@@ -1,0 +1,1665 @@
+{
+  "_meta": {
+    "source": "archives.py (fixCarTags + fixTrackTags)",
+    "note": "Jeu de règles par défaut livré avec l'app. Vocabulaire fermé. Éditable ensuite via l'UI.",
+    "rule_types": [
+      "brand_fix",
+      "name_to_tag",
+      "class_fix",
+      "tag_merge",
+      "mo2_category_map",
+      "remove"
+    ],
+    "version": "0.2-enriched",
+    "enriched_from": "analyse de 689 mods (ac_cars_report_recursive.json) + 6 Kunos",
+    "specs_field_note": "Le champ 'specs' du ui_car.json est un OBJET structuré (bhp, torque, weight, topspeed, acceleration, pwratio, range), PAS une string à parser. powerCurve/torqueCurve présents ~100%."
+  },
+  "car": {
+    "brand_fix": [
+      {
+        "name_contains": "bayro",
+        "set_brand": "BMW"
+      },
+      {
+        "name_contains": "auriel",
+        "set_brand": "Audi"
+      },
+      {
+        "name_contains": "darche",
+        "set_brand": "Porsche"
+      },
+      {
+        "name_contains": "minardi",
+        "set_brand": "Minardi"
+      },
+      {
+        "name_contains": "bar ",
+        "set_brand": "Bar"
+      }
+    ],
+    "name_to_tag": [
+      {
+        "name_contains": "police",
+        "add": [
+          "police"
+        ]
+      },
+      {
+        "name_contains": "taxi",
+        "add": [
+          "taxi"
+        ]
+      },
+      {
+        "name_contains": "traffic",
+        "add": [
+          "#traffic"
+        ]
+      },
+      {
+        "name_contains": "truck",
+        "add": [
+          "#truck"
+        ]
+      }
+    ],
+    "class_fix": [
+      {
+        "from": [
+          "racing",
+          "grand prix",
+          "dpi",
+          "group 6 gen 1",
+          "group 5 gen 3",
+          "cup",
+          "gt",
+          "ac legends"
+        ],
+        "set_class": "race",
+        "add": []
+      },
+      {
+        "from": [
+          "drift",
+          "street drift"
+        ],
+        "set_class": null,
+        "add": [
+          "#drift"
+        ]
+      },
+      {
+        "from": [
+          "rally",
+          "hillclimb",
+          "pikespeak"
+        ],
+        "set_class": "race",
+        "add": [
+          "#rally"
+        ]
+      },
+      {
+        "from": [
+          "stock",
+          "tuning",
+          "ev",
+          "shutoko",
+          "touge",
+          "street/trackday",
+          "tuned",
+          "wangan"
+        ],
+        "set_class": "street",
+        "add": []
+      },
+      {
+        "from": [
+          "rally gr4"
+        ],
+        "set_class": null,
+        "add": [
+          "#rally",
+          "group 4"
+        ]
+      },
+      {
+        "from": [
+          "kitcar",
+          "kit-car"
+        ],
+        "set_class": "race",
+        "add": [
+          "#rally",
+          "kitcar"
+        ]
+      },
+      {
+        "from": [
+          "gra"
+        ],
+        "set_class": "race",
+        "add": [
+          "#rally",
+          "group a"
+        ]
+      },
+      {
+        "from": [
+          "r5"
+        ],
+        "set_class": "race",
+        "add": [
+          "#rally",
+          "r5"
+        ]
+      },
+      {
+        "from": [
+          "tcr"
+        ],
+        "set_class": "race",
+        "add": [
+          "#tcr"
+        ]
+      },
+      {
+        "from": [
+          "wtcr"
+        ],
+        "set_class": "race",
+        "add": [
+          "#wtcr"
+        ]
+      },
+      {
+        "from": [
+          "gt500",
+          "gt2"
+        ],
+        "set_class": "race",
+        "add": [
+          "#gt500"
+        ]
+      },
+      {
+        "from": [
+          "#gt2"
+        ],
+        "set_class": "race",
+        "add": [
+          "#gt2",
+          "endurance"
+        ]
+      },
+      {
+        "from": [
+          "group 5"
+        ],
+        "set_class": "race",
+        "add": [
+          "group 5"
+        ]
+      },
+      {
+        "from": [
+          "f2"
+        ],
+        "set_class": "race",
+        "add": [
+          "#formula 2",
+          "openwheeler",
+          "singleseater"
+        ]
+      },
+      {
+        "from": [
+          "f1"
+        ],
+        "set_class": "race",
+        "add": [
+          "#formula 1",
+          "openwheeler",
+          "singleseater"
+        ]
+      },
+      {
+        "from": [
+          "formula 3"
+        ],
+        "set_class": "race",
+        "add": [
+          "#formula 3"
+        ]
+      },
+      {
+        "from": [
+          "prototype",
+          "group c"
+        ],
+        "set_class": "race",
+        "add": [
+          "prototype"
+        ]
+      },
+      {
+        "from": [
+          "lmp3"
+        ],
+        "set_class": "race",
+        "add": [
+          "prototype",
+          "#lmp3"
+        ]
+      },
+      {
+        "from": [
+          "traffic"
+        ],
+        "set_class": "street",
+        "add": [
+          "#traffic"
+        ]
+      },
+      {
+        "from": [
+          "historic",
+          "vintage"
+        ],
+        "set_class": "race",
+        "add": [
+          "vintage"
+        ]
+      },
+      {
+        "from": [
+          "utility"
+        ],
+        "set_class": "street",
+        "add": [
+          "#utility"
+        ]
+      }
+    ],
+    "tag_merge": [
+      {
+        "from": [
+          "group 5",
+          "group5"
+        ],
+        "to": [
+          "#group 5"
+        ]
+      },
+      {
+        "from": [
+          "group 3",
+          "group3"
+        ],
+        "to": [
+          "#group 3"
+        ]
+      },
+      {
+        "from": [
+          "group 4",
+          "group4"
+        ],
+        "to": [
+          "#group 4"
+        ]
+      },
+      {
+        "from": [
+          "gt1"
+        ],
+        "to": [
+          "#gt1"
+        ]
+      },
+      {
+        "from": [
+          "cup"
+        ],
+        "to": [
+          "#cup"
+        ]
+      },
+      {
+        "from": [
+          "dpi"
+        ],
+        "to": [
+          "#dpi"
+        ]
+      },
+      {
+        "from": [
+          "lmh"
+        ],
+        "to": [
+          "#lmh"
+        ]
+      },
+      {
+        "from": [
+          "touring"
+        ],
+        "to": [
+          "#touring"
+        ]
+      },
+      {
+        "from": [
+          "muscle"
+        ],
+        "to": [
+          "#muscle"
+        ]
+      },
+      {
+        "from": [
+          "trans am",
+          "trans-am",
+          "transam"
+        ],
+        "to": [
+          "#trans am"
+        ]
+      },
+      {
+        "from": [
+          "#vintage"
+        ],
+        "to": [
+          "vintage"
+        ]
+      },
+      {
+        "from": [
+          "#prototype"
+        ],
+        "to": [
+          "prototype"
+        ]
+      },
+      {
+        "from": [
+          "#gt"
+        ],
+        "to": [
+          "gt"
+        ]
+      },
+      {
+        "from": [
+          "hypercar"
+        ],
+        "to": [
+          "#hypercars"
+        ]
+      },
+      {
+        "from": [
+          "vintage gt"
+        ],
+        "to": [
+          "#vintage gt"
+        ]
+      },
+      {
+        "from": [
+          "vintage racecar",
+          "#vintage racecar"
+        ],
+        "to": [
+          "#vintage racecar"
+        ]
+      },
+      {
+        "from": [
+          "gte-gt3",
+          "#gte-gt3"
+        ],
+        "to": [
+          "#gte-gt3"
+        ]
+      },
+      {
+        "from": [
+          "lmp3"
+        ],
+        "to": [
+          "#lmp3"
+        ]
+      },
+      {
+        "from": [
+          "##small sports"
+        ],
+        "to": [
+          "#small sports"
+        ]
+      },
+      {
+        "from": [
+          "##sportscars"
+        ],
+        "to": [
+          "#sportscars"
+        ]
+      },
+      {
+        "from": [
+          "rally",
+          "rallye",
+          "#rallye",
+          "hillclimb",
+          "wrc",
+          "#rally wrc"
+        ],
+        "to": [
+          "#rally"
+        ]
+      },
+      {
+        "from": [
+          "lmp1"
+        ],
+        "to": [
+          "#lmp1",
+          "prototype",
+          "endurance"
+        ]
+      },
+      {
+        "from": [
+          "lmp2"
+        ],
+        "to": [
+          "#lmp2",
+          "prototype",
+          "endurance"
+        ]
+      },
+      {
+        "from": [
+          "lmp900"
+        ],
+        "to": [
+          "#lmp900",
+          "prototype",
+          "endurance"
+        ]
+      },
+      {
+        "from": [
+          "lmgt"
+        ],
+        "to": [
+          "#lmgt",
+          "gt1",
+          "gt",
+          "vintage",
+          "endurance"
+        ]
+      },
+      {
+        "from": [
+          "lmgtp"
+        ],
+        "to": [
+          "#lmgtp",
+          "prototype",
+          "endurance"
+        ]
+      },
+      {
+        "from": [
+          "f1",
+          "formula 1",
+          "#formula 1"
+        ],
+        "to": [
+          "#formula 1",
+          "openwheeler",
+          "singleseater"
+        ]
+      },
+      {
+        "from": [
+          "f2",
+          "formula 2",
+          "#formula 2"
+        ],
+        "to": [
+          "#formula 2",
+          "openwheeler",
+          "singleseater"
+        ]
+      },
+      {
+        "from": [
+          "f3",
+          "formula 3",
+          "#formula 3"
+        ],
+        "to": [
+          "#formula 3",
+          "openwheeler",
+          "singleseater"
+        ]
+      },
+      {
+        "from": [
+          "formula ford"
+        ],
+        "to": [
+          "#formula ford"
+        ]
+      },
+      {
+        "from": [
+          "btcc"
+        ],
+        "to": [
+          "#btcc"
+        ]
+      },
+      {
+        "from": [
+          "dpi",
+          "#dpi"
+        ],
+        "to": [
+          "dpi"
+        ]
+      },
+      {
+        "from": [
+          "drm"
+        ],
+        "to": [
+          "#drm"
+        ]
+      },
+      {
+        "from": [
+          "grand prix"
+        ],
+        "to": [
+          "gp"
+        ]
+      },
+      {
+        "from": [
+          "lemans",
+          "le mans"
+        ],
+        "to": [
+          "endurance"
+        ]
+      },
+      {
+        "from": [
+          "gra"
+        ],
+        "to": [
+          "#rally",
+          "group 3"
+        ]
+      },
+      {
+        "from": [
+          "dtm"
+        ],
+        "to": [
+          "#dtm"
+        ]
+      },
+      {
+        "from": [
+          "#gte",
+          "gte"
+        ],
+        "to": [
+          "#lm-gte",
+          "endurance"
+        ]
+      },
+      {
+        "from": [
+          "gt2",
+          "#gt2"
+        ],
+        "to": [
+          "#gt2",
+          "endurance"
+        ]
+      },
+      {
+        "from": [
+          "gt4"
+        ],
+        "to": [
+          "#gt4"
+        ]
+      },
+      {
+        "from": [
+          "gt3"
+        ],
+        "to": [
+          "#gt3"
+        ]
+      },
+      {
+        "from": [
+          "n-gt"
+        ],
+        "to": [
+          "#n-gt"
+        ]
+      },
+      {
+        "from": [
+          "tcr"
+        ],
+        "to": [
+          "#tcr"
+        ]
+      },
+      {
+        "from": [
+          "#sgt500",
+          "jgtc",
+          "gt500"
+        ],
+        "to": [
+          "#gt500"
+        ]
+      },
+      {
+        "from": [
+          "can-am",
+          "can am",
+          "#can-am",
+          "#can am"
+        ],
+        "to": [
+          "#can-am"
+        ]
+      },
+      {
+        "from": [
+          "traffic"
+        ],
+        "to": [
+          "#traffic"
+        ]
+      },
+      {
+        "from": [
+          "sport",
+          "roadsport",
+          "sportscar",
+          "sportcar"
+        ],
+        "to": [
+          "#sportscars"
+        ]
+      },
+      {
+        "from": [
+          "open wheeler"
+        ],
+        "to": [
+          "openwheeler"
+        ]
+      },
+      {
+        "from": [
+          "single seater"
+        ],
+        "to": [
+          "singleseater"
+        ]
+      },
+      {
+        "from": [
+          "historic"
+        ],
+        "to": [
+          "vintage"
+        ]
+      },
+      {
+        "from": [
+          "hothatch",
+          "hot hatchback"
+        ],
+        "to": [
+          "hatchback"
+        ]
+      },
+      {
+        "from": [
+          "supercar",
+          "#supercar"
+        ],
+        "to": [
+          "#supercars"
+        ]
+      },
+      {
+        "from": [
+          "proto c",
+          "#proto c",
+          "prototype c",
+          "group c",
+          "#group c",
+          "#prototypes grc",
+          "#group-c/3.5"
+        ],
+        "to": [
+          "#prototypes group c",
+          "prototype",
+          "endurance"
+        ]
+      },
+      {
+        "from": [
+          "wangan",
+          "jdm"
+        ],
+        "to": [
+          "#jdm"
+        ]
+      }
+    ],
+    "mo2_category_map": [
+      {
+        "from": "Car - BTCC",
+        "add": [
+          "#btcc"
+        ]
+      },
+      {
+        "from": "Car - Rally",
+        "add": [
+          "#rally"
+        ]
+      },
+      {
+        "from": "Car - Rally Gravel",
+        "add": [
+          "#rally gravel",
+          "rally gravel"
+        ]
+      },
+      {
+        "from": "Car - Cup and Misc",
+        "add": [
+          "cup"
+        ]
+      },
+      {
+        "from": "Car - GT500",
+        "add": [
+          "#gt500"
+        ]
+      },
+      {
+        "from": "Car - GT1",
+        "add": [
+          "gt1"
+        ]
+      },
+      {
+        "from": "Car - LMGT",
+        "add": [
+          "#lmgt",
+          "gt1",
+          "gt",
+          "vintage",
+          "endurance"
+        ]
+      },
+      {
+        "from": "Car - LMGTP",
+        "add": [
+          "#lmgtp",
+          "prototype",
+          "endurance"
+        ]
+      },
+      {
+        "from": "Car - LM-GTE",
+        "add": [
+          "#lm-gte",
+          "endurance"
+        ]
+      },
+      {
+        "from": "Car - N-GT",
+        "add": [
+          "#n-gt"
+        ]
+      },
+      {
+        "from": "Car - GT2",
+        "add": [
+          "#gt2"
+        ]
+      },
+      {
+        "from": "Car - GT3",
+        "add": [
+          "#gt3"
+        ]
+      },
+      {
+        "from": "Car - GT4",
+        "add": [
+          "#gt4"
+        ]
+      },
+      {
+        "from": "Car - Proto - LMP1",
+        "add": [
+          "#lmp1",
+          "prototype",
+          "endurance"
+        ]
+      },
+      {
+        "from": "Car - Proto - LMH",
+        "add": [
+          "#lmh",
+          "prototype",
+          "endurance"
+        ]
+      },
+      {
+        "from": "Car - Proto - LMP2",
+        "add": [
+          "#lmp2",
+          "prototype",
+          "endurance"
+        ]
+      },
+      {
+        "from": "Car - Road - Drift",
+        "add": [
+          "#drift"
+        ]
+      },
+      {
+        "from": "Car - Formula 1",
+        "add": [
+          "#formula 1",
+          "openwheeler",
+          "singleseater"
+        ]
+      },
+      {
+        "from": "Car - Indicar",
+        "add": [
+          "openwheeler",
+          "singleseater",
+          "#indicar"
+        ]
+      },
+      {
+        "from": "Car - Nascar",
+        "add": [
+          "#nascar"
+        ]
+      },
+      {
+        "from": "Car - Traffic",
+        "add": [
+          "#traffic"
+        ]
+      },
+      {
+        "from": "Car - Road - JDM Culture",
+        "add": [
+          "#jdm"
+        ]
+      },
+      {
+        "from": "Car - Proto Group C",
+        "add": [
+          "#prototypes group c",
+          "prototype",
+          "endurance"
+        ]
+      }
+    ],
+    "remove": [
+      "#a1",
+      "#a5",
+      "#rss",
+      "1 ton",
+      "1.4 inline-4 8v",
+      "13b",
+      "1923",
+      "1973",
+      "1990",
+      "1990s",
+      "1991",
+      "1999",
+      "2010",
+      "2010s",
+      "2022",
+      "3/4 ton",
+      "300zx",
+      "4wd",
+      "4x4",
+      "5-speed",
+      "6 speed",
+      "70s",
+      "718",
+      "90s",
+      "911",
+      "993",
+      "a1",
+      "a110",
+      "a2",
+      "a3dr",
+      "a5",
+      "acura",
+      "all wheel drive",
+      "alpine",
+      "america",
+      "amg",
+      "ap1",
+      "aspirated",
+      "asr",
+      "assettocorsamods",
+      "aston martin",
+      "audi",
+      "australia",
+      "austria",
+      "automatic",
+      "awd",
+      "axfor",
+      "belgium",
+      "big turbo",
+      "biturbo",
+      "bmw",
+      "boxer",
+      "brazil",
+      "bugatti",
+      "bulgaria",
+      "c-one",
+      "california",
+      "camaro",
+      "canada",
+      "car",
+      "carrera",
+      "caterham motorsport",
+      "cayman",
+      "ceky perfomance",
+      "ceky performance",
+      "central",
+      "chevrolet",
+      "china",
+      "civic",
+      "clubsport",
+      "compressor",
+      "cphys",
+      "czech republic",
+      "dct",
+      "ddm",
+      "delage",
+      "diesel",
+      "div 1",
+      "div 2",
+      "dp",
+      "dsg",
+      "dual-clutch",
+      "e-motor",
+      "e36",
+      "easy",
+      "ek9",
+      "electric",
+      "england",
+      "er-6",
+      "euro pack",
+      "ev",
+      "evo",
+      "evo4",
+      "f5",
+      "fd2",
+      "ferrari",
+      "fiat",
+      "fiat uno",
+      "fk 11",
+      "flat-4",
+      "flat-6",
+      "flat4",
+      "flat6",
+      "ford",
+      "france",
+      "front engine",
+      "front wheel drive",
+      "front-engine",
+      "fwd",
+      "gapplebees",
+      "gcteam",
+      "german",
+      "germany",
+      "ginetta",
+      "great britain",
+      "gt+2.0",
+      "gt3 rs",
+      "gtr",
+      "gts-r",
+      "gue",
+      "guerilla mods",
+      "h-pattern",
+      "h-shifter",
+      "hev",
+      "honda",
+      "hybrid",
+      "i4",
+      "i6",
+      "inline 4",
+      "inline 6",
+      "inline-4",
+      "inline-6",
+      "ireland",
+      "ita",
+      "italy",
+      "japan",
+      "jordan",
+      "kawasaki",
+      "koldo83",
+      "kompressor",
+      "ktm",
+      "l4",
+      "l6",
+      "lambo",
+      "legend",
+      "legends",
+      "limited edition",
+      "lms",
+      "ltk",
+      "m power",
+      "m3",
+      "m4",
+      "m6",
+      "ma70",
+      "macedosti",
+      "manu/sequential",
+      "manual",
+      "manual sequential",
+      "manual/sequential",
+      "master",
+      "mercedes benz",
+      "mid engine",
+      "mid-engine",
+      "mod",
+      "morizo edition",
+      "mr",
+      "mr2",
+      "mrs",
+      "mugen",
+      "n/a",
+      "na",
+      "naturally aspirated",
+      "naturally-aspirated",
+      "netherlands",
+      "new zealand",
+      "nissan",
+      "nsx",
+      "online",
+      "p.verdes",
+      "panoz",
+      "pdk",
+      "peugeot",
+      "physics v3",
+      "pm3dm",
+      "porsche",
+      "prelude",
+      "propulsion",
+      "public release",
+      "pure-sound",
+      "quattro",
+      "r1",
+      "r31",
+      "r32",
+      "r8",
+      "race",
+      "racing software",
+      "rb25",
+      "rear engine",
+      "rear wheel drive",
+      "rear-engine",
+      "renault",
+      "rhd",
+      "rolland-pilain",
+      "rollovers",
+      "romania",
+      "rotary",
+      "rs",
+      "rsr",
+      "rss",
+      "rtt",
+      "rwd",
+      "s1",
+      "s15",
+      "s2000",
+      "s3.0",
+      "saleen",
+      "scorpion",
+      "semiautomatic",
+      "seq",
+      "sequential",
+      "shutoko",
+      "silvia",
+      "sin",
+      "singer",
+      "skippy",
+      "skyline",
+      "sl63",
+      "south korea",
+      "spain",
+      "spec",
+      "stock",
+      "straight-4",
+      "straight-6",
+      "street",
+      "subaru",
+      "sunbeam",
+      "supercharged",
+      "supercharger",
+      "supra",
+      "sw20",
+      "sweden",
+      "tesla",
+      "tester",
+      "tm-modding",
+      "tours",
+      "toyota",
+      "track",
+      "traction",
+      "ttrs",
+      "turbo",
+      "turbocharged",
+      "twin-turbo",
+      "type r",
+      "uk",
+      "united kingdom",
+      "united states",
+      "usa",
+      "v10",
+      "v12",
+      "v6",
+      "v8",
+      "vantage",
+      "voisin",
+      "vrc",
+      "wankel",
+      "wdt street pack",
+      "williams",
+      "wip",
+      "x-bow",
+      "yamaha",
+      "yzf-r6",
+      "zzw30"
+    ],
+    "extraction_specs": {
+      "_note": "Remplit les champs techniques non présents dans l'objet specs natif (bhp/torque/weight y sont déjà). Retire ensuite ces tags du vocabulaire.",
+      "drivetrain": [
+        {
+          "from": [
+            "rwd",
+            "propulsion",
+            "rear wheel drive"
+          ],
+          "set": "RWD"
+        },
+        {
+          "from": [
+            "fwd",
+            "traction",
+            "front wheel drive"
+          ],
+          "set": "FWD"
+        },
+        {
+          "from": [
+            "awd",
+            "4wd",
+            "4x4",
+            "quattro",
+            "all wheel drive"
+          ],
+          "set": "AWD"
+        }
+      ],
+      "aspiration": [
+        {
+          "from": [
+            "turbo",
+            "twin-turbo",
+            "biturbo",
+            "turbocharged",
+            "big turbo"
+          ],
+          "set": "TURBO"
+        },
+        {
+          "from": [
+            "compressor",
+            "supercharger",
+            "supercharged",
+            "kompressor"
+          ],
+          "set": "SUPERCHARGED"
+        },
+        {
+          "from": [
+            "na",
+            "aspirated",
+            "naturally-aspirated",
+            "naturally aspirated"
+          ],
+          "set": "NA"
+        }
+      ],
+      "engine_config": [
+        {
+          "from": [
+            "v6"
+          ],
+          "set": "V6"
+        },
+        {
+          "from": [
+            "v8"
+          ],
+          "set": "V8"
+        },
+        {
+          "from": [
+            "v10"
+          ],
+          "set": "V10"
+        },
+        {
+          "from": [
+            "v12"
+          ],
+          "set": "V12"
+        },
+        {
+          "from": [
+            "i4",
+            "l4",
+            "inline-4",
+            "inline 4",
+            "straight-4"
+          ],
+          "set": "I4"
+        },
+        {
+          "from": [
+            "i6",
+            "l6",
+            "inline-6",
+            "inline 6",
+            "straight-6"
+          ],
+          "set": "I6"
+        },
+        {
+          "from": [
+            "flat-6",
+            "flat6",
+            "flat-4",
+            "flat4",
+            "boxer"
+          ],
+          "set": "FLAT"
+        },
+        {
+          "from": [
+            "rotary",
+            "wankel",
+            "13b"
+          ],
+          "set": "ROTARY"
+        },
+        {
+          "from": [
+            "electric",
+            "ev",
+            "e-motor"
+          ],
+          "set": "ELECTRIC"
+        },
+        {
+          "from": [
+            "hybrid",
+            "hev"
+          ],
+          "set": "HYBRID"
+        },
+        {
+          "from": [
+            "diesel"
+          ],
+          "set": "DIESEL"
+        }
+      ],
+      "engine_pos": [
+        {
+          "from": [
+            "mid engine",
+            "mid-engine",
+            "central"
+          ],
+          "set": "MID"
+        },
+        {
+          "from": [
+            "front engine",
+            "front-engine"
+          ],
+          "set": "FRONT"
+        },
+        {
+          "from": [
+            "rear engine",
+            "rear-engine"
+          ],
+          "set": "REAR"
+        }
+      ],
+      "gearbox": [
+        {
+          "from": [
+            "manual",
+            "h-shifter",
+            "h-pattern",
+            "6 speed"
+          ],
+          "set": "MANUAL"
+        },
+        {
+          "from": [
+            "sequential",
+            "seq"
+          ],
+          "set": "SEQUENTIAL"
+        },
+        {
+          "from": [
+            "semiautomatic",
+            "manu/sequential",
+            "manual sequential",
+            "manual/sequential"
+          ],
+          "set": "SEMIAUTO"
+        },
+        {
+          "from": [
+            "automatic"
+          ],
+          "set": "AUTO"
+        },
+        {
+          "from": [
+            "dct",
+            "dsg",
+            "pdk",
+            "dual-clutch"
+          ],
+          "set": "DCT"
+        }
+      ]
+    },
+    "extraction_country": {
+      "_note": "Si un tag est un pays ET le champ country du ui est vide, remplir country. Puis retirer le tag.",
+      "map": {
+        "italy": "Italy",
+        "germany": "Germany",
+        "german": "Germany",
+        "japan": "Japan",
+        "france": "France",
+        "great britain": "United Kingdom",
+        "uk": "United Kingdom",
+        "united kingdom": "United Kingdom",
+        "england": "United Kingdom",
+        "united states": "United States",
+        "america": "United States",
+        "usa": "United States",
+        "canada": "Canada",
+        "austria": "Austria",
+        "australia": "Australia",
+        "brazil": "Brazil",
+        "jordan": "Jordan",
+        "ireland": "Ireland",
+        "south korea": "South Korea",
+        "czech republic": "Czech Republic",
+        "sweden": "Sweden",
+        "new zealand": "New Zealand",
+        "netherlands": "Netherlands",
+        "bulgaria": "Bulgaria",
+        "spain": "Spain",
+        "china": "China",
+        "belgium": "Belgium"
+      }
+    }
+  },
+  "track": {
+    "tag_merge": [
+      {
+        "from": [
+          "freeroam"
+        ],
+        "to": [
+          "#freeroam"
+        ]
+      },
+      {
+        "from": [
+          "#circuit"
+        ],
+        "to": [
+          "circuit"
+        ]
+      },
+      {
+        "from": [
+          "country"
+        ],
+        "to": [
+          "country-side"
+        ]
+      },
+      {
+        "from": [
+          "24h",
+          "sebring"
+        ],
+        "to": [
+          "endurance"
+        ]
+      },
+      {
+        "from": [
+          "grand prix"
+        ],
+        "to": [
+          "gp"
+        ]
+      },
+      {
+        "from": [
+          "city"
+        ],
+        "to": [
+          "street"
+        ]
+      },
+      {
+        "from": [
+          "dockland"
+        ],
+        "to": [
+          "docks"
+        ]
+      },
+      {
+        "from": [
+          "formula 1"
+        ],
+        "to": [
+          "f1"
+        ]
+      },
+      {
+        "from": [
+          "historic gp"
+        ],
+        "to": [
+          "historic",
+          "gp"
+        ]
+      },
+      {
+        "from": [
+          "p2p"
+        ],
+        "to": [
+          "a2b"
+        ]
+      },
+      {
+        "from": [
+          "drift"
+        ],
+        "to": [
+          "#drift"
+        ]
+      },
+      {
+        "from": [
+          "hillclimb",
+          "hill climb"
+        ],
+        "to": [
+          "hillclimb",
+          "a2b",
+          "#rally"
+        ]
+      },
+      {
+        "from": [
+          "rally",
+          "rallye",
+          "wrc",
+          "stage",
+          "speciale"
+        ],
+        "to": [
+          "#rally"
+        ]
+      },
+      {
+        "from": [
+          "dirt3",
+          "fm7",
+          "grid",
+          "grid2",
+          "grid autosport",
+          "forza motorsport"
+        ],
+        "to": [
+          "fictional"
+        ]
+      }
+    ],
+    "mo2_category_map": [
+      {
+        "from": "Track - Rally",
+        "add": [
+          "#rally"
+        ]
+      },
+      {
+        "from": "Track - Freeroam",
+        "add": [
+          "#freeroam"
+        ]
+      },
+      {
+        "from": "Circuit - Endurance",
+        "add": [
+          "endurance"
+        ]
+      },
+      {
+        "from": "Circuit - Vintage",
+        "add": [
+          "vintage"
+        ]
+      },
+      {
+        "from": "Circuit - Drift",
+        "add": [
+          "#drift"
+        ]
+      }
+    ],
+    "remove": [
+      "1966",
+      "1988",
+      "1994",
+      "2001",
+      "2021",
+      "acc",
+      "bollene",
+      "carlo",
+      "canada",
+      "carrera.4",
+      "chicago",
+      "chiquifreaky",
+      "chq",
+      "dragon",
+      "euroracers",
+      "exeqt0r",
+      "imola",
+      "interlagos",
+      "fat-alfie",
+      "germany",
+      "gpl",
+      "hockenheim",
+      "lemax",
+      "mod",
+      "monte",
+      "monaco",
+      "moscow",
+      "pau",
+      "permanent racing circuit",
+      "quebec",
+      "rainmaker",
+      "remake",
+      "rmi",
+      "san francisco",
+      "saudi arabia",
+      "superstage",
+      "shibuya",
+      "trail",
+      "tyrone",
+      "vesubie",
+      "yeda",
+      "yokohama"
+    ]
+  }
+}

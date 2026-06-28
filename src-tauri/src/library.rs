@@ -1,0 +1,202 @@
+//! Vue bibliothèque (§6) : assemble les lignes overlay avec la vignette de
+//! preview et l'état actif/inactif pour la galerie et le tableau.
+
+use std::path::Path;
+
+use rusqlite::Connection;
+use serde::Serialize;
+
+use crate::config::AppConfig;
+use crate::inspect;
+use crate::modscan::ModKind;
+use crate::overlay::{self, HistoryRow, ModRow, VersionRow};
+use crate::uijson::{self, NativeSpecs};
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ModCard {
+    #[serde(flatten)]
+    pub base: ModRow,
+    /// Chemin absolu d'une preview (à passer à convertFileSrc côté front).
+    pub preview: Option<String>,
+    /// Junction présente dans content/ (détection fine = L3).
+    pub active: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ModDetail {
+    #[serde(flatten)]
+    pub card: ModCard,
+    pub versions: Vec<VersionRow>,
+    pub history: Vec<HistoryRow>,
+    /// Fiche technique native (voitures uniquement), lue de ui_car.json.
+    pub specs: Option<NativeSpecs>,
+}
+
+fn kind_of(s: &str) -> ModKind {
+    if s == "Track" {
+        ModKind::Track
+    } else {
+        ModKind::Car
+    }
+}
+
+fn is_active(cfg: &AppConfig, m: &ModRow) -> bool {
+    let Some(ac) = &cfg.ac_install_path else {
+        return false;
+    };
+    let link = ac
+        .join("content")
+        .join(kind_of(&m.kind).content_folder())
+        .join(&m.id_interne);
+    // « Actif » = junction gérée par l'app présente (pas un vrai dossier installé hors app).
+    crate::activation::is_junction(&link)
+}
+
+fn preview_for(conn: &Connection, m: &ModRow) -> Option<String> {
+    let vid = m.active_version_id.as_ref()?;
+    let lib = overlay::get_version_path(conn, vid).ok().flatten()?;
+    inspect::preview_path(kind_of(&m.kind), Path::new(&lib))
+}
+
+fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
+    let preview = preview_for(conn, &m);
+    let active = is_active(cfg, &m);
+    ModCard { base: m, preview, active }
+}
+
+pub fn list_cards(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<ModCard>> {
+    Ok(overlay::list_mods(conn)?
+        .into_iter()
+        .map(|m| to_card(conn, cfg, m))
+        .collect())
+}
+
+/// Contenu réellement installé dans `content/` (Kunos + mods actifs), pour les
+/// sélecteurs de l'écran de lancement. Indépendant de l'overlay.
+#[derive(Debug, Clone, Serialize)]
+pub struct InstalledItem {
+    pub id: String,
+    pub name: String,
+    /// Layouts d'un circuit (vide si mono-layout ou voiture).
+    pub layouts: Vec<String>,
+}
+
+pub fn list_installed(cfg: &AppConfig, kind: ModKind) -> Vec<InstalledItem> {
+    let Some(ac) = &cfg.ac_install_path else {
+        return Vec::new();
+    };
+    let dir = ac.join("content").join(kind.content_folder());
+    let mut out = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if !p.is_dir() {
+                continue;
+            }
+            let id = e.file_name().to_string_lossy().into_owned();
+            let (name, layouts) = match kind {
+                ModKind::Car => (
+                    inspect_name(uijson::read_car(&p), &id),
+                    Vec::new(),
+                ),
+                ModKind::Track => {
+                    let name = inspect_name(uijson::read_track(&p), &id);
+                    let mut layouts = inspect::track_layouts(&p);
+                    if layouts == ["(default)"] {
+                        layouts.clear();
+                    }
+                    (name, layouts)
+                }
+            };
+            out.push(InstalledItem { id, name, layouts });
+        }
+    }
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out
+}
+
+fn inspect_name(ui: Option<crate::uijson::UiInfo>, id: &str) -> String {
+    ui.and_then(|u| u.name).unwrap_or_else(|| id.to_string())
+}
+
+/// Skin d'une voiture avec sa miniature (§8.6).
+#[derive(Debug, Clone, Serialize)]
+pub struct SkinItem {
+    pub id: String,
+    pub name: String,
+    pub preview: Option<String>,
+}
+
+fn read_skin_name(skin_dir: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(skin_dir.join("ui_skin.json")).ok()?;
+    let v: serde_json::Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
+    v.get("skinname")
+        .or_else(|| v.get("name"))
+        .and_then(|x| x.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.to_string())
+}
+
+pub fn list_car_skins(cfg: &AppConfig, car_id: &str) -> Vec<SkinItem> {
+    let Some(ac) = &cfg.ac_install_path else {
+        return Vec::new();
+    };
+    let skins_dir = ac.join("content").join("cars").join(car_id).join("skins");
+    let mut out = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&skins_dir) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if !p.is_dir() {
+                continue;
+            }
+            let id = e.file_name().to_string_lossy().into_owned();
+            let preview = ["preview.jpg", "preview.png"]
+                .iter()
+                .map(|n| p.join(n))
+                .find(|pp| pp.is_file())
+                .map(|pp| pp.to_string_lossy().into_owned());
+            let name = read_skin_name(&p).unwrap_or_else(|| id.clone());
+            out.push(SkinItem { id, name, preview });
+        }
+    }
+    out.sort_by(|a, b| a.id.to_lowercase().cmp(&b.id.to_lowercase()));
+    out
+}
+
+/// Dossiers météo installés (`content/weather/*`).
+pub fn list_weather(cfg: &AppConfig) -> Vec<String> {
+    let Some(ac) = &cfg.ac_install_path else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(ac.join("content").join("weather")) {
+        for e in entries.flatten() {
+            if e.path().is_dir() {
+                if let Some(n) = e.file_name().to_str() {
+                    out.push(n.to_string());
+                }
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<Option<ModDetail>> {
+    let Some(m) = overlay::get_mod(conn, id)? else {
+        return Ok(None);
+    };
+    let versions = overlay::get_versions(conn, id)?;
+    let history = overlay::get_history(conn, id)?;
+    // Fiche technique native lue à la demande dans la version active (voitures).
+    let specs = if m.kind == "Car" {
+        m.active_version_id
+            .as_ref()
+            .and_then(|vid| overlay::get_version_path(conn, vid).ok().flatten())
+            .and_then(|lib| uijson::read_car_specs(Path::new(&lib)))
+    } else {
+        None
+    };
+    let card = to_card(conn, cfg, m);
+    Ok(Some(ModDetail { card, versions, history, specs }))
+}

@@ -1,0 +1,152 @@
+/* Design system Pit Box — tokens repris de pitbox-mockup.html */
+:root {
+  --rosso: #d40000;
+  --rosso-bright: #ff5555;
+  --rosso-dim: #1a0606;
+  --rosso-border: #5c1212;
+  --bg: #08080c;
+  --panel: #0d0d12;
+  --panel2: #0a0a0f;
+  --card: #13131a;
+  --raised: #15151c;
+  --line: #1e1e26;
+  --txt: #f2f2f4;
+  --txt2: #cfd2d9;
+  --muted: #86868f;
+  --muted2: #5d6470;
+  --faint: #4a4a55;
+  --faint2: #3a3a44;
+  --green: #5dcaa5;
+  --green-dim: #0a1a14;
+  --green-border: #16382c;
+  --blue: #6a9ec9;
+  --blue-dim: #0c1620;
+  --blue-border: #1d3148;
+  --yellow: #f1d83c;
+  --mono: "SF Mono", ui-monospace, "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--txt);
+  font-family: var(--sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  color: inherit;
+}
+
+input,
+select {
+  font-family: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--blue);
+}
+
+/* --- Boutons --- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  color: var(--txt2);
+  transition: background 0.12s, border-color 0.12s;
+}
+.btn:hover {
+  background: var(--card);
+  border-color: var(--faint);
+}
+.btn-primary {
+  background: var(--rosso);
+  border-color: var(--rosso);
+  color: #fff;
+}
+.btn-primary:hover {
+  background: var(--rosso-bright);
+  border-color: var(--rosso-bright);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+.btn-ghost:hover {
+  background: var(--raised);
+  color: var(--txt2);
+}
+
+/* --- Champs --- */
+.input {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  color: var(--txt);
+  font-size: 12.5px;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--rosso-border);
+}
+.input.mono {
+  font-size: 12px;
+}
+
+/* --- Pastilles d'état --- */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.pill-ok {
+  color: var(--green);
+  border-color: var(--green-border);
+  background: var(--green-dim);
+}
+.pill-err {
+  color: var(--rosso-bright);
+  border-color: var(--rosso-border);
+  background: var(--rosso-dim);
+}
+.pill-warn {
+  color: var(--yellow);
+  border-color: #4a4426;
+  background: #1a1708;
+}
