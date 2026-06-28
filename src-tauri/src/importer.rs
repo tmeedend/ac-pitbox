@@ -152,7 +152,8 @@ fn import_one(
             total: found.len(),
             label,
         });
-        match process_found(conn, rules, library, &archive_name, fm) {
+        // Archive : le contenu vient d'un dossier temp → toujours déplacé.
+        match process_found(conn, rules, library, &archive_name, fm, false) {
             Ok(imported) => result.mods.push(imported),
             Err(e) => {
                 // On consigne l'erreur sur l'archive mais on continue les autres mods.
@@ -169,6 +170,88 @@ fn import_one(
         label: "Terminé".into(),
     });
     let _ = std::fs::remove_dir_all(&workdir);
+    result
+}
+
+/// Import depuis des **dossiers déjà décompressés** (§4.5). Même pipeline que
+/// les archives, sans décompression. `copy=true` préserve la source (copie),
+/// sinon déplacement adaptatif (rename même disque, copie+suppression sinon).
+pub fn import_folders(
+    app: &AppHandle,
+    conn: &Connection,
+    cfg: &AppConfig,
+    rules: &Rules,
+    paths: &[String],
+    copy: bool,
+) -> Vec<ArchiveResult> {
+    let emit = |p: Progress| {
+        let _ = app.emit("import:progress", p);
+    };
+    paths
+        .iter()
+        .map(|p| import_one_folder(&emit, conn, cfg, rules, Path::new(p), copy))
+        .collect()
+}
+
+fn import_one_folder(
+    emit: &ProgressFn,
+    conn: &Connection,
+    cfg: &AppConfig,
+    rules: &Rules,
+    dir: &Path,
+    copy: bool,
+) -> ArchiveResult {
+    let name = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| dir.to_string_lossy().into_owned());
+    let mut result = ArchiveResult { archive: name.clone(), mods: Vec::new(), error: None };
+
+    let Some(library) = &cfg.library_path else {
+        result.error = Some("Bibliothèque non configurée.".into());
+        return result;
+    };
+    if !dir.is_dir() {
+        result.error = Some("Le chemin n'est pas un dossier.".into());
+        return result;
+    }
+
+    let found = modscan::scan(dir);
+    if found.is_empty() {
+        result.error = Some("Aucune voiture ou circuit trouvé dans le dossier.".into());
+        return result;
+    }
+    emit(Progress {
+        archive: name.clone(),
+        phase: "scan".into(),
+        current: 0,
+        total: found.len(),
+        label: format!("{} mod(s) trouvé(s)", found.len()),
+    });
+
+    for (i, fm) in found.iter().enumerate() {
+        emit(Progress {
+            archive: name.clone(),
+            phase: "filing".into(),
+            current: i + 1,
+            total: found.len(),
+            label: fm.dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+        });
+        match process_found(conn, rules, library, &name, fm, copy) {
+            Ok(imported) => result.mods.push(imported),
+            Err(e) => {
+                result.error.get_or_insert_with(String::new).push_str(&format!("{e}; "));
+            }
+        }
+    }
+
+    emit(Progress {
+        archive: name.clone(),
+        phase: "done".into(),
+        current: found.len(),
+        total: found.len(),
+        label: "Terminé".into(),
+    });
     result
 }
 
@@ -234,6 +317,7 @@ fn process_found(
     library: &Path,
     archive_name: &str,
     fm: &modscan::FoundMod,
+    copy: bool,
 ) -> Result<ImportedMod, String> {
     let id_interne = fm
         .dir
@@ -285,7 +369,12 @@ fn process_found(
             .join(&id_interne)
             .join(&version_folder),
     );
-    archive::move_dir(&fm.dir, &dest).map_err(|e| format!("rangement bibliothèque : {e}"))?;
+    // Copie (préserve la source) ou déplacement adaptatif (rename / copie+suppr).
+    if copy {
+        archive::copy_dir(&fm.dir, &dest).map_err(|e| format!("copie bibliothèque : {e}"))?;
+    } else {
+        archive::move_dir(&fm.dir, &dest).map_err(|e| format!("rangement bibliothèque : {e}"))?;
+    }
     let library_path = dest.to_string_lossy().into_owned();
 
     // --- Écriture overlay ---
@@ -481,6 +570,36 @@ mod tests {
         let mods2 = crate::overlay::list_mods(&conn).unwrap();
         assert_eq!(mods2.len(), 1, "toujours un seul mod logique");
         assert_eq!(mods2[0].version_count, 2, "deux versions coexistent");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn folder_import_copy_and_move() {
+        let base = make_temp_dir().unwrap();
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let rules = crate::rules::default_rules();
+        let noop = |_p: Progress| {};
+
+        // Copie : la source est préservée.
+        let src_copy = base.join("src_copy");
+        make_fake_car(&src_copy, "copy_car");
+        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src_copy, true);
+        assert_eq!(r.mods.len(), 1);
+        assert_eq!(r.mods[0].outcome, "IMPORT");
+        assert!(src_copy.join("copy_car").join("ui").join("ui_car.json").is_file(), "source préservée (copie)");
+        assert!(library.join("cars").join("copy_car").exists(), "rangé dans la bibliothèque");
+
+        // Déplacement : la source est retirée.
+        let src_move = base.join("src_move");
+        make_fake_car(&src_move, "move_car");
+        let r2 = import_one_folder(&noop, &conn, &cfg, &rules, &src_move, false);
+        assert_eq!(r2.mods.len(), 1);
+        assert!(!src_move.join("move_car").exists(), "source retirée (déplacement)");
+        assert!(library.join("cars").join("move_car").exists(), "rangé dans la bibliothèque");
 
         let _ = std::fs::remove_dir_all(&base);
     }

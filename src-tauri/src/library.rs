@@ -79,6 +79,8 @@ pub struct InstalledItem {
     pub name: String,
     /// Layouts d'un circuit (vide si mono-layout ou voiture).
     pub layouts: Vec<String>,
+    /// Vignette (skin voiture / outline circuit) pour les galeries du flux.
+    pub preview: Option<String>,
 }
 
 pub fn list_installed(cfg: &AppConfig, kind: ModKind) -> Vec<InstalledItem> {
@@ -95,10 +97,7 @@ pub fn list_installed(cfg: &AppConfig, kind: ModKind) -> Vec<InstalledItem> {
             }
             let id = e.file_name().to_string_lossy().into_owned();
             let (name, layouts) = match kind {
-                ModKind::Car => (
-                    inspect_name(uijson::read_car(&p), &id),
-                    Vec::new(),
-                ),
+                ModKind::Car => (inspect_name(uijson::read_car(&p), &id), Vec::new()),
                 ModKind::Track => {
                     let name = inspect_name(uijson::read_track(&p), &id);
                     let mut layouts = inspect::track_layouts(&p);
@@ -108,7 +107,8 @@ pub fn list_installed(cfg: &AppConfig, kind: ModKind) -> Vec<InstalledItem> {
                     (name, layouts)
                 }
             };
-            out.push(InstalledItem { id, name, layouts });
+            let preview = inspect::preview_path(kind, &p);
+            out.push(InstalledItem { id, name, layouts, preview });
         }
     }
     out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));

@@ -105,6 +105,21 @@ fn set_mod_field(db: State<Db>, id: String, field: String, value: Option<String>
     overlay::set_mod_field(&conn, &id, &field, value.as_deref()).map_err(|e| e.to_string())
 }
 
+/// Import depuis des dossiers déjà décompressés (§4.5). `copy=true` préserve la
+/// source, sinon déplacement adaptatif.
+#[tauri::command]
+fn import_folders(
+    app: AppHandle,
+    db: State<Db>,
+    paths: Vec<String>,
+    copy: bool,
+) -> Result<Vec<ArchiveResult>, String> {
+    let cfg = config::load(&app);
+    let rules = rules::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(importer::import_folders(&app, &conn, &cfg, &rules, &paths, copy))
+}
+
 /// Résout un conflit flou (§4.2) : action = "keep_both" | "replace".
 #[tauri::command]
 fn resolve_conflict(
@@ -245,6 +260,7 @@ pub fn run() {
             validate_config,
             autodetect_paths,
             import_archives,
+            import_folders,
             resolve_conflict,
             list_library,
             get_mod_detail,

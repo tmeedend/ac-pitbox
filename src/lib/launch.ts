@@ -7,6 +7,7 @@ export interface InstalledItem {
   id: string;
   name: string;
   layouts: string[];
+  preview: string | null;
 }
 
 export interface RaceSetup {

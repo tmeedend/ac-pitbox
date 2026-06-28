@@ -6,6 +6,7 @@
   import ModDetail from "./ModDetail.svelte";
   import {
     importArchives,
+    importFolders,
     listLibrary,
     previewSrc,
     resolveConflict,
@@ -40,6 +41,12 @@
   let report = $state<ArchiveResult[] | null>(null);
   let progress = $state<ImportProgress | null>(null);
   let pendingConflicts = $state<PendingConflict[]>([]);
+  // Mode d'import de dossier : copier (préserve la source) ou déplacer (§4.5).
+  let copyMode = $state(localStorage.getItem("pitbox.import.copy") !== "false");
+  function setCopyMode(v: boolean) {
+    copyMode = v;
+    localStorage.setItem("pitbox.import.copy", String(v));
+  }
 
   // Tri du tableau.
   type SortKey = "name" | "brand" | "year" | "kind" | "versions" | "active";
@@ -132,12 +139,11 @@
     });
   });
 
-  async function runImport(paths: string[]) {
-    if (!paths.length) return;
+  async function runImport(task: Promise<ArchiveResult[]>) {
     importing = true;
     progress = null;
     try {
-      report = await importArchives(paths);
+      report = await task;
       pendingConflicts = report.flatMap((a) =>
         a.mods
           .filter((m) => m.conflict)
@@ -167,7 +173,13 @@
       filters: [{ name: "Archives", extensions: ["zip", "rar", "7z"] }],
     });
     if (!sel) return;
-    await runImport(Array.isArray(sel) ? sel : [sel]);
+    await runImport(importArchives(Array.isArray(sel) ? sel : [sel]));
+  }
+
+  async function pickFolderAndImport() {
+    const sel = await open({ directory: true, multiple: false });
+    if (!sel || typeof sel !== "string") return;
+    await runImport(importFolders([sel], copyMode));
   }
 
   onMount(() => {
@@ -178,7 +190,7 @@
         const archives = event.payload.paths.filter((p) =>
           /\.(zip|rar|7z)$/i.test(p),
         );
-        if (archives.length) runImport(archives);
+        if (archives.length) runImport(importArchives(archives));
       }
     });
     // Progression de l'import.
@@ -201,9 +213,18 @@
 <div class="library">
   <div class="main">
     <div class="toolbar">
-      <button class="btn btn-primary" type="button" onclick={pickAndImport} disabled={importing}>
-        {importing ? "Import en cours…" : "Importer une archive"}
-      </button>
+      <div class="import-group">
+        <button class="btn btn-primary" type="button" onclick={pickAndImport} disabled={importing}>
+          {importing ? "Import…" : "Importer une archive"}
+        </button>
+        <button class="btn" type="button" onclick={pickFolderAndImport} disabled={importing} title="Importer un dossier de mod déjà décompressé (§4.5)">
+          Importer un dossier
+        </button>
+        <div class="copy-toggle" title="Pour l'import de dossier">
+          <button class:on={copyMode} onclick={() => setCopyMode(true)}>Copier</button>
+          <button class:on={!copyMode} onclick={() => setCopyMode(false)}>Déplacer</button>
+        </div>
+      </div>
 
       <div class="search">
         <input class="input" placeholder="Rechercher (nom, marque, tag…)" bind:value={query} />
@@ -423,6 +444,29 @@
     gap: 10px;
     margin-bottom: 16px;
     flex-wrap: wrap;
+  }
+  .import-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .copy-toggle {
+    display: flex;
+    border: 1px solid var(--line);
+  }
+  .copy-toggle button {
+    background: var(--panel2);
+    color: var(--muted);
+    font-size: 10.5px;
+    padding: 6px 9px;
+    border-right: 1px solid var(--line);
+  }
+  .copy-toggle button:last-child {
+    border-right: none;
+  }
+  .copy-toggle button.on {
+    background: var(--raised);
+    color: var(--rosso-bright);
   }
   .search {
     flex: 1;

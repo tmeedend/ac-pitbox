@@ -103,6 +103,11 @@ export function importArchives(paths: string[]): Promise<ArchiveResult[]> {
   return invoke<ArchiveResult[]>("import_archives", { paths });
 }
 
+/** Import de dossiers déjà décompressés (§4.5). copy=true préserve la source. */
+export function importFolders(paths: string[], copy: boolean): Promise<ArchiveResult[]> {
+  return invoke<ArchiveResult[]>("import_folders", { paths, copy });
+}
+
 export function resolveConflict(
   newId: string,
   oldId: string,
