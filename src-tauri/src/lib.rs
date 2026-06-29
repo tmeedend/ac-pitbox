@@ -352,11 +352,20 @@ fn restore_sound(app: AppHandle, db: State<Db>, parent_id: String) -> Result<(),
     submods::restore_sound(&conn, &cfg, &parent_id)
 }
 
-/// Supprime un sous-élément de l'overlay (skin/son) — vues transversales (§12bis.3).
+/// Supprime proprement un sous-élément (skin/son) : junction + fichiers + overlay (§12bis.3).
 #[tauri::command]
-fn delete_sub_mod(db: State<Db>, id: String) -> Result<(), String> {
+fn delete_sub_mod(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let cfg = config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    overlay::delete_sub_mod(&conn, &id).map_err(|e| e.to_string())
+    submods::remove_sub(&conn, &cfg, &id)
+}
+
+/// Supprime proprement une app : junction + fichiers + overlay (§12bis.4).
+#[tauri::command]
+fn delete_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    apps::remove_app(&conn, &cfg, &id)
 }
 
 /// Liste les apps Python avec leur état d'activation (§12bis.4).
@@ -431,6 +440,7 @@ pub fn run() {
             list_apps,
             activate_app,
             deactivate_app,
+            delete_app,
             get_rules,
             save_rules,
             rules_impact,

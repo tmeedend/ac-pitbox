@@ -2,7 +2,8 @@
   // Vue Apps (§12bis.4) : type autonome, simplement activable/désactivable par
   // junction. Pas de fiche ni de tags en v1 — nom, état, activation.
   import { onMount } from "svelte";
-  import { listApps, activateApp, deactivateApp, type AppItem } from "$lib/apps";
+  import { listApps, activateApp, deactivateApp, deleteApp, type AppItem } from "$lib/apps";
+  import { confirm } from "@tauri-apps/plugin-dialog";
 
   let apps = $state<AppItem[]>([]);
   let query = $state("");
@@ -20,6 +21,24 @@
     try {
       if (a.active) await deactivateApp(a.id);
       else await activateApp(a.id);
+      await load();
+    } catch (e) {
+      error = String(e);
+    } finally {
+      busy = null;
+    }
+  }
+
+  async function remove(a: AppItem) {
+    const ok = await confirm(`Supprimer l'app « ${a.id} » ? Elle sera désactivée et ses fichiers retirés.`, {
+      title: "Supprimer",
+      kind: "warning",
+    });
+    if (!ok) return;
+    busy = a.id;
+    error = "";
+    try {
+      await deleteApp(a.id);
       await load();
     } catch (e) {
       error = String(e);
@@ -61,6 +80,7 @@
           <button class="btn" type="button" onclick={() => toggle(a)} disabled={busy === a.id}>
             {busy === a.id ? "…" : a.active ? "Désactiver" : "Activer"}
           </button>
+          <button class="btn del" type="button" title="Supprimer" onclick={() => remove(a)} disabled={busy === a.id}>✕</button>
         </li>
       {/each}
     </ul>
@@ -155,6 +175,14 @@
   }
   .btn:disabled {
     opacity: 0.5;
+  }
+  .btn.del {
+    padding: 6px 9px;
+    color: var(--muted);
+  }
+  .btn.del:hover {
+    border-color: var(--rosso-border);
+    color: var(--rosso-bright);
   }
   .empty {
     color: var(--muted);

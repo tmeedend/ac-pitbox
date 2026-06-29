@@ -19,3 +19,8 @@ export function activateApp(id: string): Promise<void> {
 export function deactivateApp(id: string): Promise<void> {
   return invoke<void>("deactivate_app", { id });
 }
+
+/** Supprime proprement une app (junction + fichiers + overlay, §12bis.4). */
+export function deleteApp(id: string): Promise<void> {
+  return invoke<void>("delete_app", { id });
+}

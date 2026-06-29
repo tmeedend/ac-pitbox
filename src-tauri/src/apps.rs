@@ -113,6 +113,20 @@ pub fn deactivate_app(cfg: &AppConfig, id: &str) -> Result<(), String> {
     }
 }
 
+/// Supprime proprement une app : désactive (retire la junction), efface les
+/// fichiers de bibliothèque, puis la ligne overlay (§12bis.4).
+pub fn remove_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
+    let app = overlay::get_app(conn, id).map_err(|e| e.to_string())?.ok_or("app introuvable")?;
+    // Désactive si une junction est présente (ignore l'absence).
+    if let Some(link) = app_link(cfg, id) {
+        if activation::is_junction(&link) {
+            let _ = activation::remove_junction(&link);
+        }
+    }
+    let _ = std::fs::remove_dir_all(Path::new(&app.library_path));
+    overlay::delete_app(conn, id).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,6 +152,12 @@ mod tests {
         assert_eq!(res.len(), 1);
         assert!(library.join("apps").join("MyApp").join("MyApp.py").is_file());
         assert!(overlay::app_exists(&conn, "MyApp").unwrap());
+
+        // Suppression propre : fichiers + overlay effacés (pas de junction ici).
+        let cfg = AppConfig::default();
+        remove_app(&conn, &cfg, "MyApp").unwrap();
+        assert!(!library.join("apps").join("MyApp").exists());
+        assert!(!overlay::app_exists(&conn, "MyApp").unwrap());
 
         let _ = std::fs::remove_dir_all(&base);
     }

@@ -8,10 +8,12 @@
     listSubsByType,
     activateSound,
     restoreSound,
+    deleteSubMod,
     type SubModRow,
   } from "$lib/submods";
   import { listLibrary, type ModCard } from "$lib/library";
   import { nav } from "$lib/nav.svelte";
+  import { confirm } from "@tauri-apps/plugin-dialog";
 
   // "SKIN" | "SOUND"
   let { subType }: { subType: "SKIN" | "SOUND" } = $props();
@@ -65,6 +67,25 @@
       busy = null;
     }
   }
+
+  async function remove(s: SubModRow) {
+    const label = isSound ? "ce son" : "ce skin";
+    const ok = await confirm(`Supprimer ${label} « ${s.name} » ? Les fichiers et la projection seront retirés.`, {
+      title: "Supprimer",
+      kind: "warning",
+    });
+    if (!ok) return;
+    busy = s.id;
+    error = "";
+    try {
+      await deleteSubMod(s.id);
+      await load();
+    } catch (e) {
+      error = String(e);
+    } finally {
+      busy = null;
+    }
+  }
 </script>
 
 <div class="trans">
@@ -105,6 +126,7 @@
               {busy === s.id ? "…" : s.is_active ? "Restaurer l'origine" : "Activer"}
             </button>
           {/if}
+          <button class="btn del" type="button" title="Supprimer" onclick={() => remove(s)} disabled={busy === s.id}>✕</button>
         </li>
       {/each}
     </ul>
@@ -220,6 +242,14 @@
   }
   .btn:disabled {
     opacity: 0.5;
+  }
+  .btn.del {
+    padding: 6px 9px;
+    color: var(--muted);
+  }
+  .btn.del:hover {
+    border-color: var(--rosso-border);
+    color: var(--rosso-bright);
   }
   .empty {
     color: var(--muted);

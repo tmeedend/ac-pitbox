@@ -258,6 +258,34 @@ pub fn restore_sound(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Res
     Ok(())
 }
 
+/// Supprime proprement un sous-élément (§12bis.3) : retire la junction de
+/// projection (skin) ou restaure le son d'origine (son actif), efface les
+/// fichiers stockés, puis la ligne overlay. Garde-fou junction respecté.
+pub fn remove_sub(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<(), String> {
+    let sub = overlay::get_sub_mod(conn, sub_id).map_err(|e| e.to_string())?.ok_or("sous-élément introuvable")?;
+    match sub.sub_type.as_str() {
+        "SKIN" => {
+            // Retire la junction de projection dans le skins/ de la voiture cible.
+            if let Some(skins_dir) = parent_subdir(conn, cfg, &sub.parent_id, "skins") {
+                let link = skins_dir.join(&sub.name);
+                if activation::is_junction(&link) {
+                    let _ = activation::remove_junction(&link);
+                }
+            }
+        }
+        "SOUND" => {
+            // Si actif, on rétablit d'abord le son d'origine.
+            if sub.is_active {
+                restore_sound(conn, cfg, &sub.parent_id)?;
+            }
+        }
+        _ => {}
+    }
+    // Fichiers stockés à part.
+    let _ = std::fs::remove_dir_all(Path::new(&sub.library_path));
+    overlay::delete_sub_mod(conn, sub_id).map_err(|e| e.to_string())
+}
+
 /// `<lib>/sounds/<parent>/__original__` : sauvegarde du son d'origine.
 fn sound_backup_dir(cfg: &AppConfig, parent_id: &str) -> Result<PathBuf, String> {
     let lib = cfg.library_path.as_ref().ok_or("bibliothèque non configurée")?;
@@ -312,6 +340,12 @@ mod tests {
         let res2 = import_subs(&conn, &cfg, &library, "ferrari_skins.7z", &modscan::scan_subs(&base.join("src")), true);
         assert!(res2.is_empty());
         assert_eq!(overlay::list_subs_for_parent(&conn, "ferrari_488").unwrap().len(), 1);
+
+        // Suppression propre : fichiers stockés + ligne overlay effacés.
+        let sub_id = overlay::list_subs_for_parent(&conn, "ferrari_488").unwrap()[0].id.clone();
+        remove_sub(&conn, &cfg, &sub_id).unwrap();
+        assert!(!library.join("skins").join("ferrari_488").join("af_corse_51").exists());
+        assert!(overlay::list_subs_for_parent(&conn, "ferrari_488").unwrap().is_empty());
 
         let _ = std::fs::remove_dir_all(&base);
     }
