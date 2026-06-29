@@ -16,6 +16,12 @@
   } from "$lib/library";
   import { listModSkins, type SkinItem } from "$lib/launch";
   import { exportMod, type ExportReport } from "$lib/maintenance";
+  import {
+    listSubMods,
+    activateSound,
+    restoreSound,
+    type SubModRow,
+  } from "$lib/submods";
   import { open } from "@tauri-apps/plugin-dialog";
   import PowerCurve from "./PowerCurve.svelte";
   import { nav } from "$lib/nav.svelte";
@@ -33,6 +39,9 @@
   let skins = $state<SkinItem[]>([]);
   let previewSkin = $state(0);
   let pilotedSkin = $state<string | null>(null);
+  let sounds = $state<SubModRow[]>([]);
+  let soundBusy = $state(false);
+  const activeSound = $derived(sounds.find((s) => s.is_active) ?? null);
   let showDescription = $state(false);
   let busy = $state(false);
   let actionError = $state("");
@@ -72,8 +81,31 @@
         const pi = s.findIndex((x) => x.id === pilotedSkin);
         previewSkin = pi >= 0 ? pi : 0;
       });
+      loadSounds(current);
     }
   });
+
+  async function loadSounds(parent: string) {
+    const all = await listSubMods(parent);
+    if (parent !== id) return;
+    sounds = all.filter((s) => s.sub_type === "SOUND");
+  }
+
+  // Son = bascule exclusive (§12bis.2) : un seul actif, original restaurable.
+  async function pickSound(subId: string | null) {
+    if (!detail || soundBusy) return;
+    soundBusy = true;
+    actionError = "";
+    try {
+      if (subId) await activateSound(subId);
+      else await restoreSound(detail.id_interne);
+      await loadSounds(detail.id_interne);
+    } catch (e) {
+      actionError = String(e);
+    } finally {
+      soundBusy = false;
+    }
+  }
 
   async function reload() {
     detail = await getModDetail(id);
@@ -366,11 +398,25 @@
             <span class="soon-lot mono">§6.5</span>
           </div>
           <div class="lbl" style="margin-top:14px;">SON MOTEUR <span class="lbl-sub">exclusif — un seul</span></div>
-          <div class="soon">
-            <span class="soon-ic">🔊</span>
-            <span class="soon-txt">Gestion du son à venir</span>
-            <span class="soon-lot mono">L6</span>
+          <div class="sounds">
+            <button class="sound" class:sel={!activeSound} type="button" onclick={() => pickSound(null)} disabled={soundBusy}>
+              <span class="radio"></span>
+              <span class="s-name">Origine</span>
+              <span class="s-tag mono">BASE</span>
+            </button>
+            {#each sounds as snd (snd.id)}
+              <button class="sound" class:sel={snd.is_active} type="button" onclick={() => pickSound(snd.id)} disabled={soundBusy}>
+                <span class="radio"></span>
+                <span class="s-name">{snd.name}</span>
+                <span class="s-tag mono">MOD</span>
+              </button>
+            {/each}
           </div>
+          {#if sounds.length === 0}
+            <div class="muted small" style="margin-top:6px;">Aucun mod de son importé pour cette voiture.</div>
+          {:else}
+            <div class="restore-note">↺ son d'origine restaurable</div>
+          {/if}
         </div>
 
         <!-- Tags + Versions + Historique -->
@@ -841,6 +887,62 @@
     color: var(--faint);
     border: 1px solid var(--line);
     padding: 1px 5px;
+  }
+
+  .sounds {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .sound {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    padding: 7px 10px;
+    text-align: left;
+  }
+  .sound.sel {
+    border-color: var(--rosso-border);
+    background: var(--rosso-dim);
+  }
+  .sound:disabled {
+    opacity: 0.6;
+  }
+  .radio {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    border: 1px solid var(--muted2);
+    flex: none;
+  }
+  .sound.sel .radio {
+    border-color: var(--rosso-bright);
+    background: radial-gradient(var(--rosso-bright) 40%, transparent 45%);
+  }
+  .s-name {
+    flex: 1;
+    font-size: 11px;
+    color: var(--txt2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .s-tag {
+    font-size: 7px;
+    padding: 1px 5px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+  }
+  .restore-note {
+    margin-top: 6px;
+    background: var(--blue-dim);
+    border: 1px solid var(--blue-border);
+    color: var(--blue);
+    font-size: 9px;
+    font-family: var(--mono);
+    padding: 5px 9px;
   }
 
   .tags {

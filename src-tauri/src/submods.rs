@@ -147,21 +147,25 @@ fn project_skin(
     }
 }
 
-/// Dossier `skins/` de la voiture cible : version active en bibliothèque si
-/// c'est un mod géré, sinon `content/cars/<id>/skins` (voiture de base Kunos).
 fn parent_skins_dir(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Option<PathBuf> {
+    parent_subdir(conn, cfg, parent_id, "skins")
+}
+
+/// Dossier `<sub>/` de la voiture cible : version active en bibliothèque si c'est
+/// un mod géré, sinon `content/cars/<id>/<sub>` (voiture de base Kunos).
+fn parent_subdir(conn: &Connection, cfg: &AppConfig, parent_id: &str, sub: &str) -> Option<PathBuf> {
     if let Ok(Some(m)) = overlay::get_mod(conn, parent_id) {
         if !m.is_stock {
             if let Some(vid) = m.active_version_id {
                 if let Ok(Some(p)) = overlay::get_version_path(conn, &vid) {
-                    return Some(Path::new(&p).join("skins"));
+                    return Some(Path::new(&p).join(sub));
                 }
             }
         }
     }
     cfg.ac_install_path
         .as_ref()
-        .map(|ac| ac.join("content").join("cars").join(parent_id).join("skins"))
+        .map(|ac| ac.join("content").join("cars").join(parent_id).join(sub))
 }
 
 fn import_sound(
@@ -206,14 +210,65 @@ fn import_sound(
         Some(source_name),
         &Local::now().to_rfc3339(),
     );
-    // Bascule exclusive des fichiers sfx/ = lot suivant (§12bis.2). Stocké inactif.
     out.push(SubImported {
         sub_type: "SOUND".into(),
         parent_id: parent.clone(),
         name,
         projected: false,
-        warning: Some("son stocké (bascule à venir)".into()),
+        warning: None,
     });
+}
+
+// --- Bascule exclusive du son (§12bis.2) ------------------------------------
+
+/// Active un mod de son : remplace réellement le `sfx/` de la voiture par les
+/// fichiers du mod (bascule exclusive). Le son d'origine est **sauvegardé une
+/// fois** pour pouvoir y revenir — jamais détruit irréversiblement (§12bis.2).
+pub fn activate_sound(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<(), String> {
+    let sub = overlay::get_sub_mod(conn, sub_id).map_err(|e| e.to_string())?.ok_or("son introuvable")?;
+    if sub.sub_type != "SOUND" {
+        return Err("ce sous-élément n'est pas un mod de son".into());
+    }
+    let sfx = parent_subdir(conn, cfg, &sub.parent_id, "sfx").ok_or("voiture cible inconnue")?;
+    let backup = sound_backup_dir(cfg, &sub.parent_id)?;
+
+    // Sauvegarde du son d'origine, une seule fois (préserve le vrai original).
+    if !backup.exists() {
+        std::fs::create_dir_all(&backup).map_err(|e| e.to_string())?;
+        if sfx.is_dir() {
+            archive::copy_dir(&sfx, &backup).map_err(|e| format!("sauvegarde du son d'origine : {e}"))?;
+        }
+    }
+
+    replace_dir_contents(Path::new(&sub.library_path), &sfx)?;
+    overlay::set_active_sound(conn, &sub.parent_id, Some(sub_id)).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Restaure le son d'origine d'une voiture (désactive le mod de son actif).
+pub fn restore_sound(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Result<(), String> {
+    let backup = sound_backup_dir(cfg, parent_id)?;
+    if backup.is_dir() {
+        let sfx = parent_subdir(conn, cfg, parent_id, "sfx").ok_or("voiture cible inconnue")?;
+        replace_dir_contents(&backup, &sfx)?;
+    }
+    overlay::set_active_sound(conn, parent_id, None).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// `<lib>/sounds/<parent>/__original__` : sauvegarde du son d'origine.
+fn sound_backup_dir(cfg: &AppConfig, parent_id: &str) -> Result<PathBuf, String> {
+    let lib = cfg.library_path.as_ref().ok_or("bibliothèque non configurée")?;
+    Ok(lib.join("sounds").join(parent_id).join("__original__"))
+}
+
+/// Remplace le contenu de `dst` par celui de `src`. `dst` est toujours un vrai
+/// dossier (sous-dossier `sfx/` de la voiture), jamais une junction.
+fn replace_dir_contents(src: &Path, dst: &Path) -> Result<(), String> {
+    if dst.exists() {
+        std::fs::remove_dir_all(dst).map_err(|e| format!("nettoyage de {}: {e}", dst.display()))?;
+    }
+    archive::copy_dir(src, dst).map_err(|e| format!("copie du son : {e}"))
 }
 
 #[cfg(test)]
@@ -255,6 +310,46 @@ mod tests {
         let res2 = import_subs(&conn, &cfg, &library, "ferrari_skins.7z", &modscan::scan_subs(&base.join("src")), true);
         assert!(res2.is_empty());
         assert_eq!(overlay::list_subs_for_parent(&conn, "ferrari_488").unwrap().len(), 1);
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn sound_swap_and_restore() {
+        let base = std::env::temp_dir().join(format!("pitbox-snd-{}", Uuid::new_v4()));
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let now = Local::now().to_rfc3339();
+
+        // Voiture (mod) avec son d'origine dans sfx/.
+        let carv = library.join("cars").join("snd_car").join("v1");
+        let sfx = carv.join("sfx");
+        std::fs::create_dir_all(&sfx).unwrap();
+        std::fs::write(sfx.join("GUIDs.txt"), b"ORIG").unwrap();
+        std::fs::write(sfx.join("car.bank"), b"ORIGBANK").unwrap();
+        overlay::upsert_mod(&conn, "snd_car", "Car", Some("B"), Some("Snd"), "h", None, &now).unwrap();
+        overlay::insert_version(&conn, "v1", "snd_car", Some("1.0"), None, &now, &carv.to_string_lossy(), None, "sig", &[], &[], &[], &[]).unwrap();
+        overlay::set_active_version(&conn, "snd_car", "v1").unwrap();
+
+        // Mod de son stocké à part.
+        let snd = library.join("sounds").join("snd_car").join("v8");
+        std::fs::create_dir_all(&snd).unwrap();
+        std::fs::write(snd.join("GUIDs.txt"), b"MOD").unwrap();
+        std::fs::write(snd.join("car.bank"), b"MODBANK").unwrap();
+        overlay::insert_sub_mod(&conn, "s1", "SOUND", "snd_car", "v8", &snd.to_string_lossy(), None, &now).unwrap();
+
+        // Activation : sfx remplacé, original sauvegardé, sub actif.
+        activate_sound(&conn, &cfg, "s1").unwrap();
+        assert_eq!(std::fs::read_to_string(sfx.join("GUIDs.txt")).unwrap(), "MOD");
+        assert_eq!(std::fs::read_to_string(library.join("sounds").join("snd_car").join("__original__").join("GUIDs.txt")).unwrap(), "ORIG");
+        assert!(overlay::get_sub_mod(&conn, "s1").unwrap().unwrap().is_active);
+
+        // Restauration : son d'origine revenu, sub inactif.
+        restore_sound(&conn, &cfg, "snd_car").unwrap();
+        assert_eq!(std::fs::read_to_string(sfx.join("GUIDs.txt")).unwrap(), "ORIG");
+        assert!(!overlay::get_sub_mod(&conn, "s1").unwrap().unwrap().is_active);
 
         let _ = std::fs::remove_dir_all(&base);
     }

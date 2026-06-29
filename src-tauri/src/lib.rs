@@ -334,6 +334,29 @@ fn list_subs_by_type(db: State<Db>, sub_type: String) -> Result<Vec<overlay::Sub
     overlay::list_subs_by_type(&conn, &sub_type).map_err(|e| e.to_string())
 }
 
+/// Active un mod de son (bascule exclusive du sfx/, §12bis.2).
+#[tauri::command]
+fn activate_sound(app: AppHandle, db: State<Db>, sub_id: String) -> Result<(), String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    submods::activate_sound(&conn, &cfg, &sub_id)
+}
+
+/// Restaure le son d'origine d'une voiture (§12bis.2).
+#[tauri::command]
+fn restore_sound(app: AppHandle, db: State<Db>, parent_id: String) -> Result<(), String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    submods::restore_sound(&conn, &cfg, &parent_id)
+}
+
+/// Supprime un sous-élément de l'overlay (skin/son) — vues transversales (§12bis.3).
+#[tauri::command]
+fn delete_sub_mod(db: State<Db>, id: String) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    overlay::delete_sub_mod(&conn, &id).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -378,6 +401,9 @@ pub fn run() {
             index_stock_content,
             list_sub_mods,
             list_subs_by_type,
+            activate_sound,
+            restore_sound,
+            delete_sub_mod,
             get_rules,
             save_rules,
             rules_impact,

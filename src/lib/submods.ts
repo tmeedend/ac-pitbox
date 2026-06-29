@@ -26,3 +26,18 @@ export function listSubMods(parentId: string): Promise<SubModRow[]> {
 export function listSubsByType(subType: string): Promise<SubModRow[]> {
   return invoke<SubModRow[]>("list_subs_by_type", { subType });
 }
+
+/** Active un mod de son (bascule exclusive du sfx/, §12bis.2). */
+export function activateSound(subId: string): Promise<void> {
+  return invoke<void>("activate_sound", { subId });
+}
+
+/** Restaure le son d'origine d'une voiture (§12bis.2). */
+export function restoreSound(parentId: string): Promise<void> {
+  return invoke<void>("restore_sound", { parentId });
+}
+
+/** Supprime un sous-élément (skin/son) de l'overlay (§12bis.3). */
+export function deleteSubMod(id: string): Promise<void> {
+  return invoke<void>("delete_sub_mod", { id });
+}
