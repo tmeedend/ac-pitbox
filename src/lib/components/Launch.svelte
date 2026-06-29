@@ -150,7 +150,13 @@
       lastCar = setup.car_id;
       listSkins(setup.car_id).then((s) => {
         skins = s;
-        if (!skins.find((x) => x.id === setup.car_skin)) setup.car_skin = skins[0]?.id ?? null;
+        // Skin par défaut : l'étoile « piloté » de la fiche (§12bis.2) si elle
+        // pointe un skin existant, sinon le premier. On ne touche pas à un choix
+        // déjà valide pour cette voiture.
+        if (!skins.find((x) => x.id === setup.car_skin)) {
+          const piloted = localStorage.getItem(`pitbox.pilotedSkin.${setup.car_id}`);
+          setup.car_skin = (piloted && skins.some((x) => x.id === piloted) ? piloted : skins[0]?.id) ?? null;
+        }
       });
     }
   });
@@ -232,6 +238,11 @@
       if (pf.kind === "Car") {
         if (!cars.find((c) => c.id === pf.id)) cars = [{ id: pf.id, name: pf.name, layouts: [], preview: null }, ...cars];
         setup.car_id = pf.id;
+        // Arrivée via « Conduire » : on laisse l'étoile « piloté » fixer le skin.
+        // Reset de lastCar pour forcer la ré-résolution même si c'est la voiture
+        // déjà chargée.
+        setup.car_skin = null;
+        lastCar = "";
         category = "all";
       } else {
         let t = tracks.find((c) => c.id === pf.id);
