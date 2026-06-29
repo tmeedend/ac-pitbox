@@ -71,18 +71,36 @@ pub fn is_car_sound(dir: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Pack de skins (§12bis.2) : dossier `<carId>` contenant un sous-dossier
-/// `skins/` peuplé, mais **sans** `ui/ui_car.json` (sinon c'est une vraie
-/// voiture). Le nom du dossier est la voiture cible.
-pub fn is_skin_pack(dir: &Path) -> bool {
-    if is_car(dir) {
+/// Le dossier contient au moins un sous-dossier.
+fn has_subdir(dir: &Path) -> bool {
+    std::fs::read_dir(dir)
+        .map(|mut e| e.any(|x| x.map(|x| x.path().is_dir()).unwrap_or(false)))
+        .unwrap_or(false)
+}
+
+/// Dossier de skin « feuille » : porte `ui_skin.json`, ou n'a pas de sous-dossier
+/// (les fichiers de livrée sont à plat). Sert à distinguer un skin d'un dossier
+/// de voiture (qui, lui, contient des dossiers de skins).
+fn is_skin_leaf(dir: &Path) -> bool {
+    dir.join("ui_skin.json").is_file() || !has_subdir(dir)
+}
+
+/// Vrai si les enfants de `skins/` sont des **dossiers de voitures** (forme
+/// `skins/<voiture>/<skin>`) plutôt que des skins (forme `<voiture>/skins/<skin>`).
+fn skins_are_per_car_folders(skins_dir: &Path) -> bool {
+    let children: Vec<PathBuf> = std::fs::read_dir(skins_dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .collect();
+    // Un enfant qui ressemble à un skin → forme classique (skins directs).
+    if children.iter().any(|c| is_skin_leaf(c)) {
         return false;
     }
-    let skins = dir.join("skins");
-    skins.is_dir()
-        && std::fs::read_dir(&skins)
-            .map(|mut e| e.any(|x| x.map(|x| x.path().is_dir()).unwrap_or(false)))
-            .unwrap_or(false)
+    // Sinon, des enfants contenant des sous-dossiers = dossiers de voitures.
+    children.iter().any(|c| has_subdir(c))
 }
 
 /// Type d'un sous-élément rattaché détecté à l'import.
@@ -97,7 +115,8 @@ pub struct FoundSub {
     pub kind: SubKind,
     /// Voiture cible (nom du dossier) à laquelle rattacher le sous-élément.
     pub parent_id: String,
-    /// Dossier source (contient `skins/` pour un skin, `GUIDs.txt`+`.bank` pour un son).
+    /// Pour un SKIN : dossier dont les **enfants directs sont les skins**. Pour
+    /// un SON : dossier contenant `GUIDs.txt` + `.bank`.
     pub dir: PathBuf,
 }
 
@@ -166,10 +185,26 @@ fn descend_subs(dir: &Path, out: &mut Vec<FoundSub>) {
         return;
     }
     let dir_name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    if is_skin_pack(dir) {
-        out.push(FoundSub { kind: SubKind::Skin, parent_id: dir_name, dir: dir.to_path_buf() });
+
+    // Pack de skins : deux arborescences possibles (§12bis.2).
+    let skins = dir.join("skins");
+    if skins.is_dir() && has_subdir(&skins) {
+        if skins_are_per_car_folders(&skins) {
+            // Forme `skins/<voiture>/<skin>` : chaque enfant = une voiture cible.
+            for e in std::fs::read_dir(&skins).into_iter().flatten().flatten() {
+                let car = e.path();
+                if car.is_dir() && has_subdir(&car) {
+                    let parent = e.file_name().to_string_lossy().into_owned();
+                    out.push(FoundSub { kind: SubKind::Skin, parent_id: parent, dir: car });
+                }
+            }
+        } else {
+            // Forme `<voiture>/skins/<skin>` : le dossier courant est la voiture.
+            out.push(FoundSub { kind: SubKind::Skin, parent_id: dir_name, dir: skins });
+        }
         return;
     }
+
     if is_car_sound(dir) {
         out.push(FoundSub { kind: SubKind::Sound, parent_id: dir_name, dir: dir.to_path_buf() });
         return;

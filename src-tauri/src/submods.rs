@@ -70,7 +70,9 @@ fn import_skin_pack(
     out: &mut Vec<SubImported>,
 ) {
     let parent = &sub.parent_id;
-    let Ok(entries) = std::fs::read_dir(sub.dir.join("skins")) else {
+    // `sub.dir` contient directement les dossiers de skins (les deux formes
+    // d'arborescence sont déjà résolues par modscan).
+    let Ok(entries) = std::fs::read_dir(&sub.dir) else {
         return;
     };
     for e in entries.flatten() {
@@ -310,6 +312,36 @@ mod tests {
         let res2 = import_subs(&conn, &cfg, &library, "ferrari_skins.7z", &modscan::scan_subs(&base.join("src")), true);
         assert!(res2.is_empty());
         assert_eq!(overlay::list_subs_for_parent(&conn, "ferrari_488").unwrap().len(), 1);
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn skin_pack_multi_car_shape() {
+        // Forme `skins/<voiture>/<skin>` : un pack couvrant plusieurs voitures.
+        let base = std::env::temp_dir().join(format!("pitbox-subB-{}", Uuid::new_v4()));
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig::default();
+
+        let src = base.join("src");
+        for (car, skin) in [("ferrari_488", "af_corse_51"), ("lambo_huracan", "team_a")] {
+            let d = src.join("skins").join(car).join(skin);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("preview.jpg"), b"IMG").unwrap();
+        }
+
+        let subs = modscan::scan_subs(&src);
+        assert_eq!(subs.len(), 2, "deux voitures cibles");
+        let mut parents: Vec<String> = subs.iter().map(|s| s.parent_id.clone()).collect();
+        parents.sort();
+        assert_eq!(parents, vec!["ferrari_488", "lambo_huracan"]);
+
+        let res = import_subs(&conn, &cfg, &library, "pack.7z", &subs, true);
+        assert_eq!(res.len(), 2);
+        assert!(library.join("skins").join("ferrari_488").join("af_corse_51").join("preview.jpg").is_file());
+        assert!(library.join("skins").join("lambo_huracan").join("team_a").join("preview.jpg").is_file());
 
         let _ = std::fs::remove_dir_all(&base);
     }
