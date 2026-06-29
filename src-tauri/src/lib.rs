@@ -246,11 +246,12 @@ fn list_skins(app: AppHandle, car_id: String) -> Vec<library::SkinItem> {
     library::list_car_skins(&config::load(&app), &car_id)
 }
 
-/// Skins de la version active d'un mod, lus dans la bibliothèque (fiche détail §6.3).
+/// Skins d'une voiture pour la fiche détail (mod ou voiture de base, §6.3/§12bis).
 #[tauri::command]
-fn list_mod_skins(db: State<Db>, id: String) -> Result<Vec<library::SkinItem>, String> {
+fn list_mod_skins(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<library::SkinItem>, String> {
+    let cfg = config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(library::list_mod_skins(&conn, &id))
+    Ok(library::list_mod_skins(&conn, &cfg, &id))
 }
 
 /// Stack météo détectée (CSP/SOL/vanilla) — §8.5.

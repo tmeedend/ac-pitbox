@@ -168,20 +168,29 @@ pub fn list_car_skins(cfg: &AppConfig, car_id: &str) -> Vec<SkinItem> {
     read_skins_dir(&ac.join("content").join("cars").join(car_id).join("skins"))
 }
 
-/// Skins de la **version active** d'un mod, lus dans la bibliothèque (donc
-/// disponibles même si la voiture n'est pas activée) — pour la fiche détail (§6.3).
-pub fn list_mod_skins(conn: &Connection, mod_id: &str) -> Vec<SkinItem> {
+/// Skins d'une voiture pour la fiche détail (§6.3). Pour un **mod géré**, on lit
+/// la version active en bibliothèque (disponible même inactif). Pour une
+/// **voiture de base Kunos** (`is_stock`, sans version bibliothèque), on lit
+/// directement `content/cars/<id>/skins` — là où vivent ses skins (y compris
+/// ceux projetés par junction, §12bis.2).
+pub fn list_mod_skins(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Vec<SkinItem> {
     let Some(m) = overlay::get_mod(conn, mod_id).ok().flatten() else {
         return Vec::new();
     };
-    let Some(lib) = m
-        .active_version_id
-        .as_ref()
-        .and_then(|vid| overlay::get_version_path(conn, vid).ok().flatten())
-    else {
-        return Vec::new();
-    };
-    read_skins_dir(&Path::new(&lib).join("skins"))
+    if !m.is_stock {
+        if let Some(lib) = m
+            .active_version_id
+            .as_ref()
+            .and_then(|vid| overlay::get_version_path(conn, vid).ok().flatten())
+        {
+            return read_skins_dir(&Path::new(&lib).join("skins"));
+        }
+    }
+    // Voiture de base (ou mod sans version) : skins installés dans content/.
+    if let Some(ac) = &cfg.ac_install_path {
+        return read_skins_dir(&ac.join("content").join("cars").join(mod_id).join("skins"));
+    }
+    Vec::new()
 }
 
 /// Dossiers météo installés (`content/weather/*`).
@@ -220,4 +229,30 @@ pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<
     };
     let card = to_card(conn, cfg, m);
     Ok(Some(ModDetail { card, versions, history, specs }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stock_car_skins_read_from_content() {
+        let base = std::env::temp_dir().join(format!("pitbox-lib-{}", uuid::Uuid::new_v4()));
+        let ac = base.join("ac");
+        // Voiture de base avec un skin installé dans content/.
+        let skin = ac.join("content").join("cars").join("ks_ferrari").join("skins").join("rosso");
+        std::fs::create_dir_all(&skin).unwrap();
+        std::fs::write(skin.join("preview.jpg"), b"IMG").unwrap();
+
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_stock_mod(&conn, "ks_ferrari", "Car", Some("Ferrari"), Some("488"), &now).unwrap();
+
+        let cfg = AppConfig { ac_install_path: Some(ac.clone()), ..Default::default() };
+        let skins = list_mod_skins(&conn, &cfg, "ks_ferrari");
+        assert_eq!(skins.len(), 1, "skin de la voiture de base lu dans content/");
+        assert_eq!(skins[0].id, "rosso");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
 }
