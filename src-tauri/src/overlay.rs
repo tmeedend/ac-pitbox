@@ -91,6 +91,14 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_sub_parent ON sub_mods(parent_id);
 
+        -- Apps Python (§12bis.4) : type autonome, activable par junction.
+        CREATE TABLE IF NOT EXISTS apps (
+            id             TEXT PRIMARY KEY,       -- nom du dossier de l'app
+            library_path   TEXT NOT NULL,
+            source_archive TEXT,
+            imported_at    TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS versions (
             id                TEXT PRIMARY KEY,
             mod_id            TEXT NOT NULL REFERENCES mods(id_interne) ON DELETE CASCADE,
@@ -741,5 +749,74 @@ pub fn set_active_sound(conn: &Connection, parent_id: &str, id: Option<&str>) ->
     if let Some(id) = id {
         conn.execute("UPDATE sub_mods SET is_active = 1 WHERE id = ?1", [id])?;
     }
+    Ok(())
+}
+
+// --- Apps (§12bis.4) --------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppRow {
+    pub id: String,
+    pub library_path: String,
+    pub source_archive: Option<String>,
+    pub imported_at: String,
+}
+
+pub fn insert_app(
+    conn: &Connection,
+    id: &str,
+    library_path: &str,
+    source_archive: Option<&str>,
+    imported_at: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        r#"INSERT INTO apps (id, library_path, source_archive, imported_at)
+           VALUES (?1, ?2, ?3, ?4)
+           ON CONFLICT(id) DO UPDATE SET library_path = excluded.library_path"#,
+        params![id, library_path, source_archive, imported_at],
+    )?;
+    Ok(())
+}
+
+pub fn list_apps(conn: &Connection) -> rusqlite::Result<Vec<AppRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, library_path, source_archive, imported_at FROM apps ORDER BY id COLLATE NOCASE",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok(AppRow {
+            id: r.get(0)?,
+            library_path: r.get(1)?,
+            source_archive: r.get(2)?,
+            imported_at: r.get(3)?,
+        })
+    })?;
+    rows.collect()
+}
+
+pub fn get_app(conn: &Connection, id: &str) -> rusqlite::Result<Option<AppRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, library_path, source_archive, imported_at FROM apps WHERE id = ?1",
+    )?;
+    let mut rows = stmt.query_map([id], |r| {
+        Ok(AppRow {
+            id: r.get(0)?,
+            library_path: r.get(1)?,
+            source_archive: r.get(2)?,
+            imported_at: r.get(3)?,
+        })
+    })?;
+    match rows.next() {
+        Some(r) => Ok(Some(r?)),
+        None => Ok(None),
+    }
+}
+
+pub fn app_exists(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
+    let n: i64 = conn.query_row("SELECT COUNT(*) FROM apps WHERE id = ?1", [id], |r| r.get(0))?;
+    Ok(n > 0)
+}
+
+pub fn delete_app(conn: &Connection, id: &str) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM apps WHERE id = ?1", [id])?;
     Ok(())
 }

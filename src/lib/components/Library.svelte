@@ -426,6 +426,9 @@
               + {skins ? `${skins} skin(s)` : ""}{skins && sounds ? " · " : ""}{sounds ? `${sounds} son(s)` : ""} rattaché(s) (§12bis)
             </div>
           {/if}
+          {#if (a.apps ?? []).length}
+            <div class="r-line shared">+ {a.apps.length} app(s) importée(s) (§12bis)</div>
+          {/if}
         {/each}
       </div>
     {/if}

@@ -1,0 +1,144 @@
+//! Apps Python d'AC (§12bis.4) : type **autonome** (ni voiture, ni circuit, ni
+//! sous-élément). Stockées dans la bibliothèque, activables/désactivables par
+//! junction comme le reste, vers `<ac>/apps/python/<id>`. Pas de fiche ni de
+//! tags en v1 — juste nom, état, activation.
+
+use std::path::{Path, PathBuf};
+
+use chrono::Local;
+use rusqlite::Connection;
+use serde::Serialize;
+
+use crate::config::AppConfig;
+use crate::modscan::FoundApp;
+use crate::{activation, archive, overlay};
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AppImported {
+    pub name: String,
+}
+
+/// App avec son état d'activation (junction présente) pour la vue dédiée.
+#[derive(Debug, Clone, Serialize)]
+pub struct AppItem {
+    pub id: String,
+    pub source_archive: Option<String>,
+    pub imported_at: String,
+    pub active: bool,
+}
+
+/// Lien d'activation d'une app : `<ac>/apps/python/<id>`.
+fn app_link(cfg: &AppConfig, id: &str) -> Option<PathBuf> {
+    cfg.ac_install_path
+        .as_ref()
+        .map(|ac| ac.join("apps").join("python").join(id))
+}
+
+/// Importe les apps détectées : stockage bibliothèque + enregistrement (§12bis.4).
+pub fn import_apps(
+    conn: &Connection,
+    library: &Path,
+    source_name: &str,
+    apps: &[FoundApp],
+    copy: bool,
+) -> Vec<AppImported> {
+    let mut out = Vec::new();
+    for app in apps {
+        let dest = library.join("apps").join(&app.name);
+        // Ré-import : on remplace les fichiers existants.
+        if dest.exists() {
+            let _ = std::fs::remove_dir_all(&dest);
+        }
+        let stored = if copy {
+            archive::copy_dir(&app.dir, &dest)
+        } else {
+            archive::move_dir(&app.dir, &dest)
+        };
+        if stored.is_err() {
+            continue;
+        }
+        let _ = overlay::insert_app(
+            conn,
+            &app.name,
+            &dest.to_string_lossy(),
+            Some(source_name),
+            &Local::now().to_rfc3339(),
+        );
+        out.push(AppImported { name: app.name.clone() });
+    }
+    out
+}
+
+/// Liste les apps avec leur état d'activation (junction présente).
+pub fn list_apps(conn: &Connection, cfg: &AppConfig) -> Result<Vec<AppItem>, String> {
+    let rows = overlay::list_apps(conn).map_err(|e| e.to_string())?;
+    Ok(rows
+        .into_iter()
+        .map(|a| {
+            let active = app_link(cfg, &a.id).is_some_and(|l| activation::is_junction(&l));
+            AppItem { id: a.id, source_archive: a.source_archive, imported_at: a.imported_at, active }
+        })
+        .collect())
+}
+
+/// Active une app : junction `<ac>/apps/python/<id>` → dossier bibliothèque.
+pub fn activate_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
+    let app = overlay::get_app(conn, id).map_err(|e| e.to_string())?.ok_or("app introuvable")?;
+    let link = app_link(cfg, id).ok_or("dossier AC non configuré")?;
+
+    // Garde-fou : ne jamais écraser un vrai dossier (app installée hors de l'app).
+    match std::fs::symlink_metadata(&link) {
+        Ok(meta) => {
+            if meta.file_type().is_symlink() {
+                activation::remove_junction(&link)?;
+            } else {
+                return Err("un vrai dossier d'app existe déjà — opération refusée".into());
+            }
+        }
+        Err(_) => {}
+    }
+    if let Some(parent) = link.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    activation::create_junction(&link, Path::new(&app.library_path))
+}
+
+/// Désactive une app : retire la junction (garde-fou junction).
+pub fn deactivate_app(cfg: &AppConfig, id: &str) -> Result<(), String> {
+    let link = app_link(cfg, id).ok_or("dossier AC non configuré")?;
+    match std::fs::symlink_metadata(&link) {
+        Ok(meta) if meta.file_type().is_symlink() => activation::remove_junction(&link),
+        Ok(_) => Err("un vrai dossier d'app existe — non touché".into()),
+        Err(_) => Ok(()), // déjà inactive
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::modscan;
+
+    #[test]
+    fn app_detected_and_imported() {
+        let base = std::env::temp_dir().join(format!("pitbox-app-{}", uuid::Uuid::new_v4()));
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+
+        // App AC : apps/python/MyApp/MyApp.py
+        let app = base.join("src").join("apps").join("python").join("MyApp");
+        std::fs::create_dir_all(&app).unwrap();
+        std::fs::write(app.join("MyApp.py"), b"# app").unwrap();
+
+        let found = modscan::scan_apps(&base.join("src"));
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].name, "MyApp");
+
+        let res = import_apps(&conn, &library, "myapp.7z", &found, true);
+        assert_eq!(res.len(), 1);
+        assert!(library.join("apps").join("MyApp").join("MyApp.py").is_file());
+        assert!(overlay::app_exists(&conn, "MyApp").unwrap());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+}

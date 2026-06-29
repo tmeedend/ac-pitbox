@@ -6,6 +6,7 @@
   import Launch from "./Launch.svelte";
   import Maintenance from "./Maintenance.svelte";
   import Transversal from "./Transversal.svelte";
+  import Apps from "./Apps.svelte";
   import { nav } from "$lib/nav.svelte";
 
   type NavItem = { id: string; label: string; lot: string; disabled?: boolean };
@@ -17,7 +18,7 @@
     { id: "tracks", label: "Circuits", lot: "L1" },
     { id: "skins", label: "Skins", lot: "L6" },
     { id: "sounds", label: "Sons", lot: "L6" },
-    { id: "apps", label: "Apps", lot: "L6", disabled: true },
+    { id: "apps", label: "Apps", lot: "L6" },
   ];
   const tools: NavItem[] = [
     { id: "profiles", label: "Profils", lot: "L3" },
@@ -87,6 +88,8 @@
         <Transversal subType="SKIN" />
       {:else if nav.section === "sounds"}
         <Transversal subType="SOUND" />
+      {:else if nav.section === "apps"}
+        <Apps />
       {:else}
         <div class="placeholder">
           <div class="ph-tag">{allItems.find((n) => n.id === nav.section)?.lot}</div>

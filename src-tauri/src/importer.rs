@@ -59,6 +59,9 @@ pub struct ArchiveResult {
     /// Sous-éléments rattachés (skins/sons) routés vers la bibliothèque (§12bis.2).
     #[serde(default)]
     pub subs: Vec<crate::submods::SubImported>,
+    /// Apps Python importées (§12bis.4).
+    #[serde(default)]
+    pub apps: Vec<crate::apps::AppImported>,
 }
 
 /// Importe une liste d'archives. Chaque archive est traitée indépendamment ;
@@ -103,7 +106,7 @@ fn import_one(
         .unwrap_or_else(|| archive_path.to_string_lossy().into_owned());
 
     let mut result =
-        ArchiveResult { archive: archive_name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new() };
+        ArchiveResult { archive: archive_name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new(), apps: Vec::new() };
 
     let (Some(sevenzip), Some(library)) = (&cfg.sevenzip_exe, &cfg.library_path) else {
         result.error = Some("Chemins 7-Zip ou bibliothèque non configurés.".into());
@@ -133,10 +136,11 @@ fn import_one(
     }
 
     let found = modscan::scan(&workdir);
-    // Sous-éléments rattachés (skins/sons) — peuvent constituer une archive seuls.
+    // Sous-éléments rattachés (skins/sons) et apps — peuvent constituer une archive seuls.
     let subs = modscan::scan_subs(&workdir);
-    if found.is_empty() && subs.is_empty() {
-        result.error = Some("Aucune voiture, circuit, skin ou son trouvé dans l'archive.".into());
+    let apps = modscan::scan_apps(&workdir);
+    if found.is_empty() && subs.is_empty() && apps.is_empty() {
+        result.error = Some("Aucune voiture, circuit, skin, son ou app trouvé dans l'archive.".into());
         let _ = std::fs::remove_dir_all(&workdir);
         return result;
     }
@@ -177,6 +181,10 @@ fn import_one(
     // → contenu en temp, toujours déplacé.
     if !subs.is_empty() {
         result.subs = crate::submods::import_subs(conn, cfg, library, &archive_name, &subs, false);
+    }
+    // Apps Python (§12bis.4).
+    if !apps.is_empty() {
+        result.apps = crate::apps::import_apps(conn, library, &archive_name, &apps, false);
     }
 
     // Ressources partagées globales (fonts/drivers) avant nettoyage du temp (§4.8).
@@ -228,7 +236,7 @@ fn import_one_folder(
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| dir.to_string_lossy().into_owned());
     let mut result =
-        ArchiveResult { archive: name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new() };
+        ArchiveResult { archive: name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new(), apps: Vec::new() };
 
     let Some(library) = &cfg.library_path else {
         result.error = Some("Bibliothèque non configurée.".into());
@@ -241,8 +249,9 @@ fn import_one_folder(
 
     let found = modscan::scan(dir);
     let subs = modscan::scan_subs(dir);
-    if found.is_empty() && subs.is_empty() {
-        result.error = Some("Aucune voiture, circuit, skin ou son trouvé dans le dossier.".into());
+    let apps = modscan::scan_apps(dir);
+    if found.is_empty() && subs.is_empty() && apps.is_empty() {
+        result.error = Some("Aucune voiture, circuit, skin, son ou app trouvé dans le dossier.".into());
         return result;
     }
     emit(Progress {
@@ -274,6 +283,10 @@ fn import_one_folder(
     // Sous-éléments rattachés (skins/sons), stockage séparé (§12bis.2).
     if !subs.is_empty() {
         result.subs = crate::submods::import_subs(conn, cfg, library, &name, &subs, copy);
+    }
+    // Apps Python (§12bis.4).
+    if !apps.is_empty() {
+        result.apps = crate::apps::import_apps(conn, library, &name, &apps, copy);
     }
 
     // Ressources partagées globales (§4.8).
@@ -430,7 +443,7 @@ fn exec_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, it: &BulkExecItem
     let dir = Path::new(&it.path);
     let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let mut result =
-        ArchiveResult { archive: name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new() };
+        ArchiveResult { archive: name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new(), apps: Vec::new() };
 
     let Some(library) = &cfg.library_path else {
         result.error = Some("Bibliothèque non configurée.".into());

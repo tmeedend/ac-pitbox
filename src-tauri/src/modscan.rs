@@ -118,6 +118,48 @@ pub fn scan_subs(root: &Path) -> Vec<FoundSub> {
     found
 }
 
+/// App Python d'AC (§12bis.4) : dossier `<nom>` contenant `<nom>.py` (script
+/// principal, convention AC `apps/python/<App>/<App>.py`).
+pub fn is_app(dir: &Path) -> bool {
+    let Some(name) = dir.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    dir.join(format!("{name}.py")).is_file()
+}
+
+#[derive(Debug, Clone)]
+pub struct FoundApp {
+    pub name: String,
+    pub dir: PathBuf,
+}
+
+/// Descend et collecte les **apps** (type autonome, §12bis.4). Disjoint des
+/// voitures/circuits.
+pub fn scan_apps(root: &Path) -> Vec<FoundApp> {
+    let mut found = Vec::new();
+    descend_apps(root, &mut found);
+    found
+}
+
+fn descend_apps(dir: &Path, out: &mut Vec<FoundApp>) {
+    if is_car(dir) || is_track(dir) {
+        return; // mod de 1er niveau : pas une app, et inutile d'y descendre
+    }
+    if is_app(dir) {
+        let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        out.push(FoundApp { name, dir: dir.to_path_buf() });
+        return;
+    }
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                descend_apps(&p, out);
+            }
+        }
+    }
+}
+
 fn descend_subs(dir: &Path, out: &mut Vec<FoundSub>) {
     // Vrai mod de premier niveau : géré par `scan`, pas ici.
     if is_car(dir) || is_track(dir) {

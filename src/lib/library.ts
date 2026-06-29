@@ -118,12 +118,18 @@ export interface SubImported {
   warning: string | null;
 }
 
+/** App Python importée (§12bis.4). */
+export interface AppImported {
+  name: string;
+}
+
 export interface ArchiveResult {
   archive: string;
   mods: ImportedMod[];
   error: string | null;
   shared: SharedResult[];
   subs: SubImported[];
+  apps: AppImported[];
 }
 
 export interface ImportProgress {

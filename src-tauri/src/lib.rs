@@ -1,4 +1,5 @@
 mod activation;
+mod apps;
 mod archive;
 mod config;
 mod detect;
@@ -357,6 +358,28 @@ fn delete_sub_mod(db: State<Db>, id: String) -> Result<(), String> {
     overlay::delete_sub_mod(&conn, &id).map_err(|e| e.to_string())
 }
 
+/// Liste les apps Python avec leur état d'activation (§12bis.4).
+#[tauri::command]
+fn list_apps(app: AppHandle, db: State<Db>) -> Result<Vec<apps::AppItem>, String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    apps::list_apps(&conn, &cfg)
+}
+
+/// Active une app (junction vers apps/python/, §12bis.4).
+#[tauri::command]
+fn activate_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    apps::activate_app(&conn, &cfg, &id)
+}
+
+/// Désactive une app (§12bis.4).
+#[tauri::command]
+fn deactivate_app(app: AppHandle, id: String) -> Result<(), String> {
+    apps::deactivate_app(&config::load(&app), &id)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -404,6 +427,9 @@ pub fn run() {
             activate_sound,
             restore_sound,
             delete_sub_mod,
+            list_apps,
+            activate_app,
+            deactivate_app,
             get_rules,
             save_rules,
             rules_impact,
