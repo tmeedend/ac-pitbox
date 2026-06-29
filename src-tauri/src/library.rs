@@ -137,13 +137,10 @@ fn read_skin_name(skin_dir: &Path) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-pub fn list_car_skins(cfg: &AppConfig, car_id: &str) -> Vec<SkinItem> {
-    let Some(ac) = &cfg.ac_install_path else {
-        return Vec::new();
-    };
-    let skins_dir = ac.join("content").join("cars").join(car_id).join("skins");
+/// Lit les skins d'un dossier `skins/` donné (sous-dossiers + miniature + nom).
+fn read_skins_dir(skins_dir: &Path) -> Vec<SkinItem> {
     let mut out = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&skins_dir) {
+    if let Ok(entries) = std::fs::read_dir(skins_dir) {
         for e in entries.flatten() {
             let p = e.path();
             if !p.is_dir() {
@@ -161,6 +158,30 @@ pub fn list_car_skins(cfg: &AppConfig, car_id: &str) -> Vec<SkinItem> {
     }
     out.sort_by(|a, b| a.id.to_lowercase().cmp(&b.id.to_lowercase()));
     out
+}
+
+/// Skins d'une voiture **installée** (`content/cars/<id>/skins`) — flux de lancement.
+pub fn list_car_skins(cfg: &AppConfig, car_id: &str) -> Vec<SkinItem> {
+    let Some(ac) = &cfg.ac_install_path else {
+        return Vec::new();
+    };
+    read_skins_dir(&ac.join("content").join("cars").join(car_id).join("skins"))
+}
+
+/// Skins de la **version active** d'un mod, lus dans la bibliothèque (donc
+/// disponibles même si la voiture n'est pas activée) — pour la fiche détail (§6.3).
+pub fn list_mod_skins(conn: &Connection, mod_id: &str) -> Vec<SkinItem> {
+    let Some(m) = overlay::get_mod(conn, mod_id).ok().flatten() else {
+        return Vec::new();
+    };
+    let Some(lib) = m
+        .active_version_id
+        .as_ref()
+        .and_then(|vid| overlay::get_version_path(conn, vid).ok().flatten())
+    else {
+        return Vec::new();
+    };
+    read_skins_dir(&Path::new(&lib).join("skins"))
 }
 
 /// Dossiers météo installés (`content/weather/*`).

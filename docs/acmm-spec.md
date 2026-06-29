@@ -419,15 +419,27 @@ Pour mémoire, afin d'éviter une erreur de conception récurrente : le champ `c
 
 - **Galerie** — vignettes de preview (le `preview.png` des skins voitures, l'`outline`/preview des circuits). Visuelle, faite pour parcourir.
 - **Tableau** — dense, **colonnes sélectionnables par l'utilisateur, propres à chaque type** (le choix de colonnes est mémorisé indépendamment pour voitures et circuits). Tri par colonne.
-  - *Colonnes voitures* : nom, marque, catégorie (tag #), classe (race/road), année, auteur, version, tags, état (actif/inactif), date d'import.
-  - *Colonnes circuits* : nom, layouts, longueur, nombre de virages, extensions CSP, auteur, version, tags, état, date d'import.
+  - *Colonnes voitures* : nom, marque, catégorie (tag #), classe (race/road), année, auteur, version, tags, état (actif/inactif), distance, **date d'ajout**, **date de mise à jour**, date d'import.
+  - *Colonnes circuits* : nom, layouts, longueur, nombre de virages, extensions CSP, auteur, version, tags, état, distance, **date d'ajout**, **date de mise à jour**, date d'import.
   - Un sélecteur de colonnes (bouton « Colonnes ») permet de cocher celles à afficher ; la sélection persiste par type.
+
+**Colonnes de dates (sur tous les types de mods : voitures, circuits, et add-ons skins/sons/apps)** — trois dates, à fiabilité distincte :
+- **Date d'ajout** : quand l'utilisateur a importé le mod la première fois. **Fiable** (posée à l'import). Toujours remplie.
+- **Date de mise à jour (par l'utilisateur)** : dernière fois qu'une nouvelle version a été réimportée par-dessus dans l'app. **Fiable**. Égale la date d'ajout si jamais mis à jour.
+- **Date de publication (du moddeur)** : date officielle de la dernière version publiée. **Souvent vide en v1** — non connue de façon fiable sans l'extension navigateur (lot L7, §12ter). Prévue dans le modèle, affichée seulement si l'info existe (« — » sinon). À ne pas confondre avec les deux précédentes.
+
+Les deux premières dates sont des colonnes fonctionnelles dès maintenant, sur tous les types. La troisième s'enrichit avec L7.
 
 Bascule d'un mode à l'autre par un toggle persistant.
 
-### 6.3 Panneau de détail
+### 6.3 Panneau / page de détail
 
-Sélection d'un mod → panneau latéral : preview, métadonnées complètes, liste des versions disponibles (avec version active mise en évidence), tags éditables, historique horodaté, actions (activer/désactiver, exporter, supprimer).
+Deux présentations selon le contexte :
+- **Panneau latéral** (depuis la liste) : preview, métadonnées, versions (active mise en évidence), tags éditables, historique, actions.
+- **Page de détail pleine page** (layout de référence : maquette `pitbox-fiche-B-revisee.html`) — pour exploiter les grands écrans. Structure validée :
+  - *Rangée haute* : **image héros large à gauche** (preview de la voiture en grand, specs natives en surimpression, badge « fichier non modifié ») + **panneau données à droite** (fiche technique en grille, courbe moteur power/torque, **description dépliable** derrière un bouton — jamais affichée en permanence).
+  - *Rangée basse, 3 colonnes* : **Skins** (sélection/prévisualisation, étoile = piloté — voir §12bis.2, pas d'activation) | **Distance puis Son moteur** (§6.5 et §12bis.2) | **Tags** (par origine, §5.3) + **Versions** + **Historique**.
+  - Un peu de scroll est acceptable : l'objectif est d'exploiter la largeur, pas le zéro-scroll absolu.
 
 ### 6.4 États visuels
 
@@ -548,7 +560,7 @@ Principes du flux :
 - *Hotlap* : ghost car, + réglages pertinents.
 - **Hors périmètre** (rester simple) : pénalités détaillées, limites de piste/drapeaux, tyre blankets, ballast/restrictor.
 
-**Étape Circuit** : pleine largeur — tracé en grand, infos (longueur, virages, CSP), choix du **layout** et du **skin** de circuit.
+**Étape Circuit** : pleine largeur — **image d'aperçu du circuit en fond** (`preview.png`) avec le **tracé du layout sélectionné par-dessus** (`outline.png`/`map.png`), infos (longueur, virages, CSP), choix du **layout** (un circuit a souvent plusieurs layouts, chacun avec son tracé) et du **skin** de circuit. Ne pas se limiter au nom du layout — l'illustration est essentielle.
 
 ---
 
@@ -660,22 +672,28 @@ SubMod (overlay)
   type          : enum { SKIN, SOUND, TRACK_SKIN, TRACK_MOD }
   parent_id     : string   # empreinte de la voiture/circuit cible (mod OU stock)
   library_path  : string
-  active        : bool
   source_archive: string
+  # SKIN : pas de champ d'activation (voir ci-dessous)
+  # SOUND : is_active (un seul son actif par voiture)
 ```
 
-**Asymétrie fondamentale d'activation** (à respecter dans l'UI et la mécanique) :
-- **Skins = additifs / multiples.** Une voiture peut avoir N skins actifs simultanément (ex. tout un plateau F1 d'une saison dans un pack). Activer un pack = rendre tous ses skins disponibles ; le choix du skin piloté se fait en course (ou via le sélecteur de skin de l'écran de lancement, §8.6). Pas de conflit, on empile dans `content/cars/<voiture>/skins/`.
-- **Son = exclusif / unique.** Une voiture n'a **qu'un seul** son moteur à la fois. Activer un mod son = **remplacer** le son courant (dossier `sfx` : `.bank` + `GUIDs.txt`, déjà détecté par `isCarSound` dans `archives.py`). Choix « radio », pas accumulation.
-- **Restauration du son d'origine** : l'activation d'un son sauvegarde le son précédent (de base ou mod) pour pouvoir y revenir. L'app ne détruit jamais le son d'origine de façon irréversible.
+**Asymétrie fondamentale (à respecter dans l'UI et la mécanique) — les skins et les sons ne se gèrent PAS pareil :**
+
+- **Skins = AUCUNE activation filesystem.** Un skin est juste un sous-dossier dans `skins/`. Il ne gêne pas, ne crée pas de conflit, ne coûte rien à laisser en place — AC les charge tous. **Il n'y a donc rien à activer/désactiver.** Tous les skins présents sont disponibles. La seule action utile est la **sélection** : (a) *prévisualiser* un skin (le voir), et (b) désigner le **skin piloté** au lancement (celui utilisé quand on clique « Conduire »). Pas de case à cocher d'activation — une sélection de prévisualisation + une désignation « piloté » (une étoile). *(Correction d'un modèle initial erroné qui prévoyait une activation additive avec un champ `active` : abandonné.)*
+- **Son = exclusif / unique, vraie bascule de fichiers.** Une voiture n'a **qu'un seul** son moteur à la fois. Activer un mod son = **remplacer** réellement le son courant (dossier `sfx` : `.bank` + `GUIDs.txt`, détecté par `isCarSound` dans `archives.py`). Choix « radio », pas accumulation. C'est la seule des deux qui touche vraiment aux fichiers.
+- **Restauration du son d'origine** : activer un son sauvegarde le son précédent (base ou mod) pour pouvoir y revenir. L'app ne détruit jamais le son d'origine de façon irréversible.
+
+En résumé : **skin = choix d'affichage** (sélection/prévisualisation/piloté), **son = bascule de fichiers** (exclusive, réversible).
+
+**Import des skins** : pas de bouton d'import sur la fiche. Un pack de skins entre par l'**import général** (c'est un mod comme un autre) et se rattache automatiquement à la bonne voiture via le nom de dossier cible qu'il contient (`skins/<voiture>/`). La fiche sert à *voir et choisir* les skins, l'import général à *les faire entrer*.
 
 **Circuits** : même logique avec `TRACK_SKIN` (skins de circuit) et `TRACK_MOD` (modifications), gérés depuis la fiche du circuit.
 
 ### 12bis.3 Double accès : fiche + vue transversale
 
 Les sous-éléments ne polluent **jamais** la bibliothèque principale (qui ne liste que voitures et circuits de premier niveau — critique avec 500+ mods). Ils sont accessibles par deux chemins :
-- **Depuis la fiche de l'entité** : section « Skins » / « Son » sur la fiche d'une voiture (idem circuit), listant ce qui lui est rattaché + activation. Chemin naturel quand on travaille sur une voiture précise.
-- **Vues transversales dédiées** : trois entrées séparées dans la barre latérale — **Skins**, **Sons**, **Apps** — listant tous les éléments du type, filtrables, avec l'entité cible affichée à côté. Chemin pour retrouver « ce pack de skins F1 2023 » sans ouvrir les fiches une à une. Ces vues sont à l'écart du flux principal : on y va au besoin, elles n'alourdissent pas la navigation quotidienne.
+- **Depuis la fiche de l'entité** : section « Skins » (sélection/prévisualisation) / « Son » (sélecteur exclusif) sur la fiche d'une voiture (idem circuit). Chemin naturel quand on travaille sur une voiture précise.
+- **Vues transversales dédiées** : trois entrées séparées dans la barre latérale — **Skins**, **Sons**, **Apps** — listant tous les éléments du type, filtrables, avec l'entité cible affichée à côté. Chemin pour retrouver « ce pack de skins F1 2023 » sans ouvrir les fiches une à une. Ces vues sont à l'écart du flux principal.
 
 ### 12bis.4 Mods de type Application
 

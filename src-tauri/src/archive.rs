@@ -36,6 +36,36 @@ pub fn extract(sevenzip: &Path, archive: &Path, dest: &Path) -> Result<(), Strin
     }
 }
 
+/// Crée une archive `.7z` à partir du **contenu** de `src_dir` (chemins relatifs
+/// préservés), via `7z a`. Utilisé par l'export autonome (§9.1).
+pub fn create_7z(sevenzip: &Path, src_dir: &Path, archive: &Path) -> Result<(), String> {
+    if archive.exists() {
+        let _ = std::fs::remove_file(archive);
+    }
+    let mut cmd = Command::new(sevenzip);
+    cmd.current_dir(src_dir)
+        .arg("a")
+        .arg("-t7z")
+        .arg(archive)
+        .arg("*")
+        .arg("-y");
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let output = cmd
+        .output()
+        .map_err(|e| format!("impossible de lancer 7-Zip : {e}"))?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "7-Zip a échoué (code {:?}) : {}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+    }
+}
+
 /// Déplace un dossier : `rename` si même volume, sinon copie récursive + suppression.
 pub fn move_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
     if let Some(parent) = dst.parent() {

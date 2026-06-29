@@ -11,13 +11,16 @@
   } from "$lib/library";
   import PowerCurve from "./PowerCurve.svelte";
   import { nav } from "$lib/nav.svelte";
+  import { open } from "@tauri-apps/plugin-dialog";
+  import { exportMod, type ExportReport } from "$lib/maintenance";
 
   interface Props {
     id: string | null;
     onclose: () => void;
     onchange?: () => void;
+    onexpand?: () => void;
   }
-  let { id, onclose, onchange }: Props = $props();
+  let { id, onclose, onchange, onexpand }: Props = $props();
 
   function drive() {
     if (!detail) return;
@@ -34,6 +37,24 @@
   let showDescription = $state(false);
   let busy = $state(false);
   let actionError = $state("");
+  let exporting = $state(false);
+  let exportResult = $state<ExportReport | null>(null);
+
+  async function doExport() {
+    if (!detail || exporting) return;
+    const dir = await open({ directory: true, multiple: false, title: "Dossier d'export" });
+    if (!dir || typeof dir !== "string") return;
+    exporting = true;
+    actionError = "";
+    exportResult = null;
+    try {
+      exportResult = await exportMod(detail.id_interne, dir);
+    } catch (e) {
+      actionError = String(e);
+    } finally {
+      exporting = false;
+    }
+  }
 
   async function reload() {
     if (!id) return;
@@ -172,6 +193,9 @@
 {#if id}
   <aside class="panel">
     <header>
+      {#if onexpand}
+        <button class="btn-ghost expand" type="button" onclick={onexpand} title="Ouvrir en page détail">⤢ Agrandir</button>
+      {/if}
       <button class="btn-ghost close" type="button" onclick={onclose} title="Fermer">✕</button>
     </header>
 
@@ -205,10 +229,13 @@
         {#if detail.brand}<span><b>Marque</b> {detail.brand}</span>{/if}
         {#if detail.year}<span><b>Année</b> {detail.year}</span>{/if}
         <span><b>Type</b> {detail.kind === "Track" ? "Circuit" : "Voiture"}</span>
+        {#if detail.source_pack}<span class="pack"><b>Pack</b> {detail.source_pack}</span>{/if}
       </div>
 
       <div class="actions">
-        {#if detail.active}
+        {#if detail.is_stock}
+          <span class="state base" title="Contenu de base Kunos — lecture seule (§12bis.1)">Contenu de base</span>
+        {:else if detail.active}
           <span class="state on"><span class="state-dot"></span>Actif</span>
           <button class="btn" type="button" onclick={deactivate} disabled={busy}>Désactiver</button>
         {:else}
@@ -217,8 +244,25 @@
         {/if}
         <button class="btn btn-primary" type="button" onclick={drive}>Conduire</button>
       </div>
+      {#if !detail.is_stock}
+        <div class="sec-actions">
+          <button class="btn-ghost export" type="button" onclick={doExport} disabled={exporting}>
+            {exporting ? "Export…" : "⤓ Exporter (archive autonome)"}
+          </button>
+        </div>
+      {/if}
       {#if actionError}
         <div class="action-err">{actionError}</div>
+      {/if}
+      {#if exportResult}
+        <div class="export-ok">
+          ✓ Archive créée : {exportResult.included.length} élément(s) embarqué(s).
+          {#if exportResult.warnings.length}
+            <ul class="export-warn">
+              {#each exportResult.warnings as w}<li>⚠ {w}</li>{/each}
+            </ul>
+          {/if}
+        </div>
       {/if}
 
       {#if detail.kind === "Car"}
@@ -367,7 +411,19 @@
     background: var(--panel2);
     display: flex;
     justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
     padding: 10px 0 4px;
+    z-index: 1;
+  }
+  .expand {
+    margin-right: auto;
+    font-size: 11px;
+    padding: 4px 8px;
+    color: var(--muted);
+  }
+  .expand:hover {
+    color: var(--rosso-bright);
   }
   .close {
     font-size: 14px;
@@ -418,6 +474,12 @@
     font-size: 10px;
     text-transform: uppercase;
   }
+  .meta .pack {
+    flex-basis: 100%;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
   .actions {
     display: flex;
     align-items: center;
@@ -437,6 +499,9 @@
   .state.on {
     color: var(--green);
   }
+  .state.base {
+    color: var(--blue);
+  }
   .state-dot {
     width: 8px;
     height: 8px;
@@ -451,6 +516,32 @@
     color: var(--rosso-bright);
     font-size: 11.5px;
     line-height: 1.4;
+  }
+  .sec-actions {
+    margin-top: 8px;
+  }
+  .export {
+    font-size: 11px;
+    padding: 4px 6px;
+    color: var(--muted);
+  }
+  .export:hover {
+    color: var(--rosso-bright);
+  }
+  .export-ok {
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: var(--green-dim);
+    border: 1px solid var(--green-border);
+    color: var(--green);
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+  .export-warn {
+    list-style: none;
+    margin-top: 6px;
+    color: var(--yellow);
+    font-size: 11px;
   }
   .v-activate {
     background: var(--raised);

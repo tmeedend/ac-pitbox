@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pit Box — Vues transversales Skins / Sons / Apps</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/tabler-icons.min.css" rel="stylesheet">
+<style>
+  :root{
+    --rosso:#d40000; --rosso-bright:#ff5555; --rosso-dim:#1a0606; --rosso-border:#5c1212;
+    --bg:#08080c; --panel:#0d0d12; --panel2:#0a0a0f; --card:#13131a; --raised:#15151c;
+    --line:#1e1e26; --txt:#f2f2f4; --txt2:#cfd2d9; --muted:#86868f; --muted2:#5d6470; --faint:#4a4a55;
+    --green:#5dcaa5; --green-dim:#0a1a14; --green-border:#16382c;
+    --blue:#6a9ec9; --blue-dim:#0c1620; --blue-border:#1d3148;
+    --mono:'SF Mono',ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:13px;-webkit-font-smoothing:antialiased;padding:14px;}
+  .mono{font-family:var(--mono);}
+  button{font-family:inherit;cursor:pointer;border:none;}
+  .frame{max-width:1000px;margin:0 auto;background:var(--panel);border:1px solid var(--rosso);}
+  .topbar{background:var(--rosso);height:3px;}
+  .shell{display:grid;grid-template-columns:166px 1fr;}
+
+  .side{background:var(--bg);border-right:1px solid var(--line);min-height:520px;}
+  .brand{display:flex;align-items:center;gap:9px;padding:14px 13px;border-bottom:1px solid var(--line);}
+  .logo{width:26px;height:26px;background:var(--rosso);display:flex;align-items:center;justify-content:center;transform:skewX(-8deg);}
+  .logo i{transform:skewX(8deg);color:#fff;font-size:16px;}
+  .bn{font-size:13px;font-weight:600;letter-spacing:1.5px;font-style:italic;line-height:1;}
+  .bs{color:var(--rosso);font-size:7px;letter-spacing:3px;margin-top:3px;}
+  .nsec{color:var(--faint);font-size:8.5px;font-weight:600;letter-spacing:2px;padding:12px 13px 5px;}
+  .ni{display:flex;align-items:center;gap:9px;padding:8px 13px;border-left:3px solid transparent;color:var(--muted);font-size:11.5px;cursor:pointer;}
+  .ni:hover{background:var(--raised);}
+  .ni.on{background:var(--raised);border-left-color:var(--rosso);color:var(--txt);}
+  .ni .ct{margin-left:auto;color:var(--faint);font-family:var(--mono);font-size:10.5px;}
+  .ni.on .ct{color:var(--rosso);}
+
+  .main{display:flex;flex-direction:column;min-width:0;}
+  .head{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;background:var(--panel2);}
+  .head h1{font-size:13px;font-weight:600;letter-spacing:1.5px;display:flex;align-items:center;gap:9px;}
+  .head h1 i{color:var(--rosso);font-size:17px;}
+  .head .sub{color:var(--faint);font-size:8.5px;font-family:var(--mono);}
+  .field{height:30px;background:var(--bg);border:1px solid var(--line);padding:0 10px 0 30px;color:var(--txt);font-size:10px;letter-spacing:1px;font-family:var(--mono);width:100%;}
+  .search{position:relative;flex:1;max-width:240px;}
+  .search i{position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--faint);}
+
+  .pane{padding:14px 16px;}
+  .lbl{color:var(--faint);font-size:8px;letter-spacing:1.5px;margin-bottom:9px;}
+
+  /* row list with parent target */
+  .rows{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);}
+  .row{display:flex;align-items:center;gap:11px;background:var(--panel);padding:9px 12px;}
+  .thumb{width:46px;height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);}
+  .rname{font-size:11.5px;}
+  .rmeta{color:var(--muted);font-size:9px;font-family:var(--mono);margin-top:2px;}
+  .parent{display:flex;align-items:center;gap:5px;background:var(--panel2);border:1px solid var(--line);padding:3px 8px;}
+  .parent i{font-size:12px;color:var(--rosso);}
+  .parent span{font-size:9.5px;font-family:var(--mono);color:var(--txt2);}
+  .chk{width:15px;height:15px;border:1px solid var(--muted2);display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;}
+  .chk.on{background:var(--rosso);border-color:var(--rosso);}
+  .chk.on i{font-size:11px;color:#fff;}
+  .radio{width:14px;height:14px;border-radius:50%;border:1px solid var(--muted2);flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+  .radio.on{border-color:var(--rosso-bright);}
+  .radio.on::after{content:'';width:7px;height:7px;border-radius:50%;background:var(--rosso-bright);}
+  .src{font-size:8px;font-family:var(--mono);padding:1px 6px;border:1px solid var(--line);color:var(--muted);}
+  .grpchip{display:inline-flex;align-items:center;gap:4px;background:var(--rosso-dim);border:1px solid var(--rosso-border);color:var(--rosso-bright);font-size:8.5px;font-family:var(--mono);padding:2px 8px;}
+  .note{display:flex;align-items:center;gap:6px;background:var(--blue-dim);border:1px solid var(--blue-border);padding:7px 10px;color:#8fb4d4;font-size:9px;font-family:var(--mono);margin-top:11px;}
+  .filterbar{display:flex;align-items:center;gap:7px;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--panel2);}
+  .fchip{background:var(--raised);color:var(--txt2);font-size:9.5px;padding:3px 9px;border:1px solid var(--line);font-family:var(--mono);cursor:pointer;}
+  .fchip.on{background:var(--rosso-dim);color:var(--rosso-bright);border-color:var(--rosso-border);}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="topbar"></div>
+  <div class="shell">
+    <aside class="side">
+      <div class="brand"><div class="logo"><i class="ti ti-steering-wheel"></i></div><div><div class="bn">PITBOX</div><div class="bs">MOD MANAGER</div></div></div>
+      <div class="nsec">// BIBLIOTHÈQUE</div>
+      <div class="ni"><i class="ti ti-car"></i> VOITURES <span class="ct">418</span></div>
+      <div class="ni"><i class="ti ti-road"></i> CIRCUITS <span class="ct">96</span></div>
+      <div class="nsec">// ADD-ONS</div>
+      <div class="ni on" data-v="skins"><i class="ti ti-palette"></i> SKINS <span class="ct">214</span></div>
+      <div class="ni" data-v="sons"><i class="ti ti-volume"></i> SONS <span class="ct">37</span></div>
+      <div class="ni" data-v="apps"><i class="ti ti-apps"></i> APPS <span class="ct">12</span></div>
+      <div class="nsec">// ATELIER</div>
+      <div class="ni"><i class="ti ti-adjustments-code"></i> RÈGLES</div>
+      <div class="ni"><i class="ti ti-flag-checkered"></i> LANCER</div>
+    </aside>
+
+    <main class="main" id="main"></main>
+  </div>
+</div>
+
+<script>
+const SKINS = [
+  {name:"AF Corse #51",parent:"Ferrari 488 GT3 Evo",pack:"AF Corse 2023",active:true,col:"#a32d2d"},
+  {name:"Iron Lynx #60",parent:"Ferrari 488 GT3 Evo",pack:"AF Corse 2023",active:true,col:"#1a1a1a"},
+  {name:"Red Bull RB19",parent:"RB19 F1 2023",pack:"F1 2023 Full Grid",active:true,col:"#1e3a8a"},
+  {name:"Ferrari SF-23",parent:"SF-23 F1 2023",pack:"F1 2023 Full Grid",active:true,col:"#c0392b"},
+  {name:"Mercedes W14",parent:"W14 F1 2023",pack:"F1 2023 Full Grid",active:false,col:"#16a085"},
+  {name:"Martini Racing",parent:"Porsche 911 RSR",pack:"Classic Liveries",active:false,col:"#3498db"},
+];
+const SONS = [
+  {name:"Ferrari V8 Enhanced",parent:"Ferrari 488 GT3 Evo",src:"MOD",active:true},
+  {name:"Cosworth V8 Real",parent:"Lotus 49",src:"MOD",active:true},
+  {name:"Rotary 13B Tuned",parent:"Mazda RX-7 FD",src:"MOD",active:false},
+];
+const APPS = [
+  {name:"Real Head Motion",meta:"caméra · v1.3.4",active:true},
+  {name:"Sidekick",meta:"télémétrie HUD · v2.1",active:true},
+  {name:"Race Essentials",meta:"infos course · v0.9",active:false},
+  {name:"Track Map Display",meta:"mini-carte · v1.0",active:true},
+];
+
+function thumbCar(col){return `<div class="thumb" style="background:${col}22;"><i class="ti ti-shirt-sport" style="font-size:18px;color:${col};"></i></div>`;}
+
+function viewSkins(){
+  return `
+  <div class="head"><h1><i class="ti ti-palette"></i> SKINS</h1><span class="sub">// tous les skins, toutes voitures — additifs</span>
+    <div class="search" style="margin-left:auto;"><i class="ti ti-search"></i><input class="field" placeholder="FILTRER..."></div></div>
+  <div class="filterbar"><span class="lbl" style="margin:0;">PACKS /</span>
+    <span class="fchip on">Tous</span><span class="fchip">AF Corse 2023</span><span class="fchip">F1 2023 Full Grid</span><span class="fchip">Classic Liveries</span></div>
+  <div class="pane">
+    <div class="lbl">214 SKINS · regroupés par pack d'origine</div>
+    <div class="rows">${SKINS.map((s,i)=>`
+      <div class="row">
+        ${thumbCar(s.col)}
+        <div style="flex:1;min-width:0;"><div class="rname">${s.name}</div><div class="rmeta">pack : ${s.pack}</div></div>
+        <div class="parent"><i class="ti ti-car"></i><span>${s.parent}</span></div>
+        <span class="chk ${s.active?'on':''}" onclick="this.classList.toggle('on');this.innerHTML=this.classList.contains('on')?'<i class=\\'ti ti-check\\'></i>':''">${s.active?'<i class="ti ti-check"></i>':''}</span>
+      </div>`).join('')}</div>
+    <div class="note"><i class="ti ti-info-circle"></i> Chaque skin reste rattaché à sa voiture (colonne de droite). On les retrouve ici sans ouvrir chaque fiche. Filtrables par pack.</div>
+  </div>`;
+}
+function viewSons(){
+  return `
+  <div class="head"><h1><i class="ti ti-volume"></i> SONS</h1><span class="sub">// mods son moteur — un seul actif par voiture (exclusif)</span>
+    <div class="search" style="margin-left:auto;"><i class="ti ti-search"></i><input class="field" placeholder="FILTRER..."></div></div>
+  <div class="pane">
+    <div class="lbl">37 MODS SON · un par voiture maximum</div>
+    <div class="rows">${SONS.map((s,i)=>`
+      <div class="row">
+        <div class="thumb" style="background:var(--rosso-dim);"><i class="ti ti-volume" style="font-size:18px;color:var(--rosso-bright);"></i></div>
+        <div style="flex:1;min-width:0;"><div class="rname">${s.name}</div><div class="rmeta">${s.active?'actif sur cette voiture':'inactif'}</div></div>
+        <div class="parent"><i class="ti ti-car"></i><span>${s.parent}</span></div>
+        <span class="src">${s.src}</span>
+        <span class="radio ${s.active?'on':''}" title="actif/inactif"></span>
+      </div>`).join('')}</div>
+    <div class="note"><i class="ti ti-rotate"></i> Un mod son remplace le son d'origine de SA voiture (exclusif). Le son d'origine reste restaurable depuis la fiche voiture, onglet Son.</div>
+  </div>`;
+}
+function viewApps(){
+  return `
+  <div class="head"><h1><i class="ti ti-apps"></i> APPS</h1><span class="sub">// applications autonomes — non rattachées à une voiture</span>
+    <div class="search" style="margin-left:auto;"><i class="ti ti-search"></i><input class="field" placeholder="FILTRER..."></div></div>
+  <div class="pane">
+    <div class="lbl">12 APPS · activables indépendamment</div>
+    <div class="rows">${APPS.map((a,i)=>`
+      <div class="row">
+        <div class="thumb" style="background:var(--blue-dim);"><i class="ti ti-app-window" style="font-size:18px;color:var(--blue);"></i></div>
+        <div style="flex:1;min-width:0;"><div class="rname">${a.name}</div><div class="rmeta">${a.meta}</div></div>
+        <span class="mono" style="color:${a.active?'var(--rosso)':'var(--faint)'};font-size:9px;">${a.active?'ACTIVE':'—'}</span>
+        <span class="chk ${a.active?'on':''}" onclick="this.classList.toggle('on');this.innerHTML=this.classList.contains('on')?'<i class=\\'ti ti-check\\'></i>':''">${a.active?'<i class="ti ti-check"></i>':''}</span>
+      </div>`).join('')}</div>
+    <div class="note"><i class="ti ti-info-circle"></i> Les apps ne sont rattachées à aucune voiture : type autonome, simplement activable/désactivable. Pas de section dans les fiches.</div>
+  </div>`;
+}
+
+const views={skins:viewSkins,sons:viewSons,apps:viewApps};
+function render(v){
+  document.getElementById('main').innerHTML=views[v]();
+  document.querySelectorAll('.ni[data-v]').forEach(n=>n.classList.toggle('on',n.dataset.v===v));
+}
+document.querySelectorAll('.ni[data-v]').forEach(n=>n.addEventListener('click',()=>render(n.dataset.v)));
+render('skins');
+</script>
+</body>
+</html>

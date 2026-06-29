@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pit Box — Fiche voiture B révisée</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/tabler-icons.min.css" rel="stylesheet">
+<style>
+  :root{
+    --rosso:#d40000; --rosso-bright:#ff5555; --rosso-dim:#1a0606; --rosso-border:#5c1212;
+    --bg:#08080c; --panel:#0d0d12; --panel2:#0a0a0f; --card:#13131a; --raised:#15151c;
+    --line:#1e1e26; --txt:#f2f2f4; --txt2:#cfd2d9; --muted:#86868f; --muted2:#5d6470; --faint:#4a4a55;
+    --green:#5dcaa5; --green-dim:#0a1a14; --green-border:#16382c;
+    --blue:#6a9ec9; --blue-dim:#0c1620; --blue-border:#1d3148; --yellow:#f1d83c;
+    --mono:'SF Mono',ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#050507;color:var(--txt);font-family:var(--sans);font-size:13px;-webkit-font-smoothing:antialiased;padding:14px;}
+  .mono{font-family:var(--mono);}
+  button{font-family:inherit;cursor:pointer;border:none;}
+  .screen{max-width:1320px;margin:0 auto;background:var(--panel);border:1px solid var(--rosso);overflow:hidden;}
+  .topbar{background:var(--rosso);height:3px;}
+  .head{padding:10px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;background:var(--panel2);}
+  .escu{width:28px;height:28px;background:var(--rosso);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:var(--mono);font-weight:600;font-size:11px;color:#fff;}
+  .btn{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 13px;background:var(--raised);color:var(--txt2);border:1px solid var(--line);font-size:10px;letter-spacing:1px;font-family:var(--mono);}
+  .btn.primary{background:var(--rosso);color:#fff;border-color:var(--rosso);}
+  .lbl{color:var(--faint);font-size:8px;letter-spacing:1.5px;margin-bottom:8px;display:flex;align-items:center;}
+  .box{border:1px solid var(--line);}
+  .box-h{background:var(--raised);padding:5px 10px;border-bottom:1px solid var(--line);color:var(--muted);font-size:8px;letter-spacing:1.5px;display:flex;align-items:center;}
+  .specgrid{display:grid;background:var(--line);gap:1px;}
+  .specgrid>div{background:var(--panel2);padding:7px 10px;}
+  .specgrid .k{color:var(--faint);font-size:7.5px;letter-spacing:1px;margin-bottom:3px;}
+  .specgrid .v{color:var(--txt2);font-size:10.5px;font-family:var(--mono);}
+  .skins{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);}
+  .skin{background:var(--card);cursor:pointer;}
+  .skin-img{height:54px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--line);position:relative;}
+  .skin-b{padding:5px 7px;display:flex;align-items:center;gap:5px;}
+  .skin-name{font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;}
+  .chk{width:13px;height:13px;border:1px solid var(--muted2);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .chk.on{background:var(--rosso);border-color:var(--rosso);}.chk.on i{font-size:9px;color:#fff;}
+  .piloted .skin-img{box-shadow:inset 0 0 0 2px var(--rosso);}
+  .tag{font-size:9.5px;padding:2px 9px;font-family:var(--mono);border:1px solid var(--line);}
+  .tag.cat{background:var(--rosso-dim);color:var(--rosso-bright);border-color:var(--rosso-border);}
+  .tag.rule{background:var(--green-dim);color:var(--green);border-color:var(--green-border);}
+  .tag.manual{background:var(--raised);color:var(--txt2);border-color:#2a2a33;}
+  .tag.mod{background:var(--blue-dim);color:var(--blue);border-color:var(--blue-border);}
+  .sound{display:flex;align-items:center;gap:8px;background:var(--panel2);padding:7px 10px;border:1px solid var(--line);margin-bottom:5px;cursor:pointer;}
+  .sound.sel{border-color:var(--rosso-border);background:var(--rosso-dim);}
+  .radio{width:13px;height:13px;border-radius:50%;border:1px solid var(--muted2);flex-shrink:0;}
+  .sound.sel .radio{border-color:var(--rosso-bright);background:radial-gradient(var(--rosso-bright) 40%,transparent 45%);}
+  .ver{border:1px solid var(--line);background:var(--panel2);padding:7px 10px;margin-bottom:5px;}
+  .ver.active{border-left:3px solid var(--rosso);}
+  .curve-svg{width:100%;height:auto;display:block;}
+  .cnr{position:absolute;bottom:0;right:0;background:var(--bg);color:var(--muted);font-size:8px;padding:1px 6px;border-top:1px solid var(--line);border-left:1px solid var(--line);}
+  .desc-body{border:1px solid var(--line);background:var(--panel2);padding:9px;color:var(--txt2);font-size:10px;line-height:1.55;max-height:0;overflow:hidden;transition:none;}
+  .desc-body.open{max-height:400px;}
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="topbar"></div>
+  <div class="head">
+    <i class="ti ti-arrow-left" style="font-size:15px;color:var(--muted);"></i>
+    <span class="escu">FE</span>
+    <div><div style="font-size:13px;font-weight:600;line-height:1.1;">Ferrari 488 GT3 Evo</div><div class="mono" style="color:var(--muted);font-size:9px;">FERRARI · 2020 · <span style="color:var(--rosso-bright);">#gt3</span> · RACE</div></div>
+    <span style="margin-left:auto;display:flex;gap:7px;align-items:center;"><button style="background:none;"><i class="ti ti-heart" style="font-size:18px;color:var(--rosso);"></i></button><button class="btn"><i class="ti ti-power"></i> DÉSACTIVER</button><button class="btn primary"><i class="ti ti-player-play"></i> CONDUIRE</button></span>
+  </div>
+
+  <!-- RANGÉE HAUTE : héros à gauche + panneau données à droite -->
+  <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:1px;background:var(--line);border-bottom:1px solid var(--line);">
+    <!-- héros -->
+    <div style="background:linear-gradient(135deg,#2a0a0a,#0d0d12 72%);min-height:300px;display:flex;align-items:center;justify-content:center;position:relative;">
+      <i class="ti ti-car" style="font-size:120px;color:var(--rosso);opacity:.9;"></i>
+      <div style="position:absolute;left:16px;bottom:14px;"><div class="mono" style="color:#e8e8ea;font-size:13px;">600 bhp · 700 Nm · 1260 kg · 280 km/h</div><div class="mono" style="color:var(--muted);font-size:8px;margin-top:3px;">SPEC NATIF</div></div>
+      <div style="position:absolute;left:16px;top:14px;display:flex;align-items:center;gap:5px;background:rgba(8,8,12,.6);border:1px solid #1e2620;padding:3px 8px;"><i class="ti ti-lock" style="font-size:11px;color:var(--green);"></i><span class="mono" style="color:#6f9d8a;font-size:8px;">FICHIER NON MODIFIÉ</span></div>
+    </div>
+    <!-- panneau données à droite du héros -->
+    <div style="background:var(--panel);padding:14px;">
+      <div class="box" style="margin-bottom:11px;"><div class="box-h">FICHE TECHNIQUE</div><div class="specgrid" style="grid-template-columns:1fr 1fr 1fr;">
+        <div><div class="k">MOTEUR</div><div class="v">V8·ARR</div></div><div><div class="k">ADMISSION</div><div class="v">TURBO</div></div><div><div class="k">TRANSM.</div><div class="v">RWD</div></div>
+        <div><div class="k">BOÎTE</div><div class="v">SÉQ.</div></div><div><div class="k">PAYS</div><div class="v">ITALIE</div></div><div><div class="k">P/POIDS</div><div class="v">2.1</div></div>
+      </div></div>
+
+      <div class="lbl">COURBE MOTEUR <span style="margin-left:auto;display:flex;gap:8px;"><span style="color:var(--rosso-bright);">— POWER</span><span style="color:var(--yellow);">— TORQUE</span></span></div>
+      <div style="border:1px solid var(--line);padding:8px;margin-bottom:11px;">
+        <svg viewBox="0 0 380 120" class="curve-svg"><line x1="24" y1="6" x2="24" y2="100" stroke="#1e1e26"/><line x1="24" y1="100" x2="374" y2="100" stroke="#1e1e26"/><line x1="24" y1="67" x2="374" y2="67" stroke="#15151c"/><line x1="24" y1="36" x2="374" y2="36" stroke="#15151c"/><polyline points="24,100 70,86 116,72 162,56 208,42 254,30 300,22 336,28 374,50" fill="none" stroke="#f1d83c" stroke-width="2"/><polyline points="24,100 70,92 116,80 162,62 208,44 254,28 300,16 336,26 374,52" fill="none" stroke="#ff5555" stroke-width="2"/><text x="374" y="114" fill="#4a4a55" font-size="7" text-anchor="end" font-family="monospace">RPM</text></svg>
+      </div>
+
+      <div class="box-h" onclick="var b=document.getElementById('descBody');b.classList.toggle('open');this.querySelector('.chev').className='chev ti ti-chevron-'+(b.classList.contains('open')?'up':'down')" style="cursor:pointer;border:1px solid var(--line);"><i class="ti ti-file-text" style="font-size:12px;margin-right:6px;"></i> DESCRIPTION <i class="chev ti ti-chevron-down" style="margin-left:auto;font-size:13px;"></i></div>
+      <div class="desc-body" id="descBody" style="border-top:none;">The Ferrari 488 GT3 Evo is the evolution of the 488 GT3, homologated for GT3 championships worldwide. Twin-turbocharged 3.9L V8, revised aerodynamics, updated electronics and improved reliability over long endurance stints. Includes 6 official 2023 liveries, accurate physics and CSP rain support.</div>
+    </div>
+  </div>
+
+  <!-- RANGÉE BASSE : skins | distance+son | tags+versions -->
+  <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:1px;background:var(--line);">
+    <div style="background:var(--panel);padding:14px;">
+      <div class="lbl">SKINS · <span style="color:var(--txt2);margin-left:4px;">6 disponibles</span> <span style="color:var(--muted);text-transform:none;letter-spacing:0;margin-left:5px;">cliquer pour prévisualiser · ★ = piloté au lancement</span></div>
+      <div class="skins skinG" style="grid-template-columns:repeat(3,1fr);"></div>
+    </div>
+    <div style="background:var(--panel);padding:14px;">
+      <div class="lbl">DISTANCE</div>
+      <div class="box" style="margin-bottom:13px;"><div style="padding:7px 10px;display:flex;align-items:center;"><i class="ti ti-route" style="font-size:14px;color:var(--blue);"></i><span class="mono" style="font-size:13px;font-weight:600;margin-left:8px;">847 km</span><span class="mono" style="color:var(--green);font-size:8px;margin-left:auto;">essayée ✓</span></div></div>
+      <div class="lbl">SON MOTEUR <span style="color:var(--muted);text-transform:none;letter-spacing:0;margin-left:5px;">exclusif — un seul</span></div>
+      <div class="soundL"></div>
+      <div style="display:flex;align-items:center;gap:6px;background:var(--blue-dim);border:1px solid var(--blue-border);padding:5px 9px;color:#8fb4d4;font-size:8px;font-family:var(--mono);margin-top:6px;"><i class="ti ti-rotate"></i> son d'origine restaurable</div>
+    </div>
+    <div style="background:var(--panel);padding:14px;">
+      <div class="lbl">TAGS <span style="margin-left:auto;color:var(--muted);font-size:8px;cursor:pointer;"><i class="ti ti-plus"></i> AJOUTER</span></div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;"><span class="tag cat">#gt3</span><span class="tag rule">endurance</span><span class="tag rule">rainfx</span><span class="tag manual">night-spec</span><span class="tag mod">ferrari</span></div>
+      <div class="lbl" style="margin-top:12px;">VERSIONS · 2</div>
+      <div class="ver active"><div style="display:flex;gap:6px;align-items:center;"><span class="mono" style="font-size:10px;font-weight:600;">v1.3</span><span class="tag cat" style="font-size:7px;padding:0 5px;">ACTIVE</span><span style="margin-left:auto;color:var(--faint);font-size:8px;" class="mono">12.03.26 · 6 skins</span></div></div>
+      <div class="ver"><div style="display:flex;gap:6px;align-items:center;"><span class="mono" style="font-size:10px;color:var(--txt2);">v1.2</span><span style="margin-left:auto;color:var(--muted);font-size:8px;" class="mono">ACTIVER</span></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SKINS=[{n:"AF Corse #51",c:"#a32d2d",piloted:true},{n:"AF Corse #71",c:"#c0392b"},{n:"Iron Lynx",c:"#1a1a1a"},{n:"Spirit",c:"#d4af37"},{n:"WeatherTech",c:"#2c3e50"},{n:"Risi #62",c:"#c0392b"}];
+const SONS=[{n:"Origine (Kunos)",s:"BASE",sel:false},{n:"Ferrari V8 Enhanced",s:"MOD",sel:true}];
+let previewIdx=0;
+function renderSkins(){
+  document.querySelector('.skinG').innerHTML=SKINS.map((s,i)=>`<div class="skin ${i===previewIdx?'piloted':''}" onclick="selectSkin(${i})" title="cliquer pour prévisualiser">
+    <div class="skin-img" style="background:${s.c}22;"><i class="ti ti-shirt-sport" style="font-size:18px;color:${s.c};"></i>${s.piloted?'<span style="position:absolute;top:3px;right:3px;color:var(--rosso);" title="piloté au lancement"><i class="ti ti-star-filled" style="font-size:11px;"></i></span>':''}${i===previewIdx?'<span style="position:absolute;bottom:3px;left:3px;background:var(--rosso);color:#fff;font-size:6px;padding:0 3px;" class="mono">APERÇU</span>':''}</div>
+    <div class="skin-b"><span class="skin-name">${s.n}</span>${s.piloted?'<i class="ti ti-star-filled" style="font-size:10px;color:var(--rosso);"></i>':'<i class="ti ti-star" style="font-size:10px;color:var(--muted2);cursor:pointer;" onclick="event.stopPropagation();setPiloted(${i})" title="définir comme piloté"></i>'}</div>
+  </div>`).join('');
+}
+function selectSkin(i){previewIdx=i;renderSkins();}
+function setPiloted(i){SKINS.forEach((s,j)=>s.piloted=j===i);renderSkins();}
+renderSkins();
+document.querySelector('.soundL').innerHTML=SONS.map(s=>`<div class="sound ${s.sel?'sel':''}"><span class="radio"></span><div style="flex:1;"><div style="font-size:10px;">${s.n}</div></div><span class="mono" style="font-size:7px;padding:1px 5px;border:1px solid var(--line);color:var(--muted);">${s.s}</span></div>`).join('');
+</script>
+</body>
+</html>

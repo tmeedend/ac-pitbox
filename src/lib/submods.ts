@@ -1,0 +1,28 @@
+// Pont typé vers les commandes L6 / §12bis (contenu de base + sous-éléments).
+import { invoke } from "@tauri-apps/api/core";
+
+export interface SubModRow {
+  id: string;
+  sub_type: "SKIN" | "SOUND" | "TRACK_SKIN" | "TRACK_MOD";
+  parent_id: string;
+  name: string;
+  library_path: string;
+  source_archive: string | null;
+  is_active: boolean;
+  imported_at: string;
+}
+
+/** Indexe le contenu de base Kunos présent dans content/ (§12bis.1). Renvoie le nb indexé. */
+export function indexStockContent(): Promise<number> {
+  return invoke<number>("index_stock_content");
+}
+
+/** Sous-éléments rattachés à une entité (skins/sons d'une voiture, §12bis.3). */
+export function listSubMods(parentId: string): Promise<SubModRow[]> {
+  return invoke<SubModRow[]>("list_sub_mods", { parentId });
+}
+
+/** Tous les sous-éléments d'un type, vue transversale (§12bis.3). */
+export function listSubsByType(subType: string): Promise<SubModRow[]> {
+  return invoke<SubModRow[]>("list_subs_by_type", { subType });
+}

@@ -24,6 +24,22 @@ export interface ModCard {
   aspiration: string | null;
   engine_config: string | null;
   gearbox: string | null;
+  /** Pack d'origine commun aux mods d'une même archive multi-voitures (§4.7). */
+  source_pack: string | null;
+  /** URL d'origine (rempli plus tard par l'extension, §4.7/§12ter). */
+  source_url: string | null;
+  /** Auteur de la version active (colonne §6.2). */
+  author: string | null;
+  /** Label de version de la version active (colonne §6.2). */
+  active_version_label: string | null;
+  /** Date de dernière mise à jour (import de la version la plus récente, §6.2). */
+  updated_at: string | null;
+  /** Layouts de la version active (colonne circuits §6.2). */
+  layouts: string[];
+  /** Extensions CSP de la version active (colonne circuits §6.2). */
+  csp_features: string[];
+  /** Contenu de base Kunos : lecture seule, non désactivable (§12bis.1). */
+  is_stock: boolean;
   preview: string | null;
   active: boolean;
 }
@@ -85,10 +101,29 @@ export interface ImportedMod {
   conflict: FuzzyConflict | null;
 }
 
+/** Ressource partagée (font/driver) installée globalement (§4.8). */
+export interface SharedResult {
+  kind: "fonts" | "driver";
+  name: string;
+  /** "installed" (nouveau) | "identical" (déjà là) | "replaced" (écrasé, différent). */
+  disposition: "installed" | "identical" | "replaced";
+}
+
+/** Sous-élément rattaché (skin/son) routé à l'import (§12bis.2). */
+export interface SubImported {
+  sub_type: "SKIN" | "SOUND";
+  parent_id: string;
+  name: string;
+  projected: boolean;
+  warning: string | null;
+}
+
 export interface ArchiveResult {
   archive: string;
   mods: ImportedMod[];
   error: string | null;
+  shared: SharedResult[];
+  subs: SubImported[];
 }
 
 export interface ImportProgress {
@@ -106,6 +141,39 @@ export function importArchives(paths: string[]): Promise<ArchiveResult[]> {
 /** Import de dossiers déjà décompressés (§4.5). copy=true préserve la source. */
 export function importFolders(paths: string[], copy: boolean): Promise<ArchiveResult[]> {
   return invoke<ArchiveResult[]>("import_folders", { paths, copy });
+}
+
+// --- Import en masse (§4.6) ---
+export type BulkStatus = "new" | "update" | "duplicate" | "ambiguous";
+
+export interface BulkMod {
+  id: string;
+  kind: ModKind;
+  name: string | null;
+  status: BulkStatus;
+  existing_id: string | null;
+  existing_name: string | null;
+}
+
+export interface BulkEntry {
+  subfolder: string;
+  path: string;
+  ignored: boolean;
+  mods: BulkMod[];
+}
+
+export interface BulkExecItem {
+  path: string;
+  skip_ids: string[];
+  replace_ids: string[];
+}
+
+export function analyzeBulkImport(parent: string): Promise<BulkEntry[]> {
+  return invoke<BulkEntry[]>("analyze_bulk_import", { parent });
+}
+
+export function executeBulkImport(items: BulkExecItem[], copy: boolean): Promise<ArchiveResult[]> {
+  return invoke<ArchiveResult[]>("execute_bulk_import", { items, copy });
 }
 
 export function resolveConflict(

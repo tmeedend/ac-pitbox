@@ -45,6 +45,11 @@ export function listSkins(carId: string): Promise<SkinItem[]> {
   return invoke<SkinItem[]>("list_skins", { carId });
 }
 
+/** Skins de la version active d'un mod, lus dans la bibliothèque (fiche détail §6.3). */
+export function listModSkins(id: string): Promise<SkinItem[]> {
+  return invoke<SkinItem[]>("list_mod_skins", { id });
+}
+
 export interface WeatherStack {
   csp: boolean;
   sol: boolean;

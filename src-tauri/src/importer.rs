@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use chrono::Local;
 use rusqlite::Connection;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
@@ -53,6 +53,12 @@ pub struct ArchiveResult {
     pub archive: String,
     pub mods: Vec<ImportedMod>,
     pub error: Option<String>,
+    /// Ressources partagées (fonts/drivers) installées globalement (§4.8).
+    #[serde(default)]
+    pub shared: Vec<crate::shared::SharedResult>,
+    /// Sous-éléments rattachés (skins/sons) routés vers la bibliothèque (§12bis.2).
+    #[serde(default)]
+    pub subs: Vec<crate::submods::SubImported>,
 }
 
 /// Importe une liste d'archives. Chaque archive est traitée indépendamment ;
@@ -96,7 +102,8 @@ fn import_one(
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| archive_path.to_string_lossy().into_owned());
 
-    let mut result = ArchiveResult { archive: archive_name.clone(), mods: Vec::new(), error: None };
+    let mut result =
+        ArchiveResult { archive: archive_name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new() };
 
     let (Some(sevenzip), Some(library)) = (&cfg.sevenzip_exe, &cfg.library_path) else {
         result.error = Some("Chemins 7-Zip ou bibliothèque non configurés.".into());
@@ -126,8 +133,10 @@ fn import_one(
     }
 
     let found = modscan::scan(&workdir);
-    if found.is_empty() {
-        result.error = Some("Aucune voiture ou circuit trouvé dans l'archive.".into());
+    // Sous-éléments rattachés (skins/sons) — peuvent constituer une archive seuls.
+    let subs = modscan::scan_subs(&workdir);
+    if found.is_empty() && subs.is_empty() {
+        result.error = Some("Aucune voiture, circuit, skin ou son trouvé dans l'archive.".into());
         let _ = std::fs::remove_dir_all(&workdir);
         return result;
     }
@@ -139,6 +148,8 @@ fn import_one(
         label: format!("{} mod(s) trouvé(s)", found.len()),
     });
 
+    // Pack (§4.7) : une archive multi-voitures regroupe ses mods sous sa source.
+    let pack = (found.len() > 1).then_some(archive_name.as_str());
     for (i, fm) in found.iter().enumerate() {
         let label = fm
             .dir
@@ -153,13 +164,24 @@ fn import_one(
             label,
         });
         // Archive : le contenu vient d'un dossier temp → toujours déplacé.
-        match process_found(conn, rules, library, &archive_name, fm, false) {
+        match process_found(conn, rules, library, &archive_name, fm, false, pack) {
             Ok(imported) => result.mods.push(imported),
             Err(e) => {
                 // On consigne l'erreur sur l'archive mais on continue les autres mods.
                 result.error.get_or_insert_with(String::new).push_str(&format!("{e}; "));
             }
         }
+    }
+
+    // Sous-éléments rattachés (skins/sons) : stockage séparé (§12bis.2). Archive
+    // → contenu en temp, toujours déplacé.
+    if !subs.is_empty() {
+        result.subs = crate::submods::import_subs(conn, cfg, library, &archive_name, &subs, false);
+    }
+
+    // Ressources partagées globales (fonts/drivers) avant nettoyage du temp (§4.8).
+    if let Some(ac) = &cfg.ac_install_path {
+        result.shared = crate::shared::install(ac, &workdir);
     }
 
     emit(Progress {
@@ -205,7 +227,8 @@ fn import_one_folder(
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| dir.to_string_lossy().into_owned());
-    let mut result = ArchiveResult { archive: name.clone(), mods: Vec::new(), error: None };
+    let mut result =
+        ArchiveResult { archive: name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new() };
 
     let Some(library) = &cfg.library_path else {
         result.error = Some("Bibliothèque non configurée.".into());
@@ -217,8 +240,9 @@ fn import_one_folder(
     }
 
     let found = modscan::scan(dir);
-    if found.is_empty() {
-        result.error = Some("Aucune voiture ou circuit trouvé dans le dossier.".into());
+    let subs = modscan::scan_subs(dir);
+    if found.is_empty() && subs.is_empty() {
+        result.error = Some("Aucune voiture, circuit, skin ou son trouvé dans le dossier.".into());
         return result;
     }
     emit(Progress {
@@ -229,6 +253,8 @@ fn import_one_folder(
         label: format!("{} mod(s) trouvé(s)", found.len()),
     });
 
+    // Pack (§4.7) : un dossier multi-voitures regroupe ses mods sous sa source.
+    let pack = (found.len() > 1).then_some(name.as_str());
     for (i, fm) in found.iter().enumerate() {
         emit(Progress {
             archive: name.clone(),
@@ -237,12 +263,22 @@ fn import_one_folder(
             total: found.len(),
             label: fm.dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
         });
-        match process_found(conn, rules, library, &name, fm, copy) {
+        match process_found(conn, rules, library, &name, fm, copy, pack) {
             Ok(imported) => result.mods.push(imported),
             Err(e) => {
                 result.error.get_or_insert_with(String::new).push_str(&format!("{e}; "));
             }
         }
+    }
+
+    // Sous-éléments rattachés (skins/sons), stockage séparé (§12bis.2).
+    if !subs.is_empty() {
+        result.subs = crate::submods::import_subs(conn, cfg, library, &name, &subs, copy);
+    }
+
+    // Ressources partagées globales (§4.8).
+    if let Some(ac) = &cfg.ac_install_path {
+        result.shared = crate::shared::install(ac, dir);
     }
 
     emit(Progress {
@@ -252,6 +288,184 @@ fn import_one_folder(
         total: found.len(),
         label: "Terminé".into(),
     });
+    result
+}
+
+// --- Import en masse (§4.6) -------------------------------------------------
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BulkMod {
+    pub id: String,
+    pub kind: String,
+    pub name: Option<String>,
+    /// "new" | "update" | "duplicate" | "ambiguous"
+    pub status: String,
+    pub existing_id: Option<String>,
+    pub existing_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BulkEntry {
+    pub subfolder: String,
+    pub path: String,
+    /// Sous-dossier sans structure AC reconnaissable.
+    pub ignored: bool,
+    pub mods: Vec<BulkMod>,
+}
+
+/// Classe un mod trouvé sans rien écrire (§4.6 phase d'analyse).
+fn classify(
+    conn: &Connection,
+    id: &str,
+    kind: &str,
+    brand: &str,
+    name: &str,
+    dir: &Path,
+) -> Result<(String, Option<String>, Option<String>), String> {
+    if crate::overlay::mod_exists(conn, id).map_err(|e| e.to_string())? {
+        let sig = identity::content_signature(dir);
+        let existing = crate::overlay::active_signature(conn, id).map_err(|e| e.to_string())?;
+        if existing.as_deref() == Some(sig.as_str()) {
+            Ok(("duplicate".into(), None, None))
+        } else {
+            Ok(("update".into(), None, None))
+        }
+    } else {
+        let fuzzy = crate::overlay::find_fuzzy(conn, kind, brand, name, id)
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .next();
+        match fuzzy {
+            Some(m) => Ok(("ambiguous".into(), Some(m.id_interne), m.display_name)),
+            None => Ok(("new".into(), None, None)),
+        }
+    }
+}
+
+/// Phase d'analyse (§4.6) : scanne chaque sous-dossier direct du parent et
+/// classe les mods **sans rien écrire**. Un seul niveau de sous-dossiers.
+pub fn analyze_bulk(conn: &Connection, _cfg: &AppConfig, parent: &Path) -> Result<Vec<BulkEntry>, String> {
+    if !parent.is_dir() {
+        return Err("Le chemin n'est pas un dossier.".into());
+    }
+    let mut subs: Vec<PathBuf> = std::fs::read_dir(parent)
+        .map_err(|e| e.to_string())?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .collect();
+    subs.sort();
+
+    let mut entries = Vec::new();
+    for sub in subs {
+        let subfolder = sub.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let path = sub.to_string_lossy().into_owned();
+        let found = modscan::scan(&sub);
+        if found.is_empty() {
+            entries.push(BulkEntry { subfolder, path, ignored: true, mods: Vec::new() });
+            continue;
+        }
+        let mut mods = Vec::new();
+        for fm in &found {
+            let id = fm.dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let ui = match fm.kind {
+                ModKind::Car => uijson::read_car(&fm.dir),
+                ModKind::Track => uijson::read_track(&fm.dir),
+            }
+            .unwrap_or_default();
+            let kind_str = format!("{:?}", fm.kind);
+            let brand = ui.brand.clone().unwrap_or_default();
+            let name = ui.name.clone().unwrap_or_else(|| id.clone());
+            let (status, existing_id, existing_name) =
+                classify(conn, &id, &kind_str, &brand, &name, &fm.dir)?;
+            mods.push(BulkMod { id, kind: kind_str, name: ui.name, status, existing_id, existing_name });
+        }
+        entries.push(BulkEntry { subfolder, path, ignored: false, mods });
+    }
+    Ok(entries)
+}
+
+/// Instruction d'exécution pour un sous-dossier (après arbitrage).
+#[derive(Debug, Clone, Deserialize)]
+pub struct BulkExecItem {
+    pub path: String,
+    /// Ids de mods à ignorer (doublons que l'utilisateur ne réimporte pas).
+    #[serde(default)]
+    pub skip_ids: Vec<String>,
+    /// Ids de mods ambigus à écraser (sinon « garder les deux »).
+    #[serde(default)]
+    pub replace_ids: Vec<String>,
+}
+
+/// Exécution de l'import en masse selon les décisions (§4.6). Reprenable :
+/// relancer l'analyse après interruption reclasse les mods déjà importés en
+/// « doublon »/« mise à jour », donc rien n'est traité de travers.
+pub fn execute_bulk(
+    app: &AppHandle,
+    conn: &Connection,
+    cfg: &AppConfig,
+    rules: &Rules,
+    items: &[BulkExecItem],
+    copy: bool,
+) -> Vec<ArchiveResult> {
+    let emit = |p: Progress| {
+        let _ = app.emit("import:progress", p);
+    };
+    let total = items.len();
+    items
+        .iter()
+        .enumerate()
+        .map(|(i, it)| {
+            let label = Path::new(&it.path)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            emit(Progress { archive: label.clone(), phase: "filing".into(), current: i + 1, total, label });
+            exec_one(conn, cfg, rules, it, copy)
+        })
+        .collect()
+}
+
+fn exec_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, it: &BulkExecItem, copy: bool) -> ArchiveResult {
+    let dir = Path::new(&it.path);
+    let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let mut result =
+        ArchiveResult { archive: name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new() };
+
+    let Some(library) = &cfg.library_path else {
+        result.error = Some("Bibliothèque non configurée.".into());
+        return result;
+    };
+
+    let found = modscan::scan(dir);
+    // Pack (§4.7) : plusieurs mods issus du même dossier partagent leur source.
+    let pack = (found.len() > 1).then_some(name.as_str());
+    for fm in &found {
+        let id = fm.dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        if it.skip_ids.iter().any(|s| s == &id) {
+            continue;
+        }
+        match process_found(conn, rules, library, &name, fm, copy, pack) {
+            Ok(imported) => {
+                if let Some(conflict) = imported.conflict.clone() {
+                    let action = if it.replace_ids.iter().any(|r| r == &imported.id_interne) {
+                        "replace"
+                    } else {
+                        "keep_both"
+                    };
+                    let _ = resolve_conflict(conn, cfg, &imported.id_interne, &conflict.existing_id, action);
+                }
+                result.mods.push(imported);
+            }
+            Err(e) => {
+                result.error.get_or_insert_with(String::new).push_str(&format!("{e}; "));
+            }
+        }
+    }
+    // Ressources partagées globales (§4.8).
+    if let Some(ac) = &cfg.ac_install_path {
+        result.shared = crate::shared::install(ac, dir);
+    }
     result
 }
 
@@ -311,6 +525,7 @@ pub fn resolve_conflict(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_found(
     conn: &Connection,
     rules: &Rules,
@@ -318,6 +533,8 @@ fn process_found(
     archive_name: &str,
     fm: &modscan::FoundMod,
     copy: bool,
+    // Source de pack commune (§4.7) si l'import contient plusieurs mods.
+    pack: Option<&str>,
 ) -> Result<ImportedMod, String> {
     let id_interne = fm
         .dir
@@ -389,6 +606,11 @@ fn process_found(
         &now,
     )
     .map_err(|e| e.to_string())?;
+
+    // Source de pack (§4.7) — uniquement quand l'import regroupe plusieurs mods.
+    if pack.is_some() {
+        crate::overlay::set_source(conn, &id_interne, pack, None).map_err(|e| e.to_string())?;
+    }
 
     let version_id = Uuid::new_v4().to_string();
     crate::overlay::insert_version(
@@ -600,6 +822,78 @@ mod tests {
         assert_eq!(r2.mods.len(), 1);
         assert!(!src_move.join("move_car").exists(), "source retirée (déplacement)");
         assert!(library.join("cars").join("move_car").exists(), "rangé dans la bibliothèque");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn pack_source_on_multi_car_folder() {
+        let base = make_temp_dir().unwrap();
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let rules = crate::rules::default_rules();
+        let noop = |_p: Progress| {};
+
+        // Dossier « pack » contenant deux voitures.
+        let pack = base.join("ferrari_pack");
+        make_fake_car(&pack, "ferrari_a");
+        make_fake_car(&pack, "ferrari_b");
+        let r = import_one_folder(&noop, &conn, &cfg, &rules, &pack, true);
+        assert_eq!(r.mods.len(), 2);
+        // Les deux mods partagent la même source de pack (§4.7).
+        for id in ["ferrari_a", "ferrari_b"] {
+            let m = crate::overlay::get_mod(&conn, id).unwrap().unwrap();
+            assert_eq!(m.source_pack.as_deref(), Some("ferrari_pack"), "{id} doit pointer le pack");
+        }
+
+        // Un import mono-voiture ne crée pas de pack.
+        let solo = base.join("solo");
+        make_fake_car(&solo, "solo_car");
+        import_one_folder(&noop, &conn, &cfg, &rules, &solo, true);
+        let m = crate::overlay::get_mod(&conn, "solo_car").unwrap().unwrap();
+        assert_eq!(m.source_pack, None, "mono-voiture → pas de pack");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn bulk_analyze_and_execute() {
+        let base = make_temp_dir().unwrap();
+        let parent = base.join("catalog");
+        std::fs::create_dir_all(&parent).unwrap();
+        make_fake_car(&parent, "bulk_car"); // sous-dossier = voiture
+        // Sous-dossier sans structure AC → ignoré.
+        let notes = parent.join("notes");
+        std::fs::create_dir_all(&notes).unwrap();
+        std::fs::write(notes.join("readme.txt"), b"hi").unwrap();
+
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let rules = crate::rules::default_rules();
+
+        // Analyse : 1 nouveau (bulk_car), 1 ignoré (notes). Aucune écriture.
+        let entries = analyze_bulk(&conn, &cfg, &parent).unwrap();
+        assert_eq!(entries.len(), 2);
+        let car = entries.iter().find(|e| e.subfolder == "bulk_car").unwrap();
+        assert!(!car.ignored);
+        assert_eq!(car.mods[0].status, "new");
+        assert!(entries.iter().find(|e| e.subfolder == "notes").unwrap().ignored);
+        assert!(!library.join("cars").join("bulk_car").exists(), "analyse n'écrit rien");
+
+        // Exécution (copie).
+        let item = BulkExecItem { path: car.path.clone(), skip_ids: vec![], replace_ids: vec![] };
+        let r = exec_one(&conn, &cfg, &rules, &item, true);
+        assert_eq!(r.mods.len(), 1);
+        assert!(library.join("cars").join("bulk_car").exists());
+
+        // Reprenable : ré-analyse → bulk_car devient un doublon (même contenu).
+        let entries2 = analyze_bulk(&conn, &cfg, &parent).unwrap();
+        let car2 = entries2.iter().find(|e| e.subfolder == "bulk_car").unwrap();
+        assert_eq!(car2.mods[0].status, "duplicate");
 
         let _ = std::fs::remove_dir_all(&base);
     }

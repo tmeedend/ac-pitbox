@@ -2,16 +2,22 @@ mod activation;
 mod archive;
 mod config;
 mod detect;
+mod export;
 mod harmonize;
 mod identity;
 mod importer;
 mod inspect;
+mod kunos;
 mod launch;
 mod library;
+mod maintenance;
 mod modscan;
 mod overlay;
 mod profiles;
 mod rules;
+mod shared;
+mod stock;
+mod submods;
 mod uijson;
 mod weather;
 
@@ -120,6 +126,28 @@ fn import_folders(
     Ok(importer::import_folders(&app, &conn, &cfg, &rules, &paths, copy))
 }
 
+/// Analyse un dossier parent (§4.6) : classe chaque sous-dossier sans rien écrire.
+#[tauri::command]
+fn analyze_bulk_import(app: AppHandle, db: State<Db>, parent: String) -> Result<Vec<importer::BulkEntry>, String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    importer::analyze_bulk(&conn, &cfg, std::path::Path::new(&parent))
+}
+
+/// Exécute l'import en masse selon les décisions d'arbitrage (§4.6).
+#[tauri::command]
+fn execute_bulk_import(
+    app: AppHandle,
+    db: State<Db>,
+    items: Vec<importer::BulkExecItem>,
+    copy: bool,
+) -> Result<Vec<ArchiveResult>, String> {
+    let cfg = config::load(&app);
+    let rules = rules::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(importer::execute_bulk(&app, &conn, &cfg, &rules, &items, copy))
+}
+
 /// Résout un conflit flou (§4.2) : action = "keep_both" | "replace".
 #[tauri::command]
 fn resolve_conflict(
@@ -217,6 +245,13 @@ fn list_skins(app: AppHandle, car_id: String) -> Vec<library::SkinItem> {
     library::list_car_skins(&config::load(&app), &car_id)
 }
 
+/// Skins de la version active d'un mod, lus dans la bibliothèque (fiche détail §6.3).
+#[tauri::command]
+fn list_mod_skins(db: State<Db>, id: String) -> Result<Vec<library::SkinItem>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(library::list_mod_skins(&conn, &id))
+}
+
 /// Stack météo détectée (CSP/SOL/vanilla) — §8.5.
 #[tauri::command]
 fn weather_stack(app: AppHandle) -> weather::WeatherStack {
@@ -243,6 +278,62 @@ fn launch_session(app: AppHandle, db: State<Db>, setup: launch::RaceSetup) -> Re
     launch::launch(&conn, &cfg, &setup)
 }
 
+// --- Maintenance & export (L5) ----------------------------------------------
+
+/// Analyse mods cassés + junctions orphelines, sans rien supprimer (§9.3).
+#[tauri::command]
+fn maintenance_scan(app: AppHandle, db: State<Db>) -> Result<maintenance::MaintenanceReport, String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    maintenance::scan(&conn, &cfg)
+}
+
+/// Supprime un mod cassé (fichiers + junction + overlay).
+#[tauri::command]
+fn delete_broken_mod(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    maintenance::delete_broken(&conn, &cfg, &id)
+}
+
+/// Retire une junction orpheline (garde-fou junction).
+#[tauri::command]
+fn remove_orphan_junction(app: AppHandle, kind: String, id: String) -> Result<(), String> {
+    maintenance::remove_orphan(&config::load(&app), &kind, &id)
+}
+
+/// Exporte la version active d'un mod en archive autonome dans `dest_dir` (§9.1).
+#[tauri::command]
+fn export_mod(app: AppHandle, db: State<Db>, id: String, dest_dir: String) -> Result<export::ExportReport, String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    export::export_mod(&conn, &cfg, &id, std::path::Path::new(&dest_dir))
+}
+
+// --- Types de mods étendus (L6 / §12bis) ------------------------------------
+
+/// Indexe le contenu de base Kunos présent dans content/ (§12bis.1).
+#[tauri::command]
+fn index_stock_content(app: AppHandle, db: State<Db>) -> Result<usize, String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    stock::index_stock_content(&conn, &cfg)
+}
+
+/// Sous-éléments rattachés à une entité (skins/sons d'une voiture, §12bis.3).
+#[tauri::command]
+fn list_sub_mods(db: State<Db>, parent_id: String) -> Result<Vec<overlay::SubModRow>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    overlay::list_subs_for_parent(&conn, &parent_id).map_err(|e| e.to_string())
+}
+
+/// Tous les sous-éléments d'un type, pour la vue transversale (§12bis.3).
+#[tauri::command]
+fn list_subs_by_type(db: State<Db>, sub_type: String) -> Result<Vec<overlay::SubModRow>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    overlay::list_subs_by_type(&conn, &sub_type).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -261,6 +352,8 @@ pub fn run() {
             autodetect_paths,
             import_archives,
             import_folders,
+            analyze_bulk_import,
+            execute_bulk_import,
             resolve_conflict,
             list_library,
             get_mod_detail,
@@ -273,10 +366,18 @@ pub fn run() {
             list_installed,
             list_weather,
             list_skins,
+            list_mod_skins,
             weather_stack,
             weather_options,
             weather_temp,
             launch_session,
+            maintenance_scan,
+            delete_broken_mod,
+            remove_orphan_junction,
+            export_mod,
+            index_stock_content,
+            list_sub_mods,
+            list_subs_by_type,
             get_rules,
             save_rules,
             rules_impact,

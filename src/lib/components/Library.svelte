@@ -4,6 +4,8 @@
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { listen } from "@tauri-apps/api/event";
   import ModDetail from "./ModDetail.svelte";
+  import DetailPage from "./DetailPage.svelte";
+  import BulkImport from "./BulkImport.svelte";
   import {
     importArchives,
     importFolders,
@@ -16,6 +18,20 @@
     type ModCard,
     type ModKind,
   } from "$lib/library";
+  import {
+    columnsFor,
+    kindKey,
+    loadVisible,
+    saveVisible,
+    type ColumnDef,
+  } from "$lib/columns";
+
+  // Une bibliothèque par type (§6.1) : ce composant est rendu une fois pour les
+  // voitures, une fois pour les circuits. Toute la persistance est suffixée par
+  // type pour rester indépendante entre les deux.
+  let { kind }: { kind: ModKind } = $props();
+  const isCar = kind === "Car";
+  const kk = kindKey(kind);
 
   interface PendingConflict {
     newId: string;
@@ -26,8 +42,10 @@
 
   let cards = $state<ModCard[]>([]);
   let selectedId = $state<string | null>(null);
+  // Page détail pleine page (§6.3) : double-clic sur une carte, ou bouton
+  // « Agrandir » du panneau latéral.
+  let fullId = $state<string | null>(null);
   let query = $state("");
-  let typeFilter = $state<"all" | ModKind>("all");
   let categoryFilter = $state<string>("all");
   let classFilter = $state<"all" | "race" | "street">("all");
   let favOnly = $state(false);
@@ -35,7 +53,7 @@
   let yearMax = $state<number | null>(null);
   let showFilters = $state(false);
   let view = $state<"gallery" | "table">(
-    (localStorage.getItem("pitbox.view") as "gallery" | "table") ?? "gallery",
+    (localStorage.getItem(`pitbox.view.${kk}`) as "gallery" | "table") ?? "gallery",
   );
   let importing = $state(false);
   let report = $state<ArchiveResult[] | null>(null);
@@ -48,22 +66,39 @@
     localStorage.setItem("pitbox.import.copy", String(v));
   }
 
-  // Tri du tableau.
-  type SortKey = "name" | "brand" | "year" | "kind" | "versions" | "active";
-  let sortKey = $state<SortKey>("name");
-  let sortDir = $state<1 | -1>(1);
+  // Colonnes (§6.2) : définitions propres au type + visibilité persistée par type.
+  const columns: ColumnDef[] = columnsFor(kind);
+  let visibleKeys = $state<string[]>([...loadVisible(kind)]);
+  let showColumns = $state(false);
+  const visibleColumns = $derived(
+    columns.filter((c) => c.fixed || visibleKeys.includes(c.key)),
+  );
+  function toggleColumn(key: string) {
+    visibleKeys = visibleKeys.includes(key)
+      ? visibleKeys.filter((k) => k !== key)
+      : [...visibleKeys, key];
+    saveVisible(kind, new Set(visibleKeys));
+  }
 
-  function toggleSort(key: SortKey) {
+  // Tri du tableau (par clé de colonne), persisté par type.
+  let sortKey = $state<string>(localStorage.getItem(`pitbox.sort.${kk}.key`) ?? "name");
+  let sortDir = $state<1 | -1>(
+    localStorage.getItem(`pitbox.sort.${kk}.dir`) === "-1" ? -1 : 1,
+  );
+
+  function toggleSort(key: string) {
     if (sortKey === key) sortDir = sortDir === 1 ? -1 : 1;
     else {
       sortKey = key;
       sortDir = 1;
     }
+    localStorage.setItem(`pitbox.sort.${kk}.key`, sortKey);
+    localStorage.setItem(`pitbox.sort.${kk}.dir`, String(sortDir));
   }
 
   function setView(v: "gallery" | "table") {
     view = v;
-    localStorage.setItem("pitbox.view", v);
+    localStorage.setItem(`pitbox.view.${kk}`, v);
   }
 
   async function refresh() {
@@ -76,13 +111,15 @@
     await setFavorite(c.id_interne, c.is_favorite);
   }
 
+  // N'expose que les mods du type de cette bibliothèque (§6.1).
+  const typed = $derived(cards.filter((c) => c.kind === kind));
+
   const categories = $derived(
-    [...new Set(cards.map((c) => c.category).filter((c): c is string => !!c))].sort(),
+    [...new Set(typed.map((c) => c.category).filter((c): c is string => !!c))].sort(),
   );
 
   const filtered = $derived(
-    cards.filter((c) => {
-      if (typeFilter !== "all" && c.kind !== typeFilter) return false;
+    typed.filter((c) => {
       if (categoryFilter !== "all" && c.category !== categoryFilter) return false;
       if (classFilter !== "all" && c.car_class !== classFilter) return false;
       if (favOnly && !c.is_favorite) return false;
@@ -91,7 +128,8 @@
       if (query.trim()) {
         const q = query.toLowerCase();
         const tags = [...c.tags_from_mod, ...c.tags_from_rule, ...c.tags_manual].join(" ");
-        const hay = `${c.display_name ?? ""} ${c.brand ?? ""} ${c.id_interne} ${c.category ?? ""} ${tags}`.toLowerCase();
+        // Inclut le pack (§4.7) : rechercher son nom remonte toutes ses voitures.
+        const hay = `${c.display_name ?? ""} ${c.brand ?? ""} ${c.id_interne} ${c.category ?? ""} ${c.source_pack ?? ""} ${tags}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -114,22 +152,11 @@
     yearMax = null;
   }
 
-  const counts = $derived({
-    all: cards.length,
-    cars: cards.filter((c) => c.kind === "Car").length,
-    tracks: cards.filter((c) => c.kind === "Track").length,
-  });
-
   const sorted = $derived.by(() => {
+    const col = columns.find((c) => c.key === sortKey);
     const val = (c: ModCard): string | number => {
-      switch (sortKey) {
-        case "name": return (c.display_name ?? c.id_interne).toLowerCase();
-        case "brand": return (c.brand ?? "").toLowerCase();
-        case "year": return c.year ?? 0;
-        case "kind": return c.kind;
-        case "versions": return c.version_count;
-        case "active": return c.active ? 1 : 0;
-      }
+      if (!col) return (c.display_name ?? c.id_interne).toLowerCase();
+      return col.sortValue ? col.sortValue(c) : col.value(c).toLowerCase();
     };
     return [...filtered].sort((a, b) => {
       const va = val(a), vb = val(b);
@@ -182,6 +209,18 @@
     await runImport(importFolders([sel], copyMode));
   }
 
+  // Import en masse (§4.6) : on ouvre le flux analyse → arbitrage → exécution.
+  let bulkParent = $state<string | null>(null);
+  async function pickBulkImport() {
+    const sel = await open({ directory: true, multiple: false });
+    if (sel && typeof sel === "string") bulkParent = sel;
+  }
+  async function onBulkDone(r: ArchiveResult[]) {
+    report = r; // conflits déjà arbitrés dans le flux → pas de dialogue
+    bulkParent = null;
+    await refresh();
+  }
+
   onMount(() => {
     refresh();
     // Import par glisser-déposer de fichiers sur la fenêtre.
@@ -208,9 +247,21 @@
     const errs = r.filter((a) => a.error).length;
     return `${n} mod(s) importé(s)${errs ? `, ${errs} archive(s) en erreur` : ""}`;
   }
+
+  const typeLabel = isCar ? "voiture" : "circuit";
 </script>
 
 <div class="library">
+  {#if fullId}
+    <div class="full-wrap">
+      <DetailPage
+        id={fullId}
+        {kind}
+        onclose={() => (fullId = null)}
+        onchange={refresh}
+      />
+    </div>
+  {:else}
   <div class="main">
     <div class="toolbar">
       <div class="import-group">
@@ -219,6 +270,9 @@
         </button>
         <button class="btn" type="button" onclick={pickFolderAndImport} disabled={importing} title="Importer un dossier de mod déjà décompressé (§4.5)">
           Importer un dossier
+        </button>
+        <button class="btn" type="button" onclick={pickBulkImport} disabled={importing} title="Importer en masse : un dossier parent dont chaque sous-dossier est un mod (§4.6)">
+          Import en masse
         </button>
         <div class="copy-toggle" title="Pour l'import de dossier">
           <button class:on={copyMode} onclick={() => setCopyMode(true)}>Copier</button>
@@ -230,15 +284,32 @@
         <input class="input" placeholder="Rechercher (nom, marque, tag…)" bind:value={query} />
       </div>
 
-      <div class="seg">
-        <button class:on={typeFilter === "all"} onclick={() => (typeFilter = "all")}>Tous <span>{counts.all}</span></button>
-        <button class:on={typeFilter === "Car"} onclick={() => (typeFilter = "Car")}>Voitures <span>{counts.cars}</span></button>
-        <button class:on={typeFilter === "Track"} onclick={() => (typeFilter = "Track")}>Circuits <span>{counts.tracks}</span></button>
-      </div>
+      <span class="count-pill mono">{filtered.length}</span>
 
       <button class="btn filter-btn" class:active={activeFilterCount > 0} type="button" onclick={() => (showFilters = !showFilters)}>
         Filtres{#if activeFilterCount > 0}<span class="fc">{activeFilterCount}</span>{/if}
       </button>
+
+      {#if view === "table"}
+        <div class="columns-wrap">
+          <button class="btn" type="button" onclick={() => (showColumns = !showColumns)}>Colonnes</button>
+          {#if showColumns}
+            <div class="columns-menu">
+              {#each columns as col}
+                <label class:fixed={col.fixed}>
+                  <input
+                    type="checkbox"
+                    checked={col.fixed || visibleKeys.includes(col.key)}
+                    disabled={col.fixed}
+                    onchange={() => toggleColumn(col.key)}
+                  />
+                  <span>{col.label}</span>
+                </label>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
 
       <div class="seg view">
         <button class:on={view === "gallery"} onclick={() => setView("gallery")} title="Galerie">▦</button>
@@ -248,29 +319,31 @@
 
     {#if showFilters}
       <div class="filters">
-        <label>
-          <span>Catégorie</span>
-          <select class="input" bind:value={categoryFilter}>
-            <option value="all">Toutes</option>
-            {#each categories as cat}<option value={cat}>{cat}</option>{/each}
-          </select>
-        </label>
-        <label>
-          <span>Classe</span>
-          <select class="input" bind:value={classFilter}>
-            <option value="all">Toutes</option>
-            <option value="race">race</option>
-            <option value="street">street</option>
-          </select>
-        </label>
-        <label>
-          <span>Année min</span>
-          <input class="input" type="number" placeholder="—" bind:value={yearMin} />
-        </label>
-        <label>
-          <span>Année max</span>
-          <input class="input" type="number" placeholder="—" bind:value={yearMax} />
-        </label>
+        {#if isCar}
+          <label>
+            <span>Catégorie</span>
+            <select class="input" bind:value={categoryFilter}>
+              <option value="all">Toutes</option>
+              {#each categories as cat}<option value={cat}>{cat}</option>{/each}
+            </select>
+          </label>
+          <label>
+            <span>Classe</span>
+            <select class="input" bind:value={classFilter}>
+              <option value="all">Toutes</option>
+              <option value="race">race</option>
+              <option value="street">street</option>
+            </select>
+          </label>
+          <label>
+            <span>Année min</span>
+            <input class="input" type="number" placeholder="—" bind:value={yearMin} />
+          </label>
+          <label>
+            <span>Année max</span>
+            <input class="input" type="number" placeholder="—" bind:value={yearMax} />
+          </label>
+        {/if}
         <label class="fav-check">
           <input type="checkbox" bind:checked={favOnly} />
           <span>Favoris</span>
@@ -324,14 +397,33 @@
               {/if}
             </div>
           {/each}
+          {@const replaced = (a.shared ?? []).filter((s) => s.disposition === "replaced")}
+          {@const added = (a.shared ?? []).filter((s) => s.disposition === "installed")}
+          {#if added.length}
+            <div class="r-line shared">
+              + {added.length} ressource(s) partagée(s) installée(s) (fonts/drivers, §4.8)
+            </div>
+          {/if}
+          {#each replaced as s}
+            <div class="r-line shared warn">
+              ⚠ {s.kind === "fonts" ? "Font" : "Driver"} « {s.name} » remplacé par une version différente
+            </div>
+          {/each}
+          {#if (a.subs ?? []).length}
+            {@const skins = a.subs.filter((s) => s.sub_type === "SKIN").length}
+            {@const sounds = a.subs.filter((s) => s.sub_type === "SOUND").length}
+            <div class="r-line shared">
+              + {skins ? `${skins} skin(s)` : ""}{skins && sounds ? " · " : ""}{sounds ? `${sounds} son(s)` : ""} rattaché(s) (§12bis)
+            </div>
+          {/if}
         {/each}
       </div>
     {/if}
 
     {#if filtered.length === 0}
       <div class="empty">
-        {#if cards.length === 0}
-          <p>Bibliothèque vide.</p>
+        {#if typed.length === 0}
+          <p>Aucune {typeLabel} dans la bibliothèque.</p>
           <p class="hint">Importe une archive (.zip / .rar / .7z) ou glisse-la sur la fenêtre.</p>
         {:else}
           <p>Aucun résultat pour ce filtre.</p>
@@ -341,11 +433,12 @@
       <div class="grid">
         {#each filtered as c (c.id_interne)}
           {@const src = previewSrc(c.preview)}
-          <button class="card" class:sel={selectedId === c.id_interne} onclick={() => (selectedId = c.id_interne)}>
+          <button class="card" class:sel={selectedId === c.id_interne} onclick={() => (selectedId = c.id_interne)} ondblclick={() => (fullId = c.id_interne)} title="Double-clic : page détail">
             <div class="thumb">
               {#if src}<img src={src} alt={c.display_name ?? c.id_interne} loading="lazy" />
-              {:else}<div class="noprev">{c.kind === "Track" ? "Circuit" : "Voiture"}</div>{/if}
+              {:else}<div class="noprev">{isCar ? "Voiture" : "Circuit"}</div>{/if}
               {#if c.active}<span class="dot" title="Actif"></span>{/if}
+              {#if c.is_stock}<span class="sbadge" title="Contenu de base Kunos">BASE</span>{/if}
               {#if c.version_count > 1}<span class="vbadge">{c.version_count}</span>{/if}
               <span
                 class="card-fav"
@@ -367,27 +460,29 @@
         <table>
           <thead>
             <tr>
-              {#each [["name", "Nom"], ["brand", "Marque"], ["year", "Année"], ["kind", "Type"], ["versions", "Ver."]] as [key, label]}
-                <th class="sortable" onclick={() => toggleSort(key as SortKey)}>
-                  {label}{#if sortKey === key}<span class="arrow">{sortDir === 1 ? "▲" : "▼"}</span>{/if}
+              {#each visibleColumns as col}
+                <th class:sortable={col.sortable} onclick={() => col.sortable && toggleSort(col.key)}>
+                  {col.label}{#if sortKey === col.key}<span class="arrow">{sortDir === 1 ? "▲" : "▼"}</span>{/if}
                 </th>
               {/each}
-              <th>Tags</th>
-              <th class="sortable" onclick={() => toggleSort("active")}>
-                État{#if sortKey === "active"}<span class="arrow">{sortDir === 1 ? "▲" : "▼"}</span>{/if}
-              </th>
             </tr>
           </thead>
           <tbody>
             {#each sorted as c (c.id_interne)}
-              <tr class:sel={selectedId === c.id_interne} onclick={() => (selectedId = c.id_interne)}>
-                <td class="t-name">{c.display_name ?? c.id_interne}</td>
-                <td>{c.brand ?? ""}</td>
-                <td>{c.year ?? ""}</td>
-                <td>{c.kind === "Track" ? "Circuit" : "Voiture"}</td>
-                <td class="mono">{c.version_count}</td>
-                <td class="t-tags">{c.tags_from_mod.slice(0, 4).join(", ")}</td>
-                <td>{#if c.active}<span class="on-dot"></span>actif{:else}—{/if}</td>
+              <tr class:sel={selectedId === c.id_interne} onclick={() => (selectedId = c.id_interne)} ondblclick={() => (fullId = c.id_interne)}>
+                {#each visibleColumns as col}
+                  <td
+                    class:t-name={col.key === "name"}
+                    class:mono={col.mono}
+                    class:t-tags={col.key === "tags"}
+                  >
+                    {#if col.key === "active"}
+                      {#if c.active}<span class="on-dot"></span>actif{:else}—{/if}
+                    {:else}
+                      {col.value(c)}
+                    {/if}
+                  </td>
+                {/each}
               </tr>
             {/each}
           </tbody>
@@ -396,8 +491,18 @@
     {/if}
   </div>
 
-  <ModDetail id={selectedId} onclose={() => (selectedId = null)} onchange={refresh} />
+  <ModDetail
+    id={selectedId}
+    onclose={() => (selectedId = null)}
+    onchange={refresh}
+    onexpand={() => (fullId = selectedId)}
+  />
+  {/if}
 </div>
+
+{#if bulkParent}
+  <BulkImport parent={bulkParent} copy={copyMode} onclose={() => (bulkParent = null)} ondone={onBulkDone} />
+{/if}
 
 {#if pendingConflicts.length}
   {@const c = pendingConflicts[0]}
@@ -438,6 +543,12 @@
     padding: 18px 22px;
     overflow-y: auto;
   }
+  .full-wrap {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    padding: 28px 32px; /* compense le margin négatif de .page */
+  }
   .toolbar {
     display: flex;
     align-items: center;
@@ -472,6 +583,60 @@
     flex: 1;
     min-width: 160px;
   }
+  .count-pill {
+    color: var(--faint);
+    font-size: 11px;
+  }
+  .filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .filter-btn.active {
+    border-color: var(--rosso-border);
+    color: var(--rosso-bright);
+  }
+  .filter-btn .fc {
+    background: var(--rosso);
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 0 4px;
+    border-radius: 2px;
+  }
+  .columns-wrap {
+    position: relative;
+  }
+  .columns-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 20;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 180px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  }
+  .columns-menu label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--txt2);
+    padding: 3px 4px;
+    cursor: pointer;
+  }
+  .columns-menu label:hover {
+    background: var(--raised);
+  }
+  .columns-menu label.fixed {
+    color: var(--muted);
+    cursor: default;
+  }
   .seg {
     display: flex;
     border: 1px solid var(--line);
@@ -490,32 +655,9 @@
     background: var(--raised);
     color: var(--txt);
   }
-  .seg button span {
-    color: var(--faint);
-    font-family: var(--mono);
-    margin-left: 5px;
-    font-size: 10px;
-  }
   .seg.view button {
     font-size: 14px;
     padding: 6px 10px;
-  }
-  .filter-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .filter-btn.active {
-    border-color: var(--rosso-border);
-    color: var(--rosso-bright);
-  }
-  .filter-btn .fc {
-    background: var(--rosso);
-    color: #fff;
-    font-family: var(--mono);
-    font-size: 9px;
-    padding: 0 4px;
-    border-radius: 2px;
   }
   .filters {
     display: flex;
@@ -610,6 +752,14 @@
   .r-line.err {
     color: var(--rosso-bright);
   }
+  .r-line.shared {
+    color: var(--muted);
+    font-size: 11px;
+    padding-top: 4px;
+  }
+  .r-line.shared.warn {
+    color: var(--yellow);
+  }
   .r-out {
     font-size: 9px;
     letter-spacing: 0.5px;
@@ -701,6 +851,18 @@
     font-family: var(--mono);
     padding: 1px 5px;
   }
+  .sbadge {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    background: var(--raised);
+    color: var(--blue);
+    border: 1px solid var(--blue-border);
+    font-size: 8px;
+    font-family: var(--mono);
+    letter-spacing: 0.5px;
+    padding: 1px 4px;
+  }
   .card-fav {
     position: absolute;
     bottom: 5px;
@@ -736,6 +898,7 @@
 
   .table-wrap {
     border: 1px solid var(--line);
+    overflow-x: auto;
   }
   table {
     width: 100%;
@@ -751,6 +914,7 @@
     letter-spacing: 0.5px;
     border-bottom: 1px solid var(--line);
     background: var(--panel2);
+    white-space: nowrap;
   }
   th.sortable {
     cursor: pointer;
@@ -767,6 +931,7 @@
     padding: 7px 10px;
     border-bottom: 1px solid var(--line);
     color: var(--txt2);
+    white-space: nowrap;
   }
   tbody tr {
     cursor: pointer;
@@ -783,6 +948,7 @@
   }
   .t-tags {
     color: var(--muted);
+    white-space: normal;
   }
   .on-dot {
     display: inline-block;

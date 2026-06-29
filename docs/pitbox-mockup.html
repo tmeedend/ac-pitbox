@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pit Box — Maquette interactive</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/tabler-icons.min.css" rel="stylesheet">
+<style>
+  :root{
+    --rosso:#d40000; --rosso-bright:#ff5555; --rosso-dim:#1a0606; --rosso-border:#5c1212;
+    --bg:#08080c; --panel:#0d0d12; --panel2:#0a0a0f; --card:#13131a; --raised:#15151c;
+    --line:#1e1e26; --txt:#f2f2f4; --txt2:#cfd2d9; --muted:#86868f; --muted2:#5d6470; --faint:#4a4a55; --faint2:#3a3a44;
+    --green:#5dcaa5; --green-dim:#0a1a14; --green-border:#16382c;
+    --blue:#6a9ec9; --blue-dim:#0c1620; --blue-border:#1d3148;
+    --yellow:#f1d83c;
+    --mono:'SF Mono',ui-monospace,'Cascadia Code','Roboto Mono',Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:13px;-webkit-font-smoothing:antialiased;}
+  .app{max-width:1080px;margin:0 auto;padding:14px;}
+  .frame{background:var(--panel);border:1px solid var(--rosso);}
+  .topbar{background:var(--rosso);height:3px;}
+  .mono{font-family:var(--mono);}
+  button{font-family:inherit;cursor:pointer;border:none;}
+  .hidden{display:none !important;}
+
+  /* layout */
+  .shell{display:grid;grid-template-columns:166px 1fr;}
+  .side{background:var(--bg);border-right:1px solid var(--line);min-height:560px;}
+  .brand{display:flex;align-items:center;gap:9px;padding:14px 13px;border-bottom:1px solid var(--line);}
+  .logo{width:26px;height:26px;background:var(--rosso);display:flex;align-items:center;justify-content:center;transform:skewX(-8deg);}
+  .logo i{transform:skewX(8deg);color:#fff;font-size:16px;}
+  .brand-name{font-size:13px;font-weight:600;letter-spacing:1.5px;font-style:italic;line-height:1;}
+  .brand-sub{color:var(--rosso);font-size:7px;letter-spacing:3px;margin-top:3px;}
+  .nav-sec{color:var(--faint);font-size:8.5px;font-weight:600;letter-spacing:2px;padding:12px 13px 5px;}
+  .nav-item{display:flex;align-items:center;gap:9px;padding:9px 13px;border-left:3px solid transparent;color:var(--muted);font-size:11.5px;cursor:pointer;transition:background .12s;}
+  .nav-item:hover{background:var(--raised);}
+  .nav-item.active{background:var(--raised);border-left-color:var(--rosso);color:var(--txt);}
+  .nav-item .ct{margin-left:auto;color:var(--faint);font-family:var(--mono);font-size:11px;}
+  .nav-item.active .ct{color:var(--rosso);}
+  .storage{margin:8px 13px;border:1px solid var(--line);background:var(--panel2);}
+  .storage-h{background:var(--raised);padding:5px 9px;border-bottom:1px solid var(--line);color:var(--faint);font-size:8px;letter-spacing:1.5px;}
+  .storage-b{padding:9px;}
+  .storage-v{font-size:15px;font-weight:600;font-family:var(--mono);}
+  .storage-bar{height:7px;background:var(--line);margin-top:7px;}
+  .storage-fill{height:100%;background:var(--rosso);width:62%;}
+
+  .main{display:flex;flex-direction:column;min-width:0;}
+  .head{padding:11px 15px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;background:var(--panel2);min-height:52px;}
+  .head h1{font-size:12.5px;font-weight:600;letter-spacing:1.5px;display:flex;align-items:center;gap:9px;}
+  .head h1 i{color:var(--rosso);font-size:17px;}
+  .head .cmt{color:var(--faint);font-size:8.5px;font-family:var(--mono);}
+
+  /* widgets */
+  .field{height:32px;background:var(--bg);border:1px solid var(--line);padding:0 10px 0 30px;color:var(--txt);font-size:10.5px;letter-spacing:1px;font-family:var(--mono);width:100%;}
+  .field::placeholder{color:var(--faint);}
+  .search{position:relative;}
+  .search i{position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--faint);}
+  .btn{display:inline-flex;align-items:center;gap:6px;height:31px;padding:0 13px;background:var(--rosso);color:#fff;font-size:10px;letter-spacing:1.5px;font-family:var(--mono);}
+  .btn.ghost{background:var(--raised);color:var(--muted);border:1px solid var(--line);}
+  .btn.big{height:42px;font-size:12px;letter-spacing:2px;font-style:italic;width:100%;justify-content:center;}
+  .seg{display:flex;border:1px solid var(--line);}
+  .seg button{height:31px;padding:0 12px;background:transparent;color:var(--muted);font-size:10px;letter-spacing:1.5px;font-family:var(--mono);display:flex;align-items:center;gap:5px;}
+  .seg button+button{border-left:1px solid var(--line);}
+  .seg button.on{background:var(--rosso);color:#fff;}
+  .lbl{color:var(--faint);font-size:8px;letter-spacing:1.5px;}
+  .tag{font-size:10px;padding:3px 9px;font-family:var(--mono);border:1px solid var(--line);}
+  .tag.cat{background:var(--rosso-dim);color:var(--rosso-bright);border-color:var(--rosso-border);}
+  .tag.rule{background:var(--green-dim);color:var(--green);border-color:var(--green-border);}
+  .tag.manual{background:var(--raised);color:var(--txt2);border-color:#2a2a33;}
+  .tag.mod{background:var(--blue-dim);color:var(--blue);border-color:var(--blue-border);}
+  .marker-on{width:0;height:0;border-left:8px solid var(--rosso);border-top:4px solid transparent;border-bottom:4px solid transparent;display:inline-block;}
+  .marker-off{width:8px;height:2px;background:var(--faint2);display:inline-block;}
+
+  /* gallery */
+  .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);}
+  .gcard{background:var(--card);cursor:pointer;transition:background .12s;}
+  .gcard:hover{background:#181820;}
+  .gcard-img{position:relative;height:72px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--line);}
+  .gcard-b{padding:8px 10px;}
+  .gcard-t{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+  .gcard-name{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .badge{position:absolute;top:0;right:0;background:var(--rosso);color:#fff;font-size:8.5px;padding:2px 6px;font-family:var(--mono);font-weight:600;}
+  .cl-corner{position:absolute;bottom:0;left:0;background:var(--bg);color:var(--muted);font-size:8px;padding:1px 6px;border-top:1px solid var(--line);border-right:1px solid var(--line);font-family:var(--mono);}
+
+  /* table */
+  table{width:100%;border-collapse:collapse;table-layout:fixed;}
+  thead tr{background:var(--bg);}
+  th{text-align:left;padding:8px 9px;color:var(--muted);font-size:8.5px;font-weight:600;letter-spacing:1.5px;border-bottom:2px solid var(--rosso);}
+  td{padding:8px 9px;font-size:11px;font-family:var(--mono);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid var(--line);}
+  tbody tr{cursor:pointer;}
+  tbody tr:hover{background:var(--panel2);}
+
+  .row{display:flex;align-items:center;}
+  .escu{width:30px;height:30px;background:var(--rosso);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:var(--mono);font-weight:600;font-size:11px;color:#fff;}
+  .box{border:1px solid var(--line);background:var(--panel2);}
+  .box-h{background:var(--raised);padding:5px 9px;border-bottom:1px solid var(--line);color:var(--muted);font-size:8.5px;letter-spacing:2px;display:flex;align-items:center;}
+  .specgrid{display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--line);gap:1px;}
+  .specgrid>div{background:var(--panel);padding:7px 9px;}
+  .specgrid .k{color:var(--faint);font-size:8px;letter-spacing:1px;margin-bottom:3px;}
+  .specgrid .v{color:var(--txt2);font-size:10.5px;font-family:var(--mono);}
+  .specgrid .v.todo{color:var(--muted2);font-style:italic;}
+  .toggle{display:flex;align-items:center;width:30px;height:16px;padding:0 2px;}
+  .toggle.on{background:var(--rosso-dim);justify-content:flex-end;}
+  .toggle.on span{width:12px;height:12px;background:var(--rosso-bright);display:block;}
+  .toggle.off{background:var(--raised);}
+  .toggle.off span{width:12px;height:12px;background:var(--muted);display:block;}
+  .toggle.gon{background:var(--green-dim);justify-content:flex-end;}
+  .toggle.gon span{width:12px;height:12px;background:var(--green);display:block;}
+
+  .foot{padding:9px 15px;border-top:1px solid var(--line);display:flex;align-items:center;gap:14px;background:var(--panel2);margin-top:auto;}
+  .foot .mono{font-size:10px;letter-spacing:0.5px;}
+
+  /* rules */
+  .rule-row{background:var(--panel);padding:9px 11px;border-left:3px solid var(--line);}
+  .rule-row.merge{border-left-color:var(--rosso-bright);}
+  .rule-row.deduce{border-left-color:var(--green);}
+  .rule-row.remove{border-left-color:var(--muted);}
+  .rule-row.class{border-left-color:var(--yellow);}
+  .rule-badge{font-size:7.5px;font-family:var(--mono);letter-spacing:1px;padding:1px 6px;border:1px solid var(--line);}
+  .rb-merge{background:var(--rosso-dim);color:var(--rosso-bright);border-color:var(--rosso-border);}
+  .rb-deduce{background:var(--green-dim);color:var(--green);border-color:var(--green-border);}
+  .rb-remove{background:var(--raised);color:var(--txt2);border-color:#2a2a33;}
+  .rb-class{background:#1a1606;color:var(--yellow);border-color:#4a3c0a;}
+  .pill{display:flex;align-items:center;gap:4px;padding:3px 9px;font-size:8.5px;font-family:var(--mono);cursor:pointer;}
+
+  .scroll{max-height:430px;overflow-y:auto;}
+  .scroll::-webkit-scrollbar{width:8px;}
+  .scroll::-webkit-scrollbar-track{background:var(--bg);}
+  .scroll::-webkit-scrollbar-thumb{background:var(--line);}
+  .legend{display:flex;gap:14px;margin-top:13px;padding-top:11px;border-top:1px solid var(--line);flex-wrap:wrap;}
+  .legend span{display:flex;align-items:center;gap:5px;color:var(--muted2);font-size:8.5px;font-family:var(--mono);letter-spacing:0.5px;}
+  .sw{width:9px;height:9px;display:inline-block;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="frame">
+    <div class="topbar"></div>
+    <div class="shell">
+
+      <!-- SIDEBAR -->
+      <aside class="side">
+        <div class="brand">
+          <div class="logo"><i class="ti ti-steering-wheel"></i></div>
+          <div><div class="brand-name">PITBOX</div><div class="brand-sub">MOD MANAGER</div></div>
+        </div>
+        <div class="nav-sec">// LIBRARY</div>
+        <div class="nav-item active" data-view="library"><i class="ti ti-car"></i> VOITURES <span class="ct">418</span></div>
+        <div class="nav-item" data-view="tracks"><i class="ti ti-road"></i> CIRCUITS <span class="ct">96</span></div>
+        <div class="nav-item" data-view="race"><i class="ti ti-flag-checkered"></i> COURSE <span class="ct"></span></div>
+        <div class="nav-sec">// WORKSHOP</div>
+        <div class="nav-item" data-view="rules"><i class="ti ti-adjustments-code"></i> RÈGLES <span class="ct">177</span></div>
+        <div class="nav-item" data-view="import"><i class="ti ti-download"></i> IMPORT <span class="ct"></span></div>
+        <div class="storage">
+          <div class="storage-h">STOCKAGE</div>
+          <div class="storage-b"><div class="storage-v">287<span style="font-size:9px;color:var(--faint);"> /460GB</span></div><div class="storage-bar"><div class="storage-fill"></div></div></div>
+        </div>
+      </aside>
+
+      <!-- MAIN -->
+      <main class="main" id="main"></main>
+
+    </div>
+  </div>
+  <div style="text-align:center;color:var(--faint);font-size:9px;font-family:var(--mono);margin-top:10px;letter-spacing:1px;">MAQUETTE INTERACTIVE · DONNÉES PARTIELLEMENT RÉELLES (RÈGLES EXTRAITES DE archives.py)</div>
+</div>
+
+<script>
+// ---- DATA ----
+const CARS = [
+  {id:"ferrari_488_gt3_evo",name:"Ferrari 488 GT3 Evo",brand:"Ferrari",ab:"FE",year:2020,cat:"#gt3",cls:"RACE",active:true,multi:2,col:"#d40000"},
+  {id:"porsche_911_rsr",name:"Porsche 911 RSR",brand:"Porsche",ab:"PO",year:2019,cat:"#lm-gte",cls:"RACE",active:true,multi:0,col:"#86868f"},
+  {id:"bmw_m4_gt3",name:"BMW M4 GT3",brand:"BMW",ab:"BM",year:2022,cat:"#gt3",cls:"RACE",active:false,multi:0,col:"#86868f"},
+  {id:"toyota_gr010",name:"Toyota GR010 Hybrid",brand:"Toyota",ab:"TO",year:2021,cat:"#lmh",cls:"RACE",active:true,multi:0,col:"#d40000"},
+  {id:"mazda_787b",name:"Mazda 787B",brand:"Mazda",ab:"MA",year:1991,cat:"#group c",cls:"RACE",active:false,multi:0,col:"#86868f"},
+  {id:"nissan_gtr_nismo",name:"Nissan GT-R Nismo GT3",brand:"Nissan",ab:"NI",year:2020,cat:"#gt3",cls:"RACE",active:true,multi:3,col:"#d40000"},
+  {id:"alfa_155_dtm",name:"Alfa Romeo 155 V6 TI",brand:"Alfa Romeo",ab:"AL",year:1993,cat:"#dtm",cls:"RACE",active:false,multi:0,col:"#86868f"},
+  {id:"mclaren_720s_gt3",name:"McLaren 720S GT3",brand:"McLaren",ab:"MC",year:2019,cat:"#gt3",cls:"RACE",active:false,multi:0,col:"#86868f"},
+  {id:"mazda_mx5_nd",name:"Mazda MX-5 ND",brand:"Mazda",ab:"MA",year:2015,cat:"#jdm",cls:"STREET",active:true,multi:0,col:"#86868f"},
+  {id:"toyota_ae86",name:"Toyota AE86 Trueno",brand:"Toyota",ab:"TO",year:1986,cat:"#jdm",cls:"STREET",active:true,multi:0,col:"#86868f"}
+];
+const TRACKS = [
+  {id:"spa",name:"Spa-Francorchamps",ab:"SP",len:"7.0 km",layouts:["GP","Endurance"],corners:19,tags:["gp","#rally","endurance"],csp:["rainfx","grassfx"],active:true},
+  {id:"nords",name:"Nürburgring Nordschleife",ab:"NÜ",len:"20.8 km",layouts:["Tourist","24h"],corners:154,tags:["endurance","#freeroam"],csp:["rainfx"],active:true},
+  {id:"touge_akina",name:"Akina Downhill",ab:"AK",len:"6.4 km",layouts:["Downhill","Uphill"],corners:31,tags:["#drift","a2b"],csp:[],active:false},
+  {id:"lemans",name:"Circuit de la Sarthe",ab:"LM",len:"13.6 km",layouts:["24h"],corners:38,tags:["endurance","gp"],csp:["rainfx","grassfx"],active:false},
+  {id:"brands",name:"Brands Hatch",ab:"BR",len:"3.9 km",layouts:["GP","Indy"],corners:9,tags:["gp"],csp:["grassfx"],active:true},
+  {id:"pikes",name:"Pikes Peak",ab:"PP",len:"19.9 km",layouts:["Hillclimb"],corners:156,tags:["hillclimb","a2b","#rally"],csp:[],active:false}
+];
+
+// Règles réelles extraites de archives.py
+const RULES = {
+  car:{
+    merge:[
+      {from:["wangan","jdm"],to:["#jdm"]},
+      {from:["hothatch","hot hatchback"],to:["hatchback"]},
+      {from:["historic"],to:["vintage"]},
+      {from:["supercar","#supercar"],to:["#supercars"]},
+      {from:["gte","#gte"],to:["#lm-gte","endurance"]},
+      {from:["gt3"],to:["#gt3"]},
+      {from:["gt4"],to:["#gt4"]},
+      {from:["dtm"],to:["#dtm"]},
+      {from:["lemans","le mans"],to:["endurance"]},
+      {from:["rally","rallye","wrc"],to:["#rally"]}
+    ],
+    deduce:[
+      {from:["lmp1"],to:["#lmp1","prototype","endurance"]},
+      {from:["lmp2"],to:["#lmp2","prototype","endurance"]},
+      {from:["lmgt"],to:["#lmgt","gt1","gt","vintage","endurance"]},
+      {from:["f1"],to:["#formula 1","openwheeler","singleseater"]},
+      {from:["group c","proto c"],to:["#prototypes group c","prototype","endurance"]}
+    ],
+    cls:[
+      {from:["drift","street drift"],cls:"—",to:["#drift"]},
+      {from:["kitcar","kit-car"],cls:"race",to:["#rally","kitcar"]},
+      {from:["tcr"],cls:"race",to:["#tcr"]},
+      {from:["f2"],cls:"race",to:["#formula 2","openwheeler","singleseater"]},
+      {from:["stock","tuning","wangan","touge"],cls:"street",to:[]},
+      {from:["historic","vintage"],cls:"race",to:["vintage"]}
+    ],
+    remove:["bmw","audi","porsche","911","r32","e36","amg","supra","skyline","nsx","civic","evo","stock","street","race","track","mod","japan","usa","wip","rss"]
+  },
+  track:{
+    merge:[
+      {from:["grand prix"],to:["gp"]},
+      {from:["city"],to:["street"]},
+      {from:["24h","sebring"],to:["endurance"]},
+      {from:["drift"],to:["#drift"]},
+      {from:["country"],to:["country-side"]},
+      {from:["freeroam"],to:["#freeroam"]}
+    ],
+    deduce:[
+      {from:["hillclimb","hill climb"],to:["hillclimb","a2b","#rally"]},
+      {from:["historic gp"],to:["historic","gp"]},
+      {from:["rally","rallye","wrc","stage","speciale"],to:["#rally"]}
+    ],
+    remove:["imola","monaco","monte","moscow","hockenheim","germany","canada","quebec","remake","mod","gpl","yokohama","shibuya"]
+  }
+};
+
+// ---- VIEWS ----
+const main = document.getElementById('main');
+let libMode = 'gallery';
+
+function nav(view){
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===view||(view==='carDetail'&&n.dataset.view==='library')||(view==='trackDetail'&&n.dataset.view==='tracks')));
+  if(view==='library') renderLibrary();
+  else if(view==='tracks') renderTracks();
+  else if(view==='carDetail') renderCarDetail();
+  else if(view==='trackDetail') renderTrackDetail(arguments[1]);
+  else if(view==='race') renderRace();
+  else if(view==='rules') renderRules();
+  else if(view==='import') renderImport();
+}
+document.querySelectorAll('.nav-item').forEach(n=>n.addEventListener('click',()=>nav(n.dataset.view)));
+
+function tagClass(t){ if(t.startsWith('#')) return 'cat'; return 'rule'; }
+
+// ---------- LIBRARY (cars) ----------
+function renderLibrary(){
+  main.innerHTML = `
+  <div class="head">
+    <h1><i class="ti ti-car"></i> VOITURES</h1>
+    <div class="search" style="flex:1;max-width:260px;margin-left:8px;"><i class="ti ti-search"></i><input class="field" placeholder="RECHERCHER..."></div>
+    <div class="seg" style="margin-left:auto;">
+      <button id="mG" class="${libMode==='gallery'?'on':''}"><i class="ti ti-layout-grid"></i> GRID</button>
+      <button id="mT" class="${libMode==='table'?'on':''}"><i class="ti ti-table"></i> DATA</button>
+    </div>
+  </div>
+  <div style="padding:8px 15px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;background:var(--panel2);">
+    <span class="lbl">FILTRES /</span>
+    <span class="tag manual">#gt3</span><span class="tag cat" style="cursor:pointer;">endurance ✕</span>
+  </div>
+  <div style="padding:14px 15px;" id="libBody"></div>
+  <div class="foot">
+    <span class="mono" style="color:var(--txt2);"><span style="color:var(--rosso);">●</span> 34 ACTIVE</span>
+    <span class="mono" style="color:var(--faint);">418 TOTAL</span>
+    <button class="btn" style="margin-left:auto;" onclick="nav('race')"><i class="ti ti-player-play"></i> LANCER</button>
+  </div>`;
+  document.getElementById('mG').onclick=()=>{libMode='gallery';renderLibrary();};
+  document.getElementById('mT').onclick=()=>{libMode='table';renderLibrary();};
+  document.getElementById('libBody').innerHTML = libMode==='gallery'? carGallery() : carTable();
+}
+function carGallery(){
+  return `<div class="gallery">`+CARS.map(c=>`
+    <div class="gcard" onclick="nav('carDetail')">
+      <div class="gcard-img" style="background:${c.active?'#1a0808':'#101016'};">
+        <i class="ti ti-car" style="font-size:30px;color:${c.col};"></i>
+        ${c.multi?`<span class="badge">${c.multi}V</span>`:''}
+        <span class="cl-corner">${c.cat}</span>
+      </div>
+      <div class="gcard-b">
+        <div class="gcard-t"><span class="${c.active?'marker-on':'marker-off'}"></span><span class="gcard-name">${c.name}</span></div>
+        <div class="row"><span style="color:var(--muted);font-size:9px;" class="mono">${c.brand.toUpperCase()}</span><span style="margin-left:auto;color:var(--faint);font-size:9px;" class="mono">${c.year}</span></div>
+      </div>
+    </div>`).join('')+`</div>`;
+}
+function carTable(){
+  return `<div style="border:1px solid var(--line);"><table>
+    <thead><tr><th style="width:24px;"></th><th>DÉSIGNATION</th><th style="width:96px;">MARQUE</th><th style="width:54px;">AN</th><th style="width:74px;">CAT.</th><th style="width:60px;text-align:right;">ÉTAT</th></tr></thead>
+    <tbody>`+CARS.map(c=>`<tr onclick="nav('carDetail')">
+      <td style="text-align:center;"><span class="${c.active?'marker-on':'marker-off'}"></span></td>
+      <td style="color:var(--txt);">${c.name}${c.multi?` <span style="color:var(--rosso);font-size:8.5px;">${c.multi}V</span>`:''}</td>
+      <td>${c.brand}</td><td>${c.year}</td>
+      <td><span class="tag cat" style="font-size:9px;padding:1px 7px;">${c.cat}</span></td>
+      <td style="text-align:right;">${c.active?'<span style="color:var(--rosso);">ON</span>':'<span style="color:var(--faint);">—</span>'}</td>
+    </tr>`).join('')+`</tbody></table></div>`;
+}
+
+// ---------- TRACKS LIBRARY ----------
+function renderTracks(){
+  main.innerHTML = `
+  <div class="head">
+    <h1><i class="ti ti-road"></i> CIRCUITS</h1>
+    <div class="search" style="flex:1;max-width:260px;margin-left:8px;"><i class="ti ti-search"></i><input class="field" placeholder="RECHERCHER..."></div>
+    <div class="seg" style="margin-left:auto;"><button class="on"><i class="ti ti-layout-grid"></i> GRID</button><button><i class="ti ti-table"></i> DATA</button></div>
+  </div>
+  <div style="padding:14px 15px;">
+    <div class="gallery" style="grid-template-columns:repeat(auto-fill,minmax(168px,1fr));">`+TRACKS.map(t=>`
+      <div class="gcard" onclick="nav('trackDetail','${t.id}')">
+        <div class="gcard-img" style="background:${t.active?'#0c1620':'#101016'};height:80px;">
+          <i class="ti ti-road" style="font-size:30px;color:var(--blue);"></i>
+          ${t.layouts.length>1?`<span class="badge" style="background:var(--blue);">${t.layouts.length} LAY</span>`:''}
+          <span class="cl-corner">${t.len}</span>
+        </div>
+        <div class="gcard-b">
+          <div class="gcard-t"><span class="${t.active?'marker-on':'marker-off'}"></span><span class="gcard-name">${t.name}</span></div>
+          <div class="row" style="gap:4px;flex-wrap:wrap;">${t.csp.map(x=>`<span style="color:var(--green);font-size:8px;" class="mono">${x}</span>`).join('')||`<span style="color:var(--faint);font-size:8px;" class="mono">no csp</span>`}</div>
+        </div>
+      </div>`).join('')+`</div>
+  </div>
+  <div class="foot"><span class="mono" style="color:var(--txt2);"><span style="color:var(--rosso);">●</span> 3 ACTIVE</span><span class="mono" style="color:var(--faint);">96 TOTAL</span></div>`;
+}
+
+// ---------- CAR DETAIL ----------
+let panelOpen = true, modTagsShown = true, favOn = true;
+function renderCarDetail(){
+  const c = CARS[0];
+  main.innerHTML = `
+  <div class="head" style="gap:9px;">
+    <i class="ti ti-arrow-left" style="font-size:16px;color:var(--muted);cursor:pointer;" onclick="nav('library')"></i>
+    <span class="mono" style="color:var(--faint);font-size:10px;">VOITURES /</span>
+    <span class="mono" style="color:var(--txt2);font-size:10px;">FERRARI_488_GT3_EVO</span>
+    <span style="margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--rosso);font-size:10px;" class="mono"><span class="marker-on"></span> ACTIVE</span>
+    <button class="btn ghost" id="panelBtn"><i class="ti ti-layout-sidebar-right"></i> SUIVI</button>
+  </div>
+  <div id="cdGrid" style="display:grid;grid-template-columns:1.4fr 1fr;">
+    <div id="cdLeft" style="padding:16px;border-right:1px solid var(--line);">
+
+      <div class="row" style="gap:13px;margin-bottom:16px;">
+        <div style="width:120px;height:78px;flex-shrink:0;background:#1a0808;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);position:relative;">
+          <i class="ti ti-car" style="font-size:38px;color:var(--rosso);"></i><span class="cl-corner">488 GT3</span>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="row" style="gap:8px;align-items:flex-start;">
+            <span class="escu">FE</span>
+            <div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:600;">Ferrari 488 GT3 Evo</div><div class="mono" style="color:var(--muted);font-size:9.5px;">FERRARI · 2020</div></div>
+            <button id="favBtn" style="background:none;padding:2px;"><i class="ti ti-heart" style="font-size:20px;color:${favOn?'var(--rosso)':'var(--faint2)'};"></i></button>
+          </div>
+          <div class="row" style="gap:5px;background:var(--panel2);border:1px solid #1e2620;padding:3px 8px;width:fit-content;margin-top:8px;">
+            <i class="ti ti-lock" style="font-size:11px;color:var(--green);"></i><span class="mono" style="color:#6f9d8a;font-size:9px;">FICHIER MOD NON MODIFIÉ</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+        <div class="box"><div class="box-h" style="font-size:8px;">CATÉGORIE · tag #</div><div style="padding:8px 9px;"><span class="tag cat">#gt3</span></div></div>
+        <div class="box"><div class="box-h" style="font-size:8px;">CLASSE / ANNÉE</div><div style="padding:8px 9px;" class="row"><span class="mono" style="color:var(--rosso);font-size:11px;">RACE</span><span style="color:var(--faint2);margin:0 8px;">|</span><span class="mono" style="font-size:11px;">2020</span></div></div>
+      </div>
+
+      <div class="box" style="margin-bottom:14px;">
+        <div class="box-h">FICHE TECHNIQUE <span style="margin-left:auto;display:flex;gap:12px;"><span class="mono" style="color:var(--muted);font-size:9px;cursor:pointer;"><i class="ti ti-file-text"></i> DESCRIPTION</span><span class="mono" style="color:var(--muted);font-size:9px;cursor:pointer;"><i class="ti ti-edit"></i> ÉDITER</span></span></div>
+        <div style="padding:9px;border-bottom:1px solid var(--line);background:var(--panel2);">
+          <div class="lbl" style="margin-bottom:5px;">SPEC · champ natif du mod</div>
+          <div class="mono" style="color:#e8e8ea;font-size:10.5px;">600 ch · 700 Nm · 1260 kg · 2.1 kg/hp · 280 km/h</div>
+        </div>
+        <div style="padding:11px;border-bottom:1px solid var(--line);">
+          <div class="row" style="margin-bottom:7px;"><span class="lbl">COURBE MOTEUR</span><span style="margin-left:auto;display:flex;gap:10px;"><span class="mono" style="color:var(--rosso-bright);font-size:8px;">— POWER</span><span class="mono" style="color:var(--yellow);font-size:8px;">— TORQUE</span></span></div>
+          <svg viewBox="0 0 400 130" style="width:100%;height:auto;display:block;">
+            <line x1="30" y1="6" x2="30" y2="110" stroke="#1e1e26"/><line x1="30" y1="110" x2="394" y2="110" stroke="#1e1e26"/>
+            <line x1="30" y1="76" x2="394" y2="76" stroke="#15151c"/><line x1="30" y1="42" x2="394" y2="42" stroke="#15151c"/>
+            <polyline points="30,110 70,98 110,86 150,72 190,58 230,44 270,32 305,24 335,26 360,40 380,60" fill="none" stroke="#f1d83c" stroke-width="2"/>
+            <polyline points="30,110 70,104 110,94 150,80 190,64 230,46 270,30 300,20 330,16 355,30 380,66" fill="none" stroke="#ff5555" stroke-width="2"/>
+            <text x="394" y="124" fill="#4a4a55" font-size="8" text-anchor="end" font-family="monospace">RPM</text>
+          </svg>
+        </div>
+        <div class="specgrid">
+          <div><div class="k">MOTEUR</div><div class="v">V8 · ARRIÈRE</div></div>
+          <div><div class="k">ADMISSION</div><div class="v">TURBO</div></div>
+          <div><div class="k">TRANSMISSION</div><div class="v">RWD</div></div>
+          <div><div class="k">BOÎTE</div><div class="v todo">à compléter</div></div>
+          <div><div class="k">CYLINDRES</div><div class="v">8</div></div>
+          <div><div class="k">0-100</div><div class="v todo">à compléter</div></div>
+        </div>
+        <div style="padding:5px 9px;border-top:1px solid var(--line);background:var(--panel2);color:var(--faint);font-size:8px;" class="mono"><i class="ti ti-world-search"></i> enrichissement web — à venir</div>
+      </div>
+
+      <div class="row" style="margin-bottom:11px;"><span class="lbl">TAGS</span><span style="margin-left:auto;display:flex;gap:10px;"><span class="mono" style="color:var(--muted);font-size:9px;cursor:pointer;"><i class="ti ti-plus"></i> AJOUTER</span><span id="modTagBtn" class="mono" style="color:var(--muted2);font-size:9px;cursor:pointer;"><i class="ti ti-eye" id="modEye"></i> FICHIER MOD</span></span></div>
+      <div class="row" style="gap:6px;flex-wrap:wrap;" id="tagWrap">
+        <span class="tag cat">#gt3</span><span class="tag rule">endurance</span><span class="tag rule">rainfx</span><span class="tag manual">night-spec ✕</span>
+        <span id="modTags" style="display:contents;"><span class="tag mod">gt3</span><span class="tag mod">ferrari</span><span class="tag mod">gt</span></span>
+      </div>
+      <div class="legend" id="legend">
+        <span><span class="sw" style="background:var(--rosso-dim);border:1px solid var(--rosso-border);"></span> CATÉGORIE</span>
+        <span><span class="sw" style="background:var(--green-dim);border:1px solid var(--green-border);"></span> RÈGLE</span>
+        <span><span class="sw" style="background:var(--raised);border:1px solid #2a2a33;"></span> MANUEL</span>
+        <span id="modLeg"><span class="sw" style="background:var(--blue-dim);border:1px solid var(--blue-border);"></span> FICHIER MOD</span>
+      </div>
+    </div>
+
+    <div id="cdRight" style="padding:16px;">
+      <div class="box-h" style="border:1px solid var(--line);border-bottom:none;">VERSIONS · 2</div>
+      <div style="border:1px solid var(--line);border-left:3px solid var(--rosso);background:var(--panel2);padding:9px 11px;margin-bottom:6px;">
+        <div class="row" style="gap:7px;margin-bottom:3px;"><span class="mono" style="font-size:11.5px;font-weight:600;">v1.3</span><span class="tag cat" style="font-size:8.5px;padding:1px 6px;">ACTIVE</span><span style="margin-left:auto;color:var(--faint);font-size:9px;" class="mono">12.03.26</span></div>
+        <div class="mono" style="color:var(--muted);font-size:9px;">ferrari_488_gt3_evo · 1.2GB</div>
+      </div>
+      <div style="border:1px solid var(--line);background:var(--panel2);padding:9px 11px;margin-bottom:16px;">
+        <div class="row" style="gap:7px;margin-bottom:3px;"><span class="mono" style="font-size:11.5px;font-weight:600;color:var(--txt2);">v1.2</span><span style="margin-left:auto;color:var(--faint);font-size:9px;" class="mono">04.11.25</span></div>
+        <div class="row"><span class="mono" style="color:var(--muted);font-size:9px;">ferrari_488_evo · 1.1GB</span><span style="margin-left:auto;color:var(--muted);font-size:9px;cursor:pointer;" class="mono"><i class="ti ti-arrow-back-up"></i> ACTIVER</span></div>
+      </div>
+      <div class="box-h" style="border:1px solid var(--line);border-bottom:none;">HISTORIQUE</div>
+      <div style="border:1px solid var(--line);padding:11px;position:relative;">
+        <div style="position:absolute;left:16px;top:14px;bottom:14px;width:1px;background:var(--line);"></div>
+        ${histItem('var(--rosso)','MAJ v1.2 → v1.3','remplacement · 12.03.26')}
+        ${histItem('var(--blue)','Conflit dossier résolu','2 versions gardées · 04.11.25')}
+        ${histItem('var(--faint2)','Import initial v1.2','04.11.25',true)}
+      </div>
+    </div>
+  </div>`;
+  // wire
+  document.getElementById('favBtn').onclick=function(){favOn=!favOn;this.querySelector('i').style.color=favOn?'var(--rosso)':'var(--faint2)';};
+  document.getElementById('panelBtn').onclick=function(){
+    panelOpen=!panelOpen;
+    document.getElementById('cdGrid').style.gridTemplateColumns=panelOpen?'1.4fr 1fr':'1fr';
+    document.getElementById('cdRight').style.display=panelOpen?'block':'none';
+    document.getElementById('cdLeft').style.borderRight=panelOpen?'1px solid var(--line)':'none';
+  };
+  if(!panelOpen){document.getElementById('cdGrid').style.gridTemplateColumns='1fr';document.getElementById('cdRight').style.display='none';document.getElementById('cdLeft').style.borderRight='none';}
+  document.getElementById('modTagBtn').onclick=function(){
+    modTagsShown=!modTagsShown;
+    document.getElementById('modTags').style.display=modTagsShown?'contents':'none';
+    document.getElementById('modLeg').style.display=modTagsShown?'flex':'none';
+    document.getElementById('modEye').className=modTagsShown?'ti ti-eye':'ti ti-eye-off';
+  };
+  if(!modTagsShown){document.getElementById('modTags').style.display='none';document.getElementById('modLeg').style.display='none';document.getElementById('modEye').className='ti ti-eye-off';}
+}
+function histItem(col,t,s,last){
+  return `<div style="position:relative;padding-left:14px;${last?'':'margin-bottom:11px;'}"><span style="position:absolute;left:-1px;top:3px;width:7px;height:7px;background:${col};"></span><div style="color:var(--txt2);font-size:10.5px;">${t}</div><div class="mono" style="color:var(--faint);font-size:8.5px;">${s}</div></div>`;
+}
+
+// ---------- TRACK DETAIL ----------
+function renderTrackDetail(id){
+  const t = TRACKS.find(x=>x.id===id) || TRACKS[0];
+  main.innerHTML = `
+  <div class="head" style="gap:9px;">
+    <i class="ti ti-arrow-left" style="font-size:16px;color:var(--muted);cursor:pointer;" onclick="nav('tracks')"></i>
+    <span class="mono" style="color:var(--faint);font-size:10px;">CIRCUITS /</span>
+    <span class="mono" style="color:var(--txt2);font-size:10px;">${t.id.toUpperCase()}</span>
+    <span style="margin-left:auto;display:flex;align-items:center;gap:6px;color:${t.active?'var(--rosso)':'var(--faint)'};font-size:10px;" class="mono"><span class="${t.active?'marker-on':'marker-off'}"></span> ${t.active?'ACTIVE':'INACTIVE'}</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1.3fr 1fr;">
+    <div style="padding:16px;border-right:1px solid var(--line);">
+      <div style="border:1px solid var(--line);background:var(--panel2);margin-bottom:14px;">
+        <div style="height:150px;background:#0c1620;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--line);position:relative;">
+          <i class="ti ti-road" style="font-size:54px;color:var(--blue);"></i>
+          <span class="cl-corner" style="font-size:9px;">TRACÉ · MINIATURE</span>
+        </div>
+        <div style="padding:10px 12px;" class="row">
+          <span class="escu" style="background:var(--blue);">${t.ab}</span>
+          <div style="margin-left:9px;"><div style="font-size:14px;font-weight:600;">${t.name}</div><div class="mono" style="color:var(--muted);font-size:9.5px;">${t.len} · ${t.corners} VIRAGES</div></div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:7px;" class="lbl">LAYOUTS · ${t.layouts.length}</div>
+      <div class="row" style="gap:6px;margin-bottom:16px;">
+        ${t.layouts.map((l,i)=>`<span class="tag ${i===0?'cat':'manual'}" style="cursor:pointer;padding:5px 12px;">${l}</span>`).join('')}
+      </div>
+
+      <div class="row" style="margin-bottom:9px;"><span class="lbl">TAGS</span><span style="margin-left:auto;" class="mono" style="color:var(--muted);font-size:9px;"><i class="ti ti-plus"></i> AJOUTER</span></div>
+      <div class="row" style="gap:6px;flex-wrap:wrap;">
+        ${t.tags.map(tg=>`<span class="tag ${tg.startsWith('#')?'cat':'rule'}">${tg}</span>`).join('')}
+        ${t.csp.map(x=>`<span class="tag rule" title="détecté via CSP">${x}</span>`).join('')}
+      </div>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--rosso-dim);border:1px solid var(--rosso-border);"></span> CATÉGORIE</span>
+        <span><span class="sw" style="background:var(--green-dim);border:1px solid var(--green-border);"></span> RÈGLE / CSP</span>
+      </div>
+    </div>
+
+    <div style="padding:16px;">
+      <div class="box" style="margin-bottom:14px;">
+        <div class="box-h">CARACTÉRISTIQUES</div>
+        <div class="specgrid" style="grid-template-columns:1fr 1fr;">
+          <div><div class="k">LONGUEUR</div><div class="v">${t.len}</div></div>
+          <div><div class="k">VIRAGES</div><div class="v">${t.corners}</div></div>
+          <div><div class="k">SENS</div><div class="v">HORAIRE</div></div>
+          <div><div class="k">PIT BOXES</div><div class="v todo">à compléter</div></div>
+        </div>
+      </div>
+      <div class="box" style="margin-bottom:14px;">
+        <div class="box-h">EXTENSIONS CSP</div>
+        <div style="padding:10px;display:flex;flex-direction:column;gap:7px;">
+          ${cspRow('rainfx','Pluie dynamique',t.csp.includes('rainfx'))}
+          ${cspRow('grassfx','Herbe 3D',t.csp.includes('grassfx'))}
+          ${cspRow('weatherfx','Météo avancée',false)}
+        </div>
+      </div>
+      <button class="btn big" onclick="nav('race')"><i class="ti ti-player-play" style="font-style:normal;"></i> CONDUIRE ICI</button>
+    </div>
+  </div>`;
+}
+function cspRow(tag,label,on){
+  return `<div class="row" style="gap:9px;"><i class="ti ti-${on?'check':'minus'}" style="font-size:14px;color:${on?'var(--green)':'var(--faint2)'};"></i><span class="mono" style="font-size:10px;color:${on?'var(--txt2)':'var(--muted2)'};">${tag}</span><span style="color:var(--faint);font-size:9px;margin-left:4px;">${label}</span><span style="margin-left:auto;color:${on?'var(--green)':'var(--faint2)'};font-size:9px;" class="mono">${on?'DÉTECTÉ':'ABSENT'}</span></div>`;
+}
+
+// ---------- RACE ----------
+let optOpen=false;
+function renderRace(){
+  main.innerHTML = `
+  <div class="head">
+    <h1><i class="ti ti-trophy"></i> CRÉER UNE COURSE</h1>
+    <div class="seg" style="margin-left:12px;border:none;background:var(--line);gap:1px;">
+      <button style="background:var(--panel);">PRACTICE</button><button style="background:var(--panel);">HOTLAP</button><button class="on">COURSE</button><button style="background:var(--panel);">WEEKEND</button>
+    </div>
+    <span style="margin-left:auto;display:flex;align-items:center;gap:5px;color:var(--green);font-size:8.5px;" class="mono"><i class="ti ti-device-floppy"></i> PRESET MÉMORISÉ</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;">
+    <div style="padding:14px 15px;border-right:1px solid var(--line);">
+      <div class="lbl" style="margin-bottom:7px;">VOITURE</div>
+      <div class="box row" style="border-color:var(--rosso-border);margin-bottom:13px;">
+        <div style="width:70px;height:50px;background:#1a0808;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--line);"><i class="ti ti-car" style="font-size:26px;color:var(--rosso);"></i></div>
+        <div style="padding:0 10px;flex:1;"><div style="font-size:11px;font-weight:600;">Ferrari 488 GT3</div><div class="mono" style="color:var(--muted);font-size:8.5px;">FERRARI · 2020</div></div>
+        <div class="row" style="gap:3px;padding-right:10px;"><span style="width:16px;height:16px;background:#a32d2d;border:1.5px solid var(--rosso-bright);"></span><span style="width:16px;height:16px;background:#185fa5;border:1px solid var(--line);"></span></div>
+      </div>
+      <div class="lbl" style="margin-bottom:7px;">CIRCUIT</div>
+      <div class="box row" style="margin-bottom:13px;">
+        <div style="width:70px;height:50px;background:#0c1620;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--line);"><i class="ti ti-road" style="font-size:24px;color:var(--blue);"></i></div>
+        <div style="padding:0 10px;flex:1;"><div style="font-size:11px;font-weight:600;">Spa-Francorchamps</div><div class="mono" style="color:var(--muted);font-size:8.5px;">GP · 7.0 KM</div></div>
+      </div>
+      <div class="lbl" style="margin-bottom:7px;">MÉTÉO · temp. implicite</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:6px;">
+        ${weatherCell('sun','BEAU',true)}${weatherCell('cloud','COUV',false)}${weatherCell('cloud-rain','PLUIE',false)}${weatherCell('cloud-storm','ORAGE',false)}
+      </div>
+      <div class="row" style="gap:8px;color:var(--muted);font-size:8.5px;" class="mono"><span><i class="ti ti-clock"></i> 14:30</span><span style="color:#6f9d8a;">~24° · 31° PISTE</span><span style="margin-left:auto;color:var(--faint);">VIA PURE</span></div>
+    </div>
+    <div style="padding:14px 15px;">
+      <div class="row" style="margin-bottom:7px;"><span class="lbl">ADVERSAIRES</span><span style="margin-left:auto;display:flex;align-items:center;gap:4px;background:var(--green-dim);border:1px solid var(--green-border);padding:1px 8px;"><i class="ti ti-checks" style="font-size:10px;color:var(--green);"></i><span class="mono" style="color:var(--green);font-size:8px;">PLATEAU COHÉRENT</span></span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:9px;">
+        <span style="background:var(--rosso-dim);color:var(--rosso-bright);font-size:9px;padding:6px 0;text-align:center;" class="mono">MÊME CATÉGORIE</span>
+        <span style="background:var(--panel);color:var(--muted);font-size:9px;padding:6px 0;text-align:center;" class="mono">GRILLE LIBRE</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:13px;">
+        <div style="background:var(--panel2);padding:7px 9px;"><div class="k" style="color:var(--faint);font-size:8px;" class="mono">IA</div><div class="mono" style="font-size:13px;font-weight:600;">15</div></div>
+        <div style="background:var(--panel2);padding:7px 9px;"><div style="color:var(--faint);font-size:8px;" class="mono">FORCE</div><div class="mono" style="font-size:13px;font-weight:600;">94<span style="font-size:8px;color:var(--faint);">%</span></div></div>
+        <div style="background:var(--panel2);padding:7px 9px;"><div style="color:var(--faint);font-size:8px;" class="mono">DURÉE</div><div class="mono" style="font-size:13px;font-weight:600;">12<span style="font-size:8px;color:var(--faint);">tr</span></div></div>
+      </div>
+      <div class="row" style="margin-bottom:7px;"><span class="lbl">RÉGLAGES SESSION</span><span style="margin-left:auto;color:var(--faint);font-size:8px;" class="mono">MÉMORISÉS</span></div>
+      <div style="display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);">
+        ${setRow('car-crash','DÉGÂTS','toggle on')}
+        ${setRow('gauge','USURE PNEUS','×2')}
+        ${setRow('gas-station','CARBURANT','×1')}
+      </div>
+    </div>
+  </div>
+  <div style="padding:0 15px;">
+    <button id="optBtn" class="row" style="width:100%;background:var(--panel2);border:1px solid var(--line);padding:9px 12px;color:var(--txt2);">
+      <i class="ti ti-adjustments-horizontal" style="font-size:15px;color:var(--muted);"></i>
+      <span class="mono" style="font-size:10px;letter-spacing:1px;margin-left:9px;">OPTIONS DE COURSE</span>
+      <span class="mono" style="color:var(--faint);font-size:8.5px;margin-left:9px;">DÉPART · POSITION · QUALIF · GRIP · ASSISTS</span>
+      <i class="ti ti-chevron-down" id="optChev" style="font-size:15px;color:var(--muted);margin-left:auto;"></i>
+    </button>
+  </div>
+  <div id="optPanel" class="hidden" style="padding:11px 15px 0;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+      <div class="box"><div class="box-h" style="font-size:8px;">DÉPART</div><div style="padding:7px 9px;" class="row" style="gap:5px;"><span class="tag cat" style="font-size:9.5px;">ARRÊTÉ</span><span class="mono" style="color:var(--muted);font-size:9.5px;padding:2px 9px;">LANCÉ</span></div></div>
+      <div class="box"><div class="box-h" style="font-size:8px;">POSITION</div><div style="padding:7px 9px;" class="row" style="gap:4px;"><span class="tag cat" style="font-size:9px;">DERNIER</span><span class="mono" style="color:var(--muted);font-size:9px;padding:2px 7px;">POLE</span><span class="mono" style="color:var(--muted);font-size:9px;padding:2px 7px;">QUALIF</span></div></div>
+      ${setRow('stopwatch','QUALIFICATION','toggle off',true)}
+      ${setRow('trending-up','ÉVOL. GRIP','toggle gon',true)}
+    </div>
+    <div class="box"><div class="box-h" style="font-size:8px;">AIDES</div><div style="padding:8px 9px;display:flex;gap:5px;flex-wrap:wrap;"><span class="tag mod" style="font-size:9px;">ABS: USINE</span><span class="tag mod" style="font-size:9px;">TC: USINE</span><span class="tag manual" style="font-size:9px;">LIGNE: OFF</span><span class="tag manual" style="font-size:9px;">BOÎTE: MANUEL</span></div></div>
+  </div>
+  <div style="padding:12px 15px;" class="row">
+    <span class="mono" style="color:var(--faint);font-size:8.5px;">COURSE · 12TR · 15 IA · BEAU 14:30 · PURE</span>
+    <button class="btn" style="margin-left:auto;height:40px;padding:0 20px;font-style:italic;" onclick="alert('Lancement réel non disponible : ceci est une maquette. Le câblage à Content Manager via preset est un point ouvert de la spec (lot L4).');"><i class="ti ti-flag-checkered" style="font-style:normal;"></i> LANCER LA COURSE</button>
+  </div>`;
+  const op=document.getElementById('optPanel'),ob=document.getElementById('optBtn'),oc=document.getElementById('optChev');
+  ob.onclick=()=>{optOpen=!optOpen;op.classList.toggle('hidden',!optOpen);oc.className=optOpen?'ti ti-chevron-up':'ti ti-chevron-down';};
+  if(optOpen){op.classList.remove('hidden');oc.className='ti ti-chevron-up';}
+}
+function weatherCell(ic,lbl,on){
+  return `<div style="background:${on?'var(--rosso-dim)':'var(--panel)'};padding:7px 2px;text-align:center;cursor:pointer;"><i class="ti ti-${ic}" style="font-size:15px;color:${on?'var(--rosso-bright)':'var(--muted)'};"></i><div class="mono" style="color:${on?'var(--rosso-bright)':'var(--muted)'};font-size:8px;margin-top:2px;">${lbl}</div></div>`;
+}
+function setRow(ic,lbl,val,boxed){
+  let right;
+  if(val.startsWith('toggle')) right=`<span class="${val}"><span></span></span>`;
+  else right=`<span class="mono" style="font-size:10px;">${val}</span>`;
+  const inner=`<div class="row" style="gap:8px;background:var(--panel2);padding:6px 10px;${boxed?'border:1px solid var(--line);':''}"><i class="ti ti-${ic}" style="font-size:13px;color:var(--blue);"></i><span class="mono" style="color:var(--txt2);font-size:10px;">${lbl}</span><span style="margin-left:auto;">${right}</span></div>`;
+  return inner;
+}
+
+// ---------- RULES ----------
+let rulesScope='car';
+function renderRules(){
+  const r = RULES[rulesScope];
+  const merge = r.merge.map(x=>ruleRow('merge','FUSION',x.from,x.to)).join('');
+  const deduce = r.deduce.map(x=>ruleRow('deduce','DÉDUCTION',x.from,x.to)).join('');
+  const remove = `<div class="rule-row remove"><div class="row" style="gap:7px;"><span class="rule-badge rb-remove">SUPPRESSION</span><span class="mono" style="color:var(--muted);font-size:10px;flex:1;">${r.remove.slice(0,10).join(' · ')} … <span style="color:var(--faint);">+${r.remove.length>10?r.remove.length-10:0}</span></span><i class="ti ti-trash" style="font-size:13px;color:var(--muted2);"></i></div></div>`;
+  const clsRules = rulesScope==='car'? r.cls.map(x=>ruleRowClass(x)).join(''):'';
+  const total = r.merge.length + r.deduce.length + (rulesScope==='car'?r.cls.length:0) + 1;
+  main.innerHTML = `
+  <div class="head">
+    <h1><i class="ti ti-adjustments-code"></i> RÈGLES DE TAGS</h1>
+    <span class="cmt">// ontologie · vocabulaire fermé · extraites de archives.py</span>
+    <button class="btn" style="margin-left:auto;"><i class="ti ti-plus"></i> NOUVELLE RÈGLE</button>
+  </div>
+  <div style="padding:9px 15px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;background:var(--panel2);">
+    <div class="seg"><button class="${rulesScope==='car'?'on':''}" onclick="rulesScope='car';renderRules();"><i class="ti ti-car"></i> VOITURES</button><button class="${rulesScope==='track'?'on':''}" onclick="rulesScope='track';renderRules();"><i class="ti ti-road"></i> CIRCUITS</button></div>
+    <div class="search" style="flex:1;max-width:200px;margin-left:8px;"><i class="ti ti-search"></i><input class="field" placeholder="FILTRER..."></div>
+    <span class="pill" style="background:var(--rosso-dim);color:var(--rosso-bright);border:1px solid var(--rosso-border);margin-left:auto;">FUSION <span style="color:var(--muted);">${r.merge.length}</span></span>
+    <span class="pill" style="background:var(--green-dim);color:var(--green);border:1px solid var(--green-border);">DÉDUCTION <span style="color:var(--muted);">${r.deduce.length}</span></span>
+    ${rulesScope==='car'?`<span class="pill" style="background:#1a1606;color:var(--yellow);border:1px solid #4a3c0a;">CLASSE <span style="color:var(--muted);">${r.cls.length}</span></span>`:''}
+    <span class="pill" style="background:var(--raised);color:var(--txt2);border:1px solid #2a2a33;">SUPPR <span style="color:var(--muted);">${r.remove.length}</span></span>
+  </div>
+  <div style="padding:13px 15px;display:grid;grid-template-columns:1.4fr 1fr;gap:13px;">
+    <div>
+      <div class="lbl" style="margin-bottom:8px;">RÈGLES ACTIVES · ${total} (${rulesScope==='car'?'voitures':'circuits'})</div>
+      <div class="scroll" style="display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);">
+        ${clsRules}${merge}${deduce}${remove}
+      </div>
+    </div>
+    <div>
+      <div class="lbl" style="margin-bottom:8px;">ÉDITER LA RÈGLE</div>
+      <div class="box" style="border-color:var(--rosso-border);">
+        <div style="background:var(--rosso-dim);padding:6px 11px;border-bottom:1px solid var(--rosso-border);" class="row"><span class="mono" style="color:var(--rosso-bright);font-size:8px;letter-spacing:1px;">TYPE</span><div style="margin-left:auto;display:flex;gap:1px;"><span style="background:var(--rosso);color:#fff;font-size:8px;padding:2px 8px;" class="mono">FUSION</span><span style="background:var(--raised);color:var(--muted);font-size:8px;padding:2px 8px;" class="mono">DÉDUC</span><span style="background:var(--raised);color:var(--muted);font-size:8px;padding:2px 8px;" class="mono">SUPPR</span></div></div>
+        <div style="padding:11px;">
+          <div class="lbl" style="margin-bottom:5px;">QUAND ON VOIT (synonymes)</div>
+          <div class="row" style="gap:4px;flex-wrap:wrap;margin-bottom:5px;"><span class="tag manual" style="font-size:9.5px;">wangan ✕</span><span class="tag manual" style="font-size:9.5px;">jdm ✕</span></div>
+          <input class="field" style="padding-left:10px;margin-bottom:13px;" placeholder="+ ajouter un synonyme">
+          <div class="lbl" style="margin-bottom:5px;">REMPLACER PAR (canonique)</div>
+          <div class="row" style="gap:7px;margin-bottom:13px;"><i class="ti ti-arrow-down" style="font-size:14px;color:var(--rosso);"></i><input class="field" value="#jdm" style="padding-left:10px;height:30px;border-color:var(--rosso-border);"></div>
+          <div class="row" style="gap:5px;background:var(--green-dim);border:1px solid var(--green-border);padding:6px 9px;margin-bottom:13px;"><i class="ti ti-eye" style="font-size:12px;color:var(--green);"></i><span class="mono" style="color:#6f9d8a;font-size:8.5px;">APERÇU : 8 voitures affectées</span></div>
+          <div class="row" style="gap:7px;"><button class="btn" style="flex:1;justify-content:center;height:32px;">ENREGISTRER</button><button class="btn ghost" style="height:32px;">ANNULER</button></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function ruleRow(type,label,from,to){
+  const badge = type==='merge'?'rb-merge':'rb-deduce';
+  const cls = type==='merge'?'merge':'deduce';
+  const fromTxt = from.join(' · ');
+  const toTags = to.map(t=>`<span class="mono" style="color:${t.startsWith('#')?'var(--rosso-bright)':'var(--green)'};font-size:9.5px;">${t}</span>`).join(' ');
+  return `<div class="rule-row ${cls}"><div class="row" style="gap:7px;"><span class="rule-badge ${badge}">${label}</span><span class="mono" style="color:var(--muted);font-size:10px;flex:1;">${fromTxt}</span><i class="ti ti-arrow-right" style="font-size:13px;color:var(--rosso);"></i><div class="row" style="gap:5px;">${toTags}</div></div></div>`;
+}
+function ruleRowClass(x){
+  const toTags = x.to.length? x.to.map(t=>`<span class="mono" style="color:${t.startsWith('#')?'var(--rosso-bright)':'var(--green)'};font-size:9.5px;">${t}</span>`).join(' '):'<span class="mono" style="color:var(--faint);font-size:9.5px;">—</span>';
+  return `<div class="rule-row class"><div class="row" style="gap:7px;"><span class="rule-badge rb-class">CLASSE</span><span class="mono" style="color:var(--muted);font-size:10px;flex:1;">${x.from.slice(0,3).join(' · ')}</span><i class="ti ti-arrow-right" style="font-size:13px;color:var(--rosso);"></i><span class="mono" style="color:var(--yellow);font-size:9.5px;">${x.cls}</span> ${toTags}</div></div>`;
+}
+
+// ---------- IMPORT (placeholder) ----------
+function renderImport(){
+  main.innerHTML = `<div class="head"><h1><i class="ti ti-download"></i> IMPORT</h1></div>
+  <div style="padding:40px 15px;text-align:center;">
+    <div style="border:2px dashed var(--line);padding:40px;background:var(--panel2);">
+      <i class="ti ti-package-import" style="font-size:48px;color:var(--rosso);"></i>
+      <div style="font-size:14px;font-weight:600;margin-top:14px;letter-spacing:1px;">GLISSER UNE ARCHIVE ICI</div>
+      <div class="mono" style="color:var(--muted);font-size:10px;margin-top:8px;">.zip · .rar · .7z — analyse, détection, harmonisation des tags</div>
+      <div class="mono" style="color:var(--faint);font-size:9px;margin-top:14px;">// clic droit sur une archive → « Analyser avec Pit Box »</div>
+    </div>
+  </div>`;
+}
+
+// init
+renderLibrary();
+</script>
+</body>
+</html>

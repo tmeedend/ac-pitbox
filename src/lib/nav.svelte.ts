@@ -8,6 +8,6 @@ export interface LaunchPrefill {
 }
 
 export const nav = $state<{ section: string; prefill: LaunchPrefill | null }>({
-  section: "library",
+  section: "cars",
   prefill: null,
 });

@@ -71,12 +71,75 @@ pub fn is_car_sound(dir: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Pack de skins (§12bis.2) : dossier `<carId>` contenant un sous-dossier
+/// `skins/` peuplé, mais **sans** `ui/ui_car.json` (sinon c'est une vraie
+/// voiture). Le nom du dossier est la voiture cible.
+pub fn is_skin_pack(dir: &Path) -> bool {
+    if is_car(dir) {
+        return false;
+    }
+    let skins = dir.join("skins");
+    skins.is_dir()
+        && std::fs::read_dir(&skins)
+            .map(|mut e| e.any(|x| x.map(|x| x.path().is_dir()).unwrap_or(false)))
+            .unwrap_or(false)
+}
+
+/// Type d'un sous-élément rattaché détecté à l'import.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubKind {
+    Skin,
+    Sound,
+}
+
+#[derive(Debug, Clone)]
+pub struct FoundSub {
+    pub kind: SubKind,
+    /// Voiture cible (nom du dossier) à laquelle rattacher le sous-élément.
+    pub parent_id: String,
+    /// Dossier source (contient `skins/` pour un skin, `GUIDs.txt`+`.bank` pour un son).
+    pub dir: PathBuf,
+}
+
 /// Descend récursivement à partir de `root` et collecte les voitures/circuits.
 /// Un dossier reconnu comme mod n'est pas exploré plus profond.
 pub fn scan(root: &Path) -> Vec<FoundMod> {
     let mut found = Vec::new();
     descend(root, &mut found);
     found
+}
+
+/// Descend et collecte les **sous-éléments** (packs de skins, mods de son) qui
+/// ne sont pas des mods de premier niveau (§12bis.2). Disjoint de `scan` : une
+/// vraie voiture/circuit (avec `ui/`) est ignorée ici.
+pub fn scan_subs(root: &Path) -> Vec<FoundSub> {
+    let mut found = Vec::new();
+    descend_subs(root, &mut found);
+    found
+}
+
+fn descend_subs(dir: &Path, out: &mut Vec<FoundSub>) {
+    // Vrai mod de premier niveau : géré par `scan`, pas ici.
+    if is_car(dir) || is_track(dir) {
+        return;
+    }
+    let dir_name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    if is_skin_pack(dir) {
+        out.push(FoundSub { kind: SubKind::Skin, parent_id: dir_name, dir: dir.to_path_buf() });
+        return;
+    }
+    if is_car_sound(dir) {
+        out.push(FoundSub { kind: SubKind::Sound, parent_id: dir_name, dir: dir.to_path_buf() });
+        return;
+    }
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                descend_subs(&p, out);
+            }
+        }
+    }
 }
 
 fn descend(dir: &Path, out: &mut Vec<FoundMod>) {
