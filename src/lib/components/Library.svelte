@@ -25,6 +25,7 @@
     saveVisible,
     type ColumnDef,
   } from "$lib/columns";
+  import { nav } from "$lib/nav.svelte";
 
   // Une bibliothèque par type (§6.1) : ce composant est rendu une fois pour les
   // voitures, une fois pour les circuits. Toute la persistance est suffixée par
@@ -104,6 +105,15 @@
   async function refresh() {
     cards = await listLibrary();
   }
+
+  // Ouverture demandée depuis une vue transversale (§12bis.3) : on ouvre la
+  // fiche pleine page de l'entité ciblée (la bonne bibliothèque est déjà active).
+  $effect(() => {
+    if (nav.openMod) {
+      fullId = nav.openMod;
+      nav.openMod = null;
+    }
+  });
 
   async function toggleFav(c: ModCard, e: Event) {
     e.stopPropagation();

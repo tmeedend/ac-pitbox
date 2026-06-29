@@ -7,7 +7,13 @@ export interface LaunchPrefill {
   name: string;
 }
 
-export const nav = $state<{ section: string; prefill: LaunchPrefill | null }>({
+export const nav = $state<{
+  section: string;
+  prefill: LaunchPrefill | null;
+  /** Demande d'ouverture d'une fiche détail depuis une vue transversale (§12bis.3). */
+  openMod: string | null;
+}>({
   section: "cars",
   prefill: null,
+  openMod: null,
 });
