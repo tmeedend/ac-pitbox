@@ -41,7 +41,7 @@ pub struct ImportedMod {
     pub id_interne: String,
     pub kind: String,
     pub display_name: Option<String>,
-    /// "IMPORT" | "UPDATE_REPLACE"
+    /// "IMPORT" | "UPDATE_REPLACE" | "DUPLICATE" (réimport à l'identique ignoré)
     pub outcome: String,
     pub version_label: Option<String>,
     /// Renseigné si un mod existant ressemble fortement à celui-ci (§4.2).
@@ -581,6 +581,24 @@ fn process_found(
 
     // --- Résolution d'identité (§4.2) ---
     let is_update = crate::overlay::mod_exists(conn, &id_interne).map_err(|e| e.to_string())?;
+
+    // Ré-import à l'identique : même id ET même signature de contenu que la
+    // version active → on n'ajoute PAS de nouvelle version (évite le faux « MAJ »
+    // quand on réimporte exactement la même archive).
+    if is_update {
+        let active = crate::overlay::active_signature(conn, &id_interne).map_err(|e| e.to_string())?;
+        if active.as_deref() == Some(signature.as_str()) {
+            return Ok(ImportedMod {
+                id_interne,
+                kind: kind_str,
+                display_name: Some(name),
+                outcome: "DUPLICATE".into(),
+                version_label: ui.version,
+                conflict: None,
+            });
+        }
+    }
+
     let conflict = if is_update {
         None
     } else {
@@ -799,8 +817,20 @@ mod tests {
         let lib_ui = Path::new(&versions[0].library_path).join("ui").join("ui_car.json");
         assert!(lib_ui.is_file(), "ui_car.json doit exister dans la bibliothèque");
 
-        // --- 2e import du même id : MISE À JOUR ---
-        let res2 = run_import(&noop, &conn, &cfg, &rules, &[zip_str]);
+        // --- 2e import de la MÊME archive : DOUBLON (pas de réimport) ---
+        let res_dup = run_import(&noop, &conn, &cfg, &rules, &[zip_str.clone()]);
+        assert_eq!(res_dup[0].mods[0].outcome, "DUPLICATE");
+        assert_eq!(
+            crate::overlay::list_mods(&conn).unwrap()[0].version_count,
+            1,
+            "réimport à l'identique → toujours une seule version"
+        );
+
+        // --- 3e import avec contenu modifié : MISE À JOUR (nouvelle version) ---
+        std::fs::write(src.join("test_car").join("model.kn5"), b"DIFFERENT_KN5_CONTENT_XXL").unwrap();
+        let zip2 = base.join("test_car_v2.zip");
+        zip_dir(&sevenzip, &src, &zip2);
+        let res2 = run_import(&noop, &conn, &cfg, &rules, &[zip2.to_string_lossy().into_owned()]);
         assert_eq!(res2[0].mods[0].outcome, "UPDATE_REPLACE");
         let mods2 = crate::overlay::list_mods(&conn).unwrap();
         assert_eq!(mods2.len(), 1, "toujours un seul mod logique");

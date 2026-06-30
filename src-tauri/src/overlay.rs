@@ -668,6 +668,14 @@ pub fn upsert_stock_mod(
     Ok(())
 }
 
+/// Supprime toutes les entrées de contenu de base (ré-indexation depuis zéro).
+/// Les versions associées tombent par CASCADE. Les vrais mods ne sont pas touchés.
+pub fn clear_stock(conn: &Connection) -> rusqlite::Result<usize> {
+    conn.execute("DELETE FROM history WHERE mod_id IN (SELECT id_interne FROM mods WHERE is_stock = 1)", [])?;
+    let n = conn.execute("DELETE FROM mods WHERE is_stock = 1", [])?;
+    Ok(n)
+}
+
 // --- Sous-éléments rattachés (§12bis.2) -------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

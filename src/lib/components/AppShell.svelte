@@ -23,7 +23,7 @@
   const tools: NavItem[] = [
     { id: "profiles", label: "Profils", lot: "L3" },
     { id: "rules", label: "Règles de tags", lot: "L2" },
-    { id: "race", label: "Lancer une course", lot: "L4" },
+    { id: "race", label: "Lancer une session", lot: "L4" },
     { id: "maintenance", label: "Maintenance", lot: "L5" },
     { id: "settings", label: "Réglages", lot: "—" },
   ];
@@ -52,7 +52,7 @@
             onclick={() => !item.disabled && (nav.section = item.id)}
           >
             <span>{item.label}</span>
-            {#if item.lot !== "—"}<span class="lot">{item.lot}</span>{/if}
+            {#if item.disabled}<span class="soon">à venir</span>{/if}
           </button>
         {/each}
         <div class="nav-sec">Outils</div>
@@ -63,7 +63,6 @@
             onclick={() => (nav.section = item.id)}
           >
             <span>{item.label}</span>
-            {#if item.lot !== "—"}<span class="lot">{item.lot}</span>{/if}
           </button>
         {/each}
       </nav>
@@ -198,11 +197,12 @@
   .nav-item.disabled:hover {
     background: transparent;
   }
-  .nav-item .lot {
+  .nav-item .soon {
     margin-left: auto;
     color: var(--faint);
-    font-family: var(--mono);
-    font-size: 10px;
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
   .content {
     min-height: 0;

@@ -327,8 +327,9 @@ fn export_mod(app: AppHandle, db: State<Db>, id: String, dest_dir: String) -> Re
 #[tauri::command]
 fn index_stock_content(app: AppHandle, db: State<Db>) -> Result<usize, String> {
     let cfg = config::load(&app);
+    let rules = rules::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    stock::index_stock_content(&conn, &cfg)
+    stock::index_stock_content(&conn, &cfg, &rules)
 }
 
 /// Sous-éléments rattachés à une entité (skins/sons d'une voiture, §12bis.3).

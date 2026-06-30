@@ -46,14 +46,44 @@
   // Page détail pleine page (§6.3) : double-clic sur une carte, ou bouton
   // « Agrandir » du panneau latéral.
   let fullId = $state<string | null>(null);
-  let query = $state("");
-  let categoryFilter = $state<string>("all");
-  let classFilter = $state<"all" | "race" | "street">("all");
-  let favOnly = $state(false);
-  let neverTried = $state(false);
-  let yearMin = $state<number | null>(null);
-  let yearMax = $state<number | null>(null);
+
+  // Filtres persistés par type (rechargés au retour sur la page).
+  const FKEY = `pitbox.filters.${kk}`;
+  const sf: Record<string, unknown> = (() => {
+    try {
+      return JSON.parse(localStorage.getItem(FKEY) ?? "{}");
+    } catch {
+      return {};
+    }
+  })();
+  let query = $state<string>((sf.query as string) ?? "");
+  let categoryFilter = $state<string>((sf.category as string) ?? "all");
+  let classFilter = $state<"all" | "race" | "street">((sf.class as "all" | "race" | "street") ?? "all");
+  let stateFilter = $state<"all" | "active" | "inactive">((sf.state as "all" | "active" | "inactive") ?? "all");
+  let authorFilter = $state<string>((sf.author as string) ?? "all");
+  let favOnly = $state<boolean>((sf.fav as boolean) ?? false);
+  let neverTried = $state<boolean>((sf.neverTried as boolean) ?? false);
+  let yearMin = $state<number | null>((sf.yearMin as number | null) ?? null);
+  let yearMax = $state<number | null>((sf.yearMax as number | null) ?? null);
   let showFilters = $state(false);
+
+  // Persistance des filtres (champ libre + rubrique Filtres).
+  $effect(() => {
+    localStorage.setItem(
+      FKEY,
+      JSON.stringify({
+        query,
+        category: categoryFilter,
+        class: classFilter,
+        state: stateFilter,
+        author: authorFilter,
+        fav: favOnly,
+        neverTried,
+        yearMin,
+        yearMax,
+      }),
+    );
+  });
   let view = $state<"gallery" | "table">(
     (localStorage.getItem(`pitbox.view.${kk}`) as "gallery" | "table") ?? "gallery",
   );
@@ -137,11 +167,19 @@
   const categories = $derived(
     [...new Set(typed.map((c) => c.category).filter((c): c is string => !!c))].sort(),
   );
+  const authors = $derived(
+    [...new Set(typed.map((c) => c.author).filter((c): c is string => !!c))].sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase()),
+    ),
+  );
 
   const filtered = $derived(
     typed.filter((c) => {
       if (categoryFilter !== "all" && c.category !== categoryFilter) return false;
       if (classFilter !== "all" && c.car_class !== classFilter) return false;
+      if (stateFilter === "active" && !c.active) return false;
+      if (stateFilter === "inactive" && c.active) return false;
+      if (authorFilter !== "all" && c.author !== authorFilter) return false;
       if (favOnly && !c.is_favorite) return false;
       if (neverTried && c.tried) return false;
       if (yearMin !== null && (c.year ?? 0) < yearMin) return false;
@@ -160,6 +198,8 @@
   const activeFilterCount = $derived(
     (categoryFilter !== "all" ? 1 : 0) +
       (classFilter !== "all" ? 1 : 0) +
+      (stateFilter !== "all" ? 1 : 0) +
+      (authorFilter !== "all" ? 1 : 0) +
       (favOnly ? 1 : 0) +
       (neverTried ? 1 : 0) +
       (yearMin !== null ? 1 : 0) +
@@ -169,6 +209,8 @@
   function clearFilters() {
     categoryFilter = "all";
     classFilter = "all";
+    stateFilter = "all";
+    authorFilter = "all";
     favOnly = false;
     neverTried = false;
     yearMin = null;
@@ -342,6 +384,21 @@
 
     {#if showFilters}
       <div class="filters">
+        <label>
+          <span>État</span>
+          <select class="input" bind:value={stateFilter}>
+            <option value="all">Tous</option>
+            <option value="active">Actif</option>
+            <option value="inactive">Inactif</option>
+          </select>
+        </label>
+        <label>
+          <span>Auteur</span>
+          <select class="input" bind:value={authorFilter}>
+            <option value="all">Tous</option>
+            {#each authors as a}<option value={a}>{a}</option>{/each}
+          </select>
+        </label>
         {#if isCar}
           <label>
             <span>Catégorie</span>
@@ -412,10 +469,13 @@
           {/if}
           {#each a.mods as m}
             <div class="r-line">
-              <span class="r-out {m.outcome === 'UPDATE_REPLACE' ? 'upd' : 'new'}">
-                {m.outcome === "UPDATE_REPLACE" ? "MAJ" : "NOUVEAU"}
+              <span class="r-out {m.outcome === 'UPDATE_REPLACE' ? 'upd' : m.outcome === 'DUPLICATE' ? 'dup' : 'new'}">
+                {m.outcome === "UPDATE_REPLACE" ? "MAJ" : m.outcome === "DUPLICATE" ? "DÉJÀ PRÉSENT" : "NOUVEAU"}
               </span>
               {m.display_name ?? m.id_interne}
+              {#if m.outcome === "DUPLICATE"}
+                <span class="r-conflict">archive identique — non réimporté</span>
+              {/if}
               {#if m.conflict}
                 <span class="r-conflict">
                   ressemble à « {m.conflict.existing_name ?? m.conflict.existing_id} » —
@@ -463,10 +523,12 @@
       <div class="grid">
         {#each filtered as c (c.id_interne)}
           {@const src = previewSrc(c.preview)}
+          {@const ol = previewSrc(c.outline)}
           <button class="card" class:sel={selectedId === c.id_interne} onclick={() => (selectedId = c.id_interne)} ondblclick={() => (fullId = c.id_interne)} title="Double-clic : page détail">
             <div class="thumb">
               {#if src}<img src={src} alt={c.display_name ?? c.id_interne} loading="lazy" />
               {:else}<div class="noprev">{isCar ? "Voiture" : "Circuit"}</div>{/if}
+              {#if !isCar && ol}<img class="outline" src={ol} alt="" loading="lazy" />{/if}
               {#if c.active}<span class="dot" title="Actif"></span>{/if}
               {#if c.is_stock}<span class="sbadge" title="Contenu de base Kunos">BASE</span>{/if}
               {#if c.version_count > 1}<span class="vbadge">{c.version_count}</span>{/if}
@@ -805,6 +867,10 @@
     color: var(--yellow);
     border-color: #4a4426;
   }
+  .r-out.dup {
+    color: var(--muted);
+    border-color: var(--line);
+  }
   .r-conflict {
     color: var(--yellow);
     margin-left: 6px;
@@ -854,6 +920,13 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  /* Tracé du circuit superposé à la photo (§6.1). */
+  .thumb img.outline {
+    position: absolute;
+    inset: 0;
+    object-fit: contain;
+    padding: 8px;
   }
   .noprev {
     color: var(--faint);

@@ -344,6 +344,10 @@
         {:else}
           <div class="hero-icon">{isCar ? "🚗" : "🏁"}</div>
         {/if}
+        {#if !isCar}
+          {@const ol = previewSrc(d.track?.layouts[previewLayout]?.outline ?? null)}
+          {#if ol}<img class="hero-outline" src={ol} alt="" />{/if}
+        {/if}
         {#if isCar}
           {@const hs = heroSpecs(d.specs)}
           {#if hs}
@@ -801,6 +805,13 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  /* Tracé du layout superposé à la photo du circuit (§6.1). */
+  .hero img.hero-outline {
+    position: absolute;
+    inset: 0;
+    object-fit: contain;
+    padding: 24px;
   }
   .hero-icon {
     font-size: 90px;

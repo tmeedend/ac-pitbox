@@ -201,12 +201,14 @@
       <div class="empty">Chargement…</div>
     {:else if detail}
       {@const preview = previewSrc(detail.preview)}
+      {@const outline = previewSrc(detail.outline)}
       <div class="preview">
         {#if preview}
           <img src={preview} alt={detail.display_name ?? detail.id_interne} />
         {:else}
           <div class="noprev">{detail.kind === "Track" ? "Circuit" : "Voiture"}</div>
         {/if}
+        {#if detail.kind === "Track" && outline}<img class="outline" src={outline} alt="" />{/if}
       </div>
 
       <div class="name-row">
@@ -424,6 +426,7 @@
     padding: 4px 8px;
   }
   .preview {
+    position: relative;
     aspect-ratio: 16 / 9;
     background: var(--bg);
     border: 1px solid var(--line);
@@ -436,6 +439,12 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  .preview img.outline {
+    position: absolute;
+    inset: 0;
+    object-fit: contain;
+    padding: 8px;
   }
   .noprev {
     color: var(--faint);

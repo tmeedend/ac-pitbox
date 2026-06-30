@@ -41,6 +41,8 @@ export interface ModCard {
   /** Contenu de base Kunos : lecture seule, non désactivable (§12bis.1). */
   is_stock: boolean;
   preview: string | null;
+  /** Tracé du circuit à superposer à la photo (circuits, §6.1). */
+  outline: string | null;
   active: boolean;
   /** Distance parcourue (km) d'après CM, si connue (§6.5). */
   distance_km: number | null;
@@ -114,7 +116,7 @@ export interface ImportedMod {
   id_interne: string;
   kind: ModKind;
   display_name: string | null;
-  outcome: "IMPORT" | "UPDATE_REPLACE";
+  outcome: "IMPORT" | "UPDATE_REPLACE" | "DUPLICATE";
   version_label: string | null;
   conflict: FuzzyConflict | null;
 }

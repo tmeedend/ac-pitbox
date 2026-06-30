@@ -92,6 +92,31 @@ fn first_existing(dir: &Path, names: &[&str]) -> Option<String> {
     None
 }
 
+/// Cherche une image de circuit (`names`) dans `ui/`, puis dans le premier
+/// sous-dossier de layout qui en contient une.
+fn track_find(mod_dir: &Path, names: &[&str]) -> Option<String> {
+    let ui = mod_dir.join("ui");
+    if let Some(p) = first_existing(&ui, names) {
+        return Some(p);
+    }
+    std::fs::read_dir(&ui)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .find_map(|p| first_existing(&p, names))
+}
+
+/// Image illustratrice d'un circuit (`preview.png`) — le fond de la vignette.
+pub fn track_preview(mod_dir: &Path) -> Option<String> {
+    track_find(mod_dir, &["preview.png", "preview.jpg"])
+}
+
+/// Tracé d'un circuit (`outline.png`/`map.png`) — superposé à la photo (§6.1).
+pub fn track_outline(mod_dir: &Path) -> Option<String> {
+    track_find(mod_dir, &["outline.png", "outline.jpg", "map.png"])
+}
+
 /// Chemin absolu d'une vignette de preview pour la galerie (§6.1), si trouvée.
 /// Voiture : preview du premier skin qui en a une. Circuit : outline/preview.
 pub fn preview_path(kind: ModKind, mod_dir: &Path) -> Option<String> {

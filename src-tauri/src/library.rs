@@ -19,7 +19,10 @@ pub struct ModCard {
     #[serde(flatten)]
     pub base: ModRow,
     /// Chemin absolu d'une preview (à passer à convertFileSrc côté front).
+    /// Voiture : skin ; circuit : photo illustratrice (fond).
     pub preview: Option<String>,
+    /// Tracé du circuit à superposer à la photo (circuits uniquement, §6.1).
+    pub outline: Option<String>,
     /// Junction présente dans content/ (détection fine = L3).
     pub active: bool,
     /// Distance parcourue (km) d'après CM, si connue (§6.5).
@@ -64,13 +67,27 @@ fn preview_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String>
     // Version active en bibliothèque, sinon content/ (contenu de base Kunos) —
     // c'est ce qui fait apparaître la vignette du stock, comme l'écran de session.
     let dir = entity_dir(conn, cfg, m)?;
-    inspect::preview_path(kind_of(&m.kind), &dir)
+    match kind_of(&m.kind) {
+        ModKind::Car => inspect::preview_path(ModKind::Car, &dir),
+        // Circuit : la photo illustratrice (fond), repli sur le tracé si absente.
+        ModKind::Track => inspect::track_preview(&dir).or_else(|| inspect::track_outline(&dir)),
+    }
+}
+
+/// Tracé d'un circuit à superposer à la photo (None pour une voiture).
+fn outline_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
+    if m.kind != "Track" {
+        return None;
+    }
+    let dir = entity_dir(conn, cfg, m)?;
+    inspect::track_outline(&dir)
 }
 
 fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
     let preview = preview_for(conn, cfg, &m);
+    let outline = outline_for(conn, cfg, &m);
     let active = is_active(cfg, &m);
-    ModCard { base: m, preview, active, distance_km: None, tried: false }
+    ModCard { base: m, preview, outline, active, distance_km: None, tried: false }
 }
 
 /// Renseigne la distance CM et le marqueur « essayé » (§6.5) sur une carte.

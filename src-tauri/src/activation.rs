@@ -104,6 +104,9 @@ pub fn activate(
     let m = overlay::get_mod(conn, mod_id)
         .map_err(|e| e.to_string())?
         .ok_or("mod introuvable")?;
+    if m.is_stock {
+        return Err("contenu de base Kunos : déjà présent, non activable (§12bis.1)".into());
+    }
     let kind = kind_of(&m.kind);
 
     let vid = version_id
