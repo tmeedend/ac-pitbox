@@ -563,7 +563,7 @@
   .library {
     display: flex;
     height: 100%;
-    margin: -28px -32px; /* étend dans la zone de contenu du shell */
+    min-height: 0;
   }
   .main {
     flex: 1;

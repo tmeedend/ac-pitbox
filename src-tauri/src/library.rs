@@ -60,14 +60,15 @@ fn is_active(cfg: &AppConfig, m: &ModRow) -> bool {
     crate::activation::is_junction(&link)
 }
 
-fn preview_for(conn: &Connection, m: &ModRow) -> Option<String> {
-    let vid = m.active_version_id.as_ref()?;
-    let lib = overlay::get_version_path(conn, vid).ok().flatten()?;
-    inspect::preview_path(kind_of(&m.kind), Path::new(&lib))
+fn preview_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
+    // Version active en bibliothèque, sinon content/ (contenu de base Kunos) —
+    // c'est ce qui fait apparaître la vignette du stock, comme l'écran de session.
+    let dir = entity_dir(conn, cfg, m)?;
+    inspect::preview_path(kind_of(&m.kind), &dir)
 }
 
 fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
-    let preview = preview_for(conn, &m);
+    let preview = preview_for(conn, cfg, &m);
     let active = is_active(cfg, &m);
     ModCard { base: m, preview, active, distance_km: None, tried: false }
 }

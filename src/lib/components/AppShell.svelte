@@ -69,7 +69,7 @@
       </nav>
     </aside>
 
-    <main class="content">
+    <main class="content" class:fixed={nav.section === "cars" || nav.section === "tracks"}>
       {#if nav.section === "settings"}
         <Settings />
       {:else if nav.section === "cars"}
@@ -105,20 +105,25 @@
   .frame {
     background: var(--panel);
     border: 1px solid var(--rosso);
-    min-height: 100vh;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
   }
   .topbar {
     background: var(--rosso);
     height: 3px;
+    flex: none;
   }
   .shell {
+    flex: 1;
+    min-height: 0;
     display: grid;
     grid-template-columns: 180px 1fr;
-    min-height: calc(100vh - 3px);
   }
   .side {
     background: var(--bg);
     border-right: 1px solid var(--line);
+    overflow-y: auto;
   }
   .brand {
     display: flex;
@@ -200,8 +205,15 @@
     font-size: 10px;
   }
   .content {
+    min-height: 0;
     padding: 28px 32px;
     overflow: auto;
+  }
+  /* Bibliothèques : hauteur fixe + défilement interne (liste + panneau). Évite
+     la double scrollbar (le défilement est géré dans Library, pas ici). */
+  .content.fixed {
+    padding: 0;
+    overflow: hidden;
   }
   .placeholder {
     color: var(--muted);
