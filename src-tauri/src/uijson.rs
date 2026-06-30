@@ -141,6 +141,84 @@ fn curve(v: &Value, key: &str) -> Vec<[f64; 2]> {
         .unwrap_or_default()
 }
 
+/// Un layout de circuit avec ses images (§6.3 / §8.6).
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct LayoutItem {
+    /// Dossier du layout (vide si mono-layout).
+    pub id: String,
+    pub name: String,
+    pub length: Option<String>,
+    /// Image illustratrice (`preview.png`).
+    pub preview: Option<String>,
+    /// Tracé (`outline.png`/`map.png`).
+    pub outline: Option<String>,
+}
+
+/// Fiche détaillée d'un circuit : description + layouts illustrés (§6.3).
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct TrackDetail {
+    pub description: Option<String>,
+    pub layouts: Vec<LayoutItem>,
+}
+
+fn first_file(dir: &Path, names: &[&str]) -> Option<String> {
+    names
+        .iter()
+        .map(|n| dir.join(n))
+        .find(|p| p.is_file())
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+const TRACK_PREVIEW: [&str; 2] = ["preview.png", "preview.jpg"];
+const TRACK_OUTLINE: [&str; 3] = ["outline.png", "outline.jpg", "map.png"];
+
+/// Lit la description et les layouts (avec images) d'un circuit. Gère le mono-
+/// layout (`ui/`) et le multi-layout (`ui/<layout>/`). Lecture seule.
+pub fn read_track_detail(track_dir: &Path) -> TrackDetail {
+    let ui = track_dir.join("ui");
+    let mut layouts = Vec::new();
+    let mut description = None;
+
+    let mut add = |dir: &Path, id: String| {
+        let v = read_json(&dir.join("ui_track.json"));
+        let name = v
+            .as_ref()
+            .and_then(|v| v.get("name").and_then(as_string))
+            .unwrap_or_else(|| if id.is_empty() { "(défaut)".into() } else { id.clone() });
+        if description.is_none() {
+            description = v.as_ref().and_then(|v| v.get("description").and_then(as_string));
+        }
+        let length = v.as_ref().and_then(|v| v.get("length").and_then(as_string));
+        layouts.push(LayoutItem {
+            id,
+            name,
+            length,
+            preview: first_file(dir, &TRACK_PREVIEW),
+            outline: first_file(dir, &TRACK_OUTLINE),
+        });
+    };
+
+    // Mono-layout à la racine ui/.
+    if ui.join("ui_track.json").is_file() {
+        add(&ui, String::new());
+    }
+    // Multi-layout : sous-dossiers de ui/ contenant un ui_track.json.
+    if let Ok(entries) = std::fs::read_dir(&ui) {
+        let mut subs: Vec<PathBuf> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.is_dir() && p.join("ui_track.json").is_file())
+            .collect();
+        subs.sort();
+        for p in subs {
+            let lid = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            add(&p, lid);
+        }
+    }
+
+    TrackDetail { description, layouts }
+}
+
 pub fn read_car_specs(car_dir: &Path) -> Option<NativeSpecs> {
     let v = read_json(&car_ui_path(car_dir))?;
     let specs = v.get("specs");

@@ -85,10 +85,24 @@ export interface NativeSpecs {
   torque_curve: [number, number][];
 }
 
+export interface LayoutItem {
+  id: string;
+  name: string;
+  length: string | null;
+  preview: string | null;
+  outline: string | null;
+}
+
+export interface TrackDetail {
+  description: string | null;
+  layouts: LayoutItem[];
+}
+
 export interface ModDetail extends ModCard {
   versions: VersionRow[];
   history: HistoryRow[];
   specs: NativeSpecs | null;
+  track: TrackDetail | null;
 }
 
 export interface FuzzyConflict {

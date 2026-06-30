@@ -41,10 +41,11 @@
   let skins = $state<SkinItem[]>([]);
   let previewSkin = $state(0);
   let pilotedSkin = $state<string | null>(null);
+  let previewLayout = $state(0);
   let sounds = $state<SubModRow[]>([]);
   let soundBusy = $state(false);
   const activeSound = $derived(sounds.find((s) => s.is_active) ?? null);
-  let showDescription = $state(false);
+  let trackSkins = $state<SubModRow[]>([]);
   let busy = $state(false);
   let actionError = $state("");
   let manualInput = $state("");
@@ -54,12 +55,14 @@
   let siblings = $state<ModCard[]>([]);
   let packBusy = $state(false);
 
-  // Image héros = skin sélectionné s'il a une preview, sinon preview du mod.
-  const heroImg = $derived(
-    (isCar && skins[previewSkin]?.preview
-      ? previewSrc(skins[previewSkin].preview)
-      : previewSrc(detail?.preview ?? null)),
-  );
+  // Image héros : voiture → skin sélectionné ; circuit → preview du layout
+  // sélectionné ; sinon preview par défaut du mod.
+  const heroImg = $derived.by(() => {
+    if (isCar && skins[previewSkin]?.preview) return previewSrc(skins[previewSkin].preview);
+    const lay = detail?.track?.layouts[previewLayout];
+    if (!isCar && lay?.preview) return previewSrc(lay.preview);
+    return previewSrc(detail?.preview ?? null);
+  });
 
   function filterByPack() {
     if (!detail?.source_pack) return;
@@ -113,9 +116,9 @@
 
   $effect(() => {
     const current = id;
-    showDescription = false;
     actionError = "";
     siblings = [];
+    previewLayout = 0;
     getModDetail(current).then((d) => {
       if (current !== id) return;
       detail = d;
@@ -136,6 +139,11 @@
         previewSkin = pi >= 0 ? pi : 0;
       });
       loadSounds(current);
+    } else {
+      listSubMods(current).then((all) => {
+        if (current !== id) return;
+        trackSkins = all.filter((s) => s.sub_type === "TRACK_SKIN");
+      });
     }
   });
 
@@ -375,27 +383,25 @@
           </div>
 
           {#if d.specs?.description}
-            <button class="box-h desc-toggle" type="button" onclick={() => (showDescription = !showDescription)}>
-              DESCRIPTION <span class="chev">{showDescription ? "▲" : "▼"}</span>
-            </button>
-            {#if showDescription}
-              <div class="desc-body">{decodeDescription(d.specs.description)}</div>
-            {/if}
+            <div class="box-h">DESCRIPTION</div>
+            <div class="desc-body">{decodeDescription(d.specs.description)}</div>
           {/if}
         {:else}
+          {@const lay = d.track?.layouts[previewLayout]}
           <div class="box">
-            <div class="box-h">LAYOUTS · {d.layouts.length || 1}</div>
-            <div class="layouts">
-              {#if d.layouts.length}
-                {#each d.layouts as l}<span class="layout">{l}</span>{/each}
-              {:else}
-                <span class="muted">Tracé unique</span>
-              {/if}
+            <div class="box-h">INFOS CIRCUIT</div>
+            <div class="specgrid" style="grid-template-columns:1fr 1fr;">
+              <div><div class="k">LAYOUT</div><div class="v">{lay?.name ?? "(défaut)"}</div></div>
+              <div><div class="k">LONGUEUR</div><div class="v">{lay?.length ?? "—"}</div></div>
             </div>
           </div>
           {#if d.csp_features.length}
             <div class="lbl">EXTENSIONS CSP</div>
             <div class="csp-row">{#each d.csp_features as f}<span class="csp">{f}</span>{/each}</div>
+          {/if}
+          {#if d.track?.description}
+            <div class="box-h" style="margin-top:11px;">DESCRIPTION</div>
+            <div class="desc-body">{decodeDescription(d.track.description)}</div>
           {/if}
         {/if}
       </div>
@@ -486,10 +492,61 @@
           {@render provenanceBlock(d)}
         </div>
       {:else}
-        <!-- Circuit : tags + versions + historique+provenance -->
-        <div class="col">{@render tagsBlock(d)}</div>
-        <div class="col">{@render versionsBlock(d)}</div>
-        <div class="col">{@render historyBlock(d)}{@render provenanceBlock(d)}</div>
+        <!-- Layouts (galerie illustrée par le tracé, comme les skins voiture) -->
+        <div class="col">
+          <div class="lbl">
+            LAYOUTS <span class="lbl-sub">{d.track?.layouts.length ?? 0} · cliquer pour voir le tracé</span>
+          </div>
+          {#if d.track && d.track.layouts.length}
+            <div class="skins">
+              {#each d.track.layouts as l, i (l.id || i)}
+                {@const o = previewSrc(l.outline)}
+                <button class="skin" class:preview={i === previewLayout} onclick={() => (previewLayout = i)} title="Voir ce tracé">
+                  <div class="skin-img layout-img">
+                    {#if o}<img src={o} alt={l.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
+                    {#if i === previewLayout}<span class="skin-apercu mono">APERÇU</span>{/if}
+                  </div>
+                  <div class="skin-b"><span class="skin-name">{l.name}</span></div>
+                </button>
+              {/each}
+            </div>
+          {:else}
+            <div class="muted small">Tracé unique.</div>
+          {/if}
+
+          <!-- Skins de circuit (TRACK_SKIN, §12bis.2) — pas d'activation, tous chargés. -->
+          <div class="lbl section">SKINS DE CIRCUIT · {trackSkins.length}</div>
+          {#if trackSkins.length}
+            <ul class="tsk-list">
+              {#each trackSkins as s (s.id)}
+                <li><span class="tsk-name">{s.name}</span>{#if s.source_archive}<span class="tsk-src mono">{s.source_archive}</span>{/if}</li>
+              {/each}
+            </ul>
+            <div class="muted small">Tous présents → chargés par AC. Gestion détaillée dans la vue Skins.</div>
+          {:else}
+            <div class="muted small">Aucun skin de circuit importé.</div>
+          {/if}
+        </div>
+
+        <!-- Distance (§6.5) -->
+        <div class="col">
+          <div class="lbl">DISTANCE</div>
+          <div class="box">
+            <div class="dist">
+              <span class="dist-ic">🛣</span>
+              <span class="dist-km mono">{d.distance_km != null ? `${d.distance_km.toFixed(1)} km` : "—"}</span>
+              <span class="dist-state mono" class:on={d.tried}>{d.tried ? "essayé ✓" : "jamais essayé"}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tags + Versions + Historique + Provenance -->
+        <div class="col">
+          {@render tagsBlock(d)}
+          {@render versionsBlock(d)}
+          {@render historyBlock(d)}
+          {@render provenanceBlock(d)}
+        </div>
       {/if}
     </div>
   {/if}
@@ -882,14 +939,6 @@
     padding: 8px;
     margin-bottom: 0;
   }
-  .desc-toggle {
-    cursor: pointer;
-    border: 1px solid var(--line);
-  }
-  .desc-toggle .chev {
-    margin-left: auto;
-    font-size: 10px;
-  }
   .desc-body {
     border: 1px solid var(--line);
     border-top: none;
@@ -899,20 +948,6 @@
     font-size: 11px;
     line-height: 1.55;
     white-space: pre-line;
-  }
-  .layouts {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    padding: 10px;
-    background: var(--panel2);
-  }
-  .layout {
-    font-size: 11px;
-    font-family: var(--mono);
-    padding: 2px 8px;
-    border: 1px solid var(--line);
-    color: var(--txt2);
   }
   .csp-row {
     display: flex;
@@ -964,6 +999,11 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  /* Tracé de layout : afficher la forme complète (pas de recadrage). */
+  .layout-img img {
+    object-fit: contain;
+    padding: 4px;
   }
   .skin-noimg {
     color: var(--faint);
@@ -1204,6 +1244,35 @@
   }
   .small {
     font-size: 11px;
+  }
+
+  .tsk-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 6px;
+  }
+  .tsk-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--line);
+    background: var(--panel2);
+    padding: 5px 9px;
+  }
+  .tsk-name {
+    flex: 1;
+    font-size: 11px;
+    color: var(--txt2);
+  }
+  .tsk-src {
+    font-size: 9px;
+    color: var(--muted2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 120px;
   }
 
   /* Provenance / pack d'origine (§4.7) */

@@ -30,7 +30,14 @@
   );
 
   async function load() {
-    [subs, cards] = await Promise.all([listSubsByType(subType), listLibrary()]);
+    // La vue Skins couvre skins de voitures (SKIN) et de circuits (TRACK_SKIN, §12bis.2).
+    const types = isSound ? ["SOUND"] : ["SKIN", "TRACK_SKIN"];
+    const [lists, lib] = await Promise.all([
+      Promise.all(types.map((t) => listSubsByType(t))),
+      listLibrary(),
+    ]);
+    subs = lists.flat();
+    cards = lib;
   }
   onMount(load);
 

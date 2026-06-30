@@ -34,7 +34,6 @@
 
   let detail = $state<ModDetail | null>(null);
   let loading = $state(false);
-  let showDescription = $state(false);
   let busy = $state(false);
   let actionError = $state("");
   let exporting = $state(false);
@@ -169,7 +168,6 @@
 
   $effect(() => {
     const current = id;
-    showDescription = false;
     actionError = "";
     if (!current) {
       detail = null;
@@ -301,12 +299,8 @@
 
         {#if s.description}
           <section>
-            <button class="desc-toggle" type="button" onclick={() => (showDescription = !showDescription)}>
-              {showDescription ? "▾" : "▸"} Description
-            </button>
-            {#if showDescription}
-              <p class="description">{decodeDescription(s.description)}</p>
-            {/if}
+            <h3>Description</h3>
+            <p class="description">{decodeDescription(s.description)}</p>
           </section>
         {/if}
       {/if}
@@ -598,17 +592,6 @@
     font-size: 12px;
     color: var(--txt);
     font-family: var(--mono);
-  }
-  .desc-toggle {
-    background: transparent;
-    color: var(--muted);
-    font-size: 10.5px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    padding: 0;
-  }
-  .desc-toggle:hover {
-    color: var(--txt2);
   }
   .description {
     margin-top: 8px;

@@ -2,7 +2,7 @@
 //! preview et l'état actif/inactif pour la galerie et le tableau.
 
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rusqlite::Connection;
 use serde::Serialize;
@@ -36,6 +36,8 @@ pub struct ModDetail {
     pub history: Vec<HistoryRow>,
     /// Fiche technique native (voitures uniquement), lue de ui_car.json.
     pub specs: Option<NativeSpecs>,
+    /// Détail circuit (description + layouts illustrés), circuits uniquement.
+    pub track: Option<uijson::TrackDetail>,
 }
 
 fn kind_of(s: &str) -> ModKind {
@@ -231,24 +233,44 @@ pub fn list_weather(cfg: &AppConfig) -> Vec<String> {
     out
 }
 
+/// Dossier de l'entité contenant `ui/` : version active en bibliothèque pour un
+/// mod géré, sinon `content/<type>s/<id>` (contenu de base Kunos).
+fn entity_dir(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<PathBuf> {
+    if !m.is_stock {
+        if let Some(vid) = &m.active_version_id {
+            if let Ok(Some(p)) = overlay::get_version_path(conn, vid) {
+                return Some(PathBuf::from(p));
+            }
+        }
+    }
+    cfg.ac_install_path
+        .as_ref()
+        .map(|ac| ac.join("content").join(kind_of(&m.kind).content_folder()).join(&m.id_interne))
+}
+
 pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<Option<ModDetail>> {
     let Some(m) = overlay::get_mod(conn, id)? else {
         return Ok(None);
     };
     let versions = overlay::get_versions(conn, id)?;
     let history = overlay::get_history(conn, id)?;
-    // Fiche technique native lue à la demande dans la version active (voitures).
+    // Dossier de l'entité : version active en bibliothèque, sinon content/ (stock).
+    let entity_dir = entity_dir(conn, cfg, &m);
+    // Fiche technique native lue à la demande (voitures).
     let specs = if m.kind == "Car" {
-        m.active_version_id
-            .as_ref()
-            .and_then(|vid| overlay::get_version_path(conn, vid).ok().flatten())
-            .and_then(|lib| uijson::read_car_specs(Path::new(&lib)))
+        entity_dir.as_deref().and_then(uijson::read_car_specs)
+    } else {
+        None
+    };
+    // Détail circuit (description + layouts illustrés).
+    let track = if m.kind == "Track" {
+        entity_dir.as_deref().map(uijson::read_track_detail)
     } else {
         None
     };
     let mut card = to_card(conn, cfg, m);
     fill_usage(&mut card, &cm_stats::read(), &overlay::launched_ids(conn)?);
-    Ok(Some(ModDetail { card, versions, history, specs }))
+    Ok(Some(ModDetail { card, versions, history, specs, track }))
 }
 
 #[cfg(test)]

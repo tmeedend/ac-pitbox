@@ -70,6 +70,11 @@ fn import_skin_pack(
     out: &mut Vec<SubImported>,
 ) {
     let parent = &sub.parent_id;
+    // Skin de circuit (TRACK_SKIN) ou de voiture (SKIN) ? Stockage et type adaptés.
+    let track = is_track_skin(conn, parent, &sub.dir);
+    let sub_type = if track { "TRACK_SKIN" } else { "SKIN" };
+    let store_root = if track { "track_skins" } else { "skins" };
+
     // `sub.dir` contient directement les dossiers de skins (les deux formes
     // d'arborescence sont déjà résolues par modscan).
     let Ok(entries) = std::fs::read_dir(&sub.dir) else {
@@ -83,14 +88,14 @@ fn import_skin_pack(
         let name = e.file_name().to_string_lossy().into_owned();
 
         // Idempotence : ne ré-importe pas un skin déjà connu pour ce parent.
-        if overlay::sub_exists(conn, "SKIN", parent, &name).unwrap_or(false) {
+        if overlay::sub_exists(conn, sub_type, parent, &name).unwrap_or(false) {
             continue;
         }
 
-        let dest = library.join("skins").join(parent).join(&name);
+        let dest = library.join(store_root).join(parent).join(&name);
         if let Err(err) = copy_or_move(&skin_src, &dest, copy) {
             out.push(SubImported {
-                sub_type: "SKIN".into(),
+                sub_type: sub_type.into(),
                 parent_id: parent.clone(),
                 name,
                 projected: false,
@@ -103,7 +108,7 @@ fn import_skin_pack(
         let _ = overlay::insert_sub_mod(
             conn,
             &id,
-            "SKIN",
+            sub_type,
             parent,
             &name,
             &dest.to_string_lossy(),
@@ -111,10 +116,10 @@ fn import_skin_pack(
             &Local::now().to_rfc3339(),
         );
 
-        // Projection : junction dans le skins/ de la voiture cible.
+        // Projection : junction dans le skins/ de l'entité cible (voiture ou circuit).
         let (projected, warning) = project_skin(conn, cfg, parent, &name, &dest);
         out.push(SubImported {
-            sub_type: "SKIN".into(),
+            sub_type: sub_type.into(),
             parent_id: parent.clone(),
             name,
             projected,
@@ -153,21 +158,33 @@ fn parent_skins_dir(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Opti
     parent_subdir(conn, cfg, parent_id, "skins")
 }
 
-/// Dossier `<sub>/` de la voiture cible : version active en bibliothèque si c'est
-/// un mod géré, sinon `content/cars/<id>/<sub>` (voiture de base Kunos).
+/// Dossier `<sub>/` de l'entité cible (voiture ou circuit) : version active en
+/// bibliothèque si c'est un mod géré, sinon `content/<type>s/<id>/<sub>` (base
+/// Kunos). Le type est déduit de l'overlay (Car → cars, Track → tracks).
 fn parent_subdir(conn: &Connection, cfg: &AppConfig, parent_id: &str, sub: &str) -> Option<PathBuf> {
-    if let Ok(Some(m)) = overlay::get_mod(conn, parent_id) {
+    let m = overlay::get_mod(conn, parent_id).ok().flatten();
+    if let Some(m) = &m {
         if !m.is_stock {
-            if let Some(vid) = m.active_version_id {
-                if let Ok(Some(p)) = overlay::get_version_path(conn, &vid) {
+            if let Some(vid) = &m.active_version_id {
+                if let Ok(Some(p)) = overlay::get_version_path(conn, vid) {
                     return Some(Path::new(&p).join(sub));
                 }
             }
         }
     }
+    let folder = if m.as_ref().map(|m| m.kind.as_str()) == Some("Track") { "tracks" } else { "cars" };
     cfg.ac_install_path
         .as_ref()
-        .map(|ac| ac.join("content").join("cars").join(parent_id).join(sub))
+        .map(|ac| ac.join("content").join(folder).join(parent_id).join(sub))
+}
+
+/// Détermine si un pack de skins cible un **circuit** (TRACK_SKIN) : parent connu
+/// comme circuit dans l'overlay, ou chemin sous un dossier `tracks/`.
+fn is_track_skin(conn: &Connection, parent_id: &str, src: &Path) -> bool {
+    if let Ok(Some(m)) = overlay::get_mod(conn, parent_id) {
+        return m.kind == "Track";
+    }
+    src.components().any(|c| c.as_os_str().to_string_lossy().eq_ignore_ascii_case("tracks"))
 }
 
 fn import_sound(
@@ -264,8 +281,8 @@ pub fn restore_sound(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Res
 pub fn remove_sub(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<(), String> {
     let sub = overlay::get_sub_mod(conn, sub_id).map_err(|e| e.to_string())?.ok_or("sous-élément introuvable")?;
     match sub.sub_type.as_str() {
-        "SKIN" => {
-            // Retire la junction de projection dans le skins/ de la voiture cible.
+        "SKIN" | "TRACK_SKIN" => {
+            // Retire la junction de projection dans le skins/ de l'entité cible.
             if let Some(skins_dir) = parent_subdir(conn, cfg, &sub.parent_id, "skins") {
                 let link = skins_dir.join(&sub.name);
                 if activation::is_junction(&link) {
@@ -346,6 +363,37 @@ mod tests {
         remove_sub(&conn, &cfg, &sub_id).unwrap();
         assert!(!library.join("skins").join("ferrari_488").join("af_corse_51").exists());
         assert!(overlay::list_subs_for_parent(&conn, "ferrari_488").unwrap().is_empty());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn track_skin_routed_by_parent_kind() {
+        let base = std::env::temp_dir().join(format!("pitbox-tsk-{}", Uuid::new_v4()));
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig::default();
+        let now = Local::now().to_rfc3339();
+
+        // Le circuit « spa » est connu comme Track dans l'overlay.
+        overlay::upsert_mod(&conn, "spa", "Track", None, Some("Spa"), "h", None, &now).unwrap();
+
+        // Pack de skins pour spa : spa/skins/<skin>.
+        let pack = base.join("src").join("spa");
+        let skin = pack.join("skins").join("night");
+        std::fs::create_dir_all(&skin).unwrap();
+        std::fs::write(skin.join("ui_track_skin.json"), b"{}").unwrap();
+
+        let subs = modscan::scan_subs(&base.join("src"));
+        assert_eq!(subs.len(), 1);
+        import_subs(&conn, &cfg, &library, "spa_skins.7z", &subs, true);
+
+        // Classé TRACK_SKIN, stocké sous track_skins/.
+        let stored = overlay::list_subs_for_parent(&conn, "spa").unwrap();
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].sub_type, "TRACK_SKIN");
+        assert!(library.join("track_skins").join("spa").join("night").is_dir());
 
         let _ = std::fs::remove_dir_all(&base);
     }
