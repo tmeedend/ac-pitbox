@@ -305,6 +305,14 @@ fn remove_orphan_junction(app: AppHandle, kind: String, id: String) -> Result<()
     maintenance::remove_orphan(&config::load(&app), &kind, &id)
 }
 
+/// Désinstalle tout un pack (§4.7) : supprime chaque mod du pack. Renvoie le nb supprimé.
+#[tauri::command]
+fn delete_pack(app: AppHandle, db: State<Db>, pack: String) -> Result<usize, String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    maintenance::delete_pack(&conn, &cfg, &pack)
+}
+
 /// Exporte la version active d'un mod en archive autonome dans `dest_dir` (§9.1).
 #[tauri::command]
 fn export_mod(app: AppHandle, db: State<Db>, id: String, dest_dir: String) -> Result<export::ExportReport, String> {
@@ -431,6 +439,7 @@ pub fn run() {
             maintenance_scan,
             delete_broken_mod,
             remove_orphan_junction,
+            delete_pack,
             export_mod,
             index_stock_content,
             list_sub_mods,

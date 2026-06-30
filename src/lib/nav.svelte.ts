@@ -12,8 +12,11 @@ export const nav = $state<{
   prefill: LaunchPrefill | null;
   /** Demande d'ouverture d'une fiche détail depuis une vue transversale (§12bis.3). */
   openMod: string | null;
+  /** Terme de recherche à appliquer à la bibliothèque (ex. filtrer par pack, §4.7). */
+  search: string | null;
 }>({
   section: "cars",
   prefill: null,
   openMod: null,
+  search: null,
 });

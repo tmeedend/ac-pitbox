@@ -122,6 +122,19 @@ pub fn delete_broken(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(),
     Ok(())
 }
 
+/// Désinstalle **tout un pack** (§4.7) : supprime chaque mod partageant ce
+/// `source_pack` (fichiers + junction + overlay). Renvoie le nombre supprimé.
+pub fn delete_pack(conn: &Connection, cfg: &AppConfig, pack: &str) -> Result<usize, String> {
+    let ids = overlay::list_pack_ids(conn, pack).map_err(|e| e.to_string())?;
+    let mut n = 0;
+    for id in &ids {
+        // `delete_broken` réalise la suppression complète d'un mod (cf. §9.3).
+        delete_broken(conn, cfg, id)?;
+        n += 1;
+    }
+    Ok(n)
+}
+
 /// Retire une junction orpheline. Garde-fou : refuse si ce n'est pas une junction.
 pub fn remove_orphan(cfg: &AppConfig, kind: &str, id: &str) -> Result<(), String> {
     let ac = cfg.ac_install_path.as_ref().ok_or("dossier AC non configuré")?;

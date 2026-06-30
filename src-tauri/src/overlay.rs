@@ -631,6 +631,13 @@ pub fn delete_profile(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     Ok(())
 }
 
+/// Ids des mods partageant un même pack d'origine (§4.7).
+pub fn list_pack_ids(conn: &Connection, pack: &str) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn.prepare("SELECT id_interne FROM mods WHERE source_pack = ?1")?;
+    let rows = stmt.query_map([pack], |r| r.get::<_, String>(0))?;
+    rows.collect()
+}
+
 pub fn mod_exists(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
     let n: i64 = conn.query_row(
         "SELECT COUNT(*) FROM mods WHERE id_interne = ?1",
@@ -820,6 +827,7 @@ pub fn get_app(conn: &Connection, id: &str) -> rusqlite::Result<Option<AppRow>> 
     }
 }
 
+#[allow(dead_code)] // utilisé par les tests d'apps
 pub fn app_exists(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
     let n: i64 = conn.query_row("SELECT COUNT(*) FROM apps WHERE id = ?1", [id], |r| r.get(0))?;
     Ok(n > 0)

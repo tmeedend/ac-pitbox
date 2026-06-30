@@ -116,6 +116,15 @@
     }
   });
 
+  // Recherche imposée depuis l'extérieur (ex. « filtrer par pack », §4.7).
+  $effect(() => {
+    if (nav.search !== null) {
+      query = nav.search;
+      fullId = null;
+      nav.search = null;
+    }
+  });
+
   async function toggleFav(c: ModCard, e: Event) {
     e.stopPropagation();
     c.is_favorite = !c.is_favorite;

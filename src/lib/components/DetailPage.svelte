@@ -7,22 +7,24 @@
     activateMod,
     deactivateMod,
     getModDetail,
+    listLibrary,
     previewSrc,
     setFavorite,
     setManualTags,
+    type ModCard,
     type ModDetail,
     type ModKind,
     type NativeSpecs,
   } from "$lib/library";
   import { listModSkins, type SkinItem } from "$lib/launch";
-  import { exportMod, type ExportReport } from "$lib/maintenance";
+  import { exportMod, deletePack, type ExportReport } from "$lib/maintenance";
   import {
     listSubMods,
     activateSound,
     restoreSound,
     type SubModRow,
   } from "$lib/submods";
-  import { open } from "@tauri-apps/plugin-dialog";
+  import { open, confirm } from "@tauri-apps/plugin-dialog";
   import PowerCurve from "./PowerCurve.svelte";
   import { nav } from "$lib/nav.svelte";
 
@@ -48,6 +50,50 @@
   let manualInput = $state("");
   let exporting = $state(false);
   let exportResult = $state<ExportReport | null>(null);
+  // Provenance / pack d'origine (§4.7).
+  let siblings = $state<ModCard[]>([]);
+  let packBusy = $state(false);
+
+  // Image héros = skin sélectionné s'il a une preview, sinon preview du mod.
+  const heroImg = $derived(
+    (isCar && skins[previewSkin]?.preview
+      ? previewSrc(skins[previewSkin].preview)
+      : previewSrc(detail?.preview ?? null)),
+  );
+
+  function filterByPack() {
+    if (!detail?.source_pack) return;
+    nav.section = detail.kind === "Track" ? "tracks" : "cars";
+    nav.search = detail.source_pack;
+  }
+
+  function openSibling(c: ModCard) {
+    nav.section = c.kind === "Track" ? "tracks" : "cars";
+    nav.openMod = c.id_interne;
+  }
+
+  function activeArchive(d: ModDetail): string | null {
+    return d.versions.find((v) => v.id === d.active_version_id)?.source_archive ?? null;
+  }
+
+  async function uninstallPack() {
+    if (!detail?.source_pack || packBusy) return;
+    const ok = await confirm(
+      `Désinstaller le pack « ${detail.source_pack} » ? Les ${siblings.length + 1} mods du pack seront supprimés (fichiers + bibliothèque). Irréversible.`,
+      { title: "Désinstaller le pack", kind: "warning" },
+    );
+    if (!ok) return;
+    packBusy = true;
+    actionError = "";
+    try {
+      await deletePack(detail.source_pack);
+      onchange?.();
+      onclose();
+    } catch (e) {
+      actionError = String(e);
+      packBusy = false;
+    }
+  }
 
   async function doExport() {
     if (!detail || exporting) return;
@@ -69,9 +115,17 @@
     const current = id;
     showDescription = false;
     actionError = "";
+    siblings = [];
     getModDetail(current).then((d) => {
       if (current !== id) return;
       detail = d;
+      // Autres entités du même pack (§4.7).
+      if (d?.source_pack) {
+        listLibrary().then((all) => {
+          if (current !== id) return;
+          siblings = all.filter((c) => c.source_pack === d.source_pack && c.id_interne !== d.id_interne);
+        });
+      }
     });
     if (isCar) {
       pilotedSkin = localStorage.getItem(`pitbox.pilotedSkin.${current}`);
@@ -233,7 +287,6 @@
     <div class="empty">Chargement…</div>
   {:else}
     {@const d = detail}
-    {@const hero = previewSrc(d.preview)}
     <header class="head">
       <button class="back" type="button" onclick={onclose} title="Retour à la liste">←</button>
       <span class="escu">{initials(d.brand, d.id_interne)}</span>
@@ -278,8 +331,8 @@
     <!-- RANGÉE HAUTE : héros + panneau données -->
     <div class="row top" class:track={!isCar}>
       <div class="hero">
-        {#if hero}
-          <img src={hero} alt={d.display_name ?? d.id_interne} />
+        {#if heroImg}
+          <img src={heroImg} alt={d.display_name ?? d.id_interne} />
         {:else}
           <div class="hero-icon">{isCar ? "🚗" : "🏁"}</div>
         {/if}
@@ -298,24 +351,28 @@
 
       <div class="data">
         {#if isCar}
-          <div class="box">
-            <div class="box-h">FICHE TECHNIQUE</div>
-            <div class="specgrid">
-              {#each ficheRows(d) as [k, v]}
-                <div><div class="k">{k}</div><div class="v">{v}</div></div>
-              {/each}
+          {@const hasCurve = !!d.specs && d.specs.power_curve.length > 1}
+          <div class="tech-curve" class:with-curve={hasCurve}>
+            <div class="box fiche">
+              <div class="box-h">FICHE TECHNIQUE</div>
+              <div class="specgrid">
+                {#each ficheRows(d) as [k, v]}
+                  <div><div class="k">{k}</div><div class="v">{v}</div></div>
+                {/each}
+              </div>
             </div>
+            {#if hasCurve && d.specs}
+              <div class="curve-col">
+                <div class="lbl">
+                  COURBE
+                  <span class="legend"><span class="lg-pow">— bhp</span><span class="lg-tor">— Nm</span></span>
+                </div>
+                <div class="curve-box">
+                  <PowerCurve power={d.specs.power_curve} torque={d.specs.torque_curve} />
+                </div>
+              </div>
+            {/if}
           </div>
-
-          {#if d.specs && d.specs.power_curve.length > 1}
-            <div class="lbl">
-              COURBE MOTEUR
-              <span class="legend"><span class="lg-pow">— POWER</span><span class="lg-tor">— TORQUE</span></span>
-            </div>
-            <div class="curve-box">
-              <PowerCurve power={d.specs.power_curve} torque={d.specs.torque_curve} />
-            </div>
-          {/if}
 
           {#if d.specs?.description}
             <button class="box-h desc-toggle" type="button" onclick={() => (showDescription = !showDescription)}>
@@ -421,17 +478,18 @@
           {/if}
         </div>
 
-        <!-- Tags + Versions + Historique -->
+        <!-- Tags + Versions + Historique + Provenance -->
         <div class="col">
           {@render tagsBlock(d)}
           {@render versionsBlock(d)}
           {@render historyBlock(d)}
+          {@render provenanceBlock(d)}
         </div>
       {:else}
-        <!-- Circuit : tags + versions + historique -->
+        <!-- Circuit : tags + versions + historique+provenance -->
         <div class="col">{@render tagsBlock(d)}</div>
         <div class="col">{@render versionsBlock(d)}</div>
-        <div class="col">{@render historyBlock(d)}</div>
+        <div class="col">{@render historyBlock(d)}{@render provenanceBlock(d)}</div>
       {/if}
     </div>
   {/if}
@@ -481,6 +539,59 @@
       </li>
     {/each}
   </ul>
+{/snippet}
+
+{#snippet provenanceBlock(d: ModDetail)}
+  {@const archive = activeArchive(d)}
+  {#if d.source_pack || archive || d.source_url}
+    <div class="lbl section">SOURCE / ORIGINE</div>
+    <div class="srcbox">
+      <div class="src-h">PROVENANCE DU MOD</div>
+      {#if d.source_pack}
+        <div class="srcrow">
+          <span class="src-k">PACK</span>
+          <button class="chip" type="button" onclick={filterByPack} title="Voir toutes les entités de ce pack">
+            ⬢ {d.source_pack} <span class="chip-n">· {siblings.length + 1} mod(s)</span>
+          </button>
+        </div>
+      {/if}
+      <div class="srcrow">
+        <span class="src-k">ARCHIVE</span>
+        <span class="src-v">{archive ?? "—"}</span>
+      </div>
+      <div class="srcrow">
+        <span class="src-k">URL D'ORIGINE</span>
+        {#if d.source_url}
+          <span class="src-v url">{d.source_url}</span>
+        {:else}
+          <span class="src-empty">— non renseignée (extension navigateur, lot L7)</span>
+        {/if}
+      </div>
+    </div>
+
+    {#if d.source_pack}
+      <div class="lbl section">AUTRES ENTITÉS DU MÊME PACK · {siblings.length}</div>
+      {#if siblings.length}
+        <div class="siblings">
+          {#each siblings as c (c.id_interne)}
+            <button class="sib" type="button" onclick={() => openSibling(c)} title="Ouvrir la fiche">
+              <span class="sib-dot">{c.kind === "Track" ? "🏁" : "🚗"}</span>
+              <span class="sib-nm">{c.display_name ?? c.id_interne}</span>
+            </button>
+          {/each}
+        </div>
+      {:else}
+        <div class="muted small">Seule entité de ce pack pour l'instant.</div>
+      {/if}
+      <div class="prov-note">Chaque entité reste indépendante (activable, tagguable séparément).</div>
+      <div class="prov-actions">
+        <button class="btn" type="button" onclick={filterByPack}>⌕ Filtrer par ce pack</button>
+        <button class="btn danger" type="button" onclick={uninstallPack} disabled={packBusy}>
+          {packBusy ? "…" : "🗑 Désinstaller le pack"}
+        </button>
+      </div>
+    {/if}
+  {/if}
 {/snippet}
 
 <style>
@@ -679,6 +790,30 @@
     border: 1px solid var(--line);
     margin-bottom: 12px;
   }
+  /* Fiche technique + courbe carrée côte à côte (§5bis.1). */
+  .tech-curve {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+  .tech-curve .fiche {
+    flex: 1 1 200px;
+    min-width: 0;
+    margin-bottom: 0;
+  }
+  .tech-curve.with-curve .specgrid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .curve-col {
+    flex: 1 1 200px;
+    max-width: 260px;
+    min-width: 0;
+  }
+  .curve-col .lbl {
+    margin-bottom: 6px;
+  }
   .box-h {
     background: var(--raised);
     padding: 5px 10px;
@@ -745,7 +880,7 @@
   .curve-box {
     border: 1px solid var(--line);
     padding: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 0;
   }
   .desc-toggle {
     cursor: pointer;
@@ -814,7 +949,9 @@
     outline-offset: -2px;
   }
   .skin-img {
-    height: 56px;
+    /* Ratio des previews AC (~16:9) : la hauteur suit la largeur de la cellule,
+       au lieu d'une hauteur fixe qui rognait la voiture. */
+    aspect-ratio: 16 / 9;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1067,5 +1204,116 @@
   }
   .small {
     font-size: 11px;
+  }
+
+  /* Provenance / pack d'origine (§4.7) */
+  .srcbox {
+    border: 1px solid var(--line);
+  }
+  .src-h {
+    background: var(--raised);
+    padding: 5px 10px;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 8px;
+    letter-spacing: 1.5px;
+  }
+  .srcrow {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 11px;
+    border-bottom: 1px solid var(--line);
+  }
+  .srcrow:last-child {
+    border-bottom: none;
+  }
+  .src-k {
+    color: var(--faint);
+    font-size: 8px;
+    letter-spacing: 1px;
+    width: 84px;
+    flex-shrink: 0;
+  }
+  .src-v {
+    font-size: 10.5px;
+    font-family: var(--mono);
+    color: var(--txt2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .src-v.url {
+    color: var(--blue);
+  }
+  .src-empty {
+    color: var(--muted2);
+    font-size: 9.5px;
+    font-family: var(--mono);
+    font-style: italic;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--rosso-dim);
+    border: 1px solid var(--rosso-border);
+    color: var(--rosso-bright);
+    font-size: 10px;
+    font-family: var(--mono);
+    padding: 3px 9px;
+  }
+  .chip .chip-n {
+    color: var(--muted);
+  }
+  .siblings {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+  }
+  .sib {
+    background: var(--card);
+    padding: 7px 9px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    text-align: left;
+  }
+  .sib:hover {
+    background: var(--raised);
+  }
+  .sib-dot {
+    font-size: 13px;
+    flex: none;
+  }
+  .sib-nm {
+    font-size: 9.5px;
+    color: var(--txt2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .prov-note {
+    margin-top: 8px;
+    background: var(--blue-dim);
+    border: 1px solid var(--blue-border);
+    color: var(--blue);
+    font-size: 9px;
+    font-family: var(--mono);
+    padding: 6px 9px;
+  }
+  .prov-actions {
+    display: flex;
+    gap: 7px;
+    margin-top: 10px;
+  }
+  .btn.danger {
+    color: var(--muted);
+  }
+  .btn.danger:hover {
+    border-color: var(--rosso-border);
+    color: var(--rosso-bright);
   }
 </style>
