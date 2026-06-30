@@ -1,0 +1,30 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "ui-dev",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "dev"], // La commande qui lance votre serveur frontend de dev
+      "isBackground": true,
+      "problemMatcher": [
+        {
+          "pattern": [
+            {
+              "regexp": ".",
+              "file": 1,
+              "location": 2,
+              "message": 3
+            }
+          ],
+          "background": {
+            "activeOnStart": true,
+            // Modifiez ces lignes si vous utilisez autre chose que Vite
+            "beginsPattern": "^.*watching for file changes.*",
+            "endsPattern": "^.*Local:.*http://localhost:.*"
+          }
+        }
+      ]
+    }
+  ]
+}

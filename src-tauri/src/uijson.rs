@@ -3,7 +3,9 @@
 //! Règle d'or (§3.0) : ces fichiers ne sont JAMAIS réécrits. On les lit comme
 //! une entrée du pipeline, jamais comme une sortie.
 
+use std::fs;
 use std::path::{Path, PathBuf};
+use regex::Regex;
 
 use serde::Serialize;
 use serde_json::Value;
@@ -12,7 +14,7 @@ use serde_json::Value;
 /// relèvent de L2 et seront lues plus tard.
 /// `class` et `country` sont lus dès maintenant mais consommés en L2
 /// (extraction classe race/street et pays).
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize)] // On ajoute Serialize et Deserialize ici
 #[allow(dead_code)]
 pub struct UiInfo {
     pub name: Option<String>,
@@ -50,17 +52,27 @@ fn as_string(v: &Value) -> Option<String> {
 }
 
 fn parse(path: &Path) -> Option<UiInfo> {
-    let v = read_json(path)?;
+    // 1. Lire le fichier JSON d'origine en texte brut
+    let mut json_content = fs::read_to_string(path).ok()?;
+
+    // 2. Nettoyer les retours à la ligne illégaux dans la description
+    json_content = clean_assetto_json(&json_content);
+
+    // 3. Parser en tant que valeur JSON générique (serde_json::Value)
+    let v: Value = serde_json::from_str(&json_content).ok()?; // <-- Changement ici : Type `Value` au lieu de `UiInfo`
+
     let year = v.get("year").and_then(|y| match y {
         Value::Number(n) => n.as_i64(),
         Value::String(s) => s.trim().parse::<i64>().ok(),
         _ => None,
     });
+
     let tags = v
         .get("tags")
         .and_then(|t| t.as_array())
         .map(|arr| arr.iter().filter_map(as_string).collect())
         .unwrap_or_default();
+
     Some(UiInfo {
         name: v.get("name").and_then(as_string),
         brand: v.get("brand").and_then(as_string),
@@ -71,6 +83,39 @@ fn parse(path: &Path) -> Option<UiInfo> {
         country: v.get("country").and_then(as_string),
         tags,
     })
+}
+
+fn clean_assetto_json(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let mut in_string = false;
+    let mut chars = input.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '"' {
+            in_string = !in_string;
+            result.push(c);
+        } else if in_string {
+            // À l'intérieur d'une chaîne (Description, tags, etc.)
+            match c {
+                '\n' | '\r' => result.push(' '),
+                '\u{a0}' => result.push(' '), // Espace insécable
+                _ if c.is_control() => result.push(' '), // Caractère invisible crash-test
+                _ => result.push(c),
+            }
+        } else {
+            // À l'extérieur d'une chaîne (Structure JSON)
+            match c {
+                // On garde les sauts de ligne et espaces standards hors-chaîne,
+                // mais on vire TOUS les caractères de contrôle bizarres cachés
+                _ if c.is_control() && c != '\n' && c != '\r' && c != '\t' => {} 
+                _ => result.push(c),
+            }
+        }
+    }
+
+    // Nettoyage final des virgules traînantes
+    let re_trailing_comma = regex::Regex::new(r",\s*([\]}])").unwrap();
+    re_trailing_comma.replace_all(&result, "$1").into_owned()
 }
 
 /// Chemin du `ui_car.json` d'un dossier voiture.

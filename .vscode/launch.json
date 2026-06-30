@@ -1,0 +1,53 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+        "request": "launch",
+        "name": "Tauri Backend",
+        "cargo": {
+          "args": [
+            "build",
+            "--manifest-path=src-tauri/Cargo.toml"
+          ]
+        },
+        "preLaunchTask": "ui-dev",
+        // --- AJOUTEZ CES LIGNES ---
+        "images": [], 
+        "console": "integratedTerminal", // Force l'utilisation du terminal intégré de VS Code
+        "env": {
+          "RUST_BACKTRACE": "1" // Permet d'avoir un log précis si Rust crash
+        }
+    },
+    {
+      "type": "cppvsdbg", // Utilise le débogueur natif Windows Visual Studio
+      "request": "attach",
+      "name": "Tauri Backend (Windows Native Attach)",
+      "processId": "${command:pickProcess}" // Utilise le sélecteur natif
+    },
+    {
+      "type": "msedge", // Utilisez "chrome" si vous préférez
+      "request": "launch",
+      "name": "Tauri Frontend",
+      // Ajustez le port (1420 ou 5173) selon votre tauri.conf.json
+      "url": "http://localhost:1420", 
+      "webRoot": "${workspaceFolder}/src",
+      // Attend que le backend ait lancé l'application avant de s'attacher
+      "timeout": 30000 
+    },
+    {
+      "type": "lldb",
+      "request": "attach",
+      "name": "Tauri Backend (Attach)",
+      "program": "${workspaceFolder}/src-tauri/target/debug/pitbox.exe",
+      "pid": "${command:pickMyProcess}"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Tauri (Frontend + Backend)",
+      "configurations": ["Tauri Backend", "Tauri Frontend"],
+      "stopAll": true
+    }
+  ]
+}
