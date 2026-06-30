@@ -51,7 +51,17 @@ function commonTail(): ColumnDef[] {
       value: (c) => (c.active ? "actif" : DASH),
       sortValue: (c) => (c.active ? 1 : 0),
     },
-    { key: "distance", label: "Distance", sortable: true, defaultVisible: false, mono: true, value: () => DASH, sortValue: () => -1 },
+    {
+      key: "distance",
+      label: "Distance",
+      sortable: true,
+      defaultVisible: false,
+      mono: true,
+      // §6.5 : km CM si connus ; sinon « essayé » (marqueur app) ou « — ».
+      value: (c) => (c.distance_km != null ? `${c.distance_km.toFixed(1)} km` : c.tried ? "essayé" : DASH),
+      // Tri : km croissants font remonter les peu/pas explorés ; jamais essayé en tête.
+      sortValue: (c) => (c.distance_km ?? (c.tried ? 0 : -1)),
+    },
     { key: "added", label: "Date d'ajout", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.created_at), sortValue: (c) => c.created_at },
     { key: "updated", label: "Date de MAJ", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.updated_at), sortValue: (c) => c.updated_at ?? c.created_at },
     { key: "published", label: "Date de publication", sortable: false, defaultVisible: false, mono: true, value: () => DASH },

@@ -392,10 +392,12 @@
         <!-- Distance (§6.5) + Son (§12bis) : placeholders « à venir » désactivés -->
         <div class="col">
           <div class="lbl">DISTANCE</div>
-          <div class="soon">
-            <span class="soon-ic">🛣</span>
-            <span class="soon-txt">Suivi de distance à venir</span>
-            <span class="soon-lot mono">§6.5</span>
+          <div class="box">
+            <div class="dist">
+              <span class="dist-ic">🛣</span>
+              <span class="dist-km mono">{d.distance_km != null ? `${d.distance_km.toFixed(1)} km` : "—"}</span>
+              <span class="dist-state mono" class:on={d.tried}>{d.tried ? "essayée ✓" : "jamais essayée"}</span>
+            </div>
           </div>
           <div class="lbl" style="margin-top:14px;">SON MOTEUR <span class="lbl-sub">exclusif — un seul</span></div>
           <div class="sounds">
@@ -867,26 +869,28 @@
     position: static;
   }
 
-  .soon {
+  .dist {
     display: flex;
     align-items: center;
     gap: 8px;
-    border: 1px dashed var(--line);
-    background: var(--panel2);
-    padding: 10px;
-    color: var(--muted);
-    font-size: 11px;
+    padding: 7px 10px;
   }
-  .soon-ic {
+  .dist-ic {
     font-size: 14px;
-    opacity: 0.7;
+    opacity: 0.8;
   }
-  .soon-lot {
+  .dist-km {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--txt);
+  }
+  .dist-state {
     margin-left: auto;
     font-size: 8px;
-    color: var(--faint);
-    border: 1px solid var(--line);
-    padding: 1px 5px;
+    color: var(--muted);
+  }
+  .dist-state.on {
+    color: var(--green);
   }
 
   .sounds {

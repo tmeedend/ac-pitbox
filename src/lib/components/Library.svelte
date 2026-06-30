@@ -50,6 +50,7 @@
   let categoryFilter = $state<string>("all");
   let classFilter = $state<"all" | "race" | "street">("all");
   let favOnly = $state(false);
+  let neverTried = $state(false);
   let yearMin = $state<number | null>(null);
   let yearMax = $state<number | null>(null);
   let showFilters = $state(false);
@@ -133,6 +134,7 @@
       if (categoryFilter !== "all" && c.category !== categoryFilter) return false;
       if (classFilter !== "all" && c.car_class !== classFilter) return false;
       if (favOnly && !c.is_favorite) return false;
+      if (neverTried && c.tried) return false;
       if (yearMin !== null && (c.year ?? 0) < yearMin) return false;
       if (yearMax !== null && (c.year ?? 9999) > yearMax) return false;
       if (query.trim()) {
@@ -150,6 +152,7 @@
     (categoryFilter !== "all" ? 1 : 0) +
       (classFilter !== "all" ? 1 : 0) +
       (favOnly ? 1 : 0) +
+      (neverTried ? 1 : 0) +
       (yearMin !== null ? 1 : 0) +
       (yearMax !== null ? 1 : 0),
   );
@@ -158,6 +161,7 @@
     categoryFilter = "all";
     classFilter = "all";
     favOnly = false;
+    neverTried = false;
     yearMin = null;
     yearMax = null;
   }
@@ -357,6 +361,10 @@
         <label class="fav-check">
           <input type="checkbox" bind:checked={favOnly} />
           <span>Favoris</span>
+        </label>
+        <label class="fav-check" title="0 km côté CM ET jamais lancé par l'app (§6.5)">
+          <input type="checkbox" bind:checked={neverTried} />
+          <span>Jamais essayé</span>
         </label>
         {#if activeFilterCount > 0}
           <button class="btn-ghost clear" type="button" onclick={clearFilters}>Réinitialiser</button>

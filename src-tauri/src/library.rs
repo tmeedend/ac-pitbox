@@ -1,11 +1,13 @@
 //! Vue bibliothèque (§6) : assemble les lignes overlay avec la vignette de
 //! preview et l'état actif/inactif pour la galerie et le tableau.
 
+use std::collections::HashSet;
 use std::path::Path;
 
 use rusqlite::Connection;
 use serde::Serialize;
 
+use crate::cm_stats::{self, CmUsage};
 use crate::config::AppConfig;
 use crate::inspect;
 use crate::modscan::ModKind;
@@ -20,6 +22,10 @@ pub struct ModCard {
     pub preview: Option<String>,
     /// Junction présente dans content/ (détection fine = L3).
     pub active: bool,
+    /// Distance parcourue (km) d'après CM, si connue (§6.5).
+    pub distance_km: Option<f64>,
+    /// « Déjà essayé » : lancé par l'app OU km CM > 0 (§6.5).
+    pub tried: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -61,13 +67,26 @@ fn preview_for(conn: &Connection, m: &ModRow) -> Option<String> {
 fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
     let preview = preview_for(conn, &m);
     let active = is_active(cfg, &m);
-    ModCard { base: m, preview, active }
+    ModCard { base: m, preview, active, distance_km: None, tried: false }
+}
+
+/// Renseigne la distance CM et le marqueur « essayé » (§6.5) sur une carte.
+fn fill_usage(card: &mut ModCard, cm: &CmUsage, launched: &HashSet<String>) {
+    let id = &card.base.id_interne;
+    card.distance_km = cm.km(id);
+    card.tried = launched.contains(id) || card.distance_km.is_some_and(|k| k > 0.0);
 }
 
 pub fn list_cards(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<ModCard>> {
+    let cm = cm_stats::read();
+    let launched = overlay::launched_ids(conn)?;
     Ok(overlay::list_mods(conn)?
         .into_iter()
-        .map(|m| to_card(conn, cfg, m))
+        .map(|m| {
+            let mut card = to_card(conn, cfg, m);
+            fill_usage(&mut card, &cm, &launched);
+            card
+        })
         .collect())
 }
 
@@ -227,7 +246,8 @@ pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<
     } else {
         None
     };
-    let card = to_card(conn, cfg, m);
+    let mut card = to_card(conn, cfg, m);
+    fill_usage(&mut card, &cm_stats::read(), &overlay::launched_ids(conn)?);
     Ok(Some(ModDetail { card, versions, history, specs }))
 }
 

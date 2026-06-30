@@ -42,6 +42,10 @@ export interface ModCard {
   is_stock: boolean;
   preview: string | null;
   active: boolean;
+  /** Distance parcourue (km) d'après CM, si connue (§6.5). */
+  distance_km: number | null;
+  /** « Déjà essayé » : lancé par l'app OU km CM > 0 (§6.5). */
+  tried: boolean;
 }
 
 export interface VersionRow {

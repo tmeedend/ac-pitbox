@@ -275,6 +275,12 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
     cmd.spawn().map_err(|e| format!("lancement de Content Manager : {e}"))?;
+
+    // Marqueur « déjà essayé » définitif (§6.5) : posé au lancement, fiabilise
+    // les faux zéros de CM. Non bloquant si l'écriture échoue.
+    let now = chrono::Local::now().to_rfc3339();
+    let _ = crate::overlay::mark_launched(conn, &setup.car_id, &now);
+    let _ = crate::overlay::mark_launched(conn, &setup.track_id, &now);
     Ok(())
 }
 

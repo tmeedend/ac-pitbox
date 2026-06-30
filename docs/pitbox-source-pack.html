@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pit Box — Source / pack d'origine</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/tabler-icons.min.css" rel="stylesheet">
+<style>
+  :root{
+    --rosso:#d40000; --rosso-bright:#ff5555; --rosso-dim:#1a0606; --rosso-border:#5c1212;
+    --bg:#08080c; --panel:#0d0d12; --panel2:#0a0a0f; --card:#13131a; --raised:#15151c;
+    --line:#1e1e26; --txt:#f2f2f4; --txt2:#cfd2d9; --muted:#86868f; --muted2:#5d6470; --faint:#4a4a55;
+    --green:#5dcaa5; --green-dim:#0a1a14; --green-border:#16382c;
+    --blue:#6a9ec9; --blue-dim:#0c1620; --blue-border:#1d3148;
+    --mono:'SF Mono',ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#050507;color:var(--txt);font-family:var(--sans);font-size:13px;-webkit-font-smoothing:antialiased;padding:16px;}
+  .mono{font-family:var(--mono);}
+  button{font-family:inherit;cursor:pointer;border:none;}
+  .wrap{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}
+  .card{background:var(--panel);border:1px solid var(--line);}
+  .card.hl{border-color:var(--rosso);}
+  .topbar{background:var(--rosso);height:3px;}
+  .pad{padding:14px;}
+  .lbl{color:var(--faint);font-size:8px;letter-spacing:1.5px;margin-bottom:9px;display:flex;align-items:center;}
+  .escu{width:26px;height:26px;background:var(--rosso);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:var(--mono);font-weight:600;font-size:10px;color:#fff;}
+
+  /* bloc SOURCE sur la fiche */
+  .srcbox{border:1px solid var(--line);}
+  .srcbox .h{background:var(--raised);padding:5px 10px;border-bottom:1px solid var(--line);color:var(--muted);font-size:8px;letter-spacing:1.5px;}
+  .srcrow{display:flex;align-items:center;gap:9px;padding:9px 11px;border-bottom:1px solid var(--line);}
+  .srcrow:last-child{border-bottom:none;}
+  .srcrow .k{color:var(--faint);font-size:8px;letter-spacing:1px;width:88px;flex-shrink:0;}
+  .srcrow .v{font-size:10.5px;font-family:var(--mono);color:var(--txt2);}
+  .chip{display:inline-flex;align-items:center;gap:5px;background:var(--rosso-dim);border:1px solid var(--rosso-border);color:var(--rosso-bright);font-size:10px;font-family:var(--mono);padding:3px 9px;cursor:pointer;}
+  .urlchip{display:inline-flex;align-items:center;gap:5px;background:var(--blue-dim);border:1px solid var(--blue-border);color:var(--blue);font-size:9.5px;font-family:var(--mono);padding:3px 9px;}
+  .urlempty{color:var(--muted2);font-size:9.5px;font-family:var(--mono);font-style:italic;}
+
+  /* liste des autres voitures du pack */
+  .siblings{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);}
+  .sib{background:var(--card);padding:8px 9px;cursor:pointer;display:flex;align-items:center;gap:7px;}
+  .sib:hover{background:#181820;}
+  .sib .dot{width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .sib .nm{font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .sib.current{background:var(--rosso-dim);}
+  .note{display:flex;align-items:center;gap:6px;background:var(--blue-dim);border:1px solid var(--blue-border);padding:7px 10px;color:#8fb4d4;font-size:9px;font-family:var(--mono);margin-top:10px;}
+  .btn{display:inline-flex;align-items:center;gap:5px;height:27px;padding:0 11px;background:var(--raised);color:var(--txt2);border:1px solid var(--line);font-size:9.5px;letter-spacing:.5px;font-family:var(--mono);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- bloc SOURCE tel qu'il apparaîtrait sur la fiche d'une voiture -->
+  <div class="card hl">
+    <div class="topbar"></div>
+    <div class="pad">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:13px;">
+        <span class="escu">FE</span>
+        <div><div style="font-size:13px;font-weight:600;">Ferrari 488 GT3 Evo</div><div class="mono" style="color:var(--muted);font-size:9px;">FERRARI · 2020 · #gt3</div></div>
+      </div>
+
+      <div class="lbl">SOURCE / ORIGINE</div>
+      <div class="srcbox">
+        <div class="h">PROVENANCE DU MOD</div>
+        <div class="srcrow">
+          <span class="k">PACK</span>
+          <span class="chip" title="voir toutes les voitures de ce pack"><i class="ti ti-package"></i> VRC GT3 2023 <span style="color:var(--muted);">· 8 voitures</span></span>
+        </div>
+        <div class="srcrow">
+          <span class="k">ARCHIVE</span>
+          <span class="v">VRC_GT3_2023.7z</span>
+        </div>
+        <div class="srcrow">
+          <span class="k">URL D'ORIGINE</span>
+          <span class="urlempty">— non renseignée (extension navigateur, lot L7)</span>
+        </div>
+      </div>
+
+      <div class="lbl" style="margin-top:14px;">AUTRES VOITURES DU MÊME PACK · 8</div>
+      <div class="siblings" id="sib"></div>
+      <div class="note"><i class="ti ti-info-circle"></i> Ces voitures partagent le même champ « pack ». Chacune reste une entité indépendante (activable, tagguable séparément).</div>
+      <div style="display:flex;gap:7px;margin-top:11px;">
+        <button class="btn"><i class="ti ti-filter"></i> FILTRER PAR CE PACK</button>
+        <button class="btn"><i class="ti ti-trash"></i> DÉSINSTALLER LE PACK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- exemple : à quoi ressemble une URL renseignée (après lot L7) -->
+  <div class="card">
+    <div class="pad">
+      <div class="lbl">EXEMPLE · APRÈS LE LOT L7 (extension navigateur)</div>
+      <div class="srcbox">
+        <div class="h">PROVENANCE — URL CAPTURÉE</div>
+        <div class="srcrow">
+          <span class="k">URL D'ORIGINE</span>
+          <span class="urlchip"><i class="ti ti-world"></i> overtake.gg/downloads/vrc-gt3-2023 <i class="ti ti-external-link" style="font-size:11px;"></i></span>
+        </div>
+        <div class="srcrow">
+          <span class="k">MISE À JOUR</span>
+          <span class="v" style="color:var(--green);">détectée via URL — v1.3 dispo</span>
+        </div>
+      </div>
+      <div class="note"><i class="ti ti-bulb"></i> L'URL est le signal d'identité le plus fiable : un téléchargement depuis une URL connue = mise à jour, pas un nouveau mod.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SIB=[
+  {n:"Ferrari 488 GT3",c:"#d40000",cur:true},{n:"Audi R8 LMS",c:"#86868f"},{n:"BMW M6 GT3",c:"#185fa5"},
+  {n:"Lambo Huracán",c:"#5dcaa5"},{n:"Merc AMG GT3",c:"#86868f"},{n:"Porsche 911 GT3 R",c:"#d4af37"},
+  {n:"McLaren 720S",c:"#e67e22"},{n:"Aston V8 GT3",c:"#16a085"},
+];
+document.getElementById('sib').innerHTML=SIB.map(s=>`
+  <div class="sib ${s.cur?'current':''}">
+    <span class="dot" style="background:${s.c}22;"><i class="ti ti-car" style="font-size:14px;color:${s.c};"></i></span>
+    <span class="nm">${s.n}${s.cur?' <span style="color:var(--rosso-bright);font-size:7px;">(ici)</span>':''}</span>
+  </div>`).join('');
+</script>
+</body>
+</html>

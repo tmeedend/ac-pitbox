@@ -99,6 +99,15 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             imported_at    TEXT NOT NULL
         );
 
+        -- Suivi d'usage propre à l'app (§6.5) : marqueur « déjà essayé » définitif
+        -- posé au lancement d'une session. Fiabilise les faux zéros de CM.
+        CREATE TABLE IF NOT EXISTS usage (
+            mod_id        TEXT PRIMARY KEY,  -- id_interne de la voiture ou du circuit
+            launched      INTEGER NOT NULL DEFAULT 0,
+            launch_count  INTEGER NOT NULL DEFAULT 0,
+            last_launched TEXT
+        );
+
         CREATE TABLE IF NOT EXISTS versions (
             id                TEXT PRIMARY KEY,
             mod_id            TEXT NOT NULL REFERENCES mods(id_interne) ON DELETE CASCADE,
@@ -819,4 +828,27 @@ pub fn app_exists(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
 pub fn delete_app(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM apps WHERE id = ?1", [id])?;
     Ok(())
+}
+
+// --- Suivi d'usage (§6.5) ---------------------------------------------------
+
+/// Pose/incrémente le marqueur « essayé » d'un mod au lancement d'une session.
+pub fn mark_launched(conn: &Connection, mod_id: &str, ts: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        r#"INSERT INTO usage (mod_id, launched, launch_count, last_launched)
+           VALUES (?1, 1, 1, ?2)
+           ON CONFLICT(mod_id) DO UPDATE SET
+               launched = 1,
+               launch_count = usage.launch_count + 1,
+               last_launched = ?2"#,
+        params![mod_id, ts],
+    )?;
+    Ok(())
+}
+
+/// Ids des mods déjà lancés au moins une fois par l'app.
+pub fn launched_ids(conn: &Connection) -> rusqlite::Result<std::collections::HashSet<String>> {
+    let mut stmt = conn.prepare("SELECT mod_id FROM usage WHERE launched = 1")?;
+    let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+    rows.collect()
 }

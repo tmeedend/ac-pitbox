@@ -256,6 +256,12 @@ Un mod peut contenir **plusieurs voitures** (pack) + des ressources communes (fo
 - **Chaque voiture est une entité de premier niveau** dans la bibliothèque — pas un « gros mod pack » monolithique. Raison : l'unité d'usage est *la voiture* (on l'active, la tague, la met en favori, lui donne catégorie + fiche technique individuellement). Un pack monolithique écraserait cette granularité.
 - **Lien de source** : les voitures d'un même pack partagent une référence à leur **source** (nom d'archive, et idéalement URL d'origine — lot futur §12ter). Permet de filtrer « toutes les voitures du pack X », de les désinstaller en lot, de regrouper. Le pack est une **métadonnée de regroupement**, pas une entité.
 
+**Matérialisation visible (à implémenter, pas seulement stocker)** — maquette `pitbox-source-pack.html` :
+- Sur la **fiche d'un mod**, un bloc « Source / origine » affiche : le **pack** (avec nb de voitures, cliquable), le **nom d'archive**, et l'**URL d'origine** (vide en v1 → mention « non renseignée, lot L7 »).
+- Une section « **autres voitures du même pack** » liste les entités partageant le même `source_pack`, chacune cliquable (navigation entre voitures sœurs). Rappel visible : chaque voiture reste indépendante (activable/tagguable séparément).
+- Actions : **filtrer par ce pack**, **désinstaller le pack** (en lot).
+- Deux mods « viennent du même pack » ⟺ même valeur `source_pack`. Cette info est **connue dès l'import** (l'app voit l'archive/dossier source) — donc disponible et fiable en v1, contrairement à `source_url`.
+
 ```
 Mod (overlay, ajout)
   source_pack   : string?   # archive/dossier d'origine commun à un pack
@@ -734,7 +740,8 @@ Idée à fort potentiel pour le **moteur d'identité** : capturer l'**URL d'orig
 - Import multi-source : **archive (zip/rar/7z) ET dossier déjà décompressé** (§4.5 — clé pour migrer un catalogue MO2 sans re-zipper), avec descente récursive — porter la logique de `recursiveMoveModsToValidModDir` / `isCar` / `isTrack` / `isCarSound` de `archives.py`. Option copier/déplacer avec déplacement adaptatif selon le disque.
 - Détection de type, empreinte composite, résolution de version (règles §4.2/§4.3), base d'overlay non destructive (§3.0), historique.
 - Vues galerie + tableau.
-- Livrable testable : importer un zip, le voir rangé dans la biblio, le retrouver dans les deux vues, gérer une mise à jour.
+- **Source / pack d'origine** (§4.7) : à l'import d'un pack multi-voitures, renseigner `source_pack` sur chaque voiture, et l'**afficher** sur la fiche (bloc Source + section « autres voitures du même pack » + filtrer/désinstaller par pack). Ne pas seulement stocker le champ — l'exposer dans l'UI (maquette `pitbox-source-pack.html`).
+- Livrable testable : importer un zip, le voir rangé dans la biblio, le retrouver dans les deux vues, gérer une mise à jour, et pour un pack : voir les voitures sœurs liées par le pack.
 
 **L2 — Tags & organisation** :
 - Charger `default-tag-rules.json` (les 264 règles). Moteur d'application des 6 familles de règles.

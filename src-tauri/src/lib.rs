@@ -1,6 +1,7 @@
 mod activation;
 mod apps;
 mod archive;
+mod cm_stats;
 mod config;
 mod detect;
 mod export;
