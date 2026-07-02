@@ -56,7 +56,7 @@ pub fn create_junction(link: &Path, target: &Path) -> Result<(), String> {
     #[cfg(windows)]
     {
         cmd.raw_arg(format!(
-            "mklink /J \"{}\" \"{}\"",
+            "mklink /D \"{}\" \"{}\"",
             link.display(),
             target.display()
         ));

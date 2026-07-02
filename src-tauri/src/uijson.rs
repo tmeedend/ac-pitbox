@@ -5,7 +5,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use regex::Regex;
 
 use serde::Serialize;
 use serde_json::Value;
