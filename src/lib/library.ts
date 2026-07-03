@@ -40,6 +40,8 @@ export interface ModCard {
   csp_features: string[];
   /** Contenu de base Kunos : lecture seule, non désactivable (§12bis.1). */
   is_stock: boolean;
+  /** Date de publication estimée (dates de fichiers à l'import), remplaçable par L7 (§6.2). */
+  published_at: string | null;
   preview: string | null;
   /** Tracé du circuit à superposer à la photo (circuits, §6.1). */
   outline: string | null;
@@ -63,6 +65,8 @@ export interface VersionRow {
   skins: string[];
   layouts: string[];
   tags_from_mod: string[];
+  /** Date de publication estimée depuis les dates de fichiers (§6.2). */
+  published_at: string | null;
 }
 
 export interface HistoryRow {

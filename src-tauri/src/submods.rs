@@ -444,7 +444,7 @@ mod tests {
         std::fs::write(sfx.join("GUIDs.txt"), b"ORIG").unwrap();
         std::fs::write(sfx.join("car.bank"), b"ORIGBANK").unwrap();
         overlay::upsert_mod(&conn, "snd_car", "Car", Some("B"), Some("Snd"), "h", None, &now).unwrap();
-        overlay::insert_version(&conn, "v1", "snd_car", Some("1.0"), None, &now, &carv.to_string_lossy(), None, "sig", &[], &[], &[], &[]).unwrap();
+        overlay::insert_version(&conn, "v1", "snd_car", Some("1.0"), None, &now, &carv.to_string_lossy(), None, "sig", &[], &[], &[], &[], None).unwrap();
         overlay::set_active_version(&conn, "snd_car", "v1").unwrap();
 
         // Mod de son stocké à part.

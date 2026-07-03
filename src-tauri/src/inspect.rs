@@ -3,6 +3,9 @@
 
 use std::path::{Path, PathBuf};
 
+use chrono::{DateTime, Local};
+use walkdir::WalkDir;
+
 use crate::modscan::ModKind;
 
 /// Détecte les features CSP en lisant le `ext_config.ini` embarqué du mod.
@@ -61,6 +64,22 @@ pub fn track_layouts(track_dir: &Path) -> Vec<String> {
         layouts.push("(default)".to_string());
     }
     layouts
+}
+
+/// Date de publication estimée (§6.2) : date de modification la plus récente
+/// parmi les fichiers du mod, lue **avant** rangement en bibliothèque. Pour une
+/// archive, `dir` est le dossier d'extraction temporaire — 7-Zip restitue sur
+/// les fichiers extraits les dates internes de l'archive, donc la valeur
+/// obtenue reflète ces dates internes, pas l'instant de l'extraction.
+pub fn estimate_published_at(dir: &Path) -> Option<String> {
+    let newest = WalkDir::new(dir)
+        .into_iter()
+        .flatten()
+        .filter(|e| e.file_type().is_file())
+        .filter_map(|e| e.metadata().ok()?.modified().ok())
+        .max()?;
+    let dt: DateTime<Local> = newest.into();
+    Some(dt.to_rfc3339())
 }
 
 fn list_subdirs(dir: &Path) -> Vec<String> {

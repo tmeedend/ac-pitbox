@@ -77,6 +77,7 @@ pub fn index_stock_content(conn: &Connection, cfg: &AppConfig, rules: &Rules) ->
                 &skins,
                 &layouts,
                 &ui.tags,
+                None,
             )
             .map_err(|e| e.to_string())?;
             overlay::set_active_version(conn, &id, &vid).map_err(|e| e.to_string())?;

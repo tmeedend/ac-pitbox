@@ -597,6 +597,8 @@ fn process_found(
         ModKind::Track => inspect::track_layouts(&fm.dir),
         ModKind::Car => Vec::new(),
     };
+    // Date de publication estimée (§6.2), lue sur les fichiers avant rangement.
+    let published_at = inspect::estimate_published_at(&fm.dir);
 
     // --- Résolution d'identité (§4.2) ---
     let is_update = crate::overlay::mod_exists(conn, &id_interne).map_err(|e| e.to_string())?;
@@ -677,6 +679,7 @@ fn process_found(
         &skins,
         &layouts,
         &ui.tags,
+        published_at.as_deref(),
     )
     .map_err(|e| e.to_string())?;
 
@@ -956,6 +959,31 @@ mod tests {
         let entries2 = analyze_bulk(&conn, &cfg, &parent).unwrap();
         let car2 = entries2.iter().find(|e| e.subfolder == "bulk_car").unwrap();
         assert_eq!(car2.mods[0].status, "duplicate");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn published_at_estimated_on_import() {
+        let base = make_temp_dir().unwrap();
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let rules = crate::rules::default_rules();
+        let noop = |_p: Progress| {};
+
+        let src = base.join("src_pub");
+        make_fake_car(&src, "pub_car");
+        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true);
+        assert_eq!(r.mods.len(), 1);
+
+        // Date de publication estimée (§6.2) depuis la date de modification des
+        // fichiers, remontée à la fois sur la version et sur le mod (version active).
+        let versions = crate::overlay::get_versions(&conn, "pub_car").unwrap();
+        assert!(versions[0].published_at.is_some(), "date de publication absente sur la version");
+        let m = crate::overlay::get_mod(&conn, "pub_car").unwrap().unwrap();
+        assert!(m.published_at.is_some(), "date de publication absente sur le mod (version active)");
 
         let _ = std::fs::remove_dir_all(&base);
     }

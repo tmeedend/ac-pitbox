@@ -31,7 +31,8 @@ function allTags(c: ModCard): string[] {
 }
 
 // Colonnes communes à tous les types (dates, auteur, version, tags, état).
-// distance → §6.5, date de publication → L7 : présentes mais « — » en phase 1.
+// distance → §6.5. Date de publication : estimée dès l'import depuis les
+// dates de fichiers (§6.2) ; une source plus fiable (extension L7) la remplacera.
 function commonTail(): ColumnDef[] {
   return [
     { key: "author", label: "Auteur", sortable: true, defaultVisible: false, value: (c) => c.author ?? DASH },
@@ -64,7 +65,7 @@ function commonTail(): ColumnDef[] {
     },
     { key: "added", label: "Date d'ajout", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.created_at), sortValue: (c) => c.created_at },
     { key: "updated", label: "Date de MAJ", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.updated_at), sortValue: (c) => c.updated_at ?? c.created_at },
-    { key: "published", label: "Date de publication", sortable: false, defaultVisible: false, mono: true, value: () => DASH },
+    { key: "published", label: "Date de publication", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.published_at), sortValue: (c) => c.published_at ?? "" },
   ];
 }
 

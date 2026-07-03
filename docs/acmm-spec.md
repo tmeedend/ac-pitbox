@@ -365,11 +365,15 @@ La classe `race`/`street` reste un **champ de métadonnée/affichage** (filtrage
 
 Décision de conception : les **caractéristiques mécaniques** d'une voiture ne sont PAS des tags. Mettre `turbo`, `rwd`, `v8`, `mid-engine` dans les tags est un abus : un tag sert à *filtrer/grouper* (catégorie, style, époque), pas à *décrire une fiche technique*. Les y laisser pollue le vocabulaire de tags et empêche de s'en servir proprement.
 
-**Sources natives de l'`ui_car.json` à exploiter directement** (constaté sur 689 mods réels) :
+**Champ `year` — stratégie de résolution.** Le champ `year` n'est PAS d'origine dans les `ui_car.json` de Kunos : il a été ajouté par l'écosystème AcTools/CM, qui le récupère depuis une base en ligne et le met en cache localement (`AppData\Local\AcTools Content Manager`). Pit Box **ne dépend pas** de cette base (non documentée, fragile, liée à CM). Stratégie à trois niveaux :
+1. Lire `year` de l'`ui_car.json` **s'il est présent** (cas des mods bien renseignés).
+2. Sinon, pour le **contenu de base** (`is_stock`), chercher dans une **table statique embarquée** (`kunos_years.json`, ~150 voitures, clé = nom de dossier) — données stables, jamais à maintenir.
+3. Sinon, afficher **« — »**.
+La table Kunos est un point de départ à valider contre l'installation réelle (noms de dossiers pouvant varier légèrement selon versions) ; correction triviale ligne par ligne si besoin.
 - Champ **`specs`** : c'est un **OBJET structuré**, pas une string. Clés présentes à ~100% : `bhp`, `torque`, `weight`, `topspeed`, `acceleration`, `pwratio`, parfois `range`. **À lire directement** — aucun parsing de chaîne nécessaire. (La ligne « 190 bhp, 180 Nm… » des captures était le *rendu* de CM, pas la donnée brute.)
 - **Courbes `powerCurve` / `torqueCurve`** : présentes sur **688/689** fichiers. La courbe moteur est donc réalisable sur quasiment toutes les voitures, pas un cas rare. À tracer (graphe Nm/bhp/RPM).
 - Champ **`description`** : présent à ~96%. Affiché à la demande (bouton « Description »).
-- Champs natifs **`country`**, **`author`**, **`year`**, **`version`** : présents sur la grande majorité. À exploiter (year alimente la fenêtre de plateau ; country alimenté par extraction si vide, voir ci-dessous).
+- Champs natifs **`country`**, **`author`**, **`version`** : présents sur la grande majorité. À exploiter (country alimenté par extraction si vide, voir ci-dessous). Pour **`year`**, voir la stratégie de résolution ci-dessus (souvent absent du contenu de base → table Kunos).
 
 **Champs structurés complémentaires** (overlay) — uniquement pour ce que `specs` ne couvre pas :
 
@@ -458,7 +462,7 @@ Un mod importé qui n'est **ni** voiture, circuit, skin, son ou app reconnu (ex.
 **Colonnes de dates (sur tous les types de mods : voitures, circuits, et add-ons skins/sons/apps)** — trois dates, à fiabilité distincte :
 - **Date d'ajout** : quand l'utilisateur a importé le mod la première fois. **Fiable** (posée à l'import). Toujours remplie.
 - **Date de mise à jour (par l'utilisateur)** : dernière fois qu'une nouvelle version a été réimportée par-dessus dans l'app. **Fiable**. Égale la date d'ajout si jamais mis à jour.
-- **Date de publication (du moddeur)** : date officielle de la dernière version publiée. **Souvent vide en v1** — non connue de façon fiable sans l'extension navigateur (lot L7, §12ter). Prévue dans le modèle, affichée seulement si l'info existe (« — » sinon). À ne pas confondre avec les deux précédentes.
+- **Date de publication** : date estimée de sortie du mod. **Alimentée dès l'import** par la **date de modification** des fichiers — de l'archive (dates internes, lues avant décompression, plus fiables car non corrompues par l'extraction) ou du dossier (date de modification des fichiers) selon la source d'import. C'est une **estimation** (elle mesure quand les fichiers ont été écrits, pas la publication officielle), jugée suffisamment proche en pratique (vérifié sur cas réels). Le champ n'est donc **plus vide en v1**. Si un jour l'**extension L7** fournit la vraie date de publication (lue sur la page d'origine), elle **remplace** l'estimation (source plus fiable). Le libellé pourra être affiné (« estimée ») ultérieurement — champ unique, source qui s'améliore.
 
 Les deux premières dates sont des colonnes fonctionnelles dès maintenant, sur tous les types. La troisième s'enrichit avec L7.
 

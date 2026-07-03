@@ -396,7 +396,7 @@ mod tests {
         overlay::upsert_mod(&conn, "mycar", "Car", Some("B"), Some("My Car"), "h", None, &now).unwrap();
         overlay::insert_version(
             &conn, "v1", "mycar", Some("1.0"), None, &now,
-            &car.to_string_lossy(), None, "sig", &[], &[], &[], &[],
+            &car.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "mycar", "v1").unwrap();

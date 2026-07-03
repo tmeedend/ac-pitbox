@@ -46,6 +46,8 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         // Ignore l'erreur « duplicate column » si la colonne existe déjà.
         let _ = conn.execute(&format!("ALTER TABLE mods ADD COLUMN {col}"), []);
     }
+    // Date de publication estimée depuis les dates de fichiers (§6.2).
+    let _ = conn.execute("ALTER TABLE versions ADD COLUMN published_at TEXT", []);
     Ok(())
 }
 
@@ -120,7 +122,8 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             csp_features      TEXT NOT NULL DEFAULT '[]',
             skins             TEXT NOT NULL DEFAULT '[]',
             layouts           TEXT NOT NULL DEFAULT '[]',
-            tags_from_mod     TEXT NOT NULL DEFAULT '[]'
+            tags_from_mod     TEXT NOT NULL DEFAULT '[]',
+            published_at      TEXT                    -- date de publication estimée (§6.2)
         );
 
         CREATE TABLE IF NOT EXISTS history (
@@ -194,6 +197,8 @@ pub struct ModRow {
     pub csp_features: Vec<String>,
     /// Contenu de base Kunos : lecture seule, non désactivable (§12bis.1).
     pub is_stock: bool,
+    /// Date de publication estimée de la version active (§6.2).
+    pub published_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -210,6 +215,8 @@ pub struct VersionRow {
     pub skins: Vec<String>,
     pub layouts: Vec<String>,
     pub tags_from_mod: Vec<String>,
+    /// Date de publication estimée depuis les dates de fichiers (§6.2).
+    pub published_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -266,12 +273,14 @@ pub fn insert_version(
     skins: &[String],
     layouts: &[String],
     tags_from_mod: &[String],
+    published_at: Option<&str>,
 ) -> rusqlite::Result<()> {
     conn.execute(
         r#"INSERT INTO versions
            (id, mod_id, version_label, author, imported_at, library_path,
-            source_archive, content_signature, csp_features, skins, layouts, tags_from_mod)
-           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)"#,
+            source_archive, content_signature, csp_features, skins, layouts, tags_from_mod,
+            published_at)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)"#,
         params![
             id,
             mod_id,
@@ -285,6 +294,7 @@ pub fn insert_version(
             serde_json::to_string(skins).unwrap_or_else(|_| "[]".into()),
             serde_json::to_string(layouts).unwrap_or_else(|_| "[]".into()),
             serde_json::to_string(tags_from_mod).unwrap_or_else(|_| "[]".into()),
+            published_at,
         ],
     )?;
     Ok(())
@@ -421,7 +431,8 @@ const MOD_SELECT: &str = r#"
            COALESCE((SELECT v.layouts FROM versions v WHERE v.id = m.active_version_id), '[]') AS layouts,
            COALESCE((SELECT v.csp_features FROM versions v WHERE v.id = m.active_version_id), '[]') AS csp_features,
            (SELECT MAX(v.imported_at) FROM versions v WHERE v.mod_id = m.id_interne) AS updated_at,
-           m.is_stock
+           m.is_stock,
+           (SELECT v.published_at FROM versions v WHERE v.id = m.active_version_id) AS published_at
     FROM mods m
 "#;
 
@@ -460,6 +471,7 @@ fn map_mod(row: &rusqlite::Row) -> rusqlite::Result<ModRow> {
         csp_features: json_arr(&csp_features),
         updated_at: row.get(26)?,
         is_stock: row.get::<_, i64>(27)? != 0,
+        published_at: row.get(28)?,
     })
 }
 
@@ -483,7 +495,8 @@ pub fn get_mod(conn: &Connection, id: &str) -> rusqlite::Result<Option<ModRow>> 
 pub fn get_versions(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<VersionRow>> {
     let mut stmt = conn.prepare(
         r#"SELECT id, mod_id, version_label, author, imported_at, library_path,
-                  source_archive, content_signature, csp_features, skins, layouts, tags_from_mod
+                  source_archive, content_signature, csp_features, skins, layouts, tags_from_mod,
+                  published_at
            FROM versions WHERE mod_id = ?1 ORDER BY imported_at DESC"#,
     )?;
     let rows = stmt.query_map([mod_id], |row| {
@@ -504,6 +517,7 @@ pub fn get_versions(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<Ver
             skins: json_arr(&skins),
             layouts: json_arr(&layouts),
             tags_from_mod: json_arr(&tags),
+            published_at: row.get(12)?,
         })
     })?;
     rows.collect()

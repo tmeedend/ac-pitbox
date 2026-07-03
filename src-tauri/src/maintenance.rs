@@ -158,7 +158,7 @@ mod tests {
         overlay::upsert_mod(&conn, "ghost", "Car", Some("B"), Some("Ghost"), "h", None, &now).unwrap();
         overlay::insert_version(
             &conn, "v1", "ghost", Some("1.0"), None, &now,
-            &base.join("nope").to_string_lossy(), None, "sig", &[], &[], &[], &[],
+            &base.join("nope").to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "ghost", "v1").unwrap();
