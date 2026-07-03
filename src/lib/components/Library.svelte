@@ -17,6 +17,7 @@
   } from "$lib/columns";
   import { nav, pickSession } from "$lib/nav.svelte";
   import { importState } from "$lib/importState.svelte";
+  import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
 
   // Une bibliothèque par type (§6.1) : ce composant est rendu une fois pour les
   // voitures, une fois pour les circuits. Toute la persistance est suffixée par
@@ -116,22 +117,20 @@
   const sessionId = $derived(isCar ? nav.sessionCar?.id ?? null : nav.sessionTrack?.id ?? null);
   function select(c: ModCard) {
     selectedId = c.id_interne;
-    const meta = isCar
-      ? [c.brand, c.category].filter(Boolean).join(" · ")
-      : [c.category, c.author].filter(Boolean).join(" · ");
     // Restaure les préférences mémorisées de l'entité (skin voiture, layout circuit).
-    const skin = isCar ? localStorage.getItem(`pitbox.skin.${c.id_interne}`) : null;
-    const layout = !isCar
-      ? localStorage.getItem(`pitbox.layout.${c.id_interne}`) ?? c.layouts[0] ?? null
-      : null;
+    const sk = isCar ? getPreferredSkin(c.id_interne) : null;
+    const lay = !isCar ? getPreferredLayout(c.id_interne) : null;
+    const meta = isCar
+      ? [c.brand, sk ? `skin: ${sk.name}` : c.category].filter(Boolean).join(" · ")
+      : [lay?.name ?? c.category, c.author].filter(Boolean).join(" · ");
     pickSession(kind, {
       id: c.id_interne,
       name: c.display_name ?? c.id_interne,
       meta,
-      preview: c.preview,
-      layout,
-      skin,
-      outline: !isCar ? c.outline : null,
+      preview: sk?.preview ?? lay?.preview ?? c.preview,
+      layout: lay?.id ?? (!isCar ? c.layouts[0] ?? null : null),
+      skin: sk?.id ?? null,
+      outline: !isCar ? (lay?.outline ?? c.outline) : null,
     });
   }
 
@@ -357,8 +356,10 @@
     {:else if view === "gallery"}
       <div class="grid">
         {#each filtered as c (c.id_interne)}
-          {@const src = previewSrc(c.preview)}
-          {@const ol = previewSrc(c.outline)}
+          {@const prefSkin = isCar ? getPreferredSkin(c.id_interne) : null}
+          {@const prefLayout = !isCar ? getPreferredLayout(c.id_interne) : null}
+          {@const src = previewSrc(prefSkin?.preview ?? prefLayout?.preview ?? c.preview)}
+          {@const ol = previewSrc(prefLayout?.outline ?? c.outline)}
           <button class="card" class:sel={selectedId === c.id_interne} class:session={sessionId === c.id_interne} onclick={() => select(c)} ondblclick={() => (fullId = c.id_interne)} title="Clic : sélectionne pour la session · double-clic : page détail">
             <div class="thumb">
               {#if src}<img src={src} alt={c.display_name ?? c.id_interne} loading="lazy" />

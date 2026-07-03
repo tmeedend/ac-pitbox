@@ -27,6 +27,7 @@
   import { open, confirm } from "@tauri-apps/plugin-dialog";
   import PowerCurve from "./PowerCurve.svelte";
   import { nav, pickSession } from "$lib/nav.svelte";
+  import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
 
   interface Props {
     id: string;
@@ -130,17 +131,17 @@
       }
       // Circuit : restaure le layout mémorisé pour cette entité.
       if (d && !isCar && d.track) {
-        const savedLayout = localStorage.getItem(`pitbox.layout.${current}`);
-        const li = d.track.layouts.findIndex((l) => l.id === savedLayout);
+        const savedLayout = getPreferredLayout(current);
+        const li = d.track.layouts.findIndex((l) => l.id === savedLayout?.id);
         previewLayout = li >= 0 ? li : 0;
       }
     });
     if (isCar) {
-      const savedSkin = localStorage.getItem(`pitbox.skin.${current}`);
+      const savedSkin = getPreferredSkin(current);
       listModSkins(current).then((s) => {
         if (current !== id) return;
         skins = s;
-        const pi = s.findIndex((x) => x.id === savedSkin);
+        const pi = s.findIndex((x) => x.id === savedSkin?.id);
         previewSkin = pi >= 0 ? pi : 0;
       });
       loadSounds(current);
@@ -184,7 +185,7 @@
     previewSkin = i;
     if (!detail) return;
     const sk = skins[i];
-    if (sk) localStorage.setItem(`pitbox.skin.${detail.id_interne}`, sk.id);
+    if (sk) setPreferredSkin(detail.id_interne, sk);
     const meta = [detail.brand, sk ? `skin: ${sk.name}` : null].filter(Boolean).join(" · ");
     pickSession("Car", {
       id: detail.id_interne,
@@ -203,7 +204,7 @@
     previewLayout = i;
     if (!detail?.track) return;
     const l = detail.track.layouts[i];
-    if (l) localStorage.setItem(`pitbox.layout.${detail.id_interne}`, l.id);
+    if (l) setPreferredLayout(detail.id_interne, l);
     const meta = [l?.name, detail.author].filter(Boolean).join(" · ");
     pickSession("Track", {
       id: detail.id_interne,

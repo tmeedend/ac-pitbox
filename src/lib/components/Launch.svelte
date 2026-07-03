@@ -14,6 +14,7 @@
   } from "$lib/launch";
   import { listLibrary, previewSrc, type ModCard } from "$lib/library";
   import { nav } from "$lib/nav.svelte";
+  import { getPreferredSkin } from "$lib/preferred";
 
   type Step = "category" | "car" | "track" | "settings";
   let step = $state<Step>("settings");
@@ -139,7 +140,7 @@
         skins = s;
         // Skin par défaut : celui mémorisé pour la voiture (§8.6), sinon le 1er.
         if (!skins.find((x) => x.id === setup.car_skin)) {
-          const saved = localStorage.getItem(`pitbox.skin.${setup.car_id}`);
+          const saved = getPreferredSkin(setup.car_id)?.id ?? null;
           setup.car_skin = (saved && skins.some((x) => x.id === saved) ? saved : skins[0]?.id) ?? null;
         }
       });
@@ -220,7 +221,7 @@
     const t = nav.sessionTrack;
     setup.car_id = c?.id ?? cars[0]?.id ?? "";
     // Skin de session choisi sur la fiche (§8.6), repli sur mémorisé.
-    setup.car_skin = c?.skin ?? (c ? localStorage.getItem(`pitbox.skin.${c.id}`) : null);
+    setup.car_skin = c?.skin ?? (c ? getPreferredSkin(c.id)?.id ?? null : null);
     setup.track_id = t?.id ?? tracks[0]?.id ?? "";
     const tr = tracks.find((x) => x.id === setup.track_id);
     setup.track_layout =

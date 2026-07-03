@@ -13,6 +13,7 @@
   import { nav, pickSession } from "$lib/nav.svelte";
   import { open } from "@tauri-apps/plugin-dialog";
   import { exportMod, type ExportReport } from "$lib/maintenance";
+  import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
 
   interface Props {
     id: string | null;
@@ -25,21 +26,19 @@
   function drive() {
     if (!detail) return;
     const isCar = detail.kind === "Car";
-    const skin = isCar ? localStorage.getItem(`pitbox.skin.${detail.id_interne}`) : null;
-    const layout = !isCar
-      ? localStorage.getItem(`pitbox.layout.${detail.id_interne}`) ?? detail.layouts[0] ?? null
-      : null;
+    const sk = isCar ? getPreferredSkin(detail.id_interne) : null;
+    const lay = !isCar ? getPreferredLayout(detail.id_interne) : null;
     const meta = isCar
-      ? [detail.brand, detail.category].filter(Boolean).join(" · ")
-      : [detail.category, detail.author].filter(Boolean).join(" · ");
+      ? [detail.brand, sk ? `skin: ${sk.name}` : detail.category].filter(Boolean).join(" · ")
+      : [lay?.name ?? detail.category, detail.author].filter(Boolean).join(" · ");
     pickSession(detail.kind, {
       id: detail.id_interne,
       name: detail.display_name ?? detail.id_interne,
       meta,
-      preview: detail.preview,
-      layout,
-      skin,
-      outline: !isCar ? detail.outline : null,
+      preview: sk?.preview ?? lay?.preview ?? detail.preview,
+      layout: lay?.id ?? (!isCar ? detail.layouts[0] ?? null : null),
+      skin: sk?.id ?? null,
+      outline: !isCar ? (lay?.outline ?? detail.outline) : null,
     });
     nav.section = "race";
   }
