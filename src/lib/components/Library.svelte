@@ -1,20 +1,10 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { open } from "@tauri-apps/plugin-dialog";
-  import { getCurrentWebview } from "@tauri-apps/api/webview";
-  import { listen } from "@tauri-apps/api/event";
   import ModDetail from "./ModDetail.svelte";
   import DetailPage from "./DetailPage.svelte";
-  import BulkImport from "./BulkImport.svelte";
   import {
-    importArchives,
-    importFolders,
     listLibrary,
     previewSrc,
-    resolveConflict,
     setFavorite,
-    type ArchiveResult,
-    type ImportProgress,
     type ModCard,
     type ModKind,
   } from "$lib/library";
@@ -26,6 +16,7 @@
     type ColumnDef,
   } from "$lib/columns";
   import { nav, pickSession } from "$lib/nav.svelte";
+  import { importState } from "$lib/importState.svelte";
 
   // Une bibliothèque par type (§6.1) : ce composant est rendu une fois pour les
   // voitures, une fois pour les circuits. Toute la persistance est suffixée par
@@ -33,13 +24,6 @@
   let { kind }: { kind: ModKind } = $props();
   const isCar = kind === "Car";
   const kk = kindKey(kind);
-
-  interface PendingConflict {
-    newId: string;
-    newName: string;
-    oldId: string;
-    oldName: string;
-  }
 
   let cards = $state<ModCard[]>([]);
   let selectedId = $state<string | null>(null);
@@ -87,16 +71,6 @@
   let view = $state<"gallery" | "table">(
     (localStorage.getItem(`pitbox.view.${kk}`) as "gallery" | "table") ?? "gallery",
   );
-  let importing = $state(false);
-  let report = $state<ArchiveResult[] | null>(null);
-  let progress = $state<ImportProgress | null>(null);
-  let pendingConflicts = $state<PendingConflict[]>([]);
-  // Mode d'import de dossier : copier (préserve la source) ou déplacer (§4.5).
-  let copyMode = $state(localStorage.getItem("pitbox.import.copy") !== "false");
-  function setCopyMode(v: boolean) {
-    copyMode = v;
-    localStorage.setItem("pitbox.import.copy", String(v));
-  }
 
   // Colonnes (§6.2) : définitions propres au type + visibilité persistée par type.
   const columns: ColumnDef[] = columnsFor(kind);
@@ -255,87 +229,12 @@
     });
   });
 
-  async function runImport(task: Promise<ArchiveResult[]>) {
-    importing = true;
-    progress = null;
-    try {
-      report = await task;
-      pendingConflicts = report.flatMap((a) =>
-        a.mods
-          .filter((m) => m.conflict)
-          .map((m) => ({
-            newId: m.id_interne,
-            newName: m.display_name ?? m.id_interne,
-            oldId: m.conflict!.existing_id,
-            oldName: m.conflict!.existing_name ?? m.conflict!.existing_id,
-          })),
-      );
-      await refresh();
-    } finally {
-      importing = false;
-      progress = null;
-    }
-  }
-
-  async function resolve(c: PendingConflict, action: "keep_both" | "replace") {
-    await resolveConflict(c.newId, c.oldId, action);
-    pendingConflicts = pendingConflicts.filter((p) => p !== c);
-    await refresh();
-  }
-
-  async function pickAndImport() {
-    const sel = await open({
-      multiple: true,
-      filters: [{ name: "Archives", extensions: ["zip", "rar", "7z"] }],
-    });
-    if (!sel) return;
-    await runImport(importArchives(Array.isArray(sel) ? sel : [sel]));
-  }
-
-  async function pickFolderAndImport() {
-    const sel = await open({ directory: true, multiple: false });
-    if (!sel || typeof sel !== "string") return;
-    await runImport(importFolders([sel], copyMode));
-  }
-
-  // Import en masse (§4.6) : on ouvre le flux analyse → arbitrage → exécution.
-  let bulkParent = $state<string | null>(null);
-  async function pickBulkImport() {
-    const sel = await open({ directory: true, multiple: false });
-    if (sel && typeof sel === "string") bulkParent = sel;
-  }
-  async function onBulkDone(r: ArchiveResult[]) {
-    report = r; // conflits déjà arbitrés dans le flux → pas de dialogue
-    bulkParent = null;
-    await refresh();
-  }
-
-  onMount(() => {
+  // Recharge au montage, puis à chaque import déclenché depuis l'écran dédié
+  // ou le glisser-déposer global (§4.6bis) — `version` sert de simple signal.
+  $effect(() => {
+    importState.version;
     refresh();
-    // Import par glisser-déposer de fichiers sur la fenêtre.
-    const unlistenDrop = getCurrentWebview().onDragDropEvent((event) => {
-      if (event.payload.type === "drop") {
-        const archives = event.payload.paths.filter((p) =>
-          /\.(zip|rar|7z)$/i.test(p),
-        );
-        if (archives.length) runImport(importArchives(archives));
-      }
-    });
-    // Progression de l'import.
-    const unlistenProgress = listen<ImportProgress>("import:progress", (e) => {
-      progress = e.payload;
-    });
-    return () => {
-      unlistenDrop.then((f) => f());
-      unlistenProgress.then((f) => f());
-    };
   });
-
-  function importSummary(r: ArchiveResult[]): string {
-    const n = r.reduce((acc, a) => acc + a.mods.length, 0);
-    const errs = r.filter((a) => a.error).length;
-    return `${n} mod(s) importé(s)${errs ? `, ${errs} archive(s) en erreur` : ""}`;
-  }
 
   const typeLabel = isCar ? "voiture" : "circuit";
 </script>
@@ -353,22 +252,6 @@
   {:else}
   <div class="main">
     <div class="toolbar">
-      <div class="import-group">
-        <button class="btn btn-primary" type="button" onclick={pickAndImport} disabled={importing}>
-          {importing ? "Import…" : "Importer une archive"}
-        </button>
-        <button class="btn" type="button" onclick={pickFolderAndImport} disabled={importing} title="Importer un dossier de mod déjà décompressé (§4.5)">
-          Importer un dossier
-        </button>
-        <button class="btn" type="button" onclick={pickBulkImport} disabled={importing} title="Importer en masse : un dossier parent dont chaque sous-dossier est un mod (§4.6)">
-          Import en masse
-        </button>
-        <div class="copy-toggle" title="Pour l'import de dossier">
-          <button class:on={copyMode} onclick={() => setCopyMode(true)}>Copier</button>
-          <button class:on={!copyMode} onclick={() => setCopyMode(false)}>Déplacer</button>
-        </div>
-      </div>
-
       <div class="search">
         <input class="input" placeholder="Rechercher (nom, marque, tag…)" bind:value={query} />
       </div>
@@ -462,83 +345,11 @@
       </div>
     {/if}
 
-    {#if importing && progress}
-      <div class="progress">
-        <div class="p-label">
-          <span class="mono p-phase">{progress.phase}</span>
-          {progress.archive} — {progress.label}
-          {#if progress.total > 0 && progress.phase === "filing"}
-            <span class="mono">({progress.current}/{progress.total})</span>
-          {/if}
-        </div>
-        <div class="p-bar">
-          <div
-            class="p-fill"
-            style:width={progress.total > 0 ? `${(progress.current / progress.total) * 100}%` : "30%"}
-            class:indeterminate={progress.total === 0}
-          ></div>
-        </div>
-      </div>
-    {/if}
-
-    {#if report}
-      <div class="report">
-        <div class="report-head">
-          <span>{importSummary(report)}</span>
-          <button class="btn-ghost" onclick={() => (report = null)}>✕</button>
-        </div>
-        {#each report as a}
-          {#if a.error}
-            <div class="r-line err">⚠ {a.archive} — {a.error}</div>
-          {/if}
-          {#each a.mods as m}
-            <div class="r-line">
-              <span class="r-out {m.outcome === 'UPDATE_REPLACE' ? 'upd' : m.outcome === 'DUPLICATE' ? 'dup' : 'new'}">
-                {m.outcome === "UPDATE_REPLACE" ? "MAJ" : m.outcome === "DUPLICATE" ? "DÉJÀ PRÉSENT" : "NOUVEAU"}
-              </span>
-              {m.display_name ?? m.id_interne}
-              {#if m.outcome === "DUPLICATE"}
-                <span class="r-conflict">archive identique — non réimporté</span>
-              {/if}
-              {#if m.conflict}
-                <span class="r-conflict">
-                  ressemble à « {m.conflict.existing_name ?? m.conflict.existing_id} » —
-                  les deux ont été conservés
-                </span>
-              {/if}
-            </div>
-          {/each}
-          {@const replaced = (a.shared ?? []).filter((s) => s.disposition === "replaced")}
-          {@const added = (a.shared ?? []).filter((s) => s.disposition === "installed")}
-          {#if added.length}
-            <div class="r-line shared">
-              + {added.length} ressource(s) partagée(s) installée(s) (fonts/drivers, §4.8)
-            </div>
-          {/if}
-          {#each replaced as s}
-            <div class="r-line shared warn">
-              ⚠ {s.kind === "fonts" ? "Font" : "Driver"} « {s.name} » remplacé par une version différente
-            </div>
-          {/each}
-          {#if (a.subs ?? []).length}
-            {@const skins = a.subs.filter((s) => s.sub_type === "SKIN").length}
-            {@const sounds = a.subs.filter((s) => s.sub_type === "SOUND").length}
-            <div class="r-line shared">
-              + {skins ? `${skins} skin(s)` : ""}{skins && sounds ? " · " : ""}{sounds ? `${sounds} son(s)` : ""} rattaché(s) (§12bis)
-            </div>
-          {/if}
-          {#if (a.apps ?? []).length}
-            <div class="r-line shared">+ {a.apps.length} app(s) importée(s) (§12bis)</div>
-          {/if}
-        {/each}
-      </div>
-    {/if}
-
     {#if filtered.length === 0}
       <div class="empty">
         {#if typed.length === 0}
           <p>Aucune {typeLabel} dans la bibliothèque.</p>
-          <p class="hint">Importe une archive (.zip / .rar / .7z) ou glisse-la sur la fenêtre.</p>
+          <p class="hint">Glisse une archive sur la fenêtre, ou utilise l'écran « Importer ».</p>
         {:else}
           <p>Aucun résultat pour ce filtre.</p>
         {/if}
@@ -617,35 +428,6 @@
   {/if}
 </div>
 
-{#if bulkParent}
-  <BulkImport parent={bulkParent} copy={copyMode} onclose={() => (bulkParent = null)} ondone={onBulkDone} />
-{/if}
-
-{#if pendingConflicts.length}
-  {@const c = pendingConflicts[0]}
-  <div class="modal-backdrop">
-    <div class="modal">
-      <h3>Nouvelle version possible</h3>
-      <p>
-        « <b>{c.newName}</b> » ressemble à un mod déjà présent
-        (dossier différent : <span class="mono">{c.oldId}</span> →
-        <span class="mono">{c.newId}</span>). Que faire ?
-      </p>
-      <div class="modal-actions">
-        <button class="btn" type="button" onclick={() => resolve(c, "keep_both")}>
-          Garder les deux
-        </button>
-        <button class="btn btn-primary" type="button" onclick={() => resolve(c, "replace")}>
-          Écraser l'ancienne
-        </button>
-      </div>
-      {#if pendingConflicts.length > 1}
-        <div class="modal-rest">{pendingConflicts.length - 1} autre(s) à traiter</div>
-      {/if}
-    </div>
-  </div>
-{/if}
-
 <style>
   .library {
     display: flex;
@@ -672,29 +454,6 @@
     gap: 10px;
     margin-bottom: 16px;
     flex-wrap: wrap;
-  }
-  .import-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .copy-toggle {
-    display: flex;
-    border: 1px solid var(--line);
-  }
-  .copy-toggle button {
-    background: var(--panel2);
-    color: var(--muted);
-    font-size: 10.5px;
-    padding: 6px 9px;
-    border-right: 1px solid var(--line);
-  }
-  .copy-toggle button:last-child {
-    border-right: none;
-  }
-  .copy-toggle button.on {
-    background: var(--raised);
-    color: var(--rosso-bright);
   }
   .search {
     flex: 1;
@@ -813,93 +572,6 @@
   .clear {
     font-size: 11px;
     margin-left: auto;
-  }
-
-  .progress {
-    margin-bottom: 16px;
-  }
-  .p-label {
-    font-size: 12px;
-    color: var(--txt2);
-    margin-bottom: 6px;
-  }
-  .p-phase {
-    color: var(--rosso-bright);
-    font-size: 10px;
-    text-transform: uppercase;
-    margin-right: 6px;
-  }
-  .p-bar {
-    height: 4px;
-    background: var(--line);
-    overflow: hidden;
-  }
-  .p-fill {
-    height: 100%;
-    background: var(--rosso);
-    transition: width 0.2s;
-  }
-  .p-fill.indeterminate {
-    animation: slide 1s ease-in-out infinite;
-  }
-  @keyframes slide {
-    0% { margin-left: 0; }
-    50% { margin-left: 70%; }
-    100% { margin-left: 0; }
-  }
-
-  .report {
-    border: 1px solid var(--line);
-    background: var(--panel2);
-    padding: 10px 12px;
-    margin-bottom: 16px;
-    font-size: 12px;
-  }
-  .report-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-weight: 600;
-    margin-bottom: 6px;
-  }
-  .r-line {
-    padding: 2px 0;
-    color: var(--txt2);
-  }
-  .r-line.err {
-    color: var(--rosso-bright);
-  }
-  .r-line.shared {
-    color: var(--muted);
-    font-size: 11px;
-    padding-top: 4px;
-  }
-  .r-line.shared.warn {
-    color: var(--yellow);
-  }
-  .r-out {
-    font-size: 9px;
-    letter-spacing: 0.5px;
-    padding: 1px 5px;
-    border: 1px solid var(--line);
-    margin-right: 6px;
-  }
-  .r-out.new {
-    color: var(--green);
-    border-color: var(--green-border);
-  }
-  .r-out.upd {
-    color: var(--yellow);
-    border-color: #4a4426;
-  }
-  .r-out.dup {
-    color: var(--muted);
-    border-color: var(--line);
-  }
-  .r-conflict {
-    color: var(--yellow);
-    margin-left: 6px;
-    font-size: 11px;
   }
 
   .empty {
@@ -1104,44 +776,5 @@
     border-radius: 50%;
     background: var(--green);
     margin-right: 5px;
-  }
-
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 50;
-  }
-  .modal {
-    width: 440px;
-    max-width: 90vw;
-    background: var(--panel);
-    border: 1px solid var(--rosso);
-    padding: 22px 24px;
-  }
-  .modal h3 {
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 12px;
-  }
-  .modal p {
-    font-size: 12.5px;
-    line-height: 1.6;
-    color: var(--txt2);
-    margin-bottom: 18px;
-  }
-  .modal-actions {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-  }
-  .modal-rest {
-    margin-top: 12px;
-    font-size: 11px;
-    color: var(--muted);
-    text-align: right;
   }
 </style>

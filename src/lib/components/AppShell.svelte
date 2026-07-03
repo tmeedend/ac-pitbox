@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import Settings from "./Settings.svelte";
   import Library from "./Library.svelte";
   import RulesEditor from "./RulesEditor.svelte";
@@ -7,8 +8,11 @@
   import Maintenance from "./Maintenance.svelte";
   import Transversal from "./Transversal.svelte";
   import Apps from "./Apps.svelte";
+  import Import from "./Import.svelte";
+  import ImportOverlay from "./ImportOverlay.svelte";
   import { nav } from "$lib/nav.svelte";
   import { previewSrc } from "$lib/library";
+  import { initGlobalDragDrop } from "$lib/importState.svelte";
 
   // Barre latérale unifiée (§6.1ter, maquette pitbox-biblio-session2.html) :
   // bloc SESSION (le duo sélectionné = point d'accès aux bibliothèques) puis
@@ -21,10 +25,15 @@
   ];
   const atelier: NavBtn[] = [
     { id: "rules", label: "Règles" },
+    { id: "import", label: "Importer" },
     { id: "profiles", label: "Profils" },
     { id: "maintenance", label: "Maintenance" },
     { id: "settings", label: "Réglages", full: true },
   ];
+
+  // Glisser-déposer disponible partout (§4.6bis) : un seul listener, monté ici
+  // à la racine, plutôt que dans chaque écran susceptible de recevoir un drop.
+  onMount(() => initGlobalDragDrop());
 
   const carPrev = $derived(previewSrc(nav.sessionCar?.preview ?? null));
   const trackPrev = $derived(previewSrc(nav.sessionTrack?.preview ?? null));
@@ -104,6 +113,8 @@
         <Launch />
       {:else if nav.section === "maintenance"}
         <Maintenance />
+      {:else if nav.section === "import"}
+        <Import />
       {:else if nav.section === "skins"}
         <Transversal subType="SKIN" />
       {:else if nav.section === "sounds"}
@@ -114,6 +125,8 @@
     </main>
   </div>
 </div>
+
+<ImportOverlay />
 
 <style>
   .frame {
