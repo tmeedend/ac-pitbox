@@ -8,26 +8,28 @@
   import Transversal from "./Transversal.svelte";
   import Apps from "./Apps.svelte";
   import { nav } from "$lib/nav.svelte";
+  import { previewSrc } from "$lib/library";
 
-  type NavItem = { id: string; label: string; lot: string; disabled?: boolean };
+  // Barre latérale unifiée (§6.1ter, maquette pitbox-biblio-session2.html) :
+  // bloc SESSION (le duo sélectionné = point d'accès aux bibliothèques) puis
+  // ADD-ONS et ATELIER en deux colonnes.
+  type NavBtn = { id: string; label: string; full?: boolean };
+  const addons: NavBtn[] = [
+    { id: "skins", label: "Skins" },
+    { id: "sounds", label: "Sons" },
+    { id: "apps", label: "Apps", full: true },
+  ];
+  const atelier: NavBtn[] = [
+    { id: "rules", label: "Règles" },
+    { id: "profiles", label: "Profils" },
+    { id: "maintenance", label: "Maintenance" },
+    { id: "settings", label: "Réglages", full: true },
+  ];
 
-  // Bibliothèques séparées par type (§6.1). Skins/Sons/Apps sont prévus au lot
-  // L6 (§12bis) : affichés désactivés pour matérialiser la cible.
-  const libraries: NavItem[] = [
-    { id: "cars", label: "Voitures", lot: "L1" },
-    { id: "tracks", label: "Circuits", lot: "L1" },
-    { id: "skins", label: "Skins", lot: "L6" },
-    { id: "sounds", label: "Sons", lot: "L6" },
-    { id: "apps", label: "Apps", lot: "L6" },
-  ];
-  const tools: NavItem[] = [
-    { id: "profiles", label: "Profils", lot: "L3" },
-    { id: "rules", label: "Règles de tags", lot: "L2" },
-    { id: "race", label: "Lancer une session", lot: "L4" },
-    { id: "maintenance", label: "Maintenance", lot: "L5" },
-    { id: "settings", label: "Réglages", lot: "—" },
-  ];
-  const allItems = [...libraries, ...tools];
+  const carPrev = $derived(previewSrc(nav.sessionCar?.preview ?? null));
+  const trackPrev = $derived(previewSrc(nav.sessionTrack?.preview ?? null));
+
+  const isLibrary = $derived(nav.section === "cars" || nav.section === "tracks");
 </script>
 
 <div class="frame">
@@ -41,34 +43,51 @@
           <div class="brand-sub">AC MOD MANAGER</div>
         </div>
       </div>
-      <nav>
-        <div class="nav-sec">Bibliothèques</div>
-        {#each libraries as item}
-          <button
-            class="nav-item"
-            class:active={nav.section === item.id}
-            class:disabled={item.disabled}
-            disabled={item.disabled}
-            onclick={() => !item.disabled && (nav.section = item.id)}
-          >
-            <span>{item.label}</span>
-            {#if item.disabled}<span class="soon">à venir</span>{/if}
-          </button>
+
+      <!-- SESSION : duo sélectionné, point d'accès aux bibliothèques (§8.6) -->
+      <div class="session">
+        <div class="nsec">Session</div>
+        <button class="slot" class:on={nav.section === "cars"} onclick={() => (nav.section = "cars")} title="Ouvrir la bibliothèque voitures">
+          <div class="slot-img car">
+            {#if carPrev}<img src={carPrev} alt="" />{:else}<span class="slot-ic">🚗</span>{/if}
+            <span class="slot-tag">VOITURE</span>
+            <span class="slot-edit">✎ CHANGER</span>
+          </div>
+          <div class="slot-b">
+            <div class="slot-name">{nav.sessionCar?.name ?? "— aucune"}</div>
+            <div class="slot-meta">{nav.sessionCar?.meta || "cliquer pour choisir"}</div>
+          </div>
+        </button>
+        <button class="slot" class:on={nav.section === "tracks"} onclick={() => (nav.section = "tracks")} title="Ouvrir la bibliothèque circuits">
+          <div class="slot-img track">
+            {#if trackPrev}<img src={trackPrev} alt="" />{:else}<span class="slot-ic">🏁</span>{/if}
+            <span class="slot-tag">CIRCUIT</span>
+            <span class="slot-edit">✎ CHANGER</span>
+          </div>
+          <div class="slot-b">
+            <div class="slot-name">{nav.sessionTrack?.name ?? "— aucun"}</div>
+            <div class="slot-meta">{nav.sessionTrack?.meta || "cliquer pour choisir"}</div>
+          </div>
+        </button>
+        <button class="btn-launch" onclick={() => (nav.section = "race")}>▶ DÉMARRER UNE SESSION</button>
+      </div>
+
+      <div class="nsec">Add-ons</div>
+      <div class="navgrid">
+        {#each addons as b}
+          <button class="nb" class:full={b.full} class:on={nav.section === b.id} onclick={() => (nav.section = b.id)}>{b.label}</button>
         {/each}
-        <div class="nav-sec">Outils</div>
-        {#each tools as item}
-          <button
-            class="nav-item"
-            class:active={nav.section === item.id}
-            onclick={() => (nav.section = item.id)}
-          >
-            <span>{item.label}</span>
-          </button>
+      </div>
+
+      <div class="nsec">Atelier</div>
+      <div class="navgrid">
+        {#each atelier as b}
+          <button class="nb" class:full={b.full} class:on={nav.section === b.id} onclick={() => (nav.section = b.id)}>{b.label}</button>
         {/each}
-      </nav>
+      </div>
     </aside>
 
-    <main class="content" class:fixed={nav.section === "cars" || nav.section === "tracks"}>
+    <main class="content" class:fixed={isLibrary}>
       {#if nav.section === "settings"}
         <Settings />
       {:else if nav.section === "cars"}
@@ -89,12 +108,6 @@
         <Transversal subType="SOUND" />
       {:else if nav.section === "apps"}
         <Apps />
-      {:else}
-        <div class="placeholder">
-          <div class="ph-tag">{allItems.find((n) => n.id === nav.section)?.lot}</div>
-          <h2>{allItems.find((n) => n.id === nav.section)?.label}</h2>
-          <p>Module à venir dans le lot correspondant.</p>
-        </div>
       {/if}
     </main>
   </div>
@@ -117,7 +130,7 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: 180px 1fr;
+    grid-template-columns: 222px 1fr;
   }
   .side {
     background: var(--bg);
@@ -128,12 +141,12 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 16px 14px;
+    padding: 14px 13px;
     border-bottom: 1px solid var(--line);
   }
   .logo {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     background: var(--rosso);
     display: flex;
     align-items: center;
@@ -144,12 +157,12 @@
   .logo span {
     transform: skewX(8deg);
     color: #fff;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     font-style: italic;
   }
   .brand-name {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     letter-spacing: 1.5px;
     font-style: italic;
@@ -157,84 +170,167 @@
   }
   .brand-sub {
     color: var(--rosso);
-    font-size: 7px;
-    letter-spacing: 3px;
+    font-size: 6.5px;
+    letter-spacing: 2.5px;
     margin-top: 3px;
   }
-  .nav-sec {
-    color: var(--faint);
-    font-size: 8.5px;
+
+  /* Titres de section : rouge, mono, séparateur (§6.1ter). */
+  .nsec {
+    color: var(--rosso);
+    font-size: 9px;
     font-weight: 600;
     letter-spacing: 2px;
-    padding: 14px 14px 6px;
+    padding: 14px 13px 8px;
+    font-family: var(--mono);
     text-transform: uppercase;
-  }
-  .nav-item {
-    width: 100%;
     display: flex;
     align-items: center;
-    gap: 9px;
-    padding: 9px 14px;
-    background: transparent;
-    border-left: 3px solid transparent;
-    color: var(--muted);
-    font-size: 11.5px;
+    gap: 8px;
+  }
+  .nsec::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--rosso-border);
+  }
+
+  .session {
+    padding: 0 13px 4px;
+  }
+  .session .nsec {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .slot {
+    display: block;
+    width: 100%;
     text-align: left;
-    transition: background 0.12s;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    margin-bottom: 9px;
+    padding: 0;
   }
-  .nav-item:hover {
-    background: var(--raised);
+  .slot:hover {
+    border-color: var(--rosso-border);
   }
-  .nav-item.active {
+  .slot.on {
+    border-color: var(--rosso);
+  }
+  .slot-img {
+    height: 96px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    border-bottom: 1px solid var(--line);
+    overflow: hidden;
+    background: linear-gradient(135deg, #1a0808, var(--panel));
+  }
+  .slot-img.track {
+    background: linear-gradient(135deg, #0a1a14, var(--panel));
+  }
+  .slot-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .slot-ic {
+    font-size: 34px;
+    opacity: 0.6;
+  }
+  .slot-tag {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    background: rgba(8, 8, 12, 0.75);
+    color: var(--muted);
+    font-size: 7px;
+    letter-spacing: 1.5px;
+    font-family: var(--mono);
+    padding: 2px 6px;
+  }
+  .slot-edit {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    background: rgba(8, 8, 12, 0.8);
+    color: var(--rosso-bright);
+    font-size: 7px;
+    letter-spacing: 1px;
+    font-family: var(--mono);
+    padding: 2px 7px;
+  }
+  .slot-b {
+    padding: 7px 10px;
+  }
+  .slot-name {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--txt);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .slot-meta {
+    color: var(--muted);
+    font-size: 8.5px;
+    font-family: var(--mono);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .btn-launch {
+    width: 100%;
+    height: 40px;
+    background: var(--rosso);
+    color: #fff;
+    font-size: 10.5px;
+    letter-spacing: 1.5px;
+    font-weight: 600;
+    font-family: var(--mono);
+    margin-top: 2px;
+  }
+  .btn-launch:hover {
+    background: var(--rosso-bright);
+  }
+
+  .navgrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin: 0 13px;
+  }
+  .nb {
+    background: var(--bg);
+    color: var(--muted);
+    padding: 9px 10px;
+    text-align: left;
+    font-size: 11px;
+  }
+  .nb:hover {
     background: var(--raised);
-    border-left-color: var(--rosso);
     color: var(--txt);
   }
-  .nav-item.disabled {
-    color: var(--faint);
-    cursor: default;
+  .nb.on {
+    background: var(--raised);
+    color: var(--rosso-bright);
   }
-  .nav-item.disabled:hover {
-    background: transparent;
+  .nb.full {
+    grid-column: 1 / -1;
   }
-  .nav-item .soon {
-    margin-left: auto;
-    color: var(--faint);
-    font-size: 8px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
+
   .content {
     min-height: 0;
     padding: 28px 32px;
     overflow: auto;
   }
-  /* Bibliothèques : hauteur fixe + défilement interne (liste + panneau). Évite
-     la double scrollbar (le défilement est géré dans Library, pas ici). */
+  /* Bibliothèques : hauteur fixe + défilement interne (évite la double scrollbar). */
   .content.fixed {
     padding: 0;
     overflow: hidden;
-  }
-  .placeholder {
-    color: var(--muted);
-    max-width: 460px;
-  }
-  .ph-tag {
-    display: inline-block;
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--rosso-bright);
-    border: 1px solid var(--rosso-border);
-    padding: 2px 7px;
-    margin-bottom: 14px;
-  }
-  .placeholder h2 {
-    font-size: 18px;
-    color: var(--txt);
-    font-weight: 600;
-    margin-bottom: 10px;
-  }
-  .placeholder p {
-    line-height: 1.6;
   }
 </style>

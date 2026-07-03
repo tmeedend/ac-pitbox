@@ -249,6 +249,16 @@ En plus de l'import unitaire (§4.5), l'app accepte un **dossier parent** dont *
 
 > Note : l'import remplit la **bibliothèque** (source de vérité), pas `content/`. L'activation (junction) reste une étape séparée — l'import de dossier ne court-circuite pas le modèle.
 
+### 4.6bis Interface d'import et activation par défaut
+
+**Deux voies d'accès à l'import** (correction : l'implémentation initiale mettait une barre de boutons en haut, seulement sur Voitures/Circuits — jugée peu esthétique et incohérente) :
+- **Glisser-déposer partout** : déposer une archive ou un dossier n'importe où dans l'app lance l'import. Geste rapide, disponible sur toutes les vues (pas seulement Voitures/Circuits).
+- **Écran d'import dédié** : un écran à part (pas une barre en haut) qui présente et **explique chaque option** — import unitaire vs en masse, dossier vs archive, copier/déplacer, récapitulatif d'import en masse. C'est là qu'on contrôle finement, quand on ne se contente pas du drag-drop.
+
+**Choix copier/déplacer — mieux présenté** (correction : deux boutons « Copier »/« Déplacer » surgissant à chaque import de dossier = pénible). À présenter clairement dans l'écran dédié, avec explication de chaque option (et de l'accélération même-disque du déplacement). Un **réglage par défaut** peut être mémorisé pour ne pas reposer la question à chaque fois (ex. « toujours copier »).
+
+**Activation par défaut à l'import** : un mod **importé est activé par défaut** (junction créée immédiatement) — on veut pouvoir le conduire tout de suite, sans étape d'activation manuelle. Lors d'une **mise à jour**, c'est la **nouvelle version** qui devient active (l'ancienne reste disponible pour rollback, §4.4).
+
 ### 4.7 Packs multi-voitures et entités de premier niveau
 
 Un mod peut contenir **plusieurs voitures** (pack) + des ressources communes (fonts, drivers). Décision :
@@ -415,11 +425,27 @@ Pour mémoire, afin d'éviter une erreur de conception récurrente : le champ `c
 
 ## 6. Bibliothèque (UI)
 
-### 6.1 Deux bibliothèques séparées par type
+### 6.1 Bibliothèques Voitures et Circuits (distinctes)
 
-**Voitures et circuits sont deux bibliothèques distinctes, jamais mélangées.** Deux entrées séparées dans la barre latérale (Voitures / Circuits), chacune ouvrant sa propre vue avec ses propres colonnes. Raison : un tableau mixte est condamné au plus petit dénominateur commun (nom, auteur, tags) et perd les attributs spécifiques de chaque type. Cette séparation prépare aussi les entrées Skins/Sons/Apps du lot L6.
+**Voitures et circuits sont deux bibliothèques distinctes, jamais mélangées** : chacune a sa propre vue avec ses propres colonnes. Raison : un tableau mixte est condamné au plus petit dénominateur commun (nom, auteur, tags) et perd les attributs spécifiques de chaque type.
 
-> ⚠️ Écart constaté à corriger : une implémentation regroupant tout sous une seule « Bibliothèque » avec un tableau mixte voitures+circuits est incorrecte. La maquette prévoit deux entrées distinctes.
+> ⚠️ Écart constaté à corriger : une implémentation regroupant tout sous une seule « Bibliothèque » avec un tableau mixte voitures+circuits est incorrecte.
+
+**Accès** : on n'ouvre plus ces bibliothèques via des entrées de menu « Voitures »/« Circuits » séparées, mais via le **bloc Session** de la barre latérale (§6.1ter) — cliquer la preview voiture ouvre la bibliothèque voitures, cliquer la preview circuit ouvre la bibliothèque circuits.
+
+### 6.1ter Barre latérale unifiée (écran principal)
+
+Layout de référence : maquette `pitbox-biblio-session2.html`. Une **colonne latérale unique** regroupe la session et la navigation :
+- **Bloc SESSION en haut** (prend la place des anciennes entrées Voitures/Circuits) : previews du **duo sélectionné** (voiture + circuit), chacune **cliquable pour ouvrir la bibliothèque** correspondante (le bloc Session EST le point d'accès aux bibliothèques). Bouton **« Démarrer une session »** qui ouvre l'écran de réglages dédié à droite (§8.6). Le menu montre *quoi* (sélection courante) ; l'écran dédié gère *comment* (réglages). Pas de paramétrage de session dans le menu.
+- **ADD-ONS** (titre style « Session » : rouge, mono, séparateur) en **deux colonnes** : Skins | Sons, puis Apps, puis **Autres mods** (§6.1bis).
+- **ATELIER** (même style) en deux colonnes : Règles | Importer, puis Réglages (extensible — d'autres outils viendront).
+
+### 6.1bis Type « Autres mods »
+
+Un mod importé qui n'est **ni** voiture, circuit, skin, son ou app reconnu (ex. shaders, configs CSP, mods d'UI, weather patterns, mods de physique globale) n'est plus perdu : il est listé dans une vue **« Autres mods »** (entrée dans ADD-ONS). Cohérent avec la philosophie « ne jamais perdre un mod ».
+- **Activables/désactivables** comme les autres (par junction), même si le type précis est inconnu.
+- **Surcharges & priorité** : ces mods sont souvent des **surcharges** de contenu existant. L'app **enregistre l'intention de priorité** (marquer un mod « autre » comme prioritaire) et **détecte/signale les conflits** de fichiers (« ce mod surcharge des fichiers de tel autre »). Le mod marqué prioritaire est appliqué en dernier → ses fichiers l'emportent.
+  - ⚠️ *Limite assumée* : les junctions n'offrent pas un vrai moteur de superposition ordonné comme le VFS de MO2. On vise, en v1, **priorité notée + détection de conflits**, pas une résolution automatique complète par couches. (Un moteur de priorités type MO2 serait un gros chantier séparé.)
 
 ### 6.2 Deux vues commutables (par bibliothèque)
 
@@ -446,6 +472,23 @@ Deux présentations selon le contexte :
   - *Rangée haute* : **image héros large à gauche** (preview de la voiture en grand, specs natives en surimpression, badge « fichier non modifié ») + **panneau données à droite** (fiche technique en grille, courbe moteur power/torque, **description dépliable** derrière un bouton — jamais affichée en permanence).
   - *Rangée basse, 3 colonnes* : **Skins** (sélection/prévisualisation, étoile = piloté — voir §12bis.2, pas d'activation) | **Distance puis Son moteur** (§6.5 et §12bis.2) | **Tags** (par origine, §5.3) + **Versions** + **Historique**.
   - Un peu de scroll est acceptable : l'objectif est d'exploiter la largeur, pas le zéro-scroll absolu.
+
+### 6.3bis Interactions de sélection
+
+**Clic simple / double-clic** :
+- **1 clic** = **sélection** : affiche le mod dans le panneau de droite ET le définit comme choix de session (voiture ou circuit courant, §8.6).
+- **Double-clic** = ouvre les **détails** (page/fiche complète), où l'on peut en plus choisir le **skin piloté**.
+
+**Skin piloté persistant** : le skin choisi pour une voiture est **mémorisé** (préférence durable de l'utilisateur pour cette voiture), **affiché dans la liste** (pastille/miniature du skin sur la vignette) et rappelé dans le bandeau de session. Il devient une donnée de la voiture, pas un choix éphémère.
+
+**Sélection multiple (Ctrl / Alt)** : plusieurs mods sélectionnés → le panneau de droite bascule en **mode édition groupée** : il n'affiche plus les détails d'un mod mais uniquement les **champs applicables à tous**. Champs d'édition en masse :
+- **Tags** : ajouter / retirer des tags sur toute la sélection.
+- **Activation** : activer / désactiver en masse.
+- **Suppression** : désinstaller en masse.
+- **Favori** : marquer / démarquer en masse.
+- **Catégorie** : assigner le même tag # à tout le groupe (utile après un gros import).
+- **Export** : générer des archives autonomes de la sélection.
+Champs propres à une voiture (specs, skin piloté, version active) ne sont **pas** proposés en masse (aucun sens de leur donner une valeur commune).
 
 ### 6.4 États visuels
 
@@ -532,41 +575,33 @@ Principe : l'utilisateur choisit une **intention** (« Pluie »), l'app la tradu
 
 > **À vérifier** : détection fiable de la stack (Pure/SOL/CSP/vanilla) au démarrage, et correspondance preset → réglages backend. Dépendance du module météo.
 
-### 8.6 Architecture : deux mondes (gestion vs jeu) et flux séquentiel
+### 8.6 Architecture : la bibliothèque EST le sélecteur de session
 
-**Séparation conceptuelle structurante.** L'app a deux mondes distincts, à ne pas mélanger sur un même écran :
-- **Monde GESTION** : bibliothèque, fiches, règles, import. Dense, riche en infos — on y *organise et choisit quoi installer* (état d'esprit « bibliothécaire »).
-- **Monde JEU** : lancer une session. Aéré, visuel, parcours fluide — on y *configure une partie* (état d'esprit « pilote »).
+**Décision d'unification (revient sur le modèle "deux mondes" antérieur).** Il n'y a pas d'écran séparé pour choisir la voiture/le circuit d'une session : **la bibliothèque elle-même est le sélecteur**. La voiture ouverte/sélectionnée dans la bibliothèque voitures = la voiture de la session ; idem pour le circuit. Raison : dupliquer la sélection dans un écran de session distinct recréait deux fois les mêmes listes (doublon repéré à l'usage). La bibliothèque (grille de previews, ou tableau dense au choix) fait déjà très bien ce travail — inutile de la refaire ailleurs.
 
-Pas de doublon entre les deux : la bibliothèque sert à organiser, le flux de session à configurer une partie (il réutilise previews et données de la biblio, mais avec une présentation orientée « je vais rouler »). C'est ce qui corrige l'écran de session initial (sélecteurs compressés, listes de noms bruts) — remplacé par un parcours dédié, pleine largeur, avec l'espace pour les visuels.
+**Mécanique de sélection** :
+- **Ouvrir/cliquer une voiture** dans la bibliothèque la définit comme voiture de session (pas d'action distincte type « sélectionner pour la session » — le simple usage suffit). Idem circuit dans la bibliothèque circuits.
+- Le **skin piloté** se choisit dans la fiche de la voiture (§12bis.2).
 
-**Flux séquentiel à navigation libre** : **Catégorie/plateau → Voiture → Circuit → Réglages → Lancer**, chaque étape sur son propre écran pleine largeur (previews en grand, infos circuit, choix layout + skin…).
+**Bandeau persistant de session** (élément clé) : un bandeau **visible en permanence depuis la bibliothèque** affiche le **duo actuellement sélectionné** — voiture + circuit (avec preview miniature) — plus un accès direct aux réglages/lancement. C'est le fil rouge qui indique toujours « voici ce qui partira au lancement ». Sans lui, l'utilisateur ne saurait plus quel est le choix courant. (À NE PAS confondre avec un historique « dernière voiture de session » : c'est bien la *sélection courante* dans la bibliothèque.)
 
-Principes du flux :
-- **Barre d'étapes cliquable** (pas un tunnel) : on saute à n'importe quelle étape, on revient en arrière librement.
-- **Chaque étape mémorise et affiche son dernier choix** : en revenant, on voit ce qui est déjà sélectionné partout. Permet de changer une seule chose (ex. la voiture) et **relancer immédiatement** sans repasser par toutes les étapes.
-- **Tout a une valeur par défaut** (on peut lancer à tout moment, même sans avoir tout visité). Règle générale : **dernier choix s'il est encore valide, sinon repli sûr.** Validée à chaque ouverture (un choix dont la cible a disparu — voiture désinstallée, circuit supprimé/désactivé — déclenche le repli au lieu de pointer dans le vide).
+**Page « Démarrer une session »** : ne contient **plus aucune sélection de voiture/circuit**. Elle réunit :
+- un **rappel du duo sélectionné** (voiture + circuit + previews) ;
+- les **réglages de la session** (voir §8.4) ;
+- le bouton **Lancer**.
+Pour changer de voiture/circuit, l'utilisateur retourne dans la bibliothèque et en ouvre un autre.
 
-**Valeurs par défaut par étape** :
-| Étape | Défaut |
-|---|---|
-| Catégorie | dernière utilisée, sinon « toutes » (pas de filtre) |
-| Voiture | dernière si encore installée, sinon la première du vivier courant |
-| Circuit | dernier si encore présent, sinon le premier par ordre alphabétique |
-| Type de session | dernier utilisé, sinon Practice (pas d'IA à configurer) |
-| Réglages | derniers réglages du type courant (déjà persistants par type, §8.4) |
+**Réglages selon le type de session** (rappel §8.4 — écart constaté dans l'implémentation initiale à corriger) : les réglages affichés **dépendent du type** (ghost car en Hotlap uniquement ; dégâts/usure/carburant en Course ; etc.), et sont **persistants par type**. L'écran ne doit PAS afficher un bloc d'options fixe identique pour tous les types.
 
-**Entrée contextuelle** : le bouton « Conduire » depuis une fiche (voiture ou circuit) parachute directement dans le flux avec l'élément pré-rempli, au lieu de commencer à l'étape 1. Coexiste avec l'entrée normale (depuis l'étape Catégorie).
-
-**Réglages selon le type de session** (rappel §8.4 — écart constaté dans l'implémentation initiale à corriger) : les réglages affichés à l'étape Réglages **dépendent du type** (ghost car en Hotlap uniquement ; dégâts/usure/carburant en Course ; etc.), et sont **persistants par type**. L'écran ne doit PAS afficher un bloc d'options fixe identique pour tous les types.
-
-**Étape Réglages — contenu** (selon le type) :
+**Réglages — contenu** (selon le type) :
 - *Toujours pertinents* : météo (température implicite), heure.
 - *Course* : grille d'adversaires (plateau cohérent par défaut / libre ; nb IA, force), durée (tours OU temps), dégâts, usure, carburant, + options repliables (départ arrêté/lancé, position, qualif, grip, assists).
 - *Hotlap* : ghost car, + réglages pertinents.
 - **Hors périmètre** (rester simple) : pénalités détaillées, limites de piste/drapeaux, tyre blankets, ballast/restrictor.
 
-**Étape Circuit** : pleine largeur — **image d'aperçu du circuit en fond** (`preview.png`) avec le **tracé du layout sélectionné par-dessus** (`outline.png`/`map.png`), infos (longueur, virages, CSP), choix du **layout** (un circuit a souvent plusieurs layouts, chacun avec son tracé) et du **skin** de circuit. Ne pas se limiter au nom du layout — l'illustration est essentielle.
+**Valeurs par défaut** (si aucune sélection encore faite, ou cible disparue) : voiture = première du vivier ou dernière ouverte si encore installée ; circuit = dernier si présent, sinon premier alphabétique ; type = dernier utilisé sinon Practice ; réglages = derniers du type courant. Validées à chaque ouverture (une cible disparue déclenche le repli).
+
+**Choix du layout et du skin de circuit** : sur la fiche/bibliothèque circuit — **image d'aperçu du circuit en fond** (`preview.png`) avec le **tracé du layout sélectionné par-dessus** (`outline.png`/`map.png`), infos (longueur, virages, CSP). Un circuit a souvent plusieurs layouts, chacun avec son tracé. Ne pas se limiter au nom du layout — l'illustration est essentielle.
 
 ---
 
@@ -713,18 +748,32 @@ Bouton **« Ouvrir dans CM »** : lance `ContentManager.exe` **sans** argument d
 
 ## 12ter. Lot L7 — Source d'origine & extension navigateur (évolution future)
 
-Idée à fort potentiel pour le **moteur d'identité** : capturer l'**URL d'origine** d'un mod.
+Idée pour le **moteur d'identité** : capturer l'**URL d'origine** d'un mod via une extension navigateur.
 
-**Pourquoi c'est puissant** : l'URL de la page d'un mod est une **identité stable**, supérieure au nom de dossier. Quand un auteur publie une mise à jour, le nom de dossier peut changer mais **l'URL de la page reste la même**. Donc :
-- **Résolution de mise à jour quasi parfaite** : un mod téléchargé depuis une URL déjà connue EST une mise à jour de ce mod — plus de match flou (§4.2), l'ambiguïté disparaît. L'URL devient le **signal d'identité prioritaire**, au-dessus de l'empreinte composite quand elle est disponible.
-- **Filtrage par source** : par site (RaceDepartment/OverTake, Patreon…), par auteur.
-- **Fil vers la source** : rouvrir la page pour vérifier une nouvelle version, lire les commentaires.
+### Distinction cruciale : deux fonctions de difficulté très inégale
 
-**Composants** :
-1. **Champ `source_url`** sur le mod (déjà prévu §4.7) — peut aussi être saisi manuellement.
-2. **Extension navigateur** : capture l'URL de la page au moment du téléchargement d'un mod, et la transmet à l'app pour rattachement. Lot à part entière (architecture extension ↔ app à concevoir).
+Le mot « mise à jour » recouvre deux choses à ne PAS confondre :
 
-**Statut** : non v1. L'extension est un sous-projet ; le champ `source_url` peut être introduit avant (saisie manuelle / déduction du nom d'archive) pour préparer le terrain. À détailler ultérieurement.
+**(A) Identité — « est-ce le même mod que ce que j'ai déjà ? »** ✅ Faisable et fiable, toutes sources.
+- L'URL de la page d'un mod est une **identité stable**, supérieure au nom de dossier (qui change quand l'auteur renomme). Un fichier téléchargé depuis une URL déjà connue EST une nouvelle version d'un mod existant → plus de match flou (§4.2). L'URL devient le **signal d'identité prioritaire** quand elle est disponible.
+- Marche pour **toutes** les sources (OverTake, RSS, VRC…), car l'extension capture l'URL au moment du clic « télécharger », même sur une page payante/protégée.
+
+**(B) Détection de mise à jour *disponible* en ligne — « une version plus récente existe-t-elle que je n'ai pas ? »** ❌ **Hors périmètre — abandonné.**
+- Nécessiterait de lire la page du mod et d'y trouver un numéro de version comparable. Aucun standard : chaque site (OverTake, RSS, VRC) affiche la version différemment → il faudrait un **scraper spécifique par site**, fragile (casse à chaque refonte) et **impossible pour les sources fermées** (RSS/VRC : compte payant, page protégée — l'app ne peut pas s'y connecter).
+- Le champ URL natif de l'`ui_car.json` est censé faire ça mais **échoue en pratique**, y compris (surtout) pour les grosses sources.
+- Décision : **on ne promet pas** la détection auto. Ni scraper, ni suivi manuel bâtard (marquer des dates à la main n'apporte rien de plus que la mémoire de l'utilisateur). La vérification d'une nouvelle version reste manuelle, facilitée par le point ci-dessous.
+
+### Périmètre retenu pour L7
+
+1. **Champ `source_url`** sur le mod, rempli par l'extension (ou saisie manuelle).
+2. **Extension navigateur** : capture l'URL de la page au moment du téléchargement, la transmet à l'app pour rattachement. Sous-projet (architecture extension ↔ app à concevoir).
+3. **Identité par URL** (fonction A) : reconnaissance d'un téléchargement comme mise à jour d'un mod existant via URL identique. Signal d'identité prioritaire.
+4. **Bouton « voir la page d'origine »** : accès direct en un clic à la page du mod (grâce à l'URL capturée), pour que l'utilisateur vérifie lui-même l'existence d'une nouvelle version. Modeste mais réaliste, et couvre toutes les sources.
+5. **Filtrage par source** : par site, par auteur.
+
+**Explicitement hors périmètre** : détection automatique de mise à jour disponible (fonction B), scraping de pages, suivi manuel de versions en ligne.
+
+**Statut** : non v1. Le champ `source_url` peut être introduit avant (saisie manuelle) pour préparer le terrain.
 
 ---
 

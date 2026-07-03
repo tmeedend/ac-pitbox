@@ -26,7 +26,7 @@
   } from "$lib/submods";
   import { open, confirm } from "@tauri-apps/plugin-dialog";
   import PowerCurve from "./PowerCurve.svelte";
-  import { nav } from "$lib/nav.svelte";
+  import { nav, pickSession } from "$lib/nav.svelte";
 
   interface Props {
     id: string;
@@ -181,11 +181,17 @@
 
   function drive() {
     if (!detail) return;
-    nav.prefill = {
-      kind: detail.kind,
+    const meta =
+      detail.kind === "Car"
+        ? [detail.brand, detail.category].filter(Boolean).join(" · ")
+        : [detail.category, detail.author].filter(Boolean).join(" · ");
+    pickSession(detail.kind, {
       id: detail.id_interne,
       name: detail.display_name ?? detail.id_interne,
-    };
+      meta,
+      preview: detail.preview,
+      layout: detail.kind === "Track" ? (detail.track?.layouts[0]?.id ?? null) : null,
+    });
     nav.section = "race";
   }
 

@@ -93,6 +93,17 @@ fn run_import(
         .collect()
 }
 
+/// Active par défaut les mods fraîchement importés/mis à jour (§4.6bis) : on veut
+/// pouvoir conduire tout de suite. Best-effort (l'échec — ex. vrai dossier Kunos
+/// homonyme, dossier AC non configuré — n'interrompt pas l'import).
+fn auto_activate(conn: &Connection, cfg: &AppConfig, mods: &[ImportedMod]) {
+    for m in mods {
+        if m.outcome == "IMPORT" || m.outcome == "UPDATE_REPLACE" {
+            let _ = crate::activation::activate(conn, cfg, &m.id_interne, None);
+        }
+    }
+}
+
 fn import_one(
     emit: &ProgressFn,
     conn: &Connection,
@@ -176,6 +187,9 @@ fn import_one(
             }
         }
     }
+
+    // Activation par défaut des mods importés (§4.6bis).
+    auto_activate(conn, cfg, &result.mods);
 
     // Sous-éléments rattachés (skins/sons) : stockage séparé (§12bis.2). Archive
     // → contenu en temp, toujours déplacé.
@@ -279,6 +293,9 @@ fn import_one_folder(
             }
         }
     }
+
+    // Activation par défaut des mods importés (§4.6bis).
+    auto_activate(conn, cfg, &result.mods);
 
     // Sous-éléments rattachés (skins/sons), stockage séparé (§12bis.2).
     if !subs.is_empty() {
@@ -475,6 +492,8 @@ fn exec_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, it: &BulkExecItem
             }
         }
     }
+    // Activation par défaut des mods importés (§4.6bis).
+    auto_activate(conn, cfg, &result.mods);
     // Ressources partagées globales (§4.8).
     if let Some(ac) = &cfg.ac_install_path {
         result.shared = crate::shared::install(ac, dir);

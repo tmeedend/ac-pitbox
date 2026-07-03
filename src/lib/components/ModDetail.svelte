@@ -10,7 +10,7 @@
     type NativeSpecs,
   } from "$lib/library";
   import PowerCurve from "./PowerCurve.svelte";
-  import { nav } from "$lib/nav.svelte";
+  import { nav, pickSession } from "$lib/nav.svelte";
   import { open } from "@tauri-apps/plugin-dialog";
   import { exportMod, type ExportReport } from "$lib/maintenance";
 
@@ -24,11 +24,17 @@
 
   function drive() {
     if (!detail) return;
-    nav.prefill = {
-      kind: detail.kind,
+    const meta =
+      detail.kind === "Car"
+        ? [detail.brand, detail.category].filter(Boolean).join(" · ")
+        : [detail.category, detail.author].filter(Boolean).join(" · ");
+    pickSession(detail.kind, {
       id: detail.id_interne,
       name: detail.display_name ?? detail.id_interne,
-    };
+      meta,
+      preview: detail.preview,
+      layout: detail.kind === "Track" ? (detail.layouts[0] ?? null) : null,
+    });
     nav.section = "race";
   }
 

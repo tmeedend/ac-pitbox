@@ -16,13 +16,7 @@
   import { nav } from "$lib/nav.svelte";
 
   type Step = "category" | "car" | "track" | "settings";
-  const steps: { id: Step; label: string }[] = [
-    { id: "category", label: "Catégorie" },
-    { id: "car", label: "Voiture" },
-    { id: "track", label: "Circuit" },
-    { id: "settings", label: "Réglages" },
-  ];
-  let step = $state<Step>("category");
+  let step = $state<Step>("settings");
 
   let cars = $state<InstalledItem[]>([]);
   let tracks = $state<InstalledItem[]>([]);
@@ -80,21 +74,14 @@
   const currentCar = $derived(cars.find((c) => c.id === setup.car_id));
   const currentTrack = $derived(tracks.find((t) => t.id === setup.track_id));
   const currentWeather = $derived(weathers.find((w) => w.id === selectedIntent));
+  const carDuoSrc = $derived(previewSrc(nav.sessionCar?.preview ?? null));
+  const trackDuoSrc = $derived(previewSrc(nav.sessionTrack?.preview ?? null));
 
   const sessionTypes: { id: SessionType; label: string }[] = [
     { id: "practice", label: "Practice" },
     { id: "hotlap", label: "Hotlap" },
     { id: "race", label: "Course" },
   ];
-
-  function stepSummary(id: Step): string {
-    switch (id) {
-      case "category": return category === "all" ? "Toutes" : category;
-      case "car": return currentCar?.name ?? "—";
-      case "track": return (currentTrack?.name ?? "—") + (setup.track_layout ? ` · ${setup.track_layout}` : "");
-      case "settings": return sessionTypes.find((s) => s.id === setup.session_type)?.label ?? "";
-    }
-  }
 
   // --- Mémorisation de la sélection (§8.6) ---
   interface Selection {
@@ -215,45 +202,37 @@
     ]);
 
     const saved: Partial<Selection> = JSON.parse(localStorage.getItem("pitbox.launchSel") ?? "{}");
-
-    // Catégorie : dernière si encore valide, sinon toutes.
-    category = saved.category && (saved.category === "all" || categories.includes(saved.category)) ? saved.category : "all";
-    // Type de session : dernier, sinon Practice.
     setup.session_type = saved.session_type ?? "practice";
-    // Voiture : dernière si installée, sinon première du vivier.
-    setup.car_id = saved.car_id && cars.some((c) => c.id === saved.car_id) ? saved.car_id : (filteredCars[0]?.id ?? cars[0]?.id ?? "");
-    setup.car_skin = saved.car_skin ?? null;
-    // Circuit : dernier si présent, sinon premier alphabétique.
-    setup.track_id = saved.track_id && tracks.some((t) => t.id === saved.track_id) ? saved.track_id : (tracks[0]?.id ?? "");
-    const tr = tracks.find((t) => t.id === setup.track_id);
-    setup.track_layout = saved.track_layout && tr?.layouts.includes(saved.track_layout) ? saved.track_layout : (tr?.layouts[0] ?? null);
+
+    // La bibliothèque EST le sélecteur (§8.6) : voiture/circuit viennent du duo
+    // de session choisi dans les bibliothèques. On saute directement aux réglages.
+    syncFromSession();
+    step = "settings";
 
     const first = weathers.find((w) => w.available);
     if (first) await selectIntent(first);
     await applyPreset(setup.session_type);
-
-    // Entrée contextuelle « Conduire » : parachute dans le flux.
-    const pf = nav.prefill;
-    if (pf) {
-      if (pf.kind === "Car") {
-        if (!cars.find((c) => c.id === pf.id)) cars = [{ id: pf.id, name: pf.name, layouts: [], preview: null }, ...cars];
-        setup.car_id = pf.id;
-        // Arrivée via « Conduire » : on laisse l'étoile « piloté » fixer le skin.
-        // Reset de lastCar pour forcer la ré-résolution même si c'est la voiture
-        // déjà chargée.
-        setup.car_skin = null;
-        lastCar = "";
-        category = "all";
-      } else {
-        let t = tracks.find((c) => c.id === pf.id);
-        if (!t) { t = { id: pf.id, name: pf.name, layouts: [], preview: null }; tracks = [t, ...tracks]; }
-        setup.track_id = pf.id;
-        setup.track_layout = t.layouts[0] ?? null;
-      }
-      nav.prefill = null;
-      step = "settings"; // déjà pré-rempli, on saute près du lancement
-    }
     ready = true;
+  });
+
+  // Applique le duo de session (§8.6) au setup : voiture, skin piloté, circuit,
+  // layout. Repli sur le 1er installé si aucune sélection.
+  function syncFromSession() {
+    const c = nav.sessionCar;
+    const t = nav.sessionTrack;
+    setup.car_id = c?.id ?? cars[0]?.id ?? "";
+    setup.car_skin = c ? localStorage.getItem(`pitbox.pilotedSkin.${c.id}`) : null;
+    setup.track_id = t?.id ?? tracks[0]?.id ?? "";
+    const tr = tracks.find((x) => x.id === setup.track_id);
+    setup.track_layout =
+      t?.layout && tr?.layouts.includes(t.layout) ? t.layout : (tr?.layouts[0] ?? null);
+  }
+
+  // Resynchronise si le duo change (l'utilisateur ouvre une autre voiture/circuit
+  // dans la bibliothèque puis revient à la session).
+  $effect(() => {
+    void [nav.sessionCar?.id, nav.sessionTrack?.id, nav.sessionTrack?.layout];
+    if (ready) syncFromSession();
   });
 
   function goCategory(cat: string) {
@@ -283,19 +262,25 @@
 </script>
 
 <div class="flow">
-  <!-- Barre d'étapes cliquable + Lancer -->
+  <!-- Rappel du duo sélectionné (§8.6) + Lancer. La sélection se fait dans les
+       bibliothèques, pas ici. -->
   <header class="bar">
-    <div class="steps">
-      {#each steps as s, i}
-        <button class="step" class:on={step === s.id} onclick={() => (step = s.id)}>
-          <span class="num">{i + 1}</span>
-          <span class="s-text">
-            <span class="s-label">{s.label}</span>
-            <span class="s-val">{stepSummary(s.id)}</span>
-          </span>
-        </button>
-        {#if i < steps.length - 1}<span class="sep">›</span>{/if}
-      {/each}
+    <div class="duo">
+      <div class="duo-item">
+        <div class="duo-img">{#if carDuoSrc}<img src={carDuoSrc} alt="" />{:else}<span>🚗</span>{/if}</div>
+        <div class="duo-txt">
+          <div class="duo-k">VOITURE</div>
+          <div class="duo-n">{nav.sessionCar?.name ?? "— aucune"}</div>
+        </div>
+      </div>
+      <span class="duo-plus">+</span>
+      <div class="duo-item">
+        <div class="duo-img">{#if trackDuoSrc}<img src={trackDuoSrc} alt="" />{:else}<span>🏁</span>{/if}</div>
+        <div class="duo-txt">
+          <div class="duo-k">CIRCUIT</div>
+          <div class="duo-n">{nav.sessionTrack?.name ?? "— aucun"}{setup.track_layout ? ` · ${setup.track_layout}` : ""}</div>
+        </div>
+      </div>
     </div>
     <button class="btn btn-primary launch" type="button" onclick={launch} disabled={launching || !setup.car_id || !setup.track_id}>
       {launching ? "Lancement…" : "▶ Lancer"}
@@ -504,66 +489,53 @@
     top: 0;
     z-index: 10;
   }
-  .steps {
+  .duo {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 14px;
     flex: 1;
     min-width: 0;
-    overflow-x: auto;
   }
-  .step {
+  .duo-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    background: transparent;
-    padding: 6px 10px;
-    border: 1px solid transparent;
-    color: var(--muted);
+    gap: 9px;
+    min-width: 0;
   }
-  .step.on {
-    border-color: var(--rosso-border);
-    background: var(--rosso-dim);
-  }
-  .step .num {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--raised);
-    color: var(--txt2);
-    font-size: 10px;
+  .duo-img {
+    width: 64px;
+    height: 40px;
+    flex: none;
+    background: var(--bg);
+    border: 1px solid var(--line);
     display: flex;
     align-items: center;
     justify-content: center;
-    flex: none;
+    overflow: hidden;
   }
-  .step.on .num {
-    background: var(--rosso);
-    color: #fff;
+  .duo-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
-  .s-text {
-    display: flex;
-    flex-direction: column;
-    text-align: left;
-    line-height: 1.2;
+  .duo-txt {
+    min-width: 0;
   }
-  .s-label {
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+  .duo-k {
+    font-size: 8.5px;
+    letter-spacing: 1px;
+    color: var(--faint);
+    font-family: var(--mono);
   }
-  .s-val {
-    font-size: 12px;
+  .duo-n {
+    font-size: 12.5px;
     color: var(--txt);
+    font-weight: 600;
     white-space: nowrap;
-    max-width: 140px;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .step.on .s-val {
-    color: var(--rosso-bright);
-  }
-  .sep {
+  .duo-plus {
     color: var(--faint);
     flex: none;
   }

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pit Box — Colonne session unifiée</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/tabler-icons.min.css" rel="stylesheet">
+<style>
+  :root{
+    --rosso:#d40000; --rosso-bright:#ff5555; --rosso-dim:#1a0606; --rosso-border:#5c1212;
+    --bg:#08080c; --panel:#0d0d12; --panel2:#0a0a0f; --card:#13131a; --raised:#15151c;
+    --line:#1e1e26; --txt:#f2f2f4; --txt2:#cfd2d9; --muted:#86868f; --muted2:#5d6470; --faint:#4a4a55;
+    --green:#5dcaa5; --green-dim:#0a1a14; --green-border:#16382c;
+    --blue:#6a9ec9; --blue-dim:#0c1620; --blue-border:#1d3148;
+    --mono:'SF Mono',ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#050507;color:var(--txt);font-family:var(--sans);font-size:13px;-webkit-font-smoothing:antialiased;padding:14px;}
+  .mono{font-family:var(--mono);}
+  button{font-family:inherit;cursor:pointer;border:none;}
+  .frame{max-width:1320px;margin:0 auto;background:var(--panel);border:1px solid var(--rosso);overflow:hidden;}
+  .topbar{background:var(--rosso);height:3px;}
+  .shell{display:grid;grid-template-columns:250px 1fr;}
+
+  /* colonne latérale unifiée */
+  .side{background:var(--bg);border-right:1px solid var(--line);min-height:680px;display:flex;flex-direction:column;}
+  .brand{display:flex;align-items:center;gap:8px;padding:12px 13px;border-bottom:1px solid var(--line);}
+  .logo{width:24px;height:24px;background:var(--rosso);display:flex;align-items:center;justify-content:center;transform:skewX(-8deg);}
+  .logo i{transform:skewX(8deg);color:#fff;font-size:15px;}
+  .bn{font-size:12px;font-weight:600;letter-spacing:1.5px;font-style:italic;line-height:1;}
+  .bs{color:var(--rosso);font-size:6.5px;letter-spacing:2.5px;margin-top:2px;}
+
+  .nsec{color:var(--rosso);font-size:9px;font-weight:600;letter-spacing:2px;padding:14px 13px 8px;font-family:var(--mono);display:flex;align-items:center;gap:8px;}
+  .nsec::after{content:'';flex:1;height:1px;background:var(--rosso-border);}
+
+  /* bloc session */
+  .session{padding:13px;}
+  .stitle{color:var(--rosso);font-size:9px;letter-spacing:2px;font-family:var(--mono);margin-bottom:2px;display:flex;align-items:center;gap:6px;}
+  .ssub{color:var(--faint);font-size:8px;font-family:var(--mono);margin-bottom:12px;}
+  .slot{border:1px solid var(--line);background:var(--panel);margin-bottom:9px;cursor:pointer;}
+  .slot:hover{border-color:var(--rosso-border);}
+  .slot-img{height:104px;background:linear-gradient(135deg,#1a0808,#0d0d12);display:flex;align-items:center;justify-content:center;position:relative;border-bottom:1px solid var(--line);}
+  .slot-tag{position:absolute;top:6px;left:6px;background:rgba(8,8,12,.75);color:var(--muted);font-size:7px;letter-spacing:1.5px;font-family:var(--mono);padding:2px 6px;}
+  .slot-edit{position:absolute;bottom:6px;right:6px;background:rgba(8,8,12,.8);color:var(--rosso-bright);font-size:7px;letter-spacing:1px;font-family:var(--mono);padding:2px 7px;display:flex;align-items:center;gap:4px;}
+  .slot-b{padding:8px 10px;}
+  .slot-name{font-size:11.5px;font-weight:600;}
+  .slot-meta{color:var(--muted);font-size:8.5px;font-family:var(--mono);margin-top:2px;}
+
+  .sset{display:flex;gap:1px;background:var(--line);border:1px solid var(--line);margin:9px 0;}
+  .sset>div{background:var(--panel);padding:5px 7px;flex:1;text-align:center;}
+  .sset .k{color:var(--faint);font-size:6.5px;letter-spacing:1px;}
+  .sset .v{color:var(--txt2);font-size:8.5px;font-family:var(--mono);margin-top:2px;}
+  .btn-launch{width:100%;height:42px;background:var(--rosso);color:#fff;font-size:11px;letter-spacing:1.5px;font-weight:600;font-family:var(--mono);display:flex;align-items:center;justify-content:center;gap:8px;margin-top:2px;}
+  .btn-settings{width:100%;height:26px;background:var(--raised);color:var(--txt2);border:1px solid var(--line);font-size:8.5px;letter-spacing:1px;font-family:var(--mono);display:flex;align-items:center;justify-content:center;gap:6px;margin-top:6px;}
+
+  /* boutons nav en 2 colonnes */
+  .navgrid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);margin:0 13px;}
+  .nb{background:var(--bg);color:var(--muted);padding:9px 8px;display:flex;align-items:center;gap:7px;cursor:pointer;font-size:10px;}
+  .nb:hover{background:var(--raised);color:var(--txt);}
+  .nb.on{background:var(--raised);color:var(--txt);}
+  .nb i{font-size:14px;}
+  .nb .ct{margin-left:auto;color:var(--faint);font-family:var(--mono);font-size:8.5px;}
+  .nb.full{grid-column:1 / -1;}
+
+  .main{display:flex;flex-direction:column;min-width:0;}
+  .head{padding:11px 15px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;background:var(--panel2);}
+  .head h1{font-size:13px;font-weight:600;letter-spacing:1px;display:flex;align-items:center;gap:8px;}
+  .head h1 i{color:var(--rosso);font-size:16px;}
+  .search{position:relative;flex:1;max-width:300px;}
+  .search input{height:30px;background:var(--bg);border:1px solid var(--line);padding:0 10px 0 30px;color:var(--txt);font-size:10px;letter-spacing:1px;font-family:var(--mono);width:100%;}
+  .search i{position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--faint);}
+  .vtoggle{display:flex;gap:1px;background:var(--line);border:1px solid var(--line);}
+  .vtoggle button{width:30px;height:28px;background:var(--panel);color:var(--muted);display:flex;align-items:center;justify-content:center;}
+  .vtoggle button.on{background:var(--rosso);color:#fff;}
+
+  .grid{padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:12px;align-content:start;}
+  .car{background:var(--card);border:1px solid var(--line);cursor:pointer;position:relative;}
+  .car:hover{border-color:var(--muted2);}
+  .car.selected{border-color:var(--rosso);box-shadow:0 0 0 1px var(--rosso);}
+  .car-img{height:94px;background:linear-gradient(135deg,#160a0a,#0d0d12);display:flex;align-items:center;justify-content:center;position:relative;border-bottom:1px solid var(--line);}
+  .car-b{padding:8px 9px;}
+  .car-name{font-size:10.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .car-meta{color:var(--muted);font-size:8.5px;font-family:var(--mono);margin-top:2px;}
+  .heart{position:absolute;top:6px;right:6px;color:var(--rosso);font-size:14px;}
+  .selbadge{position:absolute;top:6px;left:6px;background:var(--rosso);color:#fff;font-size:7px;letter-spacing:1px;font-family:var(--mono);padding:2px 6px;display:none;}
+  .car.selected .selbadge{display:block;}
+  .cat{position:absolute;bottom:6px;left:6px;background:var(--rosso-dim);color:var(--rosso-bright);font-size:7.5px;font-family:var(--mono);padding:1px 6px;border:1px solid var(--rosso-border);}
+  .detailbtn{position:absolute;bottom:6px;right:6px;background:rgba(8,8,12,.8);color:var(--txt2);font-size:7px;letter-spacing:.5px;font-family:var(--mono);padding:2px 6px;opacity:0;}
+  .car:hover .detailbtn{opacity:1;}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="topbar"></div>
+  <div class="shell">
+    <aside class="side">
+      <div class="brand"><div class="logo"><i class="ti ti-steering-wheel"></i></div><div><div class="bn">PITBOX</div><div class="bs">MOD MANAGER</div></div></div>
+
+      <!-- SESSION prend le haut, avec previews -->
+      <div class="session">
+        <div class="stitle"><i class="ti ti-flag-checkered"></i> SESSION</div>
+        <div class="ssub">sélection courante — prête à lancer</div>
+
+        <div class="slot" title="ouvre la bibliothèque voitures">
+          <div class="slot-img"><i class="ti ti-car" style="font-size:44px;color:var(--rosso);"></i><span class="slot-tag">VOITURE</span><span class="slot-edit"><i class="ti ti-pencil"></i> CHANGER</span></div>
+          <div class="slot-b"><div class="slot-name" id="selCar">Ferrari 488 GT3 Evo</div><div class="slot-meta">#gt3 · skin: AF Corse #51</div></div>
+        </div>
+
+        <div class="slot" title="ouvre la bibliothèque circuits">
+          <div class="slot-img" style="background:linear-gradient(135deg,#0a1a14,#0d0d12);"><i class="ti ti-road" style="font-size:38px;color:var(--green);"></i><span class="slot-tag">CIRCUIT</span><span class="slot-edit"><i class="ti ti-pencil"></i> CHANGER</span></div>
+          <div class="slot-b"><div class="slot-name">Spa-Francorchamps</div><div class="slot-meta">GP · 7.0 km · CSP</div></div>
+        </div>
+
+        <button class="btn-launch"><i class="ti ti-flag-checkered"></i> DÉMARRER UNE SESSION</button>
+      </div>
+
+      <!-- ADD-ONS en 2 colonnes -->
+      <div class="nsec">ADD-ONS</div>
+      <div class="navgrid">
+        <div class="nb"><i class="ti ti-palette"></i> Skins <span class="ct">214</span></div>
+        <div class="nb"><i class="ti ti-volume"></i> Sons <span class="ct">37</span></div>
+        <div class="nb full"><i class="ti ti-apps"></i> Apps <span class="ct">12</span></div>
+      </div>
+
+      <!-- ATELIER en 2 colonnes -->
+      <div class="nsec">ATELIER</div>
+      <div class="navgrid">
+        <div class="nb"><i class="ti ti-adjustments"></i> Règles</div>
+        <div class="nb"><i class="ti ti-download"></i> Importer</div>
+        <div class="nb full"><i class="ti ti-settings"></i> Réglages</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="head">
+        <h1><i class="ti ti-car"></i> VOITURES</h1>
+        <div class="search"><i class="ti ti-search"></i><input placeholder="FILTRER (NOM, MARQUE, TAG...)"></div>
+        <span style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+          <button style="height:28px;padding:0 11px;background:var(--raised);color:var(--txt2);border:1px solid var(--line);font-size:9px;letter-spacing:1px;font-family:var(--mono);display:flex;align-items:center;gap:5px;"><i class="ti ti-filter"></i> FILTRES</button>
+          <button style="height:28px;padding:0 11px;background:var(--raised);color:var(--txt2);border:1px solid var(--line);font-size:9px;letter-spacing:1px;font-family:var(--mono);display:flex;align-items:center;gap:5px;"><i class="ti ti-columns"></i> COLONNES</button>
+          <span class="vtoggle"><button class="on"><i class="ti ti-layout-grid"></i></button><button><i class="ti ti-list"></i></button></span>
+        </span>
+      </div>
+      <div class="grid" id="grid"></div>
+    </main>
+  </div>
+</div>
+
+<script>
+const CARS=[
+  {n:"Ferrari 488 GT3 Evo",m:"#gt3",fav:true,sel:true,c:"#d40000"},
+  {n:"Audi R8 LMS",m:"#gt3",c:"#c0392b"},
+  {n:"Porsche 911 GT3 R",m:"#gt3",fav:true,c:"#d4af37"},
+  {n:"BMW M4 GT3",m:"#gt3",c:"#185fa5"},
+  {n:"Lamborghini Huracán",m:"#gt3",c:"#5dcaa5"},
+  {n:"Mercedes AMG GT3",m:"#gt3",c:"#86868f"},
+  {n:"McLaren 720S GT3",m:"#gt3",c:"#e67e22"},
+  {n:"Aston Martin V8",m:"#gt3",c:"#16a085"},
+  {n:"Nissan GT-R Nismo",m:"#gt3",fav:true,c:"#c0392b"},
+  {n:"Lexus RC F GT3",m:"#gt3",c:"#8e44ad"},
+  {n:"Honda NSX GT3",m:"#gt3",c:"#d40000"},
+  {n:"Bentley Continental",m:"#gt3",c:"#27ae60"},
+];
+document.getElementById('grid').innerHTML=CARS.map((c,i)=>`
+  <div class="car ${c.sel?'selected':''}" onclick="selectCar(${i})">
+    <span class="selbadge">SESSION</span>
+    ${c.fav?'<i class="ti ti-heart-filled heart"></i>':''}
+    <div class="car-img"><i class="ti ti-car" style="font-size:36px;color:${c.c};"></i><span class="cat">${c.m}</span><span class="detailbtn">DÉTAIL ›</span></div>
+    <div class="car-b"><div class="car-name">${c.n}</div><div class="car-meta">FERRARI · 2020</div></div>
+  </div>`).join('');
+function selectCar(i){
+  CARS.forEach((c,j)=>c.sel=j===i);
+  document.querySelectorAll('.car').forEach((el,j)=>el.classList.toggle('selected',j===i));
+  document.getElementById('selCar').textContent=CARS[i].n;
+}
+</script>
+</body>
+</html>

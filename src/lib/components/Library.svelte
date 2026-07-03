@@ -25,7 +25,7 @@
     saveVisible,
     type ColumnDef,
   } from "$lib/columns";
-  import { nav } from "$lib/nav.svelte";
+  import { nav, pickSession } from "$lib/nav.svelte";
 
   // Une bibliothèque par type (§6.1) : ce composant est rendu une fois pour les
   // voitures, une fois pour les circuits. Toute la persistance est suffixée par
@@ -135,6 +135,23 @@
 
   async function refresh() {
     cards = await listLibrary();
+  }
+
+  // La bibliothèque EST le sélecteur (§8.6) : ouvrir une carte la définit comme
+  // choix de session, affiché dans le bloc SESSION de la barre latérale.
+  const sessionId = $derived(isCar ? nav.sessionCar?.id ?? null : nav.sessionTrack?.id ?? null);
+  function select(c: ModCard) {
+    selectedId = c.id_interne;
+    const meta = isCar
+      ? [c.brand, c.category].filter(Boolean).join(" · ")
+      : [c.category, c.author].filter(Boolean).join(" · ");
+    pickSession(kind, {
+      id: c.id_interne,
+      name: c.display_name ?? c.id_interne,
+      meta,
+      preview: c.preview,
+      layout: !isCar ? (c.layouts[0] ?? null) : null,
+    });
   }
 
   // Ouverture demandée depuis une vue transversale (§12bis.3) : on ouvre la
@@ -524,11 +541,12 @@
         {#each filtered as c (c.id_interne)}
           {@const src = previewSrc(c.preview)}
           {@const ol = previewSrc(c.outline)}
-          <button class="card" class:sel={selectedId === c.id_interne} onclick={() => (selectedId = c.id_interne)} ondblclick={() => (fullId = c.id_interne)} title="Double-clic : page détail">
+          <button class="card" class:sel={selectedId === c.id_interne} class:session={sessionId === c.id_interne} onclick={() => select(c)} ondblclick={() => (fullId = c.id_interne)} title="Clic : sélectionne pour la session · double-clic : page détail">
             <div class="thumb">
               {#if src}<img src={src} alt={c.display_name ?? c.id_interne} loading="lazy" />
               {:else}<div class="noprev">{isCar ? "Voiture" : "Circuit"}</div>{/if}
               {#if !isCar && ol}<img class="outline" src={ol} alt="" loading="lazy" />{/if}
+              {#if sessionId === c.id_interne}<span class="sessbadge">SESSION</span>{/if}
               {#if c.active}<span class="dot" title="Actif"></span>{/if}
               {#if c.is_stock}<span class="sbadge" title="Contenu de base Kunos">BASE</span>{/if}
               {#if c.version_count > 1}<span class="vbadge">{c.version_count}</span>{/if}
@@ -561,7 +579,7 @@
           </thead>
           <tbody>
             {#each sorted as c (c.id_interne)}
-              <tr class:sel={selectedId === c.id_interne} onclick={() => (selectedId = c.id_interne)} ondblclick={() => (fullId = c.id_interne)}>
+              <tr class:sel={selectedId === c.id_interne} class:session={sessionId === c.id_interne} onclick={() => select(c)} ondblclick={() => (fullId = c.id_interne)}>
                 {#each visibleColumns as col}
                   <td
                     class:t-name={col.key === "name"}
@@ -906,6 +924,25 @@
   }
   .card.sel {
     border-color: var(--rosso);
+  }
+  .card.session {
+    border-color: var(--rosso);
+    box-shadow: 0 0 0 1px var(--rosso);
+  }
+  .sessbadge {
+    position: absolute;
+    bottom: 5px;
+    left: 5px;
+    background: var(--rosso);
+    color: #fff;
+    font-size: 7px;
+    letter-spacing: 1px;
+    font-family: var(--mono);
+    padding: 1px 5px;
+    z-index: 1;
+  }
+  tbody tr.session {
+    box-shadow: inset 2px 0 0 var(--rosso);
   }
   .thumb {
     position: relative;
