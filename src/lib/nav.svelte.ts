@@ -13,8 +13,14 @@ export interface SessionPick {
   id: string;
   name: string;
   meta: string;
+  /** Voiture : preview du skin choisi ; circuit : photo illustratrice (fond). */
   preview: string | null;
+  /** Circuit : layout choisi. */
   layout: string | null;
+  /** Voiture : id du skin choisi (mémorisé par voiture). */
+  skin: string | null;
+  /** Circuit : tracé à superposer à la photo dans le bloc Session. */
+  outline: string | null;
 }
 
 function load(key: string): SessionPick | null {

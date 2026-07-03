@@ -145,12 +145,19 @@
     const meta = isCar
       ? [c.brand, c.category].filter(Boolean).join(" · ")
       : [c.category, c.author].filter(Boolean).join(" · ");
+    // Restaure les préférences mémorisées de l'entité (skin voiture, layout circuit).
+    const skin = isCar ? localStorage.getItem(`pitbox.skin.${c.id_interne}`) : null;
+    const layout = !isCar
+      ? localStorage.getItem(`pitbox.layout.${c.id_interne}`) ?? c.layouts[0] ?? null
+      : null;
     pickSession(kind, {
       id: c.id_interne,
       name: c.display_name ?? c.id_interne,
       meta,
       preview: c.preview,
-      layout: !isCar ? (c.layouts[0] ?? null) : null,
+      layout,
+      skin,
+      outline: !isCar ? c.outline : null,
     });
   }
 

@@ -28,6 +28,7 @@
 
   const carPrev = $derived(previewSrc(nav.sessionCar?.preview ?? null));
   const trackPrev = $derived(previewSrc(nav.sessionTrack?.preview ?? null));
+  const trackOutline = $derived(previewSrc(nav.sessionTrack?.outline ?? null));
 
   const isLibrary = $derived(nav.section === "cars" || nav.section === "tracks");
 </script>
@@ -61,6 +62,7 @@
         <button class="slot" class:on={nav.section === "tracks"} onclick={() => (nav.section = "tracks")} title="Ouvrir la bibliothèque circuits">
           <div class="slot-img track">
             {#if trackPrev}<img src={trackPrev} alt="" />{:else}<span class="slot-ic">🏁</span>{/if}
+            {#if trackOutline}<img class="slot-outline" src={trackOutline} alt="" />{/if}
             <span class="slot-tag">CIRCUIT</span>
             <span class="slot-edit">✎ CHANGER</span>
           </div>
@@ -234,6 +236,13 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  /* Tracé du layout superposé à la photo du circuit (comme la fiche). */
+  .slot-img img.slot-outline {
+    position: absolute;
+    inset: 0;
+    object-fit: contain;
+    padding: 8px;
   }
   .slot-ic {
     font-size: 34px;

@@ -40,7 +40,6 @@
   let detail = $state<ModDetail | null>(null);
   let skins = $state<SkinItem[]>([]);
   let previewSkin = $state(0);
-  let pilotedSkin = $state<string | null>(null);
   let previewLayout = $state(0);
   let sounds = $state<SubModRow[]>([]);
   let soundBusy = $state(false);
@@ -129,13 +128,19 @@
           siblings = all.filter((c) => c.source_pack === d.source_pack && c.id_interne !== d.id_interne);
         });
       }
+      // Circuit : restaure le layout mémorisé pour cette entité.
+      if (d && !isCar && d.track) {
+        const savedLayout = localStorage.getItem(`pitbox.layout.${current}`);
+        const li = d.track.layouts.findIndex((l) => l.id === savedLayout);
+        previewLayout = li >= 0 ? li : 0;
+      }
     });
     if (isCar) {
-      pilotedSkin = localStorage.getItem(`pitbox.pilotedSkin.${current}`);
+      const savedSkin = localStorage.getItem(`pitbox.skin.${current}`);
       listModSkins(current).then((s) => {
         if (current !== id) return;
         skins = s;
-        const pi = s.findIndex((x) => x.id === pilotedSkin);
+        const pi = s.findIndex((x) => x.id === savedSkin);
         previewSkin = pi >= 0 ? pi : 0;
       });
       loadSounds(current);
@@ -173,25 +178,50 @@
     detail = await getModDetail(id);
   }
 
-  function setPiloted(skinId: string, e: Event) {
-    e.stopPropagation();
-    pilotedSkin = skinId;
-    localStorage.setItem(`pitbox.pilotedSkin.${id}`, skinId);
+  // Sélectionner un skin (§8.6/§12bis.2) : mémorisé par voiture ET poussé dans
+  // le duo de session (visible dans le menu). Remplace l'ancienne « étoile ».
+  function selectSkin(i: number) {
+    previewSkin = i;
+    if (!detail) return;
+    const sk = skins[i];
+    if (sk) localStorage.setItem(`pitbox.skin.${detail.id_interne}`, sk.id);
+    const meta = [detail.brand, sk ? `skin: ${sk.name}` : null].filter(Boolean).join(" · ");
+    pickSession("Car", {
+      id: detail.id_interne,
+      name: detail.display_name ?? detail.id_interne,
+      meta,
+      preview: sk?.preview ?? detail.preview,
+      layout: null,
+      skin: sk?.id ?? null,
+      outline: null,
+    });
+  }
+
+  // Sélectionner un layout de circuit : mémorisé + poussé dans le duo de session
+  // (photo + tracé en surimpression dans le menu).
+  function selectLayout(i: number) {
+    previewLayout = i;
+    if (!detail?.track) return;
+    const l = detail.track.layouts[i];
+    if (l) localStorage.setItem(`pitbox.layout.${detail.id_interne}`, l.id);
+    const meta = [l?.name, detail.author].filter(Boolean).join(" · ");
+    pickSession("Track", {
+      id: detail.id_interne,
+      name: detail.display_name ?? detail.id_interne,
+      meta,
+      preview: l?.preview ?? detail.preview,
+      layout: l?.id ?? null,
+      skin: null,
+      outline: l?.outline ?? detail.outline,
+    });
   }
 
   function drive() {
     if (!detail) return;
-    const meta =
-      detail.kind === "Car"
-        ? [detail.brand, detail.category].filter(Boolean).join(" · ")
-        : [detail.category, detail.author].filter(Boolean).join(" · ");
-    pickSession(detail.kind, {
-      id: detail.id_interne,
-      name: detail.display_name ?? detail.id_interne,
-      meta,
-      preview: detail.preview,
-      layout: detail.kind === "Track" ? (detail.track?.layouts[0]?.id ?? null) : null,
-    });
+    // Fige le duo de session avec la sélection courante (skin ou layout), puis
+    // ouvre la page session.
+    if (isCar) selectSkin(previewSkin);
+    else selectLayout(previewLayout);
     nav.section = "race";
   }
 
@@ -420,10 +450,10 @@
     <!-- RANGÉE BASSE -->
     <div class="row bottom" class:track={!isCar}>
       {#if isCar}
-        <!-- Skins (sélection/prévisualisation + étoile piloté ; pas d'activation, §12bis.2) -->
+        <!-- Skins : le skin sélectionné devient le skin de session (§8.6), mémorisé -->
         <div class="col">
           <div class="lbl">
-            SKINS <span class="lbl-sub">{skins.length} disponible(s) · cliquer pour prévisualiser · ★ = piloté</span>
+            SKINS <span class="lbl-sub">{skins.length} disponible(s) · cliquer = skin de session</span>
           </div>
           {#if skins.length}
             <div class="skins">
@@ -432,27 +462,15 @@
                 <button
                   class="skin"
                   class:preview={i === previewSkin}
-                  class:piloted={sk.id === pilotedSkin}
-                  onclick={() => (previewSkin = i)}
-                  title="Cliquer pour prévisualiser"
+                  onclick={() => selectSkin(i)}
+                  title="Choisir ce skin pour la session"
                 >
                   <div class="skin-img">
                     {#if sp}<img src={sp} alt={sk.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
-                    {#if sk.id === pilotedSkin}<span class="skin-star on" title="Piloté au lancement">★</span>{/if}
-                    {#if i === previewSkin}<span class="skin-apercu mono">APERÇU</span>{/if}
+                    {#if i === previewSkin}<span class="skin-apercu mono">SESSION</span>{/if}
                   </div>
                   <div class="skin-b">
                     <span class="skin-name">{sk.name}</span>
-                    {#if sk.id !== pilotedSkin}
-                      <span
-                        class="skin-star"
-                        role="button"
-                        tabindex="-1"
-                        title="Définir comme piloté"
-                        onclick={(e) => setPiloted(sk.id, e)}
-                        onkeydown={(e) => e.key === "Enter" && setPiloted(sk.id, e)}
-                      >☆</span>
-                    {/if}
                   </div>
                 </button>
               {/each}
@@ -505,16 +523,16 @@
         <!-- Layouts (galerie illustrée par le tracé, comme les skins voiture) -->
         <div class="col">
           <div class="lbl">
-            LAYOUTS <span class="lbl-sub">{d.track?.layouts.length ?? 0} · cliquer pour voir le tracé</span>
+            LAYOUTS <span class="lbl-sub">{d.track?.layouts.length ?? 0} · cliquer = layout de session</span>
           </div>
           {#if d.track && d.track.layouts.length}
             <div class="skins">
               {#each d.track.layouts as l, i (l.id || i)}
                 {@const o = previewSrc(l.outline)}
-                <button class="skin" class:preview={i === previewLayout} onclick={() => (previewLayout = i)} title="Voir ce tracé">
+                <button class="skin" class:preview={i === previewLayout} onclick={() => selectLayout(i)} title="Choisir ce layout pour la session">
                   <div class="skin-img layout-img">
                     {#if o}<img src={o} alt={l.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
-                    {#if i === previewLayout}<span class="skin-apercu mono">APERÇU</span>{/if}
+                    {#if i === previewLayout}<span class="skin-apercu mono">SESSION</span>{/if}
                   </div>
                   <div class="skin-b"><span class="skin-name">{l.name}</span></div>
                 </button>
@@ -1026,17 +1044,6 @@
     color: var(--faint);
     font-size: 16px;
   }
-  .skin-star {
-    position: absolute;
-    top: 3px;
-    right: 4px;
-    font-size: 12px;
-    color: var(--muted2);
-    cursor: pointer;
-  }
-  .skin-star.on {
-    color: var(--rosso);
-  }
   .skin-apercu {
     position: absolute;
     bottom: 3px;
@@ -1058,9 +1065,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     flex: 1;
-  }
-  .skin-b .skin-star {
-    position: static;
   }
 
   .dist {

@@ -137,12 +137,10 @@
       lastCar = setup.car_id;
       listSkins(setup.car_id).then((s) => {
         skins = s;
-        // Skin par défaut : l'étoile « piloté » de la fiche (§12bis.2) si elle
-        // pointe un skin existant, sinon le premier. On ne touche pas à un choix
-        // déjà valide pour cette voiture.
+        // Skin par défaut : celui mémorisé pour la voiture (§8.6), sinon le 1er.
         if (!skins.find((x) => x.id === setup.car_skin)) {
-          const piloted = localStorage.getItem(`pitbox.pilotedSkin.${setup.car_id}`);
-          setup.car_skin = (piloted && skins.some((x) => x.id === piloted) ? piloted : skins[0]?.id) ?? null;
+          const saved = localStorage.getItem(`pitbox.skin.${setup.car_id}`);
+          setup.car_skin = (saved && skins.some((x) => x.id === saved) ? saved : skins[0]?.id) ?? null;
         }
       });
     }
@@ -221,7 +219,8 @@
     const c = nav.sessionCar;
     const t = nav.sessionTrack;
     setup.car_id = c?.id ?? cars[0]?.id ?? "";
-    setup.car_skin = c ? localStorage.getItem(`pitbox.pilotedSkin.${c.id}`) : null;
+    // Skin de session choisi sur la fiche (§8.6), repli sur mémorisé.
+    setup.car_skin = c?.skin ?? (c ? localStorage.getItem(`pitbox.skin.${c.id}`) : null);
     setup.track_id = t?.id ?? tracks[0]?.id ?? "";
     const tr = tracks.find((x) => x.id === setup.track_id);
     setup.track_layout =
@@ -231,7 +230,7 @@
   // Resynchronise si le duo change (l'utilisateur ouvre une autre voiture/circuit
   // dans la bibliothèque puis revient à la session).
   $effect(() => {
-    void [nav.sessionCar?.id, nav.sessionTrack?.id, nav.sessionTrack?.layout];
+    void [nav.sessionCar?.id, nav.sessionCar?.skin, nav.sessionTrack?.id, nav.sessionTrack?.layout];
     if (ready) syncFromSession();
   });
 
