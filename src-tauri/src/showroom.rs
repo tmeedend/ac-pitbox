@@ -17,6 +17,7 @@ use std::process::Command;
 use std::sync::Once;
 use std::time::{Duration, Instant};
 
+use tauri::{AppHandle, Manager};
 use windows::core::{BOOL, PCWSTR};
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows::Win32::Graphics::Gdi::ClientToScreen;
@@ -284,16 +285,25 @@ pub struct ShowroomState(pub std::sync::Mutex<Option<ShowroomHandle>>);
 /// (problème dit "d'espace aérien", confirmé en direct : la fenêtre native
 /// restait invisible bien que correctement reparentée et visible au sens
 /// Win32). La contourner nécessite une **fenêtre overlay séparée**, top-level
-/// mais possédée par `host` (créée/détruite par Pit Box, jamais vue par
-/// l'utilisateur en tant que telle), dans laquelle le showroom est ensuite
-/// intégré. `(x, y, width, height)` sont des pixels physiques relatifs à la
-/// zone cliente de `host`. Attend l'apparition de la fenêtre du showroom
-/// jusqu'à 10s (le temps que le process démarre et initialise DirectX).
-pub fn attach(host: HWND, pid: u32, x: i32, y: i32, width: i32, height: i32) -> Result<isize, String> {
+/// mais possédée par la fenêtre principale (jamais vue par l'utilisateur en
+/// tant que telle), dans laquelle le showroom est ensuite intégré.
+///
+/// Créée sur le **thread principal** de Tauri (`run_on_main_thread`), pas sur
+/// le thread (jetable, recyclé par le pool) qui exécute la commande : Windows
+/// détruit automatiquement les fenêtres d'un thread qui se termine, ce qui
+/// entraînait la disparition de l'overlay — et avec elle, la destruction du
+/// showroom reparenté dedans, provoquant son crash pur et simple (constaté :
+/// fenêtre noire puis disparition totale du process).
+///
+/// `(x, y, width, height)` sont des pixels physiques relatifs à la zone
+/// cliente de la fenêtre principale. Attend l'apparition de la fenêtre du
+/// showroom jusqu'à 10s (le temps que le process démarre et initialise
+/// DirectX) avant de basculer sur le thread principal.
+pub fn attach(app: &AppHandle, pid: u32, x: i32, y: i32, width: i32, height: i32) -> Result<isize, String> {
     let deadline = Instant::now() + Duration::from_secs(10);
-    let target = loop {
+    let target_raw = loop {
         if let Some(h) = find_showroom_window(pid) {
-            break h;
+            break h.0 as isize;
         }
         if Instant::now() >= deadline {
             return Err("fenêtre du showroom introuvable (délai dépassé)".into());
@@ -301,39 +311,54 @@ pub fn attach(host: HWND, pid: u32, x: i32, y: i32, width: i32, height: i32) -> 
         std::thread::sleep(Duration::from_millis(250));
     };
 
-    ensure_overlay_class_registered();
-    let (ox, oy) = client_to_screen_origin(host);
-    let class_name = wstr(OVERLAY_CLASS_NAME);
-    let title = wstr("Pit Box — Aperçu 3D");
-    let overlay = unsafe {
-        CreateWindowExW(
-            WS_EX_TOOLWINDOW,
-            PCWSTR(class_name.as_ptr()),
-            PCWSTR(title.as_ptr()),
-            WS_POPUP | WS_VISIBLE,
-            ox + x,
-            oy + y,
-            width,
-            height,
-            Some(host),
-            None,
-            None,
-            None,
-        )
-    }
-    .map_err(|e| format!("création de la fenêtre overlay : {e}"))?;
+    let (tx, rx) = std::sync::mpsc::channel::<Result<isize, String>>();
+    let app_for_closure = app.clone();
+    app.run_on_main_thread(move || {
+        let app = app_for_closure;
+        let result = (|| -> Result<isize, String> {
+            let win = app.get_webview_window("main").ok_or("fenêtre principale introuvable")?;
+            let host = win.hwnd().map_err(|e| e.to_string())?;
+            let target = HWND(target_raw as *mut _);
 
-    unsafe {
-        let style = GetWindowLongPtrW(target, GWL_STYLE);
-        let new_style = (style & !(WS_POPUP.0 as isize)) | (WS_CHILD.0 as isize);
-        SetWindowLongPtrW(target, GWL_STYLE, new_style);
-        SetParent(target, Some(overlay)).map_err(|e| e.to_string())?;
-        SetWindowPos(target, None, 0, 0, width, height, SWP_NOZORDER | SWP_FRAMECHANGED)
-            .map_err(|e| e.to_string())?;
-        let _ = ShowWindow(overlay, SW_SHOW);
-    }
+            ensure_overlay_class_registered();
+            let (ox, oy) = client_to_screen_origin(host);
+            let class_name = wstr(OVERLAY_CLASS_NAME);
+            let title = wstr("Pit Box — Aperçu 3D");
+            let overlay = unsafe {
+                CreateWindowExW(
+                    WS_EX_TOOLWINDOW,
+                    PCWSTR(class_name.as_ptr()),
+                    PCWSTR(title.as_ptr()),
+                    WS_POPUP | WS_VISIBLE,
+                    ox + x,
+                    oy + y,
+                    width,
+                    height,
+                    Some(host),
+                    None,
+                    None,
+                    None,
+                )
+            }
+            .map_err(|e| format!("création de la fenêtre overlay : {e}"))?;
 
-    Ok(overlay.0 as isize)
+            unsafe {
+                let style = GetWindowLongPtrW(target, GWL_STYLE);
+                let new_style = (style & !(WS_POPUP.0 as isize)) | (WS_CHILD.0 as isize);
+                SetWindowLongPtrW(target, GWL_STYLE, new_style);
+                SetParent(target, Some(overlay)).map_err(|e| e.to_string())?;
+                SetWindowPos(target, None, 0, 0, width, height, SWP_NOZORDER | SWP_FRAMECHANGED)
+                    .map_err(|e| e.to_string())?;
+                let _ = ShowWindow(overlay, SW_SHOW);
+            }
+
+            Ok(overlay.0 as isize)
+        })();
+        let _ = tx.send(result);
+    })
+    .map_err(|e| e.to_string())?;
+
+    rx.recv().map_err(|e| e.to_string())?
 }
 
 /// Repositionne/redimensionne l'overlay (donc le showroom qu'il héberge) —

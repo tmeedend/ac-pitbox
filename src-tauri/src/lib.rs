@@ -323,9 +323,7 @@ fn attach_native_showroom(
         let guard = showroom_state.0.lock().map_err(|e| e.to_string())?;
         guard.as_ref().ok_or("aucun aperçu 3D en cours")?.pid
     };
-    let win = app.get_webview_window("main").ok_or("fenêtre principale introuvable")?;
-    let host = win.hwnd().map_err(|e| e.to_string())?;
-    let overlay = showroom::attach(host, pid, x, y, width, height)?;
+    let overlay = showroom::attach(&app, pid, x, y, width, height)?;
     let mut guard = showroom_state.0.lock().map_err(|e| e.to_string())?;
     if let Some(handle) = guard.as_mut() {
         handle.overlay = Some(overlay);
