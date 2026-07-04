@@ -375,3 +375,49 @@ les plus susceptibles de nécessiter un ajustement après un premier essai :
   statut top-level, ou le contenu pourrait apparaître décalé/mal découpé).
 - Fermeture/réattachement en changeant de voiture pendant qu'un aperçu est
   attaché : géré via un effet Svelte sur `id`, non testé.
+
+### Test réel n°2 (2026-07-04) : fenêtre invisible — "problème d'espace aérien"
+
+Premier essai réel de la Phase B : le process démarre (son entendu, visible
+dans le gestionnaire des tâches), mais **rien ne s'affiche** dans la page.
+Effet de bord noté par l'utilisateur : le clavier atteint quand même le jeu
+en arrière-plan (bruits de portières en tapant) — la fenêtre existe et reçoit
+des événements, elle n'est juste pas peinte à l'écran.
+
+**Diagnostic confirmé en direct** (pas une supposition) : `EnumChildWindows`
+sur la vraie fenêtre Pit Box montre `acShowroomW` bien reparenté (`WS_CHILD`,
+`visible=True`, rect correcte), mais **superposé exactement** par la
+hiérarchie de fenêtres de WebView2 (`WRY_WEBVIEW` → `Chrome_WidgetWin_0/1`
+→ `Chrome_RenderWidgetHostHWND`, sur 2 process différents) qui couvre toute
+la zone cliente. C'est le "problème d'espace aérien" (airspace) : la surface
+composée par accélération GPU de WebView2/Chromium passe systématiquement
+au-dessus de toute fenêtre native sœur, indépendamment de l'ordre Z Win32
+classique. Limitation documentée de l'écosystème CEF/WebView2/Electron, pas
+un bug de positionnement.
+
+**Contournement validé en direct avant d'écrire le code Rust** : prototype
+PowerShell + P/Invoke sur le process resté ouvert — création d'une fenêtre
+"overlay" séparée (classe custom enregistrée via `RegisterClassW`, `WS_POPUP`
+possédée par la fenêtre Pit Box via `CreateWindowExW(..., hWndParent=pitbox)`),
+`acShowroomW` reparenté **dans cet overlay** plutôt que directement dans la
+fenêtre principale. Confirmé fonctionnel côté Win32 (à confirmer visuellement
+par l'utilisateur avec le vrai code).
+
+Implémenté dans `src-tauri/src/showroom.rs` : `ShowroomState` porte
+maintenant `{ pid, overlay: Option<isize> }` ; `attach()` crée l'overlay et y
+reparente la cible ; `reposition()` déplace l'overlay en coordonnées écran
+absolues (translation via `ClientToScreen` sur la fenêtre principale, le
+front continue d'envoyer des coordonnées relatives à la zone cliente) et
+resynchronise la taille de l'enfant ; `close()` détruit l'overlay après avoir
+demandé la fermeture propre du showroom.
+
+**Incident collatéral** : le crash du prototype PowerShell (tué avec
+`Stop-Process -Force`) a laissé `video.ini` bloqué en mode fenêtré (1280×720,
+`FULLSCREEN=0`) — le filet de sécurité au démarrage de l'app n'avait pas
+encore eu l'occasion de tourner (l'app Pit Box n'avait pas redémarré depuis).
+Restauré manuellement. Confirme que le filet de sécurité est utile mais ne
+couvre que le redémarrage de **Pit Box**, pas un test ad hoc externe au
+process — à garder en tête pour la suite des essais.
+
+**Toujours en attente d'un test réel de cette version** (build + clic sur
+Aperçu 3D dans l'app).
