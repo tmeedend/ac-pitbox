@@ -1,6 +1,7 @@
 mod activation;
 mod apps;
 mod archive;
+mod bulk;
 mod cm_stats;
 mod config;
 mod detect;
@@ -342,6 +343,61 @@ fn export_mod(app: AppHandle, db: State<Db>, id: String, dest_dir: String) -> Re
     export::export_mod(&conn, &cfg, &id, std::path::Path::new(&dest_dir))
 }
 
+// --- Édition groupée (§6.3bis) -----------------------------------------------
+
+#[tauri::command]
+fn bulk_set_favorite(db: State<Db>, ids: Vec<String>, favorite: bool) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    bulk::set_favorite(&conn, &ids, favorite)
+}
+
+#[tauri::command]
+fn bulk_set_category(db: State<Db>, ids: Vec<String>, category: Option<String>) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    bulk::set_category(&conn, &ids, category.as_deref())
+}
+
+#[tauri::command]
+fn bulk_add_tag(db: State<Db>, ids: Vec<String>, tag: String) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    bulk::add_tag(&conn, &ids, &tag)
+}
+
+#[tauri::command]
+fn bulk_remove_tag(db: State<Db>, ids: Vec<String>, tag: String) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    bulk::remove_tag(&conn, &ids, &tag)
+}
+
+#[tauri::command]
+fn bulk_activate(app: AppHandle, db: State<Db>, ids: Vec<String>) -> Result<bulk::BulkReport, String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(bulk::activate(&conn, &cfg, &ids))
+}
+
+#[tauri::command]
+fn bulk_deactivate(app: AppHandle, db: State<Db>, ids: Vec<String>) -> Result<bulk::BulkReport, String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(bulk::deactivate(&conn, &cfg, &ids))
+}
+
+/// Supprime en masse (fichiers + junction + overlay pour chacun, §9.3).
+#[tauri::command]
+fn bulk_delete(app: AppHandle, db: State<Db>, ids: Vec<String>) -> Result<bulk::BulkReport, String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(bulk::delete(&conn, &cfg, &ids))
+}
+
+#[tauri::command]
+fn bulk_export(app: AppHandle, db: State<Db>, ids: Vec<String>, dest_dir: String) -> Result<Vec<bulk::BulkExportItem>, String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(bulk::export(&conn, &cfg, &ids, std::path::Path::new(&dest_dir)))
+}
+
 // --- Types de mods étendus (L6 / §12bis) ------------------------------------
 
 /// Indexe le contenu de base Kunos présent dans content/ (§12bis.1).
@@ -513,6 +569,14 @@ pub fn run() {
             remove_orphan_junction,
             delete_pack,
             export_mod,
+            bulk_set_favorite,
+            bulk_set_category,
+            bulk_add_tag,
+            bulk_remove_tag,
+            bulk_activate,
+            bulk_deactivate,
+            bulk_delete,
+            bulk_export,
             index_stock_content,
             list_sub_mods,
             list_subs_by_type,

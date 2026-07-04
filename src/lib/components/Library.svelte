@@ -1,6 +1,7 @@
 <script lang="ts">
   import ModDetail from "./ModDetail.svelte";
   import DetailPage from "./DetailPage.svelte";
+  import BulkEditPanel from "./BulkEditPanel.svelte";
   import {
     listLibrary,
     previewSrc,
@@ -29,6 +30,9 @@
 
   let cards = $state<ModCard[]>([]);
   let selectedId = $state<string | null>(null);
+  // Édition groupée (§6.3bis) : Ctrl/Alt-clic ajoute/retire de la sélection
+  // multiple. Un clic simple retombe toujours en sélection simple.
+  let selectedIds = $state<Set<string>>(new Set());
   // Page détail pleine page (§6.3) : double-clic sur une carte, ou bouton
   // « Agrandir » du panneau latéral.
   let fullId = $state<string | null>(null);
@@ -135,6 +139,23 @@
       skin: sk?.id ?? null,
       outline: !isCar ? (lay?.outline ?? c.outline) : null,
     });
+  }
+
+  // Ctrl/Alt-clic = sélection multiple (§6.3bis) ; clic simple = comportement
+  // normal (sélection de session) et efface toute sélection groupée en cours.
+  function onCardClick(c: ModCard, e: MouseEvent) {
+    if (e.ctrlKey || e.altKey) {
+      e.preventDefault();
+      const next = new Set(selectedIds);
+      if (next.size === 0 && selectedId) next.add(selectedId);
+      if (next.has(c.id_interne)) next.delete(c.id_interne);
+      else next.add(c.id_interne);
+      selectedIds = next;
+      if (next.size === 1) selectedId = [...next][0];
+      return;
+    }
+    selectedIds = new Set();
+    select(c);
   }
 
   // Ouverture demandée depuis une vue transversale (§12bis.3) : on ouvre la
@@ -377,7 +398,7 @@
           {@const prefLayout = !isCar ? getPreferredLayout(c.id_interne) : null}
           {@const src = previewSrc(prefSkin?.preview ?? prefLayout?.preview ?? c.preview)}
           {@const ol = previewSrc(prefLayout?.outline ?? c.outline)}
-          <button class="card" class:sel={selectedId === c.id_interne} class:session={sessionId === c.id_interne} onclick={() => select(c)} ondblclick={() => (fullId = c.id_interne)} title={t("library.cardTooltip")}>
+          <button class="card" class:sel={selectedId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (fullId = c.id_interne)} title={t("library.cardTooltip")}>
             <div class="thumb">
               {#if src}<img src={src} alt={c.display_name ?? c.id_interne} loading="lazy" />
               {:else}<div class="noprev">{isCar ? t("library.typeCar") : t("library.typeTrack")}</div>{/if}
@@ -420,7 +441,7 @@
           </thead>
           <tbody>
             {#each sorted as c (c.id_interne)}
-              <tr class:sel={selectedId === c.id_interne} class:session={sessionId === c.id_interne} onclick={() => select(c)} ondblclick={() => (fullId = c.id_interne)}>
+              <tr class:sel={selectedId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (fullId = c.id_interne)}>
                 {#each visibleColumns as col}
                   <td
                     class:t-name={col.key === "name"}
@@ -445,12 +466,21 @@
     {/if}
   </div>
 
-  <ModDetail
-    id={selectedId}
-    onclose={() => (selectedId = null)}
-    onchange={refresh}
-    onexpand={() => (fullId = selectedId)}
-  />
+  {#if selectedIds.size >= 2}
+    <BulkEditPanel
+      ids={[...selectedIds]}
+      cards={typed.filter((c) => selectedIds.has(c.id_interne))}
+      onclose={() => (selectedIds = new Set())}
+      onchange={refresh}
+    />
+  {:else}
+    <ModDetail
+      id={selectedId}
+      onclose={() => (selectedId = null)}
+      onchange={refresh}
+      onexpand={() => (fullId = selectedId)}
+    />
+  {/if}
   {/if}
 </div>
 
@@ -630,6 +660,10 @@
   .card.sel {
     border-color: var(--rosso);
   }
+  .card.multisel {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 1px var(--blue);
+  }
   .card.session {
     border-color: var(--rosso);
     box-shadow: 0 0 0 1px var(--rosso);
@@ -786,6 +820,10 @@
   }
   tbody tr.sel {
     background: var(--rosso-dim);
+  }
+  tbody tr.multisel {
+    background: var(--blue-dim);
+    box-shadow: inset 2px 0 0 var(--blue);
   }
   .t-name {
     font-weight: 600;
