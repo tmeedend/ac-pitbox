@@ -289,5 +289,33 @@ pistes 1/2 qui ne touchaient à aucun fichier appartenant au jeu.
 **La plus prometteuse des trois.** Contourne complètement les impasses de la
 piste 1 (Content Manager) : process natif séparé, configuration par simple
 fichier INI (pattern déjà maîtrisé côté Pit Box), pas de dépendance à CM.
-Reste à trancher : comment gérer le partage de `video.ini` avec le vrai jeu
-avant de coder quoi que ce soit — voir décision utilisateur à venir.
+
+### Phase A implémentée (2026-07-04)
+
+Décision utilisateur : sauvegarder/restaurer `video.ini` automatiquement.
+Implémenté dans `src-tauri/src/showroom.rs` :
+- `write_showroom_ini_at` écrit `showroom_start.ini` (voiture + skin).
+- `backup_and_force_windowed_at` sauvegarde `video.ini` puis force
+  `FULLSCREEN=0` (seule cette clé est touchée, tout le reste — résolution,
+  refresh, anti-aliasing — reste intact).
+- `restore_video_ini_at` restaure depuis la sauvegarde ; no-op si absente.
+- `open_native_showroom` écrit l'INI, sauvegarde/bascule `video.ini`, lance
+  `acShowroom.exe`, puis restaure `video.ini` dès la fermeture du process
+  (thread qui attend `child.wait()`) — que la fenêtre soit fermée par
+  l'utilisateur ou le process tué.
+- `restore_orphaned_video_ini` est appelé une fois au démarrage de l'app
+  (filet de sécurité si une sauvegarde traîne suite à un crash).
+- Bouton « Aperçu 3D » sur la fiche voiture (`DetailPage.svelte`), ouvre le
+  showroom sur le skin actuellement sélectionné.
+- 3 tests unitaires (écriture INI, transformation `FULLSCREEN`,
+  sauvegarde/restauration en aller-retour).
+
+**Non testé en conditions réelles au moment du commit** — le clic sur le
+bouton n'a délibérément pas été automatisé (lance un vrai process externe et
+modifie un vrai fichier de config du jeu). À valider manuellement.
+
+**Phase B restante (non commencée)** : intégrer réellement la fenêtre du
+showroom dans la page (SetParent + synchro de position/taille avec la zone
+preview), avec un bouton Attacher/Détacher. Nécessitera le crate `windows`
+pour `EnumWindows`/`SetParent`/`SetWindowPos`, et de déterminer le titre de
+fenêtre exact d'`acShowroom.exe` une fois lancé pour la retrouver.
