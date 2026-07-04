@@ -16,7 +16,15 @@
     type ModKind,
     type NativeSpecs,
   } from "$lib/library";
-  import { listModSkins, type SkinItem } from "$lib/launch";
+  import { onDestroy, untrack } from "svelte";
+  import {
+    listModSkins,
+    openNativeShowroom,
+    attachNativeShowroom,
+    repositionNativeShowroom,
+    closeNativeShowroom,
+    type SkinItem,
+  } from "$lib/launch";
   import { exportMod, deletePack, type ExportReport } from "$lib/maintenance";
   import {
     listSubMods,
@@ -114,6 +122,96 @@
       exporting = false;
     }
   }
+
+  // Aperçu 3D natif (acShowroom.exe) intégré à la place de l'image héros.
+  // La fenêtre du showroom est une vraie fenêtre OS (pas du DOM) : on ne peut
+  // que la repositionner par-dessus la zone `.hero`, pas la faire défiler
+  // avec la page — d'où le suivi resize/scroll ci-dessous.
+  let showroomBusy = $state(false);
+  let showroomAttached = $state(false);
+  let heroEl = $state<HTMLDivElement | null>(null);
+
+  function heroRect(): { x: number; y: number; width: number; height: number } | null {
+    if (!heroEl) return null;
+    const r = heroEl.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    return {
+      x: Math.round(r.left * dpr),
+      y: Math.round(r.top * dpr),
+      width: Math.round(r.width * dpr),
+      height: Math.round(r.height * dpr),
+    };
+  }
+
+  function trackShowroomPosition() {
+    const r = heroRect();
+    if (r) repositionNativeShowroom(r.x, r.y, r.width, r.height).catch(() => {});
+  }
+
+  function onWindowChange() {
+    if (showroomAttached) trackShowroomPosition();
+  }
+
+  let resizeObserver: ResizeObserver | null = null;
+
+  async function openShowroom() {
+    if (!detail || showroomBusy) return;
+    showroomBusy = true;
+    actionError = "";
+    try {
+      await openNativeShowroom(detail.id_interne, skins[previewSkin]?.id ?? null);
+      const r = heroRect();
+      if (r) {
+        await attachNativeShowroom(r.x, r.y, r.width, r.height);
+        showroomAttached = true;
+      }
+    } catch (e) {
+      actionError = String(e);
+    } finally {
+      showroomBusy = false;
+    }
+  }
+
+  async function closeShowroom() {
+    showroomAttached = false;
+    try {
+      await closeNativeShowroom();
+    } catch (e) {
+      actionError = String(e);
+    }
+  }
+
+  onDestroy(() => {
+    if (showroomAttached) closeNativeShowroom().catch(() => {});
+  });
+
+  // Ferme le showroom si on change de mod pendant qu'il est attaché (la
+  // fenêtre héritée n'aurait plus de sens sur la nouvelle fiche). `untrack`
+  // est indispensable ici : sans lui, lire `showroomAttached` dans l'effet
+  // le rend aussi dépendant de cette valeur, et l'effet se redéclenchait
+  // (donc fermait le showroom) dès qu'on venait de l'attacher avec succès —
+  // c'était la vraie cause du "ça se ferme tout seul", pas Windows/WebView2.
+  $effect(() => {
+    id;
+    untrack(() => {
+      if (showroomAttached) closeShowroom();
+    });
+  });
+
+  // Suivi resize/scroll : la fenêtre native ne défile pas avec la page, il
+  // faut la repositionner nous-mêmes à chaque changement de mise en page.
+  $effect(() => {
+    if (!heroEl) return;
+    const ro = new ResizeObserver(() => onWindowChange());
+    ro.observe(heroEl);
+    window.addEventListener("resize", onWindowChange);
+    window.addEventListener("scroll", onWindowChange, true);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", onWindowChange);
+      window.removeEventListener("scroll", onWindowChange, true);
+    };
+  });
 
   $effect(() => {
     const current = id;
@@ -370,6 +468,15 @@
             {exporting ? t("detail.exporting") : t("detail.export")}
           </button>
         {/if}
+        {#if isCar}
+          {#if showroomAttached}
+            <button class="btn" type="button" onclick={closeShowroom}>{t("detail.showroomClose")}</button>
+          {:else}
+            <button class="btn" type="button" onclick={openShowroom} disabled={showroomBusy} title={t("detail.showroomTooltip")}>
+              {showroomBusy ? t("detail.showroomLaunching") : t("detail.showroom")}
+            </button>
+          {/if}
+        {/if}
         <button class="btn primary" type="button" onclick={drive}>{t("detail.drive")}</button>
       </div>
     </header>
@@ -386,8 +493,12 @@
 
     <!-- RANGÉE HAUTE : héros + panneau données -->
     <div class="row top" class:track={!isCar}>
-      <div class="hero">
-        {#if heroImg}
+      <div class="hero" bind:this={heroEl}>
+        {#if showroomAttached}
+          <!-- La fenêtre native d'acShowroom.exe est dessinée par l'OS
+               directement sur cette zone de l'écran, par-dessus la page. -->
+          <div class="hero-showroom-slot"></div>
+        {:else if heroImg}
           <img src={heroImg} alt={d.display_name ?? d.id_interne} />
         {:else}
           <div class="hero-icon">{isCar ? "🚗" : "🏁"}</div>
@@ -860,6 +971,10 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  .hero-showroom-slot {
+    width: 100%;
+    height: 100%;
   }
   /* Tracé du layout superposé à la photo du circuit (§6.1). */
   .hero img.hero-outline {

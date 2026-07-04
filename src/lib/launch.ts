@@ -95,3 +95,23 @@ export function launchSession(setup: RaceSetup): Promise<void> {
 export function openContentManager(): Promise<void> {
   return invoke<void>("open_content_manager");
 }
+
+/** Lance l'aperçu 3D natif (acShowroom.exe) ciblé sur une voiture (+ skin optionnel). */
+export function openNativeShowroom(carId: string, skinId?: string | null): Promise<void> {
+  return invoke<void>("open_native_showroom", { carId, skinId: skinId ?? null });
+}
+
+/** Intègre la fenêtre du showroom lancé dans la zone (x, y, width, height) — pixels physiques. */
+export function attachNativeShowroom(x: number, y: number, width: number, height: number): Promise<void> {
+  return invoke<void>("attach_native_showroom", { x, y, width, height });
+}
+
+/** Repositionne/redimensionne le showroom déjà intégré. */
+export function repositionNativeShowroom(x: number, y: number, width: number, height: number): Promise<void> {
+  return invoke<void>("reposition_native_showroom", { x, y, width, height });
+}
+
+/** Ferme proprement le showroom en cours (attaché ou flottant). */
+export function closeNativeShowroom(): Promise<void> {
+  return invoke<void>("close_native_showroom");
+}
