@@ -196,3 +196,98 @@ qui lit un vrai `.kn5` de la bibliothèque et affiche le nombre de
 meshes/matériaux/textures trouvés, sans toucher au rendu. Valide les
 fondations avant d'investir dans l'intégration Three.js. **Non commencé** —
 à reprendre plus tard.
+
+## Piste 3 — `acShowroom.exe` natif (racine de l'install AC), pas Content Manager
+
+Piste proposée par l'utilisateur, **beaucoup plus prometteuse que la piste 1**.
+Vérifié directement sur la machine (install réelle :
+`D:\SteamLibrary\steamapps\common\assettocorsa`).
+
+### Ce qui est confirmé
+
+- **`acShowroom.exe` existe** à la racine de l'install AC, à côté de `acs.exe`
+  et `AssettoCorsa.exe` — un vrai exécutable natif Kunos séparé (17 Mo,
+  DirectX11, moteur de rendu propre avec ses propres classes `ShowroomGUI`,
+  `ShowRoomCameraManager`, `ShowroomSkinManager`, `ShowroomMirrorCamera`…,
+  identifiées via les symboles embarqués dans le binaire).
+- **Configuration par fichier INI, pas par CLI** — exactement le même schéma
+  que `race.ini` (déjà utilisé par Pit Box, voir `launch.rs`). Le fichier
+  `cfg/showroom_start.ini` existe dans `Documents/Assetto Corsa/cfg/` **et**
+  dans le dossier d'install (template par défaut). Contenu réel capturé
+  pendant que le showroom tournait sur la Celica :
+  ```ini
+  [SHOWROOM]
+  CAR=ks_toyota_celica_st185
+  SKIN=00_racing_3
+  ALLOW_SELECT_SKIN=1
+  TRACK=showroom
+  SELECTED_SKIN=1
+  CAR_ID=0
+
+  [PREVIEW_MODE]
+  LOOK_AT=0,0.6,0
+  CUSTOM_CAMERA_POSITION=-0.366574,0.775145,-6.12493
+  USE_CUSTOM_CAMERA=1
+  CUSTOM_CAMERA_ROLL=0
+  CUSTOM_CAMERA_EXPOSURE=94.5
+
+  [SETTINGS]
+  ROTATION_SPEED=1.0
+  CAMERA_DISTANCE=6
+  CAMERA_HEIGHT=1.5
+  CAMERA_FOV=30
+  CAMERA_EXPOSURE=30
+  SUN_ANGLE=-50
+  ...
+  ```
+  `TRACK=showroom` référence une des scènes disponibles dans
+  `content/showroom/` (`showroom`, `beach`, `Hangar`, `industrial`,
+  `studio_white`, chacune avec son `ui_showroom.json`). Écrire ce fichier
+  avant de lancer `acShowroom.exe` (aucun argument requis) devrait suffire à
+  cibler une voiture + skin précis — **exactement le même pattern déjà
+  éprouvé pour `race.ini`**, sans dépendre de Content Manager.
+- Le binaire utilise `CommandLineToArgvW` (accepte des arguments CLI) et logue
+  `checkShowroomINI` — cohérent avec un chargement du fichier INI ci-dessus
+  au démarrage.
+- **Redimensionnement dynamique supporté** : symboles `OnWindowResize` /
+  `OnWindowResizeEvent` présents dans le binaire — suggère que la fenêtre
+  peut être redimensionnée à chaud, utile pour synchroniser la taille avec
+  la zone preview de Pit Box une fois embarquée.
+
+### Le point bloquant : mode fenêtré partagé avec le vrai jeu
+
+Pas de flag CLI dédié trouvé pour forcer le mode fenêtré (`-window`,
+`-windowed`… absents des chaînes du binaire). Les logs internes
+(`"WARNING: Suitable video mode not found, but windowed mode requested..
+continuing"`, `IsFullscreen: %d`, `Windowed: %d`) suggèrent que
+`acShowroom.exe` lit la **même config vidéo que le jeu réel** :
+`Documents/Assetto Corsa/cfg/video.ini`, section `[VIDEO]` :
+```ini
+[VIDEO]
+FULLSCREEN=1
+WIDTH=3840
+HEIGHT=2160
+REFRESH=144
+...
+```
+C'est le fichier qui pilote aussi les vraies séances de conduite (résolution,
+taux de rafraîchissement, anti-aliasing…) — **on ne peut pas se contenter de
+le modifier en dur** sans risquer de casser l'expérience de jeu réelle si
+Pit Box plante avant de restaurer la valeur d'origine.
+
+**Approche à valider avant d'implémenter** : sauvegarder `video.ini`,
+basculer temporairement `FULLSCREEN=0` (+ une résolution raisonnable pour
+l'aperçu) juste avant de lancer `acShowroom.exe`, puis restaurer le fichier
+d'origine dès la fermeture du process (et prévoir une restauration défensive
+au démarrage de Pit Box si une sauvegarde orpheline traîne suite à un crash).
+Risque non nul sur un fichier qui ne concerne pas que la fonctionnalité
+d'aperçu — nécessite un accord explicite avant de coder, contrairement aux
+pistes 1/2 qui ne touchaient à aucun fichier appartenant au jeu.
+
+### Verdict piste 3
+
+**La plus prometteuse des trois.** Contourne complètement les impasses de la
+piste 1 (Content Manager) : process natif séparé, configuration par simple
+fichier INI (pattern déjà maîtrisé côté Pit Box), pas de dépendance à CM.
+Reste à trancher : comment gérer le partage de `video.ini` avec le vrai jeu
+avant de coder quoi que ce soit — voir décision utilisateur à venir.
