@@ -16,7 +16,7 @@
     type ModKind,
     type NativeSpecs,
   } from "$lib/library";
-  import { listModSkins, type SkinItem } from "$lib/launch";
+  import { listModSkins, openNativeShowroom, type SkinItem } from "$lib/launch";
   import { exportMod, deletePack, type ExportReport } from "$lib/maintenance";
   import {
     listSubMods,
@@ -112,6 +112,21 @@
       actionError = String(e);
     } finally {
       exporting = false;
+    }
+  }
+
+  let showroomBusy = $state(false);
+
+  async function openShowroom() {
+    if (!detail || showroomBusy) return;
+    showroomBusy = true;
+    actionError = "";
+    try {
+      await openNativeShowroom(detail.id_interne, skins[previewSkin]?.id ?? null);
+    } catch (e) {
+      actionError = String(e);
+    } finally {
+      showroomBusy = false;
     }
   }
 
@@ -368,6 +383,11 @@
         {#if !d.is_stock}
           <button class="btn" type="button" onclick={doExport} disabled={exporting} title={t("detail.exportTooltip")}>
             {exporting ? t("detail.exporting") : t("detail.export")}
+          </button>
+        {/if}
+        {#if isCar}
+          <button class="btn" type="button" onclick={openShowroom} disabled={showroomBusy} title={t("detail.showroomTooltip")}>
+            {showroomBusy ? t("detail.showroomLaunching") : t("detail.showroom")}
           </button>
         {/if}
         <button class="btn primary" type="button" onclick={drive}>{t("detail.drive")}</button>

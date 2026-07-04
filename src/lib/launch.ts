@@ -95,3 +95,8 @@ export function launchSession(setup: RaceSetup): Promise<void> {
 export function openContentManager(): Promise<void> {
   return invoke<void>("open_content_manager");
 }
+
+/** Lance l'aperçu 3D natif (acShowroom.exe) ciblé sur une voiture (+ skin optionnel). */
+export function openNativeShowroom(carId: string, skinId?: string | null): Promise<void> {
+  return invoke<void>("open_native_showroom", { carId, skinId: skinId ?? null });
+}

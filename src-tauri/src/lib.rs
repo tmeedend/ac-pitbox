@@ -19,6 +19,7 @@ mod overlay;
 mod profiles;
 mod rules;
 mod shared;
+mod showroom;
 mod stock;
 mod submods;
 mod uijson;
@@ -288,6 +289,14 @@ fn open_content_manager(app: AppHandle) -> Result<(), String> {
     launch::open_content_manager(&config::load(&app))
 }
 
+/// Lance l'aperçu 3D natif (`acShowroom.exe`, distinct de Content Manager)
+/// ciblé sur une voiture (+ skin optionnel). Bascule temporairement
+/// `video.ini` en fenêtré, restauré automatiquement à la fermeture.
+#[tauri::command]
+fn open_native_showroom(app: AppHandle, car_id: String, skin_id: Option<String>) -> Result<(), String> {
+    showroom::open_native_showroom(&config::load(&app), &car_id, skin_id.as_deref())
+}
+
 // --- Maintenance & export (L5) ----------------------------------------------
 
 /// Analyse mods cassés + junctions orphelines, sans rien supprimer (§9.3).
@@ -468,6 +477,11 @@ pub fn run() {
             let db_path = app.path().app_config_dir()?.join("overlay.sqlite");
             let conn = overlay::open(&db_path)?;
 
+            // Filet de sécurité (§8.7bis) : restaure video.ini si une
+            // sauvegarde traîne suite à une fermeture anormale d'une session
+            // d'aperçu 3D natif précédente (process tué, crash…).
+            showroom::restore_orphaned_video_ini();
+
             // Premier démarrage (ou contenu jamais indexé) : scan auto du
             // contenu de base Kunos, pour que les skins/sons puissent s'y
             // rattacher tout de suite (§12bis.1). Best-effort.
@@ -507,6 +521,7 @@ pub fn run() {
             weather_temp,
             launch_session,
             open_content_manager,
+            open_native_showroom,
             maintenance_scan,
             reindex_library,
             delete_broken_mod,
