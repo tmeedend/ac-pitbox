@@ -529,3 +529,26 @@ bugs Win32 réels et utiles à corriger, mais aucune n'expliquait le
 symptôme observé — le bug était ailleurs depuis le début. Ne pas supposer
 que la couche la plus "exotique" (Win32/WebView2) est forcément en cause
 quand un effet Svelte ordinaire peut suffire à tout expliquer.
+
+## Statut (2026-07-04) : fonctionnel, confirmé par l'utilisateur
+
+L'aperçu 3D natif marche de bout en bout : bouton "Aperçu 3D" sur la fiche
+voiture → `acShowroom.exe` lancé, ciblé sur la bonne voiture/skin, intégré
+directement dans la zone héros à la place de l'image, sans barre de titre,
+sans dépendance à Content Manager. `video.ini` sauvegardé/restauré
+proprement autour de la session.
+
+**Outil de diagnostic conservé et committé** : `tools/showroom-embed-test/`
+(reparenting Win32 hors Tauri/WebView2, modes `--overlay` et
+`--steal-focus`, config machine en dur dans `main.rs` — à adapter si le
+dossier d'install AC change). Utile pour toute future évolution de ce
+système sans repasser par un cycle de rebuild complet de l'app à chaque
+essai.
+
+**Améliorations envisagées, non détaillées pour l'instant** (l'utilisateur
+a mentionné avoir des idées, à reprendre plus tard) — pistes déjà visibles
+dans le code actuel qui pourraient en faire partie : choix de la scène
+showroom (`TRACK=` actuellement fixé à `showroom`, alors que
+`content/showroom/` propose aussi `beach`, `Hangar`, `industrial`,
+`studio_white`), réglages caméra/rotation exposés à l'utilisateur plutôt que
+codés en dur, et éventuellement appliquer le même principe aux circuits.
