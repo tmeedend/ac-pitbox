@@ -15,25 +15,28 @@
   import { previewSrc } from "$lib/library";
   import { initGlobalDragDrop } from "$lib/importState.svelte";
   import { openContentManager } from "$lib/launch";
+  import { t, setLocale } from "$lib/i18n/index.svelte";
+  import { setZoom } from "$lib/zoom.svelte";
+  import { getConfig } from "$lib/config";
 
-  // Barre latérale unifiée (§6.1ter, maquette pitbox-biblio-session2.html) :
-  // bloc SESSION (le duo sélectionné = point d'accès aux bibliothèques) puis
+  // Barre latérale unifiée (maquette pitbox-biblio-session2.html) : bloc
+  // SESSION (le duo sélectionné = point d'accès aux bibliothèques) puis
   // ADD-ONS et ATELIER en deux colonnes.
-  type NavBtn = { id: string; label: string; full?: boolean; action?: boolean };
+  type NavBtn = { id: string; labelKey: string; full?: boolean; action?: boolean };
   const addons: NavBtn[] = [
-    { id: "skins", label: "Skins" },
-    { id: "sounds", label: "Sons" },
-    { id: "others", label: "Autres mods", full: true },
-    { id: "apps", label: "Apps", full: true },
+    { id: "skins", labelKey: "nav.skins" },
+    { id: "sounds", labelKey: "nav.sounds" },
+    { id: "others", labelKey: "nav.others", full: true },
+    { id: "apps", labelKey: "nav.apps", full: true },
   ];
   const atelier: NavBtn[] = [
-    { id: "rules", label: "Règles" },
-    { id: "import", label: "Importer" },
-    { id: "profiles", label: "Profils" },
-    { id: "maintenance", label: "Maintenance" },
-    // Action directe (§12bis.5), pas un écran : n'affecte jamais nav.section.
-    { id: "opencm", label: "Ouvrir CM", action: true },
-    { id: "settings", label: "Réglages", full: true },
+    { id: "rules", labelKey: "nav.rules" },
+    { id: "import", labelKey: "nav.import" },
+    { id: "profiles", labelKey: "nav.profiles" },
+    { id: "maintenance", labelKey: "nav.maintenance" },
+    // Action directe, pas un écran : n'affecte jamais nav.section.
+    { id: "opencm", labelKey: "nav.openCm", action: true },
+    { id: "settings", labelKey: "nav.settings", full: true },
   ];
 
   async function handleAtelierClick(b: NavBtn) {
@@ -50,9 +53,17 @@
     nav.section = b.id;
   }
 
-  // Glisser-déposer disponible partout (§4.6bis) : un seul listener, monté ici
-  // à la racine, plutôt que dans chaque écran susceptible de recevoir un drop.
+  // Glisser-déposer disponible partout : un seul listener, monté ici à la
+  // racine, plutôt que dans chaque écran susceptible de recevoir un drop.
   onMount(() => initGlobalDragDrop());
+
+  // Langue forcée par l'utilisateur (Réglages), sinon langue système (déjà
+  // appliquée par défaut par le module i18n). Zoom d'interface, idem.
+  onMount(async () => {
+    const cfg = await getConfig();
+    if (cfg.prefs.language) setLocale(cfg.prefs.language);
+    setZoom(cfg.prefs.ui_zoom);
+  });
 
   const carPrev = $derived(previewSrc(nav.sessionCar?.preview ?? null));
   const trackPrev = $derived(previewSrc(nav.sessionTrack?.preview ?? null));
@@ -80,24 +91,24 @@
         </div>
       </div>
 
-      <!-- SESSION : duo sélectionné, point d'accès aux bibliothèques (§8.6) -->
+      <!-- SESSION : duo sélectionné, point d'accès aux bibliothèques -->
       <div class="session">
-        <div class="nsec">Session</div>
+        <div class="nsec">{t("nav.session")}</div>
         <button
           class="slot"
           class:on={nav.section === "cars"}
           onclick={() => (nav.section = "cars")}
           ondblclick={() => openSessionDetail("cars", nav.sessionCar?.id)}
-          title="Clic : bibliothèque voitures · double-clic : fiche détail"
+          title={t("session.carTooltip")}
         >
           <div class="slot-img car">
             {#if carPrev}<img src={carPrev} alt="" />{:else}<span class="slot-ic">🚗</span>{/if}
-            <span class="slot-tag">VOITURE</span>
-            <span class="slot-edit">✎ CHANGER</span>
+            <span class="slot-tag">{t("session.carTag")}</span>
+            <span class="slot-edit">{t("session.change")}</span>
           </div>
           <div class="slot-b">
-            <div class="slot-name">{nav.sessionCar?.name ?? "— aucune"}</div>
-            <div class="slot-meta">{nav.sessionCar?.meta || "cliquer pour choisir"}</div>
+            <div class="slot-name">{nav.sessionCar?.name ?? t("session.noCar")}</div>
+            <div class="slot-meta">{nav.sessionCar?.meta || t("session.clickToChoose")}</div>
           </div>
         </button>
         <button
@@ -105,33 +116,33 @@
           class:on={nav.section === "tracks"}
           onclick={() => (nav.section = "tracks")}
           ondblclick={() => openSessionDetail("tracks", nav.sessionTrack?.id)}
-          title="Clic : bibliothèque circuits · double-clic : fiche détail"
+          title={t("session.trackTooltip")}
         >
           <div class="slot-img track">
             {#if trackPrev}<img src={trackPrev} alt="" />{:else}<span class="slot-ic">🏁</span>{/if}
             {#if trackOutline}<img class="slot-outline" src={trackOutline} alt="" />{/if}
-            <span class="slot-tag">CIRCUIT</span>
-            <span class="slot-edit">✎ CHANGER</span>
+            <span class="slot-tag">{t("session.trackTag")}</span>
+            <span class="slot-edit">{t("session.change")}</span>
           </div>
           <div class="slot-b">
-            <div class="slot-name">{nav.sessionTrack?.name ?? "— aucun"}</div>
-            <div class="slot-meta">{nav.sessionTrack?.meta || "cliquer pour choisir"}</div>
+            <div class="slot-name">{nav.sessionTrack?.name ?? t("session.noTrack")}</div>
+            <div class="slot-meta">{nav.sessionTrack?.meta || t("session.clickToChoose")}</div>
           </div>
         </button>
-        <button class="btn-launch" onclick={() => (nav.section = "race")}>▶ DÉMARRER UNE SESSION</button>
+        <button class="btn-launch" onclick={() => (nav.section = "race")}>{t("session.start")}</button>
       </div>
 
-      <div class="nsec">Add-ons</div>
+      <div class="nsec">{t("nav.addons")}</div>
       <div class="navgrid">
         {#each addons as b}
-          <button class="nb" class:full={b.full} class:on={nav.section === b.id} onclick={() => (nav.section = b.id)}>{b.label}</button>
+          <button class="nb" class:full={b.full} class:on={nav.section === b.id} onclick={() => (nav.section = b.id)}>{t(b.labelKey)}</button>
         {/each}
       </div>
 
-      <div class="nsec">Atelier</div>
+      <div class="nsec">{t("nav.atelier")}</div>
       <div class="navgrid">
         {#each atelier as b}
-          <button class="nb" class:full={b.full} class:on={!b.action && nav.section === b.id} onclick={() => handleAtelierClick(b)}>{b.label}</button>
+          <button class="nb" class:full={b.full} class:on={!b.action && nav.section === b.id} onclick={() => handleAtelierClick(b)}>{t(b.labelKey)}</button>
         {/each}
       </div>
     </aside>

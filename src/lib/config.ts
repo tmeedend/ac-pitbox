@@ -6,6 +6,10 @@ export interface Prefs {
   tracking_panel_open: boolean;
   library_view: "gallery" | "table";
   default_cm_preset: string | null;
+  /** Langue forcée ("fr", "en"…) ; `null` = langue système. */
+  language: string | null;
+  /** Niveau de zoom de l'interface, en % (ex. 125) ; `null` = 100. */
+  ui_zoom: number | null;
 }
 
 export interface AppConfig {
@@ -48,6 +52,8 @@ export function emptyConfig(): AppConfig {
       tracking_panel_open: true,
       library_view: "gallery",
       default_cm_preset: null,
+      language: null,
+      ui_zoom: null,
     },
   };
 }

@@ -18,6 +18,7 @@
   import { nav, pickSession } from "$lib/nav.svelte";
   import { importState } from "$lib/importState.svelte";
   import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
+  import { t } from "$lib/i18n/index.svelte";
 
   // Une bibliothèque par type (§6.1) : ce composant est rendu une fois pour les
   // voitures, une fois pour les circuits. Toute la persistance est suffixée par
@@ -245,7 +246,6 @@
     refresh();
   });
 
-  const typeLabel = isCar ? "voiture" : "circuit";
 </script>
 
 <div class="library">
@@ -262,18 +262,18 @@
   <div class="main">
     <div class="toolbar">
       <div class="search">
-        <input class="input" placeholder="Rechercher (nom, marque, tag…)" bind:value={query} />
+        <input class="input" placeholder={t("library.searchPlaceholder")} bind:value={query} />
       </div>
 
       <span class="count-pill mono">{filtered.length}</span>
 
       <button class="btn filter-btn" class:active={activeFilterCount > 0} type="button" onclick={() => (showFilters = !showFilters)}>
-        Filtres{#if activeFilterCount > 0}<span class="fc">{activeFilterCount}</span>{/if}
+        {t("library.filters")}{#if activeFilterCount > 0}<span class="fc">{activeFilterCount}</span>{/if}
       </button>
 
       {#if view === "table"}
         <div class="columns-wrap">
-          <button class="btn" type="button" onclick={() => (showColumns = !showColumns)}>Colonnes</button>
+          <button class="btn" type="button" onclick={() => (showColumns = !showColumns)}>{t("library.columns")}</button>
           {#if showColumns}
             <div class="columns-menu">
               {#each columns as col}
@@ -284,7 +284,7 @@
                     disabled={col.fixed}
                     onchange={() => toggleColumn(col.key)}
                   />
-                  <span>{col.label}</span>
+                  <span>{t(col.labelKey)}</span>
                 </label>
               {/each}
             </div>
@@ -293,70 +293,70 @@
       {/if}
 
       <div class="seg view">
-        <button class:on={view === "gallery"} onclick={() => setView("gallery")} title="Galerie">▦</button>
-        <button class:on={view === "table"} onclick={() => setView("table")} title="Tableau">≣</button>
+        <button class:on={view === "gallery"} onclick={() => setView("gallery")} title={t("library.galleryView")}>▦</button>
+        <button class:on={view === "table"} onclick={() => setView("table")} title={t("library.tableView")}>≣</button>
       </div>
     </div>
 
     {#if showFilters}
       <div class="filters">
         <label>
-          <span>État</span>
+          <span>{t("library.filterState")}</span>
           <select class="input" bind:value={stateFilter}>
-            <option value="all">Tous</option>
-            <option value="active">Actif</option>
-            <option value="inactive">Inactif</option>
+            <option value="all">{t("common.all")}</option>
+            <option value="active">{t("common.active")}</option>
+            <option value="inactive">{t("common.inactive")}</option>
           </select>
         </label>
         <label>
-          <span>Auteur</span>
+          <span>{t("library.filterAuthor")}</span>
           <select class="input" bind:value={authorFilter}>
-            <option value="all">Tous</option>
+            <option value="all">{t("common.all")}</option>
             {#each authors as a}<option value={a}>{a}</option>{/each}
           </select>
         </label>
         <label>
-          <span>Pays</span>
+          <span>{t("library.filterCountry")}</span>
           <select class="input" bind:value={countryFilter}>
-            <option value="all">Tous</option>
+            <option value="all">{t("common.all")}</option>
             {#each countries as c}<option value={c}>{c}</option>{/each}
           </select>
         </label>
         {#if isCar}
           <label>
-            <span>Catégorie</span>
+            <span>{t("library.filterCategory")}</span>
             <select class="input" bind:value={categoryFilter}>
-              <option value="all">Toutes</option>
+              <option value="all">{t("common.allFem")}</option>
               {#each categories as cat}<option value={cat}>{cat}</option>{/each}
             </select>
           </label>
           <label>
-            <span>Classe</span>
+            <span>{t("library.filterClass")}</span>
             <select class="input" bind:value={classFilter}>
-              <option value="all">Toutes</option>
+              <option value="all">{t("common.allFem")}</option>
               <option value="race">race</option>
               <option value="street">street</option>
             </select>
           </label>
           <label>
-            <span>Année min</span>
+            <span>{t("library.yearMin")}</span>
             <input class="input" type="number" placeholder="—" bind:value={yearMin} />
           </label>
           <label>
-            <span>Année max</span>
+            <span>{t("library.yearMax")}</span>
             <input class="input" type="number" placeholder="—" bind:value={yearMax} />
           </label>
         {/if}
         <label class="fav-check">
           <input type="checkbox" bind:checked={favOnly} />
-          <span>Favoris</span>
+          <span>{t("library.favorites")}</span>
         </label>
-        <label class="fav-check" title="0 km côté CM ET jamais lancé par l'app (§6.5)">
+        <label class="fav-check" title={t("library.neverTriedTooltip")}>
           <input type="checkbox" bind:checked={neverTried} />
-          <span>Jamais essayé</span>
+          <span>{t("library.neverTried")}</span>
         </label>
         {#if activeFilterCount > 0}
-          <button class="btn-ghost clear" type="button" onclick={clearFilters}>Réinitialiser</button>
+          <button class="btn-ghost clear" type="button" onclick={clearFilters}>{t("common.reset")}</button>
         {/if}
       </div>
     {/if}
@@ -364,10 +364,10 @@
     {#if filtered.length === 0}
       <div class="empty">
         {#if typed.length === 0}
-          <p>Aucune {typeLabel} dans la bibliothèque.</p>
-          <p class="hint">Glisse une archive sur la fenêtre, ou utilise l'écran « Importer ».</p>
+          <p>{isCar ? t("library.emptyCars") : t("library.emptyTracks")}</p>
+          <p class="hint">{t("library.emptyHint")}</p>
         {:else}
-          <p>Aucun résultat pour ce filtre.</p>
+          <p>{t("library.noResults")}</p>
         {/if}
       </div>
     {:else if view === "gallery"}
@@ -377,23 +377,23 @@
           {@const prefLayout = !isCar ? getPreferredLayout(c.id_interne) : null}
           {@const src = previewSrc(prefSkin?.preview ?? prefLayout?.preview ?? c.preview)}
           {@const ol = previewSrc(prefLayout?.outline ?? c.outline)}
-          <button class="card" class:sel={selectedId === c.id_interne} class:session={sessionId === c.id_interne} onclick={() => select(c)} ondblclick={() => (fullId = c.id_interne)} title="Clic : sélectionne pour la session · double-clic : page détail">
+          <button class="card" class:sel={selectedId === c.id_interne} class:session={sessionId === c.id_interne} onclick={() => select(c)} ondblclick={() => (fullId = c.id_interne)} title={t("library.cardTooltip")}>
             <div class="thumb">
               {#if src}<img src={src} alt={c.display_name ?? c.id_interne} loading="lazy" />
-              {:else}<div class="noprev">{isCar ? "Voiture" : "Circuit"}</div>{/if}
+              {:else}<div class="noprev">{isCar ? t("library.typeCar") : t("library.typeTrack")}</div>{/if}
               {#if !isCar && ol}<img class="outline" src={ol} alt="" loading="lazy" />{/if}
-              {#if sessionId === c.id_interne}<span class="sessbadge">SESSION</span>{/if}
+              {#if sessionId === c.id_interne}<span class="sessbadge">{t("library.sessionBadge")}</span>{/if}
               {#if c.is_stock}
-                <span class="sbadge" title="Contenu de base Kunos">BASE</span>
+                <span class="sbadge" title={t("library.stockTooltip")}>{t("library.baseBadge")}</span>
               {:else}
-                <span class="dot" class:active={c.active} title={c.active ? "Actif" : "Inactif"}></span>
+                <span class="dot" class:active={c.active} title={c.active ? t("common.active") : t("common.inactive")}></span>
               {/if}
               <span
                 class="card-fav"
                 class:on={c.is_favorite}
                 role="button"
                 tabindex="-1"
-                title="Favori"
+                title={t("common.favorite")}
                 onclick={(e) => toggleFav(c, e)}
                 onkeydown={(e) => e.key === "Enter" && toggleFav(c, e)}
               >{c.is_favorite ? "♥" : "♡"}</span>
@@ -413,7 +413,7 @@
             <tr>
               {#each visibleColumns as col}
                 <th class:sortable={col.sortable} onclick={() => col.sortable && toggleSort(col.key)}>
-                  {col.label}{#if sortKey === col.key}<span class="arrow">{sortDir === 1 ? "▲" : "▼"}</span>{/if}
+                  {t(col.labelKey)}{#if sortKey === col.key}<span class="arrow">{sortDir === 1 ? "▲" : "▼"}</span>{/if}
                 </th>
               {/each}
             </tr>
@@ -428,7 +428,7 @@
                     class:t-tags={col.key === "tags"}
                   >
                     {#if col.key === "active"}
-                      {#if c.active}<span class="on-dot"></span>actif{:else}—{/if}
+                      {#if c.active}<span class="on-dot"></span>{t("common.active").toLowerCase()}{:else}—{/if}
                     {:else if col.key === "brand"}
                       {#if c.badge}<img class="brand-badge" src={previewSrc(c.badge)} alt="" loading="lazy" />{/if}
                       {col.value(c)}

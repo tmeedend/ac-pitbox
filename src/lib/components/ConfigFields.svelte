@@ -1,6 +1,7 @@
 <script lang="ts">
   import PathField from "./PathField.svelte";
   import type { AppConfig, ConfigValidation } from "$lib/config";
+  import { t } from "$lib/i18n/index.svelte";
 
   interface Props {
     config: AppConfig;
@@ -11,11 +12,11 @@
 </script>
 
 <PathField
-  label="Installation Assetto Corsa"
+  label={t("pathfield.acInstall")}
   kind="dir"
   bind:value={config.ac_install_path}
   placeholder="…\steamapps\common\assettocorsa"
-  hint="Doit contenir un dossier content/."
+  hint={t("pathfield.acInstallHint")}
   check={validation?.ac_install}
 />
 
@@ -23,27 +24,27 @@
 {#if validation && (!validation.content_dir.ok || !validation.content_writable.ok)}
   <div class="subchecks">
     {#if !validation.content_dir.ok}
-      <div class="sub err">{validation.content_dir.message}</div>
+      <div class="sub err">{t(validation.content_dir.message)}</div>
     {/if}
     {#if validation.content_dir.ok && !validation.content_writable.ok}
-      <div class="sub err">{validation.content_writable.message}</div>
+      <div class="sub err">{t(validation.content_writable.message)}</div>
     {/if}
   </div>
 {/if}
 
 <PathField
-  label="Bibliothèque (source de vérité, ~300 Go)"
+  label={t("pathfield.library")}
   kind="dir"
   bind:value={config.library_path}
   placeholder="ex. D:\AC-Library"
-  hint="Dossier de travail hors du jeu. Créé s'il n'existe pas encore."
+  hint={t("pathfield.libraryHint")}
   check={validation?.library}
 />
 
 <PathField
-  label="Content Manager"
+  label={t("pathfield.contentManager")}
   kind="file"
-  filterName="Exécutable"
+  filterName={t("pathfield.executable")}
   filterExt={["exe"]}
   bind:value={config.content_manager_exe}
   placeholder="…\Content Manager.exe"
@@ -53,7 +54,7 @@
 <PathField
   label="7-Zip"
   kind="file"
-  filterName="Exécutable"
+  filterName={t("pathfield.executable")}
   filterExt={["exe"]}
   bind:value={config.sevenzip_exe}
   placeholder="…\7-Zip\7z.exe"
@@ -61,22 +62,22 @@
 />
 
 <div class="optional-block">
-  <div class="opt-head">Optionnel — requis seulement pour l'export autonome (acd.bms)</div>
+  <div class="opt-head">{t("pathfield.optionalBlockHint")}</div>
   <PathField
     label="QuickBMS"
     kind="file"
     optional
-    filterName="Exécutable"
+    filterName={t("pathfield.executable")}
     filterExt={["exe"]}
     bind:value={config.quickbms_exe}
     placeholder="…\quickbms.exe"
     check={validation?.quickbms}
   />
   <PathField
-    label="Script acd.bms"
+    label={t("pathfield.acdScript")}
     kind="file"
     optional
-    filterName="Script BMS"
+    filterName={t("pathfield.bmsScript")}
     filterExt={["bms"]}
     bind:value={config.acd_bms_script}
     placeholder="…\acd.bms"

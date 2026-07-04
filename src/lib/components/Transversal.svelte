@@ -14,6 +14,7 @@
   import { listLibrary, type ModCard } from "$lib/library";
   import { nav } from "$lib/nav.svelte";
   import { confirm } from "@tauri-apps/plugin-dialog";
+  import { t } from "$lib/i18n/index.svelte";
 
   // "SKIN" | "SOUND"
   let { subType }: { subType: "SKIN" | "SOUND" } = $props();
@@ -33,7 +34,7 @@
     // La vue Skins couvre skins de voitures (SKIN) et de circuits (TRACK_SKIN, §12bis.2).
     const types = isSound ? ["SOUND"] : ["SKIN", "TRACK_SKIN"];
     const [lists, lib] = await Promise.all([
-      Promise.all(types.map((t) => listSubsByType(t))),
+      Promise.all(types.map((ty) => listSubsByType(ty))),
       listLibrary(),
     ]);
     subs = lists.flat();
@@ -76,9 +77,9 @@
   }
 
   async function remove(s: SubModRow) {
-    const label = isSound ? "ce son" : "ce skin";
-    const ok = await confirm(`Supprimer ${label} « ${s.name} » ? Les fichiers et la projection seront retirés.`, {
-      title: "Supprimer",
+    const msg = t(isSound ? "transversal.confirmDeleteSound" : "transversal.confirmDeleteSkin", { name: s.name });
+    const ok = await confirm(msg, {
+      title: t("common.delete"),
       kind: "warning",
     });
     if (!ok) return;
@@ -98,22 +99,20 @@
 <div class="trans">
   <header class="head">
     <div>
-      <h2>{isSound ? "Sons" : "Skins"}</h2>
+      <h2>{isSound ? t("nav.sounds") : t("nav.skins")}</h2>
       <p class="sub">
-        {isSound
-          ? "Tous les mods de son importés, rattachés à leur voiture (§12bis.3). Le son est exclusif : un seul actif par voiture."
-          : "Tous les skins importés, rattachés à leur voiture (§12bis.3). Stockés à part, projetés dans la voiture."}
+        {isSound ? t("transversal.soundSubtitle") : t("transversal.skinSubtitle")}
       </p>
     </div>
-    <input class="input search" placeholder="Rechercher (nom, voiture, source…)" bind:value={query} />
+    <input class="input search" placeholder={t("transversal.searchPlaceholder")} bind:value={query} />
   </header>
 
   {#if error}<div class="err">{error}</div>{/if}
 
   {#if subs.length === 0}
     <div class="empty">
-      <p>Aucun {isSound ? "son" : "skin"} importé.</p>
-      <p class="hint">Importe un pack via l'import général — il se rattache automatiquement à la bonne voiture.</p>
+      <p>{isSound ? t("transversal.emptySound") : t("transversal.emptySkin")}</p>
+      <p class="hint">{t("transversal.emptyHint")}</p>
     </div>
   {:else}
     <div class="count mono">{filtered.length} / {subs.length}</div>
@@ -122,18 +121,18 @@
         <li class:active={s.is_active}>
           <div class="l-main">
             <span class="s-name">{s.name}</span>
-            <button class="parent" type="button" onclick={() => openParent(s.parent_id)} title="Ouvrir la fiche">
+            <button class="parent" type="button" onclick={() => openParent(s.parent_id)} title={t("detail.openSheetTooltip")}>
               → {parentName(s.parent_id)}
             </button>
             {#if s.source_archive}<span class="src mono">{s.source_archive}</span>{/if}
           </div>
           {#if isSound}
-            {#if s.is_active}<span class="badge on">actif</span>{/if}
+            {#if s.is_active}<span class="badge on">{t("common.active").toLowerCase()}</span>{/if}
             <button class="btn" type="button" onclick={() => toggleSound(s)} disabled={busy === s.id}>
-              {busy === s.id ? "…" : s.is_active ? "Restaurer l'origine" : "Activer"}
+              {busy === s.id ? t("common.working") : s.is_active ? t("transversal.restoreOriginal") : t("common.activate")}
             </button>
           {/if}
-          <button class="btn del" type="button" title="Supprimer" onclick={() => remove(s)} disabled={busy === s.id}>✕</button>
+          <button class="btn del" type="button" title={t("common.delete")} onclick={() => remove(s)} disabled={busy === s.id}>✕</button>
         </li>
       {/each}
     </ul>

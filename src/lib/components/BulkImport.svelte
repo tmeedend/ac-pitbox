@@ -7,6 +7,7 @@
     type BulkEntry,
     type BulkExecItem,
   } from "$lib/library";
+  import { t } from "$lib/i18n/index.svelte";
 
   interface Props {
     parent: string;
@@ -88,49 +89,52 @@
     }
   }
 
-  const statusLabel: Record<string, string> = {
-    new: "Nouveau",
-    update: "Mise à jour",
-    duplicate: "Doublon",
-    ambiguous: "Ambigu",
-  };
+  function statusLabel(status: string): string {
+    switch (status) {
+      case "new": return t("bulkImport.statusNew");
+      case "update": return t("bulkImport.statusUpdate");
+      case "duplicate": return t("bulkImport.statusDuplicate");
+      case "ambiguous": return t("bulkImport.statusAmbiguous");
+      default: return status;
+    }
+  }
 </script>
 
 <div class="backdrop">
   <div class="modal">
     <header>
       <div>
-        <h2>Import en masse</h2>
+        <h2>{t("import.massTitle")}</h2>
         <div class="sub mono">{parentName}</div>
       </div>
       <button class="btn-ghost close" type="button" onclick={onclose}>✕</button>
     </header>
 
     {#if loading}
-      <div class="state">Analyse du dossier…</div>
+      <div class="state">{t("bulkImport.analyzing")}</div>
     {:else if error && !entries.length}
       <div class="err">{error}</div>
     {:else}
       <!-- Récapitulatif -->
       <div class="counts">
-        <span class="ct new">{counts.new} nouveau(x)</span>
-        <span class="ct upd">{counts.update} màj</span>
-        <span class="ct dup">{counts.duplicate} doublon(s)</span>
-        <span class="ct amb">{counts.ambiguous} ambigu(s)</span>
-        <span class="ct ign">{counts.ignored} ignoré(s)</span>
+        <span class="ct new">{t("bulkImport.countNew", { count: counts.new })}</span>
+        <span class="ct upd">{t("bulkImport.countUpdate", { count: counts.update })}</span>
+        <span class="ct dup">{t("bulkImport.countDuplicate", { count: counts.duplicate })}</span>
+        <span class="ct amb">{t("bulkImport.countAmbiguous", { count: counts.ambiguous })}</span>
+        <span class="ct ign">{t("bulkImport.countIgnored", { count: counts.ignored })}</span>
       </div>
 
       <!-- Arbitrage groupé -->
       <div class="controls">
         <label class="chk">
           <input type="checkbox" bind:checked={skipDuplicates} />
-          <span>Ignorer les doublons</span>
+          <span>{t("bulkImport.skipDuplicates")}</span>
         </label>
         {#if ambiguousMods.length}
           <div class="amb-actions">
-            <span class="amb-lbl">Cas ambigus :</span>
-            <button class="btn-sm" type="button" onclick={() => setAllAmbiguous("keep_both")}>Tout garder</button>
-            <button class="btn-sm" type="button" onclick={() => setAllAmbiguous("replace")}>Tout écraser</button>
+            <span class="amb-lbl">{t("bulkImport.ambiguousLabel")}</span>
+            <button class="btn-sm" type="button" onclick={() => setAllAmbiguous("keep_both")}>{t("bulkImport.keepAll")}</button>
+            <button class="btn-sm" type="button" onclick={() => setAllAmbiguous("replace")}>{t("bulkImport.replaceAll")}</button>
           </div>
         {/if}
       </div>
@@ -141,18 +145,18 @@
           <div class="entry" class:ignored={e.ignored}>
             <div class="e-name">{e.subfolder}</div>
             {#if e.ignored}
-              <span class="badge ign">ignoré — pas de mod AC</span>
+              <span class="badge ign">{t("bulkImport.ignoredBadge")}</span>
             {:else}
               <div class="e-mods">
                 {#each e.mods as m (m.id)}
                   <div class="mod">
-                    <span class="badge {m.status}">{statusLabel[m.status]}</span>
+                    <span class="badge {m.status}">{statusLabel(m.status)}</span>
                     <span class="m-name">{m.name ?? m.id}</span>
                     {#if m.status === "ambiguous"}
                       <span class="m-conflict">≈ {m.existing_name ?? m.existing_id}</span>
                       <span class="seg-mini">
-                        <button class:on={(decisions[m.id] ?? "keep_both") === "keep_both"} onclick={() => (decisions[m.id] = "keep_both")}>Garder les 2</button>
-                        <button class:on={decisions[m.id] === "replace"} onclick={() => (decisions[m.id] = "replace")}>Écraser</button>
+                        <button class:on={(decisions[m.id] ?? "keep_both") === "keep_both"} onclick={() => (decisions[m.id] = "keep_both")}>{t("bulkImport.keepBoth")}</button>
+                        <button class:on={decisions[m.id] === "replace"} onclick={() => (decisions[m.id] = "replace")}>{t("bulkImport.replace")}</button>
                       </span>
                     {/if}
                   </div>
@@ -166,11 +170,11 @@
       {#if error}<div class="err">{error}</div>{/if}
 
       <footer>
-        <span class="mode mono">{copy ? "Copier" : "Déplacer"}</span>
+        <span class="mode mono">{copy ? t("import.copy") : t("import.move")}</span>
         <div class="f-actions">
-          <button class="btn" type="button" onclick={onclose} disabled={running}>Annuler</button>
+          <button class="btn" type="button" onclick={onclose} disabled={running}>{t("common.cancel")}</button>
           <button class="btn btn-primary" type="button" onclick={execute} disabled={running || toImport === 0}>
-            {running ? "Import en cours…" : `Importer ${toImport} mod(s)`}
+            {running ? t("bulkImport.importing") : t("bulkImport.importButton", { count: toImport })}
           </button>
         </div>
       </footer>

@@ -12,6 +12,7 @@
     pickAndImportFolder,
     reportBulkDone,
   } from "$lib/importState.svelte";
+  import { t } from "$lib/i18n/index.svelte";
 
   let bulkParent = $state<string | null>(null);
   async function pickBulkImport() {
@@ -22,75 +23,54 @@
 
 <div class="import-screen">
   <header class="head">
-    <h2>Importer</h2>
+    <h2>{t("nav.import")}</h2>
     <p class="sub">
-      Ajoute des mods à la bibliothèque. Un mod importé (ou mis à jour) est
-      <b>activé tout de suite</b> — pas d'étape séparée pour pouvoir le
-      conduire.
+      {t("import.subtitlePrefix")}<b>{t("import.subtitleBold")}</b>{t("import.subtitleSuffix")}
     </p>
   </header>
 
   <section class="cards">
     <div class="card">
-      <h3>Une archive</h3>
-      <p class="hint">
-        Le cas courant : un fichier <span class="mono">.zip</span>,
-        <span class="mono">.rar</span> ou <span class="mono">.7z</span>
-        téléchargé tel quel. L'app l'extrait, détecte le type (voiture, circuit,
-        skin, son…) et le range dans la bibliothèque.
-      </p>
+      <h3>{t("import.archiveTitle")}</h3>
+      <p class="hint">{t("import.archiveHint")}</p>
       <button class="btn btn-primary" type="button" onclick={pickAndImportArchive} disabled={importState.importing}>
-        {importState.importing ? "Import…" : "Choisir une archive…"}
+        {importState.importing ? t("import.importing") : t("import.chooseArchive")}
       </button>
     </div>
 
     <div class="card">
-      <h3>Un dossier déjà décompressé</h3>
-      <p class="hint">
-        Pour un mod que tu as déjà extrait toi-même, sans repasser par
-        l'archive d'origine.
-      </p>
+      <h3>{t("import.folderTitle")}</h3>
+      <p class="hint">{t("import.folderHint")}</p>
       <div class="copy-choice">
-        <span class="cc-label">À l'import :</span>
+        <span class="cc-label">{t("import.copyChoiceLabel")}</span>
         <div class="copy-toggle">
-          <button class:on={importState.copyMode} onclick={() => setCopyMode(true)}>Copier</button>
-          <button class:on={!importState.copyMode} onclick={() => setCopyMode(false)}>Déplacer</button>
+          <button class:on={importState.copyMode} onclick={() => setCopyMode(true)}>{t("import.copy")}</button>
+          <button class:on={!importState.copyMode} onclick={() => setCopyMode(false)}>{t("import.move")}</button>
         </div>
       </div>
       <p class="hint small">
-        <b>Copier</b> (recommandé) laisse le dossier source intact.
-        <b>Déplacer</b> vide le dossier source — plus rapide s'il est sur le
-        même disque que la bibliothèque (simple renommage), sinon revient à
-        une copie suivie d'une suppression.
+        <b>{t("import.copy")}</b>{t("import.copyHintSuffix")}
+        <b>{t("import.move")}</b>{t("import.moveHintSuffix")}
       </p>
-      <button class="btn" type="button" onclick={pickAndImportFolder} disabled={importState.importing} title="Import unitaire d'un dossier (§4.5)">
-        {importState.importing ? "Import…" : "Choisir un dossier…"}
+      <button class="btn" type="button" onclick={pickAndImportFolder} disabled={importState.importing} title={t("import.folderTooltip")}>
+        {importState.importing ? t("import.importing") : t("import.chooseFolder")}
       </button>
     </div>
   </section>
 
   <section class="mass">
-    <h3>Import en masse</h3>
+    <h3>{t("import.massTitle")}</h3>
     <p class="hint">
-      Pour migrer un catalogue entier en une fois — par exemple un dossier
-      <span class="mono">mods/</span> venant de Mod Organizer 2, où
-      <b>chaque sous-dossier direct est un mod</b>. L'app analyse d'abord tout
-      sans rien écrire (nouveaux, mises à jour, doublons, cas ambigus), tu
-      arbitres les cas ambigus <b>en une fois</b>, puis l'import s'exécute —
-      il peut reprendre si interrompu.
+      {t("import.massHintPrefix")}<b>{t("import.massHintBold1")}</b>{t("import.massHintMid")}<b>{t("import.massHintBold2")}</b>{t("import.massHintSuffix")}
     </p>
     <button class="btn" type="button" onclick={pickBulkImport} disabled={importState.importing}>
-      Choisir un dossier parent…
+      {t("import.chooseParentFolder")}
     </button>
   </section>
 
   <section class="dnd">
-    <h3>Glisser-déposer</h3>
-    <p class="hint">
-      Le geste rapide : dépose une archive n'importe où dans la fenêtre, sur
-      n'importe quel écran — l'import démarre immédiatement, avec le mode
-      copier/déplacer choisi ci-dessus pour un éventuel dossier.
-    </p>
+    <h3>{t("import.dndTitle")}</h3>
+    <p class="hint">{t("import.dndHint")}</p>
   </section>
 </div>
 

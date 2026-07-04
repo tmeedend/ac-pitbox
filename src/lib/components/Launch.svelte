@@ -15,6 +15,7 @@
   import { listLibrary, previewSrc, type ModCard } from "$lib/library";
   import { nav } from "$lib/nav.svelte";
   import { getPreferredSkin } from "$lib/preferred";
+  import { t } from "$lib/i18n/index.svelte";
 
   type Step = "category" | "car" | "track" | "settings";
   let step = $state<Step>("settings");
@@ -70,18 +71,18 @@
       .filter((c) => !carFilter.trim() || `${c.name} ${c.id}`.toLowerCase().includes(carFilter.toLowerCase())),
   );
   const filteredTracks = $derived(
-    tracks.filter((t) => !trackFilter.trim() || `${t.name} ${t.id}`.toLowerCase().includes(trackFilter.toLowerCase())),
+    tracks.filter((tr) => !trackFilter.trim() || `${tr.name} ${tr.id}`.toLowerCase().includes(trackFilter.toLowerCase())),
   );
   const currentCar = $derived(cars.find((c) => c.id === setup.car_id));
-  const currentTrack = $derived(tracks.find((t) => t.id === setup.track_id));
+  const currentTrack = $derived(tracks.find((tr) => tr.id === setup.track_id));
   const currentWeather = $derived(weathers.find((w) => w.id === selectedIntent));
   const carDuoSrc = $derived(previewSrc(nav.sessionCar?.preview ?? null));
   const trackDuoSrc = $derived(previewSrc(nav.sessionTrack?.preview ?? null));
 
-  const sessionTypes: { id: SessionType; label: string }[] = [
-    { id: "practice", label: "Practice" },
-    { id: "hotlap", label: "Hotlap" },
-    { id: "race", label: "Course" },
+  const sessionTypes: { id: SessionType; labelKey: string }[] = [
+    { id: "practice", labelKey: "launch.typePractice" },
+    { id: "hotlap", labelKey: "launch.typeHotlap" },
+    { id: "race", labelKey: "launch.typeRace" },
   ];
 
   // --- Mémorisation de la sélection (§8.6) ---
@@ -252,7 +253,7 @@
     error = ""; info = "";
     try {
       await launchSession($state.snapshot(setup));
-      info = "Session envoyée à Content Manager — Assetto Corsa démarre…";
+      info = t("launch.launchSuccess");
     } catch (e) {
       error = String(e);
     } finally {
@@ -269,21 +270,21 @@
       <div class="duo-item">
         <div class="duo-img">{#if carDuoSrc}<img src={carDuoSrc} alt="" />{:else}<span>🚗</span>{/if}</div>
         <div class="duo-txt">
-          <div class="duo-k">VOITURE</div>
-          <div class="duo-n">{nav.sessionCar?.name ?? "— aucune"}</div>
+          <div class="duo-k">{t("session.carTag")}</div>
+          <div class="duo-n">{nav.sessionCar?.name ?? t("session.noCar")}</div>
         </div>
       </div>
       <span class="duo-plus">+</span>
       <div class="duo-item">
         <div class="duo-img">{#if trackDuoSrc}<img src={trackDuoSrc} alt="" />{:else}<span>🏁</span>{/if}</div>
         <div class="duo-txt">
-          <div class="duo-k">CIRCUIT</div>
-          <div class="duo-n">{nav.sessionTrack?.name ?? "— aucun"}{setup.track_layout ? ` · ${setup.track_layout}` : ""}</div>
+          <div class="duo-k">{t("session.trackTag")}</div>
+          <div class="duo-n">{nav.sessionTrack?.name ?? t("session.noTrack")}{setup.track_layout ? ` · ${setup.track_layout}` : ""}</div>
         </div>
       </div>
     </div>
     <button class="btn btn-primary launch" type="button" onclick={launch} disabled={launching || !setup.car_id || !setup.track_id}>
-      {launching ? "Lancement…" : "▶ Lancer"}
+      {launching ? t("launch.launching") : t("launch.launchButton")}
     </button>
   </header>
 
@@ -293,11 +294,11 @@
   <!-- ÉTAPE CATÉGORIE -->
   {#if step === "category"}
     <section class="screen">
-      <h2>Catégorie</h2>
-      <p class="hint">Choisis un vivier cohérent, ou « Toutes » pour piocher partout.</p>
+      <h2>{t("launch.category")}</h2>
+      <p class="hint">{t("launch.categoryHint")}</p>
       <div class="cats">
         <button class="cat" class:on={category === "all"} onclick={() => goCategory("all")}>
-          <span class="cat-name">Toutes</span>
+          <span class="cat-name">{t("common.allFem")}</span>
           <span class="cat-n">{cars.length}</span>
         </button>
         {#each categories as cat}
@@ -314,21 +315,21 @@
   {:else if step === "car"}
     <section class="screen">
       <div class="screen-head">
-        <h2>Voiture <span class="count">{filteredCars.length}</span></h2>
-        <input class="input filter" placeholder="filtrer…" bind:value={carFilter} />
+        <h2>{t("library.typeCar")} <span class="count">{filteredCars.length}</span></h2>
+        <input class="input filter" placeholder={t("launch.filterPlaceholder")} bind:value={carFilter} />
       </div>
       <div class="gallery">
         {#each filteredCars as c (c.id)}
           {@const src = previewSrc(c.preview)}
           <button class="tile" class:on={setup.car_id === c.id} onclick={() => (setup.car_id = c.id)}>
-            <div class="thumb">{#if src}<img src={src} alt={c.name} loading="lazy" />{:else}<span class="noimg">Voiture</span>{/if}</div>
+            <div class="thumb">{#if src}<img src={src} alt={c.name} loading="lazy" />{:else}<span class="noimg">{t("library.typeCar")}</span>{/if}</div>
             <span class="tile-name">{c.name}</span>
           </button>
         {/each}
       </div>
       {#if skins.length > 1}
         <div class="skins-row">
-          <span class="skins-label">Skin</span>
+          <span class="skins-label">{t("launch.skinLabel")}</span>
           {#each skins as sk (sk.id)}
             {@const s = previewSrc(sk.preview)}
             <button class="skin" class:on={setup.car_skin === sk.id} title={sk.name} onclick={() => (setup.car_skin = sk.id)}>
@@ -338,8 +339,8 @@
         </div>
       {/if}
       <div class="nav-btns">
-        <button class="btn" type="button" onclick={() => (step = "category")}>← Catégorie</button>
-        <button class="btn btn-primary" type="button" onclick={() => (step = "track")}>Circuit →</button>
+        <button class="btn" type="button" onclick={() => (step = "category")}>← {t("launch.category")}</button>
+        <button class="btn btn-primary" type="button" onclick={() => (step = "track")}>{t("library.typeTrack")} →</button>
       </div>
     </section>
 
@@ -347,16 +348,16 @@
   {:else if step === "track"}
     <section class="screen">
       <div class="screen-head">
-        <h2>Circuit <span class="count">{filteredTracks.length}</span></h2>
-        <input class="input filter" placeholder="filtrer…" bind:value={trackFilter} />
+        <h2>{t("library.typeTrack")} <span class="count">{filteredTracks.length}</span></h2>
+        <input class="input filter" placeholder={t("launch.filterPlaceholder")} bind:value={trackFilter} />
       </div>
       <div class="track-layout">
         <div class="gallery tracks">
-          {#each filteredTracks as t (t.id)}
-            {@const src = previewSrc(t.preview)}
-            <button class="tile" class:on={setup.track_id === t.id} onclick={() => { setup.track_id = t.id; setup.track_layout = t.layouts[0] ?? null; }}>
-              <div class="thumb outline">{#if src}<img src={src} alt={t.name} loading="lazy" />{:else}<span class="noimg">Circuit</span>{/if}</div>
-              <span class="tile-name">{t.name}</span>
+          {#each filteredTracks as tr (tr.id)}
+            {@const src = previewSrc(tr.preview)}
+            <button class="tile" class:on={setup.track_id === tr.id} onclick={() => { setup.track_id = tr.id; setup.track_layout = tr.layouts[0] ?? null; }}>
+              <div class="thumb outline">{#if src}<img src={src} alt={tr.name} loading="lazy" />{:else}<span class="noimg">{t("library.typeTrack")}</span>{/if}</div>
+              <span class="tile-name">{tr.name}</span>
             </button>
           {/each}
         </div>
@@ -367,55 +368,55 @@
             <h3>{currentTrack.name}</h3>
             {#if currentTrack.layouts.length}
               <label class="layout">
-                <span>Layout</span>
+                <span>{t("detail.layoutLabel")}</span>
                 <select class="input" bind:value={setup.track_layout}>
                   {#each currentTrack.layouts as l}<option value={l}>{l}</option>{/each}
                 </select>
               </label>
             {:else}
-              <div class="mono single-layout">layout unique</div>
+              <div class="mono single-layout">{t("launch.singleLayout")}</div>
             {/if}
           </aside>
         {/if}
       </div>
       <div class="nav-btns">
-        <button class="btn" type="button" onclick={() => (step = "car")}>← Voiture</button>
-        <button class="btn btn-primary" type="button" onclick={() => (step = "settings")}>Réglages →</button>
+        <button class="btn" type="button" onclick={() => (step = "car")}>← {t("library.typeCar")}</button>
+        <button class="btn btn-primary" type="button" onclick={() => (step = "settings")}>{t("nav.settings")} →</button>
       </div>
     </section>
 
   <!-- ÉTAPE RÉGLAGES -->
   {:else if step === "settings"}
     <section class="screen">
-      <h2>Réglages</h2>
+      <h2>{t("nav.settings")}</h2>
 
       <div class="seg types">
         {#each sessionTypes as st}
-          <button class:on={setup.session_type === st.id} onclick={() => setSessionType(st.id)}>{st.label}</button>
+          <button class:on={setup.session_type === st.id} onclick={() => setSessionType(st.id)}>{t(st.labelKey)}</button>
         {/each}
       </div>
 
-      <!-- Réglages dépendants du type (§8.4) -->
+      <!-- Réglages dépendants du type -->
       <div class="opts">
         {#if setup.session_type === "race"}
-          <label><span>Adversaires IA</span><input class="input" type="number" min="0" max="30" bind:value={setup.ai_count} /></label>
-          <label><span>Niveau IA ({setup.ai_level})</span><input type="range" min="70" max="100" bind:value={setup.ai_level} /></label>
-          <label><span>Tours</span><input class="input" type="number" min="1" max="99" bind:value={setup.laps} /></label>
-          <label><span>Dégâts ({setup.damage}%)</span><input type="range" min="0" max="100" bind:value={setup.damage} /></label>
-          <label><span>Carburant ({setup.fuel_rate}%)</span><input type="range" min="0" max="100" bind:value={setup.fuel_rate} /></label>
-          <label><span>Usure pneus ({setup.tyre_wear}%)</span><input type="range" min="0" max="100" bind:value={setup.tyre_wear} /></label>
+          <label><span>{t("launch.aiCount")}</span><input class="input" type="number" min="0" max="30" bind:value={setup.ai_count} /></label>
+          <label><span>{t("launch.aiLevel", { level: setup.ai_level })}</span><input type="range" min="70" max="100" bind:value={setup.ai_level} /></label>
+          <label><span>{t("launch.laps")}</span><input class="input" type="number" min="1" max="99" bind:value={setup.laps} /></label>
+          <label><span>{t("launch.damage", { pct: setup.damage })}</span><input type="range" min="0" max="100" bind:value={setup.damage} /></label>
+          <label><span>{t("launch.fuelRate", { pct: setup.fuel_rate })}</span><input type="range" min="0" max="100" bind:value={setup.fuel_rate} /></label>
+          <label><span>{t("launch.tyreWear", { pct: setup.tyre_wear })}</span><input type="range" min="0" max="100" bind:value={setup.tyre_wear} /></label>
         {:else if setup.session_type === "practice"}
-          <label><span>Durée (min)</span><input class="input" type="number" min="1" max="240" bind:value={setup.duration_minutes} /></label>
-          <label><span>Niveau IA ({setup.ai_level})</span><input type="range" min="70" max="100" bind:value={setup.ai_level} /></label>
+          <label><span>{t("launch.duration")}</span><input class="input" type="number" min="1" max="240" bind:value={setup.duration_minutes} /></label>
+          <label><span>{t("launch.aiLevel", { level: setup.ai_level })}</span><input type="range" min="70" max="100" bind:value={setup.ai_level} /></label>
         {:else if setup.session_type === "hotlap"}
-          <label class="check"><input type="checkbox" bind:checked={setup.ghost_car} /><span>Ghost car</span></label>
+          <label class="check"><input type="checkbox" bind:checked={setup.ghost_car} /><span>{t("launch.ghostCar")}</span></label>
         {/if}
       </div>
 
       <!-- Météo & heure (universels) -->
       <div class="wx">
         <div>
-          <h3>Météo</h3>
+          <h3>{t("launch.weather")}</h3>
           <div class="intents">
             {#each weathers as w}
               <button class="intent" class:on={selectedIntent === w.id} disabled={!w.available} title={w.reason ?? w.backend ?? ""} onclick={() => selectIntent(w)}>{w.label}</button>
@@ -424,12 +425,12 @@
           {#if currentWeather}
             <div class="weather-meta">
               {#if currentWeather.backend}<span class="backend">{currentWeather.backend}</span>{/if}
-              {#if setup.ambient_c !== null}<span class="temp mono">~{setup.ambient_c}°C air · {setup.road_c}°C piste</span>{/if}
+              {#if setup.ambient_c !== null}<span class="temp mono">{t("launch.tempReading", { air: setup.ambient_c, road: setup.road_c ?? 0 })}</span>{/if}
             </div>
           {/if}
         </div>
         <div>
-          <h3>Heure — {fmtTime(setup.time_hours)}</h3>
+          <h3>{t("launch.timeLabel", { time: fmtTime(setup.time_hours) })}</h3>
           <input type="range" min="6" max="22" step="0.5" bind:value={setup.time_hours} class="time" />
         </div>
       </div>
@@ -438,24 +439,24 @@
       {#if setup.session_type === "race"}
         <section class="advanced">
           <button class="adv-toggle" type="button" onclick={() => (showOptions = !showOptions)}>
-            {showOptions ? "▾" : "▸"} Options de course
+            {showOptions ? "▾" : "▸"} {t("launch.raceOptions")}
           </button>
           {#if showOptions}
             <div class="adv-body">
-              <label class="check"><input type="checkbox" bind:checked={setup.penalties} /><span>Pénalités</span></label>
-              <label><span>Faux départ</span>
+              <label class="check"><input type="checkbox" bind:checked={setup.penalties} /><span>{t("launch.penalties")}</span></label>
+              <label><span>{t("launch.jumpStart")}</span>
                 <select class="input" bind:value={setup.jump_start_penalty}>
-                  <option value={0}>Aucune</option><option value={1}>Téléport au stand</option><option value={2}>Drive-through</option>
+                  <option value={0}>{t("launch.jumpStartNone")}</option><option value={1}>{t("launch.jumpStartTeleport")}</option><option value={2}>{t("launch.jumpStartDrivethrough")}</option>
                 </select>
               </label>
-              <label><span>Évolution du grip</span>
+              <label><span>{t("launch.gripEvolution")}</span>
                 <select class="input" bind:value={setup.grip}>
-                  <option value={86}>Vert (86%)</option><option value={92}>Moyen (92%)</option><option value={96}>Roulé (96%)</option><option value={100}>Optimal (100%)</option>
+                  <option value={86}>{t("launch.gripGreen")}</option><option value={92}>{t("launch.gripMedium")}</option><option value={96}>{t("launch.gripRubbered")}</option><option value={100}>{t("launch.gripOptimal")}</option>
                 </select>
               </label>
-              <label class="check"><input type="checkbox" bind:checked={setup.qualifying} /><span>Qualification</span></label>
+              <label class="check"><input type="checkbox" bind:checked={setup.qualifying} /><span>{t("launch.qualifying")}</span></label>
               {#if setup.qualifying}
-                <label><span>Qualif (min)</span><input class="input" type="number" min="1" max="60" bind:value={setup.qualify_minutes} /></label>
+                <label><span>{t("launch.qualifyMinutes")}</span><input class="input" type="number" min="1" max="60" bind:value={setup.qualify_minutes} /></label>
               {/if}
             </div>
           {/if}
@@ -463,9 +464,9 @@
       {/if}
 
       <div class="nav-btns">
-        <button class="btn" type="button" onclick={() => (step = "track")}>← Circuit</button>
+        <button class="btn" type="button" onclick={() => (step = "track")}>← {t("library.typeTrack")}</button>
         <button class="btn btn-primary big" type="button" onclick={launch} disabled={launching || !setup.car_id || !setup.track_id}>
-          {launching ? "Lancement…" : "▶ Lancer"}
+          {launching ? t("launch.launching") : t("launch.launchButton")}
         </button>
       </div>
     </section>

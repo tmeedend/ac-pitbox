@@ -29,6 +29,11 @@ export function maintenanceScan(): Promise<MaintenanceReport> {
   return invoke<MaintenanceReport>("maintenance_scan");
 }
 
+/** Relit sur le disque les champs cache de tous les mods et réapplique l'ontologie. Renvoie le nb traité. */
+export function reindexLibrary(): Promise<number> {
+  return invoke<number>("reindex_library");
+}
+
 export function deleteBrokenMod(id: string): Promise<void> {
   return invoke<void>("delete_broken_mod", { id });
 }

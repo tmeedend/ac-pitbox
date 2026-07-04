@@ -14,6 +14,7 @@
     deleteOtherMod,
     type OtherModRow,
   } from "$lib/others";
+  import { t } from "$lib/i18n/index.svelte";
 
   let others = $state<OtherModRow[]>([]);
   let query = $state("");
@@ -64,8 +65,8 @@
   }
 
   async function remove(o: OtherModRow) {
-    const ok = await confirm(`Supprimer « ${o.id} » ? Il sera désactivé (jonctions retirées) et ses fichiers effacés.`, {
-      title: "Supprimer",
+    const ok = await confirm(t("others.confirmDelete", { id: o.id }), {
+      title: t("common.delete"),
       kind: "warning",
     });
     if (!ok) return;
@@ -89,16 +90,11 @@
 <div class="others">
   <header class="head">
     <div>
-      <h2>Autres mods</h2>
-      <p class="sub">
-        Mods d'un type non reconnu (shaders, configs CSP, mods d'UI…), §6.1bis — jamais perdus. Activés par
-        junction comme les autres types, uniquement là où AC n'a encore rien (pas de fusion de fichier isolé
-        dans un dossier déjà existant). En cas d'emplacement disputé entre deux « autres mods », le mod marqué
-        prioritaire l'emporte à sa prochaine activation.
-      </p>
+      <h2>{t("nav.others")}</h2>
+      <p class="sub">{t("others.subtitle")}</p>
     </div>
     {#if others.length}
-      <input class="input search" placeholder="Rechercher…" bind:value={query} />
+      <input class="input search" placeholder={t("others.searchPlaceholder")} bind:value={query} />
     {/if}
   </header>
 
@@ -106,8 +102,8 @@
 
   {#if others.length === 0}
     <div class="empty">
-      <p>Aucun mod « autre » importé.</p>
-      <p class="hint">Un mod dont le type n'est reconnu par aucun import (voiture, circuit, skin, son, app) atterrit ici automatiquement.</p>
+      <p>{t("others.empty")}</p>
+      <p class="hint">{t("others.emptyHint")}</p>
     </div>
   {:else}
     <ul class="list">
@@ -116,18 +112,18 @@
           <div class="row">
             <span class="o-name mono">{o.id}</span>
             {#if o.source_archive}<span class="src mono">{o.source_archive}</span>{/if}
-            {#if o.is_active}<span class="state on">actif</span>{:else}<span class="state">inactif</span>{/if}
-            <button class="btn prio" class:on={o.is_priority} type="button" onclick={() => togglePriority(o)} disabled={busy === o.id} title="Marquer prioritaire : gagne en cas d'emplacement disputé">
-              ★ Prioritaire
+            {#if o.is_active}<span class="state on">{t("common.active").toLowerCase()}</span>{:else}<span class="state">{t("common.inactive").toLowerCase()}</span>{/if}
+            <button class="btn prio" class:on={o.is_priority} type="button" onclick={() => togglePriority(o)} disabled={busy === o.id} title={t("others.priorityTooltip")}>
+              {t("others.priority")}
             </button>
             <button class="btn" type="button" onclick={() => toggle(o)} disabled={busy === o.id}>
-              {busy === o.id ? "…" : o.is_active ? "Désactiver" : "Activer"}
+              {busy === o.id ? t("common.working") : o.is_active ? t("common.deactivate") : t("common.activate")}
             </button>
-            <button class="btn del" type="button" title="Supprimer" onclick={() => remove(o)} disabled={busy === o.id}>✕</button>
+            <button class="btn del" type="button" title={t("common.delete")} onclick={() => remove(o)} disabled={busy === o.id}>✕</button>
           </div>
           {#if o.conflicts.length}
             <div class="conflicts">
-              ⚠ Fichiers en commun avec {#each o.conflicts as c, i}{i > 0 ? ", " : ""}<b>{name(c.other_id)}</b> ({c.count}){/each}
+              {t("others.conflictsWith")} {#each o.conflicts as c, i}{i > 0 ? ", " : ""}<b>{name(c.other_id)}</b> ({c.count}){/each}
             </div>
           {/if}
           {#if warnings[o.id]?.length}

@@ -23,6 +23,12 @@ pub struct Prefs {
     pub library_view: String,
     /// Preset CM graphique/FFB à appliquer au lancement (nom du preset).
     pub default_cm_preset: Option<String>,
+    /// Langue forcée par l'utilisateur ("fr", "en"…). `None` = langue système.
+    pub language: Option<String>,
+    /// Niveau de zoom de l'interface, en % (ex. 125). `None` = 100 (défaut).
+    /// Utile sur les écrans haute résolution si la mise à l'échelle Windows
+    /// n'est pas correctement reprise par la webview.
+    pub ui_zoom: Option<u32>,
 }
 
 impl Default for Prefs {
@@ -32,6 +38,8 @@ impl Default for Prefs {
             tracking_panel_open: true,
             library_view: "gallery".into(),
             default_cm_preset: None,
+            language: None,
+            ui_zoom: None,
         }
     }
 }
@@ -150,12 +158,14 @@ fn is_file(p: &Option<PathBuf>) -> bool {
     p.as_ref().is_some_and(|p| p.is_file())
 }
 
+// Les messages sont des CLÉS i18n (résolues côté frontend, `src/lib/i18n`),
+// pas du texte affichable — la validation reste indépendante de la langue.
 pub fn validate(cfg: &AppConfig) -> ConfigValidation {
     // Dossier AC
     let ac_ok = is_dir(&cfg.ac_install_path);
     let ac_install = Check::req(
         ac_ok,
-        if ac_ok { "Dossier Assetto Corsa trouvé." } else { "Dossier d'install Assetto Corsa introuvable." },
+        if ac_ok { "config.acInstallOk" } else { "config.acInstallMissing" },
     );
 
     // content/
@@ -163,14 +173,14 @@ pub fn validate(cfg: &AppConfig) -> ConfigValidation {
     let content_ok = content.as_ref().is_some_and(|p| p.is_dir());
     let content_dir = Check::req(
         content_ok,
-        if content_ok { "Dossier content/ présent." } else { "Pas de dossier content/ dans l'install AC." },
+        if content_ok { "config.contentDirOk" } else { "config.contentDirMissing" },
     );
 
     // content/ accessible en écriture (prérequis aux junctions)
     let writable_ok = content.as_ref().is_some_and(|p| is_writable(p));
     let content_writable = Check::req(
         writable_ok,
-        if writable_ok { "content/ accessible en écriture." } else { "content/ non accessible en écriture." },
+        if writable_ok { "config.contentWritableOk" } else { "config.contentWritableMissing" },
     );
 
     // Bibliothèque : OK si le dossier existe, ou si son parent existe (sera créé à l'enregistrement).
@@ -183,11 +193,11 @@ pub fn validate(cfg: &AppConfig) -> ConfigValidation {
     let library = Check::req(
         lib_ok,
         if is_dir(&cfg.library_path) {
-            "Bibliothèque trouvée."
+            "config.libraryOk"
         } else if lib_ok {
-            "Bibliothèque à créer (le dossier parent existe)."
+            "config.libraryWillCreate"
         } else {
-            "Chemin de bibliothèque invalide."
+            "config.libraryInvalid"
         },
     );
 
@@ -195,14 +205,14 @@ pub fn validate(cfg: &AppConfig) -> ConfigValidation {
     let cm_ok = is_file(&cfg.content_manager_exe);
     let content_manager = Check::req(
         cm_ok,
-        if cm_ok { "Content Manager trouvé." } else { "Exécutable Content Manager introuvable." },
+        if cm_ok { "config.cmOk" } else { "config.cmMissing" },
     );
 
     // 7-Zip
     let sz_ok = is_file(&cfg.sevenzip_exe);
     let sevenzip = Check::req(
         sz_ok,
-        if sz_ok { "7-Zip trouvé." } else { "Exécutable 7-Zip introuvable." },
+        if sz_ok { "config.sevenzipOk" } else { "config.sevenzipMissing" },
     );
 
     // QuickBMS — optionnel (export uniquement). OK si non renseigné OU fichier valide.
@@ -211,11 +221,11 @@ pub fn validate(cfg: &AppConfig) -> ConfigValidation {
     let quickbms = Check::opt(
         qb_ok,
         if !qb_set {
-            "Non configuré (requis seulement pour l'export autonome)."
+            "config.quickbmsUnset"
         } else if qb_ok {
-            "QuickBMS trouvé."
+            "config.quickbmsOk"
         } else {
-            "Chemin QuickBMS renseigné mais introuvable."
+            "config.quickbmsMissing"
         },
     );
 

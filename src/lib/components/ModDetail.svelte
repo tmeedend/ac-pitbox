@@ -14,6 +14,7 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { exportMod, type ExportReport } from "$lib/maintenance";
   import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
+  import { t } from "$lib/i18n/index.svelte";
 
   interface Props {
     id: string | null;
@@ -52,7 +53,7 @@
 
   async function doExport() {
     if (!detail || exporting) return;
-    const dir = await open({ directory: true, multiple: false, title: "Dossier d'export" });
+    const dir = await open({ directory: true, multiple: false, title: t("detail.exportDirTitle") });
     if (!dir || typeof dir !== "string") return;
     exporting = true;
     actionError = "";
@@ -119,10 +120,10 @@
 
   async function addManual() {
     if (!detail) return;
-    const t = manualInput.trim().toLowerCase();
+    const tag = manualInput.trim().toLowerCase();
     manualInput = "";
-    if (!t || detail.tags_manual.includes(t)) return;
-    detail.tags_manual = [...detail.tags_manual, t];
+    if (!tag || detail.tags_manual.includes(tag)) return;
+    detail.tags_manual = [...detail.tags_manual, tag];
     await setManualTags(detail.id_interne, detail.tags_manual);
     onchange?.();
   }
@@ -139,11 +140,11 @@
     const add = (label: string, v: string | null) => {
       if (v) rows.push([label, v]);
     };
-    add("Transmission", d.drivetrain);
-    add("Aspiration", d.aspiration);
-    add("Moteur", d.engine_config);
-    add("Position moteur", d.engine_pos);
-    add("Boîte", d.gearbox);
+    add(t("columns.drivetrain"), d.drivetrain);
+    add(t("columns.aspiration"), d.aspiration);
+    add(t("columns.engineConfig"), d.engine_config);
+    add(t("columns.enginePos"), d.engine_pos);
+    add(t("columns.gearbox"), d.gearbox);
     return rows;
   }
 
@@ -166,14 +167,14 @@
     const add = (label: string, v: string | null) => {
       if (v) rows.push([label, v]);
     };
-    add("Puissance", s.bhp);
-    add("Couple", s.torque);
-    add("Poids", s.weight);
-    add("Vitesse max", s.topspeed);
-    add("0-100 / 400m", s.acceleration);
-    add("Rapport p/p", s.pwratio);
-    add("Autonomie", s.range);
-    add("Pays", s.country);
+    add(t("modpanel.specPower"), s.bhp);
+    add(t("modpanel.specTorque"), s.torque);
+    add(t("columns.weight"), s.weight);
+    add(t("modpanel.specTopSpeed"), s.topspeed);
+    add(t("modpanel.specAccel"), s.acceleration);
+    add(t("modpanel.specPwRatio"), s.pwratio);
+    add(t("modpanel.specRange"), s.range);
+    add(t("columns.country"), s.country);
     return rows;
   }
 
@@ -203,13 +204,13 @@
   <aside class="panel">
     <header>
       {#if onexpand}
-        <button class="btn-ghost expand" type="button" onclick={onexpand} title="Ouvrir en page détail">⤢ Agrandir</button>
+        <button class="btn-ghost expand" type="button" onclick={onexpand} title={t("modpanel.expandTooltip")}>⤢ {t("modpanel.expand")}</button>
       {/if}
-      <button class="btn-ghost close" type="button" onclick={onclose} title="Fermer">✕</button>
+      <button class="btn-ghost close" type="button" onclick={onclose} title={t("common.close")}>✕</button>
     </header>
 
     {#if loading && !detail}
-      <div class="empty">Chargement…</div>
+      <div class="empty">{t("common.loading")}</div>
     {:else if detail}
       {@const preview = previewSrc(detail.preview)}
       {@const outline = previewSrc(detail.outline)}
@@ -217,7 +218,7 @@
         {#if preview}
           <img src={preview} alt={detail.display_name ?? detail.id_interne} />
         {:else}
-          <div class="noprev">{detail.kind === "Track" ? "Circuit" : "Voiture"}</div>
+          <div class="noprev">{detail.kind === "Track" ? t("library.typeTrack") : t("library.typeCar")}</div>
         {/if}
         {#if detail.kind === "Track" && outline}<img class="outline" src={outline} alt="" />{/if}
       </div>
@@ -229,7 +230,7 @@
           class:on={detail.is_favorite}
           type="button"
           onclick={toggleFav}
-          title={detail.is_favorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+          title={detail.is_favorite ? t("modpanel.removeFavorite") : t("modpanel.addFavorite")}
         >
           {detail.is_favorite ? "♥" : "♡"}
         </button>
@@ -237,28 +238,28 @@
       <div class="sub mono">{detail.id_interne}</div>
 
       <div class="meta">
-        {#if detail.brand}<span><b>Marque</b> {detail.brand}</span>{/if}
-        {#if detail.year}<span><b>Année</b> {detail.year}</span>{/if}
-        <span><b>Type</b> {detail.kind === "Track" ? "Circuit" : "Voiture"}</span>
-        {#if detail.source_pack}<span class="pack"><b>Pack</b> {detail.source_pack}</span>{/if}
+        {#if detail.brand}<span><b>{t("columns.brand")}</b> {detail.brand}</span>{/if}
+        {#if detail.year}<span><b>{t("columns.year")}</b> {detail.year}</span>{/if}
+        <span><b>{t("modpanel.typeLabel")}</b> {detail.kind === "Track" ? t("library.typeTrack") : t("library.typeCar")}</span>
+        {#if detail.source_pack}<span class="pack"><b>{t("detail.packLabel")}</b> {detail.source_pack}</span>{/if}
       </div>
 
       <div class="actions">
         {#if detail.is_stock}
-          <span class="state base" title="Contenu de base Kunos — lecture seule (§12bis.1)">Contenu de base</span>
+          <span class="state base" title={t("detail.stockTooltip")}>{t("detail.stockLabel")}</span>
         {:else if detail.active}
-          <span class="state on"><span class="state-dot"></span>Actif</span>
-          <button class="btn" type="button" onclick={deactivate} disabled={busy}>Désactiver</button>
+          <span class="state on"><span class="state-dot"></span>{t("common.active")}</span>
+          <button class="btn" type="button" onclick={deactivate} disabled={busy}>{t("common.deactivate")}</button>
         {:else}
-          <span class="state">Inactif</span>
-          <button class="btn" type="button" onclick={() => activate()} disabled={busy}>Activer</button>
+          <span class="state">{t("common.inactive")}</span>
+          <button class="btn" type="button" onclick={() => activate()} disabled={busy}>{t("common.activate")}</button>
         {/if}
-        <button class="btn btn-primary" type="button" onclick={drive}>Conduire</button>
+        <button class="btn btn-primary" type="button" onclick={drive}>{t("detail.drive")}</button>
       </div>
       {#if !detail.is_stock}
         <div class="sec-actions">
           <button class="btn-ghost export" type="button" onclick={doExport} disabled={exporting}>
-            {exporting ? "Export…" : "⤓ Exporter (archive autonome)"}
+            {exporting ? t("detail.exporting") : t("modpanel.exportFull")}
           </button>
         </div>
       {/if}
@@ -267,7 +268,7 @@
       {/if}
       {#if exportResult}
         <div class="export-ok">
-          ✓ Archive créée : {exportResult.included.length} élément(s) embarqué(s).
+          {t("detail.exportSuccess", { count: exportResult.included.length })}
           {#if exportResult.warnings.length}
             <ul class="export-warn">
               {#each exportResult.warnings as w}<li>⚠ {w}</li>{/each}
@@ -281,7 +282,7 @@
         {@const mech = mechRows(detail)}
         {#if rows.length || mech.length}
           <section>
-            <h3>Fiche technique</h3>
+            <h3>{t("detail.techSheet")}</h3>
             <div class="specs">
               {#each rows as [label, value]}
                 <div class="spec">
@@ -290,7 +291,7 @@
                 </div>
               {/each}
               {#each mech as [label, value]}
-                <div class="spec derived" title="Déduit par règle (§5bis.1)">
+                <div class="spec derived" title={t("modpanel.derivedTooltip")}>
                   <span class="s-label">{label}</span>
                   <span class="s-value">{value}</span>
                 </div>
@@ -305,14 +306,14 @@
 
         {#if s.power_curve.length > 1}
           <section>
-            <h3>Courbe moteur <span class="count mono">RPM</span></h3>
+            <h3>{t("modpanel.engineCurve")} <span class="count mono">RPM</span></h3>
             <PowerCurve power={s.power_curve} torque={s.torque_curve} />
           </section>
         {/if}
 
         {#if s.description}
           <section>
-            <h3>Description</h3>
+            <h3>{t("common.description")}</h3>
             <p class="description">{decodeDescription(s.description)}</p>
           </section>
         {/if}
@@ -320,56 +321,56 @@
 
       <section>
         <h3>
-          Tags
+          {t("detail.tagsLabel")}
           <span class="legend">
-            <span class="lg cat">catégorie</span>
-            <span class="lg rule">règle</span>
-            <span class="lg manual">manuel</span>
-            <span class="lg file">fichier</span>
+            <span class="lg cat">{t("modpanel.legendCategory")}</span>
+            <span class="lg rule">{t("modpanel.legendRule")}</span>
+            <span class="lg manual">{t("modpanel.legendManual")}</span>
+            <span class="lg file">{t("modpanel.legendFile")}</span>
           </span>
         </h3>
         <div class="tags">
-          {#each detail.tags_from_rule.filter((t) => t.startsWith("#")) as t}
-            <span class="tag cat">{t}</span>
+          {#each detail.tags_from_rule.filter((tag) => tag.startsWith("#")) as tag}
+            <span class="tag cat">{tag}</span>
           {/each}
-          {#each detail.tags_from_rule.filter((t) => !t.startsWith("#")) as t}
-            <span class="tag rule">{t}</span>
+          {#each detail.tags_from_rule.filter((tag) => !tag.startsWith("#")) as tag}
+            <span class="tag rule">{tag}</span>
           {/each}
-          {#each detail.tags_manual as t}
+          {#each detail.tags_manual as tag}
             <span class="tag manual">
-              {t}<button class="x" type="button" onclick={() => removeManual(t)} title="Retirer">×</button>
+              {tag}<button class="x" type="button" onclick={() => removeManual(tag)} title={t("common.remove")}>×</button>
             </span>
           {/each}
           {#if showFileTags}
-            {#each detail.tags_from_mod as t}
-              <span class="tag file">{t}</span>
+            {#each detail.tags_from_mod as tag}
+              <span class="tag file">{tag}</span>
             {/each}
           {/if}
         </div>
         <div class="tag-actions">
           <input
             class="input manual-input"
-            placeholder="ajouter un tag manuel…"
+            placeholder={t("detail.addTagPlaceholder")}
             bind:value={manualInput}
             onkeydown={(e) => e.key === "Enter" && addManual()}
           />
           <button class="btn-ghost toggle-file" type="button" onclick={toggleFileTags}>
-            {showFileTags ? "Masquer fichier" : "Afficher fichier"}
+            {showFileTags ? t("modpanel.hideFileTags") : t("modpanel.showFileTags")}
           </button>
         </div>
       </section>
 
       <section>
-        <h3>Versions <span class="count">{detail.versions.length}</span></h3>
+        <h3>{t("modpanel.versions")} <span class="count">{detail.versions.length}</span></h3>
         <ul class="versions">
           {#each detail.versions as v}
             <li class:active={v.id === detail.active_version_id}>
               <div class="v-head">
-                <span class="v-label">{v.version_label ?? "(sans n° de version)"}</span>
+                <span class="v-label">{v.version_label ?? t("detail.noVersionNumber")}</span>
                 {#if v.id === detail.active_version_id}
-                  <span class="badge">active</span>
+                  <span class="badge">{t("common.active").toLowerCase()}</span>
                 {:else}
-                  <button class="v-activate" type="button" onclick={() => activate(v.id)} disabled={busy}>Activer</button>
+                  <button class="v-activate" type="button" onclick={() => activate(v.id)} disabled={busy}>{t("common.activate")}</button>
                 {/if}
               </div>
               <div class="v-meta mono">
@@ -378,15 +379,15 @@
               {#if v.csp_features.length}
                 <div class="v-csp">{v.csp_features.join(" · ")}</div>
               {/if}
-              {#if v.skins.length}<div class="v-extra">{v.skins.length} skin(s)</div>{/if}
-              {#if v.layouts.length}<div class="v-extra">{v.layouts.length} layout(s)</div>{/if}
+              {#if v.skins.length}<div class="v-extra">{t("modpanel.skinCount", { count: v.skins.length })}</div>{/if}
+              {#if v.layouts.length}<div class="v-extra">{t("modpanel.layoutCount", { count: v.layouts.length })}</div>{/if}
             </li>
           {/each}
         </ul>
       </section>
 
       <section>
-        <h3>Historique</h3>
+        <h3>{t("detail.historyLabel")}</h3>
         <ul class="history">
           {#each detail.history.filter((h) => h.event !== "ACTIVATE" && h.event !== "DEACTIVATE") as h}
             <li>
@@ -398,7 +399,7 @@
         </ul>
       </section>
     {:else}
-      <div class="empty">Mod introuvable.</div>
+      <div class="empty">{t("modpanel.notFound")}</div>
     {/if}
   </aside>
 {/if}

@@ -2,12 +2,13 @@
   // Retour visuel de l'import, global (§4.6bis : le glisser-déposer marche sur
   // toutes les vues, donc ce retour doit être visible peu importe l'écran ouvert).
   import { importState, dismissReport, resolvePendingConflict } from "$lib/importState.svelte";
+  import { t } from "$lib/i18n/index.svelte";
 
   function importSummary(): string {
     const r = importState.report ?? [];
     const n = r.reduce((acc, a) => acc + a.mods.length, 0);
     const errs = r.filter((a) => a.error).length;
-    return `${n} mod(s) importé(s)${errs ? `, ${errs} archive(s) en erreur` : ""}`;
+    return t("importOverlay.summaryBase", { n }) + (errs ? t("importOverlay.summaryErrs", { errs }) : "");
   }
 </script>
 
@@ -46,34 +47,36 @@
         {#each a.mods as m}
           <div class="r-line">
             <span class="r-out {m.outcome === 'UPDATE_REPLACE' ? 'upd' : m.outcome === 'DUPLICATE' ? 'dup' : 'new'}">
-              {m.outcome === "UPDATE_REPLACE" ? "MAJ" : m.outcome === "DUPLICATE" ? "DÉJÀ PRÉSENT" : "NOUVEAU"}
+              {m.outcome === "UPDATE_REPLACE" ? t("importOverlay.outcomeUpdate") : m.outcome === "DUPLICATE" ? t("importOverlay.outcomeDuplicate") : t("importOverlay.outcomeNew")}
             </span>
             {m.display_name ?? m.id_interne}
             {#if m.outcome === "DUPLICATE"}
-              <span class="r-conflict">archive identique — non réimporté</span>
+              <span class="r-conflict">{t("importOverlay.duplicateNote")}</span>
             {/if}
           </div>
         {/each}
         {@const replaced = (a.shared ?? []).filter((s) => s.disposition === "replaced")}
         {@const added = (a.shared ?? []).filter((s) => s.disposition === "installed")}
         {#if added.length}
-          <div class="r-line shared">+ {added.length} ressource(s) partagée(s) installée(s) (fonts/drivers, §4.8)</div>
+          <div class="r-line shared">{t("importOverlay.sharedInstalled", { count: added.length })}</div>
         {/if}
         {#each replaced as s}
-          <div class="r-line shared warn">⚠ {s.kind === "fonts" ? "Font" : "Driver"} « {s.name} » remplacé par une version différente</div>
+          <div class="r-line shared warn">{t("importOverlay.sharedReplaced", { kind: s.kind === "fonts" ? t("importOverlay.fontLabel") : t("importOverlay.driverLabel"), name: s.name })}</div>
         {/each}
         {#if (a.subs ?? []).length}
           {@const skins = a.subs.filter((s) => s.sub_type === "SKIN").length}
           {@const sounds = a.subs.filter((s) => s.sub_type === "SOUND").length}
           <div class="r-line shared">
-            + {skins ? `${skins} skin(s)` : ""}{skins && sounds ? " · " : ""}{sounds ? `${sounds} son(s)` : ""} rattaché(s) (§12bis)
+            {t("importOverlay.subsAttached", {
+              parts: `${skins ? t("importOverlay.skinCount", { count: skins }) : ""}${skins && sounds ? " · " : ""}${sounds ? t("importOverlay.soundCount", { count: sounds }) : ""}`,
+            })}
           </div>
         {/if}
         {#if (a.apps ?? []).length}
-          <div class="r-line shared">+ {a.apps.length} app(s) importée(s) (§12bis)</div>
+          <div class="r-line shared">{t("importOverlay.appsImported", { count: a.apps.length })}</div>
         {/if}
         {#if (a.others ?? []).length}
-          <div class="r-line shared">+ {a.others.length} mod(s) autre(s) importé(s) (§6.1bis)</div>
+          <div class="r-line shared">{t("importOverlay.othersImported", { count: a.others.length })}</div>
         {/if}
       {/each}
     </div>
@@ -84,22 +87,20 @@
   {@const c = importState.pendingConflicts[0]}
   <div class="modal-backdrop">
     <div class="modal">
-      <h3>Nouvelle version possible</h3>
+      <h3>{t("importOverlay.newVersionTitle")}</h3>
       <p>
-        « <b>{c.newName}</b> » ressemble à un mod déjà présent
-        (dossier différent : <span class="mono">{c.oldId}</span> →
-        <span class="mono">{c.newId}</span>). Que faire ?
+        {t("importOverlay.modalBodyOpen")}<b>{c.newName}</b>{t("importOverlay.modalBodyMid")}<span class="mono">{c.oldId}</span>{t("importOverlay.modalBodyArrow")}<span class="mono">{c.newId}</span>{t("importOverlay.modalBodyEnd")}
       </p>
       <div class="modal-actions">
         <button class="btn" type="button" onclick={() => resolvePendingConflict(c, "keep_both")}>
-          Garder les deux
+          {t("importOverlay.keepBoth")}
         </button>
         <button class="btn btn-primary" type="button" onclick={() => resolvePendingConflict(c, "replace")}>
-          Écraser l'ancienne
+          {t("importOverlay.replaceOld")}
         </button>
       </div>
       {#if importState.pendingConflicts.length > 1}
-        <div class="modal-rest">{importState.pendingConflicts.length - 1} autre(s) à traiter</div>
+        <div class="modal-rest">{t("importOverlay.modalRest", { count: importState.pendingConflicts.length - 1 })}</div>
       {/if}
     </div>
   </div>

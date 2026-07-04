@@ -27,8 +27,21 @@ pub struct UiInfo {
     pub tags: Vec<String>,
 }
 
+/// Lit un fichier texte en tolérant les mods dont l'encodage n'est pas de
+/// l'UTF-8 strict (Windows-1252/Latin-1, octets invalides…) : on retente en
+/// lossy si la lecture stricte échoue, plutôt que d'abandonner silencieusement.
+fn read_text_lossy(path: &Path) -> Option<String> {
+    match fs::read_to_string(path) {
+        Ok(s) => Some(s),
+        Err(_) => {
+            let bytes = fs::read(path).ok()?;
+            Some(String::from_utf8_lossy(&bytes).into_owned())
+        }
+    }
+}
+
 fn read_json(path: &Path) -> Option<Value> {
-    let text = std::fs::read_to_string(path).ok()?;
+    let text = read_text_lossy(path)?;
     // Tolère un BOM UTF-8 en tête (fréquent sur les mods).
     let text = text.trim_start_matches('\u{feff}');
     serde_json::from_str(text).ok()
@@ -51,8 +64,9 @@ fn as_string(v: &Value) -> Option<String> {
 }
 
 fn parse(path: &Path) -> Option<UiInfo> {
-    // 1. Lire le fichier JSON d'origine en texte brut
-    let mut json_content = fs::read_to_string(path).ok()?;
+    // 1. Lire le fichier JSON d'origine en texte brut (lossy si pas UTF-8 strict)
+    let mut json_content = read_text_lossy(path)?;
+    json_content = json_content.trim_start_matches('\u{feff}').to_string();
 
     // 2. Nettoyer les retours à la ligne illégaux dans la description
     json_content = clean_assetto_json(&json_content);

@@ -1,17 +1,19 @@
-// Définitions de colonnes de tableau, propres à chaque type (§6.2).
+// Définitions de colonnes de tableau, propres à chaque type.
 // La sélection de colonnes visibles est mémorisée indépendamment par type.
 import type { ModCard, ModKind } from "./library";
+import { t } from "./i18n/index.svelte";
 
 export interface ColumnDef {
   key: string;
-  label: string;
+  /** Clé i18n du libellé d'en-tête (résolue au rendu, pour rester réactive à la langue). */
+  labelKey: string;
   /** Triable par clic d'en-tête. */
   sortable: boolean;
   /** Affichée par défaut (avant tout choix utilisateur). */
   defaultVisible: boolean;
   /** Toujours affichée, absente du sélecteur (colonne essentielle). */
   fixed?: boolean;
-  /** Valeur d'affichage ; « — » si la donnée n'existe pas encore (§6.2). */
+  /** Valeur d'affichage ; « — » si la donnée n'existe pas encore. */
   value: (c: ModCard) => string;
   /** Clé de tri (défaut = value en minuscule). */
   sortValue?: (c: ModCard) => string | number;
@@ -31,75 +33,75 @@ function allTags(c: ModCard): string[] {
 }
 
 // Colonnes communes à tous les types (dates, auteur, version, tags, état).
-// distance → §6.5. Date de publication : estimée dès l'import depuis les
-// dates de fichiers (§6.2) ; une source plus fiable (extension L7) la remplacera.
+// Date de publication : estimée dès l'import depuis les dates de fichiers ;
+// une source plus fiable (extension navigateur) la remplacera un jour.
 function commonTail(): ColumnDef[] {
   return [
-    { key: "author", label: "Auteur", sortable: true, defaultVisible: false, value: (c) => c.author ?? DASH },
-    { key: "country", label: "Pays", sortable: true, defaultVisible: false, value: (c) => c.country ?? DASH },
-    { key: "version", label: "Version", sortable: true, defaultVisible: false, mono: true, value: (c) => c.active_version_label ?? DASH },
+    { key: "author", labelKey: "columns.author", sortable: true, defaultVisible: false, value: (c) => c.author ?? DASH },
+    { key: "country", labelKey: "columns.country", sortable: true, defaultVisible: false, value: (c) => c.country ?? DASH },
+    { key: "version", labelKey: "columns.version", sortable: true, defaultVisible: false, mono: true, value: (c) => c.active_version_label ?? DASH },
     {
       key: "tags",
-      label: "Tags",
+      labelKey: "columns.tags",
       sortable: false,
       defaultVisible: false,
       value: (c) => allTags(c).slice(0, 4).join(", ") || DASH,
     },
     {
       key: "active",
-      label: "État",
+      labelKey: "columns.active",
       sortable: true,
       defaultVisible: true,
-      value: (c) => (c.active ? "actif" : DASH),
+      value: (c) => (c.active ? t("common.active").toLowerCase() : DASH),
       sortValue: (c) => (c.active ? 1 : 0),
     },
     {
       key: "distance",
-      label: "Distance",
+      labelKey: "columns.distance",
       sortable: true,
       defaultVisible: false,
       mono: true,
-      // §6.5 : km CM si connus ; sinon « essayé » (marqueur app) ou « — ».
-      value: (c) => (c.distance_km != null ? `${c.distance_km.toFixed(1)} km` : c.tried ? "essayé" : DASH),
+      // Km CM si connus ; sinon « essayé » (marqueur app) ou « — ».
+      value: (c) => (c.distance_km != null ? `${c.distance_km.toFixed(1)} km` : c.tried ? t("library.tried") : DASH),
       // Tri : km croissants font remonter les peu/pas explorés ; jamais essayé en tête.
       sortValue: (c) => (c.distance_km ?? (c.tried ? 0 : -1)),
     },
-    { key: "added", label: "Date d'ajout", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.created_at), sortValue: (c) => c.created_at },
-    { key: "updated", label: "Date de MAJ", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.updated_at), sortValue: (c) => c.updated_at ?? c.created_at },
-    { key: "published", label: "Date de publication", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.published_at), sortValue: (c) => c.published_at ?? "" },
+    { key: "added", labelKey: "columns.added", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.created_at), sortValue: (c) => c.created_at },
+    { key: "updated", labelKey: "columns.updated", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.updated_at), sortValue: (c) => c.updated_at ?? c.created_at },
+    { key: "published", labelKey: "columns.published", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.published_at), sortValue: (c) => c.published_at ?? "" },
   ];
 }
 
 const CAR_COLUMNS: ColumnDef[] = [
-  { key: "name", label: "Nom", sortable: true, defaultVisible: true, fixed: true, value: (c) => c.display_name ?? c.id_interne },
-  { key: "brand", label: "Marque", sortable: true, defaultVisible: true, value: (c) => c.brand ?? DASH },
-  { key: "category", label: "Catégorie", sortable: true, defaultVisible: true, value: (c) => c.category ?? DASH },
-  { key: "car_class", label: "Classe", sortable: true, defaultVisible: false, value: (c) => c.car_class ?? DASH },
-  { key: "year", label: "Année", sortable: true, defaultVisible: true, mono: true, value: (c) => c.year?.toString() ?? DASH, sortValue: (c) => c.year ?? 0 },
-  { key: "weight", label: "Poids", sortable: true, defaultVisible: false, mono: true, value: (c) => c.weight ?? DASH },
-  { key: "drivetrain", label: "Transmission", sortable: true, defaultVisible: false, value: (c) => c.drivetrain ?? DASH },
-  { key: "gearbox", label: "Boîte", sortable: true, defaultVisible: false, value: (c) => c.gearbox ?? DASH },
-  { key: "engine_config", label: "Moteur", sortable: true, defaultVisible: false, value: (c) => c.engine_config ?? DASH },
-  { key: "engine_pos", label: "Position moteur", sortable: true, defaultVisible: false, value: (c) => c.engine_pos ?? DASH },
-  { key: "aspiration", label: "Admission", sortable: true, defaultVisible: false, value: (c) => c.aspiration ?? DASH },
+  { key: "name", labelKey: "columns.name", sortable: true, defaultVisible: true, fixed: true, value: (c) => c.display_name ?? c.id_interne },
+  { key: "brand", labelKey: "columns.brand", sortable: true, defaultVisible: true, value: (c) => c.brand ?? DASH },
+  { key: "category", labelKey: "columns.category", sortable: true, defaultVisible: true, value: (c) => c.category ?? DASH },
+  { key: "car_class", labelKey: "columns.carClass", sortable: true, defaultVisible: false, value: (c) => c.car_class ?? DASH },
+  { key: "year", labelKey: "columns.year", sortable: true, defaultVisible: true, mono: true, value: (c) => c.year?.toString() ?? DASH, sortValue: (c) => c.year ?? 0 },
+  { key: "weight", labelKey: "columns.weight", sortable: true, defaultVisible: false, mono: true, value: (c) => c.weight ?? DASH },
+  { key: "drivetrain", labelKey: "columns.drivetrain", sortable: true, defaultVisible: false, value: (c) => c.drivetrain ?? DASH },
+  { key: "gearbox", labelKey: "columns.gearbox", sortable: true, defaultVisible: false, value: (c) => c.gearbox ?? DASH },
+  { key: "engine_config", labelKey: "columns.engineConfig", sortable: true, defaultVisible: false, value: (c) => c.engine_config ?? DASH },
+  { key: "engine_pos", labelKey: "columns.enginePos", sortable: true, defaultVisible: false, value: (c) => c.engine_pos ?? DASH },
+  { key: "aspiration", labelKey: "columns.aspiration", sortable: true, defaultVisible: false, value: (c) => c.aspiration ?? DASH },
   ...commonTail(),
 ];
 
 const TRACK_COLUMNS: ColumnDef[] = [
-  { key: "name", label: "Nom", sortable: true, defaultVisible: true, fixed: true, value: (c) => c.display_name ?? c.id_interne },
+  { key: "name", labelKey: "columns.name", sortable: true, defaultVisible: true, fixed: true, value: (c) => c.display_name ?? c.id_interne },
   {
     key: "layouts",
-    label: "Layouts",
+    labelKey: "columns.layouts",
     sortable: true,
     defaultVisible: true,
     value: (c) => (c.layouts.length ? c.layouts.join(", ") : DASH),
     sortValue: (c) => c.layouts.length,
   },
-  { key: "length", label: "Longueur", sortable: true, defaultVisible: false, mono: true, value: () => DASH, sortValue: () => -1 },
-  { key: "turns", label: "Virages", sortable: true, defaultVisible: false, mono: true, value: () => DASH, sortValue: () => -1 },
+  { key: "length", labelKey: "columns.length", sortable: true, defaultVisible: false, mono: true, value: () => DASH, sortValue: () => -1 },
+  { key: "turns", labelKey: "columns.turns", sortable: true, defaultVisible: false, mono: true, value: () => DASH, sortValue: () => -1 },
   {
     key: "csp",
-    label: "Extensions CSP",
+    labelKey: "columns.csp",
     sortable: false,
     defaultVisible: true,
     value: (c) => (c.csp_features.length ? c.csp_features.join(" · ") : DASH),

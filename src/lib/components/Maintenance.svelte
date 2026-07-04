@@ -5,9 +5,11 @@
     maintenanceScan,
     deleteBrokenMod,
     removeOrphanJunction,
+    reindexLibrary,
     type MaintenanceReport,
   } from "$lib/maintenance";
   import { indexStockContent } from "$lib/submods";
+  import { t } from "$lib/i18n/index.svelte";
 
   let report = $state<MaintenanceReport | null>(null);
   let scanning = $state(false);
@@ -15,6 +17,22 @@
   let error = $state("");
   let indexing = $state(false);
   let indexMsg = $state("");
+  let reindexing = $state(false);
+  let reindexMsg = $state("");
+
+  async function doReindex() {
+    reindexing = true;
+    error = "";
+    reindexMsg = "";
+    try {
+      const n = await reindexLibrary();
+      reindexMsg = t("maintenance.reindexDone", { count: n });
+    } catch (e) {
+      error = String(e);
+    } finally {
+      reindexing = false;
+    }
+  }
 
   async function doIndexStock() {
     indexing = true;
@@ -22,9 +40,7 @@
     indexMsg = "";
     try {
       const n = await indexStockContent();
-      indexMsg = n > 0
-        ? `${n} élément(s) de contenu de base indexé(s).`
-        : "Aucun nouveau contenu de base à indexer.";
+      indexMsg = n > 0 ? t("maintenance.stockIndexed", { count: n }) : t("maintenance.stockNoneNew");
     } catch (e) {
       error = String(e);
     } finally {
@@ -76,46 +92,57 @@
 <div class="maint">
   <header class="head">
     <div>
-      <h2>Maintenance</h2>
-      <p class="sub">Détecte les mods cassés (fichiers manquants) et les junctions orphelines (§9.3). Rien n'est supprimé sans ton action.</p>
+      <h2>{t("nav.maintenance")}</h2>
+      <p class="sub">{t("maintenance.subtitle")}</p>
     </div>
     <button class="btn btn-primary" type="button" onclick={scan} disabled={scanning}>
-      {scanning ? "Analyse…" : "Analyser"}
+      {scanning ? t("maintenance.scanning") : t("maintenance.scan")}
     </button>
   </header>
 
   {#if error}<div class="err">{error}</div>{/if}
 
   <section class="stock-sec">
-    <h3>Contenu de base (Kunos)</h3>
-    <p class="hint">Indexe les voitures/circuits de base présents dans content/ (§12bis.1) — lecture seule, non désactivables. Permet aux skins et sons de s'y rattacher.</p>
+    <h3>{t("maintenance.stockTitle")}</h3>
+    <p class="hint">{t("maintenance.stockHint")}</p>
     <div class="stock-row">
       <button class="btn" type="button" onclick={doIndexStock} disabled={indexing}>
-        {indexing ? "Indexation…" : "Indexer le contenu de base"}
+        {indexing ? t("maintenance.indexing") : t("maintenance.indexStock")}
       </button>
       {#if indexMsg}<span class="stock-msg">{indexMsg}</span>{/if}
     </div>
   </section>
 
+  <section class="stock-sec">
+    <h3>{t("maintenance.reindexTitle")}</h3>
+    <p class="hint">{t("maintenance.reindexHint")}</p>
+    <div class="stock-row">
+      <button class="btn" type="button" onclick={doReindex} disabled={reindexing}>
+        {reindexing ? t("maintenance.reindexing") : t("maintenance.reindex")}
+      </button>
+      {#if reindexMsg}<span class="stock-msg">{reindexMsg}</span>{/if}
+    </div>
+  </section>
+
   {#if report}
     {#if isClean}
-      <div class="ok">✓ Aucun problème détecté. Bibliothèque et junctions cohérentes.</div>
+      <div class="ok">✓ {t("maintenance.clean")}</div>
     {/if}
 
     {#if report.broken.length}
       <section>
-        <h3>Mods cassés <span class="count mono">{report.broken.length}</span></h3>
-        <p class="hint">Fichiers de la version active introuvables ou structure invalide. Supprimer retire le mod de l'overlay et ses fichiers de bibliothèque.</p>
+        <h3>{t("maintenance.brokenTitle")} <span class="count mono">{report.broken.length}</span></h3>
+        <p class="hint">{t("maintenance.brokenHint")}</p>
         <ul class="list">
           {#each report.broken as b (b.id)}
             <li>
               <div class="l-main">
                 <span class="l-name">{b.name ?? b.id}</span>
-                <span class="l-kind mono">{b.kind === "Track" ? "Circuit" : "Voiture"}</span>
-                <span class="l-reason">{b.reason}</span>
+                <span class="l-kind mono">{b.kind === "Track" ? t("library.typeTrack") : t("library.typeCar")}</span>
+                <span class="l-reason">{t(b.reason)}</span>
               </div>
               <button class="btn danger" type="button" onclick={() => removeBroken(b.id)} disabled={busy === b.id}>
-                {busy === b.id ? "…" : "Supprimer"}
+                {busy === b.id ? t("common.working") : t("common.delete")}
               </button>
             </li>
           {/each}
@@ -125,18 +152,18 @@
 
     {#if report.orphans.length}
       <section>
-        <h3>Junctions orphelines <span class="count mono">{report.orphans.length}</span></h3>
-        <p class="hint">Liens dans content/ pointant vers une version supprimée. Les retirer ne touche qu'au lien (garde-fou : jamais un vrai dossier).</p>
+        <h3>{t("maintenance.orphansTitle")} <span class="count mono">{report.orphans.length}</span></h3>
+        <p class="hint">{t("maintenance.orphansHint")}</p>
         <ul class="list">
           {#each report.orphans as o (o.path)}
             <li>
               <div class="l-main">
                 <span class="l-name mono">{o.id}</span>
-                <span class="l-kind mono">{o.kind === "Track" ? "Circuit" : "Voiture"}</span>
+                <span class="l-kind mono">{o.kind === "Track" ? t("library.typeTrack") : t("library.typeCar")}</span>
                 <span class="l-path mono">{o.path}</span>
               </div>
               <button class="btn danger" type="button" onclick={() => removeOrphan(o.kind, o.id)} disabled={busy === `${o.kind}/${o.id}`}>
-                {busy === `${o.kind}/${o.id}` ? "…" : "Retirer"}
+                {busy === `${o.kind}/${o.id}` ? t("common.working") : t("common.remove")}
               </button>
             </li>
           {/each}
@@ -144,7 +171,7 @@
       </section>
     {/if}
   {:else if !scanning}
-    <div class="empty">Lance une analyse pour détecter les problèmes.</div>
+    <div class="empty">{t("maintenance.emptyHint")}</div>
   {/if}
 </div>
 

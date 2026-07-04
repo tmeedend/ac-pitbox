@@ -298,6 +298,20 @@ fn maintenance_scan(app: AppHandle, db: State<Db>) -> Result<maintenance::Mainte
     maintenance::scan(&conn, &cfg)
 }
 
+/// Relit sur le disque les champs cache (nom, auteur, tags fichier, CSP,
+/// skins/layouts) de tous les mods déjà importés, puis réapplique l'ontologie
+/// (même effet que « Réappliquer les règles »). Sert à rattraper un mod dont
+/// le fichier source a été corrigé/édité après import, sans le réimporter.
+/// Renvoie le nombre de mods traités.
+#[tauri::command]
+fn reindex_library(app: AppHandle, db: State<Db>) -> Result<usize, String> {
+    let rules = rules::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let n = maintenance::reindex_all(&conn)?;
+    harmonize::harmonize_all(&conn, &rules).map_err(|e| e.to_string())?;
+    Ok(n)
+}
+
 /// Supprime un mod cassé (fichiers + junction + overlay).
 #[tauri::command]
 fn delete_broken_mod(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
@@ -494,6 +508,7 @@ pub fn run() {
             launch_session,
             open_content_manager,
             maintenance_scan,
+            reindex_library,
             delete_broken_mod,
             remove_orphan_junction,
             delete_pack,

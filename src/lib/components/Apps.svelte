@@ -4,6 +4,7 @@
   import { onMount } from "svelte";
   import { listApps, activateApp, deactivateApp, deleteApp, type AppItem } from "$lib/apps";
   import { confirm } from "@tauri-apps/plugin-dialog";
+  import { t } from "$lib/i18n/index.svelte";
 
   let apps = $state<AppItem[]>([]);
   let query = $state("");
@@ -30,8 +31,8 @@
   }
 
   async function remove(a: AppItem) {
-    const ok = await confirm(`Supprimer l'app « ${a.id} » ? Elle sera désactivée et ses fichiers retirés.`, {
-      title: "Supprimer",
+    const ok = await confirm(t("apps.confirmDelete", { id: a.id }), {
+      title: t("common.delete"),
       kind: "warning",
     });
     if (!ok) return;
@@ -55,11 +56,11 @@
 <div class="apps">
   <header class="head">
     <div>
-      <h2>Apps</h2>
-      <p class="sub">Apps Python d'Assetto Corsa (§12bis.4) — type autonome, activées/désactivées par junction comme le reste.</p>
+      <h2>{t("nav.apps")}</h2>
+      <p class="sub">{t("apps.subtitle")}</p>
     </div>
     {#if apps.length}
-      <input class="input search" placeholder="Rechercher…" bind:value={query} />
+      <input class="input search" placeholder={t("apps.searchPlaceholder")} bind:value={query} />
     {/if}
   </header>
 
@@ -67,8 +68,8 @@
 
   {#if apps.length === 0}
     <div class="empty">
-      <p>Aucune app importée.</p>
-      <p class="hint">Importe une app via l'import général (dossier <span class="mono">apps/python/&lt;App&gt;/</span>).</p>
+      <p>{t("apps.empty")}</p>
+      <p class="hint">{t("apps.emptyHint", { path: "apps/python/<App>/" })}</p>
     </div>
   {:else}
     <ul class="list">
@@ -76,11 +77,11 @@
         <li class:active={a.active}>
           <span class="a-name mono">{a.id}</span>
           {#if a.source_archive}<span class="src mono">{a.source_archive}</span>{/if}
-          {#if a.active}<span class="state on">actif</span>{:else}<span class="state">inactif</span>{/if}
+          {#if a.active}<span class="state on">{t("common.active").toLowerCase()}</span>{:else}<span class="state">{t("common.inactive").toLowerCase()}</span>{/if}
           <button class="btn" type="button" onclick={() => toggle(a)} disabled={busy === a.id}>
-            {busy === a.id ? "…" : a.active ? "Désactiver" : "Activer"}
+            {busy === a.id ? t("common.working") : a.active ? t("common.deactivate") : t("common.activate")}
           </button>
-          <button class="btn del" type="button" title="Supprimer" onclick={() => remove(a)} disabled={busy === a.id}>✕</button>
+          <button class="btn del" type="button" title={t("common.delete")} onclick={() => remove(a)} disabled={busy === a.id}>✕</button>
         </li>
       {/each}
     </ul>

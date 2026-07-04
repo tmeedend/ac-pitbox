@@ -313,6 +313,62 @@ pub fn insert_version(
     Ok(())
 }
 
+/// Rafraîchit les champs d'un mod dérivés du `ui_*.json` (réindexation) sans
+/// toucher aux champs overlay-éditables. N'écrase que si une nouvelle valeur
+/// est fournie (préserve la valeur existante si le fichier ne la contient pas).
+pub fn update_mod_reindexed_fields(
+    conn: &Connection,
+    id: &str,
+    brand: Option<&str>,
+    display_name: Option<&str>,
+    year: Option<i64>,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE mods SET
+             brand = COALESCE(?2, brand),
+             display_name = COALESCE(?3, display_name),
+             year = COALESCE(?4, year)
+         WHERE id_interne = ?1",
+        params![id, brand, display_name, year],
+    )?;
+    Ok(())
+}
+
+/// Rafraîchit les champs d'une version dérivés du `ui_*.json`/inspection
+/// (réindexation), même logique que `update_mod_reindexed_fields`.
+#[allow(clippy::too_many_arguments)]
+pub fn update_version_reindexed_fields(
+    conn: &Connection,
+    version_id: &str,
+    version_label: Option<&str>,
+    author: Option<&str>,
+    csp_features: &[String],
+    skins: &[String],
+    layouts: &[String],
+    tags_from_mod: &[String],
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE versions SET
+             version_label = COALESCE(?2, version_label),
+             author = COALESCE(?3, author),
+             csp_features = ?4,
+             skins = ?5,
+             layouts = ?6,
+             tags_from_mod = ?7
+         WHERE id = ?1",
+        params![
+            version_id,
+            version_label,
+            author,
+            serde_json::to_string(csp_features).unwrap_or_else(|_| "[]".into()),
+            serde_json::to_string(skins).unwrap_or_else(|_| "[]".into()),
+            serde_json::to_string(layouts).unwrap_or_else(|_| "[]".into()),
+            serde_json::to_string(tags_from_mod).unwrap_or_else(|_| "[]".into()),
+        ],
+    )?;
+    Ok(())
+}
+
 pub fn set_active_version(conn: &Connection, mod_id: &str, version_id: &str) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE mods SET active_version_id = ?2 WHERE id_interne = ?1",

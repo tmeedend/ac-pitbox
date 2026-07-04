@@ -8,6 +8,7 @@
     type ApplyReport,
     type ProfileRow,
   } from "$lib/profiles";
+  import { t } from "$lib/i18n/index.svelte";
 
   let profiles = $state<ProfileRow[]>([]);
   let newName = $state("");
@@ -66,28 +67,28 @@
 
 <div class="profiles">
   <header>
-    <h2>Profils</h2>
-    <p class="sub">Ensembles nommés de mods activés (§7). Appliquer un profil réconcilie les junctions pour correspondre exactement au set.</p>
+    <h2>{t("nav.profiles")}</h2>
+    <p class="sub">{t("profiles.subtitle")}</p>
   </header>
 
   <div class="create">
     <input
       class="input"
-      placeholder="Nom du profil (ex. GT3 endurance)…"
+      placeholder={t("profiles.namePlaceholder")}
       bind:value={newName}
       onkeydown={(e) => e.key === "Enter" && create()}
     />
     <button class="btn btn-primary" type="button" onclick={create} disabled={busy || !newName.trim()}>
-      Capturer l'état actif
+      {t("profiles.capture")}
     </button>
   </div>
-  <p class="hint">Le profil mémorise les mods actuellement actifs et leur version.</p>
+  <p class="hint">{t("profiles.captureHint")}</p>
 
   {#if error}<div class="err">{error}</div>{/if}
 
   {#if report}
     <div class="report">
-      <b>{report.name}</b> appliqué — {report.r.activated} activé(s), {report.r.deactivated} désactivé(s)
+      {t("profiles.appliedReport", { name: report.name, activated: report.r.activated, deactivated: report.r.deactivated })}
       {#if report.r.errors.length}
         <ul class="r-errs">
           {#each report.r.errors as e}<li>{e}</li>{/each}
@@ -97,18 +98,18 @@
   {/if}
 
   {#if profiles.length === 0}
-    <div class="empty">Aucun profil. Active des mods puis capture l'état ci-dessus.</div>
+    <div class="empty">{t("profiles.empty")}</div>
   {:else}
     <ul class="list">
       {#each profiles as p (p.id)}
         <li>
           <div class="p-info">
             <span class="p-name">{p.name}</span>
-            <span class="p-count mono">{p.entry_count} mod(s)</span>
+            <span class="p-count mono">{t("profiles.modCount", { count: p.entry_count })}</span>
           </div>
           <div class="p-actions">
-            <button class="btn btn-primary" type="button" onclick={() => apply(p)} disabled={busy}>Appliquer</button>
-            <button class="btn-ghost del" type="button" onclick={() => remove(p)} disabled={busy} title="Supprimer">✕</button>
+            <button class="btn btn-primary" type="button" onclick={() => apply(p)} disabled={busy}>{t("profiles.apply")}</button>
+            <button class="btn-ghost del" type="button" onclick={() => remove(p)} disabled={busy} title={t("common.delete")}>✕</button>
           </div>
         </li>
       {/each}

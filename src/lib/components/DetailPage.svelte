@@ -28,6 +28,7 @@
   import PowerCurve from "./PowerCurve.svelte";
   import { nav, pickSession } from "$lib/nav.svelte";
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
+  import { t } from "$lib/i18n/index.svelte";
 
   interface Props {
     id: string;
@@ -82,8 +83,8 @@
   async function uninstallPack() {
     if (!detail?.source_pack || packBusy) return;
     const ok = await confirm(
-      `Désinstaller le pack « ${detail.source_pack} » ? Les ${siblings.length + 1} mods du pack seront supprimés (fichiers + bibliothèque). Irréversible.`,
-      { title: "Désinstaller le pack", kind: "warning" },
+      t("detail.uninstallConfirm", { pack: detail.source_pack, count: siblings.length + 1 }),
+      { title: t("detail.uninstallTitle"), kind: "warning" },
     );
     if (!ok) return;
     packBusy = true;
@@ -100,7 +101,7 @@
 
   async function doExport() {
     if (!detail || exporting) return;
-    const dir = await open({ directory: true, multiple: false, title: "Dossier d'export" });
+    const dir = await open({ directory: true, multiple: false, title: t("detail.exportDirTitle") });
     if (!dir || typeof dir !== "string") return;
     exporting = true;
     actionError = "";
@@ -265,10 +266,10 @@
 
   async function addManual() {
     if (!detail) return;
-    const t = manualInput.trim().toLowerCase();
+    const tag = manualInput.trim().toLowerCase();
     manualInput = "";
-    if (!t || detail.tags_manual.includes(t)) return;
-    detail.tags_manual = [...detail.tags_manual, t];
+    if (!tag || detail.tags_manual.includes(tag)) return;
+    detail.tags_manual = [...detail.tags_manual, tag];
     await setManualTags(detail.id_interne, detail.tags_manual);
     onchange?.();
   }
@@ -304,21 +305,27 @@
     return [s.bhp, s.torque, s.weight, s.topspeed].filter((x): x is string => !!x).join(" · ");
   }
 
-  const POS: Record<string, string> = { FRONT: "AV", MID: "CEN", REAR: "ARR" };
   const DASH = "—";
 
-  // Fiche technique (champs structurés §5bis.1) — abréviations façon maquette.
+  function posLabel(pos: string): string {
+    if (pos === "FRONT") return t("detail.posFront");
+    if (pos === "MID") return t("detail.posMid");
+    if (pos === "REAR") return t("detail.posRear");
+    return pos;
+  }
+
+  // Fiche technique (champs structurés) — abréviations façon maquette.
   function ficheRows(d: ModDetail): [string, string][] {
-    const engine = [d.engine_config, d.engine_pos ? POS[d.engine_pos] ?? d.engine_pos : null]
+    const engine = [d.engine_config, d.engine_pos ? posLabel(d.engine_pos) : null]
       .filter(Boolean)
       .join(" · ");
     return [
-      ["MOTEUR", engine || DASH],
-      ["ADMISSION", d.aspiration ?? DASH],
-      ["TRANSM.", d.drivetrain ?? DASH],
-      ["BOÎTE", d.gearbox ?? DASH],
-      ["PAYS", d.country ?? DASH],
-      ["P/POIDS", d.specs?.pwratio ?? DASH],
+      [t("detail.specEngine"), engine || DASH],
+      [t("detail.specAspiration"), d.aspiration ?? DASH],
+      [t("detail.specDrivetrain"), d.drivetrain ?? DASH],
+      [t("detail.specGearbox"), d.gearbox ?? DASH],
+      [t("detail.specCountry"), d.country ?? DASH],
+      [t("detail.specPowerWeight"), d.specs?.pwratio ?? DASH],
     ];
   }
 
@@ -329,11 +336,11 @@
 
 <div class="page">
   {#if !detail}
-    <div class="empty">Chargement…</div>
+    <div class="empty">{t("common.loading")}</div>
   {:else}
     {@const d = detail}
     <header class="head">
-      <button class="back" type="button" onclick={onclose} title="Retour à la liste">←</button>
+      <button class="back" type="button" onclick={onclose} title={t("detail.backTooltip")}>←</button>
       {#if isCar && d.badge}
         <img class="escu badge-img" src={previewSrc(d.badge)} alt={d.brand ?? ""} />
       {:else}
@@ -348,29 +355,29 @@
         </div>
       </div>
       <div class="actions">
-        <button class="fav" class:on={d.is_favorite} type="button" onclick={toggleFav} title="Favori">
+        <button class="fav" class:on={d.is_favorite} type="button" onclick={toggleFav} title={t("common.favorite")}>
           {d.is_favorite ? "♥" : "♡"}
         </button>
         {#if d.is_stock}
-          <span class="base-tag" title="Contenu de base Kunos — lecture seule (§12bis.1)">Contenu de base</span>
+          <span class="base-tag" title={t("detail.stockTooltip")}>{t("detail.stockLabel")}</span>
         {:else if d.active}
-          <button class="btn" type="button" onclick={deactivate} disabled={busy}>Désactiver</button>
+          <button class="btn" type="button" onclick={deactivate} disabled={busy}>{t("common.deactivate")}</button>
         {:else}
-          <button class="btn" type="button" onclick={() => activate()} disabled={busy}>Activer</button>
+          <button class="btn" type="button" onclick={() => activate()} disabled={busy}>{t("common.activate")}</button>
         {/if}
         {#if !d.is_stock}
-          <button class="btn" type="button" onclick={doExport} disabled={exporting} title="Exporter en archive autonome (§9.1)">
-            {exporting ? "Export…" : "⤓ Exporter"}
+          <button class="btn" type="button" onclick={doExport} disabled={exporting} title={t("detail.exportTooltip")}>
+            {exporting ? t("detail.exporting") : t("detail.export")}
           </button>
         {/if}
-        <button class="btn primary" type="button" onclick={drive}>Conduire</button>
+        <button class="btn primary" type="button" onclick={drive}>{t("detail.drive")}</button>
       </div>
     </header>
 
     {#if actionError}<div class="action-err">{actionError}</div>{/if}
     {#if exportResult}
       <div class="export-ok">
-        ✓ Archive créée : {exportResult.included.length} élément(s) embarqué(s).
+        {t("detail.exportSuccess", { count: exportResult.included.length })}
         {#if exportResult.warnings.length}
           <ul class="export-warn">{#each exportResult.warnings as w}<li>⚠ {w}</li>{/each}</ul>
         {/if}
@@ -394,7 +401,7 @@
           {#if hs}
             <div class="hero-specs">
               <div class="mono hs-line">{hs}</div>
-              <div class="mono hs-label">SPEC NATIF</div>
+              <div class="mono hs-label">{t("detail.specNative")}</div>
             </div>
           {/if}
         {/if}
@@ -405,7 +412,7 @@
           {@const hasCurve = !!d.specs && d.specs.power_curve.length > 1}
           <div class="tech-curve" class:with-curve={hasCurve}>
             <div class="box fiche">
-              <div class="box-h">FICHE TECHNIQUE</div>
+              <div class="box-h">{t("detail.techSheet")}</div>
               <div class="specgrid">
                 {#each ficheRows(d) as [k, v]}
                   <div><div class="k">{k}</div><div class="v">{v}</div></div>
@@ -415,7 +422,7 @@
             {#if hasCurve && d.specs}
               <div class="curve-col">
                 <div class="lbl">
-                  COURBE
+                  {t("detail.curve")}
                   <span class="legend"><span class="lg-pow">— bhp</span><span class="lg-tor">— Nm</span></span>
                 </div>
                 <div class="curve-box">
@@ -426,24 +433,24 @@
           </div>
 
           {#if d.specs?.description}
-            <div class="box-h">DESCRIPTION</div>
+            <div class="box-h">{t("common.description")}</div>
             <div class="desc-body">{decodeDescription(d.specs.description)}</div>
           {/if}
         {:else}
           {@const lay = d.track?.layouts[previewLayout]}
           <div class="box">
-            <div class="box-h">INFOS CIRCUIT</div>
+            <div class="box-h">{t("detail.trackInfo")}</div>
             <div class="specgrid" style="grid-template-columns:1fr 1fr;">
-              <div><div class="k">LAYOUT</div><div class="v">{lay?.name ?? "(défaut)"}</div></div>
-              <div><div class="k">LONGUEUR</div><div class="v">{lay?.length ?? "—"}</div></div>
+              <div><div class="k">{t("detail.layoutLabel")}</div><div class="v">{lay?.name ?? t("detail.defaultLayout")}</div></div>
+              <div><div class="k">{t("detail.lengthLabel")}</div><div class="v">{lay?.length ?? "—"}</div></div>
             </div>
           </div>
           {#if d.csp_features.length}
-            <div class="lbl">EXTENSIONS CSP</div>
+            <div class="lbl">{t("columns.csp")}</div>
             <div class="csp-row">{#each d.csp_features as f}<span class="csp">{f}</span>{/each}</div>
           {/if}
           {#if d.track?.description}
-            <div class="box-h" style="margin-top:11px;">DESCRIPTION</div>
+            <div class="box-h" style="margin-top:11px;">{t("common.description")}</div>
             <div class="desc-body">{decodeDescription(d.track.description)}</div>
           {/if}
         {/if}
@@ -456,7 +463,7 @@
         <!-- Skins : le skin sélectionné devient le skin de session (§8.6), mémorisé -->
         <div class="col">
           <div class="lbl">
-            SKINS <span class="lbl-sub">{skins.length} disponible(s) · cliquer = skin de session</span>
+            {t("detail.skinsLabel")} <span class="lbl-sub">{t("detail.skinsHint", { count: skins.length })}</span>
           </div>
           {#if skins.length}
             <div class="skins">
@@ -466,11 +473,11 @@
                   class="skin"
                   class:preview={i === previewSkin}
                   onclick={() => selectSkin(i)}
-                  title="Choisir ce skin pour la session"
+                  title={t("detail.chooseSkinTooltip")}
                 >
                   <div class="skin-img">
                     {#if sp}<img src={sp} alt={sk.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
-                    {#if i === previewSkin}<span class="skin-apercu mono">SESSION</span>{/if}
+                    {#if i === previewSkin}<span class="skin-apercu mono">{t("library.sessionBadge")}</span>{/if}
                   </div>
                   <div class="skin-b">
                     <span class="skin-name">{sk.name}</span>
@@ -479,39 +486,39 @@
               {/each}
             </div>
           {:else}
-            <div class="muted small">Aucun skin pour cette voiture.</div>
+            <div class="muted small">{t("detail.noSkins")}</div>
           {/if}
         </div>
 
-        <!-- Distance (§6.5) + Son (§12bis) : placeholders « à venir » désactivés -->
+        <!-- Distance + Son : placeholders « à venir » désactivés -->
         <div class="col">
-          <div class="lbl">DISTANCE</div>
+          <div class="lbl">{t("detail.distanceLabel")}</div>
           <div class="box">
             <div class="dist">
               <span class="dist-ic">🛣</span>
               <span class="dist-km mono">{d.distance_km != null ? `${d.distance_km.toFixed(1)} km` : "—"}</span>
-              <span class="dist-state mono" class:on={d.tried}>{d.tried ? "essayée ✓" : "jamais essayée"}</span>
+              <span class="dist-state mono" class:on={d.tried}>{d.tried ? t("detail.triedYes") : t("detail.triedNo")}</span>
             </div>
           </div>
-          <div class="lbl" style="margin-top:14px;">SON MOTEUR <span class="lbl-sub">exclusif — un seul</span></div>
+          <div class="lbl" style="margin-top:14px;">{t("detail.engineSound")} <span class="lbl-sub">{t("detail.soundHint")}</span></div>
           <div class="sounds">
             <button class="sound" class:sel={!activeSound} type="button" onclick={() => pickSound(null)} disabled={soundBusy}>
               <span class="radio"></span>
-              <span class="s-name">Origine</span>
-              <span class="s-tag mono">BASE</span>
+              <span class="s-name">{t("detail.soundOrigin")}</span>
+              <span class="s-tag mono">{t("library.baseBadge")}</span>
             </button>
             {#each sounds as snd (snd.id)}
               <button class="sound" class:sel={snd.is_active} type="button" onclick={() => pickSound(snd.id)} disabled={soundBusy}>
                 <span class="radio"></span>
                 <span class="s-name">{snd.name}</span>
-                <span class="s-tag mono">MOD</span>
+                <span class="s-tag mono">{t("detail.modTag")}</span>
               </button>
             {/each}
           </div>
           {#if sounds.length === 0}
-            <div class="muted small" style="margin-top:6px;">Aucun mod de son importé pour cette voiture.</div>
+            <div class="muted small" style="margin-top:6px;">{t("detail.noSounds")}</div>
           {:else}
-            <div class="restore-note">↺ son d'origine restaurable</div>
+            <div class="restore-note">↺ {t("detail.soundRestorable")}</div>
           {/if}
 
           {@render tagsBlock(d)}
@@ -528,54 +535,56 @@
         <!-- Layouts (galerie illustrée par le tracé, comme les skins voiture) -->
         <div class="col">
           <div class="lbl">
-            LAYOUTS <span class="lbl-sub">{d.track?.layouts.length ?? 0} · cliquer = layout de session</span>
+            {t("columns.layouts")} <span class="lbl-sub">{t("detail.layoutsHint", { count: d.track?.layouts.length ?? 0 })}</span>
           </div>
           {#if d.track && d.track.layouts.length}
             <div class="skins">
               {#each d.track.layouts as l, i (l.id || i)}
                 {@const o = previewSrc(l.outline)}
-                <button class="skin" class:preview={i === previewLayout} onclick={() => selectLayout(i)} title="Choisir ce layout pour la session">
+                <button class="skin" class:preview={i === previewLayout} onclick={() => selectLayout(i)} title={t("detail.chooseLayoutTooltip")}>
                   <div class="skin-img layout-img">
                     {#if o}<img src={o} alt={l.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
-                    {#if i === previewLayout}<span class="skin-apercu mono">SESSION</span>{/if}
+                    {#if i === previewLayout}<span class="skin-apercu mono">{t("library.sessionBadge")}</span>{/if}
                   </div>
                   <div class="skin-b"><span class="skin-name">{l.name}</span></div>
                 </button>
               {/each}
             </div>
           {:else}
-            <div class="muted small">Tracé unique.</div>
+            <div class="muted small">{t("detail.singleLayout")}</div>
           {/if}
 
-          <!-- Skins de circuit (TRACK_SKIN, §12bis.2) — pas d'activation, tous chargés. -->
-          <div class="lbl section">SKINS DE CIRCUIT · {trackSkins.length}</div>
+          <!-- Skins de circuit (TRACK_SKIN) — pas d'activation, tous chargés. -->
+          <div class="lbl section">{t("detail.trackSkinsLabel", { count: trackSkins.length })}</div>
           {#if trackSkins.length}
             <ul class="tsk-list">
               {#each trackSkins as s (s.id)}
                 <li><span class="tsk-name">{s.name}</span>{#if s.source_archive}<span class="tsk-src mono">{s.source_archive}</span>{/if}</li>
               {/each}
             </ul>
-            <div class="muted small">Tous présents → chargés par AC. Gestion détaillée dans la vue Skins.</div>
+            <div class="muted small">{t("detail.trackSkinsNote")}</div>
           {:else}
-            <div class="muted small">Aucun skin de circuit importé.</div>
+            <div class="muted small">{t("detail.noTrackSkins")}</div>
           {/if}
         </div>
 
-        <!-- Distance (§6.5) -->
+        <!-- Distance + Auteur + Tags -->
         <div class="col">
-          <div class="lbl">DISTANCE</div>
+          <div class="lbl">{t("detail.distanceLabel")}</div>
           <div class="box">
             <div class="dist">
               <span class="dist-ic">🛣</span>
               <span class="dist-km mono">{d.distance_km != null ? `${d.distance_km.toFixed(1)} km` : "—"}</span>
-              <span class="dist-state mono" class:on={d.tried}>{d.tried ? "essayé ✓" : "jamais essayé"}</span>
+              <span class="dist-state mono" class:on={d.tried}>{d.tried ? t("detail.triedYes") : t("detail.triedNo")}</span>
             </div>
           </div>
+          <div class="lbl">{t("detail.authorLabel")}</div>
+          <div class="box">{d.author ?? "—"}</div>
+          {@render tagsBlock(d)}
         </div>
 
-        <!-- Tags + Versions + Historique + Provenance -->
+        <!-- Versions + Historique + Provenance -->
         <div class="col">
-          {@render tagsBlock(d)}
           {@render versionsBlock(d)}
           {@render historyBlock(d)}
           {@render publishedBlock(d)}
@@ -587,32 +596,32 @@
 </div>
 
 {#snippet tagsBlock(d: ModDetail)}
-  <div class="lbl">TAGS</div>
+  <div class="lbl">{t("detail.tagsLabel")}</div>
   <div class="tags">
-    {#each d.tags_from_rule.filter((t) => t.startsWith("#")) as t}<span class="tag cat">{t}</span>{/each}
-    {#each d.tags_from_rule.filter((t) => !t.startsWith("#")) as t}<span class="tag rule">{t}</span>{/each}
-    {#each d.tags_manual as t}
-      <span class="tag manual">{t}<button class="x" type="button" onclick={() => removeManual(t)} title="Retirer">×</button></span>
+    {#each d.tags_from_rule.filter((tag) => tag.startsWith("#")) as tag}<span class="tag cat">{tag}</span>{/each}
+    {#each d.tags_from_rule.filter((tag) => !tag.startsWith("#")) as tag}<span class="tag rule">{tag}</span>{/each}
+    {#each d.tags_manual as tag}
+      <span class="tag manual">{tag}<button class="x" type="button" onclick={() => removeManual(tag)} title={t("common.remove")}>×</button></span>
     {/each}
-    {#each d.tags_from_mod as t}<span class="tag mod">{t}</span>{/each}
+    {#each d.tags_from_mod as tag}<span class="tag mod">{tag}</span>{/each}
   </div>
   <input
     class="input manual-input"
-    placeholder="ajouter un tag manuel…"
+    placeholder={t("detail.addTagPlaceholder")}
     bind:value={manualInput}
     onkeydown={(e) => e.key === "Enter" && addManual()}
   />
 {/snippet}
 
 {#snippet versionsBlock(d: ModDetail)}
-  <div class="lbl section">VERSIONS · {d.versions.length}</div>
+  <div class="lbl section">{t("detail.versionsLabel", { count: d.versions.length })}</div>
   {#each d.versions as v}
     <div class="ver" class:active={v.id === d.active_version_id}>
-      <span class="v-label mono">{v.version_label ?? "(sans n°)"}</span>
+      <span class="v-label mono">{v.version_label ?? t("detail.noVersionNumber")}</span>
       {#if v.id === d.active_version_id}
-        <span class="tag cat tiny">ACTIVE</span>
+        <span class="tag cat tiny">{t("common.active").toUpperCase()}</span>
       {:else}
-        <button class="v-activate" type="button" onclick={() => activate(v.id)} disabled={busy}>Activer</button>
+        <button class="v-activate" type="button" onclick={() => activate(v.id)} disabled={busy}>{t("common.activate")}</button>
       {/if}
       <span class="v-meta mono">{fmtDate(v.imported_at)}</span>
     </div>
@@ -620,7 +629,7 @@
 {/snippet}
 
 {#snippet historyBlock(d: ModDetail)}
-  <div class="lbl section">HISTORIQUE</div>
+  <div class="lbl section">{t("detail.historyLabel")}</div>
   <ul class="history">
     {#each d.history.filter((h) => h.event !== "ACTIVATE" && h.event !== "DEACTIVATE") as h}
       <li>
@@ -633,10 +642,10 @@
 {/snippet}
 
 {#snippet publishedBlock(d: ModDetail)}
-  <div class="lbl section">DATE DE PUBLICATION</div>
+  <div class="lbl section">{t("detail.publishedLabel")}</div>
   <div class="srcbox">
     <div class="srcrow">
-      <span class="src-k">ESTIMÉE</span>
+      <span class="src-k">{t("detail.estimated")}</span>
       <span class="src-v">{d.published_at ? fmtDate(d.published_at) : "—"}</span>
     </div>
   </div>
@@ -645,50 +654,50 @@
 {#snippet provenanceBlock(d: ModDetail)}
   {@const archive = activeArchive(d)}
   {#if d.source_pack || archive || d.source_url}
-    <div class="lbl section">SOURCE / ORIGINE</div>
+    <div class="lbl section">{t("detail.sourceLabel")}</div>
     <div class="srcbox">
-      <div class="src-h">PROVENANCE DU MOD</div>
+      <div class="src-h">{t("detail.provenanceTitle")}</div>
       {#if d.source_pack}
         <div class="srcrow">
-          <span class="src-k">PACK</span>
-          <button class="chip" type="button" onclick={filterByPack} title="Voir toutes les entités de ce pack">
-            ⬢ {d.source_pack} <span class="chip-n">· {siblings.length + 1} mod(s)</span>
+          <span class="src-k">{t("detail.packLabel")}</span>
+          <button class="chip" type="button" onclick={filterByPack} title={t("detail.viewPackTooltip")}>
+            ⬢ {d.source_pack} <span class="chip-n">· {t("detail.modCount", { count: siblings.length + 1 })}</span>
           </button>
         </div>
       {/if}
       <div class="srcrow">
-        <span class="src-k">ARCHIVE</span>
+        <span class="src-k">{t("detail.archiveLabel")}</span>
         <span class="src-v">{archive ?? "—"}</span>
       </div>
       <div class="srcrow">
-        <span class="src-k">URL D'ORIGINE</span>
+        <span class="src-k">{t("detail.originUrlLabel")}</span>
         {#if d.source_url}
           <span class="src-v url">{d.source_url}</span>
         {:else}
-          <span class="src-empty">— non renseignée (extension navigateur, lot L7)</span>
+          <span class="src-empty">{t("detail.noUrl")}</span>
         {/if}
       </div>
     </div>
 
     {#if d.source_pack}
-      <div class="lbl section">AUTRES ENTITÉS DU MÊME PACK · {siblings.length}</div>
+      <div class="lbl section">{t("detail.siblingsLabel", { count: siblings.length })}</div>
       {#if siblings.length}
         <div class="siblings">
           {#each siblings as c (c.id_interne)}
-            <button class="sib" type="button" onclick={() => openSibling(c)} title="Ouvrir la fiche">
+            <button class="sib" type="button" onclick={() => openSibling(c)} title={t("detail.openSheetTooltip")}>
               <span class="sib-dot">{c.kind === "Track" ? "🏁" : "🚗"}</span>
               <span class="sib-nm">{c.display_name ?? c.id_interne}</span>
             </button>
           {/each}
         </div>
       {:else}
-        <div class="muted small">Seule entité de ce pack pour l'instant.</div>
+        <div class="muted small">{t("detail.onlyEntity")}</div>
       {/if}
-      <div class="prov-note">Chaque entité reste indépendante (activable, tagguable séparément).</div>
+      <div class="prov-note">{t("detail.packNote")}</div>
       <div class="prov-actions">
-        <button class="btn" type="button" onclick={filterByPack}>⌕ Filtrer par ce pack</button>
+        <button class="btn" type="button" onclick={filterByPack}>⌕ {t("detail.filterByPack")}</button>
         <button class="btn danger" type="button" onclick={uninstallPack} disabled={packBusy}>
-          {packBusy ? "…" : "🗑 Désinstaller le pack"}
+          {packBusy ? t("common.working") : `🗑 ${t("detail.uninstallPack")}`}
         </button>
       </div>
     {/if}

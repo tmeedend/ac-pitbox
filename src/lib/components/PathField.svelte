@@ -1,6 +1,7 @@
 <script lang="ts">
   import { open } from "@tauri-apps/plugin-dialog";
   import type { Check } from "$lib/config";
+  import { t } from "$lib/i18n/index.svelte";
 
   interface Props {
     label: string;
@@ -42,7 +43,7 @@
 <div class="field">
   <div class="row1">
     <span class="label">{label}</span>
-    {#if optional}<span class="opt">optionnel</span>{/if}
+    {#if optional}<span class="opt">{t("pathfield.optional")}</span>{/if}
   </div>
   <div class="row2">
     <input
@@ -52,11 +53,11 @@
       bind:value
       spellcheck="false"
     />
-    <button class="btn" type="button" onclick={browse}>Parcourir…</button>
+    <button class="btn" type="button" onclick={browse}>{t("pathfield.browse")}</button>
   </div>
   {#if check}
     <div class="status {check.ok ? 'ok' : check.level === 'optional' ? 'warn' : 'err'}">
-      {check.message}
+      {t(check.message)}
     </div>
   {:else if hint}
     <div class="hint">{hint}</div>

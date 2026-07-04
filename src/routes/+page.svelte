@@ -3,6 +3,7 @@
   import SetupWizard from "$lib/components/SetupWizard.svelte";
   import AppShell from "$lib/components/AppShell.svelte";
   import { getConfig, validateConfig } from "$lib/config";
+  import { t } from "$lib/i18n/index.svelte";
 
   type View = "loading" | "wizard" | "app";
   let view = $state<View>("loading");
@@ -15,7 +16,7 @@
 </script>
 
 {#if view === "loading"}
-  <div class="loading">Chargement…</div>
+  <div class="loading">{t("common.loading")}</div>
 {:else if view === "wizard"}
   <SetupWizard ondone={() => (view = "app")} />
 {:else}

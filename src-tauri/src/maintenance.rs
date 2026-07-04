@@ -10,7 +10,7 @@ use serde::Serialize;
 
 use crate::config::AppConfig;
 use crate::modscan::ModKind;
-use crate::{activation, overlay};
+use crate::{activation, inspect, overlay, uijson};
 
 fn kind_of(s: &str) -> ModKind {
     if s == "Track" {
@@ -53,16 +53,17 @@ pub fn scan(conn: &Connection, cfg: &AppConfig) -> Result<MaintenanceReport, Str
             .active_version_id
             .as_ref()
             .and_then(|vid| overlay::get_version_path(conn, vid).ok().flatten());
+        // `reason` est une clé i18n (résolue côté frontend), pas du texte affichable.
         let reason = match &path {
-            None => Some("aucune version active".to_string()),
+            None => Some("maintenance.reasonNoActiveVersion".to_string()),
             Some(p) => {
                 let dir = Path::new(p);
                 if !dir.is_dir() {
-                    Some("fichiers de la bibliothèque introuvables".to_string())
+                    Some("maintenance.reasonFilesMissing".to_string())
                 } else if matches!(kind, ModKind::Car) && !dir.join("ui").join("ui_car.json").is_file() {
-                    Some("ui/ui_car.json manquant".to_string())
+                    Some("maintenance.reasonUiCarMissing".to_string())
                 } else if matches!(kind, ModKind::Track) && !dir.join("ui").is_dir() {
-                    Some("dossier ui/ manquant".to_string())
+                    Some("maintenance.reasonUiDirMissing".to_string())
                 } else {
                     None
                 }
@@ -142,6 +143,75 @@ pub fn remove_orphan(cfg: &AppConfig, kind: &str, id: &str) -> Result<(), String
     activation::remove_junction(&link)
 }
 
+/// Relit le `ui_*.json` (et l'inspection CSP/skins/layouts) de chaque version
+/// d'un mod depuis son `library_path` déjà en bibliothèque, et met à jour les
+/// champs en cache dans l'overlay. Ne réécrit jamais les fichiers du mod
+/// lui-même (lecture seule, §3.0) — sert à rattraper un mod déjà importé dont
+/// le fichier source a changé, ou dont le parsing a été corrigé après coup.
+pub fn reindex_mod(conn: &Connection, id: &str) -> Result<(), String> {
+    let m = overlay::get_mod(conn, id).map_err(|e| e.to_string())?.ok_or("mod introuvable")?;
+    let kind = kind_of(&m.kind);
+    let versions = overlay::get_versions(conn, id).map_err(|e| e.to_string())?;
+
+    let mut fresh_for_mod = None;
+    for v in &versions {
+        let dir = Path::new(&v.library_path);
+        let ui = match kind {
+            ModKind::Car => uijson::read_car(dir),
+            ModKind::Track => uijson::read_track(dir),
+        }
+        .unwrap_or_default();
+        let csp = inspect::csp_features(dir);
+        let skins = match kind {
+            ModKind::Car => inspect::car_skins(dir),
+            ModKind::Track => Vec::new(),
+        };
+        let layouts = match kind {
+            ModKind::Track => inspect::track_layouts(dir),
+            ModKind::Car => Vec::new(),
+        };
+        overlay::update_version_reindexed_fields(
+            conn,
+            &v.id,
+            ui.version.as_deref(),
+            ui.author.as_deref(),
+            &csp,
+            &skins,
+            &layouts,
+            &ui.tags,
+        )
+        .map_err(|e| e.to_string())?;
+
+        if m.active_version_id.as_deref() == Some(v.id.as_str()) {
+            fresh_for_mod = Some(ui);
+        }
+    }
+
+    // Nom/marque/année du mod : reflète la version active, sinon la dernière lue.
+    let fresh_for_mod = fresh_for_mod.or_else(|| {
+        let dir = Path::new(&versions.last()?.library_path);
+        match kind {
+            ModKind::Car => uijson::read_car(dir),
+            ModKind::Track => uijson::read_track(dir),
+        }
+    });
+    if let Some(ui) = fresh_for_mod {
+        overlay::update_mod_reindexed_fields(conn, id, ui.brand.as_deref(), ui.name.as_deref(), ui.year)
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+/// Réindexe tous les mods de la bibliothèque (§9.3bis). Renvoie le nombre traité.
+pub fn reindex_all(conn: &Connection) -> Result<usize, String> {
+    let mods = overlay::list_mods(conn).map_err(|e| e.to_string())?;
+    for m in &mods {
+        reindex_mod(conn, &m.id_interne)?;
+    }
+    Ok(mods.len())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -169,6 +239,41 @@ mod tests {
 
         delete_broken(&conn, &cfg, "ghost").unwrap();
         assert!(overlay::get_mod(&conn, "ghost").unwrap().is_none());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn reindex_fixes_name_read_from_non_utf8_ui_json() {
+        let base = std::env::temp_dir().join(format!("pitbox-reindex-{}", uuid::Uuid::new_v4()));
+        let track_dir = base.join("deutschlandring");
+        std::fs::create_dir_all(track_dir.join("ui")).unwrap();
+        // Fichier réel : "name" correct, mais un octet Windows-1252 (° en 0xB0)
+        // plus loin dans "geotags" rend tout le fichier invalide en UTF-8 strict.
+        let mut bytes = b"{\"name\": \"Deutschlandring\", \"author\": \"Fat-Alfie\", \"tags\": [\"circuit\"], \"geotags\": [\"51.8".to_vec();
+        bytes.push(0xB0); // degré Windows-1252, invalide en UTF-8
+        bytes.extend_from_slice(b" N\"]}");
+        std::fs::write(track_dir.join("ui").join("ui_track.json"), &bytes).unwrap();
+        assert!(String::from_utf8(bytes).is_err(), "le fixture doit reproduire un fichier non-UTF-8");
+
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        // Simule l'état bugué : import précédent retombé sur le nom de dossier.
+        overlay::upsert_mod(&conn, "deutschlandring", "Track", None, Some("deutschlandring"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn, "v1", "deutschlandring", None, None, &now,
+            &track_dir.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "deutschlandring", "v1").unwrap();
+
+        reindex_mod(&conn, "deutschlandring").unwrap();
+
+        let m = overlay::get_mod(&conn, "deutschlandring").unwrap().unwrap();
+        assert_eq!(m.display_name.as_deref(), Some("Deutschlandring"));
+        let versions = overlay::get_versions(&conn, "deutschlandring").unwrap();
+        assert_eq!(versions[0].author.as_deref(), Some("Fat-Alfie"));
+        assert_eq!(versions[0].tags_from_mod, vec!["circuit".to_string()]);
 
         let _ = std::fs::remove_dir_all(&base);
     }

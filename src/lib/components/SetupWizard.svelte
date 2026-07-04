@@ -10,6 +10,7 @@
     type AppConfig,
     type ConfigValidation,
   } from "$lib/config";
+  import { t } from "$lib/i18n/index.svelte";
 
   interface Props {
     ondone: () => void;
@@ -43,10 +44,10 @@
   // Validation à la volée (anti-rebond).
   $effect(() => {
     JSON.stringify(config); // dépendance réactive
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       validation = await validateConfig(config);
     }, 250);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   });
 
   async function finish() {
@@ -72,23 +73,19 @@
         <div class="logo"><span>PB</span></div>
         <div>
           <h1>Pit Box</h1>
-          <p class="sub">Première configuration</p>
+          <p class="sub">{t("setup.title")}</p>
         </div>
       </header>
 
-      <p class="intro">
-        Pit Box a besoin de connaître son environnement avant de démarrer.
-        Les chemins ci-dessous ont été détectés automatiquement quand c'était
-        possible — vérifie-les puis termine.
-      </p>
+      <p class="intro">{t("setup.intro")}</p>
 
       <div class="toolbar">
         <button class="btn" type="button" onclick={detect} disabled={detecting}>
-          {detecting ? "Détection…" : "Détecter automatiquement"}
+          {detecting ? t("setup.detecting") : t("setup.detect")}
         </button>
         {#if validation}
           <span class="pill {validation.is_valid ? 'pill-ok' : 'pill-err'}">
-            {validation.is_valid ? "Configuration valide" : "Chemins requis manquants"}
+            {validation.is_valid ? t("setup.validConfig") : t("setup.missingPaths")}
           </span>
         {/if}
       </div>
@@ -106,7 +103,7 @@
           onclick={finish}
           disabled={!validation?.is_valid || saving}
         >
-          {saving ? "Enregistrement…" : "Terminer et démarrer"}
+          {saving ? t("settings.saving") : t("setup.finish")}
         </button>
       </footer>
     </div>
