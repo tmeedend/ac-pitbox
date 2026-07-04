@@ -399,7 +399,10 @@
               >{c.is_favorite ? "♥" : "♡"}</span>
             </div>
             <div class="c-name">{c.display_name ?? c.id_interne}</div>
-            <div class="c-sub">{c.brand ?? ""}{c.year ? ` · ${c.year}` : ""}</div>
+            <div class="c-sub">
+              {#if c.badge}<img class="brand-badge" src={previewSrc(c.badge)} alt="" loading="lazy" />{/if}
+              {c.brand ?? ""}{c.year ? ` · ${c.year}` : ""}
+            </div>
           </button>
         {/each}
       </div>
@@ -426,6 +429,9 @@
                   >
                     {#if col.key === "active"}
                       {#if c.active}<span class="on-dot"></span>actif{:else}—{/if}
+                    {:else if col.key === "brand"}
+                      {#if c.badge}<img class="brand-badge" src={previewSrc(c.badge)} alt="" loading="lazy" />{/if}
+                      {col.value(c)}
                     {:else}
                       {col.value(c)}
                     {/if}
@@ -726,6 +732,13 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .brand-badge {
+    width: 13px;
+    height: 13px;
+    object-fit: contain;
+    vertical-align: -2px;
+    margin-right: 4px;
   }
 
   .table-wrap {

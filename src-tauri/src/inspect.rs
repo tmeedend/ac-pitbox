@@ -136,6 +136,11 @@ pub fn track_outline(mod_dir: &Path) -> Option<String> {
     track_find(mod_dir, &["outline.png", "outline.jpg", "map.png"])
 }
 
+/// Badge/logo de la marque (`ui/badge.png`), presque toujours livré avec le mod.
+pub fn brand_badge(car_dir: &Path) -> Option<String> {
+    first_existing(&car_dir.join("ui"), &["badge.png", "badge.jpg"])
+}
+
 /// Chemin absolu d'une vignette de preview pour la galerie (§6.1), si trouvée.
 /// Voiture : preview du premier skin qui en a une. Circuit : outline/preview.
 pub fn preview_path(kind: ModKind, mod_dir: &Path) -> Option<String> {

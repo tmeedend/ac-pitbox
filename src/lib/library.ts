@@ -52,6 +52,8 @@ export interface ModCard {
   tried: boolean;
   /** Poids natif (voitures), lu à la volée dans ui_car.json (§6.2). */
   weight: string | null;
+  /** Badge/logo de la marque (ui/badge.png, voitures), à la place des initiales. */
+  badge: string | null;
 }
 
 export interface VersionRow {

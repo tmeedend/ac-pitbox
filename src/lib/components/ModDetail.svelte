@@ -388,7 +388,7 @@
       <section>
         <h3>Historique</h3>
         <ul class="history">
-          {#each detail.history as h}
+          {#each detail.history.filter((h) => h.event !== "ACTIVATE" && h.event !== "DEACTIVATE") as h}
             <li>
               <span class="ev">{h.event}</span>
               <span class="det">{h.details}</span>

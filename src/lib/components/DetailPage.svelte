@@ -334,7 +334,11 @@
     {@const d = detail}
     <header class="head">
       <button class="back" type="button" onclick={onclose} title="Retour à la liste">←</button>
-      <span class="escu">{initials(d.brand, d.id_interne)}</span>
+      {#if isCar && d.badge}
+        <img class="escu badge-img" src={previewSrc(d.badge)} alt={d.brand ?? ""} />
+      {:else}
+        <span class="escu">{initials(d.brand, d.id_interne)}</span>
+      {/if}
       <div class="title">
         <div class="t-name">{d.display_name ?? d.id_interne}</div>
         <div class="t-meta mono">
@@ -618,7 +622,7 @@
 {#snippet historyBlock(d: ModDetail)}
   <div class="lbl section">HISTORIQUE</div>
   <ul class="history">
-    {#each d.history as h}
+    {#each d.history.filter((h) => h.event !== "ACTIVATE" && h.event !== "DEACTIVATE") as h}
       <li>
         <span class="ev">{h.event}</span>
         <span class="det">{h.details}</span>
@@ -732,6 +736,12 @@
     font-weight: 600;
     font-size: 11px;
     flex: none;
+  }
+  .escu.badge-img {
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    object-fit: contain;
+    padding: 3px;
   }
   .title {
     min-width: 0;

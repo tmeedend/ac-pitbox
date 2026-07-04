@@ -11,7 +11,6 @@ use std::process::Command;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
-use chrono::Local;
 use rusqlite::Connection;
 
 use crate::config::AppConfig;
@@ -132,9 +131,6 @@ pub fn activate(
 
     create_junction(&link, Path::new(&target))?;
     overlay::set_active_version(conn, mod_id, &vid).map_err(|e| e.to_string())?;
-    let label = version_label(conn, &vid);
-    overlay::add_history(conn, mod_id, &Local::now().to_rfc3339(), "ACTIVATE", &label)
-        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -150,8 +146,6 @@ pub fn deactivate(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<()
         Ok(meta) => {
             if meta.file_type().is_symlink() {
                 remove_junction(&link)?;
-                overlay::add_history(conn, mod_id, &Local::now().to_rfc3339(), "DEACTIVATE", "")
-                    .map_err(|e| e.to_string())?;
             } else {
                 return Err(GUARD_MSG.into());
             }
@@ -159,15 +153,6 @@ pub fn deactivate(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<()
         Err(_) => {} // déjà inactif
     }
     Ok(())
-}
-
-fn version_label(conn: &Connection, version_id: &str) -> String {
-    conn.query_row(
-        "SELECT COALESCE(version_label, '') FROM versions WHERE id = ?1",
-        [version_id],
-        |r| r.get::<_, String>(0),
-    )
-    .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -202,6 +187,37 @@ mod tests {
         std::fs::create_dir_all(&real).unwrap();
         assert!(remove_junction(&real).is_err(), "refus sur un vrai dossier");
         assert!(real.exists(), "vrai dossier non supprimé");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn activate_deactivate_leave_no_history() {
+        // Activer/désactiver un mod ne doit plus polluer son historique.
+        if !cfg!(windows) {
+            return;
+        }
+        let base = std::env::temp_dir().join(format!("pitbox-acthist-{}", uuid::Uuid::new_v4()));
+        let ac = base.join("ac");
+        let library = base.join("library");
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let carv = library.join("cars").join("test_car").join("v1");
+        std::fs::create_dir_all(&carv).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_mod(&conn, "test_car", "Car", Some("B"), Some("Test"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn, "v1", "test_car", Some("1.0"), None, &now,
+            &carv.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "test_car", "v1").unwrap();
+        let cfg = AppConfig { ac_install_path: Some(ac), library_path: Some(library), ..Default::default() };
+
+        activate(&conn, &cfg, "test_car", None).unwrap();
+        deactivate(&conn, &cfg, "test_car").unwrap();
+
+        assert!(overlay::get_history(&conn, "test_car").unwrap().is_empty());
 
         let _ = std::fs::remove_dir_all(&base);
     }

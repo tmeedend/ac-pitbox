@@ -31,6 +31,8 @@ pub struct ModCard {
     pub tried: bool,
     /// Poids natif (voitures), lu à la volée dans ui_car.json — colonne §6.2.
     pub weight: Option<String>,
+    /// Badge/logo de la marque (`ui/badge.png`, voitures), à la place des initiales.
+    pub badge: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -100,12 +102,22 @@ fn weight_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> 
     uijson::read_car_specs(&dir)?.weight
 }
 
+/// Badge/logo de la marque (voitures uniquement), lu à la volée dans `ui/badge.png`.
+fn badge_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
+    if m.kind != "Car" {
+        return None;
+    }
+    let dir = entity_dir(conn, cfg, m)?;
+    inspect::brand_badge(&dir)
+}
+
 fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
     let preview = preview_for(conn, cfg, &m);
     let outline = outline_for(conn, cfg, &m);
     let active = is_active(cfg, &m);
     let weight = weight_for(conn, cfg, &m);
-    ModCard { base: m, preview, outline, active, distance_km: None, tried: false, weight }
+    let badge = badge_for(conn, cfg, &m);
+    ModCard { base: m, preview, outline, active, distance_km: None, tried: false, weight, badge }
 }
 
 /// Renseigne la distance CM et le marqueur « essayé » (§6.5) sur une carte.
