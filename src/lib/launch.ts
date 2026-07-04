@@ -3,11 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type SessionType = "practice" | "hotlap" | "race";
 
-export interface InstalledItem {
-  id: string;
-  name: string;
-  layouts: string[];
-  preview: string | null;
+/** Type de plateau d'adversaires (§8.6) : détermine le vivier où piocher. */
+export type GridMode = "same_car" | "same_category" | "same_era" | "free";
+
+export interface Opponent {
+  car_id: string;
+  ai_level: number;
 }
 
 export interface RaceSetup {
@@ -16,14 +17,19 @@ export interface RaceSetup {
   track_id: string;
   track_layout: string | null;
   session_type: SessionType;
-  ai_count: number;
-  ai_level: number;
+  /** Plateau d'adversaires (mode course uniquement), chacun avec son niveau IA. */
+  opponents: Opponent[];
+  /** Fourchette de niveau IA (§8.6) : le plateau est réparti dedans. */
+  ai_level_min: number;
+  ai_level_max: number;
   laps: number;
   duration_minutes: number;
   weather: string;
   time_hours: number;
   ambient_c: number | null;
   road_c: number | null;
+  wind_speed_kmh: number | null;
+  wind_direction_deg: number | null;
   penalties: boolean;
   jump_start_penalty: number;
   grip: number;
@@ -33,16 +39,15 @@ export interface RaceSetup {
   damage: number;
   fuel_rate: number;
   tyre_wear: number;
+  abs_auto: boolean;
+  traction_control_auto: boolean;
+  ideal_line: boolean;
 }
 
 export interface SkinItem {
   id: string;
   name: string;
   preview: string | null;
-}
-
-export function listSkins(carId: string): Promise<SkinItem[]> {
-  return invoke<SkinItem[]>("list_skins", { carId });
 }
 
 /** Skins de la version active d'un mod, lus dans la bibliothèque (fiche détail §6.3). */
@@ -66,25 +71,20 @@ export interface WeatherOption {
   wet: boolean;
 }
 
-export interface ImplicitTemp {
+/** Température + vent implicites (§8.5/§8.6) — jamais saisis manuellement. */
+export interface ImplicitConditions {
   ambient: number;
   road: number;
+  wind_speed_kmh: number;
+  wind_direction_deg: number;
 }
 
 export function weatherOptions(): Promise<WeatherOption[]> {
   return invoke<WeatherOption[]>("weather_options");
 }
 
-export function weatherTemp(intent: string, hour: number): Promise<ImplicitTemp> {
-  return invoke<ImplicitTemp>("weather_temp", { intent, hour });
-}
-
-export function listInstalled(kind: "car" | "track"): Promise<InstalledItem[]> {
-  return invoke<InstalledItem[]>("list_installed", { kind });
-}
-
-export function listWeather(): Promise<string[]> {
-  return invoke<string[]>("list_weather");
+export function weatherConditions(intent: string, hour: number): Promise<ImplicitConditions> {
+  return invoke<ImplicitConditions>("weather_conditions", { intent, hour });
 }
 
 export function launchSession(setup: RaceSetup): Promise<void> {

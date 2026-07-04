@@ -132,26 +132,36 @@ pub fn options(cfg: &AppConfig) -> Vec<WeatherOption> {
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
-pub struct ImplicitTemp {
+pub struct ImplicitConditions {
     pub ambient: i32,
     pub road: i32,
+    /// Vent implicite (§8.6) : suit la météo au même titre que la
+    /// température, jamais réglé manuellement en v1.
+    pub wind_speed_kmh: u32,
+    pub wind_direction_deg: u32,
 }
 
-/// Température implicite (§8.5) déduite de l'intention + l'heure. Lecture seule.
-pub fn implicit_temp(intent_id: &str, hour: f32) -> ImplicitTemp {
-    // (ambient de référence à ~14h, écart piste-air) par intention.
-    let (base, road_delta) = match intent_id {
-        "clear" => (26, 9),
-        "few_clouds" => (24, 6),
-        "overcast" => (20, 3),
-        "fog" => (14, 2),
-        "light_rain" => (17, 1),
-        "rain" => (15, 1),
-        "storm" => (16, 1),
-        _ => (22, 5),
+/// Température + vent implicites (§8.5/§8.6) déduits de l'intention + l'heure.
+/// Lecture seule — jamais saisis manuellement.
+pub fn implicit_conditions(intent_id: &str, hour: f32) -> ImplicitConditions {
+    // (ambient de référence à ~14h, écart piste-air, vent de base, direction) par intention.
+    let (base, road_delta, wind_speed, wind_dir) = match intent_id {
+        "clear" => (26, 9, 6, 250),
+        "few_clouds" => (24, 6, 9, 260),
+        "overcast" => (20, 3, 14, 280),
+        "fog" => (14, 2, 3, 200),
+        "light_rain" => (17, 1, 16, 300),
+        "rain" => (15, 1, 22, 310),
+        "storm" => (16, 1, 35, 320),
+        _ => (22, 5, 10, 270),
     };
     // Refroidissement aux heures extrêmes (matin/soir).
     let adj = (-0.7 * (hour - 14.0).abs()).round() as i32;
     let ambient = (base + adj).clamp(5, 42);
-    ImplicitTemp { ambient, road: ambient + road_delta }
+    ImplicitConditions {
+        ambient,
+        road: ambient + road_delta,
+        wind_speed_kmh: wind_speed,
+        wind_direction_deg: wind_dir,
+    }
 }

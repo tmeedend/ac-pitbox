@@ -40,6 +40,14 @@ impl SessionType {
     }
 }
 
+/// Un adversaire du plateau (mode course, §8.6) : voiture + son propre niveau
+/// IA (réparti dans la fourchette min-max choisie, pas une valeur unique).
+#[derive(Debug, Clone, Deserialize)]
+pub struct Opponent {
+    pub car_id: String,
+    pub ai_level: u32,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct RaceSetup {
     pub car_id: String,
@@ -47,11 +55,19 @@ pub struct RaceSetup {
     pub track_id: String,
     pub track_layout: Option<String>,
     pub session_type: SessionType,
-    /// Adversaires IA (mode course uniquement).
+    /// Plateau d'adversaires (mode course uniquement) — généré par type de
+    /// plateau côté front (même voiture/catégorie/ère/libre), puis ajustable.
     #[serde(default)]
-    pub ai_count: u32,
-    #[serde(default = "default_ai_level")]
-    pub ai_level: u32,
+    pub opponents: Vec<Opponent>,
+    /// Fourchette de niveau IA (comme CM) : le plateau est réparti dedans,
+    /// pas une valeur unique — plateau plus vivant. `ai_level_min` n'est pas
+    /// lu ici : la répartition se fait côté front, chaque `Opponent` porte
+    /// déjà son propre niveau ; le champ ne fait que l'aller-retour.
+    #[serde(default = "default_ai_level_min")]
+    #[allow(dead_code)]
+    pub ai_level_min: u32,
+    #[serde(default = "default_ai_level_max")]
+    pub ai_level_max: u32,
     #[serde(default)]
     pub laps: u32,
     #[serde(default = "default_duration")]
@@ -67,7 +83,12 @@ pub struct RaceSetup {
     pub ambient_c: Option<i32>,
     #[serde(default)]
     pub road_c: Option<i32>,
-    // --- Options de course (§8.6, bloc repliable) ---
+    /// Vent implicite (idem température) : déduit de la météo + heure.
+    #[serde(default)]
+    pub wind_speed_kmh: Option<u32>,
+    #[serde(default)]
+    pub wind_direction_deg: Option<u32>,
+    // --- Options de course (§8.6, toutes visibles, pas de bloc repliable) ---
     #[serde(default)]
     pub penalties: bool,
     /// Faux départ : 0 = aucune, 1 = téléport, 2 = drive-through.
@@ -85,17 +106,28 @@ pub struct RaceSetup {
     /// Ghost car (Hotlap uniquement) → [GHOST_CAR] du race.ini.
     #[serde(default)]
     pub ghost_car: bool,
-    /// Dégâts/usure/carburant (Course) → assists.ini (pas race.ini). En %.
+    /// Simulation — dégâts/usure/carburant → assists.ini. Actifs quel que
+    /// soit le type de session (§8.6, pas réservés à la Course). En %.
     #[serde(default = "default_damage")]
     pub damage: u32,
     #[serde(default = "default_rate")]
     pub fuel_rate: u32,
     #[serde(default = "default_rate")]
     pub tyre_wear: u32,
+    // --- Aides à la conduite (Course uniquement, §8.6) ---
+    #[serde(default = "default_true")]
+    pub abs_auto: bool,
+    #[serde(default = "default_true")]
+    pub traction_control_auto: bool,
+    #[serde(default)]
+    pub ideal_line: bool,
 }
 
-fn default_ai_level() -> u32 {
-    96
+fn default_ai_level_min() -> u32 {
+    92
+}
+fn default_ai_level_max() -> u32 {
+    98
 }
 fn default_duration() -> u32 {
     15
@@ -115,6 +147,9 @@ fn default_damage() -> u32 {
 fn default_rate() -> u32 {
     100
 }
+fn default_true() -> bool {
+    true
+}
 
 /// Angle solaire approximatif depuis l'heure (CM affine via ses helpers lighting).
 fn sun_angle(time_hours: f32) -> f32 {
@@ -124,11 +159,10 @@ fn sun_angle(time_hours: f32) -> f32 {
 /// Construit le contenu d'un `race.ini` (structure dérivée d'un vrai fichier CM).
 pub fn build_race_ini(s: &RaceSetup) -> String {
     let (session_type, session_name, spawn_set) = s.session_type.ac();
-    let cars_total = if s.session_type == SessionType::Race {
-        1 + s.ai_count
-    } else {
-        1
-    };
+    // Plateau : uniquement en course, chaque adversaire a sa propre voiture +
+    // son propre niveau IA (généré dans la fourchette min-max côté front).
+    let opponents: &[Opponent] = if s.session_type == SessionType::Race { &s.opponents } else { &[] };
+    let cars_total = 1 + opponents.len() as u32;
     let weather = if s.weather.is_empty() { "3_clear" } else { &s.weather };
 
     let mut ini = String::new();
@@ -145,24 +179,22 @@ pub fn build_race_ini(s: &RaceSetup) -> String {
         skin = s.car_skin.clone().unwrap_or_default(),
         track = s.track_id,
         layout = s.track_layout.clone().unwrap_or_default(),
-        ai_level = s.ai_level,
+        ai_level = s.ai_level_max,
         cars = cars_total,
         laps = if s.session_type == SessionType::Race { s.laps } else { 0 },
         pen = if s.penalties { 1 } else { 0 },
         jsp = s.jump_start_penalty,
     );
 
-    // Grille IA (course) : course one-make minimale (même modèle).
-    if s.session_type == SessionType::Race {
-        for i in 1..=s.ai_count {
-            let _ = write!(
-                ini,
-                "[CAR_{i}]\nSETUP=\nSKIN=\nMODEL={car}\nMODEL_CONFIG=\nBALLAST=0\nRESTRICTOR=0\n\
-                 DRIVER_NAME=AI {i}\nNATIONALITY=FRA\nNATION_CODE=FRA\nAI_LEVEL={ai}\n\n",
-                car = s.car_id,
-                ai = s.ai_level,
-            );
-        }
+    for (i, opp) in opponents.iter().enumerate() {
+        let n = i + 1;
+        let _ = write!(
+            ini,
+            "[CAR_{n}]\nSETUP=\nSKIN=\nMODEL={car}\nMODEL_CONFIG=\nBALLAST=0\nRESTRICTOR=0\n\
+             DRIVER_NAME=AI {n}\nNATIONALITY=FRA\nNATION_CODE=FRA\nAI_LEVEL={ai}\n\n",
+            car = opp.car_id,
+            ai = opp.ai_level,
+        );
     }
 
     // Sessions : qualif optionnelle avant la course, sinon session unique.
@@ -186,7 +218,7 @@ pub fn build_race_ini(s: &RaceSetup) -> String {
         "[LIGHTING]\nSUN_ANGLE={sun:.2}\nTIME_MULT=1.0\nCLOUD_SPEED=0.2\n\n\
          [WEATHER]\nNAME={weather}\n\n\
          [TEMPERATURE]\nAMBIENT={ambient}\nROAD={road}\n\n\
-         [WIND]\nSPEED_KMH_MIN=0\nSPEED_KMH_MAX=0\nDIRECTION_DEG=0\n\n\
+         [WIND]\nSPEED_KMH_MIN={wind_speed}\nSPEED_KMH_MAX={wind_speed}\nDIRECTION_DEG={wind_dir}\n\n\
          [DYNAMIC_TRACK]\nSESSION_START={grip}\nRANDOMNESS=2\nLAP_GAIN=30\nSESSION_TRANSFER=80\n\n\
          [GROOVE]\nVIRTUAL_LAPS=10\nMAX_LAPS=1\nSTARTING_LAPS=1\n\n\
          [LAP_INVALIDATOR]\nALLOWED_TYRES_OUT=-1\n\n\
@@ -195,6 +227,8 @@ pub fn build_race_ini(s: &RaceSetup) -> String {
         weather = weather,
         ambient = s.ambient_c.unwrap_or(26),
         road = s.road_c.unwrap_or(30),
+        wind_speed = s.wind_speed_kmh.unwrap_or(0),
+        wind_dir = s.wind_direction_deg.unwrap_or(0),
         grip = s.grip,
         // Ghost car pertinent uniquement en Hotlap.
         g = if s.ghost_car && s.session_type == SessionType::Hotlap { 1 } else { 0 },
@@ -203,10 +237,13 @@ pub fn build_race_ini(s: &RaceSetup) -> String {
     ini
 }
 
-/// Applique dégâts / carburant / usure (en %) dans `assists.ini` (Documents AC),
-/// en préservant les autres réglages (ABS, TC…). Best-effort : ces réglages
-/// vivent dans assists.ini et non dans race.ini (cf. Game.Properties.cs de CM).
-fn apply_gameplay(damage: u32, fuel_rate: u32, tyre_wear: u32) {
+/// Applique simulation (dégâts/carburant/usure) + aides à la conduite dans
+/// `assists.ini` (Documents AC), en préservant les autres réglages —
+/// best-effort, clés vérifiées sur un fichier réel (§8.6 : simulation active
+/// quel que soit le type de session ; aides = Course uniquement, appelées
+/// avec les valeurs par défaut sinon).
+#[allow(clippy::too_many_arguments)]
+fn apply_assists(damage: u32, fuel_rate: u32, tyre_wear: u32, abs: bool, traction_control: bool, ideal_line: bool) {
     let Ok(profile) = std::env::var("USERPROFILE") else {
         return;
     };
@@ -218,6 +255,7 @@ fn apply_gameplay(damage: u32, fuel_rate: u32, tyre_wear: u32) {
     let Ok(text) = std::fs::read_to_string(&path) else {
         return;
     };
+    let b = |v: bool| if v { 1 } else { 0 };
     let mut out = String::new();
     for line in text.lines() {
         let t = line.trim_start();
@@ -227,6 +265,12 @@ fn apply_gameplay(damage: u32, fuel_rate: u32, tyre_wear: u32) {
             out.push_str(&format!("FUEL_RATE={fuel_rate}"));
         } else if t.starts_with("TYRE_WEAR=") {
             out.push_str(&format!("TYRE_WEAR={tyre_wear}"));
+        } else if t.starts_with("ABS=") {
+            out.push_str(&format!("ABS={}", b(abs)));
+        } else if t.starts_with("TRACTION_CONTROL=") {
+            out.push_str(&format!("TRACTION_CONTROL={}", b(traction_control)));
+        } else if t.starts_with("IDEAL_LINE=") {
+            out.push_str(&format!("IDEAL_LINE={}", b(ideal_line)));
         } else {
             out.push_str(line);
         }
@@ -270,11 +314,24 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
 
     ensure_available(conn, cfg, ModKind::Car, &setup.car_id)?;
     ensure_available(conn, cfg, ModKind::Track, &setup.track_id)?;
-
-    // Dégâts/usure/carburant (Course) vivent dans assists.ini.
+    // Adversaires : best-effort — un adversaire manquant ne doit pas bloquer
+    // toute la session, seulement être absent du plateau final.
     if setup.session_type == SessionType::Race {
-        apply_gameplay(setup.damage, setup.fuel_rate, setup.tyre_wear);
+        for opp in &setup.opponents {
+            let _ = ensure_available(conn, cfg, ModKind::Car, &opp.car_id);
+        }
     }
+
+    // Simulation (dégâts/usure/carburant) + aides : actives quel que soit le
+    // type de session (§8.6) ; vivent dans assists.ini, pas race.ini.
+    apply_assists(
+        setup.damage,
+        setup.fuel_rate,
+        setup.tyre_wear,
+        setup.abs_auto,
+        setup.traction_control_auto,
+        setup.ideal_line,
+    );
 
     let ini = build_race_ini(setup);
     let path = std::env::temp_dir().join(format!("pitbox-race-{}.ini", Uuid::new_v4()));
@@ -306,14 +363,17 @@ mod tests {
             track_id: "magione".into(),
             track_layout: None,
             session_type: SessionType::Practice,
-            ai_count: 0,
-            ai_level: 96,
+            opponents: Vec::new(),
+            ai_level_min: 92,
+            ai_level_max: 98,
             laps: 0,
             duration_minutes: 15,
             weather: "3_clear".into(),
             time_hours: 13.0,
             ambient_c: None,
             road_c: None,
+            wind_speed_kmh: None,
+            wind_direction_deg: None,
             penalties: false,
             jump_start_penalty: 0,
             grip: 96,
@@ -323,6 +383,9 @@ mod tests {
             damage: 50,
             fuel_rate: 100,
             tyre_wear: 100,
+            abs_auto: true,
+            traction_control_auto: true,
+            ideal_line: false,
         }
     }
 
@@ -343,16 +406,43 @@ mod tests {
     fn race_ini_has_ai_grid() {
         let mut s = base();
         s.session_type = SessionType::Race;
-        s.ai_count = 3;
+        s.opponents = vec![
+            Opponent { car_id: "ks_bmw_m4_gt3".into(), ai_level: 94 },
+            Opponent { car_id: "ks_porsche_911_gt3_r".into(), ai_level: 97 },
+            Opponent { car_id: "ks_audi_r8_lms".into(), ai_level: 92 },
+        ];
         s.laps = 5;
         let ini = build_race_ini(&s);
         assert!(ini.contains("TYPE=3")); // Race
         assert!(ini.contains("CARS=4")); // 1 joueur + 3 IA
         assert!(ini.contains("RACE_LAPS=5"));
-        assert!(ini.contains("[CAR_1]"));
-        assert!(ini.contains("[CAR_3]"));
+        assert!(ini.contains("[CAR_1]\nSETUP=\nSKIN=\nMODEL=ks_bmw_m4_gt3"));
+        assert!(ini.contains("[CAR_3]\nSETUP=\nSKIN=\nMODEL=ks_audi_r8_lms"));
         assert!(!ini.contains("[CAR_4]"));
         assert!(ini.contains("DRIVER_NAME=AI 3"));
+        assert!(ini.contains("AI_LEVEL=97")); // niveau propre à l'adversaire 2
+    }
+
+    #[test]
+    fn opponents_ignored_outside_race() {
+        let mut s = base();
+        s.session_type = SessionType::Practice;
+        s.opponents = vec![Opponent { car_id: "ks_bmw_m4_gt3".into(), ai_level: 94 }];
+        let ini = build_race_ini(&s);
+        assert!(ini.contains("CARS=1"));
+        assert!(!ini.contains("[CAR_1]"));
+    }
+
+    #[test]
+    fn wind_written_when_present_else_zero() {
+        let mut s = base();
+        s.wind_speed_kmh = Some(18);
+        s.wind_direction_deg = Some(275);
+        let ini = build_race_ini(&s);
+        assert!(ini.contains("[WIND]\nSPEED_KMH_MIN=18\nSPEED_KMH_MAX=18\nDIRECTION_DEG=275"));
+
+        let ini_default = build_race_ini(&base());
+        assert!(ini_default.contains("[WIND]\nSPEED_KMH_MIN=0\nSPEED_KMH_MAX=0\nDIRECTION_DEG=0"));
     }
 
     #[test]

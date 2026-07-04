@@ -140,54 +140,6 @@ pub fn list_cards(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Mo
         .collect())
 }
 
-/// Contenu réellement installé dans `content/` (Kunos + mods actifs), pour les
-/// sélecteurs de l'écran de lancement. Indépendant de l'overlay.
-#[derive(Debug, Clone, Serialize)]
-pub struct InstalledItem {
-    pub id: String,
-    pub name: String,
-    /// Layouts d'un circuit (vide si mono-layout ou voiture).
-    pub layouts: Vec<String>,
-    /// Vignette (skin voiture / outline circuit) pour les galeries du flux.
-    pub preview: Option<String>,
-}
-
-pub fn list_installed(cfg: &AppConfig, kind: ModKind) -> Vec<InstalledItem> {
-    let Some(ac) = &cfg.ac_install_path else {
-        return Vec::new();
-    };
-    let dir = ac.join("content").join(kind.content_folder());
-    let mut out = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for e in entries.flatten() {
-            let p = e.path();
-            if !p.is_dir() {
-                continue;
-            }
-            let id = e.file_name().to_string_lossy().into_owned();
-            let (name, layouts) = match kind {
-                ModKind::Car => (inspect_name(uijson::read_car(&p), &id), Vec::new()),
-                ModKind::Track => {
-                    let name = inspect_name(uijson::read_track(&p), &id);
-                    let mut layouts = inspect::track_layouts(&p);
-                    if layouts == ["(default)"] {
-                        layouts.clear();
-                    }
-                    (name, layouts)
-                }
-            };
-            let preview = inspect::preview_path(kind, &p);
-            out.push(InstalledItem { id, name, layouts, preview });
-        }
-    }
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-    out
-}
-
-fn inspect_name(ui: Option<crate::uijson::UiInfo>, id: &str) -> String {
-    ui.and_then(|u| u.name).unwrap_or_else(|| id.to_string())
-}
-
 /// Skin d'une voiture avec sa miniature (§8.6).
 #[derive(Debug, Clone, Serialize)]
 pub struct SkinItem {
@@ -227,14 +179,6 @@ fn read_skins_dir(skins_dir: &Path) -> Vec<SkinItem> {
     }
     out.sort_by(|a, b| a.id.to_lowercase().cmp(&b.id.to_lowercase()));
     out
-}
-
-/// Skins d'une voiture **installée** (`content/cars/<id>/skins`) — flux de lancement.
-pub fn list_car_skins(cfg: &AppConfig, car_id: &str) -> Vec<SkinItem> {
-    let Some(ac) = &cfg.ac_install_path else {
-        return Vec::new();
-    };
-    read_skins_dir(&ac.join("content").join("cars").join(car_id).join("skins"))
 }
 
 /// Skins d'une voiture pour la fiche détail (§6.3). Pour un **mod géré**, on lit

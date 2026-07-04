@@ -597,13 +597,26 @@ Principe : l'utilisateur choisit une **intention** (« Pluie »), l'app la tradu
 - le bouton **Lancer**.
 Pour changer de voiture/circuit, l'utilisateur retourne dans la bibliothèque et en ouvre un autre.
 
-**Réglages selon le type de session** (rappel §8.4 — écart constaté dans l'implémentation initiale à corriger) : les réglages affichés **dépendent du type** (ghost car en Hotlap uniquement ; dégâts/usure/carburant en Course ; etc.), et sont **persistants par type**. L'écran ne doit PAS afficher un bloc d'options fixe identique pour tous les types.
+**Réglages selon le type de session** (rappel §8.4) : certains réglages **dépendent du type** (adversaires/tours/qualifs = Course uniquement ; ghost = Hotlap), d'autres sont **communs à tous les types**. Persistants par type. Layout de référence : maquette `pitbox-reglages-session.html`. L'écran de réglages n'affiche **pas** de rappel du duo voiture/circuit (il est déjà dans la colonne latérale, §6.1ter) — juste un titre + bouton Lancer.
 
-**Réglages — contenu** (selon le type) :
-- *Toujours pertinents* : météo (température implicite), heure.
-- *Course* : grille d'adversaires (plateau cohérent par défaut / libre ; nb IA, force), durée (tours OU temps), dégâts, usure, carburant, + options repliables (départ arrêté/lancé, position, qualif, grip, assists).
-- *Hotlap* : ghost car, + réglages pertinents.
-- **Hors périmètre** (rester simple) : pénalités détaillées, limites de piste/drapeaux, tyre blankets, ballast/restrictor.
+**Réglages communs à TOUS les types** :
+- **Simulation** : **dégâts**, **conso carburant**, **usure pneus** (sliders). Correction : ne sont PAS réservés à la Course — actifs quel que soit le type (on peut vouloir simuler l'usure en practice).
+- **Météo** (voir ci-dessous) et **heure**.
+
+**Réglages Course uniquement** :
+- **Adversaires — type de plateau** : 4 modes en cartes (icône + libellé) : **Même voiture** (mono-marque), **Même catégorie** (même tag #), **Même ère** (± ~5 ans via `year`), **Libre**. Le mode définit le vivier où l'app pioche.
+  - Remplissage **auto** selon le mode, mais **liste du plateau visible et ajustable** : chaque IA affichée avec sa force individuelle ; retirer / ajouter un adversaire précis.
+- **Nombre d'adversaires**, **tours OU durée (min)**, **départ** (arrêté/lancé), **position de départ** (dernier/pole/qualif), cases **qualifications / pénalités / évolution du grip**, **aides** (ABS/antipatinage/ligne).
+
+**Réglages Hotlap** : ghost car.
+
+**Niveau IA — fourchette de difficulté** (comme CM) : **deux curseurs min-max** (ex. 92–98%), le plateau est réparti dans la plage (pas une valeur unique → plateau plus vivant).
+
+**Météo** : conditions illustrées par **icônes SVG stylisées** (dessinées dans le thème, PAS des photos — libre de droits, cohérent, léger) : Beau, Quelques nuages, Couvert, Brouillard, Pluie légère, Pluie, Orage. **Température ET vent implicites** : déduits de la condition + heure (et du stack météo, VIA SOL/CSP), affichés mais non réglés manuellement en v1. Le vent suit la météo au même titre que la température.
+
+**Options toutes visibles** : pas de bloc « Options de course » replié à déplier — l'écran a la place, tout est affiché directement. Quelques icônes/pictogrammes pour aérer (dégâts, carburant, pneus, départ, etc.).
+
+- **Hors périmètre** (rester simple) : pénalités détaillées, limites de piste/drapeaux, tyre blankets, ballast/restrictor, réglage manuel fin de température/vent.
 
 **Valeurs par défaut** (si aucune sélection encore faite, ou cible disparue) : voiture = première du vivier ou dernière ouverte si encore installée ; circuit = dernier si présent, sinon premier alphabétique ; type = dernier utilisé sinon Practice ; réglages = derniers du type courant. Validées à chaque ouverture (une cible disparue déclenche le repli).
 

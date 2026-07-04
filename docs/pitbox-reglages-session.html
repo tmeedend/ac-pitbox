@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pit Box — Réglages de session</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/tabler-icons.min.css" rel="stylesheet">
+<style>
+  :root{
+    --rosso:#d40000; --rosso-bright:#ff5555; --rosso-dim:#1a0606; --rosso-border:#5c1212;
+    --bg:#08080c; --panel:#0d0d12; --panel2:#0a0a0f; --card:#13131a; --raised:#15151c;
+    --line:#1e1e26; --txt:#f2f2f4; --txt2:#cfd2d9; --muted:#86868f; --muted2:#5d6470; --faint:#4a4a55;
+    --green:#5dcaa5; --green-dim:#0a1a14; --green-border:#16382c;
+    --blue:#6a9ec9; --blue-dim:#0c1620; --blue-border:#1d3148; --yellow:#f1d83c;
+    --mono:'SF Mono',ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#050507;color:var(--txt);font-family:var(--sans);font-size:13px;-webkit-font-smoothing:antialiased;padding:14px;}
+  .mono{font-family:var(--mono);}
+  button{font-family:inherit;cursor:pointer;border:none;}
+  .screen{max-width:1280px;margin:0 auto;background:var(--panel);border:1px solid var(--rosso);overflow:hidden;}
+  .topbar{background:var(--rosso);height:3px;}
+
+  /* barre haute : duo + lancer */
+  .duobar{display:flex;align-items:center;gap:16px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--panel2);}
+  .duo{display:flex;align-items:center;gap:10px;}
+  .duo-img{width:64px;height:40px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;overflow:hidden;}
+  .duo-k{color:var(--faint);font-size:8px;letter-spacing:1.5px;}
+  .duo-v{font-size:12px;font-weight:600;margin-top:1px;}
+  .plus{color:var(--muted2);font-size:16px;}
+  .btn-launch{margin-left:auto;height:42px;padding:0 26px;background:var(--rosso);color:#fff;font-size:13px;letter-spacing:2px;font-weight:600;font-family:var(--mono);display:flex;align-items:center;gap:9px;}
+
+  .body{padding:16px 18px;}
+  .lbl{color:var(--faint);font-size:8.5px;letter-spacing:1.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+  .lbl i{font-size:12px;color:var(--muted2);}
+
+  /* type de session */
+  .types{display:flex;gap:1px;background:var(--line);border:1px solid var(--line);width:fit-content;margin-bottom:20px;}
+  .type{padding:9px 26px;background:var(--panel);color:var(--muted);font-size:11px;letter-spacing:1px;font-family:var(--mono);display:flex;align-items:center;gap:7px;}
+  .type.on{background:var(--rosso);color:#fff;}
+  .type i{font-size:14px;}
+
+  .cols{display:grid;grid-template-columns:1.35fr 1fr;gap:22px;}
+  .sect{margin-bottom:20px;}
+
+  /* adversaires : mode + liste */
+  .modes{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:12px;}
+  .mode{background:var(--panel);padding:10px 8px;cursor:pointer;text-align:center;}
+  .mode:hover{background:var(--raised);}
+  .mode.on{background:var(--rosso-dim);box-shadow:inset 0 -2px 0 var(--rosso);}
+  .mode i{font-size:19px;color:var(--muted);}
+  .mode.on i{color:var(--rosso-bright);}
+  .mode .mt{font-size:9.5px;margin-top:5px;color:var(--txt2);}
+  .mode.on .mt{color:var(--rosso-bright);}
+  .mode .md{font-size:7.5px;color:var(--faint);font-family:var(--mono);margin-top:2px;}
+
+  .grid-fields{display:grid;grid-template-columns:auto 1fr;gap:11px 16px;align-items:center;}
+  .num{width:70px;height:34px;background:var(--bg);border:1px solid var(--line);color:var(--txt);text-align:center;font-size:14px;font-family:var(--mono);}
+  .fk{color:var(--faint);font-size:8.5px;letter-spacing:1px;}
+
+  /* liste des adversaires */
+  .oppo{border:1px solid var(--line);margin-top:12px;}
+  .oppo-h{background:var(--raised);padding:6px 10px;display:flex;align-items:center;color:var(--muted);font-size:8px;letter-spacing:1.5px;}
+  .oppo-row{display:flex;align-items:center;gap:9px;padding:6px 10px;border-top:1px solid var(--line);}
+  .oppo-img{width:34px;height:22px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .oppo-n{font-size:10px;flex:1;}
+  .oppo-force{font-family:var(--mono);font-size:9px;color:var(--green);}
+  .oppo-x{color:var(--muted2);font-size:13px;cursor:pointer;}
+  .oppo-x:hover{color:var(--rosso-bright);}
+  .oppo-add{padding:7px 10px;border-top:1px solid var(--line);color:var(--rosso-bright);font-size:9px;font-family:var(--mono);cursor:pointer;display:flex;align-items:center;gap:6px;}
+
+  /* fourchette IA (2 curseurs) */
+  .range{position:relative;height:34px;display:flex;align-items:center;}
+  .range .track{position:absolute;left:0;right:0;height:3px;background:var(--line);}
+  .range .fill{position:absolute;height:3px;background:var(--rosso);left:35%;right:12%;}
+  .range .knob{position:absolute;width:15px;height:15px;background:var(--rosso);border:2px solid var(--panel);border-radius:50%;top:50%;transform:translate(-50%,-50%);}
+  .range-val{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--txt2);margin-top:2px;}
+
+  /* sliders simples */
+  .slider{-webkit-appearance:none;width:100%;height:3px;background:var(--line);outline:none;margin:10px 0 4px;}
+  .slider::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;background:var(--rosso);border-radius:50%;cursor:pointer;}
+  .slider.filled{background:linear-gradient(to right,var(--rosso) 0%,var(--rosso) var(--f,50%),var(--line) var(--f,50%),var(--line) 100%);}
+  .sval{font-family:var(--mono);font-size:9px;color:var(--muted);}
+
+  /* option avec icône */
+  .opt{margin-bottom:16px;}
+  .opt-head{display:flex;align-items:center;gap:8px;margin-bottom:2px;}
+  .opt-ico{width:26px;height:26px;border:1px solid var(--line);background:var(--panel2);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .opt-ico i{font-size:14px;color:var(--rosso-bright);}
+  .opt-name{font-size:10px;color:var(--txt2);letter-spacing:.5px;}
+  .opt-val{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--txt);}
+
+  /* météo : cartes SVG */
+  .weather{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .wcard{border:1px solid var(--line);background:var(--panel2);padding:10px 6px;cursor:pointer;text-align:center;}
+  .wcard:hover{border-color:var(--muted2);}
+  .wcard.on{border-color:var(--rosso);background:var(--rosso-dim);}
+  .wcard svg{width:38px;height:38px;}
+  .wcard .wn{font-size:9px;margin-top:5px;color:var(--txt2);}
+  .wcard.on .wn{color:var(--rosso-bright);}
+
+  .implicit{display:flex;gap:16px;margin-top:12px;padding:9px 12px;border:1px solid var(--line);background:var(--panel2);}
+  .imp{display:flex;align-items:center;gap:7px;}
+  .imp i{font-size:15px;color:var(--blue);}
+  .imp .ik{color:var(--faint);font-size:7.5px;letter-spacing:1px;}
+  .imp .iv{font-family:var(--mono);font-size:11px;color:var(--txt2);}
+  .imp.auto .iv{color:var(--green);}
+
+  .heure-wrap{margin-top:16px;}
+
+  /* options course : cases */
+  .checks{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px;}
+  .check{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel2);padding:8px 10px;cursor:pointer;}
+  .check .box{width:15px;height:15px;border:1px solid var(--muted2);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .check.on .box{background:var(--rosso);border-color:var(--rosso);}
+  .check.on .box i{font-size:11px;color:#fff;}
+  .check .cn{font-size:9.5px;}
+  .check i.lead{font-size:14px;color:var(--muted);}
+  .sel{background:var(--bg);border:1px solid var(--line);color:var(--txt2);height:32px;padding:0 8px;font-family:var(--mono);font-size:9.5px;}
+  .divider{height:1px;background:var(--line);margin:20px 0;}
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="topbar"></div>
+
+  <!-- en-tête réglages : titre + lancer (le duo voiture/circuit est déjà dans la colonne latérale) -->
+  <div class="duobar">
+    <div><div class="duo-k">SESSION</div><div class="duo-v" style="font-size:14px;">Réglages</div></div>
+    <button class="btn-launch"><i class="ti ti-player-play-filled"></i> LANCER</button>
+  </div>
+
+  <div class="body">
+    <!-- type -->
+    <div class="types">
+      <button class="type"><i class="ti ti-flag"></i> PRACTICE</button>
+      <button class="type"><i class="ti ti-clock-bolt"></i> HOTLAP</button>
+      <button class="type on"><i class="ti ti-trophy"></i> COURSE</button>
+    </div>
+
+    <div class="cols">
+      <!-- COLONNE GAUCHE -->
+      <div>
+        <!-- adversaires -->
+        <div class="sect">
+          <div class="lbl"><i class="ti ti-users"></i> ADVERSAIRES — TYPE DE PLATEAU</div>
+          <div class="modes">
+            <div class="mode"><i class="ti ti-copy"></i><div class="mt">Même voiture</div><div class="md">mono-marque</div></div>
+            <div class="mode on"><i class="ti ti-category"></i><div class="mt">Même catégorie</div><div class="md">#gt3</div></div>
+            <div class="mode"><i class="ti ti-calendar"></i><div class="mt">Même ère</div><div class="md">± 5 ans</div></div>
+            <div class="mode"><i class="ti ti-dots"></i><div class="mt">Libre</div><div class="md">au choix</div></div>
+          </div>
+
+          <div class="grid-fields">
+            <input class="num" value="7">
+            <div class="fk">ADVERSAIRES</div>
+          </div>
+
+          <div class="oppo">
+            <div class="oppo-h">PLATEAU GÉNÉRÉ · 7 IA <span style="margin-left:auto;color:var(--faint);">force répartie 92–98</span></div>
+            <div class="oppo-row"><div class="oppo-img"><i class="ti ti-car" style="font-size:12px;color:#c0392b;"></i></div><span class="oppo-n">Audi R8 LMS GT3</span><span class="oppo-force">96</span><i class="ti ti-x oppo-x"></i></div>
+            <div class="oppo-row"><div class="oppo-img"><i class="ti ti-car" style="font-size:12px;color:#d4af37;"></i></div><span class="oppo-n">Porsche 911 GT3 R</span><span class="oppo-force">94</span><i class="ti ti-x oppo-x"></i></div>
+            <div class="oppo-row"><div class="oppo-img"><i class="ti ti-car" style="font-size:12px;color:#185fa5;"></i></div><span class="oppo-n">BMW M4 GT3</span><span class="oppo-force">98</span><i class="ti ti-x oppo-x"></i></div>
+            <div class="oppo-add"><i class="ti ti-plus"></i> AJOUTER UN ADVERSAIRE · <span style="color:var(--muted);">+4 autres masqués</span></div>
+          </div>
+        </div>
+
+        <!-- fourchette IA -->
+        <div class="sect">
+          <div class="lbl"><i class="ti ti-brain"></i> NIVEAU IA — FOURCHETTE DE DIFFICULTÉ</div>
+          <div class="range">
+            <div class="track"></div><div class="fill"></div>
+            <div class="knob" style="left:35%;"></div><div class="knob" style="left:88%;"></div>
+          </div>
+          <div class="range-val"><span>MIN 92%</span><span style="color:var(--faint);">le plateau est réparti dans cette plage</span><span>MAX 98%</span></div>
+        </div>
+
+        <!-- simulation : dégats/carburant/usure pour TOUS les types -->
+        <div class="sect">
+          <div class="lbl"><i class="ti ti-settings-2"></i> SIMULATION <span style="color:var(--muted2);text-transform:none;letter-spacing:0;margin-left:4px;">— actif quel que soit le type de session</span></div>
+          <div class="opt">
+            <div class="opt-head"><span class="opt-ico"><i class="ti ti-car-crash"></i></span><span class="opt-name">DÉGÂTS</span><span class="opt-val">50%</span></div>
+            <input type="range" class="slider filled" style="--f:50%" min="0" max="100" value="50">
+          </div>
+          <div class="opt">
+            <div class="opt-head"><span class="opt-ico"><i class="ti ti-gas-station"></i></span><span class="opt-name">CONSO CARBURANT</span><span class="opt-val">100%</span></div>
+            <input type="range" class="slider filled" style="--f:100%" min="0" max="200" value="100">
+          </div>
+          <div class="opt">
+            <div class="opt-head"><span class="opt-ico"><i class="ti ti-disc"></i></span><span class="opt-name">USURE PNEUS</span><span class="opt-val">100%</span></div>
+            <input type="range" class="slider filled" style="--f:100%" min="0" max="200" value="100">
+          </div>
+        </div>
+      </div>
+
+      <!-- COLONNE DROITE -->
+      <div>
+        <!-- météo SVG -->
+        <div class="sect">
+          <div class="lbl"><i class="ti ti-cloud"></i> MÉTÉO</div>
+          <div class="weather" id="weather"></div>
+          <div class="implicit">
+            <div class="imp auto"><i class="ti ti-temperature"></i><div><div class="ik">TEMPÉRATURE</div><div class="iv">~14°C air · 15°C piste</div></div></div>
+            <div class="imp auto"><i class="ti ti-wind"></i><div><div class="ik">VENT</div><div class="iv">12 km/h NO</div></div></div>
+          </div>
+          <div style="color:var(--faint);font-size:8px;font-family:var(--mono);margin-top:6px;display:flex;align-items:center;gap:5px;"><i class="ti ti-info-circle" style="font-size:11px;"></i> température et vent déduits de la météo + heure (VIA SOL)</div>
+
+          <div class="heure-wrap">
+            <div class="opt-head"><span class="opt-ico"><i class="ti ti-sun"></i></span><span class="opt-name">HEURE</span><span class="opt-val">13:00</span></div>
+            <input type="range" class="slider filled" style="--f:54%" min="0" max="1440" value="780">
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- options course, TOUTES visibles -->
+        <div class="sect">
+          <div class="lbl"><i class="ti ti-adjustments-horizontal"></i> OPTIONS DE COURSE</div>
+
+          <div class="grid-fields" style="margin-bottom:14px;">
+            <input class="num" value="5">
+            <div class="fk">TOURS <span style="color:var(--muted2);">(ou durée en minutes)</span></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+            <div><div class="fk" style="margin-bottom:5px;">DÉPART</div><select class="sel" style="width:100%;"><option>Arrêté</option><option>Lancé</option></select></div>
+            <div><div class="fk" style="margin-bottom:5px;">POSITION DÉPART</div><select class="sel" style="width:100%;"><option>Dernier</option><option>Pole</option><option>Selon qualif</option></select></div>
+          </div>
+
+          <div class="checks">
+            <div class="check on"><span class="box"><i class="ti ti-check"></i></span><i class="ti ti-flag-checkered lead"></i><span class="cn">Qualifications</span></div>
+            <div class="check"><span class="box"></span><i class="ti ti-alert-triangle lead"></i><span class="cn">Pénalités</span></div>
+            <div class="check on"><span class="box"><i class="ti ti-check"></i></span><i class="ti ti-road lead"></i><span class="cn">Évolution grip</span></div>
+          </div>
+
+          <div class="lbl" style="margin-top:16px;"><i class="ti ti-shield"></i> AIDES À LA CONDUITE</div>
+          <div class="checks">
+            <div class="check on"><span class="box"><i class="ti ti-check"></i></span><span class="cn">ABS auto</span></div>
+            <div class="check on"><span class="box"><i class="ti ti-check"></i></span><span class="cn">Antipatinage</span></div>
+            <div class="check"><span class="box"></span><span class="cn">Ligne idéale</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// icônes météo SVG stylisées Rosso Corsa
+const WEATHER=[
+  {id:'clear',n:'Beau',svg:`<circle cx="19" cy="19" r="8" fill="none" stroke="#f1d83c" stroke-width="2"/>${rays()}`},
+  {id:'few',n:'Quelques nuages',svg:`<circle cx="14" cy="14" r="6" fill="none" stroke="#f1d83c" stroke-width="1.8"/><path d="M12 26 a5 5 0 0 1 0-10 a6 6 0 0 1 11 2 a4 4 0 0 1 1 8 z" fill="none" stroke="#cfd2d9" stroke-width="1.8"/>`},
+  {id:'overcast',n:'Couvert',svg:`<path d="M11 27 a6 6 0 0 1 0-12 a7 7 0 0 1 13 2 a5 5 0 0 1 1 10 z" fill="none" stroke="#86868f" stroke-width="1.8"/>`},
+  {id:'fog',n:'Brouillard',svg:`<path d="M8 15 h22 M6 20 h26 M9 25 h20 M11 30 h16" fill="none" stroke="#86868f" stroke-width="1.8" stroke-linecap="round"/>`},
+  {id:'light_rain',n:'Pluie légère',svg:`<path d="M11 22 a6 6 0 0 1 0-12 a7 7 0 0 1 13 2 a5 5 0 0 1 1 10 z" fill="none" stroke="#86868f" stroke-width="1.8"/><path d="M14 27 l-1 4 M20 27 l-1 4" stroke="#6a9ec9" stroke-width="1.8" stroke-linecap="round"/>`},
+  {id:'rain',n:'Pluie',svg:`<path d="M11 20 a6 6 0 0 1 0-12 a7 7 0 0 1 13 2 a5 5 0 0 1 1 10 z" fill="none" stroke="#86868f" stroke-width="1.8"/><path d="M12 25 l-1.5 6 M18 25 l-1.5 6 M24 25 l-1.5 6" stroke="#6a9ec9" stroke-width="1.8" stroke-linecap="round"/>`},
+  {id:'storm',n:'Orage',svg:`<path d="M11 19 a6 6 0 0 1 0-12 a7 7 0 0 1 13 2 a5 5 0 0 1 1 10 z" fill="none" stroke="#86868f" stroke-width="1.8"/><path d="M18 24 l-5 7 h4 l-2 6 6-8 h-4 z" fill="#f1d83c" stroke="none"/>`},
+];
+function rays(){let r='';for(let i=0;i<8;i++){const a=i*Math.PI/4,x1=19+Math.cos(a)*11,y1=19+Math.sin(a)*11,x2=19+Math.cos(a)*14,y2=19+Math.sin(a)*14;r+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#f1d83c" stroke-width="1.6" stroke-linecap="round"/>`;}return r;}
+document.getElementById('weather').innerHTML=WEATHER.map((w,i)=>`
+  <div class="wcard ${w.id==='rain'?'on':''}" onclick="document.querySelectorAll('.wcard').forEach(c=>c.classList.remove('on'));this.classList.add('on')">
+    <svg viewBox="0 0 38 38">${w.svg}</svg><div class="wn">${w.n}</div>
+  </div>`).join('');
+// type
+document.querySelectorAll('.type').forEach(t=>t.addEventListener('click',()=>{document.querySelectorAll('.type').forEach(x=>x.classList.remove('on'));t.classList.add('on');}));
+document.querySelectorAll('.mode').forEach(m=>m.addEventListener('click',()=>{document.querySelectorAll('.mode').forEach(x=>x.classList.remove('on'));m.classList.add('on');}));
+document.querySelectorAll('.check').forEach(c=>c.addEventListener('click',()=>c.classList.toggle('on')));
+document.querySelectorAll('.slider').forEach(s=>s.addEventListener('input',()=>{const p=(s.value-s.min)/(s.max-s.min)*100;s.style.setProperty('--f',p+'%');const v=s.closest('.opt,.heure-wrap')?.querySelector('.opt-val');if(v&&!v.textContent.includes(':'))v.textContent=Math.round(s.value)+'%';}));
+</script>
+</body>
+</html>

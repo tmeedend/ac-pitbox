@@ -230,24 +230,10 @@ fn delete_profile(db: State<Db>, id: String) -> Result<(), String> {
 
 // --- Lancement (L4) ---------------------------------------------------------
 
-/// Liste le contenu installé (`car` | `track`) pour les sélecteurs de lancement.
-#[tauri::command]
-fn list_installed(app: AppHandle, kind: String) -> Result<Vec<library::InstalledItem>, String> {
-    let cfg = config::load(&app);
-    let k = if kind == "track" { modscan::ModKind::Track } else { modscan::ModKind::Car };
-    Ok(library::list_installed(&cfg, k))
-}
-
 /// Météos installées (pour le sélecteur de lancement).
 #[tauri::command]
 fn list_weather(app: AppHandle) -> Vec<String> {
     library::list_weather(&config::load(&app))
-}
-
-/// Skins (+ miniatures) d'une voiture installée (§8.6).
-#[tauri::command]
-fn list_skins(app: AppHandle, car_id: String) -> Vec<library::SkinItem> {
-    library::list_car_skins(&config::load(&app), &car_id)
 }
 
 /// Skins d'une voiture pour la fiche détail (mod ou voiture de base, §6.3/§12bis).
@@ -270,10 +256,11 @@ fn weather_options(app: AppHandle) -> Vec<weather::WeatherOption> {
     weather::options(&config::load(&app))
 }
 
-/// Température implicite (air/piste) pour une intention + heure (lecture seule).
+/// Température + vent implicites (air/piste/vent) pour une intention + heure
+/// (lecture seule, §8.5/§8.6).
 #[tauri::command]
-fn weather_temp(intent: String, hour: f32) -> weather::ImplicitTemp {
-    weather::implicit_temp(&intent, hour)
+fn weather_conditions(intent: String, hour: f32) -> weather::ImplicitConditions {
+    weather::implicit_conditions(&intent, hour)
 }
 
 /// Construit le race.ini et lance la session via Content Manager (§8.3).
@@ -632,13 +619,11 @@ pub fn run() {
             create_profile,
             apply_profile,
             delete_profile,
-            list_installed,
             list_weather,
-            list_skins,
             list_mod_skins,
             weather_stack,
             weather_options,
-            weather_temp,
+            weather_conditions,
             launch_session,
             open_content_manager,
             open_native_showroom,
