@@ -421,3 +421,29 @@ process — à garder en tête pour la suite des essais.
 
 **Toujours en attente d'un test réel de cette version** (build + clic sur
 Aperçu 3D dans l'app).
+
+### Test réel n°3 (2026-07-04) : crash complet (pas juste invisible)
+
+Test de la version overlay : fenêtre noire brève puis **disparition totale
+du process** (plus dans le gestionnaire des tâches) — régression par rapport
+au test n°2 où le process restait vivant (juste invisible).
+
+**Diagnostic** : l'overlay était créé (`CreateWindowExW`) sur le thread qui
+exécute la commande Tauri `attach_native_showroom` — un thread de pool,
+recyclable/jetable, pas un thread persistant. Windows détruit automatiquement
+les fenêtres dont le thread propriétaire se termine. Une fois l'overlay
+détruit, son enfant (le showroom reparenté dedans) l'est aussi en cascade —
+et contrairement à un `WM_CLOSE` propre, ce genre de destruction forcée fait
+visiblement planter `acShowroom.exe` plutôt que de le laisser sortir
+proprement (cohérent avec "fenêtre noire puis disparition", pas juste
+"fenêtre fermée").
+
+**Corrigé** : `attach()` bascule la création de l'overlay + le reparentage
+sur le **thread principal** de Tauri via `AppHandle::run_on_main_thread` —
+ce thread pompe les messages en continu pour toute la durée de vie de l'app,
+donc les fenêtres qu'il crée ne sont jamais orphelines. Le résultat remonte
+au thread appelant via un canal `std::sync::mpsc` (le poll d'attente de la
+fenêtre du showroom, potentiellement long, reste hors du thread principal
+pour ne pas geler l'UI).
+
+**Toujours en attente d'un test réel de cette version.**
