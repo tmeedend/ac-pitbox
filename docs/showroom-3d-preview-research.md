@@ -336,8 +336,42 @@ Corrigé dans `src-tauri/src/showroom.rs`, tests mis à jour en conséquence.
 **Toujours en attente d'un nouveau test réel** pour confirmer que la voiture
 s'affiche correctement.
 
-**Phase B restante (non commencée)** : intégrer réellement la fenêtre du
-showroom dans la page (SetParent + synchro de position/taille avec la zone
-preview), avec un bouton Attacher/Détacher. Nécessitera le crate `windows`
-pour `EnumWindows`/`SetParent`/`SetWindowPos`, et de déterminer le titre de
-fenêtre exact d'`acShowroom.exe` une fois lancé pour la retrouver.
+### Phase B implémentée (2026-07-04, expérimental)
+
+Après confirmation que la Phase A fonctionne (voiture visible en fenêtré),
+implémentation de l'intégration dans la page. Fenêtre identifiée en lançant
+`acShowroom.exe` manuellement et en inspectant ses fenêtres via
+`EnumWindows`/`GetClassName` (PowerShell + P/Invoke) : classe native
+**`acShowroomW`**, titre "Assetto Corsa" (non spécifique à la voiture — la
+recherche se fait par PID + classe, pas par titre), style initial
+`WS_POPUP | WS_VISIBLE | WS_CLIPSIBLINGS`.
+
+Ajout du crate `windows` (0.61, déjà résolu transitivement par Tauri — pas de
+conflit de version) pour `EnumWindows`/`SetParent`/`SetWindowLongPtrW`/
+`SetWindowPos`/`PostMessageW`. `tauri::WebviewWindow::hwnd()` donne
+directement notre propre HWND dans le même type `windows::Win32::Foundation::HWND`
+que Tauri utilise en interne — pas besoin de `raw-window-handle`.
+
+Flux : `open_native_showroom` renvoie le PID du process lancé (mémorisé dans
+un état d'app `ShowroomState`) → `attach_native_showroom(x,y,w,h)` attend
+l'apparition de la fenêtre (jusqu'à 10s), retire `WS_POPUP`, ajoute
+`WS_CHILD`, `SetParent` dans la fenêtre principale, positionne. Le bouton
+"Fermer l'aperçu" envoie `WM_CLOSE` à la fenêtre native — le thread de
+Phase A qui attend déjà la fin du process s'occupe de restaurer `video.ini`.
+
+Suivi de position côté front (`DetailPage.svelte`) : la fenêtre intégrée est
+une vraie fenêtre OS, elle ne fait pas partie du rendu de la page — un
+`ResizeObserver` sur la zone héros + des listeners `resize`/`scroll` (phase
+de capture, pour attraper le scroll de n'importe quel ancêtre) recalculent
+sa position (`getBoundingClientRect()` × `devicePixelRatio`) à chaque
+changement de mise en page.
+
+**Entièrement expérimental, non testé en conditions réelles.** Les points
+les plus susceptibles de nécessiter un ajustement après un premier essai :
+- Le calcul `devicePixelRatio` peut être décalé par le zoom d'interface de
+  Pit Box (§ réglage ajouté précédemment) ou par un DPI Windows atypique.
+- Le comportement de `acShowroomW` une fois transformé en `WS_CHILD` n'a
+  jamais été observé (le rendu DirectX pourrait mal réagir à la perte du
+  statut top-level, ou le contenu pourrait apparaître décalé/mal découpé).
+- Fermeture/réattachement en changeant de voiture pendant qu'un aperçu est
+  attaché : géré via un effet Svelte sur `id`, non testé.
