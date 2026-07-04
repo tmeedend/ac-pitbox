@@ -14,13 +14,18 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Once;
 use std::time::{Duration, Instant};
 
-use windows::core::BOOL;
-use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::core::{BOOL, PCWSTR};
+use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, POINT, WPARAM};
+use windows::Win32::Graphics::Gdi::ClientToScreen;
+use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetClassNameW, GetWindowLongPtrW, GetWindowThreadProcessId, PostMessageW, SetParent,
-    SetWindowLongPtrW, SetWindowPos, GWL_STYLE, SWP_FRAMECHANGED, SWP_NOZORDER, WM_CLOSE, WS_CHILD, WS_POPUP,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, EnumChildWindows, EnumWindows, GetClassNameW, GetWindowLongPtrW,
+    GetWindowThreadProcessId, PostMessageW, RegisterClassW, SetParent, SetWindowLongPtrW, SetWindowPos, ShowWindow,
+    CS_HREDRAW, CS_VREDRAW, GWL_STYLE, SWP_FRAMECHANGED, SWP_NOZORDER, SW_SHOW, WM_CLOSE, WNDCLASSW, WS_CHILD,
+    WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
 };
 
 use crate::config::AppConfig;
@@ -29,10 +34,6 @@ const BACKUP_NAME: &str = "video.ini.pitbox-backup";
 /// Classe de fenêtre native d'`acShowroom.exe`, identifiée en inspectant le
 /// process réel (`EnumWindows` + `GetClassName`, voir recherche §piste 3).
 const SHOWROOM_WINDOW_CLASS: &str = "acShowroomW";
-
-/// PID du dernier showroom lancé — nécessaire pour le retrouver et l'intégrer
-/// dans la page depuis une commande Tauri séparée de celle qui l'a lancé.
-pub struct ShowroomState(pub std::sync::Mutex<Option<u32>>);
 
 fn resolve_ac_cfg_dir() -> Option<PathBuf> {
     Some(dirs::document_dir()?.join("Assetto Corsa").join("cfg"))
@@ -180,7 +181,10 @@ pub fn open_native_showroom(cfg: &AppConfig, car_id: &str, skin_id: Option<&str>
 }
 
 struct FindCtx {
-    pid: u32,
+    /// `None` = ne filtre pas par PID (utilisé pour chercher parmi les enfants
+    /// d'une fenêtre overlay, où le PID est déjà implicitement garanti par la
+    /// portée de l'énumération).
+    pid: Option<u32>,
     /// HWND stocké en pointeur brut (isize) : `HWND` n'est pas `Send`, on ne
     /// le reconstruit qu'après avoir traversé la frontière de thread.
     found: Option<isize>,
@@ -188,9 +192,15 @@ struct FindCtx {
 
 unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
     let ctx = &mut *(lparam.0 as *mut FindCtx);
-    let mut pid = 0u32;
-    let _ = GetWindowThreadProcessId(hwnd, Some(&mut pid));
-    if pid == ctx.pid {
+    let pid_ok = match ctx.pid {
+        None => true,
+        Some(want) => {
+            let mut pid = 0u32;
+            let _ = GetWindowThreadProcessId(hwnd, Some(&mut pid));
+            pid == want
+        }
+    };
+    if pid_ok {
         let mut buf = [0u16; 64];
         let len = GetClassNameW(hwnd, &mut buf);
         if len > 0 && String::from_utf16_lossy(&buf[..len as usize]) == SHOWROOM_WINDOW_CLASS {
@@ -201,23 +211,85 @@ unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
     BOOL(1) // continue.
 }
 
-/// Retrouve la fenêtre native du showroom pour un PID donné (classe
-/// `acShowroomW`). `None` si le process n'a pas encore créé sa fenêtre
-/// (démarrage/initialisation DirectX en cours) ou n'existe plus.
+/// Retrouve la fenêtre **top-level** native du showroom pour un PID donné
+/// (classe `acShowroomW`). `None` si le process n'a pas encore créé sa
+/// fenêtre (démarrage/initialisation DirectX en cours), n'existe plus, ou a
+/// déjà été intégrée (elle n'est alors plus top-level, voir
+/// `find_showroom_child`).
 fn find_showroom_window(pid: u32) -> Option<HWND> {
-    let mut ctx = FindCtx { pid, found: None };
+    let mut ctx = FindCtx { pid: Some(pid), found: None };
     unsafe {
         let _ = EnumWindows(Some(enum_proc), LPARAM(&mut ctx as *mut FindCtx as isize));
     }
     ctx.found.map(|raw| HWND(raw as *mut _))
 }
 
-/// Intègre la fenêtre du showroom (PID `pid`) comme enfant de `host` — sortie
-/// du domaine "fenêtre top-level" (`WS_POPUP`) vers `WS_CHILD`, positionnée
-/// dans la zone `(x, y, width, height)` (pixels physiques, relatifs à la zone
-/// cliente de `host`). Attend l'apparition de la fenêtre jusqu'à 10s (le
-/// temps que le process démarre et initialise DirectX).
-pub fn attach(host: HWND, pid: u32, x: i32, y: i32, width: i32, height: i32) -> Result<(), String> {
+/// Retrouve la fenêtre du showroom parmi les enfants de l'overlay qui
+/// l'héberge (après intégration, elle n'est plus une fenêtre top-level).
+fn find_showroom_child(overlay: HWND) -> Option<HWND> {
+    let mut ctx = FindCtx { pid: None, found: None };
+    unsafe {
+        let _ = EnumChildWindows(Some(overlay), Some(enum_proc), LPARAM(&mut ctx as *mut FindCtx as isize));
+    }
+    ctx.found.map(|raw| HWND(raw as *mut _))
+}
+
+const OVERLAY_CLASS_NAME: &str = "PitboxShowroomOverlay";
+
+fn wstr(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+unsafe extern "system" fn overlay_wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    DefWindowProcW(hwnd, msg, wparam, lparam)
+}
+
+/// Enregistre la classe de la fenêtre overlay (une fois par process).
+fn ensure_overlay_class_registered() {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| unsafe {
+        let class_name = wstr(OVERLAY_CLASS_NAME);
+        let hinstance: HINSTANCE = GetModuleHandleW(None).unwrap_or_default().into();
+        let wc = WNDCLASSW {
+            style: CS_HREDRAW | CS_VREDRAW,
+            lpfnWndProc: Some(overlay_wndproc),
+            hInstance: hinstance,
+            lpszClassName: PCWSTR(class_name.as_ptr()),
+            ..Default::default()
+        };
+        RegisterClassW(&wc);
+    });
+}
+
+fn client_to_screen_origin(hwnd: HWND) -> (i32, i32) {
+    let mut pt = POINT::default();
+    unsafe {
+        let _ = ClientToScreen(hwnd, &mut pt);
+    }
+    (pt.x, pt.y)
+}
+
+/// Poignée du showroom intégré : PID du process + fenêtre overlay créée par
+/// Pit Box (`None` tant que l'intégration n'a pas encore eu lieu).
+pub struct ShowroomHandle {
+    pub pid: u32,
+    pub overlay: Option<isize>,
+}
+
+pub struct ShowroomState(pub std::sync::Mutex<Option<ShowroomHandle>>);
+
+/// Intègre la fenêtre du showroom (PID `pid`) dans la page — **pas** en enfant
+/// direct de la fenêtre principale : WebView2 compose son rendu accéléré
+/// au-dessus de toute fenêtre native sœur, peu importe l'ordre Z classique
+/// (problème dit "d'espace aérien", confirmé en direct : la fenêtre native
+/// restait invisible bien que correctement reparentée et visible au sens
+/// Win32). La contourner nécessite une **fenêtre overlay séparée**, top-level
+/// mais possédée par `host` (créée/détruite par Pit Box, jamais vue par
+/// l'utilisateur en tant que telle), dans laquelle le showroom est ensuite
+/// intégré. `(x, y, width, height)` sont des pixels physiques relatifs à la
+/// zone cliente de `host`. Attend l'apparition de la fenêtre du showroom
+/// jusqu'à 10s (le temps que le process démarre et initialise DirectX).
+pub fn attach(host: HWND, pid: u32, x: i32, y: i32, width: i32, height: i32) -> Result<isize, String> {
     let deadline = Instant::now() + Duration::from_secs(10);
     let target = loop {
         if let Some(h) = find_showroom_window(pid) {
@@ -229,34 +301,74 @@ pub fn attach(host: HWND, pid: u32, x: i32, y: i32, width: i32, height: i32) -> 
         std::thread::sleep(Duration::from_millis(250));
     };
 
+    ensure_overlay_class_registered();
+    let (ox, oy) = client_to_screen_origin(host);
+    let class_name = wstr(OVERLAY_CLASS_NAME);
+    let title = wstr("Pit Box — Aperçu 3D");
+    let overlay = unsafe {
+        CreateWindowExW(
+            WS_EX_TOOLWINDOW,
+            PCWSTR(class_name.as_ptr()),
+            PCWSTR(title.as_ptr()),
+            WS_POPUP | WS_VISIBLE,
+            ox + x,
+            oy + y,
+            width,
+            height,
+            Some(host),
+            None,
+            None,
+            None,
+        )
+    }
+    .map_err(|e| format!("création de la fenêtre overlay : {e}"))?;
+
     unsafe {
         let style = GetWindowLongPtrW(target, GWL_STYLE);
         let new_style = (style & !(WS_POPUP.0 as isize)) | (WS_CHILD.0 as isize);
         SetWindowLongPtrW(target, GWL_STYLE, new_style);
-        SetParent(target, Some(host)).map_err(|e| e.to_string())?;
-        SetWindowPos(target, None, x, y, width, height, SWP_NOZORDER | SWP_FRAMECHANGED)
+        SetParent(target, Some(overlay)).map_err(|e| e.to_string())?;
+        SetWindowPos(target, None, 0, 0, width, height, SWP_NOZORDER | SWP_FRAMECHANGED)
             .map_err(|e| e.to_string())?;
+        let _ = ShowWindow(overlay, SW_SHOW);
     }
-    Ok(())
+
+    Ok(overlay.0 as isize)
 }
 
-/// Repositionne/redimensionne la fenêtre déjà intégrée (suivi du scroll/resize
-/// de la page côté front).
-pub fn reposition(pid: u32, x: i32, y: i32, width: i32, height: i32) -> Result<(), String> {
-    let target = find_showroom_window(pid).ok_or("fenêtre du showroom introuvable")?;
+/// Repositionne/redimensionne l'overlay (donc le showroom qu'il héberge) —
+/// suivi du scroll/resize de la page côté front, puisque la fenêtre native
+/// ne fait pas partie du rendu web et ne défile pas avec la page.
+pub fn reposition(host: HWND, overlay_raw: isize, x: i32, y: i32, width: i32, height: i32) -> Result<(), String> {
+    let overlay = HWND(overlay_raw as *mut _);
+    let (ox, oy) = client_to_screen_origin(host);
     unsafe {
-        SetWindowPos(target, None, x, y, width, height, SWP_NOZORDER).map_err(|e| e.to_string())?;
+        SetWindowPos(overlay, None, ox + x, oy + y, width, height, SWP_NOZORDER).map_err(|e| e.to_string())?;
+    }
+    if let Some(target) = find_showroom_child(overlay) {
+        unsafe {
+            SetWindowPos(target, None, 0, 0, width, height, SWP_NOZORDER).map_err(|e| e.to_string())?;
+        }
     }
     Ok(())
 }
 
-/// Demande la fermeture propre du showroom (`WM_CLOSE`) — le thread lancé
-/// par `open_native_showroom` restaure `video.ini` dès que le process se
-/// termine, qu'il soit intégré ou flottant.
-pub fn close(pid: u32) -> Result<(), String> {
-    if let Some(target) = find_showroom_window(pid) {
+/// Demande la fermeture propre du showroom (`WM_CLOSE`) puis détruit
+/// l'overlay — le thread lancé par `open_native_showroom` restaure
+/// `video.ini` dès que le process se termine, intégré ou non.
+pub fn close(pid: u32, overlay_raw: Option<isize>) -> Result<(), String> {
+    let target = match overlay_raw {
+        Some(raw) => find_showroom_child(HWND(raw as *mut _)),
+        None => find_showroom_window(pid),
+    };
+    if let Some(target) = target {
         unsafe {
             let _ = PostMessageW(Some(target), WM_CLOSE, WPARAM(0), LPARAM(0));
+        }
+    }
+    if let Some(raw) = overlay_raw {
+        unsafe {
+            let _ = DestroyWindow(HWND(raw as *mut _));
         }
     }
     Ok(())

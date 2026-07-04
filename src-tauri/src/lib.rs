@@ -301,13 +301,15 @@ fn open_native_showroom(
     skin_id: Option<String>,
 ) -> Result<(), String> {
     let pid = showroom::open_native_showroom(&config::load(&app), &car_id, skin_id.as_deref())?;
-    *showroom_state.0.lock().map_err(|e| e.to_string())? = Some(pid);
+    *showroom_state.0.lock().map_err(|e| e.to_string())? = Some(showroom::ShowroomHandle { pid, overlay: None });
     Ok(())
 }
 
-/// Intègre la fenêtre du dernier showroom lancé dans la fenêtre principale,
-/// à la place de la preview image (`x`/`y`/`width`/`height` en pixels
-/// physiques, relatifs à la zone cliente de l'app).
+/// Intègre la fenêtre du dernier showroom lancé dans la page, à la place de
+/// la preview image (`x`/`y`/`width`/`height` en pixels physiques, relatifs
+/// à la zone cliente de l'app). Passe par une fenêtre overlay séparée — voir
+/// `showroom::attach` pour pourquoi un enfant direct de la fenêtre
+/// principale reste invisible (WebView2 compose son rendu par-dessus).
 #[tauri::command]
 fn attach_native_showroom(
     app: AppHandle,
@@ -317,31 +319,45 @@ fn attach_native_showroom(
     width: i32,
     height: i32,
 ) -> Result<(), String> {
-    let pid = showroom_state.0.lock().map_err(|e| e.to_string())?.ok_or("aucun aperçu 3D en cours")?;
+    let pid = {
+        let guard = showroom_state.0.lock().map_err(|e| e.to_string())?;
+        guard.as_ref().ok_or("aucun aperçu 3D en cours")?.pid
+    };
     let win = app.get_webview_window("main").ok_or("fenêtre principale introuvable")?;
     let host = win.hwnd().map_err(|e| e.to_string())?;
-    showroom::attach(host, pid, x, y, width, height)
+    let overlay = showroom::attach(host, pid, x, y, width, height)?;
+    let mut guard = showroom_state.0.lock().map_err(|e| e.to_string())?;
+    if let Some(handle) = guard.as_mut() {
+        handle.overlay = Some(overlay);
+    }
+    Ok(())
 }
 
 /// Repositionne/redimensionne le showroom déjà intégré (suivi resize/scroll).
 #[tauri::command]
 fn reposition_native_showroom(
+    app: AppHandle,
     showroom_state: State<showroom::ShowroomState>,
     x: i32,
     y: i32,
     width: i32,
     height: i32,
 ) -> Result<(), String> {
-    let pid = showroom_state.0.lock().map_err(|e| e.to_string())?.ok_or("aucun aperçu 3D en cours")?;
-    showroom::reposition(pid, x, y, width, height)
+    let overlay = {
+        let guard = showroom_state.0.lock().map_err(|e| e.to_string())?;
+        guard.as_ref().and_then(|h| h.overlay).ok_or("aperçu 3D pas encore intégré")?
+    };
+    let win = app.get_webview_window("main").ok_or("fenêtre principale introuvable")?;
+    let host = win.hwnd().map_err(|e| e.to_string())?;
+    showroom::reposition(host, overlay, x, y, width, height)
 }
 
 /// Ferme proprement le showroom en cours (attaché ou flottant).
 #[tauri::command]
 fn close_native_showroom(showroom_state: State<showroom::ShowroomState>) -> Result<(), String> {
-    let pid = *showroom_state.0.lock().map_err(|e| e.to_string())?;
-    match pid {
-        Some(pid) => showroom::close(pid),
+    let handle = showroom_state.0.lock().map_err(|e| e.to_string())?.take();
+    match handle {
+        Some(h) => showroom::close(h.pid, h.overlay),
         None => Ok(()),
     }
 }
