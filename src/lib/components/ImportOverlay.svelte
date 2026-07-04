@@ -72,6 +72,9 @@
         {#if (a.apps ?? []).length}
           <div class="r-line shared">+ {a.apps.length} app(s) importée(s) (§12bis)</div>
         {/if}
+        {#if (a.others ?? []).length}
+          <div class="r-line shared">+ {a.others.length} mod(s) autre(s) importé(s) (§6.1bis)</div>
+        {/if}
       {/each}
     </div>
   </div>

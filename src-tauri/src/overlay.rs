@@ -146,6 +146,19 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             version_id TEXT NOT NULL
         );
 
+        -- Mods « autres » (§6.1bis) : ni voiture, circuit, skin, son, ni app —
+        -- jamais perdus. Activables par junction (garde-fou habituel) ; en cas
+        -- d'emplacement disputé avec un autre mod « autre », la priorité tranche.
+        CREATE TABLE IF NOT EXISTS other_mods (
+            id             TEXT PRIMARY KEY,
+            library_path   TEXT NOT NULL,
+            source_archive TEXT,
+            imported_at    TEXT NOT NULL,
+            is_priority    INTEGER NOT NULL DEFAULT 0,
+            is_active      INTEGER NOT NULL DEFAULT 0,
+            junctions      TEXT NOT NULL DEFAULT '[]'
+        );
+
         CREATE INDEX IF NOT EXISTS idx_versions_mod ON versions(mod_id);
         CREATE INDEX IF NOT EXISTS idx_history_mod  ON history(mod_id);
         CREATE INDEX IF NOT EXISTS idx_mods_idhash  ON mods(identity_hash);
@@ -863,6 +876,94 @@ pub fn app_exists(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
 
 pub fn delete_app(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM apps WHERE id = ?1", [id])?;
+    Ok(())
+}
+
+// --- Mods « autres » (§6.1bis) -----------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OtherModRow {
+    pub id: String,
+    pub library_path: String,
+    pub source_archive: Option<String>,
+    pub imported_at: String,
+    pub is_priority: bool,
+    pub is_active: bool,
+    /// Chemins absolus des jonctions créées lors de la dernière activation.
+    pub junctions: Vec<String>,
+}
+
+pub fn insert_other_mod(
+    conn: &Connection,
+    id: &str,
+    library_path: &str,
+    source_archive: Option<&str>,
+    imported_at: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        r#"INSERT INTO other_mods (id, library_path, source_archive, imported_at)
+           VALUES (?1, ?2, ?3, ?4)"#,
+        params![id, library_path, source_archive, imported_at],
+    )?;
+    Ok(())
+}
+
+fn map_other(row: &rusqlite::Row) -> rusqlite::Result<OtherModRow> {
+    let junctions: String = row.get(6)?;
+    Ok(OtherModRow {
+        id: row.get(0)?,
+        library_path: row.get(1)?,
+        source_archive: row.get(2)?,
+        imported_at: row.get(3)?,
+        is_priority: row.get::<_, i64>(4)? != 0,
+        is_active: row.get::<_, i64>(5)? != 0,
+        junctions: json_arr(&junctions),
+    })
+}
+
+const OTHER_SELECT: &str =
+    "SELECT id, library_path, source_archive, imported_at, is_priority, is_active, junctions FROM other_mods";
+
+pub fn list_other_mods(conn: &Connection) -> rusqlite::Result<Vec<OtherModRow>> {
+    let mut stmt = conn.prepare(&format!("{OTHER_SELECT} ORDER BY id COLLATE NOCASE"))?;
+    let rows = stmt.query_map([], map_other)?;
+    rows.collect()
+}
+
+pub fn get_other_mod(conn: &Connection, id: &str) -> rusqlite::Result<Option<OtherModRow>> {
+    let mut stmt = conn.prepare(&format!("{OTHER_SELECT} WHERE id = ?1"))?;
+    let mut rows = stmt.query_map([id], map_other)?;
+    match rows.next() {
+        Some(r) => Ok(Some(r?)),
+        None => Ok(None),
+    }
+}
+
+pub fn other_exists(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
+    let n: i64 = conn.query_row("SELECT COUNT(*) FROM other_mods WHERE id = ?1", [id], |r| r.get(0))?;
+    Ok(n > 0)
+}
+
+pub fn set_other_priority(conn: &Connection, id: &str, priority: bool) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE other_mods SET is_priority = ?2 WHERE id = ?1",
+        params![id, priority as i64],
+    )?;
+    Ok(())
+}
+
+/// Bascule active/inactive + mémorise les jonctions créées (pour une
+/// désactivation exacte plus tard).
+pub fn set_other_active(conn: &Connection, id: &str, active: bool, junctions: &[String]) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE other_mods SET is_active = ?2, junctions = ?3 WHERE id = ?1",
+        params![id, active as i64, serde_json::to_string(junctions).unwrap_or_else(|_| "[]".into())],
+    )?;
+    Ok(())
+}
+
+pub fn delete_other_mod(conn: &Connection, id: &str) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM other_mods WHERE id = ?1", [id])?;
     Ok(())
 }
 

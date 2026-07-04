@@ -90,3 +90,8 @@ export function listWeather(): Promise<string[]> {
 export function launchSession(setup: RaceSetup): Promise<void> {
   return invoke<void>("launch_session", { setup });
 }
+
+/** Ouvre Content Manager sans argument (§12bis.5). */
+export function openContentManager(): Promise<void> {
+  return invoke<void>("open_content_manager");
+}

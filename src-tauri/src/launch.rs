@@ -250,6 +250,17 @@ fn ensure_available(conn: &Connection, cfg: &AppConfig, kind: ModKind, id: &str)
     Err(format!("« {id} » n'est pas installé dans Assetto Corsa."))
 }
 
+/// Ouvre Content Manager sans argument (§12bis.5) : pratique pour parcourir
+/// son propre menu (réglages CM, contenu…) sans passer par une session Pit Box.
+pub fn open_content_manager(cfg: &AppConfig) -> Result<(), String> {
+    let cm = cfg.content_manager_exe.as_ref().ok_or("Content Manager non configuré")?;
+    let mut cmd = Command::new(cm);
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.spawn().map_err(|e| format!("lancement de Content Manager : {e}"))?;
+    Ok(())
+}
+
 /// Lance la session : active le contenu au besoin, écrit le race.ini, invoque CM.
 pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(), String> {
     let cm = cfg

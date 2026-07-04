@@ -149,6 +149,11 @@ export interface AppImported {
   name: string;
 }
 
+/** Mod « autre » importé — type non reconnu, jamais perdu (§6.1bis). */
+export interface OtherImported {
+  id: string;
+}
+
 export interface ArchiveResult {
   archive: string;
   mods: ImportedMod[];
@@ -156,6 +161,7 @@ export interface ArchiveResult {
   shared: SharedResult[];
   subs: SubImported[];
   apps: AppImported[];
+  others: OtherImported[];
 }
 
 export interface ImportProgress {

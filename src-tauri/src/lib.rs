@@ -14,6 +14,7 @@ mod launch;
 mod library;
 mod maintenance;
 mod modscan;
+mod others;
 mod overlay;
 mod profiles;
 mod rules;
@@ -281,6 +282,12 @@ fn launch_session(app: AppHandle, db: State<Db>, setup: launch::RaceSetup) -> Re
     launch::launch(&conn, &cfg, &setup)
 }
 
+/// Ouvre Content Manager sans argument (§12bis.5).
+#[tauri::command]
+fn open_content_manager(app: AppHandle) -> Result<(), String> {
+    launch::open_content_manager(&config::load(&app))
+}
+
 // --- Maintenance & export (L5) ----------------------------------------------
 
 /// Analyse mods cassés + junctions orphelines, sans rien supprimer (§9.3).
@@ -400,6 +407,44 @@ fn deactivate_app(app: AppHandle, id: String) -> Result<(), String> {
     apps::deactivate_app(&config::load(&app), &id)
 }
 
+// --- Mods « autres » (§6.1bis) -----------------------------------------------
+
+/// Liste les mods « autres » avec leurs conflits de fichiers détectés.
+#[tauri::command]
+fn list_other_mods(db: State<Db>) -> Result<Vec<others::OtherModCard>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    others::list_others(&conn).map_err(|e| e.to_string())
+}
+
+/// Marque/démarque un mod « autre » comme prioritaire (§6.1bis).
+#[tauri::command]
+fn set_other_priority(db: State<Db>, id: String, priority: bool) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    others::set_priority(&conn, &id, priority)
+}
+
+/// Active un mod « autre » par junction (§6.1bis).
+#[tauri::command]
+fn activate_other(app: AppHandle, db: State<Db>, id: String) -> Result<others::ActivateOtherResult, String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    others::activate_other(&conn, &cfg, &id)
+}
+
+/// Désactive un mod « autre » (§6.1bis).
+#[tauri::command]
+fn deactivate_other(db: State<Db>, id: String) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    others::deactivate_other(&conn, &id)
+}
+
+/// Supprime un mod « autre » : jonctions + fichiers + overlay (§6.1bis).
+#[tauri::command]
+fn delete_other_mod(db: State<Db>, id: String) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    others::delete_other(&conn, &id)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -447,6 +492,7 @@ pub fn run() {
             weather_options,
             weather_temp,
             launch_session,
+            open_content_manager,
             maintenance_scan,
             delete_broken_mod,
             remove_orphan_junction,
@@ -461,6 +507,11 @@ pub fn run() {
             list_apps,
             activate_app,
             deactivate_app,
+            list_other_mods,
+            set_other_priority,
+            activate_other,
+            deactivate_other,
+            delete_other_mod,
             delete_app,
             get_rules,
             save_rules,

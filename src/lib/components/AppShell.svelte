@@ -8,19 +8,22 @@
   import Maintenance from "./Maintenance.svelte";
   import Transversal from "./Transversal.svelte";
   import Apps from "./Apps.svelte";
+  import OtherMods from "./OtherMods.svelte";
   import Import from "./Import.svelte";
   import ImportOverlay from "./ImportOverlay.svelte";
   import { nav } from "$lib/nav.svelte";
   import { previewSrc } from "$lib/library";
   import { initGlobalDragDrop } from "$lib/importState.svelte";
+  import { openContentManager } from "$lib/launch";
 
   // Barre latérale unifiée (§6.1ter, maquette pitbox-biblio-session2.html) :
   // bloc SESSION (le duo sélectionné = point d'accès aux bibliothèques) puis
   // ADD-ONS et ATELIER en deux colonnes.
-  type NavBtn = { id: string; label: string; full?: boolean };
+  type NavBtn = { id: string; label: string; full?: boolean; action?: boolean };
   const addons: NavBtn[] = [
     { id: "skins", label: "Skins" },
     { id: "sounds", label: "Sons" },
+    { id: "others", label: "Autres mods", full: true },
     { id: "apps", label: "Apps", full: true },
   ];
   const atelier: NavBtn[] = [
@@ -28,8 +31,24 @@
     { id: "import", label: "Importer" },
     { id: "profiles", label: "Profils" },
     { id: "maintenance", label: "Maintenance" },
+    // Action directe (§12bis.5), pas un écran : n'affecte jamais nav.section.
+    { id: "opencm", label: "Ouvrir CM", action: true },
     { id: "settings", label: "Réglages", full: true },
   ];
+
+  async function handleAtelierClick(b: NavBtn) {
+    if (b.action) {
+      if (b.id === "opencm") {
+        try {
+          await openContentManager();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      return;
+    }
+    nav.section = b.id;
+  }
 
   // Glisser-déposer disponible partout (§4.6bis) : un seul listener, monté ici
   // à la racine, plutôt que dans chaque écran susceptible de recevoir un drop.
@@ -112,7 +131,7 @@
       <div class="nsec">Atelier</div>
       <div class="navgrid">
         {#each atelier as b}
-          <button class="nb" class:full={b.full} class:on={nav.section === b.id} onclick={() => (nav.section = b.id)}>{b.label}</button>
+          <button class="nb" class:full={b.full} class:on={!b.action && nav.section === b.id} onclick={() => handleAtelierClick(b)}>{b.label}</button>
         {/each}
       </div>
     </aside>
@@ -140,6 +159,8 @@
         <Transversal subType="SOUND" />
       {:else if nav.section === "apps"}
         <Apps />
+      {:else if nav.section === "others"}
+        <OtherMods />
       {/if}
     </main>
   </div>

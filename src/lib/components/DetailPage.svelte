@@ -394,11 +394,6 @@
             </div>
           {/if}
         {/if}
-        <!-- Le fichier du mod n'est jamais réécrit (règle d'or §3.0). -->
-        <div
-          class="badge-lock"
-          title="Pit Box ne modifie jamais les fichiers du mod (ui_car.json, etc.) : tags, catégorie et autres métadonnées sont stockés à part, dans l'app."
-        ><span class="lock">🔒</span> FICHIER NON MODIFIÉ</div>
       </div>
 
       <div class="data">
@@ -872,25 +867,6 @@
     font-size: 8px;
     margin-top: 3px;
   }
-  .badge-lock {
-    position: absolute;
-    left: 16px;
-    top: 14px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    background: rgba(8, 8, 12, 0.6);
-    border: 1px solid var(--green-border);
-    padding: 3px 8px;
-    color: var(--green);
-    font-family: var(--mono);
-    font-size: 8px;
-    letter-spacing: 0.5px;
-  }
-  .badge-lock .lock {
-    font-size: 9px;
-  }
-
   .data {
     background: var(--panel);
     padding: 14px;

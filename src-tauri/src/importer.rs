@@ -62,6 +62,9 @@ pub struct ArchiveResult {
     /// Apps Python importées (§12bis.4).
     #[serde(default)]
     pub apps: Vec<crate::apps::AppImported>,
+    /// Mods « autres » importés — type non reconnu, jamais perdus (§6.1bis).
+    #[serde(default)]
+    pub others: Vec<crate::others::OtherImported>,
 }
 
 /// Importe une liste d'archives. Chaque archive est traitée indépendamment ;
@@ -117,7 +120,7 @@ fn import_one(
         .unwrap_or_else(|| archive_path.to_string_lossy().into_owned());
 
     let mut result =
-        ArchiveResult { archive: archive_name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new(), apps: Vec::new() };
+        ArchiveResult { archive: archive_name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new(), apps: Vec::new(), others: Vec::new() };
 
     let (Some(sevenzip), Some(library)) = (&cfg.sevenzip_exe, &cfg.library_path) else {
         result.error = Some("Chemins 7-Zip ou bibliothèque non configurés.".into());
@@ -151,7 +154,13 @@ fn import_one(
     let subs = modscan::scan_subs(&workdir);
     let apps = modscan::scan_apps(&workdir);
     if found.is_empty() && subs.is_empty() && apps.is_empty() {
-        result.error = Some("Aucune voiture, circuit, skin, son ou app trouvé dans l'archive.".into());
+        // Type non reconnu : jamais perdu, rangé comme « autre mod » (§6.1bis).
+        if let Some(other) = crate::others::import_other(conn, library, &archive_name, &workdir, false) {
+            let _ = crate::others::activate_other(conn, cfg, &other.id);
+            result.others.push(other);
+        } else {
+            result.error = Some("Aucune voiture, circuit, skin, son ou app trouvé dans l'archive.".into());
+        }
         let _ = std::fs::remove_dir_all(&workdir);
         return result;
     }
@@ -250,7 +259,7 @@ fn import_one_folder(
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| dir.to_string_lossy().into_owned());
     let mut result =
-        ArchiveResult { archive: name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new(), apps: Vec::new() };
+        ArchiveResult { archive: name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new(), apps: Vec::new(), others: Vec::new() };
 
     let Some(library) = &cfg.library_path else {
         result.error = Some("Bibliothèque non configurée.".into());
@@ -265,7 +274,13 @@ fn import_one_folder(
     let subs = modscan::scan_subs(dir);
     let apps = modscan::scan_apps(dir);
     if found.is_empty() && subs.is_empty() && apps.is_empty() {
-        result.error = Some("Aucune voiture, circuit, skin, son ou app trouvé dans le dossier.".into());
+        // Type non reconnu : jamais perdu, rangé comme « autre mod » (§6.1bis).
+        if let Some(other) = crate::others::import_other(conn, library, &name, dir, copy) {
+            let _ = crate::others::activate_other(conn, cfg, &other.id);
+            result.others.push(other);
+        } else {
+            result.error = Some("Aucune voiture, circuit, skin, son ou app trouvé dans le dossier.".into());
+        }
         return result;
     }
     emit(Progress {
@@ -460,7 +475,7 @@ fn exec_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, it: &BulkExecItem
     let dir = Path::new(&it.path);
     let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let mut result =
-        ArchiveResult { archive: name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new(), apps: Vec::new() };
+        ArchiveResult { archive: name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new(), apps: Vec::new(), others: Vec::new() };
 
     let Some(library) = &cfg.library_path else {
         result.error = Some("Bibliothèque non configurée.".into());
@@ -857,6 +872,43 @@ mod tests {
         let mods2 = crate::overlay::list_mods(&conn).unwrap();
         assert_eq!(mods2.len(), 1, "toujours un seul mod logique");
         assert_eq!(mods2[0].version_count, 2, "deux versions coexistent");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn unrecognized_folder_becomes_other_mod() {
+        // Type non reconnu (ni voiture, circuit, skin, son, app) : jamais
+        // perdu, rangé comme « autre mod » et activé par défaut (§6.1bis).
+        let base = make_temp_dir().unwrap();
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("extension").join("config")).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+        let noop = |_p: Progress| {};
+
+        let src = base.join("MyShaderPack");
+        let leaf = src.join("extension").join("config").join("new_thing");
+        std::fs::create_dir_all(&leaf).unwrap();
+        std::fs::write(leaf.join("settings.ini"), b"x").unwrap();
+
+        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+        assert_eq!(r.mods.len(), 0);
+        assert_eq!(r.others.len(), 1);
+        assert_eq!(r.others[0].id, "MyShaderPack");
+        assert!(library.join("others").join("MyShaderPack").exists());
+        assert!(
+            crate::activation::is_junction(&ac.join("extension").join("config").join("new_thing")),
+            "activé par défaut comme les autres types (§4.6bis)"
+        );
 
         let _ = std::fs::remove_dir_all(&base);
     }

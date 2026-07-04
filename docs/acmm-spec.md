@@ -374,6 +374,8 @@ La table Kunos est un point de départ à valider contre l'installation réelle 
 - **Courbes `powerCurve` / `torqueCurve`** : présentes sur **688/689** fichiers. La courbe moteur est donc réalisable sur quasiment toutes les voitures, pas un cas rare. À tracer (graphe Nm/bhp/RPM).
 - Champ **`description`** : présent à ~96%. Affiché à la demande (bouton « Description »).
 - Champs natifs **`country`**, **`author`**, **`version`** : présents sur la grande majorité. À exploiter (country alimenté par extraction si vide, voir ci-dessous). Pour **`year`**, voir la stratégie de résolution ci-dessus (souvent absent du contenu de base → table Kunos).
+- **Badge de marque** : chaque voiture embarque son logo dans `content/cars/<voiture>/ui/badge.png` (écusson de marque — cheval Ferrari, anneaux Audi…). Présent pour la quasi-totalité des voitures, mod comme Kunos. **À afficher** sur fiches et vignettes (bien plus lisible que le monogramme placeholder des maquettes). Source canonique **locale**, pas de dépendance externe.
+  - ⚠️ *Icône d'auteur* : contrairement au badge, il n'existe **pas** d'icône d'auteur standard dans les fichiers du mod. Les icônes que CM affiche viennent d'un **pack de ressources externe** maintenu par la communauté (peu de moddeurs en fournissent). On ne dépend pas de cette source : afficher le **nom** de l'auteur en texte (champ `author`), sans icône.
 
 **Champs structurés complémentaires** (overlay) — uniquement pour ce que `specs` ne couvre pas :
 
