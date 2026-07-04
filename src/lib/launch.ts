@@ -3,12 +3,16 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type SessionType = "practice" | "hotlap" | "race";
 
-/** Type de plateau d'adversaires (§8.6) : détermine le vivier où piocher. */
-export type GridMode = "same_car" | "same_category" | "same_era" | "free";
+/** Type de plateau d'adversaires (§8.6) : détermine le vivier où piocher.
+ * "same_era" retiré au profit de la fourchette d'année (year_min/year_max),
+ * disponible pour same_category/free. */
+export type GridMode = "same_car" | "same_category" | "free";
 
 export interface Opponent {
   car_id: string;
   ai_level: number;
+  /** Skin de l'adversaire, choisi (auto ou via la popup de sélection). */
+  car_skin: string | null;
 }
 
 export interface RaceSetup {
@@ -30,6 +34,14 @@ export interface RaceSetup {
   road_c: number | null;
   wind_speed_kmh: number | null;
   wind_direction_deg: number | null;
+  /** Fourchette d'année du vivier d'adversaires (remplace « même ère »), comme
+   * ai_level_min/max : toujours une valeur concrète (pas de « non réglé »). */
+  year_min: number;
+  year_max: number;
+  /** Saison optionnelle (§8.6bis) — voir season_date pour la valeur réellement écrite. */
+  season: string | null;
+  /** Date ISO (YYYY-MM-DD) associée à la saison choisie ; best-effort côté race.ini. */
+  season_date: string | null;
   penalties: boolean;
   jump_start_penalty: number;
   grip: number;

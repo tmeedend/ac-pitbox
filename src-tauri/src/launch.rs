@@ -46,6 +46,10 @@ impl SessionType {
 pub struct Opponent {
     pub car_id: String,
     pub ai_level: u32,
+    /// Skin de l'adversaire (§8.6 : plateau réglable finement depuis la popup
+    /// de sélection). `None` → le jeu applique son skin par défaut.
+    #[serde(default)]
+    pub car_skin: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -88,6 +92,27 @@ pub struct RaceSetup {
     pub wind_speed_kmh: Option<u32>,
     #[serde(default)]
     pub wind_direction_deg: Option<u32>,
+    /// Fourchette d'année du vivier d'adversaires (§8.6, remplace « même ère »)
+    /// — filtrage fait côté front, transportée ici pour cohérence de la
+    /// sérialisation (comme ai_level_min/max : toujours une valeur concrète).
+    #[serde(default = "default_year_min")]
+    #[allow(dead_code)]
+    pub year_min: i32,
+    #[serde(default = "default_year_max")]
+    #[allow(dead_code)]
+    pub year_max: i32,
+    /// Saison optionnelle (§8.6bis) : "spring"|"summer"|"autumn"|"winter",
+    /// juste persistée — c'est `season_date` qui est réellement écrite.
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub season: Option<String>,
+    /// Date ISO (YYYY-MM-DD) associée à la saison choisie, calculée côté
+    /// front. Écrite en best-effort dans `[LIGHTING] DATE=` — point ouvert
+    /// non vérifié (aucune clé « date » trouvée dans un race.ini réel
+    /// capturé ; CSP semble dériver YEAR_PROGRESS de la date système, cf.
+    /// extension/config/tracks/common/conditions.ini). À valider en jeu.
+    #[serde(default)]
+    pub season_date: Option<String>,
     // --- Options de course (§8.6, toutes visibles, pas de bloc repliable) ---
     #[serde(default)]
     pub penalties: bool,
@@ -141,6 +166,12 @@ fn default_grip() -> u32 {
 fn default_qualify_minutes() -> u32 {
     10
 }
+fn default_year_min() -> i32 {
+    1950
+}
+fn default_year_max() -> i32 {
+    2026
+}
 fn default_damage() -> u32 {
     50
 }
@@ -190,8 +221,9 @@ pub fn build_race_ini(s: &RaceSetup) -> String {
         let n = i + 1;
         let _ = write!(
             ini,
-            "[CAR_{n}]\nSETUP=\nSKIN=\nMODEL={car}\nMODEL_CONFIG=\nBALLAST=0\nRESTRICTOR=0\n\
+            "[CAR_{n}]\nSETUP=\nSKIN={skin}\nMODEL={car}\nMODEL_CONFIG=\nBALLAST=0\nRESTRICTOR=0\n\
              DRIVER_NAME=AI {n}\nNATIONALITY=FRA\nNATION_CODE=FRA\nAI_LEVEL={ai}\n\n",
+            skin = opp.car_skin.clone().unwrap_or_default(),
             car = opp.car_id,
             ai = opp.ai_level,
         );
@@ -213,9 +245,17 @@ pub fn build_race_ini(s: &RaceSetup) -> String {
         );
     }
 
+    // Saison (§8.6bis) : DATE= en best-effort, point ouvert non vérifié (voir
+    // doc du champ `season_date` sur RaceSetup).
+    let date_line = s
+        .season_date
+        .as_deref()
+        .map(|d| format!("DATE={d}\n"))
+        .unwrap_or_default();
+
     let _ = write!(
         ini,
-        "[LIGHTING]\nSUN_ANGLE={sun:.2}\nTIME_MULT=1.0\nCLOUD_SPEED=0.2\n\n\
+        "[LIGHTING]\nSUN_ANGLE={sun:.2}\nTIME_MULT=1.0\nCLOUD_SPEED=0.2\n{date_line}\n\
          [WEATHER]\nNAME={weather}\n\n\
          [TEMPERATURE]\nAMBIENT={ambient}\nROAD={road}\n\n\
          [WIND]\nSPEED_KMH_MIN={wind_speed}\nSPEED_KMH_MAX={wind_speed}\nDIRECTION_DEG={wind_dir}\n\n\
@@ -374,6 +414,10 @@ mod tests {
             road_c: None,
             wind_speed_kmh: None,
             wind_direction_deg: None,
+            year_min: 1950,
+            year_max: 2026,
+            season: None,
+            season_date: None,
             penalties: false,
             jump_start_penalty: 0,
             grip: 96,
@@ -407,16 +451,16 @@ mod tests {
         let mut s = base();
         s.session_type = SessionType::Race;
         s.opponents = vec![
-            Opponent { car_id: "ks_bmw_m4_gt3".into(), ai_level: 94 },
-            Opponent { car_id: "ks_porsche_911_gt3_r".into(), ai_level: 97 },
-            Opponent { car_id: "ks_audi_r8_lms".into(), ai_level: 92 },
+            Opponent { car_id: "ks_bmw_m4_gt3".into(), ai_level: 94, car_skin: Some("red".into()) },
+            Opponent { car_id: "ks_porsche_911_gt3_r".into(), ai_level: 97, car_skin: None },
+            Opponent { car_id: "ks_audi_r8_lms".into(), ai_level: 92, car_skin: None },
         ];
         s.laps = 5;
         let ini = build_race_ini(&s);
         assert!(ini.contains("TYPE=3")); // Race
         assert!(ini.contains("CARS=4")); // 1 joueur + 3 IA
         assert!(ini.contains("RACE_LAPS=5"));
-        assert!(ini.contains("[CAR_1]\nSETUP=\nSKIN=\nMODEL=ks_bmw_m4_gt3"));
+        assert!(ini.contains("[CAR_1]\nSETUP=\nSKIN=red\nMODEL=ks_bmw_m4_gt3"));
         assert!(ini.contains("[CAR_3]\nSETUP=\nSKIN=\nMODEL=ks_audi_r8_lms"));
         assert!(!ini.contains("[CAR_4]"));
         assert!(ini.contains("DRIVER_NAME=AI 3"));
@@ -427,10 +471,22 @@ mod tests {
     fn opponents_ignored_outside_race() {
         let mut s = base();
         s.session_type = SessionType::Practice;
-        s.opponents = vec![Opponent { car_id: "ks_bmw_m4_gt3".into(), ai_level: 94 }];
+        s.opponents = vec![Opponent { car_id: "ks_bmw_m4_gt3".into(), ai_level: 94, car_skin: None }];
         let ini = build_race_ini(&s);
         assert!(ini.contains("CARS=1"));
         assert!(!ini.contains("[CAR_1]"));
+    }
+
+    #[test]
+    fn season_date_written_when_present() {
+        let mut s = base();
+        s.season_date = Some("2026-10-15".into());
+        let ini = build_race_ini(&s);
+        assert!(ini.contains("[LIGHTING]\nSUN_ANGLE"));
+        assert!(ini.contains("DATE=2026-10-15"));
+
+        let ini_default = build_race_ini(&base());
+        assert!(!ini_default.contains("DATE="));
     }
 
     #[test]

@@ -72,6 +72,7 @@ const INTENTS: &[Intent] = &[
     Intent { id: "light_rain", label: "Pluie légère", sol: &["sol_34_light_rain", "sol_31_light_drizzle"], vanilla: &[], wet: true },
     Intent { id: "rain", label: "Pluie", sol: &["sol_35_rain", "sol_36_heavy_rain"], vanilla: &[], wet: true },
     Intent { id: "storm", label: "Orage", sol: &["sol_42_thunderstorm", "sol_43_heavy_thunderstorm"], vanilla: &[], wet: true },
+    Intent { id: "snow", label: "Neige", sol: &["sol_51_light_snow", "sol_52_snow", "sol_53_heavy_snow"], vanilla: &[], wet: true },
 ];
 
 fn installed_weathers(cfg: &AppConfig) -> BTreeSet<String> {
@@ -106,15 +107,15 @@ pub fn options(cfg: &AppConfig) -> Vec<WeatherOption> {
                 (Some(w), Some("Standard".to_string()), true, None)
             } else {
                 let reason = if it.wet {
-                    "Nécessite SOL (+ CSP) pour la pluie".to_string()
+                    "Nécessite SOL (+ CSP) pour les précipitations".to_string()
                 } else {
                     "Aucune météo correspondante installée".to_string()
                 };
                 (None, None, false, Some(reason))
             };
-            // La pluie nécessite CSP pour le rendu, même via SOL.
+            // Pluie/neige nécessitent CSP pour le rendu, même via SOL.
             let (available, reason) = if it.wet && available && !stack.csp {
-                (false, Some("Nécessite CSP pour le rendu de la pluie".to_string()))
+                (false, Some("Nécessite CSP pour le rendu des précipitations".to_string()))
             } else {
                 (available, reason)
             };
@@ -152,7 +153,8 @@ pub fn implicit_conditions(intent_id: &str, hour: f32) -> ImplicitConditions {
         "fog" => (14, 2, 3, 200),
         "light_rain" => (17, 1, 16, 300),
         "rain" => (15, 1, 22, 310),
-        "storm" => (16, 1, 35, 320),
+        "storm" => (16, 1, 48, 320),
+        "snow" => (-2, 0, 12, 290),
         _ => (22, 5, 10, 270),
     };
     // Refroidissement aux heures extrêmes (matin/soir).

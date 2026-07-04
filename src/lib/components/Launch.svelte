@@ -2,18 +2,21 @@
   import { onMount } from "svelte";
   import {
     launchSession,
+    listModSkins,
     weatherOptions,
     weatherConditions,
     type GridMode,
     type Opponent,
     type RaceSetup,
     type SessionType,
+    type SkinItem,
     type WeatherOption,
   } from "$lib/launch";
   import { listLibrary, previewSrc, type ModCard } from "$lib/library";
   import { nav } from "$lib/nav.svelte";
   import { getPreferredSkin } from "$lib/preferred";
   import { t } from "$lib/i18n/index.svelte";
+  import OpponentPicker from "./OpponentPicker.svelte";
 
   let libCards = $state<ModCard[]>([]);
   let weathers = $state<WeatherOption[]>([]);
@@ -24,6 +27,10 @@
   let error = $state("");
   let info = $state("");
   let ready = $state(false);
+
+  // --- Fourchette d'année du vivier d'adversaires (§8.6, remplace « même ère ») ---
+  const YEAR_RANGE_MIN = 1950;
+  const YEAR_RANGE_MAX = new Date().getFullYear();
 
   let setup = $state<RaceSetup>({
     car_id: "",
@@ -42,6 +49,10 @@
     road_c: null,
     wind_speed_kmh: null,
     wind_direction_deg: null,
+    year_min: YEAR_RANGE_MIN,
+    year_max: YEAR_RANGE_MAX,
+    season: null,
+    season_date: null,
     penalties: false,
     jump_start_penalty: 0,
     grip: 96,
@@ -65,11 +76,10 @@
   const gridModes: { id: GridMode; labelKey: string; subKey: string }[] = [
     { id: "same_car", labelKey: "launch.gridSameCar", subKey: "launch.gridSameCarSub" },
     { id: "same_category", labelKey: "launch.gridSameCategory", subKey: "launch.gridSameCategorySub" },
-    { id: "same_era", labelKey: "launch.gridSameEra", subKey: "launch.gridSameEraSub" },
     { id: "free", labelKey: "launch.gridFree", subKey: "launch.gridFreeSub" },
   ];
 
-  const WEATHER_IDS = ["clear", "few_clouds", "overcast", "fog", "light_rain", "rain", "storm"] as const;
+  const WEATHER_IDS = ["clear", "few_clouds", "overcast", "fog", "light_rain", "rain", "storm", "snow"] as const;
   const WEATHER_LABEL_KEYS: Record<string, string> = {
     clear: "launch.wxClear",
     few_clouds: "launch.wxFewClouds",
@@ -78,7 +88,39 @@
     light_rain: "launch.wxLightRain",
     rain: "launch.wxRain",
     storm: "launch.wxStorm",
+    snow: "launch.wxSnow",
   };
+
+  // --- Saison optionnelle (§8.6bis) : associe une date au race.ini,
+  // best-effort côté CSP (voir RaceSetup.season_date côté back). ---
+  type Season = "" | "spring" | "summer" | "autumn" | "winter";
+  const SEASONS: { id: Season; labelKey: string }[] = [
+    { id: "", labelKey: "launch.seasonNone" },
+    { id: "spring", labelKey: "launch.seasonSpring" },
+    { id: "summer", labelKey: "launch.seasonSummer" },
+    { id: "autumn", labelKey: "launch.seasonAutumn" },
+    { id: "winter", labelKey: "launch.seasonWinter" },
+  ];
+  // Mois/jour représentatifs (milieu de saison, hémisphère nord).
+  const SEASON_MID: Record<Exclude<Season, "">, [number, number]> = {
+    spring: [4, 15],
+    summer: [7, 15],
+    autumn: [10, 15],
+    winter: [1, 15],
+  };
+  let season = $state<Season>("");
+  function applySeason(next: Season) {
+    season = next;
+    if (!next) {
+      setup.season = null;
+      setup.season_date = null;
+      return;
+    }
+    const [month, day] = SEASON_MID[next];
+    const year = new Date().getFullYear();
+    setup.season = next;
+    setup.season_date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
   const sunRays = Array.from({ length: 8 }, (_, i) => {
     const a = (i * Math.PI) / 4;
     return {
@@ -93,23 +135,20 @@
   const player = $derived(carPool.find((c) => c.id_interne === setup.car_id) ?? null);
   const currentWeather = $derived(weathers.find((w) => w.id === selectedIntent));
 
-  // --- Plateau d'adversaires (§8.6) : 4 modes de vivier, liste ajustable ---
+  // --- Plateau d'adversaires (§8.6) : 3 modes de vivier, liste ajustable.
+  // « Même voiture » = littéralement le même mod que le joueur (juste un
+  // skin différent) ; « même catégorie »/« libre » filtrent aussi par
+  // fourchette d'année (remplace « même ère »). ---
+  function inYearRange(c: ModCard): boolean {
+    // Année inconnue : ne pas exclure injustement un mod mal renseigné.
+    return c.year == null || (c.year >= setup.year_min && c.year <= setup.year_max);
+  }
   function poolForMode(mode: GridMode): ModCard[] {
+    if (!player) return carPool;
+    if (mode === "same_car") return [player];
     const others = carPool.filter((c) => c.id_interne !== setup.car_id);
-    if (!player) return others;
-    switch (mode) {
-      case "same_car":
-        return player.brand ? others.filter((c) => c.brand === player.brand) : others;
-      case "same_category":
-        return player.category ? others.filter((c) => c.category === player.category) : others;
-      case "same_era":
-        return player.year != null
-          ? others.filter((c) => c.year != null && Math.abs(c.year - player.year!) <= 5)
-          : others;
-      case "free":
-      default:
-        return others;
-    }
+    const byCategory = mode === "same_category" && player.category ? others.filter((c) => c.category === player.category) : others;
+    return byCategory.filter(inYearRange);
   }
 
   function randomLevel(): number {
@@ -118,46 +157,94 @@
     return Math.round(min + Math.random() * (max - min));
   }
 
-  function pickRandom(pool: ModCard[], exclude: Set<string>, n: number): Opponent[] {
-    const avail = pool.filter((c) => !exclude.has(c.id_interne));
-    const shuffled = [...avail].sort(() => Math.random() - 0.5).slice(0, Math.max(0, n));
-    return shuffled.map((c) => ({ car_id: c.id_interne, ai_level: randomLevel() }));
+  // --- Skins par voiture (cache, §8.6/§8.6bis) : chargés à la demande pour
+  // assigner un skin à chaque adversaire, et réutilisés par la popup. ---
+  let skinsByCarId = $state<Record<string, SkinItem[]>>({});
+  async function ensureSkins(carId: string): Promise<SkinItem[]> {
+    const cached = skinsByCarId[carId];
+    if (cached) return cached;
+    let skins: SkinItem[];
+    try {
+      skins = await listModSkins(carId);
+    } catch {
+      skins = [];
+    }
+    skinsByCarId = { ...skinsByCarId, [carId]: skins };
+    return skins;
+  }
+  /** Pioche un skin pour `carId`, en évitant `used` (skins déjà pris pour ce
+   * même mod dans le plateau courant) tant qu'il en reste de disponibles. */
+  async function skinFor(carId: string, used: Set<string>): Promise<string | null> {
+    const skins = await ensureSkins(carId);
+    if (!skins.length) return null;
+    const fresh = skins.filter((s) => !used.has(s.id));
+    const from = fresh.length ? fresh : skins;
+    const pick = from[Math.floor(Math.random() * from.length)];
+    used.add(pick.id);
+    return pick.id;
   }
 
-  function regenerateGrid() {
+  /** Génère `n` adversaires pour le mode courant. `excludeCarIds` = mods déjà
+   * présents dans le plateau, évités en priorité (sauf en « même voiture »,
+   * où il n'y a qu'un seul mod possible). Si le vivier distinct est épuisé
+   * (ex. tous les modèles d'une catégorie déjà utilisés), on complète en
+   * dupliquant un mod déjà choisi avec un skin différent plutôt que de
+   * tronquer le plateau. */
+  async function generateOpponents(n: number, excludeCarIds: Set<string>): Promise<Opponent[]> {
+    if (n <= 0) return [];
     const pool = poolForMode(gridMode);
-    const fallback = pool.length ? pool : carPool.filter((c) => c.id_interne !== setup.car_id);
-    setup.opponents = pickRandom(fallback, new Set(), opponentCount);
+    const source = pool.length ? pool : carPool.filter((c) => c.id_interne !== setup.car_id);
+    if (!source.length) return [];
+
+    const fresh = source.filter((c) => !excludeCarIds.has(c.id_interne)).sort(() => Math.random() - 0.5);
+    const picks: ModCard[] = fresh.slice(0, n);
+    const dupSource = picks.length ? picks : source;
+    let idx = 0;
+    while (picks.length < n) {
+      picks.push(dupSource[idx % dupSource.length]);
+      idx++;
+    }
+
+    const usedByCar = new Map<string, Set<string>>();
+    const out: Opponent[] = [];
+    for (const c of picks) {
+      const used = usedByCar.get(c.id_interne) ?? new Set<string>();
+      usedByCar.set(c.id_interne, used);
+      out.push({ car_id: c.id_interne, ai_level: randomLevel(), car_skin: await skinFor(c.id_interne, used) });
+    }
+    return out;
   }
 
-  function selectGridMode(mode: GridMode) {
+  async function regenerateGrid() {
+    setup.opponents = await generateOpponents(opponentCount, new Set());
+  }
+
+  async function selectGridMode(mode: GridMode) {
     gridMode = mode;
-    regenerateGrid();
+    await regenerateGrid();
   }
 
-  function applyOpponentCount(raw: number) {
+  async function applyOpponentCount(raw: number) {
     const n = Math.max(0, Math.min(30, Math.round(raw) || 0));
     opponentCount = n;
     const current = setup.opponents;
     if (n < current.length) {
       setup.opponents = current.slice(0, n);
     } else if (n > current.length) {
-      const pool = poolForMode(gridMode);
       const exclude = new Set(current.map((o) => o.car_id));
-      const extra = pickRandom(pool, exclude, n - current.length);
+      const extra = await generateOpponents(n - current.length, exclude);
       setup.opponents = [...current, ...extra];
     }
   }
 
-  function removeOpponent(carId: string) {
-    setup.opponents = setup.opponents.filter((o) => o.car_id !== carId);
+  function removeOpponent(index: number) {
+    setup.opponents = setup.opponents.filter((_, i) => i !== index);
     opponentCount = setup.opponents.length;
   }
 
-  function addOpponent() {
-    const pool = poolForMode(gridMode);
+  async function addOpponent() {
     const exclude = new Set(setup.opponents.map((o) => o.car_id));
-    const extra = pickRandom(pool, exclude, 1);
+    const extra = await generateOpponents(1, exclude);
     if (extra.length) {
       setup.opponents = [...setup.opponents, ...extra];
       opponentCount = setup.opponents.length;
@@ -167,8 +254,34 @@
   function opponentName(carId: string): string {
     return carPool.find((c) => c.id_interne === carId)?.display_name ?? carId;
   }
-  function opponentPreview(carId: string): string | null {
-    return previewSrc(carPool.find((c) => c.id_interne === carId)?.preview ?? null);
+  /** Vignette de l'adversaire : celle du skin choisi si connue, sinon la
+   * preview générique du mod (deux adversaires « même voiture » doivent se
+   * distinguer visuellement par leur skin, pas juste par leur nom). */
+  function opponentPreview(opp: Opponent): string | null {
+    const skin = opp.car_skin ? skinsByCarId[opp.car_id]?.find((s) => s.id === opp.car_skin) : null;
+    if (skin?.preview) return previewSrc(skin.preview);
+    return previewSrc(carPool.find((c) => c.id_interne === opp.car_id)?.preview ?? null);
+  }
+  function opponentSkinName(opp: Opponent): string | undefined {
+    return opp.car_skin ? skinsByCarId[opp.car_id]?.find((s) => s.id === opp.car_skin)?.name : undefined;
+  }
+
+  // --- Popup de sélection d'adversaire (§8.6ter) : changer voiture (parmi le
+  // vivier du mode courant) et skin, pour un réglage fin du plateau. ---
+  let pickerIndex = $state<number | null>(null);
+  const pickerPool = $derived(pickerIndex != null ? poolForMode(gridMode) : []);
+  function openPicker(index: number) {
+    pickerIndex = index;
+  }
+  function closePicker() {
+    pickerIndex = null;
+  }
+  function confirmPicker(carId: string, skinId: string | null) {
+    if (pickerIndex == null) return;
+    const opponents = [...setup.opponents];
+    opponents[pickerIndex] = { ...opponents[pickerIndex], car_id: carId, car_skin: skinId };
+    setup.opponents = opponents;
+    pickerIndex = null;
   }
 
   // --- Fourchette de niveau IA (deux curseurs, §8.6) ---
@@ -180,6 +293,16 @@
   function clampAiMax() {
     if (setup.ai_level_max < setup.ai_level_min) setup.ai_level_max = setup.ai_level_min;
   }
+
+  // --- Fourchette d'année (§8.6, remplace « même ère ») ---
+  function clampYearMin() {
+    if (setup.year_min > setup.year_max) setup.year_min = setup.year_max;
+  }
+  function clampYearMax() {
+    if (setup.year_max < setup.year_min) setup.year_max = setup.year_min;
+  }
+  const yearMinPct = $derived(((setup.year_min - YEAR_RANGE_MIN) / (YEAR_RANGE_MAX - YEAR_RANGE_MIN)) * 100);
+  const yearMaxPct = $derived(((setup.year_max - YEAR_RANGE_MIN) / (YEAR_RANGE_MAX - YEAR_RANGE_MIN)) * 100);
   const aiMinPct = $derived(((setup.ai_level_min - RANGE_MIN) / (RANGE_MAX - RANGE_MIN)) * 100);
   const aiMaxPct = $derived(((setup.ai_level_max - RANGE_MIN) / (RANGE_MAX - RANGE_MIN)) * 100);
 
@@ -240,10 +363,11 @@
   // --- Presets de session par type (§8.4) ---
   interface Persisted {
     ai_level_min: number; ai_level_max: number; grid_mode: GridMode; opponent_count: number;
+    year_min: number; year_max: number;
     laps: number; duration_minutes: number; time_hours: number;
     penalties: boolean; jump_start_penalty: number; grip: number;
     qualifying: boolean; qualify_minutes: number; ghost_car: boolean;
-    damage: number; fuel_rate: number; tyre_wear: number; intent: string;
+    damage: number; fuel_rate: number; tyre_wear: number; intent: string; season: Season;
     abs_auto: boolean; traction_control_auto: boolean; ideal_line: boolean;
   }
   let presets: Record<string, Persisted> = JSON.parse(localStorage.getItem("pitbox.launchPresets") ?? "{}");
@@ -253,10 +377,11 @@
     presets[setup.session_type] = {
       ai_level_min: setup.ai_level_min, ai_level_max: setup.ai_level_max,
       grid_mode: gridMode, opponent_count: opponentCount,
+      year_min: setup.year_min, year_max: setup.year_max,
       laps: setup.laps, duration_minutes: setup.duration_minutes, time_hours: setup.time_hours,
       penalties: setup.penalties, jump_start_penalty: setup.jump_start_penalty, grip: setup.grip,
       qualifying: setup.qualifying, qualify_minutes: setup.qualify_minutes, ghost_car: setup.ghost_car,
-      damage: setup.damage, fuel_rate: setup.fuel_rate, tyre_wear: setup.tyre_wear, intent: selectedIntent,
+      damage: setup.damage, fuel_rate: setup.fuel_rate, tyre_wear: setup.tyre_wear, intent: selectedIntent, season,
       abs_auto: setup.abs_auto, traction_control_auto: setup.traction_control_auto, ideal_line: setup.ideal_line,
     };
     localStorage.setItem("pitbox.launchPresets", JSON.stringify(presets));
@@ -267,6 +392,7 @@
     if (p) {
       setup.ai_level_min = p.ai_level_min ?? 92; setup.ai_level_max = p.ai_level_max ?? 98;
       gridMode = p.grid_mode ?? "same_category"; opponentCount = p.opponent_count ?? 7;
+      setup.year_min = p.year_min ?? YEAR_RANGE_MIN; setup.year_max = p.year_max ?? YEAR_RANGE_MAX;
       setup.laps = p.laps; setup.duration_minutes = p.duration_minutes; setup.time_hours = p.time_hours;
       setup.penalties = p.penalties; setup.jump_start_penalty = p.jump_start_penalty ?? 0;
       setup.grip = p.grip ?? 96; setup.qualifying = p.qualifying ?? false; setup.qualify_minutes = p.qualify_minutes ?? 10;
@@ -274,10 +400,11 @@
       setup.fuel_rate = p.fuel_rate ?? 100; setup.tyre_wear = p.tyre_wear ?? 100;
       setup.abs_auto = p.abs_auto ?? true; setup.traction_control_auto = p.traction_control_auto ?? true;
       setup.ideal_line = p.ideal_line ?? false;
+      applySeason(p.season ?? "");
       const opt = weathers.find((w) => w.id === p.intent && w.available);
       if (opt) await selectIntent(opt);
     }
-    if (type === "race") regenerateGrid();
+    if (type === "race") await regenerateGrid();
     applying = false;
   }
   async function setSessionType(type: SessionType) {
@@ -287,9 +414,10 @@
     await applyPreset(type);
   }
   $effect(() => {
-    void [setup.ai_level_min, setup.ai_level_max, gridMode, opponentCount, setup.laps, setup.duration_minutes,
+    void [setup.ai_level_min, setup.ai_level_max, gridMode, opponentCount, setup.year_min, setup.year_max,
+      setup.laps, setup.duration_minutes,
       setup.time_hours, setup.penalties, setup.jump_start_penalty, setup.grip, setup.qualifying, setup.qualify_minutes,
-      setup.ghost_car, setup.damage, setup.fuel_rate, setup.tyre_wear, selectedIntent,
+      setup.ghost_car, setup.damage, setup.fuel_rate, setup.tyre_wear, selectedIntent, season,
       setup.abs_auto, setup.traction_control_auto, setup.ideal_line];
     if (ready && !applying && selectedIntent) savePreset();
   });
@@ -333,7 +461,7 @@
       syncFromSession();
       if (setup.session_type === "race" && setup.car_id !== lastCarForGrid) {
         lastCarForGrid = setup.car_id;
-        regenerateGrid();
+        void regenerateGrid();
       }
     }
   });
@@ -381,6 +509,12 @@
   {:else if id === "storm"}
     <path d="M11 19 a6 6 0 0 1 0-12 a7 7 0 0 1 13 2 a5 5 0 0 1 1 10 z" fill="none" stroke="var(--muted)" stroke-width="1.8" />
     <path d="M18 24 l-5 7 h4 l-2 6 6-8 h-4 z" fill="var(--yellow)" stroke="none" />
+  {:else if id === "snow"}
+    <path d="M11 18 a6 6 0 0 1 0-12 a7 7 0 0 1 13 2 a5 5 0 0 1 1 10 z" fill="none" stroke="var(--muted)" stroke-width="1.8" />
+    <g stroke="var(--blue)" stroke-width="1.6" stroke-linecap="round">
+      <line x1="13" y1="24" x2="13" y2="32" /><line x1="9.5" y1="26" x2="16.5" y2="30" /><line x1="16.5" y1="26" x2="9.5" y2="30" />
+      <line x1="25" y1="24" x2="25" y2="32" /><line x1="21.5" y1="26" x2="28.5" y2="30" /><line x1="28.5" y1="26" x2="21.5" y2="30" />
+    </g>
   {/if}
 {/snippet}
 
@@ -425,19 +559,42 @@
                 </button>
               {/each}
             </div>
+
+            {#if gridMode !== "same_car"}
+              <!-- Fourchette d'année du vivier (remplace « même ère »), §8.6 -->
+              <div class="dual-range year-range">
+                <div class="dr-track"></div>
+                <div class="dr-fill" style="left:{yearMinPct}%; right:{100 - yearMaxPct}%"></div>
+                <input type="range" min={YEAR_RANGE_MIN} max={YEAR_RANGE_MAX} bind:value={setup.year_min} oninput={clampYearMin} />
+                <input type="range" min={YEAR_RANGE_MIN} max={YEAR_RANGE_MAX} bind:value={setup.year_max} oninput={clampYearMax} />
+              </div>
+              <div class="dr-vals mono" style="margin-bottom:12px;">
+                <span>{setup.year_min}</span>
+                <span>{t("launch.yearRangeHint")}</span>
+                <span>{setup.year_max}</span>
+              </div>
+            {/if}
+
             <label class="grid-fields">
               <input class="num" type="number" min="0" max="30" value={opponentCount} onchange={(e) => applyOpponentCount(Number(e.currentTarget.value))} />
               <span class="fk">{t("launch.aiCount")}</span>
             </label>
             <div class="oppo">
               <div class="oppo-h">{t("launch.gridGenerated", { count: setup.opponents.length })}</div>
-              {#each setup.opponents as opp (opp.car_id)}
-                {@const prev = opponentPreview(opp.car_id)}
-                <div class="oppo-row">
+              {#each setup.opponents as opp, i}
+                {@const prev = opponentPreview(opp)}
+                <div
+                  class="oppo-row"
+                  role="button"
+                  tabindex="0"
+                  title={t("launch.opponentEditTooltip")}
+                  onclick={() => openPicker(i)}
+                  onkeydown={(e) => (e.key === "Enter" || e.key === " ") && openPicker(i)}
+                >
                   <div class="oppo-img">{#if prev}<img src={prev} alt="" />{:else}<span class="mono">🏎</span>{/if}</div>
-                  <span class="oppo-n">{opponentName(opp.car_id)}</span>
+                  <span class="oppo-n">{opponentName(opp.car_id)}{#if opponentSkinName(opp)}<span class="oppo-skin"> · {opponentSkinName(opp)}</span>{/if}</span>
                   <span class="oppo-force mono">{opp.ai_level}</span>
-                  <button class="oppo-x" type="button" title={t("common.remove")} onclick={() => removeOpponent(opp.car_id)}>✕</button>
+                  <button class="oppo-x" type="button" title={t("common.remove")} onclick={(e) => { e.stopPropagation(); removeOpponent(i); }}>✕</button>
                 </div>
               {/each}
               <button class="oppo-add" type="button" onclick={addOpponent}>+ {t("launch.addOpponent")}</button>
@@ -516,6 +673,17 @@
             <div class="opt-head"><span class="opt-name">{t("launch.timeLabelShort")}</span><span class="opt-val mono">{fmtTime(setup.time_hours)}</span></div>
             <input type="range" min="6" max="22" step="0.5" bind:value={setup.time_hours} />
           </div>
+
+          <!-- Saison optionnelle (§8.6bis) : associe une date, best-effort côté
+               CSP (couleur des arbres en automne, piste blanche en hiver). -->
+          <div class="season-wrap">
+            <div class="opt-name" style="margin-bottom:6px;">{t("launch.seasonLabel")}</div>
+            <div class="seg season-seg">
+              {#each SEASONS as s}
+                <button class:on={season === s.id} type="button" onclick={() => applySeason(s.id)}>{t(s.labelKey)}</button>
+              {/each}
+            </div>
+          </div>
         </section>
 
         {#if setup.session_type === "race"}
@@ -569,11 +737,23 @@
   </div>
 </div>
 
+{#if pickerIndex != null}
+  <OpponentPicker
+    pool={pickerPool}
+    currentCarId={setup.opponents[pickerIndex].car_id}
+    currentSkinId={setup.opponents[pickerIndex].car_skin}
+    onpick={confirmPicker}
+    onclose={closePicker}
+  />
+{/if}
+
 <style>
+  /* Écran plein-page (AppShell rend `.content.fixed` pour "race", comme la
+     bibliothèque) : .flow gère lui-même son défilement — plus de hack de
+     marge négative pour compenser le padding du parent. */
   .flow {
-    margin: -28px -32px;
-    padding: 0 0 40px;
-    min-height: calc(100vh - 3px);
+    height: 100%;
+    overflow-y: auto;
   }
   .bar {
     display: flex;
@@ -616,7 +796,7 @@
     color: var(--rosso-bright);
   }
   .body {
-    padding: 22px 32px;
+    padding: 22px 32px 40px;
   }
 
   .seg,
@@ -690,11 +870,14 @@
   /* Adversaires */
   .modes {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 1px;
     background: var(--line);
     border: 1px solid var(--line);
     margin-bottom: 12px;
+  }
+  .year-range {
+    margin-bottom: 4px;
   }
   .mode {
     background: var(--panel2);
@@ -759,6 +942,11 @@
     gap: 9px;
     padding: 6px 10px;
     border-top: 1px solid var(--line);
+    background: var(--panel2);
+    cursor: pointer;
+  }
+  .oppo-row:hover {
+    background: var(--raised);
   }
   .oppo-img {
     width: 34px;
@@ -784,19 +972,25 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .oppo-skin {
+    color: var(--faint);
+  }
   .oppo-force {
     font-size: 9px;
     color: var(--green);
   }
   .oppo-x {
+    background: transparent;
     color: var(--muted2);
     font-size: 12px;
     padding: 2px 4px;
   }
   .oppo-x:hover {
+    background: transparent;
     color: var(--rosso-bright);
   }
   .oppo-add {
+    background: var(--panel2);
     padding: 7px 10px;
     border-top: 1px solid var(--line);
     color: var(--rosso-bright);
@@ -892,6 +1086,17 @@
   }
   .heure-wrap {
     margin-top: 16px;
+  }
+  .season-wrap {
+    margin-top: 16px;
+  }
+  .season-seg {
+    width: 100%;
+  }
+  .season-seg button {
+    flex: 1;
+    text-align: center;
+    padding: 8px 6px;
   }
 
   /* Météo */

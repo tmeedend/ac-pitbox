@@ -70,6 +70,11 @@
   const trackOutline = $derived(previewSrc(nav.sessionTrack?.outline ?? null));
 
   const isLibrary = $derived(nav.section === "cars" || nav.section === "tracks");
+  // Écrans « pleine page » qui gèrent leur propre défilement interne plutôt
+  // que de compter sur le padding + le scroll de `.content` (évite le hack
+  // de marge négative — cause probable de l'espace perdu au-dessus du titre
+  // « Réglages » signalé par l'utilisateur, cf. Launch.svelte).
+  const noPad = $derived(isLibrary || nav.section === "race");
 
   // Double-clic sur le slot de session : ouvre directement la fiche détail de
   // l'entité choisie (skin, layout…) plutôt que la liste de la bibliothèque.
@@ -147,7 +152,7 @@
       </div>
     </aside>
 
-    <main class="content" class:fixed={isLibrary}>
+    <main class="content" class:fixed={noPad}>
       {#if nav.section === "settings"}
         <Settings />
       {:else if nav.section === "cars"}
