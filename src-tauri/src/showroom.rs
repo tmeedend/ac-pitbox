@@ -25,8 +25,8 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, EnumChildWindows, EnumWindows, GetClassNameW, GetWindowLongPtrW,
     GetWindowThreadProcessId, PostMessageW, RegisterClassW, SetParent, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-    CS_HREDRAW, CS_VREDRAW, GWL_STYLE, SWP_FRAMECHANGED, SWP_NOZORDER, SW_SHOW, WM_CLOSE, WNDCLASSW, WS_CHILD,
-    WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
+    CS_HREDRAW, CS_VREDRAW, GWL_STYLE, SWP_FRAMECHANGED, SWP_NOZORDER, SW_SHOW, WM_CLOSE, WNDCLASSW, WS_CAPTION,
+    WS_CHILD, WS_EX_TOOLWINDOW, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_THICKFRAME, WS_VISIBLE,
 };
 
 use crate::config::AppConfig;
@@ -344,7 +344,12 @@ pub fn attach(app: &AppHandle, pid: u32, x: i32, y: i32, width: i32, height: i32
 
             unsafe {
                 let style = GetWindowLongPtrW(target, GWL_STYLE);
-                let new_style = (style & !(WS_POPUP.0 as isize)) | (WS_CHILD.0 as isize);
+                // WS_POPUP seul ne suffit pas : la fenêtre garde sa propre
+                // barre de titre/bordure/boutons une fois enfant (confirmé
+                // avec le prototype de test hors-app) tant qu'on ne retire
+                // pas aussi CAPTION/SYSMENU/THICKFRAME/MIN·MAXIMIZEBOX.
+                let remove = WS_POPUP.0 | WS_CAPTION.0 | WS_THICKFRAME.0 | WS_SYSMENU.0 | WS_MINIMIZEBOX.0 | WS_MAXIMIZEBOX.0;
+                let new_style = (style & !(remove as isize)) | (WS_CHILD.0 as isize);
                 SetWindowLongPtrW(target, GWL_STYLE, new_style);
                 SetParent(target, Some(overlay)).map_err(|e| e.to_string())?;
                 SetWindowPos(target, None, 0, 0, width, height, SWP_NOZORDER | SWP_FRAMECHANGED)
