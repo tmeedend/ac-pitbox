@@ -172,7 +172,8 @@ pub fn open_native_showroom(cfg: &AppConfig, car_id: &str, skin_id: Option<&str>
     // Restauration dès la fermeture du showroom, quelle que soit la cause
     // (fenêtre fermée par l'utilisateur, ou process tué).
     std::thread::spawn(move || {
-        let _ = child.wait();
+        let status = child.wait();
+        eprintln!("[showroom] process {pid} terminé : {status:?}");
         if let Some(dir) = resolve_ac_cfg_dir() {
             let _ = restore_video_ini_at(&dir);
         }
@@ -311,17 +312,21 @@ pub fn attach(app: &AppHandle, pid: u32, x: i32, y: i32, width: i32, height: i32
         std::thread::sleep(Duration::from_millis(250));
     };
 
+    eprintln!("[showroom] attach: fenêtre trouvée hwnd={target_raw:#x}, dispatch vers le thread principal");
     let (tx, rx) = std::sync::mpsc::channel::<Result<isize, String>>();
     let app_for_closure = app.clone();
     app.run_on_main_thread(move || {
+        eprintln!("[showroom] attach: closure exécutée sur le thread principal");
         let app = app_for_closure;
         let result = (|| -> Result<isize, String> {
             let win = app.get_webview_window("main").ok_or("fenêtre principale introuvable")?;
             let host = win.hwnd().map_err(|e| e.to_string())?;
             let target = HWND(target_raw as *mut _);
+            eprintln!("[showroom] attach: host={:#x}", host.0 as isize);
 
             ensure_overlay_class_registered();
             let (ox, oy) = client_to_screen_origin(host);
+            eprintln!("[showroom] attach: origine écran host=({ox},{oy}), rect demandé=({x},{y},{width},{height})");
             let class_name = wstr(OVERLAY_CLASS_NAME);
             let title = wstr("Pit Box — Aperçu 3D");
             let overlay = unsafe {
@@ -341,9 +346,11 @@ pub fn attach(app: &AppHandle, pid: u32, x: i32, y: i32, width: i32, height: i32
                 )
             }
             .map_err(|e| format!("création de la fenêtre overlay : {e}"))?;
+            eprintln!("[showroom] attach: overlay créé hwnd={:#x}", overlay.0 as isize);
 
             unsafe {
                 let style = GetWindowLongPtrW(target, GWL_STYLE);
+                eprintln!("[showroom] attach: style avant = {style:#x}");
                 // WS_POPUP seul ne suffit pas : la fenêtre garde sa propre
                 // barre de titre/bordure/boutons une fois enfant (confirmé
                 // avec le prototype de test hors-app) tant qu'on ne retire
@@ -351,14 +358,21 @@ pub fn attach(app: &AppHandle, pid: u32, x: i32, y: i32, width: i32, height: i32
                 let remove = WS_POPUP.0 | WS_CAPTION.0 | WS_THICKFRAME.0 | WS_SYSMENU.0 | WS_MINIMIZEBOX.0 | WS_MAXIMIZEBOX.0;
                 let new_style = (style & !(remove as isize)) | (WS_CHILD.0 as isize);
                 SetWindowLongPtrW(target, GWL_STYLE, new_style);
+                eprintln!("[showroom] attach: style après = {new_style:#x}, SetParent...");
                 SetParent(target, Some(overlay)).map_err(|e| e.to_string())?;
+                eprintln!("[showroom] attach: SetParent OK, SetWindowPos...");
                 SetWindowPos(target, None, 0, 0, width, height, SWP_NOZORDER | SWP_FRAMECHANGED)
                     .map_err(|e| e.to_string())?;
+                eprintln!("[showroom] attach: SetWindowPos OK, ShowWindow overlay...");
                 let _ = ShowWindow(overlay, SW_SHOW);
             }
+            eprintln!("[showroom] attach: terminé avec succès");
 
             Ok(overlay.0 as isize)
         })();
+        if let Err(e) = &result {
+            eprintln!("[showroom] attach: ÉCHEC dans la closure : {e}");
+        }
         let _ = tx.send(result);
     })
     .map_err(|e| e.to_string())?;
@@ -370,6 +384,7 @@ pub fn attach(app: &AppHandle, pid: u32, x: i32, y: i32, width: i32, height: i32
 /// suivi du scroll/resize de la page côté front, puisque la fenêtre native
 /// ne fait pas partie du rendu web et ne défile pas avec la page.
 pub fn reposition(host: HWND, overlay_raw: isize, x: i32, y: i32, width: i32, height: i32) -> Result<(), String> {
+    eprintln!("[showroom] reposition: overlay={overlay_raw:#x} rect=({x},{y},{width},{height})");
     let overlay = HWND(overlay_raw as *mut _);
     let (ox, oy) = client_to_screen_origin(host);
     unsafe {
@@ -380,6 +395,7 @@ pub fn reposition(host: HWND, overlay_raw: isize, x: i32, y: i32, width: i32, he
             SetWindowPos(target, None, 0, 0, width, height, SWP_NOZORDER).map_err(|e| e.to_string())?;
         }
     }
+    eprintln!("[showroom] reposition: OK");
     Ok(())
 }
 
