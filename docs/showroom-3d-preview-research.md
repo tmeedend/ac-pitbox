@@ -314,6 +314,28 @@ Implémenté dans `src-tauri/src/showroom.rs` :
 bouton n'a délibérément pas été automatisé (lance un vrai process externe et
 modifie un vrai fichier de config du jeu). À valider manuellement.
 
+### Test réel (2026-07-04) : deux bugs trouvés et corrigés
+
+Premier essai utilisateur : le showroom démarre mais reste plein écran (à
+l'œil) et l'écran est noir (voiture invisible). Diagnostic par comparaison
+avec le fichier réel capturé plus tôt (piste 3, section "confirmé") :
+
+1. **Écran noir** : `showroom_start.ini` écrit par Pit Box était tronqué —
+   sections `[FADES]`/`[ANIMATION]` absentes, et surtout `NEAR_PLANE`/
+   `FAR_PLANE`/les 3 `SHADOW_SPLIT*` manquants dans `[SETTINGS]`. Un plan de
+   clipping caméra absent/à 0 produit une matrice de projection dégénérée →
+   rien n'est rendu. Corrigé en reproduisant l'intégralité du fichier de
+   référence (seuls `CAR`/`SKIN` changent).
+2. **"Toujours plein écran"** : `FULLSCREEN` passait bien à `0`, mais
+   `WIDTH`/`HEIGHT` restaient à la résolution du bureau (3840×2160) — une
+   fenêtre sans bordure à cette taille est visuellement indiscernable du
+   plein écran. `force_windowed()` réduit maintenant aussi `WIDTH`/`HEIGHT`
+   à `1280×720` pendant la session (restaurés comme le reste à la fermeture).
+
+Corrigé dans `src-tauri/src/showroom.rs`, tests mis à jour en conséquence.
+**Toujours en attente d'un nouveau test réel** pour confirmer que la voiture
+s'affiche correctement.
+
 **Phase B restante (non commencée)** : intégrer réellement la fenêtre du
 showroom dans la page (SetParent + synchro de position/taille avec la zone
 preview), avec un bouton Attacher/Détacher. Nécessitera le crate `windows`
