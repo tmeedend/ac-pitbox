@@ -479,3 +479,53 @@ l'app + test manuel. À garder comme outil de diagnostic pour la suite
 ou pour affiner la position/taille avant de toucher au vrai code).
 
 **Toujours en attente d'un test réel de cette version dans l'app.**
+
+### Test réel n°5 (2026-07-04) : le vrai bug, enfin trouvé
+
+Le correctif WS_CAPTION n'a rien changé côté utilisateur — retour au
+symptôme "fenêtre noire puis disparition". Ajout de traces (`eprintln!`) à
+chaque étape d'`attach()`/`reposition()` et sur la sortie du process, testé
+en mode dev (`npm run tauri dev`, seul moyen de voir la console) :
+
+```
+[showroom] attach: ... (toutes les étapes, sans erreur)
+[showroom] attach: terminé avec succès
+[showroom] process 88892 terminé : Ok(ExitStatus(ExitStatus(0)))
+```
+
+**`attach()` réussit intégralement.** Le process sort ensuite avec le
+**code 0** — une fermeture propre, pas un crash. Aucune entrée dans
+l'observateur d'événements Windows (pas d'Application Error/WER), cohérent.
+
+Hypothèse testée en premier (perte de focus Windows au profit de WebView2)
+via l'outil hors-app : ajout d'un `--steal-focus` qui vole le focus vers
+l'hôte juste après le reparenting. **Infirmée** : le process survit très
+bien au vol de focus dans le test isolé. Fausse piste écartée en quelques
+secondes plutôt qu'un aller-retour de rebuild complet — l'outil a de nouveau
+justifié sa création.
+
+**Le vrai bug était côté Svelte, dans `DetailPage.svelte`**, sans aucun
+rapport avec Windows/WebView2 :
+```js
+$effect(() => {
+  id;
+  if (showroomAttached) closeShowroom();   // BUG : lit showroomAttached
+});                                          // sans untrack()
+```
+Svelte 5 traque **toute** valeur réactive lue pendant l'exécution d'un
+effet — pas seulement celles isolées en tête de fonction. Lire
+`showroomAttached` dans le `if` en fait donc une dépendance de l'effet au
+même titre que `id`. Résultat : dès que `showroomAttached` passe à `true`
+(juste après un `attach()` réussi), l'effet se redéclenche et appelle
+aussitôt `closeShowroom()` — l'app se refermait elle-même la fenêtre qu'elle
+venait d'intégrer avec succès, dans le même tick.
+
+**Corrigé** avec `untrack()` (import `svelte`) autour de la lecture de
+`showroomAttached`, pour que seul `id` reste une dépendance suivie de cet
+effet.
+
+**Leçon** : deux pistes (thread principal, barre de titre) étaient de vrais
+bugs Win32 réels et utiles à corriger, mais aucune n'expliquait le
+symptôme observé — le bug était ailleurs depuis le début. Ne pas supposer
+que la couche la plus "exotique" (Win32/WebView2) est forcément en cause
+quand un effet Svelte ordinaire peut suffire à tout expliquer.
