@@ -16,7 +16,7 @@
     type ModKind,
     type NativeSpecs,
   } from "$lib/library";
-  import { onDestroy } from "svelte";
+  import { onDestroy, untrack } from "svelte";
   import {
     listModSkins,
     openNativeShowroom,
@@ -186,10 +186,16 @@
   });
 
   // Ferme le showroom si on change de mod pendant qu'il est attaché (la
-  // fenêtre héritée n'aurait plus de sens sur la nouvelle fiche).
+  // fenêtre héritée n'aurait plus de sens sur la nouvelle fiche). `untrack`
+  // est indispensable ici : sans lui, lire `showroomAttached` dans l'effet
+  // le rend aussi dépendant de cette valeur, et l'effet se redéclenchait
+  // (donc fermait le showroom) dès qu'on venait de l'attacher avec succès —
+  // c'était la vraie cause du "ça se ferme tout seul", pas Windows/WebView2.
   $effect(() => {
     id;
-    if (showroomAttached) closeShowroom();
+    untrack(() => {
+      if (showroomAttached) closeShowroom();
+    });
   });
 
   // Suivi resize/scroll : la fenêtre native ne défile pas avec la page, il
