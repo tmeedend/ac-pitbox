@@ -447,3 +447,35 @@ fenêtre du showroom, potentiellement long, reste hors du thread principal
 pour ne pas geler l'UI).
 
 **Toujours en attente d'un test réel de cette version.**
+
+### Test réel n°4 (2026-07-04) : aucune différence perçue → test hors-app
+
+Le fix "thread principal" n'a rien changé de visible. Plutôt que de
+continuer à itérer via rebuild complet + clic manuel (boucle lente), création
+d'un outil de test **autonome, hors Tauri/WebView2**
+(`tools/showroom-embed-test/`, jamais committé — config machine en dur,
+jetable) reproduisant juste la mécanique Win32 : fenêtre hôte native simple
++ message loop, spawn `acShowroom.exe`, reparenting, dans le même process/
+thread donc pas de souci d'orphelinage.
+
+**Résultat décisif** : la voiture s'affiche correctement, dans les deux
+modes (reparent direct dans l'hôte, et overlay séparé comme dans l'app) —
+confirme que la mécanique de fond (reparenting Win32 + survie du rendu
+DirectX en tant qu'enfant) fonctionne bien. Un bug restait visible : la
+fenêtre gardait sa **propre barre de titre Windows** (bordure, boutons
+minimiser/maximiser/fermer, menu système) une fois transformée en enfant —
+`WS_POPUP` seul ne suffit pas à la retirer.
+
+**Corrigé** : il faut aussi retirer `WS_CAPTION`, `WS_THICKFRAME`,
+`WS_SYSMENU`, `WS_MINIMIZEBOX`, `WS_MAXIMIZEBOX` du style avant le
+`SetParent`. Validé visuellement sur l'outil de test (mode direct et mode
+overlay), puis porté dans le vrai code de l'app
+(`src-tauri/src/showroom.rs::attach()`).
+
+**Utilité confirmée du test hors-app** : a permis d'isoler en quelques
+minutes ce qui aurait pris plusieurs allers-retours de rebuild complet de
+l'app + test manuel. À garder comme outil de diagnostic pour la suite
+(ex. si le problème d'espace aérien WebView2 revient sous une autre forme,
+ou pour affiner la position/taille avant de toucher au vrai code).
+
+**Toujours en attente d'un test réel de cette version dans l'app.**
