@@ -23,6 +23,11 @@ fn resolve_ac_cfg_dir() -> Option<PathBuf> {
     Some(dirs::document_dir()?.join("Assetto Corsa").join("cfg"))
 }
 
+/// Reproduit fidèlement le fichier généré par AC lui-même (capturé pendant
+/// une session native réelle) — seuls `CAR`/`SKIN` changent. Une version
+/// tronquée (sans `NEAR_PLANE`/`FAR_PLANE`/les splits d'ombre) a provoqué un
+/// écran noir en test : mieux vaut garder l'intégralité des clés connues que
+/// deviner lesquelles sont réellement optionnelles.
 fn write_showroom_ini_at(cfg_dir: &Path, car_id: &str, skin_id: Option<&str>) -> Result<(), String> {
     fs::create_dir_all(cfg_dir).map_err(|e| format!("dossier de config AC : {e}"))?;
     let skin = skin_id.unwrap_or("");
@@ -35,9 +40,18 @@ fn write_showroom_ini_at(cfg_dir: &Path, car_id: &str, skin_id: Option<&str>) ->
          SELECTED_SKIN=1\r\n\
          CAR_ID=0\r\n\
          \r\n\
+         [FADES]\r\n\
+         ENTER_EXIT_MS=0\r\n\
+         \r\n\
          [PREVIEW_MODE]\r\n\
          LOOK_AT=0,0.6,0\r\n\
-         USE_CUSTOM_CAMERA=0\r\n\
+         CUSTOM_CAMERA_POSITION=-0.366574,0.775145,-6.12493\r\n\
+         USE_CUSTOM_CAMERA=1\r\n\
+         CUSTOM_CAMERA_ROLL=0\r\n\
+         CUSTOM_CAMERA_EXPOSURE=94.5\r\n\
+         \r\n\
+         [ANIMATION]\r\n\
+         MUL=0.15\r\n\
          \r\n\
          [SETTINGS]\r\n\
          ROTATION_SPEED=1.0\r\n\
@@ -45,18 +59,35 @@ fn write_showroom_ini_at(cfg_dir: &Path, car_id: &str, skin_id: Option<&str>) ->
          CAMERA_HEIGHT=1.5\r\n\
          CAMERA_FOV=30\r\n\
          CAMERA_EXPOSURE=30\r\n\
-         SUN_ANGLE=-50\r\n"
+         SUN_ANGLE=-50\r\n\
+         SHADOW_SPLIT0=2\r\n\
+         SHADOW_SPLIT1=12\r\n\
+         SHADOW_SPLIT2=50\r\n\
+         NEAR_PLANE=0.01\r\n\
+         FAR_PLANE=200\r\n\
+         MIN_EXPOSURE=0.2\r\n\
+         MAX_EXPOSURE=10000\r\n"
     );
     fs::write(cfg_dir.join("showroom_start.ini"), content).map_err(|e| format!("écriture showroom_start.ini : {e}"))
 }
 
-/// Remplace `FULLSCREEN=1` par `FULLSCREEN=0` dans `video.ini` (unique
-/// occurrence de cette clé, section `[VIDEO]`) — ne touche à rien d'autre
-/// (résolution, taux de rafraîchissement, anti-aliasing…).
+/// Force le mode fenêtré et une taille modeste dans `video.ini` : `FULLSCREEN`,
+/// `WIDTH`, `HEIGHT`. Sans réduire aussi la taille, une fenêtre "sans bordure"
+/// à la résolution du bureau (ex. 3840×2160) reste visuellement indiscernable
+/// du plein écran. Toutes les autres clés (refresh, anti-aliasing…) restent
+/// intactes.
 fn force_windowed(original: &str) -> String {
     original
         .lines()
-        .map(|l| if l.trim_start().starts_with("FULLSCREEN=") { "FULLSCREEN=0" } else { l })
+        .map(|l| {
+            let key = l.trim_start().split('=').next().unwrap_or("");
+            match key {
+                "FULLSCREEN" => "FULLSCREEN=0",
+                "WIDTH" => "WIDTH=1280",
+                "HEIGHT" => "HEIGHT=720",
+                _ => l,
+            }
+        })
         .collect::<Vec<_>>()
         .join("\r\n")
 }
@@ -142,18 +173,25 @@ mod tests {
         assert!(content.contains("CAR=ks_toyota_celica_st185"));
         assert!(content.contains("SKIN=00_racing_3"));
         assert!(content.contains("[SHOWROOM]"));
+        // Clés de clipping/ombres : leur absence a provoqué un écran noir en test réel.
+        assert!(content.contains("NEAR_PLANE=0.01"));
+        assert!(content.contains("FAR_PLANE=200"));
+        assert!(content.contains("[FADES]"));
+        assert!(content.contains("[ANIMATION]"));
         let _ = fs::remove_dir_all(&base);
     }
 
     #[test]
-    fn force_windowed_only_touches_fullscreen_key() {
+    fn force_windowed_shrinks_size_and_leaves_other_keys() {
         let original = "[VIDEO]\r\nFULLSCREEN=1\r\nWIDTH=3840\r\nHEIGHT=2160\r\nREFRESH=144\r\n";
         let windowed = force_windowed(original);
         assert!(windowed.contains("FULLSCREEN=0"));
-        assert!(windowed.contains("WIDTH=3840"));
-        assert!(windowed.contains("HEIGHT=2160"));
+        assert!(windowed.contains("WIDTH=1280"));
+        assert!(windowed.contains("HEIGHT=720"));
         assert!(windowed.contains("REFRESH=144"));
         assert!(!windowed.contains("FULLSCREEN=1"));
+        assert!(!windowed.contains("WIDTH=3840"));
+        assert!(!windowed.contains("HEIGHT=2160"));
     }
 
     #[test]
