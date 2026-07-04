@@ -36,6 +36,7 @@ function allTags(c: ModCard): string[] {
 function commonTail(): ColumnDef[] {
   return [
     { key: "author", label: "Auteur", sortable: true, defaultVisible: false, value: (c) => c.author ?? DASH },
+    { key: "country", label: "Pays", sortable: true, defaultVisible: false, value: (c) => c.country ?? DASH },
     { key: "version", label: "Version", sortable: true, defaultVisible: false, mono: true, value: (c) => c.active_version_label ?? DASH },
     {
       key: "tags",
@@ -75,6 +76,12 @@ const CAR_COLUMNS: ColumnDef[] = [
   { key: "category", label: "Catégorie", sortable: true, defaultVisible: true, value: (c) => c.category ?? DASH },
   { key: "car_class", label: "Classe", sortable: true, defaultVisible: false, value: (c) => c.car_class ?? DASH },
   { key: "year", label: "Année", sortable: true, defaultVisible: true, mono: true, value: (c) => c.year?.toString() ?? DASH, sortValue: (c) => c.year ?? 0 },
+  { key: "weight", label: "Poids", sortable: true, defaultVisible: false, mono: true, value: (c) => c.weight ?? DASH },
+  { key: "drivetrain", label: "Transmission", sortable: true, defaultVisible: false, value: (c) => c.drivetrain ?? DASH },
+  { key: "gearbox", label: "Boîte", sortable: true, defaultVisible: false, value: (c) => c.gearbox ?? DASH },
+  { key: "engine_config", label: "Moteur", sortable: true, defaultVisible: false, value: (c) => c.engine_config ?? DASH },
+  { key: "engine_pos", label: "Position moteur", sortable: true, defaultVisible: false, value: (c) => c.engine_pos ?? DASH },
+  { key: "aspiration", label: "Admission", sortable: true, defaultVisible: false, value: (c) => c.aspiration ?? DASH },
   ...commonTail(),
 ];
 

@@ -408,6 +408,16 @@ pub fn run() {
         .setup(|app| {
             let db_path = app.path().app_config_dir()?.join("overlay.sqlite");
             let conn = overlay::open(&db_path)?;
+
+            // Premier démarrage (ou contenu jamais indexé) : scan auto du
+            // contenu de base Kunos, pour que les skins/sons puissent s'y
+            // rattacher tout de suite (§12bis.1). Best-effort.
+            let cfg = config::load(app.handle());
+            if cfg.ac_install_path.is_some() && overlay::count_stock(&conn).unwrap_or(0) == 0 {
+                let rules = rules::load(app.handle());
+                let _ = stock::index_stock_content(&conn, &cfg, &rules);
+            }
+
             app.manage(Db(std::sync::Mutex::new(conn)));
             Ok(())
         })

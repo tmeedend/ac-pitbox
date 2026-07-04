@@ -690,6 +690,12 @@ pub fn clear_stock(conn: &Connection) -> rusqlite::Result<usize> {
     Ok(n)
 }
 
+/// Nombre d'entrées de contenu de base déjà indexées — sert à déclencher un
+/// scan automatique au premier démarrage (§12bis.1).
+pub fn count_stock(conn: &Connection) -> rusqlite::Result<i64> {
+    conn.query_row("SELECT COUNT(*) FROM mods WHERE is_stock = 1", [], |r| r.get(0))
+}
+
 // --- Sous-éléments rattachés (§12bis.2) -------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

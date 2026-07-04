@@ -119,25 +119,6 @@
       </div>
     </section>
 
-    <!-- CATÉGORIES MO2 -->
-    <section>
-      <div class="s-head">
-        <h3>Catégories MO2 → tags <span class="cnt">{fam.mo2_category_map.length}</span></h3>
-        <button class="btn" type="button" onclick={() => push(fam.mo2_category_map, { from: "", add: [] })}>+ Règle</button>
-      </div>
-      <p class="hint">Migration d'un catalogue Mod Organizer 2 : nom de catégorie → tags ajoutés.</p>
-      <div class="rows">
-        {#each fam.mo2_category_map as rule, i}
-          <div class="row">
-            <input class="input" value={rule.from} oninput={(e) => (rule.from = e.currentTarget.value)} placeholder="Car - GT3" />
-            <span class="arrow">→</span>
-            <input class="input mono" value={joinList(rule.add)} oninput={(e) => (rule.add = parseList(e.currentTarget.value))} placeholder="#gt3" />
-            <button class="btn-ghost del" type="button" onclick={() => removeAt(fam.mo2_category_map, i)} title="Supprimer">✕</button>
-          </div>
-        {/each}
-      </div>
-    </section>
-
     {#if tab === "car"}
       {@const car = rules.car}
       <!-- CORRECTION DE MARQUE -->

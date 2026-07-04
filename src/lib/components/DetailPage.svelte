@@ -395,7 +395,10 @@
           {/if}
         {/if}
         <!-- Le fichier du mod n'est jamais réécrit (règle d'or §3.0). -->
-        <div class="badge-lock"><span class="lock">🔒</span> FICHIER NON MODIFIÉ</div>
+        <div
+          class="badge-lock"
+          title="Pit Box ne modifie jamais les fichiers du mod (ui_car.json, etc.) : tags, catégorie et autres métadonnées sont stockés à part, dans l'app."
+        ><span class="lock">🔒</span> FICHIER NON MODIFIÉ</div>
       </div>
 
       <div class="data">
@@ -511,13 +514,15 @@
           {:else}
             <div class="restore-note">↺ son d'origine restaurable</div>
           {/if}
+
+          {@render tagsBlock(d)}
         </div>
 
-        <!-- Tags + Versions + Historique + Provenance -->
+        <!-- Versions + Historique + Provenance -->
         <div class="col">
-          {@render tagsBlock(d)}
           {@render versionsBlock(d)}
           {@render historyBlock(d)}
+          {@render publishedBlock(d)}
           {@render provenanceBlock(d)}
         </div>
       {:else}
@@ -574,6 +579,7 @@
           {@render tagsBlock(d)}
           {@render versionsBlock(d)}
           {@render historyBlock(d)}
+          {@render publishedBlock(d)}
           {@render provenanceBlock(d)}
         </div>
       {/if}
@@ -625,6 +631,16 @@
       </li>
     {/each}
   </ul>
+{/snippet}
+
+{#snippet publishedBlock(d: ModDetail)}
+  <div class="lbl section">DATE DE PUBLICATION</div>
+  <div class="srcbox">
+    <div class="srcrow">
+      <span class="src-k">ESTIMÉE</span>
+      <span class="src-v">{d.published_at ? fmtDate(d.published_at) : "—"}</span>
+    </div>
+  </div>
 {/snippet}
 
 {#snippet provenanceBlock(d: ModDetail)}

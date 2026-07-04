@@ -187,6 +187,22 @@ fn is_track_skin(conn: &Connection, parent_id: &str, src: &Path) -> bool {
     src.components().any(|c| c.as_os_str().to_string_lossy().eq_ignore_ascii_case("tracks"))
 }
 
+/// Tente d'identifier la voiture ciblée par un mod de son quand la détection
+/// par arborescence (modscan) retombe sur le dossier générique "sfx" (nom de
+/// dossier standard AC, `content/cars/<id>/sfx`, jamais un nom de voiture) :
+/// l'id d'une voiture connue apparaît-il, seul, dans le nom d'archive/dossier
+/// importé (souvent explicite, ex. « Sound - <id> by <auteur> ») ?
+fn guess_sound_parent(conn: &Connection, source_name: &str) -> Option<String> {
+    let lower = source_name.to_lowercase();
+    let mut matches = overlay::list_mods(conn)
+        .ok()?
+        .into_iter()
+        .filter(|m| m.kind == "Car" && lower.contains(&m.id_interne.to_lowercase()))
+        .map(|m| m.id_interne);
+    let first = matches.next()?;
+    matches.next().is_none().then_some(first)
+}
+
 fn import_sound(
     conn: &Connection,
     library: &Path,
@@ -195,22 +211,33 @@ fn import_sound(
     copy: bool,
     out: &mut Vec<SubImported>,
 ) {
-    let parent = &sub.parent_id;
-    let name = sub
-        .dir
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| source_name.to_string());
+    // "sfx" n'identifie aucune voiture (§12bis.2, limite connue) : on retombe
+    // sur le nom d'archive/dossier importé, en essayant d'abord d'y retrouver
+    // la voiture ciblée pour rattacher le son au bon endroit.
+    let generic = sub.parent_id.eq_ignore_ascii_case("sfx");
+    let parent = if generic {
+        guess_sound_parent(conn, source_name).unwrap_or_else(|| source_name.to_string())
+    } else {
+        sub.parent_id.clone()
+    };
+    let name = if generic {
+        source_name.to_string()
+    } else {
+        sub.dir
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| source_name.to_string())
+    };
 
-    if overlay::sub_exists(conn, "SOUND", parent, &name).unwrap_or(false) {
+    if overlay::sub_exists(conn, "SOUND", &parent, &name).unwrap_or(false) {
         return;
     }
 
-    let dest = library.join("sounds").join(parent).join(&name);
+    let dest = library.join("sounds").join(&parent).join(&name);
     if let Err(err) = copy_or_move(&sub.dir, &dest, copy) {
         out.push(SubImported {
             sub_type: "SOUND".into(),
-            parent_id: parent.clone(),
+            parent_id: parent,
             name,
             projected: false,
             warning: Some(format!("stockage : {err}")),
@@ -223,7 +250,7 @@ fn import_sound(
         conn,
         &id,
         "SOUND",
-        parent,
+        &parent,
         &name,
         &dest.to_string_lossy(),
         Some(source_name),
@@ -231,7 +258,7 @@ fn import_sound(
     );
     out.push(SubImported {
         sub_type: "SOUND".into(),
-        parent_id: parent.clone(),
+        parent_id: parent,
         name,
         projected: false,
         warning: None,
@@ -464,6 +491,39 @@ mod tests {
         restore_sound(&conn, &cfg, "snd_car").unwrap();
         assert_eq!(std::fs::read_to_string(sfx.join("GUIDs.txt")).unwrap(), "ORIG");
         assert!(!overlay::get_sub_mod(&conn, "s1").unwrap().unwrap().is_active);
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn sound_parent_guessed_from_archive_name() {
+        // Cas réel : dossier de son nommé comme l'archive, fichiers sous un
+        // sous-dossier "sfx" (convention standard AC) — modscan ne peut pas en
+        // déduire la voiture cible, seul le nom d'archive/dossier le peut.
+        let base = std::env::temp_dir().join(format!("pitbox-sndguess-{}", Uuid::new_v4()));
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let now = Local::now().to_rfc3339();
+
+        overlay::upsert_mod(&conn, "ks_lamborghini_huracan_performante", "Car", Some("Lamborghini"), Some("Huracan Performante"), "h", None, &now).unwrap();
+
+        let archive_name = "Sound - ks_lamborghini_huracan_performante by Marti";
+        let src = base.join("src").join(archive_name);
+        let sfx = src.join("sfx");
+        std::fs::create_dir_all(&sfx).unwrap();
+        std::fs::write(sfx.join("GUIDs.txt"), b"X").unwrap();
+        std::fs::write(sfx.join("car.bank"), b"Y").unwrap();
+
+        let subs = modscan::scan_subs(&src);
+        assert_eq!(subs.len(), 1);
+        assert_eq!(subs[0].parent_id, "sfx", "modscan seul retombe sur le nom générique du dossier");
+
+        let res = import_subs(&conn, &cfg, &library, archive_name, &subs, true);
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].parent_id, "ks_lamborghini_huracan_performante", "voiture retrouvée dans le nom d'archive");
+        assert_eq!(res[0].name, archive_name, "nom lisible, pas « sfx »");
 
         let _ = std::fs::remove_dir_all(&base);
     }

@@ -50,6 +50,8 @@ export interface ModCard {
   distance_km: number | null;
   /** « Déjà essayé » : lancé par l'app OU km CM > 0 (§6.5). */
   tried: boolean;
+  /** Poids natif (voitures), lu à la volée dans ui_car.json (§6.2). */
+  weight: string | null;
 }
 
 export interface VersionRow {

@@ -29,6 +29,8 @@ pub struct ModCard {
     pub distance_km: Option<f64>,
     /// « Déjà essayé » : lancé par l'app OU km CM > 0 (§6.5).
     pub tried: bool,
+    /// Poids natif (voitures), lu à la volée dans ui_car.json — colonne §6.2.
+    pub weight: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -52,6 +54,11 @@ fn kind_of(s: &str) -> ModKind {
 }
 
 fn is_active(cfg: &AppConfig, m: &ModRow) -> bool {
+    // Contenu de base Kunos : toujours un vrai dossier (jamais de junction),
+    // chargé par AC en permanence — donc toujours « actif ».
+    if m.is_stock {
+        return true;
+    }
     let Some(ac) = &cfg.ac_install_path else {
         return false;
     };
@@ -83,11 +90,22 @@ fn outline_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String>
     inspect::track_outline(&dir)
 }
 
+/// Poids natif (voitures uniquement), lu à la volée dans ui_car.json —
+/// donnée « native », jamais harmonisée par le moteur de règles (§5bis.1).
+fn weight_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
+    if m.kind != "Car" {
+        return None;
+    }
+    let dir = entity_dir(conn, cfg, m)?;
+    uijson::read_car_specs(&dir)?.weight
+}
+
 fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
     let preview = preview_for(conn, cfg, &m);
     let outline = outline_for(conn, cfg, &m);
     let active = is_active(cfg, &m);
-    ModCard { base: m, preview, outline, active, distance_km: None, tried: false }
+    let weight = weight_for(conn, cfg, &m);
+    ModCard { base: m, preview, outline, active, distance_km: None, tried: false, weight }
 }
 
 /// Renseigne la distance CM et le marqueur « essayé » (§6.5) sur une carte.
@@ -294,6 +312,20 @@ pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stock_mod_always_active() {
+        // Le contenu de base Kunos est un vrai dossier (jamais une junction) :
+        // il doit être considéré actif même sans dossier AC configuré.
+        let base = std::env::temp_dir().join(format!("pitbox-active-{}", uuid::Uuid::new_v4()));
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_stock_mod(&conn, "ks_test_track", "Track", None, Some("Test"), &now).unwrap();
+        let m = overlay::get_mod(&conn, "ks_test_track").unwrap().unwrap();
+        assert!(is_active(&AppConfig::default(), &m));
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
 
     #[test]
     fn stock_car_skins_read_from_content() {

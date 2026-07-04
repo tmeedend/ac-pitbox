@@ -46,6 +46,7 @@
   let classFilter = $state<"all" | "race" | "street">((sf.class as "all" | "race" | "street") ?? "all");
   let stateFilter = $state<"all" | "active" | "inactive">((sf.state as "all" | "active" | "inactive") ?? "all");
   let authorFilter = $state<string>((sf.author as string) ?? "all");
+  let countryFilter = $state<string>((sf.country as string) ?? "all");
   let favOnly = $state<boolean>((sf.fav as boolean) ?? false);
   let neverTried = $state<boolean>((sf.neverTried as boolean) ?? false);
   let yearMin = $state<number | null>((sf.yearMin as number | null) ?? null);
@@ -62,6 +63,7 @@
         class: classFilter,
         state: stateFilter,
         author: authorFilter,
+        country: countryFilter,
         fav: favOnly,
         neverTried,
         yearMin,
@@ -169,6 +171,11 @@
       a.toLowerCase().localeCompare(b.toLowerCase()),
     ),
   );
+  const countries = $derived(
+    [...new Set(typed.map((c) => c.country).filter((c): c is string => !!c))].sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase()),
+    ),
+  );
 
   const filtered = $derived(
     typed.filter((c) => {
@@ -177,6 +184,7 @@
       if (stateFilter === "active" && !c.active) return false;
       if (stateFilter === "inactive" && c.active) return false;
       if (authorFilter !== "all" && c.author !== authorFilter) return false;
+      if (countryFilter !== "all" && c.country !== countryFilter) return false;
       if (favOnly && !c.is_favorite) return false;
       if (neverTried && c.tried) return false;
       if (yearMin !== null && (c.year ?? 0) < yearMin) return false;
@@ -197,6 +205,7 @@
       (classFilter !== "all" ? 1 : 0) +
       (stateFilter !== "all" ? 1 : 0) +
       (authorFilter !== "all" ? 1 : 0) +
+      (countryFilter !== "all" ? 1 : 0) +
       (favOnly ? 1 : 0) +
       (neverTried ? 1 : 0) +
       (yearMin !== null ? 1 : 0) +
@@ -208,6 +217,7 @@
     classFilter = "all";
     stateFilter = "all";
     authorFilter = "all";
+    countryFilter = "all";
     favOnly = false;
     neverTried = false;
     yearMin = null;
@@ -305,6 +315,13 @@
             {#each authors as a}<option value={a}>{a}</option>{/each}
           </select>
         </label>
+        <label>
+          <span>Pays</span>
+          <select class="input" bind:value={countryFilter}>
+            <option value="all">Tous</option>
+            {#each countries as c}<option value={c}>{c}</option>{/each}
+          </select>
+        </label>
         {#if isCar}
           <label>
             <span>Catégorie</span>
@@ -366,9 +383,11 @@
               {:else}<div class="noprev">{isCar ? "Voiture" : "Circuit"}</div>{/if}
               {#if !isCar && ol}<img class="outline" src={ol} alt="" loading="lazy" />{/if}
               {#if sessionId === c.id_interne}<span class="sessbadge">SESSION</span>{/if}
-              {#if c.active}<span class="dot" title="Actif"></span>{/if}
-              {#if c.is_stock}<span class="sbadge" title="Contenu de base Kunos">BASE</span>{/if}
-              {#if c.version_count > 1}<span class="vbadge">{c.version_count}</span>{/if}
+              {#if c.is_stock}
+                <span class="sbadge" title="Contenu de base Kunos">BASE</span>
+              {:else}
+                <span class="dot" class:active={c.active} title={c.active ? "Actif" : "Inactif"}></span>
+              {/if}
               <span
                 class="card-fav"
                 class:on={c.is_favorite}
@@ -658,18 +677,11 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--green);
+    background: var(--muted2);
     box-shadow: 0 0 0 2px var(--bg);
   }
-  .vbadge {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    background: var(--rosso);
-    color: #fff;
-    font-size: 10px;
-    font-family: var(--mono);
-    padding: 1px 5px;
+  .dot.active {
+    background: var(--green);
   }
   .sbadge {
     position: absolute;

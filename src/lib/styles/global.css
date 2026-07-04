@@ -63,6 +63,13 @@ select {
   color: inherit;
 }
 
+/* Jauges/curseurs natifs (dégâts, carburant, usure pneus…) : le bleu par
+   défaut du navigateur détonne avec le thème rosso corsa. */
+input[type="range"],
+input[type="checkbox"] {
+  accent-color: var(--rosso);
+}
+
 a {
   color: var(--blue);
 }

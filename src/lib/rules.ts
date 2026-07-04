@@ -22,10 +22,6 @@ export interface ClassFix {
   set_class: string | null;
   add: string[];
 }
-export interface Mo2Map {
-  from: string;
-  add: string[];
-}
 export interface ExtractionSpecs {
   drivetrain: SetRule[];
   aspiration: SetRule[];
@@ -41,14 +37,12 @@ export interface CarRules {
   name_to_tag: NameToTag[];
   class_fix: ClassFix[];
   tag_merge: TagMerge[];
-  mo2_category_map: Mo2Map[];
   remove: string[];
   extraction_specs: ExtractionSpecs;
   extraction_country: ExtractionCountry;
 }
 export interface TrackRules {
   tag_merge: TagMerge[];
-  mo2_category_map: Mo2Map[];
   remove: string[];
 }
 export interface Rules {

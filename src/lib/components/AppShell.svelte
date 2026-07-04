@@ -40,6 +40,13 @@
   const trackOutline = $derived(previewSrc(nav.sessionTrack?.outline ?? null));
 
   const isLibrary = $derived(nav.section === "cars" || nav.section === "tracks");
+
+  // Double-clic sur le slot de session : ouvre directement la fiche détail de
+  // l'entité choisie (skin, layout…) plutôt que la liste de la bibliothèque.
+  function openSessionDetail(section: "cars" | "tracks", id: string | null | undefined) {
+    nav.section = section;
+    if (id) nav.openMod = id;
+  }
 </script>
 
 <div class="frame">
@@ -57,7 +64,13 @@
       <!-- SESSION : duo sélectionné, point d'accès aux bibliothèques (§8.6) -->
       <div class="session">
         <div class="nsec">Session</div>
-        <button class="slot" class:on={nav.section === "cars"} onclick={() => (nav.section = "cars")} title="Ouvrir la bibliothèque voitures">
+        <button
+          class="slot"
+          class:on={nav.section === "cars"}
+          onclick={() => (nav.section = "cars")}
+          ondblclick={() => openSessionDetail("cars", nav.sessionCar?.id)}
+          title="Clic : bibliothèque voitures · double-clic : fiche détail"
+        >
           <div class="slot-img car">
             {#if carPrev}<img src={carPrev} alt="" />{:else}<span class="slot-ic">🚗</span>{/if}
             <span class="slot-tag">VOITURE</span>
@@ -68,7 +81,13 @@
             <div class="slot-meta">{nav.sessionCar?.meta || "cliquer pour choisir"}</div>
           </div>
         </button>
-        <button class="slot" class:on={nav.section === "tracks"} onclick={() => (nav.section = "tracks")} title="Ouvrir la bibliothèque circuits">
+        <button
+          class="slot"
+          class:on={nav.section === "tracks"}
+          onclick={() => (nav.section = "tracks")}
+          ondblclick={() => openSessionDetail("tracks", nav.sessionTrack?.id)}
+          title="Clic : bibliothèque circuits · double-clic : fiche détail"
+        >
           <div class="slot-img track">
             {#if trackPrev}<img src={trackPrev} alt="" />{:else}<span class="slot-ic">🏁</span>{/if}
             {#if trackOutline}<img class="slot-outline" src={trackOutline} alt="" />{/if}

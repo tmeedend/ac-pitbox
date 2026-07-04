@@ -31,8 +31,6 @@ pub struct CarRules {
     #[serde(default)]
     pub tag_merge: Vec<TagMerge>,
     #[serde(default)]
-    pub mo2_category_map: Vec<Mo2Map>,
-    #[serde(default)]
     pub remove: Vec<String>,
     #[serde(default)]
     pub extraction_specs: ExtractionSpecs,
@@ -44,8 +42,6 @@ pub struct CarRules {
 pub struct TrackRules {
     #[serde(default)]
     pub tag_merge: Vec<TagMerge>,
-    #[serde(default)]
-    pub mo2_category_map: Vec<Mo2Map>,
     #[serde(default)]
     pub remove: Vec<String>,
 }
@@ -74,12 +70,6 @@ pub struct ClassFix {
 pub struct TagMerge {
     pub from: Vec<String>,
     pub to: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Mo2Map {
-    pub from: String,
-    pub add: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
