@@ -291,10 +291,59 @@ fn open_content_manager(app: AppHandle) -> Result<(), String> {
 
 /// Lance l'aperçu 3D natif (`acShowroom.exe`, distinct de Content Manager)
 /// ciblé sur une voiture (+ skin optionnel). Bascule temporairement
-/// `video.ini` en fenêtré, restauré automatiquement à la fermeture.
+/// `video.ini` en fenêtré, restauré automatiquement à la fermeture. Mémorise
+/// le PID lancé pour une intégration ultérieure dans la page.
 #[tauri::command]
-fn open_native_showroom(app: AppHandle, car_id: String, skin_id: Option<String>) -> Result<(), String> {
-    showroom::open_native_showroom(&config::load(&app), &car_id, skin_id.as_deref())
+fn open_native_showroom(
+    app: AppHandle,
+    showroom_state: State<showroom::ShowroomState>,
+    car_id: String,
+    skin_id: Option<String>,
+) -> Result<(), String> {
+    let pid = showroom::open_native_showroom(&config::load(&app), &car_id, skin_id.as_deref())?;
+    *showroom_state.0.lock().map_err(|e| e.to_string())? = Some(pid);
+    Ok(())
+}
+
+/// Intègre la fenêtre du dernier showroom lancé dans la fenêtre principale,
+/// à la place de la preview image (`x`/`y`/`width`/`height` en pixels
+/// physiques, relatifs à la zone cliente de l'app).
+#[tauri::command]
+fn attach_native_showroom(
+    app: AppHandle,
+    showroom_state: State<showroom::ShowroomState>,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+) -> Result<(), String> {
+    let pid = showroom_state.0.lock().map_err(|e| e.to_string())?.ok_or("aucun aperçu 3D en cours")?;
+    let win = app.get_webview_window("main").ok_or("fenêtre principale introuvable")?;
+    let host = win.hwnd().map_err(|e| e.to_string())?;
+    showroom::attach(host, pid, x, y, width, height)
+}
+
+/// Repositionne/redimensionne le showroom déjà intégré (suivi resize/scroll).
+#[tauri::command]
+fn reposition_native_showroom(
+    showroom_state: State<showroom::ShowroomState>,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+) -> Result<(), String> {
+    let pid = showroom_state.0.lock().map_err(|e| e.to_string())?.ok_or("aucun aperçu 3D en cours")?;
+    showroom::reposition(pid, x, y, width, height)
+}
+
+/// Ferme proprement le showroom en cours (attaché ou flottant).
+#[tauri::command]
+fn close_native_showroom(showroom_state: State<showroom::ShowroomState>) -> Result<(), String> {
+    let pid = *showroom_state.0.lock().map_err(|e| e.to_string())?;
+    match pid {
+        Some(pid) => showroom::close(pid),
+        None => Ok(()),
+    }
 }
 
 // --- Maintenance & export (L5) ----------------------------------------------
@@ -492,6 +541,7 @@ pub fn run() {
             }
 
             app.manage(Db(std::sync::Mutex::new(conn)));
+            app.manage(showroom::ShowroomState(std::sync::Mutex::new(None)));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -522,6 +572,9 @@ pub fn run() {
             launch_session,
             open_content_manager,
             open_native_showroom,
+            attach_native_showroom,
+            reposition_native_showroom,
+            close_native_showroom,
             maintenance_scan,
             reindex_library,
             delete_broken_mod,

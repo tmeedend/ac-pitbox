@@ -14,10 +14,25 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, Instant};
+
+use windows::core::BOOL;
+use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::Win32::UI::WindowsAndMessaging::{
+    EnumWindows, GetClassNameW, GetWindowLongPtrW, GetWindowThreadProcessId, PostMessageW, SetParent,
+    SetWindowLongPtrW, SetWindowPos, GWL_STYLE, SWP_FRAMECHANGED, SWP_NOZORDER, WM_CLOSE, WS_CHILD, WS_POPUP,
+};
 
 use crate::config::AppConfig;
 
 const BACKUP_NAME: &str = "video.ini.pitbox-backup";
+/// Classe de fenêtre native d'`acShowroom.exe`, identifiée en inspectant le
+/// process réel (`EnumWindows` + `GetClassName`, voir recherche §piste 3).
+const SHOWROOM_WINDOW_CLASS: &str = "acShowroomW";
+
+/// PID du dernier showroom lancé — nécessaire pour le retrouver et l'intégrer
+/// dans la page depuis une commande Tauri séparée de celle qui l'a lancé.
+pub struct ShowroomState(pub std::sync::Mutex<Option<u32>>);
 
 fn resolve_ac_cfg_dir() -> Option<PathBuf> {
     Some(dirs::document_dir()?.join("Assetto Corsa").join("cfg"))
@@ -132,8 +147,10 @@ pub fn restore_orphaned_video_ini() {
 
 /// Lance `acShowroom.exe` ciblé sur `car_id` (+ skin optionnel). Bascule
 /// `video.ini` en fenêtré le temps de la session, restauré automatiquement
-/// à la fermeture (fenêtre fermée par l'utilisateur ou process tué).
-pub fn open_native_showroom(cfg: &AppConfig, car_id: &str, skin_id: Option<&str>) -> Result<(), String> {
+/// à la fermeture (fenêtre fermée par l'utilisateur ou process tué). Renvoie
+/// le PID du process lancé, nécessaire pour le retrouver et l'intégrer dans
+/// la page (§ Phase B).
+pub fn open_native_showroom(cfg: &AppConfig, car_id: &str, skin_id: Option<&str>) -> Result<u32, String> {
     let ac = cfg.ac_install_path.as_ref().ok_or("dossier AC non configuré")?.clone();
     let exe = ac.join("acShowroom.exe");
     if !exe.is_file() {
@@ -148,6 +165,7 @@ pub fn open_native_showroom(cfg: &AppConfig, car_id: &str, skin_id: Option<&str>
         .current_dir(&ac)
         .spawn()
         .map_err(|e| format!("lancement d'acShowroom.exe : {e}"))?;
+    let pid = child.id();
 
     // Restauration dès la fermeture du showroom, quelle que soit la cause
     // (fenêtre fermée par l'utilisateur, ou process tué).
@@ -158,6 +176,89 @@ pub fn open_native_showroom(cfg: &AppConfig, car_id: &str, skin_id: Option<&str>
         }
     });
 
+    Ok(pid)
+}
+
+struct FindCtx {
+    pid: u32,
+    /// HWND stocké en pointeur brut (isize) : `HWND` n'est pas `Send`, on ne
+    /// le reconstruit qu'après avoir traversé la frontière de thread.
+    found: Option<isize>,
+}
+
+unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    let ctx = &mut *(lparam.0 as *mut FindCtx);
+    let mut pid = 0u32;
+    let _ = GetWindowThreadProcessId(hwnd, Some(&mut pid));
+    if pid == ctx.pid {
+        let mut buf = [0u16; 64];
+        let len = GetClassNameW(hwnd, &mut buf);
+        if len > 0 && String::from_utf16_lossy(&buf[..len as usize]) == SHOWROOM_WINDOW_CLASS {
+            ctx.found = Some(hwnd.0 as isize);
+            return BOOL(0); // arrête l'énumération : trouvé.
+        }
+    }
+    BOOL(1) // continue.
+}
+
+/// Retrouve la fenêtre native du showroom pour un PID donné (classe
+/// `acShowroomW`). `None` si le process n'a pas encore créé sa fenêtre
+/// (démarrage/initialisation DirectX en cours) ou n'existe plus.
+fn find_showroom_window(pid: u32) -> Option<HWND> {
+    let mut ctx = FindCtx { pid, found: None };
+    unsafe {
+        let _ = EnumWindows(Some(enum_proc), LPARAM(&mut ctx as *mut FindCtx as isize));
+    }
+    ctx.found.map(|raw| HWND(raw as *mut _))
+}
+
+/// Intègre la fenêtre du showroom (PID `pid`) comme enfant de `host` — sortie
+/// du domaine "fenêtre top-level" (`WS_POPUP`) vers `WS_CHILD`, positionnée
+/// dans la zone `(x, y, width, height)` (pixels physiques, relatifs à la zone
+/// cliente de `host`). Attend l'apparition de la fenêtre jusqu'à 10s (le
+/// temps que le process démarre et initialise DirectX).
+pub fn attach(host: HWND, pid: u32, x: i32, y: i32, width: i32, height: i32) -> Result<(), String> {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let target = loop {
+        if let Some(h) = find_showroom_window(pid) {
+            break h;
+        }
+        if Instant::now() >= deadline {
+            return Err("fenêtre du showroom introuvable (délai dépassé)".into());
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    };
+
+    unsafe {
+        let style = GetWindowLongPtrW(target, GWL_STYLE);
+        let new_style = (style & !(WS_POPUP.0 as isize)) | (WS_CHILD.0 as isize);
+        SetWindowLongPtrW(target, GWL_STYLE, new_style);
+        SetParent(target, Some(host)).map_err(|e| e.to_string())?;
+        SetWindowPos(target, None, x, y, width, height, SWP_NOZORDER | SWP_FRAMECHANGED)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Repositionne/redimensionne la fenêtre déjà intégrée (suivi du scroll/resize
+/// de la page côté front).
+pub fn reposition(pid: u32, x: i32, y: i32, width: i32, height: i32) -> Result<(), String> {
+    let target = find_showroom_window(pid).ok_or("fenêtre du showroom introuvable")?;
+    unsafe {
+        SetWindowPos(target, None, x, y, width, height, SWP_NOZORDER).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Demande la fermeture propre du showroom (`WM_CLOSE`) — le thread lancé
+/// par `open_native_showroom` restaure `video.ini` dès que le process se
+/// termine, qu'il soit intégré ou flottant.
+pub fn close(pid: u32) -> Result<(), String> {
+    if let Some(target) = find_showroom_window(pid) {
+        unsafe {
+            let _ = PostMessageW(Some(target), WM_CLOSE, WPARAM(0), LPARAM(0));
+        }
+    }
     Ok(())
 }
 

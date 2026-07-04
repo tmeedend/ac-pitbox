@@ -117,6 +117,7 @@
     "showroom": "3D preview",
     "showroomTooltip": "Opens acShowroom.exe (native AC) on this car, in a separate window",
     "showroomLaunching": "Launching…",
+    "showroomClose": "Close 3D preview",
     "exporting": "Exporting…",
     "export": "⤓ Export",
     "drive": "Drive",
