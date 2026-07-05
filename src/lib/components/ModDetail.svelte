@@ -3,6 +3,7 @@
     activateMod,
     deactivateMod,
     getModDetail,
+    openModFolder,
     previewSrc,
     setFavorite,
     setManualTags,
@@ -10,38 +11,25 @@
     type NativeSpecs,
   } from "$lib/library";
   import PowerCurve from "./PowerCurve.svelte";
-  import { nav, pickSession } from "$lib/nav.svelte";
   import { open } from "@tauri-apps/plugin-dialog";
   import { exportMod, type ExportReport } from "$lib/maintenance";
-  import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
   import { t } from "$lib/i18n/index.svelte";
 
   interface Props {
     id: string | null;
-    onclose: () => void;
     onchange?: () => void;
     onexpand?: () => void;
   }
-  let { id, onclose, onchange, onexpand }: Props = $props();
+  let { id, onchange, onexpand }: Props = $props();
 
-  function drive() {
+  // Ouvre le dossier réel du mod dans l'explorateur Windows.
+  async function openFolder() {
     if (!detail) return;
-    const isCar = detail.kind === "Car";
-    const sk = isCar ? getPreferredSkin(detail.id_interne) : null;
-    const lay = !isCar ? getPreferredLayout(detail.id_interne) : null;
-    const meta = isCar
-      ? [detail.brand, sk ? `skin: ${sk.name}` : detail.category].filter(Boolean).join(" · ")
-      : [lay?.name ?? detail.category, detail.author].filter(Boolean).join(" · ");
-    pickSession(detail.kind, {
-      id: detail.id_interne,
-      name: detail.display_name ?? detail.id_interne,
-      meta,
-      preview: sk?.preview ?? lay?.preview ?? detail.preview,
-      layout: lay?.id ?? (!isCar ? detail.layouts[0] ?? null : null),
-      skin: sk?.id ?? null,
-      outline: !isCar ? (lay?.outline ?? detail.outline) : null,
-    });
-    nav.section = "race";
+    try {
+      await openModFolder(detail.id_interne);
+    } catch (e) {
+      actionError = String(e);
+    }
   }
 
   let detail = $state<ModDetail | null>(null);
@@ -151,7 +139,7 @@
   // Décode une description HTML (br + entités) en texte sûr (pas d'injection).
   function decodeDescription(html: string): string {
     return html
-      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/?br\s*\/?>/gi, "\n")
       .replace(/<[^>]+>/g, "")
       .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
       .replace(/&amp;/g, "&")
@@ -200,18 +188,18 @@
   }
 </script>
 
-{#if id}
-  <aside class="panel">
+<aside class="panel">
+  {#if onexpand && (detail || (loading && id))}
     <header>
-      {#if onexpand}
-        <button class="btn-ghost expand" type="button" onclick={onexpand} title={t("modpanel.expandTooltip")}>⤢ {t("modpanel.expand")}</button>
-      {/if}
-      <button class="btn-ghost close" type="button" onclick={onclose} title={t("common.close")}>✕</button>
+      <button class="btn-ghost expand" type="button" onclick={onexpand} title={t("modpanel.expandTooltip")}>⤢ {t("modpanel.expand")}</button>
     </header>
+  {/if}
 
-    {#if loading && !detail}
-      <div class="empty">{t("common.loading")}</div>
-    {:else if detail}
+  {#if !id}
+    <div class="empty">{t("modpanel.noSelection")}</div>
+  {:else if loading && !detail}
+    <div class="empty">{t("common.loading")}</div>
+  {:else if detail}
       {@const preview = previewSrc(detail.preview)}
       {@const outline = previewSrc(detail.outline)}
       <div class="preview">
@@ -254,15 +242,15 @@
           <span class="state">{t("common.inactive")}</span>
           <button class="btn" type="button" onclick={() => activate()} disabled={busy}>{t("common.activate")}</button>
         {/if}
-        <button class="btn btn-primary" type="button" onclick={drive}>{t("detail.drive")}</button>
       </div>
-      {#if !detail.is_stock}
-        <div class="sec-actions">
+      <div class="sec-actions">
+        <button class="btn-ghost export" type="button" onclick={openFolder}>{t("detail.openFolder")}</button>
+        {#if !detail.is_stock}
           <button class="btn-ghost export" type="button" onclick={doExport} disabled={exporting}>
             {exporting ? t("detail.exporting") : t("modpanel.exportFull")}
           </button>
-        </div>
-      {/if}
+        {/if}
+      </div>
       {#if actionError}
         <div class="action-err">{actionError}</div>
       {/if}
@@ -398,15 +386,20 @@
           {/each}
         </ul>
       </section>
-    {:else}
-      <div class="empty">{t("modpanel.notFound")}</div>
-    {/if}
-  </aside>
-{/if}
+  {:else}
+    <div class="empty">{t("modpanel.notFound")}</div>
+  {/if}
+</aside>
 
 <style>
   .panel {
     width: 320px;
+    height: 100%;
+    /* min-height:0 annule le plancher implicite « min-height:auto » des
+       enfants flex (= hauteur de leur contenu) : sans lui, le panneau
+       grandissait au-delà de la hauteur disponible au lieu de défiler en
+       interne, et le débordement était rogné plus haut sans scrollbar. */
+    min-height: 0;
     flex: none;
     border-left: 1px solid var(--line);
     background: var(--panel2);
@@ -418,24 +411,17 @@
     top: 0;
     background: var(--panel2);
     display: flex;
-    justify-content: flex-end;
     align-items: center;
-    gap: 6px;
     padding: 10px 0 4px;
     z-index: 1;
   }
   .expand {
-    margin-right: auto;
     font-size: 11px;
     padding: 4px 8px;
     color: var(--muted);
   }
   .expand:hover {
     color: var(--rosso-bright);
-  }
-  .close {
-    font-size: 14px;
-    padding: 4px 8px;
   }
   .preview {
     position: relative;

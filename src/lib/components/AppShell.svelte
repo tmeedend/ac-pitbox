@@ -11,13 +11,15 @@
   import OtherMods from "./OtherMods.svelte";
   import Import from "./Import.svelte";
   import ImportOverlay from "./ImportOverlay.svelte";
-  import { nav } from "$lib/nav.svelte";
+  import TitleBar from "./TitleBar.svelte";
+  import { nav, requestSection } from "$lib/nav.svelte";
   import { previewSrc } from "$lib/library";
   import { initGlobalDragDrop } from "$lib/importState.svelte";
   import { openContentManager } from "$lib/launch";
   import { t, setLocale } from "$lib/i18n/index.svelte";
   import { setZoom } from "$lib/zoom.svelte";
   import { getConfig } from "$lib/config";
+  import { startGamepadNav } from "$lib/gamepadNav";
 
   // Barre latérale unifiée (maquette pitbox-biblio-session2.html) : bloc
   // SESSION (le duo sélectionné = point d'accès aux bibliothèques) puis
@@ -50,12 +52,17 @@
       }
       return;
     }
-    nav.section = b.id;
+    await requestSection(b.id);
   }
 
   // Glisser-déposer disponible partout : un seul listener, monté ici à la
   // racine, plutôt que dans chaque écran susceptible de recevoir un drop.
   onMount(() => initGlobalDragDrop());
+
+  // Navigation manette dans toute l'app (croix/stick = déplace le focus,
+  // A/Croix = valide, B/Rond = ferme la fiche pleine page). Un seul scrutin
+  // global, monté une fois ici.
+  onMount(() => startGamepadNav());
 
   // Langue forcée par l'utilisateur (Réglages), sinon langue système (déjà
   // appliquée par défaut par le module i18n). Zoom d'interface, idem.
@@ -78,12 +85,12 @@
 
   // Double-clic sur le slot de session : ouvre directement la fiche détail de
   // l'entité choisie (skin, layout…) plutôt que la liste de la bibliothèque.
-  function openSessionDetail(section: "cars" | "tracks", id: string | null | undefined) {
-    nav.section = section;
-    if (id) nav.openMod = id;
+  async function openSessionDetail(section: "cars" | "tracks", id: string | null | undefined) {
+    if (await requestSection(section) && id) nav.openMod = id;
   }
 </script>
 
+<TitleBar />
 <div class="frame">
   <div class="topbar"></div>
   <div class="shell">
@@ -102,7 +109,7 @@
         <button
           class="slot"
           class:on={nav.section === "cars"}
-          onclick={() => (nav.section = "cars")}
+          onclick={() => requestSection("cars")}
           ondblclick={() => openSessionDetail("cars", nav.sessionCar?.id)}
           title={t("session.carTooltip")}
         >
@@ -119,7 +126,7 @@
         <button
           class="slot"
           class:on={nav.section === "tracks"}
-          onclick={() => (nav.section = "tracks")}
+          onclick={() => requestSection("tracks")}
           ondblclick={() => openSessionDetail("tracks", nav.sessionTrack?.id)}
           title={t("session.trackTooltip")}
         >
@@ -134,13 +141,13 @@
             <div class="slot-meta">{nav.sessionTrack?.meta || t("session.clickToChoose")}</div>
           </div>
         </button>
-        <button class="btn-launch" onclick={() => (nav.section = "race")}>{t("session.start")}</button>
+        <button class="btn-launch" onclick={() => requestSection("race")}>{t("session.start")}</button>
       </div>
 
       <div class="nsec">{t("nav.addons")}</div>
       <div class="navgrid">
         {#each addons as b}
-          <button class="nb" class:full={b.full} class:on={nav.section === b.id} onclick={() => (nav.section = b.id)}>{t(b.labelKey)}</button>
+          <button class="nb" class:full={b.full} class:on={nav.section === b.id} onclick={() => requestSection(b.id)}>{t(b.labelKey)}</button>
         {/each}
       </div>
 
@@ -188,7 +195,15 @@
   .frame {
     background: var(--panel);
     border: 1px solid var(--rosso);
-    height: 100vh;
+    /* `zoom` (voir zoom.svelte.ts) agrandit tout le rendu, mais vh/vw restent
+       relatifs à la fenêtre réelle — sans cette division, .frame devient plus
+       haut que la fenêtre à >100% (rien à scroller pour atteindre le bas :
+       bouton Enregistrer hors champ, coquille tronquée un peu partout). */
+    height: calc(100vh / var(--ui-zoom, 1));
+    /* Barre de titre custom en position fixe (voir TitleBar.svelte) : réserve
+       sa hauteur ici plutôt que de la compter comme un enfant flex, pour
+       qu'elle reste toujours à l'écran quel que soit ce qui défile en dessous. */
+    padding-top: 32px;
     display: flex;
     flex-direction: column;
   }

@@ -42,6 +42,11 @@ export const nav = $state<{
   /** Duo de session courant (§8.6) — la bibliothèque le met à jour à l'ouverture. */
   sessionCar: SessionPick | null;
   sessionTrack: SessionPick | null;
+  /** Id du mod affiché en fiche pleine page (Library), ou null si aucune n'est
+   * ouverte — centralisé ici (plutôt que local à Library) pour que la
+   * navigation manette globale (AppShell) sache si elle doit céder la main
+   * gauche/droite au visualiseur (mod précédent/suivant) et gérer B = fermer. */
+  openFull: string | null;
 }>({
   section: "cars",
   prefill: null,
@@ -49,6 +54,7 @@ export const nav = $state<{
   search: null,
   sessionCar: load("pitbox.session.car"),
   sessionTrack: load("pitbox.session.track"),
+  openFull: null,
 });
 
 /** Définit le choix de session (persisté) — appelé à l'ouverture d'un mod (§8.6). */
@@ -60,4 +66,30 @@ export function pickSession(kind: "Car" | "Track", pick: SessionPick): void {
     nav.sessionTrack = pick;
     localStorage.setItem("pitbox.session.track", JSON.stringify(pick));
   }
+}
+
+// --- Garde de navigation (§10bis) ---
+// Un écran avec des modifications non enregistrées (ex. Réglages, zoom/langue
+// appliqués en aperçu live avant la sauvegarde) peut poser une garde : avant
+// tout changement de section, on lui laisse la main pour proposer
+// d'enregistrer ou d'annuler, plutôt que de quitter en silence en laissant
+// un état incohérent (aperçu appliqué mais jamais sauvegardé).
+let sectionGuard: (() => Promise<boolean>) | null = null;
+
+/** Posée par l'écran courant à son montage, retirée à son démontage. */
+export function setSectionGuard(guard: (() => Promise<boolean>) | null): void {
+  sectionGuard = guard;
+}
+
+/** Seul point d'entrée pour changer de section — respecte la garde posée.
+ * Renvoie `true` si la navigation a bien eu lieu (utile pour enchaîner une
+ * action, ex. ouvrir un mod précis, seulement si on a effectivement changé
+ * d'écran). */
+export async function requestSection(id: string): Promise<boolean> {
+  if (sectionGuard) {
+    const ok = await sectionGuard();
+    if (!ok) return false;
+  }
+  nav.section = id;
+  return true;
 }

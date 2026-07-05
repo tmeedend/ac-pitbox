@@ -14,6 +14,12 @@
     "openCm": "Open CM",
     "settings": "Settings"
   },
+  "titlebar": {
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
+  },
   "session": {
     "carTag": "CAR",
     "trackTag": "TRACK",
@@ -36,7 +42,10 @@
     "zoomHint": "Useful on a high-resolution screen if Windows scaling isn't picked up by the app. Takes effect right away; saved when you click Save.",
     "saved": "Saved",
     "save": "Save",
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "discard": "Discard changes",
+    "unsavedTitle": "Unsaved changes",
+    "unsavedPrompt": "Some settings were changed (and already applied as a live preview, e.g. zoom/language) but not saved. Save, or discard and revert?"
   },
   "common": {
     "all": "All",
@@ -145,7 +154,8 @@
     "showroomClose": "Close 3D preview",
     "exporting": "Exporting…",
     "export": "⤓ Export",
-    "drive": "Drive",
+    "openFolder": "⤴ Open folder",
+    "openFolderTooltip": "Open the mod's folder in Explorer",
     "exportSuccess": "✓ Archive created: {count} item(s) included.",
     "uninstallConfirm": "Uninstall pack \"{pack}\"? The {count} mods in this pack will be deleted (files + library). This cannot be undone.",
     "uninstallTitle": "Uninstall pack",
@@ -227,6 +237,7 @@
     "skinCount": "{count} skin(s)",
     "layoutCount": "{count} layout(s)",
     "notFound": "Mod not found.",
+    "noSelection": "Select a card to see its details here.",
     "specPower": "Power",
     "specTorque": "Torque",
     "specTopSpeed": "Top speed",

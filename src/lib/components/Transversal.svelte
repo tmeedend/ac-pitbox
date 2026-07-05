@@ -12,7 +12,7 @@
     type SubModRow,
   } from "$lib/submods";
   import { listLibrary, type ModCard } from "$lib/library";
-  import { nav } from "$lib/nav.svelte";
+  import { nav, requestSection } from "$lib/nav.svelte";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { t } from "$lib/i18n/index.svelte";
 
@@ -46,10 +46,11 @@
     return parents.get(id)?.display_name ?? id;
   }
 
-  function openParent(id: string) {
+  async function openParent(id: string) {
     const c = parents.get(id);
-    nav.section = c?.kind === "Track" ? "tracks" : "cars";
-    nav.openMod = id;
+    if (await requestSection(c?.kind === "Track" ? "tracks" : "cars")) {
+      nav.openMod = id;
+    }
   }
 
   const filtered = $derived(

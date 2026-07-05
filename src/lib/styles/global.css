@@ -36,6 +36,10 @@
 html,
 body {
   height: 100%;
+  /* Le document lui-même ne défile jamais : chaque écran gère son propre
+     scroll interne (.content, .panel, .main…). Un scroll de page entraînait
+     toute la coquille (barre de titre custom incluse) hors champ. */
+  overflow: hidden;
 }
 
 body {
@@ -44,6 +48,39 @@ body {
   font-family: var(--sans);
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbars discrètes, thème rosso corsa (WebView2 = Chromium, supporte
+   ::-webkit-scrollbar). Fines et carrées, cohérentes avec l'esthétique plate
+   de l'app (pas de coins arrondis ailleurs). */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--line);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted2);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Repère visuel du focus clavier/manette (navigation manette globale, voir
+   AppShell.svelte) : le contour natif du navigateur détonnait avec le thème.
+   Jaune plutôt que rosso — le rosso sert déjà à l'état « sélectionné »/
+   « session » sur les cartes, un focus rosso s'y fondait et devenait
+   invisible ; le jaune n'est utilisé nulle part ailleurs pour un état. */
+:focus-visible {
+  outline: 2px solid var(--yellow);
+  outline-offset: -2px;
+  box-shadow: 0 0 0 4px rgba(241, 216, 60, 0.35);
 }
 
 .mono {

@@ -14,6 +14,12 @@
     "openCm": "Ouvrir CM",
     "settings": "Réglages"
   },
+  "titlebar": {
+    "minimize": "Réduire",
+    "maximize": "Agrandir",
+    "restore": "Restaurer",
+    "close": "Fermer"
+  },
   "session": {
     "carTag": "VOITURE",
     "trackTag": "CIRCUIT",
@@ -36,7 +42,10 @@
     "zoomHint": "Utile sur un écran haute résolution si la mise à l'échelle Windows n'est pas reprise par l'app. Prend effet tout de suite ; mémorisé en cliquant sur Enregistrer.",
     "saved": "Enregistré",
     "save": "Enregistrer",
-    "saving": "Enregistrement…"
+    "saving": "Enregistrement…",
+    "discard": "Annuler les modifications",
+    "unsavedTitle": "Modifications non enregistrées",
+    "unsavedPrompt": "Des réglages ont été modifiés (et déjà appliqués en aperçu, ex. zoom/langue) mais pas enregistrés. Enregistrer, ou annuler et revenir en arrière ?"
   },
   "common": {
     "all": "Tous",
@@ -145,7 +154,8 @@
     "showroomClose": "Fermer l'aperçu 3D",
     "exporting": "Export…",
     "export": "⤓ Exporter",
-    "drive": "Conduire",
+    "openFolder": "⤴ Ouvrir le dossier",
+    "openFolderTooltip": "Ouvrir le dossier du mod dans l'explorateur",
     "exportSuccess": "✓ Archive créée : {count} élément(s) embarqué(s).",
     "uninstallConfirm": "Désinstaller le pack « {pack} » ? Les {count} mods du pack seront supprimés (fichiers + bibliothèque). Irréversible.",
     "uninstallTitle": "Désinstaller le pack",
@@ -227,6 +237,7 @@
     "skinCount": "{count} skin(s)",
     "layoutCount": "{count} layout(s)",
     "notFound": "Mod introuvable.",
+    "noSelection": "Sélectionne une carte pour voir ses détails ici.",
     "specPower": "Puissance",
     "specTorque": "Couple",
     "specTopSpeed": "Vitesse max",

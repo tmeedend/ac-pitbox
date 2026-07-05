@@ -44,7 +44,11 @@ fn read_json(path: &Path) -> Option<Value> {
     let text = read_text_lossy(path)?;
     // Tolère un BOM UTF-8 en tête (fréquent sur les mods).
     let text = text.trim_start_matches('\u{feff}');
-    serde_json::from_str(text).ok()
+    // Nettoie les JSON malformés fréquents chez les moddeurs AC (retours à la
+    // ligne bruts collés dans une chaîne — ex. description — invalident tout
+    // le fichier pour un parseur JSON strict ; voir clean_assetto_json).
+    let text = clean_assetto_json(text);
+    serde_json::from_str(&text).ok()
 }
 
 /// Convertit une valeur JSON en chaîne (gère nombre ou chaîne).
@@ -64,15 +68,7 @@ fn as_string(v: &Value) -> Option<String> {
 }
 
 fn parse(path: &Path) -> Option<UiInfo> {
-    // 1. Lire le fichier JSON d'origine en texte brut (lossy si pas UTF-8 strict)
-    let mut json_content = read_text_lossy(path)?;
-    json_content = json_content.trim_start_matches('\u{feff}').to_string();
-
-    // 2. Nettoyer les retours à la ligne illégaux dans la description
-    json_content = clean_assetto_json(&json_content);
-
-    // 3. Parser en tant que valeur JSON générique (serde_json::Value)
-    let v: Value = serde_json::from_str(&json_content).ok()?; // <-- Changement ici : Type `Value` au lieu de `UiInfo`
+    let v = read_json(path)?;
 
     let year = v.get("year").and_then(|y| match y {
         Value::Number(n) => n.as_i64(),
@@ -301,4 +297,31 @@ pub fn read_car_specs(car_dir: &Path) -> Option<NativeSpecs> {
         power_curve: curve(&v, "powerCurve"),
         torque_curve: curve(&v, "torqueCurve"),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Reproduit un vrai `ui_car.json` de contenu de base (ex. lotus_exige_s) :
+    /// la description contient des retours à la ligne bruts non échappés,
+    /// invalides pour un parseur JSON strict — le fichier entier doit quand
+    /// même être lu (specs + description), pas juste ignoré silencieusement.
+    #[test]
+    fn reads_specs_with_raw_newlines_in_description() {
+        let dir = std::env::temp_dir().join(format!("pitbox-uijson-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(dir.join("ui")).unwrap();
+        std::fs::write(
+            car_ui_path(&dir),
+            "{\n\"name\": \"Lotus Exige S\",\n\"brand\": \"Lotus\",\n\"description\": \"Welcome to the world.\nSecond line.\nThird line.\",\n\"specs\": {\"bhp\": \"345bhp\", \"weight\": \"1176kg\"}\n}\n",
+        )
+        .unwrap();
+
+        let specs = read_car_specs(&dir).expect("specs should parse despite raw newlines");
+        assert!(specs.description.unwrap().contains("Welcome to the world."));
+        assert_eq!(specs.bhp.as_deref(), Some("345bhp"));
+        assert_eq!(specs.weight.as_deref(), Some("1176kg"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

@@ -11,5 +11,13 @@ export function setZoom(level: number | null): void {
   zoomState.level = lvl;
   if (typeof document !== "undefined") {
     document.documentElement.style.zoom = `${lvl}%`;
+    // Le CSS `zoom` agrandit tout le rendu, mais les unités `vh`/`vw` restent
+    // relatives à la fenêtre réelle (pas au rendu zoomé) : une coquille en
+    // `height: 100vh` devient donc physiquement plus haute que la fenêtre à
+    // >100% (rien à scroller pour la voir en entier, ex. bouton Enregistrer
+    // hors champ). Cette variable permet de diviser les tailles en vh par le
+    // facteur de zoom (cf. AppShell.svelte .frame) pour qu'elles retrouvent
+    // leur taille réelle une fois zoomées.
+    document.documentElement.style.setProperty("--ui-zoom", String(lvl / 100));
   }
 }

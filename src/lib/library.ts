@@ -232,6 +232,13 @@ export function getModDetail(id: string): Promise<ModDetail | null> {
   return invoke<ModDetail | null>("get_mod_detail", { id });
 }
 
+/** Ouvre le dossier réel du mod (voiture/circuit, géré ou contenu de base)
+ * dans l'explorateur — résolu et ouvert côté backend (voir open_mod_folder,
+ * contourne le scope ACL du plugin opener). */
+export function openModFolder(id: string): Promise<void> {
+  return invoke<void>("open_mod_folder", { id });
+}
+
 export function activateMod(id: string, versionId?: string): Promise<void> {
   return invoke<void>("activate_mod", { id, versionId: versionId ?? null });
 }

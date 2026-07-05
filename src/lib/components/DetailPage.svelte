@@ -8,6 +8,7 @@
     deactivateMod,
     getModDetail,
     listLibrary,
+    openModFolder,
     previewSrc,
     setFavorite,
     setManualTags,
@@ -34,7 +35,7 @@
   } from "$lib/submods";
   import { open, confirm } from "@tauri-apps/plugin-dialog";
   import PowerCurve from "./PowerCurve.svelte";
-  import { nav, pickSession } from "$lib/nav.svelte";
+  import { nav, pickSession, requestSection } from "$lib/nav.svelte";
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
   import { t } from "$lib/i18n/index.svelte";
 
@@ -73,15 +74,17 @@
     return previewSrc(detail?.preview ?? null);
   });
 
-  function filterByPack() {
+  async function filterByPack() {
     if (!detail?.source_pack) return;
-    nav.section = detail.kind === "Track" ? "tracks" : "cars";
-    nav.search = detail.source_pack;
+    if (await requestSection(detail.kind === "Track" ? "tracks" : "cars")) {
+      nav.search = detail.source_pack;
+    }
   }
 
-  function openSibling(c: ModCard) {
-    nav.section = c.kind === "Track" ? "tracks" : "cars";
-    nav.openMod = c.id_interne;
+  async function openSibling(c: ModCard) {
+    if (await requestSection(c.kind === "Track" ? "tracks" : "cars")) {
+      nav.openMod = c.id_interne;
+    }
   }
 
   function activeArchive(d: ModDetail): string | null {
@@ -316,13 +319,16 @@
     });
   }
 
-  function drive() {
+  // Ouvre le dossier réel du mod dans l'explorateur Windows (voir aussi
+  // ce qu'il y a dedans, en dehors de la fiche). Fonctionne aussi pour le
+  // contenu de base Kunos (lecture seule).
+  async function openFolder() {
     if (!detail) return;
-    // Fige le duo de session avec la sélection courante (skin ou layout), puis
-    // ouvre la page session.
-    if (isCar) selectSkin(previewSkin);
-    else selectLayout(previewLayout);
-    nav.section = "race";
+    try {
+      await openModFolder(detail.id_interne);
+    } catch (e) {
+      actionError = String(e);
+    }
   }
 
   async function activate(versionId?: string) {
@@ -381,7 +387,7 @@
 
   function decodeDescription(html: string): string {
     return html
-      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/?br\s*\/?>/gi, "\n")
       .replace(/<[^>]+>/g, "")
       .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
       .replace(/&amp;/g, "&")
@@ -477,7 +483,7 @@
             </button>
           {/if}
         {/if}
-        <button class="btn primary" type="button" onclick={drive}>{t("detail.drive")}</button>
+        <button class="btn" type="button" onclick={openFolder} title={t("detail.openFolderTooltip")}>{t("detail.openFolder")}</button>
       </div>
     </header>
 
@@ -906,11 +912,6 @@
     border: 1px solid var(--line);
     font-size: 11px;
     padding: 6px 12px;
-  }
-  .btn.primary {
-    background: var(--rosso);
-    color: #fff;
-    border-color: var(--rosso);
   }
   .btn:disabled {
     opacity: 0.5;

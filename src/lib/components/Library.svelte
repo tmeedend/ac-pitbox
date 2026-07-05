@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import ModDetail from "./ModDetail.svelte";
   import DetailPage from "./DetailPage.svelte";
   import BulkEditPanel from "./BulkEditPanel.svelte";
@@ -34,8 +35,9 @@
   // multiple. Un clic simple retombe toujours en sélection simple.
   let selectedIds = $state<Set<string>>(new Set());
   // Page détail pleine page (§6.3) : double-clic sur une carte, ou bouton
-  // « Agrandir » du panneau latéral.
-  let fullId = $state<string | null>(null);
+  // « Agrandir » du panneau latéral. État centralisé dans nav.openFull (voir
+  // nav.svelte.ts) — la navigation manette globale (AppShell) doit savoir si
+  // elle est ouverte pour céder gauche/droite au visualiseur et gérer B=fermer.
 
   // Filtres persistés par type (rechargés au retour sur la page).
   const FKEY = `pitbox.filters.${kk}`;
@@ -56,7 +58,6 @@
   let neverTried = $state<boolean>((sf.neverTried as boolean) ?? false);
   let yearMin = $state<number | null>((sf.yearMin as number | null) ?? null);
   let yearMax = $state<number | null>((sf.yearMax as number | null) ?? null);
-  let showFilters = $state(false);
 
   // Persistance des filtres (champ libre + rubrique Filtres).
   $effect(() => {
@@ -115,13 +116,39 @@
     localStorage.setItem(`pitbox.view.${kk}`, v);
   }
 
+  // Panneau latéral toujours ouvert (jamais de saut de largeur du panneau
+  // central) : à défaut d'un clic explicite, on affiche le choix de session
+  // courant. Défilement vers l'élément sélectionné à revenir sur cet écran.
+  let mainEl = $state<HTMLDivElement | undefined>();
+  let firstLoad = true;
+  function scrollToEffective() {
+    if (!effectiveId) return;
+    tick().then(() => {
+      const el = mainEl?.querySelector(`[data-id="${CSS.escape(effectiveId!)}"]`);
+      el?.scrollIntoView({ block: "center" });
+    });
+  }
+
   async function refresh() {
     cards = await listLibrary();
+    if (firstLoad) {
+      firstLoad = false;
+      scrollToEffective();
+    }
   }
 
   // La bibliothèque EST le sélecteur (§8.6) : ouvrir une carte la définit comme
   // choix de session, affiché dans le bloc SESSION de la barre latérale.
   const sessionId = $derived(isCar ? nav.sessionCar?.id ?? null : nav.sessionTrack?.id ?? null);
+  // Sélection effective du panneau : le clic explicite prime, sinon le choix
+  // de session courant (le panneau reste toujours rempli, jamais vide).
+  const effectiveId = $derived(selectedId ?? sessionId);
+  // Défaut si aucune session n'a jamais été choisie (premier lancement) :
+  // établit une vraie sélection de session plutôt que de laisser le panneau
+  // vide indéfiniment. Ne se déclenche qu'une fois (sessionId devient non nul).
+  $effect(() => {
+    if (!sessionId && !selectedId && sorted.length) select(sorted[0]);
+  });
   function select(c: ModCard) {
     selectedId = c.id_interne;
     // Restaure les préférences mémorisées de l'entité (skin voiture, layout circuit).
@@ -162,7 +189,7 @@
   // fiche pleine page de l'entité ciblée (la bonne bibliothèque est déjà active).
   $effect(() => {
     if (nav.openMod) {
-      fullId = nav.openMod;
+      nav.openFull = nav.openMod;
       nav.openMod = null;
     }
   });
@@ -171,7 +198,7 @@
   $effect(() => {
     if (nav.search !== null) {
       query = nav.search;
-      fullId = null;
+      nav.openFull = null;
       nav.search = null;
     }
   });
@@ -267,30 +294,81 @@
     refresh();
   });
 
+  // --- Navigation clavier/manette dans la fiche pleine page ---
+  // Flèche gauche/droite = mod précédent/suivant, dans l'ordre affiché
+  // (tri courant). Ne touche pas à la sélection de session (comme le
+  // double-clic qui ouvre la fiche) — juste la navigation dans la vue.
+  function navigateFull(delta: 1 | -1) {
+    if (!nav.openFull) return;
+    const ids = sorted.map((c) => c.id_interne);
+    const idx = ids.indexOf(nav.openFull);
+    if (idx === -1 || ids.length < 2) return;
+    nav.openFull = ids[(idx + delta + ids.length) % ids.length];
+  }
+
+  function isTypingTarget(e: KeyboardEvent): boolean {
+    const t = e.target as HTMLElement | null;
+    return !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+  }
+
+  $effect(() => {
+    function onKeydown(e: KeyboardEvent) {
+      if (!nav.openFull || isTypingTarget(e)) return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        navigateFull(-1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        navigateFull(1);
+      }
+    }
+    window.addEventListener("keydown", onKeydown);
+    return () => window.removeEventListener("keydown", onKeydown);
+  });
+
+  // Manette (API Gamepad standard, sans dépendance) : croix directionnelle ou
+  // stick gauche gauche/droite navigue comme les flèches, tant que la fiche
+  // pleine page est ouverte. Détection sur front montant (évite la répétition
+  // continue tant que le bouton reste enfoncé).
+  $effect(() => {
+    if (!nav.openFull) return;
+    let raf = 0;
+    let last = { left: false, right: false };
+    function poll() {
+      for (const gp of navigator.getGamepads?.() ?? []) {
+        if (!gp) continue;
+        const axis = gp.axes[0] ?? 0;
+        const left = (gp.buttons[14]?.pressed ?? false) || axis < -0.6;
+        const right = (gp.buttons[15]?.pressed ?? false) || axis > 0.6;
+        if (left && !last.left) navigateFull(-1);
+        if (right && !last.right) navigateFull(1);
+        last = { left, right };
+      }
+      raf = requestAnimationFrame(poll);
+    }
+    raf = requestAnimationFrame(poll);
+    return () => cancelAnimationFrame(raf);
+  });
 </script>
 
 <div class="library">
-  {#if fullId}
+  {#if nav.openFull}
     <div class="full-wrap">
       <DetailPage
-        id={fullId}
+        id={nav.openFull}
         {kind}
-        onclose={() => (fullId = null)}
+        onclose={() => { nav.openFull = null; scrollToEffective(); }}
         onchange={refresh}
       />
     </div>
   {:else}
-  <div class="main">
+  <div class="main" bind:this={mainEl}>
     <div class="toolbar">
       <div class="search">
         <input class="input" placeholder={t("library.searchPlaceholder")} bind:value={query} />
       </div>
 
       <span class="count-pill mono">{filtered.length}</span>
-
-      <button class="btn filter-btn" class:active={activeFilterCount > 0} type="button" onclick={() => (showFilters = !showFilters)}>
-        {t("library.filters")}{#if activeFilterCount > 0}<span class="fc">{activeFilterCount}</span>{/if}
-      </button>
 
       {#if view === "table"}
         <div class="columns-wrap">
@@ -319,7 +397,6 @@
       </div>
     </div>
 
-    {#if showFilters}
       <div class="filters">
         <label>
           <span>{t("library.filterState")}</span>
@@ -380,7 +457,6 @@
           <button class="btn-ghost clear" type="button" onclick={clearFilters}>{t("common.reset")}</button>
         {/if}
       </div>
-    {/if}
 
     {#if filtered.length === 0}
       <div class="empty">
@@ -398,7 +474,7 @@
           {@const prefLayout = !isCar ? getPreferredLayout(c.id_interne) : null}
           {@const src = previewSrc(prefSkin?.preview ?? prefLayout?.preview ?? c.preview)}
           {@const ol = previewSrc(prefLayout?.outline ?? c.outline)}
-          <button class="card" class:sel={selectedId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (fullId = c.id_interne)} title={t("library.cardTooltip")}>
+          <button data-id={c.id_interne} class="card" class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} title={t("library.cardTooltip")}>
             <div class="thumb">
               {#if src}<img src={src} alt={c.display_name ?? c.id_interne} loading="lazy" />
               {:else}<div class="noprev">{isCar ? t("library.typeCar") : t("library.typeTrack")}</div>{/if}
@@ -441,7 +517,7 @@
           </thead>
           <tbody>
             {#each sorted as c (c.id_interne)}
-              <tr class:sel={selectedId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (fullId = c.id_interne)}>
+              <tr data-id={c.id_interne} class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)}>
                 {#each visibleColumns as col}
                   <td
                     class:t-name={col.key === "name"}
@@ -475,10 +551,9 @@
     />
   {:else}
     <ModDetail
-      id={selectedId}
-      onclose={() => (selectedId = null)}
+      id={effectiveId}
       onchange={refresh}
-      onexpand={() => (fullId = selectedId)}
+      onexpand={() => (nav.openFull = effectiveId)}
     />
   {/if}
   {/if}
@@ -518,23 +593,6 @@
   .count-pill {
     color: var(--faint);
     font-size: 11px;
-  }
-  .filter-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .filter-btn.active {
-    border-color: var(--rosso-border);
-    color: var(--rosso-bright);
-  }
-  .filter-btn .fc {
-    background: var(--rosso);
-    color: #fff;
-    font-family: var(--mono);
-    font-size: 9px;
-    padding: 0 4px;
-    border-radius: 2px;
   }
   .columns-wrap {
     position: relative;

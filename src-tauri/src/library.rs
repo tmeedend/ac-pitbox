@@ -240,6 +240,16 @@ fn entity_dir(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<PathBuf>
         .map(|ac| ac.join("content").join(kind_of(&m.kind).content_folder()).join(&m.id_interne))
 }
 
+/// Dossier réel d'un mod (voiture/circuit, géré ou contenu de base), pour
+/// « Ouvrir le dossier » dans l'explorateur — même résolution que la fiche
+/// détail (`entity_dir`), exposée publiquement pour la commande dédiée.
+pub fn folder_path(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<PathBuf, String> {
+    let m = overlay::get_mod(conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("mod introuvable : {id}"))?;
+    entity_dir(conn, cfg, &m).ok_or_else(|| format!("dossier introuvable pour « {id} »"))
+}
+
 pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<Option<ModDetail>> {
     let Some(m) = overlay::get_mod(conn, id)? else {
         return Ok(None);

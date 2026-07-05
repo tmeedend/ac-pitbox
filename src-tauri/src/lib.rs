@@ -33,6 +33,7 @@ use library::{ModCard, ModDetail};
 use overlay::Db;
 use rules::Rules;
 use tauri::{AppHandle, Manager, State};
+use tauri_plugin_opener::OpenerExt;
 
 // --- Configuration (§12) ----------------------------------------------------
 
@@ -179,6 +180,24 @@ fn get_mod_detail(app: AppHandle, db: State<Db>, id: String) -> Result<Option<Mo
     let cfg = config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     library::detail(&conn, &cfg, &id).map_err(|e| e.to_string())
+}
+
+/// Ouvre le dossier réel d'un mod (voiture/circuit) dans l'explorateur.
+/// Appelle directement `Opener::open_path` côté Rust (contourne le scope ACL
+/// du plugin, qui refuse par défaut tout chemin non pré-autorisé) : le chemin
+/// vient de notre propre résolution `entity_dir`, pas d'une entrée libre côté
+/// front, donc pas besoin d'élargir la permission `opener:allow-open-path`
+/// avec un scope large.
+#[tauri::command]
+fn open_mod_folder(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let cfg = config::load(&app);
+    let path = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        library::folder_path(&conn, &cfg, &id)?
+    };
+    app.opener()
+        .open_path(path.display().to_string(), None::<&str>)
+        .map_err(|e| e.to_string())
 }
 
 // --- Activation (L3) --------------------------------------------------------
@@ -579,6 +598,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // Mémorise taille/position/état agrandi de la fenêtre entre les
+        // lancements (restauré automatiquement à l'ouverture, sauvegardé à la
+        // fermeture et sur redimensionnement/déplacement).
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
             let db_path = app.path().app_config_dir()?.join("overlay.sqlite");
             let conn = overlay::open(&db_path)?;
@@ -613,6 +636,7 @@ pub fn run() {
             resolve_conflict,
             list_library,
             get_mod_detail,
+            open_mod_folder,
             activate_mod,
             deactivate_mod,
             list_profiles,

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import ConfigFields from "./ConfigFields.svelte";
   import {
     emptyConfig,
@@ -11,16 +11,48 @@
   } from "$lib/config";
   import { t, setLocale, availableLocales, localeNames } from "$lib/i18n/index.svelte";
   import { setZoom, ZOOM_LEVELS } from "$lib/zoom.svelte";
+  import { setSectionGuard } from "$lib/nav.svelte";
+  import { confirm } from "@tauri-apps/plugin-dialog";
 
   let config = $state<AppConfig>(emptyConfig());
+  // Instantané du dernier config enregistré (ou chargé) : sert à détecter les
+  // modifications non sauvegardées et à revenir en arrière (zoom/langue,
+  // appliqués en aperçu live avant même de cliquer Enregistrer) si l'utilisateur
+  // choisit d'annuler en quittant l'écran.
+  let savedConfig = emptyConfig();
   let validation = $state<ConfigValidation | null>(null);
   let saving = $state(false);
   let saved = $state(false);
   let error = $state("");
 
+  const dirty = $derived(JSON.stringify(config) !== JSON.stringify(savedConfig));
+
   onMount(async () => {
     config = await getConfig();
+    savedConfig = structuredClone(config);
   });
+
+  // Garde de navigation (§10bis) : quitter Réglages avec des changements non
+  // enregistrés propose d'enregistrer ou d'annuler (et dans ce cas, revient
+  // sur l'aperçu live déjà appliqué — zoom, langue).
+  setSectionGuard(async () => {
+    if (!dirty) return true;
+    const wantsSave = await confirm(t("settings.unsavedPrompt"), {
+      title: t("settings.unsavedTitle"),
+      okLabel: t("settings.save"),
+      cancelLabel: t("settings.discard"),
+    });
+    if (wantsSave) {
+      await save();
+      return validation?.is_valid ?? false;
+    }
+    // Annulé : revient sur tout ce qui a été appliqué en aperçu live.
+    setZoom(savedConfig.prefs.ui_zoom);
+    setLocale(savedConfig.prefs.language);
+    config = structuredClone(savedConfig);
+    return true;
+  });
+  onDestroy(() => setSectionGuard(null));
 
   $effect(() => {
     JSON.stringify(config);
@@ -38,6 +70,7 @@
     try {
       await saveConfig(config);
       saved = true;
+      savedConfig = structuredClone(config);
     } catch (e) {
       error = String(e);
     } finally {
