@@ -32,6 +32,11 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use crate::config::AppConfig;
 
 const BACKUP_NAME: &str = "video.ini.pitbox-backup";
+/// Filtre post-traitement imposé pendant l'aperçu (`[POST_PROCESS] FILTER` de
+/// `video.ini`). Le filtre de l'utilisateur (souvent `pure`) assombrit
+/// fortement le showroom ; `photographic` (filtre stock AC) donne un très bon
+/// rendu. Appliqué et restauré avec le reste de `video.ini`.
+const SHOWROOM_PP_FILTER: &str = "photographic";
 /// Classe de fenêtre native d'`acShowroom.exe`, identifiée en inspectant le
 /// process réel (`EnumWindows` + `GetClassName`, voir recherche §piste 3).
 const SHOWROOM_WINDOW_CLASS: &str = "acShowroomW";
@@ -93,21 +98,24 @@ fn write_showroom_ini_at(cfg_dir: &Path, car_id: &str, skin_id: Option<&str>) ->
     fs::write(cfg_dir.join("showroom_start.ini"), content).map_err(|e| format!("écriture showroom_start.ini : {e}"))
 }
 
-/// Force le mode fenêtré et une taille modeste dans `video.ini` : `FULLSCREEN`,
-/// `WIDTH`, `HEIGHT`. Sans réduire aussi la taille, une fenêtre "sans bordure"
-/// à la résolution du bureau (ex. 3840×2160) reste visuellement indiscernable
-/// du plein écran. Toutes les autres clés (refresh, anti-aliasing…) restent
-/// intactes.
-fn force_windowed(original: &str) -> String {
+/// Prépare `video.ini` pour la session showroom : force le mode fenêtré + une
+/// taille modeste (`FULLSCREEN`/`WIDTH`/`HEIGHT` — sans réduire la taille, une
+/// fenêtre « sans bordure » à la résolution du bureau reste indiscernable du
+/// plein écran) et impose le filtre post-traitement `photographic`
+/// (`[POST_PROCESS] FILTER`). Toutes les autres clés (refresh, anti-aliasing…)
+/// restent intactes, et l'original est restauré à la fermeture (voir
+/// `restore_video_ini_at`).
+fn patch_video_for_showroom(original: &str) -> String {
     original
         .lines()
         .map(|l| {
             let key = l.trim_start().split('=').next().unwrap_or("");
             match key {
-                "FULLSCREEN" => "FULLSCREEN=0",
-                "WIDTH" => "WIDTH=1280",
-                "HEIGHT" => "HEIGHT=720",
-                _ => l,
+                "FULLSCREEN" => "FULLSCREEN=0".to_string(),
+                "WIDTH" => "WIDTH=1280".to_string(),
+                "HEIGHT" => "HEIGHT=720".to_string(),
+                "FILTER" => format!("FILTER={SHOWROOM_PP_FILTER}"),
+                _ => l.to_string(),
             }
         })
         .collect::<Vec<_>>()
@@ -125,7 +133,7 @@ fn backup_and_force_windowed_at(cfg_dir: &Path) -> Result<(), String> {
     }
     let original = fs::read_to_string(&path).map_err(|e| format!("lecture video.ini : {e}"))?;
     fs::write(&backup, &original).map_err(|e| format!("sauvegarde video.ini : {e}"))?;
-    fs::write(&path, force_windowed(&original)).map_err(|e| format!("écriture video.ini : {e}"))?;
+    fs::write(&path, patch_video_for_showroom(&original)).map_err(|e| format!("écriture video.ini : {e}"))?;
     Ok(())
 }
 
@@ -448,16 +456,22 @@ mod tests {
     }
 
     #[test]
-    fn force_windowed_shrinks_size_and_leaves_other_keys() {
-        let original = "[VIDEO]\r\nFULLSCREEN=1\r\nWIDTH=3840\r\nHEIGHT=2160\r\nREFRESH=144\r\n";
-        let windowed = force_windowed(original);
-        assert!(windowed.contains("FULLSCREEN=0"));
-        assert!(windowed.contains("WIDTH=1280"));
-        assert!(windowed.contains("HEIGHT=720"));
-        assert!(windowed.contains("REFRESH=144"));
-        assert!(!windowed.contains("FULLSCREEN=1"));
-        assert!(!windowed.contains("WIDTH=3840"));
-        assert!(!windowed.contains("HEIGHT=2160"));
+    fn patch_video_shrinks_size_sets_filter_and_leaves_other_keys() {
+        let original = "[POST_PROCESS]\r\nENABLED=1\r\nFILTER=pure\r\nGLARE=5\r\n[VIDEO]\r\nFULLSCREEN=1\r\nWIDTH=3840\r\nHEIGHT=2160\r\nREFRESH=144\r\n";
+        let patched = patch_video_for_showroom(original);
+        assert!(patched.contains("FULLSCREEN=0"));
+        assert!(patched.contains("WIDTH=1280"));
+        assert!(patched.contains("HEIGHT=720"));
+        // Filtre PP forcé sur photographic (l'original 'pure' assombrissait).
+        assert!(patched.contains("FILTER=photographic"));
+        assert!(!patched.contains("FILTER=pure"));
+        // Clés voisines intactes (même section et autres).
+        assert!(patched.contains("GLARE=5"));
+        assert!(patched.contains("ENABLED=1"));
+        assert!(patched.contains("REFRESH=144"));
+        assert!(!patched.contains("FULLSCREEN=1"));
+        assert!(!patched.contains("WIDTH=3840"));
+        assert!(!patched.contains("HEIGHT=2160"));
     }
 
     #[test]
