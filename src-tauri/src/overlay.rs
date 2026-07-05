@@ -48,6 +48,8 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     }
     // Date de publication estimée depuis les dates de fichiers (§6.2).
     let _ = conn.execute("ALTER TABLE versions ADD COLUMN published_at TEXT", []);
+    // Taille sur disque de la version, octets (§9.4).
+    let _ = conn.execute("ALTER TABLE versions ADD COLUMN size_bytes INTEGER", []);
     Ok(())
 }
 
@@ -123,7 +125,8 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             skins             TEXT NOT NULL DEFAULT '[]',
             layouts           TEXT NOT NULL DEFAULT '[]',
             tags_from_mod     TEXT NOT NULL DEFAULT '[]',
-            published_at      TEXT                    -- date de publication estimée (§6.2)
+            published_at      TEXT,                   -- date de publication estimée (§6.2)
+            size_bytes        INTEGER                 -- taille sur disque, octets (§9.4)
         );
 
         CREATE TABLE IF NOT EXISTS history (
@@ -212,6 +215,10 @@ pub struct ModRow {
     pub is_stock: bool,
     /// Date de publication estimée de la version active (§6.2).
     pub published_at: Option<String>,
+    /// Taille sur disque cumulée de toutes les versions, octets (§9.4).
+    /// `None` tant qu'aucune n'a été calculée (mod importé avant cette
+    /// fonctionnalité, à rattraper via « Réindexer » + recalcul de taille).
+    pub size_bytes: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -230,6 +237,8 @@ pub struct VersionRow {
     pub tags_from_mod: Vec<String>,
     /// Date de publication estimée depuis les dates de fichiers (§6.2).
     pub published_at: Option<String>,
+    /// Taille sur disque de cette version, octets (§9.4).
+    pub size_bytes: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -310,6 +319,16 @@ pub fn insert_version(
             published_at,
         ],
     )?;
+    Ok(())
+}
+
+/// Renseigne la taille sur disque d'une version, octets (§9.4). Séparé de
+/// `insert_version` : calculée à l'import juste après la copie/le déplacement
+/// en bibliothèque (le dossier final n'existe qu'à cet instant), et sur
+/// demande explicite en réindexation (potentiellement coûteux à grande échelle,
+/// d'où une case à cocher dédiée plutôt qu'un recalcul systématique).
+pub fn update_version_size(conn: &Connection, version_id: &str, size_bytes: i64) -> rusqlite::Result<()> {
+    conn.execute("UPDATE versions SET size_bytes = ?2 WHERE id = ?1", params![version_id, size_bytes])?;
     Ok(())
 }
 
@@ -501,7 +520,8 @@ const MOD_SELECT: &str = r#"
            COALESCE((SELECT v.csp_features FROM versions v WHERE v.id = m.active_version_id), '[]') AS csp_features,
            (SELECT MAX(v.imported_at) FROM versions v WHERE v.mod_id = m.id_interne) AS updated_at,
            m.is_stock,
-           (SELECT v.published_at FROM versions v WHERE v.id = m.active_version_id) AS published_at
+           (SELECT v.published_at FROM versions v WHERE v.id = m.active_version_id) AS published_at,
+           (SELECT SUM(v.size_bytes) FROM versions v WHERE v.mod_id = m.id_interne) AS size_bytes
     FROM mods m
 "#;
 
@@ -541,6 +561,7 @@ fn map_mod(row: &rusqlite::Row) -> rusqlite::Result<ModRow> {
         updated_at: row.get(26)?,
         is_stock: row.get::<_, i64>(27)? != 0,
         published_at: row.get(28)?,
+        size_bytes: row.get(29)?,
     })
 }
 
@@ -565,7 +586,7 @@ pub fn get_versions(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<Ver
     let mut stmt = conn.prepare(
         r#"SELECT id, mod_id, version_label, author, imported_at, library_path,
                   source_archive, content_signature, csp_features, skins, layouts, tags_from_mod,
-                  published_at
+                  published_at, size_bytes
            FROM versions WHERE mod_id = ?1 ORDER BY imported_at DESC"#,
     )?;
     let rows = stmt.query_map([mod_id], |row| {
@@ -587,6 +608,7 @@ pub fn get_versions(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<Ver
             layouts: json_arr(&layouts),
             tags_from_mod: json_arr(&tags),
             published_at: row.get(12)?,
+            size_bytes: row.get(13)?,
         })
     })?;
     rows.collect()

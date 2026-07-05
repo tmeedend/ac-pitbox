@@ -28,6 +28,20 @@ function fmtDate(iso: string | null): string {
   return iso ? iso.slice(0, 10) : DASH;
 }
 
+/** Taille lisible (Ko/Mo/Go/To, base 1024), « — » si pas encore calculée (§9.4). */
+function fmtSize(bytes: number | null): string {
+  if (bytes == null) return DASH;
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let v = bytes;
+  let i = -1;
+  do {
+    v /= 1024;
+    i++;
+  } while (v >= 1024 && i < units.length - 1);
+  return `${v.toFixed(v < 10 ? 2 : v < 100 ? 1 : 0)} ${units[i]}`;
+}
+
 function allTags(c: ModCard): string[] {
   return [...c.tags_from_mod, ...c.tags_from_rule, ...c.tags_manual];
 }
@@ -69,6 +83,17 @@ function commonTail(): ColumnDef[] {
     { key: "added", labelKey: "columns.added", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.created_at), sortValue: (c) => c.created_at },
     { key: "updated", labelKey: "columns.updated", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.updated_at), sortValue: (c) => c.updated_at ?? c.created_at },
     { key: "published", labelKey: "columns.published", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.published_at), sortValue: (c) => c.published_at ?? "" },
+    {
+      key: "size",
+      labelKey: "columns.size",
+      sortable: true,
+      defaultVisible: false,
+      mono: true,
+      // Somme de toutes les versions en bibliothèque (§9.4) ; « — » tant que non
+      // calculée (mod importé avant cette fonctionnalité, cf. Maintenance).
+      value: (c) => fmtSize(c.size_bytes),
+      sortValue: (c) => c.size_bytes ?? -1,
+    },
   ];
 }
 

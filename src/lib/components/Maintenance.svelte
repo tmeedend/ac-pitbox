@@ -19,13 +19,14 @@
   let indexMsg = $state("");
   let reindexing = $state(false);
   let reindexMsg = $state("");
+  let recalcSize = $state(false);
 
   async function doReindex() {
     reindexing = true;
     error = "";
     reindexMsg = "";
     try {
-      const n = await reindexLibrary();
+      const n = await reindexLibrary(recalcSize);
       reindexMsg = t("maintenance.reindexDone", { count: n });
     } catch (e) {
       error = String(e);
@@ -116,6 +117,10 @@
   <section class="stock-sec">
     <h3>{t("maintenance.reindexTitle")}</h3>
     <p class="hint">{t("maintenance.reindexHint")}</p>
+    <label class="recalc-check">
+      <input type="checkbox" bind:checked={recalcSize} />
+      <span>{t("maintenance.recalcSize")}</span>
+    </label>
     <div class="stock-row">
       <button class="btn" type="button" onclick={doReindex} disabled={reindexing}>
         {reindexing ? t("maintenance.reindexing") : t("maintenance.reindex")}
@@ -312,6 +317,15 @@
     display: flex;
     align-items: center;
     gap: 12px;
+  }
+  .recalc-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--txt2);
+    cursor: pointer;
+    margin-bottom: 10px;
   }
   .stock-msg {
     color: var(--green);

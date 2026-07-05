@@ -42,6 +42,9 @@ export interface ModCard {
   is_stock: boolean;
   /** Date de publication estimée (dates de fichiers à l'import), remplaçable par L7 (§6.2). */
   published_at: string | null;
+  /** Taille sur disque cumulée de toutes les versions, octets (§9.4). `null`
+   * tant qu'aucune n'a été calculée (mod importé avant cette fonctionnalité). */
+  size_bytes: number | null;
   preview: string | null;
   /** Tracé du circuit à superposer à la photo (circuits, §6.1). */
   outline: string | null;
@@ -74,6 +77,8 @@ export interface VersionRow {
   tags_from_mod: string[];
   /** Date de publication estimée depuis les dates de fichiers (§6.2). */
   published_at: string | null;
+  /** Taille sur disque de cette version, octets (§9.4). */
+  size_bytes: number | null;
 }
 
 export interface HistoryRow {

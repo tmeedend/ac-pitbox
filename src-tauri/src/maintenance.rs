@@ -159,7 +159,13 @@ pub fn remove_orphan(cfg: &AppConfig, kind: &str, id: &str) -> Result<(), String
 /// champs en cache dans l'overlay. Ne réécrit jamais les fichiers du mod
 /// lui-même (lecture seule, §3.0) — sert à rattraper un mod déjà importé dont
 /// le fichier source a changé, ou dont le parsing a été corrigé après coup.
-pub fn reindex_mod(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
+///
+/// `recalc_size` (§9.4) : recalcule en plus la taille sur disque de chaque
+/// version. Décorrélé du reste (case à cocher dédiée côté UI, décochée par
+/// défaut) car parcourir tous les fichiers de toute la bibliothèque peut être
+/// lent — la plupart des réindexations n'ont pas besoin de ça (la taille ne
+/// change que si les fichiers du mod ont été modifiés hors de l'app).
+pub fn reindex_mod(conn: &Connection, cfg: &AppConfig, id: &str, recalc_size: bool) -> Result<(), String> {
     let m = overlay::get_mod(conn, id).map_err(|e| e.to_string())?.ok_or("mod introuvable")?;
     let kind = kind_of(&m.kind);
     let versions = overlay::get_versions(conn, id).map_err(|e| e.to_string())?;
@@ -201,6 +207,11 @@ pub fn reindex_mod(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), S
         )
         .map_err(|e| e.to_string())?;
 
+        if recalc_size {
+            let size_bytes = inspect::dir_size_bytes(dir) as i64;
+            overlay::update_version_size(conn, &v.id, size_bytes).map_err(|e| e.to_string())?;
+        }
+
         if m.active_version_id.as_deref() == Some(v.id.as_str()) {
             fresh_for_mod = Some(ui);
         }
@@ -223,10 +234,10 @@ pub fn reindex_mod(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), S
 }
 
 /// Réindexe tous les mods de la bibliothèque (§9.3bis). Renvoie le nombre traité.
-pub fn reindex_all(conn: &Connection, cfg: &AppConfig) -> Result<usize, String> {
+pub fn reindex_all(conn: &Connection, cfg: &AppConfig, recalc_size: bool) -> Result<usize, String> {
     let mods = overlay::list_mods(conn).map_err(|e| e.to_string())?;
     for m in &mods {
-        reindex_mod(conn, cfg, &m.id_interne)?;
+        reindex_mod(conn, cfg, &m.id_interne, recalc_size)?;
     }
     Ok(mods.len())
 }
@@ -286,13 +297,45 @@ mod tests {
         .unwrap();
         overlay::set_active_version(&conn, "deutschlandring", "v1").unwrap();
 
-        reindex_mod(&conn, &AppConfig::default(), "deutschlandring").unwrap();
+        reindex_mod(&conn, &AppConfig::default(), "deutschlandring", false).unwrap();
 
         let m = overlay::get_mod(&conn, "deutschlandring").unwrap().unwrap();
         assert_eq!(m.display_name.as_deref(), Some("Deutschlandring"));
         let versions = overlay::get_versions(&conn, "deutschlandring").unwrap();
         assert_eq!(versions[0].author.as_deref(), Some("Fat-Alfie"));
         assert_eq!(versions[0].tags_from_mod, vec!["circuit".to_string()]);
+        assert_eq!(versions[0].size_bytes, None, "recalc_size=false : taille non touchée");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn reindex_recalculates_size_only_when_requested() {
+        let base = std::env::temp_dir().join(format!("pitbox-size-{}", uuid::Uuid::new_v4()));
+        let car_dir = base.join("abarth500");
+        std::fs::create_dir_all(car_dir.join("ui")).unwrap();
+        std::fs::write(car_dir.join("ui").join("ui_car.json"), b"{\"name\": \"Abarth 500\"}").unwrap();
+        std::fs::write(car_dir.join("data.acd"), vec![0u8; 1000]).unwrap();
+
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_mod(&conn, "abarth500", "Car", None, Some("Abarth 500"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn, "v1", "abarth500", None, None, &now,
+            &car_dir.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "abarth500", "v1").unwrap();
+
+        // Sans la case cochée : la taille reste vide (None), pas de parcours disque.
+        reindex_mod(&conn, &AppConfig::default(), "abarth500", false).unwrap();
+        let m = overlay::get_mod(&conn, "abarth500").unwrap().unwrap();
+        assert_eq!(m.size_bytes, None);
+
+        // Avec la case cochée : la taille est calculée et remontée agrégée sur le mod.
+        reindex_mod(&conn, &AppConfig::default(), "abarth500", true).unwrap();
+        let m = overlay::get_mod(&conn, "abarth500").unwrap().unwrap();
+        assert!(m.size_bytes.unwrap() >= 1000, "au moins les 1000 octets de data.acd");
 
         let _ = std::fs::remove_dir_all(&base);
     }

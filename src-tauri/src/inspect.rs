@@ -123,6 +123,18 @@ pub fn estimate_published_at(dir: &Path) -> Option<String> {
     Some(dt.to_rfc3339())
 }
 
+/// Taille sur disque d'un dossier de version, octets (§9.4) : somme récursive
+/// de la taille réelle des fichiers (pas la taille allouée sur disque).
+pub fn dir_size_bytes(dir: &Path) -> u64 {
+    WalkDir::new(dir)
+        .into_iter()
+        .flatten()
+        .filter(|e| e.file_type().is_file())
+        .filter_map(|e| e.metadata().ok())
+        .map(|m| m.len())
+        .sum()
+}
+
 fn list_subdirs(dir: &Path) -> Vec<String> {
     let mut out = Vec::new();
     if let Ok(entries) = std::fs::read_dir(dir) {

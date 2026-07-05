@@ -1,27 +1,27 @@
 {
   "_meta": {
-    "description": "Table statique du contenu de base Kunos (voitures + circuits AC officiels). Deux dates distinctes : 'year' = année du MODÈLE réel de la voiture ; 'release' = date de sortie DANS Assetto Corsa (via son pack), utilisée pour alimenter le champ date de publication du contenu de base.",
+    "description": "Table statique du contenu officiel Kunos présent dans l'installation réelle (voitures + circuits). Généré à partir des dossiers réels de content/cars et content/tracks (mods exclus). Deux dates : 'year' = année du MODÈLE réel ; 'release' = date de sortie DANS AC via le pack.",
     "usage_year": "Année : lire year de ui_car.json si présent ; sinon (is_stock) chercher ici ; sinon '—'.",
-    "usage_release": "Date de publication : pour le contenu de base, utiliser 'release' (date du pack) au lieu de la date de modification des fichiers Steam.",
-    "caveat": "Affectation voiture/circuit -> pack et dates des packs : bon point de départ, à valider contre l'installation réelle. Correction triviale : une date par pack dans 'packs'.",
-    "version": "2.0"
+    "usage_release": "Date de publication du contenu de base = 'release' (date du pack), pas la date des fichiers Steam.",
+    "caveat": "Basé sur les dossiers réels de l'utilisateur. Affectation modèle->année et pack : bonne fiabilité, mais quelques années/packs peuvent être ajustés à la marge.",
+    "version": "3.0-real"
   },
   "packs": {
     "base": {
-      "name": "Assetto Corsa (base / Early Access & 1.0)",
+      "name": "Assetto Corsa (base / 1.0)",
       "date": "2014-12-19"
     },
     "dreampack1": {
       "name": "Dream Pack 1",
-      "date": "2015-04-21"
+      "date": "2015-03-11"
     },
     "dreampack2": {
       "name": "Dream Pack 2",
-      "date": "2015-09-08"
+      "date": "2015-10-08"
     },
     "dreampack3": {
       "name": "Dream Pack 3",
-      "date": "2016-03-16"
+      "date": "2015-12-15"
     },
     "japanese": {
       "name": "Japanese Pack",
@@ -29,19 +29,19 @@
     },
     "redpack": {
       "name": "Red Pack",
-      "date": "2016-06-28"
+      "date": "2016-07-14"
     },
     "tripl3pack": {
       "name": "Tripl3 Pack",
-      "date": "2016-08-18"
+      "date": "2016-08-26"
     },
     "porsche1": {
       "name": "Porsche Pack Vol.1",
-      "date": "2016-09-27"
+      "date": "2016-10-25"
     },
     "porsche2": {
       "name": "Porsche Pack Vol.2",
-      "date": "2016-11-15"
+      "date": "2016-11-22"
     },
     "porsche3": {
       "name": "Porsche Pack Vol.3",
@@ -53,7 +53,7 @@
     },
     "ferrari70": {
       "name": "Ferrari 70th Anniversary Pack",
-      "date": "2017-08-31"
+      "date": "2017-09-19"
     }
   },
   "cars": {
@@ -67,21 +67,6 @@
       "pack": "base",
       "release": "2014-12-19"
     },
-    "abarth595ss": {
-      "year": 1968,
-      "pack": "tripl3pack",
-      "release": "2016-08-18"
-    },
-    "abarth595ss_s1": {
-      "year": 1968,
-      "pack": "tripl3pack",
-      "release": "2016-08-18"
-    },
-    "abarth595ss_s2": {
-      "year": 1968,
-      "pack": "tripl3pack",
-      "release": "2016-08-18"
-    },
     "alfa_romeo_giulietta_qv": {
       "year": 2014,
       "pack": "base",
@@ -92,71 +77,6 @@
       "pack": "base",
       "release": "2014-12-19"
     },
-    "alfa_romeo_gta": {
-      "year": 1965,
-      "pack": "dreampack3",
-      "release": "2016-03-16"
-    },
-    "alfa_romeo_mito_qv": {
-      "year": 2014,
-      "pack": "base",
-      "release": "2014-12-19"
-    },
-    "alfa_romeo_155_v6": {
-      "year": 1993,
-      "pack": "dreampack1",
-      "release": "2015-04-21"
-    },
-    "alfa_romeo_4c": {
-      "year": 2013,
-      "pack": "base",
-      "release": "2014-12-19"
-    },
-    "audi_a1s1": {
-      "year": 2015,
-      "pack": "dreampack2",
-      "release": "2015-09-08"
-    },
-    "audi_r8_lms": {
-      "year": 2015,
-      "pack": "base",
-      "release": "2014-12-19"
-    },
-    "audi_r8_lms_2016": {
-      "year": 2016,
-      "pack": "ready2race",
-      "release": "2017-05-18"
-    },
-    "audi_r8_plus": {
-      "year": 2014,
-      "pack": "base",
-      "release": "2014-12-19"
-    },
-    "audi_r8_v10_2019": {
-      "year": 2019,
-      "pack": "base",
-      "release": "2014-12-19"
-    },
-    "audi_sport_quattro": {
-      "year": 1985,
-      "pack": "dreampack1",
-      "release": "2015-04-21"
-    },
-    "audi_sport_quattro_s1": {
-      "year": 1985,
-      "pack": "dreampack1",
-      "release": "2015-04-21"
-    },
-    "audi_tt_cup": {
-      "year": 2016,
-      "pack": "ready2race",
-      "release": "2017-05-18"
-    },
-    "audi_tt_vln": {
-      "year": 2015,
-      "pack": "dreampack3",
-      "release": "2016-03-16"
-    },
     "bmw_1m": {
       "year": 2011,
       "pack": "base",
@@ -164,11 +84,6 @@
     },
     "bmw_1m_s3": {
       "year": 2011,
-      "pack": "base",
-      "release": "2014-12-19"
-    },
-    "bmw_m235i_racing": {
-      "year": 2014,
       "pack": "base",
       "release": "2014-12-19"
     },
@@ -185,12 +100,12 @@
     "bmw_m3_e30_dtm": {
       "year": 1992,
       "pack": "dreampack1",
-      "release": "2015-04-21"
+      "release": "2015-03-11"
     },
     "bmw_m3_e30_gra": {
       "year": 1987,
       "pack": "dreampack1",
-      "release": "2015-04-21"
+      "release": "2015-03-11"
     },
     "bmw_m3_e30_s1": {
       "year": 1987,
@@ -240,7 +155,7 @@
     "ferrari_312t": {
       "year": 1975,
       "pack": "redpack",
-      "release": "2016-06-28"
+      "release": "2016-07-14"
     },
     "ferrari_458": {
       "year": 2009,
@@ -257,78 +172,23 @@
       "pack": "base",
       "release": "2014-12-19"
     },
-    "ferrari_488_gt3": {
-      "year": 2018,
-      "pack": "ready2race",
-      "release": "2017-05-18"
-    },
-    "ferrari_488_gtb": {
-      "year": 2015,
-      "pack": "redpack",
-      "release": "2016-06-28"
-    },
     "ferrari_599xxevo": {
       "year": 2012,
       "pack": "dreampack3",
-      "release": "2016-03-16"
+      "release": "2015-12-15"
     },
-    "ferrari_599xxevo_s1": {
-      "year": 2012,
+    "ferrari_f40": {
+      "year": 1987,
       "pack": "dreampack3",
-      "release": "2016-03-16"
+      "release": "2015-12-15"
     },
-    "ferrari_f138": {
-      "year": 2013,
-      "pack": "base",
-      "release": "2014-12-19"
-    },
-    "ferrari_f2004": {
-      "year": 2004,
-      "pack": "redpack",
-      "release": "2016-06-28"
-    },
-    "ferrari_fxx_k": {
-      "year": 2015,
+    "ferrari_f40_s3": {
+      "year": 1987,
       "pack": "dreampack3",
-      "release": "2016-03-16"
+      "release": "2015-12-15"
     },
     "ferrari_laferrari": {
       "year": 2013,
-      "pack": "base",
-      "release": "2014-12-19"
-    },
-    "ferrari_sf15t": {
-      "year": 2015,
-      "pack": "redpack",
-      "release": "2016-06-28"
-    },
-    "ferrari_sf70h": {
-      "year": 2017,
-      "pack": "ferrari70",
-      "release": "2017-08-31"
-    },
-    "ford_gt40": {
-      "year": 1966,
-      "pack": "tripl3pack",
-      "release": "2016-08-18"
-    },
-    "ford_mustang_2015": {
-      "year": 2015,
-      "pack": "base",
-      "release": "2014-12-19"
-    },
-    "ford_escort_mk1": {
-      "year": 1968,
-      "pack": "japanese",
-      "release": "2016-05-18"
-    },
-    "glickenhaus_scg003": {
-      "year": 2017,
-      "pack": "ferrari70",
-      "release": "2017-08-31"
-    },
-    "highlands": {
-      "year": 2016,
       "pack": "base",
       "release": "2014-12-19"
     },
@@ -336,46 +196,6 @@
       "year": 2013,
       "pack": "base",
       "release": "2014-12-19"
-    },
-    "lamborghini_countach": {
-      "year": 1985,
-      "pack": "tripl3pack",
-      "release": "2016-08-18"
-    },
-    "lamborghini_countach_s1": {
-      "year": 1985,
-      "pack": "tripl3pack",
-      "release": "2016-08-18"
-    },
-    "lamborghini_gallardo_sl": {
-      "year": 2010,
-      "pack": "dreampack2",
-      "release": "2015-09-08"
-    },
-    "lamborghini_gallardo_sl_s3": {
-      "year": 2010,
-      "pack": "dreampack2",
-      "release": "2015-09-08"
-    },
-    "lamborghini_huracan_gt3": {
-      "year": 2015,
-      "pack": "redpack",
-      "release": "2016-06-28"
-    },
-    "lamborghini_huracan_performante": {
-      "year": 2017,
-      "pack": "ferrari70",
-      "release": "2017-08-31"
-    },
-    "lamborghini_huracan_st": {
-      "year": 2015,
-      "pack": "redpack",
-      "release": "2016-06-28"
-    },
-    "lamborghini_miura_sv": {
-      "year": 1971,
-      "pack": "dreampack2",
-      "release": "2015-09-08"
     },
     "lotus_2_eleven": {
       "year": 2007,
@@ -387,25 +207,30 @@
       "pack": "base",
       "release": "2014-12-19"
     },
-    "lotus_25": {
-      "year": 1962,
-      "pack": "dreampack1",
-      "release": "2015-04-21"
-    },
-    "lotus_2eleven": {
-      "year": 2007,
-      "pack": "base",
-      "release": "2014-12-19"
-    },
     "lotus_49": {
       "year": 1967,
       "pack": "dreampack2",
-      "release": "2015-09-08"
+      "release": "2015-10-08"
     },
     "lotus_98t": {
       "year": 1986,
       "pack": "dreampack1",
-      "release": "2015-04-21"
+      "release": "2015-03-11"
+    },
+    "lotus_elise_sc": {
+      "year": 2008,
+      "pack": "base",
+      "release": "2014-12-19"
+    },
+    "lotus_elise_sc_s1": {
+      "year": 2008,
+      "pack": "base",
+      "release": "2014-12-19"
+    },
+    "lotus_elise_sc_s2": {
+      "year": 2008,
+      "pack": "base",
+      "release": "2014-12-19"
     },
     "lotus_evora_gtc": {
       "year": 2011,
@@ -447,12 +272,22 @@
       "pack": "base",
       "release": "2014-12-19"
     },
+    "lotus_exige_s": {
+      "year": 2012,
+      "pack": "base",
+      "release": "2014-12-19"
+    },
     "lotus_exige_scura": {
       "year": 2008,
       "pack": "base",
       "release": "2014-12-19"
     },
     "lotus_exige_s_roadster": {
+      "year": 2013,
+      "pack": "base",
+      "release": "2014-12-19"
+    },
+    "lotus_exige_v6_cup": {
       "year": 2013,
       "pack": "base",
       "release": "2014-12-19"
@@ -467,105 +302,15 @@
       "pack": "base",
       "release": "2014-12-19"
     },
-    "maserati_250f_6cyl": {
-      "year": 1957,
-      "pack": "tripl3pack",
-      "release": "2016-08-18"
-    },
-    "maserati_250f_12cyl": {
-      "year": 1957,
-      "pack": "tripl3pack",
-      "release": "2016-08-18"
-    },
-    "maserati_alfieri": {
-      "year": 2014,
-      "pack": "dreampack3",
-      "release": "2016-03-16"
-    },
-    "maserati_gt_mc_gt4": {
-      "year": 2016,
-      "pack": "ready2race",
-      "release": "2017-05-18"
-    },
-    "maserati_levante": {
-      "year": 2016,
-      "pack": "ready2race",
-      "release": "2017-05-18"
-    },
-    "maserati_mc12_gt1": {
-      "year": 2004,
-      "pack": "dreampack3",
-      "release": "2016-03-16"
-    },
-    "maserati_quattroporte_gts": {
-      "year": 2013,
-      "pack": "dreampack3",
-      "release": "2016-03-16"
-    },
-    "mazda_787b": {
-      "year": 1991,
-      "pack": "japanese",
-      "release": "2016-05-18"
-    },
-    "mazda_mx5_cup": {
-      "year": 2014,
-      "pack": "japanese",
-      "release": "2016-05-18"
-    },
-    "mazda_mx5_nd": {
-      "year": 2015,
-      "pack": "japanese",
-      "release": "2016-05-18"
-    },
-    "mazda_rx7_spirit_r": {
-      "year": 2002,
-      "pack": "japanese",
-      "release": "2016-05-18"
-    },
-    "mazda_rx7_tuned": {
-      "year": 2002,
-      "pack": "japanese",
-      "release": "2016-05-18"
-    },
-    "mclaren_570s": {
-      "year": 2015,
-      "pack": "tripl3pack",
-      "release": "2016-08-18"
-    },
-    "mclaren_650_gt3": {
-      "year": 2015,
-      "pack": "base",
-      "release": "2014-12-19"
-    },
-    "mclaren_f1_gtr": {
-      "year": 1997,
-      "pack": "dreampack3",
-      "release": "2016-03-16"
-    },
-    "mclaren_mp4_12c": {
+    "mclaren_mp412c": {
       "year": 2011,
       "pack": "base",
       "release": "2014-12-19"
     },
-    "mclaren_mp4_12c_gt3": {
+    "mclaren_mp412c_gt3": {
       "year": 2011,
       "pack": "base",
       "release": "2014-12-19"
-    },
-    "mercedes_190_evo2": {
-      "year": 1990,
-      "pack": "dreampack2",
-      "release": "2015-09-08"
-    },
-    "mercedes_amg_gt3": {
-      "year": 2016,
-      "pack": "ready2race",
-      "release": "2017-05-18"
-    },
-    "mercedes_c9": {
-      "year": 1989,
-      "pack": "dreampack2",
-      "release": "2015-09-08"
     },
     "mercedes_sls": {
       "year": 2010,
@@ -577,262 +322,642 @@
       "pack": "base",
       "release": "2014-12-19"
     },
-    "nissan_gtr": {
-      "year": 2013,
-      "pack": "japanese",
-      "release": "2016-05-18"
-    },
-    "nissan_gtr_gt3": {
-      "year": 2013,
-      "pack": "japanese",
-      "release": "2016-05-18"
-    },
-    "nissan_skyline_r34": {
-      "year": 1999,
-      "pack": "japanese",
-      "release": "2016-05-18"
+    "p4-5_2011": {
+      "year": 2011,
+      "pack": "base",
+      "release": "2014-12-19"
     },
     "pagani_huayra": {
       "year": 2012,
       "pack": "base",
       "release": "2014-12-19"
     },
-    "pagani_huayra_bc": {
-      "year": 2016,
-      "pack": "redpack",
-      "release": "2016-06-28"
-    },
     "pagani_zonda_r": {
       "year": 2009,
       "pack": "base",
       "release": "2014-12-19"
     },
-    "porsche_718_boxster_s": {
-      "year": 2016,
-      "pack": "porsche2",
-      "release": "2016-11-15"
-    },
-    "porsche_718_cayman_s": {
-      "year": 2016,
-      "pack": "porsche2",
-      "release": "2016-11-15"
-    },
-    "porsche_718_spyder_rs": {
-      "year": 2016,
-      "pack": "porsche2",
-      "release": "2016-11-15"
-    },
-    "porsche_911_carrera_rsr": {
-      "year": 1974,
-      "pack": "porsche3",
-      "release": "2016-12-20"
-    },
-    "porsche_911_gt1": {
-      "year": 1997,
-      "pack": "porsche3",
-      "release": "2016-12-20"
-    },
-    "porsche_911_gt3_cup_2017": {
-      "year": 2017,
-      "pack": "porsche2",
-      "release": "2016-11-15"
-    },
-    "porsche_911_gt3_r_2016": {
-      "year": 2016,
-      "pack": "porsche1",
-      "release": "2016-09-27"
-    },
-    "porsche_911_gt3_rs": {
-      "year": 2015,
-      "pack": "porsche1",
-      "release": "2016-09-27"
-    },
-    "porsche_911_rsr_2017": {
-      "year": 2017,
-      "pack": "porsche2",
-      "release": "2016-11-15"
-    },
-    "porsche_917_30": {
-      "year": 1973,
-      "pack": "porsche3",
-      "release": "2016-12-20"
-    },
-    "porsche_917_k": {
-      "year": 1970,
-      "pack": "porsche3",
-      "release": "2016-12-20"
-    },
-    "porsche_918_spyder": {
-      "year": 2013,
-      "pack": "porsche1",
-      "release": "2016-09-27"
-    },
-    "porsche_919_hybrid_2015": {
-      "year": 2015,
-      "pack": "porsche1",
-      "release": "2016-09-27"
-    },
-    "porsche_919_hybrid_2016": {
-      "year": 2016,
-      "pack": "porsche2",
-      "release": "2016-11-15"
-    },
-    "porsche_935_78_moby_dick": {
-      "year": 1978,
-      "pack": "porsche3",
-      "release": "2016-12-20"
-    },
-    "porsche_962c_longtail": {
-      "year": 1987,
-      "pack": "porsche3",
-      "release": "2016-12-20"
-    },
-    "porsche_962c_shorttail": {
-      "year": 1987,
-      "pack": "porsche3",
-      "release": "2016-12-20"
-    },
-    "porsche_991_carrera_s": {
-      "year": 2012,
-      "pack": "porsche1",
-      "release": "2016-09-27"
-    },
-    "porsche_991_turbo_s": {
-      "year": 2013,
-      "pack": "porsche1",
-      "release": "2016-09-27"
-    },
-    "porsche_cayman_gt4_clubsport": {
-      "year": 2016,
-      "pack": "porsche2",
-      "release": "2016-11-15"
-    },
-    "porsche_cayman_gt4_std": {
-      "year": 2016,
-      "pack": "porsche2",
-      "release": "2016-11-15"
-    },
-    "porsche_macan_turbo": {
-      "year": 2014,
-      "pack": "porsche1",
-      "release": "2016-09-27"
-    },
-    "porsche_panamera_g2_turbo": {
-      "year": 2016,
-      "pack": "porsche2",
-      "release": "2016-11-15"
-    },
-    "ruf_rt12r": {
-      "year": 2011,
-      "pack": "dreampack1",
-      "release": "2015-04-21"
-    },
-    "ruf_rt12r_awd": {
-      "year": 2011,
-      "pack": "dreampack1",
-      "release": "2015-04-21"
-    },
     "ruf_yellowbird": {
       "year": 1987,
       "pack": "dreampack1",
-      "release": "2015-04-21"
+      "release": "2015-03-11"
     },
     "shelby_cobra_427sc": {
       "year": 1965,
       "pack": "tripl3pack",
-      "release": "2016-08-18"
+      "release": "2016-08-26"
     },
     "tatuusfa1": {
       "year": 2016,
       "pack": "base",
       "release": "2014-12-19"
     },
-    "toyota_ae86": {
+    "ks_abarth500_assetto_corse": {
+      "year": 2007,
+      "pack": "base",
+      "release": "2014-12-19"
+    },
+    "ks_abarth_595ss": {
+      "year": 1968,
+      "pack": "tripl3pack",
+      "release": "2016-08-26"
+    },
+    "ks_abarth_595ss_s1": {
+      "year": 1968,
+      "pack": "tripl3pack",
+      "release": "2016-08-26"
+    },
+    "ks_abarth_595ss_s2": {
+      "year": 1968,
+      "pack": "tripl3pack",
+      "release": "2016-08-26"
+    },
+    "ks_alfa_33_stradale": {
+      "year": 1967,
+      "pack": "ferrari70",
+      "release": "2017-09-19"
+    },
+    "ks_alfa_giulia_qv": {
+      "year": 2016,
+      "pack": "ready2race",
+      "release": "2017-05-18"
+    },
+    "ks_alfa_mito_qv": {
+      "year": 2014,
+      "pack": "base",
+      "release": "2014-12-19"
+    },
+    "ks_alfa_romeo_155_v6": {
+      "year": 1993,
+      "pack": "dreampack1",
+      "release": "2015-03-11"
+    },
+    "ks_alfa_romeo_4c": {
+      "year": 2013,
+      "pack": "dreampack2",
+      "release": "2015-10-08"
+    },
+    "ks_alfa_romeo_gta": {
+      "year": 1965,
+      "pack": "dreampack3",
+      "release": "2015-12-15"
+    },
+    "ks_audi_a1s1": {
+      "year": 2015,
+      "pack": "dreampack2",
+      "release": "2015-10-08"
+    },
+    "ks_audi_r18_etron_quattro": {
+      "year": 2014,
+      "pack": "dreampack1",
+      "release": "2015-03-11"
+    },
+    "ks_audi_r8_lms": {
+      "year": 2015,
+      "pack": "base",
+      "release": "2014-12-19"
+    },
+    "ks_audi_r8_lms_2016": {
+      "year": 2016,
+      "pack": "ready2race",
+      "release": "2017-05-18"
+    },
+    "ks_audi_r8_plus": {
+      "year": 2015,
+      "pack": "dreampack1",
+      "release": "2015-03-11"
+    },
+    "ks_audi_sport_quattro": {
+      "year": 1985,
+      "pack": "dreampack1",
+      "release": "2015-03-11"
+    },
+    "ks_audi_sport_quattro_rally": {
+      "year": 1985,
+      "pack": "dreampack1",
+      "release": "2015-03-11"
+    },
+    "ks_audi_sport_quattro_s1": {
+      "year": 1985,
+      "pack": "dreampack1",
+      "release": "2015-03-11"
+    },
+    "ks_audi_tt_cup": {
+      "year": 2016,
+      "pack": "ready2race",
+      "release": "2017-05-18"
+    },
+    "ks_audi_tt_vln": {
+      "year": 2015,
+      "pack": "dreampack3",
+      "release": "2015-12-15"
+    },
+    "ks_bmw_m235i_racing": {
+      "year": 2014,
+      "pack": "base",
+      "release": "2014-12-19"
+    },
+    "ks_bmw_m4": {
+      "year": 2014,
+      "pack": "dreampack2",
+      "release": "2015-10-08"
+    },
+    "ks_bmw_m4_akrapovic": {
+      "year": 2014,
+      "pack": "dreampack2",
+      "release": "2015-10-08"
+    },
+    "ks_corvette_c7r": {
+      "year": 2014,
+      "pack": "dreampack3",
+      "release": "2015-12-15"
+    },
+    "ks_corvette_c7_stingray": {
+      "year": 2014,
+      "pack": "dreampack3",
+      "release": "2015-12-15"
+    },
+    "ks_ferrari_250_gto": {
+      "year": 1962,
+      "pack": "redpack",
+      "release": "2016-07-14"
+    },
+    "ks_ferrari_288_gto": {
+      "year": 1984,
+      "pack": "redpack",
+      "release": "2016-07-14"
+    },
+    "ks_ferrari_312_67": {
+      "year": 1967,
+      "pack": "redpack",
+      "release": "2016-07-14"
+    },
+    "ks_ferrari_330_p4": {
+      "year": 1967,
+      "pack": "redpack",
+      "release": "2016-07-14"
+    },
+    "ks_ferrari_488_gt3": {
+      "year": 2016,
+      "pack": "ready2race",
+      "release": "2017-05-18"
+    },
+    "ks_ferrari_488_gtb": {
+      "year": 2015,
+      "pack": "tripl3pack",
+      "release": "2016-08-26"
+    },
+    "ks_ferrari_812_superfast": {
+      "year": 2017,
+      "pack": "ferrari70",
+      "release": "2017-09-19"
+    },
+    "ks_ferrari_f138": {
+      "year": 2013,
+      "pack": "base",
+      "release": "2014-12-19"
+    },
+    "ks_ferrari_f2004": {
+      "year": 2004,
+      "pack": "redpack",
+      "release": "2016-07-14"
+    },
+    "ks_ferrari_fxx_k": {
+      "year": 2015,
+      "pack": "tripl3pack",
+      "release": "2016-08-26"
+    },
+    "ks_ferrari_sf15t": {
+      "year": 2015,
+      "pack": "redpack",
+      "release": "2016-07-14"
+    },
+    "ks_ferrari_sf70h": {
+      "year": 2017,
+      "pack": "ferrari70",
+      "release": "2017-09-19"
+    },
+    "ks_ford_escort_mk1": {
+      "year": 1968,
+      "pack": "japanese",
+      "release": "2016-05-18"
+    },
+    "ks_ford_gt40": {
+      "year": 1966,
+      "pack": "tripl3pack",
+      "release": "2016-08-26"
+    },
+    "ks_ford_mustang_2015": {
+      "year": 2015,
+      "pack": "base",
+      "release": "2014-12-19"
+    },
+    "ks_glickenhaus_scg003": {
+      "year": 2017,
+      "pack": "ferrari70",
+      "release": "2017-09-19"
+    },
+    "ks_lamborghini_aventador_sv": {
+      "year": 2015,
+      "pack": "ready2race",
+      "release": "2017-05-18"
+    },
+    "ks_lamborghini_countach": {
+      "year": 1985,
+      "pack": "tripl3pack",
+      "release": "2016-08-26"
+    },
+    "ks_lamborghini_countach_s1": {
+      "year": 1985,
+      "pack": "tripl3pack",
+      "release": "2016-08-26"
+    },
+    "ks_lamborghini_gallardo_sl": {
+      "year": 2010,
+      "pack": "dreampack2",
+      "release": "2015-10-08"
+    },
+    "ks_lamborghini_gallardo_sl_s3": {
+      "year": 2010,
+      "pack": "dreampack2",
+      "release": "2015-10-08"
+    },
+    "ks_lamborghini_huracan_gt3": {
+      "year": 2015,
+      "pack": "redpack",
+      "release": "2016-07-14"
+    },
+    "ks_lamborghini_huracan_performante": {
+      "year": 2017,
+      "pack": "ferrari70",
+      "release": "2017-09-19"
+    },
+    "ks_lamborghini_huracan_st": {
+      "year": 2015,
+      "pack": "redpack",
+      "release": "2016-07-14"
+    },
+    "ks_lamborghini_miura_sv": {
+      "year": 1971,
+      "pack": "dreampack2",
+      "release": "2015-10-08"
+    },
+    "ks_lamborghini_sesto_elemento": {
+      "year": 2010,
+      "pack": "ferrari70",
+      "release": "2017-09-19"
+    },
+    "ks_lotus_25": {
+      "year": 1962,
+      "pack": "dreampack1",
+      "release": "2015-03-11"
+    },
+    "ks_lotus_3_eleven": {
+      "year": 2016,
+      "pack": "ready2race",
+      "release": "2017-05-18"
+    },
+    "ks_lotus_72d": {
+      "year": 1970,
+      "pack": "dreampack3",
+      "release": "2015-12-15"
+    },
+    "ks_maserati_250f_12cyl": {
+      "year": 1957,
+      "pack": "tripl3pack",
+      "release": "2016-08-26"
+    },
+    "ks_maserati_250f_6cyl": {
+      "year": 1957,
+      "pack": "tripl3pack",
+      "release": "2016-08-26"
+    },
+    "ks_maserati_alfieri": {
+      "year": 2014,
+      "pack": "dreampack3",
+      "release": "2015-12-15"
+    },
+    "ks_maserati_gt_mc_gt4": {
+      "year": 2016,
+      "pack": "ready2race",
+      "release": "2017-05-18"
+    },
+    "ks_maserati_levante": {
+      "year": 2016,
+      "pack": "ready2race",
+      "release": "2017-05-18"
+    },
+    "ks_maserati_mc12_gt1": {
+      "year": 2004,
+      "pack": "dreampack3",
+      "release": "2015-12-15"
+    },
+    "ks_maserati_quattroporte": {
+      "year": 2013,
+      "pack": "dreampack3",
+      "release": "2015-12-15"
+    },
+    "ks_mazda_787b": {
+      "year": 1991,
+      "pack": "japanese",
+      "release": "2016-05-18"
+    },
+    "ks_mazda_miata": {
+      "year": 1989,
+      "pack": "japanese",
+      "release": "2016-05-18"
+    },
+    "ks_mazda_mx5_cup": {
+      "year": 2014,
+      "pack": "japanese",
+      "release": "2016-05-18"
+    },
+    "ks_mazda_mx5_nd": {
+      "year": 2015,
+      "pack": "japanese",
+      "release": "2016-05-18"
+    },
+    "ks_mazda_rx7_spirit_r": {
+      "year": 2002,
+      "pack": "japanese",
+      "release": "2016-05-18"
+    },
+    "ks_mazda_rx7_tuned": {
+      "year": 2002,
+      "pack": "japanese",
+      "release": "2016-05-18"
+    },
+    "ks_mclaren_570s": {
+      "year": 2015,
+      "pack": "tripl3pack",
+      "release": "2016-08-26"
+    },
+    "ks_mclaren_650_gt3": {
+      "year": 2015,
+      "pack": "base",
+      "release": "2014-12-19"
+    },
+    "ks_mclaren_f1_gtr": {
+      "year": 1997,
+      "pack": "dreampack3",
+      "release": "2015-12-15"
+    },
+    "ks_mclaren_p1": {
+      "year": 2013,
+      "pack": "dreampack2",
+      "release": "2015-10-08"
+    },
+    "ks_mclaren_p1_gtr": {
+      "year": 2015,
+      "pack": "dreampack3",
+      "release": "2015-12-15"
+    },
+    "ks_mercedes_190_evo2": {
+      "year": 1990,
+      "pack": "dreampack2",
+      "release": "2015-10-08"
+    },
+    "ks_mercedes_amg_gt3": {
+      "year": 2016,
+      "pack": "ready2race",
+      "release": "2017-05-18"
+    },
+    "ks_mercedes_c9": {
+      "year": 1989,
+      "pack": "dreampack2",
+      "release": "2015-10-08"
+    },
+    "ks_nissan_370z": {
+      "year": 2009,
+      "pack": "japanese",
+      "release": "2016-05-18"
+    },
+    "ks_nissan_gtr": {
+      "year": 2013,
+      "pack": "japanese",
+      "release": "2016-05-18"
+    },
+    "ks_nissan_gtr_gt3": {
+      "year": 2013,
+      "pack": "japanese",
+      "release": "2016-05-18"
+    },
+    "ks_nissan_skyline_r34": {
+      "year": 1999,
+      "pack": "japanese",
+      "release": "2016-05-18"
+    },
+    "ks_pagani_huayra_bc": {
+      "year": 2016,
+      "pack": "redpack",
+      "release": "2016-07-14"
+    },
+    "ks_porsche_718_boxster_s": {
+      "year": 2016,
+      "pack": "porsche2",
+      "release": "2016-11-22"
+    },
+    "ks_porsche_718_boxster_s_pdk": {
+      "year": 2016,
+      "pack": "porsche2",
+      "release": "2016-11-22"
+    },
+    "ks_porsche_718_cayman_s": {
+      "year": 2016,
+      "pack": "porsche1",
+      "release": "2016-10-25"
+    },
+    "ks_porsche_718_spyder_rs": {
+      "year": 1960,
+      "pack": "porsche2",
+      "release": "2016-11-22"
+    },
+    "ks_porsche_908_lh": {
+      "year": 1968,
+      "pack": "porsche3",
+      "release": "2016-12-20"
+    },
+    "ks_porsche_911_carrera_rsr": {
+      "year": 1974,
+      "pack": "porsche1",
+      "release": "2016-10-25"
+    },
+    "ks_porsche_911_gt1": {
+      "year": 1997,
+      "pack": "porsche2",
+      "release": "2016-11-22"
+    },
+    "ks_porsche_911_gt3_cup_2017": {
+      "year": 2017,
+      "pack": "porsche3",
+      "release": "2016-12-20"
+    },
+    "ks_porsche_911_gt3_rs": {
+      "year": 2015,
+      "pack": "porsche2",
+      "release": "2016-11-22"
+    },
+    "ks_porsche_911_gt3_r_2016": {
+      "year": 2016,
+      "pack": "porsche3",
+      "release": "2016-12-20"
+    },
+    "ks_porsche_911_r": {
+      "year": 2016,
+      "pack": "porsche3",
+      "release": "2016-12-20"
+    },
+    "ks_porsche_911_rsr_2017": {
+      "year": 2017,
+      "pack": "porsche3",
+      "release": "2016-12-20"
+    },
+    "ks_porsche_917_30": {
+      "year": 1973,
+      "pack": "porsche3",
+      "release": "2016-12-20"
+    },
+    "ks_porsche_917_k": {
+      "year": 1970,
+      "pack": "porsche3",
+      "release": "2016-12-20"
+    },
+    "ks_porsche_918_spyder": {
+      "year": 2013,
+      "pack": "porsche1",
+      "release": "2016-10-25"
+    },
+    "ks_porsche_919_hybrid_2015": {
+      "year": 2015,
+      "pack": "porsche1",
+      "release": "2016-10-25"
+    },
+    "ks_porsche_919_hybrid_2016": {
+      "year": 2016,
+      "pack": "porsche2",
+      "release": "2016-11-22"
+    },
+    "ks_porsche_935_78_moby_dick": {
+      "year": 1978,
+      "pack": "porsche3",
+      "release": "2016-12-20"
+    },
+    "ks_porsche_962c_longtail": {
+      "year": 1987,
+      "pack": "porsche3",
+      "release": "2016-12-20"
+    },
+    "ks_porsche_962c_shorttail": {
+      "year": 1987,
+      "pack": "porsche3",
+      "release": "2016-12-20"
+    },
+    "ks_porsche_991_carrera_s": {
+      "year": 2012,
+      "pack": "porsche1",
+      "release": "2016-10-25"
+    },
+    "ks_porsche_991_turbo_s": {
+      "year": 2013,
+      "pack": "porsche1",
+      "release": "2016-10-25"
+    },
+    "ks_porsche_cayenne": {
+      "year": 2015,
+      "pack": "porsche2",
+      "release": "2016-11-22"
+    },
+    "ks_porsche_cayman_gt4_clubsport": {
+      "year": 2016,
+      "pack": "porsche1",
+      "release": "2016-10-25"
+    },
+    "ks_porsche_cayman_gt4_std": {
+      "year": 2016,
+      "pack": "porsche1",
+      "release": "2016-10-25"
+    },
+    "ks_porsche_macan": {
+      "year": 2014,
+      "pack": "porsche1",
+      "release": "2016-10-25"
+    },
+    "ks_porsche_panamera": {
+      "year": 2016,
+      "pack": "porsche2",
+      "release": "2016-11-22"
+    },
+    "ks_praga_r1": {
+      "year": 2012,
+      "pack": "tripl3pack",
+      "release": "2016-08-26"
+    },
+    "ks_ruf_rt12r": {
+      "year": 2011,
+      "pack": "dreampack1",
+      "release": "2015-03-11"
+    },
+    "ks_ruf_rt12r_awd": {
+      "year": 2011,
+      "pack": "dreampack1",
+      "release": "2015-03-11"
+    },
+    "ks_toyota_ae86": {
       "year": 1986,
       "pack": "japanese",
       "release": "2016-05-18"
     },
-    "toyota_ae86_drift": {
+    "ks_toyota_ae86_drift": {
       "year": 1986,
       "pack": "japanese",
       "release": "2016-05-18"
     },
-    "toyota_ae86_tuned": {
+    "ks_toyota_ae86_tuned": {
       "year": 1986,
       "pack": "japanese",
       "release": "2016-05-18"
     },
-    "toyota_celica_st185": {
+    "ks_toyota_celica_st185": {
       "year": 1993,
       "pack": "japanese",
       "release": "2016-05-18"
     },
-    "toyota_gt86": {
+    "ks_toyota_gt86": {
       "year": 2012,
       "pack": "base",
       "release": "2014-12-19"
     },
-    "toyota_supra_mkiv": {
+    "ks_toyota_supra_mkiv": {
       "year": 1997,
       "pack": "japanese",
       "release": "2016-05-18"
     },
-    "toyota_supra_mkiv_drift": {
+    "ks_toyota_supra_mkiv_drift": {
       "year": 1997,
       "pack": "japanese",
       "release": "2016-05-18"
     },
-    "toyota_supra_mkiv_tuned": {
+    "ks_toyota_supra_mkiv_tuned": {
       "year": 1997,
       "pack": "japanese",
       "release": "2016-05-18"
     },
-    "toyota_trueno_ae86": {
-      "year": 1986,
+    "ks_toyota_ts040": {
+      "year": 2014,
       "pack": "japanese",
       "release": "2016-05-18"
-    },
-    "ferrari_812_superfast": {
-      "year": 2017,
-      "pack": "ferrari70",
-      "release": "2017-08-31"
-    },
-    "alfa_romeo_33_stradale": {
-      "year": 1967,
-      "pack": "ferrari70",
-      "release": "2017-08-31"
-    },
-    "lamborghini_sesto_elemento": {
-      "year": 2010,
-      "pack": "ferrari70",
-      "release": "2017-08-31"
-    },
-    "praga_r1": {
-      "year": 2012,
-      "pack": "base",
-      "release": "2014-12-19"
-    },
-    "mclaren_p1": {
-      "year": 2013,
-      "pack": "dreampack2",
-      "release": "2015-09-08"
-    },
-    "mclaren_p1_gtr": {
-      "year": 2015,
-      "pack": "dreampack3",
-      "release": "2016-03-16"
     }
   },
   "tracks": {
-    "magione": {
+    "drift": {
       "pack": "base",
       "release": "2014-12-19"
     },
     "imola": {
-      "pack": "dreampack2",
-      "release": "2015-09-08"
+      "pack": "base",
+      "release": "2014-12-19"
     },
-    "mugello": {
+    "magione": {
       "pack": "base",
       "release": "2014-12-19"
     },
@@ -840,89 +965,29 @@
       "pack": "base",
       "release": "2014-12-19"
     },
-    "nurburgring": {
-      "pack": "dreampack1",
-      "release": "2015-04-21"
-    },
-    "nurburgring_sprint": {
-      "pack": "dreampack1",
-      "release": "2015-04-21"
-    },
-    "silverstone": {
-      "pack": "base",
-      "release": "2014-12-19"
-    },
-    "silverstone-international": {
-      "pack": "base",
-      "release": "2014-12-19"
-    },
-    "silverstone-national": {
+    "mugello": {
       "pack": "base",
       "release": "2014-12-19"
     },
     "spa": {
       "pack": "dreampack1",
-      "release": "2015-04-21"
-    },
-    "vallelunga": {
-      "pack": "base",
-      "release": "2014-12-19"
-    },
-    "drift": {
-      "pack": "base",
-      "release": "2014-12-19"
-    },
-    "drag": {
-      "pack": "base",
-      "release": "2014-12-19"
+      "release": "2015-03-11"
     },
     "trento-bondone": {
       "pack": "tripl3pack",
-      "release": "2016-08-18"
-    },
-    "brands_hatch": {
-      "pack": "dreampack3",
-      "release": "2016-03-16"
-    },
-    "red_bull_ring": {
-      "pack": "dreampack2",
-      "release": "2015-09-08"
-    },
-    "highlands": {
-      "pack": "tripl3pack",
-      "release": "2016-08-18"
-    },
-    "laguna_seca": {
-      "pack": "base",
-      "release": "2014-12-19"
-    },
-    "zandvoort": {
-      "pack": "dreampack3",
-      "release": "2016-03-16"
-    },
-    "monza66": {
-      "pack": "redpack",
-      "release": "2016-06-28"
-    },
-    "black_cat_county": {
-      "pack": "tripl3pack",
-      "release": "2016-08-18"
-    },
-    "barcelona": {
-      "pack": "base",
-      "release": "2014-12-19"
+      "release": "2016-08-26"
     },
     "ks_barcelona": {
-      "pack": "base",
-      "release": "2014-12-19"
+      "pack": "dreampack2",
+      "release": "2015-10-08"
     },
     "ks_black_cat_county": {
       "pack": "tripl3pack",
-      "release": "2016-08-18"
+      "release": "2016-08-26"
     },
     "ks_brands_hatch": {
       "pack": "dreampack3",
-      "release": "2016-03-16"
+      "release": "2015-12-15"
     },
     "ks_drag": {
       "pack": "base",
@@ -930,7 +995,7 @@
     },
     "ks_highlands": {
       "pack": "tripl3pack",
-      "release": "2016-08-18"
+      "release": "2016-08-26"
     },
     "ks_laguna_seca": {
       "pack": "base",
@@ -938,19 +1003,19 @@
     },
     "ks_monza66": {
       "pack": "redpack",
-      "release": "2016-06-28"
+      "release": "2016-07-14"
     },
     "ks_nordschleife": {
       "pack": "dreampack1",
-      "release": "2015-04-21"
+      "release": "2015-03-11"
     },
     "ks_nurburgring": {
       "pack": "dreampack1",
-      "release": "2015-04-21"
+      "release": "2015-03-11"
     },
     "ks_red_bull_ring": {
-      "pack": "dreampack2",
-      "release": "2015-09-08"
+      "pack": "redpack",
+      "release": "2016-07-14"
     },
     "ks_silverstone": {
       "pack": "base",
@@ -958,7 +1023,7 @@
     },
     "ks_silverstone1967": {
       "pack": "redpack",
-      "release": "2016-06-28"
+      "release": "2016-07-14"
     },
     "ks_vallelunga": {
       "pack": "base",
@@ -966,7 +1031,7 @@
     },
     "ks_zandvoort": {
       "pack": "dreampack3",
-      "release": "2016-03-16"
+      "release": "2015-12-15"
     }
   }
 }

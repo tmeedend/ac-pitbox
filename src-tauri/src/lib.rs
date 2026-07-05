@@ -11,6 +11,7 @@ mod identity;
 mod importer;
 mod inspect;
 mod kunos;
+mod kunos_dates;
 mod launch;
 mod library;
 mod maintenance;
@@ -390,13 +391,16 @@ fn maintenance_scan(app: AppHandle, db: State<Db>) -> Result<maintenance::Mainte
 /// skins/layouts) de tous les mods déjà importés, puis réapplique l'ontologie
 /// (même effet que « Réappliquer les règles »). Sert à rattraper un mod dont
 /// le fichier source a été corrigé/édité après import, sans le réimporter.
+/// `recalc_size` (§9.4, option décochée par défaut côté UI) : recalcule aussi
+/// la taille sur disque de chaque version — parcourt tous les fichiers de la
+/// bibliothèque, potentiellement lent, d'où l'opt-in explicite.
 /// Renvoie le nombre de mods traités.
 #[tauri::command]
-fn reindex_library(app: AppHandle, db: State<Db>) -> Result<usize, String> {
+fn reindex_library(app: AppHandle, db: State<Db>, recalc_size: bool) -> Result<usize, String> {
     let rules = rules::load(&app);
     let cfg = config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let n = maintenance::reindex_all(&conn, &cfg)?;
+    let n = maintenance::reindex_all(&conn, &cfg, recalc_size)?;
     harmonize::harmonize_all(&conn, &rules).map_err(|e| e.to_string())?;
     Ok(n)
 }

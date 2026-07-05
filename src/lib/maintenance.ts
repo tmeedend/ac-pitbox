@@ -29,9 +29,10 @@ export function maintenanceScan(): Promise<MaintenanceReport> {
   return invoke<MaintenanceReport>("maintenance_scan");
 }
 
-/** Relit sur le disque les champs cache de tous les mods et réapplique l'ontologie. Renvoie le nb traité. */
-export function reindexLibrary(): Promise<number> {
-  return invoke<number>("reindex_library");
+/** Relit sur le disque les champs cache de tous les mods et réapplique l'ontologie. Renvoie le nb traité.
+ * `recalcSize` (§9.4) : recalcule aussi la taille sur disque de chaque mod — plus lent, décoché par défaut. */
+export function reindexLibrary(recalcSize: boolean): Promise<number> {
+  return invoke<number>("reindex_library", { recalcSize });
 }
 
 export function deleteBrokenMod(id: string): Promise<void> {

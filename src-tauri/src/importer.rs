@@ -698,6 +698,11 @@ fn process_found(
     )
     .map_err(|e| e.to_string())?;
 
+    // Taille sur disque (§9.4) : calculée maintenant, le dossier final venant
+    // d'être créé par la copie/le déplacement ci-dessus.
+    let size_bytes = inspect::dir_size_bytes(&dest) as i64;
+    crate::overlay::update_version_size(conn, &version_id, size_bytes).map_err(|e| e.to_string())?;
+
     crate::overlay::set_active_version(conn, &id_interne, &version_id).map_err(|e| e.to_string())?;
 
     // Harmonisation des tags + extraction specs/pays (§5.4), stockée en overlay.
