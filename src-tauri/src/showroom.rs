@@ -48,12 +48,17 @@ fn resolve_ac_cfg_dir() -> Option<PathBuf> {
 fn write_showroom_ini_at(cfg_dir: &Path, car_id: &str, skin_id: Option<&str>) -> Result<(), String> {
     fs::create_dir_all(cfg_dir).map_err(|e| format!("dossier de config AC : {e}"))?;
     let skin = skin_id.unwrap_or("");
+    // Scène `studio_white` : la plus légère de loin (17 Ko contre 100–300 Mo
+    // pour showroom/Hangar/industrial/beach) et **sans piste audio** (pas de
+    // .bank/.wav) → chargement quasi instantané et aucune musique à couper.
+    // Contrepartie : fond blanc (pas foncé). Les autres clés (caméra custom,
+    // clipping, ombres) sont indépendantes de la scène.
     let content = format!(
         "[SHOWROOM]\r\n\
          CAR={car_id}\r\n\
          SKIN={skin}\r\n\
          ALLOW_SELECT_SKIN=1\r\n\
-         TRACK=showroom\r\n\
+         TRACK=studio_white\r\n\
          SELECTED_SKIN=1\r\n\
          CAR_ID=0\r\n\
          \r\n\
@@ -432,6 +437,8 @@ mod tests {
         assert!(content.contains("CAR=ks_toyota_celica_st185"));
         assert!(content.contains("SKIN=00_racing_3"));
         assert!(content.contains("[SHOWROOM]"));
+        // Scène légère et silencieuse (17 Ko, sans audio), cf. write_showroom_ini_at.
+        assert!(content.contains("TRACK=studio_white"));
         // Clés de clipping/ombres : leur absence a provoqué un écran noir en test réel.
         assert!(content.contains("NEAR_PLANE=0.01"));
         assert!(content.contains("FAR_PLANE=200"));

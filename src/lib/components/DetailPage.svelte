@@ -18,6 +18,7 @@
     type NativeSpecs,
   } from "$lib/library";
   import { onDestroy, untrack } from "svelte";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
     listModSkins,
     openNativeShowroom,
@@ -209,10 +210,16 @@
     ro.observe(heroEl);
     window.addEventListener("resize", onWindowChange);
     window.addEventListener("scroll", onWindowChange, true);
+    // La fenêtre native du showroom est posée en coordonnées écran absolues :
+    // elle ne suit pas le déplacement de la fenêtre principale (aucun
+    // resize/scroll n'est émis dans ce cas). On écoute donc aussi l'événement
+    // Moved de Tauri pour la repositionner quand on déplace l'app.
+    const movedUnlisten = getCurrentWindow().onMoved(() => onWindowChange());
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", onWindowChange);
       window.removeEventListener("scroll", onWindowChange, true);
+      movedUnlisten.then((fn) => fn());
     };
   });
 
@@ -967,6 +974,15 @@
     justify-content: center;
     position: relative;
     overflow: hidden;
+  }
+  /* Voiture : cadre à ratio fixe 16:9, aligné en haut (pas étiré par la
+     hauteur du panneau de données voisin). L'image et l'aperçu 3D du showroom
+     occupent ainsi exactement la même boîte — le rendu natif (1280×720, 16:9)
+     colle au cadre, plus de saut de hauteur au moment de l'attache (#4). */
+  .row.top:not(.track) .hero {
+    aspect-ratio: 16 / 9;
+    min-height: 0;
+    align-self: start;
   }
   .hero img {
     width: 100%;

@@ -168,18 +168,39 @@
     });
   }
 
-  // Ctrl/Alt-clic = sélection multiple (§6.3bis) ; clic simple = comportement
-  // normal (sélection de session) et efface toute sélection groupée en cours.
-  // Le panneau de droite (ModDetail) reste rempli en permanence, y compris
-  // pendant une sélection groupée : il suit le dernier mod cliqué, pas
-  // uniquement le dernier ajouté à la sélection (§6.3ter).
+  // Sélection multiple (§6.3bis) ; clic simple = comportement normal (sélection
+  // de session) et efface toute sélection groupée en cours. Le panneau de droite
+  // (ModDetail) reste rempli en permanence, y compris pendant une sélection
+  // groupée : il suit le dernier mod cliqué (§6.3ter).
+  // - Ctrl-clic : bascule un mod (ajout/retrait individuel).
+  // - Maj-clic : sélectionne toute la plage entre l'ancre (dernier mod cliqué)
+  //   et celui-ci, dans l'ordre affiché courant — combinable avec des Ctrl-clic
+  //   (convention standard des gestionnaires de fichiers).
   function onCardClick(c: ModCard, e: MouseEvent) {
-    if (e.ctrlKey || e.altKey) {
+    if (e.ctrlKey) {
       e.preventDefault();
       const next = new Set(selectedIds);
       if (next.size === 0 && selectedId) next.add(selectedId);
       if (next.has(c.id_interne)) next.delete(c.id_interne);
       else next.add(c.id_interne);
+      selectedIds = next;
+      selectedId = c.id_interne;
+      return;
+    }
+    if (e.shiftKey) {
+      e.preventDefault();
+      const ids = sorted.map((x) => x.id_interne);
+      const to = ids.indexOf(c.id_interne);
+      if (to === -1) return;
+      const anchor = selectedId ?? sessionId;
+      const from = anchor ? ids.indexOf(anchor) : -1;
+      const next = new Set(selectedIds);
+      if (from === -1) {
+        next.add(c.id_interne);
+      } else {
+        const [lo, hi] = from <= to ? [from, to] : [to, from];
+        for (let i = lo; i <= hi; i++) next.add(ids[i]);
+      }
       selectedIds = next;
       selectedId = c.id_interne;
       return;

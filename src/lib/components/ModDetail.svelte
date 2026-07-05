@@ -228,7 +228,7 @@
       <div class="meta">
         {#if detail.brand}<span><b>{t("columns.brand")}</b> {detail.brand}</span>{/if}
         {#if detail.year}<span><b>{t("columns.year")}</b> {detail.year}</span>{/if}
-        <span><b>{t("modpanel.typeLabel")}</b> {detail.kind === "Track" ? t("library.typeTrack") : t("library.typeCar")}</span>
+        {#if detail.author}<span><b>{t("columns.author")}</b> {detail.author}</span>{/if}
         {#if detail.source_pack}<span class="pack"><b>{t("detail.packLabel")}</b> {detail.source_pack}</span>{/if}
       </div>
 
