@@ -466,6 +466,17 @@
     }
   });
 
+  // Lancement immédiat demandé depuis le bouton rouge « Démarrer la session »
+  // de la barre latérale (§8.6bis) : réactif plutôt que dans onMount, pour
+  // couvrir aussi bien l'arrivée fraîche sur cet écran que le cas où il est
+  // déjà ouvert (auquel cas onMount ne se redéclenche pas).
+  $effect(() => {
+    if (nav.autoLaunch && ready) {
+      nav.autoLaunch = false;
+      launch();
+    }
+  });
+
   function fmtTime(h: number): string {
     const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
     return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
@@ -519,13 +530,12 @@
 {/snippet}
 
 <div class="flow">
-  <!-- Titre + Lancer. Pas de rappel du duo voiture/circuit ici (déjà dans la
-       colonne latérale, §8.6) — juste les réglages. -->
+  <!-- Titre seul : pas de rappel du duo voiture/circuit ici (déjà dans la
+       colonne latérale, §8.6). Le lancement se fait désormais depuis le
+       bouton rouge « Démarrer la session » de la barre latérale, juste sous
+       « Paramétrage de la session » — plus de bouton Lancer sur cet écran. -->
   <header class="bar">
-    <h1>{t("nav.settings")}</h1>
-    <button class="btn btn-primary launch" type="button" onclick={launch} disabled={launching || !setup.car_id || !setup.track_id}>
-      {launching ? t("launch.launching") : t("launch.launchButton")}
-    </button>
+    <h1>{t("launch.pageTitle")}</h1>
   </header>
 
   {#if info}<div class="ok">{info}</div>{/if}
@@ -773,11 +783,6 @@
     letter-spacing: 0.5px;
     text-transform: uppercase;
     color: var(--muted);
-  }
-  .launch {
-    flex: none;
-    font-size: 13px;
-    padding: 9px 20px;
   }
   .ok,
   .err {

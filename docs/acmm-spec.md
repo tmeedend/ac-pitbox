@@ -499,7 +499,6 @@ Champs propres à une voiture (specs, skin piloté, version active) ne sont **pa
 ### 6.4 États visuels
 
 - Mod **actif** : marqueur clair (la junction existe dans `content/`).
-- Mod ayant **plusieurs versions** : badge indiquant le nombre, version active distinguée.
 - Mod **cassé / incomplet** : signalé (ex. pas d'`ui_*.json`, structure invalide).
 
 ### 6.5 Suivi d'usage : distance et « jamais essayé »

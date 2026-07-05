@@ -47,6 +47,11 @@ export const nav = $state<{
    * navigation manette globale (AppShell) sache si elle doit céder la main
    * gauche/droite au visualiseur (mod précédent/suivant) et gérer B = fermer. */
   openFull: string | null;
+  /** Demande de lancement immédiat (bouton rouge « Démarrer la session » de
+   * la barre latérale) : posée avant de naviguer vers l'écran de réglages,
+   * consommée par Launch.svelte une fois monté et prêt (mêmes réglages que
+   * s'ils avaient été ouverts normalement — dernier preset du type courant). */
+  autoLaunch: boolean;
 }>({
   section: "cars",
   prefill: null,
@@ -55,6 +60,7 @@ export const nav = $state<{
   sessionCar: load("pitbox.session.car"),
   sessionTrack: load("pitbox.session.track"),
   openFull: null,
+  autoLaunch: false,
 });
 
 /** Définit le choix de session (persisté) — appelé à l'ouverture d'un mod (§8.6). */

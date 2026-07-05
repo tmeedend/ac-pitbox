@@ -485,6 +485,7 @@
               {:else}
                 <span class="dot" class:active={c.active} title={c.active ? t("common.active") : t("common.inactive")}></span>
               {/if}
+              {#if c.broken}<span class="brokenbadge" title={t("library.brokenTooltip")}>⚠ {t("library.brokenBadge")}</span>{/if}
               <span
                 class="card-fav"
                 class:on={c.is_favorite}
@@ -528,6 +529,9 @@
                       {#if c.active}<span class="on-dot"></span>{t("common.active").toLowerCase()}{:else}—{/if}
                     {:else if col.key === "brand"}
                       {#if c.badge}<img class="brand-badge" src={previewSrc(c.badge)} alt="" loading="lazy" />{/if}
+                      {col.value(c)}
+                    {:else if col.key === "name"}
+                      {#if c.broken}<span class="broken-flag" title={t("library.brokenTooltip")}>⚠</span>{/if}
                       {col.value(c)}
                     {:else}
                       {col.value(c)}
@@ -792,6 +796,25 @@
     font-family: var(--mono);
     letter-spacing: 0.5px;
     padding: 1px 4px;
+  }
+  /* Mod cassé (§6.4) : signalement visuel sur la carte, même détection que
+     l'écran Maintenance. */
+  .brokenbadge {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: #1a1708;
+    color: var(--yellow);
+    border: 1px solid #4a4426;
+    font-size: 8px;
+    font-family: var(--mono);
+    letter-spacing: 0.5px;
+    padding: 1px 4px;
+    z-index: 1;
+  }
+  .broken-flag {
+    color: var(--yellow);
+    margin-right: 4px;
   }
   .card-fav {
     position: absolute;

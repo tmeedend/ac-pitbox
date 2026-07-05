@@ -10,6 +10,7 @@ use serde::Serialize;
 
 use crate::config::AppConfig;
 use crate::modscan::ModKind;
+use crate::overlay::ModRow;
 use crate::{activation, inspect, overlay, uijson};
 
 fn kind_of(s: &str) -> ModKind {
@@ -41,6 +42,37 @@ pub struct MaintenanceReport {
     pub orphans: Vec<OrphanJunction>,
 }
 
+/// Un mod est-il cassé (fichiers de sa version active manquants/invalides) ?
+/// Renvoie une clé i18n (résolue côté frontend, pas du texte affichable), ou
+/// `None` si tout va bien. Contenu de base (`is_stock`) jamais cassé (vrai
+/// dossier du jeu, pas géré par nous). Partagé entre `scan` (§9.3, écran
+/// Maintenance) et `library::to_card` (§6.4, badge sur la carte bibliothèque).
+pub fn broken_reason(conn: &Connection, m: &ModRow) -> Option<String> {
+    if m.is_stock {
+        return None;
+    }
+    let kind = kind_of(&m.kind);
+    let path = m
+        .active_version_id
+        .as_ref()
+        .and_then(|vid| overlay::get_version_path(conn, vid).ok().flatten());
+    match &path {
+        None => Some("maintenance.reasonNoActiveVersion".to_string()),
+        Some(p) => {
+            let dir = Path::new(p);
+            if !dir.is_dir() {
+                Some("maintenance.reasonFilesMissing".to_string())
+            } else if matches!(kind, ModKind::Car) && !dir.join("ui").join("ui_car.json").is_file() {
+                Some("maintenance.reasonUiCarMissing".to_string())
+            } else if matches!(kind, ModKind::Track) && !dir.join("ui").is_dir() {
+                Some("maintenance.reasonUiDirMissing".to_string())
+            } else {
+                None
+            }
+        }
+    }
+}
+
 /// Analyse la bibliothèque + `content/` sans rien supprimer (§9.3).
 pub fn scan(conn: &Connection, cfg: &AppConfig) -> Result<MaintenanceReport, String> {
     let mut broken = Vec::new();
@@ -48,28 +80,7 @@ pub fn scan(conn: &Connection, cfg: &AppConfig) -> Result<MaintenanceReport, Str
 
     // --- Mods cassés : fichiers de la version active manquants/invalides ---
     for m in overlay::list_mods(conn).map_err(|e| e.to_string())? {
-        let kind = kind_of(&m.kind);
-        let path = m
-            .active_version_id
-            .as_ref()
-            .and_then(|vid| overlay::get_version_path(conn, vid).ok().flatten());
-        // `reason` est une clé i18n (résolue côté frontend), pas du texte affichable.
-        let reason = match &path {
-            None => Some("maintenance.reasonNoActiveVersion".to_string()),
-            Some(p) => {
-                let dir = Path::new(p);
-                if !dir.is_dir() {
-                    Some("maintenance.reasonFilesMissing".to_string())
-                } else if matches!(kind, ModKind::Car) && !dir.join("ui").join("ui_car.json").is_file() {
-                    Some("maintenance.reasonUiCarMissing".to_string())
-                } else if matches!(kind, ModKind::Track) && !dir.join("ui").is_dir() {
-                    Some("maintenance.reasonUiDirMissing".to_string())
-                } else {
-                    None
-                }
-            }
-        };
-        if let Some(reason) = reason {
+        if let Some(reason) = broken_reason(conn, &m) {
             broken.push(BrokenMod { id: m.id_interne, kind: m.kind, name: m.display_name, reason });
         }
     }

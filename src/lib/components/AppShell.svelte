@@ -88,6 +88,15 @@
   async function openSessionDetail(section: "cars" | "tracks", id: string | null | undefined) {
     if (await requestSection(section) && id) nav.openMod = id;
   }
+
+  // Bouton rouge « Démarrer la session » : lance directement avec les
+  // réglages courants (dernier preset du type de session), sans repasser par
+  // l'écran Paramétrage — pose le drapeau consommé par Launch.svelte une fois
+  // monté et prêt (mêmes valeurs que si l'écran avait été ouvert normalement).
+  async function launchNow() {
+    nav.autoLaunch = true;
+    if (!(await requestSection("race"))) nav.autoLaunch = false;
+  }
 </script>
 
 <TitleBar />
@@ -141,7 +150,8 @@
             <div class="slot-meta">{nav.sessionTrack?.meta || t("session.clickToChoose")}</div>
           </div>
         </button>
-        <button class="btn-launch" onclick={() => requestSection("race")}>{t("session.start")}</button>
+        <button class="btn-configure" onclick={() => requestSection("race")}>{t("session.configure")}</button>
+        <button class="btn-launch" onclick={launchNow}>{t("session.start")}</button>
       </div>
 
       <div class="nsec">{t("nav.addons")}</div>
@@ -373,6 +383,22 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .btn-configure {
+    width: 100%;
+    height: 36px;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    color: var(--txt2);
+    font-size: 9.5px;
+    letter-spacing: 1.5px;
+    font-weight: 600;
+    font-family: var(--mono);
+    margin-top: 8px;
+  }
+  .btn-configure:hover {
+    background: var(--card);
+    border-color: var(--faint);
   }
   .btn-launch {
     width: 100%;

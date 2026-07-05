@@ -27,7 +27,8 @@
     "noCar": "— aucune",
     "noTrack": "— aucun",
     "clickToChoose": "cliquer pour choisir",
-    "start": "▶ DÉMARRER UNE SESSION",
+    "configure": "PARAMÉTRAGE DE LA SESSION",
+    "start": "▶ DÉMARRER LA SESSION",
     "carTooltip": "Clic : bibliothèque voitures · double-clic : fiche détail",
     "trackTooltip": "Clic : bibliothèque circuits · double-clic : fiche détail"
   },
@@ -90,7 +91,9 @@
     "sessionBadge": "SESSION",
     "stockTooltip": "Contenu de base Kunos",
     "baseBadge": "BASE",
-    "tried": "essayé"
+    "tried": "essayé",
+    "brokenBadge": "CASSÉ",
+    "brokenTooltip": "Mod cassé : fichiers manquants ou invalides (voir Maintenance)"
   },
   "bulkEdit": {
     "title": "{count} mods sélectionnés",
@@ -246,12 +249,11 @@
     "specRange": "Autonomie"
   },
   "launch": {
+    "pageTitle": "Paramétrage de la session",
     "typePractice": "Practice",
     "typeHotlap": "Hotlap",
     "typeRace": "Course",
     "launchSuccess": "Session envoyée à Content Manager — Assetto Corsa démarre…",
-    "launching": "Lancement…",
-    "launchButton": "▶ Lancer",
     "duration": "Durée (min)",
     "ghostCar": "Ghost car",
     "opponentsLabel": "Adversaires — type de plateau",

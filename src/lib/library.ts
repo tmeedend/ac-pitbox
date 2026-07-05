@@ -54,6 +54,9 @@ export interface ModCard {
   weight: string | null;
   /** Badge/logo de la marque (ui/badge.png, voitures), à la place des initiales. */
   badge: string | null;
+  /** Mod cassé (fichiers de la version active manquants/invalides, §6.4) —
+   * même détection que l'écran Maintenance, signalée ici sur la carte. */
+  broken: boolean;
 }
 
 export interface VersionRow {

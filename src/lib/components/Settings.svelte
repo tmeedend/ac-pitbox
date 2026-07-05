@@ -29,7 +29,9 @@
 
   onMount(async () => {
     config = await getConfig();
-    savedConfig = structuredClone(config);
+    // `config` est un objet $state (proxy) : structuredClone() dessus lève
+    // DataCloneError. $state.snapshot() en tire d'abord une copie brute.
+    savedConfig = structuredClone($state.snapshot(config));
   });
 
   // Garde de navigation (§10bis) : quitter Réglages avec des changements non
@@ -70,7 +72,7 @@
     try {
       await saveConfig(config);
       saved = true;
-      savedConfig = structuredClone(config);
+      savedConfig = structuredClone($state.snapshot(config));
     } catch (e) {
       error = String(e);
     } finally {

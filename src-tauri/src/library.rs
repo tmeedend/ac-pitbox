@@ -33,6 +33,10 @@ pub struct ModCard {
     pub weight: Option<String>,
     /// Badge/logo de la marque (`ui/badge.png`, voitures), à la place des initiales.
     pub badge: Option<String>,
+    /// Mod cassé (fichiers de la version active manquants/invalides, §6.4) —
+    /// même détection que l'écran Maintenance (§9.3), remontée ici comme
+    /// signalement visuel sur la carte bibliothèque.
+    pub broken: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -117,7 +121,8 @@ fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
     let active = is_active(cfg, &m);
     let weight = weight_for(conn, cfg, &m);
     let badge = badge_for(conn, cfg, &m);
-    ModCard { base: m, preview, outline, active, distance_km: None, tried: false, weight, badge }
+    let broken = crate::maintenance::broken_reason(conn, &m).is_some();
+    ModCard { base: m, preview, outline, active, distance_km: None, tried: false, weight, badge, broken }
 }
 
 /// Renseigne la distance CM et le marqueur « essayé » (§6.5) sur une carte.
@@ -310,6 +315,49 @@ mod tests {
         let skins = list_mod_skins(&conn, &cfg, "ks_ferrari");
         assert_eq!(skins.len(), 1, "skin de la voiture de base lu dans content/");
         assert_eq!(skins[0].id, "rosso");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn broken_mod_flagged_on_card() {
+        // Mod dont la version active pointe vers un dossier bibliothèque
+        // disparu (§6.4) : list_cards doit remonter broken=true, la même
+        // détection que l'écran Maintenance (§9.3).
+        let base = std::env::temp_dir().join(format!("pitbox-broken-card-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&base).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+
+        overlay::upsert_mod(&conn, "ghost", "Car", Some("B"), Some("Ghost"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn, "v1", "ghost", Some("1.0"), None, &now,
+            &base.join("nope").to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "ghost", "v1").unwrap();
+
+        let cards = list_cards(&conn, &AppConfig::default()).unwrap();
+        let ghost = cards.iter().find(|c| c.base.id_interne == "ghost").unwrap();
+        assert!(ghost.broken);
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn stock_mod_never_flagged_broken() {
+        // Le contenu de base n'a pas de version bibliothèque à proprement
+        // parler (lecture directe dans content/) — ne doit jamais être signalé
+        // cassé, même sans dossier AC configuré.
+        let base = std::env::temp_dir().join(format!("pitbox-broken-stock-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&base).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_stock_mod(&conn, "ks_test_track", "Track", None, Some("Test"), &now).unwrap();
+
+        let cards = list_cards(&conn, &AppConfig::default()).unwrap();
+        let stock = cards.iter().find(|c| c.base.id_interne == "ks_test_track").unwrap();
+        assert!(!stock.broken);
 
         let _ = std::fs::remove_dir_all(&base);
     }
