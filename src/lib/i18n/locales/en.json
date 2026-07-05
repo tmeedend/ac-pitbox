@@ -277,6 +277,7 @@
     "gridGenerated": "Grid generated · {count} AI",
     "addOpponent": "Add an opponent",
     "opponentEditTooltip": "Click to change the car or skin",
+    "opponentLevelTooltip": "Difficulty level — click to edit",
     "opponentPickTitle": "Choose an opponent",
     "opponentPickSearch": "Search…",
     "opponentPickSkin": "Skin",

@@ -363,6 +363,7 @@
     </div>
   {:else}
   <div class="main" bind:this={mainEl}>
+    <div class="pin-top">
     <div class="toolbar">
       <div class="search">
         <input class="input" placeholder={t("library.searchPlaceholder")} bind:value={query} />
@@ -457,6 +458,7 @@
           <button class="btn-ghost clear" type="button" onclick={clearFilters}>{t("common.reset")}</button>
         {/if}
       </div>
+    </div>
 
     {#if filtered.length === 0}
       <div class="empty">
@@ -582,6 +584,19 @@
     min-width: 0;
     overflow-y: auto;
     padding: 28px 32px; /* compense le margin négatif de .page */
+  }
+  /* Recherche + filtres épinglés en haut du scroll de `.main` : reste visible
+     pendant qu'on défile la grille/le tableau. Marges négatives = compense le
+     padding de `.main` pour venir affleurer les bords (fond opaque, sinon les
+     cartes défileraient visiblement dessous) ; le `top` négatif équivalent
+     ancre le point de décrochage du sticky sur ce même bord. */
+  .pin-top {
+    position: sticky;
+    top: -18px;
+    z-index: 6;
+    margin: -18px -22px 0;
+    padding: 18px 22px 2px;
+    background: var(--bg);
   }
   .toolbar {
     display: flex;

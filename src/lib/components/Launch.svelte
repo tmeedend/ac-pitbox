@@ -270,6 +270,15 @@
     opponentCount = setup.opponents.length;
   }
 
+  /** Réglage individuel du niveau IA d'un adversaire (clic sur le chiffre),
+   * indépendant de la fourchette globale qui ne sert qu'à la génération. */
+  function setOpponentLevel(index: number, raw: number) {
+    const level = Math.max(RANGE_MIN, Math.min(RANGE_MAX, Math.round(raw) || RANGE_MIN));
+    const opponents = [...setup.opponents];
+    opponents[index] = { ...opponents[index], ai_level: level };
+    setup.opponents = opponents;
+  }
+
   async function addOpponent() {
     const exclude = new Set(setup.opponents.map((o) => o.car_id));
     const extra = await generateOpponents(1, exclude);
@@ -700,7 +709,16 @@
                 >
                   <div class="oppo-img">{#if prev}<img src={prev} alt="" />{:else}<span class="mono">🏎</span>{/if}</div>
                   <span class="oppo-n">{opponentName(opp.car_id)}{#if opponentSkinName(opp)}<span class="oppo-skin"> · {opponentSkinName(opp)}</span>{/if}</span>
-                  <span class="oppo-force mono">{opp.ai_level}</span>
+                  <input
+                    class="oppo-force mono"
+                    type="number"
+                    min={RANGE_MIN}
+                    max={RANGE_MAX}
+                    value={opp.ai_level}
+                    title={t("launch.opponentLevelTooltip")}
+                    onclick={(e) => e.stopPropagation()}
+                    onchange={(e) => setOpponentLevel(i, Number(e.currentTarget.value))}
+                  />
                   <button class="oppo-x" type="button" title={t("common.remove")} onclick={(e) => { e.stopPropagation(); removeOpponent(i); }}>✕</button>
                 </div>
               {/each}
@@ -730,15 +748,15 @@
           <div class="lbl">{t("launch.simulationLabel")} <span class="lbl-note">{t("launch.simulationNote")}</span></div>
           <div class="opt">
             <div class="opt-head"><span class="opt-name">{t("launch.damageLabel")}</span><span class="opt-val mono">{setup.damage}%</span></div>
-            <input type="range" min="0" max="100" bind:value={setup.damage} />
+            <input type="range" min="0" max="100" bind:value={setup.damage} style="--f:{setup.damage}%" />
           </div>
           <div class="opt">
             <div class="opt-head"><span class="opt-name">{t("launch.fuelLabel")}</span><span class="opt-val mono">{setup.fuel_rate}%</span></div>
-            <input type="range" min="0" max="200" bind:value={setup.fuel_rate} />
+            <input type="range" min="0" max="200" bind:value={setup.fuel_rate} style="--f:{setup.fuel_rate / 2}%" />
           </div>
           <div class="opt">
             <div class="opt-head"><span class="opt-name">{t("launch.tyreLabel")}</span><span class="opt-val mono">{setup.tyre_wear}%</span></div>
-            <input type="range" min="0" max="200" bind:value={setup.tyre_wear} />
+            <input type="range" min="0" max="200" bind:value={setup.tyre_wear} style="--f:{setup.tyre_wear / 2}%" />
           </div>
         </section>
       </div>
@@ -781,7 +799,7 @@
 
           <div class="heure-wrap">
             <div class="opt-head"><span class="opt-name">{t("launch.timeLabelShort")}</span><span class="opt-val mono">{fmtTime(setup.time_hours)}</span></div>
-            <input type="range" min="6" max="22" step="0.5" bind:value={setup.time_hours} />
+            <input type="range" min="6" max="22" step="0.5" bind:value={setup.time_hours} style="--f:{((setup.time_hours - 6) / 16) * 100}%" />
           </div>
 
           <!-- Saison optionnelle (§8.6bis) : associe une date, best-effort côté
@@ -812,6 +830,18 @@
           </div>
         </section>
 
+        <!-- Aides à la conduite : concernent le pilotage du joueur, donc
+             pertinentes quel que soit le type de session (§8.6), pas
+             seulement en course — même logique que la section Simulation. -->
+        <section class="sect">
+          <div class="lbl">{t("launch.assistsLabel")}</div>
+          <div class="checks">
+            <label class="check"><input type="checkbox" bind:checked={setup.abs_auto} /><span>{t("launch.absAuto")}</span></label>
+            <label class="check"><input type="checkbox" bind:checked={setup.traction_control_auto} /><span>{t("launch.tractionAuto")}</span></label>
+            <label class="check"><input type="checkbox" bind:checked={setup.ideal_line} /><span>{t("launch.idealLine")}</span></label>
+          </div>
+        </section>
+
         {#if setup.session_type === "race"}
           <div class="divider"></div>
 
@@ -823,21 +853,21 @@
               <span class="fk">{t("launch.laps")}</span>
             </label>
             <div class="two-col">
-              <label><span class="fk">{t("launch.jumpStart")}</span>
-                <select class="input sel" bind:value={setup.jump_start_penalty}>
-                  <option value={0}>{t("launch.jumpStartNone")}</option>
-                  <option value={1}>{t("launch.jumpStartTeleport")}</option>
-                  <option value={2}>{t("launch.jumpStartDrivethrough")}</option>
-                </select>
-              </label>
-              <label><span class="fk">{t("launch.gripEvolution")}</span>
-                <select class="input sel" bind:value={setup.grip}>
-                  <option value={86}>{t("launch.gripGreen")}</option>
-                  <option value={92}>{t("launch.gripMedium")}</option>
-                  <option value={96}>{t("launch.gripRubbered")}</option>
-                  <option value={100}>{t("launch.gripOptimal")}</option>
-                </select>
-              </label>
+              <div><span class="fk">{t("launch.jumpStart")}</span>
+                <div class="seg-v">
+                  <button type="button" class:on={setup.jump_start_penalty === 0} onclick={() => (setup.jump_start_penalty = 0)}>{t("launch.jumpStartNone")}</button>
+                  <button type="button" class:on={setup.jump_start_penalty === 1} onclick={() => (setup.jump_start_penalty = 1)}>{t("launch.jumpStartTeleport")}</button>
+                  <button type="button" class:on={setup.jump_start_penalty === 2} onclick={() => (setup.jump_start_penalty = 2)}>{t("launch.jumpStartDrivethrough")}</button>
+                </div>
+              </div>
+              <div><span class="fk">{t("launch.gripEvolution")}</span>
+                <div class="seg-v">
+                  <button type="button" class:on={setup.grip === 86} onclick={() => (setup.grip = 86)}>{t("launch.gripGreen")}</button>
+                  <button type="button" class:on={setup.grip === 92} onclick={() => (setup.grip = 92)}>{t("launch.gripMedium")}</button>
+                  <button type="button" class:on={setup.grip === 96} onclick={() => (setup.grip = 96)}>{t("launch.gripRubbered")}</button>
+                  <button type="button" class:on={setup.grip === 100} onclick={() => (setup.grip = 100)}>{t("launch.gripOptimal")}</button>
+                </div>
+              </div>
             </div>
             <div class="checks">
               <label class="check"><input type="checkbox" bind:checked={setup.qualifying} /><span>{t("launch.qualifying")}</span></label>
@@ -849,13 +879,6 @@
                 <span class="fk">{t("launch.qualifyMinutes")}</span>
               </label>
             {/if}
-
-            <div class="lbl" style="margin-top:18px;">{t("launch.assistsLabel")}</div>
-            <div class="checks">
-              <label class="check"><input type="checkbox" bind:checked={setup.abs_auto} /><span>{t("launch.absAuto")}</span></label>
-              <label class="check"><input type="checkbox" bind:checked={setup.traction_control_auto} /><span>{t("launch.tractionAuto")}</span></label>
-              <label class="check"><input type="checkbox" bind:checked={setup.ideal_line} /><span>{t("launch.idealLine")}</span></label>
-            </div>
           </section>
         {/if}
       </div>
@@ -1103,8 +1126,25 @@
     color: var(--faint);
   }
   .oppo-force {
-    font-size: 9px;
+    width: 34px;
+    height: 20px;
+    background: var(--bg);
+    border: 1px solid var(--line);
     color: var(--green);
+    font-size: 9px;
+    text-align: center;
+    flex: none;
+    appearance: textfield;
+  }
+  .oppo-force::-webkit-outer-spin-button,
+  .oppo-force::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+  .oppo-force:hover,
+  .oppo-force:focus {
+    border-color: var(--rosso-border);
+    outline: none;
   }
   .oppo-x {
     background: transparent;
@@ -1167,13 +1207,13 @@
   .dual-range input[type="range"]::-webkit-slider-thumb {
     appearance: none;
     pointer-events: auto;
-    width: 15px;
-    height: 15px;
-    border-radius: 50%;
+    width: 10px;
+    height: 20px;
+    border-radius: 2px;
     background: var(--rosso);
     border: 2px solid var(--panel);
     cursor: pointer;
-    margin-top: 6.5px;
+    margin-top: 4px;
   }
   .dr-vals {
     display: flex;
@@ -1207,9 +1247,32 @@
     font-size: 11px;
     color: var(--txt);
   }
+  /* Curseurs simples (dégâts/carburant/pneus/heure) : le thumb natif du
+     navigateur est rond, incohérent avec le thème rectangulaire de l'app —
+     resimulé en carré comme les curseurs doubles ci-dessus. */
   .opt input[type="range"],
   .heure-wrap input[type="range"] {
     width: 100%;
+    height: 20px;
+    margin: 0;
+    appearance: none;
+    background: transparent;
+  }
+  .opt input[type="range"]::-webkit-slider-runnable-track,
+  .heure-wrap input[type="range"]::-webkit-slider-runnable-track {
+    height: 3px;
+    background: linear-gradient(to right, var(--rosso) 0%, var(--rosso) var(--f, 0%), var(--line) var(--f, 0%), var(--line) 100%);
+  }
+  .opt input[type="range"]::-webkit-slider-thumb,
+  .heure-wrap input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 10px;
+    height: 20px;
+    border-radius: 2px;
+    background: var(--rosso);
+    border: 2px solid var(--panel);
+    cursor: pointer;
+    margin-top: -8.5px;
   }
   .heure-wrap {
     margin-top: 16px;
@@ -1299,20 +1362,36 @@
     gap: 10px;
     margin-bottom: 12px;
   }
-  .two-col label {
+  .two-col > div {
     display: flex;
     flex-direction: column;
     gap: 5px;
   }
-  .sel {
-    background: var(--bg);
+  /* Groupe de boutons rectangulaire (remplace les <select> natifs, dont la
+     popup n'est pas pilotable à la manette) : chaque option est un bouton
+     focusable, sélectionnable au clic comme au clic manette (bouton A). */
+  .seg-v {
+    display: flex;
+    flex-direction: column;
     border: 1px solid var(--line);
+  }
+  .seg-v button {
+    background: var(--panel2);
     color: var(--txt2);
-    height: 32px;
-    padding: 0 8px;
-    font-family: var(--mono);
+    text-align: left;
+    padding: 7px 9px;
     font-size: 9.5px;
-    width: 100%;
+    border-bottom: 1px solid var(--line);
+  }
+  .seg-v button:last-child {
+    border-bottom: none;
+  }
+  .seg-v button:hover {
+    background: var(--raised);
+  }
+  .seg-v button.on {
+    background: var(--rosso);
+    color: #fff;
   }
   .checks {
     display: grid;

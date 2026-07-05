@@ -17,12 +17,44 @@ import { nav } from "$lib/nav.svelte";
 
 type Dir = "up" | "down" | "left" | "right";
 
-const FOCUSABLE = 'button:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled]), a[href]';
+// Inclut les champs de formulaire (curseurs, nombres, listes déroulantes) —
+// sans ça, les réglages de session (carburant, dégâts, ghost car…) sont
+// invisibles à la navigation manette : ni atteignables, ni modifiables.
+const FOCUSABLE =
+  'button:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled]), a[href], ' +
+  'input:not([type="hidden"]):not([disabled]), select:not([disabled])';
 
 function focusableElements(): HTMLElement[] {
   return Array.from(document.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
     (el) => el.offsetParent !== null,
   );
+}
+
+// Curseurs/nombres/listes : `.click()` (le geste "confirm" ordinaire) ne fait
+// rien d'utile dessus (un select ouvrirait une popup native que la manette ne
+// peut pas piloter). Gauche/droite pas à pas remplace la souris pour ces
+// éléments une fois qu'ils ont le focus — haut/bas continue de déplacer le
+// focus normalement.
+function isAdjustable(el: Element | null): el is HTMLInputElement | HTMLSelectElement {
+  if (!el) return false;
+  if (el instanceof HTMLSelectElement) return true;
+  return el instanceof HTMLInputElement && (el.type === "range" || el.type === "number");
+}
+
+function stepAdjustable(el: HTMLInputElement | HTMLSelectElement, dir: 1 | -1) {
+  if (el instanceof HTMLSelectElement) {
+    const next = el.selectedIndex + dir;
+    if (next < 0 || next >= el.options.length) return;
+    el.selectedIndex = next;
+  } else {
+    const step = Number(el.step) || 1;
+    const min = el.min !== "" ? Number(el.min) : -Infinity;
+    const max = el.max !== "" ? Number(el.max) : Infinity;
+    const current = Number(el.value) || 0;
+    el.value = String(Math.max(min, Math.min(max, current + dir * step)));
+  }
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 // Repère visuel garanti pour la sélection manette : `:focus-visible` ne
@@ -143,11 +175,22 @@ export function startGamepadNav(): () => void {
         // suivant, voir Library.svelte::navigateFull) — ici uniquement B=fermer.
         if (cur.back && !last.back) nav.openFull = null;
       } else {
-        if (cur.up && !last.up) moveFocus("up");
-        if (cur.down && !last.down) moveFocus("down");
-        if (cur.left && !last.left) moveFocus("left");
-        if (cur.right && !last.right) moveFocus("right");
-        if (cur.confirm && !last.confirm) (document.activeElement as HTMLElement | null)?.click();
+        const active = document.activeElement;
+        if (isAdjustable(active)) {
+          // Gauche/droite règle la valeur du champ ciblé plutôt que de
+          // changer le focus ; haut/bas continue de naviguer normalement.
+          if (cur.left && !last.left) stepAdjustable(active, -1);
+          if (cur.right && !last.right) stepAdjustable(active, 1);
+          if (cur.up && !last.up) moveFocus("up");
+          if (cur.down && !last.down) moveFocus("down");
+          if (cur.confirm && !last.confirm && !(active instanceof HTMLSelectElement)) active.click();
+        } else {
+          if (cur.up && !last.up) moveFocus("up");
+          if (cur.down && !last.down) moveFocus("down");
+          if (cur.left && !last.left) moveFocus("left");
+          if (cur.right && !last.right) moveFocus("right");
+          if (cur.confirm && !last.confirm) (document.activeElement as HTMLElement | null)?.click();
+        }
       }
       last = cur;
     }

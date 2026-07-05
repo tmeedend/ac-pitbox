@@ -277,6 +277,7 @@
     "gridGenerated": "Plateau généré · {count} IA",
     "addOpponent": "Ajouter un adversaire",
     "opponentEditTooltip": "Cliquer pour changer la voiture ou le skin",
+    "opponentLevelTooltip": "Niveau de difficulté — cliquer pour modifier",
     "opponentPickTitle": "Choisir un adversaire",
     "opponentPickSearch": "Rechercher…",
     "opponentPickSkin": "Skin",
