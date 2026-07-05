@@ -245,17 +245,25 @@ pub fn build_race_ini(s: &RaceSetup) -> String {
         );
     }
 
-    // Saison (§8.6bis) : DATE= en best-effort, point ouvert non vérifié (voir
-    // doc du champ `season_date` sur RaceSetup).
-    let date_line = s
+    // Saison (§8.6bis) : POINT OUVERT toujours non vérifié empiriquement (une
+    // première tentative sous [LIGHTING] DATE= s'est révélée sans effet).
+    // Piste actuelle, plus solide : `extension/config/track_adjustments.ini`
+    // du jeu expose `[SEASONS] ALLOW_ADJUSTMENTS=1 ; ... "With date set is 1"`
+    // — CSP calcule les conditions SEASON_*_NORTH (cf.
+    // extension/config/tracks/common/conditions.ini, INPUT=YEAR_PROGRESS) à
+    // partir d'une date qui doit être réglée quelque part pour ce mode.
+    // Tentative : une section [SEASONS] dans le race.ini, sur le même schéma
+    // que le fichier app CSP. Toujours à confirmer en jeu.
+    let season_section = s
         .season_date
         .as_deref()
-        .map(|d| format!("DATE={d}\n"))
+        .map(|d| format!("[SEASONS]\nDATE={d}\n\n"))
         .unwrap_or_default();
 
     let _ = write!(
         ini,
-        "[LIGHTING]\nSUN_ANGLE={sun:.2}\nTIME_MULT=1.0\nCLOUD_SPEED=0.2\n{date_line}\n\
+        "[LIGHTING]\nSUN_ANGLE={sun:.2}\nTIME_MULT=1.0\nCLOUD_SPEED=0.2\n\n\
+         {season_section}\
          [WEATHER]\nNAME={weather}\n\n\
          [TEMPERATURE]\nAMBIENT={ambient}\nROAD={road}\n\n\
          [WIND]\nSPEED_KMH_MIN={wind_speed}\nSPEED_KMH_MAX={wind_speed}\nDIRECTION_DEG={wind_dir}\n\n\
@@ -483,9 +491,10 @@ mod tests {
         s.season_date = Some("2026-10-15".into());
         let ini = build_race_ini(&s);
         assert!(ini.contains("[LIGHTING]\nSUN_ANGLE"));
-        assert!(ini.contains("DATE=2026-10-15"));
+        assert!(ini.contains("[SEASONS]\nDATE=2026-10-15"));
 
         let ini_default = build_race_ini(&base());
+        assert!(!ini_default.contains("[SEASONS]"));
         assert!(!ini_default.contains("DATE="));
     }
 

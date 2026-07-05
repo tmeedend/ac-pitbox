@@ -255,6 +255,26 @@ pub fn folder_path(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<PathB
     entity_dir(conn, cfg, &m).ok_or_else(|| format!("dossier introuvable pour « {id} »"))
 }
 
+/// Fonctionnalités CSP effectivement détectées pour un mod (§6.4bis) : config
+/// propre au mod + config CSP "chargée" séparément par CSP (hors du mod, cf.
+/// `inspect::csp_features_loaded` — c'est notamment ce qui manquait pour le
+/// contenu de base). Calculé à la demande (pas mis en cache) : sert à griser
+/// les réglages météo/saison non supportés sur l'écran de session.
+pub fn mod_csp_features(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<Vec<String>, String> {
+    let m = overlay::get_mod(conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("mod introuvable : {id}"))?;
+    let kind = kind_of(&m.kind);
+    let dir = entity_dir(conn, cfg, &m).ok_or_else(|| format!("dossier introuvable pour « {id} »"))?;
+    let mut feats = inspect::csp_features(&dir);
+    if let Some(ac) = &cfg.ac_install_path {
+        feats.extend(inspect::csp_features_loaded(ac, kind, id));
+    }
+    feats.sort();
+    feats.dedup();
+    Ok(feats)
+}
+
 pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<Option<ModDetail>> {
     let Some(m) = overlay::get_mod(conn, id)? else {
         return Ok(None);

@@ -3,6 +3,7 @@
   import {
     launchSession,
     listModSkins,
+    getModCspFeatures,
     weatherOptions,
     weatherConditions,
     type GridMode,
@@ -123,6 +124,31 @@
     setup.season = next;
     setup.season_date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
+
+  // --- Support CSP effectif du circuit courant (§6.4bis) : détecté à la
+  // volée (config propre au mod + config CSP "chargée" séparément — voir
+  // get_mod_csp_features), pas figé à l'import. Sert à griser la saison si le
+  // circuit ne sait pas la gérer, et à avertir si la pluie n'a pas de
+  // paramétrage identifié pour ce circuit. ---
+  let trackCspFeatures = $state<string[]>([]);
+  $effect(() => {
+    const id = setup.track_id;
+    if (!id) {
+      trackCspFeatures = [];
+      return;
+    }
+    getModCspFeatures(id)
+      .then((f) => {
+        trackCspFeatures = f;
+        // Le circuit ne gère pas la saison : pas la peine de garder une
+        // sélection qui n'aura de toute façon aucun effet ici.
+        if (!f.includes("season") && season !== "") applySeason("");
+      })
+      .catch(() => (trackCspFeatures = []));
+  });
+  const trackSupportsSeason = $derived(trackCspFeatures.includes("season"));
+  const trackSupportsRain = $derived(trackCspFeatures.includes("rainfx"));
+
   const sunRays = Array.from({ length: 8 }, (_, i) => {
     const a = (i * Math.PI) / 4;
     return {
@@ -749,6 +775,9 @@
             </div>
             <p class="implicit-note">{t("launch.implicitNote")}</p>
           {/if}
+          {#if currentWeather?.wet && !trackSupportsRain}
+            <p class="warn-note">⚠ {t("launch.rainUnsupportedWarning")}</p>
+          {/if}
 
           <div class="heure-wrap">
             <div class="opt-head"><span class="opt-name">{t("launch.timeLabelShort")}</span><span class="opt-val mono">{fmtTime(setup.time_hours)}</span></div>
@@ -756,17 +785,30 @@
           </div>
 
           <!-- Saison optionnelle (§8.6bis) : associe une date, best-effort côté
-               CSP (couleur des arbres en automne, piste blanche en hiver). -->
+               CSP (couleur des arbres en automne, piste blanche en hiver).
+               Grisée si le circuit courant n'a pas de config CSP identifiée
+               pour les ajustements saisonniers (§6.4bis). -->
           <div class="season-wrap">
             <div class="opt-name" style="margin-bottom:6px;">{t("launch.seasonLabel")}</div>
             <div class="weather season-grid">
               {#each SEASONS as s}
-                <button class="wcard" class:on={season === s.id} type="button" onclick={() => applySeason(s.id)}>
+                {@const locked = s.id !== "" && !trackSupportsSeason}
+                <button
+                  class="wcard"
+                  class:on={season === s.id}
+                  type="button"
+                  disabled={locked}
+                  title={locked ? t("launch.seasonUnsupportedTooltip") : ""}
+                  onclick={() => applySeason(s.id)}
+                >
                   <svg viewBox="0 0 38 38">{@render seasonIcon(s.id)}</svg>
                   <div class="wn">{t(s.labelKey)}</div>
                 </button>
               {/each}
             </div>
+            {#if !trackSupportsSeason}
+              <p class="implicit-note">{t("launch.seasonUnsupportedNote")}</p>
+            {/if}
           </div>
         </section>
 
@@ -1240,6 +1282,14 @@
     color: var(--faint);
     font-size: 8px;
     margin-top: 6px;
+  }
+  .warn-note {
+    color: var(--yellow);
+    font-size: 10px;
+    margin-top: 10px;
+    padding: 7px 9px;
+    background: #1a1708;
+    border: 1px solid #4a4426;
   }
 
   /* Options de course */

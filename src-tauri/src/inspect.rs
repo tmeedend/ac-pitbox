@@ -8,6 +8,31 @@ use walkdir::WalkDir;
 
 use crate::modscan::ModKind;
 
+/// Détecte les sections CSP pertinentes dans un texte de config déjà lu
+/// (`ext_config.ini` du mod, ou config CSP "chargée" séparément — voir
+/// `csp_features_loaded`). Facteur commun des deux sources.
+fn parse_csp_features(text: &str) -> Vec<String> {
+    let mut feats = Vec::new();
+    let upper = text.to_uppercase();
+    if upper.contains("[GRASS_FX") {
+        feats.push("grassfx".to_string());
+    }
+    if upper.contains("[RAIN_FX") {
+        feats.push("rainfx".to_string());
+    }
+    if upper.contains("[LIGHT_SERIES_1") {
+        feats.push("lightingfx".to_string());
+    }
+    // Ajustements saisonniers (arbres/herbe qui changent de couleur, §6.4bis) :
+    // le circuit doit avoir un bloc dédié référençant les conditions
+    // SEASON_*_NORTH (cf. extension/config/tracks/common/conditions.ini) —
+    // sans ça, choisir une saison dans l'app n'a aucun effet visuel.
+    if upper.contains("SEASON_WINTER") || upper.contains("SEASON_AUTUMN") || upper.contains("SEASON_SUMMER") {
+        feats.push("season".to_string());
+    }
+    feats
+}
+
 /// Détecte les features CSP en lisant le `ext_config.ini` embarqué du mod.
 /// (À l'import, le mod n'est pas encore installé : on lit sa propre config.)
 pub fn csp_features(mod_dir: &Path) -> Vec<String> {
@@ -17,26 +42,37 @@ pub fn csp_features(mod_dir: &Path) -> Vec<String> {
         mod_dir.join("ext_config.ini"),
     ];
     for cfg in candidates {
-        let Ok(text) = std::fs::read_to_string(&cfg) else {
-            continue;
-        };
-        let upper = text.to_uppercase();
-        if upper.contains("[GRASS_FX") {
-            feats.push("grassfx".to_string());
-        }
-        if upper.contains("[RAIN_FX") {
-            feats.push("rainfx".to_string());
-        }
-        if upper.contains("[LIGHT_SERIES_1") {
-            feats.push("lightingfx".to_string());
-        }
-        if upper.contains("SEASON_WINTER") {
-            feats.push("weatherfx".to_string());
+        if let Ok(text) = std::fs::read_to_string(&cfg) {
+            feats.extend(parse_csp_features(&text));
         }
     }
     feats.sort();
     feats.dedup();
     feats
+}
+
+/// Complète la détection avec la config CSP "chargée" séparément par CSP pour
+/// ce contenu — `extension/config/{cars,tracks}/loaded/<id>.ini`, un dossier
+/// PARTAGÉ hors du mod. C'est là que vivent les configs CSP du contenu de
+/// base Kunos (téléchargées par CSP depuis son dépôt communautaire
+/// `acc-extension-config`, pas fournies par Kunos) — sans ce dossier, la
+/// détection CSP du contenu de base est systématiquement vide même quand CSP
+/// gère bien pluie/saisons pour ce circuit. Peut aussi s'appliquer à des mods
+/// tiers déjà répertoriés par ce même dépôt communautaire.
+pub fn csp_features_loaded(ac_install_path: &Path, kind: ModKind, id: &str) -> Vec<String> {
+    let sub = match kind {
+        ModKind::Car => "cars",
+        ModKind::Track => "tracks",
+    };
+    let path = ac_install_path
+        .join("extension")
+        .join("config")
+        .join(sub)
+        .join("loaded")
+        .join(format!("{id}.ini"));
+    std::fs::read_to_string(&path)
+        .map(|t| parse_csp_features(&t))
+        .unwrap_or_default()
 }
 
 /// Skins d'une voiture : sous-dossiers de `skins/`.
@@ -210,5 +246,31 @@ mod tests {
         assert_eq!(layouts, vec!["layout_a".to_string(), "layout_b".to_string()]);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn loaded_config_detects_rain_and_season_outside_mod_folder() {
+        // Le contenu de base Kunos n'a pas ces sections dans son propre
+        // dossier — elles vivent dans la config CSP "chargée" séparément
+        // (§6.4bis), ex. extension/config/tracks/loaded/<id>.ini. Reproduit
+        // un extrait réel (magione.ini) : RainFX + ajustements saisonniers.
+        let ac = std::env::temp_dir().join(format!("pitbox-inspect-loaded-{}", uuid::Uuid::new_v4()));
+        let loaded_dir = ac.join("extension").join("config").join("tracks").join("loaded");
+        std::fs::create_dir_all(&loaded_dir).unwrap();
+        std::fs::write(
+            loaded_dir.join("magione.ini"),
+            "[GRASS_FX]\nGRASS_MATERIALS=grass-shad\n\n[MATERIAL_ADJUSTMENT_6]\nCONDITION = SEASON_WINTER_NORTH\n",
+        )
+        .unwrap();
+
+        let feats = csp_features_loaded(&ac, ModKind::Track, "magione");
+        assert!(feats.contains(&"grassfx".to_string()));
+        assert!(feats.contains(&"season".to_string()));
+
+        // Un circuit sans config "chargée" (fichier absent) ne renvoie rien,
+        // sans planter.
+        assert!(csp_features_loaded(&ac, ModKind::Track, "unknown_track").is_empty());
+
+        let _ = std::fs::remove_dir_all(&ac);
     }
 }

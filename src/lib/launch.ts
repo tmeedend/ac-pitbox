@@ -67,6 +67,15 @@ export function listModSkins(id: string): Promise<SkinItem[]> {
   return invoke<SkinItem[]>("list_mod_skins", { id });
 }
 
+/** Fonctionnalités CSP effectivement détectées pour un mod (§6.4bis) : config
+ * propre au mod + config CSP "chargée" séparément par CSP (hors du mod — ce
+ * qui manquait pour le contenu de base). Valeurs possibles : "grassfx",
+ * "rainfx", "lightingfx", "season". Sert à griser les réglages non supportés
+ * sur l'écran de session (saison, avertissement pluie). */
+export function getModCspFeatures(id: string): Promise<string[]> {
+  return invoke<string[]>("get_mod_csp_features", { id });
+}
+
 export interface WeatherStack {
   csp: boolean;
   sol: boolean;

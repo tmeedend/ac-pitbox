@@ -200,6 +200,15 @@ fn open_mod_folder(app: AppHandle, db: State<Db>, id: String) -> Result<(), Stri
         .map_err(|e| e.to_string())
 }
 
+/// Fonctionnalités CSP effectivement détectées pour un mod (§6.4bis) : sert à
+/// griser les réglages météo/saison non supportés sur l'écran de session.
+#[tauri::command]
+fn get_mod_csp_features(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<String>, String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    library::mod_csp_features(&conn, &cfg, &id)
+}
+
 // --- Activation (L3) --------------------------------------------------------
 
 /// Active un mod (crée la junction). `version_id` optionnel = change la version active.
@@ -385,8 +394,9 @@ fn maintenance_scan(app: AppHandle, db: State<Db>) -> Result<maintenance::Mainte
 #[tauri::command]
 fn reindex_library(app: AppHandle, db: State<Db>) -> Result<usize, String> {
     let rules = rules::load(&app);
+    let cfg = config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let n = maintenance::reindex_all(&conn)?;
+    let n = maintenance::reindex_all(&conn, &cfg)?;
     harmonize::harmonize_all(&conn, &rules).map_err(|e| e.to_string())?;
     Ok(n)
 }
@@ -637,6 +647,7 @@ pub fn run() {
             list_library,
             get_mod_detail,
             open_mod_folder,
+            get_mod_csp_features,
             activate_mod,
             deactivate_mod,
             list_profiles,

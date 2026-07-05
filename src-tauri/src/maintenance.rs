@@ -159,7 +159,7 @@ pub fn remove_orphan(cfg: &AppConfig, kind: &str, id: &str) -> Result<(), String
 /// champs en cache dans l'overlay. Ne réécrit jamais les fichiers du mod
 /// lui-même (lecture seule, §3.0) — sert à rattraper un mod déjà importé dont
 /// le fichier source a changé, ou dont le parsing a été corrigé après coup.
-pub fn reindex_mod(conn: &Connection, id: &str) -> Result<(), String> {
+pub fn reindex_mod(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
     let m = overlay::get_mod(conn, id).map_err(|e| e.to_string())?.ok_or("mod introuvable")?;
     let kind = kind_of(&m.kind);
     let versions = overlay::get_versions(conn, id).map_err(|e| e.to_string())?;
@@ -172,7 +172,15 @@ pub fn reindex_mod(conn: &Connection, id: &str) -> Result<(), String> {
             ModKind::Track => uijson::read_track(dir),
         }
         .unwrap_or_default();
-        let csp = inspect::csp_features(dir);
+        // Config CSP propre au mod + config "chargée" séparément par CSP
+        // (hors du mod, §6.4bis) — sans cette seconde source, le contenu de
+        // base Kunos ne remonte quasiment jamais de features CSP.
+        let mut csp = inspect::csp_features(dir);
+        if let Some(ac) = &cfg.ac_install_path {
+            csp.extend(inspect::csp_features_loaded(ac, kind, id));
+        }
+        csp.sort();
+        csp.dedup();
         let skins = match kind {
             ModKind::Car => inspect::car_skins(dir),
             ModKind::Track => Vec::new(),
@@ -215,10 +223,10 @@ pub fn reindex_mod(conn: &Connection, id: &str) -> Result<(), String> {
 }
 
 /// Réindexe tous les mods de la bibliothèque (§9.3bis). Renvoie le nombre traité.
-pub fn reindex_all(conn: &Connection) -> Result<usize, String> {
+pub fn reindex_all(conn: &Connection, cfg: &AppConfig) -> Result<usize, String> {
     let mods = overlay::list_mods(conn).map_err(|e| e.to_string())?;
     for m in &mods {
-        reindex_mod(conn, &m.id_interne)?;
+        reindex_mod(conn, cfg, &m.id_interne)?;
     }
     Ok(mods.len())
 }
@@ -278,7 +286,7 @@ mod tests {
         .unwrap();
         overlay::set_active_version(&conn, "deutschlandring", "v1").unwrap();
 
-        reindex_mod(&conn, "deutschlandring").unwrap();
+        reindex_mod(&conn, &AppConfig::default(), "deutschlandring").unwrap();
 
         let m = overlay::get_mod(&conn, "deutschlandring").unwrap().unwrap();
         assert_eq!(m.display_name.as_deref(), Some("Deutschlandring"));
