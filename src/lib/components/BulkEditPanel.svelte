@@ -1,9 +1,12 @@
 <script lang="ts">
-  // Édition groupée (§6.3bis) : remplace le panneau de détail quand plusieurs
-  // mods sont sélectionnés (Ctrl/Alt-clic dans la bibliothèque). N'expose que
+  // Édition groupée (§6.3bis/§6.3ter) : panneau bas en surimpression quand
+  // plusieurs mods sont sélectionnés (Ctrl/Alt-clic dans la bibliothèque) —
+  // ne remplace plus le panneau de détail (ModDetail reste sur la voiture/le
+  // circuit dernier cliqué) ni ne réduit la largeur de la grille. N'expose que
   // les champs communs à tout mod — jamais les champs propres à un type
   // (specs voiture, skin piloté, version active), qui restent réservés à la
-  // fiche détail d'un seul mod.
+  // fiche détail d'un seul mod. Exception : la section Adversaires
+  // (voitures uniquement), qui agit sur le réglage de session course.
   import { open, confirm } from "@tauri-apps/plugin-dialog";
   import type { ModCard } from "$lib/library";
   import {
@@ -22,10 +25,14 @@
   interface Props {
     ids: string[];
     cards: ModCard[];
+    /** Voitures uniquement : conditionne l'affichage de la section Adversaires (§6.3ter). */
+    isCar: boolean;
     onclose: () => void;
     onchange: () => void;
+    onSetOpponents: () => void;
+    onAddOpponents: () => void;
   }
-  let { ids, cards, onclose, onchange }: Props = $props();
+  let { ids, cards, isCar, onclose, onchange, onSetOpponents, onAddOpponents }: Props = $props();
 
   let busy = $state(false);
   let error = $state("");
@@ -124,14 +131,13 @@
 <aside class="panel">
   <header>
     <h2>{t("bulkEdit.title", { count: ids.length })}</h2>
+    <ul class="chips">
+      {#each cards as c (c.id_interne)}
+        <li>{c.display_name ?? c.id_interne}</li>
+      {/each}
+    </ul>
     <button class="btn-ghost close" type="button" onclick={onclose} title={t("bulkEdit.clearTooltip")}>✕</button>
   </header>
-
-  <ul class="chips">
-    {#each cards as c (c.id_interne)}
-      <li>{c.display_name ?? c.id_interne}</li>
-    {/each}
-  </ul>
 
   {#if error}<div class="err">{error}</div>{/if}
   {#if report}
@@ -146,133 +152,154 @@
     </div>
   {/if}
 
-  <section>
-    <h3>{t("bulkEdit.favoriteSection")}</h3>
-    <div class="row">
-      <button class="btn" type="button" onclick={markFavorite} disabled={busy}>{t("bulkEdit.markFavorite")}</button>
-      <button class="btn" type="button" onclick={unmarkFavorite} disabled={busy}>{t("bulkEdit.unmarkFavorite")}</button>
-    </div>
-  </section>
+  <div class="sections">
+    <section>
+      <h3>{t("bulkEdit.favoriteSection")}</h3>
+      <div class="row">
+        <button class="btn" type="button" onclick={markFavorite} disabled={busy}>{t("bulkEdit.markFavorite")}</button>
+        <button class="btn" type="button" onclick={unmarkFavorite} disabled={busy}>{t("bulkEdit.unmarkFavorite")}</button>
+      </div>
+    </section>
 
-  <section>
-    <h3>{t("bulkEdit.stateSection")}</h3>
-    <div class="row">
-      <button class="btn" type="button" onclick={activateAll} disabled={busy}>{t("bulkEdit.activateAll")}</button>
-      <button class="btn" type="button" onclick={deactivateAll} disabled={busy}>{t("bulkEdit.deactivateAll")}</button>
-    </div>
-  </section>
+    <section>
+      <h3>{t("bulkEdit.stateSection")}</h3>
+      <div class="row">
+        <button class="btn" type="button" onclick={activateAll} disabled={busy}>{t("bulkEdit.activateAll")}</button>
+        <button class="btn" type="button" onclick={deactivateAll} disabled={busy}>{t("bulkEdit.deactivateAll")}</button>
+      </div>
+    </section>
 
-  <section>
-    <h3>{t("bulkEdit.categorySection")}</h3>
-    <div class="row">
-      <input
-        class="input"
-        list="bulk-categories"
-        placeholder={t("bulkEdit.categoryPlaceholder")}
-        bind:value={categoryInput}
-        onkeydown={(e) => e.key === "Enter" && applyCategory()}
-      />
-      <datalist id="bulk-categories">
-        {#each categories as cat}<option value={cat}></option>{/each}
-      </datalist>
-      <button class="btn" type="button" onclick={applyCategory} disabled={busy || !categoryInput.trim()}>{t("bulkEdit.apply")}</button>
-    </div>
-  </section>
+    <section>
+      <h3>{t("bulkEdit.categorySection")}</h3>
+      <div class="row">
+        <input
+          class="input"
+          list="bulk-categories"
+          placeholder={t("bulkEdit.categoryPlaceholder")}
+          bind:value={categoryInput}
+          onkeydown={(e) => e.key === "Enter" && applyCategory()}
+        />
+        <datalist id="bulk-categories">
+          {#each categories as cat}<option value={cat}></option>{/each}
+        </datalist>
+        <button class="btn" type="button" onclick={applyCategory} disabled={busy || !categoryInput.trim()}>{t("bulkEdit.apply")}</button>
+      </div>
+    </section>
 
-  <section>
-    <h3>{t("bulkEdit.tagsSection")}</h3>
-    <div class="row">
-      <input
-        class="input"
-        placeholder={t("bulkEdit.tagPlaceholder")}
-        bind:value={tagInput}
-        onkeydown={(e) => e.key === "Enter" && addTag()}
-      />
-    </div>
-    <div class="row">
-      <button class="btn" type="button" onclick={addTag} disabled={busy || !tagInput.trim()}>{t("bulkEdit.addTagToAll")}</button>
-      <button class="btn" type="button" onclick={removeTag} disabled={busy || !tagInput.trim()}>{t("bulkEdit.removeTagFromAll")}</button>
-    </div>
-  </section>
+    <section>
+      <h3>{t("bulkEdit.tagsSection")}</h3>
+      <div class="row">
+        <input
+          class="input"
+          placeholder={t("bulkEdit.tagPlaceholder")}
+          bind:value={tagInput}
+          onkeydown={(e) => e.key === "Enter" && addTag()}
+        />
+        <button class="btn" type="button" onclick={addTag} disabled={busy || !tagInput.trim()}>{t("bulkEdit.addTagToAll")}</button>
+        <button class="btn" type="button" onclick={removeTag} disabled={busy || !tagInput.trim()}>{t("bulkEdit.removeTagFromAll")}</button>
+      </div>
+    </section>
 
-  <section>
-    <h3>{t("bulkEdit.exportSection")}</h3>
-    <div class="row">
-      <button class="btn-ghost export" type="button" onclick={doExport} disabled={exporting}>
-        {exporting ? t("detail.exporting") : t("bulkEdit.exportAll")}
-      </button>
-    </div>
-    {#if exportMsg}<div class="export-ok">{exportMsg}</div>{/if}
-  </section>
+    {#if isCar}
+      <section>
+        <h3>{t("bulkEdit.opponentsSection")}</h3>
+        <p class="opp-hint">{t("bulkEdit.opponentsHint")}</p>
+        <div class="row">
+          <button class="btn" type="button" onclick={onSetOpponents}>{t("bulkEdit.setOpponents")}</button>
+          <button class="btn" type="button" onclick={onAddOpponents}>{t("bulkEdit.addOpponents")}</button>
+        </div>
+      </section>
+    {/if}
 
-  <section class="danger">
-    <h3>{t("bulkEdit.deleteSection")}</h3>
-    <div class="row">
-      <button class="btn danger" type="button" onclick={deleteAll} disabled={busy}>{t("bulkEdit.deleteAll")}</button>
-    </div>
-  </section>
+    <section>
+      <h3>{t("bulkEdit.exportSection")}</h3>
+      <div class="row">
+        <button class="btn-ghost export" type="button" onclick={doExport} disabled={exporting}>
+          {exporting ? t("detail.exporting") : t("bulkEdit.exportAll")}
+        </button>
+      </div>
+      {#if exportMsg}<div class="export-ok">{exportMsg}</div>{/if}
+    </section>
+
+    <section class="danger">
+      <h3>{t("bulkEdit.deleteSection")}</h3>
+      <div class="row">
+        <button class="btn danger" type="button" onclick={deleteAll} disabled={busy}>{t("bulkEdit.deleteAll")}</button>
+      </div>
+    </section>
+  </div>
 </aside>
 
 <style>
+  /* Bandeau bas en surimpression (§6.3ter) : ancré au bas de `.main-wrap`
+     (non-scrollant, voir Library.svelte) — flotte par-dessus la grille sans
+     jamais réduire sa largeur, contrairement à l'ancien panneau latéral droit. */
   .panel {
-    width: 320px;
-    flex: none;
-    border-left: 1px solid var(--line);
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 46%;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--rosso-border);
     background: var(--panel2);
-    padding: 0 16px 20px;
-    overflow-y: auto;
+    box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.55);
+    z-index: 9;
   }
   header {
-    position: sticky;
-    top: 0;
-    background: var(--panel2);
+    flex: none;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    gap: 6px;
-    padding: 10px 0 4px;
-    z-index: 1;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
   }
   h2 {
     font-size: 13px;
     font-weight: 600;
+    flex: none;
   }
   .close {
     font-size: 14px;
     padding: 4px 8px;
+    margin-left: auto;
   }
   .chips {
     list-style: none;
     display: flex;
-    flex-direction: column;
-    gap: 3px;
-    margin-top: 8px;
-    max-height: 120px;
-    overflow-y: auto;
-    font-size: 11.5px;
+    gap: 6px;
+    overflow-x: auto;
+    font-size: 11px;
     color: var(--txt2);
+    flex: 1;
+    min-width: 0;
   }
   .chips li {
     padding: 3px 8px;
     background: var(--raised);
     border: 1px solid var(--line);
+    white-space: nowrap;
+    flex: none;
   }
   .err {
-    margin-top: 12px;
+    margin: 10px 16px 0;
     padding: 8px 10px;
     background: var(--rosso-dim);
     border: 1px solid var(--rosso-border);
     color: var(--rosso-bright);
     font-size: 11.5px;
+    flex: none;
   }
   .report {
-    margin-top: 12px;
+    margin: 10px 16px 0;
     padding: 8px 10px;
     background: var(--green-dim);
     border: 1px solid var(--green-border);
     color: var(--green);
     font-size: 11.5px;
     line-height: 1.5;
+    flex: none;
   }
   .report.warn {
     background: var(--rosso-dim);
@@ -283,8 +310,18 @@
     margin-top: 4px;
     padding-left: 16px;
   }
+  .sections {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 20px;
+    padding: 14px 16px;
+  }
   section {
-    margin-top: 18px;
+    flex: none;
   }
   h3 {
     font-size: 10.5px;
@@ -293,15 +330,22 @@
     color: var(--muted);
     margin-bottom: 8px;
   }
+  .opp-hint {
+    font-size: 10px;
+    color: var(--faint);
+    max-width: 220px;
+    margin-bottom: 8px;
+    line-height: 1.4;
+  }
   .row {
     display: flex;
     align-items: center;
     gap: 8px;
     margin-bottom: 6px;
+    flex-wrap: wrap;
   }
   .row .input {
-    flex: 1;
-    min-width: 0;
+    width: 160px;
   }
   .btn {
     background: var(--raised);
@@ -339,7 +383,7 @@
     font-size: 11px;
   }
   .danger {
-    padding-top: 14px;
-    border-top: 1px solid var(--line);
+    padding-left: 14px;
+    border-left: 1px solid var(--line);
   }
 </style>
