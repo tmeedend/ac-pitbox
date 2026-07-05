@@ -14,7 +14,7 @@
     type WeatherOption,
   } from "$lib/launch";
   import { listLibrary, previewSrc, type ModCard } from "$lib/library";
-  import { nav } from "$lib/nav.svelte";
+  import { nav, type OpponentsAction } from "$lib/nav.svelte";
   import { getPreferredSkin } from "$lib/preferred";
   import { t } from "$lib/i18n/index.svelte";
   import OpponentPicker from "./OpponentPicker.svelte";
@@ -26,6 +26,13 @@
   let selectedIntent = $state("");
   let gridMode = $state<GridMode>("same_category");
   let opponentCount = $state(7);
+  // Jeton de génération du plateau (§6.3ter) : `regenerateGrid` est asynchrone
+  // (résolution des skins par IPC) et peut encore être « en vol » quand
+  // `applyOpponentsAction` prend la main — sans garde, son résultat arrive
+  // après coup et écrase les adversaires qu'on vient d'imposer. Toute
+  // régénération capture le jeton courant et n'applique son résultat que s'il
+  // n'a pas été invalidé entre-temps par un appel plus récent.
+  let opponentsGen = 0;
   let launching = $state(false);
   let error = $state("");
   let info = $state("");
@@ -244,7 +251,11 @@
   }
 
   async function regenerateGrid() {
-    setup.opponents = await generateOpponents(opponentCount, new Set());
+    const gen = ++opponentsGen;
+    const opponents = await generateOpponents(opponentCount, new Set());
+    // Une action plus récente (nouvelle régénération, ou adversaires imposés
+    // depuis la bibliothèque) a pris le dessus entre-temps : ne pas écraser.
+    if (gen === opponentsGen) setup.opponents = opponents;
   }
 
   async function selectGridMode(mode: GridMode) {
@@ -286,6 +297,36 @@
       setup.opponents = [...setup.opponents, ...extra];
       opponentCount = setup.opponents.length;
     }
+  }
+
+  /** Adversaires envoyés depuis la sélection groupée de la bibliothèque
+   * voitures (§6.3ter). Bascule sur le type Course et le mode « libre »
+   * directement (sans passer par `selectGridMode`, qui régénérerait le
+   * plateau et écraserait les adversaires en cours). « set » remplace
+   * entièrement la liste ; « add » la complète — dans les deux cas, les
+   * adversaires déjà présents (même issus d'un mode même-voiture/même-catégorie
+   * avant bascule) sont préservés pour « add », perdus pour « set ».
+   *
+   * Deux gardes contre une régénération asynchrone qui écraserait le résultat
+   * après coup : (1) `lastCarForGrid` aligné AVANT de toucher `session_type` —
+   * l'effet de resynchronisation de session (plus haut) lit aussi
+   * `setup.session_type`/`setup.car_id`, donc passer `session_type` à "race"
+   * le redéclenche, et sans cet alignement il voit `car_id !== lastCarForGrid`
+   * et lance une régénération inutile ; (2) `opponentsGen` incrémenté pour
+   * invalider toute régénération DÉJÀ en vol (ex. si le type de session était
+   * déjà "course" à l'arrivée sur cet écran, `onMount` en a lancé une). */
+  function applyOpponentsAction(action: OpponentsAction) {
+    opponentsGen++;
+    lastCarForGrid = setup.car_id;
+    setup.session_type = "race";
+    gridMode = "free";
+    const additions: Opponent[] = action.carIds.map((carId) => ({
+      car_id: carId,
+      ai_level: randomLevel(),
+      car_skin: getPreferredSkin(carId)?.id ?? null,
+    }));
+    setup.opponents = action.mode === "set" ? additions : [...setup.opponents, ...additions];
+    opponentCount = setup.opponents.length;
   }
 
   function opponentName(carId: string): string {
@@ -511,6 +552,17 @@
     if (nav.autoLaunch && ready) {
       nav.autoLaunch = false;
       launch();
+    }
+  });
+
+  // Action « adversaires » posée depuis la bibliothèque voitures (§6.3ter) :
+  // même schéma que autoLaunch ci-dessus, consommée une fois l'écran prêt
+  // (couvre l'arrivée fraîche sur cet écran comme le cas déjà ouvert).
+  $effect(() => {
+    if (nav.opponentsAction && ready) {
+      const action = nav.opponentsAction;
+      nav.opponentsAction = null;
+      applyOpponentsAction(action);
     }
   });
 

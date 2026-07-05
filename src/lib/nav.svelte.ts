@@ -8,6 +8,16 @@ export interface LaunchPrefill {
   name: string;
 }
 
+/** Action demandée depuis la sélection groupée de la bibliothèque voitures
+ * (§6.3ter) : envoyer les mods sélectionnés comme adversaires de la session
+ * course courante. "set" vide la liste d'adversaires existante ; "add" la
+ * complète. Consommée par Launch.svelte une fois monté et prêt (même schéma
+ * que `autoLaunch`). */
+export interface OpponentsAction {
+  mode: "set" | "add";
+  carIds: string[];
+}
+
 /** Élément sélectionné pour la session (voiture ou circuit). */
 export interface SessionPick {
   id: string;
@@ -52,6 +62,9 @@ export const nav = $state<{
    * consommée par Launch.svelte une fois monté et prêt (mêmes réglages que
    * s'ils avaient été ouverts normalement — dernier preset du type courant). */
   autoLaunch: boolean;
+  /** Action « adversaires » en attente (§6.3ter), posée depuis la sélection
+   * groupée de la bibliothèque voitures. */
+  opponentsAction: OpponentsAction | null;
 }>({
   section: "cars",
   prefill: null,
@@ -61,6 +74,7 @@ export const nav = $state<{
   sessionTrack: load("pitbox.session.track"),
   openFull: null,
   autoLaunch: false,
+  opponentsAction: null,
 });
 
 /** Définit le choix de session (persisté) — appelé à l'ouverture d'un mod (§8.6). */
@@ -72,6 +86,11 @@ export function pickSession(kind: "Car" | "Track", pick: SessionPick): void {
     nav.sessionTrack = pick;
     localStorage.setItem("pitbox.session.track", JSON.stringify(pick));
   }
+}
+
+/** Pose une action « adversaires » à destination de l'écran de session (§6.3ter). */
+export function queueOpponentsAction(mode: "set" | "add", carIds: string[]): void {
+  nav.opponentsAction = { mode, carIds };
 }
 
 // --- Garde de navigation (§10bis) ---

@@ -17,7 +17,7 @@
     saveVisible,
     type ColumnDef,
   } from "$lib/columns";
-  import { nav, pickSession } from "$lib/nav.svelte";
+  import { nav, pickSession, requestSection, queueOpponentsAction } from "$lib/nav.svelte";
   import { importState } from "$lib/importState.svelte";
   import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
   import { t } from "$lib/i18n/index.svelte";
@@ -170,6 +170,9 @@
 
   // Ctrl/Alt-clic = sélection multiple (§6.3bis) ; clic simple = comportement
   // normal (sélection de session) et efface toute sélection groupée en cours.
+  // Le panneau de droite (ModDetail) reste rempli en permanence, y compris
+  // pendant une sélection groupée : il suit le dernier mod cliqué, pas
+  // uniquement le dernier ajouté à la sélection (§6.3ter).
   function onCardClick(c: ModCard, e: MouseEvent) {
     if (e.ctrlKey || e.altKey) {
       e.preventDefault();
@@ -178,11 +181,23 @@
       if (next.has(c.id_interne)) next.delete(c.id_interne);
       else next.add(c.id_interne);
       selectedIds = next;
-      if (next.size === 1) selectedId = [...next][0];
+      selectedId = c.id_interne;
       return;
     }
     selectedIds = new Set();
     select(c);
+  }
+
+  // Envoi de la sélection groupée comme adversaires de la session course
+  // (§6.3ter, voitures uniquement) — pose l'action puis navigue vers l'écran
+  // de réglages, où Launch.svelte la consomme une fois prêt.
+  async function sendAsOpponents(mode: "set" | "add") {
+    queueOpponentsAction(mode, [...selectedIds]);
+    selectedIds = new Set();
+    // Garde de navigation (§10bis) : si le changement d'écran est refusé
+    // (modifications non enregistrées ailleurs), ne pas laisser l'action
+    // traîner pour se déclencher par surprise à une prochaine visite.
+    if (!(await requestSection("race"))) nav.opponentsAction = null;
   }
 
   // Ouverture demandée depuis une vue transversale (§12bis.3) : on ouvre la
@@ -362,6 +377,7 @@
       />
     </div>
   {:else}
+  <div class="main-wrap">
   <div class="main" bind:this={mainEl}>
     <div class="pin-top">
     <div class="toolbar">
@@ -549,19 +565,27 @@
   </div>
 
   {#if selectedIds.size >= 2}
+    <!-- Panneau bas en surimpression (§6.3ter) : ne remplace plus le panneau
+         de droite (ModDetail, toujours affiché) ni ne réduit la largeur de la
+         grille — flotte par-dessus `.main`, indépendant de son défilement
+         interne (sibling non-scrollant dans `.main-wrap`, cf. style). -->
     <BulkEditPanel
       ids={[...selectedIds]}
       cards={typed.filter((c) => selectedIds.has(c.id_interne))}
+      {isCar}
       onclose={() => (selectedIds = new Set())}
       onchange={refresh}
-    />
-  {:else}
-    <ModDetail
-      id={effectiveId}
-      onchange={refresh}
-      onexpand={() => (nav.openFull = effectiveId)}
+      onSetOpponents={() => sendAsOpponents("set")}
+      onAddOpponents={() => sendAsOpponents("add")}
     />
   {/if}
+  </div>
+
+  <ModDetail
+    id={effectiveId}
+    onchange={refresh}
+    onexpand={() => (nav.openFull = effectiveId)}
+  />
   {/if}
 </div>
 
@@ -570,6 +594,15 @@
     display: flex;
     height: 100%;
     min-height: 0;
+  }
+  .main-wrap {
+    /* Non-scrollant : ancre le panneau bas en surimpression (BulkEditPanel)
+       indépendamment du défilement interne de `.main`. */
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
   }
   .main {
     flex: 1;
