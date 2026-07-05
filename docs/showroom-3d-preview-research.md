@@ -552,3 +552,120 @@ showroom (`TRACK=` actuellement fixé à `showroom`, alors que
 `content/showroom/` propose aussi `beach`, `Hangar`, `industrial`,
 `studio_white`), réglages caméra/rotation exposés à l'utilisateur plutôt que
 codés en dur, et éventuellement appliquer le même principe aux circuits.
+
+## Optimisations (2026-07-05 → 2026-07-06)
+
+Série de retours utilisateur sur l'aperçu intégré, traités un par un.
+
+### Scène `studio_white` — musique + vitesse (RÉSOLU, committé)
+
+`TRACK=showroom` → **`TRACK=studio_white`** dans `showroom_start.ini`.
+Découverte décisive en inspectant `content/showroom/` : le poids **et la
+musique** viennent de la scène. Tailles réelles : `showroom` 101 Mo,
+`Hangar` 301 Mo, `industrial` 234 Mo, `beach` 275 Mo, **`studio_white`
+17 Ko**. `studio_white` n'a **ni `.bank` ni `.wav`** → chargement quasi
+instantané et **aucune musique** à couper (règle d'un coup « pas de musique »
+et « chargement plus rapide »). Contrepartie assumée : fond blanc (pas foncé).
+Piste « scène foncée sur mesure » (petit `.kn5`) écartée pour l'instant
+(chantier format KN5). Le showroom **« Empty (Fast) » de Content Manager** est
+un preset de son **renderer maison** (fichier `AcTools Content Manager/Data/
+Built-in Presets/Custom Showroom/Default/Empty (Fast).cmpreset`), **pas** une
+scène `content/showroom/` → **non chargeable par `acShowroom.exe`**. Abandonné.
+
+### Exposition trop sombre (RÉSOLU, committé) — vrai coupable = filtre PP
+
+Symptôme : aperçu trop sombre. **Fausse piste** explorée puis annulée :
+remonter `[SETTINGS] CAMERA_EXPOSURE` (30 → 80) dans `showroom_start.ini`.
+**Vraie cause trouvée par l'utilisateur** : le **filtre post-traitement actif**
+(Pure) assombrit le showroom. Correctif retenu : forcer **`[POST_PROCESS]
+FILTER=photographic`** (filtre stock AC, « rend très bien »). Emplacement du
+filtre actif = `Documents/Assetto Corsa/cfg/video.ini`, clé `[POST_PROCESS]
+FILTER=` (unique dans le fichier, à côté de `ENABLED=1`). `video.ini` étant
+**déjà sauvegardé/restauré** autour de la session (mode fenêtré), le
+`FILTER=pure` d'origine est remis intact à la fermeture — **zéro nouveau
+fichier touché**. `CAMERA_EXPOSURE` remis à 30 ; `force_windowed()` renommé
+`patch_video_for_showroom()` (force fenêtré + impose le filtre). Réserve non
+levée : si CSP/Pure réimpose son filtre via `extension/…` malgré `video.ini`,
+il faudrait viser le réglage CSP — mais en pratique le correctif suffit.
+
+### Cadre 16:9 fixe + suivi du déplacement de fenêtre (FAIT, committé)
+
+- **Cadre** : le héros voiture (`DetailPage.svelte`) a désormais un
+  `aspect-ratio: 16/9` fixe (`.row.top:not(.track) .hero`, `align-self:
+  start`, `min-height:0`) → l'image et l'aperçu 3D occupent exactement la même
+  boîte, plus de saut de hauteur à l'attache (le rendu natif 1280×720 est aussi
+  en 16:9).
+- **Déplacement** : la fenêtre native est posée en **coordonnées écran
+  absolues** → elle ne suivait pas le déplacement de la fenêtre principale
+  (seuls `resize`/`scroll` étaient écoutés, pas le move). Ajout de
+  `getCurrentWindow().onMoved(...)` → `reposition` dans l'effet de suivi.
+
+### Masquer le menu du showroom (NON RÉSOLU)
+
+Objectif : cacher le menu/UI du showroom au démarrage. Trois tentatives, **toutes
+infructueuses** :
+
+1. Touche **`H`** (raccourci courant de masquage HUD/apps dans AC) : testée
+   manuellement dans le showroom → **ne masque pas** le menu.
+2. **Extraction des chaînes du binaire** `acShowroom.exe` (PowerShell,
+   `ReadAllBytes` + regex `[\x20-\x7E]{4,}`, 237 023 chaînes — `strings` Unix
+   indisponible dans l'environnement, d'où un premier faux négatif) : n'expose
+   que des **noms de classes RTTI** (`ShowroomGUI`, `ShowRoomCameraManager`,
+   `ShowroomSkinManager`, `ShowroomMirrorCamera`, `ShowroomScreen`,
+   `ShowroomSuspensionAnimator`), **aucune** chaîne de raccourci clavier ni clé
+   INI de type `HIDE_*`/`SHOW_*`/`*_GUI`/`MENU`.
+3. **`ALLOW_SELECT_SKIN=0`** dans `showroom_start.ini` : testé → **aucun
+   changement**, le menu reste affiché.
+
+Statut : aucun levier trouvé. Le « menu » visible n'est piloté ni par les clés
+INI connues, ni par `H`, ni par `ALLOW_SELECT_SKIN`. Pistes non encore
+explorées : envoi d'autres touches candidates (via `PostMessage` après
+attache), ou identification de l'élément d'UI réel via inspection de la fenêtre
+enfant du showroom (classes filles ?).
+
+### Fenêtre noire au démarrage (NON RÉSOLU — 1re tentative annulée)
+
+`acShowroom.exe` crée sa fenêtre top-level **visible immédiatement** (noire
+pendant l'init DirectX), affichée jusqu'à ce qu'`attach()` la reparente (poll
+jusqu'à 10 s). D'où un flash noir au lancement de l'aperçu.
+
+**Tentative 1 (ANNULÉE, régression)** : dans `attach()`, `SW_HIDE` de la
+fenêtre dès sa détection + overlay créé **sans** `WS_VISIBLE` + affichage
+`ShowWindow(enfant)` puis `ShowWindow(overlay)` seulement après reparentage +
+poll resserré 250 ms → 80 ms (**4 changements d'un coup**). **Résultat :
+régression** — la fenêtre noire restait visible **ET** le process survivait à
+la fermeture de Pit Box (orphelin, plus dans le gestionnaire des tâches
+auparavant). Diagnostic : la séquence hide/show a déstabilisé le reparentage
+fragile — la fenêtre n'était plus reparentée dans l'overlay (donc restait
+top-level & visible, et n'était plus détruite en cascade à la fermeture de la
+fenêtre principale → process orphelin). **Revert intégral** à la version qui
+marchait. Leçon : ne changer qu'**une** variable à la fois sur ce chemin Win32
+fragile (idéalement via `tools/showroom-embed-test/`).
+
+**Tentative 2 (idée utilisateur — ÉCHEC)** : réduire la fenêtre top-level à
+**1×1 px** (`SetWindowPos`, position (0,0), taille 1×1) dès sa détection, sans
+toucher à sa visibilité ni à l'overlay. **Ne change rien** : la fenêtre noire
+reste visible en plein. Conclusion importante : `acShowroom.exe` **réasserte
+lui-même la géométrie (et la visibilité) de sa fenêtre pendant l'init**
+(cohérent avec les symboles `OnWindowResize`/`OnWindowResizeEvent` du binaire)
+→ toute manipulation externe *après* la création de la fenêtre est écrasée.
+Corollaire : le seul levier exploitable est l'**état initial de la fenêtre à la
+naissance du process**, pas une correction a posteriori.
+
+**Tentative 3 (STARTUPINFO SW_HIDE, implémentée 2026-07-06, EN ATTENTE DE
+TEST)** : lancer `acShowroom.exe` via `CreateProcessW` avec
+`STARTUPINFOW.dwFlags = STARTF_USESHOWWINDOW` et `wShowWindow = SW_HIDE` — la
+fenêtre **naît masquée** (méthode Windows canonique, au bon niveau : avant même
+le `WinMain` de l'exe). `attach()`, **strictement inchangé** par ailleurs vs la
+version fonctionnelle, la ré-affiche via `ShowWindow(target, SW_SHOW)` juste
+après le reparentage dans l'overlay. Passage de `std::process::Command` à
+`CreateProcessW` : le suivi de fin de process (pour restaurer `video.ini`) se
+fait désormais via `WaitForSingleObject` sur le handle du process (HANDLE
+traversé entre threads via son entier brut, non-`Send`). Features du crate
+`windows` ajoutées : `Win32_System_Threading`, `Win32_Security` (CreateProcessW
+est gated derrière Security). **Réserve** : si acShowroom appelle lui-même
+`ShowWindow(hwnd, SW_SHOW)` pendant l'init (ignorant `nCmdShow`), le flash
+reviendra — au pire on retombe sur le comportement actuel, **sans régression**
+(le filet `restore_orphaned_video_ini` couvre toujours `video.ini` au prochain
+démarrage). Si ça échoue aussi : itérer via `tools/showroom-embed-test/` (sans
+rebuild complet de l'app), ou accepter le flash.

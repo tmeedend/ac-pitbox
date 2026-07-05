@@ -13,20 +13,24 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Once;
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager};
 use windows::core::{BOOL, PCWSTR};
-use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, POINT, WPARAM};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows::Win32::Graphics::Gdi::ClientToScreen;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::Threading::{
+    CreateProcessW, WaitForSingleObject, PROCESS_CREATION_FLAGS, PROCESS_INFORMATION, STARTF_USESHOWWINDOW,
+    STARTUPINFOW,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, EnumChildWindows, EnumWindows, GetClassNameW, GetWindowLongPtrW,
     GetWindowThreadProcessId, PostMessageW, RegisterClassW, SetParent, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-    CS_HREDRAW, CS_VREDRAW, GWL_STYLE, SWP_FRAMECHANGED, SWP_NOZORDER, SW_SHOW, WM_CLOSE, WNDCLASSW, WS_CAPTION,
-    WS_CHILD, WS_EX_TOOLWINDOW, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_THICKFRAME, WS_VISIBLE,
+    CS_HREDRAW, CS_VREDRAW, GWL_STYLE, SWP_FRAMECHANGED, SWP_NOZORDER, SW_HIDE, SW_SHOW, WM_CLOSE, WNDCLASSW,
+    WS_CAPTION, WS_CHILD, WS_EX_TOOLWINDOW, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
+    WS_VISIBLE,
 };
 
 use crate::config::AppConfig;
@@ -160,11 +164,51 @@ pub fn restore_orphaned_video_ini() {
     }
 }
 
+/// Lance `acShowroom.exe`, **fenêtre initiale masquée** (`STARTUPINFO` +
+/// `SW_HIDE`), en s'appuyant sur le répertoire courant `ac`. Renvoie
+/// `(pid, handle process brut)`. Masquer à la naissance est la seule façon
+/// fiable d'éviter le flash noir top-level : tenter de masquer/réduire la
+/// fenêtre APRÈS coup échoue car acShowroom réasserte sa géométrie/visibilité
+/// pendant l'init DirectX (cf. docs/showroom-3d-preview-research.md). Le handle
+/// process (au lieu du `Child` de `std`) sert à attendre la fin du process
+/// pour restaurer `video.ini`.
+fn spawn_hidden(exe: &Path, ac: &Path) -> Result<(u32, isize), String> {
+    let app = wstr(&exe.to_string_lossy());
+    let cwd = wstr(&ac.to_string_lossy());
+    let si = STARTUPINFOW {
+        cb: std::mem::size_of::<STARTUPINFOW>() as u32,
+        dwFlags: STARTF_USESHOWWINDOW,
+        wShowWindow: SW_HIDE.0 as u16,
+        ..Default::default()
+    };
+    let mut pi = PROCESS_INFORMATION::default();
+    unsafe {
+        CreateProcessW(
+            PCWSTR(app.as_ptr()),
+            None,
+            None,
+            None,
+            false,
+            PROCESS_CREATION_FLAGS(0),
+            None,
+            PCWSTR(cwd.as_ptr()),
+            &si,
+            &mut pi,
+        )
+        .map_err(|e| format!("lancement d'acShowroom.exe : {e}"))?;
+        // Le handle du thread principal ne nous sert pas ; on ne garde que
+        // celui du process (pour l'attente de fin).
+        let _ = CloseHandle(pi.hThread);
+    }
+    Ok((pi.dwProcessId, pi.hProcess.0 as isize))
+}
+
 /// Lance `acShowroom.exe` ciblé sur `car_id` (+ skin optionnel). Bascule
 /// `video.ini` en fenêtré le temps de la session, restauré automatiquement
 /// à la fermeture (fenêtre fermée par l'utilisateur ou process tué). Renvoie
 /// le PID du process lancé, nécessaire pour le retrouver et l'intégrer dans
-/// la page (§ Phase B).
+/// la page (§ Phase B). La fenêtre naît masquée (voir `spawn_hidden`) et est
+/// ré-affichée par `attach()` une fois reparentée.
 pub fn open_native_showroom(cfg: &AppConfig, car_id: &str, skin_id: Option<&str>) -> Result<u32, String> {
     let ac = cfg.ac_install_path.as_ref().ok_or("dossier AC non configuré")?.clone();
     let exe = ac.join("acShowroom.exe");
@@ -176,17 +220,20 @@ pub fn open_native_showroom(cfg: &AppConfig, car_id: &str, skin_id: Option<&str>
     write_showroom_ini_at(&cfg_dir, car_id, skin_id)?;
     backup_and_force_windowed_at(&cfg_dir)?;
 
-    let mut child = Command::new(&exe)
-        .current_dir(&ac)
-        .spawn()
-        .map_err(|e| format!("lancement d'acShowroom.exe : {e}"))?;
-    let pid = child.id();
+    let (pid, handle_raw) = spawn_hidden(&exe, &ac)?;
 
     // Restauration dès la fermeture du showroom, quelle que soit la cause
-    // (fenêtre fermée par l'utilisateur, ou process tué).
+    // (fenêtre fermée par l'utilisateur, ou process tué). Un filet de sécurité
+    // au démarrage de l'app (restore_orphaned_video_ini) couvre le cas où ce
+    // thread n'aboutirait pas (crash). HANDLE n'étant pas Send, on traverse la
+    // frontière de thread via l'entier brut, reconstruit de l'autre côté.
     std::thread::spawn(move || {
-        let status = child.wait();
-        eprintln!("[showroom] process {pid} terminé : {status:?}");
+        let handle = HANDLE(handle_raw as *mut _);
+        unsafe {
+            let _ = WaitForSingleObject(handle, u32::MAX);
+            let _ = CloseHandle(handle);
+        }
+        eprintln!("[showroom] process {pid} terminé");
         if let Some(dir) = resolve_ac_cfg_dir() {
             let _ = restore_video_ini_at(&dir);
         }
@@ -376,7 +423,11 @@ pub fn attach(app: &AppHandle, pid: u32, x: i32, y: i32, width: i32, height: i32
                 eprintln!("[showroom] attach: SetParent OK, SetWindowPos...");
                 SetWindowPos(target, None, 0, 0, width, height, SWP_NOZORDER | SWP_FRAMECHANGED)
                     .map_err(|e| e.to_string())?;
-                eprintln!("[showroom] attach: SetWindowPos OK, ShowWindow overlay...");
+                eprintln!("[showroom] attach: SetWindowPos OK, ShowWindow enfant + overlay...");
+                // La fenêtre est née masquée (SW_HIDE au spawn, cf.
+                // open_native_showroom) : on la ré-affiche maintenant qu'elle
+                // est reparentée et positionnée dans l'overlay.
+                let _ = ShowWindow(target, SW_SHOW);
                 let _ = ShowWindow(overlay, SW_SHOW);
             }
             eprintln!("[showroom] attach: terminé avec succès");
