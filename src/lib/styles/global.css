@@ -72,15 +72,26 @@ body {
   background: transparent;
 }
 
-/* Repère visuel du focus clavier/manette (navigation manette globale, voir
-   AppShell.svelte) : le contour natif du navigateur détonnait avec le thème.
-   Jaune plutôt que rosso — le rosso sert déjà à l'état « sélectionné »/
-   « session » sur les cartes, un focus rosso s'y fondait et devenait
-   invisible ; le jaune n'est utilisé nulle part ailleurs pour un état. */
+/* Repère visuel du focus clavier (Tab) : jaune plutôt que rosso — le rosso
+   sert déjà à l'état « sélectionné »/« session » sur les cartes, un focus
+   rosso s'y fondait et devenait invisible. */
 :focus-visible {
   outline: 2px solid var(--yellow);
   outline-offset: -2px;
   box-shadow: 0 0 0 4px rgba(241, 216, 60, 0.35);
+}
+
+/* Repère de la navigation manette (gamepadNav.ts) : classe posée
+   explicitement plutôt que de compter sur `:focus-visible`, dont
+   l'heuristique Chromium ne s'active pas de façon fiable pour un focus posé
+   par script depuis un scrutin (pas un vrai événement clavier) — d'où un
+   repère jaune qui manquait à l'usage malgré `:focus-visible` ci-dessus. */
+.gp-focus {
+  outline: 3px solid var(--yellow) !important;
+  outline-offset: -3px !important;
+  box-shadow: 0 0 0 4px rgba(241, 216, 60, 0.45), 0 0 14px 2px rgba(241, 216, 60, 0.5) !important;
+  position: relative;
+  z-index: 2;
 }
 
 .mono {

@@ -17,6 +17,8 @@
   import { getPreferredSkin } from "$lib/preferred";
   import { t } from "$lib/i18n/index.svelte";
   import OpponentPicker from "./OpponentPicker.svelte";
+  import SavedSessionsDialog from "./SavedSessionsDialog.svelte";
+  import { saveSession, type SavedSession } from "$lib/savedSessions";
 
   let libCards = $state<ModCard[]>([]);
   let weathers = $state<WeatherOption[]>([]);
@@ -496,6 +498,37 @@
       launching = false;
     }
   }
+
+  // --- Sessions sauvegardées nommées (§8.4bis) : instantané complet des
+  // réglages (adversaires, météo, options…), rappelable par nom — distinct
+  // des presets automatiques par type. Ne touche pas au duo voiture/circuit
+  // courant (géré par la bibliothèque, §8.6) : seuls les réglages sont repris. ---
+  let sessionDialog = $state<"save" | "load" | null>(null);
+
+  function doSaveSession(name: string) {
+    saveSession({
+      name,
+      savedAt: new Date().toISOString(),
+      setup: $state.snapshot(setup),
+      gridMode,
+      opponentCount,
+      season,
+      intent: selectedIntent,
+    });
+    sessionDialog = null;
+  }
+
+  function doLoadSession(s: SavedSession) {
+    // Conserve la voiture/le circuit courants (nav.sessionCar/Track fait déjà
+    // foi) — seuls les réglages de la session chargée sont appliqués.
+    const { car_id: _carId, car_skin: _carSkin, track_id: _trackId, track_layout: _trackLayout, ...settings } = s.setup;
+    setup = { ...setup, ...settings };
+    gridMode = s.gridMode;
+    opponentCount = s.opponentCount;
+    season = s.season;
+    selectedIntent = s.intent;
+    sessionDialog = null;
+  }
 </script>
 
 {#snippet weatherIcon(id: string)}
@@ -529,6 +562,31 @@
   {/if}
 {/snippet}
 
+{#snippet seasonIcon(id: string)}
+  {#if id === ""}
+    <circle cx="19" cy="19" r="9" fill="none" stroke="var(--muted2)" stroke-width="1.8" stroke-dasharray="3 3" />
+    <line x1="14" y1="19" x2="24" y2="19" stroke="var(--muted2)" stroke-width="1.8" stroke-linecap="round" />
+  {:else if id === "spring"}
+    <circle cx="19" cy="11" r="4" fill="none" stroke="var(--green)" stroke-width="1.6" />
+    <circle cx="27" cy="19" r="4" fill="none" stroke="var(--green)" stroke-width="1.6" />
+    <circle cx="19" cy="27" r="4" fill="none" stroke="var(--green)" stroke-width="1.6" />
+    <circle cx="11" cy="19" r="4" fill="none" stroke="var(--green)" stroke-width="1.6" />
+    <circle cx="19" cy="19" r="3" fill="var(--yellow)" stroke="none" />
+  {:else if id === "summer"}
+    <circle cx="19" cy="19" r="10" fill="none" stroke="var(--yellow)" stroke-width="2.6" />
+  {:else if id === "autumn"}
+    <path d="M19 8 C 26 12, 28 20, 19 30 C 10 20, 12 12, 19 8 Z" fill="none" stroke="var(--yellow)" stroke-width="1.8" />
+    <line x1="19" y1="11" x2="19" y2="27" stroke="var(--yellow)" stroke-width="1.2" />
+  {:else if id === "winter"}
+    <g stroke="var(--blue)" stroke-width="1.6" stroke-linecap="round">
+      <line x1="19" y1="7" x2="19" y2="31" />
+      <line x1="7" y1="19" x2="31" y2="19" />
+      <line x1="10" y1="10" x2="28" y2="28" />
+      <line x1="28" y1="10" x2="10" y2="28" />
+    </g>
+  {/if}
+{/snippet}
+
 <div class="flow">
   <!-- Titre seul : pas de rappel du duo voiture/circuit ici (déjà dans la
        colonne latérale, §8.6). Le lancement se fait désormais depuis le
@@ -536,7 +594,20 @@
        « Paramétrage de la session » — plus de bouton Lancer sur cet écran. -->
   <header class="bar">
     <h1>{t("launch.pageTitle")}</h1>
+    <div class="bar-actions">
+      <button class="btn" type="button" onclick={() => (sessionDialog = "load")}>{t("launch.loadSession")}</button>
+      <button class="btn" type="button" onclick={() => (sessionDialog = "save")}>{t("launch.saveSession")}</button>
+    </div>
   </header>
+
+  {#if sessionDialog}
+    <SavedSessionsDialog
+      mode={sessionDialog}
+      onsave={doSaveSession}
+      onload={doLoadSession}
+      onclose={() => (sessionDialog = null)}
+    />
+  {/if}
 
   {#if info}<div class="ok">{info}</div>{/if}
   {#if error}<div class="err">{error}</div>{/if}
@@ -688,9 +759,12 @@
                CSP (couleur des arbres en automne, piste blanche en hiver). -->
           <div class="season-wrap">
             <div class="opt-name" style="margin-bottom:6px;">{t("launch.seasonLabel")}</div>
-            <div class="seg season-seg">
+            <div class="weather season-grid">
               {#each SEASONS as s}
-                <button class:on={season === s.id} type="button" onclick={() => applySeason(s.id)}>{t(s.labelKey)}</button>
+                <button class="wcard" class:on={season === s.id} type="button" onclick={() => applySeason(s.id)}>
+                  <svg viewBox="0 0 38 38">{@render seasonIcon(s.id)}</svg>
+                  <div class="wn">{t(s.labelKey)}</div>
+                </button>
               {/each}
             </div>
           </div>
@@ -783,6 +857,12 @@
     letter-spacing: 0.5px;
     text-transform: uppercase;
     color: var(--muted);
+    flex: 1;
+  }
+  .bar-actions {
+    display: flex;
+    gap: 8px;
+    flex: none;
   }
   .ok,
   .err {
@@ -1095,13 +1175,12 @@
   .season-wrap {
     margin-top: 16px;
   }
-  .season-seg {
-    width: 100%;
-  }
-  .season-seg button {
-    flex: 1;
-    text-align: center;
-    padding: 8px 6px;
+  /* Mêmes cartes que la météo (.wcard/.wn ci-dessous), juste une colonne de
+     plus pour garder les 5 options (Aucune + 4 saisons) sur une seule ligne.
+     Sélecteur composé pour primer sur .weather { grid-template-columns } quel
+     que soit l'ordre des règles dans la feuille de style. */
+  .weather.season-grid {
+    grid-template-columns: repeat(5, 1fr);
   }
 
   /* Météo */

@@ -94,7 +94,9 @@ const TRACK_COLUMNS: ColumnDef[] = [
     labelKey: "columns.layouts",
     sortable: true,
     defaultVisible: true,
-    value: (c) => (c.layouts.length ? c.layouts.join(", ") : DASH),
+    // Mono-layout : identifiant réel = "" (voir inspect::track_layouts côté
+    // Rust, même convention que uijson::read_track_detail) — affichage seul.
+    value: (c) => (c.layouts.length ? c.layouts.map((l) => l || t("detail.defaultLayout")).join(", ") : DASH),
     sortValue: (c) => c.layouts.length,
   },
   { key: "length", labelKey: "columns.length", sortable: true, defaultVisible: false, mono: true, value: () => DASH, sortValue: () => -1 },

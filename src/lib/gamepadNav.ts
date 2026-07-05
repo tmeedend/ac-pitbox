@@ -25,13 +25,40 @@ function focusableElements(): HTMLElement[] {
   );
 }
 
+// Repère visuel garanti pour la sélection manette : `:focus-visible` ne
+// suffisait pas (le focus posé par script depuis un scrutin rAF ne déclenche
+// pas toujours l'heuristique "focus-visible" de Chromium, contrairement à un
+// vrai événement clavier) — on pose donc explicitement une classe, gérée ici,
+// plutôt que de compter sur la pseudo-classe native.
+const GP_CLASS = "gp-focus";
+let gpFocusEl: HTMLElement | null = null;
+
+function setGamepadFocus(el: HTMLElement) {
+  gpFocusEl?.classList.remove(GP_CLASS);
+  gpFocusEl = el;
+  el.classList.add(GP_CLASS);
+  el.focus();
+}
+
+// Toute prise de focus qui ne vient pas de nous (clic souris, Tab clavier…)
+// efface le repère — sinon il resterait collé sur le dernier élément visé
+// à la manette même après une interaction souris.
+function initFocusTracking() {
+  document.addEventListener("focusin", (e) => {
+    if (e.target !== gpFocusEl) {
+      gpFocusEl?.classList.remove(GP_CLASS);
+      gpFocusEl = null;
+    }
+  });
+}
+
 function moveFocus(dir: Dir) {
   const candidates = focusableElements();
   if (!candidates.length) return;
   const current = document.activeElement as HTMLElement | null;
   const from = current && candidates.includes(current) ? current.getBoundingClientRect() : null;
   if (!from) {
-    candidates[0].focus();
+    setGamepadFocus(candidates[0]);
     return;
   }
   const fromCenter = { x: from.left + from.width / 2, y: from.top + from.height / 2 };
@@ -71,7 +98,7 @@ function moveFocus(dir: Dir) {
       best = el;
     }
   }
-  best?.focus();
+  if (best) setGamepadFocus(best);
 }
 
 interface ButtonEdges {
@@ -102,6 +129,7 @@ const NONE: ButtonEdges = { up: false, down: false, left: false, right: false, c
 
 /** Démarre le scrutin manette global. Retourne une fonction d'arrêt. */
 export function startGamepadNav(): () => void {
+  initFocusTracking();
   let raf = 0;
   let last = NONE;
 

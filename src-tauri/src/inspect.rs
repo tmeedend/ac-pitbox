@@ -61,7 +61,12 @@ pub fn track_layouts(track_dir: &Path) -> Vec<String> {
     }
     layouts.sort();
     if layouts.is_empty() && ui.join("ui_track.json").is_file() {
-        layouts.push("(default)".to_string());
+        // Mono-layout : chaîne vide, PAS "(default)" — cette valeur finit dans
+        // CONFIG_TRACK du race.ini (voir launch::build_race_ini) ; un texte
+        // littéral y casse le lancement (CM cherche un dossier de layout
+        // nommé "(default)", qui n'existe pas). Même convention que l'id vide
+        // utilisé par uijson::read_track_detail pour ce cas.
+        layouts.push(String::new());
     }
     layouts
 }
@@ -168,5 +173,42 @@ pub fn preview_path(kind: ModKind, mod_dir: &Path) -> Option<String> {
                 .filter(|p| p.is_dir())
                 .find_map(|p| first_existing(&p, &OUTLINE_NAMES))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mono_layout_track_reports_empty_id_not_placeholder_text() {
+        // Un circuit mono-layout (ui/ui_track.json à la racine, pas de
+        // sous-dossier) doit renvoyer une chaîne vide, pas un texte littéral
+        // du genre "(default)" : cette valeur finit telle quelle dans
+        // CONFIG_TRACK du race.ini (launch::build_race_ini) — un texte non
+        // vide y fait chercher à Content Manager un dossier de layout qui
+        // n'existe pas (cas réel : circuit Deutschlandring de Fat-Alfie).
+        let dir = std::env::temp_dir().join(format!("pitbox-inspect-mono-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(dir.join("ui")).unwrap();
+        std::fs::write(dir.join("ui").join("ui_track.json"), b"{\"name\":\"Test\"}").unwrap();
+
+        let layouts = track_layouts(&dir);
+        assert_eq!(layouts, vec![String::new()]);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn multi_layout_track_reports_subfolder_names() {
+        let dir = std::env::temp_dir().join(format!("pitbox-inspect-multi-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(dir.join("ui").join("layout_a")).unwrap();
+        std::fs::create_dir_all(dir.join("ui").join("layout_b")).unwrap();
+        std::fs::write(dir.join("ui").join("layout_a").join("ui_track.json"), b"{}").unwrap();
+        std::fs::write(dir.join("ui").join("layout_b").join("ui_track.json"), b"{}").unwrap();
+
+        let layouts = track_layouts(&dir);
+        assert_eq!(layouts, vec!["layout_a".to_string(), "layout_b".to_string()]);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
