@@ -9,9 +9,18 @@ use std::process::Command;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
+use chrono::NaiveDate;
 use rusqlite::Connection;
 use serde::Deserialize;
 use uuid::Uuid;
+
+/// Convertit une date de saison ISO (YYYY-MM-DD) en timestamp Unix à minuit
+/// UTC — format de la clé `[LIGHTING] __CM_DATE` qu'écrit Content Manager
+/// (§8.6bis). `None` si la date est mal formée.
+fn season_timestamp(date: &str) -> Option<i64> {
+    let d = NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
+    Some(d.and_hms_opt(0, 0, 0)?.and_utc().timestamp())
+}
 
 use crate::activation;
 use crate::config::AppConfig;
@@ -106,11 +115,10 @@ pub struct RaceSetup {
     #[serde(default)]
     #[allow(dead_code)]
     pub season: Option<String>,
-    /// Date ISO (YYYY-MM-DD) associée à la saison choisie, calculée côté
-    /// front. Écrite en best-effort dans `[LIGHTING] DATE=` — point ouvert
-    /// non vérifié (aucune clé « date » trouvée dans un race.ini réel
-    /// capturé ; CSP semble dériver YEAR_PROGRESS de la date système, cf.
-    /// extension/config/tracks/common/conditions.ini). À valider en jeu.
+    /// Date ISO (YYYY-MM-DD) associée à la saison choisie, calculée côté front.
+    /// Écrite dans `[LIGHTING] __CM_DATE` (timestamp Unix), la clé que lit
+    /// CSP pour la date de simulation (donc la saison) — validée sur une
+    /// capture de race.ini produit par Content Manager (§8.6bis).
     #[serde(default)]
     pub season_date: Option<String>,
     // --- Options de course (§8.6, toutes visibles, pas de bloc repliable) ---
@@ -245,25 +253,22 @@ pub fn build_race_ini(s: &RaceSetup) -> String {
         );
     }
 
-    // Saison (§8.6bis) : POINT OUVERT toujours non vérifié empiriquement (une
-    // première tentative sous [LIGHTING] DATE= s'est révélée sans effet).
-    // Piste actuelle, plus solide : `extension/config/track_adjustments.ini`
-    // du jeu expose `[SEASONS] ALLOW_ADJUSTMENTS=1 ; ... "With date set is 1"`
-    // — CSP calcule les conditions SEASON_*_NORTH (cf.
-    // extension/config/tracks/common/conditions.ini, INPUT=YEAR_PROGRESS) à
-    // partir d'une date qui doit être réglée quelque part pour ce mode.
-    // Tentative : une section [SEASONS] dans le race.ini, sur le même schéma
-    // que le fichier app CSP. Toujours à confirmer en jeu.
-    let season_section = s
+    // Saison (§8.6bis) : CSP dérive la saison (YEAR_PROGRESS → SEASON_*_NORTH,
+    // cf. extension/config/tracks/common/conditions.ini) de l'horodatage absolu
+    // de la simulation, réglé via `[LIGHTING] __CM_DATE` (timestamp Unix, minuit
+    // UTC du jour choisi). C'est la clé qu'écrit Content Manager quand on fixe
+    // une date — validée empiriquement (capture d'un race.ini CM). L'ancienne
+    // clé [SEASONS] DATE= n'était pas lue par AC.
+    let cm_date_line = s
         .season_date
         .as_deref()
-        .map(|d| format!("[SEASONS]\nDATE={d}\n\n"))
+        .and_then(season_timestamp)
+        .map(|ts| format!("__CM_DATE={ts}\n"))
         .unwrap_or_default();
 
     let _ = write!(
         ini,
-        "[LIGHTING]\nSUN_ANGLE={sun:.2}\nTIME_MULT=1.0\nCLOUD_SPEED=0.2\n\n\
-         {season_section}\
+        "[LIGHTING]\nSUN_ANGLE={sun:.2}\nTIME_MULT=1.0\nCLOUD_SPEED=0.2\n{cm_date}\n\
          [WEATHER]\nNAME={weather}\n\n\
          [TEMPERATURE]\nAMBIENT={ambient}\nROAD={road}\n\n\
          [WIND]\nSPEED_KMH_MIN={wind_speed}\nSPEED_KMH_MAX={wind_speed}\nDIRECTION_DEG={wind_dir}\n\n\
@@ -272,6 +277,7 @@ pub fn build_race_ini(s: &RaceSetup) -> String {
          [LAP_INVALIDATOR]\nALLOWED_TYRES_OUT=-1\n\n\
          [GHOST_CAR]\nRECORDING={g}\nPLAYING={g}\nLOAD={g}\nENABLED={g}\nSECONDS_ADVANTAGE=0\nFILE=\n",
         sun = sun_angle(s.time_hours),
+        cm_date = cm_date_line,
         weather = weather,
         ambient = s.ambient_c.unwrap_or(26),
         road = s.road_c.unwrap_or(30),
@@ -491,11 +497,12 @@ mod tests {
         s.season_date = Some("2026-10-15".into());
         let ini = build_race_ini(&s);
         assert!(ini.contains("[LIGHTING]\nSUN_ANGLE"));
-        assert!(ini.contains("[SEASONS]\nDATE=2026-10-15"));
+        // Date écrite comme timestamp Unix dans [LIGHTING] __CM_DATE (clé CM).
+        let ts = season_timestamp("2026-10-15").unwrap();
+        assert!(ini.contains(&format!("__CM_DATE={ts}\n")));
 
         let ini_default = build_race_ini(&base());
-        assert!(!ini_default.contains("[SEASONS]"));
-        assert!(!ini_default.contains("DATE="));
+        assert!(!ini_default.contains("__CM_DATE"));
     }
 
     #[test]

@@ -47,6 +47,7 @@ pub fn store(
         h.brand.as_deref(),
         h.car_class.as_deref(),
         h.category.as_deref(),
+        &h.categories,
         country.as_deref(),
         &h.tags_from_rule,
         h.drivetrain.as_deref(),
@@ -113,7 +114,7 @@ pub fn count_affected(conn: &Connection, rules: &Rules) -> rusqlite::Result<usiz
         };
         let cand: BTreeSet<&String> = h.tags_from_rule.iter().collect();
         let cur: BTreeSet<&String> = m.tags_from_rule.iter().collect();
-        if cand != cur || h.category != m.category || h.car_class != m.car_class {
+        if cand != cur || h.category != m.category || h.categories != m.categories || h.car_class != m.car_class {
             n += 1;
         }
     }

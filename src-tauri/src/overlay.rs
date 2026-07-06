@@ -41,6 +41,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         "source_pack TEXT",
         "source_url TEXT",
         "is_stock INTEGER NOT NULL DEFAULT 0",
+        "categories TEXT NOT NULL DEFAULT '[]'",
     ];
     for col in cols {
         // Ignore l'erreur « duplicate column » si la colonne existe déjà.
@@ -65,6 +66,7 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             car_class         TEXT,                   -- overlay-éditable (L2)
             year              INTEGER,
             category          TEXT,                   -- tag # principal (§5bis)
+            categories        TEXT NOT NULL DEFAULT '[]', -- catégories circuit multi-valué (§5bis.2)
             country           TEXT,
             is_favorite       INTEGER NOT NULL DEFAULT 0,
             tags_from_rule    TEXT NOT NULL DEFAULT '[]',
@@ -181,6 +183,9 @@ pub struct ModRow {
     pub year: Option<i64>,
     pub car_class: Option<String>,
     pub category: Option<String>,
+    /// Catégories de circuit (§5bis.2), multi-valué, ordonnées par priorité.
+    /// Vide pour une voiture (qui utilise `category`).
+    pub categories: Vec<String>,
     pub country: Option<String>,
     pub is_favorite: bool,
     pub active_version_id: Option<String>,
@@ -406,6 +411,7 @@ pub fn update_harmonization(
     brand: Option<&str>,
     car_class: Option<&str>,
     category: Option<&str>,
+    categories: &[String],
     country: Option<&str>,
     tags_from_rule: &[String],
     drivetrain: Option<&str>,
@@ -419,19 +425,21 @@ pub fn update_harmonization(
                brand = COALESCE(?2, brand),
                car_class = ?3,
                category = ?4,
-               country = COALESCE(?5, country),
-               tags_from_rule = ?6,
-               drivetrain = COALESCE(?7, drivetrain),
-               engine_pos = COALESCE(?8, engine_pos),
-               aspiration = COALESCE(?9, aspiration),
-               engine_config = COALESCE(?10, engine_config),
-               gearbox = COALESCE(?11, gearbox)
+               categories = ?5,
+               country = COALESCE(?6, country),
+               tags_from_rule = ?7,
+               drivetrain = COALESCE(?8, drivetrain),
+               engine_pos = COALESCE(?9, engine_pos),
+               aspiration = COALESCE(?10, aspiration),
+               engine_config = COALESCE(?11, engine_config),
+               gearbox = COALESCE(?12, gearbox)
            WHERE id_interne = ?1"#,
         params![
             id,
             brand,
             car_class,
             category,
+            serde_json::to_string(categories).unwrap_or_else(|_| "[]".into()),
             country,
             serde_json::to_string(tags_from_rule).unwrap_or_else(|_| "[]".into()),
             drivetrain,
@@ -521,7 +529,8 @@ const MOD_SELECT: &str = r#"
            (SELECT MAX(v.imported_at) FROM versions v WHERE v.mod_id = m.id_interne) AS updated_at,
            m.is_stock,
            (SELECT v.published_at FROM versions v WHERE v.id = m.active_version_id) AS published_at,
-           (SELECT SUM(v.size_bytes) FROM versions v WHERE v.mod_id = m.id_interne) AS size_bytes
+           (SELECT SUM(v.size_bytes) FROM versions v WHERE v.mod_id = m.id_interne) AS size_bytes,
+           m.categories
     FROM mods m
 "#;
 
@@ -531,6 +540,7 @@ fn map_mod(row: &rusqlite::Row) -> rusqlite::Result<ModRow> {
     let tags_mod: String = row.get(19)?;
     let layouts: String = row.get(24)?;
     let csp_features: String = row.get(25)?;
+    let categories: String = row.get(30)?;
     Ok(ModRow {
         id_interne: row.get(0)?,
         kind: row.get(1)?,
@@ -539,6 +549,7 @@ fn map_mod(row: &rusqlite::Row) -> rusqlite::Result<ModRow> {
         year: row.get(4)?,
         car_class: row.get(5)?,
         category: row.get(6)?,
+        categories: json_arr(&categories),
         country: row.get(7)?,
         is_favorite: row.get::<_, i64>(8)? != 0,
         active_version_id: row.get(9)?,

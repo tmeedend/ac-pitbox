@@ -59,6 +59,23 @@
     if (v && !list.includes(v)) list.unshift(v);
   }
 
+  // --- Liste blanche des catégories de circuit (§5bis.2) : ordonnée par
+  // priorité (1ʳᵉ = principale). Ajout en fin, réordonnable, `#` normalisé. ---
+  let catInput = $state("");
+  function normCat(s: string): string {
+    const t = s.trim().toLowerCase().replace(/^#+/, "");
+    return t ? `#${t}` : "";
+  }
+  function addCategory(list: string[], value: string) {
+    const v = normCat(value);
+    if (v && !list.includes(v)) list.push(v);
+  }
+  function moveCat(list: string[], i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+
   async function save() {
     if (!rules) return;
     saving = true;
@@ -119,6 +136,34 @@
         {/each}
       </div>
     </section>
+
+    {#if tab === "track"}
+      {@const allow = rules.track.category_allowlist}
+      <!-- CATÉGORIES DE CIRCUIT (liste blanche ordonnée, §5bis.2) -->
+      <section>
+        <div class="s-head">
+          <h3>{t("rules.trackCategoriesTitle")} <span class="cnt">{allow.length}</span></h3>
+        </div>
+        <p class="s-hint">{t("rules.trackCategoriesHint")}</p>
+        <input
+          class="input add-input"
+          placeholder={t("rules.addCategoryPlaceholder")}
+          bind:value={catInput}
+          onkeydown={(e) => { if (e.key === "Enter") { addCategory(allow, catInput); catInput = ""; } }}
+        />
+        <ol class="cat-list">
+          {#each allow as cat, i}
+            <li>
+              <span class="cat-rank mono">{i + 1}</span>
+              <span class="cat-name mono">{cat}</span>
+              <button class="btn-ghost" type="button" disabled={i === 0} onclick={() => moveCat(allow, i, -1)} title={t("rules.moveUp")}>↑</button>
+              <button class="btn-ghost" type="button" disabled={i === allow.length - 1} onclick={() => moveCat(allow, i, 1)} title={t("rules.moveDown")}>↓</button>
+              <button class="btn-ghost del" type="button" onclick={() => removeAt(allow, i)} title={t("common.delete")}>✕</button>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
 
     {#if tab === "car"}
       {@const car = rules.car}
@@ -412,5 +457,47 @@
   .empty {
     color: var(--muted);
     padding: 40px 0;
+  }
+  .s-hint {
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.5;
+    margin-bottom: 10px;
+    max-width: 620px;
+  }
+  .cat-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+    max-width: 420px;
+  }
+  .cat-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--line);
+    background: var(--panel2);
+    padding: 5px 8px;
+  }
+  .cat-rank {
+    color: var(--faint);
+    font-size: 10px;
+    width: 18px;
+    text-align: right;
+    flex: none;
+  }
+  .cat-name {
+    flex: 1;
+    color: var(--rosso-bright);
+    font-size: 12px;
+  }
+  .cat-list .btn-ghost {
+    padding: 2px 7px;
+    font-size: 12px;
+  }
+  .cat-list .btn-ghost:disabled {
+    opacity: 0.3;
   }
 </style>

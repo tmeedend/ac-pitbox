@@ -44,6 +44,13 @@ pub struct TrackRules {
     pub tag_merge: Vec<TagMerge>,
     #[serde(default)]
     pub remove: Vec<String>,
+    /// Catégories de circuit autorisées (§5bis.2), tags `#` par ordre de
+    /// priorité décroissante. Un circuit peut en porter plusieurs (celles de
+    /// ses tags présentes ici) ; la première de la liste qu'il possède est sa
+    /// catégorie principale. Éditable ; rempli au chargement depuis le seed
+    /// embarqué si absent (config d'avant cette fonctionnalité).
+    #[serde(default)]
+    pub category_allowlist: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,10 +128,17 @@ pub fn load(app: &AppHandle) -> Rules {
         }
         let _ = std::fs::write(&path, DEFAULT_RULES);
     }
-    std::fs::read_to_string(&path)
+    let mut rules: Rules = std::fs::read_to_string(&path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(default_rules)
+        .unwrap_or_else(default_rules);
+    // Backfill : une config antérieure à la liste blanche des catégories de
+    // circuit (§5bis.2) n'a pas la clé → on la remplit depuis le seed embarqué,
+    // sans réécrire le fichier (l'utilisateur peut ensuite l'éditer et sauver).
+    if rules.track.category_allowlist.is_empty() {
+        rules.track.category_allowlist = default_rules().track.category_allowlist;
+    }
+    rules
 }
 
 pub fn save(app: &AppHandle, rules: &Rules) -> Result<(), String> {
@@ -142,8 +156,12 @@ pub fn save(app: &AppHandle, rules: &Rules) -> Result<(), String> {
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Harmonized {
     pub tags_from_rule: Vec<String>,
-    /// Tag `#` principal = catégorie (§5bis).
+    /// Tag `#` principal = catégorie (§5bis). Pour un circuit : la 1ʳᵉ de
+    /// `categories` (la plus prioritaire).
     pub category: Option<String>,
+    /// Catégories de circuit (§5bis.2), multi-valué, par ordre de priorité.
+    /// Vide pour une voiture (qui n'a qu'une catégorie unique via `category`).
+    pub categories: Vec<String>,
     pub car_class: Option<String>,
     /// Marque corrigée (brand_fix), si applicable.
     pub brand: Option<String>,
@@ -272,7 +290,9 @@ pub fn apply_car(
     h
 }
 
-/// Harmonise un circuit (tag_merge + remove ; pas de classe/specs).
+/// Harmonise un circuit (tag_merge + remove ; pas de classe/specs). Catégories
+/// (§5bis.2) : sous-ensemble des tags présents dans la liste blanche, ordonné
+/// par priorité — multi-valué.
 pub fn apply_track(rules: &Rules, raw_tags: &[String]) -> Harmonized {
     let t = &rules.track;
     let remove: BTreeSet<String> = t.remove.iter().map(|s| norm_tag(s)).collect();
@@ -288,14 +308,96 @@ pub fn apply_track(rules: &Rules, raw_tags: &[String]) -> Harmonized {
             out.insert(tag);
         }
     }
+    // Catégories = tags ∩ liste blanche, dans l'ordre de priorité de la liste.
+    // Le tag « nu » (ex. "drift") est promu en tag `#` (ex. "#drift") dans
+    // tags_from_rule pour l'afficher comme catégorie (color-codée) et rester
+    // cohérent avec la convention `#`.
+    let categories = track_categories(&t.category_allowlist, &out);
+    for cat in &categories {
+        out.remove(&strip_hash(cat));
+        out.insert(cat.clone());
+    }
     Harmonized {
-        category: pick_category(&out),
+        category: categories.first().cloned(),
+        categories,
         tags_from_rule: out.into_iter().collect(),
         ..Default::default()
     }
 }
 
-/// Catégorie = premier tag `#` (convention CM, §5bis).
+/// Normalise une catégorie en `#minuscule` (avec `#` de tête garanti).
+fn norm_cat(s: &str) -> String {
+    format!("#{}", strip_hash(s))
+}
+
+/// Retire un éventuel `#` de tête et normalise (minuscule, trim).
+fn strip_hash(s: &str) -> String {
+    s.trim().to_lowercase().trim_start_matches('#').to_string()
+}
+
+/// Catégories de la liste blanche présentes dans `tags` (nu ou `#`), dans
+/// l'ordre de priorité de la liste blanche.
+fn track_categories(allowlist: &[String], tags: &BTreeSet<String>) -> Vec<String> {
+    allowlist
+        .iter()
+        .filter_map(|c| {
+            let cat = norm_cat(c);
+            if tags.contains(&cat) || tags.contains(&strip_hash(c)) {
+                Some(cat)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Catégorie = premier tag `#` (convention CM, §5bis). Utilisé pour les voitures.
 fn pick_category(tags: &BTreeSet<String>) -> Option<String> {
     tags.iter().find(|t| t.starts_with('#')).cloned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn track_rules(allowlist: &[&str]) -> Rules {
+        Rules {
+            track: TrackRules {
+                category_allowlist: allowlist.iter().map(|s| s.to_string()).collect(),
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn track_categories_multi_ordered_by_priority() {
+        let rules = track_rules(&["#rally", "#drift", "#circuit"]);
+        // Tags en désordre, casse variée, avec/sans # : ressortent ordonnés
+        // selon la liste blanche (priorité), pas selon l'ordre des tags.
+        let h = apply_track(&rules, &["circuit".into(), "Drift".into(), "gt".into()]);
+        assert_eq!(h.categories, vec!["#drift".to_string(), "#circuit".to_string()]);
+        assert_eq!(h.category.as_deref(), Some("#drift")); // principale = la + prioritaire
+        // Les catégories sont promues en tags `#` ; le tag hors liste est conservé.
+        assert!(h.tags_from_rule.contains(&"#drift".to_string()));
+        assert!(h.tags_from_rule.contains(&"#circuit".to_string()));
+        assert!(h.tags_from_rule.contains(&"gt".to_string()));
+        assert!(!h.tags_from_rule.contains(&"drift".to_string()));
+    }
+
+    #[test]
+    fn track_without_allowed_tag_has_no_category() {
+        let rules = track_rules(&["#rally", "#circuit"]);
+        let h = apply_track(&rules, &["gt".into(), "fun".into()]);
+        assert!(h.categories.is_empty());
+        assert_eq!(h.category, None);
+    }
+
+    #[test]
+    fn embedded_seed_has_track_category_allowlist() {
+        // Le seed embarqué doit fournir la liste (sinon le backfill est vide).
+        let r = default_rules();
+        assert!(r.track.category_allowlist.contains(&"#rally".to_string()));
+        assert!(r.track.category_allowlist.contains(&"#circuit".to_string()));
+    }
 }

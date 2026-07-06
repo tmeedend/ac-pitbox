@@ -1469,6 +1469,21 @@
       "vesubie",
       "yeda",
       "yokohama"
+    ],
+    "category_allowlist": [
+      "#rally",
+      "#rallycross",
+      "#hillclimb",
+      "#drag",
+      "#oval",
+      "#touge",
+      "#drift",
+      "#karting",
+      "#a2b",
+      "#freeroam",
+      "#street",
+      "#test",
+      "#circuit"
     ]
   }
 }

@@ -119,6 +119,15 @@ const CAR_COLUMNS: ColumnDef[] = [
 const TRACK_COLUMNS: ColumnDef[] = [
   { key: "name", labelKey: "columns.name", sortable: true, defaultVisible: true, fixed: true, value: (c) => c.display_name ?? c.id_interne },
   {
+    key: "category",
+    labelKey: "columns.category",
+    sortable: true,
+    defaultVisible: true,
+    // Multi-valué (§5bis.2), ordonné par priorité ; la 1ʳᵉ = catégorie principale (tri).
+    value: (c) => (c.categories.length ? c.categories.join(" · ") : DASH),
+    sortValue: (c) => c.categories[0] ?? "",
+  },
+  {
     key: "layouts",
     labelKey: "columns.layouts",
     sortable: true,

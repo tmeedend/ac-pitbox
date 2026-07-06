@@ -11,6 +11,9 @@ export interface ModCard {
   year: number | null;
   car_class: string | null;
   category: string | null;
+  /** Catégories de circuit (§5bis.2), multi-valué, ordonnées par priorité.
+   * Vide pour une voiture (qui utilise `category`). */
+  categories: string[];
   country: string | null;
   is_favorite: boolean;
   active_version_id: string | null;

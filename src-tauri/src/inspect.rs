@@ -30,6 +30,23 @@ fn parse_csp_features(text: &str) -> Vec<String> {
     if upper.contains("SEASON_WINTER") || upper.contains("SEASON_AUTUMN") || upper.contains("SEASON_SUMMER") {
         feats.push("season".to_string());
     }
+    // Autres extensions CSP repérables par leur section (badges informatifs).
+    // Certaines (traffic/surfaces/waterfx) vivent surtout dans l'ext_config
+    // embarqué du mod plutôt que dans les configs communautaires « chargées ».
+    for (needle, label) in [
+        ("[PARTICLES_FX", "particlesfx"),
+        ("[EXTRA_FX", "extrafx"),
+        ("[LIGHT_POLLUTION", "lightpollution"),
+        ("[SPECTATORS", "spectators"),
+        ("[DISPLAY_", "displays"),
+        ("[TRAFFIC", "traffic"),
+        ("[SURFACES", "surfaces"),
+        ("[WATER_FX", "waterfx"),
+    ] {
+        if upper.contains(needle) {
+            feats.push(label.to_string());
+        }
+    }
     feats
 }
 

@@ -44,6 +44,8 @@ export interface CarRules {
 export interface TrackRules {
   tag_merge: TagMerge[];
   remove: string[];
+  /** Catégories de circuit autorisées (§5bis.2), tags `#` par ordre de priorité. */
+  category_allowlist: string[];
 }
 export interface Rules {
   car: CarRules;

@@ -248,8 +248,12 @@
   // N'expose que les mods du type de cette bibliothèque (§6.1).
   const typed = $derived(cards.filter((c) => c.kind === kind));
 
+  // Catégories du filtre : voiture = catégorie unique (`category`) ; circuit =
+  // multi-valué (`categories`, §5bis.2), on agrège toutes les valeurs vues.
   const categories = $derived(
-    [...new Set(typed.map((c) => c.category).filter((c): c is string => !!c))].sort(),
+    isCar
+      ? [...new Set(typed.map((c) => c.category).filter((c): c is string => !!c))].sort()
+      : [...new Set(typed.flatMap((c) => c.categories))].sort(),
   );
   const authors = $derived(
     [...new Set(typed.map((c) => c.author).filter((c): c is string => !!c))].sort((a, b) =>
@@ -264,7 +268,10 @@
 
   const filtered = $derived(
     typed.filter((c) => {
-      if (categoryFilter !== "all" && c.category !== categoryFilter) return false;
+      if (categoryFilter !== "all") {
+        const match = isCar ? c.category === categoryFilter : c.categories.includes(categoryFilter);
+        if (!match) return false;
+      }
       if (classFilter !== "all" && c.car_class !== classFilter) return false;
       if (stateFilter === "active" && !c.active) return false;
       if (stateFilter === "inactive" && c.active) return false;
@@ -458,14 +465,14 @@
             {#each countries as c}<option value={c}>{c}</option>{/each}
           </select>
         </label>
+        <label>
+          <span>{t("library.filterCategory")}</span>
+          <select class="input" bind:value={categoryFilter}>
+            <option value="all">{t("common.allFem")}</option>
+            {#each categories as cat}<option value={cat}>{cat}</option>{/each}
+          </select>
+        </label>
         {#if isCar}
-          <label>
-            <span>{t("library.filterCategory")}</span>
-            <select class="input" bind:value={categoryFilter}>
-              <option value="all">{t("common.allFem")}</option>
-              {#each categories as cat}<option value={cat}>{cat}</option>{/each}
-            </select>
-          </label>
           <label>
             <span>{t("library.filterClass")}</span>
             <select class="input" bind:value={classFilter}>
