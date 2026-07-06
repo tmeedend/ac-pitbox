@@ -784,6 +784,9 @@
     text-align: left;
     overflow: hidden;
     transition: border-color 0.12s;
+    /* Évite la sélection de texte (surlignage bleu) lors des clics de
+       sélection multiple Ctrl/Maj. */
+    user-select: none;
   }
   .card:hover {
     border-color: var(--faint);
@@ -933,6 +936,8 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 12px;
+    /* Pas de surlignage de texte lors des clics de sélection (lignes + en-têtes triables). */
+    user-select: none;
   }
   th {
     text-align: left;

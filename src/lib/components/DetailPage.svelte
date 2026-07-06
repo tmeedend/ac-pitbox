@@ -441,7 +441,8 @@
   }
 
   function fmtDate(iso: string): string {
-    return iso.slice(0, 16).replace("T", " ");
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? iso.slice(0, 16).replace("T", " ") : d.toLocaleString();
   }
 </script>
 

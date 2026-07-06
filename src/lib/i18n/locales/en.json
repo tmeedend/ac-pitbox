@@ -463,7 +463,17 @@
     "emptyHint": "Import a pack via general import — it links automatically to the right car.",
     "restoreOriginal": "Restore original",
     "confirmDeleteSound": "Delete this sound \"{name}\"? Files and the projection will be removed.",
-    "confirmDeleteSkin": "Delete this skin \"{name}\"? Files and the projection will be removed."
+    "confirmDeleteSkin": "Delete this skin \"{name}\"? Files and the projection will be removed.",
+    "groupByArchive": "By archive",
+    "groupByCar": "By car",
+    "unknownArchive": "Unknown source",
+    "selectHint": "Ctrl+click: add/remove · Shift+click: range",
+    "selectedCount": "{count} selected",
+    "deleteSelected": "Delete selection",
+    "deleteGroup": "Delete all",
+    "clearSelection": "Clear selection",
+    "confirmDeleteMany": "Delete the {count} selected items? Files and the projection will be removed.",
+    "confirmDeleteGroup": "Delete the {count} items in \"{name}\"? Files and the projection will be removed."
   },
   "apps": {
     "subtitle": "Assetto Corsa Python apps — standalone type, activated/deactivated by junction like the rest.",

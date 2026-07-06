@@ -23,9 +23,13 @@ export interface ColumnDef {
 
 const DASH = "—";
 
-/** Date courte AAAA-MM-JJ, « — » si absente. */
+/** Date courte selon la locale système (jj/MM/aaaa en fr), « — » si absente
+ * ou invalide. Les dates sont stockées en ISO/RFC3339 : ceci n'est qu'un
+ * formatage d'affichage (le tri utilise toujours la chaîne ISO brute). */
 function fmtDate(iso: string | null): string {
-  return iso ? iso.slice(0, 10) : DASH;
+  if (!iso) return DASH;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? DASH : d.toLocaleDateString();
 }
 
 /** Taille lisible (Ko/Mo/Go/To, base 1024), « — » si pas encore calculée (§9.4). */

@@ -463,7 +463,17 @@
     "emptyHint": "Importe un pack via l'import général — il se rattache automatiquement à la bonne voiture.",
     "restoreOriginal": "Restaurer l'origine",
     "confirmDeleteSound": "Supprimer ce son « {name} » ? Les fichiers et la projection seront retirés.",
-    "confirmDeleteSkin": "Supprimer ce skin « {name} » ? Les fichiers et la projection seront retirés."
+    "confirmDeleteSkin": "Supprimer ce skin « {name} » ? Les fichiers et la projection seront retirés.",
+    "groupByArchive": "Par archive",
+    "groupByCar": "Par voiture",
+    "unknownArchive": "Origine inconnue",
+    "selectHint": "Ctrl+clic : ajouter/retirer · Maj+clic : plage",
+    "selectedCount": "{count} sélectionné(s)",
+    "deleteSelected": "Supprimer la sélection",
+    "deleteGroup": "Tout supprimer",
+    "clearSelection": "Effacer la sélection",
+    "confirmDeleteMany": "Supprimer les {count} éléments sélectionnés ? Les fichiers et la projection seront retirés.",
+    "confirmDeleteGroup": "Supprimer les {count} éléments de « {name} » ? Les fichiers et la projection seront retirés."
   },
   "apps": {
     "subtitle": "Apps Python d'Assetto Corsa — type autonome, activées/désactivées par junction comme le reste.",
