@@ -293,7 +293,8 @@
   );
 
   const activeFilterCount = $derived(
-    (categoryFilter !== "all" ? 1 : 0) +
+    (query.trim() !== "" ? 1 : 0) +
+      (categoryFilter !== "all" ? 1 : 0) +
       (classFilter !== "all" ? 1 : 0) +
       (stateFilter !== "all" ? 1 : 0) +
       (authorFilter !== "all" ? 1 : 0) +
@@ -305,6 +306,7 @@
   );
 
   function clearFilters() {
+    query = "";
     categoryFilter = "all";
     classFilter = "all";
     stateFilter = "all";

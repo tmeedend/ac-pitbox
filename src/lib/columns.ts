@@ -137,8 +137,6 @@ const TRACK_COLUMNS: ColumnDef[] = [
     value: (c) => (c.layouts.length ? c.layouts.map((l) => l || t("detail.defaultLayout")).join(", ") : DASH),
     sortValue: (c) => c.layouts.length,
   },
-  { key: "length", labelKey: "columns.length", sortable: true, defaultVisible: false, mono: true, value: () => DASH, sortValue: () => -1 },
-  { key: "turns", labelKey: "columns.turns", sortable: true, defaultVisible: false, mono: true, value: () => DASH, sortValue: () => -1 },
   {
     key: "csp",
     labelKey: "columns.csp",

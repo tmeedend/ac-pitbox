@@ -118,7 +118,7 @@ Le fichier du mod est une **entrée** du pipeline (on le lit), jamais une **sort
 
 **Mod** — unité logique (une voiture, un circuit). Possède une identité stable (voir §4.1) indépendante du nom de dossier.
 
-**ModVersion** — une version concrète d'un Mod, telle qu'importée. Plusieurs ModVersions peuvent coexister pour un même Mod (rollback).
+**ModVersion** — la version courante d'un Mod, telle qu'importée. Une mise à jour **remplace** la ModVersion (pas d'historique de versions conservé, §4.4). Le filet de sécurité contre les pertes est le modèle de **couches** (base intacte + couches séparées), pas le rollback de version.
 
 **Tag** — étiquette harmonisée. Issue de l'ontologie (voir §5).
 
@@ -213,9 +213,35 @@ Le nom de dossier seul **n'est pas une identité fiable** : un auteur peut mettr
 - **Id différent mais match flou** → l'app *propose* le rapprochement et demande : garder les deux, ou écraser. Jamais de décision silencieuse sur un cas ambigu.
 - **Tout import** → ajoute une entrée horodatée à l'historique du mod.
 
-### 4.4 Conservation multi-versions
+### 4.4 Mise à jour vs couche, et recomposition
 
-L'archi à junctions rend la coexistence de plusieurs versions quasi gratuite : les versions vivent côte à côte dans la bibliothèque, une seule est « active » (projetée par junction vers `content/`). Bénéfice : rollback immédiat si une mise à jour casse quelque chose.
+**Pas d'historique de versions conservé.** Choix assumé (place disque) : on ne garde **pas** les versions antérieures d'un mod. Une mise à jour remplace. Le filet de sécurité contre les pertes n'est donc PAS le rollback de version, mais le modèle de couches ci-dessous (la base reste toujours une entité intacte).
+
+> ⚠️ Incident réel à prévenir : un import identifié comme « mise à jour » de `spa` a **supprimé tout le contenu** existant, alors que c'était un ajout (nouveau layout + améliorations). Une opération ne doit jamais détruire du contenu de façon non récupérable — voir détection ci-dessous.
+
+**Détection à l'import : mise à jour ou couche/extension ?** Quand un import cible un contenu existant (même dossier), comparer les fichiers avant d'agir :
+- Structure complète + **fort chevauchement** des fichiers existants → probablement **mise à jour** (remplace).
+- Majorité de **chemins nouveaux**, peu de fichiers écrasés → probablement **couche/extension** (ajoute).
+- **Détection auto**, et **question à l'utilisateur seulement si ambigu**, avec un récapitulatif chiffré (« ajoute 84 fichiers, en écrase 6 sur 412 → extension probable »).
+
+> **Règle absolue — le contenu de base (Kunos, `is_stock`) ne reçoit JAMAIS de mise à jour, toujours une extension.** Kunos ne met pas à jour son contenu via l'import ; tout ce qui arrive sur un contenu de base est donc traité comme une **couche par-dessus**, jamais un remplacement. Garantit par construction que le contenu de base ne peut pas être perdu. La détection update/extension ne s'applique qu'aux **mods**. (Même une « version améliorée complète » d'un circuit Kunos devient une couche : la base Kunos reste intacte dessous, désactivable pour revenir à l'original.)
+
+**Historique** : chaque opération est tracée dans l'historique du mod avec le **nom de l'archive/fichier source**. Entrées : « import initial », « mise à jour », et **« extension ajoutée »** (avec le nom de l'archive/fichier de la couche). Rend visible la lignée : ce qui a été empilé et d'où ça vient — utile pour savoir quelle couche retirer.
+
+**Modèle de couches recomposables** (résout l'empilement de mods sur un contenu) :
+- La **base** (Kunos OU mod) reste une **entité intacte** en bibliothèque, jamais fusionnée.
+- Une **couche** (nouveau layout, améliorations, surcharge) est une **entité séparée**, elle aussi intacte, rattachée à sa base.
+- Ce que le jeu voit dans `content/` est un **résultat composé** : base + couches actives, appliquées **dans l'ordre de priorité**.
+- **Désactiver/réordonner une couche = recomposer** depuis les entités intactes (on ne « défait » rien chirurgicalement, on reconstruit). Aucun état intermédiaire corrompu possible. Économe : on stocke base + couches (petites), pas des versions complètes successives.
+
+**Mécanisme hybride junction / copie** (clé de la viabilité) :
+- **Par défaut : junction** (instantané, zéro copie) — pour les ~95% de mods autonomes (voiture, circuit complet, skin) sans couche.
+- **Bascule en composition par copie UNIQUEMENT** pour un contenu qui a au moins **une couche active** — et pour ce contenu seulement. Composer implique de copier des fichiers dans l'ordre ; recomposer un gros circuit prend quelques secondes. Coût payé seulement là où on empile des couches.
+- Quand la **dernière couche est retirée** (ou le contenu désactivé), retour à la **junction simple** vers la base. Le mode copie n'est « collant » que tant qu'il y a des couches actives.
+
+**Portée & contrôle** :
+- Une couche peut se poser sur **n'importe quel contenu** (base Kunos ou mod).
+- **Contrôle réglable** : ordre des couches modifiable + activation/désactivation par couche (indispensable pour le cas des couches multiples sur un même fichier — c'est la recomposition qui tranche, dans l'ordre).
 
 ### 4.5 Sources d'import : archive OU dossier existant
 
@@ -257,7 +283,7 @@ En plus de l'import unitaire (§4.5), l'app accepte un **dossier parent** dont *
 
 **Choix copier/déplacer — mieux présenté** (correction : deux boutons « Copier »/« Déplacer » surgissant à chaque import de dossier = pénible). À présenter clairement dans l'écran dédié, avec explication de chaque option (et de l'accélération même-disque du déplacement). Un **réglage par défaut** peut être mémorisé pour ne pas reposer la question à chaque fois (ex. « toujours copier »).
 
-**Activation par défaut à l'import** : un mod **importé est activé par défaut** (junction créée immédiatement) — on veut pouvoir le conduire tout de suite, sans étape d'activation manuelle. Lors d'une **mise à jour**, c'est la **nouvelle version** qui devient active (l'ancienne reste disponible pour rollback, §4.4).
+**Activation par défaut à l'import** : un mod **importé est activé par défaut** (junction créée immédiatement) — on veut pouvoir le conduire tout de suite, sans étape d'activation manuelle. Lors d'une **mise à jour**, la nouvelle version remplace l'ancienne et devient active (pas d'historique conservé — la protection contre les pertes passe par la détection update/couche de §4.4).
 
 ### 4.7 Packs multi-voitures et entités de premier niveau
 
@@ -499,6 +525,7 @@ Champs propres à une voiture (specs, skin piloté, version active) ne sont **pa
 ### 6.4 États visuels
 
 - Mod **actif** : marqueur clair (la junction existe dans `content/`).
+- Mod ayant des **couches** (§4.4) : badge indiquant le nombre de couches actives, base distinguée.
 - Mod **cassé / incomplet** : signalé (ex. pas d'`ui_*.json`, structure invalide).
 
 ### 6.5 Suivi d'usage : distance et « jamais essayé »
@@ -526,10 +553,10 @@ Filtre/donnée pour retrouver ce qu'on n'a pas encore exploré (utile à 500+ mo
 
 ## 7. Activation / désactivation
 
-- **Activer** un mod = créer une junction `content/<type>s/<id>` → `bibliothèque/.../<version active>`.
+- **Activer** un mod sans couche = créer une junction `content/<type>s/<id>` → `bibliothèque/.../<mod>` (instantané).
 - **Désactiver** = supprimer la junction (le contenu reste intact dans la bibliothèque).
-- **Changer de version active** = supprimer la junction et la recréer vers une autre version.
-- **Profils** : activer/désactiver en masse un ensemble nommé (« GT3 endurance »). Application d'un profil = réconciliation des junctions pour correspondre exactement au set.
+- **Contenu à couches** (§4.4) : activer = **composer** (base + couches actives copiées dans l'ordre) au lieu d'une junction ; désactiver/retirer la dernière couche = revenir à la junction simple vers la base.
+- **Profils** : activer/désactiver en masse un ensemble nommé (« GT3 endurance »). Application d'un profil = réconciliation des junctions/compositions pour correspondre exactement au set.
 
 > Garde-fou : l'app ne doit jamais supprimer un dossier réel de `content/` qui ne serait pas une junction qu'elle a créée (protection contre la perte de contenu installé hors de l'app). Détection junction vs dossier réel obligatoire avant toute suppression.
 
