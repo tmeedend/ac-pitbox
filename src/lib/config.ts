@@ -10,6 +10,8 @@ export interface Prefs {
   language: string | null;
   /** Niveau de zoom de l'interface, en % (ex. 125) ; `null` = 100. */
   ui_zoom: number | null;
+  /** Afficher d'emblée l'aperçu 3D sur la fiche voiture (à la place de l'image). */
+  showroom_by_default: boolean;
 }
 
 export interface AppConfig {
@@ -54,6 +56,7 @@ export function emptyConfig(): AppConfig {
       default_cm_preset: null,
       language: null,
       ui_zoom: null,
+      showroom_by_default: false,
     },
   };
 }

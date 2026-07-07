@@ -123,6 +123,14 @@
     <p class="hint">{t("settings.zoomHint")}</p>
   </section>
 
+  <section class="lang-section">
+    <label class="check">
+      <input type="checkbox" bind:checked={config.prefs.showroom_by_default} />
+      <span>{t("settings.showroom3d")}</span>
+    </label>
+    <p class="hint">{t("settings.showroom3dHint")}</p>
+  </section>
+
   <ConfigFields bind:config {validation} />
 
   {#if error}<div class="error">{error}</div>{/if}
@@ -169,6 +177,13 @@
     font-size: 12px;
     color: var(--txt2);
     max-width: 260px;
+  }
+  .lang-section label.check {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    max-width: none;
+    cursor: pointer;
   }
   .lang-section .hint {
     margin-top: 8px;

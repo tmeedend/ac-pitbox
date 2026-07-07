@@ -17,7 +17,7 @@
     type ModKind,
     type NativeSpecs,
   } from "$lib/library";
-  import { onDestroy, untrack } from "svelte";
+  import { onDestroy, onMount, untrack } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
     listModSkins,
@@ -38,6 +38,7 @@
   import PowerCurve from "./PowerCurve.svelte";
   import { nav, pickSession, requestSection } from "$lib/nav.svelte";
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
+  import { getConfig } from "$lib/config";
   import { t } from "$lib/i18n/index.svelte";
 
   interface Props {
@@ -134,6 +135,20 @@
   let showroomBusy = $state(false);
   let showroomAttached = $state(false);
   let heroEl = $state<HTMLDivElement | null>(null);
+  // Option « aperçu 3D par défaut » (§réglages) : chargée une fois. Si activée,
+  // la 3D s'ouvre d'elle-même sur les fiches voiture et le bouton disparaît.
+  let showroom3dDefault = $state(false);
+  // Garde-fou de l'auto-ouverture : une seule tentative par mod (évite la
+  // boucle et la réouverture après fermeture manuelle). Plain var (pas d'état
+  // réactif) — c'est juste un marqueur.
+  let autoOpenedFor: string | null = null;
+  onMount(async () => {
+    try {
+      showroom3dDefault = (await getConfig()).prefs.showroom_by_default;
+    } catch {
+      /* défaut : false */
+    }
+  });
 
   function heroRect(): { x: number; y: number; width: number; height: number } | null {
     if (!heroEl) return null;
@@ -199,6 +214,23 @@
     id;
     untrack(() => {
       if (showroomAttached) closeShowroom();
+    });
+  });
+
+  // Ouverture automatique si l'option est activée : dès qu'une fiche voiture
+  // est chargée et que la zone héros est prête, on lance le showroom sans
+  // attendre un clic. `autoOpenedFor` = une tentative par mod (pas de boucle,
+  // pas de réouverture après une fermeture manuelle). `untrack` isole les
+  // lectures d'état qui ne doivent pas devenir des dépendances (sinon
+  // réouverture en boucle — même piège que l'effet ci-dessus).
+  $effect(() => {
+    const cur = id;
+    const ready = showroom3dDefault && isCar && !!detail && !!heroEl;
+    if (!ready) return;
+    untrack(() => {
+      if (autoOpenedFor === cur || showroomAttached || showroomBusy) return;
+      autoOpenedFor = cur;
+      openShowroom();
     });
   });
 
@@ -485,7 +517,9 @@
         {#if isCar}
           {#if showroomAttached}
             <button class="btn" type="button" onclick={closeShowroom}>{t("detail.showroomClose")}</button>
-          {:else}
+          {:else if !showroom3dDefault}
+            <!-- Bouton d'ouverture masqué si l'aperçu 3D par défaut est actif
+                 (§réglages) : la 3D se lance d'elle-même. -->
             <button class="btn" type="button" onclick={openShowroom} disabled={showroomBusy} title={t("detail.showroomTooltip")}>
               {showroomBusy ? t("detail.showroomLaunching") : t("detail.showroom")}
             </button>
@@ -516,6 +550,14 @@
           <img src={heroImg} alt={d.display_name ?? d.id_interne} />
         {:else}
           <div class="hero-icon">{isCar ? "🚗" : "🏁"}</div>
+        {/if}
+        {#if showroomBusy}
+          <!-- Chargement de l'aperçu 3D (spawn + attach d'acShowroom) : petite
+               pastille discrète en haut à droite, l'image reste pleinement
+               visible en attendant que la 3D s'affiche. -->
+          <div class="hero-loading" title={t("detail.showroomLoading")}>
+            <span class="spinner"></span>
+          </div>
         {/if}
         {#if !isCar}
           {@const ol = previewSrc(d.track?.layouts[previewLayout]?.outline ?? null)}
@@ -993,6 +1035,35 @@
   .hero-showroom-slot {
     width: 100%;
     height: 100%;
+  }
+  /* Pastille de chargement de l'aperçu 3D : petite, en haut à droite, sans
+     assombrir l'image — on profite de la photo de la voiture en attendant que
+     la 3D s'affiche. */
+  .hero-loading {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    background: rgba(8, 8, 12, 0.6);
+    border: 1px solid var(--line);
+    z-index: 3;
+  }
+  .hero-loading .spinner {
+    width: 15px;
+    height: 15px;
+    border: 2px solid var(--line);
+    border-top-color: var(--rosso);
+    border-radius: 50%;
+    animation: hero-spin 0.8s linear infinite;
+  }
+  @keyframes hero-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   /* Tracé du layout superposé à la photo du circuit (§6.1). */
   .hero img.hero-outline {

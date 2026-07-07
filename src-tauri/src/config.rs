@@ -29,6 +29,9 @@ pub struct Prefs {
     /// Utile sur les écrans haute résolution si la mise à l'échelle Windows
     /// n'est pas correctement reprise par la webview.
     pub ui_zoom: Option<u32>,
+    /// Afficher d'emblée l'aperçu 3D (acShowroom) sur la fiche voiture, à la
+    /// place de l'image. Défaut : non (l'utilisateur clique « Aperçu 3D »).
+    pub showroom_by_default: bool,
 }
 
 impl Default for Prefs {
@@ -40,6 +43,7 @@ impl Default for Prefs {
             default_cm_preset: None,
             language: None,
             ui_zoom: None,
+            showroom_by_default: false,
         }
     }
 }
