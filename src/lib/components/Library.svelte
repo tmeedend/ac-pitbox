@@ -120,6 +120,26 @@
   // central) : à défaut d'un clic explicite, on affiche le choix de session
   // courant. Défilement vers l'élément sélectionné à revenir sur cet écran.
   let mainEl = $state<HTMLDivElement | undefined>();
+  // Bandeau recherche+filtres épinglé : on mesure sa hauteur pour décaler
+  // d'autant les en-têtes de tableau sticky (sinon ils passeraient dessous).
+  let pinTopEl = $state<HTMLDivElement | undefined>();
+  $effect(() => {
+    const el = pinTopEl;
+    const main = mainEl;
+    if (!el || !main) return;
+    // `- 18` = le padding-top de `.main`, que `.pin-top` compense par sa marge
+    // négative (cf. son CSS `top: -18px`) ; sa hauteur visible une fois collé
+    // est donc offsetHeight - 18. Exposé en variable CSS lue par `thead th`.
+    const update = () => main.style.setProperty("--pin-h", `${el.offsetHeight - 18}px`);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener("resize", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  });
   let firstLoad = true;
   function scrollToEffective() {
     if (!effectiveId) return;
@@ -409,7 +429,7 @@
   {:else}
   <div class="main-wrap">
   <div class="main" bind:this={mainEl}>
-    <div class="pin-top">
+    <div class="pin-top" bind:this={pinTopEl}>
     <div class="toolbar">
       <div class="search">
         <input class="input" placeholder={t("library.searchPlaceholder")} bind:value={query} />
@@ -939,7 +959,9 @@
 
   .table-wrap {
     border: 1px solid var(--line);
-    overflow-x: auto;
+    /* Pas d'overflow ici : ce serait un conteneur de scroll imbriqué et les
+       en-têtes sticky se colleraient à lui (invisible) au lieu de `.main`. Le
+       défilement horizontal des tableaux larges est géré par `.main`. */
   }
   table {
     width: 100%;
@@ -958,6 +980,16 @@
     border-bottom: 1px solid var(--line);
     background: var(--panel2);
     white-space: nowrap;
+  }
+  /* En-têtes collés en haut du scroll de `.main`, juste sous le bandeau
+     recherche+filtres (décalage --pin-h mesuré en JS). `box-shadow` = ligne
+     de séparation fiable (les bordures collapse ne « suivent » pas le sticky
+     sous Chromium/WebView2). */
+  thead th {
+    position: sticky;
+    top: var(--pin-h, 0px);
+    z-index: 5;
+    box-shadow: inset 0 -1px 0 var(--line);
   }
   th.sortable {
     cursor: pointer;
