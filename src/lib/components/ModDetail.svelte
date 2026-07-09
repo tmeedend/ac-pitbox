@@ -14,6 +14,7 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { exportMod, type ExportReport } from "$lib/maintenance";
   import { t } from "$lib/i18n/index.svelte";
+  import { historyEventLabel, historyDetails } from "$lib/history";
 
   interface Props {
     id: string | null;
@@ -380,8 +381,8 @@
         <ul class="history">
           {#each detail.history.filter((h) => h.event !== "ACTIVATE" && h.event !== "DEACTIVATE") as h}
             <li>
-              <span class="ev">{h.event}</span>
-              <span class="det">{h.details}</span>
+              <span class="ev">{historyEventLabel(h.event)}</span>
+              <span class="det">{historyDetails(h.details)}</span>
               <span class="ts mono">{fmtDate(h.timestamp)}</span>
             </li>
           {/each}

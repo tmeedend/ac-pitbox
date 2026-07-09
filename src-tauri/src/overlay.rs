@@ -51,6 +51,9 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     let _ = conn.execute("ALTER TABLE versions ADD COLUMN published_at TEXT", []);
     // Taille sur disque de la version, octets (§9.4).
     let _ = conn.execute("ALTER TABLE versions ADD COLUMN size_bytes INTEGER", []);
+    // Couches/extensions (§4.4) : état actif (par défaut) + ordre de priorité.
+    let _ = conn.execute("ALTER TABLE layers ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1", []);
+    let _ = conn.execute("ALTER TABLE layers ADD COLUMN priority INTEGER NOT NULL DEFAULT 0", []);
     Ok(())
 }
 
@@ -163,6 +166,24 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             is_active      INTEGER NOT NULL DEFAULT 0,
             junctions      TEXT NOT NULL DEFAULT '[]'
         );
+
+        -- Couches / extensions (§4.4) : contenu importé par-dessus une base
+        -- (mod OU stock) qui n'est PAS une mise à jour — surtout des chemins
+        -- nouveaux. Rangé à part, ne touche jamais la base (jamais destructif).
+        CREATE TABLE IF NOT EXISTS layers (
+            id                TEXT PRIMARY KEY,
+            parent_id         TEXT NOT NULL,          -- id_interne de la base (mod ou stock)
+            parent_kind       TEXT NOT NULL,          -- 'Car' | 'Track'
+            name              TEXT NOT NULL,          -- nom de l'archive/dossier source
+            library_path      TEXT NOT NULL,          -- <lib>/layers/<parent_id>/<name>
+            source_archive    TEXT,
+            added_count       INTEGER NOT NULL DEFAULT 0,
+            overwritten_count INTEGER NOT NULL DEFAULT 0,
+            is_active         INTEGER NOT NULL DEFAULT 1, -- appliquée à la composition (§4.4)
+            priority          INTEGER NOT NULL DEFAULT 0, -- ordre : la + haute gagne
+            imported_at       TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_layers_parent ON layers(parent_id);
 
         CREATE INDEX IF NOT EXISTS idx_versions_mod ON versions(mod_id);
         CREATE INDEX IF NOT EXISTS idx_history_mod  ON history(mod_id);
@@ -671,6 +692,21 @@ pub fn active_signature(conn: &Connection, mod_id: &str) -> rusqlite::Result<Opt
     }
 }
 
+/// Chemin bibliothèque de la version **active** d'un mod (dossier à comparer à
+/// l'entrant pour la détection update/extension, §4.4). `None` si aucune version
+/// active (ex. contenu de base sans version bibliothèque).
+pub fn active_library_path(conn: &Connection, mod_id: &str) -> rusqlite::Result<Option<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT v.library_path FROM versions v
+         JOIN mods m ON m.active_version_id = v.id WHERE m.id_interne = ?1",
+    )?;
+    let mut rows = stmt.query_map([mod_id], |r| r.get::<_, String>(0))?;
+    match rows.next() {
+        Some(r) => Ok(Some(r?)),
+        None => Ok(None),
+    }
+}
+
 /// Chemin bibliothèque d'une version donnée (pour calculer la preview).
 pub fn get_version_path(conn: &Connection, version_id: &str) -> rusqlite::Result<Option<String>> {
     let mut stmt = conn.prepare("SELECT library_path FROM versions WHERE id = ?1")?;
@@ -796,6 +832,113 @@ pub fn clear_stock(conn: &Connection) -> rusqlite::Result<usize> {
 /// scan automatique au premier démarrage (§12bis.1).
 pub fn count_stock(conn: &Connection) -> rusqlite::Result<i64> {
     conn.query_row("SELECT COUNT(*) FROM mods WHERE is_stock = 1", [], |r| r.get(0))
+}
+
+// --- Couches / extensions (§4.4) --------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LayerRow {
+    pub id: String,
+    pub parent_id: String,
+    pub parent_kind: String,
+    pub name: String,
+    pub library_path: String,
+    pub source_archive: Option<String>,
+    pub added_count: i64,
+    pub overwritten_count: i64,
+    pub is_active: bool,
+    pub priority: i64,
+    pub imported_at: String,
+}
+
+/// Priorité à attribuer à une nouvelle couche du parent (max + 1 : empilée en tête).
+pub fn next_layer_priority(conn: &Connection, parent_id: &str) -> rusqlite::Result<i64> {
+    conn.query_row(
+        "SELECT COALESCE(MAX(priority), -1) + 1 FROM layers WHERE parent_id = ?1",
+        [parent_id],
+        |r| r.get(0),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn insert_layer(
+    conn: &Connection,
+    id: &str,
+    parent_id: &str,
+    parent_kind: &str,
+    name: &str,
+    library_path: &str,
+    source_archive: Option<&str>,
+    added_count: i64,
+    overwritten_count: i64,
+    priority: i64,
+    imported_at: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        r#"INSERT INTO layers
+           (id, parent_id, parent_kind, name, library_path, source_archive,
+            added_count, overwritten_count, priority, imported_at)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)"#,
+        params![id, parent_id, parent_kind, name, library_path, source_archive, added_count, overwritten_count, priority, imported_at],
+    )?;
+    Ok(())
+}
+
+fn map_layer(row: &rusqlite::Row) -> rusqlite::Result<LayerRow> {
+    Ok(LayerRow {
+        id: row.get(0)?,
+        parent_id: row.get(1)?,
+        parent_kind: row.get(2)?,
+        name: row.get(3)?,
+        library_path: row.get(4)?,
+        source_archive: row.get(5)?,
+        added_count: row.get(6)?,
+        overwritten_count: row.get(7)?,
+        is_active: row.get::<_, i64>(8)? != 0,
+        priority: row.get(9)?,
+        imported_at: row.get(10)?,
+    })
+}
+
+const LAYER_SELECT: &str = "SELECT id, parent_id, parent_kind, name, library_path, source_archive, added_count, overwritten_count, is_active, priority, imported_at FROM layers";
+
+/// Couches/extensions rattachées à une base (fiche détail, §4.4), par priorité.
+pub fn list_layers(conn: &Connection, parent_id: &str) -> rusqlite::Result<Vec<LayerRow>> {
+    let mut stmt = conn.prepare(&format!("{LAYER_SELECT} WHERE parent_id = ?1 ORDER BY priority"))?;
+    let rows = stmt.query_map([parent_id], map_layer)?;
+    rows.collect()
+}
+
+/// Couches **actives** d'une base, dans l'ordre de priorité (la + haute en dernier
+/// → gagne à la superposition). Base de la composition (§4.4).
+pub fn active_layers(conn: &Connection, parent_id: &str) -> rusqlite::Result<Vec<LayerRow>> {
+    let mut stmt = conn.prepare(&format!("{LAYER_SELECT} WHERE parent_id = ?1 AND is_active = 1 ORDER BY priority"))?;
+    let rows = stmt.query_map([parent_id], map_layer)?;
+    rows.collect()
+}
+
+pub fn get_layer(conn: &Connection, id: &str) -> rusqlite::Result<Option<LayerRow>> {
+    let mut stmt = conn.prepare(&format!("{LAYER_SELECT} WHERE id = ?1"))?;
+    let mut rows = stmt.query_map([id], map_layer)?;
+    match rows.next() {
+        Some(r) => Ok(Some(r?)),
+        None => Ok(None),
+    }
+}
+
+pub fn set_layer_active(conn: &Connection, id: &str, active: bool) -> rusqlite::Result<()> {
+    conn.execute("UPDATE layers SET is_active = ?2 WHERE id = ?1", params![id, active as i64])?;
+    Ok(())
+}
+
+pub fn set_layer_priority(conn: &Connection, id: &str, priority: i64) -> rusqlite::Result<()> {
+    conn.execute("UPDATE layers SET priority = ?2 WHERE id = ?1", params![id, priority])?;
+    Ok(())
+}
+
+pub fn delete_layer(conn: &Connection, id: &str) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM layers WHERE id = ?1", [id])?;
+    Ok(())
 }
 
 // --- Sous-éléments rattachés (§12bis.2) -------------------------------------

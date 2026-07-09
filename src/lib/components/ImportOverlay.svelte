@@ -1,8 +1,16 @@
 <script lang="ts">
   // Retour visuel de l'import, global (§4.6bis : le glisser-déposer marche sur
   // toutes les vues, donc ce retour doit être visible peu importe l'écran ouvert).
-  import { importState, dismissReport, resolvePendingConflict } from "$lib/importState.svelte";
+  import { importState, dismissReport, resolvePendingConflict, resolveAmbiguous } from "$lib/importState.svelte";
   import { t } from "$lib/i18n/index.svelte";
+
+  // Libellé + classe CSS de la pastille d'issue d'un mod importé.
+  function outcomeChip(o: string): { cls: string; label: string } {
+    if (o === "UPDATE_REPLACE") return { cls: "upd", label: t("importOverlay.outcomeUpdate") };
+    if (o === "DUPLICATE") return { cls: "dup", label: t("importOverlay.outcomeDuplicate") };
+    if (o === "EXTENSION") return { cls: "ext", label: t("importOverlay.outcomeExtension") };
+    return { cls: "new", label: t("importOverlay.outcomeNew") };
+  }
 
   function importSummary(): string {
     const r = importState.report ?? [];
@@ -32,7 +40,7 @@
   </div>
 {/if}
 
-{#if importState.report && !importState.pendingConflicts.length}
+{#if importState.report && !importState.pendingConflicts.length && !importState.pendingAmbiguous.length}
   {@const report = importState.report}
   <div class="toast report-toast">
     <div class="report-head">
@@ -45,13 +53,14 @@
           <div class="r-line err">⚠ {a.archive} — {a.error}</div>
         {/if}
         {#each a.mods as m}
+          {@const chip = outcomeChip(m.outcome)}
           <div class="r-line">
-            <span class="r-out {m.outcome === 'UPDATE_REPLACE' ? 'upd' : m.outcome === 'DUPLICATE' ? 'dup' : 'new'}">
-              {m.outcome === "UPDATE_REPLACE" ? t("importOverlay.outcomeUpdate") : m.outcome === "DUPLICATE" ? t("importOverlay.outcomeDuplicate") : t("importOverlay.outcomeNew")}
-            </span>
+            <span class="r-out {chip.cls}">{chip.label}</span>
             {m.display_name ?? m.id_interne}
             {#if m.outcome === "DUPLICATE"}
               <span class="r-conflict">{t("importOverlay.duplicateNote")}</span>
+            {:else if m.outcome === "EXTENSION"}
+              <span class="r-conflict">{t("importOverlay.extensionNote", { added: m.added_count ?? 0, overwritten: m.overwritten_count ?? 0 })}</span>
             {/if}
           </div>
         {/each}
@@ -101,6 +110,27 @@
       </div>
       {#if importState.pendingConflicts.length > 1}
         <div class="modal-rest">{t("importOverlay.modalRest", { count: importState.pendingConflicts.length - 1 })}</div>
+      {/if}
+    </div>
+  </div>
+{/if}
+
+{#if importState.pendingAmbiguous.length && !importState.pendingConflicts.length}
+  {@const a = importState.pendingAmbiguous[0]}
+  <div class="modal-backdrop">
+    <div class="modal">
+      <h3>{t("importOverlay.ambiguousTitle")}</h3>
+      <p>{t("importOverlay.ambiguousBody", { name: a.name, added: a.added, overwritten: a.overwritten, total: a.total })}</p>
+      <div class="modal-actions">
+        <button class="btn" type="button" onclick={() => resolveAmbiguous(a, "extension")}>
+          {t("importOverlay.chooseExtension")}
+        </button>
+        <button class="btn btn-primary" type="button" onclick={() => resolveAmbiguous(a, "update")}>
+          {t("importOverlay.chooseUpdate")}
+        </button>
+      </div>
+      {#if importState.pendingAmbiguous.length > 1}
+        <div class="modal-rest">{t("importOverlay.ambiguousRest", { count: importState.pendingAmbiguous.length - 1 })}</div>
       {/if}
     </div>
   </div>
@@ -204,6 +234,10 @@
   .r-out.dup {
     color: var(--muted);
     border-color: var(--line);
+  }
+  .r-out.ext {
+    color: var(--green);
+    border-color: var(--green-border);
   }
   .r-conflict {
     color: var(--yellow);

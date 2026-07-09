@@ -36,7 +36,7 @@ pub fn is_junction(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-fn content_link(cfg: &AppConfig, kind: ModKind, id: &str) -> Option<PathBuf> {
+pub(crate) fn content_link(cfg: &AppConfig, kind: ModKind, id: &str) -> Option<PathBuf> {
     cfg.ac_install_path
         .as_ref()
         .map(|ac| ac.join("content").join(kind.content_folder()).join(id))
@@ -131,6 +131,9 @@ pub fn activate(
 
     create_junction(&link, Path::new(&target))?;
     overlay::set_active_version(conn, mod_id, &vid).map_err(|e| e.to_string())?;
+    // Compose par-dessus la base si le mod a des couches actives (§4.4) ;
+    // sans couche, recompose ré-affirme simplement la junction vers la version.
+    crate::compose::recompose(conn, cfg, mod_id)?;
     Ok(())
 }
 
@@ -152,6 +155,9 @@ pub fn deactivate(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<()
         }
         Err(_) => {} // déjà inactif
     }
+    // Le dossier composé du mod (§4.4) devient inutile ; les couches restent
+    // enregistrées et seront réappliquées à la prochaine activation.
+    crate::compose::clear_composed(cfg, kind, mod_id);
     Ok(())
 }
 

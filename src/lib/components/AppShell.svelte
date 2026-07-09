@@ -26,9 +26,10 @@
   // ADD-ONS et ATELIER en deux colonnes.
   type NavBtn = { id: string; labelKey: string; full?: boolean; action?: boolean };
   const addons: NavBtn[] = [
-    { id: "skins", labelKey: "nav.skins" },
+    { id: "carskins", labelKey: "nav.carAddons" },
+    { id: "trackskins", labelKey: "nav.trackAddons" },
     { id: "sounds", labelKey: "nav.sounds" },
-    { id: "others", labelKey: "nav.others", full: true },
+    { id: "others", labelKey: "nav.others" },
     { id: "apps", labelKey: "nav.apps", full: true },
   ];
   const atelier: NavBtn[] = [
@@ -186,10 +187,12 @@
         <Maintenance />
       {:else if nav.section === "import"}
         <Import />
-      {:else if nav.section === "skins"}
-        <Transversal subType="SKIN" />
+      {:else if nav.section === "carskins"}
+        <Transversal variant="car" />
+      {:else if nav.section === "trackskins"}
+        <Transversal variant="track" />
       {:else if nav.section === "sounds"}
-        <Transversal subType="SOUND" />
+        <Transversal variant="sound" />
       {:else if nav.section === "apps"}
         <Apps />
       {:else if nav.section === "others"}

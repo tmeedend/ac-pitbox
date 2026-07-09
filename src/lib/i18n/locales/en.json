@@ -225,7 +225,31 @@
     "onlyEntity": "Only entity in this pack for now.",
     "packNote": "Each entity stays independent (activated, tagged separately).",
     "filterByPack": "Filter by this pack",
-    "uninstallPack": "Uninstall pack"
+    "uninstallPack": "Uninstall pack",
+    "layersLabel": "Layers / extensions ({count})",
+    "layersNote": "Imported on top of this base without replacing it — the base stays intact (§4.4).",
+    "layerCounts": "{added} added · {overwritten} overwritten",
+    "layerDeleteTitle": "Delete layer",
+    "layerDeleteConfirm": "Delete layer \"{name}\"? The base is unaffected.",
+    "layerActiveOn": "Layer active (applied in game)",
+    "layerActiveOff": "Layer inactive",
+    "layerUp": "Move up (higher priority)",
+    "layerDown": "Move down (lower priority)",
+    "layersRecomposeNote": "Highest wins. Toggling/reordering recomposes the content — this can take a few seconds."
+  },
+  "history": {
+    "event": {
+      "IMPORT": "Import",
+      "UPDATE_REPLACE": "Update",
+      "UPDATE_KEPT_BOTH": "Kept both",
+      "EXTENSION_ADDED": "Extension"
+    },
+    "imported": "from {archive}",
+    "updated": "new version {version}",
+    "updatedNoVersion": "new version",
+    "replaced": "replaced {old}",
+    "keptBoth": "kept separately from {old}",
+    "extensionAdded": "layer from {archive} ({added} added, {overwritten} overwritten)"
   },
   "modpanel": {
     "expandTooltip": "Open as detail page",
@@ -531,7 +555,14 @@
     "outcomeUpdate": "UPDATE",
     "outcomeDuplicate": "ALREADY PRESENT",
     "outcomeNew": "NEW",
+    "outcomeExtension": "EXTENSION",
     "duplicateNote": "identical archive — not reimported",
+    "extensionNote": "layer added ({added} added, {overwritten} overwritten) — base untouched",
+    "ambiguousTitle": "Update or extension?",
+    "ambiguousBody": "\"{name}\" targets existing content: {added} files added, {overwritten} overwritten out of {total} total. Is this an update (replaces the base) or an extension (added on top, replaces nothing)?",
+    "chooseExtension": "Extension (replaces nothing)",
+    "chooseUpdate": "Update (replaces)",
+    "ambiguousRest": "{count} more to decide",
     "sharedInstalled": "+ {count} shared resource(s) installed",
     "fontLabel": "Font",
     "driverLabel": "Driver",

@@ -135,9 +135,38 @@ export interface ImportedMod {
   id_interne: string;
   kind: ModKind;
   display_name: string | null;
-  outcome: "IMPORT" | "UPDATE_REPLACE" | "DUPLICATE";
+  /** EXTENSION : rangé comme couche à part (§4.4). AMBIGUOUS : rien écrit, à
+   * trancher par l'utilisateur (mise à jour ou extension). */
+  outcome: "IMPORT" | "UPDATE_REPLACE" | "DUPLICATE" | "EXTENSION" | "AMBIGUOUS";
   version_label: string | null;
   conflict: FuzzyConflict | null;
+  /** Décompte de comparaison (§4.4), présent pour EXTENSION/AMBIGUOUS. */
+  added_count?: number;
+  overwritten_count?: number;
+  existing_total?: number;
+}
+
+/** Décision de reprise pour un import ambigu (§4.4). */
+export interface ImportDecision {
+  id: string;
+  decision: "update" | "extension";
+}
+
+/** Couche/extension rattachée à une base (§4.4). */
+export interface LayerRow {
+  id: string;
+  parent_id: string;
+  parent_kind: ModKind;
+  name: string;
+  library_path: string;
+  source_archive: string | null;
+  added_count: number;
+  overwritten_count: number;
+  /** Appliquée à la composition en jeu (§4.4). */
+  is_active: boolean;
+  /** Ordre de priorité : la plus haute gagne à la superposition. */
+  priority: number;
+  imported_at: string;
 }
 
 /** Ressource partagée (font/driver) installée globalement (§4.8). */
@@ -185,13 +214,40 @@ export interface ImportProgress {
   label: string;
 }
 
-export function importArchives(paths: string[]): Promise<ArchiveResult[]> {
-  return invoke<ArchiveResult[]>("import_archives", { paths });
+export function importArchives(
+  paths: string[],
+  decisions: ImportDecision[] = [],
+): Promise<ArchiveResult[]> {
+  return invoke<ArchiveResult[]>("import_archives", { paths, decisions });
 }
 
 /** Import de dossiers déjà décompressés (§4.5). copy=true préserve la source. */
-export function importFolders(paths: string[], copy: boolean): Promise<ArchiveResult[]> {
-  return invoke<ArchiveResult[]>("import_folders", { paths, copy });
+export function importFolders(
+  paths: string[],
+  copy: boolean,
+  decisions: ImportDecision[] = [],
+): Promise<ArchiveResult[]> {
+  return invoke<ArchiveResult[]>("import_folders", { paths, copy, decisions });
+}
+
+/** Couches/extensions rattachées à une base (§4.4). */
+export function listLayers(parentId: string): Promise<LayerRow[]> {
+  return invoke<LayerRow[]>("list_layers", { parentId });
+}
+
+/** Supprime une couche/extension (fichiers + overlay + recompose, §4.4). */
+export function deleteLayer(id: string): Promise<void> {
+  return invoke<void>("delete_layer", { id });
+}
+
+/** Active/désactive une couche puis recompose le contenu en jeu (§4.4). */
+export function setLayerActive(id: string, active: boolean): Promise<void> {
+  return invoke<void>("set_layer_active", { id, active });
+}
+
+/** Réordonne une couche (up = plus prioritaire) puis recompose (§4.4). */
+export function reorderLayer(id: string, direction: "up" | "down"): Promise<void> {
+  return invoke<void>("reorder_layer", { id, direction });
 }
 
 // --- Import en masse (§4.6) ---

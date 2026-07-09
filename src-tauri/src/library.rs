@@ -230,9 +230,18 @@ pub fn list_weather(cfg: &AppConfig) -> Vec<String> {
     out
 }
 
-/// Dossier de l'entité contenant `ui/` : version active en bibliothèque pour un
-/// mod géré, sinon `content/<type>s/<id>` (contenu de base Kunos).
+/// Dossier de l'entité contenant `ui/`, tel que le jeu le voit :
+/// - **dossier composé** (`<lib>/composed/<type>s/<id>`) s'il existe (base +
+///   couches actives, §4.4) — reflète les layouts/skins réellement en place ;
+/// - sinon version active en bibliothèque pour un mod géré ;
+/// - sinon `content/<type>s/<id>` (contenu de base Kunos).
 fn entity_dir(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<PathBuf> {
+    if let Some(lib) = &cfg.library_path {
+        let composed = lib.join("composed").join(kind_of(&m.kind).content_folder()).join(&m.id_interne);
+        if composed.is_dir() {
+            return Some(composed);
+        }
+    }
     if !m.is_stock {
         if let Some(vid) = &m.active_version_id {
             if let Ok(Some(p)) = overlay::get_version_path(conn, vid) {

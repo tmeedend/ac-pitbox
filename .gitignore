@@ -11,3 +11,4 @@ vite.config.ts.timestamp-*
 
 # Claude Code — réglages locaux (machine-specific)
 .claude/settings.local.json
+.aider*

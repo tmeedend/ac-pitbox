@@ -3,6 +3,7 @@ mod apps;
 mod archive;
 mod bulk;
 mod cm_stats;
+mod compose;
 mod config;
 mod detect;
 mod export;
@@ -13,6 +14,7 @@ mod inspect;
 mod kunos;
 mod kunos_dates;
 mod launch;
+mod layers;
 mod library;
 mod maintenance;
 mod modscan;
@@ -61,11 +63,17 @@ fn autodetect_paths() -> DetectedPaths {
 // --- Bibliothèque & import (L1) ---------------------------------------------
 
 #[tauri::command]
-fn import_archives(app: AppHandle, db: State<Db>, paths: Vec<String>) -> Result<Vec<ArchiveResult>, String> {
+fn import_archives(
+    app: AppHandle,
+    db: State<Db>,
+    paths: Vec<String>,
+    // Décisions update/extension pour reprendre un import ambigu (§4.4). Vide au 1er appel.
+    decisions: Option<Vec<importer::ImportDecision>>,
+) -> Result<Vec<ArchiveResult>, String> {
     let cfg = config::load(&app);
     let rules = rules::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(importer::import_archives(&app, &conn, &cfg, &rules, &paths))
+    Ok(importer::import_archives(&app, &conn, &cfg, &rules, &paths, &decisions.unwrap_or_default()))
 }
 
 // --- Tags & ontologie (L2) --------------------------------------------------
@@ -126,11 +134,12 @@ fn import_folders(
     db: State<Db>,
     paths: Vec<String>,
     copy: bool,
+    decisions: Option<Vec<importer::ImportDecision>>,
 ) -> Result<Vec<ArchiveResult>, String> {
     let cfg = config::load(&app);
     let rules = rules::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(importer::import_folders(&app, &conn, &cfg, &rules, &paths, copy))
+    Ok(importer::import_folders(&app, &conn, &cfg, &rules, &paths, copy, &decisions.unwrap_or_default()))
 }
 
 /// Analyse un dossier parent (§4.6) : classe chaque sous-dossier sans rien écrire.
@@ -501,6 +510,38 @@ fn index_stock_content(app: AppHandle, db: State<Db>) -> Result<usize, String> {
     stock::index_stock_content(&conn, &cfg, &rules)
 }
 
+/// Couches/extensions rattachées à une base (§4.4), pour la fiche détail.
+#[tauri::command]
+fn list_layers(db: State<Db>, parent_id: String) -> Result<Vec<overlay::LayerRow>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    overlay::list_layers(&conn, &parent_id).map_err(|e| e.to_string())
+}
+
+/// Supprime une couche/extension : fichiers bibliothèque + overlay, puis
+/// recompose le parent (§4.4).
+#[tauri::command]
+fn delete_layer(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    compose::remove_layer(&conn, &cfg, &id)
+}
+
+/// Active/désactive une couche puis recompose le contenu en jeu (§4.4).
+#[tauri::command]
+fn set_layer_active(app: AppHandle, db: State<Db>, id: String, active: bool) -> Result<(), String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    compose::set_layer_active(&conn, &cfg, &id, active)
+}
+
+/// Réordonne une couche (up = plus prioritaire) puis recompose (§4.4).
+#[tauri::command]
+fn reorder_layer(app: AppHandle, db: State<Db>, id: String, direction: String) -> Result<(), String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    compose::reorder_layer(&conn, &cfg, &id, &direction)
+}
+
 /// Sous-éléments rattachés à une entité (skins/sons d'une voiture, §12bis.3).
 #[tauri::command]
 fn list_sub_mods(db: State<Db>, parent_id: String) -> Result<Vec<overlay::SubModRow>, String> {
@@ -648,6 +689,10 @@ pub fn run() {
             analyze_bulk_import,
             execute_bulk_import,
             resolve_conflict,
+            list_layers,
+            delete_layer,
+            set_layer_active,
+            reorder_layer,
             list_library,
             get_mod_detail,
             open_mod_folder,

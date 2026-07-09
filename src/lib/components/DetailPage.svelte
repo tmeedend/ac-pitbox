@@ -8,6 +8,10 @@
     deactivateMod,
     getModDetail,
     listLibrary,
+    listLayers,
+    deleteLayer,
+    setLayerActive,
+    reorderLayer,
     openModFolder,
     previewSrc,
     setFavorite,
@@ -16,6 +20,7 @@
     type ModDetail,
     type ModKind,
     type NativeSpecs,
+    type LayerRow,
   } from "$lib/library";
   import { onDestroy, onMount, untrack } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -37,6 +42,8 @@
   import { open, confirm } from "@tauri-apps/plugin-dialog";
   import PowerCurve from "./PowerCurve.svelte";
   import { nav, pickSession, requestSection } from "$lib/nav.svelte";
+  import { importState } from "$lib/importState.svelte";
+  import { historyEventLabel, historyDetails } from "$lib/history";
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
   import { getConfig } from "$lib/config";
   import { t } from "$lib/i18n/index.svelte";
@@ -66,6 +73,8 @@
   // Provenance / pack d'origine (§4.7).
   let siblings = $state<ModCard[]>([]);
   let packBusy = $state(false);
+  // Couches / extensions rattachées (§4.4).
+  let layerList = $state<LayerRow[]>([]);
 
   // Image héros : voiture → skin sélectionné ; circuit → preview du layout
   // sélectionné ; sinon preview par défaut du mod.
@@ -91,6 +100,73 @@
 
   function activeArchive(d: ModDetail): string | null {
     return d.versions.find((v) => v.id === d.active_version_id)?.source_archive ?? null;
+  }
+
+  let layerBusy = $state(false);
+
+  /** Recharge la fiche + les couches (après compositing/import) en préservant le
+   * layout sélectionné : activer une couche ajoute souvent des layouts (§4.4). */
+  async function refreshEntity() {
+    const current = id;
+    const [d, ls] = await Promise.all([getModDetail(current), listLayers(current)]);
+    if (current !== id) return;
+    layerList = ls;
+    if (d) {
+      const prevLayoutId = detail?.track?.layouts[previewLayout]?.id;
+      detail = d;
+      if (!isCar && d.track) {
+        const li = d.track.layouts.findIndex((l) => l.id === prevLayoutId);
+        previewLayout = li >= 0 ? li : Math.min(previewLayout, Math.max(0, d.track.layouts.length - 1));
+      }
+    }
+    if (isCar) {
+      const s = await listModSkins(current);
+      if (current === id) skins = s;
+    }
+  }
+
+  async function removeLayer(layer: LayerRow) {
+    const ok = await confirm(t("detail.layerDeleteConfirm", { name: layer.source_archive ?? layer.name }), {
+      title: t("detail.layerDeleteTitle"),
+      kind: "warning",
+    });
+    if (!ok) return;
+    layerBusy = true;
+    actionError = "";
+    try {
+      await deleteLayer(layer.id);
+      await refreshEntity();
+    } catch (e) {
+      actionError = String(e);
+    } finally {
+      layerBusy = false;
+    }
+  }
+
+  async function toggleLayer(layer: LayerRow) {
+    layerBusy = true;
+    actionError = "";
+    try {
+      await setLayerActive(layer.id, !layer.is_active);
+      await refreshEntity();
+    } catch (e) {
+      actionError = String(e);
+    } finally {
+      layerBusy = false;
+    }
+  }
+
+  async function moveLayer(layer: LayerRow, direction: "up" | "down") {
+    layerBusy = true;
+    actionError = "";
+    try {
+      await reorderLayer(layer.id, direction);
+      await refreshEntity();
+    } catch (e) {
+      actionError = String(e);
+    } finally {
+      layerBusy = false;
+    }
   }
 
   async function uninstallPack() {
@@ -259,7 +335,12 @@
     const current = id;
     actionError = "";
     siblings = [];
+    layerList = [];
     previewLayout = 0;
+    // Couches/extensions rattachées (§4.4) : rangées à part, la base est intacte.
+    listLayers(current).then((ls) => {
+      if (current === id) layerList = ls;
+    });
     getModDetail(current).then((d) => {
       if (current !== id) return;
       detail = d;
@@ -299,6 +380,19 @@
     if (parent !== id) return;
     sounds = all.filter((s) => s.sub_type === "SOUND");
   }
+
+  // Un import peut survenir depuis n'importe quel écran (§4.6bis) et cibler le
+  // mod ouvert (ex. une extension). Dès qu'un import se termine, recharger la
+  // fiche pour voir tout de suite la nouvelle couche + ses layouts.
+  let lastImportVersion = importState.version;
+  $effect(() => {
+    const v = importState.version;
+    if (v === lastImportVersion) return;
+    lastImportVersion = v;
+    // Différé hors du suivi réactif : ne dépend que de importState.version,
+    // pas de `id` (évite un double rechargement à la navigation).
+    queueMicrotask(() => void refreshEntity());
+  });
 
   // Son = bascule exclusive (§12bis.2) : un seul actif, original restaurable.
   async function pickSound(subId: string | null) {
@@ -697,6 +791,7 @@
           {@render historyBlock(d)}
           {@render publishedBlock(d)}
           {@render provenanceBlock(d)}
+          {@render layersBlock()}
         </div>
       {:else}
         <!-- Layouts (galerie illustrée par le tracé, comme les skins voiture) -->
@@ -756,6 +851,7 @@
           {@render historyBlock(d)}
           {@render publishedBlock(d)}
           {@render provenanceBlock(d)}
+          {@render layersBlock()}
         </div>
       {/if}
     </div>
@@ -800,8 +896,8 @@
   <ul class="history">
     {#each d.history.filter((h) => h.event !== "ACTIVATE" && h.event !== "DEACTIVATE") as h}
       <li>
-        <span class="ev">{h.event}</span>
-        <span class="det">{h.details}</span>
+        <span class="ev">{historyEventLabel(h.event)}</span>
+        <span class="det">{historyDetails(h.details)}</span>
         <span class="ts mono">{fmtDate(h.timestamp)}</span>
       </li>
     {/each}
@@ -868,6 +964,33 @@
         </button>
       </div>
     {/if}
+  {/if}
+{/snippet}
+
+{#snippet layersBlock()}
+  {#if layerList.length}
+    {@const ordered = [...layerList].reverse()}
+    <div class="lbl section">{t("detail.layersLabel", { count: layerList.length })}</div>
+    <div class="prov-note">{t("detail.layersNote")}</div>
+    <ul class="layer-list">
+      {#each ordered as l, i (l.id)}
+        <li class="layer-row" class:inactive={!l.is_active}>
+          <label class="layer-tog" title={l.is_active ? t("detail.layerActiveOn") : t("detail.layerActiveOff")}>
+            <input type="checkbox" checked={l.is_active} disabled={layerBusy} onchange={() => toggleLayer(l)} />
+          </label>
+          <div class="layer-main">
+            <span class="layer-nm">{l.source_archive ?? l.name}</span>
+            <span class="layer-counts mono">{t("detail.layerCounts", { added: l.added_count, overwritten: l.overwritten_count })}</span>
+          </div>
+          <div class="layer-ord">
+            <button class="layer-arrow" type="button" title={t("detail.layerUp")} disabled={layerBusy || i === 0} onclick={() => moveLayer(l, "up")}>▲</button>
+            <button class="layer-arrow" type="button" title={t("detail.layerDown")} disabled={layerBusy || i === ordered.length - 1} onclick={() => moveLayer(l, "down")}>▼</button>
+          </div>
+          <button class="layer-x" type="button" title={t("detail.layerDeleteTitle")} disabled={layerBusy} onclick={() => removeLayer(l)}>✕</button>
+        </li>
+      {/each}
+    </ul>
+    <div class="prov-note">{t("detail.layersRecomposeNote")}</div>
   {/if}
 {/snippet}
 
@@ -1510,6 +1633,84 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 120px;
+  }
+
+  /* Couches / extensions (§4.4) */
+  .layer-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 6px 0 0;
+    padding: 0;
+  }
+  .layer-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--line);
+    background: var(--panel2);
+    padding: 5px 9px;
+  }
+  .layer-row.inactive {
+    opacity: 0.5;
+  }
+  .layer-tog {
+    flex: none;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+  }
+  .layer-ord {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    line-height: 0.7;
+  }
+  .layer-arrow {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 8px;
+    padding: 1px 2px;
+  }
+  .layer-arrow:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+  .layer-arrow:not(:disabled):hover {
+    color: var(--txt2);
+  }
+  .layer-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .layer-nm {
+    font-size: 11px;
+    color: var(--txt2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .layer-counts {
+    font-size: 9px;
+    color: var(--muted2);
+  }
+  .layer-x {
+    flex: none;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 4px;
+  }
+  .layer-x:hover {
+    color: var(--rosso-bright);
   }
 
   /* Provenance / pack d'origine (§4.7) */
