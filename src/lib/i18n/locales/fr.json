@@ -489,6 +489,7 @@
   "transversal": {
     "soundSubtitle": "Tous les mods de son importés, rattachés à leur voiture. Le son est exclusif : un seul actif par voiture.",
     "skinSubtitle": "Tous les skins importés, rattachés à leur voiture. Stockés à part, projetés dans la voiture.",
+    "trackSubtitle": "Tous les skins importés, rattachés à leur circuit. Stockés à part, projetés dans le circuit.",
     "searchPlaceholder": "Rechercher (nom, voiture, source…)",
     "emptySound": "Aucun son importé.",
     "emptySkin": "Aucun skin importé.",

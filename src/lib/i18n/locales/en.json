@@ -4,6 +4,8 @@
     "addons": "Add-ons",
     "atelier": "Workshop",
     "skins": "Skins",
+    "carAddons": "Car add-ons",
+    "trackAddons": "Track add-ons",
     "sounds": "Sounds",
     "others": "Other mods",
     "apps": "Apps",
@@ -487,6 +489,7 @@
   "transversal": {
     "soundSubtitle": "All imported sound mods, linked to their car. Sound is exclusive: only one active per car.",
     "skinSubtitle": "All imported skins, linked to their car. Stored separately, projected into the car.",
+    "trackSubtitle": "All imported skins, linked to their track. Stored separately, projected into the track.",
     "searchPlaceholder": "Search (name, car, source…)",
     "emptySound": "No sound imported.",
     "emptySkin": "No skin imported.",
