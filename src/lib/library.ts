@@ -235,6 +235,11 @@ export function listLayers(parentId: string): Promise<LayerRow[]> {
   return invoke<LayerRow[]>("list_layers", { parentId });
 }
 
+/** Toutes les couches d'un type (vue transversale add-ons, §4.4). */
+export function listLayersByKind(kind: ModKind): Promise<LayerRow[]> {
+  return invoke<LayerRow[]>("list_layers_by_kind", { kind });
+}
+
 /** Supprime une couche/extension (fichiers + overlay + recompose, §4.4). */
 export function deleteLayer(id: string): Promise<void> {
   return invoke<void>("delete_layer", { id });

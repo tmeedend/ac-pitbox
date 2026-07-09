@@ -909,6 +909,13 @@ pub fn list_layers(conn: &Connection, parent_id: &str) -> rusqlite::Result<Vec<L
     rows.collect()
 }
 
+/// Toutes les couches d'un type (Car|Track), pour la vue transversale add-ons.
+pub fn list_layers_by_kind(conn: &Connection, kind: &str) -> rusqlite::Result<Vec<LayerRow>> {
+    let mut stmt = conn.prepare(&format!("{LAYER_SELECT} WHERE parent_kind = ?1 ORDER BY parent_id, priority"))?;
+    let rows = stmt.query_map([kind], map_layer)?;
+    rows.collect()
+}
+
 /// Couches **actives** d'une base, dans l'ordre de priorité (la + haute en dernier
 /// → gagne à la superposition). Base de la composition (§4.4).
 pub fn active_layers(conn: &Connection, parent_id: &str) -> rusqlite::Result<Vec<LayerRow>> {

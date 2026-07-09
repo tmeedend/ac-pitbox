@@ -517,6 +517,13 @@ fn list_layers(db: State<Db>, parent_id: String) -> Result<Vec<overlay::LayerRow
     overlay::list_layers(&conn, &parent_id).map_err(|e| e.to_string())
 }
 
+/// Toutes les couches d'un type (Car|Track), vue transversale add-ons (§4.4).
+#[tauri::command]
+fn list_layers_by_kind(db: State<Db>, kind: String) -> Result<Vec<overlay::LayerRow>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    overlay::list_layers_by_kind(&conn, &kind).map_err(|e| e.to_string())
+}
+
 /// Supprime une couche/extension : fichiers bibliothèque + overlay, puis
 /// recompose le parent (§4.4).
 #[tauri::command]
@@ -690,6 +697,7 @@ pub fn run() {
             execute_bulk_import,
             resolve_conflict,
             list_layers,
+            list_layers_by_kind,
             delete_layer,
             set_layer_active,
             reorder_layer,
