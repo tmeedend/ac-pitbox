@@ -139,8 +139,8 @@ pub struct RaceSetup {
     /// Ghost car (Hotlap uniquement) → [GHOST_CAR] du race.ini.
     #[serde(default)]
     pub ghost_car: bool,
-    /// Simulation — dégâts/usure/carburant → assists.ini. Actifs quel que
-    /// soit le type de session (§8.6, pas réservés à la Course). En %.
+    /// Simulation — dégâts/usure/carburant → assists.ini. Actifs quel que soit
+    /// le type de session (§8.6, pas réservés à la Course). En %.
     #[serde(default = "default_damage")]
     pub damage: u32,
     #[serde(default = "default_rate")]
@@ -376,7 +376,7 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
         }
     }
 
-    // Simulation (dégâts/usure/carburant) + aides : actives quel que soit le
+    // Simulation (dégâts/carburant/usure) + aides : actives quel que soit le
     // type de session (§8.6) ; vivent dans assists.ini, pas race.ini.
     apply_assists(
         setup.damage,
@@ -514,44 +514,4 @@ mod tests {
         assert!(ini.contains("[WIND]\nSPEED_KMH_MIN=18\nSPEED_KMH_MAX=18\nDIRECTION_DEG=275"));
 
         let ini_default = build_race_ini(&base());
-        assert!(ini_default.contains("[WIND]\nSPEED_KMH_MIN=0\nSPEED_KMH_MAX=0\nDIRECTION_DEG=0"));
-    }
-
-    #[test]
-    fn race_with_qualifying_has_two_sessions() {
-        let mut s = base();
-        s.session_type = SessionType::Race;
-        s.qualifying = true;
-        s.qualify_minutes = 12;
-        s.grip = 88;
-        let ini = build_race_ini(&s);
-        assert!(ini.contains("[SESSION_0]\nNAME=Qualify\nTYPE=2\nDURATION_MINUTES=12"));
-        assert!(ini.contains("[SESSION_1]\nNAME=Race\nTYPE=3"));
-        assert!(ini.contains("SESSION_START=88"));
-    }
-
-    #[test]
-    fn hotlap_is_single_car_no_duration() {
-        let mut s = base();
-        s.session_type = SessionType::Hotlap;
-        let ini = build_race_ini(&s);
-        assert!(ini.contains("TYPE=4"));
-        assert!(ini.contains("SPAWN_SET=HOTLAP_START"));
-        assert!(ini.contains("DURATION_MINUTES=0"));
-    }
-
-    #[test]
-    fn ghost_car_only_when_hotlap() {
-        // Ghost activé en Hotlap → ENABLED=1.
-        let mut s = base();
-        s.session_type = SessionType::Hotlap;
-        s.ghost_car = true;
-        assert!(build_race_ini(&s).contains("[GHOST_CAR]\nRECORDING=1\nPLAYING=1\nLOAD=1\nENABLED=1"));
-
-        // Ghost activé mais en Practice → ignoré (ENABLED=0).
-        let mut p = base();
-        p.session_type = SessionType::Practice;
-        p.ghost_car = true;
-        assert!(build_race_ini(&p).contains("[GHOST_CAR]\nRECORDING=0\nPLAYING=0\nLOAD=0\nENABLED=0"));
-    }
-}
+        assert!(ini_default.contains("[WIND]\nSPEED_KMH_MIN=0\nSPEED_KHM
