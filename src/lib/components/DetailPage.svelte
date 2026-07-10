@@ -238,6 +238,12 @@
   // avec la page — d'où le suivi resize/scroll ci-dessous.
   let showroomBusy = $state(false);
   let showroomAttached = $state(false);
+  // Résolu une fois les skins de la fiche courante chargés (§skin sélectionné) —
+  // `openShowroom` l'attend pour ne jamais ouvrir avant de connaître le skin
+  // sélectionné (sinon SKIN= part vide → voiture toute blanche au 1er affichage,
+  // course entre le chargement de `detail` et celui de `skins`).
+  let skinsLoadResolve: (() => void) | null = null;
+  let skinsLoadPromise: Promise<void> = Promise.resolve();
   let heroEl = $state<HTMLDivElement | null>(null);
   // Option « aperçu 3D par défaut » (§réglages) : chargée une fois. Si activée,
   // la 3D s'ouvre d'elle-même sur les fiches voiture et le bouton disparaît.
@@ -282,6 +288,9 @@
     showroomBusy = true;
     actionError = "";
     try {
+      // Attend que le skin sélectionné soit connu (sinon course possible avec
+      // le chargement de la fiche → showroom ouvert sans skin, voiture blanche).
+      await skinsLoadPromise;
       await openNativeShowroom(detail.id_interne, skins[previewSkin]?.id ?? null);
       const r = heroRect();
       if (r) {
@@ -392,13 +401,18 @@
       }
     });
     if (isCar) {
-      const savedSkin = getPreferredSkin(current);
-      listModSkins(current).then((s) => {
-        if (current !== id) return;
-        skins = s;
-        const pi = s.findIndex((x) => x.id === savedSkin?.id);
-        previewSkin = pi >= 0 ? pi : 0;
+      skinsLoadPromise = new Promise((resolve) => {
+        skinsLoadResolve = resolve;
       });
+      const savedSkin = getPreferredSkin(current);
+      listModSkins(current)
+        .then((s) => {
+          if (current !== id) return;
+          skins = s;
+          const pi = s.findIndex((x) => x.id === savedSkin?.id);
+          previewSkin = pi >= 0 ? pi : 0;
+        })
+        .finally(() => skinsLoadResolve?.());
       loadSounds(current);
     } else {
       listSubMods(current).then((all) => {
@@ -464,6 +478,15 @@
       skin: sk?.id ?? null,
       outline: null,
     });
+    // Le showroom natif n'a pas de mécanisme connu pour changer de skin à
+    // chaud (pas d'IPC vers acShowroom.exe, voir docs/showroom-3d-preview-
+    // research.md) : s'il est déjà ouvert, on le relance avec le nouveau skin.
+    if (showroomAttached) void relaunchShowroomForSkin();
+  }
+
+  async function relaunchShowroomForSkin() {
+    await closeShowroom();
+    await openShowroom();
   }
 
   // Sélectionner un layout de circuit : mémorisé + poussé dans le duo de session
