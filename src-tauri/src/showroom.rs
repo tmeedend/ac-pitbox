@@ -27,10 +27,10 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, EnumChildWindows, EnumWindows, GetClassNameW, GetWindowLongPtrW,
-    GetWindowThreadProcessId, PostMessageW, RegisterClassW, SetParent, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-    CS_HREDRAW, CS_VREDRAW, GWL_STYLE, SWP_FRAMECHANGED, SWP_NOZORDER, SW_HIDE, SW_SHOW, WM_CLOSE, WNDCLASSW,
-    WS_CAPTION, WS_CHILD, WS_EX_TOOLWINDOW, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
-    WS_VISIBLE,
+    GetWindowThreadProcessId, IsWindow, PostMessageW, RegisterClassW, SetParent, SetWindowLongPtrW, SetWindowPos,
+    ShowWindow, CS_HREDRAW, CS_VREDRAW, GWL_STYLE, SWP_FRAMECHANGED, SWP_NOZORDER, SW_HIDE, SW_SHOW, WM_CLOSE,
+    WNDCLASSW, WS_CAPTION, WS_CHILD, WS_EX_TOOLWINDOW, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU,
+    WS_THICKFRAME, WS_VISIBLE,
 };
 
 use crate::config::AppConfig;
@@ -296,6 +296,28 @@ fn find_showroom_child(overlay: HWND) -> Option<HWND> {
     ctx.found.map(|raw| HWND(raw as *mut _))
 }
 
+/// Attend une fenêtre showroom **valide** pour `pid` (classe `acShowroomW`),
+/// avec un budget de temps donné. `acShowroom.exe` peut détruire et recréer sa
+/// fenêtre pendant l'initialisation DirectX (splash puis fenêtre définitive) —
+/// `find_showroom_window` seul peut donc renvoyer un HWND déjà obsolète au
+/// moment où il est utilisé un peu plus tard (cause de l'erreur intermittente
+/// « handle de fenêtre non valide », 0x80070578/ERROR_INVALID_WINDOW_HANDLE).
+/// `IsWindow` revérifie juste avant de rendre la main ; si la fenêtre trouvée
+/// s'avère déjà morte, on continue de sonder au lieu de la renvoyer telle quelle.
+fn wait_for_valid_window(pid: u32, deadline: Instant, poll: Duration) -> Option<HWND> {
+    loop {
+        if let Some(h) = find_showroom_window(pid) {
+            if unsafe { IsWindow(Some(h)) }.as_bool() {
+                return Some(h);
+            }
+        }
+        if Instant::now() >= deadline {
+            return None;
+        }
+        std::thread::sleep(poll);
+    }
+}
+
 const OVERLAY_CLASS_NAME: &str = "PitboxShowroomOverlay";
 
 fn wstr(s: &str) -> Vec<u16> {
@@ -362,14 +384,9 @@ pub struct ShowroomState(pub std::sync::Mutex<Option<ShowroomHandle>>);
 /// DirectX) avant de basculer sur le thread principal.
 pub fn attach(app: &AppHandle, pid: u32, x: i32, y: i32, width: i32, height: i32) -> Result<isize, String> {
     let deadline = Instant::now() + Duration::from_secs(10);
-    let target_raw = loop {
-        if let Some(h) = find_showroom_window(pid) {
-            break h.0 as isize;
-        }
-        if Instant::now() >= deadline {
-            return Err("fenêtre du showroom introuvable (délai dépassé)".into());
-        }
-        std::thread::sleep(Duration::from_millis(250));
+    let target_raw = match wait_for_valid_window(pid, deadline, Duration::from_millis(250)) {
+        Some(h) => h.0 as isize,
+        None => return Err("fenêtre du showroom introuvable (délai dépassé)".into()),
     };
 
     eprintln!("[showroom] attach: fenêtre trouvée hwnd={target_raw:#x}, dispatch vers le thread principal");
@@ -381,7 +398,21 @@ pub fn attach(app: &AppHandle, pid: u32, x: i32, y: i32, width: i32, height: i32
         let result = (|| -> Result<isize, String> {
             let win = app.get_webview_window("main").ok_or("fenêtre principale introuvable")?;
             let host = win.hwnd().map_err(|e| e.to_string())?;
-            let target = HWND(target_raw as *mut _);
+
+            // Re-vérifie juste avant usage : le HWND trouvé avant le dispatch
+            // vers ce thread peut avoir été détruit/recréé entre-temps pendant
+            // l'init DirectX d'acShowroom (fenêtre de démarrage remplacée par
+            // la définitive) — cause de l'erreur intermittente « handle de
+            // fenêtre non valide » (0x80070578/ERROR_INVALID_WINDOW_HANDLE).
+            // Re-sonde brièvement si besoin (thread principal : budget court
+            // pour ne pas geler l'UI, la recréation est typiquement immédiate).
+            let mut target = HWND(target_raw as *mut _);
+            if !unsafe { IsWindow(Some(target)) }.as_bool() {
+                eprintln!("[showroom] attach: HWND initial devenu invalide, nouvelle recherche...");
+                target = wait_for_valid_window(pid, Instant::now() + Duration::from_secs(2), Duration::from_millis(50))
+                    .ok_or("la fenêtre du showroom a disparu avant l'intégration")?;
+                eprintln!("[showroom] attach: nouvelle fenêtre trouvée hwnd={:#x}", target.0 as isize);
+            }
             eprintln!("[showroom] attach: host={:#x}", host.0 as isize);
 
             ensure_overlay_class_registered();

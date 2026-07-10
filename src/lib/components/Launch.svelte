@@ -19,6 +19,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import OpponentPicker from "./OpponentPicker.svelte";
   import SavedSessionsDialog from "./SavedSessionsDialog.svelte";
+  import NumberStepper from "./NumberStepper.svelte";
   import { saveSession, type SavedSession } from "$lib/savedSessions";
 
   let libCards = $state<ModCard[]>([]);
@@ -119,17 +120,28 @@
     winter: [1, 15],
   };
   let season = $state<Season>("");
+  /** Pose la saison sans effet de bord (utilisé aussi en interne : chargement
+   * de preset, correction auto si le circuit ne gère pas la saison). Le reset
+   * des températures recommandées est déclenché séparément, uniquement quand
+   * l'utilisateur choisit lui-même une saison (voir `selectSeason`). */
   function applySeason(next: Season) {
     season = next;
     if (!next) {
       setup.season = null;
       setup.season_date = null;
-      return;
+    } else {
+      const [month, day] = SEASON_MID[next];
+      const year = new Date().getFullYear();
+      setup.season = next;
+      setup.season_date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     }
-    const [month, day] = SEASON_MID[next];
-    const year = new Date().getFullYear();
-    setup.season = next;
-    setup.season_date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+  /** Choix de saison par l'utilisateur (bouton) : la saison influence la
+   * température recommandée (§8.6bis) — la changer remet des valeurs
+   * cohérentes, comme un changement de météo. */
+  function selectSeason(next: Season) {
+    applySeason(next);
+    void refreshConditions(true);
   }
 
   // --- Support CSP effectif du circuit courant (§6.4bis) : détecté à la
@@ -384,26 +396,38 @@
   const aiMinPct = $derived(((setup.ai_level_min - RANGE_MIN) / (RANGE_MAX - RANGE_MIN)) * 100);
   const aiMaxPct = $derived(((setup.ai_level_max - RANGE_MIN) / (RANGE_MAX - RANGE_MIN)) * 100);
 
-  // --- Météo (intentions + température/vent implicites, §8.5/§8.6) ---
+  // --- Météo (intentions + température/vent, §8.5/§8.6) ---
+  // Air et piste sont des valeurs **recommandées** par météo+saison, mais
+  // restent modifiables à la main (§8.6bis) : `tempsOverridden` mémorise que
+  // l'utilisateur a corrigé les valeurs proposées, pour ne plus les écraser
+  // tant que la météo ou la saison ne change pas. Un changement de météo ou de
+  // saison remet toujours des valeurs recommandées fraîches (reset explicite).
+  let tempsOverridden = $state(false);
   async function selectIntent(opt: WeatherOption) {
     if (!opt.available || !opt.weather) return;
     selectedIntent = opt.id;
     setup.weather = opt.weather;
-    await refreshConditions();
+    await refreshConditions(true);
   }
-  async function refreshConditions() {
+  async function refreshConditions(resetOverride: boolean) {
     if (!selectedIntent) return;
-    const c = await weatherConditions(selectedIntent, setup.time_hours);
-    setup.ambient_c = c.ambient;
-    setup.road_c = c.road;
+    const c = await weatherConditions(selectedIntent, setup.time_hours, setup.season);
+    if (resetOverride || !tempsOverridden) {
+      setup.ambient_c = c.ambient;
+      setup.road_c = c.road;
+    }
+    if (resetOverride) tempsOverridden = false;
     setup.wind_speed_kmh = c.wind_speed_kmh;
     setup.wind_direction_deg = c.wind_direction_deg;
+  }
+  function overrideTemps() {
+    tempsOverridden = true;
   }
   let lastHour = $state(-1);
   $effect(() => {
     if (setup.time_hours !== lastHour && selectedIntent) {
       lastHour = setup.time_hours;
-      refreshConditions();
+      refreshConditions(false);
     }
   });
   function compassKey(deg: number): string {
@@ -707,7 +731,7 @@
     </div>
 
     {#if setup.session_type === "practice"}
-      <label class="quickfield"><span>{t("launch.duration")}</span><input class="input" type="number" min="1" max="240" bind:value={setup.duration_minutes} /></label>
+      <label class="quickfield"><span>{t("launch.duration")}</span><NumberStepper width={90} min={1} max={240} bind:value={setup.duration_minutes} /></label>
     {:else if setup.session_type === "hotlap"}
       <label class="check quickfield"><input type="checkbox" bind:checked={setup.ghost_car} /><span>{t("launch.ghostCar")}</span></label>
     {/if}
@@ -744,7 +768,7 @@
             {/if}
 
             <label class="grid-fields">
-              <input class="num" type="number" min="0" max="30" value={opponentCount} onchange={(e) => applyOpponentCount(Number(e.currentTarget.value))} />
+              <NumberStepper min={0} max={30} value={opponentCount} onchange={(v) => applyOpponentCount(v)} />
               <span class="fk">{t("launch.aiCount")}</span>
             </label>
             <div class="oppo">
@@ -836,11 +860,29 @@
           </div>
           {#if currentWeather}
             <div class="implicit">
-              <div class="imp">
-                <div><div class="ik">{t("launch.tempImplicit")}</div><div class="iv mono">{t("launch.tempReading", { air: setup.ambient_c ?? 0, road: setup.road_c ?? 0 })}</div></div>
+              <div class="imp temp-imp">
+                <div class="ik">{t("launch.tempAirLabel")}</div>
+                <NumberStepper
+                  width={68}
+                  min={-20}
+                  max={45}
+                  value={setup.ambient_c ?? 0}
+                  onchange={(v) => { setup.ambient_c = v; overrideTemps(); }}
+                />
+              </div>
+              <div class="imp temp-imp">
+                <div class="ik">{t("launch.tempRoadLabel")}</div>
+                <NumberStepper
+                  width={68}
+                  min={-20}
+                  max={65}
+                  value={setup.road_c ?? 0}
+                  onchange={(v) => { setup.road_c = v; overrideTemps(); }}
+                />
               </div>
               <div class="imp">
-                <div><div class="ik">{t("launch.windImplicit")}</div><div class="iv mono">{t("launch.windReading", { speed: setup.wind_speed_kmh ?? 0, dir: t(compassKey(setup.wind_direction_deg ?? 0)) })}</div></div>
+                <div class="ik">{t("launch.windImplicit")}</div>
+                <div class="iv mono">{t("launch.windReading", { speed: setup.wind_speed_kmh ?? 0, dir: t(compassKey(setup.wind_direction_deg ?? 0)) })}</div>
               </div>
             </div>
             <p class="implicit-note">{t("launch.implicitNote")}</p>
@@ -869,7 +911,7 @@
                   type="button"
                   disabled={locked}
                   title={locked ? t("launch.seasonUnsupportedTooltip") : ""}
-                  onclick={() => applySeason(s.id)}
+                  onclick={() => selectSeason(s.id)}
                 >
                   <svg viewBox="0 0 38 38">{@render seasonIcon(s.id)}</svg>
                   <div class="wn">{t(s.labelKey)}</div>
@@ -901,7 +943,7 @@
           <section class="sect">
             <div class="lbl">{t("launch.raceOptions")}</div>
             <label class="grid-fields" style="margin-bottom:14px;">
-              <input class="num" type="number" min="1" max="99" bind:value={setup.laps} />
+              <NumberStepper min={1} max={99} bind:value={setup.laps} />
               <span class="fk">{t("launch.laps")}</span>
             </label>
             <div class="two-col">
@@ -927,7 +969,7 @@
             </div>
             {#if setup.qualifying}
               <label class="grid-fields" style="margin-top:10px;">
-                <input class="num" type="number" min="1" max="60" bind:value={setup.qualify_minutes} />
+                <NumberStepper min={1} max={60} bind:value={setup.qualify_minutes} />
                 <span class="fk">{t("launch.qualifyMinutes")}</span>
               </label>
             {/if}
@@ -1033,9 +1075,6 @@
     color: var(--muted);
     margin-bottom: 20px;
   }
-  .quickfield input[type="number"] {
-    width: 90px;
-  }
   .quickfield.check {
     text-transform: none;
     font-size: 12.5px;
@@ -1109,16 +1148,6 @@
     display: flex;
     align-items: center;
     gap: 12px;
-  }
-  .num {
-    width: 70px;
-    height: 32px;
-    background: var(--bg);
-    border: 1px solid var(--line);
-    color: var(--txt);
-    text-align: center;
-    font-size: 13px;
-    font-family: var(--mono);
   }
   .fk {
     color: var(--faint);
@@ -1377,6 +1406,7 @@
   }
   .implicit {
     display: flex;
+    flex-wrap: wrap;
     gap: 16px;
     margin-top: 12px;
     padding: 9px 12px;
@@ -1388,6 +1418,7 @@
     font-size: 7.5px;
     letter-spacing: 1px;
     text-transform: uppercase;
+    margin-bottom: 5px;
   }
   .imp .iv {
     font-size: 11px;

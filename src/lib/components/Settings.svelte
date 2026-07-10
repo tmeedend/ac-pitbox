@@ -131,6 +131,18 @@
     <p class="hint">{t("settings.showroom3dHint")}</p>
   </section>
 
+  <section class="lang-section">
+    <label>
+      <span>{t("settings.resourceExtraction")}</span>
+      <select class="input" bind:value={config.prefs.resource_extraction_mode}>
+        <option value="none">{t("settings.resourceExtractionNone")}</option>
+        <option value="info_only">{t("settings.resourceExtractionInfo")}</option>
+        <option value="all">{t("settings.resourceExtractionAll")}</option>
+      </select>
+    </label>
+    <p class="hint">{t("settings.resourceExtractionHint")}</p>
+  </section>
+
   <ConfigFields bind:config {validation} />
 
   {#if error}<div class="error">{error}</div>{/if}

@@ -144,6 +144,8 @@ export interface ImportedMod {
   added_count?: number;
   overwritten_count?: number;
   existing_total?: number;
+  /** Fichiers annexes redirigés vers le dossier ressources du mod (§4.6). */
+  resources_extracted: number;
 }
 
 /** Décision de reprise pour un import ambigu (§4.4). */
@@ -184,16 +186,20 @@ export interface SubImported {
   name: string;
   projected: boolean;
   warning: string | null;
+  /** Fichiers annexes redirigés vers le dossier ressources (§4.6). */
+  resources_extracted: number;
 }
 
 /** App Python importée (§12bis.4). */
 export interface AppImported {
   name: string;
+  resources_extracted: number;
 }
 
 /** Mod « autre » importé — type non reconnu, jamais perdu (§6.1bis). */
 export interface OtherImported {
   id: string;
+  resources_extracted: number;
 }
 
 export interface ArchiveResult {
@@ -309,6 +315,25 @@ export function getModDetail(id: string): Promise<ModDetail | null> {
  * contourne le scope ACL du plugin opener). */
 export function openModFolder(id: string): Promise<void> {
   return invoke<void>("open_mod_folder", { id });
+}
+
+/** Fichier annexe du mod, listé dans le bloc Ressources (§4.6). */
+export interface ResourceFile {
+  name: string;
+  /** Chemin relatif au dossier ressources (sous-dossiers éventuels). */
+  rel_path: string;
+  size_bytes: number;
+}
+
+/** Fichiers annexes du mod, lus en direct sur disque (§4.6) — pas de cache,
+ * un dépôt manuel dans le dossier ressources apparaît sans réimport. */
+export function listModResources(id: string): Promise<ResourceFile[]> {
+  return invoke<ResourceFile[]>("list_mod_resources", { id });
+}
+
+/** Ouvre un fichier annexe avec l'application par défaut de l'OS (§4.6). */
+export function openModResource(id: string, relPath: string): Promise<void> {
+  return invoke<void>("open_mod_resource", { id, relPath });
 }
 
 export function activateMod(id: string, versionId?: string): Promise<void> {

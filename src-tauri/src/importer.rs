@@ -56,6 +56,9 @@ pub struct ImportedMod {
     pub overwritten_count: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub existing_total: Option<usize>,
+    /// Fichiers annexes redirigés vers le dossier ressources du mod (§4.6),
+    /// selon le réglage global. 0 si rien n'a été filé (doublon, ambigu bloqué).
+    pub resources_extracted: usize,
 }
 
 /// Décision explicite de l'utilisateur pour un mod resté ambigu (§4.4),
@@ -189,6 +192,9 @@ fn import_one(
         result.error = Some("Chemins 7-Zip ou bibliothèque non configurés.".into());
         return result;
     };
+    // Extraction des fichiers annexes (§4.6) : réglage global, jamais reposé
+    // à chaque import.
+    let res_mode = crate::resources::ExtractionMode::parse(&cfg.prefs.resource_extraction_mode);
 
     // Dossier de travail temporaire pour l'extraction.
     let workdir = match make_temp_dir() {
@@ -218,7 +224,7 @@ fn import_one(
     let apps = modscan::scan_apps(&workdir);
     if found.is_empty() && subs.is_empty() && apps.is_empty() {
         // Type non reconnu : jamais perdu, rangé comme « autre mod » (§6.1bis).
-        if let Some(other) = crate::others::import_other(conn, library, &archive_name, &workdir, false) {
+        if let Some(other) = crate::others::import_other(conn, library, &archive_name, &workdir, false, res_mode) {
             let _ = crate::others::activate_other(conn, cfg, &other.id);
             result.others.push(other);
         } else {
@@ -267,11 +273,11 @@ fn import_one(
     // Sous-éléments rattachés (skins/sons) : stockage séparé (§12bis.2). Archive
     // → contenu en temp, toujours déplacé.
     if !subs.is_empty() {
-        result.subs = crate::submods::import_subs(conn, cfg, library, &archive_name, &subs, false);
+        result.subs = crate::submods::import_subs(conn, cfg, library, &archive_name, &subs, false, res_mode);
     }
     // Apps Python (§12bis.4).
     if !apps.is_empty() {
-        result.apps = crate::apps::import_apps(conn, library, &archive_name, &apps, false);
+        result.apps = crate::apps::import_apps(conn, library, &archive_name, &apps, false, res_mode);
     }
 
     // Ressources partagées globales (fonts/drivers) avant nettoyage du temp (§4.8).
@@ -335,13 +341,14 @@ fn import_one_folder(
         result.error = Some("Le chemin n'est pas un dossier.".into());
         return result;
     }
+    let res_mode = crate::resources::ExtractionMode::parse(&cfg.prefs.resource_extraction_mode);
 
     let found = modscan::scan(dir);
     let subs = modscan::scan_subs(dir);
     let apps = modscan::scan_apps(dir);
     if found.is_empty() && subs.is_empty() && apps.is_empty() {
         // Type non reconnu : jamais perdu, rangé comme « autre mod » (§6.1bis).
-        if let Some(other) = crate::others::import_other(conn, library, &name, dir, copy) {
+        if let Some(other) = crate::others::import_other(conn, library, &name, dir, copy, res_mode) {
             let _ = crate::others::activate_other(conn, cfg, &other.id);
             result.others.push(other);
         } else {
@@ -381,11 +388,11 @@ fn import_one_folder(
 
     // Sous-éléments rattachés (skins/sons), stockage séparé (§12bis.2).
     if !subs.is_empty() {
-        result.subs = crate::submods::import_subs(conn, cfg, library, &name, &subs, copy);
+        result.subs = crate::submods::import_subs(conn, cfg, library, &name, &subs, copy, res_mode);
     }
     // Apps Python (§12bis.4).
     if !apps.is_empty() {
-        result.apps = crate::apps::import_apps(conn, library, &name, &apps, copy);
+        result.apps = crate::apps::import_apps(conn, library, &name, &apps, copy, res_mode);
     }
 
     // Ressources partagées globales (§4.8).
@@ -673,6 +680,9 @@ fn process_found(
     let kind_str = format!("{:?}", fm.kind); // "Car" | "Track"
     let brand = ui.brand.clone().unwrap_or_default();
     let name = ui.name.clone().unwrap_or_else(|| id_interne.clone());
+    // Extraction des fichiers annexes (§4.6) : réglage global, jamais reposé
+    // à chaque import.
+    let res_mode = crate::resources::ExtractionMode::parse(&cfg.prefs.resource_extraction_mode);
     let signature = identity::content_signature(&fm.dir);
     let id_hash = identity::identity_hash(&id_interne, &brand, &name);
     let now = Local::now().to_rfc3339();
@@ -711,6 +721,7 @@ fn process_found(
                 added_count: None,
                 overwritten_count: None,
                 existing_total: None,
+                resources_extracted: 0,
             });
         }
 
@@ -748,7 +759,7 @@ fn process_found(
             ImportClass::Extension => {
                 // Range comme couche à part — ne touche jamais la base (§4.4).
                 let name_layer = layer_name(fm, archive_name);
-                layers::store_layer(
+                let (_, resources_extracted) = layers::store_layer(
                     conn,
                     library,
                     &id_interne,
@@ -758,6 +769,7 @@ fn process_found(
                     copy,
                     diff.as_ref().unwrap_or(&crate::identity::DiffStats { added: 0, overwritten: 0, existing_total: 0 }),
                     archive_name,
+                    res_mode,
                 )?;
                 // Couche active par défaut : composer tout de suite pour qu'elle
                 // apparaisse en jeu (§4.4). Best-effort, comme auto_activate.
@@ -772,6 +784,7 @@ fn process_found(
                     added_count: diff.map(|d| d.added),
                     overwritten_count: diff.map(|d| d.overwritten),
                     existing_total: diff.map(|d| d.existing_total),
+                    resources_extracted,
                 });
             }
             ImportClass::Ambiguous => {
@@ -787,14 +800,16 @@ fn process_found(
                         added_count: diff.map(|d| d.added),
                         overwritten_count: diff.map(|d| d.overwritten),
                         existing_total: diff.map(|d| d.existing_total),
+                        resources_extracted: 0,
                     });
                 }
                 // Import en masse : défaut sûr = extension (jamais destructif).
                 let name_layer = layer_name(fm, archive_name);
-                layers::store_layer(
+                let (_, resources_extracted) = layers::store_layer(
                     conn, library, &id_interne, fm.kind, &name_layer, &fm.dir, copy,
                     diff.as_ref().unwrap_or(&crate::identity::DiffStats { added: 0, overwritten: 0, existing_total: 0 }),
                     archive_name,
+                    res_mode,
                 )?;
                 let _ = crate::compose::recompose(conn, cfg, &id_interne);
                 return Ok(ImportedMod {
@@ -807,6 +822,7 @@ fn process_found(
                     added_count: diff.map(|d| d.added),
                     overwritten_count: diff.map(|d| d.overwritten),
                     existing_total: diff.map(|d| d.existing_total),
+                    resources_extracted,
                 });
             }
         }
@@ -831,11 +847,10 @@ fn process_found(
             .join(&version_folder),
     );
     // Copie (préserve la source) ou déplacement adaptatif (rename / copie+suppr).
-    if copy {
-        archive::copy_dir(&fm.dir, &dest).map_err(|e| format!("copie bibliothèque : {e}"))?;
-    } else {
-        archive::move_dir(&fm.dir, &dest).map_err(|e| format!("rangement bibliothèque : {e}"))?;
-    }
+    // Fichiers annexes (§4.6) redirigés vers le dossier ressources du mod,
+    // jamais dans le contenu de jeu, selon le réglage global.
+    let resources_dest = crate::resources::resources_dir(library, fm.kind, &id_interne);
+    let resources_extracted = crate::resources::file_mod(&fm.dir, &dest, &resources_dest, res_mode, !copy, true)?;
     let library_path = dest.to_string_lossy().into_owned();
 
     // --- Écriture overlay ---
@@ -906,6 +921,7 @@ fn process_found(
         added_count: None,
         overwritten_count: None,
         existing_total: None,
+        resources_extracted,
     })
 }
 
@@ -1001,6 +1017,71 @@ mod tests {
             .status()
             .unwrap();
         assert!(status.success(), "7z a a échoué");
+    }
+
+    #[test]
+    fn ancillary_files_extracted_to_resources_by_default() {
+        // §4.6 : réglage par défaut "info_only" — fichiers légers extraits vers
+        // le dossier ressources du mod, jamais dans le contenu de jeu.
+        let base = make_temp_dir().unwrap();
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let rules = crate::rules::default_rules();
+        let noop = |_p: Progress| {};
+
+        let src = base.join("src");
+        make_car_with_files(
+            &src,
+            "annex_car",
+            &["model.kn5", "changelog.txt", "presentation.pdf", "livery_template.psd"],
+        );
+        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        assert_eq!(r.mods[0].outcome, "IMPORT");
+        assert_eq!(r.mods[0].resources_extracted, 2, "changelog.txt + presentation.pdf, pas le .psd");
+
+        let versions = crate::overlay::get_versions(&conn, "annex_car").unwrap();
+        let content_dir = Path::new(&versions[0].library_path);
+        assert!(content_dir.join("model.kn5").is_file());
+        assert!(!content_dir.join("changelog.txt").exists(), "jamais dans le contenu de jeu");
+        assert!(!content_dir.join("livery_template.psd").exists());
+
+        let resources = library.join("resources").join("cars").join("annex_car");
+        assert!(resources.join("changelog.txt").is_file());
+        assert!(resources.join("presentation.pdf").is_file());
+        assert!(!resources.join("livery_template.psd").exists(), "mode par défaut : pas les fichiers lourds");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn ancillary_extraction_mode_none_drops_files() {
+        // §4.6 : mode "Aucun" — rien n'est extrait vers la bibliothèque, mais le
+        // contenu de jeu reste propre quand même (règle absolue, indépendante du réglage).
+        let base = make_temp_dir().unwrap();
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let mut cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        cfg.prefs.resource_extraction_mode = "none".into();
+        let rules = crate::rules::default_rules();
+        let noop = |_p: Progress| {};
+
+        let src = base.join("src");
+        make_car_with_files(&src, "annex_car2", &["model.kn5", "changelog.txt"]);
+        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        assert_eq!(r.mods[0].resources_extracted, 0);
+
+        let versions = crate::overlay::get_versions(&conn, "annex_car2").unwrap();
+        let content_dir = Path::new(&versions[0].library_path);
+        assert!(content_dir.join("model.kn5").is_file());
+        assert!(!content_dir.join("changelog.txt").exists(), "toujours hors contenu de jeu");
+        assert!(!library.join("resources").join("cars").join("annex_car2").exists(), "rien extrait en mode Aucun");
+        // Copie (pas déplacement) : la source garde son annexe intacte.
+        assert!(src.join("annex_car2").join("changelog.txt").is_file());
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

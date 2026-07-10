@@ -21,6 +21,7 @@ mod modscan;
 mod others;
 mod overlay;
 mod profiles;
+mod resources;
 mod rules;
 mod shared;
 mod showroom;
@@ -210,6 +211,39 @@ fn open_mod_folder(app: AppHandle, db: State<Db>, id: String) -> Result<(), Stri
         .map_err(|e| e.to_string())
 }
 
+fn mod_kind(kind: &str) -> modscan::ModKind {
+    if kind == "Track" { modscan::ModKind::Track } else { modscan::ModKind::Car }
+}
+
+/// Liste les fichiers annexes du mod (§4.6, « Bloc Ressources ») — lue en
+/// direct sur disque à chaque appel, jamais mémorisée en base : un fichier
+/// déposé manuellement apparaît sans réimport.
+#[tauri::command]
+fn list_mod_resources(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<resources::ResourceFile>, String> {
+    let cfg = config::load(&app);
+    let library = cfg.library_path.clone().ok_or("bibliothèque non configurée")?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let m = overlay::get_mod(&conn, &id).map_err(|e| e.to_string())?.ok_or("mod introuvable")?;
+    Ok(resources::list_resources(&resources::resources_dir(&library, mod_kind(&m.kind), &id)))
+}
+
+/// Ouvre un fichier du dossier ressources avec l'application par défaut de
+/// l'OS (§4.6). `rel_path` est résolu et validé côté serveur (garde-fou
+/// anti-traversée) plutôt que de faire confiance à un chemin absolu envoyé
+/// par le front — même rationale que `open_mod_folder`.
+#[tauri::command]
+fn open_mod_resource(app: AppHandle, db: State<Db>, id: String, rel_path: String) -> Result<(), String> {
+    let cfg = config::load(&app);
+    let library = cfg.library_path.clone().ok_or("bibliothèque non configurée")?;
+    let dir = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        let m = overlay::get_mod(&conn, &id).map_err(|e| e.to_string())?.ok_or("mod introuvable")?;
+        resources::resources_dir(&library, mod_kind(&m.kind), &id)
+    };
+    let path = resources::resolve_resource_path(&dir, &rel_path)?;
+    app.opener().open_path(path.display().to_string(), None::<&str>).map_err(|e| e.to_string())
+}
+
 /// Fonctionnalités CSP effectivement détectées pour un mod (§6.4bis) : sert à
 /// griser les réglages météo/saison non supportés sur l'écran de session.
 #[tauri::command]
@@ -294,11 +328,13 @@ fn weather_options(app: AppHandle) -> Vec<weather::WeatherOption> {
     weather::options(&config::load(&app))
 }
 
-/// Température + vent implicites (air/piste/vent) pour une intention + heure
-/// (lecture seule, §8.5/§8.6).
+/// Température + vent **recommandés** (air/piste/vent) pour une intention +
+/// heure + saison optionnelle (§8.5/§8.6/§8.6bis). L'écran de session propose
+/// ces valeurs par défaut ; l'air et la piste restent ensuite modifiables à la
+/// main tant que la météo/saison ne change pas.
 #[tauri::command]
-fn weather_conditions(intent: String, hour: f32) -> weather::ImplicitConditions {
-    weather::implicit_conditions(&intent, hour)
+fn weather_conditions(intent: String, hour: f32, season: Option<String>) -> weather::ImplicitConditions {
+    weather::implicit_conditions(&intent, hour, season.as_deref())
 }
 
 /// Construit le race.ini et lance la session via Content Manager (§8.3).
@@ -704,6 +740,8 @@ pub fn run() {
             list_library,
             get_mod_detail,
             open_mod_folder,
+            list_mod_resources,
+            open_mod_resource,
             get_mod_csp_features,
             activate_mod,
             deactivate_mod,

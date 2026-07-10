@@ -13,6 +13,8 @@
     setLayerActive,
     reorderLayer,
     openModFolder,
+    listModResources,
+    openModResource,
     previewSrc,
     setFavorite,
     setManualTags,
@@ -21,6 +23,7 @@
     type ModKind,
     type NativeSpecs,
     type LayerRow,
+    type ResourceFile,
   } from "$lib/library";
   import { onDestroy, onMount, untrack } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -75,6 +78,8 @@
   let packBusy = $state(false);
   // Couches / extensions rattachées (§4.4).
   let layerList = $state<LayerRow[]>([]);
+  // Fichiers annexes du mod (§4.6, Bloc Ressources) — lus en direct sur disque.
+  let resourceList = $state<ResourceFile[]>([]);
 
   // Image héros : voiture → skin sélectionné ; circuit → preview du layout
   // sélectionné ; sinon preview par défaut du mod.
@@ -104,13 +109,15 @@
 
   let layerBusy = $state(false);
 
-  /** Recharge la fiche + les couches (après compositing/import) en préservant le
-   * layout sélectionné : activer une couche ajoute souvent des layouts (§4.4). */
+  /** Recharge la fiche + les couches + les ressources (après compositing/
+   * import) en préservant le layout sélectionné : activer une couche ajoute
+   * souvent des layouts (§4.4). */
   async function refreshEntity() {
     const current = id;
-    const [d, ls] = await Promise.all([getModDetail(current), listLayers(current)]);
+    const [d, ls, rs] = await Promise.all([getModDetail(current), listLayers(current), listModResources(current)]);
     if (current !== id) return;
     layerList = ls;
+    resourceList = rs;
     if (d) {
       const prevLayoutId = detail?.track?.layouts[previewLayout]?.id;
       detail = d;
@@ -166,6 +173,27 @@
       actionError = String(e);
     } finally {
       layerBusy = false;
+    }
+  }
+
+  /** Taille lisible (Ko/Mo/Go, base 1024) pour le bloc Ressources (§4.6). */
+  function fmtFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} o`;
+    const units = ["Ko", "Mo", "Go"];
+    let v = bytes;
+    let i = -1;
+    do {
+      v /= 1024;
+      i++;
+    } while (v >= 1024 && i < units.length - 1);
+    return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
+  }
+
+  async function openResource(f: ResourceFile) {
+    try {
+      await openModResource(id, f.rel_path);
+    } catch (e) {
+      actionError = String(e);
     }
   }
 
@@ -336,10 +364,15 @@
     actionError = "";
     siblings = [];
     layerList = [];
+    resourceList = [];
     previewLayout = 0;
     // Couches/extensions rattachées (§4.4) : rangées à part, la base est intacte.
     listLayers(current).then((ls) => {
       if (current === id) layerList = ls;
+    });
+    // Fichiers annexes (§4.6) : lus en direct sur disque, jamais mémorisés.
+    listModResources(current).then((rs) => {
+      if (current === id) resourceList = rs;
     });
     getModDetail(current).then((d) => {
       if (current !== id) return;
@@ -792,6 +825,7 @@
           {@render publishedBlock(d)}
           {@render provenanceBlock(d)}
           {@render layersBlock()}
+          {@render resourcesBlock()}
         </div>
       {:else}
         <!-- Layouts (galerie illustrée par le tracé, comme les skins voiture) -->
@@ -852,6 +886,7 @@
           {@render publishedBlock(d)}
           {@render provenanceBlock(d)}
           {@render layersBlock()}
+          {@render resourcesBlock()}
         </div>
       {/if}
     </div>
@@ -991,6 +1026,25 @@
       {/each}
     </ul>
     <div class="prov-note">{t("detail.layersRecomposeNote")}</div>
+  {/if}
+{/snippet}
+
+{#snippet resourcesBlock()}
+  <div class="lbl section">{t("detail.resourcesLabel", { count: resourceList.length })}</div>
+  {#if resourceList.length}
+    <div class="prov-note">{t("detail.resourcesNote")}</div>
+    <ul class="res-list">
+      {#each resourceList as f (f.rel_path)}
+        <li>
+          <button class="res-row" type="button" onclick={() => openResource(f)} title={t("detail.resourceOpenTooltip")}>
+            <span class="res-nm">{f.rel_path}</span>
+            <span class="res-size mono">{fmtFileSize(f.size_bytes)}</span>
+          </button>
+        </li>
+      {/each}
+    </ul>
+  {:else}
+    <div class="muted small">{t("detail.noResources")}</div>
   {/if}
 {/snippet}
 
@@ -1711,6 +1765,47 @@
   }
   .layer-x:hover {
     color: var(--rosso-bright);
+  }
+
+  /* Bloc Ressources (§4.6) */
+  .res-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 6px 0 0;
+    padding: 0;
+  }
+  .res-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--line);
+    background: var(--panel2);
+    padding: 5px 9px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .res-row:hover {
+    border-color: var(--rosso-border);
+  }
+  .res-nm {
+    flex: 1;
+    min-width: 0;
+    font-size: 11px;
+    color: var(--txt2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .res-row:hover .res-nm {
+    color: var(--rosso-bright);
+  }
+  .res-size {
+    flex: none;
+    font-size: 9px;
+    color: var(--muted2);
   }
 
   /* Provenance / pack d'origine (§4.7) */

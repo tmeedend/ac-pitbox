@@ -20,6 +20,7 @@ use uuid::Uuid;
 
 use crate::config::AppConfig;
 use crate::modscan::{FoundSub, SubKind};
+use crate::resources::{self, ExtractionMode};
 use crate::{activation, archive, overlay};
 
 #[derive(Debug, Clone, Serialize)]
@@ -31,9 +32,12 @@ pub struct SubImported {
     /// Skin projeté (visible par AC) ; faux si le parent est inconnu/conflit.
     pub projected: bool,
     pub warning: Option<String>,
+    /// Fichiers annexes redirigés vers le dossier ressources (§4.6).
+    pub resources_extracted: usize,
 }
 
 /// Importe les sous-éléments détectés (§12bis.2). `copy` préserve la source.
+#[allow(clippy::too_many_arguments)]
 pub fn import_subs(
     conn: &Connection,
     cfg: &AppConfig,
@@ -41,25 +45,19 @@ pub fn import_subs(
     source_name: &str,
     subs: &[FoundSub],
     copy: bool,
+    mode: ExtractionMode,
 ) -> Vec<SubImported> {
     let mut out = Vec::new();
     for sub in subs {
         match sub.kind {
-            SubKind::Skin => import_skin_pack(conn, cfg, library, source_name, sub, copy, &mut out),
-            SubKind::Sound => import_sound(conn, library, source_name, sub, copy, &mut out),
+            SubKind::Skin => import_skin_pack(conn, cfg, library, source_name, sub, copy, mode, &mut out),
+            SubKind::Sound => import_sound(conn, library, source_name, sub, copy, mode, &mut out),
         }
     }
     out
 }
 
-fn copy_or_move(src: &Path, dst: &Path, copy: bool) -> Result<(), String> {
-    if copy {
-        archive::copy_dir(src, dst).map_err(|e| e.to_string())
-    } else {
-        archive::move_dir(src, dst).map_err(|e| e.to_string())
-    }
-}
-
+#[allow(clippy::too_many_arguments)]
 fn import_skin_pack(
     conn: &Connection,
     cfg: &AppConfig,
@@ -67,6 +65,7 @@ fn import_skin_pack(
     source_name: &str,
     sub: &FoundSub,
     copy: bool,
+    mode: ExtractionMode,
     out: &mut Vec<SubImported>,
 ) {
     let parent = &sub.parent_id;
@@ -93,16 +92,23 @@ fn import_skin_pack(
         }
 
         let dest = library.join(store_root).join(parent).join(&name);
-        if let Err(err) = copy_or_move(&skin_src, &dest, copy) {
-            out.push(SubImported {
-                sub_type: sub_type.into(),
-                parent_id: parent.clone(),
-                name,
-                projected: false,
-                warning: Some(format!("stockage : {err}")),
-            });
-            continue;
-        }
+        // Fichiers annexes (§4.6) redirigés à part : une image à la racine
+        // d'un skin est TOUJOURS un vrai aperçu, jamais une annexe (allow_root_images=false).
+        let res_dir = resources::resources_dir_for(library, store_root, &[parent, &name]);
+        let resources_extracted = match resources::file_mod(&skin_src, &dest, &res_dir, mode, !copy, false) {
+            Ok(n) => n,
+            Err(err) => {
+                out.push(SubImported {
+                    sub_type: sub_type.into(),
+                    parent_id: parent.clone(),
+                    name,
+                    projected: false,
+                    warning: Some(format!("stockage : {err}")),
+                    resources_extracted: 0,
+                });
+                continue;
+            }
+        };
 
         let id = Uuid::new_v4().to_string();
         let _ = overlay::insert_sub_mod(
@@ -124,6 +130,7 @@ fn import_skin_pack(
             name,
             projected,
             warning,
+            resources_extracted,
         });
     }
 }
@@ -209,6 +216,7 @@ fn import_sound(
     source_name: &str,
     sub: &FoundSub,
     copy: bool,
+    mode: ExtractionMode,
     out: &mut Vec<SubImported>,
 ) {
     // "sfx" n'identifie aucune voiture (§12bis.2, limite connue) : on retombe
@@ -234,16 +242,23 @@ fn import_sound(
     }
 
     let dest = library.join("sounds").join(&parent).join(&name);
-    if let Err(err) = copy_or_move(&sub.dir, &dest, copy) {
-        out.push(SubImported {
-            sub_type: "SOUND".into(),
-            parent_id: parent,
-            name,
-            projected: false,
-            warning: Some(format!("stockage : {err}")),
-        });
-        return;
-    }
+    // Fichiers annexes (§4.6) redirigés à part (GUIDs.txt reste toujours du
+    // contenu, voir resources::classify — jamais confondu avec une annexe).
+    let res_dir = resources::resources_dir_for(library, "sounds", &[&parent, &name]);
+    let resources_extracted = match resources::file_mod(&sub.dir, &dest, &res_dir, mode, !copy, false) {
+        Ok(n) => n,
+        Err(err) => {
+            out.push(SubImported {
+                sub_type: "SOUND".into(),
+                parent_id: parent,
+                name,
+                projected: false,
+                warning: Some(format!("stockage : {err}")),
+                resources_extracted: 0,
+            });
+            return;
+        }
+    };
 
     let id = Uuid::new_v4().to_string();
     let _ = overlay::insert_sub_mod(
@@ -262,6 +277,7 @@ fn import_sound(
         name,
         projected: false,
         warning: None,
+        resources_extracted,
     });
 }
 
@@ -372,7 +388,7 @@ mod tests {
         assert!(modscan::scan(&base.join("src")).is_empty());
 
         // Import (copie) : stocké à part + enregistré dans sub_mods.
-        let res = import_subs(&conn, &cfg, &library, "ferrari_skins.7z", &subs, true);
+        let res = import_subs(&conn, &cfg, &library, "ferrari_skins.7z", &subs, true, ExtractionMode::InfoOnly);
         assert_eq!(res.len(), 1);
         assert_eq!(res[0].sub_type, "SKIN");
         assert!(library.join("skins").join("ferrari_488").join("af_corse_51").join("preview.jpg").is_file());
@@ -381,7 +397,7 @@ mod tests {
         assert_eq!(stored[0].name, "af_corse_51");
 
         // Idempotence : ré-import → pas de doublon.
-        let res2 = import_subs(&conn, &cfg, &library, "ferrari_skins.7z", &modscan::scan_subs(&base.join("src")), true);
+        let res2 = import_subs(&conn, &cfg, &library, "ferrari_skins.7z", &modscan::scan_subs(&base.join("src")), true, ExtractionMode::InfoOnly);
         assert!(res2.is_empty());
         assert_eq!(overlay::list_subs_for_parent(&conn, "ferrari_488").unwrap().len(), 1);
 
@@ -414,7 +430,7 @@ mod tests {
 
         let subs = modscan::scan_subs(&base.join("src"));
         assert_eq!(subs.len(), 1);
-        import_subs(&conn, &cfg, &library, "spa_skins.7z", &subs, true);
+        import_subs(&conn, &cfg, &library, "spa_skins.7z", &subs, true, ExtractionMode::InfoOnly);
 
         // Classé TRACK_SKIN, stocké sous track_skins/.
         let stored = overlay::list_subs_for_parent(&conn, "spa").unwrap();
@@ -447,7 +463,7 @@ mod tests {
         parents.sort();
         assert_eq!(parents, vec!["ferrari_488", "lambo_huracan"]);
 
-        let res = import_subs(&conn, &cfg, &library, "pack.7z", &subs, true);
+        let res = import_subs(&conn, &cfg, &library, "pack.7z", &subs, true, ExtractionMode::InfoOnly);
         assert_eq!(res.len(), 2);
         assert!(library.join("skins").join("ferrari_488").join("af_corse_51").join("preview.jpg").is_file());
         assert!(library.join("skins").join("lambo_huracan").join("team_a").join("preview.jpg").is_file());
@@ -520,7 +536,7 @@ mod tests {
         assert_eq!(subs.len(), 1);
         assert_eq!(subs[0].parent_id, "sfx", "modscan seul retombe sur le nom générique du dossier");
 
-        let res = import_subs(&conn, &cfg, &library, archive_name, &subs, true);
+        let res = import_subs(&conn, &cfg, &library, archive_name, &subs, true, ExtractionMode::InfoOnly);
         assert_eq!(res.len(), 1);
         assert_eq!(res[0].parent_id, "ks_lamborghini_huracan_performante", "voiture retrouvée dans le nom d'archive");
         assert_eq!(res[0].name, archive_name, "nom lisible, pas « sfx »");

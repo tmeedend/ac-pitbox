@@ -87,6 +87,14 @@
         {#if (a.others ?? []).length}
           <div class="r-line shared">{t("importOverlay.othersImported", { count: a.others.length })}</div>
         {/if}
+        {@const resExtracted =
+          a.mods.reduce((acc, m) => acc + (m.resources_extracted ?? 0), 0) +
+          (a.subs ?? []).reduce((acc, s) => acc + (s.resources_extracted ?? 0), 0) +
+          (a.apps ?? []).reduce((acc, s) => acc + (s.resources_extracted ?? 0), 0) +
+          (a.others ?? []).reduce((acc, s) => acc + (s.resources_extracted ?? 0), 0)}
+        {#if resExtracted > 0}
+          <div class="r-line shared">{t("importOverlay.resourcesExtracted", { count: resExtracted })}</div>
+        {/if}
       {/each}
     </div>
   </div>

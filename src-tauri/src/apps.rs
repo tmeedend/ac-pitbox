@@ -11,11 +11,14 @@ use serde::Serialize;
 
 use crate::config::AppConfig;
 use crate::modscan::FoundApp;
-use crate::{activation, archive, overlay};
+use crate::resources::{self, ExtractionMode};
+use crate::{activation, overlay};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AppImported {
     pub name: String,
+    /// Fichiers annexes redirigés vers le dossier ressources (§4.6).
+    pub resources_extracted: usize,
 }
 
 /// App avec son état d'activation (junction présente) pour la vue dédiée.
@@ -41,22 +44,23 @@ pub fn import_apps(
     source_name: &str,
     apps: &[FoundApp],
     copy: bool,
+    mode: ExtractionMode,
 ) -> Vec<AppImported> {
     let mut out = Vec::new();
     for app in apps {
         let dest = library.join("apps").join(&app.name);
-        // Ré-import : on remplace les fichiers existants.
+        // Ré-import : on remplace les fichiers existants (les ressources déjà
+        // extraites, elles, sont conservées — dossier séparé, mod-level).
         if dest.exists() {
             let _ = std::fs::remove_dir_all(&dest);
         }
-        let stored = if copy {
-            archive::copy_dir(&app.dir, &dest)
-        } else {
-            archive::move_dir(&app.dir, &dest)
-        };
-        if stored.is_err() {
+        // Fichiers annexes (§4.6) redirigés à part : une image à la racine
+        // d'une app peut être une icône réellement utilisée par le script
+        // (allow_root_images=false, jamais présumée annexe).
+        let res_dir = resources::resources_dir_for(library, "apps", &[&app.name]);
+        let Ok(resources_extracted) = resources::file_mod(&app.dir, &dest, &res_dir, mode, !copy, false) else {
             continue;
-        }
+        };
         let _ = overlay::insert_app(
             conn,
             &app.name,
@@ -64,7 +68,7 @@ pub fn import_apps(
             Some(source_name),
             &Local::now().to_rfc3339(),
         );
-        out.push(AppImported { name: app.name.clone() });
+        out.push(AppImported { name: app.name.clone(), resources_extracted });
     }
     out
 }
@@ -148,7 +152,7 @@ mod tests {
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].name, "MyApp");
 
-        let res = import_apps(&conn, &library, "myapp.7z", &found, true);
+        let res = import_apps(&conn, &library, "myapp.7z", &found, true, ExtractionMode::InfoOnly);
         assert_eq!(res.len(), 1);
         assert!(library.join("apps").join("MyApp").join("MyApp.py").is_file());
         assert!(overlay::app_exists(&conn, "MyApp").unwrap());

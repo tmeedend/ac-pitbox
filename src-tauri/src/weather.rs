@@ -142,9 +142,23 @@ pub struct ImplicitConditions {
     pub wind_direction_deg: u32,
 }
 
-/// Température + vent implicites (§8.5/§8.6) déduits de l'intention + l'heure.
-/// Lecture seule — jamais saisis manuellement.
-pub fn implicit_conditions(intent_id: &str, hour: f32) -> ImplicitConditions {
+/// Écart de température (°C) associé à une saison (§8.6bis), appliqué à la base
+/// horaire de l'intention météo. `None`/inconnu = pas d'ajustement (comportement
+/// historique, saison non choisie).
+fn season_delta(season: Option<&str>) -> i32 {
+    match season {
+        Some("spring") => 0,
+        Some("summer") => 7,
+        Some("autumn") => -4,
+        Some("winter") => -14,
+        _ => 0,
+    }
+}
+
+/// Température + vent implicites (§8.5/§8.6) déduits de l'intention + l'heure +
+/// la saison optionnelle (§8.6bis). Sert de **valeur recommandée** — l'écran de
+/// session la propose et permet ensuite à l'utilisateur de la corriger à la main.
+pub fn implicit_conditions(intent_id: &str, hour: f32, season: Option<&str>) -> ImplicitConditions {
     // (ambient de référence à ~14h, écart piste-air, vent de base, direction) par intention.
     let (base, road_delta, wind_speed, wind_dir) = match intent_id {
         "clear" => (26, 9, 6, 250),
@@ -159,11 +173,47 @@ pub fn implicit_conditions(intent_id: &str, hour: f32) -> ImplicitConditions {
     };
     // Refroidissement aux heures extrêmes (matin/soir).
     let adj = (-0.7 * (hour - 14.0).abs()).round() as i32;
-    let ambient = (base + adj).clamp(5, 42);
+    // Plage élargie sous zéro (hiver) : les bornes 5/42 d'origine empêchaient un
+    // hiver crédible (neige incluse) de descendre sous 5°C.
+    let ambient = (base + season_delta(season) + adj).clamp(-10, 42);
     ImplicitConditions {
         ambient,
         road: ambient + road_delta,
         wind_speed_kmh: wind_speed,
         wind_direction_deg: wind_dir,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn season_shifts_ambient_and_road_together() {
+        let summer = implicit_conditions("clear", 14.0, Some("summer"));
+        let winter = implicit_conditions("clear", 14.0, Some("winter"));
+        let none = implicit_conditions("clear", 14.0, None);
+
+        assert_eq!(none.ambient, 26, "sans saison : comportement historique inchangé");
+        assert_eq!(summer.ambient, 33, "été : plus chaud que sans saison");
+        assert_eq!(winter.ambient, 12, "hiver : plus froid que sans saison");
+        // La piste suit le même écart d'intention (road_delta constant) — la
+        // cohérence air/piste est préservée quelle que soit la saison.
+        assert_eq!(summer.road - summer.ambient, none.road - none.ambient);
+        assert_eq!(winter.road - winter.ambient, none.road - none.ambient);
+    }
+
+    #[test]
+    fn winter_snow_can_go_below_old_floor() {
+        // L'ancien plancher (5°C) empêchait un hiver enneigé crédible.
+        let c = implicit_conditions("snow", 14.0, Some("winter"));
+        assert!(c.ambient < 5, "hiver + neige doit pouvoir descendre sous 5°C, obtenu {}", c.ambient);
+    }
+
+    #[test]
+    fn unknown_season_is_a_no_op() {
+        let a = implicit_conditions("overcast", 10.0, None);
+        let b = implicit_conditions("overcast", 10.0, Some("bogus"));
+        assert_eq!(a.ambient, b.ambient);
     }
 }

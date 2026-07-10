@@ -669,3 +669,40 @@ reviendra — au pire on retombe sur le comportement actuel, **sans régression*
 (le filet `restore_orphaned_video_ini` couvre toujours `video.ini` au prochain
 démarrage). Si ça échoue aussi : itérer via `tools/showroom-embed-test/` (sans
 rebuild complet de l'app), ou accepter le flash.
+
+## Bug intermittent : « handle de fenêtre non valide » (2026-07-10)
+
+Retour utilisateur : `attach()` échoue **parfois, pas toujours**, avec
+`0x80070578` (`ERROR_INVALID_WINDOW_HANDLE`).
+
+**Diagnostic** : `attach()` trouve le HWND top-level du showroom sur le thread
+appelant (`find_showroom_window`, poll jusqu'à 10 s), puis dispatch le
+reparentage vers le **thread principal** via `run_on_main_thread` (nécessaire,
+voir Test réel n°3). Entre les deux, un délai existe — le temps que Tauri
+planifie l'exécution de la closure sur le thread principal. Or `acShowroom.exe`
+peut **détruire et recréer sa fenêtre pendant l'initialisation DirectX**
+(cohérent avec le flash noir déjà documenté plus haut, "Fenêtre noire au
+démarrage") : le HWND capturé côté thread appelant devient alors obsolète avant
+que la closure ne s'exécute, et tout appel Win32 dessus (`SetParent`,
+`SetWindowLongPtrW`…) échoue avec `ERROR_INVALID_WINDOW_HANDLE`. Le caractère
+intermittent s'explique par la variabilité du délai de planification du thread
+principal (charge de rendu WebView2 au moment du clic).
+
+**Corrigé** (`src-tauri/src/showroom.rs`) :
+- Nouvelle fonction `wait_for_valid_window(pid, deadline, poll)` : combine
+  `find_showroom_window` + `IsWindow` — ne renvoie un HWND que s'il est
+  **encore vivant** au moment du test, sinon continue de sonder.
+- La recherche initiale (thread appelant, budget 10 s) utilise désormais cette
+  fonction au lieu de `find_showroom_window` seul.
+- **Re-vérification côté thread principal** : juste avant les appels Win32
+  mutants, `IsWindow(target)` est revérifié. S'il est devenu invalide (fenêtre
+  détruite/recréée entre-temps), une **re-recherche bornée** (2 s, pas de
+  50 ms — budget court car sur le thread principal, ne doit pas geler l'UI)
+  retrouve la fenêtre définitive avant de poursuivre.
+- Ne couvre que le flux `attach()` (celui où le bug a été signalé) — pas
+  `reposition()`/`close()`, non concernés par le rapport utilisateur.
+
+**Non testable unitairement** (nécessite un vrai process `acShowroom.exe` et
+une vraie fenêtre native) — 3 tests existants (écriture INI, patch video.ini,
+sauvegarde/restauration) inchangés et toujours verts. **En attente d'un test
+réel** pour confirmer que l'erreur intermittente a disparu.

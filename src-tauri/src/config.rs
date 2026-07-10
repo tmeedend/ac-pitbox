@@ -32,6 +32,10 @@ pub struct Prefs {
     /// Afficher d'emblée l'aperçu 3D (acShowroom) sur la fiche voiture, à la
     /// place de l'image. Défaut : non (l'utilisateur clique « Aperçu 3D »).
     pub showroom_by_default: bool,
+    /// Extraction des fichiers annexes du mod à l'import (§4.6) : "none" |
+    /// "info_only" (défaut) | "all". Jamais reposée à chaque import — voir
+    /// `resources::ExtractionMode::parse`.
+    pub resource_extraction_mode: String,
 }
 
 impl Default for Prefs {
@@ -44,6 +48,7 @@ impl Default for Prefs {
             language: None,
             ui_zoom: None,
             showroom_by_default: false,
+            resource_extraction_mode: "info_only".into(),
         }
     }
 }

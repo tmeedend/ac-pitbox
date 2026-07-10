@@ -104,8 +104,8 @@ export function weatherOptions(): Promise<WeatherOption[]> {
   return invoke<WeatherOption[]>("weather_options");
 }
 
-export function weatherConditions(intent: string, hour: number): Promise<ImplicitConditions> {
-  return invoke<ImplicitConditions>("weather_conditions", { intent, hour });
+export function weatherConditions(intent: string, hour: number, season: string | null): Promise<ImplicitConditions> {
+  return invoke<ImplicitConditions>("weather_conditions", { intent, hour, season });
 }
 
 export function launchSession(setup: RaceSetup): Promise<void> {

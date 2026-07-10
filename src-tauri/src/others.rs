@@ -19,11 +19,14 @@ use walkdir::WalkDir;
 
 use crate::config::AppConfig;
 use crate::overlay::{self, OtherModRow};
-use crate::{activation, archive};
+use crate::resources::{self, ExtractionMode};
+use crate::activation;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct OtherImported {
     pub id: String,
+    /// Fichiers annexes redirigés vers le dossier ressources (§4.6).
+    pub resources_extracted: usize,
 }
 
 /// Id à partir du nom d'archive/dossier importé (pas du dossier temp
@@ -48,16 +51,19 @@ pub fn import_other(
     source_name: &str,
     root: &Path,
     copy: bool,
+    mode: ExtractionMode,
 ) -> Option<OtherImported> {
     let id = other_id(source_name);
     if overlay::other_exists(conn, &id).unwrap_or(false) {
         return None;
     }
     let dest = library.join("others").join(&id);
-    let stored = if copy { archive::copy_dir(root, &dest) } else { archive::move_dir(root, &dest) };
-    stored.ok()?;
+    // Fichiers annexes (§4.6) redirigés à part : structure inconnue par nature,
+    // donc jamais d'image présumée annexe même à la racine (allow_root_images=false).
+    let res_dir = resources::resources_dir_for(library, "others", &[&id]);
+    let resources_extracted = resources::file_mod(root, &dest, &res_dir, mode, !copy, false).ok()?;
     overlay::insert_other_mod(conn, &id, &dest.to_string_lossy(), Some(source_name), &Local::now().to_rfc3339()).ok()?;
-    Some(OtherImported { id })
+    Some(OtherImported { id, resources_extracted })
 }
 
 /// Chemins relatifs de tous les fichiers stockés d'un mod « autre ».
@@ -246,7 +252,7 @@ mod tests {
         let src = base.join("src").join("MyShaderMod");
         make_tree(&src, &["extension/config/tracks/newtrack/track.ini"]);
 
-        let imported = import_other(&conn, &library, "MyShaderMod.zip", &src, true).unwrap();
+        let imported = import_other(&conn, &library, "MyShaderMod.zip", &src, true, ExtractionMode::InfoOnly).unwrap();
         assert_eq!(imported.id, "MyShaderMod");
         assert!(overlay::other_exists(&conn, "MyShaderMod").unwrap());
 
@@ -279,8 +285,8 @@ mod tests {
         make_tree(&src_b, &["extension/config/tracks/shared/track.ini"]);
         std::fs::write(src_b.join("extension/config/tracks/shared/track.ini"), b"B").unwrap();
 
-        import_other(&conn, &library, "ModA.zip", &src_a, true).unwrap();
-        import_other(&conn, &library, "ModB.zip", &src_b, true).unwrap();
+        import_other(&conn, &library, "ModA.zip", &src_a, true, ExtractionMode::InfoOnly).unwrap();
+        import_other(&conn, &library, "ModB.zip", &src_b, true, ExtractionMode::InfoOnly).unwrap();
         overlay::set_other_priority(&conn, "ModB", true).unwrap();
 
         activate_other(&conn, &cfg, "ModA").unwrap();
@@ -313,8 +319,8 @@ mod tests {
         let src_b = base.join("src").join("ModB");
         make_tree(&src_b, &["extension/config/x.ini"]);
 
-        import_other(&conn, &library, "ModA.zip", &src_a, true).unwrap();
-        import_other(&conn, &library, "ModB.zip", &src_b, true).unwrap();
+        import_other(&conn, &library, "ModA.zip", &src_a, true, ExtractionMode::InfoOnly).unwrap();
+        import_other(&conn, &library, "ModB.zip", &src_b, true, ExtractionMode::InfoOnly).unwrap();
 
         let cards = list_others(&conn).unwrap();
         let a = cards.iter().find(|c| c.row.id == "ModA").unwrap();

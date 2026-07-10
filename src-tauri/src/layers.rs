@@ -17,10 +17,13 @@ use uuid::Uuid;
 
 use crate::identity::DiffStats;
 use crate::modscan::ModKind;
-use crate::{archive, importer, overlay};
+use crate::resources::{self, ExtractionMode};
+use crate::{importer, overlay};
 
 /// Range un contenu entrant comme couche/extension rattachée à `parent_id`.
-/// Ne modifie jamais la base. Renvoie l'id de couche créé.
+/// Ne modifie jamais la base. Fichiers annexes (§4.6) redirigés vers le
+/// dossier ressources du mod, jamais dans la couche elle-même. Renvoie l'id de
+/// couche créé et le nombre de fichiers annexes extraits.
 #[allow(clippy::too_many_arguments)]
 pub fn store_layer(
     conn: &Connection,
@@ -32,13 +35,11 @@ pub fn store_layer(
     copy: bool,
     diff: &DiffStats,
     archive_name: &str,
-) -> Result<String, String> {
+    mode: ExtractionMode,
+) -> Result<(String, usize), String> {
     let dest = importer::unique_dir(&library.join("layers").join(parent_id).join(name));
-    if copy {
-        archive::copy_dir(src_dir, &dest).map_err(|e| format!("copie de la couche : {e}"))?;
-    } else {
-        archive::move_dir(src_dir, &dest).map_err(|e| format!("rangement de la couche : {e}"))?;
-    }
+    let res_dir = resources::resources_dir(library, kind, parent_id);
+    let extracted = resources::file_mod(src_dir, &dest, &res_dir, mode, !copy, true)?;
 
     let now = Local::now().to_rfc3339();
     let id = Uuid::new_v4().to_string();
@@ -76,5 +77,5 @@ pub fn store_layer(
     )
     .map_err(|e| e.to_string())?;
 
-    Ok(id)
+    Ok((id, extracted))
 }

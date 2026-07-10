@@ -12,6 +12,9 @@ export interface Prefs {
   ui_zoom: number | null;
   /** Afficher d'emblée l'aperçu 3D sur la fiche voiture (à la place de l'image). */
   showroom_by_default: boolean;
+  /** Extraction des fichiers annexes du mod à l'import (§4.6) — jamais reposée
+   * à chaque import : "none" | "info_only" (défaut) | "all". */
+  resource_extraction_mode: "none" | "info_only" | "all";
 }
 
 export interface AppConfig {
@@ -57,6 +60,7 @@ export function emptyConfig(): AppConfig {
       language: null,
       ui_zoom: null,
       showroom_by_default: false,
+      resource_extraction_mode: "info_only",
     },
   };
 }
