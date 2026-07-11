@@ -223,8 +223,11 @@
     "chooseLayoutTooltip": "Choose this layout for the session",
     "singleLayout": "Single layout.",
     "trackSkinsLabel": "Track skins · {count}",
-    "trackSkinsNote": "All present → loaded by AC. Detailed management in the Skins view.",
+    "trackSkinsLabelPlain": "Track skins",
+    "trackSkinsNote": "Several can be active at once — checked = visible in game.",
     "noTrackSkins": "No track skin imported.",
+    "trackSkinActiveOn": "Skin active (visible in game)",
+    "trackSkinActiveOff": "Skin inactive",
     "tagsLabel": "Tags",
     "addTagPlaceholder": "add a manual tag…",
     "versionsLabel": "Versions · {count}",
@@ -531,7 +534,9 @@
     "deleteGroup": "Delete all",
     "clearSelection": "Clear selection",
     "confirmDeleteMany": "Delete the {count} selected items? Files and the projection will be removed.",
-    "confirmDeleteGroup": "Delete the {count} items in \"{name}\"? Files and the projection will be removed."
+    "confirmDeleteGroup": "Delete the {count} items in \"{name}\"? Files and the projection will be removed.",
+    "bundledBadge": "Comes with the mod",
+    "bundledHint": "Part of the mod's initial content — not individually removable, only the whole mod."
   },
   "apps": {
     "subtitle": "Assetto Corsa Python apps — standalone type, activated/deactivated by junction like the rest.",

@@ -41,6 +41,9 @@
     listSubMods,
     activateSound,
     restoreSound,
+    syncTrackSkins,
+    listActiveTrackSkins,
+    setTrackSkinActive,
     type SubModRow,
   } from "$lib/submods";
   import { open, confirm } from "@tauri-apps/plugin-dialog";
@@ -69,6 +72,9 @@
   let soundBusy = $state(false);
   const activeSound = $derived(sounds.find((s) => s.is_active) ?? null);
   let trackSkins = $state<SubModRow[]>([]);
+  let activeTrackSkins = $state<string[]>([]);
+  let trackSkinsLoading = $state(true);
+  let trackSkinBusy = $state(false);
   let busy = $state(false);
   let actionError = $state("");
   let manualInput = $state("");
@@ -185,6 +191,8 @@
     if (isCar) {
       const s = await listModSkins(current);
       if (current === id) skins = s;
+    } else {
+      await loadTrackSkins(current);
     }
   }
 
@@ -450,6 +458,7 @@
     layerList = [];
     resourceList = [];
     previewLayout = 0;
+    trackSkinsLoading = true;
     // Couches/extensions rattachées (§4.4) : rangées à part, la base est intacte.
     listLayers(current).then((ls) => {
       if (current === id) layerList = ls;
@@ -491,10 +500,7 @@
         .finally(() => skinsLoadResolve?.());
       loadSounds(current);
     } else {
-      listSubMods(current).then((all) => {
-        if (current !== id) return;
-        trackSkins = all.filter((s) => s.sub_type === "TRACK_SKIN");
-      });
+      loadTrackSkins(current);
     }
   });
 
@@ -502,6 +508,35 @@
     const all = await listSubMods(parent);
     if (parent !== id) return;
     sounds = all.filter((s) => s.sub_type === "SOUND");
+  }
+
+  async function loadTrackSkins(parent: string) {
+    try {
+      // Reconnaît d'abord les skins fournis avec le mod (§4.6bis) — sinon ils
+      // n'apparaîtraient pas encore dans le listSubMods qui suit.
+      await syncTrackSkins(parent);
+      if (parent !== id) return;
+      const [all, active] = await Promise.all([listSubMods(parent), listActiveTrackSkins(parent)]);
+      if (parent !== id) return;
+      trackSkins = all.filter((s) => s.sub_type === "TRACK_SKIN");
+      activeTrackSkins = active;
+    } finally {
+      if (parent === id) trackSkinsLoading = false;
+    }
+  }
+
+  async function toggleTrackSkin(name: string) {
+    if (trackSkinBusy) return;
+    trackSkinBusy = true;
+    const wasActive = activeTrackSkins.includes(name);
+    try {
+      await setTrackSkinActive(id, name, !wasActive);
+      activeTrackSkins = wasActive ? activeTrackSkins.filter((n) => n !== name) : [...activeTrackSkins, name];
+    } catch (e) {
+      actionError = String(e);
+    } finally {
+      trackSkinBusy = false;
+    }
   }
 
   // Un import peut survenir depuis n'importe quel écran (§4.6bis) et cibler le
@@ -969,12 +1004,29 @@
             <div class="muted small">{t("detail.singleLayout")}</div>
           {/if}
 
-          <!-- Skins de circuit (TRACK_SKIN) — pas d'activation, tous chargés. -->
-          <div class="lbl section">{t("detail.trackSkinsLabel", { count: trackSkins.length })}</div>
-          {#if trackSkins.length}
+          <!-- Skins de circuit (TRACK_SKIN) — activables individuellement, plusieurs
+               à la fois (§4.6bis, pas de notion d'exclusivité côté CSP). -->
+          <div class="lbl section">
+            {trackSkinsLoading ? t("detail.trackSkinsLabelPlain") : t("detail.trackSkinsLabel", { count: trackSkins.length })}
+          </div>
+          {#if trackSkinsLoading}
+            <div class="muted small loading-inline"><span class="spinner-sm"></span>{t("common.loading")}</div>
+          {:else if trackSkins.length}
             <ul class="tsk-list">
               {#each trackSkins as s (s.id)}
-                <li><span class="tsk-name">{s.name}</span>{#if s.source_archive}<span class="tsk-src mono">{s.source_archive}</span>{/if}</li>
+                {@const active = activeTrackSkins.includes(s.name)}
+                <li class:inactive={!active}>
+                  <label class="tog" title={active ? t("detail.trackSkinActiveOn") : t("detail.trackSkinActiveOff")}>
+                    <input
+                      type="checkbox"
+                      checked={active}
+                      disabled={trackSkinBusy}
+                      onchange={() => toggleTrackSkin(s.name)}
+                    />
+                  </label>
+                  <span class="tsk-name">{s.name}</span>
+                  {#if s.source_archive}<span class="tsk-src mono">{s.source_archive}</span>{/if}
+                </li>
               {/each}
             </ul>
             <div class="muted small">{t("detail.trackSkinsNote")}</div>
@@ -1794,6 +1846,15 @@
     background: var(--panel2);
     padding: 5px 9px;
   }
+  .tsk-list li.inactive {
+    opacity: 0.6;
+  }
+  .tsk-list .tog {
+    flex: none;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+  }
   .tsk-name {
     flex: 1;
     font-size: 11px;
@@ -1806,6 +1867,25 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 120px;
+  }
+  .loading-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .spinner-sm {
+    flex: none;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--line);
+    border-top-color: var(--rosso);
+    border-radius: 50%;
+    animation: tsk-spin 0.8s linear infinite;
+  }
+  @keyframes tsk-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   /* Couches / extensions (§4.4) */

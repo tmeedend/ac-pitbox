@@ -58,6 +58,11 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     // Couches/extensions (§4.4) : état actif (par défaut) + ordre de priorité.
     let _ = conn.execute("ALTER TABLE layers ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1", []);
     let _ = conn.execute("ALTER TABLE layers ADD COLUMN priority INTEGER NOT NULL DEFAULT 0", []);
+    // Skin fourni avec le contenu initial du mod (découvert sur disque, jamais
+    // importé séparément par Pit Box) → non supprimable individuellement,
+    // seulement le mod entier (§4.6bis, même logique que les skins voiture).
+    // Défaut 1 (supprimable) pour tous les sous-éléments existants/normaux.
+    let _ = conn.execute("ALTER TABLE sub_mods ADD COLUMN removable INTEGER NOT NULL DEFAULT 1", []);
     Ok(())
 }
 
@@ -99,7 +104,8 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             name           TEXT NOT NULL,
             library_path   TEXT NOT NULL,
             source_archive TEXT,
-            is_active      INTEGER NOT NULL DEFAULT 0, -- SOUND uniquement (exclusif)
+            is_active      INTEGER NOT NULL DEFAULT 0, -- SOUND (exclusif) et TRACK_SKIN (pas exclusif)
+            removable      INTEGER NOT NULL DEFAULT 1, -- faux si fourni avec le mod, découvert sur disque
             imported_at    TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_sub_parent ON sub_mods(parent_id);
@@ -977,6 +983,9 @@ pub struct SubModRow {
     pub library_path: String,
     pub source_archive: Option<String>,
     pub is_active: bool,
+    /// Faux si fourni avec le contenu initial du mod (découvert sur disque,
+    /// §4.6bis) — non supprimable individuellement, seulement le mod entier.
+    pub removable: bool,
     pub imported_at: String,
 }
 
@@ -999,6 +1008,26 @@ pub fn insert_sub_mod(
     Ok(())
 }
 
+/// Enregistre un skin de circuit découvert sur disque, fourni avec le
+/// contenu initial du mod (§4.6bis) — jamais importé séparément par Pit Box,
+/// donc `removable = 0` : reconnu et activable, mais non supprimable
+/// individuellement (seulement le mod entier).
+pub fn insert_bundled_track_skin(
+    conn: &Connection,
+    id: &str,
+    parent_id: &str,
+    name: &str,
+    library_path: &str,
+    imported_at: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        r#"INSERT INTO sub_mods (id, sub_type, parent_id, name, library_path, source_archive, removable, imported_at)
+           VALUES (?1,'TRACK_SKIN',?2,?3,?4,NULL,0,?5)"#,
+        params![id, parent_id, name, library_path, imported_at],
+    )?;
+    Ok(())
+}
+
 fn map_sub(row: &rusqlite::Row) -> rusqlite::Result<SubModRow> {
     Ok(SubModRow {
         id: row.get(0)?,
@@ -1008,12 +1037,13 @@ fn map_sub(row: &rusqlite::Row) -> rusqlite::Result<SubModRow> {
         library_path: row.get(4)?,
         source_archive: row.get(5)?,
         is_active: row.get::<_, i64>(6)? != 0,
-        imported_at: row.get(7)?,
+        removable: row.get::<_, i64>(7)? != 0,
+        imported_at: row.get(8)?,
     })
 }
 
 const SUB_SELECT: &str =
-    "SELECT id, sub_type, parent_id, name, library_path, source_archive, is_active, imported_at FROM sub_mods";
+    "SELECT id, sub_type, parent_id, name, library_path, source_archive, is_active, removable, imported_at FROM sub_mods";
 
 /// Sous-éléments rattachés à une entité (fiche détail, §12bis.3).
 pub fn list_subs_for_parent(conn: &Connection, parent_id: &str) -> rusqlite::Result<Vec<SubModRow>> {
@@ -1063,6 +1093,17 @@ pub fn set_active_sound(conn: &Connection, parent_id: &str, id: Option<&str>) ->
     if let Some(id) = id {
         conn.execute("UPDATE sub_mods SET is_active = 1 WHERE id = ?1", [id])?;
     }
+    Ok(())
+}
+
+/// Active/désactive un skin de circuit par nom (§4.6bis) — PAS exclusif,
+/// contrairement au son : plusieurs TRACK_SKIN peuvent être `is_active` en
+/// même temps pour un même circuit.
+pub fn set_track_skin_active(conn: &Connection, parent_id: &str, name: &str, active: bool) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE sub_mods SET is_active = ?3 WHERE parent_id = ?1 AND sub_type = 'TRACK_SKIN' AND name = ?2",
+        params![parent_id, name, active as i64],
+    )?;
     Ok(())
 }
 

@@ -23,14 +23,19 @@
   let layers = $state<LayerRow[]>([]);
   let cards = $state<ModCard[]>([]);
   let busy = $state(false);
+  let loading = $state(true);
   let error = $state("");
 
   const parents = $derived(new Map(cards.map((c) => [c.id_interne, c] as const)));
 
   async function load() {
-    const [ls, lib] = await Promise.all([listLayersByKind(kind), listLibrary()]);
-    layers = ls;
-    cards = lib;
+    try {
+      const [ls, lib] = await Promise.all([listLayersByKind(kind), listLibrary()]);
+      layers = ls;
+      cards = lib;
+    } finally {
+      loading = false;
+    }
   }
   onMount(load);
 
@@ -98,7 +103,12 @@
 
   {#if error}<div class="err">{error}</div>{/if}
 
-  {#if layers.length === 0}
+  {#if loading}
+    <div class="empty loading-state">
+      <span class="spinner"></span>
+      <p>{t("common.loading")}</p>
+    </div>
+  {:else if layers.length === 0}
     <div class="empty">{t("transversal.noLayers")}</div>
   {:else}
     <div class="hint">{t("detail.layersRecomposeNote")}</div>
@@ -163,6 +173,25 @@
     color: var(--faint);
     font-size: 12px;
     padding: 16px 0;
+  }
+  .loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .loading-state .spinner {
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--line);
+    border-top-color: var(--rosso);
+    border-radius: 50%;
+    animation: layers-spin 0.8s linear infinite;
+  }
+  @keyframes layers-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   .hint {
     color: var(--blue);

@@ -9,6 +9,8 @@ export interface SubModRow {
   library_path: string;
   source_archive: string | null;
   is_active: boolean;
+  /** Faux si fourni avec le contenu initial du mod (§4.6bis) — non supprimable individuellement. */
+  removable: boolean;
   imported_at: string;
 }
 
@@ -35,6 +37,21 @@ export function activateSound(subId: string): Promise<void> {
 /** Restaure le son d'origine d'une voiture (§12bis.2). */
 export function restoreSound(parentId: string): Promise<void> {
   return invoke<void>("restore_sound", { parentId });
+}
+
+/** Reconnaît les skins de circuit fournis avec le mod (§4.6bis) — à appeler avant de les lister. */
+export function syncTrackSkins(trackId: string): Promise<void> {
+  return invoke<void>("sync_track_skins", { trackId });
+}
+
+/** Skins de circuit actuellement actifs (§4.6bis, plusieurs possibles). */
+export function listActiveTrackSkins(trackId: string): Promise<string[]> {
+  return invoke<string[]>("list_active_track_skins", { trackId });
+}
+
+/** Active/désactive un skin de circuit (§4.6bis, pas exclusif). */
+export function setTrackSkinActive(trackId: string, skinName: string, active: boolean): Promise<void> {
+  return invoke<void>("set_track_skin_active", { trackId, skinName, active });
 }
 
 /** Supprime un sous-élément (skin/son) de l'overlay (§12bis.3). */

@@ -142,6 +142,25 @@ pub fn compose_tree(
     write_marker(dest, mod_id, kind)
 }
 
+/// Recompose `dest` comme l'union de `layers` (dans l'ordre, la dernière
+/// gagne) — pour un usage **hors mods** (ex. `skins/default/` d'un circuit,
+/// §4.6bis : Content Manager y copie les fichiers des skins de circuit
+/// actifs, vérifié empiriquement — décocher tous les skins vide entièrement
+/// ce dossier côté CM, aucun « fond » à préserver). Pas de marqueur
+/// `.pitbox-deployed.json` ici : ce n'est pas un déploiement de mod, juste
+/// une composition de fichiers dans un sous-dossier. `dest` est entièrement
+/// vidé puis reconstruit à chaque appel (pas de mise à jour incrémentale).
+pub fn compose_layers_into(layers: &[PathBuf], dest: &Path) -> Result<(), String> {
+    if dest.exists() {
+        std::fs::remove_dir_all(dest).map_err(|e| format!("nettoyage de {} : {e}", dest.display()))?;
+    }
+    std::fs::create_dir_all(dest).map_err(|e| e.to_string())?;
+    for layer_dir in layers {
+        overlay_tree(layer_dir, dest)?;
+    }
+    Ok(())
+}
+
 /// Retire un déploiement hardlinks. Garde-fou : refuse si le marqueur est
 /// absent (jamais un dossier qu'on n'a pas soi-même créé). Les fichiers de la
 /// bibliothèque source ne sont jamais affectés — un hardlink est une entrée de

@@ -118,6 +118,12 @@ pub struct FoundSub {
     /// Pour un SKIN : dossier dont les **enfants directs sont les skins**. Pour
     /// un SON : dossier contenant `GUIDs.txt` + `.bank`.
     pub dir: PathBuf,
+    /// Dossier "racine" du pack dans la source (celui qui contient `skins/`),
+    /// quand il désigne sans ambiguïté une seule cible — `None` pour la forme
+    /// multi-voitures (`skins/<voiture>/<skin>`, une racine par voiture, pas de
+    /// dossier commun). Sert à retrouver des fichiers voisins de `skins/` (ex.
+    /// `ext_config.ini` d'un pack de skins de circuit, §4.6bis).
+    pub extra_root: Option<PathBuf>,
 }
 
 /// Descend récursivement à partir de `root` et collecte les voitures/circuits.
@@ -186,27 +192,48 @@ fn descend_subs(dir: &Path, out: &mut Vec<FoundSub>) {
     }
     let dir_name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
 
-    // Pack de skins : deux arborescences possibles (§12bis.2).
+    // Pack de skins : deux arborescences possibles (§12bis.2), plus la
+    // convention CM pour les skins de circuit `skins/cm_skins/<skin>` (regroupe
+    // les livrées sous un sous-dossier dédié, à distinguer d'un dossier de
+    // voiture/circuit cible qui aurait la même forme à un niveau) — sinon
+    // `skins_are_per_car_folders` la confond avec `skins/<voiture>/<skin>` et
+    // route le pack vers un parent inexistant nommé "cm_skins".
     let skins = dir.join("skins");
     if skins.is_dir() && has_subdir(&skins) {
+        let cm_skins = skins.join("cm_skins");
+        if cm_skins.is_dir() {
+            out.push(FoundSub {
+                kind: SubKind::Skin,
+                parent_id: dir_name,
+                dir: cm_skins,
+                extra_root: Some(dir.to_path_buf()),
+            });
+            return;
+        }
         if skins_are_per_car_folders(&skins) {
-            // Forme `skins/<voiture>/<skin>` : chaque enfant = une voiture cible.
+            // Forme `skins/<voiture>/<skin>` : chaque enfant = une voiture cible,
+            // pas de dossier racine commun (extra_root ambigu, on l'omet).
             for e in std::fs::read_dir(&skins).into_iter().flatten().flatten() {
                 let car = e.path();
                 if car.is_dir() && has_subdir(&car) {
                     let parent = e.file_name().to_string_lossy().into_owned();
-                    out.push(FoundSub { kind: SubKind::Skin, parent_id: parent, dir: car });
+                    out.push(FoundSub { kind: SubKind::Skin, parent_id: parent, dir: car, extra_root: None });
                 }
             }
         } else {
             // Forme `<voiture>/skins/<skin>` : le dossier courant est la voiture.
-            out.push(FoundSub { kind: SubKind::Skin, parent_id: dir_name, dir: skins });
+            out.push(FoundSub {
+                kind: SubKind::Skin,
+                parent_id: dir_name,
+                dir: skins,
+                extra_root: Some(dir.to_path_buf()),
+            });
         }
         return;
     }
 
     if is_car_sound(dir) {
-        out.push(FoundSub { kind: SubKind::Sound, parent_id: dir_name, dir: dir.to_path_buf() });
+        out.push(FoundSub { kind: SubKind::Sound, parent_id: dir_name, dir: dir.to_path_buf(), extra_root: None });
         return;
     }
     if let Ok(entries) = std::fs::read_dir(dir) {

@@ -9,10 +9,15 @@
   let apps = $state<AppItem[]>([]);
   let query = $state("");
   let busy = $state<string | null>(null);
+  let loading = $state(true);
   let error = $state("");
 
   async function load() {
-    apps = await listApps();
+    try {
+      apps = await listApps();
+    } finally {
+      loading = false;
+    }
   }
   onMount(load);
 
@@ -66,7 +71,12 @@
 
   {#if error}<div class="err">{error}</div>{/if}
 
-  {#if apps.length === 0}
+  {#if loading}
+    <div class="empty loading-state">
+      <span class="spinner"></span>
+      <p>{t("common.loading")}</p>
+    </div>
+  {:else if apps.length === 0}
     <div class="empty">
       <p>{t("apps.empty")}</p>
       <p class="hint">{t("apps.emptyHint", { path: "apps/python/<App>/" })}</p>
@@ -194,5 +204,24 @@
     font-size: 12px;
     color: var(--faint);
     margin-top: 8px;
+  }
+  .loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .loading-state .spinner {
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--line);
+    border-top-color: var(--rosso);
+    border-radius: 50%;
+    animation: apps-spin 0.8s linear infinite;
+  }
+  @keyframes apps-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>

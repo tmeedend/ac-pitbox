@@ -19,11 +19,16 @@
   let others = $state<OtherModRow[]>([]);
   let query = $state("");
   let busy = $state<string | null>(null);
+  let loading = $state(true);
   let error = $state("");
   let warnings = $state<Record<string, string[]>>({});
 
   async function load() {
-    others = await listOtherMods();
+    try {
+      others = await listOtherMods();
+    } finally {
+      loading = false;
+    }
   }
   onMount(load);
 
@@ -100,7 +105,12 @@
 
   {#if error}<div class="err">{error}</div>{/if}
 
-  {#if others.length === 0}
+  {#if loading}
+    <div class="empty loading-state">
+      <span class="spinner"></span>
+      <p>{t("common.loading")}</p>
+    </div>
+  {:else if others.length === 0}
     <div class="empty">
       <p>{t("others.empty")}</p>
       <p class="hint">{t("others.emptyHint")}</p>
@@ -263,5 +273,24 @@
     font-size: 12px;
     color: var(--faint);
     margin-top: 8px;
+  }
+  .loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .loading-state .spinner {
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--line);
+    border-top-color: var(--rosso);
+    border-radius: 50%;
+    animation: others-spin 0.8s linear infinite;
+  }
+  @keyframes others-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>

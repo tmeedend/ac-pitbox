@@ -609,6 +609,32 @@ fn list_subs_by_type(db: State<Db>, sub_type: String) -> Result<Vec<overlay::Sub
     overlay::list_subs_by_type(&conn, &sub_type).map_err(|e| e.to_string())
 }
 
+/// Reconnaît les skins de circuit fournis avec le contenu initial du mod
+/// (§4.6bis, lecture live du disque, best-effort) — à appeler avant de lister
+/// les skins d'un circuit pour qu'ils y apparaissent.
+#[tauri::command]
+fn sync_track_skins(app: AppHandle, db: State<Db>, track_id: String) -> Result<(), String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    submods::sync_bundled_track_skins(&conn, &cfg, &track_id);
+    Ok(())
+}
+
+/// Skins de circuit actuellement actifs (§4.6bis, plusieurs possibles).
+#[tauri::command]
+fn list_active_track_skins(db: State<Db>, track_id: String) -> Result<Vec<String>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(submods::list_active_track_skins(&conn, &track_id))
+}
+
+/// Active/désactive un skin de circuit (§4.6bis, pas exclusif).
+#[tauri::command]
+fn set_track_skin_active(app: AppHandle, db: State<Db>, track_id: String, skin_name: String, active: bool) -> Result<(), String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    submods::set_track_skin_active(&conn, &cfg, &track_id, &skin_name, active)
+}
+
 /// Active un mod de son (bascule exclusive du sfx/, §12bis.2).
 #[tauri::command]
 fn activate_sound(app: AppHandle, db: State<Db>, sub_id: String) -> Result<(), String> {
@@ -788,6 +814,9 @@ pub fn run() {
             index_stock_content,
             list_sub_mods,
             list_subs_by_type,
+            sync_track_skins,
+            list_active_track_skins,
+            set_track_skin_active,
             activate_sound,
             restore_sound,
             delete_sub_mod,
