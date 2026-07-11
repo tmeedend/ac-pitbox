@@ -724,17 +724,19 @@
   {#if error}<div class="err">{error}</div>{/if}
 
   <div class="body">
-    <div class="seg types">
-      {#each sessionTypes as st}
-        <button class:on={setup.session_type === st.id} onclick={() => setSessionType(st.id)}>{t(st.labelKey)}</button>
-      {/each}
-    </div>
+    <div class="type-row">
+      <div class="seg types">
+        {#each sessionTypes as st}
+          <button class:on={setup.session_type === st.id} onclick={() => setSessionType(st.id)}>{t(st.labelKey)}</button>
+        {/each}
+      </div>
 
-    {#if setup.session_type === "practice"}
-      <label class="quickfield"><span>{t("launch.duration")}</span><NumberStepper width={90} min={1} max={240} bind:value={setup.duration_minutes} /></label>
-    {:else if setup.session_type === "hotlap"}
-      <label class="check quickfield"><input type="checkbox" bind:checked={setup.ghost_car} /><span>{t("launch.ghostCar")}</span></label>
-    {/if}
+      {#if setup.session_type === "practice"}
+        <label class="quickfield"><span>{t("launch.duration")}</span><NumberStepper width={90} min={1} max={240} bind:value={setup.duration_minutes} /></label>
+      {:else if setup.session_type === "hotlap"}
+        <label class="check quickfield"><input type="checkbox" bind:checked={setup.ghost_car} /><span>{t("launch.ghostCar")}</span></label>
+      {/if}
+    </div>
 
     <div class="cols">
       <!-- COLONNE GAUCHE -->
@@ -822,17 +824,19 @@
         <!-- Simulation : actif quel que soit le type de session (§8.6) -->
         <section class="sect">
           <div class="lbl">{t("launch.simulationLabel")} <span class="lbl-note">{t("launch.simulationNote")}</span></div>
-          <div class="opt">
-            <div class="opt-head"><span class="opt-name">{t("launch.damageLabel")}</span><span class="opt-val mono">{setup.damage}%</span></div>
-            <input type="range" min="0" max="100" bind:value={setup.damage} style="--f:{setup.damage}%" />
-          </div>
-          <div class="opt">
-            <div class="opt-head"><span class="opt-name">{t("launch.fuelLabel")}</span><span class="opt-val mono">{setup.fuel_rate}%</span></div>
-            <input type="range" min="0" max="200" bind:value={setup.fuel_rate} style="--f:{setup.fuel_rate / 2}%" />
-          </div>
-          <div class="opt">
-            <div class="opt-head"><span class="opt-name">{t("launch.tyreLabel")}</span><span class="opt-val mono">{setup.tyre_wear}%</span></div>
-            <input type="range" min="0" max="200" bind:value={setup.tyre_wear} style="--f:{setup.tyre_wear / 2}%" />
+          <div class="opt-row">
+            <div class="opt">
+              <div class="opt-head"><span class="opt-name">{t("launch.damageLabel")}</span><span class="opt-val mono">{setup.damage}%</span></div>
+              <input type="range" min="0" max="100" bind:value={setup.damage} style="--f:{setup.damage}%" />
+            </div>
+            <div class="opt">
+              <div class="opt-head"><span class="opt-name">{t("launch.fuelLabel")}</span><span class="opt-val mono">{setup.fuel_rate}%</span></div>
+              <input type="range" min="0" max="200" bind:value={setup.fuel_rate} style="--f:{setup.fuel_rate / 2}%" />
+            </div>
+            <div class="opt">
+              <div class="opt-head"><span class="opt-name">{t("launch.tyreLabel")}</span><span class="opt-val mono">{setup.tyre_wear}%</span></div>
+              <input type="range" min="0" max="200" bind:value={setup.tyre_wear} style="--f:{setup.tyre_wear / 2}%" />
+            </div>
           </div>
         </section>
       </div>
@@ -1065,15 +1069,27 @@
     background: var(--rosso);
     color: #fff;
   }
-  .quickfield {
+  /* Type de session + son unique réglage rapide associé (durée/ghost car) sur
+     la même ligne : les deux sont compacts, pas la peine de leur donner
+     chacun une ligne pleine largeur. */
+  .type-row {
     display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-bottom: 16px;
+  }
+  .type-row .types {
+    margin-bottom: 0;
+  }
+  .quickfield {
+    display: inline-flex;
     align-items: center;
     gap: 10px;
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--muted);
-    margin-bottom: 20px;
   }
   .quickfield.check {
     text-transform: none;
@@ -1145,7 +1161,7 @@
     margin-top: 2px;
   }
   .grid-fields {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 12px;
   }
@@ -1308,8 +1324,19 @@
   }
 
   /* Sliders simples (dégâts/carburant/pneus/heure) */
+  /* Dégâts/carburant/pneus groupés sur une même ligne (2 si l'espace manque) :
+     inutile de laisser chaque curseur s'étirer sur toute la largeur pour un
+     réglage 0-100/200 qui se lit très bien en plus étroit. */
+  .opt-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px 16px;
+  }
   .opt {
     margin-bottom: 14px;
+  }
+  .opt-row .opt {
+    margin-bottom: 0;
   }
   .opt-head {
     display: flex;

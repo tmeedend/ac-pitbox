@@ -308,6 +308,13 @@
   // boucle et la réouverture après fermeture manuelle). Plain var (pas d'état
   // réactif) — c'est juste un marqueur.
   let autoOpenedFor: string | null = null;
+  // Le lancement natif n'est pas instantané (spawn + init DirectX) : si la
+  // fiche est quittée ou change de voiture avant la fin, `openShowroom` doit
+  // s'en apercevoir à la reprise et fermer ce qu'il vient de lancer plutôt que
+  // de l'attacher à un écran qui n'existe plus (bug réel : le showroom
+  // apparaissait par-dessus l'écran suivant une fois chargé, si on revenait en
+  // arrière trop vite).
+  let destroyed = false;
   onMount(async () => {
     try {
       showroom3dDefault = (await getConfig()).prefs.showroom_by_default;
@@ -341,6 +348,7 @@
 
   async function openShowroom() {
     if (!detail || showroomBusy) return;
+    const forId = id; // capturé au lancement, comparé à la reprise
     showroomBusy = true;
     actionError = "";
     try {
@@ -348,13 +356,20 @@
       // le chargement de la fiche → showroom ouvert sans skin, voiture blanche).
       await skinsLoadPromise;
       await openNativeShowroom(detail.id_interne, skins[previewSkin]?.id ?? null);
+      // La fiche a pu être quittée (composant démonté) ou changer de voiture
+      // pendant le lancement : ne jamais attacher un showroom qui ne
+      // correspond plus à ce qui est affiché, le fermer immédiatement à la place.
+      if (destroyed || id !== forId) {
+        await closeNativeShowroom().catch(() => {});
+        return;
+      }
       const r = heroRect();
       if (r) {
         await attachNativeShowroom(r.x, r.y, r.width, r.height);
         showroomAttached = true;
       }
     } catch (e) {
-      actionError = String(e);
+      if (!destroyed) actionError = String(e);
     } finally {
       showroomBusy = false;
     }
@@ -370,7 +385,11 @@
   }
 
   onDestroy(() => {
+    destroyed = true;
     if (showroomAttached) closeNativeShowroom().catch(() => {});
+    // Sinon (encore en cours de lancement, pas attaché) : `openShowroom` s'en
+    // rendra compte à la reprise via `destroyed` et fermera lui-même ce qu'il
+    // vient de lancer.
   });
 
   // Ferme le showroom si on change de mod pendant qu'il est attaché (la
