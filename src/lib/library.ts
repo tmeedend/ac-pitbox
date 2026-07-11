@@ -82,6 +82,9 @@ export interface VersionRow {
   published_at: string | null;
   /** Taille sur disque de cette version, octets (§9.4). */
   size_bytes: number | null;
+  /** Archive/dossier source conservé en bibliothèque (§10/§11), si le réglage
+   * était activé à l'import. `null` = non conservé, pas de réinstallation possible. */
+  kept_archive_path: string | null;
 }
 
 export interface HistoryRow {

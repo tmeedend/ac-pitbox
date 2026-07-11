@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Settings from "./Settings.svelte";
+  import About from "./About.svelte";
   import Library from "./Library.svelte";
   import RulesEditor from "./RulesEditor.svelte";
   import Profiles from "./Profiles.svelte";
@@ -40,6 +41,7 @@
     // Action directe, pas un écran : n'affecte jamais nav.section.
     { id: "opencm", labelKey: "nav.openCm", action: true },
     { id: "settings", labelKey: "nav.settings", full: true },
+    { id: "about", labelKey: "nav.about", full: true },
   ];
 
   async function handleAtelierClick(b: NavBtn) {
@@ -173,6 +175,8 @@
     <main class="content" class:fixed={noPad}>
       {#if nav.section === "settings"}
         <Settings />
+      {:else if nav.section === "about"}
+        <About />
       {:else if nav.section === "cars"}
         <Library kind="Car" />
       {:else if nav.section === "tracks"}

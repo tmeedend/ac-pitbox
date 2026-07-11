@@ -11,7 +11,7 @@ use serde::Serialize;
 use crate::config::AppConfig;
 use crate::modscan::ModKind;
 use crate::overlay::ModRow;
-use crate::{activation, inspect, overlay, uijson};
+use crate::{activation, archive, inspect, modscan, overlay, uijson};
 
 fn kind_of(s: &str) -> ModKind {
     if s == "Track" {
@@ -117,6 +117,13 @@ pub fn delete_broken(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(),
     // Fichiers : versions individuelles + dossier parent du mod dans la bibliothèque.
     for v in overlay::get_versions(conn, id).map_err(|e| e.to_string())? {
         let _ = std::fs::remove_dir_all(Path::new(&v.library_path));
+        // Archive source conservée (§10/§11), si le réglage était actif à l'import :
+        // `<lib>/_source_archives/<uuid>/<nom>` — on efface tout le dossier `<uuid>`.
+        if let Some(kept) = &v.kept_archive_path {
+            if let Some(parent) = Path::new(kept).parent() {
+                let _ = std::fs::remove_dir_all(parent);
+            }
+        }
     }
     if let Some(lib) = &cfg.library_path {
         let _ = std::fs::remove_dir_all(lib.join(kind.content_folder()).join(id));
@@ -145,6 +152,64 @@ pub fn delete_pack(conn: &Connection, cfg: &AppConfig, pack: &str) -> Result<usi
         n += 1;
     }
     Ok(n)
+}
+
+/// Réinstalle un mod depuis son archive/dossier source conservé (§10/§11) :
+/// réextrait (ou recopie, si la source était un dossier) le contenu et
+/// remplace les fichiers de la version active en bibliothèque. Utile en cas
+/// de corruption, de modification accidentelle, ou pour repartir propre sans
+/// retélécharger. Ne touche ni l'id, ni les métadonnées overlay — seuls les
+/// fichiers de la version active sont remplacés, puis réindexés.
+pub fn reinstall_from_archive(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
+    let m = overlay::get_mod(conn, id).map_err(|e| e.to_string())?.ok_or("mod introuvable")?;
+    let kind = kind_of(&m.kind);
+    let versions = overlay::get_versions(conn, id).map_err(|e| e.to_string())?;
+    let active_id = m.active_version_id.clone().ok_or("aucune version active")?;
+    let version = versions
+        .iter()
+        .find(|v| v.id == active_id)
+        .ok_or("version active introuvable")?;
+    let kept = version
+        .kept_archive_path
+        .as_ref()
+        .ok_or("aucune archive source conservée pour ce mod")?;
+    let kept_path = Path::new(kept);
+    if !kept_path.exists() {
+        return Err("l'archive source conservée est introuvable sur le disque".into());
+    }
+
+    let workdir = std::env::temp_dir().join(format!("pitbox-reinstall-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&workdir).map_err(|e| e.to_string())?;
+
+    let extracted_dir = if kept_path.is_dir() {
+        kept_path.to_path_buf()
+    } else {
+        let sevenzip = cfg.sevenzip_exe.as_ref().ok_or("7-Zip non configuré")?;
+        archive::extract(sevenzip, kept_path, &workdir)?;
+        workdir.clone()
+    };
+
+    // Retrouve le dossier du mod dans le contenu réextrait — priorité à un
+    // dossier de même id (id_interne dérivé du nom de dossier à l'import),
+    // sinon premier contenu du bon type (cas d'une archive à racine décalée).
+    let found = modscan::scan(&extracted_dir);
+    let fm = found
+        .iter()
+        .find(|fm| fm.kind == kind && fm.dir.file_name().is_some_and(|n| n.to_string_lossy() == id))
+        .or_else(|| found.iter().find(|fm| fm.kind == kind))
+        .ok_or("aucun contenu de voiture/circuit retrouvé dans l'archive source")?;
+
+    let dest = Path::new(&version.library_path);
+    let _ = std::fs::remove_dir_all(dest);
+    archive::copy_dir(&fm.dir, dest).map_err(|e| e.to_string())?;
+
+    if kept_path.is_file() {
+        let _ = std::fs::remove_dir_all(&workdir);
+    }
+
+    reindex_mod(conn, cfg, id, true)?;
+    overlay::add_history(conn, id, &chrono::Local::now().to_rfc3339(), "REINSTALL", "").map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Retire une junction orpheline. Garde-fou : refuse si ce n'est pas une junction.
@@ -269,6 +334,118 @@ mod tests {
 
         delete_broken(&conn, &cfg, "ghost").unwrap();
         assert!(overlay::get_mod(&conn, "ghost").unwrap().is_none());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Voiture synthétique <root>/<id> avec `ui/ui_car.json` + un fichier de plus.
+    fn make_car(root: &Path, id: &str, extra_content: &str) {
+        let dir = root.join(id);
+        std::fs::create_dir_all(dir.join("ui")).unwrap();
+        std::fs::write(dir.join("ui").join("ui_car.json"), br#"{"name":"Test","brand":"B","tags":[]}"#).unwrap();
+        std::fs::write(dir.join("data.txt"), extra_content).unwrap();
+    }
+
+    #[test]
+    fn reinstall_restores_files_from_kept_source_folder() {
+        // §10/§11 : « conserver l'archive source » (ici un dossier, pas un
+        // .zip — pas besoin de 7-Zip) + « réinstaller depuis l'archive source »
+        // doit remplacer le contenu de la version active par une copie fraîche.
+        let base = std::env::temp_dir().join(format!("pitbox-reinstall-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&base).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig::default();
+        let now = chrono::Local::now().to_rfc3339();
+
+        // Dossier source conservé (simule la copie faite à l'import quand le
+        // réglage est actif) : contenu de référence.
+        let kept_root = base.join("kept");
+        make_car(&kept_root, "reinst_car", "original");
+        let kept_path = kept_root.join("reinst_car");
+
+        // Version en bibliothèque, « corrompue » (fichier annexe manquant).
+        let lib_path = base.join("library").join("cars").join("reinst_car").join("v1");
+        std::fs::create_dir_all(lib_path.join("ui")).unwrap();
+        std::fs::write(lib_path.join("ui").join("ui_car.json"), br#"{"name":"Test","brand":"B","tags":[]}"#).unwrap();
+        // Pas de data.txt : contenu bibliothèque corrompu/incomplet.
+
+        overlay::upsert_mod(&conn, "reinst_car", "Car", Some("B"), Some("Test"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn, "v1", "reinst_car", Some("1.0"), None, &now,
+            &lib_path.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "reinst_car", "v1").unwrap();
+        overlay::set_kept_archive(&conn, "v1", &kept_path.to_string_lossy()).unwrap();
+
+        assert!(!lib_path.join("data.txt").exists(), "précondition : fichier absent avant réinstallation");
+
+        reinstall_from_archive(&conn, &cfg, "reinst_car").unwrap();
+
+        assert!(lib_path.join("data.txt").is_file(), "réinstallation doit restaurer le fichier manquant");
+        assert_eq!(std::fs::read_to_string(lib_path.join("data.txt")).unwrap(), "original");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn reinstall_fails_without_kept_archive() {
+        let base = std::env::temp_dir().join(format!("pitbox-reinstall-none-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&base).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig::default();
+        let now = chrono::Local::now().to_rfc3339();
+
+        let lib_path = base.join("library").join("cars").join("no_kept").join("v1");
+        std::fs::create_dir_all(lib_path.join("ui")).unwrap();
+        std::fs::write(lib_path.join("ui").join("ui_car.json"), b"{}").unwrap();
+
+        overlay::upsert_mod(&conn, "no_kept", "Car", Some("B"), Some("Test"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn, "v1", "no_kept", Some("1.0"), None, &now,
+            &lib_path.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "no_kept", "v1").unwrap();
+
+        let err = reinstall_from_archive(&conn, &cfg, "no_kept").unwrap_err();
+        assert!(err.contains("archive source"), "message d'erreur attendu, obtenu : {err}");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn delete_broken_also_removes_kept_archive_copy() {
+        // §10 : supprimer un mod de la bibliothèque doit aussi libérer l'espace
+        // pris par l'archive source conservée (§11), pas seulement le contenu
+        // extrait — sinon la suppression laisse une copie orpheline sur le disque.
+        let base = std::env::temp_dir().join(format!("pitbox-delkept-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&base).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig { library_path: Some(base.join("library")), ..Default::default() };
+        let now = chrono::Local::now().to_rfc3339();
+
+        let lib_path = base.join("library").join("cars").join("del_car").join("v1");
+        std::fs::create_dir_all(lib_path.join("ui")).unwrap();
+        std::fs::write(lib_path.join("ui").join("ui_car.json"), b"{}").unwrap();
+
+        // Copie d'archive source conservée, dans son propre dossier `<uuid>/`.
+        let kept_dir = base.join("library").join("_source_archives").join("someuuid");
+        std::fs::create_dir_all(&kept_dir).unwrap();
+        std::fs::write(kept_dir.join("mod.zip"), b"fake archive").unwrap();
+
+        overlay::upsert_mod(&conn, "del_car", "Car", Some("B"), Some("Test"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn, "v1", "del_car", Some("1.0"), None, &now,
+            &lib_path.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "del_car", "v1").unwrap();
+        overlay::set_kept_archive(&conn, "v1", &kept_dir.join("mod.zip").to_string_lossy()).unwrap();
+
+        assert!(kept_dir.exists());
+        delete_broken(&conn, &cfg, "del_car").unwrap();
+        assert!(!kept_dir.exists(), "la copie d'archive source doit être nettoyée avec le mod");
 
         let _ = std::fs::remove_dir_all(&base);
     }

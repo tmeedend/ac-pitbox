@@ -35,7 +35,7 @@
     closeNativeShowroom,
     type SkinItem,
   } from "$lib/launch";
-  import { exportMod, deletePack, type ExportReport } from "$lib/maintenance";
+  import { exportMod, deletePack, deleteBrokenMod, reinstallFromArchive, type ExportReport } from "$lib/maintenance";
   import {
     listSubMods,
     activateSound,
@@ -105,6 +105,60 @@
 
   function activeArchive(d: ModDetail): string | null {
     return d.versions.find((v) => v.id === d.active_version_id)?.source_archive ?? null;
+  }
+
+  // Archive/dossier source conservé pour la version active (§10/§11), s'il y
+  // en a un — conditionne l'affichage du bouton « Réinstaller ».
+  function keptArchive(d: ModDetail): string | null {
+    return d.versions.find((v) => v.id === d.active_version_id)?.kept_archive_path ?? null;
+  }
+
+  let deleteBusy = $state(false);
+  let reinstallBusy = $state(false);
+  let reinstallOk = $state(false);
+
+  // Supprimer de la bibliothèque : action distincte de Désactiver (§10) —
+  // efface les fichiers de toutes les versions, jamais réversible sans
+  // réimport (sauf réinstallation depuis une archive source conservée).
+  async function doDelete() {
+    if (!detail || deleteBusy) return;
+    const ok = await confirm(t("detail.deleteConfirm", { name: detail.display_name ?? detail.id_interne }), {
+      title: t("detail.deleteTitle"),
+      kind: "warning",
+    });
+    if (!ok) return;
+    deleteBusy = true;
+    actionError = "";
+    try {
+      await deleteBrokenMod(detail.id_interne);
+      onchange?.();
+      onclose();
+    } catch (e) {
+      actionError = String(e);
+      deleteBusy = false;
+    }
+  }
+
+  async function doReinstall() {
+    if (!detail || reinstallBusy) return;
+    const ok = await confirm(t("detail.reinstallConfirm", { name: detail.display_name ?? detail.id_interne }), {
+      title: t("detail.reinstallConfirmTitle"),
+      kind: "warning",
+    });
+    if (!ok) return;
+    reinstallBusy = true;
+    actionError = "";
+    reinstallOk = false;
+    try {
+      await reinstallFromArchive(detail.id_interne);
+      await reload();
+      onchange?.();
+      reinstallOk = true;
+    } catch (e) {
+      actionError = String(e);
+    } finally {
+      reinstallBusy = false;
+    }
   }
 
   let layerBusy = $state(false);
@@ -663,6 +717,14 @@
           <button class="btn" type="button" onclick={doExport} disabled={exporting} title={t("detail.exportTooltip")}>
             {exporting ? t("detail.exporting") : t("detail.export")}
           </button>
+          {#if keptArchive(d)}
+            <button class="btn" type="button" onclick={doReinstall} disabled={reinstallBusy} title={t("detail.reinstallTooltip")}>
+              {reinstallBusy ? t("detail.reinstalling") : t("detail.reinstallFromArchive")}
+            </button>
+          {/if}
+          <button class="btn danger" type="button" onclick={doDelete} disabled={deleteBusy} title={t("detail.deleteFromLibraryTooltip")}>
+            {deleteBusy ? t("common.working") : t("detail.deleteFromLibrary")}
+          </button>
         {/if}
         {#if isCar}
           {#if showroomAttached}
@@ -680,6 +742,7 @@
     </header>
 
     {#if actionError}<div class="action-err">{actionError}</div>{/if}
+    {#if reinstallOk}<div class="export-ok">{t("detail.reinstallSuccess")}</div>{/if}
     {#if exportResult}
       <div class="export-ok">
         {t("detail.exportSuccess", { count: exportResult.included.length })}

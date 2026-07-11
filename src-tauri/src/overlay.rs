@@ -51,6 +51,10 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     let _ = conn.execute("ALTER TABLE versions ADD COLUMN published_at TEXT", []);
     // Taille sur disque de la version, octets (§9.4).
     let _ = conn.execute("ALTER TABLE versions ADD COLUMN size_bytes INTEGER", []);
+    // Archive/dossier source conservé (§10/§11), si le réglage était activé à
+    // l'import de cette version. Rend possible « Réinstaller depuis l'archive
+    // source ». `NULL` = non conservé (comportement par défaut).
+    let _ = conn.execute("ALTER TABLE versions ADD COLUMN kept_archive_path TEXT", []);
     // Couches/extensions (§4.4) : état actif (par défaut) + ordre de priorité.
     let _ = conn.execute("ALTER TABLE layers ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1", []);
     let _ = conn.execute("ALTER TABLE layers ADD COLUMN priority INTEGER NOT NULL DEFAULT 0", []);
@@ -265,6 +269,9 @@ pub struct VersionRow {
     pub published_at: Option<String>,
     /// Taille sur disque de cette version, octets (§9.4).
     pub size_bytes: Option<i64>,
+    /// Archive/dossier source conservé en bibliothèque (§10/§11), si le
+    /// réglage était activé à l'import. `None` = non conservé.
+    pub kept_archive_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -618,7 +625,7 @@ pub fn get_versions(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<Ver
     let mut stmt = conn.prepare(
         r#"SELECT id, mod_id, version_label, author, imported_at, library_path,
                   source_archive, content_signature, csp_features, skins, layouts, tags_from_mod,
-                  published_at, size_bytes
+                  published_at, size_bytes, kept_archive_path
            FROM versions WHERE mod_id = ?1 ORDER BY imported_at DESC"#,
     )?;
     let rows = stmt.query_map([mod_id], |row| {
@@ -641,9 +648,20 @@ pub fn get_versions(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<Ver
             tags_from_mod: json_arr(&tags),
             published_at: row.get(12)?,
             size_bytes: row.get(13)?,
+            kept_archive_path: row.get(14)?,
         })
     })?;
     rows.collect()
+}
+
+/// Enregistre le chemin de l'archive/dossier source conservé pour une version
+/// (§10/§11), copié à l'import quand le réglage `keep_source_archive` est actif.
+pub fn set_kept_archive(conn: &Connection, version_id: &str, path: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE versions SET kept_archive_path = ?1 WHERE id = ?2",
+        params![path, version_id],
+    )?;
+    Ok(())
 }
 
 pub fn get_history(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<HistoryRow>> {

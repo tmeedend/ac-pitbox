@@ -19,13 +19,16 @@ L'app prend en charge tout le cycle de vie : importer (analyse, détection de ty
 **Quatre couches** :
 1. **Bibliothèque** — source de vérité des fichiers. Disque dédié (~300 Go). Tous les mods rangés proprement.
 2. **Application** — import, identité, tags, activation, lancement.
-3. **`content/` d'Assetto Corsa** — peuplé dynamiquement par des junctions vers la bibliothèque (`content/cars/<id>`, `content/tracks/<id>`).
+3. **`content/` d'Assetto Corsa** — peuplé dynamiquement par des hardlinks par fichier vers la bibliothèque (`content/cars/<id>`, `content/tracks/<id>`).
 4. **Content Manager** — moteur conservé (graphismes CSP/Sol/Pure, FFB, presets), invoqué par l'app pour lancer une session.
 
 **Décisions structurantes** :
-- **Activation par directory junctions Windows** (`mklink /J`) : zéro duplication (critique à 300 Go), instantané, pas de droits admin. Le `content/` d'AC est une projection, jamais l'original.
+- **Activation par hardlinks par fichier** (comme Vortex) : zéro duplication (critique à 300 Go), instantané, pas de droits admin. Le `content/` d'AC est une projection, jamais l'original.
+  - ⚠️ **Changement par rapport aux junctions de dossier** (`mklink /J`) : testées, elles échouent pour les circuits (AC/CSP semble filtrer ou mal traverser ce type de reparse point sur l'arborescence complexe d'un circuit — plusieurs layouts, `ai/`, `data/`, `extension/`). Les **symlinks** (`mklink /D`) fonctionnent mais exigent les droits admin/mode développeur. Solution retenue : **un hardlink par fichier**, à l'intérieur d'une vraie arborescence de dossiers dans `content/`. Un hardlink n'est **pas** un reparse point — le fichier lié est indiscernable d'un fichier normal pour AC, aucune indirection à mal interpréter. Ni droits admin, ni duplication.
+  - **Contrainte** : les hardlinks exigent le **même volume** (contrairement aux junctions, qui peuvent traverser les disques). Chez l'utilisateur, bibliothèque et jeu sont sur le même disque. **Repli en copie physique** si bibliothèque et jeu se retrouvent sur des disques différents (détection automatique, comme pour le déplacement adaptatif à l'import, §4.2).
+  - **Composition par couches (§4.3)** : peut elle aussi utiliser des hardlinks au lieu de copies réelles pour composer base + couches, sauf pour les fichiers qui diffèrent effectivement entre couches (ceux-là doivent être de vrais fichiers distincts). Encore plus économe.
 - **Content Manager conservé** comme moteur + launcher : reproduire son moteur de config serait énorme et fragile. On contourne son UI, pas son moteur.
-- **Stack Tauri** : binaire léger, Rust à l'aise avec les opérations filesystem/junctions/process, frontend web pour la richesse visuelle.
+- **Stack Tauri** : binaire léger, Rust à l'aise avec les opérations filesystem/hardlinks/process, frontend web pour la richesse visuelle.
 - **SQLite** : placée dans `app_data_dir` (pas en chemin relatif, pour survivre aux rebuilds).
 
 ---
@@ -65,7 +68,7 @@ Deux sources, même pipeline d'analyse/identité/tagging :
 
 **Copier / déplacer** : réglage par défaut mémorisable (pas deux boutons à chaque fois). Déplacement **adaptatif** : même disque → rename instantané ; disques différents → copie puis suppression après vérification.
 
-**Interface d'import** : glisser-déposer disponible partout ; écran d'import dédié pour les options (chaque option expliquée). Un mod importé est **activé par défaut** (junction immédiate).
+**Interface d'import** : glisser-déposer disponible partout ; écran d'import dédié pour les options (chaque option expliquée). Un mod importé est **activé par défaut** (déploiement par hardlinks immédiat).
 
 ### 4.3 Mise à jour vs couche (recomposition)
 
@@ -84,9 +87,9 @@ Deux sources, même pipeline d'analyse/identité/tagging :
 - Ce que le jeu voit dans `content/` est un **résultat composé** : base + couches actives dans l'ordre de priorité.
 - Désactiver/réordonner une couche = **recomposer** depuis les entités intactes (jamais de défaire chirurgical). Aucun état corrompu possible.
 
-**Mécanisme hybride junction / copie** :
+**Mécanisme hybride hardlinks / copie** :
 - **Junction par défaut** (instantané) pour les ~95 % de mods autonomes sans couche.
-- **Composition par copie uniquement** pour un contenu ayant au moins une couche active, et pour lui seul. Retour à la junction dès que la dernière couche est retirée.
+- **Composition par copie uniquement** pour les fichiers qui diffèrent réellement entre couches ; hardlinks pour le reste. Retour au hardlink simple dès que la dernière couche est retirée.
 
 **Contrôle** : ordre des couches modifiable + activation/désactivation par couche. Une couche peut se poser sur n'importe quel contenu (base ou mod).
 
@@ -102,7 +105,7 @@ Installées **globalement**, non gérées en activation (les désactiver cassera
 
 Beaucoup de mods embarquent des fichiers **hors contenu de jeu** : PDF de présentation, templates de skin (`.psd`), changelog/readme (`.txt`), images de présentation, archives de templates. AC ne les lit pas — ils ne doivent **jamais** aller dans `content/`.
 
-- **Extraction** : à l'import, les fichiers qui ne sont pas du contenu AC (hors des dossiers voiture/circuit reconnus, extensions non-jeu) sont rangés dans un sous-dossier **ressources** du mod **dans la bibliothèque** (jamais dans le dossier junctionné). La junction vers `content/` ne pointe que sur le vrai contenu de jeu. Le dossier Assetto reste propre, les annexes ne sont pas perdues.
+- **Extraction** : à l'import, les fichiers qui ne sont pas du contenu AC (hors des dossiers voiture/circuit reconnus, extensions non-jeu) sont rangés dans un sous-dossier **ressources** du mod **dans la bibliothèque** (jamais déployés dans `content/`). Le déploiement vers `content/` ne porte que sur le vrai contenu de jeu. Le dossier Assetto reste propre, les annexes ne sont pas perdues.
 
 - **Réglage global** (préférence persistante, §11 — pas de question à chaque import) : **« Extraction des fichiers annexes »**, trois positions :
   - **Aucun** — rien n'est extrait, les annexes restent dans l'archive/source, non copiées en bibliothèque.
@@ -169,7 +172,7 @@ Une **colonne latérale unique** (maquette de référence `pitbox-biblio-session
 
 ### 7.3 Type « Autres mods »
 
-Mods de type non reconnu (shaders, configs CSP, mods d'UI, weather patterns…) : listés dans « Autres mods », activables/désactivables par junction comme les autres. Priorité notée + conflits signalés (pas de moteur de superposition type MO2).
+Mods de type non reconnu (shaders, configs CSP, mods d'UI, weather patterns…) : listés dans « Autres mods », activables/désactivables (hardlinks) comme les autres. Priorité notée + conflits signalés (pas de moteur de superposition type MO2).
 
 ### 7.4 Vues et interactions
 
@@ -253,9 +256,15 @@ Bouton d'aperçu 3D sur la fiche (lance `acshowroom` pour un rendu du modèle). 
 
 **Export d'archive autonome** : repackager un mod complet avec ses dépendances éparpillées (pilotes 3D, polices). Seule fonction qui justifie de lire le `data.acd` chiffré (extraction acd.bms, isolée dans le module d'export, jamais sur le chemin d'import/activation).
 
-**Nettoyage** : détection assistée des mods cassés (voitures sans `ui/`, circuits sans contenu valide, junctions orphelines).
+**Nettoyage** : détection assistée des mods cassés (voitures sans `ui/`, circuits sans contenu valide, hardlinks orphelins pointant vers un mod supprimé).
 
-**Activation / désactivation** : activer un mod sans couche = créer une junction ; désactiver = supprimer la junction (contenu intact en bibliothèque). Contenu à couches = composer/recomposer (§4.3). Profils = ensembles nommés activables en masse. Garde-fou : vérifier junction vs dossier réel avant toute suppression dans `content/`.
+**Activation / désactivation vs désinstallation — deux axes distincts.**
+- **Activer / désactiver** répond à « ce mod est-il actuellement déployé dans le jeu ? ». Active un mod sans couche = créer les hardlinks du mod vers `content/` ; désactiver = les supprimer (contenu **intact en bibliothèque**). Contenu à couches = composer/recomposer (§4.3). Quasi instantané, réversible, ne libère pas d'espace. Utile pour alléger le roster que CM scanne, éviter des conflits ponctuels, composer une sélection courante.
+- **Supprimer de la bibliothèque** répond à « ce mod doit-il encore occuper de la place sur le disque ? ». Action **distincte**, avec sa propre confirmation — efface les fichiers de la bibliothèque (et désactive au passage s'il était actif). Non réversible sans réimport (sauf si l'archive source a été conservée, voir ci-dessous).
+- **Profils** : ensembles nommés activables/désactivables en masse.
+- **Garde-fou** : vérifier hardlink/junction vs fichier ou dossier réel avant toute suppression dans `content/`.
+
+**Conservation de l'archive source** (réglage optionnel, défaut désactivé — cohérent avec l'absence d'historique de versions/couches, §4.3) : si activé, l'archive/dossier source d'un mod est conservée en bibliothèque en plus du contenu extrait. Rend disponible une action **« Réinstaller depuis l'archive source »** sur la fiche du mod (visible seulement si l'archive est conservée) : réextrait l'archive et remplace le contenu de bibliothèque pour ce mod. Utile en cas de corruption, de modification accidentelle, ou pour repartir propre sans retélécharger.
 
 ---
 
@@ -265,11 +274,20 @@ Bouton d'aperçu 3D sur la fiche (lance `acshowroom` pour un rendu du modèle). 
 
 **Trois bases/fichiers distincts** : bibliothèque (fichiers), base d'overlay SQLite (métadonnées), fichier de règles (ontologie), plus le fichier de config (chemins + préférences).
 
-**Préférences persistantes** : affichage des tags du fichier mod (masquables), état du panneau de suivi (global), vue bibliothèque + colonnes (par type), presets de session (par type), preset CM graphique/FFB par défaut, aperçu 3D par défaut (§9.4), regroupement des skins (archive/voiture), **extraction des fichiers annexes** (Aucun / Informations seulement / Tout — §4.6).
+**Préférences persistantes** : affichage des tags du fichier mod (masquables), état du panneau de suivi (global), vue bibliothèque + colonnes (par type), presets de session (par type), preset CM graphique/FFB par défaut, aperçu 3D par défaut (§9.4), regroupement des skins (archive/voiture), extraction des fichiers annexes (Aucun / Informations seulement / Tout — §4.6), **conservation de l'archive source** (défaut désactivé — §10).
 
 ---
 
-## 12. Conventions
+## 12. Écran « À propos »
+
+Maquette de référence `pitbox-a-propos.html`. Contenu :
+- **Identité** : nom, version/build, courte phrase de philosophie (non-destructif).
+- **Outils tiers** (Assetto Corsa, Content Manager, QuickBMS) : description, auteur/studio, lien externe, mention **non-affiliation** par outil (Kunos Simulazioni, gro-ove, Luigi Auriemma). Content Manager marqué **requis**, QuickBMS marqué **optionnel** (non embarqué — export seulement, §10).
+- **Soutien & communauté** : Patreon, profil OverTake, lien « signaler un bug », journal des versions.
+- **Bibliothèques open source** utilisées par Pit Box lui-même (Tauri, React, crates Rust, paquets npm) : liste repliable, avec licence de chacune. Nécessaire pour les licences MIT/Apache qui exigent l'attribution — liste générable automatiquement depuis `Cargo.toml`/`package.json`.
+- **Bandeau légal** : non-affiliation générale, mention marque déposée (Assetto Corsa = Kunos Simulazioni).
+
+## 13. Conventions
 
 - **Langue de travail** : français.
 - **Thème Rosso Corsa** : #d40000 sur fonds sombres (#08080c/#0d0d12), coins carrés, police mono pour les données, esthétique « pit garage » industrielle, logo « PITBOX » italique.
@@ -278,7 +296,7 @@ Bouton d'aperçu 3D sur la fiche (lance `acshowroom` pour un rendu du modèle). 
 
 ---
 
-## 13. Références (fichiers du dossier docs/)
+## 14. Références (fichiers du dossier docs/)
 
 Voir `README.md` pour l'index complet. Fichiers de données et maquettes cités ci-dessus :
 - `kunos_content_dates.json` — années + dates de publication du contenu officiel Kunos.
@@ -292,7 +310,9 @@ Voir `README.md` pour l'index complet. Fichiers de données et maquettes cités 
 
 ---
 
-## 14. Points à vérifier
+## 15. Points à vérifier
+
+- **Bascule junctions → hardlinks (§2)** : tester d'abord sur un cas de circuit réel (ex. Spa) avant de généraliser à tout le déploiement — confirmer que le chargement fonctionne bien sans droits admin avant de retirer le code symlink.
 
 - **Pilotage des presets CM + `acmanager://`** : commande exacte pour activer un preset par programmation (§9.2).
 - **Détection de la stack météo** (Pure/SOL/CSP/vanilla) et correspondance preset → backend.

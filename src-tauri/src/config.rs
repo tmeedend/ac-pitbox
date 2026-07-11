@@ -36,6 +36,11 @@ pub struct Prefs {
     /// "info_only" (défaut) | "all". Jamais reposée à chaque import — voir
     /// `resources::ExtractionMode::parse`.
     pub resource_extraction_mode: String,
+    /// Conservation de l'archive/dossier source d'un mod à l'import (§10/§11),
+    /// en plus du contenu extrait en bibliothèque. Défaut : non (cohérent avec
+    /// l'absence d'historique de versions/couches). Si activé, rend disponible
+    /// l'action « Réinstaller depuis l'archive source » sur la fiche du mod.
+    pub keep_source_archive: bool,
 }
 
 impl Default for Prefs {
@@ -49,6 +54,7 @@ impl Default for Prefs {
             ui_zoom: None,
             showroom_by_default: false,
             resource_extraction_mode: "info_only".into(),
+            keep_source_archive: false,
         }
     }
 }

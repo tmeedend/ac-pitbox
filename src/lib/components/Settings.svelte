@@ -143,6 +143,14 @@
     <p class="hint">{t("settings.resourceExtractionHint")}</p>
   </section>
 
+  <section class="lang-section">
+    <label class="check">
+      <input type="checkbox" bind:checked={config.prefs.keep_source_archive} />
+      <span>{t("settings.keepSourceArchive")}</span>
+    </label>
+    <p class="hint">{t("settings.keepSourceArchiveHint")}</p>
+  </section>
+
   <ConfigFields bind:config {validation} />
 
   {#if error}<div class="error">{error}</div>{/if}

@@ -18,6 +18,7 @@ Documentation de conception de Pit Box (gestionnaire de mods Assetto Corsa). Ce 
 - **`pitbox-fiche-B-revisee.html`** — fiche voiture : image héros à gauche, données à droite, skins/distance/son/tags en bas. **Référence de layout de fiche.**
 - **`pitbox-vues-transversales.html`** — vues transversales Skins / Sons / Apps.
 - **`pitbox-source-pack.html`** — affichage du pack d'origine (voitures sœurs, filtrer/désinstaller par pack).
+- **`pitbox-a-propos.html`** — écran « À propos » : identité, outils tiers (Assetto Corsa/Content Manager/QuickBMS), soutien (Patreon/OverTake), licences open source, mentions légales.
 
 ## Code de référence
 

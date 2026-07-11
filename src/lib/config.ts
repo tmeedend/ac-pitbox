@@ -15,6 +15,9 @@ export interface Prefs {
   /** Extraction des fichiers annexes du mod à l'import (§4.6) — jamais reposée
    * à chaque import : "none" | "info_only" (défaut) | "all". */
   resource_extraction_mode: "none" | "info_only" | "all";
+  /** Conserve l'archive/dossier source de chaque mod importé, en plus du
+   * contenu extrait (§10/§11). Défaut : false. */
+  keep_source_archive: boolean;
 }
 
 export interface AppConfig {
@@ -61,6 +64,7 @@ export function emptyConfig(): AppConfig {
       ui_zoom: null,
       showroom_by_default: false,
       resource_extraction_mode: "info_only",
+      keep_source_archive: false,
     },
   };
 }

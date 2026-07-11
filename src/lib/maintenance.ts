@@ -35,8 +35,16 @@ export function reindexLibrary(recalcSize: boolean): Promise<number> {
   return invoke<number>("reindex_library", { recalcSize });
 }
 
+/** Supprime un mod de la bibliothèque : fichiers (toutes versions) + junction + overlay.
+ * Action distincte de la désactivation (§10) — utilisable pour tout mod, pas seulement cassé. */
 export function deleteBrokenMod(id: string): Promise<void> {
   return invoke<void>("delete_broken_mod", { id });
+}
+
+/** Réinstalle un mod depuis son archive/dossier source conservé (§10/§11, réglage
+ * « conserver l'archive source »). Réextrait et remplace les fichiers de la version active. */
+export function reinstallFromArchive(id: string): Promise<void> {
+  return invoke<void>("reinstall_from_archive", { id });
 }
 
 export function removeOrphanJunction(kind: string, id: string): Promise<void> {

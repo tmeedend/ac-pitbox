@@ -156,6 +156,29 @@ fn decision_for<'a>(decisions: &'a [ImportDecision], id: &str) -> Option<&'a str
     decisions.iter().find(|d| d.id == id).map(|d| d.decision.as_str())
 }
 
+/// Copie l'archive/dossier source dans un espace dédié de la bibliothèque
+/// (§10/§11), pour permettre plus tard « Réinstaller depuis l'archive source ».
+/// Uniquement si le réglage `keep_source_archive` est actif — sinon jamais
+/// reposé à chaque import. Best-effort : une copie échouée (disque plein…)
+/// ne doit jamais interrompre l'import (`None` en ce cas).
+fn keep_source(cfg: &AppConfig, source: &Path, label: &str) -> Option<String> {
+    if !cfg.prefs.keep_source_archive {
+        return None;
+    }
+    let library = cfg.library_path.as_ref()?;
+    let dest_dir = library.join("_source_archives").join(Uuid::new_v4().to_string());
+    if source.is_dir() {
+        let dest = dest_dir.join(label);
+        archive::copy_dir(source, &dest).ok()?;
+        Some(dest.to_string_lossy().into_owned())
+    } else {
+        std::fs::create_dir_all(&dest_dir).ok()?;
+        let dest = dest_dir.join(label);
+        std::fs::copy(source, &dest).ok()?;
+        Some(dest.to_string_lossy().into_owned())
+    }
+}
+
 /// Id interne dérivé du dossier d'un mod trouvé (nom du dossier `content/<type>s/<id>`).
 fn fm_id(fm: &modscan::FoundMod) -> String {
     fm.dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
@@ -241,6 +264,11 @@ fn import_one(
         label: format!("{} mod(s) trouvé(s)", found.len()),
     });
 
+    // Conservation de l'archive source (§10/§11) : une seule copie, partagée
+    // entre tous les mods trouvés dans cette archive (évite de la dupliquer
+    // par voiture pour un pack multi-voitures).
+    let kept_archive = keep_source(cfg, archive_path, &archive_name);
+
     // Pack (§4.7) : une archive multi-voitures regroupe ses mods sous sa source.
     let pack = (found.len() > 1).then_some(archive_name.as_str());
     for (i, fm) in found.iter().enumerate() {
@@ -258,7 +286,7 @@ fn import_one(
         });
         // Archive : le contenu vient d'un dossier temp → toujours déplacé.
         let decision = decision_for(decisions, &fm_id(fm));
-        match process_found(conn, cfg, rules, library, &archive_name, fm, false, pack, decision, true) {
+        match process_found(conn, cfg, rules, library, &archive_name, fm, false, pack, decision, true, kept_archive.as_deref()) {
             Ok(imported) => result.mods.push(imported),
             Err(e) => {
                 // On consigne l'erreur sur l'archive mais on continue les autres mods.
@@ -364,6 +392,11 @@ fn import_one_folder(
         label: format!("{} mod(s) trouvé(s)", found.len()),
     });
 
+    // Conservation du dossier source (§10/§11) : copié AVANT le rangement (qui
+    // peut déplacer/consommer `dir` si `copy=false`), une seule fois pour tout
+    // le dossier (partagé si plusieurs mods dedans).
+    let kept_archive = keep_source(cfg, dir, &name);
+
     // Pack (§4.7) : un dossier multi-voitures regroupe ses mods sous sa source.
     let pack = (found.len() > 1).then_some(name.as_str());
     for (i, fm) in found.iter().enumerate() {
@@ -375,7 +408,7 @@ fn import_one_folder(
             label: fm.dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
         });
         let decision = decision_for(decisions, &fm_id(fm));
-        match process_found(conn, cfg, rules, library, &name, fm, copy, pack, decision, true) {
+        match process_found(conn, cfg, rules, library, &name, fm, copy, pack, decision, true, kept_archive.as_deref()) {
             Ok(imported) => result.mods.push(imported),
             Err(e) => {
                 result.error.get_or_insert_with(String::new).push_str(&format!("{e}; "));
@@ -557,6 +590,8 @@ fn exec_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, it: &BulkExecItem
     };
 
     let found = modscan::scan(dir);
+    // Conservation du dossier source (§10/§11), avant tout rangement.
+    let kept_archive = keep_source(cfg, dir, &name);
     // Pack (§4.7) : plusieurs mods issus du même dossier partagent leur source.
     let pack = (found.len() > 1).then_some(name.as_str());
     for fm in &found {
@@ -566,7 +601,7 @@ fn exec_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, it: &BulkExecItem
         }
         // Import en masse (§4.6) : jamais de blocage au fil de l'eau. Un cas
         // ambigu retombe sur le défaut sûr (extension, jamais destructif).
-        match process_found(conn, cfg, rules, library, &name, fm, copy, pack, None, false) {
+        match process_found(conn, cfg, rules, library, &name, fm, copy, pack, None, false, kept_archive.as_deref()) {
             Ok(imported) => {
                 if let Some(conflict) = imported.conflict.clone() {
                     let action = if it.replace_ids.iter().any(|r| r == &imported.id_interne) {
@@ -664,6 +699,10 @@ fn process_found(
     // Import unitaire (true) : bloque et demande sur cas ambigu. Import en masse
     // (false) : jamais de blocage, un cas ambigu retombe sur le défaut sûr.
     block_ambiguous: bool,
+    // Archive/dossier source déjà conservé pour cet import (§10/§11), partagé
+    // entre tous les mods d'une même archive/dossier. `None` si le réglage est
+    // désactivé ou la copie a échoué.
+    kept_archive: Option<&str>,
 ) -> Result<ImportedMod, String> {
     let id_interne = fm
         .dir
@@ -889,6 +928,11 @@ fn process_found(
         published_at.as_deref(),
     )
     .map_err(|e| e.to_string())?;
+
+    // Archive/dossier source conservé (§10/§11), s'il y en a un pour cet import.
+    if let Some(kept) = kept_archive {
+        crate::overlay::set_kept_archive(conn, &version_id, kept).map_err(|e| e.to_string())?;
+    }
 
     // Taille sur disque (§9.4) : calculée maintenant, le dossier final venant
     // d'être créé par la copie/le déplacement ci-dessus.
@@ -1485,6 +1529,64 @@ mod tests {
         assert_eq!(mods.len(), 1);
         assert_eq!(mods[0].id_interne, "car_b");
         assert!(!library.join("cars").join("car_a").exists(), "fichiers car_a supprimés");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn keep_source_archive_pref_off_leaves_kept_path_empty() {
+        // §10/§11 : réglage désactivé par défaut — aucune copie, aucun chemin
+        // enregistré (comportement historique, pas d'espace disque en plus).
+        let base = make_temp_dir().unwrap();
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let rules = crate::rules::default_rules();
+        let noop = |_p: Progress| {};
+
+        let src = base.join("src");
+        make_fake_car(&src, "nokeep_car");
+        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        assert_eq!(r.mods[0].outcome, "IMPORT");
+
+        let versions = crate::overlay::get_versions(&conn, "nokeep_car").unwrap();
+        assert!(versions[0].kept_archive_path.is_none());
+        assert!(!library.join("_source_archives").exists());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn keep_source_archive_pref_on_copies_folder_and_records_path() {
+        // §10/§11 : réglage activé — le dossier source est copié à part dans la
+        // bibliothèque et son chemin enregistré sur la version, pour permettre
+        // plus tard « Réinstaller depuis l'archive source » (maintenance.rs).
+        let base = make_temp_dir().unwrap();
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let mut cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        cfg.prefs.keep_source_archive = true;
+        let rules = crate::rules::default_rules();
+        let noop = |_p: Progress| {};
+
+        let src = base.join("src");
+        make_fake_car(&src, "keep_car");
+        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        assert_eq!(r.mods[0].outcome, "IMPORT");
+
+        let versions = crate::overlay::get_versions(&conn, "keep_car").unwrap();
+        let kept = versions[0].kept_archive_path.as_ref().expect("archive source conservée");
+        let kept_path = Path::new(kept);
+        // La copie porte sur `dir` (le dossier passé à l'import, ici `src`, qui
+        // peut contenir plusieurs mods) — le mod retrouvé est donc un niveau
+        // plus bas, comme au premier import (même logique de descente).
+        assert!(kept_path.is_dir(), "dossier source copié tel quel");
+        assert!(kept_path.join("keep_car").join("ui").join("ui_car.json").is_file());
+        assert!(kept_path.starts_with(&library), "copie rangée dans la bibliothèque, pas ailleurs");
+        // Source d'origine toujours présente : `copy=true` préserve la source.
+        assert!(src.join("keep_car").join("model.kn5").is_file(), "source d'origine intacte (copie)");
 
         let _ = std::fs::remove_dir_all(&base);
     }

@@ -472,6 +472,14 @@ fn delete_pack(app: AppHandle, db: State<Db>, pack: String) -> Result<usize, Str
     maintenance::delete_pack(&conn, &cfg, &pack)
 }
 
+/// Réinstalle un mod depuis son archive/dossier source conservé (§10/§11).
+#[tauri::command]
+fn reinstall_from_archive(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let cfg = config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    maintenance::reinstall_from_archive(&conn, &cfg, &id)
+}
+
 /// Exporte la version active d'un mod en archive autonome dans `dest_dir` (§9.1).
 #[tauri::command]
 fn export_mod(app: AppHandle, db: State<Db>, id: String, dest_dir: String) -> Result<export::ExportReport, String> {
@@ -765,6 +773,7 @@ pub fn run() {
             delete_broken_mod,
             remove_orphan_junction,
             delete_pack,
+            reinstall_from_archive,
             export_mod,
             bulk_set_favorite,
             bulk_set_category,

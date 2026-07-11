@@ -11,8 +11,8 @@
     type NativeSpecs,
   } from "$lib/library";
   import PowerCurve from "./PowerCurve.svelte";
-  import { open } from "@tauri-apps/plugin-dialog";
-  import { exportMod, type ExportReport } from "$lib/maintenance";
+  import { open, confirm } from "@tauri-apps/plugin-dialog";
+  import { exportMod, deleteBrokenMod, reinstallFromArchive, type ExportReport } from "$lib/maintenance";
   import { t } from "$lib/i18n/index.svelte";
   import { historyEventLabel, historyDetails } from "$lib/history";
 
@@ -39,6 +39,62 @@
   let actionError = $state("");
   let exporting = $state(false);
   let exportResult = $state<ExportReport | null>(null);
+  let deleteBusy = $state(false);
+  let reinstallBusy = $state(false);
+  let reinstallOk = $state(false);
+
+  // Archive/dossier source conservé pour la version active (§10/§11), s'il y
+  // en a un — conditionne l'affichage du bouton « Réinstaller ».
+  const keptArchive = $derived.by(() => {
+    const d = detail;
+    if (!d) return null;
+    return d.versions.find((v) => v.id === d.active_version_id)?.kept_archive_path ?? null;
+  });
+
+  // Supprimer de la bibliothèque : action distincte de Désactiver (§10) —
+  // efface les fichiers de toutes les versions, jamais réversible sans
+  // réimport (sauf réinstallation depuis une archive source conservée).
+  async function doDelete() {
+    if (!detail || busy || deleteBusy) return;
+    const ok = await confirm(t("detail.deleteConfirm", { name: detail.display_name ?? detail.id_interne }), {
+      title: t("detail.deleteTitle"),
+      kind: "warning",
+    });
+    if (!ok) return;
+    deleteBusy = true;
+    actionError = "";
+    try {
+      await deleteBrokenMod(detail.id_interne);
+      onchange?.();
+      await reload();
+    } catch (e) {
+      actionError = String(e);
+    } finally {
+      deleteBusy = false;
+    }
+  }
+
+  async function doReinstall() {
+    if (!detail || reinstallBusy) return;
+    const ok = await confirm(t("detail.reinstallConfirm", { name: detail.display_name ?? detail.id_interne }), {
+      title: t("detail.reinstallConfirmTitle"),
+      kind: "warning",
+    });
+    if (!ok) return;
+    reinstallBusy = true;
+    actionError = "";
+    reinstallOk = false;
+    try {
+      await reinstallFromArchive(detail.id_interne);
+      await reload();
+      onchange?.();
+      reinstallOk = true;
+    } catch (e) {
+      actionError = String(e);
+    } finally {
+      reinstallBusy = false;
+    }
+  }
 
   async function doExport() {
     if (!detail || exporting) return;
@@ -251,6 +307,26 @@
           <button class="btn-ghost export" type="button" onclick={doExport} disabled={exporting}>
             {exporting ? t("detail.exporting") : t("modpanel.exportFull")}
           </button>
+          {#if keptArchive}
+            <button
+              class="btn-ghost export"
+              type="button"
+              onclick={doReinstall}
+              disabled={reinstallBusy}
+              title={t("detail.reinstallTooltip")}
+            >
+              {reinstallBusy ? t("detail.reinstalling") : t("detail.reinstallFromArchive")}
+            </button>
+          {/if}
+          <button
+            class="btn-ghost export"
+            type="button"
+            onclick={doDelete}
+            disabled={deleteBusy}
+            title={t("detail.deleteFromLibraryTooltip")}
+          >
+            {deleteBusy ? t("common.working") : t("detail.deleteFromLibrary")}
+          </button>
         {/if}
       </div>
       {#if actionError}
@@ -265,6 +341,9 @@
             </ul>
           {/if}
         </div>
+      {/if}
+      {#if reinstallOk}
+        <div class="export-ok">{t("detail.reinstallSuccess")}</div>
       {/if}
 
       {#if detail.kind === "Car"}

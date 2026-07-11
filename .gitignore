@@ -9,6 +9,10 @@ node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
+# Généré automatiquement par `npm run gen:licenses` (predev/prebuild) — écran
+# « À propos » §12. Jamais à éditer/commit à la main : régénéré à chaque build.
+/src/lib/generated/licenses.json
+
 # Claude Code — réglages locaux (machine-specific)
 .claude/settings.local.json
 .aider*
