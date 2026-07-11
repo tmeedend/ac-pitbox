@@ -23,6 +23,7 @@
     type ModKind,
     type NativeSpecs,
     type LayerRow,
+    type LayoutItem,
     type ResourceFile,
   } from "$lib/library";
   import { onDestroy, onMount, untrack } from "svelte";
@@ -178,6 +179,7 @@
       if (!isCar && d.track) {
         const li = d.track.layouts.findIndex((l) => l.id === prevLayoutId);
         previewLayout = li >= 0 ? li : Math.min(previewLayout, Math.max(0, d.track.layouts.length - 1));
+        resyncStaleSessionLayout(current, d.track.layouts);
       }
     }
     if (isCar) {
@@ -452,6 +454,7 @@
         const savedLayout = getPreferredLayout(current);
         const li = d.track.layouts.findIndex((l) => l.id === savedLayout?.id);
         previewLayout = li >= 0 ? li : 0;
+        resyncStaleSessionLayout(current, d.track.layouts);
       }
     });
     if (isCar) {
@@ -545,6 +548,17 @@
 
   // Sélectionner un layout de circuit : mémorisé + poussé dans le duo de session
   // (photo + tracé en surimpression dans le menu).
+  /** Si le layout mémorisé comme choix de session (§8.6) pour cette entité a
+   * disparu (couche retirée/réordonnée, §4.4) alors qu'il s'agit bien de
+   * l'entité de la fiche courante, le resynchronise — sinon un layout fantôme
+   * reste affiché dans la barre latérale et proposé au lancement, alors qu'il
+   * n'existe plus sur le disque. Suppose `detail` déjà à jour à l'appel. */
+  function resyncStaleSessionLayout(trackId: string, layouts: LayoutItem[]): void {
+    if (nav.sessionTrack?.id !== trackId || !nav.sessionTrack.layout) return;
+    if (layouts.some((l) => l.id === nav.sessionTrack?.layout)) return;
+    selectLayout(previewLayout);
+  }
+
   function selectLayout(i: number) {
     previewLayout = i;
     if (!detail?.track) return;

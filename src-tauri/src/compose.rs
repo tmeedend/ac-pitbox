@@ -56,6 +56,15 @@ pub fn recompose(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(),
     let (Some(library), Some(link)) = (cfg.library_path.as_ref(), activation::content_link(cfg, kind, mod_id)) else {
         return Ok(()); // rien à projeter tant que les chemins ne sont pas configurés
     };
+    // Nettoyage best-effort d'un ancien dossier de composition intermédiaire
+    // (`<lib>/composed/<type>s/<id>`) : reliquat de l'ancien mécanisme par
+    // junction, plus jamais écrit ni lu depuis la bascule hardlinks (§4.3) —
+    // `content/<id>` EST directement le composé. Peut traîner sur une
+    // bibliothèque utilisée avant cette bascule ; sans ce nettoyage,
+    // `library::entity_dir` d'une vieille version continuerait par erreur à
+    // le préférer au contenu réellement déployé (bug réel).
+    let _ = std::fs::remove_dir_all(library.join("composed").join(kind.content_folder()).join(mod_id));
+
     let layers = overlay::active_layers(conn, mod_id).map_err(|e| e.to_string())?;
 
     let result = if m.is_stock {
@@ -344,6 +353,34 @@ mod tests {
         assert!(!is_junction(&link) && !deploy::is_deployed(&link), "retour à un vrai dossier");
         assert!(link.join("kunos.txt").is_file(), "contenu de base restauré");
         assert!(!link.join("2022.txt").exists(), "couche retirée");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn recompose_cleans_up_stale_pre_hardlink_composed_leftover() {
+        // Bug réel : `<lib>/composed/<type>s/<id>` (ancien mécanisme par
+        // junction) doit disparaître dès qu'une entité est recomposée sous le
+        // nouveau mécanisme — sinon `library::entity_dir` d'une bibliothèque
+        // migrée continue de préférer ce reliquat périmé au vrai contenu.
+        let base = std::env::temp_dir().join(format!("pitbox-cmp-stale-{}", Uuid::new_v4()));
+        let ac = base.join("ac");
+        let library = base.join("library");
+        let link = ac.join("content").join("tracks").join("spa");
+        write(&link.join("ui").join("ui_track.json"), "{}");
+
+        // Reliquat de l'ancien mécanisme, présent avant toute recomposition.
+        let stale = library.join("composed").join("tracks").join("spa");
+        write(&stale.join("ui").join("2022").join("ui_track.json"), "{}");
+        assert!(stale.is_dir());
+
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        overlay::upsert_stock_mod(&conn, "spa", "Track", Some("Kunos"), Some("Spa"), "now").unwrap();
+        let cfg = AppConfig { ac_install_path: Some(ac), library_path: Some(library), ..Default::default() };
+
+        recompose(&conn, &cfg, "spa").unwrap();
+
+        assert!(!stale.exists(), "le reliquat périmé est nettoyé dès la première recomposition");
 
         let _ = std::fs::remove_dir_all(&base);
     }

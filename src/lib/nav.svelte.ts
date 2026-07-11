@@ -116,5 +116,14 @@ export async function requestSection(id: string): Promise<boolean> {
     if (!ok) return false;
   }
   nav.section = id;
+  // `openFull` n'est jamais remis à zéro par la fiche pleine page elle-même
+  // en quittant (seul son bouton "retour" le fait) : sans ce reset, changer
+  // de section par un autre chemin (ex. double-clic sur le slot de session)
+  // laisse l'id traîner, et la bibliothèque fraîchement montée (potentiellement
+  // d'un AUTRE type — voiture vs circuit) le rouvre tel quel, comme s'il lui
+  // appartenait. Bug réel : ouvrir un circuit puis basculer vers les voitures
+  // sans en avoir choisi une rouvrait la fiche du circuit en tant que voiture
+  // (aperçu 3D lancé avec l'id du circuit → crash natif d'acShowroom.exe).
+  nav.openFull = null;
   return true;
 }

@@ -106,7 +106,7 @@ Installées **globalement**, non gérées en activation (les désactiver cassera
 
 Beaucoup de mods embarquent des fichiers **hors contenu de jeu** : PDF de présentation, templates de skin (`.psd`), changelog/readme (`.txt`), images de présentation, archives de templates. AC ne les lit pas — ils ne doivent **jamais** aller dans `content/`.
 
-- **Extraction** : à l'import, les fichiers qui ne sont pas du contenu AC (hors des dossiers voiture/circuit reconnus, extensions non-jeu) sont rangés dans un sous-dossier **ressources** du mod **dans la bibliothèque** (jamais déployés dans `content/`). Le déploiement vers `content/` ne porte que sur le vrai contenu de jeu. Le dossier Assetto reste propre, les annexes ne sont pas perdues.
+- **Extraction** : à l'import, les fichiers annexes (extensions non-jeu) **à la racine du dossier du mod** sont rangés dans un sous-dossier **ressources** du mod **dans la bibliothèque** (jamais déployés dans `content/`). **Scopé à la racine uniquement** : un fichier de même extension niché dans un sous-dossier du mod (`extension/`, `data/`, `skins/`…) est **toujours** conservé comme contenu réel — les moddeurs placent les annexes au sommet du dossier, jamais dans les sous-dossiers fonctionnels, et un `.txt`/`.pdf` en profondeur (ex. note de config CSP dans `extension/`) fait partie du mod. Le dossier Assetto reste propre, les annexes ne sont pas perdues.
 
 - **Réglage global** (préférence persistante, §11 — pas de question à chaque import) : **« Extraction des fichiers annexes »**, trois positions :
   - **Aucun** — rien n'est extrait, les annexes restent dans l'archive/source, non copiées en bibliothèque.

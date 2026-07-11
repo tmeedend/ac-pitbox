@@ -12,6 +12,7 @@
   const CM_URL = "https://acstuff.club/app/";
   const QUICKBMS_URL = "https://aluigi.altervista.org/quickbms.htm";
   const DONATE_URL = "https://paypal.me/ktulu77";
+  const SOURCE_URL = "https://github.com/tmeedend/ac-pitbox";
   const OVERTAKE_URL = "https://www.overtake.gg/members/ktulu77.1266672/";
   const BUG_URL = "https://github.com/tmeedend/ac-pitbox/issues/new";
   const CHANGELOG_URL = "https://github.com/tmeedend/ac-pitbox/commits/main";
@@ -27,7 +28,6 @@
 
   let ossOpen = $state(false);
   const packages = licenseData.packages;
-  const year = new Date().getFullYear();
 
   function go(url: string) {
     openUrl(url).catch(() => {});
@@ -87,6 +87,11 @@
         <div class="link-b"><div class="link-t">{t("about.donate")}</div><div class="link-s">{t("about.donateSub")}</div></div>
         <span class="go">↗</span>
       </button>
+      <button class="link-card" type="button" onclick={() => go(SOURCE_URL)}>
+        <div class="link-ico">🐙</div>
+        <div class="link-b"><div class="link-t">{t("about.sourceCode")}</div><div class="link-s">{t("about.sourceCodeSub")}</div></div>
+        <span class="go">↗</span>
+      </button>
       <button class="link-card" type="button" onclick={() => go(OVERTAKE_URL)}>
         <div class="link-ico">👥</div>
         <div class="link-b"><div class="link-t">{t("about.overtake")}</div><div class="link-s">{t("about.overtakeSub")}</div></div>
@@ -127,7 +132,7 @@
   <div class="legal">{t("about.legal")}</div>
 
   <div class="foot">
-    <span>{t("about.rights", { year })}</span>
+    <span>{t("about.license")}</span>
     <span>{t("about.madeWith")}</span>
   </div>
 </div>

@@ -257,7 +257,7 @@
     "layerDown": "Move down (lower priority)",
     "layersRecomposeNote": "Highest wins. Toggling/reordering recomposes the content — this can take a few seconds.",
     "resourcesLabel": "Resources ({count})",
-    "resourcesNote": "Files outside game content (docs, templates…), never mixed into the junctioned part (§4.6). Configurable in Preferences.",
+    "resourcesNote": "The mod's docs and extra files, kept aside so they don't clutter the game.",
     "resourceOpenTooltip": "Open with the default application",
     "noResources": "No ancillary files yet."
   },
@@ -650,6 +650,8 @@
     "supportTitle": "Support & community",
     "donate": "Donate",
     "donateSub": "Support development (PayPal)",
+    "sourceCode": "Source code",
+    "sourceCodeSub": "GitHub repository — GPL v3",
     "overtake": "OverTake",
     "overtakeSub": "Sim racing community profile",
     "reportBug": "Report a bug",
@@ -659,8 +661,8 @@
     "ossTitle": "Open source libraries",
     "ossToggle": "Pit Box is built with {count} open source libraries",
     "ossGenerated": "List generated automatically from Cargo.toml and package.json · {date}",
-    "legal": "Pit Box is an independent hobby project, not affiliated with Kunos Simulazioni, the Content Manager team, or any other publisher mentioned above. Assetto Corsa is a registered trademark of Kunos Simulazioni S.r.l. All trademarks mentioned belong to their respective owners.",
-    "rights": "© {year} — All rights reserved",
+    "legal": "Pit Box is an independent hobby project, not affiliated with Kunos Simulazioni, the Content Manager team, or any other publisher mentioned above. Assetto Corsa is a registered trademark of Kunos Simulazioni S.r.l. All trademarks mentioned belong to their respective owners. Pit Box's source code is distributed under the GPL v3 license — free to use, modify and redistribute, provided any derivative version also stays under GPL v3.",
+    "license": "GPL v3 — Free software",
     "madeWith": "Made with ♥ for the AC community"
   }
 }

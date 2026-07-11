@@ -211,6 +211,13 @@ fn spawn_hidden(exe: &Path, ac: &Path) -> Result<(u32, isize), String> {
 /// ré-affichée par `attach()` une fois reparentée.
 pub fn open_native_showroom(cfg: &AppConfig, car_id: &str, skin_id: Option<&str>) -> Result<u32, String> {
     let ac = cfg.ac_install_path.as_ref().ok_or("dossier AC non configuré")?.clone();
+    // Garde-fou : `acShowroom.exe` cherche `data/lods.ini` sous `content/cars/<id>`
+    // et plante (fenêtre d'erreur native, hors de notre contrôle) si `car_id`
+    // n'est pas une vraie voiture — ex. l'id d'un circuit passé par erreur
+    // depuis le front. Mieux vaut une erreur propre ici qu'un crash natif.
+    if !crate::modscan::is_car(&ac.join("content").join("cars").join(car_id)) {
+        return Err(format!("« {car_id} » n'est pas une voiture valide — aperçu 3D indisponible"));
+    }
     let exe = ac.join("acShowroom.exe");
     if !exe.is_file() {
         return Err("acShowroom.exe introuvable dans le dossier d'installation AC".into());

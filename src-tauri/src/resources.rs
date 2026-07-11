@@ -40,15 +40,22 @@ impl ExtractionMode {
     }
 }
 
-// Documents/infos légers — jamais du contenu AC légitime, donc classés annexes
-// quelle que soit leur profondeur dans l'arborescence du mod.
+// Documents/infos légers — jamais du contenu AC légitime, mais classés
+// annexes seulement **à la racine** du mod : les moddeurs placent ces
+// fichiers au sommet du dossier (`<mod>/changelog.txt`), jamais dans les
+// sous-dossiers fonctionnels. Un `.txt`/`.md` en profondeur (ex. dans
+// `extension/`, `data/`) fait presque toujours partie du contenu réel du mod
+// (note de config CSP, etc.) et ne doit jamais être extrait — même règle que
+// les images ci-dessous.
 const INFO_EXTS: &[&str] = &["txt", "pdf", "md", "doc", "docx", "rtf", "nfo", "html", "url", "lnk"];
 // Images ambiguës (capture de présentation vs aperçu de skin) : seulement
 // classées annexes **à la racine** du mod — jamais en profondeur, où elles
 // sont presque toujours de vraies previews/textures (`skins/<x>/preview.jpg`).
 const IMAGE_EXTS: &[&str] = &["jpg", "jpeg", "png"];
 // Fichiers lourds (mode "Tout" seulement) : templates d'édition, archives
-// jointes, sources 3D, vidéos — jamais lus par AC.
+// jointes, sources 3D, vidéos — jamais lus par AC. Racine uniquement, comme
+// les autres catégories (un `.zip` de templates en profondeur serait
+// extrêmement inhabituel et risquerait de casser un vrai mod).
 const HEAVY_EXTS: &[&str] = &[
     "psd", "xcf", "ai", "zip", "7z", "rar", "fbx", "blend", "3ds", "max", "mp4", "mov", "avi", "mkv", "webm",
 ];
@@ -91,18 +98,25 @@ fn ext_lower(path: &Path) -> Option<String> {
 /// skin, une app ou un mod « autre », une image à la racine (preview de skin,
 /// icône d'app, texture) est **toujours** du vrai contenu, jamais une annexe.
 fn classify(path: &Path, is_root: bool, mode: ExtractionMode, allow_root_images: bool) -> Route {
-    // Fichier requis par le moteur audio AC (mapping GUID des .bank FMOD,
-    // §12bis.2) — jamais une annexe malgré son extension .txt.
-    if path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.eq_ignore_ascii_case("GUIDs.txt")) {
-        return Route::Content;
+    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+        // GUIDs.txt : requis par le moteur audio AC (mapping GUID des .bank
+        // FMOD, §12bis.2) — jamais une annexe malgré son extension .txt.
+        // map.png : mini-carte du circuit lue par AC — jamais une annexe
+        // malgré son extension image, même à la racine du mod.
+        if name.eq_ignore_ascii_case("GUIDs.txt") || name.eq_ignore_ascii_case("map.png") {
+            return Route::Content;
+        }
     }
     let Some(ext) = ext_lower(path) else {
         return Route::Content;
     };
     let ext = ext.as_str();
-    let is_info = INFO_EXTS.contains(&ext);
+    // Toutes les catégories d'annexes sont scopées à la racine du mod : dès
+    // qu'un fichier est dans un sous-dossier (extension/, data/, skins/…), il
+    // fait partie du contenu réel du mod et n'est jamais une annexe.
+    let is_info = is_root && INFO_EXTS.contains(&ext);
     let is_image_root = allow_root_images && is_root && IMAGE_EXTS.contains(&ext);
-    let is_heavy = HEAVY_EXTS.contains(&ext);
+    let is_heavy = is_root && HEAVY_EXTS.contains(&ext);
     if !(is_info || is_image_root || is_heavy) {
         return Route::Content;
     }
@@ -133,7 +147,19 @@ fn scan(dir: &Path, mode: ExtractionMode, allow_root_images: bool) -> HashMap<Pa
         }
         let path = entry.path();
         let is_root = path.parent() == Some(dir);
-        let route = classify(path, is_root, mode, allow_root_images);
+        // Dossier `extension/` (n'importe où dans l'arborescence du mod) :
+        // toujours du contenu réel — configs/ressources CSP (ex. extension/sfx),
+        // jamais des annexes de présentation, quelle que soit l'extension.
+        let rel = path.strip_prefix(dir).unwrap_or(path);
+        let under_extension = rel.parent().is_some_and(|p| {
+            p.components()
+                .any(|c| c.as_os_str().to_str().is_some_and(|s| s.eq_ignore_ascii_case("extension")))
+        });
+        let route = if under_extension {
+            Route::Content
+        } else {
+            classify(path, is_root, mode, allow_root_images)
+        };
         if route != Route::Content {
             out.insert(path.to_path_buf(), route);
         }
@@ -266,6 +292,60 @@ mod tests {
         write(&root.join("preview.jpg")); // image, racine : ambigu mais léger
         write(&root.join("livery_template.psd")); // lourd, racine
         write(&root.join("old_templates.zip")); // lourd, racine
+    }
+
+    #[test]
+    fn deep_files_in_extension_folder_never_extracted_as_resources() {
+        // Bug réel : un .txt/.pdf niché dans un sous-dossier fonctionnel du mod
+        // (ex. `extension/`, config CSP) n'est pas une annexe — seuls les
+        // fichiers à la racine du mod le sont. Avant le fix, INFO_EXTS/HEAVY_EXTS
+        // étaient extraits quelle que soit la profondeur, cassant ce cas.
+        let base = std::env::temp_dir().join(format!("pitbox-res-ext-{}", uuid::Uuid::new_v4()));
+        let src = base.join("src");
+        write(&src.join("ui").join("ui_track.json"));
+        write(&src.join("extension").join("config").join("tracks").join("readme.txt"));
+        write(&src.join("extension").join("weather_notes.pdf"));
+        write(&src.join("data").join("templates.zip")); // lourd, en profondeur : jamais annexe non plus
+        write(&src.join("changelog.txt")); // toujours annexe : celui-là est à la racine
+        let content = base.join("content");
+        let resources = base.join("resources");
+
+        let n = file_mod(&src, &content, &resources, ExtractionMode::All, false, true).unwrap();
+        assert_eq!(n, 1, "seul changelog.txt (racine) est une annexe");
+
+        assert!(
+            content.join("extension").join("config").join("tracks").join("readme.txt").is_file(),
+            "fichier profond dans extension/ conservé comme contenu du mod"
+        );
+        assert!(content.join("extension").join("weather_notes.pdf").is_file());
+        assert!(content.join("data").join("templates.zip").is_file());
+        assert!(!resources.join("extension").exists(), "rien d'extension/ ne doit finir en ressources");
+        assert!(resources.join("changelog.txt").is_file());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn map_png_and_root_extension_folder_never_extracted() {
+        // Bug réel (rmi_mdpietra) : un fichier à la racine directe de
+        // `extension/` (pas seulement en profondeur dedans) doit rester
+        // contenu, et `map.png` (mini-carte AC) n'est jamais une annexe même
+        // si un `.png` à la racine du mod est normalement ambigu.
+        let base = std::env::temp_dir().join(format!("pitbox-res-map-{}", uuid::Uuid::new_v4()));
+        let src = base.join("src");
+        write(&src.join("ui").join("ui_track.json"));
+        write(&src.join("map.png"));
+        write(&src.join("extension").join("guids.txt")); // directement sous extension/
+        let content = base.join("content");
+        let resources = base.join("resources");
+
+        let n = file_mod(&src, &content, &resources, ExtractionMode::All, false, true).unwrap();
+        assert_eq!(n, 0, "ni map.png ni rien sous extension/ n'est une annexe");
+        assert!(content.join("map.png").is_file());
+        assert!(content.join("extension").join("guids.txt").is_file());
+        assert!(!resources.exists());
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

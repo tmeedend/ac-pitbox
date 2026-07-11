@@ -228,17 +228,13 @@ pub fn list_weather(cfg: &AppConfig) -> Vec<String> {
 }
 
 /// Dossier de l'entité contenant `ui/`, tel que le jeu le voit :
-/// - **dossier composé** (`<lib>/composed/<type>s/<id>`) s'il existe (base +
-///   couches actives, §4.4) — reflète les layouts/skins réellement en place ;
-/// - sinon version active en bibliothèque pour un mod géré ;
-/// - sinon `content/<type>s/<id>` (contenu de base Kunos).
+/// - version active en bibliothèque pour un mod géré (intacte, jamais composée) ;
+/// - sinon `content/<type>s/<id>` (contenu de base Kunos, ou mod géré/contenu
+///   de base **composé** avec ses couches actives, §4.3/§4.4 : depuis la
+///   bascule hardlinks, `content/<id>` EST directement le résultat composé —
+///   plus de dossier `<lib>/composed/<type>s/<id>` intermédiaire à consulter,
+///   contrairement à l'ancien mécanisme par junction).
 fn entity_dir(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<PathBuf> {
-    if let Some(lib) = &cfg.library_path {
-        let composed = lib.join("composed").join(kind_of(&m.kind).content_folder()).join(&m.id_interne);
-        if composed.is_dir() {
-            return Some(composed);
-        }
-    }
     if !m.is_stock {
         if let Some(vid) = &m.active_version_id {
             if let Ok(Some(p)) = overlay::get_version_path(conn, vid) {
@@ -353,6 +349,39 @@ mod tests {
         crate::activation::activate(&conn, &cfg, "hl_car", None).unwrap();
         let m = overlay::get_mod(&conn, "hl_car").unwrap().unwrap();
         assert!(is_active(&cfg, &m), "déployé par hardlinks = actif");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn entity_dir_ignores_stale_pre_hardlink_composed_leftover() {
+        // Bug réel : `<lib>/composed/<type>s/<id>` est un reliquat de l'ancien
+        // mécanisme par junction (avant la bascule hardlinks, §4.3) — plus
+        // jamais écrit ni lu. Sur une bibliothèque utilisée avant la bascule,
+        // ce dossier peut encore traîner sur le disque avec un contenu périmé
+        // (ex. un layout apporté par une couche depuis désactivée) ; il ne
+        // doit plus jamais être préféré au vrai contenu déployé dans content/.
+        let base = std::env::temp_dir().join(format!("pitbox-stale-composed-{}", uuid::Uuid::new_v4()));
+        let ac = base.join("ac");
+        let lib = base.join("library");
+        let link = ac.join("content").join("tracks").join("spa");
+        std::fs::create_dir_all(link.join("ui")).unwrap();
+        std::fs::write(link.join("ui").join("ui_track.json"), br#"{"name":"Spa restored"}"#).unwrap();
+
+        // Reliquat périmé : contient encore le layout "2022" d'une couche
+        // pourtant désactivée depuis.
+        let stale = lib.join("composed").join("tracks").join("spa");
+        std::fs::create_dir_all(stale.join("ui").join("2022")).unwrap();
+        std::fs::write(stale.join("ui").join("2022").join("ui_track.json"), "{}").unwrap();
+
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        overlay::upsert_stock_mod(&conn, "spa", "Track", Some("Kunos"), Some("Spa"), "now").unwrap();
+        let cfg = AppConfig { ac_install_path: Some(ac), library_path: Some(lib), ..Default::default() };
+        let m = overlay::get_mod(&conn, "spa").unwrap().unwrap();
+
+        let dir = entity_dir(&conn, &cfg, &m).unwrap();
+        assert_eq!(dir, link, "doit résoudre vers content/, jamais vers l'ancien dossier composé périmé");
+        assert!(!dir.join("ui").join("2022").is_dir(), "le layout périmé du reliquat ne doit pas apparaître");
 
         let _ = std::fs::remove_dir_all(&base);
     }

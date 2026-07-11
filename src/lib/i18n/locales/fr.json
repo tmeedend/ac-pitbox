@@ -257,7 +257,7 @@
     "layerDown": "Descendre (moins prioritaire)",
     "layersRecomposeNote": "La plus haute gagne. Activer/réordonner recompose le contenu — cela peut prendre quelques secondes.",
     "resourcesLabel": "Ressources ({count})",
-    "resourcesNote": "Fichiers hors contenu de jeu (docs, templates…), jamais mélangés à la partie junctionnée (§4.6). Réglable dans Préférences.",
+    "resourcesNote": "Documentation et fichiers annexes du mod, rangés à part pour ne pas encombrer le jeu.",
     "resourceOpenTooltip": "Ouvrir avec l'application par défaut",
     "noResources": "Aucun fichier annexe pour l'instant."
   },
@@ -650,6 +650,8 @@
     "supportTitle": "Soutien & communauté",
     "donate": "Faire un don",
     "donateSub": "Soutenir le développement (PayPal)",
+    "sourceCode": "Code source",
+    "sourceCodeSub": "Dépôt GitHub — GPL v3",
     "overtake": "OverTake",
     "overtakeSub": "Profil communauté sim racing",
     "reportBug": "Signaler un bug",
@@ -659,8 +661,8 @@
     "ossTitle": "Bibliothèques open source",
     "ossToggle": "Pit Box est construit avec {count} bibliothèques open source",
     "ossGenerated": "Liste générée automatiquement depuis Cargo.toml et package.json · {date}",
-    "legal": "Pit Box est un projet indépendant réalisé par un passionné, sans affiliation avec Kunos Simulazioni, l'équipe de Content Manager, ou tout autre éditeur mentionné ci-dessus. Assetto Corsa est une marque déposée de Kunos Simulazioni S.r.l. Toutes les marques citées appartiennent à leurs propriétaires respectifs.",
-    "rights": "© {year} — Tous droits réservés",
+    "legal": "Pit Box est un projet indépendant réalisé par un passionné, sans affiliation avec Kunos Simulazioni, l'équipe de Content Manager, ou tout autre éditeur mentionné ci-dessus. Assetto Corsa est une marque déposée de Kunos Simulazioni S.r.l. Toutes les marques citées appartiennent à leurs propriétaires respectifs. Le code source de Pit Box est distribué sous licence GPL v3 — libre d'utilisation, de modification et de redistribution, à condition que toute version dérivée reste elle aussi sous GPL v3.",
+    "license": "GPL v3 — Logiciel libre",
     "madeWith": "Fait avec ♥ pour la communauté AC"
   }
 }
