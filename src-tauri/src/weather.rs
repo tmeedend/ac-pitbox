@@ -46,7 +46,7 @@ pub struct WeatherOption {
     pub id: String,
     pub label: String,
     pub available: bool,
-    /// Dossier météo retenu pour le race.ini (si disponible).
+    /// Dossier météo retenu (WeatherId du preset Quick Drive), si disponible.
     pub weather: Option<String>,
     /// Backend retenu, ex. "via SOL".
     pub backend: Option<String>,

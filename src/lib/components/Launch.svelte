@@ -102,8 +102,8 @@
     snow: "launch.wxSnow",
   };
 
-  // --- Saison optionnelle (§8.6bis) : associe une date au race.ini,
-  // best-effort côté CSP (voir RaceSetup.season_date côté back). ---
+  // --- Saison optionnelle (§8.6bis) : associe une date au preset Quick
+  // Drive (udt/dtv), best-effort côté CSP (voir RaceSetup.season_date côté back). ---
   type Season = "" | "spring" | "summer" | "autumn" | "winter";
   const SEASONS: { id: Season; labelKey: string }[] = [
     { id: "", labelKey: "launch.seasonNone" },

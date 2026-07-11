@@ -216,10 +216,13 @@ Deux vues commutables par bibliothèque (galerie / tableau), colonnes choisies p
 
 Pas d'écran séparé de sélection : la voiture/le circuit sélectionnés dans la bibliothèque sont ceux de la session. Le **bloc Session** de la barre latérale montre en permanence le duo courant. La page « Démarrer une session » ne contient aucune sélection de voiture/circuit — seulement les réglages + Lancer.
 
-### 9.2 Pilotage par presets CM
+### 9.2 Pilotage par preset Quick Drive CM
 
-L'app ne fixe pas les réglages par écriture de fichiers : elle **pilote des presets CM** (CM est maître de `race.ini`). CM est démarré en service + Steam ouvert, puis la commande est émise.
-> Point à vérifier avant de figer le module de lancement : la commande exacte pour activer un preset CM par programmation (protocole `acmanager://` / `Values.data` / CLI).
+L'app pilote CM via son protocole `acmanager://race/quick?presetFile=…` : un **preset Quick Drive** (JSON, format `SaveableData` de CM) est généré à chaque lancement dans un fichier temporaire jetable, puis passé à `Content Manager.exe`. C'est le même chemin (`QuickDrive.ViewModel.Go()`) que le bouton « DRIVE » de l'UI Quick Drive native de CM — condition nécessaire pour que le téléchargement CSP automatique (VAO/config manquants) se déclenche.
+
+> L'ancien mécanisme `race/config?configFile=` (race.ini brut via `PreparedConfig`) a été abandonné : il ne peuple pas `StartProperties.BasicProperties`, dont dépend le check CSP auto-load côté CM — bug confirmé empiriquement, détail en `docs/L4-cm-launch-research.md`.
+
+Limites connues du preset Quick Drive (pas de champ correspondant trouvé dans le schéma) : skin du joueur non forçable (CM reprend le dernier skin utilisé), évolution du grip non mappée (toujours « Optimum »/sec), durée de session Practice non appliquée (sessions à durée libre par design Quick Drive).
 
 **Bouton « Ouvrir dans CM »** : lance CM sans argument de session, sélection active, pour les réglages fins (échappatoire power-user).
 
@@ -316,6 +319,5 @@ Voir `README.md` pour l'index complet. Fichiers de données et maquettes cités 
 
 - **Bascule symlinks → hardlinks (§2)** : moteur implémenté et couvert par des tests automatisés (déploiement/composition/repli copie/nettoyage, y compris un scénario circuit type Spa) — confirme la mécanique et l'absence de besoin de droits admin (`CreateHardLinkW`, contrairement à `CreateSymbolicLink`). **Validé en conditions réelles par l'utilisateur** (juillet 2026) : déploiement + composition par couches fonctionnels sur sa bibliothèque réelle.
 
-- **Pilotage des presets CM + `acmanager://`** : commande exacte pour activer un preset par programmation (§9.2).
 - **Détection de la stack météo** (Pure/SOL/CSP/vanilla) et correspondance preset → backend.
 - **Table Kunos** : valider les noms de dossiers / années contre l'installation réelle (correction triviale ligne par ligne).

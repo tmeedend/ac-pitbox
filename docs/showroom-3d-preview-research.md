@@ -50,7 +50,7 @@ tous deux des impasses **confirmées par le code source**, pas de simples
 absences de documentation :
 
 1. **Protocole `acmanager://`** (celui déjà utilisé par Pit Box pour lancer
-   les sessions, `acmanager://race/config?configFile=...`, voir
+   les sessions, `acmanager://race/quick?presetFile=...`, voir
    `L4-cm-launch-research.md`). Liste complète des commandes supportées,
    lue directement dans `AcManager/Tools/ArgumentsHandler.Commands.cs`
    (dépôt `gro-ove/actools`, source réelle de CM) :
@@ -210,8 +210,10 @@ Vérifié directement sur la machine (install réelle :
   DirectX11, moteur de rendu propre avec ses propres classes `ShowroomGUI`,
   `ShowRoomCameraManager`, `ShowroomSkinManager`, `ShowroomMirrorCamera`…,
   identifiées via les symboles embarqués dans le binaire).
-- **Configuration par fichier INI, pas par CLI** — exactement le même schéma
-  que `race.ini` (déjà utilisé par Pit Box, voir `launch.rs`). Le fichier
+- **Configuration par fichier INI, pas par CLI** — même principe que
+  l'ancien `race.ini` (abandonné depuis pour le lancement de session, voir
+  `L4-cm-launch-research.md`, mais le pattern « écrire l'INI, lancer, l'appli
+  le lit » reste valable ici). Le fichier
   `cfg/showroom_start.ini` existe dans `Documents/Assetto Corsa/cfg/` **et**
   dans le dossier d'install (template par défaut). Contenu réel capturé
   pendant que le showroom tournait sur la Celica :
@@ -244,8 +246,8 @@ Vérifié directement sur la machine (install réelle :
   `content/showroom/` (`showroom`, `beach`, `Hangar`, `industrial`,
   `studio_white`, chacune avec son `ui_showroom.json`). Écrire ce fichier
   avant de lancer `acShowroom.exe` (aucun argument requis) devrait suffire à
-  cibler une voiture + skin précis — **exactement le même pattern déjà
-  éprouvé pour `race.ini`**, sans dépendre de Content Manager.
+  cibler une voiture + skin précis — **le même pattern « écrire l'INI puis
+  lancer »**, sans dépendre de Content Manager.
 - Le binaire utilise `CommandLineToArgvW` (accepte des arguments CLI) et logue
   `checkShowroomINI` — cohérent avec un chargement du fichier INI ci-dessus
   au démarrage.

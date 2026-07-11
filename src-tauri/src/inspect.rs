@@ -115,10 +115,10 @@ pub fn track_layouts(track_dir: &Path) -> Vec<String> {
     layouts.sort();
     if layouts.is_empty() && ui.join("ui_track.json").is_file() {
         // Mono-layout : chaîne vide, PAS "(default)" — cette valeur finit dans
-        // CONFIG_TRACK du race.ini (voir launch::build_race_ini) ; un texte
-        // littéral y casse le lancement (CM cherche un dossier de layout
-        // nommé "(default)", qui n'existe pas). Même convention que l'id vide
-        // utilisé par uijson::read_track_detail pour ce cas.
+        // le TrackId du preset Quick Drive (voir quickdrive::track_id) ; un
+        // texte littéral y casse le lancement (CM cherche un dossier de
+        // layout nommé "(default)", qui n'existe pas). Même convention que
+        // l'id vide utilisé par uijson::read_track_detail pour ce cas.
         layouts.push(String::new());
     }
     layouts
@@ -249,8 +249,8 @@ mod tests {
     fn mono_layout_track_reports_empty_id_not_placeholder_text() {
         // Un circuit mono-layout (ui/ui_track.json à la racine, pas de
         // sous-dossier) doit renvoyer une chaîne vide, pas un texte littéral
-        // du genre "(default)" : cette valeur finit telle quelle dans
-        // CONFIG_TRACK du race.ini (launch::build_race_ini) — un texte non
+        // du genre "(default)" : cette valeur finit telle quelle dans le
+        // TrackId du preset Quick Drive (quickdrive::track_id) — un texte non
         // vide y fait chercher à Content Manager un dossier de layout qui
         // n'existe pas (cas réel : circuit Deutschlandring de Fat-Alfie).
         let dir = std::env::temp_dir().join(format!("pitbox-inspect-mono-{}", uuid::Uuid::new_v4()));

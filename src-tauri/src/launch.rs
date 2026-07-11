@@ -1,26 +1,20 @@
-//! Lancement de session (L4) — §8.3 résolu et validé : on construit un `race.ini`
-//! et on le passe à Content Manager via `acmanager://race/config?configFile=…`.
-//! CM l'utilise tel quel (`PreparedConfig`) sans l'écraser, et gère Steam.
-//! Voir `docs/L4-cm-launch-research.md`.
+//! Lancement de session (L4/§8.3) : on construit un **preset Quick Drive**
+//! (`quickdrive.rs`) et on le passe à Content Manager via
+//! `acmanager://race/quick?presetFile=…`. Remplace l'ancien mécanisme
+//! `race/config`/`PreparedConfig` (race.ini) : lui seul déclenche le chemin
+//! `QuickDrive.ViewModel.Go()` côté CM, qui peuple correctement
+//! `StartProperties.BasicProperties` — condition pour que le téléchargement
+//! CSP automatique (VAO/config manquants) se déclenche. Voir
+//! `docs/L4-cm-launch-research.md`.
 
-use std::fmt::Write as _;
 use std::process::Command;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
-use chrono::NaiveDate;
 use rusqlite::Connection;
 use serde::Deserialize;
 use uuid::Uuid;
-
-/// Convertit une date de saison ISO (YYYY-MM-DD) en timestamp Unix à minuit
-/// UTC — format de la clé `[LIGHTING] __CM_DATE` qu'écrit Content Manager
-/// (§8.6bis). `None` si la date est mal formée.
-fn season_timestamp(date: &str) -> Option<i64> {
-    let d = NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
-    Some(d.and_hms_opt(0, 0, 0)?.and_utc().timestamp())
-}
 
 use crate::activation;
 use crate::config::AppConfig;
@@ -38,17 +32,6 @@ pub enum SessionType {
     Race,
 }
 
-impl SessionType {
-    /// (TYPE numérique AC, NAME, SPAWN_SET).
-    fn ac(self) -> (u8, &'static str, &'static str) {
-        match self {
-            SessionType::Practice => (1, "Practice", "PIT"),
-            SessionType::Hotlap => (4, "Hotlap", "HOTLAP_START"),
-            SessionType::Race => (3, "Race", "START"),
-        }
-    }
-}
-
 /// Un adversaire du plateau (mode course, §8.6) : voiture + son propre niveau
 /// IA (réparti dans la fourchette min-max choisie, pas une valeur unique).
 #[derive(Debug, Clone, Deserialize)]
@@ -64,6 +47,10 @@ pub struct Opponent {
 #[derive(Debug, Clone, Deserialize)]
 pub struct RaceSetup {
     pub car_id: String,
+    /// Skin du joueur : pas de champ dédié dans le schéma Quick Drive
+    /// (`race/quick`), CM retombe sur le dernier skin utilisé pour cette
+    /// voiture. Conservé pour l'aller-retour front, non lu ici.
+    #[allow(dead_code)]
     pub car_skin: Option<String>,
     pub track_id: String,
     pub track_layout: Option<String>,
@@ -80,10 +67,15 @@ pub struct RaceSetup {
     #[allow(dead_code)]
     pub ai_level_min: u32,
     #[serde(default = "default_ai_level_max")]
+    #[allow(dead_code)]
     pub ai_level_max: u32,
     #[serde(default)]
     pub laps: u32,
+    /// Durée (Practice) : le schéma Quick Drive `QuickDrive_Practice.xaml`
+    /// n'a pas de champ durée dans son `ModeData` — session à durée libre.
+    /// Conservé pour compat aller-retour front, non lu ici.
     #[serde(default = "default_duration")]
+    #[allow(dead_code)]
     pub duration_minutes: u32,
     /// Nom du dossier météo (ex. "3_clear").
     #[serde(default)]
@@ -128,7 +120,11 @@ pub struct RaceSetup {
     #[serde(default)]
     pub jump_start_penalty: u32,
     /// Évolution du grip : DYNAMIC_TRACK SESSION_START (86 vert … 100 optimal).
+    /// Pas de champ correspondant trouvé dans `TrackPropertiesData` (Quick
+    /// Drive) — toujours « Optimum »/sec pour l'instant. Conservé pour
+    /// l'aller-retour front, non lu ici.
     #[serde(default = "default_grip")]
+    #[allow(dead_code)]
     pub grip: u32,
     /// Qualification avant la course (mode course uniquement).
     #[serde(default)]
@@ -188,107 +184,6 @@ fn default_rate() -> u32 {
 }
 fn default_true() -> bool {
     true
-}
-
-/// Angle solaire approximatif depuis l'heure (CM affine via ses helpers lighting).
-fn sun_angle(time_hours: f32) -> f32 {
-    (16.0 * (time_hours - 13.0)).clamp(-80.0, 80.0)
-}
-
-/// Construit le contenu d'un `race.ini` (structure dérivée d'un vrai fichier CM).
-pub fn build_race_ini(s: &RaceSetup) -> String {
-    let (session_type, session_name, spawn_set) = s.session_type.ac();
-    // Plateau : uniquement en course, chaque adversaire a sa propre voiture +
-    // son propre niveau IA (généré dans la fourchette min-max côté front).
-    let opponents: &[Opponent] = if s.session_type == SessionType::Race { &s.opponents } else { &[] };
-    let cars_total = 1 + opponents.len() as u32;
-    let weather = if s.weather.is_empty() { "3_clear" } else { &s.weather };
-
-    let mut ini = String::new();
-    let _ = write!(
-        ini,
-        "[HEADER]\nVERSION=2\n__CM_FEATURE_SET=2\n\n\
-         [RACE]\nMODEL={car}\nSKIN={skin}\nTRACK={track}\nCONFIG_TRACK={layout}\n\
-         AI_LEVEL={ai_level}\nCARS={cars}\nDRIFT_MODE=0\nRACE_LAPS={laps}\n\
-         FIXED_SETUP=0\nPENALTIES={pen}\nJUMP_START_PENALTY={jsp}\n\n\
-         [OPTIONS]\nUSE_MPH=0\n\n\
-         [CAR_0]\nSETUP=\nSKIN={skin}\nMODEL=-\nMODEL_CONFIG=\nBALLAST=0\nRESTRICTOR=0\n\
-         DRIVER_NAME=Player\nNATIONALITY=FRA\nNATION_CODE=FRA\n\n",
-        car = s.car_id,
-        skin = s.car_skin.clone().unwrap_or_default(),
-        track = s.track_id,
-        layout = s.track_layout.clone().unwrap_or_default(),
-        ai_level = s.ai_level_max,
-        cars = cars_total,
-        laps = if s.session_type == SessionType::Race { s.laps } else { 0 },
-        pen = if s.penalties { 1 } else { 0 },
-        jsp = s.jump_start_penalty,
-    );
-
-    for (i, opp) in opponents.iter().enumerate() {
-        let n = i + 1;
-        let _ = write!(
-            ini,
-            "[CAR_{n}]\nSETUP=\nSKIN={skin}\nMODEL={car}\nMODEL_CONFIG=\nBALLAST=0\nRESTRICTOR=0\n\
-             DRIVER_NAME=AI {n}\nNATIONALITY=FRA\nNATION_CODE=FRA\nAI_LEVEL={ai}\n\n",
-            skin = opp.car_skin.clone().unwrap_or_default(),
-            car = opp.car_id,
-            ai = opp.ai_level,
-        );
-    }
-
-    // Sessions : qualif optionnelle avant la course, sinon session unique.
-    if s.session_type == SessionType::Race && s.qualifying {
-        let _ = write!(
-            ini,
-            "[SESSION_0]\nNAME=Qualify\nTYPE=2\nDURATION_MINUTES={q}\nSPAWN_SET=PIT\n\n\
-             [SESSION_1]\nNAME=Race\nTYPE=3\nDURATION_MINUTES=0\nSPAWN_SET=START\n\n",
-            q = s.qualify_minutes,
-        );
-    } else {
-        let dur = if s.session_type == SessionType::Hotlap { 0 } else { s.duration_minutes };
-        let _ = write!(
-            ini,
-            "[SESSION_0]\nNAME={session_name}\nTYPE={session_type}\nDURATION_MINUTES={dur}\nSPAWN_SET={spawn_set}\n\n",
-        );
-    }
-
-    // Saison (§8.6bis) : CSP dérive la saison (YEAR_PROGRESS → SEASON_*_NORTH,
-    // cf. extension/config/tracks/common/conditions.ini) de l'horodatage absolu
-    // de la simulation, réglé via `[LIGHTING] __CM_DATE` (timestamp Unix, minuit
-    // UTC du jour choisi). C'est la clé qu'écrit Content Manager quand on fixe
-    // une date — validée empiriquement (capture d'un race.ini CM). L'ancienne
-    // clé [SEASONS] DATE= n'était pas lue par AC.
-    let cm_date_line = s
-        .season_date
-        .as_deref()
-        .and_then(season_timestamp)
-        .map(|ts| format!("__CM_DATE={ts}\n"))
-        .unwrap_or_default();
-
-    let _ = write!(
-        ini,
-        "[LIGHTING]\nSUN_ANGLE={sun:.2}\nTIME_MULT=1.0\nCLOUD_SPEED=0.2\n{cm_date}\n\
-         [WEATHER]\nNAME={weather}\n\n\
-         [TEMPERATURE]\nAMBIENT={ambient}\nROAD={road}\n\n\
-         [WIND]\nSPEED_KMH_MIN={wind_speed}\nSPEED_KMH_MAX={wind_speed}\nDIRECTION_DEG={wind_dir}\n\n\
-         [DYNAMIC_TRACK]\nSESSION_START={grip}\nRANDOMNESS=2\nLAP_GAIN=30\nSESSION_TRANSFER=80\n\n\
-         [GROOVE]\nVIRTUAL_LAPS=10\nMAX_LAPS=1\nSTARTING_LAPS=1\n\n\
-         [LAP_INVALIDATOR]\nALLOWED_TYRES_OUT=-1\n\n\
-         [GHOST_CAR]\nRECORDING={g}\nPLAYING={g}\nLOAD={g}\nENABLED={g}\nSECONDS_ADVANTAGE=0\nFILE=\n",
-        sun = sun_angle(s.time_hours),
-        cm_date = cm_date_line,
-        weather = weather,
-        ambient = s.ambient_c.unwrap_or(26),
-        road = s.road_c.unwrap_or(30),
-        wind_speed = s.wind_speed_kmh.unwrap_or(0),
-        wind_dir = s.wind_direction_deg.unwrap_or(0),
-        grip = s.grip,
-        // Ghost car pertinent uniquement en Hotlap.
-        g = if s.ghost_car && s.session_type == SessionType::Hotlap { 1 } else { 0 },
-    );
-
-    ini
 }
 
 /// Applique simulation (dégâts/carburant/usure) + aides à la conduite dans
@@ -387,11 +282,15 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
         setup.ideal_line,
     );
 
-    let ini = build_race_ini(setup);
-    let path = std::env::temp_dir().join(format!("pitbox-race-{}.ini", Uuid::new_v4()));
-    std::fs::write(&path, ini).map_err(|e| format!("écriture race.ini : {e}"))?;
+    // Preset Quick Drive (§8.3) plutôt qu'un race.ini/PreparedConfig : seul ce
+    // chemin peuple StartProperties.BasicProperties côté CM, condition pour
+    // que le téléchargement CSP automatique (VAO/config manquants) se
+    // déclenche — voir quickdrive.rs et docs/L4-cm-launch-research.md.
+    let preset = crate::quickdrive::build_preset(setup)?;
+    let path = std::env::temp_dir().join(format!("pitbox-quickdrive-{}.json", Uuid::new_v4()));
+    std::fs::write(&path, preset).map_err(|e| format!("écriture du preset Quick Drive : {e}"))?;
 
-    let uri = format!("acmanager://race/config?configFile={}", path.display());
+    let uri = format!("acmanager://race/quick?presetFile={}", path.display());
     let mut cmd = Command::new(cm);
     cmd.arg(&uri);
     #[cfg(windows)]
@@ -404,154 +303,4 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
     let _ = crate::overlay::mark_launched(conn, &setup.car_id, &now);
     let _ = crate::overlay::mark_launched(conn, &setup.track_id, &now);
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn base() -> RaceSetup {
-        RaceSetup {
-            car_id: "ks_toyota_gt86".into(),
-            car_skin: None,
-            track_id: "magione".into(),
-            track_layout: None,
-            session_type: SessionType::Practice,
-            opponents: Vec::new(),
-            ai_level_min: 92,
-            ai_level_max: 98,
-            laps: 0,
-            duration_minutes: 15,
-            weather: "3_clear".into(),
-            time_hours: 13.0,
-            ambient_c: None,
-            road_c: None,
-            wind_speed_kmh: None,
-            wind_direction_deg: None,
-            year_min: 1950,
-            year_max: 2026,
-            season: None,
-            season_date: None,
-            penalties: false,
-            jump_start_penalty: 0,
-            grip: 96,
-            qualifying: false,
-            qualify_minutes: 10,
-            ghost_car: false,
-            damage: 50,
-            fuel_rate: 100,
-            tyre_wear: 100,
-            abs_auto: true,
-            traction_control_auto: true,
-            ideal_line: false,
-        }
-    }
-
-    #[test]
-    fn practice_ini_structure() {
-        let ini = build_race_ini(&base());
-        assert!(ini.contains("[HEADER]\nVERSION=2\n__CM_FEATURE_SET=2"));
-        assert!(ini.contains("MODEL=ks_toyota_gt86"));
-        assert!(ini.contains("TRACK=magione"));
-        assert!(ini.contains("CARS=1"));
-        assert!(ini.contains("[SESSION_0]\nNAME=Practice\nTYPE=1"));
-        assert!(ini.contains("SPAWN_SET=PIT"));
-        assert!(ini.contains("NAME=3_clear"));
-        assert!(!ini.contains("[CAR_1]")); // pas de grille IA hors course
-    }
-
-    #[test]
-    fn race_ini_has_ai_grid() {
-        let mut s = base();
-        s.session_type = SessionType::Race;
-        s.opponents = vec![
-            Opponent { car_id: "ks_bmw_m4_gt3".into(), ai_level: 94, car_skin: Some("red".into()) },
-            Opponent { car_id: "ks_porsche_911_gt3_r".into(), ai_level: 97, car_skin: None },
-            Opponent { car_id: "ks_audi_r8_lms".into(), ai_level: 92, car_skin: None },
-        ];
-        s.laps = 5;
-        let ini = build_race_ini(&s);
-        assert!(ini.contains("TYPE=3")); // Race
-        assert!(ini.contains("CARS=4")); // 1 joueur + 3 IA
-        assert!(ini.contains("RACE_LAPS=5"));
-        assert!(ini.contains("[CAR_1]\nSETUP=\nSKIN=red\nMODEL=ks_bmw_m4_gt3"));
-        assert!(ini.contains("[CAR_3]\nSETUP=\nSKIN=\nMODEL=ks_audi_r8_lms"));
-        assert!(!ini.contains("[CAR_4]"));
-        assert!(ini.contains("DRIVER_NAME=AI 3"));
-        assert!(ini.contains("AI_LEVEL=97")); // niveau propre à l'adversaire 2
-    }
-
-    #[test]
-    fn opponents_ignored_outside_race() {
-        let mut s = base();
-        s.session_type = SessionType::Practice;
-        s.opponents = vec![Opponent { car_id: "ks_bmw_m4_gt3".into(), ai_level: 94, car_skin: None }];
-        let ini = build_race_ini(&s);
-        assert!(ini.contains("CARS=1"));
-        assert!(!ini.contains("[CAR_1]"));
-    }
-
-    #[test]
-    fn season_date_written_when_present() {
-        let mut s = base();
-        s.season_date = Some("2026-10-15".into());
-        let ini = build_race_ini(&s);
-        assert!(ini.contains("[LIGHTING]\nSUN_ANGLE"));
-        // Date écrite comme timestamp Unix dans [LIGHTING] __CM_DATE (clé CM).
-        let ts = season_timestamp("2026-10-15").unwrap();
-        assert!(ini.contains(&format!("__CM_DATE={ts}\n")));
-
-        let ini_default = build_race_ini(&base());
-        assert!(!ini_default.contains("__CM_DATE"));
-    }
-
-    #[test]
-    fn wind_written_when_present_else_zero() {
-        let mut s = base();
-        s.wind_speed_kmh = Some(18);
-        s.wind_direction_deg = Some(275);
-        let ini = build_race_ini(&s);
-        assert!(ini.contains("[WIND]\nSPEED_KMH_MIN=18\nSPEED_KMH_MAX=18\nDIRECTION_DEG=275"));
-
-        let ini_default = build_race_ini(&base());
-        assert!(ini_default.contains("[WIND]\nSPEED_KMH_MIN=0\nSPEED_KMH_MAX=0\nDIRECTION_DEG=0"));
-    }
-
-    #[test]
-    fn race_with_qualifying_has_two_sessions() {
-        let mut s = base();
-        s.session_type = SessionType::Race;
-        s.qualifying = true;
-        s.qualify_minutes = 12;
-        s.grip = 88;
-        let ini = build_race_ini(&s);
-        assert!(ini.contains("[SESSION_0]\nNAME=Qualify\nTYPE=2\nDURATION_MINUTES=12"));
-        assert!(ini.contains("[SESSION_1]\nNAME=Race\nTYPE=3"));
-        assert!(ini.contains("SESSION_START=88"));
-    }
-
-    #[test]
-    fn hotlap_is_single_car_no_duration() {
-        let mut s = base();
-        s.session_type = SessionType::Hotlap;
-        let ini = build_race_ini(&s);
-        assert!(ini.contains("TYPE=4"));
-        assert!(ini.contains("SPAWN_SET=HOTLAP_START"));
-        assert!(ini.contains("DURATION_MINUTES=0"));
-    }
-
-    #[test]
-    fn ghost_car_only_when_hotlap() {
-        // Ghost activé en Hotlap → ENABLED=1.
-        let mut s = base();
-        s.session_type = SessionType::Hotlap;
-        s.ghost_car = true;
-        assert!(build_race_ini(&s).contains("[GHOST_CAR]\nRECORDING=1\nPLAYING=1\nLOAD=1\nENABLED=1"));
-
-        // Ghost activé mais en Practice → ignoré (ENABLED=0).
-        let mut p = base();
-        p.session_type = SessionType::Practice;
-        p.ghost_car = true;
-        assert!(build_race_ini(&p).contains("[GHOST_CAR]\nRECORDING=0\nPLAYING=0\nLOAD=0\nENABLED=0"));
-    }
 }

@@ -2,59 +2,39 @@
 
 > Recherche menée sur la source primaire AcTools (`gro-ove/actools`, branche master).
 > Fichiers clés : `AcManager/Tools/ArgumentsHandler.cs`, `ArgumentsHandler.Commands.cs`,
-> `ArgumentsHandler.Race.cs`.
+> `ArgumentsHandler.Race.cs`, `GameWrapper.cs`.
 
-## Verdict
+## Verdict (mis à jour 2026-07-xx)
 
-**RÉSOLU ET VALIDÉ EMPIRIQUEMENT (2026-06-27).** Test réel sur la machine :
-`Content Manager.exe "acmanager://race/config?configFile=…\test-race.ini"` (GT86 @
-Magione, practice). Log CM confirmé :
+**`race/config`/`PreparedConfig` (race.ini) a été abandonné : il ne déclenche pas le
+téléchargement CSP automatique.** Bug confirmé empiriquement (lancement direct depuis
+l'UI CM = CSP charge VAO/config manquants ; lancement Pit Box via `race/config` = rien).
+Root cause trouvée dans le pipeline `GameWrapper.StartAsync` :
+
 ```
-ProcessUriRequest(): URI Request: //race/config?configFile=…
-GameWrapper: StartAsync_PrepareRace() → StartAsync_Ui(): Starting game...
-Game: StartAsync(): Starting AC: AppIdStarter
-→ acs.exe démarré, session chargée (aucune erreur, race.ini non écrasé)
+StartAsync_AdjustProperties → StartAsync_Prepare → StartAsync_PrepareRace (mode course
+uniquement) → StartAsync_Ui / StartAsync_NoUi
 ```
-Conclusion : passer un `race.ini` préparé via `race/config?configFile=` fonctionne
-de bout en bout. La boucle « biblio → race.ini → CM → session » est confirmée.
 
-**Le point ouvert est résolu.** On pilote CM via son **protocole `acmanager://`**, qui
-est aussi accepté **en argument de ligne de commande** (même chemin de code). Deux
-mécanismes officiels permettent de lancer une session par programmation :
+Le check CSP (`PatchUpdater.Instance` / `LoadPatchDataAutomatically`) dans
+`StartAsync_Ui` lit `StartProperties.BasicProperties` (`CarId`/`TrackId` typés). Or
+`race/config` ne peuple **que** `PreparedConfig` (le `race.ini` brut, tel quel) —
+`BasicProperties` reste `null`, donc le check CSP n'a rien à quoi s'accrocher et ne se
+déclenche jamais. C'est un chemin délibérément « bas niveau » côté CM : il lance
+la session sans repasser par le pipeline normal de préparation.
 
-1. **`acmanager://race/config`** — fournir un **`race.ini` préparé** que CM lance
-   tel quel (sans le réécrire). **C'est le levier recommandé** : contrôle total
-   (voiture, circuit, type de session, IA, météo, heure… tout est dans le race.ini).
-2. **`acmanager://race/quick`** — piloter le **Quick Drive de CM** avec un **preset
-   sérialisé**. Pratique pour les *presets de session par type* (§8.4).
+**On pilote désormais CM via `acmanager://race/quick`**, qui déclenche
+`QuickDrive.ViewModel.Go()` côté CM — le même chemin que le bouton « DRIVE » de son
+propre UI Quick Drive. Ce chemin peuple correctement `BasicProperties`, donc le
+téléchargement CSP automatique se déclenche normalement.
 
-> Nuance importante vs la spec : « CM écrase race.ini » est vrai pour l'approche
-> naïve (écrire le race.ini d'AC sur disque puis lancer). Mais le chemin
-> `race/config` passe explicitement notre config à `GameWrapper.StartAsync` via
-> `PreparedConfig` — CM ne l'écrase pas, il l'utilise. C'est un chemin **supporté**.
+Preuve minimale (2026-07-xx) : preset `.cmpreset` sauvegardé par CM lui-même
+(`AppData\Local\AcTools Content Manager\Presets\Quick Drive\pitbox.cmpreset`), rejoué
+via `Content Manager.exe "acmanager://race/quick?presetFile=…\pitbox.cmpreset"` →
+téléchargement CSP déclenché, confirmé par l'utilisateur.
 
-## Détail technique (vérifié dans le code)
+## Mécanisme retenu : `acmanager://race/quick`
 
-### Lecture des paramètres — helper `GetSettings(params, key)`
-Pour une clé `X`, CM lit dans l'ordre :
-- `XData` → chaîne **base64 « cut »** (URL-safe, padding retiré) décodée en UTF-8 ;
-- `XFile` → **chemin d'un fichier** dont on lit le contenu brut (`File.ReadAllText`) ;
-- `X` → la valeur brute en clair.
-
-→ **Le plus simple : écrire le race.ini dans un fichier temporaire et passer `configFile=`** (zéro encodage).
-
-### `acmanager://race/config` → `ProcessRaceConfig`
-```csharp
-var config = GetSettings(custom.Params, "config");   // requis
-// (assists optionnels via "assists"/"assistsData"/"assistsFile")
-await GameWrapper.StartAsync(new Game.StartProperties {
-    PreparedConfig = IniFile.Parse(config)           // notre race.ini, tel quel
-});
-```
-Forme : `acmanager://race/config?configFile=C:\…\race.ini`
-ou `acmanager://race/config?configData=<cutbase64(race.ini)>`
-
-### `acmanager://race/quick` → `ProcessRaceQuick`
 ```csharp
 var preset = GetSettings(custom.Params, "preset");   // requis (preset Quick Drive sérialisé)
 if (custom.Params.GetFlag("loadPreset")) {           // n'ouvre l'UI que pour charger
@@ -63,42 +43,92 @@ if (custom.Params.GetFlag("loadPreset")) {           // n'ouvre l'UI que pour ch
     await QuickDrive.RunAsync(serializedPreset: preset, …);  // lance directement
 }
 ```
-Forme : `acmanager://race/quick?presetData=<cutbase64(preset)>`
-Flags : `loadPreset` (ouvrir l'UI au lieu de lancer), `loadAssists`.
+Forme retenue : `acmanager://race/quick?presetFile=C:\…\preset.json` (fichier
+temporaire, comme pour l'ancien `race/config?configFile=`, zéro encodage base64).
 
-### `acmanager://race/csp` → `ProcessRaceCsp` (alternative simple car/piste)
-Accepte directement `car`, `skin`, `track` (ids), avec sélecteurs si absents.
-Construit `StartProperties.BasicProperties { CarId, TrackId, TrackConfigurationId,
-CarSkinId }`. Plus limité (orienté P2P/CSP) que `race/config`.
+### Lecture des paramètres — helper `GetSettings(params, key)`
+Pour une clé `X`, CM lit dans l'ordre :
+- `XData` → chaîne **base64 « cut »** (URL-safe, padding retiré) décodée en UTF-8 ;
+- `XFile` → **chemin d'un fichier** dont on lit le contenu brut (`File.ReadAllText`) ;
+- `X` → la valeur brute en clair.
 
-## Invocation depuis l'app
+### Invocation depuis l'app
 - `ProcessArguments()` traite les `args` de la ligne de commande ; `ProcessArgument`
   → si `IsCustomUriScheme` → `ProcessUriRequest`. Donc :
-  **lancer `Content Manager.exe "acmanager://race/config?configFile=…"`** suffit.
+  **lancer `Content Manager.exe "acmanager://race/quick?presetFile=…"`** suffit.
 - CM est **mono-instance** : si CM tourne déjà, l'URI est transmise à l'instance
   active (IPC). Sinon le process démarre et traite l'argument.
 - `GameWrapper.StartAsync` gère le démarrage du jeu (incl. Steam) côté CM — on n'a
-  pas à réécrire cette orchestration. La séquence « CM lancé + Steam ouvert » de la
-  spec reste une bonne pratique de fiabilité.
+  pas à réécrire cette orchestration.
 
-## Conséquences pour le modèle L4
-- **Voiture/circuit/skin/layout, mode, IA, météo statique, heure** → on construit un
-  **`race.ini`** et on lance via `race/config?configFile=`. Pas de dépendance au
-  format binaire `Values.data`.
-- **Presets de session par type (§8.4)** → on peut soit garder nos propres `race.ini`
-  par type, soit s'appuyer sur des presets Quick Drive CM via `race/quick`.
-- **Réglages lourds (graphismes/FFB/contrôleur)** → restent gérés par CM (presets CM),
-  non touchés par cette voie.
+## Format du preset Quick Drive (`SaveableData`, sérialisé JSON)
 
-## À faire avant de coder L4
-1. Confirmer la structure exacte d'un `race.ini` Quick-Race minimal qui fonctionne via
-   `PreparedConfig` (sections `RACE`, `CAR_0`, `SESSION_*`, `WEATHER`, `LIGHTING`/heure,
-   IA) — à dériver d'un race.ini réel généré par CM.
-2. Vérifier l'encodage « cut base64 » si on préfère `configData` à `configFile`
-   (URL-safe, padding retiré) — ou simplement utiliser `configFile` (recommandé).
-3. Détection de la stack météo (Pure/SOL/CSP/vanilla) — autre point ouvert §8.5,
-   indépendant de celui-ci.
+Le format n'est pas documenté publiquement dans le dépôt (juste des classes C#
+partielles) — **reconstruit empiriquement** à partir de fichiers `.cmpreset` réels
+sauvegardés depuis l'UI Quick Drive de CM (un par type de session : Practice, Hotlap,
+Weekend). Champs de premier niveau confirmés sur ces captures :
+
+- `Mode` : chemin de la page XAML du mode (`/Pages/Drive/QuickDrive_Practice.xaml`,
+  `..._Hotlap.xaml`, `..._Weekend.xaml`) — détermine quel `ModeData` est attendu.
+- `ModeData` : JSON **imbriqué en chaîne** (échappé), spécifique au mode — voir §
+  ci-dessous.
+- `CarId` / `TrackId` (avec `/layout` suffixé si applicable) — typés, peuplent
+  `BasicProperties` (c'est le point qui débloque le CSP auto-load).
+- `WeatherId`, `RealConditions`, `Temperature`, `Time` (secondes depuis minuit),
+  `TimeMultipler`.
+- `udt`/`dtv` : date de simulation (`udt` = flag « utiliser une date », `dtv` =
+  date ISO `YYYY-MM-DDT00:00:00`) — équivalent de l'ancien `__CM_DATE` du race.ini.
+- `TrackPropertiesData` : JSON imbriqué en chaîne (état de piste — grip/évolution).
+  Pas de mapping trouvé côté Pit Box pour l'instant (toujours « Optimum »/sec,
+  voir limites connues plus bas).
+- `AssistsData` : JSON imbriqué en chaîne (aides + simulation dégâts/carburant/usure).
+- Vent (`wsf`/`wst`/`wd`), divers flags de comportement CM (`rws`, `rwd`,
+  `rcTimezones`, …) — repris tels quels avec des valeurs par défaut raisonnables,
+  non exposés dans notre UI.
+
+### `ModeData` par type de session
+- **Practice** (`QuickDrive_Practice.xaml`) : `{StartType, Penalties, PlayerBallast,
+  PlayerRestrictor}`. **Pas de champ durée** — session à durée libre par design Quick
+  Drive (pas un manque du format).
+- **Hotlap** (`QuickDrive_Hotlap.xaml`) : `{GhostCar, DoNotRecordGhostCar,
+  GhostCarAdvantage, Penalties, PlayerBallast, PlayerRestrictor}`.
+- **Weekend** (`QuickDrive_Weekend.xaml`, couvre Course + Qualif/Practice optionnels) :
+  `{PracticeLength, QualificationLength, Penalties, JumpStartPenalty, LapsNumber,
+  RaceGridSerialized, Version}`. `RaceGridSerialized` est lui-même du JSON en chaîne :
+  `{ModeId:"manual", CarIds[], SkinIds[], AiLevels[], OpponentsNumber,
+  StartingPosition, …}` pour un plateau explicite par adversaire (voir
+  `RaceGridViewModel`/`RaceGridEntry` dans `AcManager.Controls`).
+
+Pit Box génère ce preset en implémentant uniquement le mode **Weekend** pour la
+course (pas de mode Race/Trackday/Drift séparé côté CM) : sans qualif ni practice
+configurés, Weekend se comporte comme une course simple — équivalent fonctionnel.
+
+## Limites connues du nouveau mécanisme
+1. **Skin du joueur non forçable** : pas de champ dans le schéma Quick Drive pour le
+   skin du joueur (contrairement à `race/csp` qui a `CarSkinId`, mais ce chemin ne
+   supporte pas un plateau complet). CM retombe sur le dernier skin utilisé pour la
+   voiture. `RaceSetup.car_skin` est conservé côté Rust (compat aller-retour front)
+   mais non lu par `quickdrive::build_preset`.
+2. **Grip/évolution de piste non mappés** : `TrackPropertiesData` toujours codé en
+   dur sur « Optimum »/sec — pas de champ identifié correspondant au réglage
+   `grip` de notre UI dans les captures réelles.
+3. **Durée de session Practice non appliquée** : le schéma `QuickDrive_Practice`
+   n'a pas de champ durée — comportement Quick Drive natif, pas un bug.
+
+Ces trois points sont documentés en commentaire sur `RaceSetup` (`src-tauri/src/launch.rs`)
+et sur `quickdrive::build_preset` (`src-tauri/src/quickdrive.rs`).
+
+## Génération du preset côté Pit Box
+`quickdrive::build_preset(&RaceSetup) -> Result<String, String>` (Rust,
+`src-tauri/src/quickdrive.rs`) construit le JSON directement avec `serde_json::json!`
+(pas de template texte). `launch::launch()` écrit le résultat dans un fichier
+temporaire jetable (`%TEMP%\pitbox-quickdrive-<uuid>.json`, un par lancement — jamais
+les `.cmpreset` sauvegardés par l'utilisateur lui-même) et invoque
+`Content Manager.exe "acmanager://race/quick?presetFile=…"`.
 
 ## Sources
 - `gro-ove/actools` — `AcManager/Tools/ArgumentsHandler.Race.cs` (ProcessRaceConfig /
-  ProcessRaceQuick / GetSettings), `ArgumentsHandler.Commands.cs`, `ArgumentsHandler.cs`.
+  ProcessRaceQuick / GetSettings), `ArgumentsHandler.Commands.cs`, `ArgumentsHandler.cs`,
+  `GameWrapper.cs` (pipeline `StartAsync`).
+- Fichiers `.cmpreset` réels sauvegardés par CM (Practice/Hotlap/Weekend), lus et
+  comparés champ par champ pour reconstruire le schéma `SaveableData`.

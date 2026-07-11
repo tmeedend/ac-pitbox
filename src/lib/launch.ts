@@ -40,7 +40,7 @@ export interface RaceSetup {
   year_max: number;
   /** Saison optionnelle (§8.6bis) — voir season_date pour la valeur réellement écrite. */
   season: string | null;
-  /** Date ISO (YYYY-MM-DD) associée à la saison choisie ; best-effort côté race.ini. */
+  /** Date ISO (YYYY-MM-DD) associée à la saison choisie ; best-effort côté preset Quick Drive (udt/dtv). */
   season_date: string | null;
   penalties: boolean;
   jump_start_penalty: number;

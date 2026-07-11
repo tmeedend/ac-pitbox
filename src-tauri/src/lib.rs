@@ -22,6 +22,7 @@ mod modscan;
 mod others;
 mod overlay;
 mod profiles;
+mod quickdrive;
 mod resources;
 mod rules;
 mod shared;
@@ -338,7 +339,7 @@ fn weather_conditions(intent: String, hour: f32, season: Option<String>) -> weat
     weather::implicit_conditions(&intent, hour, season.as_deref())
 }
 
-/// Construit le race.ini et lance la session via Content Manager (§8.3).
+/// Construit le preset Quick Drive et lance la session via Content Manager (§8.3).
 #[tauri::command]
 fn launch_session(app: AppHandle, db: State<Db>, setup: launch::RaceSetup) -> Result<(), String> {
     let cfg = config::load(&app);
