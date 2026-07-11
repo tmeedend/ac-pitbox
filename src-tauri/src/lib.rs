@@ -5,6 +5,7 @@ mod bulk;
 mod cm_stats;
 mod compose;
 mod config;
+mod deploy;
 mod detect;
 mod export;
 mod harmonize;
