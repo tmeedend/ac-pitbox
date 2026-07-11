@@ -657,13 +657,15 @@ pub fn resolve_conflict(
                     let dir = lib.join(kind.content_folder()).join(old_id);
                     let _ = std::fs::remove_dir_all(&dir);
                 }
-                // Retire une éventuelle junction orpheline dans content/ (garde-fou :
-                // uniquement si c'est bien un point de reparse, jamais un vrai dossier).
+                // Retire un déploiement orphelin dans content/ (garde-fou : symlink
+                // hérité ou déploiement hardlinks marqué, jamais un vrai dossier).
                 if let Some(ac) = &cfg.ac_install_path {
                     let cpath = ac.join("content").join(kind.content_folder()).join(old_id);
                     if let Ok(meta) = std::fs::symlink_metadata(&cpath) {
                         if meta.file_type().is_symlink() {
                             let _ = std::fs::remove_dir(&cpath);
+                        } else if crate::deploy::is_deployed(&cpath) {
+                            let _ = crate::deploy::remove_deployment(&cpath);
                         }
                     }
                 }
@@ -1529,6 +1531,44 @@ mod tests {
         assert_eq!(mods.len(), 1);
         assert_eq!(mods[0].id_interne, "car_b");
         assert!(!library.join("cars").join("car_a").exists(), "fichiers car_a supprimés");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn resolve_conflict_replace_removes_hardlink_deployment_of_old_mod() {
+        // §2 : si l'ancien mod (fuzzy conflict) était actif par hardlinks, la
+        // résolution "replace" doit retirer son déploiement dans content/, pas
+        // seulement ses fichiers de bibliothèque (sinon copie orpheline vivante).
+        let base = make_temp_dir().unwrap();
+        let ac = base.join("ac");
+        let library = base.join("library");
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library.clone()), ..Default::default() };
+        let now = chrono::Local::now().to_rfc3339();
+
+        let old_dir = library.join("cars").join("car_a").join("v1");
+        std::fs::create_dir_all(&old_dir).unwrap();
+        std::fs::write(old_dir.join("f.txt"), "old").unwrap();
+        crate::overlay::upsert_mod(&conn, "car_a", "Car", Some("B"), Some("Same"), "h", None, &now).unwrap();
+        crate::overlay::insert_version(
+            &conn, "v1", "car_a", Some("1.0"), None, &now, &old_dir.to_string_lossy(), None, "sig",
+            &[], &[], &[], &[], None,
+        )
+        .unwrap();
+        crate::overlay::set_active_version(&conn, "car_a", "v1").unwrap();
+        crate::activation::activate(&conn, &cfg, "car_a", None).unwrap();
+        let link = ac.join("content").join("cars").join("car_a");
+        assert!(crate::deploy::is_deployed(&link), "précondition : car_a actif par hardlinks");
+
+        // "car_b" existe juste en overlay (le conflit ne dépend que de l'id passé).
+        crate::overlay::upsert_mod(&conn, "car_b", "Car", Some("B"), Some("Same"), "h2", None, &now).unwrap();
+
+        resolve_conflict(&conn, &cfg, "car_b", "car_a", "replace").unwrap();
+
+        assert!(!link.exists(), "déploiement content/ de l'ancien mod retiré, pas laissé orphelin");
 
         let _ = std::fs::remove_dir_all(&base);
     }

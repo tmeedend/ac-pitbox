@@ -11,7 +11,7 @@ use serde::Serialize;
 use crate::config::AppConfig;
 use crate::modscan::ModKind;
 use crate::overlay::ModRow;
-use crate::{activation, archive, inspect, modscan, overlay, uijson};
+use crate::{activation, archive, deploy, inspect, modscan, overlay, uijson};
 
 fn kind_of(s: &str) -> ModKind {
     if s == "Track" {
@@ -129,11 +129,16 @@ pub fn delete_broken(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(),
         let _ = std::fs::remove_dir_all(lib.join(kind.content_folder()).join(id));
     }
 
-    // Junction éventuelle dans content/ (uniquement si c'est bien une junction).
+    // Déploiement éventuel dans content/ (symlink hérité OU hardlinks, §2).
+    // Contrairement à un symlink, un déploiement hardlinks ne devient pas
+    // orphelin tout seul quand la bibliothèque disparaît (les données restent
+    // vivantes via l'entrée dans content/) — il faut le retirer explicitement.
     if let Some(ac) = &cfg.ac_install_path {
         let link = ac.join("content").join(kind.content_folder()).join(id);
         if activation::is_junction(&link) {
             let _ = std::fs::remove_dir(&link);
+        } else if deploy::is_deployed(&link) {
+            let _ = deploy::remove_deployment(&link);
         }
     }
 
@@ -334,6 +339,42 @@ mod tests {
 
         delete_broken(&conn, &cfg, "ghost").unwrap();
         assert!(overlay::get_mod(&conn, "ghost").unwrap().is_none());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn delete_broken_removes_hardlink_deployment_from_content() {
+        // §2 : contrairement à un symlink, un déploiement hardlinks ne devient
+        // pas orphelin tout seul quand la bibliothèque disparaît (les données
+        // restent vivantes dans content/) — delete_broken doit le retirer
+        // explicitement, pas seulement les fichiers de bibliothèque.
+        let base = std::env::temp_dir().join(format!("pitbox-maint-hl-{}", uuid::Uuid::new_v4()));
+        let ac = base.join("ac");
+        let library = base.join("library");
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let carv = library.join("cars").join("hl_car").join("v1");
+        std::fs::create_dir_all(&carv).unwrap();
+        std::fs::write(carv.join("data.txt"), "hi").unwrap();
+
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_mod(&conn, "hl_car", "Car", Some("B"), Some("Test"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn, "v1", "hl_car", Some("1.0"), None, &now,
+            &carv.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "hl_car", "v1").unwrap();
+        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library), ..Default::default() };
+
+        activation::activate(&conn, &cfg, "hl_car", None).unwrap();
+        let link = ac.join("content").join("cars").join("hl_car");
+        assert!(deploy::is_deployed(&link), "précondition : déployé par hardlinks");
+
+        delete_broken(&conn, &cfg, "hl_car").unwrap();
+
+        assert!(!link.exists(), "le déploiement content/ doit être retiré, pas laissé orphelin");
 
         let _ = std::fs::remove_dir_all(&base);
     }

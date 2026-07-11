@@ -1,9 +1,22 @@
-//! Activation / désactivation par **directory junctions** Windows (§7).
-//! Zéro duplication, pas de droits admin (contrairement aux symlinks).
+//! Activation / désactivation dans `content/` (§2/§7).
+//!
+//! **Mécanisme actuel : hardlinks par fichier** (`deploy.rs`), comme Vortex —
+//! zéro duplication, zéro reparse point, pas de droits admin. Toute nouvelle
+//! activation utilise ce mécanisme.
+//!
+//! **Compat ascendante** : les mods déjà actifs sous l'ancien mécanisme
+//! (symlink `mklink /D`, ci-dessous `create_junction`/`is_junction`/
+//! `remove_junction` malgré leur nom — legacy) continuent de fonctionner tels
+//! quels indéfiniment, inoffensif. Ils sont migrés vers les hardlinks
+//! **transparemment à leur prochaine (ré)activation**, jamais par migration
+//! forcée : `is_mod_active`/`activate`/`deactivate` reconnaissent les deux
+//! formes, mais seule `deploy::deploy_tree`/`compose_tree` est utilisée pour
+//! écrire du nouveau contenu.
 //!
 //! Garde-fou absolu : on ne supprime JAMAIS dans `content/` un dossier qui
-//! n'est pas une junction créée par l'app (protection du contenu installé hors
-//! de l'app). Détection junction vs vrai dossier obligatoire avant suppression.
+//! n'est ni une junction/symlink créée par l'app, ni un déploiement hardlinks
+//! marqué (`deploy::is_deployed`) — protection du contenu installé hors de
+//! l'app (Kunos, autre outil).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -14,6 +27,7 @@ use std::os::windows::process::CommandExt;
 use rusqlite::Connection;
 
 use crate::config::AppConfig;
+use crate::deploy;
 use crate::modscan::ModKind;
 use crate::overlay;
 
@@ -42,9 +56,10 @@ pub(crate) fn content_link(cfg: &AppConfig, kind: ModKind, id: &str) -> Option<P
         .map(|ac| ac.join("content").join(kind.content_folder()).join(id))
 }
 
-/// Vrai si le mod est actif (junction gérée présente dans content/).
+/// Vrai si le mod est actif : déploiement hardlinks marqué (mécanisme
+/// courant) OU symlink géré par l'app (ancien mécanisme, toujours reconnu).
 pub fn is_mod_active(cfg: &AppConfig, kind: ModKind, id: &str) -> bool {
-    content_link(cfg, kind, id).is_some_and(|l| is_junction(&l))
+    content_link(cfg, kind, id).is_some_and(|l| is_junction(&l) || deploy::is_deployed(&l))
 }
 
 /// Crée une junction `link` → `target` via `mklink /J` (sans fenêtre console).
@@ -117,11 +132,15 @@ pub fn activate(
         .ok_or("version introuvable")?;
     let link = content_link(cfg, kind, mod_id).ok_or("dossier AC non configuré")?;
 
-    // Garde-fou + nettoyage d'une éventuelle junction existante.
+    // Garde-fou + nettoyage d'un déploiement existant, quelle que soit sa
+    // forme (symlink hérité ou hardlinks). Toute réactivation redéploie en
+    // hardlinks, migrant transparemment les mods encore en symlink.
     match std::fs::symlink_metadata(&link) {
         Ok(meta) => {
             if meta.file_type().is_symlink() {
                 remove_junction(&link)?;
+            } else if deploy::is_deployed(&link) {
+                deploy::remove_deployment(&link)?;
             } else {
                 return Err(GUARD_MSG.into());
             }
@@ -129,7 +148,7 @@ pub fn activate(
         Err(_) => {} // n'existe pas : OK
     }
 
-    create_junction(&link, Path::new(&target))?;
+    deploy::deploy_tree(Path::new(&target), &link, mod_id, kind)?;
     overlay::set_active_version(conn, mod_id, &vid).map_err(|e| e.to_string())?;
     // Compose par-dessus la base si le mod a des couches actives (§4.4) ;
     // sans couche, recompose ré-affirme simplement la junction vers la version.
@@ -149,15 +168,18 @@ pub fn deactivate(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<()
         Ok(meta) => {
             if meta.file_type().is_symlink() {
                 remove_junction(&link)?;
+            } else if deploy::is_deployed(&link) {
+                deploy::remove_deployment(&link)?;
             } else {
                 return Err(GUARD_MSG.into());
             }
         }
         Err(_) => {} // déjà inactif
     }
-    // Le dossier composé du mod (§4.4) devient inutile ; les couches restent
-    // enregistrées et seront réappliquées à la prochaine activation.
-    crate::compose::clear_composed(cfg, kind, mod_id);
+    // Les couches (§4.4) restent enregistrées et seront réappliquées à la
+    // prochaine activation — plus de dossier de composition intermédiaire à
+    // nettoyer (le contenu composé, s'il y en avait, vivait directement dans
+    // `link`, déjà retiré ci-dessus).
     Ok(())
 }
 
@@ -224,6 +246,95 @@ mod tests {
         deactivate(&conn, &cfg, "test_car").unwrap();
 
         assert!(overlay::get_history(&conn, "test_car").unwrap().is_empty());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Circuit de test (Spa) : `activate` doit déployer par hardlinks (§2), pas
+    /// par symlink — sans droits admin (aucune élévation dans ce test, comme
+    /// en usage réel : `CreateHardLinkW` n'en a jamais besoin, contrairement à
+    /// `CreateSymbolicLink`). Vérifie aussi que `deactivate` retire proprement
+    /// le déploiement sans toucher à la bibliothèque.
+    #[test]
+    fn activate_deploys_spa_via_hardlinks_not_symlink() {
+        let base = std::env::temp_dir().join(format!("pitbox-hardlink-spa-{}", uuid::Uuid::new_v4()));
+        let ac = base.join("ac");
+        let library = base.join("library");
+        std::fs::create_dir_all(ac.join("content").join("tracks")).unwrap();
+        let spav1 = library.join("tracks").join("spa").join("v1");
+        std::fs::create_dir_all(spav1.join("ui")).unwrap();
+        std::fs::write(spav1.join("ui").join("ui_track.json"), br#"{"name":"Spa"}"#).unwrap();
+        std::fs::create_dir_all(spav1.join("ai")).unwrap();
+        std::fs::write(spav1.join("ai").join("fast_lane.ai"), b"AI_DATA").unwrap();
+
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_mod(&conn, "spa", "Track", Some("B"), Some("Spa"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn, "v1", "spa", Some("1.0"), None, &now,
+            &spav1.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "spa", "v1").unwrap();
+        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library), ..Default::default() };
+
+        activate(&conn, &cfg, "spa", None).unwrap();
+        let link = ac.join("content").join("tracks").join("spa");
+
+        assert!(!is_junction(&link), "plus de reparse point — vrai dossier");
+        assert!(deploy::is_deployed(&link), "marqueur de déploiement hardlinks présent");
+        assert!(link.join("ui").join("ui_track.json").is_file(), "toute l'arborescence est là (ex. ai/)");
+        assert!(link.join("ai").join("fast_lane.ai").is_file());
+        assert!(is_mod_active(&cfg, ModKind::Track, "spa"), "détecté actif via le nouveau mécanisme");
+
+        deactivate(&conn, &cfg, "spa").unwrap();
+        assert!(!link.exists(), "déploiement retiré");
+        assert!(spav1.join("ai").join("fast_lane.ai").is_file(), "bibliothèque intacte après désactivation");
+        assert!(!is_mod_active(&cfg, ModKind::Track, "spa"));
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Un mod encore actif sous l'ancien mécanisme (symlink `mklink /D`) doit
+    /// rester détecté actif tel quel (aucune migration forcée), et se migrer
+    /// tout seul, silencieusement, à sa prochaine (ré)activation.
+    #[test]
+    fn legacy_symlinked_mod_still_detected_active_and_migrates_on_reactivate() {
+        if !cfg!(windows) {
+            return;
+        }
+        let base = std::env::temp_dir().join(format!("pitbox-legacy-sym-{}", uuid::Uuid::new_v4()));
+        let ac = base.join("ac");
+        let library = base.join("library");
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let carv = library.join("cars").join("legacy_car").join("v1");
+        std::fs::create_dir_all(&carv).unwrap();
+        std::fs::write(carv.join("data.txt"), "legacy").unwrap();
+
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_mod(&conn, "legacy_car", "Car", Some("B"), Some("Legacy"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn, "v1", "legacy_car", Some("1.0"), None, &now,
+            &carv.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "legacy_car", "v1").unwrap();
+        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library), ..Default::default() };
+
+        // Simule un mod activé sous l'ancien mécanisme, sans passer par `activate`.
+        let link = ac.join("content").join("cars").join("legacy_car");
+        create_junction(&link, &carv).unwrap();
+        assert!(is_junction(&link));
+
+        assert!(is_mod_active(&cfg, ModKind::Car, "legacy_car"), "symlink hérité toujours reconnu actif");
+
+        // Réactiver (ex. changement de version, ou juste re-cliquer Activer)
+        // migre silencieusement vers les hardlinks.
+        activate(&conn, &cfg, "legacy_car", None).unwrap();
+        assert!(!is_junction(&link), "migré : plus un symlink");
+        assert!(deploy::is_deployed(&link), "migré : déploiement hardlinks");
+        assert!(link.join("data.txt").is_file());
 
         let _ = std::fs::remove_dir_all(&base);
     }

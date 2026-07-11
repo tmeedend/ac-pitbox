@@ -60,20 +60,17 @@ fn kind_of(s: &str) -> ModKind {
 }
 
 fn is_active(cfg: &AppConfig, m: &ModRow) -> bool {
-    // Contenu de base Kunos : toujours un vrai dossier (jamais de junction),
+    // Contenu de base Kunos : toujours un vrai dossier (jamais de déploiement),
     // chargé par AC en permanence — donc toujours « actif ».
     if m.is_stock {
         return true;
     }
-    let Some(ac) = &cfg.ac_install_path else {
+    if cfg.ac_install_path.is_none() {
         return false;
-    };
-    let link = ac
-        .join("content")
-        .join(kind_of(&m.kind).content_folder())
-        .join(&m.id_interne);
-    // « Actif » = junction gérée par l'app présente (pas un vrai dossier installé hors app).
-    crate::activation::is_junction(&link)
+    }
+    // « Actif » = déploiement géré par l'app présent (symlink hérité ou
+    // hardlinks, §2) — pas un vrai dossier installé hors app.
+    crate::activation::is_mod_active(cfg, kind_of(&m.kind), &m.id_interne)
 }
 
 fn preview_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
@@ -323,6 +320,39 @@ mod tests {
         overlay::upsert_stock_mod(&conn, "ks_test_track", "Track", None, Some("Test"), &now).unwrap();
         let m = overlay::get_mod(&conn, "ks_test_track").unwrap().unwrap();
         assert!(is_active(&AppConfig::default(), &m));
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn managed_mod_active_when_deployed_via_hardlinks() {
+        // §2 : is_active doit reconnaître le nouveau mécanisme de déploiement
+        // (hardlinks), pas seulement l'ancien symlink.
+        let base = std::env::temp_dir().join(format!("pitbox-active-hl-{}", uuid::Uuid::new_v4()));
+        let ac = base.join("ac");
+        let lib = base.join("library");
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let carv = lib.join("cars").join("hl_car").join("v1");
+        std::fs::create_dir_all(&carv).unwrap();
+        std::fs::write(carv.join("f.txt"), "x").unwrap();
+
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_mod(&conn, "hl_car", "Car", Some("B"), Some("Test"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn, "v1", "hl_car", Some("1.0"), None, &now, &carv.to_string_lossy(), None, "sig",
+            &[], &[], &[], &[], None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "hl_car", "v1").unwrap();
+        let cfg = AppConfig { ac_install_path: Some(ac), library_path: Some(lib), ..Default::default() };
+
+        let m = overlay::get_mod(&conn, "hl_car").unwrap().unwrap();
+        assert!(!is_active(&cfg, &m), "pas encore activé");
+
+        crate::activation::activate(&conn, &cfg, "hl_car", None).unwrap();
+        let m = overlay::get_mod(&conn, "hl_car").unwrap().unwrap();
+        assert!(is_active(&cfg, &m), "déployé par hardlinks = actif");
 
         let _ = std::fs::remove_dir_all(&base);
     }
