@@ -33,7 +33,15 @@
     "configure": "PARAMÉTRAGE DE LA SESSION",
     "start": "▶ DÉMARRER LA SESSION",
     "carTooltip": "Clic : bibliothèque voitures · double-clic : fiche détail",
-    "trackTooltip": "Clic : bibliothèque circuits · double-clic : fiche détail"
+    "trackTooltip": "Clic : bibliothèque circuits · double-clic : fiche détail",
+    "pickSkin": "Choisir un skin…",
+    "noSkinsAvailable": "Aucun skin",
+    "pickLayout": "Choisir un layout…",
+    "noLayoutsAvailable": "Aucun layout",
+    "trackSkinsNone": "Aucun skin actif",
+    "trackSkinsEmpty": "Aucun skin de circuit",
+    "trackSkinsCount": "{count} skins actifs",
+    "trackSkinsTooltip": "Skins de circuit — plusieurs actifs possible"
   },
   "settings": {
     "title": "Réglages — Chemins",

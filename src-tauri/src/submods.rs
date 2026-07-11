@@ -268,6 +268,54 @@ pub fn list_active_track_skins(conn: &Connection, track_id: &str) -> Vec<String>
         .collect()
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct TrackSkinOption {
+    pub name: String,
+    pub image: Option<String>,
+    pub active: bool,
+}
+
+/// Skins de circuit avec une image de prévisualisation résolue (§4.6bis),
+/// pour le sélecteur multi-choix de la barre latérale — cherche un fichier
+/// `preview.png`/`preview.jpg` (insensible à la casse) dans le dossier
+/// stocké de chaque skin.
+pub fn list_track_skin_options(conn: &Connection, track_id: &str) -> Vec<TrackSkinOption> {
+    overlay::list_subs_for_parent(conn, track_id)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|s| s.sub_type == "TRACK_SKIN")
+        .map(|s| {
+            let image = find_preview_image(Path::new(&s.library_path));
+            TrackSkinOption { name: s.name, image, active: s.is_active }
+        })
+        .collect()
+}
+
+fn find_preview_image(dir: &Path) -> Option<String> {
+    let entries = std::fs::read_dir(dir).ok()?;
+    for e in entries.flatten() {
+        let p = e.path();
+        if !p.is_file() {
+            continue;
+        }
+        let stem_ok = p
+            .file_stem()
+            .map(|s| s.to_string_lossy().eq_ignore_ascii_case("preview"))
+            .unwrap_or(false);
+        let ext_ok = p
+            .extension()
+            .map(|e| {
+                let e = e.to_string_lossy().to_lowercase();
+                e == "png" || e == "jpg" || e == "jpeg"
+            })
+            .unwrap_or(false);
+        if stem_ok && ext_ok {
+            return Some(p.to_string_lossy().into_owned());
+        }
+    }
+    None
+}
+
 /// Active/désactive un skin de circuit (§4.6bis) puis recompose
 /// `skins/default/` — plusieurs skins peuvent être actifs simultanément
 /// (contrairement aux skins voiture, sans notion d'exclusivité). Reproduit

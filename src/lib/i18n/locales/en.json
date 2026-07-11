@@ -33,7 +33,15 @@
     "configure": "SESSION SETUP",
     "start": "▶ START THE SESSION",
     "carTooltip": "Click: car library · double-click: detail page",
-    "trackTooltip": "Click: track library · double-click: detail page"
+    "trackTooltip": "Click: track library · double-click: detail page",
+    "pickSkin": "Choose a skin…",
+    "noSkinsAvailable": "No skin",
+    "pickLayout": "Choose a layout…",
+    "noLayoutsAvailable": "No layout",
+    "trackSkinsNone": "No active skin",
+    "trackSkinsEmpty": "No track skin",
+    "trackSkinsCount": "{count} active skins",
+    "trackSkinsTooltip": "Track skins — several can be active"
   },
   "settings": {
     "title": "Settings — Paths",

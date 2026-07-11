@@ -13,10 +13,14 @@
   import Import from "./Import.svelte";
   import ImportOverlay from "./ImportOverlay.svelte";
   import TitleBar from "./TitleBar.svelte";
-  import { nav, requestSection } from "$lib/nav.svelte";
-  import { previewSrc } from "$lib/library";
+  import ImageSelectDropdown from "./ImageSelectDropdown.svelte";
+  import TrackSkinChecklistDropdown from "./TrackSkinChecklistDropdown.svelte";
+  import { nav, requestSection, pickSession } from "$lib/nav.svelte";
+  import { previewSrc, getModDetail } from "$lib/library";
   import { initGlobalDragDrop } from "$lib/importState.svelte";
-  import { openContentManager } from "$lib/launch";
+  import { openContentManager, listModSkins, type SkinItem } from "$lib/launch";
+  import { setPreferredSkin, setPreferredLayout } from "$lib/preferred";
+  import { syncTrackSkins, listTrackSkinOptions, setTrackSkinActive, type TrackSkinOption } from "$lib/submods";
   import { t, setLocale } from "$lib/i18n/index.svelte";
   import { setZoom } from "$lib/zoom.svelte";
   import { getConfig } from "$lib/config";
@@ -100,6 +104,97 @@
     nav.autoLaunch = true;
     if (!(await requestSection("race"))) nav.autoLaunch = false;
   }
+
+  // --- Sélecteurs rapides skin voiture / layout+skins circuit, directement
+  // depuis le bloc SESSION (évite de passer par la fiche détail pour un
+  // changement rapide). Mêmes actions que DetailPage.svelte (mémorise le
+  // choix + met à jour le duo de session), réutilisées à l'identique.
+  let carSkins = $state<SkinItem[]>([]);
+  let trackDetail = $state<Awaited<ReturnType<typeof getModDetail>>>(null);
+  let trackSkinOptions = $state<TrackSkinOption[]>([]);
+  let trackSkinBusy = $state(false);
+
+  $effect(() => {
+    const carId = nav.sessionCar?.id ?? null;
+    if (!carId) {
+      carSkins = [];
+      return;
+    }
+    listModSkins(carId).then((s) => {
+      if (nav.sessionCar?.id === carId) carSkins = s;
+    });
+  });
+
+  $effect(() => {
+    const trackId = nav.sessionTrack?.id ?? null;
+    if (!trackId) {
+      trackDetail = null;
+      trackSkinOptions = [];
+      return;
+    }
+    getModDetail(trackId).then((d) => {
+      if (nav.sessionTrack?.id === trackId) trackDetail = d;
+    });
+    loadTrackSkinOptions(trackId);
+  });
+
+  async function loadTrackSkinOptions(trackId: string) {
+    await syncTrackSkins(trackId);
+    if (nav.sessionTrack?.id !== trackId) return;
+    const opts = await listTrackSkinOptions(trackId);
+    if (nav.sessionTrack?.id === trackId) trackSkinOptions = opts;
+  }
+
+  const carSkinOptions = $derived(
+    carSkins.map((s) => ({ id: s.id, name: s.name, image: previewSrc(s.preview) })),
+  );
+  const trackLayoutOptions = $derived(
+    (trackDetail?.track?.layouts ?? []).map((l) => ({ id: l.id, name: l.name, image: previewSrc(l.preview) })),
+  );
+  const trackSkinChecklist = $derived(
+    trackSkinOptions.map((o) => ({ name: o.name, image: previewSrc(o.image), active: o.active })),
+  );
+
+  function pickCarSkin(skinId: string) {
+    const car = nav.sessionCar;
+    const sk = carSkins.find((s) => s.id === skinId);
+    if (!car || !sk) return;
+    setPreferredSkin(car.id, sk);
+    const base = car.meta.replace(/\s*·\s*skin:\s*[^·]+$/i, "").trim();
+    pickSession("Car", {
+      ...car,
+      meta: [base, `skin: ${sk.name}`].filter(Boolean).join(" · "),
+      preview: sk.preview ?? car.preview,
+      skin: sk.id,
+    });
+  }
+
+  function pickTrackLayout(layoutId: string) {
+    const track = nav.sessionTrack;
+    const d = trackDetail;
+    const l = d?.track?.layouts.find((x) => x.id === layoutId);
+    if (!track || !d || !l) return;
+    setPreferredLayout(d.id_interne, l);
+    pickSession("Track", {
+      ...track,
+      meta: [l.name, d.author].filter(Boolean).join(" · "),
+      preview: l.preview ?? track.preview,
+      layout: l.id,
+      outline: l.outline,
+    });
+  }
+
+  async function toggleTrackSkinFromSlot(name: string, active: boolean) {
+    const trackId = nav.sessionTrack?.id;
+    if (!trackId || trackSkinBusy) return;
+    trackSkinBusy = true;
+    try {
+      await setTrackSkinActive(trackId, name, active);
+      trackSkinOptions = await listTrackSkinOptions(trackId);
+    } finally {
+      trackSkinBusy = false;
+    }
+  }
 </script>
 
 <TitleBar />
@@ -118,41 +213,72 @@
       <!-- SESSION : duo sélectionné, point d'accès aux bibliothèques -->
       <div class="session">
         <div class="nsec">{t("nav.session")}</div>
-        <button
-          class="slot"
-          class:on={nav.section === "cars"}
-          onclick={() => requestSection("cars")}
-          ondblclick={() => openSessionDetail("cars", nav.sessionCar?.id)}
-          title={t("session.carTooltip")}
-        >
-          <div class="slot-img car">
-            {#if carPrev}<img src={carPrev} alt="" />{:else}<span class="slot-ic">🚗</span>{/if}
-            <span class="slot-tag">{t("session.carTag")}</span>
-            <span class="slot-edit">{t("session.change")}</span>
-          </div>
-          <div class="slot-b">
-            <div class="slot-name">{nav.sessionCar?.name ?? t("session.noCar")}</div>
-            <div class="slot-meta">{nav.sessionCar?.meta || t("session.clickToChoose")}</div>
-          </div>
-        </button>
-        <button
-          class="slot"
-          class:on={nav.section === "tracks"}
-          onclick={() => requestSection("tracks")}
-          ondblclick={() => openSessionDetail("tracks", nav.sessionTrack?.id)}
-          title={t("session.trackTooltip")}
-        >
-          <div class="slot-img track">
-            {#if trackPrev}<img src={trackPrev} alt="" />{:else}<span class="slot-ic">🏁</span>{/if}
-            {#if trackOutline}<img class="slot-outline" src={trackOutline} alt="" />{/if}
-            <span class="slot-tag">{t("session.trackTag")}</span>
-            <span class="slot-edit">{t("session.change")}</span>
-          </div>
-          <div class="slot-b">
-            <div class="slot-name">{nav.sessionTrack?.name ?? t("session.noTrack")}</div>
-            <div class="slot-meta">{nav.sessionTrack?.meta || t("session.clickToChoose")}</div>
-          </div>
-        </button>
+        <div class="slot" class:on={nav.section === "cars"}>
+          <button
+            class="slot-main"
+            type="button"
+            onclick={() => requestSection("cars")}
+            ondblclick={() => openSessionDetail("cars", nav.sessionCar?.id)}
+            title={t("session.carTooltip")}
+          >
+            <div class="slot-img car">
+              {#if carPrev}<img src={carPrev} alt="" />{:else}<span class="slot-ic">🚗</span>{/if}
+              <span class="slot-tag">{t("session.carTag")}</span>
+              <span class="slot-edit">{t("session.change")}</span>
+            </div>
+            <div class="slot-b">
+              <div class="slot-name">{nav.sessionCar?.name ?? t("session.noCar")}</div>
+              <div class="slot-meta">{nav.sessionCar?.meta || t("session.clickToChoose")}</div>
+            </div>
+          </button>
+          {#if nav.sessionCar}
+            <div class="slot-pick">
+              <ImageSelectDropdown
+                options={carSkinOptions}
+                selectedId={nav.sessionCar.skin}
+                placeholder={t("session.pickSkin")}
+                emptyText={t("session.noSkinsAvailable")}
+                onselect={pickCarSkin}
+              />
+            </div>
+          {/if}
+        </div>
+        <div class="slot" class:on={nav.section === "tracks"}>
+          <button
+            class="slot-main"
+            type="button"
+            onclick={() => requestSection("tracks")}
+            ondblclick={() => openSessionDetail("tracks", nav.sessionTrack?.id)}
+            title={t("session.trackTooltip")}
+          >
+            <div class="slot-img track">
+              {#if trackPrev}<img src={trackPrev} alt="" />{:else}<span class="slot-ic">🏁</span>{/if}
+              {#if trackOutline}<img class="slot-outline" src={trackOutline} alt="" />{/if}
+              <span class="slot-tag">{t("session.trackTag")}</span>
+              <span class="slot-edit">{t("session.change")}</span>
+            </div>
+            <div class="slot-b">
+              <div class="slot-name">{nav.sessionTrack?.name ?? t("session.noTrack")}</div>
+              <div class="slot-meta">{nav.sessionTrack?.meta || t("session.clickToChoose")}</div>
+            </div>
+          </button>
+          {#if nav.sessionTrack}
+            <div class="slot-pick">
+              <ImageSelectDropdown
+                options={trackLayoutOptions}
+                selectedId={nav.sessionTrack.layout}
+                placeholder={t("session.pickLayout")}
+                emptyText={t("session.noLayoutsAvailable")}
+                onselect={pickTrackLayout}
+              />
+              <TrackSkinChecklistDropdown
+                options={trackSkinChecklist}
+                busy={trackSkinBusy}
+                ontoggle={toggleTrackSkinFromSlot}
+              />
+            </div>
+          {/if}
+        </div>
         <button class="btn-configure" onclick={() => requestSection("race")}>{t("session.configure")}</button>
         <button class="btn-launch" onclick={launchNow}>{t("session.start")}</button>
       </div>
@@ -308,17 +434,31 @@
   .slot {
     display: block;
     width: 100%;
-    text-align: left;
     border: 1px solid var(--line);
     background: var(--panel);
     margin-bottom: 9px;
-    padding: 0;
   }
   .slot:hover {
     border-color: var(--rosso-border);
   }
   .slot.on {
     border-color: var(--rosso);
+  }
+  .slot-main {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+  .slot-pick {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border-top: 1px solid var(--line);
   }
   .slot-img {
     height: 96px;

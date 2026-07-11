@@ -49,6 +49,17 @@ export function listActiveTrackSkins(trackId: string): Promise<string[]> {
   return invoke<string[]>("list_active_track_skins", { trackId });
 }
 
+export interface TrackSkinOption {
+  name: string;
+  image: string | null;
+  active: boolean;
+}
+
+/** Skins de circuit avec image résolue, pour le sélecteur de la barre latérale (§4.6bis). */
+export function listTrackSkinOptions(trackId: string): Promise<TrackSkinOption[]> {
+  return invoke<TrackSkinOption[]>("list_track_skin_options", { trackId });
+}
+
 /** Active/désactive un skin de circuit (§4.6bis, pas exclusif). */
 export function setTrackSkinActive(trackId: string, skinName: string, active: boolean): Promise<void> {
   return invoke<void>("set_track_skin_active", { trackId, skinName, active });

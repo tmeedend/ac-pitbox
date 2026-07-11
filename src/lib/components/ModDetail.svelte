@@ -11,10 +11,10 @@
     type NativeSpecs,
   } from "$lib/library";
   import PowerCurve from "./PowerCurve.svelte";
+  import ContextMenu from "./ContextMenu.svelte";
   import { open, confirm } from "@tauri-apps/plugin-dialog";
   import { exportMod, deleteBrokenMod, reinstallFromArchive, type ExportReport } from "$lib/maintenance";
   import { t } from "$lib/i18n/index.svelte";
-  import { historyEventLabel, historyDetails } from "$lib/history";
 
   interface Props {
     id: string | null;
@@ -49,6 +49,35 @@
     const d = detail;
     if (!d) return null;
     return d.versions.find((v) => v.id === d.active_version_id)?.kept_archive_path ?? null;
+  });
+
+  // Actions (activer/désactiver, ouvrir dossier, exporter, réinstaller,
+  // supprimer) déplacées du panneau compact (déjà sur la fiche détail) vers
+  // un clic droit — évite d'encombrer ce panneau tout en les gardant à
+  // portée de main.
+  let ctxMenu = $state<{ x: number; y: number } | null>(null);
+  function openContextMenu(e: MouseEvent) {
+    if (!detail) return;
+    e.preventDefault();
+    ctxMenu = { x: e.clientX, y: e.clientY };
+  }
+  const contextItems = $derived.by(() => {
+    const d = detail;
+    if (!d) return [];
+    const items: { label: string; onclick: () => void; danger?: boolean }[] = [
+      { label: t("detail.openFolder"), onclick: openFolder },
+    ];
+    if (d.is_stock) return items;
+    items.unshift({
+      label: d.active ? t("common.deactivate") : t("common.activate"),
+      onclick: d.active ? deactivate : () => activate(),
+    });
+    items.push({ label: t("modpanel.exportFull"), onclick: doExport });
+    if (keptArchive) {
+      items.push({ label: t("detail.reinstallFromArchive"), onclick: doReinstall });
+    }
+    items.push({ label: t("detail.deleteFromLibrary"), onclick: doDelete, danger: true });
+    return items;
   });
 
   // Supprimer de la bibliothèque : action distincte de Désactiver (§10) —
@@ -240,13 +269,9 @@
     });
   });
 
-  function fmtDate(iso: string): string {
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? iso.slice(0, 16).replace("T", " ") : d.toLocaleString();
-  }
 </script>
 
-<aside class="panel">
+<aside class="panel" oncontextmenu={openContextMenu}>
   {#if onexpand && (detail || (loading && id))}
     <header>
       <button class="btn-ghost expand" type="button" onclick={onexpand} title={t("modpanel.expandTooltip")}>⤢ {t("modpanel.expand")}</button>
@@ -290,45 +315,6 @@
         {#if detail.source_pack}<span class="pack"><b>{t("detail.packLabel")}</b> {detail.source_pack}</span>{/if}
       </div>
 
-      <div class="actions">
-        {#if detail.is_stock}
-          <span class="state base" title={t("detail.stockTooltip")}>{t("detail.stockLabel")}</span>
-        {:else if detail.active}
-          <span class="state on"><span class="state-dot"></span>{t("common.active")}</span>
-          <button class="btn" type="button" onclick={deactivate} disabled={busy}>{t("common.deactivate")}</button>
-        {:else}
-          <span class="state">{t("common.inactive")}</span>
-          <button class="btn" type="button" onclick={() => activate()} disabled={busy}>{t("common.activate")}</button>
-        {/if}
-      </div>
-      <div class="sec-actions">
-        <button class="btn-ghost export" type="button" onclick={openFolder}>{t("detail.openFolder")}</button>
-        {#if !detail.is_stock}
-          <button class="btn-ghost export" type="button" onclick={doExport} disabled={exporting}>
-            {exporting ? t("detail.exporting") : t("modpanel.exportFull")}
-          </button>
-          {#if keptArchive}
-            <button
-              class="btn-ghost export"
-              type="button"
-              onclick={doReinstall}
-              disabled={reinstallBusy}
-              title={t("detail.reinstallTooltip")}
-            >
-              {reinstallBusy ? t("detail.reinstalling") : t("detail.reinstallFromArchive")}
-            </button>
-          {/if}
-          <button
-            class="btn-ghost export"
-            type="button"
-            onclick={doDelete}
-            disabled={deleteBusy}
-            title={t("detail.deleteFromLibraryTooltip")}
-          >
-            {deleteBusy ? t("common.working") : t("detail.deleteFromLibrary")}
-          </button>
-        {/if}
-      </div>
       {#if actionError}
         <div class="action-err">{actionError}</div>
       {/if}
@@ -429,46 +415,11 @@
         </div>
       </section>
 
-      <section>
-        <h3>{t("modpanel.versions")} <span class="count">{detail.versions.length}</span></h3>
-        <ul class="versions">
-          {#each detail.versions as v}
-            <li class:active={v.id === detail.active_version_id}>
-              <div class="v-head">
-                <span class="v-label">{v.version_label ?? t("detail.noVersionNumber")}</span>
-                {#if v.id === detail.active_version_id}
-                  <span class="badge">{t("common.active").toLowerCase()}</span>
-                {:else}
-                  <button class="v-activate" type="button" onclick={() => activate(v.id)} disabled={busy}>{t("common.activate")}</button>
-                {/if}
-              </div>
-              <div class="v-meta mono">
-                {fmtDate(v.imported_at)}{v.author ? ` · ${v.author}` : ""}
-              </div>
-              {#if v.csp_features.length}
-                <div class="v-csp">{v.csp_features.join(" · ")}</div>
-              {/if}
-              {#if v.skins.length}<div class="v-extra">{t("modpanel.skinCount", { count: v.skins.length })}</div>{/if}
-              {#if v.layouts.length}<div class="v-extra">{t("modpanel.layoutCount", { count: v.layouts.length })}</div>{/if}
-            </li>
-          {/each}
-        </ul>
-      </section>
-
-      <section>
-        <h3>{t("detail.historyLabel")}</h3>
-        <ul class="history">
-          {#each detail.history.filter((h) => h.event !== "ACTIVATE" && h.event !== "DEACTIVATE") as h}
-            <li>
-              <span class="ev">{historyEventLabel(h.event)}</span>
-              <span class="det">{historyDetails(h.details)}</span>
-              <span class="ts mono">{fmtDate(h.timestamp)}</span>
-            </li>
-          {/each}
-        </ul>
-      </section>
   {:else}
     <div class="empty">{t("modpanel.notFound")}</div>
+  {/if}
+  {#if ctxMenu}
+    <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={contextItems} onclose={() => (ctxMenu = null)} />
   {/if}
 </aside>
 
@@ -562,34 +513,6 @@
     font-family: var(--mono);
     font-size: 11px;
   }
-  .actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 14px;
-  }
-  .state {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-right: auto;
-  }
-  .state.on {
-    color: var(--green);
-  }
-  .state.base {
-    color: var(--blue);
-  }
-  .state-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--green);
-  }
   .action-err {
     margin-top: 10px;
     padding: 8px 10px;
@@ -598,17 +521,6 @@
     color: var(--rosso-bright);
     font-size: 11.5px;
     line-height: 1.4;
-  }
-  .sec-actions {
-    margin-top: 8px;
-  }
-  .export {
-    font-size: 11px;
-    padding: 4px 6px;
-    color: var(--muted);
-  }
-  .export:hover {
-    color: var(--rosso-bright);
   }
   .export-ok {
     margin-top: 10px;
@@ -624,20 +536,6 @@
     margin-top: 6px;
     color: var(--yellow);
     font-size: 11px;
-  }
-  .v-activate {
-    background: var(--raised);
-    border: 1px solid var(--line);
-    color: var(--txt2);
-    font-size: 10px;
-    padding: 2px 8px;
-  }
-  .v-activate:hover {
-    border-color: var(--rosso-border);
-    color: var(--rosso-bright);
-  }
-  .v-activate:disabled {
-    opacity: 0.5;
   }
   section {
     margin-top: 18px;
@@ -783,72 +681,6 @@
   }
   .spec.derived .s-value {
     color: var(--green);
-  }
-  .versions,
-  .history {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .versions li {
-    border: 1px solid var(--line);
-    padding: 8px 10px;
-  }
-  .versions li.active {
-    border-color: var(--green-border);
-    background: var(--green-dim);
-  }
-  .v-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .v-label {
-    font-size: 12.5px;
-    font-weight: 600;
-  }
-  .badge {
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--green);
-    border: 1px solid var(--green-border);
-    padding: 1px 5px;
-  }
-  .v-meta {
-    color: var(--muted2);
-    font-size: 11px;
-    margin-top: 3px;
-  }
-  .v-csp,
-  .v-extra {
-    color: var(--muted);
-    font-size: 11px;
-    margin-top: 3px;
-  }
-  .v-csp {
-    color: var(--green);
-  }
-  .history li {
-    display: flex;
-    flex-direction: column;
-    font-size: 11.5px;
-    border-left: 2px solid var(--line);
-    padding-left: 8px;
-  }
-  .history .ev {
-    color: var(--rosso-bright);
-    font-weight: 600;
-    font-size: 10px;
-    letter-spacing: 0.5px;
-  }
-  .history .det {
-    color: var(--txt2);
-  }
-  .history .ts {
-    color: var(--muted2);
-    font-size: 10px;
   }
   .empty {
     color: var(--muted);

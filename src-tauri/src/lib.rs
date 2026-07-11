@@ -627,6 +627,14 @@ fn list_active_track_skins(db: State<Db>, track_id: String) -> Result<Vec<String
     Ok(submods::list_active_track_skins(&conn, &track_id))
 }
 
+/// Skins de circuit avec image de prévisualisation résolue, pour le
+/// sélecteur multi-choix de la barre latérale (§4.6bis).
+#[tauri::command]
+fn list_track_skin_options(db: State<Db>, track_id: String) -> Result<Vec<submods::TrackSkinOption>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(submods::list_track_skin_options(&conn, &track_id))
+}
+
 /// Active/désactive un skin de circuit (§4.6bis, pas exclusif).
 #[tauri::command]
 fn set_track_skin_active(app: AppHandle, db: State<Db>, track_id: String, skin_name: String, active: bool) -> Result<(), String> {
@@ -816,6 +824,7 @@ pub fn run() {
             list_subs_by_type,
             sync_track_skins,
             list_active_track_skins,
+            list_track_skin_options,
             set_track_skin_active,
             activate_sound,
             restore_sound,
