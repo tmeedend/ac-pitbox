@@ -26,7 +26,8 @@ L'app prend en charge tout le cycle de vie : importer (analyse, détection de ty
 - **Activation par hardlinks par fichier** (comme Vortex) : zéro duplication (critique à 300 Go), instantané, pas de droits admin. Le `content/` d'AC est une projection, jamais l'original.
   - ⚠️ **Changement par rapport aux junctions de dossier** (`mklink /J`) : testées, elles échouent pour les circuits (AC/CSP semble filtrer ou mal traverser ce type de reparse point sur l'arborescence complexe d'un circuit — plusieurs layouts, `ai/`, `data/`, `extension/`). Les **symlinks** (`mklink /D`) fonctionnent mais exigent les droits admin/mode développeur. Solution retenue : **un hardlink par fichier**, à l'intérieur d'une vraie arborescence de dossiers dans `content/`. Un hardlink n'est **pas** un reparse point — le fichier lié est indiscernable d'un fichier normal pour AC, aucune indirection à mal interpréter. Ni droits admin, ni duplication.
   - **Contrainte** : les hardlinks exigent le **même volume** (contrairement aux junctions, qui peuvent traverser les disques). Chez l'utilisateur, bibliothèque et jeu sont sur le même disque. **Repli en copie physique** si bibliothèque et jeu se retrouvent sur des disques différents (détection automatique, comme pour le déplacement adaptatif à l'import, §4.2).
-  - **Composition par couches (§4.3)** : peut elle aussi utiliser des hardlinks au lieu de copies réelles pour composer base + couches, sauf pour les fichiers qui diffèrent effectivement entre couches (ceux-là doivent être de vrais fichiers distincts). Encore plus économe.
+  - **Composition par couches (§4.3)** : entièrement en hardlinks elle aussi, y compris pour les fichiers qu'une couche écrase — pas de copie de fusion nécessaire, juste un hardlink vers le fichier réellement gagnant (base ou couche de plus haute priorité) à chaque chemin. Pas de dossier de composition intermédiaire : `content/<type>s/<id>` **est** directement le résultat composé.
+  - **Implémenté et testé** (`src-tauri/src/deploy.rs`) : moteur générique de déploiement/composition par hardlinks, avec repli en copie physique par fichier si le hardlink échoue (disques différents). Garde-fou : un marqueur caché (`.pitbox-deployed.json`) à la racine de chaque dossier déployé, seule preuve qu'il a été créé par l'app (une arborescence de hardlinks est un vrai dossier, indiscernable d'un dossier Kunos par ses seuls attributs — contrairement à une junction/symlink, détectable par son type de reparse point). **Compat ascendante** : les mods déjà actifs sous l'ancien mécanisme (`mklink /D`) restent inoffensifs indéfiniment, migrés vers les hardlinks seulement à leur prochaine (ré)activation — jamais de migration forcée.
 - **Content Manager conservé** comme moteur + launcher : reproduire son moteur de config serait énorme et fragile. On contourne son UI, pas son moteur.
 - **Stack Tauri** : binaire léger, Rust à l'aise avec les opérations filesystem/hardlinks/process, frontend web pour la richesse visuelle.
 - **SQLite** : placée dans `app_data_dir` (pas en chemin relatif, pour survivre aux rebuilds).
@@ -87,9 +88,9 @@ Deux sources, même pipeline d'analyse/identité/tagging :
 - Ce que le jeu voit dans `content/` est un **résultat composé** : base + couches actives dans l'ordre de priorité.
 - Désactiver/réordonner une couche = **recomposer** depuis les entités intactes (jamais de défaire chirurgical). Aucun état corrompu possible.
 
-**Mécanisme hybride hardlinks / copie** :
-- **Junction par défaut** (instantané) pour les ~95 % de mods autonomes sans couche.
-- **Composition par copie uniquement** pour les fichiers qui diffèrent réellement entre couches ; hardlinks pour le reste. Retour au hardlink simple dès que la dernière couche est retirée.
+**Mécanisme, entièrement en hardlinks** (§2) :
+- **Déploiement simple** pour les ~95 % de mods autonomes sans couche : hardlink direct de chaque fichier de la version active vers `content/<type>s/<id>`.
+- **Composition** : même mécanisme, en superposant en plus chaque couche active (priorité croissante) sur la base — toujours un hardlink, jamais une copie de fusion. Retour au déploiement simple dès que la dernière couche est retirée.
 
 **Contrôle** : ordre des couches modifiable + activation/désactivation par couche. Une couche peut se poser sur n'importe quel contenu (base ou mod).
 
@@ -313,7 +314,7 @@ Voir `README.md` pour l'index complet. Fichiers de données et maquettes cités 
 
 ## 15. Points à vérifier
 
-- **Bascule junctions → hardlinks (§2)** : tester d'abord sur un cas de circuit réel (ex. Spa) avant de généraliser à tout le déploiement — confirmer que le chargement fonctionne bien sans droits admin avant de retirer le code symlink.
+- **Bascule symlinks → hardlinks (§2)** : moteur implémenté et couvert par des tests automatisés (déploiement/composition/repli copie/nettoyage, y compris un scénario circuit type Spa) — confirme la mécanique et l'absence de besoin de droits admin (`CreateHardLinkW`, contrairement à `CreateSymbolicLink`). **Validé en conditions réelles par l'utilisateur** (juillet 2026) : déploiement + composition par couches fonctionnels sur sa bibliothèque réelle.
 
 - **Pilotage des presets CM + `acmanager://`** : commande exacte pour activer un preset par programmation (§9.2).
 - **Détection de la stack météo** (Pure/SOL/CSP/vanilla) et correspondance preset → backend.
