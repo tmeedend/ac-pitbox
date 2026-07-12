@@ -14,8 +14,10 @@
     placeholder: string;
     emptyText: string;
     onselect: (id: string) => void;
+    /** "contain" pour un tracé (forme complète, pas de recadrage) — défaut "cover" pour une photo/skin. */
+    fit?: "cover" | "contain";
   }
-  let { options, selectedId, placeholder, emptyText, onselect }: Props = $props();
+  let { options, selectedId, placeholder, emptyText, onselect, fit = "cover" }: Props = $props();
 
   let open = $state(false);
   let root = $state<HTMLDivElement | undefined>(undefined);
@@ -52,7 +54,7 @@
 
 <div class="isd" bind:this={root}>
   <button class="isd-trigger" type="button" onclick={toggle} disabled={options.length === 0} title={placeholder}>
-    <span class="isd-thumb">
+    <span class="isd-thumb" class:contain={fit === "contain"}>
       {#if selected?.image}<img src={selected.image} alt="" />{:else}<span class="isd-noimg"></span>{/if}
     </span>
     <span class="isd-name" class:muted={!selected}>{selected?.name ?? (options.length ? placeholder : emptyText)}</span>
@@ -63,7 +65,7 @@
       {#each options as o (o.id)}
         <li>
           <button type="button" class:on={o.id === selectedId} onclick={() => pick(o)}>
-            <span class="isd-thumb">
+            <span class="isd-thumb" class:contain={fit === "contain"}>
               {#if o.image}<img src={o.image} alt="" />{:else}<span class="isd-noimg"></span>{/if}
             </span>
             <span class="isd-name">{o.name}</span>
@@ -111,6 +113,10 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  .isd-thumb.contain img {
+    object-fit: contain;
+    padding: 2px;
   }
   .isd-noimg {
     width: 100%;

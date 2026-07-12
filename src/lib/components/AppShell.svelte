@@ -71,6 +71,17 @@
   // global, monté une fois ici.
   onMount(() => startGamepadNav());
 
+  // Supprime le menu contextuel natif du navigateur (Actualiser/Enregistrer
+  // sous/Imprimer…) partout dans l'app — une appli desktop n'en a pas besoin,
+  // et il apparaîtrait sinon là où aucun menu contextuel maison n'est posé
+  // (celui-ci, lui, s'affiche AVANT — donc gagne toujours). Un seul listener
+  // global plutôt qu'un `preventDefault` à poser sur chaque écran.
+  onMount(() => {
+    const suppress = (e: MouseEvent) => e.preventDefault();
+    document.addEventListener("contextmenu", suppress);
+    return () => document.removeEventListener("contextmenu", suppress);
+  });
+
   // Langue forcée par l'utilisateur (Réglages), sinon langue système (déjà
   // appliquée par défaut par le module i18n). Zoom d'interface, idem.
   onMount(async () => {
@@ -148,8 +159,10 @@
   const carSkinOptions = $derived(
     carSkins.map((s) => ({ id: s.id, name: s.name, image: previewSrc(s.preview) })),
   );
+  // Le tracé (outline), pas la photo de fond : plus lisible en petite
+  // miniature pour distinguer les layouts d'un même circuit d'un coup d'œil.
   const trackLayoutOptions = $derived(
-    (trackDetail?.track?.layouts ?? []).map((l) => ({ id: l.id, name: l.name, image: previewSrc(l.preview) })),
+    (trackDetail?.track?.layouts ?? []).map((l) => ({ id: l.id, name: l.name, image: previewSrc(l.outline) })),
   );
   const trackSkinChecklist = $derived(
     trackSkinOptions.map((o) => ({ name: o.name, image: previewSrc(o.image), active: o.active })),
@@ -270,6 +283,7 @@
                 placeholder={t("session.pickLayout")}
                 emptyText={t("session.noLayoutsAvailable")}
                 onselect={pickTrackLayout}
+                fit="contain"
               />
               <TrackSkinChecklistDropdown
                 options={trackSkinChecklist}

@@ -3,6 +3,7 @@
   import ModDetail from "./ModDetail.svelte";
   import DetailPage from "./DetailPage.svelte";
   import BulkEditPanel from "./BulkEditPanel.svelte";
+  import ContextMenu from "./ContextMenu.svelte";
   import {
     listLibrary,
     previewSrc,
@@ -20,6 +21,7 @@
   import { nav, pickSession, requestSection, queueOpponentsAction } from "$lib/nav.svelte";
   import { importState } from "$lib/importState.svelte";
   import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
+  import { buildModContextItems } from "$lib/modContextActions";
   import { t } from "$lib/i18n/index.svelte";
 
   // Une bibliothèque par type (§6.1) : ce composant est rendu une fois pour les
@@ -156,6 +158,15 @@
       scrollToEffective();
     }
   }
+
+  // Clic droit sur une carte/ligne (§ nettoyage panneaux) : mêmes actions que
+  // le panneau compact, sans avoir à sélectionner le mod d'abord.
+  let ctxMenu = $state<{ x: number; y: number; card: ModCard } | null>(null);
+  function openCardContextMenu(e: MouseEvent, c: ModCard) {
+    e.preventDefault();
+    ctxMenu = { x: e.clientX, y: e.clientY, card: c };
+  }
+  const contextItems = $derived(ctxMenu ? buildModContextItems(ctxMenu.card, refresh) : []);
 
   // La bibliothèque EST le sélecteur (§8.6) : ouvrir une carte la définit comme
   // choix de session, affiché dans le bloc SESSION de la barre latérale.
@@ -542,7 +553,7 @@
           {@const prefLayout = !isCar ? getPreferredLayout(c.id_interne) : null}
           {@const src = previewSrc(prefSkin?.preview ?? prefLayout?.preview ?? c.preview)}
           {@const ol = previewSrc(prefLayout?.outline ?? c.outline)}
-          <button data-id={c.id_interne} class="card" class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} title={t("library.cardTooltip")}>
+          <button data-id={c.id_interne} class="card" class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} oncontextmenu={(e) => openCardContextMenu(e, c)} title={t("library.cardTooltip")}>
             <div class="thumb">
               {#if src}<img src={src} alt={c.display_name ?? c.id_interne} loading="lazy" />
               {:else}<div class="noprev">{isCar ? t("library.typeCar") : t("library.typeTrack")}</div>{/if}
@@ -586,7 +597,7 @@
           </thead>
           <tbody>
             {#each sorted as c (c.id_interne)}
-              <tr data-id={c.id_interne} class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)}>
+              <tr data-id={c.id_interne} class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} oncontextmenu={(e) => openCardContextMenu(e, c)}>
                 {#each visibleColumns as col}
                   <td
                     class:t-name={col.key === "name"}
@@ -636,6 +647,9 @@
     onchange={refresh}
     onexpand={() => (nav.openFull = effectiveId)}
   />
+  {/if}
+  {#if ctxMenu}
+    <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={contextItems} onclose={() => (ctxMenu = null)} />
   {/if}
 </div>
 

@@ -64,14 +64,16 @@
   const contextItems = $derived.by(() => {
     const d = detail;
     if (!d) return [];
-    const items: { label: string; onclick: () => void; danger?: boolean }[] = [
-      { label: t("detail.openFolder"), onclick: openFolder },
-    ];
+    const items: { label: string; onclick: () => void; danger?: boolean }[] = [];
+    if (onexpand) items.push({ label: t("modpanel.ctxOpenDetail"), onclick: onexpand });
+    if (!d.is_stock) {
+      items.push({
+        label: d.active ? t("common.deactivate") : t("common.activate"),
+        onclick: d.active ? deactivate : () => activate(),
+      });
+    }
+    items.push({ label: t("detail.openFolder"), onclick: openFolder });
     if (d.is_stock) return items;
-    items.unshift({
-      label: d.active ? t("common.deactivate") : t("common.activate"),
-      onclick: d.active ? deactivate : () => activate(),
-    });
     items.push({ label: t("modpanel.exportFull"), onclick: doExport });
     if (keptArchive) {
       items.push({ label: t("detail.reinstallFromArchive"), onclick: doReinstall });
@@ -372,6 +374,13 @@
             <p class="description">{decodeDescription(s.description)}</p>
           </section>
         {/if}
+      {/if}
+
+      {#if detail.kind === "Track" && detail.track?.description}
+        <section>
+          <h3>{t("common.description")}</h3>
+          <p class="description">{decodeDescription(detail.track.description)}</p>
+        </section>
       {/if}
 
       <section>

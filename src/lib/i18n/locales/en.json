@@ -69,6 +69,7 @@
     "unsavedPrompt": "Some settings were changed (and already applied as a live preview, e.g. zoom/language) but not saved. Save, or discard and revert?"
   },
   "common": {
+    "error": "Error",
     "all": "All",
     "allFem": "All",
     "active": "Active",
@@ -289,6 +290,7 @@
   "modpanel": {
     "expandTooltip": "Open as detail page",
     "expand": "Expand",
+    "ctxOpenDetail": "Open detail page",
     "removeFavorite": "Remove from favorites",
     "addFavorite": "Add to favorites",
     "typeLabel": "Type",

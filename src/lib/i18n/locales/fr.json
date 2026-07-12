@@ -69,6 +69,7 @@
     "unsavedPrompt": "Des réglages ont été modifiés (et déjà appliqués en aperçu, ex. zoom/langue) mais pas enregistrés. Enregistrer, ou annuler et revenir en arrière ?"
   },
   "common": {
+    "error": "Erreur",
     "all": "Tous",
     "allFem": "Toutes",
     "active": "Actif",
@@ -289,6 +290,7 @@
   "modpanel": {
     "expandTooltip": "Ouvrir en page détail",
     "expand": "Agrandir",
+    "ctxOpenDetail": "Ouvrir la page de détails",
     "removeFavorite": "Retirer des favoris",
     "addFavorite": "Ajouter aux favoris",
     "typeLabel": "Type",
