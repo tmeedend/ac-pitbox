@@ -268,6 +268,20 @@ pub fn list_active_track_skins(conn: &Connection, track_id: &str) -> Vec<String>
         .collect()
 }
 
+/// Vue transversale (§12bis.3) : tous les sous-éléments d'un type, avec leur
+/// taille sur disque renseignée. Le poids sert à repérer d'un coup d'œil quel
+/// pack occupe le plus de place, donc il doit refléter le disque au moment de
+/// l'affichage — d'où le parcours récursif ici plutôt qu'une colonne en base.
+/// Cantonné à cette vue : les listes chaudes (`list_subs_for_parent`, activation
+/// des skins de circuit) restent sans accès disque.
+pub fn list_by_type_sized(conn: &Connection, sub_type: &str) -> rusqlite::Result<Vec<overlay::SubModRow>> {
+    let mut rows = overlay::list_subs_by_type(conn, sub_type)?;
+    for r in &mut rows {
+        r.size_bytes = Some(crate::inspect::dir_size_bytes(Path::new(&r.library_path)) as i64);
+    }
+    Ok(rows)
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct TrackSkinOption {
     pub name: String,
@@ -1105,6 +1119,30 @@ mod tests {
         assert_eq!(res.len(), 1);
         assert_eq!(res[0].parent_id, "ks_lamborghini_huracan_performante", "voiture retrouvée dans le nom d'archive");
         assert_eq!(res[0].name, archive_name, "nom lisible, pas « sfx »");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn transversal_list_carries_disk_size() {
+        // La vue transversale pèse chaque skin pour cumuler le poids d'un pack :
+        // la taille vient du disque, pas de la base (qui n'en garde aucune trace).
+        let base = std::env::temp_dir().join(format!("pitbox-subsize-{}", Uuid::new_v4()));
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = Local::now().to_rfc3339();
+
+        let skin = base.join("library").join("skins").join("car").join("Rosso");
+        std::fs::create_dir_all(skin.join("nested")).unwrap();
+        std::fs::write(skin.join("preview.jpg"), vec![0u8; 700]).unwrap();
+        std::fs::write(skin.join("nested").join("body.dds"), vec![0u8; 324]).unwrap();
+
+        overlay::insert_sub_mod(&conn, "s1", "SKIN", "car", "Rosso", &skin.to_string_lossy(), None, &now).unwrap();
+
+        // Sans taille par défaut (pas de parcours disque sur les listes chaudes).
+        assert_eq!(overlay::list_subs_by_type(&conn, "SKIN").unwrap()[0].size_bytes, None);
+
+        let sized = list_by_type_sized(&conn, "SKIN").unwrap();
+        assert_eq!(sized[0].size_bytes, Some(1024), "somme récursive des fichiers réels");
 
         let _ = std::fs::remove_dir_all(&base);
     }

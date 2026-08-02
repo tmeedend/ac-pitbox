@@ -708,3 +708,32 @@ principal (charge de rendu WebView2 au moment du clic).
 une vraie fenêtre native) — 3 tests existants (écriture INI, patch video.ini,
 sauvegarde/restauration) inchangés et toujours verts. **En attente d'un test
 réel** pour confirmer que l'erreur intermittente a disparu.
+
+---
+
+## Verdict final (2026-08-03) — intégration abandonnée
+
+Malgré les correctifs successifs documentés ci-dessus, l'aperçu 3D **intégré à
+la page** est resté trop fragile en usage réel. Décision : **on n'intègre plus
+rien**.
+
+Ce qui a été retiré de `src-tauri/src/showroom.rs` et de `DetailPage.svelte` :
+- la fenêtre overlay `PitboxShowroomOverlay`, le reparentage (`SetParent`,
+  bidouille de styles `WS_CHILD`), le suivi resize/scroll/`onMoved` ;
+- le spawn masqué (`STARTF_USESHOWWINDOW` + `SW_HIDE`) et la recherche de
+  fenêtre par classe `acShowroomW` ;
+- la **réécriture de `video.ini`** (mode fenêtré 1280×720 + filtre
+  `photographic`) et sa restauration — le fichier du vrai jeu n'est plus touché
+  du tout ; seule subsiste `restore_orphaned_video_ini()`, filet de sécurité
+  pour les sauvegardes laissées par les versions précédentes ;
+- les commandes `attach_native_showroom` / `reposition_native_showroom` /
+  `close_native_showroom`, l'état `ShowroomState`, et la dépendance `windows`
+  du `Cargo.toml` (plus aucun appel Win32) ;
+- l'option de réglage « aperçu 3D par défaut ».
+
+Ce qui reste : le bouton « Aperçu 3D » lance `acShowroom.exe` en **process
+indépendant**, avec les réglages vidéo du jeu (donc plein écran si c'est ainsi
+qu'AC est configuré). L'utilisateur ferme le showroom lui-même pour revenir à
+Pit Box. Nouveau réglage à la place de l'ancien : le **décor** utilisé
+(`content/showroom/<id>`, liste déroulante des showrooms installés, défaut
+`studio_white`).

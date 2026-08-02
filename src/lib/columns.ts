@@ -2,6 +2,7 @@
 // La sélection de colonnes visibles est mémorisée indépendamment par type.
 import type { ModCard, ModKind } from "./library";
 import { t } from "./i18n/index.svelte";
+import { fmtSize } from "./format";
 
 export interface ColumnDef {
   key: string;
@@ -30,20 +31,6 @@ function fmtDate(iso: string | null): string {
   if (!iso) return DASH;
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? DASH : d.toLocaleDateString();
-}
-
-/** Taille lisible (Ko/Mo/Go/To, base 1024), « — » si pas encore calculée (§9.4). */
-function fmtSize(bytes: number | null): string {
-  if (bytes == null) return DASH;
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let v = bytes;
-  let i = -1;
-  do {
-    v /= 1024;
-    i++;
-  } while (v >= 1024 && i < units.length - 1);
-  return `${v.toFixed(v < 10 ? 2 : v < 100 ? 1 : 0)} ${units[i]}`;
 }
 
 function allTags(c: ModCard): string[] {

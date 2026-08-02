@@ -12,6 +12,7 @@
   import { t, setLocale, availableLocales, localeNames } from "$lib/i18n/index.svelte";
   import { setZoom, ZOOM_LEVELS } from "$lib/zoom.svelte";
   import { setSectionGuard } from "$lib/nav.svelte";
+  import { listShowrooms, type ShowroomOption } from "$lib/launch";
   import { confirm } from "@tauri-apps/plugin-dialog";
 
   let config = $state<AppConfig>(emptyConfig());
@@ -27,11 +28,24 @@
 
   const dirty = $derived(JSON.stringify(config) !== JSON.stringify(savedConfig));
 
+  // Scènes de showroom installées dans AC (aperçu 3D). Lues une fois au montage,
+  // depuis le dossier AC **enregistré** — changer le chemin ici ne rafraîchit la
+  // liste qu'au prochain passage sur l'écran.
+  let installedShowrooms = $state<ShowroomOption[]>([]);
+  // Une scène choisie puis désinstallée doit rester visible dans la liste,
+  // sinon le select s'affiche vide et donne l'illusion d'un réglage perdu.
+  const showrooms = $derived.by(() => {
+    const chosen = config.prefs.showroom_scene;
+    if (!chosen || installedShowrooms.some((s) => s.id === chosen)) return installedShowrooms;
+    return [...installedShowrooms, { id: chosen, name: `${chosen} (?)` }];
+  });
+
   onMount(async () => {
     config = await getConfig();
     // `config` est un objet $state (proxy) : structuredClone() dessus lève
     // DataCloneError. $state.snapshot() en tire d'abord une copie brute.
     savedConfig = structuredClone($state.snapshot(config));
+    installedShowrooms = await listShowrooms().catch(() => []);
   });
 
   // Garde de navigation (§10bis) : quitter Réglages avec des changements non
@@ -124,11 +138,20 @@
   </section>
 
   <section class="lang-section">
-    <label class="check">
-      <input type="checkbox" bind:checked={config.prefs.showroom_by_default} />
-      <span>{t("settings.showroom3d")}</span>
+    <label>
+      <span>{t("settings.showroomScene")}</span>
+      <select
+        class="input"
+        value={config.prefs.showroom_scene ?? ""}
+        onchange={(e) => (config.prefs.showroom_scene = e.currentTarget.value || null)}
+      >
+        <option value="">{t("settings.showroomSceneDefault")}</option>
+        {#each showrooms as s (s.id)}
+          <option value={s.id}>{s.name}</option>
+        {/each}
+      </select>
     </label>
-    <p class="hint">{t("settings.showroom3dHint")}</p>
+    <p class="hint">{t("settings.showroomSceneHint")}</p>
   </section>
 
   <section class="lang-section">

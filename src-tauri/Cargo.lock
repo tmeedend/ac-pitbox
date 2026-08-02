@@ -2530,7 +2530,6 @@ dependencies = [
  "tauri-plugin-window-state",
  "uuid",
  "walkdir",
- "windows",
 ]
 
 [[package]]

@@ -354,74 +354,18 @@ fn open_content_manager(app: AppHandle) -> Result<(), String> {
 }
 
 /// Lance l'aperçu 3D natif (`acShowroom.exe`, distinct de Content Manager)
-/// ciblé sur une voiture (+ skin optionnel). Bascule temporairement
-/// `video.ini` en fenêtré, restauré automatiquement à la fermeture. Mémorise
-/// le PID lancé pour une intégration ultérieure dans la page.
+/// ciblé sur une voiture (+ skin optionnel). Process indépendant, affiché
+/// par-dessus l'app avec les réglages vidéo du jeu : l'utilisateur le ferme
+/// lui-même pour revenir à Pit Box.
 #[tauri::command]
-fn open_native_showroom(
-    app: AppHandle,
-    showroom_state: State<showroom::ShowroomState>,
-    car_id: String,
-    skin_id: Option<String>,
-) -> Result<(), String> {
-    let pid = showroom::open_native_showroom(&config::load(&app), &car_id, skin_id.as_deref())?;
-    *showroom_state.0.lock().map_err(|e| e.to_string())? = Some(showroom::ShowroomHandle { pid, overlay: None });
-    Ok(())
+fn open_native_showroom(app: AppHandle, car_id: String, skin_id: Option<String>) -> Result<(), String> {
+    showroom::open_native_showroom(&config::load(&app), &car_id, skin_id.as_deref())
 }
 
-/// Intègre la fenêtre du dernier showroom lancé dans la page, à la place de
-/// la preview image (`x`/`y`/`width`/`height` en pixels physiques, relatifs
-/// à la zone cliente de l'app). Passe par une fenêtre overlay séparée — voir
-/// `showroom::attach` pour pourquoi un enfant direct de la fenêtre
-/// principale reste invisible (WebView2 compose son rendu par-dessus).
+/// Showrooms installés dans AC, pour le choix de scène des réglages.
 #[tauri::command]
-fn attach_native_showroom(
-    app: AppHandle,
-    showroom_state: State<showroom::ShowroomState>,
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
-) -> Result<(), String> {
-    let pid = {
-        let guard = showroom_state.0.lock().map_err(|e| e.to_string())?;
-        guard.as_ref().ok_or("aucun aperçu 3D en cours")?.pid
-    };
-    let overlay = showroom::attach(&app, pid, x, y, width, height)?;
-    let mut guard = showroom_state.0.lock().map_err(|e| e.to_string())?;
-    if let Some(handle) = guard.as_mut() {
-        handle.overlay = Some(overlay);
-    }
-    Ok(())
-}
-
-/// Repositionne/redimensionne le showroom déjà intégré (suivi resize/scroll).
-#[tauri::command]
-fn reposition_native_showroom(
-    app: AppHandle,
-    showroom_state: State<showroom::ShowroomState>,
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
-) -> Result<(), String> {
-    let overlay = {
-        let guard = showroom_state.0.lock().map_err(|e| e.to_string())?;
-        guard.as_ref().and_then(|h| h.overlay).ok_or("aperçu 3D pas encore intégré")?
-    };
-    let win = app.get_webview_window("main").ok_or("fenêtre principale introuvable")?;
-    let host = win.hwnd().map_err(|e| e.to_string())?;
-    showroom::reposition(host, overlay, x, y, width, height)
-}
-
-/// Ferme proprement le showroom en cours (attaché ou flottant).
-#[tauri::command]
-fn close_native_showroom(showroom_state: State<showroom::ShowroomState>) -> Result<(), String> {
-    let handle = showroom_state.0.lock().map_err(|e| e.to_string())?.take();
-    match handle {
-        Some(h) => showroom::close(h.pid, h.overlay),
-        None => Ok(()),
-    }
+fn list_showrooms(app: AppHandle) -> Vec<showroom::ShowroomOption> {
+    showroom::list_showrooms(&config::load(&app))
 }
 
 // --- Maintenance & export (L5) ----------------------------------------------
@@ -602,11 +546,12 @@ fn list_sub_mods(db: State<Db>, parent_id: String) -> Result<Vec<overlay::SubMod
     overlay::list_subs_for_parent(&conn, &parent_id).map_err(|e| e.to_string())
 }
 
-/// Tous les sous-éléments d'un type, pour la vue transversale (§12bis.3).
+/// Tous les sous-éléments d'un type, pour la vue transversale (§12bis.3) —
+/// taille sur disque incluse (regroupements pesés côté UI).
 #[tauri::command]
 fn list_subs_by_type(db: State<Db>, sub_type: String) -> Result<Vec<overlay::SubModRow>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    overlay::list_subs_by_type(&conn, &sub_type).map_err(|e| e.to_string())
+    submods::list_by_type_sized(&conn, &sub_type).map_err(|e| e.to_string())
 }
 
 /// Reconnaît les skins de circuit fournis avec le contenu initial du mod
@@ -749,8 +694,8 @@ pub fn run() {
             let conn = overlay::open(&db_path)?;
 
             // Filet de sécurité (§8.7bis) : restaure video.ini si une
-            // sauvegarde traîne suite à une fermeture anormale d'une session
-            // d'aperçu 3D natif précédente (process tué, crash…).
+            // sauvegarde laissée par l'ancien aperçu 3D intégré traîne encore
+            // (il forçait le mode fenêtré ; Pit Box n'y touche plus).
             showroom::restore_orphaned_video_ini();
 
             // Premier démarrage (ou contenu jamais indexé) : scan auto du
@@ -763,7 +708,6 @@ pub fn run() {
             }
 
             app.manage(Db(std::sync::Mutex::new(conn)));
-            app.manage(showroom::ShowroomState(std::sync::Mutex::new(None)));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -801,9 +745,7 @@ pub fn run() {
             launch_session,
             open_content_manager,
             open_native_showroom,
-            attach_native_showroom,
-            reposition_native_showroom,
-            close_native_showroom,
+            list_showrooms,
             maintenance_scan,
             reindex_library,
             delete_broken_mod,

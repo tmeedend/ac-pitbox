@@ -987,6 +987,11 @@ pub struct SubModRow {
     /// §4.6bis) — non supprimable individuellement, seulement le mod entier.
     pub removable: bool,
     pub imported_at: String,
+    /// Taille sur disque du dossier stocké, octets. Jamais mémorisée en base
+    /// (le contenu d'un skin peut changer sous nos pieds) : mesurée à la
+    /// demande, donc `None` partout sauf là où on la réclame explicitement
+    /// (vue transversale, cf. `submods::list_by_type_sized`).
+    pub size_bytes: Option<i64>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1039,6 +1044,7 @@ fn map_sub(row: &rusqlite::Row) -> rusqlite::Result<SubModRow> {
         is_active: row.get::<_, i64>(6)? != 0,
         removable: row.get::<_, i64>(7)? != 0,
         imported_at: row.get(8)?,
+        size_bytes: None,
     })
 }
 

@@ -26,16 +26,7 @@
     type LayoutItem,
     type ResourceFile,
   } from "$lib/library";
-  import { onDestroy, onMount, untrack } from "svelte";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
-  import {
-    listModSkins,
-    openNativeShowroom,
-    attachNativeShowroom,
-    repositionNativeShowroom,
-    closeNativeShowroom,
-    type SkinItem,
-  } from "$lib/launch";
+  import { listModSkins, openNativeShowroom, type SkinItem } from "$lib/launch";
   import { exportMod, deletePack, deleteBrokenMod, reinstallFromArchive, type ExportReport } from "$lib/maintenance";
   import {
     listSubMods,
@@ -296,67 +287,20 @@
     }
   }
 
-  // Aperçu 3D natif (acShowroom.exe) intégré à la place de l'image héros.
-  // La fenêtre du showroom est une vraie fenêtre OS (pas du DOM) : on ne peut
-  // que la repositionner par-dessus la zone `.hero`, pas la faire défiler
-  // avec la page — d'où le suivi resize/scroll ci-dessous.
+  // Aperçu 3D natif (acShowroom.exe) : lancé en **process indépendant**, par
+  // -dessus l'app, avec les réglages vidéo du jeu. C'est l'utilisateur qui
+  // ferme le showroom pour revenir à Pit Box. L'intégration de la fenêtre
+  // native dans la page a été tentée puis abandonnée (voir showroom.rs).
   let showroomBusy = $state(false);
-  let showroomAttached = $state(false);
   // Résolu une fois les skins de la fiche courante chargés (§skin sélectionné) —
   // `openShowroom` l'attend pour ne jamais ouvrir avant de connaître le skin
   // sélectionné (sinon SKIN= part vide → voiture toute blanche au 1er affichage,
   // course entre le chargement de `detail` et celui de `skins`).
   let skinsLoadResolve: (() => void) | null = null;
   let skinsLoadPromise: Promise<void> = Promise.resolve();
-  let heroEl = $state<HTMLDivElement | null>(null);
-  // Option « aperçu 3D par défaut » (§réglages) : chargée une fois. Si activée,
-  // la 3D s'ouvre d'elle-même sur les fiches voiture et le bouton disparaît.
-  let showroom3dDefault = $state(false);
-  // Garde-fou de l'auto-ouverture : une seule tentative par mod (évite la
-  // boucle et la réouverture après fermeture manuelle). Plain var (pas d'état
-  // réactif) — c'est juste un marqueur.
-  let autoOpenedFor: string | null = null;
-  // Le lancement natif n'est pas instantané (spawn + init DirectX) : si la
-  // fiche est quittée ou change de voiture avant la fin, `openShowroom` doit
-  // s'en apercevoir à la reprise et fermer ce qu'il vient de lancer plutôt que
-  // de l'attacher à un écran qui n'existe plus (bug réel : le showroom
-  // apparaissait par-dessus l'écran suivant une fois chargé, si on revenait en
-  // arrière trop vite).
-  let destroyed = false;
-  onMount(async () => {
-    try {
-      showroom3dDefault = (await getConfig()).prefs.showroom_by_default;
-    } catch {
-      /* défaut : false */
-    }
-  });
-
-  function heroRect(): { x: number; y: number; width: number; height: number } | null {
-    if (!heroEl) return null;
-    const r = heroEl.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    return {
-      x: Math.round(r.left * dpr),
-      y: Math.round(r.top * dpr),
-      width: Math.round(r.width * dpr),
-      height: Math.round(r.height * dpr),
-    };
-  }
-
-  function trackShowroomPosition() {
-    const r = heroRect();
-    if (r) repositionNativeShowroom(r.x, r.y, r.width, r.height).catch(() => {});
-  }
-
-  function onWindowChange() {
-    if (showroomAttached) trackShowroomPosition();
-  }
-
-  let resizeObserver: ResizeObserver | null = null;
 
   async function openShowroom() {
     if (!detail || showroomBusy) return;
-    const forId = id; // capturé au lancement, comparé à la reprise
     showroomBusy = true;
     actionError = "";
     try {
@@ -364,92 +308,12 @@
       // le chargement de la fiche → showroom ouvert sans skin, voiture blanche).
       await skinsLoadPromise;
       await openNativeShowroom(detail.id_interne, skins[previewSkin]?.id ?? null);
-      // La fiche a pu être quittée (composant démonté) ou changer de voiture
-      // pendant le lancement : ne jamais attacher un showroom qui ne
-      // correspond plus à ce qui est affiché, le fermer immédiatement à la place.
-      if (destroyed || id !== forId) {
-        await closeNativeShowroom().catch(() => {});
-        return;
-      }
-      const r = heroRect();
-      if (r) {
-        await attachNativeShowroom(r.x, r.y, r.width, r.height);
-        showroomAttached = true;
-      }
     } catch (e) {
-      if (!destroyed) actionError = String(e);
+      actionError = String(e);
     } finally {
       showroomBusy = false;
     }
   }
-
-  async function closeShowroom() {
-    showroomAttached = false;
-    try {
-      await closeNativeShowroom();
-    } catch (e) {
-      actionError = String(e);
-    }
-  }
-
-  onDestroy(() => {
-    destroyed = true;
-    if (showroomAttached) closeNativeShowroom().catch(() => {});
-    // Sinon (encore en cours de lancement, pas attaché) : `openShowroom` s'en
-    // rendra compte à la reprise via `destroyed` et fermera lui-même ce qu'il
-    // vient de lancer.
-  });
-
-  // Ferme le showroom si on change de mod pendant qu'il est attaché (la
-  // fenêtre héritée n'aurait plus de sens sur la nouvelle fiche). `untrack`
-  // est indispensable ici : sans lui, lire `showroomAttached` dans l'effet
-  // le rend aussi dépendant de cette valeur, et l'effet se redéclenchait
-  // (donc fermait le showroom) dès qu'on venait de l'attacher avec succès —
-  // c'était la vraie cause du "ça se ferme tout seul", pas Windows/WebView2.
-  $effect(() => {
-    id;
-    untrack(() => {
-      if (showroomAttached) closeShowroom();
-    });
-  });
-
-  // Ouverture automatique si l'option est activée : dès qu'une fiche voiture
-  // est chargée et que la zone héros est prête, on lance le showroom sans
-  // attendre un clic. `autoOpenedFor` = une tentative par mod (pas de boucle,
-  // pas de réouverture après une fermeture manuelle). `untrack` isole les
-  // lectures d'état qui ne doivent pas devenir des dépendances (sinon
-  // réouverture en boucle — même piège que l'effet ci-dessus).
-  $effect(() => {
-    const cur = id;
-    const ready = showroom3dDefault && isCar && !!detail && !!heroEl;
-    if (!ready) return;
-    untrack(() => {
-      if (autoOpenedFor === cur || showroomAttached || showroomBusy) return;
-      autoOpenedFor = cur;
-      openShowroom();
-    });
-  });
-
-  // Suivi resize/scroll : la fenêtre native ne défile pas avec la page, il
-  // faut la repositionner nous-mêmes à chaque changement de mise en page.
-  $effect(() => {
-    if (!heroEl) return;
-    const ro = new ResizeObserver(() => onWindowChange());
-    ro.observe(heroEl);
-    window.addEventListener("resize", onWindowChange);
-    window.addEventListener("scroll", onWindowChange, true);
-    // La fenêtre native du showroom est posée en coordonnées écran absolues :
-    // elle ne suit pas le déplacement de la fenêtre principale (aucun
-    // resize/scroll n'est émis dans ce cas). On écoute donc aussi l'événement
-    // Moved de Tauri pour la repositionner quand on déplace l'app.
-    const movedUnlisten = getCurrentWindow().onMoved(() => onWindowChange());
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", onWindowChange);
-      window.removeEventListener("scroll", onWindowChange, true);
-      movedUnlisten.then((fn) => fn());
-    };
-  });
 
   $effect(() => {
     const current = id;
@@ -589,15 +453,10 @@
       skin: sk?.id ?? null,
       outline: null,
     });
-    // Le showroom natif n'a pas de mécanisme connu pour changer de skin à
-    // chaud (pas d'IPC vers acShowroom.exe, voir docs/showroom-3d-preview-
-    // research.md) : s'il est déjà ouvert, on le relance avec le nouveau skin.
-    if (showroomAttached) void relaunchShowroomForSkin();
-  }
-
-  async function relaunchShowroomForSkin() {
-    await closeShowroom();
-    await openShowroom();
+    // Un showroom déjà ouvert garde le skin avec lequel il a été lancé : il
+    // n'a pas de mécanisme connu pour en changer à chaud (pas d'IPC vers
+    // acShowroom.exe, voir docs/showroom-3d-preview-research.md). Le prochain
+    // clic sur « Aperçu 3D » prendra le nouveau skin.
   }
 
   // Sélectionner un layout de circuit : mémorisé + poussé dans le duo de session
@@ -795,15 +654,9 @@
           </button>
         {/if}
         {#if isCar}
-          {#if showroomAttached}
-            <button class="btn" type="button" onclick={closeShowroom}>{t("detail.showroomClose")}</button>
-          {:else if !showroom3dDefault}
-            <!-- Bouton d'ouverture masqué si l'aperçu 3D par défaut est actif
-                 (§réglages) : la 3D se lance d'elle-même. -->
-            <button class="btn" type="button" onclick={openShowroom} disabled={showroomBusy} title={t("detail.showroomTooltip")}>
-              {showroomBusy ? t("detail.showroomLaunching") : t("detail.showroom")}
-            </button>
-          {/if}
+          <button class="btn" type="button" onclick={openShowroom} disabled={showroomBusy} title={t("detail.showroomTooltip")}>
+            {showroomBusy ? t("detail.showroomLaunching") : t("detail.showroom")}
+          </button>
         {/if}
         <button class="btn" type="button" onclick={openFolder} title={t("detail.openFolderTooltip")}>{t("detail.openFolder")}</button>
       </div>
@@ -822,20 +675,15 @@
 
     <!-- RANGÉE HAUTE : héros + panneau données -->
     <div class="row top" class:track={!isCar}>
-      <div class="hero" bind:this={heroEl}>
-        {#if showroomAttached}
-          <!-- La fenêtre native d'acShowroom.exe est dessinée par l'OS
-               directement sur cette zone de l'écran, par-dessus la page. -->
-          <div class="hero-showroom-slot"></div>
-        {:else if heroImg}
+      <div class="hero">
+        {#if heroImg}
           <img src={heroImg} alt={d.display_name ?? d.id_interne} />
         {:else}
           <div class="hero-icon">{isCar ? "🚗" : "🏁"}</div>
         {/if}
         {#if showroomBusy}
-          <!-- Chargement de l'aperçu 3D (spawn + attach d'acShowroom) : petite
-               pastille discrète en haut à droite, l'image reste pleinement
-               visible en attendant que la 3D s'affiche. -->
+          <!-- Lancement d'acShowroom : pastille discrète le temps que le
+               process démarre, il s'affichera ensuite par-dessus l'app. -->
           <div class="hero-loading" title={t("detail.showroomLoading")}>
             <span class="spinner"></span>
           </div>
@@ -1366,10 +1214,8 @@
     position: relative;
     overflow: hidden;
   }
-  /* Voiture : cadre à ratio fixe 16:9, aligné en haut (pas étiré par la
-     hauteur du panneau de données voisin). L'image et l'aperçu 3D du showroom
-     occupent ainsi exactement la même boîte — le rendu natif (1280×720, 16:9)
-     colle au cadre, plus de saut de hauteur au moment de l'attache (#4). */
+  /* Voiture : cadre à ratio fixe 16:9 (celui des previews AC), aligné en haut
+     — pas étiré par la hauteur du panneau de données voisin. */
   .row.top:not(.track) .hero {
     aspect-ratio: 16 / 9;
     min-height: 0;
@@ -1380,13 +1226,8 @@
     height: 100%;
     object-fit: cover;
   }
-  .hero-showroom-slot {
-    width: 100%;
-    height: 100%;
-  }
-  /* Pastille de chargement de l'aperçu 3D : petite, en haut à droite, sans
-     assombrir l'image — on profite de la photo de la voiture en attendant que
-     la 3D s'affiche. */
+  /* Pastille de lancement de l'aperçu 3D : petite, en haut à droite, sans
+     assombrir l'image — le showroom s'ouvrira par-dessus l'app. */
   .hero-loading {
     position: absolute;
     top: 10px;
@@ -1577,10 +1418,18 @@
     padding: 0;
     text-align: left;
     cursor: pointer;
+    position: relative;
   }
-  .skin.preview {
-    outline: 2px solid var(--rosso);
-    outline-offset: -2px;
+  /* Cadre du choix de session en calque par-dessus la vignette : un `outline`
+     inset était peint avant les descendants positionnés (.skin-img), donc
+     masqué par le tracé/la preview qui remplit la cellule. */
+  .skin.preview::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 2px solid var(--rosso);
+    pointer-events: none;
+    z-index: 2;
   }
   .skin-img {
     /* Ratio des previews AC (~16:9) : la hauteur suit la largeur de la cellule,

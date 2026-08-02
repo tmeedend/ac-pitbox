@@ -12,6 +12,8 @@ export interface SubModRow {
   /** Faux si fourni avec le contenu initial du mod (§4.6bis) — non supprimable individuellement. */
   removable: boolean;
   imported_at: string;
+  /** Taille sur disque, octets. Renseignée par `listSubsByType` (vue transversale), `null` ailleurs. */
+  size_bytes: number | null;
 }
 
 /** Indexe le contenu de base Kunos présent dans content/ (§12bis.1). Renvoie le nb indexé. */

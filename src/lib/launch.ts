@@ -117,22 +117,20 @@ export function openContentManager(): Promise<void> {
   return invoke<void>("open_content_manager");
 }
 
-/** Lance l'aperçu 3D natif (acShowroom.exe) ciblé sur une voiture (+ skin optionnel). */
+/** Lance l'aperçu 3D natif (acShowroom.exe) ciblé sur une voiture (+ skin
+ * optionnel). Process indépendant, affiché par-dessus l'app : c'est
+ * l'utilisateur qui ferme le showroom pour revenir à Pit Box. */
 export function openNativeShowroom(carId: string, skinId?: string | null): Promise<void> {
   return invoke<void>("open_native_showroom", { carId, skinId: skinId ?? null });
 }
 
-/** Intègre la fenêtre du showroom lancé dans la zone (x, y, width, height) — pixels physiques. */
-export function attachNativeShowroom(x: number, y: number, width: number, height: number): Promise<void> {
-  return invoke<void>("attach_native_showroom", { x, y, width, height });
+/** Une scène de showroom installée dans AC (`content/showroom/<id>`). */
+export interface ShowroomOption {
+  id: string;
+  name: string;
 }
 
-/** Repositionne/redimensionne le showroom déjà intégré. */
-export function repositionNativeShowroom(x: number, y: number, width: number, height: number): Promise<void> {
-  return invoke<void>("reposition_native_showroom", { x, y, width, height });
-}
-
-/** Ferme proprement le showroom en cours (attaché ou flottant). */
-export function closeNativeShowroom(): Promise<void> {
-  return invoke<void>("close_native_showroom");
+/** Showrooms installés, pour le choix de scène des réglages. */
+export function listShowrooms(): Promise<ShowroomOption[]> {
+  return invoke<ShowroomOption[]>("list_showrooms");
 }

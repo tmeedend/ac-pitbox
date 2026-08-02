@@ -29,9 +29,9 @@ pub struct Prefs {
     /// Utile sur les écrans haute résolution si la mise à l'échelle Windows
     /// n'est pas correctement reprise par la webview.
     pub ui_zoom: Option<u32>,
-    /// Afficher d'emblée l'aperçu 3D (acShowroom) sur la fiche voiture, à la
-    /// place de l'image. Défaut : non (l'utilisateur clique « Aperçu 3D »).
-    pub showroom_by_default: bool,
+    /// Scène utilisée par l'aperçu 3D (`content/showroom/<id>`, nom de dossier).
+    /// `None` = `showroom::DEFAULT_SHOWROOM`, la plus légère.
+    pub showroom_scene: Option<String>,
     /// Extraction des fichiers annexes du mod à l'import (§4.6) : "none" |
     /// "info_only" (défaut) | "all". Jamais reposée à chaque import — voir
     /// `resources::ExtractionMode::parse`.
@@ -52,7 +52,7 @@ impl Default for Prefs {
             default_cm_preset: None,
             language: None,
             ui_zoom: None,
-            showroom_by_default: false,
+            showroom_scene: None,
             resource_extraction_mode: "info_only".into(),
             keep_source_archive: false,
         }

@@ -10,8 +10,8 @@ export interface Prefs {
   language: string | null;
   /** Niveau de zoom de l'interface, en % (ex. 125) ; `null` = 100. */
   ui_zoom: number | null;
-  /** Afficher d'emblée l'aperçu 3D sur la fiche voiture (à la place de l'image). */
-  showroom_by_default: boolean;
+  /** Scène de l'aperçu 3D (`content/showroom/<id>`) ; `null` = la plus légère. */
+  showroom_scene: string | null;
   /** Extraction des fichiers annexes du mod à l'import (§4.6) — jamais reposée
    * à chaque import : "none" | "info_only" (défaut) | "all". */
   resource_extraction_mode: "none" | "info_only" | "all";
@@ -62,7 +62,7 @@ export function emptyConfig(): AppConfig {
       default_cm_preset: null,
       language: null,
       ui_zoom: null,
-      showroom_by_default: false,
+      showroom_scene: null,
       resource_extraction_mode: "info_only",
       keep_source_archive: false,
     },

@@ -161,6 +161,15 @@ pub fn read_track(track_dir: &Path) -> Option<UiInfo> {
     parse(&track_ui_path(track_dir)?)
 }
 
+/// Nom lisible d'un showroom (`content/showroom/<id>/ui/ui_showroom.json`) —
+/// `None` si le fichier est absent ou muet, l'appelant retombe alors sur l'id
+/// du dossier. Passe par le lecteur tolérant : ces fichiers Kunos sont indentés
+/// à la tabulation et truffés d'espaces en fin de ligne.
+pub fn read_showroom_name(showroom_dir: &Path) -> Option<String> {
+    let v = read_json(&showroom_dir.join("ui").join("ui_showroom.json"))?;
+    as_string(v.get("name")?)
+}
+
 /// Fiche technique native d'une voiture (§5bis.1), lue directement dans
 /// `ui_car.json`. `specs` est un OBJET de chaînes déjà formatées (pas de
 /// parsing), les courbes sont des paires `[rpm, valeur]`. Lecture seule.

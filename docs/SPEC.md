@@ -252,7 +252,7 @@ Maquette de référence `pitbox-reglages-session.html`. Pas de rappel du duo en 
 
 ### 9.4 Aperçu 3D des voitures
 
-Bouton d'aperçu 3D sur la fiche (lance `acshowroom` pour un rendu du modèle). **Option de réglage** : activer la 3D par défaut sans afficher l'image d'abord — si activée, le bouton « aperçu 3D » disparaît de la fiche (la 3D s'affiche d'emblée). Pendant le démarrage d'`acshowroom`, afficher une **animation de chargement en haut à droite** de l'image en attendant le rendu.
+Bouton d'aperçu 3D sur la fiche (lance `acshowroom` pour un rendu du modèle). Le showroom est un **process indépendant**, affiché par-dessus l'app avec les réglages vidéo du jeu : l'utilisateur le ferme lui-même pour revenir à Pit Box. L'intégration de sa fenêtre dans la page a été tentée puis abandonnée (voir `showroom-3d-preview-research.md`), et avec elle l'option « 3D par défaut ». **Option de réglage** : le décor (`content/showroom/<id>`) chargé par `acshowroom`, choisi parmi ceux installés — défaut `studio_white`, le seul instantané et sans musique. Pendant le démarrage d'`acshowroom`, afficher une **animation de chargement en haut à droite** de l'image.
 
 ---
 
@@ -278,7 +278,7 @@ Bouton d'aperçu 3D sur la fiche (lance `acshowroom` pour un rendu du modèle). 
 
 **Trois bases/fichiers distincts** : bibliothèque (fichiers), base d'overlay SQLite (métadonnées), fichier de règles (ontologie), plus le fichier de config (chemins + préférences).
 
-**Préférences persistantes** : affichage des tags du fichier mod (masquables), état du panneau de suivi (global), vue bibliothèque + colonnes (par type), presets de session (par type), preset CM graphique/FFB par défaut, aperçu 3D par défaut (§9.4), regroupement des skins (archive/voiture), extraction des fichiers annexes (Aucun / Informations seulement / Tout — §4.6), **conservation de l'archive source** (défaut désactivé — §10).
+**Préférences persistantes** : affichage des tags du fichier mod (masquables), état du panneau de suivi (global), vue bibliothèque + colonnes (par type), presets de session (par type), preset CM graphique/FFB par défaut, décor de l'aperçu 3D (§9.4), regroupement des skins (archive/voiture), extraction des fichiers annexes (Aucun / Informations seulement / Tout — §4.6), **conservation de l'archive source** (défaut désactivé — §10).
 
 ---
 
