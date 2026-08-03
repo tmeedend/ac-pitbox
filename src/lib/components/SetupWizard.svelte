@@ -12,6 +12,7 @@
   } from "$lib/config";
   import { t } from "$lib/i18n/index.svelte";
 
+  import { errorText } from "$lib/errors";
   interface Props {
     ondone: () => void;
   }
@@ -58,7 +59,7 @@
       await saveConfig(config);
       ondone();
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       saving = false;
     }

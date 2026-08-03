@@ -22,6 +22,7 @@
   } from "$lib/bulkEdit";
   import { t } from "$lib/i18n/index.svelte";
 
+  import { errorText } from "$lib/errors";
   interface Props {
     ids: string[];
     cards: ModCard[];
@@ -53,7 +54,7 @@
       await action();
       onchange();
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }
@@ -67,7 +68,7 @@
       report = await action();
       onchange();
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }
@@ -121,7 +122,7 @@
       const done = items.filter((i) => i.report).length;
       exportMsg = t("bulkEdit.exportDone", { count: done });
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       exporting = false;
     }

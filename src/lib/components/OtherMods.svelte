@@ -16,6 +16,7 @@
   } from "$lib/others";
   import { t } from "$lib/i18n/index.svelte";
 
+  import { errorText } from "$lib/errors";
   let others = $state<OtherModRow[]>([]);
   let query = $state("");
   let busy = $state<string | null>(null);
@@ -50,7 +51,7 @@
       }
       await load();
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       busy = null;
     }
@@ -63,7 +64,7 @@
       await setOtherPriority(o.id, !o.is_priority);
       await load();
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       busy = null;
     }
@@ -81,7 +82,7 @@
       await deleteOtherMod(o.id);
       await load();
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       busy = null;
     }

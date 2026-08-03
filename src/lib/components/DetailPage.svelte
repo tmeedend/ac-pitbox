@@ -46,6 +46,7 @@
   import { getConfig } from "$lib/config";
   import { t } from "$lib/i18n/index.svelte";
 
+  import { errorText } from "$lib/errors";
   interface Props {
     id: string;
     kind: ModKind;
@@ -132,7 +133,7 @@
       onchange?.();
       onclose();
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
       deleteBusy = false;
     }
   }
@@ -153,7 +154,7 @@
       onchange?.();
       reinstallOk = true;
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     } finally {
       reinstallBusy = false;
     }
@@ -199,7 +200,7 @@
       await deleteLayer(layer.id);
       await refreshEntity();
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     } finally {
       layerBusy = false;
     }
@@ -212,7 +213,7 @@
       await setLayerActive(layer.id, !layer.is_active);
       await refreshEntity();
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     } finally {
       layerBusy = false;
     }
@@ -225,7 +226,7 @@
       await reorderLayer(layer.id, direction);
       await refreshEntity();
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     } finally {
       layerBusy = false;
     }
@@ -248,7 +249,7 @@
     try {
       await openModResource(id, f.rel_path);
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     }
   }
 
@@ -266,7 +267,7 @@
       onchange?.();
       onclose();
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
       packBusy = false;
     }
   }
@@ -281,7 +282,7 @@
     try {
       exportResult = await exportMod(detail.id_interne, dir);
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     } finally {
       exporting = false;
     }
@@ -309,7 +310,7 @@
       await skinsLoadPromise;
       await openNativeShowroom(detail.id_interne, skins[previewSkin]?.id ?? null);
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     } finally {
       showroomBusy = false;
     }
@@ -397,7 +398,7 @@
       await setTrackSkinActive(id, name, !wasActive);
       activeTrackSkins = wasActive ? activeTrackSkins.filter((n) => n !== name) : [...activeTrackSkins, name];
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     } finally {
       trackSkinBusy = false;
     }
@@ -426,7 +427,7 @@
       else await restoreSound(detail.id_interne);
       await loadSounds(detail.id_interne);
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     } finally {
       soundBusy = false;
     }
@@ -497,7 +498,7 @@
     try {
       await openModFolder(detail.id_interne);
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     }
   }
 
@@ -510,7 +511,7 @@
       await reload();
       onchange?.();
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     } finally {
       busy = false;
     }
@@ -525,7 +526,7 @@
       await reload();
       onchange?.();
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     } finally {
       busy = false;
     }

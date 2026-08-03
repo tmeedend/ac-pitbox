@@ -59,16 +59,16 @@ pub fn export_mod(
     mod_id: &str,
     dest_dir: &Path,
 ) -> Result<ExportReport, String> {
-    let sevenzip = cfg.sevenzip_exe.as_ref().ok_or("7-Zip non configuré.")?;
-    let m = overlay::get_mod(conn, mod_id).map_err(|e| e.to_string())?.ok_or("mod introuvable")?;
+    let sevenzip = cfg.sevenzip_exe.as_ref().ok_or(crate::errors::SEVENZIP_NOT_CONFIGURED)?;
+    let m = overlay::get_mod(conn, mod_id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_NOT_FOUND)?;
     let kind = kind_of(&m.kind);
-    let vid = m.active_version_id.clone().ok_or("aucune version active à exporter")?;
+    let vid = m.active_version_id.clone().ok_or(crate::errors::NO_ACTIVE_VERSION_TO_EXPORT)?;
     let lib = overlay::get_version_path(conn, &vid)
         .map_err(|e| e.to_string())?
-        .ok_or("version introuvable")?;
+        .ok_or(crate::errors::VERSION_NOT_FOUND)?;
     let lib = PathBuf::from(lib);
     if !lib.is_dir() {
-        return Err("fichiers de la version introuvables dans la bibliothèque".into());
+        return Err(crate::errors::VERSION_FILES_MISSING.into());
     }
 
     let mut included = Vec::new();
@@ -374,7 +374,7 @@ mod tests {
         let Some(sevenzip) = crate::detect::find_7zip() else {
             return; // 7-Zip requis
         };
-        let base = std::env::temp_dir().join(format!("pitbox-exp-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("exp");
         let library = base.join("library");
         let ac = base.join("ac");
         let dest = base.join("out");
@@ -418,7 +418,5 @@ mod tests {
         archive::extract(&sevenzip, Path::new(&report.archive), &check).unwrap();
         assert!(check.join("content").join("cars").join("mycar").join("ui").join("ui_car.json").is_file());
         assert!(check.join("content").join("driver").join("custom_driver.kn5").is_file());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

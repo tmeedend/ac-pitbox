@@ -9,6 +9,7 @@
   } from "$lib/library";
   import { t } from "$lib/i18n/index.svelte";
 
+  import { errorText } from "$lib/errors";
   interface Props {
     parent: string;
     copy: boolean;
@@ -54,7 +55,7 @@
     try {
       entries = await analyzeBulkImport(parent);
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       loading = false;
     }
@@ -84,7 +85,7 @@
       const report = await executeBulkImport(buildItems(), copy);
       ondone(report);
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
       running = false;
     }
   }

@@ -15,6 +15,7 @@
   import { listShowrooms, type ShowroomOption } from "$lib/launch";
   import { confirm } from "@tauri-apps/plugin-dialog";
 
+  import { errorText } from "$lib/errors";
   let config = $state<AppConfig>(emptyConfig());
   // Instantané du dernier config enregistré (ou chargé) : sert à détecter les
   // modifications non sauvegardées et à revenir en arrière (zoom/langue,
@@ -88,7 +89,7 @@
       saved = true;
       savedConfig = structuredClone($state.snapshot(config));
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       saving = false;
     }

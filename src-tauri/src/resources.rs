@@ -269,7 +269,7 @@ pub fn resolve_resource_path(dir: &Path, rel_path: &str) -> Result<PathBuf, Stri
     let canon_dir = dir.canonicalize().map_err(|e| format!("dossier ressources introuvable : {e}"))?;
     let canon_candidate = candidate.canonicalize().map_err(|e| format!("fichier introuvable : {e}"))?;
     if !canon_candidate.starts_with(&canon_dir) {
-        return Err("chemin hors du dossier ressources".into());
+        return Err(crate::errors::PATH_OUTSIDE_RESOURCES.into());
     }
     Ok(canon_candidate)
 }
@@ -300,7 +300,7 @@ mod tests {
         // (ex. `extension/`, config CSP) n'est pas une annexe — seuls les
         // fichiers à la racine du mod le sont. Avant le fix, INFO_EXTS/HEAVY_EXTS
         // étaient extraits quelle que soit la profondeur, cassant ce cas.
-        let base = std::env::temp_dir().join(format!("pitbox-res-ext-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("res-ext");
         let src = base.join("src");
         write(&src.join("ui").join("ui_track.json"));
         write(&src.join("extension").join("config").join("tracks").join("readme.txt"));
@@ -321,8 +321,6 @@ mod tests {
         assert!(content.join("data").join("templates.zip").is_file());
         assert!(!resources.join("extension").exists(), "rien d'extension/ ne doit finir en ressources");
         assert!(resources.join("changelog.txt").is_file());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -331,7 +329,7 @@ mod tests {
         // `extension/` (pas seulement en profondeur dedans) doit rester
         // contenu, et `map.png` (mini-carte AC) n'est jamais une annexe même
         // si un `.png` à la racine du mod est normalement ambigu.
-        let base = std::env::temp_dir().join(format!("pitbox-res-map-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("res-map");
         let src = base.join("src");
         write(&src.join("ui").join("ui_track.json"));
         write(&src.join("map.png"));
@@ -344,13 +342,11 @@ mod tests {
         assert!(content.join("map.png").is_file());
         assert!(content.join("extension").join("guids.txt").is_file());
         assert!(!resources.exists());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn info_only_extracts_light_files_keeps_skins_and_drops_heavy() {
-        let base = std::env::temp_dir().join(format!("pitbox-res-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("res");
         let src = base.join("src");
         make_mod(&src);
         let content = base.join("content");
@@ -372,12 +368,11 @@ mod tests {
 
         // Mode Aucun côté copie : la source reste intacte (copy=false ici teste move,
         // donc on vérifie plutôt que le lourd n'est nulle part en bibliothèque.
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn all_mode_extracts_heavy_files_too() {
-        let base = std::env::temp_dir().join(format!("pitbox-res-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("res");
         let src = base.join("src");
         make_mod(&src);
         let content = base.join("content");
@@ -388,13 +383,11 @@ mod tests {
         assert!(resources.join("livery_template.psd").is_file());
         assert!(resources.join("old_templates.zip").is_file());
         assert!(content.join("skins").join("red").join("preview.jpg").is_file());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn none_mode_drops_ancillary_and_leaves_source_untouched_on_copy() {
-        let base = std::env::temp_dir().join(format!("pitbox-res-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("res");
         let src = base.join("src");
         make_mod(&src);
         let content = base.join("content");
@@ -407,15 +400,13 @@ mod tests {
         assert!(!content.join("changelog.txt").exists());
         assert!(src.join("changelog.txt").is_file(), "annexe laissée dans la source (§4.6, mode Aucun)");
         assert!(content.join("model.kn5").is_file(), "le contenu de jeu, lui, est bien rangé");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn fast_path_used_when_no_ancillary_files() {
         // Pas de fichier annexe : le dossier entier est déplacé/copié d'un bloc
         // (comportement historique préservé, aucune perte de perf).
-        let base = std::env::temp_dir().join(format!("pitbox-res-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("res");
         let src = base.join("src");
         write(&src.join("ui").join("ui_car.json"));
         write(&src.join("model.kn5"));
@@ -426,15 +417,13 @@ mod tests {
         assert_eq!(n, 0);
         assert!(content.join("model.kn5").is_file());
         assert!(!resources.exists());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn guids_txt_never_extracted() {
         // Fichier requis par le moteur audio AC (§12bis.2) : ne doit jamais
         // être traité comme une annexe malgré son extension .txt.
-        let base = std::env::temp_dir().join(format!("pitbox-res-guids-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("res-guids");
         let src = base.join("src");
         write(&src.join("GUIDs.txt"));
         write(&src.join("car.bank"));
@@ -447,8 +436,6 @@ mod tests {
         assert!(content.join("GUIDs.txt").is_file(), "GUIDs.txt reste du contenu");
         assert!(content.join("car.bank").is_file());
         assert!(resources.join("readme.txt").is_file());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -456,7 +443,7 @@ mod tests {
         // Skin/app/mod « autre » : une image à la racine est TOUJOURS du vrai
         // contenu (preview de skin, icône d'app) — jamais une annexe, même en
         // mode info_only. Seuls les documents/fichiers lourds sont concernés.
-        let base = std::env::temp_dir().join(format!("pitbox-res-imgs-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("res-imgs");
         let src = base.join("src");
         write(&src.join("ui_skin.json"));
         write(&src.join("preview.jpg")); // aperçu de skin, racine : jamais annexe ici
@@ -470,13 +457,11 @@ mod tests {
         assert!(content.join("preview.jpg").is_file(), "preview de skin jamais extrait");
         assert!(content.join("livery.dds").is_file());
         assert!(resources.join("readme.txt").is_file());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn list_and_resolve_resources() {
-        let base = std::env::temp_dir().join(format!("pitbox-res-list-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("res-list");
         let dir = base.join("resources");
         write(&dir.join("changelog.txt"));
         write(&dir.join("templates").join("livery.psd"));
@@ -497,7 +482,5 @@ mod tests {
 
         // Dossier ressources absent : liste vide, pas d'erreur.
         assert!(list_resources(&base.join("nope")).is_empty());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

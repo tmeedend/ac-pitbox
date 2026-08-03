@@ -191,8 +191,8 @@ fn place(
 /// nature : ce qui ne peut pas être posé sans toucher un vrai dossier ou un
 /// fichier isolé existant est simplement signalé, pas forcé.
 pub fn activate_other(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<ActivateOtherResult, String> {
-    let m = overlay::get_other_mod(conn, id).map_err(|e| e.to_string())?.ok_or("mod inconnu")?;
-    let ac = cfg.ac_install_path.as_ref().ok_or("dossier AC non configuré")?;
+    let m = overlay::get_other_mod(conn, id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_UNKNOWN)?;
+    let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?;
     let others = overlay::list_other_mods(conn).map_err(|e| e.to_string())?;
 
     let mut junctions = Vec::new();
@@ -207,7 +207,7 @@ pub fn activate_other(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<Ac
 /// Désactive un mod « autre » : retire exactement les jonctions posées à sa
 /// dernière activation (garde-fou déjà dans `remove_junction`).
 pub fn deactivate_other(conn: &Connection, id: &str) -> Result<(), String> {
-    let m = overlay::get_other_mod(conn, id).map_err(|e| e.to_string())?.ok_or("mod inconnu")?;
+    let m = overlay::get_other_mod(conn, id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_UNKNOWN)?;
     for j in &m.junctions {
         let _ = activation::remove_junction(Path::new(j));
     }
@@ -217,7 +217,7 @@ pub fn deactivate_other(conn: &Connection, id: &str) -> Result<(), String> {
 /// Supprime un mod « autre » : désactive (retire ses jonctions) puis efface
 /// ses fichiers stockés et son entrée overlay.
 pub fn delete_other(conn: &Connection, id: &str) -> Result<(), String> {
-    let m = overlay::get_other_mod(conn, id).map_err(|e| e.to_string())?.ok_or("mod inconnu")?;
+    let m = overlay::get_other_mod(conn, id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_UNKNOWN)?;
     let _ = deactivate_other(conn, id);
     let _ = std::fs::remove_dir_all(&m.library_path);
     overlay::delete_other_mod(conn, id).map_err(|e| e.to_string())
@@ -237,7 +237,7 @@ mod tests {
 
     #[test]
     fn import_and_activate_new_gap() {
-        let base = std::env::temp_dir().join(format!("pitbox-other-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("other");
         let library = base.join("library");
         let ac = base.join("ac");
         std::fs::create_dir_all(&library).unwrap();
@@ -264,13 +264,11 @@ mod tests {
 
         deactivate_other(&conn, "MyShaderMod").unwrap();
         assert!(!ac.join("extension").join("config").join("tracks").join("newtrack").exists());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn priority_wins_shared_gap() {
-        let base = std::env::temp_dir().join(format!("pitbox-other-prio-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("other-prio");
         let library = base.join("library");
         let ac = base.join("ac");
         std::fs::create_dir_all(&library).unwrap();
@@ -303,13 +301,11 @@ mod tests {
         assert_eq!(res_a2.junctions, 0);
         assert!(!res_a2.warnings.is_empty());
         assert_eq!(std::fs::read_to_string(target.join("track.ini")).unwrap(), "B", "ModB garde la main");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn conflict_detection_between_others() {
-        let base = std::env::temp_dir().join(format!("pitbox-other-conflict-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("other-conflict");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -327,7 +323,5 @@ mod tests {
         assert_eq!(a.conflicts.len(), 1);
         assert_eq!(a.conflicts[0].other_id, "ModB");
         assert_eq!(a.conflicts[0].count, 1, "un seul fichier commun (x.ini)");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

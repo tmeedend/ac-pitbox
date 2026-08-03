@@ -141,7 +141,7 @@ pub fn list_showrooms(cfg: &AppConfig) -> Vec<ShowroomOption> {
             out.push(ShowroomOption { id, name });
         }
     }
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out.sort_by_key(|a| a.name.to_lowercase());
     out
 }
 
@@ -151,7 +151,7 @@ pub fn list_showrooms(cfg: &AppConfig) -> Vec<ShowroomOption> {
 /// c'est lui qui le ferme pour revenir à l'app. Rien à suivre côté Pit Box —
 /// pas de PID mémorisé, pas de fenêtre à repositionner.
 pub fn open_native_showroom(cfg: &AppConfig, car_id: &str, skin_id: Option<&str>) -> Result<(), String> {
-    let ac = cfg.ac_install_path.as_ref().ok_or("dossier AC non configuré")?.clone();
+    let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?.clone();
     // Garde-fou : `acShowroom.exe` cherche `data/lods.ini` sous `content/cars/<id>`
     // et plante (fenêtre d'erreur native, hors de notre contrôle) si `car_id`
     // n'est pas une vraie voiture — ex. l'id d'un circuit passé par erreur
@@ -161,9 +161,9 @@ pub fn open_native_showroom(cfg: &AppConfig, car_id: &str, skin_id: Option<&str>
     }
     let exe = ac.join("acShowroom.exe");
     if !exe.is_file() {
-        return Err("acShowroom.exe introuvable dans le dossier d'installation AC".into());
+        return Err(crate::errors::SHOWROOM_EXE_MISSING.into());
     }
-    let cfg_dir = resolve_ac_cfg_dir().ok_or("dossier Documents introuvable")?;
+    let cfg_dir = resolve_ac_cfg_dir().ok_or(crate::errors::DOCUMENTS_NOT_FOUND)?;
 
     // Scène choisie dans les réglages, si elle est toujours installée : un
     // showroom désinstallé entre-temps ferait planter acShowroom au chargement.
@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn writes_showroom_ini_with_car_skin_and_scene() {
-        let base = std::env::temp_dir().join(format!("pitbox-showroom-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("showroom");
         write_showroom_ini_at(&base, "ks_toyota_celica_st185", Some("00_racing_3"), "Hangar").unwrap();
         let content = fs::read_to_string(base.join("showroom_start.ini")).unwrap();
         assert!(content.contains("CAR=ks_toyota_celica_st185"));
@@ -205,12 +205,11 @@ mod tests {
         assert!(content.contains("FAR_PLANE=200"));
         assert!(content.contains("[FADES]"));
         assert!(content.contains("[ANIMATION]"));
-        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]
     fn lists_installed_showrooms_by_readable_name() {
-        let base = std::env::temp_dir().join(format!("pitbox-showlist-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("showlist");
         let rooms = base.join("content").join("showroom");
         for (id, name) in [("studio_white", "Showroom White"), ("Hangar", "Hangar")] {
             fs::create_dir_all(rooms.join(id).join("ui")).unwrap();
@@ -223,13 +222,11 @@ mod tests {
         // Sans ui_showroom.json : l'id fait office de nom.
         fs::create_dir_all(rooms.join("custom_room")).unwrap();
 
-        let cfg = AppConfig { ac_install_path: Some(base.clone()), ..Default::default() };
+        let cfg = AppConfig { ac_install_path: Some(base.to_path_buf()), ..Default::default() };
         let list = list_showrooms(&cfg);
         let ids: Vec<&str> = list.iter().map(|s| s.id.as_str()).collect();
         let names: Vec<&str> = list.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(names, vec!["custom_room", "Hangar", "Showroom White"], "tri par nom lisible");
         assert_eq!(ids, vec!["custom_room", "Hangar", "studio_white"], "l'id reste le nom de dossier");
-
-        let _ = fs::remove_dir_all(&base);
     }
 }

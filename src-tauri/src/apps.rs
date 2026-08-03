@@ -87,19 +87,16 @@ pub fn list_apps(conn: &Connection, cfg: &AppConfig) -> Result<Vec<AppItem>, Str
 
 /// Active une app : junction `<ac>/apps/python/<id>` → dossier bibliothèque.
 pub fn activate_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
-    let app = overlay::get_app(conn, id).map_err(|e| e.to_string())?.ok_or("app introuvable")?;
-    let link = app_link(cfg, id).ok_or("dossier AC non configuré")?;
+    let app = overlay::get_app(conn, id).map_err(|e| e.to_string())?.ok_or(crate::errors::APP_NOT_FOUND)?;
+    let link = app_link(cfg, id).ok_or(crate::errors::AC_NOT_CONFIGURED)?;
 
     // Garde-fou : ne jamais écraser un vrai dossier (app installée hors de l'app).
-    match std::fs::symlink_metadata(&link) {
-        Ok(meta) => {
-            if meta.file_type().is_symlink() {
-                activation::remove_junction(&link)?;
-            } else {
-                return Err("un vrai dossier d'app existe déjà — opération refusée".into());
-            }
+    if let Ok(meta) = std::fs::symlink_metadata(&link) {
+        if meta.file_type().is_symlink() {
+            activation::remove_junction(&link)?;
+        } else {
+            return Err(crate::errors::REAL_APP_FOLDER_EXISTS.into());
         }
-        Err(_) => {}
     }
     if let Some(parent) = link.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -109,10 +106,10 @@ pub fn activate_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), 
 
 /// Désactive une app : retire la junction (garde-fou junction).
 pub fn deactivate_app(cfg: &AppConfig, id: &str) -> Result<(), String> {
-    let link = app_link(cfg, id).ok_or("dossier AC non configuré")?;
+    let link = app_link(cfg, id).ok_or(crate::errors::AC_NOT_CONFIGURED)?;
     match std::fs::symlink_metadata(&link) {
         Ok(meta) if meta.file_type().is_symlink() => activation::remove_junction(&link),
-        Ok(_) => Err("un vrai dossier d'app existe — non touché".into()),
+        Ok(_) => Err(crate::errors::REAL_APP_FOLDER_UNTOUCHED.into()),
         Err(_) => Ok(()), // déjà inactive
     }
 }
@@ -120,7 +117,7 @@ pub fn deactivate_app(cfg: &AppConfig, id: &str) -> Result<(), String> {
 /// Supprime proprement une app : désactive (retire la junction), efface les
 /// fichiers de bibliothèque, puis la ligne overlay (§12bis.4).
 pub fn remove_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
-    let app = overlay::get_app(conn, id).map_err(|e| e.to_string())?.ok_or("app introuvable")?;
+    let app = overlay::get_app(conn, id).map_err(|e| e.to_string())?.ok_or(crate::errors::APP_NOT_FOUND)?;
     // Désactive si une junction est présente (ignore l'absence).
     if let Some(link) = app_link(cfg, id) {
         if activation::is_junction(&link) {
@@ -138,7 +135,7 @@ mod tests {
 
     #[test]
     fn app_detected_and_imported() {
-        let base = std::env::temp_dir().join(format!("pitbox-app-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("app");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -162,7 +159,5 @@ mod tests {
         remove_app(&conn, &cfg, "MyApp").unwrap();
         assert!(!library.join("apps").join("MyApp").exists());
         assert!(!overlay::app_exists(&conn, "MyApp").unwrap());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

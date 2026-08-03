@@ -111,7 +111,7 @@ pub fn scan(conn: &Connection, cfg: &AppConfig) -> Result<MaintenanceReport, Str
 /// Supprime un mod cassé : fichiers de bibliothèque (toutes versions) + junction
 /// éventuelle (garde-fou) + overlay.
 pub fn delete_broken(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
-    let m = overlay::get_mod(conn, id).map_err(|e| e.to_string())?.ok_or("mod introuvable")?;
+    let m = overlay::get_mod(conn, id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_NOT_FOUND)?;
     let kind = kind_of(&m.kind);
 
     // Fichiers : versions individuelles + dossier parent du mod dans la bibliothèque.
@@ -166,21 +166,21 @@ pub fn delete_pack(conn: &Connection, cfg: &AppConfig, pack: &str) -> Result<usi
 /// retélécharger. Ne touche ni l'id, ni les métadonnées overlay — seuls les
 /// fichiers de la version active sont remplacés, puis réindexés.
 pub fn reinstall_from_archive(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
-    let m = overlay::get_mod(conn, id).map_err(|e| e.to_string())?.ok_or("mod introuvable")?;
+    let m = overlay::get_mod(conn, id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_NOT_FOUND)?;
     let kind = kind_of(&m.kind);
     let versions = overlay::get_versions(conn, id).map_err(|e| e.to_string())?;
-    let active_id = m.active_version_id.clone().ok_or("aucune version active")?;
+    let active_id = m.active_version_id.clone().ok_or(crate::errors::NO_ACTIVE_VERSION)?;
     let version = versions
         .iter()
         .find(|v| v.id == active_id)
-        .ok_or("version active introuvable")?;
+        .ok_or(crate::errors::ACTIVE_VERSION_NOT_FOUND)?;
     let kept = version
         .kept_archive_path
         .as_ref()
-        .ok_or("aucune archive source conservée pour ce mod")?;
+        .ok_or(crate::errors::NO_KEPT_ARCHIVE)?;
     let kept_path = Path::new(kept);
     if !kept_path.exists() {
-        return Err("l'archive source conservée est introuvable sur le disque".into());
+        return Err(crate::errors::KEPT_ARCHIVE_MISSING.into());
     }
 
     let workdir = std::env::temp_dir().join(format!("pitbox-reinstall-{}", uuid::Uuid::new_v4()));
@@ -189,7 +189,7 @@ pub fn reinstall_from_archive(conn: &Connection, cfg: &AppConfig, id: &str) -> R
     let extracted_dir = if kept_path.is_dir() {
         kept_path.to_path_buf()
     } else {
-        let sevenzip = cfg.sevenzip_exe.as_ref().ok_or("7-Zip non configuré")?;
+        let sevenzip = cfg.sevenzip_exe.as_ref().ok_or(crate::errors::SEVENZIP_NOT_CONFIGURED)?;
         archive::extract(sevenzip, kept_path, &workdir)?;
         workdir.clone()
     };
@@ -202,7 +202,7 @@ pub fn reinstall_from_archive(conn: &Connection, cfg: &AppConfig, id: &str) -> R
         .iter()
         .find(|fm| fm.kind == kind && fm.dir.file_name().is_some_and(|n| n.to_string_lossy() == id))
         .or_else(|| found.iter().find(|fm| fm.kind == kind))
-        .ok_or("aucun contenu de voiture/circuit retrouvé dans l'archive source")?;
+        .ok_or(crate::errors::NO_CONTENT_IN_ARCHIVE)?;
 
     let dest = Path::new(&version.library_path);
     let _ = std::fs::remove_dir_all(dest);
@@ -219,7 +219,7 @@ pub fn reinstall_from_archive(conn: &Connection, cfg: &AppConfig, id: &str) -> R
 
 /// Retire une junction orpheline. Garde-fou : refuse si ce n'est pas une junction.
 pub fn remove_orphan(cfg: &AppConfig, kind: &str, id: &str) -> Result<(), String> {
-    let ac = cfg.ac_install_path.as_ref().ok_or("dossier AC non configuré")?;
+    let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?;
     let link = ac.join("content").join(kind_of(kind).content_folder()).join(id);
     activation::remove_junction(&link)
 }
@@ -236,7 +236,7 @@ pub fn remove_orphan(cfg: &AppConfig, kind: &str, id: &str) -> Result<(), String
 /// lent — la plupart des réindexations n'ont pas besoin de ça (la taille ne
 /// change que si les fichiers du mod ont été modifiés hors de l'app).
 pub fn reindex_mod(conn: &Connection, cfg: &AppConfig, id: &str, recalc_size: bool) -> Result<(), String> {
-    let m = overlay::get_mod(conn, id).map_err(|e| e.to_string())?.ok_or("mod introuvable")?;
+    let m = overlay::get_mod(conn, id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_NOT_FOUND)?;
     let kind = kind_of(&m.kind);
     let versions = overlay::get_versions(conn, id).map_err(|e| e.to_string())?;
 
@@ -318,7 +318,7 @@ mod tests {
 
     #[test]
     fn detects_broken_mod_missing_files() {
-        let base = std::env::temp_dir().join(format!("pitbox-maint-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("maint");
         std::fs::create_dir_all(&base).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let cfg = AppConfig::default();
@@ -339,8 +339,6 @@ mod tests {
 
         delete_broken(&conn, &cfg, "ghost").unwrap();
         assert!(overlay::get_mod(&conn, "ghost").unwrap().is_none());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -349,7 +347,7 @@ mod tests {
         // pas orphelin tout seul quand la bibliothèque disparaît (les données
         // restent vivantes dans content/) — delete_broken doit le retirer
         // explicitement, pas seulement les fichiers de bibliothèque.
-        let base = std::env::temp_dir().join(format!("pitbox-maint-hl-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("maint-hl");
         let ac = base.join("ac");
         let library = base.join("library");
         std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
@@ -375,8 +373,6 @@ mod tests {
         delete_broken(&conn, &cfg, "hl_car").unwrap();
 
         assert!(!link.exists(), "le déploiement content/ doit être retiré, pas laissé orphelin");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     /// Voiture synthétique <root>/<id> avec `ui/ui_car.json` + un fichier de plus.
@@ -392,7 +388,7 @@ mod tests {
         // §10/§11 : « conserver l'archive source » (ici un dossier, pas un
         // .zip — pas besoin de 7-Zip) + « réinstaller depuis l'archive source »
         // doit remplacer le contenu de la version active par une copie fraîche.
-        let base = std::env::temp_dir().join(format!("pitbox-reinstall-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("reinstall");
         std::fs::create_dir_all(&base).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let cfg = AppConfig::default();
@@ -425,13 +421,11 @@ mod tests {
 
         assert!(lib_path.join("data.txt").is_file(), "réinstallation doit restaurer le fichier manquant");
         assert_eq!(std::fs::read_to_string(lib_path.join("data.txt")).unwrap(), "original");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn reinstall_fails_without_kept_archive() {
-        let base = std::env::temp_dir().join(format!("pitbox-reinstall-none-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("reinstall-none");
         std::fs::create_dir_all(&base).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let cfg = AppConfig::default();
@@ -450,9 +444,7 @@ mod tests {
         overlay::set_active_version(&conn, "no_kept", "v1").unwrap();
 
         let err = reinstall_from_archive(&conn, &cfg, "no_kept").unwrap_err();
-        assert!(err.contains("archive source"), "message d'erreur attendu, obtenu : {err}");
-
-        let _ = std::fs::remove_dir_all(&base);
+        assert_eq!(err, crate::errors::NO_KEPT_ARCHIVE, "clé d'erreur attendue");
     }
 
     #[test]
@@ -460,7 +452,7 @@ mod tests {
         // §10 : supprimer un mod de la bibliothèque doit aussi libérer l'espace
         // pris par l'archive source conservée (§11), pas seulement le contenu
         // extrait — sinon la suppression laisse une copie orpheline sur le disque.
-        let base = std::env::temp_dir().join(format!("pitbox-delkept-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("delkept");
         std::fs::create_dir_all(&base).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let cfg = AppConfig { library_path: Some(base.join("library")), ..Default::default() };
@@ -487,13 +479,11 @@ mod tests {
         assert!(kept_dir.exists());
         delete_broken(&conn, &cfg, "del_car").unwrap();
         assert!(!kept_dir.exists(), "la copie d'archive source doit être nettoyée avec le mod");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn reindex_fixes_name_read_from_non_utf8_ui_json() {
-        let base = std::env::temp_dir().join(format!("pitbox-reindex-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("reindex");
         let track_dir = base.join("deutschlandring");
         std::fs::create_dir_all(track_dir.join("ui")).unwrap();
         // Fichier réel : "name" correct, mais un octet Windows-1252 (° en 0xB0)
@@ -523,13 +513,11 @@ mod tests {
         assert_eq!(versions[0].author.as_deref(), Some("Fat-Alfie"));
         assert_eq!(versions[0].tags_from_mod, vec!["circuit".to_string()]);
         assert_eq!(versions[0].size_bytes, None, "recalc_size=false : taille non touchée");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn reindex_recalculates_size_only_when_requested() {
-        let base = std::env::temp_dir().join(format!("pitbox-size-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("size");
         let car_dir = base.join("abarth500");
         std::fs::create_dir_all(car_dir.join("ui")).unwrap();
         std::fs::write(car_dir.join("ui").join("ui_car.json"), b"{\"name\": \"Abarth 500\"}").unwrap();
@@ -554,7 +542,5 @@ mod tests {
         reindex_mod(&conn, &AppConfig::default(), "abarth500", true).unwrap();
         let m = overlay::get_mod(&conn, "abarth500").unwrap().unwrap();
         assert!(m.size_bytes.unwrap() >= 1000, "au moins les 1000 octets de data.acd");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

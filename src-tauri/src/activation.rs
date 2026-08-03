@@ -79,7 +79,7 @@ pub fn create_junction(link: &Path, target: &Path) -> Result<(), String> {
     #[cfg(not(windows))]
     {
         let _ = (link, target);
-        return Err("junctions disponibles uniquement sous Windows".into());
+        return Err(crate::errors::JUNCTIONS_WINDOWS_ONLY.into());
     }
 
     let out = cmd
@@ -99,13 +99,14 @@ pub fn create_junction(link: &Path, target: &Path) -> Result<(), String> {
 /// pas une junction (garde-fou).
 pub fn remove_junction(link: &Path) -> Result<(), String> {
     if !is_junction(link) {
-        return Err("refus : le chemin n'est pas une junction".into());
+        return Err(crate::errors::NOT_A_JUNCTION.into());
     }
     std::fs::remove_dir(link).map_err(|e| format!("suppression de la junction : {e}"))
 }
 
-const GUARD_MSG: &str =
-    "Un vrai dossier (non-junction) existe déjà dans content/ — opération refusée pour protéger un contenu installé hors de l'app.";
+/// Le garde-fou absolu du module : un vrai dossier dans `content/` n'est jamais
+/// touché. Message destiné à l'utilisateur, donc clé i18n (cf. `errors.rs`).
+const GUARD_MSG: &str = crate::errors::REAL_FOLDER_GUARD;
 
 /// Active un mod : crée la junction `content/<type>s/<id>` → version choisie.
 /// Si `version_id` est fourni, il devient la version active.
@@ -117,35 +118,33 @@ pub fn activate(
 ) -> Result<(), String> {
     let m = overlay::get_mod(conn, mod_id)
         .map_err(|e| e.to_string())?
-        .ok_or("mod introuvable")?;
+        .ok_or(crate::errors::MOD_NOT_FOUND)?;
     if m.is_stock {
-        return Err("contenu de base Kunos : déjà présent, non activable (§12bis.1)".into());
+        return Err(crate::errors::STOCK_NOT_ACTIVATABLE.into());
     }
     let kind = kind_of(&m.kind);
 
     let vid = version_id
         .map(str::to_string)
         .or(m.active_version_id)
-        .ok_or("aucune version à activer")?;
+        .ok_or(crate::errors::NO_VERSION_TO_ACTIVATE)?;
     let target = overlay::get_version_path(conn, &vid)
         .map_err(|e| e.to_string())?
-        .ok_or("version introuvable")?;
-    let link = content_link(cfg, kind, mod_id).ok_or("dossier AC non configuré")?;
+        .ok_or(crate::errors::VERSION_NOT_FOUND)?;
+    let link = content_link(cfg, kind, mod_id).ok_or(crate::errors::AC_NOT_CONFIGURED)?;
 
     // Garde-fou + nettoyage d'un déploiement existant, quelle que soit sa
     // forme (symlink hérité ou hardlinks). Toute réactivation redéploie en
     // hardlinks, migrant transparemment les mods encore en symlink.
-    match std::fs::symlink_metadata(&link) {
-        Ok(meta) => {
-            if meta.file_type().is_symlink() {
-                remove_junction(&link)?;
-            } else if deploy::is_deployed(&link) {
-                deploy::remove_deployment(&link)?;
-            } else {
-                return Err(GUARD_MSG.into());
-            }
+    // Une erreur de `symlink_metadata` = le lien n'existe pas : rien à nettoyer.
+    if let Ok(meta) = std::fs::symlink_metadata(&link) {
+        if meta.file_type().is_symlink() {
+            remove_junction(&link)?;
+        } else if deploy::is_deployed(&link) {
+            deploy::remove_deployment(&link)?;
+        } else {
+            return Err(GUARD_MSG.into());
         }
-        Err(_) => {} // n'existe pas : OK
     }
 
     deploy::deploy_tree(Path::new(&target), &link, mod_id, kind)?;
@@ -160,21 +159,19 @@ pub fn activate(
 pub fn deactivate(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(), String> {
     let m = overlay::get_mod(conn, mod_id)
         .map_err(|e| e.to_string())?
-        .ok_or("mod introuvable")?;
+        .ok_or(crate::errors::MOD_NOT_FOUND)?;
     let kind = kind_of(&m.kind);
-    let link = content_link(cfg, kind, mod_id).ok_or("dossier AC non configuré")?;
+    let link = content_link(cfg, kind, mod_id).ok_or(crate::errors::AC_NOT_CONFIGURED)?;
 
-    match std::fs::symlink_metadata(&link) {
-        Ok(meta) => {
-            if meta.file_type().is_symlink() {
-                remove_junction(&link)?;
-            } else if deploy::is_deployed(&link) {
-                deploy::remove_deployment(&link)?;
-            } else {
-                return Err(GUARD_MSG.into());
-            }
+    // Une erreur de `symlink_metadata` = rien sur le disque, donc déjà inactif.
+    if let Ok(meta) = std::fs::symlink_metadata(&link) {
+        if meta.file_type().is_symlink() {
+            remove_junction(&link)?;
+        } else if deploy::is_deployed(&link) {
+            deploy::remove_deployment(&link)?;
+        } else {
+            return Err(GUARD_MSG.into());
         }
-        Err(_) => {} // déjà inactif
     }
     // Les couches (§4.4) restent enregistrées et seront réappliquées à la
     // prochaine activation — plus de dossier de composition intermédiaire à
@@ -194,7 +191,7 @@ mod tests {
             return;
         }
         let base =
-            std::env::temp_dir().join(format!("pitbox-junc-{}", uuid::Uuid::new_v4()));
+            crate::testutil::temp_dir("junc");
         let target = base.join("target");
         let link = base.join("link");
         std::fs::create_dir_all(&target).unwrap();
@@ -215,8 +212,6 @@ mod tests {
         std::fs::create_dir_all(&real).unwrap();
         assert!(remove_junction(&real).is_err(), "refus sur un vrai dossier");
         assert!(real.exists(), "vrai dossier non supprimé");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -225,7 +220,7 @@ mod tests {
         if !cfg!(windows) {
             return;
         }
-        let base = std::env::temp_dir().join(format!("pitbox-acthist-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("acthist");
         let ac = base.join("ac");
         let library = base.join("library");
         std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
@@ -246,8 +241,6 @@ mod tests {
         deactivate(&conn, &cfg, "test_car").unwrap();
 
         assert!(overlay::get_history(&conn, "test_car").unwrap().is_empty());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     /// Circuit de test (Spa) : `activate` doit déployer par hardlinks (§2), pas
@@ -257,7 +250,7 @@ mod tests {
     /// le déploiement sans toucher à la bibliothèque.
     #[test]
     fn activate_deploys_spa_via_hardlinks_not_symlink() {
-        let base = std::env::temp_dir().join(format!("pitbox-hardlink-spa-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("hardlink-spa");
         let ac = base.join("ac");
         let library = base.join("library");
         std::fs::create_dir_all(ac.join("content").join("tracks")).unwrap();
@@ -291,8 +284,6 @@ mod tests {
         assert!(!link.exists(), "déploiement retiré");
         assert!(spav1.join("ai").join("fast_lane.ai").is_file(), "bibliothèque intacte après désactivation");
         assert!(!is_mod_active(&cfg, ModKind::Track, "spa"));
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     /// Un mod encore actif sous l'ancien mécanisme (symlink `mklink /D`) doit
@@ -303,7 +294,7 @@ mod tests {
         if !cfg!(windows) {
             return;
         }
-        let base = std::env::temp_dir().join(format!("pitbox-legacy-sym-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("legacy-sym");
         let ac = base.join("ac");
         let library = base.join("library");
         std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
@@ -335,7 +326,5 @@ mod tests {
         assert!(!is_junction(&link), "migré : plus un symlink");
         assert!(deploy::is_deployed(&link), "migré : déploiement hardlinks");
         assert!(link.join("data.txt").is_file());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

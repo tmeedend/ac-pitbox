@@ -21,7 +21,7 @@ use crate::{harmonize, inspect, kunos_dates, overlay, uijson};
 
 /// (Re)construit l'index du contenu de base. Renvoie le nombre d'entrées indexées.
 pub fn index_stock_content(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> Result<usize, String> {
-    let ac = cfg.ac_install_path.as_ref().ok_or("dossier AC non configuré")?;
+    let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?;
     let now = Local::now().to_rfc3339();
 
     // Repart de zéro : corrige aussi les entrées indexées avant une bonne config.
@@ -132,7 +132,7 @@ mod tests {
         // "abarth500" (voiture) et "imola" (circuit) sont référencés dans
         // docs/kunos_content_dates.json ; dossiers volontairement sans
         // ui_car.json/ui_track.json pour vérifier le repli sur la table.
-        let base = std::env::temp_dir().join(format!("pitbox-stockdates-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("stockdates");
         let ac = base.join("ac");
         std::fs::create_dir_all(ac.join("content").join("cars").join("abarth500")).unwrap();
         std::fs::create_dir_all(ac.join("content").join("tracks").join("imola")).unwrap();
@@ -148,8 +148,6 @@ mod tests {
         let track = overlay::get_mod(&conn, "imola").unwrap().unwrap();
         assert_eq!(track.year, None, "pas de notion d'année pour un circuit");
         assert_eq!(track.published_at.as_deref(), Some("2014-12-19"));
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -158,7 +156,7 @@ mod tests {
         // déploiement hardlinks marqué) ne doit ni disparaître de l'overlay ni
         // être indexé depuis le composé (qui contient les fichiers de la
         // couche) — toujours depuis la sauvegarde intacte (`stock_base/`).
-        let base = std::env::temp_dir().join(format!("pitbox-stock-composed-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("stock-composed");
         let ac = base.join("ac");
         let library = base.join("library");
         let link = ac.join("content").join("tracks").join("spa");
@@ -192,7 +190,5 @@ mod tests {
             !versions[0].layouts.iter().any(|l| l == "2022"),
             "indexé depuis la sauvegarde intacte, pas depuis le composé — le layout de couche n'est pas mis en cache comme s'il était Kunos"
         );
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

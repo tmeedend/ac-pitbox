@@ -562,11 +562,11 @@ fn import_sound(
 /// fichiers du mod (bascule exclusive). Le son d'origine est **sauvegardé une
 /// fois** pour pouvoir y revenir — jamais détruit irréversiblement (§12bis.2).
 pub fn activate_sound(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<(), String> {
-    let sub = overlay::get_sub_mod(conn, sub_id).map_err(|e| e.to_string())?.ok_or("son introuvable")?;
+    let sub = overlay::get_sub_mod(conn, sub_id).map_err(|e| e.to_string())?.ok_or(crate::errors::SOUND_NOT_FOUND)?;
     if sub.sub_type != "SOUND" {
-        return Err("ce sous-élément n'est pas un mod de son".into());
+        return Err(crate::errors::NOT_A_SOUND_MOD.into());
     }
-    let sfx = parent_subdir(conn, cfg, &sub.parent_id, "sfx").ok_or("voiture cible inconnue")?;
+    let sfx = parent_subdir(conn, cfg, &sub.parent_id, "sfx").ok_or(crate::errors::TARGET_CAR_UNKNOWN)?;
     let backup = sound_backup_dir(cfg, &sub.parent_id)?;
 
     // Sauvegarde du son d'origine, une seule fois (préserve le vrai original).
@@ -586,7 +586,7 @@ pub fn activate_sound(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Resul
 pub fn restore_sound(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Result<(), String> {
     let backup = sound_backup_dir(cfg, parent_id)?;
     if backup.is_dir() {
-        let sfx = parent_subdir(conn, cfg, parent_id, "sfx").ok_or("voiture cible inconnue")?;
+        let sfx = parent_subdir(conn, cfg, parent_id, "sfx").ok_or(crate::errors::TARGET_CAR_UNKNOWN)?;
         replace_dir_contents(&backup, &sfx)?;
     }
     overlay::set_active_sound(conn, parent_id, None).map_err(|e| e.to_string())?;
@@ -597,9 +597,9 @@ pub fn restore_sound(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Res
 /// projection (skin) ou restaure le son d'origine (son actif), efface les
 /// fichiers stockés, puis la ligne overlay. Garde-fou junction respecté.
 pub fn remove_sub(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<(), String> {
-    let sub = overlay::get_sub_mod(conn, sub_id).map_err(|e| e.to_string())?.ok_or("sous-élément introuvable")?;
+    let sub = overlay::get_sub_mod(conn, sub_id).map_err(|e| e.to_string())?.ok_or(crate::errors::SUB_MOD_NOT_FOUND)?;
     if !sub.removable {
-        return Err("fourni avec le contenu initial du mod : non supprimable individuellement".into());
+        return Err(crate::errors::BUNDLED_NOT_REMOVABLE.into());
     }
     match sub.sub_type.as_str() {
         "SKIN" => {
@@ -622,12 +622,11 @@ pub fn remove_sub(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<()
             }
             let _ = set_track_skin_active(conn, cfg, &sub.parent_id, &sub.name, false);
         }
-        "SOUND" => {
+        "SOUND"
             // Si actif, on rétablit d'abord le son d'origine.
-            if sub.is_active {
+            if sub.is_active => {
                 restore_sound(conn, cfg, &sub.parent_id)?;
             }
-        }
         _ => {}
     }
     // Fichiers stockés à part.
@@ -637,7 +636,7 @@ pub fn remove_sub(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<()
 
 /// `<lib>/sounds/<parent>/__original__` : sauvegarde du son d'origine.
 fn sound_backup_dir(cfg: &AppConfig, parent_id: &str) -> Result<PathBuf, String> {
-    let lib = cfg.library_path.as_ref().ok_or("bibliothèque non configurée")?;
+    let lib = cfg.library_path.as_ref().ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     Ok(lib.join("sounds").join(parent_id).join("__original__"))
 }
 
@@ -657,7 +656,7 @@ mod tests {
 
     #[test]
     fn skin_pack_routed_and_stored() {
-        let base = std::env::temp_dir().join(format!("pitbox-sub-{}", Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("sub");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -695,13 +694,11 @@ mod tests {
         remove_sub(&conn, &cfg, &sub_id).unwrap();
         assert!(!library.join("skins").join("ferrari_488").join("af_corse_51").exists());
         assert!(overlay::list_subs_for_parent(&conn, "ferrari_488").unwrap().is_empty());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn track_skin_routed_by_parent_kind() {
-        let base = std::env::temp_dir().join(format!("pitbox-tsk-{}", Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("tsk");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -726,8 +723,6 @@ mod tests {
         assert_eq!(stored.len(), 1);
         assert_eq!(stored[0].sub_type, "TRACK_SKIN");
         assert!(library.join("track_skins").join("spa").join("night").is_dir());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -737,7 +732,7 @@ mod tests {
         // Sans traitement dédié, `skins_are_per_car_folders` confond "cm_skins"
         // avec un dossier de voiture/circuit cible et route le pack vers un
         // parent inexistant nommé "cm_skins" au lieu du vrai circuit.
-        let base = std::env::temp_dir().join(format!("pitbox-tskcm-{}", Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("tskcm");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -769,8 +764,6 @@ mod tests {
             .join("Black Cat County CF1")
             .join("preview.png")
             .is_file());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -785,7 +778,7 @@ mod tests {
         // cm_skins_active.json qu'il pose à côté (sans effet sur le rendu,
         // juste pour rester cohérent si CM est rouvert ensuite) — absent
         // quand aucun skin n'est actif.
-        let base = std::env::temp_dir().join(format!("pitbox-trkact-{}", Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("trkact");
         let library = base.join("library");
         let ac = base.join("ac");
         std::fs::create_dir_all(&library).unwrap();
@@ -870,8 +863,6 @@ mod tests {
             "default/ doit être vide quand plus aucun skin n'est actif — marqueur compris"
         );
         assert!(!default_dir.join("cm_skins_active.json").exists(), "pas de marqueur quand aucun skin actif");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -880,7 +871,7 @@ mod tests {
         // dans content/, jamais passé par import_skin_pack) doit quand même
         // être reconnu et activable, mais pas supprimable individuellement —
         // même logique que les skins voiture (§4.6bis).
-        let base = std::env::temp_dir().join(format!("pitbox-bundled-{}", Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("bundled");
         let library = base.join("library");
         let ac = base.join("ac");
         let track_dir = ac.join("content").join("tracks").join("ks_black_cat_county");
@@ -919,10 +910,8 @@ mod tests {
         // Mais jamais supprimable individuellement.
         let sub_id = subs[0].id.clone();
         let err = remove_sub(&conn, &cfg, &sub_id).unwrap_err();
-        assert!(err.contains("non supprimable"), "message attendu, obtenu : {err}");
+        assert_eq!(err, crate::errors::BUNDLED_NOT_REMOVABLE, "clé d'erreur attendue");
         assert!(overlay::get_sub_mod(&conn, &sub_id).unwrap().is_some(), "toujours là, pas supprimé");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -932,7 +921,7 @@ mod tests {
         // empiriquement), l'état de Pit Box doit refléter ce changement au
         // prochain chargement de la fiche, pas rester périmé sur son propre
         // dernier état (§4.6bis).
-        let base = std::env::temp_dir().join(format!("pitbox-reconcile-{}", Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("reconcile");
         let library = base.join("library");
         let ac = base.join("ac");
         let track_dir = ac.join("content").join("tracks").join("ks_black_cat_county");
@@ -968,8 +957,6 @@ mod tests {
             vec!["GP 1966".to_string()],
             "l'état de Pit Box doit refléter le marqueur, même modifié par CM"
         );
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -978,7 +965,7 @@ mod tests {
         // amélioration du circuit lui-même, indépendante des skins actifs —
         // routé comme couche (extension/ext_config.ini), pas comme un skin de
         // plus (§4.6bis).
-        let base = std::env::temp_dir().join(format!("pitbox-trkext-{}", Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("trkext");
         let library = base.join("library");
         let ac = base.join("ac");
         std::fs::create_dir_all(&library).unwrap();
@@ -1016,14 +1003,12 @@ mod tests {
             .join("extension")
             .join("ext_config.ini");
         assert!(composed.is_file(), "ext_config.ini devrait être composé dans extension/");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn skin_pack_multi_car_shape() {
         // Forme `skins/<voiture>/<skin>` : un pack couvrant plusieurs voitures.
-        let base = std::env::temp_dir().join(format!("pitbox-subB-{}", Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("subB");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -1046,13 +1031,11 @@ mod tests {
         assert_eq!(res.len(), 2);
         assert!(library.join("skins").join("ferrari_488").join("af_corse_51").join("preview.jpg").is_file());
         assert!(library.join("skins").join("lambo_huracan").join("team_a").join("preview.jpg").is_file());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn sound_swap_and_restore() {
-        let base = std::env::temp_dir().join(format!("pitbox-snd-{}", Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("snd");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -1086,8 +1069,6 @@ mod tests {
         restore_sound(&conn, &cfg, "snd_car").unwrap();
         assert_eq!(std::fs::read_to_string(sfx.join("GUIDs.txt")).unwrap(), "ORIG");
         assert!(!overlay::get_sub_mod(&conn, "s1").unwrap().unwrap().is_active);
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -1095,7 +1076,7 @@ mod tests {
         // Cas réel : dossier de son nommé comme l'archive, fichiers sous un
         // sous-dossier "sfx" (convention standard AC) — modscan ne peut pas en
         // déduire la voiture cible, seul le nom d'archive/dossier le peut.
-        let base = std::env::temp_dir().join(format!("pitbox-sndguess-{}", Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("sndguess");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -1119,15 +1100,13 @@ mod tests {
         assert_eq!(res.len(), 1);
         assert_eq!(res[0].parent_id, "ks_lamborghini_huracan_performante", "voiture retrouvée dans le nom d'archive");
         assert_eq!(res[0].name, archive_name, "nom lisible, pas « sfx »");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn transversal_list_carries_disk_size() {
         // La vue transversale pèse chaque skin pour cumuler le poids d'un pack :
         // la taille vient du disque, pas de la base (qui n'en garde aucune trace).
-        let base = std::env::temp_dir().join(format!("pitbox-subsize-{}", Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("subsize");
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let now = Local::now().to_rfc3339();
 
@@ -1143,7 +1122,5 @@ mod tests {
 
         let sized = list_by_type_sized(&conn, "SKIN").unwrap();
         assert_eq!(sized[0].size_bytes, Some(1024), "somme récursive des fichiers réels");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

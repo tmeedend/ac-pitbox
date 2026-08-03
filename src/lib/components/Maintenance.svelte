@@ -11,6 +11,7 @@
   import { indexStockContent } from "$lib/submods";
   import { t } from "$lib/i18n/index.svelte";
 
+  import { errorText } from "$lib/errors";
   let report = $state<MaintenanceReport | null>(null);
   let scanning = $state(false);
   let busy = $state<string | null>(null);
@@ -29,7 +30,7 @@
       const n = await reindexLibrary(recalcSize);
       reindexMsg = t("maintenance.reindexDone", { count: n });
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       reindexing = false;
     }
@@ -43,7 +44,7 @@
       const n = await indexStockContent();
       indexMsg = n > 0 ? t("maintenance.stockIndexed", { count: n }) : t("maintenance.stockNoneNew");
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       indexing = false;
     }
@@ -55,7 +56,7 @@
     try {
       report = await maintenanceScan();
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       scanning = false;
     }
@@ -68,7 +69,7 @@
       await deleteBrokenMod(id);
       await scan();
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       busy = null;
     }
@@ -81,7 +82,7 @@
       await removeOrphanJunction(kind, id);
       await scan();
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       busy = null;
     }

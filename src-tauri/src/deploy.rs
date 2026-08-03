@@ -168,7 +168,7 @@ pub fn compose_layers_into(layers: &[PathBuf], dest: &Path) -> Result<(), String
 /// dossier) ne touche pas les autres (les fichiers de la bibliothèque).
 pub fn remove_deployment(path: &Path) -> Result<(), String> {
     if !is_deployed(path) {
-        return Err("refus : ce dossier n'a pas été déployé par Pit Box (marqueur absent)".into());
+        return Err(crate::errors::NOT_DEPLOYED_BY_PITBOX.into());
     }
     std::fs::remove_dir_all(path).map_err(|e| format!("suppression du déploiement : {e}"))
 }
@@ -176,10 +176,9 @@ pub fn remove_deployment(path: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uuid::Uuid;
 
-    fn temp() -> PathBuf {
-        std::env::temp_dir().join(format!("pitbox-deploy-{}", Uuid::new_v4()))
+    fn temp() -> crate::testutil::TempDir {
+        crate::testutil::temp_dir("deploy")
     }
 
     #[test]
@@ -205,8 +204,6 @@ mod tests {
         // bibliothèque doit se répercuter dans le dossier déployé.
         std::fs::write(source.join("model.kn5"), b"CHANGED").unwrap();
         assert_eq!(std::fs::read(dest.join("model.kn5")).unwrap(), b"CHANGED");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -218,8 +215,6 @@ mod tests {
 
         assert!(remove_deployment(&real).is_err(), "refus : pas notre marqueur");
         assert!(real.exists(), "dossier étranger jamais supprimé");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -236,8 +231,6 @@ mod tests {
         assert!(!dest.exists(), "déploiement retiré");
         assert!(source.join("f.txt").is_file(), "original bibliothèque intact");
         assert_eq!(std::fs::read_to_string(source.join("f.txt")).unwrap(), "data");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -264,8 +257,6 @@ mod tests {
         assert!(dest.join("only_base.txt").is_file(), "fichier de base non touché conservé");
         assert!(dest.join("only_b.txt").is_file(), "ajout de couche présent");
         assert!(is_deployed(&dest));
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -283,7 +274,5 @@ mod tests {
 
         link_or_copy(&src, &dst).unwrap();
         assert_eq!(std::fs::read_to_string(&dst).unwrap(), "source", "repli copie a bien écrasé/copié le contenu");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

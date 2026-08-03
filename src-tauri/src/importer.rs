@@ -498,7 +498,7 @@ fn classify(
 /// classe les mods **sans rien écrire**. Un seul niveau de sous-dossiers.
 pub fn analyze_bulk(conn: &Connection, _cfg: &AppConfig, parent: &Path) -> Result<Vec<BulkEntry>, String> {
     if !parent.is_dir() {
-        return Err("Le chemin n'est pas un dossier.".into());
+        return Err(crate::errors::NOT_A_DIRECTORY.into());
     }
     let mut subs: Vec<PathBuf> = std::fs::read_dir(parent)
         .map_err(|e| e.to_string())?
@@ -710,7 +710,7 @@ fn process_found(
         .dir
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
-        .ok_or("dossier de mod sans nom")?;
+        .ok_or(crate::errors::UNNAMED_MOD_FOLDER)?;
 
     let ui = match fm.kind {
         ModKind::Car => uijson::read_car(&fm.dir),
@@ -1069,7 +1069,7 @@ mod tests {
     fn ancillary_files_extracted_to_resources_by_default() {
         // §4.6 : réglage par défaut "info_only" — fichiers légers extraits vers
         // le dossier ressources du mod, jamais dans le contenu de jeu.
-        let base = make_temp_dir().unwrap();
+        let base = crate::testutil::temp_dir("import");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -1097,15 +1097,13 @@ mod tests {
         assert!(resources.join("changelog.txt").is_file());
         assert!(resources.join("presentation.pdf").is_file());
         assert!(!resources.join("livery_template.psd").exists(), "mode par défaut : pas les fichiers lourds");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn ancillary_extraction_mode_none_drops_files() {
         // §4.6 : mode "Aucun" — rien n'est extrait vers la bibliothèque, mais le
         // contenu de jeu reste propre quand même (règle absolue, indépendante du réglage).
-        let base = make_temp_dir().unwrap();
+        let base = crate::testutil::temp_dir("import");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -1126,8 +1124,6 @@ mod tests {
         assert!(!library.join("resources").join("cars").join("annex_car2").exists(), "rien extrait en mode Aucun");
         // Copie (pas déplacement) : la source garde son annexe intacte.
         assert!(src.join("annex_car2").join("changelog.txt").is_file());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -1135,7 +1131,7 @@ mod tests {
         // Bug Spa (§4.4) : un import qui ajoute surtout des chemins nouveaux et
         // n'écrase que peu de fichiers est une COUCHE, pas une mise à jour — la
         // base ne doit jamais être remplacée/perdue.
-        let base = make_temp_dir().unwrap();
+        let base = crate::testutil::temp_dir("import");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -1172,8 +1168,6 @@ mod tests {
         let layers = crate::overlay::list_layers(&conn, "spa").unwrap();
         assert_eq!(layers.len(), 1);
         assert!(Path::new(&layers[0].library_path).join("new").join("layout1.kn5").is_file());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -1181,7 +1175,7 @@ mod tests {
         // Règle absolue (§4.4) : un contenu de base Kunos ne reçoit jamais de
         // remplacement — tout import dessus est une couche, quelle que soit la
         // proportion de fichiers écrasés.
-        let base = make_temp_dir().unwrap();
+        let base = crate::testutil::temp_dir("import");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -1201,15 +1195,13 @@ mod tests {
         assert_eq!(crate::overlay::get_versions(&conn, "ks_spa").unwrap().len(), 0, "aucune version : base intacte");
         assert_eq!(crate::overlay::list_layers(&conn, "ks_spa").unwrap().len(), 1);
         assert!(crate::overlay::get_mod(&conn, "ks_spa").unwrap().unwrap().is_stock, "reste contenu de base");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn ambiguous_blocks_then_resolves() {
         // Cas ambigu (§4.4) : import unitaire → rien écrit, on attend le choix ;
         // reprise avec la décision "update" → vraie mise à jour.
-        let base = make_temp_dir().unwrap();
+        let base = crate::testutil::temp_dir("import");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -1238,8 +1230,6 @@ mod tests {
         let r2 = import_one_folder(&noop, &conn, &cfg, &rules, &src2, true, &decisions);
         assert_eq!(r2.mods[0].outcome, "UPDATE_REPLACE");
         assert_eq!(crate::overlay::get_versions(&conn, "amb").unwrap().len(), 2, "nouvelle version après décision");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -1250,7 +1240,7 @@ mod tests {
             return;
         };
 
-        let base = make_temp_dir().unwrap();
+        let base = crate::testutil::temp_dir("import");
         let src = base.join("src");
         std::fs::create_dir_all(&src).unwrap();
         make_fake_car(&src, "test_car");
@@ -1274,7 +1264,7 @@ mod tests {
 
         // --- 1er import : NOUVEAU ---
         let zip_str = zip.to_string_lossy().into_owned();
-        let res = run_import(&noop, &conn, &cfg, &rules, &[zip_str.clone()], &[]);
+        let res = run_import(&noop, &conn, &cfg, &rules, std::slice::from_ref(&zip_str), &[]);
         assert_eq!(res.len(), 1);
         assert!(res[0].error.is_none(), "erreur: {:?}", res[0].error);
         assert_eq!(res[0].mods.len(), 1);
@@ -1301,7 +1291,7 @@ mod tests {
         assert!(lib_ui.is_file(), "ui_car.json doit exister dans la bibliothèque");
 
         // --- 2e import de la MÊME archive : DOUBLON (pas de réimport) ---
-        let res_dup = run_import(&noop, &conn, &cfg, &rules, &[zip_str.clone()], &[]);
+        let res_dup = run_import(&noop, &conn, &cfg, &rules, std::slice::from_ref(&zip_str), &[]);
         assert_eq!(res_dup[0].mods[0].outcome, "DUPLICATE");
         assert_eq!(
             crate::overlay::list_mods(&conn).unwrap()[0].version_count,
@@ -1318,15 +1308,13 @@ mod tests {
         let mods2 = crate::overlay::list_mods(&conn).unwrap();
         assert_eq!(mods2.len(), 1, "toujours un seul mod logique");
         assert_eq!(mods2[0].version_count, 2, "deux versions coexistent");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn unrecognized_folder_becomes_other_mod() {
         // Type non reconnu (ni voiture, circuit, skin, son, app) : jamais
         // perdu, rangé comme « autre mod » et activé par défaut (§6.1bis).
-        let base = make_temp_dir().unwrap();
+        let base = crate::testutil::temp_dir("import");
         let library = base.join("library");
         let ac = base.join("ac");
         std::fs::create_dir_all(&library).unwrap();
@@ -1355,13 +1343,11 @@ mod tests {
             crate::activation::is_junction(&ac.join("extension").join("config").join("new_thing")),
             "activé par défaut comme les autres types (§4.6bis)"
         );
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn folder_import_copy_and_move() {
-        let base = make_temp_dir().unwrap();
+        let base = crate::testutil::temp_dir("import");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -1385,13 +1371,11 @@ mod tests {
         assert_eq!(r2.mods.len(), 1);
         assert!(!src_move.join("move_car").exists(), "source retirée (déplacement)");
         assert!(library.join("cars").join("move_car").exists(), "rangé dans la bibliothèque");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn pack_source_on_multi_car_folder() {
-        let base = make_temp_dir().unwrap();
+        let base = crate::testutil::temp_dir("import");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -1417,13 +1401,11 @@ mod tests {
         import_one_folder(&noop, &conn, &cfg, &rules, &solo, true, &[]);
         let m = crate::overlay::get_mod(&conn, "solo_car").unwrap().unwrap();
         assert_eq!(m.source_pack, None, "mono-voiture → pas de pack");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn bulk_analyze_and_execute() {
-        let base = make_temp_dir().unwrap();
+        let base = crate::testutil::temp_dir("import");
         let parent = base.join("catalog");
         std::fs::create_dir_all(&parent).unwrap();
         make_fake_car(&parent, "bulk_car"); // sous-dossier = voiture
@@ -1457,13 +1439,11 @@ mod tests {
         let entries2 = analyze_bulk(&conn, &cfg, &parent).unwrap();
         let car2 = entries2.iter().find(|e| e.subfolder == "bulk_car").unwrap();
         assert_eq!(car2.mods[0].status, "duplicate");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn published_at_estimated_on_import() {
-        let base = make_temp_dir().unwrap();
+        let base = crate::testutil::temp_dir("import");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -1482,8 +1462,6 @@ mod tests {
         assert!(versions[0].published_at.is_some(), "date de publication absente sur la version");
         let m = crate::overlay::get_mod(&conn, "pub_car").unwrap().unwrap();
         assert!(m.published_at.is_some(), "date de publication absente sur le mod (version active)");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -1491,7 +1469,7 @@ mod tests {
         let Some(sevenzip) = crate::detect::find_7zip() else {
             return;
         };
-        let base = make_temp_dir().unwrap();
+        let base = crate::testutil::temp_dir("import");
         let noop = |_p: Progress| {};
         let rules = crate::rules::default_rules();
 
@@ -1531,8 +1509,6 @@ mod tests {
         assert_eq!(mods.len(), 1);
         assert_eq!(mods[0].id_interne, "car_b");
         assert!(!library.join("cars").join("car_a").exists(), "fichiers car_a supprimés");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -1540,7 +1516,7 @@ mod tests {
         // §2 : si l'ancien mod (fuzzy conflict) était actif par hardlinks, la
         // résolution "replace" doit retirer son déploiement dans content/, pas
         // seulement ses fichiers de bibliothèque (sinon copie orpheline vivante).
-        let base = make_temp_dir().unwrap();
+        let base = crate::testutil::temp_dir("import");
         let ac = base.join("ac");
         let library = base.join("library");
         std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
@@ -1569,15 +1545,13 @@ mod tests {
         resolve_conflict(&conn, &cfg, "car_b", "car_a", "replace").unwrap();
 
         assert!(!link.exists(), "déploiement content/ de l'ancien mod retiré, pas laissé orphelin");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn keep_source_archive_pref_off_leaves_kept_path_empty() {
         // §10/§11 : réglage désactivé par défaut — aucune copie, aucun chemin
         // enregistré (comportement historique, pas d'espace disque en plus).
-        let base = make_temp_dir().unwrap();
+        let base = crate::testutil::temp_dir("import");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -1593,8 +1567,6 @@ mod tests {
         let versions = crate::overlay::get_versions(&conn, "nokeep_car").unwrap();
         assert!(versions[0].kept_archive_path.is_none());
         assert!(!library.join("_source_archives").exists());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -1602,7 +1574,7 @@ mod tests {
         // §10/§11 : réglage activé — le dossier source est copié à part dans la
         // bibliothèque et son chemin enregistré sur la version, pour permettre
         // plus tard « Réinstaller depuis l'archive source » (maintenance.rs).
-        let base = make_temp_dir().unwrap();
+        let base = crate::testutil::temp_dir("import");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -1627,7 +1599,5 @@ mod tests {
         assert!(kept_path.starts_with(&library), "copie rangée dans la bibliothèque, pas ailleurs");
         // Source d'origine toujours présente : `copy=true` préserve la source.
         assert!(src.join("keep_car").join("model.kn5").is_file(), "source d'origine intacte (copie)");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

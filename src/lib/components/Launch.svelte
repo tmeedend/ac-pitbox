@@ -22,6 +22,7 @@
   import NumberStepper from "./NumberStepper.svelte";
   import { saveSession, type SavedSession } from "$lib/savedSessions";
 
+  import { errorText } from "$lib/errors";
   let libCards = $state<ModCard[]>([]);
   let weathers = $state<WeatherOption[]>([]);
   let selectedIntent = $state("");
@@ -604,7 +605,7 @@
       await launchSession($state.snapshot(setup));
       info = t("launch.launchSuccess");
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       launching = false;
     }

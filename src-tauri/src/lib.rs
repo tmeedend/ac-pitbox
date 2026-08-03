@@ -7,6 +7,7 @@ mod compose;
 mod config;
 mod deploy;
 mod detect;
+mod errors;
 mod export;
 mod harmonize;
 mod identity;
@@ -29,6 +30,8 @@ mod shared;
 mod showroom;
 mod stock;
 mod submods;
+#[cfg(test)]
+mod testutil;
 mod uijson;
 mod weather;
 
@@ -223,9 +226,9 @@ fn mod_kind(kind: &str) -> modscan::ModKind {
 #[tauri::command]
 fn list_mod_resources(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<resources::ResourceFile>, String> {
     let cfg = config::load(&app);
-    let library = cfg.library_path.clone().ok_or("bibliothèque non configurée")?;
+    let library = cfg.library_path.clone().ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let m = overlay::get_mod(&conn, &id).map_err(|e| e.to_string())?.ok_or("mod introuvable")?;
+    let m = overlay::get_mod(&conn, &id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_NOT_FOUND)?;
     Ok(resources::list_resources(&resources::resources_dir(&library, mod_kind(&m.kind), &id)))
 }
 
@@ -236,10 +239,10 @@ fn list_mod_resources(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<r
 #[tauri::command]
 fn open_mod_resource(app: AppHandle, db: State<Db>, id: String, rel_path: String) -> Result<(), String> {
     let cfg = config::load(&app);
-    let library = cfg.library_path.clone().ok_or("bibliothèque non configurée")?;
+    let library = cfg.library_path.clone().ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     let dir = {
         let conn = db.0.lock().map_err(|e| e.to_string())?;
-        let m = overlay::get_mod(&conn, &id).map_err(|e| e.to_string())?.ok_or("mod introuvable")?;
+        let m = overlay::get_mod(&conn, &id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_NOT_FOUND)?;
         resources::resources_dir(&library, mod_kind(&m.kind), &id)
     };
     let path = resources::resolve_resource_path(&dir, &rel_path)?;

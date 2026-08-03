@@ -9,6 +9,7 @@ import { open, confirm, message } from "@tauri-apps/plugin-dialog";
 import { nav } from "$lib/nav.svelte";
 import { t } from "$lib/i18n/index.svelte";
 
+import { errorText } from "$lib/errors";
 export interface ModContextTarget {
   id_interne: string;
   is_stock: boolean;
@@ -23,7 +24,7 @@ export interface ModContextItem {
 }
 
 async function reportError(e: unknown) {
-  await message(String(e), { title: t("common.error"), kind: "error" });
+  await message(errorText(e), { title: t("common.error"), kind: "error" });
 }
 
 export function buildModContextItems(m: ModContextTarget, onchange: () => void): ModContextItem[] {

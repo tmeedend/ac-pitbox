@@ -18,6 +18,7 @@
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { t } from "$lib/i18n/index.svelte";
 
+  import { errorText } from "$lib/errors";
   let { kind }: { kind: ModKind } = $props();
 
   let layers = $state<LayerRow[]>([]);
@@ -70,7 +71,7 @@
       await fn();
       await load();
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }

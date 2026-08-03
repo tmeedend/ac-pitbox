@@ -51,7 +51,7 @@ fn clear_link(link: &Path) -> Result<(), String> {
 /// Rend `content/<type>s/<id>` conforme à l'état courant (version active + couches
 /// actives). Best-effort : sans dossier AC/bibliothèque configuré, no-op.
 pub fn recompose(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(), String> {
-    let m = overlay::get_mod(conn, mod_id).map_err(|e| e.to_string())?.ok_or("mod introuvable")?;
+    let m = overlay::get_mod(conn, mod_id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_NOT_FOUND)?;
     let kind = kind_of(&m.kind);
     let (Some(library), Some(link)) = (cfg.library_path.as_ref(), activation::content_link(cfg, kind, mod_id)) else {
         return Ok(()); // rien à projeter tant que les chemins ne sont pas configurés
@@ -109,14 +109,14 @@ fn recompose_stock(
         if is_junction(link) || deploy::is_deployed(link) {
             // Anormal : déjà projeté alors qu'aucune sauvegarde n'existe. On ne
             // peut pas déduire la base → on s'abstient plutôt que de risquer.
-            return Err("contenu de base incohérent (déjà projeté sans sauvegarde)".into());
+            return Err(crate::errors::INCONSISTENT_STOCK.into());
         }
         archive::copy_dir(link, &stock_base).map_err(|e| format!("sauvegarde du contenu de base : {e}"))?;
         // Vérification : la sauvegarde doit être non vide avant de toucher content/.
         let ok = std::fs::read_dir(&stock_base).map(|mut d| d.next().is_some()).unwrap_or(false);
         if !ok {
             let _ = std::fs::remove_dir_all(&stock_base);
-            return Err("sauvegarde du contenu de base vide — projection annulée".into());
+            return Err(crate::errors::EMPTY_STOCK_BACKUP.into());
         }
     }
 
@@ -147,13 +147,13 @@ fn recompose_managed(
     if !activation::is_mod_active(cfg, kind, mod_id) {
         return Ok(()); // mod inactif : rien à projeter
     }
-    let vid = m.active_version_id.clone().ok_or("aucune version active")?;
-    let base = overlay::get_version_path(conn, &vid).map_err(|e| e.to_string())?.ok_or("version introuvable")?;
+    let vid = m.active_version_id.clone().ok_or(crate::errors::NO_ACTIVE_VERSION)?;
+    let base = overlay::get_version_path(conn, &vid).map_err(|e| e.to_string())?.ok_or(crate::errors::VERSION_NOT_FOUND)?;
     let base = PathBuf::from(base);
 
     // Garde-fou : un mod géré ne doit jamais recouvrir un vrai dossier de content/.
     if link.exists() && !is_junction(link) && !deploy::is_deployed(link) {
-        return Err("un vrai dossier existe dans content/ — projection refusée (garde-fou)".into());
+        return Err(crate::errors::REAL_FOLDER_IN_CONTENT.into());
     }
     clear_link(link)?;
 
@@ -169,7 +169,7 @@ fn recompose_managed(
 
 /// Active/désactive une couche puis recompose son parent (§4.4).
 pub fn set_layer_active(conn: &Connection, cfg: &AppConfig, layer_id: &str, active: bool) -> Result<(), String> {
-    let layer = overlay::get_layer(conn, layer_id).map_err(|e| e.to_string())?.ok_or("couche introuvable")?;
+    let layer = overlay::get_layer(conn, layer_id).map_err(|e| e.to_string())?.ok_or(crate::errors::LAYER_NOT_FOUND)?;
     overlay::set_layer_active(conn, layer_id, active).map_err(|e| e.to_string())?;
     recompose(conn, cfg, &layer.parent_id)
 }
@@ -177,9 +177,9 @@ pub fn set_layer_active(conn: &Connection, cfg: &AppConfig, layer_id: &str, acti
 /// Réordonne une couche (échange sa priorité avec la voisine) puis recompose.
 /// `direction` : "up" = plus prioritaire, "down" = moins prioritaire.
 pub fn reorder_layer(conn: &Connection, cfg: &AppConfig, layer_id: &str, direction: &str) -> Result<(), String> {
-    let layer = overlay::get_layer(conn, layer_id).map_err(|e| e.to_string())?.ok_or("couche introuvable")?;
+    let layer = overlay::get_layer(conn, layer_id).map_err(|e| e.to_string())?.ok_or(crate::errors::LAYER_NOT_FOUND)?;
     let siblings = overlay::list_layers(conn, &layer.parent_id).map_err(|e| e.to_string())?;
-    let pos = siblings.iter().position(|l| l.id == layer_id).ok_or("couche introuvable")?;
+    let pos = siblings.iter().position(|l| l.id == layer_id).ok_or(crate::errors::LAYER_NOT_FOUND)?;
     let other = match direction {
         "up" => (pos + 1 < siblings.len()).then(|| &siblings[pos + 1]),
         "down" => (pos > 0).then(|| &siblings[pos - 1]),
@@ -232,7 +232,7 @@ mod tests {
 
     #[test]
     fn compose_over_managed_mod() {
-        let base = std::env::temp_dir().join(format!("pitbox-cmp-mng-{}", Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("cmp-mng");
         let ac = base.join("ac");
         let library = base.join("library");
         std::fs::create_dir_all(ac.join("content").join("tracks")).unwrap();
@@ -270,8 +270,6 @@ mod tests {
         set_layer_active(&conn, &cfg, &lid, false).unwrap();
         assert!(link.join("base.txt").is_file());
         assert!(!link.join("new.txt").exists(), "couche retirée du contenu projeté");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -281,7 +279,7 @@ mod tests {
         // `layouts` mis en cache dès la désactivation de la couche — sans
         // réindexation manuelle. Avant le fix, `recompose` ne rafraîchissait
         // jamais les champs mis en cache en overlay (§4.4).
-        let base = std::env::temp_dir().join(format!("pitbox-cmp-layouts-{}", Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("cmp-layouts");
         let ac = base.join("ac");
         let library = base.join("library");
         let link = ac.join("content").join("tracks").join("spa");
@@ -316,13 +314,11 @@ mod tests {
             !versions[0].layouts.iter().any(|l| l == "2022"),
             "layout de la couche retiré du cache après désactivation, sans réindexation manuelle"
         );
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn compose_over_stock_backs_up_and_restores() {
-        let base = std::env::temp_dir().join(format!("pitbox-cmp-stk-{}", Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("cmp-stk");
         let ac = base.join("ac");
         let library = base.join("library");
         // Vrai dossier Kunos dans content/.
@@ -353,8 +349,6 @@ mod tests {
         assert!(!is_junction(&link) && !deploy::is_deployed(&link), "retour à un vrai dossier");
         assert!(link.join("kunos.txt").is_file(), "contenu de base restauré");
         assert!(!link.join("2022.txt").exists(), "couche retirée");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -363,7 +357,7 @@ mod tests {
         // junction) doit disparaître dès qu'une entité est recomposée sous le
         // nouveau mécanisme — sinon `library::entity_dir` d'une bibliothèque
         // migrée continue de préférer ce reliquat périmé au vrai contenu.
-        let base = std::env::temp_dir().join(format!("pitbox-cmp-stale-{}", Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("cmp-stale");
         let ac = base.join("ac");
         let library = base.join("library");
         let link = ac.join("content").join("tracks").join("spa");
@@ -381,13 +375,11 @@ mod tests {
         recompose(&conn, &cfg, "spa").unwrap();
 
         assert!(!stale.exists(), "le reliquat périmé est nettoyé dès la première recomposition");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn priority_order_last_wins() {
-        let base = std::env::temp_dir().join(format!("pitbox-cmp-prio-{}", Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("cmp-prio");
         let ac = base.join("ac");
         let library = base.join("library");
         std::fs::create_dir_all(ac.join("content").join("tracks")).unwrap();
@@ -418,7 +410,5 @@ mod tests {
         // Remonter A au-dessus de B → A gagne.
         reorder_layer(&conn, &cfg, &a_id, "up").unwrap();
         assert_eq!(read(&link.join("conf.txt")), "A", "après réordonnancement, A gagne");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

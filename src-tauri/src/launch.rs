@@ -232,7 +232,7 @@ fn apply_assists(damage: u32, fuel_rate: u32, tyre_wear: u32, abs: bool, tractio
 /// ou junction) → OK ; sinon présent dans la bibliothèque → on l'active ; sinon
 /// erreur.
 fn ensure_available(conn: &Connection, cfg: &AppConfig, kind: ModKind, id: &str) -> Result<(), String> {
-    let ac = cfg.ac_install_path.as_ref().ok_or("dossier AC non configuré")?;
+    let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?;
     let content = ac.join("content").join(kind.content_folder()).join(id);
     if content.exists() {
         return Ok(());
@@ -246,7 +246,7 @@ fn ensure_available(conn: &Connection, cfg: &AppConfig, kind: ModKind, id: &str)
 /// Ouvre Content Manager sans argument (§12bis.5) : pratique pour parcourir
 /// son propre menu (réglages CM, contenu…) sans passer par une session Pit Box.
 pub fn open_content_manager(cfg: &AppConfig) -> Result<(), String> {
-    let cm = cfg.content_manager_exe.as_ref().ok_or("Content Manager non configuré")?;
+    let cm = cfg.content_manager_exe.as_ref().ok_or(crate::errors::CM_NOT_CONFIGURED)?;
     let mut cmd = Command::new(cm);
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
@@ -259,7 +259,7 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
     let cm = cfg
         .content_manager_exe
         .as_ref()
-        .ok_or("Content Manager non configuré")?;
+        .ok_or(crate::errors::CM_NOT_CONFIGURED)?;
 
     ensure_available(conn, cfg, ModKind::Car, &setup.car_id)?;
     ensure_available(conn, cfg, ModKind::Track, &setup.track_id)?;

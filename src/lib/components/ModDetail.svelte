@@ -16,6 +16,7 @@
   import { exportMod, deleteBrokenMod, reinstallFromArchive, type ExportReport } from "$lib/maintenance";
   import { t } from "$lib/i18n/index.svelte";
 
+  import { errorText } from "$lib/errors";
   interface Props {
     id: string | null;
     onchange?: () => void;
@@ -29,7 +30,7 @@
     try {
       await openModFolder(detail.id_interne);
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     }
   }
 
@@ -99,7 +100,7 @@
       onchange?.();
       await reload();
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     } finally {
       deleteBusy = false;
     }
@@ -121,7 +122,7 @@
       onchange?.();
       reinstallOk = true;
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     } finally {
       reinstallBusy = false;
     }
@@ -137,7 +138,7 @@
     try {
       exportResult = await exportMod(detail.id_interne, dir);
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     } finally {
       exporting = false;
     }
@@ -157,7 +158,7 @@
       await reload();
       onchange?.();
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     } finally {
       busy = false;
     }
@@ -172,7 +173,7 @@
       await reload();
       onchange?.();
     } catch (e) {
-      actionError = String(e);
+      actionError = errorText(e);
     } finally {
       busy = false;
     }

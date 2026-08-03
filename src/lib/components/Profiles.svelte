@@ -10,6 +10,7 @@
   } from "$lib/profiles";
   import { t } from "$lib/i18n/index.svelte";
 
+  import { errorText } from "$lib/errors";
   let profiles = $state<ProfileRow[]>([]);
   let newName = $state("");
   let busy = $state(false);
@@ -32,7 +33,7 @@
       newName = "";
       await refresh();
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }
@@ -47,7 +48,7 @@
       const r = await applyProfile(p.id);
       report = { name: p.name, r };
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }
