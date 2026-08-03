@@ -16,3 +16,8 @@ vite.config.ts.timestamp-*
 # Claude Code — réglages locaux (machine-specific)
 .claude/settings.local.json
 .aider*
+
+# Outils jetables de mise au point, hors app : jamais versionnés (leur code
+# vit le temps d'une investigation, cf. showroom-embed-test supprimé une fois
+# l'aperçu 3D intégré abandonné).
+/tools/

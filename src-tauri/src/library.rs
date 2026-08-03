@@ -179,7 +179,7 @@ fn read_skins_dir(skins_dir: &Path) -> Vec<SkinItem> {
             out.push(SkinItem { id, name, preview });
         }
     }
-    out.sort_by(|a, b| a.id.to_lowercase().cmp(&b.id.to_lowercase()));
+    out.sort_by_key(|a| a.id.to_lowercase());
     out
 }
 
@@ -310,21 +310,19 @@ mod tests {
     fn stock_mod_always_active() {
         // Le contenu de base Kunos est un vrai dossier (jamais une junction) :
         // il doit être considéré actif même sans dossier AC configuré.
-        let base = std::env::temp_dir().join(format!("pitbox-active-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("active");
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let now = chrono::Local::now().to_rfc3339();
         overlay::upsert_stock_mod(&conn, "ks_test_track", "Track", None, Some("Test"), &now).unwrap();
         let m = overlay::get_mod(&conn, "ks_test_track").unwrap().unwrap();
         assert!(is_active(&AppConfig::default(), &m));
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn managed_mod_active_when_deployed_via_hardlinks() {
         // §2 : is_active doit reconnaître le nouveau mécanisme de déploiement
         // (hardlinks), pas seulement l'ancien symlink.
-        let base = std::env::temp_dir().join(format!("pitbox-active-hl-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("active-hl");
         let ac = base.join("ac");
         let lib = base.join("library");
         std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
@@ -349,8 +347,6 @@ mod tests {
         crate::activation::activate(&conn, &cfg, "hl_car", None).unwrap();
         let m = overlay::get_mod(&conn, "hl_car").unwrap().unwrap();
         assert!(is_active(&cfg, &m), "déployé par hardlinks = actif");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -361,7 +357,7 @@ mod tests {
         // ce dossier peut encore traîner sur le disque avec un contenu périmé
         // (ex. un layout apporté par une couche depuis désactivée) ; il ne
         // doit plus jamais être préféré au vrai contenu déployé dans content/.
-        let base = std::env::temp_dir().join(format!("pitbox-stale-composed-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("stale-composed");
         let ac = base.join("ac");
         let lib = base.join("library");
         let link = ac.join("content").join("tracks").join("spa");
@@ -382,13 +378,11 @@ mod tests {
         let dir = entity_dir(&conn, &cfg, &m).unwrap();
         assert_eq!(dir, link, "doit résoudre vers content/, jamais vers l'ancien dossier composé périmé");
         assert!(!dir.join("ui").join("2022").is_dir(), "le layout périmé du reliquat ne doit pas apparaître");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn stock_car_skins_read_from_content() {
-        let base = std::env::temp_dir().join(format!("pitbox-lib-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("lib");
         let ac = base.join("ac");
         // Voiture de base avec un skin installé dans content/.
         let skin = ac.join("content").join("cars").join("ks_ferrari").join("skins").join("rosso");
@@ -403,8 +397,6 @@ mod tests {
         let skins = list_mod_skins(&conn, &cfg, "ks_ferrari");
         assert_eq!(skins.len(), 1, "skin de la voiture de base lu dans content/");
         assert_eq!(skins[0].id, "rosso");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -412,7 +404,7 @@ mod tests {
         // Mod dont la version active pointe vers un dossier bibliothèque
         // disparu (§6.4) : list_cards doit remonter broken=true, la même
         // détection que l'écran Maintenance (§9.3).
-        let base = std::env::temp_dir().join(format!("pitbox-broken-card-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("broken-card");
         std::fs::create_dir_all(&base).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let now = chrono::Local::now().to_rfc3339();
@@ -428,8 +420,6 @@ mod tests {
         let cards = list_cards(&conn, &AppConfig::default()).unwrap();
         let ghost = cards.iter().find(|c| c.base.id_interne == "ghost").unwrap();
         assert!(ghost.broken);
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -437,7 +427,7 @@ mod tests {
         // Le contenu de base n'a pas de version bibliothèque à proprement
         // parler (lecture directe dans content/) — ne doit jamais être signalé
         // cassé, même sans dossier AC configuré.
-        let base = std::env::temp_dir().join(format!("pitbox-broken-stock-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("broken-stock");
         std::fs::create_dir_all(&base).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let now = chrono::Local::now().to_rfc3339();
@@ -446,7 +436,5 @@ mod tests {
         let cards = list_cards(&conn, &AppConfig::default()).unwrap();
         let stock = cards.iter().find(|c| c.base.id_interne == "ks_test_track").unwrap();
         assert!(!stock.broken);
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

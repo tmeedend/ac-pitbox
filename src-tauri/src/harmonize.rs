@@ -12,7 +12,7 @@ use crate::rules::{self, Harmonized, Rules};
 use crate::uijson;
 
 fn is_empty(c: Option<&str>) -> bool {
-    c.map_or(true, |s| s.trim().is_empty())
+    c.is_none_or(|s| s.trim().is_empty())
 }
 
 /// Calcule l'harmonisation à partir des valeurs brutes du mod.

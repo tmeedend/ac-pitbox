@@ -127,7 +127,7 @@ mod tests {
 
     #[test]
     fn bulk_tags_favorite_and_category() {
-        let base = std::env::temp_dir().join(format!("pitbox-bulk-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("bulk");
         std::fs::create_dir_all(&base).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         seed_mod(&conn, "modA", &["endurance"]);
@@ -158,8 +158,6 @@ mod tests {
         set_category(&conn, &ids, Some("#gt")).unwrap();
         assert_eq!(overlay::get_mod(&conn, "modA").unwrap().unwrap().category.as_deref(), Some("#gt"));
         assert_eq!(overlay::get_mod(&conn, "modB").unwrap().unwrap().category.as_deref(), Some("#gt"));
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -167,7 +165,7 @@ mod tests {
         if !cfg!(windows) {
             return;
         }
-        let base = std::env::temp_dir().join(format!("pitbox-bulkact-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("bulkact");
         let ac = base.join("ac");
         let library = base.join("library");
         std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
@@ -206,7 +204,5 @@ mod tests {
         assert_eq!(report.ok.len(), 2, "delete_broken supprime même un mod sans fichiers valides");
         assert!(overlay::get_mod(&conn, "good").unwrap().is_none());
         assert!(overlay::get_mod(&conn, "ghost").unwrap().is_none());
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

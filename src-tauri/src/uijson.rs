@@ -97,9 +97,9 @@ fn parse(path: &Path) -> Option<UiInfo> {
 fn clean_assetto_json(input: &str) -> String {
     let mut result = String::with_capacity(input.len());
     let mut in_string = false;
-    let mut chars = input.chars().peekable();
+    let chars = input.chars().peekable();
 
-    while let Some(c) = chars.next() {
+    for c in chars {
         if c == '"' {
             in_string = !in_string;
             result.push(c);
@@ -318,7 +318,7 @@ mod tests {
     /// même être lu (specs + description), pas juste ignoré silencieusement.
     #[test]
     fn reads_specs_with_raw_newlines_in_description() {
-        let dir = std::env::temp_dir().join(format!("pitbox-uijson-{}", uuid::Uuid::new_v4()));
+        let dir = crate::testutil::temp_dir("uijson");
         std::fs::create_dir_all(dir.join("ui")).unwrap();
         std::fs::write(
             car_ui_path(&dir),
@@ -330,7 +330,5 @@ mod tests {
         assert!(specs.description.unwrap().contains("Welcome to the world."));
         assert_eq!(specs.bhp.as_deref(), Some("345bhp"));
         assert_eq!(specs.weight.as_deref(), Some("1176kg"));
-
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

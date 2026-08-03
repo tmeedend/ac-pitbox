@@ -253,19 +253,17 @@ mod tests {
         // TrackId du preset Quick Drive (quickdrive::track_id) — un texte non
         // vide y fait chercher à Content Manager un dossier de layout qui
         // n'existe pas (cas réel : circuit Deutschlandring de Fat-Alfie).
-        let dir = std::env::temp_dir().join(format!("pitbox-inspect-mono-{}", uuid::Uuid::new_v4()));
+        let dir = crate::testutil::temp_dir("inspect-mono");
         std::fs::create_dir_all(dir.join("ui")).unwrap();
         std::fs::write(dir.join("ui").join("ui_track.json"), b"{\"name\":\"Test\"}").unwrap();
 
         let layouts = track_layouts(&dir);
         assert_eq!(layouts, vec![String::new()]);
-
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn multi_layout_track_reports_subfolder_names() {
-        let dir = std::env::temp_dir().join(format!("pitbox-inspect-multi-{}", uuid::Uuid::new_v4()));
+        let dir = crate::testutil::temp_dir("inspect-multi");
         std::fs::create_dir_all(dir.join("ui").join("layout_a")).unwrap();
         std::fs::create_dir_all(dir.join("ui").join("layout_b")).unwrap();
         std::fs::write(dir.join("ui").join("layout_a").join("ui_track.json"), b"{}").unwrap();
@@ -273,8 +271,6 @@ mod tests {
 
         let layouts = track_layouts(&dir);
         assert_eq!(layouts, vec!["layout_a".to_string(), "layout_b".to_string()]);
-
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -283,7 +279,7 @@ mod tests {
         // dossier — elles vivent dans la config CSP "chargée" séparément
         // (§6.4bis), ex. extension/config/tracks/loaded/<id>.ini. Reproduit
         // un extrait réel (magione.ini) : RainFX + ajustements saisonniers.
-        let ac = std::env::temp_dir().join(format!("pitbox-inspect-loaded-{}", uuid::Uuid::new_v4()));
+        let ac = crate::testutil::temp_dir("inspect-loaded");
         let loaded_dir = ac.join("extension").join("config").join("tracks").join("loaded");
         std::fs::create_dir_all(&loaded_dir).unwrap();
         std::fs::write(
@@ -299,7 +295,5 @@ mod tests {
         // Un circuit sans config "chargée" (fichier absent) ne renvoie rien,
         // sans planter.
         assert!(csp_features_loaded(&ac, ModKind::Track, "unknown_track").is_empty());
-
-        let _ = std::fs::remove_dir_all(&ac);
     }
 }

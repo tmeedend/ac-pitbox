@@ -137,9 +137,9 @@ fn mode_data_weekend(s: &RaceSetup) -> String {
     .to_string()
 }
 
-/// Construit le preset Quick Drive complet (§8.3) — remplace `build_race_ini`
-/// + `PreparedConfig`. Renvoie le JSON sérialisé, prêt à écrire dans un
-/// fichier temporaire et passer via `race/quick?presetFile=…`.
+/// Construit le preset Quick Drive complet (§8.3) — remplace le couple
+/// `build_race_ini` / `PreparedConfig`. Renvoie le JSON sérialisé, prêt à
+/// écrire dans un fichier temporaire et passer via `race/quick?presetFile=…`.
 ///
 /// **Limites connues (best effort, pas vues dans un preset de référence)** :
 /// - **Skin du joueur** : le schéma Quick Drive ne porte **aucun** champ skin

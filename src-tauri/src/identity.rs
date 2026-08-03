@@ -121,7 +121,7 @@ mod tests {
 
     #[test]
     fn diff_content_counts_added_and_overwritten() {
-        let base = std::env::temp_dir().join(format!("pitbox-diff-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("diff");
         let existing = base.join("existing");
         let incoming = base.join("incoming");
 
@@ -139,7 +139,5 @@ mod tests {
         assert_eq!(d.existing_total, 3, "3 fichiers dans la base");
         assert_eq!(d.overwritten, 1, "seul ui_track.json est écrasé");
         assert_eq!(d.added, 2, "2 chemins nouveaux (extension probable)");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

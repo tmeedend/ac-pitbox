@@ -105,14 +105,13 @@ fn json_objects(text: &str) -> Vec<&str> {
                 }
                 depth += 1;
             }
-            b'}' => {
-                if depth > 0 {
+            b'}'
+                if depth > 0 => {
                     depth -= 1;
                     if depth == 0 {
                         out.push(&text[start..=i]);
                     }
                 }
-            }
             _ => {}
         }
     }

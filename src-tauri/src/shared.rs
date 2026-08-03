@@ -177,7 +177,7 @@ mod tests {
 
     #[test]
     fn install_identical_then_replaced() {
-        let base = std::env::temp_dir().join(format!("pitbox-shared-{}", uuid::Uuid::new_v4()));
+        let base = crate::testutil::temp_dir("shared");
         let ac = base.join("ac");
         std::fs::create_dir_all(ac.join("content")).unwrap();
 
@@ -207,7 +207,5 @@ mod tests {
         let installed =
             std::fs::read_to_string(ac.join("content").join("fonts").join("myfont.txt")).unwrap();
         assert_eq!(installed, "FONT_V2_DIFFERENT", "la version différente a écrasé");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 }
