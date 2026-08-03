@@ -76,12 +76,38 @@ src-tauri/src/          Backend Rust — un module par domaine
   maintenance.rs export.rs             Outils
   uijson.rs inspect.rs identity.rs     Lecture des fichiers AC
 src/lib/
-  components/           Composants Svelte (un écran = un composant)
+  components/           Composants Svelte (voir la carte des écrans)
+  components/detail/    Blocs extraits de la fiche détail
   *.ts                  Bindings typés vers les commandes Tauri
   i18n/locales/         fr.json + en.json
   styles/global.css     Design system Rosso Corsa
 docs/                   Documentation (voir ci-dessous)
 ```
+
+### Carte des écrans
+
+`AppShell.svelte` est la coquille : barre latérale + aiguillage sur
+`nav.section` (`src/lib/nav.svelte.ts`). Correspondance section → composant :
+
+| Section | Composant | Note |
+| --- | --- | --- |
+| `cars` / `tracks` | `Library.svelte` | **rendu deux fois**, prop `kind` — persistance suffixée par type |
+| `carskins` / `trackskins` / `sounds` | `Transversal.svelte` | **un seul composant pour trois entrées**, prop `variant` |
+| `race` | `Launch.svelte` | |
+| `import` | `Import.svelte` | contient `BulkImport` |
+| `rules` / `profiles` / `maintenance` | `RulesEditor` / `Profiles` / `Maintenance` | |
+| `apps` / `others` | `Apps` / `OtherMods` | |
+| `settings` / `about` | `Settings` / `About` | |
+
+Deux présentations coexistent pour une entité et **ne sont pas
+interchangeables** (§6.3) : `ModDetail.svelte` = panneau latéral,
+`DetailPage.svelte` = page pleine (ouverte par `Library` via son état
+`fullId`). Une évolution de fiche est souvent à faire **dans les deux**.
+
+Hors aiguillage : `TitleBar` et `ImportOverlay` (dans `AppShell`),
+`SetupWizard` (dans `routes/+page.svelte`, première configuration),
+`BulkEditPanel` / `ContextMenu` (dans `Library`), `OpponentPicker` /
+`SavedSessionsDialog` (dans `Launch`).
 
 Ajouter une fonctionnalité backend = 3 endroits : la fonction dans son module
 métier, la façade `pub fn` dans `commands/<domaine>.rs` **et** son inscription
@@ -94,8 +120,28 @@ Toute logique qui grossit dans `commands/` doit descendre dans son module
 métier. Les commandes sont `pub` (obligatoire hors du crate racine) et
 partagent `commands::prelude`.
 
-`Prefs` (`config.rs`) est en `#[serde(default)]` : un champ retiré est
-simplement ignoré dans les `config.json` existants, pas de migration à écrire.
+## Conventions qui ne se devinent pas
+
+Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux.
+
+- **`t("clé")` renvoie la clé elle-même si elle manque** dans les deux locales.
+  Une clé oubliée n'explose donc pas : elle s'affiche telle quelle à l'écran
+  (`detail.showroom`). C'est ce qui rend `errorText()` sûr, et c'est aussi
+  pourquoi une relecture visuelle attrape ces oublis mieux que le typage.
+- **Le CSS des composants est scopé** (voir l'en-tête de `global.css`) : seules
+  `.btn`, `.input`, `.mono`, `.pill`, `.gp-focus` sont globales. Déplacer du
+  markup d'un composant à l'autre n'emporte pas son style.
+- **Les clés `localStorage` sont suffixées par type** quand le composant est
+  rendu plusieurs fois : `pitbox.view.cars` / `pitbox.view.tracks`,
+  `pitbox.cols.<kind>`, `pitbox.sort.<kind>.key`. Oublier le suffixe fait
+  partager le réglage entre voitures et circuits. Ces clés sont encore des
+  littéraux dispersés (voir Chantiers).
+- **`Prefs` (`config.rs`) est en `#[serde(default)]`** : un champ retiré est
+  simplement ignoré dans les `config.json` existants, pas de migration à
+  écrire. Un champ ajouté prend sa valeur par défaut chez les utilisateurs
+  existants.
+- **Les tests backend tournent sur un vrai système de fichiers** : ils créent
+  des junctions et des hardlinks réels, donc uniquement sous Windows.
 
 ## Documentation
 
@@ -138,13 +184,6 @@ laisser pourrir ici.
       Provenance côté fiche, et les étapes côté Lancer. **Exige l'app lancée** :
       le CSS Svelte est scopé par composant, chaque extraction déplace des
       styles et `npm run check` ne prouve que la compilation, pas le rendu.
-- [ ] **Index manquants** (une demi-heure, rentable dès la session suivante) :
-      carte des écrans Svelte (quel composant = quel écran, `Transversal` sert
-      trois entrées de menu, `Library` est rendu deux fois avec une prop) ;
-      une ligne en tête de `global.css` disant quelles classes sont globales
-      (`.btn`, `.mono`, `.input`) par opposition aux classes locales aux
-      composants (`.lbl`, `.tag`, `.srcbox`) ; le fait que `t()` renvoie la clé
-      elle-même quand elle manque.
 - [ ] **Clés localStorage en littéraux dispersés** (`pitbox.session.car`,
       `pitbox.skin.<id>`, `pitbox.transversal.groupBy`…) → un module de
       constantes. Une clé mal orthographiée ne casse rien : elle perd
@@ -153,8 +192,10 @@ laisser pourrir ici.
       L'étape Azure de `release.yml` est écrite mais commentée, et placée avant
       le build — à déplacer après, ou à passer par `bundle.windows.signCommand`
       pour que l'exécutable *dans* l'installateur soit signé lui aussi.
-- [ ] **La CI n'a encore jamais tourné** : les workflows n'ont pas été poussés.
-      Le premier push est leur vrai test.
+- [ ] **La CI n'a encore jamais tourné.** Le push de `.github/workflows/` est
+      refusé tant que le jeton Git utilisé n'a pas le scope `workflow`
+      (`gh auth refresh -s workflow`, ou un PAT qui le porte). À faire depuis
+      un terminal interactif — le premier push est le vrai test des workflows.
 - [ ] **Runner de tests frontend** : délibérément absent. À reconsidérer
       seulement le jour où de la logique pure sera extraite des composants
       (le tri/regroupement/cumul de `Transversal.svelte` en est proche) — pour

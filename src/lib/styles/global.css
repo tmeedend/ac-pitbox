@@ -1,4 +1,28 @@
-/* Design system Pit Box — tokens repris de pitbox-mockup.html */
+/* Design system Pit Box — tokens repris de pitbox-mockup.html
+ *
+ * CE FICHIER EST LE SEUL CSS GLOBAL. Tout le reste vit dans un bloc <style>
+ * de composant, et Svelte le **scope** : une classe définie dans
+ * DetailPage.svelte n'existe que là.
+ *
+ * Conséquence à connaître avant de déplacer du markup d'un composant à un
+ * autre (extraction d'un bloc, découpage d'un écran) : le style ne suit pas,
+ * il faut l'emporter. Les seules classes utilisables partout sont celles
+ * définies ici :
+ *
+ *   .btn (+ .btn-primary, .btn-ghost)   boutons
+ *   .input (+ .input.mono)              champs et <select>
+ *   .mono                               police à chasse fixe (données)
+ *   .pill (+ .pill-ok, .pill-warn, .pill-err)   pastilles d'état
+ *   .gp-focus                           focus manette (gamepadNav.ts)
+ *
+ * Tout le reste — .lbl, .tag, .srcbox, .prov-note, .muted, .small… — est
+ * local au composant qui le définit, même si le nom se répète ailleurs.
+ *
+ * Filet de sécurité : après un déplacement, `npm run check` signale les
+ * « Unused CSS selector » restés derrière. Il ne dit rien, en revanche, sur
+ * les classes utilisées mais dont le style n'a pas suivi : ça, seul l'œil
+ * dans l'app le voit.
+ */
 :root {
   --rosso: #d40000;
   --rosso-bright: #ff5555;
