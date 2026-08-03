@@ -33,12 +33,12 @@
   import PowerCurve from "./PowerCurve.svelte";
   import { nav, pickSession, requestSection } from "$lib/nav.svelte";
   import { importState } from "$lib/importState.svelte";
-  import { historyEventLabel, historyDetails } from "$lib/history";
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
   import { getConfig } from "$lib/config";
   import { t } from "$lib/i18n/index.svelte";
   import LayersBlock from "./detail/LayersBlock.svelte";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
+  import TrackingBlock from "./detail/TrackingBlock.svelte";
 
   import { errorText } from "$lib/errors";
   interface Props {
@@ -519,10 +519,6 @@
     ];
   }
 
-  function fmtDate(iso: string): string {
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? iso.slice(0, 16).replace("T", " ") : d.toLocaleString();
-  }
 </script>
 
 <div class="page">
@@ -738,9 +734,7 @@
 
         <!-- Versions + Historique + Provenance -->
         <div class="col">
-          {@render versionsBlock(d)}
-          {@render historyBlock(d)}
-          {@render publishedBlock(d)}
+          <TrackingBlock detail={d} {busy} onactivateversion={(vid) => activate(vid)} />
           {@render provenanceBlock(d)}
           <LayersBlock modId={id} onchanged={refreshEntity} onerror={(m) => (actionError = m)} />
           <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
@@ -816,9 +810,7 @@
 
         <!-- Versions + Historique + Provenance -->
         <div class="col">
-          {@render versionsBlock(d)}
-          {@render historyBlock(d)}
-          {@render publishedBlock(d)}
+          <TrackingBlock detail={d} {busy} onactivateversion={(vid) => activate(vid)} />
           {@render provenanceBlock(d)}
           <LayersBlock modId={id} onchanged={refreshEntity} onerror={(m) => (actionError = m)} />
           <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
@@ -844,44 +836,6 @@
     bind:value={manualInput}
     onkeydown={(e) => e.key === "Enter" && addManual()}
   />
-{/snippet}
-
-{#snippet versionsBlock(d: ModDetail)}
-  <div class="lbl section">{t("detail.versionsLabel", { count: d.versions.length })}</div>
-  {#each d.versions as v}
-    <div class="ver" class:active={v.id === d.active_version_id}>
-      <span class="v-label mono">{v.version_label ?? t("detail.noVersionNumber")}</span>
-      {#if v.id === d.active_version_id}
-        <span class="tag cat tiny">{t("common.active").toUpperCase()}</span>
-      {:else}
-        <button class="v-activate" type="button" onclick={() => activate(v.id)} disabled={busy}>{t("common.activate")}</button>
-      {/if}
-      <span class="v-meta mono">{fmtDate(v.imported_at)}</span>
-    </div>
-  {/each}
-{/snippet}
-
-{#snippet historyBlock(d: ModDetail)}
-  <div class="lbl section">{t("detail.historyLabel")}</div>
-  <ul class="history">
-    {#each d.history.filter((h) => h.event !== "ACTIVATE" && h.event !== "DEACTIVATE") as h}
-      <li>
-        <span class="ev">{historyEventLabel(h.event)}</span>
-        <span class="det">{historyDetails(h.details)}</span>
-        <span class="ts mono">{fmtDate(h.timestamp)}</span>
-      </li>
-    {/each}
-  </ul>
-{/snippet}
-
-{#snippet publishedBlock(d: ModDetail)}
-  <div class="lbl section">{t("detail.publishedLabel")}</div>
-  <div class="srcbox">
-    <div class="srcrow">
-      <span class="src-k">{t("detail.estimated")}</span>
-      <span class="src-v">{d.published_at ? fmtDate(d.published_at) : "—"}</span>
-    </div>
-  </div>
 {/snippet}
 
 {#snippet provenanceBlock(d: ModDetail)}
@@ -1443,10 +1397,6 @@
     font-family: var(--mono);
     border: 1px solid var(--line);
   }
-  .tag.tiny {
-    font-size: 7px;
-    padding: 0 5px;
-  }
   .tag.cat {
     background: var(--rosso-dim);
     color: var(--rosso-bright);
@@ -1485,65 +1435,7 @@
     font-size: 11px;
   }
 
-  .ver {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    border: 1px solid var(--line);
-    background: var(--panel2);
-    padding: 6px 10px;
-    margin-bottom: 5px;
-  }
-  .ver.active {
-    border-left: 3px solid var(--rosso);
-  }
-  .v-label {
-    font-size: 10px;
-    font-weight: 600;
-  }
-  .v-activate {
-    background: var(--raised);
-    border: 1px solid var(--line);
-    color: var(--txt2);
-    font-size: 9px;
-    padding: 2px 7px;
-  }
-  .v-activate:hover {
-    border-color: var(--rosso-border);
-    color: var(--rosso-bright);
-  }
-  .v-meta {
-    margin-left: auto;
-    color: var(--faint);
-    font-size: 9px;
-  }
 
-  .history {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-  .history li {
-    display: flex;
-    flex-direction: column;
-    font-size: 11px;
-    border-left: 2px solid var(--line);
-    padding-left: 8px;
-  }
-  .history .ev {
-    color: var(--rosso-bright);
-    font-weight: 600;
-    font-size: 9px;
-    letter-spacing: 0.5px;
-  }
-  .history .det {
-    color: var(--txt2);
-  }
-  .history .ts {
-    color: var(--muted2);
-    font-size: 9px;
-  }
   .muted {
     color: var(--muted);
   }
