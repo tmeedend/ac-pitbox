@@ -8,13 +8,7 @@
     deactivateMod,
     getModDetail,
     listLibrary,
-    listLayers,
-    deleteLayer,
-    setLayerActive,
-    reorderLayer,
     openModFolder,
-    listModResources,
-    openModResource,
     previewSrc,
     setFavorite,
     setManualTags,
@@ -22,9 +16,7 @@
     type ModDetail,
     type ModKind,
     type NativeSpecs,
-    type LayerRow,
     type LayoutItem,
-    type ResourceFile,
   } from "$lib/library";
   import { listModSkins, openNativeShowroom, type SkinItem } from "$lib/launch";
   import { exportMod, deletePack, deleteBrokenMod, reinstallFromArchive, type ExportReport } from "$lib/maintenance";
@@ -45,6 +37,8 @@
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
   import { getConfig } from "$lib/config";
   import { t } from "$lib/i18n/index.svelte";
+  import LayersBlock from "./detail/LayersBlock.svelte";
+  import ResourcesBlock from "./detail/ResourcesBlock.svelte";
 
   import { errorText } from "$lib/errors";
   interface Props {
@@ -76,9 +70,7 @@
   let siblings = $state<ModCard[]>([]);
   let packBusy = $state(false);
   // Couches / extensions rattachées (§4.4).
-  let layerList = $state<LayerRow[]>([]);
   // Fichiers annexes du mod (§4.6, Bloc Ressources) — lus en direct sur disque.
-  let resourceList = $state<ResourceFile[]>([]);
 
   // Image héros : voiture → skin sélectionné ; circuit → preview du layout
   // sélectionné ; sinon preview par défaut du mod.
@@ -160,17 +152,14 @@
     }
   }
 
-  let layerBusy = $state(false);
 
   /** Recharge la fiche + les couches + les ressources (après compositing/
    * import) en préservant le layout sélectionné : activer une couche ajoute
    * souvent des layouts (§4.4). */
   async function refreshEntity() {
     const current = id;
-    const [d, ls, rs] = await Promise.all([getModDetail(current), listLayers(current), listModResources(current)]);
+    const d = await getModDetail(current);
     if (current !== id) return;
-    layerList = ls;
-    resourceList = rs;
     if (d) {
       const prevLayoutId = detail?.track?.layouts[previewLayout]?.id;
       detail = d;
@@ -188,70 +177,6 @@
     }
   }
 
-  async function removeLayer(layer: LayerRow) {
-    const ok = await confirm(t("detail.layerDeleteConfirm", { name: layer.source_archive ?? layer.name }), {
-      title: t("detail.layerDeleteTitle"),
-      kind: "warning",
-    });
-    if (!ok) return;
-    layerBusy = true;
-    actionError = "";
-    try {
-      await deleteLayer(layer.id);
-      await refreshEntity();
-    } catch (e) {
-      actionError = errorText(e);
-    } finally {
-      layerBusy = false;
-    }
-  }
-
-  async function toggleLayer(layer: LayerRow) {
-    layerBusy = true;
-    actionError = "";
-    try {
-      await setLayerActive(layer.id, !layer.is_active);
-      await refreshEntity();
-    } catch (e) {
-      actionError = errorText(e);
-    } finally {
-      layerBusy = false;
-    }
-  }
-
-  async function moveLayer(layer: LayerRow, direction: "up" | "down") {
-    layerBusy = true;
-    actionError = "";
-    try {
-      await reorderLayer(layer.id, direction);
-      await refreshEntity();
-    } catch (e) {
-      actionError = errorText(e);
-    } finally {
-      layerBusy = false;
-    }
-  }
-
-  /** Taille lisible (Ko/Mo/Go, base 1024) pour le bloc Ressources (§4.6). */
-  function fmtFileSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} o`;
-    const units = ["Ko", "Mo", "Go"];
-    let v = bytes;
-    let i = -1;
-    do {
-      v /= 1024;
-      i++;
-    } while (v >= 1024 && i < units.length - 1);
-    return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
-  }
-
-  async function openResource(f: ResourceFile) {
-    try {
-      await openModResource(id, f.rel_path);
-    } catch (e) {
-      actionError = errorText(e);
-    }
-  }
 
   async function uninstallPack() {
     if (!detail?.source_pack || packBusy) return;
@@ -320,18 +245,8 @@
     const current = id;
     actionError = "";
     siblings = [];
-    layerList = [];
-    resourceList = [];
     previewLayout = 0;
     trackSkinsLoading = true;
-    // Couches/extensions rattachées (§4.4) : rangées à part, la base est intacte.
-    listLayers(current).then((ls) => {
-      if (current === id) layerList = ls;
-    });
-    // Fichiers annexes (§4.6) : lus en direct sur disque, jamais mémorisés.
-    listModResources(current).then((rs) => {
-      if (current === id) resourceList = rs;
-    });
     getModDetail(current).then((d) => {
       if (current !== id) return;
       detail = d;
@@ -827,8 +742,8 @@
           {@render historyBlock(d)}
           {@render publishedBlock(d)}
           {@render provenanceBlock(d)}
-          {@render layersBlock()}
-          {@render resourcesBlock()}
+          <LayersBlock modId={id} onchanged={refreshEntity} onerror={(m) => (actionError = m)} />
+          <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
         </div>
       {:else}
         <!-- Layouts (galerie illustrée par le tracé, comme les skins voiture) -->
@@ -905,8 +820,8 @@
           {@render historyBlock(d)}
           {@render publishedBlock(d)}
           {@render provenanceBlock(d)}
-          {@render layersBlock()}
-          {@render resourcesBlock()}
+          <LayersBlock modId={id} onchanged={refreshEntity} onerror={(m) => (actionError = m)} />
+          <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
         </div>
       {/if}
     </div>
@@ -1022,51 +937,6 @@
   {/if}
 {/snippet}
 
-{#snippet layersBlock()}
-  {#if layerList.length}
-    {@const ordered = [...layerList].reverse()}
-    <div class="lbl section">{t("detail.layersLabel", { count: layerList.length })}</div>
-    <div class="prov-note">{t("detail.layersNote")}</div>
-    <ul class="layer-list">
-      {#each ordered as l, i (l.id)}
-        <li class="layer-row" class:inactive={!l.is_active}>
-          <label class="layer-tog" title={l.is_active ? t("detail.layerActiveOn") : t("detail.layerActiveOff")}>
-            <input type="checkbox" checked={l.is_active} disabled={layerBusy} onchange={() => toggleLayer(l)} />
-          </label>
-          <div class="layer-main">
-            <span class="layer-nm">{l.source_archive ?? l.name}</span>
-            <span class="layer-counts mono">{t("detail.layerCounts", { added: l.added_count, overwritten: l.overwritten_count })}</span>
-          </div>
-          <div class="layer-ord">
-            <button class="layer-arrow" type="button" title={t("detail.layerUp")} disabled={layerBusy || i === 0} onclick={() => moveLayer(l, "up")}>▲</button>
-            <button class="layer-arrow" type="button" title={t("detail.layerDown")} disabled={layerBusy || i === ordered.length - 1} onclick={() => moveLayer(l, "down")}>▼</button>
-          </div>
-          <button class="layer-x" type="button" title={t("detail.layerDeleteTitle")} disabled={layerBusy} onclick={() => removeLayer(l)}>✕</button>
-        </li>
-      {/each}
-    </ul>
-    <div class="prov-note">{t("detail.layersRecomposeNote")}</div>
-  {/if}
-{/snippet}
-
-{#snippet resourcesBlock()}
-  <div class="lbl section">{t("detail.resourcesLabel", { count: resourceList.length })}</div>
-  {#if resourceList.length}
-    <div class="prov-note">{t("detail.resourcesNote")}</div>
-    <ul class="res-list">
-      {#each resourceList as f (f.rel_path)}
-        <li>
-          <button class="res-row" type="button" onclick={() => openResource(f)} title={t("detail.resourceOpenTooltip")}>
-            <span class="res-nm">{f.rel_path}</span>
-            <span class="res-size mono">{fmtFileSize(f.size_bytes)}</span>
-          </button>
-        </li>
-      {/each}
-    </ul>
-  {:else}
-    <div class="muted small">{t("detail.noResources")}</div>
-  {/if}
-{/snippet}
 
 <style>
   .page {
@@ -1739,123 +1609,8 @@
   }
 
   /* Couches / extensions (§4.4) */
-  .layer-list {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin: 6px 0 0;
-    padding: 0;
-  }
-  .layer-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    border: 1px solid var(--line);
-    background: var(--panel2);
-    padding: 5px 9px;
-  }
-  .layer-row.inactive {
-    opacity: 0.5;
-  }
-  .layer-tog {
-    flex: none;
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-  }
-  .layer-ord {
-    flex: none;
-    display: flex;
-    flex-direction: column;
-    line-height: 0.7;
-  }
-  .layer-arrow {
-    background: none;
-    border: none;
-    color: var(--muted);
-    cursor: pointer;
-    font-size: 8px;
-    padding: 1px 2px;
-  }
-  .layer-arrow:disabled {
-    opacity: 0.3;
-    cursor: default;
-  }
-  .layer-arrow:not(:disabled):hover {
-    color: var(--txt2);
-  }
-  .layer-main {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .layer-nm {
-    font-size: 11px;
-    color: var(--txt2);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .layer-counts {
-    font-size: 9px;
-    color: var(--muted2);
-  }
-  .layer-x {
-    flex: none;
-    background: none;
-    border: none;
-    color: var(--muted);
-    cursor: pointer;
-    font-size: 12px;
-    padding: 2px 4px;
-  }
-  .layer-x:hover {
-    color: var(--rosso-bright);
-  }
 
   /* Bloc Ressources (§4.6) */
-  .res-list {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin: 6px 0 0;
-    padding: 0;
-  }
-  .res-row {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    border: 1px solid var(--line);
-    background: var(--panel2);
-    padding: 5px 9px;
-    text-align: left;
-    cursor: pointer;
-  }
-  .res-row:hover {
-    border-color: var(--rosso-border);
-  }
-  .res-nm {
-    flex: 1;
-    min-width: 0;
-    font-size: 11px;
-    color: var(--txt2);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .res-row:hover .res-nm {
-    color: var(--rosso-bright);
-  }
-  .res-size {
-    flex: none;
-    font-size: 9px;
-    color: var(--muted2);
-  }
 
   /* Provenance / pack d'origine (§4.7) */
   .srcbox {
