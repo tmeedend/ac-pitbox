@@ -164,7 +164,11 @@ pub fn build_preset(s: &RaceSetup) -> Result<String, String> {
         SessionType::Race => ("/Pages/Drive/QuickDrive_Weekend.xaml", mode_data_weekend(s)),
     };
 
-    let weather_id = if s.weather.is_empty() { "3_clear" } else { s.weather.as_str() };
+    let weather_id = if s.weather.is_empty() {
+        "3_clear"
+    } else {
+        s.weather.as_str()
+    };
     let wind_speed = s.wind_speed_kmh.unwrap_or(0) as f64;
 
     let preset = json!({
@@ -275,8 +279,16 @@ mod tests {
         s.qualifying = true;
         s.qualify_minutes = 20;
         s.opponents = vec![
-            Opponent { car_id: "ks_ferrari_488_gt3".into(), ai_level: 92, car_skin: Some("red".into()) },
-            Opponent { car_id: "ks_porsche_991_gt3_r".into(), ai_level: 87, car_skin: None },
+            Opponent {
+                car_id: "ks_ferrari_488_gt3".into(),
+                ai_level: 92,
+                car_skin: Some("red".into()),
+            },
+            Opponent {
+                car_id: "ks_porsche_991_gt3_r".into(),
+                ai_level: 87,
+                car_skin: None,
+            },
         ];
         let json = build_preset(&s).unwrap();
         let v: Value = serde_json::from_str(&json).unwrap();
@@ -302,7 +314,10 @@ mod tests {
         let json = build_preset(&s).unwrap();
         let v: Value = serde_json::from_str(&json).unwrap();
         let mode_data: Value = serde_json::from_str(v["ModeData"].as_str().unwrap()).unwrap();
-        assert!(mode_data["QualificationLength"].is_null(), "pas de qualification = weekend sans cette phase");
+        assert!(
+            mode_data["QualificationLength"].is_null(),
+            "pas de qualification = weekend sans cette phase"
+        );
         assert!(mode_data["PracticeLength"].is_null());
     }
 

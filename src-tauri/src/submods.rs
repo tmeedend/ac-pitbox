@@ -184,7 +184,10 @@ fn project_skin(
     let link = skins_dir.join(skin_name);
     if link.exists() {
         // Déjà présent (vrai dossier ou junction) : on ne touche à rien.
-        return (false, Some(format!("« {skin_name} » déjà présent dans skins/ — non projeté")));
+        return (
+            false,
+            Some(format!("« {skin_name} » déjà présent dans skins/ — non projeté")),
+        );
     }
     match activation::create_junction(&link, store) {
         Ok(()) => (true, None),
@@ -223,7 +226,9 @@ fn import_track_pack_extras(
         // attendue par `layers::store_layer` (composée telle quelle sur la base).
         let staging = std::env::temp_dir().join(format!("pitbox-track-extra-{}", Uuid::new_v4()));
         let dest_file = staging.join("extension").join(name);
-        let Some(dest_parent) = dest_file.parent() else { continue };
+        let Some(dest_parent) = dest_file.parent() else {
+            continue;
+        };
         if std::fs::create_dir_all(dest_parent).is_err() || std::fs::copy(&src, &dest_file).is_err() {
             let _ = std::fs::remove_dir_all(&staging);
             continue;
@@ -232,9 +237,22 @@ fn import_track_pack_extras(
         let diff = library::folder_path(conn, cfg, parent_id)
             .ok()
             .map(|base| identity::diff_content(&staging, &base))
-            .unwrap_or(identity::DiffStats { added: 1, overwritten: 0, existing_total: 0 });
+            .unwrap_or(identity::DiffStats {
+                added: 1,
+                overwritten: 0,
+                existing_total: 0,
+            });
         let _ = layers::store_layer(
-            conn, library, parent_id, ModKind::Track, layer_name, &staging, true, &diff, archive_name, mode,
+            conn,
+            library,
+            parent_id,
+            ModKind::Track,
+            layer_name,
+            &staging,
+            true,
+            &diff,
+            archive_name,
+            mode,
         );
         let _ = std::fs::remove_dir_all(&staging);
         // Couche active par défaut : composer tout de suite (comme les autres
@@ -244,7 +262,9 @@ fn import_track_pack_extras(
 }
 
 fn layer_exists(conn: &Connection, parent_id: &str, name: &str) -> bool {
-    overlay::list_layers(conn, parent_id).map(|v| v.iter().any(|l| l.name == name)).unwrap_or(false)
+    overlay::list_layers(conn, parent_id)
+        .map(|v| v.iter().any(|l| l.name == name))
+        .unwrap_or(false)
 }
 
 fn parent_skins_dir(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Option<PathBuf> {
@@ -300,7 +320,11 @@ pub fn list_track_skin_options(conn: &Connection, track_id: &str) -> Vec<TrackSk
         .filter(|s| s.sub_type == "TRACK_SKIN")
         .map(|s| {
             let image = find_preview_image(Path::new(&s.library_path));
-            TrackSkinOption { name: s.name, image, active: s.is_active }
+            TrackSkinOption {
+                name: s.name,
+                image,
+                active: s.is_active,
+            }
         })
         .collect()
 }
@@ -356,7 +380,9 @@ pub fn set_track_skin_active(
 /// appel — pas de mise à jour incrémentale, plus simple et plus sûr qu'un
 /// suivi fin de « quels fichiers appartiennent à quel skin ». Best-effort.
 fn recompose_track_skins(conn: &Connection, cfg: &AppConfig, track_id: &str) -> Result<(), String> {
-    let Some(skins_dir) = parent_skins_dir(conn, cfg, track_id) else { return Ok(()) };
+    let Some(skins_dir) = parent_skins_dir(conn, cfg, track_id) else {
+        return Ok(());
+    };
     let default_dir = skins_dir.join("default");
 
     let mut active: Vec<overlay::SubModRow> = overlay::list_subs_for_parent(conn, track_id)
@@ -396,9 +422,13 @@ fn recompose_track_skins(conn: &Connection, cfg: &AppConfig, track_id: &str) -> 
 /// ceux ajoutés après le sont). Lecture live du disque à chaque appel
 /// (comme les ressources), idempotent, best-effort.
 pub fn sync_bundled_track_skins(conn: &Connection, cfg: &AppConfig, track_id: &str) {
-    let Some(skins_dir) = parent_skins_dir(conn, cfg, track_id) else { return };
+    let Some(skins_dir) = parent_skins_dir(conn, cfg, track_id) else {
+        return;
+    };
     let cm_skins_dir = skins_dir.join("cm_skins");
-    let Ok(entries) = std::fs::read_dir(&cm_skins_dir) else { return };
+    let Ok(entries) = std::fs::read_dir(&cm_skins_dir) else {
+        return;
+    };
     let now = Local::now().to_rfc3339();
     for e in entries.flatten() {
         let path = e.path();
@@ -454,7 +484,11 @@ fn parent_subdir(conn: &Connection, cfg: &AppConfig, parent_id: &str, sub: &str)
             }
         }
     }
-    let folder = if m.as_ref().map(|m| m.kind.as_str()) == Some("Track") { "tracks" } else { "cars" };
+    let folder = if m.as_ref().map(|m| m.kind.as_str()) == Some("Track") {
+        "tracks"
+    } else {
+        "cars"
+    };
     cfg.ac_install_path
         .as_ref()
         .map(|ac| ac.join("content").join(folder).join(parent_id).join(sub))
@@ -466,7 +500,8 @@ fn is_track_skin(conn: &Connection, parent_id: &str, src: &Path) -> bool {
     if let Ok(Some(m)) = overlay::get_mod(conn, parent_id) {
         return m.kind == "Track";
     }
-    src.components().any(|c| c.as_os_str().to_string_lossy().eq_ignore_ascii_case("tracks"))
+    src.components()
+        .any(|c| c.as_os_str().to_string_lossy().eq_ignore_ascii_case("tracks"))
 }
 
 /// Tente d'identifier la voiture ciblée par un mod de son quand la détection
@@ -562,7 +597,9 @@ fn import_sound(
 /// fichiers du mod (bascule exclusive). Le son d'origine est **sauvegardé une
 /// fois** pour pouvoir y revenir — jamais détruit irréversiblement (§12bis.2).
 pub fn activate_sound(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<(), String> {
-    let sub = overlay::get_sub_mod(conn, sub_id).map_err(|e| e.to_string())?.ok_or(crate::errors::SOUND_NOT_FOUND)?;
+    let sub = overlay::get_sub_mod(conn, sub_id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::SOUND_NOT_FOUND)?;
     if sub.sub_type != "SOUND" {
         return Err(crate::errors::NOT_A_SOUND_MOD.into());
     }
@@ -597,7 +634,9 @@ pub fn restore_sound(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Res
 /// projection (skin) ou restaure le son d'origine (son actif), efface les
 /// fichiers stockés, puis la ligne overlay. Garde-fou junction respecté.
 pub fn remove_sub(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<(), String> {
-    let sub = overlay::get_sub_mod(conn, sub_id).map_err(|e| e.to_string())?.ok_or(crate::errors::SUB_MOD_NOT_FOUND)?;
+    let sub = overlay::get_sub_mod(conn, sub_id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::SUB_MOD_NOT_FOUND)?;
     if !sub.removable {
         return Err(crate::errors::BUNDLED_NOT_REMOVABLE.into());
     }
@@ -676,21 +715,44 @@ mod tests {
         assert!(modscan::scan(&base.join("src")).is_empty());
 
         // Import (copie) : stocké à part + enregistré dans sub_mods.
-        let res = import_subs(&conn, &cfg, &library, "ferrari_skins.7z", &subs, true, ExtractionMode::InfoOnly);
+        let res = import_subs(
+            &conn,
+            &cfg,
+            &library,
+            "ferrari_skins.7z",
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+        );
         assert_eq!(res.len(), 1);
         assert_eq!(res[0].sub_type, "SKIN");
-        assert!(library.join("skins").join("ferrari_488").join("af_corse_51").join("preview.jpg").is_file());
+        assert!(library
+            .join("skins")
+            .join("ferrari_488")
+            .join("af_corse_51")
+            .join("preview.jpg")
+            .is_file());
         let stored = overlay::list_subs_for_parent(&conn, "ferrari_488").unwrap();
         assert_eq!(stored.len(), 1);
         assert_eq!(stored[0].name, "af_corse_51");
 
         // Idempotence : ré-import → pas de doublon.
-        let res2 = import_subs(&conn, &cfg, &library, "ferrari_skins.7z", &modscan::scan_subs(&base.join("src")), true, ExtractionMode::InfoOnly);
+        let res2 = import_subs(
+            &conn,
+            &cfg,
+            &library,
+            "ferrari_skins.7z",
+            &modscan::scan_subs(&base.join("src")),
+            true,
+            ExtractionMode::InfoOnly,
+        );
         assert!(res2.is_empty());
         assert_eq!(overlay::list_subs_for_parent(&conn, "ferrari_488").unwrap().len(), 1);
 
         // Suppression propre : fichiers stockés + ligne overlay effacés.
-        let sub_id = overlay::list_subs_for_parent(&conn, "ferrari_488").unwrap()[0].id.clone();
+        let sub_id = overlay::list_subs_for_parent(&conn, "ferrari_488").unwrap()[0]
+            .id
+            .clone();
         remove_sub(&conn, &cfg, &sub_id).unwrap();
         assert!(!library.join("skins").join("ferrari_488").join("af_corse_51").exists());
         assert!(overlay::list_subs_for_parent(&conn, "ferrari_488").unwrap().is_empty());
@@ -716,7 +778,15 @@ mod tests {
 
         let subs = modscan::scan_subs(&base.join("src"));
         assert_eq!(subs.len(), 1);
-        import_subs(&conn, &cfg, &library, "spa_skins.7z", &subs, true, ExtractionMode::InfoOnly);
+        import_subs(
+            &conn,
+            &cfg,
+            &library,
+            "spa_skins.7z",
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+        );
 
         // Classé TRACK_SKIN, stocké sous track_skins/.
         let stored = overlay::list_subs_for_parent(&conn, "spa").unwrap();
@@ -739,10 +809,24 @@ mod tests {
         let cfg = AppConfig::default();
         let now = Local::now().to_rfc3339();
 
-        overlay::upsert_mod(&conn, "ks_black_cat_county", "Track", None, Some("Black Cat County"), "h", None, &now)
-            .unwrap();
+        overlay::upsert_mod(
+            &conn,
+            "ks_black_cat_county",
+            "Track",
+            None,
+            Some("Black Cat County"),
+            "h",
+            None,
+            &now,
+        )
+        .unwrap();
 
-        let track = base.join("src").join("assettocorsa").join("content").join("tracks").join("ks_black_cat_county");
+        let track = base
+            .join("src")
+            .join("assettocorsa")
+            .join("content")
+            .join("tracks")
+            .join("ks_black_cat_county");
         let skin = track.join("skins").join("cm_skins").join("Black Cat County CF1");
         std::fs::create_dir_all(&skin).unwrap();
         std::fs::write(track.join("ext_config.ini"), b"[BASIC]\n").unwrap();
@@ -752,7 +836,15 @@ mod tests {
         assert_eq!(subs.len(), 1);
         assert_eq!(subs[0].parent_id, "ks_black_cat_county");
 
-        import_subs(&conn, &cfg, &library, "black_cat_county_cf1.zip", &subs, true, ExtractionMode::InfoOnly);
+        import_subs(
+            &conn,
+            &cfg,
+            &library,
+            "black_cat_county_cf1.zip",
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+        );
 
         let stored = overlay::list_subs_for_parent(&conn, "ks_black_cat_county").unwrap();
         assert_eq!(stored.len(), 1);
@@ -784,12 +876,29 @@ mod tests {
         std::fs::create_dir_all(&library).unwrap();
         std::fs::create_dir_all(ac.join("content").join("tracks").join("ks_black_cat_county")).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         let now = Local::now().to_rfc3339();
 
-        overlay::upsert_stock_mod(&conn, "ks_black_cat_county", "Track", None, Some("Black Cat County"), &now).unwrap();
+        overlay::upsert_stock_mod(
+            &conn,
+            "ks_black_cat_county",
+            "Track",
+            None,
+            Some("Black Cat County"),
+            &now,
+        )
+        .unwrap();
 
-        let pack = base.join("src").join("assettocorsa").join("content").join("tracks").join("ks_black_cat_county");
+        let pack = base
+            .join("src")
+            .join("assettocorsa")
+            .join("content")
+            .join("tracks")
+            .join("ks_black_cat_county");
         let cf1 = pack.join("skins").join("cm_skins").join("Black Cat County CF1");
         std::fs::create_dir_all(&cf1).unwrap();
         std::fs::write(cf1.join("preview.png"), b"IMG").unwrap();
@@ -800,7 +909,15 @@ mod tests {
         std::fs::write(other.join("shared.dds"), b"OTHER").unwrap();
 
         let subs = modscan::scan_subs(&base.join("src"));
-        import_subs(&conn, &cfg, &library, "black_cat_county_cf1.zip", &subs, true, ExtractionMode::InfoOnly);
+        import_subs(
+            &conn,
+            &cfg,
+            &library,
+            "black_cat_county_cf1.zip",
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+        );
 
         let projected = ac
             .join("content")
@@ -809,17 +926,31 @@ mod tests {
             .join("skins")
             .join("cm_skins")
             .join("Black Cat County CF1");
-        assert!(projected.is_dir(), "devrait être projeté sous skins/cm_skins/, pas skins/ directement");
+        assert!(
+            projected.is_dir(),
+            "devrait être projeté sous skins/cm_skins/, pas skins/ directement"
+        );
 
-        let default_dir = ac.join("content").join("tracks").join("ks_black_cat_county").join("skins").join("default");
-        assert!(list_active_track_skins(&conn, "ks_black_cat_county").is_empty(), "aucun actif au départ");
+        let default_dir = ac
+            .join("content")
+            .join("tracks")
+            .join("ks_black_cat_county")
+            .join("skins")
+            .join("default");
+        assert!(
+            list_active_track_skins(&conn, "ks_black_cat_county").is_empty(),
+            "aucun actif au départ"
+        );
 
         set_track_skin_active(&conn, &cfg, "ks_black_cat_county", "Black Cat County CF1", true).unwrap();
         assert_eq!(
             list_active_track_skins(&conn, "ks_black_cat_county"),
             vec!["Black Cat County CF1".to_string()]
         );
-        assert!(default_dir.join("preview.png").is_file(), "fichiers de CF1 composés dans default/");
+        assert!(
+            default_dir.join("preview.png").is_file(),
+            "fichiers de CF1 composés dans default/"
+        );
         assert!(!default_dir.join("other.dds").exists(), "Other Skin pas encore actif");
         assert_eq!(
             std::fs::read_to_string(default_dir.join("cm_skins_active.json")).unwrap(),
@@ -832,9 +963,18 @@ mod tests {
         set_track_skin_active(&conn, &cfg, "ks_black_cat_county", "Other Skin", true).unwrap();
         let mut active = list_active_track_skins(&conn, "ks_black_cat_county");
         active.sort();
-        assert_eq!(active, vec!["Black Cat County CF1".to_string(), "Other Skin".to_string()]);
-        assert!(default_dir.join("preview.png").is_file(), "fichier propre à CF1 toujours présent");
-        assert!(default_dir.join("other.dds").is_file(), "fichier propre à Other Skin ajouté");
+        assert_eq!(
+            active,
+            vec!["Black Cat County CF1".to_string(), "Other Skin".to_string()]
+        );
+        assert!(
+            default_dir.join("preview.png").is_file(),
+            "fichier propre à CF1 toujours présent"
+        );
+        assert!(
+            default_dir.join("other.dds").is_file(),
+            "fichier propre à Other Skin ajouté"
+        );
         assert_eq!(
             std::fs::read_to_string(default_dir.join("shared.dds")).unwrap(),
             "OTHER",
@@ -849,8 +989,14 @@ mod tests {
         // Désactiver CF1 : default/ reconstruit en entier, plus aucune trace
         // de CF1 — pas une simple suppression de ses fichiers.
         set_track_skin_active(&conn, &cfg, "ks_black_cat_county", "Black Cat County CF1", false).unwrap();
-        assert_eq!(list_active_track_skins(&conn, "ks_black_cat_county"), vec!["Other Skin".to_string()]);
-        assert!(!default_dir.join("preview.png").exists(), "propre à CF1, doit disparaître");
+        assert_eq!(
+            list_active_track_skins(&conn, "ks_black_cat_county"),
+            vec!["Other Skin".to_string()]
+        );
+        assert!(
+            !default_dir.join("preview.png").exists(),
+            "propre à CF1, doit disparaître"
+        );
         assert!(default_dir.join("other.dds").is_file());
 
         // Plus aucun skin actif : default/ entièrement vide (comportement CM
@@ -862,7 +1008,10 @@ mod tests {
             0,
             "default/ doit être vide quand plus aucun skin n'est actif — marqueur compris"
         );
-        assert!(!default_dir.join("cm_skins_active.json").exists(), "pas de marqueur quand aucun skin actif");
+        assert!(
+            !default_dir.join("cm_skins_active.json").exists(),
+            "pas de marqueur quand aucun skin actif"
+        );
     }
 
     #[test]
@@ -883,35 +1032,63 @@ mod tests {
         std::fs::write(bundled.join("preview.png"), b"IMG").unwrap();
 
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         let now = Local::now().to_rfc3339();
-        overlay::upsert_stock_mod(&conn, "ks_black_cat_county", "Track", None, Some("Black Cat County"), &now).unwrap();
+        overlay::upsert_stock_mod(
+            &conn,
+            "ks_black_cat_county",
+            "Track",
+            None,
+            Some("Black Cat County"),
+            &now,
+        )
+        .unwrap();
 
         // Avant sync : pas encore reconnu.
-        assert!(overlay::list_subs_for_parent(&conn, "ks_black_cat_county").unwrap().is_empty());
+        assert!(overlay::list_subs_for_parent(&conn, "ks_black_cat_county")
+            .unwrap()
+            .is_empty());
 
         sync_bundled_track_skins(&conn, &cfg, "ks_black_cat_county");
         let subs = overlay::list_subs_for_parent(&conn, "ks_black_cat_county").unwrap();
         assert_eq!(subs.len(), 1);
         assert_eq!(subs[0].sub_type, "TRACK_SKIN");
         assert_eq!(subs[0].name, "Stock Livery");
-        assert!(!subs[0].removable, "fourni avec le mod, pas supprimable individuellement");
+        assert!(
+            !subs[0].removable,
+            "fourni avec le mod, pas supprimable individuellement"
+        );
         assert!(!subs[0].is_active, "pas actif par défaut");
 
         // Idempotent : un second sync ne duplique pas.
         sync_bundled_track_skins(&conn, &cfg, "ks_black_cat_county");
-        assert_eq!(overlay::list_subs_for_parent(&conn, "ks_black_cat_county").unwrap().len(), 1);
+        assert_eq!(
+            overlay::list_subs_for_parent(&conn, "ks_black_cat_county")
+                .unwrap()
+                .len(),
+            1
+        );
 
         // Activable comme n'importe quel skin : recompose bien skins/default/.
         set_track_skin_active(&conn, &cfg, "ks_black_cat_county", "Stock Livery", true).unwrap();
-        assert_eq!(list_active_track_skins(&conn, "ks_black_cat_county"), vec!["Stock Livery".to_string()]);
+        assert_eq!(
+            list_active_track_skins(&conn, "ks_black_cat_county"),
+            vec!["Stock Livery".to_string()]
+        );
         assert!(track_dir.join("skins").join("default").join("preview.png").is_file());
 
         // Mais jamais supprimable individuellement.
         let sub_id = subs[0].id.clone();
         let err = remove_sub(&conn, &cfg, &sub_id).unwrap_err();
         assert_eq!(err, crate::errors::BUNDLED_NOT_REMOVABLE, "clé d'erreur attendue");
-        assert!(overlay::get_sub_mod(&conn, &sub_id).unwrap().is_some(), "toujours là, pas supprimé");
+        assert!(
+            overlay::get_sub_mod(&conn, &sub_id).unwrap().is_some(),
+            "toujours là, pas supprimé"
+        );
     }
 
     #[test]
@@ -935,14 +1112,29 @@ mod tests {
         std::fs::write(gp.join("preview.png"), b"IMG").unwrap();
 
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         let now = Local::now().to_rfc3339();
-        overlay::upsert_stock_mod(&conn, "ks_black_cat_county", "Track", None, Some("Black Cat County"), &now).unwrap();
+        overlay::upsert_stock_mod(
+            &conn,
+            "ks_black_cat_county",
+            "Track",
+            None,
+            Some("Black Cat County"),
+            &now,
+        )
+        .unwrap();
 
         // Pit Box a activé CF1 lui-même.
         sync_bundled_track_skins(&conn, &cfg, "ks_black_cat_county");
         set_track_skin_active(&conn, &cfg, "ks_black_cat_county", "CF1", true).unwrap();
-        assert_eq!(list_active_track_skins(&conn, "ks_black_cat_county"), vec!["CF1".to_string()]);
+        assert_eq!(
+            list_active_track_skins(&conn, "ks_black_cat_county"),
+            vec!["CF1".to_string()]
+        );
 
         // L'utilisateur va ensuite dans CM et sélectionne GP 1966 à la place
         // (simulé : CM écrase le marqueur avec sa propre sélection — on ne
@@ -971,19 +1163,44 @@ mod tests {
         std::fs::create_dir_all(&library).unwrap();
         std::fs::create_dir_all(ac.join("content").join("tracks").join("ks_black_cat_county")).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         let now = Local::now().to_rfc3339();
 
-        overlay::upsert_stock_mod(&conn, "ks_black_cat_county", "Track", None, Some("Black Cat County"), &now).unwrap();
+        overlay::upsert_stock_mod(
+            &conn,
+            "ks_black_cat_county",
+            "Track",
+            None,
+            Some("Black Cat County"),
+            &now,
+        )
+        .unwrap();
 
-        let pack = base.join("src").join("assettocorsa").join("content").join("tracks").join("ks_black_cat_county");
+        let pack = base
+            .join("src")
+            .join("assettocorsa")
+            .join("content")
+            .join("tracks")
+            .join("ks_black_cat_county");
         let skin = pack.join("skins").join("cm_skins").join("Black Cat County CF1");
         std::fs::create_dir_all(&skin).unwrap();
         std::fs::write(skin.join("preview.png"), b"IMG").unwrap();
         std::fs::write(pack.join("ext_config.ini"), b"[BASIC]\n").unwrap();
 
         let subs = modscan::scan_subs(&base.join("src"));
-        import_subs(&conn, &cfg, &library, "black_cat_county_cf1.zip", &subs, true, ExtractionMode::InfoOnly);
+        import_subs(
+            &conn,
+            &cfg,
+            &library,
+            "black_cat_county_cf1.zip",
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+        );
 
         // ext_config.ini n'est pas devenu un skin de plus.
         let stored = overlay::list_subs_for_parent(&conn, "ks_black_cat_county").unwrap();
@@ -1002,7 +1219,10 @@ mod tests {
             .join("ks_black_cat_county")
             .join("extension")
             .join("ext_config.ini");
-        assert!(composed.is_file(), "ext_config.ini devrait être composé dans extension/");
+        assert!(
+            composed.is_file(),
+            "ext_config.ini devrait être composé dans extension/"
+        );
     }
 
     #[test]
@@ -1029,8 +1249,18 @@ mod tests {
 
         let res = import_subs(&conn, &cfg, &library, "pack.7z", &subs, true, ExtractionMode::InfoOnly);
         assert_eq!(res.len(), 2);
-        assert!(library.join("skins").join("ferrari_488").join("af_corse_51").join("preview.jpg").is_file());
-        assert!(library.join("skins").join("lambo_huracan").join("team_a").join("preview.jpg").is_file());
+        assert!(library
+            .join("skins")
+            .join("ferrari_488")
+            .join("af_corse_51")
+            .join("preview.jpg")
+            .is_file());
+        assert!(library
+            .join("skins")
+            .join("lambo_huracan")
+            .join("team_a")
+            .join("preview.jpg")
+            .is_file());
     }
 
     #[test]
@@ -1039,7 +1269,10 @@ mod tests {
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         let now = Local::now().to_rfc3339();
 
         // Voiture (mod) avec son d'origine dans sfx/.
@@ -1049,7 +1282,23 @@ mod tests {
         std::fs::write(sfx.join("GUIDs.txt"), b"ORIG").unwrap();
         std::fs::write(sfx.join("car.bank"), b"ORIGBANK").unwrap();
         overlay::upsert_mod(&conn, "snd_car", "Car", Some("B"), Some("Snd"), "h", None, &now).unwrap();
-        overlay::insert_version(&conn, "v1", "snd_car", Some("1.0"), None, &now, &carv.to_string_lossy(), None, "sig", &[], &[], &[], &[], None).unwrap();
+        overlay::insert_version(
+            &conn,
+            "v1",
+            "snd_car",
+            Some("1.0"),
+            None,
+            &now,
+            &carv.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
         overlay::set_active_version(&conn, "snd_car", "v1").unwrap();
 
         // Mod de son stocké à part.
@@ -1057,12 +1306,32 @@ mod tests {
         std::fs::create_dir_all(&snd).unwrap();
         std::fs::write(snd.join("GUIDs.txt"), b"MOD").unwrap();
         std::fs::write(snd.join("car.bank"), b"MODBANK").unwrap();
-        overlay::insert_sub_mod(&conn, "s1", "SOUND", "snd_car", "v8", &snd.to_string_lossy(), None, &now).unwrap();
+        overlay::insert_sub_mod(
+            &conn,
+            "s1",
+            "SOUND",
+            "snd_car",
+            "v8",
+            &snd.to_string_lossy(),
+            None,
+            &now,
+        )
+        .unwrap();
 
         // Activation : sfx remplacé, original sauvegardé, sub actif.
         activate_sound(&conn, &cfg, "s1").unwrap();
         assert_eq!(std::fs::read_to_string(sfx.join("GUIDs.txt")).unwrap(), "MOD");
-        assert_eq!(std::fs::read_to_string(library.join("sounds").join("snd_car").join("__original__").join("GUIDs.txt")).unwrap(), "ORIG");
+        assert_eq!(
+            std::fs::read_to_string(
+                library
+                    .join("sounds")
+                    .join("snd_car")
+                    .join("__original__")
+                    .join("GUIDs.txt")
+            )
+            .unwrap(),
+            "ORIG"
+        );
         assert!(overlay::get_sub_mod(&conn, "s1").unwrap().unwrap().is_active);
 
         // Restauration : son d'origine revenu, sub inactif.
@@ -1080,10 +1349,23 @@ mod tests {
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         let now = Local::now().to_rfc3339();
 
-        overlay::upsert_mod(&conn, "ks_lamborghini_huracan_performante", "Car", Some("Lamborghini"), Some("Huracan Performante"), "h", None, &now).unwrap();
+        overlay::upsert_mod(
+            &conn,
+            "ks_lamborghini_huracan_performante",
+            "Car",
+            Some("Lamborghini"),
+            Some("Huracan Performante"),
+            "h",
+            None,
+            &now,
+        )
+        .unwrap();
 
         let archive_name = "Sound - ks_lamborghini_huracan_performante by Marti";
         let src = base.join("src").join(archive_name);
@@ -1094,11 +1376,25 @@ mod tests {
 
         let subs = modscan::scan_subs(&src);
         assert_eq!(subs.len(), 1);
-        assert_eq!(subs[0].parent_id, "sfx", "modscan seul retombe sur le nom générique du dossier");
+        assert_eq!(
+            subs[0].parent_id, "sfx",
+            "modscan seul retombe sur le nom générique du dossier"
+        );
 
-        let res = import_subs(&conn, &cfg, &library, archive_name, &subs, true, ExtractionMode::InfoOnly);
+        let res = import_subs(
+            &conn,
+            &cfg,
+            &library,
+            archive_name,
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+        );
         assert_eq!(res.len(), 1);
-        assert_eq!(res[0].parent_id, "ks_lamborghini_huracan_performante", "voiture retrouvée dans le nom d'archive");
+        assert_eq!(
+            res[0].parent_id, "ks_lamborghini_huracan_performante",
+            "voiture retrouvée dans le nom d'archive"
+        );
         assert_eq!(res[0].name, archive_name, "nom lisible, pas « sfx »");
     }
 

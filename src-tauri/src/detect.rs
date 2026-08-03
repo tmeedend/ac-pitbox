@@ -57,10 +57,7 @@ fn steam_libraries() -> Vec<PathBuf> {
 /// Cherche une install Assetto Corsa contenant un dossier `content/`.
 pub fn find_ac() -> Option<PathBuf> {
     for root in steam_libraries() {
-        let ac = root
-            .join("steamapps")
-            .join("common")
-            .join("assettocorsa");
+        let ac = root.join("steamapps").join("common").join("assettocorsa");
         if ac.join("content").is_dir() {
             return Some(ac);
         }
@@ -91,10 +88,7 @@ pub fn find_cm(ac: Option<&Path>) -> Option<PathBuf> {
 }
 
 pub fn find_7zip() -> Option<PathBuf> {
-    for p in [
-        r"C:\Program Files\7-Zip\7z.exe",
-        r"C:\Program Files (x86)\7-Zip\7z.exe",
-    ] {
+    for p in [r"C:\Program Files\7-Zip\7z.exe", r"C:\Program Files (x86)\7-Zip\7z.exe"] {
         let pb = PathBuf::from(p);
         if pb.is_file() {
             return Some(pb);

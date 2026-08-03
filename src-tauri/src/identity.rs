@@ -11,11 +11,7 @@ use walkdir::WalkDir;
 
 /// Normalise pour comparaison floue : minuscule, espaces compactés.
 pub fn norm(s: &str) -> String {
-    s.trim()
-        .to_lowercase()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
+    s.trim().to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Signature des fichiers clés (modèles `.kn5`, `data.acd`) par chemin relatif

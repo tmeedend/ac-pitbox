@@ -119,7 +119,17 @@ fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
     let weight = weight_for(conn, cfg, &m);
     let badge = badge_for(conn, cfg, &m);
     let broken = crate::maintenance::broken_reason(conn, &m).is_some();
-    ModCard { base: m, preview, outline, active, distance_km: None, tried: false, weight, badge, broken }
+    ModCard {
+        base: m,
+        preview,
+        outline,
+        active,
+        distance_km: None,
+        tried: false,
+        weight,
+        badge,
+        broken,
+    }
 }
 
 /// Renseigne la distance CM et le marqueur « essayé » (§6.5) sur une carte.
@@ -242,9 +252,11 @@ fn entity_dir(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<PathBuf>
             }
         }
     }
-    cfg.ac_install_path
-        .as_ref()
-        .map(|ac| ac.join("content").join(kind_of(&m.kind).content_folder()).join(&m.id_interne))
+    cfg.ac_install_path.as_ref().map(|ac| {
+        ac.join("content")
+            .join(kind_of(&m.kind).content_folder())
+            .join(&m.id_interne)
+    })
 }
 
 /// Dossier réel d'un mod (voiture/circuit, géré ou contenu de base), pour
@@ -299,7 +311,13 @@ pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<
     };
     let mut card = to_card(conn, cfg, m);
     fill_usage(&mut card, &cm_stats::read(), &overlay::launched_ids(conn)?);
-    Ok(Some(ModDetail { card, versions, history, specs, track }))
+    Ok(Some(ModDetail {
+        card,
+        versions,
+        history,
+        specs,
+        track,
+    }))
 }
 
 #[cfg(test)]
@@ -334,12 +352,28 @@ mod tests {
         let now = chrono::Local::now().to_rfc3339();
         overlay::upsert_mod(&conn, "hl_car", "Car", Some("B"), Some("Test"), "h", None, &now).unwrap();
         overlay::insert_version(
-            &conn, "v1", "hl_car", Some("1.0"), None, &now, &carv.to_string_lossy(), None, "sig",
-            &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "hl_car",
+            Some("1.0"),
+            None,
+            &now,
+            &carv.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "hl_car", "v1").unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac), library_path: Some(lib), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac),
+            library_path: Some(lib),
+            ..Default::default()
+        };
 
         let m = overlay::get_mod(&conn, "hl_car").unwrap().unwrap();
         assert!(!is_active(&cfg, &m), "pas encore activé");
@@ -372,12 +406,22 @@ mod tests {
 
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         overlay::upsert_stock_mod(&conn, "spa", "Track", Some("Kunos"), Some("Spa"), "now").unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac), library_path: Some(lib), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac),
+            library_path: Some(lib),
+            ..Default::default()
+        };
         let m = overlay::get_mod(&conn, "spa").unwrap().unwrap();
 
         let dir = entity_dir(&conn, &cfg, &m).unwrap();
-        assert_eq!(dir, link, "doit résoudre vers content/, jamais vers l'ancien dossier composé périmé");
-        assert!(!dir.join("ui").join("2022").is_dir(), "le layout périmé du reliquat ne doit pas apparaître");
+        assert_eq!(
+            dir, link,
+            "doit résoudre vers content/, jamais vers l'ancien dossier composé périmé"
+        );
+        assert!(
+            !dir.join("ui").join("2022").is_dir(),
+            "le layout périmé du reliquat ne doit pas apparaître"
+        );
     }
 
     #[test]
@@ -385,7 +429,12 @@ mod tests {
         let base = crate::testutil::temp_dir("lib");
         let ac = base.join("ac");
         // Voiture de base avec un skin installé dans content/.
-        let skin = ac.join("content").join("cars").join("ks_ferrari").join("skins").join("rosso");
+        let skin = ac
+            .join("content")
+            .join("cars")
+            .join("ks_ferrari")
+            .join("skins")
+            .join("rosso");
         std::fs::create_dir_all(&skin).unwrap();
         std::fs::write(skin.join("preview.jpg"), b"IMG").unwrap();
 
@@ -393,7 +442,10 @@ mod tests {
         let now = chrono::Local::now().to_rfc3339();
         overlay::upsert_stock_mod(&conn, "ks_ferrari", "Car", Some("Ferrari"), Some("488"), &now).unwrap();
 
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
         let skins = list_mod_skins(&conn, &cfg, "ks_ferrari");
         assert_eq!(skins.len(), 1, "skin de la voiture de base lu dans content/");
         assert_eq!(skins[0].id, "rosso");
@@ -411,8 +463,20 @@ mod tests {
 
         overlay::upsert_mod(&conn, "ghost", "Car", Some("B"), Some("Ghost"), "h", None, &now).unwrap();
         overlay::insert_version(
-            &conn, "v1", "ghost", Some("1.0"), None, &now,
-            &base.join("nope").to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "ghost",
+            Some("1.0"),
+            None,
+            &now,
+            &base.join("nope").to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "ghost", "v1").unwrap();

@@ -23,14 +23,58 @@ pub fn is_kunos_driver(name: &str) -> bool {
 /// Polices natives (`content/fonts/<name>.{png,txt,ttf}`).
 pub fn is_kunos_font(name: &str) -> bool {
     const FONTS: &[&str] = &[
-        "4c", "599_big", "599_mid", "650S_big", "650S_mid", "a", "aria", "arial", "arial_big",
-        "audi_vln", "aventador", "aventador_b", "aventador_mid", "b", "bosch", "c7_big", "c7_mid",
-        "c7_new", "comic", "console", "console_small", "default", "digital_big", "digital_big_f138",
-        "digital_big_italic", "digital_mid", "digital_toyota", "digital_toyota_2", "e92_big",
-        "e92_mid", "f312", "gallardo_1", "gallardo_2", "german_led", "german_led_mid",
-        "ks_audi_r8_plus", "ks_corvette_c7", "ks_nissan_gtr", "ks_ruf12r", "led_audi", "led_big",
-        "led_med", "mclarenmp4gt3", "mercedes_sls", "mg", "Microgramma", "Microsquare", "mp4_big",
-        "porsche_big", "sls", "ttcup", "ttcup_big",
+        "4c",
+        "599_big",
+        "599_mid",
+        "650S_big",
+        "650S_mid",
+        "a",
+        "aria",
+        "arial",
+        "arial_big",
+        "audi_vln",
+        "aventador",
+        "aventador_b",
+        "aventador_mid",
+        "b",
+        "bosch",
+        "c7_big",
+        "c7_mid",
+        "c7_new",
+        "comic",
+        "console",
+        "console_small",
+        "default",
+        "digital_big",
+        "digital_big_f138",
+        "digital_big_italic",
+        "digital_mid",
+        "digital_toyota",
+        "digital_toyota_2",
+        "e92_big",
+        "e92_mid",
+        "f312",
+        "gallardo_1",
+        "gallardo_2",
+        "german_led",
+        "german_led_mid",
+        "ks_audi_r8_plus",
+        "ks_corvette_c7",
+        "ks_nissan_gtr",
+        "ks_ruf12r",
+        "led_audi",
+        "led_big",
+        "led_med",
+        "mclarenmp4gt3",
+        "mercedes_sls",
+        "mg",
+        "Microgramma",
+        "Microsquare",
+        "mp4_big",
+        "porsche_big",
+        "sls",
+        "ttcup",
+        "ttcup_big",
     ];
     FONTS.contains(&name)
 }
@@ -42,18 +86,62 @@ pub fn is_kunos_crew(name: &str, crew_type: &str) -> bool {
         "SUIT" => name.starts_with("\\type1\\") || name.starts_with("\\type2\\"),
         "HELMET" => matches!(
             name,
-            "\\beige" | "\\black" | "\\blue" | "\\brown" | "\\cyan" | "\\green" | "\\grey"
-                | "\\orange" | "\\purple" | "\\red" | "\\white" | "\\yellow"
+            "\\beige"
+                | "\\black"
+                | "\\blue"
+                | "\\brown"
+                | "\\cyan"
+                | "\\green"
+                | "\\grey"
+                | "\\orange"
+                | "\\purple"
+                | "\\red"
+                | "\\white"
+                | "\\yellow"
         ),
         "BRAND" => matches!(
             name,
-            "\\abarth" | "\\abarth2" | "\\alfa" | "\\alfa2" | "\\audi" | "\\audi2" | "\\bmw"
-                | "\\chevy" | "\\chevy2" | "\\cobra" | "\\cobra2" | "\\ferrari" | "\\ferrari2"
-                | "\\ford" | "\\ktm" | "\\lamborghini" | "\\lamborghini2" | "\\lotus"
-                | "\\lotus_classic" | "\\maserati" | "\\maserati2" | "\\mazda" | "\\mazda2"
-                | "\\mclaren" | "\\mclaren2" | "\\mercedes" | "\\mercedes2" | "\\nissan"
-                | "\\nissan2" | "\\pagani" | "\\porsche" | "\\porsche2" | "\\praga" | "\\praga2"
-                | "\\PSD" | "\\ruf" | "\\ruf2" | "\\scg" | "\\tatuus" | "\\toyota" | "\\toyota2"
+            "\\abarth"
+                | "\\abarth2"
+                | "\\alfa"
+                | "\\alfa2"
+                | "\\audi"
+                | "\\audi2"
+                | "\\bmw"
+                | "\\chevy"
+                | "\\chevy2"
+                | "\\cobra"
+                | "\\cobra2"
+                | "\\ferrari"
+                | "\\ferrari2"
+                | "\\ford"
+                | "\\ktm"
+                | "\\lamborghini"
+                | "\\lamborghini2"
+                | "\\lotus"
+                | "\\lotus_classic"
+                | "\\maserati"
+                | "\\maserati2"
+                | "\\mazda"
+                | "\\mazda2"
+                | "\\mclaren"
+                | "\\mclaren2"
+                | "\\mercedes"
+                | "\\mercedes2"
+                | "\\nissan"
+                | "\\nissan2"
+                | "\\pagani"
+                | "\\porsche"
+                | "\\porsche2"
+                | "\\praga"
+                | "\\praga2"
+                | "\\PSD"
+                | "\\ruf"
+                | "\\ruf2"
+                | "\\scg"
+                | "\\tatuus"
+                | "\\toyota"
+                | "\\toyota2"
         ),
         _ => false,
     }

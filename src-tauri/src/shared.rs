@@ -57,7 +57,10 @@ pub fn scan(root: &Path) -> Vec<SharedDir> {
             .and_then(|p| p.file_name())
             .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case("content"));
         if parent_is_content {
-            out.push(SharedDir { kind, path: entry.path().to_path_buf() });
+            out.push(SharedDir {
+                kind,
+                path: entry.path().to_path_buf(),
+            });
         }
     }
     out
@@ -188,7 +191,12 @@ mod tests {
         assert_eq!(r1.len(), 2, "1 font + 1 driver");
         assert!(r1.iter().all(|x| x.disposition == "installed"));
         assert!(ac.join("content").join("fonts").join("myfont.txt").is_file());
-        assert!(ac.join("content").join("driver").join("driver_model").join("model.kn5").is_file());
+        assert!(ac
+            .join("content")
+            .join("driver")
+            .join("driver_model")
+            .join("model.kn5")
+            .is_file());
 
         // 2e pack identique : silencieux (identique).
         let pack2 = base.join("pack2");
@@ -204,8 +212,7 @@ mod tests {
         let drv = r3.iter().find(|x| x.kind == "driver").unwrap();
         assert_eq!(font.disposition, "replaced");
         assert_eq!(drv.disposition, "identical");
-        let installed =
-            std::fs::read_to_string(ac.join("content").join("fonts").join("myfont.txt")).unwrap();
+        let installed = std::fs::read_to_string(ac.join("content").join("fonts").join("myfont.txt")).unwrap();
         assert_eq!(installed, "FONT_V2_DIFFERENT", "la version différente a écrasé");
     }
 }

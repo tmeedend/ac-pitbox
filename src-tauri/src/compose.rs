@@ -25,7 +25,11 @@ use crate::modscan::ModKind;
 use crate::overlay::{self, LayerRow};
 
 fn kind_of(s: &str) -> ModKind {
-    if s == "Track" { ModKind::Track } else { ModKind::Car }
+    if s == "Track" {
+        ModKind::Track
+    } else {
+        ModKind::Car
+    }
 }
 
 /// Dossier de sauvegarde du contenu de base Kunos original (§4.4), avant toute
@@ -51,7 +55,9 @@ fn clear_link(link: &Path) -> Result<(), String> {
 /// Rend `content/<type>s/<id>` conforme à l'état courant (version active + couches
 /// actives). Best-effort : sans dossier AC/bibliothèque configuré, no-op.
 pub fn recompose(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(), String> {
-    let m = overlay::get_mod(conn, mod_id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_NOT_FOUND)?;
+    let m = overlay::get_mod(conn, mod_id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_NOT_FOUND)?;
     let kind = kind_of(&m.kind);
     let (Some(library), Some(link)) = (cfg.library_path.as_ref(), activation::content_link(cfg, kind, mod_id)) else {
         return Ok(()); // rien à projeter tant que les chemins ne sont pas configurés
@@ -86,13 +92,7 @@ pub fn recompose(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(),
 /// Contenu de base Kunos : la base vit dans `content/` (ou déjà sauvegardée en
 /// `stock_base/`). Toujours « présent », donc toujours projeté quand il y a des
 /// couches ; restauré à l'original quand il n'y en a plus.
-fn recompose_stock(
-    link: &Path,
-    library: &Path,
-    kind: ModKind,
-    id: &str,
-    layers: &[LayerRow],
-) -> Result<(), String> {
+fn recompose_stock(link: &Path, library: &Path, kind: ModKind, id: &str, layers: &[LayerRow]) -> Result<(), String> {
     let stock_base = stock_base_dir(library, kind, id);
 
     if layers.is_empty() {
@@ -113,7 +113,9 @@ fn recompose_stock(
         }
         archive::copy_dir(link, &stock_base).map_err(|e| format!("sauvegarde du contenu de base : {e}"))?;
         // Vérification : la sauvegarde doit être non vide avant de toucher content/.
-        let ok = std::fs::read_dir(&stock_base).map(|mut d| d.next().is_some()).unwrap_or(false);
+        let ok = std::fs::read_dir(&stock_base)
+            .map(|mut d| d.next().is_some())
+            .unwrap_or(false);
         if !ok {
             let _ = std::fs::remove_dir_all(&stock_base);
             return Err(crate::errors::EMPTY_STOCK_BACKUP.into());
@@ -148,7 +150,9 @@ fn recompose_managed(
         return Ok(()); // mod inactif : rien à projeter
     }
     let vid = m.active_version_id.clone().ok_or(crate::errors::NO_ACTIVE_VERSION)?;
-    let base = overlay::get_version_path(conn, &vid).map_err(|e| e.to_string())?.ok_or(crate::errors::VERSION_NOT_FOUND)?;
+    let base = overlay::get_version_path(conn, &vid)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::VERSION_NOT_FOUND)?;
     let base = PathBuf::from(base);
 
     // Garde-fou : un mod géré ne doit jamais recouvrir un vrai dossier de content/.
@@ -169,7 +173,9 @@ fn recompose_managed(
 
 /// Active/désactive une couche puis recompose son parent (§4.4).
 pub fn set_layer_active(conn: &Connection, cfg: &AppConfig, layer_id: &str, active: bool) -> Result<(), String> {
-    let layer = overlay::get_layer(conn, layer_id).map_err(|e| e.to_string())?.ok_or(crate::errors::LAYER_NOT_FOUND)?;
+    let layer = overlay::get_layer(conn, layer_id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::LAYER_NOT_FOUND)?;
     overlay::set_layer_active(conn, layer_id, active).map_err(|e| e.to_string())?;
     recompose(conn, cfg, &layer.parent_id)
 }
@@ -177,9 +183,14 @@ pub fn set_layer_active(conn: &Connection, cfg: &AppConfig, layer_id: &str, acti
 /// Réordonne une couche (échange sa priorité avec la voisine) puis recompose.
 /// `direction` : "up" = plus prioritaire, "down" = moins prioritaire.
 pub fn reorder_layer(conn: &Connection, cfg: &AppConfig, layer_id: &str, direction: &str) -> Result<(), String> {
-    let layer = overlay::get_layer(conn, layer_id).map_err(|e| e.to_string())?.ok_or(crate::errors::LAYER_NOT_FOUND)?;
+    let layer = overlay::get_layer(conn, layer_id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::LAYER_NOT_FOUND)?;
     let siblings = overlay::list_layers(conn, &layer.parent_id).map_err(|e| e.to_string())?;
-    let pos = siblings.iter().position(|l| l.id == layer_id).ok_or(crate::errors::LAYER_NOT_FOUND)?;
+    let pos = siblings
+        .iter()
+        .position(|l| l.id == layer_id)
+        .ok_or(crate::errors::LAYER_NOT_FOUND)?;
     let other = match direction {
         "up" => (pos + 1 < siblings.len()).then(|| &siblings[pos + 1]),
         "down" => (pos > 0).then(|| &siblings[pos - 1]),
@@ -224,7 +235,17 @@ mod tests {
         let id = Uuid::new_v4().to_string();
         let prio = overlay::next_layer_priority(conn, parent).unwrap();
         overlay::insert_layer(
-            conn, &id, parent, &format!("{kind:?}"), "ext", &dir.to_string_lossy(), None, 0, 0, prio, "now",
+            conn,
+            &id,
+            parent,
+            &format!("{kind:?}"),
+            "ext",
+            &dir.to_string_lossy(),
+            None,
+            0,
+            0,
+            prio,
+            "now",
         )
         .unwrap();
         id
@@ -243,12 +264,28 @@ mod tests {
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         overlay::upsert_mod(&conn, "spa", "Track", Some("B"), Some("Spa"), "h", None, "now").unwrap();
         overlay::insert_version(
-            &conn, "v1", "spa", Some("1.0"), None, "now", &basever.to_string_lossy(), None, "sig",
-            &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "spa",
+            Some("1.0"),
+            None,
+            "now",
+            &basever.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "spa", "v1").unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
 
         activation::activate(&conn, &cfg, "spa", None).unwrap();
         let link = ac.join("content").join("tracks").join("spa");
@@ -264,7 +301,10 @@ mod tests {
 
         assert!(deploy::is_deployed(&link));
         assert!(link.join("base.txt").is_file(), "base présente dans le composé");
-        assert!(link.join("new.txt").is_file(), "couche appliquée dans le composé — directement dans content/, sans dossier intermédiaire");
+        assert!(
+            link.join("new.txt").is_file(),
+            "couche appliquée dans le composé — directement dans content/, sans dossier intermédiaire"
+        );
 
         // Désactiver la couche → retour à la base seule.
         set_layer_active(&conn, &cfg, &lid, false).unwrap();
@@ -290,12 +330,28 @@ mod tests {
         // Version synthétique telle que produite par un vrai « Indexer le
         // contenu de base » : mono-layout au départ (layout = chaîne vide).
         overlay::insert_version(
-            &conn, "v1", "spa", None, Some("Kunos"), "now", &link.to_string_lossy(), None, "",
-            &[], &[], &[String::new()], &[], None,
+            &conn,
+            "v1",
+            "spa",
+            None,
+            Some("Kunos"),
+            "now",
+            &link.to_string_lossy(),
+            None,
+            "",
+            &[],
+            &[],
+            &[String::new()],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "spa", "v1").unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
 
         // Couche qui ajoute un layout complet « 2022 » (ui/2022/ui_track.json).
         let layerdir = library.join("layers").join("spa").join("ext");
@@ -304,8 +360,15 @@ mod tests {
         recompose(&conn, &cfg, "spa").unwrap();
 
         let versions = overlay::get_versions(&conn, "spa").unwrap();
-        assert_eq!(versions.len(), 1, "reindex_mod met à jour la version existante, n'en crée pas une nouvelle");
-        assert!(versions[0].layouts.iter().any(|l| l == "2022"), "layout de la couche pris en compte dans le cache");
+        assert_eq!(
+            versions.len(),
+            1,
+            "reindex_mod met à jour la version existante, n'en crée pas une nouvelle"
+        );
+        assert!(
+            versions[0].layouts.iter().any(|l| l == "2022"),
+            "layout de la couche pris en compte dans le cache"
+        );
 
         // Désactiver la couche → le layout doit disparaître du cache tout seul.
         set_layer_active(&conn, &cfg, &lid, false).unwrap();
@@ -328,7 +391,11 @@ mod tests {
 
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         overlay::upsert_stock_mod(&conn, "spa", "Track", Some("Kunos"), Some("Spa"), "now").unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
 
         // Couche « 2022 ».
         let layerdir = library.join("layers").join("spa").join("ext");
@@ -336,9 +403,17 @@ mod tests {
         let lid = add_layer(&conn, "spa", ModKind::Track, &layerdir);
         recompose(&conn, &cfg, "spa").unwrap();
 
-        assert!(deploy::is_deployed(&link), "stock composé = déploiement hardlinks directement dans content/");
         assert!(
-            library.join("stock_base").join("tracks").join("spa").join("kunos.txt").is_file(),
+            deploy::is_deployed(&link),
+            "stock composé = déploiement hardlinks directement dans content/"
+        );
+        assert!(
+            library
+                .join("stock_base")
+                .join("tracks")
+                .join("spa")
+                .join("kunos.txt")
+                .is_file(),
             "base Kunos sauvegardée en bibliothèque"
         );
         assert!(link.join("kunos.txt").is_file(), "base présente dans le composé");
@@ -346,7 +421,10 @@ mod tests {
 
         // Désactiver la couche → l'original Kunos est restauré tel quel.
         set_layer_active(&conn, &cfg, &lid, false).unwrap();
-        assert!(!is_junction(&link) && !deploy::is_deployed(&link), "retour à un vrai dossier");
+        assert!(
+            !is_junction(&link) && !deploy::is_deployed(&link),
+            "retour à un vrai dossier"
+        );
         assert!(link.join("kunos.txt").is_file(), "contenu de base restauré");
         assert!(!link.join("2022.txt").exists(), "couche retirée");
     }
@@ -370,11 +448,18 @@ mod tests {
 
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         overlay::upsert_stock_mod(&conn, "spa", "Track", Some("Kunos"), Some("Spa"), "now").unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac), library_path: Some(library), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac),
+            library_path: Some(library),
+            ..Default::default()
+        };
 
         recompose(&conn, &cfg, "spa").unwrap();
 
-        assert!(!stale.exists(), "le reliquat périmé est nettoyé dès la première recomposition");
+        assert!(
+            !stale.exists(),
+            "le reliquat périmé est nettoyé dès la première recomposition"
+        );
     }
 
     #[test]
@@ -389,11 +474,28 @@ mod tests {
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         overlay::upsert_mod(&conn, "spa", "Track", Some("B"), Some("Spa"), "h", None, "now").unwrap();
         overlay::insert_version(
-            &conn, "v1", "spa", None, None, "now", &basever.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "spa",
+            None,
+            None,
+            "now",
+            &basever.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "spa", "v1").unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         activation::activate(&conn, &cfg, "spa", None).unwrap();
         let link = ac.join("content").join("tracks").join("spa");
 

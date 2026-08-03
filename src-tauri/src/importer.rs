@@ -181,7 +181,10 @@ fn keep_source(cfg: &AppConfig, source: &Path, label: &str) -> Option<String> {
 
 /// Id interne dérivé du dossier d'un mod trouvé (nom du dossier `content/<type>s/<id>`).
 fn fm_id(fm: &modscan::FoundMod) -> String {
-    fm.dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+    fm.dir
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 /// Active par défaut les mods fraîchement importés/mis à jour (§4.6bis) : on veut
@@ -208,8 +211,15 @@ fn import_one(
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| archive_path.to_string_lossy().into_owned());
 
-    let mut result =
-        ArchiveResult { archive: archive_name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new(), apps: Vec::new(), others: Vec::new() };
+    let mut result = ArchiveResult {
+        archive: archive_name.clone(),
+        mods: Vec::new(),
+        error: None,
+        shared: Vec::new(),
+        subs: Vec::new(),
+        apps: Vec::new(),
+        others: Vec::new(),
+    };
 
     let (Some(sevenzip), Some(library)) = (&cfg.sevenzip_exe, &cfg.library_path) else {
         result.error = Some("Chemins 7-Zip ou bibliothèque non configurés.".into());
@@ -286,7 +296,19 @@ fn import_one(
         });
         // Archive : le contenu vient d'un dossier temp → toujours déplacé.
         let decision = decision_for(decisions, &fm_id(fm));
-        match process_found(conn, cfg, rules, library, &archive_name, fm, false, pack, decision, true, kept_archive.as_deref()) {
+        match process_found(
+            conn,
+            cfg,
+            rules,
+            library,
+            &archive_name,
+            fm,
+            false,
+            pack,
+            decision,
+            true,
+            kept_archive.as_deref(),
+        ) {
             Ok(imported) => result.mods.push(imported),
             Err(e) => {
                 // On consigne l'erreur sur l'archive mais on continue les autres mods.
@@ -358,8 +380,15 @@ fn import_one_folder(
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| dir.to_string_lossy().into_owned());
-    let mut result =
-        ArchiveResult { archive: name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new(), apps: Vec::new(), others: Vec::new() };
+    let mut result = ArchiveResult {
+        archive: name.clone(),
+        mods: Vec::new(),
+        error: None,
+        shared: Vec::new(),
+        subs: Vec::new(),
+        apps: Vec::new(),
+        others: Vec::new(),
+    };
 
     let Some(library) = &cfg.library_path else {
         result.error = Some("Bibliothèque non configurée.".into());
@@ -405,10 +434,26 @@ fn import_one_folder(
             phase: "filing".into(),
             current: i + 1,
             total: found.len(),
-            label: fm.dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+            label: fm
+                .dir
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
         });
         let decision = decision_for(decisions, &fm_id(fm));
-        match process_found(conn, cfg, rules, library, &name, fm, copy, pack, decision, true, kept_archive.as_deref()) {
+        match process_found(
+            conn,
+            cfg,
+            rules,
+            library,
+            &name,
+            fm,
+            copy,
+            pack,
+            decision,
+            true,
+            kept_archive.as_deref(),
+        ) {
             Ok(imported) => result.mods.push(imported),
             Err(e) => {
                 result.error.get_or_insert_with(String::new).push_str(&format!("{e}; "));
@@ -510,16 +555,28 @@ pub fn analyze_bulk(conn: &Connection, _cfg: &AppConfig, parent: &Path) -> Resul
 
     let mut entries = Vec::new();
     for sub in subs {
-        let subfolder = sub.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let subfolder = sub
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
         let path = sub.to_string_lossy().into_owned();
         let found = modscan::scan(&sub);
         if found.is_empty() {
-            entries.push(BulkEntry { subfolder, path, ignored: true, mods: Vec::new() });
+            entries.push(BulkEntry {
+                subfolder,
+                path,
+                ignored: true,
+                mods: Vec::new(),
+            });
             continue;
         }
         let mut mods = Vec::new();
         for fm in &found {
-            let id = fm.dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let id = fm
+                .dir
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
             let ui = match fm.kind {
                 ModKind::Car => uijson::read_car(&fm.dir),
                 ModKind::Track => uijson::read_track(&fm.dir),
@@ -528,11 +585,22 @@ pub fn analyze_bulk(conn: &Connection, _cfg: &AppConfig, parent: &Path) -> Resul
             let kind_str = format!("{:?}", fm.kind);
             let brand = ui.brand.clone().unwrap_or_default();
             let name = ui.name.clone().unwrap_or_else(|| id.clone());
-            let (status, existing_id, existing_name) =
-                classify(conn, &id, &kind_str, &brand, &name, &fm.dir)?;
-            mods.push(BulkMod { id, kind: kind_str, name: ui.name, status, existing_id, existing_name });
+            let (status, existing_id, existing_name) = classify(conn, &id, &kind_str, &brand, &name, &fm.dir)?;
+            mods.push(BulkMod {
+                id,
+                kind: kind_str,
+                name: ui.name,
+                status,
+                existing_id,
+                existing_name,
+            });
         }
-        entries.push(BulkEntry { subfolder, path, ignored: false, mods });
+        entries.push(BulkEntry {
+            subfolder,
+            path,
+            ignored: false,
+            mods,
+        });
     }
     Ok(entries)
 }
@@ -572,7 +640,13 @@ pub fn execute_bulk(
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            emit(Progress { archive: label.clone(), phase: "filing".into(), current: i + 1, total, label });
+            emit(Progress {
+                archive: label.clone(),
+                phase: "filing".into(),
+                current: i + 1,
+                total,
+                label,
+            });
             exec_one(conn, cfg, rules, it, copy)
         })
         .collect()
@@ -580,9 +654,19 @@ pub fn execute_bulk(
 
 fn exec_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, it: &BulkExecItem, copy: bool) -> ArchiveResult {
     let dir = Path::new(&it.path);
-    let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let mut result =
-        ArchiveResult { archive: name.clone(), mods: Vec::new(), error: None, shared: Vec::new(), subs: Vec::new(), apps: Vec::new(), others: Vec::new() };
+    let name = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let mut result = ArchiveResult {
+        archive: name.clone(),
+        mods: Vec::new(),
+        error: None,
+        shared: Vec::new(),
+        subs: Vec::new(),
+        apps: Vec::new(),
+        others: Vec::new(),
+    };
 
     let Some(library) = &cfg.library_path else {
         result.error = Some("Bibliothèque non configurée.".into());
@@ -595,13 +679,29 @@ fn exec_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, it: &BulkExecItem
     // Pack (§4.7) : plusieurs mods issus du même dossier partagent leur source.
     let pack = (found.len() > 1).then_some(name.as_str());
     for fm in &found {
-        let id = fm.dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let id = fm
+            .dir
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
         if it.skip_ids.iter().any(|s| s == &id) {
             continue;
         }
         // Import en masse (§4.6) : jamais de blocage au fil de l'eau. Un cas
         // ambigu retombe sur le défaut sûr (extension, jamais destructif).
-        match process_found(conn, cfg, rules, library, &name, fm, copy, pack, None, false, kept_archive.as_deref()) {
+        match process_found(
+            conn,
+            cfg,
+            rules,
+            library,
+            &name,
+            fm,
+            copy,
+            pack,
+            None,
+            false,
+            kept_archive.as_deref(),
+        ) {
             Ok(imported) => {
                 if let Some(conflict) = imported.conflict.clone() {
                     let action = if it.replace_ids.iter().any(|r| r == &imported.id_interne) {
@@ -651,7 +751,11 @@ pub fn resolve_conflict(
         }
         "replace" => {
             if let Some(old) = crate::overlay::get_mod(conn, old_id).map_err(|e| e.to_string())? {
-                let kind = if old.kind == "Track" { ModKind::Track } else { ModKind::Car };
+                let kind = if old.kind == "Track" {
+                    ModKind::Track
+                } else {
+                    ModKind::Car
+                };
                 // Supprime les fichiers bibliothèque de l'ancien mod.
                 if let Some(lib) = &cfg.library_path {
                     let dir = lib.join(kind.content_folder()).join(old_id);
@@ -783,7 +887,11 @@ fn process_found(
                 Some(active_path) => identity::diff_content(&fm.dir, Path::new(&active_path)),
                 // Pas de dossier de base à comparer : on ne peut pas prouver que
                 // c'est une extension → comportement historique (mise à jour).
-                None => crate::identity::DiffStats { added: 0, overwritten: 0, existing_total: 0 },
+                None => crate::identity::DiffStats {
+                    added: 0,
+                    overwritten: 0,
+                    existing_total: 0,
+                },
             };
             (classify_diff(&diff), Some(diff))
         };
@@ -808,7 +916,11 @@ fn process_found(
                     &name_layer,
                     &fm.dir,
                     copy,
-                    diff.as_ref().unwrap_or(&crate::identity::DiffStats { added: 0, overwritten: 0, existing_total: 0 }),
+                    diff.as_ref().unwrap_or(&crate::identity::DiffStats {
+                        added: 0,
+                        overwritten: 0,
+                        existing_total: 0,
+                    }),
                     archive_name,
                     res_mode,
                 )?;
@@ -847,8 +959,18 @@ fn process_found(
                 // Import en masse : défaut sûr = extension (jamais destructif).
                 let name_layer = layer_name(fm, archive_name);
                 let (_, resources_extracted) = layers::store_layer(
-                    conn, library, &id_interne, fm.kind, &name_layer, &fm.dir, copy,
-                    diff.as_ref().unwrap_or(&crate::identity::DiffStats { added: 0, overwritten: 0, existing_total: 0 }),
+                    conn,
+                    library,
+                    &id_interne,
+                    fm.kind,
+                    &name_layer,
+                    &fm.dir,
+                    copy,
+                    diff.as_ref().unwrap_or(&crate::identity::DiffStats {
+                        added: 0,
+                        overwritten: 0,
+                        existing_total: 0,
+                    }),
                     archive_name,
                     res_mode,
                 )?;
@@ -876,7 +998,10 @@ fn process_found(
             .map_err(|e| e.to_string())?
             .into_iter()
             .next()
-            .map(|m| FuzzyConflict { existing_id: m.id_interne, existing_name: m.display_name })
+            .map(|m| FuzzyConflict {
+                existing_id: m.id_interne,
+                existing_name: m.display_name,
+            })
     };
 
     // --- Rangement bibliothèque ---
@@ -974,7 +1099,11 @@ fn process_found(
 /// Nom de couche lisible : id du dossier entrant s'il diffère de l'archive,
 /// sinon nom de l'archive (assaini). Évite d'écraser une couche existante.
 fn layer_name(fm: &modscan::FoundMod, archive_name: &str) -> String {
-    let dir = fm.dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let dir = fm
+        .dir
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let base = if dir.is_empty() { archive_name.to_string() } else { dir };
     sanitize(&base)
 }
@@ -1045,7 +1174,11 @@ mod tests {
     fn make_car_with_files(root: &Path, id: &str, files: &[&str]) {
         let base = root.join(id);
         std::fs::create_dir_all(base.join("ui")).unwrap();
-        std::fs::write(base.join("ui").join("ui_car.json"), br#"{"name":"Spa Test","brand":"B","tags":[]}"#).unwrap();
+        std::fs::write(
+            base.join("ui").join("ui_car.json"),
+            br#"{"name":"Spa Test","brand":"B","tags":[]}"#,
+        )
+        .unwrap();
         for f in files {
             let p = base.join(f);
             std::fs::create_dir_all(p.parent().unwrap()).unwrap();
@@ -1073,7 +1206,10 @@ mod tests {
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         let rules = crate::rules::default_rules();
         let noop = |_p: Progress| {};
 
@@ -1085,18 +1221,27 @@ mod tests {
         );
         let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
         assert_eq!(r.mods[0].outcome, "IMPORT");
-        assert_eq!(r.mods[0].resources_extracted, 2, "changelog.txt + presentation.pdf, pas le .psd");
+        assert_eq!(
+            r.mods[0].resources_extracted, 2,
+            "changelog.txt + presentation.pdf, pas le .psd"
+        );
 
         let versions = crate::overlay::get_versions(&conn, "annex_car").unwrap();
         let content_dir = Path::new(&versions[0].library_path);
         assert!(content_dir.join("model.kn5").is_file());
-        assert!(!content_dir.join("changelog.txt").exists(), "jamais dans le contenu de jeu");
+        assert!(
+            !content_dir.join("changelog.txt").exists(),
+            "jamais dans le contenu de jeu"
+        );
         assert!(!content_dir.join("livery_template.psd").exists());
 
         let resources = library.join("resources").join("cars").join("annex_car");
         assert!(resources.join("changelog.txt").is_file());
         assert!(resources.join("presentation.pdf").is_file());
-        assert!(!resources.join("livery_template.psd").exists(), "mode par défaut : pas les fichiers lourds");
+        assert!(
+            !resources.join("livery_template.psd").exists(),
+            "mode par défaut : pas les fichiers lourds"
+        );
     }
 
     #[test]
@@ -1107,7 +1252,10 @@ mod tests {
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let mut cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let mut cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         cfg.prefs.resource_extraction_mode = "none".into();
         let rules = crate::rules::default_rules();
         let noop = |_p: Progress| {};
@@ -1120,8 +1268,14 @@ mod tests {
         let versions = crate::overlay::get_versions(&conn, "annex_car2").unwrap();
         let content_dir = Path::new(&versions[0].library_path);
         assert!(content_dir.join("model.kn5").is_file());
-        assert!(!content_dir.join("changelog.txt").exists(), "toujours hors contenu de jeu");
-        assert!(!library.join("resources").join("cars").join("annex_car2").exists(), "rien extrait en mode Aucun");
+        assert!(
+            !content_dir.join("changelog.txt").exists(),
+            "toujours hors contenu de jeu"
+        );
+        assert!(
+            !library.join("resources").join("cars").join("annex_car2").exists(),
+            "rien extrait en mode Aucun"
+        );
         // Copie (pas déplacement) : la source garde son annexe intacte.
         assert!(src.join("annex_car2").join("changelog.txt").is_file());
     }
@@ -1135,7 +1289,10 @@ mod tests {
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         let rules = crate::rules::default_rules();
         let noop = |_p: Progress| {};
 
@@ -1144,7 +1301,17 @@ mod tests {
         make_car_with_files(
             &src1,
             "spa",
-            &["model.kn5", "data/a.ini", "data/b.ini", "data/c.ini", "data/d.ini", "data/e.ini", "data/f.ini", "data/g.ini", "data/h.ini"],
+            &[
+                "model.kn5",
+                "data/a.ini",
+                "data/b.ini",
+                "data/c.ini",
+                "data/d.ini",
+                "data/e.ini",
+                "data/f.ini",
+                "data/g.ini",
+                "data/h.ini",
+            ],
         );
         let r1 = import_one_folder(&noop, &conn, &cfg, &rules, &src1, true, &[]);
         assert_eq!(r1.mods[0].outcome, "IMPORT");
@@ -1162,12 +1329,22 @@ mod tests {
         assert_eq!(r2.mods[0].added_count, Some(3));
 
         // La base est intacte : toujours une seule version, dossier + model.kn5 présents.
-        assert_eq!(crate::overlay::get_versions(&conn, "spa").unwrap().len(), 1, "aucune version ajoutée");
-        assert!(Path::new(&base_path).join("model.kn5").is_file(), "contenu de base préservé");
+        assert_eq!(
+            crate::overlay::get_versions(&conn, "spa").unwrap().len(),
+            1,
+            "aucune version ajoutée"
+        );
+        assert!(
+            Path::new(&base_path).join("model.kn5").is_file(),
+            "contenu de base préservé"
+        );
         // La couche est rangée à part.
         let layers = crate::overlay::list_layers(&conn, "spa").unwrap();
         assert_eq!(layers.len(), 1);
-        assert!(Path::new(&layers[0].library_path).join("new").join("layout1.kn5").is_file());
+        assert!(Path::new(&layers[0].library_path)
+            .join("new")
+            .join("layout1.kn5")
+            .is_file());
     }
 
     #[test]
@@ -1179,7 +1356,10 @@ mod tests {
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         let rules = crate::rules::default_rules();
         let noop = |_p: Progress| {};
 
@@ -1192,9 +1372,16 @@ mod tests {
         make_car_with_files(&src, "ks_spa", &["model.kn5", "data/surfaces.ini"]);
         let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
         assert_eq!(r.mods[0].outcome, "EXTENSION", "le stock ne peut jamais être remplacé");
-        assert_eq!(crate::overlay::get_versions(&conn, "ks_spa").unwrap().len(), 0, "aucune version : base intacte");
+        assert_eq!(
+            crate::overlay::get_versions(&conn, "ks_spa").unwrap().len(),
+            0,
+            "aucune version : base intacte"
+        );
         assert_eq!(crate::overlay::list_layers(&conn, "ks_spa").unwrap().len(), 1);
-        assert!(crate::overlay::get_mod(&conn, "ks_spa").unwrap().unwrap().is_stock, "reste contenu de base");
+        assert!(
+            crate::overlay::get_mod(&conn, "ks_spa").unwrap().unwrap().is_stock,
+            "reste contenu de base"
+        );
     }
 
     #[test]
@@ -1205,7 +1392,10 @@ mod tests {
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         let rules = crate::rules::default_rules();
         let noop = |_p: Progress| {};
 
@@ -1222,14 +1412,25 @@ mod tests {
         assert_eq!(r.mods[0].outcome, "AMBIGUOUS");
         assert_eq!(r.mods[0].overwritten_count, Some(2));
         assert_eq!(r.mods[0].existing_total, Some(5));
-        assert_eq!(crate::overlay::get_versions(&conn, "amb").unwrap().len(), 1, "rien écrit tant qu'on n'a pas décidé");
+        assert_eq!(
+            crate::overlay::get_versions(&conn, "amb").unwrap().len(),
+            1,
+            "rien écrit tant qu'on n'a pas décidé"
+        );
         assert_eq!(crate::overlay::list_layers(&conn, "amb").unwrap().len(), 0);
 
         // Reprise avec la décision "update".
-        let decisions = vec![ImportDecision { id: "amb".into(), decision: "update".into() }];
+        let decisions = vec![ImportDecision {
+            id: "amb".into(),
+            decision: "update".into(),
+        }];
         let r2 = import_one_folder(&noop, &conn, &cfg, &rules, &src2, true, &decisions);
         assert_eq!(r2.mods[0].outcome, "UPDATE_REPLACE");
-        assert_eq!(crate::overlay::get_versions(&conn, "amb").unwrap().len(), 2, "nouvelle version après décision");
+        assert_eq!(
+            crate::overlay::get_versions(&conn, "amb").unwrap().len(),
+            2,
+            "nouvelle version après décision"
+        );
     }
 
     #[test]
@@ -1351,7 +1552,10 @@ mod tests {
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         let rules = crate::rules::default_rules();
         let noop = |_p: Progress| {};
 
@@ -1361,8 +1565,14 @@ mod tests {
         let r = import_one_folder(&noop, &conn, &cfg, &rules, &src_copy, true, &[]);
         assert_eq!(r.mods.len(), 1);
         assert_eq!(r.mods[0].outcome, "IMPORT");
-        assert!(src_copy.join("copy_car").join("ui").join("ui_car.json").is_file(), "source préservée (copie)");
-        assert!(library.join("cars").join("copy_car").exists(), "rangé dans la bibliothèque");
+        assert!(
+            src_copy.join("copy_car").join("ui").join("ui_car.json").is_file(),
+            "source préservée (copie)"
+        );
+        assert!(
+            library.join("cars").join("copy_car").exists(),
+            "rangé dans la bibliothèque"
+        );
 
         // Déplacement : la source est retirée.
         let src_move = base.join("src_move");
@@ -1370,7 +1580,10 @@ mod tests {
         let r2 = import_one_folder(&noop, &conn, &cfg, &rules, &src_move, false, &[]);
         assert_eq!(r2.mods.len(), 1);
         assert!(!src_move.join("move_car").exists(), "source retirée (déplacement)");
-        assert!(library.join("cars").join("move_car").exists(), "rangé dans la bibliothèque");
+        assert!(
+            library.join("cars").join("move_car").exists(),
+            "rangé dans la bibliothèque"
+        );
     }
 
     #[test]
@@ -1379,7 +1592,10 @@ mod tests {
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         let rules = crate::rules::default_rules();
         let noop = |_p: Progress| {};
 
@@ -1392,7 +1608,11 @@ mod tests {
         // Les deux mods partagent la même source de pack (§4.7).
         for id in ["ferrari_a", "ferrari_b"] {
             let m = crate::overlay::get_mod(&conn, id).unwrap().unwrap();
-            assert_eq!(m.source_pack.as_deref(), Some("ferrari_pack"), "{id} doit pointer le pack");
+            assert_eq!(
+                m.source_pack.as_deref(),
+                Some("ferrari_pack"),
+                "{id} doit pointer le pack"
+            );
         }
 
         // Un import mono-voiture ne crée pas de pack.
@@ -1409,7 +1629,7 @@ mod tests {
         let parent = base.join("catalog");
         std::fs::create_dir_all(&parent).unwrap();
         make_fake_car(&parent, "bulk_car"); // sous-dossier = voiture
-        // Sous-dossier sans structure AC → ignoré.
+                                            // Sous-dossier sans structure AC → ignoré.
         let notes = parent.join("notes");
         std::fs::create_dir_all(&notes).unwrap();
         std::fs::write(notes.join("readme.txt"), b"hi").unwrap();
@@ -1417,7 +1637,10 @@ mod tests {
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         let rules = crate::rules::default_rules();
 
         // Analyse : 1 nouveau (bulk_car), 1 ignoré (notes). Aucune écriture.
@@ -1430,7 +1653,11 @@ mod tests {
         assert!(!library.join("cars").join("bulk_car").exists(), "analyse n'écrit rien");
 
         // Exécution (copie).
-        let item = BulkExecItem { path: car.path.clone(), skip_ids: vec![], replace_ids: vec![] };
+        let item = BulkExecItem {
+            path: car.path.clone(),
+            skip_ids: vec![],
+            replace_ids: vec![],
+        };
         let r = exec_one(&conn, &cfg, &rules, &item, true);
         assert_eq!(r.mods.len(), 1);
         assert!(library.join("cars").join("bulk_car").exists());
@@ -1447,7 +1674,10 @@ mod tests {
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         let rules = crate::rules::default_rules();
         let noop = |_p: Progress| {};
 
@@ -1459,9 +1689,15 @@ mod tests {
         // Date de publication estimée (§6.2) depuis la date de modification des
         // fichiers, remontée à la fois sur la version et sur le mod (version active).
         let versions = crate::overlay::get_versions(&conn, "pub_car").unwrap();
-        assert!(versions[0].published_at.is_some(), "date de publication absente sur la version");
+        assert!(
+            versions[0].published_at.is_some(),
+            "date de publication absente sur la version"
+        );
         let m = crate::overlay::get_mod(&conn, "pub_car").unwrap().unwrap();
-        assert!(m.published_at.is_some(), "date de publication absente sur le mod (version active)");
+        assert!(
+            m.published_at.is_some(),
+            "date de publication absente sur le mod (version active)"
+        );
     }
 
     #[test]
@@ -1522,7 +1758,11 @@ mod tests {
         std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         let now = chrono::Local::now().to_rfc3339();
 
         let old_dir = library.join("cars").join("car_a").join("v1");
@@ -1530,21 +1770,39 @@ mod tests {
         std::fs::write(old_dir.join("f.txt"), "old").unwrap();
         crate::overlay::upsert_mod(&conn, "car_a", "Car", Some("B"), Some("Same"), "h", None, &now).unwrap();
         crate::overlay::insert_version(
-            &conn, "v1", "car_a", Some("1.0"), None, &now, &old_dir.to_string_lossy(), None, "sig",
-            &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "car_a",
+            Some("1.0"),
+            None,
+            &now,
+            &old_dir.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         crate::overlay::set_active_version(&conn, "car_a", "v1").unwrap();
         crate::activation::activate(&conn, &cfg, "car_a", None).unwrap();
         let link = ac.join("content").join("cars").join("car_a");
-        assert!(crate::deploy::is_deployed(&link), "précondition : car_a actif par hardlinks");
+        assert!(
+            crate::deploy::is_deployed(&link),
+            "précondition : car_a actif par hardlinks"
+        );
 
         // "car_b" existe juste en overlay (le conflit ne dépend que de l'id passé).
         crate::overlay::upsert_mod(&conn, "car_b", "Car", Some("B"), Some("Same"), "h2", None, &now).unwrap();
 
         resolve_conflict(&conn, &cfg, "car_b", "car_a", "replace").unwrap();
 
-        assert!(!link.exists(), "déploiement content/ de l'ancien mod retiré, pas laissé orphelin");
+        assert!(
+            !link.exists(),
+            "déploiement content/ de l'ancien mod retiré, pas laissé orphelin"
+        );
     }
 
     #[test]
@@ -1555,7 +1813,10 @@ mod tests {
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         let rules = crate::rules::default_rules();
         let noop = |_p: Progress| {};
 
@@ -1578,7 +1839,10 @@ mod tests {
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let mut cfg = AppConfig { library_path: Some(library.clone()), ..Default::default() };
+        let mut cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         cfg.prefs.keep_source_archive = true;
         let rules = crate::rules::default_rules();
         let noop = |_p: Progress| {};
@@ -1589,15 +1853,24 @@ mod tests {
         assert_eq!(r.mods[0].outcome, "IMPORT");
 
         let versions = crate::overlay::get_versions(&conn, "keep_car").unwrap();
-        let kept = versions[0].kept_archive_path.as_ref().expect("archive source conservée");
+        let kept = versions[0]
+            .kept_archive_path
+            .as_ref()
+            .expect("archive source conservée");
         let kept_path = Path::new(kept);
         // La copie porte sur `dir` (le dossier passé à l'import, ici `src`, qui
         // peut contenir plusieurs mods) — le mod retrouvé est donc un niveau
         // plus bas, comme au premier import (même logique de descente).
         assert!(kept_path.is_dir(), "dossier source copié tel quel");
         assert!(kept_path.join("keep_car").join("ui").join("ui_car.json").is_file());
-        assert!(kept_path.starts_with(&library), "copie rangée dans la bibliothèque, pas ailleurs");
+        assert!(
+            kept_path.starts_with(&library),
+            "copie rangée dans la bibliothèque, pas ailleurs"
+        );
         // Source d'origine toujours présente : `copy=true` préserve la source.
-        assert!(src.join("keep_car").join("model.kn5").is_file(), "source d'origine intacte (copie)");
+        assert!(
+            src.join("keep_car").join("model.kn5").is_file(),
+            "source d'origine intacte (copie)"
+        );
     }
 }

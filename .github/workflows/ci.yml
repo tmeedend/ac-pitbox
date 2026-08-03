@@ -46,7 +46,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -61,6 +61,11 @@ jobs:
       # même pour un simple `cargo test` : le front doit être construit avant.
       - run: npm ci
       - run: npm run build
+
+      # Style figé par src-tauri/rustfmt.toml (max_width = 120).
+      - name: Format
+        working-directory: src-tauri
+        run: cargo fmt --check
 
       - name: Clippy (warnings = erreurs)
         working-directory: src-tauri

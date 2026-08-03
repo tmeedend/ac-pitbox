@@ -79,7 +79,14 @@ fn import_archives(
     let cfg = config::load(&app);
     let rules = rules::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(importer::import_archives(&app, &conn, &cfg, &rules, &paths, &decisions.unwrap_or_default()))
+    Ok(importer::import_archives(
+        &app,
+        &conn,
+        &cfg,
+        &rules,
+        &paths,
+        &decisions.unwrap_or_default(),
+    ))
 }
 
 // --- Tags & ontologie (L2) --------------------------------------------------
@@ -145,7 +152,15 @@ fn import_folders(
     let cfg = config::load(&app);
     let rules = rules::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(importer::import_folders(&app, &conn, &cfg, &rules, &paths, copy, &decisions.unwrap_or_default()))
+    Ok(importer::import_folders(
+        &app,
+        &conn,
+        &cfg,
+        &rules,
+        &paths,
+        copy,
+        &decisions.unwrap_or_default(),
+    ))
 }
 
 /// Analyse un dossier parent (§4.6) : classe chaque sous-dossier sans rien écrire.
@@ -217,7 +232,11 @@ fn open_mod_folder(app: AppHandle, db: State<Db>, id: String) -> Result<(), Stri
 }
 
 fn mod_kind(kind: &str) -> modscan::ModKind {
-    if kind == "Track" { modscan::ModKind::Track } else { modscan::ModKind::Car }
+    if kind == "Track" {
+        modscan::ModKind::Track
+    } else {
+        modscan::ModKind::Car
+    }
 }
 
 /// Liste les fichiers annexes du mod (§4.6, « Bloc Ressources ») — lue en
@@ -228,8 +247,14 @@ fn list_mod_resources(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<r
     let cfg = config::load(&app);
     let library = cfg.library_path.clone().ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let m = overlay::get_mod(&conn, &id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_NOT_FOUND)?;
-    Ok(resources::list_resources(&resources::resources_dir(&library, mod_kind(&m.kind), &id)))
+    let m = overlay::get_mod(&conn, &id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_NOT_FOUND)?;
+    Ok(resources::list_resources(&resources::resources_dir(
+        &library,
+        mod_kind(&m.kind),
+        &id,
+    )))
 }
 
 /// Ouvre un fichier du dossier ressources avec l'application par défaut de
@@ -242,11 +267,15 @@ fn open_mod_resource(app: AppHandle, db: State<Db>, id: String, rel_path: String
     let library = cfg.library_path.clone().ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     let dir = {
         let conn = db.0.lock().map_err(|e| e.to_string())?;
-        let m = overlay::get_mod(&conn, &id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_NOT_FOUND)?;
+        let m = overlay::get_mod(&conn, &id)
+            .map_err(|e| e.to_string())?
+            .ok_or(crate::errors::MOD_NOT_FOUND)?;
         resources::resources_dir(&library, mod_kind(&m.kind), &id)
     };
     let path = resources::resolve_resource_path(&dir, &rel_path)?;
-    app.opener().open_path(path.display().to_string(), None::<&str>).map_err(|e| e.to_string())
+    app.opener()
+        .open_path(path.display().to_string(), None::<&str>)
+        .map_err(|e| e.to_string())
 }
 
 /// Fonctionnalités CSP effectivement détectées pour un mod (§6.4bis) : sert à
@@ -486,7 +515,12 @@ fn bulk_delete(app: AppHandle, db: State<Db>, ids: Vec<String>) -> Result<bulk::
 }
 
 #[tauri::command]
-fn bulk_export(app: AppHandle, db: State<Db>, ids: Vec<String>, dest_dir: String) -> Result<Vec<bulk::BulkExportItem>, String> {
+fn bulk_export(
+    app: AppHandle,
+    db: State<Db>,
+    ids: Vec<String>,
+    dest_dir: String,
+) -> Result<Vec<bulk::BulkExportItem>, String> {
     let cfg = config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     Ok(bulk::export(&conn, &cfg, &ids, std::path::Path::new(&dest_dir)))
@@ -585,7 +619,13 @@ fn list_track_skin_options(db: State<Db>, track_id: String) -> Result<Vec<submod
 
 /// Active/désactive un skin de circuit (§4.6bis, pas exclusif).
 #[tauri::command]
-fn set_track_skin_active(app: AppHandle, db: State<Db>, track_id: String, skin_name: String, active: bool) -> Result<(), String> {
+fn set_track_skin_active(
+    app: AppHandle,
+    db: State<Db>,
+    track_id: String,
+    skin_name: String,
+    active: bool,
+) -> Result<(), String> {
     let cfg = config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     submods::set_track_skin_active(&conn, &cfg, &track_id, &skin_name, active)

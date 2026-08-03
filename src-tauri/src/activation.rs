@@ -69,11 +69,7 @@ pub fn create_junction(link: &Path, target: &Path) -> Result<(), String> {
     // raw_arg : on maîtrise nous-mêmes les guillemets (chemins à espaces).
     #[cfg(windows)]
     {
-        cmd.raw_arg(format!(
-            "mklink /D \"{}\" \"{}\"",
-            link.display(),
-            target.display()
-        ));
+        cmd.raw_arg(format!("mklink /D \"{}\" \"{}\"", link.display(), target.display()));
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
     #[cfg(not(windows))]
@@ -110,12 +106,7 @@ const GUARD_MSG: &str = crate::errors::REAL_FOLDER_GUARD;
 
 /// Active un mod : crée la junction `content/<type>s/<id>` → version choisie.
 /// Si `version_id` est fourni, il devient la version active.
-pub fn activate(
-    conn: &Connection,
-    cfg: &AppConfig,
-    mod_id: &str,
-    version_id: Option<&str>,
-) -> Result<(), String> {
+pub fn activate(conn: &Connection, cfg: &AppConfig, mod_id: &str, version_id: Option<&str>) -> Result<(), String> {
     let m = overlay::get_mod(conn, mod_id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_NOT_FOUND)?;
@@ -190,8 +181,7 @@ mod tests {
         if !cfg!(windows) {
             return;
         }
-        let base =
-            crate::testutil::temp_dir("junc");
+        let base = crate::testutil::temp_dir("junc");
         let target = base.join("target");
         let link = base.join("link");
         std::fs::create_dir_all(&target).unwrap();
@@ -230,12 +220,28 @@ mod tests {
         let now = chrono::Local::now().to_rfc3339();
         overlay::upsert_mod(&conn, "test_car", "Car", Some("B"), Some("Test"), "h", None, &now).unwrap();
         overlay::insert_version(
-            &conn, "v1", "test_car", Some("1.0"), None, &now,
-            &carv.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "test_car",
+            Some("1.0"),
+            None,
+            &now,
+            &carv.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "test_car", "v1").unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac), library_path: Some(library), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac),
+            library_path: Some(library),
+            ..Default::default()
+        };
 
         activate(&conn, &cfg, "test_car", None).unwrap();
         deactivate(&conn, &cfg, "test_car").unwrap();
@@ -264,25 +270,50 @@ mod tests {
         let now = chrono::Local::now().to_rfc3339();
         overlay::upsert_mod(&conn, "spa", "Track", Some("B"), Some("Spa"), "h", None, &now).unwrap();
         overlay::insert_version(
-            &conn, "v1", "spa", Some("1.0"), None, &now,
-            &spav1.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "spa",
+            Some("1.0"),
+            None,
+            &now,
+            &spav1.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "spa", "v1").unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library),
+            ..Default::default()
+        };
 
         activate(&conn, &cfg, "spa", None).unwrap();
         let link = ac.join("content").join("tracks").join("spa");
 
         assert!(!is_junction(&link), "plus de reparse point — vrai dossier");
         assert!(deploy::is_deployed(&link), "marqueur de déploiement hardlinks présent");
-        assert!(link.join("ui").join("ui_track.json").is_file(), "toute l'arborescence est là (ex. ai/)");
+        assert!(
+            link.join("ui").join("ui_track.json").is_file(),
+            "toute l'arborescence est là (ex. ai/)"
+        );
         assert!(link.join("ai").join("fast_lane.ai").is_file());
-        assert!(is_mod_active(&cfg, ModKind::Track, "spa"), "détecté actif via le nouveau mécanisme");
+        assert!(
+            is_mod_active(&cfg, ModKind::Track, "spa"),
+            "détecté actif via le nouveau mécanisme"
+        );
 
         deactivate(&conn, &cfg, "spa").unwrap();
         assert!(!link.exists(), "déploiement retiré");
-        assert!(spav1.join("ai").join("fast_lane.ai").is_file(), "bibliothèque intacte après désactivation");
+        assert!(
+            spav1.join("ai").join("fast_lane.ai").is_file(),
+            "bibliothèque intacte après désactivation"
+        );
         assert!(!is_mod_active(&cfg, ModKind::Track, "spa"));
     }
 
@@ -306,19 +337,38 @@ mod tests {
         let now = chrono::Local::now().to_rfc3339();
         overlay::upsert_mod(&conn, "legacy_car", "Car", Some("B"), Some("Legacy"), "h", None, &now).unwrap();
         overlay::insert_version(
-            &conn, "v1", "legacy_car", Some("1.0"), None, &now,
-            &carv.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "legacy_car",
+            Some("1.0"),
+            None,
+            &now,
+            &carv.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "legacy_car", "v1").unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library),
+            ..Default::default()
+        };
 
         // Simule un mod activé sous l'ancien mécanisme, sans passer par `activate`.
         let link = ac.join("content").join("cars").join("legacy_car");
         create_junction(&link, &carv).unwrap();
         assert!(is_junction(&link));
 
-        assert!(is_mod_active(&cfg, ModKind::Car, "legacy_car"), "symlink hérité toujours reconnu actif");
+        assert!(
+            is_mod_active(&cfg, ModKind::Car, "legacy_car"),
+            "symlink hérité toujours reconnu actif"
+        );
 
         // Réactiver (ex. changement de version, ou juste re-cliquer Activer)
         // migre silencieusement vers les hardlinks.

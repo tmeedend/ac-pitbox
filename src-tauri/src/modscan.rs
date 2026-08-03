@@ -62,11 +62,9 @@ pub fn is_car_sound(dir: &Path) -> bool {
     }
     std::fs::read_dir(dir)
         .map(|entries| {
-            entries.flatten().any(|e| {
-                e.path()
-                    .extension()
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("bank"))
-            })
+            entries
+                .flatten()
+                .any(|e| e.path().extension().is_some_and(|ext| ext.eq_ignore_ascii_case("bank")))
         })
         .unwrap_or(false)
 }
@@ -171,8 +169,14 @@ fn descend_apps(dir: &Path, out: &mut Vec<FoundApp>) {
         return; // mod de 1er niveau : pas une app, et inutile d'y descendre
     }
     if is_app(dir) {
-        let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        out.push(FoundApp { name, dir: dir.to_path_buf() });
+        let name = dir
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        out.push(FoundApp {
+            name,
+            dir: dir.to_path_buf(),
+        });
         return;
     }
     if let Ok(entries) = std::fs::read_dir(dir) {
@@ -190,7 +194,10 @@ fn descend_subs(dir: &Path, out: &mut Vec<FoundSub>) {
     if is_car(dir) || is_track(dir) {
         return;
     }
-    let dir_name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let dir_name = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
 
     // Pack de skins : deux arborescences possibles (§12bis.2), plus la
     // convention CM pour les skins de circuit `skins/cm_skins/<skin>` (regroupe
@@ -217,7 +224,12 @@ fn descend_subs(dir: &Path, out: &mut Vec<FoundSub>) {
                 let car = e.path();
                 if car.is_dir() && has_subdir(&car) {
                     let parent = e.file_name().to_string_lossy().into_owned();
-                    out.push(FoundSub { kind: SubKind::Skin, parent_id: parent, dir: car, extra_root: None });
+                    out.push(FoundSub {
+                        kind: SubKind::Skin,
+                        parent_id: parent,
+                        dir: car,
+                        extra_root: None,
+                    });
                 }
             }
         } else {
@@ -233,7 +245,12 @@ fn descend_subs(dir: &Path, out: &mut Vec<FoundSub>) {
     }
 
     if is_car_sound(dir) {
-        out.push(FoundSub { kind: SubKind::Sound, parent_id: dir_name, dir: dir.to_path_buf(), extra_root: None });
+        out.push(FoundSub {
+            kind: SubKind::Sound,
+            parent_id: dir_name,
+            dir: dir.to_path_buf(),
+            extra_root: None,
+        });
         return;
     }
     if let Ok(entries) = std::fs::read_dir(dir) {
@@ -248,11 +265,17 @@ fn descend_subs(dir: &Path, out: &mut Vec<FoundSub>) {
 
 fn descend(dir: &Path, out: &mut Vec<FoundMod>) {
     if is_track(dir) {
-        out.push(FoundMod { kind: ModKind::Track, dir: dir.to_path_buf() });
+        out.push(FoundMod {
+            kind: ModKind::Track,
+            dir: dir.to_path_buf(),
+        });
         return;
     }
     if is_car(dir) {
-        out.push(FoundMod { kind: ModKind::Car, dir: dir.to_path_buf() });
+        out.push(FoundMod {
+            kind: ModKind::Car,
+            dir: dir.to_path_buf(),
+        });
         return;
     }
     if is_car_sound(dir) {

@@ -47,10 +47,13 @@ pub fn create_from_active(conn: &Connection, cfg: &AppConfig, name: &str) -> Res
 /// Applique un profil : réconciliation des junctions.
 pub fn apply(conn: &Connection, cfg: &AppConfig, profile_id: &str) -> Result<ApplyReport, String> {
     let entries = overlay::get_profile_entries(conn, profile_id).map_err(|e| e.to_string())?;
-    let target: HashMap<String, String> =
-        entries.into_iter().map(|e| (e.mod_id, e.version_id)).collect();
+    let target: HashMap<String, String> = entries.into_iter().map(|e| (e.mod_id, e.version_id)).collect();
 
-    let mut report = ApplyReport { activated: 0, deactivated: 0, errors: Vec::new() };
+    let mut report = ApplyReport {
+        activated: 0,
+        deactivated: 0,
+        errors: Vec::new(),
+    };
 
     // Désactiver les mods actuellement actifs absents du profil.
     for m in overlay::list_mods(conn).map_err(|e| e.to_string())? {

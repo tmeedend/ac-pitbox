@@ -53,16 +53,19 @@ fn sanitize(s: &str) -> String {
 }
 
 /// Exporte la version active d'un mod en archive autonome dans `dest_dir` (§9.1).
-pub fn export_mod(
-    conn: &Connection,
-    cfg: &AppConfig,
-    mod_id: &str,
-    dest_dir: &Path,
-) -> Result<ExportReport, String> {
-    let sevenzip = cfg.sevenzip_exe.as_ref().ok_or(crate::errors::SEVENZIP_NOT_CONFIGURED)?;
-    let m = overlay::get_mod(conn, mod_id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_NOT_FOUND)?;
+pub fn export_mod(conn: &Connection, cfg: &AppConfig, mod_id: &str, dest_dir: &Path) -> Result<ExportReport, String> {
+    let sevenzip = cfg
+        .sevenzip_exe
+        .as_ref()
+        .ok_or(crate::errors::SEVENZIP_NOT_CONFIGURED)?;
+    let m = overlay::get_mod(conn, mod_id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_NOT_FOUND)?;
     let kind = kind_of(&m.kind);
-    let vid = m.active_version_id.clone().ok_or(crate::errors::NO_ACTIVE_VERSION_TO_EXPORT)?;
+    let vid = m
+        .active_version_id
+        .clone()
+        .ok_or(crate::errors::NO_ACTIVE_VERSION_TO_EXPORT)?;
     let lib = overlay::get_version_path(conn, &vid)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::VERSION_NOT_FOUND)?;
@@ -129,9 +132,7 @@ fn resolve_car_deps(
 
     // Sources des .ini : d'abord le `data/` décompressé du mod ; sinon `data.acd`.
     let data_dir = lib_car.join("data");
-    let acd_workdir = if data_dir.join("driver3d.ini").is_file()
-        || data_dir.join("digital_instruments.ini").is_file()
-    {
+    let acd_workdir = if data_dir.join("driver3d.ini").is_file() || data_dir.join("digital_instruments.ini").is_file() {
         Some(data_dir.clone())
     } else if lib_car.join("data.acd").is_file() {
         match extract_acd(cfg, &lib_car.join("data.acd")) {
@@ -222,13 +223,7 @@ fn resolve_car_deps(
 }
 
 /// Crews référencés par `skin.ini` [CREW] SUIT/HELMET/BRAND → dossiers texture.
-fn collect_crews(
-    ac: &Path,
-    skin: &Path,
-    staging: &Path,
-    included: &mut Vec<String>,
-    warnings: &mut Vec<String>,
-) {
+fn collect_crews(ac: &Path, skin: &Path, staging: &Path, included: &mut Vec<String>, warnings: &mut Vec<String>) {
     let Some(ini) = read_ini(&skin.join("skin.ini")) else {
         return;
     };
@@ -240,8 +235,7 @@ fn collect_crews(
             continue;
         }
         // content/texture/crew_<type><name> (name commence par un backslash).
-        let rel = format!("content/texture/crew_{}{}", crew_type.to_lowercase(), name)
-            .replace('\\', "/");
+        let rel = format!("content/texture/crew_{}{}", crew_type.to_lowercase(), name).replace('\\', "/");
         if stage_dir(ac, staging, &rel) {
             included.push(rel);
         } else {
@@ -395,8 +389,20 @@ mod tests {
         let now = chrono::Local::now().to_rfc3339();
         overlay::upsert_mod(&conn, "mycar", "Car", Some("B"), Some("My Car"), "h", None, &now).unwrap();
         overlay::insert_version(
-            &conn, "v1", "mycar", Some("1.0"), None, &now,
-            &car.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "mycar",
+            Some("1.0"),
+            None,
+            &now,
+            &car.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "mycar", "v1").unwrap();
@@ -410,13 +416,23 @@ mod tests {
 
         let report = export_mod(&conn, &cfg, "mycar", &dest).unwrap();
         assert!(Path::new(&report.archive).is_file(), "archive créée");
-        assert!(report.included.iter().any(|p| p.contains("custom_driver.kn5")), "pilote embarqué: {:?}", report.included);
+        assert!(
+            report.included.iter().any(|p| p.contains("custom_driver.kn5")),
+            "pilote embarqué: {:?}",
+            report.included
+        );
 
         // Vérifie le contenu réel de l'archive.
         let check = base.join("check");
         std::fs::create_dir_all(&check).unwrap();
         archive::extract(&sevenzip, Path::new(&report.archive), &check).unwrap();
-        assert!(check.join("content").join("cars").join("mycar").join("ui").join("ui_car.json").is_file());
+        assert!(check
+            .join("content")
+            .join("cars")
+            .join("mycar")
+            .join("ui")
+            .join("ui_car.json")
+            .is_file());
         assert!(check.join("content").join("driver").join("custom_driver.kn5").is_file());
     }
 }

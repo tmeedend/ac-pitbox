@@ -246,7 +246,10 @@ fn ensure_available(conn: &Connection, cfg: &AppConfig, kind: ModKind, id: &str)
 /// Ouvre Content Manager sans argument (§12bis.5) : pratique pour parcourir
 /// son propre menu (réglages CM, contenu…) sans passer par une session Pit Box.
 pub fn open_content_manager(cfg: &AppConfig) -> Result<(), String> {
-    let cm = cfg.content_manager_exe.as_ref().ok_or(crate::errors::CM_NOT_CONFIGURED)?;
+    let cm = cfg
+        .content_manager_exe
+        .as_ref()
+        .ok_or(crate::errors::CM_NOT_CONFIGURED)?;
     let mut cmd = Command::new(cm);
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);

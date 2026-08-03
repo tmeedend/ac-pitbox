@@ -62,7 +62,10 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     // importé séparément par Pit Box) → non supprimable individuellement,
     // seulement le mod entier (§4.6bis, même logique que les skins voiture).
     // Défaut 1 (supprimable) pour tous les sous-éléments existants/normaux.
-    let _ = conn.execute("ALTER TABLE sub_mods ADD COLUMN removable INTEGER NOT NULL DEFAULT 1", []);
+    let _ = conn.execute(
+        "ALTER TABLE sub_mods ADD COLUMN removable INTEGER NOT NULL DEFAULT 1",
+        [],
+    );
     Ok(())
 }
 
@@ -367,7 +370,10 @@ pub fn insert_version(
 /// demande explicite en réindexation (potentiellement coûteux à grande échelle,
 /// d'où une case à cocher dédiée plutôt qu'un recalcul systématique).
 pub fn update_version_size(conn: &Connection, version_id: &str, size_bytes: i64) -> rusqlite::Result<()> {
-    conn.execute("UPDATE versions SET size_bytes = ?2 WHERE id = ?1", params![version_id, size_bytes])?;
+    conn.execute(
+        "UPDATE versions SET size_bytes = ?2 WHERE id = ?1",
+        params![version_id, size_bytes],
+    )?;
     Ok(())
 }
 
@@ -671,9 +677,7 @@ pub fn set_kept_archive(conn: &Connection, version_id: &str, path: &str) -> rusq
 }
 
 pub fn get_history(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<HistoryRow>> {
-    let mut stmt = conn.prepare(
-        "SELECT timestamp, event, details FROM history WHERE mod_id = ?1 ORDER BY id DESC",
-    )?;
+    let mut stmt = conn.prepare("SELECT timestamp, event, details FROM history WHERE mod_id = ?1 ORDER BY id DESC")?;
     let rows = stmt.query_map([mod_id], |row| {
         Ok(HistoryRow {
             timestamp: row.get(0)?,
@@ -787,17 +791,22 @@ pub fn list_profiles(conn: &Connection) -> rusqlite::Result<Vec<ProfileRow>> {
            FROM profiles p ORDER BY p.name COLLATE NOCASE"#,
     )?;
     let rows = stmt.query_map([], |r| {
-        Ok(ProfileRow { id: r.get(0)?, name: r.get(1)?, entry_count: r.get(2)? })
+        Ok(ProfileRow {
+            id: r.get(0)?,
+            name: r.get(1)?,
+            entry_count: r.get(2)?,
+        })
     })?;
     rows.collect()
 }
 
 pub fn get_profile_entries(conn: &Connection, profile_id: &str) -> rusqlite::Result<Vec<ProfileEntry>> {
-    let mut stmt = conn.prepare(
-        "SELECT mod_id, version_id FROM profile_entries WHERE profile_id = ?1",
-    )?;
+    let mut stmt = conn.prepare("SELECT mod_id, version_id FROM profile_entries WHERE profile_id = ?1")?;
     let rows = stmt.query_map([profile_id], |r| {
-        Ok(ProfileEntry { mod_id: r.get(0)?, version_id: r.get(1)? })
+        Ok(ProfileEntry {
+            mod_id: r.get(0)?,
+            version_id: r.get(1)?,
+        })
     })?;
     rows.collect()
 }
@@ -815,11 +824,7 @@ pub fn list_pack_ids(conn: &Connection, pack: &str) -> rusqlite::Result<Vec<Stri
 }
 
 pub fn mod_exists(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
-    let n: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM mods WHERE id_interne = ?1",
-        [id],
-        |r| r.get(0),
-    )?;
+    let n: i64 = conn.query_row("SELECT COUNT(*) FROM mods WHERE id_interne = ?1", [id], |r| r.get(0))?;
     Ok(n > 0)
 }
 
@@ -847,7 +852,10 @@ pub fn upsert_stock_mod(
 /// Supprime toutes les entrées de contenu de base (ré-indexation depuis zéro).
 /// Les versions associées tombent par CASCADE. Les vrais mods ne sont pas touchés.
 pub fn clear_stock(conn: &Connection) -> rusqlite::Result<usize> {
-    conn.execute("DELETE FROM history WHERE mod_id IN (SELECT id_interne FROM mods WHERE is_stock = 1)", [])?;
+    conn.execute(
+        "DELETE FROM history WHERE mod_id IN (SELECT id_interne FROM mods WHERE is_stock = 1)",
+        [],
+    )?;
     let n = conn.execute("DELETE FROM mods WHERE is_stock = 1", [])?;
     Ok(n)
 }
@@ -903,7 +911,18 @@ pub fn insert_layer(
            (id, parent_id, parent_kind, name, library_path, source_archive,
             added_count, overwritten_count, priority, imported_at)
            VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)"#,
-        params![id, parent_id, parent_kind, name, library_path, source_archive, added_count, overwritten_count, priority, imported_at],
+        params![
+            id,
+            parent_id,
+            parent_kind,
+            name,
+            library_path,
+            source_archive,
+            added_count,
+            overwritten_count,
+            priority,
+            imported_at
+        ],
     )?;
     Ok(())
 }
@@ -935,7 +954,9 @@ pub fn list_layers(conn: &Connection, parent_id: &str) -> rusqlite::Result<Vec<L
 
 /// Toutes les couches d'un type (Car|Track), pour la vue transversale add-ons.
 pub fn list_layers_by_kind(conn: &Connection, kind: &str) -> rusqlite::Result<Vec<LayerRow>> {
-    let mut stmt = conn.prepare(&format!("{LAYER_SELECT} WHERE parent_kind = ?1 ORDER BY parent_id, priority"))?;
+    let mut stmt = conn.prepare(&format!(
+        "{LAYER_SELECT} WHERE parent_kind = ?1 ORDER BY parent_id, priority"
+    ))?;
     let rows = stmt.query_map([kind], map_layer)?;
     rows.collect()
 }
@@ -943,7 +964,9 @@ pub fn list_layers_by_kind(conn: &Connection, kind: &str) -> rusqlite::Result<Ve
 /// Couches **actives** d'une base, dans l'ordre de priorité (la + haute en dernier
 /// → gagne à la superposition). Base de la composition (§4.4).
 pub fn active_layers(conn: &Connection, parent_id: &str) -> rusqlite::Result<Vec<LayerRow>> {
-    let mut stmt = conn.prepare(&format!("{LAYER_SELECT} WHERE parent_id = ?1 AND is_active = 1 ORDER BY priority"))?;
+    let mut stmt = conn.prepare(&format!(
+        "{LAYER_SELECT} WHERE parent_id = ?1 AND is_active = 1 ORDER BY priority"
+    ))?;
     let rows = stmt.query_map([parent_id], map_layer)?;
     rows.collect()
 }
@@ -958,7 +981,10 @@ pub fn get_layer(conn: &Connection, id: &str) -> rusqlite::Result<Option<LayerRo
 }
 
 pub fn set_layer_active(conn: &Connection, id: &str, active: bool) -> rusqlite::Result<()> {
-    conn.execute("UPDATE layers SET is_active = ?2 WHERE id = ?1", params![id, active as i64])?;
+    conn.execute(
+        "UPDATE layers SET is_active = ?2 WHERE id = ?1",
+        params![id, active as i64],
+    )?;
     Ok(())
 }
 
@@ -1053,14 +1079,18 @@ const SUB_SELECT: &str =
 
 /// Sous-éléments rattachés à une entité (fiche détail, §12bis.3).
 pub fn list_subs_for_parent(conn: &Connection, parent_id: &str) -> rusqlite::Result<Vec<SubModRow>> {
-    let mut stmt = conn.prepare(&format!("{SUB_SELECT} WHERE parent_id = ?1 ORDER BY name COLLATE NOCASE"))?;
+    let mut stmt = conn.prepare(&format!(
+        "{SUB_SELECT} WHERE parent_id = ?1 ORDER BY name COLLATE NOCASE"
+    ))?;
     let rows = stmt.query_map([parent_id], map_sub)?;
     rows.collect()
 }
 
 /// Tous les sous-éléments d'un type (vue transversale, §12bis.3).
 pub fn list_subs_by_type(conn: &Connection, sub_type: &str) -> rusqlite::Result<Vec<SubModRow>> {
-    let mut stmt = conn.prepare(&format!("{SUB_SELECT} WHERE sub_type = ?1 ORDER BY parent_id, name COLLATE NOCASE"))?;
+    let mut stmt = conn.prepare(&format!(
+        "{SUB_SELECT} WHERE sub_type = ?1 ORDER BY parent_id, name COLLATE NOCASE"
+    ))?;
     let rows = stmt.query_map([sub_type], map_sub)?;
     rows.collect()
 }
@@ -1140,9 +1170,8 @@ pub fn insert_app(
 }
 
 pub fn list_apps(conn: &Connection) -> rusqlite::Result<Vec<AppRow>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, library_path, source_archive, imported_at FROM apps ORDER BY id COLLATE NOCASE",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT id, library_path, source_archive, imported_at FROM apps ORDER BY id COLLATE NOCASE")?;
     let rows = stmt.query_map([], |r| {
         Ok(AppRow {
             id: r.get(0)?,
@@ -1155,9 +1184,7 @@ pub fn list_apps(conn: &Connection) -> rusqlite::Result<Vec<AppRow>> {
 }
 
 pub fn get_app(conn: &Connection, id: &str) -> rusqlite::Result<Option<AppRow>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, library_path, source_archive, imported_at FROM apps WHERE id = ?1",
-    )?;
+    let mut stmt = conn.prepare("SELECT id, library_path, source_archive, imported_at FROM apps WHERE id = ?1")?;
     let mut rows = stmt.query_map([id], |r| {
         Ok(AppRow {
             id: r.get(0)?,
@@ -1261,7 +1288,11 @@ pub fn set_other_priority(conn: &Connection, id: &str, priority: bool) -> rusqli
 pub fn set_other_active(conn: &Connection, id: &str, active: bool, junctions: &[String]) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE other_mods SET is_active = ?2, junctions = ?3 WHERE id = ?1",
-        params![id, active as i64, serde_json::to_string(junctions).unwrap_or_else(|_| "[]".into())],
+        params![
+            id,
+            active as i64,
+            serde_json::to_string(junctions).unwrap_or_else(|_| "[]".into())
+        ],
     )?;
     Ok(())
 }

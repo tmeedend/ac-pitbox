@@ -151,13 +151,19 @@ pub fn list_showrooms(cfg: &AppConfig) -> Vec<ShowroomOption> {
 /// c'est lui qui le ferme pour revenir à l'app. Rien à suivre côté Pit Box —
 /// pas de PID mémorisé, pas de fenêtre à repositionner.
 pub fn open_native_showroom(cfg: &AppConfig, car_id: &str, skin_id: Option<&str>) -> Result<(), String> {
-    let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?.clone();
+    let ac = cfg
+        .ac_install_path
+        .as_ref()
+        .ok_or(crate::errors::AC_NOT_CONFIGURED)?
+        .clone();
     // Garde-fou : `acShowroom.exe` cherche `data/lods.ini` sous `content/cars/<id>`
     // et plante (fenêtre d'erreur native, hors de notre contrôle) si `car_id`
     // n'est pas une vraie voiture — ex. l'id d'un circuit passé par erreur
     // depuis le front. Mieux vaut une erreur propre ici qu'un crash natif.
     if !crate::modscan::is_car(&ac.join("content").join("cars").join(car_id)) {
-        return Err(format!("« {car_id} » n'est pas une voiture valide — aperçu 3D indisponible"));
+        return Err(format!(
+            "« {car_id} » n'est pas une voiture valide — aperçu 3D indisponible"
+        ));
     }
     let exe = ac.join("acShowroom.exe");
     if !exe.is_file() {
@@ -222,11 +228,22 @@ mod tests {
         // Sans ui_showroom.json : l'id fait office de nom.
         fs::create_dir_all(rooms.join("custom_room")).unwrap();
 
-        let cfg = AppConfig { ac_install_path: Some(base.to_path_buf()), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(base.to_path_buf()),
+            ..Default::default()
+        };
         let list = list_showrooms(&cfg);
         let ids: Vec<&str> = list.iter().map(|s| s.id.as_str()).collect();
         let names: Vec<&str> = list.iter().map(|s| s.name.as_str()).collect();
-        assert_eq!(names, vec!["custom_room", "Hangar", "Showroom White"], "tri par nom lisible");
-        assert_eq!(ids, vec!["custom_room", "Hangar", "studio_white"], "l'id reste le nom de dossier");
+        assert_eq!(
+            names,
+            vec!["custom_room", "Hangar", "Showroom White"],
+            "tri par nom lisible"
+        );
+        assert_eq!(
+            ids,
+            vec!["custom_room", "Hangar", "studio_white"],
+            "l'id reste le nom de dossier"
+        );
     }
 }

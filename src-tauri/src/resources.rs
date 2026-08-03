@@ -90,7 +90,9 @@ enum Route {
 }
 
 fn ext_lower(path: &Path) -> Option<String> {
-    path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase())
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
 }
 
 /// `allow_root_images` : les images à la racine ne sont ambiguës (capture de
@@ -152,8 +154,11 @@ fn scan(dir: &Path, mode: ExtractionMode, allow_root_images: bool) -> HashMap<Pa
         // jamais des annexes de présentation, quelle que soit l'extension.
         let rel = path.strip_prefix(dir).unwrap_or(path);
         let under_extension = rel.parent().is_some_and(|p| {
-            p.components()
-                .any(|c| c.as_os_str().to_str().is_some_and(|s| s.eq_ignore_ascii_case("extension")))
+            p.components().any(|c| {
+                c.as_os_str()
+                    .to_str()
+                    .is_some_and(|s| s.eq_ignore_ascii_case("extension"))
+            })
         });
         let route = if under_extension {
             Route::Content
@@ -251,10 +256,21 @@ pub fn list_resources(dir: &Path) -> Vec<ResourceFile> {
         .filter(|e| e.file_type().is_file())
         .map(|e| {
             let path = e.path();
-            let rel = path.strip_prefix(dir).unwrap_or(path).to_string_lossy().replace('\\', "/");
-            let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let rel = path
+                .strip_prefix(dir)
+                .unwrap_or(path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
             let size_bytes = e.metadata().map(|m| m.len()).unwrap_or(0);
-            ResourceFile { name, rel_path: rel, size_bytes }
+            ResourceFile {
+                name,
+                rel_path: rel,
+                size_bytes,
+            }
         })
         .collect();
     out.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
@@ -266,8 +282,12 @@ pub fn list_resources(dir: &Path) -> Vec<ResourceFile> {
 /// à l'intérieur de `dir`. Utilisé avant toute ouverture (§4.6).
 pub fn resolve_resource_path(dir: &Path, rel_path: &str) -> Result<PathBuf, String> {
     let candidate = dir.join(rel_path);
-    let canon_dir = dir.canonicalize().map_err(|e| format!("dossier ressources introuvable : {e}"))?;
-    let canon_candidate = candidate.canonicalize().map_err(|e| format!("fichier introuvable : {e}"))?;
+    let canon_dir = dir
+        .canonicalize()
+        .map_err(|e| format!("dossier ressources introuvable : {e}"))?;
+    let canon_candidate = candidate
+        .canonicalize()
+        .map_err(|e| format!("fichier introuvable : {e}"))?;
     if !canon_candidate.starts_with(&canon_dir) {
         return Err(crate::errors::PATH_OUTSIDE_RESOURCES.into());
     }
@@ -314,12 +334,20 @@ mod tests {
         assert_eq!(n, 1, "seul changelog.txt (racine) est une annexe");
 
         assert!(
-            content.join("extension").join("config").join("tracks").join("readme.txt").is_file(),
+            content
+                .join("extension")
+                .join("config")
+                .join("tracks")
+                .join("readme.txt")
+                .is_file(),
             "fichier profond dans extension/ conservé comme contenu du mod"
         );
         assert!(content.join("extension").join("weather_notes.pdf").is_file());
         assert!(content.join("data").join("templates.zip").is_file());
-        assert!(!resources.join("extension").exists(), "rien d'extension/ ne doit finir en ressources");
+        assert!(
+            !resources.join("extension").exists(),
+            "rien d'extension/ ne doit finir en ressources"
+        );
         assert!(resources.join("changelog.txt").is_file());
     }
 
@@ -357,14 +385,23 @@ mod tests {
 
         assert!(content.join("ui").join("ui_car.json").is_file());
         assert!(content.join("model.kn5").is_file());
-        assert!(content.join("skins").join("red").join("preview.jpg").is_file(), "preview de skin jamais extrait");
+        assert!(
+            content.join("skins").join("red").join("preview.jpg").is_file(),
+            "preview de skin jamais extrait"
+        );
         assert!(!content.join("changelog.txt").exists());
-        assert!(!content.join("livery_template.psd").exists(), "annexe lourde jamais dans le contenu de jeu");
+        assert!(
+            !content.join("livery_template.psd").exists(),
+            "annexe lourde jamais dans le contenu de jeu"
+        );
 
         assert!(resources.join("changelog.txt").is_file());
         assert!(resources.join("presentation.pdf").is_file());
         assert!(resources.join("preview.jpg").is_file());
-        assert!(!resources.join("livery_template.psd").exists(), "mode info_only : pas les lourds");
+        assert!(
+            !resources.join("livery_template.psd").exists(),
+            "mode info_only : pas les lourds"
+        );
 
         // Mode Aucun côté copie : la source reste intacte (copy=false ici teste move,
         // donc on vérifie plutôt que le lourd n'est nulle part en bibliothèque.
@@ -398,8 +435,14 @@ mod tests {
         assert_eq!(n, 0, "rien n'est extrait en mode Aucun");
         assert!(!resources.exists(), "aucun dossier ressources créé");
         assert!(!content.join("changelog.txt").exists());
-        assert!(src.join("changelog.txt").is_file(), "annexe laissée dans la source (§4.6, mode Aucun)");
-        assert!(content.join("model.kn5").is_file(), "le contenu de jeu, lui, est bien rangé");
+        assert!(
+            src.join("changelog.txt").is_file(),
+            "annexe laissée dans la source (§4.6, mode Aucun)"
+        );
+        assert!(
+            content.join("model.kn5").is_file(),
+            "le contenu de jeu, lui, est bien rangé"
+        );
     }
 
     #[test]

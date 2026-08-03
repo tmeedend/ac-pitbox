@@ -195,13 +195,7 @@ fn merge_lookup<'a>(rules: &'a [TagMerge], tag: &str) -> Option<&'a [String]> {
 
 /// Harmonise une voiture. `country_empty` indique si le champ natif `country`
 /// est vide (auquel cas l'extraction de pays peut le remplir).
-pub fn apply_car(
-    rules: &Rules,
-    raw_tags: &[String],
-    name: &str,
-    class: &str,
-    country_empty: bool,
-) -> Harmonized {
+pub fn apply_car(rules: &Rules, raw_tags: &[String], name: &str, class: &str, country_empty: bool) -> Harmonized {
     let c = &rules.car;
     let name_l = name.to_lowercase();
     let mut out: BTreeSet<String> = BTreeSet::new();
@@ -378,7 +372,7 @@ mod tests {
         let h = apply_track(&rules, &["circuit".into(), "Drift".into(), "gt".into()]);
         assert_eq!(h.categories, vec!["#drift".to_string(), "#circuit".to_string()]);
         assert_eq!(h.category.as_deref(), Some("#drift")); // principale = la + prioritaire
-        // Les catégories sont promues en tags `#` ; le tag hors liste est conservé.
+                                                           // Les catégories sont promues en tags `#` ; le tag hors liste est conservé.
         assert!(h.tags_from_rule.contains(&"#drift".to_string()));
         assert!(h.tags_from_rule.contains(&"#circuit".to_string()));
         assert!(h.tags_from_rule.contains(&"gt".to_string()));

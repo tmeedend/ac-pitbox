@@ -14,16 +14,11 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// Extrait `archive` dans `dest` via `7z x`. `dest` doit exister.
 pub fn extract(sevenzip: &Path, archive: &Path, dest: &Path) -> Result<(), String> {
     let mut cmd = Command::new(sevenzip);
-    cmd.arg("x")
-        .arg(archive)
-        .arg(format!("-o{}", dest.display()))
-        .arg("-y");
+    cmd.arg("x").arg(archive).arg(format!("-o{}", dest.display())).arg("-y");
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd
-        .output()
-        .map_err(|e| format!("impossible de lancer 7-Zip : {e}"))?;
+    let output = cmd.output().map_err(|e| format!("impossible de lancer 7-Zip : {e}"))?;
     if output.status.success() {
         Ok(())
     } else {
@@ -52,9 +47,7 @@ pub fn create_7z(sevenzip: &Path, src_dir: &Path, archive: &Path) -> Result<(), 
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd
-        .output()
-        .map_err(|e| format!("impossible de lancer 7-Zip : {e}"))?;
+    let output = cmd.output().map_err(|e| format!("impossible de lancer 7-Zip : {e}"))?;
     if output.status.success() {
         Ok(())
     } else {

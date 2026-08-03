@@ -17,10 +17,10 @@ use rusqlite::Connection;
 use serde::Serialize;
 use walkdir::WalkDir;
 
+use crate::activation;
 use crate::config::AppConfig;
 use crate::overlay::{self, OtherModRow};
 use crate::resources::{self, ExtractionMode};
-use crate::activation;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct OtherImported {
@@ -62,8 +62,18 @@ pub fn import_other(
     // donc jamais d'image présumée annexe même à la racine (allow_root_images=false).
     let res_dir = resources::resources_dir_for(library, "others", &[&id]);
     let resources_extracted = resources::file_mod(root, &dest, &res_dir, mode, !copy, false).ok()?;
-    overlay::insert_other_mod(conn, &id, &dest.to_string_lossy(), Some(source_name), &Local::now().to_rfc3339()).ok()?;
-    Some(OtherImported { id, resources_extracted })
+    overlay::insert_other_mod(
+        conn,
+        &id,
+        &dest.to_string_lossy(),
+        Some(source_name),
+        &Local::now().to_rfc3339(),
+    )
+    .ok()?;
+    Some(OtherImported {
+        id,
+        resources_extracted,
+    })
 }
 
 /// Chemins relatifs de tous les fichiers stockés d'un mod « autre ».
@@ -93,8 +103,10 @@ pub struct OtherModCard {
 /// Liste les mods « autres » avec les conflits de fichiers détectés entre eux.
 pub fn list_others(conn: &Connection) -> rusqlite::Result<Vec<OtherModCard>> {
     let rows = overlay::list_other_mods(conn)?;
-    let files: Vec<(String, HashSet<PathBuf>)> =
-        rows.iter().map(|r| (r.id.clone(), relative_files(Path::new(&r.library_path)))).collect();
+    let files: Vec<(String, HashSet<PathBuf>)> = rows
+        .iter()
+        .map(|r| (r.id.clone(), relative_files(Path::new(&r.library_path))))
+        .collect();
 
     Ok(rows
         .into_iter()
@@ -107,7 +119,10 @@ pub fn list_others(conn: &Connection) -> rusqlite::Result<Vec<OtherModCard>> {
                         .filter(|(id, _)| *id != row.id)
                         .filter_map(|(id, f)| {
                             let n = mine.intersection(f).count();
-                            (n > 0).then(|| ConflictInfo { other_id: id.clone(), count: n })
+                            (n > 0).then(|| ConflictInfo {
+                                other_id: id.clone(),
+                                count: n,
+                            })
                         })
                         .collect()
                 })
@@ -142,7 +157,9 @@ fn place(
     junctions: &mut Vec<String>,
     warnings: &mut Vec<String>,
 ) {
-    let Ok(entries) = std::fs::read_dir(current) else { return };
+    let Ok(entries) = std::fs::read_dir(current) else {
+        return;
+    };
     for e in entries.flatten() {
         let p = e.path();
         let Ok(rel) = p.strip_prefix(root) else { continue };
@@ -154,7 +171,10 @@ fn place(
             if !target.parent().is_some_and(|p| p.exists()) {
                 warnings.push(format!("{} : dossier parent introuvable", rel.display()));
             } else if !target.exists() {
-                warnings.push(format!("{} : dossier déjà existant, fusion de fichier isolé non supportée", rel.display()));
+                warnings.push(format!(
+                    "{} : dossier déjà existant, fusion de fichier isolé non supportée",
+                    rel.display()
+                ));
             }
             continue;
         }
@@ -166,9 +186,9 @@ fn place(
         } else if activation::is_junction(&target) {
             // Emplacement déjà pris par un autre mod « autre » actif : la
             // priorité tranche (le mod prioritaire gagne, §6.1bis).
-            let holder = others.iter().find(|o| {
-                o.id != mine_id && o.is_active && o.junctions.iter().any(|j| Path::new(j) == target)
-            });
+            let holder = others
+                .iter()
+                .find(|o| o.id != mine_id && o.is_active && o.junctions.iter().any(|j| Path::new(j) == target));
             let take = holder.map(|h| mine_priority || !h.is_priority).unwrap_or(true);
             if take {
                 let _ = activation::remove_junction(&target);
@@ -191,23 +211,39 @@ fn place(
 /// nature : ce qui ne peut pas être posé sans toucher un vrai dossier ou un
 /// fichier isolé existant est simplement signalé, pas forcé.
 pub fn activate_other(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<ActivateOtherResult, String> {
-    let m = overlay::get_other_mod(conn, id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_UNKNOWN)?;
+    let m = overlay::get_other_mod(conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_UNKNOWN)?;
     let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?;
     let others = overlay::list_other_mods(conn).map_err(|e| e.to_string())?;
 
     let mut junctions = Vec::new();
     let mut warnings = Vec::new();
     let src = PathBuf::from(&m.library_path);
-    place(&src, &src, ac, id, m.is_priority, &others, &mut junctions, &mut warnings);
+    place(
+        &src,
+        &src,
+        ac,
+        id,
+        m.is_priority,
+        &others,
+        &mut junctions,
+        &mut warnings,
+    );
 
     overlay::set_other_active(conn, id, true, &junctions).map_err(|e| e.to_string())?;
-    Ok(ActivateOtherResult { junctions: junctions.len(), warnings })
+    Ok(ActivateOtherResult {
+        junctions: junctions.len(),
+        warnings,
+    })
 }
 
 /// Désactive un mod « autre » : retire exactement les jonctions posées à sa
 /// dernière activation (garde-fou déjà dans `remove_junction`).
 pub fn deactivate_other(conn: &Connection, id: &str) -> Result<(), String> {
-    let m = overlay::get_other_mod(conn, id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_UNKNOWN)?;
+    let m = overlay::get_other_mod(conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_UNKNOWN)?;
     for j in &m.junctions {
         let _ = activation::remove_junction(Path::new(j));
     }
@@ -217,7 +253,9 @@ pub fn deactivate_other(conn: &Connection, id: &str) -> Result<(), String> {
 /// Supprime un mod « autre » : désactive (retire ses jonctions) puis efface
 /// ses fichiers stockés et son entrée overlay.
 pub fn delete_other(conn: &Connection, id: &str) -> Result<(), String> {
-    let m = overlay::get_other_mod(conn, id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_UNKNOWN)?;
+    let m = overlay::get_other_mod(conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_UNKNOWN)?;
     let _ = deactivate_other(conn, id);
     let _ = std::fs::remove_dir_all(&m.library_path);
     overlay::delete_other_mod(conn, id).map_err(|e| e.to_string())
@@ -246,7 +284,10 @@ mod tests {
         // (comme une vraie install CSP) — seul le sous-dossier "newtrack" manque.
         std::fs::create_dir_all(ac.join("extension").join("config").join("tracks")).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
 
         // Mod « autre » : un nouveau sous-dossier de config CSP inexistant côté AC.
         let src = base.join("src").join("MyShaderMod");
@@ -257,13 +298,26 @@ mod tests {
         assert!(overlay::other_exists(&conn, "MyShaderMod").unwrap());
 
         let res = activate_other(&conn, &cfg, "MyShaderMod").unwrap();
-        assert_eq!(res.junctions, 1, "un seul dossier à jonctionner (le plus haut gap libre)");
+        assert_eq!(
+            res.junctions, 1,
+            "un seul dossier à jonctionner (le plus haut gap libre)"
+        );
         assert!(res.warnings.is_empty());
-        assert!(activation::is_junction(&ac.join("extension").join("config").join("tracks").join("newtrack")));
-        assert!(ac.join("extension/config/tracks/newtrack/track.ini").is_file(), "contenu visible via la jonction");
+        assert!(activation::is_junction(
+            &ac.join("extension").join("config").join("tracks").join("newtrack")
+        ));
+        assert!(
+            ac.join("extension/config/tracks/newtrack/track.ini").is_file(),
+            "contenu visible via la jonction"
+        );
 
         deactivate_other(&conn, "MyShaderMod").unwrap();
-        assert!(!ac.join("extension").join("config").join("tracks").join("newtrack").exists());
+        assert!(!ac
+            .join("extension")
+            .join("config")
+            .join("tracks")
+            .join("newtrack")
+            .exists());
     }
 
     #[test]
@@ -274,7 +328,10 @@ mod tests {
         std::fs::create_dir_all(&library).unwrap();
         std::fs::create_dir_all(&ac).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
 
         let src_a = base.join("src").join("ModA");
         make_tree(&src_a, &["extension/config/tracks/shared/track.ini"]);
@@ -300,7 +357,11 @@ mod tests {
         let res_a2 = activate_other(&conn, &cfg, "ModA").unwrap();
         assert_eq!(res_a2.junctions, 0);
         assert!(!res_a2.warnings.is_empty());
-        assert_eq!(std::fs::read_to_string(target.join("track.ini")).unwrap(), "B", "ModB garde la main");
+        assert_eq!(
+            std::fs::read_to_string(target.join("track.ini")).unwrap(),
+            "B",
+            "ModB garde la main"
+        );
     }
 
     #[test]

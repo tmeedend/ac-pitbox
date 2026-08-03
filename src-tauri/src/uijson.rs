@@ -107,7 +107,7 @@ fn clean_assetto_json(input: &str) -> String {
             // À l'intérieur d'une chaîne (Description, tags, etc.)
             match c {
                 '\n' | '\r' => result.push(' '),
-                '\u{a0}' => result.push(' '), // Espace insécable
+                '\u{a0}' => result.push(' '),            // Espace insécable
                 _ if c.is_control() => result.push(' '), // Caractère invisible crash-test
                 _ => result.push(c),
             }
@@ -116,7 +116,7 @@ fn clean_assetto_json(input: &str) -> String {
             match c {
                 // On garde les sauts de ligne et espaces standards hors-chaîne,
                 // mais on vire TOUS les caractères de contrôle bizarres cachés
-                _ if c.is_control() && c != '\n' && c != '\r' && c != '\t' => {} 
+                _ if c.is_control() && c != '\n' && c != '\r' && c != '\t' => {}
                 _ => result.push(c),
             }
         }
@@ -274,7 +274,10 @@ pub fn read_track_detail(track_dir: &Path) -> TrackDetail {
             .collect();
         subs.sort();
         for p in subs {
-            let lid = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let lid = p
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
             add(&p, lid);
         }
     }

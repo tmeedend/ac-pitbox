@@ -104,8 +104,7 @@ pub fn load(app: &AppHandle) -> AppConfig {
 pub fn save(app: &AppHandle, cfg: &AppConfig) -> Result<(), String> {
     if let Some(lib) = &cfg.library_path {
         if !lib.exists() {
-            std::fs::create_dir_all(lib)
-                .map_err(|e| format!("impossible de créer la bibliothèque : {e}"))?;
+            std::fs::create_dir_all(lib).map_err(|e| format!("impossible de créer la bibliothèque : {e}"))?;
         }
     }
     let path = config_file(app)?;
@@ -130,10 +129,18 @@ pub struct Check {
 
 impl Check {
     fn req(ok: bool, message: impl Into<String>) -> Self {
-        Self { ok, level: "required".into(), message: message.into() }
+        Self {
+            ok,
+            level: "required".into(),
+            message: message.into(),
+        }
     }
     fn opt(ok: bool, message: impl Into<String>) -> Self {
-        Self { ok, level: "optional".into(), message: message.into() }
+        Self {
+            ok,
+            level: "optional".into(),
+            message: message.into(),
+        }
     }
 }
 
@@ -180,7 +187,11 @@ pub fn validate(cfg: &AppConfig) -> ConfigValidation {
     let ac_ok = is_dir(&cfg.ac_install_path);
     let ac_install = Check::req(
         ac_ok,
-        if ac_ok { "config.acInstallOk" } else { "config.acInstallMissing" },
+        if ac_ok {
+            "config.acInstallOk"
+        } else {
+            "config.acInstallMissing"
+        },
     );
 
     // content/
@@ -188,14 +199,22 @@ pub fn validate(cfg: &AppConfig) -> ConfigValidation {
     let content_ok = content.as_ref().is_some_and(|p| p.is_dir());
     let content_dir = Check::req(
         content_ok,
-        if content_ok { "config.contentDirOk" } else { "config.contentDirMissing" },
+        if content_ok {
+            "config.contentDirOk"
+        } else {
+            "config.contentDirMissing"
+        },
     );
 
     // content/ accessible en écriture (prérequis aux junctions)
     let writable_ok = content.as_ref().is_some_and(|p| is_writable(p));
     let content_writable = Check::req(
         writable_ok,
-        if writable_ok { "config.contentWritableOk" } else { "config.contentWritableMissing" },
+        if writable_ok {
+            "config.contentWritableOk"
+        } else {
+            "config.contentWritableMissing"
+        },
     );
 
     // Bibliothèque : OK si le dossier existe, ou si son parent existe (sera créé à l'enregistrement).
@@ -218,16 +237,17 @@ pub fn validate(cfg: &AppConfig) -> ConfigValidation {
 
     // Content Manager
     let cm_ok = is_file(&cfg.content_manager_exe);
-    let content_manager = Check::req(
-        cm_ok,
-        if cm_ok { "config.cmOk" } else { "config.cmMissing" },
-    );
+    let content_manager = Check::req(cm_ok, if cm_ok { "config.cmOk" } else { "config.cmMissing" });
 
     // 7-Zip
     let sz_ok = is_file(&cfg.sevenzip_exe);
     let sevenzip = Check::req(
         sz_ok,
-        if sz_ok { "config.sevenzipOk" } else { "config.sevenzipMissing" },
+        if sz_ok {
+            "config.sevenzipOk"
+        } else {
+            "config.sevenzipMissing"
+        },
     );
 
     // QuickBMS — optionnel (export uniquement). OK si non renseigné OU fichier valide.

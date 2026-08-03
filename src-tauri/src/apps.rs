@@ -68,7 +68,10 @@ pub fn import_apps(
             Some(source_name),
             &Local::now().to_rfc3339(),
         );
-        out.push(AppImported { name: app.name.clone(), resources_extracted });
+        out.push(AppImported {
+            name: app.name.clone(),
+            resources_extracted,
+        });
     }
     out
 }
@@ -80,14 +83,21 @@ pub fn list_apps(conn: &Connection, cfg: &AppConfig) -> Result<Vec<AppItem>, Str
         .into_iter()
         .map(|a| {
             let active = app_link(cfg, &a.id).is_some_and(|l| activation::is_junction(&l));
-            AppItem { id: a.id, source_archive: a.source_archive, imported_at: a.imported_at, active }
+            AppItem {
+                id: a.id,
+                source_archive: a.source_archive,
+                imported_at: a.imported_at,
+                active,
+            }
         })
         .collect())
 }
 
 /// Active une app : junction `<ac>/apps/python/<id>` → dossier bibliothèque.
 pub fn activate_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
-    let app = overlay::get_app(conn, id).map_err(|e| e.to_string())?.ok_or(crate::errors::APP_NOT_FOUND)?;
+    let app = overlay::get_app(conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::APP_NOT_FOUND)?;
     let link = app_link(cfg, id).ok_or(crate::errors::AC_NOT_CONFIGURED)?;
 
     // Garde-fou : ne jamais écraser un vrai dossier (app installée hors de l'app).
@@ -117,7 +127,9 @@ pub fn deactivate_app(cfg: &AppConfig, id: &str) -> Result<(), String> {
 /// Supprime proprement une app : désactive (retire la junction), efface les
 /// fichiers de bibliothèque, puis la ligne overlay (§12bis.4).
 pub fn remove_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
-    let app = overlay::get_app(conn, id).map_err(|e| e.to_string())?.ok_or(crate::errors::APP_NOT_FOUND)?;
+    let app = overlay::get_app(conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::APP_NOT_FOUND)?;
     // Désactive si une junction est présente (ignore l'absence).
     if let Some(link) = app_link(cfg, id) {
         if activation::is_junction(&link) {

@@ -81,7 +81,12 @@ pub fn scan(conn: &Connection, cfg: &AppConfig) -> Result<MaintenanceReport, Str
     // --- Mods cassés : fichiers de la version active manquants/invalides ---
     for m in overlay::list_mods(conn).map_err(|e| e.to_string())? {
         if let Some(reason) = broken_reason(conn, &m) {
-            broken.push(BrokenMod { id: m.id_interne, kind: m.kind, name: m.display_name, reason });
+            broken.push(BrokenMod {
+                id: m.id_interne,
+                kind: m.kind,
+                name: m.display_name,
+                reason,
+            });
         }
     }
 
@@ -111,7 +116,9 @@ pub fn scan(conn: &Connection, cfg: &AppConfig) -> Result<MaintenanceReport, Str
 /// Supprime un mod cassé : fichiers de bibliothèque (toutes versions) + junction
 /// éventuelle (garde-fou) + overlay.
 pub fn delete_broken(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
-    let m = overlay::get_mod(conn, id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_NOT_FOUND)?;
+    let m = overlay::get_mod(conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_NOT_FOUND)?;
     let kind = kind_of(&m.kind);
 
     // Fichiers : versions individuelles + dossier parent du mod dans la bibliothèque.
@@ -166,7 +173,9 @@ pub fn delete_pack(conn: &Connection, cfg: &AppConfig, pack: &str) -> Result<usi
 /// retélécharger. Ne touche ni l'id, ni les métadonnées overlay — seuls les
 /// fichiers de la version active sont remplacés, puis réindexés.
 pub fn reinstall_from_archive(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
-    let m = overlay::get_mod(conn, id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_NOT_FOUND)?;
+    let m = overlay::get_mod(conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_NOT_FOUND)?;
     let kind = kind_of(&m.kind);
     let versions = overlay::get_versions(conn, id).map_err(|e| e.to_string())?;
     let active_id = m.active_version_id.clone().ok_or(crate::errors::NO_ACTIVE_VERSION)?;
@@ -189,7 +198,10 @@ pub fn reinstall_from_archive(conn: &Connection, cfg: &AppConfig, id: &str) -> R
     let extracted_dir = if kept_path.is_dir() {
         kept_path.to_path_buf()
     } else {
-        let sevenzip = cfg.sevenzip_exe.as_ref().ok_or(crate::errors::SEVENZIP_NOT_CONFIGURED)?;
+        let sevenzip = cfg
+            .sevenzip_exe
+            .as_ref()
+            .ok_or(crate::errors::SEVENZIP_NOT_CONFIGURED)?;
         archive::extract(sevenzip, kept_path, &workdir)?;
         workdir.clone()
     };
@@ -236,7 +248,9 @@ pub fn remove_orphan(cfg: &AppConfig, kind: &str, id: &str) -> Result<(), String
 /// lent — la plupart des réindexations n'ont pas besoin de ça (la taille ne
 /// change que si les fichiers du mod ont été modifiés hors de l'app).
 pub fn reindex_mod(conn: &Connection, cfg: &AppConfig, id: &str, recalc_size: bool) -> Result<(), String> {
-    let m = overlay::get_mod(conn, id).map_err(|e| e.to_string())?.ok_or(crate::errors::MOD_NOT_FOUND)?;
+    let m = overlay::get_mod(conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_NOT_FOUND)?;
     let kind = kind_of(&m.kind);
     let versions = overlay::get_versions(conn, id).map_err(|e| e.to_string())?;
 
@@ -327,8 +341,20 @@ mod tests {
         // Mod dont la version pointe vers un dossier inexistant.
         overlay::upsert_mod(&conn, "ghost", "Car", Some("B"), Some("Ghost"), "h", None, &now).unwrap();
         overlay::insert_version(
-            &conn, "v1", "ghost", Some("1.0"), None, &now,
-            &base.join("nope").to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "ghost",
+            Some("1.0"),
+            None,
+            &now,
+            &base.join("nope").to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "ghost", "v1").unwrap();
@@ -359,12 +385,28 @@ mod tests {
         let now = chrono::Local::now().to_rfc3339();
         overlay::upsert_mod(&conn, "hl_car", "Car", Some("B"), Some("Test"), "h", None, &now).unwrap();
         overlay::insert_version(
-            &conn, "v1", "hl_car", Some("1.0"), None, &now,
-            &carv.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "hl_car",
+            Some("1.0"),
+            None,
+            &now,
+            &carv.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "hl_car", "v1").unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library),
+            ..Default::default()
+        };
 
         activation::activate(&conn, &cfg, "hl_car", None).unwrap();
         let link = ac.join("content").join("cars").join("hl_car");
@@ -372,14 +414,21 @@ mod tests {
 
         delete_broken(&conn, &cfg, "hl_car").unwrap();
 
-        assert!(!link.exists(), "le déploiement content/ doit être retiré, pas laissé orphelin");
+        assert!(
+            !link.exists(),
+            "le déploiement content/ doit être retiré, pas laissé orphelin"
+        );
     }
 
     /// Voiture synthétique <root>/<id> avec `ui/ui_car.json` + un fichier de plus.
     fn make_car(root: &Path, id: &str, extra_content: &str) {
         let dir = root.join(id);
         std::fs::create_dir_all(dir.join("ui")).unwrap();
-        std::fs::write(dir.join("ui").join("ui_car.json"), br#"{"name":"Test","brand":"B","tags":[]}"#).unwrap();
+        std::fs::write(
+            dir.join("ui").join("ui_car.json"),
+            br#"{"name":"Test","brand":"B","tags":[]}"#,
+        )
+        .unwrap();
         std::fs::write(dir.join("data.txt"), extra_content).unwrap();
     }
 
@@ -403,23 +452,45 @@ mod tests {
         // Version en bibliothèque, « corrompue » (fichier annexe manquant).
         let lib_path = base.join("library").join("cars").join("reinst_car").join("v1");
         std::fs::create_dir_all(lib_path.join("ui")).unwrap();
-        std::fs::write(lib_path.join("ui").join("ui_car.json"), br#"{"name":"Test","brand":"B","tags":[]}"#).unwrap();
+        std::fs::write(
+            lib_path.join("ui").join("ui_car.json"),
+            br#"{"name":"Test","brand":"B","tags":[]}"#,
+        )
+        .unwrap();
         // Pas de data.txt : contenu bibliothèque corrompu/incomplet.
 
         overlay::upsert_mod(&conn, "reinst_car", "Car", Some("B"), Some("Test"), "h", None, &now).unwrap();
         overlay::insert_version(
-            &conn, "v1", "reinst_car", Some("1.0"), None, &now,
-            &lib_path.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "reinst_car",
+            Some("1.0"),
+            None,
+            &now,
+            &lib_path.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "reinst_car", "v1").unwrap();
         overlay::set_kept_archive(&conn, "v1", &kept_path.to_string_lossy()).unwrap();
 
-        assert!(!lib_path.join("data.txt").exists(), "précondition : fichier absent avant réinstallation");
+        assert!(
+            !lib_path.join("data.txt").exists(),
+            "précondition : fichier absent avant réinstallation"
+        );
 
         reinstall_from_archive(&conn, &cfg, "reinst_car").unwrap();
 
-        assert!(lib_path.join("data.txt").is_file(), "réinstallation doit restaurer le fichier manquant");
+        assert!(
+            lib_path.join("data.txt").is_file(),
+            "réinstallation doit restaurer le fichier manquant"
+        );
         assert_eq!(std::fs::read_to_string(lib_path.join("data.txt")).unwrap(), "original");
     }
 
@@ -437,8 +508,20 @@ mod tests {
 
         overlay::upsert_mod(&conn, "no_kept", "Car", Some("B"), Some("Test"), "h", None, &now).unwrap();
         overlay::insert_version(
-            &conn, "v1", "no_kept", Some("1.0"), None, &now,
-            &lib_path.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "no_kept",
+            Some("1.0"),
+            None,
+            &now,
+            &lib_path.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "no_kept", "v1").unwrap();
@@ -455,7 +538,10 @@ mod tests {
         let base = crate::testutil::temp_dir("delkept");
         std::fs::create_dir_all(&base).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { library_path: Some(base.join("library")), ..Default::default() };
+        let cfg = AppConfig {
+            library_path: Some(base.join("library")),
+            ..Default::default()
+        };
         let now = chrono::Local::now().to_rfc3339();
 
         let lib_path = base.join("library").join("cars").join("del_car").join("v1");
@@ -469,8 +555,20 @@ mod tests {
 
         overlay::upsert_mod(&conn, "del_car", "Car", Some("B"), Some("Test"), "h", None, &now).unwrap();
         overlay::insert_version(
-            &conn, "v1", "del_car", Some("1.0"), None, &now,
-            &lib_path.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "del_car",
+            Some("1.0"),
+            None,
+            &now,
+            &lib_path.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "del_car", "v1").unwrap();
@@ -478,7 +576,10 @@ mod tests {
 
         assert!(kept_dir.exists());
         delete_broken(&conn, &cfg, "del_car").unwrap();
-        assert!(!kept_dir.exists(), "la copie d'archive source doit être nettoyée avec le mod");
+        assert!(
+            !kept_dir.exists(),
+            "la copie d'archive source doit être nettoyée avec le mod"
+        );
     }
 
     #[test]
@@ -488,19 +589,46 @@ mod tests {
         std::fs::create_dir_all(track_dir.join("ui")).unwrap();
         // Fichier réel : "name" correct, mais un octet Windows-1252 (° en 0xB0)
         // plus loin dans "geotags" rend tout le fichier invalide en UTF-8 strict.
-        let mut bytes = b"{\"name\": \"Deutschlandring\", \"author\": \"Fat-Alfie\", \"tags\": [\"circuit\"], \"geotags\": [\"51.8".to_vec();
+        let mut bytes =
+            b"{\"name\": \"Deutschlandring\", \"author\": \"Fat-Alfie\", \"tags\": [\"circuit\"], \"geotags\": [\"51.8"
+                .to_vec();
         bytes.push(0xB0); // degré Windows-1252, invalide en UTF-8
         bytes.extend_from_slice(b" N\"]}");
         std::fs::write(track_dir.join("ui").join("ui_track.json"), &bytes).unwrap();
-        assert!(String::from_utf8(bytes).is_err(), "le fixture doit reproduire un fichier non-UTF-8");
+        assert!(
+            String::from_utf8(bytes).is_err(),
+            "le fixture doit reproduire un fichier non-UTF-8"
+        );
 
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let now = chrono::Local::now().to_rfc3339();
         // Simule l'état bugué : import précédent retombé sur le nom de dossier.
-        overlay::upsert_mod(&conn, "deutschlandring", "Track", None, Some("deutschlandring"), "h", None, &now).unwrap();
+        overlay::upsert_mod(
+            &conn,
+            "deutschlandring",
+            "Track",
+            None,
+            Some("deutschlandring"),
+            "h",
+            None,
+            &now,
+        )
+        .unwrap();
         overlay::insert_version(
-            &conn, "v1", "deutschlandring", None, None, &now,
-            &track_dir.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "deutschlandring",
+            None,
+            None,
+            &now,
+            &track_dir.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "deutschlandring", "v1").unwrap();
@@ -527,8 +655,20 @@ mod tests {
         let now = chrono::Local::now().to_rfc3339();
         overlay::upsert_mod(&conn, "abarth500", "Car", None, Some("Abarth 500"), "h", None, &now).unwrap();
         overlay::insert_version(
-            &conn, "v1", "abarth500", None, None, &now,
-            &car_dir.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "abarth500",
+            None,
+            None,
+            &now,
+            &car_dir.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "abarth500", "v1").unwrap();

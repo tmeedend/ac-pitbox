@@ -128,13 +128,7 @@ pub fn deploy_tree(source: &Path, dest: &Path, mod_id: &str, kind: ModKind) -> R
 /// directement dans `dest`, en hardlinks (§4.3) — composition base + couches
 /// sans dossier de composition intermédiaire : `dest` (`content/<type>s/<id>`)
 /// EST le résultat composé, pas une projection d'une copie ailleurs.
-pub fn compose_tree(
-    base: &Path,
-    layers: &[PathBuf],
-    dest: &Path,
-    mod_id: &str,
-    kind: ModKind,
-) -> Result<(), String> {
+pub fn compose_tree(base: &Path, layers: &[PathBuf], dest: &Path, mod_id: &str, kind: ModKind) -> Result<(), String> {
     link_tree(base, dest)?;
     for layer_dir in layers {
         overlay_tree(layer_dir, dest)?;
@@ -253,8 +247,15 @@ mod tests {
         let dest = base.join("dest");
         compose_tree(&src, &[la.clone(), lb.clone()], &dest, "spa", ModKind::Track).unwrap();
 
-        assert_eq!(std::fs::read_to_string(dest.join("conf.txt")).unwrap(), "B", "dernière couche gagne");
-        assert!(dest.join("only_base.txt").is_file(), "fichier de base non touché conservé");
+        assert_eq!(
+            std::fs::read_to_string(dest.join("conf.txt")).unwrap(),
+            "B",
+            "dernière couche gagne"
+        );
+        assert!(
+            dest.join("only_base.txt").is_file(),
+            "fichier de base non touché conservé"
+        );
         assert!(dest.join("only_b.txt").is_file(), "ajout de couche présent");
         assert!(is_deployed(&dest));
     }
@@ -273,6 +274,10 @@ mod tests {
         std::fs::write(&dst, "already here").unwrap();
 
         link_or_copy(&src, &dst).unwrap();
-        assert_eq!(std::fs::read_to_string(&dst).unwrap(), "source", "repli copie a bien écrasé/copié le contenu");
+        assert_eq!(
+            std::fs::read_to_string(&dst).unwrap(),
+            "source",
+            "repli copie a bien écrasé/copié le contenu"
+        );
     }
 }

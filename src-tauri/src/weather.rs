@@ -18,7 +18,11 @@ pub struct WeatherStack {
 
 pub fn detect_stack(cfg: &AppConfig) -> WeatherStack {
     let Some(ac) = &cfg.ac_install_path else {
-        return WeatherStack { csp: false, sol: false, vanilla: false };
+        return WeatherStack {
+            csp: false,
+            sol: false,
+            vanilla: false,
+        };
     };
     let csp = ac.join("dwrite.dll").is_file() || ac.join("extension").is_dir();
     let weather_dir = ac.join("content").join("weather");
@@ -65,14 +69,62 @@ struct Intent {
 }
 
 const INTENTS: &[Intent] = &[
-    Intent { id: "clear", label: "Beau", sol: &["sol_01_clear", "sol_00_no_clouds"], vanilla: &["3_clear", "4_mid_clear"], wet: false },
-    Intent { id: "few_clouds", label: "Quelques nuages", sol: &["sol_02_few_clouds", "sol_03_scattered_clouds"], vanilla: &["5_light_clouds", "4_mid_clear"], wet: false },
-    Intent { id: "overcast", label: "Couvert", sol: &["sol_06_overcast", "sol_05_broken_clouds"], vanilla: &["7_heavy_clouds", "6_mid_clouds"], wet: false },
-    Intent { id: "fog", label: "Brouillard", sol: &["sol_12_fog", "sol_11_mist"], vanilla: &["1_heavy_fog", "2_light_fog"], wet: false },
-    Intent { id: "light_rain", label: "Pluie légère", sol: &["sol_34_light_rain", "sol_31_light_drizzle"], vanilla: &[], wet: true },
-    Intent { id: "rain", label: "Pluie", sol: &["sol_35_rain", "sol_36_heavy_rain"], vanilla: &[], wet: true },
-    Intent { id: "storm", label: "Orage", sol: &["sol_42_thunderstorm", "sol_43_heavy_thunderstorm"], vanilla: &[], wet: true },
-    Intent { id: "snow", label: "Neige", sol: &["sol_51_light_snow", "sol_52_snow", "sol_53_heavy_snow"], vanilla: &[], wet: true },
+    Intent {
+        id: "clear",
+        label: "Beau",
+        sol: &["sol_01_clear", "sol_00_no_clouds"],
+        vanilla: &["3_clear", "4_mid_clear"],
+        wet: false,
+    },
+    Intent {
+        id: "few_clouds",
+        label: "Quelques nuages",
+        sol: &["sol_02_few_clouds", "sol_03_scattered_clouds"],
+        vanilla: &["5_light_clouds", "4_mid_clear"],
+        wet: false,
+    },
+    Intent {
+        id: "overcast",
+        label: "Couvert",
+        sol: &["sol_06_overcast", "sol_05_broken_clouds"],
+        vanilla: &["7_heavy_clouds", "6_mid_clouds"],
+        wet: false,
+    },
+    Intent {
+        id: "fog",
+        label: "Brouillard",
+        sol: &["sol_12_fog", "sol_11_mist"],
+        vanilla: &["1_heavy_fog", "2_light_fog"],
+        wet: false,
+    },
+    Intent {
+        id: "light_rain",
+        label: "Pluie légère",
+        sol: &["sol_34_light_rain", "sol_31_light_drizzle"],
+        vanilla: &[],
+        wet: true,
+    },
+    Intent {
+        id: "rain",
+        label: "Pluie",
+        sol: &["sol_35_rain", "sol_36_heavy_rain"],
+        vanilla: &[],
+        wet: true,
+    },
+    Intent {
+        id: "storm",
+        label: "Orage",
+        sol: &["sol_42_thunderstorm", "sol_43_heavy_thunderstorm"],
+        vanilla: &[],
+        wet: true,
+    },
+    Intent {
+        id: "snow",
+        label: "Neige",
+        sol: &["sol_51_light_snow", "sol_52_snow", "sol_53_heavy_snow"],
+        vanilla: &[],
+        wet: true,
+    },
 ];
 
 fn installed_weathers(cfg: &AppConfig) -> BTreeSet<String> {
@@ -115,7 +167,10 @@ pub fn options(cfg: &AppConfig) -> Vec<WeatherOption> {
             };
             // Pluie/neige nécessitent CSP pour le rendu, même via SOL.
             let (available, reason) = if it.wet && available && !stack.csp {
-                (false, Some("Nécessite CSP pour le rendu des précipitations".to_string()))
+                (
+                    false,
+                    Some("Nécessite CSP pour le rendu des précipitations".to_string()),
+                )
             } else {
                 (available, reason)
             };
@@ -207,7 +262,11 @@ mod tests {
     fn winter_snow_can_go_below_old_floor() {
         // L'ancien plancher (5°C) empêchait un hiver enneigé crédible.
         let c = implicit_conditions("snow", 14.0, Some("winter"));
-        assert!(c.ambient < 5, "hiver + neige doit pouvoir descendre sous 5°C, obtenu {}", c.ambient);
+        assert!(
+            c.ambient < 5,
+            "hiver + neige doit pouvoir descendre sous 5°C, obtenu {}",
+            c.ambient
+        );
     }
 
     #[test]

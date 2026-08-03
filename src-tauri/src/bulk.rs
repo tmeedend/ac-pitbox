@@ -28,7 +28,10 @@ impl BulkReport {
     fn push(&mut self, id: &str, result: Result<(), String>) {
         match result {
             Ok(()) => self.ok.push(id.to_string()),
-            Err(error) => self.failed.push(BulkFailure { id: id.to_string(), error }),
+            Err(error) => self.failed.push(BulkFailure {
+                id: id.to_string(),
+                error,
+            }),
         }
     }
 }
@@ -60,7 +63,9 @@ pub fn add_tag(conn: &Connection, ids: &[String], tag: &str) -> Result<(), Strin
         return Ok(());
     }
     for id in ids {
-        let Some(m) = overlay::get_mod(conn, id).map_err(|e| e.to_string())? else { continue };
+        let Some(m) = overlay::get_mod(conn, id).map_err(|e| e.to_string())? else {
+            continue;
+        };
         if !m.tags_manual.contains(&tag) {
             let mut tags = m.tags_manual;
             tags.push(tag.clone());
@@ -73,7 +78,9 @@ pub fn add_tag(conn: &Connection, ids: &[String], tag: &str) -> Result<(), Strin
 pub fn remove_tag(conn: &Connection, ids: &[String], tag: &str) -> Result<(), String> {
     let tag = tag.trim().to_lowercase();
     for id in ids {
-        let Some(m) = overlay::get_mod(conn, id).map_err(|e| e.to_string())? else { continue };
+        let Some(m) = overlay::get_mod(conn, id).map_err(|e| e.to_string())? else {
+            continue;
+        };
         if m.tags_manual.contains(&tag) {
             let tags: Vec<String> = m.tags_manual.into_iter().filter(|t| t != &tag).collect();
             overlay::set_manual_tags(conn, id, &tags).map_err(|e| e.to_string())?;
@@ -109,8 +116,16 @@ pub fn delete(conn: &Connection, cfg: &AppConfig, ids: &[String]) -> BulkReport 
 pub fn export(conn: &Connection, cfg: &AppConfig, ids: &[String], dest_dir: &Path) -> Vec<BulkExportItem> {
     ids.iter()
         .map(|id| match export::export_mod(conn, cfg, id, dest_dir) {
-            Ok(report) => BulkExportItem { id: id.clone(), report: Some(report), error: None },
-            Err(error) => BulkExportItem { id: id.clone(), report: None, error: Some(error) },
+            Ok(report) => BulkExportItem {
+                id: id.clone(),
+                report: Some(report),
+                error: None,
+            },
+            Err(error) => BulkExportItem {
+                id: id.clone(),
+                report: None,
+                error: Some(error),
+            },
         })
         .collect()
 }
@@ -156,8 +171,14 @@ mod tests {
         assert!(overlay::get_mod(&conn, "modB").unwrap().unwrap().is_favorite);
 
         set_category(&conn, &ids, Some("#gt")).unwrap();
-        assert_eq!(overlay::get_mod(&conn, "modA").unwrap().unwrap().category.as_deref(), Some("#gt"));
-        assert_eq!(overlay::get_mod(&conn, "modB").unwrap().unwrap().category.as_deref(), Some("#gt"));
+        assert_eq!(
+            overlay::get_mod(&conn, "modA").unwrap().unwrap().category.as_deref(),
+            Some("#gt")
+        );
+        assert_eq!(
+            overlay::get_mod(&conn, "modB").unwrap().unwrap().category.as_deref(),
+            Some("#gt")
+        );
     }
 
     #[test]
@@ -180,13 +201,29 @@ mod tests {
         let good_dir = library.join("cars").join("good").join("v1");
         std::fs::create_dir_all(&good_dir).unwrap();
         overlay::insert_version(
-            &conn, "v1", "good", Some("1.0"), None, &now,
-            &good_dir.to_string_lossy(), None, "sig", &[], &[], &[], &[], None,
+            &conn,
+            "v1",
+            "good",
+            Some("1.0"),
+            None,
+            &now,
+            &good_dir.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
         )
         .unwrap();
         overlay::set_active_version(&conn, "good", "v1").unwrap();
 
-        let cfg = AppConfig { ac_install_path: Some(ac), library_path: Some(library), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac),
+            library_path: Some(library),
+            ..Default::default()
+        };
         let ids = vec!["good".to_string(), "ghost".to_string()];
 
         let report = activate(&conn, &cfg, &ids);
@@ -201,7 +238,11 @@ mod tests {
         assert!(report.failed.is_empty());
 
         let report = delete(&conn, &cfg, &ids);
-        assert_eq!(report.ok.len(), 2, "delete_broken supprime même un mod sans fichiers valides");
+        assert_eq!(
+            report.ok.len(),
+            2,
+            "delete_broken supprime même un mod sans fichiers valides"
+        );
         assert!(overlay::get_mod(&conn, "good").unwrap().is_none());
         assert!(overlay::get_mod(&conn, "ghost").unwrap().is_none());
     }

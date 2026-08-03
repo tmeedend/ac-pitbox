@@ -50,7 +50,11 @@ pub fn index_stock_content(conn: &Connection, cfg: &AppConfig, rules: &Rules) ->
             // (pas du contenu de base) : jamais touché.
             let composed = crate::activation::is_junction(&p) || crate::deploy::is_deployed(&p);
             let source = if composed {
-                match cfg.library_path.as_ref().map(|lib| crate::compose::stock_base_dir(lib, kind, &id)) {
+                match cfg
+                    .library_path
+                    .as_ref()
+                    .map(|lib| crate::compose::stock_base_dir(lib, kind, &id))
+                {
                     Some(backup) if backup.is_dir() => backup,
                     _ => continue,
                 }
@@ -89,8 +93,16 @@ pub fn index_stock_content(conn: &Connection, cfg: &AppConfig, rules: &Rules) ->
             // champs ci-dessus sont lus depuis la sauvegarde quand composé.
             let vid = Uuid::new_v4().to_string();
             let csp = inspect::csp_features(&source);
-            let skins = if matches!(kind, ModKind::Car) { inspect::car_skins(&source) } else { Vec::new() };
-            let layouts = if matches!(kind, ModKind::Track) { inspect::track_layouts(&source) } else { Vec::new() };
+            let skins = if matches!(kind, ModKind::Car) {
+                inspect::car_skins(&source)
+            } else {
+                Vec::new()
+            };
+            let layouts = if matches!(kind, ModKind::Track) {
+                inspect::track_layouts(&source)
+            } else {
+                Vec::new()
+            };
             let author = ui.author.clone().or_else(|| Some("Kunos".to_string()));
             let published_at = kunos_dates::release_date(kind, &id);
             overlay::insert_version(
@@ -138,7 +150,10 @@ mod tests {
         std::fs::create_dir_all(ac.join("content").join("tracks").join("imola")).unwrap();
 
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
         index_stock_content(&conn, &cfg, &Rules::default()).unwrap();
 
         let car = overlay::get_mod(&conn, "abarth500").unwrap().unwrap();
@@ -164,7 +179,11 @@ mod tests {
         std::fs::write(link.join("ui").join("ui_track.json"), br#"{"name":"Spa"}"#).unwrap();
 
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig { ac_install_path: Some(ac.clone()), library_path: Some(library.clone()), ..Default::default() };
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         index_stock_content(&conn, &cfg, &Rules::default()).unwrap();
         assert!(overlay::get_mod(&conn, "spa").unwrap().is_some());
 
@@ -174,15 +193,34 @@ mod tests {
         std::fs::write(layerdir.join("ui").join("2022").join("ui_track.json"), "{}").unwrap();
         let lid = uuid::Uuid::new_v4().to_string();
         let prio = overlay::next_layer_priority(&conn, "spa").unwrap();
-        overlay::insert_layer(&conn, &lid, "spa", "Track", "ext", &layerdir.to_string_lossy(), None, 0, 0, prio, "now").unwrap();
+        overlay::insert_layer(
+            &conn,
+            &lid,
+            "spa",
+            "Track",
+            "ext",
+            &layerdir.to_string_lossy(),
+            None,
+            0,
+            0,
+            prio,
+            "now",
+        )
+        .unwrap();
         crate::compose::recompose(&conn, &cfg, "spa").unwrap();
-        assert!(crate::deploy::is_deployed(&link), "précondition : spa composé par hardlinks");
+        assert!(
+            crate::deploy::is_deployed(&link),
+            "précondition : spa composé par hardlinks"
+        );
 
         // Ré-indexer le contenu de base PENDANT que la couche est active.
         index_stock_content(&conn, &cfg, &Rules::default()).unwrap();
 
         let m = overlay::get_mod(&conn, "spa").unwrap();
-        assert!(m.is_some(), "le circuit ne doit pas disparaître de l'overlay pendant qu'il est composé");
+        assert!(
+            m.is_some(),
+            "le circuit ne doit pas disparaître de l'overlay pendant qu'il est composé"
+        );
         assert!(m.unwrap().is_stock);
         let versions = overlay::get_versions(&conn, "spa").unwrap();
         assert_eq!(versions.len(), 1);
