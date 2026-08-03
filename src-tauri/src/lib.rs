@@ -3,6 +3,7 @@ mod apps;
 mod archive;
 mod bulk;
 mod cm_stats;
+mod commands;
 mod compose;
 mod config;
 mod deploy;
@@ -35,693 +36,8 @@ mod testutil;
 mod uijson;
 mod weather;
 
-use config::{AppConfig, ConfigValidation};
-use detect::DetectedPaths;
-use importer::ArchiveResult;
-use library::{ModCard, ModDetail};
 use overlay::Db;
-use rules::Rules;
-use tauri::{AppHandle, Manager, State};
-use tauri_plugin_opener::OpenerExt;
-
-// --- Configuration (§12) ----------------------------------------------------
-
-#[tauri::command]
-fn get_config(app: AppHandle) -> AppConfig {
-    config::load(&app)
-}
-
-#[tauri::command]
-fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
-    config::save(&app, &config)
-}
-
-#[tauri::command]
-fn validate_config(config: AppConfig) -> ConfigValidation {
-    config::validate(&config)
-}
-
-#[tauri::command]
-fn autodetect_paths() -> DetectedPaths {
-    detect::autodetect()
-}
-
-// --- Bibliothèque & import (L1) ---------------------------------------------
-
-#[tauri::command]
-fn import_archives(
-    app: AppHandle,
-    db: State<Db>,
-    paths: Vec<String>,
-    // Décisions update/extension pour reprendre un import ambigu (§4.4). Vide au 1er appel.
-    decisions: Option<Vec<importer::ImportDecision>>,
-) -> Result<Vec<ArchiveResult>, String> {
-    let cfg = config::load(&app);
-    let rules = rules::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(importer::import_archives(
-        &app,
-        &conn,
-        &cfg,
-        &rules,
-        &paths,
-        &decisions.unwrap_or_default(),
-    ))
-}
-
-// --- Tags & ontologie (L2) --------------------------------------------------
-
-#[tauri::command]
-fn get_rules(app: AppHandle) -> Rules {
-    rules::load(&app)
-}
-
-/// Enregistre les règles et réapplique l'ontologie à toute la bibliothèque.
-/// Renvoie le nombre de mods retraités.
-#[tauri::command]
-fn save_rules(app: AppHandle, db: State<Db>, rules: Rules) -> Result<usize, String> {
-    rules::save(&app, &rules)?;
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    harmonize::harmonize_all(&conn, &rules).map_err(|e| e.to_string())
-}
-
-/// Aperçu d'impact : nombre de mods affectés par un jeu de règles candidat,
-/// sans rien enregistrer (§5.4).
-#[tauri::command]
-fn rules_impact(db: State<Db>, rules: Rules) -> Result<usize, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    harmonize::count_affected(&conn, &rules).map_err(|e| e.to_string())
-}
-
-/// Réapplique les règles enregistrées à toute la bibliothèque.
-#[tauri::command]
-fn reapply_rules(app: AppHandle, db: State<Db>) -> Result<usize, String> {
-    let rules = rules::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    harmonize::harmonize_all(&conn, &rules).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn set_favorite(db: State<Db>, id: String, favorite: bool) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    overlay::set_favorite(&conn, &id, favorite).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn set_manual_tags(db: State<Db>, id: String, tags: Vec<String>) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    overlay::set_manual_tags(&conn, &id, &tags).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn set_mod_field(db: State<Db>, id: String, field: String, value: Option<String>) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    overlay::set_mod_field(&conn, &id, &field, value.as_deref()).map_err(|e| e.to_string())
-}
-
-/// Import depuis des dossiers déjà décompressés (§4.5). `copy=true` préserve la
-/// source, sinon déplacement adaptatif.
-#[tauri::command]
-fn import_folders(
-    app: AppHandle,
-    db: State<Db>,
-    paths: Vec<String>,
-    copy: bool,
-    decisions: Option<Vec<importer::ImportDecision>>,
-) -> Result<Vec<ArchiveResult>, String> {
-    let cfg = config::load(&app);
-    let rules = rules::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(importer::import_folders(
-        &app,
-        &conn,
-        &cfg,
-        &rules,
-        &paths,
-        copy,
-        &decisions.unwrap_or_default(),
-    ))
-}
-
-/// Analyse un dossier parent (§4.6) : classe chaque sous-dossier sans rien écrire.
-#[tauri::command]
-fn analyze_bulk_import(app: AppHandle, db: State<Db>, parent: String) -> Result<Vec<importer::BulkEntry>, String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    importer::analyze_bulk(&conn, &cfg, std::path::Path::new(&parent))
-}
-
-/// Exécute l'import en masse selon les décisions d'arbitrage (§4.6).
-#[tauri::command]
-fn execute_bulk_import(
-    app: AppHandle,
-    db: State<Db>,
-    items: Vec<importer::BulkExecItem>,
-    copy: bool,
-) -> Result<Vec<ArchiveResult>, String> {
-    let cfg = config::load(&app);
-    let rules = rules::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(importer::execute_bulk(&app, &conn, &cfg, &rules, &items, copy))
-}
-
-/// Résout un conflit flou (§4.2) : action = "keep_both" | "replace".
-#[tauri::command]
-fn resolve_conflict(
-    app: AppHandle,
-    db: State<Db>,
-    new_id: String,
-    old_id: String,
-    action: String,
-) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    importer::resolve_conflict(&conn, &cfg, &new_id, &old_id, &action)
-}
-
-#[tauri::command]
-fn list_library(app: AppHandle, db: State<Db>) -> Result<Vec<ModCard>, String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    library::list_cards(&conn, &cfg).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn get_mod_detail(app: AppHandle, db: State<Db>, id: String) -> Result<Option<ModDetail>, String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    library::detail(&conn, &cfg, &id).map_err(|e| e.to_string())
-}
-
-/// Ouvre le dossier réel d'un mod (voiture/circuit) dans l'explorateur.
-/// Appelle directement `Opener::open_path` côté Rust (contourne le scope ACL
-/// du plugin, qui refuse par défaut tout chemin non pré-autorisé) : le chemin
-/// vient de notre propre résolution `entity_dir`, pas d'une entrée libre côté
-/// front, donc pas besoin d'élargir la permission `opener:allow-open-path`
-/// avec un scope large.
-#[tauri::command]
-fn open_mod_folder(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let path = {
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
-        library::folder_path(&conn, &cfg, &id)?
-    };
-    app.opener()
-        .open_path(path.display().to_string(), None::<&str>)
-        .map_err(|e| e.to_string())
-}
-
-fn mod_kind(kind: &str) -> modscan::ModKind {
-    if kind == "Track" {
-        modscan::ModKind::Track
-    } else {
-        modscan::ModKind::Car
-    }
-}
-
-/// Liste les fichiers annexes du mod (§4.6, « Bloc Ressources ») — lue en
-/// direct sur disque à chaque appel, jamais mémorisée en base : un fichier
-/// déposé manuellement apparaît sans réimport.
-#[tauri::command]
-fn list_mod_resources(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<resources::ResourceFile>, String> {
-    let cfg = config::load(&app);
-    let library = cfg.library_path.clone().ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let m = overlay::get_mod(&conn, &id)
-        .map_err(|e| e.to_string())?
-        .ok_or(crate::errors::MOD_NOT_FOUND)?;
-    Ok(resources::list_resources(&resources::resources_dir(
-        &library,
-        mod_kind(&m.kind),
-        &id,
-    )))
-}
-
-/// Ouvre un fichier du dossier ressources avec l'application par défaut de
-/// l'OS (§4.6). `rel_path` est résolu et validé côté serveur (garde-fou
-/// anti-traversée) plutôt que de faire confiance à un chemin absolu envoyé
-/// par le front — même rationale que `open_mod_folder`.
-#[tauri::command]
-fn open_mod_resource(app: AppHandle, db: State<Db>, id: String, rel_path: String) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let library = cfg.library_path.clone().ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
-    let dir = {
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
-        let m = overlay::get_mod(&conn, &id)
-            .map_err(|e| e.to_string())?
-            .ok_or(crate::errors::MOD_NOT_FOUND)?;
-        resources::resources_dir(&library, mod_kind(&m.kind), &id)
-    };
-    let path = resources::resolve_resource_path(&dir, &rel_path)?;
-    app.opener()
-        .open_path(path.display().to_string(), None::<&str>)
-        .map_err(|e| e.to_string())
-}
-
-/// Fonctionnalités CSP effectivement détectées pour un mod (§6.4bis) : sert à
-/// griser les réglages météo/saison non supportés sur l'écran de session.
-#[tauri::command]
-fn get_mod_csp_features(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<String>, String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    library::mod_csp_features(&conn, &cfg, &id)
-}
-
-// --- Activation (L3) --------------------------------------------------------
-
-/// Active un mod (crée la junction). `version_id` optionnel = change la version active.
-#[tauri::command]
-fn activate_mod(app: AppHandle, db: State<Db>, id: String, version_id: Option<String>) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    activation::activate(&conn, &cfg, &id, version_id.as_deref())
-}
-
-#[tauri::command]
-fn deactivate_mod(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    activation::deactivate(&conn, &cfg, &id)
-}
-
-// --- Profils (L3) -----------------------------------------------------------
-
-#[tauri::command]
-fn list_profiles(db: State<Db>) -> Result<Vec<overlay::ProfileRow>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    overlay::list_profiles(&conn).map_err(|e| e.to_string())
-}
-
-/// Crée un profil capturant l'état actif courant.
-#[tauri::command]
-fn create_profile(app: AppHandle, db: State<Db>, name: String) -> Result<String, String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    profiles::create_from_active(&conn, &cfg, &name)
-}
-
-/// Applique un profil (réconciliation des junctions).
-#[tauri::command]
-fn apply_profile(app: AppHandle, db: State<Db>, id: String) -> Result<profiles::ApplyReport, String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    profiles::apply(&conn, &cfg, &id)
-}
-
-#[tauri::command]
-fn delete_profile(db: State<Db>, id: String) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    overlay::delete_profile(&conn, &id).map_err(|e| e.to_string())
-}
-
-// --- Lancement (L4) ---------------------------------------------------------
-
-/// Météos installées (pour le sélecteur de lancement).
-#[tauri::command]
-fn list_weather(app: AppHandle) -> Vec<String> {
-    library::list_weather(&config::load(&app))
-}
-
-/// Skins d'une voiture pour la fiche détail (mod ou voiture de base, §6.3/§12bis).
-#[tauri::command]
-fn list_mod_skins(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<library::SkinItem>, String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(library::list_mod_skins(&conn, &cfg, &id))
-}
-
-/// Stack météo détectée (CSP/SOL/vanilla) — §8.5.
-#[tauri::command]
-fn weather_stack(app: AppHandle) -> weather::WeatherStack {
-    weather::detect_stack(&config::load(&app))
-}
-
-/// Intentions météo résolues selon la stack (dégradé gracieux).
-#[tauri::command]
-fn weather_options(app: AppHandle) -> Vec<weather::WeatherOption> {
-    weather::options(&config::load(&app))
-}
-
-/// Température + vent **recommandés** (air/piste/vent) pour une intention +
-/// heure + saison optionnelle (§8.5/§8.6/§8.6bis). L'écran de session propose
-/// ces valeurs par défaut ; l'air et la piste restent ensuite modifiables à la
-/// main tant que la météo/saison ne change pas.
-#[tauri::command]
-fn weather_conditions(intent: String, hour: f32, season: Option<String>) -> weather::ImplicitConditions {
-    weather::implicit_conditions(&intent, hour, season.as_deref())
-}
-
-/// Construit le preset Quick Drive et lance la session via Content Manager (§8.3).
-#[tauri::command]
-fn launch_session(app: AppHandle, db: State<Db>, setup: launch::RaceSetup) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    launch::launch(&conn, &cfg, &setup)
-}
-
-/// Ouvre Content Manager sans argument (§12bis.5).
-#[tauri::command]
-fn open_content_manager(app: AppHandle) -> Result<(), String> {
-    launch::open_content_manager(&config::load(&app))
-}
-
-/// Lance l'aperçu 3D natif (`acShowroom.exe`, distinct de Content Manager)
-/// ciblé sur une voiture (+ skin optionnel). Process indépendant, affiché
-/// par-dessus l'app avec les réglages vidéo du jeu : l'utilisateur le ferme
-/// lui-même pour revenir à Pit Box.
-#[tauri::command]
-fn open_native_showroom(app: AppHandle, car_id: String, skin_id: Option<String>) -> Result<(), String> {
-    showroom::open_native_showroom(&config::load(&app), &car_id, skin_id.as_deref())
-}
-
-/// Showrooms installés dans AC, pour le choix de scène des réglages.
-#[tauri::command]
-fn list_showrooms(app: AppHandle) -> Vec<showroom::ShowroomOption> {
-    showroom::list_showrooms(&config::load(&app))
-}
-
-// --- Maintenance & export (L5) ----------------------------------------------
-
-/// Analyse mods cassés + junctions orphelines, sans rien supprimer (§9.3).
-#[tauri::command]
-fn maintenance_scan(app: AppHandle, db: State<Db>) -> Result<maintenance::MaintenanceReport, String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    maintenance::scan(&conn, &cfg)
-}
-
-/// Relit sur le disque les champs cache (nom, auteur, tags fichier, CSP,
-/// skins/layouts) de tous les mods déjà importés, puis réapplique l'ontologie
-/// (même effet que « Réappliquer les règles »). Sert à rattraper un mod dont
-/// le fichier source a été corrigé/édité après import, sans le réimporter.
-/// `recalc_size` (§9.4, option décochée par défaut côté UI) : recalcule aussi
-/// la taille sur disque de chaque version — parcourt tous les fichiers de la
-/// bibliothèque, potentiellement lent, d'où l'opt-in explicite.
-/// Renvoie le nombre de mods traités.
-#[tauri::command]
-fn reindex_library(app: AppHandle, db: State<Db>, recalc_size: bool) -> Result<usize, String> {
-    let rules = rules::load(&app);
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let n = maintenance::reindex_all(&conn, &cfg, recalc_size)?;
-    harmonize::harmonize_all(&conn, &rules).map_err(|e| e.to_string())?;
-    Ok(n)
-}
-
-/// Supprime un mod cassé (fichiers + junction + overlay).
-#[tauri::command]
-fn delete_broken_mod(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    maintenance::delete_broken(&conn, &cfg, &id)
-}
-
-/// Retire une junction orpheline (garde-fou junction).
-#[tauri::command]
-fn remove_orphan_junction(app: AppHandle, kind: String, id: String) -> Result<(), String> {
-    maintenance::remove_orphan(&config::load(&app), &kind, &id)
-}
-
-/// Désinstalle tout un pack (§4.7) : supprime chaque mod du pack. Renvoie le nb supprimé.
-#[tauri::command]
-fn delete_pack(app: AppHandle, db: State<Db>, pack: String) -> Result<usize, String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    maintenance::delete_pack(&conn, &cfg, &pack)
-}
-
-/// Réinstalle un mod depuis son archive/dossier source conservé (§10/§11).
-#[tauri::command]
-fn reinstall_from_archive(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    maintenance::reinstall_from_archive(&conn, &cfg, &id)
-}
-
-/// Exporte la version active d'un mod en archive autonome dans `dest_dir` (§9.1).
-#[tauri::command]
-fn export_mod(app: AppHandle, db: State<Db>, id: String, dest_dir: String) -> Result<export::ExportReport, String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    export::export_mod(&conn, &cfg, &id, std::path::Path::new(&dest_dir))
-}
-
-// --- Édition groupée (§6.3bis) -----------------------------------------------
-
-#[tauri::command]
-fn bulk_set_favorite(db: State<Db>, ids: Vec<String>, favorite: bool) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    bulk::set_favorite(&conn, &ids, favorite)
-}
-
-#[tauri::command]
-fn bulk_set_category(db: State<Db>, ids: Vec<String>, category: Option<String>) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    bulk::set_category(&conn, &ids, category.as_deref())
-}
-
-#[tauri::command]
-fn bulk_add_tag(db: State<Db>, ids: Vec<String>, tag: String) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    bulk::add_tag(&conn, &ids, &tag)
-}
-
-#[tauri::command]
-fn bulk_remove_tag(db: State<Db>, ids: Vec<String>, tag: String) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    bulk::remove_tag(&conn, &ids, &tag)
-}
-
-#[tauri::command]
-fn bulk_activate(app: AppHandle, db: State<Db>, ids: Vec<String>) -> Result<bulk::BulkReport, String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(bulk::activate(&conn, &cfg, &ids))
-}
-
-#[tauri::command]
-fn bulk_deactivate(app: AppHandle, db: State<Db>, ids: Vec<String>) -> Result<bulk::BulkReport, String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(bulk::deactivate(&conn, &cfg, &ids))
-}
-
-/// Supprime en masse (fichiers + junction + overlay pour chacun, §9.3).
-#[tauri::command]
-fn bulk_delete(app: AppHandle, db: State<Db>, ids: Vec<String>) -> Result<bulk::BulkReport, String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(bulk::delete(&conn, &cfg, &ids))
-}
-
-#[tauri::command]
-fn bulk_export(
-    app: AppHandle,
-    db: State<Db>,
-    ids: Vec<String>,
-    dest_dir: String,
-) -> Result<Vec<bulk::BulkExportItem>, String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(bulk::export(&conn, &cfg, &ids, std::path::Path::new(&dest_dir)))
-}
-
-// --- Types de mods étendus (L6 / §12bis) ------------------------------------
-
-/// Indexe le contenu de base Kunos présent dans content/ (§12bis.1).
-#[tauri::command]
-fn index_stock_content(app: AppHandle, db: State<Db>) -> Result<usize, String> {
-    let cfg = config::load(&app);
-    let rules = rules::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    stock::index_stock_content(&conn, &cfg, &rules)
-}
-
-/// Couches/extensions rattachées à une base (§4.4), pour la fiche détail.
-#[tauri::command]
-fn list_layers(db: State<Db>, parent_id: String) -> Result<Vec<overlay::LayerRow>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    overlay::list_layers(&conn, &parent_id).map_err(|e| e.to_string())
-}
-
-/// Toutes les couches d'un type (Car|Track), vue transversale add-ons (§4.4).
-#[tauri::command]
-fn list_layers_by_kind(db: State<Db>, kind: String) -> Result<Vec<overlay::LayerRow>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    overlay::list_layers_by_kind(&conn, &kind).map_err(|e| e.to_string())
-}
-
-/// Supprime une couche/extension : fichiers bibliothèque + overlay, puis
-/// recompose le parent (§4.4).
-#[tauri::command]
-fn delete_layer(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    compose::remove_layer(&conn, &cfg, &id)
-}
-
-/// Active/désactive une couche puis recompose le contenu en jeu (§4.4).
-#[tauri::command]
-fn set_layer_active(app: AppHandle, db: State<Db>, id: String, active: bool) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    compose::set_layer_active(&conn, &cfg, &id, active)
-}
-
-/// Réordonne une couche (up = plus prioritaire) puis recompose (§4.4).
-#[tauri::command]
-fn reorder_layer(app: AppHandle, db: State<Db>, id: String, direction: String) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    compose::reorder_layer(&conn, &cfg, &id, &direction)
-}
-
-/// Sous-éléments rattachés à une entité (skins/sons d'une voiture, §12bis.3).
-#[tauri::command]
-fn list_sub_mods(db: State<Db>, parent_id: String) -> Result<Vec<overlay::SubModRow>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    overlay::list_subs_for_parent(&conn, &parent_id).map_err(|e| e.to_string())
-}
-
-/// Tous les sous-éléments d'un type, pour la vue transversale (§12bis.3) —
-/// taille sur disque incluse (regroupements pesés côté UI).
-#[tauri::command]
-fn list_subs_by_type(db: State<Db>, sub_type: String) -> Result<Vec<overlay::SubModRow>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    submods::list_by_type_sized(&conn, &sub_type).map_err(|e| e.to_string())
-}
-
-/// Reconnaît les skins de circuit fournis avec le contenu initial du mod
-/// (§4.6bis, lecture live du disque, best-effort) — à appeler avant de lister
-/// les skins d'un circuit pour qu'ils y apparaissent.
-#[tauri::command]
-fn sync_track_skins(app: AppHandle, db: State<Db>, track_id: String) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    submods::sync_bundled_track_skins(&conn, &cfg, &track_id);
-    Ok(())
-}
-
-/// Skins de circuit actuellement actifs (§4.6bis, plusieurs possibles).
-#[tauri::command]
-fn list_active_track_skins(db: State<Db>, track_id: String) -> Result<Vec<String>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(submods::list_active_track_skins(&conn, &track_id))
-}
-
-/// Skins de circuit avec image de prévisualisation résolue, pour le
-/// sélecteur multi-choix de la barre latérale (§4.6bis).
-#[tauri::command]
-fn list_track_skin_options(db: State<Db>, track_id: String) -> Result<Vec<submods::TrackSkinOption>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(submods::list_track_skin_options(&conn, &track_id))
-}
-
-/// Active/désactive un skin de circuit (§4.6bis, pas exclusif).
-#[tauri::command]
-fn set_track_skin_active(
-    app: AppHandle,
-    db: State<Db>,
-    track_id: String,
-    skin_name: String,
-    active: bool,
-) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    submods::set_track_skin_active(&conn, &cfg, &track_id, &skin_name, active)
-}
-
-/// Active un mod de son (bascule exclusive du sfx/, §12bis.2).
-#[tauri::command]
-fn activate_sound(app: AppHandle, db: State<Db>, sub_id: String) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    submods::activate_sound(&conn, &cfg, &sub_id)
-}
-
-/// Restaure le son d'origine d'une voiture (§12bis.2).
-#[tauri::command]
-fn restore_sound(app: AppHandle, db: State<Db>, parent_id: String) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    submods::restore_sound(&conn, &cfg, &parent_id)
-}
-
-/// Supprime proprement un sous-élément (skin/son) : junction + fichiers + overlay (§12bis.3).
-#[tauri::command]
-fn delete_sub_mod(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    submods::remove_sub(&conn, &cfg, &id)
-}
-
-/// Supprime proprement une app : junction + fichiers + overlay (§12bis.4).
-#[tauri::command]
-fn delete_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    apps::remove_app(&conn, &cfg, &id)
-}
-
-/// Liste les apps Python avec leur état d'activation (§12bis.4).
-#[tauri::command]
-fn list_apps(app: AppHandle, db: State<Db>) -> Result<Vec<apps::AppItem>, String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    apps::list_apps(&conn, &cfg)
-}
-
-/// Active une app (junction vers apps/python/, §12bis.4).
-#[tauri::command]
-fn activate_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    apps::activate_app(&conn, &cfg, &id)
-}
-
-/// Désactive une app (§12bis.4).
-#[tauri::command]
-fn deactivate_app(app: AppHandle, id: String) -> Result<(), String> {
-    apps::deactivate_app(&config::load(&app), &id)
-}
-
-// --- Mods « autres » (§6.1bis) -----------------------------------------------
-
-/// Liste les mods « autres » avec leurs conflits de fichiers détectés.
-#[tauri::command]
-fn list_other_mods(db: State<Db>) -> Result<Vec<others::OtherModCard>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    others::list_others(&conn).map_err(|e| e.to_string())
-}
-
-/// Marque/démarque un mod « autre » comme prioritaire (§6.1bis).
-#[tauri::command]
-fn set_other_priority(db: State<Db>, id: String, priority: bool) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    others::set_priority(&conn, &id, priority)
-}
-
-/// Active un mod « autre » par junction (§6.1bis).
-#[tauri::command]
-fn activate_other(app: AppHandle, db: State<Db>, id: String) -> Result<others::ActivateOtherResult, String> {
-    let cfg = config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    others::activate_other(&conn, &cfg, &id)
-}
-
-/// Désactive un mod « autre » (§6.1bis).
-#[tauri::command]
-fn deactivate_other(db: State<Db>, id: String) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    others::deactivate_other(&conn, &id)
-}
-
-/// Supprime un mod « autre » : jonctions + fichiers + overlay (§6.1bis).
-#[tauri::command]
-fn delete_other_mod(db: State<Db>, id: String) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    others::delete_other(&conn, &id)
-}
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -754,82 +70,82 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            get_config,
-            save_config,
-            validate_config,
-            autodetect_paths,
-            import_archives,
-            import_folders,
-            analyze_bulk_import,
-            execute_bulk_import,
-            resolve_conflict,
-            list_layers,
-            list_layers_by_kind,
-            delete_layer,
-            set_layer_active,
-            reorder_layer,
-            list_library,
-            get_mod_detail,
-            open_mod_folder,
-            list_mod_resources,
-            open_mod_resource,
-            get_mod_csp_features,
-            activate_mod,
-            deactivate_mod,
-            list_profiles,
-            create_profile,
-            apply_profile,
-            delete_profile,
-            list_weather,
-            list_mod_skins,
-            weather_stack,
-            weather_options,
-            weather_conditions,
-            launch_session,
-            open_content_manager,
-            open_native_showroom,
-            list_showrooms,
-            maintenance_scan,
-            reindex_library,
-            delete_broken_mod,
-            remove_orphan_junction,
-            delete_pack,
-            reinstall_from_archive,
-            export_mod,
-            bulk_set_favorite,
-            bulk_set_category,
-            bulk_add_tag,
-            bulk_remove_tag,
-            bulk_activate,
-            bulk_deactivate,
-            bulk_delete,
-            bulk_export,
-            index_stock_content,
-            list_sub_mods,
-            list_subs_by_type,
-            sync_track_skins,
-            list_active_track_skins,
-            list_track_skin_options,
-            set_track_skin_active,
-            activate_sound,
-            restore_sound,
-            delete_sub_mod,
-            list_apps,
-            activate_app,
-            deactivate_app,
-            list_other_mods,
-            set_other_priority,
-            activate_other,
-            deactivate_other,
-            delete_other_mod,
-            delete_app,
-            get_rules,
-            save_rules,
-            rules_impact,
-            reapply_rules,
-            set_favorite,
-            set_manual_tags,
-            set_mod_field,
+            commands::config::get_config,
+            commands::config::save_config,
+            commands::config::validate_config,
+            commands::config::autodetect_paths,
+            commands::import::import_archives,
+            commands::import::import_folders,
+            commands::import::analyze_bulk_import,
+            commands::import::execute_bulk_import,
+            commands::import::resolve_conflict,
+            commands::layers::list_layers,
+            commands::layers::list_layers_by_kind,
+            commands::layers::delete_layer,
+            commands::layers::set_layer_active,
+            commands::layers::reorder_layer,
+            commands::library::list_library,
+            commands::library::get_mod_detail,
+            commands::library::open_mod_folder,
+            commands::library::list_mod_resources,
+            commands::library::open_mod_resource,
+            commands::library::get_mod_csp_features,
+            commands::activation::activate_mod,
+            commands::activation::deactivate_mod,
+            commands::profiles::list_profiles,
+            commands::profiles::create_profile,
+            commands::profiles::apply_profile,
+            commands::profiles::delete_profile,
+            commands::session::list_weather,
+            commands::library::list_mod_skins,
+            commands::session::weather_stack,
+            commands::session::weather_options,
+            commands::session::weather_conditions,
+            commands::session::launch_session,
+            commands::session::open_content_manager,
+            commands::session::open_native_showroom,
+            commands::session::list_showrooms,
+            commands::maintenance::maintenance_scan,
+            commands::maintenance::reindex_library,
+            commands::maintenance::delete_broken_mod,
+            commands::maintenance::remove_orphan_junction,
+            commands::maintenance::delete_pack,
+            commands::maintenance::reinstall_from_archive,
+            commands::maintenance::export_mod,
+            commands::bulk_ops::bulk_set_favorite,
+            commands::bulk_ops::bulk_set_category,
+            commands::bulk_ops::bulk_add_tag,
+            commands::bulk_ops::bulk_remove_tag,
+            commands::bulk_ops::bulk_activate,
+            commands::bulk_ops::bulk_deactivate,
+            commands::bulk_ops::bulk_delete,
+            commands::bulk_ops::bulk_export,
+            commands::addons::index_stock_content,
+            commands::addons::list_sub_mods,
+            commands::addons::list_subs_by_type,
+            commands::addons::sync_track_skins,
+            commands::addons::list_active_track_skins,
+            commands::addons::list_track_skin_options,
+            commands::addons::set_track_skin_active,
+            commands::addons::activate_sound,
+            commands::addons::restore_sound,
+            commands::addons::delete_sub_mod,
+            commands::addons::list_apps,
+            commands::addons::activate_app,
+            commands::addons::deactivate_app,
+            commands::others::list_other_mods,
+            commands::others::set_other_priority,
+            commands::others::activate_other,
+            commands::others::deactivate_other,
+            commands::others::delete_other_mod,
+            commands::addons::delete_app,
+            commands::rules::get_rules,
+            commands::rules::save_rules,
+            commands::rules::rules_impact,
+            commands::rules::reapply_rules,
+            commands::library::set_favorite,
+            commands::library::set_manual_tags,
+            commands::library::set_mod_field,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

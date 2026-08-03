@@ -64,7 +64,9 @@ Jamais d'élévation admin — l'app doit fonctionner en utilisateur standard.
 
 ```
 src-tauri/src/          Backend Rust — un module par domaine
-  lib.rs                Commandes #[tauri::command] + invoke_handler (point d'entrée)
+  lib.rs                Point d'entrée : mod, état partagé, setup, invoke_handler
+  commands/             Façades #[tauri::command], un fichier par domaine
+  errors.rs             Clés i18n des erreurs destinées à l'utilisateur
   overlay.rs            Base SQLite : schéma, migrations ALTER idempotentes, CRUD
   importer.rs modscan.rs archive.rs    Import : détection, extraction, classement
   activation.rs deploy.rs compose.rs layers.rs   Déploiement dans content/
@@ -81,10 +83,16 @@ src/lib/
 docs/                   Documentation (voir ci-dessous)
 ```
 
-Ajouter une fonctionnalité backend = 3 endroits : la fonction dans son module,
-la commande dans `lib.rs` **et** son inscription dans `invoke_handler![…]`, puis
-le binding typé dans le `src/lib/*.ts` correspondant. Oublier `invoke_handler`
-ne casse rien à la compilation — l'erreur n'apparaît qu'à l'exécution.
+Ajouter une fonctionnalité backend = 3 endroits : la fonction dans son module
+métier, la façade `pub fn` dans `commands/<domaine>.rs` **et** son inscription
+dans `invoke_handler![…]` de `lib.rs`, puis le binding typé dans le
+`src/lib/*.ts` correspondant. Oublier `invoke_handler` ne casse rien à la
+compilation — l'erreur n'apparaît qu'à l'exécution.
+
+Une façade ne fait que charger la config, prendre le verrou SQLite et déléguer.
+Toute logique qui grossit dans `commands/` doit descendre dans son module
+métier. Les commandes sont `pub` (obligatoire hors du crate racine) et
+partagent `commands::prelude`.
 
 `Prefs` (`config.rs`) est en `#[serde(default)]` : un champ retiré est
 simplement ignoré dans les `config.json` existants, pas de migration à écrire.
@@ -115,10 +123,42 @@ ailleurs). Piège à connaître : `tauri-build` exige que `../build` existe, don
 crée une release **brouillon**. L'étape de signature Azure y est écrite mais
 commentée — les binaires actuels ne sont pas signés.
 
-`src-tauri/rustfmt.toml` fixe le style (`max_width = 120`), mais `cargo fmt`
-**n'a pas encore été passé** sur le code existant (~280 blocs sur 31 fichiers)
-et n'est donc pas dans la CI. À faire dans un commit isolé, jamais mélangé à un
-changement fonctionnel : sinon `git blame` devient inexploitable.
+`src-tauri/rustfmt.toml` fixe le style (`max_width = 120`) et `cargo fmt --check`
+est dans la CI. Un reformatage massif se fait dans un commit isolé, jamais
+mélangé à un changement fonctionnel : sinon `git blame` devient inexploitable.
+
+## Chantiers en cours
+
+Liste vivante : **retirer chaque entrée dès qu'elle est faite**, ne pas la
+laisser pourrir ici.
+
+- [ ] **Découpage des monolithes Svelte.** `DetailPage.svelte` (1725 l.) et
+      `Launch.svelte` (1522 l.). Les blocs Couches et Ressources sont déjà
+      sortis dans `components/detail/` ; restent Tags, Versions, Historique,
+      Provenance côté fiche, et les étapes côté Lancer. **Exige l'app lancée** :
+      le CSS Svelte est scopé par composant, chaque extraction déplace des
+      styles et `npm run check` ne prouve que la compilation, pas le rendu.
+- [ ] **Index manquants** (une demi-heure, rentable dès la session suivante) :
+      carte des écrans Svelte (quel composant = quel écran, `Transversal` sert
+      trois entrées de menu, `Library` est rendu deux fois avec une prop) ;
+      une ligne en tête de `global.css` disant quelles classes sont globales
+      (`.btn`, `.mono`, `.input`) par opposition aux classes locales aux
+      composants (`.lbl`, `.tag`, `.srcbox`) ; le fait que `t()` renvoie la clé
+      elle-même quand elle manque.
+- [ ] **Clés localStorage en littéraux dispersés** (`pitbox.session.car`,
+      `pitbox.skin.<id>`, `pitbox.transversal.groupBy`…) → un module de
+      constantes. Une clé mal orthographiée ne casse rien : elle perd
+      silencieusement un réglage, et ça ne se retrouve jamais.
+- [ ] **Signature Authenticode** : voir `docs/windows-code-signing.md`.
+      L'étape Azure de `release.yml` est écrite mais commentée, et placée avant
+      le build — à déplacer après, ou à passer par `bundle.windows.signCommand`
+      pour que l'exécutable *dans* l'installateur soit signé lui aussi.
+- [ ] **La CI n'a encore jamais tourné** : les workflows n'ont pas été poussés.
+      Le premier push est leur vrai test.
+- [ ] **Runner de tests frontend** : délibérément absent. À reconsidérer
+      seulement le jour où de la logique pure sera extraite des composants
+      (le tri/regroupement/cumul de `Transversal.svelte` en est proche) — pour
+      tester *cette* logique, pas l'affichage.
 
 ## Fin de tâche — dans cet ordre
 
