@@ -40,6 +40,7 @@
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
   import TrackingBlock from "./detail/TrackingBlock.svelte";
   import ProvenanceBlock from "./detail/ProvenanceBlock.svelte";
+  import TagsBlock from "./detail/TagsBlock.svelte";
 
   import { errorText } from "$lib/errors";
   interface Props {
@@ -64,7 +65,6 @@
   let trackSkinBusy = $state(false);
   let busy = $state(false);
   let actionError = $state("");
-  let manualInput = $state("");
   let exporting = $state(false);
   let exportResult = $state<ExportReport | null>(null);
   // Provenance / pack d'origine (§4.7).
@@ -451,11 +451,8 @@
     onchange?.();
   }
 
-  async function addManual() {
-    if (!detail) return;
-    const tag = manualInput.trim().toLowerCase();
-    manualInput = "";
-    if (!tag || detail.tags_manual.includes(tag)) return;
+  async function addManual(tag: string) {
+    if (!detail || detail.tags_manual.includes(tag)) return;
     detail.tags_manual = [...detail.tags_manual, tag];
     await setManualTags(detail.id_interne, detail.tags_manual);
     onchange?.();
@@ -726,7 +723,7 @@
             <div class="restore-note">↺ {t("detail.soundRestorable")}</div>
           {/if}
 
-          {@render tagsBlock(d)}
+          <TagsBlock detail={d} onaddtag={addManual} onremovetag={removeManual} />
         </div>
 
         <!-- Versions + Historique + Provenance -->
@@ -802,7 +799,7 @@
           </div>
           <div class="lbl">{t("detail.authorLabel")}</div>
           <div class="box">{d.author ?? "—"}</div>
-          {@render tagsBlock(d)}
+          <TagsBlock detail={d} onaddtag={addManual} onremovetag={removeManual} />
         </div>
 
         <!-- Versions + Historique + Provenance -->
@@ -816,24 +813,6 @@
     </div>
   {/if}
 </div>
-
-{#snippet tagsBlock(d: ModDetail)}
-  <div class="lbl">{t("detail.tagsLabel")}</div>
-  <div class="tags">
-    {#each d.tags_from_rule.filter((tag) => tag.startsWith("#")) as tag}<span class="tag cat">{tag}</span>{/each}
-    {#each d.tags_from_rule.filter((tag) => !tag.startsWith("#")) as tag}<span class="tag rule">{tag}</span>{/each}
-    {#each d.tags_manual as tag}
-      <span class="tag manual">{tag}<button class="x" type="button" onclick={() => removeManual(tag)} title={t("common.remove")}>×</button></span>
-    {/each}
-    {#each d.tags_from_mod as tag}<span class="tag mod">{tag}</span>{/each}
-  </div>
-  <input
-    class="input manual-input"
-    placeholder={t("detail.addTagPlaceholder")}
-    bind:value={manualInput}
-    onkeydown={(e) => e.key === "Enter" && addManual()}
-  />
-{/snippet}
 
 
 <style>
@@ -1329,55 +1308,6 @@
     padding: 5px 9px;
   }
 
-  .tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    margin-bottom: 8px;
-  }
-  .tag {
-    font-size: 10px;
-    padding: 2px 8px;
-    font-family: var(--mono);
-    border: 1px solid var(--line);
-  }
-  .tag.cat {
-    background: var(--rosso-dim);
-    color: var(--rosso-bright);
-    border-color: var(--rosso-border);
-  }
-  .tag.rule {
-    background: var(--green-dim);
-    color: var(--green);
-    border-color: var(--green-border);
-  }
-  .tag.manual {
-    background: var(--raised);
-    color: var(--txt2);
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .tag.mod {
-    background: var(--blue-dim);
-    color: var(--blue);
-    border-color: var(--blue-border);
-  }
-  .tag .x {
-    background: transparent;
-    color: var(--muted);
-    font-size: 12px;
-    line-height: 1;
-    padding: 0;
-  }
-  .tag .x:hover {
-    color: var(--rosso-bright);
-  }
-  .manual-input {
-    width: 100%;
-    padding: 5px 8px;
-    font-size: 11px;
-  }
 
 
   .muted {
