@@ -46,27 +46,43 @@ deux pistes à instruire en premier.
 
 [`.github/workflows/release.yml`](../.github/workflows/release.yml) construit
 les installateurs MSI et NSIS sur un tag `v*` et crée une release **brouillon**.
-L'étape de signature Azure y est écrite mais **commentée** : les binaires
-produits aujourd'hui ne sont pas signés.
+Les binaires produits aujourd'hui ne sont **pas signés** — le workflow est prêt
+à les signer, il attend une variable de dépôt.
 
-## Activer la signature (Azure Trusted Signing)
+## Activer la signature
 
-1. Créer la ressource Trusted Signing dans Azure, faire valider l'identité,
-   créer un profil de certificat.
-2. Créer un enregistrement d'application (service principal) et lui donner le
-   rôle de signature.
-3. Renseigner les secrets du dépôt GitHub : `AZURE_TENANT_ID`,
-   `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_ENDPOINT`,
-   `AZURE_CODE_SIGNING_NAME`, `AZURE_CERT_PROFILE_NAME`.
-4. Décommenter l'étape « Signature » dans `release.yml`.
+Une seule chose à faire : définir la **variable de dépôt** `SIGN_COMMAND`
+(*Settings → Secrets and variables → Actions → Variables*). Tant qu'elle est
+vide, le workflow construit normalement, sans signer et sans échouer.
 
-⚠️ L'ordre compte : l'étape de signature doit s'exécuter **après** que
-`tauri-action` a produit les bundles, sur les fichiers de
-`src-tauri/target/release/bundle`. En l'état, l'étape commentée est placée
-avant — la déplacer après le build, ou passer par `bundle.windows.signCommand`
-dans `tauri.conf.json` pour que Tauri signe chaque binaire au moment de
-l'empaquetage (préférable : l'exécutable *dans* l'installateur est signé lui
-aussi, pas seulement l'installateur).
+Sa valeur est la ligne de commande qui signe **un** fichier, où Tauri remplace
+`%1` par le chemin du binaire. Par exemple, avec `signtool` :
+
+```
+signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /sha1 <empreinte> %1
+```
+
+Avec Azure Trusted Signing ou SignPath, c'est la CLI du fournisseur qui prend
+la place de `signtool`. Les identifiants (jeton, secret client) restent des
+**secrets** GitHub classiques, référencés par la commande.
+
+### Pourquoi `signCommand` plutôt qu'une étape de signature
+
+C'est le point non évident, et il vaut d'être compris avant de bricoler le
+workflow :
+
+- Tauri appelle la commande **pendant** l'empaquetage. L'exécutable *à
+  l'intérieur* de l'installateur est donc signé lui aussi. Signer seulement le
+  `.msi`/`.exe` final laisserait le binaire réellement installé non signé —
+  SmartScreen s'en apercevrait au premier lancement, après l'installation.
+- `tauri-action` construit **et** publie la release en une seule étape : il
+  n'existe aucune fenêtre entre « bundles produits » et « bundles téléversés »
+  où une étape de signature pourrait s'intercaler.
+
+C'est pourquoi `release.yml` injecte `bundle.windows.signCommand` dans
+`tauri.conf.json` avant le build, plutôt que de signer après coup.
+`tauri.conf.json` étant du JSON strict, la clé ne peut pas y être laissée en
+place désactivée : elle est écrite par le workflow.
 
 ## Alternative sans certificat
 

@@ -14,7 +14,7 @@ jobs:
   release:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -22,41 +22,48 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
 
       # --- Signature Authenticode -------------------------------------------
-      # Inactive tant que les secrets ne sont pas renseignés : `tauri build`
-      # produit alors des binaires NON signés (Windows affichera l'écran
-      # SmartScreen « Éditeur inconnu »).
+      # La signature passe par `bundle.windows.signCommand` de Tauri, PAS par une
+      # étape qui signerait les fichiers après coup. Deux raisons :
       #
-      # Depuis juin 2023, une clé de signature publiquement reconnue doit vivre
-      # dans un HSM certifié FIPS 140-2 niveau 2 : un simple `.pfx` déposé dans
-      # les secrets GitHub n'est PLUS une option. Deux voies praticables en CI :
+      #  1. Tauri appelle la commande **pendant** l'empaquetage, donc
+      #     l'exécutable *à l'intérieur* de l'installateur est signé lui aussi —
+      #     signer seulement le .msi/.exe final laisserait le binaire installé
+      #     non signé, et SmartScreen le verrait au premier lancement.
+      #  2. `tauri-action` construit ET publie la release en une seule étape :
+      #     il n'existe pas de fenêtre entre « bundles produits » et « bundles
+      #     téléversés » où une étape de signature pourrait s'intercaler.
       #
-      #  1. Azure Trusted Signing (~10 $/mois) — voie recommandée : la clé reste
-      #     chez Azure, la CI ne reçoit qu'un jeton. Renseigner les secrets
-      #     AZURE_* ci-dessous et décommenter l'étape.
-      #  2. SignPath (offre gratuite pour les projets open source).
+      # Reste inactif tant que la variable de dépôt SIGN_COMMAND est vide : le
+      # build produit alors des binaires NON signés (SmartScreen affichera
+      # « Éditeur inconnu »), sans faire échouer le workflow.
       #
-      # Voir docs/windows-code-signing.md pour la marche à suivre complète.
-      #
-      # - name: Signature (Azure Trusted Signing)
-      #   uses: azure/trusted-signing-action@v0
-      #   with:
-      #     azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-      #     azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-      #     azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-      #     endpoint: ${{ secrets.AZURE_ENDPOINT }}
-      #     trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
-      #     certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
-      #     files-folder: ${{ github.workspace }}/src-tauri/target/release/bundle
-      #     files-folder-filter: msi,exe
-      #     file-digest: SHA256
+      # SIGN_COMMAND est volontairement agnostique du fournisseur — Azure
+      # Trusted Signing, SignPath ou signtool local. Tauri y remplace %1 par le
+      # chemin du fichier à signer. Voir docs/windows-code-signing.md.
+      - name: Activer la signature (si configurée)
+        if: vars.SIGN_COMMAND != ''
+        shell: pwsh
+        env:
+          SIGN_COMMAND: ${{ vars.SIGN_COMMAND }}
+        run: |
+          # tauri.conf.json est du JSON strict (pas de commentaire possible) :
+          # la clé est injectée ici plutôt que laissée en place désactivée.
+          $conf = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          if (-not $conf.bundle.PSObject.Properties['windows']) {
+            $conf.bundle | Add-Member -NotePropertyName windows -NotePropertyValue ([pscustomobject]@{})
+          }
+          $conf.bundle.windows | Add-Member -NotePropertyName signCommand `
+            -NotePropertyValue $env:SIGN_COMMAND -Force
+          $conf | ConvertTo-Json -Depth 20 | Set-Content src-tauri/tauri.conf.json -Encoding utf8
+          Write-Host "Signature activée."
 
       - name: Build + release brouillon
         uses: tauri-apps/tauri-action@v0

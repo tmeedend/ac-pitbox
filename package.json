@@ -9,7 +9,9 @@
     "prebuild": "npm run gen:licenses",
     "build": "vite build",
     "preview": "vite preview",
+    "precheck": "npm run gen:licenses",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "precheck:watch": "npm run gen:licenses",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "gen:licenses": "node scripts/gen-licenses.mjs",
     "tauri": "tauri"

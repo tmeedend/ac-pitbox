@@ -184,18 +184,10 @@ laisser pourrir ici.
       Provenance côté fiche, et les étapes côté Lancer. **Exige l'app lancée** :
       le CSS Svelte est scopé par composant, chaque extraction déplace des
       styles et `npm run check` ne prouve que la compilation, pas le rendu.
-- [ ] **Clés localStorage en littéraux dispersés** (`pitbox.session.car`,
-      `pitbox.skin.<id>`, `pitbox.transversal.groupBy`…) → un module de
-      constantes. Une clé mal orthographiée ne casse rien : elle perd
-      silencieusement un réglage, et ça ne se retrouve jamais.
-- [ ] **Signature Authenticode** : voir `docs/windows-code-signing.md`.
-      L'étape Azure de `release.yml` est écrite mais commentée, et placée avant
-      le build — à déplacer après, ou à passer par `bundle.windows.signCommand`
-      pour que l'exécutable *dans* l'installateur soit signé lui aussi.
-- [ ] **La CI n'a encore jamais tourné.** Le push de `.github/workflows/` est
-      refusé tant que le jeton Git utilisé n'a pas le scope `workflow`
-      (`gh auth refresh -s workflow`, ou un PAT qui le porte). À faire depuis
-      un terminal interactif — le premier push est le vrai test des workflows.
+- [ ] **Signature Authenticode** : le workflow est prêt, il attend un
+      certificat. Définir la variable de dépôt `SIGN_COMMAND` suffit à
+      l'activer — voir `docs/windows-code-signing.md` (lire **avant** d'acheter,
+      deux pièges y sont documentés).
 - [ ] **Runner de tests frontend** : délibérément absent. À reconsidérer
       seulement le jour où de la logique pure sera extraite des composants
       (le tri/regroupement/cumul de `Transversal.svelte` en est proche) — pour
