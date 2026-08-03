@@ -3,6 +3,7 @@
 // un instantané complet et rappelable à la demande (surtout utile pour ne pas
 // reperdre un plateau d'adversaires soigneusement ajusté).
 import type { GridMode, RaceSetup } from "./launch";
+import { StorageKey } from "./storage";
 
 export type Season = "" | "spring" | "summer" | "autumn" | "winter";
 
@@ -17,7 +18,7 @@ export interface SavedSession {
   intent: string;
 }
 
-const KEY = "pitbox.savedSessions";
+const KEY = StorageKey.savedSessions;
 
 function loadAll(): Record<string, SavedSession> {
   try {

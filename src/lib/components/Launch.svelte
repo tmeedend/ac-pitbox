@@ -23,6 +23,7 @@
   import { saveSession, type SavedSession } from "$lib/savedSessions";
 
   import { errorText } from "$lib/errors";
+  import { StorageKey } from "$lib/storage";
   let libCards = $state<ModCard[]>([]);
   let weathers = $state<WeatherOption[]>([]);
   let selectedIntent = $state("");
@@ -456,7 +457,7 @@
       track_layout: setup.track_layout,
       session_type: setup.session_type,
     };
-    localStorage.setItem("pitbox.launchSel", JSON.stringify(sel));
+    localStorage.setItem(StorageKey.launchSelection, JSON.stringify(sel));
   }
   $effect(() => {
     void [setup.car_id, setup.car_skin, setup.track_id, setup.track_layout, setup.session_type];
@@ -473,7 +474,7 @@
     damage: number; fuel_rate: number; tyre_wear: number; intent: string; season: Season;
     abs_auto: boolean; traction_control_auto: boolean; ideal_line: boolean;
   }
-  let presets: Record<string, Persisted> = JSON.parse(localStorage.getItem("pitbox.launchPresets") ?? "{}");
+  let presets: Record<string, Persisted> = JSON.parse(localStorage.getItem(StorageKey.launchPresets) ?? "{}");
   let applying = false;
 
   function savePreset() {
@@ -487,7 +488,7 @@
       damage: setup.damage, fuel_rate: setup.fuel_rate, tyre_wear: setup.tyre_wear, intent: selectedIntent, season,
       abs_auto: setup.abs_auto, traction_control_auto: setup.traction_control_auto, ideal_line: setup.ideal_line,
     };
-    localStorage.setItem("pitbox.launchPresets", JSON.stringify(presets));
+    localStorage.setItem(StorageKey.launchPresets, JSON.stringify(presets));
   }
   async function applyPreset(type: SessionType) {
     const p = presets[type];
@@ -529,7 +530,7 @@
   onMount(async () => {
     [weathers, libCards] = await Promise.all([weatherOptions(), listLibrary()]);
 
-    const saved: Partial<Selection> = JSON.parse(localStorage.getItem("pitbox.launchSel") ?? "{}");
+    const saved: Partial<Selection> = JSON.parse(localStorage.getItem(StorageKey.launchSelection) ?? "{}");
     setup.session_type = saved.session_type ?? "practice";
 
     // La bibliothèque EST le sélecteur (§8.6) : voiture/circuit viennent du duo

@@ -13,7 +13,6 @@
   } from "$lib/library";
   import {
     columnsFor,
-    kindKey,
     loadVisible,
     saveVisible,
     type ColumnDef,
@@ -24,12 +23,20 @@
   import { buildModContextItems } from "$lib/modContextActions";
   import { t } from "$lib/i18n/index.svelte";
 
+  import { StorageKey } from "$lib/storage";
   // Une bibliothèque par type (§6.1) : ce composant est rendu une fois pour les
   // voitures, une fois pour les circuits. Toute la persistance est suffixée par
   // type pour rester indépendante entre les deux.
   let { kind }: { kind: ModKind } = $props();
   const isCar = kind === "Car";
-  const kk = kindKey(kind);
+  // Clés de persistance bâties une fois, au même endroit : chaque réglage doit
+  // rester indépendant entre voitures et circuits (§6.1).
+  const KEYS = {
+    filters: StorageKey.libraryFilters(kind),
+    view: StorageKey.libraryView(kind),
+    sortKey: StorageKey.librarySortKey(kind),
+    sortDir: StorageKey.librarySortDir(kind),
+  };
 
   let cards = $state<ModCard[]>([]);
   let selectedId = $state<string | null>(null);
@@ -42,7 +49,7 @@
   // elle est ouverte pour céder gauche/droite au visualiseur et gérer B=fermer.
 
   // Filtres persistés par type (rechargés au retour sur la page).
-  const FKEY = `pitbox.filters.${kk}`;
+  const FKEY = KEYS.filters;
   const sf: Record<string, unknown> = (() => {
     try {
       return JSON.parse(localStorage.getItem(FKEY) ?? "{}");
@@ -80,7 +87,7 @@
     );
   });
   let view = $state<"gallery" | "table">(
-    (localStorage.getItem(`pitbox.view.${kk}`) as "gallery" | "table") ?? "gallery",
+    (localStorage.getItem(KEYS.view) as "gallery" | "table") ?? "gallery",
   );
 
   // Colonnes (§6.2) : définitions propres au type + visibilité persistée par type.
@@ -98,9 +105,9 @@
   }
 
   // Tri du tableau (par clé de colonne), persisté par type.
-  let sortKey = $state<string>(localStorage.getItem(`pitbox.sort.${kk}.key`) ?? "name");
+  let sortKey = $state<string>(localStorage.getItem(KEYS.sortKey) ?? "name");
   let sortDir = $state<1 | -1>(
-    localStorage.getItem(`pitbox.sort.${kk}.dir`) === "-1" ? -1 : 1,
+    localStorage.getItem(KEYS.sortDir) === "-1" ? -1 : 1,
   );
 
   function toggleSort(key: string) {
@@ -109,13 +116,13 @@
       sortKey = key;
       sortDir = 1;
     }
-    localStorage.setItem(`pitbox.sort.${kk}.key`, sortKey);
-    localStorage.setItem(`pitbox.sort.${kk}.dir`, String(sortDir));
+    localStorage.setItem(KEYS.sortKey, sortKey);
+    localStorage.setItem(KEYS.sortDir, String(sortDir));
   }
 
   function setView(v: "gallery" | "table") {
     view = v;
-    localStorage.setItem(`pitbox.view.${kk}`, v);
+    localStorage.setItem(KEYS.view, v);
   }
 
   // Panneau latéral toujours ouvert (jamais de saut de largeur du panneau

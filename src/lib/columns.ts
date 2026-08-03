@@ -3,6 +3,11 @@
 import type { ModCard, ModKind } from "./library";
 import { t } from "./i18n/index.svelte";
 import { fmtSize } from "./format";
+import { StorageKey, kindKey } from "./storage";
+
+// `kindKey` a déménagé dans storage.ts (il ne servait qu'à bâtir des clés) ;
+// ré-exporté ici pour les appelants existants.
+export { kindKey };
 
 export interface ColumnDef {
   key: string;
@@ -138,15 +143,10 @@ export function columnsFor(kind: ModKind): ColumnDef[] {
   return kind === "Track" ? TRACK_COLUMNS : CAR_COLUMNS;
 }
 
-/** Suffixe de clé localStorage par type. */
-export function kindKey(kind: ModKind): string {
-  return kind === "Track" ? "tracks" : "cars";
-}
-
 /** Charge les clés de colonnes visibles pour un type (repli sur les défauts). */
 export function loadVisible(kind: ModKind): Set<string> {
   const defs = columnsFor(kind);
-  const raw = localStorage.getItem(`pitbox.cols.${kindKey(kind)}`);
+  const raw = localStorage.getItem(StorageKey.libraryColumns(kind));
   if (raw) {
     try {
       const keys: string[] = JSON.parse(raw);
@@ -160,5 +160,5 @@ export function loadVisible(kind: ModKind): Set<string> {
 }
 
 export function saveVisible(kind: ModKind, keys: Set<string>): void {
-  localStorage.setItem(`pitbox.cols.${kindKey(kind)}`, JSON.stringify([...keys]));
+  localStorage.setItem(StorageKey.libraryColumns(kind), JSON.stringify([...keys]));
 }

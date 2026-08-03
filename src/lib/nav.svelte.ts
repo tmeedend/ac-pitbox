@@ -2,6 +2,8 @@
 // le sélecteur : ouvrir une voiture/un circuit le définit comme choix de session,
 // affiché en permanence dans le bloc SESSION de la barre latérale (§6.1ter).
 
+import { StorageKey } from "./storage";
+
 export interface LaunchPrefill {
   kind: "Car" | "Track";
   id: string;
@@ -70,8 +72,8 @@ export const nav = $state<{
   prefill: null,
   openMod: null,
   search: null,
-  sessionCar: load("pitbox.session.car"),
-  sessionTrack: load("pitbox.session.track"),
+  sessionCar: load(StorageKey.sessionCar),
+  sessionTrack: load(StorageKey.sessionTrack),
   openFull: null,
   autoLaunch: false,
   opponentsAction: null,
@@ -81,10 +83,10 @@ export const nav = $state<{
 export function pickSession(kind: "Car" | "Track", pick: SessionPick): void {
   if (kind === "Car") {
     nav.sessionCar = pick;
-    localStorage.setItem("pitbox.session.car", JSON.stringify(pick));
+    localStorage.setItem(StorageKey.sessionCar, JSON.stringify(pick));
   } else {
     nav.sessionTrack = pick;
-    localStorage.setItem("pitbox.session.track", JSON.stringify(pick));
+    localStorage.setItem(StorageKey.sessionTrack, JSON.stringify(pick));
   }
 }
 

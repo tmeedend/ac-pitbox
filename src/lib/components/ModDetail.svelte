@@ -17,6 +17,7 @@
   import { t } from "$lib/i18n/index.svelte";
 
   import { errorText } from "$lib/errors";
+  import { StorageKey } from "$lib/storage";
   interface Props {
     id: string | null;
     onchange?: () => void;
@@ -179,13 +180,13 @@
     }
   }
   let showFileTags = $state(
-    localStorage.getItem("pitbox.showFileTags") !== "false",
+    localStorage.getItem(StorageKey.showFileTags) !== "false",
   );
   let manualInput = $state("");
 
   function toggleFileTags() {
     showFileTags = !showFileTags;
-    localStorage.setItem("pitbox.showFileTags", String(showFileTags));
+    localStorage.setItem(StorageKey.showFileTags, String(showFileTags));
   }
 
   async function toggleFav() {

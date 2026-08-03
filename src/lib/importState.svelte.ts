@@ -4,6 +4,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listen } from "@tauri-apps/api/event";
+import { StorageKey } from "./storage";
 import {
   importArchives,
   importFolders,
@@ -45,13 +46,13 @@ export const importState = $state<{
   report: null,
   pendingConflicts: [],
   pendingAmbiguous: [],
-  copyMode: localStorage.getItem("pitbox.import.copy") !== "false",
+  copyMode: localStorage.getItem(StorageKey.importCopy) !== "false",
   version: 0,
 });
 
 export function setCopyMode(v: boolean): void {
   importState.copyMode = v;
-  localStorage.setItem("pitbox.import.copy", String(v));
+  localStorage.setItem(StorageKey.importCopy, String(v));
 }
 
 /** Lance un import et récolte conflits flous + cas ambigus (§4.2/§4.4). La
