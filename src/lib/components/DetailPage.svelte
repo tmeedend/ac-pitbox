@@ -39,6 +39,7 @@
   import LayersBlock from "./detail/LayersBlock.svelte";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
   import TrackingBlock from "./detail/TrackingBlock.svelte";
+  import ProvenanceBlock from "./detail/ProvenanceBlock.svelte";
 
   import { errorText } from "$lib/errors";
   interface Props {
@@ -92,10 +93,6 @@
     if (await requestSection(c.kind === "Track" ? "tracks" : "cars")) {
       nav.openMod = c.id_interne;
     }
-  }
-
-  function activeArchive(d: ModDetail): string | null {
-    return d.versions.find((v) => v.id === d.active_version_id)?.source_archive ?? null;
   }
 
   // Archive/dossier source conservé pour la version active (§10/§11), s'il y
@@ -735,7 +732,7 @@
         <!-- Versions + Historique + Provenance -->
         <div class="col">
           <TrackingBlock detail={d} {busy} onactivateversion={(vid) => activate(vid)} />
-          {@render provenanceBlock(d)}
+          <ProvenanceBlock detail={d} {siblings} busy={packBusy} onfilterbypack={filterByPack} onopensibling={openSibling} onuninstallpack={uninstallPack} />
           <LayersBlock modId={id} onchanged={refreshEntity} onerror={(m) => (actionError = m)} />
           <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
         </div>
@@ -811,7 +808,7 @@
         <!-- Versions + Historique + Provenance -->
         <div class="col">
           <TrackingBlock detail={d} {busy} onactivateversion={(vid) => activate(vid)} />
-          {@render provenanceBlock(d)}
+          <ProvenanceBlock detail={d} {siblings} busy={packBusy} onfilterbypack={filterByPack} onopensibling={openSibling} onuninstallpack={uninstallPack} />
           <LayersBlock modId={id} onchanged={refreshEntity} onerror={(m) => (actionError = m)} />
           <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
         </div>
@@ -836,59 +833,6 @@
     bind:value={manualInput}
     onkeydown={(e) => e.key === "Enter" && addManual()}
   />
-{/snippet}
-
-{#snippet provenanceBlock(d: ModDetail)}
-  {@const archive = activeArchive(d)}
-  {#if d.source_pack || archive || d.source_url}
-    <div class="lbl section">{t("detail.sourceLabel")}</div>
-    <div class="srcbox">
-      <div class="src-h">{t("detail.provenanceTitle")}</div>
-      {#if d.source_pack}
-        <div class="srcrow">
-          <span class="src-k">{t("detail.packLabel")}</span>
-          <button class="chip" type="button" onclick={filterByPack} title={t("detail.viewPackTooltip")}>
-            ⬢ {d.source_pack} <span class="chip-n">· {t("detail.modCount", { count: siblings.length + 1 })}</span>
-          </button>
-        </div>
-      {/if}
-      <div class="srcrow">
-        <span class="src-k">{t("detail.archiveLabel")}</span>
-        <span class="src-v">{archive ?? "—"}</span>
-      </div>
-      <div class="srcrow">
-        <span class="src-k">{t("detail.originUrlLabel")}</span>
-        {#if d.source_url}
-          <span class="src-v url">{d.source_url}</span>
-        {:else}
-          <span class="src-empty">{t("detail.noUrl")}</span>
-        {/if}
-      </div>
-    </div>
-
-    {#if d.source_pack}
-      <div class="lbl section">{t("detail.siblingsLabel", { count: siblings.length })}</div>
-      {#if siblings.length}
-        <div class="siblings">
-          {#each siblings as c (c.id_interne)}
-            <button class="sib" type="button" onclick={() => openSibling(c)} title={t("detail.openSheetTooltip")}>
-              <span class="sib-dot">{c.kind === "Track" ? "🏁" : "🚗"}</span>
-              <span class="sib-nm">{c.display_name ?? c.id_interne}</span>
-            </button>
-          {/each}
-        </div>
-      {:else}
-        <div class="muted small">{t("detail.onlyEntity")}</div>
-      {/if}
-      <div class="prov-note">{t("detail.packNote")}</div>
-      <div class="prov-actions">
-        <button class="btn" type="button" onclick={filterByPack}>⌕ {t("detail.filterByPack")}</button>
-        <button class="btn danger" type="button" onclick={uninstallPack} disabled={packBusy}>
-          {packBusy ? t("common.working") : `🗑 ${t("detail.uninstallPack")}`}
-        </button>
-      </div>
-    {/if}
-  {/if}
 {/snippet}
 
 
@@ -1505,108 +1449,6 @@
   /* Bloc Ressources (§4.6) */
 
   /* Provenance / pack d'origine (§4.7) */
-  .srcbox {
-    border: 1px solid var(--line);
-  }
-  .src-h {
-    background: var(--raised);
-    padding: 5px 10px;
-    border-bottom: 1px solid var(--line);
-    color: var(--muted);
-    font-size: 8px;
-    letter-spacing: 1.5px;
-  }
-  .srcrow {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 8px 11px;
-    border-bottom: 1px solid var(--line);
-  }
-  .srcrow:last-child {
-    border-bottom: none;
-  }
-  .src-k {
-    color: var(--faint);
-    font-size: 8px;
-    letter-spacing: 1px;
-    width: 84px;
-    flex-shrink: 0;
-  }
-  .src-v {
-    font-size: 10.5px;
-    font-family: var(--mono);
-    color: var(--txt2);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .src-v.url {
-    color: var(--blue);
-  }
-  .src-empty {
-    color: var(--muted2);
-    font-size: 9.5px;
-    font-family: var(--mono);
-    font-style: italic;
-  }
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    font-size: 10px;
-    font-family: var(--mono);
-    padding: 3px 9px;
-  }
-  .chip .chip-n {
-    color: var(--muted);
-  }
-  .siblings {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1px;
-    background: var(--line);
-    border: 1px solid var(--line);
-  }
-  .sib {
-    background: var(--card);
-    padding: 7px 9px;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    text-align: left;
-  }
-  .sib:hover {
-    background: var(--raised);
-  }
-  .sib-dot {
-    font-size: 13px;
-    flex: none;
-  }
-  .sib-nm {
-    font-size: 9.5px;
-    color: var(--txt2);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .prov-note {
-    margin-top: 8px;
-    background: var(--blue-dim);
-    border: 1px solid var(--blue-border);
-    color: var(--blue);
-    font-size: 9px;
-    font-family: var(--mono);
-    padding: 6px 9px;
-  }
-  .prov-actions {
-    display: flex;
-    gap: 7px;
-    margin-top: 10px;
-  }
   .btn.danger {
     color: var(--muted);
   }
