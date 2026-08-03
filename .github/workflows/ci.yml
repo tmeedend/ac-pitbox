@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Une seule exécution par branche : un nouveau push annule la précédente.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  frontend:
+    name: Frontend (types + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # svelte-check doit rester à 0 erreur (des warnings
+      # state_referenced_locally préexistants sont attendus).
+      - name: svelte-check
+        run: npm run check
+
+      - name: Build frontend
+        run: npm run build
+
+  backend:
+    name: Backend (clippy + tests)
+    # Windows obligatoire : les tests créent de vraies junctions et hardlinks
+    # (mklink /J), et l'app ne cible que Windows.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # `tauri-build` (build.rs) exige que `frontendDist` (../build) existe,
+      # même pour un simple `cargo test` : le front doit être construit avant.
+      - run: npm ci
+      - run: npm run build
+
+      - name: Clippy (warnings = erreurs)
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Tests
+        working-directory: src-tauri
+        run: cargo test
+
+  bundle:
+    name: Bundle (installateur)
+    runs-on: windows-latest
+    # Vérifie que l'app s'empaquette réellement. Ne publie rien : la
+    # distribution signée passe par release.yml, sur tag.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # `tauri build` enchaîne lui-même `beforeBuildCommand` (npm run build).
+      - name: Build installateur (non signé)
+        run: npm run tauri build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pitbox-installers-unsigned
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 7

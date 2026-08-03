@@ -294,7 +294,9 @@ Maquette de référence `pitbox-a-propos.html`. Contenu :
 
 ## 13. Conventions
 
-- **Langue de travail** : français.
+- **Langues** : le **code** (identifiants, commentaires, tests) est en anglais — l'app est destinée à être publique. Les échanges de travail et cette documentation restent en français. Les chaînes visibles par l'utilisateur ne sont **jamais** en dur : elles passent par l'i18n (`fr.json` + `en.json`).
+- **Erreurs remontées à l'UI** : ce sont des **clés i18n** (`errors.*`, constantes de `src-tauri/src/errors.rs`), pas des phrases — une phrase codée en dur ne se traduit pas. Le frontend les résout via `errorText()`. Les erreurs purement techniques (E/S, SQLite) restent en texte brut, comme diagnostic.
+- **Intégration continue** : `.github/workflows/ci.yml` (types, build, clippy `-D warnings`, tests, empaquetage) sur chaque push ; `release.yml` sur tag `v*`. Signature de l'installateur : voir `windows-code-signing.md`.
 - **Thème Rosso Corsa** : #d40000 sur fonds sombres (#08080c/#0d0d12), coins carrés, police mono pour les données, esthétique « pit garage » industrielle, logo « PITBOX » italique.
 - **Logos officiels** : dans les maquettes, monogrammes placeholder (on ne reproduit pas les logos de marque officiels) ; l'app réelle lit `ui/badge.png`.
 - **Tokens de design** en variables CSS ; Claude Code extrait les tokens et reproduit le look en composants Tauri (ne pas copier le HTML des maquettes inline).

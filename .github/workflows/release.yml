@@ -1,0 +1,69 @@
+name: Release
+
+# Publie les installateurs Windows sur un tag `v*` (ex. `v0.2.0`).
+# La release est créée en BROUILLON : on vérifie les binaires avant de publier.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # --- Signature Authenticode -------------------------------------------
+      # Inactive tant que les secrets ne sont pas renseignés : `tauri build`
+      # produit alors des binaires NON signés (Windows affichera l'écran
+      # SmartScreen « Éditeur inconnu »).
+      #
+      # Depuis juin 2023, une clé de signature publiquement reconnue doit vivre
+      # dans un HSM certifié FIPS 140-2 niveau 2 : un simple `.pfx` déposé dans
+      # les secrets GitHub n'est PLUS une option. Deux voies praticables en CI :
+      #
+      #  1. Azure Trusted Signing (~10 $/mois) — voie recommandée : la clé reste
+      #     chez Azure, la CI ne reçoit qu'un jeton. Renseigner les secrets
+      #     AZURE_* ci-dessous et décommenter l'étape.
+      #  2. SignPath (offre gratuite pour les projets open source).
+      #
+      # Voir docs/windows-code-signing.md pour la marche à suivre complète.
+      #
+      # - name: Signature (Azure Trusted Signing)
+      #   uses: azure/trusted-signing-action@v0
+      #   with:
+      #     azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+      #     azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      #     azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+      #     endpoint: ${{ secrets.AZURE_ENDPOINT }}
+      #     trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
+      #     certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
+      #     files-folder: ${{ github.workspace }}/src-tauri/target/release/bundle
+      #     files-folder-filter: msi,exe
+      #     file-digest: SHA256
+
+      - name: Build + release brouillon
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Pit Box ${{ github.ref_name }}
+          releaseDraft: true
+          prerelease: false
