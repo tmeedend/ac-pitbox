@@ -122,6 +122,135 @@ body {
   font-family: var(--mono);
 }
 
+/* --- Libellés : trois niveaux, et rien d'autre ---------------------------
+ *
+ * Un audit a compté 68 règles de libellé pour 53 apparences distinctes :
+ * 15 tailles de police, 7 interlettrages, 9 couleurs. La même fonction
+ * visuelle changeait donc de tête selon l'écran, et l'œil y lisait une
+ * hiérarchie qui n'existait pas.
+ *
+ *   .lbl-screen   titre d'écran        « Add-ons voiture », « Réglages »
+ *   .lbl          titre de rubrique    « TAGS », « VERSIONS », « PROVENANCE »
+ *   .lbl-key      clé de donnée        « PACK », « ARCHIVE », fiche technique
+ *
+ * `.lbl` reprend le traitement déjà majoritaire (8 composants) : c'est le
+ * moins de changement pour le plus de cohérence.
+ *
+ * La navigation garde son identité rouge (`.nsec` d'AppShell, 9px/2px) :
+ * c'est délibéré, elle n'est pas du contenu et la distinguer aide à
+ * s'orienter.
+ *
+ * Ces trois classes sont GLOBALES : ne pas les redéfinir dans un composant.
+ * C'est précisément ce qui avait produit six copies identiques de `.lbl`.
+ */
+.lbl-screen {
+  color: var(--txt2);
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+
+.lbl {
+  display: flex;
+  align-items: center;
+  color: var(--faint);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+/* Rubrique qui suit une autre dans la même colonne : respire davantage. */
+.lbl.section {
+  margin-top: 14px;
+}
+
+.lbl-key {
+  color: var(--faint);
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+
+/* --- Blocs : une rubrique = une carte ------------------------------------
+ *
+ * Toute rubrique se présente de la même façon : un bandeau de titre, puis un
+ * corps avec sa marge intérieure, le tout dans un encadré. Fini les rubriques
+ * « libres » (un simple libellé suivi de contenu) cohabitant avec des
+ * rubriques encadrées — c'est ce mélange qui donnait une hiérarchie illisible.
+ *
+ *   .blk        l'encadré
+ *   .blk-h      le bandeau de titre (titre à gauche, complément à droite)
+ *   .blk-t      le titre : rouge, mono, majuscules
+ *   .blk-n      le complément : gris, mono, majuscules — jamais essentiel
+ *   .blk-b      le corps, avec sa marge intérieure
+ *   .blk-sub    une sous-rubrique DANS un corps (gris, plus discret)
+ *
+ * Le complément (`.blk-n`) porte ce qui aide sans être nécessaire : un
+ * décompte, un rappel d'interaction. S'il devient indispensable à la
+ * compréhension, c'est qu'il n'a rien à faire là.
+ */
+.blk {
+  border: 1px solid var(--line);
+  /* Plus SOMBRE que le fond de page : c'est ce contraste qui détache la carte.
+     L'inverse (carte plus claire que la page) écrasait toute la hiérarchie. */
+  background: var(--panel2);
+  margin-bottom: 14px;
+}
+
+.blk-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.blk-t {
+  color: var(--rosso-bright);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.blk-n {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-align: right;
+}
+
+.blk-b {
+  padding: 16px;
+}
+
+.blk-sub {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+/* --- Titre de sous-écran --------------------------------------------------
+ *
+ * Un cran au-dessus de `.blk-t` : introduit une subdivision majeure d'un
+ * écran qui contient plusieurs cartes (ex. Skins / Sons / Couches dans
+ * « Add-ons voiture »), sans être elle-même une carte. Typographie seule —
+ * la marge et la bordure de séparation restent à la charge de l'appelant,
+ * car elles diffèrent selon que la subdivision ouvre l'écran ou le partage
+ * avec une précédente.
+ */
+.sec-t {
+  color: var(--rosso-bright);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
 button {
   font-family: inherit;
   cursor: pointer;

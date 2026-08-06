@@ -726,6 +726,7 @@
   {#if error}<div class="err">{error}</div>{/if}
 
   <div class="body">
+    <div class="sec-t">{t("launch.sessionTypeLabel")}</div>
     <div class="type-row">
       <div class="seg types">
         {#each sessionTypes as st}
@@ -746,7 +747,7 @@
         {#if setup.session_type === "race"}
           <!-- Adversaires (Course uniquement, §8.6) -->
           <section class="sect">
-            <div class="lbl">{t("launch.opponentsLabel")}</div>
+            <div class="sec-t">{t("launch.opponentsLabel")}</div>
             <div class="modes">
               {#each gridModes as m}
                 <button class="mode" class:on={gridMode === m.id} type="button" onclick={() => selectGridMode(m.id)}>
@@ -808,7 +809,7 @@
 
           <!-- Fourchette de niveau IA (§8.6) -->
           <section class="sect">
-            <div class="lbl">{t("launch.aiRangeLabel")}</div>
+            <div class="sec-t">{t("launch.aiRangeLabel")}</div>
             <div class="dual-range">
               <div class="dr-track"></div>
               <div class="dr-fill" style="left:{aiMinPct}%; right:{100 - aiMaxPct}%"></div>
@@ -825,7 +826,7 @@
 
         <!-- Simulation : actif quel que soit le type de session (§8.6) -->
         <section class="sect">
-          <div class="lbl">{t("launch.simulationLabel")} <span class="lbl-note">{t("launch.simulationNote")}</span></div>
+          <div class="sec-t">{t("launch.simulationLabel")} <span class="lbl-note">{t("launch.simulationNote")}</span></div>
           <div class="opt-row">
             <div class="opt">
               <div class="opt-head"><span class="opt-name">{t("launch.damageLabel")}</span><span class="opt-val mono">{setup.damage}%</span></div>
@@ -847,7 +848,7 @@
       <div>
         <!-- Météo en icônes SVG (§8.6) -->
         <section class="sect">
-          <div class="lbl">{t("launch.weather")}</div>
+          <div class="sec-t">{t("launch.weather")}</div>
           <div class="weather">
             {#each WEATHER_IDS as id}
               {@const opt = weathers.find((w) => w.id === id)}
@@ -934,7 +935,7 @@
              pertinentes quel que soit le type de session (§8.6), pas
              seulement en course — même logique que la section Simulation. -->
         <section class="sect">
-          <div class="lbl">{t("launch.assistsLabel")}</div>
+          <div class="sec-t">{t("launch.assistsLabel")}</div>
           <div class="checks">
             <label class="check"><input type="checkbox" bind:checked={setup.abs_auto} /><span>{t("launch.absAuto")}</span></label>
             <label class="check"><input type="checkbox" bind:checked={setup.traction_control_auto} /><span>{t("launch.tractionAuto")}</span></label>
@@ -947,7 +948,7 @@
 
           <!-- Options de course, toutes visibles (§8.6) -->
           <section class="sect">
-            <div class="lbl">{t("launch.raceOptions")}</div>
+            <div class="sec-t">{t("launch.raceOptions")}</div>
             <label class="grid-fields" style="margin-bottom:14px;">
               <NumberStepper min={1} max={99} bind:value={setup.laps} />
               <span class="fk">{t("launch.laps")}</span>
@@ -1016,12 +1017,12 @@
     top: 0;
     z-index: 10;
   }
+  /* Même traitement que le h2 de Transversal (« Add-ons voiture ») : un titre
+     d'écran se lit, il ne se murmure pas — l'ancien gris 15px capitales était
+     plus discret que les rubriques qu'il coiffe. */
   h1 {
-    font-size: 15px;
+    font-size: 18px;
     font-weight: 600;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    color: var(--muted);
     flex: 1;
   }
   .bar-actions {
@@ -1107,11 +1108,11 @@
   .sect {
     margin-bottom: 22px;
   }
-  .lbl {
-    color: var(--faint);
-    font-size: 9px;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
+  /* Typographie (rouge, mono, majuscules) portée par la classe globale
+     `.sec-t` (voir global.css) — même traitement que les rubriques de
+     « Add-ons voiture » et de la fiche détail. Seule la marge, propre à
+     cet écran, reste ici. */
+  .sec-t {
     margin-bottom: 10px;
   }
   .lbl-note {
@@ -1159,7 +1160,7 @@
   }
   .mode .md {
     font-size: 7.5px;
-    color: var(--faint);
+    color: var(--muted);
     margin-top: 2px;
   }
   .grid-fields {
@@ -1168,7 +1169,7 @@
     gap: 12px;
   }
   .fk {
-    color: var(--faint);
+    color: var(--muted);
     font-size: 9px;
     letter-spacing: 1px;
     text-transform: uppercase;
@@ -1222,7 +1223,7 @@
     white-space: nowrap;
   }
   .oppo-skin {
-    color: var(--faint);
+    color: var(--muted);
   }
   .oppo-force {
     width: 34px;
@@ -1322,7 +1323,7 @@
     margin-top: 4px;
   }
   .dr-vals span:nth-child(2) {
-    color: var(--faint);
+    color: var(--muted);
   }
 
   /* Sliders simples (dégâts/carburant/pneus/heure) */
@@ -1443,7 +1444,7 @@
     background: var(--panel2);
   }
   .imp .ik {
-    color: var(--faint);
+    color: var(--muted);
     font-size: 7.5px;
     letter-spacing: 1px;
     text-transform: uppercase;
@@ -1454,7 +1455,7 @@
     color: var(--green);
   }
   .implicit-note {
-    color: var(--faint);
+    color: var(--muted);
     font-size: 8px;
     margin-top: 6px;
   }

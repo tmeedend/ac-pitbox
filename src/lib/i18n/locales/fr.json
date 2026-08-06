@@ -223,10 +223,8 @@
     "triedYes": "Essayée ✓",
     "triedNo": "Jamais essayée",
     "engineSound": "Son moteur",
-    "soundHint": "exclusif — un seul",
     "soundOrigin": "Origine",
     "modTag": "MOD",
-    "noSounds": "Aucun mod de son importé pour cette voiture.",
     "soundRestorable": "son d'origine restaurable",
     "layoutsHint": "{count} · cliquer = layout de session",
     "chooseLayoutTooltip": "Choisir ce layout pour la session",
@@ -271,7 +269,15 @@
     "resourcesLabel": "Ressources ({count})",
     "resourcesNote": "Documentation et fichiers annexes du mod, rangés à part pour ne pas encombrer le jeu.",
     "resourceOpenTooltip": "Ouvrir avec l'application par défaut",
-    "noResources": "Aucun fichier annexe pour l'instant."
+    "noResources": "Aucun fichier annexe pour l'instant.",
+    "tagLegendCategory": "catégorie",
+    "tagLegendRule": "règle",
+    "tagLegendManual": "manuel",
+    "tagLegendMod": "fichier mod",
+    "installedOnTop": "version installée en tête",
+    "installedBadge": "installée",
+    "resourcesTitle": "Ressources",
+    "layersTitle": "Couches / extensions"
   },
   "history": {
     "event": {
@@ -409,7 +415,8 @@
     "assistsLabel": "Aides à la conduite",
     "absAuto": "ABS auto",
     "tractionAuto": "Antipatinage",
-    "idealLine": "Ligne idéale"
+    "idealLine": "Ligne idéale",
+    "sessionTypeLabel": "Type de session"
   },
   "config": {
     "acInstallOk": "Dossier Assetto Corsa trouvé.",
@@ -528,7 +535,6 @@
     "apply": "Appliquer"
   },
   "transversal": {
-    "soundSubtitle": "Tous les mods de son importés, rattachés à leur voiture. Le son est exclusif : un seul actif par voiture.",
     "skinSubtitle": "Tous les skins importés, rattachés à leur voiture. Stockés à part, projetés dans la voiture.",
     "trackSubtitle": "Tous les skins importés, rattachés à leur circuit. Stockés à part, projetés dans le circuit.",
     "layersTitle": "Couches / extensions",

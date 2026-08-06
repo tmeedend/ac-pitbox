@@ -223,10 +223,8 @@
     "triedYes": "Tried ✓",
     "triedNo": "Never tried",
     "engineSound": "Engine sound",
-    "soundHint": "exclusive — only one",
     "soundOrigin": "Original",
     "modTag": "MOD",
-    "noSounds": "No sound mod imported for this car.",
     "soundRestorable": "original sound can be restored",
     "layoutsHint": "{count} · click = session layout",
     "chooseLayoutTooltip": "Choose this layout for the session",
@@ -271,7 +269,15 @@
     "resourcesLabel": "Resources ({count})",
     "resourcesNote": "The mod's docs and extra files, kept aside so they don't clutter the game.",
     "resourceOpenTooltip": "Open with the default application",
-    "noResources": "No ancillary files yet."
+    "noResources": "No ancillary files yet.",
+    "tagLegendCategory": "category",
+    "tagLegendRule": "rule",
+    "tagLegendManual": "manual",
+    "tagLegendMod": "mod file",
+    "installedOnTop": "installed version on top",
+    "installedBadge": "installed",
+    "resourcesTitle": "Resources",
+    "layersTitle": "Layers / extensions"
   },
   "history": {
     "event": {
@@ -409,7 +415,8 @@
     "assistsLabel": "Driving aids",
     "absAuto": "ABS auto",
     "tractionAuto": "Traction control",
-    "idealLine": "Ideal line"
+    "idealLine": "Ideal line",
+    "sessionTypeLabel": "Session type"
   },
   "config": {
     "acInstallOk": "Assetto Corsa folder found.",
@@ -528,7 +535,6 @@
     "apply": "Apply"
   },
   "transversal": {
-    "soundSubtitle": "All imported sound mods, linked to their car. Sound is exclusive: only one active per car.",
     "skinSubtitle": "All imported skins, linked to their car. Stored separately, projected into the car.",
     "trackSubtitle": "All imported skins, linked to their track. Stored separately, projected into the track.",
     "layersTitle": "Layers / extensions",
