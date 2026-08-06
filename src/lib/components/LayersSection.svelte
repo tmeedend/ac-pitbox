@@ -98,7 +98,7 @@
 
 <section class="layers-sec">
   <div class="sec-head">
-    <h3>{t("transversal.layersTitle")}</h3>
+    <h3 class="sec-t">{t("transversal.layersTitle")}</h3>
     <p class="sub">{t("transversal.layersSubtitle")}</p>
   </div>
 
@@ -153,14 +153,10 @@
     border-top: 1px solid var(--line);
     max-width: 900px;
   }
-  .sec-head h3 {
-    font-size: 15px;
-    font-weight: 600;
-  }
   .sub {
     color: var(--muted);
     font-size: 12px;
-    margin-top: 4px;
+    margin-top: 8px;
   }
   .err {
     background: var(--rosso-dim);

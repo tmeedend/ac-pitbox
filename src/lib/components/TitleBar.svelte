@@ -6,6 +6,7 @@
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { t } from "$lib/i18n/index.svelte";
+  import { requestSection } from "$lib/nav.svelte";
 
   const win = getCurrentWindow();
   let maximized = $state(false);
@@ -39,6 +40,8 @@
     <span class="name">PIT BOX</span>
   </div>
   <div class="win-controls">
+    <!-- « À propos » : écran rarement ouvert, il encombrait la navigation. -->
+    <button class="wbtn help" type="button" title={t("nav.about")} onclick={() => requestSection("about")}>?</button>
     <button class="wbtn" type="button" title={t("titlebar.minimize")} onclick={minimize}>
       <svg viewBox="0 0 10 10"><line x1="1.5" y1="8.5" x2="8.5" y2="8.5" /></svg>
     </button>
@@ -97,6 +100,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+  .wbtn.help {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .wbtn.help:hover {
+    color: var(--rosso-bright);
   }
   .wbtn:hover {
     background: var(--raised);

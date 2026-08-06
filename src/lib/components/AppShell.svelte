@@ -29,13 +29,12 @@
   // Barre latérale unifiée (maquette pitbox-biblio-session2.html) : bloc
   // SESSION (le duo sélectionné = point d'accès aux bibliothèques) puis
   // ADD-ONS et ATELIER en deux colonnes.
-  type NavBtn = { id: string; labelKey: string; full?: boolean; action?: boolean };
+  type NavBtn = { id: string; labelKey: string; action?: boolean };
   const addons: NavBtn[] = [
     { id: "carskins", labelKey: "nav.carAddons" },
     { id: "trackskins", labelKey: "nav.trackAddons" },
-    { id: "sounds", labelKey: "nav.sounds" },
     { id: "others", labelKey: "nav.others" },
-    { id: "apps", labelKey: "nav.apps", full: true },
+    { id: "apps", labelKey: "nav.apps" },
   ];
   const atelier: NavBtn[] = [
     { id: "rules", labelKey: "nav.rules" },
@@ -44,8 +43,9 @@
     { id: "maintenance", labelKey: "nav.maintenance" },
     // Action directe, pas un écran : n'affecte jamais nav.section.
     { id: "opencm", labelKey: "nav.openCm", action: true },
-    { id: "settings", labelKey: "nav.settings", full: true },
-    { id: "about", labelKey: "nav.about", full: true },
+    // Réglages partage la ligne d'Ouvrir CM ; « À propos » vit désormais
+    // dans la barre de titre (icône ?), pas dans la navigation.
+    { id: "settings", labelKey: "nav.settings" },
   ];
 
   async function handleAtelierClick(b: NavBtn) {
@@ -300,14 +300,14 @@
       <div class="nsec">{t("nav.addons")}</div>
       <div class="navgrid">
         {#each addons as b}
-          <button class="nb" class:full={b.full} class:on={nav.section === b.id} onclick={() => requestSection(b.id)}>{t(b.labelKey)}</button>
+          <button class="nb" class:on={nav.section === b.id} onclick={() => requestSection(b.id)}>{t(b.labelKey)}</button>
         {/each}
       </div>
 
       <div class="nsec">{t("nav.atelier")}</div>
       <div class="navgrid">
         {#each atelier as b}
-          <button class="nb" class:full={b.full} class:on={!b.action && nav.section === b.id} onclick={() => handleAtelierClick(b)}>{t(b.labelKey)}</button>
+          <button class="nb" class:on={!b.action && nav.section === b.id} onclick={() => handleAtelierClick(b)}>{t(b.labelKey)}</button>
         {/each}
       </div>
     </aside>
@@ -335,8 +335,6 @@
         <Transversal variant="car" />
       {:else if nav.section === "trackskins"}
         <Transversal variant="track" />
-      {:else if nav.section === "sounds"}
-        <Transversal variant="sound" />
       {:else if nav.section === "apps"}
         <Apps />
       {:else if nav.section === "others"}
@@ -598,9 +596,6 @@
   .nb.on {
     background: var(--raised);
     color: var(--rosso-bright);
-  }
-  .nb.full {
-    grid-column: 1 / -1;
   }
 
   .content {
