@@ -51,69 +51,58 @@
   }
 </script>
 
-<div class="lbl section">{t("detail.resourcesLabel", { count: files.length })}</div>
-{#if files.length}
-  <div class="prov-note">{t("detail.resourcesNote")}</div>
-  <ul class="res-list">
-    {#each files as f (f.rel_path)}
-      <li>
-        <button class="res-row" type="button" onclick={() => open(f)} title={t("detail.resourceOpenTooltip")}>
-          <span class="res-nm">{f.rel_path}</span>
-          <span class="res-size mono">{fmtFileSize(f.size_bytes)}</span>
-        </button>
-      </li>
-    {/each}
-  </ul>
-{:else}
-  <div class="muted small">{t("detail.noResources")}</div>
-{/if}
+<section class="blk">
+  <header class="blk-h">
+    <span class="blk-t">{t("detail.resourcesTitle")}</span>
+    <span class="blk-n">{files.length}</span>
+  </header>
+  <div class="blk-b">
+    {#if files.length}
+      <p class="note">{t("detail.resourcesNote")}</p>
+      <ul class="res-list">
+        {#each files as f (f.rel_path)}
+          <li>
+            <button class="res-row" type="button" onclick={() => open(f)} title={t("detail.resourceOpenTooltip")}>
+              <span class="res-nm">{f.rel_path}</span>
+              <span class="res-size mono">{fmtFileSize(f.size_bytes)}</span>
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {:else}
+      <p class="empty">{t("detail.noResources")}</p>
+    {/if}
+  </div>
+</section>
 
 <style>
-  /* Styles repris de la fiche : le CSS Svelte étant scopé par composant, un
-     bloc extrait doit emporter les siens. */
-  .lbl {
-    color: var(--faint);
-    font-size: 9px;
-    letter-spacing: 1.5px;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    text-transform: uppercase;
-  }
-  .lbl.section {
-    margin-top: 14px;
-  }
-  .muted {
-    color: var(--muted);
-  }
-  .small {
-    font-size: 11px;
-  }
-  .prov-note {
-    margin-top: 8px;
-    background: var(--blue-dim);
-    border: 1px solid var(--blue-border);
+  /* Habillage propre au bloc. Encadré et bandeau viennent des classes
+     globales `.blk*` (voir global.css). */
+  .note {
     color: var(--blue);
-    font-size: 9px;
     font-family: var(--mono);
-    padding: 6px 9px;
+    font-size: 10.5px;
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+  .empty {
+    color: var(--muted);
+    font-size: 12px;
   }
   .res-list {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    margin: 6px 0 0;
-    padding: 0;
+    gap: 6px;
   }
   .res-row {
     width: 100%;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     border: 1px solid var(--line);
-    background: var(--panel2);
-    padding: 5px 9px;
+    background: var(--raised);
+    padding: 8px 11px;
     text-align: left;
     cursor: pointer;
   }
@@ -123,7 +112,7 @@
   .res-nm {
     flex: 1;
     min-width: 0;
-    font-size: 11px;
+    font-size: 12px;
     color: var(--txt2);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -134,7 +123,7 @@
   }
   .res-size {
     flex: none;
-    font-size: 9px;
+    font-size: 10.5px;
     color: var(--muted2);
   }
 </style>

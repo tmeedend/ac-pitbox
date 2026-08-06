@@ -38,7 +38,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import LayersBlock from "./detail/LayersBlock.svelte";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
-  import TrackingBlock from "./detail/TrackingBlock.svelte";
+  import HistoryBlock from "./detail/HistoryBlock.svelte";
   import ProvenanceBlock from "./detail/ProvenanceBlock.svelte";
   import TagsBlock from "./detail/TagsBlock.svelte";
 
@@ -613,47 +613,56 @@
         {#if isCar}
           {@const hasCurve = !!d.specs && d.specs.power_curve.length > 1}
           <div class="tech-curve" class:with-curve={hasCurve}>
-            <div class="box fiche">
-              <div class="box-h">{t("detail.techSheet")}</div>
+            <section class="blk fiche">
+              <header class="blk-h"><span class="blk-t">{t("detail.techSheet")}</span></header>
               <div class="specgrid">
                 {#each ficheRows(d) as [k, v]}
-                  <div><div class="k">{k}</div><div class="v">{v}</div></div>
+                  <div><div class="k lbl-key">{k}</div><div class="v">{v}</div></div>
                 {/each}
               </div>
-            </div>
+            </section>
             {#if hasCurve && d.specs}
-              <div class="curve-col">
-                <div class="lbl">
-                  {t("detail.curve")}
-                  <span class="legend"><span class="lg-pow">— bhp</span><span class="lg-tor">— Nm</span></span>
-                </div>
-                <div class="curve-box">
+              <section class="blk curve-col">
+                <header class="blk-h">
+                  <span class="blk-t">{t("detail.curve")}</span>
+                  <span class="blk-n"><span class="lg-pow">— bhp</span> <span class="lg-tor">— Nm</span></span>
+                </header>
+                <div class="blk-b curve-box">
                   <PowerCurve power={d.specs.power_curve} torque={d.specs.torque_curve} />
                 </div>
-              </div>
+              </section>
             {/if}
           </div>
 
           {#if d.specs?.description}
-            <div class="box-h">{t("common.description")}</div>
-            <div class="desc-body">{decodeDescription(d.specs.description)}</div>
+            <section class="blk">
+              <header class="blk-h"><span class="blk-t">{t("common.description")}</span></header>
+              <div class="blk-b desc-body">{decodeDescription(d.specs.description)}</div>
+            </section>
           {/if}
         {:else}
           {@const lay = d.track?.layouts[previewLayout]}
-          <div class="box">
-            <div class="box-h">{t("detail.trackInfo")}</div>
+          <section class="blk">
+            <header class="blk-h"><span class="blk-t">{t("detail.trackInfo")}</span></header>
             <div class="specgrid" style="grid-template-columns:1fr 1fr;">
-              <div><div class="k">{t("detail.layoutLabel")}</div><div class="v">{lay?.name ?? t("detail.defaultLayout")}</div></div>
-              <div><div class="k">{t("detail.lengthLabel")}</div><div class="v">{lay?.length ?? "—"}</div></div>
+              <div><div class="k lbl-key">{t("detail.layoutLabel")}</div><div class="v">{lay?.name ?? t("detail.defaultLayout")}</div></div>
+              <div><div class="k lbl-key">{t("detail.lengthLabel")}</div><div class="v">{lay?.length ?? "—"}</div></div>
             </div>
-          </div>
+          </section>
           {#if d.csp_features.length}
-            <div class="lbl">{t("columns.csp")}</div>
-            <div class="csp-row">{#each d.csp_features as f}<span class="csp">{f}</span>{/each}</div>
+            <section class="blk">
+              <header class="blk-h">
+                <span class="blk-t">{t("columns.csp")}</span>
+                <span class="blk-n">{d.csp_features.length}</span>
+              </header>
+              <div class="blk-b csp-row">{#each d.csp_features as f}<span class="csp">{f}</span>{/each}</div>
+            </section>
           {/if}
           {#if d.track?.description}
-            <div class="box-h" style="margin-top:11px;">{t("common.description")}</div>
-            <div class="desc-body">{decodeDescription(d.track.description)}</div>
+            <section class="blk">
+              <header class="blk-h"><span class="blk-t">{t("common.description")}</span></header>
+              <div class="blk-b desc-body">{decodeDescription(d.track.description)}</div>
+            </section>
           {/if}
         {/if}
       </div>
@@ -664,9 +673,11 @@
       {#if isCar}
         <!-- Skins : le skin sélectionné devient le skin de session (§8.6), mémorisé -->
         <div class="col">
-          <div class="lbl">
-            {t("detail.skinsLabel")} <span class="lbl-sub">{t("detail.skinsHint", { count: skins.length })}</span>
-          </div>
+          <section class="blk">
+            <header class="blk-h">
+              <span class="blk-t">{t("detail.skinsLabel")}</span>
+              <span class="blk-n">{t("detail.skinsHint", { count: skins.length })}</span>
+            </header>
           {#if skins.length}
             <div class="skins">
               {#each skins as sk, i (sk.id)}
@@ -688,21 +699,26 @@
               {/each}
             </div>
           {:else}
-            <div class="muted small">{t("detail.noSkins")}</div>
+            <div class="blk-b muted small">{t("detail.noSkins")}</div>
           {/if}
+          </section>
         </div>
 
         <!-- Distance + Son : placeholders « à venir » désactivés -->
         <div class="col">
-          <div class="lbl">{t("detail.distanceLabel")}</div>
-          <div class="box">
+          <section class="blk">
+            <header class="blk-h"><span class="blk-t">{t("detail.distanceLabel")}</span></header>
+            <div class="blk-b">
             <div class="dist">
               <span class="dist-ic">🛣</span>
               <span class="dist-km mono">{d.distance_km != null ? `${d.distance_km.toFixed(1)} km` : "—"}</span>
               <span class="dist-state mono" class:on={d.tried}>{d.tried ? t("detail.triedYes") : t("detail.triedNo")}</span>
             </div>
-          </div>
-          <div class="lbl" style="margin-top:14px;">{t("detail.engineSound")} <span class="lbl-sub">{t("detail.soundHint")}</span></div>
+            </div>
+          </section>
+          <section class="blk">
+            <header class="blk-h"><span class="blk-t">{t("detail.engineSound")}</span></header>
+            <div class="blk-b">
           <div class="sounds">
             <button class="sound" class:sel={!activeSound} type="button" onclick={() => pickSound(null)} disabled={soundBusy}>
               <span class="radio"></span>
@@ -717,28 +733,32 @@
               </button>
             {/each}
           </div>
-          {#if sounds.length === 0}
-            <div class="muted small" style="margin-top:6px;">{t("detail.noSounds")}</div>
-          {:else}
+          <!-- L'exclusivité et l'absence de mod se lisent sur les boutons radio
+               eux-mêmes : « Origine » seule et cochée dit tout. -->
+          {#if sounds.length > 0}
             <div class="restore-note">↺ {t("detail.soundRestorable")}</div>
           {/if}
+            </div>
+          </section>
 
           <TagsBlock detail={d} onaddtag={addManual} onremovetag={removeManual} />
+          <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
         </div>
 
         <!-- Versions + Historique + Provenance -->
         <div class="col">
-          <TrackingBlock detail={d} {busy} onactivateversion={(vid) => activate(vid)} />
+          <HistoryBlock detail={d} {busy} onactivateversion={(vid) => activate(vid)} />
           <ProvenanceBlock detail={d} {siblings} busy={packBusy} onfilterbypack={filterByPack} onopensibling={openSibling} onuninstallpack={uninstallPack} />
           <LayersBlock modId={id} onchanged={refreshEntity} onerror={(m) => (actionError = m)} />
-          <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
         </div>
       {:else}
         <!-- Layouts (galerie illustrée par le tracé, comme les skins voiture) -->
         <div class="col">
-          <div class="lbl">
-            {t("columns.layouts")} <span class="lbl-sub">{t("detail.layoutsHint", { count: d.track?.layouts.length ?? 0 })}</span>
-          </div>
+          <section class="blk">
+            <header class="blk-h">
+              <span class="blk-t">{t("columns.layouts")}</span>
+              <span class="blk-n">{t("detail.layoutsHint", { count: d.track?.layouts.length ?? 0 })}</span>
+            </header>
           {#if d.track && d.track.layouts.length}
             <div class="skins">
               {#each d.track.layouts as l, i (l.id || i)}
@@ -753,14 +773,18 @@
               {/each}
             </div>
           {:else}
-            <div class="muted small">{t("detail.singleLayout")}</div>
+            <div class="blk-b muted small">{t("detail.singleLayout")}</div>
           {/if}
+          </section>
 
           <!-- Skins de circuit (TRACK_SKIN) — activables individuellement, plusieurs
                à la fois (§4.6bis, pas de notion d'exclusivité côté CSP). -->
-          <div class="lbl section">
-            {trackSkinsLoading ? t("detail.trackSkinsLabelPlain") : t("detail.trackSkinsLabel", { count: trackSkins.length })}
-          </div>
+          <section class="blk">
+            <header class="blk-h">
+              <span class="blk-t">{t("detail.trackSkinsLabelPlain")}</span>
+              {#if !trackSkinsLoading}<span class="blk-n">{trackSkins.length}</span>{/if}
+            </header>
+            <div class="blk-b">
           {#if trackSkinsLoading}
             <div class="muted small loading-inline"><span class="spinner-sm"></span>{t("common.loading")}</div>
           {:else if trackSkins.length}
@@ -785,29 +809,31 @@
           {:else}
             <div class="muted small">{t("detail.noTrackSkins")}</div>
           {/if}
+            </div>
+          </section>
         </div>
 
-        <!-- Distance + Auteur + Tags -->
+        <!-- Distance + Tags (l'auteur vit désormais dans Source / origine) -->
         <div class="col">
-          <div class="lbl">{t("detail.distanceLabel")}</div>
-          <div class="box">
+          <section class="blk">
+            <header class="blk-h"><span class="blk-t">{t("detail.distanceLabel")}</span></header>
+            <div class="blk-b">
             <div class="dist">
               <span class="dist-ic">🛣</span>
               <span class="dist-km mono">{d.distance_km != null ? `${d.distance_km.toFixed(1)} km` : "—"}</span>
               <span class="dist-state mono" class:on={d.tried}>{d.tried ? t("detail.triedYes") : t("detail.triedNo")}</span>
             </div>
-          </div>
-          <div class="lbl">{t("detail.authorLabel")}</div>
-          <div class="box">{d.author ?? "—"}</div>
+            </div>
+          </section>
           <TagsBlock detail={d} onaddtag={addManual} onremovetag={removeManual} />
+          <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
         </div>
 
         <!-- Versions + Historique + Provenance -->
         <div class="col">
-          <TrackingBlock detail={d} {busy} onactivateversion={(vid) => activate(vid)} />
+          <HistoryBlock detail={d} {busy} onactivateversion={(vid) => activate(vid)} />
           <ProvenanceBlock detail={d} {siblings} busy={packBusy} onfilterbypack={filterByPack} onopensibling={openSibling} onuninstallpack={uninstallPack} />
           <LayersBlock modId={id} onchanged={refreshEntity} onerror={(m) => (actionError = m)} />
-          <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
         </div>
       {/if}
     </div>
@@ -819,7 +845,7 @@
   .page {
     margin: -28px -32px;
     min-height: 100%;
-    background: var(--panel);
+    background: var(--card);
   }
   .empty {
     color: var(--muted);
@@ -1028,12 +1054,8 @@
     margin-top: 3px;
   }
   .data {
-    background: var(--panel);
+    background: var(--card);
     padding: 14px;
-  }
-  .box {
-    border: 1px solid var(--line);
-    margin-bottom: 12px;
   }
   /* Fiche technique + courbe carrée côte à côte (§5bis.1). */
   .tech-curve {
@@ -1056,21 +1078,8 @@
     max-width: 260px;
     min-width: 0;
   }
-  .curve-col .lbl {
-    margin-bottom: 6px;
-  }
-  .box-h {
-    background: var(--raised);
-    padding: 5px 10px;
-    border-bottom: 1px solid var(--line);
-    color: var(--muted);
-    font-size: 9px;
-    letter-spacing: 1.5px;
-    display: flex;
-    align-items: center;
-    width: 100%;
-    text-align: left;
-  }
+  /* Bandeau de tête d'encadré : c'est une rubrique (`.lbl`), simplement
+     rendue en bandeau — d'où l'habillage local et la marge basse annulée. */
   .specgrid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
@@ -1082,39 +1091,12 @@
     padding: 7px 10px;
   }
   .specgrid .k {
-    color: var(--faint);
-    font-size: 8px;
-    letter-spacing: 1px;
     margin-bottom: 3px;
   }
   .specgrid .v {
     color: var(--txt2);
     font-size: 11px;
     font-family: var(--mono);
-  }
-  .lbl {
-    color: var(--faint);
-    font-size: 9px;
-    letter-spacing: 1.5px;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    text-transform: uppercase;
-  }
-  .lbl.section {
-    margin-top: 14px;
-  }
-  .lbl-sub {
-    color: var(--muted);
-    text-transform: none;
-    letter-spacing: 0;
-    margin-left: 6px;
-    font-size: 9px;
-  }
-  .legend {
-    margin-left: auto;
-    display: flex;
-    gap: 8px;
   }
   .lg-pow {
     color: var(--rosso-bright);
@@ -1150,7 +1132,7 @@
   }
 
   .col {
-    background: var(--panel);
+    background: var(--card);
     padding: 14px;
   }
 

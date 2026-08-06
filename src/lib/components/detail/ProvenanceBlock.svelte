@@ -1,12 +1,19 @@
 <script lang="ts">
-  // Bloc « Provenance » de la fiche détail (§4.7) : d'où vient ce mod — pack
-  // d'origine, archive source, URL — et les autres entités du même pack.
+  // Bloc « Source / origine » de la fiche détail (§4.7) : d'où vient ce mod.
+  //
+  // Plusieurs rubriques ont fusionné ici — auteur, archive, date de publication,
+  // pack d'origine — parce qu'elles répondent toutes à la même question « d'où
+  // vient ce mod ». Le sous-titre « Provenance du mod » qui doublait le titre a
+  // disparu : deux en-têtes empilés pour un seul contenu n'apportaient rien.
+  // L'auteur n'avait sa propre carte que côté circuit ; il n'était nulle part
+  // côté voiture — les deux affichent désormais la même ligne.
   //
   // Présentationnel : les trois actions (filtrer par pack, ouvrir une entité
   // sœur, désinstaller le pack) sont déléguées au parent, qui possède la
   // navigation, la bannière d'erreur et la fermeture de la fiche. Désinstaller
   // un pack ferme la page — ça ne peut pas se décider ici.
   import type { ModCard, ModDetail } from "$lib/library";
+  import { previewSrc } from "$lib/library";
   import { t } from "$lib/i18n/index.svelte";
 
   let {
@@ -31,186 +38,176 @@
   const archive = $derived(
     detail.versions.find((v) => v.id === detail.active_version_id)?.source_archive ?? null,
   );
+
+  /** Date seule : l'heure d'une date estimée n'a aucun sens (§6.2). */
+  function fmtDay(iso: string): string {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? iso.slice(0, 10) : d.toLocaleDateString();
+  }
 </script>
 
-{#if detail.source_pack || archive || detail.source_url}
-  <div class="lbl section">{t("detail.sourceLabel")}</div>
-  <div class="srcbox">
-    <div class="src-h">{t("detail.provenanceTitle")}</div>
-    {#if detail.source_pack}
-      <div class="srcrow">
-        <span class="src-k">{t("detail.packLabel")}</span>
-        <button class="chip" type="button" onclick={onfilterbypack} title={t("detail.viewPackTooltip")}>
-          ⬢ {detail.source_pack}
-          <span class="chip-n">· {t("detail.modCount", { count: siblings.length + 1 })}</span>
-        </button>
+<section class="blk">
+  <header class="blk-h">
+    <span class="blk-t">{t("detail.sourceLabel")}</span>
+  </header>
+  <div class="blk-b">
+    <dl class="rows">
+      <div class="row">
+        <dt>{t("detail.authorLabel")}</dt>
+        <dd class="mono">{detail.author ?? "—"}</dd>
       </div>
-    {/if}
-    <div class="srcrow">
-      <span class="src-k">{t("detail.archiveLabel")}</span>
-      <span class="src-v">{archive ?? "—"}</span>
-    </div>
-    <div class="srcrow">
-      <span class="src-k">{t("detail.originUrlLabel")}</span>
-      {#if detail.source_url}
-        <span class="src-v url">{detail.source_url}</span>
-      {:else}
-        <span class="src-empty">{t("detail.noUrl")}</span>
-      {/if}
-    </div>
-  </div>
+      <div class="row">
+        <dt>{t("detail.archiveLabel")}</dt>
+        <dd class="mono">{archive ?? "—"}</dd>
+      </div>
+      <div class="row">
+        <dt>{t("detail.publishedLabel")}</dt>
+        <dd class="mono">
+          {#if detail.published_at}
+            {fmtDay(detail.published_at)} <span class="hint">({t("detail.estimated")})</span>
+          {:else}
+            —
+          {/if}
+        </dd>
+      </div>
+      <div class="row">
+        <dt>{t("detail.originUrlLabel")}</dt>
+        <dd class="mono">
+          {#if detail.source_url}
+            <span class="url">{detail.source_url}</span>
+          {:else}
+            <span class="hint">{t("detail.noUrl")}</span>
+          {/if}
+        </dd>
+      </div>
+    </dl>
 
-  {#if detail.source_pack}
-    <div class="lbl section">{t("detail.siblingsLabel", { count: siblings.length })}</div>
-    {#if siblings.length}
-      <div class="siblings">
-        {#each siblings as c (c.id_interne)}
-          <button class="sib" type="button" onclick={() => onopensibling(c)} title={t("detail.openSheetTooltip")}>
-            <span class="sib-dot">{c.kind === "Track" ? "🏁" : "🚗"}</span>
-            <span class="sib-nm">{c.display_name ?? c.id_interne}</span>
+    {#if detail.source_pack}
+      <div class="pack">
+        <div class="blk-sub">{t("detail.siblingsLabel", { count: siblings.length })}</div>
+        {#if siblings.length}
+          <div class="siblings">
+            {#each siblings as c (c.id_interne)}
+              {@const img = previewSrc(c.preview)}
+              <button class="sib" type="button" onclick={() => onopensibling(c)} title={t("detail.openSheetTooltip")}>
+                <span class="sib-img">
+                  {#if img}<img src={img} alt="" loading="lazy" />{:else}<span class="sib-none">{c.kind === "Track" ? "🏁" : "🚗"}</span>{/if}
+                </span>
+                <span class="sib-nm">{c.display_name ?? c.id_interne}</span>
+              </button>
+            {/each}
+          </div>
+        {:else}
+          <div class="hint">{t("detail.onlyEntity")}</div>
+        {/if}
+        <div class="actions">
+          <button class="btn" type="button" onclick={onfilterbypack}>{t("detail.filterByPack")}</button>
+          <button class="btn danger" type="button" onclick={onuninstallpack} disabled={busy}>
+            {busy ? t("common.working") : t("detail.uninstallPack")}
           </button>
-        {/each}
+        </div>
       </div>
-    {:else}
-      <div class="muted small">{t("detail.onlyEntity")}</div>
     {/if}
-    <div class="prov-note">{t("detail.packNote")}</div>
-    <div class="prov-actions">
-      <button class="btn" type="button" onclick={onfilterbypack}>⌕ {t("detail.filterByPack")}</button>
-      <button class="btn danger" type="button" onclick={onuninstallpack} disabled={busy}>
-        {busy ? t("common.working") : `🗑 ${t("detail.uninstallPack")}`}
-      </button>
-    </div>
-  {/if}
-{/if}
+  </div>
+</section>
 
 <style>
-  /* Styles repris de la fiche : le CSS Svelte étant scopé par composant, un
-     bloc extrait doit emporter les siens (voir l'en-tête de global.css). */
-  .lbl {
-    color: var(--faint);
-    font-size: 9px;
-    letter-spacing: 1.5px;
-    margin-bottom: 8px;
+  /* Habillage propre au bloc. L'encadré, le bandeau et la sous-rubrique
+     viennent des classes globales `.blk*` (voir global.css). */
+  .rows {
     display: flex;
-    align-items: center;
-    text-transform: uppercase;
+    flex-direction: column;
+    gap: 10px;
   }
-  .lbl.section {
-    margin-top: 14px;
-  }
-  .muted {
-    color: var(--muted);
-  }
-  .small {
-    font-size: 11px;
-  }
-  .srcbox {
-    border: 1px solid var(--line);
-  }
-  .src-h {
-    background: var(--raised);
-    padding: 5px 10px;
-    border-bottom: 1px solid var(--line);
-    color: var(--muted);
-    font-size: 8px;
-    letter-spacing: 1.5px;
-  }
-  .srcrow {
+  /* Clé à gauche, valeur alignée à droite : les valeurs (noms d'archive,
+     dates) se comparent d'un coup d'œil quand elles partagent un bord. */
+  .row {
     display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 8px 11px;
-    border-bottom: 1px solid var(--line);
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
   }
-  /* Sans ça, l'encadré affiche un double filet en bas (sa bordure + celle de
-     la dernière ligne). */
-  .srcrow:last-child {
-    border-bottom: none;
+  .row dt {
+    color: var(--muted);
+    font-size: 12px;
+    flex: none;
   }
-  .src-k {
-    color: var(--faint);
-    font-size: 8px;
-    letter-spacing: 1px;
-    width: 84px;
-    flex-shrink: 0;
-  }
-  .src-v {
-    font-size: 10.5px;
-    font-family: var(--mono);
+  .row dd {
     color: var(--txt2);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font-size: 11.5px;
+    text-align: right;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
-  .src-v.url {
-    color: var(--blue);
-  }
-  .src-empty {
+  .hint {
     color: var(--muted2);
-    font-size: 9.5px;
-    font-family: var(--mono);
+    font-size: 11px;
     font-style: italic;
   }
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    font-size: 10px;
-    font-family: var(--mono);
-    padding: 3px 9px;
+  .url {
+    color: var(--blue);
   }
-  .chip .chip-n {
-    color: var(--muted);
+  .pack {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
   }
   .siblings {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1px;
-    background: var(--line);
-    border: 1px solid var(--line);
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
   }
   .sib {
-    background: var(--card);
-    padding: 7px 9px;
-    display: flex;
-    align-items: center;
-    gap: 7px;
+    background: transparent;
+    padding: 0;
     text-align: left;
   }
-  .sib:hover {
-    background: var(--raised);
+  .sib-img {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 16 / 9;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    overflow: hidden;
   }
-  .sib-dot {
-    font-size: 13px;
-    flex: none;
+  .sib-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .sib:hover .sib-img {
+    border-color: var(--rosso-border);
+  }
+  .sib-none {
+    font-size: 18px;
   }
   .sib-nm {
-    font-size: 9.5px;
+    display: block;
+    margin-top: 5px;
+    font-size: 11px;
     color: var(--txt2);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .prov-note {
-    margin-top: 8px;
-    background: var(--blue-dim);
-    border: 1px solid var(--blue-border);
-    color: var(--blue);
-    font-size: 9px;
+  .sib:hover .sib-nm {
+    color: var(--rosso-bright);
+  }
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .actions .btn {
+    justify-content: center;
+    text-align: center;
     font-family: var(--mono);
-    padding: 6px 9px;
-  }
-  .prov-actions {
-    display: flex;
-    gap: 7px;
-    margin-top: 10px;
-  }
-  .btn.danger {
-    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 11px;
   }
   .btn.danger:hover {
     border-color: var(--rosso-border);

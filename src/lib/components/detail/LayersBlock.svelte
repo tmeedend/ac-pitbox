@@ -68,73 +68,52 @@
   const ordered = $derived([...layers].reverse());
 </script>
 
+<!-- Sans couche, la rubrique n'a rien à dire : on ne montre pas une carte vide. -->
 {#if layers.length}
-  <div class="lbl section">{t("detail.layersLabel", { count: layers.length })}</div>
-  <div class="prov-note">{t("detail.layersNote")}</div>
-  <ul class="layer-list">
-    {#each ordered as l, i (l.id)}
-      <li class="layer-row" class:inactive={!l.is_active}>
-        <label class="layer-tog" title={l.is_active ? t("detail.layerActiveOn") : t("detail.layerActiveOff")}>
-          <input type="checkbox" checked={l.is_active} disabled={busy} onchange={() => toggle(l)} />
-        </label>
-        <div class="layer-main">
-          <span class="layer-nm">{l.source_archive ?? l.name}</span>
-          <span class="layer-counts mono">
-            {t("detail.layerCounts", { added: l.added_count, overwritten: l.overwritten_count })}
-          </span>
-        </div>
-        <div class="layer-ord">
-          <button
-            class="layer-arrow"
-            type="button"
-            title={t("detail.layerUp")}
-            disabled={busy || i === 0}
-            onclick={() => move(l, "up")}>▲</button
-          >
-          <button
-            class="layer-arrow"
-            type="button"
-            title={t("detail.layerDown")}
-            disabled={busy || i === ordered.length - 1}
-            onclick={() => move(l, "down")}>▼</button
-          >
-        </div>
-        <button
-          class="layer-x"
-          type="button"
-          title={t("detail.layerDeleteTitle")}
-          disabled={busy}
-          onclick={() => remove(l)}>✕</button
-        >
-      </li>
-    {/each}
-  </ul>
-  <div class="prov-note">{t("detail.layersRecomposeNote")}</div>
+  <section class="blk">
+    <header class="blk-h">
+      <span class="blk-t">{t("detail.layersTitle")}</span>
+      <span class="blk-n">{layers.length}</span>
+    </header>
+    <div class="blk-b">
+      <p class="note">{t("detail.layersNote")}</p>
+      <ul class="layer-list">
+        {#each ordered as l, i (l.id)}
+          <li class="layer-row" class:inactive={!l.is_active}>
+            <label class="layer-tog" title={l.is_active ? t("detail.layerActiveOn") : t("detail.layerActiveOff")}>
+              <input type="checkbox" checked={l.is_active} disabled={busy} onchange={() => toggle(l)} />
+            </label>
+            <div class="layer-main">
+              <span class="layer-nm">{l.source_archive ?? l.name}</span>
+              <span class="layer-counts mono">
+                {t("detail.layerCounts", { added: l.added_count, overwritten: l.overwritten_count })}
+              </span>
+            </div>
+            <div class="layer-ord">
+              <button class="layer-arrow" type="button" title={t("detail.layerUp")} disabled={busy || i === 0} onclick={() => move(l, "up")}>▲</button>
+              <button class="layer-arrow" type="button" title={t("detail.layerDown")} disabled={busy || i === ordered.length - 1} onclick={() => move(l, "down")}>▼</button>
+            </div>
+            <button class="layer-x" type="button" title={t("detail.layerDeleteTitle")} disabled={busy} onclick={() => remove(l)}>✕</button>
+          </li>
+        {/each}
+      </ul>
+      <p class="note last">{t("detail.layersRecomposeNote")}</p>
+    </div>
+  </section>
 {/if}
 
 <style>
-  /* `.lbl` et `.prov-note` sont repris de la fiche : le CSS Svelte étant
-     scopé par composant, un bloc extrait doit emporter ses styles. */
-  .lbl {
-    color: var(--faint);
-    font-size: 9px;
-    letter-spacing: 1.5px;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    text-transform: uppercase;
-  }
-  .lbl.section {
-    margin-top: 14px;
-  }
-  .prov-note {
-    margin-top: 8px;
-    background: var(--blue-dim);
-    border: 1px solid var(--blue-border);
+  /* Habillage propre au bloc. Encadré et bandeau viennent des classes
+     globales `.blk*` (voir global.css). */
+  .note {
     color: var(--blue);
-    font-size: 9px;
     font-family: var(--mono);
-    padding: 6px 9px;
+    font-size: 10.5px;
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+  .note.last {
+    margin: 12px 0 0;
   }
   .layer-list {
     list-style: none;
