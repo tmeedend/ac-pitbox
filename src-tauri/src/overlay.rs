@@ -167,6 +167,18 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             version_id TEXT NOT NULL
         );
 
+        -- Autres mods (§6.1bis) et Apps (§12bis.4) capturés par un profil : ni
+        -- l'un ni l'autre n'a de notion de version (juste actif/inactif), donc
+        -- une table séparée plutôt que de rendre `version_id` optionnelle sur
+        -- profile_entries (SQLite ne sait pas assouplir une contrainte NOT NULL
+        -- par ALTER). `kind` distingue 'other' | 'app', `entry_id` est l'id dans
+        -- la table other_mods ou apps selon le cas.
+        CREATE TABLE IF NOT EXISTS profile_extra_entries (
+            profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            kind       TEXT NOT NULL,
+            entry_id   TEXT NOT NULL
+        );
+
         -- Mods « autres » (§6.1bis) : ni voiture, circuit, skin, son, ni app —
         -- jamais perdus. Activables par junction (garde-fou habituel) ; en cas
         -- d'emplacement disputé avec un autre mod « autre », la priorité tranche.
@@ -202,6 +214,7 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_history_mod  ON history(mod_id);
         CREATE INDEX IF NOT EXISTS idx_mods_idhash  ON mods(identity_hash);
         CREATE INDEX IF NOT EXISTS idx_pe_profile   ON profile_entries(profile_id);
+        CREATE INDEX IF NOT EXISTS idx_pee_profile  ON profile_extra_entries(profile_id);
         "#,
     )
 }
@@ -768,6 +781,15 @@ pub struct ProfileEntry {
     pub version_id: String,
 }
 
+/// Entrée de profil sans notion de version — Autre mod ou App (§6.1bis/§12bis.4),
+/// simplement actif ou non. `kind` vaut "other" ou "app", `entry_id` est l'id
+/// dans la table correspondante.
+#[derive(Debug, Clone, Serialize)]
+pub struct ProfileExtraEntry {
+    pub kind: String,
+    pub entry_id: String,
+}
+
 pub fn create_profile(conn: &Connection, id: &str, name: &str, created_at: &str) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO profiles (id, name, created_at) VALUES (?1, ?2, ?3)",
@@ -784,10 +806,24 @@ pub fn add_profile_entry(conn: &Connection, profile_id: &str, mod_id: &str, vers
     Ok(())
 }
 
+pub fn add_profile_extra_entry(
+    conn: &Connection,
+    profile_id: &str,
+    kind: &str,
+    entry_id: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO profile_extra_entries (profile_id, kind, entry_id) VALUES (?1, ?2, ?3)",
+        params![profile_id, kind, entry_id],
+    )?;
+    Ok(())
+}
+
 pub fn list_profiles(conn: &Connection) -> rusqlite::Result<Vec<ProfileRow>> {
     let mut stmt = conn.prepare(
         r#"SELECT p.id, p.name,
-                  (SELECT COUNT(*) FROM profile_entries e WHERE e.profile_id = p.id) AS entry_count
+                  (SELECT COUNT(*) FROM profile_entries e WHERE e.profile_id = p.id)
+                  + (SELECT COUNT(*) FROM profile_extra_entries x WHERE x.profile_id = p.id) AS entry_count
            FROM profiles p ORDER BY p.name COLLATE NOCASE"#,
     )?;
     let rows = stmt.query_map([], |r| {
@@ -806,6 +842,17 @@ pub fn get_profile_entries(conn: &Connection, profile_id: &str) -> rusqlite::Res
         Ok(ProfileEntry {
             mod_id: r.get(0)?,
             version_id: r.get(1)?,
+        })
+    })?;
+    rows.collect()
+}
+
+pub fn get_profile_extra_entries(conn: &Connection, profile_id: &str) -> rusqlite::Result<Vec<ProfileExtraEntry>> {
+    let mut stmt = conn.prepare("SELECT kind, entry_id FROM profile_extra_entries WHERE profile_id = ?1")?;
+    let rows = stmt.query_map([profile_id], |r| {
+        Ok(ProfileExtraEntry {
+            kind: r.get(0)?,
+            entry_id: r.get(1)?,
         })
     })?;
     rows.collect()

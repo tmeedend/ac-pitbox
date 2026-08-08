@@ -86,10 +86,10 @@
     { id: "race", labelKey: "launch.typeRace" },
   ];
 
-  const gridModes: { id: GridMode; labelKey: string; subKey: string }[] = [
-    { id: "same_car", labelKey: "launch.gridSameCar", subKey: "launch.gridSameCarSub" },
-    { id: "same_category", labelKey: "launch.gridSameCategory", subKey: "launch.gridSameCategorySub" },
-    { id: "free", labelKey: "launch.gridFree", subKey: "launch.gridFreeSub" },
+  const gridModes: { id: GridMode; labelKey: string }[] = [
+    { id: "same_car", labelKey: "launch.gridSameCar" },
+    { id: "same_category", labelKey: "launch.gridSameCategory" },
+    { id: "free", labelKey: "launch.gridFree" },
   ];
 
   const WEATHER_IDS = ["clear", "few_clouds", "overcast", "fog", "light_rain", "rain", "storm", "snow"] as const;
@@ -399,12 +399,15 @@
   const aiMaxPct = $derived(((setup.ai_level_max - RANGE_MIN) / (RANGE_MAX - RANGE_MIN)) * 100);
 
   // --- Météo (intentions + température/vent, §8.5/§8.6) ---
-  // Air et piste sont des valeurs **recommandées** par météo+saison, mais
-  // restent modifiables à la main (§8.6bis) : `tempsOverridden` mémorise que
-  // l'utilisateur a corrigé les valeurs proposées, pour ne plus les écraser
-  // tant que la météo ou la saison ne change pas. Un changement de météo ou de
-  // saison remet toujours des valeurs recommandées fraîches (reset explicite).
+  // Air, piste et vent sont des valeurs **recommandées** par météo+saison, mais
+  // restent modifiables à la main (§8.6bis) : `tempsOverridden`/`windOverridden`
+  // mémorisent que l'utilisateur a corrigé les valeurs proposées, pour ne plus
+  // les écraser tant que la météo ou la saison ne change pas. Un changement de
+  // météo ou de saison remet toujours des valeurs recommandées fraîches (reset
+  // explicite) — même logique pour les deux, gardée en deux drapeaux séparés
+  // parce qu'on peut vouloir corriger la température sans toucher au vent.
   let tempsOverridden = $state(false);
+  let windOverridden = $state(false);
   async function selectIntent(opt: WeatherOption) {
     if (!opt.available || !opt.weather) return;
     selectedIntent = opt.id;
@@ -418,12 +421,20 @@
       setup.ambient_c = c.ambient;
       setup.road_c = c.road;
     }
-    if (resetOverride) tempsOverridden = false;
-    setup.wind_speed_kmh = c.wind_speed_kmh;
-    setup.wind_direction_deg = c.wind_direction_deg;
+    if (resetOverride || !windOverridden) {
+      setup.wind_speed_kmh = c.wind_speed_kmh;
+      setup.wind_direction_deg = c.wind_direction_deg;
+    }
+    if (resetOverride) {
+      tempsOverridden = false;
+      windOverridden = false;
+    }
   }
   function overrideTemps() {
     tempsOverridden = true;
+  }
+  function overrideWind() {
+    windOverridden = true;
   }
   let lastHour = $state(-1);
   $effect(() => {
@@ -432,6 +443,10 @@
       refreshConditions(false);
     }
   });
+  // 8 directions cardinales, dans l'ordre de `compassKey` — le champ n'accepte
+  // que ces valeurs canoniques (0/45/90…) : le degré exact renvoyé par la météo
+  // n'a pas de sens à retaper à la main, seul le secteur compte pour le jeu.
+  const COMPASS_DEGREES = [0, 45, 90, 135, 180, 225, 270, 315];
   function compassKey(deg: number): string {
     const keys = [
       "launch.compassN", "launch.compassNE", "launch.compassE", "launch.compassSE",
@@ -439,6 +454,10 @@
     ];
     return keys[Math.round(deg / 45) % 8];
   }
+  // Secteur affiché dans le sélecteur : la valeur recommandée par la météo
+  // tombe rarement pile sur un multiple de 45°, on l'arrondit au plus proche
+  // pour que le menu ait toujours une option correspondante sélectionnée.
+  const windDirBucket = $derived(Math.round((setup.wind_direction_deg ?? 0) / 45) * 45 % 360);
 
   // --- Mémorisation de la sélection (§8.6) ---
   interface Selection {
@@ -752,7 +771,6 @@
               {#each gridModes as m}
                 <button class="mode" class:on={gridMode === m.id} type="button" onclick={() => selectGridMode(m.id)}>
                   <div class="mt">{t(m.labelKey)}</div>
-                  <div class="md mono">{t(m.subKey)}</div>
                 </button>
               {/each}
             </div>
@@ -818,7 +836,6 @@
             </div>
             <div class="dr-vals mono">
               <span>{t("launch.aiMin", { level: setup.ai_level_min })}</span>
-              <span>{t("launch.aiRangeHint")}</span>
               <span>{t("launch.aiMax", { level: setup.ai_level_max })}</span>
             </div>
           </section>
@@ -887,9 +904,26 @@
                   onchange={(v) => { setup.road_c = v; overrideTemps(); }}
                 />
               </div>
-              <div class="imp">
+              <div class="imp wind-imp">
                 <div class="ik">{t("launch.windImplicit")}</div>
-                <div class="iv mono">{t("launch.windReading", { speed: setup.wind_speed_kmh ?? 0, dir: t(compassKey(setup.wind_direction_deg ?? 0)) })}</div>
+                <div class="wind-fields">
+                  <NumberStepper
+                    width={58}
+                    min={0}
+                    max={120}
+                    value={setup.wind_speed_kmh ?? 0}
+                    onchange={(v) => { setup.wind_speed_kmh = v; overrideWind(); }}
+                  />
+                  <select
+                    class="input mono wind-dir"
+                    value={windDirBucket}
+                    onchange={(e) => { setup.wind_direction_deg = Number(e.currentTarget.value); overrideWind(); }}
+                  >
+                    {#each COMPASS_DEGREES as deg}
+                      <option value={deg}>{t(compassKey(deg))}</option>
+                    {/each}
+                  </select>
+                </div>
               </div>
             </div>
             <p class="implicit-note">{t("launch.implicitNote")}</p>
@@ -1151,17 +1185,15 @@
     background: var(--rosso-dim);
     box-shadow: inset 0 -2px 0 var(--rosso);
   }
+  /* Même taille que .seg button (Practice/Hotlap/Course) et .seg-v button
+     (Faux départ/Grip) : ce sont le même rôle — le libellé d'une option
+     cliquable — qui n'a aucune raison de changer de taille selon l'écran. */
   .mode .mt {
-    font-size: 9.5px;
+    font-size: 11px;
     color: var(--txt2);
   }
   .mode.on .mt {
     color: var(--rosso-bright);
-  }
-  .mode .md {
-    font-size: 7.5px;
-    color: var(--muted);
-    margin-top: 2px;
   }
   .grid-fields {
     display: inline-flex;
@@ -1322,7 +1354,11 @@
     color: var(--txt2);
     margin-top: 4px;
   }
-  .dr-vals span:nth-child(2) {
+  /* `.dr-vals` sert aux deux fourchettes : année (3 spans, avec séparateur)
+     et niveau IA (2 spans, sans — la sienne a été retirée). `:not(:last-child)`
+     évite qu'à 2 spans la règle n'atteigne le max au lieu d'un séparateur
+     disparu. */
+  .dr-vals span:nth-child(2):not(:last-child) {
     color: var(--muted);
   }
 
@@ -1426,8 +1462,12 @@
     width: 34px;
     height: 34px;
   }
+  /* Même rôle que .mt/.seg button/.seg-v button : le libellé d'une option
+     cliquable, même taille partout. Un libellé long (« Quelques nuages ») peut
+     passer sur deux lignes dans une carte étroite — la grille l'absorbe (pas
+     de hauteur fixe), à revoir si ça déséquilibre visuellement une rangée. */
   .wn {
-    font-size: 8.5px;
+    font-size: 11px;
     margin-top: 5px;
     color: var(--txt2);
   }
@@ -1443,16 +1483,26 @@
     border: 1px solid var(--line);
     background: var(--panel2);
   }
+  /* Rôle différent de .mt/.wn (clé de champ, pas une option cliquable) : la
+     taille reste compacte à dessein, mais les majuscules + interlettrage
+     ajoutaient une lourdeur inutile sur un texte déjà minuscule. */
   .imp .ik {
     color: var(--muted);
     font-size: 7.5px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
     margin-bottom: 5px;
   }
-  .imp .iv {
-    font-size: 11px;
-    color: var(--green);
+  .wind-fields {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  /* `.input` (global) part de width:100% pour un champ de formulaire pleine
+     largeur ; ici il doit tenir à côté du stepper de vitesse, dans une
+     cellule de la même famille que les steppers de température. */
+  .wind-dir {
+    width: auto;
+    padding: 5px 6px;
+    font-size: 10.5px;
   }
   .implicit-note {
     color: var(--muted);
@@ -1493,7 +1543,7 @@
     color: var(--txt2);
     text-align: left;
     padding: 7px 9px;
-    font-size: 9.5px;
+    font-size: 11px;
     border-bottom: 1px solid var(--line);
   }
   .seg-v button:last-child {

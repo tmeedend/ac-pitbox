@@ -17,6 +17,7 @@
   import { nav, requestSection } from "$lib/nav.svelte";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { t } from "$lib/i18n/index.svelte";
+  import LoadingState from "./LoadingState.svelte";
 
   import { errorText } from "$lib/errors";
   let { kind }: { kind: ModKind } = $props();
@@ -105,10 +106,7 @@
   {#if error}<div class="err">{error}</div>{/if}
 
   {#if loading}
-    <div class="empty loading-state">
-      <span class="spinner"></span>
-      <p>{t("common.loading")}</p>
-    </div>
+    <LoadingState />
   {:else if layers.length === 0}
     <div class="empty">{t("transversal.noLayers")}</div>
   {:else}
@@ -170,25 +168,6 @@
     color: var(--faint);
     font-size: 12px;
     padding: 16px 0;
-  }
-  .loading-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-  }
-  .loading-state .spinner {
-    width: 22px;
-    height: 22px;
-    border: 2px solid var(--line);
-    border-top-color: var(--rosso);
-    border-radius: 50%;
-    animation: layers-spin 0.8s linear infinite;
-  }
-  @keyframes layers-spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
   .hint {
     color: var(--blue);

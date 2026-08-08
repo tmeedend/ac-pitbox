@@ -5,6 +5,7 @@
   import { listApps, activateApp, deactivateApp, deleteApp, type AppItem } from "$lib/apps";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { t } from "$lib/i18n/index.svelte";
+  import LoadingState from "./LoadingState.svelte";
 
   import { errorText } from "$lib/errors";
   let apps = $state<AppItem[]>([]);
@@ -73,10 +74,7 @@
   {#if error}<div class="err">{error}</div>{/if}
 
   {#if loading}
-    <div class="empty loading-state">
-      <span class="spinner"></span>
-      <p>{t("common.loading")}</p>
-    </div>
+    <LoadingState />
   {:else if apps.length === 0}
     <div class="empty">
       <p>{t("apps.empty")}</p>
@@ -205,24 +203,5 @@
     font-size: 12px;
     color: var(--faint);
     margin-top: 8px;
-  }
-  .loading-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-  }
-  .loading-state .spinner {
-    width: 22px;
-    height: 22px;
-    border: 2px solid var(--line);
-    border-top-color: var(--rosso);
-    border-radius: 50%;
-    animation: apps-spin 0.8s linear infinite;
-  }
-  @keyframes apps-spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 </style>

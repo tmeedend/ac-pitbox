@@ -4,6 +4,7 @@
   import DetailPage from "./DetailPage.svelte";
   import BulkEditPanel from "./BulkEditPanel.svelte";
   import ContextMenu from "./ContextMenu.svelte";
+  import LoadingState from "./LoadingState.svelte";
   import {
     listLibrary,
     previewSrc,
@@ -39,6 +40,12 @@
   };
 
   let cards = $state<ModCard[]>([]);
+  // Distinct de « bibliothèque vide » : sans lui, la liste encore vide au
+  // premier rendu (avant que listLibrary() ne réponde) affichait le message
+  // « Aucune voiture… » pendant une fraction de seconde à chaque ouverture.
+  // Ne repasse jamais à true après le premier chargement — un réimport ne
+  // doit pas faire disparaître la liste déjà affichée.
+  let loading = $state(true);
   let selectedId = $state<string | null>(null);
   // Édition groupée (§6.3bis) : Ctrl/Alt-clic ajoute/retire de la sélection
   // multiple. Un clic simple retombe toujours en sélection simple.
@@ -160,6 +167,7 @@
 
   async function refresh() {
     cards = await listLibrary();
+    loading = false;
     if (firstLoad) {
       firstLoad = false;
       scrollToEffective();
@@ -544,7 +552,9 @@
       </div>
     </div>
 
-    {#if filtered.length === 0}
+    {#if loading}
+      <LoadingState />
+    {:else if filtered.length === 0}
       <div class="empty">
         {#if typed.length === 0}
           <p>{isCar ? t("library.emptyCars") : t("library.emptyTracks")}</p>
