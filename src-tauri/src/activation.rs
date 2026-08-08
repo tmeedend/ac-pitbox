@@ -95,13 +95,53 @@ pub fn create_junction(link: &Path, target: &Path) -> Result<(), String> {
     }
 }
 
-/// Supprime la junction `link` (sans toucher à la cible). Refuse si ce n'est
-/// pas une junction (garde-fou).
+/// Crée un lien symbolique **fichier** `link` → `target` via `mklink` (sans
+/// `/D`, réservé aux dossiers) — même mécanisme et même contrainte que
+/// `create_junction` (mode développeur Windows ou élévation), pour poser un
+/// fichier isolé dans un dossier réel déjà existant côté AC sans le copier
+/// (§6.1bis, mods qui n'ajoutent qu'un fichier à un emplacement déjà présent,
+/// ex. `content/gui/flags/`). Jamais utilisé si le fichier cible existe déjà
+/// — c'est à l'appelant (`others::place`) de le garantir.
+pub fn create_file_link(link: &Path, target: &Path) -> Result<(), String> {
+    let mut cmd = Command::new("cmd");
+    cmd.arg("/C");
+    #[cfg(windows)]
+    {
+        cmd.raw_arg(format!("mklink \"{}\" \"{}\"", link.display(), target.display()));
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (link, target);
+        return Err(crate::errors::JUNCTIONS_WINDOWS_ONLY.into());
+    }
+
+    let out = cmd.output().map_err(|e| format!("impossible de créer le lien : {e}"))?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "mklink a échoué : {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ))
+    }
+}
+
+/// Supprime la junction ou le lien fichier `link` (sans toucher à la cible).
+/// Refuse si ce n'est ni l'un ni l'autre (garde-fou). `Metadata::is_dir()` ne
+/// distingue pas fiablement les deux sur un point de reparse (Windows renvoie
+/// `is_dir=false` pour une junction comme pour un lien fichier via
+/// `symlink_metadata`) — on tente `remove_dir` (le cas historique, junctions)
+/// puis on replie sur `remove_file` (lien fichier), plutôt que d'inspecter des
+/// attributs peu fiables.
 pub fn remove_junction(link: &Path) -> Result<(), String> {
     if !is_junction(link) {
         return Err(crate::errors::NOT_A_JUNCTION.into());
     }
-    std::fs::remove_dir(link).map_err(|e| format!("suppression de la junction : {e}"))
+    if std::fs::remove_dir(link).is_ok() {
+        return Ok(());
+    }
+    std::fs::remove_file(link).map_err(|e| format!("suppression du lien : {e}"))
 }
 
 /// Le garde-fou absolu du module : un vrai dossier dans `content/` n'est jamais
@@ -233,6 +273,34 @@ mod tests {
         std::fs::create_dir_all(&real).unwrap();
         assert!(remove_junction(&real).is_err(), "refus sur un vrai dossier");
         assert!(real.exists(), "vrai dossier non supprimé");
+    }
+
+    #[test]
+    fn file_link_create_remove_and_guard() {
+        // Même mécanisme que les junctions mais au niveau fichier (§6.1bis) :
+        // `remove_junction` doit reconnaître les deux formes de point de
+        // reparse (Metadata::is_dir() ne les distingue pas fiablement).
+        if !cfg!(windows) {
+            return;
+        }
+        let base = crate::testutil::temp_dir("file-link");
+        let target = base.join("target.txt");
+        let link = base.join("link.txt");
+        std::fs::write(&target, b"hello").unwrap();
+
+        create_file_link(&link, &target).expect("lien fichier créé");
+        assert!(is_junction(&link), "détecté comme point de reparse");
+        assert_eq!(std::fs::read(&link).unwrap(), b"hello", "contenu visible via le lien");
+
+        remove_junction(&link).expect("lien fichier supprimé");
+        assert!(!link.exists());
+        assert!(target.is_file(), "cible préservée");
+
+        // Garde-fou : refuse un vrai fichier.
+        let real = base.join("real.txt");
+        std::fs::write(&real, b"real").unwrap();
+        assert!(remove_junction(&real).is_err(), "refus sur un vrai fichier");
+        assert!(real.is_file(), "vrai fichier non supprimé");
     }
 
     #[test]

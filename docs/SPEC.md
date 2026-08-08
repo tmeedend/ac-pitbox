@@ -71,7 +71,7 @@ Deux sources, même pipeline d'analyse/identité/tagging :
 
 **Copier / déplacer** : réglage par défaut mémorisable (pas deux boutons à chaque fois). Déplacement **adaptatif** : même disque → rename instantané ; disques différents → copie puis suppression après vérification.
 
-**Interface d'import** : glisser-déposer disponible partout ; écran d'import dédié pour les options (chaque option expliquée). Un mod importé est **activé par défaut** (déploiement par hardlinks immédiat).
+**Interface d'import** : glisser-déposer disponible partout ; écran d'import dédié pour les options (chaque option expliquée). Un mod importé est **activé par défaut** (déploiement par hardlinks immédiat) — de même pour une app (junction) et un « autre mod » (junction/lien fichier, §6.1bis).
 
 ### 4.3 Mise à jour vs couche (recomposition)
 
@@ -177,6 +177,10 @@ Une **colonne latérale unique** (maquette de référence `pitbox-biblio-session
 
 Mods de type non reconnu (shaders, configs CSP, mods d'UI, weather patterns…) : listés dans « Autres mods », activables/désactivables (hardlinks) comme les autres. Priorité notée + conflits signalés (pas de moteur de superposition type MO2).
 
+**Fichier isolé dans un dossier déjà réel côté AC** : posé par lien fichier (`mklink`, même mécanisme que les junctions de dossier) si et seulement si le fichier cible n'existe pas encore — pure addition (ex. une nouvelle image dans `content/gui/flags/`, dossier qui existe déjà dans une install AC standard). Un fichier qui existerait déjà à cet emplacement n'est jamais remplacé (hors périmètre pour l'instant — mods qui remplacent réellement du contenu stock).
+
+**Rien n'est perdu même à côté d'un mod reconnu.** Un import n'est plus tout-ou-rien : si une archive contient une app (ou une voiture/circuit/skin/son) ET, à côté, du contenu non reconnu — cas des mods type CMRT qui livrent un dossier `apps/` et un zip séparé visant `content/gui/...` — ce reste est repéré et importé comme son propre « autre mod », plutôt que jeté au nettoyage du dossier temporaire. Un zip/7z/rar trouvé dans ce reste est extrait et reclassé récursivement (profondeur 2) avant de retomber, lui aussi, sur voiture/circuit/skin/son/app/autre mod si rien n'est reconnu dedans.
+
 ### 7.4 Vues et interactions
 
 Deux vues commutables par bibliothèque (galerie / tableau), colonnes choisies persistées.
@@ -205,7 +209,7 @@ Deux vues commutables par bibliothèque (galerie / tableau), colonnes choisies p
 
 **Sons** — exclusifs (un seul actif par voiture), vrai remplacement de fichiers (`.bank` + `GUIDs.txt`), original toujours restaurable.
 
-**Apps** — type autonome, vue propre, activables.
+**Apps** — type autonome, vue propre, activables. Détection Python (`<id>/<id>.py`) et Lua/CSP (`<id>/<id>.lua`) ; activation par junction vers `apps/python/<id>` ou `apps/lua/<id>` selon le langage constaté. Ressources annexes (§4.6, ex. manuel PDF fourni avec l'app) listées et ouvrables depuis la vue, comme sur une fiche voiture/circuit.
 
 **Accès transversal** : vues Skins / Sons / Apps dans la barre latérale, en plus de l'accès par la fiche.
 

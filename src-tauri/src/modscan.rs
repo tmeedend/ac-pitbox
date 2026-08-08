@@ -141,13 +141,16 @@ pub fn scan_subs(root: &Path) -> Vec<FoundSub> {
     found
 }
 
-/// App Python d'AC (§12bis.4) : dossier `<nom>` contenant `<nom>.py` (script
-/// principal, convention AC `apps/python/<App>/<App>.py`).
+/// App Python OU Lua/CSP d'AC (§12bis.4) : dossier `<nom>` contenant `<nom>.py`
+/// (script principal, convention AC `apps/python/<App>/<App>.py`) ou
+/// `<nom>.lua` (convention CSP `apps/lua/<App>/<App>.lua`, même schéma de
+/// nommage) — les deux sont des scripts d'app autonomes, seul le sous-dossier
+/// `apps/<langue>/` où AC va les chercher diffère (`apps.rs::app_lang`).
 pub fn is_app(dir: &Path) -> bool {
     let Some(name) = dir.file_name().and_then(|n| n.to_str()) else {
         return false;
     };
-    dir.join(format!("{name}.py")).is_file()
+    dir.join(format!("{name}.py")).is_file() || dir.join(format!("{name}.lua")).is_file()
 }
 
 #[derive(Debug, Clone)]

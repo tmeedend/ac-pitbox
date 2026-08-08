@@ -592,14 +592,16 @@
     "bundledHint": "Part of the mod's initial content — not individually removable, only the whole mod."
   },
   "apps": {
-    "subtitle": "Assetto Corsa Python apps — standalone type, activated/deactivated by junction like the rest.",
+    "subtitle": "Assetto Corsa Python or Lua/CSP apps — standalone type, activated/deactivated by junction like the rest.",
     "searchPlaceholder": "Search…",
     "empty": "No app imported.",
     "emptyHint": "Import an app via general import (folder {path}).",
-    "confirmDelete": "Delete app \"{id}\"? It will be deactivated and its files removed."
+    "confirmDelete": "Delete app \"{id}\"? It will be deactivated and its files removed.",
+    "resources": "Resources",
+    "openFolderTooltip": "Open the app's folder in Explorer"
   },
   "others": {
-    "subtitle": "Mods of an unrecognized type (shaders, CSP configs, UI mods…) — never lost. Activated by junction like other types, only where AC has nothing yet (no merging into an already-existing folder). If two \"other mods\" contest the same spot, the mod marked priority wins on its next activation.",
+    "subtitle": "Mods of an unrecognized type (shaders, CSP configs, UI mods…) — never lost. Activated by junction like other types, or by file link for a plain addition into an already-existing folder (never replacing an existing file). If two \"other mods\" contest the same spot, the mod marked priority wins on its next activation.",
     "searchPlaceholder": "Search…",
     "empty": "No \"other\" mod imported.",
     "emptyHint": "A mod whose type isn't recognized by any import (car, track, skin, sound, app) lands here automatically.",

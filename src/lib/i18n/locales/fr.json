@@ -592,14 +592,16 @@
     "bundledHint": "Fait partie du contenu initial du mod — non supprimable individuellement, seulement le mod entier."
   },
   "apps": {
-    "subtitle": "Apps Python d'Assetto Corsa — type autonome, activées/désactivées par junction comme le reste.",
+    "subtitle": "Apps Python ou Lua/CSP d'Assetto Corsa — type autonome, activées/désactivées par junction comme le reste.",
     "searchPlaceholder": "Rechercher…",
     "empty": "Aucune app importée.",
     "emptyHint": "Importe une app via l'import général (dossier {path}).",
-    "confirmDelete": "Supprimer l'app « {id} » ? Elle sera désactivée et ses fichiers retirés."
+    "confirmDelete": "Supprimer l'app « {id} » ? Elle sera désactivée et ses fichiers retirés.",
+    "resources": "Ressources",
+    "openFolderTooltip": "Ouvrir le dossier de l'app dans l'explorateur"
   },
   "others": {
-    "subtitle": "Mods d'un type non reconnu (shaders, configs CSP, mods d'UI…) — jamais perdus. Activés par junction comme les autres types, uniquement là où AC n'a encore rien (pas de fusion de fichier isolé dans un dossier déjà existant). En cas d'emplacement disputé entre deux « autres mods », le mod marqué prioritaire l'emporte à sa prochaine activation.",
+    "subtitle": "Mods d'un type non reconnu (shaders, configs CSP, mods d'UI…) — jamais perdus. Activés par junction comme les autres types, ou par lien fichier pour un simple ajout dans un dossier déjà existant (jamais un remplacement de fichier existant). En cas d'emplacement disputé entre deux « autres mods », le mod marqué prioritaire l'emporte à sa prochaine activation.",
     "searchPlaceholder": "Rechercher…",
     "empty": "Aucun mod « autre » importé.",
     "emptyHint": "Un mod dont le type n'est reconnu par aucun import (voiture, circuit, skin, son, app) atterrit ici automatiquement.",

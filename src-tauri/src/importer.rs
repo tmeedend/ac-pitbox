@@ -210,6 +210,207 @@ fn fm_id(fm: &modscan::FoundMod) -> String {
         .unwrap_or_default()
 }
 
+/// Extensions d'archives reconnues pour une extraction imbriquée (§6.1bis).
+const NESTED_ARCHIVE_EXTS: &[&str] = &["zip", "7z", "rar"];
+
+fn is_archive_file(p: &Path) -> bool {
+    p.is_file()
+        && p.extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| NESTED_ARCHIVE_EXTS.iter().any(|a| a.eq_ignore_ascii_case(e)))
+}
+
+/// Chemins, sous `dir`, qui ne sont couverts par aucun mod déjà reconnu
+/// (`consumed` : dossiers de voitures/circuits/skins/sons/apps). Un dossier
+/// entièrement sous un chemin `consumed` est ignoré (déjà pris en charge) ;
+/// un dossier qui CONTIENT un chemin `consumed` plus profond est descendu pour
+/// isoler ce qui, à côté, ne l'est pas ; tout le reste (fichier isolé ou
+/// dossier sans rien de reconnu dessous) est renvoyé tel quel, en bloc.
+fn collect_leftover(dir: &Path, consumed: &[PathBuf], out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let p = e.path();
+        if consumed.iter().any(|c| c == &p) {
+            continue;
+        }
+        if p.is_dir() {
+            if consumed.iter().any(|c| c.starts_with(&p)) {
+                collect_leftover(&p, consumed, out);
+            } else {
+                out.push(p);
+            }
+        } else {
+            out.push(p);
+        }
+    }
+}
+
+/// Chemins consommés par les mods déjà reconnus dans un dossier scanné — sert
+/// à isoler ce qui reste (`collect_leftover`) pour ne plus jamais le perdre.
+fn consumed_paths(found: &[modscan::FoundMod], subs: &[modscan::FoundSub], apps: &[modscan::FoundApp]) -> Vec<PathBuf> {
+    found
+        .iter()
+        .map(|f| f.dir.clone())
+        .chain(subs.iter().map(|s| s.dir.clone()))
+        .chain(subs.iter().filter_map(|s| s.extra_root.clone()))
+        .chain(apps.iter().map(|a| a.dir.clone()))
+        .collect()
+}
+
+/// Importe tout ce qui reste après found/subs/apps (§6.1bis) : avant ce
+/// correctif, dès qu'au moins un mod était reconnu ailleurs dans l'archive,
+/// tout le reste — fichiers isolés, zips imbriqués comme les mods CMRT-style
+/// (dossier `apps/` + zip séparé qui vise `content/gui/...`) — disparaissait
+/// silencieusement au nettoyage du dossier temporaire (tri tout-ou-rien).
+/// Chaque reste devient son propre « autre mod », jamais fusionné avec ses
+/// voisins (id `<archive>__<nom>`).
+#[allow(clippy::too_many_arguments)]
+fn sweep_leftovers(
+    conn: &Connection,
+    cfg: &AppConfig,
+    rules: &Rules,
+    library: &Path,
+    archive_name: &str,
+    workdir: &Path,
+    consumed: &[PathBuf],
+    copy: bool,
+    res_mode: crate::resources::ExtractionMode,
+    result: &mut ArchiveResult,
+) {
+    let mut leftovers = Vec::new();
+    collect_leftover(workdir, consumed, &mut leftovers);
+    for p in leftovers {
+        import_leftover(conn, cfg, rules, library, archive_name, &p, copy, res_mode, result, 0);
+    }
+}
+
+/// Un seul reste isolé : archive imbriquée (extraite puis reclassée comme un
+/// import à part entière, profondeur limitée à 2 contre une imbrication
+/// pathologique) ou contenu déjà en clair (importé directement comme « autre
+/// mod », `others::import_other` ne perd jamais rien non plus).
+#[allow(clippy::too_many_arguments)]
+fn import_leftover(
+    conn: &Connection,
+    cfg: &AppConfig,
+    rules: &Rules,
+    library: &Path,
+    archive_name: &str,
+    p: &Path,
+    copy: bool,
+    res_mode: crate::resources::ExtractionMode,
+    result: &mut ArchiveResult,
+    depth: u8,
+) {
+    let label = p
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let nested_name = format!("{archive_name}__{label}");
+
+    if depth < 2 && is_archive_file(p) {
+        let Some(sevenzip) = &cfg.sevenzip_exe else {
+            return;
+        };
+        let Ok(extracted) = make_temp_dir() else { return };
+        if archive::extract(sevenzip, p, &extracted).is_ok() {
+            let found = modscan::scan(&extracted);
+            let subs = modscan::scan_subs(&extracted);
+            let apps = modscan::scan_apps(&extracted);
+            if found.is_empty() && subs.is_empty() && apps.is_empty() {
+                if let Some(other) =
+                    crate::others::import_other(conn, library, &nested_name, &extracted, false, res_mode)
+                {
+                    let _ = crate::others::activate_other(conn, cfg, &other.id);
+                    result.others.push(other);
+                }
+            } else {
+                for fm in &found {
+                    if let Ok(imported) = process_found(
+                        conn,
+                        cfg,
+                        rules,
+                        library,
+                        &nested_name,
+                        fm,
+                        false,
+                        None,
+                        None,
+                        false,
+                        None,
+                    ) {
+                        result.mods.push(imported);
+                    }
+                }
+                auto_activate(conn, cfg, &result.mods);
+                if !subs.is_empty() {
+                    result.subs.extend(crate::submods::import_subs(
+                        conn,
+                        cfg,
+                        library,
+                        &nested_name,
+                        &subs,
+                        false,
+                        res_mode,
+                    ));
+                }
+                if !apps.is_empty() {
+                    let imported_apps = crate::apps::import_apps(conn, library, &nested_name, &apps, false, res_mode);
+                    auto_activate_apps(conn, cfg, &imported_apps);
+                    result.apps.extend(imported_apps);
+                }
+                let consumed = consumed_paths(&found, &subs, &apps);
+                let mut inner = Vec::new();
+                collect_leftover(&extracted, &consumed, &mut inner);
+                for lp in inner {
+                    import_leftover(
+                        conn,
+                        cfg,
+                        rules,
+                        library,
+                        &nested_name,
+                        &lp,
+                        false,
+                        res_mode,
+                        result,
+                        depth + 1,
+                    );
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(&extracted);
+        return;
+    }
+
+    // `p` est un reste isolé (fichier OU dossier, ex. `extension/` livré à
+    // plat à côté d'une app) : enveloppé dans un temp dir qui conserve son
+    // propre nom avant d'appeler `others::import_other`. Sans cette enveloppe,
+    // passer `p` directement comme racine du mod « autre » ferait perdre le
+    // nom de `p` (ex. "extension") — `others::place` rejoue ensuite le chemin
+    // cible depuis cette racine (`ac.join(rel)`), donc un dossier `extension/`
+    // pris comme racine atterrirait à `ac/config/...` au lieu d'
+    // `ac/extension/config/...` à l'activation.
+    let Ok(wrap) = make_temp_dir() else { return };
+    let wrapped = wrap.join(p.file_name().unwrap_or_default());
+    let placed = if p.is_dir() {
+        if copy {
+            archive::copy_dir(p, &wrapped).is_ok()
+        } else {
+            archive::move_dir(p, &wrapped).is_ok()
+        }
+    } else {
+        std::fs::rename(p, &wrapped).is_ok() || std::fs::copy(p, &wrapped).is_ok()
+    };
+    if placed {
+        if let Some(other) = crate::others::import_other(conn, library, &nested_name, &wrap, false, res_mode) {
+            let _ = crate::others::activate_other(conn, cfg, &other.id);
+            result.others.push(other);
+        }
+    }
+    let _ = std::fs::remove_dir_all(&wrap);
+}
+
 /// Active par défaut les mods fraîchement importés/mis à jour (§4.6bis) : on veut
 /// pouvoir conduire tout de suite. Best-effort (l'échec — ex. vrai dossier Kunos
 /// homonyme, dossier AC non configuré — n'interrompt pas l'import).
@@ -218,6 +419,16 @@ fn auto_activate(conn: &Connection, cfg: &AppConfig, mods: &[ImportedMod]) {
         if m.outcome == "IMPORT" || m.outcome == "UPDATE_REPLACE" {
             let _ = crate::activation::activate(conn, cfg, &m.id_interne, None);
         }
+    }
+}
+
+/// Active par défaut les apps fraîchement importées (§4.6bis, §12bis.4) — même
+/// logique que les mods voiture/circuit et les mods « autres » : best-effort,
+/// une app déjà active ou dont l'AC install n'est pas configurée ne bloque pas
+/// le reste de l'import.
+fn auto_activate_apps(conn: &Connection, cfg: &AppConfig, apps: &[crate::apps::AppImported]) {
+    for a in apps {
+        let _ = crate::apps::activate_app(conn, cfg, &a.name);
     }
 }
 
@@ -351,7 +562,25 @@ fn import_one(
     // Apps Python (§12bis.4).
     if !apps.is_empty() {
         result.apps = crate::apps::import_apps(conn, library, &archive_name, &apps, false, res_mode);
+        auto_activate_apps(conn, cfg, &result.apps);
     }
+
+    // Ce qui reste à côté des mods reconnus ci-dessus (§6.1bis) : jamais perdu,
+    // y compris le contenu de zips imbriqués (ex. mods CMRT-style qui livrent
+    // une app ET un zip séparé visant `content/gui/...`).
+    let consumed = consumed_paths(&found, &subs, &apps);
+    sweep_leftovers(
+        conn,
+        cfg,
+        rules,
+        library,
+        &archive_name,
+        &workdir,
+        &consumed,
+        false,
+        res_mode,
+        &mut result,
+    );
 
     // Ressources partagées globales (fonts/drivers) avant nettoyage du temp (§4.8).
     if let Some(ac) = &cfg.ac_install_path {
@@ -501,7 +730,25 @@ fn import_one_folder(
     // Apps Python (§12bis.4).
     if !apps.is_empty() {
         result.apps = crate::apps::import_apps(conn, library, &name, &apps, copy, res_mode);
+        auto_activate_apps(conn, cfg, &result.apps);
     }
+
+    // Ce qui reste à côté des mods reconnus ci-dessus (§6.1bis) : jamais perdu,
+    // y compris le contenu de zips imbriqués (ex. mods CMRT-style qui livrent
+    // une app ET un zip séparé visant `content/gui/...`).
+    let consumed = consumed_paths(&found, &subs, &apps);
+    sweep_leftovers(
+        conn,
+        cfg,
+        rules,
+        library,
+        &name,
+        dir,
+        &consumed,
+        copy,
+        res_mode,
+        &mut result,
+    );
 
     // Ressources partagées globales (§4.8).
     if let Some(ac) = &cfg.ac_install_path {
@@ -1553,6 +1800,40 @@ mod tests {
     }
 
     #[test]
+    fn app_activated_by_default_on_import() {
+        // Bug réel : une app importée restait inactive tant qu'on n'allait pas
+        // cliquer « Activer » sur l'écran Apps — contrairement aux mods
+        // voiture/circuit (`auto_activate`) et aux mods « autres »
+        // (`activate_other` appelé juste après l'import), §4.6bis/§12bis.4.
+        let base = crate::testutil::temp_dir("import-app-autoactivate");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(&ac).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+        let noop = |_p: Progress| {};
+
+        let src = base.join("MyApp");
+        let app = src.join("apps").join("lua").join("MyApp");
+        std::fs::create_dir_all(&app).unwrap();
+        std::fs::write(app.join("MyApp.lua"), b"-- app").unwrap();
+
+        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+        assert_eq!(r.apps.len(), 1);
+        assert!(
+            crate::activation::is_junction(&ac.join("apps").join("lua").join("MyApp")),
+            "app activée dès l'import, sans action manuelle"
+        );
+    }
+
+    #[test]
     fn unrecognized_folder_becomes_other_mod() {
         // Type non reconnu (ni voiture, circuit, skin, son, app) : jamais
         // perdu, rangé comme « autre mod » et activé par défaut (§6.1bis).
@@ -1584,6 +1865,110 @@ mod tests {
         assert!(
             crate::activation::is_junction(&ac.join("extension").join("config").join("new_thing")),
             "activé par défaut comme les autres types (§4.6bis)"
+        );
+    }
+
+    #[test]
+    fn app_and_sibling_content_override_both_survive_import() {
+        // Bug réel (mods style CMRT) : une app livrée avec, à côté, un dossier
+        // qui vise `extension/...` (ou `content/...`) directement — avant ce
+        // correctif, dès que l'app était reconnue, tout le reste du dossier
+        // disparaissait silencieusement au tri (tout-ou-rien §6.1bis).
+        let base = crate::testutil::temp_dir("import-leftover-dir");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("extension").join("config")).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+        let noop = |_p: Progress| {};
+
+        let src = base.join("MyApp_Pack");
+        let app = src.join("apps").join("lua").join("MyApp");
+        std::fs::create_dir_all(&app).unwrap();
+        std::fs::write(app.join("MyApp.lua"), b"-- app").unwrap();
+
+        let leaf = src.join("extension").join("config").join("new_thing");
+        std::fs::create_dir_all(&leaf).unwrap();
+        std::fs::write(leaf.join("settings.ini"), b"x").unwrap();
+
+        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+        assert_eq!(r.apps.len(), 1, "l'app est bien reconnue");
+        assert_eq!(
+            r.others.len(),
+            1,
+            "le dossier extension/ à côté de l'app ne doit plus être perdu"
+        );
+        assert!(library.join("apps").join("MyApp").join("MyApp.lua").is_file());
+        assert!(
+            crate::activation::is_junction(&ac.join("extension").join("config").join("new_thing")),
+            "reste importé et activé comme autre mod, chemin préservé (extension/config/new_thing)"
+        );
+    }
+
+    #[test]
+    fn nested_zip_next_to_app_is_extracted_and_imported_as_other_mod() {
+        // Bug réel (CMRT_Complete_hud) : un zip séparé à la racine du mod,
+        // sibling du dossier `apps/`, qui vise `content/gui/...` etc. N'était
+        // jamais scanné (modscan ne descend jamais dans un fichier) ni perdu
+        // via le fallback « autre mod » (qui ne se déclenchait pas puisque
+        // l'app, elle, était bien reconnue) — silencieusement jeté au
+        // nettoyage du dossier temporaire.
+        let Some(sevenzip) = crate::detect::find_7zip() else {
+            eprintln!("7-Zip introuvable — test ignoré");
+            return;
+        };
+
+        let base = crate::testutil::temp_dir("import-nested-zip");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("extension").join("config")).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            sevenzip_exe: Some(sevenzip.clone()),
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+        let noop = |_p: Progress| {};
+
+        let src = base.join("CMRT_HUD");
+        let app = src.join("apps").join("lua").join("CMRT_HUD");
+        std::fs::create_dir_all(&app).unwrap();
+        std::fs::write(app.join("CMRT_HUD.lua"), b"-- hud").unwrap();
+
+        // Contenu du zip imbriqué : sa racine contient directement `extension/`,
+        // comme une vraie install AC (le zip "flag/fuel/starting lights" de CMRT
+        // vise réellement `content/gui/...`, ici simplifié en `extension/...`).
+        let nested_src = base.join("nested_src");
+        let nested_leaf = nested_src.join("extension").join("config").join("new_hud_tweak");
+        std::fs::create_dir_all(&nested_leaf).unwrap();
+        std::fs::write(nested_leaf.join("settings.ini"), b"x").unwrap();
+        let nested_zip = src.join("CMRT_flag_fuel_and_starting_lights_replacement.zip");
+        zip_dir(&sevenzip, &nested_src, &nested_zip);
+
+        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+        assert_eq!(r.apps.len(), 1, "l'app est bien reconnue");
+        assert_eq!(
+            r.others.len(),
+            1,
+            "le zip imbriqué doit être extrait et importé comme autre mod, pas perdu"
+        );
+        assert!(r.others[0]
+            .id
+            .contains("CMRT_flag_fuel_and_starting_lights_replacement"));
+        assert!(
+            crate::activation::is_junction(&ac.join("extension").join("config").join("new_hud_tweak")),
+            "activé par défaut, chemin du zip imbriqué préservé"
         );
     }
 

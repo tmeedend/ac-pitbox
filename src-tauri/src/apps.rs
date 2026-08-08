@@ -1,7 +1,8 @@
-//! Apps Python d'AC (§12bis.4) : type **autonome** (ni voiture, ni circuit, ni
-//! sous-élément). Stockées dans la bibliothèque, activables/désactivables par
-//! junction comme le reste, vers `<ac>/apps/python/<id>`. Pas de fiche ni de
-//! tags en v1 — juste nom, état, activation.
+//! Apps Python ou Lua/CSP d'AC (§12bis.4) : type **autonome** (ni voiture, ni
+//! circuit, ni sous-élément). Stockées dans la bibliothèque, activables/
+//! désactivables par junction comme le reste, vers `<ac>/apps/python/<id>` ou
+//! `<ac>/apps/lua/<id>` selon le langage détecté (`app_lang`). Pas de fiche ni
+//! de tags en v1 — juste nom, état, activation, ressources annexes (§4.6).
 
 use std::path::{Path, PathBuf};
 
@@ -30,11 +31,26 @@ pub struct AppItem {
     pub active: bool,
 }
 
-/// Lien d'activation d'une app : `<ac>/apps/python/<id>`.
-fn app_link(cfg: &AppConfig, id: &str) -> Option<PathBuf> {
+/// Sous-dossier `apps/<langue>/` où pointe la junction d'activation d'une app
+/// (§12bis.4) : `lua` si les fichiers stockés incluent un script `<id>.lua`
+/// (convention CSP), sinon `python` (convention historique `<id>.py`, aussi
+/// le repli si aucun des deux n'est trouvé). Déduit des fichiers réellement
+/// stockés plutôt que d'une colonne overlay dédiée — pas de migration de
+/// schéma, et toujours juste même si le contenu de l'app change entre deux
+/// réimports.
+fn app_lang(stored_dir: &Path, id: &str) -> &'static str {
+    if stored_dir.join(format!("{id}.lua")).is_file() {
+        "lua"
+    } else {
+        "python"
+    }
+}
+
+/// Lien d'activation d'une app : `<ac>/apps/<lang>/<id>`.
+fn app_link(cfg: &AppConfig, id: &str, lang: &str) -> Option<PathBuf> {
     cfg.ac_install_path
         .as_ref()
-        .map(|ac| ac.join("apps").join("python").join(id))
+        .map(|ac| ac.join("apps").join(lang).join(id))
 }
 
 /// Importe les apps détectées : stockage bibliothèque + enregistrement (§12bis.4).
@@ -76,13 +92,24 @@ pub fn import_apps(
     out
 }
 
+/// Dossier bibliothèque d'une app, pour l'ouvrir dans l'explorateur.
+pub fn app_folder_path(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<PathBuf, String> {
+    let app = overlay::get_app(conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::APP_NOT_FOUND)?;
+    crate::libpath::resolve(cfg.library_path.as_deref(), &app.library_path)
+        .ok_or_else(|| crate::errors::LIBRARY_NOT_CONFIGURED.to_string())
+}
+
 /// Liste les apps avec leur état d'activation (junction présente).
 pub fn list_apps(conn: &Connection, cfg: &AppConfig) -> Result<Vec<AppItem>, String> {
     let rows = overlay::list_apps(conn).map_err(|e| e.to_string())?;
     Ok(rows
         .into_iter()
         .map(|a| {
-            let active = app_link(cfg, &a.id).is_some_and(|l| activation::is_junction(&l));
+            let stored = crate::libpath::resolve(cfg.library_path.as_deref(), &a.library_path);
+            let lang = stored.as_deref().map(|d| app_lang(d, &a.id)).unwrap_or("python");
+            let active = app_link(cfg, &a.id, lang).is_some_and(|l| activation::is_junction(&l));
             AppItem {
                 id: a.id,
                 source_archive: a.source_archive,
@@ -93,12 +120,15 @@ pub fn list_apps(conn: &Connection, cfg: &AppConfig) -> Result<Vec<AppItem>, Str
         .collect())
 }
 
-/// Active une app : junction `<ac>/apps/python/<id>` → dossier bibliothèque.
+/// Active une app : junction `<ac>/apps/<lang>/<id>` → dossier bibliothèque.
 pub fn activate_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
     let app = overlay::get_app(conn, id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::APP_NOT_FOUND)?;
-    let link = app_link(cfg, id).ok_or(crate::errors::AC_NOT_CONFIGURED)?;
+    let target = crate::libpath::resolve(cfg.library_path.as_deref(), &app.library_path)
+        .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    let lang = app_lang(&target, id);
+    let link = app_link(cfg, id, lang).ok_or(crate::errors::AC_NOT_CONFIGURED)?;
 
     // Garde-fou : ne jamais écraser un vrai dossier (app installée hors de l'app).
     if let Ok(meta) = std::fs::symlink_metadata(&link) {
@@ -111,19 +141,23 @@ pub fn activate_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), 
     if let Some(parent) = link.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let target = crate::libpath::resolve(cfg.library_path.as_deref(), &app.library_path)
-        .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     activation::create_junction(&link, &target)
 }
 
-/// Désactive une app : retire la junction (garde-fou junction).
+/// Désactive une app : retire la junction, dans `apps/python/` ou `apps/lua/`
+/// selon celui des deux qui est effectivement occupé (garde-fou junction) —
+/// pas besoin de rouvrir la bibliothèque pour deviner le langage à l'avance.
 pub fn deactivate_app(cfg: &AppConfig, id: &str) -> Result<(), String> {
-    let link = app_link(cfg, id).ok_or(crate::errors::AC_NOT_CONFIGURED)?;
-    match std::fs::symlink_metadata(&link) {
-        Ok(meta) if meta.file_type().is_symlink() => activation::remove_junction(&link),
-        Ok(_) => Err(crate::errors::REAL_APP_FOLDER_UNTOUCHED.into()),
-        Err(_) => Ok(()), // déjà inactive
+    let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?;
+    for lang in ["python", "lua"] {
+        let link = ac.join("apps").join(lang).join(id);
+        match std::fs::symlink_metadata(&link) {
+            Ok(meta) if meta.file_type().is_symlink() => return activation::remove_junction(&link),
+            Ok(_) => return Err(crate::errors::REAL_APP_FOLDER_UNTOUCHED.into()),
+            Err(_) => continue,
+        }
     }
+    Ok(()) // déjà inactive dans les deux emplacements
 }
 
 /// Supprime proprement une app : désactive (retire la junction), efface les
@@ -132,12 +166,10 @@ pub fn remove_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), St
     let app = overlay::get_app(conn, id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::APP_NOT_FOUND)?;
-    // Désactive si une junction est présente (ignore l'absence).
-    if let Some(link) = app_link(cfg, id) {
-        if activation::is_junction(&link) {
-            let _ = activation::remove_junction(&link);
-        }
-    }
+    // Désactive si une junction est présente, python ou lua (ignore l'absence
+    // des deux, et un vrai dossier étranger — rien à faire dans ce cas ici,
+    // seuls les fichiers de bibliothèque et l'overlay nous appartiennent).
+    let _ = deactivate_app(cfg, id);
     if let Some(dir) = crate::libpath::resolve(cfg.library_path.as_deref(), &app.library_path) {
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -178,5 +210,77 @@ mod tests {
         remove_app(&conn, &cfg, "MyApp").unwrap();
         assert!(!library.join("apps").join("MyApp").exists());
         assert!(!overlay::app_exists(&conn, "MyApp").unwrap());
+    }
+
+    #[test]
+    fn lua_app_detected_and_activated_under_apps_lua_not_python() {
+        // Bug réel : les apps Lua/CSP (`apps/lua/<App>/<App>.lua`, convention
+        // aussi répandue que Python en pratique — HUD, réglages de voiture…)
+        // n'étaient reconnues ni à l'import (`is_app` ne testait que `.py`),
+        // ni correctement activées (toujours liées sous `apps/python/`, où AC
+        // ne les charge jamais).
+        let base = crate::testutil::temp_dir("app-lua");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(&ac).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+
+        let app = base.join("src").join("apps").join("lua").join("MyLuaApp");
+        std::fs::create_dir_all(&app).unwrap();
+        std::fs::write(app.join("MyLuaApp.lua"), b"-- app").unwrap();
+
+        let found = modscan::scan_apps(&base.join("src"));
+        assert_eq!(found.len(), 1, "détecté malgré l'extension .lua");
+        assert_eq!(found[0].name, "MyLuaApp");
+
+        import_apps(&conn, &library, "myluaapp.7z", &found, true, ExtractionMode::InfoOnly);
+        assert!(overlay::app_exists(&conn, "MyLuaApp").unwrap());
+
+        activate_app(&conn, &cfg, "MyLuaApp").unwrap();
+        assert!(
+            activation::is_junction(&ac.join("apps").join("lua").join("MyLuaApp")),
+            "junction posée sous apps/lua/, pas apps/python/"
+        );
+        assert!(!ac.join("apps").join("python").join("MyLuaApp").exists());
+
+        deactivate_app(&cfg, "MyLuaApp").unwrap();
+        assert!(
+            !ac.join("apps").join("lua").join("MyLuaApp").exists(),
+            "désactivée proprement"
+        );
+    }
+
+    #[test]
+    fn python_app_still_activates_under_apps_python() {
+        // Non-régression : la convention historique reste le repli par défaut.
+        let base = crate::testutil::temp_dir("app-python-activate");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(&ac).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+
+        let app = base.join("src").join("apps").join("python").join("MyApp");
+        std::fs::create_dir_all(&app).unwrap();
+        std::fs::write(app.join("MyApp.py"), b"# app").unwrap();
+        let found = modscan::scan_apps(&base.join("src"));
+        import_apps(&conn, &library, "myapp.7z", &found, true, ExtractionMode::InfoOnly);
+
+        activate_app(&conn, &cfg, "MyApp").unwrap();
+        assert!(activation::is_junction(&ac.join("apps").join("python").join("MyApp")));
+
+        deactivate_app(&cfg, "MyApp").unwrap();
+        assert!(!ac.join("apps").join("python").join("MyApp").exists());
     }
 }

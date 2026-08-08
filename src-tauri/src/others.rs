@@ -4,10 +4,15 @@
 //!
 //! Activation par junction, comme les autres types, avec le même garde-fou
 //! (jamais sur un vrai dossier) : une jonction n'est posée que là où AC n'a
-//! encore rien à cet emplacement. Ce n'est PAS un moteur de superposition
-//! complet façon MO2 — un fichier isolé dont le dossier existe déjà ne peut
-//! pas être fusionné (limite assumée). Deux mods « autres » qui visent le
-//! même emplacement : la **priorité** (marquée par l'utilisateur) tranche.
+//! encore rien à cet emplacement. Un fichier isolé dont le dossier parent
+//! existe déjà réellement (ex. `content/gui/flags/`) est posé par lien
+//! fichier (`activation::create_file_link`) **si et seulement si** le fichier
+//! lui-même n'existe pas encore — pure addition, rien écrasé. Ce n'est PAS un
+//! moteur de superposition complet façon MO2 : un fichier qui existe déjà à
+//! l'identique n'est jamais remplacé (limite assumée — mods qui remplacent du
+//! contenu stock, hors périmètre pour l'instant). Deux mods « autres » qui
+//! visent le même emplacement : la **priorité** (marquée par l'utilisateur)
+//! tranche.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -150,7 +155,9 @@ pub struct ActivateOtherResult {
 /// Pose une jonction à `current`'s enfants, en descendant tant que
 /// l'emplacement AC correspondant existe déjà (vrai dossier). S'arrête et
 /// jonctionne dès qu'un emplacement est libre. Un fichier isolé dont le
-/// dossier existe déjà ne peut pas être posé (limite assumée §6.1bis).
+/// dossier parent existe déjà réellement est posé par lien fichier — mais
+/// seulement s'il n'écrase rien (§6.1bis) ; sinon (fichier cible déjà
+/// présent) laissé de côté sans le toucher, silencieusement.
 #[allow(clippy::too_many_arguments)]
 fn place(
     current: &Path,
@@ -170,16 +177,18 @@ fn place(
         let Ok(rel) = p.strip_prefix(root) else { continue };
         let target = ac.join(rel);
         if !p.is_dir() {
-            // Fichier isolé : ne peut être posé que si son dossier parent
-            // vient d'être jonctionné (donc n'existait pas juste avant) —
-            // sinon le dossier existe déjà réellement, fusion impossible.
+            // Fichier isolé : posé par lien fichier si son dossier parent
+            // existe déjà (vrai dossier ou tout juste jonctionné) ET que rien
+            // ne s'y trouve encore à cet emplacement précis — pure addition,
+            // jamais un écrasement (mods qui remplacent du contenu existant :
+            // hors périmètre pour l'instant).
             if !target.parent().is_some_and(|p| p.exists()) {
                 warnings.push(format!("{} : dossier parent introuvable", rel.display()));
             } else if !target.exists() {
-                warnings.push(format!(
-                    "{} : dossier déjà existant, fusion de fichier isolé non supportée",
-                    rel.display()
-                ));
+                match activation::create_file_link(&target, &p) {
+                    Ok(()) => junctions.push(target.to_string_lossy().into_owned()),
+                    Err(err) => warnings.push(format!("{} : {err}", rel.display())),
+                }
             }
             continue;
         }
@@ -327,6 +336,61 @@ mod tests {
             .join("tracks")
             .join("newtrack")
             .exists());
+    }
+
+    #[test]
+    fn isolated_file_added_to_existing_real_folder_via_file_link() {
+        // Cas réel (mods style CMRT) : le mod n'ajoute qu'un fichier dans un
+        // dossier qui existe déjà côté AC (ex. content/gui/flags/) — jamais
+        // un "gap" (le dossier existe), donc avant ce correctif silencieusement
+        // ignoré (warning, jamais posé) même sans rien écraser.
+        let base = crate::testutil::temp_dir("other-file-link");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        // Dossier AC déjà réel, avec un fichier stock existant à côté.
+        std::fs::create_dir_all(ac.join("content").join("gui").join("flags")).unwrap();
+        std::fs::write(
+            ac.join("content").join("gui").join("flags").join("checkered.png"),
+            b"STOCK",
+        )
+        .unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+
+        // Mod « autre » : un seul nouveau fichier, pure addition, rien d'écrasé.
+        let src = base.join("src").join("CMRT_Flags");
+        make_tree(&src, &["content/gui/flags/new_flag.png"]);
+
+        import_other(&conn, &library, "CMRT_Flags.zip", &src, true, ExtractionMode::InfoOnly).unwrap();
+        let res = activate_other(&conn, &cfg, "CMRT_Flags").unwrap();
+        assert_eq!(res.junctions, 1, "le fichier isolé est posé, pas seulement signalé");
+        assert!(res.warnings.is_empty(), "pas de warning : pure addition");
+
+        let target = ac.join("content").join("gui").join("flags").join("new_flag.png");
+        assert!(activation::is_junction(&target), "posé par lien fichier, pas copié");
+        assert_eq!(std::fs::read(&target).unwrap(), b"x", "contenu visible via le lien");
+
+        // Le fichier stock existant, lui, n'a jamais été touché.
+        assert_eq!(
+            std::fs::read(ac.join("content").join("gui").join("flags").join("checkered.png")).unwrap(),
+            b"STOCK"
+        );
+
+        deactivate_other(&conn, "CMRT_Flags").unwrap();
+        assert!(!target.exists(), "lien retiré à la désactivation");
+        assert!(
+            ac.join("content")
+                .join("gui")
+                .join("flags")
+                .join("checkered.png")
+                .is_file(),
+            "fichier stock toujours intact après désactivation"
+        );
     }
 
     #[test]

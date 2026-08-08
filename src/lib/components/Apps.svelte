@@ -1,8 +1,19 @@
 <script lang="ts">
   // Vue Apps (§12bis.4) : type autonome, simplement activable/désactivable par
-  // junction. Pas de fiche ni de tags en v1 — nom, état, activation.
+  // junction. Pas de fiche ni de tags en v1 — nom, état, activation, ressources
+  // annexes (§4.6, même mécanisme que les mods voiture/circuit).
   import { onMount } from "svelte";
-  import { listApps, activateApp, deactivateApp, deleteApp, type AppItem } from "$lib/apps";
+  import {
+    listApps,
+    activateApp,
+    deactivateApp,
+    deleteApp,
+    listAppResources,
+    openAppResource,
+    openAppFolder,
+    type AppItem,
+  } from "$lib/apps";
+  import type { ResourceFile } from "$lib/library";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { t } from "$lib/i18n/index.svelte";
   import LoadingState from "./LoadingState.svelte";
@@ -13,6 +24,49 @@
   let busy = $state<string | null>(null);
   let loading = $state(true);
   let error = $state("");
+
+  // Ressources (§4.6) : chargées à la demande, une seule fois par app dépliée
+  // (pas de parcours disque pour chaque app de la liste tant que personne ne
+  // regarde), mémorisées ensuite pour un repli instantané.
+  let expandedId = $state<string | null>(null);
+  let resourcesById = $state<Record<string, ResourceFile[]>>({});
+  let resourcesLoading = $state<string | null>(null);
+
+  async function toggleResources(id: string) {
+    if (expandedId === id) {
+      expandedId = null;
+      return;
+    }
+    expandedId = id;
+    if (!resourcesById[id]) {
+      resourcesLoading = id;
+      try {
+        resourcesById = { ...resourcesById, [id]: await listAppResources(id) };
+      } finally {
+        resourcesLoading = null;
+      }
+    }
+  }
+
+  async function openResource(id: string, f: ResourceFile) {
+    try {
+      await openAppResource(id, f.rel_path);
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
+  function fmtFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} o`;
+    const units = ["Ko", "Mo", "Go"];
+    let v = bytes;
+    let i = -1;
+    do {
+      v /= 1024;
+      i++;
+    } while (v >= 1024 && i < units.length - 1);
+    return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
+  }
 
   async function load() {
     try {
@@ -34,6 +88,14 @@
       error = errorText(e);
     } finally {
       busy = null;
+    }
+  }
+
+  async function openFolder(id: string) {
+    try {
+      await openAppFolder(id);
+    } catch (e) {
+      error = errorText(e);
     }
   }
 
@@ -78,19 +140,47 @@
   {:else if apps.length === 0}
     <div class="empty">
       <p>{t("apps.empty")}</p>
-      <p class="hint">{t("apps.emptyHint", { path: "apps/python/<App>/" })}</p>
+      <p class="hint">{t("apps.emptyHint", { path: "apps/python/<App>/ · apps/lua/<App>/" })}</p>
     </div>
   {:else}
     <ul class="list">
       {#each filtered as a (a.id)}
         <li class:active={a.active}>
-          <span class="a-name mono">{a.id}</span>
-          {#if a.source_archive}<span class="src mono">{a.source_archive}</span>{/if}
-          {#if a.active}<span class="state on">{t("common.active").toLowerCase()}</span>{:else}<span class="state">{t("common.inactive").toLowerCase()}</span>{/if}
-          <button class="btn" type="button" onclick={() => toggle(a)} disabled={busy === a.id}>
-            {busy === a.id ? t("common.working") : a.active ? t("common.deactivate") : t("common.activate")}
-          </button>
-          <button class="btn del" type="button" title={t("common.delete")} onclick={() => remove(a)} disabled={busy === a.id}>✕</button>
+          <div class="row">
+            <span class="a-name mono">{a.id}</span>
+            {#if a.source_archive}<span class="src mono">{a.source_archive}</span>{/if}
+            {#if a.active}<span class="state on">{t("common.active").toLowerCase()}</span>{:else}<span class="state">{t("common.inactive").toLowerCase()}</span>{/if}
+            <button class="btn" type="button" onclick={() => toggleResources(a.id)}>
+              {t("apps.resources")}{#if resourcesById[a.id]?.length} <span class="mono">({resourcesById[a.id].length})</span>{/if}
+            </button>
+            <button class="btn" type="button" onclick={() => openFolder(a.id)} title={t("apps.openFolderTooltip")}>
+              {t("detail.openFolder")}
+            </button>
+            <button class="btn" type="button" onclick={() => toggle(a)} disabled={busy === a.id}>
+              {busy === a.id ? t("common.working") : a.active ? t("common.deactivate") : t("common.activate")}
+            </button>
+            <button class="btn del" type="button" title={t("common.delete")} onclick={() => remove(a)} disabled={busy === a.id}>✕</button>
+          </div>
+          {#if expandedId === a.id}
+            <div class="res-panel">
+              {#if resourcesLoading === a.id}
+                <p class="res-empty">{t("common.loading")}</p>
+              {:else if !resourcesById[a.id]?.length}
+                <p class="res-empty">{t("detail.noResources")}</p>
+              {:else}
+                <ul class="res-list">
+                  {#each resourcesById[a.id] as f (f.rel_path)}
+                    <li>
+                      <button class="res-row" type="button" onclick={() => openResource(a.id, f)} title={t("detail.resourceOpenTooltip")}>
+                        <span class="res-nm">{f.rel_path}</span>
+                        <span class="res-size mono">{fmtFileSize(f.size_bytes)}</span>
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
+          {/if}
         </li>
       {/each}
     </ul>
@@ -99,7 +189,7 @@
 
 <style>
   .apps {
-    max-width: 760px;
+    max-width: 860px;
   }
   .head {
     display: flex;
@@ -138,15 +228,17 @@
     gap: 5px;
   }
   .list li {
-    display: flex;
-    align-items: center;
-    gap: 12px;
     border: 1px solid var(--line);
     background: var(--panel2);
-    padding: 9px 12px;
   }
   .list li.active {
     border-left: 3px solid var(--green-border);
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
   }
   .a-name {
     flex: 1;
@@ -203,5 +295,50 @@
     font-size: 12px;
     color: var(--faint);
     margin-top: 8px;
+  }
+  .res-panel {
+    border-top: 1px solid var(--line);
+    padding: 9px 12px;
+  }
+  .res-empty {
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .res-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .res-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--line);
+    background: var(--raised);
+    padding: 7px 10px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .res-row:hover {
+    border-color: var(--rosso-border);
+  }
+  .res-nm {
+    flex: 1;
+    min-width: 0;
+    font-size: 11.5px;
+    color: var(--txt2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .res-row:hover .res-nm {
+    color: var(--rosso-bright);
+  }
+  .res-size {
+    flex: none;
+    font-size: 10px;
+    color: var(--muted2);
   }
 </style>

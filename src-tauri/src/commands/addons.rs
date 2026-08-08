@@ -1,5 +1,5 @@
 //! Commandes des add-ons (§12bis) : contenu de base Kunos, skins, skins de
-//! circuit, sons et apps Python.
+//! circuit, sons et apps Python/Lua.
 
 use super::prelude::*;
 
@@ -109,7 +109,7 @@ pub fn delete_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), Strin
     crate::apps::remove_app(&conn, &cfg, &id)
 }
 
-/// Liste les apps Python avec leur état d'activation (§12bis.4).
+/// Liste les apps (Python ou Lua/CSP) avec leur état d'activation (§12bis.4).
 #[tauri::command]
 pub fn list_apps(app: AppHandle, db: State<Db>) -> Result<Vec<crate::apps::AppItem>, String> {
     let cfg = crate::config::load(&app);
@@ -117,7 +117,8 @@ pub fn list_apps(app: AppHandle, db: State<Db>) -> Result<Vec<crate::apps::AppIt
     crate::apps::list_apps(&conn, &cfg)
 }
 
-/// Active une app (junction vers apps/python/, §12bis.4).
+/// Active une app (junction vers apps/python/ ou apps/lua/ selon le langage
+/// détecté, §12bis.4).
 #[tauri::command]
 pub fn activate_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
     let cfg = crate::config::load(&app);
@@ -129,4 +130,46 @@ pub fn activate_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), Str
 #[tauri::command]
 pub fn deactivate_app(app: AppHandle, id: String) -> Result<(), String> {
     crate::apps::deactivate_app(&crate::config::load(&app), &id)
+}
+
+/// Ouvre le dossier bibliothèque d'une app dans l'explorateur (même schéma
+/// que `open_mod_folder` : chemin résolu côté serveur, pas de scope ACL large
+/// à ouvrir sur le plugin opener).
+#[tauri::command]
+pub fn open_app_folder(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let cfg = crate::config::load(&app);
+    let path = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        crate::apps::app_folder_path(&conn, &cfg, &id)?
+    };
+    app.opener()
+        .open_path(path.display().to_string(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+/// Liste les fichiers annexes d'une app (§4.6, même mécanisme que les mods
+/// voiture/circuit) — lue en direct sur disque à chaque appel, jamais
+/// mémorisée en base.
+#[tauri::command]
+pub fn list_app_resources(app: AppHandle, id: String) -> Result<Vec<crate::resources::ResourceFile>, String> {
+    let cfg = crate::config::load(&app);
+    let library = cfg.library_path.ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    Ok(crate::resources::list_resources(&crate::resources::resources_dir_for(
+        &library,
+        "apps",
+        &[&id],
+    )))
+}
+
+/// Ouvre un fichier annexe d'une app avec l'application par défaut de l'OS
+/// (§4.6). `rel_path` résolu et validé côté serveur (garde-fou anti-traversée).
+#[tauri::command]
+pub fn open_app_resource(app: AppHandle, id: String, rel_path: String) -> Result<(), String> {
+    let cfg = crate::config::load(&app);
+    let library = cfg.library_path.ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    let dir = crate::resources::resources_dir_for(&library, "apps", &[&id]);
+    let path = crate::resources::resolve_resource_path(&dir, &rel_path)?;
+    app.opener()
+        .open_path(path.display().to_string(), None::<&str>)
+        .map_err(|e| e.to_string())
 }
