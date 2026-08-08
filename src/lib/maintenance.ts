@@ -25,6 +25,23 @@ export interface ExportReport {
   warnings: string[];
 }
 
+export interface RepairProjectionsReport {
+  repaired: number;
+  already_ok: number;
+  failed: string[];
+}
+
+export interface ReinstallOutcome {
+  id: string;
+  error: string;
+}
+
+export interface RepairAllReport {
+  projections: RepairProjectionsReport;
+  reinstalled: string[];
+  reinstall_errors: ReinstallOutcome[];
+}
+
 export function maintenanceScan(): Promise<MaintenanceReport> {
   return invoke<MaintenanceReport>("maintenance_scan");
 }
@@ -45,6 +62,12 @@ export function deleteBrokenMod(id: string): Promise<void> {
  * « conserver l'archive source »). Réextrait et remplace les fichiers de la version active. */
 export function reinstallFromArchive(id: string): Promise<void> {
   return invoke<void>("reinstall_from_archive", { id });
+}
+
+/** Réparation générale (§9.3) : recrée les projections skin/circuit cassées, et si
+ * `reinstallBroken`, réinstalle depuis l'archive source conservée chaque mod cassé qui en a une. */
+export function repairAll(reinstallBroken: boolean): Promise<RepairAllReport> {
+  return invoke<RepairAllReport>("repair_all", { reinstallBroken });
 }
 
 export function removeOrphanJunction(kind: string, id: string): Promise<void> {

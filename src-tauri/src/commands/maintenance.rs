@@ -59,6 +59,20 @@ pub fn reinstall_from_archive(app: AppHandle, db: State<Db>, id: String) -> Resu
     crate::maintenance::reinstall_from_archive(&conn, &cfg, &id)
 }
 
+/// Réparation générale (§9.3) : recrée les projections skin/circuit cassées,
+/// et si `reinstall_broken`, réinstalle depuis l'archive source conservée
+/// chaque mod détecté cassé qui en a une.
+#[tauri::command]
+pub fn repair_all(
+    app: AppHandle,
+    db: State<Db>,
+    reinstall_broken: bool,
+) -> Result<crate::maintenance::RepairAllReport, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::maintenance::repair_all(&conn, &cfg, reinstall_broken)
+}
+
 /// Exporte la version active d'un mod en archive autonome dans `dest_dir` (§9.1).
 #[tauri::command]
 pub fn export_mod(

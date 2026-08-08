@@ -11,7 +11,7 @@ use serde::Serialize;
 use crate::config::AppConfig;
 use crate::modscan::ModKind;
 use crate::overlay::ModRow;
-use crate::{activation, archive, deploy, inspect, modscan, overlay, uijson};
+use crate::{activation, archive, deploy, inspect, modscan, overlay, submods, uijson};
 
 fn kind_of(s: &str) -> ModKind {
     if s == "Track" {
@@ -227,6 +227,49 @@ pub fn reinstall_from_archive(conn: &Connection, cfg: &AppConfig, id: &str) -> R
     reindex_mod(conn, cfg, id, true)?;
     overlay::add_history(conn, id, &chrono::Local::now().to_rfc3339(), "REINSTALL", "").map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReinstallOutcome {
+    pub id: String,
+    pub error: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RepairAllReport {
+    pub projections: submods::RepairReport,
+    pub reinstalled: Vec<String>,
+    pub reinstall_errors: Vec<ReinstallOutcome>,
+}
+
+/// Réparation générale (§9.3), à la manière du « purge & deploy » des autres
+/// gestionnaires de mods : recrée d'abord les junctions de projection skin/
+/// circuit cassées (`submods::repair_projections`, toujours sûr et gratuit —
+/// no-op sur tout ce qui est déjà sain), puis, si `reinstall_broken`, tente
+/// une réinstallation depuis l'archive source conservée (§10/§11) pour chaque
+/// mod actuellement détecté cassé par `scan`. Un mod sans archive conservée
+/// échoue simplement avec `NO_KEPT_ARCHIVE` — attendu si le réglage
+/// « conserver l'archive source » n'était pas actif à son import, ça n'arrête
+/// pas le reste du lot.
+pub fn repair_all(conn: &Connection, cfg: &AppConfig, reinstall_broken: bool) -> Result<RepairAllReport, String> {
+    let projections = submods::repair_projections(conn, cfg);
+
+    let mut reinstalled = Vec::new();
+    let mut reinstall_errors = Vec::new();
+    if reinstall_broken {
+        for b in scan(conn, cfg)?.broken {
+            match reinstall_from_archive(conn, cfg, &b.id) {
+                Ok(()) => reinstalled.push(b.id),
+                Err(error) => reinstall_errors.push(ReinstallOutcome { id: b.id, error }),
+            }
+        }
+    }
+
+    Ok(RepairAllReport {
+        projections,
+        reinstalled,
+        reinstall_errors,
+    })
 }
 
 /// Retire une junction orpheline. Garde-fou : refuse si ce n'est pas une junction.
@@ -492,6 +535,69 @@ mod tests {
             "réinstallation doit restaurer le fichier manquant"
         );
         assert_eq!(std::fs::read_to_string(lib_path.join("data.txt")).unwrap(), "original");
+    }
+
+    #[test]
+    fn repair_all_reinstalls_broken_mods_only_when_requested() {
+        // §9.3bis (réparation générale) : reinstall_broken=false doit se
+        // limiter à la réparation des projections skins (toujours sûre) et
+        // laisser les mods cassés intacts ; reinstall_broken=true doit en
+        // plus rattraper ceux qui ont une archive source conservée.
+        let base = crate::testutil::temp_dir("repair-all");
+        std::fs::create_dir_all(&base).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig::default();
+        let now = chrono::Local::now().to_rfc3339();
+
+        let kept_root = base.join("kept");
+        make_car(&kept_root, "reinst_car", "original");
+        let kept_path = kept_root.join("reinst_car");
+
+        // Dossier de bibliothèque absent : cassé pour `scan` (reasonFilesMissing).
+        // `reinstall_from_archive` n'a pas besoin qu'il préexiste (il le recrée).
+        let lib_path = base.join("library").join("cars").join("reinst_car").join("v1");
+
+        overlay::upsert_mod(&conn, "reinst_car", "Car", Some("B"), Some("Test"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn,
+            "v1",
+            "reinst_car",
+            Some("1.0"),
+            None,
+            &now,
+            &lib_path.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "reinst_car", "v1").unwrap();
+        overlay::set_kept_archive(&conn, "v1", &kept_path.to_string_lossy()).unwrap();
+
+        assert!(
+            !lib_path.join("data.txt").exists(),
+            "précondition : contenu bibliothèque incomplet"
+        );
+
+        let report = repair_all(&conn, &cfg, false).unwrap();
+        assert!(report.reinstalled.is_empty(), "reinstall_broken=false : rien tenté");
+        assert!(report.reinstall_errors.is_empty());
+        assert!(
+            !lib_path.join("data.txt").exists(),
+            "reinstall_broken=false ne doit pas réinstaller"
+        );
+
+        let report2 = repair_all(&conn, &cfg, true).unwrap();
+        assert_eq!(report2.reinstalled, vec!["reinst_car".to_string()]);
+        assert!(report2.reinstall_errors.is_empty());
+        assert!(
+            lib_path.join("data.txt").is_file(),
+            "reinstall_broken=true doit restaurer le fichier manquant"
+        );
     }
 
     #[test]

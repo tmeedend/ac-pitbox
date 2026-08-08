@@ -478,7 +478,16 @@
     "reasonNoActiveVersion": "aucune version active",
     "reasonFilesMissing": "fichiers de la bibliothèque introuvables",
     "reasonUiCarMissing": "ui/ui_car.json manquant",
-    "reasonUiDirMissing": "dossier ui/ manquant"
+    "reasonUiDirMissing": "dossier ui/ manquant",
+    "repairTitle": "Réparation générale",
+    "repairHint": "Recrée les projections de skins voiture/circuit manquantes ou cassées — utile après une copie de bibliothèque (ex. robocopy) qui ne préserve pas les junctions. Ne touche jamais aux fichiers stockés.",
+    "repairReinstallOption": "Aussi réinstaller depuis l'archive source les mods cassés qui en ont une conservée",
+    "repairing": "Réparation…",
+    "repair": "Réparer",
+    "repairProjectionsDone": "{repaired} projection(s) recréée(s), {alreadyOk} déjà en place.",
+    "repairProjectionsFailed": "{count} projection(s) en échec.",
+    "repairReinstalledDone": "{count} mod(s) réinstallé(s) depuis leur archive source.",
+    "repairReinstallFailed": "{count} réinstallation(s) en échec."
   },
   "rules": {
     "savedMsg": "Enregistré — {count} mod(s) retraité(s)",

@@ -195,6 +195,57 @@ fn project_skin(
     }
 }
 
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct RepairReport {
+    pub repaired: usize,
+    pub already_ok: usize,
+    /// `"<parent_id>/<name>: <raison>"`, best-effort — l'appelant ne peut rien
+    /// faire de plus qu'informer (cible inconnue, création skins/ échouée…).
+    pub failed: Vec<String>,
+}
+
+/// Recrée les junctions de projection de skins voiture/circuit manquantes ou
+/// cassées (§12bis.2), sans jamais toucher aux fichiers stockés eux-mêmes.
+/// Cas d'usage : une copie de bibliothèque (robocopy, migration vers une
+/// autre machine) ne préserve pas les junctions — leur cible est un chemin
+/// absolu propre à la machine source, donc non relogeable telle quelle.
+/// `project_skin` est déjà un no-op quand la junction existe (`link.exists()`),
+/// donc rejouable sans risque même sur une bibliothèque saine : on boucle
+/// simplement sur tous les skins connus et on laisse ce garde-fou décider.
+pub fn repair_projections(conn: &Connection, cfg: &AppConfig) -> RepairReport {
+    let mut report = RepairReport::default();
+    for sub_type in ["SKIN", "TRACK_SKIN"] {
+        let track = sub_type == "TRACK_SKIN";
+        for s in overlay::list_subs_by_type(conn, sub_type).unwrap_or_default() {
+            let store = Path::new(&s.library_path);
+            if !store.is_dir() {
+                // Stockage lui-même absent : hors de portée ici, ce n'est pas
+                // une junction cassée mais une perte de données réelle.
+                continue;
+            }
+            let (projected, warning) = project_skin(conn, cfg, &s.parent_id, &s.name, store, track);
+            if projected {
+                report.repaired += 1;
+                continue;
+            }
+            // `project_skin` renvoie faux aussi bien quand la junction était
+            // déjà en place (rien à faire, pas une erreur) qu'en cas d'échec
+            // réel : on tranche en revérifiant si le lien existe à présent.
+            let already_there = parent_skins_dir(conn, cfg, &s.parent_id)
+                .map(|dir| if track { dir.join("cm_skins") } else { dir })
+                .is_some_and(|dir| dir.join(&s.name).exists());
+            if already_there {
+                report.already_ok += 1;
+            } else {
+                report
+                    .failed
+                    .push(format!("{}/{}: {}", s.parent_id, s.name, warning.unwrap_or_default()));
+            }
+        }
+    }
+    report
+}
+
 /// Fichiers annexes reconnus d'un pack de skins de circuit : pas des skins,
 /// mais une amélioration du circuit qui les accompagne (§4.6bis).
 const TRACK_PACK_EXTRAS: &[&str] = &["ext_config.ini"];
@@ -1396,6 +1447,96 @@ mod tests {
             "voiture retrouvée dans le nom d'archive"
         );
         assert_eq!(res[0].name, archive_name, "nom lisible, pas « sfx »");
+    }
+
+    #[test]
+    fn repair_projections_recreates_missing_car_skin_junction() {
+        // §12bis.2 : une copie de bibliothèque (robocopy sans /XJ, migration
+        // vers une autre machine) ne préserve pas les junctions — leur cible
+        // est un chemin absolu propre à la machine source. repair_projections
+        // doit recréer celle d'un skin dont le stockage survit mais dont la
+        // projection dans skins/ a disparu, sans jamais toucher au stockage.
+        let base = crate::testutil::temp_dir("repair-proj");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        let carv = library.join("cars").join("ferrari_488").join("v1");
+        std::fs::create_dir_all(&carv).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let now = Local::now().to_rfc3339();
+        overlay::upsert_mod(
+            &conn,
+            "ferrari_488",
+            "Car",
+            Some("Ferrari"),
+            Some("488"),
+            "h",
+            None,
+            &now,
+        )
+        .unwrap();
+        overlay::insert_version(
+            &conn,
+            "v1",
+            "ferrari_488",
+            Some("1.0"),
+            None,
+            &now,
+            &carv.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "ferrari_488", "v1").unwrap();
+
+        // Skin stocké à part + projeté, comme le ferait import_skin_pack.
+        let store = library.join("skins").join("ferrari_488").join("af_corse_51");
+        std::fs::create_dir_all(&store).unwrap();
+        std::fs::write(store.join("preview.jpg"), b"IMG").unwrap();
+        overlay::insert_sub_mod(
+            &conn,
+            "s1",
+            "SKIN",
+            "ferrari_488",
+            "af_corse_51",
+            &store.to_string_lossy(),
+            None,
+            &now,
+        )
+        .unwrap();
+        let (projected, _) = project_skin(&conn, &cfg, "ferrari_488", "af_corse_51", &store, false);
+        assert!(projected, "précondition : projection initiale réussie");
+
+        let link = carv.join("skins").join("af_corse_51");
+        assert!(activation::is_junction(&link), "précondition : junction en place");
+
+        // Simule la perte de la junction (copie sans /XJ).
+        activation::remove_junction(&link).unwrap();
+        assert!(!link.exists(), "précondition : junction disparue");
+        assert!(store.join("preview.jpg").is_file(), "précondition : stockage intact");
+
+        let report = repair_projections(&conn, &cfg);
+        assert_eq!(report.repaired, 1);
+        assert_eq!(report.already_ok, 0);
+        assert!(report.failed.is_empty());
+        assert!(activation::is_junction(&link), "junction recréée");
+
+        // Rejouable sans risque sur une bibliothèque déjà saine : la seconde
+        // passe ne doit rien recréer, juste confirmer que tout est en place.
+        let report2 = repair_projections(&conn, &cfg);
+        assert_eq!(report2.repaired, 0);
+        assert_eq!(report2.already_ok, 1);
+        assert!(report2.failed.is_empty());
     }
 
     #[test]

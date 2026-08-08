@@ -6,6 +6,7 @@
     deleteBrokenMod,
     removeOrphanJunction,
     reindexLibrary,
+    repairAll,
     type MaintenanceReport,
   } from "$lib/maintenance";
   import { indexStockContent } from "$lib/submods";
@@ -21,6 +22,10 @@
   let reindexing = $state(false);
   let reindexMsg = $state("");
   let recalcSize = $state(false);
+  let repairing = $state(false);
+  let repairMsg = $state("");
+  let reinstallBroken = $state(false);
+  let reinstallFailures = $state<{ id: string; name: string; reason: string }[]>([]);
 
   async function doReindex() {
     reindexing = true;
@@ -47,6 +52,45 @@
       error = errorText(e);
     } finally {
       indexing = false;
+    }
+  }
+
+  async function doRepair() {
+    repairing = true;
+    error = "";
+    repairMsg = "";
+    reinstallFailures = [];
+    try {
+      const r = await repairAll(reinstallBroken);
+      const parts = [
+        t("maintenance.repairProjectionsDone", { repaired: r.projections.repaired, alreadyOk: r.projections.already_ok }),
+      ];
+      if (r.projections.failed.length) {
+        parts.push(t("maintenance.repairProjectionsFailed", { count: r.projections.failed.length }));
+      }
+      if (reinstallBroken) {
+        parts.push(t("maintenance.repairReinstalledDone", { count: r.reinstalled.length }));
+        if (r.reinstall_errors.length) {
+          parts.push(t("maintenance.repairReinstallFailed", { count: r.reinstall_errors.length }));
+        }
+      }
+      repairMsg = parts.join(" ");
+      // Rafraîchit toujours après une réparation : une réinstallation réussie
+      // change l'état des mods cassés, et sert aussi à retrouver le nom des
+      // mods en échec ci-dessous (le rapport de repairAll ne connaît que leur id).
+      await scan();
+      if (reinstallBroken && r.reinstall_errors.length) {
+        const names = new Map((report?.broken ?? []).map((b) => [b.id, b.name ?? b.id]));
+        reinstallFailures = r.reinstall_errors.map((e) => ({
+          id: e.id,
+          name: names.get(e.id) ?? e.id,
+          reason: e.error,
+        }));
+      }
+    } catch (e) {
+      error = errorText(e);
+    } finally {
+      repairing = false;
     }
   }
 
@@ -128,6 +172,33 @@
       </button>
       {#if reindexMsg}<span class="stock-msg">{reindexMsg}</span>{/if}
     </div>
+  </section>
+
+  <section class="stock-sec">
+    <h3>{t("maintenance.repairTitle")}</h3>
+    <p class="hint">{t("maintenance.repairHint")}</p>
+    <label class="recalc-check">
+      <input type="checkbox" bind:checked={reinstallBroken} />
+      <span>{t("maintenance.repairReinstallOption")}</span>
+    </label>
+    <div class="stock-row">
+      <button class="btn" type="button" onclick={doRepair} disabled={repairing}>
+        {repairing ? t("maintenance.repairing") : t("maintenance.repair")}
+      </button>
+      {#if repairMsg}<span class="stock-msg">{repairMsg}</span>{/if}
+    </div>
+    {#if reinstallFailures.length}
+      <ul class="list repair-fail-list">
+        {#each reinstallFailures as f (f.id)}
+          <li>
+            <div class="l-main">
+              <span class="l-name">{f.name}</span>
+              <span class="l-reason">{errorText(f.reason)}</span>
+            </div>
+          </li>
+        {/each}
+      </ul>
+    {/if}
   </section>
 
   {#if report}
@@ -331,5 +402,8 @@
   .stock-msg {
     color: var(--green);
     font-size: 12px;
+  }
+  .repair-fail-list {
+    margin-top: 10px;
   }
 </style>

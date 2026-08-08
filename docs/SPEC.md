@@ -270,6 +270,8 @@ Bouton d'aperçu 3D sur la fiche (lance `acshowroom` pour un rendu du modèle). 
 
 **Conservation de l'archive source** (réglage optionnel, défaut désactivé — cohérent avec l'absence d'historique de versions/couches, §4.3) : si activé, l'archive/dossier source d'un mod est conservée en bibliothèque en plus du contenu extrait. Rend disponible une action **« Réinstaller depuis l'archive source »** sur la fiche du mod (visible seulement si l'archive est conservée) : réextrait l'archive et remplace le contenu de bibliothèque pour ce mod. Utile en cas de corruption, de modification accidentelle, ou pour repartir propre sans retélécharger.
 
+**Réparation générale** (écran Maintenance, à la manière du « purge & deploy » des autres gestionnaires de mods) : une action **« Réparer »** recrée d'un coup toutes les projections (junctions) de skins voiture/circuit manquantes ou cassées — le cas typique étant une copie de bibliothèque (robocopy, migration vers une autre machine) qui ne préserve pas les junctions, leur cible étant un chemin absolu propre à la machine source. Sans risque et rejouable à volonté : un skin déjà bien projeté n'est pas touché, seul un lien manquant est recréé. Une case à cocher optionnelle étend l'action à une réinstallation en lot : tout mod actuellement détecté cassé par le scan et disposant d'une archive source conservée (réglage ci-dessus) est réinstallé depuis celle-ci ; un mod cassé sans archive conservée est simplement laissé de côté (visible ensuite dans la liste des mods cassés, pour suppression manuelle si besoin).
+
 ---
 
 ## 11. Configuration et préférences
