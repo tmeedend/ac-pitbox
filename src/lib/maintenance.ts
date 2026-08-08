@@ -42,6 +42,12 @@ export interface RepairAllReport {
   reinstall_errors: ReinstallOutcome[];
 }
 
+export interface RelativizeReport {
+  converted: number;
+  already_relative: number;
+  unrecognized: string[];
+}
+
 export function maintenanceScan(): Promise<MaintenanceReport> {
   return invoke<MaintenanceReport>("maintenance_scan");
 }
@@ -68,6 +74,13 @@ export function reinstallFromArchive(id: string): Promise<void> {
  * `reinstallBroken`, réinstalle depuis l'archive source conservée chaque mod cassé qui en a une. */
 export function repairAll(reinstallBroken: boolean): Promise<RepairAllReport> {
   return invoke<RepairAllReport>("repair_all", { reinstallBroken });
+}
+
+/** Convertit en chemins relatifs à la bibliothèque toutes les lignes overlay encore
+ * écrites en absolu (§11) — répare une bibliothèque copiée depuis une autre machine.
+ * Ne touche aucun fichier, uniquement une réécriture en base ; sûr à rejouer. */
+export function relativizeLibraryPaths(): Promise<RelativizeReport> {
+  return invoke<RelativizeReport>("relativize_library_paths");
 }
 
 export function removeOrphanJunction(kind: string, id: string): Promise<void> {

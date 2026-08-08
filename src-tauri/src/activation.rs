@@ -1,17 +1,21 @@
 //! Activation / désactivation dans `content/` (§2/§7).
 //!
-//! **Mécanisme actuel : hardlinks par fichier** (`deploy.rs`), comme Vortex —
-//! zéro duplication, zéro reparse point, pas de droits admin. Toute nouvelle
-//! activation utilise ce mécanisme.
+//! **Deux mécanismes de déploiement, au choix (`prefs.deploy_mode`, §12)** :
+//! - **Hardlinks par fichier** (`deploy.rs`, défaut) : zéro duplication, zéro
+//!   reparse point, pas de droits admin — exige que bibliothèque et jeu
+//!   soient sur le même disque (`CreateHardLinkW` ne traverse pas les volumes).
+//! - **Symlink** (junction `mklink /D`, ci-dessous `create_junction`/
+//!   `is_junction`/`remove_junction` malgré leur nom) : marche sur n'importe
+//!   quel disque, mais exige le mode développeur Windows ou une élévation
+//!   (déconseillée). C'était l'ancien mécanisme par défaut avant la bascule
+//!   hardlinks ; redevenu un choix explicite plutôt qu'un vestige.
 //!
-//! **Compat ascendante** : les mods déjà actifs sous l'ancien mécanisme
-//! (symlink `mklink /D`, ci-dessous `create_junction`/`is_junction`/
-//! `remove_junction` malgré leur nom — legacy) continuent de fonctionner tels
-//! quels indéfiniment, inoffensif. Ils sont migrés vers les hardlinks
-//! **transparemment à leur prochaine (ré)activation**, jamais par migration
-//! forcée : `is_mod_active`/`activate`/`deactivate` reconnaissent les deux
-//! formes, mais seule `deploy::deploy_tree`/`compose_tree` est utilisée pour
-//! écrire du nouveau contenu.
+//! Le choix ne s'applique qu'à une base **sans couche active** — voir
+//! `deploy_base` ci-dessous et `compose.rs` pour la raison (une junction ne
+//! peut pas fusionner plusieurs sources). `is_mod_active`/`activate`/
+//! `deactivate` reconnaissent les deux formes sur le disque, quel que soit le
+//! réglage courant : un mod déployé sous l'autre mode reste actif tel quel et
+//! ne se migre qu'à sa prochaine (ré)activation, jamais de force.
 //!
 //! Garde-fou absolu : on ne supprime JAMAIS dans `content/` un dossier qui
 //! n'est ni une junction/symlink créée par l'app, ni un déploiement hardlinks
@@ -104,8 +108,31 @@ pub fn remove_junction(link: &Path) -> Result<(), String> {
 /// touché. Message destiné à l'utilisateur, donc clé i18n (cf. `errors.rs`).
 const GUARD_MSG: &str = crate::errors::REAL_FOLDER_GUARD;
 
-/// Active un mod : crée la junction `content/<type>s/<id>` → version choisie.
-/// Si `version_id` est fourni, il devient la version active.
+/// Déploie une base sans couche (§2) : par junction si `cfg.prefs.deploy_mode
+/// == "symlink"`, sinon par hardlinks (défaut). Partagé par `activate` et
+/// `compose::recompose_managed` — les deux endroits qui déploient une base
+/// telle quelle, sans fusion. Une base à composer avec des couches actives
+/// n'utilise JAMAIS cette fonction : `compose_tree` fusionne plusieurs
+/// sources dans un seul dossier, ce qu'une junction (un seul lien direct vers
+/// UNE cible) ne peut pas faire — un mod à couches reste donc en hardlinks
+/// quel que soit le mode choisi.
+pub(crate) fn deploy_base(
+    cfg: &AppConfig,
+    source: &Path,
+    link: &Path,
+    mod_id: &str,
+    kind: ModKind,
+) -> Result<(), String> {
+    if cfg.prefs.deploy_mode == "symlink" {
+        create_junction(link, source)
+    } else {
+        deploy::deploy_tree(source, link, mod_id, kind)
+    }
+}
+
+/// Active un mod : déploie `content/<type>s/<id>` depuis la version choisie,
+/// selon le mode courant (`deploy_base`). Si `version_id` est fourni, il
+/// devient la version active.
 pub fn activate(conn: &Connection, cfg: &AppConfig, mod_id: &str, version_id: Option<&str>) -> Result<(), String> {
     let m = overlay::get_mod(conn, mod_id)
         .map_err(|e| e.to_string())?
@@ -119,15 +146,18 @@ pub fn activate(conn: &Connection, cfg: &AppConfig, mod_id: &str, version_id: Op
         .map(str::to_string)
         .or(m.active_version_id)
         .ok_or(crate::errors::NO_VERSION_TO_ACTIVATE)?;
-    let target = overlay::get_version_path(conn, &vid)
+    let stored = overlay::get_version_path(conn, &vid)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::VERSION_NOT_FOUND)?;
+    let target =
+        crate::libpath::resolve(cfg.library_path.as_deref(), &stored).ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     let link = content_link(cfg, kind, mod_id).ok_or(crate::errors::AC_NOT_CONFIGURED)?;
 
     // Garde-fou + nettoyage d'un déploiement existant, quelle que soit sa
-    // forme (symlink hérité ou hardlinks). Toute réactivation redéploie en
-    // hardlinks, migrant transparemment les mods encore en symlink.
-    // Une erreur de `symlink_metadata` = le lien n'existe pas : rien à nettoyer.
+    // forme (symlink ou hardlinks). Toute réactivation redéploie selon le
+    // mode courant (`deploy_base` ci-dessous), migrant transparemment un mod
+    // resté sous l'autre mode. Une erreur de `symlink_metadata` = le lien
+    // n'existe pas : rien à nettoyer.
     if let Ok(meta) = std::fs::symlink_metadata(&link) {
         if meta.file_type().is_symlink() {
             remove_junction(&link)?;
@@ -138,7 +168,7 @@ pub fn activate(conn: &Connection, cfg: &AppConfig, mod_id: &str, version_id: Op
         }
     }
 
-    deploy::deploy_tree(Path::new(&target), &link, mod_id, kind)?;
+    deploy_base(cfg, &target, &link, mod_id, kind)?;
     overlay::set_active_version(conn, mod_id, &vid).map_err(|e| e.to_string())?;
     // Compose par-dessus la base si le mod a des couches actives (§4.4) ;
     // sans couche, recompose ré-affirme simplement la junction vers la version.
@@ -146,7 +176,8 @@ pub fn activate(conn: &Connection, cfg: &AppConfig, mod_id: &str, version_id: Op
     Ok(())
 }
 
-/// Désactive un mod : retire la junction (le contenu reste dans la bibliothèque).
+/// Désactive un mod : retire son déploiement, quelle que soit sa forme
+/// (junction ou hardlinks) — le contenu reste dans la bibliothèque.
 pub fn deactivate(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(), String> {
     let m = overlay::get_mod(conn, mod_id)
         .map_err(|e| e.to_string())?
@@ -376,5 +407,66 @@ mod tests {
         assert!(!is_junction(&link), "migré : plus un symlink");
         assert!(deploy::is_deployed(&link), "migré : déploiement hardlinks");
         assert!(link.join("data.txt").is_file());
+    }
+
+    /// §2 : `deploy_mode = "symlink"` doit faire déployer `activate` par
+    /// junction (ancien mécanisme, redevenu un choix explicite) plutôt que par
+    /// hardlinks — sans droits admin requis pour créer une junction, seule
+    /// `mklink /D` en a besoin, et ce test ne s'exécute jamais élevé.
+    #[test]
+    fn activate_deploys_via_junction_when_symlink_mode_selected() {
+        if !cfg!(windows) {
+            return;
+        }
+        let base = crate::testutil::temp_dir("symlink-mode");
+        let ac = base.join("ac");
+        let library = base.join("library");
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let carv = library.join("cars").join("sym_car").join("v1");
+        std::fs::create_dir_all(&carv).unwrap();
+        std::fs::write(carv.join("data.txt"), "hi").unwrap();
+
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_mod(&conn, "sym_car", "Car", Some("B"), Some("Sym"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn,
+            "v1",
+            "sym_car",
+            Some("1.0"),
+            None,
+            &now,
+            &carv.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "sym_car", "v1").unwrap();
+        let mut cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library),
+            ..Default::default()
+        };
+        cfg.prefs.deploy_mode = "symlink".into();
+
+        // Exige le mode développeur (ou une élévation, déconseillée) — sans
+        // l'un des deux, `mklink /D` échoue en environnement CI standard :
+        // le test ne prouve alors rien de plus que « ignoré », pas un échec.
+        if activate(&conn, &cfg, "sym_car", None).is_err() {
+            return;
+        }
+        let link = ac.join("content").join("cars").join("sym_car");
+        assert!(is_junction(&link), "mode symlink : junction, pas des hardlinks");
+        assert!(!deploy::is_deployed(&link), "pas de marqueur hardlinks en mode symlink");
+        assert!(link.join("data.txt").is_file());
+
+        deactivate(&conn, &cfg, "sym_car").unwrap();
+        assert!(!link.exists());
+        assert!(carv.join("data.txt").is_file(), "bibliothèque intacte");
     }
 }

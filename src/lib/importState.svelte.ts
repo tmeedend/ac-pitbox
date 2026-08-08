@@ -59,7 +59,12 @@ export function setCopyMode(v: boolean): void {
  * `source` est mémorisée pour pouvoir reprendre un cas ambigu après décision. */
 async function runImport(source: { paths: string[]; folder: boolean; copy: boolean }): Promise<void> {
   importState.importing = true;
-  importState.progress = null;
+  // Retour immédiat (§4.6bis) : la commande est asynchrone côté backend et met
+  // un instant à démarrer réellement le traitement — sans cet état "queued",
+  // le toast de progression (conditionné sur `progress` non nul) resterait
+  // invisible pendant ce court laps, donnant l'impression que le drop n'a rien
+  // fait. Remplacé dès le premier événement `import:progress` réel.
+  importState.progress = { archive: "", phase: "queued", current: 0, total: source.paths.length, label: "" };
   try {
     const report = source.folder
       ? await importFolders(source.paths, source.copy)

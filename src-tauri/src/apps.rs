@@ -64,7 +64,7 @@ pub fn import_apps(
         let _ = overlay::insert_app(
             conn,
             &app.name,
-            &dest.to_string_lossy(),
+            &crate::libpath::to_relative(Some(library), &dest),
             Some(source_name),
             &Local::now().to_rfc3339(),
         );
@@ -111,7 +111,9 @@ pub fn activate_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), 
     if let Some(parent) = link.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    activation::create_junction(&link, Path::new(&app.library_path))
+    let target = crate::libpath::resolve(cfg.library_path.as_deref(), &app.library_path)
+        .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    activation::create_junction(&link, &target)
 }
 
 /// Désactive une app : retire la junction (garde-fou junction).
@@ -136,7 +138,9 @@ pub fn remove_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), St
             let _ = activation::remove_junction(&link);
         }
     }
-    let _ = std::fs::remove_dir_all(Path::new(&app.library_path));
+    if let Some(dir) = crate::libpath::resolve(cfg.library_path.as_deref(), &app.library_path) {
+        let _ = std::fs::remove_dir_all(dir);
+    }
     overlay::delete_app(conn, id).map_err(|e| e.to_string())
 }
 
@@ -167,7 +171,10 @@ mod tests {
         assert!(overlay::app_exists(&conn, "MyApp").unwrap());
 
         // Suppression propre : fichiers + overlay effacés (pas de junction ici).
-        let cfg = AppConfig::default();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
         remove_app(&conn, &cfg, "MyApp").unwrap();
         assert!(!library.join("apps").join("MyApp").exists());
         assert!(!overlay::app_exists(&conn, "MyApp").unwrap());

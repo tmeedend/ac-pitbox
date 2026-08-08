@@ -130,7 +130,10 @@ fn recompose_stock(link: &Path, library: &Path, kind: ModKind, id: &str, layers:
     } else if link.exists() {
         std::fs::remove_dir_all(link).map_err(|e| format!("retrait du dossier de base : {e}"))?;
     }
-    let layer_paths: Vec<PathBuf> = layers.iter().map(|l| PathBuf::from(&l.library_path)).collect();
+    let layer_paths: Vec<PathBuf> = layers
+        .iter()
+        .filter_map(|l| crate::libpath::resolve(Some(library), &l.library_path))
+        .collect();
     deploy::compose_tree(&stock_base, &layer_paths, link, id, kind)
 }
 
@@ -150,10 +153,11 @@ fn recompose_managed(
         return Ok(()); // mod inactif : rien à projeter
     }
     let vid = m.active_version_id.clone().ok_or(crate::errors::NO_ACTIVE_VERSION)?;
-    let base = overlay::get_version_path(conn, &vid)
+    let stored = overlay::get_version_path(conn, &vid)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::VERSION_NOT_FOUND)?;
-    let base = PathBuf::from(base);
+    let base =
+        crate::libpath::resolve(cfg.library_path.as_deref(), &stored).ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
 
     // Garde-fou : un mod géré ne doit jamais recouvrir un vrai dossier de content/.
     if link.exists() && !is_junction(link) && !deploy::is_deployed(link) {
@@ -162,9 +166,12 @@ fn recompose_managed(
     clear_link(link)?;
 
     if layers.is_empty() {
-        deploy::deploy_tree(&base, link, mod_id, kind)
+        activation::deploy_base(cfg, &base, link, mod_id, kind)
     } else {
-        let layer_paths: Vec<PathBuf> = layers.iter().map(|l| PathBuf::from(&l.library_path)).collect();
+        let layer_paths: Vec<PathBuf> = layers
+            .iter()
+            .filter_map(|l| crate::libpath::resolve(cfg.library_path.as_deref(), &l.library_path))
+            .collect();
         deploy::compose_tree(&base, &layer_paths, link, mod_id, kind)
     }
 }
@@ -208,7 +215,9 @@ pub fn reorder_layer(conn: &Connection, cfg: &AppConfig, layer_id: &str, directi
 pub fn remove_layer(conn: &Connection, cfg: &AppConfig, layer_id: &str) -> Result<(), String> {
     let layer = overlay::get_layer(conn, layer_id).map_err(|e| e.to_string())?;
     if let Some(layer) = &layer {
-        let _ = std::fs::remove_dir_all(&layer.library_path);
+        if let Some(dir) = crate::libpath::resolve(cfg.library_path.as_deref(), &layer.library_path) {
+            let _ = std::fs::remove_dir_all(dir);
+        }
     }
     overlay::delete_layer(conn, layer_id).map_err(|e| e.to_string())?;
     if let Some(layer) = layer {
@@ -310,6 +319,77 @@ mod tests {
         set_layer_active(&conn, &cfg, &lid, false).unwrap();
         assert!(link.join("base.txt").is_file());
         assert!(!link.join("new.txt").exists(), "couche retirée du contenu projeté");
+    }
+
+    /// §2 : même en mode `deploy_mode = "symlink"`, un mod à couche(s)
+    /// active(s) reste en hardlinks — une junction ne peut pointer que vers
+    /// UNE cible, elle ne peut pas fusionner base + couche. Le mode ne
+    /// s'applique qu'à une base sans couche (voir `activation::deploy_base`).
+    #[test]
+    fn layered_mod_stays_on_hardlinks_even_in_symlink_mode() {
+        if !cfg!(windows) {
+            return;
+        }
+        let base = crate::testutil::temp_dir("cmp-sym-layer");
+        let ac = base.join("ac");
+        let library = base.join("library");
+        std::fs::create_dir_all(ac.join("content").join("tracks")).unwrap();
+        let basever = library.join("tracks").join("spa").join("v1");
+        write(&basever.join("base.txt"), "base");
+        write(&basever.join("ui").join("ui_track.json"), "{}");
+
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        overlay::upsert_mod(&conn, "spa", "Track", Some("B"), Some("Spa"), "h", None, "now").unwrap();
+        overlay::insert_version(
+            &conn,
+            "v1",
+            "spa",
+            Some("1.0"),
+            None,
+            "now",
+            &basever.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "spa", "v1").unwrap();
+        let mut cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        cfg.prefs.deploy_mode = "symlink".into();
+
+        // Exige le mode développeur (ou une élévation, déconseillée) — sinon
+        // `mklink /D` échoue en environnement standard, rien à prouver de plus.
+        if activation::activate(&conn, &cfg, "spa", None).is_err() {
+            return;
+        }
+        let link = ac.join("content").join("tracks").join("spa");
+        assert!(is_junction(&link), "base sans couche : junction en mode symlink");
+        assert!(!deploy::is_deployed(&link));
+
+        // Couche active : bascule sur hardlinks, la junction ne peut pas fusionner.
+        let layerdir = library.join("layers").join("spa").join("ext");
+        write(&layerdir.join("new.txt"), "layer");
+        let lid = add_layer(&conn, "spa", ModKind::Track, &layerdir);
+        recompose(&conn, &cfg, "spa").unwrap();
+
+        assert!(!is_junction(&link), "couche active : plus une junction");
+        assert!(deploy::is_deployed(&link), "couche active : composé par hardlinks");
+        assert!(link.join("base.txt").is_file());
+        assert!(link.join("new.txt").is_file());
+
+        // Couche désactivée : retour à une junction (base seule, mode respecté).
+        set_layer_active(&conn, &cfg, &lid, false).unwrap();
+        assert!(is_junction(&link), "sans couche active : redevient une junction");
+        assert!(!deploy::is_deployed(&link));
+        assert!(link.join("base.txt").is_file());
     }
 
     #[test]

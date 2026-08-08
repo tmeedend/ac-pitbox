@@ -18,6 +18,7 @@ mod kunos;
 mod kunos_dates;
 mod launch;
 mod layers;
+mod libpath;
 mod library;
 mod maintenance;
 mod modscan;
@@ -74,6 +75,7 @@ pub fn run() {
             commands::config::save_config,
             commands::config::validate_config,
             commands::config::autodetect_paths,
+            commands::config::open_developer_mode_settings,
             commands::import::import_archives,
             commands::import::import_folders,
             commands::import::analyze_bulk_import,
@@ -112,6 +114,7 @@ pub fn run() {
             commands::maintenance::delete_pack,
             commands::maintenance::reinstall_from_archive,
             commands::maintenance::repair_all,
+            commands::maintenance::relativize_library_paths,
             commands::maintenance::export_mod,
             commands::bulk_ops::bulk_set_favorite,
             commands::bulk_ops::bulk_set_category,

@@ -217,7 +217,10 @@ export interface ArchiveResult {
 
 export interface ImportProgress {
   archive: string;
-  phase: "extract" | "scan" | "filing" | "done";
+  /** "queued" : posé côté frontend dès le drop/la sélection, avant même le
+   * premier événement backend — retour immédiat le temps que la commande
+   * (async, §4.6bis) démarre réellement le traitement. */
+  phase: "queued" | "extract" | "scan" | "filing" | "done";
   current: number;
   total: number;
   label: string;

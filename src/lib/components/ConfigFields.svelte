@@ -1,7 +1,10 @@
 <script lang="ts">
   import PathField from "./PathField.svelte";
+  import Tooltip from "./Tooltip.svelte";
   import type { AppConfig, ConfigValidation } from "$lib/config";
+  import { openDeveloperModeSettings } from "$lib/config";
   import { t } from "$lib/i18n/index.svelte";
+  import { errorText } from "$lib/errors";
 
   interface Props {
     config: AppConfig;
@@ -9,6 +12,12 @@
   }
 
   let { config = $bindable(), validation }: Props = $props();
+  let devModeError = $state("");
+
+  function openDevModeSettings() {
+    devModeError = "";
+    openDeveloperModeSettings().catch((e) => (devModeError = errorText(e)));
+  }
 </script>
 
 <PathField
@@ -40,6 +49,39 @@
   hint={t("pathfield.libraryHint")}
   check={validation?.library}
 />
+
+<div class="deploy-block">
+  <div class="row1"><span class="label">{t("settings.deployMode")}</span></div>
+
+  <label class="radio-opt">
+    <input type="radio" name="deploy_mode" value="hardlink" bind:group={config.prefs.deploy_mode} />
+    <span>
+      <span class="radio-title">{t("settings.deployHardlink")}</span>
+      <span class="radio-hint">{t("settings.deployHardlinkHint")}</span>
+    </span>
+  </label>
+
+  <label class="radio-opt">
+    <input type="radio" name="deploy_mode" value="symlink" bind:group={config.prefs.deploy_mode} />
+    <span>
+      <span class="radio-title">{t("settings.deploySymlink")}</span>
+      <span class="radio-hint">
+        {t("settings.deploySymlinkHint")}
+        <Tooltip text={t("settings.devModeTooltip")}>
+          <button class="devmode-link" type="button" onclick={openDevModeSettings}>
+            {t("settings.devModeLinkLabel")}
+          </button>
+        </Tooltip>
+      </span>
+    </span>
+  </label>
+
+  {#if devModeError}<div class="status err">{devModeError}</div>{/if}
+
+  {#if validation}
+    <div class="status {validation.deploy_mode.ok ? 'ok' : 'err'}">{t(validation.deploy_mode.message)}</div>
+  {/if}
+</div>
 
 <PathField
   label={t("pathfield.contentManager")}
@@ -85,6 +127,64 @@
 </div>
 
 <style>
+  .deploy-block {
+    margin-bottom: 16px;
+  }
+  .row1 {
+    margin-bottom: 8px;
+  }
+  .label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--txt2);
+    text-transform: uppercase;
+  }
+  .radio-opt {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 8px 0;
+    cursor: pointer;
+  }
+  .radio-opt input {
+    margin-top: 2px;
+    accent-color: var(--rosso);
+    flex: none;
+  }
+  .radio-title {
+    display: block;
+    font-size: 12.5px;
+    color: var(--txt);
+  }
+  .radio-hint {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+    margin-top: 2px;
+  }
+  .devmode-link {
+    background: transparent;
+    color: var(--blue);
+    font-size: 11px;
+    text-decoration: underline;
+    padding: 0;
+    display: inline;
+  }
+  .devmode-link:hover {
+    color: var(--rosso-bright);
+  }
+  .status {
+    margin-top: 5px;
+    font-size: 11px;
+  }
+  .status.ok {
+    color: var(--green);
+  }
+  .status.err {
+    color: var(--rosso-bright);
+  }
   .subchecks {
     margin: -10px 0 16px;
     padding-left: 10px;

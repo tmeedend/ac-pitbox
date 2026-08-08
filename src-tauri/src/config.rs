@@ -41,6 +41,14 @@ pub struct Prefs {
     /// l'absence d'historique de versions/couches). Si activé, rend disponible
     /// l'action « Réinstaller depuis l'archive source » sur la fiche du mod.
     pub keep_source_archive: bool,
+    /// Mécanisme de déploiement dans `content/` (§2) : "hardlink" (défaut,
+    /// zéro droits admin, exige que bibliothèque et jeu soient sur le même
+    /// disque) ou "symlink" (junction `mklink /D`, tout disque, exige le mode
+    /// développeur ou une élévation). Un mod à couches actives est toujours
+    /// déployé par hardlinks quel que soit ce réglage — composer plusieurs
+    /// sources en une seule ne se fait pas via une simple junction, voir
+    /// `compose.rs`.
+    pub deploy_mode: String,
 }
 
 impl Default for Prefs {
@@ -55,8 +63,93 @@ impl Default for Prefs {
             showroom_scene: None,
             resource_extraction_mode: "info_only".into(),
             keep_source_archive: false,
+            deploy_mode: "hardlink".into(),
         }
     }
+}
+
+/// Vrai si `a` et `b` sont sur le même disque (comparaison du préfixe de
+/// lecteur, ex. `C:`) — prérequis du déploiement par hardlinks (§2) :
+/// `CreateHardLinkW` refuse de traverser les volumes. `deploy.rs` s'en sort
+/// par un repli en copie physique, mais ça fait perdre tout l'intérêt des
+/// hardlinks (double espace disque, recopie à chaque activation) sur une
+/// bibliothèque de plusieurs centaines de Go — d'où un vrai prérequis
+/// vérifié ici plutôt qu'un simple repli silencieux.
+fn same_drive(a: &Path, b: &Path) -> bool {
+    use std::path::Component;
+    match (a.components().next(), b.components().next()) {
+        (Some(Component::Prefix(pa)), Some(Component::Prefix(pb))) => pa
+            .as_os_str()
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&pb.as_os_str().to_string_lossy()),
+        _ => false,
+    }
+}
+
+/// Mode développeur Windows activé (`HKLM\...\AppModelUnlock`) — l'un des deux
+/// prérequis du déploiement par symlink (§2), avec l'élévation ci-dessous.
+/// Sans lui, `mklink /D` échoue avec « privilège insuffisant ». Best-effort :
+/// clé absente ou illisible = considéré désactivé, jamais une erreur bloquante.
+#[cfg(windows)]
+fn developer_mode_enabled() -> bool {
+    use winreg::enums::HKEY_LOCAL_MACHINE;
+    use winreg::RegKey;
+    RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey(r"SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock")
+        .and_then(|k| k.get_value::<u32, _>("AllowDevelopmentWithoutDevLicense"))
+        .map(|v| v != 0)
+        .unwrap_or(false)
+}
+#[cfg(not(windows))]
+fn developer_mode_enabled() -> bool {
+    false
+}
+
+/// Process actuellement élévé (administrateur) — l'autre prérequis possible
+/// du déploiement par symlink, déconseillé (§2). Test classique sans API bas
+/// niveau : `net session` échoue avec l'erreur système 5 (accès refusé) sauf
+/// en élévation — la présence ou non de sessions distantes n'a aucune
+/// importance, seul le code de sortie compte.
+#[cfg(windows)]
+fn is_elevated() -> bool {
+    use std::os::windows::process::CommandExt;
+    use std::process::Command;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut cmd = Command::new("cmd");
+    cmd.arg("/C");
+    cmd.raw_arg("net session >nul 2>&1");
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.status().map(|s| s.success()).unwrap_or(false)
+}
+#[cfg(not(windows))]
+fn is_elevated() -> bool {
+    false
+}
+
+/// Ouvre directement la page Windows « Pour les développeurs » (URI native
+/// `ms-settings:developers`, Windows 10 et 11) — épargne à l'utilisateur de
+/// naviguer les menus des réglages système à la main pour activer le mode
+/// développeur, prérequis du déploiement par symlink (§2). Passe par
+/// `cmd /C start`, pas le plugin `opener` du frontend : son `openUrl` échoue
+/// silencieusement sur ce schéma d'URI non-web (bug réel constaté — le clic
+/// ne faisait rien, sans la moindre erreur visible côté JS).
+#[cfg(windows)]
+pub fn open_developer_mode_settings() -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    use std::process::Command;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut cmd = Command::new("cmd");
+    cmd.arg("/C");
+    // `start "" "<cible>"` : le titre vide est nécessaire dès que la cible
+    // elle-même est entre guillemets, sinon `start` l'interprète à tort comme
+    // le titre de fenêtre plutôt que comme la cible à ouvrir.
+    cmd.raw_arg(r#"start "" "ms-settings:developers""#);
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.status().map(|_| ()).map_err(|e| e.to_string())
+}
+#[cfg(not(windows))]
+pub fn open_developer_mode_settings() -> Result<(), String> {
+    Err("Windows uniquement".into())
 }
 
 /// Chemins + préférences. Tous les chemins sont optionnels tant que la
@@ -153,6 +246,8 @@ pub struct ConfigValidation {
     pub content_manager: Check,
     pub sevenzip: Check,
     pub quickbms: Check,
+    /// Prérequis du mode de déploiement choisi (§2, `prefs.deploy_mode`).
+    pub deploy_mode: Check,
     /// Vrai si tous les `required` sont OK (la config peut être validée).
     pub is_valid: bool,
 }
@@ -264,7 +359,42 @@ pub fn validate(cfg: &AppConfig) -> ConfigValidation {
         },
     );
 
-    let is_valid = ac_ok && content_ok && writable_ok && lib_ok && cm_ok && sz_ok;
+    // Mode de déploiement (§2) : prérequis dépendant du mode choisi.
+    // Pas encore de quoi trancher tant que AC/bibliothèque ne sont pas
+    // renseignés (mode hardlink) : n'ajoute pas de bruit en plus des checks
+    // ac_install/library qui portent déjà l'alerte à ce stade.
+    let deploy_ok;
+    let deploy_mode = if cfg.prefs.deploy_mode == "symlink" {
+        deploy_ok = developer_mode_enabled() || is_elevated();
+        Check::req(
+            deploy_ok,
+            if deploy_ok {
+                "config.deploySymlinkOk"
+            } else {
+                "config.deploySymlinkNeedsDevModeOrAdmin"
+            },
+        )
+    } else {
+        match (&cfg.ac_install_path, &cfg.library_path) {
+            (Some(ac), Some(lib)) => {
+                deploy_ok = same_drive(ac, lib);
+                Check::req(
+                    deploy_ok,
+                    if deploy_ok {
+                        "config.deployHardlinkOk"
+                    } else {
+                        "config.deployHardlinkDifferentDrives"
+                    },
+                )
+            }
+            _ => {
+                deploy_ok = true;
+                Check::req(true, "config.deployHardlinkPending")
+            }
+        }
+    };
+
+    let is_valid = ac_ok && content_ok && writable_ok && lib_ok && cm_ok && sz_ok && deploy_ok;
 
     ConfigValidation {
         ac_install,
@@ -274,6 +404,71 @@ pub fn validate(cfg: &AppConfig) -> ConfigValidation {
         content_manager,
         sevenzip,
         quickbms,
+        deploy_mode,
         is_valid,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn same_drive_compares_prefix_case_insensitively() {
+        if !cfg!(windows) {
+            return;
+        }
+        assert!(same_drive(Path::new(r"C:\a\b"), Path::new(r"c:\other")));
+        assert!(!same_drive(Path::new(r"C:\a"), Path::new(r"D:\b")));
+    }
+
+    #[test]
+    fn validate_flags_hardlink_mode_across_different_drives() {
+        if !cfg!(windows) {
+            return;
+        }
+        let cfg = AppConfig {
+            ac_install_path: Some(PathBuf::from(r"C:\ac")),
+            library_path: Some(PathBuf::from(r"D:\library")),
+            prefs: Prefs {
+                deploy_mode: "hardlink".into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let v = validate(&cfg);
+        assert!(!v.deploy_mode.ok, "disques différents : prérequis hardlink non rempli");
+        assert!(!v.is_valid);
+    }
+
+    #[test]
+    fn validate_accepts_hardlink_mode_on_same_drive() {
+        if !cfg!(windows) {
+            return;
+        }
+        let cfg = AppConfig {
+            ac_install_path: Some(PathBuf::from(r"C:\ac")),
+            library_path: Some(PathBuf::from(r"C:\library")),
+            prefs: Prefs {
+                deploy_mode: "hardlink".into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let v = validate(&cfg);
+        assert!(v.deploy_mode.ok);
+    }
+
+    #[test]
+    fn validate_does_not_flag_hardlink_mode_before_both_paths_set() {
+        // Tant que AC/bibliothèque ne sont pas tous les deux renseignés, le
+        // prérequis hardlink ne doit pas faire échouer la validation : les
+        // checks ac_install/library portent déjà l'alerte à ce stade.
+        let cfg = AppConfig {
+            library_path: Some(PathBuf::from(r"C:\library")),
+            ..Default::default()
+        };
+        let v = validate(&cfg);
+        assert!(v.deploy_mode.ok);
     }
 }

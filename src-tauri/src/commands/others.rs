@@ -5,9 +5,10 @@ use super::prelude::*;
 
 /// Liste les mods « autres » avec leurs conflits de fichiers détectés.
 #[tauri::command]
-pub fn list_other_mods(db: State<Db>) -> Result<Vec<crate::others::OtherModCard>, String> {
+pub fn list_other_mods(app: AppHandle, db: State<Db>) -> Result<Vec<crate::others::OtherModCard>, String> {
+    let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::others::list_others(&conn).map_err(|e| e.to_string())
+    crate::others::list_others(&conn, &cfg).map_err(|e| e.to_string())
 }
 
 /// Marque/démarque un mod « autre » comme prioritaire (§6.1bis).
@@ -34,7 +35,8 @@ pub fn deactivate_other(db: State<Db>, id: String) -> Result<(), String> {
 
 /// Supprime un mod « autre » : jonctions + fichiers + overlay (§6.1bis).
 #[tauri::command]
-pub fn delete_other_mod(db: State<Db>, id: String) -> Result<(), String> {
+pub fn delete_other_mod(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::others::delete_other(&conn, &id)
+    crate::others::delete_other(&conn, &cfg, &id)
 }

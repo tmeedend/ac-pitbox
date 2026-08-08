@@ -118,7 +118,7 @@ fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
     let active = is_active(cfg, &m);
     let weight = weight_for(conn, cfg, &m);
     let badge = badge_for(conn, cfg, &m);
-    let broken = crate::maintenance::broken_reason(conn, &m).is_some();
+    let broken = crate::maintenance::broken_reason(conn, cfg, &m).is_some();
     ModCard {
         base: m,
         preview,
@@ -207,8 +207,9 @@ pub fn list_mod_skins(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Vec<S
             .active_version_id
             .as_ref()
             .and_then(|vid| overlay::get_version_path(conn, vid).ok().flatten())
+            .and_then(|stored| crate::libpath::resolve(cfg.library_path.as_deref(), &stored))
         {
-            return read_skins_dir(&Path::new(&lib).join("skins"));
+            return read_skins_dir(&lib.join("skins"));
         }
     }
     // Voiture de base (ou mod sans version) : skins installés dans content/.
@@ -248,7 +249,9 @@ fn entity_dir(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<PathBuf>
     if !m.is_stock {
         if let Some(vid) = &m.active_version_id {
             if let Ok(Some(p)) = overlay::get_version_path(conn, vid) {
-                return Some(PathBuf::from(p));
+                if let Some(resolved) = crate::libpath::resolve(cfg.library_path.as_deref(), &p) {
+                    return Some(resolved);
+                }
             }
         }
     }

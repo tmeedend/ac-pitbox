@@ -2,10 +2,9 @@
 //! mod et persiste le résultat dans l'overlay. Utilisé à l'import et lors d'une
 //! réapplication globale après édition des règles.
 
-use std::path::Path;
-
 use rusqlite::Connection;
 
+use crate::config::AppConfig;
 use crate::modscan::ModKind;
 use crate::overlay::{self, ModRow};
 use crate::rules::{self, Harmonized, Rules};
@@ -55,38 +54,38 @@ pub fn store(conn: &Connection, id: &str, h: &Harmonized, native_country: Option
 
 /// Réapplique l'ontologie à tous les mods (après édition des règles).
 /// Renvoie le nombre de mods retraités.
-pub fn harmonize_all(conn: &Connection, rules: &Rules) -> rusqlite::Result<usize> {
+pub fn harmonize_all(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> rusqlite::Result<usize> {
     let mods = overlay::list_mods(conn)?;
     let mut n = 0;
     for m in &mods {
-        if reharmonize_one(conn, rules, m).is_ok() {
+        if reharmonize_one(conn, cfg, rules, m).is_ok() {
             n += 1;
         }
     }
     Ok(n)
 }
 
-fn reharmonize_one(conn: &Connection, rules: &Rules, m: &ModRow) -> rusqlite::Result<()> {
-    let Some(h) = recompute_for(conn, rules, m) else {
+fn reharmonize_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, m: &ModRow) -> rusqlite::Result<()> {
+    let Some(h) = recompute_for(conn, cfg, rules, m) else {
         return Ok(());
     };
-    let native_country = native_country(conn, m);
+    let native_country = native_country(conn, cfg, m);
     store(conn, &m.id_interne, &h, native_country.as_deref())
 }
 
 /// Recalcule l'harmonisation d'un mod en relisant sa version active (lecture seule).
-fn recompute_for(conn: &Connection, rules: &Rules, m: &ModRow) -> Option<Harmonized> {
+fn recompute_for(conn: &Connection, cfg: &AppConfig, rules: &Rules, m: &ModRow) -> Option<Harmonized> {
     let kind = if m.kind == "Track" {
         ModKind::Track
     } else {
         ModKind::Car
     };
     let vid = m.active_version_id.as_ref()?;
-    let lib = overlay::get_version_path(conn, vid).ok().flatten()?;
-    let lib = Path::new(&lib);
+    let stored = overlay::get_version_path(conn, vid).ok().flatten()?;
+    let lib = crate::libpath::resolve(cfg.library_path.as_deref(), &stored)?;
     let ui = match kind {
-        ModKind::Car => uijson::read_car(lib),
-        ModKind::Track => uijson::read_track(lib),
+        ModKind::Car => uijson::read_car(&lib),
+        ModKind::Track => uijson::read_track(&lib),
     }
     .unwrap_or_default();
     let class = ui.class.clone().unwrap_or_default();
@@ -94,21 +93,22 @@ fn recompute_for(conn: &Connection, rules: &Rules, m: &ModRow) -> Option<Harmoni
     Some(compute(rules, kind, &ui.tags, &name, &class, ui.country.as_deref()))
 }
 
-fn native_country(conn: &Connection, m: &ModRow) -> Option<String> {
+fn native_country(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
     let vid = m.active_version_id.as_ref()?;
-    let lib = overlay::get_version_path(conn, vid).ok().flatten()?;
-    uijson::read_car(Path::new(&lib)).and_then(|ui| ui.country)
+    let stored = overlay::get_version_path(conn, vid).ok().flatten()?;
+    let lib = crate::libpath::resolve(cfg.library_path.as_deref(), &stored)?;
+    uijson::read_car(&lib).and_then(|ui| ui.country)
 }
 
 /// Aperçu d'impact (§5.4) : nombre de mods dont l'harmonisation changerait
 /// avec le jeu de règles candidat (comparé aux tags règle / catégorie / classe
 /// actuellement stockés). Ne modifie rien.
-pub fn count_affected(conn: &Connection, rules: &Rules) -> rusqlite::Result<usize> {
+pub fn count_affected(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> rusqlite::Result<usize> {
     use std::collections::BTreeSet;
     let mods = overlay::list_mods(conn)?;
     let mut n = 0;
     for m in &mods {
-        let Some(h) = recompute_for(conn, rules, m) else {
+        let Some(h) = recompute_for(conn, cfg, rules, m) else {
             continue;
         };
         let cand: BTreeSet<&String> = h.tags_from_rule.iter().collect();

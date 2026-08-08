@@ -18,6 +18,11 @@ export interface Prefs {
   /** Conserve l'archive/dossier source de chaque mod importé, en plus du
    * contenu extrait (§10/§11). Défaut : false. */
   keep_source_archive: boolean;
+  /** Mécanisme de déploiement dans content/ (§2) : "hardlink" (défaut, même
+   * disque requis) | "symlink" (junction, tout disque, mode développeur ou
+   * élévation requis). Un mod à couche(s) active(s) reste toujours en
+   * hardlinks quel que soit ce réglage (une junction ne fusionne pas). */
+  deploy_mode: "hardlink" | "symlink";
 }
 
 export interface AppConfig {
@@ -44,6 +49,7 @@ export interface ConfigValidation {
   content_manager: Check;
   sevenzip: Check;
   quickbms: Check;
+  deploy_mode: Check;
   is_valid: boolean;
 }
 
@@ -65,6 +71,7 @@ export function emptyConfig(): AppConfig {
       showroom_scene: null,
       resource_extraction_mode: "info_only",
       keep_source_archive: false,
+      deploy_mode: "hardlink",
     },
   };
 }
@@ -99,8 +106,16 @@ export interface DetectedPaths {
   ac_install_path: string | null;
   content_manager_exe: string | null;
   sevenzip_exe: string | null;
+  /** Suggestion de bibliothèque dans le dossier utilisateur — rien n'y existe
+   * forcément encore, c'est une proposition de nom, pas une détection. */
+  library_path: string | null;
 }
 
 export function autodetectPaths(): Promise<DetectedPaths> {
   return invoke<DetectedPaths>("autodetect_paths");
+}
+
+/** Ouvre la page Windows « Pour les développeurs » (§2, prérequis symlink). */
+export function openDeveloperModeSettings(): Promise<void> {
+  return invoke<void>("open_developer_mode_settings");
 }

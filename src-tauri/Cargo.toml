@@ -31,3 +31,8 @@ chrono = { version = "0.4", features = ["serde"] }
 regex = "1.10"
 dirs = "5"
 tauri-plugin-window-state = "2.4.1"
+
+# Lecture registre Windows uniquement (détection du Mode développeur, §12) —
+# déjà présent transitivement via tauri, pas une dépendance de plus en pratique.
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"

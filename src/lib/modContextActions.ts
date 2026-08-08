@@ -6,7 +6,7 @@
 import { activateMod, deactivateMod, openModFolder } from "$lib/library";
 import { exportMod, deleteBrokenMod } from "$lib/maintenance";
 import { open, confirm, message } from "@tauri-apps/plugin-dialog";
-import { nav } from "$lib/nav.svelte";
+import { nav, requestSection, queueOpponentsAction } from "$lib/nav.svelte";
 import { t } from "$lib/i18n/index.svelte";
 
 import { errorText } from "$lib/errors";
@@ -15,6 +15,15 @@ export interface ModContextTarget {
   is_stock: boolean;
   active: boolean;
   display_name: string | null;
+  kind: "Car" | "Track";
+}
+
+// Même action que les boutons du panneau de sélection groupée (§6.3ter),
+// pour un seul mod — pose l'action puis navigue vers l'écran de réglages,
+// où Launch.svelte la consomme une fois prêt.
+async function sendAsOpponent(id: string, mode: "set" | "add") {
+  queueOpponentsAction(mode, [id]);
+  if (!(await requestSection("race"))) nav.opponentsAction = null;
 }
 
 export interface ModContextItem {
@@ -45,6 +54,13 @@ export function buildModContextItems(m: ModContextTarget, onchange: () => void):
         }
       },
     });
+  }
+
+  if (m.kind === "Car") {
+    items.push(
+      { label: t("modpanel.ctxSetOpponent"), onclick: () => sendAsOpponent(m.id_interne, "set") },
+      { label: t("modpanel.ctxAddOpponent"), onclick: () => sendAsOpponent(m.id_interne, "add") },
+    );
   }
 
   items.push({

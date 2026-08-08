@@ -22,9 +22,14 @@ pub fn list_sub_mods(db: State<Db>, parent_id: String) -> Result<Vec<crate::over
 /// Tous les sous-éléments d'un type, pour la vue transversale (§12bis.3) —
 /// taille sur disque incluse (regroupements pesés côté UI).
 #[tauri::command]
-pub fn list_subs_by_type(db: State<Db>, sub_type: String) -> Result<Vec<crate::overlay::SubModRow>, String> {
+pub fn list_subs_by_type(
+    app: AppHandle,
+    db: State<Db>,
+    sub_type: String,
+) -> Result<Vec<crate::overlay::SubModRow>, String> {
+    let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::submods::list_by_type_sized(&conn, &sub_type).map_err(|e| e.to_string())
+    crate::submods::list_by_type_sized(&conn, &cfg, &sub_type).map_err(|e| e.to_string())
 }
 
 /// Reconnaît les skins de circuit fournis avec le contenu initial du mod
@@ -49,11 +54,13 @@ pub fn list_active_track_skins(db: State<Db>, track_id: String) -> Result<Vec<St
 /// sélecteur multi-choix de la barre latérale (§4.6bis).
 #[tauri::command]
 pub fn list_track_skin_options(
+    app: AppHandle,
     db: State<Db>,
     track_id: String,
 ) -> Result<Vec<crate::submods::TrackSkinOption>, String> {
+    let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(crate::submods::list_track_skin_options(&conn, &track_id))
+    Ok(crate::submods::list_track_skin_options(&conn, &cfg, &track_id))
 }
 
 /// Active/désactive un skin de circuit (§4.6bis, pas exclusif).

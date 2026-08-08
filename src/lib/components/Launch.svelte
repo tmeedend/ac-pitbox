@@ -20,6 +20,7 @@
   import OpponentPicker from "./OpponentPicker.svelte";
   import SavedSessionsDialog from "./SavedSessionsDialog.svelte";
   import NumberStepper from "./NumberStepper.svelte";
+  import Tooltip from "./Tooltip.svelte";
   import { saveSession, type SavedSession } from "$lib/savedSessions";
 
   import { errorText } from "$lib/errors";
@@ -313,6 +314,21 @@
     }
   }
 
+  /** Ajoute la même voiture qu'un adversaire existant, avec un skin différent
+   * (pas encore pris par un autre adversaire de ce mod dans le plateau) —
+   * rebouclé sur les skins déjà pris si tous sont épuisés (`skinFor`, même
+   * logique que la génération initiale). Insérée juste après la ligne source. */
+  async function duplicateOpponentWithVariant(index: number) {
+    const source = setup.opponents[index];
+    const used = new Set(
+      setup.opponents.filter((o) => o.car_id === source.car_id).map((o) => o.car_skin ?? "").filter(Boolean),
+    );
+    const skin = await skinFor(source.car_id, used);
+    const clone: Opponent = { car_id: source.car_id, car_skin: skin, ai_level: randomLevel() };
+    setup.opponents = [...setup.opponents.slice(0, index + 1), clone, ...setup.opponents.slice(index + 1)];
+    opponentCount = setup.opponents.length;
+  }
+
   /** Adversaires envoyés depuis la sélection groupée de la bibliothèque
    * voitures (§6.3ter). Bascule sur le type Course et le mode « libre »
    * directement (sans passer par `selectGridMode`, qui régénérerait le
@@ -460,12 +476,18 @@
   const windDirBucket = $derived(Math.round((setup.wind_direction_deg ?? 0) / 45) * 45 % 360);
 
   // --- Mémorisation de la sélection (§8.6) ---
+  // `opponents` en fait partie (§8.6ter, bug réel) : sans elle, revenir sur cet
+  // écran après être allé choisir un circuit/une voiture démonte puis remonte
+  // Launch.svelte — `setup.opponents` (état local) repart de zéro, et
+  // `applyPreset` régénère alors un plateau aléatoire à la place de celui,
+  // potentiellement construit à la main (mode « libre »), qu'avait l'utilisateur.
   interface Selection {
     car_id: string;
     car_skin: string | null;
     track_id: string;
     track_layout: string | null;
     session_type: SessionType;
+    opponents: Opponent[];
   }
   function saveSelection() {
     if (!ready) return;
@@ -475,11 +497,12 @@
       track_id: setup.track_id,
       track_layout: setup.track_layout,
       session_type: setup.session_type,
+      opponents: setup.opponents,
     };
     localStorage.setItem(StorageKey.launchSelection, JSON.stringify(sel));
   }
   $effect(() => {
-    void [setup.car_id, setup.car_skin, setup.track_id, setup.track_layout, setup.session_type];
+    void [setup.car_id, setup.car_skin, setup.track_id, setup.track_layout, setup.session_type, setup.opponents];
     saveSelection();
   });
 
@@ -527,7 +550,10 @@
       const opt = weathers.find((w) => w.id === p.intent && w.available);
       if (opt) await selectIntent(opt);
     }
-    if (type === "race") await regenerateGrid();
+    // Ne régénère que s'il n'y a vraiment rien à préserver (première visite
+    // de l'écran course, ou aucun adversaire restauré) — jamais en écrasant
+    // silencieusement un plateau déjà construit (§8.6ter, bug réel).
+    if (type === "race" && setup.opponents.length === 0) await regenerateGrid();
     applying = false;
   }
   async function setSessionType(type: SessionType) {
@@ -551,14 +577,22 @@
 
     const saved: Partial<Selection> = JSON.parse(localStorage.getItem(StorageKey.launchSelection) ?? "{}");
     setup.session_type = saved.session_type ?? "practice";
+    if (saved.opponents?.length) setup.opponents = saved.opponents;
 
     // La bibliothèque EST le sélecteur (§8.6) : voiture/circuit viennent du duo
     // de session choisi dans les bibliothèques — rien à choisir ici.
     syncFromSession();
+    // Aligné tout de suite sur la voiture qui vient d'être synchronisée :
+    // sans ça, l'effet de resynchronisation plus bas (déclenché par `ready`
+    // qui passe à `true` en fin de montage) le voit encore vide, croit à un
+    // changement de voiture, et régénère un plateau à la place de celui
+    // qu'on vient de restaurer juste au-dessus.
+    lastCarForGrid = setup.car_id;
 
     const first = weathers.find((w) => w.available);
     if (first) await selectIntent(first);
     await applyPreset(setup.session_type);
+    if (setup.opponents.length) opponentCount = setup.opponents.length;
     ready = true;
   });
 
@@ -818,6 +852,12 @@
                     onclick={(e) => e.stopPropagation()}
                     onchange={(e) => setOpponentLevel(i, Number(e.currentTarget.value))}
                   />
+                  <button
+                    class="oppo-dup"
+                    type="button"
+                    title={t("launch.opponentDuplicateTooltip")}
+                    onclick={(e) => { e.stopPropagation(); duplicateOpponentWithVariant(i); }}
+                  >+</button>
                   <button class="oppo-x" type="button" title={t("common.remove")} onclick={(e) => { e.stopPropagation(); removeOpponent(i); }}>✕</button>
                 </div>
               {/each}
@@ -929,7 +969,10 @@
             <p class="implicit-note">{t("launch.implicitNote")}</p>
           {/if}
           {#if currentWeather?.wet && !trackSupportsRain}
-            <p class="warn-note">⚠ {t("launch.rainUnsupportedWarning")}</p>
+            <p class="warn-note">
+              ⚠ {t("launch.rainUnsupportedWarning")}
+              <Tooltip text={t("launch.cspFirstLaunchHint")}><button type="button" class="info-i">ⓘ</button></Tooltip>
+            </p>
           {/if}
 
           <div class="heure-wrap">
@@ -939,19 +982,22 @@
 
           <!-- Saison optionnelle (§8.6bis) : associe une date, best-effort côté
                CSP (couleur des arbres en automne, piste blanche en hiver).
-               Grisée si le circuit courant n'a pas de config CSP identifiée
-               pour les ajustements saisonniers (§6.4bis). -->
+               Reste cliquable même sans config CSP identifiée pour les
+               ajustements saisonniers (§6.4bis) — juste signalée (pas de
+               garantie de rendu), jamais bloquée : une config CSP absente ici
+               ne veut pas dire absente pour de bon, seulement pas encore
+               téléchargée par Content Manager (mod tout juste importé,
+               premier lancement…). -->
           <div class="season-wrap">
             <div class="opt-name" style="margin-bottom:6px;">{t("launch.seasonLabel")}</div>
             <div class="weather season-grid">
               {#each SEASONS as s}
-                {@const locked = s.id !== "" && !trackSupportsSeason}
+                {@const unsupported = s.id !== "" && !trackSupportsSeason}
                 <button
                   class="wcard"
                   class:on={season === s.id}
+                  class:unsupported
                   type="button"
-                  disabled={locked}
-                  title={locked ? t("launch.seasonUnsupportedTooltip") : ""}
                   onclick={() => selectSeason(s.id)}
                 >
                   <svg viewBox="0 0 38 38">{@render seasonIcon(s.id)}</svg>
@@ -960,7 +1006,10 @@
               {/each}
             </div>
             {#if !trackSupportsSeason}
-              <p class="implicit-note">{t("launch.seasonUnsupportedNote")}</p>
+              <p class="implicit-note">
+                {t("launch.seasonUnsupportedNote")}
+                <Tooltip text={t("launch.cspFirstLaunchHint")}><button type="button" class="info-i">ⓘ</button></Tooltip>
+              </p>
             {/if}
           </div>
         </section>
@@ -1278,6 +1327,18 @@
     border-color: var(--rosso-border);
     outline: none;
   }
+  .oppo-dup {
+    background: transparent;
+    color: var(--muted2);
+    font-size: 13px;
+    line-height: 1;
+    padding: 2px 5px;
+    flex: none;
+  }
+  .oppo-dup:hover {
+    background: transparent;
+    color: var(--green);
+  }
   .oppo-x {
     background: transparent;
     color: var(--muted2);
@@ -1516,6 +1577,26 @@
     padding: 7px 9px;
     background: #1a1708;
     border: 1px solid #4a4426;
+  }
+  /* Signale sans bloquer (§8.6bis) : une config CSP absente ici ne veut pas
+     dire absente pour de bon (voir le commentaire sur .season-wrap), donc
+     jamais un simple `:disabled` — juste un repère visuel discret. */
+  .wcard.unsupported {
+    border-style: dashed;
+    border-color: var(--yellow);
+  }
+  .info-i {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: inherit;
+    margin-left: 4px;
+    padding: 0;
+    cursor: help;
+  }
+  .info-i:hover,
+  .info-i:focus-visible {
+    color: var(--txt2);
   }
 
   /* Options de course */

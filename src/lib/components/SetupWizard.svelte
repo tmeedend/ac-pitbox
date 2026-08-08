@@ -32,6 +32,7 @@
       config.ac_install_path ||= d.ac_install_path;
       config.content_manager_exe ||= d.content_manager_exe;
       config.sevenzip_exe ||= d.sevenzip_exe;
+      config.library_path ||= d.library_path;
     } finally {
       detecting = false;
     }
@@ -113,7 +114,11 @@
 
 <style>
   .wizard {
-    min-height: 100vh;
+    /* Le document ne défile jamais (global.css) : sur un petit écran/fenêtre,
+       un contenu plus haut que la fenêtre serait sinon coupé sans recours —
+       c'est ce qui obligeait à agrandir la fenêtre à la main. */
+    height: 100vh;
+    overflow-y: auto;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -122,6 +127,7 @@
   .frame {
     width: 100%;
     max-width: 680px;
+    margin: auto;
     background: var(--panel);
     border: 1px solid var(--rosso);
   }

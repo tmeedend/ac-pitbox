@@ -25,7 +25,7 @@ pub fn reindex_library(app: AppHandle, db: State<Db>, recalc_size: bool) -> Resu
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let n = crate::maintenance::reindex_all(&conn, &cfg, recalc_size)?;
-    crate::harmonize::harmonize_all(&conn, &rules).map_err(|e| e.to_string())?;
+    crate::harmonize::harmonize_all(&conn, &cfg, &rules).map_err(|e| e.to_string())?;
     Ok(n)
 }
 
@@ -71,6 +71,17 @@ pub fn repair_all(
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::maintenance::repair_all(&conn, &cfg, reinstall_broken)
+}
+
+/// Convertit en chemins relatifs à la bibliothèque toutes les lignes overlay
+/// encore écrites en absolu (§11) — sert à réparer une bibliothèque copiée
+/// depuis une autre machine, dont l'ancienne racine ne correspond plus à
+/// rien ici. Ne déplace ni ne copie aucun fichier, uniquement une réécriture
+/// en base ; sûr à rejouer.
+#[tauri::command]
+pub fn relativize_library_paths(db: State<Db>) -> Result<crate::maintenance::RelativizeReport, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::maintenance::relativize_library_paths(&conn)
 }
 
 /// Exporte la version active d'un mod en archive autonome dans `dest_dir` (§9.1).

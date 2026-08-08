@@ -65,7 +65,7 @@ pub fn import_other(
     overlay::insert_other_mod(
         conn,
         &id,
-        &dest.to_string_lossy(),
+        &crate::libpath::to_relative(Some(library), &dest),
         Some(source_name),
         &Local::now().to_rfc3339(),
     )
@@ -101,11 +101,16 @@ pub struct OtherModCard {
 }
 
 /// Liste les mods « autres » avec les conflits de fichiers détectés entre eux.
-pub fn list_others(conn: &Connection) -> rusqlite::Result<Vec<OtherModCard>> {
+pub fn list_others(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<OtherModCard>> {
     let rows = overlay::list_other_mods(conn)?;
     let files: Vec<(String, HashSet<PathBuf>)> = rows
         .iter()
-        .map(|r| (r.id.clone(), relative_files(Path::new(&r.library_path))))
+        .map(|r| {
+            let files = crate::libpath::resolve(cfg.library_path.as_deref(), &r.library_path)
+                .map(|dir| relative_files(&dir))
+                .unwrap_or_default();
+            (r.id.clone(), files)
+        })
         .collect();
 
     Ok(rows
@@ -219,7 +224,8 @@ pub fn activate_other(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<Ac
 
     let mut junctions = Vec::new();
     let mut warnings = Vec::new();
-    let src = PathBuf::from(&m.library_path);
+    let src = crate::libpath::resolve(cfg.library_path.as_deref(), &m.library_path)
+        .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     place(
         &src,
         &src,
@@ -252,12 +258,14 @@ pub fn deactivate_other(conn: &Connection, id: &str) -> Result<(), String> {
 
 /// Supprime un mod « autre » : désactive (retire ses jonctions) puis efface
 /// ses fichiers stockés et son entrée overlay.
-pub fn delete_other(conn: &Connection, id: &str) -> Result<(), String> {
+pub fn delete_other(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
     let m = overlay::get_other_mod(conn, id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_UNKNOWN)?;
     let _ = deactivate_other(conn, id);
-    let _ = std::fs::remove_dir_all(&m.library_path);
+    if let Some(dir) = crate::libpath::resolve(cfg.library_path.as_deref(), &m.library_path) {
+        let _ = std::fs::remove_dir_all(dir);
+    }
     overlay::delete_other_mod(conn, id).map_err(|e| e.to_string())
 }
 
@@ -286,6 +294,7 @@ mod tests {
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let cfg = AppConfig {
             ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
             ..Default::default()
         };
 
@@ -330,6 +339,7 @@ mod tests {
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let cfg = AppConfig {
             ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
             ..Default::default()
         };
 
@@ -379,7 +389,11 @@ mod tests {
         import_other(&conn, &library, "ModA.zip", &src_a, true, ExtractionMode::InfoOnly).unwrap();
         import_other(&conn, &library, "ModB.zip", &src_b, true, ExtractionMode::InfoOnly).unwrap();
 
-        let cards = list_others(&conn).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let cards = list_others(&conn, &cfg).unwrap();
         let a = cards.iter().find(|c| c.row.id == "ModA").unwrap();
         assert_eq!(a.conflicts.len(), 1);
         assert_eq!(a.conflicts[0].other_id, "ModB");

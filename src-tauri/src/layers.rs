@@ -50,7 +50,7 @@ pub fn store_layer(
         parent_id,
         &format!("{kind:?}"),
         name,
-        &dest.to_string_lossy(),
+        &crate::libpath::to_relative(Some(library), &dest),
         Some(archive_name),
         diff.added as i64,
         diff.overwritten as i64,

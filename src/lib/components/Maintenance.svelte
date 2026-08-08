@@ -7,6 +7,7 @@
     removeOrphanJunction,
     reindexLibrary,
     repairAll,
+    relativizeLibraryPaths,
     type MaintenanceReport,
   } from "$lib/maintenance";
   import { indexStockContent } from "$lib/submods";
@@ -26,6 +27,9 @@
   let repairMsg = $state("");
   let reinstallBroken = $state(false);
   let reinstallFailures = $state<{ id: string; name: string; reason: string }[]>([]);
+  let relativizing = $state(false);
+  let relativizeMsg = $state("");
+  let relativizeUnrecognized = $state<string[]>([]);
 
   async function doReindex() {
     reindexing = true;
@@ -91,6 +95,25 @@
       error = errorText(e);
     } finally {
       repairing = false;
+    }
+  }
+
+  async function doRelativize() {
+    relativizing = true;
+    error = "";
+    relativizeMsg = "";
+    relativizeUnrecognized = [];
+    try {
+      const r = await relativizeLibraryPaths();
+      relativizeMsg = t("maintenance.relativizeDone", { converted: r.converted, alreadyRelative: r.already_relative });
+      relativizeUnrecognized = r.unrecognized;
+      // La conversion peut avoir résolu des mods listés cassés (chemin enfin
+      // reconnu) : on rafraîchit le rapport si une analyse était déjà affichée.
+      if (report) await scan();
+    } catch (e) {
+      error = errorText(e);
+    } finally {
+      relativizing = false;
     }
   }
 
@@ -196,6 +219,24 @@
               <span class="l-reason">{errorText(f.reason)}</span>
             </div>
           </li>
+        {/each}
+      </ul>
+    {/if}
+  </section>
+
+  <section class="stock-sec">
+    <h3>{t("maintenance.relativizeTitle")}</h3>
+    <p class="hint">{t("maintenance.relativizeHint")}</p>
+    <div class="stock-row">
+      <button class="btn" type="button" onclick={doRelativize} disabled={relativizing}>
+        {relativizing ? t("maintenance.relativizing") : t("maintenance.relativize")}
+      </button>
+      {#if relativizeMsg}<span class="stock-msg">{relativizeMsg}</span>{/if}
+    </div>
+    {#if relativizeUnrecognized.length}
+      <ul class="list repair-fail-list">
+        {#each relativizeUnrecognized as u}
+          <li><span class="l-path mono">{u}</span></li>
         {/each}
       </ul>
     {/if}

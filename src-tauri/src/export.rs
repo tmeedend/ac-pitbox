@@ -66,10 +66,11 @@ pub fn export_mod(conn: &Connection, cfg: &AppConfig, mod_id: &str, dest_dir: &P
         .active_version_id
         .clone()
         .ok_or(crate::errors::NO_ACTIVE_VERSION_TO_EXPORT)?;
-    let lib = overlay::get_version_path(conn, &vid)
+    let stored = overlay::get_version_path(conn, &vid)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::VERSION_NOT_FOUND)?;
-    let lib = PathBuf::from(lib);
+    let lib =
+        crate::libpath::resolve(cfg.library_path.as_deref(), &stored).ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     if !lib.is_dir() {
         return Err(crate::errors::VERSION_FILES_MISSING.into());
     }

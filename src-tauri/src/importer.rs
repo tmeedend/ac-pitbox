@@ -125,7 +125,7 @@ pub struct ArchiveResult {
 /// `import:progress` au fil de l'eau.
 pub fn import_archives(
     app: &AppHandle,
-    conn: &Connection,
+    db: &crate::overlay::Db,
     cfg: &AppConfig,
     rules: &Rules,
     paths: &[String],
@@ -134,12 +134,12 @@ pub fn import_archives(
     let emit = |p: Progress| {
         let _ = app.emit("import:progress", p);
     };
-    run_import(&emit, conn, cfg, rules, paths, decisions)
+    run_import(&emit, db, cfg, rules, paths, decisions)
 }
 
 fn run_import(
     emit: &ProgressFn,
-    conn: &Connection,
+    db: &crate::overlay::Db,
     cfg: &AppConfig,
     rules: &Rules,
     paths: &[String],
@@ -147,8 +147,31 @@ fn run_import(
 ) -> Vec<ArchiveResult> {
     paths
         .iter()
-        .map(|p| import_one(emit, conn, cfg, rules, Path::new(p), decisions))
+        .map(|p| {
+            // Verrou repris à chaque archive plutôt qu'une seule fois pour
+            // tout le lot : un import de plusieurs gros fichiers ne doit pas
+            // geler le reste de l'app (tout écran affiché lit l'overlay) le
+            // temps du lot entier — seulement le temps d'UNE archive.
+            match db.0.lock() {
+                Ok(conn) => import_one(emit, &conn, cfg, rules, Path::new(p), decisions),
+                Err(e) => lock_error_result(p, &e.to_string()),
+            }
+        })
         .collect()
+}
+
+/// Résultat d'archive en cas d'échec du verrou base (best-effort, ne devrait
+/// arriver qu'après un panic ailleurs — mutex empoisonné).
+fn lock_error_result(path: &str, error: &str) -> ArchiveResult {
+    ArchiveResult {
+        archive: path.to_string(),
+        mods: Vec::new(),
+        error: Some(error.to_string()),
+        shared: Vec::new(),
+        subs: Vec::new(),
+        apps: Vec::new(),
+        others: Vec::new(),
+    }
 }
 
 /// Décision utilisateur mémorisée pour cet id, s'il y en a une (§4.4).
@@ -170,12 +193,12 @@ fn keep_source(cfg: &AppConfig, source: &Path, label: &str) -> Option<String> {
     if source.is_dir() {
         let dest = dest_dir.join(label);
         archive::copy_dir(source, &dest).ok()?;
-        Some(dest.to_string_lossy().into_owned())
+        Some(crate::libpath::to_relative(Some(library), &dest))
     } else {
         std::fs::create_dir_all(&dest_dir).ok()?;
         let dest = dest_dir.join(label);
         std::fs::copy(source, &dest).ok()?;
-        Some(dest.to_string_lossy().into_owned())
+        Some(crate::libpath::to_relative(Some(library), &dest))
     }
 }
 
@@ -351,7 +374,7 @@ fn import_one(
 /// sinon déplacement adaptatif (rename même disque, copie+suppression sinon).
 pub fn import_folders(
     app: &AppHandle,
-    conn: &Connection,
+    db: &crate::overlay::Db,
     cfg: &AppConfig,
     rules: &Rules,
     paths: &[String],
@@ -363,7 +386,14 @@ pub fn import_folders(
     };
     paths
         .iter()
-        .map(|p| import_one_folder(&emit, conn, cfg, rules, Path::new(p), copy, decisions))
+        .map(|p| {
+            // Même raison qu'`import_archives` : un verrou par dossier, pas
+            // un seul pour tout le lot.
+            match db.0.lock() {
+                Ok(conn) => import_one_folder(&emit, &conn, cfg, rules, Path::new(p), copy, decisions),
+                Err(e) => lock_error_result(p, &e.to_string()),
+            }
+        })
         .collect()
 }
 
@@ -622,7 +652,7 @@ pub struct BulkExecItem {
 /// « doublon »/« mise à jour », donc rien n'est traité de travers.
 pub fn execute_bulk(
     app: &AppHandle,
-    conn: &Connection,
+    db: &crate::overlay::Db,
     cfg: &AppConfig,
     rules: &Rules,
     items: &[BulkExecItem],
@@ -647,7 +677,12 @@ pub fn execute_bulk(
                 total,
                 label,
             });
-            exec_one(conn, cfg, rules, it, copy)
+            // Même raison qu'`import_archives` : un verrou par entrée, pas un
+            // seul pour tout le lot.
+            match db.0.lock() {
+                Ok(conn) => exec_one(&conn, cfg, rules, it, copy),
+                Err(e) => lock_error_result(&it.path, &e.to_string()),
+            }
         })
         .collect()
 }
@@ -883,8 +918,11 @@ fn process_found(
             });
             (ImportClass::Extension, diff)
         } else {
-            let diff = match crate::overlay::active_library_path(conn, &id_interne).map_err(|e| e.to_string())? {
-                Some(active_path) => identity::diff_content(&fm.dir, Path::new(&active_path)),
+            let active_path = crate::overlay::active_library_path(conn, &id_interne)
+                .map_err(|e| e.to_string())?
+                .and_then(|p| crate::libpath::resolve(cfg.library_path.as_deref(), &p));
+            let diff = match active_path {
+                Some(active_path) => identity::diff_content(&fm.dir, &active_path),
                 // Pas de dossier de base à comparer : on ne peut pas prouver que
                 // c'est une extension → comportement historique (mise à jour).
                 None => crate::identity::DiffStats {
@@ -1017,7 +1055,7 @@ fn process_found(
     // jamais dans le contenu de jeu, selon le réglage global.
     let resources_dest = crate::resources::resources_dir(library, fm.kind, &id_interne);
     let resources_extracted = crate::resources::file_mod(&fm.dir, &dest, &resources_dest, res_mode, !copy, true)?;
-    let library_path = dest.to_string_lossy().into_owned();
+    let library_path = crate::libpath::to_relative(Some(library), &dest);
 
     // --- Écriture overlay ---
     crate::overlay::upsert_mod(
@@ -1227,7 +1265,7 @@ mod tests {
         );
 
         let versions = crate::overlay::get_versions(&conn, "annex_car").unwrap();
-        let content_dir = Path::new(&versions[0].library_path);
+        let content_dir = library.join(&versions[0].library_path);
         assert!(content_dir.join("model.kn5").is_file());
         assert!(
             !content_dir.join("changelog.txt").exists(),
@@ -1266,7 +1304,7 @@ mod tests {
         assert_eq!(r.mods[0].resources_extracted, 0);
 
         let versions = crate::overlay::get_versions(&conn, "annex_car2").unwrap();
-        let content_dir = Path::new(&versions[0].library_path);
+        let content_dir = library.join(&versions[0].library_path);
         assert!(content_dir.join("model.kn5").is_file());
         assert!(
             !content_dir.join("changelog.txt").exists(),
@@ -1335,13 +1373,14 @@ mod tests {
             "aucune version ajoutée"
         );
         assert!(
-            Path::new(&base_path).join("model.kn5").is_file(),
+            library.join(&base_path).join("model.kn5").is_file(),
             "contenu de base préservé"
         );
         // La couche est rangée à part.
         let layers = crate::overlay::list_layers(&conn, "spa").unwrap();
         assert_eq!(layers.len(), 1);
-        assert!(Path::new(&layers[0].library_path)
+        assert!(library
+            .join(&layers[0].library_path)
             .join("new")
             .join("layout1.kn5")
             .is_file());
@@ -1451,7 +1490,7 @@ mod tests {
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let db_path = base.join("overlay.sqlite");
-        let conn = crate::overlay::open(&db_path).unwrap();
+        let db = crate::overlay::Db(std::sync::Mutex::new(crate::overlay::open(&db_path).unwrap()));
 
         let cfg = AppConfig {
             sevenzip_exe: Some(sevenzip.clone()),
@@ -1465,7 +1504,7 @@ mod tests {
 
         // --- 1er import : NOUVEAU ---
         let zip_str = zip.to_string_lossy().into_owned();
-        let res = run_import(&noop, &conn, &cfg, &rules, std::slice::from_ref(&zip_str), &[]);
+        let res = run_import(&noop, &db, &cfg, &rules, std::slice::from_ref(&zip_str), &[]);
         assert_eq!(res.len(), 1);
         assert!(res[0].error.is_none(), "erreur: {:?}", res[0].error);
         assert_eq!(res[0].mods.len(), 1);
@@ -1473,6 +1512,7 @@ mod tests {
         assert_eq!(res[0].mods[0].id_interne, "test_car");
 
         // Fichier rangé dans la bibliothèque + ui_car.json préservé.
+        let conn = db.0.lock().unwrap();
         let mods = crate::overlay::list_mods(&conn).unwrap();
         assert_eq!(mods.len(), 1);
         assert_eq!(mods[0].display_name.as_deref(), Some("My Test Car"));
@@ -1488,14 +1528,15 @@ mod tests {
         assert!(!mods[0].tags_from_rule.contains(&"turbo".to_string()));
         assert!(!mods[0].tags_from_rule.contains(&"italy".to_string()));
         let versions = crate::overlay::get_versions(&conn, "test_car").unwrap();
-        let lib_ui = Path::new(&versions[0].library_path).join("ui").join("ui_car.json");
+        let lib_ui = library.join(&versions[0].library_path).join("ui").join("ui_car.json");
         assert!(lib_ui.is_file(), "ui_car.json doit exister dans la bibliothèque");
+        drop(conn); // libéré avant le prochain run_import, qui reprend le verrou lui-même.
 
         // --- 2e import de la MÊME archive : DOUBLON (pas de réimport) ---
-        let res_dup = run_import(&noop, &conn, &cfg, &rules, std::slice::from_ref(&zip_str), &[]);
+        let res_dup = run_import(&noop, &db, &cfg, &rules, std::slice::from_ref(&zip_str), &[]);
         assert_eq!(res_dup[0].mods[0].outcome, "DUPLICATE");
         assert_eq!(
-            crate::overlay::list_mods(&conn).unwrap()[0].version_count,
+            crate::overlay::list_mods(&db.0.lock().unwrap()).unwrap()[0].version_count,
             1,
             "réimport à l'identique → toujours une seule version"
         );
@@ -1504,9 +1545,9 @@ mod tests {
         std::fs::write(src.join("test_car").join("model.kn5"), b"DIFFERENT_KN5_CONTENT_XXL").unwrap();
         let zip2 = base.join("test_car_v2.zip");
         zip_dir(&sevenzip, &src, &zip2);
-        let res2 = run_import(&noop, &conn, &cfg, &rules, &[zip2.to_string_lossy().into_owned()], &[]);
+        let res2 = run_import(&noop, &db, &cfg, &rules, &[zip2.to_string_lossy().into_owned()], &[]);
         assert_eq!(res2[0].mods[0].outcome, "UPDATE_REPLACE");
-        let mods2 = crate::overlay::list_mods(&conn).unwrap();
+        let mods2 = crate::overlay::list_mods(&db.0.lock().unwrap()).unwrap();
         assert_eq!(mods2.len(), 1, "toujours un seul mod logique");
         assert_eq!(mods2[0].version_count, 2, "deux versions coexistent");
     }
@@ -1723,7 +1764,9 @@ mod tests {
 
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
-        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let db = crate::overlay::Db(std::sync::Mutex::new(
+            crate::overlay::open(&base.join("overlay.sqlite")).unwrap(),
+        ));
         let cfg = AppConfig {
             sevenzip_exe: Some(sevenzip),
             library_path: Some(library.clone()),
@@ -1731,15 +1774,16 @@ mod tests {
         };
 
         // 1er : pas de conflit (rien d'existant).
-        let r1 = run_import(&noop, &conn, &cfg, &rules, &[zip_a], &[]);
+        let r1 = run_import(&noop, &db, &cfg, &rules, &[zip_a], &[]);
         assert!(r1[0].mods[0].conflict.is_none());
 
         // 2e : conflit flou vers car_a.
-        let r2 = run_import(&noop, &conn, &cfg, &rules, &[zip_b], &[]);
+        let r2 = run_import(&noop, &db, &cfg, &rules, &[zip_b], &[]);
         let conflict = r2[0].mods[0].conflict.as_ref().expect("conflit attendu");
         assert_eq!(conflict.existing_id, "car_a");
 
         // Résolution "replace" : car_a disparaît, seul car_b reste.
+        let conn = db.0.lock().unwrap();
         resolve_conflict(&conn, &cfg, "car_b", "car_a", "replace").unwrap();
         let mods = crate::overlay::list_mods(&conn).unwrap();
         assert_eq!(mods.len(), 1);
@@ -1857,7 +1901,7 @@ mod tests {
             .kept_archive_path
             .as_ref()
             .expect("archive source conservée");
-        let kept_path = Path::new(kept);
+        let kept_path = library.join(kept);
         // La copie porte sur `dir` (le dossier passé à l'import, ici `src`, qui
         // peut contenir plusieurs mods) — le mod retrouvé est donc un niveau
         // plus bas, comme au premier import (même logique de descente).

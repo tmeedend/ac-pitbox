@@ -134,7 +134,7 @@ fn import_skin_pack(
             sub_type,
             parent,
             &name,
-            &dest.to_string_lossy(),
+            &crate::libpath::to_relative(Some(library), &dest),
             Some(source_name),
             &Local::now().to_rfc3339(),
         );
@@ -217,13 +217,15 @@ pub fn repair_projections(conn: &Connection, cfg: &AppConfig) -> RepairReport {
     for sub_type in ["SKIN", "TRACK_SKIN"] {
         let track = sub_type == "TRACK_SKIN";
         for s in overlay::list_subs_by_type(conn, sub_type).unwrap_or_default() {
-            let store = Path::new(&s.library_path);
+            let Some(store) = crate::libpath::resolve(cfg.library_path.as_deref(), &s.library_path) else {
+                continue;
+            };
             if !store.is_dir() {
                 // Stockage lui-même absent : hors de portée ici, ce n'est pas
                 // une junction cassée mais une perte de données réelle.
                 continue;
             }
-            let (projected, warning) = project_skin(conn, cfg, &s.parent_id, &s.name, store, track);
+            let (projected, warning) = project_skin(conn, cfg, &s.parent_id, &s.name, &store, track);
             if projected {
                 report.repaired += 1;
                 continue;
@@ -345,10 +347,15 @@ pub fn list_active_track_skins(conn: &Connection, track_id: &str) -> Vec<String>
 /// l'affichage — d'où le parcours récursif ici plutôt qu'une colonne en base.
 /// Cantonné à cette vue : les listes chaudes (`list_subs_for_parent`, activation
 /// des skins de circuit) restent sans accès disque.
-pub fn list_by_type_sized(conn: &Connection, sub_type: &str) -> rusqlite::Result<Vec<overlay::SubModRow>> {
+pub fn list_by_type_sized(
+    conn: &Connection,
+    cfg: &AppConfig,
+    sub_type: &str,
+) -> rusqlite::Result<Vec<overlay::SubModRow>> {
     let mut rows = overlay::list_subs_by_type(conn, sub_type)?;
     for r in &mut rows {
-        r.size_bytes = Some(crate::inspect::dir_size_bytes(Path::new(&r.library_path)) as i64);
+        r.size_bytes = crate::libpath::resolve(cfg.library_path.as_deref(), &r.library_path)
+            .map(|dir| crate::inspect::dir_size_bytes(&dir) as i64);
     }
     Ok(rows)
 }
@@ -364,13 +371,14 @@ pub struct TrackSkinOption {
 /// pour le sélecteur multi-choix de la barre latérale — cherche un fichier
 /// `preview.png`/`preview.jpg` (insensible à la casse) dans le dossier
 /// stocké de chaque skin.
-pub fn list_track_skin_options(conn: &Connection, track_id: &str) -> Vec<TrackSkinOption> {
+pub fn list_track_skin_options(conn: &Connection, cfg: &AppConfig, track_id: &str) -> Vec<TrackSkinOption> {
     overlay::list_subs_for_parent(conn, track_id)
         .unwrap_or_default()
         .into_iter()
         .filter(|s| s.sub_type == "TRACK_SKIN")
         .map(|s| {
-            let image = find_preview_image(Path::new(&s.library_path));
+            let image = crate::libpath::resolve(cfg.library_path.as_deref(), &s.library_path)
+                .and_then(|dir| find_preview_image(&dir));
             TrackSkinOption {
                 name: s.name,
                 image,
@@ -443,7 +451,10 @@ fn recompose_track_skins(conn: &Connection, cfg: &AppConfig, track_id: &str) -> 
         .collect();
     active.sort_by(|a, b| a.name.cmp(&b.name));
     let names: Vec<String> = active.iter().map(|s| s.name.clone()).collect();
-    let layers: Vec<PathBuf> = active.into_iter().map(|s| PathBuf::from(s.library_path)).collect();
+    let layers: Vec<PathBuf> = active
+        .into_iter()
+        .filter_map(|s| crate::libpath::resolve(cfg.library_path.as_deref(), &s.library_path))
+        .collect();
 
     deploy::compose_layers_into(&layers, &default_dir)?;
 
@@ -491,7 +502,8 @@ pub fn sync_bundled_track_skins(conn: &Connection, cfg: &AppConfig, track_id: &s
             continue;
         }
         let id = Uuid::new_v4().to_string();
-        let _ = overlay::insert_bundled_track_skin(conn, &id, track_id, &name, &path.to_string_lossy(), &now);
+        let library_path = crate::libpath::to_relative(cfg.library_path.as_deref(), &path);
+        let _ = overlay::insert_bundled_track_skin(conn, &id, track_id, &name, &library_path, &now);
     }
 
     reconcile_track_skin_activation(conn, track_id, &skins_dir);
@@ -530,7 +542,9 @@ fn parent_subdir(conn: &Connection, cfg: &AppConfig, parent_id: &str, sub: &str)
         if !m.is_stock {
             if let Some(vid) = &m.active_version_id {
                 if let Ok(Some(p)) = overlay::get_version_path(conn, vid) {
-                    return Some(Path::new(&p).join(sub));
+                    if let Some(resolved) = crate::libpath::resolve(cfg.library_path.as_deref(), &p) {
+                        return Some(resolved.join(sub));
+                    }
                 }
             }
         }
@@ -562,13 +576,31 @@ fn is_track_skin(conn: &Connection, parent_id: &str, src: &Path) -> bool {
 /// importé (souvent explicite, ex. « Sound - <id> by <auteur> ») ?
 fn guess_sound_parent(conn: &Connection, source_name: &str) -> Option<String> {
     let lower = source_name.to_lowercase();
-    let mut matches = overlay::list_mods(conn)
+    let cars: Vec<String> = overlay::list_mods(conn)
         .ok()?
         .into_iter()
-        .filter(|m| m.kind == "Car" && lower.contains(&m.id_interne.to_lowercase()))
-        .map(|m| m.id_interne);
-    let first = matches.next()?;
-    matches.next().is_none().then_some(first)
+        .filter(|m| m.kind == "Car")
+        .map(|m| m.id_interne)
+        .collect();
+
+    // 1. L'id complet d'une voiture apparaît tel quel dans le nom source.
+    let mut direct = cars.iter().filter(|id| lower.contains(id.to_lowercase().as_str()));
+    if let Some(first) = direct.next() {
+        return direct.next().is_none().then(|| first.clone());
+    }
+
+    // 2. Repli : le nom source ne reprend souvent que le modèle, pas le
+    //   préfixe marque de l'id (ex. « 312T_amafmod » pour un id du genre
+    //   « ferrari_312t ») — un segment (séparé par « _ ») du nom source
+    //   retrouvé tel quel comme segment de l'id suffit, à condition d'être
+    //   assez long pour ne pas matcher au hasard (ex. pas juste "v2"/"by").
+    let source_segments: Vec<&str> = lower.split('_').filter(|s| s.len() >= 3).collect();
+    let mut fuzzy = cars.iter().filter(|id| {
+        let id_lower = id.to_lowercase();
+        id_lower.split('_').any(|seg| source_segments.contains(&seg))
+    });
+    let first = fuzzy.next()?;
+    fuzzy.next().is_none().then(|| first.clone())
 }
 
 fn import_sound(
@@ -580,10 +612,20 @@ fn import_sound(
     mode: ExtractionMode,
     out: &mut Vec<SubImported>,
 ) {
-    // "sfx" n'identifie aucune voiture (§12bis.2, limite connue) : on retombe
-    // sur le nom d'archive/dossier importé, en essayant d'abord d'y retrouver
-    // la voiture ciblée pour rattacher le son au bon endroit.
-    let generic = sub.parent_id.eq_ignore_ascii_case("sfx");
+    // `modscan` ne remonte jamais au-delà du dossier qui contient directement
+    // les `.bank`/GUIDs.txt (§12bis.2) : c'est presque toujours littéralement
+    // "sfx" (convention AC, `content/cars/<id>/sfx/`), mais un pack qui pose
+    // ses fichiers de son directement à la racine du dossier importé (sans
+    // sous-dossier sfx/) fait tomber `sub.parent_id` sur le nom du pack
+    // lui-même (ex. « 312T_amafmod ») — tout aussi peu identifiant qu'"sfx".
+    // Dans les deux cas, `sub.parent_id` n'est vérifiable qu'en le comparant à
+    // un id de voiture réellement connu ; sinon on retombe sur le nom
+    // d'archive/dossier importé pour deviner la voiture ciblée.
+    let known_car = overlay::get_mod(conn, &sub.parent_id)
+        .ok()
+        .flatten()
+        .is_some_and(|m| m.kind == "Car");
+    let generic = !known_car;
     let parent = if generic {
         guess_sound_parent(conn, source_name).unwrap_or_else(|| source_name.to_string())
     } else {
@@ -628,7 +670,7 @@ fn import_sound(
         "SOUND",
         &parent,
         &name,
-        &dest.to_string_lossy(),
+        &crate::libpath::to_relative(Some(library), &dest),
         Some(source_name),
         &Local::now().to_rfc3339(),
     );
@@ -665,7 +707,9 @@ pub fn activate_sound(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Resul
         }
     }
 
-    replace_dir_contents(Path::new(&sub.library_path), &sfx)?;
+    let sound_dir = crate::libpath::resolve(cfg.library_path.as_deref(), &sub.library_path)
+        .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    replace_dir_contents(&sound_dir, &sfx)?;
     overlay::set_active_sound(conn, &sub.parent_id, Some(sub_id)).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -720,7 +764,9 @@ pub fn remove_sub(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<()
         _ => {}
     }
     // Fichiers stockés à part.
-    let _ = std::fs::remove_dir_all(Path::new(&sub.library_path));
+    if let Some(dir) = crate::libpath::resolve(cfg.library_path.as_deref(), &sub.library_path) {
+        let _ = std::fs::remove_dir_all(dir);
+    }
     overlay::delete_sub_mod(conn, sub_id).map_err(|e| e.to_string())
 }
 
@@ -750,7 +796,10 @@ mod tests {
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let cfg = AppConfig::default();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
 
         // Pack de skins : <carId>/skins/<skin>/preview.jpg (pas de ui/ → sous-élément).
         let pack = base.join("src").join("ferrari_488");
@@ -1450,6 +1499,159 @@ mod tests {
     }
 
     #[test]
+    fn sound_parent_guessed_when_bank_files_sit_directly_in_the_dropped_folder() {
+        // Bug réel : certains packs posent GUIDs.txt/.bank directement dans le
+        // dossier importé, sans sous-dossier sfx/ intermédiaire. `modscan`
+        // retombe alors sur le nom de CE dossier comme `parent_id` (ici
+        // « 312T_amafmod ») — aussi peu identifiant que "sfx", mais différent
+        // de "sfx" au sens strict, donc pas rattrapé par un simple test
+        // littéral sur "sfx". Doit quand même déclencher la devinette.
+        let base = crate::testutil::temp_dir("sndguess-nosfx");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let now = Local::now().to_rfc3339();
+
+        overlay::upsert_mod(
+            &conn,
+            "ferrari_312t",
+            "Car",
+            Some("Ferrari"),
+            Some("312T"),
+            "h",
+            None,
+            &now,
+        )
+        .unwrap();
+
+        let archive_name = "312T_amafmod";
+        let src = base.join("src").join(archive_name);
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("GUIDs.txt"), b"X").unwrap();
+        std::fs::write(src.join("car.bank"), b"Y").unwrap();
+
+        let subs = modscan::scan_subs(&src);
+        assert_eq!(subs.len(), 1);
+        assert_eq!(
+            subs[0].parent_id, archive_name,
+            "modscan retombe sur le nom du dossier lui-même, pas « sfx »"
+        );
+
+        let res = import_subs(
+            &conn,
+            &cfg,
+            &library,
+            archive_name,
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+        );
+        assert_eq!(res.len(), 1);
+        assert_eq!(
+            res[0].parent_id, "ferrari_312t",
+            "voiture retrouvée malgré un parent_id qui n'est ni « sfx » ni un id connu"
+        );
+    }
+
+    #[test]
+    fn sound_parent_guessed_from_model_segment_without_brand_prefix() {
+        // Cas réel rapporté : le dossier de son ne reprend que le modèle
+        // (« 312T_amafmod »), pas le préfixe marque de l'id de la voiture
+        // (« rss_formula_1970s_312t ») — la correspondance directe (id complet
+        // inclus tel quel dans le nom) échoue, il faut comparer par segment.
+        let base = crate::testutil::temp_dir("sndguess-segment");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let now = Local::now().to_rfc3339();
+
+        overlay::upsert_mod(
+            &conn,
+            "rss_formula_1970s_312t",
+            "Car",
+            Some("RSS"),
+            Some("Formula 1970s 312T"),
+            "h",
+            None,
+            &now,
+        )
+        .unwrap();
+
+        let archive_name = "312T_amafmod";
+        let src = base.join("src").join(archive_name);
+        let sfx = src.join("sfx");
+        std::fs::create_dir_all(&sfx).unwrap();
+        std::fs::write(sfx.join("GUIDs.txt"), b"X").unwrap();
+        std::fs::write(sfx.join("car.bank"), b"Y").unwrap();
+
+        let subs = modscan::scan_subs(&src);
+        let res = import_subs(
+            &conn,
+            &cfg,
+            &library,
+            archive_name,
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+        );
+        assert_eq!(res.len(), 1);
+        assert_eq!(
+            res[0].parent_id, "rss_formula_1970s_312t",
+            "voiture retrouvée par segment de modèle, sans le préfixe marque"
+        );
+    }
+
+    #[test]
+    fn sound_parent_not_guessed_when_segment_ambiguous_between_two_cars() {
+        // Deux voitures partagent un segment de modèle (ex. deux livrées/eras
+        // du même châssis importées séparément) : mieux vaut ne rien deviner
+        // que de rattacher au hasard à l'une des deux.
+        let base = crate::testutil::temp_dir("sndguess-ambiguous");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let now = Local::now().to_rfc3339();
+
+        overlay::upsert_mod(&conn, "team_a_312t", "Car", None, Some("A 312T"), "h", None, &now).unwrap();
+        overlay::upsert_mod(&conn, "team_b_312t", "Car", None, Some("B 312T"), "h", None, &now).unwrap();
+
+        let archive_name = "312T_amafmod";
+        let src = base.join("src").join(archive_name);
+        let sfx = src.join("sfx");
+        std::fs::create_dir_all(&sfx).unwrap();
+        std::fs::write(sfx.join("GUIDs.txt"), b"X").unwrap();
+        std::fs::write(sfx.join("car.bank"), b"Y").unwrap();
+
+        let subs = modscan::scan_subs(&src);
+        let res = import_subs(
+            &conn,
+            &cfg,
+            &library,
+            archive_name,
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+        );
+        assert_eq!(res.len(), 1);
+        assert_eq!(
+            res[0].parent_id, archive_name,
+            "ambigu : nom d'archive brut, pas de choix au hasard"
+        );
+    }
+
+    #[test]
     fn repair_projections_recreates_missing_car_skin_junction() {
         // §12bis.2 : une copie de bibliothèque (robocopy sans /XJ, migration
         // vers une autre machine) ne préserve pas les junctions — leur cible
@@ -1557,7 +1759,7 @@ mod tests {
         // Sans taille par défaut (pas de parcours disque sur les listes chaudes).
         assert_eq!(overlay::list_subs_by_type(&conn, "SKIN").unwrap()[0].size_bytes, None);
 
-        let sized = list_by_type_sized(&conn, "SKIN").unwrap();
+        let sized = list_by_type_sized(&conn, &AppConfig::default(), "SKIN").unwrap();
         assert_eq!(sized[0].size_bytes, Some(1024), "somme récursive des fichiers réels");
     }
 }

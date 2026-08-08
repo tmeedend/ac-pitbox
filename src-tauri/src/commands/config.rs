@@ -22,3 +22,9 @@ pub fn validate_config(config: AppConfig) -> ConfigValidation {
 pub fn autodetect_paths() -> DetectedPaths {
     crate::detect::autodetect()
 }
+
+/// Ouvre la page Windows « Pour les développeurs » (§2, prérequis symlink).
+#[tauri::command]
+pub fn open_developer_mode_settings() -> Result<(), String> {
+    crate::config::open_developer_mode_settings()
+}

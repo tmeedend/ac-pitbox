@@ -12,9 +12,16 @@
     return { cls: "new", label: t("importOverlay.outcomeNew") };
   }
 
+  // Total tous types confondus (§4.6bis) : un import peut ne produire aucun
+  // mod de premier niveau (ex. un pack de skins/sons rattaché à une voiture
+  // déjà connue) sans pour autant n'avoir « rien » importé — le titre doit
+  // refléter ce qui a été réellement ajouté, pas seulement les mods.
   function importSummary(): string {
     const r = importState.report ?? [];
-    const n = r.reduce((acc, a) => acc + a.mods.length, 0);
+    const n = r.reduce(
+      (acc, a) => acc + a.mods.length + (a.subs?.length ?? 0) + (a.apps?.length ?? 0) + (a.others?.length ?? 0),
+      0,
+    );
     const errs = r.filter((a) => a.error).length;
     return t("importOverlay.summaryBase", { n }) + (errs ? t("importOverlay.summaryErrs", { errs }) : "");
   }
@@ -24,17 +31,21 @@
   {@const p = importState.progress}
   <div class="toast progress-toast">
     <div class="p-label">
-      <span class="mono p-phase">{p.phase}</span>
-      {p.archive} — {p.label}
-      {#if p.total > 0 && p.phase === "filing"}
-        <span class="mono">({p.current}/{p.total})</span>
+      {#if p.phase === "queued"}
+        {t("importOverlay.queued", { n: p.total })}
+      {:else}
+        <span class="mono p-phase">{p.phase}</span>
+        {p.archive} — {p.label}
+        {#if p.total > 0 && p.phase === "filing"}
+          <span class="mono">({p.current}/{p.total})</span>
+        {/if}
       {/if}
     </div>
     <div class="p-bar">
       <div
         class="p-fill"
-        style:width={p.total > 0 ? `${(p.current / p.total) * 100}%` : "30%"}
-        class:indeterminate={p.total === 0}
+        style:width={p.total > 0 && p.phase !== "queued" ? `${(p.current / p.total) * 100}%` : "30%"}
+        class:indeterminate={p.phase === "queued" || p.total === 0}
       ></div>
     </div>
   </div>

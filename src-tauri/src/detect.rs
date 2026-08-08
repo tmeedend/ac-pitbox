@@ -12,6 +12,13 @@ pub struct DetectedPaths {
     pub ac_install_path: Option<PathBuf>,
     pub content_manager_exe: Option<PathBuf>,
     pub sevenzip_exe: Option<PathBuf>,
+    /// Suggestion de bibliothèque (§12), pas une détection à proprement
+    /// parler — rien n'existe encore à ce chemin la première fois. Dans le
+    /// dossier utilisateur plutôt que Documents/Bureau/Images : ces derniers
+    /// sont ceux que Windows redirige vers OneDrive par défaut (« Sauvegarde
+    /// des dossiers connus »), ce qui tenterait de synchroniser une
+    /// bibliothèque de plusieurs centaines de Go vers le cloud.
+    pub library_path: Option<PathBuf>,
 }
 
 /// Extrait la dernière valeur entre guillemets d'une ligne de fichier `.vdf`
@@ -87,11 +94,25 @@ pub fn find_cm(ac: Option<&Path>) -> Option<PathBuf> {
     None
 }
 
+/// 7-Zip standalone, sinon le `7z.exe` que Content Manager embarque pour son
+/// propre usage (plugin `7Zip`, présent dès que CM a extrait une archive au
+/// moins une fois) — beaucoup d'utilisateurs CM n'ont jamais installé 7-Zip
+/// à part, ce chemin couvre ce cas sans dépendance supplémentaire à poser.
 pub fn find_7zip() -> Option<PathBuf> {
     for p in [r"C:\Program Files\7-Zip\7z.exe", r"C:\Program Files (x86)\7-Zip\7z.exe"] {
         let pb = PathBuf::from(p);
         if pb.is_file() {
             return Some(pb);
+        }
+    }
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        let p = PathBuf::from(local)
+            .join("AcTools Content Manager")
+            .join("Plugins")
+            .join("7Zip")
+            .join("7z.exe");
+        if p.is_file() {
+            return Some(p);
         }
     }
     None
@@ -101,9 +122,11 @@ pub fn autodetect() -> DetectedPaths {
     let ac = find_ac();
     let content_manager_exe = find_cm(ac.as_deref());
     let sevenzip_exe = find_7zip();
+    let library_path = dirs::home_dir().map(|h| h.join("PitBox Library"));
     DetectedPaths {
         ac_install_path: ac,
         content_manager_exe,
         sevenzip_exe,
+        library_path,
     }
 }
