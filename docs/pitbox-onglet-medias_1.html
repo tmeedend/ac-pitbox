@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pit Box — Onglet Médias</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/tabler-icons.min.css" rel="stylesheet">
+<style>
+  :root{
+    --rosso:#d40000; --rosso-bright:#ff5555; --rosso-dim:#1a0606; --rosso-border:#5c1212;
+    --bg:#08080c; --panel:#0d0d12; --panel2:#0a0a0f; --card:#13131a; --raised:#15151c;
+    --line:#1e1e26; --txt:#f2f2f4; --txt2:#cfd2d9; --muted:#86868f; --muted2:#5d6470; --faint:#4a4a55;
+    --green:#5dcaa5; --blue:#6a9ec9;
+    --mono:'SF Mono',ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#050507;color:var(--txt);font-family:var(--sans);font-size:13px;-webkit-font-smoothing:antialiased;padding:14px;}
+  .mono{font-family:var(--mono);}
+  button{font-family:inherit;cursor:pointer;border:none;}
+  .screen{max-width:1100px;margin:0 auto;background:var(--panel);border:1px solid var(--rosso);overflow:hidden;}
+  .topbar{background:var(--rosso);height:3px;}
+
+  /* fil d'ariane + titre fiche */
+  .fichehead{padding:14px 22px;border-bottom:1px solid var(--line);background:var(--panel2);display:flex;align-items:center;gap:12px;}
+  .fichehead .crumb{color:var(--faint);font-size:9px;font-family:var(--mono);letter-spacing:1px;}
+  .fichehead h1{font-size:15px;font-weight:700;}
+
+  /* onglets de la fiche */
+  .tabs{display:flex;gap:1px;background:var(--line);border-bottom:1px solid var(--line);padding:0 22px;background:var(--panel2);}
+  .tab{padding:11px 18px;color:var(--muted);font-size:10.5px;letter-spacing:1px;font-family:var(--mono);border-bottom:2px solid transparent;cursor:pointer;display:flex;align-items:center;gap:7px;}
+  .tab i{font-size:15px;}
+  .tab.on{color:var(--txt);border-bottom-color:var(--rosso);}
+  .tab .ct{color:var(--faint);font-size:9px;}
+
+  .body{padding:22px;}
+
+  /* sous-navigation médias */
+  .medias-nav{display:flex;gap:1px;background:var(--line);border:1px solid var(--line);width:fit-content;margin-bottom:20px;}
+  .mn{padding:8px 20px;background:var(--panel);color:var(--muted);font-size:10px;letter-spacing:1px;font-family:var(--mono);display:flex;align-items:center;gap:7px;cursor:pointer;}
+  .mn.on{background:var(--rosso);color:#fff;}
+  .mn .ct{font-size:8.5px;opacity:.8;}
+
+  .sect-title{color:var(--rosso);font-size:9px;letter-spacing:2.5px;font-family:var(--mono);margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+  .sect-title::after{content:'';flex:1;height:1px;background:var(--rosso-border);}
+  .sect-hint{color:var(--faint);font-size:9.5px;font-family:var(--mono);margin:-8px 0 16px;}
+
+  /* galerie screenshots */
+  .gallery{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  .shot{position:relative;aspect-ratio:16/10;background:linear-gradient(135deg,#160a0a,#0d0d12);border:1px solid var(--line);overflow:hidden;cursor:pointer;}
+  .shot:hover{border-color:var(--rosso-border);}
+  .shot:hover .shot-overlay{opacity:1;}
+  .shot-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(8,8,12,.9),transparent 50%);opacity:0;transition:opacity .15s;display:flex;align-items:flex-end;padding:8px;}
+  .shot-meta{font-size:8px;font-family:var(--mono);color:var(--txt2);}
+  .shot-icon{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:26px;color:rgba(255,255,255,.12);}
+  .shot-combo{position:absolute;top:6px;left:6px;background:rgba(8,8,12,.75);color:var(--green);font-size:6.5px;letter-spacing:1px;font-family:var(--mono);padding:2px 6px;display:flex;align-items:center;gap:3px;}
+
+  /* backgrounds officiels */
+  .bg-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .bg-card{position:relative;aspect-ratio:16/9;background:linear-gradient(135deg,#0a1a14,#0d0d12);border:1px solid var(--line);overflow:hidden;}
+  .bg-tag{position:absolute;top:6px;left:6px;background:rgba(8,8,12,.75);color:var(--muted);font-size:6.5px;letter-spacing:1px;font-family:var(--mono);padding:2px 6px;}
+  .bg-icon{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:22px;color:rgba(255,255,255,.1);}
+
+  /* replays */
+  .replay{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);background:var(--panel2);margin-bottom:8px;}
+  .replay-ico{width:38px;height:38px;background:var(--rosso-dim);border:1px solid var(--rosso-border);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .replay-ico i{font-size:18px;color:var(--rosso-bright);}
+  .replay-name{font-size:11px;font-weight:600;}
+  .replay-meta{color:var(--muted);font-size:8.5px;font-family:var(--mono);margin-top:2px;display:flex;gap:10px;}
+  .replay-play{margin-left:auto;display:flex;gap:8px;}
+  .rbtn{height:28px;padding:0 12px;background:var(--raised);color:var(--txt2);border:1px solid var(--line);font-size:9px;letter-spacing:1px;font-family:var(--mono);display:flex;align-items:center;gap:6px;}
+  .rbtn:hover{border-color:var(--rosso-border);color:var(--rosso-bright);}
+  .rbtn.primary{background:var(--rosso);color:#fff;border-color:var(--rosso);}
+
+  .empty-note{color:var(--faint);font-size:9px;font-family:var(--mono);margin-top:14px;display:flex;align-items:center;gap:6px;}
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="topbar"></div>
+
+  <div class="fichehead">
+    <span class="crumb">VOITURES /</span>
+    <h1>Ferrari 488 GT3 Evo</h1>
+  </div>
+
+  <div class="tabs">
+    <div class="tab"><i class="ti ti-info-circle"></i> FICHE</div>
+    <div class="tab"><i class="ti ti-palette"></i> SKINS <span class="ct">6</span></div>
+    <div class="tab"><i class="ti ti-history"></i> HISTORIQUE</div>
+    <div class="tab on"><i class="ti ti-photo"></i> MÉDIAS <span class="ct">14</span></div>
+  </div>
+
+  <div class="body">
+    <div class="medias-nav">
+      <div class="mn on"><i class="ti ti-camera"></i> SCREENSHOTS <span class="ct">9</span></div>
+      <div class="mn"><i class="ti ti-mountain"></i> BACKGROUNDS <span class="ct">3</span></div>
+      <div class="mn"><i class="ti ti-movie"></i> REPLAYS <span class="ct">2</span></div>
+    </div>
+
+    <!-- SCREENSHOTS -->
+    <div id="panel-shots">
+      <div class="sect-title">MES CAPTURES</div>
+      <div class="sect-hint">// captures perso mettant en scène cette voiture — détectées automatiquement</div>
+      <div class="gallery">
+        <div class="shot"><i class="ti ti-photo shot-icon"></i><span class="shot-combo"><i class="ti ti-road" style="font-size:8px;"></i> SPA</span><div class="shot-overlay"><span class="shot-meta">08/07/2026 · 21:14</span></div></div>
+        <div class="shot"><i class="ti ti-photo shot-icon"></i><span class="shot-combo"><i class="ti ti-road" style="font-size:8px;"></i> MONZA</span><div class="shot-overlay"><span class="shot-meta">02/07/2026 · 19:40</span></div></div>
+        <div class="shot"><i class="ti ti-photo shot-icon"></i><span class="shot-combo"><i class="ti ti-road" style="font-size:8px;"></i> NORDSCHLEIFE</span><div class="shot-overlay"><span class="shot-meta">29/06/2026 · 22:03</span></div></div>
+        <div class="shot"><i class="ti ti-photo shot-icon"></i><span class="shot-combo"><i class="ti ti-road" style="font-size:8px;"></i> SPA</span><div class="shot-overlay"><span class="shot-meta">08/07/2026 · 21:16</span></div></div>
+        <div class="shot"><i class="ti ti-photo shot-icon"></i><span class="shot-combo"><i class="ti ti-road" style="font-size:8px;"></i> BRANDS HATCH</span><div class="shot-overlay"><span class="shot-meta">21/06/2026 · 18:22</span></div></div>
+        <div class="shot"><i class="ti ti-photo shot-icon"></i><span class="shot-combo"><i class="ti ti-road" style="font-size:8px;"></i> MONZA</span><div class="shot-overlay"><span class="shot-meta">02/07/2026 · 19:41</span></div></div>
+        <div class="shot"><i class="ti ti-photo shot-icon"></i><span class="shot-combo"><i class="ti ti-road" style="font-size:8px;"></i> SPA</span><div class="shot-overlay"><span class="shot-meta">05/06/2026 · 20:55</span></div></div>
+        <div class="shot"><i class="ti ti-photo shot-icon"></i><span class="shot-combo"><i class="ti ti-road" style="font-size:8px;"></i> IMOLA</span><div class="shot-overlay"><span class="shot-meta">30/05/2026 · 17:12</span></div></div>
+        <div class="shot" style="display:flex;align-items:center;justify-content:center;background:var(--panel2);">
+          <span style="color:var(--faint);font-size:9px;font-family:var(--mono);text-align:center;line-height:1.6;">+1 AUTRE<br>voir tout</span>
+        </div>
+      </div>
+      <div class="empty-note"><i class="ti ti-info-circle"></i> rattachement automatique par nom/dossier — associer manuellement si une capture manque à l'appel</div>
+    </div>
+
+    <!-- BACKGROUNDS -->
+    <div id="panel-bg" style="display:none;">
+      <div class="sect-title">BACKGROUNDS OFFICIELS</div>
+      <div class="sect-hint">// images d'ambiance téléchargées par CSP pour les circuits joués avec cette voiture</div>
+      <div class="bg-row">
+        <div class="bg-card"><i class="ti ti-mountain bg-icon"></i><span class="bg-tag">SPA · OFFICIEL</span></div>
+        <div class="bg-card"><i class="ti ti-mountain bg-icon"></i><span class="bg-tag">MONZA · OFFICIEL</span></div>
+        <div class="bg-card"><i class="ti ti-mountain bg-icon"></i><span class="bg-tag">NORDSCHLEIFE · OFFICIEL</span></div>
+      </div>
+      <div class="empty-note"><i class="ti ti-info-circle"></i> utilisées en repli sur l'écran de réglages si aucune capture perso ne correspond au combo</div>
+    </div>
+
+    <!-- REPLAYS -->
+    <div id="panel-replays" style="display:none;">
+      <div class="sect-title">REPLAYS ENREGISTRÉS</div>
+      <div class="sect-hint">// sessions sauvegardées impliquant cette voiture</div>
+      <div class="replay">
+        <div class="replay-ico"><i class="ti ti-movie"></i></div>
+        <div><div class="replay-name">Course · Spa-Francorchamps</div><div class="replay-meta"><span>08/07/2026 · 21:20</span><span>12 tours</span><span>Pluie</span></div></div>
+        <div class="replay-play"><button class="rbtn"><i class="ti ti-folder"></i> DOSSIER</button><button class="rbtn primary"><i class="ti ti-player-play-filled"></i> LIRE</button></div>
+      </div>
+      <div class="replay">
+        <div class="replay-ico"><i class="ti ti-movie"></i></div>
+        <div><div class="replay-name">Hotlap · Nordschleife</div><div class="replay-meta"><span>29/06/2026 · 22:05</span><span>Ghost ON</span></div></div>
+        <div class="replay-play"><button class="rbtn"><i class="ti ti-folder"></i> DOSSIER</button><button class="rbtn primary"><i class="ti ti-player-play-filled"></i> LIRE</button></div>
+      </div>
+      <div class="empty-note"><i class="ti ti-info-circle"></i> "Lire" ouvre le replay directement dans Content Manager</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const panels={shots:'panel-shots',bg:'panel-bg',replays:'panel-replays'};
+document.querySelectorAll('.mn').forEach((el,i)=>el.addEventListener('click',()=>{
+  document.querySelectorAll('.mn').forEach(x=>x.classList.remove('on'));
+  el.classList.add('on');
+  Object.values(panels).forEach(id=>document.getElementById(id).style.display='none');
+  document.getElementById(Object.values(panels)[i]).style.display='block';
+}));
+</script>
+</body>
+</html>
