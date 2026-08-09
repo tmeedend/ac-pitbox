@@ -31,6 +31,18 @@ résolue côté front par `errorText(e)` de `$lib/errors`. Les détails techniqu
 des conseils. Toute nouvelle erreur user-facing ajoute sa constante dans
 `errors.rs` **et** sa clé dans les deux locales.
 
+**Un `let _ = ...` sur une opération qui peut échouer s'accompagne d'un
+`log::warn!`.** Beaucoup d'opérations (activation à l'import, arbitrage de
+priorité entre « autres mods », projections skin/circuit) sont *best-effort*
+par design : un échec ne doit pas bloquer l'UI ni le reste d'un lot. Mais
+« ne bloque pas l'UI » ne veut pas dire « ne laisse aucune trace » — sur une
+install packagée (`.exe`), il n'y a pas de console, donc pas de log du tout
+si l'échec n'est écrit nulle part. Journal fichier via `tauri-plugin-log`
+(niveau Warn, `%APPDATA%\com.pitbox.app\logs\`, configuré dans `lib.rs`) :
+un `log::warn!` au moment de l'échec (pas seulement un `Result` remonté et
+jamais lu) est ce qui rend un bug rapporté par un utilisateur diagnosticable
+après coup.
+
 ## Stack
 
 | Couche | Techno |
@@ -142,6 +154,13 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
   existants.
 - **Les tests backend tournent sur un vrai système de fichiers** : ils créent
   des junctions et des hardlinks réels, donc uniquement sous Windows.
+- **`Metadata::is_dir()` ne distingue pas une junction (dossier) d'un lien
+  fichier sur un point de reparse Windows** : les deux renvoient `is_dir() ==
+  false` via `symlink_metadata` (vérifié empiriquement, pas documenté côté
+  Rust std). `activation::remove_junction` ne peut donc pas brancher sur
+  `meta.is_dir()` pour choisir entre `remove_dir`/`remove_file` — il tente
+  `remove_dir` puis se replie sur `remove_file` en cas d'échec, jamais
+  l'inverse.
 
 ## Documentation
 

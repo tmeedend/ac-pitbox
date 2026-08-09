@@ -45,6 +45,19 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // Journal fichier (`%APPDATA%\com.pitbox.app\logs\`, §9.4) : seul moyen
+        // de diagnostiquer un échec sur une install packagée (`.exe`, pas de
+        // console). Niveau Warn : n'attrape que les échecs réels d'opérations
+        // best-effort (`let _ = ...`) déjà silencieuses côté écran par design —
+        // jamais un flux d'activité normale.
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .target(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                    file_name: Some("pitbox".into()),
+                }))
+                .level(log::LevelFilter::Warn)
+                .build(),
+        )
         // Mémorise taille/position/état agrandi de la fenêtre entre les
         // lancements (restauré automatiquement à l'ouverture, sauvegardé à la
         // fermeture et sur redimensionnement/déplacement).

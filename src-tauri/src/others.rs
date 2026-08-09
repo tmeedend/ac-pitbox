@@ -183,6 +183,11 @@ fn place(
             // jamais un écrasement (mods qui remplacent du contenu existant :
             // hors périmètre pour l'instant).
             if !target.parent().is_some_and(|p| p.exists()) {
+                log::warn!(
+                    "place {mine_id} {}: parent dir missing at {}",
+                    rel.display(),
+                    target.display()
+                );
                 warnings.push(format!("{} : dossier parent introuvable", rel.display()));
             } else if !target.exists() {
                 match activation::create_file_link(&target, &p) {

@@ -84,14 +84,24 @@ pub fn create_junction(link: &Path, target: &Path) -> Result<(), String> {
 
     let out = cmd
         .output()
+        .inspect_err(|e| {
+            log::warn!(
+                "create_junction {} -> {}: spawn failed: {e}",
+                link.display(),
+                target.display()
+            )
+        })
         .map_err(|e| format!("impossible de créer la junction : {e}"))?;
     if out.status.success() {
         Ok(())
     } else {
-        Err(format!(
-            "mklink a échoué : {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ))
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        log::warn!(
+            "create_junction {} -> {}: mklink failed: {err}",
+            link.display(),
+            target.display()
+        );
+        Err(format!("mklink a échoué : {err}"))
     }
 }
 
@@ -116,14 +126,26 @@ pub fn create_file_link(link: &Path, target: &Path) -> Result<(), String> {
         return Err(crate::errors::JUNCTIONS_WINDOWS_ONLY.into());
     }
 
-    let out = cmd.output().map_err(|e| format!("impossible de créer le lien : {e}"))?;
+    let out = cmd
+        .output()
+        .inspect_err(|e| {
+            log::warn!(
+                "create_file_link {} -> {}: spawn failed: {e}",
+                link.display(),
+                target.display()
+            )
+        })
+        .map_err(|e| format!("impossible de créer le lien : {e}"))?;
     if out.status.success() {
         Ok(())
     } else {
-        Err(format!(
-            "mklink a échoué : {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ))
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        log::warn!(
+            "create_file_link {} -> {}: mklink failed: {err}",
+            link.display(),
+            target.display()
+        );
+        Err(format!("mklink a échoué : {err}"))
     }
 }
 
@@ -136,12 +158,16 @@ pub fn create_file_link(link: &Path, target: &Path) -> Result<(), String> {
 /// attributs peu fiables.
 pub fn remove_junction(link: &Path) -> Result<(), String> {
     if !is_junction(link) {
+        // Cas fréquent et bénin (garde-fou best-effort déjà inactif) : pas de
+        // log, ce n'est pas un échec d'opération.
         return Err(crate::errors::NOT_A_JUNCTION.into());
     }
     if std::fs::remove_dir(link).is_ok() {
         return Ok(());
     }
-    std::fs::remove_file(link).map_err(|e| format!("suppression du lien : {e}"))
+    std::fs::remove_file(link)
+        .inspect_err(|e| log::warn!("remove_junction {}: {e}", link.display()))
+        .map_err(|e| format!("suppression du lien : {e}"))
 }
 
 /// Le garde-fou absolu du module : un vrai dossier dans `content/` n'est jamais

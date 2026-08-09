@@ -156,6 +156,23 @@ Les caractéristiques mécaniques ne sont **pas** des tags (un tag filtre/groupe
 
 **Favori** : état personnel (cœur), ni tag ni caractéristique.
 
+### 6.1 Onglet Médias (fiche voiture/circuit)
+ 
+Maquette de référence `pitbox-onglet-medias.html`. Un onglet **Médias** sur la fiche, avec trois sous-vues :
+- **Screenshots** — captures personnelles de l'utilisateur mettant en scène cette voiture/ce circuit, en galerie. Rattachement **automatique** par nom/dossier (convention à vérifier sur les fichiers réels d'AC — `Documents\Assetto Corsa\screens\`, format non garanti). Repli : **association manuelle** si le rattachement automatique manque une capture (même principe que les fichiers annexes, §4.6).
+- **Backgrounds** — images d'ambiance officielles téléchargées par CSP pour un circuit (repli de contenu quand aucune capture perso ne correspond, voir §9.3bis).
+- **Replays** — fichiers `.acreplay` liés à ce contenu, avec métadonnées (type de session, date, tours, météo) et actions **« Ouvrir le dossier »** / **« Lire »** (lance directement dans Content Manager). Convention de nommage/dossier des replays à vérifier également.
+> ⚠️ Point à vérifier avant implémentation : convention exacte de nommage/dossier des screenshots et replays d'AC (peut varier selon version CSP/CM) — inspecter les fichiers réels plutôt que supposer un format.
+ 
+### 6.2 Fond photo sur l'écran de réglages de session
+ 
+Sur l'écran de réglages (§9.3), utiliser une image de fond assombrie/floutée derrière l'interface, avec ordre de repli :
+1. Screenshot personnel du **combo exact** (même voiture + même circuit sélectionnés).
+2. Screenshot personnel du **même circuit**, autre voiture (ambiance du lieu conservée).
+3. **Background officiel** du circuit (§6.1).
+4. Fond neutre actuel (aucun média disponible).
+
+
 ---
 
 ## 7. Bibliothèque et navigation
@@ -176,6 +193,8 @@ Une **colonne latérale unique** (maquette de référence `pitbox-biblio-session
 ### 7.3 Type « Autres mods »
 
 Mods de type non reconnu (shaders, configs CSP, mods d'UI, weather patterns…) : listés dans « Autres mods », activables/désactivables (hardlinks) comme les autres. Priorité notée + conflits signalés (pas de moteur de superposition type MO2).
+
+**Pas de notion de mise à jour.** Réimporter une archive dont l'id existe déjà en bibliothèque ne fait rien — ni remplacement, ni erreur, silencieusement ignoré. Pour reprendre un mod « autre » modifié, il faut d'abord le supprimer.
 
 **Fichier isolé dans un dossier déjà réel côté AC** : posé par lien fichier (`mklink`, même mécanisme que les junctions de dossier) si et seulement si le fichier cible n'existe pas encore — pure addition (ex. une nouvelle image dans `content/gui/flags/`, dossier qui existe déjà dans une install AC standard). Un fichier qui existerait déjà à cet emplacement n'est jamais remplacé (hors périmètre pour l'instant — mods qui remplacent réellement du contenu stock).
 
@@ -209,7 +228,9 @@ Deux vues commutables par bibliothèque (galerie / tableau), colonnes choisies p
 
 **Sons** — exclusifs (un seul actif par voiture), vrai remplacement de fichiers (`.bank` + `GUIDs.txt`), original toujours restaurable.
 
-**Apps** — type autonome, vue propre, activables. Détection Python (`<id>/<id>.py`) et Lua/CSP (`<id>/<id>.lua`) ; activation par junction vers `apps/python/<id>` ou `apps/lua/<id>` selon le langage constaté. Ressources annexes (§4.6, ex. manuel PDF fourni avec l'app) listées et ouvrables depuis la vue, comme sur une fiche voiture/circuit.
+**Apps** — type autonome, vue propre, activables (par défaut dès l'import, comme les mods voiture/circuit et les « autres mods »). Détection Python (`<id>/<id>.py`) et Lua/CSP (`<id>/<id>.lua`) ; activation par junction vers `apps/python/<id>` ou `apps/lua/<id>` selon le langage constaté. Ressources annexes (§4.6, ex. manuel PDF fourni avec l'app) listées et ouvrables depuis la vue, comme sur une fiche voiture/circuit.
+
+**Pas de notion de mise à jour ni de couche.** Contrairement aux voitures/circuits (§4.3), réimporter une app dont l'id existe déjà **remplace intégralement** ses fichiers, sans comparaison ni choix — pas de diff, pas d'historique de versions. Comportement délibérément simple : une app est un script autonome, sans les enjeux de couches/composition d'un mod de contenu.
 
 **Accès transversal** : vues Skins / Sons / Apps dans la barre latérale, en plus de l'accès par la fiche.
 
@@ -235,7 +256,7 @@ Limites connues du preset Quick Drive (pas de champ correspondant trouvé dans l
 
 ### 9.3 Écran de réglages
 
-Maquette de référence `pitbox-reglages-session.html`. Pas de rappel du duo en haut (déjà dans la barre latérale) — titre + Lancer. Toutes les options visibles (pas de bloc replié).
+Maquette de référence `pitbox-reglages-session.html`. Pas de rappel du duo en haut (déjà dans la barre latérale) — titre + Lancer. Toutes les options visibles (pas de bloc replié). **Fond photo** derrière l'interface : voir §6.2 pour l'ordre de repli (screenshot du combo → screenshot du circuit → background officiel → fond neutre).
 
 **Communs à tous les types de session** :
 - **Simulation** : dégâts, conso carburant, usure pneus (actifs quel que soit le type, pas seulement en Course).
@@ -277,7 +298,9 @@ Bouton d'aperçu 3D sur la fiche (lance `acshowroom` pour un rendu du modèle). 
 
 **Conservation de l'archive source** (réglage optionnel, défaut désactivé — cohérent avec l'absence d'historique de versions/couches, §4.3) : si activé, l'archive/dossier source d'un mod est conservée en bibliothèque en plus du contenu extrait. Rend disponible une action **« Réinstaller depuis l'archive source »** sur la fiche du mod (visible seulement si l'archive est conservée) : réextrait l'archive et remplace le contenu de bibliothèque pour ce mod. Utile en cas de corruption, de modification accidentelle, ou pour repartir propre sans retélécharger.
 
-**Réparation générale** (écran Maintenance, à la manière du « purge & deploy » des autres gestionnaires de mods) : une action **« Réparer »** recrée d'un coup toutes les projections (junctions) de skins voiture/circuit manquantes ou cassées — le cas typique étant une copie de bibliothèque (robocopy, migration vers une autre machine) qui ne préserve pas les junctions, leur cible étant un chemin absolu propre à la machine source. Sans risque et rejouable à volonté : un skin déjà bien projeté n'est pas touché, seul un lien manquant est recréé. Une case à cocher optionnelle étend l'action à une réinstallation en lot : tout mod actuellement détecté cassé par le scan et disposant d'une archive source conservée (réglage ci-dessus) est réinstallé depuis celle-ci ; un mod cassé sans archive conservée est simplement laissé de côté (visible ensuite dans la liste des mods cassés, pour suppression manuelle si besoin).
+**Réparation générale** (écran Maintenance, à la manière du « purge & deploy » des autres gestionnaires de mods) : une action **« Réparer »** recrée d'un coup toutes les projections (junctions) de skins voiture/circuit manquantes ou cassées — le cas typique étant une copie de bibliothèque (robocopy, migration vers une autre machine) qui ne préserve pas les junctions, leur cible étant un chemin absolu propre à la machine source. Sans risque et rejouable à volonté : un skin déjà bien projeté n'est pas touché, seul un lien manquant est recréé. Une case à cocher optionnelle étend l'action à une réinstallation en lot : tout mod actuellement détecté cassé par le scan et disposant d'une archive source conservée (réglage ci-dessus) est réinstallé depuis celle-ci ; un mod cassé sans archive conservée est simplement laissé de côté (visible ensuite dans la liste des mods cassés, pour suppression manuelle si besoin). Les échecs individuels (projection ou réinstallation) sont listés en détail sous le bouton, pas seulement comptés — chaque ligne identifie le skin/mod concerné et la raison technique brute.
+
+**Journal fichier** (`tauri-plugin-log`, niveau Warn, `%APPDATA%\com.pitbox.app\logs\pitbox.log`) : seul moyen de diagnostiquer, sur une install packagée sans console, un échec d'opération best-effort qui ne bloque jamais l'UI (activation automatique à l'import, arbitrage de priorité entre « autres mods », etc.). N'enregistre que des échecs réels — jamais un flux d'activité normale.
 
 **Migration de bibliothèque — chemins relatifs** (écran Maintenance, `libpath.rs`) : les chemins enregistrés en overlay sont relatifs à la bibliothèque (§2), donc portables. Une base créée avant ce format (ou copiée avant une mise à jour de l'app) garde ses chemins en absolu jusqu'à passage explicite de l'action **« Convertir »** : retrouve la partie portable de chaque ligne via la structure interne connue de sa table, sans avoir besoin de connaître l'ancienne racine, puis réécrit `library_path`/`kept_archive_path` en base — aucun fichier déplacé ni copié. Sûr à rejouer (déjà relatif = ignoré) ; ce qui n'est pas reconnu est laissé de côté et listé, jamais deviné. Le contenu de base Kunos (`is_stock`) en est exclu : ses versions pointent vers `content/`, jamais la bibliothèque. Étape recommandée après une migration multi-machine, avant ou après « Réparer » ci-dessus (les deux sont indépendants et sans risque à combiner).
 
@@ -331,6 +354,6 @@ Voir `README.md` pour l'index complet. Fichiers de données et maquettes cités 
 ## 15. Points à vérifier
 
 - **Bascule symlinks → hardlinks (§2)** : moteur implémenté et couvert par des tests automatisés (déploiement/composition/repli copie/nettoyage, y compris un scénario circuit type Spa) — confirme la mécanique et l'absence de besoin de droits admin (`CreateHardLinkW`, contrairement à `CreateSymbolicLink`). **Validé en conditions réelles par l'utilisateur** (juillet 2026) : déploiement + composition par couches fonctionnels sur sa bibliothèque réelle.
-
 - **Détection de la stack météo** (Pure/SOL/CSP/vanilla) et correspondance preset → backend.
 - **Table Kunos** : valider les noms de dossiers / années contre l'installation réelle (correction triviale ligne par ligne).
+- **Convention screenshots/replays (§6.1)** : format de nommage/dossier exact des captures d'écran et replays d'AC — à vérifier sur les fichiers réels avant d'implémenter le rattachement automatique.

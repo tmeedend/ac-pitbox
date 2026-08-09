@@ -27,6 +27,7 @@
   let repairMsg = $state("");
   let reinstallBroken = $state(false);
   let reinstallFailures = $state<{ id: string; name: string; reason: string }[]>([]);
+  let projectionFailures = $state<string[]>([]);
   let relativizing = $state(false);
   let relativizeMsg = $state("");
   let relativizeUnrecognized = $state<string[]>([]);
@@ -64,6 +65,7 @@
     error = "";
     repairMsg = "";
     reinstallFailures = [];
+    projectionFailures = [];
     try {
       const r = await repairAll(reinstallBroken);
       const parts = [
@@ -71,6 +73,7 @@
       ];
       if (r.projections.failed.length) {
         parts.push(t("maintenance.repairProjectionsFailed", { count: r.projections.failed.length }));
+        projectionFailures = r.projections.failed;
       }
       if (reinstallBroken) {
         parts.push(t("maintenance.repairReinstalledDone", { count: r.reinstalled.length }));
@@ -210,6 +213,18 @@
       </button>
       {#if repairMsg}<span class="stock-msg">{repairMsg}</span>{/if}
     </div>
+    {#if projectionFailures.length}
+      <ul class="list repair-fail-list">
+        {#each projectionFailures as f (f)}
+          <li>
+            <div class="l-main">
+              <span class="l-name">{f.split(": ")[0]}</span>
+              <span class="l-reason">{errorText(f.split(": ").slice(1).join(": "))}</span>
+            </div>
+          </li>
+        {/each}
+      </ul>
+    {/if}
     {#if reinstallFailures.length}
       <ul class="list repair-fail-list">
         {#each reinstallFailures as f (f.id)}

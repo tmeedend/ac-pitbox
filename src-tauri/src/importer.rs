@@ -322,7 +322,9 @@ fn import_leftover(
                 if let Some(other) =
                     crate::others::import_other(conn, library, &nested_name, &extracted, false, res_mode)
                 {
-                    let _ = crate::others::activate_other(conn, cfg, &other.id);
+                    if let Err(e) = crate::others::activate_other(conn, cfg, &other.id) {
+                        log::warn!("auto_activate_other {}: {e}", other.id);
+                    }
                     result.others.push(other);
                 }
             } else {
@@ -404,7 +406,9 @@ fn import_leftover(
     };
     if placed {
         if let Some(other) = crate::others::import_other(conn, library, &nested_name, &wrap, false, res_mode) {
-            let _ = crate::others::activate_other(conn, cfg, &other.id);
+            if let Err(e) = crate::others::activate_other(conn, cfg, &other.id) {
+                log::warn!("auto_activate_other {}: {e}", other.id);
+            }
             result.others.push(other);
         }
     }
@@ -417,7 +421,9 @@ fn import_leftover(
 fn auto_activate(conn: &Connection, cfg: &AppConfig, mods: &[ImportedMod]) {
     for m in mods {
         if m.outcome == "IMPORT" || m.outcome == "UPDATE_REPLACE" {
-            let _ = crate::activation::activate(conn, cfg, &m.id_interne, None);
+            if let Err(e) = crate::activation::activate(conn, cfg, &m.id_interne, None) {
+                log::warn!("auto_activate {}: {e}", m.id_interne);
+            }
         }
     }
 }
@@ -428,7 +434,9 @@ fn auto_activate(conn: &Connection, cfg: &AppConfig, mods: &[ImportedMod]) {
 /// le reste de l'import.
 fn auto_activate_apps(conn: &Connection, cfg: &AppConfig, apps: &[crate::apps::AppImported]) {
     for a in apps {
-        let _ = crate::apps::activate_app(conn, cfg, &a.name);
+        if let Err(e) = crate::apps::activate_app(conn, cfg, &a.name) {
+            log::warn!("auto_activate_apps {}: {e}", a.name);
+        }
     }
 }
 
@@ -492,7 +500,9 @@ fn import_one(
     if found.is_empty() && subs.is_empty() && apps.is_empty() {
         // Type non reconnu : jamais perdu, rangé comme « autre mod » (§6.1bis).
         if let Some(other) = crate::others::import_other(conn, library, &archive_name, &workdir, false, res_mode) {
-            let _ = crate::others::activate_other(conn, cfg, &other.id);
+            if let Err(e) = crate::others::activate_other(conn, cfg, &other.id) {
+                log::warn!("auto_activate_other {}: {e}", other.id);
+            }
             result.others.push(other);
         } else {
             result.error = Some("Aucune voiture, circuit, skin, son ou app trouvé dans l'archive.".into());
@@ -665,7 +675,9 @@ fn import_one_folder(
     if found.is_empty() && subs.is_empty() && apps.is_empty() {
         // Type non reconnu : jamais perdu, rangé comme « autre mod » (§6.1bis).
         if let Some(other) = crate::others::import_other(conn, library, &name, dir, copy, res_mode) {
-            let _ = crate::others::activate_other(conn, cfg, &other.id);
+            if let Err(e) = crate::others::activate_other(conn, cfg, &other.id) {
+                log::warn!("auto_activate_other {}: {e}", other.id);
+            }
             result.others.push(other);
         } else {
             result.error = Some("Aucune voiture, circuit, skin, son ou app trouvé dans le dossier.".into());

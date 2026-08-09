@@ -265,7 +265,10 @@ pub fn repair_all(conn: &Connection, cfg: &AppConfig, reinstall_broken: bool) ->
         for b in scan(conn, cfg)?.broken {
             match reinstall_from_archive(conn, cfg, &b.id) {
                 Ok(()) => reinstalled.push(b.id),
-                Err(error) => reinstall_errors.push(ReinstallOutcome { id: b.id, error }),
+                Err(error) => {
+                    log::warn!("reinstall_from_archive {}: {error}", b.id);
+                    reinstall_errors.push(ReinstallOutcome { id: b.id, error });
+                }
             }
         }
     }

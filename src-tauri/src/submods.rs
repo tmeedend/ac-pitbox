@@ -239,9 +239,9 @@ pub fn repair_projections(conn: &Connection, cfg: &AppConfig) -> RepairReport {
             if already_there {
                 report.already_ok += 1;
             } else {
-                report
-                    .failed
-                    .push(format!("{}/{}: {}", s.parent_id, s.name, warning.unwrap_or_default()));
+                let detail = format!("{}/{}: {}", s.parent_id, s.name, warning.unwrap_or_default());
+                log::warn!("repair_projections {detail}");
+                report.failed.push(detail);
             }
         }
     }
