@@ -31,7 +31,12 @@ pub struct FolderInfo {
 /// silencieux, §9).
 pub fn scan_folder(dir: &Path) -> FolderInfo {
     let track_count = std::fs::read_dir(dir)
-        .map(|entries| entries.filter_map(|e| e.ok()).filter(|e| is_audio_file(&e.path())).count())
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok())
+                .filter(|e| is_audio_file(&e.path()))
+                .count()
+        })
         .unwrap_or(0);
     FolderInfo { track_count }
 }
@@ -65,7 +70,10 @@ mod tests {
         std::fs::write(dir.join("readme.txt"), b"x").unwrap();
 
         let info = scan_folder(&dir);
-        assert_eq!(info.track_count, 2, "seuls mp3/flac sont comptés, extension insensible à la casse");
+        assert_eq!(
+            info.track_count, 2,
+            "seuls mp3/flac sont comptés, extension insensible à la casse"
+        );
     }
 
     #[test]
@@ -82,7 +90,10 @@ mod tests {
         std::fs::write(dir.join("skip.png"), b"x").unwrap();
 
         let tracks = list_tracks(&dir);
-        let names: Vec<_> = tracks.iter().map(|p| p.file_name().unwrap().to_str().unwrap()).collect();
+        let names: Vec<_> = tracks
+            .iter()
+            .map(|p| p.file_name().unwrap().to_str().unwrap())
+            .collect();
         assert_eq!(names, vec!["a.wav", "b.ogg"]);
     }
 }

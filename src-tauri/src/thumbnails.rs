@@ -60,7 +60,9 @@ pub fn get_or_create(app: &AppHandle, source: &Path, max_dim: u32) -> Result<Pat
     // marcher dessus ni laisser de fichier à moitié écrit derrière une
     // lecture ratée.
     let tmp = dir.join(format!("{key}.{}.tmp", std::process::id()));
-    thumb.save_with_format(&tmp, image::ImageFormat::Jpeg).map_err(|e| e.to_string())?;
+    thumb
+        .save_with_format(&tmp, image::ImageFormat::Jpeg)
+        .map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, &cached).map_err(|e| e.to_string())?;
     Ok(cached)
 }
@@ -71,9 +73,8 @@ mod tests {
     use image::{ImageBuffer, Rgb};
 
     fn write_test_png(path: &Path, w: u32, h: u32) {
-        let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_fn(w, h, |x, y| {
-            Rgb([(x % 256) as u8, (y % 256) as u8, 128])
-        });
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
+            ImageBuffer::from_fn(w, h, |x, y| Rgb([(x % 256) as u8, (y % 256) as u8, 128]));
         img.save(path).unwrap();
     }
 
@@ -95,10 +96,16 @@ mod tests {
         thumb.save_with_format(&cached, image::ImageFormat::Jpeg).unwrap();
 
         assert!(cached.is_file(), "la miniature doit être écrite sur disque");
-        assert!(thumb.width() <= 150 && thumb.height() <= 150, "la miniature respecte la dimension max");
+        assert!(
+            thumb.width() <= 150 && thumb.height() <= 150,
+            "la miniature respecte la dimension max"
+        );
         let original_size = std::fs::metadata(&source).unwrap().len();
         let thumb_size = std::fs::metadata(&cached).unwrap().len();
-        assert!(thumb_size < original_size, "la miniature doit peser moins que l'original");
+        assert!(
+            thumb_size < original_size,
+            "la miniature doit peser moins que l'original"
+        );
     }
 
     #[test]
@@ -109,10 +116,16 @@ mod tests {
 
         let key_150 = cache_key(&source, 150).unwrap();
         let key_320 = cache_key(&source, 320).unwrap();
-        assert_ne!(key_150, key_320, "deux tailles cibles différentes -> deux fichiers de cache différents");
+        assert_ne!(
+            key_150, key_320,
+            "deux tailles cibles différentes -> deux fichiers de cache différents"
+        );
 
         let key_again = cache_key(&source, 150).unwrap();
-        assert_eq!(key_150, key_again, "même fichier, même taille -> même clé (cache réutilisé)");
+        assert_eq!(
+            key_150, key_again,
+            "même fichier, même taille -> même clé (cache réutilisé)"
+        );
     }
 
     #[test]

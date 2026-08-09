@@ -157,7 +157,13 @@ struct Slot {
 
 impl Slot {
     fn empty() -> Self {
-        Self { sink: None, ambience: None, started_at: None, total_duration: None, gain_db: 0.0 }
+        Self {
+            sink: None,
+            ambience: None,
+            started_at: None,
+            total_duration: None,
+            gain_db: 0.0,
+        }
     }
 }
 
@@ -172,8 +178,17 @@ struct Playlist {
 
 impl Playlist {
     fn load(tracks: Vec<IndexedTrack>, shuffle: bool) -> Self {
-        let order = if shuffle { shuffle_order(&tracks, None) } else { tracks.clone() };
-        Self { tracks, order, pos: 0, elapsed_at_pause: Duration::ZERO }
+        let order = if shuffle {
+            shuffle_order(&tracks, None)
+        } else {
+            tracks.clone()
+        };
+        Self {
+            tracks,
+            order,
+            pos: 0,
+            elapsed_at_pause: Duration::ZERO,
+        }
     }
 
     fn current(&self) -> Option<IndexedTrack> {
@@ -189,7 +204,11 @@ impl Playlist {
         let previous = self.current();
         self.pos += 1;
         if self.pos >= self.order.len() {
-            self.order = if shuffle { shuffle_order(&self.tracks, previous.as_ref()) } else { self.tracks.clone() };
+            self.order = if shuffle {
+                shuffle_order(&self.tracks, previous.as_ref())
+            } else {
+                self.tracks.clone()
+            };
             self.pos = 0;
         }
         self.current()
@@ -245,8 +264,20 @@ fn elapsed_fraction(start: Instant, duration: Duration) -> f32 {
 
 #[derive(Clone, Copy)]
 enum ActiveFade {
-    Crossfade { out_slot: usize, in_slot: usize, start: Instant, duration: Duration },
-    SingleFade { slot: usize, start: Instant, duration: Duration, from: f32, to: f32, stop_at_end: bool },
+    Crossfade {
+        out_slot: usize,
+        in_slot: usize,
+        start: Instant,
+        duration: Duration,
+    },
+    SingleFade {
+        slot: usize,
+        start: Instant,
+        duration: Duration,
+        from: f32,
+        to: f32,
+        stop_at_end: bool,
+    },
 }
 
 fn open_track(path: &Path) -> Option<Decoder<BufReader<File>>> {
@@ -428,7 +459,10 @@ impl Engine {
         sink.set_volume(0.0);
         sink.append(decoder);
         if resume_at > Duration::ZERO && sink.try_seek(resume_at).is_err() {
-            log::warn!("music: reprise de position impossible sur {}, redémarre du début", track.path.display());
+            log::warn!(
+                "music: reprise de position impossible sur {}, redémarre du début",
+                track.path.display()
+            );
         }
         self.slots[slot] = Slot {
             sink: Some(sink),
@@ -462,7 +496,11 @@ impl Engine {
             log::warn!("music: dossier vide ou introuvable pour l'ambiance {target:?}, transition ignorée");
             return;
         };
-        let resume_at = if advance { Duration::ZERO } else { self.playlists.get(&target).unwrap().elapsed_at_pause };
+        let resume_at = if advance {
+            Duration::ZERO
+        } else {
+            self.playlists.get(&target).unwrap().elapsed_at_pause
+        };
         let next_slot = 1 - self.active_slot;
         if !self.start_track_in_slot(next_slot, target, &track, resume_at) {
             return;
@@ -499,7 +537,9 @@ impl Engine {
         let should_advance = match (slot.started_at, slot.total_duration) {
             (Some(started), Some(total)) => {
                 let margin = Duration::from_millis(self.config.crossfade_ms as u64 + 500);
-                total.checked_sub(margin).is_some_and(|threshold| started.elapsed() >= threshold)
+                total
+                    .checked_sub(margin)
+                    .is_some_and(|threshold| started.elapsed() >= threshold)
             }
             _ => sink.empty(),
         };
@@ -511,7 +551,12 @@ impl Engine {
     fn advance_fade(&mut self) {
         let Some(fade) = self.fade else { return };
         match fade {
-            ActiveFade::Crossfade { out_slot, in_slot, start, duration } => {
+            ActiveFade::Crossfade {
+                out_slot,
+                in_slot,
+                start,
+                duration,
+            } => {
                 let t = elapsed_fraction(start, duration);
                 let (gain_out, gain_in) = crossfade_gains(t);
                 let vol = self.effective_volume();
@@ -522,7 +567,14 @@ impl Engine {
                     self.fade = None;
                 }
             }
-            ActiveFade::SingleFade { slot, start, duration, from, to, stop_at_end } => {
+            ActiveFade::SingleFade {
+                slot,
+                start,
+                duration,
+                from,
+                to,
+                stop_at_end,
+            } => {
                 let t = elapsed_fraction(start, duration);
                 let ease = if to > from { fade_in_gain(t) } else { fade_out_gain(t) };
                 let vol = from + (to - from) * ease;
@@ -761,9 +813,15 @@ mod tests {
     #[test]
     fn crossfade_gains_are_monotonic_bounds() {
         let (out0, in0) = crossfade_gains(0.0);
-        assert!((out0 - 1.0).abs() < 1e-6 && in0.abs() < 1e-6, "t=0 : tout sur la piste sortante");
+        assert!(
+            (out0 - 1.0).abs() < 1e-6 && in0.abs() < 1e-6,
+            "t=0 : tout sur la piste sortante"
+        );
         let (out1, in1) = crossfade_gains(1.0);
-        assert!(out1.abs() < 1e-6 && (in1 - 1.0).abs() < 1e-6, "t=1 : tout sur la piste entrante");
+        assert!(
+            out1.abs() < 1e-6 && (in1 - 1.0).abs() < 1e-6,
+            "t=1 : tout sur la piste entrante"
+        );
     }
 
     #[test]
@@ -775,7 +833,11 @@ mod tests {
     }
 
     fn track(name: &str) -> IndexedTrack {
-        IndexedTrack { path: PathBuf::from(name), gain_db: 0.0, duration: None }
+        IndexedTrack {
+            path: PathBuf::from(name),
+            gain_db: 0.0,
+            duration: None,
+        }
     }
 
     #[test]

@@ -121,14 +121,25 @@ fn build(tracks: &[PathBuf]) -> Vec<TrackIndex> {
     tracks
         .iter()
         .map(|t| {
-            let file = t.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let file = t
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
             match analyze(t) {
-                Some((gain_db, duration)) => TrackIndex { file, duration_ms: duration.as_millis() as u64, gain_db },
+                Some((gain_db, duration)) => TrackIndex {
+                    file,
+                    duration_ms: duration.as_millis() as u64,
+                    gain_db,
+                },
                 None => {
                     // Piste illisible (§9) : entrée neutre plutôt que de
                     // faire échouer l'indexation de tout le dossier.
                     log::warn!("music: impossible d'analyser {} pour la normalisation", t.display());
-                    TrackIndex { file, duration_ms: 0, gain_db: 0.0 }
+                    TrackIndex {
+                        file,
+                        duration_ms: 0,
+                        gain_db: 0.0,
+                    }
                 }
             }
         })
@@ -165,7 +176,10 @@ fn load_or_build(dir: &Path, tracks: &[PathBuf]) -> Vec<TrackIndex> {
                 log::warn!("music: écriture du cache d'index échouée pour {} : {e}", dir.display());
             }
         }
-        Err(e) => log::warn!("music: sérialisation du cache d'index échouée pour {} : {e}", dir.display()),
+        Err(e) => log::warn!(
+            "music: sérialisation du cache d'index échouée pour {} : {e}",
+            dir.display()
+        ),
     }
     built
 }
@@ -199,16 +213,29 @@ pub fn indexed_tracks(dir: &Path) -> Vec<IndexedTrack> {
     tracks
         .into_iter()
         .map(|path| {
-            let file = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let file = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
             // Recherche par nom (pas par position) : une entrée de cache
             // périmée mais de même longueur ne doit jamais s'appliquer à la
             // mauvaise piste.
             match cached.iter().find(|t| t.file == file) {
-                Some(t) if t.duration_ms > 0 => {
-                    IndexedTrack { path, gain_db: t.gain_db, duration: Some(Duration::from_millis(t.duration_ms)) }
-                }
-                Some(t) => IndexedTrack { path, gain_db: t.gain_db, duration: None },
-                None => IndexedTrack { path, gain_db: 0.0, duration: None },
+                Some(t) if t.duration_ms > 0 => IndexedTrack {
+                    path,
+                    gain_db: t.gain_db,
+                    duration: Some(Duration::from_millis(t.duration_ms)),
+                },
+                Some(t) => IndexedTrack {
+                    path,
+                    gain_db: t.gain_db,
+                    duration: None,
+                },
+                None => IndexedTrack {
+                    path,
+                    gain_db: 0.0,
+                    duration: None,
+                },
             }
         })
         .collect()
@@ -265,7 +292,10 @@ mod tests {
         write_silent_wav(&dir.join("a.wav"), 0.2);
 
         let first = indexed_tracks(&dir);
-        assert!(dir.join(".pitbox-index.json").is_file(), "le cache doit être écrit après le premier scan");
+        assert!(
+            dir.join(".pitbox-index.json").is_file(),
+            "le cache doit être écrit après le premier scan"
+        );
 
         // Deuxième appel : doit relire le cache plutôt que redécoder — on ne
         // peut pas mesurer le temps de façon fiable en CI, mais on vérifie
@@ -283,6 +313,10 @@ mod tests {
 
         write_silent_wav(&dir.join("b.wav"), 0.2);
         let second = indexed_tracks(&dir);
-        assert_eq!(second.len(), 2, "un nouveau fichier doit invalider le cache (compte de fichiers différent)");
+        assert_eq!(
+            second.len(),
+            2,
+            "un nouveau fichier doit invalider le cache (compte de fichiers différent)"
+        );
     }
 }

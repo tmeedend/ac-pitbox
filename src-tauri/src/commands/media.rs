@@ -12,10 +12,7 @@ const REPLAY_KIND: &str = "REPLAY";
 /// Ids de l'« autre » type de la bibliothèque (circuits pour une voiture, et
 /// inversement) — sert à `media::list_screenshots`/`list_replays` à retrouver
 /// la contrepartie dans un nom de fichier (§6.1).
-fn counterpart_ids(
-    conn: &rusqlite::Connection,
-    own_kind: &str,
-) -> Result<std::collections::HashSet<String>, String> {
+fn counterpart_ids(conn: &rusqlite::Connection, own_kind: &str) -> Result<std::collections::HashSet<String>, String> {
     let other_kind = if own_kind == "Track" { "Car" } else { "Track" };
     Ok(crate::overlay::list_mod_ids_by_kind(conn, other_kind)
         .map_err(|e| e.to_string())?

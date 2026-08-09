@@ -154,7 +154,11 @@ fn parse_ddmmyy_hhmmss(s: &str) -> Option<String> {
     let sec: u32 = t[4..6].parse().ok()?;
     let date = chrono::NaiveDate::from_ymd_opt(year, month, day)?;
     let time = chrono::NaiveTime::from_hms_opt(hour, min, sec)?;
-    Some(chrono::NaiveDateTime::new(date, time).format("%Y-%m-%dT%H:%M:%S").to_string())
+    Some(
+        chrono::NaiveDateTime::new(date, time)
+            .format("%Y-%m-%dT%H:%M:%S")
+            .to_string(),
+    )
 }
 
 fn list_replays_in(dir: &Path, entity_id: &str, counterpart_ids: &HashSet<String>) -> Vec<ReplayFile> {
@@ -385,7 +389,10 @@ mod tests {
         // deux id qui matchent tous les deux, le plus long/spécifique gagne.
         let stem = "Screenshot_some_car_rt_imola_historic_1-1-2026-0-0-0";
         let counterparts = ids(&["imola", "rt_imola_historic"]);
-        assert_eq!(best_counterpart(stem, &counterparts).as_deref(), Some("rt_imola_historic"));
+        assert_eq!(
+            best_counterpart(stem, &counterparts).as_deref(),
+            Some("rt_imola_historic")
+        );
     }
 
     #[test]
@@ -396,7 +403,10 @@ mod tests {
         write(&dir.join("AC_300124-231824_R_vrc_erc_1998_pageau_shannonville_long.acreplay"));
         // Fichier de travail : jamais un replay terminé, doit être ignoré même
         // s'il matcherait par ailleurs.
-        write(&dir.join("temp").join("AC_010101-000000_R_vrc_erc_1998_pageau_shannonville_long.acreplay"));
+        write(
+            &dir.join("temp")
+                .join("AC_010101-000000_R_vrc_erc_1998_pageau_shannonville_long.acreplay"),
+        );
 
         let found = list_replays_in(&dir, "vrc_erc_1998_pageau", &HashSet::new());
         assert_eq!(found.len(), 1, "temp/ ne doit jamais être scanné");
@@ -404,7 +414,11 @@ mod tests {
         assert_eq!(found[0].recorded_at.as_deref(), Some("2024-01-30T23:18:24"));
 
         let barcelona = list_replays_in(&dir, "ks_barcelona_layout_gp", &HashSet::new());
-        assert_eq!(barcelona.len(), 1, "suffixe de longueur variable (osrw62) sans incidence sur le match");
+        assert_eq!(
+            barcelona.len(),
+            1,
+            "suffixe de longueur variable (osrw62) sans incidence sur le match"
+        );
     }
 
     #[test]
@@ -440,7 +454,11 @@ mod tests {
         write(&dir.join("ks_brands_hatch__indy_901.jpg"));
 
         let all = list_backgrounds_in(&dir, "ks_brands_hatch", None);
-        assert_eq!(all.len(), 4, "sans layout demandé, tout le circuit remonte (usage onglet)");
+        assert_eq!(
+            all.len(),
+            4,
+            "sans layout demandé, tout le circuit remonte (usage onglet)"
+        );
 
         let gp = list_backgrounds_in(&dir, "ks_brands_hatch", Some("gp"));
         assert_eq!(gp.len(), 2, "les deux variantes du layout gp");
@@ -479,7 +497,12 @@ mod tests {
         write(&screens.join("Screenshot_other_car_ks_imola_1-1-2026-10-0-0.jpg"));
         write(&screens.join("Screenshot_target_car_ks_imola_1-1-2026-11-0-0.jpg"));
         let shots = list_screenshots_in(&screens, "ks_imola", &ids(&["target_car"]));
-        let combo = shots.iter().find(|s| s.matched_counterpart.as_deref() == Some("target_car"));
-        assert!(combo.is_some(), "le combo exact doit être identifiable parmi les captures du circuit");
+        let combo = shots
+            .iter()
+            .find(|s| s.matched_counterpart.as_deref() == Some("target_car"));
+        assert!(
+            combo.is_some(),
+            "le combo exact doit être identifiable parmi les captures du circuit"
+        );
     }
 }

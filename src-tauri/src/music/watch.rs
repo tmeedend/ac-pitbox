@@ -49,7 +49,11 @@ pub fn spawn(tx: Sender<EngineCommand>) {
             sys.refresh_processes(ProcessesToUpdate::All, true);
             let now_running = ac_running(&sys);
             if now_running != running {
-                let cmd = if now_running { EngineCommand::AcProcessStarted } else { EngineCommand::AcProcessStopped };
+                let cmd = if now_running {
+                    EngineCommand::AcProcessStarted
+                } else {
+                    EngineCommand::AcProcessStopped
+                };
                 if tx.send(cmd).is_err() {
                     return;
                 }
@@ -61,7 +65,11 @@ pub fn spawn(tx: Sender<EngineCommand>) {
             if running {
                 let now_live = ac_status::is_live();
                 if now_live != live {
-                    let cmd = if now_live { EngineCommand::EnterSession } else { EngineCommand::ExitSession };
+                    let cmd = if now_live {
+                        EngineCommand::EnterSession
+                    } else {
+                        EngineCommand::ExitSession
+                    };
                     if tx.send(cmd).is_err() {
                         return;
                     }
