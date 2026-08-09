@@ -7,6 +7,7 @@
   // l'écran de réglages (§6.2/§9.3).
   import { listMediaBackgrounds, type BackgroundFile } from "$lib/media";
   import { previewSrc } from "$lib/library";
+  import { getThumbnail } from "$lib/thumbnails";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
   import Lightbox, { type LightboxItem } from "../Lightbox.svelte";
@@ -23,17 +24,28 @@
 
   let files = $state<BackgroundFile[]>([]);
   let lightboxIndex = $state<number | null>(null);
+  let thumbs = $state<Record<string, string>>({});
 
   $effect(() => {
     const current = modId;
     const layout = layoutId;
     files = [];
+    thumbs = {};
     lightboxIndex = null;
     listMediaBackgrounds(current, layout)
       .then((f) => {
         if (current === modId && layout === layoutId) files = f;
       })
       .catch((e) => onerror(errorText(e)));
+  });
+
+  $effect(() => {
+    for (const f of files) {
+      if (f.path in thumbs) continue;
+      getThumbnail(f.path)
+        .then((src) => (thumbs = { ...thumbs, [f.path]: src }))
+        .catch(() => {});
+    }
   });
 
   const lightboxItems = $derived<LightboxItem[]>(
@@ -53,7 +65,7 @@
     {#if files.length}
       <div class="bg-row">
         {#each files as f, i (f.path)}
-          {@const src = previewSrc(f.path)}
+          {@const src = thumbs[f.path]}
           <button class="bg-card" type="button" onclick={() => (lightboxIndex = i)} title={t("lightbox.open")}>
             {#if src}<img src={src} alt="" loading="lazy" />{/if}
           </button>

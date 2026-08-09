@@ -5,6 +5,7 @@
   import BulkEditPanel from "./BulkEditPanel.svelte";
   import ContextMenu from "./ContextMenu.svelte";
   import LoadingState from "./LoadingState.svelte";
+  import NumberStepper from "./NumberStepper.svelte";
   import {
     listLibrary,
     previewSrc,
@@ -50,6 +51,12 @@
   // Édition groupée (§6.3bis) : Ctrl/Alt-clic ajoute/retire de la sélection
   // multiple. Un clic simple retombe toujours en sélection simple.
   let selectedIds = $state<Set<string>>(new Set());
+  // Bornes de la fourchette d'année (mêmes constantes que le vivier
+  // d'adversaires de Launch.svelte, §8.6) : les flèches NumberStepper ont
+  // besoin d'une valeur numérique, donc plus de `null` pour « pas de borne » —
+  // rester aux bornes par défaut équivaut à l'ancien comportement non filtré.
+  const YEAR_RANGE_MIN = 1950;
+  const YEAR_RANGE_MAX = new Date().getFullYear();
   // Page détail pleine page (§6.3) : double-clic sur une carte, ou bouton
   // « Agrandir » du panneau latéral. État centralisé dans nav.openFull (voir
   // nav.svelte.ts) — la navigation manette globale (AppShell) doit savoir si
@@ -72,8 +79,9 @@
   let countryFilter = $state<string>((sf.country as string) ?? "all");
   let favOnly = $state<boolean>((sf.fav as boolean) ?? false);
   let neverTried = $state<boolean>((sf.neverTried as boolean) ?? false);
-  let yearMin = $state<number | null>((sf.yearMin as number | null) ?? null);
-  let yearMax = $state<number | null>((sf.yearMax as number | null) ?? null);
+  let hideBaseContent = $state<boolean>((sf.hideBaseContent as boolean) ?? false);
+  let yearMin = $state<number>((sf.yearMin as number | null) ?? YEAR_RANGE_MIN);
+  let yearMax = $state<number>((sf.yearMax as number | null) ?? YEAR_RANGE_MAX);
 
   // Persistance des filtres (champ libre + rubrique Filtres).
   $effect(() => {
@@ -88,6 +96,7 @@
         country: countryFilter,
         fav: favOnly,
         neverTried,
+        hideBaseContent,
         yearMin,
         yearMax,
       }),
@@ -325,8 +334,9 @@
       if (countryFilter !== "all" && c.country !== countryFilter) return false;
       if (favOnly && !c.is_favorite) return false;
       if (neverTried && c.tried) return false;
-      if (yearMin !== null && (c.year ?? 0) < yearMin) return false;
-      if (yearMax !== null && (c.year ?? 9999) > yearMax) return false;
+      if (hideBaseContent && c.is_stock) return false;
+      if (yearMin > YEAR_RANGE_MIN && (c.year ?? 0) < yearMin) return false;
+      if (yearMax < YEAR_RANGE_MAX && (c.year ?? 9999) > yearMax) return false;
       if (query.trim()) {
         const q = query.toLowerCase();
         const tags = [...c.tags_from_mod, ...c.tags_from_rule, ...c.tags_manual].join(" ");
@@ -347,8 +357,9 @@
       (countryFilter !== "all" ? 1 : 0) +
       (favOnly ? 1 : 0) +
       (neverTried ? 1 : 0) +
-      (yearMin !== null ? 1 : 0) +
-      (yearMax !== null ? 1 : 0),
+      (hideBaseContent ? 1 : 0) +
+      (yearMin !== YEAR_RANGE_MIN ? 1 : 0) +
+      (yearMax !== YEAR_RANGE_MAX ? 1 : 0),
   );
 
   function clearFilters() {
@@ -360,8 +371,9 @@
     countryFilter = "all";
     favOnly = false;
     neverTried = false;
-    yearMin = null;
-    yearMax = null;
+    hideBaseContent = false;
+    yearMin = YEAR_RANGE_MIN;
+    yearMax = YEAR_RANGE_MAX;
   }
 
   const sorted = $derived.by(() => {
@@ -534,21 +546,27 @@
           </label>
           <label>
             <span>{t("library.yearMin")}</span>
-            <input class="input" type="number" placeholder="—" bind:value={yearMin} />
+            <NumberStepper width={80} min={YEAR_RANGE_MIN} max={yearMax} bind:value={yearMin} />
           </label>
           <label>
             <span>{t("library.yearMax")}</span>
-            <input class="input" type="number" placeholder="—" bind:value={yearMax} />
+            <NumberStepper width={80} min={yearMin} max={YEAR_RANGE_MAX} bind:value={yearMax} />
           </label>
         {/if}
-        <label class="fav-check">
-          <input type="checkbox" bind:checked={favOnly} />
-          <span>{t("library.favorites")}</span>
-        </label>
-        <label class="fav-check" title={t("library.neverTriedTooltip")}>
-          <input type="checkbox" bind:checked={neverTried} />
-          <span>{t("library.neverTried")}</span>
-        </label>
+        <div class="filter-checks">
+          <label class="fav-check">
+            <input type="checkbox" bind:checked={favOnly} />
+            <span>{t("library.favorites")}</span>
+          </label>
+          <label class="fav-check" title={t("library.neverTriedTooltip")}>
+            <input type="checkbox" bind:checked={neverTried} />
+            <span>{t("library.neverTried")}</span>
+          </label>
+          <label class="fav-check">
+            <input type="checkbox" bind:checked={hideBaseContent} />
+            <span>{t("library.hideBaseContent")}</span>
+          </label>
+        </div>
         {#if activeFilterCount > 0}
           <button class="btn-ghost clear" type="button" onclick={clearFilters}>{t("common.reset")}</button>
         {/if}
@@ -807,8 +825,11 @@
   .filters .input {
     width: 120px;
   }
-  .filters input[type="number"] {
-    width: 80px;
+  .filter-checks {
+    display: flex;
+    flex-direction: row;
+    gap: 16px;
+    align-items: center;
   }
   .fav-check {
     flex-direction: row !important;
@@ -818,6 +839,10 @@
     font-size: 12px;
     color: var(--txt2);
     cursor: pointer;
+  }
+  .fav-check input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
   }
   .clear {
     font-size: 11px;

@@ -193,6 +193,8 @@ manette globale et le précédent/suivant de mod de la fiche pleine page
 qu'une même pression n'agisse jamais à la fois sur la visionneuse et sur ce
 qu'il y a en dessous.
 
+**Miniatures mises en cache** (`src-tauri/src/thumbnails.rs`) : les captures AC sont en pleine résolution jeu — les grilles Screenshots/Backgrounds n'affichent jamais l'original, seulement une miniature JPEG générée au premier affichage puis persistée sur disque (`app_cache_dir()/thumbnails/`, clé = hash du chemin + date de modification + taille cible), réutilisée telle quelle même après redémarrage de l'app. Seule la visionneuse plein écran (Lightbox) charge l'image d'origine. Pas de politique d'éviction pour l'instant — le cache grossit avec les captures vues, jamais purgé automatiquement.
+
 Formats réels vérifiés sur le poste avant implémentation (remplace la
 convention supposée) :
 - `Documents\Assetto Corsa\screens\Screenshot_<car_id>_<track_id>_<d>-<m>-<y>-<h>-<m>-<s>.jpg`
@@ -206,11 +208,13 @@ convention supposée) :
 - `<ac_install>\extension\backgrounds\<track_id>[__<layout_id>]_<variant>.jpg`
   (CSP) — convention propre, match par préfixe (double underscore avant le
   layout).
-- **Replays — bouton « Lire »** : pas implémenté dans cette itération. Le
-  protocole exact de lancement d'un `.acreplay` depuis Content Manager reste
-  un point de recherche ouvert (même prudence que pour `race/config`,
-  `docs/L4-cm-launch-research.md`) — seul « Ouvrir le dossier » est disponible
-  pour l'instant.
+- **Replays — bouton « Lire dans CM »** (`launch.rs::launch_replay`) : passe le
+  chemin du `.acreplay` en argument à l'exécutable Content Manager — même
+  mécanisme que l'association de fichier Windows au double-clic, et cohérent
+  avec la façon dont `launch()`/`open_content_manager` invoquent déjà CM (un
+  argument passé directement à `Command::new`, jamais via le gestionnaire de
+  protocole système). Pas de vérification empirique poussée (pas d'install AC
+  sur le poste de développement) — à confirmer à l'usage.
 
 ### 6.2 Fond photo sur l'écran de réglages de session
 
@@ -264,6 +268,10 @@ Deux vues commutables par bibliothèque (galerie / tableau), colonnes choisies p
 
 **Suivi d'usage** : distance parcourue par voiture/circuit ; filtre « jamais essayé » (0 km CM **et** jamais lancé via l'app, l'app tenant son propre marqueur fiable).
 
+**Filtre « Cacher le contenu de base »** : exclut le contenu Kunos (`is_stock`) de la liste, cases favoris/jamais essayé/contenu de base regroupées et alignées verticalement dans la barre de filtres.
+
+**Persistance du duo de session** (`src-tauri/src/session_state.rs`, `app_config_dir/session.json`) : fichier écrit côté Rust, pas `localStorage` du webview. `localStorage` n'est pas garanti synchrone sur disque côté WebView2 — bug réel constaté : le circuit, typiquement choisi juste avant de fermer l'app, ne survivait presque jamais à un redémarrage, contrairement à la voiture (choisie plus tôt, le temps d'être vidangée sur disque). `std::fs::write` est synchrone : la commande `save_session_picks` ne rend la main qu'une fois réellement écrit. Migration silencieuse au premier démarrage après la mise à jour : si le nouveau fichier n'a rien pour une entité, `nav.svelte.ts` relit une dernière fois l'ancienne clé `localStorage` et la re-persiste aussitôt au nouvel endroit.
+
 **Support manette** : navigation dans l'application à la manette.
 
 ---
@@ -299,7 +307,9 @@ L'app pilote CM via son protocole `acmanager://race/quick?presetFile=…` : un *
 
 > L'ancien mécanisme `race/config?configFile=` (race.ini brut via `PreparedConfig`) a été abandonné : il ne peuple pas `StartProperties.BasicProperties`, dont dépend le check CSP auto-load côté CM — bug confirmé empiriquement, détail en `docs/L4-cm-launch-research.md`.
 
-Limites connues du preset Quick Drive (pas de champ correspondant trouvé dans le schéma) : skin du joueur non forçable (CM reprend le dernier skin utilisé), évolution du grip non mappée (toujours « Optimum »/sec), durée de session Practice non appliquée (sessions à durée libre par design Quick Drive).
+Limites connues du preset Quick Drive (pas de champ correspondant trouvé dans le schéma) : **skin du joueur non forçable** (CM reprend le dernier skin utilisé pour cette voiture), évolution du grip non mappée (toujours « Optimum »/sec), durée de session Practice non appliquée (sessions à durée libre par design Quick Drive).
+
+**Skin joueur — confirmé au niveau du code source de CM**, pas seulement supposé : `ArgumentsHandler.Race.cs::ProcessRaceQuick` (le gestionnaire de l'URI `race/quick`) ne lit qu'un preset + des assists, jamais de skin, et n'en transmet aucun à `QuickDrive.RunAsync()`. Les deux seuls chemins CM qui acceptent un paramètre `skin` (`race/online`, `race/csp`) exigent soit un vrai serveur multijoueur, soit un mode CSP spécial — aucun ne supporte un plateau d'adversaires complet, donc aucun des deux ne remplace `race/quick` pour Pit Box. Le cache interne où CM retient le dernier skin par voiture (`Values.data`) est chiffré avec une clé fournie par `InternalUtils.GetValuesStorageEncryptionKey()` — fonction absente du dépôt open source d'`actools`, donc injecter une entrée depuis Pit Box est **impossible sans risquer de corrompre tout le fichier de réglages de CM** (pas seulement les skins). Palliatif retenu côté UI : astuce (ⓘ) à côté du sélecteur de skin dans le bloc SESSION, qui explique la limite et ouvre CM en un clic pour fixer le skin une fois par voiture (CM le retient ensuite pour les lancements suivants).
 
 **Bouton « Ouvrir dans CM »** : lance CM sans argument de session, sélection active, pour les réglages fins (échappatoire power-user).
 
@@ -361,7 +371,9 @@ Bouton d'aperçu 3D sur la fiche (lance `acshowroom` pour un rendu du modèle). 
 
 **Trois bases/fichiers distincts** : bibliothèque (fichiers), base d'overlay SQLite (métadonnées), fichier de règles (ontologie), plus le fichier de config (chemins + préférences).
 
-**Préférences persistantes** : affichage des tags du fichier mod (masquables), état du panneau de suivi (global), vue bibliothèque + colonnes (par type), presets de session (par type), preset CM graphique/FFB par défaut, décor de l'aperçu 3D (§9.4), regroupement des skins (archive/voiture), extraction des fichiers annexes (Aucun / Informations seulement / Tout — §4.6), **conservation de l'archive source** (défaut désactivé — §10), **mode de déploiement** (hardlink/symlink, défaut hardlink — §2).
+**Préférences persistantes** : affichage des tags du fichier mod (masquables), état du panneau de suivi (global), vue bibliothèque + colonnes (par type), presets de session (par type), preset CM graphique/FFB par défaut, décor de l'aperçu 3D (§9.4), regroupement des skins (archive/voiture), extraction des fichiers annexes (Aucun / Informations seulement / Tout — §4.6), **conservation de l'archive source** (défaut désactivé — §10), **mode de déploiement** (hardlink/symlink, défaut hardlink — §2), **zoom du mode Big Picture** (§16, distinct du zoom normal — `None` reprend ce dernier).
+
+**Écran Réglages en onglets** (Général / Chemins / Import / Musique) depuis le mode Big Picture (§16) — Général/Chemins/Import partagent `AppConfig` et sa garde de navigation (§10bis), l'onglet Musique gère son propre fichier (`music.json`) et sa propre sauvegarde.
 
 ---
 
@@ -397,6 +409,7 @@ Voir `README.md` pour l'index complet. Fichiers de données et maquettes cités 
 - `pitbox-vues-transversales.html` — vues Skins/Sons/Apps.
 - `pitbox-source-pack.html` — affichage pack d'origine.
 - `archives.py` — logique d'import/détection à porter (référence, jamais exécutée ; ne jamais réécrire les `ui_*.json`).
+- `spec-module-musique_2.md` — spec de référence du module musique (§16), écrite pour une autre stack (C#/NAudio) : les écarts de transposition Rust/`rodio` sont documentés en tête de `src-tauri/src/music/engine.rs`, pas ici.
 
 ---
 
@@ -405,3 +418,57 @@ Voir `README.md` pour l'index complet. Fichiers de données et maquettes cités 
 - **Bascule symlinks → hardlinks (§2)** : moteur implémenté et couvert par des tests automatisés (déploiement/composition/repli copie/nettoyage, y compris un scénario circuit type Spa) — confirme la mécanique et l'absence de besoin de droits admin (`CreateHardLinkW`, contrairement à `CreateSymbolicLink`). **Validé en conditions réelles par l'utilisateur** (juillet 2026) : déploiement + composition par couches fonctionnels sur sa bibliothèque réelle.
 - **Détection de la stack météo** (Pure/SOL/CSP/vanilla) et correspondance preset → backend.
 - **Table Kunos** : valider les noms de dossiers / années contre l'installation réelle (correction triviale ligne par ligne).
+- **Module musique (§16)** : implémenté et testé sur les parties pures (courbes de fondu, mélange sans répétition, playlist, config, RMS/index §16.3), mais pas encore validé à l'oreille par un humain — l'app tourne sans dossiers musicaux pré-remplis (pas de pack CC0 embarqué, voir §16). Le premier scan d'un dossier (décodage complet de chaque piste pour le RMS) est bloquant côté thread moteur — "quelques secondes pour 30 pistes" par la spec §3.4 : à confirmer que ce n'est pas gênant à l'usage (silence de quelques secondes à la première entrée en Big Picture sur un nouveau dossier) avant d'investir dans un scan progressif avec barre de progression.
+- **Détection AC_LIVE (§16.2)** et **filet de sécurité plein écran (§16.5)** : le champ `Status` et les offsets utilisés viennent d'une implémentation tierce open source, pas testés avec une vraie session AC en cours de développement (pas d'AC installé sur la machine de dev). À confirmer en conditions réelles : la musique GRID doit continuer pendant le chargement, se couper/baisser exactement quand la voiture devient pilotable, et le plein écran doit couvrir l'écran entier sans laisser la zone de l'ancienne barre des tâches visible.
+
+---
+
+## 16. Mode Big Picture et musique
+
+Bouton dans la barre de titre (icône à côté de l'aide « ? », `TitleBar.svelte`) : bascule la fenêtre en plein écran (`Window.setFullscreen` + repli explicite sur les bornes du moniteur, voir §16.6 — pas de 10-foot UI dédiée, c'est l'interface habituelle, agrandie) et démarre l'ambiance musicale si activée. **La barre de titre custom est masquée en Big Picture** (gagne en hauteur, plus aucun sens une fois plein écran). Seule sortie visible : bouton collant en bas de la barre latérale (`position: sticky`, jamais par-dessus les boutons de navigation même si la fenêtre est basse), ou touche **Échap**. Un **zoom dédié** (`prefs.bigpicture_zoom`, §11) s'applique en plus du zoom normal, pensé pour une lecture à distance manette en main.
+
+### 16.1 Musique — périmètre retenu
+
+Transposition du document `spec-module-musique_2.md` (écrit pour une stack C#/.NET + NAudio) vers Rust/Tauri avec la crate `rodio`. Décidé avec l'utilisateur, périmètre **noyau du module** :
+
+- Moteur audio à deux ambiances (MENU pendant la navigation, GRID sur l'écran de paramétrage de session `race`), crossfade à puissance constante, machine à états MENU/GRID/SESSION (`src-tauri/src/music/engine.rs`).
+- Détection du lancement d'Assetto Corsa (`acs.exe`/`AssettoCorsa.exe`, polling 500 ms) **et** de la fin du chargement (mémoire partagée AC, §16.2) pour couper ou baisser la musique seulement une fois la voiture réellement en piste — l'ambiance GRID continue de jouer pendant tout l'écran de chargement — puis fade-in au retour (`sessionBehavior` : stop/duck).
+- Sélection de dossier par Parcourir (menu/grid), écoute au clic, fichier de config séparé (`music.json`, versionné, jamais fusionné dans `config.json`).
+- Normalisation RMS entre pistes + cache d'index par dossier (§3.4, `src-tauri/src/music/index.rs`) — voir §16.3.
+
+**Explicitement hors périmètre** (voir l'en-tête de `music/mod.rs`) :
+- Pack CC0 embarqué et son `CREDITS.md` — les dossiers par défaut (`app_config_dir/Music/{menu,grid}`) sont créés vides au premier démarrage ; tant que l'utilisateur n'y dépose rien ou ne pointe pas un dossier ailleurs, le mode Big Picture reste silencieux (repli documenté, pas un bug).
+
+**Écarté pour de bon** (pas seulement reporté) : la détection automatique des bandes-son Steam (liste déroulante « Bandes-son détectées », §3.2 de `spec-module-musique_2.md`) — décidé avec l'utilisateur, aucun intérêt pour son usage. Le sélecteur de dossier par Parcourir suffit.
+
+### 16.2 Détection de fin de chargement
+
+`acs.exe` reste le même process du début du chargement jusqu'au retour aux stands/résultats — sa seule présence ne dit donc pas si la voiture est pilotable. Plutôt que de scruter des logs (format instable d'une version à l'autre, coût d'I/O disque à chaque scrutation — sensible pendant la course, précisément quand on scrute le plus), `src-tauri/src/music/ac_status.rs` lit la **mémoire partagée officielle d'AC** (`Local\acpmf_graphics`, l'API utilisée par tous les tableaux de bord tiers — SimHub, CrewChief…) : une simple lecture mémoire, de l'ordre de la microseconde, jamais de disque. Le champ `Status` (`AC_STATUS`, un `int32` juste après `PacketId`) vaut `AC_LIVE` (2) uniquement quand la voiture est réellement en piste — `AC_OFF`/`AC_REPLAY`/`AC_PAUSE` le reste du temps, chargement compris.
+
+`watch.rs` scrute la présence du process toutes les 500 ms (inchangé) et, seulement une fois le process détecté, le statut `AC_LIVE` toutes les 1000 ms. Trois signaux distincts envoyés au moteur : `AcProcessStarted`/`AcProcessStopped` (repère d'état pur, aucun effet sur la lecture — sert uniquement à `enter_big_picture` pour rester silencieux si Big Picture s'ouvre pendant qu'AC tourne déjà) et `EnterSession`/`ExitSession` (le fondu réel, déclenché par la transition `AC_LIVE`). `AcProcessStopped` reste aussi un filet de sécurité : si la mémoire partagée n'a pas signalé la sortie de `AC_LIVE` (fermeture brutale d'AC), la fermeture du process force quand même la reprise de la musique.
+
+### 16.3 Normalisation RMS + cache d'index
+
+`src-tauri/src/music/index.rs` : au premier scan d'un dossier (première entrée en Big Picture après avoir pointé vers ce dossier), chaque piste est décodée en entier via `rodio` — pas de bibliothèque audio de plus, le décodage complet est de toute façon nécessaire pour calculer le RMS — pour en tirer une correction de gain vers -18 dBFS (bornée à ±12 dB, §3.4) et sa durée exacte. Le résultat est mis en cache dans le dossier lui-même (`.pitbox-index.json`), invalidé si le nombre de fichiers ou la date de modification du dossier changent. **Toujours actif, pas de réglage pour le désactiver** (décidé avec l'utilisateur) ; le gain s'applique en plus du fondu/session courant, recalculé à chaque tick plutôt que figé au chargement.
+
+Bénéfice secondaire : la durée exacte obtenue au passage comble l'écart documenté en §16.4 pour le préchargement du crossfade — `engine.rs` la préfère désormais à `Source::total_duration()` (souvent `None` pour un MP3 décodé en direct), donc le vrai recouvrement `crossfade_ms + 500ms` s'applique aussi aux MP3, pas seulement au WAV/FLAC.
+
+Écart assumé vs la spec : le tag ReplayGain n'est pas lu ("si présent, le préférer au calcul", §3.4) — lecture de tags audio = une dépendance de plus (`lofty`/`id3`) pour une préférence secondaire ; le calcul RMS s'applique donc systématiquement.
+
+### 16.4 Écarts assumés vs la spec d'origine
+
+Documentés en tête de `engine.rs`, résumé ici :
+- `rodio`/`cpal` mixent et rééchantillonnent déjà en interne (un `Sink` par piste dans le même `OutputStream`) — pas besoin de rejouer à la main la chaîne `MixingSampleProvider`/`WdlResamplingSampleProvider` de NAudio décrite par la spec.
+- Sortie WASAPI **partagée** par défaut (jamais exclusive, qui couperait le son d'AC) — comportement natif de `cpal` sur Windows, rien à configurer.
+- Préchargement (§5.3 de la spec musique) : la durée totale d'une piste n'est connue à l'avance que pour certains formats (WAV/FLAC typiquement). Quand elle l'est, le crossfade démarre bien `crossfade_ms + 500ms` avant la fin ; sinon (la plupart des MP3), il démarre quand `Sink::empty()` devient vrai — la piste précédente est alors déjà silencieuse, donc ce qui reste du crossfade se comporte comme un simple fondu d'entrée plutôt qu'un vrai recouvrement.
+- Chemins stockés en absolu (`Option<PathBuf>`, cohérent avec `AppConfig`), pas en variables d'environnement non résolues — la portabilité multi-machine visée par la spec avait du sens pour un `%APPDATA%\<AppName>` C#, moins ici où `app_config_dir()` est déjà par-utilisateur.
+
+### 16.5 Interface
+
+Écran Réglages > onglet **Musique** (`components/settings/MusicTab.svelte`) : coupe-circuit, sélecteurs de dossier menu/grid (Parcourir + écoute ▶, nombre de pistes détectées), lecture aléatoire, volume, durée de fondu, comportement de session (couper/baisser + volume de fond si baisser). Sauvegarde indépendante des trois autres onglets (fichier séparé).
+
+L'option « baisser le volume » n'a de sens qu'en essais libres/hotlap solo (§2 de la spec musique) — en course, personne ne veut d'une musique de préparation par-dessus le bruit moteur. Contrôle d'un lecteur média **externe** (Spotify, foobar2000…) envisagé séparément, pas encore implémenté : voir « Chantiers en cours » de `CLAUDE.md`.
+
+### 16.6 Plein écran — filet de sécurité Windows
+
+Sur une fenêtre sans décorations (`decorations: false`), `Window.setFullscreen(true)` peut ne couvrir que la **zone de travail** (écran moins la barre des tâches) plutôt que l'écran entier — bug constaté (zone en bas de l'écran, là où était la barre des tâches, restée hors fenêtre et visuellement cassée). `bigpicture.svelte.ts` force donc explicitement les bornes du moniteur courant (`currentMonitor()` + `setPosition`/`setSize`) après l'appel à `setFullscreen`, et restaure la taille/position d'avant (mémorisées, pas seulement celles que `setFullscreen(false)` sait annuler tout seul) à la sortie.

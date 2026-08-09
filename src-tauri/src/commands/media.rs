@@ -2,6 +2,8 @@
 //! rattachés par nom de fichier, backgrounds officiels CSP, et fond photo de
 //! l'écran de réglages (§6.2/§9.3).
 
+use std::path::PathBuf;
+
 use super::prelude::*;
 
 const SCREENSHOT_KIND: &str = "SCREENSHOT";
@@ -77,6 +79,15 @@ pub fn open_media_folder(app: AppHandle, kind: String) -> Result<(), String> {
     app.opener()
         .open_path(base.join(sub).display().to_string(), None::<&str>)
         .map_err(|e| e.to_string())
+}
+
+/// Miniature mise en cache d'un screenshot/background (§6.1) — voir
+/// `thumbnails.rs`. `max_dim` par défaut couvre confortablement les cartes de
+/// galerie actuelles (150–180px CSS, avec marge pour les écrans haute
+/// densité).
+#[tauri::command]
+pub fn get_thumbnail(app: AppHandle, path: PathBuf, max_dim: Option<u32>) -> Result<PathBuf, String> {
+    crate::thumbnails::get_or_create(&app, &path, max_dim.unwrap_or(320))
 }
 
 /// Fond photo de l'écran de réglages (§6.2/§9.3) : combo exact → même circuit

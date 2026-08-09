@@ -47,3 +47,4 @@ pub const UNNAMED_MOD_FOLDER: &str = "errors.unnamedModFolder";
 pub const PATH_OUTSIDE_RESOURCES: &str = "errors.pathOutsideResources";
 pub const NOT_A_DIRECTORY: &str = "errors.notADirectory";
 pub const REAL_FOLDER_GUARD: &str = "errors.realFolderGuard";
+pub const MUSIC_FOLDER_EMPTY: &str = "errors.musicFolderEmpty";

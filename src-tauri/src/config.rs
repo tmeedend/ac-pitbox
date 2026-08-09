@@ -29,6 +29,10 @@ pub struct Prefs {
     /// Utile sur les écrans haute résolution si la mise à l'échelle Windows
     /// n'est pas correctement reprise par la webview.
     pub ui_zoom: Option<u32>,
+    /// Niveau de zoom appliqué en plus de `ui_zoom` quand le mode Big Picture
+    /// est actif (§ mode Big Picture). `None` = pas de zoom supplémentaire
+    /// (reprend `ui_zoom`). Utile en usage salon/manette, écran vu de loin.
+    pub bigpicture_zoom: Option<u32>,
     /// Scène utilisée par l'aperçu 3D (`content/showroom/<id>`, nom de dossier).
     /// `None` = `showroom::DEFAULT_SHOWROOM`, la plus légère.
     pub showroom_scene: Option<String>,
@@ -60,6 +64,7 @@ impl Default for Prefs {
             default_cm_preset: None,
             language: None,
             ui_zoom: None,
+            bigpicture_zoom: None,
             showroom_scene: None,
             resource_extraction_mode: "info_only".into(),
             keep_source_archive: false,

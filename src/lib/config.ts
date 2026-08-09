@@ -10,6 +10,8 @@ export interface Prefs {
   language: string | null;
   /** Niveau de zoom de l'interface, en % (ex. 125) ; `null` = 100. */
   ui_zoom: number | null;
+  /** Zoom appliqué en plus de `ui_zoom` en mode Big Picture ; `null` = reprend `ui_zoom`. */
+  bigpicture_zoom: number | null;
   /** Scène de l'aperçu 3D (`content/showroom/<id>`) ; `null` = la plus légère. */
   showroom_scene: string | null;
   /** Extraction des fichiers annexes du mod à l'import (§4.6) — jamais reposée
@@ -68,6 +70,7 @@ export function emptyConfig(): AppConfig {
       default_cm_preset: null,
       language: null,
       ui_zoom: null,
+      bigpicture_zoom: null,
       showroom_scene: null,
       resource_extraction_mode: "info_only",
       keep_source_archive: false,

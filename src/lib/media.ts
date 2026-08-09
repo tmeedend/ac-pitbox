@@ -56,6 +56,11 @@ export function openMediaFolder(kind: MediaKind): Promise<void> {
   return invoke<void>("open_media_folder", { kind });
 }
 
+/** Lance un replay dans Content Manager (§6.1). */
+export function launchReplay(replayPath: string): Promise<void> {
+  return invoke<void>("launch_replay", { replayPath });
+}
+
 /** Fond photo de l'écran de réglages (§6.2/§9.3) : combo exact → même
  * circuit → background officiel → `null` (fond neutre côté appelant). */
 export function getSessionBackground(

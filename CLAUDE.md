@@ -220,7 +220,6 @@ laisser pourrir ici.
       seulement le jour où de la logique pure sera extraite des composants
       (le tri/regroupement/cumul de `Transversal.svelte` en est proche) — pour
       tester *cette* logique, pas l'affichage.
-
 ## Fin de tâche — dans cet ordre
 
 1. **Mettre à jour `docs/SPEC.md`** dès qu'une évolution change le

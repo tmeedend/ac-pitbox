@@ -25,7 +25,12 @@ export const StorageKey = {
   /** Import : copier (défaut) plutôt que déplacer la source (§4.5). */
   importCopy: `${PREFIX}.import.copy`,
 
-  // --- Duo de session (§8.6) ---
+  // --- Duo de session (§8.6) — LEGACY ---
+  // Le duo vit désormais dans un fichier écrit côté Rust (`session_state.rs`),
+  // pas ici : `localStorage` n'est pas garanti synchrone sur disque côté
+  // WebView2, ce qui perdait la sélection la plus récente à la fermeture.
+  // Ces deux clés ne sont plus lues qu'une fois, en migration, par
+  // `nav.svelte.ts` — jamais réécrites.
   sessionCar: `${PREFIX}.session.car`,
   sessionTrack: `${PREFIX}.session.track`,
 

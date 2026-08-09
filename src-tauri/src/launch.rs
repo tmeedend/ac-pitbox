@@ -7,6 +7,7 @@
 //! CSP automatique (VAO/config manquants) se déclenche. Voir
 //! `docs/L4-cm-launch-research.md`.
 
+use std::path::Path;
 use std::process::Command;
 
 #[cfg(windows)]
@@ -254,6 +255,24 @@ pub fn open_content_manager(cfg: &AppConfig) -> Result<(), String> {
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
     cmd.spawn().map_err(|e| format!("lancement de Content Manager : {e}"))?;
+    Ok(())
+}
+
+/// Lance un replay dans Content Manager (§6.1, onglet Médias). Même mécanisme
+/// que l'association de fichier Windows pour `.acreplay` (double-clic = CM
+/// démarre la lecture) — on passe simplement le chemin en argument à
+/// l'exécutable directement plutôt que de compter sur l'association système,
+/// cohérent avec `launch`/`open_content_manager` qui invoquent déjà CM ainsi.
+pub fn launch_replay(cfg: &AppConfig, replay_path: &Path) -> Result<(), String> {
+    let cm = cfg
+        .content_manager_exe
+        .as_ref()
+        .ok_or(crate::errors::CM_NOT_CONFIGURED)?;
+    let mut cmd = Command::new(cm);
+    cmd.arg(replay_path);
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.spawn().map_err(|e| format!("lancement du replay : {e}"))?;
     Ok(())
 }
 

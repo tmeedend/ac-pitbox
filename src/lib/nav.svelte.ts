@@ -2,6 +2,7 @@
 // le sélecteur : ouvrir une voiture/un circuit le définit comme choix de session,
 // affiché en permanence dans le bloc SESSION de la barre latérale (§6.1ter).
 
+import { invoke } from "@tauri-apps/api/core";
 import { StorageKey } from "./storage";
 
 export interface LaunchPrefill {
@@ -35,13 +36,35 @@ export interface SessionPick {
   outline: string | null;
 }
 
-function load(key: string): SessionPick | null {
+/** Ancien mécanisme (avant fix, voir plus bas) : lu une seule fois pour
+ * migrer les choix déjà faits, jamais réécrit. `localStorage` n'est pas
+ * garanti synchrone sur disque côté WebView2 — fermer l'app juste après un
+ * clic pouvait perdre la sélection la plus récente (bug réel : le circuit,
+ * choisi typiquement juste avant de fermer, ne survivait presque jamais à
+ * un redémarrage, contrairement à la voiture choisie plus tôt). */
+function loadLegacy(key: string): SessionPick | null {
   try {
     const raw = localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as SessionPick) : null;
   } catch {
     return null;
   }
+}
+
+interface SessionPicks {
+  car: SessionPick | null;
+  track: SessionPick | null;
+}
+
+/** Persistance durable (§8.6) : fichier écrit côté Rust (`session_state.rs`,
+ * `std::fs::write` synchrone) plutôt que `localStorage` — voir `loadLegacy`
+ * pour le pourquoi du changement. */
+function loadPicks(): Promise<SessionPicks> {
+  return invoke<SessionPicks>("get_session_picks").catch(() => ({ car: null, track: null }));
+}
+
+function savePicks(picks: SessionPicks): void {
+  invoke("save_session_picks", { picks }).catch((e) => console.error("save_session_picks", e));
 }
 
 export const nav = $state<{
@@ -79,23 +102,39 @@ export const nav = $state<{
   prefill: null,
   openMod: null,
   search: null,
-  sessionCar: load(StorageKey.sessionCar),
-  sessionTrack: load(StorageKey.sessionTrack),
+  // Hydraté juste en dessous, de façon asynchrone (lecture fichier côté
+  // Rust) : reste `null` le temps d'un aller-retour IPC au tout premier
+  // rendu, comme le zoom/la langue (`getConfig()` dans AppShell.svelte).
+  sessionCar: null,
+  sessionTrack: null,
   openFull: null,
   lightboxOpen: false,
   autoLaunch: false,
   opponentsAction: null,
 });
 
+loadPicks().then((picks) => {
+  // Repli sur l'ancien `localStorage` seulement si le nouveau fichier n'a
+  // rien pour cette entité (première ouverture après la mise à jour) — et
+  // dans ce cas, persiste tout de suite au nouvel endroit pour ne plus
+  // jamais redépendre de `localStorage`.
+  const car = picks.car ?? loadLegacy(StorageKey.sessionCar);
+  const track = picks.track ?? loadLegacy(StorageKey.sessionTrack);
+  nav.sessionCar = car;
+  nav.sessionTrack = track;
+  if ((car && !picks.car) || (track && !picks.track)) {
+    savePicks({ car, track });
+  }
+});
+
 /** Définit le choix de session (persisté) — appelé à l'ouverture d'un mod (§8.6). */
 export function pickSession(kind: "Car" | "Track", pick: SessionPick): void {
   if (kind === "Car") {
     nav.sessionCar = pick;
-    localStorage.setItem(StorageKey.sessionCar, JSON.stringify(pick));
   } else {
     nav.sessionTrack = pick;
-    localStorage.setItem(StorageKey.sessionTrack, JSON.stringify(pick));
   }
+  savePicks({ car: nav.sessionCar, track: nav.sessionTrack });
 }
 
 /** Pose une action « adversaires » à destination de l'écran de session (§6.3ter). */

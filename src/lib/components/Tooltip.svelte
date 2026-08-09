@@ -13,14 +13,18 @@
   interface Props {
     /** Texte de la bulle — `\n` produit un retour à la ligne (`white-space: pre-line`). */
     text: string;
+    /** `"center"` (défaut) centre la bulle sous/sur le déclencheur — déborde
+     * si le déclencheur est près d'un bord étroit (ex. barre latérale).
+     * `"left"` aligne le bord gauche de la bulle sur celui du déclencheur. */
+    align?: "center" | "left";
     children: Snippet;
   }
-  let { text, children }: Props = $props();
+  let { text, align = "center", children }: Props = $props();
 </script>
 
 <span class="tt-wrap">
   {@render children()}
-  <span class="tt-bubble" role="tooltip">{text}</span>
+  <span class="tt-bubble" class:align-left={align === "left"} role="tooltip">{text}</span>
 </span>
 
 <style>
@@ -54,5 +58,15 @@
   .tt-wrap:focus-within .tt-bubble {
     opacity: 1;
     visibility: visible;
+  }
+  /* Bord gauche aligné sur le déclencheur plutôt que centré : évite le
+     débordement/rognage contre un bord étroit (ex. barre latérale, 222px).
+     `max-width` réduit en plus, sinon la bulle grandit vers la droite et se
+     fait quand même rogner par le contenu central — quitte à passer sur
+     plus de lignes dans un espace aussi étroit. */
+  .tt-bubble.align-left {
+    left: 0;
+    transform: none;
+    max-width: 170px;
   }
 </style>

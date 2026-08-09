@@ -4,6 +4,7 @@
   // manuel quand une capture n'a pas été retrouvée automatiquement.
   import { listMediaScreenshots, linkMediaManually, openMediaFolder, type ScreenshotFile } from "$lib/media";
   import { previewSrc } from "$lib/library";
+  import { getThumbnail } from "$lib/thumbnails";
   import { open } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
@@ -20,16 +21,30 @@
   let files = $state<ScreenshotFile[]>([]);
   let linking = $state(false);
   let lightboxIndex = $state<number | null>(null);
+  // Miniatures mises en cache (§6.1) : la galerie affiche ça, jamais l'image
+  // pleine résolution — seule la visionneuse plein écran (Lightbox) charge
+  // l'original.
+  let thumbs = $state<Record<string, string>>({});
 
   // La garde sur `modId` évite qu'une réponse tardive d'une fiche précédente
   // n'écrase la liste de la fiche courante (même principe que ResourcesBlock).
   $effect(() => {
     const current = modId;
     files = [];
+    thumbs = {};
     lightboxIndex = null;
     listMediaScreenshots(current).then((f) => {
       if (current === modId) files = f;
     });
+  });
+
+  $effect(() => {
+    for (const f of files) {
+      if (f.path in thumbs) continue;
+      getThumbnail(f.path)
+        .then((src) => (thumbs = { ...thumbs, [f.path]: src }))
+        .catch(() => {}); // miniature ratée : la carte reste sans image plutôt que de casser la galerie
+    }
   });
 
   function fmtDate(iso: string | null): string {
@@ -82,7 +97,7 @@
     {#if files.length}
       <div class="gallery">
         {#each files as f, i (f.path)}
-          {@const src = previewSrc(f.path)}
+          {@const src = thumbs[f.path]}
           <button class="shot" type="button" onclick={() => (lightboxIndex = i)} title={t("lightbox.open")}>
             {#if src}<img src={src} alt={f.file_name} loading="lazy" />{/if}
             {#if f.matched_counterpart}<span class="shot-tag mono">{f.matched_counterpart}</span>{/if}

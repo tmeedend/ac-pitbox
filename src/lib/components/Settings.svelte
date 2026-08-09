@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import ConfigFields from "./ConfigFields.svelte";
+  import MusicTab from "./settings/MusicTab.svelte";
   import {
     emptyConfig,
     getConfig,
@@ -16,6 +17,20 @@
   import { confirm } from "@tauri-apps/plugin-dialog";
 
   import { errorText } from "$lib/errors";
+
+  // Découpage en onglets (§ chantier "harmonisation" — Réglages était un seul
+  // écran de 250+ lignes empilant chemins, préférences et, désormais,
+  // musique). Général/Chemins/Import partagent le même AppConfig + garde de
+  // navigation ci-dessous ; Musique gère son propre fichier séparé
+  // (`music.json`, voir MusicTab.svelte) donc son propre état.
+  const tabs = [
+    { id: "general", labelKey: "settings.tabGeneral" },
+    { id: "paths", labelKey: "settings.tabPaths" },
+    { id: "import", labelKey: "settings.tabImport" },
+    { id: "music", labelKey: "settings.tabMusic" },
+  ] as const;
+  let activeTab = $state<(typeof tabs)[number]["id"]>("general");
+
   let config = $state<AppConfig>(emptyConfig());
   // Instantané du dernier config enregistré (ou chargé) : sert à détecter les
   // modifications non sauvegardées et à revenir en arrière (zoom/langue,
@@ -109,87 +124,122 @@
 <div class="settings">
   <header>
     <h2>{t("settings.title")}</h2>
-    <p class="sub">{t("settings.subtitle")}</p>
   </header>
 
-  <section class="lang-section">
-    <label>
-      <span>{t("settings.language")}</span>
-      <select class="input" value={config.prefs.language ?? ""} onchange={(e) => onLanguageChange(e.currentTarget.value)}>
-        <option value="">{t("settings.languageAuto")}</option>
-        {#each availableLocales as code}
-          <option value={code}>{localeNames[code]}</option>
-        {/each}
-      </select>
-    </label>
-    <p class="hint">{t("settings.languageHint")}</p>
-  </section>
+  <div class="tabs">
+    {#each tabs as tab}
+      <button class="tab" class:on={activeTab === tab.id} type="button" onclick={() => (activeTab = tab.id)}>
+        {t(tab.labelKey)}
+      </button>
+    {/each}
+  </div>
 
-  <section class="lang-section">
-    <label>
-      <span>{t("settings.zoom")}</span>
-      <select class="input" value={config.prefs.ui_zoom ?? ""} onchange={(e) => onZoomChange(e.currentTarget.value)}>
-        <option value="">{t("settings.zoomDefault")}</option>
-        {#each ZOOM_LEVELS as level}
-          <option value={level}>{level}%</option>
-        {/each}
-      </select>
-    </label>
-    <p class="hint">{t("settings.zoomHint")}</p>
-  </section>
+  {#if activeTab === "music"}
+    <MusicTab />
+  {:else}
+    {#if activeTab === "general"}
+      <p class="sub">{t("settings.tabGeneralHint")}</p>
 
-  <section class="lang-section">
-    <label>
-      <span>{t("settings.showroomScene")}</span>
-      <select
-        class="input"
-        value={config.prefs.showroom_scene ?? ""}
-        onchange={(e) => (config.prefs.showroom_scene = e.currentTarget.value || null)}
+      <section class="lang-section">
+        <label>
+          <span>{t("settings.language")}</span>
+          <select class="input" value={config.prefs.language ?? ""} onchange={(e) => onLanguageChange(e.currentTarget.value)}>
+            <option value="">{t("settings.languageAuto")}</option>
+            {#each availableLocales as code}
+              <option value={code}>{localeNames[code]}</option>
+            {/each}
+          </select>
+        </label>
+        <p class="hint">{t("settings.languageHint")}</p>
+      </section>
+
+      <section class="lang-section">
+        <label>
+          <span>{t("settings.zoom")}</span>
+          <select class="input" value={config.prefs.ui_zoom ?? ""} onchange={(e) => onZoomChange(e.currentTarget.value)}>
+            <option value="">{t("settings.zoomDefault")}</option>
+            {#each ZOOM_LEVELS as level}
+              <option value={level}>{level}%</option>
+            {/each}
+          </select>
+        </label>
+        <p class="hint">{t("settings.zoomHint")}</p>
+      </section>
+
+      <section class="lang-section">
+        <label>
+          <span>{t("settings.bigpictureZoom")}</span>
+          <select
+            class="input"
+            value={config.prefs.bigpicture_zoom ?? ""}
+            onchange={(e) => (config.prefs.bigpicture_zoom = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+          >
+            <option value="">{t("settings.bigpictureZoomDefault")}</option>
+            {#each ZOOM_LEVELS as level}
+              <option value={level}>{level}%</option>
+            {/each}
+          </select>
+        </label>
+        <p class="hint">{t("settings.bigpictureZoomHint")}</p>
+      </section>
+
+      <section class="lang-section">
+        <label>
+          <span>{t("settings.showroomScene")}</span>
+          <select
+            class="input"
+            value={config.prefs.showroom_scene ?? ""}
+            onchange={(e) => (config.prefs.showroom_scene = e.currentTarget.value || null)}
+          >
+            <option value="">{t("settings.showroomSceneDefault")}</option>
+            {#each showrooms as s (s.id)}
+              <option value={s.id}>{s.name}</option>
+            {/each}
+          </select>
+        </label>
+        <p class="hint">{t("settings.showroomSceneHint")}</p>
+      </section>
+    {:else if activeTab === "paths"}
+      <p class="sub">{t("settings.tabPathsHint")}</p>
+      <ConfigFields bind:config {validation} />
+    {:else if activeTab === "import"}
+      <p class="sub">{t("settings.tabImportHint")}</p>
+
+      <section class="lang-section">
+        <label>
+          <span>{t("settings.resourceExtraction")}</span>
+          <select class="input" bind:value={config.prefs.resource_extraction_mode}>
+            <option value="none">{t("settings.resourceExtractionNone")}</option>
+            <option value="info_only">{t("settings.resourceExtractionInfo")}</option>
+            <option value="all">{t("settings.resourceExtractionAll")}</option>
+          </select>
+        </label>
+        <p class="hint">{t("settings.resourceExtractionHint")}</p>
+      </section>
+
+      <section class="lang-section">
+        <label class="check">
+          <input type="checkbox" bind:checked={config.prefs.keep_source_archive} />
+          <span>{t("settings.keepSourceArchive")}</span>
+        </label>
+        <p class="hint">{t("settings.keepSourceArchiveHint")}</p>
+      </section>
+    {/if}
+
+    {#if error}<div class="error">{error}</div>{/if}
+
+    <footer>
+      {#if saved}<span class="pill pill-ok">{t("settings.saved")}</span>{/if}
+      <button
+        class="btn btn-primary"
+        type="button"
+        onclick={save}
+        disabled={!validation?.is_valid || saving}
       >
-        <option value="">{t("settings.showroomSceneDefault")}</option>
-        {#each showrooms as s (s.id)}
-          <option value={s.id}>{s.name}</option>
-        {/each}
-      </select>
-    </label>
-    <p class="hint">{t("settings.showroomSceneHint")}</p>
-  </section>
-
-  <section class="lang-section">
-    <label>
-      <span>{t("settings.resourceExtraction")}</span>
-      <select class="input" bind:value={config.prefs.resource_extraction_mode}>
-        <option value="none">{t("settings.resourceExtractionNone")}</option>
-        <option value="info_only">{t("settings.resourceExtractionInfo")}</option>
-        <option value="all">{t("settings.resourceExtractionAll")}</option>
-      </select>
-    </label>
-    <p class="hint">{t("settings.resourceExtractionHint")}</p>
-  </section>
-
-  <section class="lang-section">
-    <label class="check">
-      <input type="checkbox" bind:checked={config.prefs.keep_source_archive} />
-      <span>{t("settings.keepSourceArchive")}</span>
-    </label>
-    <p class="hint">{t("settings.keepSourceArchiveHint")}</p>
-  </section>
-
-  <ConfigFields bind:config {validation} />
-
-  {#if error}<div class="error">{error}</div>{/if}
-
-  <footer>
-    {#if saved}<span class="pill pill-ok">{t("settings.saved")}</span>{/if}
-    <button
-      class="btn btn-primary"
-      type="button"
-      onclick={save}
-      disabled={!validation?.is_valid || saving}
-    >
-      {saving ? t("settings.saving") : t("settings.save")}
-    </button>
-  </footer>
+        {saving ? t("settings.saving") : t("settings.save")}
+      </button>
+    </footer>
+  {/if}
 </div>
 
 <style>
@@ -208,6 +258,29 @@
     color: var(--muted);
     margin-top: 6px;
     line-height: 1.5;
+  }
+  .tabs {
+    display: flex;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin-bottom: 20px;
+  }
+  .tab {
+    flex: 1;
+    background: var(--bg);
+    color: var(--muted);
+    padding: 9px 10px;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+  }
+  .tab:hover {
+    background: var(--raised);
+    color: var(--txt);
+  }
+  .tab.on {
+    background: var(--raised);
+    color: var(--rosso-bright);
   }
   .lang-section {
     margin-bottom: 22px;

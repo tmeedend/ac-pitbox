@@ -18,10 +18,12 @@ pub mod layers;
 pub mod library;
 pub mod maintenance;
 pub mod media;
+pub mod music;
 pub mod others;
 pub mod profiles;
 pub mod rules;
 pub mod session;
+pub mod session_state;
 
 /// Imports communs à toutes les façades. Import global volontaire : il ne
 /// déclenche pas d'avertissement `unused_imports` quand un module n'en

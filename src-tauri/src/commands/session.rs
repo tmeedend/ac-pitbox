@@ -44,6 +44,12 @@ pub fn open_content_manager(app: AppHandle) -> Result<(), String> {
     crate::launch::open_content_manager(&crate::config::load(&app))
 }
 
+/// Lance un replay dans Content Manager (§6.1, onglet Médias).
+#[tauri::command]
+pub fn launch_replay(app: AppHandle, replay_path: std::path::PathBuf) -> Result<(), String> {
+    crate::launch::launch_replay(&crate::config::load(&app), &replay_path)
+}
+
 /// Lance l'aperçu 3D natif (`acShowroom.exe`, distinct de Content Manager)
 /// ciblé sur une voiture (+ skin optionnel). Process indépendant, affiché
 /// par-dessus l'app avec les réglages vidéo du jeu : l'utilisateur le ferme

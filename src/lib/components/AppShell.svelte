@@ -15,6 +15,7 @@
   import TitleBar from "./TitleBar.svelte";
   import ImageSelectDropdown from "./ImageSelectDropdown.svelte";
   import TrackSkinChecklistDropdown from "./TrackSkinChecklistDropdown.svelte";
+  import Tooltip from "./Tooltip.svelte";
   import { nav, requestSection, pickSession } from "$lib/nav.svelte";
   import { previewSrc, getModDetail } from "$lib/library";
   import { initGlobalDragDrop } from "$lib/importState.svelte";
@@ -25,6 +26,8 @@
   import { setZoom } from "$lib/zoom.svelte";
   import { getConfig } from "$lib/config";
   import { startGamepadNav } from "$lib/gamepadNav";
+  import { bigPictureState, exitBigPicture } from "$lib/bigpicture.svelte";
+  import { musicEnterMenu, musicEnterGrid } from "$lib/music";
 
   // Barre latérale unifiée (maquette pitbox-biblio-session2.html) : bloc
   // SESSION (le duo sélectionné = point d'accès aux bibliothèques) puis
@@ -47,6 +50,18 @@
     // dans la barre de titre (icône ?), pas dans la navigation.
     { id: "settings", labelKey: "nav.settings" },
   ];
+
+  // Raccourci de l'astuce skin (§9.2) : CM ne transmet le skin joueur nulle
+  // part dans son protocole de lancement rapide, seulement pour les
+  // adversaires — la seule façon de le fixer est de le choisir une fois dans
+  // CM lui-même, qui le retient ensuite par voiture.
+  async function openCmForSkin() {
+    try {
+      await openContentManager();
+    } catch (e) {
+      console.error(e);
+    }
+  }
 
   async function handleAtelierClick(b: NavBtn) {
     if (b.action) {
@@ -88,6 +103,26 @@
     const cfg = await getConfig();
     if (cfg.prefs.language) setLocale(cfg.prefs.language);
     setZoom(cfg.prefs.ui_zoom);
+  });
+
+  // Sortie du mode Big Picture au clavier — pas d'autre chrome de fenêtre
+  // visible une fois en plein écran pour cliquer un bouton "retour" évident.
+  onMount(() => {
+    const onKeydown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && bigPictureState.active) exitBigPicture();
+    };
+    document.addEventListener("keydown", onKeydown);
+    return () => document.removeEventListener("keydown", onKeydown);
+  });
+
+  // Ambiance musicale suit l'écran affiché tant que Big Picture est actif
+  // (§4 de la spec musique) : GRID sur l'écran de paramétrage de la session
+  // ("race", l'équivalent Pit Box de la grille de départ), MENU partout
+  // ailleurs.
+  $effect(() => {
+    if (!bigPictureState.active) return;
+    if (nav.section === "race") musicEnterGrid();
+    else musicEnterMenu();
   });
 
   const carPrev = $derived(previewSrc(nav.sessionCar?.preview ?? null));
@@ -210,8 +245,10 @@
   }
 </script>
 
-<TitleBar />
-<div class="frame">
+{#if !bigPictureState.active}
+  <TitleBar />
+{/if}
+<div class="frame" class:bigpicture={bigPictureState.active}>
   <div class="topbar"></div>
   <div class="shell">
     <aside class="side">
@@ -253,6 +290,14 @@
                 emptyText={t("session.noSkinsAvailable")}
                 onselect={pickCarSkin}
               />
+              <!-- Limite de Content Manager (§9.2) : son protocole de lancement
+                   rapide ne transmet pas le skin joueur, seulement les
+                   adversaires. CM retombe sur le dernier skin choisi pour
+                   cette voiture dans CM lui-même — bouton = raccourci direct
+                   vers ce geste. -->
+              <Tooltip text={t("session.skinLimitTooltip")} align="left">
+                <button class="skin-hint" type="button" onclick={openCmForSkin}>{t("session.skinLimitLabel")}</button>
+              </Tooltip>
             </div>
           {/if}
         </div>
@@ -310,6 +355,15 @@
           <button class="nb" class:on={!b.action && nav.section === b.id} onclick={() => handleAtelierClick(b)}>{t(b.labelKey)}</button>
         {/each}
       </div>
+
+      {#if bigPictureState.active}
+        <!-- Seule sortie visible du mode Big Picture (plein écran, pas de
+             chrome OS, barre de titre custom masquée) : bouton collant en
+             bas de la barre latérale, position:sticky reste dans le flux
+             normal donc ne peut jamais recouvrir les boutons au-dessus s'il
+             manque de hauteur — il défile avec eux au lieu de les cacher. -->
+        <button class="bigpicture-exit" type="button" onclick={exitBigPicture}>{t("bigpicture.exit")}</button>
+      {/if}
     </aside>
 
     <main class="content" class:fixed={noPad}>
@@ -362,10 +416,19 @@
     display: flex;
     flex-direction: column;
   }
+  /* Big Picture : pas de barre de titre custom (masquée, gagne en hauteur)
+     ni de bordure — rendu bord à bord, immersif. */
+  .frame.bigpicture {
+    padding-top: 0;
+    border: none;
+  }
   .topbar {
     background: var(--rosso);
     height: 3px;
     flex: none;
+  }
+  .frame.bigpicture .topbar {
+    display: none;
   }
   .shell {
     flex: 1;
@@ -471,6 +534,18 @@
     gap: 6px;
     padding: 8px;
     border-top: 1px solid var(--line);
+  }
+  .skin-hint {
+    align-self: flex-start;
+    background: transparent;
+    padding: 0;
+    display: inline;
+    color: var(--yellow);
+    font-size: 9.5px;
+    letter-spacing: 0.3px;
+  }
+  .skin-hint:hover {
+    color: var(--txt);
   }
   .slot-img {
     height: 96px;
@@ -607,5 +682,31 @@
   .content.fixed {
     padding: 0;
     overflow: hidden;
+  }
+
+  /* Seule sortie visible du mode Big Picture (plein écran, pas de chrome
+     OS, barre de titre custom masquée). Dernier enfant de .side : `sticky`
+     reste dans le flux normal (contrairement à `fixed`), donc ne peut pas
+     recouvrir les boutons de navigation au-dessus s'il manque de hauteur —
+     il défile avec eux au lieu de les cacher. Couleur bleue (secondaire,
+     "info" — le rouge est déjà pris par primaire/destructif partout
+     ailleurs) pour ne pas se confondre avec Lancer/Paramétrage. */
+  .bigpicture-exit {
+    position: sticky;
+    bottom: 0;
+    width: 100%;
+    margin-top: 8px;
+    padding: 12px 13px;
+    background: var(--blue-dim);
+    border-top: 1px solid var(--blue-border);
+    color: var(--blue);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    font-family: var(--mono);
+  }
+  .bigpicture-exit:hover {
+    background: var(--blue-border);
+    color: var(--txt);
   }
 </style>

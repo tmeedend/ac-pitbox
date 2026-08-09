@@ -33,8 +33,26 @@ dirs = "5"
 tauri-plugin-window-state = "2.4.1"
 tauri-plugin-log = "2"
 log = "0.4"
+# Moteur audio du mode Big Picture (docs/spec-module-musique_2.md) : décodeurs
+# mp3/flac/vorbis/wav inclus par défaut, sortie via cpal (WASAPI partagé sous
+# Windows — jamais le mode exclusif, qui couperait le son d'Assetto Corsa).
+rodio = "0.19"
+# Détection du lancement d'AC (acs.exe / AssettoCorsa.exe) par polling léger,
+# plus simple qu'un ManagementEventWatcher WMI (§4 de la spec musique).
+sysinfo = "0.32"
+# Permutation Fisher-Yates des playlists (§5.4) : zéro dépendance transitive,
+# bien plus léger que `rand` pour un seul besoin de mélange.
+fastrand = "2"
+# Miniatures des galeries médias (§6.1) : les captures AC sont en pleine
+# résolution jeu, jamais retaillées jusqu'ici — décodage/redimensionnement
+# jpeg+png seulement (pas les formats exotiques, inutiles ici).
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
 # Lecture registre Windows uniquement (détection du Mode développeur, §12) —
 # déjà présent transitivement via tauri, pas une dépendance de plus en pratique.
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
+# Lecture de la mémoire partagée exportée par acs.exe (`Local\acpmf_graphics`,
+# §16.4 du SPEC) pour détecter la fin du chargement de session — déjà présente
+# transitivement (winreg 0.55 en dépend), pas une dépendance de plus en pratique.
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Memory"] }

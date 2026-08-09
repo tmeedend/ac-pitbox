@@ -23,18 +23,21 @@ mod library;
 mod maintenance;
 mod media;
 mod modscan;
+mod music;
 mod others;
 mod overlay;
 mod profiles;
 mod quickdrive;
 mod resources;
 mod rules;
+mod session_state;
 mod shared;
 mod showroom;
 mod stock;
 mod submods;
 #[cfg(test)]
 mod testutil;
+mod thumbnails;
 mod uijson;
 mod weather;
 
@@ -82,6 +85,22 @@ pub fn run() {
             }
 
             app.manage(Db(std::sync::Mutex::new(conn)));
+
+            // Module musique du mode Big Picture (docs/spec-module-musique_2.md) :
+            // dossiers par défaut créés au premier démarrage (vides, pas de pack
+            // CC0 embarqué pour l'instant), moteur audio + surveillance AC
+            // démarrés pour toute la durée de vie de l'app.
+            music::config::ensure_default_dirs(app.handle());
+            let music_cfg = music::config::load(app.handle());
+            // Préchauffe le cache d'index (§3.4/§16.3) en tâche de fond dès
+            // le démarrage, pour que la première navigation Big Picture de
+            // la session ne subisse pas le scan complet du dossier.
+            music::index::warm(app.handle(), music_cfg.clone());
+            let music_engine = music::engine::spawn(app.handle().clone(), music_cfg);
+            music::watch::spawn(music_engine.clone_sender());
+            app.manage(music_engine);
+            app.manage(music::PreviewHandle::default());
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -120,13 +139,17 @@ pub fn run() {
             commands::media::link_media_manually,
             commands::media::open_media_folder,
             commands::media::get_session_background,
+            commands::media::get_thumbnail,
             commands::session::weather_stack,
             commands::session::weather_options,
             commands::session::weather_conditions,
             commands::session::launch_session,
             commands::session::open_content_manager,
+            commands::session::launch_replay,
             commands::session::open_native_showroom,
             commands::session::list_showrooms,
+            commands::session_state::get_session_picks,
+            commands::session_state::save_session_picks,
             commands::maintenance::maintenance_scan,
             commands::maintenance::reindex_library,
             commands::maintenance::delete_broken_mod,
@@ -173,6 +196,16 @@ pub fn run() {
             commands::library::set_favorite,
             commands::library::set_manual_tags,
             commands::library::set_mod_field,
+            commands::music::get_music_config,
+            commands::music::save_music_config,
+            commands::music::get_default_music_folders,
+            commands::music::scan_music_folder,
+            commands::music::music_enter_big_picture,
+            commands::music::music_exit_big_picture,
+            commands::music::music_enter_menu,
+            commands::music::music_enter_grid,
+            commands::music::music_preview_start,
+            commands::music::music_preview_stop,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

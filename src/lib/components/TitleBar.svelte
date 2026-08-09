@@ -7,6 +7,7 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { t } from "$lib/i18n/index.svelte";
   import { requestSection } from "$lib/nav.svelte";
+  import { enterBigPicture } from "$lib/bigpicture.svelte";
 
   const win = getCurrentWindow();
   let maximized = $state(false);
@@ -40,6 +41,14 @@
     <span class="name">PIT BOX</span>
   </div>
   <div class="win-controls">
+    <button class="wbtn" type="button" title={t("titlebar.bigPicture")} onclick={enterBigPicture}>
+      <svg viewBox="0 0 10 10">
+        <path d="M1.5 3.5 V1.5 H3.5" fill="none" />
+        <path d="M6.5 1.5 H8.5 V3.5" fill="none" />
+        <path d="M8.5 6.5 V8.5 H6.5" fill="none" />
+        <path d="M3.5 8.5 H1.5 V6.5" fill="none" />
+      </svg>
+    </button>
     <!-- « À propos » : écran rarement ouvert, il encombrait la navigation. -->
     <button class="wbtn help" type="button" title={t("nav.about")} onclick={() => requestSection("about")}>?</button>
     <button class="wbtn" type="button" title={t("titlebar.minimize")} onclick={minimize}>
