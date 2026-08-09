@@ -14,6 +14,7 @@
     type WeatherOption,
   } from "$lib/launch";
   import { listLibrary, previewSrc, type ModCard } from "$lib/library";
+  import { getSessionBackground } from "$lib/media";
   import { nav, type OpponentsAction } from "$lib/nav.svelte";
   import { getPreferredSkin } from "$lib/preferred";
   import { t } from "$lib/i18n/index.svelte";
@@ -623,6 +624,30 @@
     }
   });
 
+  // Fond photo derrière l'interface (§6.2/§9.3) : combo exact → même circuit →
+  // background officiel CSP → null (fond neutre actuel, aucun changement visuel).
+  // Non bloquant pour l'écran : une erreur reste silencieuse, ce fond est un
+  // agrément, jamais une donnée dont dépend le lancement de la session.
+  let backgroundSrc = $state<string | null>(null);
+  $effect(() => {
+    const carId = setup.car_id;
+    const trackId = setup.track_id;
+    const layoutId = setup.track_layout;
+    if (!carId || !trackId) {
+      backgroundSrc = null;
+      return;
+    }
+    getSessionBackground(carId, trackId, layoutId)
+      .then((path) => {
+        if (setup.car_id === carId && setup.track_id === trackId && setup.track_layout === layoutId) {
+          backgroundSrc = previewSrc(path);
+        }
+      })
+      .catch(() => {
+        backgroundSrc = null;
+      });
+  });
+
   // Lancement immédiat demandé depuis le bouton rouge « Démarrer la session »
   // de la barre latérale (§8.6bis) : réactif plutôt que dans onMount, pour
   // couvrir aussi bien l'arrivée fraîche sur cet écran que le cas où il est
@@ -753,7 +778,7 @@
   {/if}
 {/snippet}
 
-<div class="flow">
+<div class="flow" class:has-bg={!!backgroundSrc} style:--session-bg={backgroundSrc ? `url('${backgroundSrc}')` : undefined}>
   <!-- Titre seul : pas de rappel du duo voiture/circuit ici (déjà dans la
        colonne latérale, §8.6). Le lancement se fait désormais depuis le
        bouton rouge « Démarrer la session » de la barre latérale, juste sous
@@ -1087,6 +1112,13 @@
   .flow {
     height: 100%;
     overflow-y: auto;
+  }
+  /* Fond photo assombri/flouté (§6.2/§9.3) : appliqué seulement si un média
+     a été résolu, sinon le fond neutre existant reste inchangé. */
+  .flow.has-bg {
+    background-image: linear-gradient(rgba(5, 5, 7, 0.86), rgba(5, 5, 7, 0.86)), var(--session-bg);
+    background-size: cover;
+    background-position: center;
   }
   .bar {
     display: flex;

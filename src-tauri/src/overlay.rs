@@ -210,6 +210,19 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_layers_parent ON layers(parent_id);
 
+        -- Rattachement manuel d'un screenshot/replay (§6.1) : repli quand le
+        -- matching automatique par nom de fichier (media.rs) ne trouve pas
+        -- l'entité, ou pour corriger un faux négatif. Jamais rempli par le
+        -- matching automatique lui-même — uniquement par une action explicite
+        -- « Associer un fichier » côté fiche.
+        CREATE TABLE IF NOT EXISTS media_links (
+            file_path TEXT NOT NULL,
+            entity_id TEXT NOT NULL, -- id_interne voiture/circuit
+            kind      TEXT NOT NULL, -- 'SCREENSHOT' | 'REPLAY'
+            PRIMARY KEY (file_path, entity_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_media_links_entity ON media_links(entity_id);
+
         CREATE INDEX IF NOT EXISTS idx_versions_mod ON versions(mod_id);
         CREATE INDEX IF NOT EXISTS idx_history_mod  ON history(mod_id);
         CREATE INDEX IF NOT EXISTS idx_mods_idhash  ON mods(identity_hash);
@@ -883,6 +896,35 @@ pub fn list_pack_ids(conn: &Connection, pack: &str) -> rusqlite::Result<Vec<Stri
 pub fn mod_exists(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
     let n: i64 = conn.query_row("SELECT COUNT(*) FROM mods WHERE id_interne = ?1", [id], |r| r.get(0))?;
     Ok(n > 0)
+}
+
+/// Tous les id_interne d'un type (voiture/circuit, mod comme stock) — sert à
+/// `media.rs` pour retrouver le « contrepartie » (circuit dans un nom de
+/// screenshot de voiture, et inversement, §6.1).
+pub fn list_mod_ids_by_kind(conn: &Connection, kind: &str) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn.prepare("SELECT id_interne FROM mods WHERE kind = ?1")?;
+    let rows = stmt.query_map([kind], |r| r.get::<_, String>(0))?;
+    rows.collect()
+}
+
+// --- Rattachement manuel de médias (§6.1) -----------------------------------
+
+/// Associe manuellement un fichier (screenshot/replay) à une entité — repli
+/// quand `media.rs` ne l'a pas trouvé automatiquement. Idempotent (clé
+/// primaire `(file_path, entity_id)`).
+pub fn add_media_link(conn: &Connection, file_path: &str, entity_id: &str, kind: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT OR IGNORE INTO media_links (file_path, entity_id, kind) VALUES (?1, ?2, ?3)",
+        params![file_path, entity_id, kind],
+    )?;
+    Ok(())
+}
+
+/// Fichiers rattachés manuellement à `entity_id` pour ce type de média.
+pub fn list_media_links(conn: &Connection, entity_id: &str, kind: &str) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn.prepare("SELECT file_path FROM media_links WHERE entity_id = ?1 AND kind = ?2")?;
+    let rows = stmt.query_map(params![entity_id, kind], |r| r.get::<_, String>(0))?;
+    rows.collect()
 }
 
 // --- Contenu de base Kunos (§12bis.1) ---------------------------------------

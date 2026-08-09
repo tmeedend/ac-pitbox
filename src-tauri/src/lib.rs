@@ -21,6 +21,7 @@ mod layers;
 mod libpath;
 mod library;
 mod maintenance;
+mod media;
 mod modscan;
 mod others;
 mod overlay;
@@ -113,6 +114,12 @@ pub fn run() {
             commands::profiles::delete_profile,
             commands::session::list_weather,
             commands::library::list_mod_skins,
+            commands::media::list_media_screenshots,
+            commands::media::list_media_replays,
+            commands::media::list_media_backgrounds,
+            commands::media::link_media_manually,
+            commands::media::open_media_folder,
+            commands::media::get_session_background,
             commands::session::weather_stack,
             commands::session::weather_options,
             commands::session::weather_conditions,

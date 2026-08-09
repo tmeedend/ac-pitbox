@@ -170,7 +170,12 @@ export function startGamepadNav(): () => void {
       if (!gp) continue;
       const cur = readButtons(gp);
 
-      if (nav.openFull) {
+      if (nav.lightboxOpen) {
+        // Visionneuse plein écran ouverte par-dessus la fiche (§6.1,
+        // Lightbox.svelte) : elle gère elle-même tout son input manette
+        // (gauche/droite/B), y compris la fermeture — ne rien faire ici, sous
+        // peine qu'un même B ferme à la fois la visionneuse et la fiche.
+      } else if (nav.openFull) {
         // La fiche pleine page gère elle-même gauche/droite (mod précédent/
         // suivant, voir Library.svelte::navigateFull) — ici uniquement B=fermer.
         if (cur.back && !last.back) nav.openFull = null;

@@ -156,17 +156,66 @@ Les caractéristiques mécaniques ne sont **pas** des tags (un tag filtre/groupe
 
 **Favori** : état personnel (cœur), ni tag ni caractéristique.
 
+**Onglets de premier niveau** en haut de la fiche (`DetailPage.svelte` — la
+page pleine, pas `ModDetail.svelte` qui reste un panneau compact avec son
+propre menu clic-droit) : **Fiche · Screenshots · Replays · Resources ·
+Backgrounds** (ce dernier affiché seulement pour un circuit). Le bloc
+Ressources (§4.6) vit dans son propre onglet plutôt que dans la colonne de la
+fiche. Les actions secondaires de l'en-tête (Activer/Désactiver, Exporter,
+Réinstaller, Supprimer, Aperçu 3D, Ouvrir le dossier) sont regroupées dans un
+menu **⋮** — seuls le cœur favori et le badge « Contenu de base » restent
+visibles en permanence, hors du menu.
+
 ### 6.1 Onglet Médias (fiche voiture/circuit)
- 
-Maquette de référence `pitbox-onglet-medias.html`. Un onglet **Médias** sur la fiche, avec trois sous-vues :
-- **Screenshots** — captures personnelles de l'utilisateur mettant en scène cette voiture/ce circuit, en galerie. Rattachement **automatique** par nom/dossier (convention à vérifier sur les fichiers réels d'AC — `Documents\Assetto Corsa\screens\`, format non garanti). Repli : **association manuelle** si le rattachement automatique manque une capture (même principe que les fichiers annexes, §4.6).
-- **Backgrounds** — images d'ambiance officielles téléchargées par CSP pour un circuit (repli de contenu quand aucune capture perso ne correspond, voir §9.3bis).
-- **Replays** — fichiers `.acreplay` liés à ce contenu, avec métadonnées (type de session, date, tours, météo) et actions **« Ouvrir le dossier »** / **« Lire »** (lance directement dans Content Manager). Convention de nommage/dossier des replays à vérifier également.
-> ⚠️ Point à vérifier avant implémentation : convention exacte de nommage/dossier des screenshots et replays d'AC (peut varier selon version CSP/CM) — inspecter les fichiers réels plutôt que supposer un format.
- 
+
+Sous-vues **Screenshots**, **Replays** et **Backgrounds** (cette dernière
+réservée aux circuits). Rattachement par simple **`nom_de_fichier.contains(id)`**
+sur l'ensemble des id de la bibliothèque (voitures ∪ circuits, stock inclus) —
+pas de découpage voiture/circuit dans le nom : les deux espaces de noms ne se
+recoupent jamais (`content/cars/<id>` vs `content/tracks/<id>`), donc un id
+trouvé dans le nom désigne sans ambiguïté la bonne entité. Un faux positif
+occasionnel (id imbriqués, ex. « imola » contenu dans un mod
+« rt_imola_historic ») est accepté : ces médias sont un agrément (§6.1), pas
+une fonctionnalité critique — mieux vaut un média de trop qu'un rattachement
+manqué. Repli : **association manuelle** (bouton « Associer un fichier… »,
+dialogue de sélection natif) quand le rattachement automatique ne trouve rien
+— stocké dans `overlay.sqlite` (table `media_links`), jamais écrit par le
+matching automatique lui-même.
+
+**Visionneuse plein écran** (`Lightbox.svelte`, générique aux deux galeries
+Screenshots/Backgrounds) : clic sur une vignette pour l'ouvrir en grand,
+précédent/suivant (boutons, flèches clavier, croix/stick manette), diaporama
+(bouton lecture/pause, avance automatique toutes les 4 s), fermeture par le
+bouton ✕ en haut à gauche, un clic sur le fond, Echap, ou le bouton B/annuler
+manette. Pose `nav.lightboxOpen` tant qu'elle est ouverte : la navigation
+manette globale et le précédent/suivant de mod de la fiche pleine page
+(`Library.svelte::navigateFull`) cèdent gauche/droite/B pendant ce temps, pour
+qu'une même pression n'agisse jamais à la fois sur la visionneuse et sur ce
+qu'il y a en dessous.
+
+Formats réels vérifiés sur le poste avant implémentation (remplace la
+convention supposée) :
+- `Documents\Assetto Corsa\screens\Screenshot_<car_id>_<track_id>_<d>-<m>-<y>-<h>-<m>-<s>.jpg`
+  (capture en session) et `Showroom_<car_id>_<d>-<m>-<yyyy>-<h>-<m>-<s>.jpg`
+  (aperçu showroom, **pas de circuit** — le showroom n'a pas de piste). Le
+  format de l'année dans le nom n'est pas uniforme selon le mode de capture
+  (bug `tm_year` en session) : jamais parsé, seul le mtime du fichier est lu.
+- `Documents\Assetto Corsa\replay\AC_<ddmmyy>-<hhmmss>_<type>_<car_id>_<track_id[_layout]>_<suffixe?>.acreplay`,
+  `<type>` une lettre de session, suffixe final de longueur variable ou absent.
+  `replay\temp\` (fichiers de travail) n'est jamais scanné.
+- `<ac_install>\extension\backgrounds\<track_id>[__<layout_id>]_<variant>.jpg`
+  (CSP) — convention propre, match par préfixe (double underscore avant le
+  layout).
+- **Replays — bouton « Lire »** : pas implémenté dans cette itération. Le
+  protocole exact de lancement d'un `.acreplay` depuis Content Manager reste
+  un point de recherche ouvert (même prudence que pour `race/config`,
+  `docs/L4-cm-launch-research.md`) — seul « Ouvrir le dossier » est disponible
+  pour l'instant.
+
 ### 6.2 Fond photo sur l'écran de réglages de session
- 
-Sur l'écran de réglages (§9.3), utiliser une image de fond assombrie/floutée derrière l'interface, avec ordre de repli :
+
+Sur l'écran de réglages (§9.3), image de fond assombrie/floutée derrière
+l'interface, avec ordre de repli :
 1. Screenshot personnel du **combo exact** (même voiture + même circuit sélectionnés).
 2. Screenshot personnel du **même circuit**, autre voiture (ambiance du lieu conservée).
 3. **Background officiel** du circuit (§6.1).
@@ -356,4 +405,3 @@ Voir `README.md` pour l'index complet. Fichiers de données et maquettes cités 
 - **Bascule symlinks → hardlinks (§2)** : moteur implémenté et couvert par des tests automatisés (déploiement/composition/repli copie/nettoyage, y compris un scénario circuit type Spa) — confirme la mécanique et l'absence de besoin de droits admin (`CreateHardLinkW`, contrairement à `CreateSymbolicLink`). **Validé en conditions réelles par l'utilisateur** (juillet 2026) : déploiement + composition par couches fonctionnels sur sa bibliothèque réelle.
 - **Détection de la stack météo** (Pure/SOL/CSP/vanilla) et correspondance preset → backend.
 - **Table Kunos** : valider les noms de dossiers / années contre l'installation réelle (correction triviale ligne par ligne).
-- **Convention screenshots/replays (§6.1)** : format de nommage/dossier exact des captures d'écran et replays d'AC — à vérifier sur les fichiers réels avant d'implémenter le rattachement automatique.

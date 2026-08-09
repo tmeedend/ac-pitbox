@@ -284,7 +284,31 @@
     "installedOnTop": "version installée en tête",
     "installedBadge": "installée",
     "resourcesTitle": "Ressources",
-    "layersTitle": "Couches / extensions"
+    "layersTitle": "Couches / extensions",
+    "moreActions": "Plus d'actions",
+    "tabFiche": "Fiche",
+    "tabScreenshots": "Screenshots",
+    "tabReplays": "Replays",
+    "tabResources": "Ressources",
+    "tabBackgrounds": "Backgrounds",
+    "mediaScreenshotsTitle": "Screenshots",
+    "noScreenshots": "Aucune capture trouvée pour cette entité.",
+    "mediaReplaysTitle": "Replays",
+    "noReplays": "Aucun replay trouvé pour cette entité.",
+    "mediaBackgroundsTitle": "Backgrounds",
+    "noBackgrounds": "Aucun background officiel pour ce circuit.",
+    "mediaBackgroundsNote": "Utilisés en repli sur l'écran de réglages si aucune capture perso ne correspond au combo.",
+    "openMediaFolder": "Ouvrir le dossier",
+    "mediaLinkManually": "Associer un fichier…",
+    "mediaLinkPickTitle": "Choisir le fichier à associer"
+  },
+  "lightbox": {
+    "open": "Voir en grand",
+    "close": "Fermer",
+    "prev": "Image précédente",
+    "next": "Image suivante",
+    "play": "Lancer le diaporama",
+    "pause": "Mettre le diaporama en pause"
   },
   "history": {
     "event": {

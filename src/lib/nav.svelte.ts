@@ -59,6 +59,13 @@ export const nav = $state<{
    * navigation manette globale (AppShell) sache si elle doit céder la main
    * gauche/droite au visualiseur (mod précédent/suivant) et gérer B = fermer. */
   openFull: string | null;
+  /** Visionneuse plein écran d'image ouverte (galerie Screenshots/Backgrounds,
+   * §6.1) — le navigateur manette global (`gamepadNav.ts`) et la navigation
+   * manette mod précédent/suivant (`Library.svelte::navigateFull`) doivent
+   * tous deux céder gauche/droite/B à la visionneuse tant que c'est vrai,
+   * sinon une même pression ferait à la fois défiler les images ET changer de
+   * mod, ou fermerait la fiche entière au lieu de juste la visionneuse. */
+  lightboxOpen: boolean;
   /** Demande de lancement immédiat (bouton rouge « Démarrer la session » de
    * la barre latérale) : posée avant de naviguer vers l'écran de réglages,
    * consommée par Launch.svelte une fois monté et prêt (mêmes réglages que
@@ -75,6 +82,7 @@ export const nav = $state<{
   sessionCar: load(StorageKey.sessionCar),
   sessionTrack: load(StorageKey.sessionTrack),
   openFull: null,
+  lightboxOpen: false,
   autoLaunch: false,
   opponentsAction: null,
 });

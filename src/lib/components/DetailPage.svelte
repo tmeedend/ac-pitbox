@@ -31,6 +31,7 @@
   } from "$lib/submods";
   import { open, confirm } from "@tauri-apps/plugin-dialog";
   import PowerCurve from "./PowerCurve.svelte";
+  import ContextMenu from "./ContextMenu.svelte";
   import { nav, pickSession, requestSection } from "$lib/nav.svelte";
   import { importState } from "$lib/importState.svelte";
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
@@ -41,6 +42,9 @@
   import HistoryBlock from "./detail/HistoryBlock.svelte";
   import ProvenanceBlock from "./detail/ProvenanceBlock.svelte";
   import TagsBlock from "./detail/TagsBlock.svelte";
+  import MediaScreenshots from "./detail/MediaScreenshots.svelte";
+  import MediaReplays from "./detail/MediaReplays.svelte";
+  import MediaBackgrounds from "./detail/MediaBackgrounds.svelte";
 
   import { errorText } from "$lib/errors";
   interface Props {
@@ -53,6 +57,9 @@
   const isCar = kind === "Car";
 
   let detail = $state<ModDetail | null>(null);
+  // Onglets de premier niveau de la fiche (§6.1) — réinitialisé à "fiche" à
+  // chaque changement d'entité (voir le $effect suivant `id`).
+  let activeTab = $state<"fiche" | "screenshots" | "replays" | "resources" | "backgrounds">("fiche");
   let skins = $state<SkinItem[]>([]);
   let previewSkin = $state(0);
   let previewLayout = $state(0);
@@ -241,6 +248,7 @@
   $effect(() => {
     const current = id;
     actionError = "";
+    activeTab = "fiche";
     siblings = [];
     previewLayout = 0;
     trackSkinsLoading = true;
@@ -513,6 +521,63 @@
     ];
   }
 
+  // Menu ⋮ (§6.3, revue de la fiche) : regroupe les actions autrefois alignées
+  // en rangée dans l'en-tête, peu utilisées au regard de la place qu'elles
+  // prenaient une fois les onglets ajoutés. Cœur favori et badge « Contenu de
+  // base » restent hors du menu (visibles en permanence, pas des actions).
+  let menuPos = $state<{ x: number; y: number } | null>(null);
+  function openActionsMenu(e: MouseEvent) {
+    // Sans ça, ce même clic bulle jusqu'à `document` juste après le montage
+    // de `ContextMenu` (son propre listener `click` de fermeture, voir
+    // ContextMenu.svelte) et referme le menu dans la foulée — il s'ouvrait et
+    // se refermait dans le même geste, invisible à l'œil (bug réel : hover
+    // fonctionnait, le clic ne semblait « rien faire »).
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    menuPos = { x: rect.left, y: rect.bottom + 4 };
+  }
+  const menuItems = $derived.by(() => {
+    const d = detail;
+    if (!d) return [];
+    const items: { label: string; onclick: () => void; disabled?: boolean; danger?: boolean }[] = [];
+    if (!d.is_stock) {
+      items.push({
+        label: d.active ? t("common.deactivate") : t("common.activate"),
+        onclick: d.active ? deactivate : () => activate(),
+        disabled: busy,
+      });
+    }
+    if (isCar) {
+      items.push({
+        label: showroomBusy ? t("detail.showroomLaunching") : t("detail.showroom"),
+        onclick: openShowroom,
+        disabled: showroomBusy,
+      });
+    }
+    items.push({ label: t("detail.openFolder"), onclick: openFolder });
+    if (!d.is_stock) {
+      items.push({
+        label: exporting ? t("detail.exporting") : t("detail.export"),
+        onclick: doExport,
+        disabled: exporting,
+      });
+      if (keptArchive(d)) {
+        items.push({
+          label: reinstallBusy ? t("detail.reinstalling") : t("detail.reinstallFromArchive"),
+          onclick: doReinstall,
+          disabled: reinstallBusy,
+        });
+      }
+      items.push({
+        label: deleteBusy ? t("common.working") : t("detail.deleteFromLibrary"),
+        onclick: doDelete,
+        disabled: deleteBusy,
+        danger: true,
+      });
+    }
+    return items;
+  });
+
 </script>
 
 <div class="page">
@@ -541,32 +606,35 @@
         </button>
         {#if d.is_stock}
           <span class="base-tag" title={t("detail.stockTooltip")}>{t("detail.stockLabel")}</span>
-        {:else if d.active}
-          <button class="btn" type="button" onclick={deactivate} disabled={busy}>{t("common.deactivate")}</button>
-        {:else}
-          <button class="btn" type="button" onclick={() => activate()} disabled={busy}>{t("common.activate")}</button>
         {/if}
-        {#if !d.is_stock}
-          <button class="btn" type="button" onclick={doExport} disabled={exporting} title={t("detail.exportTooltip")}>
-            {exporting ? t("detail.exporting") : t("detail.export")}
-          </button>
-          {#if keptArchive(d)}
-            <button class="btn" type="button" onclick={doReinstall} disabled={reinstallBusy} title={t("detail.reinstallTooltip")}>
-              {reinstallBusy ? t("detail.reinstalling") : t("detail.reinstallFromArchive")}
-            </button>
-          {/if}
-          <button class="btn danger" type="button" onclick={doDelete} disabled={deleteBusy} title={t("detail.deleteFromLibraryTooltip")}>
-            {deleteBusy ? t("common.working") : t("detail.deleteFromLibrary")}
-          </button>
-        {/if}
-        {#if isCar}
-          <button class="btn" type="button" onclick={openShowroom} disabled={showroomBusy} title={t("detail.showroomTooltip")}>
-            {showroomBusy ? t("detail.showroomLaunching") : t("detail.showroom")}
-          </button>
-        {/if}
-        <button class="btn" type="button" onclick={openFolder} title={t("detail.openFolderTooltip")}>{t("detail.openFolder")}</button>
+        <button class="kebab" type="button" onclick={openActionsMenu} title={t("detail.moreActions")}>
+          <span class="kebab-dot"></span><span class="kebab-dot"></span><span class="kebab-dot"></span>
+        </button>
       </div>
     </header>
+    {#if menuPos}
+      <ContextMenu x={menuPos.x} y={menuPos.y} items={menuItems} onclose={() => (menuPos = null)} />
+    {/if}
+
+    <nav class="tabs">
+      <button class:on={activeTab === "fiche"} type="button" onclick={() => (activeTab = "fiche")}>
+        {t("detail.tabFiche")}
+      </button>
+      <button class:on={activeTab === "screenshots"} type="button" onclick={() => (activeTab = "screenshots")}>
+        {t("detail.tabScreenshots")}
+      </button>
+      <button class:on={activeTab === "replays"} type="button" onclick={() => (activeTab = "replays")}>
+        {t("detail.tabReplays")}
+      </button>
+      <button class:on={activeTab === "resources"} type="button" onclick={() => (activeTab = "resources")}>
+        {t("detail.tabResources")}
+      </button>
+      {#if !isCar}
+        <button class:on={activeTab === "backgrounds"} type="button" onclick={() => (activeTab = "backgrounds")}>
+          {t("detail.tabBackgrounds")}
+        </button>
+      {/if}
+    </nav>
 
     {#if actionError}<div class="action-err">{actionError}</div>{/if}
     {#if reinstallOk}<div class="export-ok">{t("detail.reinstallSuccess")}</div>{/if}
@@ -579,6 +647,7 @@
       </div>
     {/if}
 
+    {#if activeTab === "fiche"}
     <!-- RANGÉE HAUTE : héros + panneau données -->
     <div class="row top" class:track={!isCar}>
       <div class="hero">
@@ -742,7 +811,6 @@
           </section>
 
           <TagsBlock detail={d} onaddtag={addManual} onremovetag={removeManual} />
-          <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
         </div>
 
         <!-- Versions + Historique + Provenance -->
@@ -826,7 +894,6 @@
             </div>
           </section>
           <TagsBlock detail={d} onaddtag={addManual} onremovetag={removeManual} />
-          <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
         </div>
 
         <!-- Versions + Historique + Provenance -->
@@ -837,6 +904,27 @@
         </div>
       {/if}
     </div>
+    {:else if activeTab === "screenshots"}
+      <div class="tab-body">
+        <MediaScreenshots modId={id} onerror={(m) => (actionError = m)} />
+      </div>
+    {:else if activeTab === "replays"}
+      <div class="tab-body">
+        <MediaReplays modId={id} onerror={(m) => (actionError = m)} />
+      </div>
+    {:else if activeTab === "resources"}
+      <div class="tab-body">
+        <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
+      </div>
+    {:else if activeTab === "backgrounds" && !isCar}
+      <div class="tab-body">
+        <MediaBackgrounds
+          modId={id}
+          layoutId={d.track?.layouts[previewLayout]?.id ?? null}
+          onerror={(m) => (actionError = m)}
+        />
+      </div>
+    {/if}
   {/if}
 </div>
 
@@ -913,9 +1001,12 @@
   }
   .fav {
     background: transparent;
-    color: var(--muted2);
+    color: var(--txt2);
     font-size: 18px;
     line-height: 1;
+  }
+  .fav:hover {
+    color: var(--rosso-bright);
   }
   .fav.on {
     color: var(--rosso-bright);
@@ -926,15 +1017,57 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
-  .btn {
-    background: var(--raised);
-    color: var(--txt2);
-    border: 1px solid var(--line);
-    font-size: 11px;
-    padding: 6px 12px;
+  /* Menu ⋮ : regroupe les actions autrefois en rangée dans l'en-tête (§6.3).
+     Icône construite en CSS (3 carrés empilés) plutôt qu'un glyphe Unicode —
+     le rendu du caractère « ⋮ » dépendait trop de la police (fin, peu
+     lisible, cible de clic minuscule dans certains cas). */
+  .kebab {
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 4px 7px;
   }
-  .btn:disabled {
-    opacity: 0.5;
+  .kebab-dot {
+    width: 4px;
+    height: 4px;
+    background: var(--txt2);
+    border-radius: 1px;
+  }
+  .kebab:hover .kebab-dot {
+    background: var(--rosso-bright);
+  }
+  /* Onglets de premier niveau de la fiche (§6.1) — jamais présents avant ce
+     chantier, d'où l'absence d'un style `.tabs` réutilisable pour cet écran. */
+  .tabs {
+    display: flex;
+    gap: 1px;
+    background: var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 0 18px;
+  }
+  .tabs button {
+    padding: 10px 16px;
+    /* Même fond que les cartes de contenu en dessous (`.page`/`.data`/`.col`,
+       `var(--card)`) — `--panel2` créait une bande visiblement plus sombre
+       juste au-dessus du contenu (retour utilisateur direct). */
+    background: var(--card);
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid transparent;
+  }
+  .tabs button.on {
+    color: var(--txt);
+    border-bottom-color: var(--rosso);
+  }
+  .tabs button:hover:not(.on) {
+    color: var(--txt2);
+  }
+  .tab-body {
+    padding: 18px;
   }
   .action-err {
     margin: 10px 18px 0;
@@ -1358,14 +1491,7 @@
 
   /* Couches / extensions (§4.4) */
 
-  /* Bloc Ressources (§4.6) */
+  /* Bloc Ressources (§4.6) : déplacé dans son propre onglet (§6.1) */
 
   /* Provenance / pack d'origine (§4.7) */
-  .btn.danger {
-    color: var(--muted);
-  }
-  .btn.danger:hover {
-    border-color: var(--rosso-border);
-    color: var(--rosso-bright);
-  }
 </style>

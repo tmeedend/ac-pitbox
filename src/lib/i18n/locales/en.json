@@ -284,7 +284,31 @@
     "installedOnTop": "installed version on top",
     "installedBadge": "installed",
     "resourcesTitle": "Resources",
-    "layersTitle": "Layers / extensions"
+    "layersTitle": "Layers / extensions",
+    "moreActions": "More actions",
+    "tabFiche": "Overview",
+    "tabScreenshots": "Screenshots",
+    "tabReplays": "Replays",
+    "tabResources": "Resources",
+    "tabBackgrounds": "Backgrounds",
+    "mediaScreenshotsTitle": "Screenshots",
+    "noScreenshots": "No screenshot found for this entry.",
+    "mediaReplaysTitle": "Replays",
+    "noReplays": "No replay found for this entry.",
+    "mediaBackgroundsTitle": "Backgrounds",
+    "noBackgrounds": "No official background for this track.",
+    "mediaBackgroundsNote": "Used as a fallback on the session settings screen when no personal screenshot matches the combo.",
+    "openMediaFolder": "Open folder",
+    "mediaLinkManually": "Link a file…",
+    "mediaLinkPickTitle": "Pick the file to link"
+  },
+  "lightbox": {
+    "open": "View full size",
+    "close": "Close",
+    "prev": "Previous image",
+    "next": "Next image",
+    "play": "Start slideshow",
+    "pause": "Pause slideshow"
   },
   "history": {
     "event": {

@@ -17,6 +17,7 @@ pub mod import;
 pub mod layers;
 pub mod library;
 pub mod maintenance;
+pub mod media;
 pub mod others;
 pub mod profiles;
 pub mod rules;
