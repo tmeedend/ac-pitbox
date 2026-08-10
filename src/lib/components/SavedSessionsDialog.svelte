@@ -1,32 +1,32 @@
 <script lang="ts">
+  import type { SessionType } from "$lib/launch";
   import { t } from "$lib/i18n/index.svelte";
   import { listSavedSessions, deleteSavedSession, type SavedSession } from "$lib/savedSessions";
 
   interface Props {
-    mode: "save" | "load";
-    onsave?: (name: string) => void;
-    onload?: (session: SavedSession) => void;
+    sessionType: SessionType;
+    onsave: (name: string) => void;
     onclose: () => void;
   }
-  let { mode, onsave, onload, onclose }: Props = $props();
+  let { sessionType, onsave, onclose }: Props = $props();
 
-  let sessions = $state(listSavedSessions());
+  // Filtrée par type (§8.4bis, carte « Sessions enregistrées ») : la liste de
+  // chargement inline a déjà celles du type courant, cette popup ne sert plus
+  // qu'à nommer une sauvegarde — mais choisir un nom existant ici, pour
+  // l'écraser, reste plus rapide que de le retaper.
+  let sessions = $state(listSavedSessions(sessionType));
   let name = $state("");
   let confirmName = $state<string | null>(null);
 
   function pick(s: SavedSession) {
-    if (mode === "load") {
-      onload?.(s);
-    } else {
-      name = s.name;
-      confirmName = null;
-    }
+    name = s.name;
+    confirmName = null;
   }
 
   function remove(s: SavedSession, e: Event) {
     e.stopPropagation();
-    deleteSavedSession(s.name);
-    sessions = listSavedSessions();
+    deleteSavedSession(sessionType, s.name);
+    sessions = listSavedSessions(sessionType);
     if (confirmName === s.name) confirmName = null;
   }
 
@@ -38,7 +38,7 @@
       confirmName = trimmed;
       return;
     }
-    onsave?.(trimmed);
+    onsave(trimmed);
   }
 
   function fmtDate(iso: string): string {
@@ -49,31 +49,29 @@
 <div class="backdrop">
   <div class="modal">
     <header>
-      <h2>{mode === "save" ? t("launch.saveSessionTitle") : t("launch.loadSessionTitle")}</h2>
+      <h2>{t("launch.saveSessionTitle")}</h2>
       <button class="btn btn-ghost" type="button" onclick={onclose}>✕</button>
     </header>
 
-    {#if mode === "save"}
-      <div class="save-row">
-        <input
-          class="input"
-          placeholder={t("launch.sessionNamePlaceholder")}
-          bind:value={name}
-          onkeydown={(e) => e.key === "Enter" && submitSave()}
-        />
-        <button class="btn btn-primary" type="button" onclick={submitSave} disabled={!name.trim()}>
-          {t("settings.save")}
+    <div class="save-row">
+      <input
+        class="input"
+        placeholder={t("launch.sessionNamePlaceholder")}
+        bind:value={name}
+        onkeydown={(e) => e.key === "Enter" && submitSave()}
+      />
+      <button class="btn btn-primary" type="button" onclick={submitSave} disabled={!name.trim()}>
+        {t("settings.save")}
+      </button>
+    </div>
+    {#if confirmName}
+      <div class="confirm-overwrite">
+        <span>{t("launch.overwriteConfirm", { name: confirmName })}</span>
+        <button class="btn btn-primary" type="button" onclick={() => onsave(confirmName ?? "")}>
+          {t("launch.overwriteConfirmBtn")}
         </button>
+        <button class="btn" type="button" onclick={() => (confirmName = null)}>{t("common.cancel")}</button>
       </div>
-      {#if confirmName}
-        <div class="confirm-overwrite">
-          <span>{t("launch.overwriteConfirm", { name: confirmName })}</span>
-          <button class="btn btn-primary" type="button" onclick={() => onsave?.(confirmName ?? "")}>
-            {t("launch.overwriteConfirmBtn")}
-          </button>
-          <button class="btn" type="button" onclick={() => (confirmName = null)}>{t("common.cancel")}</button>
-        </div>
-      {/if}
     {/if}
 
     <div class="list">

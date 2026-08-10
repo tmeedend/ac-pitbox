@@ -317,23 +317,28 @@ Limites connues du preset Quick Drive (pas de champ correspondant trouvé dans l
 
 Maquette de référence `pitbox-reglages-session.html`. Pas de rappel du duo en haut (déjà dans la barre latérale) — titre + Lancer. Toutes les options visibles (pas de bloc replié). **Fond photo** derrière l'interface : voir §6.2 pour l'ordre de repli (screenshot du combo → screenshot du circuit → background officiel → fond neutre).
 
-**Communs à tous les types de session** :
-- **Simulation** : dégâts, conso carburant, usure pneus (actifs quel que soit le type, pas seulement en Course).
-- **Météo** et **heure**.
+**Communs à tous les types de session** — regroupés dans « Simulation » (dégâts,
+conso carburant, usure pneus, puis en sous-rubrique aides à la conduite
+ABS/antipatinage/ligne) et dans « Options de session » (pénalités, évolution
+du grip) : ces réglages sont envoyés au preset Quick Drive quel que soit le
+type (`Penalties` figure dans les trois `ModeData` ; `TrackPropertiesData`
+est au niveau racine du preset, pas dans `ModeData`), rien ne justifie de les
+cantonner à Course. Météo et heure, également communes.
 
-**Course uniquement** :
-- **Adversaires — type de plateau** : 4 modes (Même voiture / Même catégorie / Même ère ±5 ans via `year` / Libre). Remplissage auto selon le mode, **liste du plateau visible et ajustable** (chaque IA avec sa force, retirer/ajouter, cliquer une ligne pour changer sa voiture/son skin). Un bouton « + » par ligne duplique cette voiture avec un skin différent (pas encore pris par un autre adversaire du même mod dans le plateau ; reboucle sur les skins déjà pris une fois tous épuisés).
-- Nombre d'adversaires, tours ou durée, départ (arrêté/lancé), position de départ, cases qualifications / pénalités / évolution du grip, aides (ABS/antipatinage/ligne).
+**Course uniquement** (absent des schémas Quick Drive Practice/Hotlap : pas de
+grille, pas de phase weekend) :
+- **Adversaires** : 4 modes (Même voiture / Même catégorie / Même ère via année min/max / Libre). Remplissage auto selon le mode, **liste du plateau visible et ajustable** (chaque IA avec sa force, retirer/ajouter, cliquer une ligne pour changer sa voiture/son skin). Un bouton « + » par ligne duplique cette voiture avec un skin différent (pas encore pris par un autre adversaire du même mod dans le plateau ; reboucle sur les skins déjà pris une fois tous épuisés). Nombre d'adversaires, **Difficulté** (fourchette min-max, deux curseurs, le plateau réparti dans la plage — sous-rubrique du bloc Adversaires, pas une rubrique séparée) et année min/max sur une même ligne. Année min/max sont deux champs numériques indépendants (pas une double glissière) : 0 ou vide = pas de borne de ce côté, filtrage fait côté front (non transmis au preset Quick Drive).
+- Tours ou durée, faux départ, cases essais libres / qualifications. Essais libres et qualifications sont deux phases indépendantes du weekend Quick Drive, chacune activable séparément avec sa propre durée (min).
+
+**Practice** : durée (non appliquée par Quick Drive, session à durée libre — voir §9.2), départ (Stand/Piste → `StartType` du `ModeData` ; "Piste" non vérifiée sur un preset réel, voir commentaire `mode_data_practice`).
 
 **Hotlap** : ghost car.
 
-**Niveau IA** : fourchette min-max (deux curseurs), le plateau réparti dans la plage.
-
-**Météo** : conditions en **icônes SVG stylisées** (thème, libre de droits) — Beau, Quelques nuages, Couvert, Brouillard, Pluie légère, Pluie, Orage. **Température et vent implicites**, déduits de la condition + heure (+ stack SOL/CSP), affichés non réglés en v1.
+**Météo** : conditions en **icônes SVG stylisées** (thème, libre de droits) — Beau, Quelques nuages, Couvert, Brouillard, Pluie légère, Pluie, Orage. **Température, vent et heure implicites** sur une même ligne (heure modifiable, température/vent recommandés par condition + heure + stack SOL/CSP, tous corrigeables à la main). **Saison** optionnelle : un champ date natif (en premier, avant les 4 cartes saison) qui affiche/permet de corriger précisément la date associée — sélectionner une saison y reporte automatiquement la date calculée (milieu de saison), la modifier à la main ne désélectionne pas la saison affichée.
 
 **Presets de session par type** : chaque type (Practice/Hotlap/Course) a un preset mémorisé ; toute modif est persistée pour les prochaines sessions du même type.
 
-**Sauvegarde/chargement de session** (surtout pour la liste d'adversaires) : bouton **Charger** ouvre la liste des sessions sauvegardées ; bouton **Sauvegarder** propose de nommer une nouvelle sauvegarde ou d'écraser une session existante (après confirmation).
+**Sessions enregistrées** (carte dédiée, à droite de « Type de session », surtout utile pour la liste d'adversaires) : liste inline, scrollable, **filtrée par le type de session courant** — change avec l'onglet Practice/Hotlap/Course. Cliquer une entrée la charge immédiatement. Bouton **Sauvegarder** au-dessus de la liste ouvre une popup de nommage (ou sélection d'une sauvegarde existante du même type, pour l'écraser). Stockage local clé par `<type>::<nom>` : deux types peuvent avoir une sauvegarde du même nom sans collision.
 
 **Choix layout/skin de circuit** : sur la fiche/bibliothèque circuit, image d'aperçu (`preview.png`) avec le tracé du layout (`outline.png`/`map.png`) par-dessus, infos (longueur, virages, CSP).
 

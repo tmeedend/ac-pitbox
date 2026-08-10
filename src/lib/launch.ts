@@ -3,6 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type SessionType = "practice" | "hotlap" | "race";
 
+/** Saison optionnelle associée à une session (§8.6bis) — influence la
+ * température recommandée et, best-effort côté CSP, le rendu (arbres,
+ * neige). "" = aucune saison choisie. */
+export type Season = "" | "spring" | "summer" | "autumn" | "winter";
+
 /** Type de plateau d'adversaires (§8.6) : détermine le vivier où piocher.
  * "same_era" retiré au profit de la fourchette d'année (year_min/year_max),
  * disponible pour same_category/free. */
@@ -45,9 +50,14 @@ export interface RaceSetup {
   penalties: boolean;
   jump_start_penalty: number;
   grip: number;
+  /** Essais libres avant la course (weekend Quick Drive) — indépendants de la qualification. */
+  practice_enabled: boolean;
+  practice_minutes: number;
   qualifying: boolean;
   qualify_minutes: number;
   ghost_car: boolean;
+  /** Départ en Practice (mode Practice uniquement) : `true` = depuis les stands. */
+  start_from_pit: boolean;
   damage: number;
   fuel_rate: number;
   tyre_wear: number;

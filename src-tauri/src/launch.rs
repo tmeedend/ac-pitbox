@@ -127,6 +127,13 @@ pub struct RaceSetup {
     #[serde(default = "default_grip")]
     #[allow(dead_code)]
     pub grip: u32,
+    /// Essais libres avant la course (mode course uniquement, weekend Quick
+    /// Drive) : phase optionnelle indépendante de la qualification — les deux
+    /// peuvent être activées ensemble ou séparément.
+    #[serde(default)]
+    pub practice_enabled: bool,
+    #[serde(default = "default_practice_minutes")]
+    pub practice_minutes: u32,
     /// Qualification avant la course (mode course uniquement).
     #[serde(default)]
     pub qualifying: bool,
@@ -136,6 +143,13 @@ pub struct RaceSetup {
     /// Ghost car (Hotlap uniquement) → [GHOST_CAR] du race.ini.
     #[serde(default)]
     pub ghost_car: bool,
+    /// Départ en Practice (mode Practice uniquement) → `StartType` du
+    /// `ModeData` `QuickDrive_Practice.xaml`. `true` = "PIT" (valeur
+    /// confirmée sur `pitbox-practice.cmpreset`) ; `false` = "TRACK", **non
+    /// vérifiée sur un preset réel** — à confirmer si le départ sur piste ne
+    /// se comporte pas comme attendu en jeu.
+    #[serde(default = "default_true")]
+    pub start_from_pit: bool,
     /// Simulation — dégâts/usure/carburant → assists.ini. Actifs quel que
     /// soit le type de session (§8.6, pas réservés à la Course). En %.
     #[serde(default = "default_damage")]
@@ -170,6 +184,9 @@ fn default_grip() -> u32 {
 }
 fn default_qualify_minutes() -> u32 {
     10
+}
+fn default_practice_minutes() -> u32 {
+    20
 }
 fn default_year_min() -> i32 {
     1950

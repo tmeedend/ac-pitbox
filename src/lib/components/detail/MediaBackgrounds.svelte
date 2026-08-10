@@ -7,7 +7,7 @@
   // l'écran de réglages (§6.2/§9.3).
   import { listMediaBackgrounds, type BackgroundFile } from "$lib/media";
   import { previewSrc } from "$lib/library";
-  import { getThumbnail } from "$lib/thumbnails";
+  import { loadThumbnails } from "$lib/thumbnails";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
   import Lightbox, { type LightboxItem } from "../Lightbox.svelte";
@@ -40,12 +40,13 @@
   });
 
   $effect(() => {
-    for (const f of files) {
-      if (f.path in thumbs) continue;
-      getThumbnail(f.path)
-        .then((src) => (thumbs = { ...thumbs, [f.path]: src }))
-        .catch(() => {});
-    }
+    const current = modId;
+    const layout = layoutId;
+    loadThumbnails(
+      files.map((f) => f.path),
+      () => current !== modId || layout !== layoutId,
+      (path, src) => (thumbs = { ...thumbs, [path]: src }),
+    );
   });
 
   const lightboxItems = $derived<LightboxItem[]>(

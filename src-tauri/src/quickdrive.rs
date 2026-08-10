@@ -97,7 +97,7 @@ fn build_grid(opponents: &[Opponent]) -> Value {
 /// `PlayerRestrictor`. Pas de grille (session solo).
 fn mode_data_practice(s: &RaceSetup) -> String {
     json!({
-        "StartType": "PIT",
+        "StartType": if s.start_from_pit { "PIT" } else { "TRACK" },
         "Penalties": s.penalties,
         "PlayerBallast": 0,
         "PlayerRestrictor": 0,
@@ -121,12 +121,12 @@ fn mode_data_hotlap(s: &RaceSetup) -> String {
 
 /// `ModeData` pour `QuickDrive_Weekend.xaml` — schéma confirmé sur
 /// `pitbox-weekend.cmpreset` : `PracticeLength`/`QualificationLength` sont
-/// indépendants et optionnels (`null` = phase absente) — pas besoin du mode
-/// `QuickDrive_Race.xaml` séparé : une « course » chez nous est un Weekend
-/// sans pratique ni qualification.
+/// indépendants et optionnels (`null` = phase absente), chacun activable
+/// séparément — pas besoin du mode `QuickDrive_Race.xaml` séparé : une
+/// « course » chez nous est un Weekend sans pratique ni qualification.
 fn mode_data_weekend(s: &RaceSetup) -> String {
     json!({
-        "PracticeLength": Value::Null,
+        "PracticeLength": if s.practice_enabled { Some(s.practice_minutes) } else { None },
         "QualificationLength": if s.qualifying { Some(s.qualify_minutes) } else { None },
         "Penalties": s.penalties,
         "JumpStartPenalty": s.jump_start_penalty,
@@ -237,9 +237,12 @@ mod tests {
             penalties: false,
             jump_start_penalty: 0,
             grip: 96,
+            practice_enabled: false,
+            practice_minutes: 20,
             qualifying: false,
             qualify_minutes: 10,
             ghost_car: false,
+            start_from_pit: true,
             damage: 50,
             fuel_rate: 100,
             tyre_wear: 100,
@@ -262,6 +265,16 @@ mod tests {
     }
 
     #[test]
+    fn practice_start_from_track_when_not_from_pit() {
+        let mut s = base_setup(SessionType::Practice);
+        s.start_from_pit = false;
+        let json = build_preset(&s).unwrap();
+        let v: Value = serde_json::from_str(&json).unwrap();
+        let mode_data: Value = serde_json::from_str(v["ModeData"].as_str().unwrap()).unwrap();
+        assert_eq!(mode_data["StartType"], "TRACK");
+    }
+
+    #[test]
     fn hotlap_preset_carries_ghost_car() {
         let mut s = base_setup(SessionType::Hotlap);
         s.ghost_car = true;
@@ -276,6 +289,8 @@ mod tests {
     fn race_preset_uses_weekend_mode_with_explicit_grid() {
         let mut s = base_setup(SessionType::Race);
         s.laps = 10;
+        s.practice_enabled = true;
+        s.practice_minutes = 30;
         s.qualifying = true;
         s.qualify_minutes = 20;
         s.opponents = vec![
@@ -296,6 +311,7 @@ mod tests {
 
         let mode_data: Value = serde_json::from_str(v["ModeData"].as_str().unwrap()).unwrap();
         assert_eq!(mode_data["LapsNumber"], 10);
+        assert_eq!(mode_data["PracticeLength"], 30);
         assert_eq!(mode_data["QualificationLength"], 20);
 
         let grid: Value = serde_json::from_str(mode_data["RaceGridSerialized"].as_str().unwrap()).unwrap();

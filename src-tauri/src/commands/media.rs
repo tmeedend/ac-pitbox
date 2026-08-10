@@ -82,9 +82,18 @@ pub fn open_media_folder(app: AppHandle, kind: String) -> Result<(), String> {
 /// `thumbnails.rs`. `max_dim` par défaut couvre confortablement les cartes de
 /// galerie actuelles (150–180px CSS, avec marge pour les écrans haute
 /// densité).
+///
+/// `async` + `spawn_blocking` (§4.6bis) : la galerie déclenche un appel par
+/// fichier en parallèle (`MediaScreenshots.svelte`), parfois des dizaines à la
+/// fois sur des captures AC en pleine résolution jeu — décoder/redimensionner/
+/// réencoder en JPEG directement sur le thread IPC synchrone y bloquait tout
+/// le runtime async de Tauri (mêmes threads que les autres commandes),
+/// figeant l'app entière le temps du lot au lieu de juste la galerie.
 #[tauri::command]
-pub fn get_thumbnail(app: AppHandle, path: PathBuf, max_dim: Option<u32>) -> Result<PathBuf, String> {
-    crate::thumbnails::get_or_create(&app, &path, max_dim.unwrap_or(320))
+pub async fn get_thumbnail(app: AppHandle, path: PathBuf, max_dim: Option<u32>) -> Result<PathBuf, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::thumbnails::get_or_create(&app, &path, max_dim.unwrap_or(320)))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Fond photo de l'écran de réglages (§6.2/§9.3) : combo exact → même circuit

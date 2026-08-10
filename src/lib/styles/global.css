@@ -152,7 +152,11 @@ body {
 .lbl {
   display: flex;
   align-items: center;
-  color: var(--faint);
+  /* `--faint` (#4a4a55) est illisible pour du texte porteur de sens sur le
+     fond de l'app — réservé aux indicateurs volontairement discrets
+     (désactivé, ignoré). `--muted` est le gris le plus sombre qui reste
+     confortable à lire. */
+  color: var(--muted);
   font-size: 9px;
   letter-spacing: 1.5px;
   text-transform: uppercase;
@@ -165,7 +169,7 @@ body {
 }
 
 .lbl-key {
-  color: var(--faint);
+  color: var(--muted);
   font-size: 8px;
   letter-spacing: 1px;
 }

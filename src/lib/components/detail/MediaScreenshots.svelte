@@ -4,7 +4,7 @@
   // manuel quand une capture n'a pas été retrouvée automatiquement.
   import { listMediaScreenshots, linkMediaManually, openMediaFolder, type ScreenshotFile } from "$lib/media";
   import { previewSrc } from "$lib/library";
-  import { getThumbnail } from "$lib/thumbnails";
+  import { loadThumbnails } from "$lib/thumbnails";
   import { open } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
@@ -39,12 +39,12 @@
   });
 
   $effect(() => {
-    for (const f of files) {
-      if (f.path in thumbs) continue;
-      getThumbnail(f.path)
-        .then((src) => (thumbs = { ...thumbs, [f.path]: src }))
-        .catch(() => {}); // miniature ratée : la carte reste sans image plutôt que de casser la galerie
-    }
+    const current = modId;
+    loadThumbnails(
+      files.map((f) => f.path),
+      () => current !== modId,
+      (path, src) => (thumbs = { ...thumbs, [path]: src }),
+    );
   });
 
   function fmtDate(iso: string | null): string {

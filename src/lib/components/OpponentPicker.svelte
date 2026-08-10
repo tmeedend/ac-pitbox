@@ -78,7 +78,7 @@
       {/if}
 
       <div class="skins">
-        <div class="lbl">{t("launch.opponentPickSkin")}{#if selectedCar} — {selectedCar.display_name ?? selectedCar.id_interne}{/if}</div>
+        <div class="lbl skin-lbl">{t("launch.opponentPickSkin")}{#if selectedCar} — {selectedCar.display_name ?? selectedCar.id_interne}{/if}</div>
         {#if loading}
           <div class="empty">{t("common.loading")}</div>
         {:else if !skins.length}
@@ -204,12 +204,9 @@
     min-height: 0;
     overflow-y: auto;
   }
-  .lbl {
-    color: var(--faint);
-    font-size: 9px;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    margin-bottom: 10px;
+  /* Couleur/taille/interlettrage viennent de `.lbl` (global, harmonisation
+     §chantier libellés) : ne reste ici que ce que `.lbl` ne couvre pas. */
+  .skin-lbl {
     flex: none;
   }
   .skin-grid {
