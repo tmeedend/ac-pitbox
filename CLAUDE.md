@@ -197,14 +197,7 @@ mélangé à un changement fonctionnel : sinon `git blame` devient inexploitable
 Liste vivante : **retirer chaque entrée dès qu'elle est faite**, ne pas la
 laisser pourrir ici.
 
-- [ ] **Découpage de `Launch.svelte`** (1524 l.), à faire par étapes du flux de
-      session. `DetailPage.svelte` est fait : 1725 → 1389 l., cinq blocs sortis
-      dans `components/detail/`. **Exige l'app lancée** : le CSS Svelte est
-      scopé par composant, chaque extraction déplace des styles et
-      `npm run check` ne prouve que la compilation, pas le rendu. Méthode qui a
-      marché : un bloc à la fois, `svelte-check` pour repérer le CSS resté
-      orphelin dans le parent, validation visuelle avant de commiter.
-- [ ] **Harmonisation des libellés** (branche dédiée). 68 règles de libellé
+- [ ] **Harmonisation des libellés**. 68 règles de libellé
       produisent 53 signatures visuelles distinctes : 15 tailles de police,
       7 interlettrages, 9 couleurs. La même fonction visuelle change donc
       d'apparence selon l'écran. Cible : trois niveaux globaux — `.lbl-screen`
@@ -233,8 +226,7 @@ laisser pourrir ici.
    ```bash
    cd src-tauri && cargo clippy --all-targets -- -D warnings && cargo test
    ```
-   `npm run check` doit rester à 0 erreur (des warnings
-   `state_referenced_locally` préexistants sont attendus) et **clippy à 0
+   `npm run check` doit rester à 0 erreur **et 0 warning**, et **clippy à 0
    warning** — la CI les traite en erreurs.
 3. **Commiter** — message en français, court et descriptif, sans préfixe
    imposé. Le `push` n'est pas automatique : le demander.

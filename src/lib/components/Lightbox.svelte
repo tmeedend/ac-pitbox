@@ -10,6 +10,7 @@
   // pleine page (`Library.svelte::navigateFull`) l'observent tous les deux
   // pour céder gauche/droite/B — sinon une même pression ferait à la fois
   // défiler les images et changer de mod, ou fermerait la fiche entière.
+  import { untrack } from "svelte";
   import { nav } from "$lib/nav.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
@@ -28,7 +29,9 @@
     onclose: () => void;
   } = $props();
 
-  let index = $state(startIndex);
+  // Position de départ capturée une fois (composant recréé à chaque ouverture) ;
+  // la navigation prev/suivant se fait ensuite en interne, pas via la prop.
+  let index = $state(untrack(() => startIndex));
   let playing = $state(false);
   const multi = $derived(items.length > 1);
 

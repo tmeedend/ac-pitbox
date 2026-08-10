@@ -11,6 +11,7 @@
   const AC_URL = "https://store.steampowered.com/app/244210/Assetto_Corsa/";
   const CM_URL = "https://acstuff.club/app/";
   const QUICKBMS_URL = "https://aluigi.altervista.org/quickbms.htm";
+  const PIXABAY_URL = "https://pixabay.com/music/";
   const DONATE_URL = "https://paypal.me/ktulu77";
   const SOURCE_URL = "https://github.com/tmeedend/ac-pitbox";
   const OVERTAKE_URL = "https://www.overtake.gg/members/ktulu77.1266672/";
@@ -76,6 +77,26 @@
         <div class="credit-author mono">{t("about.qbAuthor")}</div>
       </div>
       <button class="ext-link" type="button" onclick={() => go(QUICKBMS_URL)} title={t("about.visitSite")}>↗</button>
+    </div>
+
+    <div class="credit">
+      <div class="credit-ico">🎵</div>
+      <div class="credit-b">
+        <div class="credit-name">{t("about.musicMenuTitle")} <span class="tag">{t("about.musicTag")}</span></div>
+        <div class="credit-desc">{t("about.musicMenuDesc")}</div>
+        <div class="credit-author mono">{t("about.musicMenuAuthor")}</div>
+      </div>
+      <button class="ext-link" type="button" onclick={() => go(PIXABAY_URL)} title={t("about.visitSite")}>↗</button>
+    </div>
+
+    <div class="credit">
+      <div class="credit-ico">🎵</div>
+      <div class="credit-b">
+        <div class="credit-name">{t("about.musicGridTitle")} <span class="tag">{t("about.musicTag")}</span></div>
+        <div class="credit-desc">{t("about.musicGridDesc")}</div>
+        <div class="credit-author mono">{t("about.musicGridAuthor")}</div>
+      </div>
+      <button class="ext-link" type="button" onclick={() => go(PIXABAY_URL)} title={t("about.visitSite")}>↗</button>
     </div>
   </section>
 

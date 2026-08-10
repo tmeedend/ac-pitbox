@@ -25,16 +25,15 @@ export const StorageKey = {
   /** Import : copier (défaut) plutôt que déplacer la source (§4.5). */
   importCopy: `${PREFIX}.import.copy`,
 
-  // --- Duo de session (§8.6) — LEGACY ---
-  // Le duo vit désormais dans un fichier écrit côté Rust (`session_state.rs`),
-  // pas ici : `localStorage` n'est pas garanti synchrone sur disque côté
-  // WebView2, ce qui perdait la sélection la plus récente à la fermeture.
-  // Ces deux clés ne sont plus lues qu'une fois, en migration, par
-  // `nav.svelte.ts` — jamais réécrites.
+  // --- Duo de session, écran de lancement (§8.6/§8.4bis) — LEGACY ---
+  // Tout ceci vit désormais dans des fichiers écrits côté Rust
+  // (`session_state.rs`, `saved_sessions.rs`), pas ici : `localStorage` n'est
+  // pas garanti synchrone sur disque côté WebView2, ce qui perdait le réglage
+  // le plus récent à la fermeture de l'app plutôt qu'au moment du changement.
+  // Ces clés ne sont plus lues qu'une fois, en migration (`nav.svelte.ts`,
+  // `Launch.svelte`, `savedSessions.ts`) — jamais réécrites.
   sessionCar: `${PREFIX}.session.car`,
   sessionTrack: `${PREFIX}.session.track`,
-
-  // --- Écran de lancement (§8.6) ---
   /** Dernière sélection de l'écran de session. */
   launchSelection: `${PREFIX}.launchSel`,
   /** Réglages de session mémorisés par type de session. */

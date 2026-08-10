@@ -54,7 +54,7 @@
     onchange?: () => void;
   }
   let { id, kind, onclose, onchange }: Props = $props();
-  const isCar = kind === "Car";
+  const isCar = $derived(kind === "Car");
 
   let detail = $state<ModDetail | null>(null);
   // Onglets de premier niveau de la fiche (§6.1) — réinitialisé à "fiche" à

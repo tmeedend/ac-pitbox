@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import type { SessionType } from "$lib/launch";
   import { t } from "$lib/i18n/index.svelte";
   import { listSavedSessions, deleteSavedSession, type SavedSession } from "$lib/savedSessions";
@@ -13,20 +14,26 @@
   // Filtrée par type (§8.4bis, carte « Sessions enregistrées ») : la liste de
   // chargement inline a déjà celles du type courant, cette popup ne sert plus
   // qu'à nommer une sauvegarde — mais choisir un nom existant ici, pour
-  // l'écraser, reste plus rapide que de le retaper.
-  let sessions = $state(listSavedSessions(sessionType));
+  // l'écraser, reste plus rapide que de le retaper. Chargée une seule fois à
+  // l'ouverture (composant recréé à chaque fois, voir l'appelant) puis
+  // rafraîchie manuellement après suppression.
+  let sessions = $state<SavedSession[]>([]);
   let name = $state("");
   let confirmName = $state<string | null>(null);
+
+  onMount(() => {
+    listSavedSessions(sessionType).then((list) => (sessions = list));
+  });
 
   function pick(s: SavedSession) {
     name = s.name;
     confirmName = null;
   }
 
-  function remove(s: SavedSession, e: Event) {
+  async function remove(s: SavedSession, e: Event) {
     e.stopPropagation();
-    deleteSavedSession(sessionType, s.name);
-    sessions = listSavedSessions(sessionType);
+    await deleteSavedSession(sessionType, s.name);
+    sessions = await listSavedSessions(sessionType);
     if (confirmName === s.name) confirmName = null;
   }
 

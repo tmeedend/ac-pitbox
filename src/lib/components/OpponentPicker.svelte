@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { listModSkins, type SkinItem } from "$lib/launch";
   import { previewSrc, type ModCard } from "$lib/library";
   import { t } from "$lib/i18n/index.svelte";
@@ -16,8 +16,11 @@
   }
   let { pool, currentCarId, currentSkinId, onpick, onclose }: Props = $props();
 
-  let selectedCarId = $state(currentCarId);
-  let selectedSkinId = $state<string | null>(currentSkinId);
+  // Sélection éditable localement, initialisée depuis la sélection courante :
+  // le composant est recréé à chaque ouverture, `untrack` documente que la
+  // capture n'est voulue qu'une fois, pas suivie en continu.
+  let selectedCarId = $state(untrack(() => currentCarId));
+  let selectedSkinId = $state<string | null>(untrack(() => currentSkinId));
   let skins = $state<SkinItem[]>([]);
   let loading = $state(false);
   let query = $state("");

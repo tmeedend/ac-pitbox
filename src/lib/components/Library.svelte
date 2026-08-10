@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { tick, untrack } from "svelte";
   import ModDetail from "./ModDetail.svelte";
   import DetailPage from "./DetailPage.svelte";
   import BulkEditPanel from "./BulkEditPanel.svelte";
@@ -30,15 +30,18 @@
   // voitures, une fois pour les circuits. Toute la persistance est suffixée par
   // type pour rester indépendante entre les deux.
   let { kind }: { kind: ModKind } = $props();
-  const isCar = kind === "Car";
+  // `kind` ne change jamais pour une instance montée (§6.1, deux instances
+  // fixes voitures/circuits) — `untrack` documente que ces lectures ne
+  // capturent la prop qu'une fois, volontairement, pour le compilateur.
+  const isCar = untrack(() => kind === "Car");
   // Clés de persistance bâties une fois, au même endroit : chaque réglage doit
   // rester indépendant entre voitures et circuits (§6.1).
-  const KEYS = {
+  const KEYS = untrack(() => ({
     filters: StorageKey.libraryFilters(kind),
     view: StorageKey.libraryView(kind),
     sortKey: StorageKey.librarySortKey(kind),
     sortDir: StorageKey.librarySortDir(kind),
-  };
+  }));
 
   let cards = $state<ModCard[]>([]);
   // Distinct de « bibliothèque vide » : sans lui, la liste encore vide au
@@ -107,8 +110,8 @@
   );
 
   // Colonnes (§6.2) : définitions propres au type + visibilité persistée par type.
-  const columns: ColumnDef[] = columnsFor(kind);
-  let visibleKeys = $state<string[]>([...loadVisible(kind)]);
+  const columns: ColumnDef[] = untrack(() => columnsFor(kind));
+  let visibleKeys = $state<string[]>(untrack(() => [...loadVisible(kind)]));
   let showColumns = $state(false);
   const visibleColumns = $derived(
     columns.filter((c) => c.fixed || visibleKeys.includes(c.key)),

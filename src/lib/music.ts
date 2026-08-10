@@ -5,6 +5,8 @@ import { invoke } from "@tauri-apps/api/core";
 export interface MusicConfig {
   version: number;
   enabled: boolean;
+  /** Décochée (défaut) : pack embarqué, `menu_folder`/`grid_folder` ignorés. */
+  use_custom_folders: boolean;
   /** `null` = dossier par défaut (voir `getDefaultMusicFolders`). */
   menu_folder: string | null;
   grid_folder: string | null;
@@ -14,15 +16,13 @@ export interface MusicConfig {
   crossfade_ms: number;
   fade_out_ms: number;
   fade_in_ms: number;
-  session_behavior: "stop" | "duck";
-  /** 0.0–1.0, volume absolu (pas un facteur du volume principal). */
-  session_duck_volume: number;
 }
 
 export function emptyMusicConfig(): MusicConfig {
   return {
     version: 1,
     enabled: true,
+    use_custom_folders: false,
     menu_folder: null,
     grid_folder: null,
     shuffle: true,
@@ -30,8 +30,6 @@ export function emptyMusicConfig(): MusicConfig {
     crossfade_ms: 2500,
     fade_out_ms: 1500,
     fade_in_ms: 2000,
-    session_behavior: "stop",
-    session_duck_volume: 0.12,
   };
 }
 

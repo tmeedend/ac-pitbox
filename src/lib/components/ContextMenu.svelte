@@ -1,6 +1,7 @@
 <script lang="ts">
   // Menu contextuel générique (clic droit) — positionné au curseur, se ferme
   // au clic ailleurs, à Echap, ou à un autre clic droit.
+  import { untrack } from "svelte";
   import { zoomState } from "$lib/zoom.svelte";
 
   interface MenuItem {
@@ -20,7 +21,11 @@
 
   let root = $state<HTMLUListElement | undefined>(undefined);
   // Recale dans la fenêtre si le menu déborderait (mesuré après montage).
-  let pos = $state({ left: x, top: y });
+  // Le composant est recréé à chaque ouverture (voir les appelants, tous sous
+  // `{#if ...}`) : ne capturer que la position initiale de x/y est voulu, le
+  // `$effect` ci-dessous la corrige ensuite — `untrack` documente cette
+  // intention pour le compilateur.
+  let pos = $state(untrack(() => ({ left: x, top: y })));
 
   $effect(() => {
     if (!root) return;

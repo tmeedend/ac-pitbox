@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { invoke } from "@tauri-apps/api/core";
   import {
     launchSession,
     listModSkins,
@@ -19,10 +20,13 @@
   import { nav, type OpponentsAction } from "$lib/nav.svelte";
   import { getPreferredSkin } from "$lib/preferred";
   import { t } from "$lib/i18n/index.svelte";
-  import SavedSessionsDialog from "./SavedSessionsDialog.svelte";
-  import NumberStepper from "./NumberStepper.svelte";
   import WeatherBlock from "./launch/WeatherBlock.svelte";
   import OpponentsBlock from "./launch/OpponentsBlock.svelte";
+  import SessionOptionsBlock from "./launch/SessionOptionsBlock.svelte";
+  import SimulationBlock from "./launch/SimulationBlock.svelte";
+  import SessionTypeBlock from "./launch/SessionTypeBlock.svelte";
+  import SavedSessionsBlock from "./launch/SavedSessionsBlock.svelte";
+  import LoadingState from "./LoadingState.svelte";
   import { saveSession, listSavedSessions, type SavedSession } from "$lib/savedSessions";
 
   import { errorText } from "$lib/errors";
@@ -85,12 +89,6 @@
     traction_control_auto: true,
     ideal_line: false,
   });
-
-  const sessionTypes: { id: SessionType; labelKey: string }[] = [
-    { id: "practice", labelKey: "launch.typePractice" },
-    { id: "hotlap", labelKey: "launch.typeHotlap" },
-    { id: "race", labelKey: "launch.typeRace" },
-  ];
 
   // --- Saison optionnelle (§8.6bis) : associe une date au preset Quick
   // Drive (udt/dtv), best-effort côté CSP (voir RaceSetup.season_date côté back). ---
@@ -402,12 +400,18 @@
       refreshConditions(false);
     }
   });
-  // --- Mémorisation de la sélection (§8.6) ---
+  // --- Mémorisation de la sélection + presets (§8.4/§8.6) ---
   // `opponents` en fait partie (§8.6ter, bug réel) : sans elle, revenir sur cet
   // écran après être allé choisir un circuit/une voiture démonte puis remonte
   // Launch.svelte — `setup.opponents` (état local) repart de zéro, et
   // `applyPreset` régénère alors un plateau aléatoire à la place de celui,
   // potentiellement construit à la main (mode « libre »), qu'avait l'utilisateur.
+  //
+  // Persisté côté Rust (`launch_state.json`, écriture synchrone), pas en
+  // `localStorage` : même bug que le duo voiture/circuit (§8.6, voir
+  // `nav.svelte.ts`/`session_state.rs`) — `localStorage` n'est pas garanti
+  // synchrone sur disque côté WebView2, ce qui perdait les réglages de
+  // session à la fermeture de l'app plutôt qu'au prochain changement d'onglet.
   interface Selection {
     car_id: string;
     car_skin: string | null;
@@ -416,22 +420,6 @@
     session_type: SessionType;
     opponents: Opponent[];
   }
-  function saveSelection() {
-    if (!ready) return;
-    const sel: Selection = {
-      car_id: setup.car_id,
-      car_skin: setup.car_skin,
-      track_id: setup.track_id,
-      track_layout: setup.track_layout,
-      session_type: setup.session_type,
-      opponents: setup.opponents,
-    };
-    localStorage.setItem(StorageKey.launchSelection, JSON.stringify(sel));
-  }
-  $effect(() => {
-    void [setup.car_id, setup.car_skin, setup.track_id, setup.track_layout, setup.session_type, setup.opponents];
-    saveSelection();
-  });
 
   // --- Presets de session par type (§8.4) ---
   interface Persisted {
@@ -444,8 +432,35 @@
     damage: number; fuel_rate: number; tyre_wear: number; intent: string; season: Season;
     abs_auto: boolean; traction_control_auto: boolean; ideal_line: boolean;
   }
-  let presets: Record<string, Persisted> = JSON.parse(localStorage.getItem(StorageKey.launchPresets) ?? "{}");
+  let presets: Record<string, Persisted> = {};
   let applying = false;
+
+  interface LaunchStateFile {
+    selection: Selection | null;
+    presets: Record<string, Persisted> | null;
+  }
+  function loadLaunchState(): Promise<LaunchStateFile> {
+    return invoke<LaunchStateFile>("get_launch_state").catch(() => ({ selection: null, presets: null }));
+  }
+  // Envoie systématiquement l'état complet (sélection + presets) : la commande
+  // réécrit tout le fichier à chaque appel, comme `save_session_picks` — un
+  // envoi partiel effacerait l'autre moitié.
+  function persistLaunchState() {
+    if (!ready) return;
+    const selection: Selection = {
+      car_id: setup.car_id,
+      car_skin: setup.car_skin,
+      track_id: setup.track_id,
+      track_layout: setup.track_layout,
+      session_type: setup.session_type,
+      opponents: setup.opponents,
+    };
+    invoke("save_launch_state", { state: { selection, presets } }).catch((e) => console.error("save_launch_state", e));
+  }
+  $effect(() => {
+    void [setup.car_id, setup.car_skin, setup.track_id, setup.track_layout, setup.session_type, setup.opponents];
+    persistLaunchState();
+  });
 
   function savePreset() {
     presets[setup.session_type] = {
@@ -460,7 +475,7 @@
       damage: setup.damage, fuel_rate: setup.fuel_rate, tyre_wear: setup.tyre_wear, intent: selectedIntent, season,
       abs_auto: setup.abs_auto, traction_control_auto: setup.traction_control_auto, ideal_line: setup.ideal_line,
     };
-    localStorage.setItem(StorageKey.launchPresets, JSON.stringify(presets));
+    persistLaunchState();
   }
   async function applyPreset(type: SessionType) {
     const p = presets[type];
@@ -509,7 +524,15 @@
   onMount(async () => {
     [weathers, libCards] = await Promise.all([weatherOptions(), listLibrary()]);
 
-    const saved: Partial<Selection> = JSON.parse(localStorage.getItem(StorageKey.launchSelection) ?? "{}");
+    const state = await loadLaunchState();
+    // Repli sur l'ancien `localStorage` seulement si le fichier Rust n'a rien
+    // (première ouverture après la mise à jour) — voir `nav.svelte.ts` pour le
+    // même schéma sur le duo voiture/circuit.
+    const hasPersisted = state.selection !== null || state.presets !== null;
+    presets = hasPersisted ? (state.presets ?? {}) : JSON.parse(localStorage.getItem(StorageKey.launchPresets) ?? "{}");
+    const saved: Partial<Selection> = hasPersisted
+      ? (state.selection ?? {})
+      : JSON.parse(localStorage.getItem(StorageKey.launchSelection) ?? "{}");
     setup.session_type = saved.session_type ?? "practice";
     if (saved.opponents?.length) setup.opponents = saved.opponents;
 
@@ -528,6 +551,10 @@
     await applyPreset(setup.session_type);
     if (setup.opponents.length) opponentCount = setup.opponents.length;
     ready = true;
+    // Migration depuis `localStorage`, ou simplement première écriture :
+    // s'assure que `launch_state.json` reflète l'état actuel sans attendre un
+    // changement de réglage par l'utilisateur.
+    if (!hasPersisted) persistLaunchState();
   });
 
   // Applique le duo de session (§8.6) au setup : voiture, skin piloté, circuit,
@@ -628,11 +655,17 @@
   let saveDialogOpen = $state(false);
   let savedList = $state<SavedSession[]>([]);
   $effect(() => {
-    savedList = listSavedSessions(setup.session_type);
+    const type = setup.session_type;
+    // Le type peut changer avant que la réponse (invoke Rust) n'arrive :
+    // n'applique le résultat que s'il correspond encore au type courant,
+    // sinon une réponse tardive écraserait la liste avec le mauvais type.
+    listSavedSessions(type).then((list) => {
+      if (setup.session_type === type) savedList = list;
+    });
   });
 
-  function doSaveSession(name: string) {
-    saveSession({
+  async function doSaveSession(name: string) {
+    await saveSession({
       name,
       savedAt: new Date().toISOString(),
       setup: $state.snapshot(setup),
@@ -641,7 +674,7 @@
       season,
       intent: selectedIntent,
     });
-    savedList = listSavedSessions(setup.session_type);
+    savedList = await listSavedSessions(setup.session_type);
     saveDialogOpen = false;
   }
 
@@ -655,10 +688,6 @@
     season = s.season;
     selectedIntent = s.intent;
   }
-
-  function fmtSavedAt(iso: string): string {
-    return iso.slice(0, 16).replace("T", " ");
-  }
 </script>
 
 <div class="flow" class:has-bg={!!backgroundSrc} style:--session-bg={backgroundSrc ? `url('${backgroundSrc}')` : undefined}>
@@ -670,133 +699,21 @@
     <h1>{t("launch.pageTitle")}</h1>
   </header>
 
-  {#if saveDialogOpen}
-    <SavedSessionsDialog
-      sessionType={setup.session_type}
-      onsave={doSaveSession}
-      onclose={() => (saveDialogOpen = false)}
-    />
-  {/if}
-
   {#if info}<div class="ok">{info}</div>{/if}
   {#if error}<div class="err">{error}</div>{/if}
 
+  {#if !ready}
+    <LoadingState />
+  {:else}
   <div class="body">
     <div class="cols">
       <!-- COLONNE GAUCHE -->
       <div>
-        <section class="blk">
-          <header class="blk-h"><span class="blk-t">{t("launch.sessionTypeLabel")}</span></header>
-          <div class="blk-b">
-            <div class="seg types">
-              {#each sessionTypes as st}
-                <button class:on={setup.session_type === st.id} onclick={() => setSessionType(st.id)}>{t(st.labelKey)}</button>
-              {/each}
-            </div>
-          </div>
-        </section>
+        <SessionTypeBlock sessionType={setup.session_type} onselect={setSessionType} />
 
-        <!-- Options de session (§8.4/§8.6) : première carte de la colonne, la
-             plus consultée — contenu dépendant du type choisi ci-dessus. -->
-        <section class="blk">
-          <header class="blk-h"><span class="blk-t">{t("launch.sessionOptionsLabel")}</span></header>
-          <div class="blk-b">
-            <!-- Tout sur une ligne : évolution du grip et pénalités sont
-                 envoyées par le backend quel que soit le type de session
-                 (Penalties dans les 3 ModeData, TrackPropertiesData au niveau
-                 racine du preset, pas dans ModeData) — rien ne justifie de les
-                 cantonner à Course. Faux départ / tours / essais / qualif
-                 restent Course uniquement : absents des schémas Practice/Hotlap
-                 (pas de grille, pas de phase weekend). -->
-            <div class="opts-row">
-              {#if setup.session_type === "practice"}
-                <label class="grid-fields">
-                  <NumberStepper width={90} min={1} max={240} bind:value={setup.duration_minutes} />
-                  <span class="fk lbl-key">{t("launch.duration")}</span>
-                </label>
-              {:else if setup.session_type === "hotlap"}
-                <label class="check"><input type="checkbox" bind:checked={setup.ghost_car} /><span>{t("launch.ghostCar")}</span></label>
-              {:else}
-                <label class="grid-fields">
-                  <NumberStepper min={1} max={99} bind:value={setup.laps} />
-                  <span class="fk lbl-key">{t("launch.laps")}</span>
-                </label>
-                <div><span class="fk lbl-key">{t("launch.jumpStart")}</span>
-                  <div class="seg-v">
-                    <button type="button" class:on={setup.jump_start_penalty === 0} onclick={() => (setup.jump_start_penalty = 0)}>{t("launch.jumpStartNone")}</button>
-                    <button type="button" class:on={setup.jump_start_penalty === 1} onclick={() => (setup.jump_start_penalty = 1)}>{t("launch.jumpStartTeleport")}</button>
-                    <button type="button" class:on={setup.jump_start_penalty === 2} onclick={() => (setup.jump_start_penalty = 2)}>{t("launch.jumpStartDrivethrough")}</button>
-                  </div>
-                </div>
-              {/if}
+        <SessionOptionsBlock {setup} />
 
-              <div><span class="fk lbl-key">{t("launch.gripEvolution")}</span>
-                <div class="seg-v">
-                  <button type="button" class:on={setup.grip === 86} onclick={() => (setup.grip = 86)}>{t("launch.gripGreen")}</button>
-                  <button type="button" class:on={setup.grip === 92} onclick={() => (setup.grip = 92)}>{t("launch.gripMedium")}</button>
-                  <button type="button" class:on={setup.grip === 96} onclick={() => (setup.grip = 96)}>{t("launch.gripRubbered")}</button>
-                  <button type="button" class:on={setup.grip === 100} onclick={() => (setup.grip = 100)}>{t("launch.gripOptimal")}</button>
-                </div>
-              </div>
-
-              {#if setup.session_type === "race"}
-                <label class="check"><input type="checkbox" bind:checked={setup.practice_enabled} /><span>{t("launch.freePractice")}</span></label>
-                {#if setup.practice_enabled}
-                  <label class="grid-fields">
-                    <NumberStepper min={1} max={120} bind:value={setup.practice_minutes} />
-                    <span class="fk lbl-key">{t("launch.practiceMinutes")}</span>
-                  </label>
-                {/if}
-                <label class="check"><input type="checkbox" bind:checked={setup.qualifying} /><span>{t("launch.qualifying")}</span></label>
-                {#if setup.qualifying}
-                  <label class="grid-fields">
-                    <NumberStepper min={1} max={60} bind:value={setup.qualify_minutes} />
-                    <span class="fk lbl-key">{t("launch.qualifyMinutes")}</span>
-                  </label>
-                {/if}
-              {/if}
-              <label class="check"><input type="checkbox" bind:checked={setup.penalties} /><span>{t("launch.penalties")}</span></label>
-
-              {#if setup.session_type === "practice"}
-                <div><span class="fk lbl-key">{t("launch.startFrom")}</span>
-                  <div class="seg-v">
-                    <button type="button" class:on={setup.start_from_pit} onclick={() => (setup.start_from_pit = true)}>{t("launch.startFromPit")}</button>
-                    <button type="button" class:on={!setup.start_from_pit} onclick={() => (setup.start_from_pit = false)}>{t("launch.startFromTrack")}</button>
-                  </div>
-                </div>
-              {/if}
-            </div>
-          </div>
-        </section>
-
-        <!-- Simulation, aides à la conduite comprises : actif quel que soit
-             le type de session (§8.6). -->
-        <section class="blk">
-          <header class="blk-h"><span class="blk-t">{t("launch.simulationLabel")}</span></header>
-          <div class="blk-b">
-          <div class="opt-row">
-            <div class="opt">
-              <div class="opt-head"><span class="opt-name lbl-key">{t("launch.damageLabel")}</span><span class="opt-val mono">{setup.damage}%</span></div>
-              <input type="range" min="0" max="100" bind:value={setup.damage} style="--f:{setup.damage}%" />
-            </div>
-            <div class="opt">
-              <div class="opt-head"><span class="opt-name lbl-key">{t("launch.fuelLabel")}</span><span class="opt-val mono">{setup.fuel_rate}%</span></div>
-              <input type="range" min="0" max="200" bind:value={setup.fuel_rate} style="--f:{setup.fuel_rate / 2}%" />
-            </div>
-            <div class="opt">
-              <div class="opt-head"><span class="opt-name lbl-key">{t("launch.tyreLabel")}</span><span class="opt-val mono">{setup.tyre_wear}%</span></div>
-              <input type="range" min="0" max="200" bind:value={setup.tyre_wear} style="--f:{setup.tyre_wear / 2}%" />
-            </div>
-          </div>
-
-          <div class="lbl section">{t("launch.assistsLabel")}</div>
-          <div class="checks">
-            <label class="check"><input type="checkbox" bind:checked={setup.abs_auto} /><span>{t("launch.absAuto")}</span></label>
-            <label class="check"><input type="checkbox" bind:checked={setup.traction_control_auto} /><span>{t("launch.tractionAuto")}</span></label>
-            <label class="check"><input type="checkbox" bind:checked={setup.ideal_line} /><span>{t("launch.idealLine")}</span></label>
-          </div>
-          </div>
-        </section>
+        <SimulationBlock {setup} />
 
         {#if setup.session_type === "race"}
           <OpponentsBlock
@@ -823,33 +740,15 @@
 
       <!-- COLONNE DROITE -->
       <div>
-        <!-- Sessions enregistrées (§8.4bis) : liste du type courant, mise à
-             jour par l'effet qui alimente `savedList` ; charge au clic,
-             Sauvegarder ouvre la popup de nommage (avec écrasement d'une
-             sauvegarde existante en option). -->
-        <section class="blk">
-          <header class="blk-h">
-            <span class="blk-t">{t("launch.savedSessionsLabel")}</span>
-            <span class="blk-n">{savedList.length}</span>
-          </header>
-          <div class="blk-b">
-            <button class="btn saved-save-btn" type="button" onclick={() => (saveDialogOpen = true)}>{t("launch.saveSession")}</button>
-            <div class="saved-list">
-              {#if !savedList.length}
-                <div class="saved-empty">{t("launch.noSavedSessions")}</div>
-              {:else}
-                {#each savedList as s (s.name)}
-                  <button class="saved-item" type="button" onclick={() => doLoadSession(s)}>
-                    <div class="saved-item-b">
-                      <div class="saved-item-name">{s.name}</div>
-                      <div class="saved-item-meta mono">{fmtSavedAt(s.savedAt)}</div>
-                    </div>
-                  </button>
-                {/each}
-              {/if}
-            </div>
-          </div>
-        </section>
+        <SavedSessionsBlock
+          sessionType={setup.session_type}
+          {savedList}
+          dialogOpen={saveDialogOpen}
+          onopendialog={() => (saveDialogOpen = true)}
+          onclosedialog={() => (saveDialogOpen = false)}
+          onsave={doSaveSession}
+          onload={doLoadSession}
+        />
 
         <WeatherBlock
           {setup}
@@ -867,6 +766,7 @@
       </div>
     </div>
   </div>
+  {/if}
 </div>
 
 <style>
@@ -941,204 +841,9 @@
     padding: 22px 32px 40px;
   }
 
-  .seg,
-  .types {
-    display: flex;
-    border: 1px solid var(--line);
-    width: fit-content;
-    margin-bottom: 16px;
-  }
-  .seg button {
-    background: var(--panel2);
-    color: var(--muted);
-    padding: 9px 26px;
-    font-size: 12px;
-    letter-spacing: 1px;
-    border-right: 1px solid var(--line);
-  }
-  .seg button:last-child {
-    border-right: none;
-  }
-  .seg button.on {
-    background: var(--rosso);
-    color: #fff;
-  }
   .cols {
     display: grid;
     grid-template-columns: 1.35fr 1fr;
     gap: 26px;
-  }
-  .grid-fields {
-    display: inline-flex;
-    align-items: center;
-    gap: 12px;
-  }
-  /* Couleur/taille/interlettrage viennent de `.lbl-key` (global, harmonisation
-     §chantier libellés) : ne reste ici que ce que `.lbl-key` ne couvre pas. */
-  .fk {
-    text-transform: uppercase;
-  }
-
-  /* Sessions enregistrées (§8.4bis) */
-  .saved-save-btn {
-    width: 100%;
-    margin-bottom: 12px;
-  }
-  /* Hauteur plafonnée + défilement propre : la carte ne doit pas grandir
-     sans limite si l'utilisateur accumule des sauvegardes. */
-  .saved-list {
-    max-height: 260px;
-    overflow-y: auto;
-    border: 1px solid var(--line);
-  }
-  .saved-empty {
-    padding: 14px 10px;
-    color: var(--muted);
-    font-size: 11px;
-    text-align: center;
-  }
-  .saved-item {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    padding: 8px 10px;
-    background: var(--panel2);
-    border-bottom: 1px solid var(--line);
-    text-align: left;
-  }
-  .saved-item:last-child {
-    border-bottom: none;
-  }
-  .saved-item:hover {
-    background: var(--raised);
-  }
-  .saved-item-b {
-    flex: 1;
-    min-width: 0;
-  }
-  .saved-item-name {
-    font-size: 12px;
-    color: var(--txt);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .saved-item-meta {
-    font-size: 10px;
-    color: var(--muted);
-    margin-top: 2px;
-  }
-
-  /* Sliders simples (dégâts/carburant/pneus/heure) */
-  /* Dégâts/carburant/pneus groupés sur une même ligne (2 si l'espace manque) :
-     inutile de laisser chaque curseur s'étirer sur toute la largeur pour un
-     réglage 0-100/200 qui se lit très bien en plus étroit. */
-  .opt-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 10px 16px;
-  }
-  .opt {
-    margin-bottom: 14px;
-  }
-  .opt-row .opt {
-    margin-bottom: 0;
-  }
-  .opt-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 4px;
-  }
-  /* Couleur/taille/interlettrage viennent de `.lbl-key` (global, harmonisation
-     §chantier libellés) : ne reste ici que ce que `.lbl-key` ne couvre pas. */
-  .opt-name {
-    text-transform: uppercase;
-  }
-  .opt-val {
-    margin-left: auto;
-    font-size: 11px;
-    color: var(--txt);
-  }
-  /* Curseurs simples (dégâts/carburant/pneus) : le thumb natif du
-     navigateur est rond, incohérent avec le thème rectangulaire de l'app —
-     resimulé en carré comme les curseurs doubles ci-dessus. */
-  .opt input[type="range"] {
-    width: 100%;
-    height: 20px;
-    margin: 0;
-    appearance: none;
-    background: transparent;
-  }
-  .opt input[type="range"]::-webkit-slider-runnable-track {
-    height: 3px;
-    background: linear-gradient(to right, var(--rosso) 0%, var(--rosso) var(--f, 0%), var(--line) var(--f, 0%), var(--line) 100%);
-  }
-  .opt input[type="range"]::-webkit-slider-thumb {
-    appearance: none;
-    width: 10px;
-    height: 20px;
-    border-radius: 2px;
-    background: var(--rosso);
-    border: 2px solid var(--panel);
-    cursor: pointer;
-    margin-top: -8.5px;
-  }
-
-  /* Options de session : tout sur une ligne (retombe à la ligne seulement si
-     la largeur manque vraiment) — un groupe par réglage, chacun garde sa
-     largeur naturelle plutôt que de s'étirer dans une grille. */
-  .opts-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    gap: 14px 16px;
-  }
-  .opts-row > div {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-  /* Groupe de boutons rectangulaire (remplace les <select> natifs, dont la
-     popup n'est pas pilotable à la manette) : chaque option est un bouton
-     focusable, sélectionnable au clic comme au clic manette (bouton A). */
-  .seg-v {
-    display: flex;
-    flex-direction: column;
-    border: 1px solid var(--line);
-  }
-  .seg-v button {
-    background: var(--panel2);
-    color: var(--txt2);
-    text-align: left;
-    padding: 7px 9px;
-    font-size: 11px;
-    border-bottom: 1px solid var(--line);
-  }
-  .seg-v button:last-child {
-    border-bottom: none;
-  }
-  .seg-v button:hover {
-    background: var(--raised);
-  }
-  .seg-v button.on {
-    background: var(--rosso);
-    color: #fff;
-  }
-  .checks {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-  }
-  .check {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    border: 1px solid var(--line);
-    background: var(--panel2);
-    padding: 8px 10px;
-    cursor: pointer;
-    font-size: 10px;
-    color: var(--txt2);
   }
 </style>

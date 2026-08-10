@@ -30,6 +30,7 @@ mod profiles;
 mod quickdrive;
 mod resources;
 mod rules;
+mod saved_sessions;
 mod session_state;
 mod shared;
 mod showroom;
@@ -87,8 +88,8 @@ pub fn run() {
             app.manage(Db(std::sync::Mutex::new(conn)));
 
             // Module musique du mode Big Picture (docs/spec-module-musique_2.md) :
-            // dossiers par défaut créés au premier démarrage (vides, pas de pack
-            // CC0 embarqué pour l'instant), moteur audio + surveillance AC
+            // dossiers par défaut créés au premier démarrage, peuplés du pack
+            // embarqué (§16.1, `music/config.rs`), moteur audio + surveillance AC
             // démarrés pour toute la durée de vie de l'app.
             music::config::ensure_default_dirs(app.handle());
             let music_cfg = music::config::load(app.handle());
@@ -150,6 +151,10 @@ pub fn run() {
             commands::session::list_showrooms,
             commands::session_state::get_session_picks,
             commands::session_state::save_session_picks,
+            commands::session_state::get_launch_state,
+            commands::session_state::save_launch_state,
+            commands::saved_sessions::get_saved_sessions,
+            commands::saved_sessions::save_saved_sessions,
             commands::maintenance::maintenance_scan,
             commands::maintenance::reindex_library,
             commands::maintenance::delete_broken_mod,

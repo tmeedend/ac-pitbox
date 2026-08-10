@@ -315,19 +315,24 @@ impl Engine {
         match cmd {
             EngineCommand::UpdateConfig(cfg) => {
                 // Playlist en cache indexée par ambiance (`ensure_playlist`) :
-                // si le dossier a changé, l'ancienne — vide ou pas — doit être
-                // oubliée, sinon un dossier vide au premier lancement de Big
-                // Picture reste mémorisé comme "vide" pour toujours, même
-                // après avoir pointé vers un dossier valide et enregistré.
-                // Bug réel : ça obligeait à redémarrer l'app pour que le
-                // nouveau dossier soit pris en compte.
-                if cfg.menu_folder != self.config.menu_folder {
+                // si le dossier *effectif* a changé, l'ancienne — vide ou pas
+                // — doit être oubliée, sinon un dossier vide au premier
+                // lancement de Big Picture reste mémorisé comme "vide" pour
+                // toujours, même après avoir pointé vers un dossier valide et
+                // enregistré. Bug réel : ça obligeait à redémarrer l'app pour
+                // que le nouveau dossier soit pris en compte. Comparaison sur
+                // le dossier *effectif* (pas juste `menu_folder`/`grid_folder`
+                // bruts) : basculer `use_custom_folders` change l'ambiance
+                // réellement jouée sans forcément changer ces deux champs.
+                let old_menu = self.folder_for(Ambience::Menu);
+                let old_grid = self.folder_for(Ambience::Grid);
+                self.config = cfg;
+                if self.folder_for(Ambience::Menu) != old_menu {
                     self.playlists.remove(&Ambience::Menu);
                 }
-                if cfg.grid_folder != self.config.grid_folder {
+                if self.folder_for(Ambience::Grid) != old_grid {
                     self.playlists.remove(&Ambience::Grid);
                 }
-                self.config = cfg;
                 // Un changement de volume dans les réglages doit s'entendre
                 // tout de suite, pas seulement à la prochaine transition.
                 if self.fade.is_none() {
@@ -672,9 +677,11 @@ impl Engine {
             // MENU.
             self.pre_session_ambience = Some(amb);
         }
+        // Musique toujours coupée pendant la session — jamais de "duck" en
+        // fond (décidé avec l'utilisateur : en course comme en essais, la
+        // musique de préparation n'a plus sa place une fois la voiture en
+        // piste).
         let slot = self.active_slot;
-        let duck = self.config.session_behavior == "duck";
-        let target = if duck { self.config.session_duck_volume } else { 0.0 };
         let from = self.current_ambient_volume(slot);
         self.cancel_fade();
         self.fade = Some(ActiveFade::SingleFade {
@@ -682,8 +689,8 @@ impl Engine {
             start: Instant::now(),
             duration: Duration::from_millis(self.config.fade_out_ms as u64),
             from,
-            to: target,
-            stop_at_end: !duck,
+            to: 0.0,
+            stop_at_end: true,
         });
         self.state = State::Session;
     }
@@ -707,39 +714,28 @@ impl Engine {
         // MENU reste alors le repli le plus sensé.
         let target = self.pre_session_ambience.unwrap_or(Ambience::Menu);
         let slot = self.active_slot;
-        let from = self.current_ambient_volume(slot);
         self.cancel_fade();
-        if self.slots[slot].sink.is_some() {
-            // "duck" : la piste tournait déjà en fond, remonte le volume.
-            self.fade = Some(ActiveFade::SingleFade {
-                slot,
-                start: Instant::now(),
-                duration: Duration::from_millis(self.config.fade_in_ms as u64),
-                from,
-                to: self.effective_volume(),
-                stop_at_end: false,
-            });
-        } else {
-            // "stop" : reprend la piste mémorisée de l'ambiance cible à sa
-            // position de pause, fade-in depuis le silence.
-            self.ensure_playlist(target);
-            let pl = self.playlists.get(&target).unwrap();
-            let track = pl.current();
-            let resume_at = pl.elapsed_at_pause;
-            match track {
-                Some(track) if self.start_track_in_slot(slot, target, &track, resume_at) => {
-                    self.fade = Some(ActiveFade::SingleFade {
-                        slot,
-                        start: Instant::now(),
-                        duration: Duration::from_millis(self.config.fade_in_ms as u64),
-                        from: 0.0,
-                        to: self.effective_volume(),
-                        stop_at_end: false,
-                    });
-                }
-                _ => {
-                    log::warn!("music: dossier vide ou introuvable pour l'ambiance {target:?}, reprise après session silencieuse");
-                }
+        // Musique toujours coupée pendant la session (`enter_session`,
+        // `stop_at_end: true`) : le slot est donc systématiquement vide ici —
+        // reprend la piste mémorisée de l'ambiance cible à sa position de
+        // pause, fade-in depuis le silence.
+        self.ensure_playlist(target);
+        let pl = self.playlists.get(&target).unwrap();
+        let track = pl.current();
+        let resume_at = pl.elapsed_at_pause;
+        match track {
+            Some(track) if self.start_track_in_slot(slot, target, &track, resume_at) => {
+                self.fade = Some(ActiveFade::SingleFade {
+                    slot,
+                    start: Instant::now(),
+                    duration: Duration::from_millis(self.config.fade_in_ms as u64),
+                    from: 0.0,
+                    to: self.effective_volume(),
+                    stop_at_end: false,
+                });
+            }
+            _ => {
+                log::warn!("music: dossier vide ou introuvable pour l'ambiance {target:?}, reprise après session silencieuse");
             }
         }
         self.state = State::Playing(target);

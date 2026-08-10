@@ -22,6 +22,7 @@ pub mod music;
 pub mod others;
 pub mod profiles;
 pub mod rules;
+pub mod saved_sessions;
 pub mod session;
 pub mod session_state;
 
