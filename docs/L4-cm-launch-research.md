@@ -100,8 +100,9 @@ Weekend). Champs de premier niveau confirmés sur ces captures :
   `RaceGridViewModel`/`RaceGridEntry` dans `AcManager.Controls`).
 
 Pit Box génère ce preset en implémentant uniquement le mode **Weekend** pour la
-course (pas de mode Race/Trackday/Drift séparé côté CM) : sans qualif ni practice
-configurés, Weekend se comporte comme une course simple — équivalent fonctionnel.
+course (pas de mode Race/Trackday/Drift séparé côté CM) : sans practice
+configurée, Weekend se comporte comme une course avec qualif minimale — pas
+d'équivalent Weekend sans qualif, voir point 4 ci-dessous.
 
 ## Limites connues du nouveau mécanisme
 1. **Skin du joueur non forçable** : pas de champ dans le schéma Quick Drive pour le
@@ -114,9 +115,58 @@ configurés, Weekend se comporte comme une course simple — équivalent fonctio
    `grip` de notre UI dans les captures réelles.
 3. **Durée de session Practice non appliquée** : le schéma `QuickDrive_Practice`
    n'a pas de champ durée — comportement Quick Drive natif, pas un bug.
+4. **Qualification jamais désactivable en mode Weekend** : `QuickDrive_Weekend.xaml.cs`
+   borne `QualificationDuration` à `[5, 90]` minutes (`value.Clamp(5, 90)`), et son
+   `Save()` écrit toujours une durée concrète — aucun état « off » n'existe côté CM
+   pour cette phase (confirmé aussi bien sur les `.cmpreset` réels de l'utilisateur,
+   qui ont toujours `QualificationLength` non nul, que dans le code source). Envoyer
+   `QualificationLength: null` ne désactive donc rien — `Load()` retombe juste sur
+   `r.QualificationLength ?? 30`, un défaut fixe. Pit Box envoie toujours une durée
+   concrète (mini 5 min côté UI) plutôt qu'une case « pas de qualif » qui ne pourrait
+   jamais être honorée par CM.
 
-Ces trois points sont documentés en commentaire sur `RaceSetup` (`src-tauri/src/launch.rs`)
+Ces quatre points sont documentés en commentaire sur `RaceSetup` (`src-tauri/src/launch.rs`)
 et sur `quickdrive::build_preset` (`src-tauri/src/quickdrive.rs`).
+
+## Chargement de l'`AssistsData` : gardé par un réglage global de CM (2026-08-11)
+
+Root cause d'un bug réel signalé par l'utilisateur : dégâts/carburant/usure/ABS/
+antipatinage/ligne idéale du preset Quick Drive n'avaient **aucun effet**, quelle
+que soit la valeur choisie dans Pit Box — et pour cause, le mécanisme touchait même
+les `.cmpreset` sauvegardés manuellement par l'utilisateur depuis l'UI de CM.
+
+`QuickDrive.xaml.cs` :
+```csharp
+private bool IsToLoadAssists() {
+    return SettingsHolder.Drive.LoadAssistsWithQuickDrivePreset ^ (Keyboard.Modifiers == ModifierKeys.Control);
+}
+...
+if (forceAssistsLoading || IsToLoadAssists()) {
+    LoadPreset(AssistsViewModel, o.AssistsPresetFilename, o.AssistsData, o.AssistsChanged);
+}
+```
+`LoadAssistsWithQuickDrivePreset` est un réglage global de CM (case à cocher sur sa
+page Quick Drive, libellé « Charger assistances avec préréglage de course rapide »),
+**`false` par défaut** (`SettingsHolder.Drive.cs` : `ValuesStorage.Get(…, false)`).
+Tant qu'il n'est pas activé, CM ignore silencieusement (pas d'exception — vérifié
+dans les logs CM, `%LOCALAPPDATA%\AcTools Content Manager\Logs\`) l'`AssistsData` de
+**tout** preset Quick Drive lancé via `race/quick`, et garde les assistances
+actuellement actives dans son UI. Le raccourci Ctrl qui inverse ce comportement ne
+s'applique pas non plus : Pit Box lance CM en tâche de fond, sans interaction clavier.
+
+`ArgumentsHandler.Race.cs::ProcessRaceQuick` expose un échappatoire dans l'URI elle-même :
+```csharp
+if (!await QuickDrive.RunAsync(serializedPreset: preset, forceAssistsLoading: custom.Params.GetFlag("loadAssists"))) { … }
+```
+D'où le flag `&loadAssists=true` ajouté à l'URI par `launch::launch()` — force
+`forceAssistsLoading`, indépendamment du réglage global de CM. `TrackPropertiesData`
+(grip) n'a pas de garde équivalente : toujours chargé (`if (!LoadPreset(TrackState, …))`
+sans condition), donc pas de flag additionnel nécessaire pour ce champ.
+
+Conséquence annexe : l'ancienne écriture directe de `assists.ini` avant le lancement
+de CM (`launch::apply_assists`, best-effort avant ce correctif) était sans effet réel
+— CM régénère son propre état d'assistances au démarrage du jeu, par-dessus n'importe
+quelle écriture externe du fichier. Fonction retirée avec l'ajout de `loadAssists=true`.
 
 ## Génération du preset côté Pit Box
 `quickdrive::build_preset(&RaceSetup) -> Result<String, String>` (Rust,

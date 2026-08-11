@@ -90,7 +90,6 @@
 <section class="blk">
   <header class="blk-h">
     <span class="blk-t">{t("detail.historyLabel")}</span>
-    <span class="blk-n">{t("detail.installedOnTop")}</span>
   </header>
   <div class="blk-b">
     <ul class="timeline">

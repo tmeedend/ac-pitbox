@@ -168,7 +168,7 @@
   {#if currentWeather}
     <div class="implicit">
       <div class="imp temp-imp">
-        <div class="ik">{t("launch.tempAirLabel")}</div>
+        <div class="ik lbl-key">{t("launch.tempAirLabel")}</div>
         <NumberStepper
           width={68}
           min={-20}
@@ -178,7 +178,7 @@
         />
       </div>
       <div class="imp temp-imp">
-        <div class="ik">{t("launch.tempRoadLabel")}</div>
+        <div class="ik lbl-key">{t("launch.tempRoadLabel")}</div>
         <NumberStepper
           width={68}
           min={-20}
@@ -188,7 +188,7 @@
         />
       </div>
       <div class="imp wind-imp">
-        <div class="ik">{t("launch.windImplicit")}</div>
+        <div class="ik lbl-key">{t("launch.windImplicit")}</div>
         <div class="wind-fields">
           <NumberStepper
             width={58}
@@ -209,7 +209,7 @@
         </div>
       </div>
       <div class="imp time-imp">
-        <div class="ik">{t("launch.timeLabelShort")}</div>
+        <div class="ik lbl-key">{t("launch.timeLabelShort")}</div>
         <div class="time-field">
           <input type="range" min="6" max="22" step="0.5" bind:value={setup.time_hours} style="--f:{((setup.time_hours - 6) / 16) * 100}%" />
           <span class="mono time-val">{fmtTime(setup.time_hours)}</span>
@@ -324,12 +324,13 @@
     border: 1px solid var(--line);
     background: var(--panel2);
   }
-  /* Rôle différent de .mt/.wn (clé de champ, pas une option cliquable) : la
-     taille reste compacte à dessein, mais les majuscules + interlettrage
-     ajoutaient une lourdeur inutile sur un texte déjà minuscule. */
+  /* Rôle différent de .mt/.wn (clé de champ, pas une option cliquable) : couleur
+     et interlettrage viennent de `.lbl-key` (global, harmonisation §chantier
+     libellés) — sans majuscules, contrairement à `.lbl`, ce qui correspond
+     déjà à ce qu'on voulait ici (les majuscules ajoutaient une lourdeur
+     inutile sur un texte aussi petit). Ne reste que l'espacement propre à ce
+     bloc dense. */
   .imp .ik {
-    color: var(--muted);
-    font-size: 7.5px;
     margin-bottom: 5px;
   }
   .wind-fields {

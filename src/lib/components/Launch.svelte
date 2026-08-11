@@ -62,7 +62,6 @@
     ai_level_min: 92,
     ai_level_max: 98,
     laps: 5,
-    duration_minutes: 15,
     weather: "",
     time_hours: 13,
     ambient_c: null,
@@ -78,13 +77,13 @@
     grip: 96,
     practice_enabled: false,
     practice_minutes: 20,
-    qualifying: false,
     qualify_minutes: 10,
     ghost_car: false,
     start_from_pit: true,
     damage: 50,
     fuel_rate: 100,
     tyre_wear: 100,
+    tyre_blankets: false,
     abs_auto: true,
     traction_control_auto: true,
     ideal_line: false,
@@ -425,11 +424,11 @@
   interface Persisted {
     ai_level_min: number; ai_level_max: number; grid_mode: GridMode; opponent_count: number;
     year_min: number; year_max: number;
-    laps: number; duration_minutes: number; time_hours: number;
+    laps: number; time_hours: number;
     penalties: boolean; jump_start_penalty: number; grip: number;
     practice_enabled: boolean; practice_minutes: number;
-    qualifying: boolean; qualify_minutes: number; ghost_car: boolean; start_from_pit: boolean;
-    damage: number; fuel_rate: number; tyre_wear: number; intent: string; season: Season;
+    qualify_minutes: number; ghost_car: boolean; start_from_pit: boolean;
+    damage: number; fuel_rate: number; tyre_wear: number; tyre_blankets: boolean; intent: string; season: Season;
     abs_auto: boolean; traction_control_auto: boolean; ideal_line: boolean;
   }
   let presets: Record<string, Persisted> = {};
@@ -467,12 +466,13 @@
       ai_level_min: setup.ai_level_min, ai_level_max: setup.ai_level_max,
       grid_mode: gridMode, opponent_count: opponentCount,
       year_min: setup.year_min, year_max: setup.year_max,
-      laps: setup.laps, duration_minutes: setup.duration_minutes, time_hours: setup.time_hours,
+      laps: setup.laps, time_hours: setup.time_hours,
       penalties: setup.penalties, jump_start_penalty: setup.jump_start_penalty, grip: setup.grip,
       practice_enabled: setup.practice_enabled, practice_minutes: setup.practice_minutes,
-      qualifying: setup.qualifying, qualify_minutes: setup.qualify_minutes, ghost_car: setup.ghost_car,
+      qualify_minutes: setup.qualify_minutes, ghost_car: setup.ghost_car,
       start_from_pit: setup.start_from_pit,
-      damage: setup.damage, fuel_rate: setup.fuel_rate, tyre_wear: setup.tyre_wear, intent: selectedIntent, season,
+      damage: setup.damage, fuel_rate: setup.fuel_rate, tyre_wear: setup.tyre_wear, tyre_blankets: setup.tyre_blankets,
+      intent: selectedIntent, season,
       abs_auto: setup.abs_auto, traction_control_auto: setup.traction_control_auto, ideal_line: setup.ideal_line,
     };
     persistLaunchState();
@@ -484,14 +484,15 @@
       setup.ai_level_min = p.ai_level_min ?? 92; setup.ai_level_max = p.ai_level_max ?? 98;
       gridMode = p.grid_mode ?? "same_category"; opponentCount = p.opponent_count ?? 7;
       setup.year_min = p.year_min ?? YEAR_RANGE_MIN; setup.year_max = p.year_max ?? YEAR_RANGE_MAX;
-      setup.laps = p.laps; setup.duration_minutes = p.duration_minutes; setup.time_hours = p.time_hours;
+      setup.laps = p.laps; setup.time_hours = p.time_hours;
       setup.penalties = p.penalties; setup.jump_start_penalty = p.jump_start_penalty ?? 0;
       setup.grip = p.grip ?? 96;
       setup.practice_enabled = p.practice_enabled ?? false; setup.practice_minutes = p.practice_minutes ?? 20;
-      setup.qualifying = p.qualifying ?? false; setup.qualify_minutes = p.qualify_minutes ?? 10;
+      setup.qualify_minutes = p.qualify_minutes ?? 10;
       setup.ghost_car = p.ghost_car ?? false; setup.start_from_pit = p.start_from_pit ?? true;
       setup.damage = p.damage ?? 50;
       setup.fuel_rate = p.fuel_rate ?? 100; setup.tyre_wear = p.tyre_wear ?? 100;
+      setup.tyre_blankets = p.tyre_blankets ?? false;
       setup.abs_auto = p.abs_auto ?? true; setup.traction_control_auto = p.traction_control_auto ?? true;
       setup.ideal_line = p.ideal_line ?? false;
       applySeason(p.season ?? "");
@@ -512,10 +513,11 @@
   }
   $effect(() => {
     void [setup.ai_level_min, setup.ai_level_max, gridMode, opponentCount, setup.year_min, setup.year_max,
-      setup.laps, setup.duration_minutes,
+      setup.laps,
       setup.time_hours, setup.penalties, setup.jump_start_penalty, setup.grip,
-      setup.practice_enabled, setup.practice_minutes, setup.qualifying, setup.qualify_minutes,
-      setup.ghost_car, setup.start_from_pit, setup.damage, setup.fuel_rate, setup.tyre_wear, selectedIntent, season,
+      setup.practice_enabled, setup.practice_minutes, setup.qualify_minutes,
+      setup.ghost_car, setup.start_from_pit, setup.damage, setup.fuel_rate, setup.tyre_wear, setup.tyre_blankets,
+      selectedIntent, season,
       setup.abs_auto, setup.traction_control_auto, setup.ideal_line];
     if (ready && !applying && selectedIntent) savePreset();
   });
@@ -696,7 +698,7 @@
        bouton rouge « Démarrer la session » de la barre latérale, juste sous
        « Paramétrage de la session » — plus de bouton Lancer sur cet écran. -->
   <header class="bar">
-    <h1>{t("launch.pageTitle")}</h1>
+    <h1 class="lbl-screen">{t("launch.pageTitle")}</h1>
   </header>
 
   {#if info}<div class="ok">{info}</div>{/if}
@@ -813,12 +815,10 @@
     top: 0;
     z-index: 10;
   }
-  /* Même traitement que le h2 de Transversal (« Add-ons voiture ») : un titre
-     d'écran se lit, il ne se murmure pas — l'ancien gris 15px capitales était
-     plus discret que les rubriques qu'il coiffe. */
+  /* Taille/graisse viennent de `.lbl-screen` (global, harmonisation §chantier
+     libellés) — même traitement que le h2 de Transversal (« Add-ons
+     voiture »). */
   h1 {
-    font-size: 18px;
-    font-weight: 600;
     flex: 1;
   }
   .ok,

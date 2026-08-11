@@ -32,7 +32,6 @@ export interface RaceSetup {
   ai_level_min: number;
   ai_level_max: number;
   laps: number;
-  duration_minutes: number;
   weather: string;
   time_hours: number;
   ambient_c: number | null;
@@ -53,7 +52,8 @@ export interface RaceSetup {
   /** Essais libres avant la course (weekend Quick Drive) — indépendants de la qualification. */
   practice_enabled: boolean;
   practice_minutes: number;
-  qualifying: boolean;
+  /** Durée qualif (Course uniquement) : toujours présente côté CM (Weekend
+   * Quick Drive n'a pas d'état désactivé, mini 5 min). */
   qualify_minutes: number;
   ghost_car: boolean;
   /** Départ en Practice (mode Practice uniquement) : `true` = depuis les stands. */
@@ -61,6 +61,7 @@ export interface RaceSetup {
   damage: number;
   fuel_rate: number;
   tyre_wear: number;
+  tyre_blankets: boolean;
   abs_auto: boolean;
   traction_control_auto: boolean;
   ideal_line: boolean;

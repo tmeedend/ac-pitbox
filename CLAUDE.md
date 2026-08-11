@@ -22,6 +22,15 @@ besoin de modifier — ça noie la revue du vrai changement.
 Aucune chaîne visible en dur dans un composant : elle passe par `t("clé")` et la
 clé est ajoutée **dans les deux locales**, jamais une seule.
 
+**Un libellé d'écran n'explique jamais son propre fonctionnement.** Pas de
+texte du genre « 1 clic = layout de session » ou « version installée en tête »
+sur l'interface : ça décrit l'implémentation, pas ce dont l'utilisateur a
+besoin pour agir. Si l'interaction n'est pas assez claire par elle-même
+(bouton, état visuel, tooltip au survol), c'est ça qu'il faut corriger — pas
+ajouter une légende qui explique la mécanique. Un décompte (`{n}`) ou un badge
+d'état restent bienvenus dans le complément d'un bandeau (`.blk-n`) ; un mode
+d'emploi n'y a pas sa place.
+
 **Les erreurs backend destinées à l'utilisateur sont des clés, pas des
 phrases.** Une `String` française renvoyée par une commande Tauri atterrit telle
 quelle dans l'UI et n'est traduisible nulle part. Donc :
@@ -71,6 +80,31 @@ Jamais d'élévation admin — l'app doit fonctionner en utilisateur standard.
 4. **Aucun fichier du jeu altéré durablement.** Si un fichier d'AC doit être
    touché (cas exceptionnel), il est sauvegardé et restauré — et il faut un
    filet de sécurité au démarrage pour les fermetures anormales.
+5. **Jamais `localStorage` pour un réglage qui doit survivre à un
+   redémarrage.** `localStorage` n'est pas garanti synchrone sur disque côté
+   WebView2 — l'écriture part dans le buffer du navigateur, pas sur disque, et
+   une fermeture de l'app juste après peut la perdre. Bug réel constaté
+   plusieurs fois avant que la règle ne soit écrite ici (duo voiture/circuit,
+   colonnes de bibliothèque, vue galerie/tableau…) : le réglage survivait tant
+   que l'app restait ouverte, mais jamais à un vrai redémarrage — le genre de
+   bug qui se reproduit à l'identique tant que le remède n'est pas
+   systématique. Le remède : un petit fichier JSON dans `app_config_dir`,
+   écrit côté Rust en `std::fs::write` **synchrone** (donc la commande Tauri
+   ne rend la main que quand c'est réellement sur disque), jamais dans la base
+   SQLite — voir `session_state.rs`/`saved_sessions.rs`/`library_columns.rs`
+   pour le patron à suivre (charger/modifier/réécrire l'objet entier à chaque
+   sauvegarde, structure opaque côté Rust — `serde_json::Value`, le schéma
+   appartient au frontend). Pour un réglage qui ne mérite pas son propre
+   fichier (une case à cocher, un tri, une préférence par mod…),
+   `ui_prefs.json` via `src/lib/uiPrefs.svelte.ts` (`getUiPref`/`setUiPref`)
+   est le point d'entrée générique — ne pas créer un fichier Rust dédié pour
+   un seul booléen. Toute lecture qui doit rester synchrone (ex. dans une
+   expression de template appelée pour chaque carte d'une liste) passe par
+   `peekUiPref` (cache réactif, `$state`) plutôt que l'API asynchrone —
+   `preferred.ts` en est l'exemple.
+   `localStorage` reste acceptable pour un état **purement transitoire**,
+   jamais relu après redémarrage (aucun cas de ce genre dans le projet
+   aujourd'hui) — dans le doute, c'est un fichier Rust.
 
 ## Structure du projet
 
@@ -141,13 +175,15 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
   (`detail.showroom`). C'est ce qui rend `errorText()` sûr, et c'est aussi
   pourquoi une relecture visuelle attrape ces oublis mieux que le typage.
 - **Le CSS des composants est scopé** (voir l'en-tête de `global.css`) : seules
-  `.btn`, `.input`, `.mono`, `.pill`, `.gp-focus` sont globales. Déplacer du
-  markup d'un composant à l'autre n'emporte pas son style.
-- **Les clés `localStorage` sont suffixées par type** quand le composant est
-  rendu plusieurs fois : `pitbox.view.cars` / `pitbox.view.tracks`,
-  `pitbox.cols.<kind>`, `pitbox.sort.<kind>.key`. Oublier le suffixe fait
-  partager le réglage entre voitures et circuits. Ces clés sont encore des
-  littéraux dispersés (voir Chantiers).
+  `.btn`, `.input`, `.mono`, `.pill`, `.gp-focus`, et les trois niveaux de
+  libellé `.lbl-screen`/`.lbl`/`.lbl-key` (§chantier libellés) sont globales.
+  Déplacer du markup d'un composant à l'autre n'emporte pas son style.
+- **Les clés `StorageKey.*` sont suffixées par type** (`storage.ts`) quand le
+  composant est rendu plusieurs fois : `pitbox.view.cars` / `pitbox.view.tracks`,
+  `pitbox.sort.<kind>.key`… Oublier le suffixe fait partager le réglage entre
+  voitures et circuits. Ces clés ne servent plus qu'à nommer les entrées dans
+  `ui_prefs.json`/les fichiers Rust dédiés (règle d'or n°5) — `localStorage`
+  lui-même n'est plus écrit nulle part, seulement lu une fois en migration.
 - **`Prefs` (`config.rs`) est en `#[serde(default)]`** : un champ retiré est
   simplement ignoré dans les `config.json` existants, pas de migration à
   écrire. Un champ ajouté prend sa valeur par défaut chez les utilisateurs
@@ -203,8 +239,20 @@ laisser pourrir ici.
       d'apparence selon l'écran. Cible : trois niveaux globaux — `.lbl-screen`
       (titre d'écran), `.lbl` (rubrique), `.lbl-key` (clé de donnée) — et des
       couleurs redevenues sémantiques (rouge = catégorie/session/destructif,
-      bleu = info et fichier mod, vert = règle, jaune = alerte). Fait sur la
-      fiche détail ; restent bibliothèque, lancement, réglages, add-ons.
+      bleu = info et fichier mod, vert = règle, jaune = alerte). Fait : fiche
+      détail ; titres d'écran passés à `.lbl-screen` sur les quatre zones
+      restantes (bibliothèque/lancement/réglages/add-ons) — au passage,
+      `.lbl-screen` lui-même corrigé à 18px/600 dans `global.css` (4 écrans
+      sur 5 avaient déjà convergé là spontanément, sans classe partagée ;
+      Réglages à 15px était l'écart, pas la référence) ; quelques `.lbl`/
+      `.lbl-key` ponctuels (`BulkEditPanel`, `OpponentsBlock`, `WeatherBlock`,
+      `Transversal`). **Explicitement laissé de côté** (décidé avec
+      l'utilisateur, à traiter séparément si besoin) : les libellés de champ
+      de formulaire (Réglages, Chemins, filtres bibliothèque — rôle différent
+      d'une clé de fiche technique en lecture seule, même si visuellement
+      proche) et les titres de popup (`OpponentPicker`/`SavedSessionsDialog`,
+      13px/majuscules, identiques entre eux mais ne correspondant à aucun des
+      trois niveaux). **Couleurs sémantiques** : pas encore attaquées.
 - [ ] **Signature Authenticode** : le workflow est prêt, il attend un
       certificat. Définir la variable de dépôt `SIGN_COMMAND` suffit à
       l'activer — voir `docs/windows-code-signing.md` (lire **avant** d'acheter,

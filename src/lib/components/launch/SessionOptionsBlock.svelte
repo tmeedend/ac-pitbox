@@ -24,12 +24,7 @@
          restent Course uniquement : absents des schémas Practice/Hotlap
          (pas de grille, pas de phase weekend). -->
     <div class="opts-row">
-      {#if setup.session_type === "practice"}
-        <label class="grid-fields">
-          <NumberStepper width={90} min={1} max={240} bind:value={setup.duration_minutes} />
-          <span class="fk lbl-key">{t("launch.duration")}</span>
-        </label>
-      {:else if setup.session_type === "hotlap"}
+      {#if setup.session_type === "hotlap"}
         <label class="check"><input type="checkbox" bind:checked={setup.ghost_car} /><span>{t("launch.ghostCar")}</span></label>
       {:else}
         <label class="grid-fields">
@@ -62,13 +57,10 @@
             <span class="fk lbl-key">{t("launch.practiceMinutes")}</span>
           </label>
         {/if}
-        <label class="check"><input type="checkbox" bind:checked={setup.qualifying} /><span>{t("launch.qualifying")}</span></label>
-        {#if setup.qualifying}
-          <label class="grid-fields">
-            <NumberStepper min={1} max={60} bind:value={setup.qualify_minutes} />
-            <span class="fk lbl-key">{t("launch.qualifyMinutes")}</span>
-          </label>
-        {/if}
+        <label class="grid-fields">
+          <NumberStepper min={5} max={90} bind:value={setup.qualify_minutes} />
+          <span class="fk lbl-key">{t("launch.qualifyMinutes")}</span>
+        </label>
       {/if}
       <label class="check"><input type="checkbox" bind:checked={setup.penalties} /><span>{t("launch.penalties")}</span></label>
 

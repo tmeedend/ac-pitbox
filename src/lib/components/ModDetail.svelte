@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import {
     activateMod,
     deactivateMod,
@@ -18,6 +19,7 @@
 
   import { errorText } from "$lib/errors";
   import { StorageKey } from "$lib/storage";
+  import { getUiPref, setUiPref } from "$lib/uiPrefs.svelte";
   interface Props {
     id: string | null;
     onchange?: () => void;
@@ -179,14 +181,19 @@
       busy = false;
     }
   }
-  let showFileTags = $state(
-    localStorage.getItem(StorageKey.showFileTags) !== "false",
-  );
+  // Défaut synchrone (affiché tant que la valeur sauvegardée n'a pas répondu,
+  // §6.2) : true, comme l'ancien repli `localStorage`.
+  let showFileTags = $state(true);
   let manualInput = $state("");
+
+  onMount(async () => {
+    const saved = await getUiPref(StorageKey.showFileTags);
+    if (saved != null) showFileTags = saved !== "false";
+  });
 
   function toggleFileTags() {
     showFileTags = !showFileTags;
-    localStorage.setItem(StorageKey.showFileTags, String(showFileTags));
+    setUiPref(StorageKey.showFileTags, String(showFileTags));
   }
 
   async function toggleFav() {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick, untrack } from "svelte";
+  import { tick, untrack, onMount, onDestroy } from "svelte";
   import ModDetail from "./ModDetail.svelte";
   import DetailPage from "./DetailPage.svelte";
   import BulkEditPanel from "./BulkEditPanel.svelte";
@@ -15,8 +15,8 @@
   } from "$lib/library";
   import {
     columnsFor,
-    loadVisible,
-    saveVisible,
+    loadColumnsPrefs,
+    saveColumnsPrefs,
     type ColumnDef,
   } from "$lib/columns";
   import { nav, pickSession, requestSection, queueOpponentsAction } from "$lib/nav.svelte";
@@ -24,6 +24,7 @@
   import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
   import { buildModContextItems } from "$lib/modContextActions";
   import { t } from "$lib/i18n/index.svelte";
+  import { getUiPrefs, setUiPref } from "$lib/uiPrefs.svelte";
 
   import { StorageKey } from "$lib/storage";
   // Une bibliothèque par type (§6.1) : ce composant est rendu une fois pour les
@@ -65,69 +66,226 @@
   // nav.svelte.ts) — la navigation manette globale (AppShell) doit savoir si
   // elle est ouverte pour céder gauche/droite au visualiseur et gérer B=fermer.
 
-  // Filtres persistés par type (rechargés au retour sur la page).
+  // Filtres persistés par type (rechargés au retour sur la page). Défauts
+  // synchrones à l'affichage initial, remplacés par les valeurs sauvegardées
+  // dès que l'onMount plus bas répond (même schéma que les colonnes, §6.2).
   const FKEY = KEYS.filters;
-  const sf: Record<string, unknown> = (() => {
-    try {
-      return JSON.parse(localStorage.getItem(FKEY) ?? "{}");
-    } catch {
-      return {};
-    }
-  })();
-  let query = $state<string>((sf.query as string) ?? "");
-  let categoryFilter = $state<string>((sf.category as string) ?? "all");
-  let classFilter = $state<"all" | "race" | "street">((sf.class as "all" | "race" | "street") ?? "all");
-  let stateFilter = $state<"all" | "active" | "inactive">((sf.state as "all" | "active" | "inactive") ?? "all");
-  let authorFilter = $state<string>((sf.author as string) ?? "all");
-  let countryFilter = $state<string>((sf.country as string) ?? "all");
-  let favOnly = $state<boolean>((sf.fav as boolean) ?? false);
-  let neverTried = $state<boolean>((sf.neverTried as boolean) ?? false);
-  let hideBaseContent = $state<boolean>((sf.hideBaseContent as boolean) ?? false);
-  let yearMin = $state<number>((sf.yearMin as number | null) ?? YEAR_RANGE_MIN);
-  let yearMax = $state<number>((sf.yearMax as number | null) ?? YEAR_RANGE_MAX);
+  let query = $state<string>("");
+  let categoryFilter = $state<string>("all");
+  let classFilter = $state<"all" | "race" | "street">("all");
+  let stateFilter = $state<"all" | "active" | "inactive">("all");
+  let authorFilter = $state<string>("all");
+  let countryFilter = $state<string>("all");
+  let favOnly = $state<boolean>(false);
+  let neverTried = $state<boolean>(false);
+  // Diagnostic temporaire : `neverTried` observé en ping-pong (voir l'effet de
+  // persistance plus bas). `$inspect` capture la pile au moment exact de
+  // l'écriture, contrairement au stack trace de l'effet qui ne montre que la
+  // relecture différée par Svelte — à retirer une fois la cause trouvée.
+  let debugInspectCount = 0;
+  $inspect(neverTried).with((type, value) => {
+    if (type === "update" && debugInspectCount++ < 10) console.trace(`[debug neverTried] -> ${value}`);
+  });
+  let hideBaseContent = $state<boolean>(false);
+  let yearMin = $state<number>(YEAR_RANGE_MIN);
+  let yearMax = $state<number>(YEAR_RANGE_MAX);
+  let view = $state<"gallery" | "table">("gallery");
+  let sortKey = $state<string>("name");
+  let sortDir = $state<1 | -1>(1);
+  // Garde toutes les persistances ci-dessous tant que l'onMount plus bas n'a
+  // pas fini de restaurer les valeurs sauvegardées — sans ça, l'effet des
+  // filtres se déclenche dès le montage avec les défauts et les réécrit par-
+  // dessus la sauvegarde avant même qu'elle soit lue (bug réel, même classe
+  // que `ready` dans Launch.svelte).
+  let prefsReady = false;
 
   // Persistance des filtres (champ libre + rubrique Filtres).
+  // Diagnostic temporaire (bug en cours : cet effet se redéclenche en boucle,
+  // 285 000+ appels `save_ui_prefs` observés) : identifie EXACTEMENT quel(s)
+  // champ(s) change(nt) entre deux passages, avant de retirer cette instrumentation.
+  let debugPrevSnapshot: Record<string, unknown> | null = null;
+  let debugLogCount = 0;
   $effect(() => {
-    localStorage.setItem(
-      FKEY,
-      JSON.stringify({
-        query,
-        category: categoryFilter,
-        class: classFilter,
-        state: stateFilter,
-        author: authorFilter,
-        country: countryFilter,
-        fav: favOnly,
-        neverTried,
-        hideBaseContent,
-        yearMin,
-        yearMax,
-      }),
-    );
+    const snapshot = {
+      query,
+      category: categoryFilter,
+      class: classFilter,
+      state: stateFilter,
+      author: authorFilter,
+      country: countryFilter,
+      fav: favOnly,
+      neverTried,
+      hideBaseContent,
+      yearMin,
+      yearMax,
+    };
+    if (debugPrevSnapshot && debugLogCount < 20) {
+      const diffs = Object.keys(snapshot).filter(
+        (k) => (snapshot as Record<string, unknown>)[k] !== (debugPrevSnapshot as Record<string, unknown>)[k],
+      );
+      if (diffs.length) {
+        debugLogCount++;
+        console.warn(
+          `[debug filtres] champ(s) modifié(s): ${diffs.join(", ")}`,
+          diffs.map((k) => ({ key: k, from: (debugPrevSnapshot as Record<string, unknown>)[k], to: (snapshot as Record<string, unknown>)[k] })),
+        );
+      } else {
+        debugLogCount++;
+        console.warn("[debug filtres] effet redéclenché SANS aucun champ modifié (snapshot identique)");
+      }
+    }
+    debugPrevSnapshot = snapshot;
+    if (prefsReady) setUiPref(FKEY, JSON.stringify(snapshot));
   });
-  let view = $state<"gallery" | "table">(
-    (localStorage.getItem(KEYS.view) as "gallery" | "table") ?? "gallery",
-  );
 
-  // Colonnes (§6.2) : définitions propres au type + visibilité persistée par type.
+  // Colonnes (§6.2) : définitions propres au type + visibilité/ordre persistés
+  // par type. Défauts synchrones à l'affichage initial (évite un vide le
+  // temps du chargement Rust), remplacés par les valeurs sauvegardées dès que
+  // `loadColumnsPrefs` répond (onMount plus bas).
   const columns: ColumnDef[] = untrack(() => columnsFor(kind));
-  let visibleKeys = $state<string[]>(untrack(() => [...loadVisible(kind)]));
+  let visibleKeys = $state<string[]>(untrack(() => columns.filter((c) => c.fixed || c.defaultVisible).map((c) => c.key)));
+  let columnOrder = $state<string[]>(untrack(() => columns.map((c) => c.key)));
+  let columnWidths = $state<Record<string, number>>({});
   let showColumns = $state(false);
+  // Colonne en cours de glissement (réordonnancement d'en-tête, §6.2) : pilote
+  // le retour visuel et la cible du drop, jamais persistée telle quelle.
+  let dragKey = $state<string | null>(null);
   const visibleColumns = $derived(
-    columns.filter((c) => c.fixed || visibleKeys.includes(c.key)),
+    columnOrder
+      .map((key) => columns.find((c) => c.key === key))
+      .filter((c): c is ColumnDef => !!c && (c.fixed || visibleKeys.includes(c.key))),
   );
+  function persistColumnsPrefs() {
+    saveColumnsPrefs(kind, { visible: visibleKeys, order: columnOrder, widths: columnWidths });
+  }
   function toggleColumn(key: string) {
     visibleKeys = visibleKeys.includes(key)
       ? visibleKeys.filter((k) => k !== key)
       : [...visibleKeys, key];
-    saveVisible(kind, new Set(visibleKeys));
+    persistColumnsPrefs();
+  }
+  /** Glisser-déposer d'en-tête (§6.2) : déplace `sourceKey` juste avant ou
+   * après `targetKey` dans l'ordre complet (colonnes masquées comprises, pour
+   * qu'elles gardent leur position relative une fois réaffichées). Colonne
+   * fixe jamais déplaçable — ni comme source, ni comme cible ne bougeant elle-
+   * même (on peut déposer dessus : la colonne déplacée vient alors juste après
+   * elle, seule place valide avant la 1ʳᵉ colonne libre). */
+  function reorderColumn(sourceKey: string, targetKey: string, before: boolean) {
+    if (sourceKey === targetKey) return;
+    if (columns.find((c) => c.key === sourceKey)?.fixed) return;
+    const rest = columnOrder.filter((k) => k !== sourceKey);
+    const targetIsFixed = columns.find((c) => c.key === targetKey)?.fixed;
+    const targetIdx = rest.indexOf(targetKey);
+    const insertAt = targetIsFixed ? targetIdx + 1 : before ? targetIdx : targetIdx + 1;
+    columnOrder = [...rest.slice(0, insertAt), sourceKey, ...rest.slice(insertAt)];
+    persistColumnsPrefs();
+  }
+  function onColumnDrop(targetKey: string, e: DragEvent) {
+    e.preventDefault();
+    const source = dragKey;
+    dragKey = null;
+    if (!source) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const before = e.clientX - rect.left < rect.width / 2;
+    reorderColumn(source, targetKey, before);
   }
 
-  // Tri du tableau (par clé de colonne), persisté par type.
-  let sortKey = $state<string>(localStorage.getItem(KEYS.sortKey) ?? "name");
-  let sortDir = $state<1 | -1>(
-    localStorage.getItem(KEYS.sortDir) === "-1" ? -1 : 1,
-  );
+  // --- Redimensionnement de colonne (§6.2) : poignée à droite de l'en-tête,
+  // glissé à la souris (pas de drag HTML5 ici — un redimensionnement est un
+  // suivi continu du pointeur, pas un dépôt discret). Écouteurs posés sur
+  // `window` le temps du geste : le curseur sort souvent de la poignée (large
+  // mouvement horizontal), `mousemove`/`mouseup` doivent suivre partout. ---
+  const MIN_COLUMN_WIDTH = 50;
+  let resizingKey = $state<string | null>(null);
+  let resizeStartX = 0;
+  let resizeStartWidth = 0;
+  function startResize(e: MouseEvent, key: string, currentWidth: number) {
+    e.preventDefault();
+    e.stopPropagation();
+    // Idempotent avant tout ajout : si un geste précédent n'avait pas relâché
+    // proprement (mouseup manqué hors fenêtre, par ex.), évite d'empiler des
+    // écouteurs `window` en double qui recalculeraient la largeur en double à
+    // chaque mouvement de souris.
+    stopResizeListeners();
+    resizingKey = key;
+    resizeStartX = e.clientX;
+    resizeStartWidth = currentWidth;
+    window.addEventListener("mousemove", onResizeMove);
+    window.addEventListener("mouseup", onResizeUp);
+  }
+  function onResizeMove(e: MouseEvent) {
+    if (!resizingKey) return;
+    const next = Math.max(MIN_COLUMN_WIDTH, Math.round(resizeStartWidth + (e.clientX - resizeStartX)));
+    columnWidths = { ...columnWidths, [resizingKey]: next };
+  }
+  function stopResizeListeners() {
+    window.removeEventListener("mousemove", onResizeMove);
+    window.removeEventListener("mouseup", onResizeUp);
+  }
+  function onResizeUp() {
+    if (!resizingKey) return;
+    resizingKey = null;
+    stopResizeListeners();
+    persistColumnsPrefs();
+  }
+  /** Redimensionnement au clavier (flèches gauche/droite), poignée focusable
+   * — pas juste une alternative a11y de façade : sans ça, la poignée n'est
+   * accessible qu'à la souris. `currentWidth` = largeur affichée actuelle
+   * (naturelle si jamais redimensionnée), pas de branchement particulier. */
+  function adjustColumnWidth(key: string, currentWidth: number, delta: number) {
+    columnWidths = { ...columnWidths, [key]: Math.max(MIN_COLUMN_WIDTH, Math.round(currentWidth + delta)) };
+    persistColumnsPrefs();
+  }
+  /** Double-clic (ou Entrée au clavier) sur la poignée = revenir à la largeur
+   * naturelle (au contenu), convention standard des tableaux redimensionnables. */
+  function resetColumnWidth(key: string) {
+    const { [key]: _removed, ...rest } = columnWidths;
+    columnWidths = rest;
+    persistColumnsPrefs();
+  }
+  onDestroy(stopResizeListeners);
+
+  // Restauration au montage (§6.2/§8.6) : colonnes (fichier dédié,
+  // `columns.ts`) et le reste des petits réglages d'écran (`uiPrefs.ts`) en
+  // parallèle, un seul aller-retour chacun. `prefsReady` n'est levé qu'une
+  // fois tout appliqué, pour que l'effet de persistance des filtres plus haut
+  // ne réécrive rien avant d'avoir vu les vraies valeurs sauvegardées.
+  onMount(async () => {
+    const [colPrefs, saved] = await Promise.all([
+      loadColumnsPrefs(kind),
+      getUiPrefs([FKEY, KEYS.view, KEYS.sortKey, KEYS.sortDir]),
+    ]);
+    visibleKeys = colPrefs.visible;
+    columnOrder = colPrefs.order;
+    columnWidths = colPrefs.widths;
+
+    if (saved[FKEY]) {
+      try {
+        const sf: Record<string, unknown> = JSON.parse(saved[FKEY]);
+        query = (sf.query as string) ?? "";
+        categoryFilter = (sf.category as string) ?? "all";
+        classFilter = (sf.class as "all" | "race" | "street") ?? "all";
+        stateFilter = (sf.state as "all" | "active" | "inactive") ?? "all";
+        authorFilter = (sf.author as string) ?? "all";
+        countryFilter = (sf.country as string) ?? "all";
+        favOnly = (sf.fav as boolean) ?? false;
+        neverTried = (sf.neverTried as boolean) ?? false;
+        hideBaseContent = (sf.hideBaseContent as boolean) ?? false;
+        yearMin = (sf.yearMin as number | null) ?? YEAR_RANGE_MIN;
+        yearMax = (sf.yearMax as number | null) ?? YEAR_RANGE_MAX;
+      } catch {
+        /* repli sur les défauts déjà en place */
+      }
+    }
+    const savedView = saved[KEYS.view];
+    if (savedView === "gallery" || savedView === "table") view = savedView;
+    const savedSortKey = saved[KEYS.sortKey];
+    if (savedSortKey) sortKey = savedSortKey;
+    const savedSortDir = saved[KEYS.sortDir];
+    if (savedSortDir) sortDir = savedSortDir === "-1" ? -1 : 1;
+
+    prefsReady = true;
+  });
 
   function toggleSort(key: string) {
     if (sortKey === key) sortDir = sortDir === 1 ? -1 : 1;
@@ -135,13 +293,15 @@
       sortKey = key;
       sortDir = 1;
     }
-    localStorage.setItem(KEYS.sortKey, sortKey);
-    localStorage.setItem(KEYS.sortDir, String(sortDir));
+    if (prefsReady) {
+      setUiPref(KEYS.sortKey, sortKey);
+      setUiPref(KEYS.sortDir, String(sortDir));
+    }
   }
 
   function setView(v: "gallery" | "table") {
     view = v;
-    localStorage.setItem(KEYS.view, v);
+    if (prefsReady) setUiPref(KEYS.view, v);
   }
 
   // Panneau latéral toujours ouvert (jamais de saut de largeur du panneau
@@ -629,9 +789,67 @@
         <table>
           <thead>
             <tr>
-              {#each visibleColumns as col}
-                <th class:sortable={col.sortable} onclick={() => col.sortable && toggleSort(col.key)}>
-                  {t(col.labelKey)}{#if sortKey === col.key}<span class="arrow">{sortDir === 1 ? "▲" : "▼"}</span>{/if}
+              {#each visibleColumns as col (col.key)}
+                <th
+                  class:sortable={col.sortable}
+                  class:dragging={dragKey === col.key}
+                  class:resizing={resizingKey === col.key}
+                  style={columnWidths[col.key] ? `width:${columnWidths[col.key]}px; max-width:${columnWidths[col.key]}px;` : undefined}
+                  draggable={!col.fixed}
+                  title={col.fixed ? undefined : t("library.dragColumnTooltip")}
+                  onclick={() => col.sortable && toggleSort(col.key)}
+                  ondragstart={(e) => {
+                    dragKey = col.key;
+                    // Sans `setData`, certains navigateurs/WebView2 ne
+                    // considèrent le geste comme un glisser valide nulle
+                    // part : curseur « sens interdit » partout, `drop` ne se
+                    // déclenche jamais (bug réel constaté).
+                    e.dataTransfer?.setData("text/plain", col.key);
+                    if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+                  }}
+                  ondragend={() => (dragKey = null)}
+                  ondragenter={(e) => e.preventDefault()}
+                  ondragover={(e) => {
+                    e.preventDefault();
+                    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+                  }}
+                  ondrop={(e) => onColumnDrop(col.key, e)}
+                >
+                  <span class="th-label">{t(col.labelKey)}{#if sortKey === col.key}<span class="arrow">{sortDir === 1 ? "▲" : "▼"}</span>{/if}</span>
+                  <!-- Poignée de redimensionnement (§6.2) : `draggable="false"` explicite
+                       coupe l'héritage du glisser-déposer de réordonnancement posé sur le
+                       `<th>` — sans ça, saisir la poignée déclencherait aussi un drag de
+                       colonne. Repère visuel permanent (pas seulement au survol) : sans
+                       indice visible, rien ne suggère qu'on peut redimensionner ici.
+                       `role="separator"` + `tabindex` + flèches clavier = le motif
+                       « separator (focusable) » documenté par le WAI-ARIA APG pour les
+                       poignées de redimensionnement — le linter a11y de Svelte ne le
+                       reconnaît pas comme interactif (liste de rôles trop stricte),
+                       d'où les deux ignores ci-dessous plutôt qu'un vrai souci. -->
+                  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+                  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                  <span
+                    class="col-resize"
+                    draggable="false"
+                    role="separator"
+                    aria-orientation="vertical"
+                    tabindex="0"
+                    title={t("library.resizeColumnTooltip")}
+                    onmousedown={(e) => startResize(e, col.key, (e.currentTarget as HTMLElement).closest("th")!.getBoundingClientRect().width)}
+                    onclick={(e) => e.stopPropagation()}
+                    ondblclick={(e) => { e.stopPropagation(); resetColumnWidth(col.key); }}
+                    onkeydown={(e) => {
+                      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const width = (e.currentTarget as HTMLElement).closest("th")!.getBoundingClientRect().width;
+                        adjustColumnWidth(col.key, width, e.key === "ArrowRight" ? 10 : -10);
+                      } else if (e.key === "Enter") {
+                        e.stopPropagation();
+                        resetColumnWidth(col.key);
+                      }
+                    }}
+                  ></span>
                 </th>
               {/each}
             </tr>
@@ -644,6 +862,8 @@
                     class:t-name={col.key === "name"}
                     class:mono={col.mono}
                     class:t-tags={col.key === "tags"}
+                    class:col-resized={!!columnWidths[col.key]}
+                    style={columnWidths[col.key] ? `width:${columnWidths[col.key]}px; max-width:${columnWidths[col.key]}px;` : undefined}
                   >
                     {#if col.key === "active"}
                       {#if c.active}<span class="on-dot"></span>{t("common.active").toLowerCase()}{:else}—{/if}
@@ -716,6 +936,10 @@
     flex-direction: column;
     padding: 18px 22px;
     overflow-y: auto;
+    /* Explicite plutôt que de compter sur la règle CSS qui promeut `visible`
+       en `auto` quand l'autre axe ne l'est pas (§6.2, tableau large) — pas de
+       doute possible sous WebView2. */
+    overflow-x: auto;
   }
   .full-wrap {
     flex: 1;
@@ -1026,13 +1250,24 @@
        défilement horizontal des tableaux larges est géré par `.main`. */
   }
   table {
-    width: 100%;
+    /* `max-content` plutôt que `100%` : avec beaucoup de colonnes visibles
+       (§6.2), un tableau capé à la largeur du conteneur se contente de
+       compresser chaque colonne au lieu de déborder — au point qu'une
+       colonne tout juste cochée peut devenir quasi invisible plutôt que de
+       déclencher le défilement horizontal prévu par `.table-wrap`/`.main`
+       (bug réel constaté). `min-width: 100%` garde un tableau à peu de
+       colonnes étalé sur toute la largeur disponible, comme avant. */
+    width: max-content;
+    min-width: 100%;
     border-collapse: collapse;
     font-size: 12px;
     /* Pas de surlignage de texte lors des clics de sélection (lignes + en-têtes triables). */
     user-select: none;
   }
   th {
+    /* Ancre la poignée de redimensionnement (position absolute). `sticky`
+       (règle suivante) l'établirait déjà, mais autant ne pas en dépendre. */
+    position: relative;
     text-align: left;
     padding: 8px 10px;
     color: var(--muted);
@@ -1063,6 +1298,56 @@
   th .arrow {
     margin-left: 4px;
     color: var(--rosso-bright);
+  }
+  .th-label {
+    padding-right: 8px;
+  }
+  /* Réordonnement par glisser-déposer (§6.2) : la colonne fixe (nom) n'a pas
+     `draggable`, donc jamais ce curseur — cohérent avec le fait qu'elle ne
+     peut être ni déplacée ni servir de cible avant elle-même. */
+  th[draggable="true"] {
+    cursor: grab;
+    /* `draggable` seul suffit normalement, mais `-webkit-user-drag` lève
+       toute ambiguïté sous Chromium/WebView2 pour un élément qui n'est ni un
+       lien ni une image (pas de comportement de glisser natif par défaut). */
+    -webkit-user-drag: element;
+  }
+  th.dragging {
+    opacity: 0.4;
+  }
+  /* Poignée de redimensionnement (§6.2) : bande à la jonction de deux
+     colonnes. Repère visuel permanent (pas seulement au survol) — un simple
+     changement de curseur ne suffit pas à faire découvrir la fonction. */
+  .col-resize {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -4px;
+    width: 8px;
+    cursor: col-resize;
+    z-index: 2;
+  }
+  .col-resize::after {
+    content: "";
+    position: absolute;
+    top: 5px;
+    bottom: 5px;
+    left: 3px;
+    width: 2px;
+    background: var(--line);
+  }
+  .col-resize:hover::after,
+  .col-resize:focus-visible::after,
+  th.resizing .col-resize::after {
+    background: var(--rosso-border);
+  }
+  .col-resize:focus-visible {
+    outline: none;
+  }
+  td.col-resized {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   td {
     padding: 7px 10px;

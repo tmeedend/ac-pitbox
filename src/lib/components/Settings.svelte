@@ -123,7 +123,7 @@
 
 <div class="settings">
   <header>
-    <h2>{t("settings.title")}</h2>
+    <h2 class="lbl-screen">{t("settings.title")}</h2>
   </header>
 
   <div class="tabs">
@@ -248,11 +248,6 @@
   }
   header {
     margin-bottom: 22px;
-  }
-  h2 {
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: 0.5px;
   }
   .sub {
     color: var(--muted);

@@ -16,6 +16,7 @@ pub mod config;
 pub mod import;
 pub mod layers;
 pub mod library;
+pub mod library_columns;
 pub mod maintenance;
 pub mod media;
 pub mod music;
@@ -25,6 +26,7 @@ pub mod rules;
 pub mod saved_sessions;
 pub mod session;
 pub mod session_state;
+pub mod ui_prefs;
 
 /// Imports communs à toutes les façades. Import global volontaire : il ne
 /// déclenche pas d'avertissement `unused_imports` quand un module n'en

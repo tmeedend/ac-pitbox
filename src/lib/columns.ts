@@ -1,5 +1,6 @@
 // Définitions de colonnes de tableau, propres à chaque type.
-// La sélection de colonnes visibles est mémorisée indépendamment par type.
+// Visibilité et ordre sont mémorisés indépendamment par type (§6.2).
+import { invokeSafe } from "./invokeSafe";
 import type { ModCard, ModKind } from "./library";
 import { t } from "./i18n/index.svelte";
 import { fmtSize } from "./format";
@@ -17,7 +18,7 @@ export interface ColumnDef {
   sortable: boolean;
   /** Affichée par défaut (avant tout choix utilisateur). */
   defaultVisible: boolean;
-  /** Toujours affichée, absente du sélecteur (colonne essentielle). */
+  /** Toujours affichée, absente du sélecteur, jamais déplaçable (colonne essentielle). */
   fixed?: boolean;
   /** Valeur d'affichage ; « — » si la donnée n'existe pas encore. */
   value: (c: ModCard) => string;
@@ -143,22 +144,101 @@ export function columnsFor(kind: ModKind): ColumnDef[] {
   return kind === "Track" ? TRACK_COLUMNS : CAR_COLUMNS;
 }
 
-/** Charge les clés de colonnes visibles pour un type (repli sur les défauts). */
-export function loadVisible(kind: ModKind): Set<string> {
-  const defs = columnsFor(kind);
-  const raw = localStorage.getItem(StorageKey.libraryColumns(kind));
-  if (raw) {
-    try {
-      const keys: string[] = JSON.parse(raw);
-      const valid = new Set(defs.map((d) => d.key));
-      return new Set(keys.filter((k) => valid.has(k)));
-    } catch {
-      /* repli sur les défauts */
-    }
-  }
-  return new Set(defs.filter((d) => d.fixed || d.defaultVisible).map((d) => d.key));
+export interface ColumnsPrefs {
+  /** Clés visibles (les colonnes `fixed` sont toujours affichées en plus, sans y figurer). */
+  visible: string[];
+  /** Ordre d'affichage — toutes les colonnes du type, visibles ou non, pour
+   * qu'une colonne masquée retrouve sa position relative une fois réaffichée. */
+  order: string[];
+  /** Largeur en pixels des colonnes redimensionnées à la main (glissé sur la
+   * poignée d'en-tête). Absente d'une clé = largeur naturelle (au contenu). */
+  widths: Record<string, number>;
 }
 
-export function saveVisible(kind: ModKind, keys: Set<string>): void {
-  localStorage.setItem(StorageKey.libraryColumns(kind), JSON.stringify([...keys]));
+function defaultOrder(kind: ModKind): string[] {
+  return columnsFor(kind).map((d) => d.key);
+}
+
+function defaultVisibleKeys(kind: ModKind): string[] {
+  return columnsFor(kind)
+    .filter((d) => d.fixed || d.defaultVisible)
+    .map((d) => d.key);
+}
+
+/** Répare un ordre persisté face à une évolution du jeu de colonnes (une
+ * colonne retirée du code disparaît silencieusement, une colonne ajoutée
+ * apparaît en fin de liste) — même esprit que `#[serde(default)]` côté Rust :
+ * un format légèrement désynchronisé ne doit jamais planter ni se figer. */
+function reconcileOrder(saved: string[] | undefined, kind: ModKind): string[] {
+  const validKeys = columnsFor(kind).map((d) => d.key);
+  const validSet = new Set(validKeys);
+  const kept = (saved ?? []).filter((k) => validSet.has(k));
+  const missing = validKeys.filter((k) => !kept.includes(k));
+  return [...kept, ...missing];
+}
+
+/** Ancien mécanisme (avant fix) : lu une seule fois pour migrer la visibilité
+ * déjà choisie, jamais réécrit. `localStorage` n'est pas garanti synchrone
+ * sur disque côté WebView2 — voir `session_state.rs` pour le pourquoi du
+ * changement. Ne portait que la visibilité, jamais l'ordre (fonctionnalité
+ * nouvelle) : une migration ne restaure donc que `visible`, `order` repart de
+ * l'ordre par défaut.
+ */
+function loadLegacyVisible(kind: ModKind): string[] | null {
+  const raw = localStorage.getItem(StorageKey.libraryColumns(kind));
+  if (!raw) return null;
+  try {
+    const keys: string[] = JSON.parse(raw);
+    return Array.isArray(keys) ? keys : null;
+  } catch {
+    return null;
+  }
+}
+
+interface AllColumnsPrefs {
+  cars?: ColumnsPrefs;
+  tracks?: ColumnsPrefs;
+}
+
+/** Persistance durable (§6.2) : fichier écrit côté Rust
+ * (`library_columns.json`, `std::fs::write` synchrone), pas `localStorage` —
+ * voir `loadLegacyVisible` pour le pourquoi du changement. Un seul fichier
+ * pour les deux types (clé `cars`/`tracks`) : chaque sauvegarde réécrit tout
+ * le fichier, donc on recharge-modifie-réécrit l'objet entier à chaque appel,
+ * jamais une écriture partielle qui effacerait l'autre type. */
+function loadAllPrefs(): Promise<AllColumnsPrefs> {
+  return invokeSafe<AllColumnsPrefs>("get_library_columns", undefined, {});
+}
+
+function persistAllPrefs(all: AllColumnsPrefs): Promise<void> {
+  return invokeSafe<void>("save_library_columns", { prefs: all }, undefined);
+}
+
+/** Charge visibilité + ordre pour un type, avec repli sur l'ancienne clé
+ * `localStorage` (visibilité seule) puis sur les défauts. */
+export async function loadColumnsPrefs(kind: ModKind): Promise<ColumnsPrefs> {
+  const all = await loadAllPrefs();
+  const saved = kindKey(kind) === "tracks" ? all.tracks : all.cars;
+  if (saved) {
+    const validSet = new Set(columnsFor(kind).map((d) => d.key));
+    return {
+      visible: (saved.visible ?? []).filter((k) => validSet.has(k)),
+      order: reconcileOrder(saved.order, kind),
+      widths: Object.fromEntries(Object.entries(saved.widths ?? {}).filter(([k]) => validSet.has(k))),
+    };
+  }
+  const legacy = loadLegacyVisible(kind);
+  const validSet = new Set(columnsFor(kind).map((d) => d.key));
+  return {
+    visible: legacy ? legacy.filter((k) => validSet.has(k)) : defaultVisibleKeys(kind),
+    order: defaultOrder(kind),
+    widths: {},
+  };
+}
+
+export async function saveColumnsPrefs(kind: ModKind, prefs: ColumnsPrefs): Promise<void> {
+  const all = await loadAllPrefs();
+  if (kindKey(kind) === "tracks") all.tracks = prefs;
+  else all.cars = prefs;
+  await persistAllPrefs(all);
 }

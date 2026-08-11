@@ -5,6 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listen } from "@tauri-apps/api/event";
 import { StorageKey } from "./storage";
+import { getUiPref, setUiPref } from "./uiPrefs.svelte";
 import {
   importArchives,
   importFolders,
@@ -46,13 +47,20 @@ export const importState = $state<{
   report: null,
   pendingConflicts: [],
   pendingAmbiguous: [],
-  copyMode: localStorage.getItem(StorageKey.importCopy) !== "false",
+  // Défaut synchrone (état module-level, pas de composant/onMount ici),
+  // corrigé de façon asynchrone juste en dessous dès que la valeur
+  // sauvegardée répond (§6.2, même schéma que `nav.svelte.ts`).
+  copyMode: true,
   version: 0,
+});
+
+getUiPref(StorageKey.importCopy).then((v) => {
+  if (v != null) importState.copyMode = v !== "false";
 });
 
 export function setCopyMode(v: boolean): void {
   importState.copyMode = v;
-  localStorage.setItem(StorageKey.importCopy, String(v));
+  setUiPref(StorageKey.importCopy, String(v));
 }
 
 /** Lance un import et récolte conflits flous + cas ambigus (§4.2/§4.4). La

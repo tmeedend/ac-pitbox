@@ -134,7 +134,7 @@
   </div>
 
   <div class="oppo">
-    <div class="oppo-h">{t("launch.gridGenerated", { count: setup.opponents.length })}</div>
+    <div class="oppo-h lbl">{t("launch.gridGenerated", { count: setup.opponents.length })}</div>
     {#each setup.opponents as opp, i}
       {@const prev = opponentPreview(opp)}
       <div
@@ -248,13 +248,14 @@
     border: 1px solid var(--line);
     margin-top: 12px;
   }
+  /* Couleur/taille/interlettrage/majuscules viennent de `.lbl` (global,
+     harmonisation §chantier libellés) : ne reste ici que le fond en bandeau
+     et l'annulation de la marge basse (`.lbl` en prévoit une pour une
+     rubrique de carte, pas pour un bandeau suivi directement des lignes). */
   .oppo-h {
     background: var(--raised);
     padding: 6px 10px;
-    color: var(--muted);
-    font-size: 8px;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
+    margin-bottom: 0;
   }
   .oppo-row {
     display: flex;

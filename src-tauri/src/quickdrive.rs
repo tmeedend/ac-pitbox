@@ -53,7 +53,7 @@ fn build_assists(s: &RaceSetup) -> Value {
         "Damage": s.damage as f64,
         "TyreWear": s.tyre_wear as f64 / 100.0,
         "FuelConsumption": s.fuel_rate as f64 / 100.0,
-        "TyreBlankets": false,
+        "TyreBlankets": s.tyre_blankets,
     })
 }
 
@@ -120,14 +120,19 @@ fn mode_data_hotlap(s: &RaceSetup) -> String {
 }
 
 /// `ModeData` pour `QuickDrive_Weekend.xaml` — schéma confirmé sur
-/// `pitbox-weekend.cmpreset` : `PracticeLength`/`QualificationLength` sont
-/// indépendants et optionnels (`null` = phase absente), chacun activable
-/// séparément — pas besoin du mode `QuickDrive_Race.xaml` séparé : une
-/// « course » chez nous est un Weekend sans pratique ni qualification.
+/// `pitbox-weekend.cmpreset`. `PracticeLength` est optionnel (`null` = phase
+/// absente, la course rapide de CM le supporte : curseur `[0, 90]`).
+/// `QualificationLength` ne l'est pas : la qualification est **toujours**
+/// présente en mode Weekend côté CM (curseur `[5, 90]`, jamais désactivable)
+/// — pas besoin du mode `QuickDrive_Race.xaml` séparé : une « course » chez
+/// nous est un Weekend sans pratique, avec la qualification la plus courte
+/// possible.
 fn mode_data_weekend(s: &RaceSetup) -> String {
     json!({
         "PracticeLength": if s.practice_enabled { Some(s.practice_minutes) } else { None },
-        "QualificationLength": if s.qualifying { Some(s.qualify_minutes) } else { None },
+        // Toujours une durée concrète : CM ne sait pas désactiver la
+        // qualification en mode Weekend (voir doc de `build_preset`).
+        "QualificationLength": s.qualify_minutes,
         "Penalties": s.penalties,
         "JumpStartPenalty": s.jump_start_penalty,
         "LapsNumber": s.laps,
@@ -153,10 +158,17 @@ fn mode_data_weekend(s: &RaceSetup) -> String {
 ///   ("Optimum"/sec). `s.grip` n'est **pas encore appliqué** — toujours piste
 ///   optimale sèche pour l'instant.
 /// - **Durée en Practice** : le `ModeData` de `QuickDrive_Practice.xaml`
-///   (confirmé sur `pitbox-practice.cmpreset`) n'a aucun champ de durée —
-///   contrairement à l'ancien race.ini (`DURATION_MINUTES`), une session
-///   Practice via Quick Drive semble illimitée (on roule tant qu'on veut,
-///   sortie manuelle). `s.duration_minutes` n'est donc plus utilisé.
+///   (confirmé sur `pitbox-practice.cmpreset`, et sur la classe C# CM
+///   elle-même) n'a aucun champ de durée — contrairement à l'ancien race.ini
+///   (`DURATION_MINUTES`), une session Practice via Quick Drive est
+///   illimitée par design (on roule tant qu'on veut, sortie manuelle). Pas
+///   de champ correspondant dans `RaceSetup` : rien à envoyer.
+/// - **Qualification jamais désactivable** : `QuickDrive_Weekend.xaml.cs`
+///   (CM) borne sa durée à `[5, 90]` minutes et son `Save()` n'écrit jamais
+///   de durée nulle — aucun état « off » n'existe côté CM pour le mode
+///   Weekend. `s.qualify_minutes` est donc toujours envoyée (jamais `null`),
+///   avec la même borne mini de 5 min côté UI plutôt qu'une case à cocher
+///   qui ne pourrait jamais réellement désactiver la phase.
 pub fn build_preset(s: &RaceSetup) -> Result<String, String> {
     let (mode_path, mode_data) = match s.session_type {
         SessionType::Practice => ("/Pages/Drive/QuickDrive_Practice.xaml", mode_data_practice(s)),
@@ -223,7 +235,6 @@ mod tests {
             ai_level_min: 92,
             ai_level_max: 98,
             laps: 5,
-            duration_minutes: 15,
             weather: "sol_01_clear".into(),
             time_hours: 13.0,
             ambient_c: Some(24),
@@ -239,13 +250,13 @@ mod tests {
             grip: 96,
             practice_enabled: false,
             practice_minutes: 20,
-            qualifying: false,
             qualify_minutes: 10,
             ghost_car: false,
             start_from_pit: true,
             damage: 50,
             fuel_rate: 100,
             tyre_wear: 100,
+            tyre_blankets: false,
             abs_auto: true,
             traction_control_auto: true,
             ideal_line: false,
@@ -291,7 +302,6 @@ mod tests {
         s.laps = 10;
         s.practice_enabled = true;
         s.practice_minutes = 30;
-        s.qualifying = true;
         s.qualify_minutes = 20;
         s.opponents = vec![
             Opponent {
@@ -325,16 +335,16 @@ mod tests {
     }
 
     #[test]
-    fn race_without_qualifying_omits_qualification_length() {
+    fn race_without_practice_omits_practice_length_but_keeps_qualification() {
         let s = base_setup(SessionType::Race);
         let json = build_preset(&s).unwrap();
         let v: Value = serde_json::from_str(&json).unwrap();
         let mode_data: Value = serde_json::from_str(v["ModeData"].as_str().unwrap()).unwrap();
-        assert!(
-            mode_data["QualificationLength"].is_null(),
-            "pas de qualification = weekend sans cette phase"
+        assert!(mode_data["PracticeLength"].is_null(), "pas d'essais libres = phase absente");
+        assert_eq!(
+            mode_data["QualificationLength"], 10,
+            "la qualification n'a pas d'état désactivé côté CM (Weekend) : toujours une durée concrète"
         );
-        assert!(mode_data["PracticeLength"].is_null());
     }
 
     #[test]
@@ -360,6 +370,16 @@ mod tests {
         assert_eq!(assists["TyreWear"], 1.0);
         assert_eq!(assists["FuelConsumption"], 2.0);
         assert_eq!(assists["Abs"], 0);
+    }
+
+    #[test]
+    fn tyre_blankets_flows_into_assists_data() {
+        let mut s = base_setup(SessionType::Practice);
+        s.tyre_blankets = true;
+        let json = build_preset(&s).unwrap();
+        let v: Value = serde_json::from_str(&json).unwrap();
+        let assists: Value = serde_json::from_str(v["AssistsData"].as_str().unwrap()).unwrap();
+        assert_eq!(assists["TyreBlankets"], true);
     }
 
     #[test]

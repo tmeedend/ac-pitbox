@@ -745,7 +745,7 @@
           <section class="blk">
             <header class="blk-h">
               <span class="blk-t">{t("detail.skinsLabel")}</span>
-              <span class="blk-n">{t("detail.skinsHint", { count: skins.length })}</span>
+              <span class="blk-n">{skins.length}</span>
             </header>
           {#if skins.length}
             <div class="skins">
@@ -825,7 +825,7 @@
           <section class="blk">
             <header class="blk-h">
               <span class="blk-t">{t("columns.layouts")}</span>
-              <span class="blk-n">{t("detail.layoutsHint", { count: d.track?.layouts.length ?? 0 })}</span>
+              <span class="blk-n">{d.track?.layouts.length ?? 0}</span>
             </header>
           {#if d.track && d.track.layouts.length}
             <div class="skins">

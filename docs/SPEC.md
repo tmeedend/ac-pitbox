@@ -255,7 +255,31 @@ Mods de type non reconnu (shaders, configs CSP, mods d'UI, weather patterns…) 
 
 ### 7.4 Vues et interactions
 
-Deux vues commutables par bibliothèque (galerie / tableau), colonnes choisies persistées.
+Deux vues commutables par bibliothèque (galerie / tableau). En vue tableau,
+colonnes choisies, **réordonnables par glisser-déposer d'en-tête** (colonne
+« Nom » fixe, jamais déplaçable) et **redimensionnables** par une poignée à la
+jonction de deux en-têtes (glissé souris, ou flèches gauche/droite au clavier
+une fois la poignée focus — double-clic/Entrée pour revenir à la largeur
+naturelle). Visibilité, ordre et largeurs persistés ensemble. Le tableau
+lui-même s'élargit au besoin plutôt que de comprimer ses colonnes (`width:
+max-content` sur la balise `<table>`, défilement horizontal du conteneur) —
+sans ça, ajouter une colonne dans un tableau déjà chargé pouvait la rendre
+quasi invisible au lieu de déclencher le défilement (bug réel constaté).
+**Persistance** (`src-tauri/src/library_columns.rs`,
+`app_config_dir/library_columns.json`) : même mécanisme que le duo de session
+et les presets (§8.4/§8.6, voir plus bas) — fichier dédié écrit côté Rust,
+pas `localStorage`, migration silencieuse depuis l'ancienne clé (visibilité
+seule ; ordre et largeurs, fonctionnalités nouvelles, repartent toujours des
+défauts lors de cette migration).
+
+**Tous les autres petits réglages d'interface** (filtres, tri, vue
+galerie/tableau, regroupement/tri de la vue transversale, mode copier/déplacer
+à l'import, tags de fichier affichés, skin/layout préféré par mod) suivent la
+même règle (§ CLAUDE.md, règle d'or n°5) : `app_config_dir/ui_prefs.json` via
+`src/lib/uiPrefs.svelte.ts`, jamais `localStorage`. Migration en bloc (toutes
+les clés `pitbox.*` encore en `localStorage`, hors celles qui vivent déjà dans
+un fichier Rust dédié) au premier démarrage après la mise à jour, pas une clé
+à la fois.
 
 **Sélection** :
 - **1 clic** = sélectionne (affiche dans le panneau de droite ET définit comme voiture/circuit de session).
@@ -307,7 +331,9 @@ L'app pilote CM via son protocole `acmanager://race/quick?presetFile=…` : un *
 
 > L'ancien mécanisme `race/config?configFile=` (race.ini brut via `PreparedConfig`) a été abandonné : il ne peuple pas `StartProperties.BasicProperties`, dont dépend le check CSP auto-load côté CM — bug confirmé empiriquement, détail en `docs/L4-cm-launch-research.md`.
 
-Limites connues du preset Quick Drive (pas de champ correspondant trouvé dans le schéma) : **skin du joueur non forçable** (CM reprend le dernier skin utilisé pour cette voiture), évolution du grip non mappée (toujours « Optimum »/sec), durée de session Practice non appliquée (sessions à durée libre par design Quick Drive).
+Limites connues du preset Quick Drive (pas de champ correspondant trouvé dans le schéma) : **skin du joueur non forçable** (CM reprend le dernier skin utilisé pour cette voiture), évolution du grip non mappée (toujours « Optimum »/sec), durée de session Practice non appliquée (sessions à durée libre par design Quick Drive), **qualification jamais désactivable** en mode Weekend (curseur CM `[5, 90]` min, aucun état « off » — voir §9.3).
+
+L'URI de lancement porte `&loadAssists=true`, qui correspond au flag `forceAssistsLoading` lu par `ArgumentsHandler.Race.cs::ProcessRaceQuick` (code source de CM) et force le chargement de l'`AssistsData` du preset (dégâts/carburant/pneus/aides/chauffe-pneus), **indépendamment** du réglage global de CM « Charger assistances avec préréglage de course rapide » (désactivé par défaut chez CM). Sans ce flag, CM ignore silencieusement (pas d'exception, pas de log) l'`AssistsData` de n'importe quel preset Quick Drive — y compris ceux sauvegardés par l'utilisateur lui-même dans CM — et garde les assistances actuellement actives dans son UI. Confirmé en lisant `QuickDrive.xaml.cs`/`ArgumentsHandler.Race.cs` (`gro-ove/actools`). `TrackPropertiesData` (grip) n'a pas de garde équivalente côté CM — toujours chargé, indépendamment de ce flag.
 
 **Skin joueur — confirmé au niveau du code source de CM**, pas seulement supposé : `ArgumentsHandler.Race.cs::ProcessRaceQuick` (le gestionnaire de l'URI `race/quick`) ne lit qu'un preset + des assists, jamais de skin, et n'en transmet aucun à `QuickDrive.RunAsync()`. Les deux seuls chemins CM qui acceptent un paramètre `skin` (`race/online`, `race/csp`) exigent soit un vrai serveur multijoueur, soit un mode CSP spécial — aucun ne supporte un plateau d'adversaires complet, donc aucun des deux ne remplace `race/quick` pour Pit Box. Le cache interne où CM retient le dernier skin par voiture (`Values.data`) est chiffré avec une clé fournie par `InternalUtils.GetValuesStorageEncryptionKey()` — fonction absente du dépôt open source d'`actools`, donc injecter une entrée depuis Pit Box est **impossible sans risquer de corrompre tout le fichier de réglages de CM** (pas seulement les skins). Palliatif retenu côté UI : astuce (ⓘ) à côté du sélecteur de skin dans le bloc SESSION, qui explique la limite et ouvre CM en un clic pour fixer le skin une fois par voiture (CM le retient ensuite pour les lancements suivants).
 
@@ -318,19 +344,19 @@ Limites connues du preset Quick Drive (pas de champ correspondant trouvé dans l
 Maquette de référence `pitbox-reglages-session.html`. Pas de rappel du duo en haut (déjà dans la barre latérale) — titre + Lancer. Toutes les options visibles (pas de bloc replié). **Fond photo** derrière l'interface : voir §6.2 pour l'ordre de repli (screenshot du combo → screenshot du circuit → background officiel → fond neutre).
 
 **Communs à tous les types de session** — regroupés dans « Simulation » (dégâts,
-conso carburant, usure pneus, puis en sous-rubrique aides à la conduite
-ABS/antipatinage/ligne) et dans « Options de session » (pénalités, évolution
-du grip) : ces réglages sont envoyés au preset Quick Drive quel que soit le
-type (`Penalties` figure dans les trois `ModeData` ; `TrackPropertiesData`
-est au niveau racine du preset, pas dans `ModeData`), rien ne justifie de les
-cantonner à Course. Météo et heure, également communes.
+conso carburant, usure pneus, chauffe-pneus, puis en sous-rubrique aides à la
+conduite ABS/antipatinage/ligne) et dans « Options de session » (pénalités,
+évolution du grip) : ces réglages sont envoyés au preset Quick Drive quel que
+soit le type (`Penalties` figure dans les trois `ModeData` ; `TrackPropertiesData`
+et `AssistsData` sont au niveau racine du preset, pas dans `ModeData`), rien ne
+justifie de les cantonner à Course. Météo et heure, également communes.
 
 **Course uniquement** (absent des schémas Quick Drive Practice/Hotlap : pas de
 grille, pas de phase weekend) :
 - **Adversaires** : 4 modes (Même voiture / Même catégorie / Même ère via année min/max / Libre). Remplissage auto selon le mode, **liste du plateau visible et ajustable** (chaque IA avec sa force, retirer/ajouter, cliquer une ligne pour changer sa voiture/son skin). Un bouton « + » par ligne duplique cette voiture avec un skin différent (pas encore pris par un autre adversaire du même mod dans le plateau ; reboucle sur les skins déjà pris une fois tous épuisés). Nombre d'adversaires, **Difficulté** (fourchette min-max, deux curseurs, le plateau réparti dans la plage — sous-rubrique du bloc Adversaires, pas une rubrique séparée) et année min/max sur une même ligne. Année min/max sont deux champs numériques indépendants (pas une double glissière) : 0 ou vide = pas de borne de ce côté, filtrage fait côté front (non transmis au preset Quick Drive).
-- Tours ou durée, faux départ, cases essais libres / qualifications. Essais libres et qualifications sont deux phases indépendantes du weekend Quick Drive, chacune activable séparément avec sa propre durée (min).
+- Tours ou durée, faux départ, case essais libres (activable, durée en min) et durée de qualification (min, **toujours présente** — pas de case pour la désactiver : `QuickDrive_Weekend.xaml` de CM n'a pas d'état « off » pour la qualif, son curseur va de 5 à 90 min. Le champ Pit Box reprend cette borne mini de 5 plutôt que de proposer un réglage que CM ne peut pas honorer).
 
-**Practice** : durée (non appliquée par Quick Drive, session à durée libre — voir §9.2), départ (Stand/Piste → `StartType` du `ModeData` ; "Piste" non vérifiée sur un preset réel, voir commentaire `mode_data_practice`).
+**Practice** : pas de champ durée (non applicable — session à durée libre par design Quick Drive, voir §9.2 ; pas de champ correspondant côté Pit Box), départ (Stand/Piste → `StartType` du `ModeData` ; "Piste" non vérifiée sur un preset réel, voir commentaire `mode_data_practice`).
 
 **Hotlap** : ghost car.
 

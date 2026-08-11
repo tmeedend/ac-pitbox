@@ -14,9 +14,10 @@
  *   .mono                               police à chasse fixe (données)
  *   .pill (+ .pill-ok, .pill-warn, .pill-err)   pastilles d'état
  *   .gp-focus                           focus manette (gamepadNav.ts)
+ *   .lbl-screen / .lbl / .lbl-key       libellés (voir plus bas, §chantier libellés)
  *
- * Tout le reste — .lbl, .tag, .srcbox, .prov-note, .muted, .small… — est
- * local au composant qui le définit, même si le nom se répète ailleurs.
+ * Tout le reste — .tag, .srcbox, .prov-note, .muted, .small… — est local au
+ * composant qui le définit, même si le nom se répète ailleurs.
  *
  * Filet de sécurité : après un déplacement, `npm run check` signale les
  * « Unused CSS selector » restés derrière. Il ne dit rien, en revanche, sur
@@ -85,7 +86,9 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background-color: var(--line);
+  /* Un peu plus clair que `--line` (bug réel : quasi invisible sur le fond
+     de l'app) tout en restant discret par rapport au survol (`--muted2`). */
+  background-color: var(--faint2);
   background-clip: padding-box;
   border: 2px solid transparent;
 }
@@ -134,7 +137,10 @@ body {
  *   .lbl-key      clé de donnée        « PACK », « ARCHIVE », fiche technique
  *
  * `.lbl` reprend le traitement déjà majoritaire (8 composants) : c'est le
- * moins de changement pour le plus de cohérence.
+ * moins de changement pour le plus de cohérence. Même logique pour
+ * `.lbl-screen` : 4 écrans sur 5 (Add-ons voiture/circuit, Lancement, Apps,
+ * Autres mods) avaient déjà convergé sur 18px/600 sans se concerter — Réglages
+ * (15px) est l'écart, pas la référence.
  *
  * La navigation garde son identité rouge (`.nsec` d'AppShell, 9px/2px) :
  * c'est délibéré, elle n'est pas du contenu et la distinguer aide à
@@ -144,9 +150,8 @@ body {
  * C'est précisément ce qui avait produit six copies identiques de `.lbl`.
  */
 .lbl-screen {
-  color: var(--txt2);
-  font-size: 13px;
-  letter-spacing: 0.5px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .lbl {

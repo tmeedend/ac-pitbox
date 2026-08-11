@@ -72,12 +72,6 @@ pub struct RaceSetup {
     pub ai_level_max: u32,
     #[serde(default)]
     pub laps: u32,
-    /// Durée (Practice) : le schéma Quick Drive `QuickDrive_Practice.xaml`
-    /// n'a pas de champ durée dans son `ModeData` — session à durée libre.
-    /// Conservé pour compat aller-retour front, non lu ici.
-    #[serde(default = "default_duration")]
-    #[allow(dead_code)]
-    pub duration_minutes: u32,
     /// Nom du dossier météo (ex. "3_clear").
     #[serde(default)]
     pub weather: String,
@@ -134,9 +128,14 @@ pub struct RaceSetup {
     pub practice_enabled: bool,
     #[serde(default = "default_practice_minutes")]
     pub practice_minutes: u32,
-    /// Qualification avant la course (mode course uniquement).
-    #[serde(default)]
-    pub qualifying: bool,
+    /// Qualification avant la course (mode course uniquement) : toujours
+    /// présente, pas de bascule pour la retirer — `QuickDrive_Weekend.xaml`
+    /// de CM n'a pas d'état « désactivé » (son curseur va de 5 à 90 min,
+    /// jamais 0, et son `Save()` n'écrit jamais de durée nulle). Envoyer une
+    /// durée nulle ne la désactive donc pas côté CM, ça retombe juste sur son
+    /// défaut interne (30 min) — vérifié en lisant `QuickDrive_Weekend.xaml.cs`
+    /// (gro-ove/actools). D'où la borne mini à 5 côté front plutôt qu'une
+    /// case à cocher.
     #[serde(default = "default_qualify_minutes")]
     pub qualify_minutes: u32,
     // --- Réglages dépendants du type (§8.4) ---
@@ -158,6 +157,9 @@ pub struct RaceSetup {
     pub fuel_rate: u32,
     #[serde(default = "default_rate")]
     pub tyre_wear: u32,
+    /// Chauffe-pneus au départ. Actif quel que soit le type de session.
+    #[serde(default)]
+    pub tyre_blankets: bool,
     // --- Aides à la conduite (Course uniquement, §8.6) ---
     #[serde(default = "default_true")]
     pub abs_auto: bool,
@@ -172,9 +174,6 @@ fn default_ai_level_min() -> u32 {
 }
 fn default_ai_level_max() -> u32 {
     98
-}
-fn default_duration() -> u32 {
-    15
 }
 fn default_time() -> f32 {
     13.0
@@ -202,48 +201,6 @@ fn default_rate() -> u32 {
 }
 fn default_true() -> bool {
     true
-}
-
-/// Applique simulation (dégâts/carburant/usure) + aides à la conduite dans
-/// `assists.ini` (Documents AC), en préservant les autres réglages —
-/// best-effort, clés vérifiées sur un fichier réel (§8.6 : simulation active
-/// quel que soit le type de session ; aides = Course uniquement, appelées
-/// avec les valeurs par défaut sinon).
-#[allow(clippy::too_many_arguments)]
-fn apply_assists(damage: u32, fuel_rate: u32, tyre_wear: u32, abs: bool, traction_control: bool, ideal_line: bool) {
-    let Ok(profile) = std::env::var("USERPROFILE") else {
-        return;
-    };
-    let path = std::path::Path::new(&profile)
-        .join("Documents")
-        .join("Assetto Corsa")
-        .join("cfg")
-        .join("assists.ini");
-    let Ok(text) = std::fs::read_to_string(&path) else {
-        return;
-    };
-    let b = |v: bool| if v { 1 } else { 0 };
-    let mut out = String::new();
-    for line in text.lines() {
-        let t = line.trim_start();
-        if t.starts_with("DAMAGE=") {
-            out.push_str(&format!("DAMAGE={damage}"));
-        } else if t.starts_with("FUEL_RATE=") {
-            out.push_str(&format!("FUEL_RATE={fuel_rate}"));
-        } else if t.starts_with("TYRE_WEAR=") {
-            out.push_str(&format!("TYRE_WEAR={tyre_wear}"));
-        } else if t.starts_with("ABS=") {
-            out.push_str(&format!("ABS={}", b(abs)));
-        } else if t.starts_with("TRACTION_CONTROL=") {
-            out.push_str(&format!("TRACTION_CONTROL={}", b(traction_control)));
-        } else if t.starts_with("IDEAL_LINE=") {
-            out.push_str(&format!("IDEAL_LINE={}", b(ideal_line)));
-        } else {
-            out.push_str(line);
-        }
-        out.push('\n');
-    }
-    let _ = std::fs::write(&path, out);
 }
 
 /// Garantit qu'un contenu est disponible dans `content/` : présent (vrai dossier
@@ -310,17 +267,6 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
         }
     }
 
-    // Simulation (dégâts/usure/carburant) + aides : actives quel que soit le
-    // type de session (§8.6) ; vivent dans assists.ini, pas race.ini.
-    apply_assists(
-        setup.damage,
-        setup.fuel_rate,
-        setup.tyre_wear,
-        setup.abs_auto,
-        setup.traction_control_auto,
-        setup.ideal_line,
-    );
-
     // Preset Quick Drive (§8.3) plutôt qu'un race.ini/PreparedConfig : seul ce
     // chemin peuple StartProperties.BasicProperties côté CM, condition pour
     // que le téléchargement CSP automatique (VAO/config manquants) se
@@ -329,7 +275,17 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
     let path = std::env::temp_dir().join(format!("pitbox-quickdrive-{}.json", Uuid::new_v4()));
     std::fs::write(&path, preset).map_err(|e| format!("écriture du preset Quick Drive : {e}"))?;
 
-    let uri = format!("acmanager://race/quick?presetFile={}", path.display());
+    // `loadAssists=true` force `forceAssistsLoading` côté CM
+    // (`ArgumentsHandler.Race.cs` → `QuickDrive.RunAsync`), indépendamment de
+    // son réglage global « Charger assistances avec préréglage de course
+    // rapide », désactivé par défaut. Sans ce flag, CM ignore silencieusement
+    // l'`AssistsData` du preset (dégâts/carburant/pneus/aides/chauffe-pneus)
+    // et garde les assistances actuellement actives dans son UI — aucune
+    // exception, aucun log, juste un preset dont la moitié est ignorée.
+    // Vérifié en lisant `QuickDrive.xaml.cs`/`ArgumentsHandler.Race.cs`
+    // (gro-ove/actools) : pas de garde équivalente pour `TrackPropertiesData`
+    // (toujours chargé), d'où l'absence du même flag pour l'état de piste.
+    let uri = format!("acmanager://race/quick?presetFile={}&loadAssists=true", path.display());
     let mut cmd = Command::new(cm);
     cmd.arg(&uri);
     #[cfg(windows)]

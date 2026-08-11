@@ -20,6 +20,7 @@ mod launch;
 mod layers;
 mod libpath;
 mod library;
+mod library_columns;
 mod maintenance;
 mod media;
 mod modscan;
@@ -39,6 +40,7 @@ mod submods;
 #[cfg(test)]
 mod testutil;
 mod thumbnails;
+mod ui_prefs;
 mod uijson;
 mod weather;
 
@@ -155,6 +157,10 @@ pub fn run() {
             commands::session_state::save_launch_state,
             commands::saved_sessions::get_saved_sessions,
             commands::saved_sessions::save_saved_sessions,
+            commands::library_columns::get_library_columns,
+            commands::library_columns::save_library_columns,
+            commands::ui_prefs::get_ui_prefs,
+            commands::ui_prefs::save_ui_prefs,
             commands::maintenance::maintenance_scan,
             commands::maintenance::reindex_library,
             commands::maintenance::delete_broken_mod,

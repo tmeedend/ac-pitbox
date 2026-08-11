@@ -97,7 +97,7 @@
 <div class="others">
   <header class="head">
     <div>
-      <h2>{t("nav.others")}</h2>
+      <h2 class="lbl-screen">{t("nav.others")}</h2>
       <p class="sub">{t("others.subtitle")}</p>
     </div>
     {#if others.length}
@@ -156,10 +156,6 @@
     justify-content: space-between;
     gap: 20px;
     margin-bottom: 18px;
-  }
-  h2 {
-    font-size: 18px;
-    font-weight: 600;
   }
   .sub {
     color: var(--muted);

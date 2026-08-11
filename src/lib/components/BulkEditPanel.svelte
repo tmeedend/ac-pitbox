@@ -155,7 +155,7 @@
 
   <div class="sections">
     <section>
-      <h3>{t("bulkEdit.favoriteSection")}</h3>
+      <h3 class="lbl">{t("bulkEdit.favoriteSection")}</h3>
       <div class="row">
         <button class="btn" type="button" onclick={markFavorite} disabled={busy}>{t("bulkEdit.markFavorite")}</button>
         <button class="btn" type="button" onclick={unmarkFavorite} disabled={busy}>{t("bulkEdit.unmarkFavorite")}</button>
@@ -163,7 +163,7 @@
     </section>
 
     <section>
-      <h3>{t("bulkEdit.stateSection")}</h3>
+      <h3 class="lbl">{t("bulkEdit.stateSection")}</h3>
       <div class="row">
         <button class="btn" type="button" onclick={activateAll} disabled={busy}>{t("bulkEdit.activateAll")}</button>
         <button class="btn" type="button" onclick={deactivateAll} disabled={busy}>{t("bulkEdit.deactivateAll")}</button>
@@ -171,7 +171,7 @@
     </section>
 
     <section>
-      <h3>{t("bulkEdit.categorySection")}</h3>
+      <h3 class="lbl">{t("bulkEdit.categorySection")}</h3>
       <div class="row">
         <input
           class="input"
@@ -188,7 +188,7 @@
     </section>
 
     <section>
-      <h3>{t("bulkEdit.tagsSection")}</h3>
+      <h3 class="lbl">{t("bulkEdit.tagsSection")}</h3>
       <div class="row">
         <input
           class="input"
@@ -203,7 +203,7 @@
 
     {#if isCar}
       <section>
-        <h3>{t("bulkEdit.opponentsSection")}</h3>
+        <h3 class="lbl">{t("bulkEdit.opponentsSection")}</h3>
         <p class="opp-hint">{t("bulkEdit.opponentsHint")}</p>
         <div class="row">
           <button class="btn" type="button" onclick={onSetOpponents}>{t("bulkEdit.setOpponents")}</button>
@@ -213,7 +213,7 @@
     {/if}
 
     <section>
-      <h3>{t("bulkEdit.exportSection")}</h3>
+      <h3 class="lbl">{t("bulkEdit.exportSection")}</h3>
       <div class="row">
         <button class="btn-ghost export" type="button" onclick={doExport} disabled={exporting}>
           {exporting ? t("detail.exporting") : t("bulkEdit.exportAll")}
@@ -223,7 +223,7 @@
     </section>
 
     <section class="danger">
-      <h3>{t("bulkEdit.deleteSection")}</h3>
+      <h3 class="lbl">{t("bulkEdit.deleteSection")}</h3>
       <div class="row">
         <button class="btn danger" type="button" onclick={deleteAll} disabled={busy}>{t("bulkEdit.deleteAll")}</button>
       </div>
@@ -323,13 +323,6 @@
   }
   section {
     flex: none;
-  }
-  h3 {
-    font-size: 10.5px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--muted);
-    margin-bottom: 8px;
   }
   .opp-hint {
     font-size: 10px;
