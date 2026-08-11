@@ -143,7 +143,11 @@ mod tests {
         let json = serde_json::to_string_pretty(&state).unwrap();
         std::fs::write(&path, &json).unwrap();
         let back: LaunchState = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-        assert_eq!(back.selection.unwrap()["session_type"], "race", "selection preserved verbatim");
+        assert_eq!(
+            back.selection.unwrap()["session_type"],
+            "race",
+            "selection preserved verbatim"
+        );
         assert_eq!(back.presets.unwrap()["race"]["laps"], 5, "presets preserved verbatim");
     }
 

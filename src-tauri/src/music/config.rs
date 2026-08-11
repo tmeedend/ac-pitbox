@@ -233,7 +233,10 @@ mod tests {
         // dossier déjà choisi ne doit pas basculer silencieusement sur le
         // pack embarqué qui vient d'apparaître.
         let cfg = parse_with_migration(r#"{"menu_folder": "D:\\Music\\menu"}"#);
-        assert!(cfg.use_custom_folders, "dossier déjà choisi -> reste en mode personnalisé");
+        assert!(
+            cfg.use_custom_folders,
+            "dossier déjà choisi -> reste en mode personnalisé"
+        );
         assert_eq!(cfg.menu_folder, Some(PathBuf::from(r"D:\Music\menu")));
     }
 
@@ -249,7 +252,10 @@ mod tests {
         // pas de migration, même si un dossier personnalisé traîne encore —
         // l'utilisateur a pu décocher la case volontairement.
         let cfg = parse_with_migration(r#"{"use_custom_folders": false, "menu_folder": "D:\\Music\\menu"}"#);
-        assert!(!cfg.use_custom_folders, "champ déjà présent -> valeur respectée telle quelle");
+        assert!(
+            !cfg.use_custom_folders,
+            "champ déjà présent -> valeur respectée telle quelle"
+        );
     }
 
     #[test]

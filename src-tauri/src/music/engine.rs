@@ -735,7 +735,9 @@ impl Engine {
                 });
             }
             _ => {
-                log::warn!("music: dossier vide ou introuvable pour l'ambiance {target:?}, reprise après session silencieuse");
+                log::warn!(
+                    "music: dossier vide ou introuvable pour l'ambiance {target:?}, reprise après session silencieuse"
+                );
             }
         }
         self.state = State::Playing(target);

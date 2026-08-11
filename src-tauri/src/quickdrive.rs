@@ -340,7 +340,10 @@ mod tests {
         let json = build_preset(&s).unwrap();
         let v: Value = serde_json::from_str(&json).unwrap();
         let mode_data: Value = serde_json::from_str(v["ModeData"].as_str().unwrap()).unwrap();
-        assert!(mode_data["PracticeLength"].is_null(), "pas d'essais libres = phase absente");
+        assert!(
+            mode_data["PracticeLength"].is_null(),
+            "pas d'essais libres = phase absente"
+        );
         assert_eq!(
             mode_data["QualificationLength"], 10,
             "la qualification n'a pas d'état désactivé côté CM (Weekend) : toujours une durée concrète"
