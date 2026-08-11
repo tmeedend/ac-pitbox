@@ -26,6 +26,11 @@ export interface ColumnDef {
   sortValue?: (c: ModCard) => string | number;
   /** Rendu en police mono (valeurs techniques/dates). */
   mono?: boolean;
+  /** Clé i18n d'une info-bulle affichée sur l'en-tête (icône ⓘ) — pour une
+   * colonne dont le sens n'est pas évident au premier regard (ex. les trois
+   * colonnes de dates, dont deux propres à l'installation locale et une au
+   * mod lui-même, une distinction facile à manquer). */
+  tooltipKey?: string;
 }
 
 const DASH = "—";
@@ -77,9 +82,9 @@ function commonTail(): ColumnDef[] {
       // Tri : km croissants font remonter les peu/pas explorés ; jamais essayé en tête.
       sortValue: (c) => (c.distance_km ?? (c.tried ? 0 : -1)),
     },
-    { key: "added", labelKey: "columns.added", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.created_at), sortValue: (c) => c.created_at },
-    { key: "updated", labelKey: "columns.updated", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.updated_at), sortValue: (c) => c.updated_at ?? c.created_at },
-    { key: "published", labelKey: "columns.published", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.published_at), sortValue: (c) => c.published_at ?? "" },
+    { key: "added", labelKey: "columns.added", tooltipKey: "columns.addedTooltip", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.created_at), sortValue: (c) => c.created_at ?? "" },
+    { key: "updated", labelKey: "columns.updated", tooltipKey: "columns.updatedTooltip", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.updated_at), sortValue: (c) => c.updated_at ?? c.created_at ?? "" },
+    { key: "published", labelKey: "columns.published", tooltipKey: "columns.publishedTooltip", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.published_at), sortValue: (c) => c.published_at ?? "" },
     {
       key: "size",
       labelKey: "columns.size",

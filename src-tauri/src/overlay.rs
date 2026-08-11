@@ -250,7 +250,12 @@ pub struct ModRow {
     pub is_favorite: bool,
     pub active_version_id: Option<String>,
     pub version_count: i64,
-    pub created_at: String,
+    /// `None` pour le contenu de base (§4, `is_stock`) : la date en base est
+    /// l'instant du réindex, sans rapport avec une vraie date d'ajout — pas de
+    /// meilleure source disponible (mtime du filesystem = date d'installation
+    /// du jeu, tout aussi dénué de sens). Mieux vaut l'absence explicite
+    /// qu'une date fausse affichée comme si elle était fiable.
+    pub created_at: Option<String>,
     /// Tags lus dans le fichier (origine « fichier mod », lecture seule).
     pub tags_from_mod: Vec<String>,
     /// Tags déduits par l'ontologie (origine « règle »).
@@ -580,7 +585,9 @@ pub fn add_history(conn: &Connection, mod_id: &str, ts: &str, event: &str, detai
 
 const MOD_SELECT: &str = r#"
     SELECT m.id_interne, m.kind, m.brand, m.display_name, m.year, m.car_class,
-           m.category, m.country, m.is_favorite, m.active_version_id, m.created_at,
+           m.category, m.country, m.is_favorite, m.active_version_id,
+           -- Pas de date d'ajout pour le contenu de base : voir ModRow.created_at.
+           CASE WHEN m.is_stock THEN NULL ELSE m.created_at END AS created_at,
            m.tags_from_rule, m.tags_manual,
            m.drivetrain, m.engine_pos, m.aspiration, m.engine_config, m.gearbox,
            (SELECT COUNT(*) FROM versions v WHERE v.mod_id = m.id_interne) AS version_count,
@@ -592,7 +599,12 @@ const MOD_SELECT: &str = r#"
            (SELECT v.version_label FROM versions v WHERE v.id = m.active_version_id) AS version_label,
            COALESCE((SELECT v.layouts FROM versions v WHERE v.id = m.active_version_id), '[]') AS layouts,
            COALESCE((SELECT v.csp_features FROM versions v WHERE v.id = m.active_version_id), '[]') AS csp_features,
-           (SELECT MAX(v.imported_at) FROM versions v WHERE v.mod_id = m.id_interne) AS updated_at,
+           -- Idem : pas de date de MAJ pour le contenu de base (§ commentaire
+           -- de ModRow.created_at) — l'agrégat MAX(imported_at) n'y vaut que
+           -- l'instant du réindex, pas une vraie mise à jour.
+           CASE WHEN m.is_stock THEN NULL
+                ELSE (SELECT MAX(v.imported_at) FROM versions v WHERE v.mod_id = m.id_interne)
+           END AS updated_at,
            m.is_stock,
            (SELECT v.published_at FROM versions v WHERE v.id = m.active_version_id) AS published_at,
            (SELECT SUM(v.size_bytes) FROM versions v WHERE v.mod_id = m.id_interne) AS size_bytes,

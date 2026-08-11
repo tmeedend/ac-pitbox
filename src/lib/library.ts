@@ -18,7 +18,8 @@ export interface ModCard {
   is_favorite: boolean;
   active_version_id: string | null;
   version_count: number;
-  created_at: string;
+  /** `null` pour le contenu de base (§4, `is_stock`) : pas de vraie date d'ajout disponible. */
+  created_at: string | null;
   tags_from_mod: string[];
   tags_from_rule: string[];
   tags_manual: string[];

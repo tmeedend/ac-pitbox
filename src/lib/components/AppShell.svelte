@@ -17,7 +17,9 @@
   import TrackSkinChecklistDropdown from "./TrackSkinChecklistDropdown.svelte";
   import Tooltip from "./Tooltip.svelte";
   import { nav, requestSection, pickSession } from "$lib/nav.svelte";
-  import { previewSrc, getModDetail } from "$lib/library";
+  import { previewSrc, getModDetail, activateMod } from "$lib/library";
+  import { confirm, message } from "@tauri-apps/plugin-dialog";
+  import { errorText } from "$lib/errors";
   import { initGlobalDragDrop } from "$lib/importState.svelte";
   import { openContentManager, listModSkins, type SkinItem } from "$lib/launch";
   import { setPreferredSkin, setPreferredLayout } from "$lib/preferred";
@@ -142,20 +144,12 @@
     if (await requestSection(section) && id) nav.openMod = id;
   }
 
-  // Bouton rouge « Démarrer la session » : lance directement avec les
-  // réglages courants (dernier preset du type de session), sans repasser par
-  // l'écran Paramétrage — pose le drapeau consommé par Launch.svelte une fois
-  // monté et prêt (mêmes valeurs que si l'écran avait été ouvert normalement).
-  async function launchNow() {
-    nav.autoLaunch = true;
-    if (!(await requestSection("race"))) nav.autoLaunch = false;
-  }
-
   // --- Sélecteurs rapides skin voiture / layout+skins circuit, directement
   // depuis le bloc SESSION (évite de passer par la fiche détail pour un
   // changement rapide). Mêmes actions que DetailPage.svelte (mémorise le
   // choix + met à jour le duo de session), réutilisées à l'identique.
   let carSkins = $state<SkinItem[]>([]);
+  let carDetail = $state<Awaited<ReturnType<typeof getModDetail>>>(null);
   let trackDetail = $state<Awaited<ReturnType<typeof getModDetail>>>(null);
   let trackSkinOptions = $state<TrackSkinOption[]>([]);
   let trackSkinBusy = $state(false);
@@ -171,6 +165,24 @@
     });
   });
 
+  // État d'activation frais du duo de session (§ garde-fou lancement
+  // ci-dessous) : jamais déduit de `nav.sessionCar`/`sessionTrack` eux-mêmes
+  // (juste id/nom/preview pour l'affichage, persistés tels quels — une donnée
+  // d'activation qui y serait figée resterait fausse dès que l'état change
+  // ailleurs, ex. désactivé depuis la fiche détail sans repasser par ce
+  // sélecteur). Repose sur le même effet-clé-sur-id que `trackDetail`
+  // ci-dessous, qui écarte déjà les réponses obsolètes.
+  $effect(() => {
+    const carId = nav.sessionCar?.id ?? null;
+    if (!carId) {
+      carDetail = null;
+      return;
+    }
+    getModDetail(carId).then((d) => {
+      if (nav.sessionCar?.id === carId) carDetail = d;
+    });
+  });
+
   $effect(() => {
     const trackId = nav.sessionTrack?.id ?? null;
     if (!trackId) {
@@ -183,6 +195,47 @@
     });
     loadTrackSkinOptions(trackId);
   });
+
+  // `null` tant que le détail n'est pas encore chargé (juste après une
+  // sélection) : pas d'avertissement affiché dans ce court intervalle plutôt
+  // que de risquer un faux positif pendant le chargement.
+  const carInactive = $derived(nav.sessionCar != null && carDetail != null && !carDetail.active);
+  const trackInactive = $derived(nav.sessionTrack != null && trackDetail != null && !trackDetail.active);
+
+  // Bouton rouge « Démarrer la session » : lance directement avec les
+  // réglages courants (dernier preset du type de session), sans repasser par
+  // l'écran Paramétrage — pose le drapeau consommé par Launch.svelte une fois
+  // monté et prêt (mêmes valeurs que si l'écran avait été ouvert normalement).
+  //
+  // Garde-fou activation (§ bug réel signalé) : lancer une session avec une
+  // voiture/un circuit sélectionné mais non activé (jamais junctionné dans
+  // `content/`) fait planter Content Manager/AC, qui ne trouve pas le contenu.
+  // On bloque, on demande confirmation, et on active avant de laisser
+  // continuer — jamais d'activation silencieuse sans accord explicite.
+  async function launchNow() {
+    const toActivate: { id: string; name: string }[] = [];
+    if (carInactive && nav.sessionCar) toActivate.push({ id: nav.sessionCar.id, name: nav.sessionCar.name });
+    if (trackInactive && nav.sessionTrack) toActivate.push({ id: nav.sessionTrack.id, name: nav.sessionTrack.name });
+    if (toActivate.length) {
+      const ok = await confirm(t("session.inactivePrompt", { names: toActivate.map((m) => m.name).join(", ") }), {
+        title: t("session.inactiveTitle"),
+        kind: "warning",
+      });
+      if (!ok) return;
+      try {
+        for (const m of toActivate) await activateMod(m.id);
+      } catch (e) {
+        await message(errorText(e), { title: t("session.activateFailedTitle"), kind: "error" });
+        return;
+      }
+      // Recharge tout de suite l'état frais : efface l'icône d'alerte sans
+      // attendre le prochain changement de sélection.
+      if (nav.sessionCar) carDetail = await getModDetail(nav.sessionCar.id);
+      if (nav.sessionTrack) trackDetail = await getModDetail(nav.sessionTrack.id);
+    }
+    nav.autoLaunch = true;
+    if (!(await requestSection("race"))) nav.autoLaunch = false;
+  }
 
   async function loadTrackSkinOptions(trackId: string) {
     await syncTrackSkins(trackId);
@@ -277,7 +330,10 @@
               <span class="slot-edit">{t("session.change")}</span>
             </div>
             <div class="slot-b">
-              <div class="slot-name">{nav.sessionCar?.name ?? t("session.noCar")}</div>
+              <div class="slot-name">
+                {nav.sessionCar?.name ?? t("session.noCar")}
+                {#if carInactive}<span class="slot-warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
+              </div>
               <div class="slot-meta">{nav.sessionCar?.meta || t("session.clickToChoose")}</div>
             </div>
           </button>
@@ -316,7 +372,10 @@
               <span class="slot-edit">{t("session.change")}</span>
             </div>
             <div class="slot-b">
-              <div class="slot-name">{nav.sessionTrack?.name ?? t("session.noTrack")}</div>
+              <div class="slot-name">
+                {nav.sessionTrack?.name ?? t("session.noTrack")}
+                {#if trackInactive}<span class="slot-warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
+              </div>
               <div class="slot-meta">{nav.sessionTrack?.meta || t("session.clickToChoose")}</div>
             </div>
           </button>
@@ -608,6 +667,12 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  /* Mod sélectionné mais non activé (§ garde-fou lancement) : jaune = alerte,
+     cohérent avec les couleurs sémantiques du projet. */
+  .slot-warn {
+    color: var(--yellow);
+    margin-left: 4px;
   }
   .slot-meta {
     color: var(--muted);

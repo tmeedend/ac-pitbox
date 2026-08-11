@@ -6,6 +6,7 @@
   import ContextMenu from "./ContextMenu.svelte";
   import LoadingState from "./LoadingState.svelte";
   import NumberStepper from "./NumberStepper.svelte";
+  import Tooltip from "./Tooltip.svelte";
   import {
     listLibrary,
     previewSrc,
@@ -76,6 +77,9 @@
   let stateFilter = $state<"all" | "active" | "inactive">("all");
   let authorFilter = $state<string>("all");
   let countryFilter = $state<string>("all");
+  // Texte libre, plusieurs tags séparés par des virgules — ET entre eux (ne
+  // remonte que les mods qui ont tous les tags saisis, pas au moins un).
+  let tagFilter = $state<string>("");
   let favOnly = $state<boolean>(false);
   let neverTried = $state<boolean>(false);
   let hideBaseContent = $state<boolean>(false);
@@ -100,6 +104,7 @@
       state: stateFilter,
       author: authorFilter,
       country: countryFilter,
+      tag: tagFilter,
       fav: favOnly,
       neverTried,
       hideBaseContent,
@@ -239,6 +244,7 @@
         stateFilter = (sf.state as "all" | "active" | "inactive") ?? "all";
         authorFilter = (sf.author as string) ?? "all";
         countryFilter = (sf.country as string) ?? "all";
+        tagFilter = (sf.tag as string) ?? "";
         favOnly = (sf.fav as boolean) ?? false;
         neverTried = (sf.neverTried as boolean) ?? false;
         hideBaseContent = (sf.hideBaseContent as boolean) ?? false;
@@ -437,6 +443,12 @@
   // N'expose que les mods du type de cette bibliothèque (§6.1).
   const typed = $derived(cards.filter((c) => c.kind === kind));
 
+  // Les trois origines de tags (fichier mod, règle, manuel) sont équivalentes
+  // pour filtrer/rechercher — seule la fiche détail les distingue par origine.
+  function modTags(c: ModCard): string[] {
+    return [...c.tags_from_mod, ...c.tags_from_rule, ...c.tags_manual];
+  }
+
   // Catégories du filtre : voiture = catégorie unique (`category`) ; circuit =
   // multi-valué (`categories`, §5bis.2), on agrège toutes les valeurs vues.
   const categories = $derived(
@@ -454,6 +466,17 @@
       a.toLowerCase().localeCompare(b.toLowerCase()),
     ),
   );
+  const tags = $derived(
+    [...new Set(typed.flatMap(modTags))].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())),
+  );
+  // Termes tapés, normalisés (minuscule, espaces superflus retirés) — ET
+  // logique entre eux dans `filtered` ci-dessous.
+  const tagFilterTerms = $derived(
+    tagFilter
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+  );
 
   const filtered = $derived(
     typed.filter((c) => {
@@ -466,17 +489,24 @@
       if (stateFilter === "inactive" && c.active) return false;
       if (authorFilter !== "all" && c.author !== authorFilter) return false;
       if (countryFilter !== "all" && c.country !== countryFilter) return false;
+      if (tagFilterTerms.length) {
+        const modTagsLower = modTags(c).map((tg) => tg.toLowerCase());
+        if (!tagFilterTerms.every((term) => modTagsLower.includes(term))) return false;
+      }
       if (favOnly && !c.is_favorite) return false;
       if (neverTried && c.tried) return false;
       if (hideBaseContent && c.is_stock) return false;
       if (yearMin > YEAR_RANGE_MIN && (c.year ?? 0) < yearMin) return false;
       if (yearMax < YEAR_RANGE_MAX && (c.year ?? 9999) > yearMax) return false;
       if (query.trim()) {
-        const q = query.toLowerCase();
-        const tags = [...c.tags_from_mod, ...c.tags_from_rule, ...c.tags_manual].join(" ");
+        // Un terme par mot séparé par un espace, ET entre eux mais chacun en
+        // simple "contains" (pas besoin d'être collés ni dans l'ordre) — bug
+        // réel signalé : « GT-M Evo » ne remontait pas « GT-M Adonis Evo »,
+        // recherché comme une seule sous-chaîne collée.
+        const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
         // Inclut le pack (§4.7) : rechercher son nom remonte toutes ses voitures.
-        const hay = `${c.display_name ?? ""} ${c.brand ?? ""} ${c.id_interne} ${c.category ?? ""} ${c.source_pack ?? ""} ${tags}`.toLowerCase();
-        if (!hay.includes(q)) return false;
+        const hay = `${c.display_name ?? ""} ${c.brand ?? ""} ${c.id_interne} ${c.category ?? ""} ${c.source_pack ?? ""} ${modTags(c).join(" ")}`.toLowerCase();
+        if (!terms.every((term) => hay.includes(term))) return false;
       }
       return true;
     }),
@@ -489,6 +519,7 @@
       (stateFilter !== "all" ? 1 : 0) +
       (authorFilter !== "all" ? 1 : 0) +
       (countryFilter !== "all" ? 1 : 0) +
+      (tagFilterTerms.length ? 1 : 0) +
       (favOnly ? 1 : 0) +
       (neverTried ? 1 : 0) +
       (hideBaseContent ? 1 : 0) +
@@ -503,6 +534,7 @@
     stateFilter = "all";
     authorFilter = "all";
     countryFilter = "all";
+    tagFilter = "";
     favOnly = false;
     neverTried = false;
     hideBaseContent = false;
@@ -663,6 +695,20 @@
           </select>
         </label>
         <label>
+          <span>{t("library.filterTag")}</span>
+          <input
+            class="input"
+            type="text"
+            list="tag-datalist-{kind}"
+            placeholder={t("library.filterTagPlaceholder")}
+            title={t("library.filterTagHint")}
+            bind:value={tagFilter}
+          />
+          <datalist id="tag-datalist-{kind}">
+            {#each tags as tag}<option value={tag}></option>{/each}
+          </datalist>
+        </label>
+        <label>
           <span>{t("library.filterCategory")}</span>
           <select class="input" bind:value={categoryFilter}>
             <option value="all">{t("common.allFem")}</option>
@@ -786,7 +832,15 @@
                   }}
                   ondrop={(e) => onColumnDrop(col.key, e)}
                 >
-                  <span class="th-label">{t(col.labelKey)}{#if sortKey === col.key}<span class="arrow">{sortDir === 1 ? "▲" : "▼"}</span>{/if}</span>
+                  <span class="th-label">
+                    {t(col.labelKey)}
+                    {#if col.tooltipKey}
+                      <Tooltip text={t(col.tooltipKey)}>
+                        <button type="button" class="th-info" onclick={(e) => e.stopPropagation()}>ⓘ</button>
+                      </Tooltip>
+                    {/if}
+                    {#if sortKey === col.key}<span class="arrow">{sortDir === 1 ? "▲" : "▼"}</span>{/if}
+                  </span>
                   <!-- Poignée de redimensionnement (§6.2) : `draggable="false"` explicite
                        coupe l'héritage du glisser-déposer de réordonnancement posé sur le
                        `<th>` — sans ça, saisir la poignée déclencherait aussi un drag de
@@ -827,7 +881,7 @@
           </thead>
           <tbody>
             {#each sorted as c (c.id_interne)}
-              <tr data-id={c.id_interne} class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} oncontextmenu={(e) => openCardContextMenu(e, c)}>
+              <tr data-id={c.id_interne} tabindex="0" class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} oncontextmenu={(e) => openCardContextMenu(e, c)}>
                 {#each visibleColumns as col}
                   <td
                     class:t-name={col.key === "name"}
@@ -1272,6 +1326,22 @@
   }
   .th-label {
     padding-right: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .th-info {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: var(--faint);
+    font-size: 10px;
+    line-height: 1;
+    cursor: help;
+  }
+  .th-info:hover,
+  .th-info:focus-visible {
+    color: var(--rosso-bright);
   }
   /* Réordonnement par glisser-déposer (§6.2) : la colonne fixe (nom) n'a pas
      `draggable`, donc jamais ce curseur — cohérent avec le fait qu'elle ne

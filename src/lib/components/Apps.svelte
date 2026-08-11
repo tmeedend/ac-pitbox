@@ -118,7 +118,14 @@
   }
 
   const filtered = $derived(
-    apps.filter((a) => !query.trim() || a.id.toLowerCase().includes(query.toLowerCase())),
+    apps.filter((a) => {
+      if (!query.trim()) return true;
+      // Un terme par mot séparé par un espace, ET entre eux (même correction
+      // que la bibliothèque, Library.svelte).
+      const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+      const hay = a.id.toLowerCase();
+      return terms.every((term) => hay.includes(term));
+    }),
   );
 </script>
 

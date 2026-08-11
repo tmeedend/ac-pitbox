@@ -15,6 +15,8 @@
   import { setSectionGuard } from "$lib/nav.svelte";
   import { listShowrooms, type ShowroomOption } from "$lib/launch";
   import { confirm } from "@tauri-apps/plugin-dialog";
+  import { getUiPref, setUiPref } from "$lib/uiPrefs.svelte";
+  import { GAMEPAD_NAV_MODE_KEY } from "$lib/gamepadNav";
 
   import { errorText } from "$lib/errors";
 
@@ -63,6 +65,72 @@
     savedConfig = structuredClone($state.snapshot(config));
     installedShowrooms = await listShowrooms().catch(() => []);
   });
+
+  // Navigation manette (§gamepadNav.ts) : réglage indépendant de `config`
+  // (persisté via ui_prefs.json, pas le fichier config.json) donc son propre
+  // chargement, hors du flux dirty/Enregistrer ci-dessus — s'applique tout de
+  // suite au changement, comme les autres réglages de `uiPrefs.svelte.ts`.
+  let gamepadNavMode = $state("");
+  let gamepadCandidates = $state<Gamepad[]>([]);
+
+  // Réinterrogé via `requestAnimationFrame`, jamais `setInterval` : constaté
+  // empiriquement sous WebView2 (comme dans `gamepadNav.ts`, seul consommateur
+  // déjà éprouvé) — un `Gamepad` lu hors d'une boucle rAF y reste figé/vide,
+  // `setInterval` seul ne suffit pas à obtenir des valeurs vivantes. Throttle
+  // à ~150ms (pas besoin d'une lecture à 60 Hz pour un tableau de diagnostic
+  // lu à l'œil) plutôt qu'une réécriture de `gamepadCandidates` à chaque frame.
+  function refreshGamepads() {
+    gamepadCandidates = Array.from(navigator.getGamepads?.() ?? []).filter(
+      (g): g is Gamepad => !!g?.connected,
+    );
+  }
+
+  // Le tableau de diagnostic ci-dessous affiche mapping/axes/boutons en
+  // direct pour qu'on puisse voir quel axe/bouton bouge sur quel périphérique
+  // — indispensable avec un volant : son ordre d'axes/boutons n'a aucune
+  // raison de suivre le layout Xbox supposé par `gamepadNav.ts`, donc
+  // "sélectionner le volant" dans le menu ci-dessus ne suffit pas forcément à
+  // le rendre utilisable pour la navigation.
+  const gamepadDiag = $derived(
+    gamepadCandidates.map((g) => ({
+      // Clé de boucle : `g.index` (slot, forcément unique), pas `g.id` — un
+      // volant peut s'annoncer à Windows comme deux périphériques HID
+      // distincts au même nom (base + pédales/shifter sur une interface USB
+      // séparée, cas réel constaté avec une base Fanatec ClubSport). Avec
+      // `g.id` comme clé, deux entrées identiques faisaient planter le bloc
+      // `{#each}` (`each_key_duplicate`) à chaque tentative de rendu — plantage
+      // silencieux côté UI, le tableau restait figé sur son état initial vide.
+      index: g.index,
+      id: g.id,
+      mapping: g.mapping || "-",
+      axes: g.axes.map((a) => a.toFixed(2)).join(", ") || "-",
+      buttons:
+        g.buttons
+          .map((b, i) => (b.pressed ? i : null))
+          .filter((i): i is number => i !== null)
+          .join(", ") || "-",
+    })),
+  );
+
+  onMount(() => {
+    getUiPref(GAMEPAD_NAV_MODE_KEY).then((v) => (gamepadNavMode = v ?? ""));
+    let raf = 0;
+    let lastRefresh = 0;
+    function tick(now: number) {
+      if (now - lastRefresh >= 150) {
+        lastRefresh = now;
+        refreshGamepads();
+      }
+      raf = requestAnimationFrame(tick);
+    }
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  });
+
+  function onGamepadNavModeChange(value: string) {
+    gamepadNavMode = value;
+    setUiPref(GAMEPAD_NAV_MODE_KEY, value);
+  }
 
   // Garde de navigation (§10bis) : quitter Réglages avec des changements non
   // enregistrés propose d'enregistrer ou d'annuler (et dans ce cas, revient
@@ -199,6 +267,38 @@
         </label>
         <p class="hint">{t("settings.showroomSceneHint")}</p>
       </section>
+
+      <section class="lang-section">
+        <label>
+          <span>{t("settings.gamepadNav")}</span>
+          <select
+            class="input"
+            value={gamepadNavMode}
+            onchange={(e) => onGamepadNavModeChange(e.currentTarget.value)}
+          >
+            <option value="">{t("settings.gamepadNavAuto")}</option>
+            <option value="off">{t("settings.gamepadNavOff")}</option>
+            {#each gamepadCandidates as g (g.index)}
+              <option value={g.id}>{g.id}</option>
+            {/each}
+          </select>
+        </label>
+        <p class="hint">{t("settings.gamepadNavHint")}</p>
+        {#if gamepadDiag.length}
+          <div class="gamepad-diag mono">
+            {#each gamepadDiag as g (g.index)}
+              <div class="gamepad-diag-row">
+                <div class="gamepad-diag-id">{g.id}</div>
+                <div>{t("settings.gamepadNavDiagMapping")}: {g.mapping}</div>
+                <div>{t("settings.gamepadNavDiagAxes")}: {g.axes}</div>
+                <div>{t("settings.gamepadNavDiagButtons")}: {g.buttons}</div>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <p class="hint">{t("settings.gamepadNavDiagNone")}</p>
+        {/if}
+      </section>
     {:else if activeTab === "paths"}
       <p class="sub">{t("settings.tabPathsHint")}</p>
       <ConfigFields bind:config {validation} />
@@ -302,6 +402,25 @@
     font-size: 11px;
     color: var(--faint);
     line-height: 1.5;
+  }
+  .gamepad-diag {
+    margin-top: 10px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+  }
+  .gamepad-diag-row {
+    padding: 8px 10px;
+    font-size: 10.5px;
+    color: var(--txt2);
+    line-height: 1.6;
+  }
+  .gamepad-diag-row + .gamepad-diag-row {
+    border-top: 1px solid var(--line);
+  }
+  .gamepad-diag-id {
+    color: var(--faint);
+    margin-bottom: 2px;
+    word-break: break-all;
   }
   .error {
     margin: 12px 0;
