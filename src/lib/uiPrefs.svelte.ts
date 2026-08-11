@@ -15,6 +15,7 @@
 // déclencherait aucun re-rendu quand le chargement asynchrone se termine, la
 // préférence resterait invisible jusqu'au prochain rendu déclenché par autre
 // chose (bug réel évité, pas seulement une préférence de style).
+import { untrack } from "svelte";
 import { invokeSafe } from "./invokeSafe";
 
 const PREFIX = "pitbox.";
@@ -112,42 +113,33 @@ export function peekUiPref(key: string): string | null {
   return cache?.[key] ?? null;
 }
 
-// Coupe-circuit temporaire de diagnostic (§6.2, bug réel en cours
-// d'investigation : `save_ui_prefs` observé en boucle — 285 000 appels et
-// ça continuait — sans erreur ni boucle synchrone détectée par Svelte, donc
-// probablement un cycle qui passe par une frontière asynchrone, réamorcé à
-// chaque tour plutôt que détecté d'un coup). Le compteur se remet à zéro
-// après un court silence (pas de rafale = pas un problème) ; s'il explose,
-// on log la pile du déclencheur UNE fois puis on arrête d'écrire, plutôt que
-// de continuer à marteler le disque et le canal IPC indéfiniment.
-let callCount = 0;
-let resetTimer: ReturnType<typeof setTimeout> | null = null;
-let breakerTripped = false;
-const CALL_BURST_LIMIT = 50;
-const CALL_BURST_WINDOW_MS = 2000;
-
 /** Écrit un réglage. Asynchrone en interne (recharge-modifie-réécrit le
  * fichier entier, comme les autres modules de persistance) mais l'appel
  * lui-même ne s'attend pas : mêmes usages fire-and-forget que
- * `persistLaunchState`/`persistColumnsPrefs` ailleurs dans le projet. */
+ * `persistLaunchState`/`persistColumnsPrefs` ailleurs dans le projet.
+ *
+ * `untrack` autour de tout le corps — pas juste par prudence : bug réel
+ * trouvé ici. Un `async () => { await ensureLoaded(); ... }` s'exécute de
+ * façon SYNCHRONE jusqu'à son premier `await` (sémantique standard des
+ * fonctions async JS) — donc si `setUiPref` est appelé depuis un `$effect`
+ * (cas des réglages auto-sauvegardés à chaque changement, ex. filtres de
+ * `Library.svelte`), la lecture `if (cache)` au tout début d'`ensureLoaded`
+ * s'exécute encore dans le contexte réactif de CET effet, ce qui l'abonne
+ * silencieusement à `cache`. Le `cache = updated` qui suit (après l'await)
+ * redéclenche alors ce même effet, qui rappelle `setUiPref`, qui relit
+ * `cache`… boucle infinie sans qu'aucun des champs lus explicitement par
+ * l'effet n'ait jamais changé (constaté : 285 000+ appels, `save_ui_prefs`
+ * en rafale, effet qui se redéclenche avec un snapshot strictement
+ * identique). N'affecte que les appelants réactifs : `toggleSort`/`setView`
+ * (clic), `persistColumnsPrefs` (mouseup) ne passent jamais par un contexte
+ * traqué, d'où leur immunité déjà observée. */
 export function setUiPref(key: string, value: string): void {
-  if (breakerTripped) return;
-  callCount++;
-  if (resetTimer) clearTimeout(resetTimer);
-  resetTimer = setTimeout(() => (callCount = 0), CALL_BURST_WINDOW_MS);
-  if (callCount === CALL_BURST_LIMIT) {
-    breakerTripped = true;
-    console.error(
-      `setUiPref("${key}") appelé ${CALL_BURST_LIMIT}+ fois en moins de ${CALL_BURST_WINDOW_MS}ms — coupe-circuit ` +
-        `déclenché, plus aucune écriture ui_prefs jusqu'au prochain redémarrage. Pile du dernier appel :`,
-    );
-    console.trace();
-    return;
-  }
-  void (async () => {
-    const all = await ensureLoaded();
-    const updated = { ...all, [key]: value };
-    cache = updated;
-    await persist(updated);
-  })();
+  untrack(() => {
+    void (async () => {
+      const all = await ensureLoaded();
+      const updated = { ...all, [key]: value };
+      cache = updated;
+      await persist(updated);
+    })();
+  });
 }

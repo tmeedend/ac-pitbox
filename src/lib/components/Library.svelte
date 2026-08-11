@@ -78,14 +78,6 @@
   let countryFilter = $state<string>("all");
   let favOnly = $state<boolean>(false);
   let neverTried = $state<boolean>(false);
-  // Diagnostic temporaire : `neverTried` observé en ping-pong (voir l'effet de
-  // persistance plus bas). `$inspect` capture la pile au moment exact de
-  // l'écriture, contrairement au stack trace de l'effet qui ne montre que la
-  // relecture différée par Svelte — à retirer une fois la cause trouvée.
-  let debugInspectCount = 0;
-  $inspect(neverTried).with((type, value) => {
-    if (type === "update" && debugInspectCount++ < 10) console.trace(`[debug neverTried] -> ${value}`);
-  });
   let hideBaseContent = $state<boolean>(false);
   let yearMin = $state<number>(YEAR_RANGE_MIN);
   let yearMax = $state<number>(YEAR_RANGE_MAX);
@@ -100,11 +92,6 @@
   let prefsReady = false;
 
   // Persistance des filtres (champ libre + rubrique Filtres).
-  // Diagnostic temporaire (bug en cours : cet effet se redéclenche en boucle,
-  // 285 000+ appels `save_ui_prefs` observés) : identifie EXACTEMENT quel(s)
-  // champ(s) change(nt) entre deux passages, avant de retirer cette instrumentation.
-  let debugPrevSnapshot: Record<string, unknown> | null = null;
-  let debugLogCount = 0;
   $effect(() => {
     const snapshot = {
       query,
@@ -119,22 +106,6 @@
       yearMin,
       yearMax,
     };
-    if (debugPrevSnapshot && debugLogCount < 20) {
-      const diffs = Object.keys(snapshot).filter(
-        (k) => (snapshot as Record<string, unknown>)[k] !== (debugPrevSnapshot as Record<string, unknown>)[k],
-      );
-      if (diffs.length) {
-        debugLogCount++;
-        console.warn(
-          `[debug filtres] champ(s) modifié(s): ${diffs.join(", ")}`,
-          diffs.map((k) => ({ key: k, from: (debugPrevSnapshot as Record<string, unknown>)[k], to: (snapshot as Record<string, unknown>)[k] })),
-        );
-      } else {
-        debugLogCount++;
-        console.warn("[debug filtres] effet redéclenché SANS aucun champ modifié (snapshot identique)");
-      }
-    }
-    debugPrevSnapshot = snapshot;
     if (prefsReady) setUiPref(FKEY, JSON.stringify(snapshot));
   });
 

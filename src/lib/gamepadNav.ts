@@ -163,12 +163,21 @@ const NONE: ButtonEdges = { up: false, down: false, left: false, right: false, c
 export function startGamepadNav(): () => void {
   initFocusTracking();
   let raf = 0;
-  let last = NONE;
+  // Un état précédent par manette (clé = `gp.index`), jamais une variable
+  // partagée : bug réel constaté — avec une seule variable `last` réutilisée
+  // pour toutes les manettes du tableau, la manette fantôme que Windows/
+  // Chromium ajoute parfois (Bluetooth, Steam, pilotes de volant…) écrase
+  // `last` à chaque frame, ce qui fait relire un front montant à une manette
+  // réelle dont le bouton confirm reste simplement appuyé — `.click()` part
+  // en boucle sur l'élément focus (ici une case à cocher, qui bascule et
+  // émet un vrai `change` à chaque appel) au lieu d'un seul déclenchement.
+  const lastByGamepad = new Map<number, ButtonEdges>();
 
   function poll() {
     for (const gp of navigator.getGamepads?.() ?? []) {
-      if (!gp) continue;
+      if (!gp?.connected) continue;
       const cur = readButtons(gp);
+      const last = lastByGamepad.get(gp.index) ?? NONE;
 
       if (nav.lightboxOpen) {
         // Visionneuse plein écran ouverte par-dessus la fiche (§6.1,
@@ -197,7 +206,7 @@ export function startGamepadNav(): () => void {
           if (cur.confirm && !last.confirm) (document.activeElement as HTMLElement | null)?.click();
         }
       }
-      last = cur;
+      lastByGamepad.set(gp.index, cur);
     }
     raf = requestAnimationFrame(poll);
   }
