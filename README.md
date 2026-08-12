@@ -3,6 +3,13 @@
 Application desktop (Tauri + SvelteKit) qui remplace Mod Organizer 2 et pilote
 Content Manager. Voir la spec fonctionnelle (`acmm-spec.md`) pour le détail.
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- **Committers, reviewers et approvers** : [Théo (tmeedend)](https://github.com/tmeedend), seul mainteneur du projet.
+- **Privacy policy** : This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
+
 ## Stack
 
 - **Frontend** : SvelteKit (SPA, `adapter-static`) + Svelte 5 (runes) + TypeScript + Vite 6
