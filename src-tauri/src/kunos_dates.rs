@@ -22,21 +22,38 @@ const RAW: &str = include_str!("../../docs/kunos_content_dates.json");
 struct CarEntry {
     year: Option<i64>,
     release: String,
+    pack: String,
 }
 
 #[derive(Deserialize)]
 struct TrackEntry {
     release: String,
+    pack: String,
+}
+
+#[derive(Deserialize)]
+struct PackEntry {
+    name: String,
 }
 
 #[derive(Deserialize)]
 struct Table {
+    packs: HashMap<String, PackEntry>,
     cars: HashMap<String, CarEntry>,
     tracks: HashMap<String, TrackEntry>,
 }
 
 static TABLE: LazyLock<Table> =
     LazyLock::new(|| serde_json::from_str(RAW).expect("docs/kunos_content_dates.json invalide"));
+
+/// Clé du pack Kunos qui a introduit ce contenu, si référencé (`"base"` pour
+/// le jeu de base, sinon l'un des DLC de `packs`).
+fn pack_key(kind: ModKind, id: &str) -> Option<&'static str> {
+    match kind {
+        ModKind::Car => TABLE.cars.get(id).map(|c| c.pack.as_str()),
+        ModKind::Track => TABLE.tracks.get(id).map(|t| t.pack.as_str()),
+    }
+}
 
 /// Année du modèle réel d'une voiture Kunos, si référencée.
 pub fn car_year(id: &str) -> Option<i64> {
@@ -48,5 +65,48 @@ pub fn release_date(kind: ModKind, id: &str) -> Option<String> {
     match kind {
         ModKind::Car => TABLE.cars.get(id).map(|c| c.release.clone()),
         ModKind::Track => TABLE.tracks.get(id).map(|t| t.release.clone()),
+    }
+}
+
+/// Nom d'affichage du DLC qui a introduit ce contenu (§10bis, fiche détail —
+/// bloc Source/Origine) — `None` pour le jeu de base (`pack == "base"`, le
+/// frontend affiche alors son propre libellé traduit) ou un contenu non
+/// référencé, jamais le nom brut de `"base"` (`"Assetto Corsa (base / 1.0)"`,
+/// trop technique pour l'UI).
+pub fn pack_name(kind: ModKind, id: &str) -> Option<String> {
+    let key = pack_key(kind, id)?;
+    if key == "base" {
+        return None;
+    }
+    TABLE.packs.get(key).map(|p| p.name.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Règle protégée : le jeu de base ne doit jamais afficher le nom
+    /// technique brut de son pack (§10bis) — `None`, pas
+    /// "Assetto Corsa (base / 1.0)".
+    #[test]
+    fn base_game_pack_name_is_none() {
+        assert_eq!(pack_name(ModKind::Car, "abarth500"), None);
+    }
+
+    /// Règle protégée : un DLC référencé renvoie le nom d'affichage du pack,
+    /// pas sa clé technique (§10bis).
+    #[test]
+    fn dlc_pack_name_resolves_display_name() {
+        assert_eq!(
+            pack_name(ModKind::Car, "ks_porsche_718_boxster_s"),
+            Some("Porsche Pack Vol.2".to_string()),
+        );
+    }
+
+    /// Règle protégée : contenu non référencé dans la table -> `None`, jamais
+    /// une erreur (le frontend retombe sur « Jeu de base » par défaut).
+    #[test]
+    fn unknown_content_pack_name_is_none() {
+        assert_eq!(pack_name(ModKind::Car, "not_a_real_car"), None);
     }
 }

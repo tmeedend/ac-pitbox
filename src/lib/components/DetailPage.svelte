@@ -604,9 +604,6 @@
         <button class="fav" class:on={d.is_favorite} type="button" onclick={toggleFav} title={t("common.favorite")}>
           {d.is_favorite ? "♥" : "♡"}
         </button>
-        {#if d.is_stock}
-          <span class="base-tag" title={t("detail.stockTooltip")}>{t("detail.stockLabel")}</span>
-        {/if}
         <button class="kebab" type="button" onclick={openActionsMenu} title={t("detail.moreActions")}>
           <span class="kebab-dot"></span><span class="kebab-dot"></span><span class="kebab-dot"></span>
         </button>
@@ -751,6 +748,7 @@
             <div class="skins">
               {#each skins as sk, i (sk.id)}
                 {@const sp = previewSrc(sk.preview)}
+                {@const lv = previewSrc(sk.livery)}
                 <button
                   class="skin"
                   class:preview={i === previewSkin}
@@ -759,6 +757,11 @@
                 >
                   <div class="skin-img">
                     {#if sp}<img src={sp} alt={sk.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
+                    <!-- `livery.png` (§8.6) : couleurs/motif du skin seul, en
+                         complément de la photo de la voiture — jamais sur la
+                         grande image du skin sélectionné (heroImg), juste ici
+                         dans la grille de choix. -->
+                    {#if lv}<img class="skin-livery" src={lv} alt="" loading="lazy" />{/if}
                     {#if i === previewSkin}<span class="skin-apercu mono">{t("library.sessionBadge")}</span>{/if}
                   </div>
                   <div class="skin-b">
@@ -804,9 +807,6 @@
           </div>
           <!-- L'exclusivité et l'absence de mod se lisent sur les boutons radio
                eux-mêmes : « Origine » seule et cochée dit tout. -->
-          {#if sounds.length > 0}
-            <div class="restore-note">↺ {t("detail.soundRestorable")}</div>
-          {/if}
             </div>
           </section>
 
@@ -1011,12 +1011,6 @@
   .fav.on {
     color: var(--rosso-bright);
   }
-  .base-tag {
-    color: var(--blue);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
   /* Menu ⋮ : regroupe les actions autrefois en rangée dans l'en-tête (§6.3).
      Icône construite en CSS (3 carrés empilés) plutôt qu'un glyphe Unicode —
      le rendu du caractère « ⋮ » dépendait trop de la police (fin, peu
@@ -1044,7 +1038,11 @@
   .tabs {
     display: flex;
     gap: 1px;
-    background: var(--line);
+    /* Même fond que les boutons (`--card`, voir leur commentaire ci-dessous) :
+       `--line` ici créait une bande visiblement plus claire à droite des
+       onglets, là où le conteneur dépasse le dernier bouton (retour
+       utilisateur direct). */
+    background: var(--card);
     border-bottom: 1px solid var(--line);
     padding: 0 18px;
   }
@@ -1277,7 +1275,11 @@
     border: 1px solid var(--line);
   }
   .skin {
-    background: var(--card);
+    /* Même gris que la grille elle-même (`.skins`, `--line`, plus clair) —
+       `--card` créait un contraste marqué entre les cartes et l'espace d'1px
+       qui les sépare (retour utilisateur direct : « gris presque noir » entre
+       les cartes contre un gris plus clair ailleurs). */
+    background: var(--line);
     padding: 0;
     text-align: left;
     cursor: pointer;
@@ -1328,6 +1330,18 @@
     color: #fff;
     font-size: 7px;
     padding: 0 3px;
+  }
+  /* `livery.png` (§8.6) : coin supérieur droit, libre (le badge session est
+     en bas à gauche). Bordure pour rester lisible sur une preview claire. */
+  .skin-livery {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 22px;
+    height: 22px;
+    object-fit: cover;
+    border: 1px solid var(--line);
+    background: var(--bg);
   }
   .skin-b {
     padding: 5px 7px;
@@ -1413,17 +1427,6 @@
     border: 1px solid var(--line);
     color: var(--muted);
   }
-  .restore-note {
-    margin-top: 6px;
-    background: var(--blue-dim);
-    border: 1px solid var(--blue-border);
-    color: var(--blue);
-    font-size: 9px;
-    font-family: var(--mono);
-    padding: 5px 9px;
-  }
-
-
 
   .muted {
     color: var(--muted);

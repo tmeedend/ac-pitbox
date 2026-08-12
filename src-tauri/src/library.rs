@@ -49,6 +49,10 @@ pub struct ModDetail {
     pub specs: Option<NativeSpecs>,
     /// Détail circuit (description + layouts illustrés), circuits uniquement.
     pub track: Option<uijson::TrackDetail>,
+    /// Nom du DLC Kunos d'origine (contenu de base uniquement, §10bis) —
+    /// `None` pour le jeu de base ou un mod importé (le bloc Source/Origine
+    /// y affiche alors l'archive ou « Jeu de base »).
+    pub stock_pack: Option<String>,
 }
 
 fn kind_of(s: &str) -> ModKind {
@@ -158,6 +162,12 @@ pub struct SkinItem {
     pub id: String,
     pub name: String,
     pub preview: Option<String>,
+    /// `livery.png` (couleurs/motif du skin seul, sans la voiture) — convention
+    /// AC reprise par CM pour son propre sélecteur de skin. Bien plus lisible
+    /// que `preview` (photo de la voiture entière) une fois écrasé à 20px
+    /// dans un menu déroulant (§8.6) ; utilisé aussi en vignette dans la
+    /// grille de skins de la fiche détail (§6.3).
+    pub livery: Option<String>,
 }
 
 fn read_skin_name(skin_dir: &Path) -> Option<String> {
@@ -185,8 +195,15 @@ fn read_skins_dir(skins_dir: &Path) -> Vec<SkinItem> {
                 .map(|n| p.join(n))
                 .find(|pp| pp.is_file())
                 .map(|pp| pp.to_string_lossy().into_owned());
+            let livery = p.join("livery.png");
+            let livery = livery.is_file().then(|| livery.to_string_lossy().into_owned());
             let name = read_skin_name(&p).unwrap_or_else(|| id.clone());
-            out.push(SkinItem { id, name, preview });
+            out.push(SkinItem {
+                id,
+                name,
+                preview,
+                livery,
+            });
         }
     }
     out.sort_by_key(|a| a.id.to_lowercase());
@@ -314,12 +331,18 @@ pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<
     };
     let mut card = to_card(conn, cfg, m);
     fill_usage(&mut card, &cm_stats::read(), &overlay::launched_ids(conn)?);
+    let stock_pack = card
+        .base
+        .is_stock
+        .then(|| crate::kunos_dates::pack_name(kind_of(&card.base.kind), id))
+        .flatten();
     Ok(Some(ModDetail {
         card,
         versions,
         history,
         specs,
         track,
+        stock_pack,
     }))
 }
 
@@ -440,6 +463,7 @@ mod tests {
             .join("rosso");
         std::fs::create_dir_all(&skin).unwrap();
         std::fs::write(skin.join("preview.jpg"), b"IMG").unwrap();
+        std::fs::write(skin.join("livery.png"), b"LIVERY").unwrap();
 
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let now = chrono::Local::now().to_rfc3339();
@@ -452,6 +476,34 @@ mod tests {
         let skins = list_mod_skins(&conn, &cfg, "ks_ferrari");
         assert_eq!(skins.len(), 1, "skin de la voiture de base lu dans content/");
         assert_eq!(skins[0].id, "rosso");
+        assert!(skins[0].preview.is_some(), "preview.jpg détecté");
+        assert!(skins[0].livery.is_some(), "livery.png détecté");
+    }
+
+    #[test]
+    fn skin_without_livery_leaves_it_none() {
+        let base = crate::testutil::temp_dir("lib");
+        let ac = base.join("ac");
+        let skin = ac
+            .join("content")
+            .join("cars")
+            .join("ks_ferrari")
+            .join("skins")
+            .join("rosso");
+        std::fs::create_dir_all(&skin).unwrap();
+        std::fs::write(skin.join("preview.jpg"), b"IMG").unwrap();
+        // Pas de livery.png : convention pas garantie sur tous les skins.
+
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_stock_mod(&conn, "ks_ferrari", "Car", Some("Ferrari"), Some("488"), &now).unwrap();
+
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let skins = list_mod_skins(&conn, &cfg, "ks_ferrari");
+        assert_eq!(skins[0].livery, None, "pas de livery.png -> None, jamais une erreur");
     }
 
     #[test]

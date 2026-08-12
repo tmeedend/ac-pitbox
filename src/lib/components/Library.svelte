@@ -126,6 +126,20 @@
   // Colonne en cours de glissement (réordonnancement d'en-tête, §6.2) : pilote
   // le retour visuel et la cible du drop, jamais persistée telle quelle.
   let dragKey = $state<string | null>(null);
+  let dropTarget = $state<{ key: string; before: boolean } | null>(null);
+  // Le clic natif qui suit un mousedown+mousemove+mouseup sur un en-tête (que
+  // ce soit un redimensionnement ou un réordonnancement) ne doit jamais
+  // déclencher son tri — bug réel constaté : redimensionner une colonne
+  // changeait l'ordre de tri, parce que le curseur termine souvent au-dessus
+  // d'un `<th>` voisin après un glissé horizontal, et le clic qui suit
+  // toujours un mouseup cible cet en-tête-là. `click` est dispatché par le
+  // navigateur juste après `mouseup`, dans la même séquence synchrone — pas
+  // besoin d'attendre, le drapeau est déjà à jour quand `onclick` s'exécute.
+  let suppressSortClick = false;
+  function markSuppressSortClick() {
+    suppressSortClick = true;
+    setTimeout(() => (suppressSortClick = false), 0);
+  }
   const visibleColumns = $derived(
     columnOrder
       .map((key) => columns.find((c) => c.key === key))
@@ -140,12 +154,12 @@
       : [...visibleKeys, key];
     persistColumnsPrefs();
   }
-  /** Glisser-déposer d'en-tête (§6.2) : déplace `sourceKey` juste avant ou
-   * après `targetKey` dans l'ordre complet (colonnes masquées comprises, pour
-   * qu'elles gardent leur position relative une fois réaffichées). Colonne
-   * fixe jamais déplaçable — ni comme source, ni comme cible ne bougeant elle-
-   * même (on peut déposer dessus : la colonne déplacée vient alors juste après
-   * elle, seule place valide avant la 1ʳᵉ colonne libre). */
+  /** Réordonnance : déplace `sourceKey` juste avant ou après `targetKey` dans
+   * l'ordre complet (colonnes masquées comprises, pour qu'elles gardent leur
+   * position relative une fois réaffichées). Colonne fixe jamais déplaçable —
+   * ni comme source, ni comme cible ne bougeant elle-même (on peut déposer
+   * dessus : la colonne déplacée vient alors juste après elle, seule place
+   * valide avant la 1ʳᵉ colonne libre). */
   function reorderColumn(sourceKey: string, targetKey: string, before: boolean) {
     if (sourceKey === targetKey) return;
     if (columns.find((c) => c.key === sourceKey)?.fixed) return;
@@ -156,14 +170,49 @@
     columnOrder = [...rest.slice(0, insertAt), sourceKey, ...rest.slice(insertAt)];
     persistColumnsPrefs();
   }
-  function onColumnDrop(targetKey: string, e: DragEvent) {
-    e.preventDefault();
-    const source = dragKey;
-    dragKey = null;
-    if (!source) return;
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const before = e.clientX - rect.left < rect.width / 2;
-    reorderColumn(source, targetKey, before);
+  const HEADER_DRAG_THRESHOLD = 4;
+  /** Réordonnancement au glissé souris (§6.2) — pas le drag HTML5 natif :
+   * abandonné après deux tentatives (curseur « sens interdit » persistant,
+   * jamais résolu malgré `setData`/`effectAllowed`/`-webkit-user-drag`).
+   * Même technique, déjà éprouvée, que le redimensionnement juste en dessous
+   * (`startResize`) : écouteurs `window` le temps du geste, seuil de
+   * quelques pixels avant de considérer que c'est un vrai glissé et pas un
+   * simple clic (sinon `toggleSort` ne se déclencherait plus jamais). */
+  function startHeaderDrag(e: MouseEvent, key: string) {
+    if (e.button !== 0) return;
+    if (columns.find((c) => c.key === key)?.fixed) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let moved = false;
+    function onMove(ev: MouseEvent) {
+      if (!moved) {
+        if (Math.abs(ev.clientX - startX) < HEADER_DRAG_THRESHOLD && Math.abs(ev.clientY - startY) < HEADER_DRAG_THRESHOLD) return;
+        moved = true;
+        dragKey = key;
+      }
+      const target = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest<HTMLElement>(
+        "th[data-col-key]",
+      );
+      const targetKey = target?.dataset.colKey;
+      if (!targetKey || targetKey === key) {
+        dropTarget = null;
+        return;
+      }
+      const rect = target!.getBoundingClientRect();
+      dropTarget = { key: targetKey, before: ev.clientX - rect.left < rect.width / 2 };
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      if (moved) {
+        if (dropTarget) reorderColumn(key, dropTarget.key, dropTarget.before);
+        markSuppressSortClick();
+      }
+      dragKey = null;
+      dropTarget = null;
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   }
 
   // --- Redimensionnement de colonne (§6.2) : poignée à droite de l'en-tête,
@@ -203,6 +252,7 @@
     resizingKey = null;
     stopResizeListeners();
     persistColumnsPrefs();
+    markSuppressSortClick();
   }
   /** Redimensionnement au clavier (flèches gauche/droite), poignée focusable
    * — pas juste une alternative a11y de façade : sans ça, la poignée n'est
@@ -808,35 +858,27 @@
             <tr>
               {#each visibleColumns as col (col.key)}
                 <th
+                  data-col-key={col.key}
                   class:sortable={col.sortable}
+                  class:draggable={!col.fixed}
                   class:dragging={dragKey === col.key}
                   class:resizing={resizingKey === col.key}
+                  class:drop-before={dropTarget?.key === col.key && dropTarget.before}
+                  class:drop-after={dropTarget?.key === col.key && !dropTarget.before}
                   style={columnWidths[col.key] ? `width:${columnWidths[col.key]}px; max-width:${columnWidths[col.key]}px;` : undefined}
-                  draggable={!col.fixed}
                   title={col.fixed ? undefined : t("library.dragColumnTooltip")}
-                  onclick={() => col.sortable && toggleSort(col.key)}
-                  ondragstart={(e) => {
-                    dragKey = col.key;
-                    // Sans `setData`, certains navigateurs/WebView2 ne
-                    // considèrent le geste comme un glisser valide nulle
-                    // part : curseur « sens interdit » partout, `drop` ne se
-                    // déclenche jamais (bug réel constaté).
-                    e.dataTransfer?.setData("text/plain", col.key);
-                    if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
-                  }}
-                  ondragend={() => (dragKey = null)}
-                  ondragenter={(e) => e.preventDefault()}
-                  ondragover={(e) => {
-                    e.preventDefault();
-                    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
-                  }}
-                  ondrop={(e) => onColumnDrop(col.key, e)}
+                  onclick={() => col.sortable && !suppressSortClick && toggleSort(col.key)}
+                  onmousedown={(e) => startHeaderDrag(e, col.key)}
                 >
                   <span class="th-label">
                     {t(col.labelKey)}
                     {#if col.tooltipKey}
-                      <Tooltip text={t(col.tooltipKey)}>
-                        <button type="button" class="th-info" onclick={(e) => e.stopPropagation()}>ⓘ</button>
+                      <!-- "published" = avant-dernière colonne par défaut (juste avant
+                           "size"), sa bulle centrée déborderait sur le panneau de droite
+                           (bug réel constaté) — bord droit aligné, la bulle grandit vers
+                           la gauche à la place. -->
+                      <Tooltip text={t(col.tooltipKey)} side="bottom" align={col.key === "published" ? "right" : "center"}>
+                        <button type="button" class="th-info" onclick={(e) => e.stopPropagation()} onmousedown={(e) => e.stopPropagation()}>ⓘ</button>
                       </Tooltip>
                     {/if}
                     {#if sortKey === col.key}<span class="arrow">{sortDir === 1 ? "▲" : "▼"}</span>{/if}
@@ -1343,18 +1385,34 @@
   .th-info:focus-visible {
     color: var(--rosso-bright);
   }
-  /* Réordonnement par glisser-déposer (§6.2) : la colonne fixe (nom) n'a pas
-     `draggable`, donc jamais ce curseur — cohérent avec le fait qu'elle ne
-     peut être ni déplacée ni servir de cible avant elle-même. */
-  th[draggable="true"] {
+  /* Réordonnement au glissé souris, pas le drag HTML5 natif (§6.2, abandonné
+     après deux tentatives infructueuses sous WebView2 — voir `startHeaderDrag`).
+     La colonne fixe (nom) n'a pas `.draggable`, donc jamais ce curseur —
+     cohérent avec le fait qu'elle ne peut être ni déplacée ni servir de cible
+     avant elle-même. */
+  th.draggable {
     cursor: grab;
-    /* `draggable` seul suffit normalement, mais `-webkit-user-drag` lève
-       toute ambiguïté sous Chromium/WebView2 pour un élément qui n'est ni un
-       lien ni une image (pas de comportement de glisser natif par défaut). */
-    -webkit-user-drag: element;
   }
   th.dragging {
     opacity: 0.4;
+  }
+  /* Repère de dépôt : ligne verticale du côté où la colonne glissée
+     s'insérerait si on relâchait maintenant. */
+  th.drop-before::before,
+  th.drop-after::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--rosso-bright);
+    z-index: 3;
+  }
+  th.drop-before::before {
+    left: 0;
+  }
+  th.drop-after::after {
+    right: 0;
   }
   /* Poignée de redimensionnement (§6.2) : bande à la jonction de deux
      colonnes. Repère visuel permanent (pas seulement au survol) — un simple

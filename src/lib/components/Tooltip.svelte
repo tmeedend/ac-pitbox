@@ -15,16 +15,33 @@
     text: string;
     /** `"center"` (défaut) centre la bulle sous/sur le déclencheur — déborde
      * si le déclencheur est près d'un bord étroit (ex. barre latérale).
-     * `"left"` aligne le bord gauche de la bulle sur celui du déclencheur. */
-    align?: "center" | "left";
+     * `"left"` aligne le bord gauche de la bulle sur celui du déclencheur.
+     * `"right"` aligne son bord droit dessus (la bulle grandit vers la
+     * gauche) — pour un déclencheur près du bord droit (ex. dernières
+     * colonnes d'un tableau, rognées par le panneau de droite sinon, bug
+     * réel constaté sur la colonne « Date de publication »). */
+    align?: "center" | "left" | "right";
+    /** `"top"` (défaut) affiche la bulle au-dessus du déclencheur. `"bottom"` —
+     * en-tête de tableau `position: sticky` collé en haut d'un conteneur
+     * `overflow-y: auto` (§6.2) : une bulle au-dessus déborderait hors de la
+     * zone visible du scroll et serait purement et simplement rognée, jamais
+     * affichée malgré `opacity`/`visibility` (bug réel constaté — ⓘ des
+     * en-têtes de colonnes dates). */
+    side?: "top" | "bottom";
     children: Snippet;
   }
-  let { text, align = "center", children }: Props = $props();
+  let { text, align = "center", side = "top", children }: Props = $props();
 </script>
 
 <span class="tt-wrap">
   {@render children()}
-  <span class="tt-bubble" class:align-left={align === "left"} role="tooltip">{text}</span>
+  <span
+    class="tt-bubble"
+    class:align-left={align === "left"}
+    class:align-right={align === "right"}
+    class:side-bottom={side === "bottom"}
+    role="tooltip"
+  >{text}</span>
 </span>
 
 <style>
@@ -44,6 +61,14 @@
     border: 1px solid var(--rosso-border);
     color: var(--txt2);
     font-size: 11px;
+    /* Composant générique : ne doit jamais hériter la typo du déclencheur
+       (bug réel constaté — ⓘ d'en-tête de tableau, où `<th>` impose gras +
+       majuscules + interlettrage par défaut du navigateur/du CSS de la
+       page). Toujours réinitialisés explicitement, quel que soit l'endroit
+       où la bulle est posée. */
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: normal;
     line-height: 1.5;
     padding: 8px 10px;
     white-space: pre-line;
@@ -68,5 +93,17 @@
     left: 0;
     transform: none;
     max-width: 170px;
+  }
+  /* Symétrique d'align-left : la bulle grandit vers la gauche depuis le bord
+     droit du déclencheur, jamais vers la droite où elle serait rognée. */
+  .tt-bubble.align-right {
+    left: auto;
+    right: 0;
+    transform: none;
+    max-width: 220px;
+  }
+  .tt-bubble.side-bottom {
+    bottom: auto;
+    top: calc(100% + 7px);
   }
 </style>

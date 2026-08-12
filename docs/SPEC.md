@@ -48,7 +48,7 @@ Le fichier du mod est une **entrée** du pipeline (lu), jamais une **sortie** (j
 
 **Entités** : Mod (identité stable, indépendante du nom de dossier), Tag (issu de l'ontologie), Profile (ensemble nommé de mods activés), HistoryEntry (événement horodaté), plus les sous-éléments et couches décrits plus bas.
 
-**Historique d'un mod** : trace les événements avec le nom de l'archive/fichier source — « import initial », « mise à jour », « extension ajoutée ». **Ne trace PAS** les activations/désactivations (bruit sans valeur). Pas de compteur de nombre de mises à jour.
+**Historique d'un mod** : trace les événements avec le nom de l'archive/fichier source — « import initial », « mise à jour », « extension ajoutée ». **Ne trace PAS** les activations/désactivations (bruit sans valeur). Pas de compteur de nombre de mises à jour. Contenu de base Kunos exclu de cette frise (`is_stock`) : pas de vraie notion de version ni d'import à raconter, la fiche affiche une simple ligne « Contenu de base ».
 
 ---
 
@@ -98,7 +98,7 @@ Deux sources, même pipeline d'analyse/identité/tagging :
 
 ### 4.4 Packs multi-voitures
 
-Chaque voiture d'un pack est une **entité de premier niveau** (activable/tagguable séparément), liée aux autres par une métadonnée `source_pack` (nom d'archive/dossier, connu dès l'import). La fiche affiche un bloc « Source / origine » (pack cliquable, nom d'archive, URL d'origine si présente) et une section « autres voitures du même pack ». Actions : filtrer par pack, désinstaller le pack en lot.
+Chaque voiture d'un pack est une **entité de premier niveau** (activable/tagguable séparément), liée aux autres par une métadonnée `source_pack` (nom d'archive/dossier, connu dès l'import). La fiche affiche un bloc « Source / origine » (pack cliquable, nom d'archive, URL d'origine si présente) et une section « autres voitures du même pack ». Actions : filtrer par pack, désinstaller le pack en lot. La rubrique « Provenance » de ce bloc s'adapte au type de contenu : nom d'archive pour un mod importé, **« Jeu de base »** ou nom du DLC (Dream Pack, Porsche Pack…) pour le contenu de base Kunos — résolu depuis `docs/kunos_content_dates.json` (`kunos_dates::pack_name`, même table que l'année/la date de publication estimées, §6.2).
 
 ### 4.5 Ressources partagées (fonts, drivers)
 
@@ -318,7 +318,7 @@ un fichier Rust dédié) au premier démarrage après la mise à jour, pas une c
 
 **Base Kunos indexée** en lecture seule (`is_stock`), non désactivable, pour que skins/sons puissent s'attacher à une voiture/circuit de base comme à un mod.
 
-**Skins — sélection, pas activation filesystem.** Un skin est un sous-dossier dans `skins/` ; AC les charge tous. Aucune activation/désactivation. Seules actions : prévisualiser, et désigner le **skin piloté** (étoile) pour le lancement. Import via l'import général (rattachement automatique via le dossier `skins/<voiture>/`).
+**Skins — sélection, pas activation filesystem.** Un skin est un sous-dossier dans `skins/` ; AC les charge tous. Aucune activation/désactivation. Seules actions : prévisualiser, et désigner le **skin piloté** (étoile) pour le lancement. Import via l'import général (rattachement automatique via le dossier `skins/<voiture>/`). **Miniature `livery.png`** (couleurs/motif du skin seul, convention AC reprise par CM) affichée quand présente : dans la liste déroulante compacte de sélection du skin de session (barre latérale, §9.1 — bien plus lisible que la photo de la voiture entière écrasée à 20px) et en médaillon dans le coin supérieur droit de chaque vignette de la grille de skins (fiche détail, §6.3) ; jamais sur la grande photo du skin sélectionné.
 - **Vue Skins** : sélection multiple (Ctrl/Alt) pour supprimer plusieurs skins d'un coup. **Regroupement par archive d'origine** (pour supprimer d'un coup tous les skins d'une même archive) ou, au choix, **par voiture**.
 
 **Sons** — exclusifs (un seul actif par voiture), vrai remplacement de fichiers (`.bank` + `GUIDs.txt`), original toujours restaurable.
@@ -401,6 +401,8 @@ Bouton d'aperçu 3D sur la fiche (lance `acshowroom` pour un rendu du modèle). 
 - **Supprimer de la bibliothèque** répond à « ce mod doit-il encore occuper de la place sur le disque ? ». Action **distincte**, avec sa propre confirmation — efface les fichiers de la bibliothèque (et désactive au passage s'il était actif). Non réversible sans réimport (sauf si l'archive source a été conservée, voir ci-dessous).
 - **Profils** : ensembles nommés activables/désactivables en masse — capture l'état actif des **trois** types activables (mods voiture/circuit avec leur version, Autres mods §6.1bis, Apps §12bis.4). Utile pour resynchroniser une bibliothèque copiée sur une autre machine (ex. réplication via robocopy) : les fichiers voyagent, mais aucune junction/hardlink ne survit à un copiage — capturer un profil avant de migrer, l'appliquer une fois la bibliothèque et `overlay.sqlite` en place sur la nouvelle machine réactive tout en une action. Autres mods et Apps n'ont pas de notion de version (simple actif/inactif), stockés à part côté overlay (`profile_extra_entries`).
 - **Garde-fou** : vérifier hardlink/junction vs fichier ou dossier réel avant toute suppression dans `content/`.
+
+**Sauvegarde automatique de démarrage** (`src-tauri/src/backup.rs`, best-effort, silencieuse) : à chaque lancement de l'app, avant toute ouverture de connexion à la base, copie `overlay.sqlite` et les petits fichiers de préférences (`config.json`, `ui_prefs.json`, `library_columns.json`, `session.json`, `launch_state.json`, `saved_sessions.json`, `music.json`, `tag-rules.json`) dans `app_config_dir/backups/<horodatage>/`. Rotation sur les 7 plus récentes. Filet de sécurité contre une base corrompue ou un fichier de préférences écrasé par erreur — pas un vrai système de restauration point-in-time (pas d'écran dédié pour l'instant) : en cas de pépin, fermer l'app et recopier à la main les fichiers voulus depuis le dossier de sauvegarde le plus récent.
 
 **Conservation de l'archive source** (réglage optionnel, défaut désactivé — cohérent avec l'absence d'historique de versions/couches, §4.3) : si activé, l'archive/dossier source d'un mod est conservée en bibliothèque en plus du contenu extrait. Rend disponible une action **« Réinstaller depuis l'archive source »** sur la fiche du mod (visible seulement si l'archive est conservée) : réextrait l'archive et remplace le contenu de bibliothèque pour ce mod. Utile en cas de corruption, de modification accidentelle, ou pour repartir propre sans retélécharger.
 

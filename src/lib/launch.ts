@@ -71,6 +71,8 @@ export interface SkinItem {
   id: string;
   name: string;
   preview: string | null;
+  /** `livery.png` (couleurs/motif du skin seul, sans la voiture) — `null` si absent. */
+  livery: string | null;
 }
 
 /** Skins de la version active d'un mod, lus dans la bibliothèque (fiche détail §6.3). */

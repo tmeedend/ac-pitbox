@@ -128,6 +128,9 @@ export interface ModDetail extends ModCard {
   history: HistoryRow[];
   specs: NativeSpecs | null;
   track: TrackDetail | null;
+  /** Nom du DLC Kunos d'origine (contenu de base uniquement) — `null` pour le
+   * jeu de base ou un mod importé. */
+  stock_pack: string | null;
 }
 
 export interface FuzzyConflict {

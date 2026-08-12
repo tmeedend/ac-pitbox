@@ -244,8 +244,12 @@
     if (nav.sessionTrack?.id === trackId) trackSkinOptions = opts;
   }
 
+  // `livery.png` (couleurs/motif du skin seul) plutôt que `preview` (photo de
+  // la voiture entière, §8.6) : à 20px dans ce menu compact, la voiture
+  // entière écrasée était illisible — repli sur `preview` si le skin n'a pas
+  // de livery (convention pas garantie sur tous les skins).
   const carSkinOptions = $derived(
-    carSkins.map((s) => ({ id: s.id, name: s.name, image: previewSrc(s.preview) })),
+    carSkins.map((s) => ({ id: s.id, name: s.name, image: previewSrc(s.livery ?? s.preview) })),
   );
   // Le tracé (outline), pas la photo de fond : plus lisible en petite
   // miniature pour distinguer les layouts d'un même circuit d'un coup d'œil.

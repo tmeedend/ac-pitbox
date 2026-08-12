@@ -45,6 +45,16 @@
   }
 
   const entries = $derived.by(() => {
+    // Contenu de base Kunos (§4/§12bis.1) : pas de vraie notion de version ni
+    // d'import à raconter ici — une seule ligne informative, pas la frise
+    // habituelle avec « (sans n°) », badge « installée » et une date qui ne
+    // correspond à rien de réel (juste l'indexation locale).
+    if (detail.is_stock) {
+      return [
+        { key: "stock", when: "", label: "", installed: false, event: t("detail.baseContentLabel"), detail: "" },
+      ];
+    }
+
     // Une version et son événement d'import partagent la même seconde : sans
     // ce dédoublonnage, la frise afficherait deux fois la même chose.
     const versionStamps = new Set(detail.versions.map((v) => v.imported_at));
@@ -114,7 +124,7 @@
             </div>
             <div class="event">{e.event}</div>
             {#if e.detail}<div class="detail mono">{e.detail}</div>{/if}
-            <div class="when mono">{fmtDate(e.when)}</div>
+            {#if e.when}<div class="when mono">{fmtDate(e.when)}</div>{/if}
           </div>
         </li>
       {/each}

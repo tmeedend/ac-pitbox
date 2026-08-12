@@ -1,6 +1,7 @@
 mod activation;
 mod apps;
 mod archive;
+mod backup;
 mod bulk;
 mod cm_stats;
 mod commands;
@@ -70,6 +71,11 @@ pub fn run() {
         // fermeture et sur redimensionnement/déplacement).
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
+            // Sauvegarde de démarrage (§6.2/§9.4), avant toute ouverture de
+            // connexion : on veut la base et les préférences exactement
+            // telles que la session précédente les a laissées.
+            backup::run_startup_backup(app.handle());
+
             let db_path = app.path().app_config_dir()?.join("overlay.sqlite");
             let conn = overlay::open(&db_path)?;
 

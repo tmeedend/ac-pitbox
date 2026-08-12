@@ -34,9 +34,14 @@
     onuninstallpack: () => void;
   } = $props();
 
-  /** Archive dont provient la version **active** (§4.2). */
-  const archive = $derived(
-    detail.versions.find((v) => v.id === detail.active_version_id)?.source_archive ?? null,
+  /** Archive dont provient la version **active** (§4.2) — mod importé
+   * uniquement. Pour le contenu de base Kunos (§10bis), il n'y a jamais eu
+   * d'archive : jeu de base ou DLC (`detail.stock_pack`, résolu côté Rust
+   * depuis `docs/kunos_content_dates.json`), jamais les deux à la fois. */
+  const provenance = $derived(
+    detail.is_stock
+      ? (detail.stock_pack ?? t("detail.baseGameLabel"))
+      : (detail.versions.find((v) => v.id === detail.active_version_id)?.source_archive ?? null),
   );
 
   /** Date seule : l'heure d'une date estimée n'a aucun sens (§6.2). */
@@ -57,8 +62,8 @@
         <dd class="mono">{detail.author ?? "—"}</dd>
       </div>
       <div class="row">
-        <dt>{t("detail.archiveLabel")}</dt>
-        <dd class="mono">{archive ?? "—"}</dd>
+        <dt>{t("detail.provenanceLabel")}</dt>
+        <dd class="mono">{provenance ?? "—"}</dd>
       </div>
       <div class="row">
         <dt>{t("detail.publishedLabel")}</dt>
