@@ -8,6 +8,7 @@
     deactivateMod,
     getModDetail,
     listLibrary,
+    listModResources,
     openModFolder,
     previewSrc,
     setFavorite,
@@ -18,6 +19,7 @@
     type NativeSpecs,
     type LayoutItem,
   } from "$lib/library";
+  import { listMediaScreenshots, listMediaReplays, listMediaBackgrounds } from "$lib/media";
   import { listModSkins, openNativeShowroom, type SkinItem } from "$lib/launch";
   import { exportMod, deletePack, deleteBrokenMod, reinstallFromArchive, type ExportReport } from "$lib/maintenance";
   import {
@@ -60,6 +62,16 @@
   // Onglets de premier niveau de la fiche (§6.1) — réinitialisé à "fiche" à
   // chaque changement d'entité (voir le $effect suivant `id`).
   let activeTab = $state<"fiche" | "screenshots" | "replays" | "resources" | "backgrounds">("fiche");
+  // Chiffres affichés entre parenthèses sur les onglets Médias/Ressources —
+  // mêmes appels que ceux faits à l'ouverture de l'onglet (media.rs parcourt
+  // en direct `screens/`/`replay/`, potentiellement coûteux), mais lancés ici
+  // en tâche de fond dès l'ouverture de la fiche : `null` tant que la réponse
+  // n'est pas là (onglet affiché sans chiffre plutôt que fiche retardée),
+  // silencieux en cas d'échec (juste un indice visuel, pas une action).
+  let screenshotsCount = $state<number | null>(null);
+  let replaysCount = $state<number | null>(null);
+  let resourcesCount = $state<number | null>(null);
+  let backgroundsCount = $state<number | null>(null);
   let skins = $state<SkinItem[]>([]);
   let previewSkin = $state(0);
   let previewLayout = $state(0);
@@ -287,6 +299,41 @@
     } else {
       loadTrackSkins(current);
     }
+
+    screenshotsCount = null;
+    replaysCount = null;
+    resourcesCount = null;
+    listMediaScreenshots(current)
+      .then((f) => {
+        if (current === id) screenshotsCount = f.length;
+      })
+      .catch(() => {});
+    listMediaReplays(current)
+      .then((f) => {
+        if (current === id) replaysCount = f.length;
+      })
+      .catch(() => {});
+    listModResources(current)
+      .then((f) => {
+        if (current === id) resourcesCount = f.length;
+      })
+      .catch(() => {});
+  });
+
+  // Chiffre de l'onglet Backgrounds (circuits seulement) : dépend en plus du
+  // layout sélectionné (même filtrage que MediaBackgrounds), donc effet
+  // séparé plutôt que mêlé au chargement de la fiche ci-dessus.
+  const currentLayoutId = $derived(!isCar ? (detail?.track?.layouts[previewLayout]?.id ?? null) : null);
+  $effect(() => {
+    if (isCar) return;
+    const current = id;
+    const layout = currentLayoutId;
+    backgroundsCount = null;
+    listMediaBackgrounds(current, layout)
+      .then((f) => {
+        if (current === id && layout === currentLayoutId) backgroundsCount = f.length;
+      })
+      .catch(() => {});
   });
 
   async function loadSounds(parent: string) {
@@ -618,17 +665,17 @@
         {t("detail.tabFiche")}
       </button>
       <button class:on={activeTab === "screenshots"} type="button" onclick={() => (activeTab = "screenshots")}>
-        {t("detail.tabScreenshots")}
+        {t("detail.tabScreenshots")}{screenshotsCount !== null ? ` (${screenshotsCount})` : ""}
       </button>
       <button class:on={activeTab === "replays"} type="button" onclick={() => (activeTab = "replays")}>
-        {t("detail.tabReplays")}
+        {t("detail.tabReplays")}{replaysCount !== null ? ` (${replaysCount})` : ""}
       </button>
       <button class:on={activeTab === "resources"} type="button" onclick={() => (activeTab = "resources")}>
-        {t("detail.tabResources")}
+        {t("detail.tabResources")}{resourcesCount !== null ? ` (${resourcesCount})` : ""}
       </button>
       {#if !isCar}
         <button class:on={activeTab === "backgrounds"} type="button" onclick={() => (activeTab = "backgrounds")}>
-          {t("detail.tabBackgrounds")}
+          {t("detail.tabBackgrounds")}{backgroundsCount !== null ? ` (${backgroundsCount})` : ""}
         </button>
       {/if}
     </nav>
@@ -1118,6 +1165,9 @@
     justify-content: center;
     position: relative;
     overflow: hidden;
+    /* Même respiration que les autres cartes (`.data`/`.col`) — l'image
+       collée aux bords haut/gauche était un retour utilisateur direct. */
+    padding: 14px;
   }
   /* Voiture : cadre à ratio fixe 16:9 (celui des previews AC), aligné en haut
      — pas étiré par la hauteur du panneau de données voisin. */

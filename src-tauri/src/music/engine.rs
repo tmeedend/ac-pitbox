@@ -255,6 +255,21 @@ pub fn fade_out_gain(t: f32) -> f32 {
     (1.0 - t) * (1.0 - t)
 }
 
+/// Volume d'un `SingleFade` à l'instant `t` ∈ [0,1] entre `from` et `to`.
+/// `fade_in_gain` est une progression 0→1 (directement utilisable dans le
+/// lerp `from + (to-from)*progress`) ; `fade_out_gain` est déjà une courbe de
+/// gain 1→0, pas une progression — la combiner au même lerp inverserait le
+/// sens du fondu (silence au début, plein volume juste avant la coupure nette
+/// de `stop_at_end`). Elle se combine donc avec `to + (from-to)*gain` à la
+/// place.
+fn single_fade_volume(from: f32, to: f32, t: f32) -> f32 {
+    if to >= from {
+        from + (to - from) * fade_in_gain(t)
+    } else {
+        to + (from - to) * fade_out_gain(t)
+    }
+}
+
 fn elapsed_fraction(start: Instant, duration: Duration) -> f32 {
     if duration.is_zero() {
         return 1.0;
@@ -581,8 +596,7 @@ impl Engine {
                 stop_at_end,
             } => {
                 let t = elapsed_fraction(start, duration);
-                let ease = if to > from { fade_in_gain(t) } else { fade_out_gain(t) };
-                let vol = from + (to - from) * ease;
+                let vol = single_fade_volume(from, to, t);
                 self.set_slot_volume(slot, vol);
                 if t >= 1.0 {
                     if stop_at_end {
@@ -828,6 +842,28 @@ mod tests {
         assert!((fade_in_gain(1.0) - 1.0).abs() < f32::EPSILON);
         assert!((fade_out_gain(0.0) - 1.0).abs() < f32::EPSILON);
         assert_eq!(fade_out_gain(1.0), 0.0);
+    }
+
+    #[test]
+    fn single_fade_volume_ramps_down_for_a_fade_out() {
+        // Bug réel (§5.2) : en combinant `fade_out_gain` (déjà une courbe de
+        // gain 1→0) au même lerp que `fade_in_gain` (une progression 0→1), le
+        // volume d'un fondu de sortie partait de 0 pour remonter jusqu'à
+        // `from` — silence au début, plein volume juste avant la coupure
+        // nette de `stop_at_end` : la saccade entendue en sortie de Big
+        // Picture.
+        assert!((single_fade_volume(0.8, 0.0, 0.0) - 0.8).abs() < 1e-6, "t=0 : encore au volume de départ");
+        assert!(single_fade_volume(0.8, 0.0, 1.0).abs() < 1e-6, "t=1 : silence atteint");
+        let mid = single_fade_volume(0.8, 0.0, 0.5);
+        assert!(mid > 0.0 && mid < 0.8, "à mi-chemin, ni silence ni plein volume : {mid}");
+    }
+
+    #[test]
+    fn single_fade_volume_ramps_up_for_a_fade_in() {
+        assert!(single_fade_volume(0.0, 0.8, 0.0).abs() < 1e-6, "t=0 : encore silencieux");
+        assert!((single_fade_volume(0.0, 0.8, 1.0) - 0.8).abs() < 1e-6, "t=1 : volume cible atteint");
+        let mid = single_fade_volume(0.0, 0.8, 0.5);
+        assert!(mid > 0.0 && mid < 0.8, "à mi-chemin, ni silence ni volume cible : {mid}");
     }
 
     fn track(name: &str) -> IndexedTrack {

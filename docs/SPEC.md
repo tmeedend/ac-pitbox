@@ -166,6 +166,14 @@ Réinstaller, Supprimer, Aperçu 3D, Ouvrir le dossier) sont regroupées dans un
 menu **⋮** — seuls le cœur favori et le badge « Contenu de base » restent
 visibles en permanence, hors du menu.
 
+**Chiffre entre parenthèses** sur Screenshots/Replays/Resources/Backgrounds
+(ex. « Replays (3) ») dès qu'il est connu, pour savoir s'il y a quelque chose
+avant de cliquer. Récupéré en tâche de fond à l'ouverture de la fiche (mêmes
+appels que ceux faits à l'ouverture de chaque onglet) : aucun chiffre tant que
+la réponse n'est pas là, jamais de blocage de l'affichage de la fiche pour
+l'attendre. Backgrounds se recalcule aussi à chaque changement de layout
+sélectionné (même filtrage que la sous-vue elle-même, §6.1).
+
 ### 6.1 Onglet Médias (fiche voiture/circuit)
 
 Sous-vues **Screenshots**, **Replays** et **Backgrounds** (cette dernière
