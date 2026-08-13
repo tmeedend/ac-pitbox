@@ -148,11 +148,13 @@ fn mode_data_weekend(s: &RaceSetup) -> String {
 ///
 /// **Limites connues (best effort, pas vues dans un preset de référence)** :
 /// - **Skin du joueur** : le schéma Quick Drive ne porte **aucun** champ skin
-///   pour la voiture du joueur (confirmé en lisant `QuickDrive.xaml.cs`) — le
-///   skin vient uniquement d'un paramètre `carSkinId` passé à `RunAsync` par
-///   le code C#, jamais du JSON, et `race/quick` (invocation URI) ne le
-///   transmet pas. À défaut, CM retombe sur le dernier skin utilisé pour
-///   cette voiture. `s.car_skin` n'est donc **pas encore appliqué** ici.
+///   pour la voiture du joueur (confirmé en lisant `QuickDrive.xaml.cs`, et
+///   mesuré : deux `.cmpreset` sauvegardés par CM avec deux skins différents
+///   sont identiques octet pour octet) — le skin vient uniquement d'un
+///   paramètre `carSkinId` passé à `RunAsync` par le code C#, jamais du JSON,
+///   et `race/quick` (invocation URI) ne le transmet pas. `s.car_skin` n'est
+///   donc pas envoyé **par ce preset** : il est réinjecté après coup dans le
+///   `race.ini` écrit par CM, voir `raceini.rs` (§9.2).
 /// - **Évolution du grip / état de piste** : pas de champ dédié trouvé —
 ///   les 4 presets de référence utilisent tous le même `TrackPropertiesData`
 ///   ("Optimum"/sec). `s.grip` n'est **pas encore appliqué** — toujours piste

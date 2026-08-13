@@ -105,11 +105,12 @@ configurée, Weekend se comporte comme une course avec qualif minimale — pas
 d'équivalent Weekend sans qualif, voir point 4 ci-dessous.
 
 ## Limites connues du nouveau mécanisme
-1. **Skin du joueur non forçable** : pas de champ dans le schéma Quick Drive pour le
-   skin du joueur (contrairement à `race/csp` qui a `CarSkinId`, mais ce chemin ne
+1. **Skin du joueur non transportable par le preset** — contourné depuis le
+   2026-08-13, voir « Skin du joueur » plus bas. Pas de champ skin dans le schéma
+   Quick Drive (contrairement à `race/csp` qui a `CarSkinId`, mais ce chemin ne
    supporte pas un plateau complet). CM retombe sur le dernier skin utilisé pour la
-   voiture. `RaceSetup.car_skin` est conservé côté Rust (compat aller-retour front)
-   mais non lu par `quickdrive::build_preset`.
+   voiture ; `quickdrive::build_preset` n'envoie donc toujours rien, le skin est
+   réinjecté après coup par `raceini.rs`.
 2. **Grip/évolution de piste non mappés** : `TrackPropertiesData` toujours codé en
    dur sur « Optimum »/sec — pas de champ identifié correspondant au réglage
    `grip` de notre UI dans les captures réelles.
@@ -167,6 +168,60 @@ Conséquence annexe : l'ancienne écriture directe de `assists.ini` avant le lan
 de CM (`launch::apply_assists`, best-effort avant ce correctif) était sans effet réel
 — CM régénère son propre état d'assistances au démarrage du jeu, par-dessus n'importe
 quelle écriture externe du fichier. Fonction retirée avec l'ajout de `loadAssists=true`.
+
+## Skin du joueur : réinjection dans `race.ini` après CM (2026-08-13)
+
+Point ouvert n°1 refermé. Quatre mesures, dans l'ordre où elles ont été faites.
+
+**1. Le preset ne peut pas porter le skin.** `SaveableData` (`QuickDrive.xaml.cs`) n'a
+aucun champ skin, et `ProcessRaceQuick` ne lit que `preset`/`presetFile`, `assists`,
+`loadPreset`, `loadAssists` — alors que `QuickDrive.RunAsync` a bien un paramètre
+`carSkinId`, jamais alimenté depuis l'URI. Confirmé sans lire une ligne de C# : deux
+`.cmpreset` sauvegardés depuis l'UI de CM avec deux skins différents sont **identiques
+octet pour octet**. Le skin retenu vient de `CarObject.SelectedSkin`, restauré depuis
+`LimitedStorage.Get(LimitedSpace.SelectedSkin, carId)`.
+
+**2. Écrire `race.ini` avant CM ne sert à rien.** Sentinelle `SKIN=zz_pitbox_sentinel_skin`
+écrite dans `[RACE]` et `[CAR_0]` de `Documents\Assetto Corsa\cfg\race.ini`, puis
+lancement normal : CM réécrit le fichier 0,26 s après avoir reçu l'URI, sentinelle
+effacée. Conforme à `Game.StartAsync`, qui charge le `race.ini` existant, le nettoie,
+puis laisse `BasicProperties.Set()` réécrire `[RACE] SKIN` et reconstruire `[CAR_0]`.
+Sur une voiture dont CM n'a aucun souvenir (`abarth500`), il retombe sur le premier
+skin du dossier — exactement `SelectPreviousOrDefaultSkin()`.
+
+**3. `race/config` applique bien le skin, mais coûte trop cher.** Vérifié : le jeu a
+chargé `SKIN=red_scorpion`, d'après son propre `logs\log.txt`. Comparaison des deux
+chemins sur la ligne `StartAsync_Ui(): Starting game` du log de CM :
+
+| | `race/config` | `race/quick` |
+| --- | --- | --- |
+| `Basic=` | **Unknown** | `Race` |
+| `Mode=` | **(vide)** | `PracticeProperties` |
+| Helpers injectés | 12 | 18 |
+| Auto-load CSP | `Auto-loading stuff for ""` → identifiant vide, rien à installer | `for "magione"` / `for "abarth500"` → `ID to install: …` |
+
+La ligne à l'identifiant vide est la preuve directe de ce que la section « Verdict »
+déduisait du code. Les 6 helpers manquants : `WeatherSpecificDate` (la date de
+simulation, donc notre saison), `WeatherDetails`, `CarExtendedPhysicsHelper`,
+`CarCustomDataHelper`, `QuickDrivePresetProperty`, `DrivenDistance`. S'y ajoutent les
+assistances, qui exigeraient le paramètre séparé `assists=`.
+
+**4. Écrire après CM fonctionne.** CM écrit `race.ini` à l'instant où il lance
+`acs.exe`, mais le jeu ne le lit que pendant son chargement, plusieurs centaines de ms
+plus tard :
+
+```text
++0 ms      acmanager://race/quick envoyée à CM
++1694 ms   CM réécrit race.ini (SKIN=0_white_scorpion) et lance acs.exe
++1702 ms   réinjection de SKIN=red_scorpion (remplacement atomique)
+→ log.txt d'Assetto Corsa : SKIN=red_scorpion
+```
+
+C'est le mécanisme retenu (`src-tauri/src/raceini.rs`) : seules `[RACE]` et `[CAR_0]`
+sont touchées, les adversaires gardent les skins écrits par CM depuis notre grille.
+La marge réelle n'a pas été mesurée — on sait que +7 ms passe, pas où est la limite.
+Une évolution de CM ou de CSP peut déplacer le moment de l'écriture, d'où l'intérêt
+d'obtenir un `carSkinId` dans l'URI côté amont (question posée au projet CM).
 
 ## Génération du preset côté Pit Box
 `quickdrive::build_preset(&RaceSetup) -> Result<String, String>` (Rust,

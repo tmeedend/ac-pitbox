@@ -49,9 +49,9 @@ pub struct Opponent {
 pub struct RaceSetup {
     pub car_id: String,
     /// Skin du joueur : pas de champ dédié dans le schéma Quick Drive
-    /// (`race/quick`), CM retombe sur le dernier skin utilisé pour cette
-    /// voiture. Conservé pour l'aller-retour front, non lu ici.
-    #[allow(dead_code)]
+    /// (`race/quick`), CM retombe sur le dernier skin qu'il a lui-même utilisé
+    /// pour cette voiture. Appliqué en réécrivant le `race.ini` juste après CM
+    /// et avant que le jeu ne le lise — voir `raceini.rs` (§9.2).
     pub car_skin: Option<String>,
     pub track_id: String,
     pub track_layout: Option<String>,
@@ -291,6 +291,15 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
     cmd.spawn().map_err(|e| format!("lancement de Content Manager : {e}"))?;
+
+    // Skin du joueur (§9.2) : absent du schéma Quick Drive, donc réinjecté
+    // dans le `race.ini` que CM écrit à l'instant où il lance `acs.exe` — le
+    // jeu ne lit ce fichier que quelques centaines de ms plus tard. Démarré
+    // après le `spawn` : CM n'a pas encore lu ses arguments, l'état initial du
+    // fichier relevé ici est donc bien celui d'avant son écriture.
+    if let Some(skin) = setup.car_skin.as_deref().filter(|s| !s.is_empty()) {
+        crate::raceini::spawn_player_skin_patcher(setup.car_id.clone(), skin.to_string());
+    }
 
     // Marqueur « déjà essayé » définitif (§6.5) : posé au lancement, fiabilise
     // les faux zéros de CM. Non bloquant si l'écriture échoue.

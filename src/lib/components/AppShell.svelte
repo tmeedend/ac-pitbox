@@ -15,7 +15,6 @@
   import TitleBar from "./TitleBar.svelte";
   import ImageSelectDropdown from "./ImageSelectDropdown.svelte";
   import TrackSkinChecklistDropdown from "./TrackSkinChecklistDropdown.svelte";
-  import Tooltip from "./Tooltip.svelte";
   import { nav, requestSection, pickSession } from "$lib/nav.svelte";
   import { previewSrc, getModDetail, activateMod } from "$lib/library";
   import { confirm, message } from "@tauri-apps/plugin-dialog";
@@ -52,18 +51,6 @@
     // dans la barre de titre (icône ?), pas dans la navigation.
     { id: "settings", labelKey: "nav.settings" },
   ];
-
-  // Raccourci de l'astuce skin (§9.2) : CM ne transmet le skin joueur nulle
-  // part dans son protocole de lancement rapide, seulement pour les
-  // adversaires — la seule façon de le fixer est de le choisir une fois dans
-  // CM lui-même, qui le retient ensuite par voiture.
-  async function openCmForSkin() {
-    try {
-      await openContentManager();
-    } catch (e) {
-      console.error(e);
-    }
-  }
 
   async function handleAtelierClick(b: NavBtn) {
     if (b.action) {
@@ -350,14 +337,6 @@
                 emptyText={t("session.noSkinsAvailable")}
                 onselect={pickCarSkin}
               />
-              <!-- Limite de Content Manager (§9.2) : son protocole de lancement
-                   rapide ne transmet pas le skin joueur, seulement les
-                   adversaires. CM retombe sur le dernier skin choisi pour
-                   cette voiture dans CM lui-même — bouton = raccourci direct
-                   vers ce geste. -->
-              <Tooltip text={t("session.skinLimitTooltip")} align="left">
-                <button class="skin-hint" type="button" onclick={openCmForSkin}>{t("session.skinLimitLabel")}</button>
-              </Tooltip>
             </div>
           {/if}
         </div>
@@ -597,18 +576,6 @@
     gap: 6px;
     padding: 8px;
     border-top: 1px solid var(--line);
-  }
-  .skin-hint {
-    align-self: flex-start;
-    background: transparent;
-    padding: 0;
-    display: inline;
-    color: var(--yellow);
-    font-size: 9.5px;
-    letter-spacing: 0.3px;
-  }
-  .skin-hint:hover {
-    color: var(--txt);
   }
   .slot-img {
     height: 96px;

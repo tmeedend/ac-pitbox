@@ -30,6 +30,7 @@ mod others;
 mod overlay;
 mod profiles;
 mod quickdrive;
+mod raceini;
 mod resources;
 mod rules;
 mod saved_sessions;

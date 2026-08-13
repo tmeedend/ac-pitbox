@@ -40,8 +40,6 @@
     "inactiveTitle": "Mod non activé",
     "activateFailedTitle": "Échec de l'activation",
     "pickSkin": "Choisir un skin…",
-    "skinLimitLabel": "ⓘ Skin non garanti au lancement",
-    "skinLimitTooltip": "Content Manager ne transmet pas le skin joueur via son lancement rapide (seulement les adversaires) — il reprend le dernier skin utilisé pour cette voiture dans CM lui-même.\nClique pour ouvrir CM et le fixer une fois pour toutes pour cette voiture.",
     "noSkinsAvailable": "Aucun skin",
     "pickLayout": "Choisir un layout…",
     "noLayoutsAvailable": "Aucun layout",

@@ -40,8 +40,6 @@
     "inactiveTitle": "Mod not active",
     "activateFailedTitle": "Activation failed",
     "pickSkin": "Choose a skin…",
-    "skinLimitLabel": "ⓘ Skin not guaranteed at launch",
-    "skinLimitTooltip": "Content Manager doesn't pass the player's skin through its quick-launch protocol (only opponents get one) — it falls back to the last skin used for this car inside CM itself.\nClick to open CM and set it once for this car.",
     "noSkinsAvailable": "No skin",
     "pickLayout": "Choose a layout…",
     "noLayoutsAvailable": "No layout",
