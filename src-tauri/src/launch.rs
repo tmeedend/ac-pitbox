@@ -218,6 +218,25 @@ fn ensure_available(conn: &Connection, cfg: &AppConfig, kind: ModKind, id: &str)
     Err(format!("« {id} » n'est pas installé dans Assetto Corsa."))
 }
 
+/// Steam tourne-t-il ? (§9.2bis)
+///
+/// Assetto Corsa est un jeu Steam : c'est Steam qui le démarre, quel que soit
+/// le `Starter` choisi par CM. Steam éteint, le lancement échoue **côté CM**,
+/// après que Pit Box a rendu la main — donc sans erreur remontable à notre UI,
+/// et souvent sans message clair non plus (au mieux Steam s'ouvre de lui-même
+/// et réclame une connexion). D'où un contrôle en amont, avant de construire
+/// le preset : c'est le seul moment où on peut encore expliquer la situation.
+///
+/// Même mécanique de détection que la surveillance du jeu (`music/watch.rs`),
+/// mais ponctuelle : un scan de processus au clic, pas un thread.
+pub fn steam_running() -> bool {
+    let mut sys = sysinfo::System::new();
+    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    sys.processes()
+        .values()
+        .any(|p| p.name().to_string_lossy().eq_ignore_ascii_case("steam.exe"))
+}
+
 /// Ouvre Content Manager sans argument (§12bis.5) : pratique pour parcourir
 /// son propre menu (réglages CM, contenu…) sans passer par une session Pit Box.
 pub fn open_content_manager(cfg: &AppConfig) -> Result<(), String> {

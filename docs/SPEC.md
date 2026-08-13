@@ -365,6 +365,12 @@ Best-effort par construction, comme tout le reste du lancement : arriver trop ta
 
 > Écrire `race.ini` **avant** de lancer CM ne sert à rien : `Game.StartAsync` charge le fichier existant, le nettoie, puis `BasicProperties.Set()` réécrit `[RACE] SKIN` et reconstruit `[CAR_0]` intégralement. Vérifié : un skin sentinelle écrit avant lancement est effacé 0,26 s après l'envoi de l'URI.
 
+### 9.2bis Steam doit tourner avant le lancement
+
+Assetto Corsa est un jeu Steam : c'est Steam qui le démarre, quel que soit le `Starter` retenu par CM. Steam éteint, l'échec se produit **après** que Pit Box a rendu la main — aucune erreur ne remonte à l'app, l'utilisateur voit seulement une session qui ne démarre pas.
+
+Le lancement vérifie donc la présence du process `steam.exe` (`launch::steam_running`, scan ponctuel `sysinfo`, même mécanique que la surveillance du jeu en §16.4) **avant** de construire le preset. Absent : un dialogue demande de démarrer Steam et de valider, la validation revérifie, et tant que Steam manque le dialogue reste ouvert en le signalant. Une erreur de la vérification elle-même laisse passer le lancement — le pire cas redevient simplement l'échec côté CM.
+
 **Bouton « Ouvrir dans CM »** : lance CM sans argument de session, sélection active, pour les réglages fins (échappatoire power-user).
 
 ### 9.3 Écran de réglages

@@ -38,6 +38,13 @@ pub fn launch_session(app: AppHandle, db: State<Db>, setup: crate::launch::RaceS
     crate::launch::launch(&conn, &cfg, &setup)
 }
 
+/// Steam tourne-t-il ? Vérifié avant chaque lancement de session (§9.2bis) :
+/// sans Steam, l'échec se produit côté CM, hors de notre portée.
+#[tauri::command]
+pub fn is_steam_running() -> bool {
+    crate::launch::steam_running()
+}
+
 /// Ouvre Content Manager sans argument (§12bis.5).
 #[tauri::command]
 pub fn open_content_manager(app: AppHandle) -> Result<(), String> {

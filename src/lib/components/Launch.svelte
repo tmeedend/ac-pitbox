@@ -3,6 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import {
     launchSession,
+    isSteamRunning,
     listModSkins,
     getModCspFeatures,
     weatherOptions,
@@ -632,8 +633,49 @@
     }
   });
 
+  // --- Contrôle Steam (§9.2bis) ---
+  // Assetto Corsa est un jeu Steam : sans Steam, le lancement échoue côté
+  // Content Manager, après que Pit Box a rendu la main — aucune erreur ne
+  // remonte jusqu'ici, l'utilisateur voit juste une session qui ne démarre
+  // pas. Le seul moment où on peut encore expliquer, c'est avant de lancer.
+  let steamPromptOpen = $state(false);
+  let steamStillMissing = $state(false);
+  let steamChecking = $state(false);
+
+  // Un échec de la vérification elle-même ne doit pas empêcher de jouer :
+  // dans le doute on laisse passer, l'échec côté CM reste le pire cas.
+  async function steamReady(): Promise<boolean> {
+    try {
+      return await isSteamRunning();
+    } catch {
+      return true;
+    }
+  }
+
   async function launch() {
     if (launching || !setup.car_id || !setup.track_id) return;
+    if (!(await steamReady())) {
+      steamStillMissing = false;
+      steamPromptOpen = true;
+      return;
+    }
+    await doLaunch();
+  }
+
+  async function confirmSteamStarted() {
+    if (steamChecking) return;
+    steamChecking = true;
+    const ok = await steamReady();
+    steamChecking = false;
+    if (!ok) {
+      steamStillMissing = true;
+      return;
+    }
+    steamPromptOpen = false;
+    await doLaunch();
+  }
+
+  async function doLaunch() {
     savePreset();
     launching = true;
     error = ""; info = "";
@@ -771,7 +813,72 @@
   {/if}
 </div>
 
+<!-- Steam manquant (§9.2bis) : dialogue bloquant plutôt qu'un message dans le
+     bandeau, parce qu'il y a un geste à faire hors de l'app et qu'il faut
+     revérifier après — un texte passif laisserait l'utilisateur relancer dans
+     le vide. -->
+{#if steamPromptOpen}
+  <div class="backdrop">
+    <div class="modal">
+      <h2>{t("launch.steamRequiredTitle")}</h2>
+      <p>{t("launch.steamRequiredBody")}</p>
+      {#if steamStillMissing}
+        <p class="steam-missing">{t("launch.steamStillMissing")}</p>
+      {/if}
+      <div class="steam-actions">
+        <button class="btn btn-ghost" type="button" onclick={() => (steamPromptOpen = false)}>
+          {t("common.cancel")}
+        </button>
+        <button class="btn btn-primary" type="button" disabled={steamChecking} onclick={confirmSteamStarted}>
+          {steamChecking ? t("common.working") : t("launch.steamStarted")}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
+  /* Dialogue Steam — même langage visuel que `SavedSessionsDialog` ; le CSS
+     des composants étant scopé, il se recopie plutôt qu'il ne s'hérite. */
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .modal {
+    width: 420px;
+    max-width: 92vw;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    background: var(--panel);
+    border: 1px solid var(--rosso);
+  }
+  .modal h2 {
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--txt2);
+  }
+  .modal p {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--txt2);
+  }
+  .steam-missing {
+    color: var(--yellow);
+  }
+  .steam-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
   /* Écran plein-page (AppShell rend `.content.fixed` pour "race", comme la
      bibliothèque) : .flow gère lui-même son défilement — plus de hack de
      marge négative pour compenser le padding du parent. */

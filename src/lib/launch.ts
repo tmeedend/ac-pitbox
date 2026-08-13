@@ -130,6 +130,13 @@ export function openContentManager(): Promise<void> {
   return invoke<void>("open_content_manager");
 }
 
+/** Steam tourne-t-il ? (§9.2bis) Assetto Corsa est un jeu Steam : sans Steam,
+ * le lancement échoue côté Content Manager, après que Pit Box a rendu la main
+ * — donc sans erreur qu'on puisse afficher. D'où ce contrôle avant lancement. */
+export function isSteamRunning(): Promise<boolean> {
+  return invoke<boolean>("is_steam_running");
+}
+
 /** Lance l'aperçu 3D natif (acShowroom.exe) ciblé sur une voiture (+ skin
  * optionnel). Process indépendant, affiché par-dessus l'app : c'est
  * l'utilisateur qui ferme le showroom pour revenir à Pit Box. */
