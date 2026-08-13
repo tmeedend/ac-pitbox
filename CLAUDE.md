@@ -256,7 +256,12 @@ laisser pourrir ici.
 - [ ] **Signature Authenticode** : le workflow est prêt, il attend un
       certificat. Définir la variable de dépôt `SIGN_COMMAND` suffit à
       l'activer — voir `docs/windows-code-signing.md` (lire **avant** d'acheter,
-      deux pièges y sont documentés).
+      deux pièges y sont documentés). Repo passé public, `v0.1.0` publiée,
+      README doté de la « Code signing policy » exigée : candidature déposée
+      auprès de la SignPath Foundation (certificat gratuit, projet open
+      source), réponse attendue par email. Si refus ou trop long, plan B
+      documenté : Certum Open Source Code Signing (~49€/an, cloud SimplySign,
+      pas de jeton USB).
 - [ ] **Runner de tests frontend** : délibérément absent. À reconsidérer
       seulement le jour où de la logique pure sera extraite des composants
       (le tri/regroupement/cumul de `Transversal.svelte` en est proche) — pour

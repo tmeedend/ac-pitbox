@@ -44,6 +44,11 @@
   // régénération capture le jeton courant et n'applique son résultat que s'il
   // n'a pas été invalidé entre-temps par un appel plus récent.
   let opponentsGen = 0;
+  // Voiture pour laquelle le plateau courant a été construit (§8.6ter).
+  // Persistée avec lui : cet écran est démonté dès qu'on passe à la
+  // bibliothèque, donc c'est le seul moyen, au remontage, de savoir si le
+  // plateau restauré correspond encore à la voiture pilotée.
+  let gridCarId = $state<string | null>(null);
   let launching = $state(false);
   let error = $state("");
   let info = $state("");
@@ -78,6 +83,7 @@
     grip: 96,
     practice_enabled: false,
     practice_minutes: 20,
+    qualify_enabled: true,
     qualify_minutes: 10,
     ghost_car: false,
     start_from_pit: true,
@@ -239,6 +245,10 @@
 
   async function regenerateGrid() {
     const gen = ++opponentsGen;
+    // Posé avant l'attente, pas après : c'est un marqueur d'intention, sinon
+    // l'effet de resynchronisation redéclencherait une génération pendant
+    // celle-ci.
+    gridCarId = setup.car_id;
     const opponents = await generateOpponents(opponentCount, new Set());
     // Une action plus récente (nouvelle régénération, ou adversaires imposés
     // depuis la bibliothèque) a pris le dessus entre-temps : ne pas écraser.
@@ -319,7 +329,7 @@
    * déjà "course" à l'arrivée sur cet écran, `onMount` en a lancé une). */
   function applyOpponentsAction(action: OpponentsAction) {
     opponentsGen++;
-    lastCarForGrid = setup.car_id;
+    gridCarId = setup.car_id;
     setup.session_type = "race";
     gridMode = "free";
     const additions: Opponent[] = action.carIds.map((carId) => ({
@@ -419,6 +429,11 @@
     track_layout: string | null;
     session_type: SessionType;
     opponents: Opponent[];
+    /** Voiture pour laquelle le plateau restauré a été construit (§8.6ter).
+     * Sans elle, revenir sur cet écran après avoir changé de voiture dans la
+     * bibliothèque remonte le composant, qui ne peut plus distinguer « plateau
+     * fait pour cette voiture » de « plateau hérité de la précédente ». */
+    grid_car_id: string | null;
   }
 
   // --- Presets de session par type (§8.4) ---
@@ -428,7 +443,7 @@
     laps: number; time_hours: number;
     penalties: boolean; jump_start_penalty: number; grip: number;
     practice_enabled: boolean; practice_minutes: number;
-    qualify_minutes: number; ghost_car: boolean; start_from_pit: boolean;
+    qualify_enabled: boolean; qualify_minutes: number; ghost_car: boolean; start_from_pit: boolean;
     damage: number; fuel_rate: number; tyre_wear: number; tyre_blankets: boolean; intent: string; season: Season;
     abs_auto: boolean; traction_control_auto: boolean; ideal_line: boolean;
   }
@@ -454,6 +469,7 @@
       track_layout: setup.track_layout,
       session_type: setup.session_type,
       opponents: setup.opponents,
+      grid_car_id: gridCarId,
     };
     invoke("save_launch_state", { state: { selection, presets } }).catch((e) => console.error("save_launch_state", e));
   }
@@ -470,7 +486,7 @@
       laps: setup.laps, time_hours: setup.time_hours,
       penalties: setup.penalties, jump_start_penalty: setup.jump_start_penalty, grip: setup.grip,
       practice_enabled: setup.practice_enabled, practice_minutes: setup.practice_minutes,
-      qualify_minutes: setup.qualify_minutes, ghost_car: setup.ghost_car,
+      qualify_enabled: setup.qualify_enabled, qualify_minutes: setup.qualify_minutes, ghost_car: setup.ghost_car,
       start_from_pit: setup.start_from_pit,
       damage: setup.damage, fuel_rate: setup.fuel_rate, tyre_wear: setup.tyre_wear, tyre_blankets: setup.tyre_blankets,
       intent: selectedIntent, season,
@@ -489,7 +505,7 @@
       setup.penalties = p.penalties; setup.jump_start_penalty = p.jump_start_penalty ?? 0;
       setup.grip = p.grip ?? 96;
       setup.practice_enabled = p.practice_enabled ?? false; setup.practice_minutes = p.practice_minutes ?? 20;
-      setup.qualify_minutes = p.qualify_minutes ?? 10;
+      setup.qualify_enabled = p.qualify_enabled ?? true; setup.qualify_minutes = p.qualify_minutes ?? 10;
       setup.ghost_car = p.ghost_car ?? false; setup.start_from_pit = p.start_from_pit ?? true;
       setup.damage = p.damage ?? 50;
       setup.fuel_rate = p.fuel_rate ?? 100; setup.tyre_wear = p.tyre_wear ?? 100;
@@ -542,12 +558,15 @@
     // La bibliothèque EST le sélecteur (§8.6) : voiture/circuit viennent du duo
     // de session choisi dans les bibliothèques — rien à choisir ici.
     syncFromSession();
-    // Aligné tout de suite sur la voiture qui vient d'être synchronisée :
-    // sans ça, l'effet de resynchronisation plus bas (déclenché par `ready`
-    // qui passe à `true` en fin de montage) le voit encore vide, croit à un
-    // changement de voiture, et régénère un plateau à la place de celui
-    // qu'on vient de restaurer juste au-dessus.
-    lastCarForGrid = setup.car_id;
+    // Voiture du plateau restauré — **pas** celle qui vient d'être
+    // synchronisée : c'est toute la différence entre « ce plateau est fait
+    // pour cette voiture » et « ce plateau vient d'une autre voiture ».
+    // S'aligner sur la voiture courante rendait le second cas indétectable,
+    // et laissait le plateau de l'ancienne voiture après un changement fait
+    // depuis la bibliothèque (bug réel : Shelby restées face à une autre
+    // voiture). Fichier d'avant ce champ : on suppose le plateau à jour,
+    // c'était le comportement précédent.
+    gridCarId = saved.grid_car_id ?? setup.car_id;
 
     const first = weathers.find((w) => w.available);
     if (first) await selectIntent(first);
@@ -573,17 +592,21 @@
   }
 
   // Resynchronise si le duo change (l'utilisateur ouvre une autre voiture/circuit
-  // dans la bibliothèque puis revient à la session) — régénère aussi le plateau
-  // si la voiture change (le vivier dépend d'elle).
-  let lastCarForGrid = $state("");
+  // dans la bibliothèque puis revient à la session).
+  //
+  // Le plateau se régénère quand la **voiture pilotée** change, parce que le
+  // vivier en dépend : « même voiture » n'a plus rien à voir, « même
+  // catégorie » change de catégorie. Deux cas où on n'y touche pas :
+  // - mode « libre », dont le vivier est indépendant de la voiture pilotée —
+  //   régénérer jetterait un plateau souvent réglé à la main ;
+  // - changement de **skin** seul : `setup.car_id` ne bouge pas, donc rien ne
+  //   se déclenche (`nav.sessionCar?.skin` n'est lu que pour resynchroniser).
   $effect(() => {
     void [nav.sessionCar?.id, nav.sessionCar?.skin, nav.sessionTrack?.id, nav.sessionTrack?.layout];
-    if (ready) {
-      syncFromSession();
-      if (setup.session_type === "race" && setup.car_id !== lastCarForGrid) {
-        lastCarForGrid = setup.car_id;
-        void regenerateGrid();
-      }
+    if (!ready) return;
+    syncFromSession();
+    if (setup.session_type === "race" && gridMode !== "free" && setup.car_id !== gridCarId) {
+      void regenerateGrid();
     }
   });
 

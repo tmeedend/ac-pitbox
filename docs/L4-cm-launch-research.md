@@ -116,7 +116,15 @@ d'équivalent Weekend sans qualif, voir point 4 ci-dessous.
    `grip` de notre UI dans les captures réelles.
 3. **Durée de session Practice non appliquée** : le schéma `QuickDrive_Practice`
    n'a pas de champ durée — comportement Quick Drive natif, pas un bug.
-4. **Qualification jamais désactivable en mode Weekend** : `QuickDrive_Weekend.xaml.cs`
+4. **Qualification jamais désactivable en mode Weekend** — contourné depuis le
+   2026-08-13 : une course sans qualification passe par l'autre mode course de
+   CM, `QuickDrive_Race.xaml`, dont le `ModeData` est le Weekend **moins**
+   `PracticeLength`/`QualificationLength` (schéma confirmé sur
+   `pitbox-race.cmpreset`). Dans le mode Weekend lui-même, en revanche, tout ce
+   qui suit reste vrai. À noter au passage : `PracticeLength: null` ne saute
+   pas les essais libres, `Load()` faisant `r.PracticeLength ?? 15` — il faut
+   envoyer `0` (curseur `[0, 90]`, « Skip session »).
+   `QuickDrive_Weekend.xaml.cs`
    borne `QualificationDuration` à `[5, 90]` minutes (`value.Clamp(5, 90)`), et son
    `Save()` écrit toujours une durée concrète — aucun état « off » n'existe côté CM
    pour cette phase (confirmé aussi bien sur les `.cmpreset` réels de l'utilisateur,

@@ -128,14 +128,15 @@ pub struct RaceSetup {
     pub practice_enabled: bool,
     #[serde(default = "default_practice_minutes")]
     pub practice_minutes: u32,
-    /// Qualification avant la course (mode course uniquement) : toujours
-    /// présente, pas de bascule pour la retirer — `QuickDrive_Weekend.xaml`
-    /// de CM n'a pas d'état « désactivé » (son curseur va de 5 à 90 min,
-    /// jamais 0, et son `Save()` n'écrit jamais de durée nulle). Envoyer une
-    /// durée nulle ne la désactive donc pas côté CM, ça retombe juste sur son
-    /// défaut interne (30 min) — vérifié en lisant `QuickDrive_Weekend.xaml.cs`
-    /// (gro-ove/actools). D'où la borne mini à 5 côté front plutôt qu'une
-    /// case à cocher.
+    /// Qualification avant la course (§9.3). Le mode Weekend de CM n'a pas
+    /// d'état « pas de qualif » : son curseur va de 5 à 90 min et son `Save()`
+    /// n'écrit jamais de durée nulle (`QuickDrive_Weekend.xaml.cs`) — envoyer
+    /// `null` retombe juste sur son défaut interne de 30 min. Décochée, on
+    /// bascule donc sur l'**autre** mode de CM, `QuickDrive_Race.xaml`, dont
+    /// le `ModeData` ne porte aucune durée : c'est lui, la course sèche
+    /// (schéma confirmé sur `pitbox-race.cmpreset`).
+    #[serde(default = "default_true")]
+    pub qualify_enabled: bool,
     #[serde(default = "default_qualify_minutes")]
     pub qualify_minutes: u32,
     // --- Réglages dépendants du type (§8.4) ---

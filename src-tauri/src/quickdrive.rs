@@ -120,19 +120,33 @@ fn mode_data_hotlap(s: &RaceSetup) -> String {
 }
 
 /// `ModeData` pour `QuickDrive_Weekend.xaml` — schéma confirmé sur
-/// `pitbox-weekend.cmpreset`. `PracticeLength` est optionnel (`null` = phase
-/// absente, la course rapide de CM le supporte : curseur `[0, 90]`).
-/// `QualificationLength` ne l'est pas : la qualification est **toujours**
-/// présente en mode Weekend côté CM (curseur `[5, 90]`, jamais désactivable)
-/// — pas besoin du mode `QuickDrive_Race.xaml` séparé : une « course » chez
-/// nous est un Weekend sans pratique, avec la qualification la plus courte
-/// possible.
+/// `pitbox-weekend.cmpreset`. Utilisé dès qu'une qualification est demandée :
+/// c'est le seul mode de CM qui en a une.
 fn mode_data_weekend(s: &RaceSetup) -> String {
     json!({
-        "PracticeLength": if s.practice_enabled { Some(s.practice_minutes) } else { None },
-        // Toujours une durée concrète : CM ne sait pas désactiver la
-        // qualification en mode Weekend (voir doc de `build_preset`).
+        // `0` = phase sautée (curseur CM `[0, 90]`, libellé « Skip session »).
+        // `null` ne la désactive **pas** : le `Load()` de
+        // `QuickDrive_Weekend.xaml.cs` fait `r.PracticeLength ?? 15` et
+        // rendait donc 15 min d'essais à toute course censée ne pas en avoir
+        // — bug réel, constaté en jeu avant d'être retrouvé dans la source.
+        "PracticeLength": if s.practice_enabled { s.practice_minutes } else { 0 },
         "QualificationLength": s.qualify_minutes,
+        "Penalties": s.penalties,
+        "JumpStartPenalty": s.jump_start_penalty,
+        "LapsNumber": s.laps,
+        "RaceGridSerialized": build_grid(&s.opponents).to_string(),
+        "Version": 2,
+    })
+    .to_string()
+}
+
+/// `ModeData` pour `QuickDrive_Race.xaml` — la course sèche, sans phase
+/// préparatoire. Schéma confirmé sur `pitbox-race.cmpreset` : exactement le
+/// Weekend **moins** les deux durées. C'est le seul moyen d'obtenir une course
+/// sans qualification, le mode Weekend n'ayant pas d'état « off » pour elle
+/// (voir `RaceSetup::qualify_enabled`).
+fn mode_data_race(s: &RaceSetup) -> String {
+    json!({
         "Penalties": s.penalties,
         "JumpStartPenalty": s.jump_start_penalty,
         "LapsNumber": s.laps,
@@ -165,17 +179,17 @@ fn mode_data_weekend(s: &RaceSetup) -> String {
 ///   (`DURATION_MINUTES`), une session Practice via Quick Drive est
 ///   illimitée par design (on roule tant qu'on veut, sortie manuelle). Pas
 ///   de champ correspondant dans `RaceSetup` : rien à envoyer.
-/// - **Qualification jamais désactivable** : `QuickDrive_Weekend.xaml.cs`
-///   (CM) borne sa durée à `[5, 90]` minutes et son `Save()` n'écrit jamais
-///   de durée nulle — aucun état « off » n'existe côté CM pour le mode
-///   Weekend. `s.qualify_minutes` est donc toujours envoyée (jamais `null`),
-///   avec la même borne mini de 5 min côté UI plutôt qu'une case à cocher
-///   qui ne pourrait jamais réellement désactiver la phase.
+///
+/// Une course se joue sur **deux** modes CM selon `qualify_enabled` : Weekend
+/// quand une qualification est demandée, Race sinon (§9.3). Le mode Weekend
+/// n'a pas d'état « pas de qualif » — sa durée est bornée à `[5, 90]` et son
+/// `Save()` n'écrit jamais de durée nulle.
 pub fn build_preset(s: &RaceSetup) -> Result<String, String> {
     let (mode_path, mode_data) = match s.session_type {
         SessionType::Practice => ("/Pages/Drive/QuickDrive_Practice.xaml", mode_data_practice(s)),
         SessionType::Hotlap => ("/Pages/Drive/QuickDrive_Hotlap.xaml", mode_data_hotlap(s)),
-        SessionType::Race => ("/Pages/Drive/QuickDrive_Weekend.xaml", mode_data_weekend(s)),
+        SessionType::Race if s.qualify_enabled => ("/Pages/Drive/QuickDrive_Weekend.xaml", mode_data_weekend(s)),
+        SessionType::Race => ("/Pages/Drive/QuickDrive_Race.xaml", mode_data_race(s)),
     };
 
     let weather_id = if s.weather.is_empty() {
@@ -252,6 +266,7 @@ mod tests {
             grip: 96,
             practice_enabled: false,
             practice_minutes: 20,
+            qualify_enabled: true,
             qualify_minutes: 10,
             ghost_car: false,
             start_from_pit: true,
@@ -336,20 +351,46 @@ mod tests {
         assert_eq!(grid["AiLevels"][0], 92.0);
     }
 
+    /// Bug réel : `null` ne saute pas les essais libres, CM le lit comme
+    /// « non renseigné » et retombe sur son défaut de 15 min. Seul `0` les
+    /// saute (`QuickDrive_Weekend.xaml.cs`, curseur `[0, 90]`).
     #[test]
-    fn race_without_practice_omits_practice_length_but_keeps_qualification() {
+    fn race_without_practice_sends_zero_not_null() {
         let s = base_setup(SessionType::Race);
         let json = build_preset(&s).unwrap();
         let v: Value = serde_json::from_str(&json).unwrap();
         let mode_data: Value = serde_json::from_str(v["ModeData"].as_str().unwrap()).unwrap();
-        assert!(
-            mode_data["PracticeLength"].is_null(),
-            "pas d'essais libres = phase absente"
-        );
         assert_eq!(
-            mode_data["QualificationLength"], 10,
-            "la qualification n'a pas d'état désactivé côté CM (Weekend) : toujours une durée concrète"
+            mode_data["PracticeLength"], 0,
+            "pas d'essais libres = 0, jamais null (null = 15 min par défaut côté CM)"
         );
+        assert_eq!(mode_data["QualificationLength"], 10, "la qualification reste demandée");
+    }
+
+    /// Le mode Weekend n'a pas d'état « pas de qualification » : sans elle,
+    /// c'est l'autre mode course de CM qu'il faut viser (§9.3).
+    #[test]
+    fn race_without_qualification_switches_to_race_mode() {
+        let mut s = base_setup(SessionType::Race);
+        s.qualify_enabled = false;
+        s.laps = 12;
+        s.opponents = vec![Opponent {
+            car_id: "ks_ferrari_488_gt3".into(),
+            ai_level: 92,
+            car_skin: Some("red".into()),
+        }];
+        let json = build_preset(&s).unwrap();
+        let v: Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(v["Mode"], "/Pages/Drive/QuickDrive_Race.xaml");
+
+        let mode_data: Value = serde_json::from_str(v["ModeData"].as_str().unwrap()).unwrap();
+        assert!(
+            mode_data["QualificationLength"].is_null() && mode_data["PracticeLength"].is_null(),
+            "le ModeData de Race ne porte aucune durée : {mode_data}"
+        );
+        assert_eq!(mode_data["LapsNumber"], 12, "la course elle-même est inchangée");
+        let grid: Value = serde_json::from_str(mode_data["RaceGridSerialized"].as_str().unwrap()).unwrap();
+        assert_eq!(grid["CarIds"][0], "ks_ferrari_488_gt3", "le plateau suit aussi ce mode");
     }
 
     #[test]

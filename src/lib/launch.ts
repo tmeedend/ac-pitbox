@@ -52,8 +52,11 @@ export interface RaceSetup {
   /** Essais libres avant la course (weekend Quick Drive) — indépendants de la qualification. */
   practice_enabled: boolean;
   practice_minutes: number;
-  /** Durée qualif (Course uniquement) : toujours présente côté CM (Weekend
-   * Quick Drive n'a pas d'état désactivé, mini 5 min). */
+  /** Qualification avant la course (§9.3). Décochée, le preset bascule sur le
+   * mode course sèche de CM : son mode Weekend n'a pas d'état « pas de
+   * qualif ». Les essais libres n'existant que dans Weekend, ils la suivent. */
+  qualify_enabled: boolean;
+  /** Durée qualif quand elle est demandée (mini 5 min, borne de CM). */
   qualify_minutes: number;
   ghost_car: boolean;
   /** Départ en Practice (mode Practice uniquement) : `true` = depuis les stands. */

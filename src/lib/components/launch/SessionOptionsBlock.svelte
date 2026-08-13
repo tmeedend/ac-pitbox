@@ -9,6 +9,15 @@
   import NumberStepper from "../NumberStepper.svelte";
 
   let { setup }: { setup: RaceSetup } = $props();
+
+  // Les essais libres n'existent que dans le mode Weekend de CM — celui-là
+  // même qui porte la qualification. Sans qualif, le preset bascule sur le
+  // mode course sèche, où aucune phase préparatoire n'existe (§9.3) : les
+  // laisser cochables afficherait un réglage sans effet en jeu.
+  function toggleQualifying(on: boolean) {
+    setup.qualify_enabled = on;
+    if (!on) setup.practice_enabled = false;
+  }
 </script>
 
 <!-- Options de session (§8.4/§8.6) : première carte de la colonne, la
@@ -50,17 +59,26 @@
       </div>
 
       {#if setup.session_type === "race"}
-        <label class="check"><input type="checkbox" bind:checked={setup.practice_enabled} /><span>{t("launch.freePractice")}</span></label>
-        {#if setup.practice_enabled}
-          <label class="grid-fields">
-            <NumberStepper min={1} max={120} bind:value={setup.practice_minutes} />
-            <span class="fk lbl-key">{t("launch.practiceMinutes")}</span>
-          </label>
-        {/if}
-        <label class="grid-fields">
-          <NumberStepper min={5} max={90} bind:value={setup.qualify_minutes} />
-          <span class="fk lbl-key">{t("launch.qualifyMinutes")}</span>
+        <label class="check">
+          <input
+            type="checkbox"
+            checked={setup.qualify_enabled}
+            onchange={(e) => toggleQualifying(e.currentTarget.checked)}
+          /><span>{t("launch.qualifying")}</span>
         </label>
+        {#if setup.qualify_enabled}
+          <label class="grid-fields">
+            <NumberStepper min={5} max={90} bind:value={setup.qualify_minutes} />
+            <span class="fk lbl-key">{t("launch.qualifyMinutes")}</span>
+          </label>
+          <label class="check"><input type="checkbox" bind:checked={setup.practice_enabled} /><span>{t("launch.freePractice")}</span></label>
+          {#if setup.practice_enabled}
+            <label class="grid-fields">
+              <NumberStepper min={1} max={120} bind:value={setup.practice_minutes} />
+              <span class="fk lbl-key">{t("launch.practiceMinutes")}</span>
+            </label>
+          {/if}
+        {/if}
       {/if}
       <label class="check"><input type="checkbox" bind:checked={setup.penalties} /><span>{t("launch.penalties")}</span></label>
 
