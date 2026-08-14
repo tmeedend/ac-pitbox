@@ -16,10 +16,11 @@
     type SkinItem,
     type WeatherOption,
   } from "$lib/launch";
-  import { listLibrary, previewSrc, type ModCard } from "$lib/library";
+  import { getModDetail, listLibrary, previewSrc, type ModCard } from "$lib/library";
   import { getSessionBackground } from "$lib/media";
-  import { nav, type OpponentsAction } from "$lib/nav.svelte";
-  import { getPreferredSkin } from "$lib/preferred";
+  import { nav, pickSession, type OpponentsAction } from "$lib/nav.svelte";
+  import { getPreferredSkin, setPreferredLayout, setPreferredSkin } from "$lib/preferred";
+  import { listActiveTrackSkins, listTrackSkinOptions, setTrackSkinActive, syncTrackSkins } from "$lib/submods";
   import { t } from "$lib/i18n/index.svelte";
   import WeatherBlock from "./launch/WeatherBlock.svelte";
   import OpponentsBlock from "./launch/OpponentsBlock.svelte";
@@ -52,6 +53,11 @@
   let launching = $state(false);
   let error = $state("");
   let info = $state("");
+  // Ce qui n'a pas pu être rétabli au chargement d'une session enregistrée
+  // (§8.4bis) : bandeau dans la page, au même endroit que le retour de
+  // lancement — pas une popup. Il n'y a rien à décider, juste à savoir que la
+  // session ne sera pas exactement celle qui avait été enregistrée.
+  let warning = $state("");
   let ready = $state(false);
 
   // --- Fourchette d'année du vivier d'adversaires (§8.6, remplace « même ère ») ---
@@ -701,7 +707,9 @@
   async function doLaunch() {
     savePreset();
     launching = true;
-    error = ""; info = "";
+    // L'avertissement de chargement porte sur ce qui n'a pas pu être rétabli :
+    // une fois la session lancée telle qu'elle est, il n'a plus d'objet.
+    error = ""; info = ""; warning = "";
     try {
       await launchSession($state.snapshot(setup));
       info = t("launch.launchSuccess");
@@ -732,6 +740,11 @@
   });
 
   async function doSaveSession(name: string) {
+    // Skins de circuit actifs : état de déploiement, pas un champ de `setup` —
+    // capturé ici pour pouvoir remettre le circuit dans l'apparence qu'il
+    // avait quand la session a été enregistrée. Un échec de lecture ne doit
+    // pas empêcher la sauvegarde du reste : liste vide plutôt que rien.
+    const trackSkins = setup.track_id ? await listActiveTrackSkins(setup.track_id).catch(() => []) : [];
     await saveSession({
       name,
       savedAt: new Date().toISOString(),
@@ -740,20 +753,125 @@
       opponentCount,
       season,
       intent: selectedIntent,
+      trackSkins,
     });
     savedList = await listSavedSessions(setup.session_type);
     saveDialogOpen = false;
   }
 
-  function doLoadSession(s: SavedSession) {
-    // Conserve la voiture/le circuit courants (nav.sessionCar/Track fait déjà
-    // foi) — seuls les réglages de la session chargée sont appliqués.
-    const { car_id: _carId, car_skin: _carSkin, track_id: _trackId, track_layout: _trackLayout, ...settings } = s.setup;
-    setup = { ...setup, ...settings };
+  /** Charge une session enregistrée (§8.4bis) : réglages **et** duo de session
+   * (voiture + skin piloté, circuit + tracé + skins de circuit).
+   *
+   * Rien n'est bloquant ici : un mod supprimé depuis la sauvegarde laisse la
+   * sélection courante en place et se signale dans le bandeau d'avertissement,
+   * plutôt que d'interrompre le chargement du reste. Une session enregistrée
+   * survit à des années de bibliothèque remaniée — l'échec partiel est le cas
+   * normal, pas l'exception. */
+  async function doLoadSession(s: SavedSession) {
+    error = ""; info = ""; warning = "";
+    const warnings: string[] = [];
+
+    setup = { ...setup, ...s.setup };
     gridMode = s.gridMode;
     opponentCount = s.opponentCount;
     season = s.season;
     selectedIntent = s.intent;
+
+    await restoreCar(s.setup.car_id, s.setup.car_skin, warnings);
+    await restoreTrack(s.setup.track_id, s.setup.track_layout, s.trackSkins, warnings);
+
+    // Réaligne `setup` sur le duo de session : `pickSession` l'a mis à jour
+    // pour ce qui a été retrouvé, et pour ce qui manquait c'est la sélection
+    // courante qui fait foi. Sans cet appel, l'id d'un mod disparu resterait
+    // dans `setup` et partirait tel quel au lancement quand NI la voiture NI
+    // le circuit n'ont pu être rétablis — aucun `pickSession` n'ayant eu lieu,
+    // l'effet de resynchronisation ne passe pas de lui-même.
+    syncFromSession();
+    // Le plateau chargé appartient à la voiture qui vient d'être rétablie :
+    // sans cet alignement, ce même effet prend le plateau pour un héritage de
+    // la voiture précédente et le régénère par-dessus.
+    gridCarId = setup.car_id;
+
+    warning = warnings.join(" ");
+  }
+
+  /** Rétablit la voiture pilotée et son skin. Passe par `pickSession` et non
+   * par `setup` : le duo de session est la source de vérité (§8.6), l'effet de
+   * resynchronisation réécrirait sinon `setup.car_id` avec la voiture restée
+   * dans la barre latérale. */
+  async function restoreCar(carId: string, skinId: string | null, warnings: string[]) {
+    if (!carId) return;
+    const card = carPool.find((c) => c.id_interne === carId);
+    if (!card) {
+      warnings.push(t("launch.loadWarnCarMissing", { id: carId }));
+      return;
+    }
+    const skins = await ensureSkins(carId);
+    const skin = skinId ? skins.find((sk) => sk.id === skinId) ?? null : null;
+    if (skinId && !skin) warnings.push(t("launch.loadWarnCarSkinMissing", { id: skinId }));
+    if (skin) setPreferredSkin(carId, skin);
+    const meta = [card.brand, skin ? `skin: ${skin.name}` : card.category].filter(Boolean).join(" · ");
+    pickSession("Car", {
+      id: carId,
+      name: card.display_name ?? carId,
+      meta,
+      preview: skin?.preview ?? card.preview,
+      layout: null,
+      skin: skin?.id ?? null,
+      outline: null,
+    });
+  }
+
+  /** Rétablit le circuit, son tracé et ses skins. Même principe que
+   * `restoreCar` : tout passe par le duo de session. */
+  async function restoreTrack(trackId: string, layoutId: string | null, trackSkins: string[] | undefined, warnings: string[]) {
+    if (!trackId) return;
+    const card = libCards.find((c) => c.id_interne === trackId && c.kind === "Track");
+    if (!card) {
+      warnings.push(t("launch.loadWarnTrackMissing", { id: trackId }));
+      return;
+    }
+    const detail = await getModDetail(trackId).catch(() => null);
+    const layouts = detail?.track?.layouts ?? [];
+    const layout = layoutId ? layouts.find((l) => l.id === layoutId) ?? null : null;
+    if (layoutId && !layout) warnings.push(t("launch.loadWarnLayoutMissing", { id: layoutId }));
+    if (layout) setPreferredLayout(trackId, layout);
+    // Avant `pickSession`, pas après : la barre latérale recharge sa liste de
+    // skins de circuit quand `nav.sessionTrack` change, donc basculer les
+    // skins d'abord lui fait lire l'état déjà à jour. Dans l'autre ordre, elle
+    // afficherait les cases de l'état précédent jusqu'au prochain changement
+    // de circuit.
+    await restoreTrackSkins(trackId, trackSkins, warnings);
+    const meta = [layout?.name ?? card.category, card.author].filter(Boolean).join(" · ");
+    pickSession("Track", {
+      id: trackId,
+      name: card.display_name ?? trackId,
+      meta,
+      preview: layout?.preview ?? card.preview,
+      layout: layout?.id ?? null,
+      skin: null,
+      outline: layout?.outline ?? card.outline,
+    });
+  }
+
+  /** Remet exactement le jeu de skins de circuit de la sauvegarde (§4.6bis) :
+   * ceux qui manquent sont activés, ceux en trop désactivés — un skin resté
+   * actif d'une session précédente changerait sinon l'apparence du circuit
+   * sans que rien ne le signale. */
+  async function restoreTrackSkins(trackId: string, wanted: string[] | undefined, warnings: string[]) {
+    if (!wanted) return;
+    try {
+      await syncTrackSkins(trackId);
+      const options = await listTrackSkinOptions(trackId);
+      const missing = wanted.filter((name) => !options.some((o) => o.name === name));
+      if (missing.length) warnings.push(t("launch.loadWarnTrackSkinsMissing", { names: missing.join(", ") }));
+      for (const o of options) {
+        const active = wanted.includes(o.name);
+        if (o.active !== active) await setTrackSkinActive(trackId, o.name, active);
+      }
+    } catch (e) {
+      warnings.push(t("launch.loadWarnTrackSkinsFailed", { error: errorText(e) }));
+    }
   }
 </script>
 
@@ -768,6 +886,7 @@
 
   {#if info}<div class="ok">{info}</div>{/if}
   {#if error}<div class="err">{error}</div>{/if}
+  {#if warning}<div class="warn">⚠ {warning}</div>{/if}
 
   {#if !ready}
     <LoadingState />
@@ -952,7 +1071,8 @@
     flex: 1;
   }
   .ok,
-  .err {
+  .err,
+  .warn {
     margin: 14px 32px 0;
     padding: 10px 12px;
     font-size: 12px;
@@ -966,6 +1086,14 @@
     background: var(--rosso-dim);
     border: 1px solid var(--rosso-border);
     color: var(--rosso-bright);
+  }
+  /* Jaune = alerte non bloquante (couleurs sémantiques du chantier libellés) —
+     mêmes teintes que `.warn-note` de WeatherBlock, recopiées parce que le CSS
+     des composants est scopé. */
+  .warn {
+    background: #1a1708;
+    border: 1px solid #4a4426;
+    color: var(--yellow);
   }
   .body {
     padding: 22px 32px 40px;

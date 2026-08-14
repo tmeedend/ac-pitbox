@@ -17,6 +17,14 @@ export interface SavedSession {
   season: Season;
   /** Intention météo sélectionnée (pour resurligner la bonne carte à la relecture). */
   intent: string;
+  /** Skins de circuit actifs au moment de la sauvegarde (§4.6bis, plusieurs
+   * possibles). Voiture, skin piloté, circuit et tracé sont déjà dans `setup` ;
+   * les skins de circuit, eux, ne sont pas un réglage de session mais un état
+   * de déploiement — d'où ce champ séparé. `undefined` sur une sauvegarde
+   * antérieure à ce champ : le chargement n'y touche alors pas du tout, plutôt
+   * que de prendre une liste vide pour « aucun skin actif » et de désactiver
+   * ce que l'utilisateur avait mis en place. */
+  trackSkins?: string[];
 }
 
 /** Clé de stockage préfixée par type (§8.4bis, carte « Sessions enregistrées » :
