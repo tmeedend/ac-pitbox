@@ -211,7 +211,10 @@
       <div class="imp time-imp">
         <div class="ik lbl-key">{t("launch.timeLabelShort")}</div>
         <div class="time-field">
-          <input type="range" min="6" max="22" step="0.5" bind:value={setup.time_hours} style="--f:{((setup.time_hours - 6) / 16) * 100}%" />
+          <!-- Full 24 h range: night sessions are legitimate (CSP/Sol handle lighting),
+               nothing in the launch path depends on daylight. Max is 23.5 rather than 24
+               so the last step reads 23:30 instead of a nonsensical 24:00. -->
+          <input type="range" min="0" max="23.5" step="0.5" bind:value={setup.time_hours} style="--f:{(setup.time_hours / 23.5) * 100}%" />
           <span class="mono time-val">{fmtTime(setup.time_hours)}</span>
         </div>
       </div>
