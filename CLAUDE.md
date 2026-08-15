@@ -80,7 +80,7 @@ Jamais d'élévation admin — l'app doit fonctionner en utilisateur standard.
    (`rss_gtm_lanzo_v8/`, `ks_nordschleife/`) — pas l'archive qui l'entoure.
    Tout ce qui est **dedans**, à quelque profondeur que ce soit, est du contenu
    du mod : ça se copie en bibliothèque intégralement, ça ne se trie pas.
-   L'extraction des annexes (§4.6) ne s'applique **qu'à ce qui est à côté du
+   L'extraction des annexes (§4.5.1) ne s'applique **qu'à ce qui est à côté du
    dossier du mod**, jamais dedans. Bug réel : `body_shadow.png`,
    `tyre_*_shadow.png` et `logo.png` — de vrais assets AC vivant à la racine du
    dossier voiture — ont été déplacés en `resources/` sur 23 mods, parce que le
@@ -95,11 +95,11 @@ Jamais d'élévation admin — l'app doit fonctionner en utilisateur standard.
    remplacé par un mod — beaucoup de mods ne font que ça — mais jamais sans
    filet : l'original est sauvegardé avant écriture, restauré dès que plus
    aucun mod ne le réclame, et un balayage au démarrage rattrape les fermetures
-   anormales. Tout est dans `gamebackup.rs` (§4.9) : **passer par lui**, ne
+   anormales. Tout est dans `gamebackup.rs` (§4.5.4) : **passer par lui**, ne
    jamais écrire directement dans le dossier du jeu. Corollaire souvent
    oublié : un fichier qu'on n'a pas posé ne se supprime pas, et un exemplaire
    plus ancien ne déloge pas ce qui tourne déjà (même arbitrage par date que
-   les fichiers partagés, §4.6ter). Ne pas confondre avec la règle n°2, qui
+   les fichiers partagés, §4.5.4). Ne pas confondre avec la règle n°2, qui
    porte sur les **dossiers** de `content/`.
 6. **Jamais `localStorage` pour un réglage qui doit survivre à un
    redémarrage.** `localStorage` n'est pas garanti synchrone sur disque côté
@@ -179,7 +179,7 @@ refusera ensuite de reposer quoi que ce soit.
 | `settings` / `about` | `Settings` / `About` | |
 
 Deux présentations coexistent pour une entité et **ne sont pas
-interchangeables** (§6.3) : `ModDetail.svelte` = panneau latéral,
+interchangeables** (§6) : `ModDetail.svelte` = panneau latéral,
 `DetailPage.svelte` = page pleine (ouverte par `Library` via son état
 `fullId`). Une évolution de fiche est souvent à faire **dans les deux**.
 
@@ -335,7 +335,7 @@ contraintes découvertes empiriquement (« sans cette clé, écran noir en test
 réel », « WebView2 compose son rendu par-dessus toute fenêtre native sœur »).
 Un commentaire qui paraphrase le code est inutile ; un commentaire qui évite de
 refaire une erreur déjà faite vaut de l'or. Référencer la section du SPEC
-concernée (`§4.6bis`) quand elle existe.
+concernée (`§4.5.3`) quand elle existe.
 
 **Dépendances** : ne pas en ajouter à la légère, et retirer celles qui ne
 servent plus (une fonctionnalité abandonnée emporte sa dépendance).
