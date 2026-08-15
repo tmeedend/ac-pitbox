@@ -10,6 +10,8 @@
 //! que l'import. Auteur par défaut « Kunos ». Ré-indexation idempotente
 //! (`clear_stock` puis reconstruction).
 
+use std::path::Path;
+
 use chrono::Local;
 use rusqlite::Connection;
 use uuid::Uuid;
@@ -18,6 +20,24 @@ use crate::config::AppConfig;
 use crate::modscan::ModKind;
 use crate::rules::Rules;
 use crate::{harmonize, inspect, kunos_dates, overlay, uijson};
+
+/// Faut-il (ré)indexer le contenu de base après un enregistrement de config ?
+///
+/// Extrait de `commands::config::save_config` pour être testable : la règle
+/// tient en deux cas, mais les avoir laissés implicites a coûté un bug de
+/// premier démarrage (bibliothèque vide jusqu'au lancement suivant, parce que
+/// le seul scan existant tournait au `setup` de l'app — avant que l'assistant
+/// n'ait écrit le moindre chemin).
+///
+/// - le dossier du jeu **change** : l'index décrit l'ancienne install ;
+/// - rien n'est indexé alors qu'un dossier est désigné : c'est le premier
+///   démarrage, ou un scan qui a échoué.
+pub fn needs_reindex(previous: Option<&Path>, current: Option<&Path>, indexed: usize) -> bool {
+    match current {
+        None => false,
+        Some(cur) => previous != Some(cur) || indexed == 0,
+    }
+}
 
 /// (Re)construit l'index du contenu de base. Renvoie le nombre d'entrées indexées.
 pub fn index_stock_content(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> Result<usize, String> {
@@ -137,6 +157,29 @@ pub fn index_stock_content(conn: &Connection, cfg: &AppConfig, rules: &Rules) ->
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn reindex_when_the_game_folder_is_set_or_changes() {
+        use super::needs_reindex;
+        use std::path::Path;
+        let a = Path::new("D:/ac");
+        let b = Path::new("E:/ac");
+
+        // Premier démarrage : un dossier vient d'être désigné, rien n'est
+        // indexé. C'est le cas qui échouait — l'assistant écrivait les chemins
+        // et la bibliothèque restait vide jusqu'au lancement suivant.
+        assert!(needs_reindex(None, Some(a), 0), "premier démarrage");
+        // Changement de dossier de jeu : l'index décrit l'ancienne install.
+        assert!(needs_reindex(Some(a), Some(b), 200), "dossier du jeu changé");
+        // Scan précédemment échoué : rien en base, on retente.
+        assert!(needs_reindex(Some(a), Some(a), 0), "index vide, on retente");
+
+        // Cas courant : on enregistre d'autres réglages, l'index est bon.
+        assert!(!needs_reindex(Some(a), Some(a), 200), "aucun changement utile");
+        // Pas de dossier de jeu : rien à indexer, et surtout pas d'erreur.
+        assert!(!needs_reindex(Some(a), None, 200), "jeu non configuré");
+        assert!(!needs_reindex(None, None, 0));
+    }
+
     use super::*;
 
     #[test]

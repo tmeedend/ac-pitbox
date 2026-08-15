@@ -92,13 +92,18 @@ pub fn run() {
             // (il forçait le mode fenêtré ; Pit Box n'y touche plus).
             showroom::restore_orphaned_video_ini();
 
-            // Premier démarrage (ou contenu jamais indexé) : scan auto du
-            // contenu de base Kunos, pour que les skins/sons puissent s'y
-            // rattacher tout de suite (§12bis.1). Best-effort.
+            // Contenu de base Kunos jamais indexé : scan auto, pour que les
+            // skins/sons puissent s'y rattacher tout de suite (§12bis.1).
+            // Ne couvre PAS le premier démarrage — la config n'existe pas
+            // encore à ce moment-là, l'assistant ne l'écrit qu'après. C'est
+            // `save_config` qui s'en charge, dès que le dossier du jeu est
+            // désigné. Best-effort ici aussi, mais tracé.
             let cfg = config::load(app.handle());
             if cfg.ac_install_path.is_some() && overlay::count_stock(&conn).unwrap_or(0) == 0 {
                 let rules = rules::load(app.handle());
-                let _ = stock::index_stock_content(&conn, &cfg, &rules);
+                if let Err(e) = stock::index_stock_content(&conn, &cfg, &rules) {
+                    log::warn!("index_stock_content at startup: {e}");
+                }
             }
 
             app.manage(Db(std::sync::Mutex::new(conn)));
