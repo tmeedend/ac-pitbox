@@ -121,12 +121,29 @@ const SCAN_SHARE: f64 = 0.05;
 /// jamais au dernier mod rangé — il reste du travail après lui.
 const TAIL_SHARE: f64 = 0.10;
 
+/// Fin du rangement des mods, début de la queue.
+const TAIL_START: f64 = 1.0 - TAIL_SHARE;
+
+/// Découpage de la queue (§4.2bis). Les skins/sons en prennent la moitié : un
+/// pack de deux cents livrées y passe bien plus de temps que les apps, et
+/// c'était l'endroit où la barre semblait bloquée.
+const TAIL_SUBS_END: f64 = 0.95;
+const TAIL_APPS_END: f64 = 0.96;
+
 /// Avancement du rangement d'un item après `done` mods sur `total`.
 fn filing_ratio(done: usize, total: usize) -> f64 {
     if total == 0 {
-        return 1.0 - TAIL_SHARE;
+        return TAIL_START;
     }
-    SCAN_SHARE + (1.0 - SCAN_SHARE - TAIL_SHARE) * (done as f64 / total as f64)
+    SCAN_SHARE + (TAIL_START - SCAN_SHARE) * (done as f64 / total as f64)
+}
+
+/// Avancement dans une bande de la queue, `done` sur `total`.
+fn tail_ratio(from: f64, to: f64, done: usize, total: usize) -> f64 {
+    if total == 0 {
+        return to;
+    }
+    from + (to - from) * (done as f64 / total as f64).min(1.0)
 }
 
 /// Nom affichable d'une source d'import (archive ou dossier).
@@ -547,6 +564,8 @@ fn owner_of_leftover<'a>(rel: &Path, mods: &'a [(String, ModKind)]) -> Option<&'
 
 #[allow(clippy::too_many_arguments)]
 fn sweep_leftovers(
+    ctx: &ImportCtx,
+    index: usize,
     conn: &Connection,
     cfg: &AppConfig,
     rules: &Rules,
@@ -561,12 +580,14 @@ fn sweep_leftovers(
 ) {
     let mut leftovers = Vec::new();
     collect_leftover(workdir, consumed, &mut leftovers);
+    let leftover_count = leftovers.len();
     // Mods ayant reçu au moins un ajout : ces ajouts sont posés en
     // fin de balayage. L'activation par défaut (§4.2) a lieu avant, quand
     // leur arbre n'existe pas encore — sans ce rattrapage, ils ne
     // seraient posés qu'à la réactivation suivante.
     let mut owners_with_extras: Vec<(String, ModKind)> = Vec::new();
-    for p in leftovers {
+    for (i, p) in leftovers.into_iter().enumerate() {
+        ctx.file_ratio(index, tail_ratio(TAIL_APPS_END, 1.0, i, leftover_count));
         let rel = p.strip_prefix(workdir).unwrap_or(&p).to_path_buf();
 
         // Une archive imbriquée n'est pas un ajout au jeu : elle doit être
@@ -616,6 +637,7 @@ fn sweep_leftovers(
         }
 
         import_leftover(
+            ctx,
             conn,
             cfg,
             rules,
@@ -648,6 +670,7 @@ fn sweep_leftovers(
 /// mod », `others::import_other` ne perd jamais rien non plus).
 #[allow(clippy::too_many_arguments)]
 fn import_leftover(
+    ctx: &ImportCtx,
     conn: &Connection,
     cfg: &AppConfig,
     rules: &Rules,
@@ -678,7 +701,21 @@ fn import_leftover(
             return;
         };
         let Ok(extracted) = make_temp_dir() else { return };
-        if archive::extract(sevenzip, p, &extracted).is_ok() {
+        // Une archive imbriquée peut peser autant que celle qui l'entoure (mods
+        // CMRT-style). Sans ce signalement, la barre restait figée en fin d'item
+        // sans rien dire de ce qu'elle attendait. Pas de pourcentage en
+        // revanche : le nombre d'archives imbriquées n'est pas connu d'avance,
+        // donc leur avancement ne se projette sur aucune part fiable de la
+        // barre — une précision inventée serait pire que pas de précision.
+        ctx.phase(PHASE_EXTRACT, label.clone());
+        let nested = archive::extract(sevenzip, p, &extracted);
+        if let Err(e) = &nested {
+            // Sans cette trace, une archive imbriquée illisible disparaissait
+            // au nettoyage du temporaire sans le moindre indice (§7.3 : rien ne
+            // doit être perdu en silence).
+            log::warn!("nested archive {}: {e}", p.display());
+        }
+        if nested.is_ok() {
             let found = modscan::scan(&extracted);
             let subs = modscan::scan_subs(&extracted);
             let apps = modscan::scan_apps(&extracted);
@@ -731,6 +768,7 @@ fn import_leftover(
                 collect_leftover(&extracted, &consumed, &mut inner);
                 for lp in inner {
                     import_leftover(
+                        ctx,
                         conn,
                         cfg,
                         rules,
@@ -917,31 +955,18 @@ fn file_extracted(
     // Activation par défaut des mods importés (§4.2).
     auto_activate(conn, cfg, &result.mods);
 
-    // Sous-éléments rattachés (skins/sons) : stockage séparé (§12bis.2). Archive
-    // → contenu en temp, toujours déplacé.
-    if !subs.is_empty() {
-        result.subs = crate::submods::import_subs(conn, cfg, library, &archive_name, &subs, false, res_mode);
-    }
-    // Apps Python (§12bis.4).
-    if !apps.is_empty() {
-        result.apps = crate::apps::import_apps(conn, library, &archive_name, &apps, false, res_mode);
-        auto_activate_apps(conn, cfg, &result.apps);
-    }
-
-    // Ce qui reste à côté des mods reconnus ci-dessus (§7.3) : jamais perdu,
-    // y compris le contenu de zips imbriqués (ex. mods CMRT-style qui livrent
-    // une app ET un zip séparé visant `content/gui/...`).
-    let consumed = consumed_paths(&found, &subs, &apps);
-    let found_ids: Vec<(String, ModKind)> = found.iter().map(|fm| (fm_id(fm), fm.kind)).collect();
-    sweep_leftovers(
+    file_tail(
+        ctx,
+        ex.index,
         conn,
         cfg,
         rules,
         library,
         &archive_name,
         workdir,
-        &consumed,
-        &found_ids,
+        &found,
+        &subs,
+        &apps,
         false,
         res_mode,
         &mut result,
@@ -1092,30 +1117,18 @@ fn import_one_folder(
     // Activation par défaut des mods importés (§4.2).
     auto_activate(conn, cfg, &result.mods);
 
-    // Sous-éléments rattachés (skins/sons), stockage séparé (§12bis.2).
-    if !subs.is_empty() {
-        result.subs = crate::submods::import_subs(conn, cfg, library, &name, &subs, copy, res_mode);
-    }
-    // Apps Python (§12bis.4).
-    if !apps.is_empty() {
-        result.apps = crate::apps::import_apps(conn, library, &name, &apps, copy, res_mode);
-        auto_activate_apps(conn, cfg, &result.apps);
-    }
-
-    // Ce qui reste à côté des mods reconnus ci-dessus (§7.3) : jamais perdu,
-    // y compris le contenu de zips imbriqués (ex. mods CMRT-style qui livrent
-    // une app ET un zip séparé visant `content/gui/...`).
-    let consumed = consumed_paths(&found, &subs, &apps);
-    let found_ids: Vec<(String, ModKind)> = found.iter().map(|fm| (fm_id(fm), fm.kind)).collect();
-    sweep_leftovers(
+    file_tail(
+        ctx,
+        index,
         conn,
         cfg,
         rules,
         library,
         &name,
         dir,
-        &consumed,
-        &found_ids,
+        &found,
+        &subs,
+        &apps,
         copy,
         res_mode,
         &mut result,
@@ -1123,6 +1136,63 @@ fn import_one_folder(
 
     drop_unused_kept_source(conn, cfg, kept_archive);
     result
+}
+
+/// Range ce qui suit les mods d'un item : sous-éléments rattachés (§12bis.2),
+/// apps Python (§12bis.4) et balayage des restes (§7.3).
+///
+/// Extrait en commun des deux chemins d'import (archive et dossier) au moment
+/// d'y ajouter la progression : les trois étapes occupent la queue de la barre,
+/// et deux copies du découpage en bandes auraient divergé à la première
+/// retouche.
+#[allow(clippy::too_many_arguments)]
+fn file_tail(
+    ctx: &ImportCtx,
+    index: usize,
+    conn: &Connection,
+    cfg: &AppConfig,
+    rules: &Rules,
+    library: &Path,
+    name: &str,
+    root: &Path,
+    found: &[modscan::FoundMod],
+    subs: &[modscan::FoundSub],
+    apps: &[modscan::FoundApp],
+    copy: bool,
+    res_mode: crate::resources::ExtractionMode,
+    result: &mut ArchiveResult,
+) {
+    if !subs.is_empty() {
+        result.subs = crate::submods::import_subs_reported(
+            conn,
+            cfg,
+            library,
+            name,
+            subs,
+            copy,
+            res_mode,
+            &|done, total, sub_name| {
+                ctx.sub(done, total, sub_name.to_string());
+                ctx.file_ratio(index, tail_ratio(TAIL_START, TAIL_SUBS_END, done, total));
+            },
+        );
+    }
+    ctx.file_ratio(index, TAIL_SUBS_END);
+
+    if !apps.is_empty() {
+        result.apps = crate::apps::import_apps(conn, library, name, apps, copy, res_mode);
+        auto_activate_apps(conn, cfg, &result.apps);
+    }
+    ctx.file_ratio(index, TAIL_APPS_END);
+
+    // Ce qui reste à côté des mods reconnus (§7.3) : jamais perdu, y compris le
+    // contenu de zips imbriqués (ex. mods CMRT-style qui livrent une app ET un
+    // zip séparé visant `content/gui/...`).
+    let consumed = consumed_paths(found, subs, apps);
+    let found_ids: Vec<(String, ModKind)> = found.iter().map(|fm| (fm_id(fm), fm.kind)).collect();
+    sweep_leftovers(
+        ctx, index, conn, cfg, rules, library, name, root, &consumed, &found_ids, copy, res_mode, result,
+    );
 }
 
 // --- Import en masse (§4.2) -------------------------------------------------
@@ -1398,6 +1468,8 @@ fn exec_one(
     let found_ids: Vec<(String, ModKind)> = found.iter().map(|fm| (fm_id(fm), fm.kind)).collect();
     let res_mode = crate::resources::ExtractionMode::parse(&cfg.prefs.resource_extraction_mode);
     sweep_leftovers(
+        ctx,
+        index,
         conn,
         cfg,
         rules,
@@ -2196,6 +2268,30 @@ mod tests {
             filing_ratio(5, 5) < 1.0,
             "le dernier mod ne finit pas l'item : skins, apps et restes viennent après"
         );
+    }
+
+    /// Règle : la queue d'un item (§4.2bis) reprend exactement là où le dernier
+    /// mod s'est arrêté et va jusqu'au bout, bande après bande. Un trou entre
+    /// deux bandes ferait sauter la barre ; un chevauchement la ferait reculer.
+    #[test]
+    fn tail_bands_chain_from_the_last_mod_to_the_end_of_the_item() {
+        // La séquence qu'un item parcourt réellement : dernier mod rangé, puis
+        // 4 livrées, une app, 3 restes.
+        let steps = [
+            filing_ratio(3, 3),
+            tail_ratio(TAIL_START, TAIL_SUBS_END, 0, 4),
+            tail_ratio(TAIL_START, TAIL_SUBS_END, 4, 4),
+            tail_ratio(TAIL_SUBS_END, TAIL_APPS_END, 1, 1),
+            tail_ratio(TAIL_APPS_END, 1.0, 0, 3),
+            tail_ratio(TAIL_APPS_END, 1.0, 3, 3),
+        ];
+        for pair in steps.windows(2) {
+            assert!(pair[1] >= pair[0], "la barre ne recule jamais : {steps:?}");
+        }
+        assert_eq!(steps[0], TAIL_START, "la queue reprend là où le dernier mod s'arrête");
+        assert_eq!(steps[steps.len() - 1], 1.0, "le balayage des restes ferme l'item");
+        // Rien à traiter dans une bande : elle est derrière nous, pas devant.
+        assert_eq!(tail_ratio(TAIL_APPS_END, 1.0, 0, 0), 1.0, "aucun reste = bande finie");
     }
 
     /// Règle : un lot qui ne peut pas tenir sur le volume de la bibliothèque est

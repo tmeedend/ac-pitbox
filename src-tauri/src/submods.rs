@@ -53,6 +53,40 @@ pub struct SubImported {
     pub resources_extracted: usize,
 }
 
+/// Signalement d'avancement des sous-éléments : `(rangés, total, nom)`.
+/// Le total est estimé avant la boucle (voir `count_sub_items`).
+pub type SubReport<'a> = dyn Fn(usize, usize, &str) + 'a;
+
+/// Compteur passé aux importateurs de packs, pour qu'ils n'aient pas à
+/// connaître la façon dont l'avancement est présenté à l'écran.
+struct SubProgress<'a> {
+    done: usize,
+    total: usize,
+    report: &'a SubReport<'a>,
+}
+
+impl SubProgress<'_> {
+    fn step(&mut self, name: &str) {
+        self.done += 1;
+        (self.report)(self.done, self.total, name);
+    }
+}
+
+/// Nombre de sous-éléments qu'un lot va traiter, pour donner un dénominateur à
+/// la progression. Approximatif par construction — un skin déjà connu est
+/// ignoré plus loin sans être décompté, donc un ré-import finit plus tôt que
+/// prévu. Sans conséquence : ce ré-import ne coûte rien de toute façon.
+fn count_sub_items(subs: &[FoundSub]) -> usize {
+    subs.iter()
+        .map(|s| match s.kind {
+            SubKind::Skin => std::fs::read_dir(&s.dir)
+                .map(|entries| entries.flatten().filter(|e| e.path().is_dir()).count())
+                .unwrap_or(1),
+            SubKind::Sound => 1,
+        })
+        .sum()
+}
+
 /// Importe les sous-éléments détectés (§12bis.2). `copy` préserve la source.
 #[allow(clippy::too_many_arguments)]
 pub fn import_subs(
@@ -64,11 +98,46 @@ pub fn import_subs(
     copy: bool,
     mode: ExtractionMode,
 ) -> Vec<SubImported> {
+    import_subs_reported(conn, cfg, library, source_name, subs, copy, mode, &|_, _, _| {})
+}
+
+/// Comme [`import_subs`], en signalant chaque sous-élément rangé (§4.2bis).
+///
+/// Un pack de deux cents livrées tient dans une seule entrée `FoundSub` : sans
+/// ce signalement, la barre de l'item restait immobile pendant tout son
+/// rangement, à l'endroit précis où l'utilisateur se demande si l'app est
+/// bloquée.
+#[allow(clippy::too_many_arguments)]
+pub fn import_subs_reported(
+    conn: &Connection,
+    cfg: &AppConfig,
+    library: &Path,
+    source_name: &str,
+    subs: &[FoundSub],
+    copy: bool,
+    mode: ExtractionMode,
+    report: &SubReport,
+) -> Vec<SubImported> {
     let mut out = Vec::new();
+    let mut progress = SubProgress {
+        done: 0,
+        total: count_sub_items(subs),
+        report,
+    };
     for sub in subs {
         match sub.kind {
-            SubKind::Skin => import_skin_pack(conn, cfg, library, source_name, sub, copy, mode, &mut out),
-            SubKind::Sound => import_sound(conn, library, source_name, sub, copy, mode, &mut out),
+            SubKind::Skin => import_skin_pack(
+                conn,
+                cfg,
+                library,
+                source_name,
+                sub,
+                copy,
+                mode,
+                &mut out,
+                &mut progress,
+            ),
+            SubKind::Sound => import_sound(conn, library, source_name, sub, copy, mode, &mut out, &mut progress),
         }
     }
     out
@@ -84,6 +153,7 @@ fn import_skin_pack(
     copy: bool,
     mode: ExtractionMode,
     out: &mut Vec<SubImported>,
+    progress: &mut SubProgress,
 ) {
     let parent = &sub.parent_id;
     // Skin de circuit (TRACK_SKIN) ou de voiture (SKIN) ? Stockage et type adaptés.
@@ -102,6 +172,7 @@ fn import_skin_pack(
             continue;
         }
         let name = e.file_name().to_string_lossy().into_owned();
+        progress.step(&name);
 
         // Idempotence : ne ré-importe pas un skin déjà connu pour ce parent.
         if overlay::sub_exists(conn, sub_type, parent, &name).unwrap_or(false) {
@@ -604,6 +675,7 @@ fn guess_sound_parent(conn: &Connection, source_name: &str) -> Option<String> {
     fuzzy.next().is_none().then(|| first.clone())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn import_sound(
     conn: &Connection,
     library: &Path,
@@ -612,7 +684,9 @@ fn import_sound(
     copy: bool,
     mode: ExtractionMode,
     out: &mut Vec<SubImported>,
+    progress: &mut SubProgress,
 ) {
+    progress.step(&sub.parent_id);
     // `modscan` ne remonte jamais au-delà du dossier qui contient directement
     // les `.bank`/GUIDs.txt (§12bis.2) : c'est presque toujours littéralement
     // "sfx" (convention AC, `content/cars/<id>/sfx/`), mais un pack qui pose
@@ -1363,6 +1437,52 @@ mod tests {
             .join("team_a")
             .join("preview.jpg")
             .is_file());
+    }
+
+    /// Règle (§4.2bis) : chaque livrée d'un pack est signalée une fois, avec un
+    /// dénominateur. Un pack de deux cents skins tient dans une seule entrée
+    /// `FoundSub` : sans ce signalement, la barre de l'item restait immobile
+    /// pendant tout son rangement, là où l'utilisateur se demande si l'app est
+    /// bloquée.
+    #[test]
+    fn every_skin_of_a_pack_is_reported_once() {
+        let base = crate::testutil::temp_dir("subprog");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig::default();
+
+        let src = base.join("src");
+        for skin in ["skin_a", "skin_b", "skin_c"] {
+            let d = src.join("skins").join("ferrari_488").join(skin);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("preview.jpg"), b"IMG").unwrap();
+        }
+        let subs = modscan::scan_subs(&src);
+
+        let seen = std::cell::RefCell::new(Vec::new());
+        import_subs_reported(
+            &conn,
+            &cfg,
+            &library,
+            "pack.7z",
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+            &|done, total, name| seen.borrow_mut().push((done, total, name.to_string())),
+        );
+
+        let seen = seen.into_inner();
+        assert_eq!(seen.len(), 3, "un signalement par livrée");
+        assert!(
+            seen.iter().all(|(_, total, _)| *total == 3),
+            "dénominateur connu dès le premier signalement : {seen:?}"
+        );
+        let counts: Vec<usize> = seen.iter().map(|(done, _, _)| *done).collect();
+        assert_eq!(counts, vec![1, 2, 3], "compteur croissant, sans trou");
+        let mut names: Vec<&str> = seen.iter().map(|(_, _, n)| n.as_str()).collect();
+        names.sort();
+        assert_eq!(names, vec!["skin_a", "skin_b", "skin_c"], "chaque livrée nommée");
     }
 
     #[test]

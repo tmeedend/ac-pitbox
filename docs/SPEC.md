@@ -83,6 +83,8 @@ Pensé pour un lot de plusieurs dizaines de mods.
 
 **Progression réelle pendant l'extraction.** 7-Zip est lancé avec `-bsp1` et sa sortie lue au fil de l'eau (mises à jour séparées par des retours chariot, pas des sauts de ligne). Un binaire trop ancien pour ce commutateur retombe sur une extraction sans progression, jamais sur un échec. Les événements sont plafonnés à 10/s : sans ça, quarante archives noieraient l'IPC.
 
+**La fin d'un item n'est pas muette.** Après le dernier mod rangé, il reste les skins/sons rattachés, les apps et le balayage des restes (§7.3). Ces trois étapes se partagent la queue de la barre, chacune dans sa bande : les skins/sons en prennent la moitié et sont signalés **un par un** — un pack de deux cents livrées tient dans une seule entrée détectée, et c'est précisément là que la barre semblait bloquée. Une archive imbriquée annonce son nom pendant sa décompression, sans pourcentage : leur nombre n'étant pas connu d'avance, leur avancement ne se projette sur aucune part fiable de la barre, et une précision inventée serait pire que pas de précision.
+
 **Extraction et rangement en pipeline.** L'archive N+1 se décompresse pendant que la N se range — les deux saturent des ressources différentes. Le canal est un rendez-vous, ce qui borne l'avance à une archive et donc à deux dossiers temporaires vivants au plus.
 
 **Verrou base réduit au rangement.** Extraction et copie de l'archive source, qui ne touchent pas la base, se font hors verrou — un écran qui lit l'overlay n'attend plus la décompression d'un gros circuit. Le rangement d'un mod, lui, garde le verrou : il entrelace décisions et écritures overlay, et le relâcher au milieu ouvrirait une fenêtre où l'UI pourrait modifier ce qu'on est en train d'écrire.
