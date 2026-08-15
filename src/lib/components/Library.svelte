@@ -618,10 +618,11 @@
   // (tri courant). Ne touche pas à la sélection de session (comme le
   // double-clic qui ouvre la fiche) — juste la navigation dans la vue.
   function navigateFull(delta: 1 | -1) {
-    // Une visionneuse plein écran ouverte par-dessus la fiche (§6.1) gère son
-    // propre gauche/droite — sinon une même pression ferait défiler les
-    // images ET changer de mod.
-    if (!nav.openFull || nav.lightboxOpen) return;
+    // Une visionneuse plein écran ouverte par-dessus la fiche (§6.1), ou le
+    // panneau de périphérique (§7.4), consomme les entrées manette en
+    // exclusivité — sinon une même pression ferait défiler les images ET
+    // changer de mod.
+    if (!nav.openFull || nav.inputCapture) return;
     const ids = sorted.map((c) => c.id_interne);
     const idx = ids.indexOf(nav.openFull);
     if (idx === -1 || ids.length < 2) return;

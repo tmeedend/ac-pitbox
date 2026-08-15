@@ -82,13 +82,22 @@ export const nav = $state<{
    * navigation manette globale (AppShell) sache si elle doit céder la main
    * gauche/droite au visualiseur (mod précédent/suivant) et gérer B = fermer. */
   openFull: string | null;
-  /** Visionneuse plein écran d'image ouverte (galerie Screenshots/Backgrounds,
-   * §6.1) — le navigateur manette global (`gamepadNav.ts`) et la navigation
-   * manette mod précédent/suivant (`Library.svelte::navigateFull`) doivent
-   * tous deux céder gauche/droite/B à la visionneuse tant que c'est vrai,
-   * sinon une même pression ferait à la fois défiler les images ET changer de
-   * mod, ou fermerait la fiche entière au lieu de juste la visionneuse. */
-  lightboxOpen: boolean;
+  /** Qui consomme les entrées manette en exclusivité, ou `null` si personne
+   * (cas normal : c'est la navigation globale de `gamepadNav.ts` qui les lit).
+   *
+   * - `"lightbox"` : visionneuse plein écran ouverte (galerie Screenshots/
+   *   Backgrounds, §6.1) — elle gère elle-même gauche/droite/B ; sans ce
+   *   drapeau, une même pression ferait à la fois défiler les images ET
+   *   changer de mod, ou fermerait la fiche entière au lieu de la visionneuse.
+   * - `"controller"` : panneau de configuration du périphérique (§7.4) — sa
+   *   zone d'essai consomme les entrées du périphérique en cours de
+   *   calibration ; sans ça, « haut » validerait un bouton derrière le
+   *   panneau.
+   *
+   * Un seul drapeau pour les deux plutôt qu'un booléen par cas : un deuxième
+   * drapeau parallèle finit toujours par être oublié dans l'une des trois
+   * lectures (`gamepadNav.ts`, `Library.svelte::navigateFull`, ici). */
+  inputCapture: "lightbox" | "controller" | null;
   /** Demande de lancement immédiat (bouton rouge « Démarrer la session » de
    * la barre latérale) : posée avant de naviguer vers l'écran de réglages,
    * consommée par Launch.svelte une fois monté et prêt (mêmes réglages que
@@ -108,7 +117,7 @@ export const nav = $state<{
   sessionCar: null,
   sessionTrack: null,
   openFull: null,
-  lightboxOpen: false,
+  inputCapture: null,
   autoLaunch: false,
   opponentsAction: null,
 });

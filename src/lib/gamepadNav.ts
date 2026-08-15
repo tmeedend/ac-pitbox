@@ -6,6 +6,12 @@
 // manettes/volants reconnus) valide l'élément ciblé, et le bouton secondaire
 // (B/Rond — button[1]) ferme la fiche pleine page d'un mod si elle est ouverte.
 //
+// QUI pilote l'interface ne se décide pas ici : un périphérique n'agit que si
+// l'utilisateur l'a désigné, une fois, explicitement (`gamepadDevices.svelte.ts`,
+// §7.4). Ce module ne fait que résoudre le profil du périphérique adopté
+// (calibré → livré → layout standard → rien) et exiger son retour au neutre
+// avant le premier événement.
+//
 // Approche générique par géométrie (plus proche voisin dans la direction
 // visée), plutôt que du câblage par écran : marche pour n'importe quelle vue
 // sans code spécifique, y compris pour passer de la grille au menu latéral en
@@ -14,16 +20,21 @@
 // demandé pour l'instant.
 
 import { nav } from "$lib/nav.svelte";
-import { peekUiPref } from "$lib/uiPrefs.svelte";
+import { deviceRecords, gamepadEnabled } from "$lib/gamepadDevices.svelte";
+import {
+  EMPTY_REST,
+  bindingActive,
+  deviceKey,
+  hasRest,
+  measureRest,
+  sampleEqual,
+  type DeviceRecord,
+  type Direction,
+  type NavProfile,
+  type RestSnapshot,
+} from "$lib/gamepadProfile";
 
-type Dir = "up" | "down" | "left" | "right";
-
-// Réglage utilisateur (Réglages > Général) : "" (ou absent) = auto (filtre
-// mapping standard ci-dessous), "off" = désactivé, sinon l'`id` exact d'une
-// manette (`Gamepad.id`) à utiliser explicitement — filet de sécurité pour un
-// périphérique qui échapperait au filtre auto (ex. un volant qui se déclare
-// "standard" via une couche de compatibilité XInput).
-export const GAMEPAD_NAV_MODE_KEY = "pitbox.gamepadNav.mode";
+type Dir = Direction;
 
 // Inclut les champs de formulaire (curseurs, nombres, listes déroulantes) —
 // sans ça, les réglages de session (carburant, dégâts, ghost car…) sont
@@ -197,6 +208,12 @@ interface ButtonEdges {
 
 const AXIS_THRESHOLD = 0.6;
 
+// Layout standard (Xbox) : croix sur les boutons 12-15, stick gauche sur les
+// axes 0/1, A/B sur 0/1. Volontairement lu tel quel plutôt que traduit en
+// `NavProfile` : une direction y a DEUX sources (croix et stick), qu'un
+// `Binding` unique par direction ne sait pas représenter — traduire ferait
+// perdre le stick sur toutes les manettes normales, régression pour gagner
+// une uniformité que personne ne voit.
 function readButtons(gp: Gamepad): ButtonEdges {
   const ax = gp.axes[0] ?? 0;
   const ay = gp.axes[1] ?? 0;
@@ -210,13 +227,11 @@ function readButtons(gp: Gamepad): ButtonEdges {
   };
 }
 
-// Table d'overrides par périphérique (Réglages > Général affiche un tableau
-// de diagnostic — mapping/axes/boutons en direct — servant justement à
-// relever les valeurs ci-dessous pour un nouveau volant). Chaque volant a un
-// layout non standard qui lui est propre, sans norme fiable : rien ne garantit
-// qu'un autre modèle (même une autre rim Fanatec) partage ces codes, donc pas
-// de généralisation tentée — un override par modèle constaté, ajouté au fil
-// de l'eau.
+// Profils livrés, dans le format EXACT que produit la calibration guidée
+// (`NavProfile`) : un profil reçu d'un utilisateur doit pouvoir être collé ici
+// tel quel, sinon chaque contribution demande une traduction manuelle — donc
+// une occasion de se tromper. Chaque volant a un layout qui lui est propre,
+// sans norme : pas de généralisation tentée, une entrée par modèle constaté.
 interface DeviceOverride {
   // Sous-chaîne de `Gamepad.id` : un même modèle peut s'annoncer sur deux
   // entrées `Gamepad` distinctes au même `id` (base + interface boutons
@@ -224,57 +239,83 @@ interface DeviceOverride {
   // les deux plutôt que de dépendre d'un `index` non garanti stable d'un
   // redémarrage à l'autre.
   idIncludes: string;
-  confirmButton: number;
-  backButton: number;
-  // Croix directionnelle rapportée comme un seul axe à valeurs discrètes
-  // (hat switch matériel) plutôt que 4 boutons ou un vrai stick 2D — valeurs
-  // lues empiriquement, propres à ce modèle/pilote précis.
-  hat: { up: number; down: number; left: number; right: number };
+  profile: NavProfile;
 }
-
-const HAT_TOLERANCE = 0.08;
 
 const DEVICE_OVERRIDES: DeviceOverride[] = [
   {
     idIncludes: "FANATEC ClubSport Wheel Base V2.5",
-    confirmButton: 0,
-    backButton: 1,
-    hat: { up: -1, right: -3 / 7, down: 1 / 7, left: 5 / 7 },
+    profile: {
+      // Croix rapportée comme un seul axe à valeurs discrètes (hat switch
+      // matériel) plutôt que 4 boutons ou un vrai stick 2D — valeurs lues
+      // empiriquement, propres à ce modèle/pilote. `hint` n'est qu'un point
+      // de départ : l'index de l'axe n'est pas garanti stable, la
+      // reconnaissance se fait par valeur (voir `bindingActive`).
+      dirs: {
+        up: { kind: "axis", hint: 9, mode: "equals", value: -1 },
+        right: { kind: "axis", hint: 9, mode: "equals", value: -3 / 7 },
+        down: { kind: "axis", hint: 9, mode: "equals", value: 1 / 7 },
+        left: { kind: "axis", hint: 9, mode: "equals", value: 5 / 7 },
+      },
+      confirm: { kind: "button", index: 0 },
+      back: { kind: "button", index: 1 },
+      // Pas de repos livré : il dépend de la position du volant et des
+      // pédales au moment du branchement, donc il est mesuré à l'exécution
+      // (voir `armDevice`). C'est ce qui empêche une pédale au repos à -1 de
+      // répondre à la place du hat dont « haut » vaut aussi -1.
+      rest: EMPTY_REST,
+    },
   },
 ];
 
-function findDeviceOverride(gp: Gamepad): DeviceOverride | undefined {
+function findDeviceOverride(gp: { id: string }): DeviceOverride | undefined {
   return DEVICE_OVERRIDES.find((o) => gp.id.includes(o.idIncludes));
 }
 
-// L'axe qui porte le hat switch n'a pas d'index fixe garanti (dépend de
-// l'ordre d'énumération HID) : on le retrouve à chaque lecture en cherchant,
-// parmi tous les axes du périphérique, celui dont la valeur est proche d'une
-// des 4 positions connues — auto-localisation plutôt qu'un index en dur.
-function readOverrideButtons(gp: Gamepad, o: DeviceOverride): ButtonEdges {
-  let hat: number | undefined;
-  for (const v of gp.axes) {
-    if (
-      Math.abs(v - o.hat.up) < HAT_TOLERANCE ||
-      Math.abs(v - o.hat.down) < HAT_TOLERANCE ||
-      Math.abs(v - o.hat.left) < HAT_TOLERANCE ||
-      Math.abs(v - o.hat.right) < HAT_TOLERANCE
-    ) {
-      hat = v;
-      break;
-    }
-  }
+/** D'où vient le profil qui pilote ce périphérique. Ordre de résolution
+ * (§7.4) : calibré ici (gagne toujours) → livré → layout standard si le
+ * périphérique se déclare `mapping === "standard"` → rien, il reste inerte. */
+export type ProfileSource = "calibrated" | "override" | "standard" | "none";
+
+export interface ResolvedProfile {
+  source: ProfileSource;
+  /** `null` pour le layout standard : il n'est pas exprimable en `NavProfile`
+   * (voir `readButtons`). */
+  profile: NavProfile | null;
+}
+
+export function resolveProfile(gp: { id: string; mapping: string }, rec: DeviceRecord | undefined): ResolvedProfile {
+  if (rec?.profile) return { source: "calibrated", profile: rec.profile };
+  const override = findDeviceOverride(gp);
+  if (override) return { source: "override", profile: override.profile };
+  if (gp.mapping === "standard") return { source: "standard", profile: null };
+  return { source: "none", profile: null };
+}
+
+function readProfileButtons(gp: Gamepad, profile: NavProfile, rest: RestSnapshot): ButtonEdges {
+  const dir = (d: Direction) => {
+    const b = profile.dirs[d];
+    return !!b && bindingActive(gp, b, rest);
+  };
   return {
-    up: hat !== undefined && Math.abs(hat - o.hat.up) < HAT_TOLERANCE,
-    down: hat !== undefined && Math.abs(hat - o.hat.down) < HAT_TOLERANCE,
-    left: hat !== undefined && Math.abs(hat - o.hat.left) < HAT_TOLERANCE,
-    right: hat !== undefined && Math.abs(hat - o.hat.right) < HAT_TOLERANCE,
-    confirm: gp.buttons[o.confirmButton]?.pressed ?? false,
-    back: gp.buttons[o.backButton]?.pressed ?? false,
+    up: dir("up"),
+    down: dir("down"),
+    left: dir("left"),
+    right: dir("right"),
+    confirm: !!profile.confirm && bindingActive(gp, profile.confirm, rest),
+    back: !!profile.back && bindingActive(gp, profile.back, rest),
   };
 }
 
+function readEdges(gp: Gamepad, resolved: ResolvedProfile, rest: RestSnapshot): ButtonEdges {
+  return resolved.profile ? readProfileButtons(gp, resolved.profile, rest) : readButtons(gp);
+}
+
 const NONE: ButtonEdges = { up: false, down: false, left: false, right: false, confirm: false, back: false };
+
+function anyEdge(e: ButtonEdges): boolean {
+  return e.up || e.down || e.left || e.right || e.confirm || e.back;
+}
 
 // Répétition en rester appuyé (haut/bas/gauche/droite uniquement — jamais
 // confirm/back, un clic répété en boucle n'a pas de sens) : sans ça, parcourir
@@ -327,6 +368,58 @@ function shouldFire(
   return true;
 }
 
+// --- Armement : retour au neutre exigé (§7.4) ----------------------------
+//
+// Un périphérique ne produit son premier événement qu'après avoir été VU au
+// repos — à l'adoption comme à chaque reconnexion. Sans ça, une pédale
+// enfoncée au branchement (ou un volant tourné) vaut « bas » maintenu dès la
+// première image, et le focus dérive tout seul sans que rien à l'écran ne
+// l'explique. C'est le correctif de ce bug-là ; le consentement explicite
+// (§7.4) répond à une autre question, les deux sont complémentaires.
+//
+// Le repos se MESURE, jamais ne se suppose : un hat DirectInput normalisé par
+// Chromium repose *hors* de [-1, 1] (~3,2 constaté), les pédales à -1, un
+// volant là où on l'a laissé. On attend donc que le périphérique cesse de
+// bouger pendant `STABLE_MS`, on prend cet instantané comme référence (sauf
+// profil calibré, qui porte le sien), et on n'arme que si rien de ce que le
+// profil écoute n'est actif à ce moment-là.
+const STABLE_MS = 500;
+
+interface ArmState {
+  sample: RestSnapshot | null;
+  stableSince: number;
+  /** Non nul = armé ; c'est aussi le repos de référence des lectures. */
+  rest: RestSnapshot | null;
+}
+
+function armDevice(
+  arms: Map<number, ArmState>,
+  gp: Gamepad,
+  resolved: ResolvedProfile,
+  now: number,
+): RestSnapshot | null {
+  let a = arms.get(gp.index);
+  if (!a) {
+    a = { sample: null, stableSince: now, rest: null };
+    arms.set(gp.index, a);
+  }
+  if (a.rest) return a.rest;
+  const sample = measureRest(gp);
+  if (!a.sample || !sampleEqual(a.sample, sample)) {
+    a.sample = sample;
+    a.stableSince = now;
+    return null;
+  }
+  if (now - a.stableSince < STABLE_MS) return null;
+  const rest = resolved.profile && hasRest(resolved.profile.rest) ? resolved.profile.rest : sample;
+  // Immobile ne veut pas dire relâché : une pédale maintenue à fond est
+  // parfaitement stable. Le profil, lui, sait la reconnaître — et tant qu'elle
+  // l'est, le périphérique reste inerte plutôt que de faire défiler le focus.
+  if (anyEdge(readEdges(gp, resolved, rest))) return null;
+  a.rest = rest;
+  return rest;
+}
+
 /** Démarre le scrutin manette global. Retourne une fonction d'arrêt. */
 export function startGamepadNav(): () => void {
   initFocusTracking();
@@ -341,6 +434,7 @@ export function startGamepadNav(): () => void {
   // émet un vrai `change` à chaque appel) au lieu d'un seul déclenchement.
   const lastByGamepad = new Map<number, ButtonEdges>();
   const dirRepeats = makeDirRepeat();
+  const arms = new Map<number, ArmState>();
 
   // Champ « entré » (confirm appuyé dessus une première fois) — liste
   // déroulante ou champ numérique, voir `needsEntry` : tant qu'il n'est pas
@@ -351,42 +445,38 @@ export function startGamepadNav(): () => void {
   let entered: HTMLSelectElement | HTMLInputElement | null = null;
 
   function poll() {
-    const mode = peekUiPref(GAMEPAD_NAV_MODE_KEY) || "auto";
-    if (mode === "off") {
+    // Coupe-circuit global (Réglages), et capture exclusive des entrées par le
+    // panneau de configuration du périphérique : sa zone d'essai consomme
+    // elle-même les entrées du périphérique calibré, sinon « haut » validerait
+    // un bouton derrière le panneau. Tout est remis à zéro plutôt que gelé —
+    // sans ça, le premier front lu au retour serait celui d'avant.
+    if (!gamepadEnabled() || nav.inputCapture === "controller") {
+      arms.clear();
+      lastByGamepad.clear();
       raf = requestAnimationFrame(poll);
       return;
     }
     const now = performance.now();
+    const records = deviceRecords();
+    const seen = new Set<number>();
     for (const gp of navigator.getGamepads?.() ?? []) {
       if (!gp?.connected) continue;
-      const override = findDeviceOverride(gp);
-      if (mode === "auto") {
-        // Un volant (Fanatec…) n'a pas le layout Xbox que ce module suppose
-        // (axes[0..1] = stick gauche, boutons 12-15 = croix) : ses axes
-        // correspondent à des pédales/à la rotation du volant, ses boutons à
-        // autre chose. Chrome ne marque `mapping === "standard"` que pour les
-        // manettes dont il reconnaît le layout — jamais pour un volant. Sans
-        // ce filtre, un axe non standard au repos au-dessus du seuil (ou
-        // simplement bruité, ce qui refait franchir le seuil à chaque frame)
-        // déclenche "bas" en boucle — bug réel constaté : volant Fanatec
-        // allumé, aucune autre manette branchée, sélecteur qui ne va que vers
-        // le bas, et les boutons gauche/droite/valider (autres indices que
-        // sur ce device) restaient sans effet.
-        // Exception : un périphérique avec un override connu (ci-dessus) est
-        // accepté même sans mapping standard — c'est justement ce que
-        // l'override sert à corriger.
-        if (!override && gp.mapping !== "standard") continue;
-      } else if (gp.id !== mode) {
-        // Réglage manuel (Réglages > Général) : seule la manette choisie par
-        // l'utilisateur pilote la navigation, même si elle n'a pas le mapping
-        // "standard" — l'utilisateur a vérifié lui-même que ça marche pour
-        // son périphérique (ou compte sur un override, voir ci-dessus).
-        continue;
-      }
-      const cur = override ? readOverrideButtons(gp, override) : readButtons(gp);
+      seen.add(gp.index);
+      // Défaut fermé (§7.4) : un périphérique que l'utilisateur n'a pas
+      // désigné ne pilote rien. `mapping === "standard"` est *déclaré* par le
+      // périphérique, pas vérifié — un volant en « mode Xbox » ou derrière un
+      // adaptateur XInput s'annonce standard, et le layout Xbox place « haut/
+      // bas » sur l'axe 1, qui sur un volant est une pédale.
+      const rec = records[deviceKey(gp.id)];
+      if (!rec?.use) continue;
+      const resolved = resolveProfile(gp, rec);
+      if (resolved.source === "none") continue;
+      const rest = armDevice(arms, gp, resolved, now);
+      if (!rest) continue;
+      const cur = readEdges(gp, resolved, rest);
       const last = lastByGamepad.get(gp.index) ?? NONE;
 
-      if (nav.lightboxOpen) {
+      if (nav.inputCapture === "lightbox") {
         // Visionneuse plein écran ouverte par-dessus la fiche (§6.1,
         // Lightbox.svelte) : elle gère elle-même tout son input manette
         // (gauche/droite/B), y compris la fermeture — ne rien faire ici, sous
@@ -435,6 +525,12 @@ export function startGamepadNav(): () => void {
       }
       lastByGamepad.set(gp.index, cur);
     }
+    // Un slot libéré au débranchement est réattribué à un autre périphérique :
+    // ne jamais lui laisser hériter de l'armement ni du dernier front de son
+    // prédécesseur — c'est ce qui garantit qu'une reconnexion repasse par le
+    // retour au neutre.
+    for (const idx of arms.keys()) if (!seen.has(idx)) arms.delete(idx);
+    for (const idx of lastByGamepad.keys()) if (!seen.has(idx)) lastByGamepad.delete(idx);
     raf = requestAnimationFrame(poll);
   }
 

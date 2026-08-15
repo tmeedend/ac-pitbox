@@ -13,6 +13,7 @@
   import Import from "./Import.svelte";
   import ImportOverlay from "./ImportOverlay.svelte";
   import TitleBar from "./TitleBar.svelte";
+  import ControllerSetup from "./ControllerSetup.svelte";
   import ImageSelectDropdown from "./ImageSelectDropdown.svelte";
   import TrackSkinChecklistDropdown from "./TrackSkinChecklistDropdown.svelte";
   import { nav, requestSection, pickSession } from "$lib/nav.svelte";
@@ -27,6 +28,13 @@
   import { setZoom } from "$lib/zoom.svelte";
   import { getConfig } from "$lib/config";
   import { startGamepadNav } from "$lib/gamepadNav";
+  import {
+    controllers,
+    startControllerWatch,
+    bannerVisible,
+    pendingDevices,
+    openControllerSetup,
+  } from "$lib/gamepadDevices.svelte";
   import { bigPictureState, exitBigPicture } from "$lib/bigpicture.svelte";
   import { musicEnterMenu, musicEnterGrid } from "$lib/music";
 
@@ -74,6 +82,14 @@
   // A/Croix = valide, B/Rond = ferme la fiche pleine page). Un seul scrutin
   // global, monté une fois ici.
   onMount(() => startGamepadNav());
+
+  // Détection des périphériques et décision « lequel pilote l'interface »
+  // (§7.4). Démarrage, branchement à chaud et première installation sont le
+  // même événement — un périphérique visible sans décision enregistrée — donc
+  // une seule surveillance, montée ici comme le scrutin ci-dessus.
+  onMount(() => startControllerWatch());
+
+  const pendingCount = $derived(pendingDevices().length);
 
   // Supprime le menu contextuel natif du navigateur (Actualiser/Enregistrer
   // sous/Imprimer…) partout dans l'app — une appli desktop n'en a pas besoin,
@@ -408,39 +424,70 @@
       {/if}
     </aside>
 
-    <main class="content" class:fixed={noPad}>
-      {#if nav.section === "settings"}
-        <Settings />
-      {:else if nav.section === "about"}
-        <About />
-      {:else if nav.section === "cars"}
-        <Library kind="Car" />
-      {:else if nav.section === "tracks"}
-        <Library kind="Track" />
-      {:else if nav.section === "rules"}
-        <RulesEditor />
-      {:else if nav.section === "profiles"}
-        <Profiles />
-      {:else if nav.section === "race"}
-        <Launch />
-      {:else if nav.section === "maintenance"}
-        <Maintenance />
-      {:else if nav.section === "import"}
-        <Import />
-      {:else if nav.section === "carskins"}
-        <Transversal variant="car" />
-      {:else if nav.section === "trackskins"}
-        <Transversal variant="track" />
-      {:else if nav.section === "apps"}
-        <Apps />
-      {:else if nav.section === "others"}
-        <OtherMods />
+    <div class="main-col">
+      <!-- Bandeau « nouveau périphérique » (§7.4) : persistant, pas un toast
+           qui s'évanouit — s'il disparaît tout seul, l'utilisateur qui n'a pas
+           eu le temps de lire n'a plus aucun chemin évident. Il n'interrompt
+           rien, c'est tout l'intérêt : aucune logique de report (AC qui
+           tourne, import en cours) n'est nécessaire. -->
+      {#if bannerVisible()}
+        <div class="banner">
+          <span class="banner-ic">🎮</span>
+          <span class="banner-txt">
+            {pendingCount > 1
+              ? t("controller.banner.many", { n: pendingCount })
+              : t("controller.banner.one")}
+          </span>
+          <button class="btn" type="button" onclick={() => openControllerSetup()}>
+            {t("controller.banner.configure")}
+          </button>
+          <button
+            class="banner-x"
+            type="button"
+            title={t("controller.banner.later")}
+            aria-label={t("controller.banner.later")}
+            onclick={() => (controllers.bannerDismissed = true)}
+          >✕</button>
+        </div>
       {/if}
-    </main>
+
+      <main class="content" class:fixed={noPad}>
+        {#if nav.section === "settings"}
+          <Settings />
+        {:else if nav.section === "about"}
+          <About />
+        {:else if nav.section === "cars"}
+          <Library kind="Car" />
+        {:else if nav.section === "tracks"}
+          <Library kind="Track" />
+        {:else if nav.section === "rules"}
+          <RulesEditor />
+        {:else if nav.section === "profiles"}
+          <Profiles />
+        {:else if nav.section === "race"}
+          <Launch />
+        {:else if nav.section === "maintenance"}
+          <Maintenance />
+        {:else if nav.section === "import"}
+          <Import />
+        {:else if nav.section === "carskins"}
+          <Transversal variant="car" />
+        {:else if nav.section === "trackskins"}
+          <Transversal variant="track" />
+        {:else if nav.section === "apps"}
+          <Apps />
+        {:else if nav.section === "others"}
+          <OtherMods />
+        {/if}
+      </main>
+    </div>
   </div>
 </div>
 
 <ImportOverlay />
+{#if controllers.setupOpen}
+  <ControllerSetup onclose={() => (controllers.setupOpen = false)} />
+{/if}
 
 <style>
   .frame {
@@ -709,7 +756,47 @@
     color: var(--rosso-bright);
   }
 
+  /* Colonne de droite : le bandeau se pose AU-DESSUS de l'écran actif sans
+     lui prendre son défilement — `.content` garde son `overflow`, ce qui
+     compte pour les écrans pleine page (bibliothèque, paramétrage de session)
+     qui gèrent le leur. */
+  .main-col {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+  /* Bleu = information (le rouge est pris par catégorie/session/destructif) :
+     un bandeau qui n'annonce ni une erreur ni une action irréversible. */
+  .banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: none;
+    padding: 8px 12px;
+    background: var(--blue-dim);
+    border-bottom: 1px solid var(--blue-border);
+  }
+  .banner-ic {
+    font-size: 14px;
+  }
+  .banner-txt {
+    flex: 1;
+    min-width: 0;
+    color: var(--txt2);
+    font-size: 11.5px;
+  }
+  .banner-x {
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    padding: 4px 6px;
+  }
+  .banner-x:hover {
+    color: var(--txt);
+  }
   .content {
+    flex: 1;
     min-height: 0;
     padding: 28px 32px;
     overflow: auto;

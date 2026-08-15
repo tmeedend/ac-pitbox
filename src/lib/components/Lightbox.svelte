@@ -10,7 +10,7 @@
   // corbeille Windows, et une boîte de dialogue par image rendrait le tri
   // d'une galerie insupportable.
   //
-  // Pose `nav.lightboxOpen` tant qu'elle est montée : la navigation manette
+  // Pose `nav.inputCapture` tant qu'elle est montée : la navigation manette
   // globale (`gamepadNav.ts`) et le précédent/suivant de mod de la fiche
   // pleine page (`Library.svelte::navigateFull`) l'observent tous les deux
   // pour céder gauche/droite/B — sinon une même pression ferait à la fois
@@ -74,9 +74,9 @@
   });
 
   $effect(() => {
-    nav.lightboxOpen = true;
+    nav.inputCapture = "lightbox";
     return () => {
-      nav.lightboxOpen = false;
+      nav.inputCapture = null;
     };
   });
 

@@ -143,3 +143,20 @@ export function setUiPref(key: string, value: string): void {
     })();
   });
 }
+
+/** Drops a setting for good — for a key that has been read one last time and
+ * replaced by something else (migration), not for "reset to default": writing
+ * an empty string would leave the old key lying around forever, and the next
+ * migration would keep finding it. Same `untrack` reasoning as `setUiPref`. */
+export function removeUiPref(key: string): void {
+  untrack(() => {
+    void (async () => {
+      const all = await ensureLoaded();
+      if (!(key in all)) return;
+      const updated = { ...all };
+      delete updated[key];
+      cache = updated;
+      await persist(updated);
+    })();
+  });
+}

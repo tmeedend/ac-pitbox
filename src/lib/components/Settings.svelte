@@ -15,8 +15,16 @@
   import { setSectionGuard } from "$lib/nav.svelte";
   import { listShowrooms, type ShowroomOption } from "$lib/launch";
   import { confirm } from "@tauri-apps/plugin-dialog";
-  import { getUiPref, setUiPref } from "$lib/uiPrefs.svelte";
-  import { GAMEPAD_NAV_MODE_KEY } from "$lib/gamepadNav";
+  import { resolveProfile, type ProfileSource } from "$lib/gamepadNav";
+  import {
+    controllers,
+    deviceRecords,
+    forgetDevice,
+    gamepadEnabled,
+    openControllerSetup,
+    setDeviceUse,
+    setGamepadEnabled,
+  } from "$lib/gamepadDevices.svelte";
 
   import { errorText } from "$lib/errors";
 
@@ -66,71 +74,37 @@
     installedShowrooms = await listShowrooms().catch(() => []);
   });
 
-  // Navigation manette (§gamepadNav.ts) : réglage indépendant de `config`
-  // (persisté via ui_prefs.json, pas le fichier config.json) donc son propre
-  // chargement, hors du flux dirty/Enregistrer ci-dessus — s'applique tout de
-  // suite au changement, comme les autres réglages de `uiPrefs.svelte.ts`.
-  let gamepadNavMode = $state("");
-  let gamepadCandidates = $state<Gamepad[]>([]);
+  // Périphérique de contrôle (§7.4) : réglages indépendants de `config`
+  // (persistés via ui_prefs.json, pas config.json) donc hors du flux
+  // dirty/Enregistrer ci-dessus — ils s'appliquent tout de suite, comme les
+  // autres réglages de `uiPrefs.svelte.ts`.
+  //
+  // Réglages ne garde que ce qui est rattrapable : le coupe-circuit global, la
+  // liste des périphériques connus (débranchés compris — le label est
+  // mémorisé) et de quoi revenir sur une réponse. Le tableau de diagnostic en
+  // direct, lui, vit dans le panneau, replié sous « Détails techniques » : il
+  // ne sert qu'au cas où la calibration échoue.
+  const sourceLabels: Record<ProfileSource, string> = {
+    calibrated: "controller.settings.sourceCalibrated",
+    override: "controller.settings.sourceOverride",
+    standard: "controller.settings.sourceStandard",
+    none: "controller.settings.sourceNone",
+  };
 
-  // Réinterrogé via `requestAnimationFrame`, jamais `setInterval` : constaté
-  // empiriquement sous WebView2 (comme dans `gamepadNav.ts`, seul consommateur
-  // déjà éprouvé) — un `Gamepad` lu hors d'une boucle rAF y reste figé/vide,
-  // `setInterval` seul ne suffit pas à obtenir des valeurs vivantes. Throttle
-  // à ~150ms (pas besoin d'une lecture à 60 Hz pour un tableau de diagnostic
-  // lu à l'œil) plutôt qu'une réécriture de `gamepadCandidates` à chaque frame.
-  function refreshGamepads() {
-    gamepadCandidates = Array.from(navigator.getGamepads?.() ?? []).filter(
-      (g): g is Gamepad => !!g?.connected,
-    );
-  }
-
-  // Le tableau de diagnostic ci-dessous affiche mapping/axes/boutons en
-  // direct pour qu'on puisse voir quel axe/bouton bouge sur quel périphérique
-  // — indispensable avec un volant : son ordre d'axes/boutons n'a aucune
-  // raison de suivre le layout Xbox supposé par `gamepadNav.ts`, donc
-  // "sélectionner le volant" dans le menu ci-dessus ne suffit pas forcément à
-  // le rendre utilisable pour la navigation.
-  const gamepadDiag = $derived(
-    gamepadCandidates.map((g) => ({
-      // Clé de boucle : `g.index` (slot, forcément unique), pas `g.id` — un
-      // volant peut s'annoncer à Windows comme deux périphériques HID
-      // distincts au même nom (base + pédales/shifter sur une interface USB
-      // séparée, cas réel constaté avec une base Fanatec ClubSport). Avec
-      // `g.id` comme clé, deux entrées identiques faisaient planter le bloc
-      // `{#each}` (`each_key_duplicate`) à chaque tentative de rendu — plantage
-      // silencieux côté UI, le tableau restait figé sur son état initial vide.
-      index: g.index,
-      id: g.id,
-      mapping: g.mapping || "-",
-      axes: g.axes.map((a) => a.toFixed(2)).join(", ") || "-",
-      buttons:
-        g.buttons
-          .map((b, i) => (b.pressed ? i : null))
-          .filter((i): i is number => i !== null)
-          .join(", ") || "-",
-    })),
-  );
-
-  onMount(() => {
-    getUiPref(GAMEPAD_NAV_MODE_KEY).then((v) => (gamepadNavMode = v ?? ""));
-    let raf = 0;
-    let lastRefresh = 0;
-    function tick(now: number) {
-      if (now - lastRefresh >= 150) {
-        lastRefresh = now;
-        refreshGamepads();
-      }
-      raf = requestAnimationFrame(tick);
-    }
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+  const knownDevices = $derived.by(() => {
+    const live = new Map(controllers.live.map((d) => [d.key, d]));
+    return Object.values(deviceRecords()).map((r) => {
+      const d = live.get(r.key);
+      // `label` est le `Gamepad.id` brut : la résolution du profil marche donc
+      // aussi pour un périphérique débranché (le mapping, lui, reste inconnu
+      // tant qu'il n'est pas là — on ne prétend pas qu'il est standard).
+      return {
+        ...r,
+        connected: !!d,
+        source: resolveProfile({ id: r.label, mapping: d?.mapping ?? "" }, r).source,
+      };
+    });
   });
-
-  function onGamepadNavModeChange(value: string) {
-    gamepadNavMode = value;
-    setUiPref(GAMEPAD_NAV_MODE_KEY, value);
-  }
 
   // Garde de navigation (§10bis) : quitter Réglages avec des changements non
   // enregistrés propose d'enregistrer ou d'annuler (et dans ce cas, revient
@@ -269,35 +243,45 @@
       </section>
 
       <section class="lang-section">
-        <label>
-          <span>{t("settings.gamepadNav")}</span>
-          <select
-            class="input"
-            value={gamepadNavMode}
-            onchange={(e) => onGamepadNavModeChange(e.currentTarget.value)}
-          >
-            <option value="">{t("settings.gamepadNavAuto")}</option>
-            <option value="off">{t("settings.gamepadNavOff")}</option>
-            {#each gamepadCandidates as g (g.index)}
-              <option value={g.id}>{g.id}</option>
-            {/each}
-          </select>
+        <label class="check">
+          <input
+            type="checkbox"
+            checked={gamepadEnabled()}
+            onchange={(e) => setGamepadEnabled(e.currentTarget.checked)}
+          />
+          <span>{t("controller.settings.enabled")}</span>
         </label>
-        <p class="hint">{t("settings.gamepadNavHint")}</p>
-        {#if gamepadDiag.length}
-          <div class="gamepad-diag mono">
-            {#each gamepadDiag as g (g.index)}
-              <div class="gamepad-diag-row">
-                <div class="gamepad-diag-id">{g.id}</div>
-                <div>{t("settings.gamepadNavDiagMapping")}: {g.mapping}</div>
-                <div>{t("settings.gamepadNavDiagAxes")}: {g.axes}</div>
-                <div>{t("settings.gamepadNavDiagButtons")}: {g.buttons}</div>
+        <p class="hint">{t("controller.settings.enabledHint")}</p>
+
+        <div class="lbl device-lbl">{t("controller.settings.known")}</div>
+        {#if knownDevices.length}
+          <div class="devices">
+            {#each knownDevices as d (d.key)}
+              <div class="device">
+                <div class="dev-b">
+                  <div class="dev-name" class:off={!d.connected}>
+                    {d.label}{#if !d.connected}<span class="dim"> ({t("controller.settings.disconnected")})</span>{/if}
+                  </div>
+                  <div class="dev-id mono">{d.key} · {t(sourceLabels[d.source])}</div>
+                </div>
+                <button class="btn" type="button" onclick={() => setDeviceUse(d.key, d.label, !d.use)}>
+                  {d.use ? t("controller.settings.used") : t("controller.settings.unused")}
+                </button>
+                <button class="btn" type="button" disabled={!d.connected} onclick={() => openControllerSetup(d.key)}>
+                  {t("controller.settings.calibrate")}
+                </button>
+                <button class="btn" type="button" onclick={() => forgetDevice(d.key)}>
+                  {t("controller.settings.forget")}
+                </button>
               </div>
             {/each}
           </div>
         {:else}
-          <p class="hint">{t("settings.gamepadNavDiagNone")}</p>
+          <p class="hint">{t("controller.settings.noneKnown")}</p>
         {/if}
+        <button class="btn open-setup" type="button" onclick={() => openControllerSetup()}>
+          {t("controller.settings.open")}
+        </button>
       </section>
     {:else if activeTab === "paths"}
       <p class="sub">{t("settings.tabPathsHint")}</p>
@@ -403,24 +387,49 @@
     color: var(--faint);
     line-height: 1.5;
   }
-  .gamepad-diag {
-    margin-top: 10px;
+  .device-lbl {
+    margin-top: 16px;
+    margin-bottom: 8px;
+  }
+  .devices {
     border: 1px solid var(--line);
-    background: var(--bg);
   }
-  .gamepad-diag-row {
+  .device {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     padding: 8px 10px;
-    font-size: 10.5px;
-    color: var(--txt2);
-    line-height: 1.6;
+    background: var(--panel2);
   }
-  .gamepad-diag-row + .gamepad-diag-row {
+  .device + .device {
     border-top: 1px solid var(--line);
   }
-  .gamepad-diag-id {
+  .dev-b {
+    flex: 1;
+    min-width: 0;
+  }
+  .dev-name {
+    font-size: 11.5px;
+    color: var(--txt);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Débranché : le périphérique reste listé (son label est mémorisé), grisé
+     pour qu'on ne le confonde pas avec ce qui est là maintenant. */
+  .dev-name.off {
+    color: var(--muted);
+  }
+  .dim {
     color: var(--faint);
-    margin-bottom: 2px;
-    word-break: break-all;
+  }
+  .dev-id {
+    font-size: 9px;
+    color: var(--faint);
+    margin-top: 2px;
+  }
+  .open-setup {
+    margin-top: 12px;
   }
   .error {
     margin: 12px 0;
