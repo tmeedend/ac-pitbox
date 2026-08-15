@@ -261,6 +261,20 @@ pub fn merge_replay_links(mut auto: Vec<ReplayFile>, manual_paths: &[String]) ->
     auto
 }
 
+/// Sends a screenshot/replay to the Windows recycle bin (§6.1) — never a plain
+/// deletion, so a mistake stays undoable from the bin itself. That
+/// recoverability is what lets the gallery skip a confirmation dialog on every
+/// image.
+///
+/// Guard: an existing *file* only. A gallery entry never designates a folder,
+/// and recycling one would take a whole tree with it.
+pub fn trash_file(path: &Path) -> Result<(), String> {
+    if !path.is_file() {
+        return Err(crate::errors::MEDIA_NOT_A_FILE.to_string());
+    }
+    trash::delete(path).map_err(|e| e.to_string())
+}
+
 fn list_backgrounds_in(dir: &Path, track_id: &str, layout_id: Option<&str>) -> Vec<BackgroundFile> {
     if !dir.is_dir() {
         return Vec::new();
@@ -440,6 +454,27 @@ mod tests {
         assert!(
             merged.iter().any(|s| s.path == manual.to_string_lossy()),
             "le fichier rattaché manuellement doit apparaître même sans id dans son nom"
+        );
+    }
+
+    // Seul le garde-fou est testé : le chemin nominal enverrait un vrai
+    // fichier dans la corbeille du poste à chaque `cargo test`, et
+    // `temp_dir` ne la nettoie évidemment pas.
+    #[test]
+    fn trash_refuses_anything_that_is_not_an_existing_file() {
+        let base = crate::testutil::temp_dir("media-trash-guard");
+        let folder = base.join("a_folder");
+        std::fs::create_dir_all(&folder).unwrap();
+
+        assert_eq!(
+            trash_file(&folder).err().as_deref(),
+            Some(crate::errors::MEDIA_NOT_A_FILE),
+            "un dossier n'est jamais un média : il ne part pas à la corbeille"
+        );
+        assert!(folder.is_dir(), "le dossier refusé doit rester intact");
+        assert!(
+            trash_file(&base.join("gone.jpg")).is_err(),
+            "un chemin mort remonte une erreur au lieu d'être silencieusement ignoré"
         );
     }
 

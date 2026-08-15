@@ -1,8 +1,17 @@
 <script lang="ts">
   // Onglet Médias — sous-vue Screenshots (§6.1). Rattachement automatique par
   // nom de fichier (voir media.rs) ; « Associer un fichier » couvre le repli
-  // manuel quand une capture n'a pas été retrouvée automatiquement.
-  import { listMediaScreenshots, linkMediaManually, openMediaFolder, type ScreenshotFile } from "$lib/media";
+  // manuel quand une capture n'a pas été retrouvée automatiquement. Le bouton
+  // corbeille (et la touche Suppr, sur la vignette focalisée comme dans la
+  // visionneuse) envoie le fichier à la corbeille Windows — récupérable, donc
+  // sans confirmation.
+  import {
+    listMediaScreenshots,
+    linkMediaManually,
+    openMediaFolder,
+    trashMediaFile,
+    type ScreenshotFile,
+  } from "$lib/media";
   import { previewSrc } from "$lib/library";
   import { loadThumbnails } from "$lib/thumbnails";
   import { open } from "@tauri-apps/plugin-dialog";
@@ -20,6 +29,7 @@
 
   let files = $state<ScreenshotFile[]>([]);
   let linking = $state(false);
+  let trashing = $state(false);
   let lightboxIndex = $state<number | null>(null);
   // Miniatures mises en cache (§6.1) : la galerie affiche ça, jamais l'image
   // pleine résolution — seule la visionneuse plein écran (Lightbox) charge
@@ -60,6 +70,28 @@
     })),
   );
 
+  // Retrait local plutôt que rechargement de la liste : la visionneuse reste
+  // ouverte sur la suivante (son index inchangé la désigne déjà), et les
+  // miniatures voisines ne repartent pas dans un cycle de chargement. Le
+  // backend a retiré le rattachement manuel du fichier, un rechargement
+  // ultérieur donnera la même liste.
+  //
+  // Le verrou `trashing` évite qu'une rafale de Suppr ne relance la même
+  // suppression avant que la première n'ait retiré l'entrée.
+  async function trashAt(i: number) {
+    const f = files[i];
+    if (trashing || !f) return;
+    trashing = true;
+    try {
+      await trashMediaFile(f.path);
+      files = files.filter((x) => x.path !== f.path);
+    } catch (e) {
+      onerror(errorText(e));
+    } finally {
+      trashing = false;
+    }
+  }
+
   async function openFolder() {
     try {
       await openMediaFolder("SCREENSHOT");
@@ -98,11 +130,38 @@
       <div class="gallery">
         {#each files as f, i (f.path)}
           {@const src = thumbs[f.path]}
-          <button class="shot" type="button" onclick={() => (lightboxIndex = i)} title={t("lightbox.open")}>
-            {#if src}<img src={src} alt={f.file_name} loading="lazy" />{/if}
-            {#if f.matched_counterpart}<span class="shot-tag mono">{f.matched_counterpart}</span>{/if}
-            <span class="shot-date mono">{fmtDate(f.modified_at)}</span>
-          </button>
+          <!-- Le bouton corbeille est frère de la vignette, pas dedans : un
+               bouton dans un bouton n'est pas du HTML valide. -->
+          <div class="shot-wrap">
+            <button
+              class="shot"
+              type="button"
+              onclick={() => (lightboxIndex = i)}
+              onkeydown={(e) => {
+                // La vignette garde le focus DOM pendant que la visionneuse
+                // est ouverte, et celle-ci écoute Suppr sur `window` : sans
+                // cette garde, une seule pression supprimerait deux images.
+                if (e.key === "Delete" && lightboxIndex === null) {
+                  e.preventDefault();
+                  trashAt(i);
+                }
+              }}
+              title={t("lightbox.open")}
+            >
+              {#if src}<img src={src} alt={f.file_name} loading="lazy" />{/if}
+              {#if f.matched_counterpart}<span class="shot-tag mono">{f.matched_counterpart}</span>{/if}
+              <span class="shot-date mono">{fmtDate(f.modified_at)}</span>
+            </button>
+            <button
+              class="shot-del"
+              type="button"
+              title={t("detail.mediaTrash")}
+              disabled={trashing}
+              onclick={() => trashAt(i)}
+            >
+              🗑
+            </button>
+          </div>
         {/each}
       </div>
     {:else}
@@ -118,7 +177,12 @@
 </section>
 
 {#if lightboxIndex !== null}
-  <Lightbox items={lightboxItems} startIndex={lightboxIndex} onclose={() => (lightboxIndex = null)} />
+  <Lightbox
+    items={lightboxItems}
+    startIndex={lightboxIndex}
+    onclose={() => (lightboxIndex = null)}
+    ondelete={trashAt}
+  />
 {/if}
 
 <style>
@@ -127,6 +191,9 @@
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 10px;
     margin-bottom: 14px;
+  }
+  .shot-wrap {
+    position: relative;
   }
   .shot {
     position: relative;
@@ -155,6 +222,29 @@
     font-size: 8px;
     letter-spacing: 0.5px;
     padding: 2px 6px;
+  }
+  /* Révélé au survol (et au focus clavier) : une corbeille visible en
+     permanence sur chaque vignette d'une grille en 150px sature la galerie
+     de rouge alors que l'action reste marginale. */
+  .shot-del {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(8, 8, 12, 0.8);
+    border: 1px solid var(--line);
+    color: var(--txt2);
+    font-size: 11px;
+    line-height: 1;
+    padding: 4px 6px;
+    opacity: 0;
+  }
+  .shot-wrap:hover .shot-del,
+  .shot-wrap:focus-within .shot-del {
+    opacity: 1;
+  }
+  .shot-del:hover {
+    border-color: var(--rosso-border);
+    color: var(--rosso-bright);
   }
   .shot-date {
     position: absolute;

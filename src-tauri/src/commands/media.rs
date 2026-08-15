@@ -2,7 +2,7 @@
 //! rattachés par nom de fichier, backgrounds officiels CSP, et fond photo de
 //! l'écran de réglages (§6.2/§9.3).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::prelude::*;
 
@@ -64,6 +64,22 @@ pub fn list_media_backgrounds(
 pub fn link_media_manually(db: State<Db>, id: String, kind: String, file_path: String) -> Result<(), String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::overlay::add_media_link(&conn, &file_path, &id, &kind).map_err(|e| e.to_string())
+}
+
+/// Envoie un screenshot/replay à la corbeille Windows (§6.1) — bouton corbeille
+/// des galeries et touche Suppr. Récupérable par l'utilisateur depuis la
+/// corbeille, c'est ce qui justifie l'absence de confirmation côté UI.
+#[tauri::command]
+pub fn trash_media_file(db: State<Db>, path: String) -> Result<(), String> {
+    crate::media::trash_file(Path::new(&path))?;
+    // Best-effort : le fichier est déjà parti, échouer ici n'annulerait rien.
+    // Mais une ligne `media_links` orpheline referait apparaître le média
+    // supprimé à la prochaine ouverture de l'onglet — d'où la trace.
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    if let Err(e) = crate::overlay::remove_media_links_for_path(&conn, &path) {
+        log::warn!("media link cleanup failed for {path}: {e}");
+    }
+    Ok(())
 }
 
 /// Ouvre `screens/` ou `replay/` (Documents AC) dans l'explorateur — bouton

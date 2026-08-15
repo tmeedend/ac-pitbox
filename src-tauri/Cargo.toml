@@ -47,6 +47,13 @@ fastrand = "2"
 # résolution jeu, jamais retaillées jusqu'ici — décodage/redimensionnement
 # jpeg+png seulement (pas les formats exotiques, inutiles ici).
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+# Mise à la corbeille d'un screenshot/replay depuis la fiche (§6.1). Passe par
+# `IFileOperation` + `FOFX_RECYCLEONDELETE`, qui **échoue** quand le recyclage
+# est impossible (partage réseau, fichier plus gros que le quota de la
+# corbeille) — là où le `SHFileOperationW`/`FOF_ALLOWUNDO` qu'on écrirait à la
+# main bascule silencieusement en suppression définitive dans exactement ces
+# cas-là. C'est ce que cette dépendance achète : pas la commodité.
+trash = "5"
 
 # Lecture registre Windows uniquement (détection du Mode développeur, §12) —
 # déjà présent transitivement via tauri, pas une dépendance de plus en pratique.

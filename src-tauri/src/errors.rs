@@ -48,3 +48,4 @@ pub const PATH_OUTSIDE_RESOURCES: &str = "errors.pathOutsideResources";
 pub const NOT_A_DIRECTORY: &str = "errors.notADirectory";
 pub const REAL_FOLDER_GUARD: &str = "errors.realFolderGuard";
 pub const MUSIC_FOLDER_EMPTY: &str = "errors.musicFolderEmpty";
+pub const MEDIA_NOT_A_FILE: &str = "errors.mediaNotAFile";

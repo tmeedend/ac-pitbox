@@ -2,8 +2,17 @@
   // Onglet Médias — sous-vue Replays (§6.1). « Lire dans CM » passe le
   // chemin du .acreplay en argument à l'exécutable Content Manager, comme
   // l'association de fichier Windows le ferait au double-clic (même
-  // mécanisme que launch()/open_content_manager, voir launch.rs).
-  import { listMediaReplays, linkMediaManually, openMediaFolder, launchReplay, type ReplayFile } from "$lib/media";
+  // mécanisme que launch()/open_content_manager, voir launch.rs). Le bouton
+  // corbeille (et la touche Suppr sur la ligne focalisée) envoie le fichier à
+  // la corbeille Windows — récupérable, donc sans confirmation.
+  import {
+    listMediaReplays,
+    linkMediaManually,
+    openMediaFolder,
+    launchReplay,
+    trashMediaFile,
+    type ReplayFile,
+  } from "$lib/media";
   import { open } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
@@ -19,6 +28,7 @@
   let files = $state<ReplayFile[]>([]);
   let linking = $state(false);
   let launching = $state<string | null>(null);
+  let trashing = $state(false);
 
   $effect(() => {
     const current = modId;
@@ -54,6 +64,21 @@
     }
   }
 
+  // Retrait local plutôt que rechargement : le backend a déjà retiré le
+  // rattachement manuel du fichier, un rechargement donnerait la même liste.
+  async function trashReplay(f: ReplayFile) {
+    if (trashing) return;
+    trashing = true;
+    try {
+      await trashMediaFile(f.path);
+      files = files.filter((x) => x.path !== f.path);
+    } catch (e) {
+      onerror(errorText(e));
+    } finally {
+      trashing = false;
+    }
+  }
+
   async function linkManually() {
     if (linking) return;
     const picked = await open({
@@ -83,7 +108,24 @@
     {#if files.length}
       <ul class="replay-list">
         {#each files as f (f.path)}
-          <li class="replay">
+          <!-- Ligne focalisable pour que Suppr ait une cible : un clic
+               n'importe où dessus la désigne, et le contour rouge dit
+               laquelle. Le linter a11y ne connaît pas ce motif sur un `li`
+               (rôle non interactif) alors qu'il n'y a rien à corriger ici :
+               la ligne reste atteignable au clavier et ses deux actions
+               restent de vrais boutons. -->
+          <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+          <li
+            class="replay"
+            tabindex="0"
+            onkeydown={(e) => {
+              if (e.key === "Delete") {
+                e.preventDefault();
+                trashReplay(f);
+              }
+            }}
+          >
             <div class="replay-b">
               <div class="replay-name">{f.file_name}</div>
               <div class="replay-meta mono">
@@ -94,6 +136,15 @@
             </div>
             <button class="btn-ghost play" type="button" onclick={() => playReplay(f.path)} disabled={launching === f.path}>
               {launching === f.path ? t("common.working") : t("detail.playReplay")}
+            </button>
+            <button
+              class="replay-del"
+              type="button"
+              title={t("detail.mediaTrash")}
+              disabled={trashing}
+              onclick={() => trashReplay(f)}
+            >
+              🗑
             </button>
           </li>
         {/each}
@@ -126,9 +177,28 @@
     background: var(--raised);
     padding: 8px 11px;
   }
+  /* `:focus` et pas `:focus-visible` : la ligne se focalise aussi au clic, et
+     c'est justement là qu'il faut montrer sur quoi Suppr va agir. */
+  .replay:focus {
+    border-color: var(--rosso-border);
+    outline: none;
+  }
   .replay-b {
     flex: 1;
     min-width: 0;
+  }
+  .replay-del {
+    flex: none;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1;
+    padding: 6px 7px;
+  }
+  .replay-del:hover {
+    border-color: var(--rosso-border);
+    color: var(--rosso-bright);
   }
   .replay .play {
     flex: none;

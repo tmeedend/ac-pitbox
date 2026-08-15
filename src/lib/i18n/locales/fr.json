@@ -352,7 +352,8 @@
     "mediaBackgroundsNote": "Utilisés en repli sur l'écran de réglages si aucune capture perso ne correspond au combo.",
     "openMediaFolder": "Ouvrir le dossier",
     "mediaLinkManually": "Associer un fichier…",
-    "mediaLinkPickTitle": "Choisir le fichier à associer"
+    "mediaLinkPickTitle": "Choisir le fichier à associer",
+    "mediaTrash": "Mettre à la corbeille (Suppr)"
   },
   "lightbox": {
     "open": "Voir en grand",
@@ -360,7 +361,8 @@
     "prev": "Image précédente",
     "next": "Image suivante",
     "play": "Lancer le diaporama",
-    "pause": "Mettre le diaporama en pause"
+    "pause": "Mettre le diaporama en pause",
+    "trash": "Mettre à la corbeille (Suppr)"
   },
   "history": {
     "event": {
@@ -839,6 +841,7 @@
     "keptArchiveMissing": "l'archive source conservée est introuvable sur le disque.",
     "layerNotFound": "couche introuvable.",
     "libraryNotConfigured": "bibliothèque non configurée.",
+    "mediaNotAFile": "ce média n'est pas un fichier existant : rien n'a été mis à la corbeille.",
     "modNotFound": "mod introuvable.",
     "modUnknown": "mod inconnu.",
     "noActiveVersion": "aucune version active.",

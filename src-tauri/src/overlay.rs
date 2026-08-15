@@ -1073,6 +1073,14 @@ pub fn add_media_link(conn: &Connection, file_path: &str, entity_id: &str, kind:
     Ok(())
 }
 
+/// Retire tout rattachement pointant sur ce fichier, quelle que soit l'entité —
+/// appelé quand le fichier part à la corbeille (§6.1). Sans ça, la ligne
+/// survivrait au fichier et `merge_*_links` referait apparaître le média
+/// supprimé dans la galerie à la prochaine ouverture de l'onglet.
+pub fn remove_media_links_for_path(conn: &Connection, file_path: &str) -> rusqlite::Result<usize> {
+    conn.execute("DELETE FROM media_links WHERE file_path = ?1", params![file_path])
+}
+
 /// Fichiers rattachés manuellement à `entity_id` pour ce type de média.
 pub fn list_media_links(conn: &Connection, entity_id: &str, kind: &str) -> rusqlite::Result<Vec<String>> {
     let mut stmt = conn.prepare("SELECT file_path FROM media_links WHERE entity_id = ?1 AND kind = ?2")?;

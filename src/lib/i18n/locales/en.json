@@ -352,7 +352,8 @@
     "mediaBackgroundsNote": "Used as a fallback on the session settings screen when no personal screenshot matches the combo.",
     "openMediaFolder": "Open folder",
     "mediaLinkManually": "Link a file…",
-    "mediaLinkPickTitle": "Pick the file to link"
+    "mediaLinkPickTitle": "Pick the file to link",
+    "mediaTrash": "Move to Recycle Bin (Del)"
   },
   "lightbox": {
     "open": "View full size",
@@ -360,7 +361,8 @@
     "prev": "Previous image",
     "next": "Next image",
     "play": "Start slideshow",
-    "pause": "Pause slideshow"
+    "pause": "Pause slideshow",
+    "trash": "Move to Recycle Bin (Del)"
   },
   "history": {
     "event": {
@@ -839,6 +841,7 @@
     "keptArchiveMissing": "The kept source archive is missing from disk.",
     "layerNotFound": "Layer not found.",
     "libraryNotConfigured": "Library folder is not configured.",
+    "mediaNotAFile": "This media is not an existing file: nothing was moved to the Recycle Bin.",
     "modNotFound": "Mod not found.",
     "modUnknown": "Unknown mod.",
     "noActiveVersion": "No active version.",

@@ -254,6 +254,22 @@ dialogue de sélection natif) quand le rattachement automatique ne trouve rien
 — stocké dans `overlay.sqlite` (table `media_links`), jamais écrit par le
 matching automatique lui-même.
 
+**Mise à la corbeille** (Screenshots et Replays uniquement — les Backgrounds
+sont des fichiers posés par CSP, pas des médias de l'utilisateur) : bouton 🗑
+sur chaque vignette/ligne et dans la visionneuse, plus la touche **Suppr** sur
+l'élément focalisé (vignette, ligne de replay) et sur l'image affichée en
+visionneuse. Le fichier part dans la **corbeille Windows**, jamais en
+suppression définitive : `media::trash_file` s'appuie sur `IFileOperation` +
+`FOFX_RECYCLEONDELETE`, qui échoue quand le recyclage est impossible (partage
+réseau, fichier plus gros que le quota) au lieu de basculer silencieusement en
+effacement définitif. Récupérable, donc **aucune confirmation** — une boîte de
+dialogue par image rendrait le tri d'une galerie insupportable. Tout
+rattachement manuel (`media_links`) pointant sur le fichier est retiré dans la
+foulée, sinon la ligne survivrait au fichier et referait apparaître le média
+disparu. Supprimer l'image affichée en visionneuse enchaîne sur la suivante
+(sur la précédente pour la dernière de la liste), et ferme la visionneuse
+quand il ne reste plus rien.
+
 **Visionneuse plein écran** (`Lightbox.svelte`, générique aux deux galeries
 Screenshots/Backgrounds) : clic sur une vignette pour l'ouvrir en grand,
 précédent/suivant (boutons, flèches clavier, croix/stick manette), diaporama

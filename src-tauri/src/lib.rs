@@ -161,6 +161,7 @@ pub fn run() {
             commands::media::list_media_backgrounds,
             commands::media::link_media_manually,
             commands::media::open_media_folder,
+            commands::media::trash_media_file,
             commands::media::get_session_background,
             commands::media::get_thumbnail,
             commands::session::weather_stack,

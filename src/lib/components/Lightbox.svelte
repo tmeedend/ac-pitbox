@@ -5,6 +5,11 @@
   // Echap, le bouton ✕, un clic sur le fond, ou le bouton B/Rond manette.
   // Diaporama optionnel (bouton lecture) qui avance automatiquement.
   //
+  // Mise à la corbeille optionnelle (`ondelete`, §6.1) : bouton 🗑 et touche
+  // Suppr, sans confirmation — le fichier reste récupérable depuis la
+  // corbeille Windows, et une boîte de dialogue par image rendrait le tri
+  // d'une galerie insupportable.
+  //
   // Pose `nav.lightboxOpen` tant qu'elle est montée : la navigation manette
   // globale (`gamepadNav.ts`) et le précédent/suivant de mod de la fiche
   // pleine page (`Library.svelte::navigateFull`) l'observent tous les deux
@@ -23,10 +28,16 @@
     items,
     startIndex = 0,
     onclose,
+    ondelete,
   }: {
     items: LightboxItem[];
     startIndex?: number;
     onclose: () => void;
+    /** Mise à la corbeille de l'image affichée (§6.1) — absent = galerie non
+     * supprimable (backgrounds : fichiers posés par CSP, pas des médias de
+     * l'utilisateur). Le parent retire l'entrée de `items` une fois le
+     * fichier parti. */
+    ondelete?: (index: number) => void;
   } = $props();
 
   // Position de départ capturée une fois (composant recréé à chaque ouverture) ;
@@ -44,6 +55,16 @@
     if (!multi) return;
     playing = !playing;
   }
+
+  // La liste rétrécit sous nos pieds quand le parent supprime l'image
+  // affichée : l'index inchangé désigne alors la suivante, ce qui est
+  // exactement le comportement attendu. Deux cas à rattraper — la dernière
+  // image, où l'index sort du tableau (`items[index]` serait `undefined` et
+  // le rendu planterait), et la liste vidée, où il n'y a plus rien à montrer.
+  $effect(() => {
+    if (items.length === 0) onclose();
+    else if (index >= items.length) index = items.length - 1;
+  });
 
   const PLAY_INTERVAL_MS = 4000;
   $effect(() => {
@@ -70,6 +91,9 @@
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
         step(1);
+      } else if (e.key === "Delete" && ondelete) {
+        e.preventDefault();
+        ondelete(index);
       }
     }
     window.addEventListener("keydown", onKeydown);
@@ -132,6 +156,13 @@
       </div>
 
       <div class="lb-bar">
+        {#if ondelete}
+          <!-- En tête de barre, à distance des zones précédent/suivant et du
+               ✕ : sa position ne bouge pas quand la légende change de
+               longueur, et un raté de visée retombe sur du vide, pas sur
+               lui. -->
+          <button class="lb-del" type="button" onclick={() => ondelete?.(index)} title={t("lightbox.trash")}>🗑</button>
+        {/if}
         {#if multi}
           <button
             class="lb-play"
@@ -267,6 +298,22 @@
     justify-content: center;
   }
   .lb-play:hover {
+    border-color: var(--rosso-border);
+    color: var(--rosso-bright);
+  }
+  .lb-del {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid transparent;
+    font-size: 13px;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 4px;
+  }
+  .lb-del:hover {
     border-color: var(--rosso-border);
     color: var(--rosso-bright);
   }

@@ -51,6 +51,13 @@ export function linkMediaManually(id: string, kind: MediaKind, filePath: string)
   return invoke<void>("link_media_manually", { id, kind, filePath });
 }
 
+/** Envoie un screenshot/replay à la corbeille Windows (§6.1) — récupérable
+ * depuis la corbeille, d'où l'absence de confirmation. Retire aussi son
+ * éventuel rattachement manuel, qui survivrait sinon au fichier. */
+export function trashMediaFile(path: string): Promise<void> {
+  return invoke<void>("trash_media_file", { path });
+}
+
 /** Ouvre `screens/` ou `replay/` (Documents AC) dans l'explorateur. */
 export function openMediaFolder(kind: MediaKind): Promise<void> {
   return invoke<void>("open_media_folder", { kind });
