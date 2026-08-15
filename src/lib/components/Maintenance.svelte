@@ -75,6 +75,10 @@
         parts.push(t("maintenance.repairProjectionsFailed", { count: r.projections.failed.length }));
         projectionFailures = r.projections.failed;
       }
+      parts.push(t("maintenance.repairRedeployedDone", { count: r.redeployed }));
+      if (r.redeploy_errors.length) {
+        parts.push(t("maintenance.repairRedeployFailed", { count: r.redeploy_errors.length }));
+      }
       if (reinstallBroken) {
         parts.push(t("maintenance.repairReinstalledDone", { count: r.reinstalled.length }));
         if (r.reinstall_errors.length) {

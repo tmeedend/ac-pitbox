@@ -254,21 +254,57 @@ pub struct ReinstallOutcome {
 #[derive(Debug, Clone, Serialize)]
 pub struct RepairAllReport {
     pub projections: submods::RepairReport,
+    /// Mods actifs redéployés depuis la bibliothèque.
+    pub redeployed: usize,
+    pub redeploy_errors: Vec<ReinstallOutcome>,
     pub reinstalled: Vec<String>,
     pub reinstall_errors: Vec<ReinstallOutcome>,
 }
 
 /// Réparation générale (§9.3), à la manière du « purge & deploy » des autres
-/// gestionnaires de mods : recrée d'abord les junctions de projection skin/
-/// circuit cassées (`submods::repair_projections`, toujours sûr et gratuit —
-/// no-op sur tout ce qui est déjà sain), puis, si `reinstall_broken`, tente
-/// une réinstallation depuis l'archive source conservée (§10/§11) pour chaque
-/// mod actuellement détecté cassé par `scan`. Un mod sans archive conservée
-/// échoue simplement avec `NO_KEPT_ARCHIVE` — attendu si le réglage
-/// « conserver l'archive source » n'était pas actif à son import, ça n'arrête
-/// pas le reste du lot.
+/// gestionnaires de mods. Sa définition tient en une phrase : **recalculer tout
+/// ce qui dérive de la bibliothèque**.
+///
+/// Rien de tout cela n'a besoin de connaître les règles des versions
+/// précédentes de l'app : `content/` est une fonction pure de la bibliothèque,
+/// recalculée à chaque activation. Un changement de règles de déploiement se
+/// rattrape donc en redéployant, sans rien versionner ni comparer.
+///
+/// 1. Projections skin/circuit manquantes ou cassées (`submods::repair_projections`).
+/// 2. **Redéploiement des mods actifs** : `activation::activate` nettoie le
+///    déploiement existant et le refait selon le mode et les règles du jour —
+///    y compris les ajouts au jeu (§4.6ter), que les mods importés avant leur
+///    existence n'ont jamais posés.
+/// 3. Si `reinstall_broken`, réinstallation depuis l'archive source conservée
+///    (§10/§11) des mods détectés cassés. Un mod sans archive conservée échoue
+///    avec `NO_KEPT_ARCHIVE` — attendu si le réglage n'était pas actif à son
+///    import, et ça n'arrête pas le reste du lot.
+///
+/// Seule la 3 touche la bibliothèque elle-même ; les deux premières sont sûres
+/// et idempotentes, d'où l'opt-in sur celle-là seulement.
 pub fn repair_all(conn: &Connection, cfg: &AppConfig, reinstall_broken: bool) -> Result<RepairAllReport, String> {
     let projections = submods::repair_projections(conn, cfg);
+
+    // Redéploiement : seulement ce qui est **déjà actif**. Activer au passage
+    // un mod que l'utilisateur avait désactivé serait une surprise, pas une
+    // réparation.
+    let mut redeployed = 0usize;
+    let mut redeploy_errors = Vec::new();
+    for m in overlay::list_mods(conn).map_err(|e| e.to_string())? {
+        if m.is_stock || !activation::is_mod_active(cfg, kind_of(&m.kind), &m.id_interne) {
+            continue;
+        }
+        match activation::activate(conn, cfg, &m.id_interne, None) {
+            Ok(()) => redeployed += 1,
+            Err(error) => {
+                log::warn!("redeploy {}: {error}", m.id_interne);
+                redeploy_errors.push(ReinstallOutcome {
+                    id: m.id_interne,
+                    error,
+                });
+            }
+        }
+    }
 
     let mut reinstalled = Vec::new();
     let mut reinstall_errors = Vec::new();
@@ -286,6 +322,8 @@ pub fn repair_all(conn: &Connection, cfg: &AppConfig, reinstall_broken: bool) ->
 
     Ok(RepairAllReport {
         projections,
+        redeployed,
+        redeploy_errors,
         reinstalled,
         reinstall_errors,
     })
@@ -695,6 +733,73 @@ mod tests {
             "réinstallation doit restaurer le fichier manquant"
         );
         assert_eq!(std::fs::read_to_string(lib_path.join("data.txt")).unwrap(), "original");
+    }
+
+    #[test]
+    fn repair_redeploys_active_mods_and_leaves_inactive_ones_alone() {
+        // §9.3 : « réparer » = recalculer tout ce qui dérive de la
+        // bibliothèque. C'est ce qui rattrape un changement de règles de
+        // déploiement sans avoir à connaître les anciennes — `content/` est une
+        // fonction pure de la bibliothèque. Un mod que l'utilisateur avait
+        // désactivé ne doit pas être réactivé au passage : ce serait une
+        // surprise, pas une réparation.
+        let base = crate::testutil::temp_dir("repair-redeploy");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+
+        for id in ["on_car", "off_car"] {
+            let dir = library.join("cars").join(id).join("v1");
+            std::fs::create_dir_all(dir.join("ui")).unwrap();
+            std::fs::write(dir.join("ui").join("ui_car.json"), b"{}").unwrap();
+            std::fs::write(dir.join("model.kn5"), b"data").unwrap();
+            let now = chrono::Local::now().to_rfc3339();
+            overlay::upsert_mod(&conn, id, "Car", Some("B"), Some(id), "h", None, &now).unwrap();
+            let vid = format!("{id}-v1");
+            overlay::insert_version(
+                &conn,
+                &vid,
+                id,
+                Some("1.0"),
+                None,
+                &now,
+                &crate::libpath::to_relative(Some(&library), &dir),
+                None,
+                "sig",
+                &[],
+                &[],
+                &[],
+                &[],
+                None,
+            )
+            .unwrap();
+            overlay::set_active_version(&conn, id, &vid).unwrap();
+        }
+        // Un seul des deux est réellement déployé.
+        activation::activate(&conn, &cfg, "on_car", None).unwrap();
+        let deployed = ac.join("content").join("cars").join("on_car");
+        assert!(deploy::is_deployed(&deployed), "prérequis : on_car est actif");
+
+        // Déploiement abîmé à la main : c'est ce que la réparation doit refaire.
+        std::fs::remove_file(deployed.join("model.kn5")).unwrap();
+
+        let report = repair_all(&conn, &cfg, false).unwrap();
+        assert_eq!(report.redeployed, 1, "seul le mod actif est redéployé");
+        assert!(report.redeploy_errors.is_empty());
+        assert!(
+            deployed.join("model.kn5").is_file(),
+            "le fichier retiré du déploiement est revenu"
+        );
+        assert!(
+            !ac.join("content").join("cars").join("off_car").exists(),
+            "un mod inactif n'est pas activé au passage"
+        );
     }
 
     #[test]

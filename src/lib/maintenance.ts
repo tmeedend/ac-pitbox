@@ -38,6 +38,9 @@ export interface ReinstallOutcome {
 
 export interface RepairAllReport {
   projections: RepairProjectionsReport;
+  /** Mods actifs redéployés depuis la bibliothèque. */
+  redeployed: number;
+  redeploy_errors: ReinstallOutcome[];
   reinstalled: string[];
   reinstall_errors: ReinstallOutcome[];
 }
@@ -70,8 +73,11 @@ export function reinstallFromArchive(id: string): Promise<void> {
   return invoke<void>("reinstall_from_archive", { id });
 }
 
-/** Réparation générale (§9.3) : recrée les projections skin/circuit cassées, et si
- * `reinstallBroken`, réinstalle depuis l'archive source conservée chaque mod cassé qui en a une. */
+/** Réparation générale (§9.3) : recalcule tout ce qui dérive de la bibliothèque —
+ * projections skin/circuit cassées, puis redéploiement des mods actifs (donc aussi
+ * leurs ajouts au jeu). Si `reinstallBroken`, réinstalle en plus depuis l'archive
+ * source conservée chaque mod cassé qui en a une : la seule étape qui touche la
+ * bibliothèque elle-même, d'où l'opt-in. */
 export function repairAll(reinstallBroken: boolean): Promise<RepairAllReport> {
   return invoke<RepairAllReport>("repair_all", { reinstallBroken });
 }
