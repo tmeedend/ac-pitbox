@@ -225,6 +225,22 @@ Deux onglets frères sur la fiche pleine (`DetailPage`), **Ressources** et **Ajo
 
 Les deux onglets sont **absents du panneau latéral `ModDetail`** (§6) : les listes de fichiers vivent dans la page pleine.
 
+### 4.6 Décider ou demander, et rendre compte
+
+**Le critère : demander seulement quand l'information nécessaire est dans la tête de l'utilisateur, pas sur le disque.**
+
+- Information déterminable en regardant le contenu → l'app **décide**, et rend compte. Jamais de question.
+- Information de préférence ou d'intention (quelle variante d'un mod installer) → **demander** (§4.3 en est le précédent : détection auto, question seulement si ambigu, avec récapitulatif chiffré).
+- Information nulle part → défaut **réversible**, et signalement visible.
+
+Ce n'est pas de la frilosité : une question à laquelle l'utilisateur ne peut pas répondre correctement est **pire** qu'un défaut, parce qu'elle donne l'illusion du consentement sans en avoir la substance. Demander « ce mod livre un dossier `driver/`, dois-je le poser dans `content/driver` ? » revient à rendre à l'utilisateur le travail que l'app existe pour faire — et il y a une bonne réponse, déterminable. À l'inverse, ce qui a réellement coûté cher n'est jamais un défaut mal choisi : c'est un défaut **appliqué en silence**.
+
+Deux contraintes encadrent toute nouvelle question : **jamais de blocage en import de masse** (un lot de cinquante mods avec douze questions devient un impôt qu'on paie en cliquant « défaut » douze fois), et **arbitrage groupé** en fin de lot. Les cas identifiés comme relevant vraiment de l'utilisateur : les **variantes offertes par l'auteur** (`Optional - No ambient sounds`, `Track Installation`, dossiers frères de même forme) et **deux versions du même mod dans une archive**.
+
+**Journal des décisions.** Chaque arbitrage non trivial pris pendant un import est enregistré (`import_decisions` dans l'overlay) et relisible sur la fiche, bloc « Décisions d'import » — sous Provenance, effacé quand il n'y a rien à dire. Ne sont journalisées que les décisions **surprenantes** : chemin deviné (`pathNormalized`), chemin refusé (`pathRefused`), annexe non extraite (`ancillaryDropped`), reste qu'aucun mod ne réclame (`leftoverUnattached`). Rattacher `extension/` à la seule voiture d'une archive est la routine ; le noter à chaque fois noierait ce qu'on veut voir.
+
+Le journal décrit le **dernier** import : il est effacé et réécrit à chaque passage, par mod **et** par archive — une archive réimportée à l'identique classe ses mods en doublons, ce qui saute leur écriture overlay, alors que le balayage des restes tourne quand même et réenregistre tout. Écriture best-effort : le journal explique l'import, il ne le conditionne pas.
+
 ---
 
 ## 5. Tags et harmonisation

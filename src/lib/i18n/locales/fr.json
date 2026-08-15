@@ -384,6 +384,14 @@
     "layerDown": "Descendre (moins prioritaire)",
     "layersRecomposeNote": "La plus haute gagne. Activer/réordonner recompose le contenu — cela peut prendre quelques secondes.",
     "resourcesLabel": "Ressources ({count})",
+    "decisionsTitle": "Décisions d'import",
+    "decisionsNote": "Ce que l'app a tranché seule sur cette archive.",
+    "decision": {
+      "pathNormalized": "Dossier de jeu livré à nu, replacé",
+      "pathRefused": "Hors chemin de jeu, non posé",
+      "ancillaryDropped": "Annexe non extraite (réglage « Aucun »)",
+      "leftoverUnattached": "Rattaché à aucun mod, importé comme « autre mod »"
+    },
     "resourcesNote": "Documentation et fichiers annexes du mod, rangés à part pour ne pas encombrer le jeu.",
     "resourceOpenTooltip": "Ouvrir avec l'application par défaut",
     "resourcePreviewTooltip": "Prévisualiser",

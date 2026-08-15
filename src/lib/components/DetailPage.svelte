@@ -42,6 +42,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import LayersBlock from "./detail/LayersBlock.svelte";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
+  import DecisionsBlock from "./detail/DecisionsBlock.svelte";
   import ExtrasBlock from "./detail/ExtrasBlock.svelte";
   import HistoryBlock from "./detail/HistoryBlock.svelte";
   import ProvenanceBlock from "./detail/ProvenanceBlock.svelte";
@@ -877,6 +878,9 @@
           <HistoryBlock detail={d} {busy} onactivateversion={(vid) => activate(vid)} />
           <ProvenanceBlock detail={d} {siblings} busy={packBusy} onfilterbypack={filterByPack} onopensibling={openSibling} onuninstallpack={uninstallPack} />
           <LayersBlock modId={id} onchanged={refreshEntity} onerror={(m) => (actionError = m)} />
+          <!-- Sous Provenance : c'est du même ordre — d'où vient ce mod et ce
+               que l'app en a fait. Le bloc s'efface quand il n'y a rien à dire. -->
+          <DecisionsBlock modId={id} />
         </div>
       {:else}
         <!-- Layouts (galerie illustrée par le tracé, comme les skins voiture) -->
@@ -960,6 +964,9 @@
           <HistoryBlock detail={d} {busy} onactivateversion={(vid) => activate(vid)} />
           <ProvenanceBlock detail={d} {siblings} busy={packBusy} onfilterbypack={filterByPack} onopensibling={openSibling} onuninstallpack={uninstallPack} />
           <LayersBlock modId={id} onchanged={refreshEntity} onerror={(m) => (actionError = m)} />
+          <!-- Sous Provenance : c'est du même ordre — d'où vient ce mod et ce
+               que l'app en a fait. Le bloc s'efface quand il n'y a rien à dire. -->
+          <DecisionsBlock modId={id} />
         </div>
       {/if}
     </div>

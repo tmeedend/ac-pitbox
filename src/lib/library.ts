@@ -382,6 +382,28 @@ export function listModExtras(id: string): Promise<ExtraFile[]> {
   return invoke<ExtraFile[]>("list_mod_extras", { id });
 }
 
+/**
+ * Une décision que l'**app** a prise seule au dernier import du mod (§4.6).
+ * À ne pas confondre avec `ImportDecision` ci-dessus, qui est la décision de
+ * l'**utilisateur** sur un cas ambigu (§4.4) : l'une rend compte, l'autre
+ * arbitre.
+ */
+export interface ImportJournalEntry {
+  /** Clé i18n courte — le libellé vit dans les locales, jamais en base. */
+  kind: string;
+  /** Le chemin sur lequel la décision a porté, tel qu'il était dans l'archive. */
+  subject: string;
+  /** Ce qui en a été fait (destination, mod de rattachement), quand ça s'impose. */
+  detail: string | null;
+  archive: string;
+  decided_at: string;
+}
+
+/** Journal des décisions du dernier import (§4.6) — vide pour la plupart des mods. */
+export function listImportDecisions(id: string): Promise<ImportJournalEntry[]> {
+  return invoke<ImportJournalEntry[]>("list_import_decisions", { id });
+}
+
 /** Ouvre un fichier annexe avec l'application par défaut de l'OS (§4.5.2). */
 export function openModResource(id: string, relPath: string, inMod: boolean): Promise<void> {
   return invoke<void>("open_mod_resource", { id, relPath, inMod });

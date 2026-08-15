@@ -137,6 +137,14 @@ pub fn read_mod_resource(
     )?))
 }
 
+/// Décisions que l'app a prises seule au dernier import de ce mod (§4.6) —
+/// bloc « Décisions d'import » de la fiche.
+#[tauri::command]
+pub fn list_import_decisions(db: State<Db>, id: String) -> Result<Vec<crate::overlay::ImportJournalEntry>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::overlay::decisions_for_mod(&conn, &id).map_err(|e| e.to_string())
+}
+
 /// Liste ce qu'un mod installe hors de `content/<type>/<id>` (§4.5.3) —
 /// onglet « Ajouts au jeu » de la fiche.
 #[tauri::command]

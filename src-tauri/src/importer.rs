@@ -678,6 +678,18 @@ fn owner_of_leftover<'a>(rel: &Path, mods: &'a [(String, ModKind)]) -> Option<&'
     None
 }
 
+/// Ce reste finira-t-il dans le jeu ? Un dossier n'a qu'à **mener** dans le
+/// jeu (`content` seul est un début de chemin valide), un fichier doit
+/// désigner un chemin complet — même distinction que dans `others::place`,
+/// pour la même raison.
+fn deployable(src: &Path, rel: &Path) -> bool {
+    if src.is_dir() {
+        crate::acpath::leads_into_game(rel)
+    } else {
+        crate::acpath::is_ac_relative(rel)
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn sweep_leftovers(
     ctx: &ImportCtx,
@@ -694,6 +706,13 @@ fn sweep_leftovers(
     res_mode: crate::resources::ExtractionMode,
     result: &mut ArchiveResult,
 ) {
+    // Le journal (§4.6) décrit le dernier passage de cette archive : on repart
+    // d'une ardoise propre plutôt que d'empiler. Indispensable ici et pas
+    // seulement au niveau du mod — une archive réimportée à l'identique classe
+    // ses mods en doublons, ce qui saute leur écriture overlay, alors que ce
+    // balayage-ci tourne quand même.
+    crate::overlay::clear_decisions_for_archive(conn, archive_name);
+
     let mut leftovers = Vec::new();
     collect_leftover(workdir, consumed, &mut leftovers);
     let leftover_count = leftovers.len();
@@ -736,10 +755,35 @@ fn sweep_leftovers(
         // Dossier de jeu livré à nu (`driver/` au lieu de `content/driver/`) :
         // corrigé avant tout usage, car ce chemin est ce que l'activation
         // rejouera depuis la racine d'AC (§4.5.3).
-        let rel = crate::acpath::normalize_leftover(&raw, &p).unwrap_or(raw);
+        let normalized = crate::acpath::normalize_leftover(&raw, &p);
+        let rel = normalized.clone().unwrap_or(raw.clone());
 
         {
             if let Some((owner_id, owner_kind)) = owner_of_leftover(&rel, &owners) {
+                // Journal (§4.6) : seulement les décisions **surprenantes**.
+                // Rattacher `extension/` à la seule voiture de l'archive est la
+                // routine ; le noter à chaque fois noierait ce qu'on veut voir.
+                // Ce qui mérite une ligne, c'est quand l'app a deviné, ou
+                // quand elle a refusé.
+                if normalized.is_some() {
+                    crate::overlay::record_decision(
+                        conn,
+                        Some(owner_id),
+                        archive_name,
+                        "pathNormalized",
+                        &raw.to_string_lossy(),
+                        Some(&rel.to_string_lossy()),
+                    );
+                } else if !deployable(&p, &rel) {
+                    crate::overlay::record_decision(
+                        conn,
+                        Some(owner_id),
+                        archive_name,
+                        "pathRefused",
+                        &rel.to_string_lossy(),
+                        None,
+                    );
+                }
                 // Document isolé à la racine de ce qui entoure le mod : une
                 // annexe (§4.5.2), pas un ajout au jeu — il n'a rien à faire dans
                 // AC. Rangé dans les ressources du mod auquel il appartient,
@@ -760,8 +804,21 @@ fn sweep_leftovers(
                             continue;
                         }
                         // Mode « Aucun » : ni contenu, ni ressources — laissé
-                        // dans la source, jamais supprimé.
-                        crate::resources::Route::Drop => continue,
+                        // dans la source, jamais supprimé. Journalisé parce que
+                        // c'est le seul cas où quelque chose de l'archive
+                        // n'entre pas du tout en bibliothèque : sans trace,
+                        // l'utilisateur croirait la notice perdue.
+                        crate::resources::Route::Drop => {
+                            crate::overlay::record_decision(
+                                conn,
+                                Some(owner_id),
+                                archive_name,
+                                "ancillaryDropped",
+                                &rel.to_string_lossy(),
+                                None,
+                            );
+                            continue;
+                        }
                         crate::resources::Route::Content => {}
                     }
                 }
@@ -779,6 +836,19 @@ fn sweep_leftovers(
                     // reste est simplement moins bien rattaché.
                     Err(e) => log::warn!("extras {} <- {}: {e}", owner_id, rel.display()),
                 }
+            } else {
+                // Rien à quoi le rattacher : la « limite assumée » de §7.3 (pack
+                // multi-mods). Il devient un « autre mod » autonome, ce qui ne
+                // perd rien mais mérite d'être dit — c'est exactement le genre
+                // de rattachement que l'utilisateur, lui, saurait parfois faire.
+                crate::overlay::record_decision(
+                    conn,
+                    None,
+                    archive_name,
+                    "leftoverUnattached",
+                    &rel.to_string_lossy(),
+                    None,
+                );
             }
         }
 
@@ -2069,6 +2139,11 @@ fn process_found(
     let library_path = crate::libpath::to_relative(Some(library), &dest);
 
     // --- Écriture overlay ---
+    // Le journal (§4.6) décrit le **dernier** import de ce mod : réimporter un
+    // mod corrigé doit effacer l'explication de l'import fautif, sinon la
+    // fiche garderait indéfiniment à l'écran une décision qui n'a plus cours.
+    // Effacé ici, avant le balayage des restes qui réenregistrera les nouvelles.
+    crate::overlay::clear_decisions(conn, &id_interne);
     crate::overlay::upsert_mod(
         conn,
         &id_interne,
@@ -3294,6 +3369,71 @@ mod tests {
         assert!(
             !ac.join("driver").exists(),
             "jamais à la racine d'AC (le bug d'origine)"
+        );
+    }
+
+    #[test]
+    fn guesses_and_refusals_leave_a_readable_trace() {
+        // §4.6 — l'app tranche seule tout ce qui est déterminable, mais une
+        // décision fausse et **silencieuse** est ce qui a coûté le plus cher :
+        // un pilote posé au mauvais endroit et un dossier d'emballage déversé à
+        // la racine du jeu sont restés invisibles jusqu'à ce qu'on lise le
+        // disque à la main. Ce test vérifie qu'on peut relire, longtemps après,
+        // ce que l'import a décidé.
+        let base = crate::testutil::temp_dir("import-journal");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        // Une voiture, un `driver/` livré à nu (deviné), un dossier
+        // d'emballage (refusé).
+        let src = base.join("SomePack");
+        make_fake_car(&src.join("content").join("cars"), "some_car");
+        let d = src.join("driver");
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("pro.kn5"), b"driver-model").unwrap();
+        let wrap = src.join("Optional - No ambient sounds");
+        std::fs::create_dir_all(&wrap).unwrap();
+        std::fs::write(wrap.join("quiet.bank"), b"silence").unwrap();
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+
+        let log = crate::overlay::decisions_for_mod(&conn, "some_car").unwrap();
+        let normalized = log
+            .iter()
+            .find(|d| d.kind == "pathNormalized")
+            .expect("le chemin deviné est journalisé");
+        assert_eq!(normalized.subject, "driver", "ce qu'il y avait dans l'archive");
+        assert_eq!(
+            normalized.detail.as_deref(),
+            Some("content\\driver"),
+            "et ce qu'on en a fait"
+        );
+
+        let refused = log
+            .iter()
+            .find(|d| d.kind == "pathRefused")
+            .expect("le refus est journalisé, pas seulement appliqué");
+        assert_eq!(refused.subject, "Optional - No ambient sounds");
+
+        // Et la décision décrit bien le dernier import : réimporter efface
+        // l'explication de celui d'avant plutôt que de l'empiler.
+        let r2 = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert!(r2.error.is_none(), "erreur inattendue: {:?}", r2.error);
+        let log2 = crate::overlay::decisions_for_mod(&conn, "some_car").unwrap();
+        assert_eq!(
+            log2.iter().filter(|d| d.kind == "pathNormalized").count(),
+            1,
+            "une seule ligne après réimport, pas deux : {log2:?}"
         );
     }
 

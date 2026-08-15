@@ -384,6 +384,14 @@
     "layerDown": "Move down (lower priority)",
     "layersRecomposeNote": "Highest wins. Toggling/reordering recomposes the content — this can take a few seconds.",
     "resourcesLabel": "Resources ({count})",
+    "decisionsTitle": "Import decisions",
+    "decisionsNote": "What the app settled on its own for this archive.",
+    "decision": {
+      "pathNormalized": "Bare game folder, moved into place",
+      "pathRefused": "Off game path, not deployed",
+      "ancillaryDropped": "Ancillary file not extracted (“None” setting)",
+      "leftoverUnattached": "Attached to no mod, imported as “other mod”"
+    },
     "resourcesNote": "The mod's docs and extra files, kept aside so they don't clutter the game.",
     "resourceOpenTooltip": "Open with the default application",
     "resourcePreviewTooltip": "Preview",
