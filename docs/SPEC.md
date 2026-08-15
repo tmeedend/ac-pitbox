@@ -93,7 +93,7 @@ Pensé pour un lot de plusieurs dizaines de mods.
 
 **Annulation.** Constatée **entre deux items** — et 7-Zip est tué s'il décompresse. Jamais au milieu du rangement d'un mod, qui laisserait une bibliothèque à moitié écrite. Le rapport affiche ce qui a été importé avant l'arrêt.
 
-**Rapport de fin cliquable.** Chaque contenu importé ouvre sa fiche. Une **couche** ouvre le contenu de base auquel elle se rattache (§4.4). Skins et sons sont regroupés par contenu parent — une ligne par parent, pas par livrée. Apps et « autres mods » ouvrent leur écran. Un mod resté **ambigu** n'est pas cliquable : rien n'a encore été écrit.
+**Rapport de fin cliquable.** Chaque contenu importé ouvre sa fiche. Une **couche** ouvre le contenu de base auquel elle se rattache (§4.4). Skins et sons sont regroupés par contenu parent — une ligne par parent, pas par livrée. Apps et « autres mods » ouvrent leur écran. Un mod resté **ambigu** n'est pas cliquable : rien n'a encore été écrit. Le rapport survit à la fermeture du toast et reste consultable sur l'écran Import — un lot de plusieurs dizaines de mods ne doit pas disparaître sur un clic réflexe. En mémoire seulement : c'est le compte rendu d'une action, pas un réglage, et il n'a pas à survivre à un redémarrage.
 
 ### 4.3 Mise à jour vs couche (recomposition)
 

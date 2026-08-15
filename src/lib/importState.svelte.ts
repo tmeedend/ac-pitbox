@@ -4,6 +4,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listen } from "@tauri-apps/api/event";
+import { t } from "./i18n/index.svelte";
 import { StorageKey } from "./storage";
 import { getUiPref, setUiPref } from "./uiPrefs.svelte";
 import {
@@ -38,6 +39,11 @@ export const importState = $state<{
   importing: boolean;
   progress: ImportProgress | null;
   report: ArchiveResult[] | null;
+  /** Dernier rapport, conservé après fermeture du toast (§4.2bis) : un import
+   * de quarante mods ne doit pas disparaître sur un clic réflexe sur ✕.
+   * En mémoire seulement — il ne survit pas à un redémarrage, et n'a pas à le
+   * faire : c'est le compte rendu d'une action, pas un réglage. */
+  lastReport: ArchiveResult[] | null;
   pendingConflicts: PendingConflict[];
   pendingAmbiguous: PendingAmbiguous[];
   copyMode: boolean;
@@ -50,6 +56,7 @@ export const importState = $state<{
   importing: false,
   progress: null,
   report: null,
+  lastReport: null,
   pendingConflicts: [],
   pendingAmbiguous: [],
   // Défaut synchrone (état module-level, pas de composant/onMount ici),
@@ -110,7 +117,10 @@ async function runImport(source: { paths: string[]; folder: boolean; copy: boole
     const report = source.folder
       ? await importFolders(source.paths, source.copy)
       : await importArchives(source.paths);
+    // Même référence des deux côtés : trancher un cas ambigu modifie le rapport
+    // en place, et les deux vues doivent en rendre compte.
     importState.report = report;
+    importState.lastReport = report;
     importState.pendingConflicts = report.flatMap((a) =>
       a.mods
         .filter((m) => m.conflict)
@@ -200,6 +210,7 @@ export async function resolvePendingConflict(
   importState.version++;
 }
 
+/** Ferme le toast. `lastReport` survit : l'écran Import le garde consultable. */
 export function dismissReport(): void {
   importState.report = null;
 }
@@ -207,7 +218,21 @@ export function dismissReport(): void {
 /** Fin du flux d'import en masse (§4.2) : conflits déjà arbitrés, pas de modale. */
 export function reportBulkDone(report: ArchiveResult[]): void {
   importState.report = report;
+  importState.lastReport = report;
   importState.version++;
+}
+
+/** Résumé chiffré d'un rapport (§4.2). Un import peut ne produire aucun mod de
+ * premier niveau (ex. un pack de skins rattaché à une voiture déjà connue) sans
+ * pour autant n'avoir « rien » importé — le titre compte donc tout ce qui a été
+ * réellement ajouté, pas seulement les mods. */
+export function importSummary(report: ArchiveResult[]): string {
+  const n = report.reduce(
+    (acc, a) => acc + a.mods.length + (a.subs?.length ?? 0) + (a.apps?.length ?? 0) + (a.others?.length ?? 0),
+    0,
+  );
+  const errs = report.filter((a) => a.error).length;
+  return t("importOverlay.summaryBase", { n }) + (errs ? t("importOverlay.summaryErrs", { errs }) : "");
 }
 
 /** À appeler une seule fois, depuis la racine de l'app (§4.2 : glisser-déposer partout). */

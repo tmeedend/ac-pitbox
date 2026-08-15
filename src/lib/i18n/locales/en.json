@@ -732,6 +732,7 @@
     "massHintBold2": "all at once",
     "massHintSuffix": ", then the import runs — it can resume if interrupted.",
     "chooseParentFolder": "Choose a parent folder…",
+    "lastReportTitle": "Last import",
     "dndTitle": "Drag & drop",
     "dndHint": "The quick gesture: drop an archive anywhere in the window, on any screen — the import starts immediately, using the copy/move mode chosen above for a folder."
   },

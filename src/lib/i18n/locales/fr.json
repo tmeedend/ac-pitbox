@@ -732,6 +732,7 @@
     "massHintBold2": "en une fois",
     "massHintSuffix": ", puis l'import s'exécute — il peut reprendre si interrompu.",
     "chooseParentFolder": "Choisir un dossier parent…",
+    "lastReportTitle": "Dernier import",
     "dndTitle": "Glisser-déposer",
     "dndHint": "Le geste rapide : dépose une archive n'importe où dans la fenêtre, sur n'importe quel écran — l'import démarre immédiatement, avec le mode copier/déplacer choisi ci-dessus pour un éventuel dossier."
   },

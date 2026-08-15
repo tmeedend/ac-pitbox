@@ -5,8 +5,10 @@
   // disponible partout dans l'app (voir initGlobalDragDrop dans AppShell).
   import { open } from "@tauri-apps/plugin-dialog";
   import BulkImport from "./BulkImport.svelte";
+  import ImportReport from "./ImportReport.svelte";
   import {
     importState,
+    importSummary,
     setCopyMode,
     pickAndImportArchive,
     pickAndImportFolder,
@@ -72,6 +74,20 @@
     <h3>{t("import.dndTitle")}</h3>
     <p class="hint">{t("import.dndHint")}</p>
   </section>
+
+  <!-- Dernier rapport (§4.2bis) : le toast se ferme d'un clic, souvent par
+       réflexe, et un import de quarante mods méritait mieux que de disparaître
+       avec lui. -->
+  {#if importState.lastReport?.length}
+    {@const report = importState.lastReport}
+    <section class="last-report">
+      <h3>{t("import.lastReportTitle")}</h3>
+      <p class="hint">{importSummary(report)}</p>
+      <div class="lr-body">
+        <ImportReport {report} />
+      </div>
+    </section>
+  {/if}
 </div>
 
 {#if bulkParent}
@@ -174,6 +190,22 @@
   .dnd .hint {
     max-width: 620px;
     margin-bottom: 12px;
+  }
+  .last-report {
+    border: 1px solid var(--line);
+    background: var(--panel2);
+    padding: 14px 16px;
+    margin-bottom: 16px;
+  }
+  .last-report .hint {
+    margin-bottom: 10px;
+  }
+  /* Un lot de plusieurs dizaines de mods tient dans une hauteur bornée, sans
+     repousser le reste de l'écran hors de vue. */
+  .lr-body {
+    max-height: 320px;
+    overflow-y: auto;
+    font-size: 12px;
   }
   .btn {
     background: var(--raised);

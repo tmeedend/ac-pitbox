@@ -797,6 +797,55 @@ fn sweep_leftovers(
     }
 }
 
+/// Conserve une archive imbriquée qu'on n'a pas su ouvrir (§7.3) — sans jamais
+/// la déployer. Renvoie l'entrée créée, ou `None` si l'id est déjà pris ou si
+/// la mise de côté a échoué (les deux tracés).
+///
+/// Volontairement **pas activée** par l'appelant : le contenu est une archive,
+/// et « poser » une archive dans le dossier du jeu n'a aucun sens. L'utilisateur
+/// la retrouve dans les « autres mods », inerte, et décide quoi en faire.
+fn keep_unreadable_archive(
+    conn: &Connection,
+    library: &Path,
+    archive_name: &str,
+    root: &Path,
+    p: &Path,
+    copy: bool,
+    res_mode: crate::resources::ExtractionMode,
+) -> Option<crate::others::OtherImported> {
+    let rel = p.strip_prefix(root).unwrap_or(p);
+    // Extension conservée dans l'id, contrairement à une archive lisible : ce
+    // qui est rangé EST l'archive, pas ce qu'elle contient.
+    let id = format!("{archive_name}__{}", rel.to_string_lossy());
+    let wrap = make_temp_dir().ok()?;
+    let wrapped = wrap.join(rel);
+    if let Some(parent) = wrapped.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            log::warn!("keep_unreadable_archive {}: create wrap dir: {e}", rel.display());
+            let _ = std::fs::remove_dir_all(&wrap);
+            return None;
+        }
+    }
+    // `copy` = la source appartient à l'utilisateur : on n'y touche pas.
+    let placed = if copy {
+        std::fs::copy(p, &wrapped).is_ok()
+    } else {
+        std::fs::rename(p, &wrapped).is_ok() || std::fs::copy(p, &wrapped).is_ok()
+    };
+    let out = if placed {
+        let imported = crate::others::import_other(conn, library, &id, &wrap, false, res_mode);
+        if imported.is_none() {
+            log::warn!("keep_unreadable_archive {id}: id already known, archive dropped");
+        }
+        imported
+    } else {
+        log::warn!("keep_unreadable_archive {}: could not stage", rel.display());
+        None
+    };
+    let _ = std::fs::remove_dir_all(&wrap);
+    out
+}
+
 /// Un seul reste isolé : archive imbriquée (extraite puis reclassée comme un
 /// import à part entière, profondeur limitée à 2 contre une imbrication
 /// pathologique) ou contenu déjà en clair (importé directement comme « autre
@@ -846,12 +895,6 @@ fn import_leftover(
         // barre — une précision inventée serait pire que pas de précision.
         ctx.phase(PHASE_EXTRACT, label.clone());
         let nested = archive::extract(sevenzip, p, &extracted);
-        if let Err(e) = &nested {
-            // Sans cette trace, une archive imbriquée illisible disparaissait
-            // au nettoyage du temporaire sans le moindre indice (§7.3 : rien ne
-            // doit être perdu en silence).
-            log::warn!("nested archive {}: {e}", p.display());
-        }
         if nested.is_ok() {
             let found = modscan::scan(&extracted);
             let subs = modscan::scan_subs(&extracted);
@@ -921,6 +964,19 @@ fn import_leftover(
                         discovered,
                     );
                 }
+            }
+        } else if let Err(e) = &nested {
+            // Archive illisible (corrompue, format exotique, protégée par mot
+            // de passe) : elle disparaissait au nettoyage du temporaire, sans
+            // trace ni recours — contraire à §7.3, « l'import ne jette rien ».
+            //
+            // Conservée telle quelle, mais **jamais activée** : c'est une
+            // archive, et la déployer la poserait telle quelle dans le dossier
+            // du jeu. Elle apparaît donc en « autre mod » inactif — visible,
+            // récupérable, et sans rien mettre dans AC.
+            log::warn!("nested archive {}: {e} — conservée inactive", p.display());
+            if let Some(other) = keep_unreadable_archive(conn, library, archive_name, root, p, copy, res_mode) {
+                result.others.push(other);
             }
         }
         let _ = std::fs::remove_dir_all(&extracted);
@@ -2235,6 +2291,49 @@ mod tests {
             res_dir.join("readme.txt").is_file(),
             "notice rangée dans les ressources de la voiture, pas laissée seule ({})",
             res_dir.display()
+        );
+    }
+
+    /// Règle (§7.3) : une archive imbriquée qu'on ne sait pas ouvrir n'est pas
+    /// perdue. Elle disparaissait au nettoyage du dossier temporaire, sans trace
+    /// ni recours. Conservée en « autre mod » — mais **inactive** : déployer une
+    /// archive la poserait telle quelle dans le dossier du jeu.
+    #[test]
+    fn unreadable_nested_archive_is_kept_but_never_deployed() {
+        let Some(sevenzip) = crate::detect::find_7zip() else {
+            eprintln!("7-Zip introuvable — test ignoré");
+            return;
+        };
+        let base = crate::testutil::temp_dir("broken-nested");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(&ac).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            sevenzip_exe: Some(sevenzip),
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        // Une voiture reconnue, plus un « zip » qui n'en est pas un.
+        let src = base.join("WithBrokenZip");
+        make_fake_car(&src, "ok_car");
+        std::fs::write(src.join("broken.zip"), b"ceci n'est pas une archive").unwrap();
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert_eq!(r.mods.len(), 1, "la voiture passe malgré l'archive illisible");
+        assert_eq!(r.others.len(), 1, "l'archive illisible est conservée : {:?}", r.others);
+
+        // Conservée en bibliothèque, mais rien de posé dans le jeu.
+        let others = crate::overlay::list_other_mods(&conn).unwrap();
+        assert_eq!(others.len(), 1);
+        assert!(!others[0].is_active, "jamais déployée : c'est une archive");
+        assert!(
+            !ac.join("broken.zip").exists(),
+            "aucune archive posée à la racine du jeu"
         );
     }
 
