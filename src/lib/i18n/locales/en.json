@@ -422,6 +422,7 @@
     "typePractice": "Practice",
     "typeHotlap": "Hotlap",
     "typeRace": "Race",
+    "typeTrackday": "Track day",
     "launchSuccess": "Session sent to Content Manager — Assetto Corsa is starting…",
     "steamRequiredTitle": "Steam isn't running",
     "steamRequiredBody": "Assetto Corsa launches through Steam. Start Steam, sign in, then confirm here to continue.",

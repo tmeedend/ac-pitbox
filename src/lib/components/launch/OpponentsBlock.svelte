@@ -20,9 +20,12 @@
     carPool,
     skinsByCarId,
     yearRangeMax,
+    categorySelection,
+    categoryOptions,
     pickerPool,
     pickerIndex,
     onselectmode,
+    onselectcategory,
     oncountchange,
     onremove,
     onadd,
@@ -38,9 +41,12 @@
     carPool: ModCard[];
     skinsByCarId: Record<string, SkinItem[]>;
     yearRangeMax: number;
+    categorySelection: string;
+    categoryOptions: string[];
     pickerPool: ModCard[];
     pickerIndex: number | null;
     onselectmode: (mode: GridMode) => void;
+    onselectcategory: (category: string) => void;
     oncountchange: (n: number) => void;
     onremove: (index: number) => void;
     onadd: () => void;
@@ -72,12 +78,14 @@
   function opponentName(carId: string): string {
     return carPool.find((c) => c.id_interne === carId)?.display_name ?? carId;
   }
-  /** Vignette de l'adversaire : celle du skin choisi si connue, sinon la
-   * preview générique du mod (deux adversaires « même voiture » doivent se
+  /** Vignette de l'adversaire : livery du skin choisi si connue (couleurs/motif
+   * du skin seul, même convention que le sélecteur de skin de la barre
+   * latérale — voir `ImageSelectDropdown`/`AppShell`), repli sur la preview du
+   * skin puis sur celle du mod (deux adversaires « même voiture » doivent se
    * distinguer visuellement par leur skin, pas juste par leur nom). */
   function opponentPreview(opp: Opponent): string | null {
     const skin = opp.car_skin ? skinsByCarId[opp.car_id]?.find((s) => s.id === opp.car_skin) : null;
-    if (skin?.preview) return previewSrc(skin.preview);
+    if (skin?.livery || skin?.preview) return previewSrc(skin.livery ?? skin.preview);
     return previewSrc(carPool.find((c) => c.id_interne === opp.car_id)?.preview ?? null);
   }
   function opponentSkinName(opp: Opponent): string | undefined {
@@ -91,9 +99,30 @@
   <div class="blk-b">
   <div class="modes">
     {#each gridModes as m}
-      <button class="mode" class:on={gridMode === m.id} type="button" onclick={() => onselectmode(m.id)}>
+      <div
+        class="mode"
+        class:on={gridMode === m.id}
+        role="button"
+        tabindex="0"
+        onclick={() => onselectmode(m.id)}
+        onkeydown={(e) => (e.key === "Enter" || e.key === " ") && onselectmode(m.id)}
+      >
         <div class="mt">{t(m.labelKey)}</div>
-      </button>
+        {#if m.id === "same_category" && gridMode === "same_category"}
+          <!-- Catégorie prise en compte par ce vivier (§8.6) : s'initialise
+               sur celle de la voiture pilotée (Launch.svelte), mais reste
+               modifiable ici — le libellé de l'onglet dit déjà « Même
+               catégorie », pas besoin de le répéter à côté du champ. -->
+          <select
+            class="input cat-select"
+            value={categorySelection}
+            onclick={(e) => e.stopPropagation()}
+            onchange={(e) => { e.stopPropagation(); onselectcategory(e.currentTarget.value); }}
+          >
+            {#each categoryOptions as cat}<option value={cat}>{cat}</option>{/each}
+          </select>
+        {/if}
+      </div>
     {/each}
   </div>
 
@@ -190,6 +219,10 @@
     border: 1px solid var(--line);
     margin-bottom: 12px;
   }
+  .cat-select {
+    width: 100%;
+    margin-top: 8px;
+  }
   /* Compteur d'adversaires, difficulté, fourchette d'année : tout sur une
      ligne (retombe seulement si la largeur manque). */
   .adv-row {
@@ -213,8 +246,9 @@
   }
   .mode {
     background: var(--panel2);
-    padding: 10px 6px;
+    padding: 12px 8px;
     text-align: center;
+    cursor: pointer;
   }
   .mode:hover {
     background: var(--raised);

@@ -12,6 +12,7 @@
     { id: "practice", labelKey: "launch.typePractice" },
     { id: "hotlap", labelKey: "launch.typeHotlap" },
     { id: "race", labelKey: "launch.typeRace" },
+    { id: "trackday", labelKey: "launch.typeTrackday" },
   ];
 </script>
 

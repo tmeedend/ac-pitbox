@@ -8,13 +8,14 @@
 //! le même chemin qu'un lancement depuis l'UI de CM. Voir
 //! `docs/L4-cm-launch-research.md` pour le détail de cette recherche.
 //!
-//! Schéma reconstitué **empiriquement** depuis 4 presets réels sauvegardés
+//! Schéma reconstitué **empiriquement** depuis 5 presets réels sauvegardés
 //! par l'utilisateur via l'UI de CM (`pitbox-practice.cmpreset`,
-//! `pitbox-hotlap.cmpreset`, `pitbox-weekend.cmpreset`, et le grid manuel de
-//! `pitbox.cmpreset`), pas depuis la source AcTools (trop de pièges de
-//! sérialisation Newtonsoft.Json à deviner sans référence réelle). Champs
-//! marqués « best effort » ci-dessous : pas vus dans un preset de référence,
-//! valeur choisie par analogie — à vérifier en usage réel.
+//! `pitbox-hotlap.cmpreset`, `pitbox-weekend.cmpreset`, le grid manuel de
+//! `pitbox.cmpreset`, et `pitbox-trackday.cmpreset`), pas depuis la source
+//! AcTools (trop de pièges de sérialisation Newtonsoft.Json à deviner sans
+//! référence réelle). Champs marqués « best effort » ci-dessous : pas vus
+//! dans un preset de référence, valeur choisie par analogie — à vérifier en
+//! usage réel.
 
 use serde_json::{json, Value};
 
@@ -156,6 +157,24 @@ fn mode_data_race(s: &RaceSetup) -> String {
     .to_string()
 }
 
+/// `ModeData` pour `QuickDrive_Trackday.xaml` — schéma confirmé sur
+/// `pitbox-trackday.cmpreset` : même grille manuelle que Course (Race, sans
+/// qualification — Track day n'a pas de mode Weekend équivalent), plus
+/// `SpeedLimit`. Pas de champ dédié dans `RaceSetup` pour l'instant (best
+/// effort, comme `s.grip` plus bas) : `0.0` = pas de limite, seule valeur vue
+/// dans le preset de référence.
+fn mode_data_trackday(s: &RaceSetup) -> String {
+    json!({
+        "SpeedLimit": 0.0,
+        "Penalties": s.penalties,
+        "JumpStartPenalty": s.jump_start_penalty,
+        "LapsNumber": s.laps,
+        "RaceGridSerialized": build_grid(&s.opponents).to_string(),
+        "Version": 2,
+    })
+    .to_string()
+}
+
 /// Construit le preset Quick Drive complet (§8.3) — remplace le couple
 /// `build_race_ini` / `PreparedConfig`. Renvoie le JSON sérialisé, prêt à
 /// écrire dans un fichier temporaire et passer via `race/quick?presetFile=…`.
@@ -190,6 +209,7 @@ pub fn build_preset(s: &RaceSetup) -> Result<String, String> {
         SessionType::Hotlap => ("/Pages/Drive/QuickDrive_Hotlap.xaml", mode_data_hotlap(s)),
         SessionType::Race if s.qualify_enabled => ("/Pages/Drive/QuickDrive_Weekend.xaml", mode_data_weekend(s)),
         SessionType::Race => ("/Pages/Drive/QuickDrive_Race.xaml", mode_data_race(s)),
+        SessionType::TrackDay => ("/Pages/Drive/QuickDrive_Trackday.xaml", mode_data_trackday(s)),
     };
 
     let weather_id = if s.weather.is_empty() {
@@ -391,6 +411,34 @@ mod tests {
         assert_eq!(mode_data["LapsNumber"], 12, "la course elle-même est inchangée");
         let grid: Value = serde_json::from_str(mode_data["RaceGridSerialized"].as_str().unwrap()).unwrap();
         assert_eq!(grid["CarIds"][0], "ks_ferrari_488_gt3", "le plateau suit aussi ce mode");
+    }
+
+    /// Track day : grille manuelle comme Course, plus `SpeedLimit`, jamais de
+    /// qualification/essais libres (pas de mode Weekend équivalent côté CM) —
+    /// schéma confirmé sur `pitbox-trackday.cmpreset`.
+    #[test]
+    fn trackday_preset_uses_dedicated_mode_with_speed_limit_and_grid() {
+        let mut s = base_setup(SessionType::TrackDay);
+        s.laps = 2;
+        s.opponents = vec![Opponent {
+            car_id: "ks_praga_r1".into(),
+            ai_level: 90,
+            car_skin: None,
+        }];
+        let json = build_preset(&s).unwrap();
+        let v: Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(v["Mode"], "/Pages/Drive/QuickDrive_Trackday.xaml");
+
+        let mode_data: Value = serde_json::from_str(v["ModeData"].as_str().unwrap()).unwrap();
+        assert_eq!(mode_data["SpeedLimit"], 0.0);
+        assert_eq!(mode_data["LapsNumber"], 2);
+        assert!(
+            mode_data["QualificationLength"].is_null() && mode_data["PracticeLength"].is_null(),
+            "le ModeData de Trackday ne porte aucune durée : {mode_data}"
+        );
+        let grid: Value = serde_json::from_str(mode_data["RaceGridSerialized"].as_str().unwrap()).unwrap();
+        assert_eq!(grid["ModeId"], "manual");
+        assert_eq!(grid["CarIds"][0], "ks_praga_r1");
     }
 
     #[test]

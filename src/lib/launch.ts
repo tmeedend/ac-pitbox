@@ -1,7 +1,7 @@
 // Pont typé vers le lancement de session (L4, §8).
 import { invoke } from "@tauri-apps/api/core";
 
-export type SessionType = "practice" | "hotlap" | "race";
+export type SessionType = "practice" | "hotlap" | "race" | "trackday";
 
 /** Saison optionnelle associée à une session (§8.6bis) — influence la
  * température recommandée et, best-effort côté CSP, le rendu (arbres,

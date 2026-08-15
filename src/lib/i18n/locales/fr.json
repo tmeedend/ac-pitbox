@@ -422,6 +422,7 @@
     "typePractice": "Practice",
     "typeHotlap": "Hotlap",
     "typeRace": "Course",
+    "typeTrackday": "Track day",
     "launchSuccess": "Session envoyée à Content Manager — Assetto Corsa démarre…",
     "steamRequiredTitle": "Steam n'est pas démarré",
     "steamRequiredBody": "Assetto Corsa se lance par Steam. Démarre Steam, connecte-toi, puis valide ici pour continuer.",

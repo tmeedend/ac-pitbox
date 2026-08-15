@@ -31,6 +31,7 @@ pub enum SessionType {
     Practice,
     Hotlap,
     Race,
+    TrackDay,
 }
 
 /// Un adversaire du plateau (mode course, §8.6) : voiture + son propre niveau
@@ -280,8 +281,9 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
     ensure_available(conn, cfg, ModKind::Car, &setup.car_id)?;
     ensure_available(conn, cfg, ModKind::Track, &setup.track_id)?;
     // Adversaires : best-effort — un adversaire manquant ne doit pas bloquer
-    // toute la session, seulement être absent du plateau final.
-    if setup.session_type == SessionType::Race {
+    // toute la session, seulement être absent du plateau final. Track day a
+    // aussi une grille (§8.6), même traitement que Course.
+    if matches!(setup.session_type, SessionType::Race | SessionType::TrackDay) {
         for opp in &setup.opponents {
             let _ = ensure_available(conn, cfg, ModKind::Car, &opp.car_id);
         }

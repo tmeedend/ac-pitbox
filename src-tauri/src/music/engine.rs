@@ -852,18 +852,33 @@ mod tests {
         // `from` — silence au début, plein volume juste avant la coupure
         // nette de `stop_at_end` : la saccade entendue en sortie de Big
         // Picture.
-        assert!((single_fade_volume(0.8, 0.0, 0.0) - 0.8).abs() < 1e-6, "t=0 : encore au volume de départ");
+        assert!(
+            (single_fade_volume(0.8, 0.0, 0.0) - 0.8).abs() < 1e-6,
+            "t=0 : encore au volume de départ"
+        );
         assert!(single_fade_volume(0.8, 0.0, 1.0).abs() < 1e-6, "t=1 : silence atteint");
         let mid = single_fade_volume(0.8, 0.0, 0.5);
-        assert!(mid > 0.0 && mid < 0.8, "à mi-chemin, ni silence ni plein volume : {mid}");
+        assert!(
+            mid > 0.0 && mid < 0.8,
+            "à mi-chemin, ni silence ni plein volume : {mid}"
+        );
     }
 
     #[test]
     fn single_fade_volume_ramps_up_for_a_fade_in() {
-        assert!(single_fade_volume(0.0, 0.8, 0.0).abs() < 1e-6, "t=0 : encore silencieux");
-        assert!((single_fade_volume(0.0, 0.8, 1.0) - 0.8).abs() < 1e-6, "t=1 : volume cible atteint");
+        assert!(
+            single_fade_volume(0.0, 0.8, 0.0).abs() < 1e-6,
+            "t=0 : encore silencieux"
+        );
+        assert!(
+            (single_fade_volume(0.0, 0.8, 1.0) - 0.8).abs() < 1e-6,
+            "t=1 : volume cible atteint"
+        );
         let mid = single_fade_volume(0.0, 0.8, 0.5);
-        assert!(mid > 0.0 && mid < 0.8, "à mi-chemin, ni silence ni volume cible : {mid}");
+        assert!(
+            mid > 0.0 && mid < 0.8,
+            "à mi-chemin, ni silence ni volume cible : {mid}"
+        );
     }
 
     fn track(name: &str) -> IndexedTrack {

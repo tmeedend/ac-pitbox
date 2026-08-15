@@ -164,6 +164,27 @@
   const player = $derived(carPool.find((c) => c.id_interne === setup.car_id) ?? null);
   const currentWeather = $derived(weathers.find((w) => w.id === selectedIntent));
 
+  // --- Catégorie du vivier « même catégorie » (§8.6) : modifiable, mais
+  // toujours réinitialisée sur la catégorie de la voiture pilotée dès qu'elle
+  // change — `categoryCarId` mémorise la dernière voiture pour laquelle la
+  // sélection a été (ré)initialisée, pour ne réagir qu'à un vrai changement de
+  // voiture, pas à chaque relecture de l'effet. Même liste que le filtre
+  // catégorie de la bibliothèque voitures. ---
+  let categorySelection = $state("");
+  let categoryCarId = $state<string | null>(null);
+  const categoryOptions = $derived([...new Set(carPool.map((c) => c.category).filter((c): c is string => !!c))].sort());
+  $effect(() => {
+    const id = setup.car_id;
+    if (id !== categoryCarId) {
+      categoryCarId = id;
+      categorySelection = player?.category ?? "";
+    }
+  });
+  async function selectCategory(cat: string) {
+    categorySelection = cat;
+    if (gridMode === "same_category") await regenerateGrid();
+  }
+
   // --- Plateau d'adversaires (§8.6) : 3 modes de vivier, liste ajustable.
   // « Même voiture » = littéralement le même mod que le joueur (juste un
   // skin différent) ; « même catégorie »/« libre » filtrent aussi par
@@ -181,7 +202,7 @@
     if (!player) return carPool;
     if (mode === "same_car") return [player];
     const others = carPool.filter((c) => c.id_interne !== setup.car_id);
-    const byCategory = mode === "same_category" && player.category ? others.filter((c) => c.category === player.category) : others;
+    const byCategory = mode === "same_category" && categorySelection ? others.filter((c) => c.category === categorySelection) : others;
     return byCategory.filter(inYearRange);
   }
 
@@ -523,9 +544,9 @@
       if (opt) await selectIntent(opt);
     }
     // Ne régénère que s'il n'y a vraiment rien à préserver (première visite
-    // de l'écran course, ou aucun adversaire restauré) — jamais en écrasant
-    // silencieusement un plateau déjà construit (§8.6ter, bug réel).
-    if (type === "race" && setup.opponents.length === 0) await regenerateGrid();
+    // de l'écran course/trackday, ou aucun adversaire restauré) — jamais en
+    // écrasant silencieusement un plateau déjà construit (§8.6ter, bug réel).
+    if ((type === "race" || type === "trackday") && setup.opponents.length === 0) await regenerateGrid();
     applying = false;
   }
   async function setSessionType(type: SessionType) {
@@ -611,7 +632,7 @@
     void [nav.sessionCar?.id, nav.sessionCar?.skin, nav.sessionTrack?.id, nav.sessionTrack?.layout];
     if (!ready) return;
     syncFromSession();
-    if (setup.session_type === "race" && gridMode !== "free" && setup.car_id !== gridCarId) {
+    if ((setup.session_type === "race" || setup.session_type === "trackday") && gridMode !== "free" && setup.car_id !== gridCarId) {
       void regenerateGrid();
     }
   });
@@ -901,7 +922,7 @@
 
         <SimulationBlock {setup} />
 
-        {#if setup.session_type === "race"}
+        {#if setup.session_type === "race" || setup.session_type === "trackday"}
           <OpponentsBlock
             {setup}
             {gridMode}
@@ -909,9 +930,12 @@
             {carPool}
             {skinsByCarId}
             yearRangeMax={YEAR_RANGE_MAX}
+            {categorySelection}
+            {categoryOptions}
             {pickerPool}
             {pickerIndex}
             onselectmode={selectGridMode}
+            onselectcategory={selectCategory}
             oncountchange={applyOpponentCount}
             onremove={removeOpponent}
             onadd={addOpponent}
