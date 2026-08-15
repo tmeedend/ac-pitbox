@@ -121,7 +121,11 @@ async function runImport(source: { paths: string[]; folder: boolean; copy: boole
           oldName: m.conflict!.existing_name ?? m.conflict!.existing_id,
         })),
     );
-    importState.pendingAmbiguous = report.flatMap((a) =>
+    // Une entrée du rapport par source, dans l'ordre du lot : `report[i]`
+    // correspond donc à `source.paths[i]`. On ne mémorise que CETTE source-là
+    // pour la reprise — renvoyer le lot entier ferait re-décompresser quarante
+    // archives pour trancher un mod (§4.4).
+    importState.pendingAmbiguous = report.flatMap((a, i) =>
       a.mods
         .filter((m) => m.outcome === "AMBIGUOUS")
         .map((m) => ({
@@ -130,7 +134,7 @@ async function runImport(source: { paths: string[]; folder: boolean; copy: boole
           added: m.added_count ?? 0,
           overwritten: m.overwritten_count ?? 0,
           total: m.existing_total ?? 0,
-          source,
+          source: { ...source, paths: [source.paths[i] ?? source.paths[0]] },
         })),
     );
     importState.version++;

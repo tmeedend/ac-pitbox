@@ -104,6 +104,8 @@ Pensé pour un lot de plusieurs dizaines de mods.
 - Majorité de chemins nouveaux, peu de fichiers écrasés → **couche/extension** (ajoute).
 - Détection **auto**, question à l'utilisateur **seulement si ambigu**, avec récapitulatif chiffré (« ajoute 84 fichiers, en écrase 6 sur 412 »).
 
+**Reprise après arbitrage** : trancher un cas ambigu rejoue l'import de **ce mod-là uniquement**, depuis la seule source d'où il venait — pas le lot entier. Ses voisins ne sont pas retouchés, et ce qui suit les mods (skins/sons, apps, restes) n'est pas rejoué : tout cela a déjà été rangé au premier passage. La source est re-décompressée plutôt que gardée au chaud, pour qu'aucun dossier temporaire ne survive à l'import en attendant une réponse.
+
 **Règle absolue** : le **contenu de base** (Kunos, `is_stock`) ne reçoit **jamais** de mise à jour, **toujours** une couche. Garantit par construction qu'il ne peut pas être perdu. Même une « version améliorée complète » d'un circuit Kunos devient une couche posée sur la base intacte.
 
 **Modèle de couches recomposables** :
@@ -162,6 +164,8 @@ Deux propriétés en découlent :
 
 - **L'import ne jette rien.** Ce qui n'est pas classé est conservé tel quel, donc l'*interprétation* — où poser, qui arbitre un fichier partagé — reste recalculable depuis la bibliothèque à tout moment. Aucune règle des versions précédentes à mémoriser, aucune archive à conserver : c'est l'**entrée** qui est préservée, pas la décision. C'est ce qui rend un futur changement de règles rattrapable sans rien versionner.
 - **L'ajout vit et meurt avec son mod.** Posé à l'activation, retiré à la désactivation, supprimé avec lui. Le passage par « autre mod » (§7.3) ne donnait pas ça : les fichiers d'une voiture supprimée restaient dans AC, rattachés à une entrée anonyme que plus rien ne reliait au mod.
+
+**Les archives imbriquées passent avant leurs voisins.** Une archive imbriquée est extraite et reclassée (§7.3), et ce qui en sort entre dans la liste des propriétaires possibles **avant** que les fichiers qui l'entouraient ne soient arbitrés. C'est ce qui permet à une livraison `readme.txt` + `Car.zip` de ranger la notice dans les ressources de la voiture sortie du zip. Corollaire : **rien de reconnu à la racine ne signifie pas rien du tout** — tant qu'une archive imbriquée traîne quelque part dans la source, à n'importe quelle profondeur, on descend dedans avant de conclure. Sans cette descente, la source entière partait en « autre mod » : la voiture n'entrait jamais en bibliothèque et le `.zip` brut se retrouvait lié à la racine du dossier du jeu.
 
 **Rattachement** d'un reste (§7.3), dans cet ordre : le chemin contient l'id d'exactement un mod reconnu de l'archive ; sinon l'archive ne livre qu'un seul mod, et tout ce qui l'entoure lui appartient. *Limite assumée* : dans un pack multi-mods, un reste que rien ne rattache reste un « autre mod » — le rattacher à tous dupliquerait des arbres parfois lourds, et « autre mod » ne perd rien. Un **document isolé** à la racine reste une annexe (§4.5.2) et va dans les ressources du mod, jamais dans AC : sans ce test, un `Read Me.pdf` deviendrait un ajout au jeu posé à la racine d'Assetto Corsa.
 

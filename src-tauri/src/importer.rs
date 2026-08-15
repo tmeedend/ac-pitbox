@@ -398,6 +398,28 @@ fn decision_for<'a>(decisions: &'a [ImportDecision], id: &str) -> Option<&'a str
     decisions.iter().find(|d| d.id == id).map(|d| d.decision.as_str())
 }
 
+/// Vrai si cet import est une **reprise** après arbitrage (§4.4). `decisions`
+/// est toujours vide au premier passage : sa présence signifie que
+/// l'utilisateur vient de trancher un cas ambigu.
+fn is_resume(decisions: &[ImportDecision]) -> bool {
+    !decisions.is_empty()
+}
+
+/// Mods à ranger dans cette passe. Au premier import, tous. Sur reprise, **le
+/// seul mod tranché** : rejouer les trente-neuf autres d'un pack les faisait
+/// revenir en « doublon » — donc sans dégât, mais au prix du lot entier, et la
+/// barre annonçait un travail qui n'en était pas un.
+fn targets_of<'a>(found: &'a [modscan::FoundMod], decisions: &[ImportDecision]) -> Vec<&'a modscan::FoundMod> {
+    if is_resume(decisions) {
+        found
+            .iter()
+            .filter(|fm| decision_for(decisions, &fm_id(fm)).is_some())
+            .collect()
+    } else {
+        found.iter().collect()
+    }
+}
+
 /// Copie l'archive/dossier source dans un espace dédié de la bibliothèque
 /// (§10/§11), pour permettre plus tard « Réinstaller depuis l'archive source ».
 /// Uniquement si le réglage `keep_source_archive` est actif — sinon jamais
@@ -485,6 +507,90 @@ fn is_archive_file(p: &Path) -> bool {
         && p.extension()
             .and_then(|e| e.to_str())
             .is_some_and(|e| NESTED_ARCHIVE_EXTS.iter().any(|a| a.eq_ignore_ascii_case(e)))
+}
+
+/// Archives imbriquées sous `dir`, à n'importe quelle profondeur (§7.3).
+///
+/// Sert à décider si une source dont **rien** n'est reconnu mérite qu'on
+/// descende avant de conclure. Recherche récursive et non limitée à la racine :
+/// la même livraison se rencontre à plat (`readme.txt` + `Car.zip`) et
+/// enveloppée d'un dossier (`Mod/{readme.txt, Car.zip}`), selon que l'auteur a
+/// zippé le contenu ou le dossier.
+fn nested_archives(dir: &Path) -> Vec<PathBuf> {
+    walkdir::WalkDir::new(dir)
+        .into_iter()
+        .flatten()
+        .map(|e| e.into_path())
+        .filter(|p| is_archive_file(p))
+        .collect()
+}
+
+/// Tente de sauver une source dont rien n'est reconnu en descendant dans les
+/// archives qu'elle contient (§7.3). Renvoie `false` si elle n'en contient
+/// aucune — l'appelant retombe alors sur « autre mod », comportement historique.
+///
+/// Bug réel : une archive livrant `readme.txt` + `Car.zip` (la voiture dans le
+/// zip) n'était pas reconnue à la racine, donc rangée en bloc comme « autre
+/// mod » — la voiture n'entrait jamais en bibliothèque, et le `.zip` brut se
+/// retrouvait lié à la racine du dossier du jeu. La machinerie qui sait extraire
+/// et reclasser une archive imbriquée existait déjà, ce chemin ne l'atteignait
+/// simplement jamais.
+#[allow(clippy::too_many_arguments)]
+fn rescue_nested_archives(
+    ctx: &ImportCtx,
+    index: usize,
+    conn: &Connection,
+    cfg: &AppConfig,
+    rules: &Rules,
+    library: &Path,
+    source_name: &str,
+    root: &Path,
+    copy: bool,
+    res_mode: crate::resources::ExtractionMode,
+    result: &mut ArchiveResult,
+) -> bool {
+    let nested = nested_archives(root);
+    if nested.is_empty() {
+        return false;
+    }
+    let mut discovered: Vec<(String, ModKind)> = Vec::new();
+    for p in &nested {
+        import_leftover(
+            ctx,
+            conn,
+            cfg,
+            rules,
+            library,
+            source_name,
+            root,
+            p,
+            copy,
+            res_mode,
+            result,
+            0,
+            &mut discovered,
+        );
+    }
+    // Le reste (la notice, et tout ce qui entourait le zip) est arbitré ensuite,
+    // avec ce qui vient d'en sortir comme propriétaires possibles. `consumed`
+    // porte les archives déjà traitées : `collect_leftover` descend dans un
+    // dossier qui en contient une, ce qui couvre les deux formes de livraison.
+    sweep_leftovers(
+        ctx,
+        index,
+        conn,
+        cfg,
+        rules,
+        library,
+        source_name,
+        root,
+        &nested,
+        &discovered,
+        copy,
+        res_mode,
+        result,
+    );
+    true
 }
 
 /// Chemins, sous `dir`, qui ne sont couverts par aucun mod déjà reconnu
@@ -586,14 +692,40 @@ fn sweep_leftovers(
     // leur arbre n'existe pas encore — sans ce rattrapage, ils ne
     // seraient posés qu'à la réactivation suivante.
     let mut owners_with_extras: Vec<(String, ModKind)> = Vec::new();
-    for (i, p) in leftovers.into_iter().enumerate() {
+
+    // Les archives imbriquées passent AVANT leurs voisins : ce qui en sort peut
+    // devenir le propriétaire de ce qui les entoure. Cas réel : une archive qui
+    // livre `readme.txt` + `Car.zip`, la voiture étant dans le zip — traités
+    // dans l'ordre du disque, le readme serait arbitré alors qu'aucune voiture
+    // n'est encore connue, et finirait « autre mod » au lieu d'être rangé dans
+    // les ressources de la voiture (§4.5.2).
+    let (nested, plain): (Vec<PathBuf>, Vec<PathBuf>) = leftovers.into_iter().partition(|p| is_archive_file(p));
+    let mut owners: Vec<(String, ModKind)> = mods.to_vec();
+    for (i, p) in nested.iter().enumerate() {
         ctx.file_ratio(index, tail_ratio(TAIL_APPS_END, 1.0, i, leftover_count));
+        import_leftover(
+            ctx,
+            conn,
+            cfg,
+            rules,
+            library,
+            archive_name,
+            workdir,
+            p,
+            copy,
+            res_mode,
+            result,
+            0,
+            &mut owners,
+        );
+    }
+
+    for (i, p) in plain.into_iter().enumerate() {
+        ctx.file_ratio(index, tail_ratio(TAIL_APPS_END, 1.0, nested.len() + i, leftover_count));
         let rel = p.strip_prefix(workdir).unwrap_or(&p).to_path_buf();
 
-        // Une archive imbriquée n'est pas un ajout au jeu : elle doit être
-        // extraite et reclassée (§7.3), pas stockée telle quelle.
-        if !is_archive_file(&p) {
-            if let Some((owner_id, owner_kind)) = owner_of_leftover(&rel, mods) {
+        {
+            if let Some((owner_id, owner_kind)) = owner_of_leftover(&rel, &owners) {
                 // Document isolé à la racine de ce qui entoure le mod : une
                 // annexe (§4.5.2), pas un ajout au jeu — il n'a rien à faire dans
                 // AC. Rangé dans les ressources du mod auquel il appartient,
@@ -649,6 +781,7 @@ fn sweep_leftovers(
             res_mode,
             result,
             0,
+            &mut owners,
         );
     }
 
@@ -682,6 +815,10 @@ fn import_leftover(
     res_mode: crate::resources::ExtractionMode,
     result: &mut ArchiveResult,
     depth: u8,
+    // Mods connus, complété par ceux qui sortent d'une archive imbriquée : c'est
+    // ce qui permet ensuite de rattacher à une voiture la notice livrée à côté
+    // du zip qui la contenait.
+    discovered: &mut Vec<(String, ModKind)>,
 ) {
     // Chemin relatif à la racine balayée, et non simple nom de fichier : c'est
     // lui qui donne sa destination au reste à l'activation (`others::place`
@@ -743,6 +880,7 @@ fn import_leftover(
                         false,
                         None,
                     ) {
+                        discovered.push((imported.id_interne.clone(), fm.kind));
                         result.mods.push(imported);
                     }
                 }
@@ -780,6 +918,7 @@ fn import_leftover(
                         res_mode,
                         result,
                         depth + 1,
+                        discovered,
                     );
                 }
             }
@@ -899,35 +1038,53 @@ fn file_extracted(
     let subs = modscan::scan_subs(workdir);
     let apps = modscan::scan_apps(workdir);
     if found.is_empty() && subs.is_empty() && apps.is_empty() {
+        // Rien à la racine ne veut pas dire rien du tout : le contenu peut être
+        // enfermé dans une archive imbriquée (§7.3).
+        let rescued = rescue_nested_archives(
+            ctx,
+            ex.index,
+            conn,
+            cfg,
+            rules,
+            library,
+            &archive_name,
+            workdir,
+            false,
+            res_mode,
+            &mut result,
+        );
         // Type non reconnu : jamais perdu, rangé comme « autre mod » (§7.3).
-        if let Some(other) = crate::others::import_other(conn, library, &archive_name, workdir, false, res_mode) {
-            if let Err(e) = crate::others::activate_other(conn, cfg, &other.id) {
-                log::warn!("auto_activate_other {}: {e}", other.id);
+        if !rescued {
+            if let Some(other) = crate::others::import_other(conn, library, &archive_name, workdir, false, res_mode) {
+                if let Err(e) = crate::others::activate_other(conn, cfg, &other.id) {
+                    log::warn!("auto_activate_other {}: {e}", other.id);
+                }
+                result.others.push(other);
+            } else {
+                result.error = Some(crate::errors::NOTHING_TO_IMPORT_IN_ARCHIVE.into());
             }
-            result.others.push(other);
-        } else {
-            result.error = Some(crate::errors::NOTHING_TO_IMPORT_IN_ARCHIVE.into());
         }
-        // « Autre mod » ne stocke aucune version : la copie de source faite à
-        // l'extraction ne sert à personne.
         drop_unused_kept_source(conn, cfg, ex.kept.as_deref());
         return result;
     }
-    ctx.sub(0, found.len(), archive_name.clone());
+    let targets = targets_of(&found, decisions);
+    ctx.sub(0, targets.len(), archive_name.clone());
     ctx.file_ratio(ex.index, SCAN_SHARE);
 
     let kept_archive = ex.kept.clone();
 
     // Pack (§4.4) : une archive multi-voitures regroupe ses mods sous sa source.
+    // Compté sur `found`, jamais sur `targets` : une reprise ne doit pas
+    // changer l'identité du pack sous prétexte qu'elle ne rejoue qu'un mod.
     let pack = (found.len() > 1).then_some(archive_name.as_str());
-    for (i, fm) in found.iter().enumerate() {
+    for (i, fm) in targets.iter().enumerate() {
         let label = fm
             .dir
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         ctx.phase(PHASE_FILING, label);
-        ctx.sub(i + 1, found.len(), fm_id(fm));
+        ctx.sub(i + 1, targets.len(), fm_id(fm));
         // Archive : le contenu vient d'un dossier temp → toujours déplacé.
         let decision = decision_for(decisions, &fm_id(fm));
         match process_found(
@@ -949,28 +1106,32 @@ fn file_extracted(
                 result.error.get_or_insert_with(String::new).push_str(&format!("{e}; "));
             }
         }
-        ctx.file_ratio(ex.index, filing_ratio(i + 1, found.len()));
+        ctx.file_ratio(ex.index, filing_ratio(i + 1, targets.len()));
     }
 
     // Activation par défaut des mods importés (§4.2).
     auto_activate(conn, cfg, &result.mods);
 
-    file_tail(
-        ctx,
-        ex.index,
-        conn,
-        cfg,
-        rules,
-        library,
-        &archive_name,
-        workdir,
-        &found,
-        &subs,
-        &apps,
-        false,
-        res_mode,
-        &mut result,
-    );
+    // Une reprise s'arrête au mod tranché : skins, apps et restes ont déjà été
+    // rangés au premier passage, les rejouer ne ferait que payer deux fois.
+    if !is_resume(decisions) {
+        file_tail(
+            ctx,
+            ex.index,
+            conn,
+            cfg,
+            rules,
+            library,
+            &archive_name,
+            workdir,
+            &found,
+            &subs,
+            &apps,
+            false,
+            res_mode,
+            &mut result,
+        );
+    }
 
     drop_unused_kept_source(conn, cfg, kept_archive.as_deref());
     result
@@ -1066,24 +1227,42 @@ fn import_one_folder(
     let subs = modscan::scan_subs(dir);
     let apps = modscan::scan_apps(dir);
     if found.is_empty() && subs.is_empty() && apps.is_empty() {
+        // Même sauvetage que pour une archive : le contenu peut être enfermé
+        // dans un zip posé dans le dossier (§7.3).
+        let rescued = rescue_nested_archives(
+            ctx,
+            index,
+            conn,
+            cfg,
+            rules,
+            library,
+            &name,
+            dir,
+            copy,
+            res_mode,
+            &mut result,
+        );
         // Type non reconnu : jamais perdu, rangé comme « autre mod » (§7.3).
-        if let Some(other) = crate::others::import_other(conn, library, &name, dir, copy, res_mode) {
-            if let Err(e) = crate::others::activate_other(conn, cfg, &other.id) {
-                log::warn!("auto_activate_other {}: {e}", other.id);
+        if !rescued {
+            if let Some(other) = crate::others::import_other(conn, library, &name, dir, copy, res_mode) {
+                if let Err(e) = crate::others::activate_other(conn, cfg, &other.id) {
+                    log::warn!("auto_activate_other {}: {e}", other.id);
+                }
+                result.others.push(other);
+            } else {
+                result.error = Some(crate::errors::NOTHING_TO_IMPORT_IN_FOLDER.into());
             }
-            result.others.push(other);
-        } else {
-            result.error = Some(crate::errors::NOTHING_TO_IMPORT_IN_FOLDER.into());
         }
         drop_unused_kept_source(conn, cfg, kept_archive);
         return result;
     }
-    ctx.sub(0, found.len(), name.clone());
+    let targets = targets_of(&found, decisions);
+    ctx.sub(0, targets.len(), name.clone());
     ctx.file_ratio(index, SCAN_SHARE);
 
     // Pack (§4.4) : un dossier multi-voitures regroupe ses mods sous sa source.
     let pack = (found.len() > 1).then_some(name.as_str());
-    for (i, fm) in found.iter().enumerate() {
+    for (i, fm) in targets.iter().enumerate() {
         ctx.phase(
             PHASE_FILING,
             fm.dir
@@ -1091,7 +1270,7 @@ fn import_one_folder(
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default(),
         );
-        ctx.sub(i + 1, found.len(), fm_id(fm));
+        ctx.sub(i + 1, targets.len(), fm_id(fm));
         let decision = decision_for(decisions, &fm_id(fm));
         match process_found(
             conn,
@@ -1111,28 +1290,31 @@ fn import_one_folder(
                 result.error.get_or_insert_with(String::new).push_str(&format!("{e}; "));
             }
         }
-        ctx.file_ratio(index, filing_ratio(i + 1, found.len()));
+        ctx.file_ratio(index, filing_ratio(i + 1, targets.len()));
     }
 
     // Activation par défaut des mods importés (§4.2).
     auto_activate(conn, cfg, &result.mods);
 
-    file_tail(
-        ctx,
-        index,
-        conn,
-        cfg,
-        rules,
-        library,
-        &name,
-        dir,
-        &found,
-        &subs,
-        &apps,
-        copy,
-        res_mode,
-        &mut result,
-    );
+    // Reprise : voir `file_extracted`, même raison.
+    if !is_resume(decisions) {
+        file_tail(
+            ctx,
+            index,
+            conn,
+            cfg,
+            rules,
+            library,
+            &name,
+            dir,
+            &found,
+            &subs,
+            &apps,
+            copy,
+            res_mode,
+            &mut result,
+        );
+    }
 
     drop_unused_kept_source(conn, cfg, kept_archive);
     result
@@ -1984,6 +2166,78 @@ mod tests {
         assert!(status.success(), "7z a a échoué");
     }
 
+    /// Règle (§7.3/§4.5.2) : une voiture enfermée dans un zip imbriqué, avec sa
+    /// notice posée à côté, est importée comme une voiture — et la notice lui
+    /// est rattachée.
+    ///
+    /// Bug réel : rien n'étant reconnu à la racine, l'archive entière partait en
+    /// « autre mod ». La voiture n'entrait jamais en bibliothèque, et le `.zip`
+    /// brut se retrouvait lié à la racine du dossier du jeu. Packaging courant
+    /// (notice + archive), pas un cas tordu.
+    #[test]
+    fn car_locked_inside_a_nested_zip_is_imported_with_its_readme() {
+        let Some(sevenzip) = crate::detect::find_7zip() else {
+            eprintln!("7-Zip introuvable — test ignoré");
+            return;
+        };
+        let base = crate::testutil::temp_dir("nested-zip");
+
+        // inner.zip contient le dossier de la voiture, rien d'autre.
+        let car_src = base.join("carsrc");
+        make_fake_car(&car_src, "nested_car");
+        let inner = base.join("inner.zip");
+        zip_dir(&sevenzip, &car_src, &inner);
+
+        // outer.zip = notice + inner.zip. Rien de reconnaissable à la racine.
+        let outer_src = base.join("outersrc");
+        std::fs::create_dir_all(&outer_src).unwrap();
+        std::fs::write(outer_src.join("readme.txt"), b"notice du mod").unwrap();
+        std::fs::copy(&inner, outer_src.join("inner.zip")).unwrap();
+        let outer = base.join("outer.zip");
+        zip_dir(&sevenzip, &outer_src, &outer);
+
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let db = crate::overlay::Db(std::sync::Mutex::new(
+            crate::overlay::open(&base.join("overlay.sqlite")).unwrap(),
+        ));
+        let cfg = AppConfig {
+            sevenzip_exe: Some(sevenzip.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let res = import_archives(
+            &ImportCtx::silent(),
+            &db,
+            &cfg,
+            &rules,
+            &[outer.to_string_lossy().into_owned()],
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(res[0].mods.len(), 1, "la voiture est reconnue, pas rangée en vrac");
+        assert_eq!(res[0].mods[0].id_interne, "nested_car");
+        assert_eq!(res[0].mods[0].outcome, "IMPORT");
+        assert!(
+            res[0].others.is_empty(),
+            "plus de zip brut en « autre mod » : {:?}",
+            res[0].others
+        );
+        // La notice suit la voiture, dans ses ressources (§4.5.2) — c'est un
+        // document à lire, pas un ajout au jeu. Vérifié sur le disque : le
+        // rangement d'une annexe à côté du mod n'incrémente aucun compteur du
+        // rapport, seul l'emplacement fait foi.
+        let res_dir = crate::resources::resources_dir(&library, ModKind::Car, "nested_car");
+        assert!(
+            res_dir.join("readme.txt").is_file(),
+            "notice rangée dans les ressources de la voiture, pas laissée seule ({})",
+            res_dir.display()
+        );
+    }
+
     #[test]
     fn mod_folder_contents_are_never_extracted_whatever_the_mode() {
         // Règle d'or (§4.5.1) : rien ne sort du dossier du mod, quel que soit le
@@ -2248,6 +2502,57 @@ mod tests {
             crate::overlay::get_versions(&conn, "amb").unwrap().len(),
             2,
             "nouvelle version après décision"
+        );
+    }
+
+    /// Règle (§4.4) : une reprise après arbitrage ne rejoue que le mod tranché.
+    /// Rejouer ses voisins les faisait revenir en « doublon » — donc sans dégât,
+    /// mais au prix du lot entier, et la barre annonçait un travail qui n'en
+    /// était pas un.
+    #[test]
+    fn resuming_an_ambiguous_decision_touches_only_the_decided_mod() {
+        let base = crate::testutil::temp_dir("import-resume");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        // Un pack de deux voitures : une qui deviendra ambiguë, une voisine.
+        let src1 = base.join("src1");
+        make_car_with_files(&src1, "amb", &["model.kn5", "data/a.ini", "data/b.ini", "data/c.ini"]);
+        make_fake_car(&src1, "neighbour");
+        import_folder_for_test(&conn, &cfg, &rules, &src1, true, &[]);
+
+        // Second import du même pack : « amb » change assez pour être ambiguë,
+        // la voisine est à l'identique.
+        let src2 = base.join("src2");
+        make_car_with_files(&src2, "amb", &["model2.kn5", "data/a.ini", "new/y.ini"]);
+        make_fake_car(&src2, "neighbour");
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src2, true, &[]);
+        assert_eq!(r.mods.len(), 2, "les deux voitures sont vues au premier passage");
+
+        // Reprise : seule « amb » est tranchée.
+        let decisions = vec![ImportDecision {
+            id: "amb".into(),
+            decision: "update".into(),
+        }];
+        let r2 = import_folder_for_test(&conn, &cfg, &rules, &src2, true, &decisions);
+        assert_eq!(r2.mods.len(), 1, "la voisine n'est pas rejouée : {:?}", r2.mods);
+        assert_eq!(r2.mods[0].id_interne, "amb");
+        assert_eq!(r2.mods[0].outcome, "UPDATE_REPLACE");
+        assert_eq!(
+            crate::overlay::get_versions(&conn, "amb").unwrap().len(),
+            2,
+            "nouvelle version après décision"
+        );
+        assert_eq!(
+            crate::overlay::get_versions(&conn, "neighbour").unwrap().len(),
+            1,
+            "la voisine n'a pas bougé"
         );
     }
 
