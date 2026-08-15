@@ -133,6 +133,7 @@ pub fn run() {
             commands::library::get_mod_detail,
             commands::library::open_mod_folder,
             commands::library::list_mod_resources,
+            commands::library::list_mod_extras,
             commands::library::open_mod_resource,
             commands::library::get_mod_csp_features,
             commands::activation::activate_mod,

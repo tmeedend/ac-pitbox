@@ -291,6 +291,52 @@ pub fn undeploy(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(), 
     Ok(())
 }
 
+/// Une entrée de l'onglet « Ajouts au jeu » de la fiche (§4.6ter).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ExtraFile {
+    /// Chemin relatif à la racine d'AC — c'est *l'*information utile : elle dit
+    /// où le fichier atterrit dans le jeu (`extension/config/cars/…`).
+    pub rel_path: String,
+    pub size_bytes: u64,
+    /// Actuellement posé dans AC par ce mod. Faux = un autre mod fournit le
+    /// même fichier (partagé), ou le mod est inactif.
+    pub deployed: bool,
+    /// Mod qui fournit l'exemplaire posé, quand ce n'est pas celui-ci.
+    pub provided_by: Option<String>,
+}
+
+/// Liste ce qu'un mod installe hors de `content/<type>/<id>`, **lu en direct
+/// sur disque** comme le bloc Ressources (§4.6) : un mod importé avant que
+/// l'app ne suive ces fichiers n'a rien à réimporter pour que l'onglet se
+/// remplisse. L'état de pose, lui, vient de la base.
+pub fn list(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -> Vec<ExtraFile> {
+    let (Some(library), Some(ac)) = (cfg.library_path.as_ref(), cfg.ac_install_path.as_ref()) else {
+        return Vec::new();
+    };
+    let sat = dir(library, kind, mod_id);
+    if !sat.is_dir() {
+        return Vec::new();
+    }
+    let mut out: Vec<ExtraFile> = WalkDir::new(&sat)
+        .into_iter()
+        .flatten()
+        .filter(|e| e.file_type().is_file())
+        .filter_map(|e| {
+            let rel = e.path().strip_prefix(&sat).ok()?.to_path_buf();
+            let target = ac.join(&rel);
+            let provider = overlay::extra_provider(conn, &target.to_string_lossy()).unwrap_or(None);
+            Some(ExtraFile {
+                rel_path: rel.to_string_lossy().replace('\\', "/"),
+                size_bytes: e.metadata().map(|m| m.len()).unwrap_or(0),
+                deployed: provider.as_deref() == Some(mod_id),
+                provided_by: provider.filter(|p| p != mod_id),
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -368,6 +414,55 @@ mod tests {
         undeploy(&conn, &cfg, "rss_old").unwrap();
         assert!(!target.exists(), "plus aucun réclamant : retiré");
         assert!(!ac.join("extension").exists(), "dossiers créés pour l'occasion élagués");
+    }
+
+    #[test]
+    fn list_reports_where_each_file_lands_and_who_provides_it() {
+        // §4.6ter, onglet « Ajouts au jeu » : la fiche doit dire *où* le mod
+        // pose ses fichiers dans le jeu, et lesquels sont en fait fournis par
+        // un autre mod (fichier partagé). Sans ça, un mod peut poser 69
+        // fichiers hors de son dossier sans que rien ne le montre.
+        let base = crate::testutil::temp_dir("sat-list");
+        let cfg = cfg_for(&base);
+        let library = cfg.library_path.clone().unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+
+        let shared = Path::new("system").join("shaders").join("shared.fxo");
+        let own = Path::new("extension").join("config").join("mine.ini");
+        write(&dir(&library, ModKind::Car, "car_a").join(&shared), b"AAAA");
+        write(&dir(&library, ModKind::Car, "car_a").join(&own), b"MINE");
+        write(&dir(&library, ModKind::Car, "car_b").join(&shared), b"BBBB");
+        // car_b, plus récent, gagnera le fichier partagé.
+        set_mtime(&dir(&library, ModKind::Car, "car_a").join(&shared), 1_000_000);
+        set_mtime(&dir(&library, ModKind::Car, "car_b").join(&shared), 2_000_000);
+
+        deploy(&conn, &cfg, ModKind::Car, "car_a").unwrap();
+        deploy(&conn, &cfg, ModKind::Car, "car_b").unwrap();
+
+        let listed = list(&conn, &cfg, ModKind::Car, "car_a");
+        assert_eq!(listed.len(), 2, "les deux fichiers de car_a sont listés");
+
+        let mine = listed
+            .iter()
+            .find(|f| f.rel_path == "extension/config/mine.ini")
+            .unwrap();
+        assert!(mine.deployed, "fichier propre : posé par ce mod");
+        assert!(mine.provided_by.is_none());
+        assert_eq!(mine.size_bytes, 4);
+
+        let sh = listed
+            .iter()
+            .find(|f| f.rel_path == "system/shaders/shared.fxo")
+            .unwrap();
+        assert!(!sh.deployed, "fichier partagé perdu à l'arbitrage");
+        assert_eq!(
+            sh.provided_by.as_deref(),
+            Some("car_b"),
+            "la fiche nomme le mod qui fournit l'exemplaire posé"
+        );
+
+        // Chemins relatifs à AC, séparateurs normalisés pour l'affichage.
+        assert!(listed.iter().all(|f| !f.rel_path.contains('\\')));
     }
 
     #[test]

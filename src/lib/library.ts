@@ -334,6 +334,22 @@ export function listModResources(id: string): Promise<ResourceFile[]> {
   return invoke<ResourceFile[]>("list_mod_resources", { id });
 }
 
+/** Une entrée de l'onglet « Ajouts au jeu » (§4.6ter). */
+export interface ExtraFile {
+  /** Chemin relatif à la racine d'Assetto Corsa — dit où le fichier atterrit. */
+  rel_path: string;
+  size_bytes: number;
+  /** Posé dans le jeu par ce mod. Faux = un autre mod le fournit, ou mod inactif. */
+  deployed: boolean;
+  /** Mod qui fournit l'exemplaire posé, quand ce n'est pas celui-ci. */
+  provided_by: string | null;
+}
+
+/** Ce qu'un mod installe hors de son dossier `content/` (§4.6ter). */
+export function listModExtras(id: string): Promise<ExtraFile[]> {
+  return invoke<ExtraFile[]>("list_mod_extras", { id });
+}
+
 /** Ouvre un fichier annexe avec l'application par défaut de l'OS (§4.6). */
 export function openModResource(id: string, relPath: string): Promise<void> {
   return invoke<void>("open_mod_resource", { id, relPath });

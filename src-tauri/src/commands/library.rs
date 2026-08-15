@@ -57,6 +57,18 @@ pub fn list_mod_resources(
     )))
 }
 
+/// Liste ce qu'un mod installe hors de `content/<type>/<id>` (§4.6ter) —
+/// onglet « Ajouts au jeu » de la fiche.
+#[tauri::command]
+pub fn list_mod_extras(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<crate::extras::ExtraFile>, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let m = crate::overlay::get_mod(&conn, &id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_NOT_FOUND)?;
+    Ok(crate::extras::list(&conn, &cfg, mod_kind(&m.kind), &id))
+}
+
 /// Ouvre un fichier du dossier ressources avec l'application par défaut de
 /// l'OS (§4.6). `rel_path` est résolu et validé côté serveur (garde-fou
 /// anti-traversée) plutôt que de faire confiance à un chemin absolu envoyé

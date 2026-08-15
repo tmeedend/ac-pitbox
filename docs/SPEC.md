@@ -154,6 +154,8 @@ Le fournisseur courant est mémorisé (`provided`), jamais déduit de la taille 
 
 **Un fichier que personne ne réclame est hors jeu** (règle d'or n°5) : contenu Kunos, ou mod installé hors de l'app. Jamais touché, et surtout jamais enregistré — sinon une désactivation pourrait l'emporter. Ce qui a été posé est mémorisé **fichiers et dossiers créés pour l'occasion séparément** : c'est la seule façon d'élaguer les dossiers vides sans risquer d'emporter un dossier d'AC préexistant devenu vide.
 
+**Onglet « Ajouts au jeu »** sur la fiche pleine (`DetailPage`), frère de « Ressources » et avec le même décompte. Répond à « qu'est-ce que ce mod met chez moi en plus de son dossier ? », que rien ne montrait auparavant — un mod pouvait en poser 69 en silence. **Regroupé par dossier de destination** : quatre destinations disent tout de suite ce que le mod touche, là où 69 lignes plates sont illisibles. Chaque groupe est dépliable, et les fichiers **partagés** qu'un autre mod fournit sont signalés avec son nom. Liste **lue en direct sur disque** comme le bloc Ressources (un mod importé avant que l'app ne suive ces fichiers n'a rien à réimporter) ; l'état de pose, lui, vient de la base. Absent du panneau latéral `ModDetail`, comme le bloc Ressources — les listes de fichiers vivent dans la page pleine.
+
 ---
 
 ## 5. Tags et harmonisation

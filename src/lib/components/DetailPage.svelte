@@ -9,6 +9,7 @@
     getModDetail,
     listLibrary,
     listModResources,
+    listModExtras,
     openModFolder,
     previewSrc,
     setFavorite,
@@ -41,6 +42,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import LayersBlock from "./detail/LayersBlock.svelte";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
+  import ExtrasBlock from "./detail/ExtrasBlock.svelte";
   import HistoryBlock from "./detail/HistoryBlock.svelte";
   import ProvenanceBlock from "./detail/ProvenanceBlock.svelte";
   import TagsBlock from "./detail/TagsBlock.svelte";
@@ -61,7 +63,7 @@
   let detail = $state<ModDetail | null>(null);
   // Onglets de premier niveau de la fiche (§6.1) — réinitialisé à "fiche" à
   // chaque changement d'entité (voir le $effect suivant `id`).
-  let activeTab = $state<"fiche" | "screenshots" | "replays" | "resources" | "backgrounds">("fiche");
+  let activeTab = $state<"fiche" | "screenshots" | "replays" | "resources" | "extras" | "backgrounds">("fiche");
   // Chiffres affichés entre parenthèses sur les onglets Médias/Ressources —
   // mêmes appels que ceux faits à l'ouverture de l'onglet (media.rs parcourt
   // en direct `screens/`/`replay/`, potentiellement coûteux), mais lancés ici
@@ -71,6 +73,7 @@
   let screenshotsCount = $state<number | null>(null);
   let replaysCount = $state<number | null>(null);
   let resourcesCount = $state<number | null>(null);
+  let extrasCount = $state<number | null>(null);
   let backgroundsCount = $state<number | null>(null);
   let skins = $state<SkinItem[]>([]);
   let previewSkin = $state(0);
@@ -303,6 +306,7 @@
     screenshotsCount = null;
     replaysCount = null;
     resourcesCount = null;
+    extrasCount = null;
     listMediaScreenshots(current)
       .then((f) => {
         if (current === id) screenshotsCount = f.length;
@@ -316,6 +320,11 @@
     listModResources(current)
       .then((f) => {
         if (current === id) resourcesCount = f.length;
+      })
+      .catch(() => {});
+    listModExtras(current)
+      .then((f) => {
+        if (current === id) extrasCount = f.length;
       })
       .catch(() => {});
   });
@@ -673,6 +682,9 @@
       <button class:on={activeTab === "resources"} type="button" onclick={() => (activeTab = "resources")}>
         {t("detail.tabResources")}{resourcesCount !== null ? ` (${resourcesCount})` : ""}
       </button>
+      <button class:on={activeTab === "extras"} type="button" onclick={() => (activeTab = "extras")}>
+        {t("detail.tabExtras")}{extrasCount !== null ? ` (${extrasCount})` : ""}
+      </button>
       {#if !isCar}
         <button class:on={activeTab === "backgrounds"} type="button" onclick={() => (activeTab = "backgrounds")}>
           {t("detail.tabBackgrounds")}{backgroundsCount !== null ? ` (${backgroundsCount})` : ""}
@@ -962,6 +974,10 @@
     {:else if activeTab === "resources"}
       <div class="tab-body">
         <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
+      </div>
+    {:else if activeTab === "extras"}
+      <div class="tab-body">
+        <ExtrasBlock modId={id} />
       </div>
     {:else if activeTab === "backgrounds" && !isCar}
       <div class="tab-body">
