@@ -227,15 +227,34 @@ pub fn file_mod(
     move_files: bool,
     source: Source,
 ) -> Result<usize, String> {
+    file_mod_reported(src, content_dest, resources_dest, mode, move_files, source, &|_| {})
+}
+
+/// Comme [`file_mod`], en signalant les octets rangés au fil de l'eau (§4.2bis).
+///
+/// Ranger un mod est une seule opération, mais elle peut durer des minutes sur
+/// un mod de plusieurs Go — et c'était la dernière étape de l'import à ne rien
+/// dire d'elle-même. Un `rename` sur le même volume ne signale rien : il est
+/// instantané, il n'y a pas de progression à montrer.
+#[allow(clippy::too_many_arguments)]
+pub fn file_mod_reported(
+    src: &Path,
+    content_dest: &Path,
+    resources_dest: &Path,
+    mode: ExtractionMode,
+    move_files: bool,
+    source: Source,
+    on_bytes: &archive::BytesReport,
+) -> Result<usize, String> {
     let ancillary = match source {
         Source::ModFolder => HashMap::new(),
         Source::BesideMod => scan(src, mode),
     };
     if ancillary.is_empty() {
         if move_files {
-            archive::move_dir(src, content_dest)
+            archive::move_dir_reported(src, content_dest, on_bytes)
         } else {
-            archive::copy_dir(src, content_dest)
+            archive::copy_dir_reported(src, content_dest, on_bytes)
         }
         .map_err(|e| format!("rangement bibliothèque : {e}"))?;
         return Ok(0);
@@ -248,13 +267,18 @@ pub fn file_mod(
         }
         let path = entry.path();
         let rel = path.strip_prefix(src).unwrap_or(path);
+        let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
         match ancillary.get(path).copied().unwrap_or(Route::Content) {
-            Route::Content => copy_or_move_one(path, &content_dest.join(rel), move_files)
-                .map_err(|e| format!("rangement bibliothèque : {e}"))?,
+            Route::Content => {
+                copy_or_move_one(path, &content_dest.join(rel), move_files)
+                    .map_err(|e| format!("rangement bibliothèque : {e}"))?;
+                on_bytes(size);
+            }
             Route::Resources => {
                 extracted += 1;
                 copy_or_move_one(path, &resources_dest.join(rel), move_files)
                     .map_err(|e| format!("extraction des fichiers annexes : {e}"))?;
+                on_bytes(size);
             }
             Route::Drop => { /* ni content, ni ressources : reste dans la source (§4.5.2, mode Aucun) */ }
         }

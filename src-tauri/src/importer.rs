@@ -138,6 +138,16 @@ fn filing_ratio(done: usize, total: usize) -> f64 {
     SCAN_SHARE + (TAIL_START - SCAN_SHARE) * (done as f64 / total as f64)
 }
 
+/// Rapporteur d'avancement pour le mod `i` sur `n` d'un item : projette sa
+/// progression interne (§4.2bis) sur la seule part de la barre qui lui revient.
+/// Sans lui, la barre saute d'un mod à l'autre et reste immobile pendant la
+/// copie d'un mod de plusieurs Go — le cas type d'un import de dossier unique.
+fn mod_progress(ctx: &ImportCtx, index: usize, i: usize, n: usize) -> impl Fn(f64) + '_ {
+    let from = filing_ratio(i, n);
+    let to = filing_ratio(i + 1, n);
+    move |r: f64| ctx.file_ratio(index, from + (to - from) * r.clamp(0.0, 1.0))
+}
+
 /// Avancement dans une bande de la queue, `done` sur `total`.
 fn tail_ratio(from: f64, to: f64, done: usize, total: usize) -> f64 {
     if total == 0 {
@@ -922,6 +932,9 @@ fn import_leftover(
                         None,
                         false,
                         None,
+                        // Contenu d'une archive imbriquée : rangé dans la queue
+                        // de la barre, qui n'a pas de part réservée par mod.
+                        &|_| {},
                     ) {
                         discovered.push((imported.id_interne.clone(), fm.kind));
                         result.mods.push(imported);
@@ -1155,6 +1168,7 @@ fn file_extracted(
             decision,
             true,
             kept_archive.as_deref(),
+            &mod_progress(ctx, ex.index, i, targets.len()),
         ) {
             Ok(imported) => result.mods.push(imported),
             Err(e) => {
@@ -1340,6 +1354,7 @@ fn import_one_folder(
             decision,
             true,
             kept_archive,
+            &mod_progress(ctx, index, i, targets.len()),
         ) {
             Ok(imported) => result.mods.push(imported),
             Err(e) => {
@@ -1656,8 +1671,8 @@ fn exec_one(
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         ctx.sub(i + 1, found.len(), id.clone());
-        ctx.file_ratio(index, filing_ratio(i + 1, found.len()));
         if it.skip_ids.iter().any(|s| s == &id) {
+            ctx.file_ratio(index, filing_ratio(i + 1, found.len()));
             continue;
         }
         // Import en masse (§4.2) : jamais de blocage au fil de l'eau. Un cas
@@ -1674,6 +1689,7 @@ fn exec_one(
             None,
             false,
             kept_archive.as_deref(),
+            &mod_progress(ctx, index, i, found.len()),
         ) {
             Ok(imported) => {
                 if let Some(conflict) = imported.conflict.clone() {
@@ -1690,6 +1706,10 @@ fn exec_one(
                 result.error.get_or_insert_with(String::new).push_str(&format!("{e}; "));
             }
         }
+        // Fin de la part de ce mod, quoi qu'il se soit passé pendant : un
+        // `rename` sur le même volume ne signale aucun octet, donc le
+        // rapporteur d'octets seul laisserait la barre au début de la part.
+        ctx.file_ratio(index, filing_ratio(i + 1, found.len()));
     }
     // Activation par défaut des mods importés (§4.2).
     auto_activate(conn, cfg, &result.mods);
@@ -1806,6 +1826,10 @@ fn process_found(
     // entre tous les mods d'une même archive/dossier. `None` si le réglage est
     // désactivé ou la copie a échoué.
     kept_archive: Option<&str>,
+    // Avancement du rangement de CE mod, dans [0,1] (§4.2bis). Une simple
+    // fonction plutôt que le contexte de progression : `process_found` n'a pas
+    // à connaître les bandes de la barre ni le rang de l'item dans le lot.
+    on_progress: &dyn Fn(f64),
 ) -> Result<ImportedMod, String> {
     let id_interne = fm
         .dir
@@ -2016,13 +2040,22 @@ fn process_found(
     // Fichiers annexes (§4.5.2) redirigés vers le dossier ressources du mod,
     // jamais dans le contenu de jeu, selon le réglage global.
     let resources_dest = crate::resources::resources_dir(library, fm.kind, &id_interne);
-    let resources_extracted = crate::resources::file_mod(
+    // Taille mesurée avant le rangement : c'est le dénominateur de la
+    // progression. Un parcours de métadonnées de plus, négligeable devant la
+    // copie qu'il sert à commenter.
+    let total_bytes = source_size(&fm.dir).max(1);
+    let copied = std::cell::Cell::new(0u64);
+    let resources_extracted = crate::resources::file_mod_reported(
         &fm.dir,
         &dest,
         &resources_dest,
         res_mode,
         !copy,
         crate::resources::Source::ModFolder,
+        &|bytes| {
+            copied.set(copied.get() + bytes);
+            on_progress((copied.get() as f64 / total_bytes as f64).min(1.0));
+        },
     )?;
     let library_path = crate::libpath::to_relative(Some(library), &dest);
 
@@ -2168,6 +2201,36 @@ mod tests {
     /// de progression silencieux, item unique. Reproduit ce que fait
     /// `import_folders` autour de lui, copie de la source comprise — sans quoi
     /// les tests qui vérifient `kept_archive_path` passeraient à côté.
+    /// Règle (§4.2bis) : la progression d'un mod reste dans la part qui lui
+    /// revient et va d'un bout à l'autre. Sans cette projection, la copie d'un
+    /// mod de plusieurs Go laisserait la barre immobile — puis un mod ferait
+    /// avancer la barre au-delà de sa propre part.
+    #[test]
+    fn a_mods_own_progress_stays_inside_its_share_of_the_bar() {
+        let ctx = ImportCtx::silent();
+        ctx.plan(vec![crate::import_progress::ItemPlan {
+            label: "item".into(),
+            extract_w: 0.0,
+            file_w: 10.0,
+        }]);
+        // Deuxième mod sur trois : sa part va de filing_ratio(1,3) à (2,3).
+        let report = mod_progress(&ctx, 0, 1, 3);
+        report(0.0);
+        assert_eq!(ctx.item_ratio_for_test(), filing_ratio(1, 3), "début de la part");
+        report(0.5);
+        let mid = ctx.item_ratio_for_test();
+        assert!(
+            mid > filing_ratio(1, 3) && mid < filing_ratio(2, 3),
+            "mi-copie, dans la part : {mid}"
+        );
+        report(1.0);
+        assert_eq!(
+            ctx.item_ratio_for_test(),
+            filing_ratio(2, 3),
+            "fin de la part, pas au-delà"
+        );
+    }
+
     fn import_folder_for_test(
         conn: &Connection,
         cfg: &AppConfig,

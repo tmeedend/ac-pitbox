@@ -182,30 +182,46 @@ pub fn create_7z(sevenzip: &Path, src_dir: &Path, archive: &Path) -> Result<(), 
     }
 }
 
+/// Octets copiés, signalés fichier par fichier. Permet à la barre de progression
+/// d'avancer pendant la copie d'un mod de plusieurs Go, qui est autrement une
+/// seule opération opaque (§4.2bis).
+pub type BytesReport<'a> = dyn Fn(u64) + 'a;
+
 /// Déplace un dossier : `rename` si même volume, sinon copie récursive + suppression.
 pub fn move_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
+    move_dir_reported(src, dst, &|_| {})
+}
+
+/// Comme [`move_dir`], en signalant les octets copiés. Un `rename` réussi ne
+/// signale rien : il est instantané, il n'y a pas de progression à montrer.
+pub fn move_dir_reported(src: &Path, dst: &Path, on_bytes: &BytesReport) -> std::io::Result<()> {
     if let Some(parent) = dst.parent() {
         std::fs::create_dir_all(parent)?;
     }
     if std::fs::rename(src, dst).is_ok() {
         return Ok(());
     }
-    copy_dir(src, dst)?;
+    copy_dir_reported(src, dst, on_bytes)?;
     std::fs::remove_dir_all(src)?;
     Ok(())
 }
 
 /// Copie récursive d'un dossier (fallback inter-volumes).
 pub fn copy_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
+    copy_dir_reported(src, dst, &|_| {})
+}
+
+/// Comme [`copy_dir`], en signalant les octets de chaque fichier copié.
+pub fn copy_dir_reported(src: &Path, dst: &Path, on_bytes: &BytesReport) -> std::io::Result<()> {
     std::fs::create_dir_all(dst)?;
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;
         let from = entry.path();
         let to = dst.join(entry.file_name());
         if from.is_dir() {
-            copy_dir(&from, &to)?;
+            copy_dir_reported(&from, &to, on_bytes)?;
         } else {
-            std::fs::copy(&from, &to)?;
+            on_bytes(std::fs::copy(&from, &to)?);
         }
     }
     Ok(())

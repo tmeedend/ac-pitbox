@@ -244,6 +244,13 @@ impl ImportCtx {
         }
     }
 
+    /// Avancement de l'item courant, pour les tests d'autres modules qui
+    /// vérifient ce qu'ils poussent dans la barre.
+    #[cfg(test)]
+    pub fn item_ratio_for_test(&self) -> f64 {
+        self.state.lock().expect("progress mutex").item_ratio()
+    }
+
     pub fn cancelled(&self) -> bool {
         self.cancel.load(Ordering::Relaxed)
     }
