@@ -404,6 +404,52 @@ fn keep_source(cfg: &AppConfig, source: &Path, label: &str) -> Option<String> {
     }
 }
 
+/// Retire la copie de source qu'aucune version ne réclame (§10/§11).
+///
+/// `keep_source` copie **avant** de savoir si la copie servira : c'est
+/// obligatoire, puisqu'un import de dossier en mode déplacement consomme sa
+/// source pendant le rangement. Mais tous les classements ne stockent pas une
+/// version — un doublon sort avant d'écrire quoi que ce soit (§4.4), une couche
+/// passe par `layers::store_layer`, une archive au contenu non reconnu devient
+/// un « autre mod » (§7.3). Dans ces cas-là, la copie restait dans
+/// `_source_archives/` sans que rien ne la référence ni ne la nettoie : sur une
+/// archive de 2 Go réimportée par erreur, 2 Go perdus à chaque fois.
+///
+/// L'overlay fait autorité plutôt que l'issue affichée : une issue ajoutée plus
+/// tard n'a pas à être reportée ici pour que le nettoyage reste juste.
+fn drop_unused_kept_source(conn: &Connection, cfg: &AppConfig, kept: Option<&str>) {
+    let Some(kept) = kept else { return };
+    match crate::overlay::kept_archive_in_use(conn, kept) {
+        Ok(true) => return,
+        Ok(false) => {}
+        Err(e) => {
+            // Base illisible : ne rien supprimer. Une copie orpheline coûte du
+            // disque, une copie retirée à tort casse « Réinstaller depuis
+            // l'archive source ».
+            log::warn!("kept_archive_in_use {kept}: {e}");
+            return;
+        }
+    }
+    let Some(path) = crate::libpath::resolve(cfg.library_path.as_deref(), kept) else {
+        return;
+    };
+    // Le dossier à retirer est celui à l'uuid, pas le fichier dedans : c'est lui
+    // que `keep_source` a créé. Garde-fou sur le nom du parent — on ne supprime
+    // récursivement que ce qu'on a soi-même posé sous `_source_archives/`.
+    let Some(uuid_dir) = path.parent() else { return };
+    let under_source_archives = uuid_dir
+        .parent()
+        .and_then(|p| p.file_name())
+        .is_some_and(|n| n == "_source_archives");
+    if !under_source_archives {
+        log::warn!("kept source outside _source_archives, left alone: {}", path.display());
+        return;
+    }
+    if let Err(e) = std::fs::remove_dir_all(uuid_dir) {
+        log::warn!("drop_unused_kept_source {}: {e}", uuid_dir.display());
+    }
+}
+
 /// Id interne dérivé du dossier d'un mod trouvé (nom du dossier `content/<type>s/<id>`).
 fn fm_id(fm: &modscan::FoundMod) -> String {
     fm.dir
@@ -824,6 +870,9 @@ fn file_extracted(
         } else {
             result.error = Some(crate::errors::NOTHING_TO_IMPORT_IN_ARCHIVE.into());
         }
+        // « Autre mod » ne stocke aucune version : la copie de source faite à
+        // l'extraction ne sert à personne.
+        drop_unused_kept_source(conn, cfg, ex.kept.as_deref());
         return result;
     }
     ctx.sub(0, found.len(), archive_name.clone());
@@ -898,6 +947,7 @@ fn file_extracted(
         &mut result,
     );
 
+    drop_unused_kept_source(conn, cfg, kept_archive.as_deref());
     result
 }
 
@@ -1000,6 +1050,7 @@ fn import_one_folder(
         } else {
             result.error = Some(crate::errors::NOTHING_TO_IMPORT_IN_FOLDER.into());
         }
+        drop_unused_kept_source(conn, cfg, kept_archive);
         return result;
     }
     ctx.sub(0, found.len(), name.clone());
@@ -1070,6 +1121,7 @@ fn import_one_folder(
         &mut result,
     );
 
+    drop_unused_kept_source(conn, cfg, kept_archive);
     result
 }
 
@@ -1358,6 +1410,7 @@ fn exec_one(
         res_mode,
         &mut result,
     );
+    drop_unused_kept_source(conn, cfg, kept_archive.as_deref());
     result
 }
 
@@ -3053,6 +3106,78 @@ mod tests {
         assert!(
             src.join("keep_car").join("model.kn5").is_file(),
             "source d'origine intacte (copie)"
+        );
+    }
+
+    /// Règle (§10/§11) : une copie de source qu'aucune version ne réclame est
+    /// retirée. `keep_source` copie avant de savoir si la copie servira — un
+    /// import de dossier en mode déplacement consomme sa source pendant le
+    /// rangement, il n'y a pas d'autre ordre possible. Sans ce nettoyage,
+    /// réimporter la même archive de 2 Go en laissait 2 Go de plus à chaque
+    /// fois, sans que rien ne les référence.
+    #[test]
+    fn duplicate_import_leaves_no_orphan_source_copy() {
+        let base = crate::testutil::temp_dir("import");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let mut cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        cfg.prefs.keep_source_archive = true;
+        let rules = crate::rules::default_rules();
+
+        let src = base.join("src");
+        make_fake_car(&src, "dup_car");
+        let first = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert_eq!(first.mods[0].outcome, "IMPORT");
+        let kept = crate::overlay::get_versions(&conn, "dup_car").unwrap()[0]
+            .kept_archive_path
+            .clone()
+            .expect("archive source conservée au premier import");
+
+        // Même source à l'identique : doublon, aucune version stockée.
+        let second = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert_eq!(second.mods[0].outcome, "DUPLICATE");
+
+        let copies: Vec<_> = std::fs::read_dir(library.join("_source_archives"))
+            .unwrap()
+            .flatten()
+            .collect();
+        assert_eq!(copies.len(), 1, "la copie du doublon a été retirée");
+        assert!(
+            library.join(&kept).exists(),
+            "celle du premier import, elle, est toujours là"
+        );
+    }
+
+    /// Règle (§7.3/§10) : une archive dont rien n'est reconnu devient un « autre
+    /// mod », qui ne stocke aucune version — sa copie de source n'a donc rien à
+    /// faire dans `_source_archives/`.
+    #[test]
+    fn unrecognized_content_leaves_no_orphan_source_copy() {
+        let base = crate::testutil::temp_dir("import");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let mut cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        cfg.prefs.keep_source_archive = true;
+        let rules = crate::rules::default_rules();
+
+        let src = base.join("MysteryPack");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("readme.txt"), b"rien de reconnaissable").unwrap();
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert_eq!(r.others.len(), 1, "rangé en « autre mod », jamais perdu");
+        let archives = library.join("_source_archives");
+        assert!(
+            !archives.exists() || std::fs::read_dir(&archives).unwrap().next().is_none(),
+            "aucune copie de source laissée derrière"
         );
     }
 }

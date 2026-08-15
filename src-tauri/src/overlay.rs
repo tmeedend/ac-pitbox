@@ -751,6 +751,22 @@ pub fn set_kept_archive(conn: &Connection, version_id: &str, path: &str) -> rusq
     Ok(())
 }
 
+/// Vrai si une version réclame encore cette source conservée (§10/§11).
+///
+/// Fait autorité pour décider si une copie fraîchement posée dans
+/// `_source_archives/` sert à quelque chose : l'import la fait **avant** de
+/// savoir si elle sera retenue (doublon, contenu non reconnu, couche… ne
+/// stockent aucune version), et sans ce contrôle elle resterait sur le disque
+/// sans que rien ne la référence ni ne la nettoie.
+pub fn kept_archive_in_use(conn: &Connection, path: &str) -> rusqlite::Result<bool> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM versions WHERE kept_archive_path = ?1",
+        params![path],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
+
 /// Réécrit `library_path` d'une version (§11, migration vers un stockage
 /// relatif à la bibliothèque — `maintenance::relativize_library_paths`).
 pub fn update_version_library_path(conn: &Connection, version_id: &str, path: &str) -> rusqlite::Result<()> {
