@@ -35,30 +35,69 @@ pub fn open_mod_folder(app: AppHandle, db: State<Db>, id: String) -> Result<(), 
         .map_err(|e| e.to_string())
 }
 
-/// Dossier ressources d'un mod (§4.5.2). Le verrou SQLite est relâché en
-/// sortant : toutes les opérations sur les ressources sont ensuite du pur
-/// système de fichiers, parfois longues (lecture d'un PDF de plusieurs Mo), et
-/// n'ont aucune raison de bloquer le reste de l'app.
-fn resources_dir_of(app: &AppHandle, db: &State<Db>, id: &str) -> Result<std::path::PathBuf, String> {
+/// Les deux racines d'où peut venir une annexe (§4.5.2) : le dossier
+/// ressources de la bibliothèque, et le dossier du mod lui-même pour les
+/// documents que la règle d'or (§4.5.1) interdit d'en sortir.
+///
+/// Le verrou SQLite est relâché en sortant : tout ce qui suit est du pur
+/// système de fichiers, parfois long (lecture d'un PDF de plusieurs Mo), et
+/// n'a aucune raison de bloquer le reste de l'app.
+struct ResourceRoots {
+    resources: std::path::PathBuf,
+    mod_dir: Option<std::path::PathBuf>,
+}
+
+fn resource_roots(app: &AppHandle, db: &State<Db>, id: &str) -> Result<ResourceRoots, String> {
     let cfg = crate::config::load(app);
     let library = cfg.library_path.clone().ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let m = crate::overlay::get_mod(&conn, id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_NOT_FOUND)?;
-    Ok(crate::resources::resources_dir(&library, mod_kind(&m.kind), id))
+    Ok(ResourceRoots {
+        resources: crate::resources::resources_dir(&library, mod_kind(&m.kind), id),
+        // Absent pour un mod dont le dossier n'est pas résolvable (version
+        // manquante, AC non configuré) : la liste se réduit alors au dossier
+        // ressources au lieu d'échouer entièrement.
+        mod_dir: crate::library::folder_path(&conn, &cfg, id).ok(),
+    })
+}
+
+/// Racine contre laquelle résoudre un `rel_path`, selon d'où le front dit que
+/// l'entrée vient. Le choix de la racine n'ouvre aucune brèche : le garde-fou
+/// anti-traversée s'applique ensuite à celle qui a été retenue, donc au pire
+/// le front lit dans l'autre dossier du même mod.
+fn resource_root(app: &AppHandle, db: &State<Db>, id: &str, in_mod: bool) -> Result<std::path::PathBuf, String> {
+    let roots = resource_roots(app, db, id)?;
+    if in_mod {
+        roots
+            .mod_dir
+            .ok_or_else(|| format!("dossier introuvable pour « {id} »"))
+    } else {
+        Ok(roots.resources)
+    }
 }
 
 /// Liste les fichiers annexes du mod (§4.5.2, « Bloc Ressources ») — lue en
 /// direct sur disque à chaque appel, jamais mémorisée en base : un fichier
 /// déposé manuellement apparaît sans réimport.
+///
+/// Deux provenances réunies dans une seule liste : ce qui a été rangé à part à
+/// l'import, et les documents restés à la racine du dossier du mod parce que
+/// la règle d'or interdit de les en sortir (§4.5.1). Un `readme.txt` posé par
+/// l'auteur au milieu du circuit se lit donc comme les autres.
 #[tauri::command]
 pub fn list_mod_resources(
     app: AppHandle,
     db: State<Db>,
     id: String,
 ) -> Result<Vec<crate::resources::ResourceFile>, String> {
-    Ok(crate::resources::list_resources(&resources_dir_of(&app, &db, &id)?))
+    let roots = resource_roots(&app, &db, &id)?;
+    let mut out = crate::resources::list_resources(&roots.resources);
+    if let Some(dir) = &roots.mod_dir {
+        out.extend(crate::resources::list_in_mod_documents(dir));
+    }
+    Ok(out)
 }
 
 /// Chemin absolu d'une ressource, pour l'afficher via le protocole `asset://`
@@ -66,8 +105,14 @@ pub fn list_mod_resources(
 /// chemin lui-même : il passe par ici pour bénéficier du garde-fou
 /// anti-traversée, comme pour l'ouverture.
 #[tauri::command]
-pub fn get_mod_resource_path(app: AppHandle, db: State<Db>, id: String, rel_path: String) -> Result<String, String> {
-    let dir = resources_dir_of(&app, &db, &id)?;
+pub fn get_mod_resource_path(
+    app: AppHandle,
+    db: State<Db>,
+    id: String,
+    rel_path: String,
+    in_mod: bool,
+) -> Result<String, String> {
+    let dir = resource_root(&app, &db, &id, in_mod)?;
     let path = crate::resources::resolve_resource_path(&dir, &rel_path)?;
     Ok(path.display().to_string())
 }
@@ -84,8 +129,9 @@ pub fn read_mod_resource(
     db: State<Db>,
     id: String,
     rel_path: String,
+    in_mod: bool,
 ) -> Result<tauri::ipc::Response, String> {
-    let dir = resources_dir_of(&app, &db, &id)?;
+    let dir = resource_root(&app, &db, &id, in_mod)?;
     Ok(tauri::ipc::Response::new(crate::resources::read_resource(
         &dir, &rel_path,
     )?))
@@ -108,8 +154,14 @@ pub fn list_mod_extras(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<
 /// anti-traversée) plutôt que de faire confiance à un chemin absolu envoyé
 /// par le front — même rationale que `open_mod_folder`.
 #[tauri::command]
-pub fn open_mod_resource(app: AppHandle, db: State<Db>, id: String, rel_path: String) -> Result<(), String> {
-    let dir = resources_dir_of(&app, &db, &id)?;
+pub fn open_mod_resource(
+    app: AppHandle,
+    db: State<Db>,
+    id: String,
+    rel_path: String,
+    in_mod: bool,
+) -> Result<(), String> {
+    let dir = resource_root(&app, &db, &id, in_mod)?;
     let path = crate::resources::resolve_resource_path(&dir, &rel_path)?;
     app.opener()
         .open_path(path.display().to_string(), None::<&str>)

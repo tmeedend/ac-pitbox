@@ -27,7 +27,7 @@
 
   let files = $state<ResourceFile[]>([]);
   /** Ressource ouverte en prévisualisation, `null` quand la liste seule est affichée. */
-  let selected = $state<string | null>(null);
+  let selected = $state<ResourceFile | null>(null);
   let loading = $state(false);
   /** Message d'échec propre à la prévisualisation : il s'affiche à la place du
       document, sans faire remonter une bannière d'erreur sur toute la fiche. */
@@ -37,7 +37,11 @@
   let imgSrc = $state<string | null>(null);
   let pdfData = $state<ArrayBuffer | null>(null);
 
-  const selectedKind = $derived<PreviewKind | null>(selected ? previewKind(selected) : null);
+  const selectedKind = $derived<PreviewKind | null>(selected ? previewKind(selected.rel_path) : null);
+
+  /** Identité d'une entrée : le chemin relatif seul ne suffit pas, un même
+      `readme.txt` peut exister dans les ressources **et** dans le mod. */
+  const keyOf = (f: ResourceFile) => `${f.in_mod ? "mod" : "res"}:${f.rel_path}`;
 
   // La garde sur `modId` évite qu'une réponse tardive d'un mod précédent
   // n'écrase la liste du mod courant.
@@ -62,22 +66,22 @@
   // dernière sélection a le droit d'écrire le résultat, sinon un clic rapide
   // sur deux fichiers peut afficher le contenu du premier sous le nom du second.
   $effect(() => {
-    const rel = selected;
+    const f = selected;
     const mod = modId;
     clearPreview();
-    if (!rel) return;
-    const kind = previewKind(rel);
+    if (!f) return;
+    const kind = previewKind(f.rel_path);
     if (!kind) return;
-    const stale = () => rel !== selected || mod !== modId;
+    const stale = () => f !== selected || mod !== modId;
     loading = true;
     (async () => {
       try {
         if (kind === "image") {
-          const src = await modResourceSrc(mod, rel);
+          const src = await modResourceSrc(mod, f.rel_path, f.in_mod);
           if (!stale()) imgSrc = src;
           return;
         }
-        const bytes = await readModResource(mod, rel);
+        const bytes = await readModResource(mod, f.rel_path, f.in_mod);
         if (stale()) return;
         if (kind === "pdf") pdfData = bytes;
         else if (kind === "markdown") html = renderMarkdown(decodeText(bytes));
@@ -107,7 +111,7 @@
       courante ; le reste part dans l'application par défaut de Windows. */
   function activate(f: ResourceFile) {
     if (previewKind(f.rel_path)) {
-      selected = selected === f.rel_path ? null : f.rel_path;
+      selected = selected && keyOf(selected) === keyOf(f) ? null : f;
     } else {
       openExternally(f);
     }
@@ -116,7 +120,7 @@
   async function openExternally(f: ResourceFile) {
     try {
       // Le chemin relatif est résolu et validé côté backend (anti-traversée).
-      await openModResource(modId, f.rel_path);
+      await openModResource(modId, f.rel_path, f.in_mod);
     } catch (e) {
       onerror(errorText(e));
     }
@@ -141,10 +145,10 @@
     {#if files.length}
       <p class="note">{t("detail.resourcesNote")}</p>
       <ul class="res-list">
-        {#each files as f (f.rel_path)}
+        {#each files as f (keyOf(f))}
           {@const canPreview = previewKind(f.rel_path) !== null}
           <li>
-            <div class="res-row" class:on={selected === f.rel_path}>
+            <div class="res-row" class:on={selected !== null && keyOf(selected) === keyOf(f)}>
               <button
                 class="res-main"
                 type="button"
@@ -152,6 +156,9 @@
                 title={canPreview ? t("detail.resourcePreviewTooltip") : t("detail.resourceOpenTooltip")}
               >
                 <span class="res-nm">{f.rel_path}</span>
+                {#if f.in_mod}
+                  <span class="res-src">{t("detail.resourceInMod")}</span>
+                {/if}
                 <span class="res-size mono">{fmtFileSize(f.size_bytes)}</span>
               </button>
               {#if canPreview}
@@ -171,7 +178,7 @@
       {#if selected}
         <div class="preview">
           <header class="pv-h">
-            <span class="pv-nm mono">{selected}</span>
+            <span class="pv-nm mono">{selected.rel_path}</span>
             <button class="pv-close" type="button" onclick={() => (selected = null)} title={t("common.close")}>×</button>
           </header>
           {#if failure}
@@ -179,7 +186,7 @@
           {:else if loading && selectedKind !== "pdf"}
             <p class="pv-info">{t("detail.previewLoading")}</p>
           {:else if imgSrc}
-            <img class="pv-img" src={imgSrc} alt={selected} />
+            <img class="pv-img" src={imgSrc} alt={selected.rel_path} />
           {:else if pdfData}
             <ResourcePdf data={pdfData} onerror={(m) => (failure = m)} />
           {:else if html !== null}
@@ -258,6 +265,18 @@
     font-size: 10.5px;
     color: var(--muted2);
   }
+  /* Bleu = information et fichier mod (couleurs sémantiques, §chantier
+     libellés) : dit d'où vient le fichier, pas ce qu'il faut en faire. */
+  .res-src {
+    flex: none;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--blue);
+    border: 1px solid var(--blue-border);
+    padding: 1px 5px;
+  }
   .res-ext {
     flex: none;
     padding: 0 10px;
@@ -280,6 +299,16 @@
     border: 1px solid var(--line);
     background: var(--panel2);
   }
+  /* Volontairement **pas** `sticky`. La fiche défile dans `.full-wrap`
+     (Library.svelte), un conteneur qui a son propre `padding: 28px 32px` pour
+     compenser la marge négative de `.page` — et un `sticky` y décroche 28 px
+     sous le bord visible, laissant un vide dans lequel le document défile
+     tandis que la barre recouvre les pages. C'est le même piège que celui
+     documenté sur `.pin-top` de la bibliothèque, qui s'en sort avec un `top`
+     négatif compensé par du padding ; ici la barre vit à l'intérieur d'un
+     panneau encadré et lui-même en retrait, donc la remonter jusqu'au bord de
+     la fenêtre déborderait sur la liste au-dessus. Elle défile avec le
+     document. */
   .pv-h {
     display: flex;
     align-items: center;
@@ -287,10 +316,6 @@
     padding: 7px 8px 7px 11px;
     border-bottom: 1px solid var(--line);
     background: var(--raised);
-    /* Le nom du fichier reste visible en défilant un long document. */
-    position: sticky;
-    top: 0;
-    z-index: 1;
   }
   .pv-nm {
     flex: 1;

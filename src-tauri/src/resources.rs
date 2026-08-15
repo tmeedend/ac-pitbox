@@ -290,9 +290,28 @@ pub fn file_mod_reported(
 #[derive(Debug, Clone, Serialize)]
 pub struct ResourceFile {
     pub name: String,
-    /// Chemin relatif au dossier ressources (affichage, sous-dossiers éventuels).
+    /// Chemin relatif à sa racine — dossier ressources, ou dossier du mod
+    /// quand `in_mod` (affichage, sous-dossiers éventuels).
     pub rel_path: String,
     pub size_bytes: u64,
+    /// Document resté **dans** le dossier du mod (§4.5.1) : signalé, jamais
+    /// déplacé. Dit aussi contre quelle racine résoudre le chemin relatif.
+    pub in_mod: bool,
+}
+
+/// Document d'information : notice, changelog, readme. Même famille
+/// d'extensions que le classement à l'import — mais ici pour **signaler** un
+/// fichier, pas pour le déplacer. `GUIDs.txt` en est exclu comme partout
+/// ailleurs : c'est un fichier de fonctionnement du moteur audio (§12bis.2).
+fn is_info_document(path: &Path) -> bool {
+    if path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.eq_ignore_ascii_case("GUIDs.txt"))
+    {
+        return false;
+    }
+    ext_lower(path).is_some_and(|e| INFO_EXTS.contains(&e.as_str()))
 }
 
 /// Liste le contenu du dossier ressources d'un mod, **lu en direct sur disque**
@@ -323,6 +342,41 @@ pub fn list_resources(dir: &Path) -> Vec<ResourceFile> {
                 name,
                 rel_path: rel,
                 size_bytes,
+                in_mod: false,
+            }
+        })
+        .collect();
+    out.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
+    out
+}
+
+/// Documents restés **à la racine du dossier du mod** (§4.5.2).
+///
+/// La règle d'or (§4.5.1) interdit de sortir quoi que ce soit du dossier du
+/// mod : un `..._readme.txt` livré au milieu d'un circuit y reste, et c'est
+/// bien ce qu'on veut. Mais « jamais déplacé » n'a jamais voulu dire « jamais
+/// lisible » — la règle prévoit explicitement qu'une annexe détectée dedans
+/// soit **signalée**. Sans ce balayage, la notice d'un mod dont l'auteur l'a
+/// posée à côté du `.kn5` restait invisible depuis la fiche, alors que la même
+/// notice livrée à côté du dossier apparaissait bien.
+///
+/// Racine seulement, comme le classement à l'import : plus profond, un `.txt`
+/// fait presque toujours partie du contenu (config CSP, notes de skin).
+pub fn list_in_mod_documents(mod_dir: &Path) -> Vec<ResourceFile> {
+    let Ok(entries) = std::fs::read_dir(mod_dir) else {
+        return Vec::new();
+    };
+    let mut out: Vec<ResourceFile> = entries
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter(|e| is_info_document(&e.path()))
+        .map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            ResourceFile {
+                rel_path: name.clone(),
+                name,
+                size_bytes: e.metadata().map(|m| m.len()).unwrap_or(0),
+                in_mod: true,
             }
         })
         .collect();
@@ -695,6 +749,63 @@ mod tests {
 
         // Dossier ressources absent : liste vide, pas d'erreur.
         assert!(list_resources(&base.join("nope")).is_empty());
+    }
+
+    #[test]
+    fn documents_inside_the_mod_folder_are_listed_but_never_moved() {
+        // Les deux moitiés de la règle d'or (§4.5.1) tiennent ensemble : le
+        // dossier du mod part d'un bloc, **et** la notice que l'auteur y a
+        // posée reste lisible depuis la fiche. Bug réel : le
+        // `..._readme.txt` livré à la racine d'un circuit n'apparaissait nulle
+        // part, alors que la même notice livrée à côté du dossier, elle,
+        // s'affichait — deux mods identiques, deux comportements.
+        let base = crate::testutil::temp_dir("res-in-mod");
+        let src = base.join("src");
+        make_mod(&src);
+        write(&src.join("skins").join("red").join("notes.txt")); // en profondeur : contenu, pas annexe
+        write(&src.join("GUIDs.txt")); // fonctionnel (§12bis.2), jamais une annexe
+        let content = base.join("content");
+        let resources = base.join("resources");
+
+        let n = file_mod(
+            &src,
+            &content,
+            &resources,
+            ExtractionMode::All,
+            false,
+            Source::ModFolder,
+        )
+        .unwrap();
+        assert_eq!(n, 0, "rien n'est sorti du dossier du mod");
+
+        let listed = list_in_mod_documents(&content);
+        let names: Vec<&str> = listed.iter().map(|f| f.rel_path.as_str()).collect();
+        assert!(names.contains(&"changelog.txt"), "notice texte signalée : {names:?}");
+        assert!(names.contains(&"presentation.pdf"), "notice PDF signalée : {names:?}");
+        assert!(
+            !names.contains(&"GUIDs.txt"),
+            "GUIDs.txt n'est pas une annexe : {names:?}"
+        );
+        assert!(
+            !names.contains(&"logo.png"),
+            "une image n'est jamais une annexe : {names:?}"
+        );
+        assert!(
+            !names.contains(&"model.kn5"),
+            "le contenu de jeu n'est pas listé : {names:?}"
+        );
+        assert!(
+            !names.iter().any(|n| n.contains("notes.txt")),
+            "racine seulement, rien en profondeur : {names:?}"
+        );
+        assert!(listed.iter().all(|f| f.in_mod), "signalées comme restées dans le mod");
+
+        // Et surtout : signaler n'a rien déplacé.
+        assert!(
+            content.join("changelog.txt").is_file(),
+            "la notice est restée dans le mod"
+        );
+        assert!(!resources.exists(), "aucun dossier ressources créé");
     }
 
     #[test]

@@ -387,6 +387,7 @@
     "resourcesNote": "Documentation et fichiers annexes du mod, rangés à part pour ne pas encombrer le jeu.",
     "resourceOpenTooltip": "Ouvrir avec l'application par défaut",
     "resourcePreviewTooltip": "Prévisualiser",
+    "resourceInMod": "dans le mod",
     "previewLoading": "Chargement…",
     "noResources": "Aucun fichier annexe pour l'instant.",
     "tagLegendCategory": "catégorie",

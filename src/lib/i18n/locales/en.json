@@ -387,6 +387,7 @@
     "resourcesNote": "The mod's docs and extra files, kept aside so they don't clutter the game.",
     "resourceOpenTooltip": "Open with the default application",
     "resourcePreviewTooltip": "Preview",
+    "resourceInMod": "in mod",
     "previewLoading": "Loading…",
     "noResources": "No ancillary files yet.",
     "tagLegendCategory": "category",

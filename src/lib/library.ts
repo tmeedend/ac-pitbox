@@ -348,9 +348,11 @@ export function openModFolder(id: string): Promise<void> {
 /** Fichier annexe du mod, listé dans le bloc Ressources (§4.5.2). */
 export interface ResourceFile {
   name: string;
-  /** Chemin relatif au dossier ressources (sous-dossiers éventuels). */
+  /** Chemin relatif à sa racine — dossier ressources, ou dossier du mod si `in_mod`. */
   rel_path: string;
   size_bytes: number;
+  /** Document resté **dans** le dossier du mod (§4.5.1) : signalé, jamais déplacé. */
+  in_mod: boolean;
 }
 
 /** Fichiers annexes du mod, lus en direct sur disque (§4.5.2) — pas de cache,
@@ -378,13 +380,13 @@ export function listModExtras(id: string): Promise<ExtraFile[]> {
 }
 
 /** Ouvre un fichier annexe avec l'application par défaut de l'OS (§4.5.2). */
-export function openModResource(id: string, relPath: string): Promise<void> {
-  return invoke<void>("open_mod_resource", { id, relPath });
+export function openModResource(id: string, relPath: string, inMod: boolean): Promise<void> {
+  return invoke<void>("open_mod_resource", { id, relPath, inMod });
 }
 
 /** URL `asset://` d'une ressource, pour l'afficher dans un `<img>` (§4.5.2). */
-export async function modResourceSrc(id: string, relPath: string): Promise<string> {
-  return convertFileSrc(await invoke<string>("get_mod_resource_path", { id, relPath }));
+export async function modResourceSrc(id: string, relPath: string, inMod: boolean): Promise<string> {
+  return convertFileSrc(await invoke<string>("get_mod_resource_path", { id, relPath, inMod }));
 }
 
 /**
@@ -393,8 +395,8 @@ export async function modResourceSrc(id: string, relPath: string): Promise<strin
  * CORS, là où une commande Tauri renvoie l'`ArrayBuffer` sans intermédiaire.
  * Échoue au-delà du plafond de prévisualisation (`errors.resourceTooLarge`).
  */
-export function readModResource(id: string, relPath: string): Promise<ArrayBuffer> {
-  return invoke<ArrayBuffer>("read_mod_resource", { id, relPath });
+export function readModResource(id: string, relPath: string, inMod: boolean): Promise<ArrayBuffer> {
+  return invoke<ArrayBuffer>("read_mod_resource", { id, relPath, inMod });
 }
 
 export function activateMod(id: string, versionId?: string): Promise<void> {
