@@ -91,9 +91,16 @@ Jamais d'élévation admin — l'app doit fonctionner en utilisateur standard.
    `scripts/audit-resources.ps1` audite et répare l'existant.
 4. **CM est maître de `race.ini`.** On pilote des presets via le protocole
    `acmanager://`, on n'écrit pas les fichiers du jeu à la main.
-5. **Aucun fichier du jeu altéré durablement.** Si un fichier d'AC doit être
-   touché (cas exceptionnel), il est sauvegardé et restauré — et il faut un
-   filet de sécurité au démarrage pour les fermetures anormales.
+5. **Aucun fichier du jeu altéré durablement.** Un fichier d'AC *peut* être
+   remplacé par un mod — beaucoup de mods ne font que ça — mais jamais sans
+   filet : l'original est sauvegardé avant écriture, restauré dès que plus
+   aucun mod ne le réclame, et un balayage au démarrage rattrape les fermetures
+   anormales. Tout est dans `gamebackup.rs` (§4.9) : **passer par lui**, ne
+   jamais écrire directement dans le dossier du jeu. Corollaire souvent
+   oublié : un fichier qu'on n'a pas posé ne se supprime pas, et un exemplaire
+   plus ancien ne déloge pas ce qui tourne déjà (même arbitrage par date que
+   les fichiers partagés, §4.6ter). Ne pas confondre avec la règle n°2, qui
+   porte sur les **dossiers** de `content/`.
 6. **Jamais `localStorage` pour un réglage qui doit survivre à un
    redémarrage.** `localStorage` n'est pas garanti synchrone sur disque côté
    WebView2 — l'écriture part dans le buffer du navigateur, pas sur disque, et
@@ -143,7 +150,18 @@ src/lib/
   i18n/locales/         fr.json + en.json
   styles/global.css     Design system Rosso Corsa
 docs/                   Documentation (voir ci-dessous)
+scripts/                Outillage ponctuel, hors application (PowerShell)
 ```
+
+Les deux scripts de `scripts/` sont des **outils de dépannage**, pas des
+fonctionnalités : sortie sèche par défaut, action seulement sur option
+explicite. `audit-resources.ps1` liste — et répare sur `-Restore` — les
+fichiers que l'extracteur d'annexes a sortis d'un dossier de mod (règle d'or
+n°3). `clean-ac-footprint.ps1` liste — et retire sur `-Apply` — tout ce que
+l'app a déployé dans une install AC : indispensable **avant** de supprimer une
+bibliothèque, sans quoi les déploiements par hardlink deviennent de vrais
+dossiers pleins de contenu que rien ne nettoie et sur lesquels le garde-fou
+refusera ensuite de reposer quoi que ce soit.
 
 ### Carte des écrans
 
