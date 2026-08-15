@@ -35,6 +35,20 @@ pub fn open_mod_folder(app: AppHandle, db: State<Db>, id: String) -> Result<(), 
         .map_err(|e| e.to_string())
 }
 
+/// Dossier ressources d'un mod (§4.5.2). Le verrou SQLite est relâché en
+/// sortant : toutes les opérations sur les ressources sont ensuite du pur
+/// système de fichiers, parfois longues (lecture d'un PDF de plusieurs Mo), et
+/// n'ont aucune raison de bloquer le reste de l'app.
+fn resources_dir_of(app: &AppHandle, db: &State<Db>, id: &str) -> Result<std::path::PathBuf, String> {
+    let cfg = crate::config::load(app);
+    let library = cfg.library_path.clone().ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let m = crate::overlay::get_mod(&conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_NOT_FOUND)?;
+    Ok(crate::resources::resources_dir(&library, mod_kind(&m.kind), id))
+}
+
 /// Liste les fichiers annexes du mod (§4.5.2, « Bloc Ressources ») — lue en
 /// direct sur disque à chaque appel, jamais mémorisée en base : un fichier
 /// déposé manuellement apparaît sans réimport.
@@ -44,17 +58,37 @@ pub fn list_mod_resources(
     db: State<Db>,
     id: String,
 ) -> Result<Vec<crate::resources::ResourceFile>, String> {
-    let cfg = crate::config::load(&app);
-    let library = cfg.library_path.clone().ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let m = crate::overlay::get_mod(&conn, &id)
-        .map_err(|e| e.to_string())?
-        .ok_or(crate::errors::MOD_NOT_FOUND)?;
-    Ok(crate::resources::list_resources(&crate::resources::resources_dir(
-        &library,
-        mod_kind(&m.kind),
-        &id,
-    )))
+    Ok(crate::resources::list_resources(&resources_dir_of(&app, &db, &id)?))
+}
+
+/// Chemin absolu d'une ressource, pour l'afficher via le protocole `asset://`
+/// (§4.5.2, prévisualisation des images). Le front ne construit jamais ce
+/// chemin lui-même : il passe par ici pour bénéficier du garde-fou
+/// anti-traversée, comme pour l'ouverture.
+#[tauri::command]
+pub fn get_mod_resource_path(app: AppHandle, db: State<Db>, id: String, rel_path: String) -> Result<String, String> {
+    let dir = resources_dir_of(&app, &db, &id)?;
+    let path = crate::resources::resolve_resource_path(&dir, &rel_path)?;
+    Ok(path.display().to_string())
+}
+
+/// Contenu brut d'une ressource, pour la prévisualisation dans la fiche
+/// (§4.5.2) : texte, markdown et PDF passent par ici plutôt que par
+/// `asset://`, ce qui évite au front de dépendre du CORS du protocole
+/// personnalisé. Les images, elles, restent servies en `asset://`
+/// (`get_mod_resource_path`) — un `<img>` n'a pas besoin de l'octet en
+/// mémoire.
+#[tauri::command]
+pub fn read_mod_resource(
+    app: AppHandle,
+    db: State<Db>,
+    id: String,
+    rel_path: String,
+) -> Result<tauri::ipc::Response, String> {
+    let dir = resources_dir_of(&app, &db, &id)?;
+    Ok(tauri::ipc::Response::new(crate::resources::read_resource(
+        &dir, &rel_path,
+    )?))
 }
 
 /// Liste ce qu'un mod installe hors de `content/<type>/<id>` (§4.5.3) —
@@ -75,15 +109,7 @@ pub fn list_mod_extras(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<
 /// par le front — même rationale que `open_mod_folder`.
 #[tauri::command]
 pub fn open_mod_resource(app: AppHandle, db: State<Db>, id: String, rel_path: String) -> Result<(), String> {
-    let cfg = crate::config::load(&app);
-    let library = cfg.library_path.clone().ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
-    let dir = {
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
-        let m = crate::overlay::get_mod(&conn, &id)
-            .map_err(|e| e.to_string())?
-            .ok_or(crate::errors::MOD_NOT_FOUND)?;
-        crate::resources::resources_dir(&library, mod_kind(&m.kind), &id)
-    };
+    let dir = resources_dir_of(&app, &db, &id)?;
     let path = crate::resources::resolve_resource_path(&dir, &rel_path)?;
     app.opener()
         .open_path(path.display().to_string(), None::<&str>)

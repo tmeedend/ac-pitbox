@@ -347,6 +347,27 @@ pub fn resolve_resource_path(dir: &Path, rel_path: &str) -> Result<PathBuf, Stri
     Ok(canon_candidate)
 }
 
+/// Plafond de lecture d'une ressource prévisualisée (§4.5.2). Le contenu
+/// traverse l'IPC puis vit en mémoire dans la WebView : au-delà de ce seuil on
+/// renvoie l'utilisateur vers l'application par défaut plutôt que de figer
+/// l'interface le temps du transfert. 32 Mio couvre très largement les notices
+/// PDF et les changelogs livrés avec un mod.
+pub const PREVIEW_MAX_BYTES: u64 = 32 * 1024 * 1024;
+
+/// Lit un fichier du dossier ressources pour prévisualisation (§4.5.2). Même
+/// garde-fou anti-traversée que l'ouverture ; les octets sont renvoyés bruts,
+/// c'est le front qui décide comment les interpréter (texte, PDF).
+pub fn read_resource(dir: &Path, rel_path: &str) -> Result<Vec<u8>, String> {
+    let path = resolve_resource_path(dir, rel_path)?;
+    let size = std::fs::metadata(&path)
+        .map_err(|e| format!("lecture de la ressource : {e}"))?
+        .len();
+    if size > PREVIEW_MAX_BYTES {
+        return Err(crate::errors::RESOURCE_TOO_LARGE.into());
+    }
+    std::fs::read(&path).map_err(|e| format!("lecture de la ressource : {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -674,5 +695,50 @@ mod tests {
 
         // Dossier ressources absent : liste vide, pas d'erreur.
         assert!(list_resources(&base.join("nope")).is_empty());
+    }
+
+    #[test]
+    fn read_resource_honours_the_traversal_guard() {
+        // La prévisualisation (§4.5.2) lit le fichier au lieu de le confier à
+        // l'OS : elle doit rester tenue par le même garde-fou que l'ouverture,
+        // sans quoi un `rel_path` forgé lirait n'importe quel fichier du disque
+        // et en renverrait le contenu au front.
+        let base = crate::testutil::temp_dir("res-read");
+        let dir = base.join("resources");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("readme.txt"), b"hello").unwrap();
+        std::fs::write(base.join("secret.txt"), b"nope").unwrap();
+
+        assert_eq!(
+            read_resource(&dir, "readme.txt").unwrap(),
+            b"hello",
+            "contenu brut rendu tel quel"
+        );
+        assert!(
+            read_resource(&dir, "../secret.txt").is_err(),
+            "aucune lecture hors du dossier ressources"
+        );
+        assert!(
+            read_resource(&dir, "absent.txt").is_err(),
+            "fichier inexistant : erreur, pas de panique"
+        );
+    }
+
+    #[test]
+    fn read_resource_refuses_oversized_files() {
+        // Au-delà du plafond, la prévisualisation refuse plutôt que de faire
+        // transiter des dizaines de Mo par l'IPC : l'utilisateur garde le clic
+        // « ouvrir avec l'application par défaut ».
+        let base = crate::testutil::temp_dir("res-big");
+        let dir = base.join("resources");
+        std::fs::create_dir_all(&dir).unwrap();
+        let big = vec![0u8; (PREVIEW_MAX_BYTES + 1) as usize];
+        std::fs::write(dir.join("huge.pdf"), &big).unwrap();
+
+        assert_eq!(
+            read_resource(&dir, "huge.pdf").unwrap_err(),
+            crate::errors::RESOURCE_TOO_LARGE,
+            "erreur traduisible, pas un message technique"
+        );
     }
 }

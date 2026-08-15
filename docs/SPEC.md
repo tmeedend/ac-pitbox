@@ -156,6 +156,12 @@ Beaucoup de mods embarquent des fichiers **hors contenu de jeu** : PDF de prése
 
 **Les images ne sont jamais des annexes**, à aucune profondeur et même à côté du mod : rien ne distingue une capture de présentation d'un asset AC (`logo.png`, `body_shadow.png`, `map.png`, aperçu de skin) — donc on ne tranche pas, on laisse. Une capture de présentation qui reste dans le mod ne coûte rien ; un `body_shadow.png` retiré casse le rendu.
 
+**Prévisualisation dans l'onglet Ressources.** Un clic sur une annexe d'un format lisible l'ouvre **sous la liste**, dans la fiche : texte brut (`.txt`, `.nfo`, `.log`, `.ini`, `.cfg`, `.csv`, `.json`, `.yml`, `.lua`), markdown (`.md`), images (`.png`, `.jpg`, `.gif`, `.webp`, `.bmp`, `.avif`) et **PDF**. Tout autre format garde le comportement d'origine — ouverture par l'application par défaut de Windows, également accessible d'un bouton dédié (`↗`) sur les formats prévisualisables. Au-delà de 32 Mio, la prévisualisation refuse et renvoie sur cette ouverture externe plutôt que de faire transiter le fichier par l'IPC.
+
+Le document n'a **ni hauteur imposée ni défilement propre** : il s'étend dans le flux et c'est la page de la fiche qui défile. C'est ce qui écarte l'`<iframe>` pour le PDF — la WebView y répondrait par la visionneuse d'Edge, application autonome avec sa barre d'outils et son défilement interne dans une boîte à hauteur fixe. Le PDF est donc rendu par **pdf.js**, page par page en `<canvas>` empilés sur toute la largeur disponible, re-rendus au redimensionnement.
+
+Deux points de sûreté, tous deux côté backend, hérités de l'ouverture externe : le chemin relatif est **résolu et validé** (garde-fou anti-traversée) avant toute lecture, et le contenu remonte par une commande Tauri plutôt que par `asset://` — seules les images, servies dans un `<img>`, passent par le protocole. Le markdown est **échappé avant** production du moindre tag (rendu maison, pas de dépendance de parsing), et les liens d'un readme partent dans le navigateur du système : suivis dans la WebView, ils remplaceraient l'application par la page distante.
+
 #### 4.5.3 Ajouts au jeu → `extras/` en bibliothèque, posés dans AC
 
 Ce qu'AC lit ailleurs que dans `content/<type>/<id>` : configs CSP (`extension/config/cars/rss/<id>/…`), shaders (`system/shaders/…`), textures d'équipe (`content/texture/…`), modèle de pilote (`content/driver/…`).

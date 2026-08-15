@@ -382,6 +382,21 @@ export function openModResource(id: string, relPath: string): Promise<void> {
   return invoke<void>("open_mod_resource", { id, relPath });
 }
 
+/** URL `asset://` d'une ressource, pour l'afficher dans un `<img>` (§4.5.2). */
+export async function modResourceSrc(id: string, relPath: string): Promise<string> {
+  return convertFileSrc(await invoke<string>("get_mod_resource_path", { id, relPath }));
+}
+
+/**
+ * Octets bruts d'une ressource (§4.5.2). Passe par l'IPC plutôt que par
+ * `asset://` : un `fetch` du protocole personnalisé dépendrait de ses en-têtes
+ * CORS, là où une commande Tauri renvoie l'`ArrayBuffer` sans intermédiaire.
+ * Échoue au-delà du plafond de prévisualisation (`errors.resourceTooLarge`).
+ */
+export function readModResource(id: string, relPath: string): Promise<ArrayBuffer> {
+  return invoke<ArrayBuffer>("read_mod_resource", { id, relPath });
+}
+
 export function activateMod(id: string, versionId?: string): Promise<void> {
   return invoke<void>("activate_mod", { id, versionId: versionId ?? null });
 }
