@@ -739,7 +739,7 @@
     "appsImported": "+ {count} app(s) importée(s)",
     "othersImported": "+ {count} mod(s) autre(s) importé(s)",
     "resourcesExtracted": "+ {count} fichier(s) annexe(s) extrait(s) vers les ressources",
-    "satellitesAttached": "{count} fichier(s) rattaché(s) au mod",
+    "extrasAttached": "{count} ajout(s) au jeu",
     "newVersionTitle": "Nouvelle version possible",
     "modalBodyOpen": "« ",
     "modalBodyMid": " » ressemble à un mod déjà présent (dossier différent : ",

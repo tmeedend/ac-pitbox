@@ -223,11 +223,11 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_media_links_entity ON media_links(entity_id);
 
-        -- Satellites posés dans AC pour un mod (§4.6ter) : ce qui a été
+        -- Ajouts au jeu posés dans AC pour un mod (§4.6ter) : ce qui a été
         -- réellement écrit hors de `content/<type>/<id>` à la dernière
         -- activation. Retirer exactement cette liste — et rien d'autre — est ce
         -- qui rend la désinstallation propre : un fichier qu'on n'a pas posé
-        -- (contenu Kunos, satellite d'un autre mod) n'y figure jamais.
+        -- (contenu Kunos, ajout d'un autre mod) n'y figure jamais.
         -- `is_dir` : dossier créé pour l'occasion, à élaguer au retrait. Sans
         -- cette distinction, l'élagage se fondait sur « dossier vide » et
         -- pouvait emporter un dossier d'AC préexistant devenu vide.
@@ -240,7 +240,7 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         -- le fournisseur de la taille et de la date du fichier posé — ce qui
         -- échoue précisément dans le cas qu'on veut arbitrer, deux exemplaires
         -- de même date (archives repackées).
-        CREATE TABLE IF NOT EXISTS satellite_links (
+        CREATE TABLE IF NOT EXISTS extra_links (
             mod_id     TEXT NOT NULL,
             ac_path    TEXT NOT NULL,
             is_dir     INTEGER NOT NULL DEFAULT 0,
@@ -249,7 +249,7 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             provided   INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (mod_id, ac_path)
         );
-        CREATE INDEX IF NOT EXISTS idx_sat_path ON satellite_links(ac_path);
+        CREATE INDEX IF NOT EXISTS idx_sat_path ON extra_links(ac_path);
 
         CREATE INDEX IF NOT EXISTS idx_versions_mod ON versions(mod_id);
         CREATE INDEX IF NOT EXISTS idx_history_mod  ON history(mod_id);
@@ -825,27 +825,27 @@ pub fn get_version_path(conn: &Connection, version_id: &str) -> rusqlite::Result
 /// N'agit que sur l'overlay : les fichiers bibliothèque sont gérés par l'appelant.
 pub fn delete_mod(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM history WHERE mod_id = ?1", [id])?;
-    conn.execute("DELETE FROM satellite_links WHERE mod_id = ?1", [id])?;
+    conn.execute("DELETE FROM extra_links WHERE mod_id = ?1", [id])?;
     conn.execute("DELETE FROM mods WHERE id_interne = ?1", [id])?;
     Ok(())
 }
 
-// --- Satellites posés dans AC (§4.6ter) -------------------------------------
+// --- Ajouts au jeu posés dans AC (§4.6ter) ----------------------------------
 
-/// Remplace la liste des satellites posés pour un mod (liste vide = plus rien
+/// Remplace la liste des ajouts posés pour un mod (liste vide = plus rien
 /// de posé). Réécriture complète : c'est l'état du disque après l'opération qui
 /// est mémorisé, jamais un cumul. `(chemin, est_un_dossier_créé)`.
-pub fn set_satellite_links(
+pub fn set_extra_links(
     conn: &Connection,
     mod_id: &str,
     kind: &str,
     entries: &[(String, bool)],
 ) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM satellite_links WHERE mod_id = ?1", [mod_id])?;
+    conn.execute("DELETE FROM extra_links WHERE mod_id = ?1", [mod_id])?;
     let now = chrono::Local::now().to_rfc3339();
     for (p, is_dir) in entries {
         conn.execute(
-            "INSERT OR IGNORE INTO satellite_links (mod_id, ac_path, is_dir, kind, claimed_at)
+            "INSERT OR IGNORE INTO extra_links (mod_id, ac_path, is_dir, kind, claimed_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             rusqlite::params![mod_id, p, *is_dir as i64, kind, now],
         )?;
@@ -853,8 +853,8 @@ pub fn set_satellite_links(
     Ok(())
 }
 
-pub fn get_satellite_links(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<(String, bool)>> {
-    let mut stmt = conn.prepare("SELECT ac_path, is_dir FROM satellite_links WHERE mod_id = ?1")?;
+pub fn get_extra_links(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<(String, bool)>> {
+    let mut stmt = conn.prepare("SELECT ac_path, is_dir FROM extra_links WHERE mod_id = ?1")?;
     let rows = stmt.query_map([mod_id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? != 0)))?;
     rows.collect()
 }
@@ -864,9 +864,9 @@ pub fn get_satellite_links(conn: &Connection, mod_id: &str) -> rusqlite::Result<
 /// moins une ligne, le fichier est encore réclamé et ne doit pas être retiré
 /// d'AC. `claimed_at` départage deux exemplaires de même date de modification :
 /// le dernier mod installé gagne.
-pub fn satellite_claimants(conn: &Connection, ac_path: &str) -> rusqlite::Result<Vec<(String, String, String)>> {
+pub fn extra_claimants(conn: &Connection, ac_path: &str) -> rusqlite::Result<Vec<(String, String, String)>> {
     let mut stmt =
-        conn.prepare("SELECT mod_id, kind, claimed_at FROM satellite_links WHERE ac_path = ?1 AND is_dir = 0")?;
+        conn.prepare("SELECT mod_id, kind, claimed_at FROM extra_links WHERE ac_path = ?1 AND is_dir = 0")?;
     let rows = stmt.query_map([ac_path], |r| {
         Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
     })?;
@@ -874,17 +874,17 @@ pub fn satellite_claimants(conn: &Connection, ac_path: &str) -> rusqlite::Result
 }
 
 /// Mod dont l'exemplaire est actuellement posé dans AC à ce chemin.
-pub fn satellite_provider(conn: &Connection, ac_path: &str) -> rusqlite::Result<Option<String>> {
-    let mut stmt = conn.prepare("SELECT mod_id FROM satellite_links WHERE ac_path = ?1 AND provided = 1")?;
+pub fn extra_provider(conn: &Connection, ac_path: &str) -> rusqlite::Result<Option<String>> {
+    let mut stmt = conn.prepare("SELECT mod_id FROM extra_links WHERE ac_path = ?1 AND provided = 1")?;
     let mut rows = stmt.query_map([ac_path], |r| r.get::<_, String>(0))?;
     rows.next().transpose()
 }
 
 /// Désigne le mod qui fournit désormais ce chemin — au plus un à la fois.
-pub fn set_satellite_provider(conn: &Connection, ac_path: &str, mod_id: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE satellite_links SET provided = 0 WHERE ac_path = ?1", [ac_path])?;
+pub fn set_extra_provider(conn: &Connection, ac_path: &str, mod_id: &str) -> rusqlite::Result<()> {
+    conn.execute("UPDATE extra_links SET provided = 0 WHERE ac_path = ?1", [ac_path])?;
     conn.execute(
-        "UPDATE satellite_links SET provided = 1 WHERE ac_path = ?1 AND mod_id = ?2",
+        "UPDATE extra_links SET provided = 1 WHERE ac_path = ?1 AND mod_id = ?2",
         [ac_path, mod_id],
     )?;
     Ok(())

@@ -98,9 +98,9 @@
         {#if resExtracted > 0}
           <div class="r-line shared">{t("importOverlay.resourcesExtracted", { count: resExtracted })}</div>
         {/if}
-        {@const satellites = a.satellites ?? 0}
-        {#if satellites > 0}
-          <div class="r-line shared">{t("importOverlay.satellitesAttached", { count: satellites })}</div>
+        {@const extras = a.extras ?? 0}
+        {#if extras > 0}
+          <div class="r-line shared">{t("importOverlay.extrasAttached", { count: extras })}</div>
         {/if}
       {/each}
     </div>

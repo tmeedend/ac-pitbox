@@ -102,13 +102,13 @@ Chaque voiture d'un pack est une **entité de premier niveau** (activable/taggua
 
 ### 4.5 Ressources partagées (fonts, drivers)
 
-`content/fonts` et `content/driver` ne sont **plus un cas particulier** : ce sont des satellites comme les autres (§4.6ter), donc suivis, arbitrés par date et retirés quand plus aucun mod ne les réclame.
+`content/fonts` et `content/driver` ne sont **plus un cas particulier** : ce sont des ajouts au jeu comme les autres (§4.6ter), donc suivis, arbitrés par date et retirés quand plus aucun mod ne les réclame.
 
 Ils avaient leur propre mécanisme — copie globale dans l'install AC, jamais désactivée, écrasement par défaut en cas de collision de contenu. Trois raisons de l'avoir retiré :
 
 - **Il était déjà court-circuité.** Le balayage des restes (§6.1bis) passe avant lui et ramasse `content/fonts` et `content/driver` comme n'importe quel autre reste — la copie globale ne voyait plus rien arriver.
 - **Deux politiques contradictoires** cohabitaient : « jamais désactivé » ici, « vit et meurt avec son mod » là.
-- **L'écrasement par défaut** contredisait la règle d'or n°5. Un satellite ne touche jamais un fichier que personne ne réclame.
+- **L'écrasement par défaut** contredisait la règle d'or n°5. Un ajout ne touche jamais un fichier que personne ne réclame.
 
 Conséquence pour l'existant : les fonts et drivers déjà posés dans une install AC — par une version antérieure, par Content Manager, ou à la main — ne sont réclamés par personne. Ils ne seront donc **jamais ni modifiés ni supprimés**. Un nettoyage éclairé des orphelins reste possible plus tard, une fois qu'on peut distinguer réclamé et non réclamé.
 
@@ -130,22 +130,22 @@ Beaucoup de mods embarquent des fichiers **hors contenu de jeu** : PDF de prése
 - **Bloc « Ressources » sur la fiche** : liste le contenu du dossier ressources **lu en direct** (pas une liste mémorisée en base). Conséquences : un fichier déposé **manuellement** dans le dossier ressources apparaît automatiquement ; les **mods déjà installés** n'ont rien à réimporter — le bloc se remplit dès qu'un dossier ressources existe. Un clic sur un fichier l'ouvre avec **l'application par défaut de l'OS** (PDF → lecteur, PSD → éditeur d'image).
 - **Bouton « ouvrir le dossier du mod »** sur la fiche : ouvre le dossier du mod dans l'explorateur (distinct du bloc Ressources).
 
-### 4.6ter Satellites d'un mod
+### 4.6ter Ajouts au jeu
 
-Une archive livre souvent, **à côté** du dossier du mod, des fichiers qui lui appartiennent mais qu'AC lit ailleurs que dans `content/<type>/<id>` : configs CSP (`extension/config/cars/rss/<id>/…`), shaders (`system/shaders/…`), textures d'équipe (`content/texture/…`), modèle de pilote (`content/driver/…`). L'archive RSS GT-M Lanzo en compte 69. Ce sont les **satellites** du mod.
+Une archive livre souvent, **à côté** du dossier du mod, des fichiers qui lui appartiennent mais qu'AC lit ailleurs que dans `content/<type>/<id>` : configs CSP (`extension/config/cars/rss/<id>/…`), shaders (`system/shaders/…`), textures d'équipe (`content/texture/…`), modèle de pilote (`content/driver/…`). L'archive RSS GT-M Lanzo en compte 69. Ce sont les **ajouts au jeu** du mod — l'onglet du même nom sur la fiche les liste.
 
-**Stockés bruts, avec leur chemin relatif à la racine d'AC**, dans `<lib>/satellites/<type>/<id>/…` — jamais dans la version, qui est déployée telle quelle dans `content/`. Au **niveau du mod** comme `resources/` (§4.6) : une mise à jour remplace ses propres fichiers, les couches partagent le même arbre.
+**Stockés bruts, avec leur chemin relatif à la racine d'AC**, dans `<lib>/extras/<type>/<id>/…` — jamais dans la version, qui est déployée telle quelle dans `content/`. Au **niveau du mod** comme `resources/` (§4.6) : une mise à jour remplace ses propres fichiers, les couches partagent le même arbre.
 
 Deux propriétés en découlent :
 
 - **L'import ne jette rien.** Ce qui n'est pas classé est conservé tel quel, donc l'*interprétation* — où poser, qui arbitre un fichier partagé — reste recalculable depuis la bibliothèque à tout moment. Aucune règle des versions précédentes à mémoriser, aucune archive à conserver : c'est l'**entrée** qui est préservée, pas la décision. C'est ce qui rend un futur changement de règles rattrapable sans rien versionner.
-- **Le satellite vit et meurt avec son mod.** Posé à l'activation, retiré à la désactivation, supprimé avec lui. Le passage par « autre mod » (§7.3) ne donnait pas ça : les fichiers d'une voiture supprimée restaient dans AC, rattachés à une entrée anonyme que plus rien ne reliait au mod.
+- **L'ajout vit et meurt avec son mod.** Posé à l'activation, retiré à la désactivation, supprimé avec lui. Le passage par « autre mod » (§7.3) ne donnait pas ça : les fichiers d'une voiture supprimée restaient dans AC, rattachés à une entrée anonyme que plus rien ne reliait au mod.
 
-**Rattachement** d'un reste (§6.1bis), dans cet ordre : le chemin contient l'id d'exactement un mod reconnu de l'archive ; sinon l'archive ne livre qu'un seul mod, et tout ce qui l'entoure lui appartient. *Limite assumée* : dans un pack multi-mods, un reste que rien ne rattache reste un « autre mod » — le rattacher à tous dupliquerait des arbres parfois lourds, et « autre mod » ne perd rien. Un **document isolé** à la racine reste une annexe (§4.6) et va dans les ressources du mod, jamais dans AC : sans ce test, un `Read Me.pdf` deviendrait un satellite posé à la racine d'Assetto Corsa.
+**Rattachement** d'un reste (§6.1bis), dans cet ordre : le chemin contient l'id d'exactement un mod reconnu de l'archive ; sinon l'archive ne livre qu'un seul mod, et tout ce qui l'entoure lui appartient. *Limite assumée* : dans un pack multi-mods, un reste que rien ne rattache reste un « autre mod » — le rattacher à tous dupliquerait des arbres parfois lourds, et « autre mod » ne perd rien. Un **document isolé** à la racine reste une annexe (§4.6) et va dans les ressources du mod, jamais dans AC : sans ce test, un `Read Me.pdf` deviendrait un ajout au jeu posé à la racine d'Assetto Corsa.
 
 **Pose fichier par fichier** (hardlink), jamais par jonction de dossier : plusieurs mods visent les mêmes arbres (`extension/textures/common/rss/…` est livré à l'identique par chaque voiture RSS), et une jonction en donnerait la propriété exclusive au premier arrivé.
 
-**Fichiers partagés.** Chaque mod *réclame* les chemins d'AC dont il a besoin (`satellite_links`), et deux règles suffisent :
+**Fichiers partagés.** Chaque mod *réclame* les chemins d'AC dont il a besoin (`extra_links`), et deux règles suffisent :
 
 - **Compteur de références** — un fichier n'est retiré d'AC que lorsque plus aucun mod ne le réclame. Désactiver une voiture RSS n'emporte pas `extension/textures/common/rss/…` dont onze autres dépendent, et il n'y a plus de course à la propriété : le premier arrivé ne gagne rien.
 - **Arbitrage par date** — l'exemplaire à la **date de modification la plus récente** gagne, un mod plus récent corrigeant en général des bugs de celui d'avant. La date traverse la chaîne intacte : 7-Zip restitue celle stockée dans l'archive, `std::fs::copy` la conserve sous Windows, un hardlink partage l'entrée MFT. À égalité (archives repackées par un tiers, qui perdent les dates), c'est le **dernier mod installé**. L'arbitrage se rejoue dans les deux sens : quand le fournisseur s'en va, le fichier repasse à l'exemplaire du meilleur réclamant restant.

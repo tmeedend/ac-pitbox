@@ -1,4 +1,4 @@
-//! Satellites d'un mod (§4.6ter) : ce qu'une archive livre **à côté** du
+//! Ajouts au jeu d'un mod (§4.6ter) : ce qu'une archive livre **à côté** du
 //! dossier du mod mais qui lui appartient — configs CSP
 //! (`extension/config/cars/rss/<id>/…`), shaders (`system/shaders/…`),
 //! textures d'équipe (`content/texture/…`), modèle de pilote
@@ -6,7 +6,7 @@
 //! peuvent donc pas voyager dans le dossier du mod.
 //!
 //! **Stockés bruts, avec leur chemin relatif à la racine d'AC**, dans un arbre
-//! dédié (`<lib>/satellites/<type>/<id>/…`) — jamais dans la version, qui est
+//! dédié (`<lib>/extras/<type>/<id>/…`) — jamais dans la version, qui est
 //! déployée telle quelle dans `content/`. Deux propriétés en découlent :
 //!
 //! - **L'import ne jette rien.** Ce qui n'est pas classé est conservé tel quel,
@@ -14,7 +14,7 @@
 //!   recalculable depuis la bibliothèque à tout moment. Aucune règle des
 //!   versions précédentes à mémoriser, aucune archive à conserver : c'est
 //!   l'entrée qui est préservée, pas la décision.
-//! - **Le satellite vit et meurt avec son mod.** Posé à l'activation, retiré à
+//! - **L'ajout vit et meurt avec son mod.** Posé à l'activation, retiré à
 //!   la désactivation, supprimé avec lui — c'est ce que le passage par « autre
 //!   mod » ne donnait pas : les fichiers d'une voiture désinstallée restaient
 //!   dans AC, rattachés à une entrée anonyme que plus rien ne reliait au mod.
@@ -29,7 +29,7 @@
 //! en donnerait la propriété exclusive au premier arrivé.
 //!
 //! **Fichiers partagés** : chaque mod *réclame* les chemins d'AC dont il a
-//! besoin (`satellite_links`), et deux règles suffisent.
+//! besoin (`extra_links`), et deux règles suffisent.
 //!
 //! - *Compteur de références* — un fichier n'est retiré d'AC que lorsque plus
 //!   aucun mod ne le réclame. Désactiver une voiture RSS n'emporte pas les
@@ -56,18 +56,18 @@ use crate::config::AppConfig;
 use crate::modscan::ModKind;
 use crate::overlay;
 
-/// Arbre des satellites d'un mod : `<lib>/satellites/<type>/<id>`.
+/// Arbre des ajouts au jeu d'un mod : `<lib>/extras/<type>/<id>`.
 pub fn dir(library: &Path, kind: ModKind, id: &str) -> PathBuf {
-    library.join("satellites").join(kind.content_folder()).join(id)
+    library.join("extras").join(kind.content_folder()).join(id)
 }
 
-/// Range un reste sous le satellite du mod, à `rel` (son chemin relatif à la
+/// Range un reste dans les ajouts au jeu du mod, à `rel` (son chemin relatif à la
 /// racine de l'archive, donc à la racine d'AC). Fusionne avec l'existant : une
 /// mise à jour du mod remplace ses propres fichiers, sans effacer les autres.
 pub fn store(sat_dir: &Path, rel: &Path, src: &Path, copy: bool) -> Result<(), String> {
     let dest = sat_dir.join(rel);
     if let Some(parent) = dest.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| format!("satellite : {e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("ajout au jeu : {e}"))?;
     }
     if src.is_dir() {
         if copy {
@@ -75,23 +75,23 @@ pub fn store(sat_dir: &Path, rel: &Path, src: &Path, copy: bool) -> Result<(), S
         } else {
             crate::archive::move_dir(src, &dest)
         }
-        .map_err(|e| format!("satellite : {e}"))
+        .map_err(|e| format!("ajout au jeu : {e}"))
     } else {
         if !copy && std::fs::rename(src, &dest).is_ok() {
             return Ok(());
         }
         std::fs::copy(src, &dest)
             .map(|_| ())
-            .map_err(|e| format!("satellite : {e}"))
+            .map_err(|e| format!("ajout au jeu : {e}"))
     }
 }
 
-/// Supprime l'arbre des satellites d'un mod (suppression du mod).
+/// Supprime l'arbre des ajouts au jeu d'un mod (suppression du mod).
 pub fn remove_tree(library: &Path, kind: ModKind, id: &str) {
     let d = dir(library, kind, id);
     if d.exists() {
         if let Err(e) = std::fs::remove_dir_all(&d) {
-            log::warn!("remove satellite tree {}: {e}", d.display());
+            log::warn!("remove extras tree {}: {e}", d.display());
         }
     }
 }
@@ -116,8 +116,8 @@ struct Claim {
 fn best_claim(conn: &Connection, cfg: &AppConfig, ac_path: &Path) -> Option<Claim> {
     let (library, ac) = (cfg.library_path.as_ref()?, cfg.ac_install_path.as_ref()?);
     let rel = ac_path.strip_prefix(ac).ok()?;
-    let rows = overlay::satellite_claimants(conn, &ac_path.to_string_lossy())
-        .inspect_err(|e| log::warn!("satellite_claimants {}: {e}", ac_path.display()))
+    let rows = overlay::extra_claimants(conn, &ac_path.to_string_lossy())
+        .inspect_err(|e| log::warn!("extra_claimants {}: {e}", ac_path.display()))
         .ok()?;
     rows.into_iter()
         .filter_map(|(mod_id, kind, claimed_at)| {
@@ -149,32 +149,32 @@ fn sync(conn: &Connection, cfg: &AppConfig, ac_path: &Path) {
     let Some(best) = best_claim(conn, cfg, ac_path) else {
         if ac_path.is_file() {
             if let Err(e) = std::fs::remove_file(ac_path) {
-                log::warn!("satellite remove {}: {e}", ac_path.display());
+                log::warn!("extras remove {}: {e}", ac_path.display());
             }
         }
         return;
     };
-    let current = overlay::satellite_provider(conn, &key).unwrap_or(None);
+    let current = overlay::extra_provider(conn, &key).unwrap_or(None);
     if current.as_deref() == Some(best.mod_id.as_str()) && ac_path.is_file() {
         return;
     }
     if ac_path.exists() {
         if let Err(e) = std::fs::remove_file(ac_path) {
-            log::warn!("satellite replace {}: {e}", ac_path.display());
+            log::warn!("extras replace {}: {e}", ac_path.display());
             return;
         }
     }
     match crate::deploy::link_or_copy(&best.src, ac_path) {
         Ok(()) => {
-            if let Err(e) = overlay::set_satellite_provider(conn, &key, &best.mod_id) {
-                log::warn!("set_satellite_provider {}: {e}", ac_path.display());
+            if let Err(e) = overlay::set_extra_provider(conn, &key, &best.mod_id) {
+                log::warn!("set_extra_provider {}: {e}", ac_path.display());
             }
         }
-        Err(e) => log::warn!("satellite replace {} <- {}: {e}", ac_path.display(), best.mod_id),
+        Err(e) => log::warn!("extras replace {} <- {}: {e}", ac_path.display(), best.mod_id),
     }
 }
 
-/// Pose les satellites du mod dans AC et mémorise exactement ce qu'il réclame
+/// Pose les ajouts au jeu du mod dans AC et mémorise exactement ce qu'il réclame
 /// — c'est cette liste, et elle seule, qui sera retirée à la désactivation.
 /// Best-effort : un fichier qui ne peut pas être posé est signalé, jamais forcé.
 pub fn deploy(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -> Result<usize, String> {
@@ -202,11 +202,11 @@ pub fn deploy(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -
         // Réclamé par un autre mod, en revanche, c'est un fichier partagé : on
         // s'y ajoute et l'arbitrage (`sync`) tranche.
         if target.exists() {
-            let claimed = overlay::satellite_claimants(conn, &target.to_string_lossy())
+            let claimed = overlay::extra_claimants(conn, &target.to_string_lossy())
                 .map(|c| !c.is_empty())
                 .unwrap_or(false);
             if !claimed {
-                log::warn!("satellite {mod_id}: {} already exists, left alone", target.display());
+                log::warn!("extras {mod_id}: {} already exists, left alone", target.display());
                 continue;
             }
             files.push(target);
@@ -227,7 +227,7 @@ pub fn deploy(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -
         }
         match crate::deploy::link_or_copy(src, &target) {
             Ok(()) => files.push(target),
-            Err(e) => log::warn!("satellite deploy {} -> {}: {e}", mod_id, target.display()),
+            Err(e) => log::warn!("extras deploy {} -> {}: {e}", mod_id, target.display()),
         }
     }
 
@@ -243,14 +243,14 @@ pub fn deploy(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -
     );
     // Enregistré **avant** l'arbitrage : `sync` lit les réclamations en base,
     // ce mod doit donc déjà y figurer pour pouvoir gagner.
-    overlay::set_satellite_links(conn, mod_id, kind.content_folder(), &entries).map_err(|e| e.to_string())?;
+    overlay::set_extra_links(conn, mod_id, kind.content_folder(), &entries).map_err(|e| e.to_string())?;
     for f in &files {
         sync(conn, cfg, f);
     }
     Ok(placed)
 }
 
-/// Retire la réclamation du mod sur ses satellites, puis réaligne chaque
+/// Retire la réclamation du mod sur ses ajouts au jeu, puis réaligne chaque
 /// fichier : encore réclamé par un autre mod, il **reste** (et repasse à
 /// l'exemplaire du meilleur réclamant restant) ; plus réclamé du tout, il est
 /// retiré. C'est le compteur de références des fichiers partagés (§4.6ter) —
@@ -259,7 +259,7 @@ pub fn deploy(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -
 /// plus profond au plus superficiel ; `remove_dir` échoue sur un dossier non
 /// vide, second garde-fou.
 pub fn undeploy(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(), String> {
-    let links = overlay::get_satellite_links(conn, mod_id).map_err(|e| e.to_string())?;
+    let links = overlay::get_extra_links(conn, mod_id).map_err(|e| e.to_string())?;
     // Garde-fou : on n'efface jamais hors du dossier d'AC, même si la base dit
     // le contraire (bibliothèque déplacée, chemin d'AC changé depuis la pose).
     let ac = cfg.ac_install_path.as_ref();
@@ -267,11 +267,11 @@ pub fn undeploy(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(), 
 
     // La réclamation part d'abord : `sync` compte ce qui reste en base, ce mod
     // ne doit plus y figurer.
-    overlay::set_satellite_links(conn, mod_id, "", &[]).map_err(|e| e.to_string())?;
+    overlay::set_extra_links(conn, mod_id, "", &[]).map_err(|e| e.to_string())?;
     for (p, _) in links.iter().filter(|(_, is_dir)| !is_dir) {
         let p = Path::new(p);
         if !inside_ac(p) {
-            log::warn!("satellite undeploy {}: outside AC, skipped", p.display());
+            log::warn!("extras undeploy {}: outside AC, skipped", p.display());
             continue;
         }
         sync(conn, cfg, p);
@@ -399,8 +399,8 @@ mod tests {
     }
 
     #[test]
-    fn satellite_deployed_on_activate_and_fully_removed_on_deactivate() {
-        // §4.6ter : le satellite vit et meurt avec son mod. C'est ce que le
+    fn extras_deployed_on_activate_and_fully_removed_on_deactivate() {
+        // §4.6ter : l'ajout vit et meurt avec son mod. C'est ce que le
         // passage par « autre mod » ne donnait pas — les fichiers d'une voiture
         // désinstallée restaient dans AC, rattachés à une entrée anonyme.
         let base = crate::testutil::temp_dir("sat");
@@ -415,7 +415,7 @@ mod tests {
         write(&sat.join("content").join("driver").join("pro.kn5"), b"model");
 
         let n = deploy(&conn, &cfg, ModKind::Car, "rss_car").unwrap();
-        assert_eq!(n, 2, "les deux satellites sont posés");
+        assert_eq!(n, 2, "les deux ajouts sont posés");
         assert!(ac.join("extension").join("config").join("cars").join("x.ini").is_file());
         assert!(ac.join("content").join("driver").join("pro.kn5").is_file());
 
@@ -432,14 +432,14 @@ mod tests {
         );
         assert!(
             sat.join("content").join("driver").join("pro.kn5").is_file(),
-            "la bibliothèque garde le satellite : réactivable sans réimport"
+            "la bibliothèque garde l'ajout : réactivable sans réimport"
         );
     }
 
     #[test]
-    fn satellite_never_overwrites_an_existing_file() {
+    fn extras_never_overwrite_an_existing_file() {
         // Règle d'or n°5 : aucun fichier du jeu altéré. Un fichier déjà présent
-        // — contenu Kunos, ou satellite d'un autre mod livrant le même fichier
+        // — contenu Kunos, ou ajout d'un autre mod livrant le même fichier
         // partagé — est laissé intact, et n'entre pas dans la liste des liens
         // posés (donc la désactivation ne peut pas l'emporter).
         let base = crate::testutil::temp_dir("sat-noover");
@@ -467,7 +467,7 @@ mod tests {
     }
 
     #[test]
-    fn store_merges_into_the_existing_satellite_tree() {
+    fn store_merges_into_the_existing_extras_tree() {
         // Une mise à jour du mod remplace ses propres fichiers sans effacer les
         // autres : l'arbre est au niveau du mod, partagé par les versions.
         let base = crate::testutil::temp_dir("sat-store");
