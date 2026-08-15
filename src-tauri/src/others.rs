@@ -36,16 +36,37 @@ pub struct OtherImported {
 
 /// Id à partir du nom d'archive/dossier importé (pas du dossier temp
 /// d'extraction, dont le nom — un UUID — n'a aucun sens pour une archive).
+///
+/// Deux pièges, tous deux à l'origine d'une perte de données réelle :
+///
+/// 1. **Assainir avant de découper.** Le nom reçu pour un reste d'archive est
+///    `<archive>__<chemin relatif>` et peut donc contenir des séparateurs
+///    (`RSS….rar__content\driver`). Passé tel quel à `Path::file_stem()`, seul
+///    le dernier segment survivait.
+/// 2. **Ne retirer que les extensions d'archive.** `file_stem()` coupe au
+///    dernier point : sur `RSS….rar__driver`, il voyait l'extension
+///    `rar__driver` et renvoyait `RSS…`. Tous les restes d'une même archive
+///    tombaient donc sur le même id ; le premier était importé, les suivants
+///    rejetés par `other_exists` — et leurs fichiers, déjà déplacés dans le
+///    dossier temporaire d'emballage, disparaissaient à son nettoyage. Pour
+///    l'archive du Lanzo : `extension/`, `system/`, `content/texture` et le PDF
+///    perdus, seul `content/driver` conservé.
 fn other_id(source_name: &str) -> String {
-    let stem = Path::new(source_name)
-        .file_stem()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_else(|| source_name.to_string());
-    stem.chars()
+    let sanitized: String = source_name
+        .chars()
         .map(|c| if r#"\/:*?"<>|"#.contains(c) { '_' } else { c })
-        .collect::<String>()
-        .trim()
-        .to_string()
+        .collect();
+    let sanitized = sanitized.trim();
+    if let Some((stem, ext)) = sanitized.rsplit_once('.') {
+        if !stem.trim().is_empty()
+            && crate::importer::NESTED_ARCHIVE_EXTS
+                .iter()
+                .any(|a| a.eq_ignore_ascii_case(ext))
+        {
+            return stem.trim().to_string();
+        }
+    }
+    sanitized.to_string()
 }
 
 /// Importe un dossier non reconnu comme « autre mod » (§6.1bis) : stocké tel
@@ -293,6 +314,39 @@ mod tests {
             std::fs::create_dir_all(p.parent().unwrap()).unwrap();
             std::fs::write(&p, b"x").unwrap();
         }
+    }
+
+    #[test]
+    fn other_id_keeps_the_leftover_label_and_strips_only_archive_extensions() {
+        // Bug réel (§6.1bis) : `other_id` découpait au dernier point via
+        // `Path::file_stem`, donc `<archive>.rar__<label>` perdait son label —
+        // tous les restes d'une archive partageaient un id et s'annulaient.
+        assert_eq!(
+            other_id("RSS_Lanzo.rar__content\\driver"),
+            "RSS_Lanzo.rar__content_driver",
+            "le label du reste survit, séparateurs assainis"
+        );
+        assert_ne!(
+            other_id("RSS_Lanzo.rar__content\\driver"),
+            other_id("RSS_Lanzo.rar__system"),
+            "deux restes de la même archive ne partagent jamais un id"
+        );
+        assert_ne!(
+            other_id("Pack.rar__driver"),
+            other_id("Pack.rar__content\\driver"),
+            "deux restes homonymes dans des dossiers différents restent distincts"
+        );
+
+        // Extension d'archive : retirée (nom d'archive nu passé par l'import).
+        assert_eq!(other_id("MyShaderMod.zip"), "MyShaderMod");
+        assert_eq!(other_id("Pack.7z"), "Pack");
+        assert_eq!(other_id("Pack.RAR"), "Pack", "insensible à la casse");
+
+        // Toute autre extension appartient au nom : un dossier `mod.v2` ne
+        // devient pas `mod`, deux versions ne se confondent pas.
+        assert_eq!(other_id("mod.v2"), "mod.v2");
+        assert_eq!(other_id("Settings_24-10-25"), "Settings_24-10-25");
+        assert_ne!(other_id("mod.v2"), other_id("mod.v3"));
     }
 
     #[test]

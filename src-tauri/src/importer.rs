@@ -211,7 +211,9 @@ fn fm_id(fm: &modscan::FoundMod) -> String {
 }
 
 /// Extensions d'archives reconnues pour une extraction imbriquée (§6.1bis).
-const NESTED_ARCHIVE_EXTS: &[&str] = &["zip", "7z", "rar"];
+/// Partagé avec `others::other_id`, qui ne doit retirer *que* ces extensions-là
+/// en dérivant l'id d'un mod « autre ».
+pub(crate) const NESTED_ARCHIVE_EXTS: &[&str] = &["zip", "7z", "rar"];
 
 fn is_archive_file(p: &Path) -> bool {
     p.is_file()
@@ -282,7 +284,19 @@ fn sweep_leftovers(
     let mut leftovers = Vec::new();
     collect_leftover(workdir, consumed, &mut leftovers);
     for p in leftovers {
-        import_leftover(conn, cfg, rules, library, archive_name, &p, copy, res_mode, result, 0);
+        import_leftover(
+            conn,
+            cfg,
+            rules,
+            library,
+            archive_name,
+            workdir,
+            &p,
+            copy,
+            res_mode,
+            result,
+            0,
+        );
     }
 }
 
@@ -297,19 +311,27 @@ fn import_leftover(
     rules: &Rules,
     library: &Path,
     archive_name: &str,
+    root: &Path,
     p: &Path,
     copy: bool,
     res_mode: crate::resources::ExtractionMode,
     result: &mut ArchiveResult,
     depth: u8,
 ) {
-    let label = p
-        .file_stem()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_default();
+    // Chemin relatif à la racine balayée, et non simple nom de fichier : c'est
+    // lui qui donne sa destination au reste à l'activation (`others::place`
+    // rejoue `ac.join(rel)`), et lui qui distingue deux restes homonymes dans
+    // des dossiers différents. Avec le seul nom, `content/driver` atterrissait
+    // à `AC\driver` — et un `driver/` à la racine de l'archive aurait pris le
+    // même id.
+    let rel = p.strip_prefix(root).unwrap_or(p);
+    let label = rel.to_string_lossy().into_owned();
     let nested_name = format!("{archive_name}__{label}");
 
     if depth < 2 && is_archive_file(p) {
+        // Archive imbriquée : son extension n'a pas à rester dans l'id des mods
+        // qui en sortiront.
+        let nested_name = format!("{archive_name}__{}", rel.with_extension("").to_string_lossy());
         let Some(sevenzip) = &cfg.sevenzip_exe else {
             return;
         };
@@ -372,6 +394,7 @@ fn import_leftover(
                         rules,
                         library,
                         &nested_name,
+                        &extracted,
                         &lp,
                         false,
                         res_mode,
@@ -386,15 +409,24 @@ fn import_leftover(
     }
 
     // `p` est un reste isolé (fichier OU dossier, ex. `extension/` livré à
-    // plat à côté d'une app) : enveloppé dans un temp dir qui conserve son
-    // propre nom avant d'appeler `others::import_other`. Sans cette enveloppe,
-    // passer `p` directement comme racine du mod « autre » ferait perdre le
-    // nom de `p` (ex. "extension") — `others::place` rejoue ensuite le chemin
-    // cible depuis cette racine (`ac.join(rel)`), donc un dossier `extension/`
-    // pris comme racine atterrirait à `ac/config/...` au lieu d'
-    // `ac/extension/config/...` à l'activation.
+    // plat à côté d'une app) : enveloppé dans un temp dir qui reconstitue son
+    // **chemin relatif à la racine balayée** avant d'appeler
+    // `others::import_other`. `others::place` rejoue ensuite ce chemin depuis
+    // cette racine (`ac.join(rel)`) — d'où deux exigences :
+    //   - sans enveloppe du tout, `extension/` pris comme racine atterrirait à
+    //     `ac/config/...` au lieu d'`ac/extension/config/...` ;
+    //   - avec une enveloppe réduite au seul nom, `content/driver` atterrissait
+    //     à `ac/driver` au lieu d'`ac/content/driver` (bug réel : le pilote du
+    //     Lanzo jonctionné à la racine d'AC, donc invisible pour le jeu).
     let Ok(wrap) = make_temp_dir() else { return };
-    let wrapped = wrap.join(p.file_name().unwrap_or_default());
+    let wrapped = wrap.join(rel);
+    if let Some(parent) = wrapped.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            log::warn!("import_leftover {}: create wrap dir: {e}", rel.display());
+            let _ = std::fs::remove_dir_all(&wrap);
+            return;
+        }
+    }
     let placed = if p.is_dir() {
         if copy {
             archive::copy_dir(p, &wrapped).is_ok()
@@ -404,13 +436,18 @@ fn import_leftover(
     } else {
         std::fs::rename(p, &wrapped).is_ok() || std::fs::copy(p, &wrapped).is_ok()
     };
-    if placed {
-        if let Some(other) = crate::others::import_other(conn, library, &nested_name, &wrap, false, res_mode) {
-            if let Err(e) = crate::others::activate_other(conn, cfg, &other.id) {
-                log::warn!("auto_activate_other {}: {e}", other.id);
-            }
-            result.others.push(other);
+    if !placed {
+        log::warn!("import_leftover {}: could not stage leftover", rel.display());
+    } else if let Some(other) = crate::others::import_other(conn, library, &nested_name, &wrap, false, res_mode) {
+        if let Err(e) = crate::others::activate_other(conn, cfg, &other.id) {
+            log::warn!("auto_activate_other {}: {e}", other.id);
         }
+        result.others.push(other);
+    } else {
+        // Id déjà connu : `import_other` ne remplace jamais (§7.3). Sans cette
+        // trace, le reste disparaissait au nettoyage de `wrap` sans laisser le
+        // moindre indice — c'est ce qui rendait la collision d'id indétectable.
+        log::warn!("import_leftover {}: id already known, leftover dropped", nested_name);
     }
     let _ = std::fs::remove_dir_all(&wrap);
 }
@@ -1921,6 +1958,127 @@ mod tests {
         assert!(
             crate::activation::is_junction(&ac.join("extension").join("config").join("new_thing")),
             "reste importé et activé comme autre mod, chemin préservé (extension/config/new_thing)"
+        );
+    }
+
+    #[test]
+    fn every_leftover_of_one_archive_gets_its_own_id_and_survives() {
+        // Bug réel (RSS GT-M Lanzo) : tous les restes d'une même archive
+        // tombaient sur le même id « autre mod » — `other_id` voyait dans
+        // `<archive>.rar__<label>` une extension `rar__<label>` et ne gardait
+        // que `<archive>`. Le premier reste était importé, les suivants
+        // rejetés par `other_exists`, et leurs fichiers — déjà déplacés dans le
+        // dossier temporaire d'emballage — disparaissaient à son nettoyage.
+        // Sur l'archive du Lanzo : `extension/`, `system/` et `content/texture`
+        // perdus, seul `content/driver` conservé (§6.1bis).
+        let base = crate::testutil::temp_dir("import-leftover-ids");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+        let noop = |_p: Progress| {};
+
+        // Archive « à la RSS » : une voiture reconnue + quatre restes autour.
+        let src = base.join("RSS_Pack.rar");
+        make_fake_car(&src.join("content").join("cars"), "rss_test_v8");
+        for (rel, name) in [
+            ("extension/config/cars/rss", "car.ini"),
+            ("system/shaders", "shader.fxo"),
+            ("content/texture/crew", "brand.dds"),
+            ("content/driver", "driver.kn5"),
+        ] {
+            let d = src.join(rel);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join(name), name.as_bytes()).unwrap();
+        }
+
+        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+        assert_eq!(r.mods.len(), 1, "la voiture est reconnue");
+        assert_eq!(
+            r.others.len(),
+            4,
+            "les quatre restes sont importés, aucun écrasé par collision d'id"
+        );
+
+        let ids: Vec<&str> = r.others.iter().map(|o| o.id.as_str()).collect();
+        let mut sorted = ids.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), 4, "quatre ids distincts, obtenus: {ids:?}");
+
+        // Chaque fichier de reste est bien arrivé en bibliothèque.
+        for rel in [
+            "extension/config/cars/rss/car.ini",
+            "system/shaders/shader.fxo",
+            "content/texture/crew/brand.dds",
+            "content/driver/driver.kn5",
+        ] {
+            let found = r.others.iter().any(|o| {
+                let mut p = library.join("others").join(&o.id);
+                for seg in rel.split('/') {
+                    p = p.join(seg);
+                }
+                p.is_file()
+            });
+            assert!(found, "{rel} conservé en bibliothèque");
+        }
+    }
+
+    #[test]
+    fn leftover_keeps_its_path_relative_to_the_archive_root() {
+        // Bug réel : l'emballage d'un reste ne conservait que son nom de
+        // fichier, or `others::place` rejoue le chemin depuis la racine du mod
+        // (`ac.join(rel)`). `content/driver` atterrissait donc à `AC\driver`
+        // au lieu d'`AC\content\driver` — jonction posée hors de portée du jeu.
+        let base = crate::testutil::temp_dir("import-leftover-relpath");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        // `content/` existe déjà côté AC (vrai dossier) : `place` doit y
+        // descendre plutôt que de jonctionner à la racine.
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+        let noop = |_p: Progress| {};
+
+        let src = base.join("WithDriver");
+        make_fake_car(&src.join("content").join("cars"), "some_car");
+        let d = src.join("content").join("driver");
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("pro.kn5"), b"driver-model").unwrap();
+
+        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+        assert_eq!(r.others.len(), 1, "le dossier driver/ est repris comme reste");
+
+        let stored = library
+            .join("others")
+            .join(&r.others[0].id)
+            .join("content")
+            .join("driver")
+            .join("pro.kn5");
+        assert!(stored.is_file(), "chemin relatif conservé en bibliothèque: {stored:?}");
+
+        assert!(
+            ac.join("content").join("driver").join("pro.kn5").exists(),
+            "déployé sous content/driver, là où AC le lit"
+        );
+        assert!(
+            !ac.join("driver").exists(),
+            "jamais à la racine d'AC (le bug d'origine)"
         );
     }
 

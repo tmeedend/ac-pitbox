@@ -75,12 +75,26 @@ Jamais d'élévation admin — l'app doit fonctionner en utilisateur standard.
 2. **Avant toute suppression dans `content/`, vérifier junction/hardlink vs vrai
    dossier.** Le garde-fou existe dans `activation.rs` — ne jamais le
    contourner. Effacer un vrai dossier du jeu est irréversible.
-3. **CM est maître de `race.ini`.** On pilote des presets via le protocole
+3. **Jamais un fichier retiré de l'intérieur du dossier du mod.** Le dossier du
+   mod, c'est le dossier que l'auteur a conçu pour être posé dans `content/`
+   (`rss_gtm_lanzo_v8/`, `ks_nordschleife/`) — pas l'archive qui l'entoure.
+   Tout ce qui est **dedans**, à quelque profondeur que ce soit, est du contenu
+   du mod : ça se copie en bibliothèque intégralement, ça ne se trie pas.
+   L'extraction des annexes (§4.6) ne s'applique **qu'à ce qui est à côté du
+   dossier du mod**, jamais dedans. Bug réel : `body_shadow.png`,
+   `tyre_*_shadow.png` et `logo.png` — de vrais assets AC vivant à la racine du
+   dossier voiture — ont été déplacés en `resources/` sur 23 mods, parce que le
+   classement se fondait sur l'extension et la profondeur au lieu de
+   l'appartenance au mod. Une annexe **détectée dedans** (un PDF de notice au
+   milieu de la voiture) peut être **signalée**, jamais déplacée : dans le
+   doute, le fichier reste où l'auteur l'a mis. Le script
+   `scripts/audit-resources.ps1` audite et répare l'existant.
+4. **CM est maître de `race.ini`.** On pilote des presets via le protocole
    `acmanager://`, on n'écrit pas les fichiers du jeu à la main.
-4. **Aucun fichier du jeu altéré durablement.** Si un fichier d'AC doit être
+5. **Aucun fichier du jeu altéré durablement.** Si un fichier d'AC doit être
    touché (cas exceptionnel), il est sauvegardé et restauré — et il faut un
    filet de sécurité au démarrage pour les fermetures anormales.
-5. **Jamais `localStorage` pour un réglage qui doit survivre à un
+6. **Jamais `localStorage` pour un réglage qui doit survivre à un
    redémarrage.** `localStorage` n'est pas garanti synchrone sur disque côté
    WebView2 — l'écriture part dans le buffer du navigateur, pas sur disque, et
    une fermeture de l'app juste après peut la perdre. Bug réel constaté
