@@ -1,3 +1,12 @@
+# Racine du workspace : `src-tauri` reste le paquet principal, et les crates de
+# l'aperçu 3D (docs/SPEC-preview-3d-kn5.md §5.1) vivent sous `crates/`. Le
+# workspace est ici plutôt qu'à la racine du dépôt pour que `target/`, le
+# `Cargo.lock` et les invocations `cargo` de la CI restent exactement où ils
+# étaient — un workspace à la racine du dépôt aurait déplacé tout ça.
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
 [package]
 name = "pitbox"
 version = "0.1.0"

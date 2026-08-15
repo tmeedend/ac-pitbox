@@ -2149,6 +2149,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "kn5"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "kn5-tool"
+version = "0.1.0"
+dependencies = [
+ "kn5",
+ "log",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

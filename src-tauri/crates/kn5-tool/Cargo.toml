@@ -1,0 +1,17 @@
+[package]
+name = "kn5-tool"
+version = "0.1.0"
+edition = "2021"
+description = "Developer CLI for inspecting Assetto Corsa KN5 models — not shipped to users"
+license = "MIT"
+
+[dependencies]
+kn5 = { path = "../kn5" }
+# Le parser signale ses doutes via la façade `log` (version inconnue, octets
+# résiduels après l'arbre de nœuds) : sans un logger branché, l'outil de
+# validation serait aveugle précisément là où il doit voir.
+log = "0.4"
+
+# Aucune autre dépendance volontairement : le parsing d'arguments de deux
+# sous-commandes tient en quarante lignes, et cet outil ne doit pas être une
+# raison d'alourdir le graphe de dépendances de l'application.

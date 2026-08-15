@@ -143,6 +143,9 @@ src-tauri/src/          Backend Rust — un module par domaine
   rules.rs harmonize.rs                Moteur de tags
   maintenance.rs export.rs             Outils
   uijson.rs inspect.rs identity.rs     Lecture des fichiers AC
+src-tauri/crates/       Crates du workspace (aperçu 3D, docs/SPEC-preview-3d-kn5.md)
+  kn5/                  Parsing du format KN5 — pur, sans I/O ni Tauri
+  kn5-tool/             CLI de validation, jamais livrée à l'utilisateur
 src/lib/
   components/           Composants Svelte (voir la carte des écrans)
   components/detail/    Blocs extraits de la fiche détail
@@ -240,6 +243,11 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
 - **`docs/*-research.md`** — comptes rendus de recherche sur les points durs
   (lancement CM, aperçu 3D). Contiennent le *pourquoi* de choix non évidents et
   la trace des pistes abandonnées. À lire avant de retenter quelque chose.
+- **`docs/SPEC-preview-3d-kn5.md`** — spécification du chantier « aperçu 3D
+  natif » (parser KN5 → glTF → three.js), avec son plan par lots. Accompagnée
+  de **`docs/kn5-format.md`**, qui consigne ce que le format fait *réellement*
+  quand il s'écarte de la spec, avec la méthode de vérification. Toute
+  découverte sur le format s'écrit là, pas seulement dans un commentaire.
 - **`docs/windows-code-signing.md`** — signature Authenticode de l'installateur
   (SmartScreen). À lire **avant** d'acheter un certificat.
 - `docs/README-livrables.md` — doc d'amorçage historique, partiellement
@@ -257,8 +265,13 @@ ailleurs). Piège à connaître : `tauri-build` exige que `../build` existe, don
 crée une release **brouillon**. L'étape de signature Azure y est écrite mais
 commentée — les binaires actuels ne sont pas signés.
 
-`src-tauri/rustfmt.toml` fixe le style (`max_width = 120`) et `cargo fmt --check`
-est dans la CI. Un reformatage massif se fait dans un commit isolé, jamais
+`src-tauri/` est la **racine d'un workspace Cargo** : le paquet principal plus
+les crates de l'aperçu 3D sous `src-tauri/crates/`. D'où le `--workspace` de
+clippy/test ci-dessus — sans lui, cargo ne regarde que le paquet racine et les
+crates passent en CI sans être vérifiés.
+
+`src-tauri/rustfmt.toml` fixe le style (`max_width = 120`) et `cargo fmt --all
+--check` est dans la CI. Un reformatage massif se fait dans un commit isolé, jamais
 mélangé à un changement fonctionnel : sinon `git blame` devient inexploitable.
 
 ## Chantiers en cours
@@ -286,6 +299,18 @@ laisser pourrir ici.
       proche) et les titres de popup (`OpponentPicker`/`SavedSessionsDialog`,
       13px/majuscules, identiques entre eux mais ne correspondant à aucun des
       trois niveaux). **Couleurs sémantiques** : pas encore attaquées.
+- [ ] **Aperçu 3D natif des voitures** (`docs/SPEC-preview-3d-kn5.md`, branche
+      `feature/3dpreview`). Plan en 7 lots, chacun vérifiable sans lancer
+      l'app. Fait : **lot 0** — workspace Cargo, crate `kn5` (parser complet du
+      §3, robuste sur entrée non fiable) et `kn5-tool` (`inspect` / `scan`).
+      198 voitures sur 201 de la bibliothèque de référence parsées sans échec ;
+      trois questions ouvertes du §12 tranchées et consignées dans
+      `docs/kn5-format.md`. Reste : textures (lot 2), export glTF (lot 3),
+      cache + intégration Tauri (lot 4), viewer three.js (lot 5), finitions
+      (lot 6). Décidé avec l'utilisateur : le viewer KN5 **coexiste** avec le
+      bouton `acShowroom.exe` existant (§9.4 du SPEC) au lieu de le remplacer,
+      et n'arrive dans `ModDetail.svelte` qu'au lot 6, `DetailPage.svelte`
+      d'abord.
 - [ ] **Signature Authenticode** : le workflow est prêt, il attend un
       certificat. Définir la variable de dépôt `SIGN_COMMAND` suffit à
       l'activer — voir `docs/windows-code-signing.md` (lire **avant** d'acheter,
@@ -310,7 +335,7 @@ laisser pourrir ici.
    npm run check && npm run build
    ```
    ```bash
-   cd src-tauri && cargo clippy --all-targets -- -D warnings && cargo test
+   cd src-tauri && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
    ```
    `npm run check` doit rester à 0 erreur **et 0 warning**, et **clippy à 0
    warning** — la CI les traite en erreurs.

@@ -1,0 +1,15 @@
+[package]
+name = "kn5"
+version = "0.1.0"
+edition = "2021"
+description = "Parser for the Assetto Corsa KN5 3D model format"
+license = "MIT"
+
+[dependencies]
+# Erreurs typées : une seule enum publique, mais elle porte assez de variantes
+# et de champs pour que l'implémenter à la main soit du bruit.
+thiserror = "2"
+# Façade de log seulement (le backend est branché côté application, via
+# `tauri-plugin-log`) : sans ça, un fichier de version inconnue ou un compteur
+# aberrant se corrigerait silencieusement, sans trace dans le journal utilisateur.
+log = "0.4"
