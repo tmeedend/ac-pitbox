@@ -130,6 +130,7 @@ src-tauri/src/          Backend Rust — un module par domaine
   overlay.rs            Base SQLite : schéma, migrations ALTER idempotentes, CRUD
   importer.rs modscan.rs archive.rs    Import : détection, extraction, classement
   activation.rs deploy.rs compose.rs layers.rs   Déploiement dans content/
+  extras.rs gamebackup.rs              Ce qu'un mod pose hors de content/<type>/<id>
   library.rs submods.rs apps.rs others.rs        Bibliothèque et add-ons
   launch.rs quickdrive.rs weather.rs   Lancement de session via CM
   rules.rs harmonize.rs                Moteur de tags
