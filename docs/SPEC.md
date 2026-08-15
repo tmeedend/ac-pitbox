@@ -102,7 +102,17 @@ Chaque voiture d'un pack est une **entité de premier niveau** (activable/taggua
 
 ### 4.5 Ressources partagées (fonts, drivers)
 
-Installées **globalement**, non gérées en activation (les désactiver casserait d'autres mods). Nettoyage optionnel des orphelins. Collision par contenu : identique → silencieux ; différent → warning (défaut = écraser). Le checksum anti-triche d'AC porte sur `data.acd` et `surfaces.ini`, pas sur les fonts/drivers.
+`content/fonts` et `content/driver` ne sont **plus un cas particulier** : ce sont des satellites comme les autres (§4.6ter), donc suivis, arbitrés par date et retirés quand plus aucun mod ne les réclame.
+
+Ils avaient leur propre mécanisme — copie globale dans l'install AC, jamais désactivée, écrasement par défaut en cas de collision de contenu. Trois raisons de l'avoir retiré :
+
+- **Il était déjà court-circuité.** Le balayage des restes (§6.1bis) passe avant lui et ramasse `content/fonts` et `content/driver` comme n'importe quel autre reste — la copie globale ne voyait plus rien arriver.
+- **Deux politiques contradictoires** cohabitaient : « jamais désactivé » ici, « vit et meurt avec son mod » là.
+- **L'écrasement par défaut** contredisait la règle d'or n°5. Un satellite ne touche jamais un fichier que personne ne réclame.
+
+Conséquence pour l'existant : les fonts et drivers déjà posés dans une install AC — par une version antérieure, par Content Manager, ou à la main — ne sont réclamés par personne. Ils ne seront donc **jamais ni modifiés ni supprimés**. Un nettoyage éclairé des orphelins reste possible plus tard, une fois qu'on peut distinguer réclamé et non réclamé.
+
+Le checksum anti-triche d'AC porte sur `data.acd` et `surfaces.ini`, pas sur les fonts/drivers.
 
 ### 4.6 Fichiers annexes du mod (docs, templates)
 

@@ -106,9 +106,6 @@ pub struct ArchiveResult {
     pub archive: String,
     pub mods: Vec<ImportedMod>,
     pub error: Option<String>,
-    /// Ressources partagées (fonts/drivers) installées globalement (§4.8).
-    #[serde(default)]
-    pub shared: Vec<crate::shared::SharedResult>,
     /// Sous-éléments rattachés (skins/sons) routés vers la bibliothèque (§12bis.2).
     #[serde(default)]
     pub subs: Vec<crate::submods::SubImported>,
@@ -171,7 +168,6 @@ fn lock_error_result(path: &str, error: &str) -> ArchiveResult {
         archive: path.to_string(),
         mods: Vec::new(),
         error: Some(error.to_string()),
-        shared: Vec::new(),
         subs: Vec::new(),
         apps: Vec::new(),
         others: Vec::new(),
@@ -599,7 +595,6 @@ fn import_one(
         archive: archive_name.clone(),
         mods: Vec::new(),
         error: None,
-        shared: Vec::new(),
         subs: Vec::new(),
         apps: Vec::new(),
         others: Vec::new(),
@@ -737,11 +732,6 @@ fn import_one(
         &mut result,
     );
 
-    // Ressources partagées globales (fonts/drivers) avant nettoyage du temp (§4.8).
-    if let Some(ac) = &cfg.ac_install_path {
-        result.shared = crate::shared::install(ac, &workdir);
-    }
-
     emit(Progress {
         archive: archive_name.clone(),
         phase: "done".into(),
@@ -798,7 +788,6 @@ fn import_one_folder(
         archive: name.clone(),
         mods: Vec::new(),
         error: None,
-        shared: Vec::new(),
         subs: Vec::new(),
         apps: Vec::new(),
         others: Vec::new(),
@@ -909,11 +898,6 @@ fn import_one_folder(
         res_mode,
         &mut result,
     );
-
-    // Ressources partagées globales (§4.8).
-    if let Some(ac) = &cfg.ac_install_path {
-        result.shared = crate::shared::install(ac, dir);
-    }
 
     emit(Progress {
         archive: name.clone(),
@@ -1104,7 +1088,6 @@ fn exec_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, it: &BulkExecItem
         archive: name.clone(),
         mods: Vec::new(),
         error: None,
-        shared: Vec::new(),
         subs: Vec::new(),
         apps: Vec::new(),
         others: Vec::new(),
@@ -1163,10 +1146,31 @@ fn exec_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, it: &BulkExecItem
     }
     // Activation par défaut des mods importés (§4.6bis).
     auto_activate(conn, cfg, &result.mods);
-    // Ressources partagées globales (§4.8).
-    if let Some(ac) = &cfg.ac_install_path {
-        result.shared = crate::shared::install(ac, dir);
-    }
+
+    // Ce qui entoure les mods reconnus (§6.1bis/§4.6ter). Ce chemin d'import en
+    // masse n'avait aucun balayage : tout ce qui n'était pas une voiture ou un
+    // circuit y disparaissait, à l'exception des fonts et drivers qu'une copie
+    // globale attrapait au passage. Skins, sons et apps sont marqués consommés
+    // sans être importés — l'import en masse ne les traite pas davantage
+    // qu'avant, mais il ne les prend plus pour des restes.
+    let subs = modscan::scan_subs(dir);
+    let apps = modscan::scan_apps(dir);
+    let consumed = consumed_paths(&found, &subs, &apps);
+    let found_ids: Vec<(String, ModKind)> = found.iter().map(|fm| (fm_id(fm), fm.kind)).collect();
+    let res_mode = crate::resources::ExtractionMode::parse(&cfg.prefs.resource_extraction_mode);
+    sweep_leftovers(
+        conn,
+        cfg,
+        rules,
+        library,
+        &name,
+        dir,
+        &consumed,
+        &found_ids,
+        copy,
+        res_mode,
+        &mut result,
+    );
     result
 }
 
@@ -2114,6 +2118,69 @@ mod tests {
         assert!(
             crate::activation::is_junction(&ac.join("extension").join("config").join("new_thing")),
             "reste importé et activé comme autre mod, chemin préservé (extension/config/new_thing)"
+        );
+    }
+
+    #[test]
+    fn fonts_and_drivers_are_satellites_like_the_rest() {
+        // §4.5 : `content/fonts` et `content/driver` avaient leur propre
+        // mécanisme — copie globale dans AC, jamais désactivée, écrasement par
+        // défaut. Il était déjà court-circuité par le balayage des restes, et
+        // contredisait la règle d'or n°5. Ils suivent désormais le sort commun :
+        // suivis, et retirés avec le mod qui les a apportés.
+        let base = crate::testutil::temp_dir("import-fonts");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        // Font déjà présente, que personne ne réclamera : ni touchée, ni retirée.
+        let foreign = ac.join("content").join("fonts").join("kunos.txt");
+        std::fs::create_dir_all(foreign.parent().unwrap()).unwrap();
+        std::fs::write(&foreign, b"KUNOS").unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+        let noop = |_p: Progress| {};
+
+        let src = base.join("FontPack");
+        make_fake_car(&src.join("content").join("cars"), "font_car");
+        for (rel, name, body) in [
+            ("content/fonts", "rss-arial.txt", &b"MOD"[..]),
+            ("content/driver", "rss_driver.kn5", &b"MOD"[..]),
+            // Même nom que la font déjà là : jamais écrasée (règle d'or n°5).
+            ("content/fonts", "kunos.txt", &b"MOD"[..]),
+        ] {
+            let d = src.join(rel);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join(name), body).unwrap();
+        }
+
+        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+        assert_eq!(r.satellites, 2, "fonts et driver rattachés à la voiture");
+
+        assert!(ac.join("content").join("fonts").join("rss-arial.txt").is_file());
+        assert!(ac.join("content").join("driver").join("rss_driver.kn5").is_file());
+        assert_eq!(
+            std::fs::read(&foreign).unwrap(),
+            b"KUNOS",
+            "une font que personne ne réclame n'est jamais écrasée"
+        );
+
+        crate::maintenance::delete_broken(&conn, &cfg, "font_car").unwrap();
+        assert!(
+            !ac.join("content").join("fonts").join("rss-arial.txt").exists(),
+            "retirée avec le mod qui l'a apportée"
+        );
+        assert!(!ac.join("content").join("driver").join("rss_driver.kn5").exists());
+        assert_eq!(
+            std::fs::read(&foreign).unwrap(),
+            b"KUNOS",
+            "et la font non réclamée est toujours là, intacte"
         );
     }
 

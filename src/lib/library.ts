@@ -178,14 +178,6 @@ export interface LayerRow {
   imported_at: string;
 }
 
-/** Ressource partagée (font/driver) installée globalement (§4.8). */
-export interface SharedResult {
-  kind: "fonts" | "driver";
-  name: string;
-  /** "installed" (nouveau) | "identical" (déjà là) | "replaced" (écrasé, différent). */
-  disposition: "installed" | "identical" | "replaced";
-}
-
 /** Sous-élément rattaché (skin/son) routé à l'import (§12bis.2). */
 export interface SubImported {
   sub_type: "SKIN" | "SOUND";
@@ -213,7 +205,6 @@ export interface ArchiveResult {
   archive: string;
   mods: ImportedMod[];
   error: string | null;
-  shared: SharedResult[];
   subs: SubImported[];
   apps: AppImported[];
   others: OtherImported[];

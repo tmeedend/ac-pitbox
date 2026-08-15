@@ -36,7 +36,6 @@ mod rules;
 mod satellites;
 mod saved_sessions;
 mod session_state;
-mod shared;
 mod showroom;
 mod stock;
 mod submods;

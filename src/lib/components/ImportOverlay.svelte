@@ -75,14 +75,6 @@
             {/if}
           </div>
         {/each}
-        {@const replaced = (a.shared ?? []).filter((s) => s.disposition === "replaced")}
-        {@const added = (a.shared ?? []).filter((s) => s.disposition === "installed")}
-        {#if added.length}
-          <div class="r-line shared">{t("importOverlay.sharedInstalled", { count: added.length })}</div>
-        {/if}
-        {#each replaced as s}
-          <div class="r-line shared warn">{t("importOverlay.sharedReplaced", { kind: s.kind === "fonts" ? t("importOverlay.fontLabel") : t("importOverlay.driverLabel"), name: s.name })}</div>
-        {/each}
         {#if (a.subs ?? []).length}
           {@const skins = a.subs.filter((s) => s.sub_type === "SKIN").length}
           {@const sounds = a.subs.filter((s) => s.sub_type === "SOUND").length}
