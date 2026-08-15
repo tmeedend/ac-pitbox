@@ -199,6 +199,12 @@ export interface AppImported {
 export interface OtherImported {
   id: string;
   resources_extracted: number;
+  /** Composant optionnel (§4.6bis) : livré dans une archive à part **et**
+   * modifiant le jeu de base. Importé, mais laissé inactif — à l'utilisateur
+   * de trancher. */
+  optional?: boolean;
+  /** Nombre de fichiers du jeu de base qu'il remplacerait. */
+  game_files_replaced?: number;
 }
 
 export interface ArchiveResult {

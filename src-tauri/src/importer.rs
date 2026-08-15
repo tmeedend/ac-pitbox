@@ -989,10 +989,29 @@ fn import_leftover(
             let subs = modscan::scan_subs(&extracted);
             let apps = modscan::scan_apps(&extracted);
             if found.is_empty() && subs.is_empty() && apps.is_empty() {
-                if let Some(other) =
+                // Composant optionnel (§4.6bis) : deux signaux **ensemble**.
+                // L'auteur l'a emballé à part — personne ne zippe un
+                // sous-dossier de son propre mod par accident — **et** ça
+                // remplace des fichiers du jeu de base, donc ça déborde
+                // largement du mod. Aucun des deux ne suffit : une archive
+                // imbriquée porte très souvent le mod principal (racine réduite
+                // à un readme + un zip), et remplacer du jeu de base est le
+                // quotidien de mods parfaitement obligatoires (shaders, fonts).
+                //
+                // Mesuré avant l'import, qui déplace `extracted`.
+                let replaced = crate::others::game_files_replaced(conn, cfg, &extracted);
+                if let Some(mut other) =
                     crate::others::import_other(conn, library, &nested_name, &extracted, false, res_mode)
                 {
-                    if let Err(e) = crate::others::activate_other(conn, cfg, &other.id) {
+                    if replaced > 0 {
+                        // Rangé en bibliothèque — l'import ne jette rien — mais
+                        // laissé **inactif** : aucun des deux défauts n'est sûr
+                        // (installer efface des fichiers du jeu partout ; ne pas
+                        // installer peut faire doublonner l'affichage du mod),
+                        // donc c'est l'utilisateur qui tranche, en fin de lot.
+                        other.optional = true;
+                        other.game_files_replaced = replaced;
+                    } else if let Err(e) = crate::others::activate_other(conn, cfg, &other.id) {
                         log::warn!("auto_activate_other {}: {e}", other.id);
                     }
                     result.others.push(other);
@@ -3493,6 +3512,102 @@ mod tests {
         assert!(
             crate::activation::is_junction(&ac.join("extension").join("config").join("new_hud_tweak")),
             "activé par défaut, chemin du zip imbriqué préservé"
+        );
+    }
+
+    #[test]
+    fn a_nested_zip_that_overwrites_the_base_game_waits_for_the_user() {
+        // §4.6bis — cas réel CMRT_Complete_hud : à côté de l'app, un
+        // `..._replacement.zip` qui neutralise les drapeaux et la jauge de
+        // carburant du jeu de base. Aucun des deux défauts n'est sûr — l'
+        // installer efface des fichiers vus dans **toutes** les sessions, ne pas
+        // l'installer peut faire doublonner l'affichage du HUD — donc l'app ne
+        // tranche pas : elle range et laisse inactif.
+        let Some(sevenzip) = crate::detect::find_7zip() else {
+            eprintln!("7-Zip introuvable — test ignoré");
+            return;
+        };
+
+        let base = crate::testutil::temp_dir("import-optional-zip");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        // Fichier du jeu de base, tel que Kunos le livre.
+        let flags = ac.join("content").join("gui").join("flags");
+        std::fs::create_dir_all(&flags).unwrap();
+        std::fs::write(flags.join("blackflag.png"), b"ORIGINAL-KUNOS").unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            sevenzip_exe: Some(sevenzip.clone()),
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let src = base.join("CMRT_HUD");
+        let app = src.join("apps").join("lua").join("CMRT_HUD");
+        std::fs::create_dir_all(&app).unwrap();
+        std::fs::write(app.join("CMRT_HUD.lua"), b"-- hud").unwrap();
+
+        let nested_src = base.join("nested_src");
+        let nested_flags = nested_src.join("content").join("gui").join("flags");
+        std::fs::create_dir_all(&nested_flags).unwrap();
+        std::fs::write(nested_flags.join("blackflag.png"), b"BLANK").unwrap();
+        zip_dir(&sevenzip, &nested_src, &src.join("CMRT_flag_fuel_replacement.zip"));
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+        assert_eq!(r.apps.len(), 1, "l'app, elle, s'installe sans rien demander");
+        assert_eq!(r.others.len(), 1, "le zip est rangé, jamais perdu");
+        assert!(r.others[0].optional, "signalé comme optionnel");
+        assert_eq!(r.others[0].game_files_replaced, 1, "et chiffré : 1 fichier du jeu");
+        assert_eq!(
+            std::fs::read(flags.join("blackflag.png")).unwrap(),
+            b"ORIGINAL-KUNOS",
+            "le drapeau du jeu est intact tant que l'utilisateur n'a pas dit oui"
+        );
+    }
+
+    #[test]
+    fn a_nested_zip_carrying_the_mod_itself_installs_normally() {
+        // L'autre moitié de la règle, et la raison pour laquelle « archive
+        // imbriquée » ne suffit pas : beaucoup d'auteurs livrent une racine
+        // réduite à un readme + une archive, et c'est le **mod principal** qui
+        // est dedans. Rien d'optionnel là-dedans.
+        let Some(sevenzip) = crate::detect::find_7zip() else {
+            eprintln!("7-Zip introuvable — test ignoré");
+            return;
+        };
+
+        let base = crate::testutil::temp_dir("import-nested-main");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            sevenzip_exe: Some(sevenzip.clone()),
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let src = base.join("SomeCarRelease");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("readme.txt"), b"install the zip").unwrap();
+        let nested_src = base.join("nested_car");
+        make_fake_car(&nested_src, "nested_gt");
+        zip_dir(&sevenzip, &nested_src, &src.join("nested_gt.zip"));
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+        assert_eq!(r.mods.len(), 1, "la voiture sort du zip et s'importe normalement");
+        assert_eq!(r.mods[0].id_interne, "nested_gt");
+        assert!(
+            !r.others.iter().any(|o| o.optional),
+            "rien d'optionnel : le zip portait le mod lui-même"
         );
     }
 

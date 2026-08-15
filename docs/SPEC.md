@@ -241,6 +241,23 @@ Deux contraintes encadrent toute nouvelle question : **jamais de blocage en impo
 
 Le journal décrit le **dernier** import : il est effacé et réécrit à chaque passage, par mod **et** par archive — une archive réimportée à l'identique classe ses mods en doublons, ce qui saute leur écriture overlay, alors que le balayage des restes tourne quand même et réenregistre tout. Écriture best-effort : le journal explique l'import, il ne le conditionne pas.
 
+#### 4.6bis Composants optionnels
+
+**Le discriminant est le rayon d'action, pas le contenu.** Ce qui atterrit *chez le mod* (`apps/lua/<name>/`, `content/cars/<id>/`) s'installe sans rien demander : c'est la définition d'installer le mod. Ce qui atterrit *chez les autres* — un fichier du jeu de base, vu dans **toutes** les sessions et sur **toutes** les voitures — n'est plus le mod qui s'installe, c'est le jeu qu'on modifie.
+
+**Détection : deux signaux, exigés ensemble.**
+
+1. **Archive imbriquée** livrée à côté du mod. Personne ne zippe un sous-dossier de son propre mod par accident : un dossier sert à « une partie de la chose », une archive à « une chose qu'on peut vouloir ou non ». Signal structurel, pas sémantique — le nom du fichier n'est jamais lu.
+2. **Elle remplace des fichiers du jeu de base** : le chemin existe dans AC, aucun mod ne le réclame, et ce n'est pas un exemplaire qu'on a soi-même posé (`others::game_files_replaced`).
+
+Aucun des deux ne suffit, et c'est le cœur de la règle. Une archive imbriquée porte très souvent le **mod principal** — beaucoup d'auteurs livrent une racine réduite à un `readme.txt` et un zip. Et remplacer des fichiers du jeu est le quotidien de mods parfaitement obligatoires (shaders, fonts).
+
+**Traitement** : importé et rangé en bibliothèque (l'import ne jette rien), mais **laissé inactif**, et la question posée en **fin de lot** dans le rapport d'import — jamais pendant, un lot de cinquante mods ne s'interrompt pas. Ne rien décider est une réponse valable : le composant reste activable depuis « Autres mods ».
+
+C'est le seul cas rencontré jusqu'ici où **aucun des deux défauts n'est sûr**, et c'est ce qui justifie la question. Cas réel, `CMRT_Complete_hud` : l'archive jointe neutralise drapeaux et jauge de carburant du jeu (fichiers de ~1,7 Ko remplaçant des originaux de 10 à 60 Ko), parce que le HUD les redessine lui-même. L'installer en silence fait disparaître les drapeaux partout, y compris sur des voitures sans rapport ; ne pas l'installer peut faire doublonner l'affichage. L'auteur livre d'ailleurs les originaux en `*_backup.png` — son propre « annulez à la main », que `gamebackup` (§4.5.4) rend inutile. Ces `_backup` sont posés comme le reste : aucune heuristique de nom, la règle d'or n°3 a déjà coûté assez cher.
+
+**Limite assumée** : cette règle ne couvre pas l'espace. Beaucoup de mods livrent des dossiers quelconques accompagnés d'instructions en prose (« copiez X dans Y si vous voulez Z »), et rien dans l'arborescence ne permet de les interpréter. Pour ceux-là, la réponse honnête n'est pas de deviner : c'est de rendre la notice **lisible** (§4.5.2, prévisualisation dans l'onglet Ressources) et de dire ce qu'on a fait (§4.6).
+
 ---
 
 ## 5. Tags et harmonisation
