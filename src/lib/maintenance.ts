@@ -17,6 +17,7 @@ export interface OrphanJunction {
 export interface MaintenanceReport {
   broken: BrokenMod[];
   orphans: OrphanJunction[];
+  orphan_subs: OrphanSub[];
 }
 
 export interface ExportReport {
@@ -43,6 +44,20 @@ export interface RepairAllReport {
   redeploy_errors: ReinstallOutcome[];
   reinstalled: string[];
   reinstall_errors: ReinstallOutcome[];
+}
+
+/** Skin ou son dont la voiture/le circuit parent n'existe plus (§9.3). */
+export interface OrphanSub {
+  id: string;
+  sub_type: string;
+  parent_id: string;
+  name: string;
+}
+
+/** Efface les skins/sons sans parent. Jamais automatique : ils sont conservés à
+ * la suppression d'un mod pour qu'un réimport du même id les retrouve. */
+export function purgeOrphanSubs(): Promise<number> {
+  return invoke<number>("purge_orphan_subs");
 }
 
 export interface RelativizeReport {

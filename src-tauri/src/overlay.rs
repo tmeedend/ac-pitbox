@@ -832,6 +832,20 @@ pub fn get_version_path(conn: &Connection, version_id: &str) -> rusqlite::Result
 
 /// Supprime un mod et ses données overlay (versions cascade + historique).
 /// N'agit que sur l'overlay : les fichiers bibliothèque sont gérés par l'appelant.
+/// Supprime un mod de l'overlay. Ce qui **survit volontairement** :
+///
+/// - `usage` (§6.5) — le marqueur « déjà essayé » et le nombre de lancements.
+///   Réimporter la même voiture retrouve son historique d'usage plutôt que de
+///   repartir de zéro. Le kilométrage, lui, n'a jamais été chez nous : il vit
+///   dans le journal de sessions de Content Manager.
+/// - `sub_mods` — skins et sons rattachés, dont les fichiers ne sont pas
+///   effacés non plus. Réimporter le parent sous le même id les retrouve
+///   automatiquement, ce qui est précisément le geste d'une réinstallation.
+///   Ce n'est un déchet que si le parent ne revient jamais : d'où
+///   `orphan_subs`, listé en maintenance et nettoyé sur décision.
+///
+/// Les deux tables sont donc absentes de ce `DELETE` **par choix**, pas par
+/// oubli — c'est ce que ce commentaire est là pour dire au prochain lecteur.
 pub fn delete_mod(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM history WHERE mod_id = ?1", [id])?;
     conn.execute("DELETE FROM extra_links WHERE mod_id = ?1", [id])?;
@@ -1336,6 +1350,20 @@ const SUB_SELECT: &str =
     "SELECT id, sub_type, parent_id, name, library_path, source_archive, is_active, removable, imported_at FROM sub_mods";
 
 /// Sous-éléments rattachés à une entité (fiche détail, §12bis.3).
+/// Sous-éléments (skins, sons) dont le parent n'existe plus (§9.3). Conservés
+/// **délibérément** à la suppression du mod — voir `delete_mod` — mais devenus
+/// inutiles dès qu'on ne compte plus réimporter le parent. Listés ici pour être
+/// nettoyés sur décision de l'utilisateur, jamais automatiquement.
+pub fn orphan_subs(conn: &Connection) -> rusqlite::Result<Vec<SubModRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM sub_mods
+          WHERE parent_id NOT IN (SELECT id_interne FROM mods)
+          ORDER BY parent_id, name",
+    )?;
+    let rows = stmt.query_map([], map_sub)?;
+    rows.collect()
+}
+
 pub fn list_subs_for_parent(conn: &Connection, parent_id: &str) -> rusqlite::Result<Vec<SubModRow>> {
     let mut stmt = conn.prepare(&format!(
         "{SUB_SELECT} WHERE parent_id = ?1 ORDER BY name COLLATE NOCASE"

@@ -7,6 +7,7 @@
     removeOrphanJunction,
     reindexLibrary,
     repairAll,
+    purgeOrphanSubs,
     relativizeLibraryPaths,
     type MaintenanceReport,
   } from "$lib/maintenance";
@@ -57,6 +58,22 @@
       error = errorText(e);
     } finally {
       indexing = false;
+    }
+  }
+
+  // Nettoyage des sous-éléments sans parent (§9.3) : jamais automatique — ils
+  // sont conservés à la suppression d'un mod pour qu'un réimport du même id les
+  // retrouve, ce qui n'a plus d'intérêt une fois le parent définitivement parti.
+  async function doPurgeOrphanSubs() {
+    busy = "orphan-subs";
+    error = "";
+    try {
+      await purgeOrphanSubs();
+      await scan();
+    } catch (e) {
+      error = errorText(e);
+    } finally {
+      busy = "";
     }
   }
 
@@ -162,7 +179,9 @@
     }
   }
 
-  const isClean = $derived(report && report.broken.length === 0 && report.orphans.length === 0);
+  const isClean = $derived(
+    report && report.broken.length === 0 && report.orphans.length === 0 && report.orphan_subs.length === 0,
+  );
 </script>
 
 <div class="maint">
@@ -284,6 +303,29 @@
             </li>
           {/each}
         </ul>
+      </section>
+    {/if}
+
+    {#if report.orphan_subs.length}
+      <section>
+        <h3>{t("maintenance.orphanSubsTitle")} <span class="count mono">{report.orphan_subs.length}</span></h3>
+        <p class="hint">{t("maintenance.orphanSubsHint")}</p>
+        <ul class="list">
+          {#each report.orphan_subs as o (o.id)}
+            <li>
+              <div class="l-main">
+                <span class="l-name mono">{o.name}</span>
+                <span class="l-kind mono">{o.sub_type}</span>
+                <span class="l-path mono">{o.parent_id}</span>
+              </div>
+            </li>
+          {/each}
+        </ul>
+        <div class="row">
+          <button class="btn danger" type="button" onclick={doPurgeOrphanSubs} disabled={busy === "orphan-subs"}>
+            {busy === "orphan-subs" ? t("common.working") : t("maintenance.purgeOrphanSubs")}
+          </button>
+        </div>
       </section>
     {/if}
 

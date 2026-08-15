@@ -180,6 +180,7 @@ pub fn run() {
             commands::maintenance::maintenance_scan,
             commands::maintenance::reindex_library,
             commands::maintenance::delete_broken_mod,
+            commands::maintenance::purge_orphan_subs,
             commands::maintenance::remove_orphan_junction,
             commands::maintenance::delete_pack,
             commands::maintenance::reinstall_from_archive,

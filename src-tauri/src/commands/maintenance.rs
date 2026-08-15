@@ -37,6 +37,14 @@ pub fn delete_broken_mod(app: AppHandle, db: State<Db>, id: String) -> Result<()
     crate::maintenance::delete_broken(&conn, &cfg, &id)
 }
 
+/// Efface les skins/sons dont le mod parent n'existe plus (§9.3).
+#[tauri::command]
+pub fn purge_orphan_subs(app: AppHandle, db: State<Db>) -> Result<usize, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::maintenance::purge_orphan_subs(&conn, &cfg)
+}
+
 /// Retire une junction orpheline (garde-fou junction).
 #[tauri::command]
 pub fn remove_orphan_junction(app: AppHandle, kind: String, id: String) -> Result<(), String> {

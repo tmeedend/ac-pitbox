@@ -34,10 +34,23 @@ pub struct OrphanJunction {
     pub path: String,
 }
 
+/// Skin ou son dont la voiture/le circuit parent n'existe plus (§9.3).
+#[derive(Debug, Clone, Serialize)]
+pub struct OrphanSub {
+    pub id: String,
+    pub sub_type: String,
+    pub parent_id: String,
+    pub name: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct MaintenanceReport {
     pub broken: Vec<BrokenMod>,
     pub orphans: Vec<OrphanJunction>,
+    /// Sous-éléments sans parent (§9.3). Conservés volontairement à la
+    /// suppression d'un mod — réimporter le même id les retrouve — donc jamais
+    /// nettoyés automatiquement : seulement listés, pour décision.
+    pub orphan_subs: Vec<OrphanSub>,
 }
 
 /// Un mod est-il cassé (fichiers de sa version active manquants/invalides) ?
@@ -107,7 +120,43 @@ pub fn scan(conn: &Connection, cfg: &AppConfig) -> Result<MaintenanceReport, Str
         }
     }
 
-    Ok(MaintenanceReport { broken, orphans })
+    // --- Sous-éléments sans parent : skins/sons d'un mod supprimé ---
+    let orphan_subs = overlay::orphan_subs(conn)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|s| OrphanSub {
+            id: s.id,
+            sub_type: s.sub_type,
+            parent_id: s.parent_id,
+            name: s.name,
+        })
+        .collect();
+
+    Ok(MaintenanceReport {
+        broken,
+        orphans,
+        orphan_subs,
+    })
+}
+
+/// Efface les sous-éléments sans parent : fichiers stockés puis ligne overlay
+/// (§9.3). Contourne délibérément le garde-fou `removable` de `remove_sub` —
+/// il protège un skin fourni avec un mod **vivant**, ce qui n'a plus de sens
+/// quand le parent a disparu. Aucune projection à retirer non plus : le
+/// dossier `skins/` de la cible n'existe plus.
+pub fn purge_orphan_subs(conn: &Connection, cfg: &AppConfig) -> Result<usize, String> {
+    let mut n = 0;
+    for sub in overlay::orphan_subs(conn).map_err(|e| e.to_string())? {
+        if let Some(dir) = crate::libpath::resolve(cfg.library_path.as_deref(), &sub.library_path) {
+            if let Err(e) = std::fs::remove_dir_all(&dir) {
+                // Dossier déjà absent : rien d'anormal, la ligne part quand même.
+                log::warn!("purge_orphan_sub {} ({}): {e}", sub.id, dir.display());
+            }
+        }
+        overlay::delete_sub_mod(conn, &sub.id).map_err(|e| e.to_string())?;
+        n += 1;
+    }
+    Ok(n)
 }
 
 /// Supprime un mod cassé : fichiers de bibliothèque (toutes versions) + junction
@@ -733,6 +782,58 @@ mod tests {
             "réinstallation doit restaurer le fichier manquant"
         );
         assert_eq!(std::fs::read_to_string(lib_path.join("data.txt")).unwrap(), "original");
+    }
+
+    #[test]
+    fn subs_survive_their_parent_and_are_purged_only_on_demand() {
+        // §9.3 : skins et sons sont **volontairement** conservés à la
+        // suppression de leur voiture — réimporter le même id les retrouve, ce
+        // qui est le geste d'une réinstallation. Ils ne deviennent des déchets
+        // que si le parent ne revient jamais, d'où le nettoyage sur décision et
+        // jamais automatique.
+        let base = crate::testutil::temp_dir("orphan-subs");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let now = chrono::Local::now().to_rfc3339();
+
+        let car = library.join("cars").join("sub_car").join("v1");
+        std::fs::create_dir_all(car.join("ui")).unwrap();
+        std::fs::write(car.join("ui").join("ui_car.json"), b"{}").unwrap();
+        overlay::upsert_mod(&conn, "sub_car", "Car", Some("B"), Some("N"), "h", None, &now).unwrap();
+
+        let skin = library.join("skins").join("sub_car").join("red");
+        std::fs::create_dir_all(&skin).unwrap();
+        std::fs::write(skin.join("preview.jpg"), b"x").unwrap();
+        overlay::insert_sub_mod(
+            &conn,
+            "skin1",
+            "SKIN",
+            "sub_car",
+            "red",
+            &crate::libpath::to_relative(Some(&library), &skin),
+            None,
+            &now,
+        )
+        .unwrap();
+
+        // Parent supprimé : le skin reste, en base comme sur disque.
+        delete_broken(&conn, &cfg, "sub_car").unwrap();
+        assert!(skin.join("preview.jpg").is_file(), "fichiers du skin conservés");
+        let report = scan(&conn, &cfg).unwrap();
+        assert_eq!(report.orphan_subs.len(), 1, "et signalé comme orphelin");
+        assert_eq!(report.orphan_subs[0].name, "red");
+
+        // Nettoyage explicite seulement.
+        assert_eq!(purge_orphan_subs(&conn, &cfg).unwrap(), 1);
+        assert!(!skin.exists(), "fichiers effacés");
+        assert!(scan(&conn, &cfg).unwrap().orphan_subs.is_empty());
     }
 
     #[test]
