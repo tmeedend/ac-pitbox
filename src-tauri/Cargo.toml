@@ -62,4 +62,11 @@ winreg = "0.55"
 # Lecture de la mémoire partagée exportée par acs.exe (`Local\acpmf_graphics`,
 # §16.4 du SPEC) pour détecter la fin du chargement de session — déjà présente
 # transitivement (winreg 0.55 en dépend), pas une dépendance de plus en pratique.
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Memory"] }
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_Memory",
+    # Espace libre du volume de la bibliothèque avant un import en lot (§4.2bis) :
+    # refuser un lot qui ne peut pas tenir coûte moins cher que le nettoyage
+    # d'un import mort à mi-parcours.
+    "Win32_Storage_FileSystem",
+] }

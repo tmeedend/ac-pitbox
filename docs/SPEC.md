@@ -71,7 +71,27 @@ Deux sources, même pipeline d'analyse/identité/tagging :
 
 **Copier / déplacer** : réglage par défaut mémorisable (pas deux boutons à chaque fois). Déplacement **adaptatif** : même disque → rename instantané ; disques différents → copie puis suppression après vérification.
 
-**Interface d'import** : glisser-déposer disponible partout ; écran d'import dédié pour les options (chaque option expliquée). Un mod importé est **activé par défaut** (déploiement par hardlinks immédiat) — de même pour une app (junction) et un « autre mod » (junction/lien fichier, §7.3).
+**Interface d'import** : glisser-déposer disponible partout ; écran d'import dédié pour les options (chaque option expliquée). Un mod importé est **activé par défaut** (déploiement par hardlinks immédiat) — de même pour une app (junction) et un « autre mod » (junction/lien fichier, §7.3). Le glisser-déposer accepte **archives et dossiers** : le tri est fait côté backend (`split_dropped_paths`), le webview ne pouvant pas distinguer un dossier d'un fichier à partir du seul chemin. Un seul lot tourne à la fois.
+
+### 4.2bis Progression, estimation et annulation d'un lot
+
+Pensé pour un lot de plusieurs dizaines de mods.
+
+**Deux barres, cohérentes par construction.** La barre du haut suit l'item en cours, celle du bas le lot entier — cette dernière masquée quand le lot n'a qu'un item, où elle répéterait la première. La barre globale n'est **pas** comptée en nombre d'items (un skin de 3 Mo et un circuit de 2 Go pèsent alors pareil, et la barre avance par à-coups) mais en **secondes estimées** ; elle est recalculée à partir des avancements par item à chaque émission, donc elle contient la barre de l'item et ne peut ni la contredire ni la doubler. Un item en erreur ou ignoré est quand même consommé, sans quoi la barre n'atteindrait jamais sa fin.
+
+**Estimation du temps restant.** Un benchmark persistant (`import_bench.json`, écriture synchrone côté Rust — §6.2) mesure le débit réel de la machine, par seau : extraction d'archive, rangement d'archive, copie de dossier, déplacement de dossier. Chaque seau amortit ses mesures (facteur 0,85), ce qui pondère naturellement un gros mod plus qu'un petit et fait oublier l'ancien disque après un déménagement de bibliothèque. Le benchmark ne fixe que les **poids relatifs** des items : l'échelle absolue est recalibrée en direct sur le temps réellement écoulé dans le lot en cours, donc une estimation fausse d'un facteur 2 converge après le premier item. L'ETA est affichée en unités grossières et lissée — un ordre de grandeur, pas une prédiction.
+
+**Progression réelle pendant l'extraction.** 7-Zip est lancé avec `-bsp1` et sa sortie lue au fil de l'eau (mises à jour séparées par des retours chariot, pas des sauts de ligne). Un binaire trop ancien pour ce commutateur retombe sur une extraction sans progression, jamais sur un échec. Les événements sont plafonnés à 10/s : sans ça, quarante archives noieraient l'IPC.
+
+**Extraction et rangement en pipeline.** L'archive N+1 se décompresse pendant que la N se range — les deux saturent des ressources différentes. Le canal est un rendez-vous, ce qui borne l'avance à une archive et donc à deux dossiers temporaires vivants au plus.
+
+**Verrou base réduit au rangement.** Extraction et copie de l'archive source, qui ne touchent pas la base, se font hors verrou — un écran qui lit l'overlay n'attend plus la décompression d'un gros circuit. Le rangement d'un mod, lui, garde le verrou : il entrelace décisions et écritures overlay, et le relâcher au milieu ouvrirait une fenêtre où l'UI pourrait modifier ce qu'on est en train d'écrire.
+
+**Contrôle d'espace disque.** Un lot dont la taille dépasse l'espace libre du volume de la bibliothèque est refusé **avant** d'écrire quoi que ce soit. Jamais bloquant sur une information absente (bibliothèque non configurée, volume non interrogeable).
+
+**Annulation.** Constatée **entre deux items** — et 7-Zip est tué s'il décompresse. Jamais au milieu du rangement d'un mod, qui laisserait une bibliothèque à moitié écrite. Le rapport affiche ce qui a été importé avant l'arrêt.
+
+**Rapport de fin cliquable.** Chaque contenu importé ouvre sa fiche. Une **couche** ouvre le contenu de base auquel elle se rattache (§4.4). Skins et sons sont regroupés par contenu parent — une ligne par parent, pas par livrée. Apps et « autres mods » ouvrent leur écran. Un mod resté **ambigu** n'est pas cliquable : rien n'a encore été écrit.
 
 ### 4.3 Mise à jour vs couche (recomposition)
 

@@ -180,7 +180,7 @@ export interface LayerRow {
 
 /** Sous-élément rattaché (skin/son) routé à l'import (§12bis.2). */
 export interface SubImported {
-  sub_type: "SKIN" | "SOUND";
+  sub_type: "SKIN" | "TRACK_SKIN" | "SOUND";
   parent_id: string;
   name: string;
   projected: boolean;
@@ -212,15 +212,40 @@ export interface ArchiveResult {
   extras?: number;
 }
 
+/** Miroir de `import_progress::Progress` (§4.2bis) — les deux changent ensemble. */
 export interface ImportProgress {
+  /** Rang de l'item en cours de rangement, 1-basé. 0 pendant le pesage du lot. */
+  item_index: number;
+  item_count: number;
+  /** Lot entier, dans [0,1], pondéré en secondes estimées. */
+  overall_ratio: number;
+  /** Item courant, dans [0,1]. */
+  item_ratio: number;
+  /** Secondes restantes estimées, `null` tant que le lot n'en dit rien. */
+  eta_secs: number | null;
   archive: string;
   /** "queued" : posé côté frontend dès le drop/la sélection, avant même le
    * premier événement backend — retour immédiat le temps que la commande
    * (async, §4.2) démarre réellement le traitement. */
-  phase: "queued" | "extract" | "scan" | "filing" | "done";
-  current: number;
-  total: number;
+  phase: "queued" | "sizing" | "extract" | "scan" | "filing" | "done" | "cancelled";
+  /** Rang du mod dans l'item courant, quand il en contient plusieurs. */
+  sub_current: number;
+  sub_total: number;
   label: string;
+}
+
+/** Demande l'arrêt du lot d'import en cours (§4.2bis). */
+export function cancelImport(): Promise<void> {
+  return invoke<void>("cancel_import");
+}
+
+/** Tri d'un glisser-déposer : archives d'un côté, dossiers de l'autre (§4.2).
+ * Seul le backend peut le faire — un chemin sans extension peut être un
+ * dossier de mod comme un fichier quelconque. */
+export function splitDroppedPaths(
+  paths: string[],
+): Promise<{ archives: string[]; folders: string[] }> {
+  return invoke<{ archives: string[]; folders: string[] }>("split_dropped_paths", { paths });
 }
 
 export function importArchives(

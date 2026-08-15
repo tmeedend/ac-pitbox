@@ -13,6 +13,33 @@
 
 use std::path::{Path, PathBuf};
 
+/// Free bytes on the volume holding `path`, `None` if it cannot be told.
+///
+/// Used to refuse a batch import that cannot possibly fit (§4.2bis) rather than
+/// let it die halfway through, leaving a half-extracted work directory and a
+/// library the user then has to clean up by hand.
+#[cfg(windows)]
+pub fn free_space(path: &Path) -> Option<u64> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::core::PCWSTR;
+    use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+
+    // The path must exist for the call to resolve a volume: walk up to the
+    // first ancestor that does (the library folder may not be created yet).
+    let existing = path.ancestors().find(|p| p.exists())?;
+    let wide: Vec<u16> = existing.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+    let mut available: u64 = 0;
+    unsafe { GetDiskFreeSpaceExW(PCWSTR(wide.as_ptr()), Some(&mut available), None, None) }.ok()?;
+    Some(available)
+}
+
+/// Non-Windows builds never reach the import pipeline (the app is Windows-only,
+/// §Stack); the stub only keeps the module compiling everywhere.
+#[cfg(not(windows))]
+pub fn free_space(_path: &Path) -> Option<u64> {
+    None
+}
+
 /// Relativise `path` par rapport à `library` pour l'écriture en overlay.
 /// Repli sur le chemin absolu si `library` est absente ou si `path` n'est pas
 /// sous elle — cas normal pour un skin de circuit fourni avec le contenu de

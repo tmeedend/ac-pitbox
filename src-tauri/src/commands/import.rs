@@ -1,8 +1,33 @@
-//! Commandes d'import (§4) : archives, dossiers, import en masse et
-//! arbitrage des conflits flous.
+//! Commandes d'import (§4) : archives, dossiers, import en masse, arbitrage
+//! des conflits flous et annulation d'un lot en cours.
+
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use super::prelude::*;
 use tauri::Manager;
+
+/// Drapeau d'annulation partagé (§4.2bis). Un seul import tourne à la fois
+/// (le frontend désactive les boutons pendant), donc un drapeau global suffit :
+/// il est remis à zéro au démarrage de chaque lot, jamais avant.
+#[derive(Default)]
+pub struct ImportControl(pub Arc<AtomicBool>);
+
+/// Prépare un lot : remet le drapeau d'annulation à zéro et construit le
+/// contexte de progression (émission + benchmark persistant).
+fn begin(app: &AppHandle) -> crate::import_progress::ImportCtx {
+    let control = app.state::<ImportControl>();
+    control.0.store(false, Ordering::Relaxed);
+    crate::import_progress::ImportCtx::new(app, control.0.clone())
+}
+
+/// Demande l'arrêt de l'import en cours (§4.2bis). L'arrêt est constaté
+/// **entre deux items** — et 7-Zip est tué s'il décompresse : jamais au milieu
+/// du rangement d'un mod, qui laisserait une bibliothèque à moitié écrite.
+#[tauri::command]
+pub fn cancel_import(control: State<ImportControl>) {
+    control.0.store(true, Ordering::Relaxed);
+}
 
 /// Importe une liste d'archives. `async` + `spawn_blocking` (§4.2) : un gros
 /// lot (extraction 7-Zip incluse) peut prendre plusieurs minutes — exécuté
@@ -10,8 +35,7 @@ use tauri::Manager;
 /// livraison des événements `import:progress`, qui n'arriveraient alors
 /// jamais avant la toute fin (barre de progression muette, drop apparemment
 /// sans effet). Sur un thread dédié, les événements sont émis et livrés au
-/// fil de l'eau, sans jamais bloquer le reste de l'app (chaque écran lit
-/// l'overlay via son propre verrou, repris entre deux archives — §9.3bis).
+/// fil de l'eau, sans jamais bloquer le reste de l'app.
 #[tauri::command]
 pub async fn import_archives(
     app: AppHandle,
@@ -20,13 +44,17 @@ pub async fn import_archives(
     decisions: Option<Vec<crate::importer::ImportDecision>>,
 ) -> Result<Vec<ArchiveResult>, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        let ctx = begin(&app);
         let cfg = crate::config::load(&app);
         let rules = crate::rules::load(&app);
         let db = app.state::<Db>();
-        crate::importer::import_archives(&app, db.inner(), &cfg, &rules, &paths, &decisions.unwrap_or_default())
+        let out =
+            crate::importer::import_archives(&ctx, db.inner(), &cfg, &rules, &paths, &decisions.unwrap_or_default());
+        ctx.finish_batch(ctx.cancelled());
+        out
     })
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?
 }
 
 /// Import depuis des dossiers déjà décompressés (§4.2). `copy=true` préserve la
@@ -40,33 +68,40 @@ pub async fn import_folders(
     decisions: Option<Vec<crate::importer::ImportDecision>>,
 ) -> Result<Vec<ArchiveResult>, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        let ctx = begin(&app);
         let cfg = crate::config::load(&app);
         let rules = crate::rules::load(&app);
         let db = app.state::<Db>();
-        crate::importer::import_folders(
-            &app,
+        let out = crate::importer::import_folders(
+            &ctx,
             db.inner(),
             &cfg,
             &rules,
             &paths,
             copy,
             &decisions.unwrap_or_default(),
-        )
+        );
+        ctx.finish_batch(ctx.cancelled());
+        out
     })
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?
 }
 
-/// Analyse un dossier parent (§4.2) : classe chaque sous-dossier sans rien écrire.
+/// Analyse un dossier parent (§4.2) : classe chaque sous-dossier sans rien
+/// écrire. `async` + `spawn_blocking` comme les imports : le scan d'un dossier
+/// parent de plusieurs dizaines de mods tient le verrou base tout du long, et
+/// le tenir depuis le thread IPC gèlerait en plus la livraison des événements.
 #[tauri::command]
-pub fn analyze_bulk_import(
-    app: AppHandle,
-    db: State<Db>,
-    parent: String,
-) -> Result<Vec<crate::importer::BulkEntry>, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::importer::analyze_bulk(&conn, &cfg, std::path::Path::new(&parent))
+pub async fn analyze_bulk_import(app: AppHandle, parent: String) -> Result<Vec<crate::importer::BulkEntry>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let cfg = crate::config::load(&app);
+        let db = app.state::<Db>();
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        crate::importer::analyze_bulk(&conn, &cfg, std::path::Path::new(&parent))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Exécute l'import en masse selon les décisions d'arbitrage (§4.2). Même
@@ -78,13 +113,47 @@ pub async fn execute_bulk_import(
     copy: bool,
 ) -> Result<Vec<ArchiveResult>, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        let ctx = begin(&app);
         let cfg = crate::config::load(&app);
         let rules = crate::rules::load(&app);
         let db = app.state::<Db>();
-        crate::importer::execute_bulk(&app, db.inner(), &cfg, &rules, &items, copy)
+        let out = crate::importer::execute_bulk(&ctx, db.inner(), &cfg, &rules, &items, copy);
+        ctx.finish_batch(ctx.cancelled());
+        out
     })
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?
+}
+
+/// Ce qu'un glisser-déposer contient réellement (§4.2). Le frontend ne peut pas
+/// distinguer un dossier d'un fichier à partir du seul chemin que lui donne
+/// Tauri — il filtrait donc sur l'extension, et **ignorait un dossier de mod en
+/// silence**, sans le moindre retour.
+#[derive(serde::Serialize)]
+pub struct DroppedPaths {
+    pub archives: Vec<String>,
+    pub folders: Vec<String>,
+}
+
+#[tauri::command]
+pub fn split_dropped_paths(paths: Vec<String>) -> DroppedPaths {
+    let mut archives = Vec::new();
+    let mut folders = Vec::new();
+    for p in paths {
+        let path = std::path::Path::new(&p);
+        if path.is_dir() {
+            folders.push(p);
+        } else if path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+            crate::importer::NESTED_ARCHIVE_EXTS
+                .iter()
+                .any(|a| a.eq_ignore_ascii_case(e))
+        }) {
+            archives.push(p);
+        }
+        // Tout le reste (un .txt lâché par mégarde) est ignoré : c'est le seul
+        // cas où ne rien faire est la bonne réponse.
+    }
+    DroppedPaths { archives, folders }
 }
 
 /// Résout un conflit flou (§4.2) : action = "keep_both" | "replace".

@@ -15,6 +15,8 @@ mod extras;
 mod gamebackup;
 mod harmonize;
 mod identity;
+mod import_bench;
+mod import_progress;
 mod importer;
 mod inspect;
 mod kunos;
@@ -107,6 +109,8 @@ pub fn run() {
             }
 
             app.manage(Db(std::sync::Mutex::new(conn)));
+            // Drapeau d'annulation d'un import en cours (§4.2bis).
+            app.manage(commands::import::ImportControl::default());
 
             // Module musique du mode Big Picture (docs/spec-module-musique_2.md) :
             // dossiers par défaut créés au premier démarrage, peuplés du pack
@@ -136,6 +140,8 @@ pub fn run() {
             commands::import::analyze_bulk_import,
             commands::import::execute_bulk_import,
             commands::import::resolve_conflict,
+            commands::import::cancel_import,
+            commands::import::split_dropped_paths,
             commands::layers::list_layers,
             commands::layers::list_layers_by_kind,
             commands::layers::delete_layer,

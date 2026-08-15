@@ -1,8 +1,16 @@
 <script lang="ts">
   // Retour visuel de l'import, global (§4.2 : le glisser-déposer marche sur
   // toutes les vues, donc ce retour doit être visible peu importe l'écran ouvert).
-  import { importState, dismissReport, resolvePendingConflict, resolveAmbiguous } from "$lib/importState.svelte";
+  import {
+    importState,
+    dismissReport,
+    resolvePendingConflict,
+    resolveAmbiguous,
+    requestCancelImport,
+  } from "$lib/importState.svelte";
+  import { nav, requestSection } from "$lib/nav.svelte";
   import { t } from "$lib/i18n/index.svelte";
+  import type { SubImported } from "$lib/library";
 
   // Libellé + classe CSS de la pastille d'issue d'un mod importé.
   function outcomeChip(o: string): { cls: string; label: string } {
@@ -10,6 +18,56 @@
     if (o === "DUPLICATE") return { cls: "dup", label: t("importOverlay.outcomeDuplicate") };
     if (o === "EXTENSION") return { cls: "ext", label: t("importOverlay.outcomeExtension") };
     return { cls: "new", label: t("importOverlay.outcomeNew") };
+  }
+
+  // Clés explicites plutôt qu'une clé construite à la volée : `t()` renvoyant la
+  // clé quand elle manque, une phase non prévue s'afficherait telle quelle.
+  const PHASE_KEYS: Record<string, string> = {
+    queued: "importOverlay.phaseQueued",
+    sizing: "importOverlay.phaseSizing",
+    extract: "importOverlay.phaseExtract",
+    scan: "importOverlay.phaseScan",
+    filing: "importOverlay.phaseFiling",
+    done: "importOverlay.phaseDone",
+    cancelled: "importOverlay.phaseCancelled",
+  };
+
+  /** Temps restant en unités grossières : à la seconde près, il sauterait à
+   * chaque événement pour une précision que l'estimation n'a pas. */
+  function etaText(secs: number): string {
+    if (secs < 60) return t("importOverlay.etaSeconds", { n: Math.max(5, Math.round(secs / 5) * 5) });
+    return t("importOverlay.etaMinutes", { n: Math.max(1, Math.round(secs / 60)) });
+  }
+
+  /** Ouvre la fiche d'un contenu depuis le rapport. Pour une couche, `id` est
+   * déjà celui du contenu de base (§4.4) : c'est donc lui qui s'ouvre. */
+  async function openContent(id: string, kind: string): Promise<void> {
+    dismissReport();
+    if (await requestSection(kind === "Track" ? "tracks" : "cars")) nav.openMod = id;
+  }
+
+  async function openSection(section: string): Promise<void> {
+    dismissReport();
+    await requestSection(section);
+  }
+
+  /** Skins et sons regroupés par contenu parent : un pack de quarante livrées
+   * ferait déborder le rapport à raison d'une ligne chacune, alors qu'il n'y a
+   * qu'une seule fiche à ouvrir au bout. */
+  function subsByParent(subs: SubImported[]): { id: string; kind: string; skins: number; sounds: number }[] {
+    const groups = new Map<string, { id: string; kind: string; skins: number; sounds: number }>();
+    for (const s of subs) {
+      const g = groups.get(s.parent_id) ?? {
+        id: s.parent_id,
+        kind: s.sub_type === "TRACK_SKIN" ? "Track" : "Car",
+        skins: 0,
+        sounds: 0,
+      };
+      if (s.sub_type === "SOUND") g.sounds++;
+      else g.skins++;
+      groups.set(s.parent_id, g);
+    }
+    return [...groups.values()];
   }
 
   // Total tous types confondus (§4.2) : un import peut ne produire aucun
@@ -29,25 +87,39 @@
 
 {#if importState.importing && importState.progress}
   {@const p = importState.progress}
+  {@const settled = p.phase !== "queued" && p.phase !== "sizing"}
   <div class="toast progress-toast">
-    <div class="p-label">
-      {#if p.phase === "queued"}
-        {t("importOverlay.queued", { n: p.total })}
-      {:else}
-        <span class="mono p-phase">{p.phase}</span>
-        {p.archive} — {p.label}
-        {#if p.total > 0 && p.phase === "filing"}
-          <span class="mono">({p.current}/{p.total})</span>
-        {/if}
-      {/if}
+    <div class="p-head">
+      <span class="p-title">
+        <span class="mono p-phase">{t(PHASE_KEYS[p.phase] ?? p.phase)}</span>
+        {p.archive || p.label}
+      </span>
+      <button
+        class="btn-ghost p-cancel"
+        type="button"
+        onclick={requestCancelImport}
+        disabled={importState.cancelling}
+      >
+        {importState.cancelling ? t("importOverlay.cancelling") : t("importOverlay.cancel")}
+      </button>
     </div>
+    {#if settled && p.sub_total > 1}
+      <div class="p-sub">{p.label} <span class="mono">({p.sub_current}/{p.sub_total})</span></div>
+    {/if}
     <div class="p-bar">
-      <div
-        class="p-fill"
-        style:width={p.total > 0 && p.phase !== "queued" ? `${(p.current / p.total) * 100}%` : "30%"}
-        class:indeterminate={p.phase === "queued" || p.total === 0}
-      ></div>
+      <div class="p-fill" style:width="{p.item_ratio * 100}%" class:indeterminate={!settled}></div>
     </div>
+    <!-- Barre globale seulement quand il y a bien un lot : pour un seul mod,
+         elle répéterait la barre du dessus. -->
+    {#if p.item_count > 1}
+      <div class="p-overall">
+        <span class="mono">{p.item_index || 1} / {p.item_count}</span>
+        {#if p.eta_secs !== null}<span class="p-eta">{etaText(p.eta_secs)}</span>{/if}
+      </div>
+      <div class="p-bar global">
+        <div class="p-fill" style:width="{p.overall_ratio * 100}%"></div>
+      </div>
+    {/if}
   </div>
 {/if}
 
@@ -65,9 +137,18 @@
         {/if}
         {#each a.mods as m}
           {@const chip = outcomeChip(m.outcome)}
+          <!-- Un mod resté AMBIGU n'a rien écrit (§4.4) : il n'y a pas de fiche
+               à ouvrir tant que l'utilisateur n'a pas tranché. -->
+          {@const openable = m.outcome !== "AMBIGUOUS"}
           <div class="r-line">
             <span class="r-out {chip.cls}">{chip.label}</span>
-            {m.display_name ?? m.id_interne}
+            {#if openable}
+              <button class="r-open" type="button" onclick={() => openContent(m.id_interne, m.kind)}>
+                {m.display_name ?? m.id_interne}
+              </button>
+            {:else}
+              {m.display_name ?? m.id_interne}
+            {/if}
             {#if m.outcome === "DUPLICATE"}
               <span class="r-conflict">{t("importOverlay.duplicateNote")}</span>
             {:else if m.outcome === "EXTENSION"}
@@ -75,20 +156,27 @@
             {/if}
           </div>
         {/each}
-        {#if (a.subs ?? []).length}
-          {@const skins = a.subs.filter((s) => s.sub_type === "SKIN").length}
-          {@const sounds = a.subs.filter((s) => s.sub_type === "SOUND").length}
+        {#each subsByParent(a.subs ?? []) as g}
           <div class="r-line shared">
             {t("importOverlay.subsAttached", {
-              parts: `${skins ? t("importOverlay.skinCount", { count: skins }) : ""}${skins && sounds ? " · " : ""}${sounds ? t("importOverlay.soundCount", { count: sounds }) : ""}`,
+              parts: `${g.skins ? t("importOverlay.skinCount", { count: g.skins }) : ""}${g.skins && g.sounds ? " · " : ""}${g.sounds ? t("importOverlay.soundCount", { count: g.sounds }) : ""}`,
             })}
+            <button class="r-open" type="button" onclick={() => openContent(g.id, g.kind)}>{g.id}</button>
+          </div>
+        {/each}
+        {#if (a.apps ?? []).length}
+          <div class="r-line shared">
+            <button class="r-open" type="button" onclick={() => openSection("apps")}>
+              {t("importOverlay.appsImported", { count: a.apps.length })}
+            </button>
           </div>
         {/if}
-        {#if (a.apps ?? []).length}
-          <div class="r-line shared">{t("importOverlay.appsImported", { count: a.apps.length })}</div>
-        {/if}
         {#if (a.others ?? []).length}
-          <div class="r-line shared">{t("importOverlay.othersImported", { count: a.others.length })}</div>
+          <div class="r-line shared">
+            <button class="r-open" type="button" onclick={() => openSection("others")}>
+              {t("importOverlay.othersImported", { count: a.others.length })}
+            </button>
+          </div>
         {/if}
         {@const resExtracted =
           a.mods.reduce((acc, m) => acc + (m.resources_extracted ?? 0), 0) +
@@ -167,9 +255,34 @@
   .progress-toast {
     padding: 12px 14px;
   }
-  .p-label {
+  .p-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    justify-content: space-between;
     color: var(--txt2);
     margin-bottom: 8px;
+  }
+  .p-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .p-cancel {
+    flex: none;
+    font-size: 11px;
+  }
+  .p-cancel:disabled {
+    color: var(--muted);
+    cursor: default;
+  }
+  .p-sub {
+    color: var(--muted);
+    font-size: 11px;
+    margin-bottom: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .p-phase {
     color: var(--rosso-bright);
@@ -177,10 +290,25 @@
     text-transform: uppercase;
     margin-right: 6px;
   }
+  .p-overall {
+    display: flex;
+    justify-content: space-between;
+    color: var(--muted);
+    font-size: 11px;
+    margin: 10px 0 4px;
+  }
+  .p-eta {
+    color: var(--txt2);
+  }
   .p-bar {
     height: 4px;
     background: var(--line);
     overflow: hidden;
+  }
+  /* Barre du lot : plus discrète que celle du mod en cours, qui est
+     l'information immédiate. */
+  .p-bar.global {
+    height: 2px;
   }
   .p-fill {
     height: 100%;
@@ -258,6 +386,34 @@
     color: var(--yellow);
     margin-left: 6px;
     font-size: 11px;
+  }
+  /* Nom cliquable du rapport : ouvre la fiche du contenu. Bouton et non
+     `<span onclick>` — le rapport doit rester atteignable au clavier et à la
+     manette comme le reste de l'app. */
+  .r-open {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: var(--txt);
+    text-align: left;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: var(--line);
+    text-underline-offset: 2px;
+  }
+  .r-open:hover,
+  .r-open:focus-visible {
+    color: var(--rosso-bright);
+    text-decoration-color: currentColor;
+  }
+  .r-line.shared .r-open {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .r-line.shared .r-open:hover,
+  .r-line.shared .r-open:focus-visible {
+    color: var(--rosso-bright);
   }
 
   .modal-backdrop {

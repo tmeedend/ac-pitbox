@@ -3,32 +3,19 @@
 //! écriture overlay + historique. Le fichier du mod n'est jamais modifié.
 
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use chrono::Local;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 use crate::config::AppConfig;
+use crate::import_bench::{Bucket, ITEM_OVERHEAD_SECS};
+use crate::import_progress::{ImportCtx, ItemPlan, PHASE_EXTRACT, PHASE_FILING, PHASE_SCAN};
 use crate::modscan::{self, ModKind};
 use crate::rules::Rules;
 use crate::{archive, harmonize, identity, inspect, layers, uijson};
-
-/// Événement de progression émis pendant l'import (`import:progress`).
-#[derive(Debug, Clone, Serialize)]
-struct Progress {
-    archive: String,
-    /// "extract" | "scan" | "filing" | "done"
-    phase: String,
-    current: usize,
-    total: usize,
-    label: String,
-}
-
-/// Émetteur de progression. Branché sur les événements Tauri en production,
-/// remplacé par un no-op dans les tests.
-type ProgressFn<'a> = dyn Fn(Progress) + 'a;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FuzzyConflict {
@@ -121,53 +108,267 @@ pub struct ArchiveResult {
     pub extras: usize,
 }
 
-/// Importe une liste d'archives. Chaque archive est traitée indépendamment ;
-/// une erreur sur l'une n'interrompt pas les autres. Émet des événements
-/// `import:progress` au fil de l'eau.
-pub fn import_archives(
-    app: &AppHandle,
-    db: &crate::overlay::Db,
-    cfg: &AppConfig,
-    rules: &Rules,
-    paths: &[String],
-    decisions: &[ImportDecision],
-) -> Vec<ArchiveResult> {
-    let emit = |p: Progress| {
-        let _ = app.emit("import:progress", p);
-    };
-    run_import(&emit, db, cfg, rules, paths, decisions)
+/// Marge appliquée à la taille d'un lot pour le contrôle d'espace disque
+/// (§4.2bis) : une archive rend plus d'octets qu'elle n'en pèse, et le contenu
+/// extrait vit en temporaire **et** en bibliothèque le temps du rangement.
+const DISK_HEADROOM: f64 = 1.5;
+
+/// Part du rangement d'un item consommée par le scan, avant le premier mod.
+const SCAN_SHARE: f64 = 0.05;
+
+/// Part réservée à ce qui suit les mods (skins/sons, apps, balayage des restes,
+/// §7.3) : la barre de l'item n'atteint sa fin qu'une fois l'item consommé,
+/// jamais au dernier mod rangé — il reste du travail après lui.
+const TAIL_SHARE: f64 = 0.10;
+
+/// Avancement du rangement d'un item après `done` mods sur `total`.
+fn filing_ratio(done: usize, total: usize) -> f64 {
+    if total == 0 {
+        return 1.0 - TAIL_SHARE;
+    }
+    SCAN_SHARE + (1.0 - SCAN_SHARE - TAIL_SHARE) * (done as f64 / total as f64)
 }
 
-fn run_import(
-    emit: &ProgressFn,
-    db: &crate::overlay::Db,
-    cfg: &AppConfig,
-    rules: &Rules,
-    paths: &[String],
-    decisions: &[ImportDecision],
-) -> Vec<ArchiveResult> {
+/// Nom affichable d'une source d'import (archive ou dossier).
+fn source_label(path: &Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.to_string_lossy().into_owned())
+}
+
+/// Taille d'une source, pour la pondération du lot et le contrôle d'espace.
+/// 0 si illisible : mieux vaut une estimation absente qu'un import refusé.
+fn source_size(path: &Path) -> u64 {
+    match std::fs::metadata(path) {
+        Ok(m) if m.is_file() => m.len(),
+        Ok(m) if m.is_dir() => walkdir::WalkDir::new(path)
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.metadata().ok())
+            .filter(|m| m.is_file())
+            .map(|m| m.len())
+            .sum(),
+        _ => 0,
+    }
+}
+
+/// Pèse le lot avant de commencer. La phase `sizing` est émise au fil du
+/// parcours : sans elle, désigner un dossier de quarante mods laisse l'app
+/// muette le temps de la mesure, ce qui ressemble exactement à un blocage.
+fn size_batch(ctx: &ImportCtx, paths: &[String]) -> Vec<u64> {
     paths
         .iter()
-        .map(|p| {
-            // Verrou repris à chaque archive plutôt qu'une seule fois pour
-            // tout le lot : un import de plusieurs gros fichiers ne doit pas
-            // geler le reste de l'app (tout écran affiché lit l'overlay) le
-            // temps du lot entier — seulement le temps d'UNE archive.
-            match db.0.lock() {
-                Ok(conn) => import_one(emit, &conn, cfg, rules, Path::new(p), decisions),
-                Err(e) => lock_error_result(p, &e.to_string()),
-            }
+        .enumerate()
+        .map(|(i, p)| {
+            let path = Path::new(p);
+            ctx.sizing(i + 1, paths.len(), source_label(path));
+            source_size(path)
         })
         .collect()
 }
 
-/// Résultat d'archive en cas d'échec du verrou base (best-effort, ne devrait
-/// arriver qu'après un panic ailleurs — mutex empoisonné).
-fn lock_error_result(path: &str, error: &str) -> ArchiveResult {
+/// Refuse un lot qui ne peut pas tenir sur le volume de la bibliothèque
+/// (§4.2bis). Un import mort à mi-parcours, disque plein, coûte bien plus cher
+/// à nettoyer qu'à prévenir. Ne bloque jamais sur une information manquante
+/// (bibliothèque non configurée, volume non interrogeable).
+fn check_disk_space(cfg: &AppConfig, sizes: &[u64], headroom: f64) -> Result<(), String> {
+    let Some(library) = &cfg.library_path else {
+        return Ok(());
+    };
+    let Some(free) = crate::libpath::free_space(library) else {
+        return Ok(());
+    };
+    let needed = (sizes.iter().sum::<u64>() as f64 * headroom) as u64;
+    if needed > free {
+        log::warn!(
+            "import refused: needs ~{needed} bytes, only {free} free on {}",
+            library.display()
+        );
+        return Err(crate::errors::NOT_ENOUGH_DISK_SPACE.to_string());
+    }
+    Ok(())
+}
+
+/// Une archive extraite, prête à être rangée. Produite hors verrou base.
+struct Extracted {
+    index: usize,
+    label: String,
+    /// Dossier temporaire d'extraction, supprimé après rangement.
+    workdir: PathBuf,
+    /// Taille de l'archive d'origine, pour alimenter le benchmark.
+    size: u64,
+    /// Copie de l'archive source (§10/§11), faite hors verrou elle aussi.
+    kept: Option<String>,
+}
+
+/// Ce que le producteur remet au rangeur : une archive prête, ou l'échec de
+/// son extraction — jamais rien, sinon l'index du lot se décalerait.
+enum Staged {
+    Ready(Box<Extracted>),
+    Failed { label: String, error: String },
+}
+
+/// Importe une liste d'archives. Chaque archive est traitée indépendamment ;
+/// une erreur sur l'une n'interrompt pas les autres.
+pub fn import_archives(
+    ctx: &ImportCtx,
+    db: &crate::overlay::Db,
+    cfg: &AppConfig,
+    rules: &Rules,
+    paths: &[String],
+    decisions: &[ImportDecision],
+) -> Result<Vec<ArchiveResult>, String> {
+    let sizes = size_batch(ctx, paths);
+    check_disk_space(cfg, &sizes, DISK_HEADROOM)?;
+    ctx.plan(
+        paths
+            .iter()
+            .zip(&sizes)
+            .map(|(p, &size)| ItemPlan {
+                label: source_label(Path::new(p)),
+                extract_w: ctx.estimate(Bucket::ArchiveExtract, size),
+                file_w: ITEM_OVERHEAD_SECS + ctx.estimate(Bucket::ArchiveFile, size),
+            })
+            .collect(),
+    );
+    Ok(run_import(ctx, db, cfg, rules, paths, &sizes, decisions))
+}
+
+/// Extraction et rangement en pipeline (§4.2bis) : l'archive N+1 se décompresse
+/// pendant que la N se range. Les deux étapes saturent des ressources
+/// différentes (7-Zip est limité par le CPU, le rangement par le disque), donc
+/// les mener de front raccourcit nettement un gros lot.
+///
+/// Le canal est un rendez-vous (capacité 0) et pas un tampon : il borne
+/// l'avance à **une** archive, donc à deux dossiers temporaires vivants au
+/// plus. Avec un tampon, un lot de quarante archives pourrait en extraire
+/// autant d'avance qu'il en tient — et remplir le disque avant d'en avoir
+/// rangé trois.
+fn run_import(
+    ctx: &ImportCtx,
+    db: &crate::overlay::Db,
+    cfg: &AppConfig,
+    rules: &Rules,
+    paths: &[String],
+    sizes: &[u64],
+    decisions: &[ImportDecision],
+) -> Vec<ArchiveResult> {
+    let (tx, rx) = std::sync::mpsc::sync_channel::<Staged>(0);
+    std::thread::scope(|scope| {
+        scope.spawn(move || {
+            for (i, p) in paths.iter().enumerate() {
+                if ctx.cancelled() {
+                    break;
+                }
+                let staged = extract_stage(ctx, cfg, i, Path::new(p), sizes[i]);
+                if let Err(returned) = tx.send(staged) {
+                    // Rangeur parti (annulation) : le temporaire qu'on vient
+                    // d'extraire n'ira nulle part, il faut le retirer nous-mêmes.
+                    if let Staged::Ready(ex) = returned.0 {
+                        let _ = std::fs::remove_dir_all(&ex.workdir);
+                    }
+                    break;
+                }
+            }
+        });
+
+        let mut results = Vec::with_capacity(paths.len());
+        for (i, p) in paths.iter().enumerate() {
+            if ctx.cancelled() {
+                break;
+            }
+            // Affiché AVANT l'attente : quand l'extraction n'a pas encore été
+            // prise d'avance (première archive du lot, ou pipeline en retard),
+            // c'est elle qu'on attend — et c'est sa progression que le
+            // producteur alimente pendant ce temps.
+            ctx.set_current(i, PHASE_EXTRACT, source_label(Path::new(p)));
+            let Ok(staged) = rx.recv() else { break };
+            match staged {
+                Staged::Failed { label, error } => {
+                    results.push(failed_result(&label, error));
+                }
+                Staged::Ready(ex) => {
+                    ctx.phase(PHASE_SCAN, ex.label.clone());
+                    let started = Instant::now();
+                    // Verrou pris seulement pour le rangement : l'extraction et
+                    // la copie de l'archive source, qui ne touchent pas la base,
+                    // se sont faites en dehors. Avant, tout écran lisant
+                    // l'overlay attendait aussi la décompression — plusieurs
+                    // minutes sur un gros circuit.
+                    let result = match db.0.lock() {
+                        Ok(conn) => file_extracted(ctx, &conn, cfg, rules, &ex, decisions),
+                        Err(e) => failed_result(&ex.label, e.to_string()),
+                    };
+                    ctx.record(Bucket::ArchiveFile, ex.size, started.elapsed().as_secs_f64());
+                    let _ = std::fs::remove_dir_all(&ex.workdir);
+                    results.push(result);
+                }
+            }
+            ctx.finish_item(i);
+        }
+        // Libère le producteur s'il attend encore un rendez-vous : sans ça, une
+        // annulation laisserait le fil d'extraction bloqué sur `send` et la
+        // portée ne se refermerait jamais.
+        drop(rx);
+        results
+    })
+}
+
+/// Phase hors verrou : décompression de l'archive et copie de la source.
+fn extract_stage(ctx: &ImportCtx, cfg: &AppConfig, index: usize, archive_path: &Path, size: u64) -> Staged {
+    let label = source_label(archive_path);
+    let (Some(sevenzip), Some(_)) = (&cfg.sevenzip_exe, &cfg.library_path) else {
+        return Staged::Failed {
+            label,
+            error: crate::errors::SEVENZIP_NOT_CONFIGURED.to_string(),
+        };
+    };
+    let workdir = match make_temp_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            log::warn!("import {label}: temp dir: {e}");
+            return Staged::Failed {
+                label,
+                error: crate::errors::TEMP_DIR_UNAVAILABLE.to_string(),
+            };
+        }
+    };
+
+    let started = Instant::now();
+    let extracted = archive::extract_with_progress(
+        sevenzip,
+        archive_path,
+        &workdir,
+        &|pct| ctx.extract_ratio(index, pct as f64 / 100.0),
+        &|| ctx.cancelled(),
+    );
+    if let Err(e) = extracted {
+        let _ = std::fs::remove_dir_all(&workdir);
+        return Staged::Failed { label, error: e };
+    }
+    ctx.record(Bucket::ArchiveExtract, size, started.elapsed().as_secs_f64());
+    ctx.extract_ratio(index, 1.0);
+
+    Staged::Ready(Box::new(Extracted {
+        index,
+        // Conservation de l'archive source (§10/§11) : une seule copie partagée
+        // entre tous les mods trouvés dedans, faite ici parce qu'elle peut
+        // peser plusieurs Go et n'a rien à faire sous le verrou base.
+        kept: keep_source(cfg, archive_path, &label),
+        label,
+        workdir,
+        size,
+    }))
+}
+
+/// Résultat d'archive en échec — verrou base empoisonné, extraction ratée,
+/// espace manquant. `error` est soit une clé i18n, soit un diagnostic brut
+/// (7-Zip, E/S), les deux traversant `errorText()` sans dommage.
+fn failed_result(label: &str, error: String) -> ArchiveResult {
     ArchiveResult {
-        archive: path.to_string(),
+        archive: label.to_string(),
         mods: Vec::new(),
-        error: Some(error.to_string()),
+        error: Some(error),
         subs: Vec::new(),
         apps: Vec::new(),
         others: Vec::new(),
@@ -578,18 +779,18 @@ fn auto_activate_apps(conn: &Connection, cfg: &AppConfig, apps: &[crate::apps::A
     }
 }
 
-fn import_one(
-    emit: &ProgressFn,
+/// Range une archive déjà extraite (§4.2). Seule cette moitié du pipeline tient
+/// le verrou base — voir `run_import`.
+fn file_extracted(
+    ctx: &ImportCtx,
     conn: &Connection,
     cfg: &AppConfig,
     rules: &Rules,
-    archive_path: &Path,
+    ex: &Extracted,
     decisions: &[ImportDecision],
 ) -> ArchiveResult {
-    let archive_name = archive_path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| archive_path.to_string_lossy().into_owned());
+    let archive_name = ex.label.clone();
+    let workdir = ex.workdir.as_path();
 
     let mut result = ArchiveResult {
         archive: archive_name.clone(),
@@ -601,65 +802,34 @@ fn import_one(
         extras: 0,
     };
 
-    let (Some(sevenzip), Some(library)) = (&cfg.sevenzip_exe, &cfg.library_path) else {
-        result.error = Some("Chemins 7-Zip ou bibliothèque non configurés.".into());
+    let Some(library) = &cfg.library_path else {
+        result.error = Some(crate::errors::LIBRARY_NOT_CONFIGURED.into());
         return result;
     };
     // Extraction des fichiers annexes (§4.5.2) : réglage global, jamais reposé
     // à chaque import.
     let res_mode = crate::resources::ExtractionMode::parse(&cfg.prefs.resource_extraction_mode);
 
-    // Dossier de travail temporaire pour l'extraction.
-    let workdir = match make_temp_dir() {
-        Ok(d) => d,
-        Err(e) => {
-            result.error = Some(format!("dossier temporaire : {e}"));
-            return result;
-        }
-    };
-
-    emit(Progress {
-        archive: archive_name.clone(),
-        phase: "extract".into(),
-        current: 0,
-        total: 0,
-        label: "Extraction de l'archive…".into(),
-    });
-    if let Err(e) = archive::extract(sevenzip, archive_path, &workdir) {
-        result.error = Some(e);
-        let _ = std::fs::remove_dir_all(&workdir);
-        return result;
-    }
-
-    let found = modscan::scan(&workdir);
+    let found = modscan::scan(workdir);
     // Sous-éléments rattachés (skins/sons) et apps — peuvent constituer une archive seuls.
-    let subs = modscan::scan_subs(&workdir);
-    let apps = modscan::scan_apps(&workdir);
+    let subs = modscan::scan_subs(workdir);
+    let apps = modscan::scan_apps(workdir);
     if found.is_empty() && subs.is_empty() && apps.is_empty() {
         // Type non reconnu : jamais perdu, rangé comme « autre mod » (§7.3).
-        if let Some(other) = crate::others::import_other(conn, library, &archive_name, &workdir, false, res_mode) {
+        if let Some(other) = crate::others::import_other(conn, library, &archive_name, workdir, false, res_mode) {
             if let Err(e) = crate::others::activate_other(conn, cfg, &other.id) {
                 log::warn!("auto_activate_other {}: {e}", other.id);
             }
             result.others.push(other);
         } else {
-            result.error = Some("Aucune voiture, circuit, skin, son ou app trouvé dans l'archive.".into());
+            result.error = Some(crate::errors::NOTHING_TO_IMPORT_IN_ARCHIVE.into());
         }
-        let _ = std::fs::remove_dir_all(&workdir);
         return result;
     }
-    emit(Progress {
-        archive: archive_name.clone(),
-        phase: "scan".into(),
-        current: 0,
-        total: found.len(),
-        label: format!("{} mod(s) trouvé(s)", found.len()),
-    });
+    ctx.sub(0, found.len(), archive_name.clone());
+    ctx.file_ratio(ex.index, SCAN_SHARE);
 
-    // Conservation de l'archive source (§10/§11) : une seule copie, partagée
-    // entre tous les mods trouvés dans cette archive (évite de la dupliquer
-    // par voiture pour un pack multi-voitures).
-    let kept_archive = keep_source(cfg, archive_path, &archive_name);
+    let kept_archive = ex.kept.clone();
 
     // Pack (§4.4) : une archive multi-voitures regroupe ses mods sous sa source.
     let pack = (found.len() > 1).then_some(archive_name.as_str());
@@ -669,13 +839,8 @@ fn import_one(
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
-        emit(Progress {
-            archive: archive_name.clone(),
-            phase: "filing".into(),
-            current: i + 1,
-            total: found.len(),
-            label,
-        });
+        ctx.phase(PHASE_FILING, label);
+        ctx.sub(i + 1, found.len(), fm_id(fm));
         // Archive : le contenu vient d'un dossier temp → toujours déplacé.
         let decision = decision_for(decisions, &fm_id(fm));
         match process_found(
@@ -697,6 +862,7 @@ fn import_one(
                 result.error.get_or_insert_with(String::new).push_str(&format!("{e}; "));
             }
         }
+        ctx.file_ratio(ex.index, filing_ratio(i + 1, found.len()));
     }
 
     // Activation par défaut des mods importés (§4.2).
@@ -724,7 +890,7 @@ fn import_one(
         rules,
         library,
         &archive_name,
-        &workdir,
+        workdir,
         &consumed,
         &found_ids,
         false,
@@ -732,58 +898,75 @@ fn import_one(
         &mut result,
     );
 
-    emit(Progress {
-        archive: archive_name.clone(),
-        phase: "done".into(),
-        current: found.len(),
-        total: found.len(),
-        label: "Terminé".into(),
-    });
-    let _ = std::fs::remove_dir_all(&workdir);
     result
 }
 
 /// Import depuis des **dossiers déjà décompressés** (§4.2). Même pipeline que
-/// les archives, sans décompression. `copy=true` préserve la source (copie),
+/// les archives, sans décompression — donc sans rien à mettre en pipeline non
+/// plus, c'est une simple boucle. `copy=true` préserve la source (copie),
 /// sinon déplacement adaptatif (rename même disque, copie+suppression sinon).
 pub fn import_folders(
-    app: &AppHandle,
+    ctx: &ImportCtx,
     db: &crate::overlay::Db,
     cfg: &AppConfig,
     rules: &Rules,
     paths: &[String],
     copy: bool,
     decisions: &[ImportDecision],
-) -> Vec<ArchiveResult> {
-    let emit = |p: Progress| {
-        let _ = app.emit("import:progress", p);
-    };
-    paths
-        .iter()
-        .map(|p| {
-            // Même raison qu'`import_archives` : un verrou par dossier, pas
-            // un seul pour tout le lot.
-            match db.0.lock() {
-                Ok(conn) => import_one_folder(&emit, &conn, cfg, rules, Path::new(p), copy, decisions),
-                Err(e) => lock_error_result(p, &e.to_string()),
-            }
-        })
-        .collect()
+) -> Result<Vec<ArchiveResult>, String> {
+    let sizes = size_batch(ctx, paths);
+    let bucket = if copy { Bucket::FolderCopy } else { Bucket::FolderMove };
+    // Un déplacement ne consomme pas d'espace supplémentaire (même volume :
+    // simple `rename`) — seule une copie doit tenir à côté de sa source.
+    check_disk_space(cfg, &sizes, if copy { 1.0 } else { 0.0 })?;
+    ctx.plan(
+        paths
+            .iter()
+            .zip(&sizes)
+            .map(|(p, &size)| ItemPlan {
+                label: source_label(Path::new(p)),
+                extract_w: 0.0,
+                file_w: ITEM_OVERHEAD_SECS + ctx.estimate(bucket, size),
+            })
+            .collect(),
+    );
+
+    let mut results = Vec::with_capacity(paths.len());
+    for (i, p) in paths.iter().enumerate() {
+        if ctx.cancelled() {
+            break;
+        }
+        let dir = Path::new(p);
+        let label = source_label(dir);
+        ctx.set_current(i, PHASE_SCAN, label.clone());
+        // Conservation du dossier source (§10/§11) : hors verrou, comme pour
+        // les archives — c'est une copie complète, parfois de plusieurs Go.
+        let kept = keep_source(cfg, dir, &label);
+        let started = Instant::now();
+        let result = match db.0.lock() {
+            Ok(conn) => import_one_folder(ctx, &conn, cfg, rules, i, dir, copy, decisions, kept.as_deref()),
+            Err(e) => failed_result(&label, e.to_string()),
+        };
+        ctx.record(bucket, sizes[i], started.elapsed().as_secs_f64());
+        results.push(result);
+        ctx.finish_item(i);
+    }
+    Ok(results)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn import_one_folder(
-    emit: &ProgressFn,
+    ctx: &ImportCtx,
     conn: &Connection,
     cfg: &AppConfig,
     rules: &Rules,
+    index: usize,
     dir: &Path,
     copy: bool,
     decisions: &[ImportDecision],
+    kept_archive: Option<&str>,
 ) -> ArchiveResult {
-    let name = dir
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| dir.to_string_lossy().into_owned());
+    let name = source_label(dir);
     let mut result = ArchiveResult {
         archive: name.clone(),
         mods: Vec::new(),
@@ -795,11 +978,11 @@ fn import_one_folder(
     };
 
     let Some(library) = &cfg.library_path else {
-        result.error = Some("Bibliothèque non configurée.".into());
+        result.error = Some(crate::errors::LIBRARY_NOT_CONFIGURED.into());
         return result;
     };
     if !dir.is_dir() {
-        result.error = Some("Le chemin n'est pas un dossier.".into());
+        result.error = Some(crate::errors::NOT_A_DIRECTORY.into());
         return result;
     }
     let res_mode = crate::resources::ExtractionMode::parse(&cfg.prefs.resource_extraction_mode);
@@ -815,37 +998,24 @@ fn import_one_folder(
             }
             result.others.push(other);
         } else {
-            result.error = Some("Aucune voiture, circuit, skin, son ou app trouvé dans le dossier.".into());
+            result.error = Some(crate::errors::NOTHING_TO_IMPORT_IN_FOLDER.into());
         }
         return result;
     }
-    emit(Progress {
-        archive: name.clone(),
-        phase: "scan".into(),
-        current: 0,
-        total: found.len(),
-        label: format!("{} mod(s) trouvé(s)", found.len()),
-    });
-
-    // Conservation du dossier source (§10/§11) : copié AVANT le rangement (qui
-    // peut déplacer/consommer `dir` si `copy=false`), une seule fois pour tout
-    // le dossier (partagé si plusieurs mods dedans).
-    let kept_archive = keep_source(cfg, dir, &name);
+    ctx.sub(0, found.len(), name.clone());
+    ctx.file_ratio(index, SCAN_SHARE);
 
     // Pack (§4.4) : un dossier multi-voitures regroupe ses mods sous sa source.
     let pack = (found.len() > 1).then_some(name.as_str());
     for (i, fm) in found.iter().enumerate() {
-        emit(Progress {
-            archive: name.clone(),
-            phase: "filing".into(),
-            current: i + 1,
-            total: found.len(),
-            label: fm
-                .dir
+        ctx.phase(
+            PHASE_FILING,
+            fm.dir
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default(),
-        });
+        );
+        ctx.sub(i + 1, found.len(), fm_id(fm));
         let decision = decision_for(decisions, &fm_id(fm));
         match process_found(
             conn,
@@ -858,13 +1028,14 @@ fn import_one_folder(
             pack,
             decision,
             true,
-            kept_archive.as_deref(),
+            kept_archive,
         ) {
             Ok(imported) => result.mods.push(imported),
             Err(e) => {
                 result.error.get_or_insert_with(String::new).push_str(&format!("{e}; "));
             }
         }
+        ctx.file_ratio(index, filing_ratio(i + 1, found.len()));
     }
 
     // Activation par défaut des mods importés (§4.2).
@@ -899,13 +1070,6 @@ fn import_one_folder(
         &mut result,
     );
 
-    emit(Progress {
-        archive: name.clone(),
-        phase: "done".into(),
-        current: found.len(),
-        total: found.len(),
-        label: "Terminé".into(),
-    });
     result
 }
 
@@ -1042,43 +1206,62 @@ pub struct BulkExecItem {
 /// relancer l'analyse après interruption reclasse les mods déjà importés en
 /// « doublon »/« mise à jour », donc rien n'est traité de travers.
 pub fn execute_bulk(
-    app: &AppHandle,
+    ctx: &ImportCtx,
     db: &crate::overlay::Db,
     cfg: &AppConfig,
     rules: &Rules,
     items: &[BulkExecItem],
     copy: bool,
-) -> Vec<ArchiveResult> {
-    let emit = |p: Progress| {
-        let _ = app.emit("import:progress", p);
-    };
-    let total = items.len();
-    items
-        .iter()
-        .enumerate()
-        .map(|(i, it)| {
-            let label = Path::new(&it.path)
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            emit(Progress {
-                archive: label.clone(),
-                phase: "filing".into(),
-                current: i + 1,
-                total,
-                label,
-            });
-            // Même raison qu'`import_archives` : un verrou par entrée, pas un
-            // seul pour tout le lot.
-            match db.0.lock() {
-                Ok(conn) => exec_one(&conn, cfg, rules, it, copy),
-                Err(e) => lock_error_result(&it.path, &e.to_string()),
-            }
-        })
-        .collect()
+) -> Result<Vec<ArchiveResult>, String> {
+    // Même protocole de progression que les autres chemins d'import (§4.2bis) :
+    // c'est celui qui traite le plus de mods d'un coup, il serait le dernier à
+    // devoir se contenter d'un compteur d'entrées.
+    let paths: Vec<String> = items.iter().map(|it| it.path.clone()).collect();
+    let sizes = size_batch(ctx, &paths);
+    let bucket = if copy { Bucket::FolderCopy } else { Bucket::FolderMove };
+    check_disk_space(cfg, &sizes, if copy { 1.0 } else { 0.0 })?;
+    ctx.plan(
+        paths
+            .iter()
+            .zip(&sizes)
+            .map(|(p, &size)| ItemPlan {
+                label: source_label(Path::new(p)),
+                extract_w: 0.0,
+                file_w: ITEM_OVERHEAD_SECS + ctx.estimate(bucket, size),
+            })
+            .collect(),
+    );
+
+    let mut results = Vec::with_capacity(items.len());
+    for (i, it) in items.iter().enumerate() {
+        if ctx.cancelled() {
+            break;
+        }
+        let label = source_label(Path::new(&it.path));
+        ctx.set_current(i, PHASE_FILING, label.clone());
+        let started = Instant::now();
+        // Verrou par entrée, jamais un seul pour tout le lot : un import en
+        // masse ne doit pas geler les écrans qui lisent l'overlay.
+        let result = match db.0.lock() {
+            Ok(conn) => exec_one(ctx, &conn, cfg, rules, i, it, copy),
+            Err(e) => failed_result(&label, e.to_string()),
+        };
+        ctx.record(bucket, sizes[i], started.elapsed().as_secs_f64());
+        results.push(result);
+        ctx.finish_item(i);
+    }
+    Ok(results)
 }
 
-fn exec_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, it: &BulkExecItem, copy: bool) -> ArchiveResult {
+fn exec_one(
+    ctx: &ImportCtx,
+    conn: &Connection,
+    cfg: &AppConfig,
+    rules: &Rules,
+    index: usize,
+    it: &BulkExecItem,
+    copy: bool,
+) -> ArchiveResult {
     let dir = Path::new(&it.path);
     let name = dir
         .file_name()
@@ -1095,21 +1278,25 @@ fn exec_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, it: &BulkExecItem
     };
 
     let Some(library) = &cfg.library_path else {
-        result.error = Some("Bibliothèque non configurée.".into());
+        result.error = Some(crate::errors::LIBRARY_NOT_CONFIGURED.into());
         return result;
     };
 
     let found = modscan::scan(dir);
+    ctx.sub(0, found.len(), name.clone());
+    ctx.file_ratio(index, SCAN_SHARE);
     // Conservation du dossier source (§10/§11), avant tout rangement.
     let kept_archive = keep_source(cfg, dir, &name);
     // Pack (§4.4) : plusieurs mods issus du même dossier partagent leur source.
     let pack = (found.len() > 1).then_some(name.as_str());
-    for fm in &found {
+    for (i, fm) in found.iter().enumerate() {
         let id = fm
             .dir
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
+        ctx.sub(i + 1, found.len(), id.clone());
+        ctx.file_ratio(index, filing_ratio(i + 1, found.len()));
         if it.skip_ids.iter().any(|s| s == &id) {
             continue;
         }
@@ -1614,6 +1801,23 @@ mod tests {
     use crate::config::AppConfig;
     use std::process::Command;
 
+    /// Import d'un dossier hors du lot qui l'encadre en production : contexte
+    /// de progression silencieux, item unique. Reproduit ce que fait
+    /// `import_folders` autour de lui, copie de la source comprise — sans quoi
+    /// les tests qui vérifient `kept_archive_path` passeraient à côté.
+    fn import_folder_for_test(
+        conn: &Connection,
+        cfg: &AppConfig,
+        rules: &Rules,
+        dir: &Path,
+        copy: bool,
+        decisions: &[ImportDecision],
+    ) -> ArchiveResult {
+        let ctx = ImportCtx::silent();
+        let kept = keep_source(cfg, dir, &source_label(dir));
+        import_one_folder(&ctx, conn, cfg, rules, 0, dir, copy, decisions, kept.as_deref())
+    }
+
     /// Crée un dossier voiture synthétique <root>/<id>/ui/ui_car.json + un .kn5.
     fn make_fake_car(root: &Path, id: &str) {
         let ui = root.join(id).join("ui");
@@ -1672,7 +1876,6 @@ mod tests {
             };
             cfg.prefs.resource_extraction_mode = mode.into();
             let rules = crate::rules::default_rules();
-            let noop = |_p: Progress| {};
 
             let src = base.join("src");
             let files = [
@@ -1685,7 +1888,7 @@ mod tests {
                 "livery_template.psd",
             ];
             make_car_with_files(&src, "annex_car", &files);
-            let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+            let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
             assert_eq!(r.mods[0].outcome, "IMPORT");
             assert_eq!(r.mods[0].resources_extracted, 0, "rien extrait du mod ({mode})");
 
@@ -1715,14 +1918,13 @@ mod tests {
             ..Default::default()
         };
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         // Archive « à la RSS » : la voiture sous content/cars/, un PDF à côté.
         let src = base.join("RSS_Pack");
         make_fake_car(&src.join("content").join("cars"), "beside_car");
         std::fs::write(src.join("Read Me - Beside.pdf"), b"%PDF").unwrap();
 
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
         assert_eq!(r.mods.len(), 1, "la voiture est reconnue");
         assert!(r.others.is_empty(), "une annexe ne devient pas un « autre mod »");
@@ -1754,13 +1956,12 @@ mod tests {
         };
         cfg.prefs.resource_extraction_mode = "none".into();
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         let src = base.join("NonePack");
         make_fake_car(&src.join("content").join("cars"), "annex_car2");
         std::fs::write(src.join("changelog.txt"), b"notes").unwrap();
 
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
         assert!(
             r.others.iter().all(|o| o.resources_extracted == 0),
@@ -1788,7 +1989,6 @@ mod tests {
             ..Default::default()
         };
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         // Base : 10 fichiers (dont model.kn5 pour la signature).
         let src1 = base.join("src1");
@@ -1807,7 +2007,7 @@ mod tests {
                 "data/h.ini",
             ],
         );
-        let r1 = import_one_folder(&noop, &conn, &cfg, &rules, &src1, true, &[]);
+        let r1 = import_folder_for_test(&conn, &cfg, &rules, &src1, true, &[]);
         assert_eq!(r1.mods[0].outcome, "IMPORT");
         let base_version = crate::overlay::get_versions(&conn, "spa").unwrap();
         assert_eq!(base_version.len(), 1);
@@ -1817,7 +2017,7 @@ mod tests {
         // nouveaux (dont 2 .kn5 → signature différente, pas un doublon).
         let src2 = base.join("src2");
         make_car_with_files(&src2, "spa", &["new/layout1.kn5", "new/layout2.kn5", "new/extra.ini"]);
-        let r2 = import_one_folder(&noop, &conn, &cfg, &rules, &src2, true, &[]);
+        let r2 = import_folder_for_test(&conn, &cfg, &rules, &src2, true, &[]);
         assert_eq!(r2.mods[0].outcome, "EXTENSION", "couche, pas mise à jour");
         assert_eq!(r2.mods[0].overwritten_count, Some(1));
         assert_eq!(r2.mods[0].added_count, Some(3));
@@ -1856,7 +2056,6 @@ mod tests {
             ..Default::default()
         };
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         // Contenu de base indexé (is_stock=1), sans version bibliothèque.
         let now = chrono::Local::now().to_rfc3339();
@@ -1865,7 +2064,7 @@ mod tests {
         // Import « version complète améliorée » par-dessus : recouvrement total.
         let src = base.join("src");
         make_car_with_files(&src, "ks_spa", &["model.kn5", "data/surfaces.ini"]);
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert_eq!(r.mods[0].outcome, "EXTENSION", "le stock ne peut jamais être remplacé");
         assert_eq!(
             crate::overlay::get_versions(&conn, "ks_spa").unwrap().len(),
@@ -1892,18 +2091,17 @@ mod tests {
             ..Default::default()
         };
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         // Base : 5 fichiers.
         let src1 = base.join("src1");
         make_car_with_files(&src1, "amb", &["model.kn5", "data/a.ini", "data/b.ini", "data/c.ini"]);
-        import_one_folder(&noop, &conn, &cfg, &rules, &src1, true, &[]);
+        import_folder_for_test(&conn, &cfg, &rules, &src1, true, &[]);
 
         // Entrant : écrase 2/5 (ui_car.json + data/a.ini), signature changée
         // (model2.kn5), 1 chemin nouveau → coverage 0.4 = bande ambiguë.
         let src2 = base.join("src2");
         make_car_with_files(&src2, "amb", &["model2.kn5", "data/a.ini", "new/y.ini"]);
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src2, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src2, true, &[]);
         assert_eq!(r.mods[0].outcome, "AMBIGUOUS");
         assert_eq!(r.mods[0].overwritten_count, Some(2));
         assert_eq!(r.mods[0].existing_total, Some(5));
@@ -1919,12 +2117,94 @@ mod tests {
             id: "amb".into(),
             decision: "update".into(),
         }];
-        let r2 = import_one_folder(&noop, &conn, &cfg, &rules, &src2, true, &decisions);
+        let r2 = import_folder_for_test(&conn, &cfg, &rules, &src2, true, &decisions);
         assert_eq!(r2.mods[0].outcome, "UPDATE_REPLACE");
         assert_eq!(
             crate::overlay::get_versions(&conn, "amb").unwrap().len(),
             2,
             "nouvelle version après décision"
+        );
+    }
+
+    /// Règle : l'avancement du rangement d'un item est croissant et reste dans
+    /// [0,1] — c'est ce qui garantit que la barre globale, qui l'agrège, ne
+    /// recule jamais (§4.2bis).
+    #[test]
+    fn filing_ratio_grows_monotonically_within_bounds() {
+        assert!(filing_ratio(0, 0) > 0.0 && filing_ratio(0, 0) < 1.0, "item sans mod");
+        let mut previous = SCAN_SHARE;
+        for done in 1..=5 {
+            let r = filing_ratio(done, 5);
+            assert!(r > previous, "croissant à {done}/5 : {r} <= {previous}");
+            assert!(r <= 1.0, "borné à 1 : {r}");
+            previous = r;
+        }
+        assert!(
+            filing_ratio(5, 5) < 1.0,
+            "le dernier mod ne finit pas l'item : skins, apps et restes viennent après"
+        );
+    }
+
+    /// Règle : un lot qui ne peut pas tenir sur le volume de la bibliothèque est
+    /// refusé AVANT d'écrire quoi que ce soit (§4.2bis) — un import mort à
+    /// mi-parcours laisse un temporaire et une bibliothèque à nettoyer à la main.
+    #[test]
+    fn disk_space_check_refuses_a_batch_that_cannot_fit() {
+        let base = crate::testutil::temp_dir("diskspace");
+        let cfg = AppConfig {
+            library_path: Some(base.to_path_buf()),
+            ..Default::default()
+        };
+        assert!(check_disk_space(&cfg, &[1024], 1.5).is_ok(), "1 Ko tient toujours");
+        let huge = u64::MAX / 4;
+        assert_eq!(
+            check_disk_space(&cfg, &[huge], 1.5),
+            Err(crate::errors::NOT_ENOUGH_DISK_SPACE.to_string()),
+            "4 exaoctets ne tiennent nulle part"
+        );
+    }
+
+    /// Règle : une bibliothèque non configurée ne doit pas faire échouer le
+    /// contrôle d'espace — il n'y a alors aucun volume à interroger, et refuser
+    /// sur une information absente bloquerait un import parfaitement valide.
+    #[test]
+    fn disk_space_check_stays_silent_without_a_library() {
+        let cfg = AppConfig::default();
+        assert!(check_disk_space(&cfg, &[u64::MAX / 4], 1.5).is_ok(), "rien à vérifier");
+    }
+
+    /// Règle : une annulation demandée avant le lancement n'importe rien
+    /// (§4.2bis). L'arrêt est constaté entre deux items, jamais au milieu du
+    /// rangement d'un mod — donc ici, aucun item n'est entamé.
+    #[test]
+    fn cancelled_batch_imports_nothing() {
+        let base = crate::testutil::temp_dir("import-cancel");
+        let src = base.join("src");
+        make_fake_car(&src, "never_imported");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let db_path = base.join("overlay.sqlite");
+        let db = crate::overlay::Db(std::sync::Mutex::new(crate::overlay::open(&db_path).unwrap()));
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let out = import_folders(
+            &ImportCtx::silent_cancelled(),
+            &db,
+            &cfg,
+            &rules,
+            &[src.to_string_lossy().into_owned()],
+            true,
+            &[],
+        )
+        .unwrap();
+        assert!(out.is_empty(), "aucun item traité");
+        assert!(
+            crate::overlay::list_mods(&db.0.lock().unwrap()).unwrap().is_empty(),
+            "rien n'a été écrit en overlay"
         );
     }
 
@@ -1954,13 +2234,19 @@ mod tests {
             ..Default::default()
         };
 
-        // Émetteur no-op pour les tests (pas d'AppHandle).
-        let noop = |_p: Progress| {};
         let rules = crate::rules::default_rules();
 
         // --- 1er import : NOUVEAU ---
         let zip_str = zip.to_string_lossy().into_owned();
-        let res = run_import(&noop, &db, &cfg, &rules, std::slice::from_ref(&zip_str), &[]);
+        let res = import_archives(
+            &ImportCtx::silent(),
+            &db,
+            &cfg,
+            &rules,
+            std::slice::from_ref(&zip_str),
+            &[],
+        )
+        .unwrap();
         assert_eq!(res.len(), 1);
         assert!(res[0].error.is_none(), "erreur: {:?}", res[0].error);
         assert_eq!(res[0].mods.len(), 1);
@@ -1989,7 +2275,15 @@ mod tests {
         drop(conn); // libéré avant le prochain run_import, qui reprend le verrou lui-même.
 
         // --- 2e import de la MÊME archive : DOUBLON (pas de réimport) ---
-        let res_dup = run_import(&noop, &db, &cfg, &rules, std::slice::from_ref(&zip_str), &[]);
+        let res_dup = import_archives(
+            &ImportCtx::silent(),
+            &db,
+            &cfg,
+            &rules,
+            std::slice::from_ref(&zip_str),
+            &[],
+        )
+        .unwrap();
         assert_eq!(res_dup[0].mods[0].outcome, "DUPLICATE");
         assert_eq!(
             crate::overlay::list_mods(&db.0.lock().unwrap()).unwrap()[0].version_count,
@@ -2001,7 +2295,15 @@ mod tests {
         std::fs::write(src.join("test_car").join("model.kn5"), b"DIFFERENT_KN5_CONTENT_XXL").unwrap();
         let zip2 = base.join("test_car_v2.zip");
         zip_dir(&sevenzip, &src, &zip2);
-        let res2 = run_import(&noop, &db, &cfg, &rules, &[zip2.to_string_lossy().into_owned()], &[]);
+        let res2 = import_archives(
+            &ImportCtx::silent(),
+            &db,
+            &cfg,
+            &rules,
+            &[zip2.to_string_lossy().into_owned()],
+            &[],
+        )
+        .unwrap();
         assert_eq!(res2[0].mods[0].outcome, "UPDATE_REPLACE");
         let mods2 = crate::overlay::list_mods(&db.0.lock().unwrap()).unwrap();
         assert_eq!(mods2.len(), 1, "toujours un seul mod logique");
@@ -2026,14 +2328,13 @@ mod tests {
             ..Default::default()
         };
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         let src = base.join("MyApp");
         let app = src.join("apps").join("lua").join("MyApp");
         std::fs::create_dir_all(&app).unwrap();
         std::fs::write(app.join("MyApp.lua"), b"-- app").unwrap();
 
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
         assert_eq!(r.apps.len(), 1);
         assert!(
@@ -2058,14 +2359,13 @@ mod tests {
             ..Default::default()
         };
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         let src = base.join("MyShaderPack");
         let leaf = src.join("extension").join("config").join("new_thing");
         std::fs::create_dir_all(&leaf).unwrap();
         std::fs::write(leaf.join("settings.ini"), b"x").unwrap();
 
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
         assert_eq!(r.mods.len(), 0);
         assert_eq!(r.others.len(), 1);
@@ -2095,7 +2395,6 @@ mod tests {
             ..Default::default()
         };
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         let src = base.join("MyApp_Pack");
         let app = src.join("apps").join("lua").join("MyApp");
@@ -2106,7 +2405,7 @@ mod tests {
         std::fs::create_dir_all(&leaf).unwrap();
         std::fs::write(leaf.join("settings.ini"), b"x").unwrap();
 
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
         assert_eq!(r.apps.len(), 1, "l'app est bien reconnue");
         assert_eq!(
@@ -2144,7 +2443,6 @@ mod tests {
             ..Default::default()
         };
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         let src = base.join("FontPack");
         make_fake_car(&src.join("content").join("cars"), "font_car");
@@ -2160,7 +2458,7 @@ mod tests {
             std::fs::write(d.join(name), body).unwrap();
         }
 
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
         assert_eq!(r.extras, 2, "fonts et driver rattachés à la voiture");
 
@@ -2206,7 +2504,6 @@ mod tests {
             ..Default::default()
         };
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         let src = base.join("RSS_Pack");
         make_fake_car(&src.join("content").join("cars"), "rss_test_v8");
@@ -2220,7 +2517,7 @@ mod tests {
             std::fs::write(d.join(name), name.as_bytes()).unwrap();
         }
 
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
         assert_eq!(r.mods.len(), 1, "la voiture est reconnue");
         assert_eq!(r.extras, 3, "les trois restes lui sont rattachés");
@@ -2282,7 +2579,6 @@ mod tests {
             ..Default::default()
         };
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         let src = base.join("RSS_Pack.rar");
         make_fake_car(&src.join("content").join("cars"), "rss_test_a");
@@ -2298,7 +2594,7 @@ mod tests {
             std::fs::write(d.join(name), name.as_bytes()).unwrap();
         }
 
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
         assert_eq!(r.mods.len(), 2, "les deux voitures sont reconnues");
         assert_eq!(r.extras, 0, "pack ambigu : aucun rattachement automatique");
@@ -2349,7 +2645,6 @@ mod tests {
             ..Default::default()
         };
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         let src = base.join("WithDriver");
         make_fake_car(&src.join("content").join("cars"), "some_car");
@@ -2357,7 +2652,7 @@ mod tests {
         std::fs::create_dir_all(&d).unwrap();
         std::fs::write(d.join("pro.kn5"), b"driver-model").unwrap();
 
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
         assert_eq!(r.extras, 1, "le dossier driver/ est rattaché à la voiture");
 
@@ -2403,7 +2698,6 @@ mod tests {
             ..Default::default()
         };
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         let src = base.join("CMRT_HUD");
         let app = src.join("apps").join("lua").join("CMRT_HUD");
@@ -2420,7 +2714,7 @@ mod tests {
         let nested_zip = src.join("CMRT_flag_fuel_and_starting_lights_replacement.zip");
         zip_dir(&sevenzip, &nested_src, &nested_zip);
 
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
         assert_eq!(r.apps.len(), 1, "l'app est bien reconnue");
         assert_eq!(
@@ -2448,12 +2742,11 @@ mod tests {
             ..Default::default()
         };
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         // Copie : la source est préservée.
         let src_copy = base.join("src_copy");
         make_fake_car(&src_copy, "copy_car");
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src_copy, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src_copy, true, &[]);
         assert_eq!(r.mods.len(), 1);
         assert_eq!(r.mods[0].outcome, "IMPORT");
         assert!(
@@ -2468,7 +2761,7 @@ mod tests {
         // Déplacement : la source est retirée.
         let src_move = base.join("src_move");
         make_fake_car(&src_move, "move_car");
-        let r2 = import_one_folder(&noop, &conn, &cfg, &rules, &src_move, false, &[]);
+        let r2 = import_folder_for_test(&conn, &cfg, &rules, &src_move, false, &[]);
         assert_eq!(r2.mods.len(), 1);
         assert!(!src_move.join("move_car").exists(), "source retirée (déplacement)");
         assert!(
@@ -2488,13 +2781,12 @@ mod tests {
             ..Default::default()
         };
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         // Dossier « pack » contenant deux voitures.
         let pack = base.join("ferrari_pack");
         make_fake_car(&pack, "ferrari_a");
         make_fake_car(&pack, "ferrari_b");
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &pack, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &pack, true, &[]);
         assert_eq!(r.mods.len(), 2);
         // Les deux mods partagent la même source de pack (§4.4).
         for id in ["ferrari_a", "ferrari_b"] {
@@ -2509,7 +2801,7 @@ mod tests {
         // Un import mono-voiture ne crée pas de pack.
         let solo = base.join("solo");
         make_fake_car(&solo, "solo_car");
-        import_one_folder(&noop, &conn, &cfg, &rules, &solo, true, &[]);
+        import_folder_for_test(&conn, &cfg, &rules, &solo, true, &[]);
         let m = crate::overlay::get_mod(&conn, "solo_car").unwrap().unwrap();
         assert_eq!(m.source_pack, None, "mono-voiture → pas de pack");
     }
@@ -2549,7 +2841,7 @@ mod tests {
             skip_ids: vec![],
             replace_ids: vec![],
         };
-        let r = exec_one(&conn, &cfg, &rules, &item, true);
+        let r = exec_one(&ImportCtx::silent(), &conn, &cfg, &rules, 0, &item, true);
         assert_eq!(r.mods.len(), 1);
         assert!(library.join("cars").join("bulk_car").exists());
 
@@ -2570,11 +2862,10 @@ mod tests {
             ..Default::default()
         };
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         let src = base.join("src_pub");
         make_fake_car(&src, "pub_car");
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert_eq!(r.mods.len(), 1);
 
         // Date de publication estimée (§6.2) depuis la date de modification des
@@ -2597,7 +2888,6 @@ mod tests {
             return;
         };
         let base = crate::testutil::temp_dir("import");
-        let noop = |_p: Progress| {};
         let rules = crate::rules::default_rules();
 
         // Deux voitures avec des id de dossier différents mais même brand+name.
@@ -2624,11 +2914,11 @@ mod tests {
         };
 
         // 1er : pas de conflit (rien d'existant).
-        let r1 = run_import(&noop, &db, &cfg, &rules, &[zip_a], &[]);
+        let r1 = import_archives(&ImportCtx::silent(), &db, &cfg, &rules, &[zip_a], &[]).unwrap();
         assert!(r1[0].mods[0].conflict.is_none());
 
         // 2e : conflit flou vers car_a.
-        let r2 = run_import(&noop, &db, &cfg, &rules, &[zip_b], &[]);
+        let r2 = import_archives(&ImportCtx::silent(), &db, &cfg, &rules, &[zip_b], &[]).unwrap();
         let conflict = r2[0].mods[0].conflict.as_ref().expect("conflit attendu");
         assert_eq!(conflict.existing_id, "car_a");
 
@@ -2712,11 +3002,10 @@ mod tests {
             ..Default::default()
         };
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         let src = base.join("src");
         make_fake_car(&src, "nokeep_car");
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert_eq!(r.mods[0].outcome, "IMPORT");
 
         let versions = crate::overlay::get_versions(&conn, "nokeep_car").unwrap();
@@ -2739,11 +3028,10 @@ mod tests {
         };
         cfg.prefs.keep_source_archive = true;
         let rules = crate::rules::default_rules();
-        let noop = |_p: Progress| {};
 
         let src = base.join("src");
         make_fake_car(&src, "keep_car");
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert_eq!(r.mods[0].outcome, "IMPORT");
 
         let versions = crate::overlay::get_versions(&conn, "keep_car").unwrap();

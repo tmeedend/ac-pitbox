@@ -7,9 +7,11 @@ import { listen } from "@tauri-apps/api/event";
 import { StorageKey } from "./storage";
 import { getUiPref, setUiPref } from "./uiPrefs.svelte";
 import {
+  cancelImport,
   importArchives,
   importFolders,
   resolveConflict,
+  splitDroppedPaths,
   type ArchiveResult,
   type ImportProgress,
 } from "$lib/library";
@@ -39,6 +41,9 @@ export const importState = $state<{
   pendingConflicts: PendingConflict[];
   pendingAmbiguous: PendingAmbiguous[];
   copyMode: boolean;
+  /** Arrêt demandé (§4.2bis) : le lot s'interrompt entre deux items, donc il
+   * reste du travail en cours après le clic — le bouton doit le dire. */
+  cancelling: boolean;
   /** Incrémenté à chaque fois que la bibliothèque a pu changer, pour resynchroniser les vues ouvertes. */
   version: number;
 }>({
@@ -51,8 +56,31 @@ export const importState = $state<{
   // corrigé de façon asynchrone juste en dessous dès que la valeur
   // sauvegardée répond (§6.2, même schéma que `nav.svelte.ts`).
   copyMode: true,
+  cancelling: false,
   version: 0,
 });
+
+/** État de progression initial, avant le premier événement backend. */
+function queuedProgress(count: number): ImportProgress {
+  return {
+    item_index: 0,
+    item_count: count,
+    overall_ratio: 0,
+    item_ratio: 0,
+    eta_secs: null,
+    archive: "",
+    phase: "queued",
+    sub_current: 0,
+    sub_total: 0,
+    label: "",
+  };
+}
+
+/** Demande l'arrêt du lot en cours (§4.2bis). */
+export function requestCancelImport(): void {
+  importState.cancelling = true;
+  cancelImport().catch((e) => console.error("cancel_import", e));
+}
 
 getUiPref(StorageKey.importCopy).then((v) => {
   if (v != null) importState.copyMode = v !== "false";
@@ -66,13 +94,18 @@ export function setCopyMode(v: boolean): void {
 /** Lance un import et récolte conflits flous + cas ambigus (§4.2/§4.4). La
  * `source` est mémorisée pour pouvoir reprendre un cas ambigu après décision. */
 async function runImport(source: { paths: string[]; folder: boolean; copy: boolean }): Promise<void> {
+  // Un seul lot à la fois : le backend n'a qu'un drapeau d'annulation et qu'un
+  // état de progression, deux lots concurrents se marcheraient dessus. Les
+  // boutons sont déjà désactivés pendant un import, mais pas le glisser-déposer.
+  if (importState.importing) return;
   importState.importing = true;
+  importState.cancelling = false;
   // Retour immédiat (§4.2) : la commande est asynchrone côté backend et met
   // un instant à démarrer réellement le traitement — sans cet état "queued",
   // le toast de progression (conditionné sur `progress` non nul) resterait
   // invisible pendant ce court laps, donnant l'impression que le drop n'a rien
   // fait. Remplacé dès le premier événement `import:progress` réel.
-  importState.progress = { archive: "", phase: "queued", current: 0, total: source.paths.length, label: "" };
+  importState.progress = queuedProgress(source.paths.length);
   try {
     const report = source.folder
       ? await importFolders(source.paths, source.copy)
@@ -103,6 +136,7 @@ async function runImport(source: { paths: string[]; folder: boolean; copy: boole
     importState.version++;
   } finally {
     importState.importing = false;
+    importState.cancelling = false;
     importState.progress = null;
   }
 }
@@ -130,7 +164,8 @@ export async function resolveAmbiguous(
 ): Promise<void> {
   importState.pendingAmbiguous = importState.pendingAmbiguous.filter((p) => p.id !== item.id);
   importState.importing = true;
-  importState.progress = null;
+  importState.cancelling = false;
+  importState.progress = queuedProgress(item.source.paths.length);
   try {
     const decisions = [{ id: item.id, decision }];
     const report = item.source.folder
@@ -147,6 +182,7 @@ export async function resolveAmbiguous(
     importState.version++;
   } finally {
     importState.importing = false;
+    importState.cancelling = false;
     importState.progress = null;
   }
 }
@@ -173,10 +209,23 @@ export function reportBulkDone(report: ArchiveResult[]): void {
 /** À appeler une seule fois, depuis la racine de l'app (§4.2 : glisser-déposer partout). */
 export function initGlobalDragDrop(): () => void {
   const unlistenDrop = getCurrentWebview().onDragDropEvent((event) => {
-    if (event.payload.type === "drop") {
-      const archives = event.payload.paths.filter((p) => /\.(zip|rar|7z)$/i.test(p));
-      if (archives.length) runImport({ paths: archives, folder: false, copy: false });
-    }
+    if (event.payload.type !== "drop") return;
+    // Le tri revient au backend : depuis le webview, un chemin sans extension
+    // peut être un dossier de mod comme un fichier quelconque. L'ancien filtre
+    // sur `.zip|.rar|.7z` faisait qu'un dossier déposé ne déclenchait
+    // strictement rien — pas d'import, et aucun retour non plus.
+    const dropped = event.payload.paths;
+    splitDroppedPaths(dropped)
+      .then(({ archives, folders }) => {
+        if (archives.length) return runImport({ paths: archives, folder: false, copy: false });
+        // Un lot mêlant archives et dossiers est rare ; les archives passent
+        // d'abord, les dossiers restent à redéposer plutôt que de lancer deux
+        // imports concurrents sur un backend qui n'en admet qu'un.
+        if (folders.length) {
+          return runImport({ paths: folders, folder: true, copy: importState.copyMode });
+        }
+      })
+      .catch((e) => console.error("split_dropped_paths", e));
   });
   const unlistenProgress = listen<ImportProgress>("import:progress", (e) => {
     importState.progress = e.payload;
