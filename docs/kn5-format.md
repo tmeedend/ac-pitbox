@@ -118,6 +118,39 @@ rendu.
 
 ---
 
+## Écart n°2 — une texture sur huit est un DDS non compressé
+
+**Spec §5.4** prévoit `image_dds` pour décoder « BC1–BC7 ». C'est nécessaire mais
+**pas suffisant**.
+
+**Réel** : une part importante des textures AC ne sont pas compressées par blocs
+du tout. Ce sont des DDS hérités dont le format n'est décrit **que par les
+masques de bits** de leurs canaux dans le bloc `DDS_PIXELFORMAT` — ni FourCC, ni
+tag DXGI. `image_dds` les refuse toutes, avec le message
+`DdsFormatInfo { dxgi: None, d3d: None, fourcc: None }`.
+
+**Fréquence mesurée** sur 12 voitures (938 textures) : **117 échecs, soit 12 %**,
+et jusqu'à **26 % sur `ks_ford_gt40`**. Sans correctif, ces textures manquent
+purement et simplement à l'affichage.
+
+**Correctif** : décodeur générique par masques dans `kn5-gltf`, en repli quand
+`image_dds` échoue. Il ne connaît pas de formats nommés — il lit `rgb_bit_count`
+et les quatre masques, ce qui couvre d'un coup A8R8G8B8, X8R8G8B8, R8G8B8,
+A1R5G5B5, X1R5G5B5, R5G6B5, A4R4G4B4, L8, A8L8 et leurs variantes. Après
+correctif : **0 échec** sur les mêmes 12 voitures (938 → 0).
+
+⚠️ **Piège à ne pas refaire** : un canal de 5 bits ne se convertit pas en 8 bits
+par un décalage. `value << 3` plafonne à 248 au lieu de 255 — un blanc devient
+gris, sur toute la texture. Il faut une mise à l'échelle
+(`value * 255 / (2^n - 1)`). Verrouillé par
+`narrow_channels_stretch_to_full_range`.
+
+**Vérification visuelle** : `leather_nm.dds` de `ks_mazda_mx5_cup` (format
+X1R5G5B5, précédemment en échec) ressort en normal map bleu-violet canonique ;
+`leather.dds` (luminance) ressort en cuir gris correct.
+
+---
+
 ## Découverte annexe — remorque chiffrée après l'arbre de nœuds
 
 Deux voitures de la bibliothèque de référence (`ms_citroen_berlingo_2003_hdi` et

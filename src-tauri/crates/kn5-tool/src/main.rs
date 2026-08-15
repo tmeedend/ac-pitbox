@@ -15,11 +15,13 @@ mod resolve;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::time::Instant;
 
 use kn5::{Kn5Model, Kn5NodeKind};
+use kn5_gltf::{prepare_textures, TextureOptions, TextureOrigin};
 
 use report::{by_count, human_bytes, Stats};
-use resolve::{resolve_model, ModelSource};
+use resolve::{resolve_model, resolve_skin, ModelSource};
 
 const USAGE: &str = "\
 kn5-tool — inspect Assetto Corsa KN5 models
@@ -27,16 +29,21 @@ kn5-tool — inspect Assetto Corsa KN5 models
 USAGE:
     kn5-tool inspect <file.kn5 | car_dir> [--tree] [--materials] [--textures]
     kn5-tool scan <dir> [--details]
+    kn5-tool extract-textures <car_dir> --out=<dir> [--skin=<id>]
 
 COMMANDS:
-    inspect   Parse one model and report what it contains.
-    scan      Parse every car of a folder (e.g. content/cars) and aggregate.
+    inspect            Parse one model and report what it contains.
+    scan               Parse every car of a folder (e.g. content/cars) and aggregate.
+    extract-textures   Decode, resize and re-encode the textures to a folder.
 
 OPTIONS:
     --tree        Print the node hierarchy.
     --materials   Print every material with its shader, properties and samplers.
     --textures    Print every embedded texture with its sniffed format.
     --details     scan: also print the aggregate shader / property tables.
+    --out=<dir>   extract-textures: destination folder, created if missing.
+    --skin=<id>   extract-textures: skin whose files override the embedded ones
+                  (default: first skin in alphabetical order).
 ";
 
 /// Minimal stderr logger. The parser reports its suspicions through the `log`
@@ -89,6 +96,10 @@ fn main() -> ExitCode {
         "scan" => match positional.first() {
             Some(path) => scan(Path::new(path), &flags),
             None => Err("scan needs a path".to_string()),
+        },
+        "extract-textures" => match positional.first() {
+            Some(path) => extract_textures(Path::new(path), &flags),
+            None => Err("extract-textures needs a car folder".to_string()),
         },
         "-h" | "--help" | "help" => {
             print!("{USAGE}");
@@ -430,6 +441,94 @@ fn scan(dir: &Path, flags: &[&str]) -> Result<(), String> {
         println!("\nfailures");
         for (name, error) in &failures {
             println!("  {name}: {error}");
+        }
+    }
+
+    Ok(())
+}
+
+/// Value of a `--key=value` flag. Keeping option syntax to a single token
+/// avoids a stateful argument parser for what is a two-option tool.
+fn option_value<'a>(flags: &[&'a str], key: &str) -> Option<&'a str> {
+    let prefix = format!("{key}=");
+    flags.iter().find_map(|flag| flag.strip_prefix(&prefix))
+}
+
+/// Texture names come from an untrusted file and are written to disk here, so
+/// anything that could escape the destination folder is flattened first.
+fn safe_file_name(name: &str) -> String {
+    name.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || "-_. ".contains(c) {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+fn extract_textures(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
+    let out = option_value(flags, "--out").ok_or("extract-textures needs --out=<dir>")?;
+    let out = Path::new(out);
+    let (file, _) = model_path(car_dir)?;
+    let skin = resolve_skin(car_dir, option_value(flags, "--skin"));
+
+    let bytes = std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+    let started = Instant::now();
+    let model = kn5::parse(&bytes).map_err(|e| format!("{}: {e}", file.display()))?;
+    let parsed = started.elapsed();
+
+    let started = Instant::now();
+    let set = prepare_textures(&model, skin.as_deref(), &TextureOptions::default());
+    let prepared = started.elapsed();
+
+    std::fs::create_dir_all(out).map_err(|e| format!("{}: {e}", out.display()))?;
+    for texture in &set.textures {
+        let extension = if texture.mime == "image/jpeg" { "jpg" } else { "png" };
+        // The source name keeps its own extension in the output file name: it
+        // is the key materials refer to, and a `.dds` that is really a PNG
+        // would otherwise be impossible to trace back.
+        let path = out.join(format!("{}.{extension}", safe_file_name(&texture.name)));
+        std::fs::write(&path, &texture.bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    }
+
+    println!("model     {}", file.display());
+    println!(
+        "skin      {}",
+        skin.as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "none (embedded textures only)".to_string())
+    );
+    println!("output    {}", out.display());
+    println!(
+        "textures  {} written, {} unreferenced left alone, {} warning(s)",
+        set.textures.len(),
+        set.unreferenced.len(),
+        set.warnings.len()
+    );
+    let overridden = set
+        .textures
+        .iter()
+        .filter(|t| matches!(t.origin, TextureOrigin::Skin(_)))
+        .count();
+    println!("          {overridden} taken from the skin folder");
+    println!(
+        "size      {} in, {} out ({:.0} %)",
+        human_bytes(set.source_bytes() as u64),
+        human_bytes(set.total_bytes() as u64),
+        100.0 * set.total_bytes() as f64 / set.source_bytes().max(1) as f64
+    );
+    println!(
+        "time      {:.0} ms parsing, {:.0} ms transcoding",
+        parsed.as_secs_f64() * 1000.0,
+        prepared.as_secs_f64() * 1000.0
+    );
+
+    if !set.warnings.is_empty() {
+        println!("\nwarnings");
+        for warning in &set.warnings {
+            println!("  {}: {}", warning.name, warning.reason);
         }
     }
 

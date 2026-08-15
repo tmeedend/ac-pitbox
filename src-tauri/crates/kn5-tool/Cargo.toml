@@ -7,6 +7,7 @@ license = "MIT"
 
 [dependencies]
 kn5 = { path = "../kn5" }
+kn5-gltf = { path = "../kn5-gltf" }
 # Le parser signale ses doutes via la façade `log` (version inconnue, octets
 # résiduels après l'arbre de nœuds) : sans un logger branché, l'outil de
 # validation serait aveugle précisément là où il doit voir.

@@ -145,6 +145,7 @@ src-tauri/src/          Backend Rust — un module par domaine
   uijson.rs inspect.rs identity.rs     Lecture des fichiers AC
 src-tauri/crates/       Crates du workspace (aperçu 3D, docs/SPEC-preview-3d-kn5.md)
   kn5/                  Parsing du format KN5 — pur, sans I/O ni Tauri
+  kn5-gltf/             Textures et export glTF (touche au disque : skins)
   kn5-tool/             CLI de validation, jamais livrée à l'utilisateur
 src/lib/
   components/           Composants Svelte (voir la carte des écrans)
@@ -305,9 +306,11 @@ laisser pourrir ici.
       §3, robuste sur entrée non fiable) et `kn5-tool` (`inspect` / `scan`).
       198 voitures sur 201 de la bibliothèque de référence parsées sans échec ;
       trois questions ouvertes du §12 tranchées et consignées dans
-      `docs/kn5-format.md`. Reste : textures (lot 2), export glTF (lot 3),
-      cache + intégration Tauri (lot 4), viewer three.js (lot 5), finitions
-      (lot 6). Décidé avec l'utilisateur : le viewer KN5 **coexiste** avec le
+      `docs/kn5-format.md`. **Lot 2** — crate `kn5-gltf` : décodage (dont un
+      décodeur DDS par masques, 12 % des textures sinon perdues),
+      redimensionnement, réencodage PNG/JPEG, déduplication, surcharge par
+      skin. Reste : export glTF (lot 3), cache + intégration Tauri (lot 4),
+      viewer three.js (lot 5), finitions (lot 6). Décidé avec l'utilisateur : le viewer KN5 **coexiste** avec le
       bouton `acShowroom.exe` existant (§9.4 du SPEC) au lieu de le remplacer,
       et n'arrive dans `ModDetail.svelte` qu'au lot 6, `DetailPage.svelte`
       d'abord.

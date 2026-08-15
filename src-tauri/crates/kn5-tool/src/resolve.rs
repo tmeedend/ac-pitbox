@@ -22,6 +22,27 @@ pub struct ResolvedModel {
     pub source: ModelSource,
 }
 
+/// Skin folder to use for texture overrides (§4.3).
+///
+/// `wanted` names a skin explicitly; without it the first one in alphabetical
+/// order wins, which is also what AC shows first. Returns `None` when the car
+/// has no `skins/` folder at all — a legitimate case for some mods.
+pub fn resolve_skin(car_dir: &Path, wanted: Option<&str>) -> Option<PathBuf> {
+    let skins = car_dir.join("skins");
+    if let Some(id) = wanted {
+        let path = skins.join(id);
+        return path.is_dir().then_some(path);
+    }
+    let mut names: Vec<PathBuf> = std::fs::read_dir(&skins)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .collect();
+    names.sort();
+    names.into_iter().next()
+}
+
 /// Suffixes of the lower LOD models, which are never the main one.
 const LOD_SUFFIXES: [&str; 4] = ["_lodb", "_lodc", "_lodd", "_lode"];
 
