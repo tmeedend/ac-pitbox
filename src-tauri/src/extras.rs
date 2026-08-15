@@ -200,6 +200,14 @@ pub fn deploy(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -
         }
         let src = entry.path();
         let Ok(rel) = src.strip_prefix(&sat) else { continue };
+        // Chemin qui n'en est pas un : dossier d'emballage de l'auteur pris
+        // pour un chemin de jeu (§4.5.3). Conservé en bibliothèque et listé
+        // dans l'onglet, mais jamais posé — sinon `Track Installation/` et
+        // consorts se déversent à la racine de l'install.
+        if !crate::acpath::is_ac_relative(rel) {
+            log::warn!("extras {mod_id}: {} is not an AC path, not deployed", rel.display());
+            continue;
+        }
         let target = ac.join(rel);
 
         // Fichier déjà présent : trois cas, et un seul est un refus.
@@ -332,6 +340,11 @@ pub struct ExtraFile {
     /// restauré (§4.5.4). Signalé sur la fiche — une modification réversible mais
     /// invisible reste un piège.
     pub replaces_game_file: bool,
+    /// Le chemin n'en est pas un du point de vue d'AC (dossier d'emballage de
+    /// l'auteur) : conservé en bibliothèque, jamais posé dans le jeu. Signalé
+    /// plutôt que masqué — un fichier listé qui n'arrive jamais dans le jeu
+    /// sans qu'on dise pourquoi est plus déroutant qu'un fichier absent.
+    pub off_game_path: bool,
 }
 
 /// Liste ce qu'un mod installe hors de `content/<type>/<id>`, **lu en direct
@@ -360,6 +373,7 @@ pub fn list(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -> 
                 deployed: provider.as_deref() == Some(mod_id),
                 provided_by: provider.filter(|p| p != mod_id),
                 replaces_game_file: crate::gamebackup::is_replaced(conn, &target),
+                off_game_path: !crate::acpath::is_ac_relative(&rel),
             })
         })
         .collect();
@@ -394,6 +408,45 @@ mod tests {
             .unwrap()
             .set_modified(t)
             .unwrap();
+    }
+
+    #[test]
+    fn a_wrapper_folder_is_kept_but_never_deployed() {
+        // Bug réel : le dossier d'emballage de l'auteur (`Ferrari F2002
+        // V1.4/`, `Track Installation/`, `Optional - No ambient sounds/`)
+        // était pris pour un chemin de jeu et déversé à la racine de l'install.
+        // Il reste rangé en bibliothèque et listé — l'import ne jette rien
+        // (§4.5.3) — mais rien ne descend dans le jeu.
+        let base = crate::testutil::temp_dir("sat-wrapper");
+        let cfg = cfg_for(&base);
+        let library = cfg.library_path.clone().unwrap();
+        let ac = cfg.ac_install_path.clone().unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+
+        let sat = dir(&library, ModKind::Car, "ferrari_f2002");
+        write(&sat.join("Ferrari F2002 V1.4").join("READ ME.txt"), b"notice");
+        let good = Path::new("content").join("driver").join("driver_501.kn5");
+        write(&sat.join(&good), b"pilote");
+
+        let n = deploy(&conn, &cfg, ModKind::Car, "ferrari_f2002").unwrap();
+        assert_eq!(n, 1, "seul le vrai chemin de jeu est posé");
+        assert!(ac.join(&good).is_file(), "le pilote arrive bien dans content/driver");
+        assert!(
+            !ac.join("Ferrari F2002 V1.4").exists(),
+            "rien ne se déverse à la racine de l'install"
+        );
+
+        // Listé quand même, et dit pour ce qu'il est.
+        let listed = list(&conn, &cfg, ModKind::Car, "ferrari_f2002");
+        let wrapper = listed
+            .iter()
+            .find(|f| f.rel_path.starts_with("Ferrari F2002"))
+            .expect("l'emballage reste visible dans l'onglet");
+        assert!(wrapper.off_game_path, "signalé hors chemin de jeu");
+        assert!(!wrapper.deployed, "et non posé");
+        let driver = listed.iter().find(|f| f.rel_path.contains("driver_501")).unwrap();
+        assert!(!driver.off_game_path, "le vrai chemin n'est pas signalé");
+        assert!(driver.deployed);
     }
 
     #[test]

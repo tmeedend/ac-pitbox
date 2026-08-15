@@ -170,6 +170,13 @@ Ce qu'AC lit ailleurs que dans `content/<type>/<id>` : configs CSP (`extension/c
 
 **Stockés bruts, avec leur chemin relatif à la racine d'AC**, dans `<lib>/extras/<type>/<id>/…` — jamais dans la version, qui est déployée telle quelle dans `content/`. Au **niveau du mod** comme `resources/` : une mise à jour remplace ses propres fichiers, les couches partagent le même arbre.
 
+**Le chemin d'archive n'est pas toujours un chemin de jeu.** Le balayage (§7.3) pose que le chemin d'un reste relatif à la racine de l'archive est son chemin relatif à la racine d'AC. C'est vrai la plupart du temps, et faux de deux façons — `acpath.rs` porte les deux règles :
+
+- **Dossier de jeu livré à nu.** Un dossier `driver/` contenant un `.kn5` (à n'importe quelle profondeur) est le `content/driver/` d'AC : il est préfixé avant tout usage. Cas réel, la Ferrari 599 GTO livre `driver/driver_501.kn5` à côté du dossier de la voiture ; sans le préfixe le pilote atterrit dans `<AC>\driver\`, que le jeu ne lit pas. Une **seule** règle de ce type, volontairement : `weather/` et `sfx/` existent sous `content/` **et** sous `extension/`, on ne peut pas trancher sans regarder le contenu, et deviner mal pose des fichiers au mauvais endroit dans le jeu.
+- **Dossier d'emballage de l'auteur.** `Ferrari F2002 V1.4/`, `Track Installation/`, `Optional - No ambient sounds/` ne sont pas des chemins de jeu, et les poser revient à déverser un dossier d'archive à la racine de l'install. Un reste dont le premier segment n'est pas un dossier lu par AC (`content`, `system`, `extension`, `apps`, `cfg`, `launcher`, `sdk`, `server`, `plugins`, `mods`) n'est **jamais posé** — ni en ajout au jeu, ni en « autre mod ». Un fichier isolé à la racine est refusé pour la même raison : AC n'en lit pas, et l'exception qui vient à l'esprit (le `dwrite.dll` d'une install CSP) est précisément ce qu'un gestionnaire de mods ne pose pas tout seul.
+
+Refuser ne jette rien : le fichier reste en bibliothèque et **reste listé** dans « Ajouts au jeu », marqué « hors chemin de jeu ». Un fichier listé qui n'arrive jamais dans le jeu sans qu'on dise pourquoi serait plus déroutant qu'un fichier absent.
+
 Deux propriétés en découlent :
 
 - **L'import ne jette rien.** Ce qui n'est pas classé est conservé tel quel, donc l'*interprétation* — où poser, qui arbitre un fichier partagé — reste recalculable depuis la bibliothèque à tout moment. Aucune règle des versions précédentes à mémoriser, aucune archive à conserver : c'est l'**entrée** qui est préservée, pas la décision. C'est ce qui rend un futur changement de règles rattrapable sans rien versionner.

@@ -409,6 +409,8 @@
     "extrasFileCount": "{count} file(s)",
     "extrasShared": "{count} shared",
     "extrasReplaced": "{count} replacing game files",
+    "extrasOffPath": "{count} off game path",
+    "extrasOffPathFile": "off game path",
     "extrasReplacesGameFile": "replaces a game file",
     "extrasProvidedBy": "provided by {mod}",
     "tabBackgrounds": "Backgrounds",

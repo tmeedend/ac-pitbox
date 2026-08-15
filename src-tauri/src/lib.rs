@@ -1,3 +1,4 @@
+mod acpath;
 mod activation;
 mod apps;
 mod archive;

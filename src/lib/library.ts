@@ -372,6 +372,9 @@ export interface ExtraFile {
   provided_by: string | null;
   /** Remplace un fichier du jeu — l'original est sauvegardé et sera restauré (§4.5.4). */
   replaces_game_file: boolean;
+  /** Chemin qui n'en est pas un pour AC (dossier d'emballage de l'auteur) :
+   * conservé en bibliothèque, jamais posé dans le jeu (§4.5.3). */
+  off_game_path: boolean;
 }
 
 /** Ce qu'un mod installe hors de son dossier `content/` (§4.5.3). */

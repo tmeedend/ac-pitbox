@@ -206,6 +206,25 @@ fn place(
     for e in entries.flatten() {
         let p = e.path();
         let Ok(rel) = p.strip_prefix(root) else { continue };
+        // Même refus que pour les ajouts au jeu (§4.5.3) : un « autre mod »
+        // dont le chemin n'est pas un chemin de jeu reste en bibliothèque
+        // plutôt que d'être jonctionné à la racine de l'install.
+        //
+        // Le test diffère selon qu'on regarde un dossier ou un fichier. En
+        // descendant, `content` seul est un début de chemin valide alors que
+        // ce n'en est pas encore un ; un fichier, lui, doit désigner un chemin
+        // complet — d'où `leads_into_game` d'un côté, `is_ac_relative` de
+        // l'autre.
+        let acceptable = if p.is_dir() {
+            crate::acpath::leads_into_game(rel)
+        } else {
+            crate::acpath::is_ac_relative(rel)
+        };
+        if !acceptable {
+            log::warn!("place {mine_id}: {} is not an AC path, skipped", rel.display());
+            warnings.push(format!("{} : hors chemin de jeu, non posé", rel.display()));
+            continue;
+        }
         let target = ac.join(rel);
         if !p.is_dir() {
             // Fichier isolé : posé par lien fichier si son dossier parent

@@ -732,7 +732,11 @@ fn sweep_leftovers(
 
     for (i, p) in plain.into_iter().enumerate() {
         ctx.file_ratio(index, tail_ratio(TAIL_APPS_END, 1.0, nested.len() + i, leftover_count));
-        let rel = p.strip_prefix(workdir).unwrap_or(&p).to_path_buf();
+        let raw = p.strip_prefix(workdir).unwrap_or(&p).to_path_buf();
+        // Dossier de jeu livré à nu (`driver/` au lieu de `content/driver/`) :
+        // corrigé avant tout usage, car ce chemin est ce que l'activation
+        // rejouera depuis la racine d'AC (§4.5.3).
+        let rel = crate::acpath::normalize_leftover(&raw, &p).unwrap_or(raw);
 
         {
             if let Some((owner_id, owner_kind)) = owner_of_leftover(&rel, &owners) {
@@ -885,7 +889,12 @@ fn import_leftover(
     // des dossiers différents. Avec le seul nom, `content/driver` atterrissait
     // à `AC\driver` — et un `driver/` à la racine de l'archive aurait pris le
     // même id.
-    let rel = p.strip_prefix(root).unwrap_or(p);
+    let raw = p.strip_prefix(root).unwrap_or(p);
+    // Même correction que dans le balayage : un `driver/` à nu doit devenir
+    // `content/driver` **aussi** quand le reste part en « autre mod », sinon la
+    // destination dépendrait de la présence d'un mod voisin à qui le rattacher.
+    let normalized = crate::acpath::normalize_leftover(raw, p);
+    let rel: &Path = normalized.as_deref().unwrap_or(raw);
     let label = rel.to_string_lossy().into_owned();
     let nested_name = format!("{archive_name}__{label}");
 

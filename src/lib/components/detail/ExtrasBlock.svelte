@@ -44,6 +44,8 @@
     shared: number;
     /** Fichiers du groupe qui remplacent un fichier du jeu (§4.5.4). */
     replaced: number;
+    /** Fichiers dont le chemin n'en est pas un pour AC : jamais posés (§4.5.3). */
+    offPath: number;
   }
 
   // Groupe = dossier parent. Un fichier posé à la racine d'AC (rare) tombe
@@ -64,6 +66,7 @@
         size: fs.reduce((a, f) => a + f.size_bytes, 0),
         shared: fs.filter((f) => f.provided_by !== null).length,
         replaced: fs.filter((f) => f.replaces_game_file).length,
+        offPath: fs.filter((f) => f.off_game_path).length,
       }))
       .sort((a, b) => a.dir.localeCompare(b.dir));
   });
@@ -85,6 +88,9 @@
             <button class="grp-row" type="button" onclick={() => (openDirs[g.dir] = !openDirs[g.dir])}>
               <span class="grp-caret mono">{openDirs[g.dir] ? "−" : "+"}</span>
               <span class="grp-dir mono">{g.dir || "/"}</span>
+              {#if g.offPath}
+                <span class="grp-offpath">{t("detail.extrasOffPath", { count: g.offPath })}</span>
+              {/if}
               {#if g.replaced}
                 <span class="grp-replaced">{t("detail.extrasReplaced", { count: g.replaced })}</span>
               {/if}
@@ -99,6 +105,9 @@
                 {#each g.files as f (f.rel_path)}
                   <li class="file-row">
                     <span class="file-nm">{f.rel_path.slice(g.dir.length)}</span>
+                    {#if f.off_game_path}
+                      <span class="file-offpath">{t("detail.extrasOffPathFile")}</span>
+                    {/if}
                     {#if f.replaces_game_file}
                       <span class="file-replaced">{t("detail.extrasReplacesGameFile")}</span>
                     {/if}
@@ -176,6 +185,14 @@
     white-space: nowrap;
   }
   .grp-shared {
+    color: var(--yellow);
+    font-size: 10.5px;
+    white-space: nowrap;
+  }
+  /* Jaune = alerte : ni une erreur, ni une action destructive — un fichier
+     conservé mais que le jeu ne recevra pas. */
+  .grp-offpath,
+  .file-offpath {
     color: var(--yellow);
     font-size: 10.5px;
     white-space: nowrap;
