@@ -84,10 +84,14 @@ pub fn import_other(
         return None;
     }
     let dest = library.join("others").join(&id);
-    // Fichiers annexes (§4.6) redirigés à part : structure inconnue par nature,
-    // donc jamais d'image présumée annexe même à la racine (allow_root_images=false).
+    // Seul appelant en `BesideMod` (§4.6) : un « autre mod » est par
+    // construction ce qui était livré à côté des mods reconnus — racine
+    // d'archive ou reste ramassé par le balayage (§6.1bis). Un document isolé
+    // y est bien une annexe, contrairement au même fichier trouvé dans un
+    // dossier de mod.
     let res_dir = resources::resources_dir_for(library, "others", &[&id]);
-    let resources_extracted = resources::file_mod(root, &dest, &res_dir, mode, !copy, false).ok()?;
+    let resources_extracted =
+        resources::file_mod(root, &dest, &res_dir, mode, !copy, resources::Source::BesideMod).ok()?;
     overlay::insert_other_mod(
         conn,
         &id,

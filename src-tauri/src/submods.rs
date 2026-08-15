@@ -112,20 +112,21 @@ fn import_skin_pack(
         // Fichiers annexes (§4.6) redirigés à part : une image à la racine
         // d'un skin est TOUJOURS un vrai aperçu, jamais une annexe (allow_root_images=false).
         let res_dir = resources::resources_dir_for(library, store_root, &[parent, &name]);
-        let resources_extracted = match resources::file_mod(&skin_src, &dest, &res_dir, mode, !copy, false) {
-            Ok(n) => n,
-            Err(err) => {
-                out.push(SubImported {
-                    sub_type: sub_type.into(),
-                    parent_id: parent.clone(),
-                    name,
-                    projected: false,
-                    warning: Some(format!("stockage : {err}")),
-                    resources_extracted: 0,
-                });
-                continue;
-            }
-        };
+        let resources_extracted =
+            match resources::file_mod(&skin_src, &dest, &res_dir, mode, !copy, resources::Source::ModFolder) {
+                Ok(n) => n,
+                Err(err) => {
+                    out.push(SubImported {
+                        sub_type: sub_type.into(),
+                        parent_id: parent.clone(),
+                        name,
+                        projected: false,
+                        warning: Some(format!("stockage : {err}")),
+                        resources_extracted: 0,
+                    });
+                    continue;
+                }
+            };
 
         let id = Uuid::new_v4().to_string();
         let _ = overlay::insert_sub_mod(
@@ -648,20 +649,21 @@ fn import_sound(
     // Fichiers annexes (§4.6) redirigés à part (GUIDs.txt reste toujours du
     // contenu, voir resources::classify — jamais confondu avec une annexe).
     let res_dir = resources::resources_dir_for(library, "sounds", &[&parent, &name]);
-    let resources_extracted = match resources::file_mod(&sub.dir, &dest, &res_dir, mode, !copy, false) {
-        Ok(n) => n,
-        Err(err) => {
-            out.push(SubImported {
-                sub_type: "SOUND".into(),
-                parent_id: parent,
-                name,
-                projected: false,
-                warning: Some(format!("stockage : {err}")),
-                resources_extracted: 0,
-            });
-            return;
-        }
-    };
+    let resources_extracted =
+        match resources::file_mod(&sub.dir, &dest, &res_dir, mode, !copy, resources::Source::ModFolder) {
+            Ok(n) => n,
+            Err(err) => {
+                out.push(SubImported {
+                    sub_type: "SOUND".into(),
+                    parent_id: parent,
+                    name,
+                    projected: false,
+                    warning: Some(format!("stockage : {err}")),
+                    resources_extracted: 0,
+                });
+                return;
+            }
+        };
 
     let id = Uuid::new_v4().to_string();
     let _ = overlay::insert_sub_mod(

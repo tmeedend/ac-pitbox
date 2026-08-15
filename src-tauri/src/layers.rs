@@ -39,7 +39,7 @@ pub fn store_layer(
 ) -> Result<(String, usize), String> {
     let dest = importer::unique_dir(&library.join("layers").join(parent_id).join(name));
     let res_dir = resources::resources_dir(library, kind, parent_id);
-    let extracted = resources::file_mod(src_dir, &dest, &res_dir, mode, !copy, true)?;
+    let extracted = resources::file_mod(src_dir, &dest, &res_dir, mode, !copy, resources::Source::ModFolder)?;
 
     let now = Local::now().to_rfc3339();
     let id = Uuid::new_v4().to_string();

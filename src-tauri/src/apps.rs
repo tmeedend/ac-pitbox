@@ -74,7 +74,9 @@ pub fn import_apps(
         // d'une app peut être une icône réellement utilisée par le script
         // (allow_root_images=false, jamais présumée annexe).
         let res_dir = resources::resources_dir_for(library, "apps", &[&app.name]);
-        let Ok(resources_extracted) = resources::file_mod(&app.dir, &dest, &res_dir, mode, !copy, false) else {
+        let Ok(resources_extracted) =
+            resources::file_mod(&app.dir, &dest, &res_dir, mode, !copy, resources::Source::ModFolder)
+        else {
             continue;
         };
         let _ = overlay::insert_app(

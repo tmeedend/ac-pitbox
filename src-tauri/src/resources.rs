@@ -41,24 +41,23 @@ impl ExtractionMode {
 }
 
 // Documents/infos légers — jamais du contenu AC légitime, mais classés
-// annexes seulement **à la racine** du mod : les moddeurs placent ces
-// fichiers au sommet du dossier (`<mod>/changelog.txt`), jamais dans les
-// sous-dossiers fonctionnels. Un `.txt`/`.md` en profondeur (ex. dans
-// `extension/`, `data/`) fait presque toujours partie du contenu réel du mod
-// (note de config CSP, etc.) et ne doit jamais être extrait — même règle que
-// les images ci-dessous.
+// annexes seulement **à la racine** de ce qui est livré à côté du mod : un
+// `.txt`/`.md` en profondeur (ex. dans `extension/`, `data/`) fait presque
+// toujours partie du contenu réel (note de config CSP, etc.).
 const INFO_EXTS: &[&str] = &["txt", "pdf", "md", "doc", "docx", "rtf", "nfo", "html", "url", "lnk"];
-// Images ambiguës (capture de présentation vs aperçu de skin) : seulement
-// classées annexes **à la racine** du mod — jamais en profondeur, où elles
-// sont presque toujours de vraies previews/textures (`skins/<x>/preview.jpg`).
-const IMAGE_EXTS: &[&str] = &["jpg", "jpeg", "png"];
 // Fichiers lourds (mode "Tout" seulement) : templates d'édition, archives
 // jointes, sources 3D, vidéos — jamais lus par AC. Racine uniquement, comme
-// les autres catégories (un `.zip` de templates en profondeur serait
-// extrêmement inhabituel et risquerait de casser un vrai mod).
+// les documents.
 const HEAVY_EXTS: &[&str] = &[
     "psd", "xcf", "ai", "zip", "7z", "rar", "fbx", "blend", "3ds", "max", "mp4", "mov", "avi", "mkv", "webm",
 ];
+
+// Les **images** ne sont jamais des annexes, à aucune profondeur. Elles l'ont
+// été (à la racine, présumées captures de présentation) et c'est la cause du
+// bug corrigé ici : `body_shadow.png`, `tyre_*_shadow.png`, `logo.png`,
+// `map.png` sont de vrais assets AC qui vivent précisément à la racine du
+// dossier du mod. Aucune heuristique d'extension ne les distingue d'une
+// capture d'écran — donc on ne tranche pas, on laisse.
 
 /// Dossier ressources générique : `<lib>/resources/<category>/<segments...>`.
 /// Base commune à tous les types de mods (voiture/circuit, skin, son, app,
@@ -95,17 +94,11 @@ fn ext_lower(path: &Path) -> Option<String> {
         .map(|e| e.to_ascii_lowercase())
 }
 
-/// `allow_root_images` : les images à la racine ne sont ambiguës (capture de
-/// présentation vs contenu réel) que pour une **voiture/circuit** — pour un
-/// skin, une app ou un mod « autre », une image à la racine (preview de skin,
-/// icône d'app, texture) est **toujours** du vrai contenu, jamais une annexe.
-fn classify(path: &Path, is_root: bool, mode: ExtractionMode, allow_root_images: bool) -> Route {
+fn classify(path: &Path, is_root: bool, mode: ExtractionMode) -> Route {
     if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
         // GUIDs.txt : requis par le moteur audio AC (mapping GUID des .bank
         // FMOD, §12bis.2) — jamais une annexe malgré son extension .txt.
-        // map.png : mini-carte du circuit lue par AC — jamais une annexe
-        // malgré son extension image, même à la racine du mod.
-        if name.eq_ignore_ascii_case("GUIDs.txt") || name.eq_ignore_ascii_case("map.png") {
+        if name.eq_ignore_ascii_case("GUIDs.txt") {
             return Route::Content;
         }
     }
@@ -113,13 +106,12 @@ fn classify(path: &Path, is_root: bool, mode: ExtractionMode, allow_root_images:
         return Route::Content;
     };
     let ext = ext.as_str();
-    // Toutes les catégories d'annexes sont scopées à la racine du mod : dès
-    // qu'un fichier est dans un sous-dossier (extension/, data/, skins/…), il
-    // fait partie du contenu réel du mod et n'est jamais une annexe.
+    // Toutes les catégories d'annexes sont scopées à la racine : dès qu'un
+    // fichier est dans un sous-dossier (extension/, data/, skins/…), il fait
+    // partie d'un contenu structuré et n'est jamais une annexe.
     let is_info = is_root && INFO_EXTS.contains(&ext);
-    let is_image_root = allow_root_images && is_root && IMAGE_EXTS.contains(&ext);
     let is_heavy = is_root && HEAVY_EXTS.contains(&ext);
-    if !(is_info || is_image_root || is_heavy) {
+    if !(is_info || is_heavy) {
         return Route::Content;
     }
     // Classé annexe (jamais du contenu de jeu, quel que soit le réglage) : la
@@ -127,7 +119,7 @@ fn classify(path: &Path, is_root: bool, mode: ExtractionMode, allow_root_images:
     match mode {
         ExtractionMode::None => Route::Drop,
         ExtractionMode::InfoOnly => {
-            if is_info || is_image_root {
+            if is_info {
                 Route::Resources
             } else {
                 Route::Drop
@@ -141,7 +133,7 @@ fn classify(path: &Path, is_root: bool, mode: ExtractionMode, allow_root_images:
 /// grande majorité des mods (aucun fichier annexe) — sert à décider si le
 /// rangement peut emprunter le chemin rapide (dossier entier déplacé/copié
 /// d'un bloc) ou doit être partitionné fichier par fichier.
-fn scan(dir: &Path, mode: ExtractionMode, allow_root_images: bool) -> HashMap<PathBuf, Route> {
+fn scan(dir: &Path, mode: ExtractionMode) -> HashMap<PathBuf, Route> {
     let mut out = HashMap::new();
     for entry in WalkDir::new(dir).into_iter().flatten() {
         if !entry.file_type().is_file() {
@@ -149,9 +141,9 @@ fn scan(dir: &Path, mode: ExtractionMode, allow_root_images: bool) -> HashMap<Pa
         }
         let path = entry.path();
         let is_root = path.parent() == Some(dir);
-        // Dossier `extension/` (n'importe où dans l'arborescence du mod) :
-        // toujours du contenu réel — configs/ressources CSP (ex. extension/sfx),
-        // jamais des annexes de présentation, quelle que soit l'extension.
+        // Dossier `extension/` (n'importe où dans l'arborescence) : toujours du
+        // contenu réel — configs/ressources CSP (ex. extension/sfx), jamais des
+        // annexes de présentation, quelle que soit l'extension.
         let rel = path.strip_prefix(dir).unwrap_or(path);
         let under_extension = rel.parent().is_some_and(|p| {
             p.components().any(|c| {
@@ -163,7 +155,7 @@ fn scan(dir: &Path, mode: ExtractionMode, allow_root_images: bool) -> HashMap<Pa
         let route = if under_extension {
             Route::Content
         } else {
-            classify(path, is_root, mode, allow_root_images)
+            classify(path, is_root, mode)
         };
         if route != Route::Content {
             out.insert(path.to_path_buf(), route);
@@ -186,22 +178,50 @@ fn copy_or_move_one(src: &Path, dest: &Path, move_files: bool) -> std::io::Resul
     Ok(())
 }
 
+/// Ce que représente l'arborescence confiée à `file_mod` — c'est **la** donnée
+/// qui décide si l'extraction des annexes s'applique (§4.6, règle d'or).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Source {
+    /// Le dossier du mod lui-même : celui que l'auteur a conçu pour être posé
+    /// dans `content/` (`rss_gtm_lanzo_v8/`), ou son équivalent pour un skin,
+    /// un son, une app, une couche. **Rien n'en sort jamais**, à aucune
+    /// profondeur : tout ce qu'il contient est du contenu du mod, y compris
+    /// ce qui ressemble à une annexe. Un `.pdf` de notice posé au milieu de la
+    /// voiture reste où l'auteur l'a mis — dans le doute on ne touche pas.
+    ModFolder,
+    /// Ce qui était livré **à côté** du dossier du mod : racine de l'archive,
+    /// dossiers frères, restes ramassés par le balayage (§6.1bis). Là, un
+    /// document isolé est bien une annexe et n'a rien à faire dans `content/`.
+    BesideMod,
+}
+
 /// Range `src` dans `content_dest` (contenu de jeu) en redirigeant les fichiers
 /// annexes (§4.6) vers `resources_dest` selon `mode`, ou en les laissant dans
 /// `src` (mode Aucun — jamais supprimés). Renvoie le nombre de fichiers
-/// effectivement rangés en ressources. Chemin rapide inchangé (déplacement/
-/// copie de dossier entier, comme avant cette fonctionnalité) quand `src` ne
-/// contient aucun fichier annexe — le cas de la grande majorité des mods.
-/// `allow_root_images` : `true` uniquement pour voiture/circuit (voir `classify`).
+/// effectivement rangés en ressources.
+///
+/// **Règle d'or (§4.6)** : avec `Source::ModFolder`, rien n'est extrait, quel
+/// que soit le réglage — le dossier part d'un bloc. Le tri par extension ne
+/// s'applique qu'à ce qui est livré à côté du mod. C'est l'inverse qui avait
+/// été codé (tri par extension + profondeur, sans regarder l'appartenance au
+/// mod), et de vrais assets AC vivant à la racine du dossier voiture —
+/// `body_shadow.png`, `tyre_*_shadow.png`, `logo.png` — ont été sortis de
+/// 23 mods.
+///
+/// Chemin rapide (déplacement/copie du dossier entier) dès qu'il n'y a rien à
+/// extraire : toujours pour `ModFolder`, et pour la grande majorité des mods.
 pub fn file_mod(
     src: &Path,
     content_dest: &Path,
     resources_dest: &Path,
     mode: ExtractionMode,
     move_files: bool,
-    allow_root_images: bool,
+    source: Source,
 ) -> Result<usize, String> {
-    let ancillary = scan(src, mode, allow_root_images);
+    let ancillary = match source {
+        Source::ModFolder => HashMap::new(),
+        Source::BesideMod => scan(src, mode),
+    };
     if ancillary.is_empty() {
         if move_files {
             archive::move_dir(src, content_dest)
@@ -303,22 +323,126 @@ mod tests {
         std::fs::write(path, b"x").unwrap();
     }
 
+    /// Dossier de mod réaliste : du contenu de jeu, et à sa racine des fichiers
+    /// que l'ancien tri par extension prenait pour des annexes — dont de vrais
+    /// assets AC (`logo.png`, `body_shadow.png`).
     fn make_mod(root: &Path) {
         write(&root.join("ui").join("ui_car.json"));
         write(&root.join("model.kn5"));
-        write(&root.join("skins").join("red").join("preview.jpg")); // jamais annexe : en profondeur
-        write(&root.join("changelog.txt")); // info, racine
-        write(&root.join("presentation.pdf")); // info, racine
-        write(&root.join("preview.jpg")); // image, racine : ambigu mais léger
-        write(&root.join("livery_template.psd")); // lourd, racine
-        write(&root.join("old_templates.zip")); // lourd, racine
+        write(&root.join("skins").join("red").join("preview.jpg"));
+        write(&root.join("logo.png"));
+        write(&root.join("body_shadow.png"));
+        write(&root.join("tyre_0_shadow.png"));
+        write(&root.join("changelog.txt"));
+        write(&root.join("presentation.pdf"));
+        write(&root.join("livery_template.psd"));
+        write(&root.join("old_templates.zip"));
+    }
+
+    #[test]
+    fn nothing_is_ever_taken_out_of_a_mod_folder() {
+        // Règle d'or (§4.6). Bug réel : `body_shadow.png`, `tyre_*_shadow.png`
+        // et `logo.png` — de vrais assets AC vivant à la racine du dossier
+        // voiture — ont été déplacés en `resources/` sur 23 mods, parce que le
+        // classement se fondait sur l'extension et la profondeur au lieu de
+        // l'appartenance au mod. Le mode d'extraction le plus agressif ne doit
+        // rien pouvoir en sortir.
+        for mode in [ExtractionMode::None, ExtractionMode::InfoOnly, ExtractionMode::All] {
+            let base = crate::testutil::temp_dir("res-golden");
+            let src = base.join("src");
+            make_mod(&src);
+            let content = base.join("content");
+            let resources = base.join("resources");
+
+            let n = file_mod(&src, &content, &resources, mode, false, Source::ModFolder).unwrap();
+            assert_eq!(n, 0, "aucune extraction depuis un dossier de mod ({mode:?})");
+            assert!(!resources.exists(), "aucun dossier ressources créé ({mode:?})");
+
+            for rel in [
+                "ui/ui_car.json",
+                "model.kn5",
+                "skins/red/preview.jpg",
+                "logo.png",
+                "body_shadow.png",
+                "tyre_0_shadow.png",
+                "changelog.txt",
+                "presentation.pdf",
+                "livery_template.psd",
+                "old_templates.zip",
+            ] {
+                let mut p = content.to_path_buf();
+                for seg in rel.split('/') {
+                    p = p.join(seg);
+                }
+                assert!(p.is_file(), "{rel} conservé dans le mod ({mode:?})");
+            }
+        }
+    }
+
+    #[test]
+    fn documents_beside_the_mod_are_still_extracted() {
+        // L'autre moitié de la règle : ce qui est livré **à côté** du dossier
+        // du mod (racine d'archive, reste ramassé §6.1bis) reste trié — un PDF
+        // de présentation n'a rien à faire dans `content/`.
+        let base = crate::testutil::temp_dir("res-beside");
+        let src = base.join("src");
+        write(&src.join("Read Me.pdf"));
+        write(&src.join("changelog.txt"));
+        write(&src.join("content").join("driver").join("pro.kn5"));
+        let content = base.join("content");
+        let resources = base.join("resources");
+
+        let n = file_mod(
+            &src,
+            &content,
+            &resources,
+            ExtractionMode::InfoOnly,
+            false,
+            Source::BesideMod,
+        )
+        .unwrap();
+        assert_eq!(n, 2, "les deux documents de la racine sont capturés");
+        assert!(resources.join("Read Me.pdf").is_file());
+        assert!(resources.join("changelog.txt").is_file());
+        assert!(!content.join("Read Me.pdf").exists(), "jamais dans le contenu de jeu");
+        assert!(
+            content.join("content").join("driver").join("pro.kn5").is_file(),
+            "le vrai contenu, lui, est rangé normalement"
+        );
+    }
+
+    #[test]
+    fn images_are_never_ancillary_even_beside_the_mod() {
+        // Aucune heuristique d'extension ne distingue une capture de
+        // présentation d'un asset AC (`map.png`, `logo.png`, preview de skin).
+        // On ne tranche donc plus du tout : une image est toujours du contenu.
+        let base = crate::testutil::temp_dir("res-img");
+        let src = base.join("src");
+        write(&src.join("screenshot.jpg"));
+        write(&src.join("map.png"));
+        let content = base.join("content");
+        let resources = base.join("resources");
+
+        let n = file_mod(
+            &src,
+            &content,
+            &resources,
+            ExtractionMode::All,
+            false,
+            Source::BesideMod,
+        )
+        .unwrap();
+        assert_eq!(n, 0, "aucune image n'est une annexe");
+        assert!(content.join("screenshot.jpg").is_file());
+        assert!(content.join("map.png").is_file(), "mini-carte AC jamais extraite");
+        assert!(!resources.exists());
     }
 
     #[test]
     fn deep_files_in_extension_folder_never_extracted_as_resources() {
-        // Bug réel : un .txt/.pdf niché dans un sous-dossier fonctionnel du mod
+        // Bug réel : un .txt/.pdf niché dans un sous-dossier fonctionnel
         // (ex. `extension/`, config CSP) n'est pas une annexe — seuls les
-        // fichiers à la racine du mod le sont. Avant le fix, INFO_EXTS/HEAVY_EXTS
+        // fichiers à la racine le sont. Avant le fix, INFO_EXTS/HEAVY_EXTS
         // étaient extraits quelle que soit la profondeur, cassant ce cas.
         let base = crate::testutil::temp_dir("res-ext");
         let src = base.join("src");
@@ -326,11 +450,19 @@ mod tests {
         write(&src.join("extension").join("config").join("tracks").join("readme.txt"));
         write(&src.join("extension").join("weather_notes.pdf"));
         write(&src.join("data").join("templates.zip")); // lourd, en profondeur : jamais annexe non plus
-        write(&src.join("changelog.txt")); // toujours annexe : celui-là est à la racine
+        write(&src.join("changelog.txt")); // annexe : celui-là est à la racine
         let content = base.join("content");
         let resources = base.join("resources");
 
-        let n = file_mod(&src, &content, &resources, ExtractionMode::All, false, true).unwrap();
+        let n = file_mod(
+            &src,
+            &content,
+            &resources,
+            ExtractionMode::All,
+            false,
+            Source::BesideMod,
+        )
+        .unwrap();
         assert_eq!(n, 1, "seul changelog.txt (racine) est une annexe");
 
         assert!(
@@ -340,7 +472,7 @@ mod tests {
                 .join("tracks")
                 .join("readme.txt")
                 .is_file(),
-            "fichier profond dans extension/ conservé comme contenu du mod"
+            "fichier profond dans extension/ conservé comme contenu"
         );
         assert!(content.join("extension").join("weather_notes.pdf").is_file());
         assert!(content.join("data").join("templates.zip").is_file());
@@ -352,86 +484,75 @@ mod tests {
     }
 
     #[test]
-    fn map_png_and_root_extension_folder_never_extracted() {
-        // Bug réel (rmi_mdpietra) : un fichier à la racine directe de
-        // `extension/` (pas seulement en profondeur dedans) doit rester
-        // contenu, et `map.png` (mini-carte AC) n'est jamais une annexe même
-        // si un `.png` à la racine du mod est normalement ambigu.
-        let base = crate::testutil::temp_dir("res-map");
-        let src = base.join("src");
-        write(&src.join("ui").join("ui_track.json"));
-        write(&src.join("map.png"));
-        write(&src.join("extension").join("guids.txt")); // directement sous extension/
-        let content = base.join("content");
-        let resources = base.join("resources");
-
-        let n = file_mod(&src, &content, &resources, ExtractionMode::All, false, true).unwrap();
-        assert_eq!(n, 0, "ni map.png ni rien sous extension/ n'est une annexe");
-        assert!(content.join("map.png").is_file());
-        assert!(content.join("extension").join("guids.txt").is_file());
-        assert!(!resources.exists());
-    }
-
-    #[test]
-    fn info_only_extracts_light_files_keeps_skins_and_drops_heavy() {
+    fn info_only_extracts_light_files_and_drops_heavy() {
         let base = crate::testutil::temp_dir("res");
         let src = base.join("src");
-        make_mod(&src);
+        write(&src.join("changelog.txt"));
+        write(&src.join("presentation.pdf"));
+        write(&src.join("livery_template.psd"));
+        write(&src.join("old_templates.zip"));
+        write(&src.join("content").join("gui").join("flag.dds"));
         let content = base.join("content");
         let resources = base.join("resources");
 
-        let n = file_mod(&src, &content, &resources, ExtractionMode::InfoOnly, false, true).unwrap();
-        assert_eq!(n, 3, "changelog.txt + presentation.pdf + preview.jpg (racine)");
-
-        assert!(content.join("ui").join("ui_car.json").is_file());
-        assert!(content.join("model.kn5").is_file());
-        assert!(
-            content.join("skins").join("red").join("preview.jpg").is_file(),
-            "preview de skin jamais extrait"
-        );
-        assert!(!content.join("changelog.txt").exists());
-        assert!(
-            !content.join("livery_template.psd").exists(),
-            "annexe lourde jamais dans le contenu de jeu"
-        );
-
+        let n = file_mod(
+            &src,
+            &content,
+            &resources,
+            ExtractionMode::InfoOnly,
+            false,
+            Source::BesideMod,
+        )
+        .unwrap();
+        assert_eq!(n, 2, "changelog.txt + presentation.pdf");
         assert!(resources.join("changelog.txt").is_file());
         assert!(resources.join("presentation.pdf").is_file());
-        assert!(resources.join("preview.jpg").is_file());
         assert!(
             !resources.join("livery_template.psd").exists(),
             "mode info_only : pas les lourds"
         );
-
-        // Mode Aucun côté copie : la source reste intacte (copy=false ici teste move,
-        // donc on vérifie plutôt que le lourd n'est nulle part en bibliothèque.
+        assert!(
+            !content.join("livery_template.psd").exists(),
+            "annexe lourde jamais dans le contenu de jeu"
+        );
+        assert!(content.join("content").join("gui").join("flag.dds").is_file());
     }
 
     #[test]
     fn all_mode_extracts_heavy_files_too() {
         let base = crate::testutil::temp_dir("res");
         let src = base.join("src");
-        make_mod(&src);
+        write(&src.join("changelog.txt"));
+        write(&src.join("livery_template.psd"));
+        write(&src.join("old_templates.zip"));
         let content = base.join("content");
         let resources = base.join("resources");
 
-        let n = file_mod(&src, &content, &resources, ExtractionMode::All, true, true).unwrap();
-        assert_eq!(n, 5, "3 légers + template.psd + archive.zip");
+        let n = file_mod(&src, &content, &resources, ExtractionMode::All, true, Source::BesideMod).unwrap();
+        assert_eq!(n, 3, "le léger + template.psd + archive.zip");
         assert!(resources.join("livery_template.psd").is_file());
         assert!(resources.join("old_templates.zip").is_file());
-        assert!(content.join("skins").join("red").join("preview.jpg").is_file());
     }
 
     #[test]
     fn none_mode_drops_ancillary_and_leaves_source_untouched_on_copy() {
         let base = crate::testutil::temp_dir("res");
         let src = base.join("src");
-        make_mod(&src);
+        write(&src.join("changelog.txt"));
+        write(&src.join("content").join("gui").join("flag.dds"));
         let content = base.join("content");
         let resources = base.join("resources");
 
         // copy=true (préserve la source) : les annexes doivent rester dans src.
-        let n = file_mod(&src, &content, &resources, ExtractionMode::None, false, true).unwrap();
+        let n = file_mod(
+            &src,
+            &content,
+            &resources,
+            ExtractionMode::None,
+            false,
+            Source::BesideMod,
+        )
+        .unwrap();
         assert_eq!(n, 0, "rien n'est extrait en mode Aucun");
         assert!(!resources.exists(), "aucun dossier ressources créé");
         assert!(!content.join("changelog.txt").exists());
@@ -440,7 +561,7 @@ mod tests {
             "annexe laissée dans la source (§4.6, mode Aucun)"
         );
         assert!(
-            content.join("model.kn5").is_file(),
+            content.join("content").join("gui").join("flag.dds").is_file(),
             "le contenu de jeu, lui, est bien rangé"
         );
     }
@@ -456,7 +577,15 @@ mod tests {
         let content = base.join("content");
         let resources = base.join("resources");
 
-        let n = file_mod(&src, &content, &resources, ExtractionMode::All, false, true).unwrap();
+        let n = file_mod(
+            &src,
+            &content,
+            &resources,
+            ExtractionMode::All,
+            false,
+            Source::BesideMod,
+        )
+        .unwrap();
         assert_eq!(n, 0);
         assert!(content.join("model.kn5").is_file());
         assert!(!resources.exists());
@@ -474,31 +603,18 @@ mod tests {
         let content = base.join("content");
         let resources = base.join("resources");
 
-        let n = file_mod(&src, &content, &resources, ExtractionMode::All, false, false).unwrap();
+        let n = file_mod(
+            &src,
+            &content,
+            &resources,
+            ExtractionMode::All,
+            false,
+            Source::BesideMod,
+        )
+        .unwrap();
         assert_eq!(n, 1, "seul readme.txt est une annexe");
         assert!(content.join("GUIDs.txt").is_file(), "GUIDs.txt reste du contenu");
         assert!(content.join("car.bank").is_file());
-        assert!(resources.join("readme.txt").is_file());
-    }
-
-    #[test]
-    fn root_images_never_extracted_for_non_car_track_mods() {
-        // Skin/app/mod « autre » : une image à la racine est TOUJOURS du vrai
-        // contenu (preview de skin, icône d'app) — jamais une annexe, même en
-        // mode info_only. Seuls les documents/fichiers lourds sont concernés.
-        let base = crate::testutil::temp_dir("res-imgs");
-        let src = base.join("src");
-        write(&src.join("ui_skin.json"));
-        write(&src.join("preview.jpg")); // aperçu de skin, racine : jamais annexe ici
-        write(&src.join("livery.dds"));
-        write(&src.join("readme.txt")); // doc : toujours annexe, quel que soit le type
-        let content = base.join("content");
-        let resources = base.join("resources");
-
-        let n = file_mod(&src, &content, &resources, ExtractionMode::InfoOnly, false, false).unwrap();
-        assert_eq!(n, 1, "seul readme.txt est capturé");
-        assert!(content.join("preview.jpg").is_file(), "preview de skin jamais extrait");
-        assert!(content.join("livery.dds").is_file());
         assert!(resources.join("readme.txt").is_file());
     }
 

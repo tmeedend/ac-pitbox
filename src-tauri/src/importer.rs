@@ -433,6 +433,12 @@ fn import_leftover(
         } else {
             archive::move_dir(p, &wrapped).is_ok()
         }
+    } else if copy {
+        // `copy` = la source appartient à l'utilisateur (import d'un dossier
+        // qu'il désigne, pas d'une extraction temporaire) : on n'y touche pas.
+        // Le `rename` inconditionnel d'avant retirait ses fichiers isolés de
+        // son propre dossier — un import « en copie » qui déplaçait quand même.
+        std::fs::copy(p, &wrapped).is_ok()
     } else {
         std::fs::rename(p, &wrapped).is_ok() || std::fs::copy(p, &wrapped).is_ok()
     };
@@ -1350,7 +1356,14 @@ fn process_found(
     // Fichiers annexes (§4.6) redirigés vers le dossier ressources du mod,
     // jamais dans le contenu de jeu, selon le réglage global.
     let resources_dest = crate::resources::resources_dir(library, fm.kind, &id_interne);
-    let resources_extracted = crate::resources::file_mod(&fm.dir, &dest, &resources_dest, res_mode, !copy, true)?;
+    let resources_extracted = crate::resources::file_mod(
+        &fm.dir,
+        &dest,
+        &resources_dest,
+        res_mode,
+        !copy,
+        crate::resources::Source::ModFolder,
+    )?;
     let library_path = crate::libpath::to_relative(Some(library), &dest);
 
     // --- Écriture overlay ---
@@ -1533,10 +1546,57 @@ mod tests {
     }
 
     #[test]
-    fn ancillary_files_extracted_to_resources_by_default() {
-        // §4.6 : réglage par défaut "info_only" — fichiers légers extraits vers
-        // le dossier ressources du mod, jamais dans le contenu de jeu.
-        let base = crate::testutil::temp_dir("import");
+    fn mod_folder_contents_are_never_extracted_whatever_the_mode() {
+        // Règle d'or (§4.6) : rien ne sort du dossier du mod, quel que soit le
+        // réglage d'extraction. Bug réel — `logo.png`, `body_shadow.png` et
+        // `tyre_*_shadow.png`, de vrais assets AC vivant à la racine du dossier
+        // voiture, ont été sortis de 23 mods par un tri fondé sur l'extension.
+        for mode in ["info_only", "all"] {
+            let base = crate::testutil::temp_dir("import-golden");
+            let library = base.join("library");
+            std::fs::create_dir_all(&library).unwrap();
+            let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+            let mut cfg = AppConfig {
+                library_path: Some(library.clone()),
+                ..Default::default()
+            };
+            cfg.prefs.resource_extraction_mode = mode.into();
+            let rules = crate::rules::default_rules();
+            let noop = |_p: Progress| {};
+
+            let src = base.join("src");
+            let files = [
+                "model.kn5",
+                "logo.png",
+                "body_shadow.png",
+                "tyre_0_shadow.png",
+                "changelog.txt",
+                "presentation.pdf",
+                "livery_template.psd",
+            ];
+            make_car_with_files(&src, "annex_car", &files);
+            let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+            assert_eq!(r.mods[0].outcome, "IMPORT");
+            assert_eq!(r.mods[0].resources_extracted, 0, "rien extrait du mod ({mode})");
+
+            let versions = crate::overlay::get_versions(&conn, "annex_car").unwrap();
+            let content_dir = library.join(&versions[0].library_path);
+            for f in files {
+                assert!(content_dir.join(f).is_file(), "{f} conservé dans le mod ({mode})");
+            }
+            assert!(
+                !library.join("resources").join("cars").join("annex_car").exists(),
+                "aucun dossier ressources créé ({mode})"
+            );
+        }
+    }
+
+    #[test]
+    fn documents_beside_the_mod_folder_are_extracted_to_resources() {
+        // L'autre moitié de la règle (§4.6) : un PDF de présentation livré à la
+        // racine de l'archive, à côté du dossier du mod, n'est pas du contenu
+        // de jeu — il est rangé en ressources et jamais déployé dans AC.
+        let base = crate::testutil::temp_dir("import-beside");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -1547,42 +1607,37 @@ mod tests {
         let rules = crate::rules::default_rules();
         let noop = |_p: Progress| {};
 
-        let src = base.join("src");
-        make_car_with_files(
-            &src,
-            "annex_car",
-            &["model.kn5", "changelog.txt", "presentation.pdf", "livery_template.psd"],
-        );
+        // Archive « à la RSS » : la voiture sous content/cars/, un PDF à côté.
+        let src = base.join("RSS_Pack");
+        make_fake_car(&src.join("content").join("cars"), "beside_car");
+        std::fs::write(src.join("Read Me - Beside.pdf"), b"%PDF").unwrap();
+
         let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
-        assert_eq!(r.mods[0].outcome, "IMPORT");
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+        assert_eq!(r.mods.len(), 1, "la voiture est reconnue");
+        assert_eq!(r.others.len(), 1, "le PDF devient son propre reste");
         assert_eq!(
-            r.mods[0].resources_extracted, 2,
-            "changelog.txt + presentation.pdf, pas le .psd"
+            r.others[0].resources_extracted, 1,
+            "et ce reste est capturé comme annexe"
         );
-
-        let versions = crate::overlay::get_versions(&conn, "annex_car").unwrap();
-        let content_dir = library.join(&versions[0].library_path);
-        assert!(content_dir.join("model.kn5").is_file());
         assert!(
-            !content_dir.join("changelog.txt").exists(),
-            "jamais dans le contenu de jeu"
-        );
-        assert!(!content_dir.join("livery_template.psd").exists());
-
-        let resources = library.join("resources").join("cars").join("annex_car");
-        assert!(resources.join("changelog.txt").is_file());
-        assert!(resources.join("presentation.pdf").is_file());
-        assert!(
-            !resources.join("livery_template.psd").exists(),
-            "mode par défaut : pas les fichiers lourds"
+            library
+                .join("resources")
+                .join("others")
+                .join(&r.others[0].id)
+                .join("Read Me - Beside.pdf")
+                .is_file(),
+            "PDF rangé en ressources"
         );
     }
 
     #[test]
-    fn ancillary_extraction_mode_none_drops_files() {
-        // §4.6 : mode "Aucun" — rien n'est extrait vers la bibliothèque, mais le
-        // contenu de jeu reste propre quand même (règle absolue, indépendante du réglage).
-        let base = crate::testutil::temp_dir("import");
+    fn ancillary_extraction_mode_none_drops_files_beside_the_mod() {
+        // §4.6, mode « Aucun » : rien n'est extrait vers la bibliothèque, mais
+        // l'annexe ne finit pas non plus dans le contenu de jeu (règle absolue,
+        // indépendante du réglage). Ne vaut que pour ce qui est livré à côté du
+        // mod — dans le mod, l'annexe reste simplement en place.
+        let base = crate::testutil::temp_dir("import-none");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -1594,24 +1649,22 @@ mod tests {
         let rules = crate::rules::default_rules();
         let noop = |_p: Progress| {};
 
-        let src = base.join("src");
-        make_car_with_files(&src, "annex_car2", &["model.kn5", "changelog.txt"]);
-        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
-        assert_eq!(r.mods[0].resources_extracted, 0);
+        let src = base.join("NonePack");
+        make_fake_car(&src.join("content").join("cars"), "annex_car2");
+        std::fs::write(src.join("changelog.txt"), b"notes").unwrap();
 
-        let versions = crate::overlay::get_versions(&conn, "annex_car2").unwrap();
-        let content_dir = library.join(&versions[0].library_path);
-        assert!(content_dir.join("model.kn5").is_file());
+        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
         assert!(
-            !content_dir.join("changelog.txt").exists(),
-            "toujours hors contenu de jeu"
-        );
-        assert!(
-            !library.join("resources").join("cars").join("annex_car2").exists(),
+            r.others.iter().all(|o| o.resources_extracted == 0),
             "rien extrait en mode Aucun"
         );
+        assert!(
+            !library.join("resources").exists(),
+            "aucun dossier ressources en mode Aucun"
+        );
         // Copie (pas déplacement) : la source garde son annexe intacte.
-        assert!(src.join("annex_car2").join("changelog.txt").is_file());
+        assert!(src.join("changelog.txt").is_file());
     }
 
     #[test]
