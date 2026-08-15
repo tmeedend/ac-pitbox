@@ -174,6 +174,8 @@ L'original vit dans `<lib>/game_backup/<chemin relatif à AC>`, la table `game_b
 
 Installé **par défaut**, pas sur autorisation : c'est la réversibilité qui rend l'opération sûre, et un mod cassé en silence est pire qu'un mod installé et annoncé. L'annonce est donc obligatoire — l'onglet « Ajouts au jeu » marque ces fichiers en rouge, au niveau du fichier et du dossier.
 
+S'applique aux **deux** mécanismes de pose : les ajouts au jeu (§4.6ter) et les mods « autres » (§7.3). Le filet de démarrage compte les réclamations des deux côtés — n'en regarder qu'un restaurerait un fichier qu'un mod actif utilise encore.
+
 ---
 
 ## 5. Tags et harmonisation
@@ -315,7 +317,7 @@ Mods de type non reconnu (shaders, configs CSP, mods d'UI, weather patterns…) 
 
 **Pas de notion de mise à jour.** Réimporter une archive dont l'id existe déjà en bibliothèque ne fait rien — ni remplacement, ni erreur, silencieusement ignoré. Pour reprendre un mod « autre » modifié, il faut d'abord le supprimer.
 
-**Fichier isolé dans un dossier déjà réel côté AC** : posé par lien fichier (`mklink`, même mécanisme que les junctions de dossier) si et seulement si le fichier cible n'existe pas encore — pure addition (ex. une nouvelle image dans `content/gui/flags/`, dossier qui existe déjà dans une install AC standard). Un fichier qui existerait déjà à cet emplacement n'est jamais remplacé (hors périmètre pour l'instant — mods qui remplacent réellement du contenu stock).
+**Fichier isolé dans un dossier déjà réel côté AC** : posé par lien fichier (`mklink`, même mécanisme que les junctions de dossier) — ex. une nouvelle image dans `content/gui/flags/`, dossier qui existe déjà dans une install AC standard. **Un fichier déjà présent à cet emplacement est remplacé, plus sauté en silence** : l'original part en sauvegarde et revient à la désactivation (§4.9), et seul un exemplaire plus récent prend la place de ce qui tourne déjà. C'est ce qui manquait aux mods qui remplacent réellement du contenu — un mod façon CMRT visant `content/gui/` s'installait à moitié sans que rien ne l'indique.
 
 **Rien n'est perdu même à côté d'un mod reconnu.** Un import n'est plus tout-ou-rien : si une archive contient une app (ou une voiture/circuit/skin/son) ET, à côté, du contenu non reconnu — cas des mods type CMRT qui livrent un dossier `apps/` et un zip séparé visant `content/gui/...` — ce reste est repéré et importé comme son propre « autre mod », plutôt que jeté au nettoyage du dossier temporaire. Un zip/7z/rar trouvé dans ce reste est extrait et reclassé récursivement (profondeur 2) avant de retomber, lui aussi, sur voiture/circuit/skin/son/app/autre mod si rien n'est reconnu dedans.
 

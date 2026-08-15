@@ -3,16 +3,20 @@
 //! de physique globale…). Jamais perdu — stocké tel quel et listé.
 //!
 //! Activation par junction, comme les autres types, avec le même garde-fou
-//! (jamais sur un vrai dossier) : une jonction n'est posée que là où AC n'a
+//! (jamais sur un vrai **dossier**) : une jonction n'est posée que là où AC n'a
 //! encore rien à cet emplacement. Un fichier isolé dont le dossier parent
-//! existe déjà réellement (ex. `content/gui/flags/`) est posé par lien
-//! fichier (`activation::create_file_link`) **si et seulement si** le fichier
-//! lui-même n'existe pas encore — pure addition, rien écrasé. Ce n'est PAS un
-//! moteur de superposition complet façon MO2 : un fichier qui existe déjà à
-//! l'identique n'est jamais remplacé (limite assumée — mods qui remplacent du
-//! contenu stock, hors périmètre pour l'instant). Deux mods « autres » qui
-//! visent le même emplacement : la **priorité** (marquée par l'utilisateur)
-//! tranche.
+//! existe déjà réellement (ex. `content/gui/flags/`) est posé par lien fichier
+//! (`activation::create_file_link`).
+//!
+//! **Un fichier déjà présent est remplacé, pas sauté** (§4.9) : l'original part
+//! en sauvegarde et revient à la désactivation. C'est ce qui manquait aux mods
+//! qui remplacent réellement du contenu — un mod façon CMRT visant
+//! `content/gui/` s'installait à moitié, en silence. Comme partout ailleurs,
+//! seul un exemplaire **plus récent** prend la place de ce qui tourne déjà.
+//!
+//! Ce n'est pas pour autant un moteur de superposition façon MO2 : deux mods
+//! « autres » visant le même emplacement se départagent à la **priorité**
+//! (marquée par l'utilisateur), pas par un ordre de chargement.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -180,11 +184,13 @@ pub struct ActivateOtherResult {
 /// Pose une jonction à `current`'s enfants, en descendant tant que
 /// l'emplacement AC correspondant existe déjà (vrai dossier). S'arrête et
 /// jonctionne dès qu'un emplacement est libre. Un fichier isolé dont le
-/// dossier parent existe déjà réellement est posé par lien fichier — mais
-/// seulement s'il n'écrase rien (§6.1bis) ; sinon (fichier cible déjà
-/// présent) laissé de côté sans le toucher, silencieusement.
+/// dossier parent existe déjà réellement est posé par lien fichier ; s'il vise
+/// un fichier déjà présent, il le **remplace après sauvegarde** (§4.9) — et
+/// seulement si son exemplaire est plus récent.
 #[allow(clippy::too_many_arguments)]
 fn place(
+    conn: &Connection,
+    cfg: &AppConfig,
     current: &Path,
     root: &Path,
     ac: &Path,
@@ -203,10 +209,11 @@ fn place(
         let target = ac.join(rel);
         if !p.is_dir() {
             // Fichier isolé : posé par lien fichier si son dossier parent
-            // existe déjà (vrai dossier ou tout juste jonctionné) ET que rien
-            // ne s'y trouve encore à cet emplacement précis — pure addition,
-            // jamais un écrasement (mods qui remplacent du contenu existant :
-            // hors périmètre pour l'instant).
+            // existe déjà (vrai dossier ou tout juste jonctionné). Un fichier
+            // déjà présent à cet emplacement n'est plus sauté en silence — il
+            // est remplacé après sauvegarde de l'original (§4.9), sous la même
+            // condition que partout ailleurs : seul un exemplaire plus récent
+            // prend la place de ce qui tourne déjà.
             if !target.parent().is_some_and(|p| p.exists()) {
                 log::warn!(
                     "place {mine_id} {}: parent dir missing at {}",
@@ -214,11 +221,30 @@ fn place(
                     target.display()
                 );
                 warnings.push(format!("{} : dossier parent introuvable", rel.display()));
-            } else if !target.exists() {
-                match activation::create_file_link(&target, &p) {
-                    Ok(()) => junctions.push(target.to_string_lossy().into_owned()),
-                    Err(err) => warnings.push(format!("{} : {err}", rel.display())),
+                continue;
+            }
+            if target.exists() {
+                if !crate::gamebackup::is_newer(&p, &target) {
+                    log::warn!(
+                        "place {mine_id} {}: target exists and is not older, left alone",
+                        rel.display()
+                    );
+                    continue;
                 }
+                // `protect` refuse s'il n'a pas pu sécuriser l'original : alors
+                // on ne touche à rien, plutôt que d'altérer sans filet.
+                if !crate::gamebackup::protect(conn, cfg, &target) {
+                    warnings.push(format!("{} : sauvegarde impossible, non remplacé", rel.display()));
+                    continue;
+                }
+                if let Err(e) = std::fs::remove_file(&target) {
+                    log::warn!("place {mine_id} {}: {e}", rel.display());
+                    continue;
+                }
+            }
+            match activation::create_file_link(&target, &p) {
+                Ok(()) => junctions.push(target.to_string_lossy().into_owned()),
+                Err(err) => warnings.push(format!("{} : {err}", rel.display())),
             }
             continue;
         }
@@ -246,7 +272,18 @@ fn place(
         } else {
             // Vrai dossier existant, jamais touché (garde-fou) : on essaie de
             // se glisser plus profond, dans un sous-dossier qui n'existe pas.
-            place(&p, root, ac, mine_id, mine_priority, others, junctions, warnings);
+            place(
+                conn,
+                cfg,
+                &p,
+                root,
+                ac,
+                mine_id,
+                mine_priority,
+                others,
+                junctions,
+                warnings,
+            );
         }
     }
 }
@@ -266,6 +303,8 @@ pub fn activate_other(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<Ac
     let src = crate::libpath::resolve(cfg.library_path.as_deref(), &m.library_path)
         .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     place(
+        conn,
+        cfg,
         &src,
         &src,
         ac,
@@ -290,7 +329,11 @@ pub fn deactivate_other(conn: &Connection, id: &str) -> Result<(), String> {
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_UNKNOWN)?;
     for j in &m.junctions {
-        let _ = activation::remove_junction(Path::new(j));
+        let path = Path::new(j);
+        let _ = activation::remove_junction(path);
+        // Si ce chemin était un fichier du jeu que ce mod avait remplacé,
+        // l'original revient (§4.9). No-op sur une simple addition.
+        crate::gamebackup::restore(conn, path);
     }
     overlay::set_other_active(conn, id, false, &[]).map_err(|e| e.to_string())
 }
@@ -351,6 +394,95 @@ mod tests {
         assert_eq!(other_id("mod.v2"), "mod.v2");
         assert_eq!(other_id("Settings_24-10-25"), "Settings_24-10-25");
         assert_ne!(other_id("mod.v2"), other_id("mod.v3"));
+    }
+
+    #[test]
+    fn an_other_mod_replaces_a_game_file_and_gives_it_back() {
+        // §4.9 : un mod « autre » qui vise un fichier existant du jeu ne doit
+        // plus être sauté en silence — c'est ce qui installait à moitié les
+        // mods façon CMRT (`content/gui/…`) sans que rien ne le dise. L'original
+        // part en sauvegarde et revient à la désactivation.
+        let base = crate::testutil::temp_dir("other-replace");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        // `content/gui/` existe déjà côté AC, avec un fichier Kunos dedans.
+        let kunos = ac.join("content").join("gui").join("logo.png");
+        std::fs::create_dir_all(kunos.parent().unwrap()).unwrap();
+        std::fs::write(&kunos, b"KUNOS-LOGO").unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+
+        let src = base.join("src").join("HudMod");
+        make_tree(&src, &["content/gui/logo.png"]);
+        std::fs::write(src.join("content").join("gui").join("logo.png"), b"MOD-LOGO").unwrap();
+        // L'exemplaire du mod doit être le plus récent pour prendre la place.
+        let t = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+        std::fs::File::options()
+            .write(true)
+            .open(src.join("content").join("gui").join("logo.png"))
+            .unwrap()
+            .set_modified(t)
+            .unwrap();
+
+        import_other(&conn, &library, "HudMod.zip", &src, true, ExtractionMode::InfoOnly).unwrap();
+        let res = activate_other(&conn, &cfg, "HudMod").unwrap();
+        assert_eq!(res.junctions, 1, "le fichier est bien posé");
+        assert_eq!(std::fs::read(&kunos).unwrap(), b"MOD-LOGO", "le mod prend la place");
+        assert!(
+            crate::gamebackup::is_replaced(&conn, &kunos),
+            "et le remplacement est tracé, pas silencieux"
+        );
+
+        deactivate_other(&conn, "HudMod").unwrap();
+        assert_eq!(
+            std::fs::read(&kunos).unwrap(),
+            b"KUNOS-LOGO",
+            "l'original du jeu revient à la désactivation"
+        );
+        assert!(!crate::gamebackup::is_replaced(&conn, &kunos));
+    }
+
+    #[test]
+    fn an_older_other_mod_file_leaves_the_game_file_alone() {
+        // Même arbitrage par date que partout : un exemplaire plus ancien ne
+        // déloge pas ce qui tourne déjà, et ne crée aucune sauvegarde inutile.
+        let base = crate::testutil::temp_dir("other-older");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        let kunos = ac.join("content").join("gui").join("logo.png");
+        std::fs::create_dir_all(kunos.parent().unwrap()).unwrap();
+        std::fs::write(&kunos, b"RECENT").unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+
+        let src = base.join("src").join("OldHud");
+        make_tree(&src, &["content/gui/logo.png"]);
+        let t = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        std::fs::File::options()
+            .write(true)
+            .open(src.join("content").join("gui").join("logo.png"))
+            .unwrap()
+            .set_modified(t)
+            .unwrap();
+
+        import_other(&conn, &library, "OldHud.zip", &src, true, ExtractionMode::InfoOnly).unwrap();
+        let res = activate_other(&conn, &cfg, "OldHud").unwrap();
+        assert_eq!(res.junctions, 0, "rien posé : l'exemplaire du mod est plus ancien");
+        assert_eq!(std::fs::read(&kunos).unwrap(), b"RECENT", "fichier du jeu intact");
+        assert!(
+            !crate::gamebackup::is_replaced(&conn, &kunos),
+            "aucune sauvegarde inutile"
+        );
     }
 
     #[test]

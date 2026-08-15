@@ -36,6 +36,16 @@ fn backup_path(library: &Path, ac: &Path, ac_path: &Path) -> Option<PathBuf> {
     Some(library.join("game_backup").join(rel))
 }
 
+/// `a` est-il strictement plus récent que `b` ? Faux dès qu'une des deux dates
+/// est illisible : dans le doute, on ne remplace pas. C'est le même critère
+/// que l'arbitrage des fichiers partagés (§4.6ter) — un exemplaire plus ancien,
+/// ou de même date, ne prend jamais la place de ce qui tourne déjà.
+pub fn is_newer(a: &Path, b: &Path) -> bool {
+    let ta = std::fs::metadata(a).and_then(|m| m.modified()).ok();
+    let tb = std::fs::metadata(b).and_then(|m| m.modified()).ok();
+    matches!((ta, tb), (Some(a), Some(b)) if a > b)
+}
+
 /// Met de côté l'original de `ac_path` avant qu'un mod ne le remplace.
 /// Renvoie `true` si le fichier peut être remplacé — soit qu'on vienne de le
 /// sauvegarder, soit qu'une sauvegarde existe déjà (cas d'un second mod qui
@@ -154,10 +164,17 @@ pub fn restore_orphans(conn: &Connection) {
             return;
         }
     };
+    // Deux mécanismes réclament des chemins d'AC : les ajouts au jeu
+    // (§4.6ter) et les mods « autres » (§7.3). Oublier l'un des deux ferait
+    // restaurer au démarrage un fichier qu'un mod actif utilise encore.
+    let others = crate::overlay::list_other_mods(conn).unwrap_or_default();
     for (ac_path, _) in rows {
         let claimed = crate::overlay::extra_claimants(conn, &ac_path)
             .map(|c| !c.is_empty())
-            .unwrap_or(true); // en cas de doute, on ne restaure pas
+            .unwrap_or(true) // en cas de doute, on ne restaure pas
+            || others
+                .iter()
+                .any(|o| o.is_active && o.junctions.iter().any(|j| j == &ac_path));
         if !claimed {
             log::warn!("game restore (startup): {ac_path} no longer claimed");
             restore(conn, Path::new(&ac_path));

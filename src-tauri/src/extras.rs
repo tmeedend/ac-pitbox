@@ -111,14 +111,6 @@ struct Claim {
     claimed_at: String,
 }
 
-/// `a` est-il strictement plus récent que `b` ? Faux dès qu'une des deux dates
-/// est illisible : dans le doute, on ne remplace pas.
-fn is_newer(a: &Path, b: &Path) -> bool {
-    let ta = std::fs::metadata(a).and_then(|m| m.modified()).ok();
-    let tb = std::fs::metadata(b).and_then(|m| m.modified()).ok();
-    matches!((ta, tb), (Some(a), Some(b)) if a > b)
-}
-
 /// Qui, parmi les mods qui réclament ce fichier, fournit l'exemplaire à poser.
 /// **La date de modification la plus récente gagne** — un mod plus récent
 /// corrige en général des bugs de celui d'avant. À égalité (archives repackées
@@ -225,7 +217,7 @@ pub fn deploy(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -
             //    comparaison, le dernier mod installé écraserait une font mise
             //    à jour par un autre outil, ce que rien ne justifie.
             if !claimed && !crate::gamebackup::is_replaced(conn, &target) {
-                if !is_newer(src, &target) {
+                if !crate::gamebackup::is_newer(src, &target) {
                     log::warn!(
                         "extras {mod_id}: {} exists and is not older, left alone",
                         target.display()
