@@ -2151,7 +2151,8 @@ mod tests {
         for (rel, name, body) in [
             ("content/fonts", "rss-arial.txt", &b"MOD"[..]),
             ("content/driver", "rss_driver.kn5", &b"MOD"[..]),
-            // Même nom que la font déjà là : jamais écrasée (règle d'or n°5).
+            // Même nom que la font déjà là, et plus récente : la remplace,
+            // après sauvegarde de l'originale (§4.9).
             ("content/fonts", "kunos.txt", &b"MOD"[..]),
         ] {
             let d = src.join(rel);
@@ -2165,22 +2166,24 @@ mod tests {
 
         assert!(ac.join("content").join("fonts").join("rss-arial.txt").is_file());
         assert!(ac.join("content").join("driver").join("rss_driver.kn5").is_file());
-        assert_eq!(
-            std::fs::read(&foreign).unwrap(),
-            b"KUNOS",
-            "une font que personne ne réclame n'est jamais écrasée"
+        // La font homonyme est plus récente côté mod : elle prend la place,
+        // mais l'originale est sauvegardée (§4.9), pas perdue.
+        assert_eq!(std::fs::read(&foreign).unwrap(), b"MOD");
+        assert!(
+            crate::gamebackup::is_replaced(&conn, &foreign),
+            "le remplacement est tracé, pas silencieux"
         );
 
         crate::maintenance::delete_broken(&conn, &cfg, "font_car").unwrap();
         assert!(
             !ac.join("content").join("fonts").join("rss-arial.txt").exists(),
-            "retirée avec le mod qui l'a apportée"
+            "l'ajout pur est retiré avec le mod qui l'a apporté"
         );
         assert!(!ac.join("content").join("driver").join("rss_driver.kn5").exists());
         assert_eq!(
             std::fs::read(&foreign).unwrap(),
             b"KUNOS",
-            "et la font non réclamée est toujours là, intacte"
+            "et la font d'origine revient à la suppression du mod"
         );
     }
 

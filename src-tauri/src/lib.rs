@@ -12,6 +12,7 @@ mod detect;
 mod errors;
 mod export;
 mod extras;
+mod gamebackup;
 mod harmonize;
 mod identity;
 mod importer;
@@ -79,6 +80,12 @@ pub fn run() {
 
             let db_path = app.path().app_config_dir()?.join("overlay.sqlite");
             let conn = overlay::open(&db_path)?;
+
+            // Filet de sécurité (§4.9) : un fichier du jeu remplacé par un mod
+            // et que plus personne ne réclame redevient celui du jeu. Rattrape
+            // une app tuée entre la sauvegarde et la pose, ou entre le retrait
+            // et la restauration.
+            gamebackup::restore_orphans(&conn);
 
             // Filet de sécurité (§8.7bis) : restaure video.ini si une
             // sauvegarde laissée par l'ancien aperçu 3D intégré traîne encore

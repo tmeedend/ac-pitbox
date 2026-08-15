@@ -110,7 +110,7 @@ Ils avaient leur propre mécanisme — copie globale dans l'install AC, jamais d
 - **Deux politiques contradictoires** cohabitaient : « jamais désactivé » ici, « vit et meurt avec son mod » là.
 - **L'écrasement par défaut** contredisait la règle d'or n°5. Un ajout ne touche jamais un fichier que personne ne réclame.
 
-Conséquence pour l'existant : les fonts et drivers déjà posés dans une install AC — par une version antérieure, par Content Manager, ou à la main — ne sont réclamés par personne. Ils ne seront donc **jamais ni modifiés ni supprimés**. Un nettoyage éclairé des orphelins reste possible plus tard, une fois qu'on peut distinguer réclamé et non réclamé.
+Conséquence pour l'existant : les fonts et drivers déjà posés dans une install AC — par une version antérieure, par Content Manager, ou à la main — ne sont réclamés par personne. Ils ne sont donc **jamais supprimés**, et ne sont **remplacés que par un exemplaire plus récent**, après sauvegarde de l'original (§4.9) — qui revient dès que le mod part. Un nettoyage éclairé des orphelins reste possible plus tard, une fois qu'on peut distinguer réclamé et non réclamé.
 
 Le checksum anti-triche d'AC porte sur `data.acd` et `surfaces.ini`, pas sur les fonts/drivers.
 
@@ -152,9 +152,27 @@ Deux propriétés en découlent :
 
 Le fournisseur courant est mémorisé (`provided`), jamais déduit de la taille et de la date du fichier posé : c'est précisément dans le cas qu'on veut arbitrer — deux exemplaires de même date — que cette déduction se trompe. Pour la même raison, `kind` et `claimed_at` sont dupliqués depuis `mods` : une ligne doit se suffire à elle-même, une jointure vers une ligne manquante ferait disparaître la réclamation et l'arbitrage effacerait d'AC un fichier encore utile.
 
-**Un fichier que personne ne réclame est hors jeu** (règle d'or n°5) : contenu Kunos, ou mod installé hors de l'app. Jamais touché, et surtout jamais enregistré — sinon une désactivation pourrait l'emporter. Ce qui a été posé est mémorisé **fichiers et dossiers créés pour l'occasion séparément** : c'est la seule façon d'élaguer les dossiers vides sans risquer d'emporter un dossier d'AC préexistant devenu vide.
+**Un fichier que personne ne réclame** — contenu Kunos, ou mod installé hors de l'app — relève du même arbitrage : un exemplaire plus récent le remplace, mais seulement après mise à l'abri de l'original (§4.9), et il revient dès que plus aucun mod ne réclame le chemin. Un exemplaire plus ancien ou de même date ne prend jamais la place de ce qui tourne déjà. Ce qui a été posé est mémorisé **fichiers et dossiers créés pour l'occasion séparément** : c'est la seule façon d'élaguer les dossiers vides sans risquer d'emporter un dossier d'AC préexistant devenu vide.
 
 **Onglet « Ajouts au jeu »** sur la fiche pleine (`DetailPage`), frère de « Ressources » et avec le même décompte. Répond à « qu'est-ce que ce mod met chez moi en plus de son dossier ? », que rien ne montrait auparavant — un mod pouvait en poser 69 en silence. **Regroupé par dossier de destination** : quatre destinations disent tout de suite ce que le mod touche, là où 69 lignes plates sont illisibles. Chaque groupe est dépliable, et les fichiers **partagés** qu'un autre mod fournit sont signalés avec son nom. Liste **lue en direct sur disque** comme le bloc Ressources (un mod importé avant que l'app ne suive ces fichiers n'a rien à réimporter) ; l'état de pose, lui, vient de la base. Absent du panneau latéral `ModDetail`, comme le bloc Ressources — les listes de fichiers vivent dans la page pleine.
+
+### 4.9 Remplacement d'un fichier du jeu
+
+Certains mods ne se contentent pas d'**ajouter** des fichiers : ils en **remplacent** — shader `system/shaders/…` modifié, config CSP qui écrase la stock, HUD façon CMRT qui remplace des images de `content/gui/`. Jusqu'ici l'app refusait, **et en silence** : la pose sautait le fichier sans laisser de trace, le mod s'installait à moitié et rien n'en informait l'utilisateur.
+
+La règle d'or n°5 n'interdit pas de toucher un fichier du jeu : elle exige qu'il soit **sauvegardé et restauré**, et qu'un filet de sécurité rattrape les fermetures anormales. C'est ce que fait `gamebackup.rs`, en généralisant au fichier isolé la discipline déjà éprouvée sur les dossiers par `compose::recompose_stock` (§4.4) :
+
+1. sauvegarde **avant** toute écriture, jamais l'inverse ;
+2. vérification que la sauvegarde est lisible avant de toucher au jeu — sinon on ne remplace pas ;
+3. la **première** sauvegarde fait foi : un second mod visant le même chemin ne sauvegarde pas la version du premier par-dessus l'originale, sinon la restauration rendrait un fichier de mod et l'original serait perdu ;
+4. restauration dès que plus aucun mod ne réclame le chemin ;
+5. au démarrage, restauration de toute sauvegarde que plus rien ne réclame — le filet pour une app tuée entre la sauvegarde et la pose, ou entre le retrait et la restauration.
+
+L'original vit dans `<lib>/game_backup/<chemin relatif à AC>`, la table `game_backups` fait le lien. Perdre la base ne perd donc pas l'original : le chemin de la sauvegarde dit à lui seul où le fichier doit revenir.
+
+**Le remplacement obéit au même arbitrage par date que les fichiers partagés** (§4.6ter) : seul un exemplaire **plus récent** prend la place de ce qui tourne déjà. Un mod plus ancien, ou de même date, ne remplace rien — sans cette comparaison, le dernier mod installé écraserait une font déjà mise à jour par un autre outil.
+
+Installé **par défaut**, pas sur autorisation : c'est la réversibilité qui rend l'opération sûre, et un mod cassé en silence est pire qu'un mod installé et annoncé. L'annonce est donc obligatoire — l'onglet « Ajouts au jeu » marque ces fichiers en rouge, au niveau du fichier et du dossier.
 
 ---
 

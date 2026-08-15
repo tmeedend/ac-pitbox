@@ -251,6 +251,15 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_sat_path ON extra_links(ac_path);
 
+        -- Fichiers du jeu qu'un mod a remplacés (§4.9), et où dort l'original.
+        -- Clé sur le chemin d'AC, pas sur le mod : c'est le fichier qui n'a
+        -- qu'un seul original, quel que soit le nombre de mods qui le visent.
+        CREATE TABLE IF NOT EXISTS game_backups (
+            ac_path     TEXT PRIMARY KEY,
+            backup_path TEXT NOT NULL,
+            created_at  TEXT NOT NULL DEFAULT ''
+        );
+
         CREATE INDEX IF NOT EXISTS idx_versions_mod ON versions(mod_id);
         CREATE INDEX IF NOT EXISTS idx_history_mod  ON history(mod_id);
         CREATE INDEX IF NOT EXISTS idx_mods_idhash  ON mods(identity_hash);
@@ -828,6 +837,35 @@ pub fn delete_mod(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM extra_links WHERE mod_id = ?1", [id])?;
     conn.execute("DELETE FROM mods WHERE id_interne = ?1", [id])?;
     Ok(())
+}
+
+// --- Fichiers du jeu remplacés (§4.9) ---------------------------------------
+
+/// Enregistre la sauvegarde de l'original. `INSERT OR IGNORE` : la **première**
+/// sauvegarde fait foi, un second mod visant le même chemin ne l'écrase pas.
+pub fn add_game_backup(conn: &Connection, ac_path: &str, backup_path: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT OR IGNORE INTO game_backups (ac_path, backup_path, created_at) VALUES (?1, ?2, ?3)",
+        rusqlite::params![ac_path, backup_path, chrono::Local::now().to_rfc3339()],
+    )?;
+    Ok(())
+}
+
+pub fn game_backup_of(conn: &Connection, ac_path: &str) -> rusqlite::Result<Option<String>> {
+    let mut stmt = conn.prepare("SELECT backup_path FROM game_backups WHERE ac_path = ?1")?;
+    let mut rows = stmt.query_map([ac_path], |r| r.get::<_, String>(0))?;
+    rows.next().transpose()
+}
+
+pub fn remove_game_backup(conn: &Connection, ac_path: &str) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM game_backups WHERE ac_path = ?1", [ac_path])?;
+    Ok(())
+}
+
+pub fn list_game_backups(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
+    let mut stmt = conn.prepare("SELECT ac_path, backup_path FROM game_backups")?;
+    let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+    rows.collect()
 }
 
 // --- Ajouts au jeu posés dans AC (§4.6ter) ----------------------------------

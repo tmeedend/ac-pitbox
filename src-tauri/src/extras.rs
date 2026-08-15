@@ -42,9 +42,11 @@
 //!   hardlink partage l'entrée MFT. À égalité (archives repackées par un tiers,
 //!   qui perdent les dates), c'est le dernier mod installé.
 //!
-//! Un fichier que **personne ne réclame** est hors jeu : contenu Kunos, ou mod
-//! installé hors de l'app. Jamais touché (règle d'or n°5), et surtout jamais
-//! enregistré — sinon une désactivation pourrait l'emporter.
+//! Un fichier que **personne ne réclame** — contenu Kunos, ou mod installé hors
+//! de l'app — relève du même arbitrage : un exemplaire plus récent le remplace,
+//! mais seulement après que l'original a été mis à l'abri (`gamebackup`, §4.9),
+//! et il revient dès que plus aucun mod ne réclame le chemin. Un exemplaire
+//! plus ancien ou de même date ne prend jamais la place de ce qui tourne déjà.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -109,6 +111,14 @@ struct Claim {
     claimed_at: String,
 }
 
+/// `a` est-il strictement plus récent que `b` ? Faux dès qu'une des deux dates
+/// est illisible : dans le doute, on ne remplace pas.
+fn is_newer(a: &Path, b: &Path) -> bool {
+    let ta = std::fs::metadata(a).and_then(|m| m.modified()).ok();
+    let tb = std::fs::metadata(b).and_then(|m| m.modified()).ok();
+    matches!((ta, tb), (Some(a), Some(b)) if a > b)
+}
+
 /// Qui, parmi les mods qui réclament ce fichier, fournit l'exemplaire à poser.
 /// **La date de modification la plus récente gagne** — un mod plus récent
 /// corrige en général des bugs de celui d'avant. À égalité (archives repackées
@@ -147,7 +157,11 @@ fn best_claim(conn: &Connection, cfg: &AppConfig, ac_path: &Path) -> Option<Clai
 fn sync(conn: &Connection, cfg: &AppConfig, ac_path: &Path) {
     let key = ac_path.to_string_lossy().into_owned();
     let Some(best) = best_claim(conn, cfg, ac_path) else {
-        if ac_path.is_file() {
+        // Plus aucun réclamant. Si ce chemin était un fichier du jeu qu'un mod
+        // avait remplacé, l'original revient (§4.9) ; sinon le fichier part.
+        if crate::gamebackup::is_replaced(conn, ac_path) {
+            crate::gamebackup::restore(conn, ac_path);
+        } else if ac_path.is_file() {
             if let Err(e) = std::fs::remove_file(ac_path) {
                 log::warn!("extras remove {}: {e}", ac_path.display());
             }
@@ -196,18 +210,37 @@ pub fn deploy(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -
         let Ok(rel) = src.strip_prefix(&sat) else { continue };
         let target = ac.join(rel);
 
-        // Fichier déjà là que **personne ne réclame** : contenu du jeu, ou mod
-        // installé hors de l'app. Jamais touché (règle d'or n°5), et surtout
-        // jamais enregistré — sinon une désactivation pourrait l'emporter.
-        // Réclamé par un autre mod, en revanche, c'est un fichier partagé : on
-        // s'y ajoute et l'arbitrage (`sync`) tranche.
+        // Fichier déjà présent : trois cas, et un seul est un refus.
         if target.exists() {
             let claimed = overlay::extra_claimants(conn, &target.to_string_lossy())
                 .map(|c| !c.is_empty())
                 .unwrap_or(false);
-            if !claimed {
-                log::warn!("extras {mod_id}: {} already exists, left alone", target.display());
-                continue;
+            // 1. Réclamé par un autre mod : fichier partagé, on s'y ajoute et
+            //    l'arbitrage par date (`sync`) tranche.
+            // 2. Déjà remplacé par nous : l'original est à l'abri, même chose.
+            // 3. Fichier du jeu intact : le **même arbitrage par date**
+            //    s'applique. Un exemplaire plus récent le remplace, après
+            //    sauvegarde (§4.9) ; un exemplaire plus ancien ou de même date
+            //    ne prend pas la place de ce qui tourne déjà. Sans cette
+            //    comparaison, le dernier mod installé écraserait une font mise
+            //    à jour par un autre outil, ce que rien ne justifie.
+            if !claimed && !crate::gamebackup::is_replaced(conn, &target) {
+                if !is_newer(src, &target) {
+                    log::warn!(
+                        "extras {mod_id}: {} exists and is not older, left alone",
+                        target.display()
+                    );
+                    continue;
+                }
+                // `protect` refuse s'il n'a pas pu sécuriser l'original — et
+                // alors on ne touche à rien.
+                if !crate::gamebackup::protect(conn, cfg, &target) {
+                    log::warn!(
+                        "extras {mod_id}: {} could not be backed up, left alone",
+                        target.display()
+                    );
+                    continue;
+                }
             }
             files.push(target);
             continue;
@@ -303,6 +336,10 @@ pub struct ExtraFile {
     pub deployed: bool,
     /// Mod qui fournit l'exemplaire posé, quand ce n'est pas celui-ci.
     pub provided_by: Option<String>,
+    /// Ce chemin était un fichier du jeu : l'original est sauvegardé et sera
+    /// restauré (§4.9). Signalé sur la fiche — une modification réversible mais
+    /// invisible reste un piège.
+    pub replaces_game_file: bool,
 }
 
 /// Liste ce qu'un mod installe hors de `content/<type>/<id>`, **lu en direct
@@ -330,6 +367,7 @@ pub fn list(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -> 
                 size_bytes: e.metadata().map(|m| m.len()).unwrap_or(0),
                 deployed: provider.as_deref() == Some(mod_id),
                 provided_by: provider.filter(|p| p != mod_id),
+                replaces_game_file: crate::gamebackup::is_replaced(conn, &target),
             })
         })
         .collect();
@@ -532,12 +570,12 @@ mod tests {
     }
 
     #[test]
-    fn extras_never_overwrite_an_existing_file() {
-        // Règle d'or n°5 : aucun fichier du jeu altéré. Un fichier déjà présent
-        // — contenu Kunos, ou ajout d'un autre mod livrant le même fichier
-        // partagé — est laissé intact, et n'entre pas dans la liste des liens
-        // posés (donc la désactivation ne peut pas l'emporter).
-        let base = crate::testutil::temp_dir("sat-noover");
+    fn a_newer_mod_file_replaces_a_game_file_and_the_original_comes_back() {
+        // §4.9 : la règle d'or n°5 n'interdit pas de toucher un fichier du jeu,
+        // elle exige qu'il soit sauvegardé et restauré. Avant, la pose sautait
+        // le fichier en silence et le mod s'installait à moitié — c'est ce qui
+        // cassait les mods qui remplacent vraiment (HUD façon CMRT, shaders).
+        let base = crate::testutil::temp_dir("sat-replace");
         let cfg = cfg_for(&base);
         let library = cfg.library_path.clone().unwrap();
         let ac = cfg.ac_install_path.clone().unwrap();
@@ -545,20 +583,66 @@ mod tests {
 
         let kunos = ac.join("system").join("shaders").join("stock.fxo");
         write(&kunos, b"KUNOS");
+        set_mtime(&kunos, 1_000_000);
         let sat = dir(&library, ModKind::Car, "rss_car");
         write(&sat.join("system").join("shaders").join("stock.fxo"), b"MOD");
         write(&sat.join("system").join("shaders").join("new.fxo"), b"MOD");
+        set_mtime(&sat.join("system").join("shaders").join("stock.fxo"), 2_000_000);
 
         let n = deploy(&conn, &cfg, ModKind::Car, "rss_car").unwrap();
-        assert_eq!(n, 1, "seul le fichier nouveau est posé");
-        assert_eq!(std::fs::read(&kunos).unwrap(), b"KUNOS", "fichier du jeu intact");
+        assert_eq!(n, 2, "le nouveau fichier ET le remplacement sont posés");
+        assert_eq!(std::fs::read(&kunos).unwrap(), b"MOD", "le mod prend la place");
+        assert!(
+            crate::gamebackup::is_replaced(&conn, &kunos),
+            "et le remplacement est tracé, pas silencieux"
+        );
 
         undeploy(&conn, &cfg, "rss_car").unwrap();
+        assert_eq!(
+            std::fs::read(&kunos).unwrap(),
+            b"KUNOS",
+            "l'original du jeu revient à la désactivation"
+        );
+        assert!(!crate::gamebackup::is_replaced(&conn, &kunos));
         assert!(
-            kunos.is_file(),
+            !ac.join("system").join("shaders").join("new.fxo").exists(),
+            "l'ajout pur, lui, part"
+        );
+    }
+
+    #[test]
+    fn an_older_mod_file_never_displaces_what_already_runs() {
+        // Même arbitrage par date que pour les fichiers partagés : un
+        // exemplaire plus ancien (ou de même date) ne prend pas la place de ce
+        // qui tourne déjà. Sans ça, le dernier mod installé écraserait une font
+        // mise à jour par un autre outil, ce que rien ne justifie.
+        let base = crate::testutil::temp_dir("sat-older");
+        let cfg = cfg_for(&base);
+        let library = cfg.library_path.clone().unwrap();
+        let ac = cfg.ac_install_path.clone().unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+
+        let existing = ac.join("content").join("fonts").join("shared.txt");
+        write(&existing, b"RECENT");
+        set_mtime(&existing, 2_000_000);
+        let sat = dir(&library, ModKind::Car, "old_car");
+        write(&sat.join("content").join("fonts").join("shared.txt"), b"ANCIEN");
+        set_mtime(&sat.join("content").join("fonts").join("shared.txt"), 1_000_000);
+
+        let n = deploy(&conn, &cfg, ModKind::Car, "old_car").unwrap();
+        assert_eq!(n, 0, "rien posé : l'exemplaire du mod est plus ancien");
+        assert_eq!(std::fs::read(&existing).unwrap(), b"RECENT", "intact");
+        assert!(
+            !crate::gamebackup::is_replaced(&conn, &existing),
+            "aucune sauvegarde inutile"
+        );
+
+        undeploy(&conn, &cfg, "old_car").unwrap();
+        assert_eq!(
+            std::fs::read(&existing).unwrap(),
+            b"RECENT",
             "la désactivation n'emporte pas ce qu'elle n'a pas posé"
         );
-        assert_eq!(std::fs::read(&kunos).unwrap(), b"KUNOS");
     }
 
     #[test]

@@ -338,6 +338,8 @@
     "noExtras": "Ce mod n'installe rien hors de son dossier.",
     "extrasFileCount": "{count} fichier(s)",
     "extrasShared": "{count} partagé(s)",
+    "extrasReplaced": "{count} remplace(nt) le jeu",
+    "extrasReplacesGameFile": "remplace un fichier du jeu",
     "extrasProvidedBy": "fourni par {mod}",
     "tabBackgrounds": "Backgrounds",
     "mediaScreenshotsTitle": "Screenshots",

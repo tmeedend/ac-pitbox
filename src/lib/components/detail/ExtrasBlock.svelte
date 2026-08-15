@@ -42,6 +42,8 @@
     size: number;
     /** Fichiers du groupe qu'un autre mod fournit — fichiers partagés (§4.6ter). */
     shared: number;
+    /** Fichiers du groupe qui remplacent un fichier du jeu (§4.9). */
+    replaced: number;
   }
 
   // Groupe = dossier parent. Un fichier posé à la racine d'AC (rare) tombe
@@ -61,6 +63,7 @@
         files: fs,
         size: fs.reduce((a, f) => a + f.size_bytes, 0),
         shared: fs.filter((f) => f.provided_by !== null).length,
+        replaced: fs.filter((f) => f.replaces_game_file).length,
       }))
       .sort((a, b) => a.dir.localeCompare(b.dir));
   });
@@ -82,6 +85,9 @@
             <button class="grp-row" type="button" onclick={() => (openDirs[g.dir] = !openDirs[g.dir])}>
               <span class="grp-caret mono">{openDirs[g.dir] ? "−" : "+"}</span>
               <span class="grp-dir mono">{g.dir || "/"}</span>
+              {#if g.replaced}
+                <span class="grp-replaced">{t("detail.extrasReplaced", { count: g.replaced })}</span>
+              {/if}
               {#if g.shared}
                 <span class="grp-shared">{t("detail.extrasShared", { count: g.shared })}</span>
               {/if}
@@ -93,6 +99,9 @@
                 {#each g.files as f (f.rel_path)}
                   <li class="file-row">
                     <span class="file-nm">{f.rel_path.slice(g.dir.length)}</span>
+                    {#if f.replaces_game_file}
+                      <span class="file-replaced">{t("detail.extrasReplacesGameFile")}</span>
+                    {/if}
                     {#if f.provided_by}
                       <span class="file-by" title={f.provided_by}>{t("detail.extrasProvidedBy", { mod: f.provided_by })}</span>
                     {/if}
@@ -158,6 +167,12 @@
     color: var(--txt2);
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .grp-replaced,
+  .file-replaced {
+    color: var(--rosso-bright);
+    font-size: 10.5px;
     white-space: nowrap;
   }
   .grp-shared {

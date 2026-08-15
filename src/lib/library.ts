@@ -343,6 +343,8 @@ export interface ExtraFile {
   deployed: boolean;
   /** Mod qui fournit l'exemplaire posé, quand ce n'est pas celui-ci. */
   provided_by: string | null;
+  /** Remplace un fichier du jeu — l'original est sauvegardé et sera restauré (§4.9). */
+  replaces_game_file: boolean;
 }
 
 /** Ce qu'un mod installe hors de son dossier `content/` (§4.6ter). */
