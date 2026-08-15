@@ -109,7 +109,7 @@ pub fn create_junction(link: &Path, target: &Path) -> Result<(), String> {
 /// `/D`, réservé aux dossiers) — même mécanisme et même contrainte que
 /// `create_junction` (mode développeur Windows ou élévation), pour poser un
 /// fichier isolé dans un dossier réel déjà existant côté AC sans le copier
-/// (§6.1bis, mods qui n'ajoutent qu'un fichier à un emplacement déjà présent,
+/// (§7.3, mods qui n'ajoutent qu'un fichier à un emplacement déjà présent,
 /// ex. `content/gui/flags/`). Jamais utilisé si le fichier cible existe déjà
 /// — c'est à l'appelant (`others::place`) de le garantir.
 pub fn create_file_link(link: &Path, target: &Path) -> Result<(), String> {
@@ -239,7 +239,7 @@ pub fn activate(conn: &Connection, cfg: &AppConfig, mod_id: &str, version_id: Op
     // Compose par-dessus la base si le mod a des couches actives (§4.4) ;
     // sans couche, recompose ré-affirme simplement la junction vers la version.
     crate::compose::recompose(conn, cfg, mod_id)?;
-    // Ajouts au jeu (§4.6ter) : ce que l'archive livrait hors de
+    // Ajouts au jeu (§4.5.3) : ce que l'archive livrait hors de
     // `content/<type>/<id>` et qui appartient au mod. Best-effort — un
     // ajout non posé (emplacement déjà occupé) ne doit pas empêcher de
     // conduire, mais laisse une trace.
@@ -272,7 +272,7 @@ pub fn deactivate(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<()
     // prochaine activation — plus de dossier de composition intermédiaire à
     // nettoyer (le contenu composé, s'il y en avait, vivait directement dans
     // `link`, déjà retiré ci-dessus).
-    // Ajouts au jeu (§4.6ter) : retirés exactement comme ils ont été posés. Ils
+    // Ajouts au jeu (§4.5.3) : retirés exactement comme ils ont été posés. Ils
     // restent en bibliothèque, donc réactivables sans réimport.
     if let Err(e) = crate::extras::undeploy(conn, cfg, mod_id) {
         log::warn!("undeploy_extras {mod_id}: {e}");
@@ -315,7 +315,7 @@ mod tests {
 
     #[test]
     fn file_link_create_remove_and_guard() {
-        // Même mécanisme que les junctions mais au niveau fichier (§6.1bis) :
+        // Même mécanisme que les junctions mais au niveau fichier (§7.3) :
         // `remove_junction` doit reconnaître les deux formes de point de
         // reparse (Metadata::is_dir() ne les distingue pas fiablement).
         if !cfg!(windows) {

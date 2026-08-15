@@ -81,7 +81,7 @@ pub fn run() {
             let db_path = app.path().app_config_dir()?.join("overlay.sqlite");
             let conn = overlay::open(&db_path)?;
 
-            // Filet de sécurité (§4.9) : un fichier du jeu remplacé par un mod
+            // Filet de sécurité (§4.5.4) : un fichier du jeu remplacé par un mod
             // et que plus personne ne réclame redevient celui du jeu. Rattrape
             // une app tuée entre la sauvegarde et la pose, ou entre le retrait
             // et la restauration.

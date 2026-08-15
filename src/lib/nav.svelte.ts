@@ -72,7 +72,7 @@ export const nav = $state<{
   prefill: LaunchPrefill | null;
   /** Demande d'ouverture d'une fiche détail depuis une vue transversale (§12bis.3). */
   openMod: string | null;
-  /** Terme de recherche à appliquer à la bibliothèque (ex. filtrer par pack, §4.7). */
+  /** Terme de recherche à appliquer à la bibliothèque (ex. filtrer par pack, §4.4). */
   search: string | null;
   /** Duo de session courant (§8.6) — la bibliothèque le met à jour à l'ouverture. */
   sessionCar: SessionPick | null;

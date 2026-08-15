@@ -51,7 +51,7 @@ pub fn remove_orphan_junction(app: AppHandle, kind: String, id: String) -> Resul
     crate::maintenance::remove_orphan(&crate::config::load(&app), &kind, &id)
 }
 
-/// Désinstalle tout un pack (§4.7) : supprime chaque mod du pack. Renvoie le nb supprimé.
+/// Désinstalle tout un pack (§4.4) : supprime chaque mod du pack. Renvoie le nb supprimé.
 #[tauri::command]
 pub fn delete_pack(app: AppHandle, db: State<Db>, pack: String) -> Result<usize, String> {
     let cfg = crate::config::load(&app);

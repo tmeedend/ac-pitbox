@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Bloc « Ressources » de la fiche détail (§4.6) : fichiers annexes rangés à
+  // Bloc « Ressources » de la fiche détail (§4.5.2) : fichiers annexes rangés à
   // part du contenu de jeu (PDF, changelog, templates de skin…).
   //
   // Lus **en direct sur disque** à chaque ouverture, jamais mémorisés en base :

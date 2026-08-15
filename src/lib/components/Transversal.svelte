@@ -169,7 +169,7 @@
   // Clic sur une ligne : clic simple = sélectionne seule ; Ctrl(ou Alt)+clic =
   // bascule ; Maj+clic = plage depuis la dernière ligne cliquée (ordre affiché).
   function onItemClick(id: string, e: MouseEvent) {
-    // Fourni avec le mod (§4.6bis) : pas de sélection, rien à supprimer.
+    // Fourni avec le mod (§8) : pas de sélection, rien à supprimer.
     if (!subs.find((s) => s.id === id)?.removable) return;
     if (e.shiftKey && lastClicked) {
       const a = flatOrder.indexOf(lastClicked);

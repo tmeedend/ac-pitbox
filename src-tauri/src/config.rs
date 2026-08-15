@@ -36,7 +36,7 @@ pub struct Prefs {
     /// Scène utilisée par l'aperçu 3D (`content/showroom/<id>`, nom de dossier).
     /// `None` = `showroom::DEFAULT_SHOWROOM`, la plus légère.
     pub showroom_scene: Option<String>,
-    /// Extraction des fichiers annexes du mod à l'import (§4.6) : "none" |
+    /// Extraction des fichiers annexes du mod à l'import (§4.5.2) : "none" |
     /// "info_only" (défaut) | "all". Jamais reposée à chaque import — voir
     /// `resources::ExtractionMode::parse`.
     pub resource_extraction_mode: String,

@@ -1,4 +1,4 @@
-//! Mods « autres » (§6.1bis) : tout mod importé qui n'est ni voiture, circuit,
+//! Mods « autres » (§7.3) : tout mod importé qui n'est ni voiture, circuit,
 //! skin, son, ni app (shaders, configs CSP, mods d'UI, weather patterns, mods
 //! de physique globale…). Jamais perdu — stocké tel quel et listé.
 //!
@@ -8,7 +8,7 @@
 //! existe déjà réellement (ex. `content/gui/flags/`) est posé par lien fichier
 //! (`activation::create_file_link`).
 //!
-//! **Un fichier déjà présent est remplacé, pas sauté** (§4.9) : l'original part
+//! **Un fichier déjà présent est remplacé, pas sauté** (§4.5.4) : l'original part
 //! en sauvegarde et revient à la désactivation. C'est ce qui manquait aux mods
 //! qui remplacent réellement du contenu — un mod façon CMRT visant
 //! `content/gui/` s'installait à moitié, en silence. Comme partout ailleurs,
@@ -34,7 +34,7 @@ use crate::resources::{self, ExtractionMode};
 #[derive(Debug, Clone, Serialize)]
 pub struct OtherImported {
     pub id: String,
-    /// Fichiers annexes redirigés vers le dossier ressources (§4.6).
+    /// Fichiers annexes redirigés vers le dossier ressources (§4.5.2).
     pub resources_extracted: usize,
 }
 
@@ -73,7 +73,7 @@ fn other_id(source_name: &str) -> String {
     sanitized.to_string()
 }
 
-/// Importe un dossier non reconnu comme « autre mod » (§6.1bis) : stocké tel
+/// Importe un dossier non reconnu comme « autre mod » (§7.3) : stocké tel
 /// quel dans la bibliothèque, jamais perdu. Idempotent (ignore si déjà connu).
 pub fn import_other(
     conn: &Connection,
@@ -88,9 +88,9 @@ pub fn import_other(
         return None;
     }
     let dest = library.join("others").join(&id);
-    // Seul appelant en `BesideMod` (§4.6) : un « autre mod » est par
+    // Seul appelant en `BesideMod` (§4.5.2) : un « autre mod » est par
     // construction ce qui était livré à côté des mods reconnus — racine
-    // d'archive ou reste ramassé par le balayage (§6.1bis). Un document isolé
+    // d'archive ou reste ramassé par le balayage (§7.3). Un document isolé
     // y est bien une annexe, contrairement au même fichier trouvé dans un
     // dossier de mod.
     let res_dir = resources::resources_dir_for(library, "others", &[&id]);
@@ -130,7 +130,7 @@ pub struct ConflictInfo {
 pub struct OtherModCard {
     #[serde(flatten)]
     pub row: OtherModRow,
-    /// Autres mods « autres » partageant au moins un chemin de fichier (§6.1bis).
+    /// Autres mods « autres » partageant au moins un chemin de fichier (§7.3).
     pub conflicts: Vec<ConflictInfo>,
 }
 
@@ -185,7 +185,7 @@ pub struct ActivateOtherResult {
 /// l'emplacement AC correspondant existe déjà (vrai dossier). S'arrête et
 /// jonctionne dès qu'un emplacement est libre. Un fichier isolé dont le
 /// dossier parent existe déjà réellement est posé par lien fichier ; s'il vise
-/// un fichier déjà présent, il le **remplace après sauvegarde** (§4.9) — et
+/// un fichier déjà présent, il le **remplace après sauvegarde** (§4.5.4) — et
 /// seulement si son exemplaire est plus récent.
 #[allow(clippy::too_many_arguments)]
 fn place(
@@ -211,7 +211,7 @@ fn place(
             // Fichier isolé : posé par lien fichier si son dossier parent
             // existe déjà (vrai dossier ou tout juste jonctionné). Un fichier
             // déjà présent à cet emplacement n'est plus sauté en silence — il
-            // est remplacé après sauvegarde de l'original (§4.9), sous la même
+            // est remplacé après sauvegarde de l'original (§4.5.4), sous la même
             // condition que partout ailleurs : seul un exemplaire plus récent
             // prend la place de ce qui tourne déjà.
             if !target.parent().is_some_and(|p| p.exists()) {
@@ -255,7 +255,7 @@ fn place(
             }
         } else if activation::is_junction(&target) {
             // Emplacement déjà pris par un autre mod « autre » actif : la
-            // priorité tranche (le mod prioritaire gagne, §6.1bis).
+            // priorité tranche (le mod prioritaire gagne, §7.3).
             let holder = others
                 .iter()
                 .find(|o| o.id != mine_id && o.is_active && o.junctions.iter().any(|j| Path::new(j) == target));
@@ -288,7 +288,7 @@ fn place(
     }
 }
 
-/// Active un mod « autre » par junction (§6.1bis). Best-effort et partiel par
+/// Active un mod « autre » par junction (§7.3). Best-effort et partiel par
 /// nature : ce qui ne peut pas être posé sans toucher un vrai dossier ou un
 /// fichier isolé existant est simplement signalé, pas forcé.
 pub fn activate_other(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<ActivateOtherResult, String> {
@@ -332,7 +332,7 @@ pub fn deactivate_other(conn: &Connection, id: &str) -> Result<(), String> {
         let path = Path::new(j);
         let _ = activation::remove_junction(path);
         // Si ce chemin était un fichier du jeu que ce mod avait remplacé,
-        // l'original revient (§4.9). No-op sur une simple addition.
+        // l'original revient (§4.5.4). No-op sur une simple addition.
         crate::gamebackup::restore(conn, path);
     }
     overlay::set_other_active(conn, id, false, &[]).map_err(|e| e.to_string())
@@ -365,7 +365,7 @@ mod tests {
 
     #[test]
     fn other_id_keeps_the_leftover_label_and_strips_only_archive_extensions() {
-        // Bug réel (§6.1bis) : `other_id` découpait au dernier point via
+        // Bug réel (§7.3) : `other_id` découpait au dernier point via
         // `Path::file_stem`, donc `<archive>.rar__<label>` perdait son label —
         // tous les restes d'une archive partageaient un id et s'annulaient.
         assert_eq!(
@@ -398,7 +398,7 @@ mod tests {
 
     #[test]
     fn an_other_mod_replaces_a_game_file_and_gives_it_back() {
-        // §4.9 : un mod « autre » qui vise un fichier existant du jeu ne doit
+        // §4.5.4 : un mod « autre » qui vise un fichier existant du jeu ne doit
         // plus être sauté en silence — c'est ce qui installait à moitié les
         // mods façon CMRT (`content/gui/…`) sans que rien ne le dise. L'original
         // part en sauvegarde et revient à la désactivation.

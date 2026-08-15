@@ -1,7 +1,7 @@
 <script lang="ts">
   // Vue Apps (§12bis.4) : type autonome, simplement activable/désactivable par
   // junction. Pas de fiche ni de tags en v1 — nom, état, activation, ressources
-  // annexes (§4.6, même mécanisme que les mods voiture/circuit).
+  // annexes (§4.5.2, même mécanisme que les mods voiture/circuit).
   import { onMount } from "svelte";
   import {
     listApps,
@@ -25,7 +25,7 @@
   let loading = $state(true);
   let error = $state("");
 
-  // Ressources (§4.6) : chargées à la demande, une seule fois par app dépliée
+  // Ressources (§4.5.2) : chargées à la demande, une seule fois par app dépliée
   // (pas de parcours disque pour chaque app de la liste tant que personne ne
   // regarde), mémorisées ensuite pour un repli instantané.
   let expandedId = $state<string | null>(null);

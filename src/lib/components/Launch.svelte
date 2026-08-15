@@ -875,7 +875,7 @@
     });
   }
 
-  /** Remet exactement le jeu de skins de circuit de la sauvegarde (§4.6bis) :
+  /** Remet exactement le jeu de skins de circuit de la sauvegarde (§8) :
    * ceux qui manquent sont activés, ceux en trop désactivés — un skin resté
    * actif d'une session précédente changerait sinon l'apparence du circuit
    * sans que rien ne le signale. */

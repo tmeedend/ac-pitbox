@@ -33,7 +33,7 @@ pub fn list_subs_by_type(
 }
 
 /// Reconnaît les skins de circuit fournis avec le contenu initial du mod
-/// (§4.6bis, lecture live du disque, best-effort) — à appeler avant de lister
+/// (§8, lecture live du disque, best-effort) — à appeler avant de lister
 /// les skins d'un circuit pour qu'ils y apparaissent.
 #[tauri::command]
 pub fn sync_track_skins(app: AppHandle, db: State<Db>, track_id: String) -> Result<(), String> {
@@ -43,7 +43,7 @@ pub fn sync_track_skins(app: AppHandle, db: State<Db>, track_id: String) -> Resu
     Ok(())
 }
 
-/// Skins de circuit actuellement actifs (§4.6bis, plusieurs possibles).
+/// Skins de circuit actuellement actifs (§8, plusieurs possibles).
 #[tauri::command]
 pub fn list_active_track_skins(db: State<Db>, track_id: String) -> Result<Vec<String>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
@@ -51,7 +51,7 @@ pub fn list_active_track_skins(db: State<Db>, track_id: String) -> Result<Vec<St
 }
 
 /// Skins de circuit avec image de prévisualisation résolue, pour le
-/// sélecteur multi-choix de la barre latérale (§4.6bis).
+/// sélecteur multi-choix de la barre latérale (§8).
 #[tauri::command]
 pub fn list_track_skin_options(
     app: AppHandle,
@@ -63,7 +63,7 @@ pub fn list_track_skin_options(
     Ok(crate::submods::list_track_skin_options(&conn, &cfg, &track_id))
 }
 
-/// Active/désactive un skin de circuit (§4.6bis, pas exclusif).
+/// Active/désactive un skin de circuit (§8, pas exclusif).
 #[tauri::command]
 pub fn set_track_skin_active(
     app: AppHandle,
@@ -147,7 +147,7 @@ pub fn open_app_folder(app: AppHandle, db: State<Db>, id: String) -> Result<(), 
         .map_err(|e| e.to_string())
 }
 
-/// Liste les fichiers annexes d'une app (§4.6, même mécanisme que les mods
+/// Liste les fichiers annexes d'une app (§4.5.2, même mécanisme que les mods
 /// voiture/circuit) — lue en direct sur disque à chaque appel, jamais
 /// mémorisée en base.
 #[tauri::command]
@@ -162,7 +162,7 @@ pub fn list_app_resources(app: AppHandle, id: String) -> Result<Vec<crate::resou
 }
 
 /// Ouvre un fichier annexe d'une app avec l'application par défaut de l'OS
-/// (§4.6). `rel_path` résolu et validé côté serveur (garde-fou anti-traversée).
+/// (§4.5.2). `rel_path` résolu et validé côté serveur (garde-fou anti-traversée).
 #[tauri::command]
 pub fn open_app_resource(app: AppHandle, id: String, rel_path: String) -> Result<(), String> {
     let cfg = crate::config::load(&app);

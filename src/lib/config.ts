@@ -14,7 +14,7 @@ export interface Prefs {
   bigpicture_zoom: number | null;
   /** Scène de l'aperçu 3D (`content/showroom/<id>`) ; `null` = la plus légère. */
   showroom_scene: string | null;
-  /** Extraction des fichiers annexes du mod à l'import (§4.6) — jamais reposée
+  /** Extraction des fichiers annexes du mod à l'import (§4.5.2) — jamais reposée
    * à chaque import : "none" | "info_only" (défaut) | "all". */
   resource_extraction_mode: "none" | "info_only" | "all";
   /** Conserve l'archive/dossier source de chaque mod importé, en plus du

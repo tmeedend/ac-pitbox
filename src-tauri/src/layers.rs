@@ -21,7 +21,7 @@ use crate::resources::{self, ExtractionMode};
 use crate::{importer, overlay};
 
 /// Range un contenu entrant comme couche/extension rattachée à `parent_id`.
-/// Ne modifie jamais la base. Fichiers annexes (§4.6) redirigés vers le
+/// Ne modifie jamais la base. Fichiers annexes (§4.5.2) redirigés vers le
 /// dossier ressources du mod, jamais dans la couche elle-même. Renvoie l'id de
 /// couche créé et le nombre de fichiers annexes extraits.
 #[allow(clippy::too_many_arguments)]

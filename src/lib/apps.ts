@@ -26,13 +26,13 @@ export function deleteApp(id: string): Promise<void> {
   return invoke<void>("delete_app", { id });
 }
 
-/** Fichiers annexes d'une app (§4.6, même mécanisme que les mods voiture/circuit),
+/** Fichiers annexes d'une app (§4.5.2, même mécanisme que les mods voiture/circuit),
  * lus en direct sur disque — pas de cache, un dépôt manuel apparaît sans réimport. */
 export function listAppResources(id: string): Promise<ResourceFile[]> {
   return invoke<ResourceFile[]>("list_app_resources", { id });
 }
 
-/** Ouvre un fichier annexe d'une app avec l'application par défaut de l'OS (§4.6). */
+/** Ouvre un fichier annexe d'une app avec l'application par défaut de l'OS (§4.5.2). */
 export function openAppResource(id: string, relPath: string): Promise<void> {
   return invoke<void>("open_app_resource", { id, relPath });
 }

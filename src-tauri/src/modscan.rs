@@ -120,7 +120,7 @@ pub struct FoundSub {
     /// quand il désigne sans ambiguïté une seule cible — `None` pour la forme
     /// multi-voitures (`skins/<voiture>/<skin>`, une racine par voiture, pas de
     /// dossier commun). Sert à retrouver des fichiers voisins de `skins/` (ex.
-    /// `ext_config.ini` d'un pack de skins de circuit, §4.6bis).
+    /// `ext_config.ini` d'un pack de skins de circuit, §8).
     pub extra_root: Option<PathBuf>,
 }
 

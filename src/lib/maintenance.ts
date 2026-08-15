@@ -108,7 +108,7 @@ export function removeOrphanJunction(kind: string, id: string): Promise<void> {
   return invoke<void>("remove_orphan_junction", { kind, id });
 }
 
-/** Désinstalle tout un pack (§4.7) : supprime chaque mod du pack. Renvoie le nb supprimé. */
+/** Désinstalle tout un pack (§4.4) : supprime chaque mod du pack. Renvoie le nb supprimé. */
 export function deletePack(pack: string): Promise<number> {
   return invoke<number>("delete_pack", { pack });
 }

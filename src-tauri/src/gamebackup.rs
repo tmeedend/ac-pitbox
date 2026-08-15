@@ -1,4 +1,4 @@
-//! Remplacement d'un fichier du jeu, avec sauvegarde et restauration (§4.9).
+//! Remplacement d'un fichier du jeu, avec sauvegarde et restauration (§4.5.4).
 //!
 //! Certains mods ne se contentent pas d'**ajouter** des fichiers : ils en
 //! **remplacent** — shader `system/shaders/…` modifié, config CSP qui écrase
@@ -38,7 +38,7 @@ fn backup_path(library: &Path, ac: &Path, ac_path: &Path) -> Option<PathBuf> {
 
 /// `a` est-il strictement plus récent que `b` ? Faux dès qu'une des deux dates
 /// est illisible : dans le doute, on ne remplace pas. C'est le même critère
-/// que l'arbitrage des fichiers partagés (§4.6ter) — un exemplaire plus ancien,
+/// que l'arbitrage des fichiers partagés (§4.5.4) — un exemplaire plus ancien,
 /// ou de même date, ne prend jamais la place de ce qui tourne déjà.
 pub fn is_newer(a: &Path, b: &Path) -> bool {
     let ta = std::fs::metadata(a).and_then(|m| m.modified()).ok();
@@ -165,7 +165,7 @@ pub fn restore_orphans(conn: &Connection) {
         }
     };
     // Deux mécanismes réclament des chemins d'AC : les ajouts au jeu
-    // (§4.6ter) et les mods « autres » (§7.3). Oublier l'un des deux ferait
+    // (§4.5.3) et les mods « autres » (§7.3). Oublier l'un des deux ferait
     // restaurer au démarrage un fichier qu'un mod actif utilise encore.
     let others = crate::overlay::list_other_mods(conn).unwrap_or_default();
     for (ac_path, _) in rows {

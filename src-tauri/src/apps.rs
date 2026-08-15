@@ -2,7 +2,7 @@
 //! circuit, ni sous-élément). Stockées dans la bibliothèque, activables/
 //! désactivables par junction comme le reste, vers `<ac>/apps/python/<id>` ou
 //! `<ac>/apps/lua/<id>` selon le langage détecté (`app_lang`). Pas de fiche ni
-//! de tags en v1 — juste nom, état, activation, ressources annexes (§4.6).
+//! de tags en v1 — juste nom, état, activation, ressources annexes (§4.5.2).
 
 use std::path::{Path, PathBuf};
 
@@ -18,7 +18,7 @@ use crate::{activation, overlay};
 #[derive(Debug, Clone, Serialize)]
 pub struct AppImported {
     pub name: String,
-    /// Fichiers annexes redirigés vers le dossier ressources (§4.6).
+    /// Fichiers annexes redirigés vers le dossier ressources (§4.5.2).
     pub resources_extracted: usize,
 }
 
@@ -70,7 +70,7 @@ pub fn import_apps(
         if dest.exists() {
             let _ = std::fs::remove_dir_all(&dest);
         }
-        // Fichiers annexes (§4.6) redirigés à part : une image à la racine
+        // Fichiers annexes (§4.5.2) redirigés à part : une image à la racine
         // d'une app peut être une icône réellement utilisée par le script
         // (allow_root_images=false, jamais présumée annexe).
         let res_dir = resources::resources_dir_for(library, "apps", &[&app.name]);

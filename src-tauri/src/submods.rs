@@ -24,7 +24,7 @@
 //!   `skins/<skin>/` directement, convention CM, pour rester sélectionnable
 //!   depuis CM aussi), et une activation explicite depuis Pit Box recompose
 //!   directement `skins/default/` = union des skins actifs, reproduisant le
-//!   comportement de CM (§4.6bis, voir `recompose_track_skins`).
+//!   comportement de CM (§8, voir `recompose_track_skins`).
 //! - **Son** : exclusif (un seul actif). La bascule réelle des fichiers `sfx/`
 //!   est un lot suivant — ici on **stocke et enregistre** le son (inactif).
 
@@ -49,7 +49,7 @@ pub struct SubImported {
     /// Skin projeté (visible par AC) ; faux si le parent est inconnu/conflit.
     pub projected: bool,
     pub warning: Option<String>,
-    /// Fichiers annexes redirigés vers le dossier ressources (§4.6).
+    /// Fichiers annexes redirigés vers le dossier ressources (§4.5.2).
     pub resources_extracted: usize,
 }
 
@@ -109,7 +109,7 @@ fn import_skin_pack(
         }
 
         let dest = library.join(store_root).join(parent).join(&name);
-        // Fichiers annexes (§4.6) redirigés à part : une image à la racine
+        // Fichiers annexes (§4.5.2) redirigés à part : une image à la racine
         // d'un skin est TOUJOURS un vrai aperçu, jamais une annexe (allow_root_images=false).
         let res_dir = resources::resources_dir_for(library, store_root, &[parent, &name]);
         let resources_extracted =
@@ -155,7 +155,7 @@ fn import_skin_pack(
 
     // Fichiers annexes au pack de skins de circuit (ex. ext_config.ini,
     // amélioration CSP du circuit lui-même, indépendante de quel(s) skin(s)
-    // sont actifs) : routés comme couche, pas comme skin (§4.6bis).
+    // sont actifs) : routés comme couche, pas comme skin (§8).
     if track {
         if let Some(extra_root) = &sub.extra_root {
             import_track_pack_extras(conn, cfg, library, parent, extra_root, source_name, mode);
@@ -165,7 +165,7 @@ fn import_skin_pack(
 
 /// Projette un skin stocké séparément dans le `skins/` de l'entité cible via
 /// junction, pour qu'AC (ou CSP, pour un circuit) le charge (§12bis.2). Pour un
-/// circuit, sous `skins/cm_skins/<skin>/` (convention CM, §4.6bis) — pas
+/// circuit, sous `skins/cm_skins/<skin>/` (convention CM, §8) — pas
 /// `skins/<skin>/` directement. Best-effort.
 fn project_skin(
     conn: &Connection,
@@ -250,7 +250,7 @@ pub fn repair_projections(conn: &Connection, cfg: &AppConfig) -> RepairReport {
 }
 
 /// Fichiers annexes reconnus d'un pack de skins de circuit : pas des skins,
-/// mais une amélioration du circuit qui les accompagne (§4.6bis).
+/// mais une amélioration du circuit qui les accompagne (§8).
 const TRACK_PACK_EXTRAS: &[&str] = &["ext_config.ini"];
 
 /// Route les fichiers annexes d'un pack de skins de circuit (ex. `ext_config.ini`,
@@ -325,7 +325,7 @@ fn parent_skins_dir(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Opti
     parent_subdir(conn, cfg, parent_id, "skins")
 }
 
-/// Skins de circuit actuellement actifs (§4.6bis) — état géré par Pit Box
+/// Skins de circuit actuellement actifs (§8) — état géré par Pit Box
 /// (colonne `is_active` de `sub_mods`), **pas** un fichier posé dans le
 /// dossier du circuit : le `cm_skins_active.json` que Content Manager y
 /// dépose n'est que sa propre mémoire pour re-cocher ses cases, sans effet
@@ -368,7 +368,7 @@ pub struct TrackSkinOption {
     pub active: bool,
 }
 
-/// Skins de circuit avec une image de prévisualisation résolue (§4.6bis),
+/// Skins de circuit avec une image de prévisualisation résolue (§8),
 /// pour le sélecteur multi-choix de la barre latérale — cherche un fichier
 /// `preview.png`/`preview.jpg` (insensible à la casse) dans le dossier
 /// stocké de chaque skin.
@@ -414,7 +414,7 @@ fn find_preview_image(dir: &Path) -> Option<String> {
     None
 }
 
-/// Active/désactive un skin de circuit (§4.6bis) puis recompose
+/// Active/désactive un skin de circuit (§8) puis recompose
 /// `skins/default/` — plusieurs skins peuvent être actifs simultanément
 /// (contrairement aux skins voiture, sans notion d'exclusivité). Reproduit
 /// ce que fait réellement Content Manager : il **copie** les fichiers des
@@ -433,7 +433,7 @@ pub fn set_track_skin_active(
     recompose_track_skins(conn, cfg, track_id)
 }
 
-/// Reconstruit `skins/default/` comme l'union des skins actifs (§4.6bis),
+/// Reconstruit `skins/default/` comme l'union des skins actifs (§8),
 /// triés par nom pour un résultat déterministe (en cas de collision de nom
 /// de fichier entre deux skins — cas non observé en pratique — le dernier
 /// dans l'ordre alphabétique l'emporte). Entièrement reconstruit à chaque
@@ -459,7 +459,7 @@ fn recompose_track_skins(conn: &Connection, cfg: &AppConfig, track_id: &str) -> 
 
     deploy::compose_layers_into(&layers, &default_dir)?;
 
-    // cm_skins_active.json (§4.6bis) : reproduit fidèlement ce que pose
+    // cm_skins_active.json (§8) : reproduit fidèlement ce que pose
     // Content Manager lui-même — absent quand aucun skin actif (vérifié
     // empiriquement : default/ est intégralement vide dans ce cas), sinon le
     // tableau des noms actifs. N'a aucun effet sur le rendu de notre côté
@@ -475,7 +475,7 @@ fn recompose_track_skins(conn: &Connection, cfg: &AppConfig, track_id: &str) -> 
 }
 
 /// Reconnaît les skins de circuit déjà présents sur le disque, **fournis
-/// avec le contenu initial du mod** (§4.6bis) — jamais importés séparément
+/// avec le contenu initial du mod** (§8) — jamais importés séparément
 /// par Pit Box (donc jamais passés par `import_skin_pack`), le mod se
 /// dézippe normalement dans `content/`/la bibliothèque comme le reste de son
 /// contenu, sans y toucher. Enregistre ceux pas encore connus comme non
@@ -511,7 +511,7 @@ pub fn sync_bundled_track_skins(conn: &Connection, cfg: &AppConfig, track_id: &s
 }
 
 /// Réconcilie l'état actif connu de Pit Box avec `cm_skins_active.json`
-/// (§4.6bis) : si l'utilisateur a sélectionné des skins directement depuis
+/// (§8) : si l'utilisateur a sélectionné des skins directement depuis
 /// Content Manager (qui écrit aussi ce fichier — vérifié empiriquement),
 /// notre propre état deviendrait sinon périmé sans jamais le refléter. Le
 /// marqueur reflète toujours la **dernière** sélection appliquée à
@@ -646,7 +646,7 @@ fn import_sound(
     }
 
     let dest = library.join("sounds").join(&parent).join(&name);
-    // Fichiers annexes (§4.6) redirigés à part (GUIDs.txt reste toujours du
+    // Fichiers annexes (§4.5.2) redirigés à part (GUIDs.txt reste toujours du
     // contenu, voir resources::classify — jamais confondu avec une annexe).
     let res_dir = resources::resources_dir_for(library, "sounds", &[&parent, &name]);
     let resources_extracted =
@@ -748,7 +748,7 @@ pub fn remove_sub(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<()
             }
         }
         "TRACK_SKIN" => {
-            // Même chose, sous skins/cm_skins/ (convention CM, §4.6bis) — et
+            // Même chose, sous skins/cm_skins/ (convention CM, §8) — et
             // retiré du marqueur d'activation s'il y était.
             if let Some(skins_dir) = parent_subdir(conn, cfg, &sub.parent_id, "skins") {
                 let link = skins_dir.join("cm_skins").join(&sub.name);
@@ -962,7 +962,7 @@ mod tests {
 
     #[test]
     fn track_skin_projected_under_cm_skins_and_default_composed() {
-        // Convention CM (§4.6bis) : un skin de circuit se projette sous
+        // Convention CM (§8) : un skin de circuit se projette sous
         // skins/cm_skins/<nom>, pas skins/<nom> directement. Activation gérée
         // par Pit Box (sub_mods.is_active, pas de notion d'exclusivité comme
         // un skin voiture) et recompose skins/default/ — ce que fait
@@ -1060,7 +1060,7 @@ mod tests {
             "marqueur cm_skins_active.json posé, même format que CM"
         );
 
-        // Plusieurs actifs en même temps (§4.6bis, pas exclusif comme le son) —
+        // Plusieurs actifs en même temps (§8, pas exclusif comme le son) —
         // le dernier activé gagne les conflits de nom de fichier.
         set_track_skin_active(&conn, &cfg, "ks_black_cat_county", "Other Skin", true).unwrap();
         let mut active = list_active_track_skins(&conn, "ks_black_cat_county");
@@ -1121,7 +1121,7 @@ mod tests {
         // Un skin fourni avec le contenu initial du mod (dézippé normalement
         // dans content/, jamais passé par import_skin_pack) doit quand même
         // être reconnu et activable, mais pas supprimable individuellement —
-        // même logique que les skins voiture (§4.6bis).
+        // même logique que les skins voiture (§8).
         let base = crate::testutil::temp_dir("bundled");
         let library = base.join("library");
         let ac = base.join("ac");
@@ -1199,7 +1199,7 @@ mod tests {
         // Manager (qui écrit aussi cm_skins_active.json — vérifié
         // empiriquement), l'état de Pit Box doit refléter ce changement au
         // prochain chargement de la fiche, pas rester périmé sur son propre
-        // dernier état (§4.6bis).
+        // dernier état (§8).
         let base = crate::testutil::temp_dir("reconcile");
         let library = base.join("library");
         let ac = base.join("ac");
@@ -1258,7 +1258,7 @@ mod tests {
         // ext_config.ini voisin de skins/ dans un pack de skins de circuit :
         // amélioration du circuit lui-même, indépendante des skins actifs —
         // routé comme couche (extension/ext_config.ini), pas comme un skin de
-        // plus (§4.6bis).
+        // plus (§8).
         let base = crate::testutil::temp_dir("trkext");
         let library = base.join("library");
         let ac = base.join("ac");

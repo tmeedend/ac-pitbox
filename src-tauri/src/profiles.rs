@@ -1,5 +1,5 @@
 //! Profils (§7) : ensembles nommés de mods/versions activés, **plus** l'état
-//! des Autres mods et des Apps (§6.1bis/§12bis.4) capturés dans le même
+//! des Autres mods et des Apps (§7.3/§12bis.4) capturés dans le même
 //! instantané. Appliquer un profil = **réconcilier** chacun des trois :
 //! désactiver ce qui n'y est pas, activer ce qui y est.
 //!
@@ -52,7 +52,7 @@ pub fn create_from_active(conn: &Connection, cfg: &AppConfig, name: &str) -> Res
         }
     }
 
-    // Autres mods (§6.1bis) : is_active est un simple drapeau overlay, pas de version.
+    // Autres mods (§7.3) : is_active est un simple drapeau overlay, pas de version.
     for o in overlay::list_other_mods(conn).map_err(|e| e.to_string())? {
         if o.is_active {
             overlay::add_profile_extra_entry(conn, &id, "other", &o.id).map_err(|e| e.to_string())?;
@@ -109,7 +109,7 @@ pub fn apply(conn: &Connection, cfg: &AppConfig, profile_id: &str) -> Result<App
         }
     }
 
-    // --- Autres mods (§6.1bis) ---
+    // --- Autres mods (§7.3) ---
     for o in overlay::list_other_mods(conn).map_err(|e| e.to_string())? {
         if o.is_active && !target_other.contains(&o.id) {
             match others::deactivate_other(conn, &o.id) {

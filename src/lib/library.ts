@@ -28,9 +28,9 @@ export interface ModCard {
   aspiration: string | null;
   engine_config: string | null;
   gearbox: string | null;
-  /** Pack d'origine commun aux mods d'une même archive multi-voitures (§4.7). */
+  /** Pack d'origine commun aux mods d'une même archive multi-voitures (§4.4). */
   source_pack: string | null;
-  /** URL d'origine (rempli plus tard par l'extension, §4.7/§12ter). */
+  /** URL d'origine (rempli plus tard par l'extension, §4.4/§12ter). */
   source_url: string | null;
   /** Auteur de la version active (colonne §6.2). */
   author: string | null;
@@ -151,7 +151,7 @@ export interface ImportedMod {
   added_count?: number;
   overwritten_count?: number;
   existing_total?: number;
-  /** Fichiers annexes redirigés vers le dossier ressources du mod (§4.6). */
+  /** Fichiers annexes redirigés vers le dossier ressources du mod (§4.5.2). */
   resources_extracted: number;
 }
 
@@ -185,7 +185,7 @@ export interface SubImported {
   name: string;
   projected: boolean;
   warning: string | null;
-  /** Fichiers annexes redirigés vers le dossier ressources (§4.6). */
+  /** Fichiers annexes redirigés vers le dossier ressources (§4.5.2). */
   resources_extracted: number;
 }
 
@@ -195,7 +195,7 @@ export interface AppImported {
   resources_extracted: number;
 }
 
-/** Mod « autre » importé — type non reconnu, jamais perdu (§6.1bis). */
+/** Mod « autre » importé — type non reconnu, jamais perdu (§7.3). */
 export interface OtherImported {
   id: string;
   resources_extracted: number;
@@ -208,7 +208,7 @@ export interface ArchiveResult {
   subs: SubImported[];
   apps: AppImported[];
   others: OtherImported[];
-  /** Fichiers livrés à côté du mod et rattachés à lui (§4.6ter). */
+  /** Fichiers livrés à côté du mod et rattachés à lui (§4.5.3). */
   extras?: number;
 }
 
@@ -216,7 +216,7 @@ export interface ImportProgress {
   archive: string;
   /** "queued" : posé côté frontend dès le drop/la sélection, avant même le
    * premier événement backend — retour immédiat le temps que la commande
-   * (async, §4.6bis) démarre réellement le traitement. */
+   * (async, §4.2) démarre réellement le traitement. */
   phase: "queued" | "extract" | "scan" | "filing" | "done";
   current: number;
   total: number;
@@ -230,7 +230,7 @@ export function importArchives(
   return invoke<ArchiveResult[]>("import_archives", { paths, decisions });
 }
 
-/** Import de dossiers déjà décompressés (§4.5). copy=true préserve la source. */
+/** Import de dossiers déjà décompressés (§4.2). copy=true préserve la source. */
 export function importFolders(
   paths: string[],
   copy: boolean,
@@ -264,7 +264,7 @@ export function reorderLayer(id: string, direction: "up" | "down"): Promise<void
   return invoke<void>("reorder_layer", { id, direction });
 }
 
-// --- Import en masse (§4.6) ---
+// --- Import en masse (§4.2) ---
 export type BulkStatus = "new" | "update" | "duplicate" | "ambiguous";
 
 export interface BulkMod {
@@ -320,7 +320,7 @@ export function openModFolder(id: string): Promise<void> {
   return invoke<void>("open_mod_folder", { id });
 }
 
-/** Fichier annexe du mod, listé dans le bloc Ressources (§4.6). */
+/** Fichier annexe du mod, listé dans le bloc Ressources (§4.5.2). */
 export interface ResourceFile {
   name: string;
   /** Chemin relatif au dossier ressources (sous-dossiers éventuels). */
@@ -328,13 +328,13 @@ export interface ResourceFile {
   size_bytes: number;
 }
 
-/** Fichiers annexes du mod, lus en direct sur disque (§4.6) — pas de cache,
+/** Fichiers annexes du mod, lus en direct sur disque (§4.5.2) — pas de cache,
  * un dépôt manuel dans le dossier ressources apparaît sans réimport. */
 export function listModResources(id: string): Promise<ResourceFile[]> {
   return invoke<ResourceFile[]>("list_mod_resources", { id });
 }
 
-/** Une entrée de l'onglet « Ajouts au jeu » (§4.6ter). */
+/** Une entrée de l'onglet « Ajouts au jeu » (§4.5.5). */
 export interface ExtraFile {
   /** Chemin relatif à la racine d'Assetto Corsa — dit où le fichier atterrit. */
   rel_path: string;
@@ -343,16 +343,16 @@ export interface ExtraFile {
   deployed: boolean;
   /** Mod qui fournit l'exemplaire posé, quand ce n'est pas celui-ci. */
   provided_by: string | null;
-  /** Remplace un fichier du jeu — l'original est sauvegardé et sera restauré (§4.9). */
+  /** Remplace un fichier du jeu — l'original est sauvegardé et sera restauré (§4.5.4). */
   replaces_game_file: boolean;
 }
 
-/** Ce qu'un mod installe hors de son dossier `content/` (§4.6ter). */
+/** Ce qu'un mod installe hors de son dossier `content/` (§4.5.3). */
 export function listModExtras(id: string): Promise<ExtraFile[]> {
   return invoke<ExtraFile[]>("list_mod_extras", { id });
 }
 
-/** Ouvre un fichier annexe avec l'application par défaut de l'OS (§4.6). */
+/** Ouvre un fichier annexe avec l'application par défaut de l'OS (§4.5.2). */
 export function openModResource(id: string, relPath: string): Promise<void> {
   return invoke<void>("open_mod_resource", { id, relPath });
 }

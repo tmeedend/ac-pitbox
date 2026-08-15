@@ -1,4 +1,4 @@
-//! Ajouts au jeu d'un mod (§4.6ter) : ce qu'une archive livre **à côté** du
+//! Ajouts au jeu d'un mod (§4.5.3) : ce qu'une archive livre **à côté** du
 //! dossier du mod mais qui lui appartient — configs CSP
 //! (`extension/config/cars/rss/<id>/…`), shaders (`system/shaders/…`),
 //! textures d'équipe (`content/texture/…`), modèle de pilote
@@ -19,7 +19,7 @@
 //!   mod » ne donnait pas : les fichiers d'une voiture désinstallée restaient
 //!   dans AC, rattachés à une entrée anonyme que plus rien ne reliait au mod.
 //!
-//! Au **niveau du mod**, pas de la version (comme `resources/`, §4.6) : les
+//! Au **niveau du mod**, pas de la version (comme `resources/`, §4.5.2) : les
 //! configs CSP d'une mise à jour remplacent celles de la précédente, ce qui est
 //! le comportement voulu, et les couches (§4.3) partagent le même arbre.
 //!
@@ -44,7 +44,7 @@
 //!
 //! Un fichier que **personne ne réclame** — contenu Kunos, ou mod installé hors
 //! de l'app — relève du même arbitrage : un exemplaire plus récent le remplace,
-//! mais seulement après que l'original a été mis à l'abri (`gamebackup`, §4.9),
+//! mais seulement après que l'original a été mis à l'abri (`gamebackup`, §4.5.4),
 //! et il revient dès que plus aucun mod ne réclame le chemin. Un exemplaire
 //! plus ancien ou de même date ne prend jamais la place de ce qui tourne déjà.
 
@@ -150,7 +150,7 @@ fn sync(conn: &Connection, cfg: &AppConfig, ac_path: &Path) {
     let key = ac_path.to_string_lossy().into_owned();
     let Some(best) = best_claim(conn, cfg, ac_path) else {
         // Plus aucun réclamant. Si ce chemin était un fichier du jeu qu'un mod
-        // avait remplacé, l'original revient (§4.9) ; sinon le fichier part.
+        // avait remplacé, l'original revient (§4.5.4) ; sinon le fichier part.
         if crate::gamebackup::is_replaced(conn, ac_path) {
             crate::gamebackup::restore(conn, ac_path);
         } else if ac_path.is_file() {
@@ -212,7 +212,7 @@ pub fn deploy(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -
             // 2. Déjà remplacé par nous : l'original est à l'abri, même chose.
             // 3. Fichier du jeu intact : le **même arbitrage par date**
             //    s'applique. Un exemplaire plus récent le remplace, après
-            //    sauvegarde (§4.9) ; un exemplaire plus ancien ou de même date
+            //    sauvegarde (§4.5.4) ; un exemplaire plus ancien ou de même date
             //    ne prend pas la place de ce qui tourne déjà. Sans cette
             //    comparaison, le dernier mod installé écraserait une font mise
             //    à jour par un autre outil, ce que rien ne justifie.
@@ -278,7 +278,7 @@ pub fn deploy(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -
 /// Retire la réclamation du mod sur ses ajouts au jeu, puis réaligne chaque
 /// fichier : encore réclamé par un autre mod, il **reste** (et repasse à
 /// l'exemplaire du meilleur réclamant restant) ; plus réclamé du tout, il est
-/// retiré. C'est le compteur de références des fichiers partagés (§4.6ter) —
+/// retiré. C'est le compteur de références des fichiers partagés (§4.5.4) —
 /// désactiver une voiture RSS n'emporte pas les textures communes dont douze
 /// autres dépendent. Puis les dossiers créés pour l'occasion sont élagués, du
 /// plus profond au plus superficiel ; `remove_dir` échoue sur un dossier non
@@ -316,7 +316,7 @@ pub fn undeploy(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(), 
     Ok(())
 }
 
-/// Une entrée de l'onglet « Ajouts au jeu » de la fiche (§4.6ter).
+/// Une entrée de l'onglet « Ajouts au jeu » de la fiche (§4.5.5).
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ExtraFile {
     /// Chemin relatif à la racine d'AC — c'est *l'*information utile : elle dit
@@ -329,13 +329,13 @@ pub struct ExtraFile {
     /// Mod qui fournit l'exemplaire posé, quand ce n'est pas celui-ci.
     pub provided_by: Option<String>,
     /// Ce chemin était un fichier du jeu : l'original est sauvegardé et sera
-    /// restauré (§4.9). Signalé sur la fiche — une modification réversible mais
+    /// restauré (§4.5.4). Signalé sur la fiche — une modification réversible mais
     /// invisible reste un piège.
     pub replaces_game_file: bool,
 }
 
 /// Liste ce qu'un mod installe hors de `content/<type>/<id>`, **lu en direct
-/// sur disque** comme le bloc Ressources (§4.6) : un mod importé avant que
+/// sur disque** comme le bloc Ressources (§4.5.5) : un mod importé avant que
 /// l'app ne suive ces fichiers n'a rien à réimporter pour que l'onglet se
 /// remplisse. L'état de pose, lui, vient de la base.
 pub fn list(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -> Vec<ExtraFile> {
@@ -398,7 +398,7 @@ mod tests {
 
     #[test]
     fn shared_file_survives_until_the_last_mod_stops_claiming_it() {
-        // §4.6ter — compteur de références. Douze voitures RSS livrent le même
+        // §4.5.4 — compteur de références. Douze voitures RSS livrent le même
         // `extension/textures/common/rss/…` : en désactiver une ne doit pas
         // emporter le fichier dont les onze autres dépendent. Et l'arbitrage
         // par date décide de l'exemplaire posé, dans les deux sens : quand le
@@ -448,7 +448,7 @@ mod tests {
 
     #[test]
     fn list_reports_where_each_file_lands_and_who_provides_it() {
-        // §4.6ter, onglet « Ajouts au jeu » : la fiche doit dire *où* le mod
+        // §4.5.5, onglet « Ajouts au jeu » : la fiche doit dire *où* le mod
         // pose ses fichiers dans le jeu, et lesquels sont en fait fournis par
         // un autre mod (fichier partagé). Sans ça, un mod peut poser 69
         // fichiers hors de son dossier sans que rien ne le montre.
@@ -525,7 +525,7 @@ mod tests {
 
     #[test]
     fn extras_deployed_on_activate_and_fully_removed_on_deactivate() {
-        // §4.6ter : l'ajout vit et meurt avec son mod. C'est ce que le
+        // §4.5.3 : l'ajout vit et meurt avec son mod. C'est ce que le
         // passage par « autre mod » ne donnait pas — les fichiers d'une voiture
         // désinstallée restaient dans AC, rattachés à une entrée anonyme.
         let base = crate::testutil::temp_dir("sat");
@@ -563,7 +563,7 @@ mod tests {
 
     #[test]
     fn a_newer_mod_file_replaces_a_game_file_and_the_original_comes_back() {
-        // §4.9 : la règle d'or n°5 n'interdit pas de toucher un fichier du jeu,
+        // §4.5.4 : la règle d'or n°5 n'interdit pas de toucher un fichier du jeu,
         // elle exige qu'il soit sauvegardé et restauré. Avant, la pose sautait
         // le fichier en silence et le mod s'installait à moitié — c'est ce qui
         // cassait les mods qui remplacent vraiment (HUD façon CMRT, shaders).

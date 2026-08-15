@@ -89,11 +89,11 @@
   let actionError = $state("");
   let exporting = $state(false);
   let exportResult = $state<ExportReport | null>(null);
-  // Provenance / pack d'origine (§4.7).
+  // Provenance / pack d'origine (§4.4).
   let siblings = $state<ModCard[]>([]);
   let packBusy = $state(false);
   // Couches / extensions rattachées (§4.4).
-  // Fichiers annexes du mod (§4.6, Bloc Ressources) — lus en direct sur disque.
+  // Fichiers annexes du mod (§4.5.2, Bloc Ressources) — lus en direct sur disque.
 
   // Image héros : voiture → skin sélectionné ; circuit → preview du layout
   // sélectionné ; sinon preview par défaut du mod.
@@ -270,7 +270,7 @@
     getModDetail(current).then((d) => {
       if (current !== id) return;
       detail = d;
-      // Autres entités du même pack (§4.7).
+      // Autres entités du même pack (§4.4).
       if (d?.source_pack) {
         listLibrary().then((all) => {
           if (current !== id) return;
@@ -353,7 +353,7 @@
 
   async function loadTrackSkins(parent: string) {
     try {
-      // Reconnaît d'abord les skins fournis avec le mod (§4.6bis) — sinon ils
+      // Reconnaît d'abord les skins fournis avec le mod (§8) — sinon ils
       // n'apparaîtraient pas encore dans le listSubMods qui suit.
       await syncTrackSkins(parent);
       if (parent !== id) return;
@@ -380,7 +380,7 @@
     }
   }
 
-  // Un import peut survenir depuis n'importe quel écran (§4.6bis) et cibler le
+  // Un import peut survenir depuis n'importe quel écran (§4.2) et cibler le
   // mod ouvert (ex. une extension). Dès qu'un import se termine, recharger la
   // fiche pour voir tout de suite la nouvelle couche + ses layouts.
   let lastImportVersion = importState.version;
@@ -905,7 +905,7 @@
           </section>
 
           <!-- Skins de circuit (TRACK_SKIN) — activables individuellement, plusieurs
-               à la fois (§4.6bis, pas de notion d'exclusivité côté CSP). -->
+               à la fois (§8, pas de notion d'exclusivité côté CSP). -->
           <section class="blk">
             <header class="blk-h">
               <span class="blk-t">{t("detail.trackSkinsLabelPlain")}</span>
@@ -1560,7 +1560,7 @@
 
   /* Couches / extensions (§4.4) */
 
-  /* Bloc Ressources (§4.6) : déplacé dans son propre onglet (§6.1) */
+  /* Bloc Ressources (§4.5.2) : déplacé dans son propre onglet (§6.1) */
 
-  /* Provenance / pack d'origine (§4.7) */
+  /* Provenance / pack d'origine (§4.4) */
 </style>

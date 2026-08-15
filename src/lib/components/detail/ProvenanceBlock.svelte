@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Bloc « Source / origine » de la fiche détail (§4.7) : d'où vient ce mod.
+  // Bloc « Source / origine » de la fiche détail (§4.4) : d'où vient ce mod.
   //
   // Plusieurs rubriques ont fusionné ici — auteur, archive, date de publication,
   // pack d'origine — parce qu'elles répondent toutes à la même question « d'où

@@ -1,4 +1,4 @@
-// Pont typé vers les commandes « Autres mods » (§6.1bis).
+// Pont typé vers les commandes « Autres mods » (§7.3).
 import { invoke } from "@tauri-apps/api/core";
 
 export interface ConflictInfo {
@@ -38,7 +38,7 @@ export function deactivateOther(id: string): Promise<void> {
   return invoke<void>("deactivate_other", { id });
 }
 
-/** Supprime proprement un mod « autre » (jonctions + fichiers + overlay, §6.1bis). */
+/** Supprime proprement un mod « autre » (jonctions + fichiers + overlay, §7.3). */
 export function deleteOtherMod(id: string): Promise<void> {
   return invoke<void>("delete_other_mod", { id });
 }

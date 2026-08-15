@@ -188,7 +188,7 @@ pub fn delete_broken(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(),
         let _ = std::fs::remove_dir_all(lib.join(kind.content_folder()).join(id));
     }
 
-    // Ajouts au jeu (§4.6ter) : retirés d'AC *avant* de supprimer leur source en
+    // Ajouts au jeu (§4.5.3) : retirés d'AC *avant* de supprimer leur source en
     // bibliothèque — c'est la liste en base qui dit quoi retirer, mais autant
     // le faire tant que tout est cohérent. C'est ce qui manquait au passage par
     // « autre mod » : les fichiers d'une voiture supprimée restaient dans AC.
@@ -216,7 +216,7 @@ pub fn delete_broken(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(),
     Ok(())
 }
 
-/// Désinstalle **tout un pack** (§4.7) : supprime chaque mod partageant ce
+/// Désinstalle **tout un pack** (§4.4) : supprime chaque mod partageant ce
 /// `source_pack` (fichiers + junction + overlay). Renvoie le nombre supprimé.
 pub fn delete_pack(conn: &Connection, cfg: &AppConfig, pack: &str) -> Result<usize, String> {
     let ids = overlay::list_pack_ids(conn, pack).map_err(|e| e.to_string())?;
@@ -322,7 +322,7 @@ pub struct RepairAllReport {
 /// 1. Projections skin/circuit manquantes ou cassées (`submods::repair_projections`).
 /// 2. **Redéploiement des mods actifs** : `activation::activate` nettoie le
 ///    déploiement existant et le refait selon le mode et les règles du jour —
-///    y compris les ajouts au jeu (§4.6ter), que les mods importés avant leur
+///    y compris les ajouts au jeu (§4.5.3), que les mods importés avant leur
 ///    existence n'ont jamais posés.
 /// 3. Si `reinstall_broken`, réinstallation depuis l'archive source conservée
 ///    (§10/§11) des mods détectés cassés. Un mod sans archive conservée échoue

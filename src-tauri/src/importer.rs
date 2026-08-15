@@ -56,7 +56,7 @@ pub struct ImportedMod {
     pub overwritten_count: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub existing_total: Option<usize>,
-    /// Fichiers annexes redirigés vers le dossier ressources du mod (§4.6),
+    /// Fichiers annexes redirigés vers le dossier ressources du mod (§4.5.2),
     /// selon le réglage global. 0 si rien n'a été filé (doublon, ambigu bloqué).
     pub resources_extracted: usize,
 }
@@ -112,11 +112,11 @@ pub struct ArchiveResult {
     /// Apps Python importées (§12bis.4).
     #[serde(default)]
     pub apps: Vec<crate::apps::AppImported>,
-    /// Mods « autres » importés — type non reconnu, jamais perdus (§6.1bis).
+    /// Mods « autres » importés — type non reconnu, jamais perdus (§7.3).
     #[serde(default)]
     pub others: Vec<crate::others::OtherImported>,
     /// Fichiers rattachés à un mod de l'''archive et stockés comme ses
-    /// ajouts au jeu (§4.6ter) — configs CSP, shaders, pilote…
+    /// ajouts au jeu (§4.5.3) — configs CSP, shaders, pilote…
     #[serde(default)]
     pub extras: usize,
 }
@@ -211,7 +211,7 @@ fn fm_id(fm: &modscan::FoundMod) -> String {
         .unwrap_or_default()
 }
 
-/// Extensions d'archives reconnues pour une extraction imbriquée (§6.1bis).
+/// Extensions d'archives reconnues pour une extraction imbriquée (§7.3).
 /// Partagé avec `others::other_id`, qui ne doit retirer *que* ces extensions-là
 /// en dérivant l'id d'un mod « autre ».
 pub(crate) const NESTED_ARCHIVE_EXTS: &[&str] = &["zip", "7z", "rar"];
@@ -262,13 +262,13 @@ fn consumed_paths(found: &[modscan::FoundMod], subs: &[modscan::FoundSub], apps:
         .collect()
 }
 
-/// Importe tout ce qui reste après found/subs/apps (§6.1bis) : avant ce
+/// Importe tout ce qui reste après found/subs/apps (§7.3) : avant ce
 /// correctif, dès qu'au moins un mod était reconnu ailleurs dans l'archive,
 /// tout le reste — fichiers isolés, zips imbriqués comme les mods CMRT-style
 /// (dossier `apps/` + zip séparé qui vise `content/gui/...`) — disparaissait
 /// silencieusement au nettoyage du dossier temporaire (tri tout-ou-rien).
 /// Un reste rattaché à un mod de la même archive devient un de ses **ajouts au jeu**
-/// (§4.6ter) ; sinon il reste un « autre mod » autonome (id `<archive>__<nom>`),
+/// (§4.5.3) ; sinon il reste un « autre mod » autonome (id `<archive>__<nom>`),
 /// jamais fusionné avec ses voisins.
 ///
 /// Rattachement, dans cet ordre :
@@ -315,7 +315,7 @@ fn sweep_leftovers(
     let mut leftovers = Vec::new();
     collect_leftover(workdir, consumed, &mut leftovers);
     // Mods ayant reçu au moins un ajout : ces ajouts sont posés en
-    // fin de balayage. L'activation par défaut (§4.6bis) a lieu avant, quand
+    // fin de balayage. L'activation par défaut (§4.2) a lieu avant, quand
     // leur arbre n'existe pas encore — sans ce rattrapage, ils ne
     // seraient posés qu'à la réactivation suivante.
     let mut owners_with_extras: Vec<(String, ModKind)> = Vec::new();
@@ -323,11 +323,11 @@ fn sweep_leftovers(
         let rel = p.strip_prefix(workdir).unwrap_or(&p).to_path_buf();
 
         // Une archive imbriquée n'est pas un ajout au jeu : elle doit être
-        // extraite et reclassée (§6.1bis), pas stockée telle quelle.
+        // extraite et reclassée (§7.3), pas stockée telle quelle.
         if !is_archive_file(&p) {
             if let Some((owner_id, owner_kind)) = owner_of_leftover(&rel, mods) {
                 // Document isolé à la racine de ce qui entoure le mod : une
-                // annexe (§4.6), pas un ajout au jeu — il n'a rien à faire dans
+                // annexe (§4.5.2), pas un ajout au jeu — il n'a rien à faire dans
                 // AC. Rangé dans les ressources du mod auquel il appartient,
                 // là où l'utilisateur ira le lire.
                 let is_root_file = p.is_file() && rel.parent().is_some_and(|d| d.as_os_str().is_empty());
@@ -553,7 +553,7 @@ fn import_leftover(
     let _ = std::fs::remove_dir_all(&wrap);
 }
 
-/// Active par défaut les mods fraîchement importés/mis à jour (§4.6bis) : on veut
+/// Active par défaut les mods fraîchement importés/mis à jour (§4.2) : on veut
 /// pouvoir conduire tout de suite. Best-effort (l'échec — ex. vrai dossier Kunos
 /// homonyme, dossier AC non configuré — n'interrompt pas l'import).
 fn auto_activate(conn: &Connection, cfg: &AppConfig, mods: &[ImportedMod]) {
@@ -566,7 +566,7 @@ fn auto_activate(conn: &Connection, cfg: &AppConfig, mods: &[ImportedMod]) {
     }
 }
 
-/// Active par défaut les apps fraîchement importées (§4.6bis, §12bis.4) — même
+/// Active par défaut les apps fraîchement importées (§4.2, §12bis.4) — même
 /// logique que les mods voiture/circuit et les mods « autres » : best-effort,
 /// une app déjà active ou dont l'AC install n'est pas configurée ne bloque pas
 /// le reste de l'import.
@@ -605,7 +605,7 @@ fn import_one(
         result.error = Some("Chemins 7-Zip ou bibliothèque non configurés.".into());
         return result;
     };
-    // Extraction des fichiers annexes (§4.6) : réglage global, jamais reposé
+    // Extraction des fichiers annexes (§4.5.2) : réglage global, jamais reposé
     // à chaque import.
     let res_mode = crate::resources::ExtractionMode::parse(&cfg.prefs.resource_extraction_mode);
 
@@ -636,7 +636,7 @@ fn import_one(
     let subs = modscan::scan_subs(&workdir);
     let apps = modscan::scan_apps(&workdir);
     if found.is_empty() && subs.is_empty() && apps.is_empty() {
-        // Type non reconnu : jamais perdu, rangé comme « autre mod » (§6.1bis).
+        // Type non reconnu : jamais perdu, rangé comme « autre mod » (§7.3).
         if let Some(other) = crate::others::import_other(conn, library, &archive_name, &workdir, false, res_mode) {
             if let Err(e) = crate::others::activate_other(conn, cfg, &other.id) {
                 log::warn!("auto_activate_other {}: {e}", other.id);
@@ -661,7 +661,7 @@ fn import_one(
     // par voiture pour un pack multi-voitures).
     let kept_archive = keep_source(cfg, archive_path, &archive_name);
 
-    // Pack (§4.7) : une archive multi-voitures regroupe ses mods sous sa source.
+    // Pack (§4.4) : une archive multi-voitures regroupe ses mods sous sa source.
     let pack = (found.len() > 1).then_some(archive_name.as_str());
     for (i, fm) in found.iter().enumerate() {
         let label = fm
@@ -699,7 +699,7 @@ fn import_one(
         }
     }
 
-    // Activation par défaut des mods importés (§4.6bis).
+    // Activation par défaut des mods importés (§4.2).
     auto_activate(conn, cfg, &result.mods);
 
     // Sous-éléments rattachés (skins/sons) : stockage séparé (§12bis.2). Archive
@@ -713,7 +713,7 @@ fn import_one(
         auto_activate_apps(conn, cfg, &result.apps);
     }
 
-    // Ce qui reste à côté des mods reconnus ci-dessus (§6.1bis) : jamais perdu,
+    // Ce qui reste à côté des mods reconnus ci-dessus (§7.3) : jamais perdu,
     // y compris le contenu de zips imbriqués (ex. mods CMRT-style qui livrent
     // une app ET un zip séparé visant `content/gui/...`).
     let consumed = consumed_paths(&found, &subs, &apps);
@@ -743,7 +743,7 @@ fn import_one(
     result
 }
 
-/// Import depuis des **dossiers déjà décompressés** (§4.5). Même pipeline que
+/// Import depuis des **dossiers déjà décompressés** (§4.2). Même pipeline que
 /// les archives, sans décompression. `copy=true` préserve la source (copie),
 /// sinon déplacement adaptatif (rename même disque, copie+suppression sinon).
 pub fn import_folders(
@@ -808,7 +808,7 @@ fn import_one_folder(
     let subs = modscan::scan_subs(dir);
     let apps = modscan::scan_apps(dir);
     if found.is_empty() && subs.is_empty() && apps.is_empty() {
-        // Type non reconnu : jamais perdu, rangé comme « autre mod » (§6.1bis).
+        // Type non reconnu : jamais perdu, rangé comme « autre mod » (§7.3).
         if let Some(other) = crate::others::import_other(conn, library, &name, dir, copy, res_mode) {
             if let Err(e) = crate::others::activate_other(conn, cfg, &other.id) {
                 log::warn!("auto_activate_other {}: {e}", other.id);
@@ -832,7 +832,7 @@ fn import_one_folder(
     // le dossier (partagé si plusieurs mods dedans).
     let kept_archive = keep_source(cfg, dir, &name);
 
-    // Pack (§4.7) : un dossier multi-voitures regroupe ses mods sous sa source.
+    // Pack (§4.4) : un dossier multi-voitures regroupe ses mods sous sa source.
     let pack = (found.len() > 1).then_some(name.as_str());
     for (i, fm) in found.iter().enumerate() {
         emit(Progress {
@@ -867,7 +867,7 @@ fn import_one_folder(
         }
     }
 
-    // Activation par défaut des mods importés (§4.6bis).
+    // Activation par défaut des mods importés (§4.2).
     auto_activate(conn, cfg, &result.mods);
 
     // Sous-éléments rattachés (skins/sons), stockage séparé (§12bis.2).
@@ -880,7 +880,7 @@ fn import_one_folder(
         auto_activate_apps(conn, cfg, &result.apps);
     }
 
-    // Ce qui reste à côté des mods reconnus ci-dessus (§6.1bis) : jamais perdu,
+    // Ce qui reste à côté des mods reconnus ci-dessus (§7.3) : jamais perdu,
     // y compris le contenu de zips imbriqués (ex. mods CMRT-style qui livrent
     // une app ET un zip séparé visant `content/gui/...`).
     let consumed = consumed_paths(&found, &subs, &apps);
@@ -909,7 +909,7 @@ fn import_one_folder(
     result
 }
 
-// --- Import en masse (§4.6) -------------------------------------------------
+// --- Import en masse (§4.2) -------------------------------------------------
 
 #[derive(Debug, Clone, Serialize)]
 pub struct BulkMod {
@@ -931,7 +931,7 @@ pub struct BulkEntry {
     pub mods: Vec<BulkMod>,
 }
 
-/// Classe un mod trouvé sans rien écrire (§4.6 phase d'analyse).
+/// Classe un mod trouvé sans rien écrire (§4.2 phase d'analyse).
 fn classify(
     conn: &Connection,
     id: &str,
@@ -960,7 +960,7 @@ fn classify(
     }
 }
 
-/// Phase d'analyse (§4.6) : scanne chaque sous-dossier direct du parent et
+/// Phase d'analyse (§4.2) : scanne chaque sous-dossier direct du parent et
 /// classe les mods **sans rien écrire**. Un seul niveau de sous-dossiers.
 pub fn analyze_bulk(conn: &Connection, _cfg: &AppConfig, parent: &Path) -> Result<Vec<BulkEntry>, String> {
     if !parent.is_dir() {
@@ -1038,7 +1038,7 @@ pub struct BulkExecItem {
     pub replace_ids: Vec<String>,
 }
 
-/// Exécution de l'import en masse selon les décisions (§4.6). Reprenable :
+/// Exécution de l'import en masse selon les décisions (§4.2). Reprenable :
 /// relancer l'analyse après interruption reclasse les mods déjà importés en
 /// « doublon »/« mise à jour », donc rien n'est traité de travers.
 pub fn execute_bulk(
@@ -1102,7 +1102,7 @@ fn exec_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, it: &BulkExecItem
     let found = modscan::scan(dir);
     // Conservation du dossier source (§10/§11), avant tout rangement.
     let kept_archive = keep_source(cfg, dir, &name);
-    // Pack (§4.7) : plusieurs mods issus du même dossier partagent leur source.
+    // Pack (§4.4) : plusieurs mods issus du même dossier partagent leur source.
     let pack = (found.len() > 1).then_some(name.as_str());
     for fm in &found {
         let id = fm
@@ -1113,7 +1113,7 @@ fn exec_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, it: &BulkExecItem
         if it.skip_ids.iter().any(|s| s == &id) {
             continue;
         }
-        // Import en masse (§4.6) : jamais de blocage au fil de l'eau. Un cas
+        // Import en masse (§4.2) : jamais de blocage au fil de l'eau. Un cas
         // ambigu retombe sur le défaut sûr (extension, jamais destructif).
         match process_found(
             conn,
@@ -1144,10 +1144,10 @@ fn exec_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, it: &BulkExecItem
             }
         }
     }
-    // Activation par défaut des mods importés (§4.6bis).
+    // Activation par défaut des mods importés (§4.2).
     auto_activate(conn, cfg, &result.mods);
 
-    // Ce qui entoure les mods reconnus (§6.1bis/§4.6ter). Ce chemin d'import en
+    // Ce qui entoure les mods reconnus (§7.3/§4.5.3). Ce chemin d'import en
     // masse n'avait aucun balayage : tout ce qui n'était pas une voiture ou un
     // circuit y disparaissait, à l'exception des fonts et drivers qu'une copie
     // globale attrapait au passage. Skins, sons et apps sont marqués consommés
@@ -1245,7 +1245,7 @@ fn process_found(
     archive_name: &str,
     fm: &modscan::FoundMod,
     copy: bool,
-    // Source de pack commune (§4.7) si l'import contient plusieurs mods.
+    // Source de pack commune (§4.4) si l'import contient plusieurs mods.
     pack: Option<&str>,
     // Décision utilisateur pour un cas ambigu (§4.4) : "update" | "extension".
     decision: Option<&str>,
@@ -1272,7 +1272,7 @@ fn process_found(
     let kind_str = format!("{:?}", fm.kind); // "Car" | "Track"
     let brand = ui.brand.clone().unwrap_or_default();
     let name = ui.name.clone().unwrap_or_else(|| id_interne.clone());
-    // Extraction des fichiers annexes (§4.6) : réglage global, jamais reposé
+    // Extraction des fichiers annexes (§4.5.2) : réglage global, jamais reposé
     // à chaque import.
     let res_mode = crate::resources::ExtractionMode::parse(&cfg.prefs.resource_extraction_mode);
     let signature = identity::content_signature(&fm.dir);
@@ -1463,7 +1463,7 @@ fn process_found(
             .join(&version_folder),
     );
     // Copie (préserve la source) ou déplacement adaptatif (rename / copie+suppr).
-    // Fichiers annexes (§4.6) redirigés vers le dossier ressources du mod,
+    // Fichiers annexes (§4.5.2) redirigés vers le dossier ressources du mod,
     // jamais dans le contenu de jeu, selon le réglage global.
     let resources_dest = crate::resources::resources_dir(library, fm.kind, &id_interne);
     let resources_extracted = crate::resources::file_mod(
@@ -1489,7 +1489,7 @@ fn process_found(
     )
     .map_err(|e| e.to_string())?;
 
-    // Source de pack (§4.7) — uniquement quand l'import regroupe plusieurs mods.
+    // Source de pack (§4.4) — uniquement quand l'import regroupe plusieurs mods.
     if pack.is_some() {
         crate::overlay::set_source(conn, &id_interne, pack, None).map_err(|e| e.to_string())?;
     }
@@ -1657,7 +1657,7 @@ mod tests {
 
     #[test]
     fn mod_folder_contents_are_never_extracted_whatever_the_mode() {
-        // Règle d'or (§4.6) : rien ne sort du dossier du mod, quel que soit le
+        // Règle d'or (§4.5.1) : rien ne sort du dossier du mod, quel que soit le
         // réglage d'extraction. Bug réel — `logo.png`, `body_shadow.png` et
         // `tyre_*_shadow.png`, de vrais assets AC vivant à la racine du dossier
         // voiture, ont été sortis de 23 mods par un tri fondé sur l'extension.
@@ -1703,7 +1703,7 @@ mod tests {
 
     #[test]
     fn documents_beside_the_mod_folder_are_extracted_to_resources() {
-        // L'autre moitié de la règle (§4.6) : un PDF de présentation livré à la
+        // L'autre moitié de la règle (§4.5.1) : un PDF de présentation livré à la
         // racine de l'archive, à côté du dossier du mod, n'est pas du contenu
         // de jeu — il est rangé en ressources et jamais déployé dans AC.
         let base = crate::testutil::temp_dir("import-beside");
@@ -1740,7 +1740,7 @@ mod tests {
 
     #[test]
     fn ancillary_extraction_mode_none_drops_files_beside_the_mod() {
-        // §4.6, mode « Aucun » : rien n'est extrait vers la bibliothèque, mais
+        // §4.5.2, mode « Aucun » : rien n'est extrait vers la bibliothèque, mais
         // l'annexe ne finit pas non plus dans le contenu de jeu (règle absolue,
         // indépendante du réglage). Ne vaut que pour ce qui est livré à côté du
         // mod — dans le mod, l'annexe reste simplement en place.
@@ -2013,7 +2013,7 @@ mod tests {
         // Bug réel : une app importée restait inactive tant qu'on n'allait pas
         // cliquer « Activer » sur l'écran Apps — contrairement aux mods
         // voiture/circuit (`auto_activate`) et aux mods « autres »
-        // (`activate_other` appelé juste après l'import), §4.6bis/§12bis.4.
+        // (`activate_other` appelé juste après l'import), §4.2/§12bis.4.
         let base = crate::testutil::temp_dir("import-app-autoactivate");
         let library = base.join("library");
         let ac = base.join("ac");
@@ -2045,7 +2045,7 @@ mod tests {
     #[test]
     fn unrecognized_folder_becomes_other_mod() {
         // Type non reconnu (ni voiture, circuit, skin, son, app) : jamais
-        // perdu, rangé comme « autre mod » et activé par défaut (§6.1bis).
+        // perdu, rangé comme « autre mod » et activé par défaut (§7.3).
         let base = crate::testutil::temp_dir("import");
         let library = base.join("library");
         let ac = base.join("ac");
@@ -2073,7 +2073,7 @@ mod tests {
         assert!(library.join("others").join("MyShaderPack").exists());
         assert!(
             crate::activation::is_junction(&ac.join("extension").join("config").join("new_thing")),
-            "activé par défaut comme les autres types (§4.6bis)"
+            "activé par défaut comme les autres types (§4.2)"
         );
     }
 
@@ -2082,7 +2082,7 @@ mod tests {
         // Bug réel (mods style CMRT) : une app livrée avec, à côté, un dossier
         // qui vise `extension/...` (ou `content/...`) directement — avant ce
         // correctif, dès que l'app était reconnue, tout le reste du dossier
-        // disparaissait silencieusement au tri (tout-ou-rien §6.1bis).
+        // disparaissait silencieusement au tri (tout-ou-rien §7.3).
         let base = crate::testutil::temp_dir("import-leftover-dir");
         let library = base.join("library");
         let ac = base.join("ac");
@@ -2123,7 +2123,7 @@ mod tests {
 
     #[test]
     fn fonts_and_drivers_are_extras_like_the_rest() {
-        // §4.5 : `content/fonts` et `content/driver` avaient leur propre
+        // §4.5.3 : `content/fonts` et `content/driver` avaient leur propre
         // mécanisme — copie globale dans AC, jamais désactivée, écrasement par
         // défaut. Il était déjà court-circuité par le balayage des restes, et
         // contredisait la règle d'or n°5. Ils suivent désormais le sort commun :
@@ -2152,7 +2152,7 @@ mod tests {
             ("content/fonts", "rss-arial.txt", &b"MOD"[..]),
             ("content/driver", "rss_driver.kn5", &b"MOD"[..]),
             // Même nom que la font déjà là, et plus récente : la remplace,
-            // après sauvegarde de l'originale (§4.9).
+            // après sauvegarde de l'originale (§4.5.4).
             ("content/fonts", "kunos.txt", &b"MOD"[..]),
         ] {
             let d = src.join(rel);
@@ -2167,7 +2167,7 @@ mod tests {
         assert!(ac.join("content").join("fonts").join("rss-arial.txt").is_file());
         assert!(ac.join("content").join("driver").join("rss_driver.kn5").is_file());
         // La font homonyme est plus récente côté mod : elle prend la place,
-        // mais l'originale est sauvegardée (§4.9), pas perdue.
+        // mais l'originale est sauvegardée (§4.5.4), pas perdue.
         assert_eq!(std::fs::read(&foreign).unwrap(), b"MOD");
         assert!(
             crate::gamebackup::is_replaced(&conn, &foreign),
@@ -2189,7 +2189,7 @@ mod tests {
 
     #[test]
     fn leftovers_become_extras_of_the_mod_they_came_with() {
-        // §4.6ter : ce qu'une archive livre à côté du dossier du mod lui
+        // §4.5.3 : ce qu'une archive livre à côté du dossier du mod lui
         // appartient — configs CSP, shaders, pilote, textures d'équipe. Stocké
         // brut avec son chemin relatif à AC, posé à l'activation, et retiré
         // avec le mod. Avant, tout ça devenait des « autres mods » anonymes qui
@@ -2240,7 +2240,7 @@ mod tests {
             assert!(p.is_file(), "{rel} stocké en ajout au jeu");
         }
 
-        // Posés dans AC dès l'import (activation par défaut, §4.6bis).
+        // Posés dans AC dès l'import (activation par défaut, §4.2).
         assert!(ac.join("system").join("shaders").join("shader.fxo").is_file());
         assert!(ac.join("content").join("driver").join("driver.kn5").is_file());
 
@@ -2268,7 +2268,7 @@ mod tests {
         // dossier temporaire d'emballage — disparaissaient à son nettoyage.
         //
         // Pack multi-voitures : rien ne rattache ces restes à une voiture
-        // précise (§4.6ter), ils restent donc des « autres mods » — le cas où
+        // précise (§4.5.3), ils restent donc des « autres mods » — le cas où
         // l'unicité des ids compte encore.
         let base = crate::testutil::temp_dir("import-leftover-ids");
         let library = base.join("library");
@@ -2496,7 +2496,7 @@ mod tests {
         make_fake_car(&pack, "ferrari_b");
         let r = import_one_folder(&noop, &conn, &cfg, &rules, &pack, true, &[]);
         assert_eq!(r.mods.len(), 2);
-        // Les deux mods partagent la même source de pack (§4.7).
+        // Les deux mods partagent la même source de pack (§4.4).
         for id in ["ferrari_a", "ferrari_b"] {
             let m = crate::overlay::get_mod(&conn, id).unwrap().unwrap();
             assert_eq!(

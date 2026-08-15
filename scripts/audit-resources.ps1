@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Audits — and optionally restores — the files that the resource extractor (§4.6)
+    Audits — and optionally restores — the files that the resource extractor (§4.5.2)
     pulled out of installed mods.
 
 .DESCRIPTION

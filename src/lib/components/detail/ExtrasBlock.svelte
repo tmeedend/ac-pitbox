@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Bloc « Ajouts au jeu » de la fiche détail (§4.6ter) : ce que le mod
+  // Bloc « Ajouts au jeu » de la fiche détail (§4.5.5) : ce que le mod
   // installe hors de son dossier `content/<type>/<id>` — configs CSP, shaders,
   // pilote, fonts. C'est la réponse à « qu'est-ce que ce mod met chez moi en
   // plus de son dossier ? », que rien ne montrait jusqu'ici.
@@ -40,9 +40,9 @@
     dir: string;
     files: ExtraFile[];
     size: number;
-    /** Fichiers du groupe qu'un autre mod fournit — fichiers partagés (§4.6ter). */
+    /** Fichiers du groupe qu'un autre mod fournit — fichiers partagés (§4.5.4). */
     shared: number;
-    /** Fichiers du groupe qui remplacent un fichier du jeu (§4.9). */
+    /** Fichiers du groupe qui remplacent un fichier du jeu (§4.5.4). */
     replaced: number;
   }
 

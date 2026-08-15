@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Écran d'import dédié (§4.6bis) : remplace l'ancienne barre de boutons en
+  // Écran d'import dédié (§4.2) : remplace l'ancienne barre de boutons en
   // haut de la bibliothèque — trop discrète pour expliquer les choix, et
   // limitée à Voitures/Circuits. Le glisser-déposer reste le geste rapide,
   // disponible partout dans l'app (voir initGlobalDragDrop dans AppShell).

@@ -4,7 +4,7 @@
 use super::prelude::*;
 use tauri::Manager;
 
-/// Importe une liste d'archives. `async` + `spawn_blocking` (§4.6bis) : un gros
+/// Importe une liste d'archives. `async` + `spawn_blocking` (§4.2) : un gros
 /// lot (extraction 7-Zip incluse) peut prendre plusieurs minutes — exécuté
 /// directement sur l'IPC, la commande partagerait le même thread que la
 /// livraison des événements `import:progress`, qui n'arriveraient alors
@@ -29,7 +29,7 @@ pub async fn import_archives(
     .map_err(|e| e.to_string())
 }
 
-/// Import depuis des dossiers déjà décompressés (§4.5). `copy=true` préserve la
+/// Import depuis des dossiers déjà décompressés (§4.2). `copy=true` préserve la
 /// source, sinon déplacement adaptatif. Même raison qu'`import_archives` pour
 /// `async` + `spawn_blocking`.
 #[tauri::command]
@@ -57,7 +57,7 @@ pub async fn import_folders(
     .map_err(|e| e.to_string())
 }
 
-/// Analyse un dossier parent (§4.6) : classe chaque sous-dossier sans rien écrire.
+/// Analyse un dossier parent (§4.2) : classe chaque sous-dossier sans rien écrire.
 #[tauri::command]
 pub fn analyze_bulk_import(
     app: AppHandle,
@@ -69,7 +69,7 @@ pub fn analyze_bulk_import(
     crate::importer::analyze_bulk(&conn, &cfg, std::path::Path::new(&parent))
 }
 
-/// Exécute l'import en masse selon les décisions d'arbitrage (§4.6). Même
+/// Exécute l'import en masse selon les décisions d'arbitrage (§4.2). Même
 /// raison qu'`import_archives` pour `async` + `spawn_blocking`.
 #[tauri::command]
 pub async fn execute_bulk_import(

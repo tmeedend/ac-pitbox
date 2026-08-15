@@ -1,7 +1,7 @@
 //! Médias liés à une voiture/un circuit (§6.1) : captures d'écran et replays
 //! d'Assetto Corsa, lus en direct depuis `Documents/Assetto Corsa/`, plus les
 //! backgrounds officiels CSP lus depuis l'installation AC. Aucune donnée mise
-//! en cache — même principe que `resources.rs` (§4.6).
+//! en cache — même principe que `resources.rs` (§4.5.2).
 //!
 //! Rattachement par simple « le nom de fichier contient cet id » (pas de
 //! découpage voiture/circuit) : les deux espaces de noms ne se recoupent

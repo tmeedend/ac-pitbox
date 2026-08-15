@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Vue « Autres mods » (§6.1bis) : tout mod importé qui n'est ni voiture,
+  // Vue « Autres mods » (§7.3) : tout mod importé qui n'est ni voiture,
   // circuit, skin, son, ni app (shaders, configs CSP, mods d'UI…). Jamais
   // perdu. Activable par junction comme les autres types, avec le même
   // garde-fou — ce n'est PAS un moteur de superposition complet façon MO2 :

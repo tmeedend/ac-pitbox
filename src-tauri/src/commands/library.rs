@@ -35,7 +35,7 @@ pub fn open_mod_folder(app: AppHandle, db: State<Db>, id: String) -> Result<(), 
         .map_err(|e| e.to_string())
 }
 
-/// Liste les fichiers annexes du mod (§4.6, « Bloc Ressources ») — lue en
+/// Liste les fichiers annexes du mod (§4.5.2, « Bloc Ressources ») — lue en
 /// direct sur disque à chaque appel, jamais mémorisée en base : un fichier
 /// déposé manuellement apparaît sans réimport.
 #[tauri::command]
@@ -57,7 +57,7 @@ pub fn list_mod_resources(
     )))
 }
 
-/// Liste ce qu'un mod installe hors de `content/<type>/<id>` (§4.6ter) —
+/// Liste ce qu'un mod installe hors de `content/<type>/<id>` (§4.5.3) —
 /// onglet « Ajouts au jeu » de la fiche.
 #[tauri::command]
 pub fn list_mod_extras(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<crate::extras::ExtraFile>, String> {
@@ -70,7 +70,7 @@ pub fn list_mod_extras(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<
 }
 
 /// Ouvre un fichier du dossier ressources avec l'application par défaut de
-/// l'OS (§4.6). `rel_path` est résolu et validé côté serveur (garde-fou
+/// l'OS (§4.5.2). `rel_path` est résolu et validé côté serveur (garde-fou
 /// anti-traversée) plutôt que de faire confiance à un chemin absolu envoyé
 /// par le front — même rationale que `open_mod_folder`.
 #[tauri::command]

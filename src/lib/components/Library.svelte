@@ -475,7 +475,7 @@
     }
   });
 
-  // Recherche imposée depuis l'extérieur (ex. « filtrer par pack », §4.7).
+  // Recherche imposée depuis l'extérieur (ex. « filtrer par pack », §4.4).
   $effect(() => {
     if (nav.search !== null) {
       query = nav.search;
@@ -554,7 +554,7 @@
         // réel signalé : « GT-M Evo » ne remontait pas « GT-M Adonis Evo »,
         // recherché comme une seule sous-chaîne collée.
         const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-        // Inclut le pack (§4.7) : rechercher son nom remonte toutes ses voitures.
+        // Inclut le pack (§4.4) : rechercher son nom remonte toutes ses voitures.
         const hay = `${c.display_name ?? ""} ${c.brand ?? ""} ${c.id_interne} ${c.category ?? ""} ${c.source_pack ?? ""} ${modTags(c).join(" ")}`.toLowerCase();
         if (!terms.every((term) => hay.includes(term))) return false;
       }
@@ -607,7 +607,7 @@
   });
 
   // Recharge au montage, puis à chaque import déclenché depuis l'écran dédié
-  // ou le glisser-déposer global (§4.6bis) — `version` sert de simple signal.
+  // ou le glisser-déposer global (§4.2) — `version` sert de simple signal.
   $effect(() => {
     importState.version;
     refresh();

@@ -1,4 +1,4 @@
-//! Fichiers annexes du mod — docs, templates (§4.6). Beaucoup de mods embarquent
+//! Fichiers annexes du mod — docs, templates (§4.5.2). Beaucoup de mods embarquent
 //! des fichiers hors contenu de jeu (PDF de présentation, templates `.psd`,
 //! changelog/readme, images de présentation, archives de templates) : AC ne les
 //! lit pas, ils ne doivent **jamais** finir dans `content/` (donc jamais dans le
@@ -70,7 +70,7 @@ pub fn resources_dir_for(library: &Path, category: &str, segments: &[&str]) -> P
     p
 }
 
-/// Dossier ressources d'un mod voiture/circuit (§4.6) : **au niveau du mod**
+/// Dossier ressources d'un mod voiture/circuit (§4.5.2) : **au niveau du mod**
 /// (pas de la version), hors de l'arborescence junctionnée — survit aux mises
 /// à jour, partagé par toutes les couches posées sur ce mod (§4.3).
 pub fn resources_dir(library: &Path, kind: ModKind, id: &str) -> PathBuf {
@@ -94,9 +94,9 @@ fn ext_lower(path: &Path) -> Option<String> {
         .map(|e| e.to_ascii_lowercase())
 }
 
-/// Route d'un fichier posé **à la racine de ce qui entoure le mod** (§4.6) —
+/// Route d'un fichier posé **à la racine de ce qui entoure le mod** (§4.5.2) —
 /// le seul endroit où un document isolé est une annexe. Sert au routage des
-/// restes (§6.1bis) avant de décider ajout au jeu vs annexe : sans ce test, le
+/// restes (§7.3) avant de décider ajout au jeu vs annexe : sans ce test, le
 /// `Read Me.pdf` livré à côté d'une voiture deviendrait un ajout au jeu et
 /// atterrirait à la racine d'AC.
 pub fn route_beside_root(path: &Path, mode: ExtractionMode) -> Route {
@@ -188,7 +188,7 @@ fn copy_or_move_one(src: &Path, dest: &Path, move_files: bool) -> std::io::Resul
 }
 
 /// Ce que représente l'arborescence confiée à `file_mod` — c'est **la** donnée
-/// qui décide si l'extraction des annexes s'applique (§4.6, règle d'or).
+/// qui décide si l'extraction des annexes s'applique (§4.5.1, règle d'or).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Source {
     /// Le dossier du mod lui-même : celui que l'auteur a conçu pour être posé
@@ -199,17 +199,17 @@ pub enum Source {
     /// voiture reste où l'auteur l'a mis — dans le doute on ne touche pas.
     ModFolder,
     /// Ce qui était livré **à côté** du dossier du mod : racine de l'archive,
-    /// dossiers frères, restes ramassés par le balayage (§6.1bis). Là, un
+    /// dossiers frères, restes ramassés par le balayage (§7.3). Là, un
     /// document isolé est bien une annexe et n'a rien à faire dans `content/`.
     BesideMod,
 }
 
 /// Range `src` dans `content_dest` (contenu de jeu) en redirigeant les fichiers
-/// annexes (§4.6) vers `resources_dest` selon `mode`, ou en les laissant dans
+/// annexes (§4.5.2) vers `resources_dest` selon `mode`, ou en les laissant dans
 /// `src` (mode Aucun — jamais supprimés). Renvoie le nombre de fichiers
 /// effectivement rangés en ressources.
 ///
-/// **Règle d'or (§4.6)** : avec `Source::ModFolder`, rien n'est extrait, quel
+/// **Règle d'or (§4.5.1)** : avec `Source::ModFolder`, rien n'est extrait, quel
 /// que soit le réglage — le dossier part d'un bloc. Le tri par extension ne
 /// s'applique qu'à ce qui est livré à côté du mod. C'est l'inverse qui avait
 /// été codé (tri par extension + profondeur, sans regarder l'appartenance au
@@ -256,13 +256,13 @@ pub fn file_mod(
                 copy_or_move_one(path, &resources_dest.join(rel), move_files)
                     .map_err(|e| format!("extraction des fichiers annexes : {e}"))?;
             }
-            Route::Drop => { /* ni content, ni ressources : reste dans la source (§4.6, mode Aucun) */ }
+            Route::Drop => { /* ni content, ni ressources : reste dans la source (§4.5.2, mode Aucun) */ }
         }
     }
     Ok(extracted)
 }
 
-/// Fichier annexe listé sur la fiche (§4.6, « Bloc Ressources »).
+/// Fichier annexe listé sur la fiche (§4.5.2, « Bloc Ressources »).
 #[derive(Debug, Clone, Serialize)]
 pub struct ResourceFile {
     pub name: String,
@@ -272,7 +272,7 @@ pub struct ResourceFile {
 }
 
 /// Liste le contenu du dossier ressources d'un mod, **lu en direct sur disque**
-/// (§4.6) — jamais mémorisé en base : un fichier déposé manuellement apparaît
+/// (§4.5.2) — jamais mémorisé en base : un fichier déposé manuellement apparaît
 /// sans réimport, et un mod déjà installé avant cette fonctionnalité n'a rien
 /// à réimporter pour que le bloc se remplisse.
 pub fn list_resources(dir: &Path) -> Vec<ResourceFile> {
@@ -308,7 +308,7 @@ pub fn list_resources(dir: &Path) -> Vec<ResourceFile> {
 
 /// Résout le chemin absolu d'un fichier ressources à partir de son chemin
 /// relatif, avec garde-fou anti-traversée (`../..`) : le résultat doit rester
-/// à l'intérieur de `dir`. Utilisé avant toute ouverture (§4.6).
+/// à l'intérieur de `dir`. Utilisé avant toute ouverture (§4.5.2).
 pub fn resolve_resource_path(dir: &Path, rel_path: &str) -> Result<PathBuf, String> {
     let candidate = dir.join(rel_path);
     let canon_dir = dir
@@ -350,7 +350,7 @@ mod tests {
 
     #[test]
     fn nothing_is_ever_taken_out_of_a_mod_folder() {
-        // Règle d'or (§4.6). Bug réel : `body_shadow.png`, `tyre_*_shadow.png`
+        // Règle d'or (§4.5.1). Bug réel : `body_shadow.png`, `tyre_*_shadow.png`
         // et `logo.png` — de vrais assets AC vivant à la racine du dossier
         // voiture — ont été déplacés en `resources/` sur 23 mods, parce que le
         // classement se fondait sur l'extension et la profondeur au lieu de
@@ -391,7 +391,7 @@ mod tests {
     #[test]
     fn documents_beside_the_mod_are_still_extracted() {
         // L'autre moitié de la règle : ce qui est livré **à côté** du dossier
-        // du mod (racine d'archive, reste ramassé §6.1bis) reste trié — un PDF
+        // du mod (racine d'archive, reste ramassé §7.3) reste trié — un PDF
         // de présentation n'a rien à faire dans `content/`.
         let base = crate::testutil::temp_dir("res-beside");
         let src = base.join("src");
@@ -567,7 +567,7 @@ mod tests {
         assert!(!content.join("changelog.txt").exists());
         assert!(
             src.join("changelog.txt").is_file(),
-            "annexe laissée dans la source (§4.6, mode Aucun)"
+            "annexe laissée dans la source (§4.5.2, mode Aucun)"
         );
         assert!(
             content.join("content").join("gui").join("flag.dds").is_file(),

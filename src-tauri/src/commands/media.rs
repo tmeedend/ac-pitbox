@@ -83,7 +83,7 @@ pub fn open_media_folder(app: AppHandle, kind: String) -> Result<(), String> {
 /// galerie actuelles (150–180px CSS, avec marge pour les écrans haute
 /// densité).
 ///
-/// `async` + `spawn_blocking` (§4.6bis) : la galerie déclenche un appel par
+/// `async` + `spawn_blocking` (§4.2) : la galerie déclenche un appel par
 /// fichier en parallèle (`MediaScreenshots.svelte`), parfois des dizaines à la
 /// fois sur des captures AC en pleine résolution jeu — décoder/redimensionner/
 /// réencoder en JPEG directement sur le thread IPC synchrone y bloquait tout

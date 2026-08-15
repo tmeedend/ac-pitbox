@@ -138,7 +138,7 @@ pub fn compose_tree(base: &Path, layers: &[PathBuf], dest: &Path, mod_id: &str, 
 
 /// Recompose `dest` comme l'union de `layers` (dans l'ordre, la dernière
 /// gagne) — pour un usage **hors mods** (ex. `skins/default/` d'un circuit,
-/// §4.6bis : Content Manager y copie les fichiers des skins de circuit
+/// §8 : Content Manager y copie les fichiers des skins de circuit
 /// actifs, vérifié empiriquement — décocher tous les skins vide entièrement
 /// ce dossier côté CM, aucun « fond » à préserver). Pas de marqueur
 /// `.pitbox-deployed.json` ici : ce n'est pas un déploiement de mod, juste

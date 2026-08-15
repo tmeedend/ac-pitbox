@@ -9,7 +9,7 @@ export interface SubModRow {
   library_path: string;
   source_archive: string | null;
   is_active: boolean;
-  /** Faux si fourni avec le contenu initial du mod (§4.6bis) — non supprimable individuellement. */
+  /** Faux si fourni avec le contenu initial du mod (§8) — non supprimable individuellement. */
   removable: boolean;
   imported_at: string;
   /** Taille sur disque, octets. Renseignée par `listSubsByType` (vue transversale), `null` ailleurs. */
@@ -41,12 +41,12 @@ export function restoreSound(parentId: string): Promise<void> {
   return invoke<void>("restore_sound", { parentId });
 }
 
-/** Reconnaît les skins de circuit fournis avec le mod (§4.6bis) — à appeler avant de les lister. */
+/** Reconnaît les skins de circuit fournis avec le mod (§8) — à appeler avant de les lister. */
 export function syncTrackSkins(trackId: string): Promise<void> {
   return invoke<void>("sync_track_skins", { trackId });
 }
 
-/** Skins de circuit actuellement actifs (§4.6bis, plusieurs possibles). */
+/** Skins de circuit actuellement actifs (§8, plusieurs possibles). */
 export function listActiveTrackSkins(trackId: string): Promise<string[]> {
   return invoke<string[]>("list_active_track_skins", { trackId });
 }
@@ -57,12 +57,12 @@ export interface TrackSkinOption {
   active: boolean;
 }
 
-/** Skins de circuit avec image résolue, pour le sélecteur de la barre latérale (§4.6bis). */
+/** Skins de circuit avec image résolue, pour le sélecteur de la barre latérale (§8). */
 export function listTrackSkinOptions(trackId: string): Promise<TrackSkinOption[]> {
   return invoke<TrackSkinOption[]>("list_track_skin_options", { trackId });
 }
 
-/** Active/désactive un skin de circuit (§4.6bis, pas exclusif). */
+/** Active/désactive un skin de circuit (§8, pas exclusif). */
 export function setTrackSkinActive(trackId: string, skinName: string, active: boolean): Promise<void> {
   return invoke<void>("set_track_skin_active", { trackId, skinName, active });
 }

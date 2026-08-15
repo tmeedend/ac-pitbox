@@ -60,7 +60,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     let _ = conn.execute("ALTER TABLE layers ADD COLUMN priority INTEGER NOT NULL DEFAULT 0", []);
     // Skin fourni avec le contenu initial du mod (découvert sur disque, jamais
     // importé séparément par Pit Box) → non supprimable individuellement,
-    // seulement le mod entier (§4.6bis, même logique que les skins voiture).
+    // seulement le mod entier (§8, même logique que les skins voiture).
     // Défaut 1 (supprimable) pour tous les sous-éléments existants/normaux.
     let _ = conn.execute(
         "ALTER TABLE sub_mods ADD COLUMN removable INTEGER NOT NULL DEFAULT 1",
@@ -91,8 +91,8 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             aspiration        TEXT,
             engine_config     TEXT,
             gearbox           TEXT,
-            source_pack       TEXT,                   -- pack d'origine (§4.7)
-            source_url        TEXT,                   -- URL d'origine (§4.7/§12ter)
+            source_pack       TEXT,                   -- pack d'origine (§4.4)
+            source_url        TEXT,                   -- URL d'origine (§4.4/§12ter)
             is_stock          INTEGER NOT NULL DEFAULT 0, -- contenu de base Kunos (§12bis.1)
             active_version_id TEXT,
             created_at        TEXT NOT NULL
@@ -167,7 +167,7 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             version_id TEXT NOT NULL
         );
 
-        -- Autres mods (§6.1bis) et Apps (§12bis.4) capturés par un profil : ni
+        -- Autres mods (§7.3) et Apps (§12bis.4) capturés par un profil : ni
         -- l'un ni l'autre n'a de notion de version (juste actif/inactif), donc
         -- une table séparée plutôt que de rendre `version_id` optionnelle sur
         -- profile_entries (SQLite ne sait pas assouplir une contrainte NOT NULL
@@ -179,7 +179,7 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             entry_id   TEXT NOT NULL
         );
 
-        -- Mods « autres » (§6.1bis) : ni voiture, circuit, skin, son, ni app —
+        -- Mods « autres » (§7.3) : ni voiture, circuit, skin, son, ni app —
         -- jamais perdus. Activables par junction (garde-fou habituel) ; en cas
         -- d'emplacement disputé avec un autre mod « autre », la priorité tranche.
         CREATE TABLE IF NOT EXISTS other_mods (
@@ -223,7 +223,7 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_media_links_entity ON media_links(entity_id);
 
-        -- Ajouts au jeu posés dans AC pour un mod (§4.6ter) : ce qui a été
+        -- Ajouts au jeu posés dans AC pour un mod (§4.5.3) : ce qui a été
         -- réellement écrit hors de `content/<type>/<id>` à la dernière
         -- activation. Retirer exactement cette liste — et rien d'autre — est ce
         -- qui rend la désinstallation propre : un fichier qu'on n'a pas posé
@@ -251,7 +251,7 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_sat_path ON extra_links(ac_path);
 
-        -- Fichiers du jeu qu'un mod a remplacés (§4.9), et où dort l'original.
+        -- Fichiers du jeu qu'un mod a remplacés (§4.5.4), et où dort l'original.
         -- Clé sur le chemin d'AC, pas sur le mod : c'est le fichier qui n'a
         -- qu'un seul original, quel que soit le nombre de mods qui le visent.
         CREATE TABLE IF NOT EXISTS game_backups (
@@ -304,9 +304,9 @@ pub struct ModRow {
     pub aspiration: Option<String>,
     pub engine_config: Option<String>,
     pub gearbox: Option<String>,
-    /// Pack d'origine commun aux mods d'une même archive multi-voitures (§4.7).
+    /// Pack d'origine commun aux mods d'une même archive multi-voitures (§4.4).
     pub source_pack: Option<String>,
-    /// URL d'origine (rempli plus tard par l'extension, §4.7/§12ter).
+    /// URL d'origine (rempli plus tard par l'extension, §4.4/§12ter).
     pub source_url: Option<String>,
     /// Auteur de la version active (colonne §6.2).
     pub author: Option<String>,
@@ -560,7 +560,7 @@ pub fn update_harmonization(
     Ok(())
 }
 
-/// Renseigne le pack/URL d'origine d'un mod (§4.7). N'écrase une valeur
+/// Renseigne le pack/URL d'origine d'un mod (§4.4). N'écrase une valeur
 /// existante que si une nouvelle est fournie (COALESCE) — un ré-import ne
 /// perd pas l'URL renseignée par ailleurs.
 pub fn set_source(conn: &Connection, id: &str, pack: Option<&str>, url: Option<&str>) -> rusqlite::Result<()> {
@@ -853,7 +853,7 @@ pub fn delete_mod(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     Ok(())
 }
 
-// --- Fichiers du jeu remplacés (§4.9) ---------------------------------------
+// --- Fichiers du jeu remplacés (§4.5.4) ---------------------------------------
 
 /// Enregistre la sauvegarde de l'original. `INSERT OR IGNORE` : la **première**
 /// sauvegarde fait foi, un second mod visant le même chemin ne l'écrase pas.
@@ -882,7 +882,7 @@ pub fn list_game_backups(conn: &Connection) -> rusqlite::Result<Vec<(String, Str
     rows.collect()
 }
 
-// --- Ajouts au jeu posés dans AC (§4.6ter) ----------------------------------
+// --- Ajouts au jeu posés dans AC (§4.5.3) ----------------------------------
 
 /// Remplace la liste des ajouts posés pour un mod (liste vide = plus rien
 /// de posé). Réécriture complète : c'est l'état du disque après l'opération qui
@@ -912,7 +912,7 @@ pub fn get_extra_links(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<
 }
 
 /// Mods qui réclament ce fichier d'AC — `(mod_id, kind, claimed_at)`. C'est le
-/// compteur de références des fichiers partagés (§4.6ter) : tant qu'il reste au
+/// compteur de références des fichiers partagés (§4.5.4) : tant qu'il reste au
 /// moins une ligne, le fichier est encore réclamé et ne doit pas être retiré
 /// d'AC. `claimed_at` départage deux exemplaires de même date de modification :
 /// le dernier mod installé gagne.
@@ -957,7 +957,7 @@ pub struct ProfileEntry {
     pub version_id: String,
 }
 
-/// Entrée de profil sans notion de version — Autre mod ou App (§6.1bis/§12bis.4),
+/// Entrée de profil sans notion de version — Autre mod ou App (§7.3/§12bis.4),
 /// simplement actif ou non. `kind` vaut "other" ou "app", `entry_id` est l'id
 /// dans la table correspondante.
 #[derive(Debug, Clone, Serialize)]
@@ -1039,7 +1039,7 @@ pub fn delete_profile(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     Ok(())
 }
 
-/// Ids des mods partageant un même pack d'origine (§4.7).
+/// Ids des mods partageant un même pack d'origine (§4.4).
 pub fn list_pack_ids(conn: &Connection, pack: &str) -> rusqlite::Result<Vec<String>> {
     let mut stmt = conn.prepare("SELECT id_interne FROM mods WHERE source_pack = ?1")?;
     let rows = stmt.query_map([pack], |r| r.get::<_, String>(0))?;
@@ -1272,7 +1272,7 @@ pub struct SubModRow {
     pub source_archive: Option<String>,
     pub is_active: bool,
     /// Faux si fourni avec le contenu initial du mod (découvert sur disque,
-    /// §4.6bis) — non supprimable individuellement, seulement le mod entier.
+    /// §8) — non supprimable individuellement, seulement le mod entier.
     pub removable: bool,
     pub imported_at: String,
     /// Taille sur disque du dossier stocké, octets. Jamais mémorisée en base
@@ -1302,7 +1302,7 @@ pub fn insert_sub_mod(
 }
 
 /// Enregistre un skin de circuit découvert sur disque, fourni avec le
-/// contenu initial du mod (§4.6bis) — jamais importé séparément par Pit Box,
+/// contenu initial du mod (§8) — jamais importé séparément par Pit Box,
 /// donc `removable = 0` : reconnu et activable, mais non supprimable
 /// individuellement (seulement le mod entier).
 pub fn insert_bundled_track_skin(
@@ -1418,7 +1418,7 @@ pub fn set_active_sound(conn: &Connection, parent_id: &str, id: Option<&str>) ->
     Ok(())
 }
 
-/// Active/désactive un skin de circuit par nom (§4.6bis) — PAS exclusif,
+/// Active/désactive un skin de circuit par nom (§8) — PAS exclusif,
 /// contrairement au son : plusieurs TRACK_SKIN peuvent être `is_active` en
 /// même temps pour un même circuit.
 pub fn set_track_skin_active(conn: &Connection, parent_id: &str, name: &str, active: bool) -> rusqlite::Result<()> {
@@ -1503,7 +1503,7 @@ pub fn delete_app(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     Ok(())
 }
 
-// --- Mods « autres » (§6.1bis) -----------------------------------------------
+// --- Mods « autres » (§7.3) -----------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OtherModRow {

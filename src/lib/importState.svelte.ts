@@ -1,4 +1,4 @@
-// État d'import partagé (§4.6bis) : le glisser-déposer fonctionne partout dans
+// État d'import partagé (§4.2) : le glisser-déposer fonctionne partout dans
 // l'app (pas seulement dans une bibliothèque), donc la progression, le rapport
 // et l'arbitrage des conflits flous vivent ici plutôt que dans Library.svelte.
 import { open } from "@tauri-apps/plugin-dialog";
@@ -67,7 +67,7 @@ export function setCopyMode(v: boolean): void {
  * `source` est mémorisée pour pouvoir reprendre un cas ambigu après décision. */
 async function runImport(source: { paths: string[]; folder: boolean; copy: boolean }): Promise<void> {
   importState.importing = true;
-  // Retour immédiat (§4.6bis) : la commande est asynchrone côté backend et met
+  // Retour immédiat (§4.2) : la commande est asynchrone côté backend et met
   // un instant à démarrer réellement le traitement — sans cet état "queued",
   // le toast de progression (conditionné sur `progress` non nul) resterait
   // invisible pendant ce court laps, donnant l'impression que le drop n'a rien
@@ -164,13 +164,13 @@ export function dismissReport(): void {
   importState.report = null;
 }
 
-/** Fin du flux d'import en masse (§4.6) : conflits déjà arbitrés, pas de modale. */
+/** Fin du flux d'import en masse (§4.2) : conflits déjà arbitrés, pas de modale. */
 export function reportBulkDone(report: ArchiveResult[]): void {
   importState.report = report;
   importState.version++;
 }
 
-/** À appeler une seule fois, depuis la racine de l'app (§4.6bis : glisser-déposer partout). */
+/** À appeler une seule fois, depuis la racine de l'app (§4.2 : glisser-déposer partout). */
 export function initGlobalDragDrop(): () => void {
   const unlistenDrop = getCurrentWebview().onDragDropEvent((event) => {
     if (event.payload.type === "drop") {

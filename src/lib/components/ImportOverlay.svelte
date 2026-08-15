@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Retour visuel de l'import, global (§4.6bis : le glisser-déposer marche sur
+  // Retour visuel de l'import, global (§4.2 : le glisser-déposer marche sur
   // toutes les vues, donc ce retour doit être visible peu importe l'écran ouvert).
   import { importState, dismissReport, resolvePendingConflict, resolveAmbiguous } from "$lib/importState.svelte";
   import { t } from "$lib/i18n/index.svelte";
@@ -12,7 +12,7 @@
     return { cls: "new", label: t("importOverlay.outcomeNew") };
   }
 
-  // Total tous types confondus (§4.6bis) : un import peut ne produire aucun
+  // Total tous types confondus (§4.2) : un import peut ne produire aucun
   // mod de premier niveau (ex. un pack de skins/sons rattaché à une voiture
   // déjà connue) sans pour autant n'avoir « rien » importé — le titre doit
   // refléter ce qui a été réellement ajouté, pas seulement les mods.

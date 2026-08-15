@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Liste déroulante à choix multiple pour les skins de circuit (§4.6bis) —
+  // Liste déroulante à choix multiple pour les skins de circuit (§8) —
   // plusieurs actifs à la fois, comme le fait Content Manager lui-même dans
   // son propre sélecteur. Reste ouverte tant qu'on coche/décoche.
   import { t } from "$lib/i18n/index.svelte";
