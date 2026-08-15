@@ -139,6 +139,17 @@ pub fn delete_broken(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(),
         let _ = std::fs::remove_dir_all(lib.join(kind.content_folder()).join(id));
     }
 
+    // Satellites (§4.6ter) : retirés d'AC *avant* de supprimer leur source en
+    // bibliothèque — c'est la liste en base qui dit quoi retirer, mais autant
+    // le faire tant que tout est cohérent. C'est ce qui manquait au passage par
+    // « autre mod » : les fichiers d'une voiture supprimée restaient dans AC.
+    if let Err(e) = crate::satellites::undeploy(conn, cfg, id) {
+        log::warn!("undeploy_satellites {id}: {e}");
+    }
+    if let Some(lib) = &cfg.library_path {
+        crate::satellites::remove_tree(lib, kind, id);
+    }
+
     // Déploiement éventuel dans content/ (symlink hérité OU hardlinks, §2).
     // Contrairement à un symlink, un déploiement hardlinks ne devient pas
     // orphelin tout seul quand la bibliothèque disparaît (les données restent

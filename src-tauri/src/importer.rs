@@ -118,6 +118,10 @@ pub struct ArchiveResult {
     /// Mods « autres » importés — type non reconnu, jamais perdus (§6.1bis).
     #[serde(default)]
     pub others: Vec<crate::others::OtherImported>,
+    /// Fichiers rattachés à un mod de l'''archive et stockés comme ses
+    /// satellites (§4.6ter) — configs CSP, shaders, pilote…
+    #[serde(default)]
+    pub satellites: usize,
 }
 
 /// Importe une liste d'archives. Chaque archive est traitée indépendamment ;
@@ -171,6 +175,7 @@ fn lock_error_result(path: &str, error: &str) -> ArchiveResult {
         subs: Vec::new(),
         apps: Vec::new(),
         others: Vec::new(),
+        satellites: 0,
     }
 }
 
@@ -266,8 +271,37 @@ fn consumed_paths(found: &[modscan::FoundMod], subs: &[modscan::FoundSub], apps:
 /// tout le reste — fichiers isolés, zips imbriqués comme les mods CMRT-style
 /// (dossier `apps/` + zip séparé qui vise `content/gui/...`) — disparaissait
 /// silencieusement au nettoyage du dossier temporaire (tri tout-ou-rien).
-/// Chaque reste devient son propre « autre mod », jamais fusionné avec ses
-/// voisins (id `<archive>__<nom>`).
+/// Un reste rattaché à un mod de la même archive devient son **satellite**
+/// (§4.6ter) ; sinon il reste un « autre mod » autonome (id `<archive>__<nom>`),
+/// jamais fusionné avec ses voisins.
+///
+/// Rattachement, dans cet ordre :
+/// 1. le chemin du reste contient l'id d'exactement un mod reconnu
+///    (`extension/config/cars/rss/rss_gtm_lanzo_v8/…`) — sans ambiguïté ;
+/// 2. sinon, l'archive ne livre qu'un seul mod : tout ce qui l'entoure lui
+///    appartient (`system/shaders/…`, `content/driver/…`).
+///
+/// **Limite assumée** : dans un pack multi-mods, un reste que rien ne rattache
+/// reste un « autre mod ». Le rattacher à tous dupliquerait des arbres parfois
+/// lourds ; il n'y a pas de bonne réponse sans regarder le contenu, et « autre
+/// mod » ne perd rien.
+fn owner_of_leftover<'a>(rel: &Path, mods: &'a [(String, ModKind)]) -> Option<&'a (String, ModKind)> {
+    let named: Vec<&(String, ModKind)> = mods
+        .iter()
+        .filter(|(id, _)| {
+            rel.components()
+                .any(|c| c.as_os_str().to_str().is_some_and(|s| s.eq_ignore_ascii_case(id)))
+        })
+        .collect();
+    if named.len() == 1 {
+        return Some(named[0]);
+    }
+    if named.is_empty() && mods.len() == 1 {
+        return Some(&mods[0]);
+    }
+    None
+}
+
 #[allow(clippy::too_many_arguments)]
 fn sweep_leftovers(
     conn: &Connection,
@@ -277,13 +311,67 @@ fn sweep_leftovers(
     archive_name: &str,
     workdir: &Path,
     consumed: &[PathBuf],
+    mods: &[(String, ModKind)],
     copy: bool,
     res_mode: crate::resources::ExtractionMode,
     result: &mut ArchiveResult,
 ) {
     let mut leftovers = Vec::new();
     collect_leftover(workdir, consumed, &mut leftovers);
+    // Mods ayant reçu au moins un satellite : leurs satellites sont posés en
+    // fin de balayage. L'activation par défaut (§4.6bis) a lieu avant, quand
+    // l'arbre des satellites n'existe pas encore — sans ce rattrapage, ils ne
+    // seraient posés qu'à la réactivation suivante.
+    let mut owners_with_satellites: Vec<(String, ModKind)> = Vec::new();
     for p in leftovers {
+        let rel = p.strip_prefix(workdir).unwrap_or(&p).to_path_buf();
+
+        // Une archive imbriquée n'est pas un satellite : elle doit être
+        // extraite et reclassée (§6.1bis), pas stockée telle quelle.
+        if !is_archive_file(&p) {
+            if let Some((owner_id, owner_kind)) = owner_of_leftover(&rel, mods) {
+                // Document isolé à la racine de ce qui entoure le mod : une
+                // annexe (§4.6), pas un satellite — il n'a rien à faire dans
+                // AC. Rangé dans les ressources du mod auquel il appartient,
+                // là où l'utilisateur ira le lire.
+                let is_root_file = p.is_file() && rel.parent().is_some_and(|d| d.as_os_str().is_empty());
+                if is_root_file {
+                    match crate::resources::route_beside_root(&p, res_mode) {
+                        crate::resources::Route::Resources => {
+                            let dest = crate::resources::resources_dir(library, *owner_kind, owner_id).join(&rel);
+                            if let Err(e) = crate::satellites::store(
+                                &crate::resources::resources_dir(library, *owner_kind, owner_id),
+                                &rel,
+                                &p,
+                                copy,
+                            ) {
+                                log::warn!("ancillary {}: {e}", dest.display());
+                            }
+                            continue;
+                        }
+                        // Mode « Aucun » : ni contenu, ni ressources — laissé
+                        // dans la source, jamais supprimé.
+                        crate::resources::Route::Drop => continue,
+                        crate::resources::Route::Content => {}
+                    }
+                }
+                let sat = crate::satellites::dir(library, *owner_kind, owner_id);
+                match crate::satellites::store(&sat, &rel, &p, copy) {
+                    Ok(()) => {
+                        result.satellites += 1;
+                        let owner = (owner_id.clone(), *owner_kind);
+                        if !owners_with_satellites.contains(&owner) {
+                            owners_with_satellites.push(owner);
+                        }
+                        continue;
+                    }
+                    // Le repli sur « autre mod » ci-dessous ne perd rien : le
+                    // reste est simplement moins bien rattaché.
+                    Err(e) => log::warn!("satellite {} <- {}: {e}", owner_id, rel.display()),
+                }
+            }
+        }
+
         import_leftover(
             conn,
             cfg,
@@ -297,6 +385,17 @@ fn sweep_leftovers(
             result,
             0,
         );
+    }
+
+    for (id, kind) in owners_with_satellites {
+        // Seulement si le mod est effectivement déployé : poser les satellites
+        // d'un mod inactif mettrait dans AC du contenu que rien n'y annonce.
+        if !crate::activation::is_mod_active(cfg, kind, &id) {
+            continue;
+        }
+        if let Err(e) = crate::satellites::deploy(conn, cfg, kind, &id) {
+            log::warn!("deploy_satellites {id}: {e}");
+        }
     }
 }
 
@@ -504,6 +603,7 @@ fn import_one(
         subs: Vec::new(),
         apps: Vec::new(),
         others: Vec::new(),
+        satellites: 0,
     };
 
     let (Some(sevenzip), Some(library)) = (&cfg.sevenzip_exe, &cfg.library_path) else {
@@ -622,6 +722,7 @@ fn import_one(
     // y compris le contenu de zips imbriqués (ex. mods CMRT-style qui livrent
     // une app ET un zip séparé visant `content/gui/...`).
     let consumed = consumed_paths(&found, &subs, &apps);
+    let found_ids: Vec<(String, ModKind)> = found.iter().map(|fm| (fm_id(fm), fm.kind)).collect();
     sweep_leftovers(
         conn,
         cfg,
@@ -630,6 +731,7 @@ fn import_one(
         &archive_name,
         &workdir,
         &consumed,
+        &found_ids,
         false,
         res_mode,
         &mut result,
@@ -700,6 +802,7 @@ fn import_one_folder(
         subs: Vec::new(),
         apps: Vec::new(),
         others: Vec::new(),
+        satellites: 0,
     };
 
     let Some(library) = &cfg.library_path else {
@@ -792,6 +895,7 @@ fn import_one_folder(
     // y compris le contenu de zips imbriqués (ex. mods CMRT-style qui livrent
     // une app ET un zip séparé visant `content/gui/...`).
     let consumed = consumed_paths(&found, &subs, &apps);
+    let found_ids: Vec<(String, ModKind)> = found.iter().map(|fm| (fm_id(fm), fm.kind)).collect();
     sweep_leftovers(
         conn,
         cfg,
@@ -800,6 +904,7 @@ fn import_one_folder(
         &name,
         dir,
         &consumed,
+        &found_ids,
         copy,
         res_mode,
         &mut result,
@@ -1003,6 +1108,7 @@ fn exec_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, it: &BulkExecItem
         subs: Vec::new(),
         apps: Vec::new(),
         others: Vec::new(),
+        satellites: 0,
     };
 
     let Some(library) = &cfg.library_path else {
@@ -1615,19 +1721,16 @@ mod tests {
         let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
         assert_eq!(r.mods.len(), 1, "la voiture est reconnue");
-        assert_eq!(r.others.len(), 1, "le PDF devient son propre reste");
-        assert_eq!(
-            r.others[0].resources_extracted, 1,
-            "et ce reste est capturé comme annexe"
-        );
+        assert!(r.others.is_empty(), "une annexe ne devient pas un « autre mod »");
+        assert_eq!(r.satellites, 0, "ni un satellite : elle n'''a rien à faire dans AC");
         assert!(
             library
                 .join("resources")
-                .join("others")
-                .join(&r.others[0].id)
+                .join("cars")
+                .join("beside_car")
                 .join("Read Me - Beside.pdf")
                 .is_file(),
-            "PDF rangé en ressources"
+            "PDF rangé dans les ressources de la voiture qu'''il accompagne"
         );
     }
 
@@ -2015,15 +2118,88 @@ mod tests {
     }
 
     #[test]
-    fn every_leftover_of_one_archive_gets_its_own_id_and_survives() {
+    fn leftovers_become_satellites_of_the_mod_they_came_with() {
+        // §4.6ter : ce qu'une archive livre à côté du dossier du mod lui
+        // appartient — configs CSP, shaders, pilote, textures d'équipe. Stocké
+        // brut avec son chemin relatif à AC, posé à l'activation, et retiré
+        // avec le mod. Avant, tout ça devenait des « autres mods » anonymes qui
+        // survivaient à la suppression de la voiture.
+        let base = crate::testutil::temp_dir("import-sat");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+        let noop = |_p: Progress| {};
+
+        let src = base.join("RSS_Pack");
+        make_fake_car(&src.join("content").join("cars"), "rss_test_v8");
+        for (rel, name) in [
+            ("extension/config/cars/rss/rss_test_v8", "car.ini"),
+            ("system/shaders", "shader.fxo"),
+            ("content/driver", "driver.kn5"),
+        ] {
+            let d = src.join(rel);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join(name), name.as_bytes()).unwrap();
+        }
+
+        let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+        assert_eq!(r.mods.len(), 1, "la voiture est reconnue");
+        assert_eq!(r.satellites, 3, "les trois restes lui sont rattachés");
+        assert!(r.others.is_empty(), "aucun « autre mod » anonyme créé");
+
+        // Stockés bruts, chemin relatif à AC conservé.
+        let sat = crate::satellites::dir(&library, ModKind::Car, "rss_test_v8");
+        for rel in [
+            "extension/config/cars/rss/rss_test_v8/car.ini",
+            "system/shaders/shader.fxo",
+            "content/driver/driver.kn5",
+        ] {
+            let mut p = sat.clone();
+            for seg in rel.split('/') {
+                p = p.join(seg);
+            }
+            assert!(p.is_file(), "{rel} stocké en satellite");
+        }
+
+        // Posés dans AC dès l'import (activation par défaut, §4.6bis).
+        assert!(ac.join("system").join("shaders").join("shader.fxo").is_file());
+        assert!(ac.join("content").join("driver").join("driver.kn5").is_file());
+
+        // Et retirés avec le mod — c'est tout l'intérêt du rattachement.
+        crate::maintenance::delete_broken(&conn, &cfg, "rss_test_v8").unwrap();
+        assert!(
+            !ac.join("system").join("shaders").join("shader.fxo").exists(),
+            "satellite retiré d'AC à la suppression du mod"
+        );
+        assert!(!ac.join("content").join("driver").join("driver.kn5").exists());
+        assert!(!sat.exists(), "arbre des satellites supprimé avec le mod");
+        assert!(
+            ac.join("content").is_dir(),
+            "un dossier AC préexistant n'est jamais emporté"
+        );
+    }
+
+    #[test]
+    fn every_unattached_leftover_of_one_archive_gets_its_own_id_and_survives() {
         // Bug réel (RSS GT-M Lanzo) : tous les restes d'une même archive
         // tombaient sur le même id « autre mod » — `other_id` voyait dans
         // `<archive>.rar__<label>` une extension `rar__<label>` et ne gardait
         // que `<archive>`. Le premier reste était importé, les suivants
         // rejetés par `other_exists`, et leurs fichiers — déjà déplacés dans le
         // dossier temporaire d'emballage — disparaissaient à son nettoyage.
-        // Sur l'archive du Lanzo : `extension/`, `system/` et `content/texture`
-        // perdus, seul `content/driver` conservé (§6.1bis).
+        //
+        // Pack multi-voitures : rien ne rattache ces restes à une voiture
+        // précise (§4.6ter), ils restent donc des « autres mods » — le cas où
+        // l'unicité des ids compte encore.
         let base = crate::testutil::temp_dir("import-leftover-ids");
         let library = base.join("library");
         let ac = base.join("ac");
@@ -2038,11 +2214,11 @@ mod tests {
         let rules = crate::rules::default_rules();
         let noop = |_p: Progress| {};
 
-        // Archive « à la RSS » : une voiture reconnue + quatre restes autour.
         let src = base.join("RSS_Pack.rar");
-        make_fake_car(&src.join("content").join("cars"), "rss_test_v8");
+        make_fake_car(&src.join("content").join("cars"), "rss_test_a");
+        make_fake_car(&src.join("content").join("cars"), "rss_test_b");
         for (rel, name) in [
-            ("extension/config/cars/rss", "car.ini"),
+            ("extension/config/shared", "shared.ini"),
             ("system/shaders", "shader.fxo"),
             ("content/texture/crew", "brand.dds"),
             ("content/driver", "driver.kn5"),
@@ -2054,7 +2230,8 @@ mod tests {
 
         let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
-        assert_eq!(r.mods.len(), 1, "la voiture est reconnue");
+        assert_eq!(r.mods.len(), 2, "les deux voitures sont reconnues");
+        assert_eq!(r.satellites, 0, "pack ambigu : aucun rattachement automatique");
         assert_eq!(
             r.others.len(),
             4,
@@ -2067,9 +2244,8 @@ mod tests {
         sorted.dedup();
         assert_eq!(sorted.len(), 4, "quatre ids distincts, obtenus: {ids:?}");
 
-        // Chaque fichier de reste est bien arrivé en bibliothèque.
         for rel in [
-            "extension/config/cars/rss/car.ini",
+            "extension/config/shared/shared.ini",
             "system/shaders/shader.fxo",
             "content/texture/crew/brand.dds",
             "content/driver/driver.kn5",
@@ -2088,15 +2264,13 @@ mod tests {
     #[test]
     fn leftover_keeps_its_path_relative_to_the_archive_root() {
         // Bug réel : l'emballage d'un reste ne conservait que son nom de
-        // fichier, or `others::place` rejoue le chemin depuis la racine du mod
-        // (`ac.join(rel)`). `content/driver` atterrissait donc à `AC\driver`
-        // au lieu d'`AC\content\driver` — jonction posée hors de portée du jeu.
+        // fichier, or la pose rejoue le chemin depuis la racine d'AC.
+        // `content/driver` atterrissait donc à `AC\driver` au lieu d'
+        // `AC\content\driver` — hors de portée du jeu.
         let base = crate::testutil::temp_dir("import-leftover-relpath");
         let library = base.join("library");
         let ac = base.join("ac");
         std::fs::create_dir_all(&library).unwrap();
-        // `content/` existe déjà côté AC (vrai dossier) : `place` doit y
-        // descendre plutôt que de jonctionner à la racine.
         std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
         let cfg = AppConfig {
@@ -2115,19 +2289,17 @@ mod tests {
 
         let r = import_one_folder(&noop, &conn, &cfg, &rules, &src, true, &[]);
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
-        assert_eq!(r.others.len(), 1, "le dossier driver/ est repris comme reste");
+        assert_eq!(r.satellites, 1, "le dossier driver/ est rattaché à la voiture");
 
-        let stored = library
-            .join("others")
-            .join(&r.others[0].id)
+        let stored = crate::satellites::dir(&library, ModKind::Car, "some_car")
             .join("content")
             .join("driver")
             .join("pro.kn5");
         assert!(stored.is_file(), "chemin relatif conservé en bibliothèque: {stored:?}");
 
         assert!(
-            ac.join("content").join("driver").join("pro.kn5").exists(),
-            "déployé sous content/driver, là où AC le lit"
+            ac.join("content").join("driver").join("pro.kn5").is_file(),
+            "posé sous content/driver, là où AC le lit"
         );
         assert!(
             !ac.join("driver").exists(),

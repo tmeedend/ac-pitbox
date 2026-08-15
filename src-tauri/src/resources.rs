@@ -78,7 +78,7 @@ pub fn resources_dir(library: &Path, kind: ModKind, id: &str) -> PathBuf {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Route {
+pub enum Route {
     /// Contenu de jeu : copié normalement, sera junctionné.
     Content,
     /// Fichier annexe capturé : rangé dans le dossier ressources.
@@ -92,6 +92,15 @@ fn ext_lower(path: &Path) -> Option<String> {
     path.extension()
         .and_then(|e| e.to_str())
         .map(|e| e.to_ascii_lowercase())
+}
+
+/// Route d'un fichier posé **à la racine de ce qui entoure le mod** (§4.6) —
+/// le seul endroit où un document isolé est une annexe. Sert au routage des
+/// restes (§6.1bis) avant de décider satellite vs annexe : sans ce test, le
+/// `Read Me.pdf` livré à côté d'une voiture deviendrait un satellite et
+/// atterrirait à la racine d'AC.
+pub fn route_beside_root(path: &Path, mode: ExtractionMode) -> Route {
+    classify(path, true, mode)
 }
 
 fn classify(path: &Path, is_root: bool, mode: ExtractionMode) -> Route {

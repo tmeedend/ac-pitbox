@@ -239,6 +239,13 @@ pub fn activate(conn: &Connection, cfg: &AppConfig, mod_id: &str, version_id: Op
     // Compose par-dessus la base si le mod a des couches actives (§4.4) ;
     // sans couche, recompose ré-affirme simplement la junction vers la version.
     crate::compose::recompose(conn, cfg, mod_id)?;
+    // Satellites (§4.6ter) : ce que l'archive livrait hors de
+    // `content/<type>/<id>` et qui appartient au mod. Best-effort — un
+    // satellite non posé (emplacement déjà occupé) ne doit pas empêcher de
+    // conduire, mais laisse une trace.
+    if let Err(e) = crate::satellites::deploy(conn, cfg, kind, mod_id) {
+        log::warn!("deploy_satellites {mod_id}: {e}");
+    }
     Ok(())
 }
 
@@ -265,6 +272,11 @@ pub fn deactivate(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<()
     // prochaine activation — plus de dossier de composition intermédiaire à
     // nettoyer (le contenu composé, s'il y en avait, vivait directement dans
     // `link`, déjà retiré ci-dessus).
+    // Satellites (§4.6ter) : retirés exactement comme ils ont été posés. Ils
+    // restent en bibliothèque, donc réactivables sans réimport.
+    if let Err(e) = crate::satellites::undeploy(conn, cfg, mod_id) {
+        log::warn!("undeploy_satellites {mod_id}: {e}");
+    }
     Ok(())
 }
 

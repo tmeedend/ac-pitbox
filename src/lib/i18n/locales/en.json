@@ -743,6 +743,7 @@
     "appsImported": "+ {count} app(s) imported",
     "othersImported": "+ {count} other mod(s) imported",
     "resourcesExtracted": "+ {count} ancillary file(s) extracted to resources",
+    "satellitesAttached": "{count} file(s) attached to the mod",
     "newVersionTitle": "Possible new version",
     "modalBodyOpen": "\"",
     "modalBodyMid": "\" looks like a mod already present (different folder: ",

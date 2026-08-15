@@ -120,6 +120,23 @@ Beaucoup de mods embarquent des fichiers **hors contenu de jeu** : PDF de prése
 - **Bloc « Ressources » sur la fiche** : liste le contenu du dossier ressources **lu en direct** (pas une liste mémorisée en base). Conséquences : un fichier déposé **manuellement** dans le dossier ressources apparaît automatiquement ; les **mods déjà installés** n'ont rien à réimporter — le bloc se remplit dès qu'un dossier ressources existe. Un clic sur un fichier l'ouvre avec **l'application par défaut de l'OS** (PDF → lecteur, PSD → éditeur d'image).
 - **Bouton « ouvrir le dossier du mod »** sur la fiche : ouvre le dossier du mod dans l'explorateur (distinct du bloc Ressources).
 
+### 4.6ter Satellites d'un mod
+
+Une archive livre souvent, **à côté** du dossier du mod, des fichiers qui lui appartiennent mais qu'AC lit ailleurs que dans `content/<type>/<id>` : configs CSP (`extension/config/cars/rss/<id>/…`), shaders (`system/shaders/…`), textures d'équipe (`content/texture/…`), modèle de pilote (`content/driver/…`). L'archive RSS GT-M Lanzo en compte 69. Ce sont les **satellites** du mod.
+
+**Stockés bruts, avec leur chemin relatif à la racine d'AC**, dans `<lib>/satellites/<type>/<id>/…` — jamais dans la version, qui est déployée telle quelle dans `content/`. Au **niveau du mod** comme `resources/` (§4.6) : une mise à jour remplace ses propres fichiers, les couches partagent le même arbre.
+
+Deux propriétés en découlent :
+
+- **L'import ne jette rien.** Ce qui n'est pas classé est conservé tel quel, donc l'*interprétation* — où poser, qui arbitre un fichier partagé — reste recalculable depuis la bibliothèque à tout moment. Aucune règle des versions précédentes à mémoriser, aucune archive à conserver : c'est l'**entrée** qui est préservée, pas la décision. C'est ce qui rend un futur changement de règles rattrapable sans rien versionner.
+- **Le satellite vit et meurt avec son mod.** Posé à l'activation, retiré à la désactivation, supprimé avec lui. Le passage par « autre mod » (§7.3) ne donnait pas ça : les fichiers d'une voiture supprimée restaient dans AC, rattachés à une entrée anonyme que plus rien ne reliait au mod.
+
+**Rattachement** d'un reste (§6.1bis), dans cet ordre : le chemin contient l'id d'exactement un mod reconnu de l'archive ; sinon l'archive ne livre qu'un seul mod, et tout ce qui l'entoure lui appartient. *Limite assumée* : dans un pack multi-mods, un reste que rien ne rattache reste un « autre mod » — le rattacher à tous dupliquerait des arbres parfois lourds, et « autre mod » ne perd rien. Un **document isolé** à la racine reste une annexe (§4.6) et va dans les ressources du mod, jamais dans AC : sans ce test, un `Read Me.pdf` deviendrait un satellite posé à la racine d'Assetto Corsa.
+
+**Pose fichier par fichier** (hardlink), jamais par jonction de dossier : plusieurs mods visent les mêmes arbres (`extension/textures/common/rss/…` est livré à l'identique par chaque voiture RSS), et une jonction en donnerait la propriété exclusive au premier arrivé.
+
+**Rien n'est jamais écrasé** (règle d'or n°5) : un fichier déjà présent — contenu Kunos, ou satellite d'un autre mod livrant le même fichier partagé — est laissé intact et n'entre pas dans la liste des liens posés, donc la désactivation ne peut pas l'emporter. Ce qui a été posé est mémorisé en base (`satellite_links`), **fichiers et dossiers créés pour l'occasion séparément** : c'est la seule façon d'élaguer les dossiers vides sans risquer d'emporter un dossier d'AC préexistant devenu vide.
+
 ---
 
 ## 5. Tags et harmonisation

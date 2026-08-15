@@ -223,6 +223,21 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_media_links_entity ON media_links(entity_id);
 
+        -- Satellites posés dans AC pour un mod (§4.6ter) : ce qui a été
+        -- réellement écrit hors de `content/<type>/<id>` à la dernière
+        -- activation. Retirer exactement cette liste — et rien d'autre — est ce
+        -- qui rend la désinstallation propre : un fichier qu'on n'a pas posé
+        -- (contenu Kunos, satellite d'un autre mod) n'y figure jamais.
+        -- `is_dir` : dossier créé pour l'occasion, à élaguer au retrait. Sans
+        -- cette distinction, l'élagage se fondait sur « dossier vide » et
+        -- pouvait emporter un dossier d'AC préexistant devenu vide.
+        CREATE TABLE IF NOT EXISTS satellite_links (
+            mod_id  TEXT NOT NULL,
+            ac_path TEXT NOT NULL,
+            is_dir  INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (mod_id, ac_path)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_versions_mod ON versions(mod_id);
         CREATE INDEX IF NOT EXISTS idx_history_mod  ON history(mod_id);
         CREATE INDEX IF NOT EXISTS idx_mods_idhash  ON mods(identity_hash);
@@ -797,8 +812,31 @@ pub fn get_version_path(conn: &Connection, version_id: &str) -> rusqlite::Result
 /// N'agit que sur l'overlay : les fichiers bibliothèque sont gérés par l'appelant.
 pub fn delete_mod(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM history WHERE mod_id = ?1", [id])?;
+    conn.execute("DELETE FROM satellite_links WHERE mod_id = ?1", [id])?;
     conn.execute("DELETE FROM mods WHERE id_interne = ?1", [id])?;
     Ok(())
+}
+
+// --- Satellites posés dans AC (§4.6ter) -------------------------------------
+
+/// Remplace la liste des satellites posés pour un mod (liste vide = plus rien
+/// de posé). Réécriture complète : c'est l'état du disque après l'opération qui
+/// est mémorisé, jamais un cumul. `(chemin, est_un_dossier_créé)`.
+pub fn set_satellite_links(conn: &Connection, mod_id: &str, entries: &[(String, bool)]) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM satellite_links WHERE mod_id = ?1", [mod_id])?;
+    for (p, is_dir) in entries {
+        conn.execute(
+            "INSERT OR IGNORE INTO satellite_links (mod_id, ac_path, is_dir) VALUES (?1, ?2, ?3)",
+            rusqlite::params![mod_id, p, *is_dir as i64],
+        )?;
+    }
+    Ok(())
+}
+
+pub fn get_satellite_links(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<(String, bool)>> {
+    let mut stmt = conn.prepare("SELECT ac_path, is_dir FROM satellite_links WHERE mod_id = ?1")?;
+    let rows = stmt.query_map([mod_id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? != 0)))?;
+    rows.collect()
 }
 
 // --- Profils (L3) -----------------------------------------------------------

@@ -49,7 +49,7 @@ pub fn is_deployed(path: &Path) -> bool {
 
 /// Pose un hardlink `dst` → `src` ; repli en copie physique si le hardlink
 /// échoue (disques différents, système de fichiers qui ne le supporte pas…).
-fn link_or_copy(src: &Path, dst: &Path) -> Result<(), String> {
+pub(crate) fn link_or_copy(src: &Path, dst: &Path) -> Result<(), String> {
     if let Some(parent) = dst.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }

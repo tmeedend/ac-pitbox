@@ -217,6 +217,8 @@ export interface ArchiveResult {
   subs: SubImported[];
   apps: AppImported[];
   others: OtherImported[];
+  /** Fichiers livrés à côté du mod et rattachés à lui (§4.6ter). */
+  satellites?: number;
 }
 
 export interface ImportProgress {
