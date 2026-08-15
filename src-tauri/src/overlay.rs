@@ -231,12 +231,25 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         -- `is_dir` : dossier créé pour l'occasion, à élaguer au retrait. Sans
         -- cette distinction, l'élagage se fondait sur « dossier vide » et
         -- pouvait emporter un dossier d'AC préexistant devenu vide.
+        -- `kind`/`claimed_at` sont dupliqués depuis `mods` **volontairement** :
+        -- une ligne doit suffire à elle-même pour décider quoi poser. Avec une
+        -- jointure, une ligne `mods` manquante faisait disparaître la
+        -- réclamation, et l'arbitrage effaçait d'AC un fichier encore utile.
+        -- `provided` : c'est *cette* ligne qui fournit l'exemplaire actuellement
+        -- posé dans AC (au plus une par chemin). Sans elle, il faudrait déduire
+        -- le fournisseur de la taille et de la date du fichier posé — ce qui
+        -- échoue précisément dans le cas qu'on veut arbitrer, deux exemplaires
+        -- de même date (archives repackées).
         CREATE TABLE IF NOT EXISTS satellite_links (
-            mod_id  TEXT NOT NULL,
-            ac_path TEXT NOT NULL,
-            is_dir  INTEGER NOT NULL DEFAULT 0,
+            mod_id     TEXT NOT NULL,
+            ac_path    TEXT NOT NULL,
+            is_dir     INTEGER NOT NULL DEFAULT 0,
+            kind       TEXT NOT NULL DEFAULT 'Car',
+            claimed_at TEXT NOT NULL DEFAULT '',
+            provided   INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (mod_id, ac_path)
         );
+        CREATE INDEX IF NOT EXISTS idx_sat_path ON satellite_links(ac_path);
 
         CREATE INDEX IF NOT EXISTS idx_versions_mod ON versions(mod_id);
         CREATE INDEX IF NOT EXISTS idx_history_mod  ON history(mod_id);
@@ -822,12 +835,19 @@ pub fn delete_mod(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 /// Remplace la liste des satellites posés pour un mod (liste vide = plus rien
 /// de posé). Réécriture complète : c'est l'état du disque après l'opération qui
 /// est mémorisé, jamais un cumul. `(chemin, est_un_dossier_créé)`.
-pub fn set_satellite_links(conn: &Connection, mod_id: &str, entries: &[(String, bool)]) -> rusqlite::Result<()> {
+pub fn set_satellite_links(
+    conn: &Connection,
+    mod_id: &str,
+    kind: &str,
+    entries: &[(String, bool)],
+) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM satellite_links WHERE mod_id = ?1", [mod_id])?;
+    let now = chrono::Local::now().to_rfc3339();
     for (p, is_dir) in entries {
         conn.execute(
-            "INSERT OR IGNORE INTO satellite_links (mod_id, ac_path, is_dir) VALUES (?1, ?2, ?3)",
-            rusqlite::params![mod_id, p, *is_dir as i64],
+            "INSERT OR IGNORE INTO satellite_links (mod_id, ac_path, is_dir, kind, claimed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![mod_id, p, *is_dir as i64, kind, now],
         )?;
     }
     Ok(())
@@ -837,6 +857,37 @@ pub fn get_satellite_links(conn: &Connection, mod_id: &str) -> rusqlite::Result<
     let mut stmt = conn.prepare("SELECT ac_path, is_dir FROM satellite_links WHERE mod_id = ?1")?;
     let rows = stmt.query_map([mod_id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? != 0)))?;
     rows.collect()
+}
+
+/// Mods qui réclament ce fichier d'AC — `(mod_id, kind, claimed_at)`. C'est le
+/// compteur de références des fichiers partagés (§4.6ter) : tant qu'il reste au
+/// moins une ligne, le fichier est encore réclamé et ne doit pas être retiré
+/// d'AC. `claimed_at` départage deux exemplaires de même date de modification :
+/// le dernier mod installé gagne.
+pub fn satellite_claimants(conn: &Connection, ac_path: &str) -> rusqlite::Result<Vec<(String, String, String)>> {
+    let mut stmt =
+        conn.prepare("SELECT mod_id, kind, claimed_at FROM satellite_links WHERE ac_path = ?1 AND is_dir = 0")?;
+    let rows = stmt.query_map([ac_path], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+    })?;
+    rows.collect()
+}
+
+/// Mod dont l'exemplaire est actuellement posé dans AC à ce chemin.
+pub fn satellite_provider(conn: &Connection, ac_path: &str) -> rusqlite::Result<Option<String>> {
+    let mut stmt = conn.prepare("SELECT mod_id FROM satellite_links WHERE ac_path = ?1 AND provided = 1")?;
+    let mut rows = stmt.query_map([ac_path], |r| r.get::<_, String>(0))?;
+    rows.next().transpose()
+}
+
+/// Désigne le mod qui fournit désormais ce chemin — au plus un à la fois.
+pub fn set_satellite_provider(conn: &Connection, ac_path: &str, mod_id: &str) -> rusqlite::Result<()> {
+    conn.execute("UPDATE satellite_links SET provided = 0 WHERE ac_path = ?1", [ac_path])?;
+    conn.execute(
+        "UPDATE satellite_links SET provided = 1 WHERE ac_path = ?1 AND mod_id = ?2",
+        [ac_path, mod_id],
+    )?;
+    Ok(())
 }
 
 // --- Profils (L3) -----------------------------------------------------------

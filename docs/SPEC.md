@@ -135,7 +135,14 @@ Deux propriétés en découlent :
 
 **Pose fichier par fichier** (hardlink), jamais par jonction de dossier : plusieurs mods visent les mêmes arbres (`extension/textures/common/rss/…` est livré à l'identique par chaque voiture RSS), et une jonction en donnerait la propriété exclusive au premier arrivé.
 
-**Rien n'est jamais écrasé** (règle d'or n°5) : un fichier déjà présent — contenu Kunos, ou satellite d'un autre mod livrant le même fichier partagé — est laissé intact et n'entre pas dans la liste des liens posés, donc la désactivation ne peut pas l'emporter. Ce qui a été posé est mémorisé en base (`satellite_links`), **fichiers et dossiers créés pour l'occasion séparément** : c'est la seule façon d'élaguer les dossiers vides sans risquer d'emporter un dossier d'AC préexistant devenu vide.
+**Fichiers partagés.** Chaque mod *réclame* les chemins d'AC dont il a besoin (`satellite_links`), et deux règles suffisent :
+
+- **Compteur de références** — un fichier n'est retiré d'AC que lorsque plus aucun mod ne le réclame. Désactiver une voiture RSS n'emporte pas `extension/textures/common/rss/…` dont onze autres dépendent, et il n'y a plus de course à la propriété : le premier arrivé ne gagne rien.
+- **Arbitrage par date** — l'exemplaire à la **date de modification la plus récente** gagne, un mod plus récent corrigeant en général des bugs de celui d'avant. La date traverse la chaîne intacte : 7-Zip restitue celle stockée dans l'archive, `std::fs::copy` la conserve sous Windows, un hardlink partage l'entrée MFT. À égalité (archives repackées par un tiers, qui perdent les dates), c'est le **dernier mod installé**. L'arbitrage se rejoue dans les deux sens : quand le fournisseur s'en va, le fichier repasse à l'exemplaire du meilleur réclamant restant.
+
+Le fournisseur courant est mémorisé (`provided`), jamais déduit de la taille et de la date du fichier posé : c'est précisément dans le cas qu'on veut arbitrer — deux exemplaires de même date — que cette déduction se trompe. Pour la même raison, `kind` et `claimed_at` sont dupliqués depuis `mods` : une ligne doit se suffire à elle-même, une jointure vers une ligne manquante ferait disparaître la réclamation et l'arbitrage effacerait d'AC un fichier encore utile.
+
+**Un fichier que personne ne réclame est hors jeu** (règle d'or n°5) : contenu Kunos, ou mod installé hors de l'app. Jamais touché, et surtout jamais enregistré — sinon une désactivation pourrait l'emporter. Ce qui a été posé est mémorisé **fichiers et dossiers créés pour l'occasion séparément** : c'est la seule façon d'élaguer les dossiers vides sans risquer d'emporter un dossier d'AC préexistant devenu vide.
 
 ---
 
