@@ -17,13 +17,19 @@ use sha2::{Digest, Sha256};
 
 use crate::config::AppConfig;
 
-/// Version du convertisseur, incluse dans la clé de cache.
+/// Version du convertisseur, **préfixe du nom de chaque entrée du cache**.
 ///
 /// **À incrémenter dès que le rendu produit change** — mapping matériaux,
 /// filtrage de nœuds, taille des textures. Sans ça, un utilisateur qui met
 /// l'app à jour continue de voir les anciens `.glb` : le §10 liste
 /// « cache non versionné » parmi les pièges connus, et c'est celui qui se
 /// remarque le plus tard.
+///
+/// Dans le **nom** et non dans le hachage, alors que l'un ou l'autre suffirait
+/// à ne plus servir une entrée périmée : seul le nom permet aussi de la
+/// *reconnaître* pour libérer sa place. Trois incréments en une session de
+/// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
+/// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
 const CONVERTER_VERSION: u32 = 7;
 
 /// Plafond du cache (§5.3). Au-delà, éviction du plus ancien utilisé.
@@ -57,6 +63,9 @@ pub struct PreviewState {
     /// transcodage parallèle des textures, en lancer deux ne ferait que les
     /// ralentir mutuellement.
     slot: Mutex<()>,
+    /// Le ménage des entrées d'une version antérieure a-t-il déjà eu lieu ?
+    /// Une fois par exécution suffit — le dossier ne se périme pas tout seul.
+    swept: std::sync::atomic::AtomicBool,
 }
 
 impl PreviewState {
@@ -82,12 +91,56 @@ pub fn cache_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+/// Préfixe des entrées écrites par la version courante du convertisseur.
+fn version_prefix() -> String {
+    format!("v{CONVERTER_VERSION}-")
+}
+
+/// Nom de fichier (sans extension) d'une entrée du cache.
+fn entry_stem(key: &str) -> String {
+    format!("{}{key}", version_prefix())
+}
+
+/// Efface les entrées écrites par une **autre** version du convertisseur.
+///
+/// Elles ne seront plus jamais servies — leur nom ne peut plus être demandé —
+/// mais elles occupent le disque et poussent les entrées vivantes vers
+/// l'éviction. Best-effort : un fichier verrouillé n'est pas un problème, on
+/// repassera au prochain démarrage.
+fn sweep_foreign_versions(dir: &Path) {
+    let prefix = version_prefix();
+    let Ok(read) = std::fs::read_dir(dir) else { return };
+    let mut removed = 0u32;
+    let mut freed = 0u64;
+    for entry in read.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with(&prefix) {
+            continue;
+        }
+        let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+        match std::fs::remove_file(entry.path()) {
+            Ok(()) => {
+                removed += 1;
+                freed += size;
+            }
+            Err(e) => log::warn!("preview: entrée de cache périmée {name} non supprimée — {e}"),
+        }
+    }
+    if removed > 0 {
+        log::info!(
+            "preview: {removed} entrée(s) de cache d'une version antérieure effacée(s), {} Mio libérés",
+            freed / (1024 * 1024)
+        );
+    }
+}
+
 /// Clé de cache d'un couple (modèle, skin).
 ///
 /// Inclut la date et la taille du `.kn5` : réimporter une version modifiée
 /// d'un mod invalide l'entrée sans qu'on ait à s'en occuper. Inclut le skin,
-/// puisqu'il surcharge les textures (§4.3). Inclut la version du
-/// convertisseur, qui invalide tout le cache d'un coup.
+/// puisqu'il surcharge les textures (§4.3). La version du convertisseur, elle,
+/// est portée par le nom du fichier (voir [`CONVERTER_VERSION`]).
 fn cache_key(model: &Path, skin: Option<&str>) -> String {
     let mut hasher = Sha256::new();
     hasher.update(model.to_string_lossy().to_lowercase().as_bytes());
@@ -100,7 +153,6 @@ fn cache_key(model: &Path, skin: Option<&str>) -> String {
         }
     }
     hasher.update(skin.unwrap_or("").as_bytes());
-    hasher.update(CONVERTER_VERSION.to_le_bytes());
     // 32 caractères hexadécimaux suffisent largement à éviter toute collision
     // sur quelques milliers d'entrées, et gardent des noms de fichier courts.
     format!("{:x}", hasher.finalize())[..32].to_string()
@@ -120,8 +172,13 @@ pub fn prepare(
 ) -> Result<CarPreview, String> {
     let resolved = kn5_gltf::resolve_model(car_dir).ok_or(crate::errors::PREVIEW_MODEL_NOT_FOUND)?;
     let dir = cache_dir(app)?;
-    let key = cache_key(&resolved.path, skin_id);
-    let file = dir.join(format!("{key}.glb"));
+    // Une seule fois par exécution : au premier aperçu demandé, pas au
+    // démarrage, pour ne rien coûter à qui n'en ouvre jamais.
+    if !state.swept.swap(true, Ordering::Relaxed) {
+        sweep_foreign_versions(&dir);
+    }
+    let stem = entry_stem(&cache_key(&resolved.path, skin_id));
+    let file = dir.join(format!("{stem}.glb"));
 
     if let Ok(meta) = std::fs::metadata(&file) {
         if meta.len() > 0 {
@@ -129,9 +186,9 @@ pub fn prepare(
             // entrée comme récemment utilisée : sans ça, une voiture consultée
             // tous les jours finirait évincée avant une convertie une fois.
             touch(&file);
-            let counts = read_counts(&dir, &key).unwrap_or_default();
+            let counts = read_counts(&dir, &stem).unwrap_or_default();
             return Ok(CarPreview {
-                url: url_for(&key),
+                url: url_for(&stem),
                 triangle_count: counts.0,
                 material_count: counts.1,
                 texture_count: counts.2,
@@ -174,11 +231,11 @@ pub fn prepare(
         log::warn!("preview: texture `{}` ignorée — {}", warning.name, warning.reason);
     }
 
-    write_entry(&dir, &key, &conversion)?;
+    write_entry(&dir, &stem, &conversion)?;
     evict_over_cap(&dir);
 
     Ok(CarPreview {
-        url: url_for(&key),
+        url: url_for(&stem),
         triangle_count: conversion.triangle_count,
         material_count: conversion.material_count,
         texture_count: conversion.texture_count,
@@ -280,9 +337,14 @@ pub fn clear_cache(app: &tauri::AppHandle) -> Result<u64, String> {
 pub fn cached_file(dir: &Path, requested: &str) -> Option<PathBuf> {
     let name = requested.trim_start_matches('/');
     let stem = name.strip_suffix(".glb")?;
-    // Une clé est un hachage hexadécimal : tout le reste (séparateurs, `..`)
-    // est refusé avant de toucher au disque.
-    if stem.is_empty() || !stem.chars().all(|c| c.is_ascii_hexdigit()) {
+    // Un nom d'entrée est `v<version>-<hachage hexadécimal>` : tout le reste
+    // (séparateurs, `..`) est refusé avant de toucher au disque.
+    let key = stem
+        .strip_prefix('v')
+        .and_then(|rest| rest.split_once('-'))
+        .filter(|(version, _)| !version.is_empty() && version.chars().all(|c| c.is_ascii_digit()))
+        .map(|(_, key)| key)?;
+    if key.is_empty() || !key.chars().all(|c| c.is_ascii_hexdigit()) {
         return None;
     }
     let file = dir.join(name);
@@ -461,18 +523,65 @@ mod tests {
         let base = crate::testutil::temp_dir("preview-serve");
         let dir = base.join("previews");
         std::fs::create_dir_all(&dir).unwrap();
-        let key = "abcdef0123456789abcdef0123456789";
-        std::fs::write(dir.join(format!("{key}.glb")), b"glb").unwrap();
+        let stem = entry_stem("abcdef0123456789abcdef0123456789");
+        std::fs::write(dir.join(format!("{stem}.glb")), b"glb").unwrap();
         std::fs::write(base.join("secret.txt"), b"nope").unwrap();
 
-        assert!(cached_file(&dir, &format!("/{key}.glb")).is_some(), "clé valide servie");
+        assert!(cached_file(&dir, &format!("/{stem}.glb")).is_some(), "nom valide servi");
         assert!(
             cached_file(&dir, "/../secret.txt").is_none(),
             "remontée de dossier refusée"
         );
-        assert!(cached_file(&dir, "/nothex.glb").is_none(), "nom non hexadécimal refusé");
-        assert!(cached_file(&dir, "/.glb").is_none(), "clé vide refusée");
-        assert!(cached_file(&dir, &format!("/{key}")).is_none(), "extension obligatoire");
+        assert!(
+            cached_file(&dir, "/v7-nothex.glb").is_none(),
+            "clé non hexadécimale refusée"
+        );
+        assert!(
+            cached_file(&dir, "/abcdef0123456789abcdef0123456789.glb").is_none(),
+            "préfixe de version obligatoire"
+        );
+        assert!(cached_file(&dir, "/v7-.glb").is_none(), "clé vide refusée");
+        assert!(
+            cached_file(&dir, &format!("/{stem}")).is_none(),
+            "extension obligatoire"
+        );
+    }
+
+    // Règle : les entrées d'une version antérieure du convertisseur sont
+    // effacées, pas seulement ignorées — sinon elles occupent le disque jusqu'à
+    // ce que le plafond finisse par les évincer. Trois incréments de version en
+    // une session avaient laissé plusieurs centaines de Mo derrière eux.
+    #[test]
+    fn entries_from_an_older_converter_are_reclaimed() {
+        let base = crate::testutil::temp_dir("preview-sweep");
+        let dir = base.join("previews");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mine = entry_stem("abcdef0123456789abcdef0123456789");
+        std::fs::write(dir.join(format!("{mine}.glb")), b"glb").unwrap();
+        std::fs::write(dir.join(format!("{mine}.txt")), b"1 2 3").unwrap();
+        std::fs::write(dir.join("v1-abcdef0123456789abcdef0123456789.glb"), b"vieux").unwrap();
+        std::fs::write(dir.join("v1-abcdef0123456789abcdef0123456789.txt"), b"1 2 3").unwrap();
+        // Nom de l'époque où la version vivait dans le hachage, sans préfixe.
+        std::fs::write(dir.join("0123456789abcdef0123456789abcdef.glb"), b"ancien").unwrap();
+
+        sweep_foreign_versions(&dir);
+
+        assert!(
+            dir.join(format!("{mine}.glb")).is_file() && dir.join(format!("{mine}.txt")).is_file(),
+            "l'entrée de la version courante survit, compteurs compris"
+        );
+        assert!(
+            !dir.join("v1-abcdef0123456789abcdef0123456789.glb").exists(),
+            "l'entrée d'une version antérieure est effacée"
+        );
+        assert!(
+            !dir.join("v1-abcdef0123456789abcdef0123456789.txt").exists(),
+            "son fichier de compteurs part avec"
+        );
+        assert!(
+            !dir.join("0123456789abcdef0123456789abcdef.glb").exists(),
+            "et les noms sans préfixe, d'avant ce nommage, aussi"
+        );
     }
 
     // Règle : au-delà du plafond, on évince les entrées les plus anciennement
@@ -538,7 +647,7 @@ mod tests {
         let base = crate::testutil::temp_dir("preview-cors");
         let dir = base.join("previews");
         std::fs::create_dir_all(&dir).unwrap();
-        let key = "abcdef0123456789abcdef0123456789";
+        let key = entry_stem("abcdef0123456789abcdef0123456789");
         std::fs::write(dir.join(format!("{key}.glb")), b"glTFbody").unwrap();
 
         let ok = serve(&dir, &request("GET", &format!("/{key}.glb"), None));

@@ -690,17 +690,39 @@ gêne constatée :
      photo (le fond d'un `preview.jpg` passe de rgb(2,3,5) dans les coins à
      rgb(12,13,15) sous la voiture).
 
-   **Reste** : la carrosserie sort encore plus claire que dans le jeu (Supra
-   verte : (53, 182, 72) contre (14, 81, 36)), et **l'éclairage n'en est pas
-   la cause** — la teinte ne bouge quasiment plus quand on assombrit le
-   studio, donc c'est l'albédo qui est affiché à pleine force. Piste suivante,
-   et elle est du côté de la conversion : AC multiplie sa diffuse par
-   `ksAmbient + ksDiffuse` (0,4 + 0,45 sur la carrosserie de la Supra), qu'on
-   ignore aujourd'hui. À mesurer avant d'appliquer : ces constantes valent
-   ~0,85 alors que l'écart constaté est d'un facteur 2.
+   ⚠️ **Piège de la méthode, vérifié par l'utilisateur.** La carrosserie sort
+   plus claire que le `preview.jpg` (Supra verte : (53, 182, 72) contre
+   (14, 81, 36)), et j'en avais conclu qu'il restait un écart à corriger, du
+   côté de `ksAmbient + ksDiffuse`. **Comparaison faite avec le jeu lancé : il
+   n'y a pas d'écart** — ce sont les `preview.jpg` qui sont plus sombres que
+   le rendu d'AC. Le `preview.jpg` reste la bonne référence pour le *cadrage*
+   et la *géométrie de l'éclairage*, il ne l'est pas pour le niveau absolu.
+   Ne pas « corriger » la luminosité sur cette base.
 
 Restent aussi, hérités du plan initial : **R et B de `txMaps`** (§6.2, §12 q3 —
 le vert est documenté et exploité, voir `kn5-format.md` écart n°7 ; les deux
-autres canaux restent ouverts), choix du LOD en config,
-purge du cache depuis les Réglages, et l'aperçu dans `ModDetail.svelte`
-(panneau latéral), qui n'a jamais été branché.
+autres canaux restent ouverts), choix du LOD en config, purge **manuelle** du
+cache depuis les Réglages, et l'aperçu dans `ModDetail.svelte` (panneau
+latéral), qui n'a jamais été branché.
+
+### 15.1 Cache — ce qui est en place
+
+Rappel, parce que la question revient : le cache est **sur disque**
+(`%LOCALAPPDATA%\com.pitbox.app\previews`), donc il survit à un redémarrage —
+une voiture déjà vue s'ouvre sans reconversion. Chaque entrée est un
+`v<version>-<hachage>.glb` plus un `.txt` de compteurs à côté.
+
+Le **numéro de version du convertisseur** (`preview::CONVERTER_VERSION`) est
+dans le nom du fichier. Deux effets, et il faut les deux :
+
+- une entrée d'une autre version n'est jamais servie, puisque son nom ne peut
+  plus être demandé — c'est l'invalidation ;
+- elle est **reconnaissable**, donc effaçable. Au premier aperçu de chaque
+  exécution, les entrées d'une autre version sont supprimées. Sans ça elles
+  restaient à occuper le disque jusqu'à ce que le plafond de 2 Gio les évince :
+  trois incréments en une session de travail avaient laissé plusieurs centaines
+  de Mo derrière eux.
+
+La purge manuelle depuis les Réglages garde son intérêt malgré ce ménage — le
+cache d'une grande bibliothèque atteint vite le gigaoctet **en entrées
+valides**.
