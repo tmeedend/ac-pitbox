@@ -68,6 +68,16 @@
   /** Un tour en ~28 s à 100 % : assez lent pour être calme, assez vif pour
    * qu'on voie les reflets glisser sur la carrosserie. */
   const SPIN_SPEED = 0.22;
+
+  // Lens and framing, measured against Kunos' `preview.jpg` (§15 point 7).
+  //
+  // A 20° field of view rather than the 35° first used: at 35° the nose of a
+  // car looms and its tail falls away, a distortion the game's own previews do
+  // not have. The distance that follows is what puts the car at the size Kunos
+  // frames it — the two go together, since a longer lens has to step back.
+  const FRAMING_FOV = 20;
+  /** Camera distance at zoom 100 %, in multiples of the model's radius. */
+  const FRAMING_DISTANCE = 4.9;
   /** Reprise après un lâcher de souris. Assez long pour examiner un détail
    * sans que le plateau ne redémarre sous les doigts. */
   const SPIN_RESUME_MS = 4000;
@@ -183,7 +193,7 @@
    */
   function placeCamera(current: ThreeScene) {
     const prefs = preview3dPrefs();
-    const distance = (current.radius * 2.2 * 100) / prefs.zoom;
+    const distance = (current.radius * FRAMING_DISTANCE * 100) / prefs.zoom;
     const azimuth = (prefs.azimuth * Math.PI) / 180;
     const elevation = (prefs.elevation * Math.PI) / 180;
     current.camera.position.set(
@@ -199,7 +209,7 @@
     const THREE = await import("three");
     const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
     const { OrbitControls } = await import("three/examples/jsm/controls/OrbitControls.js");
-    const { RoomEnvironment } = await import("three/examples/jsm/environments/RoomEnvironment.js");
+    const { showroomEnvironment } = await import("./showroomEnvironment");
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -207,10 +217,11 @@
     renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     const scene = new THREE.Scene();
-    // Éclairage par environment map : c'est ce qui donne à une carrosserie un
-    // rendu crédible, sans embarquer le moindre asset (§8.1).
+    // Image-based lighting, and no asset to ship for it (§8.1). The showroom is
+    // dark on purpose — see `showroomEnvironment` for what a white room did to
+    // the paint.
     const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = pmrem.fromScene(showroomEnvironment(THREE), 0.04).texture;
 
     const gltf = await new GLTFLoader().loadAsync(url);
 
@@ -241,7 +252,7 @@
     turntable.add(gltf.scene);
     scene.add(turntable);
 
-    const camera = new THREE.PerspectiveCamera(35, 16 / 9, radius / 100, radius * 40);
+    const camera = new THREE.PerspectiveCamera(FRAMING_FOV, 16 / 9, radius / 100, radius * 40);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.copy(center);
@@ -249,7 +260,10 @@
     controls.dampingFactor = 0.08;
     controls.enablePan = false;
     controls.minDistance = radius * 1.1;
-    controls.maxDistance = radius * 5;
+    // Roomy enough for the whole zoom range of the settings: at 50 % the camera
+    // sits at nearly ten radii, and a tighter bound would silently cancel the
+    // setting on the first frame.
+    controls.maxDistance = radius * 12;
     // Borne l'angle polaire pour qu'on ne puisse pas passer sous le sol.
     controls.maxPolarAngle = Math.PI * 0.495;
 

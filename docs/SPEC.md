@@ -651,7 +651,7 @@ Ce n'est un déchet que si le parent ne revient jamais. Ils sont donc **listés 
 
 **Écran Réglages en onglets** (Général / Chemins / Import / Aperçu / Musique) depuis le mode Big Picture (§16) — Général/Chemins/Import partagent `AppConfig` et sa garde de navigation (§10bis) ; Aperçu et Musique ont chacun leur propre stockage et **s'appliquent sans bouton Enregistrer** (`ui_prefs.json` pour l'un, `music.json` pour l'autre).
 
-**Onglet Aperçu** (`components/settings/PreviewTab.svelte`) : réglages de l'aperçu 3D intégré (§9.4) — affiché ou non sur les fiches (même réglage que la bascule de la zone héros), zoom, orientation, hauteur de vue, vitesse du plateau tournant, et un bouton qui rétablit le cadrage d'origine. Les valeurs par défaut reproduisent exactement le cadrage livré, et un changement s'applique à une fiche déjà ouverte sans recharger son modèle.
+**Onglet Aperçu** (`components/settings/PreviewTab.svelte`) : réglages de l'aperçu 3D intégré (§9.4) — affiché ou non sur les fiches (même réglage que la bascule de la zone héros), zoom, orientation, hauteur de vue, vitesse du plateau tournant, et un bouton qui rétablit le cadrage d'origine. Les valeurs par défaut sont celles mesurées sur les `preview.jpg` de Kunos, pour que la bascule photo/3D ne saute pas à l'œil (trois-quarts avant gauche, vue basse — détail dans `SPEC-preview-3d-kn5.md` §15), et un changement s'applique à une fiche déjà ouverte sans recharger son modèle.
 
 ---
 

@@ -659,20 +659,40 @@ gêne constatée :
 6. ~~**Rugosité par pixel depuis `txMaps`**~~ ✅ **Fait**, ajouté en cours de
    lot : son canal vert est la brillance, et `ksSpecularEXP` seul ne
    distinguait pas le chrome du cuir. Voir `kn5-format.md`, écart n°7.
-7. **Éclairage et cadrage calés sur les `preview.jpg` Kunos**, pour que le
-   passage de la photo à la 3D ne saute pas à l'œil. C'est le point qui
-   demande le plus de tâtonnement visuel.
-   **À faire après la rugosité** (décidé avec l'utilisateur) : elle change la
-   réponse à la lumière, donc calibrer l'éclairage avant l'aurait fait
-   recommencer.
-   Point de départ utile, mesuré en corrigeant le n°2 : l'albédo produit est
-   désormais juste, mais AC ne l'affiche jamais tel quel — ses matériaux
-   annoncent `ksAmbient + ksDiffuse ≈ 0,8` sur une carrosserie et son studio
-   est sombre, là où le viewer éclaire avec une `RoomEnvironment` claire, à
-   exposition 1 et sans réglage. Une voiture peut donc rester « trop claire »
-   alors que sa peinture est la bonne : chercher du côté de
-   `toneMappingExposure` / `scene.environmentIntensity` avant de retoucher la
-   conversion.
+7. **Éclairage et cadrage calés sur les `preview.jpg` Kunos** ✅ **pour
+   l'essentiel** — reste un écart de luminosité décrit plus bas.
+   **Fait après la rugosité** (décidé avec l'utilisateur) : elle change la
+   réponse à la lumière, donc calibrer avant l'aurait fait recommencer.
+
+   **Méthode** — un banc de comparaison plutôt que du tâtonnement : une page
+   qui rend le `.glb` dans la même scène three.js à côté du `preview.jpg` du
+   même skin, et qui mesure les deux (couverture, boîte de la voiture,
+   luminance médiane, couleur médiane de la carrosserie). Jetable, hors dépôt.
+
+   **Corrigé, mesuré sur deux voitures** :
+   - **Focale** 35° → **20°**, avec la distance qui suit (4,9 rayons à
+     zoom 100 %). À 35°, l'avant d'une voiture enfle et l'arrière fuit ; les
+     photos du jeu n'ont pas cette déformation.
+   - **Angle par défaut** : trois-quarts avant **gauche** (azimut 318°,
+     hauteur 13°). Toutes les photos Kunos sont prises de ce côté ; on
+     présentait le côté opposé, ce qui suffisait à faire sauter la bascule
+     photo/3D.
+   - **Cadrage** : la voiture couvre désormais ~17,6 % de l'image contre
+     17,5 % chez Kunos, et n'est plus coupée en bas.
+   - **Environnement** : la `RoomEnvironment` de three.js est une pièce
+     **blanche**, et une peinture peu rugueuse y reflète des murs clairs sur
+     toute sa surface. Remplacée par un studio sombre à rampes zénithales
+     (`components/detail/showroomEnvironment.ts`), procédural comme elle et
+     sans asset (§8.1).
+
+   **Reste** : la carrosserie sort encore plus claire que dans le jeu (Supra
+   verte : (53, 182, 72) contre (14, 81, 36)), et **l'éclairage n'en est pas
+   la cause** — la teinte ne bouge quasiment plus quand on assombrit le
+   studio, donc c'est l'albédo qui est affiché à pleine force. Piste suivante,
+   et elle est du côté de la conversion : AC multiplie sa diffuse par
+   `ksAmbient + ksDiffuse` (0,4 + 0,45 sur la carrosserie de la Supra), qu'on
+   ignore aujourd'hui. À mesurer avant d'appliquer : ces constantes valent
+   ~0,85 alors que l'écart constaté est d'un facteur 2.
 
 Restent aussi, hérités du plan initial : **R et B de `txMaps`** (§6.2, §12 q3 —
 le vert est documenté et exploité, voir `kn5-format.md` écart n°7 ; les deux

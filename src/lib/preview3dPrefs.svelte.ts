@@ -31,11 +31,13 @@ export const PREVIEW3D_RANGES = {
    * rester dans les limites de zoom des contrôles souris (`minDistance` /
    * `maxDistance`), sinon le réglage serait annulé au premier rendu. */
   zoom: { min: 50, max: 200, step: 5, default: 100 },
-  /** Rotation de la caméra autour de l'axe vertical, en degrés. */
-  azimuth: { min: 0, max: 359, step: 1, default: 40 },
+  /** Rotation de la caméra autour de l'axe vertical, en degrés. Le défaut est
+   * l'angle des `preview.jpg` Kunos : trois-quarts avant **gauche**, comme
+   * toutes les photos du jeu (§15 point 7). */
+  azimuth: { min: 0, max: 359, step: 1, default: 318 },
   /** Hauteur de la caméra, en degrés au-dessus de l'horizon. Plafonnée sous
    * l'angle polaire maximal des contrôles. */
-  elevation: { min: 0, max: 80, step: 1, default: 16 },
+  elevation: { min: 0, max: 80, step: 1, default: 13 },
   /** Vitesse du plateau tournant. 0 % = plateau à l'arrêt. */
   spin: { min: 0, max: 200, step: 5, default: 100 },
 } as const;
