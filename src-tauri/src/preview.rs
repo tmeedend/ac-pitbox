@@ -295,21 +295,69 @@ pub fn cached_file(dir: &Path, requested: &str) -> Option<PathBuf> {
 /// `Cache-Control: immutable` — la clé de cache **est** la version, donc le
 /// contenu d'une URL donnée ne changera jamais. Gère les requêtes `Range`,
 /// pour que la webview puisse streamer un gros modèle au lieu de tout attendre.
-pub fn serve(app: &tauri::AppHandle, request: &tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
-    use tauri::http::{header, Response, StatusCode};
+///
+/// **Les en-têtes CORS ne sont pas optionnels.** Un protocole custom vit sur sa
+/// propre origine (`http://carpreview.localhost` sous Windows), distincte de
+/// celle de la page — `http://localhost:1420` en développement,
+/// `http://tauri.localhost` une fois packagé. Toute lecture depuis la page est
+/// donc une requête d'origine croisée, refusée par le navigateur avant même
+/// que le fichier ne soit lu si `Access-Control-Allow-Origin` manque. Bug réel
+/// au premier essai utilisateur : les étapes de conversion s'affichaient
+/// normalement (elles passent par l'IPC, pas par ce protocole) puis « aperçu 3D
+/// indisponible », alors que le `.glb` était bien écrit dans le cache.
+pub fn serve_request(
+    app: &tauri::AppHandle,
+    request: &tauri::http::Request<Vec<u8>>,
+) -> tauri::http::Response<Vec<u8>> {
+    match cache_dir(app) {
+        Ok(dir) => serve(&dir, request),
+        Err(e) => {
+            log::warn!("preview: cache indisponible ({e})");
+            serve(Path::new(""), request)
+        }
+    }
+}
+
+/// Corps de [`serve_request`], séparé du `AppHandle` pour être testable sans
+/// lancer Tauri — c'est ce qui permet de verrouiller les en-têtes CORS par un
+/// test plutôt que par un souvenir.
+pub fn serve(dir: &Path, request: &tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
+    use tauri::http::{header, Method, Response, StatusCode};
+
+    // Appliqués à **toutes** les réponses, y compris les erreurs : une 404 sans
+    // en-tête CORS remonte côté page comme une erreur réseau opaque, ce qui
+    // masque la vraie cause.
+    let with_cors = |builder: tauri::http::response::Builder| {
+        builder
+            .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+            .header(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, HEAD, OPTIONS")
+            .header(header::ACCESS_CONTROL_ALLOW_HEADERS, "Range")
+            .header(
+                header::ACCESS_CONTROL_EXPOSE_HEADERS,
+                "Content-Length, Content-Range, Accept-Ranges",
+            )
+    };
 
     let not_found = || {
-        Response::builder()
-            .status(StatusCode::NOT_FOUND)
+        with_cors(Response::builder().status(StatusCode::NOT_FOUND))
             .body(Vec::new())
             .unwrap_or_default()
     };
 
-    let Ok(dir) = cache_dir(app) else { return not_found() };
-    let Some(file) = cached_file(&dir, request.uri().path()) else {
+    // `Range` n'est pas un en-tête sûr au sens CORS : une lecture partielle
+    // déclenche un préchargement `OPTIONS` qu'il faut accepter.
+    if request.method() == Method::OPTIONS {
+        return with_cors(Response::builder().status(StatusCode::NO_CONTENT))
+            .body(Vec::new())
+            .unwrap_or_default();
+    }
+
+    let Some(file) = cached_file(dir, request.uri().path()) else {
+        log::warn!("preview: entrée de cache absente ({})", request.uri().path());
         return not_found();
     };
     let Ok(bytes) = std::fs::read(&file) else {
+        log::warn!("preview: entrée de cache illisible ({})", file.display());
         return not_found();
     };
 
@@ -320,10 +368,12 @@ pub fn serve(app: &tauri::AppHandle, request: &tauri::http::Request<Vec<u8>>) ->
         .and_then(|v| v.to_str().ok())
         .and_then(|v| parse_range(v, total));
 
-    let builder = Response::builder()
-        .header(header::CONTENT_TYPE, "model/gltf-binary")
-        .header(header::CACHE_CONTROL, "public, max-age=31536000, immutable")
-        .header(header::ACCEPT_RANGES, "bytes");
+    let builder = with_cors(
+        Response::builder()
+            .header(header::CONTENT_TYPE, "model/gltf-binary")
+            .header(header::CACHE_CONTROL, "public, max-age=31536000, immutable")
+            .header(header::ACCEPT_RANGES, "bytes"),
+    );
 
     match range {
         Some((start, end)) => builder
@@ -459,6 +509,72 @@ mod tests {
         // Une fois sous le plafond, plus rien ne bouge.
         evict_to(&dir, 16);
         assert!(fresh.exists(), "sous le plafond, rien n'est évincé");
+    }
+
+    /// Requête minimale vers le protocole, pour les tests.
+    fn request(method: &str, path: &str, range: Option<&str>) -> tauri::http::Request<Vec<u8>> {
+        let mut builder = tauri::http::Request::builder()
+            .method(method)
+            .uri(format!("http://carpreview.localhost{path}"));
+        if let Some(range) = range {
+            builder = builder.header(tauri::http::header::RANGE, range);
+        }
+        builder.body(Vec::new()).unwrap()
+    }
+
+    // Règle : **toute** réponse du protocole porte les en-têtes CORS, réussite
+    // comme échec.
+    //
+    // Bug réel, remonté par l'utilisateur au premier essai : les étapes de
+    // conversion s'affichaient (elles passent par l'IPC) puis « aperçu 3D
+    // indisponible », alors que le `.glb` était bien écrit dans le cache. Un
+    // protocole custom vit sur sa propre origine, distincte de celle de la
+    // page : sans `Access-Control-Allow-Origin`, le navigateur refuse la
+    // lecture avant même d'ouvrir le fichier.
+    #[test]
+    fn every_response_carries_cors_headers() {
+        use tauri::http::header::ACCESS_CONTROL_ALLOW_ORIGIN;
+
+        let base = crate::testutil::temp_dir("preview-cors");
+        let dir = base.join("previews");
+        std::fs::create_dir_all(&dir).unwrap();
+        let key = "abcdef0123456789abcdef0123456789";
+        std::fs::write(dir.join(format!("{key}.glb")), b"glTFbody").unwrap();
+
+        let ok = serve(&dir, &request("GET", &format!("/{key}.glb"), None));
+        assert_eq!(ok.status(), 200, "entrée servie");
+        assert_eq!(
+            ok.headers()
+                .get(ACCESS_CONTROL_ALLOW_ORIGIN)
+                .map(|v| v.to_str().unwrap()),
+            Some("*"),
+            "sans cet en-tête la page ne peut pas lire le modèle"
+        );
+        assert_eq!(ok.body(), b"glTFbody", "corps complet");
+
+        let missing = serve(&dir, &request("GET", "/00000000000000000000000000000000.glb", None));
+        assert_eq!(missing.status(), 404, "entrée absente");
+        assert!(
+            missing.headers().contains_key(ACCESS_CONTROL_ALLOW_ORIGIN),
+            "une 404 sans CORS remonte en erreur réseau opaque, ce qui masque la cause"
+        );
+
+        // `Range` n'étant pas un en-tête sûr au sens CORS, une lecture
+        // partielle commence par un préchargement `OPTIONS`.
+        let preflight = serve(&dir, &request("OPTIONS", &format!("/{key}.glb"), None));
+        assert_eq!(preflight.status(), 204, "préchargement accepté");
+        assert!(
+            preflight.headers().contains_key(ACCESS_CONTROL_ALLOW_ORIGIN),
+            "préchargement porte les en-têtes CORS"
+        );
+
+        let partial = serve(&dir, &request("GET", &format!("/{key}.glb"), Some("bytes=4-7")));
+        assert_eq!(partial.status(), 206, "contenu partiel");
+        assert_eq!(partial.body(), b"body", "tranche demandée");
+        assert!(
+            partial.headers().contains_key(ACCESS_CONTROL_ALLOW_ORIGIN),
+            "réponse partielle porte les en-têtes CORS"
+        );
     }
 
     // Règle : une plage `Range` correcte est honorée, et tout ce qui sort du

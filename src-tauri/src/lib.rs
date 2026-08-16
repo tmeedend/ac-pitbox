@@ -81,7 +81,9 @@ pub fn run() {
         // transiter le modèle par l'IPC : 30 Mo de binaire deviennent ~40 Mo
         // de base64 à parser côté JS, l'UI se fige. Ici la webview fetch un
         // fichier local, sans copie intermédiaire.
-        .register_uri_scheme_protocol("carpreview", |ctx, request| preview::serve(ctx.app_handle(), &request))
+        .register_uri_scheme_protocol("carpreview", |ctx, request| {
+            preview::serve_request(ctx.app_handle(), &request)
+        })
         .setup(|app| {
             // Sauvegarde de démarrage (§6.2/§9.4), avant toute ouverture de
             // connexion : on veut la base et les préférences exactement
