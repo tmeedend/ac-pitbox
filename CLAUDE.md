@@ -317,7 +317,11 @@ laisser pourrir ici.
       hashé dans `app_cache_dir`, éviction LRU, protocole `carpreview` (le
       `.glb` ne passe **jamais** par l'IPC), commandes `prepare_car_preview` /
       `clear_preview_cache`, conversion sur `spawn_blocking` avec abandon des
-      demandes remplacées. Reste : viewer three.js (lot 5), finitions (lot 6).
+      demandes remplacées. **Lot 5** — `CarPreview3D.svelte` dans la zone héros
+      de `DetailPage` : three.js en `import()` dynamique, cadrage calculé,
+      rendu à la demande, libération GPU systématique, états de repli sur la
+      photo. **Non validé à l'œil dans l'app** — à faire au premier lancement.
+      Reste : finitions (lot 6), et l'aperçu dans `ModDetail.svelte`.
       **`preview::CONVERTER_VERSION` est à incrémenter dès qu'on touche au
       rendu produit** — sinon les anciens `.glb` restent servis. Décidé avec l'utilisateur : le viewer KN5 **coexiste** avec le
       bouton `acShowroom.exe` existant (§9.4 du SPEC) au lieu de le remplacer,

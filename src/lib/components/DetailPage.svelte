@@ -22,6 +22,8 @@
   } from "$lib/library";
   import { listMediaScreenshots, listMediaReplays, listMediaBackgrounds } from "$lib/media";
   import { listModSkins, openNativeShowroom, type SkinItem } from "$lib/launch";
+  import CarPreview3D from "./detail/CarPreview3D.svelte";
+  import { getUiPref, setUiPref } from "$lib/uiPrefs.svelte";
   import { exportMod, deletePack, deleteBrokenMod, reinstallFromArchive, type ExportReport } from "$lib/maintenance";
   import {
     listSubMods,
@@ -238,6 +240,21 @@
   // ferme le showroom pour revenir à Pit Box. L'intégration de la fenêtre
   // native dans la page a été tentée puis abandonnée (voir showroom.rs).
   let showroomBusy = $state(false);
+
+  // Aperçu 3D maison (KN5 → glTF → three.js, docs/SPEC-preview-3d-kn5.md) :
+  // il **coexiste** avec le showroom natif ci-dessus, il ne le remplace pas.
+  // Les deux ne rendent pas le même service : celui-ci est inline et
+  // manipulable dans la fiche, l'autre donne le rendu fidèle du jeu.
+  const PREVIEW3D_KEY = "pitbox.preview3d";
+  let preview3d = $state(true);
+  getUiPref(PREVIEW3D_KEY).then((v) => {
+    if (v !== null) preview3d = v === "1";
+  });
+
+  function togglePreview3d() {
+    preview3d = !preview3d;
+    setUiPref(PREVIEW3D_KEY, preview3d ? "1" : "0");
+  }
   // Résolu une fois les skins de la fiche courante chargés (§skin sélectionné) —
   // `openShowroom` l'attend pour ne jamais ouvrir avant de connaître le skin
   // sélectionné (sinon SKIN= part vide → voiture toute blanche au 1er affichage,
@@ -712,6 +729,21 @@
           <img src={heroImg} alt={d.display_name ?? d.id_interne} />
         {:else}
           <div class="hero-icon">{isCar ? "🚗" : "🏁"}</div>
+        {/if}
+        {#if isCar && preview3d}
+          <CarPreview3D
+            carId={d.id_interne}
+            skinId={skins[previewSkin]?.id ?? null}
+            fallbackSrc={heroImg}
+          />
+        {/if}
+        {#if isCar}
+          <button
+            class="hero-toggle"
+            onclick={togglePreview3d}
+            title={preview3d ? t("detail.preview3dShowPhoto") : t("detail.preview3dShow3d")}
+            aria-label={preview3d ? t("detail.preview3dShowPhoto") : t("detail.preview3dShow3d")}
+          >{preview3d ? "🖼" : "🧊"}</button>
         {/if}
         {#if showroomBusy}
           <!-- Lancement d'acShowroom : pastille discrète le temps que le
@@ -1203,6 +1235,29 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  /* Bascule photo / 3D, en bas à droite pour ne pas gêner le badge d'état de
+     l'aperçu ni la pastille de lancement du showroom, tous deux en haut. */
+  .hero-toggle {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 13px;
+    line-height: 1;
+    background: rgba(8, 8, 12, 0.62);
+    border: 1px solid var(--line);
+    color: var(--text);
+    cursor: pointer;
+    z-index: 4;
+  }
+  .hero-toggle:hover {
+    border-color: var(--rosso);
   }
   /* Pastille de lancement de l'aperçu 3D : petite, en haut à droite, sans
      assombrir l'image — le showroom s'ouvrira par-dessus l'app. */

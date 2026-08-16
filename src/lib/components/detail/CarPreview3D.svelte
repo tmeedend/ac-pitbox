@@ -1,0 +1,378 @@
+<script lang="ts">
+  // Aperçu 3D interactif d'une voiture (docs/SPEC-preview-3d-kn5.md §8).
+  //
+  // Le modèle est converti côté Rust en glTF binaire, mis en cache et servi
+  // par le protocole `carpreview` : ici on ne reçoit qu'une URL, jamais les
+  // octets (§7.2).
+  //
+  // three.js est chargé en `import()` dynamique : c'est de loin la plus grosse
+  // dépendance du front, et elle ne doit peser ni au démarrage de l'app ni sur
+  // les écrans qui n'affichent aucun aperçu.
+  import { onDestroy, untrack } from "svelte";
+  import { prepareCarPreview, onPreviewProgress, type PreviewStage } from "$lib/preview";
+  import { t } from "$lib/i18n/index.svelte";
+  import { errorText } from "$lib/errors";
+  import type * as ThreeModule from "three";
+
+  let {
+    carId,
+    skinId = null,
+    fallbackSrc = null,
+  }: { carId: string; skinId?: string | null; fallbackSrc?: string | null } = $props();
+
+  type Phase = "loading" | "ready" | "unavailable";
+
+  let phase = $state<Phase>("loading");
+  let stage = $state<PreviewStage | null>(null);
+  /** Clé i18n ou message technique, affiché en infobulle du badge (§8.5). */
+  let reason = $state<string | null>(null);
+  let canvasHost = $state<HTMLDivElement | null>(null);
+
+  /** Tout ce qui doit être libéré : vit hors des runes, ce n'est pas de l'état
+   * d'affichage et le rendre réactif ne ferait que déclencher des effets. */
+  let scene: ThreeScene | null = null;
+  let frame = 0;
+  let observer: ResizeObserver | null = null;
+
+  interface ThreeScene {
+    THREE: typeof ThreeModule;
+    renderer: ThreeModule.WebGLRenderer;
+    scene: ThreeModule.Scene;
+    camera: ThreeModule.PerspectiveCamera;
+    controls: { update(): boolean; dispose(): void };
+    pmrem: ThreeModule.PMREMGenerator;
+  }
+
+  /**
+   * WebGL indisponible = repli silencieux sur la photo (§8.5) : ce n'est pas
+   * une erreur à signaler, c'est une machine qui ne peut pas afficher de 3D.
+   */
+  function webglAvailable(): boolean {
+    try {
+      const probe = document.createElement("canvas");
+      return !!(probe.getContext("webgl2") ?? probe.getContext("webgl"));
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Libère tout ce qui occupe la mémoire GPU (§8.3).
+   *
+   * Première cause de plantage de ce genre de composant : l'utilisateur
+   * parcourt deux cents voitures, chacune laissant ses géométries et ses
+   * textures derrière elle. Appelée au démontage **et** à chaque changement de
+   * voiture, sans exception.
+   */
+  function disposeScene(current: ThreeScene | null) {
+    if (frame) cancelAnimationFrame(frame);
+    frame = 0;
+    if (!current) return;
+
+    current.scene.traverse((object) => {
+      const mesh = object as ThreeModule.Mesh;
+      mesh.geometry?.dispose?.();
+      const material = mesh.material as ThreeModule.Material | ThreeModule.Material[] | undefined;
+      for (const m of Array.isArray(material) ? material : material ? [material] : []) {
+        // Les textures ne sont pas libérées par `material.dispose()` : il faut
+        // parcourir ses propriétés pour les attraper une par une.
+        for (const value of Object.values(m)) {
+          if (value && typeof value === "object" && "isTexture" in value) {
+            (value as ThreeModule.Texture).dispose();
+          }
+        }
+        m.dispose();
+      }
+    });
+    current.scene.clear();
+    current.controls.dispose();
+    current.pmrem.dispose();
+    current.renderer.dispose();
+    // Rend explicitement le contexte WebGL : les navigateurs en limitent le
+    // nombre simultané, et attendre le ramasse-miettes suffit à l'épuiser.
+    current.renderer.forceContextLoss();
+    current.renderer.domElement.remove();
+  }
+
+  /** Rendu à la demande (§8.4) : rien ne bouge tant qu'on n'y touche pas, donc
+   * rien ne consomme. Relancé tant que l'inertie d'OrbitControls travaille. */
+  function requestRender(current: ThreeScene) {
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      const moving = current.controls.update();
+      current.renderer.render(current.scene, current.camera);
+      if (moving) requestRender(current);
+    });
+  }
+
+  async function build(url: string, host: HTMLDivElement): Promise<ThreeScene> {
+    const THREE = await import("three");
+    const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
+    const { OrbitControls } = await import("three/examples/jsm/controls/OrbitControls.js");
+    const { RoomEnvironment } = await import("three/examples/jsm/environments/RoomEnvironment.js");
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    const scene = new THREE.Scene();
+    // Éclairage par environment map : c'est ce qui donne à une carrosserie un
+    // rendu crédible, sans embarquer le moindre asset (§8.1).
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+    const gltf = await new GLTFLoader().loadAsync(url);
+    scene.add(gltf.scene);
+
+    // Les vitres passent après l'opaque et n'écrivent pas dans le tampon de
+    // profondeur, sinon l'intérieur disparaît derrière le pare-brise (§8.2).
+    gltf.scene.traverse((object) => {
+      const mesh = object as ThreeModule.Mesh;
+      if (!mesh.isMesh) return;
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      if (materials.some((m) => (m as ThreeModule.Material).transparent)) {
+        mesh.renderOrder = 1;
+        for (const m of materials) (m as ThreeModule.Material).depthWrite = false;
+      }
+    });
+
+    // Cadrage calculé, jamais codé en dur : les mods ont des échelles très
+    // variables et un cadrage fixe en couperait la moitié (§8.1).
+    const box = new THREE.Box3().setFromObject(gltf.scene);
+    const center = box.getCenter(new THREE.Vector3());
+    const radius = box.getSize(new THREE.Vector3()).length() / 2;
+    const distance = radius * 2.2;
+
+    const camera = new THREE.PerspectiveCamera(35, 16 / 9, radius / 100, radius * 40);
+    // Trois-quarts avant, l'angle le plus flatteur pour une voiture.
+    const azimuth = Math.PI * 0.22;
+    const elevation = Math.PI * 0.09;
+    camera.position.set(
+      center.x + distance * Math.cos(elevation) * Math.sin(azimuth),
+      center.y + distance * Math.sin(elevation),
+      center.z + distance * Math.cos(elevation) * Math.cos(azimuth),
+    );
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.copy(center);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enablePan = false;
+    controls.minDistance = radius * 1.1;
+    controls.maxDistance = radius * 5;
+    // Borne l'angle polaire pour qu'on ne puisse pas passer sous le sol.
+    controls.maxPolarAngle = Math.PI * 0.495;
+    controls.update();
+
+    // Ombre de contact : un simple disque dégradé, pas de shadow map (§8.1).
+    // Sans elle la voiture flotte visiblement au-dessus du vide.
+    const shadow = new THREE.Mesh(
+      new THREE.PlaneGeometry(radius * 3, radius * 3),
+      new THREE.MeshBasicMaterial({ map: contactShadowTexture(THREE), transparent: true, depthWrite: false }),
+    );
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.set(center.x, box.min.y + radius / 400, center.z);
+    scene.add(shadow);
+
+    host.appendChild(renderer.domElement);
+    const built: ThreeScene = { THREE, renderer, scene, camera, controls, pmrem };
+
+    const resize = () => {
+      const width = host.clientWidth;
+      const height = host.clientHeight;
+      if (width === 0 || height === 0) return;
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      requestRender(built);
+    };
+    observer = new ResizeObserver(resize);
+    observer.observe(host);
+    resize();
+
+    controls.addEventListener("change", () => requestRender(built));
+    return built;
+  }
+
+  /** Dégradé radial dessiné à la volée — aucun fichier à embarquer. */
+  function contactShadowTexture(THREE: typeof ThreeModule): ThreeModule.Texture {
+    const size = 256;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+      gradient.addColorStop(0, "rgba(0,0,0,0.55)");
+      gradient.addColorStop(0.7, "rgba(0,0,0,0.12)");
+      gradient.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, size, size);
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  }
+
+  // Chargement, et rechargement complet à chaque changement de voiture ou de
+  // skin. `untrack` sur tout le reste : un effet Svelte 5 suit **toute** valeur
+  // réactive lue pendant son exécution, pas seulement celles nommées en tête —
+  // c'est exactement ce qui avait fait se refermer l'ancien aperçu natif dès
+  // qu'il s'ouvrait (voir showroom-3d-preview-research.md, test réel n°5).
+  $effect(() => {
+    const car = carId;
+    const skin = skinId;
+
+    untrack(() => {
+      disposeScene(scene);
+      scene = null;
+      observer?.disconnect();
+      observer = null;
+      phase = "loading";
+      stage = null;
+      reason = null;
+    });
+
+    if (!webglAvailable()) {
+      untrack(() => {
+        phase = "unavailable";
+        reason = null;
+      });
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const handle = await prepareCarPreview(car, skin);
+        // La fiche a pu changer pendant la conversion : ne jamais poser le
+        // modèle d'une voiture sur la fiche d'une autre.
+        if (cancelled || car !== untrack(() => carId)) return;
+        const host = untrack(() => canvasHost);
+        if (!host) return;
+        const built = await build(handle.url, host);
+        if (cancelled || car !== untrack(() => carId)) {
+          disposeScene(built);
+          return;
+        }
+        scene = built;
+        phase = "ready";
+      } catch (e) {
+        if (cancelled) return;
+        phase = "unavailable";
+        // `errors.previewSuperseded` n'est pas une panne : une demande plus
+        // récente a pris la main, l'écran ne doit rien signaler.
+        reason = String(e) === "errors.previewSuperseded" ? null : String(e);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  // Étapes de conversion, pour que le squelette dise où on en est plutôt que
+  // de tourner dans le vide pendant une seconde et demie (§7.3).
+  let unlisten: (() => void) | null = null;
+  onPreviewProgress((s) => {
+    stage = s;
+  }).then((off) => {
+    unlisten = off;
+  });
+
+  onDestroy(() => {
+    disposeScene(scene);
+    scene = null;
+    observer?.disconnect();
+    unlisten?.();
+  });
+</script>
+
+<div class="preview3d" class:ready={phase === "ready"}>
+  {#if fallbackSrc}
+    <!-- La photo reste dessous : fond flouté pendant le chargement, repli
+         complet si la 3D n'aboutit pas (§8.5). -->
+    <img class="fallback" class:blurred={phase === "loading"} src={fallbackSrc} alt="" />
+  {/if}
+
+  <div class="host" bind:this={canvasHost}></div>
+
+  {#if phase === "loading"}
+    <div class="badge">
+      <span class="spinner"></span>
+      <span class="mono">{stage ? t(`detail.preview3dStage.${stage}`) : t("detail.preview3dLoading")}</span>
+    </div>
+  {:else if phase === "unavailable" && reason}
+    <div class="badge quiet" title={errorText(reason)}>
+      <span class="mono">{t("detail.preview3dUnavailable")}</span>
+    </div>
+  {/if}
+</div>
+
+<style>
+  .preview3d {
+    position: absolute;
+    inset: 0;
+  }
+  .fallback {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: filter 0.25s ease, opacity 0.25s ease;
+  }
+  .fallback.blurred {
+    filter: blur(10px) saturate(0.7);
+  }
+  /* Fondu depuis l'image une fois le modèle en place (§8.5). */
+  .preview3d.ready .fallback {
+    opacity: 0;
+  }
+  .host {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+  }
+  .preview3d.ready .host {
+    opacity: 1;
+  }
+  .host :global(canvas) {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 8px;
+    background: rgba(8, 8, 12, 0.62);
+    border: 1px solid var(--line);
+    font-size: 11px;
+    color: var(--text-dim);
+    z-index: 3;
+  }
+  .badge.quiet {
+    opacity: 0.75;
+  }
+  .spinner {
+    width: 11px;
+    height: 11px;
+    border: 2px solid var(--line);
+    border-top-color: var(--rosso);
+    border-radius: 50%;
+    animation: preview3d-spin 0.8s linear infinite;
+  }
+  @keyframes preview3d-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+</style>

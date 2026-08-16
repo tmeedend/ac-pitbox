@@ -602,7 +602,11 @@ grille, pas de phase weekend) :
 
 ### 9.4 Aperçu 3D des voitures
 
-Bouton d'aperçu 3D sur la fiche (lance `acshowroom` pour un rendu du modèle). Le showroom est un **process indépendant**, affiché par-dessus l'app avec les réglages vidéo du jeu : l'utilisateur le ferme lui-même pour revenir à Pit Box. L'intégration de sa fenêtre dans la page a été tentée puis abandonnée (voir `showroom-3d-preview-research.md`), et avec elle l'option « 3D par défaut ». **Option de réglage** : le décor (`content/showroom/<id>`) chargé par `acshowroom`, choisi parmi ceux installés — défaut `studio_white`, le seul instantané et sans musique. Pendant le démarrage d'`acshowroom`, afficher une **animation de chargement en haut à droite** de l'image.
+Deux aperçus 3D **coexistent**, parce qu'ils ne rendent pas le même service.
+
+**Aperçu intégré à la fiche** (docs/SPEC-preview-3d-kn5.md). Le modèle `.kn5` de la voiture est lu, converti en glTF et affiché **dans la zone héros**, à la place de la photo : orbite et zoom à la souris, cadrage trois-quarts avant calculé sur les dimensions réelles du modèle. Actif par défaut sur les fiches voiture ; une bascule discrète en bas à droite du héros permet de revenir à la photo, et ce choix est mémorisé. Pendant la préparation, la photo reste affichée en fond flouté avec un badge d'étape en haut à droite. Si le modèle est introuvable, protégé (KN5 chiffré) ou si la machine n'a pas de WebGL, l'aperçu retombe **silencieusement** sur la photo — badge discret « aperçu 3D indisponible » seulement quand il y a une raison à donner. Ce n'est jamais une erreur bloquante : c'est un bonus visuel. Le skin sélectionné sur la fiche est appliqué au modèle. La conversion est mise en cache sur disque : le deuxième affichage d'une même voiture est immédiat.
+
+**Aperçu natif** (bouton de la fiche, lance `acshowroom`) — conservé pour le rendu fidèle du jeu, que l'aperçu intégré n'imite pas. Le showroom est un **process indépendant**, affiché par-dessus l'app avec les réglages vidéo du jeu : l'utilisateur le ferme lui-même pour revenir à Pit Box. L'intégration de sa fenêtre dans la page a été tentée puis abandonnée (voir `showroom-3d-preview-research.md`). **Option de réglage** : le décor (`content/showroom/<id>`) chargé par `acshowroom`, choisi parmi ceux installés — défaut `studio_white`, le seul instantané et sans musique. Pendant le démarrage d'`acshowroom`, afficher une **animation de chargement en haut à droite** de l'image.
 
 ---
 
@@ -643,7 +647,7 @@ Ce n'est un déchet que si le parent ne revient jamais. Ils sont donc **listés 
 
 **Trois bases/fichiers distincts** : bibliothèque (fichiers), base d'overlay SQLite (métadonnées), fichier de règles (ontologie), plus le fichier de config (chemins + préférences).
 
-**Préférences persistantes** : affichage des tags du fichier mod (masquables), état du panneau de suivi (global), vue bibliothèque + colonnes (par type), presets de session (par type), preset CM graphique/FFB par défaut, décor de l'aperçu 3D (§9.4), regroupement des skins (archive/voiture), extraction des fichiers annexes (Aucun / Informations seulement / Tout — §4.5.2), **conservation de l'archive source** (défaut désactivé — §10), **mode de déploiement** (hardlink/symlink, défaut hardlink — §2), **zoom du mode Big Picture** (§16, distinct du zoom normal — `None` reprend ce dernier).
+**Préférences persistantes** : affichage des tags du fichier mod (masquables), état du panneau de suivi (global), vue bibliothèque + colonnes (par type), presets de session (par type), preset CM graphique/FFB par défaut, décor de l'aperçu 3D natif (§9.4), **aperçu 3D intégré affiché ou non sur la fiche voiture** (défaut affiché — §9.4), regroupement des skins (archive/voiture), extraction des fichiers annexes (Aucun / Informations seulement / Tout — §4.5.2), **conservation de l'archive source** (défaut désactivé — §10), **mode de déploiement** (hardlink/symlink, défaut hardlink — §2), **zoom du mode Big Picture** (§16, distinct du zoom normal — `None` reprend ce dernier).
 
 **Écran Réglages en onglets** (Général / Chemins / Import / Musique) depuis le mode Big Picture (§16) — Général/Chemins/Import partagent `AppConfig` et sa garde de navigation (§10bis), l'onglet Musique gère son propre fichier (`music.json`) et sa propre sauvegarde.
 

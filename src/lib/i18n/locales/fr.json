@@ -294,6 +294,15 @@
   "detail": {
     "backTooltip": "Retour à la liste",
     "exportTooltip": "Exporter en archive autonome",
+    "preview3dLoading": "Préparation",
+    "preview3dStage": {
+      "geometry": "Géométrie",
+      "textures": "Textures",
+      "writing": "Assemblage"
+    },
+    "preview3dUnavailable": "Aperçu 3D indisponible",
+    "preview3dShowPhoto": "Afficher la photo",
+    "preview3dShow3d": "Afficher le modèle 3D",
     "showroom": "Aperçu 3D",
     "showroomTooltip": "Ouvre acShowroom.exe (natif AC) sur cette voiture, par-dessus Pit Box — ferme-le toi-même pour revenir",
     "showroomLaunching": "Lancement…",
