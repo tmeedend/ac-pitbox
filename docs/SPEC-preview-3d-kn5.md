@@ -643,10 +643,18 @@ gêne constatée :
 3. ~~**Pare-brise constellé de taches.**~~ ✅ **Corrigé.** Même mécanisme que
    les dégâts, sur un autre slot : `ksWindscreen` réserve sa `txDiffuse` aux
    rayures et à la poussière. Voir `kn5-format.md`, écart n°6.
-4. **Réglages à exposer** (écran Réglages) : aperçu photo ou 3D par défaut,
-   niveau de zoom, angle de caméra autour de l'axe vertical, hauteur de
-   caméra, vitesse de rotation. La voiture est aujourd'hui cadrée trop bas :
-   quand le plateau la présente de face, l'avant est coupé.
+4. ~~**Réglages à exposer**~~ ✅ **Fait.** Écran Réglages, onglet **Aperçu**
+   (`components/settings/PreviewTab.svelte`) : aperçu photo ou 3D, zoom,
+   orientation, hauteur de vue, vitesse du plateau, plus un retour au cadrage
+   d'origine. Persistance dans `ui_prefs.json` via
+   `src/lib/preview3dPrefs.svelte.ts` (`$state` de module, partagé avec la
+   bascule de la zone héros pour que les deux restent d'accord). Un changement
+   se voit sur une fiche déjà ouverte : la caméra est reposée, le modèle n'est
+   pas rechargé.
+   La hauteur de vue est le réglage qui répond au cadrage : plus la caméra est
+   haute, plus elle plonge, et plus l'avant sort du cadre quand le plateau
+   tourne. **Décidé avec l'utilisateur** : on expose le réglage, on ne calcule
+   pas une hauteur idéale par angle.
 5. **Éclairage et cadrage calés sur les `preview.jpg` Kunos**, pour que le
    passage de la photo à la 3D ne saute pas à l'œil. C'est le point qui
    demande le plus de tâtonnement visuel.

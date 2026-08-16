@@ -649,7 +649,9 @@ Ce n'est un déchet que si le parent ne revient jamais. Ils sont donc **listés 
 
 **Préférences persistantes** : affichage des tags du fichier mod (masquables), état du panneau de suivi (global), vue bibliothèque + colonnes (par type), presets de session (par type), preset CM graphique/FFB par défaut, décor de l'aperçu 3D natif (§9.4), **aperçu 3D intégré affiché ou non sur la fiche voiture** (défaut affiché — §9.4), regroupement des skins (archive/voiture), extraction des fichiers annexes (Aucun / Informations seulement / Tout — §4.5.2), **conservation de l'archive source** (défaut désactivé — §10), **mode de déploiement** (hardlink/symlink, défaut hardlink — §2), **zoom du mode Big Picture** (§16, distinct du zoom normal — `None` reprend ce dernier).
 
-**Écran Réglages en onglets** (Général / Chemins / Import / Musique) depuis le mode Big Picture (§16) — Général/Chemins/Import partagent `AppConfig` et sa garde de navigation (§10bis), l'onglet Musique gère son propre fichier (`music.json`) et sa propre sauvegarde.
+**Écran Réglages en onglets** (Général / Chemins / Import / Aperçu / Musique) depuis le mode Big Picture (§16) — Général/Chemins/Import partagent `AppConfig` et sa garde de navigation (§10bis) ; Aperçu et Musique ont chacun leur propre stockage et **s'appliquent sans bouton Enregistrer** (`ui_prefs.json` pour l'un, `music.json` pour l'autre).
+
+**Onglet Aperçu** (`components/settings/PreviewTab.svelte`) : réglages de l'aperçu 3D intégré (§9.4) — affiché ou non sur les fiches (même réglage que la bascule de la zone héros), zoom, orientation, hauteur de vue, vitesse du plateau tournant, et un bouton qui rétablit le cadrage d'origine. Les valeurs par défaut reproduisent exactement le cadrage livré, et un changement s'applique à une fiche déjà ouverte sans recharger son modèle.
 
 ---
 

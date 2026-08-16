@@ -23,7 +23,7 @@
   import { listMediaScreenshots, listMediaReplays, listMediaBackgrounds } from "$lib/media";
   import { listModSkins, openNativeShowroom, type SkinItem } from "$lib/launch";
   import CarPreview3D from "./detail/CarPreview3D.svelte";
-  import { getUiPref, setUiPref } from "$lib/uiPrefs.svelte";
+  import { preview3dPrefs, setPreview3dEnabled } from "$lib/preview3dPrefs.svelte";
   import { exportMod, deletePack, deleteBrokenMod, reinstallFromArchive, type ExportReport } from "$lib/maintenance";
   import {
     listSubMods,
@@ -245,15 +245,13 @@
   // il **coexiste** avec le showroom natif ci-dessus, il ne le remplace pas.
   // Les deux ne rendent pas le même service : celui-ci est inline et
   // manipulable dans la fiche, l'autre donne le rendu fidèle du jeu.
-  const PREVIEW3D_KEY = "pitbox.preview3d";
-  let preview3d = $state(true);
-  getUiPref(PREVIEW3D_KEY).then((v) => {
-    if (v !== null) preview3d = v === "1";
-  });
+  // La bascule et les réglages de cadrage vivent dans `preview3dPrefs` : le
+  // même réglage se change aussi depuis l'écran Réglages, et les deux doivent
+  // rester d'accord sans qu'aucun des deux écrans n'ait à être remonté.
+  const preview3d = $derived(preview3dPrefs().enabled);
 
   function togglePreview3d() {
-    preview3d = !preview3d;
-    setUiPref(PREVIEW3D_KEY, preview3d ? "1" : "0");
+    setPreview3dEnabled(!preview3d);
   }
   // Résolu une fois les skins de la fiche courante chargés (§skin sélectionné) —
   // `openShowroom` l'attend pour ne jamais ouvrir avant de connaître le skin

@@ -10,6 +10,7 @@
   // les écrans qui n'affichent aucun aperçu.
   import { onDestroy, untrack } from "svelte";
   import { prepareCarPreview, onPreviewProgress, type PreviewStage } from "$lib/preview";
+  import { preview3dPrefs, preview3dReady } from "$lib/preview3dPrefs.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
   import type * as ThreeModule from "three";
@@ -49,6 +50,10 @@
     /** Le plateau : la voiture y est posée, l'ombre de contact non — un socle
      * de salon tourne sous la voiture, il n'emporte pas son ombre. */
     turntable: ThreeModule.Group;
+    /** Centre et rayon du modèle, gardés pour recalculer le cadrage quand un
+     * réglage change, sans reconstruire la scène. */
+    center: ThreeModule.Vector3;
+    radius: number;
   }
 
   // Plateau tournant, comme un socle de salon : c'est la raison d'être de tout
@@ -60,8 +65,8 @@
   // quitte l'écran, que la fenêtre passe en arrière-plan, ou que l'utilisateur
   // attrape le modèle — un panneau qu'on ne regarde pas ne consomme rien.
 
-  /** Un tour en ~28 s : assez lent pour être calme, assez vif pour qu'on voie
-   * les reflets glisser sur la carrosserie. */
+  /** Un tour en ~28 s à 100 % : assez lent pour être calme, assez vif pour
+   * qu'on voie les reflets glisser sur la carrosserie. */
   const SPIN_SPEED = 0.22;
   /** Reprise après un lâcher de souris. Assez long pour examiner un détail
    * sans que le plateau ne redémarre sous les doigts. */
@@ -133,9 +138,11 @@
     current.renderer.domElement.remove();
   }
 
-  /** Le plateau tourne-t-il en ce moment ? Trois conditions, toutes nécessaires. */
+  /** Le plateau tourne-t-il en ce moment ? Quatre conditions, toutes
+   * nécessaires — vitesse nulle comprise, sinon la boucle de rendu
+   * continuerait à tourner pour ne rien déplacer. */
   function turning(): boolean {
-    return spinning && onScreen && !document.hidden;
+    return spinning && onScreen && !document.hidden && preview3dPrefs().spin > 0;
   }
 
   /**
@@ -156,13 +163,36 @@
         // parfaitement stable, les reflets glissent sur la carrosserie, et
         // rien ne vient contrarier l'état interne d'OrbitControls quand
         // l'utilisateur prend la main.
-        current.turntable.rotation.y += SPIN_SPEED * elapsed;
+        current.turntable.rotation.y += SPIN_SPEED * (preview3dPrefs().spin / 100) * elapsed;
       }
       const moving = current.controls.update();
       current.renderer.render(current.scene, current.camera);
       if (moving || turning()) requestRender(current);
       else lastFrameAt = 0;
     });
+  }
+
+  /**
+   * Pose la caméra d'après les réglages (§15) : distance, angle autour de
+   * l'axe vertical, hauteur. Par défaut un trois-quarts avant, l'angle le plus
+   * flatteur pour une voiture.
+   *
+   * Séparée de `build` parce qu'elle sert deux fois : à la construction, et à
+   * chaque changement de réglage — recadrer ne demande pas de reconstruire la
+   * scène, et surtout pas de reconvertir le modèle.
+   */
+  function placeCamera(current: ThreeScene) {
+    const prefs = preview3dPrefs();
+    const distance = (current.radius * 2.2 * 100) / prefs.zoom;
+    const azimuth = (prefs.azimuth * Math.PI) / 180;
+    const elevation = (prefs.elevation * Math.PI) / 180;
+    current.camera.position.set(
+      current.center.x + distance * Math.cos(elevation) * Math.sin(azimuth),
+      current.center.y + distance * Math.sin(elevation),
+      current.center.z + distance * Math.cos(elevation) * Math.cos(azimuth),
+    );
+    current.controls.update();
+    requestRender(current);
   }
 
   async function build(url: string, host: HTMLDivElement): Promise<ThreeScene> {
@@ -201,7 +231,6 @@
     const box = new THREE.Box3().setFromObject(gltf.scene);
     const center = box.getCenter(new THREE.Vector3());
     const radius = box.getSize(new THREE.Vector3()).length() / 2;
-    const distance = radius * 2.2;
 
     // Plateau centré sous la voiture : le modèle est décalé pour que l'axe de
     // rotation passe par son centre, sinon elle décrirait un cercle au lieu de
@@ -213,14 +242,6 @@
     scene.add(turntable);
 
     const camera = new THREE.PerspectiveCamera(35, 16 / 9, radius / 100, radius * 40);
-    // Trois-quarts avant, l'angle le plus flatteur pour une voiture.
-    const azimuth = Math.PI * 0.22;
-    const elevation = Math.PI * 0.09;
-    camera.position.set(
-      center.x + distance * Math.cos(elevation) * Math.sin(azimuth),
-      center.y + distance * Math.sin(elevation),
-      center.z + distance * Math.cos(elevation) * Math.cos(azimuth),
-    );
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.copy(center);
@@ -231,7 +252,6 @@
     controls.maxDistance = radius * 5;
     // Borne l'angle polaire pour qu'on ne puisse pas passer sous le sol.
     controls.maxPolarAngle = Math.PI * 0.495;
-    controls.update();
 
     // Ombre de contact : un simple disque dégradé, pas de shadow map (§8.1).
     // Sans elle la voiture flotte visiblement au-dessus du vide.
@@ -244,7 +264,8 @@
     scene.add(shadow);
 
     host.appendChild(renderer.domElement);
-    const built: ThreeScene = { THREE, renderer, scene, camera, controls, pmrem, turntable };
+    const built: ThreeScene = { THREE, renderer, scene, camera, controls, pmrem, turntable, center, radius };
+    placeCamera(built);
 
     const resize = () => {
       const width = host.clientWidth;
@@ -344,6 +365,9 @@
         if (cancelled || car !== untrack(() => carId)) return;
         const host = untrack(() => canvasHost);
         if (!host) return;
+        // Les réglages de cadrage avant la scène : construire sur les valeurs
+        // par défaut ferait sauter l'aperçu d'un cadrage à l'autre.
+        await preview3dReady();
         const built = await build(handle.url, host);
         if (cancelled || car !== untrack(() => carId)) {
           disposeScene(built);
@@ -363,6 +387,20 @@
     return () => {
       cancelled = true;
     };
+  });
+
+  // Un réglage de cadrage changé pendant qu'une fiche est ouverte s'applique
+  // tout de suite : recadrer ne coûte qu'un rendu, alors que remonter le
+  // composant relancerait tout le chargement du modèle.
+  $effect(() => {
+    // Un effet ne suit que ce qu'il lit : les quatre valeurs sont donc lues
+    // ici, à découvert, et pas seulement à l'intérieur de `placeCamera`.
+    const prefs = preview3dPrefs();
+    void [prefs.zoom, prefs.azimuth, prefs.elevation, prefs.spin];
+    untrack(() => {
+      if (!scene) return;
+      placeCamera(scene);
+    });
   });
 
   // Étapes de conversion, pour que le squelette dise où on en est plutôt que
