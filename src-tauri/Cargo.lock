@@ -3016,6 +3016,8 @@ dependencies = [
  "dirs 5.0.1",
  "fastrand",
  "image",
+ "kn5",
+ "kn5-gltf",
  "log",
  "regex",
  "rodio",

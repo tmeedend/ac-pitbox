@@ -63,6 +63,10 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png"]
 # main bascule silencieusement en suppression définitive dans exactement ces
 # cas-là. C'est ce que cette dépendance achète : pas la commodité.
 trash = "5"
+# Aperçu 3D natif des voitures (docs/SPEC-preview-3d-kn5.md) : parsing du
+# format KN5 et conversion en glTF, tous deux dans `crates/`.
+kn5 = { path = "crates/kn5" }
+kn5-gltf = { path = "crates/kn5-gltf" }
 
 # Lecture registre Windows uniquement (détection du Mode développeur, §12) —
 # déjà présent transitivement via tauri, pas une dépendance de plus en pratique.

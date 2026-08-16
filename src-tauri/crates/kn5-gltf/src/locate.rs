@@ -1,9 +1,8 @@
 //! Picking the model file inside a car folder (spec §4.2).
 //!
 //! Lives here rather than in the `kn5` crate, which is pure parsing with no
-//! filesystem access. Lot 4 will need the same logic inside the application;
-//! it moves to a shared place then, once the Tauri side tells us what shape it
-//! actually needs.
+//! filesystem access. Shared by `kn5-tool` and by the application: both have
+//! to pick the same file, or a preview would not match what the tool shows.
 
 use std::path::{Path, PathBuf};
 

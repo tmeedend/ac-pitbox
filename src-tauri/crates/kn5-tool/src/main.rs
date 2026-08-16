@@ -10,7 +10,6 @@
 //! ```
 
 mod report;
-mod resolve;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -18,10 +17,9 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use kn5::{Kn5Model, Kn5NodeKind};
-use kn5_gltf::{prepare_textures, TextureOptions, TextureOrigin};
+use kn5_gltf::{prepare_textures, resolve_model, resolve_skin, ModelSource, TextureOptions, TextureOrigin};
 
 use report::{by_count, human_bytes, Stats};
-use resolve::{resolve_model, resolve_skin, ModelSource};
 
 const USAGE: &str = "\
 kn5-tool — inspect Assetto Corsa KN5 models
@@ -594,7 +592,14 @@ fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
     let parsed = started.elapsed();
 
     let started = Instant::now();
-    let conversion = kn5_gltf::convert(&model, skin.as_deref(), &kn5_gltf::ConvertOptions::default())?;
+    let conversion = kn5_gltf::convert(
+        &model,
+        skin.as_deref(),
+        &kn5_gltf::ConvertOptions::default(),
+        &|stage| {
+            eprintln!("[stage] {}", stage.as_str());
+        },
+    )?;
     let converted = started.elapsed();
 
     if let Some(parent) = out.parent() {

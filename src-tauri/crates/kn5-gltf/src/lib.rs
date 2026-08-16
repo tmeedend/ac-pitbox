@@ -6,6 +6,7 @@
 
 mod geometry;
 mod glb;
+mod locate;
 mod material;
 mod texture;
 
@@ -14,6 +15,7 @@ use std::path::Path;
 use kn5::Kn5Model;
 
 pub use geometry::{node_world_centers, winding_consistency, FlatMesh, GeometryOptions, GeometryStats};
+pub use locate::{resolve_model, resolve_skin, ModelSource, ResolvedModel};
 pub use material::{AlphaMode, GltfMaterial};
 pub use texture::{
     prepare_textures, PreparedTexture, TextureOptions, TextureOrigin, TextureRole, TextureSet, TextureWarning,
@@ -37,9 +39,36 @@ pub struct Conversion {
     pub texture_warnings: Vec<TextureWarning>,
 }
 
+/// Stage the conversion has reached, reported as it goes.
+///
+/// Exists so the application can keep a skeleton alive during the second or
+/// two a first conversion takes (§7.3). Transcoding is by far the longest of
+/// the three, which is why it is announced before it starts and not after.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConvertStage {
+    Geometry,
+    Textures,
+    Writing,
+}
+
+impl ConvertStage {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Geometry => "geometry",
+            Self::Textures => "textures",
+            Self::Writing => "writing",
+        }
+    }
+}
+
 /// Full pipeline: filter and flatten the node tree, transcode the textures the
 /// surviving materials need, map the materials, write the GLB.
-pub fn convert(model: &Kn5Model, skin_dir: Option<&Path>, options: &ConvertOptions) -> Result<Conversion, String> {
+pub fn convert(
+    model: &Kn5Model,
+    skin_dir: Option<&Path>,
+    options: &ConvertOptions,
+    progress: &dyn Fn(ConvertStage),
+) -> Result<Conversion, String> {
     // Safety net for the handedness decision documented in `geometry.rs`: the
     // reference library agrees at 100 %, so anything meaningfully below that
     // means a file whose convention we have not met before, and which would
@@ -51,10 +80,14 @@ pub fn convert(model: &Kn5Model, skin_dir: Option<&Path>, options: &ConvertOptio
         );
     }
 
+    progress(ConvertStage::Geometry);
     let (meshes, geometry) = geometry::flatten(model, &options.geometry);
-    let textures = prepare_textures(model, skin_dir, &options.textures);
     let materials: Vec<GltfMaterial> = model.materials.iter().map(material::convert).collect();
 
+    progress(ConvertStage::Textures);
+    let textures = prepare_textures(model, skin_dir, &options.textures);
+
+    progress(ConvertStage::Writing);
     let triangle_count = meshes.iter().map(|m| m.indices.len() / 3).sum::<usize>() as u32;
     let glb = glb::write_glb(&meshes, &materials, &textures)?;
 
