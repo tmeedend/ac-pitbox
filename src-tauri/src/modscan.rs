@@ -20,6 +20,20 @@ impl ModKind {
             ModKind::Track => "tracks",
         }
     }
+
+    /// Reads back what [`Self::content_folder`] wrote. Also accepts the
+    /// singular spelling and any case: this string is persisted in the overlay
+    /// and compared in several places, and a mismatch is silent — a track read
+    /// back as a car simply looks in the wrong library tree and finds nothing.
+    /// Real bug: extras of a track were deployed then immediately removed,
+    /// because `"tracks"` was compared against `"Track"`.
+    pub fn from_content_folder(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "car" | "cars" => Some(ModKind::Car),
+            "track" | "tracks" => Some(ModKind::Track),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

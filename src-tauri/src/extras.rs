@@ -111,25 +111,57 @@ struct Claim {
     claimed_at: String,
 }
 
+/// Ce que l'arbitrage a trouvé pour un chemin d'AC. La distinction entre les
+/// deux derniers cas est ce qui décide d'une **suppression** : seule l'absence
+/// de réclamant en base l'autorise. Ne pas savoir résoudre une réclamation
+/// (bibliothèque déplacée, exemplaire disparu, `kind` illisible) n'est jamais
+/// une raison d'effacer — c'est la réclamation qui décide, pas notre capacité
+/// à la suivre.
+enum Arbitration {
+    /// Un mod réclame le chemin et son exemplaire a été retrouvé.
+    Winner(Claim),
+    /// Plus aucun mod ne réclame le chemin : il doit partir.
+    Unclaimed,
+    /// Des mods le réclament encore, mais aucun exemplaire n'a pu être lu.
+    Unresolvable,
+}
+
 /// Qui, parmi les mods qui réclament ce fichier, fournit l'exemplaire à poser.
 /// **La date de modification la plus récente gagne** — un mod plus récent
 /// corrige en général des bugs de celui d'avant. À égalité (archives repackées
 /// par un tiers, qui perdent les dates), c'est le dernier mod installé.
-fn best_claim(conn: &Connection, cfg: &AppConfig, ac_path: &Path) -> Option<Claim> {
-    let (library, ac) = (cfg.library_path.as_ref()?, cfg.ac_install_path.as_ref()?);
-    let rel = ac_path.strip_prefix(ac).ok()?;
-    let rows = overlay::extra_claimants(conn, &ac_path.to_string_lossy())
-        .inspect_err(|e| log::warn!("extra_claimants {}: {e}", ac_path.display()))
-        .ok()?;
-    rows.into_iter()
+fn best_claim(conn: &Connection, cfg: &AppConfig, ac_path: &Path) -> Arbitration {
+    let (Some(library), Some(ac)) = (cfg.library_path.as_ref(), cfg.ac_install_path.as_ref()) else {
+        return Arbitration::Unresolvable;
+    };
+    let Ok(rel) = ac_path.strip_prefix(ac) else {
+        return Arbitration::Unresolvable;
+    };
+    let rows = match overlay::extra_claimants(conn, &ac_path.to_string_lossy()) {
+        Ok(rows) => rows,
+        Err(e) => {
+            log::warn!("extra_claimants {}: {e}", ac_path.display());
+            return Arbitration::Unresolvable;
+        }
+    };
+    if rows.is_empty() {
+        return Arbitration::Unclaimed;
+    }
+    let best = rows
+        .into_iter()
         .filter_map(|(mod_id, kind, claimed_at)| {
-            let kind = if kind.eq_ignore_ascii_case("Track") {
-                ModKind::Track
-            } else {
-                ModKind::Car
+            // `kind` a été écrit par `set_extra_links` sous la forme
+            // `content_folder()` ("cars"/"tracks") : le relire autrement
+            // enverrait la recherche dans le mauvais arbre de bibliothèque.
+            let Some(kind) = ModKind::from_content_folder(&kind) else {
+                log::warn!("extras claim {mod_id}: unknown kind {kind:?}, ignored");
+                return None;
             };
             let src = dir(library, kind, &mod_id).join(rel);
-            let mtime = std::fs::metadata(&src).and_then(|m| m.modified()).ok()?;
+            let mtime = std::fs::metadata(&src)
+                .and_then(|m| m.modified())
+                .inspect_err(|e| log::warn!("extras claim {mod_id}: {}: {e}", src.display()))
+                .ok()?;
             Some(Claim {
                 mod_id,
                 src,
@@ -137,7 +169,11 @@ fn best_claim(conn: &Connection, cfg: &AppConfig, ac_path: &Path) -> Option<Clai
                 claimed_at,
             })
         })
-        .max_by(|a, b| a.mtime.cmp(&b.mtime).then_with(|| a.claimed_at.cmp(&b.claimed_at)))
+        .max_by(|a, b| a.mtime.cmp(&b.mtime).then_with(|| a.claimed_at.cmp(&b.claimed_at)));
+    match best {
+        Some(c) => Arbitration::Winner(c),
+        None => Arbitration::Unresolvable,
+    }
 }
 
 /// Aligne le fichier posé dans AC sur l'exemplaire qui doit gagner. Sans
@@ -148,17 +184,31 @@ fn best_claim(conn: &Connection, cfg: &AppConfig, ac_path: &Path) -> Option<Clai
 /// deux exemplaires de même date — que cette déduction se trompe.
 fn sync(conn: &Connection, cfg: &AppConfig, ac_path: &Path) {
     let key = ac_path.to_string_lossy().into_owned();
-    let Some(best) = best_claim(conn, cfg, ac_path) else {
-        // Plus aucun réclamant. Si ce chemin était un fichier du jeu qu'un mod
-        // avait remplacé, l'original revient (§4.5.4) ; sinon le fichier part.
-        if crate::gamebackup::is_replaced(conn, ac_path) {
-            crate::gamebackup::restore(conn, ac_path);
-        } else if ac_path.is_file() {
-            if let Err(e) = std::fs::remove_file(ac_path) {
-                log::warn!("extras remove {}: {e}", ac_path.display());
+    let best = match best_claim(conn, cfg, ac_path) {
+        Arbitration::Winner(c) => c,
+        Arbitration::Unclaimed => {
+            // Plus aucun réclamant. Si ce chemin était un fichier du jeu qu'un
+            // mod avait remplacé, l'original revient (§4.5.4) ; sinon le
+            // fichier part.
+            if crate::gamebackup::is_replaced(conn, ac_path) {
+                crate::gamebackup::restore(conn, ac_path);
+            } else if ac_path.is_file() {
+                if let Err(e) = std::fs::remove_file(ac_path) {
+                    log::warn!("extras remove {}: {e}", ac_path.display());
+                }
             }
+            return;
         }
-        return;
+        // Encore réclamé, mais introuvable en bibliothèque : on laisse en place
+        // ce qui tourne. Effacer ici, c'était retirer d'AC un fichier qu'un mod
+        // actif venait de poser.
+        Arbitration::Unresolvable => {
+            log::warn!(
+                "extras sync {}: still claimed but no copy found, left alone",
+                ac_path.display()
+            );
+            return;
+        }
     };
     let current = overlay::extra_provider(conn, &key).unwrap_or(None);
     if current.as_deref() == Some(best.mod_id.as_str()) && ac_path.is_file() {
@@ -497,6 +547,67 @@ mod tests {
         undeploy(&conn, &cfg, "rss_old").unwrap();
         assert!(!target.exists(), "plus aucun réclamant : retiré");
         assert!(!ac.join("extension").exists(), "dossiers créés pour l'occasion élagués");
+    }
+
+    #[test]
+    fn a_track_deploys_its_extras_like_a_car() {
+        // Bug réel (bahrain_international_circuit) : les ajouts au jeu d'un
+        // circuit étaient posés puis **immédiatement retirés** par l'arbitrage.
+        // `set_extra_links` écrit le type sous la forme `content_folder()`
+        // ("tracks") et `best_claim` le relisait en le comparant à "Track" :
+        // tout circuit était donc cherché dans `extras/cars/`, où il n'y a
+        // rien — donc « aucun réclamant », donc suppression. Les voitures
+        // passaient par hasard, "cars" tombant dans la même branche par défaut.
+        let base = crate::testutil::temp_dir("sat-track");
+        let cfg = cfg_for(&base);
+        let library = cfg.library_path.clone().unwrap();
+        let ac = cfg.ac_install_path.clone().unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+
+        let sat = dir(&library, ModKind::Track, "bahrain_international_circuit");
+        let ini = Path::new("extension")
+            .join("config")
+            .join("tracks")
+            .join("loaded")
+            .join("bahrain_international_circuit.ini");
+        let vao = Path::new("extension")
+            .join("vao-patches")
+            .join("bahrain_international_circuit.vao-patch");
+        write(&sat.join(&ini), b"[TRACK]");
+        write(&sat.join(&vao), b"vao");
+
+        let n = deploy(&conn, &cfg, ModKind::Track, "bahrain_international_circuit").unwrap();
+        assert_eq!(n, 2, "les deux ajouts du circuit sont posés");
+        assert!(ac.join(&ini).is_file(), "la config CSP survit à l'arbitrage");
+        assert!(ac.join(&vao).is_file(), "le vao-patch survit à l'arbitrage");
+
+        let listed = list(&conn, &cfg, ModKind::Track, "bahrain_international_circuit");
+        assert!(listed.iter().all(|f| f.deployed), "et la fiche les dit posés");
+    }
+
+    #[test]
+    fn an_unresolvable_claim_never_removes_what_is_deployed() {
+        // Garde-fou : c'est l'absence de **réclamation en base** qui autorise
+        // une suppression, jamais notre incapacité à retrouver l'exemplaire.
+        // Sans lui, n'importe quel décrochage de la bibliothèque (dossier
+        // déplacé, type illisible) vidait d'AC les fichiers d'un mod actif.
+        let base = crate::testutil::temp_dir("sat-unresolvable");
+        let cfg = cfg_for(&base);
+        let library = cfg.library_path.clone().unwrap();
+        let ac = cfg.ac_install_path.clone().unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+
+        let rel = Path::new("extension").join("config").join("mine.ini");
+        let sat = dir(&library, ModKind::Car, "car_a");
+        write(&sat.join(&rel), b"MINE");
+        deploy(&conn, &cfg, ModKind::Car, "car_a").unwrap();
+        let target = ac.join(&rel);
+        assert!(target.is_file(), "posé");
+
+        // L'exemplaire disparaît de la bibliothèque, la réclamation reste.
+        std::fs::remove_dir_all(&sat).unwrap();
+        sync(&conn, &cfg, &target);
+        assert!(target.is_file(), "encore réclamé : on laisse tourner ce qui est posé");
     }
 
     #[test]
