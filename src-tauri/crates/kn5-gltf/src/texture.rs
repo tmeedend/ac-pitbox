@@ -96,6 +96,9 @@ pub struct PreparedTexture {
     pub source_bytes: usize,
     /// L'image encodée porte-t-elle un canal alpha exploitable ?
     pub has_alpha: bool,
+    /// Couleur moyenne, en linéaire approché [0,1]. Sert à teinter un matériau
+    /// depuis sa carte de détail (voir `material::convert`).
+    pub average: [f32; 3],
 }
 
 /// A texture that could not be prepared. Never fatal: a car with one broken
@@ -296,7 +299,24 @@ fn prepare_one(
         origin,
         source_bytes,
         has_alpha: usage.keep_alpha && resized.pixels().any(|p| p.0[3] != u8::MAX),
+        average: average_color(&resized),
     })
+}
+
+/// Couleur moyenne d'une image, canaux dans [0,1].
+fn average_color(image: &RgbaImage) -> [f32; 3] {
+    let mut sum = [0u64; 3];
+    for pixel in image.pixels() {
+        for (channel, value) in sum.iter_mut().zip(pixel.0.iter()) {
+            *channel += *value as u64;
+        }
+    }
+    let count = (image.pixels().len() as u64).max(1);
+    [
+        (sum[0] / count) as f32 / 255.0,
+        (sum[1] / count) as f32 / 255.0,
+        (sum[2] / count) as f32 / 255.0,
+    ]
 }
 
 /// Force le canal alpha à l'opacité totale.

@@ -24,7 +24,7 @@ use crate::config::AppConfig;
 /// l'app à jour continue de voir les anciens `.glb` : le §10 liste
 /// « cache non versionné » parmi les pièges connus, et c'est celui qui se
 /// remarque le plus tard.
-const CONVERTER_VERSION: u32 = 3;
+const CONVERTER_VERSION: u32 = 4;
 
 /// Plafond du cache (§5.3). Au-delà, éviction du plus ancien utilisé.
 const CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;

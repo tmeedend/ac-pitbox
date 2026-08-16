@@ -73,7 +73,17 @@ pub(crate) fn alpha_mode_of(material: &Kn5Material) -> (AlphaMode, f32) {
     }
 }
 
-pub fn convert(material: &Kn5Material, diffuse_has_alpha: bool) -> GltfMaterial {
+/// Ce que le pipeline de textures apprend d'un matériau et que la conversion
+/// ne peut pas deviner seule.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MaterialTextures {
+    /// La texture diffuse porte-t-elle un alpha qu'un matériau exploite ?
+    pub diffuse_has_alpha: bool,
+    /// Couleur moyenne de la carte de détail, quand le matériau en a une.
+    pub detail_average: Option<[f32; 3]>,
+}
+
+pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMaterial {
     let shader = material.shader.as_str();
 
     // §6.1: an approximation to calibrate by eye, not an exact conversion.
@@ -96,19 +106,7 @@ pub fn convert(material: &Kn5Material, diffuse_has_alpha: bool) -> GltfMaterial 
         _ => [0.0, 0.0, 0.0],
     };
 
-    let is_glass = GLASS_MARKERS.iter().any(|marker| shader.contains(marker));
-    let (alpha_mode, alpha_cutoff) = if material.blend_mode == 1 || is_glass {
-        (AlphaMode::Blend, 0.5)
-    } else if material.alpha_tested {
-        // The decoded `alpha_tested` byte is the reliable signal here, more so
-        // than `ksAlphaRef > 0` — see docs/kn5-format.md, §12 q2.
-        (
-            AlphaMode::Mask,
-            material.property("ksAlphaRef").unwrap_or(0.5).clamp(0.0, 1.0),
-        )
-    } else {
-        (AlphaMode::Opaque, 0.5)
-    };
+    let (alpha_mode, alpha_cutoff) = alpha_mode_of(material);
 
     if !shader.starts_with("ks") {
         // Never a failure (§6.3), but worth collecting: the list of shaders met
@@ -131,10 +129,36 @@ pub fn convert(material: &Kn5Material, diffuse_has_alpha: bool) -> GltfMaterial 
     //
     // Appliquer l'opacité à tout matériau en fondu rendait translucides des
     // pièces qui ne devaient pas l'être — bug remonté sur `abarth500`.
-    let base_color = match alpha_mode {
-        AlphaMode::Blend if !diffuse_has_alpha => [1.0, 1.0, 1.0, glass_opacity(material)],
+    let mut base_color = match alpha_mode {
+        AlphaMode::Blend if !textures.diffuse_has_alpha => [1.0, 1.0, 1.0, glass_opacity(material)],
         _ => [1.0, 1.0, 1.0, 1.0],
     };
+
+    // Teinte apportée par la carte de détail (§6.2, approximation assumée).
+    //
+    // Beaucoup de peintures AC ont une diffuse en **niveaux de gris** et
+    // tiennent leur couleur du `txDetail` du skin, que le shader
+    // `ksPerPixelMultiMap` multiplie par-dessus avec un fort facteur de
+    // répétition (`detailUVMultiplier = 25` sur la Supra). glTF ne sait pas
+    // multiplier deux textures de couleur, et le motif est de toute façon trop
+    // fin pour compter à la résolution d'un aperçu : ce qu'il en reste à l'œil
+    // est une **teinte**. On applique donc la couleur moyenne de la carte,
+    // ramenée à luminance constante pour ne teinter que la nuance — une carte
+    // neutre ne change alors rien, et aucune voiture ne s'assombrit.
+    //
+    // Reste une approximation : `ks_toyota_supra_mkiv` / `dark_green_pearl_met`
+    // ressort en vert clair, pas en vert foncé nacré. Reproduire vraiment la
+    // peinture demande le pipeline multi-map, encore non documenté (§12 q3).
+    if let Some(detail) = textures
+        .detail_average
+        .filter(|_| material.property("useDetail").unwrap_or(0.0) > 0.0)
+    {
+        if let Some(tint) = detail_tint(detail) {
+            for (channel, factor) in base_color.iter_mut().zip(tint.iter()) {
+                *channel *= factor;
+            }
+        }
+    }
 
     GltfMaterial {
         name: material.name.clone(),
@@ -143,10 +167,7 @@ pub fn convert(material: &Kn5Material, diffuse_has_alpha: bool) -> GltfMaterial 
             .texture_for("txDiffuse")
             .filter(|t| !t.is_empty())
             .map(str::to_string),
-        normal_texture: material
-            .texture_for("txNormal")
-            .filter(|t| !t.is_empty())
-            .map(str::to_string),
+        normal_texture: normal_map(material),
         normal_scale: material.property("normalMult").filter(|v| *v > 0.0).unwrap_or(1.0),
         emissive,
         roughness,
@@ -160,6 +181,58 @@ pub fn convert(material: &Kn5Material, diffuse_has_alpha: bool) -> GltfMaterial 
         alpha_cutoff,
         base_color,
     }
+}
+
+/// Amplification de la teinte tirée de la carte de détail.
+///
+/// **Calibré à l'œil, et c'est assumé.** La carte de détail d'un skin AC est
+/// très peu saturée — celle du vert de `ks_toyota_supra_mkiv` est un vert
+/// d'eau — alors que la voiture rendue par le jeu est franchement verte. Le
+/// shader d'AC amplifie donc l'écart d'une façon qui n'est pas documentée
+/// (§12 q3, toujours ouverte). Sans ce facteur, la teinte est juste mais si
+/// pâle qu'elle se lit comme du blanc.
+const DETAIL_TINT_BOOST: f32 = 3.0;
+
+/// Teinte à appliquer, à partir de la couleur moyenne d'une carte de détail.
+///
+/// Le calcul se fait en **linéaire**, parce que `baseColorFactor` est linéaire
+/// et que faire le rapport entre canaux en sRGB écrase les écarts. La teinte
+/// est ramenée à luminance constante : une carte neutre ne change alors rien
+/// et aucune voiture ne s'assombrit.
+fn detail_tint(average_srgb: [f32; 3]) -> Option<[f32; 3]> {
+    let linear = average_srgb.map(|c| {
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    });
+    let luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+    if luminance <= 0.02 {
+        return None;
+    }
+    Some(linear.map(|c| (1.0 + (c / luminance - 1.0) * DETAIL_TINT_BOOST).clamp(0.0, 1.0)))
+}
+
+/// Normal map d'un matériau, **sauf quand c'en est une de dégâts**.
+///
+/// Les shaders de la famille `*_damage*` réservent `txNormal` à la déformation
+/// des tôles, qu'AC ne mélange qu'à proportion des dégâts subis — nulle sur une
+/// voiture intacte. Appliquée à pleine intensité, elle donne une carrosserie
+/// définitivement froissée : c'est exactement le défaut remonté par
+/// l'utilisateur après essai réel.
+///
+/// Vérifié sur quatre voitures, sans exception : `ks_toyota_supra_mkiv`
+/// (`exterior_damage_NM.dds`), `ks_mazda_mx5_cup` (`Damage_NM.dds`),
+/// `abarth500` (`NORMAL MAP DAMAGE_TEMP.dds`), `ks_ford_gt40` (`damageNM.dds`).
+fn normal_map(material: &Kn5Material) -> Option<String> {
+    if material.shader.to_ascii_lowercase().contains("damage") {
+        return None;
+    }
+    material
+        .texture_for("txNormal")
+        .filter(|t| !t.is_empty())
+        .map(str::to_string)
 }
 
 /// Opacity of a blended material.
@@ -207,7 +280,10 @@ mod tests {
     // ajoured rims as solid panels (§10).
     #[test]
     fn alpha_tested_material_becomes_a_mask() {
-        let converted = convert(&material("ksPerPixelAT", 0, true, &[("ksAlphaRef", 0.3)]), false);
+        let converted = convert(
+            &material("ksPerPixelAT", 0, true, &[("ksAlphaRef", 0.3)]),
+            MaterialTextures::default(),
+        );
         assert_eq!(converted.alpha_mode, AlphaMode::Mask, "alpha tested maps to MASK");
         assert!(
             (converted.alpha_cutoff - 0.3).abs() < 1e-6,
@@ -220,12 +296,16 @@ mod tests {
     #[test]
     fn glass_blends_either_way() {
         assert_eq!(
-            convert(&material("ksPerPixelReflection", 1, false, &[]), false).alpha_mode,
+            convert(
+                &material("ksPerPixelReflection", 1, false, &[]),
+                MaterialTextures::default()
+            )
+            .alpha_mode,
             AlphaMode::Blend,
             "blend mode 1 is enough"
         );
         assert_eq!(
-            convert(&material("ksWindscreen", 0, false, &[]), false).alpha_mode,
+            convert(&material("ksWindscreen", 0, false, &[]), MaterialTextures::default()).alpha_mode,
             AlphaMode::Blend,
             "shader name is enough"
         );
@@ -235,11 +315,23 @@ mod tests {
     // move the opposite way. A sign error here makes every car look chalky.
     #[test]
     fn roughness_decreases_as_specular_exponent_rises() {
-        let dull = convert(&material("ksPerPixel", 0, false, &[("ksSpecularEXP", 5.0)]), false).roughness;
-        let shiny = convert(&material("ksPerPixel", 0, false, &[("ksSpecularEXP", 200.0)]), false).roughness;
+        let dull = convert(
+            &material("ksPerPixel", 0, false, &[("ksSpecularEXP", 5.0)]),
+            MaterialTextures::default(),
+        )
+        .roughness;
+        let shiny = convert(
+            &material("ksPerPixel", 0, false, &[("ksSpecularEXP", 200.0)]),
+            MaterialTextures::default(),
+        )
+        .roughness;
         assert!(shiny < dull, "shinier material is less rough: {shiny} < {dull}");
         assert_eq!(
-            convert(&material("ksTyres", 0, false, &[("ksSpecularEXP", 200.0)]), false).roughness,
+            convert(
+                &material("ksTyres", 0, false, &[("ksSpecularEXP", 200.0)]),
+                MaterialTextures::default()
+            )
+            .roughness,
             0.9,
             "rubber overrides the formula"
         );
@@ -257,13 +349,111 @@ mod tests {
     fn blended_material_trusts_its_texture_alpha_when_there_is_one() {
         let decal = material("ksPerPixelNM", 1, false, &[("ksDiffuse", 0.3)]);
         assert_eq!(
-            convert(&decal, true).base_color[3],
+            convert(
+                &decal,
+                MaterialTextures {
+                    diffuse_has_alpha: true,
+                    ..Default::default()
+                }
+            )
+            .base_color[3],
             1.0,
             "la texture porte la découpe, on n'y touche pas"
         );
         assert!(
-            convert(&decal, false).base_color[3] < 1.0,
+            convert(&decal, MaterialTextures::default()).base_color[3] < 1.0,
             "sans alpha exploitable, la transparence vient du shader"
+        );
+    }
+
+    // Règle : la normal map d'un shader de dégâts n'est pas exportée. Bug réel
+    // remonté par l'utilisateur : la carrosserie paraissait cabossée en
+    // permanence, parce qu'AC ne mélange cette carte qu'à proportion des dégâts.
+    #[test]
+    fn damage_shaders_do_not_export_their_normal_map() {
+        let mut damaged = material("ksPerPixelMultiMap_damage_dirt", 0, false, &[]);
+        damaged.samplers.push(kn5::Kn5Sampler {
+            name: "txNormal".to_string(),
+            slot: 1,
+            texture: "damage_NM.dds".to_string(),
+        });
+        assert_eq!(
+            convert(&damaged, MaterialTextures::default()).normal_texture,
+            None,
+            "une carte de dégâts ne doit pas déformer une voiture intacte"
+        );
+
+        let mut plain = material("ksPerPixelNM", 0, false, &[]);
+        plain.samplers.push(kn5::Kn5Sampler {
+            name: "txNormal".to_string(),
+            slot: 1,
+            texture: "body_NM.dds".to_string(),
+        });
+        assert_eq!(
+            convert(&plain, MaterialTextures::default()).normal_texture.as_deref(),
+            Some("body_NM.dds"),
+            "une vraie normal map reste exportée"
+        );
+    }
+
+    // Règle : la carte de détail ne fait que teinter, jamais assombrir. Sa
+    // couleur moyenne est ramenée à luminance constante, donc une carte neutre
+    // ne change rien.
+    #[test]
+    fn detail_map_tints_without_darkening() {
+        let painted = material("ksPerPixelMultiMap", 0, false, &[("useDetail", 1.0)]);
+        let neutral = convert(
+            &painted,
+            MaterialTextures {
+                detail_average: Some([0.5, 0.5, 0.5]),
+                ..Default::default()
+            },
+        );
+        for channel in 0..3 {
+            assert!(
+                (neutral.base_color[channel] - 1.0).abs() < 1e-5,
+                "une carte de détail neutre laisse la couleur intacte"
+            );
+        }
+
+        // Valeurs réelles mesurées sur `metal_detail.dds` du skin
+        // `01_dark_green_pearl_met` : une carte de paillettes très peu saturée.
+        let green = convert(
+            &painted,
+            MaterialTextures {
+                detail_average: Some([0.84, 0.91, 0.86]),
+                ..Default::default()
+            },
+        );
+        assert!(
+            green.base_color[1] > green.base_color[0] && green.base_color[1] > green.base_color[2],
+            "la nuance verte ressort, et domine"
+        );
+        assert!(
+            green.base_color.iter().take(3).all(|c| *c > 0.3),
+            "sur une carte réelle, aucun canal ne s'effondre"
+        );
+        assert!(
+            green.base_color[1] >= 1.0,
+            "le canal dominant reste à pleine intensité : la teinte n'assombrit pas"
+        );
+    }
+
+    // Règle : sans `useDetail`, la carte de détail est ignorée.
+    #[test]
+    fn detail_map_ignored_when_the_material_does_not_use_it() {
+        let plain = material("ksPerPixelMultiMap", 0, false, &[]);
+        let converted = convert(
+            &plain,
+            MaterialTextures {
+                detail_average: Some([0.2, 0.9, 0.2]),
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            converted.base_color,
+            [1.0, 1.0, 1.0, 1.0],
+            "détail non déclaré, non appliqué"
         );
     }
 
@@ -272,7 +462,11 @@ mod tests {
     #[test]
     fn metallic_stays_neutral() {
         assert_eq!(
-            convert(&material("ksPerPixelMultiMap", 0, false, &[("ksSpecular", 1.0)]), false).metallic,
+            convert(
+                &material("ksPerPixelMultiMap", 0, false, &[("ksSpecular", 1.0)]),
+                MaterialTextures::default()
+            )
+            .metallic,
             0.0,
             "no metallic guess before the txMaps semantics are documented"
         );

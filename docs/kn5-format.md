@@ -237,6 +237,67 @@ depuis `ksDiffuse`.
 
 ---
 
+## Écart n°4 — sur un shader de dégâts, `txNormal` est la carte de dégâts
+
+**Symptôme** : carrosserie qui paraît cabossée en permanence, sur une voiture
+pourtant intacte.
+
+**Réel** : les shaders de la famille `*_damage*` réservent `txNormal` à la
+déformation des tôles, qu'AC ne mélange qu'à proportion des dégâts subis —
+nulle sur une voiture neuve. Appliquée à pleine intensité comme une normal map
+ordinaire, elle froisse définitivement la carrosserie.
+
+**Vérifié sur quatre voitures, sans exception** :
+
+| Voiture | Matériau | `txNormal` |
+| --- | --- | --- |
+| `ks_toyota_supra_mkiv` | `supra_body` | `exterior_damage_NM.dds` |
+| `ks_mazda_mx5_cup` | `EXT_Carpaint` | `Damage_NM.dds` |
+| `abarth500` | `CAR_Livrea` | `NORMAL MAP DAMAGE_TEMP.dds` |
+| `ks_ford_gt40` | `Car_body` | `damageNM.dds` |
+
+La corrélation porte sur le **shader**, pas sur le nom de la texture : c'est le
+critère retenu, il ne dépend d'aucune convention de nommage.
+
+**Correctif** : aucune normal map exportée quand le nom du shader contient
+`damage`. Verrouillé par `damage_shaders_do_not_export_their_normal_map`.
+
+---
+
+## Écart n°5 — la couleur de peinture est souvent dans la carte de détail
+
+**Symptôme** : `ks_toyota_supra_mkiv` / `01_dark_green_pearl_met` ressortait
+**blanche**, alors que `abarth500` / `black_red` était juste.
+
+**Réel** : la texture diffuse du corps de la Supra est en **niveaux de gris
+purs** — aucune couleur. Le skin ne fournit que quatre fichiers, dont
+`metal_detail.dds`, une carte de paillettes métallisées **vert d'eau**. C'est
+elle qui porte la teinte, et le shader `ksPerPixelMultiMap` la multiplie
+par-dessus avec `useDetail = 1` et `detailUVMultiplier = 25`.
+
+Recoupement décisif : le skin `00_super_red` de la même voiture fournit un
+`metal_detail.dds` **rose pâle**. La teinte suit bien le skin.
+
+**Correctif, approximation assumée** : glTF ne sait pas multiplier deux
+textures de couleur, et à la résolution d'un aperçu le motif est de toute façon
+trop fin pour compter — ce qu'il en reste à l'œil est une **teinte**. On
+applique donc la couleur moyenne de la carte de détail au `baseColorFactor`,
+avec deux précautions :
+
+- **calcul en linéaire**, parce que `baseColorFactor` l'est et que faire le
+  rapport entre canaux en sRGB écrase les écarts ;
+- **luminance ramenée à l'identique**, pour ne toucher qu'à la nuance : une
+  carte neutre ne change alors rien et aucune voiture ne s'assombrit.
+
+⚠️ Un facteur d'amplification (`DETAIL_TINT_BOOST = 3.0`) est **calibré à
+l'œil** : les cartes de détail d'AC sont très peu saturées alors que les
+voitures rendues par le jeu sont franchement colorées, donc le shader amplifie
+d'une façon qui reste non documentée (§12 q3, toujours ouverte). Sans ce
+facteur la teinte est juste mais si pâle qu'elle se lit comme du blanc. C'est
+le seul nombre de ce chantier qui n'ait pas de justification mesurée.
+
+---
+
 ## Découverte annexe — remorque chiffrée après l'arbre de nœuds
 
 Deux voitures de la bibliothèque de référence (`ms_citroen_berlingo_2003_hdi` et

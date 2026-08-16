@@ -16,7 +16,7 @@ use kn5::Kn5Model;
 
 pub use geometry::{node_world_centers, winding_consistency, FlatMesh, GeometryOptions, GeometryStats};
 pub use locate::{resolve_model, resolve_skin, ModelSource, ResolvedModel};
-pub use material::{AlphaMode, GltfMaterial};
+pub use material::{AlphaMode, GltfMaterial, MaterialTextures};
 pub use texture::{
     alpha_stats, prepare_textures, PreparedTexture, TextureOptions, TextureOrigin, TextureRole, TextureSet,
     TextureWarning,
@@ -94,11 +94,19 @@ pub fn convert(
         .materials
         .iter()
         .map(|m| {
-            let has_alpha = m
-                .texture_for("txDiffuse")
-                .and_then(|name| textures.get(name))
-                .is_some_and(|t| t.has_alpha);
-            material::convert(m, has_alpha)
+            material::convert(
+                m,
+                material::MaterialTextures {
+                    diffuse_has_alpha: m
+                        .texture_for("txDiffuse")
+                        .and_then(|name| textures.get(name))
+                        .is_some_and(|t| t.has_alpha),
+                    detail_average: m
+                        .texture_for("txDetail")
+                        .and_then(|name| textures.get(name))
+                        .map(|t| t.average),
+                },
+            )
         })
         .collect();
 

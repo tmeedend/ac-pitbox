@@ -624,17 +624,18 @@ Chacun a été pris en connaissance de cause, avec sa raison. Ne pas les
 Points remontés par l'utilisateur après validation à l'écran, par ordre de
 gêne constatée :
 
-1. **La carrosserie paraît cabossée.** Hypothèse principale : les normales.
-   Le `TANGENT` du KN5 n'est pas exporté (three.js reconstruit alors les
-   tangentes par dérivées d'écran), et les normal maps DirectX ont leur canal
-   vert inversé par rapport à la convention OpenGL/glTF. L'un comme l'autre
-   donnent un relief faux qui se lit comme de la tôle froissée. **À vérifier
-   avant de conclure** : que ce ne soit pas une texture de dégâts
-   (`txDamage`/`txDamageMask`, shader `ksPerPixelMultiMap_damage_dirt`)
-   appliquée à tort.
-2. **Couleur de peinture parfois absente.** `ks_toyota_supra_mkiv`, skin
-   `01_dark_green_pearl_met` : la voiture ressort blanche alors que la photo
-   du skin est verte. `abarth500` / `black_red` est correcte. Non diagnostiqué.
+1. ~~**La carrosserie paraît cabossée.**~~ ✅ **Corrigé.** C'était bien une
+   carte de dégâts appliquée à tort : sur un shader `*_damage*`, `txNormal`
+   est la déformation des tôles, qu'AC ne mélange qu'à proportion des dégâts.
+   Vérifié sur quatre voitures — voir `kn5-format.md`, écart n°4.
+   *Reste possible plus tard* : exporter le `TANGENT` du KN5 (three.js
+   reconstruit aujourd'hui les tangentes par dérivées d'écran), et vérifier le
+   canal vert des normal maps DirectX. Non nécessaire pour ce défaut-ci.
+2. **Couleur de peinture** ✅ **améliorée, pas résolue.** La teinte vient de la
+   carte de détail du skin, pas de la diffuse — voir `kn5-format.md`, écart
+   n°5. La Supra verte ressort désormais verte. La nuance exacte reste
+   approchée : un facteur d'amplification calibré à l'œil compense une
+   amplification du shader qu'on ne sait pas encore reproduire (§12 q3).
 3. **Réglages à exposer** (écran Réglages) : aperçu photo ou 3D par défaut,
    niveau de zoom, angle de caméra autour de l'axe vertical, hauteur de
    caméra, vitesse de rotation. La voiture est aujourd'hui cadrée trop bas :
