@@ -310,8 +310,9 @@ laisser pourrir ici.
       décodeur DDS par masques, 12 % des textures sinon perdues),
       redimensionnement, réencodage PNG/JPEG, déduplication, surcharge par
       skin. **Lot 3** — export glTF : aplatissement des transforms, conversion
-      de repère (§12 q4 tranchée par le rendu, deux tests numériques s'étant
-      révélés trompeurs — voir `docs/kn5-format.md`), mapping matériaux §6.1,
+      de repère (§12 q4 : **aucune** conversion ni inversion V, tranché après une
+      première réponse fausse validée sur une voiture à l'atlas symétrique —
+      voir `docs/kn5-format.md`), mapping matériaux §6.1,
       écriture du conteneur GLB. `kn5-tool convert` produit un `.glb` qui
       s'ouvre dans n'importe quel viewer. **Lot 4** — `preview.rs` : cache
       hashé dans `app_cache_dir`, éviction LRU, protocole `carpreview` (le

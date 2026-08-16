@@ -497,6 +497,33 @@ fn extract_textures(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
         std::fs::write(&path, &texture.bytes).map_err(|e| format!("{}: {e}", path.display()))?;
     }
 
+    if flags.contains(&"--alpha-stats") {
+        // Diagnostic : AC se sert parfois du canal alpha d'une texture diffuse
+        // pour autre chose que la transparence. Le savoir change la façon de
+        // l'encoder — un alpha nul sur des pixels dont le RVB est plein est le
+        // signe qu'il ne faut surtout pas le conserver.
+        println!(
+            "
+alpha des textures de couleur"
+        );
+        for texture in &set.textures {
+            if texture.role != kn5_gltf::TextureRole::Color {
+                continue;
+            }
+            let Some((zero, total, rgb)) = kn5_gltf::alpha_stats(texture) else {
+                continue;
+            };
+            if zero == 0 {
+                continue;
+            }
+            println!(
+                "  {:<34} {:>5.1} % à alpha=0, RVB moyen sous ces pixels = {rgb:?}",
+                texture.name,
+                100.0 * zero as f64 / total as f64
+            );
+        }
+    }
+
     println!("model     {}", file.display());
     println!(
         "skin      {}",
@@ -541,17 +568,18 @@ fn extract_textures(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
 
 /// Regression guard for the coordinate conversion (§4.4, §12 q4).
 ///
-/// **Calibrated against a render, not derived.** The reference is the livery:
-/// with the conversion as it stands, `ks_mazda_mx5_cup` shows `55` and
-/// `MX-5 CUP` reading left to right. This check records the wheel geometry of
-/// that verified state so a future change to the conversion shows up here
-/// instead of silently mirroring every car.
+/// **Calibré sur un rendu, pas déduit** — et recalibré une fois, ce qui est
+/// tout l'intérêt de l'avoir. La référence est `abarth500` : la conversion
+/// actuelle y affiche `ABARTH` de gauche à droite sur le bas de caisse. Ce
+/// contrôle enregistre la géométrie des roues de cet état vérifié, pour qu'un
+/// changement de conversion se signale ici au lieu de mettre en miroir toutes
+/// les voitures en silence.
 ///
-/// The trap it encodes: `WHEEL_LF` is **not** the driver's left. AC names its
-/// wheel nodes from the point of view of someone facing the car, so in the
-/// correct output the node called `WHEEL_LF` sits on the negative-X side while
-/// the nose points at +Z. Read as the driver's left, the same numbers argue
-/// for the opposite conversion — which renders every livery mirrored.
+/// La première calibration s'appuyait sur `ks_mazda_mx5_cup` et s'est révélée
+/// fausse : l'atlas de cette voiture range ses deux flancs côte à côte et
+/// presque identiques, et son îlot UV est tourné à 90°, si bien qu'un modèle
+/// en miroir échantillonnant le mauvais flanc y paraissait juste. Une voiture
+/// dont l'atlas est symétrique ne prouve rien.
 fn orientation_verdict(model: &kn5::Kn5Model) -> Option<String> {
     let centers = kn5_gltf::node_world_centers(model);
     let find = |suffix: &str| -> Option<[f32; 3]> {
@@ -565,8 +593,8 @@ fn orientation_verdict(model: &kn5::Kn5Model) -> Option<String> {
     let front_z = (lf[2] + rf[2]) / 2.0;
     let rear_z = (lr[2] + rr[2]) / 2.0;
     let forward = (front_z - rear_z).signum();
-    // Verified state: the `WHEEL_LF` node ends up opposite the nose direction.
-    let ok = (lf[0] > 0.0) == (forward < 0.0) && (rf[0] > 0.0) == (forward > 0.0);
+    // État vérifié : `WHEEL_LF` se retrouve du côté du nez, `WHEEL_RF` en face.
+    let ok = (lf[0] > 0.0) == (forward > 0.0) && (rf[0] > 0.0) == (forward < 0.0);
 
     Some(format!(
         "{} — nose at z={front_z:+.2}, tail at z={rear_z:+.2}, WHEEL_LF at x={:+.2}, WHEEL_RF at x={:+.2}",

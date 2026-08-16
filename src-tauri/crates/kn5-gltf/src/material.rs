@@ -50,7 +50,30 @@ pub struct GltfMaterial {
 /// Shaders whose name alone says the surface is glass.
 const GLASS_MARKERS: [&str; 3] = ["Glass", "Windscreen", "windscreen"];
 
-pub fn convert(material: &Kn5Material) -> GltfMaterial {
+/// Mode de transparence d'un matériau, et son seuil de découpe.
+///
+/// Extrait de [`convert`] parce que le pipeline de textures a besoin de la
+/// même réponse : c'est lui qui décide de conserver ou non le canal alpha
+/// d'une texture, et il ne peut le faire qu'en sachant si un matériau
+/// s'en sert vraiment.
+pub(crate) fn alpha_mode_of(material: &Kn5Material) -> (AlphaMode, f32) {
+    let shader = material.shader.as_str();
+    let is_glass = GLASS_MARKERS.iter().any(|marker| shader.contains(marker));
+    if material.blend_mode == 1 || is_glass {
+        (AlphaMode::Blend, 0.5)
+    } else if material.alpha_tested {
+        // Le drapeau décodé est le signal fiable ici, plus que `ksAlphaRef > 0`
+        // — voir docs/kn5-format.md, §12 q2.
+        (
+            AlphaMode::Mask,
+            material.property("ksAlphaRef").unwrap_or(0.5).clamp(0.0, 1.0),
+        )
+    } else {
+        (AlphaMode::Opaque, 0.5)
+    }
+}
+
+pub fn convert(material: &Kn5Material, diffuse_has_alpha: bool) -> GltfMaterial {
     let shader = material.shader.as_str();
 
     // §6.1: an approximation to calibrate by eye, not an exact conversion.
@@ -96,15 +119,20 @@ pub fn convert(material: &Kn5Material) -> GltfMaterial {
         );
     }
 
-    // AC glass carries its transparency in the shader, never in an alpha
-    // channel. On `ks_mazda_mx5_cup`, `EXT_Glass` and `INT_Glass` declare no
-    // `txDiffuse` at all, and the windscreen's `INTERNAL_glass.dds` is fully
-    // opaque — it is a smudge map, not a mask. Either way the pane reaches
-    // glTF opaque and hides the whole interior, the exact symptom §10 warns
-    // about. glTF multiplies `baseColorFactor.a` by the texture's alpha, so
-    // setting the factor works in both cases.
+    // Un matériau en fondu tire sa transparence de deux endroits possibles, et
+    // il faut savoir lequel — sans se fier au nom, qui est dans la langue du
+    // moddeur (le verre de l'Abarth s'appelle `CAR_Vetro`).
+    //
+    // - Sa texture porte un alpha utile : décalcomanie, flou de jante,
+    //   couture. C'est l'alpha qui découpe, on n'y touche pas.
+    // - Sa texture n'en porte pas, ou il n'y a pas de texture : la
+    //   transparence vient alors du shader, comme pour toutes les vitres d'AC.
+    //   C'est là, et seulement là, qu'on l'approxime depuis `ksDiffuse`.
+    //
+    // Appliquer l'opacité à tout matériau en fondu rendait translucides des
+    // pièces qui ne devaient pas l'être — bug remonté sur `abarth500`.
     let base_color = match alpha_mode {
-        AlphaMode::Blend => [1.0, 1.0, 1.0, glass_opacity(material)],
+        AlphaMode::Blend if !diffuse_has_alpha => [1.0, 1.0, 1.0, glass_opacity(material)],
         _ => [1.0, 1.0, 1.0, 1.0],
     };
 
@@ -179,7 +207,7 @@ mod tests {
     // ajoured rims as solid panels (§10).
     #[test]
     fn alpha_tested_material_becomes_a_mask() {
-        let converted = convert(&material("ksPerPixelAT", 0, true, &[("ksAlphaRef", 0.3)]));
+        let converted = convert(&material("ksPerPixelAT", 0, true, &[("ksAlphaRef", 0.3)]), false);
         assert_eq!(converted.alpha_mode, AlphaMode::Mask, "alpha tested maps to MASK");
         assert!(
             (converted.alpha_cutoff - 0.3).abs() < 1e-6,
@@ -192,12 +220,12 @@ mod tests {
     #[test]
     fn glass_blends_either_way() {
         assert_eq!(
-            convert(&material("ksPerPixelReflection", 1, false, &[])).alpha_mode,
+            convert(&material("ksPerPixelReflection", 1, false, &[]), false).alpha_mode,
             AlphaMode::Blend,
             "blend mode 1 is enough"
         );
         assert_eq!(
-            convert(&material("ksWindscreen", 0, false, &[])).alpha_mode,
+            convert(&material("ksWindscreen", 0, false, &[]), false).alpha_mode,
             AlphaMode::Blend,
             "shader name is enough"
         );
@@ -207,13 +235,35 @@ mod tests {
     // move the opposite way. A sign error here makes every car look chalky.
     #[test]
     fn roughness_decreases_as_specular_exponent_rises() {
-        let dull = convert(&material("ksPerPixel", 0, false, &[("ksSpecularEXP", 5.0)])).roughness;
-        let shiny = convert(&material("ksPerPixel", 0, false, &[("ksSpecularEXP", 200.0)])).roughness;
+        let dull = convert(&material("ksPerPixel", 0, false, &[("ksSpecularEXP", 5.0)]), false).roughness;
+        let shiny = convert(&material("ksPerPixel", 0, false, &[("ksSpecularEXP", 200.0)]), false).roughness;
         assert!(shiny < dull, "shinier material is less rough: {shiny} < {dull}");
         assert_eq!(
-            convert(&material("ksTyres", 0, false, &[("ksSpecularEXP", 200.0)])).roughness,
+            convert(&material("ksTyres", 0, false, &[("ksSpecularEXP", 200.0)]), false).roughness,
             0.9,
             "rubber overrides the formula"
+        );
+    }
+
+    // Règle : un matériau en fondu dont la texture porte un alpha exploitable
+    // garde son opacité pleine — c'est l'alpha qui découpe. Sans texture
+    // utile, l'opacité vient de `ksDiffuse`, comme pour le verre.
+    //
+    // Bug réel remonté sur `abarth500` : appliquer l'opacité à tout matériau
+    // en fondu rendait translucides le logo d'airbag, les coutures et le flou
+    // de jante. Et le verre y est nommé `CAR_Vetro`, donc aucun critère fondé
+    // sur le nom n'aurait pu trancher.
+    #[test]
+    fn blended_material_trusts_its_texture_alpha_when_there_is_one() {
+        let decal = material("ksPerPixelNM", 1, false, &[("ksDiffuse", 0.3)]);
+        assert_eq!(
+            convert(&decal, true).base_color[3],
+            1.0,
+            "la texture porte la découpe, on n'y touche pas"
+        );
+        assert!(
+            convert(&decal, false).base_color[3] < 1.0,
+            "sans alpha exploitable, la transparence vient du shader"
         );
     }
 
@@ -222,7 +272,7 @@ mod tests {
     #[test]
     fn metallic_stays_neutral() {
         assert_eq!(
-            convert(&material("ksPerPixelMultiMap", 0, false, &[("ksSpecular", 1.0)])).metallic,
+            convert(&material("ksPerPixelMultiMap", 0, false, &[("ksSpecular", 1.0)]), false).metallic,
             0.0,
             "no metallic guess before the txMaps semantics are documented"
         );

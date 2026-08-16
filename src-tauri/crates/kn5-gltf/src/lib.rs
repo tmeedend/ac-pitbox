@@ -18,7 +18,8 @@ pub use geometry::{node_world_centers, winding_consistency, FlatMesh, GeometryOp
 pub use locate::{resolve_model, resolve_skin, ModelSource, ResolvedModel};
 pub use material::{AlphaMode, GltfMaterial};
 pub use texture::{
-    prepare_textures, PreparedTexture, TextureOptions, TextureOrigin, TextureRole, TextureSet, TextureWarning,
+    alpha_stats, prepare_textures, PreparedTexture, TextureOptions, TextureOrigin, TextureRole, TextureSet,
+    TextureWarning,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -82,10 +83,24 @@ pub fn convert(
 
     progress(ConvertStage::Geometry);
     let (meshes, geometry) = geometry::flatten(model, &options.geometry);
-    let materials: Vec<GltfMaterial> = model.materials.iter().map(material::convert).collect();
 
     progress(ConvertStage::Textures);
     let textures = prepare_textures(model, skin_dir, &options.textures);
+
+    // Les matériaux sont convertis **après** les textures : savoir si la
+    // texture diffuse porte un alpha exploitable change la façon de traiter
+    // un matériau en fondu (verre contre décalcomanie).
+    let materials: Vec<GltfMaterial> = model
+        .materials
+        .iter()
+        .map(|m| {
+            let has_alpha = m
+                .texture_for("txDiffuse")
+                .and_then(|name| textures.get(name))
+                .is_some_and(|t| t.has_alpha);
+            material::convert(m, has_alpha)
+        })
+        .collect();
 
     progress(ConvertStage::Writing);
     let triangle_count = meshes.iter().map(|m| m.indices.len() / 3).sum::<usize>() as u32;

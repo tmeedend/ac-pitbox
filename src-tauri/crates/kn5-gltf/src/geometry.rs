@@ -6,26 +6,36 @@
 
 use kn5::{Kn5Mesh, Kn5Model, Kn5Node};
 
-/// Axis negated to go from Assetto Corsa's frame to glTF's (§4.4).
-///
-/// **X — settled by rendering, after two numeric tests said otherwise.** Both
-/// are worth knowing about, because both look convincing and both are traps:
-///
-///  - *The wheel names.* `WHEEL_LF` / `WHEEL_RF` seem like ground truth for
-///    left and right. They are not the **driver's** left and right: they are
-///    named from the point of view of someone facing the car. Read as the
-///    driver's, they argue for no negation at all.
-///  - *Winding against normals.* `(p1-p0) × (p2-p0)` agrees with the stored
-///    normal on 100 % of 1.3 million triangles — before conversion. That
-///    measures the file's internal consistency, which mirroring preserves
-///    (positions, normals and winding all flip together). It cannot decide
-///    chirality, and reading it as if it could argues for no negation either.
-///
-/// What decides is the livery: with X negated the car's number reads `55` and
-/// `MX-5 CUP` reads left to right; without it, both are mirrored. That is the
-/// test §4.4 asked for, and it is the only one that answers the question.
-/// See docs/kn5-format.md.
-const MIRROR_X: bool = true;
+// **Aucune conversion de repère, et aucune inversion de la coordonnée V.**
+// Le §4.4 de la spec demande les deux ; les deux sont fausses, et il a fallu
+// deux erreurs successives pour l'établir.
+//
+// Deux mesures numériques disaient dès le départ « identité » :
+//  - les noms de roues `WHEEL_LF`/`WHEEL_RF`, lus dans le repère droitier ;
+//  - l'accord entre l'enroulement des triangles et les normales stockées,
+//    à 100 % sur 1,3 million de triangles.
+//
+// Elles ont été écartées au lot 3 sur la foi d'un rendu de `ks_mazda_mx5_cup`,
+// où la livrée semblait à l'endroit avec négation de X **et** inversion de V.
+// C'était une coïncidence, et une coïncidence double :
+//  - l'îlot UV du flanc est tourné à 90°, donc l'inversion de V agit
+//    horizontalement sur la voiture et **annule** le miroir géométrique : le
+//    texte redevient lisible alors que le modèle est bien en miroir ;
+//  - l'atlas de cette voiture range ses deux flancs côte à côte et
+//    quasi identiques, donc échantillonner l'un pour l'autre ne se voit pas.
+//
+// `abarth500` a cassé les deux illusions d'un coup : son atlas place la photo
+// du compartiment moteur là où l'inversion de V envoie la portière. Un lancer
+// de rayon sur la portière donnait `uv=(0.515, 1.619)` — 62 % de la hauteur de
+// l'atlas, en plein moteur — contre 38 % sans inversion, soit le panneau.
+//
+// Explication de fond, cohérente avec la mesure : DirectX **et** glTF placent
+// tous deux l'origine des textures en haut à gauche. L'inversion de V est
+// nécessaire vers OpenGL, pas vers glTF.
+//
+// Leçon : valider une conversion sur une voiture dont l'atlas est symétrique
+// ne prouve rien. Le test doit porter sur du texte **et** sur une zone d'atlas
+// que la transformation fautive déplacerait visiblement.
 
 /// One drawable mesh, already in glTF space and independent of any parent.
 #[derive(Debug, Clone)]
@@ -57,7 +67,12 @@ pub struct GeometryOptions {
 impl Default for GeometryOptions {
     fn default() -> Self {
         Self {
-            excluded_name_patterns: ["COLLIDER", "_SHADOW", "AC_CRASH", "DAMAGE_GLASS"]
+            // `BLUR` : les jantes floutées d'AC (`GEO_rimblur1`, `RIM_BLUR_LF`),
+            // qui ne remplacent la vraie jante qu'au-delà d'une certaine vitesse
+            // de rotation. À l'arrêt elles se superposent à elle et brouillent
+            // la roue. Motif sans souligné : les deux conventions de nommage
+            // coexistent selon les voitures.
+            excluded_name_patterns: ["COLLIDER", "_SHADOW", "AC_CRASH", "DAMAGE_GLASS", "BLUR"]
                 .iter()
                 .map(|s| s.to_string())
                 .collect(),
@@ -174,25 +189,17 @@ fn convert_mesh(name: &str, mesh: &Kn5Mesh, world: &[f32; 16]) -> FlatMesh {
     let mut uvs = Vec::with_capacity(mesh.vertices.len());
 
     for vertex in &mesh.vertices {
-        let mut p = transform_point(world, vertex.position);
-        let mut n = normalize(transform_direction(&normal_matrix, vertex.normal));
-        if MIRROR_X {
-            p[0] = -p[0];
-            n[0] = -n[0];
-        }
-        positions.push(p);
-        normals.push(n);
-        // AC's V axis runs the other way (§4.4). Skipping this is very
-        // visible: liveries come out upside down.
-        uvs.push([vertex.uv[0], 1.0 - vertex.uv[1]]);
+        positions.push(transform_point(world, vertex.position));
+        normals.push(normalize(transform_direction(&normal_matrix, vertex.normal)));
+        uvs.push(vertex.uv);
     }
 
     let mut indices = mesh.indices.clone();
-    // Negating an axis mirrors space, so every triangle's winding is reversed
-    // or the car renders inside out (§10). A node whose own transform already
-    // mirrors — the usual trick for shipping a symmetric part once — cancels
-    // that out and keeps its original order.
-    if (determinant3(world) < 0.0) != MIRROR_X {
+    // Le repère ne change pas, mais un nœud dont la transformation est en
+    // miroir — la façon habituelle de ne modéliser qu'une moitié symétrique —
+    // inverse l'orientation de ses triangles. glTF veut des faces avant en
+    // sens antihoraire, donc on la rétablit là et seulement là (§10).
+    if determinant3(world) < 0.0 {
         for triangle in indices.chunks_exact_mut(3) {
             triangle.swap(1, 2);
         }
@@ -376,10 +383,7 @@ fn collect_centers(node: &Kn5Node, parent_world: &[f32; 16], out: &mut Vec<(Stri
             ])
         }
     };
-    if let Some(mut center) = center {
-        if MIRROR_X {
-            center[0] = -center[0];
-        }
+    if let Some(center) = center {
         out.push((node.name.clone(), center));
     }
     for child in &node.children {
@@ -468,20 +472,21 @@ mod tests {
         let mirrored = convert_mesh("m", &mesh, &mirror);
         assert_eq!(
             straight.indices,
-            vec![0, 2, 1],
-            "negating an axis reverses the winding of an ordinary mesh"
+            vec![0, 1, 2],
+            "sans conversion de repère, un mesh ordinaire garde son enroulement"
         );
         assert_eq!(
             mirrored.indices,
-            vec![0, 1, 2],
-            "a mirroring node cancels it out and keeps the original order"
+            vec![0, 2, 1],
+            "un nœud en miroir voit le sien rétabli en antihoraire"
         );
     }
 
-    // Rule: V is flipped. A livery rendered upside down is the most visible
-    // symptom of forgetting it (§10).
+    // Règle : les UV sont reprises telles quelles. Bug réel sur `abarth500` —
+    // inverser V envoyait la portière échantillonner la photo du compartiment
+    // moteur, à l'autre bout de l'atlas.
     #[test]
-    fn uv_v_axis_is_flipped() {
+    fn uv_are_taken_as_they_are() {
         let mesh = Kn5Mesh {
             cast_shadows: true,
             is_visible: true,
@@ -502,7 +507,11 @@ mod tests {
             is_renderable: true,
         };
         let flat = convert_mesh("m", &mesh, &IDENTITY);
-        assert_eq!(flat.uvs[0], [0.25, 0.25], "U kept, V mirrored");
+        assert_eq!(
+            flat.uvs[0],
+            [0.25, 0.75],
+            "UV reprises telles quelles : DirectX et glTF ont la même origine de texture"
+        );
     }
 
     // Rule: the inverse transpose is what normals go through. Under a

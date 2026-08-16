@@ -94,6 +94,8 @@ pub struct PreparedTexture {
     pub origin: TextureOrigin,
     /// Size of the source blob, for the compression ratio the tool reports.
     pub source_bytes: usize,
+    /// L'image encodée porte-t-elle un canal alpha exploitable ?
+    pub has_alpha: bool,
 }
 
 /// A texture that could not be prepared. Never fatal: a car with one broken
@@ -128,15 +130,48 @@ impl TextureSet {
     }
 }
 
+/// Proportion de pixels à alpha nul et couleur moyenne sous ces pixels.
+///
+/// Sert au diagnostic : si le RVB est plein là où l'alpha est nul, le canal
+/// alpha ne décrit pas une transparence et le conserver produit un rendu faux.
+pub fn alpha_stats(texture: &PreparedTexture) -> Option<(usize, usize, [u8; 3])> {
+    let decoded = image::load_from_memory(&texture.bytes).ok()?.to_rgba8();
+    let mut zero = 0usize;
+    let mut sum = [0u64; 3];
+    for pixel in decoded.pixels() {
+        if pixel.0[3] == 0 {
+            zero += 1;
+            for (channel, value) in sum.iter_mut().zip(pixel.0.iter()) {
+                *channel += *value as u64;
+            }
+        }
+    }
+    let total = decoded.pixels().len();
+    let mean = if zero == 0 {
+        [0, 0, 0]
+    } else {
+        [
+            (sum[0] / zero as u64) as u8,
+            (sum[1] / zero as u64) as u8,
+            (sum[2] / zero as u64) as u8,
+        ]
+    };
+    Some((zero, total, mean))
+}
+
 /// Role of every texture referenced by a material, keyed by texture name.
 ///
 /// A texture bound to `txDiffuse` anywhere is treated as colour everywhere:
 /// mods do reuse the same file across slots, and getting it wrong in the
 /// lossy direction (a normal map encoded as JPEG) is far worse than the
 /// opposite.
-fn roles(model: &Kn5Model) -> BTreeMap<String, TextureRole> {
-    let mut roles: BTreeMap<String, TextureRole> = BTreeMap::new();
+fn roles(model: &Kn5Model) -> BTreeMap<String, TextureUse> {
+    let mut roles: BTreeMap<String, TextureUse> = BTreeMap::new();
     for material in &model.materials {
+        let consumes_alpha = !matches!(
+            crate::material::alpha_mode_of(material).0,
+            crate::material::AlphaMode::Opaque
+        );
         for sampler in &material.samplers {
             if sampler.texture.is_empty() {
                 continue;
@@ -146,13 +181,31 @@ fn roles(model: &Kn5Model) -> BTreeMap<String, TextureRole> {
             } else {
                 TextureRole::Data
             };
-            let entry = roles.entry(sampler.texture.clone()).or_insert(role);
+            let entry = roles.entry(sampler.texture.clone()).or_insert(TextureUse {
+                role,
+                keep_alpha: false,
+            });
             if role == TextureRole::Color {
-                *entry = TextureRole::Color;
+                entry.role = TextureRole::Color;
+                // L'alpha n'est conservé que si un matériau s'en sert
+                // réellement. Voir `strip_alpha` : chez AC il transporte
+                // le plus souvent tout autre chose.
+                entry.keep_alpha |= consumes_alpha;
+            } else {
+                // Une carte de données (normales, masques) garde son alpha :
+                // il y encode une donnée, pas une découpe.
+                entry.keep_alpha = true;
             }
         }
     }
     roles
+}
+
+/// Ce qu'on sait d'une texture avant de la décoder.
+#[derive(Debug, Clone, Copy)]
+struct TextureUse {
+    role: TextureRole,
+    keep_alpha: bool,
 }
 
 /// Decodes, resizes and re-encodes every texture the materials actually use.
@@ -175,7 +228,7 @@ pub fn prepare_textures(model: &Kn5Model, skin_dir: Option<&Path>, options: &Tex
     // one texture to the next. `par_iter` over an ordered vector keeps the
     // result deterministic, which matters: the cache key must not depend on
     // how threads happened to be scheduled.
-    let work: Vec<(&String, &TextureRole)> = roles.iter().collect();
+    let work: Vec<(&String, &TextureUse)> = roles.iter().collect();
     let prepared: Vec<Result<PreparedTexture, TextureWarning>> = work
         .par_iter()
         .map(|(name, role)| {
@@ -222,13 +275,16 @@ fn prepare_one(
     name: &str,
     blob: &[u8],
     origin: TextureOrigin,
-    role: TextureRole,
+    usage: TextureUse,
     options: &TextureOptions,
 ) -> Result<PreparedTexture, String> {
     let source_bytes = blob.len();
     let decoded = decode(blob).map_err(|e| format!("decode failed: {e}"))?;
-    let resized = downscale(decoded, role.max_size(options));
-    let (bytes, mime) = encode(&resized, role, options)?;
+    let mut resized = downscale(decoded, usage.role.max_size(options));
+    if !usage.keep_alpha {
+        strip_alpha(&mut resized);
+    }
+    let (bytes, mime) = encode(&resized, usage.role, options)?;
 
     Ok(PreparedTexture {
         name: name.to_string(),
@@ -236,10 +292,31 @@ fn prepare_one(
         bytes,
         width: resized.width(),
         height: resized.height(),
-        role,
+        role: usage.role,
         origin,
         source_bytes,
+        has_alpha: usage.keep_alpha && resized.pixels().any(|p| p.0[3] != u8::MAX),
     })
+}
+
+/// Force le canal alpha à l'opacité totale.
+///
+/// **Le canal alpha d'une texture diffuse d'Assetto Corsa ne décrit
+/// généralement pas une transparence.** Mesuré sur `abarth500` :
+/// `SkinBase_DEFAULT.dds` a 82,5 % de ses pixels à alpha nul, alors que le RVB
+/// sous ces pixels vaut [163, 159, 159] — la peinture de la carrosserie. Les
+/// shaders d'AC y lisent autre chose (masque de spécularité selon les
+/// matériaux). Conservé tel quel, le navigateur prémultiplie le RVB par cet
+/// alpha à l'envoi vers le GPU : la carrosserie est effacée par son propre
+/// canal alpha, et la voiture paraît transparente.
+///
+/// N'est donc appliqué qu'aux textures dont **aucun** matériau n'exploite
+/// l'alpha (voir `TextureUse::keep_alpha`). Bénéfice secondaire : elles
+/// repassent en JPEG, bien plus léger.
+fn strip_alpha(image: &mut RgbaImage) {
+    for pixel in image.pixels_mut() {
+        pixel.0[3] = u8::MAX;
+    }
 }
 
 /// Decodes whatever the blob actually is — the filename is never consulted
@@ -498,11 +575,27 @@ mod tests {
         };
 
         let roles = roles(&model);
-        assert_eq!(roles.get("body.dds"), Some(&TextureRole::Color), "txDiffuse is colour");
         assert_eq!(
-            roles.get("shared.dds"),
-            Some(&TextureRole::Color),
+            roles.get("body.dds").map(|u| u.role),
+            Some(TextureRole::Color),
+            "txDiffuse is colour"
+        );
+        assert_eq!(
+            roles.get("shared.dds").map(|u| u.role),
+            Some(TextureRole::Color),
             "colour wins over data when a texture is bound to both"
+        );
+        // La texture liée aussi à `txNormal` garde son alpha : une carte de
+        // données y encode une valeur, pas une découpe.
+        assert_eq!(
+            roles.get("shared.dds").map(|u| u.keep_alpha),
+            Some(true),
+            "un usage en carte de données impose de garder l'alpha"
+        );
+        assert_eq!(
+            roles.get("body.dds").map(|u| u.keep_alpha),
+            Some(false),
+            "diffuse d'un matériau opaque : l'alpha n'est pas une transparence"
         );
     }
 
@@ -573,7 +666,10 @@ mod tests {
             "broken.dds",
             b"not an image at all",
             TextureOrigin::Embedded,
-            TextureRole::Color,
+            TextureUse {
+                role: TextureRole::Color,
+                keep_alpha: false,
+            },
             &TextureOptions::default(),
         )
         .expect_err("garbage must not decode");

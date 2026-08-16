@@ -151,80 +151,89 @@ X1R5G5B5, précédemment en échec) ressort en normal map bleu-violet canonique 
 
 ---
 
-## §12 q4 — l'axe à négliger, et deux tests numériques qui se trompent
+## §12 q4 — aucune conversion de repère, et aucune inversion de V
 
-**Réponse : négation de X**, comme le §4.4 le prévoyait. Ce qui mérite d'être
-consigné, ce n'est pas la réponse — c'est le chemin, parce que **deux mesures
-numériques convaincantes donnent la mauvaise réponse**.
+**Réponse : l'identité.** Ni négation d'axe, ni inversion de la coordonnée V,
+contrairement à ce que demande le §4.4. Il a fallu **deux erreurs successives**
+pour l'établir, et c'est cette histoire qui vaut d'être consignée.
 
-### Piège n°1 — les noms de roues ne disent pas la gauche du conducteur
+### Ce que disaient les mesures numériques
 
-L'arbre de nœuds contient `WHEEL_LF` / `WHEEL_RF` / `WHEEL_LR` / `WHEEL_RR`.
-C'est tentant : voilà une vérité terrain sur la gauche et la droite, sans avoir
-à rendre quoi que ce soit. En repère droitier, `gauche = haut × avant` ; les
-données brutes placent les roues avant en +Z et les roues « L » en +X, ce qui
-satisfait exactement cette relation. Conclusion apparente : **aucune négation
-n'est nécessaire**.
+Deux mesures indépendantes concluaient « identité » dès le lot 3 :
 
-C'est faux. `WHEEL_LF` n'est pas la gauche **du conducteur** : AC nomme ses
-nœuds de roue du point de vue de quelqu'un qui **fait face** à la voiture. Dans
-la sortie correcte, le nœud `WHEEL_LF` se retrouve donc du côté X négatif alors
-que le nez pointe vers +Z.
+- **Les noms de roues.** `WHEEL_LF`/`WHEEL_RF` placés dans un repère droitier
+  satisfont la relation `gauche = haut × avant` sans aucune négation.
+- **L'accord enroulement/normales.** `(p1-p0) × (p2-p0)` en règle droitière
+  s'accorde avec la normale stockée sur **100 % de 1,3 million de triangles**.
 
-### Piège n°2 — l'accord enroulement/normales ne mesure pas la chiralité
+Elles avaient raison. Elles ont pourtant été écartées.
 
-Second test, indépendant en apparence : `(p1-p0) × (p2-p0)` avec la règle
-droitière, comparé à la normale stockée. Résultat sur les données brutes :
-**100 % d'accord sur 1,3 million de triangles**, quatre voitures. Conclusion
-apparente : la source est déjà droitière, donc **aucune négation**.
+### Pourquoi elles ont été écartées à tort
 
-C'est faux aussi, et pour une raison qui n'a rien d'évident : un miroir retourne
-les positions, les normales **et** l'enroulement **ensemble**. L'accord entre
-les trois est donc *invariant* par miroir. Ce test mesure la cohérence interne
-du fichier, jamais sa chiralité. Il reste utile — il détecterait un fichier dont
-l'enroulement contredit ses normales, qui rendrait à l'envers — mais il ne peut
-pas répondre à cette question-là.
+Le rendu de `ks_mazda_mx5_cup` semblait exiger une négation de X *et* une
+inversion de V : dans cette combinaison, le numéro `55` et `MX-5 CUP` se
+lisaient correctement. **C'était une double coïncidence propre à cette
+voiture** :
 
-### Ce qui tranche : la livrée
+1. **L'îlot UV du flanc est tourné à 90°.** L'inversion de V agit donc
+   *horizontalement* sur la carrosserie et **annule** le miroir géométrique.
+   Le texte redevient lisible alors que le modèle est bel et bien en miroir.
+2. **L'atlas range ses deux flancs côte à côte, quasi identiques.** Inverser V
+   fait échantillonner le flanc gauche à la place du droit — invisible à l'œil.
 
-Le seul test qui répond est celui que le §4.4 demandait, et il faut un rendu :
-sur `ks_mazda_mx5_cup`, **avec** négation de X le numéro affiche `55` et
-`MX-5 CUP` se lit de gauche à droite ; **sans**, les deux sont en miroir. Une
-voiture est trop symétrique pour que l'œil détecte le miroir autrement que par
-du texte.
+### Ce qui a cassé l'illusion
 
-Méthode utilisée (reproductible sans Blender) : page HTML statique posée dans
-`static/`, three.js chargé par *import map* depuis `node_modules`, servie par le
-serveur de dev Vite ; le rendu est récupéré via `canvas.toDataURL()` et POSTé
-vers un petit serveur Node local qui l'écrit en fichier. Le `.glb` produit
-s'ouvre par ailleurs dans n'importe quel viewer glTF, ce que confirme le
-chargement par `GLTFLoader`.
+`abarth500`. Son atlas place la **photo du compartiment moteur** exactement là
+où l'inversion de V envoie la portière. Symptôme : une voiture qui paraît
+translucide, alors qu'elle affiche simplement le mauvais morceau de son atlas.
 
-**Vérifié aussi au passage** : `bbox` de 3,91 m pour la MX-5 (réelle : 3,92 m)
-et 4,35 m pour la Miura SV (réelle : 4,39 m) — l'échelle et le repère sont bons,
-ce qui est l'assertion d'intégration demandée au §11.
+Diagnostic par élimination, chaque étape écartant une hypothèse :
+
+| Test | Résultat | Conclusion |
+| --- | --- | --- |
+| Tous matériaux en blanc opaque | silhouette pleine et parfaite | la géométrie est complète |
+| Rendu double-face | inchangé | pas un problème de faces culées |
+| Masquage des meshes transparents | inchangé | pas un problème de transparence |
+| Superposition des îlots UV sur l'atlas | formes correctes | le découpage UV est bon |
+| **Lancer de rayon sur la portière** | `uv=(0.515, 1.619)` | **62 % de la hauteur de l'atlas : le moteur.** Sans inversion : 38 %, le panneau |
+
+### L'explication de fond
+
+DirectX **et** glTF placent tous deux l'origine des textures **en haut à
+gauche**. L'inversion de V est nécessaire pour aller vers OpenGL, pas vers
+glTF. Le §4.4 confond les deux conventions.
+
+⚠️ **Leçon de méthode** : valider une conversion sur une voiture dont l'atlas
+est symétrique ne prouve rien. Le test doit porter sur **du texte** *et* sur une
+zone d'atlas que la transformation fautive déplacerait visiblement. Le contrôle
+automatique de `kn5-tool convert` est calibré sur `abarth500` pour cette raison.
 
 ---
 
-## Les vitres n'ont pas de canal alpha
+## Écart n°3 — l'alpha d'une texture diffuse n'est pas de la transparence
 
-**Symptôme** : pare-brise opaque, intérieur invisible — exactement le piège
-listé au §10.
+**Mesuré sur `abarth500`** : `SkinBase_DEFAULT.dds` a **82,5 % de ses pixels à
+alpha nul**, et le RVB moyen sous ces pixels vaut **[163, 159, 159]** — la
+peinture de la carrosserie. Le canal alpha y transporte autre chose (masque de
+spécularité selon les matériaux), pas une découpe.
 
-**Cause** : AC ne stocke pas la transparence du verre dans un canal alpha. Sur
-`ks_mazda_mx5_cup`, `EXT_Glass` et `INT_Glass` ne déclarent **aucun**
-`txDiffuse`, et la texture du pare-brise (`INTERNAL_glass.dds`) est entièrement
-opaque — c'est une carte de salissures, pas un masque. La transparence vient du
-shader (`ksPerPixelReflection`, `ksWindscreen`).
+**Conséquence si on le conserve** : le navigateur prémultiplie le RVB par
+l'alpha à l'envoi vers le GPU. La carrosserie est effacée par son propre canal
+alpha, et la voiture paraît transparente — alors que `alphaMode` vaut pourtant
+`OPAQUE`.
 
-**Correctif retenu, assumé comme une calibration** : tout matériau en
-`alphaMode: BLEND` reçoit un `baseColorFactor.a` tiré de `ksDiffuse`, borné à
-[0.08, 0.6]. `ksDiffuse` vaut 0.1 sur le verre intérieur, 0.3 sur l'extérieur,
-0.45 sur le pare-brise de la voiture de référence : bas précisément parce que
-l'essentiel de la lumière traverse. La hiérarchie obtenue est celle que l'œil
-lit comme du verre. glTF multipliant le facteur par l'alpha de la texture, le
-correctif marche que la texture existe ou non. À revoir au lot 5, quand
-l'éclairage du viewer sera en place.
+**Correctif** : l'alpha n'est conservé que si un matériau l'exploite réellement
+(mode `MASK` ou `BLEND`), ou si la texture sert aussi de carte de données. Sinon
+il est forcé à l'opacité, ce qui fait au passage repasser la texture en JPEG —
+`abarth500` passe de 12,0 à 9,8 Mo.
+
+**Retombée sur la détection du verre** : le même signal sert à distinguer une
+vitre d'une décalcomanie, **sans dépendre du nom** — le verre de l'Abarth
+s'appelle `CAR_Vetro`, `INT_Vetro`, `INT_Vetro_Laterale`. Un matériau en fondu
+dont la texture porte un alpha exploitable tire sa découpe de cet alpha
+(décalcomanie, flou de jante, couture) ; un matériau en fondu sans alpha
+exploitable, ou sans texture, est du verre et reçoit une opacité approximée
+depuis `ksDiffuse`.
 
 ---
 

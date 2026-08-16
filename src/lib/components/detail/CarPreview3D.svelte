@@ -397,9 +397,10 @@
 
 <div class="preview3d" class:ready={phase === "ready"}>
   {#if fallbackSrc}
-    <!-- La photo reste dessous : fond flouté pendant le chargement, repli
-         complet si la 3D n'aboutit pas (§8.5). -->
-    <img class="fallback" class:blurred={phase === "loading"} src={fallbackSrc} alt="" />
+    <!-- La photo reste dessous, telle quelle : c'est déjà l'aperçu habituel de
+         la fiche, et la flouter pendant la préparation la rendait illisible
+         juste au moment où elle sert le plus (§8.5). -->
+    <img class="fallback" src={fallbackSrc} alt="" />
   {/if}
 
   <div class="host" bind:this={canvasHost}></div>
@@ -427,10 +428,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: filter 0.25s ease, opacity 0.25s ease;
-  }
-  .fallback.blurred {
-    filter: blur(10px) saturate(0.7);
+    transition: opacity 0.25s ease;
   }
   /* Fondu depuis l'image une fois le modèle en place (§8.5). */
   .preview3d.ready .fallback {
