@@ -306,10 +306,13 @@ laisser pourrir ici.
       là qu'il faut lire en reprenant, pas ici.
       En bref : **lots 0 à 5 faits et validés à l'écran** — la voiture
       s'affiche dans la fiche, tourne sur son socle et se manipule à la souris.
-      **Lot 6 en cours** : carrosserie qui paraît cabossée (piste : tangentes
-      non exportées + canal vert des normal maps), couleur de peinture parfois
-      absente (`ks_toyota_supra_mkiv`), réglages de caméra à exposer, et
-      éclairage à caler sur les `preview.jpg` Kunos.
+      **Lot 6 en cours.** Faits : tôle froissée, couleur de peinture, taches
+      de pare-brise — tous trois avaient la **même cause de fond**, AC range
+      dans un slot standard une carte que son shader ne mélange qu'à
+      proportion d'un état (dégâts, saleté). Devant un défaut du genre « la
+      voiture a l'air abîmée ou sale », c'est la première chose à vérifier.
+      Restent les réglages de caméra à exposer et l'éclairage à caler sur les
+      `preview.jpg` Kunos — détail dans `docs/SPEC-preview-3d-kn5.md` §15.
       Deux règles à ne pas perdre de vue :
       **`preview::CONVERTER_VERSION` s'incrémente dès qu'on touche au rendu
       produit** (sinon les anciens `.glb` restent servis), et **une conversion

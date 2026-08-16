@@ -129,8 +129,10 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     //
     // Appliquer l'opacité à tout matériau en fondu rendait translucides des
     // pièces qui ne devaient pas l'être — bug remonté sur `abarth500`.
+    let base_color_texture = base_color_map(material);
+    let texture_carries_alpha = base_color_texture.is_some() && textures.diffuse_has_alpha;
     let mut base_color = match alpha_mode {
-        AlphaMode::Blend if !textures.diffuse_has_alpha => [1.0, 1.0, 1.0, glass_opacity(material)],
+        AlphaMode::Blend if !texture_carries_alpha => [1.0, 1.0, 1.0, glass_opacity(material)],
         _ => [1.0, 1.0, 1.0, 1.0],
     };
 
@@ -163,10 +165,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     GltfMaterial {
         name: material.name.clone(),
         shader: material.shader.clone(),
-        base_color_texture: material
-            .texture_for("txDiffuse")
-            .filter(|t| !t.is_empty())
-            .map(str::to_string),
+        base_color_texture,
         normal_texture: normal_map(material),
         normal_scale: material.property("normalMult").filter(|v| *v > 0.0).unwrap_or(1.0),
         emissive,
@@ -212,6 +211,28 @@ fn detail_tint(average_srgb: [f32; 3]) -> Option<[f32; 3]> {
         return None;
     }
     Some(linear.map(|c| (1.0 + (c / luminance - 1.0) * DETAIL_TINT_BOOST).clamp(0.0, 1.0)))
+}
+
+/// Texture de couleur d'un matériau, **sauf sur un pare-brise**.
+///
+/// `ksWindscreen` n'utilise pas sa `txDiffuse` comme une couleur : c'est une
+/// carte de **rayures et de poussière**, qu'AC ne mélange qu'à proportion de
+/// la saleté du pare-brise — nulle sur une voiture propre. Posée telle quelle,
+/// elle donne un vitrage constellé de taches. Même mécanisme que la carte de
+/// dégâts sur la carrosserie (voir [`normal_map`]), et même remède.
+///
+/// Vérifié sur trois voitures : `ks_mazda_mx5_cup` et `abarth500`
+/// (`INTERNAL_glass.dds`, une texture de rayures grises), `ks_toyota_supra_mkiv`
+/// (`Interior_windscreen_diff.dds`). Sans texture, le matériau retombe sur
+/// l'opacité tirée de `ksDiffuse`, qui est le bon comportement pour du verre.
+fn base_color_map(material: &Kn5Material) -> Option<String> {
+    if material.shader.contains("ksWindscreen") {
+        return None;
+    }
+    material
+        .texture_for("txDiffuse")
+        .filter(|t| !t.is_empty())
+        .map(str::to_string)
 }
 
 /// Normal map d'un matériau, **sauf quand c'en est une de dégâts**.
@@ -454,6 +475,32 @@ mod tests {
             converted.base_color,
             [1.0, 1.0, 1.0, 1.0],
             "détail non déclaré, non appliqué"
+        );
+    }
+
+    // Règle : un pare-brise n'emprunte pas sa couleur à sa texture. Bug réel
+    // remonté par l'utilisateur : le vitrage paraissait constellé de taches,
+    // parce que `ksWindscreen` réserve sa `txDiffuse` aux rayures et à la
+    // poussière, qu'AC ne mélange qu'à proportion de la saleté.
+    #[test]
+    fn windscreen_does_not_use_its_dirt_map_as_colour() {
+        let windscreen = material("ksWindscreen", 1, false, &[("ksDiffuse", 0.45)]);
+        let converted = convert(&windscreen, MaterialTextures::default());
+        assert_eq!(
+            converted.base_color_texture, None,
+            "la carte de rayures ne sert pas de couleur"
+        );
+        assert!(
+            converted.base_color[3] < 1.0,
+            "sans texture, l'opacité vient de ksDiffuse — du verre, pas une vitre pleine"
+        );
+
+        let plain_glass = material("ksPerPixelReflection", 1, false, &[]);
+        assert!(
+            convert(&plain_glass, MaterialTextures::default())
+                .base_color_texture
+                .is_some(),
+            "les autres matériaux gardent leur texture"
         );
     }
 

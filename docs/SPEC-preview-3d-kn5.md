@@ -636,11 +636,14 @@ gêne constatée :
    n°5. La Supra verte ressort désormais verte. La nuance exacte reste
    approchée : un facteur d'amplification calibré à l'œil compense une
    amplification du shader qu'on ne sait pas encore reproduire (§12 q3).
-3. **Réglages à exposer** (écran Réglages) : aperçu photo ou 3D par défaut,
+3. ~~**Pare-brise constellé de taches.**~~ ✅ **Corrigé.** Même mécanisme que
+   les dégâts, sur un autre slot : `ksWindscreen` réserve sa `txDiffuse` aux
+   rayures et à la poussière. Voir `kn5-format.md`, écart n°6.
+4. **Réglages à exposer** (écran Réglages) : aperçu photo ou 3D par défaut,
    niveau de zoom, angle de caméra autour de l'axe vertical, hauteur de
    caméra, vitesse de rotation. La voiture est aujourd'hui cadrée trop bas :
    quand le plateau la présente de face, l'avant est coupé.
-4. **Éclairage et cadrage calés sur les `preview.jpg` Kunos**, pour que le
+5. **Éclairage et cadrage calés sur les `preview.jpg` Kunos**, pour que le
    passage de la photo à la 3D ne saute pas à l'œil. C'est le point qui
    demande le plus de tâtonnement visuel.
 

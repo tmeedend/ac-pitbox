@@ -298,6 +298,33 @@ le seul nombre de ce chantier qui n'ait pas de justification mesurée.
 
 ---
 
+## Écart n°6 — sur `ksWindscreen`, `txDiffuse` est une carte de saletés
+
+**Symptôme** : vitrage constellé de taches, comme un pare-brise abîmé.
+
+**Réel** : même mécanisme que l'écart n°4, sur un autre slot. `ksWindscreen`
+n'utilise pas sa `txDiffuse` comme une couleur : c'est une carte de **rayures
+et de poussière**, qu'AC ne mélange qu'à proportion de la saleté du pare-brise
+— nulle sur une voiture propre.
+
+**Vérifié sur trois voitures** : `ks_mazda_mx5_cup` et `abarth500`
+(`INTERNAL_glass.dds`, un fond gris rayé et piqueté), `ks_toyota_supra_mkiv`
+(`Interior_windscreen_diff.dds`).
+
+**Correctif** : aucune texture de couleur exportée pour un matériau
+`ksWindscreen`. Le matériau retombe alors sur l'opacité tirée de `ksDiffuse`,
+qui est le bon comportement pour du verre. Verrouillé par
+`windscreen_does_not_use_its_dirt_map_as_colour`.
+
+> **Motif à retenir pour la suite.** Trois défauts visuels sur trois avaient la
+> même cause de fond : **AC range dans un slot de texture standard une carte
+> que son shader ne mélange qu'à proportion d'un état** (dégâts, saleté). Prise
+> au premier degré, elle s'applique à 100 %. Devant un nouveau défaut « la
+> voiture a l'air abîmée / sale / bizarre », c'est la première chose à
+> vérifier : quel shader, et que met-il vraiment dans ce slot.
+
+---
+
 ## Découverte annexe — remorque chiffrée après l'arbre de nœuds
 
 Deux voitures de la bibliothèque de référence (`ms_citroen_berlingo_2003_hdi` et
