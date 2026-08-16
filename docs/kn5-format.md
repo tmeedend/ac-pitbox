@@ -357,6 +357,62 @@ qui est le bon comportement pour du verre. Verrouillé par
 
 ---
 
+## Écart n°7 — dans `txMaps`, seul le vert est lisible (et c'est la brillance)
+
+**Question ouverte depuis le début du chantier** (SPEC-preview-3d §6.2, §12 q3),
+laissée de côté parce que « une spécularité fausse est pire qu'une surface
+seulement diffuse ». Mesurée, elle l'est maintenant à moitié.
+
+**Méthode** : décodage direct des textures liées à `txMaps`, moyenne et
+écart-type par canal, croisés avec le nom du matériau qui les utilise et ses
+`ksSpecular*`. Quatre voitures, une trentaine de textures.
+
+**Le canal vert est la brillance**, sans exception rencontrée :
+
+| Texture | surface | G |
+| --- | --- | --- |
+| `EXT_Chrome_MAP` (`ks_mazda_mx5_cup`) | chrome | 255 |
+| `exterior_body_map` (`ks_toyota_supra_mkiv`) | peinture | 255 |
+| `500_Abarth_Racing_skin_MAP` | peinture de course | 255 |
+| `EXT_Rims_MAP` | jantes | 223 |
+| `exterior_metal_map` | métal nu | 148 |
+| `exterior_plastic_map` | plastique mat | 64 |
+| `EXT_Loghi_MAP` | décalcomanies | 54 |
+| `INT_LR_map` | cuir, planche de bord | 25 |
+
+Ce qui compte autant que la découverte : **`ksSpecularEXP` ne sépare pas ces
+surfaces**. Le chrome et le cuir de la MX-5 sont tous deux à `EXP = 100`, avec
+G à 255 contre 25. La rugosité devinée depuis l'exposant seul rangeait donc une
+carrosserie à 0,55 — un satiné, pas une peinture.
+
+**R et B restent indéterminés.** Les auteurs écrivent très souvent la même
+valeur dans les deux (`R == B` exactement sur la plupart des cartes mesurées,
+et sur la Supra cette valeur suit l'AO de la diffuse), mais pas toujours : la
+carrosserie de l'Abarth porte R=24 contre B=239. Ce sont donc **deux
+grandeurs**, et rien de mesuré ne dit lesquelles. Elles restent inutilisées, et
+`metallicFactor` reste à zéro — §6.2 demande un résultat plausible plutôt qu'un
+résultat deviné.
+
+**Correctif** : une texture métallique-rugosité dérivée par carte de surface —
+glTF lit la rugosité dans le vert, donc une inversion suffit
+(`crates/kn5-gltf/src/roughness.rs`). Par pixel et non en scalaire : un même
+atlas sert couramment plusieurs finitions (écart-type de 70 sur le G de
+`INT_Cockpit_OCC_Map`), qu'une moyenne effacerait.
+
+Deux garde-fous, tous deux nés d'un cas réel :
+
+- **`txMaps` qui pointe sur une texture de couleur** — `Grey.dds` sur le
+  radiateur de la Supra, son propre atlas d'habitacle sur l'Abarth. Le vert
+  d'une texture de couleur est un vert, pas une brillance. Écarté sur le rôle
+  déjà attribué à la texture par le pipeline.
+- **`NULL.dds`**, quatre pixels blancs, qui veut dire « rien à dire sur cette
+  surface » : les sièges en tissu de la Supra pointent dessus et devenaient des
+  miroirs. Détecté sur **les trois canaux saturés**, pas seulement le vert —
+  une carte réellement brillante porte des valeurs ailleurs (R=24, B=239 sur
+  l'Abarth). Le matériau garde alors son repli sur `ksSpecularEXP`.
+
+---
+
 ## Découverte annexe — remorque chiffrée après l'arbre de nœuds
 
 Deux voitures de la bibliothèque de référence (`ms_citroen_berlingo_2003_hdi` et

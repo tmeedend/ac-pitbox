@@ -50,9 +50,13 @@ pub fn write_glb(meshes: &[FlatMesh], materials: &[GltfMaterial], textures: &Tex
     let mut gltf_textures: Vec<Value> = Vec::new();
     let mut texture_index: Map<String, Value> = Map::new();
     for material in &used_materials {
-        for name in [&material.base_color_texture, &material.normal_texture]
-            .into_iter()
-            .flatten()
+        for name in [
+            &material.base_color_texture,
+            &material.normal_texture,
+            &material.roughness_texture,
+        ]
+        .into_iter()
+        .flatten()
         {
             if texture_index.contains_key(name) {
                 continue;
@@ -126,6 +130,9 @@ fn material_json(material: &GltfMaterial, texture_index: &Map<String, Value>) ->
     });
     if let Some(index) = material.base_color_texture.as_ref().and_then(|n| texture_index.get(n)) {
         pbr["baseColorTexture"] = json!({ "index": index });
+    }
+    if let Some(index) = material.roughness_texture.as_ref().and_then(|n| texture_index.get(n)) {
+        pbr["metallicRoughnessTexture"] = json!({ "index": index });
     }
 
     let mut value = json!({
@@ -292,6 +299,7 @@ mod tests {
             shader: "ksPerPixel".to_string(),
             base_color_texture: None,
             normal_texture: None,
+            roughness_texture: None,
             normal_scale: 1.0,
             emissive: [0.0; 3],
             roughness: 0.5,

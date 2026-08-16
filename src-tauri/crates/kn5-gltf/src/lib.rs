@@ -9,6 +9,7 @@ mod glb;
 mod locate;
 mod material;
 mod paint;
+mod roughness;
 mod texture;
 
 use std::path::Path;
@@ -94,6 +95,11 @@ pub fn convert(
     let mut paint = paint::plan(model, &textures);
     texture::bake_paint(&mut textures, &mut paint, model, skin_dir, &options.textures);
 
+    // Même temps, même raison : savoir si un `txMaps` est une vraie carte de
+    // surface demande de connaître le rôle de chaque texture (§12 q3).
+    let mut roughness = roughness::plan(model, &textures);
+    texture::bake_roughness(&mut textures, &mut roughness, model, skin_dir, &options.textures);
+
     // Les matériaux sont convertis **après** les textures : savoir si la
     // texture diffuse porte un alpha exploitable change la façon de traiter
     // un matériau en fondu (verre contre décalcomanie).
@@ -110,6 +116,7 @@ pub fn convert(
                         .and_then(|name| textures.get(name))
                         .is_some_and(|t| t.has_alpha),
                     painted_diffuse: paint.painted_diffuse(index),
+                    roughness_texture: roughness.roughness_texture(index),
                 },
             )
         })

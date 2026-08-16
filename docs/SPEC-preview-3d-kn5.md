@@ -617,6 +617,7 @@ Chacun a été pris en connaissance de cause, avec sa raison. Ne pas les
 | §5.4 décodage BC1–BC7 | + **décodeur DDS par masques** | 12 % des textures AC sont des DDS non compressés qu'`image_dds` refuse. |
 | — | **L'alpha des textures diffuses est retiré** quand aucun matériau ne l'exploite | Chez AC il ne code pas la transparence (82,5 % des pixels à alpha nul sur une carrosserie blanche). Le conserver efface la carrosserie. Il code en fait le **masque de peinture** — voir la ligne suivante. |
 | §6.2 teinte au `baseColorFactor` | **Peinture cuite dans une variante de la texture diffuse** | Le masque est par pixel (l'alpha de la diffuse), donc un facteur global peindrait aussi les décalcomanies ; et glTF borne le facteur à 1, alors qu'un aplat blanc demande ×1,87. Voir `kn5-format.md`, écart n°5. |
+| §6.2 `txMaps` laissé de côté | **Rugosité par pixel tirée de son canal vert** | La sémantique du vert est mesurée (brillance) ; `ksSpecularEXP` seul ne distinguait pas le chrome du cuir. R, B et `metallicFactor` restent hors jeu, faute de mesure. Voir `kn5-format.md`, écart n°7. |
 
 ---
 
@@ -655,9 +656,15 @@ gêne constatée :
    haute, plus elle plonge, et plus l'avant sort du cadre quand le plateau
    tourne. **Décidé avec l'utilisateur** : on expose le réglage, on ne calcule
    pas une hauteur idéale par angle.
-5. **Éclairage et cadrage calés sur les `preview.jpg` Kunos**, pour que le
+6. ~~**Rugosité par pixel depuis `txMaps`**~~ ✅ **Fait**, ajouté en cours de
+   lot : son canal vert est la brillance, et `ksSpecularEXP` seul ne
+   distinguait pas le chrome du cuir. Voir `kn5-format.md`, écart n°7.
+7. **Éclairage et cadrage calés sur les `preview.jpg` Kunos**, pour que le
    passage de la photo à la 3D ne saute pas à l'œil. C'est le point qui
    demande le plus de tâtonnement visuel.
+   **À faire après la rugosité** (décidé avec l'utilisateur) : elle change la
+   réponse à la lumière, donc calibrer l'éclairage avant l'aurait fait
+   recommencer.
    Point de départ utile, mesuré en corrigeant le n°2 : l'albédo produit est
    désormais juste, mais AC ne l'affiche jamais tel quel — ses matériaux
    annoncent `ksAmbient + ksDiffuse ≈ 0,8` sur une carrosserie et son studio
@@ -667,7 +674,8 @@ gêne constatée :
    `toneMappingExposure` / `scene.environmentIntensity` avant de retoucher la
    conversion.
 
-Restent aussi, hérités du plan initial : `txMaps` une fois sa sémantique
-documentée (§6.2, §12 q3 — **toujours ouverte**), choix du LOD en config,
+Restent aussi, hérités du plan initial : **R et B de `txMaps`** (§6.2, §12 q3 —
+le vert est documenté et exploité, voir `kn5-format.md` écart n°7 ; les deux
+autres canaux restent ouverts), choix du LOD en config,
 purge du cache depuis les Réglages, et l'aperçu dans `ModDetail.svelte`
 (panneau latéral), qui n'a jamais été branché.

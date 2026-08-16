@@ -312,6 +312,85 @@ pub(crate) fn bake_paint(
     }
 }
 
+/// Bakes the metallic-roughness textures the plan asks for (see
+/// [`crate::roughness`]), and adds them to the set.
+///
+/// Same two-pass shape as [`bake_paint`], and for the same reason: which
+/// `txMaps` textures are surface maps rather than recycled colour textures is
+/// only known once the first pass has assigned every texture its role.
+pub(crate) fn bake_roughness(
+    set: &mut TextureSet,
+    plan: &mut crate::roughness::Plan,
+    model: &Kn5Model,
+    skin_dir: Option<&Path>,
+    options: &TextureOptions,
+) {
+    let variants = plan.variants();
+    let baked: Vec<(String, Result<Option<PreparedTexture>, TextureWarning>)> = variants
+        .par_iter()
+        .map(|(name, source)| {
+            let embedded = model.texture(source);
+            let Some((blob, origin)) = load_source(source, skin_dir, embedded.map(|t| t.data.as_slice())) else {
+                return (
+                    name.clone(),
+                    Err(TextureWarning {
+                        name: name.clone(),
+                        reason: "surface map disappeared between the two passes".to_string(),
+                    }),
+                );
+            };
+            let outcome = roughness_one(name, &blob, origin, options).map_err(|reason| TextureWarning {
+                name: name.clone(),
+                reason,
+            });
+            (name.clone(), outcome)
+        })
+        .collect();
+
+    for (name, outcome) in baked {
+        match outcome {
+            Ok(Some(texture)) => set.textures.push(texture),
+            Ok(None) => plan.forget(&name),
+            Err(warning) => {
+                plan.forget(&name);
+                set.warnings.push(warning);
+            }
+        }
+    }
+}
+
+/// `None` sur une carte qui ne dit rien : le matériau garde alors la rugosité
+/// tirée de `ksSpecularEXP` (voir [`crate::roughness::apply`]).
+fn roughness_one(
+    name: &str,
+    blob: &[u8],
+    origin: TextureOrigin,
+    options: &TextureOptions,
+) -> Result<Option<PreparedTexture>, String> {
+    let source_bytes = blob.len();
+    let decoded = decode(blob).map_err(|e| format!("decode failed: {e}"))?;
+    // Rôle `Data` : jamais de JPEG sur une carte de rugosité, ses artefacts se
+    // liraient comme des variations de brillance sur une carrosserie.
+    let mut resized = downscale(decoded, TextureRole::Data.max_size(options));
+    if !crate::roughness::apply(&mut resized) {
+        return Ok(None);
+    }
+    let (bytes, mime) = encode(&resized, TextureRole::Data, options)?;
+
+    Ok(Some(PreparedTexture {
+        name: name.to_string(),
+        mime,
+        bytes,
+        width: resized.width(),
+        height: resized.height(),
+        role: TextureRole::Data,
+        origin,
+        source_bytes,
+        has_alpha: false,
+        average: average_color(&resized),
+    }))
+}
+
 /// Decodes a diffuse texture again and paints it. `None` when its alpha mask
 /// protects every pixel, i.e. the variant would duplicate its source.
 fn paint_one(

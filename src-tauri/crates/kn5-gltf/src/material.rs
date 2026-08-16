@@ -35,8 +35,13 @@ pub struct GltfMaterial {
     pub shader: String,
     pub base_color_texture: Option<String>,
     pub normal_texture: Option<String>,
+    /// Carte métallique-rugosité dérivée de `txMaps`, quand le matériau en a
+    /// une exploitable (voir [`crate::roughness`]).
+    pub roughness_texture: Option<String>,
     pub normal_scale: f32,
     pub emissive: [f32; 3],
+    /// Facteur de rugosité. glTF le **multiplie** par la carte ci-dessus, donc
+    /// il vaut 1 dès qu'une carte est là : c'est elle qui décide.
     pub roughness: f32,
     pub metallic: f32,
     pub alpha_mode: AlphaMode,
@@ -82,6 +87,8 @@ pub struct MaterialTextures {
     /// Variante peinte de la texture diffuse, quand la carte de détail du
     /// matériau porte une couleur de peinture (voir [`crate::paint`]).
     pub painted_diffuse: Option<String>,
+    /// Carte métallique-rugosité tirée de `txMaps` (voir [`crate::roughness`]).
+    pub roughness_texture: Option<String>,
 }
 
 pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMaterial {
@@ -90,6 +97,11 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // §6.1: an approximation to calibrate by eye, not an exact conversion.
     // `ksSpecularEXP` is a Blinn-Phong exponent; the square root maps its very
     // non-linear range onto something roughness-shaped.
+    //
+    // Ce n'est qu'un **repli** : quand le matériau a une carte de surface
+    // exploitable, c'est elle qui dit la rugosité, pixel par pixel, et
+    // `ksSpecularEXP` ne sépare de toute façon pas les finitions (le chrome et
+    // le cuir de la MX-5 sont tous deux à 100 — voir [`crate::roughness`]).
     let roughness = match material.property("ksSpecularEXP") {
         Some(exp) if exp > 0.0 => (1.0 - (exp / 250.0).sqrt()).clamp(0.05, 1.0),
         _ => 0.6,
@@ -98,6 +110,13 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // is almost fully rough, and reading it off `ksSpecularEXP` gives a
     // plastic sheen (§6.3).
     let roughness = if shader.contains("ksTyres") { 0.9 } else { roughness };
+    // glTF multiplie facteur et carte : avec une carte, le facteur doit valoir
+    // 1, sinon il assombrirait une rugosité déjà juste.
+    let roughness = if textures.roughness_texture.is_some() {
+        1.0
+    } else {
+        roughness
+    };
 
     let emissive = match material.property("ksEmissive") {
         Some(value) if value > 0.0 => {
@@ -146,6 +165,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
         shader: material.shader.clone(),
         base_color_texture,
         normal_texture: normal_map(material),
+        roughness_texture: textures.roughness_texture.clone(),
         normal_scale: material.property("normalMult").filter(|v| *v > 0.0).unwrap_or(1.0),
         emissive,
         roughness,
