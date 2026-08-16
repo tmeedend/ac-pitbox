@@ -546,3 +546,104 @@ Chaque lot doit être livré **avec ses tests** et être vérifiable indépendam
 5. Contenu des 36 octets de padding après chaque propriété de matériau — probablement une valeur vectorielle ; sans intérêt en v1 mais à documenter.
 
 Chaque réponse trouvée doit être consignée dans `docs/kn5-format.md` avec la méthode de vérification, pas seulement dans un commentaire de code.
+
+---
+
+## 13. État d'avancement (mis à jour au fil des lots)
+
+> Section ajoutée **après** la rédaction initiale. Le corps de ce document
+> reste la spécification de départ, y compris là où l'implémentation l'a
+> contredite : les écarts sont listés au §14, avec leur raison. Quelqu'un qui
+> reprend le chantier lit cette section-ci en premier.
+
+Branche `feature/3dpreview`.
+
+| Lot | État | Où |
+| --- | --- | --- |
+| 0 — outillage | ✅ | `crates/kn5`, `crates/kn5-tool` |
+| 1 — parser | ✅ (fondu dans le lot 0) | `crates/kn5` |
+| 2 — textures | ✅ | `crates/kn5-gltf/src/texture.rs` |
+| 3 — export glTF | ✅ | `crates/kn5-gltf/src/{geometry,material,glb}.rs` |
+| 4 — cache + Tauri | ✅ | `src-tauri/src/preview.rs`, `commands/preview.rs` |
+| 5 — viewer three.js | ✅ | `src/lib/components/detail/CarPreview3D.svelte` |
+| 6 — finitions | ⏳ **en cours** | voir §15 |
+
+**Validé à l'écran par l'utilisateur** : l'aperçu s'affiche dans la fiche
+voiture, tourne sur son socle, se manipule à la souris, et les textures se
+posent au bon endroit.
+
+**Corpus** : 198 voitures sur 201 de la bibliothèque de référence se parsent
+et se convertissent sans échec (les 3 restantes n'ont pas de modèle).
+
+---
+
+## 14. Écarts assumés par rapport à cette spécification
+
+Chacun a été pris en connaissance de cause, avec sa raison. Ne pas les
+« corriger » vers la spec sans relire la raison.
+
+### 14.1 Ajouts demandés par l'utilisateur en cours de route
+
+- **Plateau tournant.** C'était le *but* du chantier, non écrit dans la
+  demande initiale : la voiture tourne lentement sur elle-même, comme sur un
+  socle de salon (un tour en ~28 s). C'est la voiture qui tourne, pas la
+  caméra : le cadrage reste stable et l'état d'`OrbitControls` n'est jamais
+  contrarié quand l'utilisateur prend la main.
+  **Contredit le §8.4** (« rendre à la demande, pas en continu »), et les deux
+  sont inconciliables. Contrepartie payée là où elle se voit : rotation
+  suspendue hors écran, en arrière-plan, et pendant la manipulation (reprise
+  après 4 s) ; désactivée si le système demande de réduire les animations ;
+  avance calculée sur le temps écoulé, pour qu'un écran 144 Hz ne double pas
+  la vitesse.
+- **Manipulation à la souris** conservée par-dessus le plateau : orbite et
+  zoom, sans panoramique, angle polaire borné pour ne pas passer sous le sol.
+- **Coexistence avec le showroom natif** (`acShowroom.exe`, §9.4 du SPEC
+  principal) au lieu du remplacement : les deux ne rendent pas le même
+  service. Une bascule photo/3D mémorisée vit dans la zone héros.
+- **Photo de repli non floutée** pendant la préparation : c'est déjà l'aperçu
+  habituel de la fiche, la flouter la rendait illisible au moment où elle sert.
+
+### 14.2 Écarts techniques
+
+| Spec | Fait | Raison |
+| --- | --- | --- |
+| §4.4 négation d'un axe + inversion du winding | **Aucune conversion de repère** | Prémisse fausse. Voir `kn5-format.md` §12 q4 : deux mesures numériques le disaient dès le lot 3, une validation sur une voiture à l'atlas symétrique les a fait écarter à tort. |
+| §4.4 `v = 1.0 - v` | **UV reprises telles quelles** | DirectX et glTF placent tous deux l'origine des textures en haut à gauche. L'inversion vaut pour OpenGL. |
+| §5.2 `binrw` | Lecteur binaire écrit à la main | Chaque compteur doit être validé *avant* d'allouer ; l'exprimer en attributs coûtait plus que 130 lignes, pour une dépendance de plus. |
+| §5.2 `gltf-json` | Document glTF écrit avec `serde_json` | Sous-ensemble petit et figé ; le test d'acceptation est empirique de toute façon. |
+| §5.4 WebP q85 | **JPEG q85**, PNG si alpha utile | Le glTF de base n'accepte que PNG et JPEG ; WebP exige `EXT_texture_webp`, ce qui casse le critère « s'ouvre dans Blender ». `image` 0.25 n'encode plus le WebP. |
+| §7.1 `PreviewHandle` | `CarPreview` | Nom déjà pris par `music::PreviewHandle`. |
+| §5.1 `crates/` à la racine | `src-tauri/crates/` | Garde `target/`, `Cargo.lock` et les chemins CI où ils étaient. |
+| §5.4 décodage BC1–BC7 | + **décodeur DDS par masques** | 12 % des textures AC sont des DDS non compressés qu'`image_dds` refuse. |
+| — | **L'alpha des textures diffuses est retiré** quand aucun matériau ne l'exploite | Chez AC il ne code pas la transparence (82,5 % des pixels à alpha nul sur une carrosserie blanche). Le conserver efface la carrosserie. |
+
+---
+
+## 15. Reste à faire — lot 6
+
+Points remontés par l'utilisateur après validation à l'écran, par ordre de
+gêne constatée :
+
+1. **La carrosserie paraît cabossée.** Hypothèse principale : les normales.
+   Le `TANGENT` du KN5 n'est pas exporté (three.js reconstruit alors les
+   tangentes par dérivées d'écran), et les normal maps DirectX ont leur canal
+   vert inversé par rapport à la convention OpenGL/glTF. L'un comme l'autre
+   donnent un relief faux qui se lit comme de la tôle froissée. **À vérifier
+   avant de conclure** : que ce ne soit pas une texture de dégâts
+   (`txDamage`/`txDamageMask`, shader `ksPerPixelMultiMap_damage_dirt`)
+   appliquée à tort.
+2. **Couleur de peinture parfois absente.** `ks_toyota_supra_mkiv`, skin
+   `01_dark_green_pearl_met` : la voiture ressort blanche alors que la photo
+   du skin est verte. `abarth500` / `black_red` est correcte. Non diagnostiqué.
+3. **Réglages à exposer** (écran Réglages) : aperçu photo ou 3D par défaut,
+   niveau de zoom, angle de caméra autour de l'axe vertical, hauteur de
+   caméra, vitesse de rotation. La voiture est aujourd'hui cadrée trop bas :
+   quand le plateau la présente de face, l'avant est coupé.
+4. **Éclairage et cadrage calés sur les `preview.jpg` Kunos**, pour que le
+   passage de la photo à la 3D ne saute pas à l'œil. C'est le point qui
+   demande le plus de tâtonnement visuel.
+
+Restent aussi, hérités du plan initial : `txMaps` une fois sa sémantique
+documentée (§6.2, §12 q3 — **toujours ouverte**), choix du LOD en config,
+purge du cache depuis les Réglages, et l'aperçu dans `ModDetail.svelte`
+(panneau latéral), qui n'a jamais été branché.

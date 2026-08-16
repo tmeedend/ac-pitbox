@@ -300,37 +300,21 @@ laisser pourrir ici.
       proche) et les titres de popup (`OpponentPicker`/`SavedSessionsDialog`,
       13px/majuscules, identiques entre eux mais ne correspondant à aucun des
       trois niveaux). **Couleurs sémantiques** : pas encore attaquées.
-- [ ] **Aperçu 3D natif des voitures** (`docs/SPEC-preview-3d-kn5.md`, branche
-      `feature/3dpreview`). Plan en 7 lots, chacun vérifiable sans lancer
-      l'app. Fait : **lot 0** — workspace Cargo, crate `kn5` (parser complet du
-      §3, robuste sur entrée non fiable) et `kn5-tool` (`inspect` / `scan`).
-      198 voitures sur 201 de la bibliothèque de référence parsées sans échec ;
-      trois questions ouvertes du §12 tranchées et consignées dans
-      `docs/kn5-format.md`. **Lot 2** — crate `kn5-gltf` : décodage (dont un
-      décodeur DDS par masques, 12 % des textures sinon perdues),
-      redimensionnement, réencodage PNG/JPEG, déduplication, surcharge par
-      skin. **Lot 3** — export glTF : aplatissement des transforms, conversion
-      de repère (§12 q4 : **aucune** conversion ni inversion V, tranché après une
-      première réponse fausse validée sur une voiture à l'atlas symétrique —
-      voir `docs/kn5-format.md`), mapping matériaux §6.1,
-      écriture du conteneur GLB. `kn5-tool convert` produit un `.glb` qui
-      s'ouvre dans n'importe quel viewer. **Lot 4** — `preview.rs` : cache
-      hashé dans `app_cache_dir`, éviction LRU, protocole `carpreview` (le
-      `.glb` ne passe **jamais** par l'IPC), commandes `prepare_car_preview` /
-      `clear_preview_cache`, conversion sur `spawn_blocking` avec abandon des
-      demandes remplacées. **Lot 5** — `CarPreview3D.svelte` dans la zone héros
-      de `DetailPage` : three.js en `import()` dynamique, cadrage calculé,
-      libération GPU systématique, états de repli sur la photo, et **plateau
-      tournant** (la voiture pivote sur elle-même, façon socle de salon) —
-      lequel contredit le §8.4 de la spec (« rendu à la demande ») : la
-      contrepartie est payée par un arrêt hors écran, en arrière-plan et à la
-      prise en main. **Non validé à l'œil dans l'app** — à faire au premier lancement.
-      Reste : finitions (lot 6), et l'aperçu dans `ModDetail.svelte`.
-      **`preview::CONVERTER_VERSION` est à incrémenter dès qu'on touche au
-      rendu produit** — sinon les anciens `.glb` restent servis. Décidé avec l'utilisateur : le viewer KN5 **coexiste** avec le
-      bouton `acShowroom.exe` existant (§9.4 du SPEC) au lieu de le remplacer,
-      et n'arrive dans `ModDetail.svelte` qu'au lot 6, `DetailPage.svelte`
-      d'abord.
+- [ ] **Aperçu 3D natif des voitures** (branche `feature/3dpreview`).
+      **L'avancement détaillé, les écarts assumés vis-à-vis de la spec et le
+      reste à faire sont dans `docs/SPEC-preview-3d-kn5.md` §13 à §15** — c'est
+      là qu'il faut lire en reprenant, pas ici.
+      En bref : **lots 0 à 5 faits et validés à l'écran** — la voiture
+      s'affiche dans la fiche, tourne sur son socle et se manipule à la souris.
+      **Lot 6 en cours** : carrosserie qui paraît cabossée (piste : tangentes
+      non exportées + canal vert des normal maps), couleur de peinture parfois
+      absente (`ks_toyota_supra_mkiv`), réglages de caméra à exposer, et
+      éclairage à caler sur les `preview.jpg` Kunos.
+      Deux règles à ne pas perdre de vue :
+      **`preview::CONVERTER_VERSION` s'incrémente dès qu'on touche au rendu
+      produit** (sinon les anciens `.glb` restent servis), et **une conversion
+      ne se valide jamais sur une seule voiture** — l'atlas de la MX-5 est
+      symétrique et a masqué une erreur de repère pendant deux lots.
 - [ ] **Signature Authenticode** : le workflow est prêt, il attend un
       certificat. Définir la variable de dépôt `SIGN_COMMAND` suffit à
       l'activer — voir `docs/windows-code-signing.md` (lire **avant** d'acheter,
