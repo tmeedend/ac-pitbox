@@ -33,15 +33,49 @@
   let scene: ThreeScene | null = null;
   let frame = 0;
   let observer: ResizeObserver | null = null;
+  let visibility: IntersectionObserver | null = null;
 
   interface ThreeScene {
     THREE: typeof ThreeModule;
     renderer: ThreeModule.WebGLRenderer;
     scene: ThreeModule.Scene;
     camera: ThreeModule.PerspectiveCamera;
-    controls: { update(): boolean; dispose(): void };
+    controls: {
+      update(): boolean;
+      dispose(): void;
+      addEventListener(type: string, listener: () => void): void;
+    };
     pmrem: ThreeModule.PMREMGenerator;
+    /** Le plateau : la voiture y est posée, l'ombre de contact non — un socle
+     * de salon tourne sous la voiture, il n'emporte pas son ombre. */
+    turntable: ThreeModule.Group;
   }
+
+  // Plateau tournant, comme un socle de salon : c'est la raison d'être de tout
+  // ce chantier — voir la voiture tourner, pas seulement pouvoir la tourner.
+  //
+  // Le §8.4 de la spec demande l'inverse (« ne pas rendre en continu à 60 fps
+  // sur un panneau statique ») et les deux sont inconciliables. La contrepartie
+  // est donc payée là où elle se voit : la rotation s'arrête dès que la fiche
+  // quitte l'écran, que la fenêtre passe en arrière-plan, ou que l'utilisateur
+  // attrape le modèle — un panneau qu'on ne regarde pas ne consomme rien.
+
+  /** Un tour en ~28 s : assez lent pour être calme, assez vif pour qu'on voie
+   * les reflets glisser sur la carrosserie. */
+  const SPIN_SPEED = 0.22;
+  /** Reprise après un lâcher de souris. Assez long pour examiner un détail
+   * sans que le plateau ne redémarre sous les doigts. */
+  const SPIN_RESUME_MS = 4000;
+
+  /** Une préférence système « moins d'animations » désactive le plateau : une
+   * rotation permanente est exactement ce qu'elle demande d'éviter. */
+  const reducedMotion =
+    typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  let spinning = !reducedMotion;
+  let onScreen = true;
+  let lastFrameAt = 0;
+  let resumeTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
    * WebGL indisponible = repli silencieux sur la photo (§8.5) : ce n'est pas
@@ -67,6 +101,11 @@
   function disposeScene(current: ThreeScene | null) {
     if (frame) cancelAnimationFrame(frame);
     frame = 0;
+    lastFrameAt = 0;
+    if (resumeTimer) clearTimeout(resumeTimer);
+    resumeTimer = null;
+    visibility?.disconnect();
+    visibility = null;
     if (!current) return;
 
     current.scene.traverse((object) => {
@@ -94,15 +133,35 @@
     current.renderer.domElement.remove();
   }
 
-  /** Rendu à la demande (§8.4) : rien ne bouge tant qu'on n'y touche pas, donc
-   * rien ne consomme. Relancé tant que l'inertie d'OrbitControls travaille. */
+  /** Le plateau tourne-t-il en ce moment ? Trois conditions, toutes nécessaires. */
+  function turning(): boolean {
+    return spinning && onScreen && !document.hidden;
+  }
+
+  /**
+   * Une image. La boucle ne se prolonge que si quelque chose bouge encore :
+   * le plateau, ou l'inertie d'OrbitControls après un lâcher de souris.
+   */
   function requestRender(current: ThreeScene) {
     if (frame) return;
-    frame = requestAnimationFrame(() => {
+    frame = requestAnimationFrame((now) => {
       frame = 0;
+      // Avance en fonction du temps écoulé, pas du nombre d'images : la vitesse
+      // ne doit pas dépendre du taux de rafraîchissement de l'écran, sinon un
+      // moniteur 144 Hz fait tourner la voiture deux fois plus vite.
+      const elapsed = lastFrameAt ? Math.min((now - lastFrameAt) / 1000, 0.1) : 0;
+      lastFrameAt = now;
+      if (turning() && elapsed > 0) {
+        // C'est la voiture qui tourne, pas la caméra : le cadrage reste
+        // parfaitement stable, les reflets glissent sur la carrosserie, et
+        // rien ne vient contrarier l'état interne d'OrbitControls quand
+        // l'utilisateur prend la main.
+        current.turntable.rotation.y += SPIN_SPEED * elapsed;
+      }
       const moving = current.controls.update();
       current.renderer.render(current.scene, current.camera);
-      if (moving) requestRender(current);
+      if (moving || turning()) requestRender(current);
+      else lastFrameAt = 0;
     });
   }
 
@@ -124,7 +183,6 @@
     scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
     const gltf = await new GLTFLoader().loadAsync(url);
-    scene.add(gltf.scene);
 
     // Les vitres passent après l'opaque et n'écrivent pas dans le tampon de
     // profondeur, sinon l'intérieur disparaît derrière le pare-brise (§8.2).
@@ -144,6 +202,15 @@
     const center = box.getCenter(new THREE.Vector3());
     const radius = box.getSize(new THREE.Vector3()).length() / 2;
     const distance = radius * 2.2;
+
+    // Plateau centré sous la voiture : le modèle est décalé pour que l'axe de
+    // rotation passe par son centre, sinon elle décrirait un cercle au lieu de
+    // pivoter sur elle-même. Les positions dans le monde ne changent pas.
+    const turntable = new THREE.Group();
+    turntable.position.set(center.x, 0, center.z);
+    gltf.scene.position.set(-center.x, 0, -center.z);
+    turntable.add(gltf.scene);
+    scene.add(turntable);
 
     const camera = new THREE.PerspectiveCamera(35, 16 / 9, radius / 100, radius * 40);
     // Trois-quarts avant, l'angle le plus flatteur pour une voiture.
@@ -177,7 +244,7 @@
     scene.add(shadow);
 
     host.appendChild(renderer.domElement);
-    const built: ThreeScene = { THREE, renderer, scene, camera, controls, pmrem };
+    const built: ThreeScene = { THREE, renderer, scene, camera, controls, pmrem, turntable };
 
     const resize = () => {
       const width = host.clientWidth;
@@ -193,6 +260,31 @@
     resize();
 
     controls.addEventListener("change", () => requestRender(built));
+    // Première image, puis la boucle s'entretient tant que le plateau tourne.
+    requestRender(built);
+    // La main de l'utilisateur prime sur le plateau : il s'arrête à la prise,
+    // et ne repart qu'après un temps de repos.
+    controls.addEventListener("start", () => {
+      spinning = false;
+      if (resumeTimer) clearTimeout(resumeTimer);
+      resumeTimer = null;
+    });
+    controls.addEventListener("end", () => {
+      if (reducedMotion) return;
+      if (resumeTimer) clearTimeout(resumeTimer);
+      resumeTimer = setTimeout(() => {
+        spinning = true;
+        requestRender(built);
+      }, SPIN_RESUME_MS);
+    });
+
+    // Fiche sortie de l'écran par le scroll : plus rien à rendre.
+    visibility = new IntersectionObserver((entries) => {
+      onScreen = entries.some((e) => e.isIntersecting);
+      if (turning()) requestRender(built);
+    });
+    visibility.observe(host);
+
     return built;
   }
 
@@ -280,6 +372,19 @@
     stage = s;
   }).then((off) => {
     unlisten = off;
+  });
+
+  // Fenêtre en arrière-plan ou app minimisée : le plateau s'arrête, et repart
+  // au retour. Sans ça, une app laissée ouverte sur une fiche tournerait dans
+  // le vide toute la journée.
+  function onVisibilityChange() {
+    lastFrameAt = 0;
+    if (scene && turning()) requestRender(scene);
+  }
+
+  $effect(() => {
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   });
 
   onDestroy(() => {

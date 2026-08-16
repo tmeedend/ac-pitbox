@@ -319,8 +319,11 @@ laisser pourrir ici.
       `clear_preview_cache`, conversion sur `spawn_blocking` avec abandon des
       demandes remplacées. **Lot 5** — `CarPreview3D.svelte` dans la zone héros
       de `DetailPage` : three.js en `import()` dynamique, cadrage calculé,
-      rendu à la demande, libération GPU systématique, états de repli sur la
-      photo. **Non validé à l'œil dans l'app** — à faire au premier lancement.
+      libération GPU systématique, états de repli sur la photo, et **plateau
+      tournant** (la voiture pivote sur elle-même, façon socle de salon) —
+      lequel contredit le §8.4 de la spec (« rendu à la demande ») : la
+      contrepartie est payée par un arrêt hors écran, en arrière-plan et à la
+      prise en main. **Non validé à l'œil dans l'app** — à faire au premier lancement.
       Reste : finitions (lot 6), et l'aperçu dans `ModDetail.svelte`.
       **`preview::CONVERTER_VERSION` est à incrémenter dès qu'on touche au
       rendu produit** — sinon les anciens `.glb` restent servis. Décidé avec l'utilisateur : le viewer KN5 **coexiste** avec le
