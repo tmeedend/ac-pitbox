@@ -151,6 +151,83 @@ X1R5G5B5, précédemment en échec) ressort en normal map bleu-violet canonique 
 
 ---
 
+## §12 q4 — l'axe à négliger, et deux tests numériques qui se trompent
+
+**Réponse : négation de X**, comme le §4.4 le prévoyait. Ce qui mérite d'être
+consigné, ce n'est pas la réponse — c'est le chemin, parce que **deux mesures
+numériques convaincantes donnent la mauvaise réponse**.
+
+### Piège n°1 — les noms de roues ne disent pas la gauche du conducteur
+
+L'arbre de nœuds contient `WHEEL_LF` / `WHEEL_RF` / `WHEEL_LR` / `WHEEL_RR`.
+C'est tentant : voilà une vérité terrain sur la gauche et la droite, sans avoir
+à rendre quoi que ce soit. En repère droitier, `gauche = haut × avant` ; les
+données brutes placent les roues avant en +Z et les roues « L » en +X, ce qui
+satisfait exactement cette relation. Conclusion apparente : **aucune négation
+n'est nécessaire**.
+
+C'est faux. `WHEEL_LF` n'est pas la gauche **du conducteur** : AC nomme ses
+nœuds de roue du point de vue de quelqu'un qui **fait face** à la voiture. Dans
+la sortie correcte, le nœud `WHEEL_LF` se retrouve donc du côté X négatif alors
+que le nez pointe vers +Z.
+
+### Piège n°2 — l'accord enroulement/normales ne mesure pas la chiralité
+
+Second test, indépendant en apparence : `(p1-p0) × (p2-p0)` avec la règle
+droitière, comparé à la normale stockée. Résultat sur les données brutes :
+**100 % d'accord sur 1,3 million de triangles**, quatre voitures. Conclusion
+apparente : la source est déjà droitière, donc **aucune négation**.
+
+C'est faux aussi, et pour une raison qui n'a rien d'évident : un miroir retourne
+les positions, les normales **et** l'enroulement **ensemble**. L'accord entre
+les trois est donc *invariant* par miroir. Ce test mesure la cohérence interne
+du fichier, jamais sa chiralité. Il reste utile — il détecterait un fichier dont
+l'enroulement contredit ses normales, qui rendrait à l'envers — mais il ne peut
+pas répondre à cette question-là.
+
+### Ce qui tranche : la livrée
+
+Le seul test qui répond est celui que le §4.4 demandait, et il faut un rendu :
+sur `ks_mazda_mx5_cup`, **avec** négation de X le numéro affiche `55` et
+`MX-5 CUP` se lit de gauche à droite ; **sans**, les deux sont en miroir. Une
+voiture est trop symétrique pour que l'œil détecte le miroir autrement que par
+du texte.
+
+Méthode utilisée (reproductible sans Blender) : page HTML statique posée dans
+`static/`, three.js chargé par *import map* depuis `node_modules`, servie par le
+serveur de dev Vite ; le rendu est récupéré via `canvas.toDataURL()` et POSTé
+vers un petit serveur Node local qui l'écrit en fichier. Le `.glb` produit
+s'ouvre par ailleurs dans n'importe quel viewer glTF, ce que confirme le
+chargement par `GLTFLoader`.
+
+**Vérifié aussi au passage** : `bbox` de 3,91 m pour la MX-5 (réelle : 3,92 m)
+et 4,35 m pour la Miura SV (réelle : 4,39 m) — l'échelle et le repère sont bons,
+ce qui est l'assertion d'intégration demandée au §11.
+
+---
+
+## Les vitres n'ont pas de canal alpha
+
+**Symptôme** : pare-brise opaque, intérieur invisible — exactement le piège
+listé au §10.
+
+**Cause** : AC ne stocke pas la transparence du verre dans un canal alpha. Sur
+`ks_mazda_mx5_cup`, `EXT_Glass` et `INT_Glass` ne déclarent **aucun**
+`txDiffuse`, et la texture du pare-brise (`INTERNAL_glass.dds`) est entièrement
+opaque — c'est une carte de salissures, pas un masque. La transparence vient du
+shader (`ksPerPixelReflection`, `ksWindscreen`).
+
+**Correctif retenu, assumé comme une calibration** : tout matériau en
+`alphaMode: BLEND` reçoit un `baseColorFactor.a` tiré de `ksDiffuse`, borné à
+[0.08, 0.6]. `ksDiffuse` vaut 0.1 sur le verre intérieur, 0.3 sur l'extérieur,
+0.45 sur le pare-brise de la voiture de référence : bas précisément parce que
+l'essentiel de la lumière traverse. La hiérarchie obtenue est celle que l'œil
+lit comme du verre. glTF multipliant le facteur par l'alpha de la texture, le
+correctif marche que la texture existe ou non. À revoir au lot 5, quand
+l'éclairage du viewer sera en place.
+
+---
+
 ## Découverte annexe — remorque chiffrée après l'arbre de nœuds
 
 Deux voitures de la bibliothèque de référence (`ms_citroen_berlingo_2003_hdi` et

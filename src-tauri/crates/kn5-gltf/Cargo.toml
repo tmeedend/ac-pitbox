@@ -9,6 +9,11 @@ license = "MIT"
 kn5 = { path = "../kn5" }
 thiserror = "2"
 log = "0.4"
+# Document glTF écrit directement (le conteneur GLB, lui, tient en vingt
+# lignes) : le sous-ensemble utilisé est petit et figé, et `gltf-json`
+# n'apporterait de la sûreté de type que sur des index qu'on construit nous-
+# mêmes. Déjà dans le graphe via l'application.
+serde_json = "1"
 
 # Décodage DDS/BCn (BC1 à BC7) vers RGBA8. `default-features = false` retire
 # l'encodage, qui dépendrait d'`intel_tex_2` — donc d'un compilateur C dans la

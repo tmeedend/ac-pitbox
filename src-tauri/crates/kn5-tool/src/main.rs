@@ -30,18 +30,20 @@ USAGE:
     kn5-tool inspect <file.kn5 | car_dir> [--tree] [--materials] [--textures]
     kn5-tool scan <dir> [--details]
     kn5-tool extract-textures <car_dir> --out=<dir> [--skin=<id>]
+    kn5-tool convert <car_dir> --out=<file.glb> [--skin=<id>]
 
 COMMANDS:
     inspect            Parse one model and report what it contains.
     scan               Parse every car of a folder (e.g. content/cars) and aggregate.
     extract-textures   Decode, resize and re-encode the textures to a folder.
+    convert            Write the whole car as a self-contained glTF binary.
 
 OPTIONS:
     --tree        Print the node hierarchy.
     --materials   Print every material with its shader, properties and samplers.
     --textures    Print every embedded texture with its sniffed format.
     --details     scan: also print the aggregate shader / property tables.
-    --out=<dir>   extract-textures: destination folder, created if missing.
+    --out=<path>  extract-textures: destination folder. convert: .glb file.
     --skin=<id>   extract-textures: skin whose files override the embedded ones
                   (default: first skin in alphabetical order).
 ";
@@ -96,6 +98,10 @@ fn main() -> ExitCode {
         "scan" => match positional.first() {
             Some(path) => scan(Path::new(path), &flags),
             None => Err("scan needs a path".to_string()),
+        },
+        "convert" => match positional.first() {
+            Some(path) => convert(Path::new(path), &flags),
+            None => Err("convert needs a car folder".to_string()),
         },
         "extract-textures" => match positional.first() {
             Some(path) => extract_textures(Path::new(path), &flags),
@@ -528,6 +534,121 @@ fn extract_textures(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
     if !set.warnings.is_empty() {
         println!("\nwarnings");
         for warning in &set.warnings {
+            println!("  {}: {}", warning.name, warning.reason);
+        }
+    }
+
+    Ok(())
+}
+
+/// Regression guard for the coordinate conversion (§4.4, §12 q4).
+///
+/// **Calibrated against a render, not derived.** The reference is the livery:
+/// with the conversion as it stands, `ks_mazda_mx5_cup` shows `55` and
+/// `MX-5 CUP` reading left to right. This check records the wheel geometry of
+/// that verified state so a future change to the conversion shows up here
+/// instead of silently mirroring every car.
+///
+/// The trap it encodes: `WHEEL_LF` is **not** the driver's left. AC names its
+/// wheel nodes from the point of view of someone facing the car, so in the
+/// correct output the node called `WHEEL_LF` sits on the negative-X side while
+/// the nose points at +Z. Read as the driver's left, the same numbers argue
+/// for the opposite conversion — which renders every livery mirrored.
+fn orientation_verdict(model: &kn5::Kn5Model) -> Option<String> {
+    let centers = kn5_gltf::node_world_centers(model);
+    let find = |suffix: &str| -> Option<[f32; 3]> {
+        centers
+            .iter()
+            .find(|(name, _)| name.to_ascii_uppercase() == format!("WHEEL_{suffix}"))
+            .map(|(_, center)| *center)
+    };
+    let (lf, rf, lr, rr) = (find("LF")?, find("RF")?, find("LR")?, find("RR")?);
+
+    let front_z = (lf[2] + rf[2]) / 2.0;
+    let rear_z = (lr[2] + rr[2]) / 2.0;
+    let forward = (front_z - rear_z).signum();
+    // Verified state: the `WHEEL_LF` node ends up opposite the nose direction.
+    let ok = (lf[0] > 0.0) == (forward < 0.0) && (rf[0] > 0.0) == (forward > 0.0);
+
+    Some(format!(
+        "{} — nose at z={front_z:+.2}, tail at z={rear_z:+.2}, WHEEL_LF at x={:+.2}, WHEEL_RF at x={:+.2}",
+        if ok {
+            "matches the verified render"
+        } else {
+            "CHANGED — re-check the livery text before trusting this build"
+        },
+        lf[0],
+        rf[0]
+    ))
+}
+
+fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
+    let out = option_value(flags, "--out").ok_or("convert needs --out=<file.glb>")?;
+    let out = Path::new(out);
+    let (file, _) = model_path(car_dir)?;
+    let skin = resolve_skin(car_dir, option_value(flags, "--skin"));
+
+    let bytes = std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+    let started = Instant::now();
+    let model = kn5::parse(&bytes).map_err(|e| format!("{}: {e}", file.display()))?;
+    let parsed = started.elapsed();
+
+    let started = Instant::now();
+    let conversion = kn5_gltf::convert(&model, skin.as_deref(), &kn5_gltf::ConvertOptions::default())?;
+    let converted = started.elapsed();
+
+    if let Some(parent) = out.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        }
+    }
+    std::fs::write(out, &conversion.glb).map_err(|e| format!("{}: {e}", out.display()))?;
+
+    let stats = &conversion.geometry;
+    println!("model     {}", file.display());
+    println!(
+        "skin      {}",
+        skin.as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "none".to_string())
+    );
+    println!(
+        "output    {} ({})",
+        out.display(),
+        human_bytes(conversion.glb.len() as u64)
+    );
+    println!(
+        "meshes    {} kept — skipped: {} hidden, {} by name, {} empty, {} distant LOD ({} mirrored nodes)",
+        stats.kept,
+        stats.skipped_hidden,
+        stats.skipped_by_name,
+        stats.skipped_empty,
+        stats.skipped_distant_lod,
+        stats.mirrored
+    );
+    println!(
+        "content   {} triangles, {} materials, {} textures",
+        conversion.triangle_count, conversion.material_count, conversion.texture_count
+    );
+    println!(
+        "time      {:.0} ms parsing, {:.0} ms converting (total {:.1} s)",
+        parsed.as_secs_f64() * 1000.0,
+        converted.as_secs_f64() * 1000.0,
+        (parsed + converted).as_secs_f64()
+    );
+    let (agreeing, total) = kn5_gltf::winding_consistency(&model);
+    println!(
+        "winding   {:.1} % of {total} triangles agree with their normals (internal consistency, not chirality)",
+        100.0 * agreeing as f64 / total.max(1) as f64
+    );
+    match orientation_verdict(&model) {
+        Some(verdict) => println!("handedness {verdict}"),
+        None => println!("handedness unchecked — no WHEEL_LF/RF/LR/RR nodes in this model"),
+    }
+
+    if !conversion.texture_warnings.is_empty() {
+        println!("\ntexture warnings");
+        for warning in &conversion.texture_warnings {
             println!("  {}: {}", warning.name, warning.reason);
         }
     }

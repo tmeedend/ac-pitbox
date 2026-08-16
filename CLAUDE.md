@@ -309,8 +309,12 @@ laisser pourrir ici.
       `docs/kn5-format.md`. **Lot 2** — crate `kn5-gltf` : décodage (dont un
       décodeur DDS par masques, 12 % des textures sinon perdues),
       redimensionnement, réencodage PNG/JPEG, déduplication, surcharge par
-      skin. Reste : export glTF (lot 3), cache + intégration Tauri (lot 4),
-      viewer three.js (lot 5), finitions (lot 6). Décidé avec l'utilisateur : le viewer KN5 **coexiste** avec le
+      skin. **Lot 3** — export glTF : aplatissement des transforms, conversion
+      de repère (§12 q4 tranchée par le rendu, deux tests numériques s'étant
+      révélés trompeurs — voir `docs/kn5-format.md`), mapping matériaux §6.1,
+      écriture du conteneur GLB. `kn5-tool convert` produit un `.glb` qui
+      s'ouvre dans n'importe quel viewer. Reste : cache + intégration Tauri
+      (lot 4), viewer three.js (lot 5), finitions (lot 6). Décidé avec l'utilisateur : le viewer KN5 **coexiste** avec le
       bouton `acShowroom.exe` existant (§9.4 du SPEC) au lieu de le remplacer,
       et n'arrive dans `ModDetail.svelte` qu'au lot 6, `DetailPage.svelte`
       d'abord.
