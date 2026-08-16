@@ -684,6 +684,11 @@ gêne constatée :
      toute sa surface. Remplacée par un studio sombre à rampes zénithales
      (`components/detail/showroomEnvironment.ts`), procédural comme elle et
      sans asset (§8.1).
+   - **Sol** : l'ombre de contact seule laissait la voiture posée sur rien.
+     Le même dégradé porte maintenant la **flaque de lumière** que renvoie le
+     sol d'un showroom, avec l'ombre en son milieu — l'intensité vient de la
+     photo (le fond d'un `preview.jpg` passe de rgb(2,3,5) dans les coins à
+     rgb(12,13,15) sous la voiture).
 
    **Reste** : la carrosserie sort encore plus claire que dans le jeu (Supra
    verte : (53, 182, 72) contre (14, 81, 36)), et **l'éclairage n'en est pas

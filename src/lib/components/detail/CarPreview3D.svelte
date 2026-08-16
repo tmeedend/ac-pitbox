@@ -267,15 +267,24 @@
     // Borne l'angle polaire pour qu'on ne puisse pas passer sous le sol.
     controls.maxPolarAngle = Math.PI * 0.495;
 
-    // Ombre de contact : un simple disque dégradé, pas de shadow map (§8.1).
-    // Sans elle la voiture flotte visiblement au-dessus du vide.
-    const shadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(radius * 3, radius * 3),
-      new THREE.MeshBasicMaterial({ map: contactShadowTexture(THREE), transparent: true, depthWrite: false }),
+    // The ground: a pool of light with the contact shadow in its middle, drawn
+    // as one gradient rather than a shadow map (§8.1). Two things at once,
+    // because they are two halves of the same thing — the car sits on a lit
+    // floor and blocks part of that light.
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(radius * 5, radius * 5),
+      new THREE.MeshBasicMaterial({
+        map: groundTexture(THREE),
+        transparent: true,
+        depthWrite: false,
+        // Le dégradé est déjà la valeur voulue à l'écran : le faire passer par
+        // le tone mapping l'assombrirait d'un tiers.
+        toneMapped: false,
+      }),
     );
-    shadow.rotation.x = -Math.PI / 2;
-    shadow.position.set(center.x, box.min.y + radius / 400, center.z);
-    scene.add(shadow);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.set(center.x, box.min.y + radius / 400, center.z);
+    scene.add(ground);
 
     host.appendChild(renderer.domElement);
     const built: ThreeScene = { THREE, renderer, scene, camera, controls, pmrem, turntable, center, radius };
@@ -323,19 +332,42 @@
     return built;
   }
 
-  /** Dégradé radial dessiné à la volée — aucun fichier à embarquer. */
-  function contactShadowTexture(THREE: typeof ThreeModule): ThreeModule.Texture {
-    const size = 256;
+  /**
+   * The floor under the car, drawn on the fly — no file to ship (§8.1).
+   *
+   * Two gradients on one texture. The wide, pale one is the pool of light a
+   * showroom floor returns under the lamps: it is what the Kunos photos show
+   * around the car, and without it the car sits on nothing. The tight dark one
+   * on top is the contact shadow, which is what makes it sit on the floor
+   * rather than hover above it.
+   *
+   * Stops are in fractions of the plane's half-width, so changing the plane's
+   * size keeps their proportions.
+   */
+  function groundTexture(THREE: typeof ThreeModule): ThreeModule.Texture {
+    const size = 512;
     const canvas = document.createElement("canvas");
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext("2d");
     if (ctx) {
-      const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-      gradient.addColorStop(0, "rgba(0,0,0,0.55)");
-      gradient.addColorStop(0.7, "rgba(0,0,0,0.12)");
-      gradient.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = gradient;
+      const middle = size / 2;
+      // Calé sur la photo : le fond d'un `preview.jpg` Kunos passe de
+      // rgb(2,3,5) dans les coins à rgb(12,13,15) sous la voiture, soit une
+      // dizaine de niveaux ajoutés au plus clair de la flaque.
+      const pool = ctx.createRadialGradient(middle, middle, 0, middle, middle, middle);
+      pool.addColorStop(0, "rgba(255,255,255,0.07)");
+      pool.addColorStop(0.45, "rgba(255,255,255,0.042)");
+      pool.addColorStop(0.75, "rgba(255,255,255,0.011)");
+      pool.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = pool;
+      ctx.fillRect(0, 0, size, size);
+
+      const shadow = ctx.createRadialGradient(middle, middle, 0, middle, middle, middle * 0.6);
+      shadow.addColorStop(0, "rgba(0,0,0,0.55)");
+      shadow.addColorStop(0.7, "rgba(0,0,0,0.12)");
+      shadow.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = shadow;
       ctx.fillRect(0, 0, size, size);
     }
     const texture = new THREE.CanvasTexture(canvas);
