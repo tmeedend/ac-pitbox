@@ -46,6 +46,10 @@
     replaced: number;
     /** Fichiers dont le chemin n'en est pas un pour AC : jamais posés (§4.5.3). */
     offPath: number;
+    /** Fichiers en zone auto-gérée par un outil externe, typiquement CM (§4.5.3). */
+    managed: number;
+    /** Fichiers qu'un fichier étranger occupe déjà dans le jeu (§4.5.4). */
+    foreign: number;
   }
 
   // Groupe = dossier parent. Un fichier posé à la racine d'AC (rare) tombe
@@ -67,6 +71,8 @@
         shared: fs.filter((f) => f.provided_by !== null).length,
         replaced: fs.filter((f) => f.replaces_game_file).length,
         offPath: fs.filter((f) => f.off_game_path).length,
+        managed: fs.filter((f) => f.externally_managed).length,
+        foreign: fs.filter((f) => f.held_by_foreign_file).length,
       }))
       .sort((a, b) => a.dir.localeCompare(b.dir));
   });
@@ -82,6 +88,9 @@
   <div class="blk-b">
     {#if files.length}
       <p class="note">{t("detail.extrasNote")}</p>
+      {#if groups.some((g) => g.managed)}
+        <p class="warn">{t("detail.extrasManagedNote")}</p>
+      {/if}
       <ul class="grp-list">
         {#each groups as g (g.dir)}
           <li>
@@ -90,6 +99,12 @@
               <span class="grp-dir mono">{g.dir || "/"}</span>
               {#if g.offPath}
                 <span class="grp-offpath">{t("detail.extrasOffPath", { count: g.offPath })}</span>
+              {/if}
+              {#if g.foreign}
+                <span class="grp-foreign">{t("detail.extrasForeign", { count: g.foreign })}</span>
+              {/if}
+              {#if g.managed}
+                <span class="grp-managed">{t("detail.extrasManaged", { count: g.managed })}</span>
               {/if}
               {#if g.replaced}
                 <span class="grp-replaced">{t("detail.extrasReplaced", { count: g.replaced })}</span>
@@ -107,6 +122,16 @@
                     <span class="file-nm">{f.rel_path.slice(g.dir.length)}</span>
                     {#if f.off_game_path}
                       <span class="file-offpath">{t("detail.extrasOffPathFile")}</span>
+                    {/if}
+                    {#if f.held_by_foreign_file}
+                      <span class="file-foreign" title={t("detail.extrasForeignHint")}
+                        >{t("detail.extrasForeignFile")}</span
+                      >
+                    {/if}
+                    {#if f.externally_managed}
+                      <span class="file-managed" title={t("detail.extrasManagedHint")}
+                        >{t("detail.extrasManagedFile")}</span
+                      >
                     {/if}
                     {#if f.replaces_game_file}
                       <span class="file-replaced">{t("detail.extrasReplacesGameFile")}</span>
@@ -132,6 +157,16 @@
   /* Encadré et bandeau viennent des classes globales `.blk*` (global.css). */
   .note {
     color: var(--blue);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+  /* Jaune = alerte, comme les autres signalements de ce bloc : rien n'est
+     cassé, mais l'utilisateur doit savoir que ces fichiers ne lui appartiennent
+     pas tout à fait. */
+  .warn {
+    color: var(--yellow);
     font-family: var(--mono);
     font-size: 10.5px;
     line-height: 1.5;
@@ -185,6 +220,21 @@
     white-space: nowrap;
   }
   .grp-shared {
+    color: var(--yellow);
+    font-size: 10.5px;
+    white-space: nowrap;
+  }
+  /* Bleu = information : la zone auto-gérée n'est pas une anomalie, c'est un
+     fait sur le chemin. Jaune pour l'occupant étranger, qui lui a une
+     conséquence — le fichier du mod n'arrive pas dans le jeu. */
+  .grp-managed,
+  .file-managed {
+    color: var(--blue);
+    font-size: 10.5px;
+    white-space: nowrap;
+  }
+  .grp-foreign,
+  .file-foreign {
     color: var(--yellow);
     font-size: 10.5px;
     white-space: nowrap;

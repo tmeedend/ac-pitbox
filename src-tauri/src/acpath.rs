@@ -71,6 +71,44 @@ pub fn is_ac_relative(rel: &Path) -> bool {
     rel.components().count() >= 2 && leads_into_game(rel)
 }
 
+/// Zones d'AC qu'un **outil externe tient à jour tout seul** : le téléchargeur
+/// de configs de Content Manager, alimenté par le dépôt `acc-extension-config`
+/// (un serveur le tire toutes les 5 minutes et le convertit en un format que CM
+/// récupère automatiquement).
+///
+/// Un mod *peut* y déposer un fichier — certaines archives de circuit livrent
+/// leur config CSP dans `extension/config/tracks/loaded/` — mais il n'y est pas
+/// chez lui, et ce n'est pas la bonne pratique : `loaded/` est le **dernier**
+/// des trois emplacements que CSP consulte (après `content/tracks/<id>/
+/// extension/ext_config.ini`, qui est la place prévue pour un auteur, puis
+/// `extension/config/tracks/<id>.ini`), et c'est précisément celui que la
+/// synchro écrase. On pose quand même — l'app n'arbitre pas les choix de
+/// l'auteur — mais on le **dit** sur la fiche : un fichier que CM remplacera
+/// sans prévenir ne doit pas avoir l'air d'un ajout stable.
+const EXTERNALLY_MANAGED: &[&[&str]] = &[
+    &["extension", "config", "tracks", "loaded"],
+    &["extension", "config", "cars", "loaded"],
+    // Les vao-patches se téléchargent aussi par lots depuis CM (constaté sur
+    // une install réelle : une vingtaine de `ks_*.vao-patch` à la seconde près).
+    &["extension", "vao-patches"],
+    &["extension", "vao-patches-cars"],
+];
+
+/// Vrai si `rel` tombe dans une zone qu'un outil externe synchronise
+/// ([`EXTERNALLY_MANAGED`]).
+pub fn is_externally_managed(rel: &Path) -> bool {
+    let segs: Vec<String> = rel
+        .components()
+        .filter_map(|c| c.as_os_str().to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .collect();
+    EXTERNALLY_MANAGED
+        .iter()
+        // `>` et non `>=` : le préfixe seul est le dossier, pas un fichier
+        // dedans — c'est le contenu qui est géré, pas le dossier lui-même.
+        .any(|p| segs.len() > p.len() && segs.iter().zip(p.iter()).all(|(a, b)| a == b))
+}
+
 /// Le dossier contient un `.kn5` à n'importe quelle profondeur.
 ///
 /// AC range les modèles de pilote à plat (`content/driver/driver_501.kn5`)
@@ -187,6 +225,40 @@ mod tests {
         ] {
             assert!(is_ac_relative(Path::new(real)), "{real} est un vrai chemin de jeu");
         }
+    }
+
+    #[test]
+    fn cm_managed_folders_are_recognised() {
+        // §4.5.5 : ces chemins sont posés comme les autres, mais la fiche doit
+        // dire qu'un outil externe les réécrira. `loaded/` est la cible de
+        // synchro du dépôt CSP, pas un emplacement stable.
+        for managed in [
+            "extension/config/tracks/loaded/bahrain_international_circuit.ini",
+            "extension/config/cars/loaded/ks_mazda_mx5.ini",
+            "extension/vao-patches/spa.vao-patch",
+            "Extension/Config/Tracks/Loaded/Spa.ini",
+        ] {
+            assert!(
+                is_externally_managed(Path::new(managed)),
+                "{managed} est en zone auto-gérée"
+            );
+        }
+
+        for own in [
+            // Voisin immédiat, mais hors de `loaded/` : c'est un emplacement
+            // local que la synchro ne touche pas.
+            "extension/config/tracks/spa.ini",
+            "extension/config/cars/rss/rss_gtm_lanzo_v8/car.ini",
+            "content/tracks/spa/extension/ext_config.ini",
+            "system/shaders/gl/ks_base.fx",
+        ] {
+            assert!(!is_externally_managed(Path::new(own)), "{own} appartient au mod");
+        }
+
+        assert!(
+            !is_externally_managed(Path::new("extension/vao-patches")),
+            "le dossier lui-même n'est pas un fichier géré"
+        );
     }
 
     #[test]

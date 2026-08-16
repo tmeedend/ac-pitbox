@@ -375,6 +375,12 @@ export interface ExtraFile {
   /** Chemin qui n'en est pas un pour AC (dossier d'emballage de l'auteur) :
    * conservé en bibliothèque, jamais posé dans le jeu (§4.5.3). */
   off_game_path: boolean;
+  /** Zone qu'un outil externe synchronise (`extension/config/tracks/loaded/`…) :
+   * posé quand même, mais Content Manager peut le remplacer sans prévenir. */
+  externally_managed: boolean;
+  /** Un fichier étranger occupe déjà ce chemin : l'exemplaire du mod a perdu
+   * l'arbitrage par date et attend (§4.5.4). */
+  held_by_foreign_file: boolean;
 }
 
 /** Ce qu'un mod installe hors de son dossier `content/` (§4.5.3). */

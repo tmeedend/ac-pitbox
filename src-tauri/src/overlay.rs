@@ -944,9 +944,16 @@ pub fn set_extra_links(
     Ok(())
 }
 
-pub fn get_extra_links(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<(String, bool)>> {
-    let mut stmt = conn.prepare("SELECT ac_path, is_dir FROM extra_links WHERE mod_id = ?1")?;
-    let rows = stmt.query_map([mod_id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? != 0)))?;
+/// Ce qu'un mod réclame — `(ac_path, is_dir, kind)`. Le `kind` est celui qu'a
+/// écrit [`set_extra_links`], donc la forme `content_folder()` ("cars"/"tracks")
+/// : il faut le rendre avec le reste, parce que le retrait doit retrouver
+/// l'exemplaire en bibliothèque **avant** d'effacer la réclamation — après, plus
+/// rien en base ne dit de quel arbre il venait.
+pub fn get_extra_links(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<(String, bool, String)>> {
+    let mut stmt = conn.prepare("SELECT ac_path, is_dir, kind FROM extra_links WHERE mod_id = ?1")?;
+    let rows = stmt.query_map([mod_id], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? != 0, r.get::<_, String>(2)?))
+    })?;
     rows.collect()
 }
 

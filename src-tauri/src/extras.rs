@@ -333,6 +333,39 @@ pub fn deploy(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -
     Ok(placed)
 }
 
+/// Le fichier posé dans AC est-il **encore celui que nous y avons mis** ?
+///
+/// La question se pose parce que certains chemins sont partagés avec un outil
+/// externe : `extension/config/tracks/loaded/` est la cible de synchro du
+/// téléchargeur de configs de Content Manager (§4.5.3, [`crate::acpath`]). Si
+/// CM a repris le chemin entre-temps, ce qui est là ne nous appartient plus, et
+/// la règle d'or n°5 vaut dans les deux sens : on ne supprime pas un fichier
+/// qu'on n'a pas posé.
+///
+/// Le critère est **taille + date de modification**, et il couvre les deux
+/// formes que prend la pose (`deploy::link_or_copy`) :
+/// - **hardlink** (cas normal) — les deux chemins partagent l'entrée MFT, donc
+///   taille et date sont identiques par construction, et le restent si un outil
+///   réécrit le fichier *en place* (c'est alors bien toujours notre entrée) ;
+/// - **copie physique** (repli quand bibliothèque et jeu sont sur deux volumes)
+///   — `std::fs::copy` conserve la date sous Windows, c'est déjà le critère
+///   d'arbitrage des exemplaires (§4.5.4).
+///
+/// Ce qu'il détecte, c'est la **recréation** du fichier par quelqu'un d'autre :
+/// contenu différent, date de téléchargement fraîche. L'index de fichier NTFS
+/// serait plus direct, mais `MetadataExt::file_index` est encore instable en
+/// Rust stable (`windows_by_handle`) — et il donnerait la même réponse dans
+/// tous les cas réalistes.
+///
+/// Source illisible = « pas à nous » : dans le doute on laisse en place, comme
+/// partout ailleurs ici.
+fn is_still_ours(src: &Path, deployed: &Path) -> bool {
+    let (Ok(a), Ok(b)) = (std::fs::metadata(src), std::fs::metadata(deployed)) else {
+        return false;
+    };
+    a.len() == b.len() && a.modified().ok() == b.modified().ok()
+}
+
 /// Retire la réclamation du mod sur ses ajouts au jeu, puis réaligne chaque
 /// fichier : encore réclamé par un autre mod, il **reste** (et repasse à
 /// l'exemplaire du meilleur réclamant restant) ; plus réclamé du tout, il est
@@ -348,21 +381,46 @@ pub fn undeploy(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(), 
     let ac = cfg.ac_install_path.as_ref();
     let inside_ac = |p: &Path| ac.is_some_and(|ac| p.starts_with(ac));
 
+    // Arbre des ajouts de ce mod, relevé **avant** d'effacer la réclamation :
+    // c'est elle qui porte le type, et sans lui on ne sait plus où chercher
+    // l'exemplaire de référence pour vérifier l'identité de ce qui est posé.
+    let sat = links
+        .first()
+        .and_then(|(_, _, kind)| ModKind::from_content_folder(kind))
+        .zip(cfg.library_path.as_ref())
+        .map(|(kind, library)| dir(library, kind, mod_id));
+
     // La réclamation part d'abord : `sync` compte ce qui reste en base, ce mod
     // ne doit plus y figurer.
     overlay::set_extra_links(conn, mod_id, "", &[]).map_err(|e| e.to_string())?;
-    for (p, _) in links.iter().filter(|(_, is_dir)| !is_dir) {
+    for (p, _, _) in links.iter().filter(|(_, is_dir, _)| !is_dir) {
         let p = Path::new(p);
         if !inside_ac(p) {
             log::warn!("extras undeploy {}: outside AC, skipped", p.display());
             continue;
         }
+        // Le fichier posé n'est plus le nôtre : un outil externe a repris le
+        // chemin depuis. Cas concret, `extension/config/tracks/loaded/` — le
+        // téléchargeur de configs de CM y écrit aussi (§4.5.3). On ne touche à
+        // rien : ce qui est là appartient désormais à quelqu'un d'autre, et le
+        // supprimer casserait l'install de l'utilisateur, pas la nôtre.
+        if let (Some(sat), Some(ac)) = (sat.as_ref(), ac) {
+            if let Ok(rel) = p.strip_prefix(ac) {
+                if p.is_file() && !is_still_ours(&sat.join(rel), p) {
+                    log::warn!(
+                        "extras undeploy {}: replaced by another tool since deploy, left alone",
+                        p.display()
+                    );
+                    continue;
+                }
+            }
+        }
         sync(conn, cfg, p);
     }
     let mut dirs: Vec<&Path> = links
         .iter()
-        .filter(|(_, is_dir)| *is_dir)
-        .map(|(p, _)| Path::new(p.as_str()))
+        .filter(|(_, is_dir, _)| *is_dir)
+        .map(|(p, _, _)| Path::new(p.as_str()))
         .filter(|p| inside_ac(p))
         .collect();
     // Du plus profond au plus superficiel, sinon un parent encore peuplé de ses
@@ -395,6 +453,22 @@ pub struct ExtraFile {
     /// plutôt que masqué — un fichier listé qui n'arrive jamais dans le jeu
     /// sans qu'on dise pourquoi est plus déroutant qu'un fichier absent.
     pub off_game_path: bool,
+    /// Le chemin est dans une zone qu'un outil externe synchronise
+    /// ([`crate::acpath::is_externally_managed`]) — typiquement
+    /// `extension/config/tracks/loaded/`, que le téléchargeur de configs de
+    /// Content Manager réécrit. L'app pose quand même : arbitrer les choix de
+    /// l'auteur n'est pas son rôle. Mais un ajout que CM remplacera sans
+    /// prévenir ne doit pas avoir l'air stable, donc on le dit.
+    pub externally_managed: bool,
+    /// Un fichier étranger occupe déjà ce chemin dans AC : ni posé par nous, ni
+    /// par un autre mod, ni un fichier du jeu qu'on a remplacé. L'exemplaire du
+    /// mod a perdu l'arbitrage par date et attend (§4.5.4).
+    ///
+    /// C'est le cas le plus fréquent en zone auto-gérée, et il était totalement
+    /// muet : les configs du dépôt CSP sont remises à jour en continu quand une
+    /// archive porte la date de son packaging, donc CM gagne presque toujours —
+    /// et rien à l'écran ne disait pourquoi le fichier du mod n'arrivait pas.
+    pub held_by_foreign_file: bool,
 }
 
 /// Liste ce qu'un mod installe hors de `content/<type>/<id>`, **lu en direct
@@ -417,13 +491,20 @@ pub fn list(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -> 
             let rel = e.path().strip_prefix(&sat).ok()?.to_path_buf();
             let target = ac.join(&rel);
             let provider = overlay::extra_provider(conn, &target.to_string_lossy()).unwrap_or(None);
+            let off_game_path = !crate::acpath::is_ac_relative(&rel);
+            let replaces_game_file = crate::gamebackup::is_replaced(conn, &target);
             Some(ExtraFile {
                 rel_path: rel.to_string_lossy().replace('\\', "/"),
                 size_bytes: e.metadata().map(|m| m.len()).unwrap_or(0),
                 deployed: provider.as_deref() == Some(mod_id),
+                // Personne ne fournit ce chemin et pourtant il est occupé : ce
+                // qui est là vient d'ailleurs (CM, une install manuelle). Sans
+                // intérêt sur un chemin qu'on ne pose jamais de toute façon.
+                held_by_foreign_file: !off_game_path && provider.is_none() && !replaces_game_file && target.is_file(),
                 provided_by: provider.filter(|p| p != mod_id),
-                replaces_game_file: crate::gamebackup::is_replaced(conn, &target),
-                off_game_path: !crate::acpath::is_ac_relative(&rel),
+                replaces_game_file,
+                off_game_path,
+                externally_managed: crate::acpath::is_externally_managed(&rel),
             })
         })
         .collect();
@@ -608,6 +689,90 @@ mod tests {
         std::fs::remove_dir_all(&sat).unwrap();
         sync(&conn, &cfg, &target);
         assert!(target.is_file(), "encore réclamé : on laisse tourner ce qui est posé");
+    }
+
+    #[test]
+    fn a_file_replaced_by_another_tool_is_never_removed() {
+        // §4.5.3 : `extension/config/tracks/loaded/` est partagé avec le
+        // téléchargeur de configs de CM. S'il a repris le chemin depuis notre
+        // pose, le fichier qui est là ne nous appartient plus — le retirer à la
+        // désactivation casserait l'install de l'utilisateur. La règle d'or n°5
+        // vaut dans les deux sens : on ne supprime que ce qu'on a posé.
+        let base = crate::testutil::temp_dir("sat-foreign");
+        let cfg = cfg_for(&base);
+        let library = cfg.library_path.clone().unwrap();
+        let ac = cfg.ac_install_path.clone().unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+
+        let rel = Path::new("extension")
+            .join("config")
+            .join("tracks")
+            .join("loaded")
+            .join("spa.ini");
+        write(&dir(&library, ModKind::Track, "spa").join(&rel), b"MOD-CONFIG");
+        deploy(&conn, &cfg, ModKind::Track, "spa").unwrap();
+        let target = ac.join(&rel);
+        assert_eq!(std::fs::read(&target).unwrap(), b"MOD-CONFIG", "posé");
+
+        // CM resynchronise : le chemin est repris, notre lien est rompu.
+        std::fs::remove_file(&target).unwrap();
+        std::fs::write(&target, b"CM-CONFIG").unwrap();
+
+        undeploy(&conn, &cfg, "spa").unwrap();
+        assert_eq!(
+            std::fs::read(&target).unwrap(),
+            b"CM-CONFIG",
+            "la config de CM survit à la désactivation du mod"
+        );
+    }
+
+    #[test]
+    fn list_flags_cm_managed_paths_and_foreign_occupants() {
+        // §4.5.5 : deux informations qui manquaient et rendaient la situation
+        // illisible — que le chemin est en zone auto-gérée par CM, et qu'un
+        // fichier étranger l'occupe déjà. Les configs du dépôt CSP étant
+        // remises à jour en continu, elles gagnent presque toujours
+        // l'arbitrage par date contre une archive figée : sans ces drapeaux,
+        // le fichier du mod n'arrivait jamais et rien ne disait pourquoi.
+        let base = crate::testutil::temp_dir("sat-managed");
+        let cfg = cfg_for(&base);
+        let library = cfg.library_path.clone().unwrap();
+        let ac = cfg.ac_install_path.clone().unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+
+        let managed = Path::new("extension")
+            .join("config")
+            .join("tracks")
+            .join("loaded")
+            .join("spa.ini");
+        let own = Path::new("extension").join("weather").join("spa_fog.ini");
+        let sat = dir(&library, ModKind::Track, "spa");
+        write(&sat.join(&managed), b"MOD");
+        write(&sat.join(&own), b"MOD");
+        set_mtime(&sat.join(&managed), 1_000_000);
+
+        // CM est déjà passé, avec un exemplaire plus récent.
+        write(&ac.join(&managed), b"CM");
+        set_mtime(&ac.join(&managed), 2_000_000);
+
+        let n = deploy(&conn, &cfg, ModKind::Track, "spa").unwrap();
+        assert_eq!(n, 1, "seul le chemin libre est posé");
+        assert_eq!(std::fs::read(ac.join(&managed)).unwrap(), b"CM", "CM garde la main");
+
+        let listed = list(&conn, &cfg, ModKind::Track, "spa");
+        let cfg_file = listed
+            .iter()
+            .find(|f| f.rel_path.contains("loaded/spa.ini"))
+            .expect("la config reste listée");
+        assert!(cfg_file.externally_managed, "signalée en zone auto-gérée");
+        assert!(cfg_file.held_by_foreign_file, "et occupée par un fichier étranger");
+        assert!(!cfg_file.deployed, "donc pas posée");
+        assert!(cfg_file.provided_by.is_none(), "aucun autre mod en cause");
+
+        let weather = listed.iter().find(|f| f.rel_path.contains("spa_fog")).unwrap();
+        assert!(!weather.externally_managed, "hors zone auto-gérée");
+        assert!(!weather.held_by_foreign_file);
+        assert!(weather.deployed);
     }
 
     #[test]
