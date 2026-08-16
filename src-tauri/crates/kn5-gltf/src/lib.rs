@@ -8,6 +8,7 @@ mod geometry;
 mod glb;
 mod locate;
 mod material;
+mod paint;
 mod texture;
 
 use std::path::Path;
@@ -85,7 +86,13 @@ pub fn convert(
     let (meshes, geometry) = geometry::flatten(model, &options.geometry);
 
     progress(ConvertStage::Textures);
-    let textures = prepare_textures(model, skin_dir, &options.textures);
+    let mut textures = prepare_textures(model, skin_dir, &options.textures);
+
+    // La peinture du skin se cuit dans une variante de la livrée, et elle a
+    // besoin de la couleur moyenne des cartes de détail — donc après leur
+    // décodage, jamais avant (voir `paint`).
+    let mut paint = paint::plan(model, &textures);
+    texture::bake_paint(&mut textures, &mut paint, model, skin_dir, &options.textures);
 
     // Les matériaux sont convertis **après** les textures : savoir si la
     // texture diffuse porte un alpha exploitable change la façon de traiter
@@ -93,7 +100,8 @@ pub fn convert(
     let materials: Vec<GltfMaterial> = model
         .materials
         .iter()
-        .map(|m| {
+        .enumerate()
+        .map(|(index, m)| {
             material::convert(
                 m,
                 material::MaterialTextures {
@@ -101,10 +109,7 @@ pub fn convert(
                         .texture_for("txDiffuse")
                         .and_then(|name| textures.get(name))
                         .is_some_and(|t| t.has_alpha),
-                    detail_average: m
-                        .texture_for("txDetail")
-                        .and_then(|name| textures.get(name))
-                        .map(|t| t.average),
+                    painted_diffuse: paint.painted_diffuse(index),
                 },
             )
         })

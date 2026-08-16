@@ -75,12 +75,13 @@ pub(crate) fn alpha_mode_of(material: &Kn5Material) -> (AlphaMode, f32) {
 
 /// Ce que le pipeline de textures apprend d'un matériau et que la conversion
 /// ne peut pas deviner seule.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct MaterialTextures {
     /// La texture diffuse porte-t-elle un alpha qu'un matériau exploite ?
     pub diffuse_has_alpha: bool,
-    /// Couleur moyenne de la carte de détail, quand le matériau en a une.
-    pub detail_average: Option<[f32; 3]>,
+    /// Variante peinte de la texture diffuse, quand la carte de détail du
+    /// matériau porte une couleur de peinture (voir [`crate::paint`]).
+    pub painted_diffuse: Option<String>,
 }
 
 pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMaterial {
@@ -129,38 +130,16 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     //
     // Appliquer l'opacité à tout matériau en fondu rendait translucides des
     // pièces qui ne devaient pas l'être — bug remonté sur `abarth500`.
-    let base_color_texture = base_color_map(material);
+    // La peinture du skin ne passe pas par `baseColorFactor` mais par une
+    // variante de la texture diffuse : elle est masquée pixel par pixel par
+    // l'alpha de cette texture, et un facteur global peindrait les
+    // décalcomanies avec la carrosserie (voir [`crate::paint`]).
+    let base_color_texture = textures.painted_diffuse.clone().or_else(|| base_color_map(material));
     let texture_carries_alpha = base_color_texture.is_some() && textures.diffuse_has_alpha;
-    let mut base_color = match alpha_mode {
+    let base_color = match alpha_mode {
         AlphaMode::Blend if !texture_carries_alpha => [1.0, 1.0, 1.0, glass_opacity(material)],
         _ => [1.0, 1.0, 1.0, 1.0],
     };
-
-    // Teinte apportée par la carte de détail (§6.2, approximation assumée).
-    //
-    // Beaucoup de peintures AC ont une diffuse en **niveaux de gris** et
-    // tiennent leur couleur du `txDetail` du skin, que le shader
-    // `ksPerPixelMultiMap` multiplie par-dessus avec un fort facteur de
-    // répétition (`detailUVMultiplier = 25` sur la Supra). glTF ne sait pas
-    // multiplier deux textures de couleur, et le motif est de toute façon trop
-    // fin pour compter à la résolution d'un aperçu : ce qu'il en reste à l'œil
-    // est une **teinte**. On applique donc la couleur moyenne de la carte,
-    // ramenée à luminance constante pour ne teinter que la nuance — une carte
-    // neutre ne change alors rien, et aucune voiture ne s'assombrit.
-    //
-    // Reste une approximation : `ks_toyota_supra_mkiv` / `dark_green_pearl_met`
-    // ressort en vert clair, pas en vert foncé nacré. Reproduire vraiment la
-    // peinture demande le pipeline multi-map, encore non documenté (§12 q3).
-    if let Some(detail) = textures
-        .detail_average
-        .filter(|_| material.property("useDetail").unwrap_or(0.0) > 0.0)
-    {
-        if let Some(tint) = detail_tint(detail) {
-            for (channel, factor) in base_color.iter_mut().zip(tint.iter()) {
-                *channel *= factor;
-            }
-        }
-    }
 
     GltfMaterial {
         name: material.name.clone(),
@@ -182,37 +161,6 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     }
 }
 
-/// Amplification de la teinte tirée de la carte de détail.
-///
-/// **Calibré à l'œil, et c'est assumé.** La carte de détail d'un skin AC est
-/// très peu saturée — celle du vert de `ks_toyota_supra_mkiv` est un vert
-/// d'eau — alors que la voiture rendue par le jeu est franchement verte. Le
-/// shader d'AC amplifie donc l'écart d'une façon qui n'est pas documentée
-/// (§12 q3, toujours ouverte). Sans ce facteur, la teinte est juste mais si
-/// pâle qu'elle se lit comme du blanc.
-const DETAIL_TINT_BOOST: f32 = 3.0;
-
-/// Teinte à appliquer, à partir de la couleur moyenne d'une carte de détail.
-///
-/// Le calcul se fait en **linéaire**, parce que `baseColorFactor` est linéaire
-/// et que faire le rapport entre canaux en sRGB écrase les écarts. La teinte
-/// est ramenée à luminance constante : une carte neutre ne change alors rien
-/// et aucune voiture ne s'assombrit.
-fn detail_tint(average_srgb: [f32; 3]) -> Option<[f32; 3]> {
-    let linear = average_srgb.map(|c| {
-        if c <= 0.04045 {
-            c / 12.92
-        } else {
-            ((c + 0.055) / 1.055).powf(2.4)
-        }
-    });
-    let luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
-    if luminance <= 0.02 {
-        return None;
-    }
-    Some(linear.map(|c| (1.0 + (c / luminance - 1.0) * DETAIL_TINT_BOOST).clamp(0.0, 1.0)))
-}
-
 /// Texture de couleur d'un matériau, **sauf sur un pare-brise**.
 ///
 /// `ksWindscreen` n'utilise pas sa `txDiffuse` comme une couleur : c'est une
@@ -225,7 +173,7 @@ fn detail_tint(average_srgb: [f32; 3]) -> Option<[f32; 3]> {
 /// (`INTERNAL_glass.dds`, une texture de rayures grises), `ks_toyota_supra_mkiv`
 /// (`Interior_windscreen_diff.dds`). Sans texture, le matériau retombe sur
 /// l'opacité tirée de `ksDiffuse`, qui est le bon comportement pour du verre.
-fn base_color_map(material: &Kn5Material) -> Option<String> {
+pub(crate) fn base_color_map(material: &Kn5Material) -> Option<String> {
     if material.shader.contains("ksWindscreen") {
         return None;
     }
@@ -417,64 +365,35 @@ mod tests {
         );
     }
 
-    // Règle : la carte de détail ne fait que teinter, jamais assombrir. Sa
-    // couleur moyenne est ramenée à luminance constante, donc une carte neutre
-    // ne change rien.
+    // Règle : la peinture du skin passe par la variante peinte de la livrée,
+    // pas par `baseColorFactor`. Un facteur global peindrait aussi les
+    // décalcomanies, et glTF le borne à 1 — il ne saurait pas éclaircir.
     #[test]
-    fn detail_map_tints_without_darkening() {
-        let painted = material("ksPerPixelMultiMap", 0, false, &[("useDetail", 1.0)]);
-        let neutral = convert(
-            &painted,
-            MaterialTextures {
-                detail_average: Some([0.5, 0.5, 0.5]),
-                ..Default::default()
-            },
-        );
-        for channel in 0..3 {
-            assert!(
-                (neutral.base_color[channel] - 1.0).abs() < 1e-5,
-                "une carte de détail neutre laisse la couleur intacte"
-            );
-        }
-
-        // Valeurs réelles mesurées sur `metal_detail.dds` du skin
-        // `01_dark_green_pearl_met` : une carte de paillettes très peu saturée.
-        let green = convert(
-            &painted,
-            MaterialTextures {
-                detail_average: Some([0.84, 0.91, 0.86]),
-                ..Default::default()
-            },
-        );
-        assert!(
-            green.base_color[1] > green.base_color[0] && green.base_color[1] > green.base_color[2],
-            "la nuance verte ressort, et domine"
-        );
-        assert!(
-            green.base_color.iter().take(3).all(|c| *c > 0.3),
-            "sur une carte réelle, aucun canal ne s'effondre"
-        );
-        assert!(
-            green.base_color[1] >= 1.0,
-            "le canal dominant reste à pleine intensité : la teinte n'assombrit pas"
-        );
-    }
-
-    // Règle : sans `useDetail`, la carte de détail est ignorée.
-    #[test]
-    fn detail_map_ignored_when_the_material_does_not_use_it() {
-        let plain = material("ksPerPixelMultiMap", 0, false, &[]);
+    fn paint_comes_from_the_painted_texture_not_the_base_colour() {
+        let body = material("ksPerPixelMultiMap", 0, false, &[("useDetail", 1.0)]);
         let converted = convert(
-            &plain,
+            &body,
             MaterialTextures {
-                detail_average: Some([0.2, 0.9, 0.2]),
+                painted_diffuse: Some("body.dds#paint-001026".to_string()),
                 ..Default::default()
             },
         );
         assert_eq!(
+            converted.base_color_texture.as_deref(),
+            Some("body.dds#paint-001026"),
+            "le matériau pointe sur la livrée peinte"
+        );
+        assert_eq!(
             converted.base_color,
             [1.0, 1.0, 1.0, 1.0],
-            "détail non déclaré, non appliqué"
+            "et la couleur de base reste neutre"
+        );
+
+        let plain = convert(&body, MaterialTextures::default());
+        assert_eq!(
+            plain.base_color_texture.as_deref(),
+            Some("body.dds"),
+            "sans peinture, la livrée d'origine"
         );
     }
 

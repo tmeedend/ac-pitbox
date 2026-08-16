@@ -615,7 +615,8 @@ Chacun a été pris en connaissance de cause, avec sa raison. Ne pas les
 | §7.1 `PreviewHandle` | `CarPreview` | Nom déjà pris par `music::PreviewHandle`. |
 | §5.1 `crates/` à la racine | `src-tauri/crates/` | Garde `target/`, `Cargo.lock` et les chemins CI où ils étaient. |
 | §5.4 décodage BC1–BC7 | + **décodeur DDS par masques** | 12 % des textures AC sont des DDS non compressés qu'`image_dds` refuse. |
-| — | **L'alpha des textures diffuses est retiré** quand aucun matériau ne l'exploite | Chez AC il ne code pas la transparence (82,5 % des pixels à alpha nul sur une carrosserie blanche). Le conserver efface la carrosserie. |
+| — | **L'alpha des textures diffuses est retiré** quand aucun matériau ne l'exploite | Chez AC il ne code pas la transparence (82,5 % des pixels à alpha nul sur une carrosserie blanche). Le conserver efface la carrosserie. Il code en fait le **masque de peinture** — voir la ligne suivante. |
+| §6.2 teinte au `baseColorFactor` | **Peinture cuite dans une variante de la texture diffuse** | Le masque est par pixel (l'alpha de la diffuse), donc un facteur global peindrait aussi les décalcomanies ; et glTF borne le facteur à 1, alors qu'un aplat blanc demande ×1,87. Voir `kn5-format.md`, écart n°5. |
 
 ---
 
@@ -631,11 +632,14 @@ gêne constatée :
    *Reste possible plus tard* : exporter le `TANGENT` du KN5 (three.js
    reconstruit aujourd'hui les tangentes par dérivées d'écran), et vérifier le
    canal vert des normal maps DirectX. Non nécessaire pour ce défaut-ci.
-2. **Couleur de peinture** ✅ **améliorée, pas résolue.** La teinte vient de la
-   carte de détail du skin, pas de la diffuse — voir `kn5-format.md`, écart
-   n°5. La Supra verte ressort désormais verte. La nuance exacte reste
-   approchée : un facteur d'amplification calibré à l'œil compense une
-   amplification du shader qu'on ne sait pas encore reproduire (§12 q3).
+2. ~~**Couleur de peinture.**~~ ✅ **Corrigée.** La peinture vient de la carte
+   de détail du skin (multipliée ×2, convention `MODULATE2X`) et elle est
+   **masquée par l'alpha de la diffuse**, qui distingue la carrosserie des
+   décalcomanies. Elle est donc cuite dans une variante de la texture, pas
+   posée en `baseColorFactor` — voir `kn5-format.md`, écart n°5, réécrit : la
+   mesure qui avait justifié le facteur calibré à l'œil (supprimé) était
+   fausse. Vérifié sur six couples voiture/skin, dont
+   `ks_abarth500_assetto_corse` / `dark_blue`, qui ressortait blanche.
 3. ~~**Pare-brise constellé de taches.**~~ ✅ **Corrigé.** Même mécanisme que
    les dégâts, sur un autre slot : `ksWindscreen` réserve sa `txDiffuse` aux
    rayures et à la poussière. Voir `kn5-format.md`, écart n°6.
@@ -646,6 +650,14 @@ gêne constatée :
 5. **Éclairage et cadrage calés sur les `preview.jpg` Kunos**, pour que le
    passage de la photo à la 3D ne saute pas à l'œil. C'est le point qui
    demande le plus de tâtonnement visuel.
+   Point de départ utile, mesuré en corrigeant le n°2 : l'albédo produit est
+   désormais juste, mais AC ne l'affiche jamais tel quel — ses matériaux
+   annoncent `ksAmbient + ksDiffuse ≈ 0,8` sur une carrosserie et son studio
+   est sombre, là où le viewer éclaire avec une `RoomEnvironment` claire, à
+   exposition 1 et sans réglage. Une voiture peut donc rester « trop claire »
+   alors que sa peinture est la bonne : chercher du côté de
+   `toneMappingExposure` / `scene.environmentIntensity` avant de retoucher la
+   conversion.
 
 Restent aussi, hérités du plan initial : `txMaps` une fois sa sémantique
 documentée (§6.2, §12 q3 — **toujours ouverte**), choix du LOD en config,

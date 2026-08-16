@@ -309,8 +309,10 @@ laisser pourrir ici.
       **Lot 6 en cours.** Faits : tôle froissée, couleur de peinture, taches
       de pare-brise — tous trois avaient la **même cause de fond**, AC range
       dans un slot standard une carte que son shader ne mélange qu'à
-      proportion d'un état (dégâts, saleté). Devant un défaut du genre « la
-      voiture a l'air abîmée ou sale », c'est la première chose à vérifier.
+      proportion de quelque chose : un état (dégâts, saleté) ou un masque (la
+      peinture, sous l'alpha de la diffuse). Devant un défaut du genre « la
+      voiture a l'air abîmée, sale, ou de la mauvaise couleur », c'est la
+      première chose à vérifier — canal alpha compris.
       Restent les réglages de caméra à exposer et l'éclairage à caler sur les
       `preview.jpg` Kunos — détail dans `docs/SPEC-preview-3d-kn5.md` §15.
       Deux règles à ne pas perdre de vue :

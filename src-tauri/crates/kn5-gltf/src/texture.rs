@@ -259,6 +259,90 @@ pub fn prepare_textures(model: &Kn5Model, skin_dir: Option<&Path>, options: &Tex
     set
 }
 
+/// Bakes the paint the plan asks for, and adds the results to the set.
+///
+/// A second decoding pass over a handful of liveries, and it is deliberate: the
+/// paint colour is the *average of another texture*, so it cannot be known
+/// before the first pass has decoded the detail maps. Only the diffuse textures
+/// a plan actually names are read again.
+///
+/// Variants that turn out to change nothing are dropped from the plan, so their
+/// materials fall back on the plain texture instead of shipping a copy of it.
+pub(crate) fn bake_paint(
+    set: &mut TextureSet,
+    plan: &mut crate::paint::Plan,
+    model: &Kn5Model,
+    skin_dir: Option<&Path>,
+    options: &TextureOptions,
+) {
+    let variants = plan.variants();
+    let baked: Vec<(String, Result<Option<PreparedTexture>, TextureWarning>)> = variants
+        .par_iter()
+        .map(|variant| {
+            let embedded = model.texture(&variant.source);
+            let Some((blob, origin)) = load_source(&variant.source, skin_dir, embedded.map(|t| t.data.as_slice()))
+            else {
+                // The plain texture was prepared, so its source was there a
+                // moment ago: only a race with the filesystem gets here.
+                return (
+                    variant.name.clone(),
+                    Err(TextureWarning {
+                        name: variant.name.clone(),
+                        reason: "paint source disappeared between the two passes".to_string(),
+                    }),
+                );
+            };
+            let outcome = paint_one(variant, &blob, origin, options).map_err(|reason| TextureWarning {
+                name: variant.name.clone(),
+                reason,
+            });
+            (variant.name.clone(), outcome)
+        })
+        .collect();
+
+    for (name, outcome) in baked {
+        match outcome {
+            Ok(Some(texture)) => set.textures.push(texture),
+            Ok(None) => plan.forget(&name),
+            Err(warning) => {
+                plan.forget(&name);
+                set.warnings.push(warning);
+            }
+        }
+    }
+}
+
+/// Decodes a diffuse texture again and paints it. `None` when its alpha mask
+/// protects every pixel, i.e. the variant would duplicate its source.
+fn paint_one(
+    variant: &crate::paint::Variant,
+    blob: &[u8],
+    origin: TextureOrigin,
+    options: &TextureOptions,
+) -> Result<Option<PreparedTexture>, String> {
+    let source_bytes = blob.len();
+    let decoded = decode(blob).map_err(|e| format!("decode failed: {e}"))?;
+    let mut resized = downscale(decoded, TextureRole::Color.max_size(options));
+    if !crate::paint::apply(&mut resized, variant.factor) {
+        return Ok(None);
+    }
+    let (bytes, mime) = encode(&resized, TextureRole::Color, options)?;
+
+    Ok(Some(PreparedTexture {
+        name: variant.name.clone(),
+        mime,
+        bytes,
+        width: resized.width(),
+        height: resized.height(),
+        role: TextureRole::Color,
+        origin,
+        source_bytes,
+        // `paint::apply` consumes the mask and leaves the image opaque.
+        has_alpha: false,
+        average: average_color(&resized),
+    }))
+}
+
 /// Skin file first, embedded blob second (§4.3).
 fn load_source(name: &str, skin_dir: Option<&Path>, embedded: Option<&[u8]>) -> Option<(Vec<u8>, TextureOrigin)> {
     if let Some(dir) = skin_dir {

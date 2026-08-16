@@ -267,34 +267,64 @@ critère retenu, il ne dépend d'aucune convention de nommage.
 ## Écart n°5 — la couleur de peinture est souvent dans la carte de détail
 
 **Symptôme** : `ks_toyota_supra_mkiv` / `01_dark_green_pearl_met` ressortait
-**blanche**, alors que `abarth500` / `black_red` était juste.
+**blanche**, alors que `abarth500` / `black_red` était juste. Puis, une fois la
+teinte posée : `ks_abarth500_assetto_corse` / `dark_blue` ressortait **blanche**
+là où le jeu la rend bleu nuit.
 
-**Réel** : la texture diffuse du corps de la Supra est en **niveaux de gris
-purs** — aucune couleur. Le skin ne fournit que quatre fichiers, dont
-`metal_detail.dds`, une carte de paillettes métallisées **vert d'eau**. C'est
-elle qui porte la teinte, et le shader `ksPerPixelMultiMap` la multiplie
-par-dessus avec `useDetail = 1` et `detailUVMultiplier = 25`.
+**Réel** : la texture diffuse d'une carrosserie AC est un fond **gris neutre**
+(la Supra : 200 à 230 sur les panneaux) qui porte la découpe des panneaux et
+les décalcomanies — mais **aucune couleur**. La peinture vient de la petite
+carte `txDetail` que le dossier du skin remplace, le plus souvent un aplat de
+quelques dizaines de pixels. Le shader les combine à la manière du
+`MODULATE2X` de Direct3D, où **un gris moyen est neutre** :
 
-Recoupement décisif : le skin `00_super_red` de la même voiture fournit un
-`metal_detail.dds` **rose pâle**. La teinte suit bien le skin.
+```
+diffuse.rgb *= lerp(1, detail.rgb * 2, useDetail * (1 - diffuse.a))
+```
 
-**Correctif, approximation assumée** : glTF ne sait pas multiplier deux
-textures de couleur, et à la résolution d'un aperçu le motif est de toute façon
-trop fin pour compter — ce qu'il en reste à l'œil est une **teinte**. On
-applique donc la couleur moyenne de la carte de détail au `baseColorFactor`,
-avec deux précautions :
+Deux choses se lisent mal dans cette ligne et expliquent chacune un bug :
 
-- **calcul en linéaire**, parce que `baseColorFactor` l'est et que faire le
-  rapport entre canaux en sRGB écrase les écarts ;
-- **luminance ramenée à l'identique**, pour ne toucher qu'à la nuance : une
-  carte neutre ne change alors rien et aucune voiture ne s'assombrit.
+1. le facteur **×2** — les aplats « officiels » de Kunos valent 148 à 156 sur
+   255, soit juste au-dessus du 128 que cette convention rend neutre ;
+2. le terme `1 - diffuse.a` : **l'alpha de la diffuse est un masque de
+   peinture**, pas une transparence. Alpha nul = carrosserie, à peindre ;
+   alpha plein = décalcomanie, à laisser. C'est ce qui garde un numéro de
+   course blanc sur une voiture bleu nuit — mesuré sur la livrée de
+   `dark_blue` : carrosserie α=3, planche du 495 α=255, bandes bleues α=205.
+   C'est aussi ce que voyait l'écart n°1 (« 82,5 % des pixels à alpha nul sur
+   une carrosserie blanche ») sans le nommer.
 
-⚠️ Un facteur d'amplification (`DETAIL_TINT_BOOST = 3.0`) est **calibré à
-l'œil** : les cartes de détail d'AC sont très peu saturées alors que les
-voitures rendues par le jeu sont franchement colorées, donc le shader amplifie
-d'une façon qui reste non documentée (§12 q3, toujours ouverte). Sans ce
-facteur la teinte est juste mais si pâle qu'elle se lit comme du blanc. C'est
-le seul nombre de ce chantier qui n'ait pas de justification mesurée.
+**Vérifié sur toutes les combinaisons essayées**, sans exception :
+
+| Voiture / skin | aplat `txDetail` | voiture rendue |
+| --- | --- | --- |
+| `ks_abarth500_assetto_corse` / `dark_blue` | (0, 16, 38) | bleu nuit |
+| … / `red_yellow` | (239, 0, 0) | rouge |
+| … / `white_grey` | (238, 238, 238) | blanche |
+| … / `black_neon` | (8, 8, 8) | noire |
+| `ks_toyota_supra_mkiv` / `01_dark_green_pearl_met` | (5, 105, 36) | vert foncé |
+| … / `05_blue_pearl_met` | (35, 57, 161) | bleue |
+
+**Correctif** : la peinture est cuite dans une **variante de la texture
+diffuse** (`crates/kn5-gltf/src/paint.rs`), pas dans `baseColorFactor`. Deux
+raisons, toutes deux rédhibitoires pour un facteur global : le masque est par
+pixel, donc un facteur peindrait les décalcomanies avec la carrosserie ; et
+glTF borne `baseColorFactor` à 1, donc il ne saurait pas porter la moitié
+*éclaircissante* d'un `MODULATE2X` (un aplat blanc demande ×1,87). Les
+variantes sont nommées d'après leur source et leur couleur, donc deux matériaux
+qui demandent la même peinture partagent une image ; une variante qui
+n'assombrit ni n'éclaircit rien (diffuse entièrement opaque) n'est pas écrite.
+
+⚠️ **Correction d'une conclusion antérieure.** Cette section affirmait que la
+carte de détail de la Supra verte était un « vert d'eau » très peu saturé, ce
+qui avait justifié un facteur d'amplification calibré à l'œil
+(`DETAIL_TINT_BOOST = 3.0`, supprimé). C'était une mesure fausse : la carte
+vaut (5, 105, 36), un vert franc et sombre. Le rendu trop pâle ne venait pas
+d'une carte fade mais de la normalisation à luminance constante, qui
+interdisait par construction à une voiture d'être foncée — et faisait tomber
+les peintures les plus sombres sous le garde-fou `luminance <= 0.02`, d'où une
+carrosserie restée blanche. Méthode de vérification : décodage direct du DDS
+hors pipeline (moyenne par canal) et comparaison au `preview.jpg` du skin.
 
 ---
 
@@ -316,12 +346,14 @@ et de poussière**, qu'AC ne mélange qu'à proportion de la saleté du pare-bri
 qui est le bon comportement pour du verre. Verrouillé par
 `windscreen_does_not_use_its_dirt_map_as_colour`.
 
-> **Motif à retenir pour la suite.** Trois défauts visuels sur trois avaient la
-> même cause de fond : **AC range dans un slot de texture standard une carte
-> que son shader ne mélange qu'à proportion d'un état** (dégâts, saleté). Prise
-> au premier degré, elle s'applique à 100 %. Devant un nouveau défaut « la
-> voiture a l'air abîmée / sale / bizarre », c'est la première chose à
-> vérifier : quel shader, et que met-il vraiment dans ce slot.
+> **Motif à retenir pour la suite.** Quatre défauts visuels sur quatre avaient
+> la même cause de fond : **AC range dans un slot standard une carte que son
+> shader ne mélange qu'à proportion de quelque chose** — un état (dégâts,
+> saleté) ou un masque (la peinture, sous l'alpha de la diffuse). Prise au
+> premier degré, elle s'applique à 100 %, ou pas du tout. Devant un nouveau
+> défaut « la voiture a l'air abîmée / sale / de la mauvaise couleur », c'est
+> la première chose à vérifier : quel shader, et que met-il vraiment dans ce
+> slot — **y compris dans le canal alpha**.
 
 ---
 
