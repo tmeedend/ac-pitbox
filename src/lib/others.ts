@@ -15,6 +15,10 @@ export interface OtherModRow {
   is_active: boolean;
   junctions: string[];
   conflicts: ConflictInfo[];
+  /** Fichiers visant une zone qu'un outil externe synchronise
+   * (`extension/config/*​/loaded/`, vao-patches) : Content Manager peut y
+   * remplacer la version du mod par la sienne (§4.5.3). */
+  externally_managed: number;
 }
 
 export interface ActivateOtherResult {
@@ -41,4 +45,10 @@ export function deactivateOther(id: string): Promise<void> {
 /** Supprime proprement un mod « autre » (jonctions + fichiers + overlay, §7.3). */
 export function deleteOtherMod(id: string): Promise<void> {
   return invoke<void>("delete_other_mod", { id });
+}
+
+/** Ouvre le dossier de bibliothèque du mod « autre » dans l'explorateur —
+ * résolu et ouvert côté backend, comme `openModFolder`. */
+export function openOtherModFolder(id: string): Promise<void> {
+  return invoke<void>("open_other_mod_folder", { id });
 }

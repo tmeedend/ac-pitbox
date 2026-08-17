@@ -12,6 +12,7 @@
     activateOther,
     deactivateOther,
     deleteOtherMod,
+    openOtherModFolder,
     type OtherModRow,
   } from "$lib/others";
   import { t } from "$lib/i18n/index.svelte";
@@ -68,6 +69,15 @@
       error = errorText(e);
     } finally {
       busy = null;
+    }
+  }
+
+  async function openFolder(o: OtherModRow) {
+    error = "";
+    try {
+      await openOtherModFolder(o.id);
+    } catch (e) {
+      error = errorText(e);
     }
   }
 
@@ -128,7 +138,15 @@
           <div class="row">
             <span class="o-name mono">{o.id}</span>
             {#if o.source_archive}<span class="src mono">{o.source_archive}</span>{/if}
+            {#if o.externally_managed}
+              <span class="managed" title={t("others.managedTooltip")}>
+                {t("others.managed", { count: o.externally_managed })}
+              </span>
+            {/if}
             {#if o.is_active}<span class="state on">{t("common.active").toLowerCase()}</span>{:else}<span class="state">{t("common.inactive").toLowerCase()}</span>{/if}
+            <button class="btn" type="button" onclick={() => openFolder(o)} title={t("others.openFolder")}>
+              {t("others.openFolder")}
+            </button>
             <button class="btn prio" class:on={o.is_priority} type="button" onclick={() => togglePriority(o)} disabled={busy === o.id} title={t("others.priorityTooltip")}>
               {t("others.priority")}
             </button>
@@ -224,6 +242,13 @@
   }
   .state.on {
     color: var(--green);
+  }
+  /* Bleu = information, comme dans « Ajouts au jeu » (§4.5.5) : le chemin est
+     partagé avec un outil externe, ce n'est pas une anomalie. */
+  .managed {
+    color: var(--blue);
+    font-size: 10px;
+    white-space: nowrap;
   }
   .btn {
     background: var(--raised);

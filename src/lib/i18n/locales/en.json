@@ -793,7 +793,10 @@
     "priority": "★ Priority",
     "priorityTooltip": "Mark as priority: wins in case of a contested spot",
     "confirmDelete": "Delete \"{id}\"? It will be deactivated (junctions removed) and its files erased.",
-    "conflictsWith": "⚠ Files shared with"
+    "conflictsWith": "⚠ Files shared with",
+    "openFolder": "Open folder",
+    "managed": "{count} in Content Manager territory",
+    "managedTooltip": "Content Manager syncs these folders from the CSP config repository. It may replace these files with its own versions at any time. This is not the recommended location for a mod."
   },
   "import": {
     "subtitlePrefix": "Adds mods to the library. An imported (or updated) mod is ",

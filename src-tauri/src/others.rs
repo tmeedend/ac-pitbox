@@ -132,6 +132,13 @@ pub struct OtherModCard {
     pub row: OtherModRow,
     /// Autres mods « autres » partageant au moins un chemin de fichier (§7.3).
     pub conflicts: Vec<ConflictInfo>,
+    /// Fichiers visant une zone qu'un outil externe synchronise
+    /// ([`crate::acpath::is_externally_managed`]) — `extension/config/*/loaded/`,
+    /// vao-patches. Même signalement que dans « Ajouts au jeu » (§4.5.5) : les
+    /// deux mécanismes de pose posent dans le même jeu, il n'y a pas de raison
+    /// qu'un seul des deux prévienne. Un pack multi-mods qui livre des configs
+    /// CSP que rien ne rattache atterrit précisément ici (§7.3).
+    pub externally_managed: usize,
 }
 
 /// Liste les mods « autres » avec les conflits de fichiers détectés entre eux.
@@ -166,9 +173,27 @@ pub fn list_others(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<O
                         .collect()
                 })
                 .unwrap_or_default();
-            OtherModCard { row, conflicts }
+            let externally_managed = mine
+                .map(|f| f.iter().filter(|p| crate::acpath::is_externally_managed(p)).count())
+                .unwrap_or(0);
+            OtherModCard {
+                row,
+                conflicts,
+                externally_managed,
+            }
         })
         .collect())
+}
+
+/// Dossier de bibliothèque d'un mod « autre », résolu depuis l'overlay — le
+/// pendant de `library::folder_path` pour ce type d'entrée.
+pub fn folder_path(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<PathBuf, String> {
+    let m = overlay::get_other_mod(conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_UNKNOWN)?;
+    crate::libpath::resolve(cfg.library_path.as_deref(), &m.library_path)
+        .filter(|d| d.is_dir())
+        .ok_or_else(|| crate::errors::MOD_NOT_FOUND.to_string())
 }
 
 pub fn set_priority(conn: &Connection, id: &str, priority: bool) -> Result<(), String> {
@@ -676,5 +701,72 @@ mod tests {
         assert_eq!(a.conflicts.len(), 1);
         assert_eq!(a.conflicts[0].other_id, "ModB");
         assert_eq!(a.conflicts[0].count, 1, "un seul fichier commun (x.ini)");
+    }
+
+    #[test]
+    fn others_report_files_landing_in_cm_managed_folders() {
+        // §4.5.3/§7.3 : un pack multi-mods dont les configs CSP ne se rattachent
+        // à aucune voiture atterrit en « autre mod ». Le signalement « zone
+        // Content Manager » ne peut donc pas vivre seulement dans « Ajouts au
+        // jeu » — les deux mécanismes posent dans le même jeu.
+        let base = crate::testutil::temp_dir("other-managed");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+
+        let src = base.join("src").join("Pack");
+        make_tree(
+            &src,
+            &[
+                "extension/config/tracks/loaded/spa.ini",
+                "extension/vao-patches/spa.vao-patch",
+                // Hors zone auto-gérée : appartient bien au mod.
+                "content/fonts/pack.png",
+            ],
+        );
+        import_other(&conn, &library, "Pack.zip", &src, true, ExtractionMode::InfoOnly).unwrap();
+
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let card = list_others(&conn, &cfg)
+            .unwrap()
+            .into_iter()
+            .find(|c| c.row.id == "Pack")
+            .unwrap();
+        assert_eq!(
+            card.externally_managed, 2,
+            "la config et le vao-patch sont comptés, pas la font"
+        );
+    }
+
+    #[test]
+    fn folder_path_resolves_the_library_folder_of_an_other_mod() {
+        // Le bouton « ouvrir le dossier » résout côté Rust, jamais depuis un
+        // chemin reçu du front — c'est ce qui permet de garder fermé le scope
+        // ACL du plugin `opener`.
+        let base = crate::testutil::temp_dir("other-folder");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+
+        let src = base.join("src").join("ShaderMod");
+        make_tree(&src, &["system/shaders/x.fx"]);
+        import_other(&conn, &library, "ShaderMod.zip", &src, true, ExtractionMode::InfoOnly).unwrap();
+
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        assert_eq!(
+            folder_path(&conn, &cfg, "ShaderMod").unwrap(),
+            library.join("others").join("ShaderMod"),
+            "le dossier de bibliothèque du mod"
+        );
+        assert!(
+            folder_path(&conn, &cfg, "does_not_exist").is_err(),
+            "un id inconnu ne renvoie pas un chemin inventé"
+        );
     }
 }

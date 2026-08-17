@@ -11,6 +11,22 @@ pub fn list_other_mods(app: AppHandle, db: State<Db>) -> Result<Vec<crate::other
     crate::others::list_others(&conn, &cfg).map_err(|e| e.to_string())
 }
 
+/// Ouvre le dossier de bibliothèque d'un mod « autre » dans l'explorateur.
+/// Même rationale que `open_mod_folder` : le chemin est résolu côté Rust depuis
+/// l'overlay, jamais reçu du front, donc le scope ACL du plugin `opener` reste
+/// fermé.
+#[tauri::command]
+pub fn open_other_mod_folder(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let cfg = crate::config::load(&app);
+    let path = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        crate::others::folder_path(&conn, &cfg, &id)?
+    };
+    app.opener()
+        .open_path(path.display().to_string(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
 /// Marque/démarque un mod « autre » comme prioritaire (§7.3).
 #[tauri::command]
 pub fn set_other_priority(db: State<Db>, id: String, priority: bool) -> Result<(), String> {

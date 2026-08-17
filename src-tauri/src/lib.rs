@@ -232,6 +232,7 @@ pub fn run() {
             commands::others::activate_other,
             commands::others::deactivate_other,
             commands::others::delete_other_mod,
+            commands::others::open_other_mod_folder,
             commands::addons::delete_app,
             commands::rules::get_rules,
             commands::rules::save_rules,

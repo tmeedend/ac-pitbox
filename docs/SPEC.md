@@ -407,7 +407,9 @@ Une **colonne latérale unique** (maquette de référence `pitbox-biblio-session
 
 ### 7.3 Type « Autres mods »
 
-Mods de type non reconnu (shaders, configs CSP, mods d'UI, weather patterns…) : listés dans « Autres mods », activables/désactivables (hardlinks) comme les autres. Priorité notée + conflits signalés (pas de moteur de superposition type MO2).
+Mods de type non reconnu (shaders, configs CSP, mods d'UI, weather patterns…) : listés dans « Autres mods », activables/désactivables (hardlinks) comme les autres. Priorité notée + conflits signalés (pas de moteur de superposition type MO2). Chaque entrée a un bouton **« ouvrir le dossier »** vers son emplacement en bibliothèque — le chemin est résolu côté Rust depuis l'overlay, jamais reçu du front, ce qui permet de garder fermé le scope ACL du plugin `opener` (même rationale que `open_mod_folder`).
+
+**Le signalement « zone Content Manager » vaut ici aussi** (§4.5.3) : le décompte des fichiers de l'entrée qui visent un dossier auto-synchronisé est affiché sur sa ligne, avec la même explication au survol que dans « Ajouts au jeu ». Ce n'est pas un doublon décoratif — c'est précisément ici qu'atterrissent les configs CSP d'un **pack multi-mods**, puisque rien ne les rattache à une voiture en particulier (voir le rattachement ci-dessous). N'avertir que dans « Ajouts au jeu » aurait laissé muet le cas le plus probable.
 
 **Pas de notion de mise à jour.** Réimporter une archive dont l'id existe déjà en bibliothèque ne fait rien — ni remplacement, ni erreur, silencieusement ignoré. Pour reprendre un mod « autre » modifié, il faut d'abord le supprimer.
 
