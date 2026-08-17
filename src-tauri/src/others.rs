@@ -36,6 +36,16 @@ pub struct OtherImported {
     pub id: String,
     /// Fichiers annexes redirigés vers le dossier ressources (§4.5.2).
     pub resources_extracted: usize,
+    /// Composant **optionnel** (§4.6bis) : livré par l'auteur dans une archive
+    /// à part **et** modifiant le jeu de base. Importé mais laissé inactif —
+    /// c'est à l'utilisateur de dire s'il le veut.
+    #[serde(default)]
+    pub optional: bool,
+    /// Combien de fichiers du jeu de base il remplacerait. C'est le chiffre qui
+    /// rend la question répondable : « remplace 10 fichiers » se décide, « ce
+    /// mod contient des trucs » non.
+    #[serde(default)]
+    pub game_files_replaced: usize,
 }
 
 /// Id à partir du nom d'archive/dossier importé (pas du dossier temp
@@ -107,7 +117,54 @@ pub fn import_other(
     Some(OtherImported {
         id,
         resources_extracted,
+        optional: false,
+        game_files_replaced: 0,
     })
+}
+
+/// Combien de fichiers du **jeu de base** cet arbre remplacerait s'il était posé.
+///
+/// « Du jeu de base » = le chemin existe déjà dans AC, aucun mod ne le réclame
+/// (§4.5.4) et ce n'est pas un exemplaire qu'on a soi-même posé. C'est la
+/// mesure du **rayon d'action**, et c'est elle qui distingue un mod qui
+/// s'installe chez lui d'un mod qui s'installe chez les autres : un fichier
+/// ajouté ne coûte rien à personne, un fichier remplacé change le jeu pour
+/// toutes les voitures et toutes les sessions.
+///
+/// Les chemins qui ne mènent nulle part dans le jeu (§4.5.3) ne comptent pas :
+/// ils ne seront pas posés, ils ne remplacent donc rien. D'où la traversée de
+/// l'emballage de l'auteur, comme partout ailleurs : mesuré depuis la racine
+/// d'extraction, un composant livré dans un dossier à son nom ne présenterait
+/// **aucun** chemin de jeu et serait donc compté à zéro — soit exactement
+/// l'inverse de ce que ce décompte doit détecter.
+pub fn game_files_replaced(conn: &Connection, cfg: &AppConfig, dir: &Path) -> usize {
+    let Some(ac) = cfg.ac_install_path.as_ref() else {
+        return 0;
+    };
+    let dir = &crate::acpath::effective_root(dir);
+    WalkDir::new(dir)
+        .into_iter()
+        .flatten()
+        .filter(|e| e.file_type().is_file())
+        .filter(|e| {
+            let Ok(rel) = e.path().strip_prefix(dir) else {
+                return false;
+            };
+            if !crate::acpath::is_ac_relative(rel) {
+                return false;
+            }
+            let target = ac.join(rel);
+            if !target.exists() {
+                return false;
+            }
+            // Réclamé par un mod, ou déjà remplacé par nous : l'original est
+            // déjà sous notre garde, ce n'est plus « du jeu de base ».
+            let claimed = overlay::extra_claimants(conn, &target.to_string_lossy())
+                .map(|c| !c.is_empty())
+                .unwrap_or(false);
+            !claimed && !crate::gamebackup::is_replaced(conn, &target)
+        })
+        .count()
 }
 
 /// Chemins relatifs de tous les fichiers stockés d'un mod « autre », comptés
