@@ -685,10 +685,21 @@ gêne constatée :
      (`components/detail/showroomEnvironment.ts`), procédural comme elle et
      sans asset (§8.1).
    - **Sol** : l'ombre de contact seule laissait la voiture posée sur rien.
-     Le même dégradé porte maintenant la **flaque de lumière** que renvoie le
-     sol d'un showroom, avec l'ombre en son milieu — l'intensité vient de la
-     photo (le fond d'un `preview.jpg` passe de rgb(2,3,5) dans les coins à
-     rgb(12,13,15) sous la voiture).
+     Le sol porte maintenant la **flaque de lumière** que renvoie un showroom
+     (intensité partie de la photo — son fond passe de rgb(2,3,5) dans les
+     coins à rgb(12,13,15) sous la voiture — puis remontée d'un cran, l'aperçu
+     n'ayant pas le décor autour pour donner la profondeur), **et l'ombre
+     portée de la voiture**, projetée pour de vrai.
+     L'ombre vient d'une lumière directionnelle **d'intensité nulle** : elle
+     n'éclaire rien, tout ce que la voiture reçoit continue de venir de la
+     carte d'environnement calée plus haut. Elle n'existe que pour donner une
+     direction de projection, `ShadowMaterial` lisant le masque d'ombre et non
+     la contribution de la lumière. Carte d'ombre en **VSM** et non
+     `PCFSoftShadowMap`, dont le filtre est de taille fixe : `shadow.radius`
+     n'y fait rien, et une ombre nette sous une rampe large ne ressemble à
+     rien (retour utilisateur). Le dégradé du sol ne garde qu'un
+     assombrissement de contact, là où une carte d'ombre manque toujours de
+     résolution.
 
    ⚠️ **Piège de la méthode, vérifié par l'utilisateur.** La carrosserie sort
    plus claire que le `preview.jpg` (Supra verte : (53, 182, 72) contre

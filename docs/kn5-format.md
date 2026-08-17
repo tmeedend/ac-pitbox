@@ -342,9 +342,24 @@ et de poussière**, qu'AC ne mélange qu'à proportion de la saleté du pare-bri
 (`Interior_windscreen_diff.dds`).
 
 **Correctif** : aucune texture de couleur exportée pour un matériau
-`ksWindscreen`. Le matériau retombe alors sur l'opacité tirée de `ksDiffuse`,
-qui est le bon comportement pour du verre. Verrouillé par
+`ksWindscreen`. Verrouillé par
 `windscreen_does_not_use_its_dirt_map_as_colour`.
+
+**Suite : sur ce shader, `ksDiffuse` n'est pas non plus une opacité.** Le
+matériau retombait alors sur l'opacité tirée de `ksDiffuse`, comme tout le
+vitrage — et c'était encore faux. Symptôme remonté par l'utilisateur : un
+**voile blanc sur tout l'habitacle** de `ks_toyota_supra_mkiv`, qui lavait les
+sièges et la planche de bord.
+
+La valeur trahit sa nature : `ksDiffuse = 0,45` sur `ks_toyota_supra_mkiv`,
+`ks_mazda_mx5_cup`, `ks_ford_gt40` et `abarth500`, 0,75 sur
+`ks_ferrari_488_gt3`. C'est une constante de la famille de shaders, pas un
+réglage de vitre — prise pour une opacité, elle pose une vitre blanche opaque
+à 45 % devant l'intérieur. Les noms des matériaux disent la même chose :
+`INT_Glass_REFLEX`, `INT_Vetro`, `Windshield`. C'est la couche de **reflet**
+du pare-brise ; la vitre elle-même est claire, et ce qui doit s'y voir est
+l'environnement réfléchi. Opacité fixée à 0,1, verrouillée par
+`a_windscreen_stays_clear_whatever_its_ksdiffuse_says`.
 
 > **Motif à retenir pour la suite.** Quatre défauts visuels sur quatre avaient
 > la même cause de fond : **AC range dans un slot standard une carte que son

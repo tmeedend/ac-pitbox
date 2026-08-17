@@ -215,6 +215,11 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    // VSM et non `PCFSoftShadowMap` : ce dernier a un filtre de taille fixe,
+    // que `shadow.radius` ne touche pas — l'ombre y reste nette quoi qu'on
+    // fasse, et une ombre nette sous une rampe large ne ressemble à rien.
+    renderer.shadowMap.type = THREE.VSMShadowMap;
 
     const scene = new THREE.Scene();
     // Image-based lighting, and no asset to ship for it (§8.1). The showroom is
@@ -234,6 +239,10 @@
       if (materials.some((m) => (m as ThreeModule.Material).transparent)) {
         mesh.renderOrder = 1;
         for (const m of materials) (m as ThreeModule.Material).depthWrite = false;
+      } else {
+        // Only the opaque body casts: a windscreen that casts a shadow map
+        // casts it solid black, and the car ends up sitting on a dark blob.
+        mesh.castShadow = true;
       }
     });
 
@@ -284,7 +293,52 @@
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.set(center.x, box.min.y + radius / 400, center.z);
+    ground.renderOrder = -2;
     scene.add(ground);
+
+    // The car's own shadow, projected on that floor.
+    //
+    // The light is at **intensity zero**: it lights nothing, and everything the
+    // car receives still comes from the environment map, which is what was
+    // calibrated against the Kunos photos. It exists only so three.js has a
+    // direction to project from — `ShadowMaterial` reads the shadow mask, not
+    // the light's contribution, so the two concerns stay apart.
+    const sun = new THREE.DirectionalLight(0xffffff, 0);
+    sun.castShadow = true;
+    // Above and slightly to the front-left, the direction the ceiling strips
+    // of the showroom come from: the shadow falls almost straight under the
+    // car, as in the photos, with just enough offset to be read as a shadow.
+    sun.position.set(center.x - radius * 0.35, center.y + radius * 4, center.z + radius * 0.6);
+    sun.target.position.copy(center);
+    scene.add(sun.target);
+    scene.add(sun);
+    const shadowCamera = sun.shadow.camera;
+    shadowCamera.left = -radius;
+    shadowCamera.right = radius;
+    shadowCamera.top = radius;
+    shadowCamera.bottom = -radius;
+    shadowCamera.near = radius * 0.5;
+    shadowCamera.far = radius * 8;
+    shadowCamera.updateProjectionMatrix();
+    sun.shadow.mapSize.set(1024, 1024);
+    // Le flou : une rampe de plafond est une source large, donc son ombre est
+    // molle et le devient encore plus loin du point de contact. `radius` est
+    // le rayon du flou, `blurSamples` ce qui l'empêche de se voir par paquets.
+    sun.shadow.radius = 5;
+    sun.shadow.blurSamples = 16;
+    // Le biais reste à zéro en VSM : la variance fait déjà ce travail, et un
+    // biais négatif y décolle l'ombre de la voiture au lieu de la nettoyer.
+    sun.shadow.bias = 0;
+
+    const shadowCatcher = new THREE.Mesh(
+      new THREE.PlaneGeometry(radius * 5, radius * 5),
+      new THREE.ShadowMaterial({ opacity: 0.5 }),
+    );
+    shadowCatcher.receiveShadow = true;
+    shadowCatcher.rotation.x = -Math.PI / 2;
+    shadowCatcher.position.set(center.x, box.min.y + radius / 300, center.z);
+    shadowCatcher.renderOrder = -1;
+    scene.add(shadowCatcher);
 
     host.appendChild(renderer.domElement);
     const built: ThreeScene = { THREE, renderer, scene, camera, controls, pmrem, turntable, center, radius };
@@ -352,22 +406,26 @@
     const ctx = canvas.getContext("2d");
     if (ctx) {
       const middle = size / 2;
-      // Calé sur la photo : le fond d'un `preview.jpg` Kunos passe de
-      // rgb(2,3,5) dans les coins à rgb(12,13,15) sous la voiture, soit une
-      // dizaine de niveaux ajoutés au plus clair de la flaque.
+      // Parti de la photo — le fond d'un `preview.jpg` passe de rgb(2,3,5)
+      // dans les coins à rgb(12,13,15) sous la voiture — puis remonté d'un
+      // cran : ici le sol est aussi le seul repère de profondeur, alors que
+      // la photo, elle, montre le décor du showroom autour.
       const pool = ctx.createRadialGradient(middle, middle, 0, middle, middle, middle);
-      pool.addColorStop(0, "rgba(255,255,255,0.07)");
-      pool.addColorStop(0.45, "rgba(255,255,255,0.042)");
-      pool.addColorStop(0.75, "rgba(255,255,255,0.011)");
+      pool.addColorStop(0, "rgba(255,255,255,0.11)");
+      pool.addColorStop(0.45, "rgba(255,255,255,0.066)");
+      pool.addColorStop(0.75, "rgba(255,255,255,0.018)");
       pool.addColorStop(1, "rgba(255,255,255,0)");
       ctx.fillStyle = pool;
       ctx.fillRect(0, 0, size, size);
 
-      const shadow = ctx.createRadialGradient(middle, middle, 0, middle, middle, middle * 0.6);
-      shadow.addColorStop(0, "rgba(0,0,0,0.55)");
-      shadow.addColorStop(0.7, "rgba(0,0,0,0.12)");
-      shadow.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = shadow;
+      // Assombrissement de contact seulement. L'ombre de la voiture, elle, est
+      // désormais **projetée** (voir la lumière directionnelle plus haut) ; ce
+      // dégradé ne fait plus que noircir le dernier centimètre sous la caisse,
+      // là où une carte d'ombre manque toujours de résolution.
+      const contact = ctx.createRadialGradient(middle, middle, 0, middle, middle, middle * 0.34);
+      contact.addColorStop(0, "rgba(0,0,0,0.3)");
+      contact.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = contact;
       ctx.fillRect(0, 0, size, size);
     }
     const texture = new THREE.CanvasTexture(canvas);

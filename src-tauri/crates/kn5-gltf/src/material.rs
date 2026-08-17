@@ -233,9 +233,27 @@ fn normal_map(material: &Kn5Material) -> Option<String> {
 /// it as opacity reproduces that ordering, which is what the eye reads as
 /// glass. The clamp keeps a missing or extreme value from producing either an
 /// invisible pane or an opaque one.
+///
+/// **`ksWindscreen` is the exception, and reading it like the others was a
+/// real bug.** Its `ksDiffuse` is not a per-car opacity but a constant of the
+/// shader family: 0.45 on `ks_toyota_supra_mkiv`, `ks_mazda_mx5_cup`,
+/// `ks_ford_gt40` and `abarth500` alike, 0.75 on `ks_ferrari_488_gt3`. Taken
+/// as opacity it lays a **white pane at 45 % over the whole cabin** — the
+/// haze the user reported through the Supra's windscreen. The material is the
+/// reflection layer of the glass (`INT_Glass_REFLEX`, `INT_Vetro`,
+/// `Windshield`), so the pane itself is clear and what should show is the
+/// environment reflected in it.
 fn glass_opacity(material: &Kn5Material) -> f32 {
+    if material.shader.contains("ksWindscreen") {
+        return WINDSCREEN_OPACITY;
+    }
     material.property("ksDiffuse").unwrap_or(0.3).clamp(0.08, 0.6)
 }
+
+/// Ce qu'il reste d'une vitre propre : un voile, pas une teinte. Assez pour
+/// que la vitre attrape un reflet du studio et ne disparaisse pas, trop peu
+/// pour laver ce qu'il y a derrière.
+const WINDSCREEN_OPACITY: f32 = 0.1;
 
 #[cfg(test)]
 mod tests {
@@ -440,6 +458,35 @@ mod tests {
                 .base_color_texture
                 .is_some(),
             "les autres matériaux gardent leur texture"
+        );
+    }
+
+    // Règle : sur un `ksWindscreen`, `ksDiffuse` n'est pas une opacité. Bug
+    // réel remonté par l'utilisateur : un voile blanc sur tout l'habitacle de
+    // `ks_toyota_supra_mkiv`. La valeur vaut 0,45 sur quatre voitures mesurées
+    // et 0,75 sur une cinquième — c'est une constante de famille de shaders,
+    // pas un réglage de vitre.
+    #[test]
+    fn a_windscreen_stays_clear_whatever_its_ksdiffuse_says() {
+        let windscreen = convert(
+            &material("ksWindscreen", 1, false, &[("ksDiffuse", 0.45)]),
+            MaterialTextures::default(),
+        );
+        assert!(
+            windscreen.base_color[3] <= 0.15,
+            "une vitre propre laisse passer, elle ne lave pas l'habitacle (obtenu {})",
+            windscreen.base_color[3]
+        );
+
+        // La règle ne déborde pas sur le reste du vitrage, où `ksDiffuse`
+        // ordonne bien les épaisseurs.
+        let side = convert(
+            &material("ksPerPixelReflection", 1, false, &[("ksDiffuse", 0.45)]),
+            MaterialTextures::default(),
+        );
+        assert!(
+            side.base_color[3] > windscreen.base_color[3],
+            "les autres vitres gardent leur opacité tirée de ksDiffuse"
         );
     }
 
