@@ -109,6 +109,46 @@ pub fn is_externally_managed(rel: &Path) -> bool {
         .any(|p| segs.len() > p.len() && segs.iter().zip(p.iter()).all(|(a, b)| a == b))
 }
 
+/// Racine réelle d'une livraison, en traversant l'**emballage** de l'auteur.
+///
+/// Un packageur enveloppe très souvent tout son contenu dans un dossier unique
+/// portant le nom de l'archive (`NFS_TOURNAMENT_CLASS_A_2026-02-15/content/…`).
+/// `modscan` sait déjà descendre cet emballage pour trouver les mods — d'où des
+/// voitures correctement importées. Le balayage des restes (§7.3), lui,
+/// calculait ses chemins depuis la racine d'extraction et **gardait le segment
+/// d'emballage** : `content/texture` devenait `NFS_…/content/texture`, que
+/// [`is_ac_relative`] refuse à juste titre. Le reste était donc rangé en
+/// bibliothèque puis jamais posé dans le jeu.
+///
+/// Bug réel : trois packs (NFS Tournament A et B, A3DR Porsche 993) dont les
+/// `content/texture` et `content/fonts` n'ont jamais atteint AC, alors que leurs
+/// voitures, elles, étaient bien installées.
+///
+/// **Deux garde-fous**, et ils comptent autant que la règle :
+///
+/// - on ne descend que dans un dossier **seul à son niveau**. Un dossier parmi
+///   plusieurs n'est pas un emballage mais un choix de l'auteur (`Optional - No
+///   ambient sounds/` à côté de son alternative) : le traverser installerait
+///   d'office une variante que l'utilisateur n'a pas choisie ;
+/// - on ne traverse **jamais un dossier de jeu**. Un `content/` seul à la racine
+///   *est* la racine ; le traverser ferait de `cars/` un chemin de premier
+///   niveau, et le contenu partirait à `<AC>\cars\`.
+pub fn effective_root(dir: &Path) -> PathBuf {
+    let mut cur = dir.to_path_buf();
+    loop {
+        let Ok(mut entries) = std::fs::read_dir(&cur).map(|e| e.flatten()) else {
+            return cur;
+        };
+        let (Some(only), None) = (entries.next(), entries.next()) else {
+            return cur;
+        };
+        if !only.file_type().is_ok_and(|t| t.is_dir()) || leads_into_game(Path::new(&only.file_name())) {
+            return cur;
+        }
+        cur = only.path();
+    }
+}
+
 /// Le dossier contient un `.kn5` à n'importe quelle profondeur.
 ///
 /// AC range les modèles de pilote à plat (`content/driver/driver_501.kn5`)
@@ -225,6 +265,73 @@ mod tests {
         ] {
             assert!(is_ac_relative(Path::new(real)), "{real} est un vrai chemin de jeu");
         }
+    }
+
+    #[test]
+    fn a_lone_wrapper_folder_is_traversed_but_a_game_folder_never_is() {
+        // Bug réel (NFS Tournament, A3DR Porsche) : l'archive emballe tout dans
+        // un dossier à son nom. Les voitures étaient trouvées — `modscan`
+        // descend — mais les restes gardaient le segment d'emballage et
+        // n'arrivaient jamais dans le jeu.
+        let base = crate::testutil::temp_dir("acpath-root");
+
+        // Emballage à traverser : un seul dossier, qui n'est pas un dossier AC.
+        let wrapped = base.join("wrapped");
+        write(
+            &wrapped
+                .join("NFS_TOURNAMENT_A")
+                .join("content")
+                .join("texture")
+                .join("t.dds"),
+        );
+        assert_eq!(
+            effective_root(&wrapped),
+            wrapped.join("NFS_TOURNAMENT_A"),
+            "l'emballage est traversé"
+        );
+
+        // Emballages imbriqués : on descend tant que le dossier est seul.
+        let twice = base.join("twice");
+        write(
+            &twice
+                .join("Pack")
+                .join("Pack v2")
+                .join("content")
+                .join("fonts")
+                .join("f.png"),
+        );
+        assert_eq!(effective_root(&twice), twice.join("Pack").join("Pack v2"));
+
+        // `content/` seul EST la racine : le traverser enverrait le contenu
+        // dans `<AC>\cars\`.
+        let game = base.join("game");
+        write(&game.join("content").join("cars").join("x").join("y.ini"));
+        assert_eq!(effective_root(&game), game, "un dossier de jeu n'est jamais traversé");
+
+        // Plusieurs entrées : ce n'est pas un emballage, c'est un choix de
+        // l'auteur. En traverser un installerait une variante non choisie.
+        let choice = base.join("choice");
+        write(
+            &choice
+                .join("Optional - No sounds")
+                .join("content")
+                .join("tracks")
+                .join("spa")
+                .join("a.kn5"),
+        );
+        write(
+            &choice
+                .join("Standard")
+                .join("content")
+                .join("tracks")
+                .join("spa")
+                .join("a.kn5"),
+        );
+        assert_eq!(
+            effective_root(&choice),
+            choice,
+            "on ne choisit pas à la place de l'auteur"
+        );
     }
 
     #[test]

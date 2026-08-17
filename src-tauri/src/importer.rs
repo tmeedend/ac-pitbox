@@ -713,6 +713,26 @@ fn sweep_leftovers(
     // balayage-ci tourne quand même.
     crate::overlay::clear_decisions_for_archive(conn, archive_name);
 
+    // Racine réelle de la livraison, emballage de l'auteur traversé (§7.3).
+    // `modscan` descend déjà cet emballage pour trouver les mods ; sans le même
+    // traitement ici, un reste en gardait le segment (`NFS_…/content/texture`)
+    // et n'était donc jamais posé dans le jeu. Les deux doivent s'accorder sur
+    // ce qu'est « la racine de l'archive », sinon les voitures d'un pack
+    // s'installent et ce qui les accompagne reste en bibliothèque.
+    //
+    // **Jamais dans un mod reconnu**, en revanche : une archive qui ne livre
+    // qu'une voiture a, elle aussi, un dossier unique à sa racine — mais c'en
+    // est le contenu, pas un emballage. Descendre dedans ferait passer les
+    // fichiers du mod pour des restes, et l'extraction des annexes les sortirait
+    // du dossier de l'auteur : très exactement la règle d'or n°3 (§4.5.1), et le
+    // bug qu'elle est là pour empêcher.
+    let unwrapped = crate::acpath::effective_root(workdir);
+    let workdir = if consumed.iter().any(|c| unwrapped.starts_with(c)) {
+        workdir
+    } else {
+        &unwrapped
+    };
+
     let mut leftovers = Vec::new();
     collect_leftover(workdir, consumed, &mut leftovers);
     let leftover_count = leftovers.len();
@@ -2527,6 +2547,59 @@ mod tests {
                 "aucun dossier ressources créé ({mode})"
             );
         }
+    }
+
+    #[test]
+    fn a_pack_wrapped_in_one_folder_still_delivers_what_sits_beside_its_cars() {
+        // Bug réel (NFS Tournament A/B, A3DR Porsche 993) : l'archive emballe
+        // tout dans un dossier à son nom. `modscan` descend l'emballage et
+        // trouve les voitures — elles s'installaient bien — mais le balayage
+        // calculait ses restes depuis la racine d'extraction, donc
+        // `content/texture` devenait `NFS_…/content/texture`, refusé comme
+        // chemin hors jeu et jamais posé. Symptôme vu par l'utilisateur : pas de
+        // `content/texture/crew_brand` dans AC alors que les voitures roulaient.
+        let base = crate::testutil::temp_dir("import-wrapped");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        // Deux voitures : rien ne rattache `content/texture` à l'une d'elles,
+        // il part donc en « autre mod » (§7.3) — le cas du pack multi-mods.
+        let src = base.join("src");
+        let wrapper = src.join("NFS_TOURNAMENT_CLASS_A_2026-02-15");
+        make_fake_car(&wrapper.join("content").join("cars"), "a3dr_ferrari_512tr");
+        make_fake_car(&wrapper.join("content").join("cars"), "a3dr_lambo_diablo_vt");
+        let tex = wrapper.join("content").join("texture").join("crew_brand");
+        std::fs::create_dir_all(&tex).unwrap();
+        std::fs::write(tex.join("logo.dds"), b"DDS").unwrap();
+
+        import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+
+        let others = crate::overlay::list_other_mods(&conn).unwrap();
+        let entry = others
+            .iter()
+            .find(|o| o.id.contains("texture"))
+            .expect("le reste devient un « autre mod »");
+        assert!(
+            !entry.id.contains("NFS_TOURNAMENT_CLASS_A_2026-02-15_content"),
+            "l'id ne porte plus le segment d'emballage : {}",
+            entry.id
+        );
+        let stored = library.join(&entry.library_path);
+        assert!(
+            stored
+                .join("content")
+                .join("texture")
+                .join("crew_brand")
+                .join("logo.dds")
+                .is_file(),
+            "rangé sous son vrai chemin de jeu, donc posable"
+        );
     }
 
     #[test]

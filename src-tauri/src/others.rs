@@ -110,13 +110,23 @@ pub fn import_other(
     })
 }
 
-/// Chemins relatifs de tous les fichiers stockés d'un mod « autre ».
+/// Chemins relatifs de tous les fichiers stockés d'un mod « autre », comptés
+/// depuis la racine réelle de la livraison — emballage de l'auteur traversé
+/// ([`crate::acpath::effective_root`]).
+///
+/// Traverser **ici**, et pas seulement à l'import, soigne les entrées déjà en
+/// bibliothèque : celles importées avant le correctif ont l'emballage figé dans
+/// leur arbre stocké, et rien ne les répare puisqu'un « autre mod » ne connaît
+/// pas la mise à jour (§7.3) — réimporter une archive déjà connue est ignoré en
+/// silence. Sans ça, il faudrait supprimer et réimporter chaque entrée, archive
+/// source en main.
 fn relative_files(dir: &Path) -> HashSet<PathBuf> {
-    WalkDir::new(dir)
+    let root = crate::acpath::effective_root(dir);
+    WalkDir::new(&root)
         .into_iter()
         .flatten()
         .filter(|e| e.file_type().is_file())
-        .filter_map(|e| e.path().strip_prefix(dir).ok().map(|p| p.to_path_buf()))
+        .filter_map(|e| e.path().strip_prefix(&root).ok().map(|p| p.to_path_buf()))
         .collect()
 }
 
@@ -344,7 +354,11 @@ pub fn activate_other(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<Ac
 
     let mut junctions = Vec::new();
     let mut warnings = Vec::new();
+    // Emballage de l'auteur traversé, même raison que `relative_files` : les
+    // entrées importées avant le correctif le portent encore dans leur arbre
+    // stocké, et `place` refuserait tout (`NFS_…` n'est pas un chemin de jeu).
     let src = crate::libpath::resolve(cfg.library_path.as_deref(), &m.library_path)
+        .map(|d| crate::acpath::effective_root(&d))
         .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     place(
         conn,
@@ -738,6 +752,65 @@ mod tests {
         assert_eq!(
             card.externally_managed, 2,
             "la config et le vao-patch sont comptés, pas la font"
+        );
+    }
+
+    #[test]
+    fn an_entry_wrapped_by_its_author_still_reaches_the_game() {
+        // Bug réel (NFS Tournament, A3DR Porsche) : l'archive emballe tout dans
+        // un dossier à son nom. Les voitures étaient importées — `modscan`
+        // descend l'emballage — mais `content/texture` et `content/fonts`
+        // gardaient le segment et `place` les refusait, à juste titre. Les
+        // fichiers restaient en bibliothèque sans jamais atteindre AC.
+        //
+        // Traversé à l'activation et pas seulement à l'import : une entrée déjà
+        // en bibliothèque ne se répare pas autrement (§7.3, pas de mise à jour
+        // d'un « autre mod » — un réimport est ignoré en silence).
+        let base = crate::testutil::temp_dir("other-wrapped");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(ac.join("content").join("texture")).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+
+        // Tel que l'ancien import l'a rangé : emballage inclus.
+        let stored = library.join("others").join("NFS_Pack.7z__NFS_Pack_content_texture");
+        make_tree(&stored, &["NFS_Pack/content/texture/crew_brand/logo.dds"]);
+        overlay::insert_other_mod(
+            &conn,
+            "NFS_Pack.7z__NFS_Pack_content_texture",
+            &crate::libpath::to_relative(Some(&library), &stored),
+            Some("NFS_Pack.7z"),
+            "2026-08-16T00:32:21+02:00",
+        )
+        .unwrap();
+
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        activate_other(&conn, &cfg, "NFS_Pack.7z__NFS_Pack_content_texture").unwrap();
+
+        assert!(
+            ac.join("content").join("texture").join("crew_brand").exists(),
+            "le dossier arrive à sa vraie place, sans le segment d'emballage"
+        );
+        assert!(
+            !ac.join("NFS_Pack").exists(),
+            "et rien ne se déverse à la racine de l'install"
+        );
+
+        // Les chemins comptés (conflits, zone CM) partent eux aussi de la vraie
+        // racine, sinon ils ne ressembleraient à aucun chemin de jeu.
+        let files = relative_files(&stored);
+        assert!(
+            files.contains(
+                &PathBuf::from("content")
+                    .join("texture")
+                    .join("crew_brand")
+                    .join("logo.dds")
+            ),
+            "chemin relatif compté depuis la racine réelle"
         );
     }
 
