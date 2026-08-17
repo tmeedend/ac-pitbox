@@ -651,12 +651,14 @@ fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
         human_bytes(conversion.glb.len() as u64)
     );
     println!(
-        "meshes    {} kept — skipped: {} hidden, {} by name, {} empty, {} distant LOD ({} mirrored nodes)",
+        "meshes    {} kept — skipped: {} hidden, {} by name, {} empty, {} distant LOD, \
+         {} broken glass ({} mirrored nodes)",
         stats.kept,
         stats.skipped_hidden,
         stats.skipped_by_name,
         stats.skipped_empty,
         stats.skipped_distant_lod,
+        stats.skipped_broken_glass,
         stats.mirrored
     );
     println!(

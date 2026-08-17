@@ -10,7 +10,7 @@
   // les écrans qui n'affichent aucun aperçu.
   import { onDestroy, untrack } from "svelte";
   import { prepareCarPreview, onPreviewProgress, type PreviewStage } from "$lib/preview";
-  import { preview3dPrefs, preview3dReady } from "$lib/preview3dPrefs.svelte";
+  import { preview3dPrefs, preview3dReady, preview3dResets } from "$lib/preview3dPrefs.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
   import type * as ThreeModule from "three";
@@ -32,6 +32,9 @@
   /** Tout ce qui doit être libéré : vit hors des runes, ce n'est pas de l'état
    * d'affichage et le rendre réactif ne ferait que déclencher des effets. */
   let scene: ThreeScene | null = null;
+  /** Couple voiture/skin réellement en place, pour ne pas reconstruire une
+   * scène identique. Vide tant que rien n'est chargé. */
+  let loaded = "";
   let frame = 0;
   let observer: ResizeObserver | null = null;
   let visibility: IntersectionObserver | null = null;
@@ -45,6 +48,8 @@
       update(): boolean;
       dispose(): void;
       addEventListener(type: string, listener: () => void): void;
+      /** Point visé, déplacé verticalement par le réglage de hauteur. */
+      target: ThreeModule.Vector3;
     };
     pmrem: ThreeModule.PMREMGenerator;
     /** Le plateau : la voiture y est posée, l'ombre de contact non — un socle
@@ -196,9 +201,14 @@
     const distance = (current.radius * FRAMING_DISTANCE * 100) / prefs.zoom;
     const azimuth = (prefs.azimuth * Math.PI) / 180;
     const elevation = (prefs.elevation * Math.PI) / 180;
+    // Le point visé monte ou descend avec la hauteur : c'est lui qui décide de
+    // la place de la voiture dans le cadre, alors que la plongée décide de ce
+    // qu'on voit de son toit. Les deux se règlent séparément.
+    const targetY = current.center.y + current.radius * (prefs.height / 100);
+    current.controls.target.set(current.center.x, targetY, current.center.z);
     current.camera.position.set(
       current.center.x + distance * Math.cos(elevation) * Math.sin(azimuth),
-      current.center.y + distance * Math.sin(elevation),
+      targetY + distance * Math.sin(elevation),
       current.center.z + distance * Math.cos(elevation) * Math.cos(azimuth),
     );
     current.controls.update();
@@ -212,7 +222,12 @@
     const { showroomEnvironment } = await import("./showroomEnvironment");
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Rendu à 1,5× au minimum, même sur un écran à 1 dpi : le MSAA échantillonne
+    // les bords, pas l'intérieur des surfaces, et sur une carrosserie lisse ce
+    // sont les reflets qui scintillent. Suréchantillonner puis réduire est le
+    // remède direct, et le panneau est assez petit pour que ça ne se paie pas.
+    // Plafond à 2 — au-delà, la facture en pixels double sans que ça se voie.
+    renderer.setPixelRatio(Math.min(Math.max(window.devicePixelRatio, 1.5), 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.shadowMap.enabled = true;
@@ -227,12 +242,37 @@
 
     const gltf = await new GLTFLoader().loadAsync(url);
 
+    // Filtrage anisotrope, au maximum de ce que la carte accepte (16 en
+    // pratique). Le MSAA du contexte ne lisse que les **bords de géométrie** ;
+    // le fourmillement d'une texture vue en biais — les décalcomanies d'une
+    // portière, les rainures d'un pneu, le sol — vient du filtrage, et c'est
+    // l'anisotropie qui le règle. Une ligne pour le gain le plus visible.
+    const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+
     // Les vitres passent après l'opaque et n'écrivent pas dans le tampon de
     // profondeur, sinon l'intérieur disparaît derrière le pare-brise (§8.2).
     gltf.scene.traverse((object) => {
       const mesh = object as ThreeModule.Mesh;
       if (!mesh.isMesh) return;
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const material of materials) {
+        for (const value of Object.values(material)) {
+          if (value && typeof value === "object" && "isTexture" in value) {
+            const texture = value as ThreeModule.Texture;
+            texture.anisotropy = maxAnisotropy;
+            texture.needsUpdate = true;
+          }
+        }
+        // Découpes en alpha (calandres, jantes ajourées, grillages) : leur bord
+        // est décidé par un seuil, donc le MSAA ne le voit pas — il ne lisse
+        // que la silhouette du triangle, pas le trou qu'on y perce. Reporté sur
+        // la couverture des échantillons, ce bord retrouve le même adoucissement
+        // que le reste.
+        const standard = material as ThreeModule.MeshStandardMaterial;
+        if (standard.alphaTest > 0) {
+          standard.alphaToCoverage = true;
+        }
+      }
       if (materials.some((m) => (m as ThreeModule.Material).transparent)) {
         mesh.renderOrder = 1;
         for (const m of materials) (m as ThreeModule.Material).depthWrite = false;
@@ -441,11 +481,20 @@
     const car = carId;
     const skin = skinId;
 
+    // Garde-fou : une scène déjà posée sur ce couple voiture/skin n'est pas
+    // reconstruite. Recharger coûte le retour à la photo puis une conversion,
+    // pour finir exactement là où on était — et ça s'est produit pour de bon,
+    // un effet parent réévalué relançant tout (voir `untrack` dans
+    // `DetailPage`). La cause est corrigée là-bas ; ceci empêche la classe
+    // entière de se voir à l'écran.
+    if (untrack(() => loaded) === `${car}|${skin}`) return;
+
     untrack(() => {
       disposeScene(scene);
       scene = null;
       observer?.disconnect();
       observer = null;
+      loaded = "";
       phase = "loading";
       stage = null;
       reason = null;
@@ -477,6 +526,7 @@
           return;
         }
         scene = built;
+        loaded = `${car}|${skin}`;
         phase = "ready";
       } catch (e) {
         if (cancelled) return;
@@ -496,12 +546,28 @@
   // tout de suite : recadrer ne coûte qu'un rendu, alors que remonter le
   // composant relancerait tout le chargement du modèle.
   $effect(() => {
-    // Un effet ne suit que ce qu'il lit : les quatre valeurs sont donc lues
-    // ici, à découvert, et pas seulement à l'intérieur de `placeCamera`.
+    // Un effet ne suit que ce qu'il lit : les valeurs sont donc lues ici, à
+    // découvert, et pas seulement à l'intérieur de `placeCamera`.
     const prefs = preview3dPrefs();
-    void [prefs.zoom, prefs.azimuth, prefs.elevation, prefs.spin];
+    void [prefs.zoom, prefs.azimuth, prefs.elevation, prefs.height, prefs.spin];
     untrack(() => {
       if (!scene) return;
+      placeCamera(scene);
+    });
+  });
+
+  // Bouton « replacer » : le compteur de remises à zéro change, la voiture
+  // revient au cadrage réglé et repart. Passer par le module de préférences
+  // plutôt que par une référence au composant permet de déclencher la remise à
+  // zéro depuis n'importe où — la fiche comme l'écran Réglages.
+  $effect(() => {
+    preview3dResets();
+    untrack(() => {
+      if (!scene) return;
+      if (resumeTimer) clearTimeout(resumeTimer);
+      resumeTimer = null;
+      scene.turntable.rotation.y = 0;
+      spinning = !reducedMotion;
       placeCamera(scene);
     });
   });

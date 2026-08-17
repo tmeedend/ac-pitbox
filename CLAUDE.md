@@ -207,6 +207,16 @@ partagent `commands::prelude`.
 
 Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux.
 
+- **Lire une préférence dans le corps d'un `$effect` abonne cet effet à
+  *toutes* les préférences.** `peekUiPref` (donc `getPreferredSkin`,
+  `getPreferredLayout`, `preferred.ts` en général) lit un cache `$state` global :
+  toute écriture ailleurs dans l'app le remplace, et l'effet lecteur se
+  redéclenche. Bug réel : bouger un curseur de l'aperçu 3D relançait le
+  chargement complet de la fiche détail — skins rechargés, skin sélectionné
+  réinitialisé, aperçu remonté et retour à la photo. Une restauration à
+  l'ouverture n'est pas une dépendance : l'entourer d'`untrack`. Le symétrique
+  côté écriture est déjà documenté dans `uiPrefs.svelte.ts` (`setUiPref` est
+  `untrack`é pour la même raison, après une boucle infinie de 285 000 appels).
 - **`t("clé")` renvoie la clé elle-même si elle manque** dans les deux locales.
   Une clé oubliée n'explose donc pas : elle s'affiche telle quelle à l'écran
   (`detail.showroom`). C'est ce qui rend `errorText()` sûr, et c'est aussi
@@ -271,6 +281,14 @@ les crates de l'aperçu 3D sous `src-tauri/crates/`. D'où le `--workspace` de
 clippy/test ci-dessus — sans lui, cargo ne regarde que le paquet racine et les
 crates passent en CI sans être vérifiés.
 
+**Le profil `dev` optimise les dépendances, pas le code de l'app**
+(`[profile.dev.package."*"]` et les deux crates de l'aperçu, dans
+`src-tauri/Cargo.toml`). Mesuré : la conversion d'un aperçu 3D prenait **5,5 s
+sous `tauri dev` contre 0,4 s en release**, tout le temps passant dans le
+décodage et le ré-encodage des textures. Ramenée à 0,5 s. Le code de Pit Box
+reste en `opt-level = 0`, donc débogable ; la contrepartie est une première
+compilation plus longue après un `cargo clean`.
+
 `src-tauri/rustfmt.toml` fixe le style (`max_width = 120`) et `cargo fmt --all
 --check` est dans la CI. Un reformatage massif se fait dans un commit isolé, jamais
 mélangé à un changement fonctionnel : sinon `git blame` devient inexploitable.
@@ -304,22 +322,34 @@ laisser pourrir ici.
       **L'avancement détaillé, les écarts assumés vis-à-vis de la spec et le
       reste à faire sont dans `docs/SPEC-preview-3d-kn5.md` §13 à §15** — c'est
       là qu'il faut lire en reprenant, pas ici.
-      En bref : **lots 0 à 5 faits et validés à l'écran** — la voiture
-      s'affiche dans la fiche, tourne sur son socle et se manipule à la souris.
-      **Lot 6 en cours.** Faits : tôle froissée, couleur de peinture, taches
-      de pare-brise — tous trois avaient la **même cause de fond**, AC range
-      dans un slot standard une carte que son shader ne mélange qu'à
-      proportion de quelque chose : un état (dégâts, saleté) ou un masque (la
-      peinture, sous l'alpha de la diffuse). Devant un défaut du genre « la
-      voiture a l'air abîmée, sale, ou de la mauvaise couleur », c'est la
-      première chose à vérifier — canal alpha compris.
-      Restent les réglages de caméra à exposer et l'éclairage à caler sur les
-      `preview.jpg` Kunos — détail dans `docs/SPEC-preview-3d-kn5.md` §15.
-      Deux règles à ne pas perdre de vue :
+      En bref : **lots 0 à 6 faits et validés à l'écran** — la voiture
+      s'affiche dans la fiche, tourne sur son socle, se manipule à la souris,
+      porte la couleur de son skin, se règle depuis la fiche et projette son
+      ombre sur le sol d'un studio.
+      **Ce qu'il faut retenir des neuf écarts de format documentés** (tous dans
+      `docs/kn5-format.md`, avec leur méthode de mesure) : **AC renseigne ses
+      champs et ses slots standard avec des valeurs que ses shaders n'utilisent
+      pas comme on le croirait.** Trois formes rencontrées, dans cet ordre de
+      difficulté :
+      *un état* (carte de dégâts, saleté de pare-brise) qu'il ne mélange qu'à
+      proportion de quelque chose ; *un masque* (la peinture d'un skin, sous
+      l'alpha de la diffuse) ; et *un objet entier* (`ksBrokenGlass`, la vitre
+      brisée, toujours présente dans le modèle). Un même matériau peut mentir
+      sur plusieurs de ses champs à la fois — `ksWindscreen` s'est trompé trois
+      fois de suite (texture, opacité, exposant spéculaire). Donc : devant un
+      défaut visuel, **ne pas s'arrêter au premier champ coupable**, et
+      regarder aussi ce qui est dessiné par-dessus.
+      Reste surtout **R et B de `txMaps`** (le vert est documenté et exploité),
+      le choix du LOD, la purge du cache et l'aperçu dans `ModDetail` — §15.
+      Trois règles à ne pas perdre de vue :
       **`preview::CONVERTER_VERSION` s'incrémente dès qu'on touche au rendu
-      produit** (sinon les anciens `.glb` restent servis), et **une conversion
-      ne se valide jamais sur une seule voiture** — l'atlas de la MX-5 est
-      symétrique et a masqué une erreur de repère pendant deux lots.
+      produit** (sinon les anciens `.glb` restent servis — la version est dans
+      le *nom* des entrées de cache, ce qui permet aussi d'effacer les
+      périmées) ; **une conversion ne se valide jamais sur une seule voiture**
+      — l'atlas de la MX-5 est symétrique et a masqué une erreur de repère
+      pendant deux lots ; et **le `preview.jpg` d'un skin est une référence de
+      cadrage, pas de luminosité** — il est plus sombre que le rendu du jeu, ce
+      qui m'a fait diagnostiquer un écart inexistant.
 - [ ] **Signature Authenticode** : le workflow est prêt, il attend un
       certificat. Définir la variable de dépôt `SIGN_COMMAND` suffit à
       l'activer — voir `docs/windows-code-signing.md` (lire **avant** d'acheter,

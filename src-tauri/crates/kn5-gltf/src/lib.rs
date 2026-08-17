@@ -111,10 +111,10 @@ pub fn convert(
             material::convert(
                 m,
                 material::MaterialTextures {
-                    diffuse_has_alpha: m
+                    diffuse_alpha_varies: m
                         .texture_for("txDiffuse")
                         .and_then(|name| textures.get(name))
-                        .is_some_and(|t| t.has_alpha),
+                        .is_some_and(|t| t.alpha_varies),
                     painted_diffuse: paint.painted_diffuse(index),
                     roughness_texture: roughness.roughness_texture(index),
                 },

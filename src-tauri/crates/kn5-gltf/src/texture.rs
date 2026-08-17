@@ -96,6 +96,15 @@ pub struct PreparedTexture {
     pub source_bytes: usize,
     /// L'image encodée porte-t-elle un canal alpha exploitable ?
     pub has_alpha: bool,
+    /// Cet alpha **varie-t-il** d'un pixel à l'autre ?
+    ///
+    /// La distinction décide de la transparence d'un matériau en fondu. Un
+    /// alpha qui varie **découpe** : décalcomanie, flou de jante, couture — on
+    /// n'y touche pas. Un alpha constant ne découpe rien, c'est une opacité
+    /// uniforme, et la traiter comme une découpe rendait le vitrage d'AC
+    /// invisible : le `glass.dds` de `ks_toyota_supra_mkiv` vaut 13/255 partout,
+    /// soit 5 % d'opacité, là où l'opacité du shader en donne le triple.
+    pub alpha_varies: bool,
     /// Couleur moyenne, en linéaire approché [0,1]. Sert à teinter un matériau
     /// depuis sa carte de détail (voir `material::convert`).
     pub average: [f32; 3],
@@ -387,6 +396,7 @@ fn roughness_one(
         origin,
         source_bytes,
         has_alpha: false,
+        alpha_varies: false,
         average: average_color(&resized),
     }))
 }
@@ -418,6 +428,7 @@ fn paint_one(
         source_bytes,
         // `paint::apply` consumes the mask and leaves the image opaque.
         has_alpha: false,
+        alpha_varies: false,
         average: average_color(&resized),
     }))
 }
@@ -462,8 +473,18 @@ fn prepare_one(
         origin,
         source_bytes,
         has_alpha: usage.keep_alpha && resized.pixels().any(|p| p.0[3] != u8::MAX),
+        alpha_varies: usage.keep_alpha && alpha_varies(&resized),
         average: average_color(&resized),
     })
+}
+
+/// L'alpha de cette image varie-t-il d'un pixel à l'autre ?
+fn alpha_varies(image: &RgbaImage) -> bool {
+    let mut pixels = image.pixels();
+    let Some(first) = pixels.next().map(|p| p.0[3]) else {
+        return false;
+    };
+    pixels.any(|p| p.0[3] != first)
 }
 
 /// Couleur moyenne d'une image, canaux dans [0,1].

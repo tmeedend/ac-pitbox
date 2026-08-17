@@ -82,8 +82,10 @@ pub(crate) fn alpha_mode_of(material: &Kn5Material) -> (AlphaMode, f32) {
 /// ne peut pas deviner seule.
 #[derive(Debug, Clone, Default)]
 pub struct MaterialTextures {
-    /// La texture diffuse porte-t-elle un alpha qu'un matériau exploite ?
-    pub diffuse_has_alpha: bool,
+    /// La texture diffuse porte-t-elle un alpha **qui varie**, donc une
+    /// découpe ? Un alpha constant est une opacité, pas un masque — voir
+    /// `PreparedTexture::alpha_varies`.
+    pub diffuse_alpha_varies: bool,
     /// Variante peinte de la texture diffuse, quand la carte de détail du
     /// matériau porte une couleur de peinture (voir [`crate::paint`]).
     pub painted_diffuse: Option<String>,
@@ -166,7 +168,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // l'alpha de cette texture, et un facteur global peindrait les
     // décalcomanies avec la carrosserie (voir [`crate::paint`]).
     let base_color_texture = textures.painted_diffuse.clone().or_else(|| base_color_map(material));
-    let texture_carries_alpha = base_color_texture.is_some() && textures.diffuse_has_alpha;
+    let texture_carries_alpha = base_color_texture.is_some() && textures.diffuse_alpha_varies;
     let base_color = match alpha_mode {
         AlphaMode::Blend if !texture_carries_alpha => [1.0, 1.0, 1.0, glass_opacity(material)],
         _ => [1.0, 1.0, 1.0, 1.0],
@@ -259,8 +261,21 @@ fn glass_opacity(material: &Kn5Material) -> f32 {
     if material.shader.contains("ksWindscreen") {
         return WINDSCREEN_OPACITY;
     }
-    material.property("ksDiffuse").unwrap_or(0.3).clamp(0.08, 0.6)
+    material
+        .property("ksDiffuse")
+        .unwrap_or(0.3)
+        .clamp(GLASS_MIN_OPACITY, 0.6)
 }
+
+/// Plancher d'opacité d'une vitre.
+///
+/// Chez AC une vitre est presque parfaitement transparente (`ksDiffuse = 0.1`
+/// sur la Supra) et ce qu'on en voit vient de la **réflexion** : son shader y
+/// met un fresnel fort (`fresnelMaxLevel = 0.7`). Notre studio étant sombre, il
+/// n'y a presque rien à réfléchir, et une vitre honnête devient une vitre
+/// absente — signalée telle quelle par l'utilisateur. Ce plancher lui rend une
+/// présence, faute de pouvoir lui rendre son reflet.
+const GLASS_MIN_OPACITY: f32 = 0.15;
 
 /// Ce qu'il reste d'une vitre propre : un voile, pas une teinte. Assez pour
 /// que la vitre attrape un reflet du studio et ne disparaisse pas, trop peu
@@ -371,7 +386,7 @@ mod tests {
             convert(
                 &decal,
                 MaterialTextures {
-                    diffuse_has_alpha: true,
+                    diffuse_alpha_varies: true,
                     ..Default::default()
                 }
             )

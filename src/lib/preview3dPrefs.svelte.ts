@@ -17,6 +17,7 @@ const KEYS = {
   zoom: "pitbox.preview3d.zoom",
   azimuth: "pitbox.preview3d.azimuth",
   elevation: "pitbox.preview3d.elevation",
+  height: "pitbox.preview3d.height",
   spin: "pitbox.preview3d.spin",
 } as const;
 
@@ -35,9 +36,14 @@ export const PREVIEW3D_RANGES = {
    * l'angle des `preview.jpg` Kunos : trois-quarts avant **gauche**, comme
    * toutes les photos du jeu (§15 point 7). */
   azimuth: { min: 0, max: 359, step: 1, default: 318 },
-  /** Hauteur de la caméra, en degrés au-dessus de l'horizon. Plafonnée sous
+  /** Plongée de la caméra, en degrés au-dessus de l'horizon. Plafonnée sous
    * l'angle polaire maximal des contrôles. */
   elevation: { min: 0, max: 80, step: 1, default: 13 },
+  /** Hauteur de la caméra, en pourcentage du rayon du modèle. Monte ou
+   * descend le point visé **sans toucher à la plongée** : c'est ce qui décide
+   * de la place de la voiture dans le cadre, là où l'angle décide de ce qu'on
+   * voit de son toit. 0 vise le centre du modèle. */
+  height: { min: -60, max: 60, step: 1, default: 0 },
   /** Vitesse du plateau tournant. 0 % = plateau à l'arrêt. */
   spin: { min: 0, max: 200, step: 5, default: 100 },
 } as const;
@@ -60,8 +66,24 @@ const values: Preview3dPrefs = $state({
   zoom: PREVIEW3D_RANGES.zoom.default,
   azimuth: PREVIEW3D_RANGES.azimuth.default,
   elevation: PREVIEW3D_RANGES.elevation.default,
+  height: PREVIEW3D_RANGES.height.default,
   spin: PREVIEW3D_RANGES.spin.default,
 });
+
+/** Compteur de remises à zéro de la vue. Ce n'est pas un réglage : il n'est ni
+ * lu ni écrit sur disque, il ne sert qu'à ce qu'un aperçu monté ailleurs voie
+ * passer la demande. Un compteur et non un booléen — deux remises à zéro
+ * successives doivent produire deux événements distincts. */
+let resets = $state(0);
+
+export function preview3dResets(): number {
+  return resets;
+}
+
+/** Replace la voiture selon les réglages et la remet à tourner. */
+export function resetPreview3dView(): void {
+  resets += 1;
+}
 
 // Chargé une fois pour toute la session, dès l'import du module : un aperçu
 // monté tout de suite ne doit pas s'ouvrir sur les valeurs par défaut puis

@@ -376,6 +376,65 @@ qu'annonce son matériau ; rugosité plafonnée à 0,08 sur toute la famille
 > un shader qui porte un nom de rôle plutôt qu'un nom de technique, se méfier
 > de **tous** ses champs, pas seulement de celui qui vient de trahir.
 
+---
+
+## Écart n°8 — la vitre brisée est toujours dans le modèle
+
+**Symptôme** : après les trois correctifs de l'écart n°6, le pare-brise de
+`ks_toyota_supra_mkiv` restait « sale » — un voile gris marbré par-dessus
+l'habitacle. C'était le quatrième signalement du même défaut apparent, et la
+cause n'avait rien à voir avec les précédentes.
+
+**Réel** : un maillage distinct, de shader **`ksBrokenGlass`**, double le
+vitrage en permanence — cinq maillages sur la Supra. Sa `txDiffuse` est un
+aplat gris de 16×16 et sa `txNormal` porte le réseau de **fissures**. AC ne
+l'affiche qu'une fois la vitre effectivement brisée ; dessiné tel quel, à 40 %
+d'opacité, il pose un voile gris et une toile de craquelures sur le pare-brise.
+
+**Même mécanisme que l'écart n°4** (la carte de dégâts), mais **sur un maillage
+entier au lieu d'un slot de texture** — d'où quatre passages à côté : on
+cherchait une texture fautive sur le matériau du pare-brise, alors que le
+coupable était un autre objet posé devant.
+
+**Correctif** : les maillages dont le matériau est `ksBrokenGlass` ne sont pas
+convertis du tout (`geometry::classify`, `Skip::BrokenGlass`, compté dans les
+statistiques de `kn5-tool convert`). Verrouillé par
+`broken_glass_is_never_drawn`.
+
+> **Le motif s'étend donc d'un cran.** AC ne range pas seulement un état dans un
+> slot de texture : il le range aussi dans un **maillage**. Devant un défaut
+> visuel qui résiste aux textures du matériau soupçonné, regarder ce qui est
+> dessiné **par-dessus**.
+
+**Conséquence immédiate, et il faut la connaître** : une fois la vitre brisée
+retirée, il n'y avait plus de vitrage du tout à l'écran — le voile gris qu'on
+prenait pour une vitre *était* la vitre brisée. Voir l'écart n°9.
+
+---
+
+## Écart n°9 — un alpha constant est une opacité, pas une découpe
+
+**Symptôme** : plus aucune vitre visible après le correctif de l'écart n°8.
+
+**Réel** : le vitrage d'AC est presque parfaitement transparent, et ce qu'on en
+voit vient de la **réflexion** — `fresnelMaxLevel = 0.7` sur le pare-brise de
+la Supra. Le `glass.dds` qu'il porte est un aplat de 64×64 dont l'alpha vaut
+**13/255 partout**, soit 5 % d'opacité.
+
+Notre conversion traitait tout alpha présent dans une texture diffuse comme une
+**découpe** (décalcomanie, flou de jante, couture) et laissait donc cet alpha
+piloter la transparence : 5 %, invisible. Or un alpha **constant** ne découpe
+rien — c'est une opacité uniforme, exactement la grandeur que le shader donne
+par ailleurs. La distinction utile n'est donc pas « la texture a-t-elle un
+alpha » mais « **cet alpha varie-t-il** ».
+
+**Correctif** : `PreparedTexture::alpha_varies` (l'alpha diffère-t-il d'un pixel
+à l'autre) remplace `has_alpha` dans la décision de transparence. Un alpha
+constant renvoie le matériau sur l'opacité tirée du shader, plancher à 0,15 —
+faute de pouvoir lui rendre son reflet, on lui rend une présence
+(`GLASS_MIN_OPACITY`, à ajuster avec `WINDSCREEN_OPACITY` si le vitrage paraît
+trop ou pas assez marqué).
+
 > **Motif à retenir pour la suite.** Quatre défauts visuels sur quatre avaient
 > la même cause de fond : **AC range dans un slot standard une carte que son
 > shader ne mélange qu'à proportion de quelque chose** — un état (dégâts,

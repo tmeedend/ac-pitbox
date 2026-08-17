@@ -23,7 +23,9 @@
   import { listMediaScreenshots, listMediaReplays, listMediaBackgrounds } from "$lib/media";
   import { listModSkins, openNativeShowroom, type SkinItem } from "$lib/launch";
   import CarPreview3D from "./detail/CarPreview3D.svelte";
-  import { preview3dPrefs, setPreview3dEnabled } from "$lib/preview3dPrefs.svelte";
+  import { untrack } from "svelte";
+  import { preview3dPrefs, setPreview3dEnabled, resetPreview3dView } from "$lib/preview3dPrefs.svelte";
+  import Preview3dControls from "./detail/Preview3dControls.svelte";
   import { exportMod, deletePack, deleteBrokenMod, reinstallFromArchive, type ExportReport } from "$lib/maintenance";
   import {
     listSubMods,
@@ -249,6 +251,10 @@
   // même réglage se change aussi depuis l'écran Réglages, et les deux doivent
   // rester d'accord sans qu'aucun des deux écrans n'ait à être remonté.
   const preview3d = $derived(preview3dPrefs().enabled);
+  /** Panneau de réglages posé sur l'aperçu. Ouvert, il garde la barre d'outils
+   * visible même quand la souris s'en va — sinon régler un curseur la ferait
+   * disparaître sous les doigts. */
+  let preview3dPanel = $state(false);
 
   function togglePreview3d() {
     setPreview3dEnabled(!preview3d);
@@ -305,7 +311,14 @@
       skinsLoadPromise = new Promise((resolve) => {
         skinsLoadResolve = resolve;
       });
-      const savedSkin = getPreferredSkin(current);
+      // `untrack` obligatoire, et pas par précaution : `getPreferredSkin` lit
+      // le cache de `ui_prefs.json`, qui est un `$state`. Lu à découvert dans
+      // le corps de cet effet, il l'abonne à **toutes** les préférences de
+      // l'app — si bien qu'un curseur de l'aperçu 3D, en écrivant sa valeur,
+      // relançait le chargement complet de la fiche : skins rechargés, skin
+      // sélectionné réinitialisé, donc aperçu 3D remonté et retour à la photo.
+      // C'est une restauration ponctuelle à l'ouverture, jamais une dépendance.
+      const savedSkin = untrack(() => getPreferredSkin(current));
       listModSkins(current)
         .then((s) => {
           if (current !== id) return;
@@ -736,12 +749,72 @@
           />
         {/if}
         {#if isCar}
-          <button
-            class="hero-toggle"
-            onclick={togglePreview3d}
-            title={preview3d ? t("detail.preview3dShowPhoto") : t("detail.preview3dShow3d")}
-            aria-label={preview3d ? t("detail.preview3dShowPhoto") : t("detail.preview3dShow3d")}
-          >{preview3d ? "🖼" : "🧊"}</button>
+          <!-- Commandes de l'aperçu : révélées au survol de la zone héros, pour
+               qu'elles ne mangent pas l'image le reste du temps. Le focus
+               clavier les révèle aussi (`:focus-within`), sans quoi elles
+               seraient inatteignables autrement qu'à la souris. -->
+          <div class="hero-tools" class:open={preview3dPanel}>
+            <button
+              class="hero-btn"
+              type="button"
+              onclick={togglePreview3d}
+              title={preview3d ? t("detail.preview3dShowPhoto") : t("detail.preview3dShow3d")}
+              aria-label={preview3d ? t("detail.preview3dShowPhoto") : t("detail.preview3dShow3d")}
+            >
+              {#if preview3d}
+                <!-- Retour à la photo : un cadre et sa montagne. -->
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <rect x="1.5" y="3.5" width="13" height="9" rx="1" />
+                  <path d="M2.5 11 L6 7.5 L8.5 10 L10.5 8.5 L13.5 11.5" fill="none" />
+                  <circle cx="5.5" cy="6" r="1" />
+                </svg>
+              {:else}
+                <!-- Passage en 3D : un volume en perspective. -->
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M8 1.8 L14 5 V11 L8 14.2 L2 11 V5 Z" fill="none" />
+                  <path d="M2 5 L8 8.2 L14 5" fill="none" />
+                  <path d="M8 8.2 V14.2" fill="none" />
+                </svg>
+              {/if}
+            </button>
+            {#if preview3d}
+              <button
+                class="hero-btn"
+                type="button"
+                onclick={resetPreview3dView}
+                title={t("detail.preview3dReplace")}
+                aria-label={t("detail.preview3dReplace")}
+              >
+                <!-- Replacer et relancer : une flèche qui reboucle. -->
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M13.2 8 A5.2 5.2 0 1 1 11.4 4.1" fill="none" />
+                  <path d="M11.9 1.2 V4.5 H8.6" fill="none" />
+                </svg>
+              </button>
+              <button
+                class="hero-btn"
+                class:on={preview3dPanel}
+                type="button"
+                onclick={() => (preview3dPanel = !preview3dPanel)}
+                title={t("detail.preview3dSettings")}
+                aria-label={t("detail.preview3dSettings")}
+                aria-expanded={preview3dPanel}
+              >
+                <!-- Réglages : deux curseurs. -->
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M2 5.5 H14" fill="none" />
+                  <path d="M2 10.5 H14" fill="none" />
+                  <circle cx="6" cy="5.5" r="1.8" />
+                  <circle cx="10.5" cy="10.5" r="1.8" />
+                </svg>
+              </button>
+            {/if}
+          </div>
+          {#if preview3d && preview3dPanel}
+            <div class="hero-panel">
+              <Preview3dControls compact />
+            </div>
+          {/if}
         {/if}
         {#if showroomBusy}
           <!-- Lancement d'acShowroom : pastille discrète le temps que le
@@ -1236,26 +1309,63 @@
   }
   /* Bascule photo / 3D, en bas à droite pour ne pas gêner le badge d'état de
      l'aperçu ni la pastille de lancement du showroom, tous deux en haut. */
-  .hero-toggle {
+  .hero-tools {
     position: absolute;
     right: 10px;
     bottom: 10px;
+    display: flex;
+    gap: 6px;
+    z-index: 4;
+    /* Effacées tant qu'on ne survole pas la zone : l'aperçu est là pour être
+       regardé, pas pour montrer ses commandes. */
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+  .hero:hover .hero-tools,
+  .hero:focus-within .hero-tools,
+  .hero-tools.open {
+    opacity: 1;
+  }
+  .hero-btn {
     width: 26px;
     height: 26px;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0;
-    font-size: 13px;
-    line-height: 1;
     background: rgba(8, 8, 12, 0.62);
     border: 1px solid var(--line);
-    color: var(--text);
+    color: var(--txt2);
     cursor: pointer;
-    z-index: 4;
   }
-  .hero-toggle:hover {
+  .hero-btn:hover {
     border-color: var(--rosso);
+    color: var(--txt);
+  }
+  .hero-btn.on {
+    border-color: var(--rosso);
+    color: var(--rosso-bright);
+  }
+  .hero-btn svg {
+    width: 14px;
+    height: 14px;
+    /* Tracé plutôt que remplissage, comme les boutons de la barre de titre :
+       une seule couleur à piloter, et un rendu net à cette taille. */
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .hero-panel {
+    position: absolute;
+    right: 10px;
+    bottom: 44px;
+    width: 208px;
+    padding: 10px 12px 8px;
+    background: rgba(8, 8, 12, 0.9);
+    border: 1px solid var(--line);
+    z-index: 4;
   }
   /* Pastille de lancement de l'aperçu 3D : petite, en haut à droite, sans
      assombrir l'image — le showroom s'ouvrira par-dessus l'app. */

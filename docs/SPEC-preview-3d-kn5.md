@@ -599,7 +599,12 @@ Chacun a été pris en connaissance de cause, avec sa raison. Ne pas les
   zoom, sans panoramique, angle polaire borné pour ne pas passer sous le sol.
 - **Coexistence avec le showroom natif** (`acShowroom.exe`, §9.4 du SPEC
   principal) au lieu du remplacement : les deux ne rendent pas le même
-  service. Une bascule photo/3D mémorisée vit dans la zone héros.
+  service. Une barre d'outils vit dans la zone héros : bascule photo/3D
+  mémorisée, remise en place de la voiture, et ouverture des réglages de
+  cadrage. **Révélée au survol** (et au focus clavier) — l'aperçu est là pour
+  être regardé, pas pour montrer ses commandes ; le panneau de réglages ouvert
+  la maintient visible, sinon régler un curseur la ferait disparaître sous les
+  doigts.
 - **Photo de repli non floutée** pendant la préparation : c'est déjà l'aperçu
   habituel de la fiche, la flouter la rendait illisible au moment où elle sert.
 
@@ -641,15 +646,33 @@ gêne constatée :
    mesure qui avait justifié le facteur calibré à l'œil (supprimé) était
    fausse. Vérifié sur six couples voiture/skin, dont
    `ks_abarth500_assetto_corse` / `dark_blue`, qui ressortait blanche.
-3. ~~**Pare-brise constellé de taches.**~~ ✅ **Corrigé.** Même mécanisme que
-   les dégâts, sur un autre slot : `ksWindscreen` réserve sa `txDiffuse` aux
-   rayures et à la poussière. Voir `kn5-format.md`, écart n°6.
+3. ~~**Pare-brise.**~~ ✅ **Corrigé, en quatre passes** — c'est le point qui a
+   le plus résisté, et la leçon vaut le détour : *le même défaut apparent*
+   (« la vitre est sale ») avait **quatre causes différentes**, dévoilées une
+   à une, chacune masquant la suivante.
+   1. sa `txDiffuse` est une carte de rayures, pas une couleur (écart n°6) ;
+   2. son `ksDiffuse` n'est pas une opacité mais une constante de famille de
+      shaders — un voile blanc à 45 % sur tout l'habitacle ;
+   3. son `ksSpecularEXP` ne donne pas une rugosité utilisable : 0,8, soit du
+      verre dépoli ;
+   4. et surtout, un **maillage entier** de vitre brisée (`ksBrokenGlass`) est
+      posé par-dessus en permanence (écart n°8).
+   Une fois ce dernier retiré il n'y avait plus de vitrage du tout, ce qui a
+   révélé une cinquième chose : un alpha **constant** dans une texture n'est
+   pas une découpe mais une opacité (écart n°9).
+   **Ce qu'il faut en retenir** : quand un correctif ne change rien au défaut,
+   se demander si on regarde le bon objet — et pas seulement le bon champ.
+   Détail de la première passe : `ksWindscreen` réserve sa `txDiffuse` aux
+   rayures et à la poussière. Voir `kn5-format.md`, écarts n°6, 8 et 9.
 4. ~~**Réglages à exposer**~~ ✅ **Fait.** Écran Réglages, onglet **Aperçu**
    (`components/settings/PreviewTab.svelte`) : aperçu photo ou 3D, zoom,
    orientation, hauteur de vue, vitesse du plateau, plus un retour au cadrage
    d'origine. Persistance dans `ui_prefs.json` via
    `src/lib/preview3dPrefs.svelte.ts` (`$state` de module, partagé avec la
-   bascule de la zone héros pour que les deux restent d'accord). Un changement
+   bascule de la zone héros pour que les deux restent d'accord ; les curseurs
+   vivent dans `Preview3dControls.svelte`, utilisé par les deux écrans — on les
+   règle sur la fiche, où le résultat est sous les yeux, on les retrouve dans
+   les Réglages avec leur mode d'emploi). Un changement
    se voit sur une fiche déjà ouverte : la caméra est reposée, le modèle n'est
    pas rechargé.
    La hauteur de vue est le réglage qui répond au cadrage : plus la caméra est
@@ -715,6 +738,20 @@ gêne constatée :
    le rendu d'AC. Le `preview.jpg` reste la bonne référence pour le *cadrage*
    et la *géométrie de l'éclairage*, il ne l'est pas pour le niveau absolu.
    Ne pas « corriger » la luminosité sur cette base.
+
+8. **Anti-crénelage** ✅ **complété.** Le MSAA du contexte
+   (`antialias: true`) ne lisse que les **bords de géométrie**. Trois sources
+   de fourmillement lui échappaient, chacune avec son remède :
+   - une texture vue en biais (décalcomanies d'une portière, rainures d'un
+     pneu, le sol) → **filtrage anisotrope** au maximum de la carte, posé sur
+     chaque texture après chargement ;
+   - une **découpe en alpha** (calandre, jante ajourée, grillage), dont le bord
+     vient d'un seuil que le MSAA ne voit pas → `alphaToCoverage` sur les
+     matériaux à `alphaTest`, qui reporte ce bord sur la couverture des
+     échantillons ;
+   - le scintillement des **reflets** sur une carrosserie lisse, qui n'est pas
+     un problème de bord → rendu à 1,5× au minimum puis réduit
+     (`setPixelRatio`), plafonné à 2.
 
 Restent aussi, hérités du plan initial : **R et B de `txMaps`** (§6.2, §12 q3 —
 le vert est documenté et exploité, voir `kn5-format.md` écart n°7 ; les deux

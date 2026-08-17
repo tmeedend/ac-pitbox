@@ -4,7 +4,7 @@
 //! flattening the hierarchy, changing handedness, and dropping the nodes that
 //! are not meant to be drawn.
 
-use kn5::{Kn5Mesh, Kn5Model, Kn5Node};
+use kn5::{Kn5Material, Kn5Mesh, Kn5Model, Kn5Node};
 
 // **Aucune conversion de repère, et aucune inversion de la coordonnée V.**
 // Le §4.4 de la spec demande les deux ; les deux sont fausses, et il a fallu
@@ -91,6 +91,8 @@ pub struct GeometryStats {
     pub skipped_by_name: usize,
     pub skipped_empty: usize,
     pub skipped_distant_lod: usize,
+    /// Meshes carrying the car's *broken* glass — see [`Skip::BrokenGlass`].
+    pub skipped_broken_glass: usize,
     /// Meshes whose accumulated transform mirrors space, and whose winding was
     /// flipped a second time as a result.
     pub mirrored: usize,
@@ -100,7 +102,14 @@ pub struct GeometryStats {
 pub fn flatten(model: &Kn5Model, options: &GeometryOptions) -> (Vec<FlatMesh>, GeometryStats) {
     let mut meshes = Vec::new();
     let mut stats = GeometryStats::default();
-    walk(&model.root, &IDENTITY, options, &mut meshes, &mut stats);
+    walk(
+        &model.root,
+        &IDENTITY,
+        &model.materials,
+        options,
+        &mut meshes,
+        &mut stats,
+    );
     (meshes, stats)
 }
 
@@ -114,6 +123,7 @@ const IDENTITY: [f32; 16] = [
 fn walk(
     node: &Kn5Node,
     parent_world: &[f32; 16],
+    materials: &[Kn5Material],
     options: &GeometryOptions,
     meshes: &mut Vec<FlatMesh>,
     stats: &mut GeometryStats,
@@ -126,12 +136,13 @@ fn walk(
     };
 
     if let Some(mesh) = node.mesh() {
-        match classify(node, mesh, options) {
+        match classify(node, mesh, materials, options) {
             Keep::No(reason) => match reason {
                 Skip::Hidden => stats.skipped_hidden += 1,
                 Skip::Name => stats.skipped_by_name += 1,
                 Skip::Empty => stats.skipped_empty += 1,
                 Skip::DistantLod => stats.skipped_distant_lod += 1,
+                Skip::BrokenGlass => stats.skipped_broken_glass += 1,
             },
             Keep::Yes => {
                 let flat = convert_mesh(&node.name, mesh, &world);
@@ -145,7 +156,7 @@ fn walk(
     }
 
     for child in &node.children {
-        walk(child, &world, options, meshes, stats);
+        walk(child, &world, materials, options, meshes, stats);
     }
 }
 
@@ -159,14 +170,27 @@ enum Skip {
     Name,
     Empty,
     DistantLod,
+    /// The shattered version of the car's glass. AC keeps it in the model at
+    /// all times and only shows it once the pane has actually been broken —
+    /// same mechanism as the damage normal map (docs/kn5-format.md, écart n°4),
+    /// on a whole mesh rather than a texture slot. Drawn as it stands, it lays
+    /// a grey pane and a web of cracks over the windscreen: the "dirty glass"
+    /// the user kept reporting on `ks_toyota_supra_mkiv`.
+    BrokenGlass,
 }
 
-fn classify(node: &Kn5Node, mesh: &Kn5Mesh, options: &GeometryOptions) -> Keep {
+fn classify(node: &Kn5Node, mesh: &Kn5Mesh, materials: &[Kn5Material], options: &GeometryOptions) -> Keep {
     if mesh.vertices.is_empty() || mesh.indices.len() < 3 {
         return Keep::No(Skip::Empty);
     }
     if !mesh.is_renderable || !mesh.is_visible {
         return Keep::No(Skip::Hidden);
+    }
+    if materials
+        .get(mesh.material_id as usize)
+        .is_some_and(|m| m.shader.contains("ksBrokenGlass"))
+    {
+        return Keep::No(Skip::BrokenGlass);
     }
     let name = node.name.to_ascii_uppercase();
     if options.excluded_name_prefixes.iter().any(|p| name.starts_with(p))
@@ -517,6 +541,75 @@ mod tests {
     // Rule: the inverse transpose is what normals go through. Under a
     // non-uniform scale the plain matrix tilts them; here a flattening scale
     // must leave a horizontal normal horizontal.
+    // Règle : la vitre **brisée** ne se dessine pas. AC la garde en permanence
+    // dans le modèle et ne l'affiche qu'après un choc — même mécanisme que la
+    // carte de dégâts (kn5-format.md, écart n°4), sur un maillage entier au
+    // lieu d'un slot de texture. Bug réel remonté trois fois par
+    // l'utilisateur : un pare-brise « sale » sur `ks_toyota_supra_mkiv`, en
+    // fait un réseau de fissures posé par-dessus.
+    #[test]
+    fn broken_glass_is_never_drawn() {
+        fn glass_mesh(material_id: u32) -> Kn5Mesh {
+            Kn5Mesh {
+                cast_shadows: false,
+                is_visible: true,
+                is_transparent: true,
+                vertices: vec![
+                    kn5::Kn5Vertex {
+                        position: [0.0, 0.0, 0.0],
+                        normal: [0.0, 1.0, 0.0],
+                        uv: [0.0, 0.0],
+                        tangent: [1.0, 0.0, 0.0],
+                    };
+                    3
+                ],
+                indices: vec![0, 1, 2],
+                material_id,
+                layer: 0,
+                lod_in: 0.0,
+                lod_out: 0.0,
+                bounding_sphere_center: [0.0; 3],
+                bounding_sphere_radius: 0.0,
+                is_renderable: true,
+            }
+        }
+        fn material(shader: &str) -> Kn5Material {
+            Kn5Material {
+                name: shader.to_string(),
+                shader: shader.to_string(),
+                blend_mode: 1,
+                alpha_tested: false,
+                reserved: 0,
+                properties: Vec::new(),
+                samplers: Vec::new(),
+            }
+        }
+
+        let materials = [material("ksBrokenGlass"), material("ksPerPixelReflection")];
+        let options = GeometryOptions::default();
+
+        let broken = glass_mesh(0);
+        let intact = glass_mesh(1);
+        let node = Kn5Node {
+            name: "GLASS".to_string(),
+            active: true,
+            kind: kn5::Kn5NodeKind::Mesh(intact.clone()),
+            children: Vec::new(),
+        };
+
+        assert!(
+            matches!(
+                classify(&node, &broken, &materials, &options),
+                Keep::No(Skip::BrokenGlass)
+            ),
+            "la vitre brisée est écartée"
+        );
+        assert!(
+            matches!(classify(&node, &intact, &materials, &options), Keep::Yes),
+            "la vitre intacte reste, elle"
+        );
+    }
+
     #[test]
     fn normals_survive_non_uniform_scale() {
         let mut squash = IDENTITY;
