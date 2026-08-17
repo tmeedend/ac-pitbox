@@ -8,8 +8,7 @@
 //! après une migration, même avec une copie de bibliothèque parfaite).
 //!
 //! **Compat ascendante** : les lignes écrites avant ce format restent en
-//! chemin absolu, reconnu et utilisé tel quel par `resolve` — jamais cassé
-//! sans migration explicite (`maintenance::relativize_library_paths`).
+//! chemin absolu, reconnu et utilisé tel quel par `resolve` — jamais cassé.
 
 use std::path::{Path, PathBuf};
 
@@ -49,35 +48,6 @@ pub fn to_relative(library: Option<&Path>, path: &Path) -> String {
         .and_then(|lib| path.strip_prefix(lib).ok())
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.to_string_lossy().into_owned())
-}
-
-/// Cherche `marker` (une séquence de composants consécutifs, ex.
-/// `["cars", "ferrari_488"]`) dans `path` et renvoie tout ce qui suit **à
-/// partir du premier composant du marqueur**, comparaison insensible à la
-/// casse et à `/` vs `\`. Sert à retrouver le chemin relatif à la
-/// bibliothèque d'une ligne encore écrite en absolu (§11, migration), sans
-/// avoir à connaître l'ancienne racine — la structure interne connue
-/// (`<type>/<id>`, `layers/<parent>`, `skins/<parent>`…) suffit à la
-/// retrouver telle quelle, jamais reconstruite.
-pub fn relative_from_marker(path: &str, marker: &[&str]) -> Option<String> {
-    let comps: Vec<_> = Path::new(path).components().collect();
-    if marker.is_empty() {
-        return None;
-    }
-    for start in 0..comps.len() {
-        if start + marker.len() > comps.len() {
-            break;
-        }
-        let matches = marker
-            .iter()
-            .enumerate()
-            .all(|(i, m)| comps[start + i].as_os_str().to_string_lossy().eq_ignore_ascii_case(m));
-        if matches {
-            let rel: PathBuf = comps[start..].iter().collect();
-            return Some(rel.to_string_lossy().into_owned());
-        }
-    }
-    None
 }
 
 /// Résout un chemin stocké en overlay : relatif à `library` (format courant)
@@ -140,44 +110,5 @@ mod tests {
     #[test]
     fn resolve_relative_without_library_configured_is_none() {
         assert_eq!(resolve(None, r"cars\ferrari_488\v1"), None);
-    }
-
-    #[test]
-    fn relative_from_marker_finds_known_suffix_regardless_of_old_root() {
-        // Le cas réel d'une migration multi-PC : l'ancienne racine (ici
-        // `D:\AC-Library` sur le PC source) n'a plus aucun sens sur le nouveau
-        // PC — seule la structure interne connue (cars/<id>/<version>) permet
-        // de retrouver la partie portable, sans qu'on ait besoin de la saisir.
-        let stored = r"D:\AC-Library\cars\ferrari_488\v1.0";
-        assert_eq!(
-            relative_from_marker(stored, &["cars", "ferrari_488"]),
-            Some(r"cars\ferrari_488\v1.0".to_string())
-        );
-    }
-
-    #[test]
-    fn relative_from_marker_is_case_insensitive() {
-        let stored = r"D:\lib\CARS\Ferrari_488\v1";
-        assert_eq!(
-            relative_from_marker(stored, &["cars", "ferrari_488"]),
-            Some(r"CARS\Ferrari_488\v1".to_string())
-        );
-    }
-
-    #[test]
-    fn relative_from_marker_none_when_not_found() {
-        let stored = r"D:\somewhere\else\entirely";
-        assert_eq!(relative_from_marker(stored, &["cars", "ferrari_488"]), None);
-    }
-
-    #[test]
-    fn relative_from_marker_single_component_marker() {
-        // kept_archive_path : on ne connaît pas l'uuid du sous-dossier,
-        // seul le nom fixe `_source_archives` sert de marqueur.
-        let stored = r"D:\AC-Library\_source_archives\a1b2c3\mod.zip";
-        assert_eq!(
-            relative_from_marker(stored, &["_source_archives"]),
-            Some(r"_source_archives\a1b2c3\mod.zip".to_string())
-        );
     }
 }

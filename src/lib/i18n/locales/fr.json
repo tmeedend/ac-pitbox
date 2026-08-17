@@ -549,6 +549,7 @@
     "startFrom": "Départ",
     "startFromPit": "Stand",
     "startFromTrack": "Piste",
+    "startFromHotlap": "Position de chrono",
     "opponentsLabel": "Adversaires",
     "gridSameCar": "Même voiture",
     "gridSameCategory": "Même catégorie",
@@ -713,12 +714,7 @@
     "repairRedeployedDone": "{count} mod(s) actif(s) redéployé(s).",
     "repairRedeployFailed": "{count} redéploiement(s) en échec.",
     "repairReinstalledDone": "{count} mod(s) réinstallé(s) depuis leur archive source.",
-    "repairReinstallFailed": "{count} réinstallation(s) en échec.",
-    "relativizeTitle": "Chemins de bibliothèque (migration)",
-    "relativizeHint": "Convertit les chemins encore enregistrés en absolu (ex. « D:\\AC-Library\\… ») en chemins relatifs à la bibliothèque — nécessaire une fois après avoir copié la bibliothèque et cette configuration sur un autre PC (ou un autre disque), sinon tout apparaît cassé même si les fichiers sont bien là. Ne déplace ni ne copie rien, une seule réécriture en base, sans risque à relancer.",
-    "relativizing": "Conversion…",
-    "relativize": "Convertir",
-    "relativizeDone": "{converted} chemin(s) converti(s), {alreadyRelative} déjà relatif(s)."
+    "repairReinstallFailed": "{count} réinstallation(s) en échec."
   },
   "rules": {
     "savedMsg": "Enregistré — {count} mod(s) retraité(s)",

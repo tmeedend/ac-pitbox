@@ -10,6 +10,7 @@
     weatherConditions,
     type GridMode,
     type Opponent,
+    type PracticeStart,
     type RaceSetup,
     type Season,
     type SessionType,
@@ -92,7 +93,7 @@
     qualify_enabled: true,
     qualify_minutes: 10,
     ghost_car: false,
-    start_from_pit: true,
+    practice_start: "pit",
     damage: 50,
     fuel_rate: 100,
     tyre_wear: 100,
@@ -470,7 +471,7 @@
     laps: number; time_hours: number;
     penalties: boolean; jump_start_penalty: number; grip: number;
     practice_enabled: boolean; practice_minutes: number;
-    qualify_enabled: boolean; qualify_minutes: number; ghost_car: boolean; start_from_pit: boolean;
+    qualify_enabled: boolean; qualify_minutes: number; ghost_car: boolean; practice_start: PracticeStart;
     damage: number; fuel_rate: number; tyre_wear: number; tyre_blankets: boolean; intent: string; season: Season;
     abs_auto: boolean; traction_control_auto: boolean; ideal_line: boolean;
   }
@@ -514,7 +515,7 @@
       penalties: setup.penalties, jump_start_penalty: setup.jump_start_penalty, grip: setup.grip,
       practice_enabled: setup.practice_enabled, practice_minutes: setup.practice_minutes,
       qualify_enabled: setup.qualify_enabled, qualify_minutes: setup.qualify_minutes, ghost_car: setup.ghost_car,
-      start_from_pit: setup.start_from_pit,
+      practice_start: setup.practice_start,
       damage: setup.damage, fuel_rate: setup.fuel_rate, tyre_wear: setup.tyre_wear, tyre_blankets: setup.tyre_blankets,
       intent: selectedIntent, season,
       abs_auto: setup.abs_auto, traction_control_auto: setup.traction_control_auto, ideal_line: setup.ideal_line,
@@ -533,7 +534,7 @@
       setup.grip = p.grip ?? 96;
       setup.practice_enabled = p.practice_enabled ?? false; setup.practice_minutes = p.practice_minutes ?? 20;
       setup.qualify_enabled = p.qualify_enabled ?? true; setup.qualify_minutes = p.qualify_minutes ?? 10;
-      setup.ghost_car = p.ghost_car ?? false; setup.start_from_pit = p.start_from_pit ?? true;
+      setup.ghost_car = p.ghost_car ?? false; setup.practice_start = p.practice_start ?? "pit";
       setup.damage = p.damage ?? 50;
       setup.fuel_rate = p.fuel_rate ?? 100; setup.tyre_wear = p.tyre_wear ?? 100;
       setup.tyre_blankets = p.tyre_blankets ?? false;
@@ -560,7 +561,7 @@
       setup.laps,
       setup.time_hours, setup.penalties, setup.jump_start_penalty, setup.grip,
       setup.practice_enabled, setup.practice_minutes, setup.qualify_minutes,
-      setup.ghost_car, setup.start_from_pit, setup.damage, setup.fuel_rate, setup.tyre_wear, setup.tyre_blankets,
+      setup.ghost_car, setup.practice_start, setup.damage, setup.fuel_rate, setup.tyre_wear, setup.tyre_blankets,
       selectedIntent, season,
       setup.abs_auto, setup.traction_control_auto, setup.ideal_line];
     if (ready && !applying && selectedIntent) savePreset();

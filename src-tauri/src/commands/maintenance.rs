@@ -81,17 +81,6 @@ pub fn repair_all(
     crate::maintenance::repair_all(&conn, &cfg, reinstall_broken)
 }
 
-/// Convertit en chemins relatifs à la bibliothèque toutes les lignes overlay
-/// encore écrites en absolu (§11) — sert à réparer une bibliothèque copiée
-/// depuis une autre machine, dont l'ancienne racine ne correspond plus à
-/// rien ici. Ne déplace ni ne copie aucun fichier, uniquement une réécriture
-/// en base ; sûr à rejouer.
-#[tauri::command]
-pub fn relativize_library_paths(db: State<Db>) -> Result<crate::maintenance::RelativizeReport, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::maintenance::relativize_library_paths(&conn)
-}
-
 /// Exporte la version active d'un mod en archive autonome dans `dest_dir` (§9.1).
 #[tauri::command]
 pub fn export_mod(

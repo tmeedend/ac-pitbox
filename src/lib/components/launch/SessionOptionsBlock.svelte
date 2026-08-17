@@ -29,17 +29,23 @@
          envoyées par le backend quel que soit le type de session
          (Penalties dans les 3 ModeData, TrackPropertiesData au niveau
          racine du preset, pas dans ModeData) — rien ne justifie de les
-         cantonner à Course. Faux départ / tours / essais / qualif
-         restent Course uniquement : absents des schémas Practice/Hotlap
-         (pas de grille, pas de phase weekend). -->
+         cantonner à Course. Faux départ / tours / essais / qualif sont
+         absents des schémas Practice/Hotlap (pas de grille, pas de phase
+         weekend) : jamais affichés pour ces deux types. Track day partage
+         la grille et le faux départ avec Course (schéma confirmé), mais
+         pas le nombre de tours : la session ne se termine jamais par un
+         compte de tours en jeu (retour testé), donc le réglage n'a aucun
+         effet malgré sa présence dans le ModeData envoyé. -->
     <div class="opts-row">
       {#if setup.session_type === "hotlap"}
         <label class="check"><input type="checkbox" bind:checked={setup.ghost_car} /><span>{t("launch.ghostCar")}</span></label>
-      {:else}
-        <label class="grid-fields">
-          <NumberStepper min={1} max={99} bind:value={setup.laps} />
-          <span class="fk lbl-key">{t("launch.laps")}</span>
-        </label>
+      {:else if setup.session_type === "race" || setup.session_type === "trackday"}
+        {#if setup.session_type === "race"}
+          <label class="grid-fields">
+            <NumberStepper min={1} max={99} bind:value={setup.laps} />
+            <span class="fk lbl-key">{t("launch.laps")}</span>
+          </label>
+        {/if}
         <div><span class="fk lbl-key">{t("launch.jumpStart")}</span>
           <div class="seg-v">
             <button type="button" class:on={setup.jump_start_penalty === 0} onclick={() => (setup.jump_start_penalty = 0)}>{t("launch.jumpStartNone")}</button>
@@ -85,8 +91,9 @@
       {#if setup.session_type === "practice"}
         <div><span class="fk lbl-key">{t("launch.startFrom")}</span>
           <div class="seg-v">
-            <button type="button" class:on={setup.start_from_pit} onclick={() => (setup.start_from_pit = true)}>{t("launch.startFromPit")}</button>
-            <button type="button" class:on={!setup.start_from_pit} onclick={() => (setup.start_from_pit = false)}>{t("launch.startFromTrack")}</button>
+            <button type="button" class:on={setup.practice_start === "pit"} onclick={() => (setup.practice_start = "pit")}>{t("launch.startFromPit")}</button>
+            <button type="button" class:on={setup.practice_start === "track"} onclick={() => (setup.practice_start = "track")}>{t("launch.startFromTrack")}</button>
+            <button type="button" class:on={setup.practice_start === "hotlap"} onclick={() => (setup.practice_start = "hotlap")}>{t("launch.startFromHotlap")}</button>
           </div>
         </div>
       {/if}

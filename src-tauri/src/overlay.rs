@@ -790,16 +790,6 @@ pub fn kept_archive_in_use(conn: &Connection, path: &str) -> rusqlite::Result<bo
     Ok(count > 0)
 }
 
-/// Réécrit `library_path` d'une version (§11, migration vers un stockage
-/// relatif à la bibliothèque — `maintenance::relativize_library_paths`).
-pub fn update_version_library_path(conn: &Connection, version_id: &str, path: &str) -> rusqlite::Result<()> {
-    conn.execute(
-        "UPDATE versions SET library_path = ?1 WHERE id = ?2",
-        params![path, version_id],
-    )?;
-    Ok(())
-}
-
 pub fn get_history(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<HistoryRow>> {
     let mut stmt = conn.prepare("SELECT timestamp, event, details FROM history WHERE mod_id = ?1 ORDER BY id DESC")?;
     let rows = stmt.query_map([mod_id], |row| {
@@ -1318,16 +1308,6 @@ pub fn insert_layer(
     Ok(())
 }
 
-/// Réécrit `library_path` d'une couche (§11, migration vers un stockage
-/// relatif à la bibliothèque).
-pub fn update_layer_library_path(conn: &Connection, layer_id: &str, path: &str) -> rusqlite::Result<()> {
-    conn.execute(
-        "UPDATE layers SET library_path = ?1 WHERE id = ?2",
-        params![path, layer_id],
-    )?;
-    Ok(())
-}
-
 fn map_layer(row: &rusqlite::Row) -> rusqlite::Result<LayerRow> {
     Ok(LayerRow {
         id: row.get(0)?,
@@ -1460,15 +1440,6 @@ pub fn insert_bundled_track_skin(
     Ok(())
 }
 
-/// Réécrit `library_path` d'un sous-élément (§11, migration vers un stockage
-/// relatif à la bibliothèque).
-pub fn update_sub_mod_library_path(conn: &Connection, sub_id: &str, path: &str) -> rusqlite::Result<()> {
-    conn.execute(
-        "UPDATE sub_mods SET library_path = ?1 WHERE id = ?2",
-        params![path, sub_id],
-    )?;
-    Ok(())
-}
 
 fn map_sub(row: &rusqlite::Row) -> rusqlite::Result<SubModRow> {
     Ok(SubModRow {
@@ -1594,13 +1565,6 @@ pub fn insert_app(
     Ok(())
 }
 
-/// Réécrit `library_path` d'une app (§11, migration vers un stockage relatif
-/// à la bibliothèque).
-pub fn update_app_library_path(conn: &Connection, id: &str, path: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE apps SET library_path = ?1 WHERE id = ?2", params![path, id])?;
-    Ok(())
-}
-
 pub fn list_apps(conn: &Connection) -> rusqlite::Result<Vec<AppRow>> {
     let mut stmt =
         conn.prepare("SELECT id, library_path, source_archive, imported_at FROM apps ORDER BY id COLLATE NOCASE")?;
@@ -1671,15 +1635,6 @@ pub fn insert_other_mod(
     Ok(())
 }
 
-/// Réécrit `library_path` d'un mod « autre » (§11, migration vers un stockage
-/// relatif à la bibliothèque).
-pub fn update_other_mod_library_path(conn: &Connection, id: &str, path: &str) -> rusqlite::Result<()> {
-    conn.execute(
-        "UPDATE other_mods SET library_path = ?1 WHERE id = ?2",
-        params![path, id],
-    )?;
-    Ok(())
-}
 
 fn map_other(row: &rusqlite::Row) -> rusqlite::Result<OtherModRow> {
     let junctions: String = row.get(6)?;

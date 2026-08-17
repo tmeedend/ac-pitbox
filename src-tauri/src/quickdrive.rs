@@ -19,7 +19,7 @@
 
 use serde_json::{json, Value};
 
-use crate::launch::{Opponent, RaceSetup, SessionType};
+use crate::launch::{Opponent, PracticeStart, RaceSetup, SessionType};
 
 /// `TrackId` façon CM : `<piste>/<layout>` si un layout est choisi (même
 /// convention que `race/csp` côté CM : `trackId.Split('/')`), sinon la piste
@@ -95,10 +95,16 @@ fn build_grid(opponents: &[Opponent]) -> Value {
 
 /// `ModeData` (§8.6) pour `QuickDrive_Practice.xaml` — schéma confirmé sur
 /// `pitbox-practice.cmpreset` : `StartType`/`Penalties`/`PlayerBallast`/
-/// `PlayerRestrictor`. Pas de grille (session solo).
+/// `PlayerRestrictor`. Pas de grille (session solo). Valeurs de `StartType` :
+/// voir `PracticeStart`.
 fn mode_data_practice(s: &RaceSetup) -> String {
+    let start_type = match s.practice_start {
+        PracticeStart::Pit => "PIT",
+        PracticeStart::Track => "TRACK",
+        PracticeStart::Hotlap => "HOTLAP_START",
+    };
     json!({
-        "StartType": if s.start_from_pit { "PIT" } else { "TRACK" },
+        "StartType": start_type,
         "Penalties": s.penalties,
         "PlayerBallast": 0,
         "PlayerRestrictor": 0,
@@ -289,7 +295,7 @@ mod tests {
             qualify_enabled: true,
             qualify_minutes: 10,
             ghost_car: false,
-            start_from_pit: true,
+            practice_start: PracticeStart::Pit,
             damage: 50,
             fuel_rate: 100,
             tyre_wear: 100,
@@ -315,11 +321,21 @@ mod tests {
     #[test]
     fn practice_start_from_track_when_not_from_pit() {
         let mut s = base_setup(SessionType::Practice);
-        s.start_from_pit = false;
+        s.practice_start = PracticeStart::Track;
         let json = build_preset(&s).unwrap();
         let v: Value = serde_json::from_str(&json).unwrap();
         let mode_data: Value = serde_json::from_str(v["ModeData"].as_str().unwrap()).unwrap();
         assert_eq!(mode_data["StartType"], "TRACK");
+    }
+
+    #[test]
+    fn practice_start_from_hotlap_position() {
+        let mut s = base_setup(SessionType::Practice);
+        s.practice_start = PracticeStart::Hotlap;
+        let json = build_preset(&s).unwrap();
+        let v: Value = serde_json::from_str(&json).unwrap();
+        let mode_data: Value = serde_json::from_str(v["ModeData"].as_str().unwrap()).unwrap();
+        assert_eq!(mode_data["StartType"], "HOTLAP_START");
     }
 
     #[test]

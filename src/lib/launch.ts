@@ -3,6 +3,10 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type SessionType = "practice" | "hotlap" | "race" | "trackday";
 
+/** Départ en Practice (§8.4) : "pit"/"track"/"hotlap" → `StartType` du preset
+ * Quick Drive ("PIT"/"TRACK"/"HOTLAP_START", voir `PracticeStart` côté Rust). */
+export type PracticeStart = "pit" | "track" | "hotlap";
+
 /** Saison optionnelle associée à une session (§8.6bis) — influence la
  * température recommandée et, best-effort côté CSP, le rendu (arbres,
  * neige). "" = aucune saison choisie. */
@@ -59,8 +63,8 @@ export interface RaceSetup {
   /** Durée qualif quand elle est demandée (mini 5 min, borne de CM). */
   qualify_minutes: number;
   ghost_car: boolean;
-  /** Départ en Practice (mode Practice uniquement) : `true` = depuis les stands. */
-  start_from_pit: boolean;
+  /** Départ en Practice (mode Practice uniquement). */
+  practice_start: PracticeStart;
   damage: number;
   fuel_rate: number;
   tyre_wear: number;

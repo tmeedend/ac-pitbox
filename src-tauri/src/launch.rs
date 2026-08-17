@@ -34,6 +34,20 @@ pub enum SessionType {
     TrackDay,
 }
 
+/// Départ en Practice → `StartType` du `ModeData` `QuickDrive_Practice.xaml`
+/// (§8.4). `Pit` → "PIT" (confirmée sur `pitbox-practice.cmpreset`) ; `Hotlap`
+/// → "HOTLAP_START" (confirmée en usage réel — position de départ dédiée au
+/// chrono, plutôt qu'un point arbitraire sur la piste) ; `Track` → "TRACK",
+/// **non vérifiée sur un preset réel** — à confirmer si le départ sur piste
+/// ne se comporte pas comme attendu en jeu.
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum PracticeStart {
+    Pit,
+    Track,
+    Hotlap,
+}
+
 /// Un adversaire du plateau (mode course, §8.6) : voiture + son propre niveau
 /// IA (réparti dans la fourchette min-max choisie, pas une valeur unique).
 #[derive(Debug, Clone, Deserialize)]
@@ -144,13 +158,9 @@ pub struct RaceSetup {
     /// Ghost car (Hotlap uniquement) → [GHOST_CAR] du race.ini.
     #[serde(default)]
     pub ghost_car: bool,
-    /// Départ en Practice (mode Practice uniquement) → `StartType` du
-    /// `ModeData` `QuickDrive_Practice.xaml`. `true` = "PIT" (valeur
-    /// confirmée sur `pitbox-practice.cmpreset`) ; `false` = "TRACK", **non
-    /// vérifiée sur un preset réel** — à confirmer si le départ sur piste ne
-    /// se comporte pas comme attendu en jeu.
-    #[serde(default = "default_true")]
-    pub start_from_pit: bool,
+    /// Départ en Practice (mode Practice uniquement) — voir `PracticeStart`.
+    #[serde(default = "default_practice_start")]
+    pub practice_start: PracticeStart,
     /// Simulation — dégâts/usure/carburant → assists.ini. Actifs quel que
     /// soit le type de session (§8.6, pas réservés à la Course). En %.
     #[serde(default = "default_damage")]
@@ -203,6 +213,9 @@ fn default_rate() -> u32 {
 }
 fn default_true() -> bool {
     true
+}
+fn default_practice_start() -> PracticeStart {
+    PracticeStart::Pit
 }
 
 /// Garantit qu'un contenu est disponible dans `content/` : présent (vrai dossier

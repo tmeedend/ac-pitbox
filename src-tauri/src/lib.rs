@@ -216,7 +216,6 @@ pub fn run() {
             commands::maintenance::delete_pack,
             commands::maintenance::reinstall_from_archive,
             commands::maintenance::repair_all,
-            commands::maintenance::relativize_library_paths,
             commands::maintenance::export_mod,
             commands::bulk_ops::bulk_set_favorite,
             commands::bulk_ops::bulk_set_category,

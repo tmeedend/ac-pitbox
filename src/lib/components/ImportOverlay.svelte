@@ -57,13 +57,19 @@
     <div class="p-bar">
       <div class="p-fill" style:width="{p.item_ratio * 100}%" class:indeterminate={!settled}></div>
     </div>
-    <!-- Barre globale seulement quand il y a bien un lot : pour un seul mod,
-         elle répéterait la barre du dessus. -->
-    {#if p.item_count > 1}
+    <!-- Compte du lot et temps restant sur la même ligne, mais deux
+         conditions distinctes : le compte n'a de sens que pour un vrai lot
+         (pour un seul mod, ce serait toujours « 1/1 ») alors que l'ETA reste
+         utile même seul — c'est justement l'import le plus long (un gros mod)
+         qui en a le plus besoin. La barre globale, elle, répéterait
+         exactement celle du dessus pour un seul mod : elle reste réservée au lot. -->
+    {#if settled && (p.item_count > 1 || p.eta_secs !== null)}
       <div class="p-overall">
-        <span class="mono">{p.item_index || 1} / {p.item_count}</span>
+        {#if p.item_count > 1}<span class="mono">{p.item_index || 1} / {p.item_count}</span>{/if}
         {#if p.eta_secs !== null}<span class="p-eta">{etaText(p.eta_secs)}</span>{/if}
       </div>
+    {/if}
+    {#if p.item_count > 1}
       <div class="p-bar global">
         <div class="p-fill" style:width="{p.overall_ratio * 100}%"></div>
       </div>
@@ -188,6 +194,9 @@
   }
   .p-eta {
     color: var(--txt2);
+    /* Poussé à droite même seul (pas de compte de lot à côté) : une marge
+       auto l'emporte sur `justify-content` qu'il ait ou non un voisin. */
+    margin-left: auto;
   }
   .p-bar {
     height: 4px;

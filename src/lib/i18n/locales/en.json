@@ -549,6 +549,7 @@
     "startFrom": "Start",
     "startFromPit": "Pit",
     "startFromTrack": "Track",
+    "startFromHotlap": "Hotlap start",
     "opponentsLabel": "Opponents",
     "gridSameCar": "Same car",
     "gridSameCategory": "Same category",
@@ -713,12 +714,7 @@
     "repairRedeployedDone": "{count} active mod(s) redeployed.",
     "repairRedeployFailed": "{count} redeployment(s) failed.",
     "repairReinstalledDone": "{count} mod(s) reinstalled from their source archive.",
-    "repairReinstallFailed": "{count} reinstall(s) failed.",
-    "relativizeTitle": "Library paths (migration)",
-    "relativizeHint": "Converts paths still stored as absolute (e.g. \"D:\\AC-Library\\...\") into paths relative to the library — needed once after copying the library and this config to another PC (or another drive), otherwise everything looks broken even though the files are really there. Doesn't move or copy anything, a single database rewrite, safe to rerun.",
-    "relativizing": "Converting…",
-    "relativize": "Convert",
-    "relativizeDone": "{converted} path(s) converted, {alreadyRelative} already relative."
+    "repairReinstallFailed": "{count} reinstall(s) failed."
   },
   "rules": {
     "savedMsg": "Saved — {count} mod(s) reprocessed",
