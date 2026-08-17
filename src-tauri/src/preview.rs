@@ -30,7 +30,7 @@ use crate::config::AppConfig;
 /// *reconnaître* pour libérer sa place. Trois incréments en une session de
 /// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
-const CONVERTER_VERSION: u32 = 8;
+const CONVERTER_VERSION: u32 = 9;
 
 /// Plafond du cache (§5.3). Au-delà, éviction du plus ancien utilisé.
 const CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;

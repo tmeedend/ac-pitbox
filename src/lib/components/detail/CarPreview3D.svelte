@@ -216,10 +216,7 @@
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.shadowMap.enabled = true;
-    // VSM et non `PCFSoftShadowMap` : ce dernier a un filtre de taille fixe,
-    // que `shadow.radius` ne touche pas — l'ombre y reste nette quoi qu'on
-    // fasse, et une ombre nette sous une rampe large ne ressemble à rien.
-    renderer.shadowMap.type = THREE.VSMShadowMap;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     const scene = new THREE.Scene();
     // Image-based lighting, and no asset to ship for it (§8.1). The showroom is
@@ -320,15 +317,17 @@
     shadowCamera.near = radius * 0.5;
     shadowCamera.far = radius * 8;
     shadowCamera.updateProjectionMatrix();
-    sun.shadow.mapSize.set(1024, 1024);
-    // Le flou : une rampe de plafond est une source large, donc son ombre est
-    // molle et le devient encore plus loin du point de contact. `radius` est
-    // le rayon du flou, `blurSamples` ce qui l'empêche de se voir par paquets.
-    sun.shadow.radius = 5;
-    sun.shadow.blurSamples = 16;
-    // Le biais reste à zéro en VSM : la variance fait déjà ce travail, et un
-    // biais négatif y décolle l'ombre de la voiture au lieu de la nettoyer.
-    sun.shadow.bias = 0;
+    // La douceur se règle par la **résolution**, et c'est contre-intuitif :
+    // `PCFSoftShadowMap` a un noyau de filtrage fixe, exprimé en texels, donc
+    // moins de texels = un flou plus large. `shadow.radius` n'y fait rien
+    // (three.js le documente), et VSM, qui l'écouterait, a été essayé puis
+    // écarté : il zébrait le sol de barres grises (retour utilisateur).
+    // 512 sur une rampe de plafond large donne le bord mou d'une ombre de
+    // studio ; monter cette valeur la redurcit.
+    sun.shadow.mapSize.set(512, 512);
+    // Sans ce biais, la carte d'ombre s'auto-ombre en fines rayures sur les
+    // surfaces presque parallèles à la lumière (le capot, le toit).
+    sun.shadow.bias = -0.0015;
 
     const shadowCatcher = new THREE.Mesh(
       new THREE.PlaneGeometry(radius * 5, radius * 5),

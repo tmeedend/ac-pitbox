@@ -7,6 +7,29 @@
 members = ["crates/*"]
 resolver = "2"
 
+# En développement, **les dépendances sont optimisées, pas le code de l'app**.
+#
+# Mesuré sur `ks_toyota_supra_mkiv` : la conversion d'un aperçu 3D prenait
+# 5,5 s sous `tauri dev` contre 0,4 s en release — un facteur 13, entièrement
+# imputable au décodage et au ré-encodage des textures, qui passent leur temps
+# dans `image`, `image_dds` et `rayon`. Les optimiser rend l'aperçu utilisable
+# en développement sans toucher à la lisibilité des piles d'appel du code de
+# Pit Box, qui reste en `opt-level = 0`.
+#
+# Coût : la première compilation après un `cargo clean` est plus longue. Elles
+# ne se recompilent ensuite qu'à un changement de version.
+[profile.dev.package."*"]
+opt-level = 2
+
+# Les crates de l'aperçu sont du calcul pur, elles aussi : un parser binaire et
+# un transcodeur d'images. Les garder non optimisées annulerait l'essentiel du
+# gain ci-dessus, et on n'y pose pas de point d'arrêt au quotidien.
+[profile.dev.package.kn5]
+opt-level = 2
+
+[profile.dev.package.kn5-gltf]
+opt-level = 2
+
 [package]
 name = "pitbox"
 version = "0.1.0"

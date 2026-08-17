@@ -110,6 +110,18 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // is almost fully rough, and reading it off `ksSpecularEXP` gives a
     // plastic sheen (§6.3).
     let roughness = if shader.contains("ksTyres") { 0.9 } else { roughness };
+    // Glass is the other one, in the opposite direction. `ksWindscreen`
+    // announces `ksSpecular = 0` and `ksSpecularEXP = 10` — its shader does not
+    // use them the way the others do — which the formula above turns into a
+    // roughness of 0.8, i.e. **frosted** glass. That is the "dirty windscreen"
+    // the user reported once the white veil was gone. A pane is smooth,
+    // whatever its material says; the exterior glass of the same car already
+    // lands here on its own (`ksSpecularEXP = 500`).
+    let roughness = if GLASS_MARKERS.iter().any(|marker| shader.contains(marker)) {
+        roughness.min(0.08)
+    } else {
+        roughness
+    };
     // glTF multiplie facteur et carte : avec une carte, le facteur doit valoir
     // 1, sinon il assombrirait une rugosité déjà juste.
     let roughness = if textures.roughness_texture.is_some() {
@@ -458,6 +470,32 @@ mod tests {
                 .base_color_texture
                 .is_some(),
             "les autres matériaux gardent leur texture"
+        );
+    }
+
+    // Règle : une vitre est lisse, quoi qu'annonce son `ksSpecularEXP`. Bug
+    // réel : `ksWindscreen` déclare `ksSpecular = 0` et `ksSpecularEXP = 10`,
+    // dont la formule générale tirait une rugosité de 0,8 — du verre dépoli,
+    // vu comme un pare-brise sale.
+    #[test]
+    fn glass_is_smooth_whatever_its_exponent_says() {
+        let windscreen = convert(
+            &material("ksWindscreen", 1, false, &[("ksSpecularEXP", 10.0)]),
+            MaterialTextures::default(),
+        );
+        assert!(
+            windscreen.roughness <= 0.1,
+            "une vitre reste lisse (obtenu {})",
+            windscreen.roughness
+        );
+
+        let plastic = convert(
+            &material("ksPerPixel", 0, false, &[("ksSpecularEXP", 10.0)]),
+            MaterialTextures::default(),
+        );
+        assert!(
+            plastic.roughness > 0.5,
+            "et le même exposant sur du plastique reste mat"
         );
     }
 

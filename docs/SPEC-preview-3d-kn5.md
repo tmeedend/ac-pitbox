@@ -700,6 +700,12 @@ gêne constatée :
      rien (retour utilisateur). Le dégradé du sol ne garde qu'un
      assombrissement de contact, là où une carte d'ombre manque toujours de
      résolution.
+     ⚠️ **VSM essayé puis écarté** : c'est le seul type d'ombre dont
+     `shadow.radius` règle le flou, mais il zébrait le sol de barres grises
+     (retour utilisateur). Retour à `PCFSoftShadowMap`, dont le noyau est fixe
+     en **texels** — la douceur s'y règle donc par la résolution de la carte
+     d'ombre, à contre-intuition : 512 pour une ombre molle, monter la valeur
+     la redurcit.
 
    ⚠️ **Piège de la méthode, vérifié par l'utilisateur.** La carrosserie sort
    plus claire que le `preview.jpg` (Supra verte : (53, 182, 72) contre

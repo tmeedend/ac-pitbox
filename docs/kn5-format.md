@@ -361,6 +361,21 @@ du pare-brise ; la vitre elle-même est claire, et ce qui doit s'y voir est
 l'environnement réfléchi. Opacité fixée à 0,1, verrouillée par
 `a_windscreen_stays_clear_whatever_its_ksdiffuse_says`.
 
+**Et son `ksSpecularEXP` n'est pas un exposant utilisable non plus.** Une fois
+le voile blanc retiré, la vitre restait « sale » : `ksWindscreen` annonce
+`ksSpecular = 0` et `ksSpecularEXP = 10`, dont la formule générale de rugosité
+(§6.1) tire **0,8** — du verre dépoli. Comparaison qui tranche, sur la même
+voiture : la vitre extérieure (`ksPerPixelReflection`) annonce, elle,
+`ksSpecularEXP = 500`, soit une surface lisse. Une vitre est lisse quoi
+qu'annonce son matériau ; rugosité plafonnée à 0,08 sur toute la famille
+`GLASS_MARKERS`, verrouillée par `glass_is_smooth_whatever_its_exponent_says`.
+
+> Trois lectures fausses sur le **même** matériau — la texture, l'opacité, la
+> rugosité — et toujours la même racine : `ksWindscreen` renseigne ses champs
+> standard avec des valeurs que son shader n'utilise pas comme les autres. Sur
+> un shader qui porte un nom de rôle plutôt qu'un nom de technique, se méfier
+> de **tous** ses champs, pas seulement de celui qui vient de trahir.
+
 > **Motif à retenir pour la suite.** Quatre défauts visuels sur quatre avaient
 > la même cause de fond : **AC range dans un slot standard une carte que son
 > shader ne mélange qu'à proportion de quelque chose** — un état (dégâts,
