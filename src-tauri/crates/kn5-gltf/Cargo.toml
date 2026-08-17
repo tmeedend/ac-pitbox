@@ -1,0 +1,29 @@
+[package]
+name = "kn5-gltf"
+version = "0.1.0"
+edition = "2021"
+description = "Converts a parsed KN5 model into a glTF binary (GLB) preview"
+license = "MIT"
+
+[dependencies]
+kn5 = { path = "../kn5" }
+thiserror = "2"
+log = "0.4"
+# Document glTF écrit directement (le conteneur GLB, lui, tient en vingt
+# lignes) : le sous-ensemble utilisé est petit et figé, et `gltf-json`
+# n'apporterait de la sûreté de type que sur des index qu'on construit nous-
+# mêmes. Déjà dans le graphe via l'application.
+serde_json = "1"
+
+# Décodage DDS/BCn (BC1 à BC7) vers RGBA8. `default-features = false` retire
+# l'encodage, qui dépendrait d'`intel_tex_2` — donc d'un compilateur C dans la
+# CI — alors qu'on ne fait que lire.
+image_dds = { version = "0.7", default-features = false, features = ["ddsfile", "image"] }
+# Redimensionnement et encodage PNG/JPEG. Même version 0.25 que l'application,
+# pour que les deux partagent une seule copie du crate.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+# Transcodage des textures en parallèle (§5.2). Pas un confort : mesuré à
+# 10 s en séquentiel sur `rss_gtm_lanzo_v8` (136 textures), contre une cible de
+# 2 s pour toute la conversion. Chaque texture est indépendante des autres,
+# c'est le cas d'école d'un `par_iter`.
+rayon = "1"

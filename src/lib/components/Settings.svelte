@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import ConfigFields from "./ConfigFields.svelte";
   import MusicTab from "./settings/MusicTab.svelte";
+  import PreviewTab from "./settings/PreviewTab.svelte";
   import {
     emptyConfig,
     getConfig,
@@ -37,6 +38,7 @@
     { id: "general", labelKey: "settings.tabGeneral" },
     { id: "paths", labelKey: "settings.tabPaths" },
     { id: "import", labelKey: "settings.tabImport" },
+    { id: "preview", labelKey: "settings.tabPreview" },
     { id: "music", labelKey: "settings.tabMusic" },
   ] as const;
   let activeTab = $state<(typeof tabs)[number]["id"]>("general");
@@ -178,6 +180,12 @@
 
   {#if activeTab === "music"}
     <MusicTab />
+  {:else if activeTab === "preview"}
+    <!-- Comme Musique : réglages appliqués tout de suite, donc pas de bouton
+         Enregistrer ni de garde de navigation — ceux-ci ne portent que sur
+         AppConfig. -->
+    <p class="sub">{t("settings.tabPreviewHint")}</p>
+    <PreviewTab />
   {:else}
     {#if activeTab === "general"}
       <p class="sub">{t("settings.tabGeneralHint")}</p>

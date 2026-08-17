@@ -546,3 +546,237 @@ Chaque lot doit être livré **avec ses tests** et être vérifiable indépendam
 5. Contenu des 36 octets de padding après chaque propriété de matériau — probablement une valeur vectorielle ; sans intérêt en v1 mais à documenter.
 
 Chaque réponse trouvée doit être consignée dans `docs/kn5-format.md` avec la méthode de vérification, pas seulement dans un commentaire de code.
+
+---
+
+## 13. État d'avancement (mis à jour au fil des lots)
+
+> Section ajoutée **après** la rédaction initiale. Le corps de ce document
+> reste la spécification de départ, y compris là où l'implémentation l'a
+> contredite : les écarts sont listés au §14, avec leur raison. Quelqu'un qui
+> reprend le chantier lit cette section-ci en premier.
+
+Branche `feature/3dpreview`.
+
+| Lot | État | Où |
+| --- | --- | --- |
+| 0 — outillage | ✅ | `crates/kn5`, `crates/kn5-tool` |
+| 1 — parser | ✅ (fondu dans le lot 0) | `crates/kn5` |
+| 2 — textures | ✅ | `crates/kn5-gltf/src/texture.rs` |
+| 3 — export glTF | ✅ | `crates/kn5-gltf/src/{geometry,material,glb}.rs` |
+| 4 — cache + Tauri | ✅ | `src-tauri/src/preview.rs`, `commands/preview.rs` |
+| 5 — viewer three.js | ✅ | `src/lib/components/detail/CarPreview3D.svelte` |
+| 6 — finitions | ⏳ **en cours** | voir §15 |
+
+**Validé à l'écran par l'utilisateur** : l'aperçu s'affiche dans la fiche
+voiture, tourne sur son socle, se manipule à la souris, et les textures se
+posent au bon endroit.
+
+**Corpus** : 198 voitures sur 201 de la bibliothèque de référence se parsent
+et se convertissent sans échec (les 3 restantes n'ont pas de modèle).
+
+---
+
+## 14. Écarts assumés par rapport à cette spécification
+
+Chacun a été pris en connaissance de cause, avec sa raison. Ne pas les
+« corriger » vers la spec sans relire la raison.
+
+### 14.1 Ajouts demandés par l'utilisateur en cours de route
+
+- **Plateau tournant.** C'était le *but* du chantier, non écrit dans la
+  demande initiale : la voiture tourne lentement sur elle-même, comme sur un
+  socle de salon (un tour en ~28 s). C'est la voiture qui tourne, pas la
+  caméra : le cadrage reste stable et l'état d'`OrbitControls` n'est jamais
+  contrarié quand l'utilisateur prend la main.
+  **Contredit le §8.4** (« rendre à la demande, pas en continu »), et les deux
+  sont inconciliables. Contrepartie payée là où elle se voit : rotation
+  suspendue hors écran, en arrière-plan, et pendant la manipulation (reprise
+  après 4 s) ; désactivée si le système demande de réduire les animations ;
+  avance calculée sur le temps écoulé, pour qu'un écran 144 Hz ne double pas
+  la vitesse.
+- **Manipulation à la souris** conservée par-dessus le plateau : orbite et
+  zoom, sans panoramique, angle polaire borné pour ne pas passer sous le sol.
+- **Coexistence avec le showroom natif** (`acShowroom.exe`, §9.4 du SPEC
+  principal) au lieu du remplacement : les deux ne rendent pas le même
+  service. Une barre d'outils vit dans la zone héros : bascule photo/3D
+  mémorisée, remise en place de la voiture, et ouverture des réglages de
+  cadrage. **Révélée au survol** (et au focus clavier) — l'aperçu est là pour
+  être regardé, pas pour montrer ses commandes ; le panneau de réglages ouvert
+  la maintient visible, sinon régler un curseur la ferait disparaître sous les
+  doigts.
+- **Photo de repli non floutée** pendant la préparation : c'est déjà l'aperçu
+  habituel de la fiche, la flouter la rendait illisible au moment où elle sert.
+
+### 14.2 Écarts techniques
+
+| Spec | Fait | Raison |
+| --- | --- | --- |
+| §4.4 négation d'un axe + inversion du winding | **Aucune conversion de repère** | Prémisse fausse. Voir `kn5-format.md` §12 q4 : deux mesures numériques le disaient dès le lot 3, une validation sur une voiture à l'atlas symétrique les a fait écarter à tort. |
+| §4.4 `v = 1.0 - v` | **UV reprises telles quelles** | DirectX et glTF placent tous deux l'origine des textures en haut à gauche. L'inversion vaut pour OpenGL. |
+| §5.2 `binrw` | Lecteur binaire écrit à la main | Chaque compteur doit être validé *avant* d'allouer ; l'exprimer en attributs coûtait plus que 130 lignes, pour une dépendance de plus. |
+| §5.2 `gltf-json` | Document glTF écrit avec `serde_json` | Sous-ensemble petit et figé ; le test d'acceptation est empirique de toute façon. |
+| §5.4 WebP q85 | **JPEG q85**, PNG si alpha utile | Le glTF de base n'accepte que PNG et JPEG ; WebP exige `EXT_texture_webp`, ce qui casse le critère « s'ouvre dans Blender ». `image` 0.25 n'encode plus le WebP. |
+| §7.1 `PreviewHandle` | `CarPreview` | Nom déjà pris par `music::PreviewHandle`. |
+| §5.1 `crates/` à la racine | `src-tauri/crates/` | Garde `target/`, `Cargo.lock` et les chemins CI où ils étaient. |
+| §5.4 décodage BC1–BC7 | + **décodeur DDS par masques** | 12 % des textures AC sont des DDS non compressés qu'`image_dds` refuse. |
+| — | **L'alpha des textures diffuses est retiré** quand aucun matériau ne l'exploite | Chez AC il ne code pas la transparence (82,5 % des pixels à alpha nul sur une carrosserie blanche). Le conserver efface la carrosserie. Il code en fait le **masque de peinture** — voir la ligne suivante. |
+| §6.2 teinte au `baseColorFactor` | **Peinture cuite dans une variante de la texture diffuse** | Le masque est par pixel (l'alpha de la diffuse), donc un facteur global peindrait aussi les décalcomanies ; et glTF borne le facteur à 1, alors qu'un aplat blanc demande ×1,87. Voir `kn5-format.md`, écart n°5. |
+| §6.2 `txMaps` laissé de côté | **Rugosité par pixel tirée de son canal vert** | La sémantique du vert est mesurée (brillance) ; `ksSpecularEXP` seul ne distinguait pas le chrome du cuir. R, B et `metallicFactor` restent hors jeu, faute de mesure. Voir `kn5-format.md`, écart n°7. |
+
+---
+
+## 15. Reste à faire — lot 6
+
+Points remontés par l'utilisateur après validation à l'écran, par ordre de
+gêne constatée :
+
+1. ~~**La carrosserie paraît cabossée.**~~ ✅ **Corrigé.** C'était bien une
+   carte de dégâts appliquée à tort : sur un shader `*_damage*`, `txNormal`
+   est la déformation des tôles, qu'AC ne mélange qu'à proportion des dégâts.
+   Vérifié sur quatre voitures — voir `kn5-format.md`, écart n°4.
+   *Reste possible plus tard* : exporter le `TANGENT` du KN5 (three.js
+   reconstruit aujourd'hui les tangentes par dérivées d'écran), et vérifier le
+   canal vert des normal maps DirectX. Non nécessaire pour ce défaut-ci.
+2. ~~**Couleur de peinture.**~~ ✅ **Corrigée.** La peinture vient de la carte
+   de détail du skin (multipliée ×2, convention `MODULATE2X`) et elle est
+   **masquée par l'alpha de la diffuse**, qui distingue la carrosserie des
+   décalcomanies. Elle est donc cuite dans une variante de la texture, pas
+   posée en `baseColorFactor` — voir `kn5-format.md`, écart n°5, réécrit : la
+   mesure qui avait justifié le facteur calibré à l'œil (supprimé) était
+   fausse. Vérifié sur six couples voiture/skin, dont
+   `ks_abarth500_assetto_corse` / `dark_blue`, qui ressortait blanche.
+3. ~~**Pare-brise.**~~ ✅ **Corrigé, en quatre passes** — c'est le point qui a
+   le plus résisté, et la leçon vaut le détour : *le même défaut apparent*
+   (« la vitre est sale ») avait **quatre causes différentes**, dévoilées une
+   à une, chacune masquant la suivante.
+   1. sa `txDiffuse` est une carte de rayures, pas une couleur (écart n°6) ;
+   2. son `ksDiffuse` n'est pas une opacité mais une constante de famille de
+      shaders — un voile blanc à 45 % sur tout l'habitacle ;
+   3. son `ksSpecularEXP` ne donne pas une rugosité utilisable : 0,8, soit du
+      verre dépoli ;
+   4. et surtout, un **maillage entier** de vitre brisée (`ksBrokenGlass`) est
+      posé par-dessus en permanence (écart n°8).
+   Une fois ce dernier retiré il n'y avait plus de vitrage du tout, ce qui a
+   révélé une cinquième chose : un alpha **constant** dans une texture n'est
+   pas une découpe mais une opacité (écart n°9).
+   **Ce qu'il faut en retenir** : quand un correctif ne change rien au défaut,
+   se demander si on regarde le bon objet — et pas seulement le bon champ.
+   Détail de la première passe : `ksWindscreen` réserve sa `txDiffuse` aux
+   rayures et à la poussière. Voir `kn5-format.md`, écarts n°6, 8 et 9.
+4. ~~**Réglages à exposer**~~ ✅ **Fait.** Écran Réglages, onglet **Aperçu**
+   (`components/settings/PreviewTab.svelte`) : aperçu photo ou 3D, zoom,
+   orientation, hauteur de vue, vitesse du plateau, plus un retour au cadrage
+   d'origine. Persistance dans `ui_prefs.json` via
+   `src/lib/preview3dPrefs.svelte.ts` (`$state` de module, partagé avec la
+   bascule de la zone héros pour que les deux restent d'accord ; les curseurs
+   vivent dans `Preview3dControls.svelte`, utilisé par les deux écrans — on les
+   règle sur la fiche, où le résultat est sous les yeux, on les retrouve dans
+   les Réglages avec leur mode d'emploi). Un changement
+   se voit sur une fiche déjà ouverte : la caméra est reposée, le modèle n'est
+   pas rechargé.
+   La hauteur de vue est le réglage qui répond au cadrage : plus la caméra est
+   haute, plus elle plonge, et plus l'avant sort du cadre quand le plateau
+   tourne. **Décidé avec l'utilisateur** : on expose le réglage, on ne calcule
+   pas une hauteur idéale par angle.
+6. ~~**Rugosité par pixel depuis `txMaps`**~~ ✅ **Fait**, ajouté en cours de
+   lot : son canal vert est la brillance, et `ksSpecularEXP` seul ne
+   distinguait pas le chrome du cuir. Voir `kn5-format.md`, écart n°7.
+7. **Éclairage et cadrage calés sur les `preview.jpg` Kunos** ✅ **pour
+   l'essentiel** — reste un écart de luminosité décrit plus bas.
+   **Fait après la rugosité** (décidé avec l'utilisateur) : elle change la
+   réponse à la lumière, donc calibrer avant l'aurait fait recommencer.
+
+   **Méthode** — un banc de comparaison plutôt que du tâtonnement : une page
+   qui rend le `.glb` dans la même scène three.js à côté du `preview.jpg` du
+   même skin, et qui mesure les deux (couverture, boîte de la voiture,
+   luminance médiane, couleur médiane de la carrosserie). Jetable, hors dépôt.
+
+   **Corrigé, mesuré sur deux voitures** :
+   - **Focale** 35° → **20°**, avec la distance qui suit (4,9 rayons à
+     zoom 100 %). À 35°, l'avant d'une voiture enfle et l'arrière fuit ; les
+     photos du jeu n'ont pas cette déformation.
+   - **Angle par défaut** : trois-quarts avant **gauche** (azimut 318°,
+     hauteur 13°). Toutes les photos Kunos sont prises de ce côté ; on
+     présentait le côté opposé, ce qui suffisait à faire sauter la bascule
+     photo/3D.
+   - **Cadrage** : la voiture couvre désormais ~17,6 % de l'image contre
+     17,5 % chez Kunos, et n'est plus coupée en bas.
+   - **Environnement** : la `RoomEnvironment` de three.js est une pièce
+     **blanche**, et une peinture peu rugueuse y reflète des murs clairs sur
+     toute sa surface. Remplacée par un studio sombre à rampes zénithales
+     (`components/detail/showroomEnvironment.ts`), procédural comme elle et
+     sans asset (§8.1).
+   - **Sol** : l'ombre de contact seule laissait la voiture posée sur rien.
+     Le sol porte maintenant la **flaque de lumière** que renvoie un showroom
+     (intensité partie de la photo — son fond passe de rgb(2,3,5) dans les
+     coins à rgb(12,13,15) sous la voiture — puis remontée d'un cran, l'aperçu
+     n'ayant pas le décor autour pour donner la profondeur), **et l'ombre
+     portée de la voiture**, projetée pour de vrai.
+     L'ombre vient d'une lumière directionnelle **d'intensité nulle** : elle
+     n'éclaire rien, tout ce que la voiture reçoit continue de venir de la
+     carte d'environnement calée plus haut. Elle n'existe que pour donner une
+     direction de projection, `ShadowMaterial` lisant le masque d'ombre et non
+     la contribution de la lumière. Carte d'ombre en **VSM** et non
+     `PCFSoftShadowMap`, dont le filtre est de taille fixe : `shadow.radius`
+     n'y fait rien, et une ombre nette sous une rampe large ne ressemble à
+     rien (retour utilisateur). Le dégradé du sol ne garde qu'un
+     assombrissement de contact, là où une carte d'ombre manque toujours de
+     résolution.
+     ⚠️ **VSM essayé puis écarté** : c'est le seul type d'ombre dont
+     `shadow.radius` règle le flou, mais il zébrait le sol de barres grises
+     (retour utilisateur). Retour à `PCFSoftShadowMap`, dont le noyau est fixe
+     en **texels** — la douceur s'y règle donc par la résolution de la carte
+     d'ombre, à contre-intuition : 512 pour une ombre molle, monter la valeur
+     la redurcit.
+
+   ⚠️ **Piège de la méthode, vérifié par l'utilisateur.** La carrosserie sort
+   plus claire que le `preview.jpg` (Supra verte : (53, 182, 72) contre
+   (14, 81, 36)), et j'en avais conclu qu'il restait un écart à corriger, du
+   côté de `ksAmbient + ksDiffuse`. **Comparaison faite avec le jeu lancé : il
+   n'y a pas d'écart** — ce sont les `preview.jpg` qui sont plus sombres que
+   le rendu d'AC. Le `preview.jpg` reste la bonne référence pour le *cadrage*
+   et la *géométrie de l'éclairage*, il ne l'est pas pour le niveau absolu.
+   Ne pas « corriger » la luminosité sur cette base.
+
+8. **Anti-crénelage** ✅ **complété.** Le MSAA du contexte
+   (`antialias: true`) ne lisse que les **bords de géométrie**. Trois sources
+   de fourmillement lui échappaient, chacune avec son remède :
+   - une texture vue en biais (décalcomanies d'une portière, rainures d'un
+     pneu, le sol) → **filtrage anisotrope** au maximum de la carte, posé sur
+     chaque texture après chargement ;
+   - une **découpe en alpha** (calandre, jante ajourée, grillage), dont le bord
+     vient d'un seuil que le MSAA ne voit pas → `alphaToCoverage` sur les
+     matériaux à `alphaTest`, qui reporte ce bord sur la couverture des
+     échantillons ;
+   - le scintillement des **reflets** sur une carrosserie lisse, qui n'est pas
+     un problème de bord → rendu à 1,5× au minimum puis réduit
+     (`setPixelRatio`), plafonné à 2.
+
+Restent aussi, hérités du plan initial : **R et B de `txMaps`** (§6.2, §12 q3 —
+le vert est documenté et exploité, voir `kn5-format.md` écart n°7 ; les deux
+autres canaux restent ouverts), choix du LOD en config, purge **manuelle** du
+cache depuis les Réglages, et l'aperçu dans `ModDetail.svelte` (panneau
+latéral), qui n'a jamais été branché.
+
+### 15.1 Cache — ce qui est en place
+
+Rappel, parce que la question revient : le cache est **sur disque**
+(`%LOCALAPPDATA%\com.pitbox.app\previews`), donc il survit à un redémarrage —
+une voiture déjà vue s'ouvre sans reconversion. Chaque entrée est un
+`v<version>-<hachage>.glb` plus un `.txt` de compteurs à côté.
+
+Le **numéro de version du convertisseur** (`preview::CONVERTER_VERSION`) est
+dans le nom du fichier. Deux effets, et il faut les deux :
+
+- une entrée d'une autre version n'est jamais servie, puisque son nom ne peut
+  plus être demandé — c'est l'invalidation ;
+- elle est **reconnaissable**, donc effaçable. Au premier aperçu de chaque
+  exécution, les entrées d'une autre version sont supprimées. Sans ça elles
+  restaient à occuper le disque jusqu'à ce que le plafond de 2 Gio les évince :
+  trois incréments en une session de travail avaient laissé plusieurs centaines
+  de Mo derrière eux.
+
+La purge manuelle depuis les Réglages garde son intérêt malgré ce ménage — le
+cache d'une grande bibliothèque atteint vite le gigaoctet **en entrées
+valides**.

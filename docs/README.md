@@ -20,6 +20,12 @@ Documentation de conception de Pit Box (gestionnaire de mods Assetto Corsa). Ce 
 - **`pitbox-source-pack.html`** — affichage du pack d'origine (voitures sœurs, filtrer/désinstaller par pack).
 - **`pitbox-a-propos.html`** — écran « À propos » : identité, outils tiers (Assetto Corsa/Content Manager/QuickBMS), soutien (Patreon/OverTake), licences open source, mentions légales.
 
+## Aperçu 3D des voitures (chantier en cours)
+
+- **`SPEC-preview-3d-kn5.md`** — spécification du rendu 3D natif : parsing KN5 en Rust → glTF → three.js dans la webview. Décision d'architecture, layout binaire du format, plan par lots. **Point d'entrée du chantier.**
+- **`kn5-format.md`** — ce que le format fait *vraiment*, mesuré sur des fichiers réels : écarts constatés avec la spec et réponses à ses questions ouvertes, avec la méthode de vérification. À mettre à jour à chaque découverte.
+- **`showroom-3d-preview-research.md`** — recherche préalable : les trois pistes explorées (fenêtre Content Manager, parser maison, `acShowroom.exe`), et pourquoi l'intégration de la fenêtre native a été abandonnée. À lire avant de retenter quoi que ce soit dans cette direction.
+
 ## Code de référence
 
 - **`archives.py`** — logique d'import/détection de l'ancien outil Python (`isCar`/`isTrack`/`isCarSound`, descente récursive). À **porter** dans le backend Rust, jamais exécutée. ⚠️ Ne jamais réécrire les `ui_*.json` (contrairement à ce code) — l'app est non destructive.

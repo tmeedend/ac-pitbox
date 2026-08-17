@@ -62,18 +62,21 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+      # `--all`/`--workspace` obligatoires depuis l'ajout des crates de
+      # l'aperçu 3D (src-tauri/crates/) : sans ça, cargo ne regarde que le
+      # paquet racine du workspace et les crates ne sont ni vérifiés ni testés.
       # Style figé par src-tauri/rustfmt.toml (max_width = 120).
       - name: Format
         working-directory: src-tauri
-        run: cargo fmt --check
+        run: cargo fmt --all --check
 
       - name: Clippy (warnings = erreurs)
         working-directory: src-tauri
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Tests
         working-directory: src-tauri
-        run: cargo test
+        run: cargo test --workspace
 
   bundle:
     name: Bundle (installateur)

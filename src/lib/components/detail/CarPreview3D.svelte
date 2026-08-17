@@ -1,0 +1,688 @@
+<script lang="ts">
+  // Aperçu 3D interactif d'une voiture (docs/SPEC-preview-3d-kn5.md §8).
+  //
+  // Le modèle est converti côté Rust en glTF binaire, mis en cache et servi
+  // par le protocole `carpreview` : ici on ne reçoit qu'une URL, jamais les
+  // octets (§7.2).
+  //
+  // three.js est chargé en `import()` dynamique : c'est de loin la plus grosse
+  // dépendance du front, et elle ne doit peser ni au démarrage de l'app ni sur
+  // les écrans qui n'affichent aucun aperçu.
+  import { onDestroy, untrack } from "svelte";
+  import { prepareCarPreview, onPreviewProgress, type PreviewStage } from "$lib/preview";
+  import { preview3dPrefs, preview3dReady, preview3dResets } from "$lib/preview3dPrefs.svelte";
+  import { t } from "$lib/i18n/index.svelte";
+  import { errorText } from "$lib/errors";
+  import type * as ThreeModule from "three";
+
+  let {
+    carId,
+    skinId = null,
+    fallbackSrc = null,
+  }: { carId: string; skinId?: string | null; fallbackSrc?: string | null } = $props();
+
+  type Phase = "loading" | "ready" | "unavailable";
+
+  let phase = $state<Phase>("loading");
+  let stage = $state<PreviewStage | null>(null);
+  /** Clé i18n ou message technique, affiché en infobulle du badge (§8.5). */
+  let reason = $state<string | null>(null);
+  let canvasHost = $state<HTMLDivElement | null>(null);
+
+  /** Tout ce qui doit être libéré : vit hors des runes, ce n'est pas de l'état
+   * d'affichage et le rendre réactif ne ferait que déclencher des effets. */
+  let scene: ThreeScene | null = null;
+  /** Couple voiture/skin réellement en place, pour ne pas reconstruire une
+   * scène identique. Vide tant que rien n'est chargé. */
+  let loaded = "";
+  let frame = 0;
+  let observer: ResizeObserver | null = null;
+  let visibility: IntersectionObserver | null = null;
+
+  interface ThreeScene {
+    THREE: typeof ThreeModule;
+    renderer: ThreeModule.WebGLRenderer;
+    scene: ThreeModule.Scene;
+    camera: ThreeModule.PerspectiveCamera;
+    controls: {
+      update(): boolean;
+      dispose(): void;
+      addEventListener(type: string, listener: () => void): void;
+      /** Point visé, déplacé verticalement par le réglage de hauteur. */
+      target: ThreeModule.Vector3;
+    };
+    pmrem: ThreeModule.PMREMGenerator;
+    /** Le plateau : la voiture y est posée, l'ombre de contact non — un socle
+     * de salon tourne sous la voiture, il n'emporte pas son ombre. */
+    turntable: ThreeModule.Group;
+    /** Centre et rayon du modèle, gardés pour recalculer le cadrage quand un
+     * réglage change, sans reconstruire la scène. */
+    center: ThreeModule.Vector3;
+    radius: number;
+  }
+
+  // Plateau tournant, comme un socle de salon : c'est la raison d'être de tout
+  // ce chantier — voir la voiture tourner, pas seulement pouvoir la tourner.
+  //
+  // Le §8.4 de la spec demande l'inverse (« ne pas rendre en continu à 60 fps
+  // sur un panneau statique ») et les deux sont inconciliables. La contrepartie
+  // est donc payée là où elle se voit : la rotation s'arrête dès que la fiche
+  // quitte l'écran, que la fenêtre passe en arrière-plan, ou que l'utilisateur
+  // attrape le modèle — un panneau qu'on ne regarde pas ne consomme rien.
+
+  /** Un tour en ~28 s à 100 % : assez lent pour être calme, assez vif pour
+   * qu'on voie les reflets glisser sur la carrosserie. */
+  const SPIN_SPEED = 0.22;
+
+  // Lens and framing, measured against Kunos' `preview.jpg` (§15 point 7).
+  //
+  // A 20° field of view rather than the 35° first used: at 35° the nose of a
+  // car looms and its tail falls away, a distortion the game's own previews do
+  // not have. The distance that follows is what puts the car at the size Kunos
+  // frames it — the two go together, since a longer lens has to step back.
+  const FRAMING_FOV = 20;
+  /** Camera distance at zoom 100 %, in multiples of the model's radius. */
+  const FRAMING_DISTANCE = 4.9;
+  /** Reprise après un lâcher de souris. Assez long pour examiner un détail
+   * sans que le plateau ne redémarre sous les doigts. */
+  const SPIN_RESUME_MS = 4000;
+
+  /** Une préférence système « moins d'animations » désactive le plateau : une
+   * rotation permanente est exactement ce qu'elle demande d'éviter. */
+  const reducedMotion =
+    typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  let spinning = !reducedMotion;
+  let onScreen = true;
+  let lastFrameAt = 0;
+  let resumeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * WebGL indisponible = repli silencieux sur la photo (§8.5) : ce n'est pas
+   * une erreur à signaler, c'est une machine qui ne peut pas afficher de 3D.
+   */
+  function webglAvailable(): boolean {
+    try {
+      const probe = document.createElement("canvas");
+      return !!(probe.getContext("webgl2") ?? probe.getContext("webgl"));
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Libère tout ce qui occupe la mémoire GPU (§8.3).
+   *
+   * Première cause de plantage de ce genre de composant : l'utilisateur
+   * parcourt deux cents voitures, chacune laissant ses géométries et ses
+   * textures derrière elle. Appelée au démontage **et** à chaque changement de
+   * voiture, sans exception.
+   */
+  function disposeScene(current: ThreeScene | null) {
+    if (frame) cancelAnimationFrame(frame);
+    frame = 0;
+    lastFrameAt = 0;
+    if (resumeTimer) clearTimeout(resumeTimer);
+    resumeTimer = null;
+    visibility?.disconnect();
+    visibility = null;
+    if (!current) return;
+
+    current.scene.traverse((object) => {
+      const mesh = object as ThreeModule.Mesh;
+      mesh.geometry?.dispose?.();
+      const material = mesh.material as ThreeModule.Material | ThreeModule.Material[] | undefined;
+      for (const m of Array.isArray(material) ? material : material ? [material] : []) {
+        // Les textures ne sont pas libérées par `material.dispose()` : il faut
+        // parcourir ses propriétés pour les attraper une par une.
+        for (const value of Object.values(m)) {
+          if (value && typeof value === "object" && "isTexture" in value) {
+            (value as ThreeModule.Texture).dispose();
+          }
+        }
+        m.dispose();
+      }
+    });
+    current.scene.clear();
+    current.controls.dispose();
+    current.pmrem.dispose();
+    current.renderer.dispose();
+    // Rend explicitement le contexte WebGL : les navigateurs en limitent le
+    // nombre simultané, et attendre le ramasse-miettes suffit à l'épuiser.
+    current.renderer.forceContextLoss();
+    current.renderer.domElement.remove();
+  }
+
+  /** Le plateau tourne-t-il en ce moment ? Quatre conditions, toutes
+   * nécessaires — vitesse nulle comprise, sinon la boucle de rendu
+   * continuerait à tourner pour ne rien déplacer. */
+  function turning(): boolean {
+    return spinning && onScreen && !document.hidden && preview3dPrefs().spin > 0;
+  }
+
+  /**
+   * Une image. La boucle ne se prolonge que si quelque chose bouge encore :
+   * le plateau, ou l'inertie d'OrbitControls après un lâcher de souris.
+   */
+  function requestRender(current: ThreeScene) {
+    if (frame) return;
+    frame = requestAnimationFrame((now) => {
+      frame = 0;
+      // Avance en fonction du temps écoulé, pas du nombre d'images : la vitesse
+      // ne doit pas dépendre du taux de rafraîchissement de l'écran, sinon un
+      // moniteur 144 Hz fait tourner la voiture deux fois plus vite.
+      const elapsed = lastFrameAt ? Math.min((now - lastFrameAt) / 1000, 0.1) : 0;
+      lastFrameAt = now;
+      if (turning() && elapsed > 0) {
+        // C'est la voiture qui tourne, pas la caméra : le cadrage reste
+        // parfaitement stable, les reflets glissent sur la carrosserie, et
+        // rien ne vient contrarier l'état interne d'OrbitControls quand
+        // l'utilisateur prend la main.
+        current.turntable.rotation.y += SPIN_SPEED * (preview3dPrefs().spin / 100) * elapsed;
+      }
+      const moving = current.controls.update();
+      current.renderer.render(current.scene, current.camera);
+      if (moving || turning()) requestRender(current);
+      else lastFrameAt = 0;
+    });
+  }
+
+  /**
+   * Pose la caméra d'après les réglages (§15) : distance, angle autour de
+   * l'axe vertical, hauteur. Par défaut un trois-quarts avant, l'angle le plus
+   * flatteur pour une voiture.
+   *
+   * Séparée de `build` parce qu'elle sert deux fois : à la construction, et à
+   * chaque changement de réglage — recadrer ne demande pas de reconstruire la
+   * scène, et surtout pas de reconvertir le modèle.
+   */
+  function placeCamera(current: ThreeScene) {
+    const prefs = preview3dPrefs();
+    const distance = (current.radius * FRAMING_DISTANCE * 100) / prefs.zoom;
+    const azimuth = (prefs.azimuth * Math.PI) / 180;
+    const elevation = (prefs.elevation * Math.PI) / 180;
+    // Le point visé monte ou descend avec la hauteur : c'est lui qui décide de
+    // la place de la voiture dans le cadre, alors que la plongée décide de ce
+    // qu'on voit de son toit. Les deux se règlent séparément.
+    const targetY = current.center.y + current.radius * (prefs.height / 100);
+    current.controls.target.set(current.center.x, targetY, current.center.z);
+    current.camera.position.set(
+      current.center.x + distance * Math.cos(elevation) * Math.sin(azimuth),
+      targetY + distance * Math.sin(elevation),
+      current.center.z + distance * Math.cos(elevation) * Math.cos(azimuth),
+    );
+    current.controls.update();
+    requestRender(current);
+  }
+
+  async function build(url: string, host: HTMLDivElement): Promise<ThreeScene> {
+    const THREE = await import("three");
+    const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
+    const { OrbitControls } = await import("three/examples/jsm/controls/OrbitControls.js");
+    const { showroomEnvironment } = await import("./showroomEnvironment");
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    // Rendu à 1,5× au minimum, même sur un écran à 1 dpi : le MSAA échantillonne
+    // les bords, pas l'intérieur des surfaces, et sur une carrosserie lisse ce
+    // sont les reflets qui scintillent. Suréchantillonner puis réduire est le
+    // remède direct, et le panneau est assez petit pour que ça ne se paie pas.
+    // Plafond à 2 — au-delà, la facture en pixels double sans que ça se voie.
+    renderer.setPixelRatio(Math.min(Math.max(window.devicePixelRatio, 1.5), 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    const scene = new THREE.Scene();
+    // Image-based lighting, and no asset to ship for it (§8.1). The showroom is
+    // dark on purpose — see `showroomEnvironment` for what a white room did to
+    // the paint.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(showroomEnvironment(THREE), 0.04).texture;
+
+    const gltf = await new GLTFLoader().loadAsync(url);
+
+    // Filtrage anisotrope, au maximum de ce que la carte accepte (16 en
+    // pratique). Le MSAA du contexte ne lisse que les **bords de géométrie** ;
+    // le fourmillement d'une texture vue en biais — les décalcomanies d'une
+    // portière, les rainures d'un pneu, le sol — vient du filtrage, et c'est
+    // l'anisotropie qui le règle. Une ligne pour le gain le plus visible.
+    const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    // Les vitres passent après l'opaque et n'écrivent pas dans le tampon de
+    // profondeur, sinon l'intérieur disparaît derrière le pare-brise (§8.2).
+    gltf.scene.traverse((object) => {
+      const mesh = object as ThreeModule.Mesh;
+      if (!mesh.isMesh) return;
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const material of materials) {
+        for (const value of Object.values(material)) {
+          if (value && typeof value === "object" && "isTexture" in value) {
+            const texture = value as ThreeModule.Texture;
+            texture.anisotropy = maxAnisotropy;
+            texture.needsUpdate = true;
+          }
+        }
+        // Découpes en alpha (calandres, jantes ajourées, grillages) : leur bord
+        // est décidé par un seuil, donc le MSAA ne le voit pas — il ne lisse
+        // que la silhouette du triangle, pas le trou qu'on y perce. Reporté sur
+        // la couverture des échantillons, ce bord retrouve le même adoucissement
+        // que le reste.
+        const standard = material as ThreeModule.MeshStandardMaterial;
+        if (standard.alphaTest > 0) {
+          standard.alphaToCoverage = true;
+        }
+      }
+      if (materials.some((m) => (m as ThreeModule.Material).transparent)) {
+        mesh.renderOrder = 1;
+        for (const m of materials) (m as ThreeModule.Material).depthWrite = false;
+      } else {
+        // Only the opaque body casts: a windscreen that casts a shadow map
+        // casts it solid black, and the car ends up sitting on a dark blob.
+        mesh.castShadow = true;
+      }
+    });
+
+    // Cadrage calculé, jamais codé en dur : les mods ont des échelles très
+    // variables et un cadrage fixe en couperait la moitié (§8.1).
+    const box = new THREE.Box3().setFromObject(gltf.scene);
+    const center = box.getCenter(new THREE.Vector3());
+    const radius = box.getSize(new THREE.Vector3()).length() / 2;
+
+    // Plateau centré sous la voiture : le modèle est décalé pour que l'axe de
+    // rotation passe par son centre, sinon elle décrirait un cercle au lieu de
+    // pivoter sur elle-même. Les positions dans le monde ne changent pas.
+    const turntable = new THREE.Group();
+    turntable.position.set(center.x, 0, center.z);
+    gltf.scene.position.set(-center.x, 0, -center.z);
+    turntable.add(gltf.scene);
+    scene.add(turntable);
+
+    const camera = new THREE.PerspectiveCamera(FRAMING_FOV, 16 / 9, radius / 100, radius * 40);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.copy(center);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enablePan = false;
+    controls.minDistance = radius * 1.1;
+    // Roomy enough for the whole zoom range of the settings: at 50 % the camera
+    // sits at nearly ten radii, and a tighter bound would silently cancel the
+    // setting on the first frame.
+    controls.maxDistance = radius * 12;
+    // Borne l'angle polaire pour qu'on ne puisse pas passer sous le sol.
+    controls.maxPolarAngle = Math.PI * 0.495;
+
+    // The ground: a pool of light with the contact shadow in its middle, drawn
+    // as one gradient rather than a shadow map (§8.1). Two things at once,
+    // because they are two halves of the same thing — the car sits on a lit
+    // floor and blocks part of that light.
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(radius * 5, radius * 5),
+      new THREE.MeshBasicMaterial({
+        map: groundTexture(THREE),
+        transparent: true,
+        depthWrite: false,
+        // Le dégradé est déjà la valeur voulue à l'écran : le faire passer par
+        // le tone mapping l'assombrirait d'un tiers.
+        toneMapped: false,
+      }),
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.set(center.x, box.min.y + radius / 400, center.z);
+    ground.renderOrder = -2;
+    scene.add(ground);
+
+    // The car's own shadow, projected on that floor.
+    //
+    // The light is at **intensity zero**: it lights nothing, and everything the
+    // car receives still comes from the environment map, which is what was
+    // calibrated against the Kunos photos. It exists only so three.js has a
+    // direction to project from — `ShadowMaterial` reads the shadow mask, not
+    // the light's contribution, so the two concerns stay apart.
+    const sun = new THREE.DirectionalLight(0xffffff, 0);
+    sun.castShadow = true;
+    // Above and slightly to the front-left, the direction the ceiling strips
+    // of the showroom come from: the shadow falls almost straight under the
+    // car, as in the photos, with just enough offset to be read as a shadow.
+    sun.position.set(center.x - radius * 0.35, center.y + radius * 4, center.z + radius * 0.6);
+    sun.target.position.copy(center);
+    scene.add(sun.target);
+    scene.add(sun);
+    const shadowCamera = sun.shadow.camera;
+    shadowCamera.left = -radius;
+    shadowCamera.right = radius;
+    shadowCamera.top = radius;
+    shadowCamera.bottom = -radius;
+    shadowCamera.near = radius * 0.5;
+    shadowCamera.far = radius * 8;
+    shadowCamera.updateProjectionMatrix();
+    // La douceur se règle par la **résolution**, et c'est contre-intuitif :
+    // `PCFSoftShadowMap` a un noyau de filtrage fixe, exprimé en texels, donc
+    // moins de texels = un flou plus large. `shadow.radius` n'y fait rien
+    // (three.js le documente), et VSM, qui l'écouterait, a été essayé puis
+    // écarté : il zébrait le sol de barres grises (retour utilisateur).
+    // 512 sur une rampe de plafond large donne le bord mou d'une ombre de
+    // studio ; monter cette valeur la redurcit.
+    sun.shadow.mapSize.set(512, 512);
+    // Sans ce biais, la carte d'ombre s'auto-ombre en fines rayures sur les
+    // surfaces presque parallèles à la lumière (le capot, le toit).
+    sun.shadow.bias = -0.0015;
+
+    const shadowCatcher = new THREE.Mesh(
+      new THREE.PlaneGeometry(radius * 5, radius * 5),
+      new THREE.ShadowMaterial({ opacity: 0.5 }),
+    );
+    shadowCatcher.receiveShadow = true;
+    shadowCatcher.rotation.x = -Math.PI / 2;
+    shadowCatcher.position.set(center.x, box.min.y + radius / 300, center.z);
+    shadowCatcher.renderOrder = -1;
+    scene.add(shadowCatcher);
+
+    host.appendChild(renderer.domElement);
+    const built: ThreeScene = { THREE, renderer, scene, camera, controls, pmrem, turntable, center, radius };
+    placeCamera(built);
+
+    const resize = () => {
+      const width = host.clientWidth;
+      const height = host.clientHeight;
+      if (width === 0 || height === 0) return;
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      requestRender(built);
+    };
+    observer = new ResizeObserver(resize);
+    observer.observe(host);
+    resize();
+
+    controls.addEventListener("change", () => requestRender(built));
+    // Première image, puis la boucle s'entretient tant que le plateau tourne.
+    requestRender(built);
+    // La main de l'utilisateur prime sur le plateau : il s'arrête à la prise,
+    // et ne repart qu'après un temps de repos.
+    controls.addEventListener("start", () => {
+      spinning = false;
+      if (resumeTimer) clearTimeout(resumeTimer);
+      resumeTimer = null;
+    });
+    controls.addEventListener("end", () => {
+      if (reducedMotion) return;
+      if (resumeTimer) clearTimeout(resumeTimer);
+      resumeTimer = setTimeout(() => {
+        spinning = true;
+        requestRender(built);
+      }, SPIN_RESUME_MS);
+    });
+
+    // Fiche sortie de l'écran par le scroll : plus rien à rendre.
+    visibility = new IntersectionObserver((entries) => {
+      onScreen = entries.some((e) => e.isIntersecting);
+      if (turning()) requestRender(built);
+    });
+    visibility.observe(host);
+
+    return built;
+  }
+
+  /**
+   * The floor under the car, drawn on the fly — no file to ship (§8.1).
+   *
+   * Two gradients on one texture. The wide, pale one is the pool of light a
+   * showroom floor returns under the lamps: it is what the Kunos photos show
+   * around the car, and without it the car sits on nothing. The tight dark one
+   * on top is the contact shadow, which is what makes it sit on the floor
+   * rather than hover above it.
+   *
+   * Stops are in fractions of the plane's half-width, so changing the plane's
+   * size keeps their proportions.
+   */
+  function groundTexture(THREE: typeof ThreeModule): ThreeModule.Texture {
+    const size = 512;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      const middle = size / 2;
+      // Parti de la photo — le fond d'un `preview.jpg` passe de rgb(2,3,5)
+      // dans les coins à rgb(12,13,15) sous la voiture — puis remonté d'un
+      // cran : ici le sol est aussi le seul repère de profondeur, alors que
+      // la photo, elle, montre le décor du showroom autour.
+      const pool = ctx.createRadialGradient(middle, middle, 0, middle, middle, middle);
+      pool.addColorStop(0, "rgba(255,255,255,0.11)");
+      pool.addColorStop(0.45, "rgba(255,255,255,0.066)");
+      pool.addColorStop(0.75, "rgba(255,255,255,0.018)");
+      pool.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = pool;
+      ctx.fillRect(0, 0, size, size);
+
+      // Assombrissement de contact seulement. L'ombre de la voiture, elle, est
+      // désormais **projetée** (voir la lumière directionnelle plus haut) ; ce
+      // dégradé ne fait plus que noircir le dernier centimètre sous la caisse,
+      // là où une carte d'ombre manque toujours de résolution.
+      const contact = ctx.createRadialGradient(middle, middle, 0, middle, middle, middle * 0.34);
+      contact.addColorStop(0, "rgba(0,0,0,0.3)");
+      contact.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = contact;
+      ctx.fillRect(0, 0, size, size);
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  }
+
+  // Chargement, et rechargement complet à chaque changement de voiture ou de
+  // skin. `untrack` sur tout le reste : un effet Svelte 5 suit **toute** valeur
+  // réactive lue pendant son exécution, pas seulement celles nommées en tête —
+  // c'est exactement ce qui avait fait se refermer l'ancien aperçu natif dès
+  // qu'il s'ouvrait (voir showroom-3d-preview-research.md, test réel n°5).
+  $effect(() => {
+    const car = carId;
+    const skin = skinId;
+
+    // Garde-fou : une scène déjà posée sur ce couple voiture/skin n'est pas
+    // reconstruite. Recharger coûte le retour à la photo puis une conversion,
+    // pour finir exactement là où on était — et ça s'est produit pour de bon,
+    // un effet parent réévalué relançant tout (voir `untrack` dans
+    // `DetailPage`). La cause est corrigée là-bas ; ceci empêche la classe
+    // entière de se voir à l'écran.
+    if (untrack(() => loaded) === `${car}|${skin}`) return;
+
+    untrack(() => {
+      disposeScene(scene);
+      scene = null;
+      observer?.disconnect();
+      observer = null;
+      loaded = "";
+      phase = "loading";
+      stage = null;
+      reason = null;
+    });
+
+    if (!webglAvailable()) {
+      untrack(() => {
+        phase = "unavailable";
+        reason = null;
+      });
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const handle = await prepareCarPreview(car, skin);
+        // La fiche a pu changer pendant la conversion : ne jamais poser le
+        // modèle d'une voiture sur la fiche d'une autre.
+        if (cancelled || car !== untrack(() => carId)) return;
+        const host = untrack(() => canvasHost);
+        if (!host) return;
+        // Les réglages de cadrage avant la scène : construire sur les valeurs
+        // par défaut ferait sauter l'aperçu d'un cadrage à l'autre.
+        await preview3dReady();
+        const built = await build(handle.url, host);
+        if (cancelled || car !== untrack(() => carId)) {
+          disposeScene(built);
+          return;
+        }
+        scene = built;
+        loaded = `${car}|${skin}`;
+        phase = "ready";
+      } catch (e) {
+        if (cancelled) return;
+        phase = "unavailable";
+        // `errors.previewSuperseded` n'est pas une panne : une demande plus
+        // récente a pris la main, l'écran ne doit rien signaler.
+        reason = String(e) === "errors.previewSuperseded" ? null : String(e);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  // Un réglage de cadrage changé pendant qu'une fiche est ouverte s'applique
+  // tout de suite : recadrer ne coûte qu'un rendu, alors que remonter le
+  // composant relancerait tout le chargement du modèle.
+  $effect(() => {
+    // Un effet ne suit que ce qu'il lit : les valeurs sont donc lues ici, à
+    // découvert, et pas seulement à l'intérieur de `placeCamera`.
+    const prefs = preview3dPrefs();
+    void [prefs.zoom, prefs.azimuth, prefs.elevation, prefs.height, prefs.spin];
+    untrack(() => {
+      if (!scene) return;
+      placeCamera(scene);
+    });
+  });
+
+  // Bouton « replacer » : le compteur de remises à zéro change, la voiture
+  // revient au cadrage réglé et repart. Passer par le module de préférences
+  // plutôt que par une référence au composant permet de déclencher la remise à
+  // zéro depuis n'importe où — la fiche comme l'écran Réglages.
+  $effect(() => {
+    preview3dResets();
+    untrack(() => {
+      if (!scene) return;
+      if (resumeTimer) clearTimeout(resumeTimer);
+      resumeTimer = null;
+      scene.turntable.rotation.y = 0;
+      spinning = !reducedMotion;
+      placeCamera(scene);
+    });
+  });
+
+  // Étapes de conversion, pour que le squelette dise où on en est plutôt que
+  // de tourner dans le vide pendant une seconde et demie (§7.3).
+  let unlisten: (() => void) | null = null;
+  onPreviewProgress((s) => {
+    stage = s;
+  }).then((off) => {
+    unlisten = off;
+  });
+
+  // Fenêtre en arrière-plan ou app minimisée : le plateau s'arrête, et repart
+  // au retour. Sans ça, une app laissée ouverte sur une fiche tournerait dans
+  // le vide toute la journée.
+  function onVisibilityChange() {
+    lastFrameAt = 0;
+    if (scene && turning()) requestRender(scene);
+  }
+
+  $effect(() => {
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  });
+
+  onDestroy(() => {
+    disposeScene(scene);
+    scene = null;
+    observer?.disconnect();
+    unlisten?.();
+  });
+</script>
+
+<div class="preview3d" class:ready={phase === "ready"}>
+  {#if fallbackSrc}
+    <!-- La photo reste dessous, telle quelle : c'est déjà l'aperçu habituel de
+         la fiche, et la flouter pendant la préparation la rendait illisible
+         juste au moment où elle sert le plus (§8.5). -->
+    <img class="fallback" src={fallbackSrc} alt="" />
+  {/if}
+
+  <div class="host" bind:this={canvasHost}></div>
+
+  {#if phase === "loading"}
+    <div class="badge">
+      <span class="spinner"></span>
+      <span class="mono">{stage ? t(`detail.preview3dStage.${stage}`) : t("detail.preview3dLoading")}</span>
+    </div>
+  {:else if phase === "unavailable" && reason}
+    <div class="badge quiet" title={errorText(reason)}>
+      <span class="mono">{t("detail.preview3dUnavailable")}</span>
+    </div>
+  {/if}
+</div>
+
+<style>
+  .preview3d {
+    position: absolute;
+    inset: 0;
+  }
+  .fallback {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: opacity 0.25s ease;
+  }
+  /* Fondu depuis l'image une fois le modèle en place (§8.5). */
+  .preview3d.ready .fallback {
+    opacity: 0;
+  }
+  .host {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+  }
+  .preview3d.ready .host {
+    opacity: 1;
+  }
+  .host :global(canvas) {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 8px;
+    background: rgba(8, 8, 12, 0.62);
+    border: 1px solid var(--line);
+    font-size: 11px;
+    color: var(--text-dim);
+    z-index: 3;
+  }
+  .badge.quiet {
+    opacity: 0.75;
+  }
+  .spinner {
+    width: 11px;
+    height: 11px;
+    border: 2px solid var(--line);
+    border-top-color: var(--rosso);
+    border-radius: 50%;
+    animation: preview3d-spin 0.8s linear infinite;
+  }
+  @keyframes preview3d-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+</style>

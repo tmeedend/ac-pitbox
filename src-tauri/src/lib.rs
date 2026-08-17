@@ -33,6 +33,7 @@ mod modscan;
 mod music;
 mod others;
 mod overlay;
+mod preview;
 mod profiles;
 mod quickdrive;
 mod raceini;
@@ -75,6 +76,14 @@ pub fn run() {
         // lancements (restauré automatiquement à l'ouverture, sauvegardé à la
         // fermeture et sur redimensionnement/déplacement).
         .plugin(tauri_plugin_window_state::Builder::default().build())
+        // Protocole servant les `.glb` d'aperçu 3D depuis le cache disque
+        // (docs/SPEC-preview-3d-kn5.md §7.2). Sans lui, il faudrait faire
+        // transiter le modèle par l'IPC : 30 Mo de binaire deviennent ~40 Mo
+        // de base64 à parser côté JS, l'UI se fige. Ici la webview fetch un
+        // fichier local, sans copie intermédiaire.
+        .register_uri_scheme_protocol("carpreview", |ctx, request| {
+            preview::serve_request(ctx.app_handle(), &request)
+        })
         .setup(|app| {
             // Sauvegarde de démarrage (§6.2/§9.4), avant toute ouverture de
             // connexion : on veut la base et les préférences exactement
@@ -127,6 +136,10 @@ pub fn run() {
             music::watch::spawn(music_engine.clone_sender());
             app.manage(music_engine);
             app.manage(music::PreviewHandle::default());
+
+            // Aperçu 3D des voitures : jeton de génération + créneau unique de
+            // conversion (docs/SPEC-preview-3d-kn5.md §7.3).
+            app.manage(preview::PreviewState::default());
 
             Ok(())
         })
@@ -183,6 +196,8 @@ pub fn run() {
             commands::session::launch_replay,
             commands::session::open_native_showroom,
             commands::session::list_showrooms,
+            commands::preview::prepare_car_preview,
+            commands::preview::clear_preview_cache,
             commands::session_state::get_session_picks,
             commands::session_state::save_session_picks,
             commands::session_state::get_launch_state,

@@ -21,6 +21,7 @@ pub mod maintenance;
 pub mod media;
 pub mod music;
 pub mod others;
+pub mod preview;
 pub mod profiles;
 pub mod rules;
 pub mod saved_sessions;
