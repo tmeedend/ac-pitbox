@@ -1568,8 +1568,12 @@
     padding: 0 3px;
   }
   /* `livery.png` (§8.6) : coin supérieur droit, libre (le badge session est
-     en bas à gauche). Bordure pour rester lisible sur une preview claire. */
-  .skin-livery {
+     en bas à gauche). Bordure pour rester lisible sur une preview claire.
+     Sélecteur descendant obligatoire, et pas par style : `.skin-img img`
+     (0,1,1) l'emporte sur `.skin-livery` (0,1,0) quel que soit l'ordre des
+     règles, donc le médaillon héritait de `width/height: 100%` et recouvrait
+     la photo de la voiture — soit exactement ce que le §8.6 interdit. */
+  .skin-img img.skin-livery {
     position: absolute;
     top: 4px;
     right: 4px;

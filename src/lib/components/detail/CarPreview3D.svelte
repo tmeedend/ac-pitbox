@@ -27,6 +27,9 @@
   let stage = $state<PreviewStage | null>(null);
   /** Clé i18n ou message technique, affiché en infobulle du badge (§8.5). */
   let reason = $state<string | null>(null);
+  /** Un nouveau skin se prépare pendant que le précédent reste à l'écran :
+   * le badge doit le dire, mais l'aperçu ne bascule pas pour autant. */
+  let swapping = $state(false);
   let canvasHost = $state<HTMLDivElement | null>(null);
 
   /** Tout ce qui doit être libéré : vit hors des runes, ce n'est pas de l'état
@@ -35,9 +38,9 @@
   /** Couple voiture/skin réellement en place, pour ne pas reconstruire une
    * scène identique. Vide tant que rien n'est chargé. */
   let loaded = "";
-  let frame = 0;
-  let observer: ResizeObserver | null = null;
-  let visibility: IntersectionObserver | null = null;
+  /** Voiture du modèle en place — la moitié de `loaded` qui décide si un
+   * changement de skin peut se faire à chaud (même géométrie) ou non. */
+  let loadedCar = "";
 
   interface ThreeScene {
     THREE: typeof ThreeModule;
@@ -59,6 +62,26 @@
      * réglage change, sans reconstruire la scène. */
     center: ThreeModule.Vector3;
     radius: number;
+    /** Boucle de rendu et observateurs **par scène** : deux aperçus coexistent
+     * le temps d'un changement de skin (l'ancien tourne pendant que le nouveau
+     * se construit), et une image en vol ou un ResizeObserver partagés
+     * laisseraient l'un des deux figé ou abandonné derrière l'autre. */
+    frame: number;
+    lastFrameAt: number;
+    observer: ResizeObserver | null;
+    visibility: IntersectionObserver | null;
+    /** Libérée : plus rien ne doit lui demander de rendu (une reprise de
+     * rotation en attente, par exemple, survit à la scène qui l'a armée). */
+    disposed: boolean;
+  }
+
+  /** Ce qu'un aperçu à l'écran transmet à son remplaçant quand seul le skin
+   * change : sa scène est identique au triangle près, donc la reprendre en
+   * l'état est exactement ce qui rend le changement de skin fluide. */
+  interface Carry {
+    rotationY: number;
+    position: ThreeModule.Vector3;
+    target: ThreeModule.Vector3;
   }
 
   // Plateau tournant, comme un socle de salon : c'est la raison d'être de tout
@@ -94,8 +117,21 @@
 
   let spinning = !reducedMotion;
   let onScreen = true;
-  let lastFrameAt = 0;
   let resumeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** La scène en place à cet instant. Passe par une fonction parce que `build`
+   * a sa propre `scene` — celle de three.js — qui masque celle-ci. */
+  function liveScene(): ThreeScene | null {
+    return scene;
+  }
+
+  /** Annule une reprise de rotation en attente. Séparée de `disposeScene` : un
+   * changement de skin remplace la scène sans rien changer à ce que
+   * l'utilisateur était en train de faire avec la souris. */
+  function stopResume() {
+    if (resumeTimer) clearTimeout(resumeTimer);
+    resumeTimer = null;
+  }
 
   /**
    * WebGL indisponible = repli silencieux sur la photo (§8.5) : ce n'est pas
@@ -119,14 +155,15 @@
    * voiture, sans exception.
    */
   function disposeScene(current: ThreeScene | null) {
-    if (frame) cancelAnimationFrame(frame);
-    frame = 0;
-    lastFrameAt = 0;
-    if (resumeTimer) clearTimeout(resumeTimer);
-    resumeTimer = null;
-    visibility?.disconnect();
-    visibility = null;
-    if (!current) return;
+    if (!current || current.disposed) return;
+    current.disposed = true;
+    if (current.frame) cancelAnimationFrame(current.frame);
+    current.frame = 0;
+    current.lastFrameAt = 0;
+    current.observer?.disconnect();
+    current.observer = null;
+    current.visibility?.disconnect();
+    current.visibility = null;
 
     current.scene.traverse((object) => {
       const mesh = object as ThreeModule.Mesh;
@@ -165,14 +202,15 @@
    * le plateau, ou l'inertie d'OrbitControls après un lâcher de souris.
    */
   function requestRender(current: ThreeScene) {
-    if (frame) return;
-    frame = requestAnimationFrame((now) => {
-      frame = 0;
+    if (current.disposed || current.frame) return;
+    current.frame = requestAnimationFrame((now) => {
+      current.frame = 0;
+      if (current.disposed) return;
       // Avance en fonction du temps écoulé, pas du nombre d'images : la vitesse
       // ne doit pas dépendre du taux de rafraîchissement de l'écran, sinon un
       // moniteur 144 Hz fait tourner la voiture deux fois plus vite.
-      const elapsed = lastFrameAt ? Math.min((now - lastFrameAt) / 1000, 0.1) : 0;
-      lastFrameAt = now;
+      const elapsed = current.lastFrameAt ? Math.min((now - current.lastFrameAt) / 1000, 0.1) : 0;
+      current.lastFrameAt = now;
       if (turning() && elapsed > 0) {
         // C'est la voiture qui tourne, pas la caméra : le cadrage reste
         // parfaitement stable, les reflets glissent sur la carrosserie, et
@@ -183,7 +221,7 @@
       const moving = current.controls.update();
       current.renderer.render(current.scene, current.camera);
       if (moving || turning()) requestRender(current);
-      else lastFrameAt = 0;
+      else current.lastFrameAt = 0;
     });
   }
 
@@ -215,7 +253,19 @@
     requestRender(current);
   }
 
-  async function build(url: string, host: HTMLDivElement): Promise<ThreeScene> {
+  /**
+   * Construit la scène et l'ajoute au conteneur.
+   *
+   * `carry` est évalué **juste avant la première image**, pas à l'appel : la
+   * scène qu'on remplace tourne encore pendant toute la conversion, et lire sa
+   * rotation trop tôt ferait sauter la voiture en arrière au moment du
+   * remplacement.
+   */
+  async function build(
+    url: string,
+    host: HTMLDivElement,
+    carry: (() => Carry | null) | null = null,
+  ): Promise<ThreeScene> {
     const THREE = await import("three");
     const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
     const { OrbitControls } = await import("three/examples/jsm/controls/OrbitControls.js");
@@ -380,8 +430,32 @@
     scene.add(shadowCatcher);
 
     host.appendChild(renderer.domElement);
-    const built: ThreeScene = { THREE, renderer, scene, camera, controls, pmrem, turntable, center, radius };
-    placeCamera(built);
+    const built: ThreeScene = {
+      THREE,
+      renderer,
+      scene,
+      camera,
+      controls,
+      pmrem,
+      turntable,
+      center,
+      radius,
+      frame: 0,
+      lastFrameAt: 0,
+      observer: null,
+      visibility: null,
+      disposed: false,
+    };
+    // Reprise de la scène précédente, ou cadrage réglé si on part de zéro.
+    const carried = carry?.();
+    if (carried) {
+      turntable.rotation.y = carried.rotationY;
+      camera.position.copy(carried.position);
+      controls.target.copy(carried.target);
+      controls.update();
+    } else {
+      placeCamera(built);
+    }
 
     const resize = () => {
       const width = host.clientWidth;
@@ -392,8 +466,8 @@
       camera.updateProjectionMatrix();
       requestRender(built);
     };
-    observer = new ResizeObserver(resize);
-    observer.observe(host);
+    built.observer = new ResizeObserver(resize);
+    built.observer.observe(host);
     resize();
 
     controls.addEventListener("change", () => requestRender(built));
@@ -403,24 +477,26 @@
     // et ne repart qu'après un temps de repos.
     controls.addEventListener("start", () => {
       spinning = false;
-      if (resumeTimer) clearTimeout(resumeTimer);
-      resumeTimer = null;
+      stopResume();
     });
     controls.addEventListener("end", () => {
       if (reducedMotion) return;
-      if (resumeTimer) clearTimeout(resumeTimer);
+      stopResume();
       resumeTimer = setTimeout(() => {
         spinning = true;
-        requestRender(built);
+        // La scène en place, pas celle qui a armé le minuteur : un changement
+        // de skin peut l'avoir remplacée entre-temps.
+        const live = liveScene();
+        if (live) requestRender(live);
       }, SPIN_RESUME_MS);
     });
 
     // Fiche sortie de l'écran par le scroll : plus rien à rendre.
-    visibility = new IntersectionObserver((entries) => {
+    built.visibility = new IntersectionObserver((entries) => {
       onScreen = entries.some((e) => e.isIntersecting);
       if (turning()) requestRender(built);
     });
-    visibility.observe(host);
+    built.visibility.observe(host);
 
     return built;
   }
@@ -489,13 +565,25 @@
     // entière de se voir à l'écran.
     if (untrack(() => loaded) === `${car}|${skin}`) return;
 
+    // Remplacement **à chaud** : même voiture, seul le skin change, et un
+    // modèle tourne déjà à l'écran. Il y reste, et continue de tourner, le
+    // temps que le nouveau se convertisse ; le remplaçant reprend le plateau
+    // et la caméra là où celui-ci les avait laissés. Sans ça, changer de skin
+    // repassait par la photo puis par un modèle remis droit — trois sauts
+    // visibles pour repeindre une voiture.
+    const hot = untrack(() => scene !== null && !scene.disposed && loadedCar === car);
+
     untrack(() => {
-      disposeScene(scene);
-      scene = null;
-      observer?.disconnect();
-      observer = null;
+      if (hot) {
+        swapping = true;
+      } else {
+        disposeScene(scene);
+        scene = null;
+        stopResume();
+        loadedCar = "";
+        phase = "loading";
+      }
       loaded = "";
-      phase = "loading";
       stage = null;
       reason = null;
     });
@@ -520,20 +608,40 @@
         // Les réglages de cadrage avant la scène : construire sur les valeurs
         // par défaut ferait sauter l'aperçu d'un cadrage à l'autre.
         await preview3dReady();
-        const built = await build(handle.url, host);
+        const built = await build(handle.url, host, () => {
+          const old = untrack(() => scene);
+          if (!hot || !old || old.disposed) return null;
+          return {
+            rotationY: old.turntable.rotation.y,
+            position: old.camera.position.clone(),
+            target: old.controls.target.clone(),
+          };
+        });
         if (cancelled || car !== untrack(() => carId)) {
           disposeScene(built);
           return;
         }
+        // L'ancien modèle ne part qu'une fois le nouveau posé et rendu : c'est
+        // ce qui évite le trou noir d'une image entre les deux.
+        disposeScene(untrack(() => scene));
         scene = built;
         loaded = `${car}|${skin}`;
+        loadedCar = car;
         phase = "ready";
+        swapping = false;
+        requestRender(built);
       } catch (e) {
         if (cancelled) return;
-        phase = "unavailable";
+        swapping = false;
         // `errors.previewSuperseded` n'est pas une panne : une demande plus
         // récente a pris la main, l'écran ne doit rien signaler.
-        reason = String(e) === "errors.previewSuperseded" ? null : String(e);
+        const failure = String(e) === "errors.previewSuperseded" ? null : String(e);
+        reason = failure;
+        // Skin non converti alors qu'un modèle est en place : il reste à
+        // l'écran avec son ancienne peinture, ce qui vaut mieux qu'un retour à
+        // la photo — le badge dit ce qui a échoué.
+        if (untrack(() => scene)) return;
+        phase = "unavailable";
       }
     })();
 
@@ -564,8 +672,7 @@
     preview3dResets();
     untrack(() => {
       if (!scene) return;
-      if (resumeTimer) clearTimeout(resumeTimer);
-      resumeTimer = null;
+      stopResume();
       scene.turntable.rotation.y = 0;
       spinning = !reducedMotion;
       placeCamera(scene);
@@ -585,8 +692,11 @@
   // au retour. Sans ça, une app laissée ouverte sur une fiche tournerait dans
   // le vide toute la journée.
   function onVisibilityChange() {
-    lastFrameAt = 0;
-    if (scene && turning()) requestRender(scene);
+    if (!scene) return;
+    // Le temps passé masqué ne compte pas : sans cette remise à zéro, la
+    // première image du retour ferait avancer le plateau de tout ce temps.
+    scene.lastFrameAt = 0;
+    if (turning()) requestRender(scene);
   }
 
   $effect(() => {
@@ -597,7 +707,7 @@
   onDestroy(() => {
     disposeScene(scene);
     scene = null;
-    observer?.disconnect();
+    stopResume();
     unlisten?.();
   });
 </script>
@@ -612,12 +722,12 @@
 
   <div class="host" bind:this={canvasHost}></div>
 
-  {#if phase === "loading"}
+  {#if phase === "loading" || swapping}
     <div class="badge">
       <span class="spinner"></span>
       <span class="mono">{stage ? t(`detail.preview3dStage.${stage}`) : t("detail.preview3dLoading")}</span>
     </div>
-  {:else if phase === "unavailable" && reason}
+  {:else if reason}
     <div class="badge quiet" title={errorText(reason)}>
       <span class="mono">{t("detail.preview3dUnavailable")}</span>
     </div>
@@ -650,7 +760,12 @@
   .preview3d.ready .host {
     opacity: 1;
   }
+  /* Absolu, pas dans le flux : deux canevas cohabitent le temps d'un
+     changement de skin, et empilés dans le flux le second doublerait la
+     hauteur du conteneur au lieu de recouvrir le premier. */
   .host :global(canvas) {
+    position: absolute;
+    inset: 0;
     display: block;
     width: 100%;
     height: 100%;
