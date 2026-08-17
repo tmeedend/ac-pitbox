@@ -63,6 +63,24 @@ pub fn dir(library: &Path, kind: ModKind, id: &str) -> PathBuf {
     library.join("extras").join(kind.content_folder()).join(id)
 }
 
+/// Racine depuis laquelle les chemins de cet arbre sont relatifs à AC —
+/// emballage de l'auteur traversé ([`crate::acpath::effective_root`]).
+///
+/// L'import applique déjà cette règle au balayage (§7.3), mais un arbre rangé
+/// **avant** ce correctif garde l'emballage figé, et rien ne le répare : les
+/// ajouts au jeu se recalculent depuis le disque, jamais depuis l'archive.
+/// D'où la traversée ici aussi — même choix que `others::relative_files`.
+///
+/// Cas réel : une archive dont le `.zip` porte un nom dupliqué
+/// (`Track - … SchleifeTrack - … Schleife.zip`) et contient un dossier du même
+/// nom, avec `content/` **et** `extension/` dedans. Le circuit s'installait —
+/// `modscan` descend l'emballage — mais les huit images de fond livrées à côté
+/// restaient en bibliothèque : deux moitiés du même import qui ne s'accordaient
+/// pas sur la racine.
+fn root_of(sat: &Path) -> PathBuf {
+    crate::acpath::effective_root(sat)
+}
+
 /// Range un reste dans les ajouts au jeu du mod, à `rel` (son chemin relatif à la
 /// racine de l'archive, donc à la racine d'AC). Fusionne avec l'existant : une
 /// mise à jour du mod remplace ses propres fichiers, sans effacer les autres.
@@ -157,7 +175,11 @@ fn best_claim(conn: &Connection, cfg: &AppConfig, ac_path: &Path) -> Arbitration
                 log::warn!("extras claim {mod_id}: unknown kind {kind:?}, ignored");
                 return None;
             };
-            let src = dir(library, kind, &mod_id).join(rel);
+            // `root_of` et non `dir` : l'exemplaire vit sous la racine
+            // traversée, comme à la pose. Sans ça, l'arbre d'un mod emballé
+            // n'est jamais résolu, donc jamais désigné fournisseur — le fichier
+            // est posé mais la fiche le dit non posé.
+            let src = root_of(&dir(library, kind, &mod_id)).join(rel);
             let mtime = std::fs::metadata(&src)
                 .and_then(|m| m.modified())
                 .inspect_err(|e| log::warn!("extras claim {mod_id}: {}: {e}", src.display()))
@@ -242,6 +264,7 @@ pub fn deploy(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -
         return Ok(0);
     }
 
+    let sat = root_of(&sat);
     let mut files: Vec<PathBuf> = Vec::new();
     let mut created_dirs: BTreeSet<PathBuf> = BTreeSet::new();
     for entry in WalkDir::new(&sat).into_iter().flatten() {
@@ -388,7 +411,10 @@ pub fn undeploy(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(), 
         .first()
         .and_then(|(_, _, kind)| ModKind::from_content_folder(kind))
         .zip(cfg.library_path.as_ref())
-        .map(|(kind, library)| dir(library, kind, mod_id));
+        // Même racine qu'à la pose, emballage traversé : sinon la vérification
+        // d'identité chercherait l'exemplaire à un chemin qui n'existe pas, le
+        // lirait comme « plus à nous » et ne retirerait plus jamais rien.
+        .map(|(kind, library)| root_of(&dir(library, kind, mod_id)));
 
     // La réclamation part d'abord : `sync` compte ce qui reste en base, ce mod
     // ne doit plus y figurer.
@@ -483,6 +509,7 @@ pub fn list(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -> 
     if !sat.is_dir() {
         return Vec::new();
     }
+    let sat = root_of(&sat);
     let mut out: Vec<ExtraFile> = WalkDir::new(&sat)
         .into_iter()
         .flatten()
@@ -689,6 +716,50 @@ mod tests {
         std::fs::remove_dir_all(&sat).unwrap();
         sync(&conn, &cfg, &target);
         assert!(target.is_file(), "encore réclamé : on laisse tourner ce qui est posé");
+    }
+
+    #[test]
+    fn extras_wrapped_by_their_author_still_reach_the_game() {
+        // Cas réel (Aspertsham) : le `.zip` porte un nom dupliqué et contient un
+        // dossier du même nom, avec `content/` et `extension/` dedans. Le
+        // circuit s'installait — `modscan` descend l'emballage — mais les huit
+        // images de fond livrées à côté restaient en bibliothèque, refusées
+        // comme chemin hors jeu. Deux moitiés du même import qui ne
+        // s'accordaient pas sur la racine.
+        //
+        // Traversé à la lecture, pas seulement à l'import : les arbres rangés
+        // avant le correctif gardent l'emballage figé, et les ajouts au jeu se
+        // recalculent depuis le disque — rien d'autre ne les répare.
+        let base = crate::testutil::temp_dir("sat-wrapped");
+        let cfg = cfg_for(&base);
+        let library = cfg.library_path.clone().unwrap();
+        let ac = cfg.ac_install_path.clone().unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+
+        let sat = dir(&library, ModKind::Track, "aspertsham");
+        let wrapper = sat.join("Track - Aspertsham - Hargasser SchleifeTrack - Aspertsham - Hargasser Schleife");
+        let rel = Path::new("extension").join("backgrounds").join("aspertsham_0.jpg");
+        write(&wrapper.join(&rel), b"JPG");
+
+        let n = deploy(&conn, &cfg, ModKind::Track, "aspertsham").unwrap();
+        assert_eq!(n, 1, "l'image de fond est posée malgré l'emballage");
+        assert!(ac.join(&rel).is_file(), "à sa vraie place dans le jeu");
+        assert!(
+            !ac.join("Track - Aspertsham - Hargasser SchleifeTrack - Aspertsham - Hargasser Schleife")
+                .exists(),
+            "et rien ne se déverse à la racine de l'install"
+        );
+
+        let listed = list(&conn, &cfg, ModKind::Track, "aspertsham");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].rel_path, "extension/backgrounds/aspertsham_0.jpg");
+        assert!(!listed[0].off_game_path, "plus signalé hors chemin de jeu");
+        assert!(listed[0].deployed);
+
+        // Le retrait doit continuer de reconnaître son propre exemplaire : la
+        // vérification d'identité part de la même racine traversée.
+        undeploy(&conn, &cfg, "aspertsham").unwrap();
+        assert!(!ac.join(&rel).exists(), "retiré comme n'importe quel ajout");
     }
 
     #[test]
