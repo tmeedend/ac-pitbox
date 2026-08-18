@@ -12,6 +12,7 @@
   // Il s'inscrit auprès de `screenActions` tant qu'il est monté : c'est ce qui
   // permet aux boutons « onglet précédent/suivant » de la manette de le
   // parcourir sans que la manette ait à connaître l'écran affiché.
+  import type { Snippet } from "svelte";
   import { registerTabStrip } from "$lib/screenActions";
 
   export interface TabItem {
@@ -27,8 +28,14 @@
      * occupe tout le cadre (fiche détail). Par défaut la bande est
      * transparente et suit la marge de l'écran qui la contient. */
     flush?: boolean;
+    /** Contenu poussé à droite de la bande, sur la même ligne que les onglets
+     * (l'état du mod sur la fiche détail). Rendu ici plutôt que posé en
+     * absolu par l'appelant : la bande garde son fond et son trait sur toute
+     * la largeur, et l'alignement vertical est celui des onglets par
+     * construction. */
+    trailing?: Snippet;
   }
-  let { tabs, active, onselect, flush = false }: Props = $props();
+  let { tabs, active, onselect, flush = false, trailing }: Props = $props();
 
   // Boucle plutôt que butée : avec deux onglets, une butée rendrait l'un des
   // deux boutons de la manette inerte la moitié du temps.
@@ -47,6 +54,9 @@
       {tab.label}
     </button>
   {/each}
+  {#if trailing}
+    <span class="trailing">{@render trailing()}</span>
+  {/if}
 </nav>
 
 <style>
@@ -82,5 +92,15 @@
   }
   .tabs button:hover:not(.on) {
     color: var(--txt2);
+  }
+  .trailing {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    /* Aligné sur le libellé des onglets, pas sur leur boîte : ceux-ci portent
+       un liseré bas de 2px que rien ici ne doit compenser. */
+    padding: 0 4px 2px;
   }
 </style>

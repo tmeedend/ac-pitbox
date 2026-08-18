@@ -930,7 +930,6 @@
             {opponentCount}
             {carPool}
             {skinsByCarId}
-            yearRangeMax={YEAR_RANGE_MAX}
             {categorySelection}
             {categoryOptions}
             {pickerPool}

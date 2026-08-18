@@ -68,7 +68,11 @@ function commonTail(): ColumnDef[] {
       labelKey: "columns.active",
       sortable: true,
       defaultVisible: true,
-      value: (c) => (c.active ? t("common.active").toLowerCase() : DASH),
+      // Rendu par `StateBadge` dans le tableau (pastille + libellé) ; ce
+      // `value` ne sert que de repli textuel, gardé cohérent avec lui.
+      // `sortValue` est inchangé : le tri et le filtre d'état ne dépendent
+      // pas de l'affichage — le contenu de base reste `active` pour eux.
+      value: (c) => (c.is_stock ? t("common.stockState") : c.active ? t("common.active") : t("common.inactive")),
       sortValue: (c) => (c.active ? 1 : 0),
     },
     {

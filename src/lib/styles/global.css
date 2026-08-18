@@ -48,6 +48,10 @@
   --blue-dim: #0c1620;
   --blue-border: #1d3148;
   --yellow: #f1d83c;
+  /* État neutre-négatif (mod inactif) : ni une alerte — le jaune est déjà pris
+     pour ça — ni une erreur. Désaturé comme le vert et le bleu, pour qu'une
+     pastille de 7px se lise sans crier. */
+  --orange: #dd9440;
   --mono: "SF Mono", ui-monospace, "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }

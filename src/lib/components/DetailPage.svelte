@@ -24,6 +24,7 @@
   import { listModSkins, openNativeShowroom, type SkinItem } from "$lib/launch";
   import CarPreview3D from "./detail/CarPreview3D.svelte";
   import Tabs from "./Tabs.svelte";
+  import StateBadge from "./StateBadge.svelte";
   import { tick, untrack } from "svelte";
   import { focusGamepadElement, isGamepadDriving } from "$lib/gamepadNav";
   import { preview3dPrefs, setPreview3dEnabled, resetPreview3dView } from "$lib/preview3dPrefs.svelte";
@@ -741,7 +742,15 @@
       <ContextMenu x={menuPos.x} y={menuPos.y} items={menuItems} onclose={() => (menuPos = null)} />
     {/if}
 
-    <Tabs flush tabs={tabItems} active={activeTab} onselect={(v) => (activeTab = v as DetailTab)} />
+    <!-- État du mod à droite de la bande d'onglets : c'est la première chose
+         qu'on vient vérifier sur une fiche, et elle était introuvable sans
+         ouvrir le menu ⋮ (dont le libellé Activer/Désactiver était le seul
+         indice). Même pastille que la colonne « État » du tableau. -->
+    <Tabs flush tabs={tabItems} active={activeTab} onselect={(v) => (activeTab = v as DetailTab)}>
+      {#snippet trailing()}
+        <StateBadge active={d.active} stock={d.is_stock} />
+      {/snippet}
+    </Tabs>
 
     {#if actionError}<div class="action-err">{actionError}</div>{/if}
     {#if reinstallOk}<div class="export-ok">{t("detail.reinstallSuccess")}</div>{/if}

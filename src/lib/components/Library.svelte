@@ -6,6 +6,7 @@
   import ContextMenu from "./ContextMenu.svelte";
   import LoadingState from "./LoadingState.svelte";
   import NumberStepper from "./NumberStepper.svelte";
+  import StateBadge from "./StateBadge.svelte";
   import Tooltip from "./Tooltip.svelte";
   import {
     listLibrary,
@@ -58,12 +59,17 @@
   // Édition groupée (§6.3bis) : Ctrl/Alt-clic ajoute/retire de la sélection
   // multiple. Un clic simple retombe toujours en sélection simple.
   let selectedIds = $state<Set<string>>(new Set());
-  // Bornes de la fourchette d'année (mêmes constantes que le vivier
-  // d'adversaires de Launch.svelte, §8.6) : les flèches NumberStepper ont
-  // besoin d'une valeur numérique, donc plus de `null` pour « pas de borne » —
-  // rester aux bornes par défaut équivaut à l'ancien comportement non filtré.
+  // Bornes de saisie de la fourchette d'année (mêmes constantes que le vivier
+  // d'adversaires de Launch.svelte, §8.6).
   const YEAR_RANGE_MIN = 1950;
   const YEAR_RANGE_MAX = new Date().getFullYear();
+  // « Pas de borne de ce côté », et c'est l'état par défaut : le champ est
+  // alors **vide** (`emptyValue` du NumberStepper) et ne filtre rien.
+  // Auparavant le défaut était 1950/2026, ce qui affichait deux bornes qu'on
+  // n'avait pas demandées et ne pouvait pas effacer — vider le champ le
+  // ramenait à sa borne, et vider « année max » l'écrasait même à 1950, ne
+  // laissant plus rien remonter.
+  const NO_YEAR = 0;
   // Page détail pleine page (§6.3) : double-clic sur une carte, ou bouton
   // « Agrandir » du panneau latéral. État centralisé dans nav.openFull (voir
   // nav.svelte.ts) — la navigation manette globale (AppShell) doit savoir si
@@ -85,8 +91,8 @@
   let favOnly = $state<boolean>(false);
   let neverTried = $state<boolean>(false);
   let hideBaseContent = $state<boolean>(false);
-  let yearMin = $state<number>(YEAR_RANGE_MIN);
-  let yearMax = $state<number>(YEAR_RANGE_MAX);
+  let yearMin = $state<number>(NO_YEAR);
+  let yearMax = $state<number>(NO_YEAR);
   let view = $state<"gallery" | "table">("gallery");
   let sortKey = $state<string>("name");
   let sortDir = $state<1 | -1>(1);
@@ -273,6 +279,16 @@
   }
   onDestroy(stopResizeListeners);
 
+  /** Borne d'année lue depuis les filtres enregistrés. `legacyNone` est
+   * l'ancienne sentinelle « pas de borne » de ce côté (la borne de la plage
+   * elle-même), traduite en champ vide : elle n'a jamais rien filtré, elle ne
+   * doit pas se mettre à le faire ni à compter comme un filtre actif. */
+  function readYearFilter(raw: unknown, legacyNone: number): number {
+    const v = raw as number | null | undefined;
+    if (v == null || v === legacyNone) return NO_YEAR;
+    return v;
+  }
+
   // Restauration au montage (§6.2/§8.6) : colonnes (fichier dédié,
   // `columns.ts`) et le reste des petits réglages d'écran (`uiPrefs.ts`) en
   // parallèle, un seul aller-retour chacun. `prefsReady` n'est levé qu'une
@@ -300,8 +316,11 @@
         favOnly = (sf.fav as boolean) ?? false;
         neverTried = (sf.neverTried as boolean) ?? false;
         hideBaseContent = (sf.hideBaseContent as boolean) ?? false;
-        yearMin = (sf.yearMin as number | null) ?? YEAR_RANGE_MIN;
-        yearMax = (sf.yearMax as number | null) ?? YEAR_RANGE_MAX;
+        // Un filtre enregistré avant que « vide » n'existe portait les bornes
+        // de la plage comme sentinelle de « pas de borne » : elles se lisent
+        // donc comme un champ vide, ce qu'elles ont toujours voulu dire.
+        yearMin = readYearFilter(sf.yearMin, YEAR_RANGE_MIN);
+        yearMax = readYearFilter(sf.yearMax, YEAR_RANGE_MAX);
       } catch {
         /* repli sur les défauts déjà en place */
       }
@@ -548,8 +567,10 @@
       if (favOnly && !c.is_favorite) return false;
       if (neverTried && c.tried) return false;
       if (hideBaseContent && c.is_stock) return false;
-      if (yearMin > YEAR_RANGE_MIN && (c.year ?? 0) < yearMin) return false;
-      if (yearMax < YEAR_RANGE_MAX && (c.year ?? 9999) > yearMax) return false;
+      // Champ vide = aucun filtre de ce côté, quelle que soit la plage de
+      // saisie : c'est la borne saisie qui décide, pas sa distance aux bornes.
+      if (yearMin !== NO_YEAR && (c.year ?? 0) < yearMin) return false;
+      if (yearMax !== NO_YEAR && (c.year ?? 9999) > yearMax) return false;
       if (query.trim()) {
         // Un terme par mot séparé par un espace, ET entre eux mais chacun en
         // simple "contains" (pas besoin d'être collés ni dans l'ordre) — bug
@@ -575,8 +596,8 @@
       (favOnly ? 1 : 0) +
       (neverTried ? 1 : 0) +
       (hideBaseContent ? 1 : 0) +
-      (yearMin !== YEAR_RANGE_MIN ? 1 : 0) +
-      (yearMax !== YEAR_RANGE_MAX ? 1 : 0),
+      (yearMin !== NO_YEAR ? 1 : 0) +
+      (yearMax !== NO_YEAR ? 1 : 0),
   );
 
   function clearFilters() {
@@ -590,8 +611,8 @@
     favOnly = false;
     neverTried = false;
     hideBaseContent = false;
-    yearMin = YEAR_RANGE_MIN;
-    yearMax = YEAR_RANGE_MAX;
+    yearMin = NO_YEAR;
+    yearMax = NO_YEAR;
   }
 
   const sorted = $derived.by(() => {
@@ -783,13 +804,36 @@
               <option value="street">street</option>
             </select>
           </label>
+          <!-- Les deux champs se bornent l'un l'autre, mais un champ **vide**
+               ne borne rien : sans ce repli, vider « année min » ramenait le
+               plafond de « année max » à zéro. Pas de plancher ni de plafond
+               à l'année courante : des voitures existent bien avant 1950, et
+               un mod peut légitimement porter une année future (voiture
+               concept, DLC annoncé) — `YEAR_RANGE_MIN` ne sert donc plus
+               qu'à `emptyStart`, un point de départ, jamais une borne.
+               `emptyStart` fait atterrir ▲ et ▼ sur le même repère depuis un
+               champ vide — 1950 pour l'un, l'année courante pour l'autre —
+               exactement comme taper cette valeur ; sans lui ▲ retombait sur
+               `min` et ▼ restait désactivé faute de destination. -->
           <label>
             <span>{t("library.yearMin")}</span>
-            <NumberStepper width={80} min={YEAR_RANGE_MIN} max={yearMax} bind:value={yearMin} />
+            <NumberStepper
+              width={80}
+              max={yearMax === NO_YEAR ? undefined : yearMax}
+              emptyValue={NO_YEAR}
+              emptyStart={YEAR_RANGE_MIN}
+              bind:value={yearMin}
+            />
           </label>
           <label>
             <span>{t("library.yearMax")}</span>
-            <NumberStepper width={80} min={yearMin} max={YEAR_RANGE_MAX} bind:value={yearMax} />
+            <NumberStepper
+              width={80}
+              min={yearMin === NO_YEAR ? undefined : yearMin}
+              emptyValue={NO_YEAR}
+              emptyStart={YEAR_RANGE_MAX}
+              bind:value={yearMax}
+            />
           </label>
         {/if}
         <div class="filter-checks">
@@ -942,7 +986,7 @@
                     style={columnWidths[col.key] ? `width:${columnWidths[col.key]}px; max-width:${columnWidths[col.key]}px;` : undefined}
                   >
                     {#if col.key === "active"}
-                      {#if c.active}<span class="on-dot"></span>{t("common.active").toLowerCase()}{:else}—{/if}
+                      <StateBadge active={c.active} stock={c.is_stock} />
                     {:else if col.key === "brand"}
                       {#if c.badge}<img class="brand-badge" src={previewSrc(c.badge)} alt="" loading="lazy" />{/if}
                       {col.value(c)}
@@ -1484,12 +1528,5 @@
     color: var(--muted);
     white-space: normal;
   }
-  .on-dot {
-    display: inline-block;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--green);
-    margin-right: 5px;
-  }
+  /* La pastille d'état vit dans `StateBadge.svelte`, partagée avec la fiche. */
 </style>

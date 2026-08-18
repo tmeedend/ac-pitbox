@@ -19,7 +19,6 @@
     opponentCount,
     carPool,
     skinsByCarId,
-    yearRangeMax,
     categorySelection,
     categoryOptions,
     pickerPool,
@@ -40,7 +39,6 @@
     opponentCount: number;
     carPool: ModCard[];
     skinsByCarId: Record<string, SkinItem[]>;
-    yearRangeMax: number;
     categorySelection: string;
     categoryOptions: string[];
     pickerPool: ModCard[];
@@ -151,12 +149,14 @@
     </div>
 
     {#if gridMode !== "same_car"}
+      <!-- Pas de plafond à l'année courante : un vivier peut légitimement
+         viser une voiture concept ou un DLC annoncé pas encore sorti. -->
       <label class="grid-fields">
-        <NumberStepper width={70} min={0} max={yearRangeMax} bind:value={setup.year_min} />
+        <NumberStepper width={70} min={0} bind:value={setup.year_min} />
         <span class="fk lbl-key">{t("launch.yearMinLabel")}</span>
       </label>
       <label class="grid-fields">
-        <NumberStepper width={70} min={0} max={yearRangeMax} bind:value={setup.year_max} />
+        <NumberStepper width={70} min={0} bind:value={setup.year_max} />
         <span class="fk lbl-key">{t("launch.yearMaxLabel")}</span>
       </label>
     {/if}

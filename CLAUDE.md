@@ -317,7 +317,39 @@ laisser pourrir ici.
       d'une clé de fiche technique en lecture seule, même si visuellement
       proche) et les titres de popup (`OpponentPicker`/`SavedSessionsDialog`,
       13px/majuscules, identiques entre eux mais ne correspondant à aucun des
-      trois niveaux). **Couleurs sémantiques** : pas encore attaquées.
+      trois niveaux). **Couleurs sémantiques** : pas encore attaquées — le
+      `--orange` ajouté pour « mod inactif » (`StateBadge`) est le premier pas
+      dans cette direction (ni le jaune d'alerte, ni le rouge destructif).
+- [ ] **Composants partagés plutôt que styles recopiés.** Même cause que le
+      chantier ci-dessus, un cran au-dessus : le CSS Svelte étant **scopé par
+      composant**, une même brique recopiée dans dix écrans y dérive sans que
+      rien ne le signale — ni `npm run check`, ni la relecture d'un seul
+      fichier. Fait : `Tabs.svelte` (remplace trois `.tabs` locaux — fiche
+      détail, Réglages, Règles — et sert désormais aussi les deux écrans
+      Add-ons), `StateBadge.svelte` (colonne « État » du tableau + fiche
+      détail), `NumberStepper`, `LoadingState`, `Tooltip`, `ContextMenu`.
+      **Inventaire de ce qui reste**, mesuré le 2026-08-18 :
+      - **Boîte d'erreur : 15 définitions locales** (`.err` / `.error` /
+        `.action-err` dans Apps, BulkEditPanel, BulkImport, DetailPage,
+        Launch, LayersSection, Maintenance, ModDetail, OtherMods, Profiles,
+        Settings, SetupWizard, Transversal, MusicTab). Mêmes trois couleurs
+        partout (`--rosso-dim` / `--rosso-border` / `--rosso-bright`), seuls
+        le padding (8/10 vs 10/12), la taille (11,5 vs 12px) et les marges
+        diffèrent. Le cas le plus net : une classe globale `.errbox` suffit,
+        les marges restant à l'appelant.
+      - **Sous-titre d'écran : 8 copies** de `.sub`, identiques à `max-width`
+        près (520/540/560/620/aucune). Trois n'avaient pas de `font-size` et
+        étaient donc plus gros que les autres — corrigé, mais les 8 copies
+        restent. En faire un 4ᵉ niveau global (`.lbl-sub` ?) est une décision
+        de design à prendre avec l'utilisateur, pas à trancher seul.
+      - **Groupe de boutons segmenté : 6 copies** (`.seg` / `.seg-v`) dans
+        Library, Transversal, BulkImport, OpponentsBlock, SessionOptionsBlock,
+        SessionTypeBlock. Deux orientations (horizontale/verticale) et deux
+        traitements de l'état actif (fond rouge plein vs fond surélevé) : un
+        vrai composant avec une prop d'orientation, pas juste une classe.
+      Un lot de ce genre est du **reformatage pur sur une quinzaine de
+      fichiers** : le faire dans son propre commit, jamais mélangé à un
+      changement fonctionnel (sinon `git blame` devient inexploitable).
 - [ ] **Aperçu 3D natif des voitures** (branche `feature/3dpreview`).
       **L'avancement détaillé, les écarts assumés vis-à-vis de la spec et le
       reste à faire sont dans `docs/SPEC-preview-3d-kn5.md` §13 à §15** — c'est

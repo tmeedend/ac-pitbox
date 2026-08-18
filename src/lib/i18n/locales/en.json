@@ -207,6 +207,7 @@
     "allFem": "All",
     "active": "Active",
     "inactive": "Inactive",
+    "stockState": "Stock",
     "favorite": "Favorite",
     "reset": "Reset",
     "cancel": "Cancel",
