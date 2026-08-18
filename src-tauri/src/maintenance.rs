@@ -1021,5 +1021,4 @@ mod tests {
         let m = overlay::get_mod(&conn, "abarth500").unwrap().unwrap();
         assert!(m.size_bytes.unwrap() >= 1000, "au moins les 1000 octets de data.acd");
     }
-
 }

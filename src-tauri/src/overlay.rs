@@ -1440,7 +1440,6 @@ pub fn insert_bundled_track_skin(
     Ok(())
 }
 
-
 fn map_sub(row: &rusqlite::Row) -> rusqlite::Result<SubModRow> {
     Ok(SubModRow {
         id: row.get(0)?,
@@ -1634,7 +1633,6 @@ pub fn insert_other_mod(
     )?;
     Ok(())
 }
-
 
 fn map_other(row: &rusqlite::Row) -> rusqlite::Result<OtherModRow> {
     let junctions: String = row.get(6)?;
