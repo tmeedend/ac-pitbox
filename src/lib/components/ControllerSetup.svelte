@@ -23,6 +23,7 @@
   } from "$lib/gamepadDevices.svelte";
   import { resolveProfile, type ProfileSource } from "$lib/gamepadNav";
   import {
+    ACTIONS,
     EMPTY_REST,
     axisMode,
     bindingActive,
@@ -34,6 +35,7 @@
     profileReport,
     sampleEqual,
     strongestChange,
+    type Action,
     type Binding,
     type Direction,
     type NavProfile,
@@ -47,8 +49,13 @@
 
   const ISSUE_URL = "https://github.com/tmeedend/ac-pitbox/issues/new";
 
-  type StepId = Direction | "confirm" | "back";
-  const STEPS: StepId[] = ["up", "down", "left", "right", "confirm", "back"];
+  // Les six premières étapes sont le socle (déplacer le curseur, valider,
+  // revenir) ; les cinq suivantes sont des raccourcis (§7.4bis), et un
+  // périphérique n'a pas forcément cinq boutons à leur donner — « Passer » y
+  // est un chemin normal, signalé comme tel à l'écran.
+  type StepId = Direction | "confirm" | "back" | Action;
+  const STEPS: StepId[] = ["up", "down", "left", "right", "confirm", "back", ...ACTIONS];
+  const isOptional = (s: StepId) => (ACTIONS as readonly string[]).includes(s);
 
   /** Repos mesuré sur 2 s au début de la calibration — assez long pour que
    * l'utilisateur ait vraiment lâché le volant, assez court pour ne pas
@@ -140,6 +147,9 @@
     dirs: { up: captured.up, down: captured.down, left: captured.left, right: captured.right },
     confirm: captured.confirm,
     back: captured.back,
+    actions: Object.fromEntries(
+      ACTIONS.filter((a) => captured[a]).map((a) => [a, captured[a]!]),
+    ) as NavProfile["actions"],
     rest: rest ?? EMPTY_REST,
   });
 
@@ -465,6 +475,9 @@
         {:else}
           <div class="cal-stage">
             <div class="cal-ask">{t("controller.calib.press", { what: stepLabel(currentStep) })}</div>
+            {#if isOptional(currentStep)}
+              <p class="cal-opt">{t("controller.calib.optional")}</p>
+            {/if}
             {#if duplicateOf}
               <p class="cal-warn">{t("controller.calib.duplicate", { dir: stepLabel(duplicateOf) })}</p>
             {:else if phase === "timeout"}
@@ -671,6 +684,13 @@
     color: var(--yellow);
     font-size: 11.5px;
     line-height: 1.5;
+  }
+  /* Étape facultative : dit clairement que « Passer » est une réponse, pas
+     un abandon — sinon l'utilisateur attend devant un bouton qu'il n'a pas. */
+  .cal-opt {
+    margin-top: 8px;
+    color: var(--faint);
+    font-size: 11px;
   }
   .gauge {
     margin: 16px auto 0;

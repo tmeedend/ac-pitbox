@@ -28,10 +28,20 @@ export interface RestSnapshot {
   buttons: boolean[];
 }
 
+/** Actions au-delà du déplacement du curseur (§7.4bis) — toutes **optionnelles** :
+ * beaucoup de volants n'ont pas cinq boutons à leur consacrer, et un profil
+ * sans elles reste parfaitement utilisable. Un raccourci absent ne fait rien,
+ * il ne bloque rien. */
+export type Action = "modPrev" | "modNext" | "tabPrev" | "tabNext" | "start";
+
+export const ACTIONS: readonly Action[] = ["modPrev", "modNext", "tabPrev", "tabNext", "start"] as const;
+
 export interface NavProfile {
   dirs: Partial<Record<Direction, Binding>>;
   confirm?: Binding;
   back?: Binding;
+  /** Raccourcis optionnels — voir `Action`. */
+  actions?: Partial<Record<Action, Binding>>;
   rest: RestSnapshot;
 }
 
@@ -158,6 +168,13 @@ export function profileBindings(profile: NavProfile): Binding[] {
   }
   if (profile.confirm) out.push(profile.confirm);
   if (profile.back) out.push(profile.back);
+  // Les raccourcis comptent dans l'armement au même titre que le reste : un
+  // bouton d'action maintenu au branchement doit retarder le premier
+  // événement, sinon on retombe sur le bug que `anyBindingActive` évite.
+  for (const a of ACTIONS) {
+    const b = profile.actions?.[a];
+    if (b) out.push(b);
+  }
   return out;
 }
 
@@ -246,6 +263,7 @@ export function profileReport(
       dirs: profile.dirs,
       confirm: profile.confirm,
       back: profile.back,
+      actions: profile.actions,
       rest: profile.rest,
       pitbox: appVersion,
     },

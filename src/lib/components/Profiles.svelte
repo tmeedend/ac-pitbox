@@ -68,7 +68,7 @@
 
 <div class="profiles">
   <header>
-    <h2>{t("nav.profiles")}</h2>
+    <h2 class="lbl-screen">{t("nav.profiles")}</h2>
     <p class="sub">{t("profiles.subtitle")}</p>
   </header>
 
@@ -125,12 +125,14 @@
   header {
     margin-bottom: 20px;
   }
-  h2 {
-    font-size: 15px;
-    font-weight: 600;
-  }
+  /* Taille/graisse viennent de `.lbl-screen` (global, §chantier libellés) :
+     ce titre était le dernier à 15px alors que tous les autres écrans sont
+     à 18px (retour utilisateur direct). */
+  /* 12px comme les sept autres sous-titres d'écran : sans cette ligne il
+     héritait de la taille du corps, donc plus gros qu'ailleurs. */
   .sub {
     color: var(--muted);
+    font-size: 12px;
     margin-top: 6px;
     line-height: 1.5;
   }

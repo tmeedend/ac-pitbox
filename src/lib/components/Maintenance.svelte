@@ -164,7 +164,7 @@
 <div class="maint">
   <header class="head">
     <div>
-      <h2>{t("nav.maintenance")}</h2>
+      <h2 class="lbl-screen">{t("nav.maintenance")}</h2>
       <p class="sub">{t("maintenance.subtitle")}</p>
     </div>
     <button class="btn btn-primary" type="button" onclick={scan} disabled={scanning}>
@@ -324,10 +324,7 @@
     gap: 20px;
     margin-bottom: 20px;
   }
-  h2 {
-    font-size: 18px;
-    font-weight: 600;
-  }
+  /* Taille/graisse viennent de `.lbl-screen` (global, §chantier libellés). */
   .sub {
     color: var(--muted);
     font-size: 12px;

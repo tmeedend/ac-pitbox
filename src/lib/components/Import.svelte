@@ -25,7 +25,7 @@
 
 <div class="import-screen">
   <header class="head">
-    <h2>{t("nav.import")}</h2>
+    <h2 class="lbl-screen">{t("nav.import")}</h2>
     <p class="sub">
       {t("import.subtitlePrefix")}<b>{t("import.subtitleBold")}</b>{t("import.subtitleSuffix")}
     </p>
@@ -109,10 +109,7 @@
   .head {
     margin-bottom: 22px;
   }
-  h2 {
-    font-size: 18px;
-    font-weight: 600;
-  }
+  /* Taille/graisse viennent de `.lbl-screen` (global, §chantier libellés). */
   .sub {
     color: var(--muted);
     font-size: 12px;

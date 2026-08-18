@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import Tabs from "./Tabs.svelte";
   import { getRules, saveRules, rulesImpact, type Rules } from "$lib/rules";
   import { t } from "$lib/i18n/index.svelte";
 
@@ -91,7 +92,7 @@
 
 <div class="rules">
   <header class="r-header">
-    <h2>{t("rules.title")}</h2>
+    <h2 class="lbl-screen">{t("rules.title")}</h2>
     <p class="sub">{t("rules.subtitle")}</p>
   </header>
 
@@ -99,10 +100,14 @@
     <div class="empty">{t("rules.loading")}</div>
   {:else}
     {@const fam = tab === "car" ? rules.car : rules.track}
-    <div class="tabs">
-      <button class:on={tab === "car"} onclick={() => (tab = "car")}>{t("rules.tabCars")}</button>
-      <button class:on={tab === "track"} onclick={() => (tab = "track")}>{t("rules.tabTracks")}</button>
-    </div>
+    <Tabs
+      tabs={[
+        { id: "car", label: t("rules.tabCars") },
+        { id: "track", label: t("rules.tabTracks") },
+      ]}
+      active={tab}
+      onselect={(v) => (tab = v as "car" | "track")}
+    />
 
     <!-- FUSION / DÉDUCTION -->
     <section>
@@ -297,34 +302,13 @@
   .r-header {
     margin-bottom: 16px;
   }
-  h2 {
-    font-size: 15px;
-    font-weight: 600;
-  }
+  /* Taille/graisse viennent de `.lbl-screen` (global, §chantier libellés). */
+  /* 12px comme les autres sous-titres d'écran (voir Profiles.svelte). */
   .sub {
     color: var(--muted);
+    font-size: 12px;
     margin-top: 6px;
     line-height: 1.5;
-  }
-  .tabs {
-    display: flex;
-    border: 1px solid var(--line);
-    width: fit-content;
-    margin-bottom: 20px;
-  }
-  .tabs button {
-    background: var(--panel2);
-    color: var(--muted);
-    padding: 8px 18px;
-    font-size: 12px;
-    border-right: 1px solid var(--line);
-  }
-  .tabs button:last-child {
-    border-right: none;
-  }
-  .tabs button.on {
-    background: var(--raised);
-    color: var(--txt);
   }
   section {
     margin-bottom: 26px;

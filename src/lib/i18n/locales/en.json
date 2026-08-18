@@ -87,13 +87,19 @@
       "neutral": "Release everything to carry on.",
       "duplicate": "This input is already used for “{dir}”. Try again.",
       "timeout": "Nothing detected. Many wheels have no D-pad: skipping this step is perfectly normal.",
+      "optional": "Optional: skip it if your device has no spare button.",
       "dir": {
         "up": "Up",
         "down": "Down",
         "left": "Left",
         "right": "Right",
         "confirm": "Confirm",
-        "back": "Back"
+        "back": "Back",
+        "modPrev": "Previous mod",
+        "modNext": "Next mod",
+        "tabPrev": "Previous tab",
+        "tabNext": "Next tab",
+        "start": "Jump to the launch button"
       },
       "tryIt": "Try it: the highlight should move.",
       "skip": "Skip",

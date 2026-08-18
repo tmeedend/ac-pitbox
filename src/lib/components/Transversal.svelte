@@ -18,6 +18,7 @@
   import { fmtSize } from "$lib/format";
   import LayersSection from "./LayersSection.svelte";
   import LoadingState from "./LoadingState.svelte";
+  import Tabs from "./Tabs.svelte";
   // Auto-import : la vue des sons est ce même composant, en sous-section.
   import Transversal from "./Transversal.svelte";
 
@@ -26,12 +27,23 @@
   import { getUiPrefs, setUiPref } from "$lib/uiPrefs.svelte";
   // "car" = skins de voitures (SKIN) · "track" = skins de circuits (TRACK_SKIN)
   // · "sound" = mods de son (SOUND). Voir menu ADD-ONS (§6.1ter).
-  // `embedded` : rendu comme sous-section d'un autre écran (les sons dans
-  // « Add-ons voiture ») — pas de titre d'écran, pas de bloc Couches, et un
-  // simple titre de rubrique à la place.
+  // `embedded` : rendu à l'intérieur d'un onglet d'un autre écran (les sons
+  // dans « Add-ons voiture ») — ni titre d'écran, ni onglets à lui, l'onglet
+  // qui le contient le nomme déjà.
   let { variant, embedded = false }: { variant: "car" | "track" | "sound"; embedded?: boolean } = $props();
   const isSound = $derived(variant === "sound");
   const isTrack = $derived(variant === "track");
+
+  // Onglets de l'écran Add-ons (§6.1ter). Les trois rubriques s'empilaient sur
+  // une seule page interminable ; elles ne se consultent jamais ensemble.
+  // Les sons n'existent que pour les voitures.
+  type AddonTab = "skins" | "sounds" | "layers";
+  let activeTab = $state<AddonTab>("skins");
+  const tabItems = $derived([
+    { id: "skins", label: isTrack ? t("detail.trackSkinsLabelPlain") : t("detail.skinsLabel") },
+    ...(isTrack ? [] : [{ id: "sounds", label: t("nav.sounds") }]),
+    { id: "layers", label: t("transversal.layersTitle") },
+  ]);
 
   let subs = $state<SubModRow[]>([]);
   let cards = $state<ModCard[]>([]);
@@ -82,7 +94,14 @@
         Promise.all(types.map((ty) => listSubsByType(ty))),
         listLibrary(),
       ]);
-      subs = lists.flat();
+      // Skins de circuit **fournis avec le mod** (§8) : reconnus sur disque
+      // dans `cm_skins/`, jamais importés séparément, donc sans archive
+      // d'origine — ils remplissaient à eux seuls la rubrique « Origine
+      // inconnue ». Et rien ici ne s'applique à eux : ni sélection, ni
+      // suppression (seul le mod entier les emporte), ni activation (elle se
+      // fait depuis la barre latérale ou la fiche du circuit). Les lister
+      // n'apprenait donc rien et noyait ce qui se gère vraiment.
+      subs = lists.flat().filter((s) => !isTrack || s.removable);
       cards = lib;
       // Purge la sélection des ids disparus (après suppression).
       selected = new Set([...selected].filter((id) => subs.some((s) => s.id === id)));
@@ -251,25 +270,23 @@
 </script>
 
 <div class="trans">
-  {#if embedded}
-    <div class="sec-block">
-      <h3 class="sec-t">{t("nav.sounds")}</h3>
-    </div>
-  {:else}
-  <header class="head">
-    <div>
+  {#if !embedded}
+    <header class="head">
       <h2 class="lbl-screen">{isTrack ? t("nav.trackAddons") : t("nav.carAddons")}</h2>
       <p class="sub">
         {isTrack ? t("transversal.trackSubtitle") : t("transversal.skinSubtitle")}
       </p>
-    </div>
-    <input class="input search" placeholder={t("transversal.searchPlaceholder")} bind:value={query} />
-  </header>
-  <!-- Skins et Sons/Couches partagent désormais l'écran : ce titre les
-       distingue, avec le même traitement que les subdivisions qui suivent. -->
-  <h3 class="sec-t sec-first">{isTrack ? t("detail.trackSkinsLabelPlain") : t("detail.skinsLabel")}</h3>
+    </header>
+    <Tabs tabs={tabItems} active={activeTab} onselect={(v) => (activeTab = v as AddonTab)} />
   {/if}
 
+  <!-- Un onglet à la fois. Une instance `embedded` (les sons) n'a pas de
+       bandeau d'onglets, donc `activeTab` y reste sur "skins" : c'est bien sa
+       propre liste qu'elle rend, et jamais les deux branches suivantes.
+       Le corps de cette première branche garde volontairement son indentation
+       d'origine — le ré-indenter d'un cran noierait le changement réel dans
+       cent lignes de diff blanc, et avec lui `git blame`. -->
+  {#if activeTab === "skins"}
   {#if error}<div class="err">{error}</div>{/if}
 
   {#if loading}
@@ -281,6 +298,10 @@
     </div>
   {:else}
     <div class="toolbar">
+      <!-- La recherche est descendue de l'en-tête dans la barre d'outils : là,
+           elle accompagne la liste qu'elle filtre, et le fait aussi pour les
+           sons — imbriqués, ils n'avaient aucun champ de recherche. -->
+      <input class="input search" placeholder={t("transversal.searchPlaceholder")} bind:value={query} />
       <span class="seg-lbl lbl-key mono">{t("transversal.groupLabel")}</span>
       <div class="seg">
         <button class:on={groupBy === "archive"} type="button" onclick={() => setGroupBy("archive")}>{t("transversal.groupByArchive")}</button>
@@ -364,40 +385,21 @@
       {/each}
     </div>
   {/if}
-
-  <!-- Les mods de son n'avaient pas de quoi remplir un écran : ils vivent
-       désormais dans « Add-ons voiture », juste avant les couches. -->
-  {#if variant === "car"}
+  {:else if activeTab === "sounds"}
+    <!-- Les mods de son n'avaient pas de quoi remplir un écran à eux : ils sont
+         un onglet d'« Add-ons voiture », rendu par ce même composant. L'onglet
+         n'existe pas pour un circuit (voir `tabItems`), donc pas de garde ici. -->
     <Transversal variant="sound" embedded />
-  {/if}
-
-  <!-- variant="sound" n'est jamais rendu qu'imbriqué (voir l'appel ci-dessus) :
-       !embedded suffit, isSound serait toujours faux dans ce cas. -->
-  {#if !embedded}
-    <LayersSection kind={isTrack ? "Track" : "Car"} />
+  {:else}
+    <LayersSection kind={isTrack ? "Track" : "Car"} heading={false} />
   {/if}
 </div>
 
 <style>
-  /* `.sec-t` (global.css) porte la typographie ; ce wrapper porte la
-     séparation — nécessaire pour une subdivision qui suit une autre, pas
-     pour la première de l'écran (voir `.sec-first`). */
-  .sec-block {
-    margin-top: 30px;
-    padding-top: 22px;
-    border-top: 1px solid var(--line);
-  }
-  .sec-first {
-    margin-bottom: 18px;
-  }
   .trans {
     max-width: 900px;
   }
   .head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 20px;
     margin-bottom: 18px;
   }
   .sub {
@@ -408,7 +410,7 @@
     max-width: 540px;
   }
   .search {
-    width: 240px;
+    width: 200px;
     flex: none;
   }
   .err {

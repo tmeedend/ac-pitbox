@@ -21,6 +21,8 @@
     type ColumnDef,
   } from "$lib/columns";
   import { nav, pickSession, requestSection, queueOpponentsAction } from "$lib/nav.svelte";
+  import { moveFocus } from "$lib/gamepadNav";
+  import { registerModNav } from "$lib/screenActions";
   import { importState } from "$lib/importState.svelte";
   import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
   import { buildModContextItems } from "$lib/modContextActions";
@@ -614,14 +616,13 @@
   });
 
   // --- Navigation clavier/manette dans la fiche pleine page ---
-  // Flèche gauche/droite = mod précédent/suivant, dans l'ordre affiché
-  // (tri courant). Ne touche pas à la sélection de session (comme le
-  // double-clic qui ouvre la fiche) — juste la navigation dans la vue.
+  // Mod précédent/suivant, dans l'ordre affiché (tri et filtres courants). Ne
+  // touche pas à la sélection de session (comme le double-clic qui ouvre la
+  // fiche) — juste la navigation dans la vue.
   function navigateFull(delta: 1 | -1) {
     // Une visionneuse plein écran ouverte par-dessus la fiche (§6.1), ou le
-    // panneau de périphérique (§7.4), consomme les entrées manette en
-    // exclusivité — sinon une même pression ferait défiler les images ET
-    // changer de mod.
+    // panneau de périphérique (§7.4), consomme les entrées en exclusivité —
+    // sinon une même pression ferait défiler les images ET changer de mod.
     if (!nav.openFull || nav.inputCapture) return;
     const ids = sorted.map((c) => c.id_interne);
     const idx = ids.indexOf(nav.openFull);
@@ -629,48 +630,55 @@
     nav.openFull = ids[(idx + delta + ids.length) % ids.length];
   }
 
+  // Ouverte à la manette (boutons « mod précédent/suivant », §7.4bis) sans que
+  // celle-ci ait à connaître le tri courant : seule la bibliothèque le sait.
+  // Inscrite uniquement pendant qu'une fiche est ouverte — hors de là, ces
+  // boutons n'ont rien à faire.
+  $effect(() => {
+    if (!nav.openFull) return;
+    return registerModNav(navigateFull);
+  });
+
+  // Un champ de saisie garde ses flèches (déplacement du caret) — et un
+  // curseur `range` aussi, c'est un `<input>` : les réglages de l'aperçu 3D,
+  // posés sur la fiche, restent réglables au clavier.
   function isTypingTarget(e: KeyboardEvent): boolean {
     const t = e.target as HTMLElement | null;
     return !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
   }
 
+  const ARROW_DIRS: Record<string, "up" | "down" | "left" | "right"> = {
+    ArrowUp: "up",
+    ArrowDown: "down",
+    ArrowLeft: "left",
+    ArrowRight: "right",
+  };
+
+  // Clavier dans la fiche pleine page (§7.4bis) :
+  // - Page préc./suiv. = mod précédent/suivant. Les flèches tenaient ce rôle
+  //   avant, et c'était le mauvais choix : elles sont l'équivalent naturel de
+  //   la croix directionnelle, donc du déplacement du curseur DANS la fiche.
+  //   Tant qu'elles changeaient de mod, rien de la fiche (skins, onglets,
+  //   boutons) n'était atteignable autrement qu'à la souris.
+  // - Flèches = déplacement du curseur, exactement comme la croix
+  //   directionnelle (`moveFocus`, partagé avec la manette : un seul
+  //   comportement, pas deux implémentations qui divergent).
   $effect(() => {
     function onKeydown(e: KeyboardEvent) {
-      if (!nav.openFull || isTypingTarget(e)) return;
-      if (e.key === "ArrowLeft") {
+      if (!nav.openFull || isTypingTarget(e) || e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.key === "PageUp") {
         e.preventDefault();
         navigateFull(-1);
-      } else if (e.key === "ArrowRight") {
+      } else if (e.key === "PageDown") {
         e.preventDefault();
         navigateFull(1);
+      } else if (ARROW_DIRS[e.key]) {
+        e.preventDefault();
+        moveFocus(ARROW_DIRS[e.key]);
       }
     }
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
-  });
-
-  // Manette (API Gamepad standard, sans dépendance) : croix directionnelle ou
-  // stick gauche gauche/droite navigue comme les flèches, tant que la fiche
-  // pleine page est ouverte. Détection sur front montant (évite la répétition
-  // continue tant que le bouton reste enfoncé).
-  $effect(() => {
-    if (!nav.openFull) return;
-    let raf = 0;
-    let last = { left: false, right: false };
-    function poll() {
-      for (const gp of navigator.getGamepads?.() ?? []) {
-        if (!gp) continue;
-        const axis = gp.axes[0] ?? 0;
-        const left = (gp.buttons[14]?.pressed ?? false) || axis < -0.6;
-        const right = (gp.buttons[15]?.pressed ?? false) || axis > 0.6;
-        if (left && !last.left) navigateFull(-1);
-        if (right && !last.right) navigateFull(1);
-        last = { left, right };
-      }
-      raf = requestAnimationFrame(poll);
-    }
-    raf = requestAnimationFrame(poll);
-    return () => cancelAnimationFrame(raf);
   });
 </script>
 

@@ -21,6 +21,7 @@
 
 import { nav } from "$lib/nav.svelte";
 import { deviceRecords, gamepadEnabled } from "$lib/gamepadDevices.svelte";
+import { cycleTab, navigateMod } from "$lib/screenActions";
 import {
   EMPTY_REST,
   bindingActive,
@@ -28,6 +29,8 @@ import {
   hasRest,
   measureRest,
   sampleEqual,
+  type Action,
+  type Binding,
   type DeviceRecord,
   type Direction,
   type NavProfile,
@@ -100,8 +103,51 @@ let gpFocusEl: HTMLElement | null = null;
 function setGamepadFocus(el: HTMLElement) {
   gpFocusEl?.classList.remove(GP_CLASS);
   gpFocusEl = el;
+  lastConfirmed = null;
   el.classList.add(GP_CLASS);
   el.focus();
+}
+
+/**
+ * Valide l'élément ciblé. Une **deuxième validation d'affilée sur le même
+ * élément vaut double-clic** (§7.4bis) : c'est exactement la convention de la
+ * souris — cliquer sélectionne, double-cliquer ouvre — donc une carte de
+ * bibliothèque s'ouvre en fiche pleine page d'un second appui, sans avoir à
+ * aller chercher le bouton « Agrandir ». Gratuit partout où un `ondblclick`
+ * existe déjà (cartes et lignes de bibliothèque, slots de session).
+ *
+ * Le clic part **dans tous les cas**, y compris à la deuxième pression : sans
+ * lui, un bouton qui n'écoute que `click` (une flèche d'ordre, un « + ») ne
+ * répondrait qu'un appui sur deux. Le double-clic s'ajoute, il ne remplace pas.
+ *
+ * `bubbles` est indispensable : Svelte 5 délègue `dblclick` à la racine, un
+ * événement qui ne remonte pas n'atteint aucun gestionnaire.
+ */
+let lastConfirmed: HTMLElement | null = null;
+
+function activate(el: HTMLElement) {
+  const repeat = lastConfirmed === el;
+  el.click();
+  if (repeat) el.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  lastConfirmed = el;
+}
+
+/** Pose le curseur manette sur un élément précis, depuis un écran qui sait
+ * mieux que la géométrie où l'utilisateur doit commencer (§7.4bis : la fiche
+ * détail le pose sur le skin sélectionné à l'ouverture). Passe par le même
+ * chemin que le scrutin — donc le même repère visuel, et le même effacement
+ * automatique dès qu'une souris reprend la main. */
+export function focusGamepadElement(el: HTMLElement | null | undefined): void {
+  if (el) setGamepadFocus(el);
+}
+
+/** Vrai quand un périphérique adopté est effectivement en train de piloter
+ * l'interface. Un écran ne déplace le curseur d'autorité que dans ce cas :
+ * sans manette, poser le focus par surprise fait sauter le défilement et vole
+ * le curseur du clavier. */
+let driving = false;
+export function isGamepadDriving(): boolean {
+  return driving;
 }
 
 // Toute prise de focus qui ne vient pas de nous (clic souris, Tab clavier…)
@@ -112,6 +158,9 @@ function initFocusTracking() {
     if (e.target !== gpFocusEl) {
       gpFocusEl?.classList.remove(GP_CLASS);
       gpFocusEl = null;
+      // Le compteur de validations suit le curseur : revenir sur une carte
+      // déjà validée plus tôt ne doit pas l'ouvrir dès le premier appui.
+      lastConfirmed = null;
     }
   });
 }
@@ -180,7 +229,10 @@ function bestCandidate(
   return best;
 }
 
-function moveFocus(dir: Dir) {
+/** Déplace le curseur d'un cran. Exportée pour le clavier : les flèches font
+ * exactement ce que fait la croix directionnelle (§7.4bis) — c'est une même
+ * intention exprimée sur deux périphériques, pas deux comportements. */
+export function moveFocus(dir: Dir) {
   const candidates = focusableElements();
   if (!candidates.length) return;
   const current = document.activeElement as HTMLElement | null;
@@ -197,14 +249,22 @@ function moveFocus(dir: Dir) {
   if (best) setGamepadFocus(best);
 }
 
-interface ButtonEdges {
-  up: boolean;
-  down: boolean;
-  left: boolean;
-  right: boolean;
-  confirm: boolean;
-  back: boolean;
+/** Bouton « Démarrer la session » de la barre latérale (§7.4bis) : le bouton
+ * Start y **amène le curseur**, il ne lance pas. Lancer d'une pression depuis
+ * n'importe quel écran, sans avoir vu ce qu'on lance, serait le contraire d'un
+ * raccourci utile. La barre latérale est toujours montée, donc la cible existe
+ * quel que soit l'écran ouvert.
+ *
+ * Repéré par un attribut dédié plutôt que par sa classe : un nom de classe est
+ * du style, il se renomme sans qu'on pense à ce fichier. */
+export const LAUNCH_BUTTON_ATTR = "data-gp-launch";
+
+function focusLaunchButton() {
+  const el = document.querySelector<HTMLElement>(`[${LAUNCH_BUTTON_ATTR}]`);
+  if (el) setGamepadFocus(el);
 }
+
+type ButtonEdges = Record<Dir | "confirm" | "back" | Action, boolean>;
 
 const AXIS_THRESHOLD = 0.6;
 
@@ -214,16 +274,29 @@ const AXIS_THRESHOLD = 0.6;
 // `Binding` unique par direction ne sait pas représenter — traduire ferait
 // perdre le stick sur toutes les manettes normales, régression pour gagner
 // une uniformité que personne ne voit.
+//
+// Raccourcis (§7.4bis) placés là où les interfaces de console les mettent :
+// les **gâchettes hautes** (LB/RB, 4/5) changent d'onglet, les **basses**
+// (LT/RT, 6/7) changent de mod, Start (9) saute au bouton de lancement. Les
+// deux paires sont voisines et ne font pas la même chose : les mettre dans
+// cet ordre-là (onglets au-dessus, contenu en-dessous) est ce qui rend le
+// couple mémorisable.
 function readButtons(gp: Gamepad): ButtonEdges {
   const ax = gp.axes[0] ?? 0;
   const ay = gp.axes[1] ?? 0;
+  const btn = (i: number) => gp.buttons[i]?.pressed ?? false;
   return {
-    up: (gp.buttons[12]?.pressed ?? false) || ay < -AXIS_THRESHOLD,
-    down: (gp.buttons[13]?.pressed ?? false) || ay > AXIS_THRESHOLD,
-    left: (gp.buttons[14]?.pressed ?? false) || ax < -AXIS_THRESHOLD,
-    right: (gp.buttons[15]?.pressed ?? false) || ax > AXIS_THRESHOLD,
-    confirm: gp.buttons[0]?.pressed ?? false,
-    back: gp.buttons[1]?.pressed ?? false,
+    up: btn(12) || ay < -AXIS_THRESHOLD,
+    down: btn(13) || ay > AXIS_THRESHOLD,
+    left: btn(14) || ax < -AXIS_THRESHOLD,
+    right: btn(15) || ax > AXIS_THRESHOLD,
+    confirm: btn(0),
+    back: btn(1),
+    tabPrev: btn(4),
+    tabNext: btn(5),
+    modPrev: btn(6),
+    modNext: btn(7),
+    start: btn(9),
   };
 }
 
@@ -293,17 +366,21 @@ export function resolveProfile(gp: { id: string; mapping: string }, rec: DeviceR
 }
 
 function readProfileButtons(gp: Gamepad, profile: NavProfile, rest: RestSnapshot): ButtonEdges {
-  const dir = (d: Direction) => {
-    const b = profile.dirs[d];
-    return !!b && bindingActive(gp, b, rest);
-  };
+  const on = (b: Binding | undefined) => !!b && bindingActive(gp, b, rest);
+  const dir = (d: Direction) => on(profile.dirs[d]);
+  const act = (a: Action) => on(profile.actions?.[a]);
   return {
     up: dir("up"),
     down: dir("down"),
     left: dir("left"),
     right: dir("right"),
-    confirm: !!profile.confirm && bindingActive(gp, profile.confirm, rest),
-    back: !!profile.back && bindingActive(gp, profile.back, rest),
+    confirm: on(profile.confirm),
+    back: on(profile.back),
+    tabPrev: act("tabPrev"),
+    tabNext: act("tabNext"),
+    modPrev: act("modPrev"),
+    modNext: act("modNext"),
+    start: act("start"),
   };
 }
 
@@ -311,10 +388,22 @@ function readEdges(gp: Gamepad, resolved: ResolvedProfile, rest: RestSnapshot): 
   return resolved.profile ? readProfileButtons(gp, resolved.profile, rest) : readButtons(gp);
 }
 
-const NONE: ButtonEdges = { up: false, down: false, left: false, right: false, confirm: false, back: false };
+const NONE: ButtonEdges = {
+  up: false,
+  down: false,
+  left: false,
+  right: false,
+  confirm: false,
+  back: false,
+  tabPrev: false,
+  tabNext: false,
+  modPrev: false,
+  modNext: false,
+  start: false,
+};
 
 function anyEdge(e: ButtonEdges): boolean {
-  return e.up || e.down || e.left || e.right || e.confirm || e.back;
+  return Object.values(e).some(Boolean);
 }
 
 // Répétition en rester appuyé (haut/bas/gauche/droite uniquement — jamais
@@ -453,12 +542,14 @@ export function startGamepadNav(): () => void {
     if (!gamepadEnabled() || nav.inputCapture === "controller") {
       arms.clear();
       lastByGamepad.clear();
+      driving = false;
       raf = requestAnimationFrame(poll);
       return;
     }
     const now = performance.now();
     const records = deviceRecords();
     const seen = new Set<number>();
+    let anyDriving = false;
     for (const gp of navigator.getGamepads?.() ?? []) {
       if (!gp?.connected) continue;
       seen.add(gp.index);
@@ -475,17 +566,34 @@ export function startGamepadNav(): () => void {
       if (!rest) continue;
       const cur = readEdges(gp, resolved, rest);
       const last = lastByGamepad.get(gp.index) ?? NONE;
+      // Au moins un périphérique adopté, armé et lu : c'est ce qui autorise un
+      // écran à poser lui-même le curseur (voir `isGamepadDriving`).
+      anyDriving = true;
 
       if (nav.inputCapture === "lightbox") {
         // Visionneuse plein écran ouverte par-dessus la fiche (§6.1,
         // Lightbox.svelte) : elle gère elle-même tout son input manette
         // (gauche/droite/B), y compris la fermeture — ne rien faire ici, sous
         // peine qu'un même B ferme à la fois la visionneuse et la fiche.
-      } else if (nav.openFull) {
-        // La fiche pleine page gère elle-même gauche/droite (mod précédent/
-        // suivant, voir Library.svelte::navigateFull) — ici uniquement B=fermer.
-        if (cur.back && !last.back) nav.openFull = null;
       } else {
+        // Raccourcis (§7.4bis), lus AVANT la navigation et quel que soit
+        // l'écran : ils ne dépendent ni de l'élément ciblé, ni du fait qu'une
+        // fiche pleine page soit ouverte. Front montant seulement, jamais de
+        // répétition au maintien — changer de mod recharge toute une fiche
+        // (et reconvertit un modèle 3D), une rafale n'a rien d'un service.
+        if (cur.tabPrev && !last.tabPrev) cycleTab(-1);
+        if (cur.tabNext && !last.tabNext) cycleTab(1);
+        if (cur.modPrev && !last.modPrev) navigateMod(-1);
+        if (cur.modNext && !last.modNext) navigateMod(1);
+        if (cur.start && !last.start) focusLaunchButton();
+
+        // La fiche pleine page se navigue comme n'importe quel écran : la
+        // croix directionnelle y déplace le curseur (elle changeait de mod
+        // avant, ce qui rendait ses propres commandes — skins, onglets,
+        // boutons — inatteignables à la manette). Mod précédent/suivant a
+        // désormais ses deux boutons dédiés, ci-dessus.
+        if (nav.openFull && cur.back && !last.back) nav.openFull = null;
+
         const active = document.activeElement;
         if (entered && active !== entered) entered = null;
         if (needsEntry(active)) {
@@ -520,11 +628,19 @@ export function startGamepadNav(): () => void {
           if (shouldFire(dirRepeats, gp.index, "down", cur.down, now)) moveFocus("down");
           if (shouldFire(dirRepeats, gp.index, "left", cur.left, now)) moveFocus("left");
           if (shouldFire(dirRepeats, gp.index, "right", cur.right, now)) moveFocus("right");
-          if (cur.confirm && !last.confirm) (document.activeElement as HTMLElement | null)?.click();
+          // Seule branche à passer par `activate` : c'est celle des éléments
+          // ordinaires (cartes, lignes, boutons). Les champs de saisie ont
+          // leur propre sémantique de validation juste au-dessus, un
+          // double-clic n'y voudrait rien dire.
+          if (cur.confirm && !last.confirm) {
+            const el = document.activeElement as HTMLElement | null;
+            if (el) activate(el);
+          }
         }
       }
       lastByGamepad.set(gp.index, cur);
     }
+    driving = anyDriving;
     // Un slot libéré au débranchement est réattribué à un autre périphérique :
     // ne jamais lui laisser hériter de l'armement ni du dernier front de son
     // prédécesseur — c'est ce qui garantit qu'une reconnexion repasse par le

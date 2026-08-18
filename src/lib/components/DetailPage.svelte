@@ -23,7 +23,9 @@
   import { listMediaScreenshots, listMediaReplays, listMediaBackgrounds } from "$lib/media";
   import { listModSkins, openNativeShowroom, type SkinItem } from "$lib/launch";
   import CarPreview3D from "./detail/CarPreview3D.svelte";
-  import { untrack } from "svelte";
+  import Tabs from "./Tabs.svelte";
+  import { tick, untrack } from "svelte";
+  import { focusGamepadElement, isGamepadDriving } from "$lib/gamepadNav";
   import { preview3dPrefs, setPreview3dEnabled, resetPreview3dView } from "$lib/preview3dPrefs.svelte";
   import Preview3dControls from "./detail/Preview3dControls.svelte";
   import { exportMod, deletePack, deleteBrokenMod, reinstallFromArchive, type ExportReport } from "$lib/maintenance";
@@ -68,7 +70,8 @@
   let detail = $state<ModDetail | null>(null);
   // Onglets de premier niveau de la fiche (§6.1) — réinitialisé à "fiche" à
   // chaque changement d'entité (voir le $effect suivant `id`).
-  let activeTab = $state<"fiche" | "screenshots" | "replays" | "resources" | "extras" | "backgrounds">("fiche");
+  type DetailTab = "fiche" | "screenshots" | "replays" | "resources" | "extras" | "backgrounds";
+  let activeTab = $state<DetailTab>("fiche");
   // Chiffres affichés entre parenthèses sur les onglets Médias/Ressources —
   // mêmes appels que ceux faits à l'ouverture de l'onglet (media.rs parcourt
   // en direct `screens/`/`replay/`, potentiellement coûteux), mais lancés ici
@@ -99,6 +102,22 @@
   let packBusy = $state(false);
   // Couches / extensions rattachées (§4.4).
   // Fichiers annexes du mod (§4.5.2, Bloc Ressources) — lus en direct sur disque.
+
+  // Onglets de la fiche. Le décompte fait partie du libellé (`null` tant qu'il
+  // n'est pas connu : afficher « (0) » avant de savoir est un mensonge qui
+  // dure une seconde). « Backgrounds » n'existe que pour un circuit.
+  const tabItems = $derived.by(() => {
+    const count = (n: number | null) => (n !== null ? ` (${n})` : "");
+    const items = [
+      { id: "fiche", label: t("detail.tabFiche") },
+      { id: "screenshots", label: t("detail.tabScreenshots") + count(screenshotsCount) },
+      { id: "replays", label: t("detail.tabReplays") + count(replaysCount) },
+      { id: "resources", label: t("detail.tabResources") + count(resourcesCount) },
+      { id: "extras", label: t("detail.tabExtras") + count(extrasCount) },
+    ];
+    if (!isCar) items.push({ id: "backgrounds", label: t("detail.tabBackgrounds") + count(backgroundsCount) });
+    return items;
+  });
 
   // Image héros : voiture → skin sélectionné ; circuit → preview du layout
   // sélectionné ; sinon preview par défaut du mod.
@@ -356,6 +375,30 @@
         if (current === id) extrasCount = f.length;
       })
       .catch(() => {});
+  });
+
+  // Curseur manette à l'ouverture de la fiche (§7.4bis). Sans point de départ
+  // désigné, `moveFocus` part du premier élément focusable de la page — le
+  // bouton « retour » — et rejoindre les skins demandait une dizaine d'appuis.
+  // La grille de skins (ou de layouts) est ce qu'on vient régler ici, donc
+  // c'est là que le curseur se pose, sur la vignette **sélectionnée** : par
+  // défaut la première, celle mémorisée sinon.
+  //
+  // Une seule fois par mod ouvert : le curseur appartient à l'utilisateur dès
+  // qu'il l'a bougé, le lui reprendre à chaque rechargement de la fiche serait
+  // pire que de ne rien faire.
+  let cursorPlacedFor: string | null = null;
+  $effect(() => {
+    const current = id;
+    // Dépendances explicites : le curseur ne se pose qu'une fois les vignettes
+    // rendues, donc après l'arrivée des skins (voiture) ou de la fiche (circuit).
+    const ready = isCar ? skins.length > 0 : !!detail?.track?.layouts.length;
+    if (!ready || cursorPlacedFor === current || !isGamepadDriving()) return;
+    cursorPlacedFor = current;
+    tick().then(() => {
+      if (current !== id) return;
+      focusGamepadElement(document.querySelector<HTMLElement>(".skin.preview"));
+    });
   });
 
   // Chiffre de l'onglet Backgrounds (circuits seulement) : dépend en plus du
@@ -698,28 +741,7 @@
       <ContextMenu x={menuPos.x} y={menuPos.y} items={menuItems} onclose={() => (menuPos = null)} />
     {/if}
 
-    <nav class="tabs">
-      <button class:on={activeTab === "fiche"} type="button" onclick={() => (activeTab = "fiche")}>
-        {t("detail.tabFiche")}
-      </button>
-      <button class:on={activeTab === "screenshots"} type="button" onclick={() => (activeTab = "screenshots")}>
-        {t("detail.tabScreenshots")}{screenshotsCount !== null ? ` (${screenshotsCount})` : ""}
-      </button>
-      <button class:on={activeTab === "replays"} type="button" onclick={() => (activeTab = "replays")}>
-        {t("detail.tabReplays")}{replaysCount !== null ? ` (${replaysCount})` : ""}
-      </button>
-      <button class:on={activeTab === "resources"} type="button" onclick={() => (activeTab = "resources")}>
-        {t("detail.tabResources")}{resourcesCount !== null ? ` (${resourcesCount})` : ""}
-      </button>
-      <button class:on={activeTab === "extras"} type="button" onclick={() => (activeTab = "extras")}>
-        {t("detail.tabExtras")}{extrasCount !== null ? ` (${extrasCount})` : ""}
-      </button>
-      {#if !isCar}
-        <button class:on={activeTab === "backgrounds"} type="button" onclick={() => (activeTab = "backgrounds")}>
-          {t("detail.tabBackgrounds")}{backgroundsCount !== null ? ` (${backgroundsCount})` : ""}
-        </button>
-      {/if}
-    </nav>
+    <Tabs flush tabs={tabItems} active={activeTab} onselect={(v) => (activeTab = v as DetailTab)} />
 
     {#if actionError}<div class="action-err">{actionError}</div>{/if}
     {#if reinstallOk}<div class="export-ok">{t("detail.reinstallSuccess")}</div>{/if}
@@ -1206,37 +1228,8 @@
   .kebab:hover .kebab-dot {
     background: var(--rosso-bright);
   }
-  /* Onglets de premier niveau de la fiche (§6.1) — jamais présents avant ce
-     chantier, d'où l'absence d'un style `.tabs` réutilisable pour cet écran. */
-  .tabs {
-    display: flex;
-    gap: 1px;
-    /* Même fond que les boutons (`--card`, voir leur commentaire ci-dessous) :
-       `--line` ici créait une bande visiblement plus claire à droite des
-       onglets, là où le conteneur dépasse le dernier bouton (retour
-       utilisateur direct). */
-    background: var(--card);
-    border-bottom: 1px solid var(--line);
-    padding: 0 18px;
-  }
-  .tabs button {
-    padding: 10px 16px;
-    /* Même fond que les cartes de contenu en dessous (`.page`/`.data`/`.col`,
-       `var(--card)`) — `--panel2` créait une bande visiblement plus sombre
-       juste au-dessus du contenu (retour utilisateur direct). */
-    background: var(--card);
-    color: var(--muted);
-    font-size: 11px;
-    letter-spacing: 0.5px;
-    border-bottom: 2px solid transparent;
-  }
-  .tabs button.on {
-    color: var(--txt);
-    border-bottom-color: var(--rosso);
-  }
-  .tabs button:hover:not(.on) {
-    color: var(--txt2);
-  }
+  /* Onglets : `Tabs.svelte` (variante `flush`), partagé avec Réglages,
+     Add-ons et Règles de tags — plus de style local ici. */
   .tab-body {
     padding: 18px;
   }

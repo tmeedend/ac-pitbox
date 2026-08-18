@@ -87,13 +87,19 @@
       "neutral": "Relâchez tout pour continuer.",
       "duplicate": "Cette commande est déjà utilisée pour « {dir} ». Recommencez.",
       "timeout": "Rien détecté. Beaucoup de volants n'ont pas de croix directionnelle : passer cette étape est normal.",
+      "optional": "Facultatif : passez si votre périphérique n'a pas de bouton libre.",
       "dir": {
         "up": "Haut",
         "down": "Bas",
         "left": "Gauche",
         "right": "Droite",
         "confirm": "Valider",
-        "back": "Retour"
+        "back": "Retour",
+        "modPrev": "Mod précédent",
+        "modNext": "Mod suivant",
+        "tabPrev": "Onglet précédent",
+        "tabNext": "Onglet suivant",
+        "start": "Aller au bouton de lancement"
       },
       "tryIt": "Essayez : le repère doit se déplacer.",
       "skip": "Passer",

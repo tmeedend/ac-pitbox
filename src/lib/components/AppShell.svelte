@@ -27,7 +27,7 @@
   import { t, setLocale } from "$lib/i18n/index.svelte";
   import { setZoom } from "$lib/zoom.svelte";
   import { getConfig } from "$lib/config";
-  import { startGamepadNav } from "$lib/gamepadNav";
+  import { LAUNCH_BUTTON_ATTR, startGamepadNav } from "$lib/gamepadNav";
   import {
     controllers,
     startControllerWatch,
@@ -397,7 +397,9 @@
           {/if}
         </div>
         <button class="btn-configure" onclick={() => requestSection("race")}>{t("session.configure")}</button>
-        <button class="btn-launch" onclick={launchNow}>{t("session.start")}</button>
+        <!-- Cible du bouton Start de la manette (§7.4bis) : il y amène le
+             curseur depuis n'importe quel écran, il ne lance pas lui-même. -->
+        <button class="btn-launch" {...{ [LAUNCH_BUTTON_ATTR]: "" }} onclick={launchNow}>{t("session.start")}</button>
       </div>
 
       <div class="nsec">{t("nav.addons")}</div>

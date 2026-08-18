@@ -20,7 +20,10 @@
   import LoadingState from "./LoadingState.svelte";
 
   import { errorText } from "$lib/errors";
-  let { kind }: { kind: ModKind } = $props();
+  // `heading` : le titre de rubrique n'a de sens que si la section est empilée
+  // avec d'autres. Dans un onglet, l'onglet la nomme déjà — le répéter juste
+  // en dessous est du bruit.
+  let { kind, heading = true }: { kind: ModKind; heading?: boolean } = $props();
 
   let layers = $state<LayerRow[]>([]);
   let cards = $state<ModCard[]>([]);
@@ -97,9 +100,9 @@
   }
 </script>
 
-<section class="layers-sec">
+<section class="layers-sec" class:alone={!heading}>
   <div class="sec-head">
-    <h3 class="sec-t">{t("transversal.layersTitle")}</h3>
+    {#if heading}<h3 class="sec-t">{t("transversal.layersTitle")}</h3>{/if}
     <p class="sub">{t("transversal.layersSubtitle")}</p>
   </div>
 
@@ -150,6 +153,13 @@
     padding-top: 20px;
     border-top: 1px solid var(--line);
     max-width: 900px;
+  }
+  /* Seule dans son onglet : le trait et l'espace qui la détachaient de la
+     section précédente n'ont plus rien à séparer. */
+  .layers-sec.alone {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
   }
   .sub {
     color: var(--muted);

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import ConfigFields from "./ConfigFields.svelte";
+  import Tabs from "./Tabs.svelte";
   import MusicTab from "./settings/MusicTab.svelte";
   import PreviewTab from "./settings/PreviewTab.svelte";
   import {
@@ -34,14 +35,14 @@
   // musique). Général/Chemins/Import partagent le même AppConfig + garde de
   // navigation ci-dessous ; Musique gère son propre fichier séparé
   // (`music.json`, voir MusicTab.svelte) donc son propre état.
-  const tabs = [
-    { id: "general", labelKey: "settings.tabGeneral" },
-    { id: "paths", labelKey: "settings.tabPaths" },
-    { id: "import", labelKey: "settings.tabImport" },
-    { id: "preview", labelKey: "settings.tabPreview" },
-    { id: "music", labelKey: "settings.tabMusic" },
-  ] as const;
-  let activeTab = $state<(typeof tabs)[number]["id"]>("general");
+  const TAB_IDS = ["general", "paths", "import", "preview", "music"] as const;
+  type SettingsTab = (typeof TAB_IDS)[number];
+  let activeTab = $state<SettingsTab>("general");
+  // Libellés recalculés à chaque changement de langue (`t` est réactif) — un
+  // tableau `const` de clés figées les aurait laissés dans l'ancienne langue.
+  const tabItems = $derived(
+    TAB_IDS.map((id) => ({ id, label: t(`settings.tab${id[0].toUpperCase()}${id.slice(1)}`) })),
+  );
 
   let config = $state<AppConfig>(emptyConfig());
   // Instantané du dernier config enregistré (ou chargé) : sert à détecter les
@@ -170,13 +171,7 @@
     <h2 class="lbl-screen">{t("settings.title")}</h2>
   </header>
 
-  <div class="tabs">
-    {#each tabs as tab}
-      <button class="tab" class:on={activeTab === tab.id} type="button" onclick={() => (activeTab = tab.id)}>
-        {t(tab.labelKey)}
-      </button>
-    {/each}
-  </div>
+  <Tabs tabs={tabItems} active={activeTab} onselect={(v) => (activeTab = v as SettingsTab)} />
 
   {#if activeTab === "music"}
     <MusicTab />
@@ -341,33 +336,12 @@
   header {
     margin-bottom: 22px;
   }
+  /* 12px comme les autres sous-titres d'écran (voir Profiles.svelte). */
   .sub {
     color: var(--muted);
+    font-size: 12px;
     margin-top: 6px;
     line-height: 1.5;
-  }
-  .tabs {
-    display: flex;
-    gap: 1px;
-    background: var(--line);
-    border: 1px solid var(--line);
-    margin-bottom: 20px;
-  }
-  .tab {
-    flex: 1;
-    background: var(--bg);
-    color: var(--muted);
-    padding: 9px 10px;
-    font-size: 11px;
-    letter-spacing: 0.5px;
-  }
-  .tab:hover {
-    background: var(--raised);
-    color: var(--txt);
-  }
-  .tab.on {
-    background: var(--raised);
-    color: var(--rosso-bright);
   }
   .lang-section {
     margin-bottom: 22px;
