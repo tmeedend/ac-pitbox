@@ -32,9 +32,9 @@ export interface RestSnapshot {
  * beaucoup de volants n'ont pas cinq boutons à leur consacrer, et un profil
  * sans elles reste parfaitement utilisable. Un raccourci absent ne fait rien,
  * il ne bloque rien. */
-export type Action = "modPrev" | "modNext" | "tabPrev" | "tabNext" | "start";
+export type Action = "modPrev" | "modNext" | "tabPrev" | "tabNext" | "start" | "menu";
 
-export const ACTIONS: readonly Action[] = ["modPrev", "modNext", "tabPrev", "tabNext", "start"] as const;
+export const ACTIONS: readonly Action[] = ["modPrev", "modNext", "tabPrev", "tabNext", "start", "menu"] as const;
 
 /** Axe analogique dédié au défilement — le stick droit d'une manette, une
  *  molette de volant. Ce n'est pas un `Binding` : une liaison est un

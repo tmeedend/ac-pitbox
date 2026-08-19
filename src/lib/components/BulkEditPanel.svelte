@@ -1,52 +1,44 @@
 <script lang="ts">
   // Édition groupée (§6.3bis/§6.3ter) : panneau bas en surimpression quand
-  // plusieurs mods sont sélectionnés (Ctrl/Alt-clic dans la bibliothèque) —
-  // ne remplace plus le panneau de détail (ModDetail reste sur la voiture/le
-  // circuit dernier cliqué) ni ne réduit la largeur de la grille. N'expose que
-  // les champs communs à tout mod — jamais les champs propres à un type
-  // (specs voiture, skin piloté, version active), qui restent réservés à la
-  // fiche détail d'un seul mod. Exception : la section Adversaires
-  // (voitures uniquement), qui agit sur le réglage de session course.
-  import { open, confirm } from "@tauri-apps/plugin-dialog";
+  // plusieurs mods sont sélectionnés (Ctrl/Maj-clic, Ctrl+A) — ne remplace pas
+  // le panneau de détail (ModDetail reste sur le dernier mod cliqué) ni ne
+  // réduit la largeur de la grille.
+  //
+  // Il ne garde que **ce qu'un menu contextuel ne peut pas porter** : un champ
+  // de saisie (catégorie, tag) et une paire de boutons sans argument (favori).
+  // Activer, désactiver, supprimer, exporter et « envoyer en adversaires »
+  // sont partis au clic droit, qui agit désormais sur toute la sélection —
+  // deux endroits pour la même action, c'était un endroit de trop pour la
+  // chercher. La progression et le rapport d'un lot vivent dans la pile de
+  // notifications (`BulkToasts`), pas ici : un rapport enfermé dans ce panneau
+  // partait avec lui.
+  //
+  // N'expose que les champs communs à tout mod — jamais ceux propres à un type
+  // (specs voiture, skin piloté, version active), réservés à la fiche détail.
   import type { ModCard } from "$lib/library";
-  import {
-    bulkSetFavorite,
-    bulkSetCategory,
-    bulkAddTag,
-    bulkRemoveTag,
-    bulkActivate,
-    bulkDeactivate,
-    bulkDelete,
-    bulkExport,
-    type BulkReport,
-  } from "$lib/bulkEdit";
+  import { bulkSetFavorite, bulkSetCategory, bulkAddTag, bulkRemoveTag } from "$lib/bulkEdit";
   import { t } from "$lib/i18n/index.svelte";
 
   import { errorText } from "$lib/errors";
   interface Props {
     ids: string[];
     cards: ModCard[];
-    /** Voitures uniquement : conditionne l'affichage de la section Adversaires (§6.3ter). */
-    isCar: boolean;
     onclose: () => void;
     onchange: () => void;
-    onSetOpponents: () => void;
-    onAddOpponents: () => void;
   }
-  let { ids, cards, isCar, onclose, onchange, onSetOpponents, onAddOpponents }: Props = $props();
+  let { ids, cards, onclose, onchange }: Props = $props();
 
   let busy = $state(false);
   let error = $state("");
-  let report = $state<BulkReport | null>(null);
   let categoryInput = $state("");
   let tagInput = $state("");
-  let exporting = $state(false);
-  let exportMsg = $state("");
 
   const categories = $derived(
     [...new Set(cards.map((c) => c.category).filter((c): c is string => !!c))].sort(),
   );
 
+  // Ces quatre actions sont quelques écritures SQLite : pas de progression, pas
+  // de rapport — une barre y serait un clignotement (§6.3bis).
   async function run(action: () => Promise<void>) {
     busy = true;
     error = "";
@@ -60,24 +52,8 @@
     }
   }
 
-  async function runReport(action: () => Promise<BulkReport>) {
-    busy = true;
-    error = "";
-    report = null;
-    try {
-      report = await action();
-      onchange();
-    } catch (e) {
-      error = errorText(e);
-    } finally {
-      busy = false;
-    }
-  }
-
   const markFavorite = () => run(() => bulkSetFavorite(ids, true));
   const unmarkFavorite = () => run(() => bulkSetFavorite(ids, false));
-  const activateAll = () => runReport(() => bulkActivate(ids));
-  const deactivateAll = () => runReport(() => bulkDeactivate(ids));
 
   function applyCategory() {
     const cat = categoryInput.trim();
@@ -98,35 +74,6 @@
     tagInput = "";
     run(() => bulkRemoveTag(ids, tag));
   }
-
-  async function deleteAll() {
-    if (busy) return;
-    const ok = await confirm(t("bulkEdit.confirmDelete", { count: ids.length }), {
-      title: t("common.delete"),
-      kind: "warning",
-    });
-    if (!ok) return;
-    await runReport(() => bulkDelete(ids));
-    if (report && report.failed.length === 0) onclose();
-  }
-
-  async function doExport() {
-    if (exporting) return;
-    const dir = await open({ directory: true, multiple: false });
-    if (!dir || typeof dir !== "string") return;
-    exporting = true;
-    error = "";
-    exportMsg = "";
-    try {
-      const items = await bulkExport(ids, dir);
-      const done = items.filter((i) => i.report).length;
-      exportMsg = t("bulkEdit.exportDone", { count: done });
-    } catch (e) {
-      error = errorText(e);
-    } finally {
-      exporting = false;
-    }
-  }
 </script>
 
 <aside class="panel">
@@ -141,17 +88,6 @@
   </header>
 
   {#if error}<div class="err">{error}</div>{/if}
-  {#if report}
-    <div class="report" class:warn={report.failed.length > 0}>
-      {t("bulkEdit.reportOk", { count: report.ok.length })}
-      {#if report.failed.length}
-        · {t("bulkEdit.reportFailed", { count: report.failed.length })}
-        <ul class="fail-list">
-          {#each report.failed as f}<li>{f.id} — {f.error}</li>{/each}
-        </ul>
-      {/if}
-    </div>
-  {/if}
 
   <div class="sections">
     <section>
@@ -159,14 +95,6 @@
       <div class="row">
         <button class="btn" type="button" onclick={markFavorite} disabled={busy}>{t("bulkEdit.markFavorite")}</button>
         <button class="btn" type="button" onclick={unmarkFavorite} disabled={busy}>{t("bulkEdit.unmarkFavorite")}</button>
-      </div>
-    </section>
-
-    <section>
-      <h3 class="lbl">{t("bulkEdit.stateSection")}</h3>
-      <div class="row">
-        <button class="btn" type="button" onclick={activateAll} disabled={busy}>{t("bulkEdit.activateAll")}</button>
-        <button class="btn" type="button" onclick={deactivateAll} disabled={busy}>{t("bulkEdit.deactivateAll")}</button>
       </div>
     </section>
 
@@ -198,34 +126,6 @@
         />
         <button class="btn" type="button" onclick={addTag} disabled={busy || !tagInput.trim()}>{t("bulkEdit.addTagToAll")}</button>
         <button class="btn" type="button" onclick={removeTag} disabled={busy || !tagInput.trim()}>{t("bulkEdit.removeTagFromAll")}</button>
-      </div>
-    </section>
-
-    {#if isCar}
-      <section>
-        <h3 class="lbl">{t("bulkEdit.opponentsSection")}</h3>
-        <p class="opp-hint">{t("bulkEdit.opponentsHint")}</p>
-        <div class="row">
-          <button class="btn" type="button" onclick={onSetOpponents}>{t("bulkEdit.setOpponents")}</button>
-          <button class="btn" type="button" onclick={onAddOpponents}>{t("bulkEdit.addOpponents")}</button>
-        </div>
-      </section>
-    {/if}
-
-    <section>
-      <h3 class="lbl">{t("bulkEdit.exportSection")}</h3>
-      <div class="row">
-        <button class="btn-ghost export" type="button" onclick={doExport} disabled={exporting}>
-          {exporting ? t("detail.exporting") : t("bulkEdit.exportAll")}
-        </button>
-      </div>
-      {#if exportMsg}<div class="export-ok">{exportMsg}</div>{/if}
-    </section>
-
-    <section class="danger">
-      <h3 class="lbl">{t("bulkEdit.deleteSection")}</h3>
-      <div class="row">
-        <button class="btn danger" type="button" onclick={deleteAll} disabled={busy}>{t("bulkEdit.deleteAll")}</button>
       </div>
     </section>
   </div>
@@ -292,25 +192,6 @@
     font-size: 11.5px;
     flex: none;
   }
-  .report {
-    margin: 10px 16px 0;
-    padding: 8px 10px;
-    background: var(--green-dim);
-    border: 1px solid var(--green-border);
-    color: var(--green);
-    font-size: 11.5px;
-    line-height: 1.5;
-    flex: none;
-  }
-  .report.warn {
-    background: var(--rosso-dim);
-    border-color: var(--rosso-border);
-    color: var(--rosso-bright);
-  }
-  .fail-list {
-    margin-top: 4px;
-    padding-left: 16px;
-  }
   .sections {
     flex: 1;
     min-height: 0;
@@ -323,13 +204,6 @@
   }
   section {
     flex: none;
-  }
-  .opp-hint {
-    font-size: 10px;
-    color: var(--faint);
-    max-width: 220px;
-    margin-bottom: 8px;
-    line-height: 1.4;
   }
   .row {
     display: flex;
@@ -355,29 +229,5 @@
   }
   .btn:disabled {
     opacity: 0.5;
-  }
-  .btn.danger {
-    color: var(--rosso-bright);
-    border-color: var(--rosso-border);
-  }
-  .export {
-    font-size: 11px;
-    padding: 4px 6px;
-    color: var(--muted);
-  }
-  .export:hover {
-    color: var(--rosso-bright);
-  }
-  .export-ok {
-    margin-top: 6px;
-    padding: 6px 8px;
-    background: var(--green-dim);
-    border: 1px solid var(--green-border);
-    color: var(--green);
-    font-size: 11px;
-  }
-  .danger {
-    padding-left: 14px;
-    border-left: 1px solid var(--line);
   }
 </style>

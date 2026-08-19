@@ -236,6 +236,14 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
   simplement ignoré dans les `config.json` existants, pas de migration à
   écrire. Un champ ajouté prend sa valeur par défaut chez les utilisateurs
   existants.
+- **Un module métier Rust n'importe pas `tauri::{AppHandle, Emitter}`.** Pas
+  seulement par propreté d'architecture : mesuré, l'import suffit à rendre le
+  binaire de test de la lib **inexécutable** — il ne démarre plus du tout
+  (`STATUS_ENTRYPOINT_NOT_FOUND`, 0xc0000139, avant le premier test), alors
+  que le même import dans `commands/` ou dans `import_progress.rs` ne pose
+  rien. Trouvé par bissection sur `bulk.rs` : 253 tests passent sans l'import,
+  zéro avec. Un module qui doit rendre compte prend donc une **fermeture**
+  (`ProgressSink` dans `bulk.rs`), et c'est la façade qui émet.
 - **Les tests backend tournent sur un vrai système de fichiers** : ils créent
   des junctions et des hardlinks réels, donc uniquement sous Windows.
 - **`Metadata::is_dir()` ne distingue pas une junction (dossier) d'un lien
@@ -330,7 +338,8 @@ laisser pourrir ici.
       Add-ons), `StateBadge.svelte` (colonne « État » du tableau + fiche
       détail), `NumberStepper`, `LoadingState`, `Tooltip`, `ContextMenu`,
       `Toast`/`ToastStack` (pile bas-droite : progression et rapports
-      d'import, nouveau périphérique — voir SPEC §4.2bis).
+      d'import, actions groupées, nouveau périphérique — voir SPEC §4.2bis),
+      `Slider` (tous les curseurs de l'app).
       **Inventaire de ce qui reste**, mesuré le 2026-08-18 :
       - **Boîte d'erreur : 15 définitions locales** (`.err` / `.error` /
         `.action-err` dans Apps, BulkEditPanel, BulkImport, DetailPage,

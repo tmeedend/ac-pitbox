@@ -107,7 +107,8 @@
         "tabPrev": "Previous tab",
         "tabNext": "Next tab",
         "start": "Jump to the launch button",
-        "scroll": "Fast scrolling"
+        "scroll": "Fast scrolling",
+        "menu": "Context menu"
       },
       "tryIt": "Try it: the highlight should move.",
       "skip": "Skip",
@@ -267,6 +268,20 @@
     "tried": "tried",
     "brokenBadge": "BROKEN",
     "brokenTooltip": "Broken mod: missing or invalid files (see Maintenance)"
+  },
+  "bulk": {
+    "runningActivate": "Activating {count} mods",
+    "runningDeactivate": "Deactivating {count} mods",
+    "runningDelete": "Deleting {count} mods",
+    "runningExport": "Exporting {count} mods",
+    "doneActivate": "{count} mod(s) activated",
+    "doneDeactivate": "{count} mod(s) deactivated",
+    "doneDelete": "{count} mod(s) deleted",
+    "doneExport": "{count} mod(s) exported",
+    "failedCount": ", {count} failed",
+    "cancelledNote": " — stopped",
+    "cancel": "Stop",
+    "cancelling": "Stopping…"
   },
   "bulkEdit": {
     "title": "{count} mods selected",
@@ -516,6 +531,12 @@
     "ctxOpenDetail": "Open detail page",
     "ctxSetOpponent": "Set as opponent",
     "ctxAddOpponent": "Add as opponent",
+    "ctxActivateN": "Activate the {count} mods",
+    "ctxDeactivateN": "Deactivate the {count} mods",
+    "ctxDeleteN": "Delete the {count} mods",
+    "ctxSetOpponentN": "Set the {count} as opponents",
+    "ctxAddOpponentN": "Add the {count} as opponents",
+    "exportFullN": "Export the {count} mods…",
     "removeFavorite": "Remove from favorites",
     "addFavorite": "Add to favorites",
     "typeLabel": "Type",

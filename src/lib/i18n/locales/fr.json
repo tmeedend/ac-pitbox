@@ -107,7 +107,8 @@
         "tabPrev": "Onglet précédent",
         "tabNext": "Onglet suivant",
         "start": "Aller au bouton de lancement",
-        "scroll": "Défilement rapide"
+        "scroll": "Défilement rapide",
+        "menu": "Menu contextuel"
       },
       "tryIt": "Essayez : le repère doit se déplacer.",
       "skip": "Passer",
@@ -267,6 +268,20 @@
     "tried": "essayé",
     "brokenBadge": "CASSÉ",
     "brokenTooltip": "Mod cassé : fichiers manquants ou invalides (voir Maintenance)"
+  },
+  "bulk": {
+    "runningActivate": "Activation de {count} mods",
+    "runningDeactivate": "Désactivation de {count} mods",
+    "runningDelete": "Suppression de {count} mods",
+    "runningExport": "Export de {count} mods",
+    "doneActivate": "{count} mod(s) activé(s)",
+    "doneDeactivate": "{count} mod(s) désactivé(s)",
+    "doneDelete": "{count} mod(s) supprimé(s)",
+    "doneExport": "{count} mod(s) exporté(s)",
+    "failedCount": ", {count} en échec",
+    "cancelledNote": " — arrêté",
+    "cancel": "Arrêter",
+    "cancelling": "Arrêt…"
   },
   "bulkEdit": {
     "title": "{count} mods sélectionnés",
@@ -516,6 +531,12 @@
     "ctxOpenDetail": "Ouvrir la page de détails",
     "ctxSetOpponent": "Définir comme adversaire",
     "ctxAddOpponent": "Ajouter comme adversaire",
+    "ctxActivateN": "Activer les {count} mods",
+    "ctxDeactivateN": "Désactiver les {count} mods",
+    "ctxDeleteN": "Supprimer les {count} mods",
+    "ctxSetOpponentN": "Définir les {count} comme adversaires",
+    "ctxAddOpponentN": "Ajouter les {count} comme adversaires",
+    "exportFullN": "Exporter les {count} mods…",
     "removeFavorite": "Retirer des favoris",
     "addFavorite": "Ajouter aux favoris",
     "typeLabel": "Type",

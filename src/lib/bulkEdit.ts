@@ -12,6 +12,18 @@ export interface BulkFailure {
 export interface BulkReport {
   ok: string[];
   failed: BulkFailure[];
+  /** Lot interrompu : ce qui n'apparaît ni en succès ni en échec n'a pas été
+   * traité du tout (miroir de `BulkReport` dans `src-tauri/src/bulk.rs`). */
+  cancelled: boolean;
+}
+
+/** Émis sous `bulk:progress` pendant les lots qui touchent au disque. Miroir
+ * de `Progress` dans `src-tauri/src/bulk.rs` — les deux se changent ensemble. */
+export interface BulkProgress {
+  index: number;
+  total: number;
+  op: string;
+  id: string;
 }
 
 export interface BulkExportItem {
@@ -50,4 +62,9 @@ export function bulkDelete(ids: string[]): Promise<BulkReport> {
 
 export function bulkExport(ids: string[], destDir: string): Promise<BulkExportItem[]> {
   return invoke<BulkExportItem[]>("bulk_export", { ids, destDir });
+}
+
+/** Demande l'arrêt du lot en cours. Constaté entre deux mods côté Rust. */
+export function cancelBulk(): Promise<void> {
+  return invoke<void>("cancel_bulk");
 }

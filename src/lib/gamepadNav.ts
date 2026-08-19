@@ -326,6 +326,30 @@ function focusLaunchButton() {
   if (el) setGamepadFocus(el);
 }
 
+/** Ouvre le menu contextuel de l'élément ciblé (§6.3ter). Les actions
+ * groupées — activer, supprimer, exporter, envoyer en adversaires — sont
+ * passées au clic droit ; sans ce bouton, elles seraient devenues
+ * inatteignables au volant, où il n'y a pas de clic droit.
+ *
+ * Un vrai événement `contextmenu` synthétisé plutôt qu'un registre par écran :
+ * tout ce qui répond déjà à la souris (cartes, lignes, panneau de détail)
+ * répond du même coup, sans une ligne de code de sa part. Il doit **remonter**
+ * (`bubbles`), Svelte 5 déléguant ses gestionnaires à la racine, et porter des
+ * coordonnées — le menu s'y positionne. */
+function openContextMenuAt(el: HTMLElement): void {
+  const r = el.getBoundingClientRect();
+  el.dispatchEvent(
+    new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      // Coin bas-gauche de l'élément ciblé : là où le menu tomberait si on
+      // avait cliqué dessus, et jamais par-dessus ce qu'on vient de viser.
+      clientX: Math.round(r.left + 8),
+      clientY: Math.round(r.bottom - 4),
+    }),
+  );
+}
+
 type ButtonEdges = Record<Dir | "confirm" | "back" | Action, boolean>;
 
 const AXIS_THRESHOLD = 0.6;
@@ -359,6 +383,7 @@ function readButtons(gp: Gamepad): ButtonEdges {
     modPrev: btn(6),
     modNext: btn(7),
     start: btn(9),
+    menu: btn(8),
   };
 }
 
@@ -443,6 +468,7 @@ function readProfileButtons(gp: Gamepad, profile: NavProfile, rest: RestSnapshot
     modPrev: act("modPrev"),
     modNext: act("modNext"),
     start: act("start"),
+    menu: act("menu"),
   };
 }
 
@@ -512,6 +538,7 @@ const NONE: ButtonEdges = {
   modPrev: false,
   modNext: false,
   start: false,
+  menu: false,
 };
 
 function anyEdge(e: ButtonEdges): boolean {
@@ -723,6 +750,10 @@ export function startGamepadNav(): () => void {
         if (cur.modPrev && !last.modPrev) navigateMod(-1);
         if (cur.modNext && !last.modNext) navigateMod(1);
         if (cur.start && !last.start) focusLaunchButton();
+        if (cur.menu && !last.menu) {
+          const el = document.activeElement as HTMLElement | null;
+          if (el) openContextMenuAt(el);
+        }
 
         const active = document.activeElement;
         if (entered && active !== entered) setEntered(null);

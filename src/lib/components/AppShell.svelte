@@ -15,6 +15,7 @@
   import ImportToasts from "./ImportToasts.svelte";
   import ToastStack from "./ToastStack.svelte";
   import ControllerToast from "./ControllerToast.svelte";
+  import BulkToasts from "./BulkToasts.svelte";
   import TitleBar from "./TitleBar.svelte";
   import ControllerSetup from "./ControllerSetup.svelte";
   import ImageSelectDropdown from "./ImageSelectDropdown.svelte";
@@ -24,6 +25,7 @@
   import { confirm, message } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
   import { initGlobalDragDrop } from "$lib/importState.svelte";
+  import { initBulkProgress } from "$lib/bulkState.svelte";
   import { openContentManager, listModSkins, type SkinItem } from "$lib/launch";
   import { setPreferredSkin, setPreferredLayout } from "$lib/preferred";
   import { syncTrackSkins, listTrackSkinOptions, setTrackSkinActive, type TrackSkinOption } from "$lib/submods";
@@ -74,6 +76,11 @@
   // Glisser-déposer disponible partout : un seul listener, monté ici à la
   // racine, plutôt que dans chaque écran susceptible de recevoir un drop.
   onMount(() => initGlobalDragDrop());
+
+  // Progression des actions groupées (§6.3bis) : un seul écouteur, monté ici
+  // comme le glisser-déposer — un lot lancé depuis la bibliothèque doit rester
+  // visible même si on change d'écran pendant.
+  onMount(() => initBulkProgress());
 
   // Navigation manette dans toute l'app (croix/stick = déplace le focus,
   // A/Croix = valide, B/Rond = ferme la fiche pleine page). Un seul scrutin
@@ -465,6 +472,7 @@
      à droite : progression et rapports d'import, nouveau périphérique. -->
 <ToastStack>
   <ControllerToast />
+  <BulkToasts />
   <ImportToasts />
 </ToastStack>
 {#if controllers.setupOpen}

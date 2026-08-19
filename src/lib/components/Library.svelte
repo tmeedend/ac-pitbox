@@ -21,7 +21,7 @@
     saveColumnsPrefs,
     type ColumnDef,
   } from "$lib/columns";
-  import { nav, pickSession, requestSection, queueOpponentsAction } from "$lib/nav.svelte";
+  import { nav, pickSession } from "$lib/nav.svelte";
   import { moveFocus } from "$lib/gamepadNav";
   import { registerModNav } from "$lib/screenActions";
   import { importState } from "$lib/importState.svelte";
@@ -399,9 +399,24 @@
   let ctxMenu = $state<{ x: number; y: number; card: ModCard } | null>(null);
   function openCardContextMenu(e: MouseEvent, c: ModCard) {
     e.preventDefault();
+    // Convention des gestionnaires de fichiers : viser un mod qui n'est pas
+    // dans la sélection la ramène à lui seul. Sans ça, un clic droit un peu à
+    // côté ferait porter « supprimer » sur douze mods qu'on ne regarde même
+    // pas — et le menu n'a rien qui rappelle lesquels.
+    if (!selectedIds.has(c.id_interne)) selectedIds = new Set();
     ctxMenu = { x: e.clientX, y: e.clientY, card: c };
   }
-  const contextItems = $derived(ctxMenu ? buildModContextItems(ctxMenu.card, refresh) : []);
+  // Le menu porte sur toute la sélection quand le mod visé en fait partie
+  // (§6.3ter). C'est le chemin principal des actions groupées : le panneau du
+  // bas ne garde que ce qu'un menu ne peut pas porter — un champ de saisie.
+  const contextTargets = $derived.by(() => {
+    if (!ctxMenu) return [];
+    if (selectedIds.size >= 2 && selectedIds.has(ctxMenu.card.id_interne)) {
+      return sorted.filter((c) => selectedIds.has(c.id_interne));
+    }
+    return [ctxMenu.card];
+  });
+  const contextItems = $derived(buildModContextItems(contextTargets, refresh));
 
   // La bibliothèque EST le sélecteur (§8.6) : ouvrir une carte la définit comme
   // choix de session, affiché dans le bloc SESSION de la barre latérale.
@@ -473,18 +488,6 @@
     }
     selectedIds = new Set();
     select(c);
-  }
-
-  // Envoi de la sélection groupée comme adversaires de la session course
-  // (§6.3ter, voitures uniquement) — pose l'action puis navigue vers l'écran
-  // de réglages, où Launch.svelte la consomme une fois prêt.
-  async function sendAsOpponents(mode: "set" | "add") {
-    queueOpponentsAction(mode, [...selectedIds]);
-    selectedIds = new Set();
-    // Garde de navigation (§10bis) : si le changement d'écran est refusé
-    // (modifications non enregistrées ailleurs), ne pas laisser l'action
-    // traîner pour se déclencher par surprise à une prochaine visite.
-    if (!(await requestSection("race"))) nav.opponentsAction = null;
   }
 
   // Ouverture demandée depuis une vue transversale (§12bis.3) : on ouvre la
@@ -700,6 +703,25 @@
     }
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
+  });
+
+  // Ctrl+A = sélectionner tout **ce qui est affiché** (filtres et recherche
+  // courants), jamais la bibliothèque entière. C'est le geste attendu après un
+  // filtre précis, et c'est aussi ce qui rend l'erreur peu probable : on ne
+  // sélectionne que ce qu'on a sous les yeux, et le décompte est écrit dans le
+  // panneau comme dans la demande de confirmation d'une suppression.
+  $effect(() => {
+    function onSelectAll(e: KeyboardEvent) {
+      if (nav.openFull || !e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.key !== "a" && e.key !== "A") return;
+      // Dans la recherche ou un filtre, Ctrl+A garde son sens : tout le texte.
+      if (isTypingTarget(e)) return;
+      e.preventDefault();
+      selectedIds = new Set(sorted.map((c) => c.id_interne));
+      if (sorted.length) selectedId = sorted[sorted.length - 1].id_interne;
+    }
+    window.addEventListener("keydown", onSelectAll);
+    return () => window.removeEventListener("keydown", onSelectAll);
   });
 </script>
 
@@ -1027,11 +1049,8 @@
     <BulkEditPanel
       ids={[...selectedIds]}
       cards={typed.filter((c) => selectedIds.has(c.id_interne))}
-      {isCar}
       onclose={() => (selectedIds = new Set())}
       onchange={refresh}
-      onSetOpponents={() => sendAsOpponents("set")}
-      onAddOpponents={() => sendAsOpponents("add")}
     />
   {/if}
   </div>
