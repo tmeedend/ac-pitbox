@@ -220,6 +220,10 @@
     "working": "…",
     "description": "Description"
   },
+  "toast": {
+    "expand": "Expand",
+    "collapse": "Collapse"
+  },
   "library": {
     "searchPlaceholder": "Search (name, brand, tag…)",
     "filters": "Filters",

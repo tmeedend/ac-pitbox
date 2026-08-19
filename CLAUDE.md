@@ -187,7 +187,8 @@ interchangeables** (§6) : `ModDetail.svelte` = panneau latéral,
 `DetailPage.svelte` = page pleine (ouverte par `Library` via son état
 `fullId`). Une évolution de fiche est souvent à faire **dans les deux**.
 
-Hors aiguillage : `TitleBar` et `ImportOverlay` (dans `AppShell`),
+Hors aiguillage : `TitleBar`, `ImportOverlay` (les modales d'arbitrage) et
+`ToastStack` (`ImportToasts` + `ControllerToast`) — tous dans `AppShell` —,
 `SetupWizard` (dans `routes/+page.svelte`, première configuration),
 `BulkEditPanel` / `ContextMenu` (dans `Library`), `OpponentPicker` /
 `SavedSessionsDialog` (dans `Launch`).
@@ -327,7 +328,9 @@ laisser pourrir ici.
       fichier. Fait : `Tabs.svelte` (remplace trois `.tabs` locaux — fiche
       détail, Réglages, Règles — et sert désormais aussi les deux écrans
       Add-ons), `StateBadge.svelte` (colonne « État » du tableau + fiche
-      détail), `NumberStepper`, `LoadingState`, `Tooltip`, `ContextMenu`.
+      détail), `NumberStepper`, `LoadingState`, `Tooltip`, `ContextMenu`,
+      `Toast`/`ToastStack` (pile bas-droite : progression et rapports
+      d'import, nouveau périphérique — voir SPEC §4.2bis).
       **Inventaire de ce qui reste**, mesuré le 2026-08-18 :
       - **Boîte d'erreur : 15 définitions locales** (`.err` / `.error` /
         `.action-err` dans Apps, BulkEditPanel, BulkImport, DetailPage,

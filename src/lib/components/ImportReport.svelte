@@ -1,6 +1,6 @@
 <script lang="ts">
   // Corps du rapport d'import (§4.2bis), sans son cadre : rendu à l'identique
-  // dans le toast de fin (ImportOverlay) et sur l'écran Import, qui garde le
+  // dans le toast de fin (ImportToasts) et sur l'écran Import, qui garde le
   // dernier rapport consultable. Extrait justement pour ça — deux copies du
   // même balisage auraient divergé dès la première retouche.
   import { nav, requestSection } from "$lib/nav.svelte";
@@ -12,7 +12,9 @@
   interface Props {
     report: ArchiveResult[];
     /** Appelé juste avant d'ouvrir une fiche : le toast s'en sert pour se
-     * fermer, sans quoi il recouvrirait la fiche qu'on vient d'ouvrir. */
+     * REPLIER, sans quoi il recouvrirait la fiche qu'on vient d'ouvrir. Il se
+     * fermait, avant — et on ouvre souvent plusieurs mods du même lot l'un
+     * après l'autre, sans aucun chemin pour revenir au rapport. */
     onnavigate?: () => void;
   }
   const { report, onnavigate }: Props = $props();

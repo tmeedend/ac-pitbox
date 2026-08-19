@@ -35,10 +35,29 @@ export interface PendingAmbiguous {
   source: { paths: string[]; folder: boolean; copy: boolean };
 }
 
+/** One import report in the notification stack (§4.2bis).
+ *
+ * A stack, not a single slot: a second import used to overwrite the first
+ * one's report — and its toast was drawn at the very same corner, so it hid it
+ * anyway. Reports now pile up, and only the newest one is unfolded. */
+export interface ReportEntry {
+  /** Render key and arrival order. */
+  id: number;
+  report: ArchiveResult[];
+  /** Folded = header line only. One unfolded report at a time. */
+  collapsed: boolean;
+}
+
+/** Beyond that, the oldest ones drop out: a column of ten header bars eats the
+ * screen the stack is meant to leave free, and a report still unread after
+ * three imports will not be read. The last one stays available on the Import
+ * screen regardless. */
+const MAX_REPORTS = 3;
+
 export const importState = $state<{
   importing: boolean;
   progress: ImportProgress | null;
-  report: ArchiveResult[] | null;
+  reports: ReportEntry[];
   /** Dernier rapport, conservé après fermeture du toast (§4.2bis) : un import
    * de quarante mods ne doit pas disparaître sur un clic réflexe sur ✕.
    * En mémoire seulement — il ne survit pas à un redémarrage, et n'a pas à le
@@ -55,7 +74,7 @@ export const importState = $state<{
 }>({
   importing: false,
   progress: null,
-  report: null,
+  reports: [],
   lastReport: null,
   pendingConflicts: [],
   pendingAmbiguous: [],
@@ -117,10 +136,7 @@ async function runImport(source: { paths: string[]; folder: boolean; copy: boole
     const report = source.folder
       ? await importFolders(source.paths, source.copy)
       : await importArchives(source.paths);
-    // Même référence des deux côtés : trancher un cas ambigu modifie le rapport
-    // en place, et les deux vues doivent en rendre compte.
-    importState.report = report;
-    importState.lastReport = report;
+    pushReport(report);
     importState.pendingConflicts = report.flatMap((a) =>
       a.mods
         .filter((m) => m.conflict)
@@ -187,10 +203,15 @@ export async function resolveAmbiguous(
       : await importArchives(item.source.paths, decisions);
     // Fusionne : remplace la ligne du mod tranché dans le rapport affiché.
     const resolved = report.flatMap((a) => a.mods).find((m) => m.id_interne === item.id);
-    if (resolved && importState.report) {
-      for (const a of importState.report) {
-        const i = a.mods.findIndex((m) => m.id_interne === item.id);
-        if (i >= 0) a.mods[i] = resolved;
+    if (resolved) {
+      // Toute la pile, pas seulement le dernier rapport : le même mod peut
+      // figurer dans un lot précédent encore affiché. Le tableau est partagé
+      // avec `lastReport`, donc l'écran Import en rend compte lui aussi.
+      for (const entry of importState.reports) {
+        for (const a of entry.report) {
+          const i = a.mods.findIndex((m) => m.id_interne === item.id);
+          if (i >= 0) a.mods[i] = resolved;
+        }
       }
     }
     importState.version++;
@@ -210,15 +231,47 @@ export async function resolvePendingConflict(
   importState.version++;
 }
 
-/** Ferme le toast. `lastReport` survit : l'écran Import le garde consultable. */
-export function dismissReport(): void {
-  importState.report = null;
+let nextReportId = 1;
+
+/** Pousse un rapport sur la pile. `lastReport` garde la même référence que
+ * l'entrée : trancher un cas ambigu modifie le rapport en place, et les deux
+ * vues (toast et écran Import) doivent en rendre compte. */
+function pushReport(report: ArchiveResult[]): void {
+  // Un seul déplié à la fois : le nouveau. Les précédents restent atteignables
+  // en un clic sur leur bandeau — deux rapports de quarante lignes dépliés
+  // côte à côte ne tiennent pas dans la hauteur d'écran.
+  for (const e of importState.reports) e.collapsed = true;
+  importState.reports.push({ id: nextReportId++, report, collapsed: false });
+  const excess = importState.reports.length - MAX_REPORTS;
+  if (excess > 0) importState.reports.splice(0, excess);
+  importState.lastReport = report;
+}
+
+/** Ferme un rapport. `lastReport` survit : l'écran Import le garde consultable. */
+export function dismissReport(id: number): void {
+  importState.reports = importState.reports.filter((e) => e.id !== id);
+}
+
+/** Déplie/replie un rapport. Déplier replie les autres (voir `pushReport`). */
+export function toggleReport(id: number, collapsed?: boolean): void {
+  const entry = importState.reports.find((e) => e.id === id);
+  if (!entry) return;
+  entry.collapsed = collapsed ?? !entry.collapsed;
+  if (!entry.collapsed) {
+    for (const other of importState.reports) if (other.id !== id) other.collapsed = true;
+  }
+}
+
+/** Replie le rapport qui vient d'envoyer l'utilisateur sur une fiche. Replier
+ * et non fermer : on ouvre souvent plusieurs mods d'un même lot l'un après
+ * l'autre, et le rapport fermé ne revenait par aucun chemin. */
+export function collapseReportOnNavigate(id: number): void {
+  toggleReport(id, true);
 }
 
 /** Fin du flux d'import en masse (§4.2) : conflits déjà arbitrés, pas de modale. */
 export function reportBulkDone(report: ArchiveResult[]): void {
-  importState.report = report;
-  importState.lastReport = report;
+  pushReport(report);
   importState.version++;
 }
 
