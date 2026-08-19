@@ -8,7 +8,7 @@
 // — règle d'or n°6 : un réglage qui doit survivre à un redémarrage n'a rien à
 // faire dans un stockage que WebView2 n'écrit pas forcément sur disque. Aucun
 // fichier Rust dédié : quatre nombres et un booléen ne le justifient pas.
-import { getUiPrefs, setUiPref } from "./uiPrefs.svelte";
+import { getUiPrefs, setUiPref, setUiPrefs } from "./uiPrefs.svelte";
 
 /** Clés de `ui_prefs.json`. `preview3d` seule existait avant les autres : elle
  * porte la bascule photo/3D de la zone héros, et garde donc son nom. */
@@ -115,14 +115,57 @@ export function preview3dReady(): Promise<void> {
   return ensureLoaded();
 }
 
+// --- Persistance : appliquée tout de suite, écrite un peu après -----------
+//
+// Le réglage s'applique à l'image suivante (`values` est un `$state` lu par
+// l'aperçu), mais l'écriture disque attend que le curseur s'arrête. Sans ce
+// délai, un glissé de curseur réécrivait `ui_prefs.json` en entier à chaque
+// pas — une cinquantaine de fois pour un seul geste, fichier complet et
+// écriture Rust synchrone à chaque fois.
+const PERSIST_DEBOUNCE_MS = 400;
+
+let pending: Record<string, string> = {};
+let timer: ReturnType<typeof setTimeout> | null = null;
+let dirty = $state(false);
+
+/** Vrai tant qu'un réglage bougé n'est pas encore sur disque. */
+export function preview3dDirty(): boolean {
+  return dirty;
+}
+
+function queue(key: string, value: string): void {
+  pending[key] = value;
+  dirty = true;
+  if (timer) clearTimeout(timer);
+  timer = setTimeout(() => void flushPreview3dPrefs(), PERSIST_DEBOUNCE_MS);
+}
+
+/** Écrit tout de suite ce qui attend, et rend la main quand c'est **sur
+ * disque** — ce que le bouton Enregistrer a besoin de savoir pour annoncer
+ * « Enregistré » sans mentir. Appelé aussi au démontage des curseurs : le
+ * délai ci-dessus ne doit pas survivre à la fermeture du panneau. */
+export async function flushPreview3dPrefs(): Promise<void> {
+  if (timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
+  const entries = pending;
+  pending = {};
+  if (Object.keys(entries).length) await setUiPrefs(entries);
+  // Relu après l'attente : un réglage bougé pendant l'écriture est encore en
+  // attente, et effacer le drapeau ici le rendrait invisible.
+  dirty = Object.keys(pending).length > 0;
+}
+
 export function setPreview3dEnabled(enabled: boolean): void {
   values.enabled = enabled;
+  // Une case à cocher n'est pas un geste continu : elle s'écrit tout de suite.
   setUiPref(KEYS.enabled, enabled ? "1" : "0");
 }
 
 export function setPreview3dValue(key: NumericKey, value: number): void {
   values[key] = clamp(key, value);
-  setUiPref(KEYS[key], String(values[key]));
+  queue(KEYS[key], String(values[key]));
 }
 
 /** Remet le cadrage d'origine, sans toucher à la bascule photo/3D. */

@@ -176,9 +176,9 @@
   {#if activeTab === "music"}
     <MusicTab />
   {:else if activeTab === "preview"}
-    <!-- Comme Musique : réglages appliqués tout de suite, donc pas de bouton
-         Enregistrer ni de garde de navigation — ceux-ci ne portent que sur
-         AppConfig. -->
+    <!-- Réglages appliqués tout de suite, donc pas de garde de navigation :
+         celle-ci ne porte que sur AppConfig. L'onglet a son propre bouton
+         Enregistrer (écriture disque différée, voir PreviewTab). -->
     <p class="sub">{t("settings.tabPreviewHint")}</p>
     <PreviewTab />
   {:else}

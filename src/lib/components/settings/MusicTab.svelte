@@ -14,6 +14,7 @@
   } from "$lib/music";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
+  import Slider from "../Slider.svelte";
 
   // Fichier séparé de AppConfig (music.json, §2 de la spec musique) : état et
   // sauvegarde propres à cet onglet, indépendants de la garde de navigation
@@ -176,23 +177,26 @@
 </section>
 
 <section class="lang-section">
-  <label>
-    <span>{t("music.volume")} — {pct(config.volume)}%</span>
-    <input
-      type="range"
-      min="0"
-      max="100"
-      value={pct(config.volume)}
-      oninput={(e) => (config.volume = Number(e.currentTarget.value) / 100)}
-    />
-  </label>
+  <Slider
+    label={t("music.volume")}
+    value={pct(config.volume)}
+    min={0}
+    max={100}
+    display="{pct(config.volume)}%"
+    oninput={(v) => (config.volume = v / 100)}
+  />
 </section>
 
 <section class="lang-section">
-  <label>
-    <span>{t("music.crossfade")} — {fmtSeconds(config.crossfade_ms)} s</span>
-    <input type="range" min="500" max="6000" step="250" bind:value={config.crossfade_ms} />
-  </label>
+  <Slider
+    label={t("music.crossfade")}
+    value={config.crossfade_ms}
+    min={500}
+    max={6000}
+    step={250}
+    display="{fmtSeconds(config.crossfade_ms)} s"
+    oninput={(v) => (config.crossfade_ms = v)}
+  />
 </section>
 
 {#if error}<div class="error">{error}</div>{/if}

@@ -144,6 +144,22 @@ export function setUiPref(key: string, value: string): void {
   });
 }
 
+/** Writes several settings in one go, and **awaits the disk**. Two reasons to
+ * exist next to `setUiPref`: a caller that saves five values (the 3D preview
+ * sliders) would otherwise rewrite the whole file five times, and a caller
+ * that displays "saved" has to know when it really is. Same `untrack`
+ * reasoning as `setUiPref`. */
+export function setUiPrefs(entries: Record<string, string>): Promise<void> {
+  return untrack(() =>
+    (async () => {
+      const all = await ensureLoaded();
+      const updated = { ...all, ...entries };
+      cache = updated;
+      await persist(updated);
+    })(),
+  );
+}
+
 /** Drops a setting for good — for a key that has been read one last time and
  * replaced by something else (migration), not for "reset to default": writing
  * an empty string would leave the old key lying around forever, and the next

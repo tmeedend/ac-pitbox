@@ -9,6 +9,7 @@
   import type { RaceSetup, Season, WeatherOption } from "$lib/launch";
   import { t } from "$lib/i18n/index.svelte";
   import NumberStepper from "../NumberStepper.svelte";
+  import Slider from "../Slider.svelte";
   import Tooltip from "../Tooltip.svelte";
 
   let {
@@ -209,14 +210,18 @@
         </div>
       </div>
       <div class="imp time-imp">
-        <div class="ik lbl-key">{t("launch.timeLabelShort")}</div>
-        <div class="time-field">
-          <!-- Full 24 h range: night sessions are legitimate (CSP/Sol handle lighting),
-               nothing in the launch path depends on daylight. Max is 23.5 rather than 24
-               so the last step reads 23:30 instead of a nonsensical 24:00. -->
-          <input type="range" min="0" max="23.5" step="0.5" bind:value={setup.time_hours} style="--f:{(setup.time_hours / 23.5) * 100}%" />
-          <span class="mono time-val">{fmtTime(setup.time_hours)}</span>
-        </div>
+        <!-- Full 24 h range: night sessions are legitimate (CSP/Sol handle lighting),
+             nothing in the launch path depends on daylight. Max is 23.5 rather than 24
+             so the last step reads 23:30 instead of a nonsensical 24:00. -->
+        <Slider
+          label={t("launch.timeLabelShort")}
+          value={setup.time_hours}
+          min={0}
+          max={23.5}
+          step={0.5}
+          display={fmtTime(setup.time_hours)}
+          oninput={(v) => (setup.time_hours = v)}
+        />
       </div>
     </div>
     <p class="implicit-note">{t("launch.implicitNote")}</p>
@@ -390,36 +395,11 @@
   }
   /* Heure : 4e colonne de `.implicit`, à côté du vent (§8.6). Largeur figée
      pour rester compacte comme les autres champs de la ligne plutôt que de
-     s'étirer en pleine largeur (son ancien emplacement, en rangée seule). */
-  .time-field {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .time-field input[type="range"] {
-    width: 90px;
-    height: 20px;
-    margin: 0;
-    appearance: none;
-    background: transparent;
-  }
-  .time-field input[type="range"]::-webkit-slider-runnable-track {
-    height: 3px;
-    background: linear-gradient(to right, var(--rosso) 0%, var(--rosso) var(--f, 0%), var(--line) var(--f, 0%), var(--line) 100%);
-  }
-  .time-field input[type="range"]::-webkit-slider-thumb {
-    appearance: none;
-    width: 10px;
-    height: 20px;
-    border-radius: 2px;
-    background: var(--rosso);
-    border: 2px solid var(--panel);
-    cursor: pointer;
-    margin-top: -8.5px;
-  }
-  .time-val {
-    font-size: 11px;
-    color: var(--txt);
+     s'étirer en pleine largeur (son ancien emplacement, en rangée seule) —
+     `Slider` prend toute la largeur qu'on lui donne, donc c'est cette
+     largeur-là qui la fixe. */
+  .time-imp {
+    width: 140px;
   }
   .season-wrap {
     margin-top: 16px;
