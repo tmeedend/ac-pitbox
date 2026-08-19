@@ -13,7 +13,7 @@
  *   .input (+ .input.mono)              champs et <select>
  *   .mono                               police à chasse fixe (données)
  *   .pill (+ .pill-ok, .pill-warn, .pill-err)   pastilles d'état
- *   .gp-focus                           focus manette (gamepadNav.ts)
+ *   .gp-focus / .gp-editing             focus manette (gamepadNav.ts)
  *   .lbl-screen / .lbl / .lbl-key       libellés (voir plus bas, §chantier libellés)
  *
  * Tout le reste — .tag, .srcbox, .prov-note, .muted, .small… — est local au
@@ -123,6 +123,16 @@ body {
   box-shadow: 0 0 0 4px rgba(241, 216, 60, 0.45), 0 0 14px 2px rgba(241, 216, 60, 0.5) !important;
   position: relative;
   z-index: 2;
+}
+
+/* Champ « entré » à la manette (gamepadNav.ts) : gauche/droite y règle la
+ * valeur au lieu de déplacer le curseur. Le même geste ayant deux effets
+ * selon l'état, il faut que l'état se voie — sinon la croix a simplement
+ * l'air de ne plus répondre. Rouge, comme la piste du curseur qu'on est en
+ * train de bouger ; le jaune reste le repère de ciblage. */
+.gp-editing {
+  outline-color: var(--rosso-bright) !important;
+  box-shadow: 0 0 0 4px rgba(255, 85, 85, 0.4), 0 0 14px 2px rgba(255, 85, 85, 0.45) !important;
 }
 
 .mono {

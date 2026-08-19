@@ -62,6 +62,11 @@
       "axes": "axes",
       "buttons": "boutons",
       "calibrate": "Tester / calibrer",
+      "calibrateNeeded": "Calibrer",
+      "readyStandard": "Fonctionne sans calibration : ce périphérique annonce un agencement standard, que Pit Box sait lire.",
+      "readyOverride": "Fonctionne sans calibration : Pit Box embarque un profil pour ce modèle.",
+      "readyCalibrated": "Fonctionne : vous avez calibré ce périphérique.",
+      "needsCalibration": "À calibrer : sans profil, ce périphérique ne pilote rien.",
       "unknownHelp": "Ce modèle n'est pas encore connu de Pit Box. Les volants n'ont aucune norme pour leur croix directionnelle : sans repères, Pit Box ne peut pas deviner quel bouton fait quoi. La calibration prend deux minutes et rend le volant utilisable immédiatement. Vous pourrez ensuite envoyer le profil obtenu à l'auteur, en un clic.",
       "tech": "Détails techniques",
       "techMapping": "Mapping",
@@ -88,6 +93,8 @@
       "duplicate": "Cette commande est déjà utilisée pour « {dir} ». Recommencez.",
       "timeout": "Rien détecté. Beaucoup de volants n'ont pas de croix directionnelle : passer cette étape est normal.",
       "optional": "Facultatif : passez si votre périphérique n'a pas de bouton libre.",
+      "scrollHint": "Facultatif : poussez vers le bas l'axe qui servira à faire défiler les listes — le stick droit sur une manette.",
+      "escape": "Échap passe l'étape.",
       "dir": {
         "up": "Haut",
         "down": "Bas",
@@ -99,7 +106,8 @@
         "modNext": "Mod suivant",
         "tabPrev": "Onglet précédent",
         "tabNext": "Onglet suivant",
-        "start": "Aller au bouton de lancement"
+        "start": "Aller au bouton de lancement",
+        "scroll": "Défilement rapide"
       },
       "tryIt": "Essayez : le repère doit se déplacer.",
       "skip": "Passer",

@@ -29,6 +29,7 @@ import {
   hasRest,
   measureRest,
   sampleEqual,
+  scrollAmount,
   type Action,
   type Binding,
   type DeviceRecord,
@@ -46,34 +47,38 @@ const FOCUSABLE =
   'button:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled]), a[href], ' +
   'input:not([type="hidden"]):not([disabled]), select:not([disabled])';
 
+/** Focusable au clavier mais **pas** une étape de navigation manette. Posé sur
+ * les poignées de redimensionnement de colonnes : le motif WAI-ARIA impose de
+ * les rendre focusables, et le curseur manette tombait donc sur un trait de
+ * quelques pixels entre deux entêtes — le repère jaune n'y ressemblait plus
+ * qu'à une bordure, et l'entête lui-même restait inatteignable. */
+export const GP_SKIP_ATTR = "data-gp-skip";
+
 function focusableElements(): HTMLElement[] {
   return Array.from(document.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-    (el) => el.offsetParent !== null,
+    (el) => el.offsetParent !== null && !el.hasAttribute(GP_SKIP_ATTR),
   );
-}
-
-// Curseurs (`type="range"`) : `.click()` ne fait rien d'utile dessus, gauche/
-// droite pas à pas remplace la souris dès le focus, sans geste d'entrée — un
-// curseur n'a pas de popup native à éviter, gauche/droite y est déjà
-// l'équivalent naturel d'un clic-glisse. Haut/bas continue de déplacer le
-// focus normalement.
-function isAdjustable(el: Element | null): el is HTMLInputElement {
-  if (!el) return false;
-  return el instanceof HTMLInputElement && el.type === "range";
 }
 
 // Champs qui ont besoin d'un geste d'« entrée » avant que gauche/droite
 // change leur valeur : listes déroulantes (`<select>`, popup native que la
-// manette ne peut pas piloter) et champs numériques (`type="number"`, ex.
-// année min/max de la bibliothèque). Sans ce geste, gauche/droite au simple
-// survol changeait la valeur au lieu de déplacer le focus — deux bugs réels
-// signalés : les filtres de bibliothèque changeaient en passant dessus, et le
-// champ année ne pouvait plus être quitté par gauche/droite (piégé, valeur
-// qui grimpe sans fin). Voir `entered` dans `startGamepadNav`.
+// manette ne peut pas piloter), champs numériques (`type="number"`, ex. année
+// min/max de la bibliothèque) et curseurs (`type="range"`). Sans ce geste,
+// gauche/droite au simple survol changeait la valeur au lieu de déplacer le
+// focus — deux bugs réels signalés : les filtres de bibliothèque changeaient
+// en passant dessus, et le champ année ne pouvait plus être quitté par
+// gauche/droite (piégé, valeur qui grimpe sans fin).
+//
+// Les curseurs y ont rejoint les deux autres après le même signalement : trois
+// curseurs alignés sur une ligne (dégâts/carburant/pneus) sont un cul-de-sac
+// si gauche/droite règle au lieu de déplacer — on ne peut atteindre ni le
+// voisin, ni rien à droite du dernier. Une même règle pour tout ce qui porte
+// une valeur vaut mieux qu'une exception par type de champ : confirm entre,
+// annuler (ou confirm à nouveau) sort. Voir `entered` dans `startGamepadNav`.
 function needsEntry(el: Element | null): el is HTMLSelectElement | HTMLInputElement {
   if (!el) return false;
   if (el instanceof HTMLSelectElement) return true;
-  return el instanceof HTMLInputElement && el.type === "number";
+  return el instanceof HTMLInputElement && (el.type === "number" || el.type === "range");
 }
 
 function stepAdjustable(el: HTMLInputElement | HTMLSelectElement, dir: 1 | -1) {
@@ -98,6 +103,10 @@ function stepAdjustable(el: HTMLInputElement | HTMLSelectElement, dir: 1 | -1) {
 // vrai événement clavier) — on pose donc explicitement une classe, gérée ici,
 // plutôt que de compter sur la pseudo-classe native.
 const GP_CLASS = "gp-focus";
+/** Champ « entré » : gauche/droite y règle la valeur au lieu de déplacer le
+ * curseur. Sans repère distinct, rien à l'écran ne dit pourquoi la croix ne
+ * déplace plus rien — c'est le même geste qui a deux effets selon l'état. */
+const GP_EDIT_CLASS = "gp-editing";
 let gpFocusEl: HTMLElement | null = null;
 
 function setGamepadFocus(el: HTMLElement) {
@@ -105,6 +114,7 @@ function setGamepadFocus(el: HTMLElement) {
   gpFocusEl = el;
   lastConfirmed = null;
   el.classList.add(GP_CLASS);
+  rememberInRegion(el);
   el.focus();
 }
 
@@ -249,6 +259,58 @@ export function moveFocus(dir: Dir) {
   if (best) setGamepadFocus(best);
 }
 
+// --- Zones (§7.4bis) ------------------------------------------------------
+//
+// Les gâchettes hautes changent d'onglet quand l'écran affiché en a
+// (`cycleTab`) ; sinon elles changent de ZONE. C'est ce qui manquait à la
+// bibliothèque, qui n'a pas d'onglets : rien n'y permettait de passer du menu
+// latéral aux filtres, ni des filtres à la fiche de droite, autrement qu'en
+// traversant toute la liste à la croix directionnelle.
+//
+// Marquées par un attribut plutôt que par leur classe, pour la même raison que
+// le bouton de lancement : une classe est du style, elle se renomme sans qu'on
+// pense à ce fichier.
+export const REGION_ATTR = "data-gp-region";
+
+/** Les zones les plus internes seulement. La zone de contenu d'`AppShell` en
+ * est une pour les écrans d'un seul tenant (Lancement, Réglages) ; dans la
+ * bibliothèque, elle en contient deux (liste et fiche), et c'est ce découpage-
+ * là qui compte — garder les deux niveaux ferait toujours répondre le plus
+ * extérieur. */
+function regions(): HTMLElement[] {
+  const all = Array.from(document.querySelectorAll<HTMLElement>(`[${REGION_ATTR}]`)).filter(
+    (el) => el.offsetParent !== null,
+  );
+  return all.filter((z) => !all.some((other) => other !== z && z.contains(other)));
+}
+
+// Dernier élément visé dans chaque zone : revenir sur la liste des mods doit
+// rendre le curseur là où on l'avait laissé, pas en haut de la liste — sans
+// quoi l'aller-retour vers la fiche de droite coûte le défilement.
+const lastInRegion = new WeakMap<Element, HTMLElement>();
+
+function rememberInRegion(el: HTMLElement) {
+  const zone = el.closest(`[${REGION_ATTR}]`);
+  if (zone) lastInRegion.set(zone, el);
+}
+
+/** Zone suivante/précédente, curseur posé là où on l'avait laissé. */
+function cycleRegion(delta: 1 | -1): void {
+  const zones = regions();
+  if (zones.length < 2) return;
+  const current = document.activeElement as HTMLElement | null;
+  const from = current ? zones.findIndex((z) => z.contains(current)) : -1;
+  // Curseur hors de toute zone (ou nulle part) : `-1 + 1 = 0` amène sur la
+  // première, ce qui est exactement ce qu'on veut d'un premier appui.
+  const next = zones[(from + delta + zones.length) % zones.length];
+  const remembered = lastInRegion.get(next);
+  const target =
+    remembered && next.contains(remembered) && remembered.offsetParent !== null
+      ? remembered
+      : focusableElements().find((el) => next.contains(el));
+  if (target) setGamepadFocus(target);
+}
+
 /** Bouton « Démarrer la session » de la barre latérale (§7.4bis) : le bouton
  * Start y **amène le curseur**, il ne lance pas. Lancer d'une pression depuis
  * n'importe quel écran, sans avoir vu ce qu'on lance, serait le contraire d'un
@@ -388,6 +450,56 @@ function readEdges(gp: Gamepad, resolved: ResolvedProfile, rest: RestSnapshot): 
   return resolved.profile ? readProfileButtons(gp, resolved.profile, rest) : readButtons(gp);
 }
 
+// --- Défilement analogique (§7.4bis) -------------------------------------
+//
+// La croix directionnelle parcourt les éléments un par un et emmène le
+// défilement avec elle ; c'est juste pour choisir, beaucoup trop lent pour
+// traverser une bibliothèque de plusieurs centaines de mods. Un axe dédié
+// (stick droit d'une manette) fait défiler la liste sans déplacer le curseur,
+// à la vitesse de la poussée.
+//
+// Layout standard : axes 2/3 = stick droit, l'axe 3 est sa verticale (positif
+// vers le bas, comme `deltaY`). Un profil calibré, lui, porte son propre axe.
+const STANDARD_SCROLL_AXIS = 3;
+
+/** Vitesse maximale, en pixels par seconde, stick à fond. Calé sur « une
+ * hauteur d'écran par demi-seconde » environ : assez pour traverser une
+ * longue liste, pas au point de la rendre illisible en chemin. */
+const SCROLL_SPEED_PX_S = 1800;
+
+function readScroll(gp: Gamepad, resolved: ResolvedProfile, rest: RestSnapshot): number {
+  const axis = resolved.profile
+    ? resolved.profile.scroll
+    : { index: STANDARD_SCROLL_AXIS, invert: false };
+  return scrollAmount(gp, axis, rest);
+}
+
+/** Le conteneur qui défile réellement autour du curseur. Remonté depuis
+ * l'élément ciblé plutôt que deviné par écran : la même touche doit défiler la
+ * liste de la bibliothèque, le corps d'une fiche ou un panneau de réglages
+ * sans que rien de tout cela ait à se déclarer. */
+function scrollableAround(el: Element | null): Element | null {
+  let node: Element | null = el;
+  while (node && node !== document.body) {
+    const style = getComputedStyle(node);
+    const scrollable = /(auto|scroll)/.test(style.overflowY);
+    if (scrollable && node.scrollHeight > node.clientHeight + 1) return node;
+    node = node.parentElement;
+  }
+  return document.scrollingElement;
+}
+
+function applyScroll(amount: number, dtMs: number): void {
+  if (!amount) return;
+  const target = scrollableAround(document.activeElement);
+  if (!target) return;
+  // Réponse quadratique : le premier tiers de la course sert au réglage fin,
+  // la fin de course à traverser la liste. Un rapport linéaire donne un
+  // défilement soit trop nerveux au début, soit trop lent au bout.
+  const curve = amount * Math.abs(amount);
+  target.scrollTop += (curve * SCROLL_SPEED_PX_S * dtMs) / 1000;
+}
+
 const NONE: ButtonEdges = {
   up: false,
   down: false,
@@ -505,6 +617,9 @@ function armDevice(
   // parfaitement stable. Le profil, lui, sait la reconnaître — et tant qu'elle
   // l'est, le périphérique reste inerte plutôt que de faire défiler le focus.
   if (anyEdge(readEdges(gp, resolved, rest))) return null;
+  // Même raison pour l'axe de défilement : un stick maintenu au branchement
+  // ferait défiler la liste toute seule dès la première image.
+  if (readScroll(gp, resolved, rest) !== 0) return null;
   a.rest = rest;
   return rest;
 }
@@ -524,14 +639,24 @@ export function startGamepadNav(): () => void {
   const lastByGamepad = new Map<number, ButtonEdges>();
   const dirRepeats = makeDirRepeat();
   const arms = new Map<number, ArmState>();
+  // Le défilement analogique est une vitesse, donc il lui faut la durée de
+  // l'image : à 60 Hz comme à 144, la liste doit défiler à la même allure.
+  let lastFrame = 0;
 
   // Champ « entré » (confirm appuyé dessus une première fois) — liste
-  // déroulante ou champ numérique, voir `needsEntry` : tant qu'il n'est pas
-  // entré, gauche/droite déplace le focus normalement (un filtre est un champ
-  // parmi d'autres) ; une fois entré, gauche/droite change sa valeur, et un
-  // nouvel appui sur confirm en ressort. Remise à zéro dès que le focus quitte
-  // ce champ par un autre moyen (clic souris, focus posé ailleurs par le code).
+  // déroulante, champ numérique ou curseur, voir `needsEntry` : tant qu'il
+  // n'est pas entré, gauche/droite déplace le focus normalement (un filtre est
+  // un champ parmi d'autres) ; une fois entré, gauche/droite change sa valeur,
+  // et annuler (ou confirm à nouveau) en ressort. Remise à zéro dès que le
+  // focus quitte ce champ par un autre moyen (clic souris, focus posé ailleurs
+  // par le code).
   let entered: HTMLSelectElement | HTMLInputElement | null = null;
+
+  function setEntered(el: HTMLSelectElement | HTMLInputElement | null) {
+    entered?.classList.remove(GP_EDIT_CLASS);
+    entered = el;
+    el?.classList.add(GP_EDIT_CLASS);
+  }
 
   function poll() {
     // Coupe-circuit global (Réglages), et capture exclusive des entrées par le
@@ -547,6 +672,10 @@ export function startGamepadNav(): () => void {
       return;
     }
     const now = performance.now();
+    // Bornée : revenir d'un onglet en arrière-plan (ou d'une longue pause de
+    // rendu) ne doit pas faire sauter la liste d'un coup.
+    const dt = lastFrame ? Math.min(50, now - lastFrame) : 0;
+    lastFrame = now;
     const records = deviceRecords();
     const seen = new Set<number>();
     let anyDriving = false;
@@ -570,6 +699,11 @@ export function startGamepadNav(): () => void {
       // écran à poser lui-même le curseur (voir `isGamepadDriving`).
       anyDriving = true;
 
+      // Hors visionneuse : le défilement analogique tourne quel que soit
+      // l'élément ciblé, y compris pendant l'édition d'un champ — il ne
+      // déplace pas le curseur, il ne peut donc rien perturber.
+      if (nav.inputCapture !== "lightbox") applyScroll(readScroll(gp, resolved, rest), dt);
+
       if (nav.inputCapture === "lightbox") {
         // Visionneuse plein écran ouverte par-dessus la fiche (§6.1,
         // Lightbox.svelte) : elle gère elle-même tout son input manette
@@ -581,31 +715,43 @@ export function startGamepadNav(): () => void {
         // fiche pleine page soit ouverte. Front montant seulement, jamais de
         // répétition au maintien — changer de mod recharge toute une fiche
         // (et reconvertit un modèle 3D), une rafale n'a rien d'un service.
-        if (cur.tabPrev && !last.tabPrev) cycleTab(-1);
-        if (cur.tabNext && !last.tabNext) cycleTab(1);
+        // Onglets d'abord, zones à défaut : `cycleTab` répond `false` quand
+        // aucun écran à onglets n'est monté (bibliothèque), et c'est là que
+        // passer d'une zone à l'autre est le seul chemin praticable.
+        if (cur.tabPrev && !last.tabPrev && !cycleTab(-1)) cycleRegion(-1);
+        if (cur.tabNext && !last.tabNext && !cycleTab(1)) cycleRegion(1);
         if (cur.modPrev && !last.modPrev) navigateMod(-1);
         if (cur.modNext && !last.modNext) navigateMod(1);
         if (cur.start && !last.start) focusLaunchButton();
+
+        const active = document.activeElement;
+        if (entered && active !== entered) setEntered(null);
+        const backPressed = cur.back && !last.back;
+        // Annuler sort d'abord du champ en cours d'édition, et ne fait que ça
+        // cette image-là : sinon le même appui refermerait aussi la fiche
+        // pleine page derrière, alors que l'utilisateur voulait juste rendre
+        // la croix à la navigation.
+        const leftField = backPressed && entered !== null;
+        if (leftField) setEntered(null);
 
         // La fiche pleine page se navigue comme n'importe quel écran : la
         // croix directionnelle y déplace le curseur (elle changeait de mod
         // avant, ce qui rendait ses propres commandes — skins, onglets,
         // boutons — inatteignables à la manette). Mod précédent/suivant a
         // désormais ses deux boutons dédiés, ci-dessus.
-        if (nav.openFull && cur.back && !last.back) nav.openFull = null;
+        if (nav.openFull && backPressed && !leftField) nav.openFull = null;
 
-        const active = document.activeElement;
-        if (entered && active !== entered) entered = null;
         if (needsEntry(active)) {
           if (active === entered) {
-            // Entré : gauche/droite change la valeur. Un nouvel appui sur
-            // confirm en ressort (bascule), sans agir sur la valeur — même
-            // geste que pour y entrer.
+            // Entré : gauche/droite change la valeur. Annuler en ressort (ou
+            // un nouvel appui sur confirm, même geste que pour y entrer) sans
+            // agir sur la valeur. Haut/bas continue de déplacer le curseur :
+            // c'est la sortie de secours de qui a oublié quel bouton sort.
             if (shouldFire(dirRepeats, gp.index, "left", cur.left, now)) stepAdjustable(active, -1);
             if (shouldFire(dirRepeats, gp.index, "right", cur.right, now)) stepAdjustable(active, 1);
             if (shouldFire(dirRepeats, gp.index, "up", cur.up, now)) moveFocus("up");
             if (shouldFire(dirRepeats, gp.index, "down", cur.down, now)) moveFocus("down");
-            if (cur.confirm && !last.confirm) entered = null;
+            if (cur.confirm && !last.confirm) setEntered(null);
           } else {
             // Pas encore entré : un champ ordinaire parmi d'autres, gauche/
             // droite déplace le focus. Confirm y entre.
@@ -613,16 +759,8 @@ export function startGamepadNav(): () => void {
             if (shouldFire(dirRepeats, gp.index, "down", cur.down, now)) moveFocus("down");
             if (shouldFire(dirRepeats, gp.index, "left", cur.left, now)) moveFocus("left");
             if (shouldFire(dirRepeats, gp.index, "right", cur.right, now)) moveFocus("right");
-            if (cur.confirm && !last.confirm) entered = active;
+            if (cur.confirm && !last.confirm) setEntered(active);
           }
-        } else if (isAdjustable(active)) {
-          // Gauche/droite règle la valeur du champ ciblé plutôt que de
-          // changer le focus ; haut/bas continue de naviguer normalement.
-          if (shouldFire(dirRepeats, gp.index, "left", cur.left, now)) stepAdjustable(active, -1);
-          if (shouldFire(dirRepeats, gp.index, "right", cur.right, now)) stepAdjustable(active, 1);
-          if (shouldFire(dirRepeats, gp.index, "up", cur.up, now)) moveFocus("up");
-          if (shouldFire(dirRepeats, gp.index, "down", cur.down, now)) moveFocus("down");
-          if (cur.confirm && !last.confirm) active.click();
         } else {
           if (shouldFire(dirRepeats, gp.index, "up", cur.up, now)) moveFocus("up");
           if (shouldFire(dirRepeats, gp.index, "down", cur.down, now)) moveFocus("down");

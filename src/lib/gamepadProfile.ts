@@ -36,13 +36,48 @@ export type Action = "modPrev" | "modNext" | "tabPrev" | "tabNext" | "start";
 
 export const ACTIONS: readonly Action[] = ["modPrev", "modNext", "tabPrev", "tabNext", "start"] as const;
 
+/** Axe analogique dédié au défilement — le stick droit d'une manette, une
+ *  molette de volant. Ce n'est pas un `Binding` : une liaison est un
+ *  interrupteur (« actif ou non »), alors que défiler demande la **valeur**,
+ *  c'est ce qui distingue un défilement rapide d'un défilement fin. */
+export interface ScrollAxis {
+  /** Index de l'axe. Ici c'est bien l'index et non un point de départ : un axe
+   *  continu n'a pas de valeur caractéristique à retrouver ailleurs. */
+  index: number;
+  /** Vrai quand pousser l'axe vers le haut donne une valeur *positive* : la
+   *  convention interne est « positif = vers le bas », comme `deltaY`. */
+  invert: boolean;
+}
+
 export interface NavProfile {
   dirs: Partial<Record<Direction, Binding>>;
   confirm?: Binding;
   back?: Binding;
   /** Raccourcis optionnels — voir `Action`. */
   actions?: Partial<Record<Action, Binding>>;
+  /** Défilement analogique, optionnel lui aussi. */
+  scroll?: ScrollAxis;
   rest: RestSnapshot;
+}
+
+/** En deçà, c'est de la dérive analogique, pas une intention. Plus haut que le
+ *  seuil de capture : un stick relâché revient rarement exactement à zéro, et
+ *  une liste qui glisse toute seule est pire que pas de défilement du tout. */
+export const SCROLL_DEADZONE = 0.25;
+
+/** Position de l'axe de défilement, entre -1 et 1, **positif vers le bas**, et
+ *  0 dans la zone morte. Relatif au repos, comme tout le reste de ce module —
+ *  un stick de volant ne repose pas forcément à zéro. */
+export function scrollAmount(gp: Gamepad, scroll: ScrollAxis | undefined, rest: RestSnapshot): number {
+  if (!scroll) return 0;
+  const v = gp.axes[scroll.index];
+  if (v === undefined) return 0;
+  const delta = (v - (rest.axes[scroll.index] ?? 0)) * (scroll.invert ? -1 : 1);
+  if (Math.abs(delta) < SCROLL_DEADZONE) return 0;
+  // Renormalisé au-delà de la zone morte : sans ça, le premier cran utile
+  // partirait déjà à 25 % de la vitesse maximale.
+  const usable = (Math.abs(delta) - SCROLL_DEADZONE) / (1 - SCROLL_DEADZONE);
+  return Math.sign(delta) * Math.min(1, usable);
 }
 
 export interface DeviceRecord {
@@ -264,6 +299,7 @@ export function profileReport(
       confirm: profile.confirm,
       back: profile.back,
       actions: profile.actions,
+      scroll: profile.scroll,
       rest: profile.rest,
       pitbox: appVersion,
     },

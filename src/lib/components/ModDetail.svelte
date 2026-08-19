@@ -282,7 +282,10 @@
 
 </script>
 
-<aside class="panel" oncontextmenu={openContextMenu}>
+<!-- Zone à part pour les gâchettes hautes de la manette (§7.4bis) : sans
+     elle, rejoindre la fiche depuis la liste demandait de traverser toute la
+     liste à la croix directionnelle. -->
+<aside class="panel" data-gp-region="detail" oncontextmenu={openContextMenu}>
   {#if onexpand && (detail || (loading && id))}
     <header>
       <button class="btn-ghost expand" type="button" onclick={onexpand} title={t("modpanel.expandTooltip")}>⤢ {t("modpanel.expand")}</button>

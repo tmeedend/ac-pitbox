@@ -62,6 +62,11 @@
       "axes": "axes",
       "buttons": "buttons",
       "calibrate": "Test / calibrate",
+      "calibrateNeeded": "Calibrate",
+      "readyStandard": "Works without calibration: this device reports a standard layout, which Pit Box can read.",
+      "readyOverride": "Works without calibration: Pit Box ships a profile for this model.",
+      "readyCalibrated": "Works: you calibrated this device.",
+      "needsCalibration": "Needs calibration: without a profile, this device drives nothing.",
       "unknownHelp": "Pit Box does not know this model yet. Wheels follow no standard for their D-pad: with no reference, Pit Box cannot guess which button does what. Calibration takes two minutes and makes the wheel usable right away. You can then send the resulting profile to the author in one click.",
       "tech": "Technical details",
       "techMapping": "Mapping",
@@ -88,6 +93,8 @@
       "duplicate": "This input is already used for “{dir}”. Try again.",
       "timeout": "Nothing detected. Many wheels have no D-pad: skipping this step is perfectly normal.",
       "optional": "Optional: skip it if your device has no spare button.",
+      "scrollHint": "Optional: push down the axis you want to scroll lists with — the right stick on a gamepad.",
+      "escape": "Esc skips this step.",
       "dir": {
         "up": "Up",
         "down": "Down",
@@ -99,7 +106,8 @@
         "modNext": "Next mod",
         "tabPrev": "Previous tab",
         "tabNext": "Next tab",
-        "start": "Jump to the launch button"
+        "start": "Jump to the launch button",
+        "scroll": "Fast scrolling"
       },
       "tryIt": "Try it: the highlight should move.",
       "skip": "Skip",

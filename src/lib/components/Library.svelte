@@ -714,7 +714,7 @@
       />
     </div>
   {:else}
-  <div class="main-wrap">
+  <div class="main-wrap" data-gp-region="list">
   <div class="main" bind:this={mainEl}>
     <div class="pin-top" bind:this={pinTopEl}>
     <div class="toolbar">
@@ -924,7 +924,19 @@
                   onmousedown={(e) => startHeaderDrag(e, col.key)}
                 >
                   <span class="th-label">
-                    {t(col.labelKey)}
+                    <!-- Le libellé d'une colonne triable est un vrai bouton :
+                         sans lui, la seule chose focusable de l'entête était
+                         la poignée de redimensionnement, et trier restait
+                         hors de portée de la manette et du clavier. Aucun
+                         gestionnaire dessus — le clic remonte au `<th>`, qui
+                         trie déjà (et applique sa garde anti-glissé). Le
+                         `mousedown` remonte lui aussi : glisser une colonne
+                         par son libellé continue de marcher. -->
+                    {#if col.sortable}
+                      <button class="th-sort" type="button">{t(col.labelKey)}</button>
+                    {:else}
+                      {t(col.labelKey)}
+                    {/if}
                     {#if col.tooltipKey}
                       <!-- "published" = avant-dernière colonne par défaut (juste avant
                            "size"), sa bulle centrée déborderait sur le panneau de droite
@@ -950,6 +962,7 @@
                   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                   <span
                     class="col-resize"
+                    data-gp-skip
                     draggable="false"
                     role="separator"
                     aria-orientation="vertical"
@@ -1424,6 +1437,21 @@
     display: inline-flex;
     align-items: center;
     gap: 3px;
+  }
+  /* Bouton uniquement pour être atteignable (focus manette/clavier) : il ne
+     doit rien changer à l'apparence de l'entête, qui est déjà cliquable sur
+     toute sa surface. */
+  .th-sort {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    text-align: left;
+    cursor: inherit;
   }
   .th-info {
     background: transparent;

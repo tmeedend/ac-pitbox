@@ -40,6 +40,7 @@
     type Direction,
     type NavProfile,
     type RestSnapshot,
+    type ScrollAxis,
   } from "$lib/gamepadProfile";
 
   interface Props {
@@ -53,9 +54,13 @@
   // revenir) ; les cinq suivantes sont des raccourcis (§7.4bis), et un
   // périphérique n'a pas forcément cinq boutons à leur donner — « Passer » y
   // est un chemin normal, signalé comme tel à l'écran.
-  type StepId = Direction | "confirm" | "back" | Action;
-  const STEPS: StepId[] = ["up", "down", "left", "right", "confirm", "back", ...ACTIONS];
-  const isOptional = (s: StepId) => (ACTIONS as readonly string[]).includes(s);
+  // « scroll » vient en dernier : c'est un axe analogique, pas un bouton, et
+  // c'est le seul geste de la calibration qui demande une poussée maintenue
+  // plutôt qu'un appui — le mettre au bout évite de casser le rythme des dix
+  // étapes qui se ressemblent.
+  type StepId = Direction | "confirm" | "back" | Action | "scroll";
+  const STEPS: StepId[] = ["up", "down", "left", "right", "confirm", "back", ...ACTIONS, "scroll"];
+  const isOptional = (s: StepId) => s === "scroll" || (ACTIONS as readonly string[]).includes(s);
 
   /** Repos mesuré sur 2 s au début de la calibration — assez long pour que
    * l'utilisateur ait vraiment lâché le volant, assez court pour ne pas
@@ -95,6 +100,19 @@
     override: "controller.badge.known",
     standard: "controller.badge.standard",
     none: "controller.badge.unknown",
+  };
+
+  /** Ce que le badge ne dit pas : est-ce qu'il faut calibrer ? Une manette
+   * Xbox marche telle quelle (elle annonce l'agencement standard du
+   * navigateur), un modèle connu de Pit Box aussi (profil livré), et les deux
+   * ressemblaient pourtant à un volant inconnu — même liste, même bouton
+   * « calibrer » à côté. D'où cette ligne, qui distingue « ça marche déjà, et
+   * pourquoi » de « il faut passer par la calibration ». */
+  const readyKeys: Record<ProfileSource, string> = {
+    calibrated: "controller.panel.readyCalibrated",
+    override: "controller.panel.readyOverride",
+    standard: "controller.panel.readyStandard",
+    none: "controller.panel.needsCalibration",
   };
 
   const anyUnknown = $derived(listed.some((d) => sourceOf(d) === "none"));
@@ -143,6 +161,16 @@
 
   const currentStep = $derived(STEPS[stepIdx]);
 
+  /** L'étape « défilement » capture une liaison comme les autres, mais ce
+   * qu'on en garde est différent : l'index de l'axe et son sens. La consigne
+   * est de pousser vers le BAS, donc une valeur qui descend sous le repos veut
+   * dire que cet axe compte à l'envers de la convention interne (positif =
+   * vers le bas, comme `deltaY`). */
+  function scrollAxisOf(b: Binding | undefined): ScrollAxis | undefined {
+    if (!b || b.kind !== "axis") return undefined;
+    return { index: b.hint, invert: b.value - (rest?.axes[b.hint] ?? 0) < 0 };
+  }
+
   const builtProfile = $derived<NavProfile>({
     dirs: { up: captured.up, down: captured.down, left: captured.left, right: captured.right },
     confirm: captured.confirm,
@@ -150,6 +178,7 @@
     actions: Object.fromEntries(
       ACTIONS.filter((a) => captured[a]).map((a) => [a, captured[a]!]),
     ) as NavProfile["actions"],
+    scroll: scrollAxisOf(captured.scroll),
     rest: rest ?? EMPTY_REST,
   });
 
@@ -308,9 +337,28 @@
     }
   }
 
+  /** Échap = « n'assigne rien à cette étape ». Beaucoup de volants n'ont pas
+   * dix boutons libres, et le bouton « Passer » demandait de lâcher le volant
+   * pour aller chercher la souris — au milieu d'une manipulation qui consiste
+   * justement à garder les mains dessus. Hors calibration, Échap ferme le
+   * panneau, comme de toute modale. */
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    if (!calKey) {
+      onclose();
+    } else if (phase === "rest" || phase === "review") {
+      // Rien à passer : ces deux phases n'attendent aucun geste.
+      cancelCalibration();
+    } else {
+      skipStep();
+    }
+  }
+
   onMount(() => {
     // Suspend la navigation manette globale tant que le panneau est ouvert.
     nav.inputCapture = "controller";
+    window.addEventListener("keydown", onKeydown);
     getVersion()
       .then((v) => (version = v))
       .catch(() => {
@@ -334,6 +382,7 @@
     raf = requestAnimationFrame(frame);
     return () => {
       cancelAnimationFrame(raf);
+      window.removeEventListener("keydown", onKeydown);
       nav.inputCapture = null;
     };
   });
@@ -400,7 +449,15 @@
                   </span>
                 </label>
                 <span class="badge" class:warn={source === "none"}>{t(badgeKeys[source])}</span>
-                <button class="btn" type="button" onclick={() => startCalibration(d)}>{t("controller.panel.calibrate")}</button>
+                <button
+                  class="btn"
+                  class:btn-primary={source === "none"}
+                  type="button"
+                  onclick={() => startCalibration(d)}
+                >
+                  {source === "none" ? t("controller.panel.calibrateNeeded") : t("controller.panel.calibrate")}
+                </button>
+                <p class="ready" class:warn={source === "none"}>{t(readyKeys[source])}</p>
               </div>
             {/each}
           </div>
@@ -475,7 +532,9 @@
         {:else}
           <div class="cal-stage">
             <div class="cal-ask">{t("controller.calib.press", { what: stepLabel(currentStep) })}</div>
-            {#if isOptional(currentStep)}
+            {#if currentStep === "scroll"}
+              <p class="cal-opt">{t("controller.calib.scrollHint")}</p>
+            {:else if isOptional(currentStep)}
               <p class="cal-opt">{t("controller.calib.optional")}</p>
             {/if}
             {#if duplicateOf}
@@ -504,7 +563,16 @@
           {#if phase === "timeout"}
             <button class="btn" type="button" onclick={retryStep}>{t("controller.calib.retry")}</button>
           {/if}
-          <button class="btn" type="button" onclick={skipStep} disabled={phase === "rest"}>
+          <!-- Le raccourci est dans l'infobulle, pas dans le libellé : on
+               garde les mains sur le volant pendant la calibration, mais un
+               bouton n'a pas à expliquer son propre fonctionnement à l'écran. -->
+          <button
+            class="btn"
+            type="button"
+            onclick={skipStep}
+            disabled={phase === "rest"}
+            title={t("controller.calib.escape")}
+          >
             {t("controller.calib.skip")}
           </button>
         {/if}
@@ -565,9 +633,21 @@
   .device {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
     padding: 8px 10px;
     background: var(--panel2);
+  }
+  /* Deuxième ligne pleine largeur : la réponse à « dois-je calibrer ? » est
+     une phrase, pas un badge de plus à caser au bout de la ligne. */
+  .ready {
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .ready.warn {
+    color: var(--yellow);
   }
   .device + .device {
     border-top: 1px solid var(--line);

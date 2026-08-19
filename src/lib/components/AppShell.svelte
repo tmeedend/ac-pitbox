@@ -306,7 +306,11 @@
 <div class="frame" class:bigpicture={bigPictureState.active}>
   <div class="topbar"></div>
   <div class="shell">
-    <aside class="side">
+    <!-- Zones parcourues par les gâchettes hautes de la manette (§7.4bis) :
+         la barre latérale d'un côté, l'écran actif de l'autre. La
+         bibliothèque redécoupe sa moitié en deux (liste et fiche) — les zones
+         imbriquées les plus internes gagnent, voir `regions()`. -->
+    <aside class="side" data-gp-region="sidebar">
       <div class="brand">
         <div class="logo"><span>PB</span></div>
         <div>
@@ -422,7 +426,7 @@
     </aside>
 
     <div class="main-col">
-      <main class="content" class:fixed={noPad}>
+      <main class="content" class:fixed={noPad} data-gp-region="main">
         {#if nav.section === "settings"}
           <Settings />
         {:else if nav.section === "about"}

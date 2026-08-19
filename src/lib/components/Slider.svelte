@@ -9,9 +9,9 @@
   // mechanism the "shared components" chantier is about: scoped CSS lets every
   // copy drift on its own and nothing flags it.
   //
-  // It also has one behaviour a bare `<input type=range>` cannot have: gamepad
-  // navigation treats it as a field to *enter* (see `needsEntry` in
-  // `gamepadNav.ts`), and `data-gp-field` is what marks it as such.
+  // Gamepad-wise there is nothing to declare: `needsEntry` in `gamepadNav.ts`
+  // keys on the input type, so every range in the app — this one included —
+  // is a field the cursor enters before left/right changes anything.
 
   interface Props {
     label: string;
@@ -52,7 +52,6 @@
       {step}
       {value}
       style:--f="{fill}%"
-      data-gp-field
       oninput={(e) => oninput(Number(e.currentTarget.value))}
     />
   </label>
