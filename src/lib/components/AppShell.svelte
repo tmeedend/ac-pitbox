@@ -36,6 +36,7 @@
   import { controllers, startControllerWatch } from "$lib/gamepadDevices.svelte";
   import { bigPictureState, exitBigPicture } from "$lib/bigpicture.svelte";
   import { musicEnterMenu, musicEnterGrid } from "$lib/music";
+  import { libraryVersion } from "$lib/libraryVersion.svelte";
 
   // Barre latérale unifiée (maquette pitbox-biblio-session2.html) : bloc
   // SESSION (le duo sélectionné = point d'accès aux bibliothèques) puis
@@ -179,6 +180,11 @@
   // ci-dessous, qui écarte déjà les réponses obsolètes.
   $effect(() => {
     const carId = nav.sessionCar?.id ?? null;
+    // Dépendance explicite : sans elle, désactiver la voiture de session
+    // depuis sa fiche (ou en masse) ne rafraîchirait `carDetail` qu'au
+    // prochain changement d'id — l'avertissement resterait faux jusqu'à ce
+    // qu'on resélectionne la même voiture.
+    libraryVersion();
     if (!carId) {
       carDetail = null;
       return;
@@ -190,6 +196,7 @@
 
   $effect(() => {
     const trackId = nav.sessionTrack?.id ?? null;
+    libraryVersion();
     if (!trackId) {
       trackDetail = null;
       trackSkinOptions = [];

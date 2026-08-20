@@ -383,7 +383,7 @@ function readButtons(gp: Gamepad): ButtonEdges {
     modPrev: btn(6),
     modNext: btn(7),
     start: btn(9),
-    menu: btn(8),
+    menu: btn(3),
   };
 }
 

@@ -43,7 +43,7 @@
   import PowerCurve from "./PowerCurve.svelte";
   import ContextMenu from "./ContextMenu.svelte";
   import { nav, pickSession, requestSection } from "$lib/nav.svelte";
-  import { importState } from "$lib/importState.svelte";
+  import { libraryVersion } from "$lib/libraryVersion.svelte";
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
   import { getConfig } from "$lib/config";
   import { t } from "$lib/i18n/index.svelte";
@@ -453,15 +453,16 @@
     }
   }
 
-  // Un import peut survenir depuis n'importe quel écran (§4.2) et cibler le
-  // mod ouvert (ex. une extension). Dès qu'un import se termine, recharger la
-  // fiche pour voir tout de suite la nouvelle couche + ses layouts.
-  let lastImportVersion = importState.version;
+  // Un import, une activation ou une suppression peuvent survenir depuis
+  // n'importe quel écran (§4.2/§ resynchronisation) et concerner le mod
+  // ouvert (ex. une extension importée, désactivée depuis le panneau
+  // compact). Dès que la bibliothèque change, recharger la fiche.
+  let lastLibraryVersion = libraryVersion();
   $effect(() => {
-    const v = importState.version;
-    if (v === lastImportVersion) return;
-    lastImportVersion = v;
-    // Différé hors du suivi réactif : ne dépend que de importState.version,
+    const v = libraryVersion();
+    if (v === lastLibraryVersion) return;
+    lastLibraryVersion = v;
+    // Différé hors du suivi réactif : ne dépend que de libraryVersion(),
     // pas de `id` (évite un double rechargement à la navigation).
     queueMicrotask(() => void refreshEntity());
   });

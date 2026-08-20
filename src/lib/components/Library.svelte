@@ -24,7 +24,7 @@
   import { nav, pickSession } from "$lib/nav.svelte";
   import { moveFocus } from "$lib/gamepadNav";
   import { registerModNav } from "$lib/screenActions";
-  import { importState } from "$lib/importState.svelte";
+  import { libraryVersion } from "$lib/libraryVersion.svelte";
   import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
   import { buildModContextItems } from "$lib/modContextActions";
   import { t } from "$lib/i18n/index.svelte";
@@ -388,6 +388,14 @@
   async function refresh() {
     cards = await listLibrary();
     loading = false;
+    // Purge de la sélection groupée : un mod supprimé pendant qu'il était
+    // sélectionné (§6.3bis) ne doit pas laisser le panneau du bas affiché sur
+    // une sélection en partie fantôme.
+    if (selectedIds.size) {
+      const ids = new Set(cards.map((c) => c.id_interne));
+      const pruned = new Set([...selectedIds].filter((id) => ids.has(id)));
+      if (pruned.size !== selectedIds.size) selectedIds = pruned;
+    }
     if (firstLoad) {
       firstLoad = false;
       scrollToEffective();
@@ -426,9 +434,22 @@
   const effectiveId = $derived(selectedId ?? sessionId);
   // Défaut si aucune session n'a jamais été choisie (premier lancement) :
   // établit une vraie sélection de session plutôt que de laisser le panneau
-  // vide indéfiniment. Ne se déclenche qu'une fois (sessionId devient non nul).
+  // vide indéfiniment. Même repli si le mod affiché a été SUPPRIMÉ entre-temps
+  // (§6.3bis) : sans lui, `selectedId`/la session continuaient de désigner un
+  // id qui n'existe plus, et la fiche de droite comme le bloc SESSION
+  // restaient bloqués dessus. L'existence se vérifie sur `typed` — la
+  // bibliothèque de ce type SANS le filtre/la recherche courants — jamais sur
+  // `sorted` : un mod simplement masqué par un filtre ne doit pas faire
+  // sauter la session sur un autre mod.
   $effect(() => {
-    if (!sessionId && !selectedId && sorted.length) select(sorted[0]);
+    if (!sorted.length) return;
+    if (!sessionId && !selectedId) {
+      select(sorted[0]);
+      return;
+    }
+    if (effectiveId && !typed.some((c) => c.id_interne === effectiveId)) {
+      select(sorted[0]);
+    }
   });
   function select(c: ModCard) {
     selectedId = c.id_interne;
@@ -632,10 +653,11 @@
     });
   });
 
-  // Recharge au montage, puis à chaque import déclenché depuis l'écran dédié
-  // ou le glisser-déposer global (§4.2) — `version` sert de simple signal.
+  // Recharge au montage, puis à chaque changement de bibliothèque (import,
+  // activation, suppression — §4.2/§ resynchronisation) — `libraryVersion()`
+  // sert de simple signal.
   $effect(() => {
-    importState.version;
+    libraryVersion();
     refresh();
   });
 

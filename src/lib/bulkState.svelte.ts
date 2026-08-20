@@ -7,6 +7,7 @@
 // la pile de notifications, comme l'import (§4.2bis).
 import { listen } from "@tauri-apps/api/event";
 import { cancelBulk, type BulkExportItem, type BulkProgress, type BulkReport } from "$lib/bulkEdit";
+import { bumpLibraryVersion } from "$lib/libraryVersion.svelte";
 
 /** Les quatre lots qui touchent au disque. Les autres (favori, catégorie,
  * tags) sont quelques écritures SQLite : ni progression, ni rapport. */
@@ -57,6 +58,10 @@ export async function runBulkOp(
   try {
     const report = await run();
     bulkState.result = { op, report };
+    // Activer/désactiver/supprimer changent l'état de mods qui peuvent être
+    // affichés ailleurs (bloc SESSION, fiche détail) sans y avoir été touchés
+    // directement — même resynchronisation générique qu'un mod unique.
+    if (op !== "export") bumpLibraryVersion();
     return report;
   } finally {
     bulkState.running = false;

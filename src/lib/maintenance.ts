@@ -1,5 +1,6 @@
 // Pont typé vers les commandes L5 (maintenance & export, §9).
 import { invoke } from "@tauri-apps/api/core";
+import { bumpLibraryVersion } from "./libraryVersion.svelte";
 
 export interface BrokenMod {
   id: string;
@@ -72,8 +73,9 @@ export function reindexLibrary(recalcSize: boolean): Promise<number> {
 
 /** Supprime un mod de la bibliothèque : fichiers (toutes versions) + junction + overlay.
  * Action distincte de la désactivation (§10) — utilisable pour tout mod, pas seulement cassé. */
-export function deleteBrokenMod(id: string): Promise<void> {
-  return invoke<void>("delete_broken_mod", { id });
+export async function deleteBrokenMod(id: string): Promise<void> {
+  await invoke<void>("delete_broken_mod", { id });
+  bumpLibraryVersion();
 }
 
 /** Réinstalle un mod depuis son archive/dossier source conservé (§10/§11, réglage
@@ -96,8 +98,10 @@ export function removeOrphanJunction(kind: string, id: string): Promise<void> {
 }
 
 /** Désinstalle tout un pack (§4.4) : supprime chaque mod du pack. Renvoie le nb supprimé. */
-export function deletePack(pack: string): Promise<number> {
-  return invoke<number>("delete_pack", { pack });
+export async function deletePack(pack: string): Promise<number> {
+  const n = await invoke<number>("delete_pack", { pack });
+  bumpLibraryVersion();
+  return n;
 }
 
 /** Exporte la version active d'un mod en archive autonome dans `destDir` (§9.1). */

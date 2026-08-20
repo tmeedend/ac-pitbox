@@ -1,5 +1,6 @@
 // Pont typé vers les commandes L1 (bibliothèque & import).
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { bumpLibraryVersion } from "./libraryVersion.svelte";
 
 export type ModKind = "Car" | "Track";
 
@@ -436,12 +437,14 @@ export function readModResource(id: string, relPath: string, inMod: boolean): Pr
   return invoke<ArrayBuffer>("read_mod_resource", { id, relPath, inMod });
 }
 
-export function activateMod(id: string, versionId?: string): Promise<void> {
-  return invoke<void>("activate_mod", { id, versionId: versionId ?? null });
+export async function activateMod(id: string, versionId?: string): Promise<void> {
+  await invoke<void>("activate_mod", { id, versionId: versionId ?? null });
+  bumpLibraryVersion();
 }
 
-export function deactivateMod(id: string): Promise<void> {
-  return invoke<void>("deactivate_mod", { id });
+export async function deactivateMod(id: string): Promise<void> {
+  await invoke<void>("deactivate_mod", { id });
+  bumpLibraryVersion();
 }
 
 export function setFavorite(id: string, favorite: boolean): Promise<void> {

@@ -7,6 +7,7 @@ import { listen } from "@tauri-apps/api/event";
 import { t } from "./i18n/index.svelte";
 import { StorageKey } from "./storage";
 import { getUiPref, setUiPref } from "./uiPrefs.svelte";
+import { bumpLibraryVersion } from "./libraryVersion.svelte";
 import {
   cancelImport,
   importArchives,
@@ -69,8 +70,6 @@ export const importState = $state<{
   /** Arrêt demandé (§4.2bis) : le lot s'interrompt entre deux items, donc il
    * reste du travail en cours après le clic — le bouton doit le dire. */
   cancelling: boolean;
-  /** Incrémenté à chaque fois que la bibliothèque a pu changer, pour resynchroniser les vues ouvertes. */
-  version: number;
 }>({
   importing: false,
   progress: null,
@@ -83,7 +82,6 @@ export const importState = $state<{
   // sauvegardée répond (§6.2, même schéma que `nav.svelte.ts`).
   copyMode: true,
   cancelling: false,
-  version: 0,
 });
 
 /** État de progression initial, avant le premier événement backend. */
@@ -163,7 +161,7 @@ async function runImport(source: { paths: string[]; folder: boolean; copy: boole
           source: { ...source, paths: [source.paths[i] ?? source.paths[0]] },
         })),
     );
-    importState.version++;
+    bumpLibraryVersion();
   } finally {
     importState.importing = false;
     importState.cancelling = false;
@@ -214,7 +212,7 @@ export async function resolveAmbiguous(
         }
       }
     }
-    importState.version++;
+    bumpLibraryVersion();
   } finally {
     importState.importing = false;
     importState.cancelling = false;
@@ -228,7 +226,7 @@ export async function resolvePendingConflict(
 ): Promise<void> {
   await resolveConflict(c.newId, c.oldId, action);
   importState.pendingConflicts = importState.pendingConflicts.filter((p) => p !== c);
-  importState.version++;
+  bumpLibraryVersion();
 }
 
 let nextReportId = 1;
@@ -272,7 +270,7 @@ export function collapseReportOnNavigate(id: number): void {
 /** Fin du flux d'import en masse (§4.2) : conflits déjà arbitrés, pas de modale. */
 export function reportBulkDone(report: ArchiveResult[]): void {
   pushReport(report);
-  importState.version++;
+  bumpLibraryVersion();
 }
 
 /** Résumé chiffré d'un rapport (§4.2). Un import peut ne produire aucun mod de
