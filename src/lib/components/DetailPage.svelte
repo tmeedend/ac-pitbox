@@ -603,6 +603,19 @@
     onchange?.();
   }
 
+  /** Cases vides à ajouter en fin de grille (§ correctif damier) : `.skins`
+   * est une vraie grille CSS à colonnes fixes, donc la dernière ligne
+   * incomplète laisse des cellules sans le moindre élément dedans — rien n'y
+   * peint la couleur de carte (`--panel2`), c'est le fond de la grille
+   * (`--card`, la couleur DERRIÈRE les cartes) qui s'y voit à la place (bug
+   * réel signalé). Une case fantôme, muette pour tout le monde (souris,
+   * clavier, lecteur d'écran), comble le trou avec la bonne couleur plutôt
+   * que de la laisser transparente. */
+  const SKINS_GRID_COLUMNS = 3;
+  function gridFillerCount(n: number): number {
+    return (SKINS_GRID_COLUMNS - (n % SKINS_GRID_COLUMNS)) % SKINS_GRID_COLUMNS;
+  }
+
   function decodeDescription(html: string): string {
     return html
       .replace(/<\/?br\s*\/?>/gi, "\n")
@@ -768,106 +781,114 @@
     <!-- RANGÉE HAUTE : héros + panneau données -->
     <div class="row top" class:track={!isCar}>
       <div class="hero">
-        {#if heroImg}
-          <img src={heroImg} alt={d.display_name ?? d.id_interne} />
-        {:else}
-          <div class="hero-icon">{isCar ? "🚗" : "🏁"}</div>
-        {/if}
-        {#if isCar && preview3d}
-          <CarPreview3D
-            carId={d.id_interne}
-            skinId={skins[previewSkin]?.id ?? null}
-            fallbackSrc={heroImg}
-          />
-        {/if}
-        {#if isCar}
-          <!-- Commandes de l'aperçu : révélées au survol de la zone héros, pour
-               qu'elles ne mangent pas l'image le reste du temps. Le focus
-               clavier les révèle aussi (`:focus-within`), sans quoi elles
-               seraient inatteignables autrement qu'à la souris. -->
-          <div class="hero-tools" class:open={preview3dPanel}>
-            <button
-              class="hero-btn"
-              type="button"
-              onclick={togglePreview3d}
-              title={preview3d ? t("detail.preview3dShowPhoto") : t("detail.preview3dShow3d")}
-              aria-label={preview3d ? t("detail.preview3dShowPhoto") : t("detail.preview3dShow3d")}
-            >
+        <!-- Photo et aperçu 3D partagent le même cadre (§ correctif marge) :
+             la photo est un enfant normal, `CarPreview3D` se pose en absolu
+             `inset:0` — sans ce conteneur commun, chacun résolvait sa marge
+             contre un ancêtre différent (`.hero` avec son padding pour l'un,
+             `.hero` sans aucun pour l'autre), d'où le décalage constaté entre
+             les deux vues. -->
+        <div class="hero-inner">
+          {#if heroImg}
+            <img src={heroImg} alt={d.display_name ?? d.id_interne} />
+          {:else}
+            <div class="hero-icon">{isCar ? "🚗" : "🏁"}</div>
+          {/if}
+          {#if isCar && preview3d}
+            <CarPreview3D
+              carId={d.id_interne}
+              skinId={skins[previewSkin]?.id ?? null}
+              fallbackSrc={heroImg}
+            />
+          {/if}
+          {#if isCar}
+            <!-- Commandes de l'aperçu : révélées au survol de la zone héros, pour
+                 qu'elles ne mangent pas l'image le reste du temps. Le focus
+                 clavier les révèle aussi (`:focus-within`), sans quoi elles
+                 seraient inatteignables autrement qu'à la souris. -->
+            <div class="hero-tools" class:open={preview3dPanel}>
+              <button
+                class="hero-btn"
+                type="button"
+                onclick={togglePreview3d}
+                title={preview3d ? t("detail.preview3dShowPhoto") : t("detail.preview3dShow3d")}
+                aria-label={preview3d ? t("detail.preview3dShowPhoto") : t("detail.preview3dShow3d")}
+              >
+                {#if preview3d}
+                  <!-- Retour à la photo : un cadre et sa montagne. -->
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <rect x="1.5" y="3.5" width="13" height="9" rx="1" />
+                    <path d="M2.5 11 L6 7.5 L8.5 10 L10.5 8.5 L13.5 11.5" fill="none" />
+                    <circle cx="5.5" cy="6" r="1" />
+                  </svg>
+                {:else}
+                  <!-- Passage en 3D : un volume en perspective. -->
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M8 1.8 L14 5 V11 L8 14.2 L2 11 V5 Z" fill="none" />
+                    <path d="M2 5 L8 8.2 L14 5" fill="none" />
+                    <path d="M8 8.2 V14.2" fill="none" />
+                  </svg>
+                {/if}
+              </button>
               {#if preview3d}
-                <!-- Retour à la photo : un cadre et sa montagne. -->
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <rect x="1.5" y="3.5" width="13" height="9" rx="1" />
-                  <path d="M2.5 11 L6 7.5 L8.5 10 L10.5 8.5 L13.5 11.5" fill="none" />
-                  <circle cx="5.5" cy="6" r="1" />
-                </svg>
-              {:else}
-                <!-- Passage en 3D : un volume en perspective. -->
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M8 1.8 L14 5 V11 L8 14.2 L2 11 V5 Z" fill="none" />
-                  <path d="M2 5 L8 8.2 L14 5" fill="none" />
-                  <path d="M8 8.2 V14.2" fill="none" />
-                </svg>
+                <button
+                  class="hero-btn"
+                  type="button"
+                  onclick={resetPreview3dView}
+                  title={t("detail.preview3dReplace")}
+                  aria-label={t("detail.preview3dReplace")}
+                >
+                  <!-- Replacer et relancer : une flèche qui reboucle. -->
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M13.2 8 A5.2 5.2 0 1 1 11.4 4.1" fill="none" />
+                    <path d="M11.9 1.2 V4.5 H8.6" fill="none" />
+                  </svg>
+                </button>
+                <button
+                  class="hero-btn"
+                  class:on={preview3dPanel}
+                  type="button"
+                  onclick={() => (preview3dPanel = !preview3dPanel)}
+                  title={t("detail.preview3dSettings")}
+                  aria-label={t("detail.preview3dSettings")}
+                  aria-expanded={preview3dPanel}
+                >
+                  <!-- Réglages : deux curseurs. -->
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M2 5.5 H14" fill="none" />
+                    <path d="M2 10.5 H14" fill="none" />
+                    <circle cx="6" cy="5.5" r="1.8" />
+                    <circle cx="10.5" cy="10.5" r="1.8" />
+                  </svg>
+                </button>
               {/if}
-            </button>
-            {#if preview3d}
-              <button
-                class="hero-btn"
-                type="button"
-                onclick={resetPreview3dView}
-                title={t("detail.preview3dReplace")}
-                aria-label={t("detail.preview3dReplace")}
-              >
-                <!-- Replacer et relancer : une flèche qui reboucle. -->
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M13.2 8 A5.2 5.2 0 1 1 11.4 4.1" fill="none" />
-                  <path d="M11.9 1.2 V4.5 H8.6" fill="none" />
-                </svg>
-              </button>
-              <button
-                class="hero-btn"
-                class:on={preview3dPanel}
-                type="button"
-                onclick={() => (preview3dPanel = !preview3dPanel)}
-                title={t("detail.preview3dSettings")}
-                aria-label={t("detail.preview3dSettings")}
-                aria-expanded={preview3dPanel}
-              >
-                <!-- Réglages : deux curseurs. -->
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M2 5.5 H14" fill="none" />
-                  <path d="M2 10.5 H14" fill="none" />
-                  <circle cx="6" cy="5.5" r="1.8" />
-                  <circle cx="10.5" cy="10.5" r="1.8" />
-                </svg>
-              </button>
+            </div>
+            {#if preview3d && preview3dPanel}
+              <div class="hero-panel">
+                <Preview3dControls compact />
+              </div>
             {/if}
-          </div>
-          {#if preview3d && preview3dPanel}
-            <div class="hero-panel">
-              <Preview3dControls compact />
+          {/if}
+          {#if showroomBusy}
+            <!-- Lancement d'acShowroom : pastille discrète le temps que le
+                 process démarre, il s'affichera ensuite par-dessus l'app. -->
+            <div class="hero-loading" title={t("detail.showroomLoading")}>
+              <span class="spinner"></span>
             </div>
           {/if}
-        {/if}
-        {#if showroomBusy}
-          <!-- Lancement d'acShowroom : pastille discrète le temps que le
-               process démarre, il s'affichera ensuite par-dessus l'app. -->
-          <div class="hero-loading" title={t("detail.showroomLoading")}>
-            <span class="spinner"></span>
-          </div>
-        {/if}
-        {#if !isCar}
-          {@const ol = previewSrc(d.track?.layouts[previewLayout]?.outline ?? null)}
-          {#if ol}<img class="hero-outline" src={ol} alt="" />{/if}
-        {/if}
-        {#if isCar}
-          {@const hs = heroSpecs(d.specs)}
-          {#if hs}
-            <div class="hero-specs">
-              <div class="mono hs-line">{hs}</div>
-              <div class="mono hs-label">{t("detail.specNative")}</div>
-            </div>
+          {#if !isCar}
+            {@const ol = previewSrc(d.track?.layouts[previewLayout]?.outline ?? null)}
+            {#if ol}<img class="hero-outline" src={ol} alt="" />{/if}
           {/if}
-        {/if}
+          {#if isCar}
+            {@const hs = heroSpecs(d.specs)}
+            {#if hs}
+              <div class="hero-specs">
+                <div class="mono hs-line">{hs}</div>
+                <div class="mono hs-label">{t("detail.specNative")}</div>
+              </div>
+            {/if}
+          {/if}
+        </div>
       </div>
 
       <div class="data">
@@ -964,6 +985,9 @@
                   </div>
                 </button>
               {/each}
+              {#each Array.from({ length: gridFillerCount(skins.length) }) as _}
+                <div class="skin-filler" aria-hidden="true"></div>
+              {/each}
             </div>
           {:else}
             <div class="blk-b muted small">{t("detail.noSkins")}</div>
@@ -1036,6 +1060,9 @@
                   </div>
                   <div class="skin-b"><span class="skin-name">{l.name}</span></div>
                 </button>
+              {/each}
+              {#each Array.from({ length: gridFillerCount(d.track.layouts.length) }) as _}
+                <div class="skin-filler" aria-hidden="true"></div>
               {/each}
             </div>
           {:else}
@@ -1270,7 +1297,13 @@
   .row {
     display: grid;
     gap: 1px;
-    background: var(--line);
+    /* Fond de page (`.page`, plus bas), pas une couleur de carte : c'est ce
+       qui se voit dans l'interligne de 1px entre héros et panneau de
+       données, et sous le héros lui-même quand celui-ci (16:9, jamais
+       étiré — voir `.hero` plus bas) est plus court que sa ligne. `--line`
+       y ressortait comme un gris clair qui ne se voyait nulle part ailleurs
+       (bug réel signalé). */
+    background: var(--card);
   }
   .row.top {
     grid-template-columns: 1.4fr 1fr;
@@ -1287,7 +1320,9 @@
   }
 
   .hero {
-    background: linear-gradient(135deg, #2a0a0a, var(--panel) 72%);
+    /* Même fond que la page (`.page`, plus bas) : un dégradé rouge/gris ici
+       cassait cette continuité. */
+    background: var(--card);
     min-height: 300px;
     display: flex;
     align-items: center;
@@ -1295,15 +1330,46 @@
     position: relative;
     overflow: hidden;
     /* Même respiration que les autres cartes (`.data`/`.col`) — l'image
-       collée aux bords haut/gauche était un retour utilisateur direct. */
+       collée aux bords haut/gauche était un retour utilisateur direct.
+       Pour une voiture, ce padding est repris par `.hero-inner` à la place
+       (voir plus bas) : lui seul encadre aussi l'aperçu 3D. */
     padding: 14px;
   }
+  /* Photo et aperçu 3D (voiture uniquement) partagent ce cadre : la photo y
+     est un enfant normal, l'aperçu 3D s'y pose en absolu `inset:0` — sans ce
+     conteneur commun, chacun résolvait sa marge contre un ancêtre différent
+     (`.hero` et son padding pour l'un, `.hero` sans aucun pour l'autre), d'où
+     le décalage constaté entre les deux vues. Pour un circuit, simple
+     passe-plat en flux normal : `.hero` garde son padding, rien ne change. */
+  .hero-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
   /* Voiture : cadre à ratio fixe 16:9 (celui des previews AC), aligné en haut
-     — pas étiré par la hauteur du panneau de données voisin. */
+     — `.hero` reste dimensionné par SON PROPRE ratio (`align-self: start`,
+     ci-dessous), jamais étiré à la hauteur du panneau de données voisin.
+     Un essai précédent avait fait l'inverse (`.hero` étiré, ratio seulement
+     sur `.hero-inner`) pour que le fond de `.hero` couvre l'espace sous un
+     aperçu court — mais rien ne garantissait plus que `.hero` reste assez
+     haut pour SON PROPRE contenu : une fiche à description courte ramenait
+     la ligne de grille sous la hauteur qu'exige le 16:9, et le bloc suivant
+     (skins/distance) rognait l'aperçu par-dessus (bug réel signalé). Revenu
+     à la version qui ne peut pas rogner : `.hero` a toujours exactement la
+     taille de son média, l'espace qui reste dans sa ligne de grille montre le
+     fond de `.row` (`--card`, identique au sien) plutôt que le sien propre. */
   .row.top:not(.track) .hero {
     aspect-ratio: 16 / 9;
     min-height: 0;
     align-self: start;
+    padding: 0;
+  }
+  .row.top:not(.track) .hero-inner {
+    position: absolute;
+    inset: 14px;
   }
   .hero img {
     width: 100%;
@@ -1510,19 +1576,26 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 1px;
-    background: var(--line);
+    /* Fond de page dans l'interligne de 1px entre vignettes, comme `.row`
+       plus haut — pas une couleur de carte (bug réel signalé : `--line`,
+       trop clair, y ressortait comme un gris qui ne se voyait nulle part
+       ailleurs). */
+    background: var(--card);
     border: 1px solid var(--line);
   }
   .skin {
-    /* Même gris que la grille elle-même (`.skins`, `--line`, plus clair) —
-       `--card` créait un contraste marqué entre les cartes et l'espace d'1px
-       qui les sépare (retour utilisateur direct : « gris presque noir » entre
-       les cartes contre un gris plus clair ailleurs). */
-    background: var(--line);
+    /* Même fond que les autres cartes de la fiche (`.blk`, global.css) : plus
+       sombre que la page, c'est ce contraste qui détache la vignette. */
+    background: var(--panel2);
     padding: 0;
     text-align: left;
     cursor: pointer;
     position: relative;
+  }
+  /* Case fantôme de fin de grille (§ correctif damier, `gridFillerCount`) :
+     même fond que `.skin`, sans rien d'interactif. */
+  .skin-filler {
+    background: var(--panel2);
   }
   /* Cadre du choix de session en calque par-dessus la vignette : un `outline`
      inset était peint avant les descendants positionnés (.skin-img), donc

@@ -30,7 +30,7 @@ use crate::config::AppConfig;
 /// *reconnaître* pour libérer sa place. Trois incréments en une session de
 /// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
-const CONVERTER_VERSION: u32 = 10;
+const CONVERTER_VERSION: u32 = 11;
 
 /// Plafond du cache (§5.3). Au-delà, éviction du plus ancien utilisé.
 const CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
@@ -215,6 +215,23 @@ pub fn prepare(
         kn5::Kn5Error::NotAKn5File => crate::errors::PREVIEW_PROTECTED.to_string(),
         other => format!("{} : {other}", resolved.path.display()),
     })?;
+
+    // Deuxième détection, complémentaire à la magie ci-dessus (§4.5bis) : un
+    // modèle peut avoir un en-tête KN5 parfaitement valide et pourtant ne
+    // rien avoir d'affichable — deux mods signalés cassés (un carré bleu qui
+    // clignote, une pluie de petits polygones bleus) parsent sans la moindre
+    // erreur mais n'orientent leurs triangles correctement qu'une fois sur
+    // deux, littéralement un résultat de pile ou face, là où les mods sains
+    // de la bibliothèque de référence sont tous au-dessus de 99,5 % (voir
+    // `kn5_gltf::WINDING_SANITY_THRESHOLD`, mesuré, pas deviné). On ne sait
+    // pas si c'est une protection CSP ou une autre corruption qui laisse le
+    // magic intact — l'un comme l'autre produisent la même chose côté
+    // utilisateur, donc le même traitement : repli silencieux sur la photo,
+    // jamais de tentative de rendu sur des triangles qui ne veulent rien dire.
+    let (agreeing, total) = kn5_gltf::winding_consistency(&model);
+    if !kn5_gltf::is_geometry_sane(agreeing, total) {
+        return Err(crate::errors::PREVIEW_PROTECTED.to_string());
+    }
 
     let skin_dir = kn5_gltf::resolve_skin(car_dir, skin_id);
     let conversion = kn5_gltf::convert(

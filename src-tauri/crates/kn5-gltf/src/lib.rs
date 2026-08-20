@@ -64,6 +64,30 @@ impl ConvertStage {
     }
 }
 
+/// Fraction of winding-consistent triangles below which a model is not worth
+/// rendering (§4.5bis of the spec).
+///
+/// Measured, not guessed: every healthy car in the reference library sits
+/// between 99.5 % and 100 % (`ferrari_599_gto`, `rss_gtm_lanzo_v8`,
+/// `some1_acura_nsx_1992`… eight checked, none below 99.5). The two mods
+/// reported broken by a user (`ms_citroen_berlingo_2003_vts`, a blinking blue
+/// square; `gmp_w204_c63_c13`, a cloud of small blue triangles) both parse
+/// with a perfectly valid KN5 magic — `kn5::parse` succeeds, `NotAKn5File`
+/// never fires — yet sit at **exactly 50.0 %/50.1 %**: a coin flip between
+/// "front" and "back", not a file using a convention we have not met before.
+/// No file in the sample has ever landed between the two clusters. See
+/// `docs/kn5-format.md` for the investigation.
+pub const WINDING_SANITY_THRESHOLD: f64 = 0.9;
+
+/// True when the model's geometry is coherent enough to be worth converting —
+/// see [`WINDING_SANITY_THRESHOLD`]. Split out from `convert()` so a caller
+/// that already has `winding_consistency`'s numbers (the app's preview
+/// pipeline, §4.5bis) can bail out **before** paying for texture transcoding,
+/// instead of converting a model no one will keep.
+pub fn is_geometry_sane(agreeing: usize, total: usize) -> bool {
+    total == 0 || (agreeing as f64) >= WINDING_SANITY_THRESHOLD * total as f64
+}
+
 /// Full pipeline: filter and flatten the node tree, transcode the textures the
 /// surviving materials need, map the materials, write the GLB.
 pub fn convert(
@@ -75,9 +99,12 @@ pub fn convert(
     // Safety net for the handedness decision documented in `geometry.rs`: the
     // reference library agrees at 100 %, so anything meaningfully below that
     // means a file whose convention we have not met before, and which would
-    // otherwise render inside out without a word.
+    // otherwise render inside out without a word. `kn5-tool` calls `convert`
+    // directly (never through the app's preview pipeline), so this warning is
+    // its only signal — the app itself checks earlier, see
+    // `is_geometry_sane`/§4.5bis.
     let (agreeing, total) = geometry::winding_consistency(model);
-    if total > 0 && (agreeing as f64) < 0.9 * total as f64 {
+    if !is_geometry_sane(agreeing, total) {
         log::warn!(
             "kn5-gltf: only {agreeing}/{total} triangles wind the expected way — this model may render inside out"
         );
@@ -134,4 +161,21 @@ pub fn convert(
         texture_count: textures.textures.len() as u32,
         texture_warnings: textures.warnings,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Rule: the threshold used to gate the app's preview pipeline (§4.5bis)
+    // is the same one `convert()` warns on — a single constant, not two
+    // literals that could drift apart.
+    #[test]
+    fn geometry_sanity_matches_the_measured_split() {
+        assert!(is_geometry_sane(999, 1000), "99.9 % — every healthy car in the sample");
+        assert!(is_geometry_sane(900, 1000), "exactly at the threshold");
+        assert!(!is_geometry_sane(899, 1000), "just under the threshold");
+        assert!(!is_geometry_sane(500, 1000), "50 % — the two broken mods in the sample");
+        assert!(is_geometry_sane(0, 0), "no triangles at all: nothing to condemn");
+    }
 }

@@ -533,9 +533,72 @@ identifiants de matériaux tous valides). La remorque est ignorée, conformémen
 à §4.5 — on ne déchiffre pas. L'avertissement du parser est conservé : il reste
 le bon signal si un vrai décalage de section apparaissait un jour.
 
-⚠️ **Non vérifié** : que le modèle en clair soit bien celui que le jeu affiche.
-Il pourrait n'être qu'une version dégradée, le vrai modèle vivant dans la partie
-chiffrée. Seul le rendu (lot 3+) le dira.
+⚠️ **Levé, négativement** : voir « Découverte — un magic KN5 valide n'est pas une
+garantie de géométrie exploitable » ci-dessous. Le modèle en clair de
+`ms_citroen_berlingo_2003_vts` n'est **pas** le modèle affiché en jeu — la
+moitié de ses triangles est incohérente, un rendu réel dessine un carré bleu
+qui clignote à la place de la voiture. « Complet et cohérent » plus haut
+décrivait ce que **le parseur structurel** voyait (compteurs de mesh,
+identifiants de matériaux tous valides) — pas ce qu'un moteur de rendu en
+ferait. Les deux questions sont différentes, et seule la seconde compte pour
+l'utilisateur.
+
+---
+
+## Découverte — un magic KN5 valide n'est pas une garantie de géométrie exploitable
+
+Deux mods signalés par un utilisateur comme cassés dans l'aperçu 3D :
+`ms_citroen_berlingo_2003_vts` (« un gros carré bleu qui clignote ») et
+`gmp_w204_c63_c13` (« plein de petits polygones bleus »). L'hypothèse de
+départ — un magic `sc6969` altéré par la protection CSP (§4.5) — ne tient pas :
+les deux fichiers parsent **sans la moindre erreur**, `kn5::Kn5Error::NotAKn5File`
+ne se déclenche jamais. La détection existante (comparaison du magic) est donc
+aveugle à cette famille de mods cassés.
+
+**Méthode** : le vrai signal était déjà calculé, juste jamais exploité —
+`kn5_gltf::winding_consistency` (accord entre le sens d'enroulement d'un
+triangle et sa normale stockée, une mesure de cohérence interne indépendante
+de toute convention de repère). Comparé sur un échantillon :
+
+| Mod | Triangles orientés comme attendu |
+| --- | --- |
+| `ferrari_599_gto` | 99,9 % |
+| `ford_mustang_boss_302` | 99,5 % |
+| `rss_gtm_lanzo_v8` | 100,0 % |
+| `some1_acura_nsx_1992` | 100,0 % |
+| `oneweek_corvette_c1` | 99,9 % |
+| `c13_porsche_959_87` | 99,9 % |
+| `ag_subaru_impreza_wrx_tuned` | 100,0 % |
+| **`ms_citroen_berlingo_2003_vts`** | **50,0 %** |
+| **`ms_citroen_berlingo_2003_hdi`** | **50,1 %** |
+| **`gmp_w204_c63_c13`** | **50,0 %** |
+
+Aucun fichier de l'échantillon ne tombe entre les deux groupes : c'est une
+rupture nette, pas un dégradé. 50 % est très exactement ce que produit un pile
+ou face — la moitié des triangles n'a plus aucun rapport cohérent avec sa
+normale, ce qui est la signature attendue d'une partie de la géométrie
+remplacée par du bruit avant l'empaquetage, plutôt qu'une simple erreur
+d'export. Sur `ms_citroen_berlingo_2003_vts` spécifiquement, une partie des
+dummies (`bodyshell`, `door_dside_f`, `Headlight_housing`, une trentaine
+d'autres) portent en plus une échelle locale de ~10237× au lieu de ~1× — sans
+rapport visible avec le taux de winding (le second mod cassé, `gmp_w204_c63_c13`,
+n'a aucune transformée suspecte de ce genre), donc probablement un symptôme
+distinct de la même corruption plutôt que sa cause.
+
+**Ce qu'on en fait** : `kn5_gltf::is_geometry_sane`/`WINDING_SANITY_THRESHOLD`
+(0,9 — la marge entre 99,5 % et 50 % est large, aucune anomalie
+de réglage à craindre) transforme cette mesure en verdict. Le pipeline
+d'aperçu (`preview::prepare`) l'applique **avant** `convert()`, juste après le
+contrôle du magic, avec le même repli : `errors.previewProtected`, jamais de
+tentative de rendu sur une géométrie qui ne veut rien dire. `kn5-tool
+convert`, lui, continue de convertir et de simplement avertir — c'est un outil
+de diagnostic, pas le chemin utilisateur.
+
+On ne sait toujours pas s'il s'agit de la protection CSP (§4.5) ou d'une autre
+forme de corruption qui laisse le magic intact : les deux produisent le même
+symptôme côté utilisateur, donc le même traitement. Le libellé affiché reste
+générique (« modèle protégé ») plutôt que de nommer une cause qu'on ne peut
+pas confirmer.
 
 ---
 
