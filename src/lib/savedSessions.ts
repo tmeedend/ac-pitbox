@@ -14,6 +14,11 @@ export interface SavedSession {
   setup: RaceSetup;
   gridMode: GridMode;
   opponentCount: number;
+  /** §8.6 : `SAME_CATEGORY` ou une catégorie fixée à la main. `undefined` sur
+   * une sauvegarde antérieure à ce champ — même repli qu'à la relecture d'un
+   * preset, `SAME_CATEGORY` reproduit exactement l'ancien comportement
+   * implicite (toujours suivre la voiture pilotée). */
+  categorySelection?: string;
   season: Season;
   /** Intention météo sélectionnée (pour resurligner la bonne carte à la relecture). */
   intent: string;

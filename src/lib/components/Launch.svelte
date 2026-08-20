@@ -9,6 +9,7 @@
     weatherOptions,
     weatherConditions,
     type GridMode,
+    SAME_CATEGORY,
     type Opponent,
     type PracticeStart,
     type RaceSetup,
@@ -165,22 +166,18 @@
   const player = $derived(carPool.find((c) => c.id_interne === setup.car_id) ?? null);
   const currentWeather = $derived(weathers.find((w) => w.id === selectedIntent));
 
-  // --- Catégorie du vivier « même catégorie » (§8.6) : modifiable, mais
-  // toujours réinitialisée sur la catégorie de la voiture pilotée dès qu'elle
-  // change — `categoryCarId` mémorise la dernière voiture pour laquelle la
-  // sélection a été (ré)initialisée, pour ne réagir qu'à un vrai changement de
-  // voiture, pas à chaque relecture de l'effet. Même liste que le filtre
-  // catégorie de la bibliothèque voitures. ---
-  let categorySelection = $state("");
-  let categoryCarId = $state<string | null>(null);
+  // --- Catégorie du vivier « Par catégorie » (§8.6) : `SAME_CATEGORY` (valeur
+  // par défaut) suit la catégorie de la voiture pilotée automatiquement — une
+  // catégorie fixée à la main, elle, reste choisie tant qu'on ne revient pas
+  // sur « Même catégorie » dans la liste, y compris à travers un changement de
+  // voiture. `effectiveCategory` fait toute la traduction : sentinelle → la
+  // catégorie du joueur (recalculée à chaque frame par construction, `player`
+  // étant lui-même dérivé de `setup.car_id`), valeur fixée → elle-même. Plus
+  // besoin de rejouer cette bascule à la main à chaque changement de voiture.
+  // Même liste que le filtre catégorie de la bibliothèque voitures. ---
+  let categorySelection = $state<string>(SAME_CATEGORY);
   const categoryOptions = $derived([...new Set(carPool.map((c) => c.category).filter((c): c is string => !!c))].sort());
-  $effect(() => {
-    const id = setup.car_id;
-    if (id !== categoryCarId) {
-      categoryCarId = id;
-      categorySelection = player?.category ?? "";
-    }
-  });
+  const effectiveCategory = $derived(categorySelection === SAME_CATEGORY ? player?.category ?? "" : categorySelection);
   async function selectCategory(cat: string) {
     categorySelection = cat;
     if (gridMode === "same_category") await regenerateGrid();
@@ -203,7 +200,7 @@
     if (!player) return carPool;
     if (mode === "same_car") return [player];
     const others = carPool.filter((c) => c.id_interne !== setup.car_id);
-    const byCategory = mode === "same_category" && categorySelection ? others.filter((c) => c.category === categorySelection) : others;
+    const byCategory = mode === "same_category" && effectiveCategory ? others.filter((c) => c.category === effectiveCategory) : others;
     return byCategory.filter(inYearRange);
   }
 
@@ -467,6 +464,10 @@
   // --- Presets de session par type (§8.4) ---
   interface Persisted {
     ai_level_min: number; ai_level_max: number; grid_mode: GridMode; opponent_count: number;
+    /** §8.6 : `SAME_CATEGORY` ou une catégorie fixée à la main. Absent sur un
+     * preset antérieur à ce champ — repli sur `SAME_CATEGORY`, l'ancien
+     * comportement implicite (toujours suivre la voiture pilotée). */
+    category_selection?: string;
     year_min: number; year_max: number;
     laps: number; time_hours: number;
     penalties: boolean; jump_start_penalty: number; grip: number;
@@ -509,7 +510,7 @@
   function savePreset() {
     presets[setup.session_type] = {
       ai_level_min: setup.ai_level_min, ai_level_max: setup.ai_level_max,
-      grid_mode: gridMode, opponent_count: opponentCount,
+      grid_mode: gridMode, opponent_count: opponentCount, category_selection: categorySelection,
       year_min: setup.year_min, year_max: setup.year_max,
       laps: setup.laps, time_hours: setup.time_hours,
       penalties: setup.penalties, jump_start_penalty: setup.jump_start_penalty, grip: setup.grip,
@@ -528,6 +529,7 @@
     if (p) {
       setup.ai_level_min = p.ai_level_min ?? 92; setup.ai_level_max = p.ai_level_max ?? 98;
       gridMode = p.grid_mode ?? "same_category"; opponentCount = p.opponent_count ?? 7;
+      categorySelection = p.category_selection ?? SAME_CATEGORY;
       setup.year_min = p.year_min ?? YEAR_RANGE_MIN; setup.year_max = p.year_max ?? YEAR_RANGE_MAX;
       setup.laps = p.laps; setup.time_hours = p.time_hours;
       setup.penalties = p.penalties; setup.jump_start_penalty = p.jump_start_penalty ?? 0;
@@ -773,6 +775,7 @@
       setup: $state.snapshot(setup),
       gridMode,
       opponentCount,
+      categorySelection,
       season,
       intent: selectedIntent,
       trackSkins,
@@ -796,6 +799,7 @@
     setup = { ...setup, ...s.setup };
     gridMode = s.gridMode;
     opponentCount = s.opponentCount;
+    categorySelection = s.categorySelection ?? SAME_CATEGORY;
     season = s.season;
     selectedIntent = s.intent;
 

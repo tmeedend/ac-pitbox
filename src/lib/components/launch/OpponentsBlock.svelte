@@ -7,7 +7,7 @@
   // d'autres sources (presets, resynchronisation voiture/circuit) — ce bloc
   // ne fait qu'afficher le résultat et notifier les actions locales
   // (ajouter/dupliquer/retirer une ligne, régler un niveau, ouvrir le picker).
-  import type { GridMode, Opponent, RaceSetup, SkinItem } from "$lib/launch";
+  import { SAME_CATEGORY, type GridMode, type Opponent, type RaceSetup, type SkinItem } from "$lib/launch";
   import { previewSrc, type ModCard } from "$lib/library";
   import { t } from "$lib/i18n/index.svelte";
   import NumberStepper from "../NumberStepper.svelte";
@@ -106,29 +106,32 @@
         onkeydown={(e) => (e.key === "Enter" || e.key === " ") && onselectmode(m.id)}
       >
         <div class="mt">{t(m.labelKey)}</div>
-        {#if m.id === "same_category" && gridMode === "same_category"}
-          <!-- Catégorie prise en compte par ce vivier (§8.6) : s'initialise
-               sur celle de la voiture pilotée (Launch.svelte), mais reste
-               modifiable ici — le libellé de l'onglet dit déjà « Même
-               catégorie », pas besoin de le répéter à côté du champ. -->
-          <select
-            class="input cat-select"
-            value={categorySelection}
-            onclick={(e) => e.stopPropagation()}
-            onchange={(e) => { e.stopPropagation(); onselectcategory(e.currentTarget.value); }}
-          >
-            {#each categoryOptions as cat}<option value={cat}>{cat}</option>{/each}
-          </select>
-        {/if}
       </div>
     {/each}
   </div>
 
-  <!-- Nombre d'adversaires, difficulté et fourchette d'année du vivier, tout
-       sur une ligne (§8.6). Année min/max : 0 ou vide = pas de filtre sur ce
-       bord (`inYearRange` côté Launch.svelte) — remplace l'ancienne double
-       glissière, ces deux champs se tapent directement. -->
+  <!-- Catégorie du vivier, nombre d'adversaires, difficulté et fourchette
+       d'année, tout sur une ligne (§8.6). Catégorie : par défaut « Même
+       catégorie » (en tête de liste) suit automatiquement la voiture pilotée,
+       comportement d'origine ; une catégorie fixée à la main reste choisie
+       même si on change de voiture. Année min/max : 0 ou vide = pas de filtre
+       sur ce bord (`inYearRange` côté Launch.svelte) — remplace l'ancienne
+       double glissière, ces deux champs se tapent directement. -->
   <div class="adv-row">
+    {#if gridMode === "same_category"}
+      <label class="cat-field">
+        <span class="fk lbl-key">{t("launch.gridCategoryLabel")}</span>
+        <select
+          class="input cat-select"
+          value={categorySelection}
+          onchange={(e) => onselectcategory(e.currentTarget.value)}
+        >
+          <option value={SAME_CATEGORY}>{t("launch.gridCategorySame")}</option>
+          {#each categoryOptions as cat}<option value={cat}>{cat}</option>{/each}
+        </select>
+      </label>
+    {/if}
+
     <label class="grid-fields">
       <NumberStepper min={0} max={30} value={opponentCount} onchange={(v) => oncountchange(v)} />
       <span class="fk lbl-key">{t("launch.aiCount")}</span>
@@ -219,12 +222,20 @@
     border: 1px solid var(--line);
     margin-bottom: 12px;
   }
+  /* Même patron que `.ai-range-field` : libellé au-dessus, largeur fixe pour
+     tenir dans la ligne plutôt que de s'étirer sur toute la largeur restante. */
+  .cat-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 150px;
+  }
   .cat-select {
     width: 100%;
-    margin-top: 8px;
   }
-  /* Compteur d'adversaires, difficulté, fourchette d'année : tout sur une
-     ligne (retombe seulement si la largeur manque). */
+  /* Catégorie (si « Par catégorie »), compteur d'adversaires, difficulté,
+     fourchette d'année : tout sur une ligne (retombe seulement si la largeur
+     manque). */
   .adv-row {
     display: flex;
     flex-wrap: wrap;

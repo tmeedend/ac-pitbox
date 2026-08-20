@@ -17,6 +17,13 @@ export type Season = "" | "spring" | "summer" | "autumn" | "winter";
  * disponible pour same_category/free. */
 export type GridMode = "same_car" | "same_category" | "free";
 
+/** Valeur spéciale de la catégorie du vivier « Par catégorie » (§8.6) : suit
+ * automatiquement la catégorie de la voiture pilotée, plutôt qu'une catégorie
+ * fixée à la main qui doit survivre à un changement de voiture. Vit ici (pas
+ * dans un composant) parce que `savedSessions.ts` en a besoin comme valeur par
+ * défaut pour les sauvegardes antérieures à ce champ. */
+export const SAME_CATEGORY = "__same_category__";
+
 export interface Opponent {
   car_id: string;
   ai_level: number;
