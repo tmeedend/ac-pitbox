@@ -45,7 +45,7 @@ pub struct FlatMesh {
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
     pub uvs: Vec<[f32; 2]>,
-    pub indices: Vec<u16>,
+    pub indices: Vec<u32>,
     /// Kept for reporting: a mesh flagged transparent needs the render-order
     /// treatment of §8.2 on the viewer side.
     pub transparent: bool,
@@ -96,6 +96,9 @@ pub struct GeometryStats {
     /// Meshes whose accumulated transform mirrors space, and whose winding was
     /// flipped a second time as a result.
     pub mirrored: usize,
+    /// Meshes actually written, once those sharing a material have been merged
+    /// — i.e. the number of draw calls the viewer will make. Always ≤ `kept`.
+    pub merged: usize,
 }
 
 /// Walks the tree, accumulates transforms and returns every mesh worth drawing.
@@ -110,7 +113,53 @@ pub fn flatten(model: &Kn5Model, options: &GeometryOptions) -> (Vec<FlatMesh>, G
         &mut meshes,
         &mut stats,
     );
+    let meshes = merge_by_material(meshes);
+    stats.merged = meshes.len();
     (meshes, stats)
+}
+
+/// Regroupe en un seul maillage tous ceux qui partagent un matériau.
+///
+/// **Ce que ça achète** : un appel de dessin par matériau au lieu d'un par
+/// nœud. Mesuré sur cinq voitures, 133 à 208 primitives tombent à 32 à 53,
+/// soit 3,3× à 5,3× moins — et sur Windows, où WebGL passe par la traduction
+/// D3D11, un appel de dessin n'est pas gratuit. Le panneau rend en continu
+/// (plateau tournant), donc ce coût est payé soixante fois par seconde.
+///
+/// **Pourquoi c'est une simple concaténation** : les sommets sont déjà en
+/// espace monde à ce stade — la transformation accumulée du nœud leur a été
+/// appliquée par [`convert_mesh`] — et les nœuds glTF écrits ensuite ne
+/// portent aucune matrice. Il n'y a donc rien à recomposer, seulement des
+/// index à décaler.
+///
+/// **La clé inclut la transparence**, et ce n'est pas de la prudence
+/// décorative : le drapeau est porté par le *maillage* (`mesh.is_transparent`)
+/// et non par le matériau, donc deux maillages du même matériau peuvent ne pas
+/// s'accorder. Les fusionner mélangerait un objet que la vue doit rendre après
+/// l'opaque, sans écriture de profondeur (§8.2), avec un objet ordinaire.
+fn merge_by_material(meshes: Vec<FlatMesh>) -> Vec<FlatMesh> {
+    let mut merged: Vec<FlatMesh> = Vec::new();
+    // L'ordre de première apparition est conservé : deux conversions du même
+    // modèle doivent produire le même fichier, octet pour octet, sinon le
+    // cache disque perd son sens.
+    let mut slot_of: std::collections::BTreeMap<(u32, bool), usize> = std::collections::BTreeMap::new();
+    for mesh in meshes {
+        match slot_of.get(&(mesh.material_id, mesh.transparent)) {
+            Some(&slot) => {
+                let target: &mut FlatMesh = &mut merged[slot];
+                let offset = target.positions.len() as u32;
+                target.positions.extend(mesh.positions);
+                target.normals.extend(mesh.normals);
+                target.uvs.extend(mesh.uvs);
+                target.indices.extend(mesh.indices.iter().map(|index| index + offset));
+            }
+            None => {
+                slot_of.insert((mesh.material_id, mesh.transparent), merged.len());
+                merged.push(mesh);
+            }
+        }
+    }
+    merged
 }
 
 const IDENTITY: [f32; 16] = [
@@ -218,7 +267,7 @@ fn convert_mesh(name: &str, mesh: &Kn5Mesh, world: &[f32; 16]) -> FlatMesh {
         uvs.push(vertex.uv);
     }
 
-    let mut indices = mesh.indices.clone();
+    let mut indices: Vec<u32> = mesh.indices.iter().map(|i| u32::from(*i)).collect();
     // Le repère ne change pas, mais un nœud dont la transformation est en
     // miroir — la façon habituelle de ne modéliser qu'une moitié symétrique —
     // inverse l'orientation de ses triangles. glTF veut des faces avant en
@@ -508,6 +557,62 @@ mod tests {
             vec![0, 2, 1],
             "un nœud en miroir voit le sien rétabli en antihoraire"
         );
+    }
+
+    /// Maillage plat minimal, pour les règles de fusion : trois sommets, un
+    /// triangle, tout le reste à zéro — seuls le matériau, la transparence et
+    /// le décalage des index comptent ici.
+    fn flat(material_id: u32, transparent: bool) -> FlatMesh {
+        FlatMesh {
+            name: format!("m{material_id}"),
+            material_id,
+            positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            normals: vec![[0.0, 1.0, 0.0]; 3],
+            uvs: vec![[0.0, 0.0]; 3],
+            indices: vec![0, 1, 2],
+            transparent,
+        }
+    }
+
+    // Règle : les maillages d'un même matériau sont fusionnés en un seul, et
+    // les index du second sont décalés du nombre de sommets du premier — sans
+    // ce décalage, le second triangle irait chercher les sommets du premier.
+    #[test]
+    fn meshes_sharing_a_material_become_one_and_indices_follow() {
+        let merged = merge_by_material(vec![flat(0, false), flat(0, false), flat(1, false)]);
+
+        assert_eq!(merged.len(), 2, "deux matériaux, deux maillages");
+        assert_eq!(merged[0].positions.len(), 6, "les sommets sont concaténés");
+        assert_eq!(
+            merged[0].indices,
+            vec![0, 1, 2, 3, 4, 5],
+            "le second triangle vise ses propres sommets, pas ceux du premier"
+        );
+        assert_eq!(merged[1].positions.len(), 3, "l'autre matériau reste seul");
+    }
+
+    // Règle : la transparence entre dans la clé de fusion. Elle est portée par
+    // le **maillage** et non par le matériau, donc deux maillages du même
+    // matériau peuvent ne pas s'accorder — les fusionner mélangerait un objet
+    // qui doit passer après l'opaque avec un objet ordinaire (§8.2).
+    #[test]
+    fn a_transparent_mesh_is_never_merged_into_an_opaque_one() {
+        let merged = merge_by_material(vec![flat(0, false), flat(0, true)]);
+
+        assert_eq!(merged.len(), 2, "même matériau, mais pas le même traitement");
+        assert!(!merged[0].transparent, "l'opaque reste opaque");
+        assert!(merged[1].transparent, "et le transparent reste transparent");
+    }
+
+    // Règle : l'ordre de première apparition est conservé. Deux conversions du
+    // même modèle doivent produire le même fichier, sans quoi le cache disque
+    // servirait des entrées différentes pour une voiture inchangée.
+    #[test]
+    fn merging_keeps_the_order_materials_first_appeared_in() {
+        let merged = merge_by_material(vec![flat(7, false), flat(2, false), flat(7, false)]);
+
+        let materials: Vec<u32> = merged.iter().map(|m| m.material_id).collect();
+        assert_eq!(materials, vec![7, 2], "7 est apparu le premier, il reste le premier");
     }
 
     // Règle : les UV sont reprises telles quelles. Bug réel sur `abarth500` —

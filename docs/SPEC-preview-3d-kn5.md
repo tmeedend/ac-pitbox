@@ -881,6 +881,29 @@ gêne constatée :
     la réflectance à incidence normale, vetée par `fresnelMaxLevel`. Détail,
     chiffres et pièges dans `kn5-format.md`, écarts n°7 et n°10.
 
+12. **Fusion des maillages par matériau** ✅ **Faite.** Un appel de dessin par
+    matériau au lieu d'un par nœud. Mesuré sur cinq voitures : 133 à 208
+    primitives tombent à 36 à 56, soit **3,2× à 4,7× moins** — et sur Windows,
+    où WebGL passe par la traduction D3D11, un appel de dessin n'est pas
+    gratuit. Le panneau rendant en continu (plateau tournant), ce coût est payé
+    soixante fois par seconde.
+
+    Simple concaténation : les sommets sont déjà en espace monde à ce stade et
+    les nœuds glTF écrits ensuite ne portent aucune matrice, donc il n'y a que
+    des index à décaler. **La clé de fusion inclut la transparence**, parce que
+    le drapeau est porté par le *maillage* et non par le matériau : les
+    fusionner mélangerait un objet qui doit passer après l'opaque, sans
+    écriture de profondeur (§8.2), avec un objet ordinaire.
+
+    Les index passent en 32 bits **seulement quand il le faut** — un maillage
+    fusionné peut dépasser 65 535 sommets, mais aucun ne le fait sur les cinq
+    voitures mesurées, et les écrire tous en 32 bits gonflait le `.glb` de
+    10 % pour rien. Le cache a une taille réglée par l'utilisateur ; la
+    gaspiller en zéros de poids fort serait un mauvais échange.
+
+    Vérifié : nombre de triangles **identique au triangle près** sur les cinq
+    voitures, et `.glb` marginalement plus petit qu'avant (moins d'accesseurs).
+
 Restent aussi, hérités du plan initial : le choix du LOD en config, et l'aperçu
 dans `ModDetail.svelte` (panneau latéral), qui n'a jamais été branché.
 

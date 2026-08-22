@@ -788,9 +788,10 @@ fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
         human_bytes(conversion.glb.len() as u64)
     );
     println!(
-        "meshes    {} kept — skipped: {} hidden, {} by name, {} empty, {} distant LOD, \
+        "meshes    {} kept, merged into {} draw calls — skipped: {} hidden, {} by name, {} empty, {} distant LOD, \
          {} broken glass ({} mirrored nodes)",
         stats.kept,
+        stats.merged,
         stats.skipped_hidden,
         stats.skipped_by_name,
         stats.skipped_empty,

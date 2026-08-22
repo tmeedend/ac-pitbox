@@ -16,6 +16,7 @@ use crate::texture::TextureSet;
 // the specification does.
 const COMPONENT_F32: u32 = 5126;
 const COMPONENT_U16: u32 = 5123;
+const COMPONENT_U32: u32 = 5125;
 const TARGET_ARRAY_BUFFER: u32 = 34962;
 const TARGET_ELEMENT_ARRAY_BUFFER: u32 = 34963;
 
@@ -77,7 +78,7 @@ pub fn write_glb(meshes: &[FlatMesh], materials: &[GltfMaterial], textures: &Tex
         let positions = push_accessor_vec3(&mut bin, &mut buffer_views, &mut accessors, &mesh.positions, true);
         let normals = push_accessor_vec3(&mut bin, &mut buffer_views, &mut accessors, &mesh.normals, false);
         let uvs = push_accessor_vec2(&mut bin, &mut buffer_views, &mut accessors, &mesh.uvs);
-        let indices = push_accessor_u16(&mut bin, &mut buffer_views, &mut accessors, &mesh.indices);
+        let indices = push_accessor_indices(&mut bin, &mut buffer_views, &mut accessors, &mesh.indices);
 
         let mut primitive = json!({
             "attributes": { "POSITION": positions, "NORMAL": normals, "TEXCOORD_0": uvs },
@@ -231,15 +232,28 @@ fn push_accessor_vec2(
     accessors.len() - 1
 }
 
-fn push_accessor_u16(bin: &mut Vec<u8>, views: &mut Vec<Value>, accessors: &mut Vec<Value>, data: &[u16]) -> usize {
-    let mut bytes = Vec::with_capacity(data.len() * 2);
+/// Index, dans le plus étroit des deux types que WebGL 2 accepte.
+///
+/// La fusion par matériau (voir `geometry::merge_by_material`) fait dépasser
+/// 65 535 sommets à une carrosserie entière, ce qu'un `u16` ne peut plus
+/// adresser — mais la plupart des maillages fusionnés restent bien en deçà, et
+/// les écrire tous en 32 bits gonflait le `.glb` de 10 % pour rien. Le cache
+/// disque a une taille réglée par l'utilisateur : la gaspiller sur des zéros
+/// de poids fort serait un mauvais échange.
+fn push_accessor_indices(bin: &mut Vec<u8>, views: &mut Vec<Value>, accessors: &mut Vec<Value>, data: &[u32]) -> usize {
+    let wide = data.iter().any(|index| *index > u32::from(u16::MAX));
+    let mut bytes = Vec::with_capacity(data.len() * if wide { 4 } else { 2 });
     for value in data {
-        bytes.extend_from_slice(&value.to_le_bytes());
+        if wide {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        } else {
+            bytes.extend_from_slice(&(*value as u16).to_le_bytes());
+        }
     }
     let view = push_view(bin, views, &bytes, Some(TARGET_ELEMENT_ARRAY_BUFFER));
     accessors.push(json!({
         "bufferView": view,
-        "componentType": COMPONENT_U16,
+        "componentType": if wide { COMPONENT_U32 } else { COMPONENT_U16 },
         "count": data.len(),
         "type": "SCALAR",
     }));
