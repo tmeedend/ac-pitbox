@@ -4,7 +4,7 @@
 //! Le balayage des restes (§7.3) pose une hypothèse simple : le chemin d'un
 //! reste **relatif à la racine de l'archive** est son chemin **relatif à la
 //! racine d'AC**. Elle est vraie quand l'auteur a livré `content/driver/…` ou
-//! `extension/config/…`, et fausse dans deux cas qu'on rencontre en vrai :
+//! `extension/config/…`, et fausse de trois façons qu'on rencontre en vrai :
 //!
 //! - l'auteur livre un dossier de jeu **à nu**, sans son préfixe : un
 //!   `driver/` posé à côté du dossier de la voiture, alors qu'AC le lit dans
@@ -13,7 +13,12 @@
 //!   V1.4/`, `Track Installation/`, `Optional - No ambient sounds/`. Là il n'y
 //!   a rien à rattraper : ce n'est pas un chemin de jeu, et le poser revient à
 //!   déverser un dossier d'archive à la racine de l'install. C'est ce que
-//!   [`is_ac_relative`] refuse.
+//!   [`is_ac_relative`] refuse ;
+//! - l'emballage est bien là, mais **accompagné** — un `AC Files/` avec, à
+//!   côté, un `MANUAL.pdf` et un dossier de fonds d'écran. Deviner à la forme
+//!   ne marche plus ([`effective_root`] ne traverse qu'un dossier seul), alors
+//!   que les mods déjà trouvés, eux, disent exactement où est la racine :
+//!   c'est [`game_root`].
 //!
 //! Le refus ne jette rien (§4.5.3, « l'import ne jette rien ») : le reste est
 //! rangé en bibliothèque et listé dans « Ajouts au jeu » comme les autres,
@@ -32,6 +37,17 @@ use walkdir::WalkDir;
 /// qu'un mod a le droit de viser. Un faux positif ici ne fait que rendre à
 /// l'app le comportement qu'elle avait avant ce garde-fou ; un faux négatif
 /// empêcherait un mod légitime de s'installer.
+///
+/// Permissive, mais **pas au point d'accepter un dossier qu'AC ne lit pas** :
+/// `mods/` en faisait partie et n'aurait jamais dû. C'est le dossier de
+/// *stockage* de JSGME (chaque sous-dossier y attend, inerte, que JSGME le
+/// recopie dans le jeu), et AC n'y regarde jamais. Cas réel, l'archive LA
+/// Canyons : ses trois `MODS/LA Canyons 1.2 - …/content/…` passaient pour des
+/// chemins de jeu, étaient donc posés tels quels dans `<AC>\MODS\` — où le
+/// patch « Hide Pit Crew » ne fait strictement rien, faute d'être sous
+/// `content/`. Un faux positif ici ne rend pas seulement le comportement
+/// d'avant le garde-fou : il installe un mod *à moitié*, en silence, avec
+/// l'apparence du succès.
 const AC_ROOT_DIRS: &[&str] = &[
     "content",
     "system",
@@ -42,7 +58,6 @@ const AC_ROOT_DIRS: &[&str] = &[
     "sdk",
     "server",
     "plugins",
-    "mods",
 ];
 
 /// Premier segment d'un chemin relatif, en minuscules.
@@ -133,6 +148,15 @@ pub fn is_externally_managed(rel: &Path) -> bool {
 /// - on ne traverse **jamais un dossier de jeu**. Un `content/` seul à la racine
 ///   *est* la racine ; le traverser ferait de `cars/` un chemin de premier
 ///   niveau, et le contenu partirait à `<AC>\cars\`.
+///
+/// **Limite connue** : le premier garde-fou regarde ce qui *reste* dans l'arbre,
+/// pas ce que l'auteur avait mis à côté. Une livraison façon JSGME
+/// (`MODS/<variante>/content/…`) qui n'offrirait qu'**une** variante se
+/// présenterait donc comme un double emballage et serait traversée, donc posée
+/// dans le jeu sans que personne l'ait choisie. Les archives réelles en offrent
+/// plusieurs — LA Canyons en a trois — ce qui suffit à bloquer la traversée,
+/// mais c'est un accident heureux, pas une règle. La vraie réponse est de
+/// **demander**, et c'est le sujet du chantier « dossiers proposés » (§4.6bis).
 pub fn effective_root(dir: &Path) -> PathBuf {
     let mut cur = dir.to_path_buf();
     loop {
@@ -147,6 +171,50 @@ pub fn effective_root(dir: &Path) -> PathBuf {
         }
         cur = only.path();
     }
+}
+
+/// Racine de jeu **déduite des mods reconnus**, et non devinée à la forme de
+/// l'arborescence.
+///
+/// Un mod trouvé à `<X>/content/cars/<id>` dit tout : `<X>` *est* la racine
+/// relative à laquelle AC lit cette livraison. Ce n'est pas une heuristique,
+/// c'est ce que `modscan` a déjà établi en descendant — [`effective_root`], lui,
+/// devine à la forme (« un dossier seul à son niveau ») et se trompe dès que
+/// l'auteur pose un readme à côté de son dossier d'emballage.
+///
+/// Bug réel, l'archive VRC Pageau 9T8 : sept entrées à la racine
+/// (`AC Files/`, `MANUAL.pdf`, `Wallpapers/`, `Templates/`…), donc pas
+/// d'emballage traversé, donc `AC Files/content/fonts` refusé comme non-chemin
+/// de jeu — la font du mod n'atteignait jamais AC, en silence. La voiture,
+/// elle, était trouvée : les deux moitiés de l'import ne s'accordaient pas.
+///
+/// **Repli sur [`effective_root`]** dans les deux cas où la déduction ne dit
+/// rien de sûr : aucun mod reconnu ne porte de `content/` au-dessus de lui (la
+/// Ferrari 599 GTO livre son dossier de voiture à nu), ou plusieurs en portent
+/// et ne s'accordent pas (`A/content/cars/x` à côté de `B/content/cars/y` :
+/// deux racines, aucune raison d'en préférer une).
+pub fn game_root(scan_root: &Path, mod_dirs: &[PathBuf]) -> PathBuf {
+    let mut deduced: Option<PathBuf> = None;
+    for dir in mod_dirs {
+        // Le `content/` **le plus proche au-dessus du mod** : c'est celui qui
+        // porte le `cars/`/`tracks/` dans lequel `modscan` l'a trouvé.
+        let Some(root) = dir
+            .ancestors()
+            .skip(1)
+            .find(|a| a.file_name().is_some_and(|n| n.eq_ignore_ascii_case("content")))
+            .and_then(|c| c.parent())
+            .filter(|p| p.starts_with(scan_root))
+        else {
+            continue;
+        };
+        match &deduced {
+            // Désaccord entre deux mods : on ne tranche pas.
+            Some(prev) if prev != root => return effective_root(scan_root),
+            Some(_) => {}
+            None => deduced = Some(root.to_path_buf()),
+        }
+    }
+    deduced.unwrap_or_else(|| effective_root(scan_root))
 }
 
 /// Le dossier contient un `.kn5` à n'importe quelle profondeur.
@@ -265,6 +333,101 @@ mod tests {
         ] {
             assert!(is_ac_relative(Path::new(real)), "{real} est un vrai chemin de jeu");
         }
+    }
+
+    #[test]
+    fn the_jsgme_mods_folder_is_not_a_game_folder() {
+        // `mods/` est le dossier de *stockage* de JSGME : ses sous-dossiers y
+        // attendent d'être recopiés dans le jeu, AC ne les lit jamais. Il a
+        // pourtant figuré dans AC_ROOT_DIRS, et l'archive LA Canyons y a perdu
+        // son patch « Hide Pit Crew » — posé dans `<AC>\MODS\`, donc inerte,
+        // avec l'apparence d'une installation réussie.
+        for junk in [
+            "MODS/LA Canyons 1.2 - Hide Pit Crew/content/objects3D/pitcrew.kn5",
+            "MODS/LA Canyons 1.2 - Main/description.jsgme",
+            "mods/whatever/content/cars/x/x.kn5",
+        ] {
+            assert!(
+                !is_ac_relative(Path::new(junk)),
+                "{junk} n'est pas un chemin de jeu : AC ne lit pas mods/"
+            );
+            assert!(
+                !leads_into_game(Path::new(junk)),
+                "{junk} ne mène pas non plus dans le jeu : rien à descendre là-dedans"
+            );
+        }
+    }
+
+    #[test]
+    fn the_game_root_is_deduced_from_where_the_mods_were_found() {
+        // Bug réel (VRC Pageau 9T8) : sept entrées à la racine, donc aucun
+        // emballage traversable **par la forme** — et pourtant la voiture est
+        // sous `AC Files/content/cars/`, qui dit exactement où est la racine.
+        // Sans cette déduction, `AC Files/content/fonts` était refusé comme
+        // non-chemin de jeu et la font du mod n'atteignait jamais AC.
+        let base = crate::testutil::temp_dir("acpath-gameroot");
+        let vrc = base.join("vrc");
+        let car = vrc.join("AC Files").join("content").join("cars").join("vrc_pageau");
+        write(&car.join("ui").join("ui_car.json"));
+        write(&vrc.join("AC Files").join("content").join("fonts").join("f.txt"));
+        write(&vrc.join("MANUAL.pdf"));
+        write(&vrc.join("Wallpapers").join("01.jpg"));
+
+        assert_eq!(
+            effective_root(&vrc),
+            vrc,
+            "l'heuristique de forme ne voit aucun emballage : plusieurs entrées à la racine"
+        );
+        assert_eq!(
+            game_root(&vrc, std::slice::from_ref(&car)),
+            vrc.join("AC Files"),
+            "la voiture dit où est la racine de jeu"
+        );
+
+        // Pack multi-mods sous le même emballage : les deux s'accordent.
+        let pack = base.join("pack");
+        let a = pack.join("NFS_A").join("content").join("cars").join("car_a");
+        let b = pack.join("NFS_A").join("content").join("tracks").join("track_b");
+        write(&a.join("ui").join("ui_car.json"));
+        write(&b.join("ui").join("ui_track.json"));
+        assert_eq!(
+            game_root(&pack, &[a, b]),
+            pack.join("NFS_A"),
+            "deux mods, une seule racine : elle fait foi"
+        );
+    }
+
+    #[test]
+    fn an_undeducible_game_root_falls_back_to_the_shape() {
+        // Deux cas où la déduction ne dit rien de sûr, et où le repli sur
+        // `effective_root` est la seule réponse honnête.
+        let base = crate::testutil::temp_dir("acpath-gameroot-fallback");
+
+        // 1. Ferrari 599 GTO : dossier de voiture livré **à nu**, aucun
+        //    `content/` au-dessus de lui. Rien à déduire.
+        let gto = base.join("gto");
+        let car = gto.join("ferrari_599_gto");
+        write(&car.join("ui").join("ui_car.json"));
+        write(&gto.join("driver").join("driver_501.kn5"));
+        assert_eq!(
+            game_root(&gto, std::slice::from_ref(&car)),
+            effective_root(&gto),
+            "aucun content/ au-dessus du mod : on retombe sur la forme"
+        );
+
+        // 2. Deux mods sous deux racines différentes (l'auteur propose des
+        //    variantes) : en préférer une installerait un choix qu'il n'a pas
+        //    fait.
+        let split = base.join("split");
+        let a = split.join("Variant A").join("content").join("cars").join("x");
+        let b = split.join("Variant B").join("content").join("cars").join("y");
+        write(&a.join("ui").join("ui_car.json"));
+        write(&b.join("ui").join("ui_car.json"));
+        assert_eq!(
+            game_root(&split, &[a, b]),
+            effective_root(&split),
+            "désaccord entre deux mods : on ne tranche pas"
+        );
     }
 
     #[test]

@@ -132,8 +132,10 @@ pub fn activate_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), Str
 
 /// Désactive une app (§12bis.4).
 #[tauri::command]
-pub fn deactivate_app(app: AppHandle, id: String) -> Result<(), String> {
-    crate::apps::deactivate_app(&crate::config::load(&app), &id)
+pub fn deactivate_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::apps::deactivate_app(&conn, &cfg, &id)
 }
 
 /// Ouvre le dossier bibliothèque d'une app dans l'explorateur (même schéma

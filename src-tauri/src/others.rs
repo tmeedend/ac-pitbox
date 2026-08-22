@@ -254,11 +254,27 @@ pub fn list_others(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<O
 
 /// Dossier de bibliothèque d'un mod « autre », résolu depuis l'overlay — le
 /// pendant de `library::folder_path` pour ce type d'entrée.
+///
+/// **Le dossier de contenu peut ne pas exister**, et l'entrée est valide quand
+/// même : `import_other` range en `BesideMod` (§4.5.2), donc une livraison
+/// réduite à un document part **entièrement** en ressources et ne crée jamais
+/// `<lib>/others/<id>/`. Cas réel, l'archive `_RSS_Settings` : son
+/// `READ ME.pdf` de racine, que rien ne rattachait à l'app livrée à côté,
+/// devenait une entrée « autre mod » dont « ouvrir le dossier » répondait
+/// « mod introuvable » — alors que le PDF était bel et bien en bibliothèque,
+/// sous `resources/others/<id>/`.
+///
+/// On rend donc le dossier de contenu s'il existe, le dossier ressources
+/// sinon. L'erreur reste réservée au cas où **aucun des deux** n'est là :
+/// celui-là est une vraie perte.
 pub fn folder_path(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<PathBuf, String> {
     let m = overlay::get_other_mod(conn, id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_UNKNOWN)?;
-    crate::libpath::resolve(cfg.library_path.as_deref(), &m.library_path)
+    let library = cfg.library_path.as_deref();
+    crate::libpath::resolve(library, &m.library_path)
+        .filter(|d| d.is_dir())
+        .or_else(|| library.map(|l| resources::resources_dir_for(l, "others", &[id])))
         .filter(|d| d.is_dir())
         .ok_or_else(|| crate::errors::MOD_NOT_FOUND.to_string())
 }
@@ -897,6 +913,36 @@ mod tests {
         assert!(
             folder_path(&conn, &cfg, "does_not_exist").is_err(),
             "un id inconnu ne renvoie pas un chemin inventé"
+        );
+    }
+
+    #[test]
+    fn folder_path_falls_back_to_resources_when_everything_went_there() {
+        // Bug réel (`_RSS_Settings`) : une livraison réduite à un document part
+        // entièrement en ressources (§4.5.2, rangement `BesideMod`), donc
+        // `<lib>/others/<id>/` n'est jamais créé. « Ouvrir le dossier »
+        // répondait « mod introuvable » alors que le PDF était en bibliothèque.
+        let base = crate::testutil::temp_dir("other-folder-res");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+
+        let src = base.join("src").join("JustAPdf");
+        make_tree(&src, &["READ ME.pdf"]);
+        import_other(&conn, &library, "JustAPdf.rar", &src, true, ExtractionMode::InfoOnly).unwrap();
+
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        assert!(
+            !library.join("others").join("JustAPdf").is_dir(),
+            "rien n'est allé dans le dossier de contenu : tout était une annexe"
+        );
+        assert_eq!(
+            folder_path(&conn, &cfg, "JustAPdf").unwrap(),
+            resources::resources_dir_for(&library, "others", &["JustAPdf"]),
+            "on ouvre le dossier ressources, là où le document est réellement"
         );
     }
 }

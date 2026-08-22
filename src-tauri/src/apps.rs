@@ -143,13 +143,41 @@ pub fn activate_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), 
     if let Some(parent) = link.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    activation::create_junction(&link, &target)
+    activation::create_junction(&link, &target)?;
+    // Ajouts au jeu (§4.5.3) : une app en a autant qu'une voiture — configs
+    // CSP, textures, fichiers de `cfg/` livrés à côté de son dossier. Même
+    // best-effort qu'ailleurs : un ajout non posé ne doit pas empêcher l'app
+    // de tourner, mais laisse une trace.
+    if let Err(e) = crate::extras::deploy(conn, cfg, crate::extras::OwnerKind::App, id) {
+        log::warn!("deploy_extras app {id}: {e}");
+    }
+    Ok(())
+}
+
+/// L'app est-elle posée dans AC ? Les deux emplacements sont testés : le
+/// langage se déduit des fichiers stockés ([`app_lang`]), et un appelant qui
+/// n'a pas la bibliothèque sous la main n'a pas à le savoir.
+pub fn is_app_active(cfg: &AppConfig, id: &str) -> bool {
+    let Some(ac) = cfg.ac_install_path.as_ref() else {
+        return false;
+    };
+    ["python", "lua"]
+        .iter()
+        .any(|lang| activation::is_junction(&ac.join("apps").join(lang).join(id)))
 }
 
 /// Désactive une app : retire la junction, dans `apps/python/` ou `apps/lua/`
 /// selon celui des deux qui est effectivement occupé (garde-fou junction) —
 /// pas besoin de rouvrir la bibliothèque pour deviner le langage à l'avance.
-pub fn deactivate_app(cfg: &AppConfig, id: &str) -> Result<(), String> {
+///
+/// Les ajouts au jeu partent **avant** la junction : l'ordre n'a pas
+/// d'importance fonctionnelle (les deux mécanismes sont indépendants), mais un
+/// retrait de junction raté ne doit pas laisser d'ajouts posés sans rien qui
+/// les réclame.
+pub fn deactivate_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
+    if let Err(e) = crate::extras::undeploy(conn, cfg, id) {
+        log::warn!("undeploy_extras app {id}: {e}");
+    }
     let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?;
     for lang in ["python", "lua"] {
         let link = ac.join("apps").join(lang).join(id);
@@ -171,9 +199,14 @@ pub fn remove_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), St
     // Désactive si une junction est présente, python ou lua (ignore l'absence
     // des deux, et un vrai dossier étranger — rien à faire dans ce cas ici,
     // seuls les fichiers de bibliothèque et l'overlay nous appartiennent).
-    let _ = deactivate_app(cfg, id);
+    // Retire aussi ses ajouts au jeu d'AC (§4.5.3), avant d'effacer leur source
+    // en bibliothèque : « l'ajout vit et meurt avec son mod ».
+    let _ = deactivate_app(conn, cfg, id);
     if let Some(dir) = crate::libpath::resolve(cfg.library_path.as_deref(), &app.library_path) {
         let _ = std::fs::remove_dir_all(dir);
+    }
+    if let Some(lib) = &cfg.library_path {
+        crate::extras::remove_tree(lib, crate::extras::OwnerKind::App, id);
     }
     overlay::delete_app(conn, id).map_err(|e| e.to_string())
 }
@@ -251,7 +284,7 @@ mod tests {
         );
         assert!(!ac.join("apps").join("python").join("MyLuaApp").exists());
 
-        deactivate_app(&cfg, "MyLuaApp").unwrap();
+        deactivate_app(&conn, &cfg, "MyLuaApp").unwrap();
         assert!(
             !ac.join("apps").join("lua").join("MyLuaApp").exists(),
             "désactivée proprement"
@@ -282,7 +315,7 @@ mod tests {
         activate_app(&conn, &cfg, "MyApp").unwrap();
         assert!(activation::is_junction(&ac.join("apps").join("python").join("MyApp")));
 
-        deactivate_app(&cfg, "MyApp").unwrap();
+        deactivate_app(&conn, &cfg, "MyApp").unwrap();
         assert!(!ac.join("apps").join("python").join("MyApp").exists());
     }
 }

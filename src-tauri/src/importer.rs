@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::config::AppConfig;
+use crate::extras::OwnerKind;
 use crate::import_bench::{Bucket, ITEM_OVERHEAD_SECS};
 use crate::import_progress::{ImportCtx, ItemPlan, PHASE_EXTRACT, PHASE_FILING, PHASE_SCAN};
 use crate::modscan::{self, ModKind};
@@ -563,7 +564,7 @@ fn rescue_nested_archives(
     if nested.is_empty() {
         return false;
     }
-    let mut discovered: Vec<(String, ModKind)> = Vec::new();
+    let mut discovered: Vec<(String, OwnerKind)> = Vec::new();
     for p in &nested {
         import_leftover(
             ctx,
@@ -596,6 +597,9 @@ fn rescue_nested_archives(
         root,
         &nested,
         &discovered,
+        // Rien de reconnu à ce niveau — c'est la définition de ce chemin de
+        // sauvetage. La racine de jeu retombe donc sur l'heuristique de forme.
+        &[],
         copy,
         res_mode,
         result,
@@ -630,6 +634,26 @@ fn collect_leftover(dir: &Path, consumed: &[PathBuf], out: &mut Vec<PathBuf>) {
     }
 }
 
+/// Dossiers des mods reconnus — la matière de la déduction de racine de jeu
+/// ([`crate::acpath::game_root`]). Voitures et circuits seulement : un pack de
+/// skins ou une app ne dit rien de la racine, leur emplacement n'étant pas
+/// contraint par `content/<type>/`.
+fn mod_dirs_of(found: &[modscan::FoundMod]) -> Vec<PathBuf> {
+    found.iter().map(|f| f.dir.clone()).collect()
+}
+
+/// Propriétaires possibles d'un reste (§7.3) : voitures, circuits **et** apps.
+/// Les packs de skins et de sons en sont absents à dessein — leur parent est
+/// une voiture qui n'est pas forcément dans cette archive, donc rien ne dit
+/// qu'un fichier voisin lui appartient.
+fn owners_of(found: &[modscan::FoundMod], apps: &[modscan::FoundApp]) -> Vec<(String, OwnerKind)> {
+    found
+        .iter()
+        .map(|fm| (fm_id(fm), fm.kind.into()))
+        .chain(apps.iter().map(|a| (a.name.clone(), OwnerKind::App)))
+        .collect()
+}
+
 /// Chemins consommés par les mods déjà reconnus dans un dossier scanné — sert
 /// à isoler ce qui reste (`collect_leftover`) pour ne plus jamais le perdre.
 fn consumed_paths(found: &[modscan::FoundMod], subs: &[modscan::FoundSub], apps: &[modscan::FoundApp]) -> Vec<PathBuf> {
@@ -657,12 +681,18 @@ fn consumed_paths(found: &[modscan::FoundMod], subs: &[modscan::FoundSub], apps:
 /// 2. sinon, l'archive ne livre qu'un seul mod : tout ce qui l'entoure lui
 ///    appartient (`system/shaders/…`, `content/driver/…`).
 ///
+/// **Les apps comptent parmi les propriétaires possibles** ([`OwnerKind`]), au
+/// même titre que les voitures et les circuits. Sans elles, une archive livrant
+/// une app et sa notice n'avait aucun propriétaire à proposer : le `READ ME.pdf`
+/// de `_RSS_Settings` devenait un « autre mod » nommé d'après lui, inerte, et
+/// dont « ouvrir le dossier » échouait.
+///
 /// **Limite assumée** : dans un pack multi-mods, un reste que rien ne rattache
 /// reste un « autre mod ». Le rattacher à tous dupliquerait des arbres parfois
 /// lourds ; il n'y a pas de bonne réponse sans regarder le contenu, et « autre
 /// mod » ne perd rien.
-fn owner_of_leftover<'a>(rel: &Path, mods: &'a [(String, ModKind)]) -> Option<&'a (String, ModKind)> {
-    let named: Vec<&(String, ModKind)> = mods
+fn owner_of_leftover<'a>(rel: &Path, mods: &'a [(String, OwnerKind)]) -> Option<&'a (String, OwnerKind)> {
+    let named: Vec<&(String, OwnerKind)> = mods
         .iter()
         .filter(|(id, _)| {
             rel.components()
@@ -701,7 +731,8 @@ fn sweep_leftovers(
     archive_name: &str,
     workdir: &Path,
     consumed: &[PathBuf],
-    mods: &[(String, ModKind)],
+    mods: &[(String, OwnerKind)],
+    mod_dirs: &[PathBuf],
     copy: bool,
     res_mode: crate::resources::ExtractionMode,
     result: &mut ArchiveResult,
@@ -713,25 +744,35 @@ fn sweep_leftovers(
     // balayage-ci tourne quand même.
     crate::overlay::clear_decisions_for_archive(conn, archive_name);
 
-    // Racine réelle de la livraison, emballage de l'auteur traversé (§7.3).
-    // `modscan` descend déjà cet emballage pour trouver les mods ; sans le même
-    // traitement ici, un reste en gardait le segment (`NFS_…/content/texture`)
-    // et n'était donc jamais posé dans le jeu. Les deux doivent s'accorder sur
-    // ce qu'est « la racine de l'archive », sinon les voitures d'un pack
-    // s'installent et ce qui les accompagne reste en bibliothèque.
+    // **Deux racines, et il faut les deux** — c'est ce qui manquait.
     //
-    // **Jamais dans un mod reconnu**, en revanche : une archive qui ne livre
+    // - `workdir` est la racine de *balayage* : ce qu'on parcourt pour ne rien
+    //   laisser derrière. Elle ne bouge pas, sinon un fichier livré à côté de
+    //   l'emballage (le `MANUAL.pdf` du VRC) ne serait jamais ramassé.
+    // - `game_root` est la racine de *jeu* : celle à laquelle les chemins sont
+    //   relatifs pour AC. Elle est **déduite des mods reconnus** — un mod trouvé
+    //   à `<X>/content/cars/<id>` dit que `<X>` est cette racine (§4.5.3) — avec
+    //   repli sur l'ancienne heuristique de forme quand la déduction ne dit rien.
+    //
+    // Les confondre a coûté deux bugs opposés : la font du VRC jamais posée
+    // (`AC Files/` gardé dans le chemin), et le patch de LA Canyons posé dans un
+    // `<AC>\MODS\` inerte (`MODS/` pris pour un chemin de jeu).
+    //
+    // **Jamais dans un mod reconnu**, comme avant : une archive qui ne livre
     // qu'une voiture a, elle aussi, un dossier unique à sa racine — mais c'en
     // est le contenu, pas un emballage. Descendre dedans ferait passer les
     // fichiers du mod pour des restes, et l'extraction des annexes les sortirait
-    // du dossier de l'auteur : très exactement la règle d'or n°3 (§4.5.1), et le
-    // bug qu'elle est là pour empêcher.
-    let unwrapped = crate::acpath::effective_root(workdir);
-    let workdir = if consumed.iter().any(|c| unwrapped.starts_with(c)) {
+    // du dossier de l'auteur : très exactement la règle d'or n°3 (§4.5.1).
+    let deduced = crate::acpath::game_root(workdir, mod_dirs);
+    let game_root: &Path = if consumed.iter().any(|c| deduced.starts_with(c)) {
         workdir
     } else {
-        &unwrapped
+        &deduced
     };
+    // Racine à laquelle rapporter ce reste-ci. Hors de la racine de jeu, on
+    // retombe sur la racine de balayage : le chemin obtenu ne mènera nulle part
+    // dans AC, ce qui est exactement ce qu'on veut dire de lui.
+    let root_of = |p: &Path| if p.starts_with(game_root) { game_root } else { workdir };
 
     let mut leftovers = Vec::new();
     collect_leftover(workdir, consumed, &mut leftovers);
@@ -740,7 +781,7 @@ fn sweep_leftovers(
     // fin de balayage. L'activation par défaut (§4.2) a lieu avant, quand
     // leur arbre n'existe pas encore — sans ce rattrapage, ils ne
     // seraient posés qu'à la réactivation suivante.
-    let mut owners_with_extras: Vec<(String, ModKind)> = Vec::new();
+    let mut owners_with_extras: Vec<(String, OwnerKind)> = Vec::new();
 
     // Les archives imbriquées passent AVANT leurs voisins : ce qui en sort peut
     // devenir le propriétaire de ce qui les entoure. Cas réel : une archive qui
@@ -749,7 +790,7 @@ fn sweep_leftovers(
     // n'est encore connue, et finirait « autre mod » au lieu d'être rangé dans
     // les ressources de la voiture (§4.5.2).
     let (nested, plain): (Vec<PathBuf>, Vec<PathBuf>) = leftovers.into_iter().partition(|p| is_archive_file(p));
-    let mut owners: Vec<(String, ModKind)> = mods.to_vec();
+    let mut owners: Vec<(String, OwnerKind)> = mods.to_vec();
     for (i, p) in nested.iter().enumerate() {
         ctx.file_ratio(index, tail_ratio(TAIL_APPS_END, 1.0, i, leftover_count));
         import_leftover(
@@ -759,7 +800,7 @@ fn sweep_leftovers(
             rules,
             library,
             archive_name,
-            workdir,
+            root_of(p),
             p,
             copy,
             res_mode,
@@ -771,7 +812,8 @@ fn sweep_leftovers(
 
     for (i, p) in plain.into_iter().enumerate() {
         ctx.file_ratio(index, tail_ratio(TAIL_APPS_END, 1.0, nested.len() + i, leftover_count));
-        let raw = p.strip_prefix(workdir).unwrap_or(&p).to_path_buf();
+        let base = root_of(&p);
+        let raw = p.strip_prefix(base).unwrap_or(&p).to_path_buf();
         // Dossier de jeu livré à nu (`driver/` au lieu de `content/driver/`) :
         // corrigé avant tout usage, car ce chemin est ce que l'activation
         // rejouera depuis la racine d'AC (§4.5.3).
@@ -808,17 +850,23 @@ fn sweep_leftovers(
                 // annexe (§4.5.2), pas un ajout au jeu — il n'a rien à faire dans
                 // AC. Rangé dans les ressources du mod auquel il appartient,
                 // là où l'utilisateur ira le lire.
+                //
+                // « À la racine » vaut pour **les deux** racines : le
+                // `MANUAL.pdf` posé à côté de l'emballage `AC Files/` est une
+                // notice au même titre que le `readme.txt` posé dedans. Le
+                // `rel` d'un reste hors racine de jeu étant compté depuis la
+                // racine de balayage, ce seul test les couvre tous les deux.
                 let is_root_file = p.is_file() && rel.parent().is_some_and(|d| d.as_os_str().is_empty());
                 if is_root_file {
                     match crate::resources::route_beside_root(&p, res_mode) {
                         crate::resources::Route::Resources => {
-                            let dest = crate::resources::resources_dir(library, *owner_kind, owner_id).join(&rel);
-                            if let Err(e) = crate::extras::store(
-                                &crate::resources::resources_dir(library, *owner_kind, owner_id),
-                                &rel,
-                                &p,
-                                copy,
-                            ) {
+                            let res_dir = crate::resources::resources_dir_for(
+                                library,
+                                owner_kind.category(),
+                                &[owner_id.as_str()],
+                            );
+                            let dest = res_dir.join(&rel);
+                            if let Err(e) = crate::extras::store(&res_dir, &rel, &p, copy) {
                                 log::warn!("ancillary {}: {e}", dest.display());
                             }
                             continue;
@@ -879,7 +927,7 @@ fn sweep_leftovers(
             rules,
             library,
             archive_name,
-            workdir,
+            base,
             &p,
             copy,
             res_mode,
@@ -889,15 +937,27 @@ fn sweep_leftovers(
         );
     }
 
-    for (id, kind) in owners_with_extras {
+    for (id, owner) in owners_with_extras {
         // Seulement si le mod est effectivement déployé : poser les ajouts au jeu
         // d'un mod inactif mettrait dans AC du contenu que rien n'y annonce.
-        if !crate::activation::is_mod_active(cfg, kind, &id) {
+        if !is_owner_active(cfg, owner, &id) {
             continue;
         }
-        if let Err(e) = crate::extras::deploy(conn, cfg, kind, &id) {
+        if let Err(e) = crate::extras::deploy(conn, cfg, owner, &id) {
             log::warn!("deploy_extras {id}: {e}");
         }
+    }
+}
+
+/// Le propriétaire est-il posé dans le jeu ? Chaque type a son mécanisme —
+/// hardlinks/junction dans `content/` pour un mod, junction dans `apps/` pour
+/// une app — mais la question posée avant de déployer des ajouts au jeu est la
+/// même : ne rien mettre dans AC au nom de quelque chose qui n'y est pas.
+fn is_owner_active(cfg: &AppConfig, owner: OwnerKind, id: &str) -> bool {
+    match owner {
+        OwnerKind::Car => crate::activation::is_mod_active(cfg, ModKind::Car, id),
+        OwnerKind::Track => crate::activation::is_mod_active(cfg, ModKind::Track, id),
+        OwnerKind::App => crate::apps::is_app_active(cfg, id),
     }
 }
 
@@ -971,7 +1031,7 @@ fn import_leftover(
     // Mods connus, complété par ceux qui sortent d'une archive imbriquée : c'est
     // ce qui permet ensuite de rattacher à une voiture la notice livrée à côté
     // du zip qui la contenait.
-    discovered: &mut Vec<(String, ModKind)>,
+    discovered: &mut Vec<(String, OwnerKind)>,
 ) {
     // Chemin relatif à la racine balayée, et non simple nom de fichier : c'est
     // lui qui donne sa destination au reste à l'activation (`others::place`
@@ -1054,7 +1114,7 @@ fn import_leftover(
                         // de la barre, qui n'a pas de part réservée par mod.
                         &|_| {},
                     ) {
-                        discovered.push((imported.id_interne.clone(), fm.kind));
+                        discovered.push((imported.id_interne.clone(), fm.kind.into()));
                         result.mods.push(imported);
                     }
                 }
@@ -1073,11 +1133,24 @@ fn import_leftover(
                 if !apps.is_empty() {
                     let imported_apps = crate::apps::import_apps(conn, library, &nested_name, &apps, false, res_mode);
                     auto_activate_apps(conn, cfg, &imported_apps);
+                    // Propriétaires possibles, comme les voitures : la notice
+                    // livrée à côté d'une app appartient à cette app (§4.5.2).
+                    discovered.extend(imported_apps.iter().map(|a| (a.name.clone(), OwnerKind::App)));
                     result.apps.extend(imported_apps);
                 }
                 let consumed = consumed_paths(&found, &subs, &apps);
                 let mut inner = Vec::new();
                 collect_leftover(&extracted, &consumed, &mut inner);
+                // Même règle des deux racines qu'au balayage de premier niveau
+                // (`sweep_leftovers`) : l'emballage de l'auteur se rencontre
+                // aussi bien dans une archive imbriquée que dehors, et les deux
+                // chemins doivent s'accorder sur ce qu'est un chemin de jeu.
+                let inner_game_root = crate::acpath::game_root(&extracted, &mod_dirs_of(&found));
+                let inner_game_root = if consumed.iter().any(|c| inner_game_root.starts_with(c)) {
+                    extracted.clone()
+                } else {
+                    inner_game_root
+                };
                 for lp in inner {
                     import_leftover(
                         ctx,
@@ -1086,7 +1159,11 @@ fn import_leftover(
                         rules,
                         library,
                         &nested_name,
-                        &extracted,
+                        if lp.starts_with(&inner_game_root) {
+                            &inner_game_root
+                        } else {
+                            &extracted
+                        },
                         &lp,
                         false,
                         res_mode,
@@ -1560,9 +1637,22 @@ fn file_tail(
     // contenu de zips imbriqués (ex. mods CMRT-style qui livrent une app ET un
     // zip séparé visant `content/gui/...`).
     let consumed = consumed_paths(found, subs, apps);
-    let found_ids: Vec<(String, ModKind)> = found.iter().map(|fm| (fm_id(fm), fm.kind)).collect();
+    let owners = owners_of(found, apps);
     sweep_leftovers(
-        ctx, index, conn, cfg, rules, library, name, root, &consumed, &found_ids, copy, res_mode, result,
+        ctx,
+        index,
+        conn,
+        cfg,
+        rules,
+        library,
+        name,
+        root,
+        &consumed,
+        &owners,
+        &mod_dirs_of(found),
+        copy,
+        res_mode,
+        result,
     );
 }
 
@@ -1841,7 +1931,7 @@ fn exec_one(
     let subs = modscan::scan_subs(dir);
     let apps = modscan::scan_apps(dir);
     let consumed = consumed_paths(&found, &subs, &apps);
-    let found_ids: Vec<(String, ModKind)> = found.iter().map(|fm| (fm_id(fm), fm.kind)).collect();
+    let owners = owners_of(&found, &apps);
     let res_mode = crate::resources::ExtractionMode::parse(&cfg.prefs.resource_extraction_mode);
     sweep_leftovers(
         ctx,
@@ -1853,7 +1943,8 @@ fn exec_one(
         &name,
         dir,
         &consumed,
-        &found_ids,
+        &owners,
+        &mod_dirs_of(&found),
         copy,
         res_mode,
         &mut result,
@@ -2381,6 +2472,18 @@ mod tests {
         std::fs::write(
             ui.join("ui_car.json"),
             r#"{"name":"My Test Car","brand":"TestBrand","tags":["gt3","turbo","italy"],"class":"race","year":2020,"version":"1.0","author":"Tester"}"#,
+        )
+        .unwrap();
+        std::fs::write(root.join(id).join("model.kn5"), b"FAKE_KN5_DATA").unwrap();
+    }
+
+    /// Circuit synthétique <root>/<id>/ui/ui_track.json + un .kn5.
+    fn make_fake_track(root: &Path, id: &str) {
+        let ui = root.join(id).join("ui");
+        std::fs::create_dir_all(&ui).unwrap();
+        std::fs::write(
+            ui.join("ui_track.json"),
+            r#"{"name":"My Test Track","country":"Italy","tags":["road"],"version":"1.0","author":"Tester"}"#,
         )
         .unwrap();
         std::fs::write(root.join(id).join("model.kn5"), b"FAKE_KN5_DATA").unwrap();
@@ -3177,11 +3280,21 @@ mod tests {
     }
 
     #[test]
-    fn app_and_sibling_content_override_both_survive_import() {
-        // Bug réel (mods style CMRT) : une app livrée avec, à côté, un dossier
-        // qui vise `extension/...` (ou `content/...`) directement — avant ce
-        // correctif, dès que l'app était reconnue, tout le reste du dossier
-        // disparaissait silencieusement au tri (tout-ou-rien §7.3).
+    fn what_is_delivered_beside_an_app_belongs_to_that_app() {
+        // Deux bugs successifs, et c'est le second qui est corrigé ici.
+        //
+        // 1. Mods style CMRT : une app livrée avec, à côté, un dossier visant
+        //    `extension/…` — dès que l'app était reconnue, tout le reste
+        //    disparaissait silencieusement au tri (tout-ou-rien §7.3).
+        // 2. Le reste survivait, mais **sans propriétaire** : le balayage ne
+        //    connaissait que voitures et circuits, donc il devenait un « autre
+        //    mod » anonyme. Rien ne le reliait plus à l'app — il survivait donc
+        //    à sa suppression, exactement le défaut que les ajouts au jeu
+        //    (§4.5.3) existent pour éviter.
+        //
+        // Une app est désormais propriétaire au même titre qu'une voiture : le
+        // dossier devient un de ses ajouts au jeu, posé fichier par fichier
+        // (hardlink) et non par jonction, et il vit et meurt avec elle.
         let base = crate::testutil::temp_dir("import-leftover-dir");
         let library = base.join("library");
         let ac = base.join("ac");
@@ -3207,15 +3320,212 @@ mod tests {
         let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
         assert_eq!(r.apps.len(), 1, "l'app est bien reconnue");
-        assert_eq!(
-            r.others.len(),
-            1,
-            "le dossier extension/ à côté de l'app ne doit plus être perdu"
+        assert_eq!(r.extras, 1, "le dossier voisin est un ajout au jeu de l'app");
+        assert!(
+            r.others.is_empty(),
+            "plus d'entrée anonyme : il a un propriétaire, donc il n'est plus orphelin"
         );
         assert!(library.join("apps").join("MyApp").join("MyApp.lua").is_file());
         assert!(
-            crate::activation::is_junction(&ac.join("extension").join("config").join("new_thing")),
-            "reste importé et activé comme autre mod, chemin préservé (extension/config/new_thing)"
+            crate::extras::dir(&library, OwnerKind::App, "MyApp")
+                .join("extension")
+                .join("config")
+                .join("new_thing")
+                .join("settings.ini")
+                .is_file(),
+            "rangé sous les ajouts au jeu de l'app, chemin d'AC préservé"
+        );
+        assert!(
+            ac.join("extension")
+                .join("config")
+                .join("new_thing")
+                .join("settings.ini")
+                .is_file(),
+            "posé dans AC dès l'import, l'app étant activée par défaut (§4.2)"
+        );
+
+        // Et il repart avec elle : c'est tout l'intérêt d'avoir un propriétaire.
+        crate::apps::remove_app(&conn, &cfg, "MyApp").unwrap();
+        assert!(
+            !ac.join("extension").join("config").join("new_thing").exists(),
+            "l'ajout au jeu meurt avec l'app qui l'a apporté (§4.5.3)"
+        );
+    }
+
+    #[test]
+    fn an_accompanied_wrapper_still_reaches_the_game() {
+        // Bug reel (VRC Pageau 9T8) : l'auteur emballe le jeu dans `AC Files/`
+        // mais pose a cote un manuel et des fonds d'ecran. Sept entrees a la
+        // racine, donc aucun emballage traversable par la forme — et
+        // `AC Files/content/fonts` etait refuse comme non-chemin de jeu. La
+        // voiture s'installait, sa font non, en silence.
+        //
+        // La racine de jeu se deduit desormais de l'endroit ou la voiture a ete
+        // trouvee (`acpath::game_root`), et les deux racines cohabitent : la
+        // notice posee **hors** de l'emballage reste une annexe.
+        let base = crate::testutil::temp_dir("import-wrapped-beside");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let src = base.join("VRC_Pageau");
+        let game = src.join("AC Files");
+        make_fake_car(&game.join("content").join("cars"), "vrc_pageau");
+        let fonts = game.join("content").join("fonts");
+        std::fs::create_dir_all(&fonts).unwrap();
+        std::fs::write(fonts.join("vrc.txt"), b"FONT").unwrap();
+        std::fs::write(src.join("MANUAL.pdf"), b"PDF").unwrap();
+        std::fs::create_dir_all(src.join("Wallpapers")).unwrap();
+        std::fs::write(src.join("Wallpapers").join("01.jpg"), b"JPG").unwrap();
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+        assert_eq!(r.mods.len(), 1, "la voiture est trouvee sous l'emballage");
+        assert!(
+            ac.join("content").join("fonts").join("vrc.txt").is_file(),
+            "la font atteint le jeu : l'emballage ne fait plus partie du chemin"
+        );
+        assert!(
+            crate::resources::resources_dir(&library, ModKind::Car, "vrc_pageau")
+                .join("MANUAL.pdf")
+                .is_file(),
+            "la notice posee hors de l'emballage reste une annexe (§4.5.2)"
+        );
+        // Les fonds d'ecran ne sont ni un chemin de jeu ni un document isole :
+        // gardes, listes « hors chemin de jeu », jamais poses. C'est ce que le
+        // lot suivant transformera en question a l'utilisateur.
+        assert!(
+            !ac.join("Wallpapers").exists(),
+            "un dossier d'archive ne se deverse pas a la racine de l'install"
+        );
+    }
+
+    #[test]
+    fn a_jsgme_mods_folder_is_never_laid_into_the_game() {
+        // Bug reel (LA Canyons) : l'archive livre `MODS/<variante>/content/…`,
+        // la convention JSGME. `mods/` figurait dans les dossiers de jeu, donc
+        // les variantes etaient posees dans `<AC>\MODS\` — ou AC ne regarde
+        // jamais. Le patch « Hide Pit Crew » s'installait avec l'apparence du
+        // succes et ne faisait rien.
+        let base = crate::testutil::temp_dir("import-jsgme");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("content").join("tracks")).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        // Arborescence de l'archive reelle : trois variantes sous `MODS/`,
+        // chacune decrite par son `description.jsgme`, et deux notices a la
+        // racine. Le circuit est dans l'une d'elles, les deux autres sont des
+        // options que l'auteur propose.
+        let src = base.join("LA_Canyons");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("Install Guide.pdf"), b"PDF").unwrap();
+        let mods = src.join("MODS");
+
+        let main = mods.join("LA Canyons - Main");
+        make_fake_track(&main.join("content").join("tracks"), "la_canyons");
+        std::fs::write(main.join("description.jsgme"), b"LA Canyons - Main").unwrap();
+
+        let patch = mods.join("LA Canyons - Hide Pit Crew");
+        std::fs::create_dir_all(patch.join("content").join("objects3D")).unwrap();
+        std::fs::write(patch.join("content").join("objects3D").join("pitcrew.kn5"), b"PATCH").unwrap();
+        std::fs::write(patch.join("description.jsgme"), b"Hide Pit Crew").unwrap();
+
+        let chp = mods.join("LA Canyons - Highway Patrol Skins");
+        std::fs::create_dir_all(
+            chp.join("content")
+                .join("cars")
+                .join("ks_alfa_giulia_qv")
+                .join("skins")
+                .join("chp_118"),
+        )
+        .unwrap();
+        std::fs::write(
+            chp.join("content")
+                .join("cars")
+                .join("ks_alfa_giulia_qv")
+                .join("skins")
+                .join("chp_118")
+                .join("skin.dds"),
+            b"SKIN",
+        )
+        .unwrap();
+        std::fs::write(chp.join("description.jsgme"), b"CHP Skins").unwrap();
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+        assert_eq!(r.mods.len(), 1, "le circuit est trouve sous sa variante");
+        assert!(
+            !ac.join("MODS").exists(),
+            "rien n'est pose dans le dossier de stockage de JSGME"
+        );
+        assert!(
+            !ac.join("content").join("objects3D").exists(),
+            "et le patch n'est pas pose non plus : c'est une variante que l'auteur propose, \
+             pas un ajout du circuit — l'utilisateur tranchera"
+        );
+        assert!(
+            crate::resources::resources_dir(&library, ModKind::Track, "la_canyons")
+                .join("Install Guide.pdf")
+                .is_file(),
+            "la notice de racine reste une annexe du circuit"
+        );
+    }
+
+    #[test]
+    fn a_document_delivered_beside_an_app_becomes_its_resource() {
+        // Bug reel (`_RSS_Settings`) : l'archive livre `apps/lua/RSS_Settings/`
+        // et, a cote, son mode d'emploi. Les apps ne comptaient pas parmi les
+        // proprietaires possibles d'un reste, donc le PDF devenait un « autre
+        // mod » nomme `…rar__READ ME - RSS Settings Application.pdf` — dont le
+        // contenu partait en ressources, laissant une entree sans dossier, et
+        // « ouvrir le dossier » repondait « mod introuvable ».
+        let base = crate::testutil::temp_dir("import-app-doc");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("apps").join("lua")).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let src = base.join("_RSS_Settings");
+        let app = src.join("apps").join("lua").join("RSS_Settings");
+        std::fs::create_dir_all(&app).unwrap();
+        std::fs::write(app.join("RSS_Settings.lua"), b"-- app").unwrap();
+        std::fs::write(src.join("READ ME - RSS Settings.pdf"), b"PDF").unwrap();
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+        assert_eq!(r.apps.len(), 1, "l'app est reconnue");
+        assert!(
+            r.others.is_empty(),
+            "plus d'entree « autre mod » nommee d'apres une notice"
+        );
+        assert!(
+            crate::resources::resources_dir_for(&library, "apps", &["RSS_Settings"])
+                .join("READ ME - RSS Settings.pdf")
+                .is_file(),
+            "la notice est rangee dans les ressources de l'app, la ou on ira la lire"
         );
     }
 
@@ -3323,7 +3633,7 @@ mod tests {
         assert!(r.others.is_empty(), "aucun « autre mod » anonyme créé");
 
         // Stockés bruts, chemin relatif à AC conservé.
-        let sat = crate::extras::dir(&library, ModKind::Car, "rss_test_v8");
+        let sat = crate::extras::dir(&library, OwnerKind::Car, "rss_test_v8");
         for rel in [
             "extension/config/cars/rss/rss_test_v8/car.ini",
             "system/shaders/shader.fxo",
@@ -3455,7 +3765,7 @@ mod tests {
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
         assert_eq!(r.extras, 1, "le dossier driver/ est rattaché à la voiture");
 
-        let stored = crate::extras::dir(&library, ModKind::Car, "some_car")
+        let stored = crate::extras::dir(&library, OwnerKind::Car, "some_car")
             .join("content")
             .join("driver")
             .join("pro.kn5");

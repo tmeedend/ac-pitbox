@@ -196,7 +196,7 @@ pub fn delete_broken(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(),
         log::warn!("undeploy_extras {id}: {e}");
     }
     if let Some(lib) = &cfg.library_path {
-        crate::extras::remove_tree(lib, kind, id);
+        crate::extras::remove_tree(lib, kind.into(), id);
     }
 
     // Déploiement éventuel dans content/ (symlink hérité OU hardlinks, §2).

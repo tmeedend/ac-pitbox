@@ -154,7 +154,7 @@ pub fn list_mod_extras(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<
     let m = crate::overlay::get_mod(&conn, &id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_NOT_FOUND)?;
-    Ok(crate::extras::list(&conn, &cfg, mod_kind(&m.kind), &id))
+    Ok(crate::extras::list(&conn, &cfg, mod_kind(&m.kind).into(), &id))
 }
 
 /// Ouvre un fichier du dossier ressources avec l'application par défaut de

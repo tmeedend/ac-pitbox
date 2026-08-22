@@ -58,9 +58,62 @@ use crate::config::AppConfig;
 use crate::modscan::ModKind;
 use crate::overlay;
 
+/// Ce qui peut **posséder** des ajouts au jeu : une voiture, un circuit, ou une
+/// app (§12bis.4). Donne le segment d'arbre sous `extras/` — et le même sous
+/// `resources/`, les deux arbres étant rangés à l'identique.
+///
+/// Une app en a besoin pour la même raison qu'une voiture : ce qu'une archive
+/// livre **à côté** de son dossier lui appartient quand même. Sans ce type, le
+/// balayage des restes (§7.3) ne connaissait que voitures et circuits, donc le
+/// `READ ME.pdf` livré à côté d'une app n'avait aucun propriétaire possible et
+/// devenait un « autre mod » à nom absurde
+/// (`_RSS_Settings….rar__READ ME - RSS Settings Application.pdf`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OwnerKind {
+    Car,
+    Track,
+    App,
+}
+
+impl OwnerKind {
+    /// Segment de bibliothèque : `<lib>/extras/<category>/<id>`.
+    pub fn category(self) -> &'static str {
+        match self {
+            OwnerKind::Car => "cars",
+            OwnerKind::Track => "tracks",
+            OwnerKind::App => "apps",
+        }
+    }
+
+    /// Relit ce que [`Self::category`] a écrit dans `extra_links.kind`. Accepte
+    /// le singulier et n'importe quelle casse, parce que ce type est persisté
+    /// en base et comparé à plusieurs endroits, et qu'un écart y est
+    /// **silencieux** : un circuit relu comme voiture cherche simplement dans
+    /// le mauvais arbre de bibliothèque et ne trouve rien. Bug réel : les
+    /// ajouts au jeu d'un circuit étaient posés puis immédiatement effacés,
+    /// parce que `"tracks"` était comparé à `"Track"`.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "car" | "cars" => Some(OwnerKind::Car),
+            "track" | "tracks" => Some(OwnerKind::Track),
+            "app" | "apps" => Some(OwnerKind::App),
+            _ => None,
+        }
+    }
+}
+
+impl From<ModKind> for OwnerKind {
+    fn from(k: ModKind) -> Self {
+        match k {
+            ModKind::Car => OwnerKind::Car,
+            ModKind::Track => OwnerKind::Track,
+        }
+    }
+}
+
 /// Arbre des ajouts au jeu d'un mod : `<lib>/extras/<type>/<id>`.
-pub fn dir(library: &Path, kind: ModKind, id: &str) -> PathBuf {
-    library.join("extras").join(kind.content_folder()).join(id)
+pub fn dir(library: &Path, owner: OwnerKind, id: &str) -> PathBuf {
+    library.join("extras").join(owner.category()).join(id)
 }
 
 /// Racine depuis laquelle les chemins de cet arbre sont relatifs à AC —
@@ -107,8 +160,8 @@ pub fn store(sat_dir: &Path, rel: &Path, src: &Path, copy: bool) -> Result<(), S
 }
 
 /// Supprime l'arbre des ajouts au jeu d'un mod (suppression du mod).
-pub fn remove_tree(library: &Path, kind: ModKind, id: &str) {
-    let d = dir(library, kind, id);
+pub fn remove_tree(library: &Path, owner: OwnerKind, id: &str) {
+    let d = dir(library, owner, id);
     if d.exists() {
         if let Err(e) = std::fs::remove_dir_all(&d) {
             log::warn!("remove extras tree {}: {e}", d.display());
@@ -169,9 +222,12 @@ fn best_claim(conn: &Connection, cfg: &AppConfig, ac_path: &Path) -> Arbitration
         .into_iter()
         .filter_map(|(mod_id, kind, claimed_at)| {
             // `kind` a été écrit par `set_extra_links` sous la forme
-            // `content_folder()` ("cars"/"tracks") : le relire autrement
-            // enverrait la recherche dans le mauvais arbre de bibliothèque.
-            let Some(kind) = ModKind::from_content_folder(&kind) else {
+            // `OwnerKind::category()` ("cars"/"tracks"/"apps") : le relire
+            // autrement enverrait la recherche dans le mauvais arbre de
+            // bibliothèque. Un type inconnu est **ignoré**, jamais traité comme
+            // une absence de réclamant : c'est la réclamation qui décide d'une
+            // suppression, pas notre capacité à la suivre (§4.5.4, règle 4).
+            let Some(kind) = OwnerKind::parse(&kind) else {
                 log::warn!("extras claim {mod_id}: unknown kind {kind:?}, ignored");
                 return None;
             };
@@ -255,11 +311,11 @@ fn sync(conn: &Connection, cfg: &AppConfig, ac_path: &Path) {
 /// Pose les ajouts au jeu du mod dans AC et mémorise exactement ce qu'il réclame
 /// — c'est cette liste, et elle seule, qui sera retirée à la désactivation.
 /// Best-effort : un fichier qui ne peut pas être posé est signalé, jamais forcé.
-pub fn deploy(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -> Result<usize, String> {
+pub fn deploy(conn: &Connection, cfg: &AppConfig, owner: OwnerKind, mod_id: &str) -> Result<usize, String> {
     let (Some(library), Some(ac)) = (cfg.library_path.as_ref(), cfg.ac_install_path.as_ref()) else {
         return Ok(0);
     };
-    let sat = dir(library, kind, mod_id);
+    let sat = dir(library, owner, mod_id);
     if !sat.is_dir() {
         return Ok(0);
     }
@@ -349,7 +405,7 @@ pub fn deploy(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -
     );
     // Enregistré **avant** l'arbitrage : `sync` lit les réclamations en base,
     // ce mod doit donc déjà y figurer pour pouvoir gagner.
-    overlay::set_extra_links(conn, mod_id, kind.content_folder(), &entries).map_err(|e| e.to_string())?;
+    overlay::set_extra_links(conn, mod_id, owner.category(), &entries).map_err(|e| e.to_string())?;
     for f in &files {
         sync(conn, cfg, f);
     }
@@ -409,12 +465,12 @@ pub fn undeploy(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(), 
     // l'exemplaire de référence pour vérifier l'identité de ce qui est posé.
     let sat = links
         .first()
-        .and_then(|(_, _, kind)| ModKind::from_content_folder(kind))
+        .and_then(|(_, _, kind)| OwnerKind::parse(kind))
         .zip(cfg.library_path.as_ref())
         // Même racine qu'à la pose, emballage traversé : sinon la vérification
         // d'identité chercherait l'exemplaire à un chemin qui n'existe pas, le
         // lirait comme « plus à nous » et ne retirerait plus jamais rien.
-        .map(|(kind, library)| root_of(&dir(library, kind, mod_id)));
+        .map(|(owner, library)| root_of(&dir(library, owner, mod_id)));
 
     // La réclamation part d'abord : `sync` compte ce qui reste en base, ce mod
     // ne doit plus y figurer.
@@ -501,11 +557,11 @@ pub struct ExtraFile {
 /// sur disque** comme le bloc Ressources (§4.5.5) : un mod importé avant que
 /// l'app ne suive ces fichiers n'a rien à réimporter pour que l'onglet se
 /// remplisse. L'état de pose, lui, vient de la base.
-pub fn list(conn: &Connection, cfg: &AppConfig, kind: ModKind, mod_id: &str) -> Vec<ExtraFile> {
+pub fn list(conn: &Connection, cfg: &AppConfig, owner: OwnerKind, mod_id: &str) -> Vec<ExtraFile> {
     let (Some(library), Some(ac)) = (cfg.library_path.as_ref(), cfg.ac_install_path.as_ref()) else {
         return Vec::new();
     };
-    let sat = dir(library, kind, mod_id);
+    let sat = dir(library, owner, mod_id);
     if !sat.is_dir() {
         return Vec::new();
     }
@@ -581,12 +637,12 @@ mod tests {
         let ac = cfg.ac_install_path.clone().unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
 
-        let sat = dir(&library, ModKind::Car, "ferrari_f2002");
+        let sat = dir(&library, OwnerKind::Car, "ferrari_f2002");
         write(&sat.join("Ferrari F2002 V1.4").join("READ ME.txt"), b"notice");
         let good = Path::new("content").join("driver").join("driver_501.kn5");
         write(&sat.join(&good), b"pilote");
 
-        let n = deploy(&conn, &cfg, ModKind::Car, "ferrari_f2002").unwrap();
+        let n = deploy(&conn, &cfg, OwnerKind::Car, "ferrari_f2002").unwrap();
         assert_eq!(n, 1, "seul le vrai chemin de jeu est posé");
         assert!(ac.join(&good).is_file(), "le pilote arrive bien dans content/driver");
         assert!(
@@ -595,7 +651,7 @@ mod tests {
         );
 
         // Listé quand même, et dit pour ce qu'il est.
-        let listed = list(&conn, &cfg, ModKind::Car, "ferrari_f2002");
+        let listed = list(&conn, &cfg, OwnerKind::Car, "ferrari_f2002");
         let wrapper = listed
             .iter()
             .find(|f| f.rel_path.starts_with("Ferrari F2002"))
@@ -621,8 +677,8 @@ mod tests {
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
 
         let rel = Path::new("extension").join("textures").join("common").join("rss.dds");
-        let old_car = dir(&library, ModKind::Car, "rss_old");
-        let new_car = dir(&library, ModKind::Car, "rss_new");
+        let old_car = dir(&library, OwnerKind::Car, "rss_old");
+        let new_car = dir(&library, OwnerKind::Car, "rss_new");
         write(&old_car.join(&rel), b"ANCIENNE");
         write(&new_car.join(&rel), b"NOUVELLE");
         set_mtime(&old_car.join(&rel), 1_000_000);
@@ -630,12 +686,12 @@ mod tests {
         let target = ac.join(&rel);
 
         // La plus ancienne d'abord : elle pose le fichier.
-        deploy(&conn, &cfg, ModKind::Car, "rss_old").unwrap();
+        deploy(&conn, &cfg, OwnerKind::Car, "rss_old").unwrap();
         assert_eq!(std::fs::read(&target).unwrap(), b"ANCIENNE");
 
         // La plus récente ensuite : son exemplaire gagne, sans dépendre de
         // l'ordre d'installation.
-        deploy(&conn, &cfg, ModKind::Car, "rss_new").unwrap();
+        deploy(&conn, &cfg, OwnerKind::Car, "rss_new").unwrap();
         assert_eq!(
             std::fs::read(&target).unwrap(),
             b"NOUVELLE",
@@ -672,7 +728,7 @@ mod tests {
         let ac = cfg.ac_install_path.clone().unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
 
-        let sat = dir(&library, ModKind::Track, "bahrain_international_circuit");
+        let sat = dir(&library, OwnerKind::Track, "bahrain_international_circuit");
         let ini = Path::new("extension")
             .join("config")
             .join("tracks")
@@ -684,12 +740,12 @@ mod tests {
         write(&sat.join(&ini), b"[TRACK]");
         write(&sat.join(&vao), b"vao");
 
-        let n = deploy(&conn, &cfg, ModKind::Track, "bahrain_international_circuit").unwrap();
+        let n = deploy(&conn, &cfg, OwnerKind::Track, "bahrain_international_circuit").unwrap();
         assert_eq!(n, 2, "les deux ajouts du circuit sont posés");
         assert!(ac.join(&ini).is_file(), "la config CSP survit à l'arbitrage");
         assert!(ac.join(&vao).is_file(), "le vao-patch survit à l'arbitrage");
 
-        let listed = list(&conn, &cfg, ModKind::Track, "bahrain_international_circuit");
+        let listed = list(&conn, &cfg, OwnerKind::Track, "bahrain_international_circuit");
         assert!(listed.iter().all(|f| f.deployed), "et la fiche les dit posés");
     }
 
@@ -706,9 +762,9 @@ mod tests {
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
 
         let rel = Path::new("extension").join("config").join("mine.ini");
-        let sat = dir(&library, ModKind::Car, "car_a");
+        let sat = dir(&library, OwnerKind::Car, "car_a");
         write(&sat.join(&rel), b"MINE");
-        deploy(&conn, &cfg, ModKind::Car, "car_a").unwrap();
+        deploy(&conn, &cfg, OwnerKind::Car, "car_a").unwrap();
         let target = ac.join(&rel);
         assert!(target.is_file(), "posé");
 
@@ -736,12 +792,12 @@ mod tests {
         let ac = cfg.ac_install_path.clone().unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
 
-        let sat = dir(&library, ModKind::Track, "aspertsham");
+        let sat = dir(&library, OwnerKind::Track, "aspertsham");
         let wrapper = sat.join("Track - Aspertsham - Hargasser SchleifeTrack - Aspertsham - Hargasser Schleife");
         let rel = Path::new("extension").join("backgrounds").join("aspertsham_0.jpg");
         write(&wrapper.join(&rel), b"JPG");
 
-        let n = deploy(&conn, &cfg, ModKind::Track, "aspertsham").unwrap();
+        let n = deploy(&conn, &cfg, OwnerKind::Track, "aspertsham").unwrap();
         assert_eq!(n, 1, "l'image de fond est posée malgré l'emballage");
         assert!(ac.join(&rel).is_file(), "à sa vraie place dans le jeu");
         assert!(
@@ -750,7 +806,7 @@ mod tests {
             "et rien ne se déverse à la racine de l'install"
         );
 
-        let listed = list(&conn, &cfg, ModKind::Track, "aspertsham");
+        let listed = list(&conn, &cfg, OwnerKind::Track, "aspertsham");
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].rel_path, "extension/backgrounds/aspertsham_0.jpg");
         assert!(!listed[0].off_game_path, "plus signalé hors chemin de jeu");
@@ -780,8 +836,8 @@ mod tests {
             .join("tracks")
             .join("loaded")
             .join("spa.ini");
-        write(&dir(&library, ModKind::Track, "spa").join(&rel), b"MOD-CONFIG");
-        deploy(&conn, &cfg, ModKind::Track, "spa").unwrap();
+        write(&dir(&library, OwnerKind::Track, "spa").join(&rel), b"MOD-CONFIG");
+        deploy(&conn, &cfg, OwnerKind::Track, "spa").unwrap();
         let target = ac.join(&rel);
         assert_eq!(std::fs::read(&target).unwrap(), b"MOD-CONFIG", "posé");
 
@@ -817,7 +873,7 @@ mod tests {
             .join("loaded")
             .join("spa.ini");
         let own = Path::new("extension").join("weather").join("spa_fog.ini");
-        let sat = dir(&library, ModKind::Track, "spa");
+        let sat = dir(&library, OwnerKind::Track, "spa");
         write(&sat.join(&managed), b"MOD");
         write(&sat.join(&own), b"MOD");
         set_mtime(&sat.join(&managed), 1_000_000);
@@ -826,11 +882,11 @@ mod tests {
         write(&ac.join(&managed), b"CM");
         set_mtime(&ac.join(&managed), 2_000_000);
 
-        let n = deploy(&conn, &cfg, ModKind::Track, "spa").unwrap();
+        let n = deploy(&conn, &cfg, OwnerKind::Track, "spa").unwrap();
         assert_eq!(n, 1, "seul le chemin libre est posé");
         assert_eq!(std::fs::read(ac.join(&managed)).unwrap(), b"CM", "CM garde la main");
 
-        let listed = list(&conn, &cfg, ModKind::Track, "spa");
+        let listed = list(&conn, &cfg, OwnerKind::Track, "spa");
         let cfg_file = listed
             .iter()
             .find(|f| f.rel_path.contains("loaded/spa.ini"))
@@ -859,17 +915,17 @@ mod tests {
 
         let shared = Path::new("system").join("shaders").join("shared.fxo");
         let own = Path::new("extension").join("config").join("mine.ini");
-        write(&dir(&library, ModKind::Car, "car_a").join(&shared), b"AAAA");
-        write(&dir(&library, ModKind::Car, "car_a").join(&own), b"MINE");
-        write(&dir(&library, ModKind::Car, "car_b").join(&shared), b"BBBB");
+        write(&dir(&library, OwnerKind::Car, "car_a").join(&shared), b"AAAA");
+        write(&dir(&library, OwnerKind::Car, "car_a").join(&own), b"MINE");
+        write(&dir(&library, OwnerKind::Car, "car_b").join(&shared), b"BBBB");
         // car_b, plus récent, gagnera le fichier partagé.
-        set_mtime(&dir(&library, ModKind::Car, "car_a").join(&shared), 1_000_000);
-        set_mtime(&dir(&library, ModKind::Car, "car_b").join(&shared), 2_000_000);
+        set_mtime(&dir(&library, OwnerKind::Car, "car_a").join(&shared), 1_000_000);
+        set_mtime(&dir(&library, OwnerKind::Car, "car_b").join(&shared), 2_000_000);
 
-        deploy(&conn, &cfg, ModKind::Car, "car_a").unwrap();
-        deploy(&conn, &cfg, ModKind::Car, "car_b").unwrap();
+        deploy(&conn, &cfg, OwnerKind::Car, "car_a").unwrap();
+        deploy(&conn, &cfg, OwnerKind::Car, "car_b").unwrap();
 
-        let listed = list(&conn, &cfg, ModKind::Car, "car_a");
+        let listed = list(&conn, &cfg, OwnerKind::Car, "car_a");
         assert_eq!(listed.len(), 2, "les deux fichiers de car_a sont listés");
 
         let mine = listed
@@ -908,14 +964,14 @@ mod tests {
 
         let rel = Path::new("system").join("shaders").join("shared.fxo");
         for (id, body) in [("car_a", b"AAAA"), ("car_b", b"BBBB")] {
-            let p = dir(&library, ModKind::Car, id).join(&rel);
+            let p = dir(&library, OwnerKind::Car, id).join(&rel);
             write(&p, body);
             set_mtime(&p, 1_500_000);
         }
 
-        deploy(&conn, &cfg, ModKind::Car, "car_a").unwrap();
+        deploy(&conn, &cfg, OwnerKind::Car, "car_a").unwrap();
         assert_eq!(std::fs::read(ac.join(&rel)).unwrap(), b"AAAA");
-        deploy(&conn, &cfg, ModKind::Car, "car_b").unwrap();
+        deploy(&conn, &cfg, OwnerKind::Car, "car_b").unwrap();
         assert_eq!(
             std::fs::read(ac.join(&rel)).unwrap(),
             b"BBBB",
@@ -935,11 +991,11 @@ mod tests {
         std::fs::create_dir_all(ac.join("content")).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
 
-        let sat = dir(&library, ModKind::Car, "rss_car");
+        let sat = dir(&library, OwnerKind::Car, "rss_car");
         write(&sat.join("extension").join("config").join("cars").join("x.ini"), b"cfg");
         write(&sat.join("content").join("driver").join("pro.kn5"), b"model");
 
-        let n = deploy(&conn, &cfg, ModKind::Car, "rss_car").unwrap();
+        let n = deploy(&conn, &cfg, OwnerKind::Car, "rss_car").unwrap();
         assert_eq!(n, 2, "les deux ajouts sont posés");
         assert!(ac.join("extension").join("config").join("cars").join("x.ini").is_file());
         assert!(ac.join("content").join("driver").join("pro.kn5").is_file());
@@ -976,12 +1032,12 @@ mod tests {
         let kunos = ac.join("system").join("shaders").join("stock.fxo");
         write(&kunos, b"KUNOS");
         set_mtime(&kunos, 1_000_000);
-        let sat = dir(&library, ModKind::Car, "rss_car");
+        let sat = dir(&library, OwnerKind::Car, "rss_car");
         write(&sat.join("system").join("shaders").join("stock.fxo"), b"MOD");
         write(&sat.join("system").join("shaders").join("new.fxo"), b"MOD");
         set_mtime(&sat.join("system").join("shaders").join("stock.fxo"), 2_000_000);
 
-        let n = deploy(&conn, &cfg, ModKind::Car, "rss_car").unwrap();
+        let n = deploy(&conn, &cfg, OwnerKind::Car, "rss_car").unwrap();
         assert_eq!(n, 2, "le nouveau fichier ET le remplacement sont posés");
         assert_eq!(std::fs::read(&kunos).unwrap(), b"MOD", "le mod prend la place");
         assert!(
@@ -1017,11 +1073,11 @@ mod tests {
         let existing = ac.join("content").join("fonts").join("shared.txt");
         write(&existing, b"RECENT");
         set_mtime(&existing, 2_000_000);
-        let sat = dir(&library, ModKind::Car, "old_car");
+        let sat = dir(&library, OwnerKind::Car, "old_car");
         write(&sat.join("content").join("fonts").join("shared.txt"), b"ANCIEN");
         set_mtime(&sat.join("content").join("fonts").join("shared.txt"), 1_000_000);
 
-        let n = deploy(&conn, &cfg, ModKind::Car, "old_car").unwrap();
+        let n = deploy(&conn, &cfg, OwnerKind::Car, "old_car").unwrap();
         assert_eq!(n, 0, "rien posé : l'exemplaire du mod est plus ancien");
         assert_eq!(std::fs::read(&existing).unwrap(), b"RECENT", "intact");
         assert!(

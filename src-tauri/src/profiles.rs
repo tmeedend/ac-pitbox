@@ -128,7 +128,7 @@ pub fn apply(conn: &Connection, cfg: &AppConfig, profile_id: &str) -> Result<App
     // --- Apps (§12bis.4) ---
     for a in apps::list_apps(conn, cfg).map_err(|e| e.to_string())? {
         if a.active && !target_apps.contains(&a.id) {
-            match apps::deactivate_app(cfg, &a.id) {
+            match apps::deactivate_app(conn, cfg, &a.id) {
                 Ok(()) => report.deactivated += 1,
                 Err(e) => report.errors.push(format!("{} : {e}", a.id)),
             }
@@ -236,7 +236,7 @@ mod tests {
         // copiage de fichiers (aucune junction ne survit).
         activation::deactivate(&conn, &cfg, "test_car").unwrap();
         others::deactivate_other(&conn, "MyShaderMod").unwrap();
-        apps::deactivate_app(&cfg, "MyApp").unwrap();
+        apps::deactivate_app(&conn, &cfg, "MyApp").unwrap();
         assert!(!activation::is_mod_active(&cfg, ModKind::Car, "test_car"));
         assert!(!overlay::list_other_mods(&conn).unwrap()[0].is_active);
         assert!(!apps::list_apps(&conn, &cfg).unwrap()[0].active);

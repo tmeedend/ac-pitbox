@@ -243,7 +243,7 @@ pub fn activate(conn: &Connection, cfg: &AppConfig, mod_id: &str, version_id: Op
     // `content/<type>/<id>` et qui appartient au mod. Best-effort — un
     // ajout non posé (emplacement déjà occupé) ne doit pas empêcher de
     // conduire, mais laisse une trace.
-    if let Err(e) = crate::extras::deploy(conn, cfg, kind, mod_id) {
+    if let Err(e) = crate::extras::deploy(conn, cfg, kind.into(), mod_id) {
         log::warn!("deploy_extras {mod_id}: {e}");
     }
     Ok(())
