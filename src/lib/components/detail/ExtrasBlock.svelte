@@ -7,9 +7,19 @@
   // Regroupé par dossier de destination : 69 lignes plates sont illisibles,
   // alors que quatre destinations disent tout de suite ce que le mod touche.
   import { listModExtras, type ExtraFile } from "$lib/library";
+  import { listAppExtras } from "$lib/apps";
   import { t } from "$lib/i18n/index.svelte";
 
-  let { modId }: { modId: string } = $props();
+  let {
+    modId,
+    source = "mod",
+  }: {
+    modId: string;
+    /** Une app pose ses ajouts au jeu exactement comme une voiture (§4.5.3) :
+     * même arbre, même arbitrage, même affichage. Seul le chemin de résolution
+     * côté backend diffère. */
+    source?: "mod" | "app";
+  } = $props();
 
   let files = $state<ExtraFile[]>([]);
 
@@ -18,7 +28,7 @@
   $effect(() => {
     const current = modId;
     files = [];
-    listModExtras(current).then((fs) => {
+    (source === "app" ? listAppExtras(current) : listModExtras(current)).then((fs) => {
       if (current === modId) files = fs;
     });
   });

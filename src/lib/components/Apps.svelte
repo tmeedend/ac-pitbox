@@ -1,22 +1,18 @@
 <script lang="ts">
-  // Vue Apps (§12bis.4) : type autonome, simplement activable/désactivable par
-  // junction. Pas de fiche ni de tags en v1 — nom, état, activation, ressources
-  // annexes (§4.5.2, même mécanisme que les mods voiture/circuit).
+  // Vue Apps (§12bis.4) : type autonome, activable/désactivable par junction.
+  //
+  // La liste ne montre plus les ressources elle-même : elles vivent, avec les
+  // ajouts au jeu, sur la **fiche** de l'app (`AppDetail`) — même règle que
+  // pour les voitures et les circuits (§4.5.5), les listes de fichiers vivent
+  // dans la page pleine. Un dépliant au milieu d'une liste ne tient pas quand
+  // l'app pose trente configs CSP.
   import { onMount } from "svelte";
-  import {
-    listApps,
-    activateApp,
-    deactivateApp,
-    deleteApp,
-    listAppResources,
-    openAppResource,
-    openAppFolder,
-    type AppItem,
-  } from "$lib/apps";
-  import type { ResourceFile } from "$lib/library";
+  import { listApps, activateApp, deactivateApp, deleteApp, openAppFolder, type AppItem } from "$lib/apps";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { t } from "$lib/i18n/index.svelte";
+  import AppDetail from "./AppDetail.svelte";
   import LoadingState from "./LoadingState.svelte";
+  import StateBadge from "./StateBadge.svelte";
 
   import { errorText } from "$lib/errors";
   let apps = $state<AppItem[]>([]);
@@ -24,49 +20,12 @@
   let busy = $state<string | null>(null);
   let loading = $state(true);
   let error = $state("");
+  /** Fiche ouverte, `null` = la liste. Même schéma que `Library`/`DetailPage`. */
+  let fullId = $state<string | null>(null);
 
-  // Ressources (§4.5.2) : chargées à la demande, une seule fois par app dépliée
-  // (pas de parcours disque pour chaque app de la liste tant que personne ne
-  // regarde), mémorisées ensuite pour un repli instantané.
-  let expandedId = $state<string | null>(null);
-  let resourcesById = $state<Record<string, ResourceFile[]>>({});
-  let resourcesLoading = $state<string | null>(null);
-
-  async function toggleResources(id: string) {
-    if (expandedId === id) {
-      expandedId = null;
-      return;
-    }
-    expandedId = id;
-    if (!resourcesById[id]) {
-      resourcesLoading = id;
-      try {
-        resourcesById = { ...resourcesById, [id]: await listAppResources(id) };
-      } finally {
-        resourcesLoading = null;
-      }
-    }
-  }
-
-  async function openResource(id: string, f: ResourceFile) {
-    try {
-      await openAppResource(id, f.rel_path);
-    } catch (e) {
-      error = errorText(e);
-    }
-  }
-
-  function fmtFileSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} o`;
-    const units = ["Ko", "Mo", "Go"];
-    let v = bytes;
-    let i = -1;
-    do {
-      v /= 1024;
-      i++;
-    } while (v >= 1024 && i < units.length - 1);
-    return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
-  }
+  // Relu depuis la liste plutôt que mémorisé : après une activation, la fiche
+  // doit refléter le nouvel état sans qu'on la remonte.
+  const opened = $derived(apps.find((a) => a.id === fullId) ?? null);
 
   async function load() {
     try {
@@ -129,70 +88,55 @@
   );
 </script>
 
-<div class="apps">
-  <header class="head">
-    <div>
-      <h2 class="lbl-screen">{t("nav.apps")}</h2>
-      <p class="sub">{t("apps.subtitle")}</p>
-    </div>
-    {#if apps.length}
-      <input class="input search" placeholder={t("apps.searchPlaceholder")} bind:value={query} />
-    {/if}
-  </header>
+{#if opened}
+  <AppDetail app={opened} onclose={() => (fullId = null)} onchange={load} />
+{:else}
+  <div class="apps">
+    <header class="head">
+      <div>
+        <h2 class="lbl-screen">{t("nav.apps")}</h2>
+        <p class="sub">{t("apps.subtitle")}</p>
+      </div>
+      {#if apps.length}
+        <input class="input search" placeholder={t("apps.searchPlaceholder")} bind:value={query} />
+      {/if}
+    </header>
 
-  {#if error}<div class="err">{error}</div>{/if}
+    {#if error}<div class="err">{error}</div>{/if}
 
-  {#if loading}
-    <LoadingState />
-  {:else if apps.length === 0}
-    <div class="empty">
-      <p>{t("apps.empty")}</p>
-      <p class="hint">{t("apps.emptyHint", { path: "apps/python/<App>/ · apps/lua/<App>/" })}</p>
-    </div>
-  {:else}
-    <ul class="list">
-      {#each filtered as a (a.id)}
-        <li class:active={a.active}>
-          <div class="row">
-            <span class="a-name mono">{a.id}</span>
-            {#if a.source_archive}<span class="src mono">{a.source_archive}</span>{/if}
-            {#if a.active}<span class="state on">{t("common.active").toLowerCase()}</span>{:else}<span class="state">{t("common.inactive").toLowerCase()}</span>{/if}
-            <button class="btn" type="button" onclick={() => toggleResources(a.id)}>
-              {t("apps.resources")}{#if resourcesById[a.id]?.length} <span class="mono">({resourcesById[a.id].length})</span>{/if}
-            </button>
-            <button class="btn" type="button" onclick={() => openFolder(a.id)} title={t("apps.openFolderTooltip")}>
-              {t("detail.openFolder")}
-            </button>
-            <button class="btn" type="button" onclick={() => toggle(a)} disabled={busy === a.id}>
-              {busy === a.id ? t("common.working") : a.active ? t("common.deactivate") : t("common.activate")}
-            </button>
-            <button class="btn del" type="button" title={t("common.delete")} onclick={() => remove(a)} disabled={busy === a.id}>✕</button>
-          </div>
-          {#if expandedId === a.id}
-            <div class="res-panel">
-              {#if resourcesLoading === a.id}
-                <p class="res-empty">{t("common.loading")}</p>
-              {:else if !resourcesById[a.id]?.length}
-                <p class="res-empty">{t("detail.noResources")}</p>
-              {:else}
-                <ul class="res-list">
-                  {#each resourcesById[a.id] as f (f.rel_path)}
-                    <li>
-                      <button class="res-row" type="button" onclick={() => openResource(a.id, f)} title={t("detail.resourceOpenTooltip")}>
-                        <span class="res-nm">{f.rel_path}</span>
-                        <span class="res-size mono">{fmtFileSize(f.size_bytes)}</span>
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
+    {#if loading}
+      <LoadingState />
+    {:else if apps.length === 0}
+      <div class="empty">
+        <p>{t("apps.empty")}</p>
+        <p class="hint">{t("apps.emptyHint", { path: "apps/python/<App>/ · apps/lua/<App>/" })}</p>
+      </div>
+    {:else}
+      <ul class="list">
+        {#each filtered as a (a.id)}
+          <li class:active={a.active}>
+            <div class="row">
+              <!-- Le nom ouvre la fiche : c'est la cible la plus large de la
+                   ligne, et l'endroit où on clique naturellement. -->
+              <button class="a-name mono" type="button" title={t("apps.detailTooltip")} onclick={() => (fullId = a.id)}>
+                {a.id}
+              </button>
+              {#if a.source_archive}<span class="src mono">{a.source_archive}</span>{/if}
+              <StateBadge active={a.active} stock={false} />
+              <button class="btn" type="button" onclick={() => openFolder(a.id)} title={t("apps.openFolderTooltip")}>
+                {t("detail.openFolder")}
+              </button>
+              <button class="btn" type="button" onclick={() => toggle(a)} disabled={busy === a.id}>
+                {busy === a.id ? t("common.working") : a.active ? t("common.deactivate") : t("common.activate")}
+              </button>
+              <button class="btn del" type="button" title={t("common.delete")} onclick={() => remove(a)} disabled={busy === a.id}>✕</button>
             </div>
-          {/if}
-        </li>
-      {/each}
-    </ul>
-  {/if}
-</div>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </div>
+{/if}
 
 <style>
   .apps {
@@ -243,11 +187,26 @@
     gap: 12px;
     padding: 9px 12px;
   }
+  /* Bouton et non `<span onclick>` : la liste doit rester atteignable au
+     clavier et à la manette, comme les noms cliquables du rapport d'import. */
   .a-name {
     flex: 1;
+    min-width: 0;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
     font-weight: 600;
     color: var(--txt);
     font-size: 12.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .a-name:hover,
+  .a-name:focus-visible {
+    color: var(--rosso-bright);
   }
   .src {
     color: var(--muted2);
@@ -256,15 +215,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 200px;
-  }
-  .state {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--muted);
-  }
-  .state.on {
-    color: var(--green);
   }
   .btn {
     background: var(--raised);
@@ -298,50 +248,5 @@
     font-size: 12px;
     color: var(--faint);
     margin-top: 8px;
-  }
-  .res-panel {
-    border-top: 1px solid var(--line);
-    padding: 9px 12px;
-  }
-  .res-empty {
-    color: var(--muted);
-    font-size: 11.5px;
-  }
-  .res-list {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .res-row {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    border: 1px solid var(--line);
-    background: var(--raised);
-    padding: 7px 10px;
-    text-align: left;
-    cursor: pointer;
-  }
-  .res-row:hover {
-    border-color: var(--rosso-border);
-  }
-  .res-nm {
-    flex: 1;
-    min-width: 0;
-    font-size: 11.5px;
-    color: var(--txt2);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .res-row:hover .res-nm {
-    color: var(--rosso-bright);
-  }
-  .res-size {
-    flex: none;
-    font-size: 10px;
-    color: var(--muted2);
   }
 </style>

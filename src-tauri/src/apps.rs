@@ -29,6 +29,10 @@ pub struct AppItem {
     pub source_archive: Option<String>,
     pub imported_at: String,
     pub active: bool,
+    /// "python" | "lua" — déduit des fichiers stockés ([`app_lang`]), pas d'une
+    /// colonne. Affiché sur la fiche : c'est ce qui dit si l'app suit la
+    /// convention historique d'AC ou celle de CSP, et donc où elle est posée.
+    pub lang: String,
 }
 
 /// Sous-dossier `apps/<langue>/` où pointe la junction d'activation d'une app
@@ -117,6 +121,7 @@ pub fn list_apps(conn: &Connection, cfg: &AppConfig) -> Result<Vec<AppItem>, Str
                 source_archive: a.source_archive,
                 imported_at: a.imported_at,
                 active,
+                lang: lang.to_string(),
             }
         })
         .collect())

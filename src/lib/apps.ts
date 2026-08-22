@@ -1,12 +1,16 @@
 // Pont typé vers les commandes Apps (§12bis.4).
 import { invoke } from "@tauri-apps/api/core";
-import type { ResourceFile } from "$lib/library";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import type { ExtraFile, ResourceFile } from "$lib/library";
 
 export interface AppItem {
   id: string;
   source_archive: string | null;
   imported_at: string;
   active: boolean;
+  /** "python" | "lua" : dit si l'app suit la convention historique d'AC ou
+   * celle de CSP, et donc sous quel `apps/<langue>/` elle est posée. */
+  lang: string;
 }
 
 export function listApps(): Promise<AppItem[]> {
@@ -40,4 +44,23 @@ export function openAppResource(id: string, relPath: string): Promise<void> {
 /** Ouvre le dossier bibliothèque de l'app dans l'explorateur. */
 export function openAppFolder(id: string): Promise<void> {
   return invoke<void>("open_app_folder", { id });
+}
+
+/** URL `asset://` d'une ressource d'app, pour un `<img>` (§4.5.2) — jumeau de
+ * `modResourceSrc`. */
+export async function appResourceSrc(id: string, relPath: string): Promise<string> {
+  return convertFileSrc(await invoke<string>("get_app_resource_path", { id, relPath }));
+}
+
+/** Octets bruts d'une ressource d'app (§4.5.2) — jumeau de `readModResource` :
+ * l'IPC plutôt que `asset://`, pour ne pas dépendre du CORS du protocole. */
+export function readAppResource(id: string, relPath: string): Promise<ArrayBuffer> {
+  return invoke<ArrayBuffer>("read_app_resource", { id, relPath });
+}
+
+/** Ce que l'app installe hors de son dossier `apps/<langue>/<id>` (§4.5.3).
+ * Une app en a autant qu'une voiture : configs CSP, textures, fichiers de
+ * `cfg/` livrés à côté de son dossier. */
+export function listAppExtras(id: string): Promise<ExtraFile[]> {
+  return invoke<ExtraFile[]>("list_app_extras", { id });
 }

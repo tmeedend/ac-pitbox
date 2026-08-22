@@ -179,3 +179,39 @@ pub fn open_app_resource(app: AppHandle, id: String, rel_path: String) -> Result
         .open_path(path.display().to_string(), None::<&str>)
         .map_err(|e| e.to_string())
 }
+
+/// Chemin absolu d'une ressource d'app, pour l'afficher via `asset://`
+/// (§4.5.2, prévisualisation des images) — jumeau de
+/// `get_mod_resource_path`. Le front ne construit jamais ce chemin lui-même :
+/// il passe par ici pour bénéficier du garde-fou anti-traversée.
+#[tauri::command]
+pub fn get_app_resource_path(app: AppHandle, id: String, rel_path: String) -> Result<String, String> {
+    let cfg = crate::config::load(&app);
+    let library = cfg.library_path.ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    let dir = crate::resources::resources_dir_for(&library, "apps", &[&id]);
+    Ok(crate::resources::resolve_resource_path(&dir, &rel_path)?
+        .display()
+        .to_string())
+}
+
+/// Contenu brut d'une ressource d'app, pour la prévisualisation dans la fiche
+/// (§4.5.2) — jumeau de `read_mod_resource`, mêmes garde-fous et même plafond.
+#[tauri::command]
+pub fn read_app_resource(app: AppHandle, id: String, rel_path: String) -> Result<tauri::ipc::Response, String> {
+    let cfg = crate::config::load(&app);
+    let library = cfg.library_path.ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    let dir = crate::resources::resources_dir_for(&library, "apps", &[&id]);
+    Ok(tauri::ipc::Response::new(crate::resources::read_resource(
+        &dir, &rel_path,
+    )?))
+}
+
+/// Ce qu'une app installe hors de son dossier `apps/<langue>/<id>` (§4.5.3) —
+/// onglet « Ajouts au jeu » de sa fiche. Une app en a autant qu'une voiture :
+/// configs CSP, textures, fichiers de `cfg/` livrés à côté de son dossier.
+#[tauri::command]
+pub fn list_app_extras(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<crate::extras::ExtraFile>, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(crate::extras::list(&conn, &cfg, crate::extras::OwnerKind::App, &id))
+}

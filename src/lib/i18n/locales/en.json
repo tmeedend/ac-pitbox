@@ -856,8 +856,13 @@
     "empty": "No app imported.",
     "emptyHint": "Import an app via general import (folder {path}).",
     "confirmDelete": "Delete app \"{id}\"? It will be deactivated and its files removed.",
-    "resources": "Resources",
-    "openFolderTooltip": "Open the app's folder in Explorer"
+    "openFolderTooltip": "Open the app's folder in Explorer",
+    "back": "← Back to apps",
+    "importedAt": "Imported on",
+    "langLabel": "Convention",
+    "langPython": "Python (AC)",
+    "langLua": "Lua (CSP)",
+    "detailTooltip": "Open the app's page"
   },
   "others": {
     "subtitle": "Mods of an unrecognized type (shaders, CSP configs, UI mods…) — never lost. Activated by junction like other types, or by file link for a plain addition into an already-existing folder (never replacing an existing file). If two \"other mods\" contest the same spot, the mod marked priority wins on its next activation.",

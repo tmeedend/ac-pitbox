@@ -10,6 +10,7 @@
   // dans le flux de la page, sans hauteur imposée ni défilement propre : c'est
   // la page entière qui défile, un document se lit d'un seul geste.
   import { listModResources, openModResource, modResourceSrc, readModResource, type ResourceFile } from "$lib/library";
+  import { listAppResources, openAppResource, appResourceSrc, readAppResource } from "$lib/apps";
   import { previewKind, decodeText, type PreviewKind } from "$lib/resourcePreview";
   import { renderMarkdown } from "$lib/markdown";
   import { errorText } from "$lib/errors";
@@ -19,11 +20,29 @@
 
   let {
     modId,
+    source = "mod",
     onerror,
   }: {
     modId: string;
+    /** D'où viennent les ressources. Une app a le même dossier `resources/`
+     * qu'une voiture (§4.5.2) et la même prévisualisation ; seul le chemin de
+     * résolution côté backend diffère. Le bloc est donc partagé plutôt que
+     * recopié — c'est exactement le genre de duplication qui a produit 53
+     * signatures visuelles pour 68 libellés (§chantier composants partagés). */
+    source?: "mod" | "app";
     onerror: (message: string) => void;
   } = $props();
+
+  // `in_mod` ne concerne que les voitures et circuits : un document resté dans
+  // le dossier du mod y est listé sans être déplacé (§4.5.1). Les ressources
+  // d'une app viennent toutes de son dossier `resources/`.
+  const load = (id: string) => (source === "app" ? listAppResources(id) : listModResources(id));
+  const openExternal = (id: string, rel: string, inMod: boolean) =>
+    source === "app" ? openAppResource(id, rel) : openModResource(id, rel, inMod);
+  const srcOf = (id: string, rel: string, inMod: boolean) =>
+    source === "app" ? appResourceSrc(id, rel) : modResourceSrc(id, rel, inMod);
+  const bytesOf = (id: string, rel: string, inMod: boolean) =>
+    source === "app" ? readAppResource(id, rel) : readModResource(id, rel, inMod);
 
   let files = $state<ResourceFile[]>([]);
   /** Ressource ouverte en prévisualisation, `null` quand la liste seule est affichée. */
@@ -49,7 +68,7 @@
     const current = modId;
     files = [];
     selected = null;
-    listModResources(current).then((rs) => {
+    load(current).then((rs) => {
       if (current === modId) files = rs;
     });
   });
@@ -77,11 +96,11 @@
     (async () => {
       try {
         if (kind === "image") {
-          const src = await modResourceSrc(mod, f.rel_path, f.in_mod);
+          const src = await srcOf(mod, f.rel_path, f.in_mod);
           if (!stale()) imgSrc = src;
           return;
         }
-        const bytes = await readModResource(mod, f.rel_path, f.in_mod);
+        const bytes = await bytesOf(mod, f.rel_path, f.in_mod);
         if (stale()) return;
         if (kind === "pdf") pdfData = bytes;
         else if (kind === "markdown") html = renderMarkdown(decodeText(bytes));
@@ -120,7 +139,7 @@
   async function openExternally(f: ResourceFile) {
     try {
       // Le chemin relatif est résolu et validé côté backend (anti-traversée).
-      await openModResource(modId, f.rel_path, f.in_mod);
+      await openExternal(modId, f.rel_path, f.in_mod);
     } catch (e) {
       onerror(errorText(e));
     }
