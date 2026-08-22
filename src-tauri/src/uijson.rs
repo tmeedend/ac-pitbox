@@ -238,7 +238,6 @@ const TRACK_OUTLINE: [&str; 3] = ["outline.png", "outline.jpg", "map.png"];
 /// Lit la description et les layouts (avec images) d'un circuit. Gère le mono-
 /// layout (`ui/`) et le multi-layout (`ui/<layout>/`). Lecture seule.
 pub fn read_track_detail(track_dir: &Path) -> TrackDetail {
-    let ui = track_dir.join("ui");
     let mut layouts = Vec::new();
     let mut description = None;
 
@@ -261,11 +260,22 @@ pub fn read_track_detail(track_dir: &Path) -> TrackDetail {
         });
     };
 
-    // Mono-layout à la racine ui/.
-    if ui.join("ui_track.json").is_file() {
-        add(&ui, String::new());
+    for (dir, id) in layout_dirs(track_dir) {
+        add(&dir, id);
     }
-    // Multi-layout : sous-dossiers de ui/ contenant un ui_track.json.
+
+    TrackDetail { description, layouts }
+}
+
+/// Dossiers `ui/` porteurs d'un `ui_track.json`, avec l'id de layout associé
+/// (vide pour un circuit mono-layout, dont le fichier est à la racine `ui/`).
+/// Ordre stable : racine d'abord, puis sous-dossiers triés.
+fn layout_dirs(track_dir: &Path) -> Vec<(PathBuf, String)> {
+    let ui = track_dir.join("ui");
+    let mut out = Vec::new();
+    if ui.join("ui_track.json").is_file() {
+        out.push((ui.clone(), String::new()));
+    }
     if let Ok(entries) = std::fs::read_dir(&ui) {
         let mut subs: Vec<PathBuf> = entries
             .flatten()
@@ -278,11 +288,75 @@ pub fn read_track_detail(track_dir: &Path) -> TrackDetail {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            add(&p, lid);
+            out.push((p, lid));
         }
     }
+    out
+}
 
-    TrackDetail { description, layouts }
+/// Nom d'un circuit tel qu'il doit s'afficher (§5bis.3) : la racine commune de
+/// ses layouts quand il en a plusieurs, sinon le nom du seul qu'il a.
+///
+/// C'est ce qui remplace `read_track(dir).name`, qui rendait le nom du
+/// **premier** layout — « Highlands Drift » pour un circuit qui s'appelle
+/// « Highlands ». Ne lit que le champ `name` de chaque layout : pas de scan
+/// des images, contrairement à `read_track_detail`.
+pub fn read_track_name(track_dir: &Path) -> Option<String> {
+    let names: Vec<String> = layout_dirs(track_dir)
+        .iter()
+        .filter_map(|(dir, _)| read_json(&dir.join("ui_track.json")))
+        .filter_map(|v| v.get("name").and_then(as_string))
+        .collect();
+    // Repli sur le premier nom lisible : sans racine commune (des layouts qui
+    // ne partagent rien), mieux vaut le comportement d'avant qu'aucun nom.
+    common_layout_name(&names).or_else(|| names.first().cloned())
+}
+
+/// Racine commune des noms de layouts d'un circuit (§5bis.3).
+///
+/// Un circuit multi-layouts n'a pas de nom à lui : chaque `ui_track.json` de
+/// layout porte le sien (« Highlands Drift », « Highlands Long », « Highlands
+/// Short »…). On prenait jusqu'ici celui du **premier layout trouvé**, ce qui
+/// affichait « Highlands Drift » pour tout le circuit — un nom faux, et qui
+/// dépendait de l'ordre alphabétique des dossiers.
+///
+/// La racine se calcule **par mots entiers**, jamais caractère par caractère :
+/// sur « Nordschleife » et « Nordschleife Tourist », une comparaison par
+/// caractères s'arrêterait au milieu d'un mot dès que deux layouts divergent
+/// (« Monza 1966 » / « Monza 1971 » donnerait « Monza 19 »). La ponctuation de
+/// liaison laissée en bout (« Spa - GP » / « Spa - National » → « Spa - ») est
+/// retirée, elle n'est là que pour séparer.
+///
+/// `None` quand les layouts n'ont aucun mot en commun : mieux vaut alors le
+/// comportement d'avant (le nom du premier) qu'un nom vide — et de toute façon
+/// l'utilisateur peut renommer.
+pub fn common_layout_name(names: &[String]) -> Option<String> {
+    let first = names.first()?;
+    let reference: Vec<&str> = first.split_whitespace().collect();
+    if reference.is_empty() {
+        return None;
+    }
+    let mut shared = reference.len();
+    for name in names.iter().skip(1) {
+        let words: Vec<&str> = name.split_whitespace().collect();
+        let mut common = 0;
+        while common < shared && common < words.len() && words[common].eq_ignore_ascii_case(reference[common]) {
+            common += 1;
+        }
+        shared = common;
+        if shared == 0 {
+            return None;
+        }
+    }
+    let root = reference[..shared].join(" ");
+    // `trim_end_matches` sur la ponctuation seule : un nom qui se termine
+    // légitimement par un chiffre ou une lettre n'est pas touché.
+    let root = root.trim_end_matches(|c: char| !c.is_alphanumeric()).trim();
+    if root.is_empty() {
+        None
+    } else {
+        Some(root.to_string())
+    }
 }
 
 pub fn read_car_specs(car_dir: &Path) -> Option<NativeSpecs> {
@@ -333,5 +407,93 @@ mod tests {
         assert!(specs.description.unwrap().contains("Welcome to the world."));
         assert_eq!(specs.bhp.as_deref(), Some("345bhp"));
         assert_eq!(specs.weight.as_deref(), Some("1176kg"));
+    }
+
+    fn names(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// Règle : le nom d'un circuit multi-layouts est la racine commune de ses
+    /// layouts, découpée sur des MOTS entiers (§5bis.3). Le cas signalé par
+    /// l'utilisateur : « Highlands » affiché « Highlands Drift » parce qu'on
+    /// prenait le premier layout venu.
+    #[test]
+    fn common_layout_name_cuts_on_whole_words() {
+        assert_eq!(
+            common_layout_name(&names(&[
+                "Highlands Drift",
+                "Highlands Long",
+                "Highlands",
+                "Highlands Short"
+            ]))
+            .as_deref(),
+            Some("Highlands"),
+            "racine commune, pas le nom du premier layout"
+        );
+        // Le piège d'une comparaison caractère par caractère : elle rendrait
+        // « Monza 19 », qui n'est le nom de rien.
+        assert_eq!(
+            common_layout_name(&names(&["Monza 1966", "Monza 1971"])).as_deref(),
+            Some("Monza"),
+            "coupe sur un mot entier, jamais au milieu"
+        );
+        // La ponctuation de liaison ne survit pas seule en bout de racine.
+        assert_eq!(
+            common_layout_name(&names(&["Spa - GP", "Spa - National"])).as_deref(),
+            Some("Spa"),
+            "séparateur laissé en bout retiré"
+        );
+        // Un seul layout : son nom est déjà le nom du circuit.
+        assert_eq!(
+            common_layout_name(&names(&["Nordschleife"])).as_deref(),
+            Some("Nordschleife"),
+            "mono-layout : le nom tel quel"
+        );
+        // Le premier mot doit valoir pour TOUS, pas seulement pour deux d'affilée.
+        assert_eq!(
+            common_layout_name(&names(&["Highlands Drift", "Autre chose"])),
+            None,
+            "aucun mot commun : pas de racine inventée"
+        );
+        assert_eq!(common_layout_name(&[]), None, "aucun layout : rien à déduire");
+    }
+
+    /// Règle : la casse ne casse pas la racine — les auteurs de mods ne sont
+    /// pas réguliers là-dessus (« Highlands short » à côté de « Highlands Long »).
+    #[test]
+    fn common_layout_name_ignores_case_differences() {
+        assert_eq!(
+            common_layout_name(&names(&["Highlands Long", "highlands short"])).as_deref(),
+            Some("Highlands"),
+            "casse du premier layout conservée pour l'affichage"
+        );
+    }
+
+    /// Règle : `read_track_name` applique la racine commune sur une vraie
+    /// arborescence multi-layouts — c'est ce qui remplace `read_track().name`
+    /// à l'import comme au réindex.
+    #[test]
+    fn track_name_uses_the_common_root_of_its_layouts() {
+        let dir = crate::testutil::temp_dir("trackname");
+        for (layout, name) in [
+            ("drift", "Highlands Drift"),
+            ("long", "Highlands Long"),
+            ("short", "Highlands Short"),
+        ] {
+            let d = dir.join("ui").join(layout);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("ui_track.json"), format!("{{\"name\":\"{name}\"}}")).unwrap();
+        }
+        assert_eq!(
+            read_track_name(&dir).as_deref(),
+            Some("Highlands"),
+            "racine commune des 3 layouts"
+        );
+        // Contrôle : l'ancienne lecture rendait bien le premier layout venu,
+        // c'est-à-dire le nom faux que ce test protège contre un retour en arrière.
+        assert_eq!(
+            read_track(&dir).and_then(|u| u.name).as_deref(),
+            Some("Highlands Drift")
+        );
     }
 }

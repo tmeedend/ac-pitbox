@@ -11,6 +11,7 @@
     type MaintenanceReport,
   } from "$lib/maintenance";
   import { indexStockContent } from "$lib/submods";
+  import { confirm } from "@tauri-apps/plugin-dialog";
   import { t } from "$lib/i18n/index.svelte";
 
   import { errorText } from "$lib/errors";
@@ -43,12 +44,26 @@
     }
   }
 
+  /** Réinitialiser aussi les saisies de l'utilisateur sur le contenu de base
+   * (§9.3bis). Décoché par défaut : un réindex ordinaire ne doit jamais faire
+   * perdre un renommage — c'était le cas, sans le dire. */
+  let resetStockEdits = $state(false);
+
   async function doIndexStock() {
+    // La case seule ne suffit pas : elle se coche d'un clic, et ce qu'elle
+    // efface ne se récupère pas. On dit donc ce qui va disparaître, avant.
+    if (resetStockEdits) {
+      const ok = await confirm(t("maintenance.stockResetPrompt"), {
+        title: t("maintenance.stockResetTitle"),
+        kind: "warning",
+      });
+      if (!ok) return;
+    }
     indexing = true;
     error = "";
     indexMsg = "";
     try {
-      const n = await indexStockContent();
+      const n = await indexStockContent(resetStockEdits);
       indexMsg = n > 0 ? t("maintenance.stockIndexed", { count: n }) : t("maintenance.stockNoneNew");
     } catch (e) {
       error = errorText(e);
@@ -177,6 +192,10 @@
   <section class="stock-sec">
     <h3>{t("maintenance.stockTitle")}</h3>
     <p class="hint">{t("maintenance.stockHint")}</p>
+    <label class="recalc-check">
+      <input type="checkbox" bind:checked={resetStockEdits} />
+      <span>{t("maintenance.stockReset")}</span>
+    </label>
     <div class="stock-row">
       <button class="btn" type="button" onclick={doIndexStock} disabled={indexing}>
         {indexing ? t("maintenance.indexing") : t("maintenance.indexStock")}

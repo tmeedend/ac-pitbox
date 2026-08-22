@@ -40,13 +40,38 @@ pub fn needs_reindex(previous: Option<&Path>, current: Option<&Path>, indexed: u
 }
 
 /// (Re)construit l'index du contenu de base. Renvoie le nombre d'entrées indexées.
-pub fn index_stock_content(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> Result<usize, String> {
+///
+/// `reset_user_edits` : repartir **vraiment** de zéro, en effaçant aussi ce que
+/// l'utilisateur a saisi sur ce contenu (nom repris à la main, description,
+/// tags manuels, favori, catégorie). C'était le comportement inconditionnel
+/// jusqu'ici, et il perdait ces saisies sans le dire — un utilisateur ayant
+/// renommé « Mugello » en « Autodromo del Mugello » retrouvait « Mugello »
+/// après un simple réindex (bug réel signalé). Réservé désormais à une demande
+/// explicite, confirmée à l'écran (§9.3bis).
+pub fn index_stock_content(
+    conn: &Connection,
+    cfg: &AppConfig,
+    rules: &Rules,
+    reset_user_edits: bool,
+) -> Result<usize, String> {
     let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?;
     let now = Local::now().to_rfc3339();
 
-    // Repart de zéro : corrige aussi les entrées indexées avant une bonne config.
-    overlay::clear_stock(conn).map_err(|e| e.to_string())?;
+    if reset_user_edits {
+        // Repart de zéro : corrige aussi les entrées indexées avant une bonne
+        // config, au prix des saisies de l'utilisateur.
+        overlay::clear_stock(conn).map_err(|e| e.to_string())?;
+    } else {
+        // Seules les versions synthétiques repartent : elles se refabriquent
+        // avec un nouvel UUID à chaque passage et s'accumuleraient sinon. Les
+        // lignes `mods`, qui portent l'overlay, survivent telles quelles.
+        overlay::clear_stock_versions(conn).map_err(|e| e.to_string())?;
+    }
 
+    // Ids réellement trouvés sur disque : ce qui n'y est plus est retiré en fin
+    // de parcours (sans le `DELETE` global, rien ne ferait disparaître un
+    // contenu désinstallé du jeu).
+    let mut present: Vec<String> = Vec::new();
     let mut count = 0;
     for kind in [ModKind::Car, ModKind::Track] {
         let dir = ac.join("content").join(kind.content_folder());
@@ -149,14 +174,122 @@ pub fn index_stock_content(conn: &Connection, cfg: &AppConfig, rules: &Rules) ->
             let h = harmonize::compute(rules, kind, &ui.tags, &name, &class, ui.country.as_deref());
             harmonize::store(conn, &id, &h, ui.country.as_deref()).map_err(|e| e.to_string())?;
 
+            present.push(id);
             count += 1;
         }
+    }
+    if !reset_user_edits {
+        overlay::delete_stock_absent(conn, &present).map_err(|e| e.to_string())?;
     }
     Ok(count)
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    /// Arbo AC minimale : un circuit de contenu de base avec son `ui_track.json`.
+    fn fake_stock_track(ac: &Path, id: &str, name: &str) {
+        let dir = ac.join("content").join("tracks").join(id).join("ui");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("ui_track.json"), format!("{{\"name\":\"{name}\"}}")).unwrap();
+    }
+
+    /// Règle : un réindex ordinaire ne détruit RIEN de ce que l'utilisateur a
+    /// saisi sur le contenu de base (§9.3bis). Bug réel signalé : « Mugello »
+    /// renommé « Autodromo del Mugello » redevenait « Mugello » au premier
+    /// réindex, parce que l'indexation repartait d'un `DELETE` global.
+    #[test]
+    fn plain_reindex_keeps_user_edits_on_stock_content() {
+        let base = crate::testutil::temp_dir("stock-keep");
+        let ac = base.join("ac");
+        fake_stock_track(&ac, "mugello", "Mugello");
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = Rules::default();
+
+        assert_eq!(index_stock_content(&conn, &cfg, &rules, false).unwrap(), 1);
+        overlay::set_mod_field(&conn, "mugello", "display_name_user", Some("Autodromo del Mugello")).unwrap();
+        overlay::set_manual_tags(&conn, "mugello", &["mon-tag".to_string()]).unwrap();
+        overlay::set_favorite(&conn, "mugello", true).unwrap();
+
+        index_stock_content(&conn, &cfg, &rules, false).unwrap();
+
+        let m = overlay::get_mod(&conn, "mugello").unwrap().unwrap();
+        assert_eq!(
+            m.display_name.as_deref(),
+            Some("Autodromo del Mugello"),
+            "le renommage tient"
+        );
+        assert_eq!(m.tags_manual, vec!["mon-tag".to_string()], "les tags manuels tiennent");
+        assert!(m.is_favorite, "le favori tient");
+        // Les versions synthétiques ne s'accumulent pas d'un passage à l'autre.
+        assert_eq!(
+            overlay::get_versions(&conn, "mugello").unwrap().len(),
+            1,
+            "une seule version"
+        );
+        assert!(m.active_version_id.is_some(), "et elle est bien la version active");
+    }
+
+    /// Règle : la réinitialisation explicite, elle, efface bien ces saisies —
+    /// c'est toute sa raison d'être, et c'est pourquoi l'écran la fait
+    /// confirmer.
+    #[test]
+    fn reset_reindex_clears_user_edits() {
+        let base = crate::testutil::temp_dir("stock-reset");
+        let ac = base.join("ac");
+        fake_stock_track(&ac, "mugello", "Mugello");
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = Rules::default();
+
+        index_stock_content(&conn, &cfg, &rules, false).unwrap();
+        overlay::set_mod_field(&conn, "mugello", "display_name_user", Some("Autodromo del Mugello")).unwrap();
+
+        index_stock_content(&conn, &cfg, &rules, true).unwrap();
+
+        let m = overlay::get_mod(&conn, "mugello").unwrap().unwrap();
+        assert_eq!(m.display_name.as_deref(), Some("Mugello"), "retour au nom du fichier");
+        assert!(m.display_name_user.is_none(), "la saisie est bien effacée");
+    }
+
+    /// Règle : ne plus tout supprimer ne doit pas laisser traîner du contenu
+    /// désinstallé du jeu — c'est ce que le `DELETE` global faisait
+    /// gratuitement, et qu'il faut remplacer explicitement.
+    #[test]
+    fn plain_reindex_drops_content_removed_from_the_game() {
+        let base = crate::testutil::temp_dir("stock-gone");
+        let ac = base.join("ac");
+        fake_stock_track(&ac, "mugello", "Mugello");
+        fake_stock_track(&ac, "spa", "Spa");
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = Rules::default();
+
+        assert_eq!(index_stock_content(&conn, &cfg, &rules, false).unwrap(), 2);
+        std::fs::remove_dir_all(ac.join("content").join("tracks").join("spa")).unwrap();
+        assert_eq!(index_stock_content(&conn, &cfg, &rules, false).unwrap(), 1);
+
+        assert!(
+            overlay::get_mod(&conn, "mugello").unwrap().is_some(),
+            "toujours installé"
+        );
+        assert!(
+            overlay::get_mod(&conn, "spa").unwrap().is_none(),
+            "désinstallé du jeu, retiré de l'index"
+        );
+    }
+
     #[test]
     fn reindex_when_the_game_folder_is_set_or_changes() {
         use super::needs_reindex;
@@ -180,8 +313,6 @@ mod tests {
         assert!(!needs_reindex(None, None, 0));
     }
 
-    use super::*;
-
     #[test]
     fn reindex_fills_year_and_release_from_kunos_table() {
         // "abarth500" (voiture) et "imola" (circuit) sont référencés dans
@@ -197,7 +328,7 @@ mod tests {
             ac_install_path: Some(ac.clone()),
             ..Default::default()
         };
-        index_stock_content(&conn, &cfg, &Rules::default()).unwrap();
+        index_stock_content(&conn, &cfg, &Rules::default(), false).unwrap();
 
         let car = overlay::get_mod(&conn, "abarth500").unwrap().unwrap();
         assert_eq!(car.year, Some(2007), "année reprise de la table faute de ui_car.json");
@@ -227,7 +358,7 @@ mod tests {
             library_path: Some(library.clone()),
             ..Default::default()
         };
-        index_stock_content(&conn, &cfg, &Rules::default()).unwrap();
+        index_stock_content(&conn, &cfg, &Rules::default(), false).unwrap();
         assert!(overlay::get_mod(&conn, "spa").unwrap().is_some());
 
         // Couche qui ajoute un layout "2022" -> compose "spa" en hardlinks.
@@ -257,7 +388,7 @@ mod tests {
         );
 
         // Ré-indexer le contenu de base PENDANT que la couche est active.
-        index_stock_content(&conn, &cfg, &Rules::default()).unwrap();
+        index_stock_content(&conn, &cfg, &Rules::default(), false).unwrap();
 
         let m = overlay::get_mod(&conn, "spa").unwrap();
         assert!(

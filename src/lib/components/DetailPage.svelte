@@ -14,6 +14,7 @@
     previewSrc,
     setFavorite,
     setManualTags,
+    setModField,
     type ModCard,
     type ModDetail,
     type ModKind,
@@ -23,6 +24,7 @@
   import { listMediaScreenshots, listMediaReplays, listMediaBackgrounds } from "$lib/media";
   import { listModSkins, openNativeShowroom, type SkinItem } from "$lib/launch";
   import CarPreview3D from "./detail/CarPreview3D.svelte";
+  import InlineEdit from "./InlineEdit.svelte";
   import Tabs from "./Tabs.svelte";
   import StateBadge from "./StateBadge.svelte";
   import { tick, untrack } from "svelte";
@@ -200,6 +202,20 @@
   /** Recharge la fiche + les couches + les ressources (après compositing/
    * import) en préservant le layout sélectionné : activer une couche ajoute
    * souvent des layouts (§4.4). */
+  /** Enregistre une surcharge (§5bis.3) puis recharge la fiche. `null` =
+   * renoncer et revenir à ce qu'annonce le fichier du mod. La bibliothèque est
+   * prévenue (`bumpLibraryVersion`, via `onchange`) : un nom change aussi la
+   * liste et le bloc SESSION, pas seulement cette page. */
+  async function saveOverride(field: "display_name_user" | "description_user", value: string | null) {
+    try {
+      await setModField(id, field, value);
+      await refreshEntity();
+      onchange?.();
+    } catch (e) {
+      actionError = errorText(e);
+    }
+  }
+
   async function refreshEntity() {
     const current = id;
     const d = await getModDetail(current);
@@ -723,6 +739,29 @@
 
 </script>
 
+<!-- Carte « Description », identique pour une voiture et pour un circuit :
+     seule la source du texte change. Rendue MÊME VIDE, sans quoi un mod sans
+     description n'offrirait aucun endroit où en écrire une (§5bis.3). -->
+{#snippet descriptionCard(text: string | null, overridden: boolean)}
+  <section class="blk">
+    <header class="blk-h">
+      <span class="blk-t">{t("common.description")}</span>
+      <InlineEdit
+        value={text}
+        original={overridden ? null : text}
+        {overridden}
+        multiline
+        label={t("detail.editDescriptionLabel")}
+        placeholder={t("detail.editDescriptionPlaceholder")}
+        onsave={(v) => saveOverride("description_user", v)}
+      />
+    </header>
+    <div class="blk-b desc-body" class:empty-desc={!text}>
+      {text ? decodeDescription(text) : t("detail.noDescription")}
+    </div>
+  </section>
+{/snippet}
+
 <div class="page">
   {#if !detail}
     <div class="empty">{t("common.loading")}</div>
@@ -736,7 +775,19 @@
         <span class="escu">{initials(d.brand, d.id_interne)}</span>
       {/if}
       <div class="title">
-        <div class="t-name">{d.display_name ?? d.id_interne}</div>
+        <div class="t-name">
+          <span class="t-name-txt">{d.display_name ?? d.id_interne}</span>
+          <!-- Renommer (§5bis.3). Le repère montré pendant l'édition est le nom
+               du FICHIER : `d.display_name` porte déjà la surcharge quand il y
+               en a une, il ne dirait donc pas à quoi on reviendrait. -->
+          <InlineEdit
+            value={d.display_name}
+            original={d.display_name_user ? d.display_name_file : null}
+            overridden={!!d.display_name_user}
+            label={t("detail.renameLabel")}
+            onsave={(v) => saveOverride("display_name_user", v)}
+          />
+        </div>
         <div class="t-meta mono">
           {d.brand ?? ""}{d.year ? ` · ${d.year}` : ""}
           {#if d.category}· <span class="cat">{d.category}</span>{/if}
@@ -916,12 +967,7 @@
             {/if}
           </div>
 
-          {#if d.specs?.description}
-            <section class="blk">
-              <header class="blk-h"><span class="blk-t">{t("common.description")}</span></header>
-              <div class="blk-b desc-body">{decodeDescription(d.specs.description)}</div>
-            </section>
-          {/if}
+          {@render descriptionCard(d.specs?.description ?? null, !!d.description_user)}
         {:else}
           {@const lay = d.track?.layouts[previewLayout]}
           <section class="blk">
@@ -940,12 +986,7 @@
               <div class="blk-b csp-row">{#each d.csp_features as f}<span class="csp">{f}</span>{/each}</div>
             </section>
           {/if}
-          {#if d.track?.description}
-            <section class="blk">
-              <header class="blk-h"><span class="blk-t">{t("common.description")}</span></header>
-              <div class="blk-b desc-body">{decodeDescription(d.track.description)}</div>
-            </section>
-          {/if}
+          {@render descriptionCard(d.track?.description ?? null, !!d.description_user)}
         {/if}
       </div>
     </div>
@@ -1211,11 +1252,35 @@
   }
   .title {
     min-width: 0;
+    /* Prend la place disponible : en édition, le champ de saisie a besoin
+       d'une largeur utile plutôt que de la seule largeur du nom. */
+    flex: 1;
   }
   .t-name {
     font-size: 14px;
     font-weight: 600;
-    line-height: 1.1;
+    /* 1.2 et pas 1.1 : à 1.1 la boîte de ligne est plus courte que la fonte,
+       et les jambages descendants se font rogner en bas (le « g » de
+       « Mugello » — retour utilisateur direct). */
+    line-height: 1.2;
+    /* Le crayon se pose au bout du nom, sur la même ligne de base. En édition,
+       `InlineEdit` remplace le crayon par son champ : la colonne du titre
+       s'élargit alors au lieu de pousser le nom hors cadre. */
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .t-name-txt {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Description absente : le texte de remplacement se distingue d'une vraie
+     description, sinon « Aucune description. » se lit comme le contenu du mod. */
+  .empty-desc {
+    color: var(--muted);
+    font-style: italic;
   }
   .t-meta {
     color: var(--muted);

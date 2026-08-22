@@ -17,8 +17,11 @@ export interface SubModRow {
 }
 
 /** Indexe le contenu de base Kunos présent dans content/ (§12bis.1). Renvoie le nb indexé. */
-export function indexStockContent(): Promise<number> {
-  return invoke<number>("index_stock_content");
+/** Réindexe le contenu de base (§12bis.1). `resetUserEdits` efface en plus ce
+ * que l'utilisateur a saisi dessus (nom, description, tags manuels, favori) —
+ * jamais le défaut, et confirmé à l'écran avant d'être envoyé (§9.3bis). */
+export function indexStockContent(resetUserEdits = false): Promise<number> {
+  return invoke<number>("index_stock_content", { resetUserEdits });
 }
 
 /** Sous-éléments rattachés à une entité (skins/sons d'une voiture, §12bis.3). */

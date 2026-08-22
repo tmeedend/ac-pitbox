@@ -339,7 +339,8 @@ laisser pourrir ici.
       détail), `NumberStepper`, `LoadingState`, `Tooltip`, `ContextMenu`,
       `Toast`/`ToastStack` (pile bas-droite : progression et rapports
       d'import, actions groupées, nouveau périphérique — voir SPEC §4.2bis),
-      `Slider` (tous les curseurs de l'app).
+      `Slider` (tous les curseurs de l'app),
+      `InlineEdit` (nom et description repris à la main — SPEC §5bis.3).
       **Inventaire de ce qui reste**, mesuré le 2026-08-18 :
       - **Boîte d'erreur : 15 définitions locales** (`.err` / `.error` /
         `.action-err` dans Apps, BulkEditPanel, BulkImport, DetailPage,

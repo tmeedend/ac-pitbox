@@ -317,15 +317,38 @@ pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<
     let history = overlay::get_history(conn, id)?;
     // Dossier de l'entité : version active en bibliothèque, sinon content/ (stock).
     let entity_dir = entity_dir(conn, cfg, &m);
+    // Description saisie par l'utilisateur (§5bis.3) : contrairement au nom
+    // (arbitré en SQL, voir `MOD_SELECT`), la description native n'est pas en
+    // base — elle se relit dans le `ui_*.json` à chaque affichage. L'arbitrage
+    // se fait donc ici, une fois pour les deux formes de fiche.
+    let described = m.description_user.clone();
     // Fiche technique native lue à la demande (voitures).
     let specs = if m.kind == "Car" {
-        entity_dir.as_deref().and_then(uijson::read_car_specs)
+        let native = entity_dir.as_deref().and_then(uijson::read_car_specs);
+        // `or_else` et pas seulement `map` : un mod sans `ui_car.json` lisible
+        // n'a pas de fiche native, mais peut très bien porter une description
+        // écrite à la main — la perdre serait perdre la seule chose qu'on ait.
+        match (&described, native) {
+            (Some(_), Some(mut s)) => {
+                s.description = described.clone();
+                Some(s)
+            }
+            (Some(_), None) => Some(uijson::NativeSpecs {
+                description: described.clone(),
+                ..Default::default()
+            }),
+            (None, native) => native,
+        }
     } else {
         None
     };
     // Détail circuit (description + layouts illustrés).
     let track = if m.kind == "Track" {
-        entity_dir.as_deref().map(uijson::read_track_detail)
+        let mut t = entity_dir.as_deref().map(uijson::read_track_detail).unwrap_or_default();
+        if described.is_some() {
+            t.description = described.clone();
+        }
+        Some(t)
     } else {
         None
     };
@@ -349,6 +372,69 @@ pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Règle : le nom et la description saisis par l'utilisateur (§5bis.3)
+    /// survivent à une mise à jour du mod. C'est TOUTE la raison d'être de ces
+    /// deux colonnes séparées — les champs dérivés du `ui_*.json`, eux, sont
+    /// réécrits à chaque réimport/réindex, et une saisie qui y vivrait
+    /// disparaîtrait à la première mise à jour publiée par l'auteur.
+    #[test]
+    fn user_name_and_description_survive_a_mod_update() {
+        let base = crate::testutil::temp_dir("override");
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_mod(
+            &conn,
+            "car_a",
+            "Car",
+            Some("B"),
+            Some("Nom d'origine"),
+            "h1",
+            None,
+            &now,
+        )
+        .unwrap();
+
+        overlay::set_mod_field(&conn, "car_a", "display_name_user", Some("Mon nom à moi")).unwrap();
+        overlay::set_mod_field(&conn, "car_a", "description_user", Some("Ma description")).unwrap();
+
+        // Mise à jour du mod : l'auteur publie un nouveau nom dans son ui_car.json.
+        overlay::upsert_mod(
+            &conn,
+            "car_a",
+            "Car",
+            Some("B"),
+            Some("Nom v2 de l'auteur"),
+            "h2",
+            None,
+            &now,
+        )
+        .unwrap();
+        // Et un réindex passe derrière, qui relit lui aussi le fichier.
+        overlay::update_mod_reindexed_fields(&conn, "car_a", Some("B"), Some("Nom v2 de l'auteur"), None).unwrap();
+
+        let m = overlay::get_mod(&conn, "car_a").unwrap().unwrap();
+        assert_eq!(
+            m.display_name.as_deref(),
+            Some("Mon nom à moi"),
+            "le nom saisi l'emporte encore après la mise à jour"
+        );
+        assert_eq!(
+            m.display_name_user.as_deref(),
+            Some("Mon nom à moi"),
+            "la saisie brute reste lisible pour proposer d'y renoncer"
+        );
+        assert_eq!(m.description_user.as_deref(), Some("Ma description"));
+
+        // Renoncer à la surcharge redonne le nom de l'auteur, pas l'ancien.
+        overlay::set_mod_field(&conn, "car_a", "display_name_user", None).unwrap();
+        let m = overlay::get_mod(&conn, "car_a").unwrap().unwrap();
+        assert_eq!(
+            m.display_name.as_deref(),
+            Some("Nom v2 de l'auteur"),
+            "sans surcharge, on retombe sur le nom courant du fichier"
+        );
+    }
 
     #[test]
     fn stock_mod_always_active() {

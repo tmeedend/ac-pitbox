@@ -42,6 +42,9 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         "source_url TEXT",
         "is_stock INTEGER NOT NULL DEFAULT 0",
         "categories TEXT NOT NULL DEFAULT '[]'",
+        // Nom/description saisis par l'utilisateur (§5bis.3).
+        "display_name_user TEXT",
+        "description_user TEXT",
     ];
     for col in cols {
         // Ignore l'erreur « duplicate column » si la colonne existe déjà.
@@ -77,6 +80,12 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             kind              TEXT NOT NULL,          -- 'Car' | 'Track'
             brand             TEXT,
             display_name      TEXT,
+            -- Nom et description saisis par l'utilisateur (§5bis.3). Séparés des
+            -- champs dérivés du `ui_*.json` juste au-dessus : ceux-là sont
+            -- rafraîchis à chaque réindex/mise à jour du mod, une saisie qui y
+            -- vivrait serait écrasée à la première mise à jour de l'auteur.
+            display_name_user TEXT,
+            description_user  TEXT,
             identity_hash     TEXT,
             car_class         TEXT,                   -- overlay-éditable (L2)
             year              INTEGER,
@@ -341,6 +350,19 @@ pub struct ModRow {
     pub layouts: Vec<String>,
     /// Extensions CSP de la version active (colonne circuits §6.2).
     pub csp_features: Vec<String>,
+    /// Nom saisi par l'utilisateur (§5bis.3), `None` si aucun. `display_name`
+    /// ci-dessus vaut déjà celui-ci quand il existe : ce champ ne sert qu'à
+    /// SAVOIR qu'il y a une surcharge (proposer d'y renoncer, pré-remplir le
+    /// champ d'édition), jamais à l'affichage courant.
+    pub display_name_user: Option<String>,
+    /// Nom annoncé par le `ui_*.json` du mod, que `display_name` masque dès
+    /// qu'une surcharge existe. Sert à montrer à quoi on reviendrait.
+    pub display_name_file: Option<String>,
+    /// Description saisie par l'utilisateur (§5bis.3). Contrairement au nom,
+    /// la description native n'est pas en base — elle est relue dans le
+    /// `ui_*.json` à chaque affichage — donc l'arbitrage se fait côté
+    /// `library.rs`, pas en SQL.
+    pub description_user: Option<String>,
     /// Contenu de base Kunos : lecture seule, non désactivable (§12bis.1).
     pub is_stock: bool,
     /// Date de publication estimée de la version active (§6.2).
@@ -624,6 +646,11 @@ pub fn set_mod_field(conn: &Connection, id: &str, field: &str, value: Option<&st
         "aspiration" => "aspiration",
         "engine_config" => "engine_config",
         "gearbox" => "gearbox",
+        // Saisies libres de l'utilisateur (§5bis.3) : jamais écrites dans le
+        // `ui_*.json` du mod (règle d'or n°1), donc conservées quand l'auteur
+        // publie une mise à jour.
+        "display_name_user" => "display_name_user",
+        "description_user" => "description_user",
         _ => return Err(rusqlite::Error::InvalidParameterName(field.into())),
     };
     conn.execute(
@@ -644,7 +671,13 @@ pub fn add_history(conn: &Connection, mod_id: &str, ts: &str, event: &str, detai
 // --- Lectures ---------------------------------------------------------------
 
 const MOD_SELECT: &str = r#"
-    SELECT m.id_interne, m.kind, m.brand, m.display_name, m.year, m.car_class,
+    SELECT m.id_interne, m.kind, m.brand,
+           -- Nom effectif (§5bis.3) : la saisie de l'utilisateur l'emporte sur
+           -- ce qu'annonce le `ui_*.json`. Résolu ICI et pas chez l'appelant,
+           -- pour que TOUT ce qui affiche un mod en profite d'un coup — liste,
+           -- fiche, sélecteur de session, adversaires, export.
+           COALESCE(m.display_name_user, m.display_name) AS display_name,
+           m.year, m.car_class,
            m.category, m.country, m.is_favorite, m.active_version_id,
            -- Pas de date d'ajout pour le contenu de base : voir ModRow.created_at.
            CASE WHEN m.is_stock THEN NULL ELSE m.created_at END AS created_at,
@@ -668,7 +701,15 @@ const MOD_SELECT: &str = r#"
            m.is_stock,
            (SELECT v.published_at FROM versions v WHERE v.id = m.active_version_id) AS published_at,
            (SELECT SUM(v.size_bytes) FROM versions v WHERE v.mod_id = m.id_interne) AS size_bytes,
-           m.categories
+           m.categories,
+           -- Les deux saisies brutes, pour que la fiche sache qu'un nom est
+           -- surchargé (et propose de revenir à l'original) — `display_name`
+           -- ci-dessus ne le dit plus, par construction.
+           m.display_name_user, m.description_user,
+           -- Le nom tel que l'annonce le fichier du mod, que `display_name`
+           -- ci-dessus masque dès qu'une surcharge existe : c'est pourtant lui
+           -- qu'il faut montrer à qui hésite à revenir en arrière.
+           m.display_name AS display_name_file
     FROM mods m
 "#;
 
@@ -711,11 +752,16 @@ fn map_mod(row: &rusqlite::Row) -> rusqlite::Result<ModRow> {
         is_stock: row.get::<_, i64>(27)? != 0,
         published_at: row.get(28)?,
         size_bytes: row.get(29)?,
+        display_name_user: row.get(31)?,
+        description_user: row.get(32)?,
+        display_name_file: row.get(33)?,
     })
 }
 
 pub fn list_mods(conn: &Connection) -> rusqlite::Result<Vec<ModRow>> {
-    let sql = format!("{MOD_SELECT} ORDER BY m.display_name COLLATE NOCASE");
+    // Tri sur le nom EFFECTIF : trier sur `m.display_name` rangerait un mod
+    // renommé à sa place d'avant, invisible pour qui lit la liste.
+    let sql = format!("{MOD_SELECT} ORDER BY COALESCE(m.display_name_user, m.display_name) COLLATE NOCASE");
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map([], map_mod)?;
     rows.collect()
@@ -1230,8 +1276,60 @@ pub fn upsert_stock_mod(
     Ok(())
 }
 
+/// Efface les **versions** synthétiques du contenu de base, en gardant les
+/// lignes `mods` (§12bis.1). C'est ce qui permet de réindexer sans détruire ce
+/// que l'utilisateur a mis dans l'overlay — nom repris à la main, description,
+/// tags manuels, favori, catégorie.
+///
+/// Les versions, elles, se refabriquent à chaque passage avec un nouvel UUID :
+/// sans cet effacement elles s'accumuleraient à chaque réindexation.
+pub fn clear_stock_versions(conn: &Connection) -> rusqlite::Result<usize> {
+    // `active_version_id` d'abord : la contrainte ne l'impose pas, mais laisser
+    // un mod pointer une version qui vient d'être supprimée le rendrait
+    // brièvement incohérent si l'indexation s'interrompait ici.
+    conn.execute("UPDATE mods SET active_version_id = NULL WHERE is_stock = 1", [])?;
+    conn.execute(
+        "DELETE FROM versions WHERE mod_id IN (SELECT id_interne FROM mods WHERE is_stock = 1)",
+        [],
+    )
+}
+
+/// Supprime les entrées de contenu de base **absentes de la liste** — celles
+/// dont le dossier n'est plus dans `content/`. Complément de
+/// `clear_stock_versions` : une réindexation qui ne détruit plus tout doit
+/// quand même faire disparaître ce qui a été désinstallé du jeu.
+pub fn delete_stock_absent(conn: &Connection, present: &[String]) -> rusqlite::Result<usize> {
+    // Liste vide = plus rien sur disque : `NOT IN ()` étant invalide en SQL,
+    // le cas se traite à part plutôt que de construire une requête bancale.
+    if present.is_empty() {
+        return delete_all_stock(conn);
+    }
+    let placeholders = std::iter::repeat_n("?", present.len()).collect::<Vec<_>>().join(",");
+    let params = rusqlite::params_from_iter(present.iter());
+    conn.execute(
+        &format!("DELETE FROM history WHERE mod_id IN (SELECT id_interne FROM mods WHERE is_stock = 1 AND id_interne NOT IN ({placeholders}))"),
+        rusqlite::params_from_iter(present.iter()),
+    )?;
+    conn.execute(
+        &format!("DELETE FROM mods WHERE is_stock = 1 AND id_interne NOT IN ({placeholders})"),
+        params,
+    )
+}
+
+fn delete_all_stock(conn: &Connection) -> rusqlite::Result<usize> {
+    conn.execute(
+        "DELETE FROM history WHERE mod_id IN (SELECT id_interne FROM mods WHERE is_stock = 1)",
+        [],
+    )?;
+    conn.execute("DELETE FROM mods WHERE is_stock = 1", [])
+}
+
 /// Supprime toutes les entrées de contenu de base (ré-indexation depuis zéro).
 /// Les versions associées tombent par CASCADE. Les vrais mods ne sont pas touchés.
+///
+/// **Détruit aussi ce que l'utilisateur a saisi** sur ce contenu (nom,
+/// description, tags manuels, favori) : réservé à la réinitialisation
+/// explicitement demandée, jamais au réindex ordinaire (§9.3bis).
 pub fn clear_stock(conn: &Connection) -> rusqlite::Result<usize> {
     conn.execute(
         "DELETE FROM history WHERE mod_id IN (SELECT id_interne FROM mods WHERE is_stock = 1)",

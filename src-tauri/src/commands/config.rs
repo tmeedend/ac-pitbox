@@ -33,7 +33,9 @@ pub fn save_config(app: AppHandle, db: State<Db>, config: AppConfig) -> Result<(
     // Best-effort : un contenu de base non indexé ne doit pas faire échouer
     // l'enregistrement des chemins, mais ne doit pas non plus passer inaperçu.
     let rules = crate::rules::load(&app);
-    if let Err(e) = crate::stock::index_stock_content(&conn, &config, &rules) {
+    // Jamais de réinitialisation ici : l'utilisateur enregistre des chemins,
+    // il ne demande pas d'effacer ses saisies.
+    if let Err(e) = crate::stock::index_stock_content(&conn, &config, &rules, false) {
         log::warn!("index_stock_content after save_config: {e}");
     }
     Ok(())

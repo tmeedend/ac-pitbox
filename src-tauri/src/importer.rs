@@ -1963,7 +1963,14 @@ fn process_found(
 
     let kind_str = format!("{:?}", fm.kind); // "Car" | "Track"
     let brand = ui.brand.clone().unwrap_or_default();
-    let name = ui.name.clone().unwrap_or_else(|| id_interne.clone());
+    // Circuit : racine commune de ses layouts (§5bis.3), pas le nom du premier
+    // d'entre eux — `ui.name` vaut ici « Highlands Drift » pour un circuit qui
+    // s'appelle « Highlands ».
+    let name = match fm.kind {
+        ModKind::Track => uijson::read_track_name(&fm.dir),
+        ModKind::Car => ui.name.clone(),
+    }
+    .unwrap_or_else(|| id_interne.clone());
     // Extraction des fichiers annexes (§4.5.2) : réglage global, jamais reposé
     // à chaque import.
     let res_mode = crate::resources::ExtractionMode::parse(&cfg.prefs.resource_extraction_mode);

@@ -113,7 +113,7 @@ pub fn run() {
             let cfg = config::load(app.handle());
             if cfg.ac_install_path.is_some() && overlay::count_stock(&conn).unwrap_or(0) == 0 {
                 let rules = rules::load(app.handle());
-                if let Err(e) = stock::index_stock_content(&conn, &cfg, &rules) {
+                if let Err(e) = stock::index_stock_content(&conn, &cfg, &rules, false) {
                     log::warn!("index_stock_content at startup: {e}");
                 }
             }

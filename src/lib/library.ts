@@ -8,7 +8,20 @@ export interface ModCard {
   id_interne: string;
   kind: ModKind;
   brand: string | null;
+  /** Nom EFFECTIF (§5bis.3) : déjà celui saisi par l'utilisateur s'il en a
+   * saisi un, sinon celui du `ui_*.json`. Rien à arbitrer côté écran. */
   display_name: string | null;
+  /** Nom saisi par l'utilisateur, `null` si aucun. Ne sert qu'à SAVOIR qu'il y
+   * a une surcharge (pré-remplir le champ d'édition, proposer d'y renoncer) —
+   * jamais à l'affichage, `display_name` le porte déjà. */
+  display_name_user: string | null;
+  /** Description saisie par l'utilisateur, `null` si aucune. Même rôle : la
+   * description affichée est déjà arbitrée côté Rust (`specs.description` /
+   * `track.description`). */
+  description_user: string | null;
+  /** Nom annoncé par le fichier du mod, que `display_name` masque dès qu'une
+   * surcharge existe — à montrer à qui hésite à y renoncer. */
+  display_name_file: string | null;
   year: number | null;
   car_class: string | null;
   category: string | null;

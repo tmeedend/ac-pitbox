@@ -4,12 +4,16 @@
 use super::prelude::*;
 
 /// Indexe le contenu de base Kunos présent dans content/ (§12bis.1).
+///
+/// `reset_user_edits` : efface aussi ce que l'utilisateur a saisi sur ce
+/// contenu (§9.3bis). Absent = préserver, le seul défaut acceptable — c'est le
+/// contraire qui était fait, et il perdait un renommage sans prévenir.
 #[tauri::command]
-pub fn index_stock_content(app: AppHandle, db: State<Db>) -> Result<usize, String> {
+pub fn index_stock_content(app: AppHandle, db: State<Db>, reset_user_edits: Option<bool>) -> Result<usize, String> {
     let cfg = crate::config::load(&app);
     let rules = crate::rules::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::stock::index_stock_content(&conn, &cfg, &rules)
+    crate::stock::index_stock_content(&conn, &cfg, &rules, reset_user_edits.unwrap_or(false))
 }
 
 /// Sous-éléments rattachés à une entité (skins/sons d'une voiture, §12bis.3).

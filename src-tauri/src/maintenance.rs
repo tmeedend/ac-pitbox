@@ -452,20 +452,30 @@ pub fn reindex_mod(conn: &Connection, cfg: &AppConfig, id: &str, recalc_size: bo
         }
 
         if m.active_version_id.as_deref() == Some(v.id.as_str()) {
-            fresh_for_mod = Some(ui);
+            // Le dossier voyage avec le `UiInfo` : le nom d'un circuit se
+            // recalcule sur l'ensemble de ses layouts (§5bis.3), donc sur
+            // disque, pas à partir du seul fichier déjà lu.
+            fresh_for_mod = Some((ui, dir.to_path_buf()));
         }
     }
 
     // Nom/marque/année du mod : reflète la version active, sinon la dernière lue.
     let fresh_for_mod = fresh_for_mod.or_else(|| {
         let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &versions.last()?.library_path)?;
-        match kind {
+        let ui = match kind {
             ModKind::Car => uijson::read_car(&dir),
             ModKind::Track => uijson::read_track(&dir),
-        }
+        }?;
+        Some((ui, dir))
     });
-    if let Some(ui) = fresh_for_mod {
-        overlay::update_mod_reindexed_fields(conn, id, ui.brand.as_deref(), ui.name.as_deref(), ui.year)
+    if let Some((ui, dir)) = fresh_for_mod {
+        // Même arbitrage qu'à l'import : pour un circuit, la racine commune de
+        // ses layouts plutôt que le nom du premier d'entre eux.
+        let name = match kind {
+            ModKind::Track => uijson::read_track_name(&dir),
+            ModKind::Car => ui.name.clone(),
+        };
+        overlay::update_mod_reindexed_fields(conn, id, ui.brand.as_deref(), name.as_deref(), ui.year)
             .map_err(|e| e.to_string())?;
     }
 

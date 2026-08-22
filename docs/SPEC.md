@@ -296,6 +296,20 @@ Distinction par **code couleur** (rouge = catégorie, vert = règle, gris = manu
 
 **Catégorie = tag `#`** (convention CM) : le tag préfixé `#` identifie la catégorie de la voiture. Sert à la **composition de plateau** (§7), combiné à la fenêtre d'années.
 
+### 5bis.3 Nom et description repris à la main
+
+**Le nom et la description d'un mod s'éditent** depuis la fiche pleine page : un crayon à droite du nom, un autre dans l'en-tête de la carte « Description ». Même mécanisme que les tags manuels, et pour la même raison — les `ui_*.json` d'un mod sont en lecture seule (règle d'or n°1), donc la saisie va dans l'overlay et **survit à une mise à jour du mod**. Sans ça, corriger le nom d'un mod mal nommé serait un travail à refaire à chaque version publiée par l'auteur.
+
+Deux colonnes SQLite distinctes des champs dérivés du fichier (`display_name_user`, `description_user`) : les champs dérivés, eux, sont réécrits à chaque réimport et à chaque réindex — une saisie qui y vivrait disparaîtrait à la première mise à jour. Le **nom effectif** est arbitré en SQL (`COALESCE(display_name_user, display_name)`), donc tout ce qui affiche un mod en profite d'un coup : liste, tri, fiche, sélecteur de session, adversaires, export. La description, elle, n'est pas en base — elle se relit dans le fichier à chaque affichage — donc son arbitrage se fait dans `library.rs`. Le nom du fichier reste exposé à part (`display_name_file`) : il faut bien montrer à quoi on reviendrait.
+
+**La carte « Description » s'affiche même vide** : un mod qui n'en a aucune est justement celui à qui on veut en écrire une. Vider le champ vaut « reviens au fichier du mod » — le geste naturel pour annuler, et il évite de distinguer « vide » de « pas de surcharge », qui n'ont aucune différence utile.
+
+**Où le dire à l'utilisateur** : la phrase (« Enregistré dans Pit Box, pas dans les fichiers du mod : conservé si le mod est mis à jour ») s'affiche **sous le champ, pendant la saisie**, pas en infobulle sur le crayon — une infobulle disparaît à l'instant précis où l'information devient utile, c'est-à-dire quand on tape. Le crayon garde une infobulle courte (« Renommer »), qui répond à une autre question : à quoi sert ce bouton.
+
+**Une réindexation ne détruit jamais ces saisies** (§9.3bis). L'indexation du contenu de base repartait d'un `DELETE` global de ses lignes, donc chaque réindex effaçait tout l'overlay posé dessus — nom repris à la main, description, **tags manuels et favoris compris**. Bug réel signalé : « Mugello » renommé « Autodromo del Mugello » redevenait « Mugello ». Désormais seules les **versions synthétiques** repartent (elles se refabriquent avec un nouvel UUID et s'accumuleraient sinon) ; les lignes `mods` survivent, et ce qui a disparu de `content/` est retiré par comparaison avec ce qui a été trouvé sur disque — ce que le `DELETE` global faisait gratuitement et qu'il fallait donc remplacer explicitement. Une case à cocher **décochée par défaut** rétablit l'effacement complet, et elle seule fait apparaître une confirmation qui énumère ce qui va disparaître : la case se coche d'un clic, ce qu'elle efface ne se récupère pas.
+
+**Nom d'un circuit multi-layouts** : un circuit n'a pas de nom à lui, chaque layout porte le sien. On prenait celui du **premier layout trouvé** — « Highlands Drift » pour un circuit qui s'appelle « Highlands », et le nom changeait selon l'ordre alphabétique des dossiers. Le nom est désormais la **racine commune** des noms de layouts, découpée sur des **mots entiers** : une comparaison caractère par caractère rendrait « Monza 19 » pour « Monza 1966 »/« Monza 1971 », qui n'est le nom de rien. La ponctuation de liaison laissée en bout est retirée (« Spa - GP »/« Spa - National » → « Spa »), la casse est ignorée pour comparer mais celle du premier layout est conservée à l'affichage, et sans aucun mot commun on retombe sur le comportement d'avant plutôt que sur un nom vide. Appliqué à l'import **et** au réindex ; l'utilisateur reste libre de renommer par-dessus.
+
 ---
 
 ## 6. Fiche technique et champs dédiés
