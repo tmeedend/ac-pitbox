@@ -35,7 +35,7 @@ jobs:
       #
       #  1. Tauri appelle la commande **pendant** l'empaquetage, donc
       #     l'exécutable *à l'intérieur* de l'installateur est signé lui aussi —
-      #     signer seulement le .msi/.exe final laisserait le binaire installé
+      #     signer seulement l'installateur final laisserait le binaire installé
       #     non signé, et SmartScreen le verrait au premier lancement.
       #  2. `tauri-action` construit ET publie la release en une seule étape :
       #     il n'existe pas de fenêtre entre « bundles produits » et « bundles

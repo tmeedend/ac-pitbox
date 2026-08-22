@@ -45,9 +45,22 @@ deux pistes à instruire en premier.
 ## Ce qui est déjà en place
 
 [`.github/workflows/release.yml`](../.github/workflows/release.yml) construit
-les installateurs MSI et NSIS sur un tag `v*` et crée une release **brouillon**.
+l'installateur NSIS (`.exe`) sur un tag `v*` et crée une release **brouillon**.
 Les binaires produits aujourd'hui ne sont **pas signés** — le workflow est prêt
 à les signer, il attend une variable de dépôt.
+
+**Un seul installateur, le NSIS** (`bundle.targets` dans `tauri.conf.json`).
+Tauri sait aussi produire un `.msi`, et les deux ont été livrés le temps de la
+`v0.2.0` — assez pour constater que **c'est une mauvaise idée** : les deux
+installent dans le **même** dossier (`%LOCALAPPDATA%\Pit Box`) sans se
+connaître. Sur une machine ayant reçu les deux, Windows liste deux entrées
+« Pit Box » de versions différentes, propriétaires du même dossier ; désinstaller
+l'une efface les fichiers de l'autre et laisse son entrée pointer dans le vide.
+Le NSIS est celui qu'on garde parce qu'il s'enregistre dans **HKCU**
+(utilisateur courant, aucune élévation), là où le MSI s'inscrit dans HKLM et
+réclame donc l'admin pour poser un exécutable dans `AppData\Local` — ce que la
+règle « jamais d'élévation admin » du projet interdit. Le MSI n'a d'intérêt
+qu'en déploiement d'entreprise par GPO, ce qui n'est pas le public visé.
 
 ## Activer la signature
 
@@ -73,7 +86,7 @@ workflow :
 
 - Tauri appelle la commande **pendant** l'empaquetage. L'exécutable *à
   l'intérieur* de l'installateur est donc signé lui aussi. Signer seulement le
-  `.msi`/`.exe` final laisserait le binaire réellement installé non signé —
+  `.exe` final laisserait le binaire réellement installé non signé —
   SmartScreen s'en apercevrait au premier lancement, après l'installation.
 - `tauri-action` construit **et** publie la release en une seule étape : il
   n'existe aucune fenêtre entre « bundles produits » et « bundles téléversés »
