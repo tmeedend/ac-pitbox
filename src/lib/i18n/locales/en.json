@@ -693,7 +693,8 @@
     "tractionAuto": "Traction control",
     "idealLine": "Ideal line",
     "tyreBlankets": "Tyre blankets",
-    "sessionTypeLabel": "Session type"
+    "sessionTypeLabel": "Session type",
+    "trackNotCircuitWarning": "This track isn't categorised as a closed circuit: a hotlap or a race will still start, but with no lap to complete there will be no usable lap times or standings."
   },
   "config": {
     "acInstallOk": "Assetto Corsa folder found.",

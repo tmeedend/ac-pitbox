@@ -163,6 +163,10 @@
   const trackSupportsRain = $derived(trackCspFeatures.includes("rainfx"));
 
   const carPool = $derived(libCards.filter((c) => c.kind === "Car"));
+  /** Carte du circuit choisi — sert à connaître ses catégories (§5bis.2). */
+  const trackCard = $derived(
+    libCards.find((c) => c.kind === "Track" && c.id_interne === setup.track_id) ?? null,
+  );
   const player = $derived(carPool.find((c) => c.id_interne === setup.car_id) ?? null);
   const currentWeather = $derived(weathers.find((w) => w.id === selectedIntent));
 
@@ -921,7 +925,11 @@
     <div class="cols">
       <!-- COLONNE GAUCHE -->
       <div>
-        <SessionTypeBlock sessionType={setup.session_type} onselect={setSessionType} />
+        <SessionTypeBlock
+          sessionType={setup.session_type}
+          trackCategories={trackCard?.categories ?? []}
+          onselect={setSessionType}
+        />
 
         <SessionOptionsBlock {setup} />
 

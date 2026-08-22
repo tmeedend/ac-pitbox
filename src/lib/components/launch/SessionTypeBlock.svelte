@@ -6,7 +6,30 @@
   import type { SessionType } from "$lib/launch";
   import { t } from "$lib/i18n/index.svelte";
 
-  let { sessionType, onselect }: { sessionType: SessionType; onselect: (type: SessionType) => void } = $props();
+  let {
+    sessionType,
+    trackCategories = [],
+    onselect,
+  }: {
+    sessionType: SessionType;
+    /** Catégories du circuit choisi (§5bis.2), telles que stockées : `#circuit`,
+     * `#drift`… Vide tant qu'aucun circuit n'est sélectionné. */
+    trackCategories?: string[];
+    onselect: (type: SessionType) => void;
+  } = $props();
+
+  // Un hotlap et une course supposent un tracé qui boucle et qu'on chronomètre.
+  // Sur une piste de dragster, une montée ou un point-à-point, elles partent
+  // mais ne veulent rien dire : pas de tour à boucler, donc pas de temps au
+  // tour ni de classement. On avertit sans bloquer — l'app n'arbitre pas ce
+  // que l'utilisateur a le droit de lancer, et la catégorie vient de règles
+  // que lui-même peut modifier (écran Règles).
+  //
+  // Comparé sans le `#` : la catégorie est stockée avec, mais un tag saisi à
+  // la main ou une règle personnalisée peut l'écrire sans.
+  const isCircuit = $derived(trackCategories.some((c) => c.replace(/^#/, "").toLowerCase() === "circuit"));
+  const lapBased = $derived(sessionType === "hotlap" || sessionType === "race");
+  const warn = $derived(trackCategories.length > 0 && lapBased && !isCircuit);
 
   const sessionTypes: { id: SessionType; labelKey: string }[] = [
     { id: "practice", labelKey: "launch.typePractice" },
@@ -24,6 +47,9 @@
         <button class:on={sessionType === st.id} onclick={() => onselect(st.id)}>{t(st.labelKey)}</button>
       {/each}
     </div>
+    {#if warn}
+      <p class="warn-note">⚠ {t("launch.trackNotCircuitWarning")}</p>
+    {/if}
   </div>
 </section>
 
@@ -49,5 +75,15 @@
   .seg button.on {
     background: var(--rosso);
     color: #fff;
+  }
+  /* Même habillage que l'avertissement « pas de RainFX » du bloc Météo : ces
+     deux-là disent la même chose — ça partira, mais pas comme tu l'imagines. */
+  .warn-note {
+    color: var(--yellow);
+    font-size: 10px;
+    margin-top: -6px;
+    padding: 7px 9px;
+    background: #1a1708;
+    border: 1px solid #4a4426;
   }
 </style>

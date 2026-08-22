@@ -693,7 +693,8 @@
     "tractionAuto": "Antipatinage",
     "idealLine": "Ligne idéale",
     "tyreBlankets": "Chauffe-pneus",
-    "sessionTypeLabel": "Type de session"
+    "sessionTypeLabel": "Type de session",
+    "trackNotCircuitWarning": "Ce circuit n'est pas catégorisé comme un circuit fermé : un hotlap ou une course y partiront, mais sans tour à boucler il n'y aura ni temps au tour ni classement utilisables."
   },
   "config": {
     "acInstallOk": "Dossier Assetto Corsa trouvé.",

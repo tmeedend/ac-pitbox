@@ -6,8 +6,8 @@
   // pour les voitures et les circuits (§4.5.5), les listes de fichiers vivent
   // dans la page pleine. Un dépliant au milieu d'une liste ne tient pas quand
   // l'app pose trente configs CSP.
-  import { onMount } from "svelte";
   import { listApps, activateApp, deactivateApp, deleteApp, openAppFolder, type AppItem } from "$lib/apps";
+  import { libraryVersion } from "$lib/libraryVersion.svelte";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { t } from "$lib/i18n/index.svelte";
   import AppDetail from "./AppDetail.svelte";
@@ -34,7 +34,14 @@
       loading = false;
     }
   }
-  onMount(load);
+  // Charge au montage, puis à chaque changement de bibliothèque — dont un
+   // import (`importState`). Sans ça, importer une app pendant que cet écran
+   // est ouvert ne montrait rien : la liste n'était lue qu'au montage, et on
+   // croyait l'import raté. Même abonnement que `Library` et `AppShell`.
+  $effect(() => {
+    libraryVersion();
+    load();
+  });
 
   async function toggle(a: AppItem) {
     busy = a.id;

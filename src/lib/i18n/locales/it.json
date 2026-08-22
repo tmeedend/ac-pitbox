@@ -693,7 +693,8 @@
     "tractionAuto": "Controllo di trazione",
     "idealLine": "Traiettoria ideale",
     "tyreBlankets": "Termocoperte",
-    "sessionTypeLabel": "Tipo di sessione"
+    "sessionTypeLabel": "Tipo di sessione",
+    "trackNotCircuitWarning": "Questo tracciato non è classificato come circuito chiuso: un hotlap o una gara partiranno comunque, ma senza un giro da chiudere non ci saranno tempi sul giro né classifica utilizzabili."
   },
   "config": {
     "acInstallOk": "Cartella di Assetto Corsa trovata.",

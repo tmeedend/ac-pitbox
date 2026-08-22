@@ -13,6 +13,7 @@
   import { getPackDetail, type PackDetail } from "$lib/packs";
   import { deletePack } from "$lib/maintenance";
   import { previewSrc } from "$lib/library";
+  import { fmtSize } from "$lib/format";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
   import ExtrasBlock from "./detail/ExtrasBlock.svelte";
@@ -60,19 +61,6 @@
     { id: "extras", label: t("detail.tabExtras"), count: detail?.extras.length },
     { id: "resources", label: t("detail.tabResources") },
   ]);
-
-  /** Taille lisible (base 1024), même présentation que les blocs de fiche. */
-  function fmtSize(bytes: number): string {
-    if (bytes <= 0) return "—";
-    const units = ["Ko", "Mo", "Go", "To"];
-    let v = bytes / 1024;
-    let i = 0;
-    while (v >= 1024 && i < units.length - 1) {
-      v /= 1024;
-      i++;
-    }
-    return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
-  }
 
   async function uninstall() {
     if (!detail) return;

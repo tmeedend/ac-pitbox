@@ -693,7 +693,8 @@
     "tractionAuto": "Control de tracción",
     "idealLine": "Trazada ideal",
     "tyreBlankets": "Mantas térmicas",
-    "sessionTypeLabel": "Tipo de sesión"
+    "sessionTypeLabel": "Tipo de sesión",
+    "trackNotCircuitWarning": "Este circuito no está clasificado como circuito cerrado: un hotlap o una carrera arrancarán igualmente, pero sin una vuelta que cerrar no habrá tiempos por vuelta ni clasificación utilizables."
   },
   "config": {
     "acInstallOk": "Carpeta de Assetto Corsa encontrada.",

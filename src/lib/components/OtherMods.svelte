@@ -258,15 +258,19 @@
   }
   .row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 12px;
   }
+  /* Coupé n'importe où plutôt que tronqué. Un id de reste est de la forme
+     `<archive>__<chemin>` et n'a souvent aucun espace :
+     `CMRT_Complete_hud_v2.1.3.zip__CMRT_flag_fuel_and_starting_lights_replacement`.
+     Sans point de coupure, le mot pousse la ligne et déforme la page ; avec
+     une ellipse, c'est la **fin** qui disparaît — or c'est précisément elle
+     qui distingue deux restes de la même archive (§7.3). */
   .o-name {
     flex: 1;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
     font-weight: 600;
     color: var(--txt);
     font-size: 12.5px;

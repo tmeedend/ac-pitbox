@@ -693,7 +693,8 @@
     "tractionAuto": "Traktionskontrolle",
     "idealLine": "Ideallinie",
     "tyreBlankets": "Reifenwärmer",
-    "sessionTypeLabel": "Session-Typ"
+    "sessionTypeLabel": "Session-Typ",
+    "trackNotCircuitWarning": "Diese Strecke ist nicht als geschlossener Rundkurs eingestuft: ein Hotlap oder ein Rennen startet trotzdem, aber ohne Runde zum Schließen gibt es keine brauchbaren Rundenzeiten und keine Wertung."
   },
   "config": {
     "acInstallOk": "Assetto-Corsa-Ordner gefunden.",

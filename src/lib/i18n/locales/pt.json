@@ -693,7 +693,8 @@
     "tractionAuto": "Controle de tração",
     "idealLine": "Traçado ideal",
     "tyreBlankets": "Mantas térmicas",
-    "sessionTypeLabel": "Tipo de sessão"
+    "sessionTypeLabel": "Tipo de sessão",
+    "trackNotCircuitWarning": "Esta pista não está classificada como circuito fechado: um hotlap ou uma corrida vão iniciar mesmo assim, mas sem uma volta para fechar não haverá tempos de volta nem classificação utilizáveis."
   },
   "config": {
     "acInstallOk": "Pasta do Assetto Corsa encontrada.",

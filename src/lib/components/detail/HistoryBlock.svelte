@@ -13,6 +13,7 @@
   // et la bannière d'erreur).
   import type { ModDetail } from "$lib/library";
   import { historyEventLabel, historyDetails } from "$lib/history";
+  import { fmtSize } from "$lib/format";
   import { t } from "$lib/i18n/index.svelte";
 
   let {
@@ -45,6 +46,9 @@
     installed: boolean;
     /** Ce qui s'est passé : « import initial », « mise à jour »… */
     event: string;
+    /** Taille sur disque de cette version (§9.4), `null` pour un événement
+     * isolé ou une version importée avant que la taille ne soit calculée. */
+    size: number | null;
     /** Archive dont provient la version, ou détail de l'événement. */
     detail: string;
   }
@@ -56,7 +60,15 @@
     // correspond à rien de réel (juste l'indexation locale).
     if (detail.is_stock) {
       return [
-        { key: "stock", when: "", label: "", installed: false, event: t("detail.baseContentLabel"), detail: "" },
+        {
+          key: "stock",
+          when: "",
+          label: "",
+          installed: false,
+          event: t("detail.baseContentLabel"),
+          detail: "",
+          size: null,
+        },
       ];
     }
 
@@ -75,6 +87,7 @@
           detail.history.find((h) => h.timestamp === v.imported_at)?.event ?? "IMPORT",
         ),
       detail: v.source_archive ?? "",
+      size: v.size_bytes,
     }));
 
     // Activer/désactiver n'est pas un événement de cycle de vie : ces lignes
@@ -91,6 +104,7 @@
         installed: false,
         event: historyEventLabel(h.event),
         detail: historyDetails(h.details),
+        size: null,
       }));
 
     // Version installée en tête (c'est ce qu'on vient vérifier en premier),
@@ -105,6 +119,13 @@
 <section class="blk">
   <header class="blk-h">
     <span class="blk-t">{t("detail.historyLabel")}</span>
+    <!-- La place que le mod prend sur le disque, toutes versions confondues —
+         la même valeur que la colonne « Taille » de la bibliothèque, et le
+         même formatage (`fmtSize`). Ici plutôt que dans une carte à elle :
+         c'est une donnée qu'on consulte, pas qu'on suit. -->
+    {#if detail.size_bytes != null}
+      <span class="blk-n">{fmtSize(detail.size_bytes)}</span>
+    {/if}
   </header>
   <div class="blk-b">
     <ul class="timeline">
@@ -114,6 +135,10 @@
           <div class="body">
             <div class="head">
               {#if e.label}<span class="ver mono">{e.label}</span>{/if}
+              <!-- Décomposée par version, et pas seulement cumulée : depuis
+                   qu'une version se supprime (§10), c'est le chiffre qui dit
+                   laquelle vaut la peine d'être retirée. -->
+              {#if e.size != null}<span class="size mono">{fmtSize(e.size)}</span>{/if}
               {#if e.installed}
                 <span class="badge">{t("detail.installedBadge")}</span>
               {:else if e.versionId}
@@ -186,6 +211,10 @@
     color: var(--txt);
     font-size: 14px;
     font-weight: 600;
+  }
+  .size {
+    color: var(--muted2);
+    font-size: 10.5px;
   }
   .badge {
     background: var(--rosso);
