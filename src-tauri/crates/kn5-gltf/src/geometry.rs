@@ -224,7 +224,11 @@ fn convert_mesh(name: &str, mesh: &Kn5Mesh, world: &[f32; 16]) -> FlatMesh {
     // inverse l'orientation de ses triangles. glTF veut des faces avant en
     // sens antihoraire, donc on la rétablit là et seulement là (§10).
     if determinant3(world) < 0.0 {
-        for triangle in indices.chunks_exact_mut(3) {
+        // `as_chunks_mut` plutôt que `chunks_exact_mut(3)` : la taille étant
+        // constante, il rend des `[u32; 3]` au lieu de tranches de longueur
+        // vérifiée à l'exécution. Clippy l'exige depuis Rust 1.98 — plus récent
+        // que la chaîne locale, donc invisible ici et vu seulement en CI.
+        for triangle in indices.as_chunks_mut::<3>().0 {
             triangle.swap(1, 2);
         }
     }
@@ -334,7 +338,7 @@ pub fn winding_consistency(model: &Kn5Model) -> (usize, usize) {
         if !mesh.is_renderable || !mesh.is_visible {
             return;
         }
-        for triangle in mesh.indices.chunks_exact(3) {
+        for triangle in mesh.indices.as_chunks::<3>().0 {
             let Some(v) = triangle
                 .iter()
                 .map(|i| mesh.vertices.get(*i as usize))
