@@ -876,7 +876,21 @@
     "conflictsWith": "⚠ Fichiers en commun avec",
     "openFolder": "Ouvrir le dossier",
     "managed": "{count} en zone Content Manager",
-    "managedTooltip": "Content Manager synchronise ces dossiers depuis le dépôt de configs CSP. Il peut y remplacer ces fichiers par ses propres versions à tout moment. Ce n'est pas l'emplacement recommandé pour un mod."
+    "managedTooltip": "Content Manager synchronise ces dossiers depuis le dépôt de configs CSP. Il peut y remplacer ces fichiers par ses propres versions à tout moment. Ce n'est pas l'emplacement recommandé pour un mod.",
+    "cat": {
+      "all": "Tous",
+      "extension": "Extensions",
+      "weather": "Météo",
+      "gui": "Interface",
+      "driver": "Pilotes",
+      "textures": "Textures",
+      "objects3d": "Objets 3D",
+      "fonts": "Polices",
+      "ppfilters": "Filtres PP",
+      "showrooms": "Showrooms",
+      "other": "Autres"
+    },
+    "noMatch": "Aucun mod ne correspond."
   },
   "import": {
     "subtitlePrefix": "Ajoute des mods à la bibliothèque. Un mod importé (ou mis à jour) est ",

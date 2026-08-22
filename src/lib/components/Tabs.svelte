@@ -18,6 +18,13 @@
   export interface TabItem {
     id: string;
     label: string;
+    /** Décompte affiché à droite du libellé. Absent = pas de décompte. */
+    count?: number;
+    /** Onglet visible mais inatteignable : ni cliquable, ni parcouru à la
+     * manette. Sert à montrer une catégorie vide sans la faire disparaître —
+     * une bande d'onglets qui change de taille selon le contenu se relit
+     * entièrement à chaque visite. */
+    disabled?: boolean;
   }
 
   interface Props {
@@ -38,20 +45,28 @@
   let { tabs, active, onselect, flush = false, trailing }: Props = $props();
 
   // Boucle plutôt que butée : avec deux onglets, une butée rendrait l'un des
-  // deux boutons de la manette inerte la moitié du temps.
+  // deux boutons de la manette inerte la moitié du temps. Les onglets
+  // désactivés sont sautés — la manette ne montre pas qu'un onglet est grisé,
+  // elle le traverserait sans que rien ne change à l'écran.
   $effect(() =>
     registerTabStrip((delta) => {
-      const i = tabs.findIndex((tab) => tab.id === active);
-      if (i === -1 || tabs.length < 2) return;
-      onselect(tabs[(i + delta + tabs.length) % tabs.length].id);
+      const reachable = tabs.filter((tab) => !tab.disabled);
+      const i = reachable.findIndex((tab) => tab.id === active);
+      if (i === -1 || reachable.length < 2) return;
+      onselect(reachable[(i + delta + reachable.length) % reachable.length].id);
     }),
   );
 </script>
 
 <nav class="tabs" class:flush>
   {#each tabs as tab (tab.id)}
-    <button class:on={active === tab.id} type="button" onclick={() => onselect(tab.id)}>
-      {tab.label}
+    <button
+      class:on={active === tab.id}
+      type="button"
+      disabled={tab.disabled}
+      onclick={() => onselect(tab.id)}
+    >
+      {tab.label}{#if tab.count !== undefined}<span class="n">{tab.count}</span>{/if}
     </button>
   {/each}
   {#if trailing}
@@ -90,8 +105,21 @@
     color: var(--txt);
     border-bottom-color: var(--rosso);
   }
-  .tabs button:hover:not(.on) {
+  .tabs button:hover:not(.on):not(:disabled) {
     color: var(--txt2);
+  }
+  .tabs button:disabled {
+    color: var(--faint);
+    cursor: default;
+  }
+  /* Décompte : plus discret que le libellé, jamais au point de disparaître. */
+  .tabs button .n {
+    color: var(--muted2);
+    font-family: var(--mono);
+    margin-left: 6px;
+  }
+  .tabs button.on .n {
+    color: var(--muted);
   }
   .trailing {
     margin-left: auto;

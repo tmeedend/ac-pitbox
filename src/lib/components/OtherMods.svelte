@@ -13,14 +13,22 @@
     deactivateOther,
     deleteOtherMod,
     openOtherModFolder,
+    OTHER_CATEGORIES,
     type OtherModRow,
   } from "$lib/others";
   import { t } from "$lib/i18n/index.svelte";
   import LoadingState from "./LoadingState.svelte";
+  import Tabs, { type TabItem } from "./Tabs.svelte";
 
   import { errorText } from "$lib/errors";
+
+  const ALL_TAB = "all";
   let others = $state<OtherModRow[]>([]);
   let query = $state("");
+  /** Onglet courant. `ALL_TAB` n'est pas une catégorie du backend : c'est
+   * l'écran d'avant les onglets, gardé parce qu'il reste la seule vue où deux
+   * mods de zones différentes se comparent. */
+  let tab = $state(ALL_TAB);
   let busy = $state<string | null>(null);
   let loading = $state(true);
   let error = $state("");
@@ -99,7 +107,7 @@
     }
   }
 
-  const filtered = $derived(
+  const searched = $derived(
     others.filter((o) => {
       if (!query.trim()) return true;
       // Un terme par mot séparé par un espace, ET entre eux (même correction
@@ -108,6 +116,30 @@
       const hay = o.id.toLowerCase();
       return terms.every((term) => hay.includes(term));
     }),
+  );
+
+  /** Onglets à afficher : l'ordre connu, plus les catégories que le backend
+   * renverrait sans que `OTHER_CATEGORIES` les connaisse — insérées avant
+   * « Autres », qui reste la fin de liste. Sans ce rattrapage, une catégorie
+   * ajoutée côté Rust et oubliée ici rendrait ses mods introuvables. */
+  const categoryIds = $derived.by(() => {
+    const known = new Set<string>(OTHER_CATEGORIES);
+    const unknown = [...new Set(others.flatMap((o) => o.categories))].filter((c) => !known.has(c));
+    return [...OTHER_CATEGORIES.filter((c) => c !== "other"), ...unknown, "other"];
+  });
+
+  // Décomptes sur la totalité, pas sur la recherche : un onglet qui se vide
+  // en cours de frappe fait sauter la sélection d'un onglet à l'autre.
+  const tabs = $derived<TabItem[]>([
+    { id: ALL_TAB, label: t("others.cat.all"), count: others.length },
+    ...categoryIds.map((c) => {
+      const count = others.filter((o) => o.categories.includes(c)).length;
+      return { id: c, label: t(`others.cat.${c}`), count, disabled: count === 0 };
+    }),
+  ]);
+
+  const filtered = $derived(
+    tab === ALL_TAB ? searched : searched.filter((o) => o.categories.includes(tab)),
   );
 </script>
 
@@ -132,11 +164,20 @@
       <p class="hint">{t("others.emptyHint")}</p>
     </div>
   {:else}
+    <Tabs {tabs} active={tab} onselect={(id) => (tab = id)} />
+    {#if filtered.length === 0}
+      <div class="empty"><p>{t("others.noMatch")}</p></div>
+    {/if}
     <ul class="list">
       {#each filtered as o (o.id)}
         <li class:active={o.is_active}>
           <div class="row">
             <span class="o-name mono">{o.id}</span>
+            <span class="cats">
+              {#each o.categories as c}
+                <span class="cat" class:here={c === tab}>{t(`others.cat.${c}`)}</span>
+              {/each}
+            </span>
             {#if o.source_archive}<span class="src mono">{o.source_archive}</span>{/if}
             {#if o.externally_managed}
               <span class="managed" title={t("others.managedTooltip")}>
@@ -222,9 +263,34 @@
   }
   .o-name {
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-weight: 600;
     color: var(--txt);
     font-size: 12.5px;
+  }
+  /* Zones touchées par le mod. Un mod qui en touche deux est listé sous les
+     deux onglets : ces pastilles sont ce qui permet de reconnaître le même
+     mod d'un onglet à l'autre, celle de l'onglet courant étant marquée. */
+  .cats {
+    display: flex;
+    gap: 4px;
+    flex: none;
+  }
+  .cat {
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted2);
+    border: 1px solid var(--line);
+    padding: 1px 6px;
+    white-space: nowrap;
+  }
+  .cat.here {
+    color: var(--txt2);
+    border-color: var(--muted2);
   }
   .src {
     color: var(--muted2);

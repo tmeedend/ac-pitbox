@@ -876,7 +876,21 @@
     "conflictsWith": "⚠ Files shared with",
     "openFolder": "Open folder",
     "managed": "{count} in Content Manager territory",
-    "managedTooltip": "Content Manager syncs these folders from the CSP config repository. It may replace these files with its own versions at any time. This is not the recommended location for a mod."
+    "managedTooltip": "Content Manager syncs these folders from the CSP config repository. It may replace these files with its own versions at any time. This is not the recommended location for a mod.",
+    "cat": {
+      "all": "All",
+      "extension": "Extensions",
+      "weather": "Weather",
+      "gui": "Interface",
+      "driver": "Drivers",
+      "textures": "Textures",
+      "objects3d": "3D objects",
+      "fonts": "Fonts",
+      "ppfilters": "PP filters",
+      "showrooms": "Showrooms",
+      "other": "Other"
+    },
+    "noMatch": "No mod matches."
   },
   "import": {
     "subtitlePrefix": "Adds mods to the library. An imported (or updated) mod is ",

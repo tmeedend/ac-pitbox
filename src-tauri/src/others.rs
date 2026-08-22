@@ -187,6 +187,87 @@ fn relative_files(dir: &Path) -> HashSet<PathBuf> {
         .collect()
 }
 
+/// Tab order of the "other mods" screen (§7.3). Every id here has a
+/// `others.cat.<id>` label in both locales; [`OTHER_CATEGORY`] closes the list
+/// and holds whatever no rule matched.
+///
+/// Kept apart from [`CATEGORY_RULES`] on purpose: the rules are ordered by
+/// **specificity** (a matching concern), the tabs by what the user looks for
+/// first (a design concern). A test checks the two lists still name the same
+/// categories.
+pub const CATEGORY_ORDER: &[&str] = &[
+    "extension",
+    "weather",
+    "gui",
+    "driver",
+    "textures",
+    "objects3d",
+    "fonts",
+    "ppfilters",
+    "showrooms",
+    OTHER_CATEGORY,
+];
+
+/// Catch-all category: a mod whose files match no rule — and a mod with no
+/// stored file at all, which happens for a delivery that went entirely to
+/// resources (§4.5.2, the `_RSS_Settings` case in [`folder_path`]).
+pub const OTHER_CATEGORY: &str = "other";
+
+/// Path prefixes per category, **most specific first**: the first rule a file
+/// matches wins. That order is what makes `extension/textures/` a texture mod
+/// rather than a CSP one, both prefixes being a legitimate match.
+///
+/// Prefixes are lowercase, compared segment by segment against a lowercased
+/// path — AC ships `content/objects3D` with a capital D and mod authors do not
+/// reproduce it reliably.
+const CATEGORY_RULES: &[(&str, &[&str])] = &[
+    ("fonts", &["content", "fonts"]),
+    ("driver", &["content", "driver"]),
+    ("textures", &["content", "texture"]),
+    ("textures", &["extension", "textures"]),
+    ("objects3d", &["content", "objects3d"]),
+    ("showrooms", &["content", "showroom"]),
+    ("weather", &["content", "weather"]),
+    ("gui", &["content", "gui"]),
+    ("ppfilters", &["system", "cfg", "ppfilters"]),
+    ("extension", &["extension"]),
+];
+
+/// Category of a single file, from its path relative to the AC root.
+fn category_of(rel: &Path) -> &'static str {
+    let segs: Vec<String> = rel
+        .components()
+        .filter_map(|c| c.as_os_str().to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .collect();
+    CATEGORY_RULES
+        .iter()
+        // `>` and not `>=`: the prefix alone is the folder, never a file in it.
+        .find(|(_, prefix)| segs.len() > prefix.len() && segs.iter().zip(prefix.iter()).all(|(a, b)| a == b))
+        .map(|(cat, _)| *cat)
+        .unwrap_or(OTHER_CATEGORY)
+}
+
+/// Every category a mod touches, in [`CATEGORY_ORDER`], never empty.
+///
+/// A mod is listed under **all** of its categories rather than a dominant one.
+/// A pack shipping both fonts and a GUI skin is two different things to look
+/// for, and filing it under the bigger half is what sends the user back to the
+/// file explorer to find the other one. The screen shows the full list on each
+/// row, so a mod met twice is recognizable as the same mod.
+fn categories_of(files: &HashSet<PathBuf>) -> Vec<String> {
+    let found: HashSet<&str> = files.iter().map(|f| category_of(f)).collect();
+    let mut cats: Vec<String> = CATEGORY_ORDER
+        .iter()
+        .filter(|c| found.contains(*c))
+        .map(|c| (*c).to_string())
+        .collect();
+    if cats.is_empty() {
+        cats.push(OTHER_CATEGORY.to_string());
+    }
+    cats
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ConflictInfo {
     pub other_id: String,
@@ -206,6 +287,9 @@ pub struct OtherModCard {
     /// qu'un seul des deux prévienne. Un pack multi-mods qui livre des configs
     /// CSP que rien ne rattache atterrit précisément ici (§7.3).
     pub externally_managed: usize,
+    /// Onglets sous lesquels ce mod se range ([`categories_of`]) — plusieurs
+    /// quand il touche plusieurs zones du jeu, jamais vide.
+    pub categories: Vec<String>,
 }
 
 /// Liste les mods « autres » avec les conflits de fichiers détectés entre eux.
@@ -247,6 +331,9 @@ pub fn list_others(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<O
                 row,
                 conflicts,
                 externally_managed,
+                categories: mine
+                    .map(categories_of)
+                    .unwrap_or_else(|| vec![OTHER_CATEGORY.to_string()]),
             }
         })
         .collect())
@@ -496,6 +583,65 @@ mod tests {
             std::fs::create_dir_all(p.parent().unwrap()).unwrap();
             std::fs::write(&p, b"x").unwrap();
         }
+    }
+
+    #[test]
+    fn every_rule_category_is_a_tab_and_every_tab_has_a_rule() {
+        // Les deux listes sont séparées (ordre de spécificité vs ordre des
+        // onglets) : ce test est ce qui les empêche de diverger — une règle
+        // dont la catégorie n'a pas d'onglet range des mods dans le vide.
+        for (cat, _) in CATEGORY_RULES {
+            assert!(CATEGORY_ORDER.contains(cat), "{cat} : règle sans onglet");
+        }
+        for cat in CATEGORY_ORDER {
+            assert!(
+                *cat == OTHER_CATEGORY || CATEGORY_RULES.iter().any(|(c, _)| c == cat),
+                "{cat} : onglet qu'aucune règle n'alimente"
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_falls_in_the_most_specific_category_that_matches_it() {
+        // `extension/textures/` est réclamé par deux règles ; la plus précise
+        // gagne, sinon toute texture CSP passerait pour une config CSP.
+        assert_eq!(category_of(Path::new("extension/textures/lut.dds")), "textures");
+        assert_eq!(category_of(Path::new("extension/config/cars/x.ini")), "extension");
+
+        assert_eq!(category_of(Path::new("content/fonts/aria.txt")), "fonts");
+        assert_eq!(category_of(Path::new("content/driver/driver_501.kn5")), "driver");
+        assert_eq!(category_of(Path::new("content/texture/sky.dds")), "textures");
+        assert_eq!(category_of(Path::new("content/weather/sol/x.ini")), "weather");
+        assert_eq!(category_of(Path::new("system/cfg/ppfilters/natural.ini")), "ppfilters");
+
+        // AC écrit `objects3D` avec une majuscule, les auteurs de mods pas
+        // toujours : la comparaison est insensible à la casse.
+        assert_eq!(category_of(Path::new("content/objects3D/pitcrew.kn5")), "objects3d");
+        assert_eq!(category_of(Path::new("content/objects3d/pitcrew.kn5")), "objects3d");
+
+        // Le préfixe seul désigne le dossier, jamais un fichier dedans.
+        assert_eq!(category_of(Path::new("content/fonts")), OTHER_CATEGORY);
+        // Hors chemin de jeu (§4.5.3) : rangé, listé, mais dans « Autres ».
+        assert_eq!(category_of(Path::new("MODS/patch/readme.txt")), OTHER_CATEGORY);
+    }
+
+    #[test]
+    fn a_mod_is_listed_under_every_zone_it_touches() {
+        // Un pack qui livre polices ET interface se cherche des deux côtés :
+        // le ranger sous sa moitié la plus grosse perdrait l'autre.
+        let files: HashSet<PathBuf> = ["content/gui/flags/fr.png", "content/fonts/aria.txt"]
+            .iter()
+            .map(PathBuf::from)
+            .collect();
+        assert_eq!(
+            categories_of(&files),
+            vec!["gui".to_string(), "fonts".to_string()],
+            "les deux zones, dans l'ordre des onglets"
+        );
+
+        // Une livraison partie entièrement en ressources n'a aucun fichier
+        // stocké (§4.5.2) — elle reste listée, sous « Autres ».
+        assert_eq!(categories_of(&HashSet::new()), vec![OTHER_CATEGORY.to_string()]);
     }
 
     #[test]
