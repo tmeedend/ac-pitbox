@@ -55,12 +55,20 @@
     />
     <button class="btn" type="button" onclick={browse}>{t("pathfield.browse")}</button>
   </div>
+  <!-- Les deux, et dans cet ordre. L'aide et la vérification ne répondent pas
+       à la même question : « à quoi sert ce champ ? » d'un côté, « ce que j'ai
+       tapé convient-il ? » de l'autre. Elles étaient exclusives (`:else if`),
+       donc l'aide disparaissait dès qu'une vérification remontait — c'est-à-dire
+       toujours, la détection automatique renseignant les chemins avant même
+       que l'écran ne s'affiche. Résultat : une aide écrite, traduite, et que
+       personne n'a jamais lue. -->
+  {#if hint}
+    <div class="hint">{hint}</div>
+  {/if}
   {#if check}
     <div class="status {check.ok ? 'ok' : check.level === 'optional' ? 'warn' : 'err'}">
       {t(check.message)}
     </div>
-  {:else if hint}
-    <div class="hint">{hint}</div>
   {/if}
 </div>
 

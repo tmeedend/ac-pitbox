@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Filtres bibliothèque de mods — maquette</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel-2:#1e222b;
+    --border:#2a2f3a; --border-strong:#3a4150;
+    --text:#e6e9ef; --muted:#8b93a5;
+    --accent:#e8534f;
+    --inc:#3ecf8e; --inc-bg:rgba(62,207,142,.14); --inc-br:rgba(62,207,142,.45);
+    --exc:#f2645a; --exc-bg:rgba(242,100,90,.14); --exc-br:rgba(242,100,90,.45);
+    --radius:8px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;padding:28px 20px 60px;background:var(--bg);color:var(--text);
+    font:14px/1.5 "Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:920px;margin:0 auto}
+  h1{font-size:15px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);margin:0 0 20px}
+  .lbl{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+    margin-bottom:6px;height:20px;
+  }
+  .lbl .note{text-transform:none;letter-spacing:0;font-size:11px;opacity:.7}
+
+  /* ---------- ligne des 2 combobox ---------- */
+  .row{display:flex;gap:12px;align-items:flex-start}
+  .col{flex:1;min-width:0}
+  .filter{position:relative}
+  .field{
+    display:flex;flex-wrap:wrap;align-items:center;gap:6px;
+    background:var(--panel);border:1px solid var(--border-strong);
+    border-radius:var(--radius);padding:7px 8px;min-height:44px;cursor:text;transition:border-color .15s;
+  }
+  .field:focus-within{border-color:var(--accent)}
+  .field .icon{color:var(--muted);margin:0 2px 0 4px;flex:none;display:flex}
+  .field input{flex:1 1 90px;min-width:90px;background:none;border:0;outline:0;color:var(--text);font:inherit;padding:4px 2px}
+  .field input::placeholder{color:#5d6577}
+
+  /* ---------- jetons ---------- */
+  .chip{display:inline-flex;align-items:center;border-radius:6px;border:1px solid;font-size:13px;font-weight:500;overflow:hidden;user-select:none;white-space:nowrap}
+  .chip .body{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;background:none;border:0;color:inherit;font:inherit}
+  .chip .body:hover{background:rgba(255,255,255,.06)}
+  .chip .state{font-size:12px;width:12px;text-align:center;flex:none}
+  .chip .del{padding:4px 7px 4px 5px;cursor:pointer;background:none;border:0;border-left:1px solid;border-color:inherit;color:inherit;opacity:.55;line-height:1;font-size:14px}
+  .chip .del:hover{opacity:1;background:rgba(255,255,255,.08)}
+  .chip.inc{border-color:var(--inc-br);background:var(--inc-bg);color:var(--inc)}
+  .chip.exc{border-color:var(--exc-br);background:var(--exc-bg);color:var(--exc)}
+  .chip.exc .label{text-decoration:line-through;text-decoration-thickness:1px;opacity:.85}
+
+  /* ---------- autocomplétion ---------- */
+  .menu{
+    position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:20;
+    background:var(--panel-2);border:1px solid var(--border-strong);border-radius:var(--radius);
+    box-shadow:0 12px 32px rgba(0,0,0,.55);max-height:290px;overflow:auto;padding:4px;display:none;
+  }
+  .menu.open{display:block}
+  .menu .r{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:6px;cursor:pointer}
+  .menu .r.active,.menu .r:hover{background:rgba(255,255,255,.06)}
+  .menu .r .name{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis}
+  .menu .r .count{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+  .menu .r .quick{border:1px solid var(--border-strong);background:transparent;color:var(--muted);border-radius:5px;width:24px;height:24px;font-size:13px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center}
+  .menu .r .quick.inc:hover{color:var(--inc);border-color:var(--inc)}
+  .menu .r .quick.exc:hover{color:var(--exc);border-color:var(--exc)}
+  .menu .empty{padding:12px 10px;color:var(--muted)}
+  .menu .hint{padding:8px 10px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);margin-top:4px;display:flex;gap:12px;flex-wrap:wrap}
+  kbd{background:var(--panel);border:1px solid var(--border-strong);border-bottom-width:2px;border-radius:4px;padding:1px 5px;font:11px/1.4 ui-monospace,monospace;color:var(--text)}
+
+  /* ---------- cases à cocher tri-état ---------- */
+  .flags{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 0}
+  .tri{
+    display:inline-flex;align-items:center;gap:8px;padding:6px 11px 6px 8px;
+    background:var(--panel);border:1px solid var(--border-strong);border-radius:var(--radius);
+    color:var(--muted);font:inherit;font-size:13px;cursor:pointer;user-select:none;transition:.12s;
+  }
+  .tri:hover{border-color:#4a5364;color:var(--text)}
+  .tri:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .tri .box{
+    width:17px;height:17px;flex:none;border-radius:4px;border:1.5px solid #4a5364;
+    display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1;color:transparent;
+    transition:.12s;
+  }
+  .tri[data-state="inc"]{border-color:var(--inc-br);background:var(--inc-bg);color:var(--inc)}
+  .tri[data-state="inc"] .box{border-color:var(--inc);background:var(--inc);color:#0f1115}
+  .tri[data-state="exc"]{border-color:var(--exc-br);background:var(--exc-bg);color:var(--exc)}
+  .tri[data-state="exc"] .box{border-color:var(--exc);background:var(--exc);color:#0f1115}
+  .tri .sub{font-size:11px;opacity:.75}
+
+  /* ---------- résumé ---------- */
+  .summary{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    padding:10px 12px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    font-size:13px;color:var(--muted);margin:16px 0 14px;
+  }
+  .summary b{color:var(--text);font-weight:600}
+  .summary .i{color:var(--inc);font-weight:500}
+  .summary .e{color:var(--exc);font-weight:500}
+  .seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:6px;overflow:hidden}
+  .seg button{background:none;border:0;color:var(--muted);font:inherit;font-size:11px;padding:2px 8px;cursor:pointer}
+  .seg button.on{background:var(--panel-2);color:var(--text)}
+  .clear{background:none;border:0;color:var(--muted);font:inherit;font-size:12px;cursor:pointer;text-decoration:underline}
+  .clear:hover{color:var(--text)}
+
+  /* ---------- liste ---------- */
+  .list{display:flex;flex-direction:column;gap:6px}
+  .mod{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius)}
+  .thumb{width:52px;height:34px;border-radius:5px;flex:none;background:linear-gradient(135deg,#252b36,#171a21);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:#4a5264;font-size:10px}
+  .mod .meta{flex:1;min-width:0}
+  .mod .title{font-weight:500;margin-bottom:3px;display:flex;align-items:center;gap:7px}
+  .mod .cat{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border:1px solid var(--border-strong);border-radius:4px;padding:0 5px;cursor:pointer}
+  .mod .cat:hover{color:var(--text)}
+  .mod .star{color:#e3b341}
+  .mod .tags{display:flex;flex-wrap:wrap;gap:4px}
+  .tag{font-size:11px;padding:1px 6px;border-radius:4px;color:var(--muted);background:var(--panel-2);border:1px solid var(--border);cursor:pointer}
+  .tag:hover{color:var(--text);border-color:var(--border-strong)}
+  .tag.on-inc{color:var(--inc);border-color:var(--inc-br);background:var(--inc-bg)}
+  .score{flex:none;font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted);border:1px solid var(--border);border-radius:5px;padding:3px 7px}
+  .none{padding:26px;text-align:center;color:var(--muted);border:1px dashed var(--border-strong);border-radius:var(--radius)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Bibliothèque de mods — filtres</h1>
+
+  <div class="row">
+    <div class="col">
+      <div class="lbl">
+        <span>Tags</span>
+        <span class="seg" id="seg-tags">
+          <button data-mode="and" class="on">ET</button><button data-mode="or">OU</button>
+        </span>
+      </div>
+      <div class="filter" id="f-tags"></div>
+    </div>
+    <div class="col">
+      <div class="lbl">
+        <span>Catégorie</span>
+        <span class="note">plusieurs = OU</span>
+      </div>
+      <div class="filter" id="f-cats"></div>
+    </div>
+  </div>
+
+  <div class="flags" id="flags"></div>
+
+  <div class="summary">
+    <div id="summary-text"></div>
+    <button class="clear" id="clear">Réinitialiser tous les filtres</button>
+  </div>
+
+  <div class="list" id="list"></div>
+</div>
+
+<script>
+/* ============ données ============ */
+const MODS = [
+  {n:"Toyota AE86 Trueno",       c:"Voiture",   t:["drift","jdm","historique","propulsion","route"], s:87, fav:1, base:0, essaye:1},
+  {n:"Nissan Skyline R34 GT-R",  c:"Voiture",   t:["jdm","route","turbo","integrale"],               s:92, fav:1, base:0, essaye:1},
+  {n:"Ferrari 488 GT3 Evo",      c:"Voiture",   t:["gt3","course","propulsion"],                     s:96, fav:0, base:1, essaye:1},
+  {n:"Porsche 911 GT3 R",        c:"Voiture",   t:["gt3","course","propulsion"],                     s:94, fav:0, base:1, essaye:0},
+  {n:"Mazda RX-7 FD Drift Spec", c:"Voiture",   t:["drift","jdm","turbo","wip"],                     s:61, fav:0, base:0, essaye:0},
+  {n:"BMW E30 M3 Group A",       c:"Voiture",   t:["historique","course","propulsion"],              s:90, fav:0, base:1, essaye:1},
+  {n:"Nissan Silvia S15",        c:"Voiture",   t:["drift","jdm","turbo","route"],                   s:83, fav:1, base:0, essaye:1},
+  {n:"Subaru Impreza 22B",       c:"Voiture",   t:["jdm","rallye","turbo","integrale"],              s:79, fav:0, base:0, essaye:0},
+  {n:"Formula Hybrid 2023",      c:"Voiture",   t:["formule","course","wip"],                        s:58, fav:0, base:0, essaye:0},
+  {n:"Nordschleife Tourist",     c:"Circuit",   t:["route","historique"],                            s:95, fav:1, base:1, essaye:1},
+  {n:"Ebisu Minami",             c:"Circuit",   t:["drift","jdm"],                                   s:84, fav:0, base:0, essaye:1},
+  {n:"Spa-Francorchamps",        c:"Circuit",   t:["course","gt3"],                                  s:93, fav:0, base:1, essaye:1},
+  {n:"Shutoko Revival Project",  c:"Circuit",   t:["route","jdm","wip"],                             s:88, fav:1, base:0, essaye:0},
+  {n:"Livrée Martini 488 GT3",   c:"Skin",      t:["gt3","course"],                                  s:72, fav:0, base:0, essaye:1},
+  {n:"CM Sidekick",              c:"Application",t:["ui","wip"],                                     s:66, fav:0, base:0, essaye:0},
+  {n:"Natural Mod PP Filter",    c:"Filtre PP", t:["graphismes"],                                    s:90, fav:1, base:0, essaye:1},
+];
+const ALL_TAGS = [...new Set(MODS.flatMap(m=>m.t))].sort();
+const ALL_CATS = [...new Set(MODS.map(m=>m.c))].sort();
+
+/* ============ état ============ */
+const S = {
+  tags: new Map(),   // tag -> "inc" | "exc"
+  cats: new Map(),
+  tagMode: "and",
+  flags: {fav:0, base:0, neuf:0},   // 0 = neutre, 1 = doit correspondre, -1 = ne doit pas
+};
+
+const FLAGS = [
+  {key:"fav",  label:"Favoris",          on:"favoris uniquement",        off:"hors favoris",         test:m=>!!m.fav},
+  {key:"base", label:"Contenu de base",  on:"contenu de base uniquement",off:"hors contenu de base", test:m=>!!m.base},
+  {key:"neuf", label:"Jamais essayé",    on:"jamais essayés uniquement", off:"déjà essayés seulement",test:m=>!m.essaye},
+];
+
+/* ============ moteur de filtrage ============ */
+function results(){
+  const tInc=[...S.tags].filter(([,v])=>v==="inc").map(([k])=>k);
+  const tExc=[...S.tags].filter(([,v])=>v==="exc").map(([k])=>k);
+  const cInc=[...S.cats].filter(([,v])=>v==="inc").map(([k])=>k);
+  const cExc=[...S.cats].filter(([,v])=>v==="exc").map(([k])=>k);
+  return MODS.filter(m=>{
+    if(tExc.some(t=>m.t.includes(t))) return false;
+    if(tInc.length && !(S.tagMode==="and" ? tInc.every(t=>m.t.includes(t)) : tInc.some(t=>m.t.includes(t)))) return false;
+    if(cExc.includes(m.c)) return false;
+    if(cInc.length && !cInc.includes(m.c)) return false;   // catégorie mono-valuée => OU
+    for(const f of FLAGS){
+      const st=S.flags[f.key];
+      if(st ===  1 && !f.test(m)) return false;
+      if(st === -1 &&  f.test(m)) return false;
+    }
+    return true;
+  });
+}
+
+/* ============ combobox à jetons tri-état ============ */
+function TokenFilter({mount, options, store, placeholder, countOf}){
+  const root=document.getElementById(mount);
+  root.innerHTML=`
+    <div class="field">
+      <span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+      <input type="text" autocomplete="off" placeholder="${placeholder}">
+    </div>
+    <div class="menu"></div>`;
+  const field=root.querySelector(".field"), input=root.querySelector("input"), menu=root.querySelector(".menu");
+  let active=0;
+
+  field.addEventListener("mousedown",e=>{ if(e.target===field) input.focus(); });
+
+  const excMode=()=>input.value.trim().startsWith("-");
+  const suggest=()=>{
+    let q=input.value.trim().toLowerCase();
+    if(q.startsWith("-")) q=q.slice(1);
+    return options.filter(o=>!store.has(o) && o.toLowerCase().includes(q));
+  };
+  const add=(o,st)=>{ store.set(o,st); input.value=""; active=0; renderAll(); input.focus(); };
+  const toggle=o=>{ store.set(o, store.get(o)==="inc"?"exc":"inc"); renderAll(); };
+  const del=o=>{ store.delete(o); renderAll(); input.focus(); };
+
+  function drawChips(){
+    [...field.querySelectorAll(".chip")].forEach(c=>c.remove());
+    const frag=document.createDocumentFragment();
+    for(const [o,st] of store){
+      const chip=document.createElement("span");
+      chip.className="chip "+st;
+      chip.innerHTML=`
+        <button class="body" title="Basculer inclus / exclu">
+          <span class="state">${st==="inc"?"✓":"⊘"}</span><span class="label">${o}</span>
+        </button>
+        <button class="del" title="Retirer">×</button>`;
+      chip.querySelector(".body").onclick=()=>toggle(o);
+      chip.querySelector(".del").onclick=()=>del(o);
+      frag.appendChild(chip);
+    }
+    field.insertBefore(frag,input);
+  }
+
+  function drawMenu(){
+    const open=document.activeElement===input;
+    menu.classList.toggle("open",open);
+    if(!open) return;
+    const items=suggest();
+    if(!items.length){ menu.innerHTML=`<div class="empty">Aucune correspondance.</div>`; return; }
+    if(active>=items.length) active=items.length-1;
+    menu.innerHTML=items.map((o,i)=>`
+      <div class="r ${i===active?"active":""}" data-o="${o}">
+        <span class="name">${o}</span><span class="count">${countOf(o)}</span>
+        <button class="quick inc" data-a="inc" title="Inclure">✓</button>
+        <button class="quick exc" data-a="exc" title="Exclure">⊘</button>
+      </div>`).join("")
+      + `<div class="hint">
+           <span><kbd>↑</kbd><kbd>↓</kbd> naviguer</span>
+           <span><kbd>Entrée</kbd> ${excMode()?"exclure":"inclure"}</span>
+           <span><kbd>Alt</kbd>+<kbd>Entrée</kbd> exclure</span>
+         </div>`;
+    menu.querySelectorAll(".r").forEach(r=>{
+      r.addEventListener("mousedown",e=>{
+        e.preventDefault();
+        const b=e.target.closest(".quick");
+        add(r.dataset.o, b ? b.dataset.a : ((excMode()||e.altKey) ? "exc" : "inc"));
+      });
+    });
+  }
+
+  input.addEventListener("input",()=>{active=0;drawMenu();});
+  input.addEventListener("focus",drawMenu);
+  input.addEventListener("blur",()=>setTimeout(()=>menu.classList.remove("open"),90));
+  input.addEventListener("keydown",e=>{
+    const items=suggest();
+    if(e.key==="ArrowDown"){e.preventDefault();active=Math.min(active+1,items.length-1);drawMenu();}
+    else if(e.key==="ArrowUp"){e.preventDefault();active=Math.max(active-1,0);drawMenu();}
+    else if(e.key==="Enter"&&items[active]){e.preventDefault();add(items[active],(e.altKey||excMode())?"exc":"inc");}
+    else if(e.key==="Backspace"&&!input.value&&store.size){del([...store.keys()].pop());}
+    else if(e.key==="Escape"){input.blur();}
+  });
+
+  return {render(){drawChips();drawMenu();}};
+}
+
+/* ============ cases à cocher tri-état ============ */
+const $flags=document.getElementById("flags");
+$flags.innerHTML=FLAGS.map(f=>`
+  <button class="tri" data-key="${f.key}" data-state="off" role="button" aria-pressed="false">
+    <span class="box" aria-hidden="true"></span><span class="txt">${f.label}</span>
+  </button>`).join("");
+
+function cycle(key,back){
+  const order=back?[0,-1,1]:[0,1,-1];
+  const i=order.indexOf(S.flags[key]);
+  S.flags[key]=order[(i+1)%3];
+  renderAll();
+}
+$flags.querySelectorAll(".tri").forEach(el=>{
+  el.addEventListener("click",e=>cycle(el.dataset.key, e.shiftKey));
+  el.addEventListener("keydown",e=>{ if(e.key===" "||e.key==="Enter"){e.preventDefault();cycle(el.dataset.key,e.shiftKey);} });
+});
+function drawFlags(){
+  $flags.querySelectorAll(".tri").forEach(el=>{
+    const f=FLAGS.find(x=>x.key===el.dataset.key), st=S.flags[f.key];
+    el.dataset.state = st===1?"inc" : st===-1?"exc" : "off";
+    el.querySelector(".box").textContent = st===1?"✓" : st===-1?"✕" : "";
+    el.setAttribute("aria-pressed", st===0?"false":"true");
+    el.setAttribute("aria-label",
+      st===1 ? `${f.label} : ${f.on}` : st===-1 ? `${f.label} : ${f.off}` : `${f.label} : sans filtre`);
+    el.title = st===1 ? f.on : st===-1 ? f.off : "Aucun filtre — cliquer pour n'afficher que « "+f.label.toLowerCase()+" »";
+  });
+}
+
+/* ============ résumé ============ */
+function drawSummary(){
+  const n=results().length;
+  const tInc=[...S.tags].filter(([,v])=>v==="inc").map(([k])=>k);
+  const tExc=[...S.tags].filter(([,v])=>v==="exc").map(([k])=>k);
+  const cInc=[...S.cats].filter(([,v])=>v==="inc").map(([k])=>k);
+  const cExc=[...S.cats].filter(([,v])=>v==="exc").map(([k])=>k);
+  const I=a=>a.map(x=>`<span class="i">${x}</span>`), E=a=>a.map(x=>`<span class="e">${x}</span>`);
+  const p=[];
+  if(cInc.length) p.push(`catégorie ${I(cInc).join(" ou ")}`);
+  if(cExc.length) p.push(`hors catégorie ${E(cExc).join(" ni ")}`);
+  if(tInc.length) p.push(`avec ${I(tInc).join(S.tagMode==="and"?" et ":" ou ")}`);
+  if(tExc.length) p.push(`sans ${E(tExc).join(" ni ")}`);
+  for(const f of FLAGS){
+    if(S.flags[f.key]===1)  p.push(`<span class="i">${f.on}</span>`);
+    if(S.flags[f.key]===-1) p.push(`<span class="e">${f.off}</span>`);
+  }
+  document.getElementById("summary-text").innerHTML =
+    p.length ? `<b>${n}</b> mod${n>1?"s":""} — ${p.join(", ")}.`
+             : `<b>${MODS.length}</b> mods — aucun filtre actif.`;
+}
+
+/* ============ liste ============ */
+function drawList(){
+  const r=results();
+  const $l=document.getElementById("list");
+  if(!r.length){ $l.innerHTML=`<div class="none">Aucun mod ne correspond à ces critères.</div>`; return; }
+  $l.innerHTML=r.map(m=>`
+    <div class="mod">
+      <div class="thumb">3D</div>
+      <div class="meta">
+        <div class="title">
+          ${m.fav?'<span class="star">★</span>':''}${m.n}
+          <span class="cat" data-cat="${m.c}">${m.c}</span>
+        </div>
+        <div class="tags">${m.t.map(t=>`<span class="tag ${S.tags.get(t)==="inc"?"on-inc":""}" data-tag="${t}">${t}</span>`).join("")}</div>
+      </div>
+      <div class="score">${m.s}</div>
+    </div>`).join("");
+  $l.querySelectorAll(".tag").forEach(el=>el.onclick=()=>{
+    const t=el.dataset.tag;
+    S.tags.has(t) ? S.tags.set(t,S.tags.get(t)==="inc"?"exc":"inc") : S.tags.set(t,"inc");
+    renderAll();
+  });
+  $l.querySelectorAll(".cat").forEach(el=>el.onclick=()=>{
+    const c=el.dataset.cat;
+    S.cats.has(c) ? S.cats.set(c,S.cats.get(c)==="inc"?"exc":"inc") : S.cats.set(c,"inc");
+    renderAll();
+  });
+}
+
+/* ============ montage ============ */
+const fTags=TokenFilter({mount:"f-tags",options:ALL_TAGS,store:S.tags,placeholder:"Ajouter un tag…  (« - » pour exclure)",countOf:t=>MODS.filter(m=>m.t.includes(t)).length});
+const fCats=TokenFilter({mount:"f-cats",options:ALL_CATS,store:S.cats,placeholder:"Ajouter une catégorie…",countOf:c=>MODS.filter(m=>m.c===c).length});
+
+document.getElementById("seg-tags").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  S.tagMode=b.dataset.mode;
+  [...e.currentTarget.children].forEach(x=>x.classList.toggle("on",x===b));
+  renderAll();
+});
+document.getElementById("clear").onclick=()=>{
+  S.tags.clear(); S.cats.clear(); S.flags={fav:0,base:0,neuf:0}; renderAll();
+};
+
+function renderAll(){ fTags.render(); fCats.render(); drawFlags(); drawSummary(); drawList(); }
+
+/* état de démo */
+S.tags.set("jdm","inc"); S.tags.set("wip","exc"); S.flags.base=-1;
+renderAll();
+</script>
+</body>
+</html>

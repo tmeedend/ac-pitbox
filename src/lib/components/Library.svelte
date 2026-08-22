@@ -3,6 +3,8 @@
   import ModDetail from "./ModDetail.svelte";
   import DetailPage from "./DetailPage.svelte";
   import PackDetail from "./PackDetail.svelte";
+  import TokenFilter, { type Token } from "./TokenFilter.svelte";
+  import TriCheck, { type TriState } from "./TriCheck.svelte";
   import BulkEditPanel from "./BulkEditPanel.svelte";
   import ContextMenu from "./ContextMenu.svelte";
   import LoadingState from "./LoadingState.svelte";
@@ -86,12 +88,16 @@
   let stateFilter = $state<"all" | "active" | "inactive">("all");
   let authorFilter = $state<string>("all");
   let countryFilter = $state<string>("all");
-  // Texte libre, plusieurs tags séparés par des virgules — ET entre eux (ne
-  // remonte que les mods qui ont tous les tags saisis, pas au moins un).
-  let tagFilter = $state<string>("");
-  let favOnly = $state<boolean>(false);
-  let neverTried = $state<boolean>(false);
-  let hideBaseContent = $state<boolean>(false);
+  // Jetons inclure/exclure (§6.3). Ils remplacent un champ texte à virgules
+  // (tags) et un `<select>` mono-valué (catégorie), qui partageaient la même
+  // limite : on ne savait dire que « ceux-ci », jamais « tous sauf ceux-là ».
+  let tagTokens = $state<Token[]>([]);
+  let tagMode = $state<"and" | "or">("and");
+  let catTokens = $state<Token[]>([]);
+  // Trois états chacune : neutre, « uniquement ceux-ci », « tous sauf ceux-ci ».
+  let favState = $state<TriState>(0);
+  let triedState = $state<TriState>(0);
+  let stockState = $state<TriState>(0);
   let yearMin = $state<number>(NO_YEAR);
   let yearMax = $state<number>(NO_YEAR);
   let view = $state<"gallery" | "table">("gallery");
@@ -113,10 +119,17 @@
       state: stateFilter,
       author: authorFilter,
       country: countryFilter,
-      tag: tagFilter,
-      fav: favOnly,
-      neverTried,
-      hideBaseContent,
+      // Sérialisés sous des clés distinctes des anciennes (`tag`, `fav`,
+       // `neverTried`, `hideBaseContent`) : une préférence enregistrée par une
+       // version antérieure garde son ancienne forme, que la relecture sait
+       // encore convertir (voir l'onMount). Réutiliser les mêmes clés avec un
+       // type différent aurait rendu les deux indiscernables.
+      tagTokens,
+      tagMode,
+      catTokens,
+      favState,
+      triedState,
+      stockState,
       yearMin,
       yearMax,
     };
@@ -290,6 +303,22 @@
     return v;
   }
 
+  // Conversion des filtres enregistrés par une version antérieure. Les tags
+  // étaient un texte à virgules, tous inclus ; la catégorie un choix unique,
+  // `"all"` valant « pas de filtre ». Rien à jeter : les deux se traduisent
+  // exactement en jetons « inclure ».
+  function legacyTagTokens(raw: unknown): Token[] {
+    if (typeof raw !== "string") return [];
+    return raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((value) => ({ value, mode: "inc" as const }));
+  }
+  function legacyCatTokens(raw: unknown): Token[] {
+    return typeof raw === "string" && raw !== "" && raw !== "all" ? [{ value: raw, mode: "inc" }] : [];
+  }
+
   // Restauration au montage (§6.2/§8.6) : colonnes (fichier dédié,
   // `columns.ts`) et le reste des petits réglages d'écran (`uiPrefs.ts`) en
   // parallèle, un seul aller-retour chacun. `prefsReady` n'est levé qu'une
@@ -308,15 +337,19 @@
       try {
         const sf: Record<string, unknown> = JSON.parse(saved[FKEY]);
         query = (sf.query as string) ?? "";
-        categoryFilter = (sf.category as string) ?? "all";
         classFilter = (sf.class as "all" | "race" | "street") ?? "all";
         stateFilter = (sf.state as "all" | "active" | "inactive") ?? "all";
         authorFilter = (sf.author as string) ?? "all";
         countryFilter = (sf.country as string) ?? "all";
-        tagFilter = (sf.tag as string) ?? "";
-        favOnly = (sf.fav as boolean) ?? false;
-        neverTried = (sf.neverTried as boolean) ?? false;
-        hideBaseContent = (sf.hideBaseContent as boolean) ?? false;
+        tagTokens = (sf.tagTokens as Token[]) ?? legacyTagTokens(sf.tag);
+        tagMode = (sf.tagMode as "and" | "or") ?? "and";
+        catTokens = (sf.catTokens as Token[]) ?? legacyCatTokens(sf.category);
+        favState = (sf.favState as TriState) ?? (sf.fav ? 1 : 0);
+        // Le sens s'est inversé : la case s'appelait « jamais essayé » (donc
+        // cochée = jamais essayés), le tri-état s'appelle « déjà essayé ». Une
+        // préférence enregistrée cochée devient donc l'état **rouge**.
+        triedState = (sf.triedState as TriState) ?? (sf.neverTried ? -1 : 0);
+        stockState = (sf.stockState as TriState) ?? (sf.hideBaseContent ? -1 : 0);
         // Un filtre enregistré avant que « vide » n'existe portait les bornes
         // de la plage comme sentinelle de « pas de borne » : elles se lisent
         // donc comme un champ vide, ce qu'elles ont toujours voulu dire.
@@ -565,33 +598,68 @@
   const tags = $derived(
     [...new Set(typed.flatMap(modTags))].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())),
   );
-  // Termes tapés, normalisés (minuscule, espaces superflus retirés) — ET
-  // logique entre eux dans `filtered` ci-dessous.
-  const tagFilterTerms = $derived(
-    tagFilter
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean),
-  );
+  /** Valeurs d'un lot de jetons pour un sens donné, en minuscules. */
+  function picked(tokens: Token[], mode: "inc" | "exc"): string[] {
+    return tokens.filter((tk) => tk.mode === mode).map((tk) => tk.value.toLowerCase());
+  }
+  const tagsIncluded = $derived(picked(tagTokens, "inc"));
+  const tagsExcluded = $derived(picked(tagTokens, "exc"));
+  const catsIncluded = $derived(picked(catTokens, "inc"));
+  const catsExcluded = $derived(picked(catTokens, "exc"));
+
+  /** Catégories d'un mod, en minuscules — une seule pour une voiture,
+   * plusieurs pour un circuit (§5bis.2). */
+  function modCats(c: ModCard): string[] {
+    return (isCar ? [c.category].filter((x): x is string => !!x) : c.categories).map((x) => x.toLowerCase());
+  }
+
+  /** Combien de mods portent ce tag / cette catégorie — le décompte affiché
+   * dans l'autocomplétion. Calculé sur le type courant, pas sur les résultats
+   * filtrés : un chiffre qui bouge à chaque jeton posé ne sert à rien pour
+   * décider du jeton suivant. */
+  const tagCounts = $derived.by(() => {
+    const m = new Map<string, number>();
+    for (const c of typed) for (const tg of modTags(c)) m.set(tg, (m.get(tg) ?? 0) + 1);
+    return m;
+  });
+  const catCounts = $derived.by(() => {
+    const m = new Map<string, number>();
+    for (const c of typed) for (const cat of isCar ? [c.category].filter(Boolean) : c.categories) {
+      m.set(cat as string, (m.get(cat as string) ?? 0) + 1);
+    }
+    return m;
+  });
 
   const filtered = $derived(
     typed.filter((c) => {
-      if (categoryFilter !== "all") {
-        const match = isCar ? c.category === categoryFilter : c.categories.includes(categoryFilter);
-        if (!match) return false;
-      }
+      // Exclure l'emporte toujours sur inclure : un mod qui porte un critère
+      // refusé sort, même s'il en porte un autre demandé. C'est ce qu'on attend
+      // d'un « sauf » — sinon « avec jdm, sans wip » laisserait passer les mods
+      // marqués les deux.
+      const cats = modCats(c);
+      if (catsExcluded.some((x) => cats.includes(x))) return false;
+      // Plusieurs catégories incluses = OU. Une voiture n'en a qu'une, donc un
+      // ET n'aurait jamais rien remonté ; un circuit en a plusieurs, mais on
+      // garde le même sens des deux côtés.
+      if (catsIncluded.length && !catsIncluded.some((x) => cats.includes(x))) return false;
       if (classFilter !== "all" && c.car_class !== classFilter) return false;
       if (stateFilter === "active" && !c.active) return false;
       if (stateFilter === "inactive" && c.active) return false;
       if (authorFilter !== "all" && c.author !== authorFilter) return false;
       if (countryFilter !== "all" && c.country !== countryFilter) return false;
-      if (tagFilterTerms.length) {
-        const modTagsLower = modTags(c).map((tg) => tg.toLowerCase());
-        if (!tagFilterTerms.every((term) => modTagsLower.includes(term))) return false;
+      if (tagTokens.length) {
+        const mine = modTags(c).map((tg) => tg.toLowerCase());
+        if (tagsExcluded.some((x) => mine.includes(x))) return false;
+        const ok =
+          tagMode === "and" ? tagsIncluded.every((x) => mine.includes(x)) : tagsIncluded.some((x) => mine.includes(x));
+        if (tagsIncluded.length && !ok) return false;
       }
-      if (favOnly && !c.is_favorite) return false;
-      if (neverTried && c.tried) return false;
-      if (hideBaseContent && c.is_stock) return false;
+      if (favState === 1 && !c.is_favorite) return false;
+      if (favState === -1 && c.is_favorite) return false;
+      if (triedState === 1 && !c.tried) return false;
+      if (triedState === -1 && c.tried) return false;
+      if (stockState === 1 && !c.is_stock) return false;
+      if (stockState === -1 && c.is_stock) return false;
       // Champ vide = aucun filtre de ce côté, quelle que soit la plage de
       // saisie : c'est la borne saisie qui décide, pas sa distance aux bornes.
       if (yearMin !== NO_YEAR && (c.year ?? 0) < yearMin) return false;
@@ -612,30 +680,31 @@
 
   const activeFilterCount = $derived(
     (query.trim() !== "" ? 1 : 0) +
-      (categoryFilter !== "all" ? 1 : 0) +
+      (catTokens.length ? 1 : 0) +
       (classFilter !== "all" ? 1 : 0) +
       (stateFilter !== "all" ? 1 : 0) +
       (authorFilter !== "all" ? 1 : 0) +
       (countryFilter !== "all" ? 1 : 0) +
-      (tagFilterTerms.length ? 1 : 0) +
-      (favOnly ? 1 : 0) +
-      (neverTried ? 1 : 0) +
-      (hideBaseContent ? 1 : 0) +
+      (tagTokens.length ? 1 : 0) +
+      (favState !== 0 ? 1 : 0) +
+      (triedState !== 0 ? 1 : 0) +
+      (stockState !== 0 ? 1 : 0) +
       (yearMin !== NO_YEAR ? 1 : 0) +
       (yearMax !== NO_YEAR ? 1 : 0),
   );
 
   function clearFilters() {
     query = "";
-    categoryFilter = "all";
+    catTokens = [];
     classFilter = "all";
     stateFilter = "all";
     authorFilter = "all";
     countryFilter = "all";
-    tagFilter = "";
-    favOnly = false;
-    neverTried = false;
-    hideBaseContent = false;
+    tagTokens = [];
+    tagMode = "and";
+    favState = 0;
+    triedState = 0;
+    stockState = 0;
     yearMin = NO_YEAR;
     yearMax = NO_YEAR;
   }
@@ -830,27 +899,36 @@
             {#each countries as c}<option value={c}>{c}</option>{/each}
           </select>
         </label>
-        <label>
-          <span>{t("library.filterTag")}</span>
-          <input
-            class="input"
-            type="text"
-            list="tag-datalist-{kind}"
+        <div class="tok-field">
+          <div class="tok-head">
+            <span>{t("library.filterTag")}</span>
+            <!-- ET/OU : seul réglage du champ qui ne se lit pas sur les jetons
+                 eux-mêmes, donc posé au-dessus d'eux plutôt que dedans. -->
+            <span class="seg">
+              <button type="button" class:on={tagMode === "and"} onclick={() => (tagMode = "and")}>
+                {t("library.tagModeAnd")}
+              </button>
+              <button type="button" class:on={tagMode === "or"} onclick={() => (tagMode = "or")}>
+                {t("library.tagModeOr")}
+              </button>
+            </span>
+          </div>
+          <TokenFilter
+            options={tags}
+            bind:tokens={tagTokens}
             placeholder={t("library.filterTagPlaceholder")}
-            title={t("library.filterTagHint")}
-            bind:value={tagFilter}
+            countOf={(v) => tagCounts.get(v) ?? 0}
           />
-          <datalist id="tag-datalist-{kind}">
-            {#each tags as tag}<option value={tag}></option>{/each}
-          </datalist>
-        </label>
-        <label>
-          <span>{t("library.filterCategory")}</span>
-          <select class="input" bind:value={categoryFilter}>
-            <option value="all">{t("common.allFem")}</option>
-            {#each categories as cat}<option value={cat}>{cat}</option>{/each}
-          </select>
-        </label>
+        </div>
+        <div class="tok-field">
+          <div class="tok-head"><span>{t("library.filterCategory")}</span></div>
+          <TokenFilter
+            options={categories}
+            bind:tokens={catTokens}
+            placeholder={t("library.filterCategoryPlaceholder")}
+            countOf={(v) => catCounts.get(v) ?? 0}
+          />
+        </div>
         {#if isCar}
           <label>
             <span>{t("library.filterClass")}</span>
@@ -893,18 +971,27 @@
           </label>
         {/if}
         <div class="filter-checks">
-          <label class="fav-check">
-            <input type="checkbox" bind:checked={favOnly} />
-            <span>{t("library.favorites")}</span>
-          </label>
-          <label class="fav-check" title={t("library.neverTriedTooltip")}>
-            <input type="checkbox" bind:checked={neverTried} />
-            <span>{t("library.neverTried")}</span>
-          </label>
-          <label class="fav-check">
-            <input type="checkbox" bind:checked={hideBaseContent} />
-            <span>{t("library.hideBaseContent")}</span>
-          </label>
+          <TriCheck
+            label={t("library.favorites")}
+            bind:value={favState}
+            titleInclude={t("library.favOnly")}
+            titleExclude={t("library.favExcluded")}
+            titleNeutral={t("library.favNeutral")}
+          />
+          <TriCheck
+            label={t("library.tried")}
+            bind:value={triedState}
+            titleInclude={t("library.triedOnly")}
+            titleExclude={t("library.triedExcluded")}
+            titleNeutral={t("library.triedNeutral")}
+          />
+          <TriCheck
+            label={t("library.baseContent")}
+            bind:value={stockState}
+            titleInclude={t("library.baseOnly")}
+            titleExclude={t("library.baseExcluded")}
+            titleNeutral={t("library.baseNeutral")}
+          />
         </div>
         {#if activeFilterCount > 0}
           <button class="btn-ghost clear" type="button" onclick={clearFilters}>{t("common.reset")}</button>
@@ -1238,24 +1325,53 @@
   .filters .input {
     width: 120px;
   }
+  /* Les deux champs à jetons ne sont pas des `label` : leur ligne de titre
+     porte aussi le sélecteur ET/OU, et le champ lui-même est un composant. */
+  .tok-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1 1 220px;
+    max-width: 340px;
+    min-width: 0;
+  }
+  .tok-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    /* Même hauteur que les libellés des `<select>` voisins, pour que tous les
+       champs de la rangée s'alignent sur leur bas. */
+    min-height: 13px;
+  }
+  .seg {
+    display: inline-flex;
+    border: 1px solid var(--line);
+  }
+  .seg button {
+    background: none;
+    border: 0;
+    color: var(--muted);
+    font: inherit;
+    font-size: 9.5px;
+    letter-spacing: 0.5px;
+    padding: 1px 6px;
+    cursor: pointer;
+  }
+  .seg button.on {
+    background: var(--raised);
+    color: var(--txt);
+  }
   .filter-checks {
     display: flex;
     flex-direction: row;
-    gap: 16px;
+    gap: 8px;
     align-items: center;
-  }
-  .fav-check {
-    flex-direction: row !important;
-    align-items: center;
-    gap: 6px !important;
-    text-transform: none;
-    font-size: 12px;
-    color: var(--txt2);
-    cursor: pointer;
-  }
-  .fav-check input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
+    flex-wrap: wrap;
   }
   .clear {
     font-size: 11px;
