@@ -354,7 +354,20 @@ pub fn deploy(conn: &Connection, cfg: &AppConfig, owner: OwnerKind, mod_id: &str
             //    comparaison, le dernier mod installé écraserait une font mise
             //    à jour par un autre outil, ce que rien ne justifie.
             if !claimed && !crate::gamebackup::is_replaced(conn, &target) {
-                if !crate::gamebackup::is_newer(src, &target) {
+                // **Sauf autorisation explicite** (§4.6ter). L'arbitrage par
+                // date protège les poses automatiques ; il n'a aucune autorité
+                // contre une décision prise en connaissance de cause. Cas réel,
+                // le patch « Hide Pit Crew » de LA Canyons : ses `pitcrew.kn5`
+                // datent de 2020, ceux de l'install Kunos portent la date du
+                // téléchargement Steam — donc plus récents, donc le patch
+                // n'arrivait jamais, alors que l'utilisateur venait de lire
+                // « remplace 2 fichiers du jeu de base » et de répondre oui.
+                //
+                // La sauvegarde de l'original reste obligatoire : c'est elle
+                // qui rend l'opération sûre (§4.5.4), pas la comparaison de
+                // dates.
+                let forced = overlay::is_forced_extra(conn, mod_id, &target.to_string_lossy());
+                if !forced && !crate::gamebackup::is_newer(src, &target) {
                     log::warn!(
                         "extras {mod_id}: {} exists and is not older, left alone",
                         target.display()

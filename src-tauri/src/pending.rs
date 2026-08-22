@@ -625,6 +625,9 @@ fn into_game(
     dir: &Path,
 ) -> Result<(), String> {
     let root = crate::acpath::effective_root(dir);
+    // Relevé **avant** le rangement, qui déplace les fichiers : ce sont les
+    // chemins d'AC que l'utilisateur vient d'autoriser.
+    let allowed = ac_paths_under(cfg, &root);
     match (&row.owner_id, &row.owner_kind) {
         (Some(owner), Some(kind)) => {
             let owner_kind = OwnerKind::parse(kind).ok_or(crate::errors::PENDING_UNKNOWN_ACTION)?;
@@ -633,12 +636,51 @@ fn into_game(
                 let rel = Path::new(&e.file_name()).to_path_buf();
                 crate::extras::store(&sat, &rel, &e.path(), false)?;
             }
+            authorize(conn, owner, &allowed);
             crate::extras::deploy(conn, cfg, owner_kind, owner).map(|_| ())
         }
-        // Sans propriétaire, « installer dans le jeu » et « autre mod » sont le
+        // Sans propriétaire, « ajouter au jeu » et « garder à part » sont le
         // même geste — à ceci près qu'on part de la racine de jeu et non du
         // dossier d'emballage.
-        _ => activate_as_other(conn, cfg, library, &row.id, &root),
+        _ => {
+            authorize(conn, &row.id, &allowed);
+            activate_as_other(conn, cfg, library, &row.id, &root)
+        }
+    }
+}
+
+/// Chemins absolus d'AC que cet arbre poserait, dans l'état où il est.
+fn ac_paths_under(cfg: &AppConfig, root: &Path) -> Vec<PathBuf> {
+    let Some(ac) = cfg.ac_install_path.as_ref() else {
+        return Vec::new();
+    };
+    walkdir::WalkDir::new(root)
+        .into_iter()
+        .flatten()
+        .filter(|e| e.file_type().is_file())
+        .filter_map(|e| e.path().strip_prefix(root).ok().map(|r| r.to_path_buf()))
+        .filter(|rel| crate::acpath::is_ac_relative(rel))
+        .map(|rel| ac.join(rel))
+        .collect()
+}
+
+/// Mémorise que ces chemins ont été autorisés **explicitement** (§4.6ter).
+///
+/// Sans ça, l'arbitrage par date (§4.5.4) refuse en silence tout exemplaire qui
+/// n'est pas plus récent que ce qu'il remplace — et c'est presque toujours le
+/// cas contre un fichier du jeu, dont la date est celle du téléchargement
+/// Steam. Cas réel : le patch « Hide Pit Crew » de LA Canyons n'installait que
+/// son fichier neuf (`BACKUP_CREW.7z`) et laissait les deux modèles qu'il
+/// devait remplacer marqués « en attente », alors que l'utilisateur venait de
+/// répondre « ajouter au jeu » devant l'avertissement.
+///
+/// Best-effort : une autorisation non enregistrée ne fait que ramener au
+/// comportement d'avant, elle ne casse rien.
+fn authorize(conn: &Connection, mod_id: &str, paths: &[PathBuf]) {
+    for p in paths {
+        if let Err(e) = overlay::mark_forced_extra(conn, mod_id, &p.to_string_lossy()) {
+            log::warn!("mark_forced_extra {mod_id} {}: {e}", p.display());
+        }
     }
 }
 
@@ -936,6 +978,101 @@ mod tests {
                 .iter()
                 .any(|d| d.kind == "userDiscarded" && d.subject == "Wallpapers"),
             "et l'information reste"
+        );
+    }
+
+    /// Date de modification explicite — c'est le critère d'arbitrage (§4.5.4),
+    /// il faut pouvoir le poser plutôt que dépendre de l'ordre d'écriture.
+    fn set_mtime(p: &Path, secs: u64) {
+        let t = std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs);
+        std::fs::File::options()
+            .write(true)
+            .open(p)
+            .unwrap()
+            .set_modified(t)
+            .unwrap();
+    }
+
+    #[test]
+    fn an_explicit_yes_beats_the_date_of_the_file_it_replaces() {
+        // Bug réel signalé sur LA Canyons. L'utilisateur lit « remplace 2
+        // fichiers du jeu de base », répond « ajouter au jeu » — et seul le
+        // fichier neuf du patch arrive. Les deux modèles qu'il devait remplacer
+        // restaient marqués « en attente », parce que l'arbitrage par date
+        // refuse un exemplaire qui n'est pas plus récent : ceux du patch datent
+        // de 2020, ceux de l'install Kunos portent la date du téléchargement
+        // Steam.
+        //
+        // Cette comparaison protège les poses **automatiques** ; elle n'a aucune
+        // autorité contre une décision prise en connaissance de cause. La
+        // sauvegarde de l'original, elle, reste obligatoire — c'est elle qui
+        // rend l'opération sûre, pas la date.
+        let base = crate::testutil::temp_dir("pending-forced");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+
+        // Le fichier du jeu, plus récent que celui du patch.
+        let kunos = ac.join("content").join("objects3D").join("pitcrew.kn5");
+        write(&kunos, b"KUNOS");
+        set_mtime(&kunos, 2_000_000);
+
+        let src = base.join("src").join("Hide Pit Crew");
+        write(&src.join("content").join("objects3D").join("pitcrew.kn5"), b"PATCH");
+        write(&src.join("content").join("objects3D").join("BACKUP_CREW.7z"), b"BK");
+        set_mtime(&src.join("content").join("objects3D").join("pitcrew.kn5"), 1_000_000);
+
+        let id = park(
+            &conn,
+            &library,
+            "LA_Canyons.7z",
+            Path::new("MODS/Hide Pit Crew"),
+            &src,
+            Some(("la_canyons", OwnerKind::Track)),
+            Detected {
+                shape: SHAPE_JSGME.into(),
+                ..Default::default()
+            },
+            true,
+            1,
+        )
+        .expect("mis en attente");
+
+        resolve(&conn, &cfg, &id, ACTION_GAME).unwrap();
+
+        assert_eq!(
+            std::fs::read(&kunos).unwrap(),
+            b"PATCH",
+            "l'exemplaire du patch est posé malgré sa date plus ancienne"
+        );
+        assert!(
+            crate::gamebackup::is_replaced(&conn, &kunos),
+            "et l'original est à l'abri, comme pour tout remplacement (§4.5.4)"
+        );
+        assert!(
+            ac.join("content").join("objects3D").join("BACKUP_CREW.7z").is_file(),
+            "le fichier neuf du patch arrive lui aussi"
+        );
+
+        // Et il reste posé : l'autorisation survit à une désactivation suivie
+        // d'une réactivation, sans quoi la question se reposerait à chaque fois.
+        crate::extras::undeploy(&conn, &cfg, "la_canyons").unwrap();
+        assert_eq!(
+            std::fs::read(&kunos).unwrap(),
+            b"KUNOS",
+            "l'original revient quand plus rien ne le réclame"
+        );
+        crate::extras::deploy(&conn, &cfg, OwnerKind::Track, "la_canyons").unwrap();
+        assert_eq!(
+            std::fs::read(&kunos).unwrap(),
+            b"PATCH",
+            "et le patch reprend sa place sans qu'on redemande"
         );
     }
 

@@ -9,7 +9,7 @@
   // **Non bloquante**, contrairement aux arbitrages de `ImportOverlay` : ne
   // rien décider est une réponse valable (§4.6bis). Fermer laisse les dossiers
   // en attente, et le rapport d'import garde la ligne pour y revenir.
-  import { importState, closePendingDialog } from "$lib/importState.svelte";
+  import { importState, closePendingDialog, refreshPendingCount } from "$lib/importState.svelte";
   import { errorText } from "$lib/errors";
   import { fmtSize } from "$lib/format";
   import {
@@ -41,6 +41,10 @@
       error = errorText(e);
       folders = [];
     }
+    // Le bandeau du rapport lit le même compte : sans cette mise à jour, il
+    // continuait d'annoncer un dossier à trancher après le dernier arbitrage,
+    // et son bouton n'ouvrait plus rien.
+    await refreshPendingCount();
   }
 
   /** Notices rendues sur place. Un PDF ou un .docx ne se rend pas ici : son nom
@@ -67,7 +71,6 @@
     try {
       await resolvePendingFolder(f.id, action);
       await refresh();
-      if (!folders.length) closePendingDialog();
     } catch (e) {
       error = errorText(e);
     } finally {

@@ -281,6 +281,23 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         -- mod ne réclame. Pas de clé étrangère pour la même raison, et pour que
         -- la suppression d'un mod n'efface pas l'explication de ce qu'il a
         -- laissé derrière lui.
+        -- Chemins d'AC que l'utilisateur a **explicitement** demande d'installer
+        -- (§4.6ter). L'arbitrage par date (§4.5.4) protege les poses
+        -- automatiques : il empeche un exemplaire plus ancien de deloger ce qui
+        -- tourne. Il n'a aucune autorite contre une decision prise en connaissance
+        -- de cause — l'utilisateur venait de lire « remplace N fichiers du jeu de
+        -- base » et a repondu « ajouter au jeu ».
+        --
+        -- Table separee de `extra_links`, qui est effacee et reecrite a chaque
+        -- deploiement : l'autorisation, elle, doit survivre a une desactivation
+        -- suivie d'une reactivation. La sauvegarde de l'original reste
+        -- obligatoire — seule la comparaison de dates est levee.
+        CREATE TABLE IF NOT EXISTS forced_extras (
+            mod_id  TEXT NOT NULL,
+            ac_path TEXT NOT NULL,
+            PRIMARY KEY (mod_id, ac_path)
+        );
+
         -- Dossiers proposes par l'auteur (§4.6ter) : livres a cote du mod, ni
         -- chemin de jeu ni annexe, donc sans sort deductible du disque. Ranges
         -- en attente et **jamais poses** tant que l'utilisateur n'a pas
@@ -946,6 +963,7 @@ pub fn get_version_path(conn: &Connection, version_id: &str) -> rusqlite::Result
 pub fn delete_mod(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM history WHERE mod_id = ?1", [id])?;
     conn.execute("DELETE FROM extra_links WHERE mod_id = ?1", [id])?;
+    clear_forced_extras(conn, id)?;
     conn.execute("DELETE FROM mods WHERE id_interne = ?1", [id])?;
     Ok(())
 }
@@ -1722,6 +1740,8 @@ pub fn app_exists(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
 
 pub fn delete_app(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM apps WHERE id = ?1", [id])?;
+    conn.execute("DELETE FROM extra_links WHERE mod_id = ?1", [id])?;
+    clear_forced_extras(conn, id)?;
     Ok(())
 }
 
@@ -1814,6 +1834,36 @@ pub fn set_other_active(conn: &Connection, id: &str, active: bool, junctions: &[
 
 pub fn delete_other_mod(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM other_mods WHERE id = ?1", [id])?;
+    clear_forced_extras(conn, id)?;
+    Ok(())
+}
+
+// --- Poses explicitement autorisees (§4.6ter) -------------------------------
+
+/// Enregistre qu'un mod a l'autorisation de poser ce chemin quoi qu'il occupe
+/// deja. Idempotent.
+pub fn mark_forced_extra(conn: &Connection, mod_id: &str, ac_path: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT OR IGNORE INTO forced_extras (mod_id, ac_path) VALUES (?1, ?2)",
+        params![mod_id, ac_path],
+    )?;
+    Ok(())
+}
+
+pub fn is_forced_extra(conn: &Connection, mod_id: &str, ac_path: &str) -> bool {
+    conn.query_row(
+        "SELECT COUNT(*) FROM forced_extras WHERE mod_id = ?1 AND ac_path = ?2",
+        params![mod_id, ac_path],
+        |r| r.get::<_, i64>(0),
+    )
+    .map(|n| n > 0)
+    .unwrap_or(false)
+}
+
+/// Retire les autorisations d'un mod — a la suppression du mod, jamais a sa
+/// desactivation : desactiver puis reactiver ne doit pas reposer la question.
+pub fn clear_forced_extras(conn: &Connection, mod_id: &str) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM forced_extras WHERE mod_id = ?1", [mod_id])?;
     Ok(())
 }
 

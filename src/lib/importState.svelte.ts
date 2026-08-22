@@ -8,6 +8,7 @@ import { t } from "./i18n/index.svelte";
 import { StorageKey } from "./storage";
 import { getUiPref, setUiPref } from "./uiPrefs.svelte";
 import { bumpLibraryVersion } from "./libraryVersion.svelte";
+import { listPendingFolders } from "./pending";
 import {
   cancelImport,
   importArchives,
@@ -75,6 +76,11 @@ export const importState = $state<{
    * pendant** : un lot de cinquante mods ne s'interrompt pas. Fermer ne décide
    * rien — les dossiers restent en attente et la ligne du rapport y ramène. */
   pendingOpen: boolean;
+  /** Combien de dossiers attendent encore, **partagé** entre le bandeau du
+   * rapport et la modale. Deux compteurs locaux avaient divergé dès le premier
+   * arbitrage : la modale se vidait, le bandeau continuait d'annoncer un
+   * dossier à trancher, et le bouton n'ouvrait plus rien. */
+  pendingCount: number;
 }>({
   importing: false,
   progress: null,
@@ -88,6 +94,7 @@ export const importState = $state<{
   copyMode: true,
   cancelling: false,
   pendingOpen: false,
+  pendingCount: 0,
 });
 
 /** État de progression initial, avant le premier événement backend. */
@@ -250,9 +257,11 @@ function pushReport(report: ArchiveResult[]): void {
   if (excess > 0) importState.reports.splice(0, excess);
   importState.lastReport = report;
   // Fin de lot : c'est le moment convenu pour poser la question (§4.6). Le
-  // compte vient du rapport, la liste sera relue en base par la modale — un
-  // dossier laissé en attente par un lot précédent doit reparaître ici.
+  // rapport dit seulement qu'il y a **quelque chose** à trancher ; le compte,
+  // lui, est relu en base — un dossier laissé en attente par un lot précédent
+  // doit reparaître ici.
   if (report.some((a) => (a.pending ?? 0) > 0)) importState.pendingOpen = true;
+  void refreshPendingCount();
 }
 
 /** Ouvre l'écran d'arbitrage des dossiers proposés (§4.6ter). */
@@ -263,6 +272,20 @@ export function openPendingDialog(): void {
 /** Le referme sans rien décider — une réponse valable en soi. */
 export function closePendingDialog(): void {
   importState.pendingOpen = false;
+}
+
+/** Relit en base combien de dossiers attendent, et referme la modale s'il n'y
+ * a plus rien à y voir. Appelé après chaque arbitrage et à chaque nouveau
+ * rapport : c'est la base qui fait foi, jamais un compte gardé en mémoire —
+ * un dossier laissé en attente par un lot précédent compte lui aussi. */
+export async function refreshPendingCount(): Promise<void> {
+  try {
+    importState.pendingCount = (await listPendingFolders()).length;
+  } catch {
+    // Pas de liste : rien à trancher. Ce n'est pas une erreur à montrer.
+    importState.pendingCount = 0;
+  }
+  if (!importState.pendingCount) importState.pendingOpen = false;
 }
 
 /** Ferme un rapport. `lastReport` survit : l'écran Import le garde consultable. */

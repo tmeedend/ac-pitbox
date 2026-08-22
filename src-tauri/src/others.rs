@@ -351,7 +351,11 @@ fn place(
                 continue;
             }
             if target.exists() {
-                if !crate::gamebackup::is_newer(&p, &target) {
+                // Même exception qu'aux ajouts au jeu (§4.6ter) : une pose que
+                // l'utilisateur a explicitement autorisée ne se laisse pas
+                // refuser par une date. La sauvegarde, elle, reste obligatoire.
+                let forced = overlay::is_forced_extra(conn, mine_id, &target.to_string_lossy());
+                if !forced && !crate::gamebackup::is_newer(&p, &target) {
                     log::warn!(
                         "place {mine_id} {}: target exists and is not older, left alone",
                         rel.display()

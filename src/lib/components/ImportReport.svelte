@@ -5,10 +5,9 @@
   // même balisage auraient divergé dès la première retouche.
   import { nav, requestSection } from "$lib/nav.svelte";
   import { t } from "$lib/i18n/index.svelte";
-  import { openPendingDialog } from "$lib/importState.svelte";
+  import { importState, openPendingDialog, refreshPendingCount } from "$lib/importState.svelte";
   import { activateOther } from "$lib/others";
   import { errorText } from "$lib/errors";
-  import { listPendingFolders } from "$lib/pending";
   import type { ArchiveResult, OtherImported, SubImported } from "$lib/library";
 
   interface Props {
@@ -74,28 +73,17 @@
 
   // --- Dossiers proposés (§4.6ter) ----------------------------------------
   //
-  // Le rapport n'en garde qu'une ligne : la décision se prend dans une modale
+  // Le rapport n'en garde qu'un bandeau : la décision se prend dans une modale
   // (`PendingDialog`), parce qu'elle demande un titre, une description libre,
   // une notice, un avertissement et jusqu'à quatre réponses — de quoi rendre
   // la pile de notifications, large de 380 px, illisible.
   //
-  // Le compte est relu en base et non pris dans le rapport : un dossier laissé
-  // en attente par un lot précédent doit rester atteignable ici.
-  let pendingCount = $state(0);
-
+  // Le compte vit dans `importState`, partagé avec la modale : deux compteurs
+  // locaux avaient divergé dès le premier arbitrage.
   $effect(() => {
     void report;
     void refreshPendingCount();
   });
-
-  async function refreshPendingCount(): Promise<void> {
-    try {
-      pendingCount = (await listPendingFolders()).length;
-    } catch {
-      // Pas de liste, rien à trancher : ce n'est pas une erreur à montrer.
-      pendingCount = 0;
-    }
-  }
 
   /** Skins et sons regroupés par contenu parent : un pack de quarante livrées
    * ferait déborder le rapport à raison d'une ligne chacune, alors qu'il n'y a
@@ -117,11 +105,11 @@
   }
 </script>
 
-{#if pendingCount}
+{#if importState.pendingCount}
   <!-- Une ligne, pas une section : la question se pose dans la modale, qui
        s'ouvre toute seule en fin de lot. Cette ligne sert à y revenir. -->
   <button class="pend-bar" type="button" onclick={openPendingDialog}>
-    <span class="pend-bar-l">{t("importOverlay.pendingBarLine", { count: pendingCount })}</span>
+    <span class="pend-bar-l">{t("importOverlay.pendingBarLine", { count: importState.pendingCount })}</span>
     <span class="pend-bar-a">{t("importOverlay.pendingOpen")}</span>
   </button>
 {/if}
