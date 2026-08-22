@@ -1372,7 +1372,6 @@
   }
   .row.top {
     grid-template-columns: 1.4fr 1fr;
-    border-bottom: 1px solid var(--line);
   }
   .row.bottom {
     grid-template-columns: 1.3fr 1fr 1fr;
