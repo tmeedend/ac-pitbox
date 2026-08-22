@@ -111,6 +111,8 @@ Pensé pour un lot de plusieurs dizaines de mods.
 
 **Reprise après arbitrage** : trancher un cas ambigu rejoue l'import de **ce mod-là uniquement**, depuis la seule source d'où il venait — pas le lot entier. Ses voisins ne sont pas retouchés, et ce qui suit les mods (skins/sons, apps, restes) n'est pas rejoué : tout cela a déjà été rangé au premier passage. La source est re-décompressée plutôt que gardée au chaud, pour qu'aucun dossier temporaire ne survive à l'import en attendant une réponse.
 
+**Une couche a une identité** : son parent et l'archive dont elle vient. Réimporter la même archive **remplace** la couche qu'elle avait posée — priorité reprise — au lieu d'en empiler une seconde, identique et inutile ; l'issue rapportée est alors une mise à jour, pas une extension. Remplacer plutôt qu'ignorer, parce qu'une archive au même nom peut avoir été corrigée, exactement comme un mod réimporté remplace sa version. Bug réel, `spa2022-release_V1-03.rar` (un layout posé sur le circuit Kunos) : deux imports donnaient deux couches, et le décompte affiché trahissait la mécanique — « 109 ajoutés · 0 écrasés » pour la première, comparée au circuit nu, puis « 0 ajouté · 109 écrasés » pour la seconde, comparée au circuit **déjà composé** avec la première. Une archive différente sur le même parent reste, elle, une seconde couche : c'est l'identité de l'archive qui compte.
+
 **Règle absolue** : le **contenu de base** (Kunos, `is_stock`) ne reçoit **jamais** de mise à jour, **toujours** une couche. Garantit par construction qu'il ne peut pas être perdu. Même une « version améliorée complète » d'un circuit Kunos devient une couche posée sur la base intacte.
 
 **Modèle de couches recomposables** :
@@ -320,7 +322,7 @@ Aucune règle ne les sépare depuis le disque, et c'est le fond du problème : l
 | --- | --- | --- |
 | **Ajouter au jeu** | c'est la réponse de l'utilisateur qui autorise à chercher la racine de jeu **à l'intérieur** du dossier. Sans elle, l'app n'a que le chemin d'archive et doit refuser (§4.5.3). Rangé en ajouts au jeu du propriétaire — sauf ce qui ne mène nulle part dans le jeu (le `description.jsgme` qui accompagne la variante sans en faire partie), qui va en ressources : dire « ajoute au jeu » n'a jamais voulu dire « pose tout ». | retiré quand le mod est désactivé, supprimé avec lui ; les fichiers du jeu remplacés sont restaurés (§4.5.4) |
 | **Ajouter au dossier du mod** | composé par-dessus la version du mod (§4.4), qui n'est jamais touchée. La seule réponse non destructive à « copiez ces fichiers dans le dossier de la voiture ». **Proposé uniquement pour une variante de livrées** — voir ci-dessous. | se désactive ou se retire depuis « Couches & extensions » sur la fiche |
-| **Garder sans installer** | rangé sous son propre nom dans les ressources du propriétaire. Rien n'entre dans le jeu. | rien à défaire |
+| **Garder dans l'onglet Ressources** | rangé sous son propre nom dans les ressources du propriétaire, consultable depuis sa fiche. Rien n'entre dans le jeu. Le libellé nomme l'endroit où le dossier réapparaîtra — « garder sans installer » disait ce que l'action ne fait pas, pas où elle range. | rien à défaire |
 | **Garder à part** | entrée « autre mod » indépendante. Proposé seulement quand rien ne rattache le dossier à un mod. | s'active et se désactive depuis « Autres mods » |
 | **Ne pas importer** | supprimé, et journalisé (`userDiscarded`). Le seul endroit de l'app où de la matière importée disparaît. | l'archive source, si elle est conservée (§11) |
 

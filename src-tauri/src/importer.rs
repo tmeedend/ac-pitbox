@@ -2269,8 +2269,37 @@ fn process_found(
             ImportClass::Update => { /* poursuit vers le chemin UPDATE_REPLACE ci-dessous */ }
             ImportClass::Extension => {
                 // Range comme couche à part — ne touche jamais la base (§4.4).
+                //
+                // **Une couche a une identité** : son parent et l'archive dont
+                // elle vient. Réimporter la même archive remplace donc la
+                // couche qu'elle avait posée, au lieu d'en empiler une seconde,
+                // identique et rigoureusement inutile.
+                //
+                // Bug réel signalé sur `spa2022-release_V1-03.rar`, un layout
+                // posé sur le circuit Kunos : deux imports de la même archive
+                // donnaient deux couches, et le décompte affiché sur la fiche
+                // trahissait la mécanique — « 109 ajoutés · 0 écrasés » pour la
+                // première (comparée au circuit Kunos nu), « 0 ajouté · 109
+                // écrasés » pour la seconde (comparée au circuit **déjà
+                // composé** avec la première).
+                //
+                // Remplacer plutôt qu'ignorer : une archive au même nom peut
+                // avoir été mise à jour, et c'est ce que fait déjà un mod
+                // réimporté (§4.3). La priorité de la couche est reprise, sans
+                // quoi elle repasserait en tête de pile à chaque réimport.
+                let replaced_priority = crate::overlay::list_layers(conn, &id_interne)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .find(|l| l.source_archive.as_deref() == Some(archive_name))
+                    .map(|l| {
+                        let priority = l.priority;
+                        if let Err(e) = crate::compose::remove_layer(conn, cfg, &l.id) {
+                            log::warn!("replace_layer {}: {e}", l.id);
+                        }
+                        priority
+                    });
                 let name_layer = layer_name(fm, archive_name);
-                let (_, resources_extracted) = layers::store_layer(
+                let (layer_id, resources_extracted) = layers::store_layer(
                     conn,
                     library,
                     &id_interne,
@@ -2286,6 +2315,9 @@ fn process_found(
                     archive_name,
                     res_mode,
                 )?;
+                if let Some(priority) = replaced_priority {
+                    let _ = crate::overlay::set_layer_priority(conn, &layer_id, priority);
+                }
                 // Couche active par défaut : composer tout de suite pour qu'elle
                 // apparaisse en jeu (§4.4). Best-effort, comme auto_activate.
                 let _ = crate::compose::recompose(conn, cfg, &id_interne);
@@ -2293,7 +2325,13 @@ fn process_found(
                     id_interne,
                     kind: kind_str,
                     display_name: Some(name),
-                    outcome: "EXTENSION".into(),
+                    // Une couche qui en remplace une autre est une mise à jour,
+                    // pas une nouvelle extension : la fiche doit le dire.
+                    outcome: if replaced_priority.is_some() {
+                        "UPDATE_REPLACE".into()
+                    } else {
+                        "EXTENSION".into()
+                    },
                     version_label: ui.version,
                     conflict: None,
                     added_count: diff.map(|d| d.added),
@@ -3021,6 +3059,71 @@ mod tests {
         assert!(
             crate::overlay::get_mod(&conn, "ks_spa").unwrap().unwrap().is_stock,
             "reste contenu de base"
+        );
+    }
+
+    #[test]
+    fn reimporting_the_same_archive_replaces_its_layer_instead_of_stacking_one() {
+        // Bug réel signalé sur `spa2022-release_V1-03.rar`, un layout posé sur
+        // le circuit Kunos. Deux imports de la même archive donnaient deux
+        // couches, et le décompte affiché trahissait la mécanique : « 109
+        // ajoutés · 0 écrasés » pour la première (comparée au circuit Kunos nu)
+        // et « 0 ajouté · 109 écrasés » pour la seconde (comparée au circuit
+        // **déjà composé** avec la première).
+        //
+        // Une couche a une identité — son parent et l'archive dont elle vient.
+        // Réimporter remplace la sienne, comme un mod réimporté remplace sa
+        // version (§4.3).
+        let base = crate::testutil::temp_dir("import-layer-reimport");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("content").join("tracks")).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        // Circuit de base Kunos : jamais remplacé, tout import dessus est une
+        // couche (§4.4).
+        let now = chrono::Local::now().to_rfc3339();
+        crate::overlay::upsert_stock_mod(&conn, "spa", "Track", None, Some("Spa"), &now).unwrap();
+        let stock = ac.join("content").join("tracks").join("spa");
+        std::fs::create_dir_all(&stock).unwrap();
+        std::fs::write(stock.join("spa.kn5"), b"KUNOS").unwrap();
+
+        let src = base.join("spa2022-release_V1-03.rar");
+        make_fake_track(&src.join("content").join("tracks"), "spa");
+
+        let first = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert_eq!(first.mods[0].outcome, "EXTENSION", "premier import : une extension");
+        assert_eq!(crate::overlay::list_layers(&conn, "spa").unwrap().len(), 1);
+
+        let second = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert_eq!(
+            second.mods[0].outcome, "UPDATE_REPLACE",
+            "réimport : la couche est remplacée, et la fiche doit le dire"
+        );
+        let layers = crate::overlay::list_layers(&conn, "spa").unwrap();
+        assert_eq!(layers.len(), 1, "une seule couche, pas deux : {layers:?}");
+        assert!(
+            library.join(&layers[0].library_path).join("ui").is_dir(),
+            "et c'est bien la nouvelle qui est en place"
+        );
+
+        // Une archive **différente** posée sur le même circuit reste une
+        // seconde couche : c'est l'identité de l'archive qui compte, pas le
+        // parent.
+        let other = base.join("spa-lights.rar");
+        make_fake_track(&other.join("content").join("tracks"), "spa");
+        import_folder_for_test(&conn, &cfg, &rules, &other, true, &[]);
+        assert_eq!(
+            crate::overlay::list_layers(&conn, "spa").unwrap().len(),
+            2,
+            "deux archives distinctes, deux couches"
         );
     }
 
