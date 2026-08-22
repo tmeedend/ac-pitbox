@@ -198,6 +198,13 @@ pub fn delete_broken(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(),
     if let Some(lib) = &cfg.library_path {
         crate::extras::remove_tree(lib, kind.into(), id);
     }
+    // Ce que le pack possédait (§4.4) : suit ses membres tant qu'il en reste
+    // un, et part avec le dernier — sinon un pack entièrement supprimé
+    // laisserait ses fichiers dans le jeu, rattachés à plus rien.
+    let pack = crate::overlay::get_mod(conn, id)
+        .ok()
+        .flatten()
+        .and_then(|m| m.source_pack);
 
     // Déploiement éventuel dans content/ (symlink hérité OU hardlinks, §2).
     // Contrairement à un symlink, un déploiement hardlinks ne devient pas
@@ -213,6 +220,30 @@ pub fn delete_broken(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(),
     }
 
     overlay::delete_mod(conn, id).map_err(|e| e.to_string())?;
+
+    // Le pack est relu **après** la suppression : s'il ne reste aucun membre,
+    // ce qu'il possédait n'a plus de raison d'être, ni dans le jeu ni en
+    // bibliothèque. Tant qu'il en reste un, `sync_pack` remet simplement les
+    // ajouts en accord avec ce qui est encore actif.
+    if let Some(pack) = &pack {
+        if overlay::list_pack_ids(conn, pack).unwrap_or_default().is_empty() {
+            if let Err(e) = crate::extras::undeploy(conn, cfg, pack) {
+                log::warn!("undeploy_extras pack {pack}: {e}");
+            }
+            if let Some(lib) = &cfg.library_path {
+                crate::extras::remove_tree(lib, crate::extras::OwnerKind::Pack, pack);
+                let res = crate::resources::resources_dir_for(lib, "packs", &[pack]);
+                if res.exists() {
+                    if let Err(e) = std::fs::remove_dir_all(&res) {
+                        log::warn!("remove pack resources {}: {e}", res.display());
+                    }
+                }
+            }
+            let _ = overlay::clear_forced_extras(conn, pack);
+        } else {
+            crate::extras::sync_pack(conn, cfg, pack);
+        }
+    }
     Ok(())
 }
 

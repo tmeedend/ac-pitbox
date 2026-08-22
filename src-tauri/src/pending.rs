@@ -418,8 +418,20 @@ fn weigh(dir: &Path) -> (usize, u64) {
 fn actions_for(row: &PendingFolderRow, has_game_tree: bool) -> (String, Vec<String>) {
     let owned = row.owner_id.is_some();
     // « Ajouter au dossier du mod » compose par-dessus la version d'un mod de
-    // contenu (§4.4) : une app n'en a pas.
-    let layerable = owned && row.owner_kind.as_deref() != Some("apps");
+    // contenu (§4.4) : il faut donc un mod, pas une app ni un pack.
+    //
+    // Et il faut surtout **savoir où** les fichiers vont dans le mod. On ne le
+    // sait que pour une variante de livrées, où la structure `skins/<nom>` et
+    // le recoupement des noms le prouvent. Partout ailleurs — deux `.dds` à
+    // nu, un dossier quelconque — la destination n'est écrite nulle part
+    // ailleurs que dans la notice de l'auteur : vérifié sur les `Optional
+    // Textures` de VRC, rien dans l'arborescence ne la donne. Proposer de
+    // composer à l'aveugle, c'est offrir un bouton qui a une chance sur trois
+    // de poser les fichiers au mauvais endroit, en silence. La notice, elle,
+    // est affichée au moment du choix : l'utilisateur peut le faire lui-même,
+    // en connaissance de cause.
+    let layerable =
+        owned && matches!(row.owner_kind.as_deref(), Some("cars") | Some("tracks")) && row.shape == SHAPE_SKIN_VARIANT;
 
     let mut actions: Vec<String> = Vec::new();
     if has_game_tree {
@@ -437,14 +449,14 @@ fn actions_for(row: &PendingFolderRow, has_game_tree: bool) -> (String, Vec<Stri
     let suggestion = if row.replaced > 0 {
         // Le jeu de base est en cause : l'app ne tranche pas.
         ""
+    } else if has_game_tree {
+        ACTION_GAME
+    } else if layerable {
+        ACTION_LAYER
+    } else if owned && row.shape == SHAPE_DOCUMENTS {
+        ACTION_RESOURCES
     } else {
-        match row.shape.as_str() {
-            SHAPE_SKIN_VARIANT if layerable && !has_game_tree => ACTION_LAYER,
-            _ if has_game_tree => ACTION_GAME,
-            SHAPE_SKIN_VARIANT if layerable => ACTION_LAYER,
-            SHAPE_DOCUMENTS if owned => ACTION_RESOURCES,
-            _ => "",
-        }
+        ""
     };
     // Une proposition qu'on n'offre pas serait un mensonge d'interface.
     let suggestion = if actions.iter().any(|a| a == suggestion) {
@@ -648,7 +660,15 @@ fn into_game(
                 crate::extras::store(dest, &rel, &e.path(), false)?;
             }
             authorize(conn, owner, &allowed);
-            crate::extras::deploy(conn, cfg, owner_kind, owner).map(|_| ())
+            if owner_kind == OwnerKind::Pack {
+                // Un pack n'est pas déployable : ses ajouts suivent ses membres
+                // (§4.4). Poser d'office mettrait dans le jeu les fichiers d'un
+                // pack dont aucune voiture n'est active.
+                crate::extras::sync_pack(conn, cfg, owner);
+                Ok(())
+            } else {
+                crate::extras::deploy(conn, cfg, owner_kind, owner).map(|_| ())
+            }
         }
         // Sans propriétaire, « ajouter au jeu » et « garder à part » sont le
         // même geste — à ceci près qu'on part de la racine de jeu et non du
@@ -893,12 +913,19 @@ mod tests {
     }
 
     #[test]
-    fn adding_to_the_game_and_adding_to_the_mod_are_never_both_offered() {
-        // Les deux ne sont pas deux goûts, ce sont deux destinations, et
-        // l'arbre du dossier dit laquelle a un sens. Un `content/objects3D/`
-        // compose dans le dossier d'un circuit donnerait
-        // `content/tracks/<id>/content/objects3D/`, que rien ne lit ; et deux
-        // `.dds` a nu n'ont aucun chemin a poser a la racine d'AC.
+    fn adding_to_the_mod_is_offered_only_when_we_know_where_the_files_go() {
+        // « Ajouter au jeu » et « ajouter au dossier du mod » ne sont pas deux
+        // gouts, ce sont deux destinations — et un dossier qui porte un arbre
+        // de jeu n'a rien a faire dans le dossier d'un mod : composer
+        // `content/objects3D/` sur un circuit donnerait
+        // `content/tracks/<id>/content/objects3D/`, que rien ne lit.
+        //
+        // Mais l'inverse n'est pas vrai pour autant. Des fichiers a nu ne
+        // reçoivent pas « ajouter au dossier du mod » : **on ne sait pas ou ils
+        // vont dedans**. Verifie sur les `Optional Textures` de VRC — deux
+        // `.dds` sans structure, dont la destination n'est ecrite que dans la
+        // notice. On ne le sait que pour une variante de livrees, ou la
+        // structure `skins/<nom>` et le recoupement des noms le prouvent.
         let base = crate::testutil::temp_dir("pending-actions");
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
@@ -923,9 +950,21 @@ mod tests {
         let c = card(&conn, &cfg, &library, "Optional Textures", &loose, SHAPE_UNKNOWN, 0);
         assert_eq!(
             c.actions,
-            vec![ACTION_LAYER, ACTION_RESOURCES, ACTION_DISCARD],
-            "des fichiers a nu vont dans le dossier du mod, jamais a la racine d'AC"
+            vec![ACTION_RESOURCES, ACTION_DISCARD],
+            "destination inconnue dans le mod : on ne propose pas de composer a l'aveugle"
         );
+        assert!(c.suggestion.is_empty(), "et rien n'est propose");
+
+        // Une variante de livrees, elle, dit ou elle va.
+        let liveries = base.join("src").join("2K Skins");
+        write(&liveries.join("skins").join("a_michael").join("skin.dds"), b"x");
+        let c = card(&conn, &cfg, &library, "2K Skins", &liveries, SHAPE_SKIN_VARIANT, 0);
+        assert_eq!(
+            c.actions,
+            vec![ACTION_LAYER, ACTION_RESOURCES, ACTION_DISCARD],
+            "la structure skins/<nom> prouve la destination"
+        );
+        assert_eq!(c.suggestion, ACTION_LAYER);
     }
 
     #[test]

@@ -110,11 +110,23 @@ flowchart TD
     PATH -->|oui| EXT["AJOUTS AU JEU du mod"]
 ```
 
-**Le propriétaire**, dans cet ordre : le chemin contient l'id d'exactement un
-mod reconnu de la source ; sinon la source ne livre qu'un seul mod, et tout ce
-qui l'entoure lui appartient ; sinon aucun. Voitures, circuits **et** apps
-comptent — pas les packs de skins ni les sons, dont le parent n'est pas
-forcément dans cette source.
+**Le propriétaire**, dans cet ordre :
+
+1. le chemin contient l'id d'exactement **un** mod reconnu de la source ;
+2. sinon, la source ne livre qu'**un seul** mod, et tout ce qui l'entoure lui
+   appartient ;
+3. sinon, elle en livre **plusieurs** : ils forment un pack (§4.4), et c'est le
+   **pack** qui possède ce qui les entoure.
+
+Voitures, circuits **et** apps comptent — pas les packs de skins ni les sons,
+dont le parent n'est pas forcément dans cette source.
+
+*La troisième règle a remplacé un trou.* « Dans un pack multi-mods, un reste que
+rien ne rattache reste un autre mod » se lisait comme un compromis ; c'en était
+un jusqu'à ce qu'on mesure sa portée. Une voiture livrée avec sa variante CSP
+est la forme la plus banale qui soit, et **plus rien** n'y était rattaché : les
+notices devenaient des entrées inertes, et `content/fonts` une entrée anonyme
+survivant à la suppression des deux voitures.
 
 **Les archives imbriquées passent avant leurs voisins** : ce qui en sort entre
 dans la liste des propriétaires possibles. C'est ce qui range la notice livrée à
@@ -142,6 +154,13 @@ selon qu'il porte ou non un arbre de jeu.
 | **Garder à part** | entrée « autre mod » | écran « Autres mods » |
 | **Ne pas importer** | supprimé, journalisé `userDiscarded` | l'archive source, si conservée |
 
+**« Ajouter au dossier du mod » n'apparaît que pour une variante de livrées** —
+le seul cas où on sait *où* les fichiers vont dedans, la structure `skins/<nom>`
+et le recoupement des noms le prouvant. Ailleurs, la destination n'est écrite
+que dans la notice de l'auteur : composer à l'aveugle poserait les fichiers au
+mauvais endroit, en silence. La notice est affichée au moment du choix, donc
+l'utilisateur peut le faire lui-même en connaissance de cause.
+
 Aucune réponse n'est pré-cochée quand le dossier remplace des fichiers du jeu de
 base : aucun des deux défauts n'est sûr, donc l'app ne fait pas semblant de
 savoir.
@@ -157,6 +176,7 @@ activation.
 | Ce qui est posé | Où | Comment | Retiré quand |
 | --- | --- | --- | --- |
 | Voiture · circuit (+ ses couches) | `content/cars\|tracks/<id>` | hardlinks, arbre composé base + couches | désactivation, suppression |
+| Ajout au jeu **d'un pack** | n'importe où sous la racine AC | hardlink fichier par fichier | plus **aucun membre** du pack n'est actif |
 | Skin de voiture | `content/cars/<voiture>/skins/<skin>` | junction | suppression du skin |
 | Skin de circuit | `content/tracks/<circuit>/skins/cm_skins/<skin>` | junction | suppression du skin |
 | Son de voiture | `content/cars/<voiture>/sfx/` | **remplacement du contenu**, original sauvegardé | restauration, un seul son actif |
@@ -229,7 +249,7 @@ elles.
 | Archive | Ce qu'elle a révélé | Ce qui se passe aujourd'hui |
 | --- | --- | --- |
 | **Ferrari F2002 V1.4** | `2K Skins/` et `No Dust Skins/` importés comme skins d'une voiture qui n'existe pas | reconnus comme livrées de remplacement, mis en attente, posables en couche |
-| **VRC Pageau 9T8** | emballage `AC Files/` accompagné → `content/fonts` jamais posé | racine de jeu déduite de la voiture, la font arrive ; wallpapers et templates en attente |
+| **VRC Pageau 9T8** | emballage `AC Files/` accompagné → `content/fonts` jamais posé ; puis **deux** voitures → plus rien n'était rattaché | racine de jeu déduite ; tout appartient au pack, dont les deux notices lisibles depuis les deux fiches ; wallpapers et templates en attente |
 | **Ferrari 599 GTO** | `driver/` livré à nu à côté de la voiture | préfixé `content/driver/` sans rien demander, décision journalisée |
 | **_RSS_Settings** | notice d'une app devenue un « autre mod » à nom absurde, dossier introuvable | l'app est propriétaire : la notice est sa ressource, lisible sur sa fiche |
 | **LA Canyons 1.2** | `MODS/<variante>/` posé dans un `<AC>\MODS\` inerte | `mods/` n'est plus un dossier de jeu ; les variantes se choisissent |

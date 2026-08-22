@@ -507,7 +507,8 @@
     "openMediaFolder": "Ouvrir le dossier",
     "mediaLinkManually": "Associer un fichier…",
     "mediaLinkPickTitle": "Choisir le fichier à associer",
-    "mediaTrash": "Mettre à la corbeille (Suppr)"
+    "mediaTrash": "Mettre à la corbeille (Suppr)",
+    "resourceFromPack": "du pack"
   },
   "lightbox": {
     "open": "Voir en grand",

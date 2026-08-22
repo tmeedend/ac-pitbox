@@ -246,6 +246,12 @@ pub fn activate(conn: &Connection, cfg: &AppConfig, mod_id: &str, version_id: Op
     if let Err(e) = crate::extras::deploy(conn, cfg, kind.into(), mod_id) {
         log::warn!("deploy_extras {mod_id}: {e}");
     }
+    // Ce que le **pack** livrait autour de ses mods (§4.4) : posé dès qu'un de
+    // ses membres est actif. `sync_pack` fait les deux sens, il est donc juste
+    // de l'appeler ici comme à la désactivation.
+    if let Some(pack) = &m.source_pack {
+        crate::extras::sync_pack(conn, cfg, pack);
+    }
     Ok(())
 }
 
@@ -276,6 +282,12 @@ pub fn deactivate(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<()
     // restent en bibliothèque, donc réactivables sans réimport.
     if let Err(e) = crate::extras::undeploy(conn, cfg, mod_id) {
         log::warn!("undeploy_extras {mod_id}: {e}");
+    }
+    // Les ajouts du pack ne partent que si **aucun** membre ne reste actif :
+    // désactiver une voiture d'un pack de vingt ne doit pas emporter la font
+    // dont les dix-neuf autres dépendent.
+    if let Some(pack) = &m.source_pack {
+        crate::extras::sync_pack(conn, cfg, pack);
     }
     Ok(())
 }

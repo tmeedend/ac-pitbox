@@ -294,17 +294,30 @@ pub fn file_mod_reported(
     Ok(extracted)
 }
 
+/// D'où vient une ressource — donc **contre quelle racine** résoudre son chemin
+/// relatif, et ce que la fiche en dit.
+///
+/// C'était un booléen `in_mod` tant qu'il n'y avait que deux provenances. Le
+/// pack en fait une troisième (§4.4) : deux drapeaux se seraient contredits, et
+/// le front aurait eu à les combiner pour retrouver une racine.
+pub const ORIGIN_RESOURCES: &str = "resources";
+/// Document resté **dans** le dossier du mod (§4.5.1) : signalé, jamais déplacé.
+pub const ORIGIN_MOD: &str = "mod";
+/// Ressource du **pack** (§4.4) : partagée par toutes ses voitures, elle
+/// apparaît sur la fiche de chacune. Le manuel d'un pack de vingt voitures
+/// n'appartient à aucune d'elles.
+pub const ORIGIN_PACK: &str = "pack";
+
 /// Fichier annexe listé sur la fiche (§4.5.2, « Bloc Ressources »).
 #[derive(Debug, Clone, Serialize)]
 pub struct ResourceFile {
     pub name: String,
-    /// Chemin relatif à sa racine — dossier ressources, ou dossier du mod
-    /// quand `in_mod` (affichage, sous-dossiers éventuels).
+    /// Chemin relatif à sa racine — celle que désigne `origin` (affichage,
+    /// sous-dossiers éventuels).
     pub rel_path: String,
     pub size_bytes: u64,
-    /// Document resté **dans** le dossier du mod (§4.5.1) : signalé, jamais
-    /// déplacé. Dit aussi contre quelle racine résoudre le chemin relatif.
-    pub in_mod: bool,
+    /// `ORIGIN_RESOURCES` | `ORIGIN_MOD` | `ORIGIN_PACK`.
+    pub origin: String,
 }
 
 /// Document d'information : notice, changelog, readme. Même famille
@@ -350,7 +363,7 @@ pub fn list_resources(dir: &Path) -> Vec<ResourceFile> {
                 name,
                 rel_path: rel,
                 size_bytes,
-                in_mod: false,
+                origin: ORIGIN_RESOURCES.into(),
             }
         })
         .collect();
@@ -384,7 +397,7 @@ pub fn list_in_mod_documents(mod_dir: &Path) -> Vec<ResourceFile> {
                 rel_path: name.clone(),
                 name,
                 size_bytes: e.metadata().map(|m| m.len()).unwrap_or(0),
-                in_mod: true,
+                origin: ORIGIN_MOD.into(),
             }
         })
         .collect();
@@ -806,7 +819,10 @@ mod tests {
             !names.iter().any(|n| n.contains("notes.txt")),
             "racine seulement, rien en profondeur : {names:?}"
         );
-        assert!(listed.iter().all(|f| f.in_mod), "signalées comme restées dans le mod");
+        assert!(
+            listed.iter().all(|f| f.origin == ORIGIN_MOD),
+            "signalées comme restées dans le mod"
+        );
 
         // Et surtout : signaler n'a rien déplacé.
         assert!(

@@ -605,8 +605,10 @@ fn rescue_nested_archives(
         &nested,
         &discovered,
         // Rien de reconnu à ce niveau — c'est la définition de ce chemin de
-        // sauvetage. La racine de jeu retombe donc sur l'heuristique de forme.
+        // sauvetage. La racine de jeu retombe donc sur l'heuristique de forme,
+        // et il n'y a pas de pack.
         &[],
+        None,
         copy,
         res_mode,
         result,
@@ -694,11 +696,24 @@ fn consumed_paths(found: &[modscan::FoundMod], subs: &[modscan::FoundSub], apps:
 /// de `_RSS_Settings` devenait un « autre mod » nommé d'après lui, inerte, et
 /// dont « ouvrir le dossier » échouait.
 ///
-/// **Limite assumée** : dans un pack multi-mods, un reste que rien ne rattache
-/// reste un « autre mod ». Le rattacher à tous dupliquerait des arbres parfois
-/// lourds ; il n'y a pas de bonne réponse sans regarder le contenu, et « autre
-/// mod » ne perd rien.
-fn owner_of_leftover<'a>(rel: &Path, mods: &'a [(String, OwnerKind)]) -> Option<&'a (String, OwnerKind)> {
+/// 3. sinon, la source livre **plusieurs** mods : ils forment un pack (§4.4),
+///    et c'est le **pack** qui possède ce qui les entoure.
+///
+/// La troisième règle remplace une limite qui coûtait cher. « Dans un pack
+/// multi-mods, un reste que rien ne rattache reste un autre mod » : c'était
+/// écrit comme un compromis, c'était en fait un trou. Une voiture livrée avec
+/// sa variante CSP est la forme la plus banale qui soit, et **plus rien** n'y
+/// était rattaché — ni le `MANUAL.pdf`, ni les `content/fonts`, qui devenaient
+/// des entrées anonymes survivant à la suppression des deux voitures.
+///
+/// Le rattacher à *tous* les mods aurait dupliqué des arbres parfois lourds ;
+/// le rattacher au pack ne duplique rien, et c'est de toute façon plus juste :
+/// le manuel d'un pack de vingt voitures n'appartient à aucune d'elles.
+fn owner_of_leftover<'a>(
+    rel: &Path,
+    mods: &'a [(String, OwnerKind)],
+    pack: Option<&'a (String, OwnerKind)>,
+) -> Option<&'a (String, OwnerKind)> {
     let named: Vec<&(String, OwnerKind)> = mods
         .iter()
         .filter(|(id, _)| {
@@ -709,8 +724,11 @@ fn owner_of_leftover<'a>(rel: &Path, mods: &'a [(String, OwnerKind)]) -> Option<
     if named.len() == 1 {
         return Some(named[0]);
     }
-    if named.is_empty() && mods.len() == 1 {
-        return Some(&mods[0]);
+    if named.is_empty() {
+        if mods.len() == 1 {
+            return Some(&mods[0]);
+        }
+        return pack;
     }
     None
 }
@@ -740,6 +758,9 @@ fn sweep_leftovers(
     consumed: &[PathBuf],
     mods: &[(String, OwnerKind)],
     mod_dirs: &[PathBuf],
+    // Nom du pack quand la source livre plusieurs mods (§4.4) : propriétaire
+    // de dernier recours de tout ce qui les entoure.
+    pack: Option<&str>,
     copy: bool,
     res_mode: crate::resources::ExtractionMode,
     result: &mut ArchiveResult,
@@ -780,6 +801,8 @@ fn sweep_leftovers(
     // retombe sur la racine de balayage : le chemin obtenu ne mènera nulle part
     // dans AC, ce qui est exactement ce qu'on veut dire de lui.
     let root_of = |p: &Path| if p.starts_with(game_root) { game_root } else { workdir };
+
+    let pack = pack.map(|p| (p.to_string(), OwnerKind::Pack));
 
     let mut leftovers = Vec::new();
     collect_leftover(workdir, consumed, &mut leftovers);
@@ -839,7 +862,7 @@ fn sweep_leftovers(
             // dossier remplacerait. C'est le seul chiffre qui dit « ceci ne
             // concerne pas que ce mod », et il change la réponse.
             let replaced = crate::others::game_files_replaced(conn, cfg, &p);
-            let owner = owner_of_leftover(&rel, &owners).map(|(id, k)| (id.clone(), *k));
+            let owner = owner_of_leftover(&rel, &owners, pack.as_ref()).map(|(id, k)| (id.clone(), *k));
             let parked = crate::pending::park(
                 conn,
                 library,
@@ -860,7 +883,7 @@ fn sweep_leftovers(
         }
 
         {
-            if let Some((owner_id, owner_kind)) = owner_of_leftover(&rel, &owners) {
+            if let Some((owner_id, owner_kind)) = owner_of_leftover(&rel, &owners, pack.as_ref()) {
                 // Journal (§4.6) : seulement les décisions **surprenantes**.
                 // Rattacher `extension/` à la seule voiture de l'archive est la
                 // routine ; le noter à chaque fois noierait ce qu'on veut voir.
@@ -1009,7 +1032,7 @@ fn sweep_leftovers(
     for (id, owner) in owners_with_extras {
         // Seulement si le mod est effectivement déployé : poser les ajouts au jeu
         // d'un mod inactif mettrait dans AC du contenu que rien n'y annonce.
-        if !is_owner_active(cfg, owner, &id) {
+        if !is_owner_active(conn, cfg, owner, &id) {
             continue;
         }
         if let Err(e) = crate::extras::deploy(conn, cfg, owner, &id) {
@@ -1022,11 +1045,17 @@ fn sweep_leftovers(
 /// hardlinks/junction dans `content/` pour un mod, junction dans `apps/` pour
 /// une app — mais la question posée avant de déployer des ajouts au jeu est la
 /// même : ne rien mettre dans AC au nom de quelque chose qui n'y est pas.
-fn is_owner_active(cfg: &AppConfig, owner: OwnerKind, id: &str) -> bool {
+fn is_owner_active(conn: &Connection, cfg: &AppConfig, owner: OwnerKind, id: &str) -> bool {
     match owner {
         OwnerKind::Car => crate::activation::is_mod_active(cfg, ModKind::Car, id),
         OwnerKind::Track => crate::activation::is_mod_active(cfg, ModKind::Track, id),
         OwnerKind::App => crate::apps::is_app_active(cfg, id),
+        // Un pack n'est pas déployable : ses ajouts suivent ses membres
+        // (§4.4). `sync_pack` fait les deux sens, pose comme retrait.
+        OwnerKind::Pack => {
+            crate::extras::sync_pack(conn, cfg, id);
+            false
+        }
     }
 }
 
@@ -1462,6 +1491,7 @@ fn file_extracted(
             &found,
             &subs,
             &apps,
+            pack,
             false,
             res_mode,
             &mut result,
@@ -1647,6 +1677,7 @@ fn import_one_folder(
             &found,
             &subs,
             &apps,
+            pack,
             copy,
             res_mode,
             &mut result,
@@ -1677,6 +1708,7 @@ fn file_tail(
     found: &[modscan::FoundMod],
     subs: &[modscan::FoundSub],
     apps: &[modscan::FoundApp],
+    pack: Option<&str>,
     copy: bool,
     res_mode: crate::resources::ExtractionMode,
     result: &mut ArchiveResult,
@@ -1737,6 +1769,7 @@ fn file_tail(
         &consumed,
         &owners,
         &mod_dirs_of(found),
+        pack,
         copy,
         res_mode,
         result,
@@ -2033,6 +2066,7 @@ fn exec_one(
         &consumed,
         &owners,
         &mod_dirs_of(&found),
+        pack,
         copy,
         res_mode,
         &mut result,
@@ -2785,8 +2819,8 @@ mod tests {
         };
         let rules = crate::rules::default_rules();
 
-        // Deux voitures : rien ne rattache `content/texture` à l'une d'elles,
-        // il part donc en « autre mod » (§7.3) — le cas du pack multi-mods.
+        // Deux voitures : rien ne rattache `content/texture` à l'une d'elles
+        // en particulier, il appartient donc au **pack** (§4.4).
         let src = base.join("src");
         let wrapper = src.join("NFS_TOURNAMENT_CLASS_A_2026-02-15");
         make_fake_car(&wrapper.join("content").join("cars"), "a3dr_ferrari_512tr");
@@ -2795,27 +2829,24 @@ mod tests {
         std::fs::create_dir_all(&tex).unwrap();
         std::fs::write(tex.join("logo.dds"), b"DDS").unwrap();
 
-        import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert_eq!(r.extras, 1, "rattaché au pack, pas laissé orphelin");
+        assert!(r.others.is_empty(), "plus d'entrée anonyme : {:?}", r.others);
 
-        let others = crate::overlay::list_other_mods(&conn).unwrap();
-        let entry = others
-            .iter()
-            .find(|o| o.id.contains("texture"))
-            .expect("le reste devient un « autre mod »");
+        let pack = crate::overlay::get_mod(&conn, "a3dr_ferrari_512tr")
+            .unwrap()
+            .unwrap()
+            .source_pack
+            .expect("les deux voitures partagent un pack");
         assert!(
-            !entry.id.contains("NFS_TOURNAMENT_CLASS_A_2026-02-15_content"),
-            "l'id ne porte plus le segment d'emballage : {}",
-            entry.id
-        );
-        let stored = library.join(&entry.library_path);
-        assert!(
-            stored
+            crate::extras::dir(&library, OwnerKind::Pack, &pack)
                 .join("content")
                 .join("texture")
                 .join("crew_brand")
                 .join("logo.dds")
                 .is_file(),
-            "rangé sous son vrai chemin de jeu, donc posable"
+            "rangé sous son vrai chemin de jeu — l'emballage n'en fait plus partie — \
+             et sous le pack, donc il partira avec sa dernière voiture"
         );
     }
 
@@ -3795,6 +3826,113 @@ mod tests {
     }
 
     #[test]
+    fn the_vrc_archive_leaves_nothing_anonymous() {
+        // L'archive VRC Pageau 9T8, dans sa forme réelle : deux voitures (la
+        // standard et sa variante CSP) sous un emballage `AC Files/`, une font
+        // partagée, deux notices et quatre dossiers proposés à la racine.
+        //
+        // Elle a révélé que le rattachement ne connaissait que deux règles —
+        // l'id dans le chemin, ou la source ne livre qu'un mod — et qu'avec
+        // deux voitures **plus rien** n'était rattaché. Tout partait en entrées
+        // anonymes, y compris la font, qui aurait survécu à la suppression des
+        // deux voitures.
+        let base = crate::testutil::temp_dir("import-vrc");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let src = base.join("VRC_Pageau_9T8_V1.5");
+        let game = src.join("AC Files");
+        make_fake_car(&game.join("content").join("cars"), "vrc_pageau_98");
+        make_fake_car(&game.join("content").join("cars"), "vrc_pageau_98_csp");
+        let fonts = game.join("content").join("fonts");
+        std::fs::create_dir_all(&fonts).unwrap();
+        std::fs::write(fonts.join("vrc.txt"), b"FONT").unwrap();
+        std::fs::write(src.join("MANUAL.pdf"), b"PDF").unwrap();
+        std::fs::write(src.join("README.pdf"), b"PDF").unwrap();
+        for (dir, file) in [
+            ("Wallpapers", "01.jpg"),
+            ("Templates", "body.psd"),
+            ("Optional Textures", "GEN_MATES.dds"),
+        ] {
+            std::fs::create_dir_all(src.join(dir)).unwrap();
+            std::fs::write(src.join(dir).join(file), b"x").unwrap();
+        }
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+        assert_eq!(r.mods.len(), 2, "les deux voitures sont reconnues");
+        assert!(r.others.is_empty(), "plus aucune entrée anonyme : {:?}", r.others);
+
+        let pack = crate::overlay::get_mod(&conn, "vrc_pageau_98")
+            .unwrap()
+            .unwrap()
+            .source_pack
+            .expect("les deux voitures partagent un pack");
+
+        // La font atteint le jeu, et elle appartient au pack — donc elle en
+        // partira avec sa dernière voiture, au lieu de rester orpheline.
+        assert!(
+            ac.join("content").join("fonts").join("vrc.txt").is_file(),
+            "la font est posée"
+        );
+        assert!(
+            crate::extras::dir(&library, OwnerKind::Pack, &pack)
+                .join("content")
+                .join("fonts")
+                .join("vrc.txt")
+                .is_file(),
+            "et elle est rangée sous le pack"
+        );
+
+        // Les deux notices sont des ressources du pack, donc lisibles depuis la
+        // fiche des **deux** voitures.
+        let res = crate::resources::resources_dir_for(&library, "packs", &[pack.as_str()]);
+        assert!(res.join("MANUAL.pdf").is_file() && res.join("README.pdf").is_file());
+
+        // Les trois dossiers attendent une décision, avec un propriétaire —
+        // c'est lui qui rend « Garder sans installer » possible, là où il n'y
+        // avait que « Garder à part », qui ne servait à rien.
+        let waiting = crate::pending::list(&conn, &cfg).unwrap();
+        assert_eq!(waiting.len(), 3, "trois dossiers proposés : {waiting:?}");
+        for w in &waiting {
+            assert_eq!(
+                w.owner_id.as_deref(),
+                Some(pack.as_str()),
+                "{} rattaché au pack",
+                w.rel_path
+            );
+            assert!(
+                w.actions.contains(&crate::pending::ACTION_RESOURCES.to_string()),
+                "{} peut être gardé sans installer",
+                w.rel_path
+            );
+            assert!(
+                !w.actions.contains(&crate::pending::ACTION_LAYER.to_string()),
+                "{} : on ne sait pas où ces fichiers vont dans le mod, on ne le propose pas",
+                w.rel_path
+            );
+        }
+
+        // Rangé en ressources du pack, un dossier proposé se lit lui aussi
+        // depuis les deux fiches.
+        let textures = waiting
+            .iter()
+            .find(|w| w.rel_path == "Optional Textures")
+            .expect("les textures optionnelles attendent");
+        crate::pending::resolve(&conn, &cfg, &textures.id, crate::pending::ACTION_RESOURCES).unwrap();
+        assert!(res.join("Optional Textures").join("GEN_MATES.dds").is_file());
+    }
+
+    #[test]
     fn fonts_and_drivers_are_extras_like_the_rest() {
         // §4.5.3 : `content/fonts` et `content/driver` avaient leur propre
         // mécanisme — copie globale dans AC, jamais désactivée, écrasement par
@@ -3930,17 +4068,21 @@ mod tests {
     }
 
     #[test]
-    fn every_unattached_leftover_of_one_archive_gets_its_own_id_and_survives() {
-        // Bug réel (RSS GT-M Lanzo) : tous les restes d'une même archive
-        // tombaient sur le même id « autre mod » — `other_id` voyait dans
-        // `<archive>.rar__<label>` une extension `rar__<label>` et ne gardait
-        // que `<archive>`. Le premier reste était importé, les suivants
-        // rejetés par `other_exists`, et leurs fichiers — déjà déplacés dans le
-        // dossier temporaire d'emballage — disparaissaient à son nettoyage.
+    fn what_surrounds_several_cars_belongs_to_their_pack() {
+        // Bug réel signalé sur l'archive VRC Pageau : elle livre **deux**
+        // voitures (une variante CSP à côté de la standard), et le rattachement
+        // ne connaissait que deux règles — l'id dans le chemin, ou l'archive
+        // ne livre qu'un mod. Ni l'une ni l'autre ne s'applique ici, donc
+        // **plus rien** n'était rattaché : les notices devenaient des « autres
+        // mods » inertes, et `content/fonts` une entrée anonyme qui aurait
+        // survécu à la suppression des deux voitures.
         //
-        // Pack multi-voitures : rien ne rattache ces restes à une voiture
-        // précise (§4.5.3), ils restent donc des « autres mods » — le cas où
-        // l'unicité des ids compte encore.
+        // C'était écrit comme un compromis (« le rattacher à tous dupliquerait
+        // des arbres lourds »), c'était un trou : une voiture livrée avec sa
+        // variante est la forme la plus banale qui soit. Le propriétaire de
+        // dernier recours est le **pack** (§4.4) — ce qui ne duplique rien et
+        // qui est de toute façon plus juste, le manuel d'un pack de vingt
+        // voitures n'appartenant à aucune d'elles.
         let base = crate::testutil::temp_dir("import-leftover-ids");
         let library = base.join("library");
         let ac = base.join("ac");
@@ -3971,34 +4113,47 @@ mod tests {
         let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
         assert_eq!(r.mods.len(), 2, "les deux voitures sont reconnues");
-        assert_eq!(r.extras, 0, "pack ambigu : aucun rattachement automatique");
-        assert_eq!(
-            r.others.len(),
-            4,
-            "les quatre restes sont importés, aucun écrasé par collision d'id"
-        );
+        assert_eq!(r.extras, 4, "les quatre restes appartiennent au pack");
+        assert!(r.others.is_empty(), "plus aucune entrée anonyme : {:?}", r.others);
 
-        let ids: Vec<&str> = r.others.iter().map(|o| o.id.as_str()).collect();
-        let mut sorted = ids.clone();
-        sorted.sort_unstable();
-        sorted.dedup();
-        assert_eq!(sorted.len(), 4, "quatre ids distincts, obtenus: {ids:?}");
-
+        let pack = crate::overlay::get_mod(&conn, "rss_test_a")
+            .unwrap()
+            .unwrap()
+            .source_pack
+            .expect("les deux voitures partagent un pack");
+        let sat = crate::extras::dir(&library, OwnerKind::Pack, &pack);
         for rel in [
             "extension/config/shared/shared.ini",
             "system/shaders/shader.fxo",
             "content/texture/crew/brand.dds",
             "content/driver/driver.kn5",
         ] {
-            let found = r.others.iter().any(|o| {
-                let mut p = library.join("others").join(&o.id);
-                for seg in rel.split('/') {
-                    p = p.join(seg);
-                }
-                p.is_file()
-            });
-            assert!(found, "{rel} conservé en bibliothèque");
+            let mut stored = sat.clone();
+            let mut posed = ac.clone();
+            for seg in rel.split('/') {
+                stored = stored.join(seg);
+                posed = posed.join(seg);
+            }
+            assert!(stored.is_file(), "{rel} rangé sous le pack");
+            assert!(posed.is_file(), "{rel} posé dans le jeu, les voitures étant actives");
         }
+
+        // Et ça vit et meurt avec le pack : tant qu'une voiture reste, les
+        // ajouts restent ; la dernière partie, ils partent avec elle.
+        crate::maintenance::delete_broken(&conn, &cfg, "rss_test_a").unwrap();
+        assert!(
+            ac.join("system").join("shaders").join("shader.fxo").is_file(),
+            "une voiture supprimée n'emporte pas ce dont l'autre dépend encore"
+        );
+        crate::maintenance::delete_broken(&conn, &cfg, "rss_test_b").unwrap();
+        assert!(
+            !ac.join("system").join("shaders").join("shader.fxo").exists(),
+            "la dernière voiture du pack emporte ce que le pack avait posé"
+        );
+        assert!(
+            !crate::extras::dir(&library, OwnerKind::Pack, &pack).exists(),
+            "et son arbre de bibliothèque part aussi"
+        );
     }
 
     #[test]

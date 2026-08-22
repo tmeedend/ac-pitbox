@@ -507,7 +507,8 @@
     "openMediaFolder": "Open folder",
     "mediaLinkManually": "Link a file…",
     "mediaLinkPickTitle": "Pick the file to link",
-    "mediaTrash": "Move to Recycle Bin (Del)"
+    "mediaTrash": "Move to Recycle Bin (Del)",
+    "resourceFromPack": "from the pack"
   },
   "lightbox": {
     "open": "View full size",

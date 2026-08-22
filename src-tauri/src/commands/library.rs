@@ -45,6 +45,8 @@ pub fn open_mod_folder(app: AppHandle, db: State<Db>, id: String) -> Result<(), 
 struct ResourceRoots {
     resources: std::path::PathBuf,
     mod_dir: Option<std::path::PathBuf>,
+    /// Dossier ressources du pack d'origine (§4.4), quand le mod en a un.
+    pack: Option<std::path::PathBuf>,
 }
 
 fn resource_roots(app: &AppHandle, db: &State<Db>, id: &str) -> Result<ResourceRoots, String> {
@@ -56,6 +58,12 @@ fn resource_roots(app: &AppHandle, db: &State<Db>, id: &str) -> Result<ResourceR
         .ok_or(crate::errors::MOD_NOT_FOUND)?;
     Ok(ResourceRoots {
         resources: crate::resources::resources_dir(&library, mod_kind(&m.kind), id),
+        // Ressources du pack (§4.4) : partagées par toutes ses voitures, donc
+        // listées sur la fiche de chacune plutôt que dupliquées.
+        pack: m
+            .source_pack
+            .as_deref()
+            .map(|p| crate::resources::resources_dir_for(&library, "packs", &[p])),
         // Absent pour un mod dont le dossier n'est pas résolvable (version
         // manquante, AC non configuré) : la liste se réduit alors au dossier
         // ressources au lieu d'échouer entièrement.
@@ -67,14 +75,14 @@ fn resource_roots(app: &AppHandle, db: &State<Db>, id: &str) -> Result<ResourceR
 /// l'entrée vient. Le choix de la racine n'ouvre aucune brèche : le garde-fou
 /// anti-traversée s'applique ensuite à celle qui a été retenue, donc au pire
 /// le front lit dans l'autre dossier du même mod.
-fn resource_root(app: &AppHandle, db: &State<Db>, id: &str, in_mod: bool) -> Result<std::path::PathBuf, String> {
+fn resource_root(app: &AppHandle, db: &State<Db>, id: &str, origin: &str) -> Result<std::path::PathBuf, String> {
     let roots = resource_roots(app, db, id)?;
-    if in_mod {
-        roots
+    match origin {
+        crate::resources::ORIGIN_MOD => roots
             .mod_dir
-            .ok_or_else(|| format!("dossier introuvable pour « {id} »"))
-    } else {
-        Ok(roots.resources)
+            .ok_or_else(|| format!("dossier introuvable pour « {id} »")),
+        crate::resources::ORIGIN_PACK => roots.pack.ok_or(crate::errors::MOD_NOT_FOUND.to_string()),
+        _ => Ok(roots.resources),
     }
 }
 
@@ -97,6 +105,12 @@ pub fn list_mod_resources(
     if let Some(dir) = &roots.mod_dir {
         out.extend(crate::resources::list_in_mod_documents(dir));
     }
+    if let Some(dir) = &roots.pack {
+        out.extend(crate::resources::list_resources(dir).into_iter().map(|mut f| {
+            f.origin = crate::resources::ORIGIN_PACK.into();
+            f
+        }));
+    }
     Ok(out)
 }
 
@@ -110,9 +124,9 @@ pub fn get_mod_resource_path(
     db: State<Db>,
     id: String,
     rel_path: String,
-    in_mod: bool,
+    origin: String,
 ) -> Result<String, String> {
-    let dir = resource_root(&app, &db, &id, in_mod)?;
+    let dir = resource_root(&app, &db, &id, &origin)?;
     let path = crate::resources::resolve_resource_path(&dir, &rel_path)?;
     Ok(path.display().to_string())
 }
@@ -129,9 +143,9 @@ pub fn read_mod_resource(
     db: State<Db>,
     id: String,
     rel_path: String,
-    in_mod: bool,
+    origin: String,
 ) -> Result<tauri::ipc::Response, String> {
-    let dir = resource_root(&app, &db, &id, in_mod)?;
+    let dir = resource_root(&app, &db, &id, &origin)?;
     Ok(tauri::ipc::Response::new(crate::resources::read_resource(
         &dir, &rel_path,
     )?))
@@ -167,9 +181,9 @@ pub fn open_mod_resource(
     db: State<Db>,
     id: String,
     rel_path: String,
-    in_mod: bool,
+    origin: String,
 ) -> Result<(), String> {
-    let dir = resource_root(&app, &db, &id, in_mod)?;
+    let dir = resource_root(&app, &db, &id, &origin)?;
     let path = crate::resources::resolve_resource_path(&dir, &rel_path)?;
     app.opener()
         .open_path(path.display().to_string(), None::<&str>)

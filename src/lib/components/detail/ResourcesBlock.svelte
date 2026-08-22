@@ -33,16 +33,17 @@
     onerror: (message: string) => void;
   } = $props();
 
-  // `in_mod` ne concerne que les voitures et circuits : un document resté dans
-  // le dossier du mod y est listé sans être déplacé (§4.5.1). Les ressources
-  // d'une app viennent toutes de son dossier `resources/`.
+  // `origin` ne concerne que les voitures et circuits : un document resté dans
+  // le dossier du mod y est listé sans être déplacé (§4.5.1), et une ressource
+  // de pack est partagée par toutes ses voitures (§4.4). Les ressources d'une
+  // app viennent toutes de son dossier `resources/`.
   const load = (id: string) => (source === "app" ? listAppResources(id) : listModResources(id));
-  const openExternal = (id: string, rel: string, inMod: boolean) =>
-    source === "app" ? openAppResource(id, rel) : openModResource(id, rel, inMod);
-  const srcOf = (id: string, rel: string, inMod: boolean) =>
-    source === "app" ? appResourceSrc(id, rel) : modResourceSrc(id, rel, inMod);
-  const bytesOf = (id: string, rel: string, inMod: boolean) =>
-    source === "app" ? readAppResource(id, rel) : readModResource(id, rel, inMod);
+  const openExternal = (id: string, rel: string, origin: string) =>
+    source === "app" ? openAppResource(id, rel) : openModResource(id, rel, origin);
+  const srcOf = (id: string, rel: string, origin: string) =>
+    source === "app" ? appResourceSrc(id, rel) : modResourceSrc(id, rel, origin);
+  const bytesOf = (id: string, rel: string, origin: string) =>
+    source === "app" ? readAppResource(id, rel) : readModResource(id, rel, origin);
 
   let files = $state<ResourceFile[]>([]);
   /** Ressource ouverte en prévisualisation, `null` quand la liste seule est affichée. */
@@ -60,7 +61,7 @@
 
   /** Identité d'une entrée : le chemin relatif seul ne suffit pas, un même
       `readme.txt` peut exister dans les ressources **et** dans le mod. */
-  const keyOf = (f: ResourceFile) => `${f.in_mod ? "mod" : "res"}:${f.rel_path}`;
+  const keyOf = (f: ResourceFile) => `${f.origin}:${f.rel_path}`;
 
   // La garde sur `modId` évite qu'une réponse tardive d'un mod précédent
   // n'écrase la liste du mod courant.
@@ -96,11 +97,11 @@
     (async () => {
       try {
         if (kind === "image") {
-          const src = await srcOf(mod, f.rel_path, f.in_mod);
+          const src = await srcOf(mod, f.rel_path, f.origin);
           if (!stale()) imgSrc = src;
           return;
         }
-        const bytes = await bytesOf(mod, f.rel_path, f.in_mod);
+        const bytes = await bytesOf(mod, f.rel_path, f.origin);
         if (stale()) return;
         if (kind === "pdf") pdfData = bytes;
         else if (kind === "markdown") html = renderMarkdown(decodeText(bytes));
@@ -139,7 +140,7 @@
   async function openExternally(f: ResourceFile) {
     try {
       // Le chemin relatif est résolu et validé côté backend (anti-traversée).
-      await openExternal(modId, f.rel_path, f.in_mod);
+      await openExternal(modId, f.rel_path, f.origin);
     } catch (e) {
       onerror(errorText(e));
     }
@@ -175,8 +176,10 @@
                 title={canPreview ? t("detail.resourcePreviewTooltip") : t("detail.resourceOpenTooltip")}
               >
                 <span class="res-nm">{f.rel_path}</span>
-                {#if f.in_mod}
+                {#if f.origin === "mod"}
                   <span class="res-src">{t("detail.resourceInMod")}</span>
+                {:else if f.origin === "pack"}
+                  <span class="res-src">{t("detail.resourceFromPack")}</span>
                 {/if}
                 <span class="res-size mono">{fmtFileSize(f.size_bytes)}</span>
               </button>

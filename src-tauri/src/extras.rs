@@ -73,6 +73,12 @@ pub enum OwnerKind {
     Car,
     Track,
     App,
+    /// L'**archive** elle-même, quand elle livre plusieurs mods (§4.4). Le
+    /// `MANUAL.pdf` d'un pack de vingt voitures n'appartient à aucune d'elles :
+    /// il documente le pack. Sans ce propriétaire, tout ce qui entourait un
+    /// pack tombait en « autre mod » anonyme — y compris ses `content/fonts`,
+    /// qui survivaient à la suppression de toutes ses voitures.
+    Pack,
 }
 
 impl OwnerKind {
@@ -82,6 +88,7 @@ impl OwnerKind {
             OwnerKind::Car => "cars",
             OwnerKind::Track => "tracks",
             OwnerKind::App => "apps",
+            OwnerKind::Pack => "packs",
         }
     }
 
@@ -97,6 +104,7 @@ impl OwnerKind {
             "car" | "cars" => Some(OwnerKind::Car),
             "track" | "tracks" => Some(OwnerKind::Track),
             "app" | "apps" => Some(OwnerKind::App),
+            "pack" | "packs" => Some(OwnerKind::Pack),
             _ => None,
         }
     }
@@ -166,6 +174,36 @@ pub fn remove_tree(library: &Path, owner: OwnerKind, id: &str) {
         if let Err(e) = std::fs::remove_dir_all(&d) {
             log::warn!("remove extras tree {}: {e}", d.display());
         }
+    }
+}
+
+/// Aligne les ajouts au jeu d'un **pack** sur l'état de ses membres (§4.4) :
+/// posés dès qu'au moins un est actif, retirés quand aucun ne l'est.
+///
+/// Un pack ne s'active pas lui-même — c'est une métadonnée partagée, pas une
+/// entité déployable. Mais ce qu'il livre (`content/fonts`, une config CSP
+/// commune) n'a de sens dans le jeu que tant qu'au moins une de ses voitures y
+/// est. D'où cette synchronisation, appelée après chaque activation,
+/// désactivation ou suppression d'un membre.
+///
+/// Best-effort : un pack dont les ajouts ne peuvent pas être posés ne doit pas
+/// empêcher la voiture de rouler.
+pub fn sync_pack(conn: &Connection, cfg: &AppConfig, pack: &str) {
+    let members = overlay::list_pack_ids(conn, pack).unwrap_or_default();
+    let any_active = members.iter().any(|id| {
+        overlay::get_mod(conn, id)
+            .ok()
+            .flatten()
+            .and_then(|m| ModKind::from_kind(&m.kind))
+            .is_some_and(|k| crate::activation::is_mod_active(cfg, k, id))
+    });
+    let outcome = if any_active {
+        deploy(conn, cfg, OwnerKind::Pack, pack).map(|_| ())
+    } else {
+        undeploy(conn, cfg, pack)
+    };
+    if let Err(e) = outcome {
+        log::warn!("sync_pack {pack}: {e}");
     }
 }
 

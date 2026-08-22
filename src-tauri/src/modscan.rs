@@ -13,6 +13,18 @@ pub enum ModKind {
 }
 
 impl ModKind {
+    /// Relit la colonne `mods.kind`, qui porte `"Car"` / `"Track"` (le `Debug`
+    /// de cet enum). Tolérante à la casse pour la même raison que partout
+    /// ailleurs : un type relu de travers envoie la recherche dans le mauvais
+    /// arbre, en silence.
+    pub fn from_kind(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "car" | "cars" => Some(ModKind::Car),
+            "track" | "tracks" => Some(ModKind::Track),
+            _ => None,
+        }
+    }
+
     /// Segment de dossier dans `content/` : "cars" | "tracks".
     pub fn content_folder(self) -> &'static str {
         match self {
