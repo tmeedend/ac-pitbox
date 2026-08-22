@@ -408,8 +408,13 @@ laisser pourrir ici.
       fois de suite (texture, opacité, exposant spéculaire). Donc : devant un
       défaut visuel, **ne pas s'arrêter au premier champ coupable**, et
       regarder aussi ce qui est dessiné par-dessus.
-      Reste surtout **R et B de `txMaps`** (le vert est documenté et exploité),
-      le choix du LOD et l'aperçu dans `ModDetail` — §15.
+      Reste surtout le choix du LOD et l'aperçu dans `ModDetail` — §15.
+      **Un défaut ouvert** : l'aliasing géométrique ne bouge pas entre les
+      niveaux de qualité 1,5× et 4×, ce qui est impossible si le tampon a
+      bien la taille demandée. Rien n'est encore mesuré ; les pistes et la
+      méthode sont au §15 point 8.
+      (R et B de `txMaps` : question close, par la négative ; la métallicité
+      vient de `fresnelC` — écarts n°7 et n°10 de `kn5-format.md`.)
       Trois règles à ne pas perdre de vue :
       **`preview::CONVERTER_VERSION` s'incrémente dès qu'on touche au rendu
       produit** (sinon les anciens `.glb` restent servis — la version est dans

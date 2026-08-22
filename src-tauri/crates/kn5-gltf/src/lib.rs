@@ -10,6 +10,7 @@ mod locate;
 mod material;
 mod paint;
 mod roughness;
+mod stats;
 mod texture;
 
 use std::path::Path;
@@ -19,6 +20,7 @@ use kn5::Kn5Model;
 pub use geometry::{node_world_centers, winding_consistency, FlatMesh, GeometryOptions, GeometryStats};
 pub use locate::{resolve_model, resolve_skin, ModelSource, ResolvedModel};
 pub use material::{AlphaMode, GltfMaterial, MaterialTextures};
+pub use stats::{channel_stats, ChannelStats};
 pub use texture::{
     alpha_stats, prepare_textures, PreparedTexture, TextureOptions, TextureOrigin, TextureRole, TextureSet,
     TextureWarning,

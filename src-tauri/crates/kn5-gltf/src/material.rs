@@ -93,6 +93,73 @@ pub struct MaterialTextures {
     pub roughness_texture: Option<String>,
 }
 
+/// Réflectance à incidence normale à partir de laquelle une surface commence
+/// à être traitée comme un métal, puis celle où elle l'est pleinement.
+///
+/// **Mesurées, pas choisies.** Sur les voitures Kunos — les auteurs des
+/// shaders, donc la référence — `fresnelC` couvre 0,02 à 0,40 et ne dépasse
+/// **jamais** 0,5 (p99 = 0,40 sur 3 381 matériaux). Les diélectriques y sont
+/// groupés bas : cuir 0,00, plastique 0,01, carbone 0,04, peinture et jantes
+/// 0,05. Le chrome est seul au-dessus, à 0,20 de médiane et 0,50 de troisième
+/// quartile. Le plancher est donc posé au-dessus du groupe diélectrique, et le
+/// plafond au sommet de la plage que Kunos s'autorise.
+const METALLIC_F0_FLOOR: f32 = 0.10;
+const METALLIC_F0_FULL: f32 = 0.40;
+
+/// Niveau de réflexion en dessous duquel une surface ne peut pas être un
+/// métal, quelle que soit sa `fresnelC`.
+///
+/// `fresnelMaxLevel` est le plafond du reflet. Sans ce veto, la 250 GTO
+/// ressortait avec un **tapis de sol** et des **coutures de cuir** métalliques
+/// à 0,33 : leur `fresnelC` vaut bien 0,20, mais leur `fresnelMaxLevel` vaut
+/// 0,02, c'est-à-dire « cette surface ne renvoie rien ». Le seuil sépare ce
+/// groupe (0,01 à 0,05 : tapis, coutures, plastique, cuir) du chrome et des
+/// optiques (0,40 à 1,00), sans toucher à la peinture — elle passe le veto
+/// avec 0,50, mais sa `fresnelC` de 0,05 la laisse diélectrique, ce qui est
+/// exactement ce qu'est un vernis.
+const METALLIC_MIN_REFLECTION: f32 = 0.15;
+
+/// Métallicité d'un matériau, tirée de `fresnelC`.
+///
+/// `fresnelC` **est** la réflectance à incidence normale — F0 — c'est-à-dire
+/// exactement la grandeur qu'encode le modèle métallique-rugosité de glTF :
+/// un diélectrique vaut 0,04, un métal la couleur de sa base. C'est la seule
+/// donnée du KN5 qui décrive la réflectivité d'une surface, elle est écrite
+/// délibérément (82 % des matériaux la portent), et l'ordre qu'elle produit
+/// est celui de la physique.
+///
+/// **Ce qu'elle remplace** : `metallicFactor` était tenu à zéro faute de
+/// savoir lire R et B de `txMaps` — question tranchée depuis, par la négative
+/// (`docs/kn5-format.md`, écart n°7). Conséquence visible jusqu'ici : le
+/// chrome, les jantes et le métal nu rendaient comme de la peinture brillante.
+///
+/// Deux familles sont exclues quoi qu'annonce leur `fresnelC`. Le **vitrage**,
+/// diélectrique très réfléchissant que la métallicité rendrait opaque et
+/// teinté — c'est le contraire d'une vitre. Et le **caoutchouc**, pour la même
+/// raison qu'au §6.3 : un pneu n'est jamais un miroir, quoi qu'en dise son
+/// matériau.
+fn metallic_of(material: &Kn5Material, shader: &str) -> f32 {
+    if GLASS_MARKERS.iter().any(|marker| shader.contains(marker)) || shader.contains("ksTyres") {
+        return 0.0;
+    }
+    let Some(f0) = material.property("fresnelC") else {
+        return 0.0;
+    };
+    // Le veto du plafond de reflet, avant tout calcul : une surface qui ne
+    // renvoie rien n'est pas un métal, même si elle annonce une réflectance
+    // franche à incidence normale.
+    if material.property("fresnelMaxLevel").unwrap_or(0.0) < METALLIC_MIN_REFLECTION {
+        return 0.0;
+    }
+    // Au-delà de 1, ce n'est plus une réflectance. Des auteurs de mods y
+    // écrivent 1,2 pour dire « le plus réfléchissant possible » (11 % de leurs
+    // matériaux passent 0,5, là où Kunos n'y va jamais), et l'un d'eux a laissé
+    // 100. Ramené à 1 plutôt qu'écarté : l'intention reste lisible, et une
+    // valeur aberrante donne un miroir, pas un plantage.
+    let f0 = f0.clamp(0.0, 1.0);
+    ((f0 - METALLIC_F0_FLOOR) / (METALLIC_F0_FULL - METALLIC_F0_FLOOR)).clamp(0.0, 1.0)
+}
+
 pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMaterial {
     let shader = material.shader.as_str();
 
@@ -183,9 +250,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
         normal_scale: material.property("normalMult").filter(|v| *v > 0.0).unwrap_or(1.0),
         emissive,
         roughness,
-        // Held at zero on purpose: `txMaps` channel semantics are still
-        // undocumented (§6.2, §12 q3).
-        metallic: 0.0,
+        metallic: metallic_of(material, shader),
         alpha_mode,
         // Glass rendered double-sided shows the inside of the far pane through
         // the near one; §6.1 asks for single-sided there specifically.
@@ -485,6 +550,91 @@ mod tests {
                 .base_color_texture
                 .is_some(),
             "les autres matériaux gardent leur texture"
+        );
+    }
+
+    // Règle : la métallicité vient de `fresnelC`, la réflectance à incidence
+    // normale, et le seuil est celui mesuré sur les voitures Kunos — les
+    // diélectriques (peinture, plastique, cuir) restent à zéro, le chrome
+    // monte (docs/kn5-format.md, écart n°10).
+    #[test]
+    fn metallic_follows_fresnel_reflectance() {
+        let with = |f0: f32| {
+            material(
+                "ksPerPixelMultiMap",
+                0,
+                false,
+                &[("fresnelC", f0), ("fresnelMaxLevel", 0.7)],
+            )
+        };
+        assert_eq!(
+            metallic_of(&with(0.05), "ksPerPixelMultiMap"),
+            0.0,
+            "peinture et jantes Kunos (0,05) restent diélectriques"
+        );
+        assert_eq!(
+            metallic_of(&with(0.01), "ksPerPixelMultiMap"),
+            0.0,
+            "le plastique aussi"
+        );
+        assert!(
+            metallic_of(&with(0.20), "ksPerPixelMultiMap") > 0.2,
+            "le chrome médian Kunos devient franchement métallique"
+        );
+        assert_eq!(
+            metallic_of(&with(0.40), "ksPerPixelMultiMap"),
+            1.0,
+            "le haut de la plage Kunos est un métal plein"
+        );
+        assert_eq!(
+            metallic_of(&with(100.0), "ksPerPixelMultiMap"),
+            1.0,
+            "une valeur aberrante donne un miroir, pas un débordement"
+        );
+    }
+
+    // Règle : deux surfaces ne deviennent jamais métalliques, quoi qu'annonce
+    // leur `fresnelC` — une vitre métallique est opaque, un pneu n'est pas un
+    // miroir (§6.3).
+    #[test]
+    fn glass_and_rubber_are_never_metallic() {
+        let shiny = material("ksWindscreen", 1, false, &[("fresnelC", 0.9), ("fresnelMaxLevel", 1.0)]);
+        assert_eq!(
+            metallic_of(&shiny, "ksWindscreen"),
+            0.0,
+            "un pare-brise reste transparent"
+        );
+        let tyre = material("ksTyres", 0, false, &[("fresnelC", 0.9), ("fresnelMaxLevel", 1.0)]);
+        assert_eq!(metallic_of(&tyre, "ksTyres"), 0.0, "un pneu reste du caoutchouc");
+    }
+
+    // Règle : une surface qui ne renvoie rien n'est pas un métal, même quand sa
+    // réflectance à incidence normale est franche. Bug réel : le tapis de sol
+    // et les coutures de la 250 GTO ressortaient métalliques (écart n°10).
+    #[test]
+    fn a_surface_that_reflects_nothing_is_never_metallic() {
+        let carpet = material(
+            "ksPerPixelMultiMap",
+            0,
+            false,
+            &[("fresnelC", 0.20), ("fresnelMaxLevel", 0.02)],
+        );
+        assert_eq!(
+            metallic_of(&carpet, "ksPerPixelMultiMap"),
+            0.0,
+            "un tapis à fresnelMaxLevel 0,02 ne renvoie rien, quelle que soit sa fresnelC"
+        );
+    }
+
+    // Règle : sans `fresnelC` — 18 % des matériaux n'en portent pas — on ne
+    // devine rien, la surface reste diélectrique.
+    #[test]
+    fn a_material_without_fresnel_stays_dielectric() {
+        let plain = material("ksPerPixelMultiMap", 0, false, &[("ksSpecularEXP", 200.0)]);
+        assert_eq!(
+            metallic_of(&plain, "ksPerPixelMultiMap"),
+            0.0,
+            "rien de mesuré, rien de deviné"
         );
     }
 

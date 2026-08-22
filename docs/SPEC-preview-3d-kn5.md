@@ -364,6 +364,12 @@ Démarche imposée à l'implémentation :
 
 Tant que ce n'est pas tranché : `metallicFactor = 0.0`, `roughnessFactor` issu de `ksSpecularEXP`, pas de `metallicRoughnessTexture`. Un rendu diffus correct vaut mieux qu'un rendu métallique faux.
 
+**Tranché depuis, en deux temps** (voir `kn5-format.md`, écarts n°7 et n°10) :
+
+- **Le vert de `txMaps` est la brillance** → `metallicRoughnessTexture`, rugosité par pixel. Fait.
+- **R et B ne portent rien d'exploitable**, et c'est une réponse, pas une prudence : chez Kunos les deux canaux sont la même donnée (corrélation médiane 1,00, identiques au pixel près sur la moitié des cartes), aucun des deux ne suit la brillance, et les mods y écrivent tout autre chose sans paraître cassés en jeu. Mesuré sur 6 597 textures. Ils restent inutilisés.
+- **La métallicité vient de `fresnelC`**, la réflectance à incidence normale — donc F0, la grandeur même du modèle glTF — vetée par `fresnelMaxLevel`. C'est ce qui fait enfin ressortir le chrome, les optiques et le métal nu comme du métal. Le paragraphe ci-dessus reste vrai pour `txMaps` ; il ne l'est plus pour `metallicFactor`.
+
 ### 6.3 Shaders spécifiques
 
 - `ksPerPixelReflection`, `ksPerPixelMultiMap_damage_dirt` → traiter comme le cas standard.
@@ -549,7 +555,7 @@ Chaque lot doit être livré **avec ses tests** et être vérifiable indépendam
 
 1. Ordre exact des 3 octets de flags des nœuds mesh (`cast_shadows` / `is_visible` / `is_transparent`) — à confirmer en croisant plusieurs voitures.
 2. Sémantique du `i16` `blend_mode` des matériaux.
-3. Sémantique des canaux de `txMaps` (§6.2).
+3. ~~Sémantique des canaux de `txMaps` (§6.2).~~ **Tranchée** : le vert est la brillance (écart n°7), R et B ne portent rien d'exploitable (même écart, seconde campagne), et la métallicité vient de `fresnelC` et non d'une texture (écart n°10).
 4. Axe à négliger pour la conversion de repère (§4.4).
 5. Contenu des 36 octets de padding après chaque propriété de matériau — probablement une valeur vectorielle ; sans intérêt en v1 mais à documenter.
 
@@ -630,7 +636,7 @@ Chacun a été pris en connaissance de cause, avec sa raison. Ne pas les
 | §5.4 décodage BC1–BC7 | + **décodeur DDS par masques** | 12 % des textures AC sont des DDS non compressés qu'`image_dds` refuse. |
 | — | **L'alpha des textures diffuses est retiré** quand aucun matériau ne l'exploite | Chez AC il ne code pas la transparence (82,5 % des pixels à alpha nul sur une carrosserie blanche). Le conserver efface la carrosserie. Il code en fait le **masque de peinture** — voir la ligne suivante. |
 | §6.2 teinte au `baseColorFactor` | **Peinture cuite dans une variante de la texture diffuse** | Le masque est par pixel (l'alpha de la diffuse), donc un facteur global peindrait aussi les décalcomanies ; et glTF borne le facteur à 1, alors qu'un aplat blanc demande ×1,87. Voir `kn5-format.md`, écart n°5. |
-| §6.2 `txMaps` laissé de côté | **Rugosité par pixel tirée de son canal vert** | La sémantique du vert est mesurée (brillance) ; `ksSpecularEXP` seul ne distinguait pas le chrome du cuir. R, B et `metallicFactor` restent hors jeu, faute de mesure. Voir `kn5-format.md`, écart n°7. |
+| §6.2 `txMaps` laissé de côté | **Rugosité par pixel tirée de son canal vert, métallicité tirée de `fresnelC`** | La sémantique du vert est mesurée (brillance) ; `ksSpecularEXP` seul ne distinguait pas le chrome du cuir. R et B, eux, ne portent rien d'exploitable — mesuré, pas supposé. La métallicité que le §6.2 attendait d'une texture vient d'un scalaire du matériau. Voir `kn5-format.md`, écarts n°7 et n°10. |
 
 ---
 
@@ -770,8 +776,16 @@ gêne constatée :
      ne peut rien pour lui : il échantillonne la *couverture* des triangles,
      mais n'ombre qu'une fois par pixel — un scintillement à l'intérieur d'une
      face lui est invisible par construction. Seul le suréchantillonnage
-     l'attaque, parce que lui seul augmente le taux d'ombrage. D'où un plafond
-     porté de 2 à 2,5 (Élevée) ou 3 (Ultra).
+     l'attaque, parce que lui seul augmente le taux d'ombrage. D'où un facteur
+     porté de 1,5 à 2,5 (Élevée) ou 4 (Ultra).
+
+     **Le niveau est une cible, pas un plafond**, et la distinction est tout le
+     réglage. Écrit d'abord en plafond — `min(max(dpr, 1.5), niveau)` — il ne
+     servait à rien sur un écran à 1 dpi : le plancher de 1,5 l'emportait, les
+     trois niveaux rendaient à l'identique, et l'utilisateur ne voyait aucune
+     différence entre Standard et Ultra. La densité de l'écran reste un
+     plancher (rendre sous elle serait flou), le niveau est le minimum visé, et
+     une borne dure à 4 protège la mémoire.
    - une **géométrie sous-pixel** — des lames de calandre plus fines qu'un
      pixel — que le MSAA voit, mais où quatre échantillons saturent. Traitée
      par une passe **SMAA**, qui travaille sur l'image finie.
@@ -791,6 +805,45 @@ gêne constatée :
    s'applique à l'image suivante, sur une fiche déjà ouverte, sans recharger
    le modèle. Standard reproduit exactement ce que faisait l'app avant ce
    réglage ; Élevée est le défaut.
+
+   **⚠ Le défaut n'est toujours pas réglé, et le symptôme a changé de nature.**
+   Après le correctif cible/plafond, l'utilisateur ne voit **aucune différence
+   entre Standard (1,5×) et Ultra (4×)** — ni sur le flanc de la NSX, ni sur
+   les pièces fines de sa face avant. Son diagnostic, plus juste que le mien :
+   ce sont les **formes 3D** qui crénellent, pas seulement les reflets.
+
+   C'est cette absence de différence qui est le vrai signal, et elle déplace le
+   soupçon : **le suréchantillonnage lisse toujours un bord géométrique.** Sept
+   fois plus de pixels ne peuvent pas donner exactement la même image. Le
+   défaut est donc probablement dans la *plomberie* — le tampon de rendu n'a
+   pas la taille demandée, ou les pixels supplémentaires sont jetés en aval —
+   et non dans la technique d'antialiasing.
+
+   **Rien n'a été mesuré à ce stade** : tout ce qui précède est du raisonnement
+   sur le code. Pistes à tester, dans cet ordre :
+
+   1. **Mesurer ce qui est réellement rendu**, avant toute autre chose :
+      `renderer.getPixelRatio()`, puis `canvas.width`/`height` comparés à
+      `clientWidth`/`clientHeight`, relevés dans l'app réelle. Un rapport de 1
+      là où on attend 4 clôt la question immédiatement.
+   2. **Le `zoom` CSS de l'interface** (`src/lib/zoom.svelte.ts` applique
+      `document.documentElement.style.zoom`, 110 % chez l'utilisateur).
+      `devicePixelRatio` l'ignore, et `clientWidth` sous `zoom` ne rend pas la
+      même chose d'un moteur à l'autre : le tampon peut être dimensionné sur
+      des valeurs non zoomées, donc ~10 % trop petit puis étiré. Insuffisant à
+      lui seul pour expliquer le symptôme, mais **il rend toute mesure
+      ambiguë** — mesurer avec le zoom à 100 %.
+   3. **La chaîne de post-traitement** (active à partir d'Élevée) redimensionne
+      ses cibles depuis un ratio qu'elle mémorise : vérifier qu'elle ne les
+      alloue pas sur un ratio périmé après un changement de niveau.
+   4. **La composition WebView2** : le canevas est étiré en CSS à 100 % de son
+      conteneur ; vérifier qu'aucun ancêtre ne force une re-rastérisation qui
+      annulerait le suréchantillonnage.
+
+   Ce qui est en revanche établi : la chaîne SMAA est bien embarquée et
+   chargée (`EffectComposer` et `SMAANeighborhoodBlending` présents dans le
+   bundle de production), et les trois niveaux produisent bien trois valeurs
+   différentes dans le code.
 
 9. ~~**Certains mods s'affichent en carré/nuage de triangles bleus.**~~
    ✅ **Corrigé.** Signalé par l'utilisateur sur deux mods
@@ -818,10 +871,18 @@ gêne constatée :
     « replacer la voiture », lui, le rejoue. Un plateau à l'arrêt (vitesse 0)
     ou une préférence système « moins d'animations » n'en reçoivent aucun.
 
-Restent aussi, hérités du plan initial : **R et B de `txMaps`** (§6.2, §12 q3 —
-le vert est documenté et exploité, voir `kn5-format.md` écart n°7 ; les deux
-autres canaux restent ouverts), choix du LOD en config, et l'aperçu dans
-`ModDetail.svelte` (panneau latéral), qui n'a jamais été branché.
+11. **Métallicité** ✅ **Faite**, et la question qui la bloquait est close.
+    `metallicFactor` était tenu à zéro depuis le début du chantier faute de
+    savoir lire R et B de `txMaps` : aucun matériau n'était métallique, donc le
+    chrome, les optiques et le métal nu rendaient comme de la peinture
+    brillante. Deux campagnes de mesure sur 6 597 textures et 16 791 matériaux
+    (`kn5-tool maps`, écrit pour ça) : **R et B ne portent rien d'exploitable**
+    — réponse négative, pas prudence — et la métallicité est dans `fresnelC`,
+    la réflectance à incidence normale, vetée par `fresnelMaxLevel`. Détail,
+    chiffres et pièges dans `kn5-format.md`, écarts n°7 et n°10.
+
+Restent aussi, hérités du plan initial : le choix du LOD en config, et l'aperçu
+dans `ModDetail.svelte` (panneau latéral), qui n'a jamais été branché.
 
 ### 15.1 Cache — ce qui est en place
 

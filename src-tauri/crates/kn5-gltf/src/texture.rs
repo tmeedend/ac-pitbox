@@ -525,7 +525,7 @@ fn strip_alpha(image: &mut RgbaImage) {
 
 /// Decodes whatever the blob actually is — the filename is never consulted
 /// (§3.2, and one texture in a hundred contradicts its own extension).
-fn decode(blob: &[u8]) -> Result<RgbaImage, String> {
+pub(crate) fn decode(blob: &[u8]) -> Result<RgbaImage, String> {
     match ImageFormat::sniff(blob) {
         ImageFormat::Dds => {
             let dds = image_dds::ddsfile::Dds::read(blob).map_err(|e| format!("not a readable DDS: {e}"))?;

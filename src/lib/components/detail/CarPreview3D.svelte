@@ -139,15 +139,18 @@
   // compris sur une géométrie sous-pixel — les lames d'une calandre.
   const QUALITY = {
     /** Ce que faisait l'app avant ce réglage. */
-    standard: { pixelRatio: 2, smaa: false },
-    high: { pixelRatio: 2.5, smaa: true },
-    ultra: { pixelRatio: 3, smaa: true },
+    standard: { supersampling: 1.5, smaa: false },
+    high: { supersampling: 2.5, smaa: true },
+    ultra: { supersampling: 4, smaa: true },
   } as const;
 
-  /** Plancher de suréchantillonnage, même sur un écran à 1 dpi : le MSAA
-   * échantillonne les bords, pas l'intérieur des surfaces, et sur une
-   * carrosserie lisse ce sont les reflets qui scintillent. */
-  const MIN_PIXEL_RATIO = 1.5;
+  /** Borne dure du suréchantillonnage, pour la mémoire : la facture en pixels
+   * croît au carré, et chacun est en plus multi-échantillonné. À 4× sur un
+   * panneau de 780 px, la cible fait 3120×1760 en RGBA16F multi-échantillonné,
+   * soit ~175 Mio de mémoire graphique — assumé sur la machine visée (§Stack :
+   * qui active l'aperçu 3D a une carte dédiée), et c'est ce que veut dire
+   * « Ultra ». */
+  const MAX_PIXEL_RATIO = 4;
 
   // Effet d'entrée du plateau (§15). Deux gestes, et rien d'autre qu'un
   // facteur appliqué à la vitesse déjà calculée : aucune image de plus, aucun
@@ -167,11 +170,20 @@
     return QUALITY[preview3dPrefs().quality];
   }
 
-  /** Applique le suréchantillonnage du niveau courant. Le plancher reste en
-   * place quel que soit le niveau : c'est lui qui traite le scintillement des
-   * reflets, pas le confort d'affichage. */
+  /**
+   * Applique le suréchantillonnage du niveau courant.
+   *
+   * Le niveau est une **cible**, pas un plafond, et la distinction est tout le
+   * réglage : écrit en plafond (`min(max(dpr, 1.5), niveau)`), il ne servait à
+   * rien sur un écran à 1 dpi — le plancher de 1,5 l'emportait et les trois
+   * niveaux rendaient à l'identique. Défaut réel, remonté par l'utilisateur
+   * qui ne voyait aucune différence entre Standard et Ultra.
+   *
+   * La densité de l'écran reste un plancher : rendre sous elle serait flou.
+   */
   function applyPixelRatio(renderer: ThreeModule.WebGLRenderer) {
-    renderer.setPixelRatio(Math.min(Math.max(window.devicePixelRatio, MIN_PIXEL_RATIO), quality().pixelRatio));
+    const wanted = Math.max(window.devicePixelRatio, quality().supersampling);
+    renderer.setPixelRatio(Math.min(wanted, MAX_PIXEL_RATIO));
   }
 
   /**
@@ -432,7 +444,7 @@
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     // Suréchantillonner puis réduire est le remède direct au scintillement des
     // reflets, et le panneau est assez petit pour qu'on puisse se le payer. Le
-    // plafond vient du niveau de qualité (§15) — c'était 2 en dur avant lui.
+    // facteur vient du niveau de qualité (§15) — c'était 1,5 à 2 avant lui.
     applyPixelRatio(renderer);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.outputColorSpace = THREE.SRGBColorSpace;

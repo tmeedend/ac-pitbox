@@ -446,7 +446,7 @@ trop ou pas assez marqué).
 
 ---
 
-## Écart n°7 — dans `txMaps`, seul le vert est lisible (et c'est la brillance)
+## Écart n°7 — dans `txMaps`, seul le vert porte un sens (et c'est la brillance)
 
 **Question ouverte depuis le début du chantier** (SPEC-preview-3d §6.2, §12 q3),
 laissée de côté parce que « une spécularité fausse est pire qu'une surface
@@ -474,13 +474,37 @@ surfaces**. Le chrome et le cuir de la MX-5 sont tous deux à `EXP = 100`, avec
 G à 255 contre 25. La rugosité devinée depuis l'exposant seul rangeait donc une
 carrosserie à 0,55 — un satiné, pas une peinture.
 
-**R et B restent indéterminés.** Les auteurs écrivent très souvent la même
-valeur dans les deux (`R == B` exactement sur la plupart des cartes mesurées,
-et sur la Supra cette valeur suit l'AO de la diffuse), mais pas toujours : la
-carrosserie de l'Abarth porte R=24 contre B=239. Ce sont donc **deux
-grandeurs**, et rien de mesuré ne dit lesquelles. Elles restent inutilisées, et
-`metallicFactor` reste à zéro — §6.2 demande un résultat plausible plutôt qu'un
-résultat deviné.
+**R et B ne portent rien d'exploitable — mesuré, et la question est close.**
+
+Seconde campagne, sur **6 597 textures `txMaps`** de tout le parc (`kn5-tool
+maps`, qui écrit une ligne de CSV par couple matériau/texture et dont c'est la
+seule raison d'être). Trois mesures, convergentes :
+
+| | Kunos (3 381) | mods (3 216) |
+| --- | --- | --- |
+| corrélation R↔B, médiane | **1,00** | 0,00 |
+| R et B identiques sur **tous** les pixels | 49 % | 33 % |
+| corrélation R↔V et B↔V, médiane | 0,06 | 0,00 |
+
+Ce que ça dit, dans l'ordre :
+
+1. **Chez Kunos, R et B sont la même donnée.** Une corrélation médiane de 1,00
+   et la moitié des cartes identiques au pixel près : deux entrées distinctes
+   d'un shader ne seraient pas des doublons sur la moitié du contenu officiel.
+2. **Ni l'un ni l'autre ne suit la brillance.** Corrélation médiane 0,06 avec
+   le vert, et la valeur balaie **−0,97 à +1,00** d'une voiture à l'autre.
+   C'est la signature d'un canal que personne n'écrit délibérément, pas celle
+   d'une grandeur.
+3. **Les mods y écrivent tout autre chose** (corrélation R↔B médiane 0,00) sans
+   que leurs voitures paraissent cassées en jeu. Le shader ne les lit donc pas
+   davantage.
+
+Conclusion : R et B restent inutilisés, et ce n'est plus une prudence en
+attendant mieux — c'est une réponse. La question §12 q3 de la spec est
+tranchée, par la négative.
+
+**La métallicité qu'on en attendait vient d'ailleurs** : `fresnelC`, voir
+l'écart n°10.
 
 **Correctif** : une texture métallique-rugosité dérivée par carte de surface —
 glTF lit la rugosité dans le vert, donc une inversion suffit
@@ -499,6 +523,71 @@ Deux garde-fous, tous deux nés d'un cas réel :
   miroirs. Détecté sur **les trois canaux saturés**, pas seulement le vert —
   une carte réellement brillante porte des valeurs ailleurs (R=24, B=239 sur
   l'Abarth). Le matériau garde alors son repli sur `ksSpecularEXP`.
+
+---
+
+## Écart n°10 — la métallicité n'est pas dans une texture, elle est dans `fresnelC`
+
+**Le problème qu'il fallait résoudre** : `metallicFactor` était tenu à zéro
+depuis le début du chantier (§6.2), donc **aucun matériau n'était métallique** —
+le chrome, les jantes, le métal nu et les optiques rendaient comme de la
+peinture brillante. On l'attendait de `txMaps`, qui ne le donne pas (écart n°7).
+
+**Méthode** : mêmes 6 597 lignes, en y ajoutant les propriétés scalaires des
+matériaux. `fresnelC`, `fresnelEXP` et `fresnelMaxLevel` sont portées par
+**82 %** des matériaux (13 695 sur 16 791) — c'est le seul groupe de propriétés
+qui décrive la réflectivité.
+
+**`fresnelC` est la réflectance à incidence normale**, c'est-à-dire F0 — la
+grandeur même qu'encode le modèle métallique-rugosité de glTF. Médianes par
+famille de surface, voitures Kunos seules :
+
+| surface | `fresnelC` | `fresnelMaxLevel` | `fresnelEXP` |
+| --- | --- | --- | --- |
+| chrome | 0,20 (q3 0,50) | 0,60 | 1,45 |
+| optiques | 0,15 | 0,40 | 1,90 |
+| métal nu | 0,05 | 0,30 | 1,70 |
+| peinture | 0,05 | 0,50 | 3,50 |
+| jantes | 0,05 | 0,20 | 2,00 |
+| carbone | 0,04 | 0,20 | 3,00 |
+| plastique | 0,01 | 0,05 | 3,00 |
+| cuir, tissu | 0,00 | 0,02 | 4,00 |
+
+C'est l'ordre de la physique, et l'exposant le confirme : bas (1,4–2) là où le
+reflet tient de face — un métal — haut (4) là où il n'apparaît qu'en rasant,
+c'est-à-dire un diélectrique. L'approximation de Schlick utilise 5.
+
+**Kunos ne dépasse jamais 0,5** (p99 = 0,40). Les moddeurs, si : 11 % de leurs
+matériaux passent 0,5, certains écrivent 1,2 pour dire « le plus réfléchissant
+possible », et l'un a laissé 100. La valeur est donc ramenée dans [0, 1] plutôt
+qu'écartée — l'intention reste lisible.
+
+**Un second champ sert de veto, et il a été trouvé par un bug.** Sur la seule
+`fresnelC`, la 250 GTO ressortait avec un **tapis de sol**, des **coutures de
+cuir** et des **étriers** métalliques : leur `fresnelC` vaut bien 0,20 à 0,40,
+mais leur `fresnelMaxLevel` vaut **0,01 à 0,03** — « cette surface ne renvoie
+rien ». Le chrome et les optiques sont à 0,40–1,00. Un plancher sur ce champ
+supprime les trois faux positifs sans toucher au chrome. La peinture, elle,
+passe le veto (0,50) mais reste diélectrique par sa `fresnelC` de 0,05 : c'est
+exactement ce qu'est un vernis, très réfléchissant en rasant, transparent de
+face.
+
+**Correctif** : `kn5_gltf::material::metallic_of` — rampe de `fresnelC` entre
+0,10 et 0,40, vetée sous `fresnelMaxLevel` 0,15, et jamais appliquée au vitrage
+ni au caoutchouc. Vérifié sur cinq voitures : la 250 GTO ne garde que son
+rétroviseur, la Mustang ses six chromes, la MX-5 son chrome et ses étriers, la
+Supra son rétroviseur et son métal nu.
+
+**Piège associé, et il annulait tout en silence** : glTF lit la métallicité
+dans le **bleu** de la texture métallique-rugosité et la **multiplie** par
+`metallicFactor`. La carte dérivée de `txMaps` écrivait ce bleu à zéro — donc
+le facteur ne serait jamais arrivé jusqu'aux surfaces qui en ont une, c'est-à-
+dire précisément celles qui portent une carte. Le canal est désormais ouvert à
+255 (`crates/kn5-gltf/src/roughness.rs`).
+
+**Limite connue** : chez un moddeur qui écrit des valeurs de chrome sur un
+volant, on obtient un volant chromé. Rien dans le fichier ne dit le contraire —
+c'est un choix d'auteur qu'aucune mesure ne distingue d'un vrai miroir.
 
 ---
 

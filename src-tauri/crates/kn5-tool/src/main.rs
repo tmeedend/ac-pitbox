@@ -7,6 +7,7 @@
 //! ```text
 //! kn5-tool inspect <file.kn5 | car_dir> [--tree] [--materials] [--textures]
 //! kn5-tool scan <dir> [--details]
+//! kn5-tool maps <dir | car_dir>
 //! ```
 
 mod report;
@@ -29,12 +30,16 @@ USAGE:
     kn5-tool scan <dir> [--details]
     kn5-tool extract-textures <car_dir> --out=<dir> [--skin=<id>]
     kn5-tool convert <car_dir> --out=<file.glb> [--skin=<id>]
+    kn5-tool maps <dir | car_dir>
 
 COMMANDS:
     inspect            Parse one model and report what it contains.
     scan               Parse every car of a folder (e.g. content/cars) and aggregate.
     extract-textures   Decode, resize and re-encode the textures to a folder.
     convert            Write the whole car as a self-contained glTF binary.
+    maps               Measure every `txMaps` texture, channel by channel (CSV
+                       on stdout). Investigation instrument for the undocumented
+                       R and B channels — docs/kn5-format.md, écart n°7.
 
 OPTIONS:
     --tree        Print the node hierarchy.
@@ -100,6 +105,10 @@ fn main() -> ExitCode {
         "convert" => match positional.first() {
             Some(path) => convert(Path::new(path), &flags),
             None => Err("convert needs a car folder".to_string()),
+        },
+        "maps" => match positional.first() {
+            Some(path) => maps(Path::new(path)),
+            None => Err("maps needs a folder of cars, or one car folder".to_string()),
         },
         "extract-textures" => match positional.first() {
             Some(path) => extract_textures(Path::new(path), &flags),
@@ -448,6 +457,134 @@ fn scan(dir: &Path, flags: &[&str]) -> Result<(), String> {
         }
     }
 
+    Ok(())
+}
+
+/// Measures every texture bound to a `txMaps` sampler, one CSV row per
+/// (car, material) pair, on stdout.
+///
+/// Written for one question, and it is worth stating it: the green channel of
+/// `txMaps` is documented as the gloss (docs/kn5-format.md, écart n°7), R and
+/// B are not. `metallicFactor` is held at zero until they are, because §6.2
+/// of the spec asks for a plausible result rather than a guessed one — so the
+/// chrome, the rims and the bare metal of every car currently render as
+/// glossy paint.
+///
+/// Everything a hypothesis might need is on the row: the surface is named by
+/// the material, the shader says which family it belongs to, `ksSpecular*`
+/// says what the author declared, and `also_diffuse` flags the first
+/// guard-rail of that same écart — a `txMaps` pointing at a colour texture,
+/// whose green is a green and not a gloss.
+fn maps(path: &Path) -> Result<(), String> {
+    let mut car_dirs: Vec<PathBuf> = if resolve_model(path).is_some() {
+        vec![path.to_path_buf()]
+    } else {
+        let entries = std::fs::read_dir(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let mut dirs: Vec<PathBuf> = entries
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.is_dir())
+            .collect();
+        dirs.sort();
+        dirs
+    };
+    // Bibliothèque Pit Box : chaque voiture y porte un dossier de version
+    // intermédiaire, alors que `content/cars` est plat. On descend d'un cran
+    // quand le dossier lui-même ne contient aucun modèle.
+    car_dirs = car_dirs
+        .into_iter()
+        .flat_map(|dir| match resolve_model(&dir) {
+            Some(_) => vec![dir],
+            None => std::fs::read_dir(&dir)
+                .map(|entries| {
+                    entries
+                        .flatten()
+                        .map(|entry| entry.path())
+                        .filter(|path| resolve_model(path).is_some())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default(),
+        })
+        .collect();
+
+    println!(
+        "car,material,shader,texture,width,height,r_mean,g_mean,b_mean,r_std,g_std,b_std,r_min,r_max,b_min,b_max,rb_equal,white,corr_rg,corr_bg,corr_rb,ks_specular,ks_specular_exp,ks_ambient,ks_diffuse,fresnel_c,fresnel_exp,fresnel_max,also_diffuse"
+    );
+
+    for car_dir in &car_dirs {
+        let car = car_dir.file_name().and_then(|n| n.to_str()).unwrap_or("?").to_string();
+        let Some(resolved) = resolve_model(car_dir) else {
+            continue;
+        };
+        let Ok(bytes) = std::fs::read(&resolved.path) else {
+            continue;
+        };
+        let Ok(model) = kn5::parse(&bytes) else {
+            eprintln!("{car}: unreadable model, skipped");
+            continue;
+        };
+
+        // Noms liés à un `txDiffuse` quelque part dans le modèle : c'est le
+        // garde-fou n°1, et il se juge à l'échelle du modèle entier, pas du
+        // matériau courant.
+        let diffuse: std::collections::BTreeSet<&str> = model
+            .materials
+            .iter()
+            .filter_map(|material| material.texture_for("txDiffuse"))
+            .collect();
+
+        for material in &model.materials {
+            let Some(name) = material.texture_for("txMaps") else {
+                continue;
+            };
+            if name.is_empty() {
+                continue;
+            }
+            let Some(texture) = model.textures.iter().find(|t| t.name == name) else {
+                // Nom non embarqué : surcharge de skin, mesurée ailleurs.
+                eprintln!("{car}: {name} not embedded, skipped");
+                continue;
+            };
+            let stats = match kn5_gltf::channel_stats(&texture.data) {
+                Ok(stats) => stats,
+                Err(e) => {
+                    eprintln!("{car}: {name} unreadable — {e}");
+                    continue;
+                }
+            };
+            let property = |key: &str| material.property(key).map(|v| format!("{v}")).unwrap_or_default();
+            println!(
+                "{car},{},{},{name},{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{},{},{},{},{:.3},{:.3},{:.3},{:.3},{:.3},{},{},{},{},{},{},{},{}",
+                material.name,
+                material.shader,
+                stats.width,
+                stats.height,
+                stats.mean[0],
+                stats.mean[1],
+                stats.mean[2],
+                stats.stddev[0],
+                stats.stddev[1],
+                stats.stddev[2],
+                stats.min[0],
+                stats.max[0],
+                stats.min[2],
+                stats.max[2],
+                stats.rb_equal,
+                stats.white,
+                stats.corr_rg,
+                stats.corr_bg,
+                stats.corr_rb,
+                property("ksSpecular"),
+                property("ksSpecularEXP"),
+                property("ksAmbient"),
+                property("ksDiffuse"),
+                property("fresnelC"),
+                property("fresnelEXP"),
+                property("fresnelMaxLevel"),
+                diffuse.contains(name),
+            );
+        }
+    }
     Ok(())
 }
 

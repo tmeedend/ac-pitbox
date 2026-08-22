@@ -18,11 +18,17 @@
 //! and its interior leather both sit at `EXP ≈ 100`, with G at 255 against 25.
 //! A car body came out at roughness 0.55, a satin finish rather than paint.
 //!
-//! **R and B stay undocumented.** Authors very often write the same value in
-//! both (`R == B` exactly on most maps measured), but not always — the Abarth's
-//! body map holds R=24 against B=239 — so they are two quantities, not one, and
-//! nothing measured so far says which. They are left unused: §6.2 asks for a
-//! plausible result over a guessed one.
+//! **R and B carry nothing usable, and that is now measured rather than
+//! suspected** (docs/kn5-format.md, écart n°7). On Kunos content the two are
+//! the *same data*: correlation 1.00 in the median, pixel-identical on 49 % of
+//! the maps. Neither tracks the gloss — the median correlation with green is
+//! 0.06, and the figure swings from −0.97 to +1.00 from one car to the next,
+//! which is the signature of a channel nobody authors deliberately. Mods write
+//! something else again (correlation 0.00 in the median) without looking broken
+//! in game, so the shader does not read them either. They stay unused.
+//!
+//! The metallicity they were expected to provide comes from `fresnelC`
+//! instead — see [`crate::material`].
 //!
 //! The conversion is per-pixel and not a scalar because an atlas is routinely
 //! shared between surfaces of different finishes — G varies by a standard
@@ -104,9 +110,9 @@ fn maps_texture(material: &Kn5Material, textures: &TextureSet) -> Option<String>
 /// Turns a surface map into a glTF metallic-roughness texture.
 ///
 /// glTF reads roughness from **G** and metallic from **B** of the same image,
-/// so the transformation is one inversion and one channel wiped: AC's
-/// glossiness is the complement of a roughness, and metallic stays at zero
-/// until `txMaps` R/B are understood (§6.2).
+/// so the transformation is one inversion and one channel opened: AC's
+/// glossiness is the complement of a roughness, and the blue is held wide open
+/// so that the material's `metallicFactor` reaches the surface untouched.
 ///
 /// Returns `false` on a map that says nothing — see [`is_placeholder`] — so the
 /// caller can drop it and leave the material on its `ksSpecularEXP` fallback.
@@ -116,7 +122,14 @@ pub(crate) fn apply(image: &mut RgbaImage) -> bool {
     }
     for pixel in image.pixels_mut() {
         let roughness = (1.0 - pixel.0[1] as f32 / 255.0).max(MIN_ROUGHNESS);
-        pixel.0 = [0, (roughness * 255.0).round() as u8, 0, u8::MAX];
+        // Bleu à **255**, et ce n'est pas une valeur neutre choisie au hasard :
+        // glTF lit la métallicité dans le bleu de cette même texture et la
+        // **multiplie** par `metallicFactor`. Un bleu à zéro annulerait donc en
+        // silence la métallicité du matériau — précisément sur les surfaces qui
+        // en ont une, puisque ce sont celles qui portent une carte. Le canal
+        // dit « laisse passer le facteur », la métallicité restant scalaire :
+        // rien dans le KN5 ne la décrit par pixel (voir [`crate::material`]).
+        pixel.0 = [0, (roughness * 255.0).round() as u8, u8::MAX, u8::MAX];
     }
     true
 }
@@ -163,7 +176,11 @@ mod tests {
             "et le métal nu se range entre les deux"
         );
         for x in 0..3 {
-            assert_eq!(image.get_pixel(x, 0).0[2], 0, "le canal métallique reste nul (§6.2)");
+            assert_eq!(
+                image.get_pixel(x, 0).0[2],
+                255,
+                "le canal métallique laisse passer le facteur du matériau, il ne l'annule pas"
+            );
         }
     }
 
