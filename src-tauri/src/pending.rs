@@ -387,17 +387,44 @@ fn weigh(dir: &Path) -> (usize, u64) {
 }
 
 /// Actions qui ont un sens pour ce dossier, la proposition pré-remplie en tête.
-fn actions_for(row: &PendingFolderRow) -> (String, Vec<String>) {
+///
+/// **« Ajouter au jeu » et « Ajouter au dossier du mod » s'excluent**, et c'est
+/// l'arbre du dossier qui tranche, pas une préférence :
+///
+/// - il **porte un arbre de jeu** (`content/`, `extension/`…) → ces chemins
+///   sont relatifs à la racine d'AC, ils ne veulent rien dire dans le dossier
+///   d'un mod. Composer `content/objects3D/` par-dessus un circuit donnerait
+///   `content/tracks/<id>/content/objects3D/`, qui n'est lu par rien ;
+/// - il **n'en porte pas** (deux `.dds`, un dossier `skins/`) → ce sont des
+///   fichiers destinés au dossier du mod, et il n'y a rien à poser à la racine
+///   d'AC. « Ajouter au jeu » les refuserait un par un (§4.5.3).
+///
+/// Offrir les deux partout, c'était laisser l'utilisateur choisir entre une
+/// bonne réponse et une qui ne pouvait pas marcher.
+///
+/// **Aucune proposition quand le dossier remplace des fichiers du jeu de base.**
+/// C'est la règle du §4.6bis, à la lettre : là, aucun des deux défauts n'est
+/// sûr — installer change le jeu pour toutes les sessions, ne pas installer
+/// peut priver d'un correctif que l'auteur juge nécessaire. Pré-cocher une
+/// réponse donnerait l'illusion que l'app sait ; elle ne sait pas. Les boutons
+/// sont alors à égalité, et c'est le décompte des fichiers remplacés qui parle.
+///
+/// **Limite connue** : un arbre de jeu qui vise le dossier du mod lui-même
+/// (`content/cars/<id>/…` livré dans un dossier optionnel) reçoit « Ajouter au
+/// jeu », alors que la couche serait plus juste — les fichiers poses la
+/// atterriraient dans un arbre que la composition regenere. Aucun cas reel
+/// rencontre a ce jour ; le jour ou il s'en presente un, le prefixe se retire
+/// et l'action bascule.
+fn actions_for(row: &PendingFolderRow, has_game_tree: bool) -> (String, Vec<String>) {
     let owned = row.owner_id.is_some();
-    // « Poser comme couche » compose par-dessus la version du mod (§4.3) : il
-    // faut un mod de contenu, une app n'en a pas.
+    // « Ajouter au dossier du mod » compose par-dessus la version d'un mod de
+    // contenu (§4.4) : une app n'en a pas.
     let layerable = owned && row.owner_kind.as_deref() != Some("apps");
 
     let mut actions: Vec<String> = Vec::new();
-    if holds_game_shape(row) {
+    if has_game_tree {
         actions.push(ACTION_GAME.into());
-    }
-    if layerable {
+    } else if layerable {
         actions.push(ACTION_LAYER.into());
     }
     if owned {
@@ -407,28 +434,36 @@ fn actions_for(row: &PendingFolderRow) -> (String, Vec<String>) {
     }
     actions.push(ACTION_DISCARD.into());
 
-    let suggestion = match row.shape.as_str() {
-        SHAPE_SKIN_VARIANT if layerable => ACTION_LAYER,
-        SHAPE_GAME_TREE => ACTION_GAME,
-        SHAPE_JSGME if actions.iter().any(|a| a == ACTION_GAME) => ACTION_GAME,
-        SHAPE_DOCUMENTS if owned => ACTION_RESOURCES,
-        _ => actions.first().map(String::as_str).unwrap_or(ACTION_DISCARD),
+    let suggestion = if row.replaced > 0 {
+        // Le jeu de base est en cause : l'app ne tranche pas.
+        ""
+    } else {
+        match row.shape.as_str() {
+            SHAPE_SKIN_VARIANT if layerable && !has_game_tree => ACTION_LAYER,
+            _ if has_game_tree => ACTION_GAME,
+            SHAPE_SKIN_VARIANT if layerable => ACTION_LAYER,
+            SHAPE_DOCUMENTS if owned => ACTION_RESOURCES,
+            _ => "",
+        }
     };
-    (suggestion.to_string(), actions)
-}
-
-/// Le dossier en attente porte-t-il un arbre de jeu ? Relu du `shape` plutôt
-/// que du disque : c'est la détection d'import qui fait foi, et la relire ici
-/// ferait dépendre les boutons proposés d'un état qui a pu changer.
-fn holds_game_shape(row: &PendingFolderRow) -> bool {
-    matches!(row.shape.as_str(), SHAPE_GAME_TREE) || row.shape == SHAPE_JSGME
+    // Une proposition qu'on n'offre pas serait un mensonge d'interface.
+    let suggestion = if actions.iter().any(|a| a == suggestion) {
+        suggestion.to_string()
+    } else {
+        String::new()
+    };
+    if !suggestion.is_empty() {
+        actions.sort_by_key(|a| *a != suggestion);
+    }
+    (suggestion, actions)
 }
 
 fn to_card(cfg: &AppConfig, row: PendingFolderRow) -> PendingFolder {
-    let (file_count, size_bytes) = crate::libpath::resolve(cfg.library_path.as_deref(), &row.library_path)
-        .map(|d| weigh(&d))
-        .unwrap_or((0, 0));
-    let (suggestion, actions) = actions_for(&row);
+    let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &row.library_path);
+    let (file_count, size_bytes) = dir.as_deref().map(weigh).unwrap_or((0, 0));
+    // Lu sur disque comme le poids (§4.5.5), et non depuis la forme mémorisée :
+    // c'est l'arbre réel qui décide de ce qu'on peut faire du dossier.
+    let (suggestion, actions) = actions_for(&row, dir.as_deref().is_some_and(holds_game_tree));
     PendingFolder {
         id: row.id,
         archive: row.archive,
@@ -759,6 +794,101 @@ mod tests {
         let shots = base.join("Wallpapers");
         write(&shots.join("01.jpg"), b"x");
         assert_eq!(detect(&conn, &cfg, &shots, &[]).shape, SHAPE_UNKNOWN);
+    }
+
+    /// Range un dossier en attente et rend la carte que l'écran affichera.
+    fn card(
+        conn: &Connection,
+        cfg: &AppConfig,
+        library: &Path,
+        name: &str,
+        src: &Path,
+        shape: &str,
+        replaced: usize,
+    ) -> PendingFolder {
+        let id = park(
+            conn,
+            library,
+            "Pack.7z",
+            Path::new(name),
+            src,
+            Some(("la_canyons", OwnerKind::Track)),
+            Detected {
+                shape: shape.into(),
+                ..Default::default()
+            },
+            true,
+            replaced,
+        )
+        .expect("mis en attente");
+        list(conn, cfg)
+            .unwrap()
+            .into_iter()
+            .find(|f| f.id == id)
+            .expect("listé")
+    }
+
+    #[test]
+    fn adding_to_the_game_and_adding_to_the_mod_are_never_both_offered() {
+        // Les deux ne sont pas deux goûts, ce sont deux destinations, et
+        // l'arbre du dossier dit laquelle a un sens. Un `content/objects3D/`
+        // compose dans le dossier d'un circuit donnerait
+        // `content/tracks/<id>/content/objects3D/`, que rien ne lit ; et deux
+        // `.dds` a nu n'ont aucun chemin a poser a la racine d'AC.
+        let base = crate::testutil::temp_dir("pending-actions");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+
+        let tree = base.join("src").join("Hide Pit Crew");
+        write(&tree.join("content").join("objects3D").join("pitcrew.kn5"), b"x");
+        let c = card(&conn, &cfg, &library, "Hide Pit Crew", &tree, SHAPE_JSGME, 0);
+        assert_eq!(
+            c.actions,
+            vec![ACTION_GAME, ACTION_RESOURCES, ACTION_DISCARD],
+            "un arbre de jeu s'ajoute au jeu, jamais au dossier du mod"
+        );
+        assert_eq!(c.suggestion, ACTION_GAME);
+
+        let loose = base.join("src").join("Optional Textures");
+        write(&loose.join("GEN_MATES.dds"), b"x");
+        let c = card(&conn, &cfg, &library, "Optional Textures", &loose, SHAPE_UNKNOWN, 0);
+        assert_eq!(
+            c.actions,
+            vec![ACTION_LAYER, ACTION_RESOURCES, ACTION_DISCARD],
+            "des fichiers a nu vont dans le dossier du mod, jamais a la racine d'AC"
+        );
+    }
+
+    #[test]
+    fn nothing_is_suggested_when_the_base_game_is_at_stake() {
+        // §4.6bis, a la lettre : quand un dossier remplace des fichiers du jeu
+        // de base, aucun des deux defauts n'est sur — installer change le jeu
+        // pour toutes les sessions, ne pas installer peut priver d'un correctif
+        // que l'auteur juge necessaire. Pre-cocher une reponse donnerait
+        // l'illusion que l'app sait. Elle ne sait pas.
+        let base = crate::testutil::temp_dir("pending-neutral");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+
+        let tree = base.join("src").join("Hide Pit Crew");
+        write(&tree.join("content").join("objects3D").join("pitcrew.kn5"), b"x");
+        let c = card(&conn, &cfg, &library, "Hide Pit Crew", &tree, SHAPE_JSGME, 2);
+        assert_eq!(c.replaced, 2, "le decompte est ce qui parle a la place de l'app");
+        assert!(
+            c.suggestion.is_empty(),
+            "aucune proposition : les boutons sont a egalite"
+        );
+        assert_eq!(c.actions, vec![ACTION_GAME, ACTION_RESOURCES, ACTION_DISCARD]);
     }
 
     #[test]

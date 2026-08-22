@@ -70,6 +70,11 @@ export const importState = $state<{
   /** Arrêt demandé (§4.2bis) : le lot s'interrompt entre deux items, donc il
    * reste du travail en cours après le clic — le bouton doit le dire. */
   cancelling: boolean;
+  /** Écran d'arbitrage des dossiers proposés (§4.6ter) ouvert. S'ouvre tout
+   * seul en fin de lot quand il y a quelque chose à trancher, et **jamais
+   * pendant** : un lot de cinquante mods ne s'interrompt pas. Fermer ne décide
+   * rien — les dossiers restent en attente et la ligne du rapport y ramène. */
+  pendingOpen: boolean;
 }>({
   importing: false,
   progress: null,
@@ -82,6 +87,7 @@ export const importState = $state<{
   // sauvegardée répond (§6.2, même schéma que `nav.svelte.ts`).
   copyMode: true,
   cancelling: false,
+  pendingOpen: false,
 });
 
 /** État de progression initial, avant le premier événement backend. */
@@ -243,6 +249,20 @@ function pushReport(report: ArchiveResult[]): void {
   const excess = importState.reports.length - MAX_REPORTS;
   if (excess > 0) importState.reports.splice(0, excess);
   importState.lastReport = report;
+  // Fin de lot : c'est le moment convenu pour poser la question (§4.6). Le
+  // compte vient du rapport, la liste sera relue en base par la modale — un
+  // dossier laissé en attente par un lot précédent doit reparaître ici.
+  if (report.some((a) => (a.pending ?? 0) > 0)) importState.pendingOpen = true;
+}
+
+/** Ouvre l'écran d'arbitrage des dossiers proposés (§4.6ter). */
+export function openPendingDialog(): void {
+  importState.pendingOpen = true;
+}
+
+/** Le referme sans rien décider — une réponse valable en soi. */
+export function closePendingDialog(): void {
+  importState.pendingOpen = false;
 }
 
 /** Ferme un rapport. `lastReport` survit : l'écran Import le garde consultable. */

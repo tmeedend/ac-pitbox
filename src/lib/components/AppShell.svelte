@@ -12,6 +12,7 @@
   import OtherMods from "./OtherMods.svelte";
   import Import from "./Import.svelte";
   import ImportOverlay from "./ImportOverlay.svelte";
+  import PendingDialog from "./PendingDialog.svelte";
   import ImportToasts from "./ImportToasts.svelte";
   import ToastStack from "./ToastStack.svelte";
   import ControllerToast from "./ControllerToast.svelte";
@@ -474,6 +475,7 @@
 </div>
 
 <ImportOverlay />
+<PendingDialog />
 
 <!-- Tout ce que l'app a à dire sans interrompre, dans une seule colonne en bas
      à droite : progression et rapports d'import, nouveau périphérique. -->

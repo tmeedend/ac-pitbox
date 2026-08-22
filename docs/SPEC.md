@@ -304,17 +304,25 @@ Aucune règle ne les sépare depuis le disque, et c'est le fond du problème : l
 - **documents** — tous les fichiers sont d'un format qu'AC ne lit jamais. **Les images n'en font pas partie** : rien ne distingue une capture de présentation d'un asset AC (§4.5.2), donc un dossier de fonds d'écran retombe en *indéterminé*, ce qui est honnête — c'est l'utilisateur qui sait.
 - **indéterminé** — aucune des quatre.
 
-**Cinq sorts**, dont ceux qui ont un sens pour le dossier en question :
+**Cinq sorts**, dont ceux qui ont un sens pour le dossier en question. Aucun n'est définitif — c'est ce que leurs libellés doivent dire, et ce que « Installer » ne disait pas :
 
-| Sort | Ce qu'il fait |
-| --- | --- |
-| **Installer dans le jeu** | c'est la réponse de l'utilisateur qui autorise à chercher la racine de jeu **à l'intérieur** du dossier. Sans elle, l'app n'a que le chemin d'archive et doit refuser (§4.5.3) ; avec elle, il n'y a plus rien à deviner. Rangé en ajouts au jeu du propriétaire, donc il vit et meurt avec lui. |
-| **Poser comme couche** | composé par-dessus la version du mod (§4.4), qui n'est jamais touchée. La seule réponse non destructive à « copiez ces fichiers dans le dossier de la voiture » — retirer la couche rend la voiture d'origine. |
-| **Garder en ressources** | rangé sous son propre nom dans les ressources du propriétaire. Rien n'entre dans le jeu. |
-| **Garder à part** | entrée « autre mod » indépendante, activable quand on veut. Proposé seulement quand rien ne rattache le dossier à un mod. |
-| **Ne pas importer** | supprimé, et journalisé (`userDiscarded`). Le seul endroit de l'app où de la matière importée disparaît. |
+| Sort | Ce qu'il fait | Comment on revient dessus |
+| --- | --- | --- |
+| **Ajouter au jeu** | c'est la réponse de l'utilisateur qui autorise à chercher la racine de jeu **à l'intérieur** du dossier. Sans elle, l'app n'a que le chemin d'archive et doit refuser (§4.5.3). Rangé en ajouts au jeu du propriétaire. | retiré quand le mod est désactivé, supprimé avec lui ; les fichiers du jeu remplacés sont restaurés (§4.5.4) |
+| **Ajouter au dossier du mod** | composé par-dessus la version du mod (§4.4), qui n'est jamais touchée. La seule réponse non destructive à « copiez ces fichiers dans le dossier de la voiture ». | se désactive ou se retire depuis « Couches & extensions » sur la fiche |
+| **Garder sans installer** | rangé sous son propre nom dans les ressources du propriétaire. Rien n'entre dans le jeu. | rien à défaire |
+| **Garder à part** | entrée « autre mod » indépendante. Proposé seulement quand rien ne rattache le dossier à un mod. | s'active et se désactive depuis « Autres mods » |
+| **Ne pas importer** | supprimé, et journalisé (`userDiscarded`). Le seul endroit de l'app où de la matière importée disparaît. | l'archive source, si elle est conservée (§11) |
 
-**Ce qui est montré**, parce que c'est ce sur quoi la décision se prend : le chemin dans l'archive, la forme reconnue, le poids, le mod de rattachement — et deux choses qui changent la réponse. Le **nombre de fichiers du jeu de base** que le dossier remplacerait (§4.6bis) : c'est le seul chiffre qui dit « ceci ne concerne pas que ce mod ». Et la **notice**, lisible sur place pour les formats texte : §4.6bis posait déjà que pour les dossiers qu'on ne sait pas interpréter, la réponse honnête est de rendre la notice lisible — ici elle se lit sans quitter l'écran où la décision se prend, le va-et-vient vers l'explorateur étant précisément ce qui fait cliquer au hasard.
+**« Ajouter au jeu » et « Ajouter au dossier du mod » s'excluent**, et c'est l'arbre du dossier qui tranche, pas un goût. S'il porte un **arbre de jeu** (`content/`, `extension/`…), ces chemins sont relatifs à la racine d'AC : les composer dans un mod donnerait `content/tracks/<id>/content/objects3D/`, que rien ne lit. S'il n'en porte pas (deux `.dds`, un dossier `skins/`), ce sont des fichiers destinés au dossier du mod, et « ajouter au jeu » les refuserait un par un. Offrir les deux partout revenait à faire choisir entre une bonne réponse et une qui ne pouvait pas marcher. *Limite connue* : un arbre de jeu qui vise le dossier du mod lui-même (`content/cars/<id>/…` livré dans un dossier optionnel) reçoit « Ajouter au jeu » alors que la couche serait plus juste ; aucun cas réel rencontré à ce jour.
+
+**Aucune proposition quand le dossier remplace des fichiers du jeu de base.** C'est le §4.6bis appliqué à la lettre : là, aucun des deux défauts n'est sûr — installer change le jeu pour **toutes** les sessions, ne pas installer peut priver d'un correctif que l'auteur juge nécessaire. Pré-cocher donnerait l'illusion que l'app sait. Les réponses sont alors à égalité, et c'est le décompte des fichiers remplacés qui parle.
+
+**Aucune couleur sur les réponses**, pour la même raison. Ce sont quatre réponses à une question, pas une bonne et trois mauvaises : « Ne pas importer » est souvent la plus sensée devant une option qui écraserait du contenu de base. Le seul repère est la mention « proposé », et elle disparaît dès que l'app n'a pas d'avis. L'avertissement, lui, porte sur le **fait** (jaune, « remplace N fichiers du jeu de base — s'applique à toutes les sessions »), jamais sur un bouton.
+
+**Ce qui est montré**, parce que c'est ce sur quoi la décision se prend : le titre écrit par l'auteur (qui passe devant le chemin d'archive — c'est la seule ligne écrite pour être lue), le chemin, la forme reconnue, le poids, le mod de rattachement, le décompte des fichiers du jeu remplacés, et la **notice avec son nom de fichier**, rendue sur place pour les formats texte. §4.6bis posait déjà que pour les dossiers qu'on ne sait pas interpréter, la réponse honnête est de rendre la notice lisible ; ici elle se lit sans quitter l'écran où la décision se prend, le va-et-vient vers l'explorateur étant précisément ce qui fait cliquer au hasard. Chaque réponse porte son explication en toutes lettres sous son libellé, et non en infobulle : une infobulle est invisible à la manette.
+
+**Une modale, centrée, ouverte automatiquement en fin de lot** (`PendingDialog`) — et **non bloquante**, contrairement aux arbitrages de `ImportOverlay` : la fermer ne décide rien, les dossiers restent en attente, et le rapport d'import garde un bandeau pour y revenir. Le rapport lui-même n'en garde qu'une ligne : la pile de notifications fait 380 px de large, et une question illisible se répond au hasard.
 
 **Ce qui reste automatique.** Un dossier de jeu livré à nu (`driver/` avec un `.kn5`) est toujours corrigé sans rien demander : c'est déterminable, et le §4.6 dit qu'une question à laquelle l'utilisateur ne peut pas mieux répondre que l'app est pire qu'un défaut. La décision est journalisée (`pathNormalized`) et relisible sur la fiche.
 
