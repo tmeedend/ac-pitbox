@@ -993,9 +993,22 @@
             titleNeutral={t("library.baseNeutral")}
           />
         </div>
-        {#if activeFilterCount > 0}
-          <button class="btn-ghost clear" type="button" onclick={clearFilters}>{t("common.reset")}</button>
-        {/if}
+        <!-- Toujours présent, désactivé quand il n'y a rien à faire. Il
+             disparaissait quand aucun filtre n'était posé : or c'est
+             exactement la personne perdue dans ses propres filtres qui a
+             besoin de voir la sortie, et on ne trouve pas un bouton qu'on n'a
+             jamais vu. « Visible mais sans effet » aurait été pire que
+             désactivé — un clic sans réaction laisse douter qu'il ait été
+             pris. Le décompte dit du même coup combien de filtres sont
+             actifs, ce que rien n'affichait jusqu'ici. -->
+        <button
+          class="btn clear"
+          type="button"
+          disabled={activeFilterCount === 0}
+          onclick={clearFilters}
+        >
+          {t("common.reset")}{#if activeFilterCount}<span class="n">{activeFilterCount}</span>{/if}
+        </button>
       </div>
     </div>
 
@@ -1373,9 +1386,15 @@
     align-items: center;
     flex-wrap: wrap;
   }
+  /* Le `.btn` global plutôt qu'un `.btn-ghost` réduit à 11px : c'est le bouton
+     du design system, et il n'y a pas de raison que celui-ci soit plus discret
+     que les autres actions de l'écran. */
   .clear {
-    font-size: 11px;
     margin-left: auto;
+  }
+  .clear .n {
+    color: var(--muted2);
+    font-family: var(--mono);
   }
 
   .empty {

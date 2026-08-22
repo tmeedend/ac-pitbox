@@ -25,6 +25,25 @@ Box drives it rather than competing with it: sessions are launched through CM,
 and you can open CM directly from inside Pit Box if you would rather use Pit Box
 purely as a mod and file manager.
 
+## Screenshots
+
+![The library in gallery view, with the session panel on the left and the mod
+sheet on the right](docs/screenshots/library-gallery.png)
+
+*The library. The left panel is the current session — pick a car and a track,
+then launch. The right panel is the selected mod.*
+
+![A mod's detail page: 3D preview, tech sheet, engine curve, skins, tags and
+history](docs/screenshots/mod-detail.png)
+
+*A mod's page: interactive 3D preview, tech sheet read from the mod's own files,
+skins, tags by origin, and where every version came from.*
+
+![The library in table view with the column picker open](docs/screenshots/library-table.png)
+
+*Table view, for when you want to sort three hundred cars by year or by size.
+Columns are chosen, reordered and resized.*
+
 ## Download
 
 Windows installer on the [Releases page](https://github.com/tmeedend/ac-pitbox/releases).
