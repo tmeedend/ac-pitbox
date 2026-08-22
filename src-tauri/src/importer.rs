@@ -3606,6 +3606,21 @@ mod tests {
             "pose la ou l'auteur le voulait, une fois seulement que l'utilisateur l'a dit"
         );
         assert!(!ac.join("MODS").exists(), "et toujours rien dans le dossier JSGME");
+        // Le descripteur de la variante accompagne le dossier sans en faire
+        // partie : il ne mene nulle part dans le jeu, donc il n'est pas un ajout
+        // au jeu — meme quand on vient de repondre « ajouter au jeu ».
+        assert!(
+            !crate::extras::dir(&library, OwnerKind::Track, "la_canyons")
+                .join("description.jsgme")
+                .exists(),
+            "le description.jsgme n'atterrit pas dans les ajouts au jeu"
+        );
+        assert!(
+            crate::resources::resources_dir(&library, ModKind::Track, "la_canyons")
+                .join("description.jsgme")
+                .is_file(),
+            "il est range en ressources, ou son texte se lit"
+        );
         assert!(
             crate::resources::resources_dir(&library, ModKind::Track, "la_canyons")
                 .join("Install Guide.pdf")

@@ -154,7 +154,7 @@ Beaucoup de mods embarquent des fichiers **hors contenu de jeu** : PDF de prése
 **Réglage global** (préférence persistante, §11 — pas de question à chaque import) : **« Extraction des fichiers annexes »**, trois positions :
 
 - **Aucun** — rien n'est extrait, les annexes restent dans l'archive/source, non copiées en bibliothèque.
-- **Informations seulement** (défaut) — extrait uniquement les fichiers légers d'information : `.txt`, `.pdf`, `.md`, `.doc`/`.docx`, `.rtf`, `.nfo`, `.html`, `.url`, `.lnk`.
+- **Informations seulement** (défaut) — extrait uniquement les fichiers légers d'information : `.txt`, `.pdf`, `.md`, `.doc`/`.docx`, `.rtf`, `.nfo`, `.html`, `.url`, `.lnk`, `.jsgme`. Le dernier est le descripteur de variante de JSGME (Generic Mod Enabler), dont beaucoup d'auteurs suivent encore la convention : nom et contenu standardisés — première ligne le nom de l'option, le reste son explication — et **jamais lu par AC**. C'est un document, au même titre qu'un readme ; sans lui dans cette liste, il partait en ajout au jeu et la fiche annonçait un fichier posé dans `MODS/`. Il est aussi prévisualisable comme du texte (§4.5.2, prévisualisation) : c'est souvent la seule chose qui dise à quoi sert un dossier optionnel.
 - **Tout** — ajoute les fichiers lourds : templates d'édition (`.psd`, `.xcf`, `.ai`), archives jointes (`.zip`/`.7z`/`.rar`), sources 3D (`.fbx`, `.blend`, `.3dsmax`), vidéos de présentation.
 
 **Les images ne sont jamais des annexes**, à aucune profondeur et même à côté du mod : rien ne distingue une capture de présentation d'un asset AC (`logo.png`, `body_shadow.png`, `map.png`, aperçu de skin) — donc on ne tranche pas, on laisse. Une capture de présentation qui reste dans le mod ne coûte rien ; un `body_shadow.png` retiré casse le rendu.
@@ -310,7 +310,7 @@ Aucune règle ne les sépare depuis le disque, et c'est le fond du problème : l
 
 | Sort | Ce qu'il fait | Comment on revient dessus |
 | --- | --- | --- |
-| **Ajouter au jeu** | c'est la réponse de l'utilisateur qui autorise à chercher la racine de jeu **à l'intérieur** du dossier. Sans elle, l'app n'a que le chemin d'archive et doit refuser (§4.5.3). Rangé en ajouts au jeu du propriétaire. | retiré quand le mod est désactivé, supprimé avec lui ; les fichiers du jeu remplacés sont restaurés (§4.5.4) |
+| **Ajouter au jeu** | c'est la réponse de l'utilisateur qui autorise à chercher la racine de jeu **à l'intérieur** du dossier. Sans elle, l'app n'a que le chemin d'archive et doit refuser (§4.5.3). Rangé en ajouts au jeu du propriétaire — sauf ce qui ne mène nulle part dans le jeu (le `description.jsgme` qui accompagne la variante sans en faire partie), qui va en ressources : dire « ajoute au jeu » n'a jamais voulu dire « pose tout ». | retiré quand le mod est désactivé, supprimé avec lui ; les fichiers du jeu remplacés sont restaurés (§4.5.4) |
 | **Ajouter au dossier du mod** | composé par-dessus la version du mod (§4.4), qui n'est jamais touchée. La seule réponse non destructive à « copiez ces fichiers dans le dossier de la voiture ». | se désactive ou se retire depuis « Couches & extensions » sur la fiche |
 | **Garder sans installer** | rangé sous son propre nom dans les ressources du propriétaire. Rien n'entre dans le jeu. | rien à défaire |
 | **Garder à part** | entrée « autre mod » indépendante. Proposé seulement quand rien ne rattache le dossier à un mod. | s'active et se désactive depuis « Autres mods » |

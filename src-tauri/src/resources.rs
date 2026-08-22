@@ -44,7 +44,15 @@ impl ExtractionMode {
 // annexes seulement **à la racine** de ce qui est livré à côté du mod : un
 // `.txt`/`.md` en profondeur (ex. dans `extension/`, `data/`) fait presque
 // toujours partie du contenu réel (note de config CSP, etc.).
-const INFO_EXTS: &[&str] = &["txt", "pdf", "md", "doc", "docx", "rtf", "nfo", "html", "url", "lnk"];
+// `jsgme` : le descripteur de variante de JSGME (Generic Mod Enabler), un
+// gestionnaire de mods vieux de vingt ans dont beaucoup d'auteurs suivent
+// encore la convention. Nom et contenu standardisés — première ligne le nom
+// de l'option, le reste son explication — et **jamais lu par AC** : c'est un
+// document, au même titre qu'un readme. Sans lui dans cette liste, il partait
+// en ajout au jeu et la fiche annonçait un fichier posé dans `MODS/`.
+const INFO_EXTS: &[&str] = &[
+    "txt", "pdf", "md", "doc", "docx", "rtf", "nfo", "html", "url", "lnk", "jsgme",
+];
 // Fichiers lourds (mode "Tout" seulement) : templates d'édition, archives
 // jointes, sources 3D, vidéos — jamais lus par AC. Racine uniquement, comme
 // les documents.

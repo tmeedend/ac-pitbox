@@ -8,7 +8,10 @@
 /** How a resource can be shown inside the detail page. `null` = not previewable. */
 export type PreviewKind = "text" | "markdown" | "image" | "pdf";
 
-const TEXT_EXTS = ["txt", "nfo", "log", "ini", "cfg", "csv", "json", "yml", "yaml", "lua"];
+// `jsgme` : descripteur de variante JSGME, du texte brut malgré son extension
+// exotique — première ligne le nom de l'option, le reste son explication.
+// C'est souvent la seule chose qui dise à quoi sert un dossier optionnel.
+const TEXT_EXTS = ["txt", "nfo", "log", "ini", "cfg", "csv", "json", "yml", "yaml", "lua", "jsgme"];
 const IMAGE_EXTS = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "avif"];
 
 /** Lowercase extension of a relative path, without the dot. */

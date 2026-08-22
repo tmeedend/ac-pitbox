@@ -632,9 +632,20 @@ fn into_game(
         (Some(owner), Some(kind)) => {
             let owner_kind = OwnerKind::parse(kind).ok_or(crate::errors::PENDING_UNKNOWN_ACTION)?;
             let sat = crate::extras::dir(library, owner_kind, owner);
+            let res_dir = resources_dir_of(row, library);
             for e in std::fs::read_dir(&root).map_err(|e| e.to_string())?.flatten() {
                 let rel = Path::new(&e.file_name()).to_path_buf();
-                crate::extras::store(&sat, &rel, &e.path(), false)?;
+                // Ce qui ne mène nulle part dans le jeu n'est pas un ajout au
+                // jeu, même quand on vient de dire « ajoute au jeu » : le
+                // `description.jsgme` d'une variante JSGME accompagne le
+                // dossier sans en faire partie, et il finissait listé sur la
+                // fiche comme posé dans `MODS/`. Même règle qu'à l'import.
+                let dest = if crate::acpath::leads_into_game(&rel) {
+                    &sat
+                } else {
+                    &res_dir
+                };
+                crate::extras::store(dest, &rel, &e.path(), false)?;
             }
             authorize(conn, owner, &allowed);
             crate::extras::deploy(conn, cfg, owner_kind, owner).map(|_| ())
