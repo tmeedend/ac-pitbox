@@ -12,7 +12,7 @@ distincts :
 | --- | --- |
 | **Code : identifiants, commentaires, doc-comments, noms de tests, messages d'erreur techniques** | **anglais** |
 | Échanges avec l'utilisateur, `docs/`, messages de commit | français |
-| Chaînes visibles par l'utilisateur | ni l'un ni l'autre en dur → **i18n** (`fr.json` + `en.json`) |
+| Chaînes visibles par l'utilisateur | ni l'un ni l'autre en dur → **i18n** (six locales, `fr` + `en` en référence) |
 
 **Tout code nouveau ou modifié s'écrit en anglais.** L'existant est encore
 largement en français : le traduire au fil de l'eau, sur ce qu'on touche
@@ -20,7 +20,24 @@ réellement. Ne pas partir en traduction spontanée de fichiers qu'on n'a pas
 besoin de modifier — ça noie la revue du vrai changement.
 
 Aucune chaîne visible en dur dans un composant : elle passe par `t("clé")` et la
-clé est ajoutée **dans les deux locales**, jamais une seule.
+clé est ajoutée **dans `fr.json` et `en.json`**, jamais une seule des deux.
+
+**Six locales, mais deux seulement sont de ta responsabilité.** `fr` et `en`
+forment le couple de référence : `en.json` définit l'ensemble des clés qui
+existent, `fr.json` doit le suivre exactement. Les quatre autres (`it`, `de`,
+`es`, `pt`) sont des traductions : `t()` retombe sur l'anglais pour une clé
+qui y manque (`i18n/index.svelte.ts`), donc une clé ajoutée sans elles
+s'affiche en anglais — jamais la clé brute à l'écran. Les traduire est un
+bonus, pas un prérequis. `npm run check` lance `scripts/check-locales.mjs`,
+qui **échoue** sur une clé inconnue, une clé manquante en `fr`, ou une
+**variable d'interpolation perdue ou inventée** (`{count}`, `{name}`…) — ce
+dernier cas est le seul défaut de traduction qu'on ne peut pas voir en
+relisant une langue qu'on ne parle pas. Le nombre de clés traduites par langue
+est simplement affiché.
+
+**Le jargon Assetto Corsa ne se traduit pas** : *skin*, *layout*, *pack*,
+*showroom*, *hardlink*, *junction*, *hotlap* restent en anglais dans toutes
+les langues — c'est ainsi que les pilotes les emploient.
 
 **Un libellé d'écran n'explique jamais son propre fonctionnement.** Pas de
 texte du genre « 1 clic = layout de session » ou « version installée en tête »
@@ -151,7 +168,7 @@ src/lib/
   components/           Composants Svelte (voir la carte des écrans)
   components/detail/    Blocs extraits de la fiche détail
   *.ts                  Bindings typés vers les commandes Tauri
-  i18n/locales/         fr.json + en.json
+  i18n/locales/         fr, en (référence) + it, de, es, pt (traductions)
   styles/global.css     Design system Rosso Corsa
 docs/                   Documentation (voir ci-dessous)
 scripts/                Outillage ponctuel, hors application (PowerShell)
@@ -218,7 +235,7 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
   l'ouverture n'est pas une dépendance : l'entourer d'`untrack`. Le symétrique
   côté écriture est déjà documenté dans `uiPrefs.svelte.ts` (`setUiPref` est
   `untrack`é pour la même raison, après une boucle infinie de 285 000 appels).
-- **`t("clé")` renvoie la clé elle-même si elle manque** dans les deux locales.
+- **`t("clé")` renvoie la clé elle-même si elle manque** en anglais aussi.
   Une clé oubliée n'explose donc pas : elle s'affiche telle quelle à l'écran
   (`detail.showroom`). C'est ce qui rend `errorText()` sûr, et c'est aussi
   pourquoi une relecture visuelle attrape ces oublis mieux que le typage.

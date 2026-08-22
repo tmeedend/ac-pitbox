@@ -9,12 +9,13 @@
     "prebuild": "npm run gen:licenses",
     "build": "vite build",
     "preview": "vite preview",
-    "precheck": "npm run gen:licenses",
+    "precheck": "npm run gen:licenses && npm run check:locales",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "precheck:watch": "npm run gen:licenses",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "gen:licenses": "node scripts/gen-licenses.mjs",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "check:locales": "node scripts/check-locales.mjs"
   },
   "license": "MIT",
   "dependencies": {

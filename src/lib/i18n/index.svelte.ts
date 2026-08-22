@@ -4,21 +4,38 @@
 // déclarer dans `locales` ci-dessous.
 import fr from "./locales/fr.json";
 import en from "./locales/en.json";
+import it from "./locales/it.json";
+import de from "./locales/de.json";
+import es from "./locales/es.json";
+import pt from "./locales/pt.json";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Dict = Record<string, any>;
 
-export const locales: Record<string, Dict> = { fr, en };
+export const locales: Record<string, Dict> = { fr, en, it, de, es, pt };
 
+// Chaque langue s'écrit dans sa propre langue : c'est ainsi qu'on la reconnaît
+// dans une liste dont on ne comprend pas, par définition, la langue courante.
 export const localeNames: Record<string, string> = {
   fr: "Français",
   en: "English",
+  it: "Italiano",
+  de: "Deutsch",
+  es: "Español",
+  pt: "Português",
 };
 
 export const availableLocales = Object.keys(locales);
 
 const FALLBACK = "en";
 
+/** Langue du système, réduite à son code à deux lettres.
+ *
+ * `pt-BR` et `pt-PT` retombent donc tous deux sur `pt`, `zh-CN` sur `zh` : le
+ * dictionnaire `pt` est écrit en portugais **brésilien**, de très loin la plus
+ * grosse communauté Assetto Corsa lusophone. Distinguer les variantes
+ * demanderait de comparer la balise complète avant de tronquer — à faire le
+ * jour où une variante est réellement traduite à part, pas avant. */
 function systemLocale(): string {
   const nav = typeof navigator !== "undefined" ? navigator.language : FALLBACK;
   const code = (nav ?? FALLBACK).slice(0, 2).toLowerCase();
