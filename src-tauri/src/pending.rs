@@ -642,10 +642,7 @@ fn into_game(
         // Sans propriétaire, « ajouter au jeu » et « garder à part » sont le
         // même geste — à ceci près qu'on part de la racine de jeu et non du
         // dossier d'emballage.
-        _ => {
-            authorize(conn, &row.id, &allowed);
-            activate_as_other(conn, cfg, library, &row.id, &root)
-        }
+        _ => activate_as_other(conn, cfg, library, &row.id, &root, &allowed),
     }
 }
 
@@ -691,13 +688,27 @@ fn into_other(
     library: &Path,
     dir: &Path,
 ) -> Result<(), String> {
-    activate_as_other(conn, cfg, library, &row.id, dir)
+    activate_as_other(conn, cfg, library, &row.id, dir, &[])
 }
 
-fn activate_as_other(conn: &Connection, cfg: &AppConfig, library: &Path, id: &str, src: &Path) -> Result<(), String> {
+/// `allowed` : chemins d'AC que l'utilisateur vient d'autoriser explicitement,
+/// à mémoriser **sous l'id que l'entrée porte réellement**. `others::import_other`
+/// dérive le sien (`other_id` assainit et retire une extension d'archive), et il
+/// ne coïncide pas forcément avec celui du dossier en attente : autoriser sous
+/// le mauvais id laisserait `others::place` refuser par date des fichiers qu'on
+/// venait d'accepter.
+fn activate_as_other(
+    conn: &Connection,
+    cfg: &AppConfig,
+    library: &Path,
+    id: &str,
+    src: &Path,
+    allowed: &[PathBuf],
+) -> Result<(), String> {
     let mode = ExtractionMode::parse(&cfg.prefs.resource_extraction_mode);
     let other =
         crate::others::import_other(conn, library, id, src, false, mode).ok_or(crate::errors::PENDING_ALREADY_KNOWN)?;
+    authorize(conn, &other.id, allowed);
     crate::others::activate_other(conn, cfg, &other.id).map(|_| ())
 }
 
