@@ -29,6 +29,21 @@ jobs:
 
       - run: npm ci
 
+      # Le tag est ce qui nomme la release ; `tauri.conf.json` est ce qui
+      # nomme le binaire. Rien ne les relie, donc rien n'empêche de publier une
+      # release « v0.3.0 » dont l'installateur annonce 0.2.0 — et ça ne se voit
+      # qu'après coup, dans l'écran À propos. On refuse ici plutôt que de
+      # construire pour rien. `npm version <x>` maintient l'accord tout seul.
+      - name: Le tag correspond-il à la version compilée ?
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "${{ github.ref_name }}" != "v$version" ]; then
+            echo "::error::tag ${{ github.ref_name }} mais version $version — voir scripts/sync-version.mjs"
+            exit 1
+          fi
+          node scripts/check-version.mjs
+
       # --- Signature Authenticode -------------------------------------------
       # La signature passe par `bundle.windows.signCommand` de Tauri, PAS par une
       # étape qui signerait les fichiers après coup. Deux raisons :
