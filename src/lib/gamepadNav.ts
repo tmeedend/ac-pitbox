@@ -770,7 +770,8 @@ export function startGamepadNav(): () => void {
         // avant, ce qui rendait ses propres commandes — skins, onglets,
         // boutons — inatteignables à la manette). Mod précédent/suivant a
         // désormais ses deux boutons dédiés, ci-dessus.
-        if (nav.openFull && backPressed && !leftField) nav.openFull = null;
+        if (nav.openPack && backPressed && !leftField) nav.openPack = null;
+        else if (nav.openFull && backPressed && !leftField) nav.openFull = null;
 
         if (needsEntry(active)) {
           if (active === entered) {

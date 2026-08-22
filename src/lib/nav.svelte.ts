@@ -82,6 +82,11 @@ export const nav = $state<{
    * navigation manette globale (AppShell) sache si elle doit céder la main
    * gauche/droite au visualiseur (mod précédent/suivant) et gérer B = fermer. */
   openFull: string | null;
+  /** Nom du pack affiché en fiche pleine page (§4.4), ou `null`. Posé par
+   * dessus `openFull` plutôt qu'à sa place : fermer la fiche du pack ramène
+   * à la fiche du mod d'où l'on venait, ce qui est le chemin normal pour y
+   * arriver. */
+  openPack: string | null;
   /** Qui consomme les entrées manette en exclusivité, ou `null` si personne
    * (cas normal : c'est la navigation globale de `gamepadNav.ts` qui les lit).
    *
@@ -117,6 +122,7 @@ export const nav = $state<{
   sessionCar: null,
   sessionTrack: null,
   openFull: null,
+  openPack: null,
   inputCapture: null,
   autoLaunch: false,
   opponentsAction: null,
@@ -183,5 +189,6 @@ export async function requestSection(id: string): Promise<boolean> {
   // sans en avoir choisi une rouvrait la fiche du circuit en tant que voiture
   // (aperçu 3D lancé avec l'id du circuit → crash natif d'acShowroom.exe).
   nav.openFull = null;
+  nav.openPack = null;
   return true;
 }

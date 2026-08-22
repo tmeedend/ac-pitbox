@@ -21,6 +21,7 @@
     siblings,
     busy,
     onfilterbypack,
+    onopenpack,
     onopensibling,
     onuninstallpack,
   }: {
@@ -30,6 +31,10 @@
     /** Désinstallation en cours côté parent. */
     busy: boolean;
     onfilterbypack: () => void;
+    /** Ouvrir la fiche du pack (§4.4) — la seule vue où ce que le pack pose
+     * dans le jeu est visible : ces fichiers n'appartiennent à aucun de ses
+     * mods, donc aucune fiche de mod ne les montre. */
+    onopenpack: () => void;
     onopensibling: (sibling: ModCard) => void;
     onuninstallpack: () => void;
   } = $props();
@@ -106,6 +111,7 @@
           <div class="hint">{t("detail.onlyEntity")}</div>
         {/if}
         <div class="actions">
+          <button class="btn" type="button" onclick={onopenpack}>{t("detail.openPack")}</button>
           <button class="btn" type="button" onclick={onfilterbypack}>{t("detail.filterByPack")}</button>
           <button class="btn danger" type="button" onclick={onuninstallpack} disabled={busy}>
             {busy ? t("common.working") : t("detail.uninstallPack")}

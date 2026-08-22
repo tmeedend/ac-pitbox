@@ -513,7 +513,8 @@
     "deleteVersionConfirm": "Supprimer la version {label} ? Ses fichiers partent à la corbeille Windows, avec l'archive source conservée pour elle s'il y en a une. Si la corbeille refuse (version trop volumineuse, bibliothèque sur un lecteur réseau), la suppression est définitive.",
     "deleteVersionProfiles": "Cette version est épinglée par : {profiles}. Ces profils utiliseront la version installée à la place.",
     "deleteVersionRecycled": "Version {label} envoyée à la corbeille.",
-    "deleteVersionPurged": "Version {label} supprimée définitivement : la corbeille l'a refusée."
+    "deleteVersionPurged": "Version {label} supprimée définitivement : la corbeille l'a refusée.",
+    "openPack": "Fiche du pack"
   },
   "lightbox": {
     "open": "Voir en grand",
@@ -1122,6 +1123,15 @@
     "pendingNotFound": "Ce dossier proposé n'existe plus.",
     "pendingUnknownAction": "Action impossible pour ce dossier.",
     "pendingAlreadyKnown": "Un mod porte déjà ce nom.",
-    "versionIsActive": "C'est la version installée. Activez-en une autre avant de la supprimer."
+    "versionIsActive": "C'est la version installée. Activez-en une autre avant de la supprimer.",
+    "packNotFound": "Ce pack n'existe plus : aucun de ses mods n'est en bibliothèque."
+  },
+  "pack": {
+    "tabMembers": "Mods",
+    "membersLabel": "MODS LIVRÉS",
+    "sizeLabel": "TAILLE DES MODS",
+    "extrasSizeLabel": "TAILLE DES AJOUTS",
+    "uninstall": "Désinstaller le pack",
+    "uninstallConfirm": "Désinstaller « {name} » ? Ses {count} mods sont supprimés de la bibliothèque, avec ce que le pack pose dans le jeu."
   }
 }

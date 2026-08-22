@@ -10,6 +10,9 @@
 
 pub const MOD_NOT_FOUND: &str = "errors.modNotFound";
 pub const MOD_UNKNOWN: &str = "errors.modUnknown";
+// Fiche de pack (§4.4) : un pack sans membre n'existe plus — le dernier
+// membre supprimé emporte ses fichiers.
+pub const PACK_NOT_FOUND: &str = "errors.packNotFound";
 pub const AC_NOT_CONFIGURED: &str = "errors.acNotConfigured";
 pub const LIBRARY_NOT_CONFIGURED: &str = "errors.libraryNotConfigured";
 pub const CM_NOT_CONFIGURED: &str = "errors.cmNotConfigured";

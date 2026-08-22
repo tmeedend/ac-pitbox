@@ -18,6 +18,13 @@
     type ResourceFile,
   } from "$lib/library";
   import { listAppResources, openAppResource, appResourcePath, appResourceSrc, readAppResource } from "$lib/apps";
+  import {
+    listPackResources,
+    openPackResource,
+    packResourcePath,
+    packResourceSrc,
+    readPackResource,
+  } from "$lib/packs";
   import { loadThumbnails } from "$lib/thumbnails";
   import Lightbox, { type LightboxItem } from "../Lightbox.svelte";
   import { previewKind, decodeText, type PreviewKind } from "$lib/resourcePreview";
@@ -38,7 +45,7 @@
      * résolution côté backend diffère. Le bloc est donc partagé plutôt que
      * recopié — c'est exactement le genre de duplication qui a produit 53
      * signatures visuelles pour 68 libellés (§chantier composants partagés). */
-    source?: "mod" | "app";
+    source?: "mod" | "app" | "pack";
     onerror: (message: string) => void;
   } = $props();
 
@@ -46,15 +53,36 @@
   // le dossier du mod y est listé sans être déplacé (§4.5.1), et une ressource
   // de pack est partagée par toutes ses voitures (§4.4). Les ressources d'une
   // app viennent toutes de son dossier `resources/`.
-  const load = (id: string) => (source === "app" ? listAppResources(id) : listModResources(id));
+  //
+  // Un pack (§4.4) a le même dossier `resources/` qu'une app, et ses documents
+  // sont déjà listés sur la fiche de chacun de ses membres, marqués « du
+  // pack » — ici ils sont chez eux.
+  const load = (id: string) =>
+    source === "app" ? listAppResources(id) : source === "pack" ? listPackResources(id) : listModResources(id);
   const openExternal = (id: string, rel: string, origin: string) =>
-    source === "app" ? openAppResource(id, rel) : openModResource(id, rel, origin);
+    source === "app"
+      ? openAppResource(id, rel)
+      : source === "pack"
+        ? openPackResource(id, rel)
+        : openModResource(id, rel, origin);
   const srcOf = (id: string, rel: string, origin: string) =>
-    source === "app" ? appResourceSrc(id, rel) : modResourceSrc(id, rel, origin);
+    source === "app"
+      ? appResourceSrc(id, rel)
+      : source === "pack"
+        ? packResourceSrc(id, rel)
+        : modResourceSrc(id, rel, origin);
   const bytesOf = (id: string, rel: string, origin: string) =>
-    source === "app" ? readAppResource(id, rel) : readModResource(id, rel, origin);
+    source === "app"
+      ? readAppResource(id, rel)
+      : source === "pack"
+        ? readPackResource(id, rel)
+        : readModResource(id, rel, origin);
   const pathOf = (id: string, rel: string, origin: string) =>
-    source === "app" ? appResourcePath(id, rel) : modResourcePath(id, rel, origin);
+    source === "app"
+      ? appResourcePath(id, rel)
+      : source === "pack"
+        ? packResourcePath(id, rel)
+        : modResourcePath(id, rel, origin);
 
   let files = $state<ResourceFile[]>([]);
   /** Ressource ouverte en prévisualisation, `null` quand la liste seule est affichée. */

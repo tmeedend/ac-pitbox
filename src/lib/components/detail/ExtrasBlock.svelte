@@ -8,6 +8,7 @@
   // alors que quatre destinations disent tout de suite ce que le mod touche.
   import { listModExtras, type ExtraFile } from "$lib/library";
   import { listAppExtras } from "$lib/apps";
+  import { listPackExtras } from "$lib/packs";
   import { t } from "$lib/i18n/index.svelte";
 
   let {
@@ -17,8 +18,10 @@
     modId: string;
     /** Une app pose ses ajouts au jeu exactement comme une voiture (§4.5.3) :
      * même arbre, même arbitrage, même affichage. Seul le chemin de résolution
-     * côté backend diffère. */
-    source?: "mod" | "app";
+     * côté backend diffère. Un **pack** aussi (§4.4) — ce sont même les seuls
+     * ajouts au jeu que rien n'affichait avant sa fiche : `listModExtras` ne
+     * regarde que `extras/<type>/<id>`, jamais `extras/packs/<nom>`. */
+    source?: "mod" | "app" | "pack";
   } = $props();
 
   let files = $state<ExtraFile[]>([]);
@@ -28,7 +31,9 @@
   $effect(() => {
     const current = modId;
     files = [];
-    (source === "app" ? listAppExtras(current) : listModExtras(current)).then((fs) => {
+    const load =
+      source === "app" ? listAppExtras : source === "pack" ? listPackExtras : listModExtras;
+    load(current).then((fs) => {
       if (current === modId) files = fs;
     });
   });

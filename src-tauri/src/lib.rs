@@ -33,6 +33,7 @@ mod modscan;
 mod music;
 mod others;
 mod overlay;
+mod packs;
 mod pending;
 mod preview;
 mod profiles;
@@ -222,6 +223,12 @@ pub fn run() {
             commands::maintenance::purge_orphan_subs,
             commands::maintenance::remove_orphan_junction,
             commands::maintenance::delete_pack,
+            commands::packs::get_pack_detail,
+            commands::packs::list_pack_resources,
+            commands::packs::open_pack_resource,
+            commands::packs::get_pack_resource_path,
+            commands::packs::read_pack_resource,
+            commands::packs::list_pack_extras,
             commands::maintenance::reinstall_from_archive,
             commands::maintenance::repair_all,
             commands::maintenance::export_mod,

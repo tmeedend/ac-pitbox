@@ -146,6 +146,12 @@
     }
   }
 
+  // Ouvre la fiche du pack (§4.4). La fiche du mod reste dessous : la fermer
+  // y ramène, ce qui est le seul chemin par lequel on arrive ici.
+  function openPack() {
+    if (detail?.source_pack) nav.openPack = detail.source_pack;
+  }
+
   async function openSibling(c: ModCard) {
     if (await requestSection(c.kind === "Track" ? "tracks" : "cars")) {
       nav.openMod = c.id_interne;
@@ -1134,7 +1140,7 @@
             onactivateversion={(vid) => activate(vid)}
             ondeleteversion={deleteVersion}
           />
-          <ProvenanceBlock detail={d} {siblings} busy={packBusy} onfilterbypack={filterByPack} onopensibling={openSibling} onuninstallpack={uninstallPack} />
+          <ProvenanceBlock detail={d} {siblings} busy={packBusy} onfilterbypack={filterByPack} onopenpack={openPack} onopensibling={openSibling} onuninstallpack={uninstallPack} />
           <LayersBlock modId={id} onchanged={refreshEntity} onerror={(m) => (actionError = m)} />
           <!-- Sous Provenance : c'est du même ordre — d'où vient ce mod et ce
                que l'app en a fait. Le bloc s'efface quand il n'y a rien à dire. -->
@@ -1228,7 +1234,7 @@
             onactivateversion={(vid) => activate(vid)}
             ondeleteversion={deleteVersion}
           />
-          <ProvenanceBlock detail={d} {siblings} busy={packBusy} onfilterbypack={filterByPack} onopensibling={openSibling} onuninstallpack={uninstallPack} />
+          <ProvenanceBlock detail={d} {siblings} busy={packBusy} onfilterbypack={filterByPack} onopenpack={openPack} onopensibling={openSibling} onuninstallpack={uninstallPack} />
           <LayersBlock modId={id} onchanged={refreshEntity} onerror={(m) => (actionError = m)} />
           <!-- Sous Provenance : c'est du même ordre — d'où vient ce mod et ce
                que l'app en a fait. Le bloc s'efface quand il n'y a rien à dire. -->

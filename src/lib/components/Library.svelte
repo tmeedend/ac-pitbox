@@ -2,6 +2,7 @@
   import { tick, untrack, onMount, onDestroy } from "svelte";
   import ModDetail from "./ModDetail.svelte";
   import DetailPage from "./DetailPage.svelte";
+  import PackDetail from "./PackDetail.svelte";
   import BulkEditPanel from "./BulkEditPanel.svelte";
   import ContextMenu from "./ContextMenu.svelte";
   import LoadingState from "./LoadingState.svelte";
@@ -669,7 +670,7 @@
     // Une visionneuse plein écran ouverte par-dessus la fiche (§6.1), ou le
     // panneau de périphérique (§7.4), consomme les entrées en exclusivité —
     // sinon une même pression ferait défiler les images ET changer de mod.
-    if (!nav.openFull || nav.inputCapture) return;
+    if (!nav.openFull || nav.openPack || nav.inputCapture) return;
     const ids = sorted.map((c) => c.id_interne);
     const idx = ids.indexOf(nav.openFull);
     if (idx === -1 || ids.length < 2) return;
@@ -711,7 +712,7 @@
   //   comportement, pas deux implémentations qui divergent).
   $effect(() => {
     function onKeydown(e: KeyboardEvent) {
-      if (!nav.openFull || isTypingTarget(e) || e.ctrlKey || e.altKey || e.metaKey) return;
+      if (!nav.openFull || nav.openPack || isTypingTarget(e) || e.ctrlKey || e.altKey || e.metaKey) return;
       if (e.key === "PageUp") {
         e.preventDefault();
         navigateFull(-1);
@@ -734,7 +735,7 @@
   // panneau comme dans la demande de confirmation d'une suppression.
   $effect(() => {
     function onSelectAll(e: KeyboardEvent) {
-      if (nav.openFull || !e.ctrlKey || e.altKey || e.metaKey) return;
+      if (nav.openFull || nav.openPack || !e.ctrlKey || e.altKey || e.metaKey) return;
       if (e.key !== "a" && e.key !== "A") return;
       // Dans la recherche ou un filtre, Ctrl+A garde son sens : tout le texte.
       if (isTypingTarget(e)) return;
@@ -748,7 +749,18 @@
 </script>
 
 <div class="library">
-  {#if nav.openFull}
+  <!-- La fiche d'un pack (§4.4) se pose PAR-DESSUS celle du mod d'où l'on
+       vient : la fermer y ramène, au lieu de renvoyer à la liste. -->
+  {#if nav.openPack}
+    <div class="full-wrap">
+      <PackDetail
+        pack={nav.openPack}
+        onclose={() => (nav.openPack = null)}
+        onopenmod={(id) => { nav.openPack = null; nav.openFull = id; }}
+        onuninstalled={() => { nav.openFull = null; refresh(); }}
+      />
+    </div>
+  {:else if nav.openFull}
     <div class="full-wrap">
       <DetailPage
         id={nav.openFull}

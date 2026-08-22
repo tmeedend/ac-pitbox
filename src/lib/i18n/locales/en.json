@@ -513,7 +513,8 @@
     "deleteVersionConfirm": "Delete version {label}? Its files go to the Windows recycle bin, along with the source archive kept for it, if any. If the recycle bin refuses (version too large, library on a network drive), deletion is permanent.",
     "deleteVersionProfiles": "This version is pinned by: {profiles}. Those profiles will use the installed version instead.",
     "deleteVersionRecycled": "Version {label} sent to the recycle bin.",
-    "deleteVersionPurged": "Version {label} deleted permanently: the recycle bin refused it."
+    "deleteVersionPurged": "Version {label} deleted permanently: the recycle bin refused it.",
+    "openPack": "Pack sheet"
   },
   "lightbox": {
     "open": "View full size",
@@ -1122,6 +1123,15 @@
     "pendingNotFound": "That offered folder no longer exists.",
     "pendingUnknownAction": "That action does not apply to this folder.",
     "pendingAlreadyKnown": "A mod by that name already exists.",
-    "versionIsActive": "This is the installed version. Activate another one before deleting it."
+    "versionIsActive": "This is the installed version. Activate another one before deleting it.",
+    "packNotFound": "This pack no longer exists: none of its mods are in the library."
+  },
+  "pack": {
+    "tabMembers": "Mods",
+    "membersLabel": "MODS DELIVERED",
+    "sizeLabel": "MODS SIZE",
+    "extrasSizeLabel": "ADDITIONS SIZE",
+    "uninstall": "Uninstall pack",
+    "uninstallConfirm": "Uninstall “{name}”? Its {count} mods are removed from the library, along with what the pack installs in the game."
   }
 }
