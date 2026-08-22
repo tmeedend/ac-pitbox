@@ -508,7 +508,12 @@
     "mediaLinkManually": "Associer un fichier…",
     "mediaLinkPickTitle": "Choisir le fichier à associer",
     "mediaTrash": "Mettre à la corbeille (Suppr)",
-    "resourceFromPack": "du pack"
+    "resourceFromPack": "du pack",
+    "deleteVersion": "Supprimer cette version",
+    "deleteVersionConfirm": "Supprimer la version {label} ? Ses fichiers partent à la corbeille Windows, avec l'archive source conservée pour elle s'il y en a une. Si la corbeille refuse (version trop volumineuse, bibliothèque sur un lecteur réseau), la suppression est définitive.",
+    "deleteVersionProfiles": "Cette version est épinglée par : {profiles}. Ces profils utiliseront la version installée à la place.",
+    "deleteVersionRecycled": "Version {label} envoyée à la corbeille.",
+    "deleteVersionPurged": "Version {label} supprimée définitivement : la corbeille l'a refusée."
   },
   "lightbox": {
     "open": "Voir en grand",
@@ -1116,6 +1121,7 @@
     "versionNotFound": "version introuvable.",
     "pendingNotFound": "Ce dossier proposé n'existe plus.",
     "pendingUnknownAction": "Action impossible pour ce dossier.",
-    "pendingAlreadyKnown": "Un mod porte déjà ce nom."
+    "pendingAlreadyKnown": "Un mod porte déjà ce nom.",
+    "versionIsActive": "C'est la version installée. Activez-en une autre avant de la supprimer."
   }
 }

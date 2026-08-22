@@ -7,9 +7,10 @@
   // frise, donc, où chaque entrée porte sa date, et où la version en place
   // est mise en avant.
   //
-  // Purement présentationnel, à une exception : activer une autre version est
-  // une action réelle, déléguée au parent (qui possède `busy`, la relecture de
-  // la fiche et la bannière d'erreur).
+  // Purement présentationnel à deux exceptions près — activer une autre
+  // version, et en supprimer une (§10) : deux actions réelles, déléguées
+  // au parent (qui possède `busy`, la relecture de la fiche, la confirmation
+  // et la bannière d'erreur).
   import type { ModDetail } from "$lib/library";
   import { historyEventLabel, historyDetails } from "$lib/history";
   import { t } from "$lib/i18n/index.svelte";
@@ -18,11 +19,15 @@
     detail,
     busy,
     onactivateversion,
+    ondeleteversion,
   }: {
     detail: ModDetail;
     /** Une action est déjà en cours côté parent : les boutons se désactivent. */
     busy: boolean;
     onactivateversion: (versionId: string) => void;
+    /** Supprimer une version rangée (§10). Jamais proposé sur la version
+     * en place : ses fichiers sont ceux que le jeu utilise. */
+    ondeleteversion: (versionId: string) => void;
   } = $props();
 
   /** Date+heure locales ; repli sur l'ISO tronqué si la chaîne est illisible. */
@@ -120,6 +125,16 @@
                 >
                   {t("common.activate")}
                 </button>
+                <button
+                  class="trash"
+                  type="button"
+                  disabled={busy}
+                  title={t("detail.deleteVersion")}
+                  aria-label={t("detail.deleteVersion")}
+                  onclick={() => ondeleteversion(e.versionId!)}
+                >
+                  🗑
+                </button>
               {/if}
             </div>
             <div class="event">{e.event}</div>
@@ -193,6 +208,23 @@
     color: var(--rosso-bright);
   }
   .activate:disabled {
+    opacity: 0.5;
+  }
+  /* Rouge seulement au survol : la frise se parcourt pour lire l'historique,
+     une colonne de pastilles rouges y crierait à chaque ligne. */
+  .trash {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--muted2);
+    font-size: 11px;
+    line-height: 1;
+    padding: 3px 6px;
+  }
+  .trash:hover:not(:disabled) {
+    border-color: var(--rosso-border);
+    color: var(--rosso-bright);
+  }
+  .trash:disabled {
     opacity: 0.5;
   }
   .event {

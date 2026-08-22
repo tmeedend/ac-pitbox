@@ -78,6 +78,33 @@ export async function deleteBrokenMod(id: string): Promise<void> {
   bumpLibraryVersion();
 }
 
+/** Ce qu'a réellement fait `deleteModVersion` (§10). */
+export interface DeleteVersionOutcome {
+  /** Fichiers récupérables dans la corbeille Windows ; faux = la corbeille a
+   * refusé (volume réseau, version plus grosse que son quota) et ils ont été
+   * effacés définitivement. */
+  recycled: boolean;
+  /** Octets rendus au disque. */
+  freed_bytes: number;
+  /** Profils qui épinglaient cette version et pointent désormais celle en place. */
+  profiles_repointed: string[];
+}
+
+/** Profils épinglant une version (§10) — à lire avant de proposer la
+ * suppression, la confirmation devant pouvoir les nommer. */
+export function profilesUsingVersion(versionId: string): Promise<string[]> {
+  return invoke<string[]>("profiles_using_version", { versionId });
+}
+
+/** Supprime une version non active d'un mod (§10) : ses fichiers partent à
+ * la corbeille Windows avec l'archive source qu'elle avait fait conserver. La
+ * version en place n'est pas supprimable — le backend refuse. */
+export async function deleteModVersion(versionId: string): Promise<DeleteVersionOutcome> {
+  const outcome = await invoke<DeleteVersionOutcome>("delete_mod_version", { versionId });
+  bumpLibraryVersion();
+  return outcome;
+}
+
 /** Réinstalle un mod depuis son archive/dossier source conservé (§10/§11, réglage
  * « conserver l'archive source »). Réextrait et remplace les fichiers de la version active. */
 export function reinstallFromArchive(id: string): Promise<void> {

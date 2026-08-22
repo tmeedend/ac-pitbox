@@ -37,6 +37,27 @@ pub fn delete_broken_mod(app: AppHandle, db: State<Db>, id: String) -> Result<()
     crate::maintenance::delete_broken(&conn, &cfg, &id)
 }
 
+/// Supprime une version non active d'un mod (§10) : fichiers à la
+/// corbeille, archive source conservée avec, ligne overlay effacée.
+#[tauri::command]
+pub fn delete_mod_version(
+    app: AppHandle,
+    db: State<Db>,
+    version_id: String,
+) -> Result<crate::maintenance::DeleteVersionOutcome, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::maintenance::delete_version(&conn, &cfg, &version_id)
+}
+
+/// Profils qui épinglent cette version (§10) — lus **avant** la
+/// suppression, pour que la confirmation puisse les nommer.
+#[tauri::command]
+pub fn profiles_using_version(db: State<Db>, version_id: String) -> Result<Vec<String>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::overlay::profiles_using_version(&conn, &version_id).map_err(|e| e.to_string())
+}
+
 /// Efface les skins/sons dont le mod parent n'existe plus (§9.3).
 #[tauri::command]
 pub fn purge_orphan_subs(app: AppHandle, db: State<Db>) -> Result<usize, String> {

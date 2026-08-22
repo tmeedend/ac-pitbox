@@ -3,6 +3,8 @@
 //! vers une version supprimée). Porté de l'esprit de `clean.py`, mais non
 //! destructif sans confirmation et respectant le garde-fou junction.
 
+use std::path::Path;
+
 use rusqlite::Connection;
 use serde::Serialize;
 
@@ -245,6 +247,104 @@ pub fn delete_broken(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(),
         }
     }
     Ok(())
+}
+
+/// Ce qu'a réellement fait [`delete_version`] — la corbeille peut refuser, et
+/// l'utilisateur doit savoir laquelle des deux issues il a eue.
+#[derive(Debug, Clone, Serialize)]
+pub struct DeleteVersionOutcome {
+    /// Vrai si les fichiers sont récupérables dans la corbeille Windows ; faux
+    /// si la corbeille a refusé et qu'ils ont été effacés définitivement.
+    pub recycled: bool,
+    /// Octets rendus au disque (taille enregistrée de la version).
+    pub freed_bytes: i64,
+    /// Profils qui épinglaient cette version et pointent désormais la version
+    /// en place ([`crate::overlay::repoint_profile_entries`]).
+    pub profiles_repointed: Vec<String>,
+}
+
+/// Envoie les fichiers d'un dossier à la corbeille Windows, avec repli sur une
+/// suppression définitive (§10).
+///
+/// `trash` passe par `IFileOperation` + `FOFX_RECYCLEONDELETE`, qui **échoue**
+/// quand le recyclage est impossible plutôt que d'effacer en douce — et c'est
+/// exactement ce qui arrive ici : une version de mod pèse couramment plusieurs
+/// Go, au-delà du quota de corbeille du volume. D'où le repli explicite, dont
+/// l'issue remonte jusqu'à l'écran (`recycled`) au lieu de se deviner.
+fn trash_or_delete(dir: &Path) -> Result<bool, String> {
+    if !dir.exists() {
+        // Rien à effacer n'est pas un échec : la ligne overlay doit partir
+        // quand même, sinon une version dont les fichiers ont disparu (disque
+        // nettoyé à la main) resterait indéboulonnable de la fiche.
+        return Ok(true);
+    }
+    match trash::delete(dir) {
+        Ok(()) => Ok(true),
+        Err(e) => {
+            log::warn!("recycle {} refused ({e}), deleting permanently", dir.display());
+            std::fs::remove_dir_all(dir).map_err(|e| e.to_string())?;
+            Ok(false)
+        }
+    }
+}
+
+/// Supprime **une version** d'un mod : ses fichiers en bibliothèque, l'archive
+/// source qu'elle avait fait conserver, et sa ligne overlay (§10).
+///
+/// Trois garde-fous, dans cet ordre :
+///
+/// 1. **La version en place n'est jamais supprimable.** Elle est déployée dans
+///    `content/` par des hardlinks qui pointent ses fichiers : les effacer
+///    reviendrait à vider le mod sous les pieds du jeu. En activer une autre
+///    d'abord est une décision, pas un détail qu'on prend à la place de
+///    l'utilisateur.
+/// 2. **Les profils qui l'épinglaient sont repointés**, pas vidés — un profil
+///    amputé de son entrée *désactiverait* le mod à l'application, soit
+///    l'inverse de ce qu'il dit. Leurs noms remontent pour que l'écran ait pu
+///    prévenir avant.
+/// 3. **La corbeille d'abord**, suppression définitive seulement si elle
+///    refuse ([`trash_or_delete`]).
+pub fn delete_version(conn: &Connection, cfg: &AppConfig, version_id: &str) -> Result<DeleteVersionOutcome, String> {
+    let v = overlay::get_version(conn, version_id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::VERSION_NOT_FOUND)?;
+    let m = overlay::get_mod(conn, &v.mod_id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_NOT_FOUND)?;
+    let active = m.active_version_id.clone().ok_or(crate::errors::NO_ACTIVE_VERSION)?;
+    if active == v.id {
+        return Err(crate::errors::VERSION_IS_ACTIVE.to_string());
+    }
+
+    let profiles_repointed = overlay::profiles_using_version(conn, version_id).map_err(|e| e.to_string())?;
+
+    let lib = cfg.library_path.as_deref();
+    let mut recycled = true;
+    if let Some(dir) = crate::libpath::resolve(lib, &v.library_path) {
+        recycled &= trash_or_delete(&dir)?;
+    }
+    // Archive source conservée (§10/§11) : `<lib>/_source_archives/<uuid>/<nom>`,
+    // un dossier par version — elle appartient à cette version-là et n'a plus
+    // rien à réinstaller une fois la version partie.
+    if let Some(kept) = v
+        .kept_archive_path
+        .as_deref()
+        .and_then(|p| crate::libpath::resolve(lib, p))
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+    {
+        recycled &= trash_or_delete(&kept)?;
+    }
+
+    if !profiles_repointed.is_empty() {
+        overlay::repoint_profile_entries(conn, version_id, &active).map_err(|e| e.to_string())?;
+    }
+    overlay::delete_version(conn, version_id).map_err(|e| e.to_string())?;
+
+    Ok(DeleteVersionOutcome {
+        recycled,
+        freed_bytes: v.size_bytes.unwrap_or(0),
+        profiles_repointed,
+    })
 }
 
 /// Désinstalle **tout un pack** (§4.4) : supprime chaque mod partageant ce
@@ -525,7 +625,96 @@ pub fn reindex_all(conn: &Connection, cfg: &AppConfig, recalc_size: bool) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
+
+    /// Fabrique un mod à deux versions, la plus récente active. Les dossiers de
+    /// bibliothèque n'existent volontairement pas : `trash_or_delete` sort tout
+    /// de suite sur un chemin absent, donc la suite de tests ne dépose jamais
+    /// rien dans la corbeille du poste (même précaution que `media.rs`).
+    fn two_versions(base: &Path) -> (Connection, AppConfig) {
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_mod(&conn, "car", "Car", Some("B"), Some("Car"), "h", None, &now).unwrap();
+        for (id, label) in [("v1", "1.0"), ("v2", "2.0")] {
+            overlay::insert_version(
+                &conn,
+                id,
+                "car",
+                Some(label),
+                None,
+                &now,
+                &base.join("lib").join(id).to_string_lossy(),
+                None,
+                "sig",
+                &[],
+                &[],
+                &[],
+                &[],
+                None,
+            )
+            .unwrap();
+        }
+        overlay::set_active_version(&conn, "car", "v2").unwrap();
+        let cfg = AppConfig {
+            library_path: Some(base.join("lib")),
+            ..AppConfig::default()
+        };
+        (conn, cfg)
+    }
+
+    #[test]
+    fn the_installed_version_is_never_deletable() {
+        // §10 : la version en place est celle que `content/` pointe par
+        // hardlinks. L'effacer viderait le mod sous les pieds du jeu — en
+        // activer une autre d'abord est une décision, pas un détail.
+        let base = crate::testutil::temp_dir("del-active");
+        let (conn, cfg) = two_versions(&base);
+        assert_eq!(
+            delete_version(&conn, &cfg, "v2").err().as_deref(),
+            Some(crate::errors::VERSION_IS_ACTIVE),
+            "la version installée est refusée, par sa clé i18n"
+        );
+        assert!(
+            overlay::get_version(&conn, "v2").unwrap().is_some(),
+            "et rien n'a été retiré de l'overlay"
+        );
+    }
+
+    #[test]
+    fn deleting_a_version_repoints_the_profiles_that_pinned_it() {
+        // Vider l'entrée de profil au lieu de la repointer inverserait son
+        // sens : un mod absent d'un profil est un mod que son application
+        // DÉSACTIVE (profiles.rs). Le profil perd l'épinglage, jamais son
+        // intention.
+        let base = crate::testutil::temp_dir("del-profile");
+        let (conn, cfg) = two_versions(&base);
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::create_profile(&conn, "p1", "Endurance", &now).unwrap();
+        overlay::add_profile_entry(&conn, "p1", "car", "v1").unwrap();
+
+        assert_eq!(
+            overlay::profiles_using_version(&conn, "v1").unwrap(),
+            vec!["Endurance".to_string()],
+            "la confirmation doit pouvoir nommer le profil avant de supprimer"
+        );
+
+        let out = delete_version(&conn, &cfg, "v1").unwrap();
+        assert_eq!(out.profiles_repointed, vec!["Endurance".to_string()]);
+        assert!(overlay::get_version(&conn, "v1").unwrap().is_none(), "version retirée");
+        let entries = overlay::get_profile_entries(&conn, "p1").unwrap();
+        assert_eq!(entries.len(), 1, "l'entrée de profil survit");
+        assert_eq!(entries[0].version_id, "v2", "repointée sur la version en place");
+    }
+
+    #[test]
+    fn a_version_whose_files_already_vanished_still_leaves_the_library() {
+        // Un dossier effacé à la main hors de l'app ne doit pas rendre sa
+        // version indéboulonnable : rien à effacer n'est pas un échec.
+        let base = crate::testutil::temp_dir("del-ghost");
+        let (conn, cfg) = two_versions(&base);
+        let out = delete_version(&conn, &cfg, "v1").unwrap();
+        assert!(out.recycled, "aucun fichier à recycler = aucune suppression définitive");
+        assert!(overlay::get_version(&conn, "v1").unwrap().is_none(), "version retirée");
+    }
 
     #[test]
     fn detects_broken_mod_missing_files() {

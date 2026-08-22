@@ -31,7 +31,15 @@
   import { focusGamepadElement, isGamepadDriving } from "$lib/gamepadNav";
   import { preview3dPrefs, setPreview3dEnabled, resetPreview3dView } from "$lib/preview3dPrefs.svelte";
   import Preview3dControls from "./detail/Preview3dControls.svelte";
-  import { exportMod, deletePack, deleteBrokenMod, reinstallFromArchive, type ExportReport } from "$lib/maintenance";
+  import {
+    exportMod,
+    deletePack,
+    deleteBrokenMod,
+    reinstallFromArchive,
+    deleteModVersion,
+    profilesUsingVersion,
+    type ExportReport,
+  } from "$lib/maintenance";
   import {
     listSubMods,
     activateSound,
@@ -153,6 +161,9 @@
   let deleteBusy = $state(false);
   let reinstallBusy = $state(false);
   let reinstallOk = $state(false);
+  /** Ce qu'est devenue la version supprimée (§10) — corbeille ou
+   * suppression définitive. Un message, pas une erreur. */
+  let versionNotice = $state("");
 
   // Supprimer de la bibliothèque : action distincte de Désactiver (§10) —
   // efface les fichiers de toutes les versions, jamais réversible sans
@@ -583,6 +594,47 @@
     }
   }
 
+  // Supprimer une version rangée (§10). Deux avertissements à donner
+  // AVANT que ce soit irréversible : les profils qui l'épinglaient (ils
+  // basculeront sur la version en place) et le fait que la corbeille peut
+  // refuser une version volumineuse, auquel cas la suppression est définitive.
+  // Ce qui a réellement eu lieu revient dans le résultat, et s'affiche.
+  async function deleteVersion(versionId: string) {
+    if (!detail || busy) return;
+    const v = detail.versions.find((ver) => ver.id === versionId);
+    const label = v?.version_label ?? t("detail.noVersionNumber");
+    let pinned: string[] = [];
+    try {
+      pinned = await profilesUsingVersion(versionId);
+    } catch (e) {
+      actionError = errorText(e);
+      return;
+    }
+    const message = [
+      t("detail.deleteVersionConfirm", { label }),
+      pinned.length ? t("detail.deleteVersionProfiles", { profiles: pinned.join(", ") }) : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    const ok = await confirm(message, { title: t("detail.deleteVersion"), kind: "warning" });
+    if (!ok) return;
+    busy = true;
+    actionError = "";
+    versionNotice = "";
+    try {
+      const outcome = await deleteModVersion(versionId);
+      versionNotice = outcome.recycled
+        ? t("detail.deleteVersionRecycled", { label })
+        : t("detail.deleteVersionPurged", { label });
+      await reload();
+      onchange?.();
+    } catch (e) {
+      actionError = errorText(e);
+    } finally {
+      busy = false;
+    }
+  }
+
   async function deactivate() {
     if (!detail || busy) return;
     busy = true;
@@ -819,6 +871,7 @@
 
     {#if actionError}<div class="action-err">{actionError}</div>{/if}
     {#if reinstallOk}<div class="export-ok">{t("detail.reinstallSuccess")}</div>{/if}
+    {#if versionNotice}<div class="export-ok">{versionNotice}</div>{/if}
     {#if exportResult}
       <div class="export-ok">
         {t("detail.exportSuccess", { count: exportResult.included.length })}
@@ -1075,7 +1128,12 @@
 
         <!-- Versions + Historique + Provenance -->
         <div class="col">
-          <HistoryBlock detail={d} {busy} onactivateversion={(vid) => activate(vid)} />
+          <HistoryBlock
+            detail={d}
+            {busy}
+            onactivateversion={(vid) => activate(vid)}
+            ondeleteversion={deleteVersion}
+          />
           <ProvenanceBlock detail={d} {siblings} busy={packBusy} onfilterbypack={filterByPack} onopensibling={openSibling} onuninstallpack={uninstallPack} />
           <LayersBlock modId={id} onchanged={refreshEntity} onerror={(m) => (actionError = m)} />
           <!-- Sous Provenance : c'est du même ordre — d'où vient ce mod et ce
@@ -1164,7 +1222,12 @@
 
         <!-- Versions + Historique + Provenance -->
         <div class="col">
-          <HistoryBlock detail={d} {busy} onactivateversion={(vid) => activate(vid)} />
+          <HistoryBlock
+            detail={d}
+            {busy}
+            onactivateversion={(vid) => activate(vid)}
+            ondeleteversion={deleteVersion}
+          />
           <ProvenanceBlock detail={d} {siblings} busy={packBusy} onfilterbypack={filterByPack} onopensibling={openSibling} onuninstallpack={uninstallPack} />
           <LayersBlock modId={id} onchanged={refreshEntity} onerror={(m) => (actionError = m)} />
           <!-- Sous Provenance : c'est du même ordre — d'où vient ce mod et ce

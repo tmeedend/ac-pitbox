@@ -508,7 +508,12 @@
     "mediaLinkManually": "Link a file…",
     "mediaLinkPickTitle": "Pick the file to link",
     "mediaTrash": "Move to Recycle Bin (Del)",
-    "resourceFromPack": "from the pack"
+    "resourceFromPack": "from the pack",
+    "deleteVersion": "Delete this version",
+    "deleteVersionConfirm": "Delete version {label}? Its files go to the Windows recycle bin, along with the source archive kept for it, if any. If the recycle bin refuses (version too large, library on a network drive), deletion is permanent.",
+    "deleteVersionProfiles": "This version is pinned by: {profiles}. Those profiles will use the installed version instead.",
+    "deleteVersionRecycled": "Version {label} sent to the recycle bin.",
+    "deleteVersionPurged": "Version {label} deleted permanently: the recycle bin refused it."
   },
   "lightbox": {
     "open": "View full size",
@@ -1116,6 +1121,7 @@
     "versionNotFound": "Version not found.",
     "pendingNotFound": "That offered folder no longer exists.",
     "pendingUnknownAction": "That action does not apply to this folder.",
-    "pendingAlreadyKnown": "A mod by that name already exists."
+    "pendingAlreadyKnown": "A mod by that name already exists.",
+    "versionIsActive": "This is the installed version. Activate another one before deleting it."
   }
 }

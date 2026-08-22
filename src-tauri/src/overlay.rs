@@ -816,37 +816,82 @@ pub fn get_mod(conn: &Connection, id: &str) -> rusqlite::Result<Option<ModRow>> 
     }
 }
 
+/// Colonnes de `versions`, dans l'ordre attendu par [`version_row`].
+const VERSION_COLUMNS: &str = r#"id, mod_id, version_label, author, imported_at, library_path,
+       source_archive, content_signature, csp_features, skins, layouts, tags_from_mod,
+       published_at, size_bytes, kept_archive_path"#;
+
+fn version_row(row: &rusqlite::Row) -> rusqlite::Result<VersionRow> {
+    let csp: String = row.get(8)?;
+    let skins: String = row.get(9)?;
+    let layouts: String = row.get(10)?;
+    let tags: String = row.get(11)?;
+    Ok(VersionRow {
+        id: row.get(0)?,
+        mod_id: row.get(1)?,
+        version_label: row.get(2)?,
+        author: row.get(3)?,
+        imported_at: row.get(4)?,
+        library_path: row.get(5)?,
+        source_archive: row.get(6)?,
+        content_signature: row.get(7)?,
+        csp_features: json_arr(&csp),
+        skins: json_arr(&skins),
+        layouts: json_arr(&layouts),
+        tags_from_mod: json_arr(&tags),
+        published_at: row.get(12)?,
+        size_bytes: row.get(13)?,
+        kept_archive_path: row.get(14)?,
+    })
+}
+
 pub fn get_versions(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<VersionRow>> {
-    let mut stmt = conn.prepare(
-        r#"SELECT id, mod_id, version_label, author, imported_at, library_path,
-                  source_archive, content_signature, csp_features, skins, layouts, tags_from_mod,
-                  published_at, size_bytes, kept_archive_path
-           FROM versions WHERE mod_id = ?1 ORDER BY imported_at DESC"#,
-    )?;
-    let rows = stmt.query_map([mod_id], |row| {
-        let csp: String = row.get(8)?;
-        let skins: String = row.get(9)?;
-        let layouts: String = row.get(10)?;
-        let tags: String = row.get(11)?;
-        Ok(VersionRow {
-            id: row.get(0)?,
-            mod_id: row.get(1)?,
-            version_label: row.get(2)?,
-            author: row.get(3)?,
-            imported_at: row.get(4)?,
-            library_path: row.get(5)?,
-            source_archive: row.get(6)?,
-            content_signature: row.get(7)?,
-            csp_features: json_arr(&csp),
-            skins: json_arr(&skins),
-            layouts: json_arr(&layouts),
-            tags_from_mod: json_arr(&tags),
-            published_at: row.get(12)?,
-            size_bytes: row.get(13)?,
-            kept_archive_path: row.get(14)?,
-        })
-    })?;
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {VERSION_COLUMNS} FROM versions WHERE mod_id = ?1 ORDER BY imported_at DESC"
+    ))?;
+    let rows = stmt.query_map([mod_id], version_row)?;
     rows.collect()
+}
+
+/// Une version par son id — ce que la suppression d'une version a besoin de
+/// lire avant d'effacer quoi que ce soit (§10).
+pub fn get_version(conn: &Connection, version_id: &str) -> rusqlite::Result<Option<VersionRow>> {
+    let mut stmt = conn.prepare(&format!("SELECT {VERSION_COLUMNS} FROM versions WHERE id = ?1"))?;
+    let mut rows = stmt.query_map([version_id], version_row)?;
+    rows.next().transpose()
+}
+
+/// Retire la ligne d'une version. Les fichiers, eux, sont l'affaire de
+/// `maintenance::delete_version` — l'overlay ne touche jamais au disque.
+pub fn delete_version(conn: &Connection, version_id: &str) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM versions WHERE id = ?1", params![version_id])?;
+    Ok(())
+}
+
+/// Noms des profils qui épinglent cette version (§10). Un profil pointant
+/// une version effacée activerait dans le vide : la suppression le dit avant,
+/// et [`repoint_profile_entries`] le recolle après.
+pub fn profiles_using_version(conn: &Connection, version_id: &str) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT p.name FROM profiles p
+         JOIN profile_entries e ON e.profile_id = p.id
+         WHERE e.version_id = ?1 ORDER BY p.name COLLATE NOCASE",
+    )?;
+    let rows = stmt.query_map([version_id], |r| r.get::<_, String>(0))?;
+    rows.collect()
+}
+
+/// Repointe les profils d'une version vers une autre — appelé à la suppression.
+///
+/// Repointer plutôt que supprimer l'entrée : sans version, le profil ne
+/// contient plus ce mod, donc l'appliquer le **désactiverait** au lieu de
+/// l'activer. Le profil perd l'épinglage d'une version précise, jamais son
+/// intention.
+pub fn repoint_profile_entries(conn: &Connection, from_version: &str, to_version: &str) -> rusqlite::Result<usize> {
+    conn.execute(
+        "UPDATE profile_entries SET version_id = ?2 WHERE version_id = ?1",
+        params![from_version, to_version],
+    )
 }
 
 /// Enregistre le chemin de l'archive/dossier source conservé pour une version

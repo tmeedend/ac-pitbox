@@ -20,6 +20,9 @@ pub const NO_ACTIVE_VERSION: &str = "errors.noActiveVersion";
 pub const NO_VERSION_TO_ACTIVATE: &str = "errors.noVersionToActivate";
 pub const NO_ACTIVE_VERSION_TO_EXPORT: &str = "errors.noActiveVersionToExport";
 pub const VERSION_FILES_MISSING: &str = "errors.versionFilesMissing";
+// Suppression d'une version (§10) : la version en place n'est pas
+// supprimable — en activer une autre d'abord est une décision, pas un détail.
+pub const VERSION_IS_ACTIVE: &str = "errors.versionIsActive";
 pub const LAYER_NOT_FOUND: &str = "errors.layerNotFound";
 pub const PENDING_NOT_FOUND: &str = "errors.pendingNotFound";
 pub const PENDING_UNKNOWN_ACTION: &str = "errors.pendingUnknownAction";
