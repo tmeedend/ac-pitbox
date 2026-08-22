@@ -48,7 +48,7 @@
       {/each}
     </div>
     {#if warn}
-      <p class="warn-note">⚠ {t("launch.trackNotCircuitWarning")}</p>
+      <p class="warnbox spaced">⚠ {t("launch.trackNotCircuitWarning")}</p>
     {/if}
   </div>
 </section>
@@ -76,14 +76,9 @@
     background: var(--rosso);
     color: #fff;
   }
-  /* Même habillage que l'avertissement « pas de RainFX » du bloc Météo : ces
-     deux-là disent la même chose — ça partira, mais pas comme tu l'imagines. */
-  .warn-note {
-    color: var(--yellow);
-    font-size: 10px;
+  /* L'encadré vient de `.warnbox` (global.css). La marge négative rattrape
+     celle que `.seg` réserve sous les boutons. */
+  .spaced {
     margin-top: -6px;
-    padding: 7px 9px;
-    background: #1a1708;
-    border: 1px solid #4a4426;
   }
 </style>

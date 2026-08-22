@@ -227,7 +227,7 @@
     <p class="implicit-note">{t("launch.implicitNote")}</p>
   {/if}
   {#if currentWeather?.wet && !trackSupportsRain}
-    <p class="warn-note">
+    <p class="warnbox spaced">
       ⚠ {t("launch.rainUnsupportedWarning")}
       <Tooltip text={t("launch.cspFirstLaunchHint")}><button type="button" class="info-i">ⓘ</button></Tooltip>
     </p>
@@ -274,7 +274,11 @@
       {/each}
     </div>
     {#if !trackSupportsSeason}
-      <p class="implicit-note">
+      <!-- Alerte, pas note de bas de page : elle prévient que le réglage
+           qu'on vient de choisir n'aura aucun effet ici. Elle s'affichait en
+           8px gris, la même taille que la note d'information voisine, donc
+           illisible et indistinguable de ce qui n'est qu'un commentaire. -->
+      <p class="warnbox spaced">
         {t("launch.seasonUnsupportedNote")}
         <Tooltip text={t("launch.cspFirstLaunchHint")}><button type="button" class="info-i">ⓘ</button></Tooltip>
       </p>
@@ -354,18 +358,16 @@
     padding: 5px 6px;
     font-size: 10.5px;
   }
+  /* Note d'information — ce qui explique, sans rien signaler. Passée de 8 à
+     10px : à 8 elle n'était pas discrète, elle était illisible. */
   .implicit-note {
     color: var(--muted);
-    font-size: 8px;
+    font-size: 10px;
     margin-top: 6px;
   }
-  .warn-note {
-    color: var(--yellow);
-    font-size: 10px;
+  /* L'encadré vient de `.warnbox` (global.css) ; seule la marge est locale. */
+  .spaced {
     margin-top: 10px;
-    padding: 7px 9px;
-    background: #1a1708;
-    border: 1px solid #4a4426;
   }
   /* Signale sans bloquer (§8.6bis) : une config CSP absente ici ne veut pas
      dire absente pour de bon (voir le commentaire sur .season-wrap), donc

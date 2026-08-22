@@ -916,7 +916,7 @@
 
   {#if info}<div class="ok">{info}</div>{/if}
   {#if error}<div class="err">{error}</div>{/if}
-  {#if warning}<div class="warn">⚠ {warning}</div>{/if}
+  {#if warning}<div class="warnbox banner">⚠ {warning}</div>{/if}
 
   {#if !ready}
     <LoadingState />
@@ -1108,7 +1108,7 @@
   }
   .ok,
   .err,
-  .warn {
+  .banner {
     margin: 14px 32px 0;
     padding: 10px 12px;
     font-size: 12px;
@@ -1122,14 +1122,6 @@
     background: var(--rosso-dim);
     border: 1px solid var(--rosso-border);
     color: var(--rosso-bright);
-  }
-  /* Jaune = alerte non bloquante (couleurs sémantiques du chantier libellés) —
-     mêmes teintes que `.warn-note` de WeatherBlock, recopiées parce que le CSS
-     des composants est scopé. */
-  .warn {
-    background: #1a1708;
-    border: 1px solid #4a4426;
-    color: var(--yellow);
   }
   .body {
     padding: 22px 32px 40px;

@@ -15,6 +15,7 @@
  *   .pill (+ .pill-ok, .pill-warn, .pill-err)   pastilles d'état
  *   .gp-focus / .gp-editing             focus manette (gamepadNav.ts)
  *   .lbl-screen / .lbl / .lbl-key       libellés (voir plus bas, §chantier libellés)
+ *   .warnbox                            alerte non bloquante (jaune)
  *
  * Tout le reste — .tag, .srcbox, .prov-note, .muted, .small… — est local au
  * composant qui le définit, même si le nom se répète ailleurs.
@@ -337,6 +338,31 @@ a {
 .btn-ghost:hover {
   background: var(--raised);
   color: var(--txt2);
+}
+
+/* --- Alerte non bloquante ---------------------------------------------------
+ *
+ * Jaune = « ça partira, mais pas comme tu l'imagines » : la saison qu'un
+ * circuit ne sait pas rendre, la pluie sans RainFX, un hotlap sur un tracé qui
+ * ne boucle pas. Jamais un refus — l'app dit ce qu'elle sait, elle n'arbitre
+ * pas ce que l'utilisateur a le droit de lancer.
+ *
+ * Globale parce qu'elle était recopiée dans trois composants (Launch,
+ * WeatherBlock, SessionTypeBlock), le CSS Svelte étant scopé — et les copies
+ * avaient déjà divergé : 12px avec marge dans l'une, 10px sans dans les deux
+ * autres, quand l'une des alertes s'affichait carrément en 8px gris, à peine
+ * lisible. C'est exactement le mécanisme décrit au chantier « composants
+ * partagés » du CLAUDE.md.
+ *
+ * La marge appartient à l'appelant : ces encadrés apparaissent aussi bien dans
+ * le flux d'un bloc qu'en pleine largeur sous un en-tête. */
+.warnbox {
+  background: #1a1708;
+  border: 1px solid #4a4426;
+  color: var(--yellow);
+  padding: 8px 10px;
+  font-size: 11.5px;
+  line-height: 1.45;
 }
 
 /* --- Champs --- */
