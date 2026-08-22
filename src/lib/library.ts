@@ -445,7 +445,14 @@ export function openModResource(id: string, relPath: string, origin: string): Pr
 
 /** URL `asset://` d'une ressource, pour l'afficher dans un `<img>` (§4.5.2). */
 export async function modResourceSrc(id: string, relPath: string, origin: string): Promise<string> {
-  return convertFileSrc(await invoke<string>("get_mod_resource_path", { id, relPath, origin }));
+  return convertFileSrc(await modResourcePath(id, relPath, origin));
+}
+
+/** Chemin absolu d'une ressource, **non converti** : c'est ce qu'attend le
+ * générateur de miniatures (`getThumbnail`), qui travaille sur le fichier et
+ * non sur une URL. Résolu et validé côté backend comme le reste (§4.5.2). */
+export function modResourcePath(id: string, relPath: string, origin: string): Promise<string> {
+  return invoke<string>("get_mod_resource_path", { id, relPath, origin });
 }
 
 /**

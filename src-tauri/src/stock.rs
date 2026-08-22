@@ -118,7 +118,20 @@ pub fn index_stock_content(
                 ModKind::Track => uijson::read_track(&source),
             }
             .unwrap_or_default();
-            let name = ui.name.clone().unwrap_or_else(|| id.clone());
+            // Un circuit multi-layouts n'a pas de nom à lui : `read_track` rend
+            // celui du **premier** layout trouvé (§5bis.3), donc « Highlands
+            // Drift » pour un circuit qui s'appelle « Highlands » — et le nom
+            // dépendait de l'ordre alphabétique des dossiers. La racine commune
+            // des layouts corrige ça, mais elle n'était appliquée qu'à la
+            // relecture des mods : l'indexation du contenu de base, elle,
+            // rendait toujours le nom du premier layout. Deux chemins qui
+            // nomment la même chose doivent la nommer pareil.
+            let name = match kind {
+                ModKind::Track => uijson::read_track_name(&source),
+                ModKind::Car => ui.name.clone(),
+            }
+            .or_else(|| ui.name.clone())
+            .unwrap_or_else(|| id.clone());
 
             overlay::upsert_stock_mod(conn, &id, &format!("{kind:?}"), ui.brand.as_deref(), Some(&name), &now)
                 .map_err(|e| e.to_string())?;
@@ -193,6 +206,68 @@ mod tests {
         let dir = ac.join("content").join("tracks").join(id).join("ui");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("ui_track.json"), format!("{{\"name\":\"{name}\"}}")).unwrap();
+    }
+
+    /// Arbo AC d'un circuit de base à **plusieurs layouts**, chacun avec son
+    /// propre `ui_track.json` — la forme réelle de Highlands, Monza, Spa…
+    fn fake_stock_multilayout(ac: &Path, id: &str, layouts: &[(&str, &str)]) {
+        for (layout, name) in layouts {
+            let dir = ac.join("content").join("tracks").join(id).join("ui").join(layout);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("ui_track.json"), format!("{{\"name\":\"{name}\"}}")).unwrap();
+        }
+    }
+
+    #[test]
+    fn stock_multilayout_track_is_named_after_the_common_root_of_its_layouts() {
+        // Un circuit multi-layouts n'a pas de nom à lui : chaque layout porte le
+        // sien. `read_track` rend celui du **premier trouvé** (§5bis.3), donc
+        // « Highlands Drift » pour un circuit qui s'appelle « Highlands » — et
+        // ce nom dépendait de l'ordre alphabétique des dossiers.
+        //
+        // La racine commune corrigeait déjà ça à la relecture des mods, mais
+        // pas ici : l'indexation du contenu de base rendait toujours le nom du
+        // premier layout. Deux chemins qui nomment la même chose doivent la
+        // nommer pareil.
+        let base = crate::testutil::temp_dir("stock-layouts");
+        let ac = base.join("ac");
+        fake_stock_multilayout(
+            &ac,
+            "ks_highlands",
+            &[
+                ("drift", "Highlands Drift"),
+                ("long", "Highlands Long"),
+                ("short", "Highlands Short"),
+            ],
+        );
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+
+        index_stock_content(&conn, &cfg, &Rules::default(), false).unwrap();
+        assert_eq!(
+            overlay::get_mod(&conn, "ks_highlands")
+                .unwrap()
+                .unwrap()
+                .display_name
+                .as_deref(),
+            Some("Highlands"),
+            "la racine commune des layouts, pas le nom du premier"
+        );
+
+        // Layout unique : son nom fait foi, il n'y a rien à recouper.
+        fake_stock_track(&ac, "ks_nordschleife", "Nordschleife");
+        index_stock_content(&conn, &cfg, &Rules::default(), false).unwrap();
+        assert_eq!(
+            overlay::get_mod(&conn, "ks_nordschleife")
+                .unwrap()
+                .unwrap()
+                .display_name
+                .as_deref(),
+            Some("Nordschleife")
+        );
     }
 
     /// Règle : un réindex ordinaire ne détruit RIEN de ce que l'utilisateur a

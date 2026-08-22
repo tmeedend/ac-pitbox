@@ -49,7 +49,13 @@ export function openAppFolder(id: string): Promise<void> {
 /** URL `asset://` d'une ressource d'app, pour un `<img>` (§4.5.2) — jumeau de
  * `modResourceSrc`. */
 export async function appResourceSrc(id: string, relPath: string): Promise<string> {
-  return convertFileSrc(await invoke<string>("get_app_resource_path", { id, relPath }));
+  return convertFileSrc(await appResourcePath(id, relPath));
+}
+
+/** Chemin absolu d'une ressource d'app, non converti — jumeau de
+ * `modResourcePath`, pour le générateur de miniatures. */
+export function appResourcePath(id: string, relPath: string): Promise<string> {
+  return invoke<string>("get_app_resource_path", { id, relPath });
 }
 
 /** Octets bruts d'une ressource d'app (§4.5.2) — jumeau de `readModResource` :

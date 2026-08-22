@@ -9,8 +9,17 @@
   // sous la liste plutôt que dans une application externe. Le rendu est posé
   // dans le flux de la page, sans hauteur imposée ni défilement propre : c'est
   // la page entière qui défile, un document se lit d'un seul geste.
-  import { listModResources, openModResource, modResourceSrc, readModResource, type ResourceFile } from "$lib/library";
-  import { listAppResources, openAppResource, appResourceSrc, readAppResource } from "$lib/apps";
+  import {
+    listModResources,
+    openModResource,
+    modResourcePath,
+    modResourceSrc,
+    readModResource,
+    type ResourceFile,
+  } from "$lib/library";
+  import { listAppResources, openAppResource, appResourcePath, appResourceSrc, readAppResource } from "$lib/apps";
+  import { loadThumbnails } from "$lib/thumbnails";
+  import Lightbox, { type LightboxItem } from "../Lightbox.svelte";
   import { previewKind, decodeText, type PreviewKind } from "$lib/resourcePreview";
   import { renderMarkdown } from "$lib/markdown";
   import { errorText } from "$lib/errors";
@@ -44,6 +53,8 @@
     source === "app" ? appResourceSrc(id, rel) : modResourceSrc(id, rel, origin);
   const bytesOf = (id: string, rel: string, origin: string) =>
     source === "app" ? readAppResource(id, rel) : readModResource(id, rel, origin);
+  const pathOf = (id: string, rel: string, origin: string) =>
+    source === "app" ? appResourcePath(id, rel) : modResourcePath(id, rel, origin);
 
   let files = $state<ResourceFile[]>([]);
   /** Ressource ouverte en prévisualisation, `null` quand la liste seule est affichée. */
@@ -54,10 +65,66 @@
   let failure = $state<string | null>(null);
   let text = $state<string | null>(null);
   let html = $state<string | null>(null);
-  let imgSrc = $state<string | null>(null);
   let pdfData = $state<ArrayBuffer | null>(null);
 
   const selectedKind = $derived<PreviewKind | null>(selected ? previewKind(selected.rel_path) : null);
+
+  // --- Galerie (§4.5.2) ----------------------------------------------------
+  //
+  // Les images d'un dossier de ressources — les `Wallpapers/` qu'un auteur
+  // livre à côté de son mod — se consultent mal en liste : quatorze lignes
+  // `01.jpg`, `02.jpg`… ne disent rien. Elles sortent donc de la liste et
+  // passent en grille de vignettes, avec la **même** visionneuse que les
+  // captures et les backgrounds (§6.1). Rien de neuf : `Lightbox` et
+  // `loadThumbnails` existaient, seule la source des images change.
+  const images = $derived(files.filter((f) => previewKind(f.rel_path) === "image"));
+  const documents = $derived(files.filter((f) => previewKind(f.rel_path) !== "image"));
+
+  /** Vignette par entrée, indexée comme `keyOf` — deux dossiers de ressources
+   * peuvent porter le même nom de fichier. */
+  let thumbs = $state<Record<string, string>>({});
+  let galleryIndex = $state<number | null>(null);
+  /** URL `asset://` de chaque image, résolue une fois pour la visionneuse. */
+  let fullSrc = $state<Record<string, string>>({});
+
+  $effect(() => {
+    const current = modId;
+    const wanted = images;
+    thumbs = {};
+    fullSrc = {};
+    if (!wanted.length) return;
+    const stale = () => current !== modId;
+    (async () => {
+      // Les chemins absolus d'abord : `getThumbnail` travaille sur le fichier,
+      // pas sur une URL, et la visionneuse a besoin de l'`asset://`.
+      const resolved: { key: string; path: string }[] = [];
+      for (const f of wanted) {
+        try {
+          const path = await pathOf(current, f.rel_path, f.origin);
+          if (stale()) return;
+          resolved.push({ key: keyOf(f), path });
+          fullSrc = { ...fullSrc, [keyOf(f)]: await srcOf(current, f.rel_path, f.origin) };
+        } catch {
+          // Image irrésolvable : elle reste sans vignette plutôt que de casser
+          // la galerie entière.
+        }
+      }
+      if (stale()) return;
+      const byPath = new Map(resolved.map((r) => [r.path, r.key]));
+      loadThumbnails(
+        resolved.map((r) => r.path),
+        stale,
+        (path, src) => {
+          const key = byPath.get(path);
+          if (key) thumbs = { ...thumbs, [key]: src };
+        },
+      );
+    })();
+  });
+
+  const lightboxItems = $derived<LightboxItem[]>(
+    images.map((f) => ({ src: fullSrc[keyOf(f)] ?? "", caption: f.rel_path })),
+  );
 
   /** Identité d'une entrée : le chemin relatif seul ne suffit pas, un même
       `readme.txt` peut exister dans les ressources **et** dans le mod. */
@@ -77,7 +144,6 @@
   function clearPreview() {
     text = null;
     html = null;
-    imgSrc = null;
     pdfData = null;
     failure = null;
   }
@@ -96,11 +162,8 @@
     loading = true;
     (async () => {
       try {
-        if (kind === "image") {
-          const src = await srcOf(mod, f.rel_path, f.origin);
-          if (!stale()) imgSrc = src;
-          return;
-        }
+        // Pas d'image ici : elles passent par la galerie et la visionneuse,
+        // jamais par l'aperçu en ligne (voir plus haut).
         const bytes = await bytesOf(mod, f.rel_path, f.origin);
         if (stale()) return;
         if (kind === "pdf") pdfData = bytes;
@@ -164,8 +227,27 @@
   <div class="blk-b">
     {#if files.length}
       <p class="note">{t("detail.resourcesNote")}</p>
-      <ul class="res-list">
-        {#each files as f (keyOf(f))}
+      {#if images.length}
+        <!-- Les images passent en grille : quatorze lignes « 01.jpg » ne
+             disent rien, quatorze vignettes se parcourent d'un regard. Même
+             visionneuse que les captures et les backgrounds (§6.1). -->
+        <div class="res-gal">
+          {#each images as f, i (keyOf(f))}
+            {@const thumb = thumbs[keyOf(f)]}
+            <button
+              class="res-shot"
+              type="button"
+              onclick={() => (galleryIndex = i)}
+              title={f.rel_path}
+              aria-label={f.rel_path}
+            >
+              {#if thumb}<img src={thumb} alt="" loading="lazy" />{/if}
+            </button>
+          {/each}
+        </div>
+      {/if}
+      <ul class="res-list" class:after-gal={images.length > 0}>
+        {#each documents as f (keyOf(f))}
           {@const canPreview = previewKind(f.rel_path) !== null}
           <li>
             <div class="res-row" class:on={selected !== null && keyOf(selected) === keyOf(f)}>
@@ -207,8 +289,6 @@
             <p class="pv-err">{failure}</p>
           {:else if loading && selectedKind !== "pdf"}
             <p class="pv-info">{t("detail.previewLoading")}</p>
-          {:else if imgSrc}
-            <img class="pv-img" src={imgSrc} alt={selected.rel_path} />
           {:else if pdfData}
             <ResourcePdf data={pdfData} onerror={(m) => (failure = m)} />
           {:else if html !== null}
@@ -227,7 +307,44 @@
   </div>
 </section>
 
+{#if galleryIndex !== null}
+  <Lightbox items={lightboxItems} startIndex={galleryIndex} onclose={() => (galleryIndex = null)} />
+{/if}
+
 <style>
+  /* Grille de vignettes, identique à celle des backgrounds (§6.1) : même
+     cadrage 16/9, même survol. Recopiée plutôt que partagée parce que le CSS
+     Svelte est scopé — si une troisième galerie apparaît, c'est un composant
+     qu'il faudra extraire, pas une troisième copie. */
+  .res-gal {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .res-shot {
+    aspect-ratio: 16 / 9;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    overflow: hidden;
+    padding: 0;
+    display: block;
+    width: 100%;
+    cursor: pointer;
+  }
+  .res-shot:hover,
+  .res-shot:focus-visible {
+    border-color: var(--rosso-border);
+  }
+  .res-shot img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .res-list.after-gal {
+    border-top: 1px solid var(--line);
+    padding-top: 10px;
+  }
   /* Habillage propre au bloc. Encadré et bandeau viennent des classes
      globales `.blk*` (voir global.css). */
   .note {
@@ -372,11 +489,6 @@
   }
   .pv-err {
     color: var(--rosso-bright);
-  }
-  .pv-img {
-    display: block;
-    max-width: 100%;
-    margin: 0 auto;
   }
   .pv-txt {
     margin: 0;
