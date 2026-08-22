@@ -885,6 +885,7 @@ fn sweep_leftovers(
                         None,
                     );
                 }
+
                 // Document isolé à la racine de ce qui entoure le mod : une
                 // annexe (§4.5.2), pas un ajout au jeu — il n'a rien à faire dans
                 // AC. Rangé dans les ressources du mod auquel il appartient,
@@ -928,6 +929,35 @@ fn sweep_leftovers(
                         }
                         crate::resources::Route::Content => {}
                     }
+                }
+
+                // **Un fichier qui n'ira jamais dans le jeu n'est pas un ajout
+                // au jeu.** Il était rangé là quand même, listé « hors chemin
+                // de jeu » — au motif qu'un fichier absent sans explication
+                // serait plus déroutant qu'un fichier listé. C'était vrai tant
+                // que rien d'autre ne l'expliquait ; le journal d'import
+                // (`pathRefused`, juste au-dessus) le dit désormais mieux, et
+                // l'onglet « Ajouts au jeu » doit répondre à « qu'est-ce que ce
+                // mod met chez moi ? » (§4.5.5) sans y mêler ce qu'il n'y met
+                // pas.
+                //
+                // Cas réel, LA Canyons : le dossier `Highway Patrol Skins`
+                // **contient** des skins reconnus, donc le balayage y descend
+                // au lieu de le ramasser en bloc — et son `description.jsgme`
+                // en ressortait seul, pour finir listé comme ajout au jeu du
+                // circuit. Les livrées s'installaient parfaitement, et la fiche
+                // annonçait quand même un fichier posé dans `MODS/`.
+                //
+                // Il part donc en ressources, avec son chemin d'archive : c'est
+                // là qu'on range ce qui appartient au mod sans appartenir au
+                // jeu, et le chemin dit d'où il vient.
+                if p.is_file() && !deployable(&p, &rel) {
+                    let res_dir =
+                        crate::resources::resources_dir_for(library, owner_kind.category(), &[owner_id.as_str()]);
+                    if let Err(e) = crate::extras::store(&res_dir, &rel, &p, copy) {
+                        log::warn!("off-game file {} -> resources: {e}", rel.display());
+                    }
+                    continue;
                 }
                 let sat = crate::extras::dir(library, *owner_kind, owner_id);
                 match crate::extras::store(&sat, &rel, &p, copy) {
@@ -3581,6 +3611,28 @@ mod tests {
                 .join("Install Guide.pdf")
                 .is_file(),
             "la notice de racine reste une annexe du circuit"
+        );
+
+        // Bug reel : le dossier des livrees CHP **contient** des skins reconnus,
+        // donc le balayage y descend au lieu de le ramasser en bloc, et son
+        // `description.jsgme` en ressort seul. Il finissait liste comme ajout au
+        // jeu du circuit, dans `MODS/` — un fichier annonce pose alors qu'il ne
+        // l'est jamais. Un fichier qui n'ira pas dans le jeu n'est pas un ajout
+        // au jeu : il part en ressources, avec son chemin d'archive.
+        let stray = Path::new("MODS")
+            .join("LA Canyons - Highway Patrol Skins")
+            .join("description.jsgme");
+        assert!(
+            crate::resources::resources_dir(&library, ModKind::Track, "la_canyons")
+                .join(&stray)
+                .is_file(),
+            "range en ressources, avec le chemin qui dit d'ou il vient"
+        );
+        assert!(
+            !crate::extras::dir(&library, OwnerKind::Track, "la_canyons")
+                .join(&stray)
+                .exists(),
+            "et plus dans les ajouts au jeu, ou il n'avait rien a faire"
         );
     }
 
