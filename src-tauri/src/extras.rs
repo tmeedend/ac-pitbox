@@ -145,24 +145,37 @@ fn root_of(sat: &Path) -> PathBuf {
 /// Range un reste dans les ajouts au jeu du mod, à `rel` (son chemin relatif à la
 /// racine de l'archive, donc à la racine d'AC). Fusionne avec l'existant : une
 /// mise à jour du mod remplace ses propres fichiers, sans effacer les autres.
-pub fn store(sat_dir: &Path, rel: &Path, src: &Path, copy: bool) -> Result<(), String> {
+///
+/// Renvoie le **nombre de fichiers** rangés — un reste est très souvent un
+/// dossier entier. Compté avant l'opération : en mode déplacement, la source
+/// n'existe plus après, et l'appelant ne peut donc plus le savoir. Sans ce
+/// compte, le rapport d'import annonçait « 3 ajouts au jeu » pour les
+/// `content/{driver,fonts,texture}` d'un pack de 94 voitures — 82 fichiers
+/// réellement posés, et l'utilisateur en droit de croire qu'il en manquait 79.
+pub fn store(sat_dir: &Path, rel: &Path, src: &Path, copy: bool) -> Result<usize, String> {
     let dest = sat_dir.join(rel);
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("ajout au jeu : {e}"))?;
     }
     if src.is_dir() {
+        let placed = WalkDir::new(src)
+            .into_iter()
+            .flatten()
+            .filter(|e| e.file_type().is_file())
+            .count();
         if copy {
             crate::archive::copy_dir(src, &dest)
         } else {
             crate::archive::move_dir(src, &dest)
         }
-        .map_err(|e| format!("ajout au jeu : {e}"))
+        .map_err(|e| format!("ajout au jeu : {e}"))?;
+        Ok(placed)
     } else {
         if !copy && std::fs::rename(src, &dest).is_ok() {
-            return Ok(());
+            return Ok(1);
         }
         std::fs::copy(src, &dest)
-            .map(|_| ())
+            .map(|_| 1)
             .map_err(|e| format!("ajout au jeu : {e}"))
     }
 }

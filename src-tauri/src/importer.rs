@@ -103,8 +103,11 @@ pub struct ArchiveResult {
     /// Mods « autres » importés — type non reconnu, jamais perdus (§7.3).
     #[serde(default)]
     pub others: Vec<crate::others::OtherImported>,
-    /// Fichiers rattachés à un mod de l'archive et stockés comme ses
-    /// ajouts au jeu (§4.5.3) — configs CSP, shaders, pilote…
+    /// Nombre de **fichiers** rattachés à un mod de l'archive et stockés comme
+    /// ses ajouts au jeu (§4.5.3) — configs CSP, shaders, pilote… Des fichiers
+    /// et non des entrées : un reste est le plus souvent un dossier entier, et
+    /// compter les dossiers donnait un chiffre sans rapport avec ce que
+    /// l'utilisateur voit dans l'archive comme sur la fiche du mod.
     #[serde(default)]
     pub extras: usize,
     /// Dossiers que l'auteur propose et dont le sort revient à l'utilisateur
@@ -984,8 +987,8 @@ fn sweep_leftovers(
                 }
                 let sat = crate::extras::dir(library, *owner_kind, owner_id);
                 match crate::extras::store(&sat, &rel, &p, copy) {
-                    Ok(()) => {
-                        result.extras += 1;
+                    Ok(placed) => {
+                        result.extras += placed;
                         let owner = (owner_id.clone(), *owner_kind);
                         if !owners_with_extras.contains(&owner) {
                             owners_with_extras.push(owner);
@@ -4075,7 +4078,13 @@ mod tests {
 
         let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
-        assert_eq!(r.extras, 2, "fonts et driver rattachés à la voiture");
+        // Le décompte est en **fichiers**, pas en dossiers : deux polices
+        // (dont l'homonyme) plus le pilote. Compter les dossiers annonçait
+        // « 2 » là où l'utilisateur en voyait trois dans son archive.
+        assert_eq!(
+            r.extras, 3,
+            "les trois fichiers de fonts/ et driver/ rattachés à la voiture"
+        );
 
         assert!(ac.join("content").join("fonts").join("rss-arial.txt").is_file());
         assert!(ac.join("content").join("driver").join("rss_driver.kn5").is_file());
