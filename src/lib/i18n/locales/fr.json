@@ -947,7 +947,32 @@
     "modalBodyEnd": "). Que faire ?",
     "keepBoth": "Garder les deux",
     "replaceOld": "Écraser l'ancienne",
-    "modalRest": "{count} autre(s) à traiter"
+    "modalRest": "{count} autre(s) à traiter",
+    "pendingTitle": "Dossiers proposés par l'auteur",
+    "pendingNote": "Ni contenu de jeu, ni annexe : leur sort vous revient. Rien n'est installé tant que vous n'avez pas choisi.",
+    "pendingFiles": "{count} fichier(s) · {size}",
+    "pendingReplaces": "remplace {count} fichier(s) du jeu",
+    "pendingFor": "pour {name}",
+    "pendingOverwrites": "recouvre les livrées de {name}",
+    "pendingShapeJsgme": "variante proposée",
+    "pendingShapeGameTree": "contenu de jeu",
+    "pendingShapeSkinVariant": "livrées de remplacement",
+    "pendingShapeDocuments": "documents",
+    "pendingShapeUnknown": "indéterminé",
+    "pendingReadNotice": "Lire {name}",
+    "pendingHideNotice": "Masquer la notice",
+    "pendingActionGame": "Installer dans le jeu",
+    "pendingActionLayer": "Poser comme couche",
+    "pendingActionResources": "Garder en ressources",
+    "pendingActionOther": "Garder à part",
+    "pendingActionDiscard": "Ne pas importer",
+    "pendingActionGameHint": "Pose les fichiers là où l'auteur les destinait, dans le dossier du jeu.",
+    "pendingActionLayerHint": "Compose ces fichiers par-dessus le mod, sans jamais le modifier. Réversible.",
+    "pendingActionResourcesHint": "Rangé avec la documentation du mod. Rien n'entre dans le jeu.",
+    "pendingActionOtherHint": "Rangé comme mod indépendant, activable quand vous voulez.",
+    "pendingActionDiscardHint": "Supprimé de la bibliothèque. Le journal d'import en gardera la trace.",
+    "pendingSuggested": "proposé",
+    "pendingDone": "réglé"
   },
   "bulkImport": {
     "analyzing": "Analyse du dossier…",
@@ -1059,6 +1084,9 @@
     "targetCarUnknown": "voiture cible inconnue.",
     "unnamedModFolder": "dossier de mod sans nom.",
     "versionFilesMissing": "fichiers de la version introuvables dans la bibliothèque.",
-    "versionNotFound": "version introuvable."
+    "versionNotFound": "version introuvable.",
+    "pendingNotFound": "Ce dossier proposé n'existe plus.",
+    "pendingUnknownAction": "Action impossible pour ce dossier.",
+    "pendingAlreadyKnown": "Un mod porte déjà ce nom."
   }
 }

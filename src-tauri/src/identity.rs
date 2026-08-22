@@ -73,7 +73,7 @@ fn rel_files(dir: &Path) -> BTreeSet<String> {
 /// Décompte de la comparaison de deux contenus (§4.4) : combien de chemins le
 /// contenu entrant **ajoute** vs **écrase** par rapport au contenu existant.
 /// Base de la détection « mise à jour » vs « couche/extension ».
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct DiffStats {
     /// Chemins présents dans l'entrant mais absents de l'existant.
     pub added: usize,

@@ -947,7 +947,32 @@
     "modalBodyEnd": "). What should we do?",
     "keepBoth": "Keep both",
     "replaceOld": "Overwrite the old one",
-    "modalRest": "{count} more to handle"
+    "modalRest": "{count} more to handle",
+    "pendingTitle": "Folders the author offers",
+    "pendingNote": "Neither game content nor documentation: the call is yours. Nothing is installed until you choose.",
+    "pendingFiles": "{count} file(s) · {size}",
+    "pendingReplaces": "replaces {count} game file(s)",
+    "pendingFor": "for {name}",
+    "pendingOverwrites": "overrides {name}'s liveries",
+    "pendingShapeJsgme": "offered variant",
+    "pendingShapeGameTree": "game content",
+    "pendingShapeSkinVariant": "replacement liveries",
+    "pendingShapeDocuments": "documents",
+    "pendingShapeUnknown": "undetermined",
+    "pendingReadNotice": "Read {name}",
+    "pendingHideNotice": "Hide notice",
+    "pendingActionGame": "Install into the game",
+    "pendingActionLayer": "Add as a layer",
+    "pendingActionResources": "Keep as resources",
+    "pendingActionOther": "Keep separately",
+    "pendingActionDiscard": "Do not import",
+    "pendingActionGameHint": "Places the files where the author meant them to go, inside the game folder.",
+    "pendingActionLayerHint": "Composes these files over the mod without ever changing it. Reversible.",
+    "pendingActionResourcesHint": "Filed with the mod's documentation. Nothing goes into the game.",
+    "pendingActionOtherHint": "Filed as a standalone mod, enable it whenever you like.",
+    "pendingActionDiscardHint": "Deleted from the library. The import journal keeps a record of it.",
+    "pendingSuggested": "suggested",
+    "pendingDone": "settled"
   },
   "bulkImport": {
     "analyzing": "Analyzing folder…",
@@ -1059,6 +1084,9 @@
     "targetCarUnknown": "Unknown target car.",
     "unnamedModFolder": "Mod folder has no name.",
     "versionFilesMissing": "Version files are missing from the library.",
-    "versionNotFound": "Version not found."
+    "versionNotFound": "Version not found.",
+    "pendingNotFound": "That offered folder no longer exists.",
+    "pendingUnknownAction": "That action does not apply to this folder.",
+    "pendingAlreadyKnown": "A mod by that name already exists."
   }
 }

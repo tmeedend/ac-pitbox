@@ -7,6 +7,14 @@
   import { t } from "$lib/i18n/index.svelte";
   import { activateOther } from "$lib/others";
   import { errorText } from "$lib/errors";
+  import { fmtSize } from "$lib/format";
+  import {
+    listPendingFolders,
+    readPendingDocument,
+    resolvePendingFolder,
+    type PendingAction,
+    type PendingFolder,
+  } from "$lib/pending";
   import type { ArchiveResult, OtherImported, SubImported } from "$lib/library";
 
   interface Props {
@@ -70,6 +78,86 @@
     }
   }
 
+  // --- Dossiers proposés (§4.6ter) ----------------------------------------
+  //
+  // Chargés depuis la base, jamais depuis le rapport en mémoire : ne rien
+  // décider est une réponse valable, donc ce qui attend doit survivre à une
+  // fermeture de l'app — et se retrouver ici au prochain import.
+  let pending = $state<PendingFolder[]>([]);
+  let pendingBusy = $state<string | null>(null);
+  let pendingError = $state<string | null>(null);
+  /** Notice dépliée, par dossier. `null` = repliée. */
+  let notices = $state<Record<string, string>>({});
+
+  $effect(() => {
+    // Dépend du rapport : un nouveau lot peut avoir ajouté des dossiers.
+    void report;
+    void refreshPending();
+  });
+
+  async function refreshPending(): Promise<void> {
+    try {
+      pending = await listPendingFolders();
+    } catch {
+      // Rien à dire : l'absence de liste n'est pas une erreur à montrer, elle
+      // signifie seulement qu'il n'y a rien à trancher.
+      pending = [];
+    }
+  }
+
+  /** Notices lisibles sans quitter l'écran. Un PDF ou un .docx ne se rend pas
+   * ici — le nom seul est affiché, et le dossier reste ouvrable ailleurs. */
+  const READABLE = /\.(txt|md|nfo|log|ini|cfg)$/i;
+
+  async function toggleNotice(f: PendingFolder): Promise<void> {
+    if (notices[f.id] !== undefined) {
+      const { [f.id]: _dropped, ...rest } = notices;
+      notices = rest;
+      return;
+    }
+    if (!f.readme) return;
+    try {
+      notices = { ...notices, [f.id]: await readPendingDocument(f.id, f.readme) };
+    } catch (e) {
+      pendingError = errorText(e);
+    }
+  }
+
+  async function settle(f: PendingFolder, action: PendingAction): Promise<void> {
+    pendingBusy = f.id;
+    pendingError = null;
+    try {
+      await resolvePendingFolder(f.id, action);
+      await refreshPending();
+    } catch (e) {
+      pendingError = errorText(e);
+    } finally {
+      pendingBusy = null;
+    }
+  }
+
+  const ACTION_LABEL: Record<PendingAction, string> = {
+    game: "importOverlay.pendingActionGame",
+    layer: "importOverlay.pendingActionLayer",
+    resources: "importOverlay.pendingActionResources",
+    other: "importOverlay.pendingActionOther",
+    discard: "importOverlay.pendingActionDiscard",
+  };
+  const ACTION_HINT: Record<PendingAction, string> = {
+    game: "importOverlay.pendingActionGameHint",
+    layer: "importOverlay.pendingActionLayerHint",
+    resources: "importOverlay.pendingActionResourcesHint",
+    other: "importOverlay.pendingActionOtherHint",
+    discard: "importOverlay.pendingActionDiscardHint",
+  };
+  const SHAPE_LABEL: Record<string, string> = {
+    jsgme: "importOverlay.pendingShapeJsgme",
+    gameTree: "importOverlay.pendingShapeGameTree",
+    skinVariant: "importOverlay.pendingShapeSkinVariant",
+    documents: "importOverlay.pendingShapeDocuments",
+    unknown: "importOverlay.pendingShapeUnknown",
+  };
+
   /** Skins et sons regroupés par contenu parent : un pack de quarante livrées
    * ferait déborder le rapport à raison d'une ligne chacune, alors qu'il n'y a
    * qu'une seule fiche à ouvrir au bout. */
@@ -89,6 +177,71 @@
     return [...groups.values()];
   }
 </script>
+
+{#if pending.length}
+  <!-- En tête du rapport, avant même les composants optionnels : c'est ici que
+       la question la plus fréquente se pose, et un dossier proposé n'a pas de
+       défaut sûr — il attend, il n'agit pas. -->
+  <section class="pend">
+    <div class="pend-h">{t("importOverlay.pendingTitle")} ({pending.length})</div>
+    <p class="pend-note">{t("importOverlay.pendingNote")}</p>
+    {#each pending as f (f.id)}
+      <article class="pend-row">
+        <header class="pend-top">
+          <span class="pend-nm mono">{f.rel_path}</span>
+          <span class="pend-shape">{t(SHAPE_LABEL[f.shape] ?? SHAPE_LABEL.unknown)}</span>
+          <span class="pend-meta">
+            {t("importOverlay.pendingFiles", { count: f.file_count, size: fmtSize(f.size_bytes) })}
+          </span>
+        </header>
+
+        {#if f.title}<div class="pend-title">{f.title}</div>{/if}
+        {#if f.description}<p class="pend-desc">{f.description}</p>{/if}
+
+        <div class="pend-tags">
+          {#if f.skin_target}
+            <span class="pend-tag info">{t("importOverlay.pendingOverwrites", { name: f.skin_target })}</span>
+          {:else if f.owner_id}
+            <span class="pend-tag info">{t("importOverlay.pendingFor", { name: f.owner_id })}</span>
+          {/if}
+          {#if f.replaced > 0}
+            <span class="pend-tag warn">{t("importOverlay.pendingReplaces", { count: f.replaced })}</span>
+          {/if}
+          {#if f.readme && READABLE.test(f.readme)}
+            <button class="pend-notice-btn" type="button" onclick={() => toggleNotice(f)}>
+              {notices[f.id] !== undefined
+                ? t("importOverlay.pendingHideNotice")
+                : t("importOverlay.pendingReadNotice", { name: f.readme })}
+            </button>
+          {:else if f.readme}
+            <span class="pend-tag">{f.readme}</span>
+          {/if}
+        </div>
+
+        {#if notices[f.id] !== undefined}
+          <pre class="pend-notice">{notices[f.id]}</pre>
+        {/if}
+
+        <div class="pend-actions">
+          {#each f.actions as a}
+            <button
+              class="btn"
+              class:btn-primary={a === f.suggestion}
+              class:danger={a === "discard"}
+              type="button"
+              title={t(ACTION_HINT[a])}
+              disabled={pendingBusy === f.id}
+              onclick={() => settle(f, a)}
+            >
+              {t(ACTION_LABEL[a])}
+            </button>
+          {/each}
+        </div>
+      </article>
+    {/each}
+    {#if pendingError}<p class="opt-err">{pendingError}</p>{/if}
+  </section>
+{/if}
 
 {#if optionals.length}
   <!-- En tête du rapport : c'est la seule chose qui attend une réponse. -->
@@ -183,6 +336,133 @@
 {/each}
 
 <style>
+  /* Dossiers proposés (§4.6ter). Même bleu que partout ailleurs pour
+     l'information — ce n'est ni une alerte ni une erreur, c'est une question.
+     Encadré, comme les composants optionnels, sans quoi une question se lirait
+     comme un compte rendu de plus. */
+  .pend {
+    border: 1px solid var(--blue-border);
+    background: var(--raised);
+    padding: 9px 11px;
+    margin-bottom: 10px;
+  }
+  .pend-h {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin-bottom: 4px;
+  }
+  .pend-note {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .pend-row {
+    padding: 8px 0;
+    border-top: 1px solid var(--line);
+  }
+  .pend-row:first-of-type {
+    border-top: none;
+  }
+  .pend-top {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .pend-nm {
+    flex: 1;
+    min-width: 0;
+    font-size: 11px;
+    color: var(--txt2);
+    overflow-wrap: anywhere;
+  }
+  .pend-shape {
+    font-size: 9px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 1px 5px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .pend-meta {
+    font-size: 10.5px;
+    color: var(--muted2);
+    white-space: nowrap;
+  }
+  /* Le titre vient de l'auteur, pas de nous : il porte l'information la plus
+     utile de la ligne, donc il passe devant le chemin d'archive. */
+  .pend-title {
+    margin-top: 4px;
+    font-size: 12.5px;
+    color: var(--txt);
+  }
+  .pend-desc {
+    margin-top: 2px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--muted);
+    white-space: pre-wrap;
+  }
+  .pend-tags {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .pend-tag {
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+  .pend-tag.info {
+    color: var(--blue);
+  }
+  .pend-tag.warn {
+    color: var(--yellow);
+  }
+  .pend-notice-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-size: 10.5px;
+    color: var(--muted);
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: var(--line);
+    text-underline-offset: 2px;
+  }
+  .pend-notice-btn:hover,
+  .pend-notice-btn:focus-visible {
+    color: var(--rosso-bright);
+  }
+  /* La notice s'étend dans le flux, sans hauteur imposée ni défilement propre —
+     même choix que la prévisualisation des ressources (§4.5.2) : c'est la page
+     qui défile, pas une boîte dans la page. */
+  .pend-notice {
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--txt2);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .pend-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .pend-actions .danger {
+    color: var(--rosso-bright);
+  }
+
   /* Composants optionnels (§4.6bis). Jaune = alerte : ce n'est ni une erreur
      ni une action destructive, c'est la seule chose du rapport qui attend une
      réponse. Encadré plutôt que fondu dans les lignes, sans quoi la question

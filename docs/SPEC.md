@@ -190,7 +190,7 @@ L'app **pose quand même** : arbitrer les choix de l'auteur n'est pas son rôle,
 
 Deux propriétés en découlent :
 
-- **L'import ne jette rien.** Ce qui n'est pas classé est conservé tel quel, donc l'*interprétation* — où poser, qui arbitre un fichier partagé — reste recalculable depuis la bibliothèque à tout moment. Aucune règle des versions précédentes à mémoriser, aucune archive à conserver : c'est l'**entrée** qui est préservée, pas la décision. C'est ce qui rend un futur changement de règles rattrapable sans rien versionner.
+- **L'import ne jette rien que l'utilisateur n'ait pas explicitement écarté.** Ce qui n'est pas classé est conservé tel quel, donc l'*interprétation* — où poser, qui arbitre un fichier partagé — reste recalculable depuis la bibliothèque à tout moment. Aucune règle des versions précédentes à mémoriser, aucune archive à conserver : c'est l'**entrée** qui est préservée, pas la décision. C'est ce qui rend un futur changement de règles rattrapable sans rien versionner. La seule exception est un dossier proposé que l'utilisateur a écarté lui-même (§4.6ter) : il n'a plus de décision à recalculer, puisqu'elle est prise. Il est supprimé, et il laisse une ligne au journal d'import (`userDiscarded`) — la règle protégeait la recalculabilité, pas les octets.
 - **L'ajout vit et meurt avec son mod.** Posé à l'activation, retiré à la désactivation, supprimé avec lui. Le passage par « autre mod » (§7.3) ne donnait pas ça : les fichiers d'une voiture supprimée restaient dans AC, rattachés à une entrée anonyme que plus rien ne reliait au mod.
 
 **Les archives imbriquées passent avant leurs voisins.** Une archive imbriquée est extraite et reclassée (§7.3), et ce qui en sort entre dans la liste des propriétaires possibles **avant** que les fichiers qui l'entouraient ne soient arbitrés. C'est ce qui permet à une livraison `readme.txt` + `Car.zip` de ranger la notice dans les ressources de la voiture sortie du zip. Corollaire : **rien de reconnu à la racine ne signifie pas rien du tout** — tant qu'une archive imbriquée traîne quelque part dans la source, à n'importe quelle profondeur, on descend dedans avant de conclure. Sans cette descente, la source entière partait en « autre mod » : la voiture n'entrait jamais en bibliothèque et le `.zip` brut se retrouvait lié à la racine du dossier du jeu.
@@ -276,6 +276,47 @@ Aucun des deux ne suffit, et c'est le cœur de la règle. Une archive imbriquée
 C'est le seul cas rencontré jusqu'ici où **aucun des deux défauts n'est sûr**, et c'est ce qui justifie la question. Cas réel, `CMRT_Complete_hud` : l'archive jointe neutralise drapeaux et jauge de carburant du jeu (fichiers de ~1,7 Ko remplaçant des originaux de 10 à 60 Ko), parce que le HUD les redessine lui-même. L'installer en silence fait disparaître les drapeaux partout, y compris sur des voitures sans rapport ; ne pas l'installer peut faire doublonner l'affichage. L'auteur livre d'ailleurs les originaux en `*_backup.png` — son propre « annulez à la main », que `gamebackup` (§4.5.4) rend inutile. Ces `_backup` sont posés comme le reste : aucune heuristique de nom, la règle d'or n°3 a déjà coûté assez cher.
 
 **Limite assumée** : cette règle ne couvre pas l'espace. Beaucoup de mods livrent des dossiers quelconques accompagnés d'instructions en prose (« copiez X dans Y si vous voulez Z »), et rien dans l'arborescence ne permet de les interpréter. Pour ceux-là, la réponse honnête n'est pas de deviner : c'est de rendre la notice **lisible** (§4.5.2, prévisualisation dans l'onglet Ressources) et de dire ce qu'on a fait (§4.6).
+
+#### 4.6ter Dossiers proposés par l'auteur
+
+**Le fourre-tout du milieu.** Le balayage (§7.3) sait classer deux choses : un chemin de jeu (ajout au jeu, §4.5.3) et un document isolé (annexe, §4.5.2). Entre les deux, ce qui restait était arbitré par le *chemin*, alors que ce qui s'y trouve n'est presque jamais un chemin :
+
+| Ce que l'auteur livre | Ce que c'est |
+| --- | --- |
+| `2K Skins/`, `No Dust Skins/` (Ferrari F2002) | des livrées de meilleure qualité qui **recouvrent** celles de la voiture |
+| `Optional Textures/` (VRC Pageau 9T8) | deux `.dds` à poser dans le dossier de la voiture |
+| `MODS/<variante>/` (LA Canyons) | la convention JSGME, un sous-dossier par option — dont un patch qui masque le personnel des stands **sur toutes les pistes** |
+| `Wallpapers/`, `Templates/`, `CM Previews Template/` | de la matière qui n'a rien à faire dans le jeu |
+
+Aucune règle ne les sépare depuis le disque, et c'est le fond du problème : l'information est dans la notice, en prose, ou dans l'intention de l'utilisateur. Le §4.6 tranche ce cas depuis toujours — **information de préférence → demander**.
+
+**Le déclencheur est structurel** : un *dossier* resté après le balayage dont le chemin ne mène nulle part dans le jeu. Un dossier qui mène dans le jeu reste un ajout, décidé sans rien demander ; un fichier isolé reste une annexe ou un ajout. Rien de nouveau ne s'ajoute au chemin nominal.
+
+**Un cas de plus, et il est ailleurs** : un pack de skins dont la cible est inconnue **et** dont les livrées recouvrent celles d'un contenu de la même source n'est pas un pack, c'est une variante — il n'est donc pas consommé comme skin (`pending::offered_liveries_target`). Le test est volontairement étroit : sans ce recoupement de noms, un pack pour une voiture pas encore installée reste un pack, dort en bibliothèque, et `repair_projections` le branchera quand la voiture arrivera. Sans cette règle, les `2K Skins/` de la F2002 s'importaient comme skins d'une voiture nommée « 2K Skins », qui n'existe pas : jamais projetés, jamais utilisables.
+
+**Rangé, jamais posé, jamais perdu.** Le dossier attend dans `<lib>/pending/<id>/`, sa ligne (`pending_folders`) survit à un redémarrage, et rien de lui n'entre dans le jeu. La question est posée **en fin de lot**, dans le rapport d'import, jamais pendant — un lot de cinquante mods ne s'interrompt pas (§4.6). Ne rien décider reste une réponse valable : ce qui attend est toujours là au prochain import.
+
+**Cinq formes reconnues**, qui ne décident de rien : elles choisissent ce qu'on montre et ce qu'on pré-remplit.
+
+- **variante JSGME** — un `description.jsgme` est présent. Convention vieille de vingt ans : première ligne le nom, le reste l'explication. C'est le seul cas où l'auteur fournit un libellé exploitable tel quel, et il est affiché tel quel.
+- **contenu de jeu** — un enfant direct est un dossier lu par AC. Enfants directs seulement : plus profond, on retrouverait le `content/` d'un dossier de mod.
+- **livrées de remplacement** — voir ci-dessus.
+- **documents** — tous les fichiers sont d'un format qu'AC ne lit jamais. **Les images n'en font pas partie** : rien ne distingue une capture de présentation d'un asset AC (§4.5.2), donc un dossier de fonds d'écran retombe en *indéterminé*, ce qui est honnête — c'est l'utilisateur qui sait.
+- **indéterminé** — aucune des quatre.
+
+**Cinq sorts**, dont ceux qui ont un sens pour le dossier en question :
+
+| Sort | Ce qu'il fait |
+| --- | --- |
+| **Installer dans le jeu** | c'est la réponse de l'utilisateur qui autorise à chercher la racine de jeu **à l'intérieur** du dossier. Sans elle, l'app n'a que le chemin d'archive et doit refuser (§4.5.3) ; avec elle, il n'y a plus rien à deviner. Rangé en ajouts au jeu du propriétaire, donc il vit et meurt avec lui. |
+| **Poser comme couche** | composé par-dessus la version du mod (§4.4), qui n'est jamais touchée. La seule réponse non destructive à « copiez ces fichiers dans le dossier de la voiture » — retirer la couche rend la voiture d'origine. |
+| **Garder en ressources** | rangé sous son propre nom dans les ressources du propriétaire. Rien n'entre dans le jeu. |
+| **Garder à part** | entrée « autre mod » indépendante, activable quand on veut. Proposé seulement quand rien ne rattache le dossier à un mod. |
+| **Ne pas importer** | supprimé, et journalisé (`userDiscarded`). Le seul endroit de l'app où de la matière importée disparaît. |
+
+**Ce qui est montré**, parce que c'est ce sur quoi la décision se prend : le chemin dans l'archive, la forme reconnue, le poids, le mod de rattachement — et deux choses qui changent la réponse. Le **nombre de fichiers du jeu de base** que le dossier remplacerait (§4.6bis) : c'est le seul chiffre qui dit « ceci ne concerne pas que ce mod ». Et la **notice**, lisible sur place pour les formats texte : §4.6bis posait déjà que pour les dossiers qu'on ne sait pas interpréter, la réponse honnête est de rendre la notice lisible — ici elle se lit sans quitter l'écran où la décision se prend, le va-et-vient vers l'explorateur étant précisément ce qui fait cliquer au hasard.
+
+**Ce qui reste automatique.** Un dossier de jeu livré à nu (`driver/` avec un `.kn5`) est toujours corrigé sans rien demander : c'est déterminable, et le §4.6 dit qu'une question à laquelle l'utilisateur ne peut pas mieux répondre que l'app est pire qu'un défaut. La décision est journalisée (`pathNormalized`) et relisible sur la fiche.
 
 ---
 

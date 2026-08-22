@@ -169,3 +169,33 @@ pub fn resolve_conflict(
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::importer::resolve_conflict(&conn, &cfg, &new_id, &old_id, &action)
 }
+
+/// Dossiers proposés par l'auteur et en attente d'une décision (§4.6ter).
+/// Lus en base, pas dans le rapport en mémoire : ne rien décider est une
+/// réponse valable, donc ce qui attend doit survivre à une fermeture de l'app.
+#[tauri::command]
+pub fn list_pending_folders(app: AppHandle, db: State<Db>) -> Result<Vec<crate::pending::PendingFolder>, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::pending::list(&conn, &cfg)
+}
+
+/// Applique le sort choisi pour un dossier proposé (§4.6ter) :
+/// "game" | "layer" | "resources" | "other" | "discard".
+#[tauri::command]
+pub fn resolve_pending_folder(app: AppHandle, db: State<Db>, id: String, action: String) -> Result<(), String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::pending::resolve(&conn, &cfg, &id, &action)
+}
+
+/// Contenu texte de la notice d'un dossier proposé (§4.6ter), pour la lire sans
+/// quitter l'écran d'arbitrage : c'est elle qui porte l'information que le
+/// disque n'a pas. Même garde-fou anti-traversée et même plafond de taille que
+/// la prévisualisation des ressources (§4.5.2).
+#[tauri::command]
+pub fn read_pending_document(app: AppHandle, db: State<Db>, id: String, name: String) -> Result<String, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::pending::read_document(&conn, &cfg, &id, &name)
+}

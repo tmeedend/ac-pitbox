@@ -609,13 +609,24 @@ fn reconcile_track_skin_activation(conn: &Connection, track_id: &str, skins_dir:
 /// bibliothèque si c'est un mod géré, sinon `content/<type>s/<id>/<sub>` (base
 /// Kunos). Le type est déduit de l'overlay (Car → cars, Track → tracks).
 fn parent_subdir(conn: &Connection, cfg: &AppConfig, parent_id: &str, sub: &str) -> Option<PathBuf> {
+    Some(parent_content_dir(conn, cfg, parent_id)?.join(sub))
+}
+
+/// Dossier de contenu de l'entite cible : version active en bibliotheque si
+/// c'est un mod gere, sinon `content/<type>s/<id>` (base Kunos). Le type est
+/// deduit de l'overlay (Car -> cars, Track -> tracks).
+///
+/// `pub(crate)` parce que les dossiers proposes (§4.6ter) en ont besoin pour la
+/// meme raison que les skins : comparer ce qu'un dossier livre a ce que le mod
+/// contient deja, sans supposer ou vit sa version active.
+pub(crate) fn parent_content_dir(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Option<PathBuf> {
     let m = overlay::get_mod(conn, parent_id).ok().flatten();
     if let Some(m) = &m {
         if !m.is_stock {
             if let Some(vid) = &m.active_version_id {
                 if let Ok(Some(p)) = overlay::get_version_path(conn, vid) {
                     if let Some(resolved) = crate::libpath::resolve(cfg.library_path.as_deref(), &p) {
-                        return Some(resolved.join(sub));
+                        return Some(resolved);
                     }
                 }
             }
@@ -628,7 +639,7 @@ fn parent_subdir(conn: &Connection, cfg: &AppConfig, parent_id: &str, sub: &str)
     };
     cfg.ac_install_path
         .as_ref()
-        .map(|ac| ac.join("content").join(folder).join(parent_id).join(sub))
+        .map(|ac| ac.join("content").join(folder).join(parent_id))
 }
 
 /// Détermine si un pack de skins cible un **circuit** (TRACK_SKIN) : parent connu

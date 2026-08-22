@@ -281,6 +281,28 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         -- mod ne réclame. Pas de clé étrangère pour la même raison, et pour que
         -- la suppression d'un mod n'efface pas l'explication de ce qu'il a
         -- laissé derrière lui.
+        -- Dossiers proposes par l'auteur (§4.6ter) : livres a cote du mod, ni
+        -- chemin de jeu ni annexe, donc sans sort deductible du disque. Ranges
+        -- en attente et **jamais poses** tant que l'utilisateur n'a pas
+        -- tranche. La ligne survit a un redemarrage : la question est posee en
+        -- fin de lot, mais ne rien decider est une reponse valable, et ce qui
+        -- attend ne doit pas disparaitre parce qu'on a ferme l'app.
+        CREATE TABLE IF NOT EXISTS pending_folders (
+            id           TEXT PRIMARY KEY,
+            archive      TEXT NOT NULL DEFAULT '',
+            rel_path     TEXT NOT NULL,
+            library_path TEXT NOT NULL,
+            owner_id     TEXT,
+            owner_kind   TEXT,
+            shape        TEXT NOT NULL DEFAULT 'unknown',
+            title        TEXT,
+            description  TEXT,
+            readme       TEXT,
+            skin_target  TEXT,
+            replaced     INTEGER NOT NULL DEFAULT 0,
+            found_at     TEXT NOT NULL DEFAULT ''
+        );
+
         CREATE TABLE IF NOT EXISTS import_decisions (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             mod_id     TEXT,
@@ -1792,6 +1814,98 @@ pub fn set_other_active(conn: &Connection, id: &str, active: bool, junctions: &[
 
 pub fn delete_other_mod(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM other_mods WHERE id = ?1", [id])?;
+    Ok(())
+}
+
+// --- Dossiers proposes (§4.6ter) --------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct PendingFolderRow {
+    pub id: String,
+    pub archive: String,
+    pub rel_path: String,
+    pub library_path: String,
+    pub owner_id: Option<String>,
+    pub owner_kind: Option<String>,
+    pub shape: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub readme: Option<String>,
+    pub skin_target: Option<String>,
+    pub replaced: usize,
+    pub found_at: String,
+}
+
+const PENDING_SELECT: &str = "SELECT id, archive, rel_path, library_path, owner_id, owner_kind, shape, title, \
+     description, readme, skin_target, replaced, found_at FROM pending_folders";
+
+fn map_pending(row: &rusqlite::Row) -> rusqlite::Result<PendingFolderRow> {
+    Ok(PendingFolderRow {
+        id: row.get(0)?,
+        archive: row.get(1)?,
+        rel_path: row.get(2)?,
+        library_path: row.get(3)?,
+        owner_id: row.get(4)?,
+        owner_kind: row.get(5)?,
+        shape: row.get(6)?,
+        title: row.get(7)?,
+        description: row.get(8)?,
+        readme: row.get(9)?,
+        skin_target: row.get(10)?,
+        replaced: row.get::<_, i64>(11)?.max(0) as usize,
+        found_at: row.get(12)?,
+    })
+}
+
+/// `INSERT OR REPLACE` : reimporter la meme archive represente les memes
+/// dossiers, et c'est voulu — la source est fraiche, la question se repose.
+#[allow(clippy::too_many_arguments)]
+pub fn insert_pending_folder(conn: &Connection, r: &PendingFolderRow) -> rusqlite::Result<()> {
+    conn.execute(
+        r#"INSERT OR REPLACE INTO pending_folders
+           (id, archive, rel_path, library_path, owner_id, owner_kind, shape, title,
+            description, readme, skin_target, replaced, found_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)"#,
+        params![
+            r.id,
+            r.archive,
+            r.rel_path,
+            r.library_path,
+            r.owner_id,
+            r.owner_kind,
+            r.shape,
+            r.title,
+            r.description,
+            r.readme,
+            r.skin_target,
+            r.replaced as i64,
+            r.found_at,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Les plus recents d'abord : ce qui vient d'etre importe est ce qu'on veut
+/// trancher, et une vieille ligne encore en attente ne doit pas passer devant.
+pub fn list_pending_folders(conn: &Connection) -> rusqlite::Result<Vec<PendingFolderRow>> {
+    let mut stmt = conn.prepare(&format!(
+        "{PENDING_SELECT} ORDER BY found_at DESC, rel_path COLLATE NOCASE"
+    ))?;
+    let rows = stmt.query_map([], map_pending)?;
+    rows.collect()
+}
+
+pub fn get_pending_folder(conn: &Connection, id: &str) -> rusqlite::Result<Option<PendingFolderRow>> {
+    let mut stmt = conn.prepare(&format!("{PENDING_SELECT} WHERE id = ?1"))?;
+    let mut rows = stmt.query_map([id], map_pending)?;
+    match rows.next() {
+        Some(r) => Ok(Some(r?)),
+        None => Ok(None),
+    }
+}
+
+pub fn delete_pending_folder(conn: &Connection, id: &str) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM pending_folders WHERE id = ?1", [id])?;
     Ok(())
 }
 

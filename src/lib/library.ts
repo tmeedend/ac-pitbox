@@ -230,6 +230,10 @@ export interface ArchiveResult {
   others: OtherImported[];
   /** Fichiers livrés à côté du mod et rattachés à lui (§4.5.3). */
   extras?: number;
+  /** Dossiers que l'auteur propose et dont le sort revient à l'utilisateur
+   * (§4.6ter). La liste elle-même se lit en base (`listPendingFolders`) — ce
+   * compte sert au résumé de fin de lot. */
+  pending?: number;
 }
 
 /** Miroir de `import_progress::Progress` (§4.2bis) — les deux changent ensemble. */

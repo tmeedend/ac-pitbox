@@ -103,10 +103,16 @@ pub struct ArchiveResult {
     /// Mods « autres » importés — type non reconnu, jamais perdus (§7.3).
     #[serde(default)]
     pub others: Vec<crate::others::OtherImported>,
-    /// Fichiers rattachés à un mod de l'''archive et stockés comme ses
+    /// Fichiers rattachés à un mod de l'archive et stockés comme ses
     /// ajouts au jeu (§4.5.3) — configs CSP, shaders, pilote…
     #[serde(default)]
     pub extras: usize,
+    /// Dossiers que l'auteur propose et dont le sort revient à l'utilisateur
+    /// (§4.6ter) : rangés en attente, jamais posés. La liste elle-même se lit
+    /// en base (`pending::list`) — le compte est ici pour que le résumé de fin
+    /// de lot puisse annoncer qu'il y a une question à trancher.
+    #[serde(default)]
+    pub pending: usize,
 }
 
 /// Marge appliquée à la taille d'un lot pour le contrôle d'espace disque
@@ -401,6 +407,7 @@ fn failed_result(label: &str, error: String) -> ArchiveResult {
         apps: Vec::new(),
         others: Vec::new(),
         extras: 0,
+        pending: 0,
     }
 }
 
@@ -819,6 +826,38 @@ fn sweep_leftovers(
         // rejouera depuis la racine d'AC (§4.5.3).
         let normalized = crate::acpath::normalize_leftover(&raw, &p);
         let rel = normalized.clone().unwrap_or(raw.clone());
+
+        // Dossier proposé (§4.6ter). Un **dossier** qui ne mène nulle part dans
+        // le jeu n'est ni un ajout ni une annexe : c'est quelque chose que
+        // l'auteur propose — une variante, des textures optionnelles, un pack
+        // de fonds d'écran — et rien sur le disque ne dit lequel des trois.
+        // L'information est dans la notice ou dans l'intention de
+        // l'utilisateur, donc on range et on demande (§4.6).
+        if p.is_dir() && !crate::acpath::leads_into_game(&rel) {
+            let detected = crate::pending::detect(conn, cfg, &p, &owners);
+            // Rayon d'action (§4.6bis) : combien de fichiers du jeu de base ce
+            // dossier remplacerait. C'est le seul chiffre qui dit « ceci ne
+            // concerne pas que ce mod », et il change la réponse.
+            let replaced = crate::others::game_files_replaced(conn, cfg, &p);
+            let owner = owner_of_leftover(&rel, &owners).map(|(id, k)| (id.clone(), *k));
+            let parked = crate::pending::park(
+                conn,
+                library,
+                archive_name,
+                &rel,
+                &p,
+                owner.as_ref().map(|(id, k)| (id.as_str(), *k)),
+                detected,
+                copy,
+                replaced,
+            );
+            if parked.is_some() {
+                result.pending += 1;
+                continue;
+            }
+            // Rangement en attente impossible : on retombe sur le classement
+            // d'avant, qui ne perd rien non plus.
+        }
 
         {
             if let Some((owner_id, owner_kind)) = owner_of_leftover(&rel, &owners) {
@@ -1287,6 +1326,7 @@ fn file_extracted(
         apps: Vec::new(),
         others: Vec::new(),
         extras: 0,
+        pending: 0,
     };
 
     let Some(library) = &cfg.library_path else {
@@ -1476,6 +1516,7 @@ fn import_one_folder(
         apps: Vec::new(),
         others: Vec::new(),
         extras: 0,
+        pending: 0,
     };
 
     let Some(library) = &cfg.library_path else {
@@ -1610,6 +1651,23 @@ fn file_tail(
     res_mode: crate::resources::ExtractionMode,
     result: &mut ArchiveResult,
 ) {
+    // Une variante de livrées n'est pas un pack de skins (§4.6ter). Cas réel,
+    // la Ferrari F2002 : `2K Skins/skins/<skin>` porte exactement les noms des
+    // livrées de la voiture livrée à côté — l'auteur propose de les remplacer,
+    // pas d'en ajouter. Importée comme pack, elle se rattachait à une voiture
+    // nommée « 2K Skins » qui n'existe pas, ne se projetait jamais, et dormait
+    // en bibliothèque pour toujours. Non consommée, elle redevient un dossier
+    // que le balayage ramasse et met en attente.
+    let owners = owners_of(found, apps);
+    let (subs, offered): (Vec<_>, Vec<_>) = subs
+        .iter()
+        .cloned()
+        .partition(|s| crate::pending::offered_liveries_target(conn, cfg, s, &owners).is_none());
+    if !offered.is_empty() {
+        log::info!("{} livery variant(s) left to the user to decide", offered.len());
+    }
+    let subs = subs.as_slice();
+
     if !subs.is_empty() {
         result.subs = crate::submods::import_subs_reported(
             conn,
@@ -1637,7 +1695,6 @@ fn file_tail(
     // contenu de zips imbriqués (ex. mods CMRT-style qui livrent une app ET un
     // zip séparé visant `content/gui/...`).
     let consumed = consumed_paths(found, subs, apps);
-    let owners = owners_of(found, apps);
     sweep_leftovers(
         ctx,
         index,
@@ -1858,6 +1915,7 @@ fn exec_one(
         apps: Vec::new(),
         others: Vec::new(),
         extras: 0,
+        pending: 0,
     };
 
     let Some(library) = &cfg.library_path else {
@@ -3479,6 +3537,45 @@ mod tests {
             "et le patch n'est pas pose non plus : c'est une variante que l'auteur propose, \
              pas un ajout du circuit — l'utilisateur tranchera"
         );
+
+        // Il ne disparait pas pour autant : il attend une decision (§4.6ter),
+        // avec le titre et l'explication que l'auteur a ecrits dans son
+        // `description.jsgme`.
+        //
+        // **Une seule** variante attend, et c'est juste : la troisieme du lot
+        // livre `content/cars/<voiture>/skins/<livree>`, une forme que l'app
+        // sait lire sans rien demander — elle s'importe comme pack de skins,
+        // comme n'importe quel pack. Ne mettre en attente que ce qu'on ne sait
+        // pas classer est tout l'interet de la regle.
+        assert_eq!(
+            r.subs.len(),
+            1,
+            "les livrees CHP s'importent normalement : {:?}",
+            r.subs
+        );
+        let waiting = crate::pending::list(&conn, &cfg).unwrap();
+        assert_eq!(waiting.len(), 1, "seule l'option non classable attend : {waiting:?}");
+        let patch = waiting
+            .iter()
+            .find(|w| w.rel_path.ends_with("Hide Pit Crew"))
+            .expect("le patch attend");
+        assert_eq!(patch.shape, crate::pending::SHAPE_JSGME);
+        assert_eq!(patch.title.as_deref(), Some("Hide Pit Crew"));
+        assert_eq!(patch.owner_id.as_deref(), Some("la_canyons"), "rattache au circuit");
+        assert_eq!(
+            patch.suggestion,
+            crate::pending::ACTION_GAME,
+            "il porte un arbre de jeu : la proposition est de l'installer"
+        );
+
+        // Installe sur demande : c'est la reponse de l'utilisateur qui autorise
+        // a chercher la racine de jeu dans le dossier.
+        crate::pending::resolve(&conn, &cfg, &patch.id, crate::pending::ACTION_GAME).unwrap();
+        assert!(
+            ac.join("content").join("objects3D").join("pitcrew.kn5").is_file(),
+            "pose la ou l'auteur le voulait, une fois seulement que l'utilisateur l'a dit"
+        );
+        assert!(!ac.join("MODS").exists(), "et toujours rien dans le dossier JSGME");
         assert!(
             crate::resources::resources_dir(&library, ModKind::Track, "la_canyons")
                 .join("Install Guide.pdf")
@@ -3526,6 +3623,107 @@ mod tests {
                 .join("READ ME - RSS Settings.pdf")
                 .is_file(),
             "la notice est rangee dans les ressources de l'app, la ou on ira la lire"
+        );
+    }
+
+    #[test]
+    fn offered_liveries_wait_for_the_user_then_land_as_a_layer() {
+        // Cas reel (Ferrari F2002) : l'archive livre la voiture et, a cote,
+        // `2K Skins/` et `No Dust Skins/` — des livrees de meilleure qualite
+        // portant EXACTEMENT les noms de celles de la voiture. Importees comme
+        // packs de skins, elles se rattachaient a des voitures nommees
+        // « 2K Skins » et « No Dust Skins », qui n'existent pas : jamais
+        // projetees, elles dormaient en bibliotheque pour toujours.
+        //
+        // Elles attendent desormais une decision, et « poser comme couche »
+        // (§4.3) est la seule reponse non destructive : compose par-dessus la
+        // version, qui n'est jamais touchee. Retirer la couche rend la voiture
+        // d'origine.
+        let base = crate::testutil::temp_dir("import-liveries");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let src = base.join("Ferrari F2002 V1.4");
+        let car = src.join("content").join("cars");
+        make_fake_car(&car, "ferrari_f2002");
+        let livery = car.join("ferrari_f2002").join("skins").join("a_2002_michael");
+        std::fs::create_dir_all(&livery).unwrap();
+        std::fs::write(livery.join("skin.dds"), b"BASE").unwrap();
+
+        let offered = src.join("2K Skins").join("skins").join("a_2002_michael");
+        std::fs::create_dir_all(&offered).unwrap();
+        std::fs::write(offered.join("skin.dds"), b"HD").unwrap();
+        std::fs::write(src.join("2K Skins").join("READ ME.txt"), b"2K liveries").unwrap();
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert!(r.error.is_none(), "erreur inattendue: {:?}", r.error);
+        assert!(
+            r.subs.is_empty(),
+            "plus importe comme pack de skins d'une voiture qui n'existe pas : {:?}",
+            r.subs
+        );
+        assert_eq!(r.pending, 1);
+
+        let waiting = crate::pending::list(&conn, &cfg).unwrap();
+        assert_eq!(waiting.len(), 1);
+        assert_eq!(waiting[0].shape, crate::pending::SHAPE_SKIN_VARIANT);
+        assert_eq!(
+            waiting[0].skin_target.as_deref(),
+            Some("ferrari_f2002"),
+            "reconnu par les noms de livrees qu'il recouvre, jamais par le nom du dossier"
+        );
+        assert_eq!(
+            waiting[0].readme.as_deref(),
+            Some("READ ME.txt"),
+            "la notice est montree"
+        );
+        assert_eq!(waiting[0].suggestion, crate::pending::ACTION_LAYER);
+        assert_eq!(
+            std::fs::read(
+                ac.join("content")
+                    .join("cars")
+                    .join("ferrari_f2002")
+                    .join("skins")
+                    .join("a_2002_michael")
+                    .join("skin.dds")
+            )
+            .unwrap(),
+            b"BASE",
+            "rien n'a bouge tant que personne n'a tranche"
+        );
+
+        crate::pending::resolve(&conn, &cfg, &waiting[0].id, crate::pending::ACTION_LAYER).unwrap();
+        assert_eq!(
+            std::fs::read(
+                ac.join("content")
+                    .join("cars")
+                    .join("ferrari_f2002")
+                    .join("skins")
+                    .join("a_2002_michael")
+                    .join("skin.dds")
+            )
+            .unwrap(),
+            b"HD",
+            "la livree proposee recouvre celle du mod, par composition"
+        );
+        assert!(
+            crate::resources::resources_dir(&library, ModKind::Car, "ferrari_f2002")
+                .join("READ ME.txt")
+                .is_file(),
+            "la notice est rangee en ressources, pas composee dans la voiture"
+        );
+        assert!(
+            crate::pending::list(&conn, &cfg).unwrap().is_empty(),
+            "la question ne se repose pas"
         );
     }
 
@@ -3802,13 +4000,15 @@ mod tests {
         };
         let rules = crate::rules::default_rules();
 
-        // Une voiture, un `driver/` livré à nu (deviné), un dossier
-        // d'emballage (refusé).
+        // Une voiture, un `driver/` livré à nu (deviné), un fichier isolé qui
+        // ne désigne aucun chemin de jeu (refusé), et un dossier d'emballage
+        // (mis en attente, §4.6ter — on ne refuse plus en silence, on demande).
         let src = base.join("SomePack");
         make_fake_car(&src.join("content").join("cars"), "some_car");
         let d = src.join("driver");
         std::fs::create_dir_all(&d).unwrap();
         std::fs::write(d.join("pro.kn5"), b"driver-model").unwrap();
+        std::fs::write(src.join("notes.dat"), b"stray").unwrap();
         let wrap = src.join("Optional - No ambient sounds");
         std::fs::create_dir_all(&wrap).unwrap();
         std::fs::write(wrap.join("quiet.bank"), b"silence").unwrap();
@@ -3832,7 +4032,18 @@ mod tests {
             .iter()
             .find(|d| d.kind == "pathRefused")
             .expect("le refus est journalisé, pas seulement appliqué");
-        assert_eq!(refused.subject, "Optional - No ambient sounds");
+        assert_eq!(refused.subject, "notes.dat");
+
+        // Le dossier d'emballage, lui, ne se refuse plus en silence : il attend
+        // que l'utilisateur dise quoi en faire, et rien de lui n'est dans AC.
+        assert_eq!(r.pending, 1, "un dossier mis en attente");
+        let waiting = crate::pending::list(&conn, &cfg).unwrap();
+        assert_eq!(waiting.len(), 1);
+        assert_eq!(waiting[0].rel_path, "Optional - No ambient sounds");
+        assert!(
+            !ac.join("Optional - No ambient sounds").exists(),
+            "rien n'entre dans le jeu tant que personne n'a tranché"
+        );
 
         // Et la décision décrit bien le dernier import : réimporter efface
         // l'explication de celui d'avant plutôt que de l'empiler.

@@ -33,6 +33,7 @@ mod modscan;
 mod music;
 mod others;
 mod overlay;
+mod pending;
 mod preview;
 mod profiles;
 mod quickdrive;
@@ -158,6 +159,9 @@ pub fn run() {
             commands::import::cancel_import,
             commands::bulk_ops::cancel_bulk,
             commands::import::split_dropped_paths,
+            commands::import::list_pending_folders,
+            commands::import::resolve_pending_folder,
+            commands::import::read_pending_document,
             commands::layers::list_layers,
             commands::layers::list_layers_by_kind,
             commands::layers::delete_layer,

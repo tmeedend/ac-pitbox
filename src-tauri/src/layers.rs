@@ -5,9 +5,12 @@
 //! la version active de celle-ci. Rien n'est détruit : « restaurer » = supprimer
 //! la couche, la base est intacte dessous.
 //!
-//! Portée v1 : détection + rangement sûr. Le moteur de composition (fusionner
-//! base + couches actives pour rendre l'extension visible en jeu) est un lot
-//! ultérieur — la couche est stockée et listée, pas encore appliquée.
+//! Les couches sont **composées** : `compose::recompose` fusionne la base et
+//! les couches actives, par ordre de priorité, dans `content/<type>/<id>`
+//! (`deploy::compose_tree`). Retirer une couche recompose sans elle, et la base
+//! réapparaît intacte — c'est ce qui fait de la couche la seule réponse non
+//! destructive à « copiez ces fichiers dans le dossier du mod », que ce soit
+//! une extension importée ou un dossier proposé par l'auteur (§4.6ter).
 
 use std::path::Path;
 
