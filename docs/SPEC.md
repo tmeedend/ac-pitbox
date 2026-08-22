@@ -131,6 +131,9 @@ Chaque voiture d'un pack est une **entité de premier niveau** (activable/taggua
 
 ### 4.5 Ce qu'un mod pose, et où
 
+> **`SPEC-import.md`** condense tout ce qui suit en un arbre de décision et une table de destinations, sur une page. C'est là qu'il faut regarder pour voir les règles *ensemble* ; ici, pour lire le raisonnement de chacune.
+
+
 Une archive de mod contient **le dossier du mod** — celui que l'auteur a conçu pour être posé dans `content/` (`rss_gtm_lanzo_v8/`, `ks_nordschleife/`) — et, autour de lui, tout le reste : notices, templates, configs CSP, shaders, textures d'équipe, modèle de pilote. L'archive RSS GT-M Lanzo en compte 69 rien qu'en fichiers de jeu hors `content/cars/`.
 
 Trois destinations, et une seule question pour choisir : **le fichier appartient-il au dossier du mod ?**

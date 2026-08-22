@@ -259,6 +259,13 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
 - **`docs/README.md`** — index de tout `docs/`. Point d'entrée.
 - **`docs/SPEC.md`** — spécification de référence, organisée par domaine.
   Décrit l'app telle qu'elle fonctionne. **La source de vérité.**
+- **`docs/SPEC-import.md`** — l'import sur une page : une seule question
+  (« où va ce fichier ? »), un arbre de décision, la table des mécanismes de
+  pose, et les cinq archives réelles qui servent de tests. À lire **avant**
+  de toucher à une règle d'import — le §4 du SPEC les décrit une par une,
+  celui-ci les montre *ensemble*, ce qui est la seule façon de voir qu'une
+  règle en contredit une autre. En cas d'écart, `SPEC.md` fait foi, et l'un
+  des deux est à corriger tout de suite.
 - **`docs/*.html`** — maquettes visuelles (référence de layout et de thème).
 - **`docs/*-research.md`** — comptes rendus de recherche sur les points durs
   (lancement CM, aperçu 3D). Contiennent le *pourquoi* de choix non évidents et
