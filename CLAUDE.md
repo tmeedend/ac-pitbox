@@ -409,7 +409,7 @@ laisser pourrir ici.
       défaut visuel, **ne pas s'arrêter au premier champ coupable**, et
       regarder aussi ce qui est dessiné par-dessus.
       Reste surtout **R et B de `txMaps`** (le vert est documenté et exploité),
-      le choix du LOD, la purge du cache et l'aperçu dans `ModDetail` — §15.
+      le choix du LOD et l'aperçu dans `ModDetail` — §15.
       Trois règles à ne pas perdre de vue :
       **`preview::CONVERTER_VERSION` s'incrémente dès qu'on touche au rendu
       produit** (sinon les anciens `.glb` restent servis — la version est dans

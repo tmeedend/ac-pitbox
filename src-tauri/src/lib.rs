@@ -205,6 +205,8 @@ pub fn run() {
             commands::session::list_showrooms,
             commands::preview::prepare_car_preview,
             commands::preview::clear_preview_cache,
+            commands::preview::preview_cache_size,
+            commands::preview::set_preview_cache_cap,
             commands::session_state::get_session_picks,
             commands::session_state::save_session_picks,
             commands::session_state::get_launch_state,

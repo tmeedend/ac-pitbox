@@ -32,8 +32,18 @@ use crate::config::AppConfig;
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
 const CONVERTER_VERSION: u32 = 11;
 
-/// Plafond du cache (§5.3). Au-delà, éviction du plus ancien utilisé.
-const CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+/// Default cache ceiling (§5.3). Beyond it, the least recently used entries
+/// are evicted. Only a default: the real ceiling is a setting, carried by
+/// [`PreviewState`] — the frontend pushes it in at startup and on every
+/// change (`set_preview_cache_cap`).
+const DEFAULT_CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
+/// Bounds accepted for that setting. The floor is not cosmetic: a ceiling
+/// under one entry would evict a model the moment it is written, so every
+/// preview would reconvert on every visit — a setting that turns the cache
+/// off without saying so.
+const CACHE_CAP_MIN_BYTES: u64 = 512 * 1024 * 1024;
+const CACHE_CAP_MAX_BYTES: u64 = 20 * 1024 * 1024 * 1024;
 
 /// Ce que l'UI reçoit d'une conversion réussie (§7.1).
 ///
@@ -54,7 +64,6 @@ pub struct CarPreview {
 
 /// État partagé : sérialise les conversions et permet d'abandonner celles
 /// devenues obsolètes (§7.3).
-#[derive(Default)]
 pub struct PreviewState {
     /// Incrémenté à chaque demande. Une conversion dont le jeton n'est plus
     /// le dernier a été remplacée par une sélection plus récente.
@@ -66,6 +75,24 @@ pub struct PreviewState {
     /// Le ménage des entrées d'une version antérieure a-t-il déjà eu lieu ?
     /// Une fois par exécution suffit — le dossier ne se périme pas tout seul.
     swept: std::sync::atomic::AtomicBool,
+    /// Cache ceiling in bytes, as the user set it. Held here rather than read
+    /// from `ui_prefs.json`: that file's schema belongs to the frontend (see
+    /// `ui_prefs.rs`), so the frontend pushes the value in rather than the
+    /// backend reaching into it. Until it does, the default applies — which
+    /// only matters for a conversion asked before the UI has booted, and there
+    /// is none.
+    cap: AtomicU64,
+}
+
+impl Default for PreviewState {
+    fn default() -> Self {
+        Self {
+            generation: AtomicU64::new(0),
+            slot: Mutex::new(()),
+            swept: std::sync::atomic::AtomicBool::new(false),
+            cap: AtomicU64::new(DEFAULT_CACHE_MAX_BYTES),
+        }
+    }
 }
 
 impl PreviewState {
@@ -77,6 +104,44 @@ impl PreviewState {
     fn is_current(&self, token: u64) -> bool {
         self.generation.load(Ordering::SeqCst) == token
     }
+
+    fn cache_cap(&self) -> u64 {
+        self.cap.load(Ordering::Relaxed)
+    }
+}
+
+/// Brings `bytes` into the accepted range. An out-of-bounds value is clamped
+/// rather than refused: it reaches us from a slider, and a settings screen has
+/// no useful way to report "this number is impossible".
+fn clamp_cap(bytes: u64) -> u64 {
+    bytes.clamp(CACHE_CAP_MIN_BYTES, CACHE_CAP_MAX_BYTES)
+}
+
+/// Applies the cache ceiling and enforces it **right away** (§5.3).
+///
+/// Evicting on the spot rather than at the next conversion is what makes the
+/// setting legible: someone who lowers the ceiling to free disk space expects
+/// the space to be free when the figure next to the slider updates, not after
+/// they next open a car.
+pub fn set_cache_cap(app: &tauri::AppHandle, state: &PreviewState, bytes: u64) -> Result<(), String> {
+    let cap = clamp_cap(bytes);
+    state.cap.store(cap, Ordering::Relaxed);
+    evict_to(&cache_dir(app)?, cap);
+    Ok(())
+}
+
+/// Bytes currently held by the cache, entries and counter files alike.
+pub fn cache_usage(app: &tauri::AppHandle) -> Result<u64, String> {
+    let dir = cache_dir(app)?;
+    let mut total = 0u64;
+    for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
+        if let Ok(meta) = entry.metadata() {
+            if meta.is_file() {
+                total += meta.len();
+            }
+        }
+    }
+    Ok(total)
 }
 
 /// Dossier du cache, créé au besoin.
@@ -249,7 +314,7 @@ pub fn prepare(
     }
 
     write_entry(&dir, &stem, &conversion)?;
-    evict_over_cap(&dir);
+    evict_to(&dir, state.cache_cap());
 
     Ok(CarPreview {
         url: url_for(&stem),
@@ -296,10 +361,6 @@ fn touch(file: &Path) {
     if let Ok(handle) = std::fs::File::options().write(true).open(file) {
         let _ = handle.set_modified(SystemTime::now());
     }
-}
-
-fn evict_over_cap(dir: &Path) {
-    evict_to(dir, CACHE_MAX_BYTES);
 }
 
 /// Ramène le cache sous `cap` en supprimant les entrées les plus anciennement
@@ -635,6 +696,22 @@ mod tests {
         // Une fois sous le plafond, plus rien ne bouge.
         evict_to(&dir, 16);
         assert!(fresh.exists(), "sous le plafond, rien n'est évincé");
+    }
+
+    // Règle : le plafond de cache réglable reste dans ses bornes, et un
+    // plafond trop bas ne peut pas transformer le cache en trou noir
+    // (§5.3 — bornes de `set_preview_cache_cap`).
+    #[test]
+    fn cache_cap_is_clamped_into_its_range() {
+        assert_eq!(clamp_cap(0), CACHE_CAP_MIN_BYTES, "zero is raised to the floor");
+        assert_eq!(clamp_cap(u64::MAX), CACHE_CAP_MAX_BYTES, "the ceiling is capped");
+        let inside = 4 * 1024 * 1024 * 1024;
+        assert_eq!(clamp_cap(inside), inside, "a value inside the range is left alone");
+        assert_eq!(
+            clamp_cap(DEFAULT_CACHE_MAX_BYTES),
+            DEFAULT_CACHE_MAX_BYTES,
+            "the default is itself a legal value"
+        );
     }
 
     /// Requête minimale vers le protocole, pour les tests.

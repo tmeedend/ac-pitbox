@@ -10,10 +10,16 @@
   // les écrans qui n'affichent aucun aperçu.
   import { onDestroy, untrack } from "svelte";
   import { prepareCarPreview, onPreviewProgress, type PreviewStage } from "$lib/preview";
-  import { preview3dPrefs, preview3dReady, preview3dResets } from "$lib/preview3dPrefs.svelte";
+  import {
+    preview3dPrefs,
+    preview3dReady,
+    preview3dResets,
+    type PreviewQuality,
+  } from "$lib/preview3dPrefs.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
   import type * as ThreeModule from "three";
+  import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 
   let {
     carId,
@@ -70,6 +76,16 @@
     lastFrameAt: number;
     observer: ResizeObserver | null;
     visibility: IntersectionObserver | null;
+    /** Recale renderer, chaîne de post-traitement et caméra sur la taille du
+     * conteneur. Portée par la scène pour qu'un changement de qualité puisse
+     * la rejouer depuis l'extérieur de `build`. */
+    resize: () => void;
+    /** Chaîne de post-traitement, quand la qualité demande SMAA. `null` sinon,
+     * et le rendu passe alors directement par le renderer. */
+    composer: EffectComposer | null;
+    /** Horodatage du début de l'effet d'entrée, 0 quand il n'y en a pas ou
+     * qu'il est terminé (§15 — effet d'intro). */
+    introAt: number;
     /** Libérée : plus rien ne doit lui demander de rendu (une reprise de
      * rotation en attente, par exemple, survit à la scène qui l'a armée). */
     disposed: boolean;
@@ -109,6 +125,139 @@
   /** Reprise après un lâcher de souris. Assez long pour examiner un détail
    * sans que le plateau ne redémarre sous les doigts. */
   const SPIN_RESUME_MS = 4000;
+
+  // Qualité de rendu (§15). Ne touche **que** l'affichage : aucun de ces
+  // réglages n'entre dans la conversion, donc en changer n'invalide aucune
+  // entrée de cache et s'applique à l'image suivante.
+  //
+  // Les deux leviers ne traitent pas le même défaut, et c'est pour ça qu'il
+  // en faut deux. Le suréchantillonnage augmente le **taux d'ombrage** : c'est
+  // le seul qui attaque le scintillement d'un reflet plus fin qu'un pixel sur
+  // une carrosserie, que le MSAA ne voit pas (il échantillonne la couverture
+  // des triangles, mais n'ombre qu'une fois par pixel). SMAA, lui, travaille
+  // sur l'image finie et rattrape les marches d'escalier qui restent, y
+  // compris sur une géométrie sous-pixel — les lames d'une calandre.
+  const QUALITY = {
+    /** Ce que faisait l'app avant ce réglage. */
+    standard: { pixelRatio: 2, smaa: false },
+    high: { pixelRatio: 2.5, smaa: true },
+    ultra: { pixelRatio: 3, smaa: true },
+  } as const;
+
+  /** Plancher de suréchantillonnage, même sur un écran à 1 dpi : le MSAA
+   * échantillonne les bords, pas l'intérieur des surfaces, et sur une
+   * carrosserie lisse ce sont les reflets qui scintillent. */
+  const MIN_PIXEL_RATIO = 1.5;
+
+  // Effet d'entrée du plateau (§15). Deux gestes, et rien d'autre qu'un
+  // facteur appliqué à la vitesse déjà calculée : aucune image de plus, aucun
+  // coût GPU.
+  /** Montée en douceur jusqu'à la vitesse réglée. */
+  const INTRO_RAMP_MS = 1200;
+  /** Départ lancé : la voiture part à `1 + BOOST` fois la vitesse réglée et
+   * décroît vers elle. Durée choisie pour que le dernier dixième de l'écart
+   * soit déjà imperceptible quand on coupe. */
+  const INTRO_LAUNCH_MS = 2600;
+  const INTRO_LAUNCH_BOOST = 4;
+  const INTRO_LAUNCH_TAU_MS = 900;
+
+  /** Le niveau de qualité courant. Passe par une fonction : lu à chaque
+   * construction et à chaque changement de réglage, jamais capturé. */
+  function quality() {
+    return QUALITY[preview3dPrefs().quality];
+  }
+
+  /** Applique le suréchantillonnage du niveau courant. Le plancher reste en
+   * place quel que soit le niveau : c'est lui qui traite le scintillement des
+   * reflets, pas le confort d'affichage. */
+  function applyPixelRatio(renderer: ThreeModule.WebGLRenderer) {
+    renderer.setPixelRatio(Math.min(Math.max(window.devicePixelRatio, MIN_PIXEL_RATIO), quality().pixelRatio));
+  }
+
+  /**
+   * Chaîne SMAA.
+   *
+   * La cible est **multi-échantillonnée à la main** (`samples: 4`), et c'est
+   * le piège de tout le montage : dès qu'on passe par un `EffectComposer`, le
+   * rendu ne va plus dans le tampon d'écran, donc l'`antialias: true` du
+   * contexte ne s'applique plus à rien. Sans cette option, activer SMAA
+   * *retirerait* le MSAA — un antialiasing échangé contre un autre au lieu des
+   * deux cumulés.
+   *
+   * Ordre des passes : rendu → SMAA → sortie. SMAA **avant** `OutputPass`,
+   * et non après comme on l'écrirait spontanément pour un filtre
+   * morphologique : trois.js documente cette implémentation comme travaillant
+   * en `linear-srgb` (en-tête de `SMAAPass.js`, r185). Placée en dernier, la
+   * passe chercherait ses contours dans des valeurs déjà converties, ce pour
+   * quoi ses seuils ne sont pas réglés.
+   */
+  async function buildComposer(
+    THREE: typeof ThreeModule,
+    renderer: ThreeModule.WebGLRenderer,
+    scene: ThreeModule.Scene,
+    camera: ThreeModule.PerspectiveCamera,
+  ): Promise<EffectComposer> {
+    const [{ EffectComposer }, { RenderPass }, { OutputPass }, { SMAAPass }] = await Promise.all([
+      import("three/examples/jsm/postprocessing/EffectComposer.js"),
+      import("three/examples/jsm/postprocessing/RenderPass.js"),
+      import("three/examples/jsm/postprocessing/OutputPass.js"),
+      import("three/examples/jsm/postprocessing/SMAAPass.js"),
+    ]);
+    const size = renderer.getSize(new THREE.Vector2());
+    const ratio = renderer.getPixelRatio();
+    const target = new THREE.WebGLRenderTarget(
+      Math.max(Math.round(size.x * ratio), 1),
+      Math.max(Math.round(size.y * ratio), 1),
+      { type: THREE.HalfFloatType, samples: 4 },
+    );
+    const composer = new EffectComposer(renderer, target);
+    composer.setPixelRatio(ratio);
+    composer.addPass(new RenderPass(scene, camera));
+    composer.addPass(new SMAAPass());
+    composer.addPass(new OutputPass());
+    return composer;
+  }
+
+  /** Libère une chaîne de post-traitement. `EffectComposer.dispose()` ne
+   * s'occupe que de ses deux tampons : les passes gardent les leurs (SMAA en
+   * a deux, plus ses textures de recherche), et personne ne les libérerait. */
+  function disposeComposer(composer: EffectComposer | null) {
+    if (!composer) return;
+    for (const pass of composer.passes) pass.dispose?.();
+    composer.dispose();
+  }
+
+  /**
+   * Facteur appliqué à la vitesse du plateau pendant l'effet d'entrée (§15).
+   *
+   * Se désarme lui-même en écrivant `introAt = 0` : une fois l'effet fini, il
+   * ne reste aucun calcul par image, et la boucle de rendu retrouve exactement
+   * le code qu'elle avait avant ce réglage.
+   */
+  function introFactor(current: ThreeScene, now: number): number {
+    if (!current.introAt) return 1;
+    const elapsed = now - current.introAt;
+    const mode = preview3dPrefs().intro;
+    if (mode === "ramp" && elapsed < INTRO_RAMP_MS) {
+      // Lissage en S : démarrer linéairement se voit — la voiture part d'un
+      // coup à vitesse faible au lieu de s'ébranler.
+      const x = elapsed / INTRO_RAMP_MS;
+      return x * x * (3 - 2 * x);
+    }
+    if (mode === "launch" && elapsed < INTRO_LAUNCH_MS) {
+      return 1 + INTRO_LAUNCH_BOOST * Math.exp(-elapsed / INTRO_LAUNCH_TAU_MS);
+    }
+    current.introAt = 0;
+    return 1;
+  }
+
+  /** Arme l'effet d'entrée sur la scène donnée, si les réglages en veulent un.
+   * Un plateau à l'arrêt n'en reçoit pas : il n'y a rien à lancer. */
+  function armIntro(current: ThreeScene) {
+    const prefs = preview3dPrefs();
+    current.introAt =
+      reducedMotion || prefs.intro === "none" || prefs.spin === 0 ? 0 : performance.now();
+  }
 
   /** Une préférence système « moins d'animations » désactive le plateau : une
    * rotation permanente est exactement ce qu'elle demande d'éviter. */
@@ -181,6 +330,8 @@
       }
     });
     current.scene.clear();
+    disposeComposer(current.composer);
+    current.composer = null;
     current.controls.dispose();
     current.pmrem.dispose();
     current.renderer.dispose();
@@ -216,10 +367,17 @@
         // parfaitement stable, les reflets glissent sur la carrosserie, et
         // rien ne vient contrarier l'état interne d'OrbitControls quand
         // l'utilisateur prend la main.
-        current.turntable.rotation.y += SPIN_SPEED * (preview3dPrefs().spin / 100) * elapsed;
+        const intro = introFactor(current, now);
+        current.turntable.rotation.y += SPIN_SPEED * (preview3dPrefs().spin / 100) * intro * elapsed;
       }
       const moving = current.controls.update();
-      current.renderer.render(current.scene, current.camera);
+      if (current.composer) current.composer.render();
+      else current.renderer.render(current.scene, current.camera);
+      // Rien à ajouter pour l'effet d'entrée : il ne fait qu'accélérer un
+      // plateau qui tourne, donc `turning()` le couvre déjà. L'ajouter ici
+      // ferait tourner la boucle dans le vide si la vitesse passait à 0 en
+      // cours d'effet — l'effet resterait armé, plus rien ne bougerait, et le
+      // panneau redemanderait une image soixante fois par seconde.
       if (moving || turning()) requestRender(current);
       else current.lastFrameAt = 0;
     });
@@ -272,12 +430,10 @@
     const { showroomEnvironment } = await import("./showroomEnvironment");
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    // Rendu à 1,5× au minimum, même sur un écran à 1 dpi : le MSAA échantillonne
-    // les bords, pas l'intérieur des surfaces, et sur une carrosserie lisse ce
-    // sont les reflets qui scintillent. Suréchantillonner puis réduire est le
-    // remède direct, et le panneau est assez petit pour que ça ne se paie pas.
-    // Plafond à 2 — au-delà, la facture en pixels double sans que ça se voie.
-    renderer.setPixelRatio(Math.min(Math.max(window.devicePixelRatio, 1.5), 2));
+    // Suréchantillonner puis réduire est le remède direct au scintillement des
+    // reflets, et le panneau est assez petit pour qu'on puisse se le payer. Le
+    // plafond vient du niveau de qualité (§15) — c'était 2 en dur avant lui.
+    applyPixelRatio(renderer);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.shadowMap.enabled = true;
@@ -444,8 +600,14 @@
       lastFrameAt: 0,
       observer: null,
       visibility: null,
+      resize: () => {},
+      composer: null,
+      introAt: 0,
       disposed: false,
     };
+    // Chaîne SMAA d'emblée si le niveau de qualité la demande : la monter
+    // après la première image ferait clignoter le panneau à l'ouverture.
+    if (quality().smaa) built.composer = await buildComposer(THREE, renderer, scene, camera);
     // Reprise de la scène précédente, ou cadrage réglé si on part de zéro.
     const carried = carry?.();
     if (carried) {
@@ -462,10 +624,16 @@
       const height = host.clientHeight;
       if (width === 0 || height === 0) return;
       renderer.setSize(width, height, false);
+      // `setPixelRatio` avant `setSize` : la chaîne multiplie la taille reçue
+      // par le ratio qu'elle connaît, et un ratio périmé lui ferait allouer
+      // des cibles de la mauvaise taille après un changement de qualité.
+      built.composer?.setPixelRatio(renderer.getPixelRatio());
+      built.composer?.setSize(width, height);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       requestRender(built);
     };
+    built.resize = resize;
     built.observer = new ResizeObserver(resize);
     built.observer.observe(host);
     resize();
@@ -629,6 +797,12 @@
         loadedCar = car;
         phase = "ready";
         swapping = false;
+        // Armé ici et non dans `build` : le modèle n'apparaît qu'à partir de
+        // cette ligne, et un effet d'entrée commencé pendant la conversion
+        // serait à moitié joué avant d'être visible. Jamais sur un changement
+        // de skin à chaud — la voiture en place tourne déjà, la relancer
+        // serait un défaut, pas un effet.
+        if (!hot) armIntro(built);
         requestRender(built);
       } catch (e) {
         if (cancelled) return;
@@ -648,6 +822,40 @@
     return () => {
       cancelled = true;
     };
+  });
+
+  /**
+   * Applique un niveau de qualité à la scène en place, sans la reconstruire :
+   * rien de ce que le niveau change ne dépend du modèle, et recharger coûterait
+   * le retour à la photo pour finir sur la même voiture.
+   */
+  async function applyQuality(current: ThreeScene | null, level: PreviewQuality) {
+    if (!current || current.disposed) return;
+    applyPixelRatio(current.renderer);
+    const wanted = QUALITY[level].smaa;
+    if (wanted && !current.composer) {
+      const composer = await buildComposer(current.THREE, current.renderer, current.scene, current.camera);
+      // Les imports dynamiques laissent le temps de changer d'avis : la scène
+      // a pu être libérée, ou le réglage repasser à un niveau sans SMAA.
+      if (current.disposed || !QUALITY[preview3dPrefs().quality].smaa) {
+        disposeComposer(composer);
+        return;
+      }
+      current.composer = composer;
+    } else if (!wanted && current.composer) {
+      disposeComposer(current.composer);
+      current.composer = null;
+    }
+    if (current.disposed) return;
+    current.resize();
+    requestRender(current);
+  }
+
+  // Niveau de qualité changé pendant qu'une fiche est ouverte : même principe
+  // que le cadrage ci-dessous, l'aperçu suit sans être remonté.
+  $effect(() => {
+    const level = preview3dPrefs().quality;
+    untrack(() => void applyQuality(scene, level));
   });
 
   // Un réglage de cadrage changé pendant qu'une fiche est ouverte s'applique
@@ -675,6 +883,7 @@
       stopResume();
       scene.turntable.rotation.y = 0;
       spinning = !reducedMotion;
+      armIntro(scene);
       placeCamera(scene);
     });
   });

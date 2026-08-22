@@ -40,3 +40,23 @@ pub async fn prepare_car_preview(
 pub fn clear_preview_cache(app: AppHandle) -> Result<u64, String> {
     crate::preview::clear_cache(&app)
 }
+
+/// Octets actuellement occupés par le cache d'aperçus (§5.3).
+#[tauri::command]
+pub fn preview_cache_size(app: AppHandle) -> Result<u64, String> {
+    crate::preview::cache_usage(&app)
+}
+
+/// Fixe le plafond du cache et l'applique tout de suite (§5.3).
+///
+/// Le réglage vit dans `ui_prefs.json`, dont le schéma appartient au
+/// frontend : c'est donc lui qui pousse la valeur ici, au démarrage et à
+/// chaque changement, plutôt que le backend qui irait la lire.
+#[tauri::command]
+pub fn set_preview_cache_cap(
+    app: AppHandle,
+    state: State<'_, crate::preview::PreviewState>,
+    bytes: u64,
+) -> Result<(), String> {
+    crate::preview::set_cache_cap(&app, &state, bytes)
+}

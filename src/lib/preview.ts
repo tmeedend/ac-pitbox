@@ -37,6 +37,23 @@ export function clearPreviewCache(): Promise<number> {
   return invoke<number>("clear_preview_cache");
 }
 
+/** Octets actuellement occupés par le cache d'aperçus. */
+export function previewCacheSize(): Promise<number> {
+  return invoke<number>("preview_cache_size");
+}
+
+/**
+ * Fixe le plafond du cache, en octets, et l'applique immédiatement — baisser
+ * le plafond libère la place tout de suite, sans attendre une conversion.
+ *
+ * Le réglage vit côté frontend (`ui_prefs.json`) : c'est donc lui qui le
+ * pousse au backend, au démarrage et à chaque changement. Le backend borne la
+ * valeur lui-même, l'appelant n'a pas à s'en occuper.
+ */
+export function setPreviewCacheCap(bytes: number): Promise<void> {
+  return invoke<void>("set_preview_cache_cap", { bytes });
+}
+
 /**
  * S'abonne à la progression de la conversion en cours, pour alimenter le
  * squelette de chargement (§7.3). Renvoie la fonction de désabonnement.

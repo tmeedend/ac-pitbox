@@ -759,7 +759,38 @@ gêne constatée :
      échantillons ;
    - le scintillement des **reflets** sur une carrosserie lisse, qui n'est pas
      un problème de bord → rendu à 1,5× au minimum puis réduit
-     (`setPixelRatio`), plafonné à 2.
+     (`setPixelRatio`).
+
+   **Complété ensuite par un niveau de qualité** (Réglages → Aperçu → Rendu),
+   après que l'utilisateur a signalé des marches d'escalier persistantes sur
+   deux voitures — le flanc d'une NSX et la calandre d'une Mustang. Les deux
+   défauts ne sont pas de la même famille, d'où deux leviers :
+
+   - un **reflet plus fin qu'un pixel** sur une surface quasi-miroir. Le MSAA
+     ne peut rien pour lui : il échantillonne la *couverture* des triangles,
+     mais n'ombre qu'une fois par pixel — un scintillement à l'intérieur d'une
+     face lui est invisible par construction. Seul le suréchantillonnage
+     l'attaque, parce que lui seul augmente le taux d'ombrage. D'où un plafond
+     porté de 2 à 2,5 (Élevée) ou 3 (Ultra).
+   - une **géométrie sous-pixel** — des lames de calandre plus fines qu'un
+     pixel — que le MSAA voit, mais où quatre échantillons saturent. Traitée
+     par une passe **SMAA**, qui travaille sur l'image finie.
+
+   Le montage SMAA porte un piège à connaître : dès qu'on passe par un
+   `EffectComposer`, le rendu ne va plus dans le tampon d'écran et
+   l'`antialias: true` du contexte ne s'applique plus à rien. Sa cible est donc
+   créée à la main avec `samples: 4`, sans quoi activer SMAA *retirerait* le
+   MSAA au lieu de s'y ajouter. Ordre des passes : rendu → SMAA →
+   `OutputPass` — SMAA **avant** la sortie, et non après comme on l'écrirait
+   spontanément pour un filtre morphologique : three.js documente cette
+   implémentation comme travaillant en `linear-srgb` (en-tête de
+   `SMAAPass.js`, r185).
+
+   Trois niveaux, **rendu seulement** : rien de ce qu'ils changent n'entre
+   dans la conversion, donc en changer n'invalide aucune entrée de cache et
+   s'applique à l'image suivante, sur une fiche déjà ouverte, sans recharger
+   le modèle. Standard reproduit exactement ce que faisait l'app avant ce
+   réglage ; Élevée est le défaut.
 
 9. ~~**Certains mods s'affichent en carré/nuage de triangles bleus.**~~
    ✅ **Corrigé.** Signalé par l'utilisateur sur deux mods
@@ -774,11 +805,23 @@ gêne constatée :
    (converties avec succès mais montrant la géométrie cassée) soient
    reconverties — et cette fois refusées — plutôt que servies telles quelles.
 
+10. **Effet d'entrée du plateau** (Réglages → Aperçu → Rendu). Trois choix :
+    *Aucun* (la voiture tourne tout de suite à sa vitesse), *Progressif* — le
+    défaut, une montée en douceur sur 1,2 s — et *Lancé*, qui part à cinq fois
+    la vitesse réglée et décroît vers elle en ~2,6 s. Ce n'est qu'un facteur
+    appliqué à la vitesse déjà calculée par image : aucune image de plus,
+    aucun coût GPU, et le facteur se désarme tout seul une fois l'effet fini.
+    Il est armé **au moment où le modèle arrive à l'écran**, pas à la fin de
+    `build()` : commencé pendant la conversion, il serait à moitié joué avant
+    d'être visible. Jamais sur un changement de skin à chaud — la voiture en
+    place tourne déjà, la relancer serait un défaut et non un effet. Le bouton
+    « replacer la voiture », lui, le rejoue. Un plateau à l'arrêt (vitesse 0)
+    ou une préférence système « moins d'animations » n'en reçoivent aucun.
+
 Restent aussi, hérités du plan initial : **R et B de `txMaps`** (§6.2, §12 q3 —
 le vert est documenté et exploité, voir `kn5-format.md` écart n°7 ; les deux
-autres canaux restent ouverts), choix du LOD en config, purge **manuelle** du
-cache depuis les Réglages, et l'aperçu dans `ModDetail.svelte` (panneau
-latéral), qui n'a jamais été branché.
+autres canaux restent ouverts), choix du LOD en config, et l'aperçu dans
+`ModDetail.svelte` (panneau latéral), qui n'a jamais été branché.
 
 ### 15.1 Cache — ce qui est en place
 
@@ -794,10 +837,26 @@ dans le nom du fichier. Deux effets, et il faut les deux :
   plus être demandé — c'est l'invalidation ;
 - elle est **reconnaissable**, donc effaçable. Au premier aperçu de chaque
   exécution, les entrées d'une autre version sont supprimées. Sans ça elles
-  restaient à occuper le disque jusqu'à ce que le plafond de 2 Gio les évince :
-  trois incréments en une session de travail avaient laissé plusieurs centaines
-  de Mo derrière eux.
+  restaient à occuper le disque jusqu'à ce que le plafond les évince : trois
+  incréments en une session de travail avaient laissé plusieurs centaines de
+  Mo derrière eux.
+
+**Le plafond est un réglage** (Réglages → Aperçu → Cache), de 0,5 à 20 Go, à
+2 Go par défaut. Il vit dans `ui_prefs.json` comme les autres réglages
+d'aperçu, et c'est le **frontend qui le pousse au backend** — au chargement et
+à chaque changement — plutôt que le backend qui irait le lire : le schéma de ce
+fichier appartient au frontend (voir l'en-tête de `ui_prefs.rs`). Le backend
+borne la valeur lui-même, et le plancher n'est pas cosmétique : un plafond
+inférieur à une entrée évincerait un modèle à l'instant où il est écrit, donc
+le reconvertirait à chaque visite — un réglage qui désactiverait le cache sans
+le dire.
+
+Baisser le plafond **évince tout de suite**, sans attendre la prochaine
+conversion : quelqu'un qui réduit le plafond pour libérer de la place attend
+que la place soit libre quand le chiffre affiché à côté du curseur change, pas
+après avoir rouvert une voiture.
 
 La purge manuelle depuis les Réglages garde son intérêt malgré ce ménage — le
 cache d'une grande bibliothèque atteint vite le gigaoctet **en entrées
-valides**.
+valides**. L'écran affiche la taille réellement occupée à côté du plafond :
+sans elle, le réglage se règle à l'aveugle.
