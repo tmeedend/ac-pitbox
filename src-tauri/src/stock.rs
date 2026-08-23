@@ -227,6 +227,37 @@ pub fn index_stock_content(
     Ok(count)
 }
 
+/// Rejuge le classement contenu de base / mod non géré de tout ce qui est déjà
+/// indexé, **sans relire le disque** (§12bis.1bis). Renvoie le nombre d'entrées
+/// dont le drapeau a changé.
+///
+/// L'indexation complète ne se relance ni au démarrage (elle ne tourne que si
+/// rien n'est indexé) ni à l'ouverture d'un écran : sur une base écrite avant
+/// cette distinction, les mods de l'utilisateur seraient donc restés étiquetés
+/// « contenu de base » — avec le chemin de couche ouvert dessus — jusqu'à un
+/// réindex manuel que personne n'a de raison de lancer. D'où cette passe, assez
+/// bon marché (une requête, une comparaison par entrée) pour tourner à chaque
+/// démarrage.
+///
+/// Ne touche **que** `is_unmanaged`. L'auteur « Kunos » inscrit à tort sur la
+/// version synthétique d'un mod, lui, ne se corrige qu'au prochain réindex :
+/// c'est de l'affichage, pas une protection.
+pub fn reclassify_indexed_content(conn: &Connection) -> Result<usize, String> {
+    let mut changed = 0;
+    for (id, kind_str) in overlay::list_stock_ids(conn).map_err(|e| e.to_string())? {
+        let kind = if kind_str == "Track" {
+            ModKind::Track
+        } else {
+            ModKind::Car
+        };
+        let unmanaged = !kunos_dates::is_official(kind, &id);
+        if overlay::set_unmanaged(conn, &id, unmanaged).map_err(|e| e.to_string())? > 0 {
+            changed += 1;
+        }
+    }
+    Ok(changed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -544,6 +575,30 @@ mod tests {
             None,
             "no author is better than a made-up Kunos"
         );
+    }
+
+    /// Rule: the startup pass reclassifies an existing base without touching
+    /// the disk (§12bis.1bis) — the full scan never runs again once something
+    /// is indexed, so without it a base written before the distinction would
+    /// keep the user's mods filed as game content until a manual reindex.
+    #[test]
+    fn startup_pass_reclassifies_without_reading_the_disk() {
+        let base = crate::testutil::temp_dir("stock-reclass-pass");
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        // État d'avant : tout indexé comme contenu de base, aucun dossier AC.
+        overlay::upsert_stock_mod(&conn, "monza", "Track", None, Some("Monza"), "now", false).unwrap();
+        overlay::upsert_stock_mod(&conn, "srp", "Track", None, Some("Shutoko"), "now", false).unwrap();
+
+        assert_eq!(
+            reclassify_indexed_content(&conn).unwrap(),
+            1,
+            "one entry actually moves"
+        );
+        assert!(!overlay::get_mod(&conn, "monza").unwrap().unwrap().is_unmanaged);
+        assert!(overlay::get_mod(&conn, "srp").unwrap().unwrap().is_unmanaged);
+
+        // Idempotent : rien à reclasser au démarrage suivant.
+        assert_eq!(reclassify_indexed_content(&conn).unwrap(), 0, "nothing left to move");
     }
 
     /// Rule: bases written before this distinction filed every real folder of

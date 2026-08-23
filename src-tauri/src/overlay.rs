@@ -1459,6 +1459,26 @@ pub fn count_stock(conn: &Connection) -> rusqlite::Result<i64> {
     conn.query_row("SELECT COUNT(*) FROM mods WHERE is_stock = 1", [], |r| r.get(0))
 }
 
+/// Ids indexés depuis `content/`, avec leur type — de quoi rejuger leur
+/// classement sans relire le disque ([`crate::stock::reclassify_indexed_content`]).
+pub fn list_stock_ids(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
+    let mut stmt = conn.prepare("SELECT id_interne, kind FROM mods WHERE is_stock = 1")?;
+    let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+    rows.collect()
+}
+
+/// Repositionne le seul drapeau `is_unmanaged` d'une entrée déjà indexée
+/// (§12bis.1bis). N'écrit rien d'autre : c'est ce qui permet de reclasser une
+/// base existante sans toucher aux saisies de l'utilisateur.
+pub fn set_unmanaged(conn: &Connection, id: &str, unmanaged: bool) -> rusqlite::Result<usize> {
+    conn.execute(
+        // `is_unmanaged != ?2` : le nombre de lignes touchées devient le nombre de
+        // reclassements réels, pas le nombre d'entrées examinées.
+        "UPDATE mods SET is_unmanaged = ?2 WHERE id_interne = ?1 AND is_stock = 1 AND is_unmanaged != ?2",
+        params![id, unmanaged as i64],
+    )
+}
+
 // --- Couches / extensions (§4.4) --------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

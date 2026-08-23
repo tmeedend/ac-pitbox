@@ -119,6 +119,18 @@ pub fn run() {
                     log::warn!("index_stock_content at startup: {e}");
                 }
             }
+            // Contenu de base vs mod installé hors Pit Box (§12bis.1bis) : une
+            // base écrite avant cette distinction range les seconds avec les
+            // premiers, ce qui autorise dessus des écritures qu'ils ne doivent
+            // pas subir. Le scan complet ci-dessus ne se relancerait jamais
+            // (il exige un index vide), donc cette passe — sans disque, une
+            // comparaison par entrée — rattrape le classement à chaque
+            // démarrage.
+            match stock::reclassify_indexed_content(&conn) {
+                Ok(n) if n > 0 => log::warn!("reclassified {n} indexed entries as unmanaged mods"),
+                Err(e) => log::warn!("reclassify_indexed_content at startup: {e}"),
+                _ => {}
+            }
 
             app.manage(Db(std::sync::Mutex::new(conn)));
             // Drapeau d'annulation d'un import en cours (§4.2bis).
