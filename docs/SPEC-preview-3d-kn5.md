@@ -806,44 +806,56 @@ gêne constatée :
    le modèle. Standard reproduit exactement ce que faisait l'app avant ce
    réglage ; Élevée est le défaut.
 
-   **⚠ Le défaut n'est toujours pas réglé, et le symptôme a changé de nature.**
-   Après le correctif cible/plafond, l'utilisateur ne voit **aucune différence
-   entre Standard (1,5×) et Ultra (4×)** — ni sur le flanc de la NSX, ni sur
-   les pièces fines de sa face avant. Son diagnostic, plus juste que le mien :
-   ce sont les **formes 3D** qui crénellent, pas seulement les reflets.
+   **Suite, et deux corrections.**
 
-   C'est cette absence de différence qui est le vrai signal, et elle déplace le
-   soupçon : **le suréchantillonnage lisse toujours un bord géométrique.** Sept
-   fois plus de pixels ne peuvent pas donner exactement la même image. Le
-   défaut est donc probablement dans la *plomberie* — le tampon de rendu n'a
-   pas la taille demandée, ou les pixels supplémentaires sont jetés en aval —
-   et non dans la technique d'antialiasing.
+   *Première fausse piste, la mienne.* Après le correctif cible/plafond,
+   l'utilisateur a d'abord rapporté ne voir **aucune** différence entre
+   Standard et Ultra, ce qui m'a fait soupçonner la plomberie — sept fois plus
+   de pixels ne pouvant pas donner la même image. La prémisse était fausse :
+   deux captures de l'arrière de la NSX montrent une différence franche (ovales
+   des sorties d'échappement ronds au lieu de dentelés, cadre de plaque propre,
+   jonc chromé continu). J'avais bâti quatre hypothèses sur une impression.
+   **Une absence de différence rapportée à l'œil n'est pas une mesure.**
 
-   **Rien n'a été mesuré à ce stade** : tout ce qui précède est du raisonnement
-   sur le code. Pistes à tester, dans cet ordre :
+   *Seconde, sur SMAA.* La passe a été ajoutée, puis déplacée après
+   `OutputPass` — argument chiffré à l'appui : son seuil de détection est 0,1,
+   en dur dans le shader, et le linéaire écrase les sombres, un bord typique du
+   bas de caisse (40 → 90 sur 255) pesant 0,196 en sRGB contre 0,078 en
+   linéaire, donc sous le seuil. Le raisonnement était juste et **le résultat
+   n'a rien donné** : comparée à l'écran sur le cas le plus défavorable qui
+   soit — un jonc chromé quasi horizontal d'un pixel de haut sur fond noir — la
+   passe n'a produit aucune différence visible, ni avant ni après le
+   déplacement. Un essai à 5× n'en a pas produit non plus par rapport à 4×.
 
-   1. **Mesurer ce qui est réellement rendu**, avant toute autre chose :
-      `renderer.getPixelRatio()`, puis `canvas.width`/`height` comparés à
-      `clientWidth`/`clientHeight`, relevés dans l'app réelle. Un rapport de 1
-      là où on attend 4 clôt la question immédiatement.
-   2. **Le `zoom` CSS de l'interface** (`src/lib/zoom.svelte.ts` applique
-      `document.documentElement.style.zoom`, 110 % chez l'utilisateur).
-      `devicePixelRatio` l'ignore, et `clientWidth` sous `zoom` ne rend pas la
-      même chose d'un moteur à l'autre : le tampon peut être dimensionné sur
-      des valeurs non zoomées, donc ~10 % trop petit puis étiré. Insuffisant à
-      lui seul pour expliquer le symptôme, mais **il rend toute mesure
-      ambiguë** — mesurer avec le zoom à 100 %.
-   3. **La chaîne de post-traitement** (active à partir d'Élevée) redimensionne
-      ses cibles depuis un ratio qu'elle mémorise : vérifier qu'elle ne les
-      alloue pas sur un ratio périmé après un changement de niveau.
-   4. **La composition WebView2** : le canevas est étiré en CSS à 100 % de son
-      conteneur ; vérifier qu'aucun ancêtre ne force une re-rastérisation qui
-      annulerait le suréchantillonnage.
+   **Conclusion, et état final** : la chaîne de post-traitement est **retirée**.
+   Elle imposait un `EffectComposer`, donc **deux** cibles RGBA16F
+   multi-échantillonnées (il clone la sienne) plus les deux tampons internes de
+   SMAA — près d'un gigaoctet de mémoire graphique sur une fiche large — pour
+   un gain que personne n'a pu voir. Le réglage se réduit donc à ce qui se
+   voit, le **suréchantillonnage seul** : 1,5× / 2,5× / 4×.
 
-   Ce qui est en revanche établi : la chaîne SMAA est bien embarquée et
-   chargée (`EffectComposer` et `SMAANeighborhoodBlending` présents dans le
-   bundle de production), et les trois niveaux produisent bien trois valeurs
-   différentes dans le code.
+   Trois effets de bord, tous favorables :
+
+   - le MSAA du contexte (`antialias: true`) revient à **tous** les niveaux, et
+     avec lui `alphaToCoverage` sur les découpes en alpha — le montage
+     post-traitement les avait contournés ;
+   - la mémoire du tampon tombe à 88 Mo (panneau 780 px) à 207 Mo (panneau
+     1200 px) à Ultra, contre près d'un gigaoctet ;
+   - le composant perd la gestion de cycle de vie de la chaîne, qui était la
+     partie la plus fragile du montage.
+
+   Un **budget en pixels** (16 Mpx) est conservé : il porte sur la surface et
+   non sur le facteur, parce que c'est la fenêtre qui décide de la taille du
+   panneau. Une allocation qui échoue ne dégrade pas l'image, elle fait perdre
+   le contexte WebGL et laisse le panneau noir.
+
+   **Ce qui reste ouvert** : un crénelage résiduel sur les lignes claires quasi
+   horizontales, y compris à 4×. Le suréchantillonnage l'atténue sans le
+   supprimer, et aucune passe en aval n'y a changé quoi que ce soit — ce qui
+   oriente le prochain essai **en amont** : lissage des normales ou plancher de
+   rugosité sur ces pièces fines, plutôt qu'un filtre de plus sur l'image finie.
+   Si l'idée d'une passe de post-traitement revient, la leçon est qu'il ne
+   suffit pas de l'ajouter : il faut prouver qu'elle se voit sur ce panneau-là.
 
 9. ~~**Certains mods s'affichent en carré/nuage de triangles bleus.**~~
    ✅ **Corrigé.** Signalé par l'utilisateur sur deux mods

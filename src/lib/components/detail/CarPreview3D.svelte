@@ -14,12 +14,10 @@
     preview3dPrefs,
     preview3dReady,
     preview3dResets,
-    type PreviewQuality,
   } from "$lib/preview3dPrefs.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
   import type * as ThreeModule from "three";
-  import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 
   let {
     carId,
@@ -80,9 +78,9 @@
      * conteneur. Portée par la scène pour qu'un changement de qualité puisse
      * la rejouer depuis l'extérieur de `build`. */
     resize: () => void;
-    /** Chaîne de post-traitement, quand la qualité demande SMAA. `null` sinon,
-     * et le rendu passe alors directement par le renderer. */
-    composer: EffectComposer | null;
+    /** Le conteneur : sa taille décide du budget de pixels, qui se recalcule à
+     * chaque changement de niveau. */
+    host: HTMLElement;
     /** Horodatage du début de l'effet d'entrée, 0 quand il n'y en a pas ou
      * qu'il est terminé (§15 — effet d'intro). */
     introAt: number;
@@ -130,27 +128,47 @@
   // réglages n'entre dans la conversion, donc en changer n'invalide aucune
   // entrée de cache et s'applique à l'image suivante.
   //
-  // Les deux leviers ne traitent pas le même défaut, et c'est pour ça qu'il
-  // en faut deux. Le suréchantillonnage augmente le **taux d'ombrage** : c'est
-  // le seul qui attaque le scintillement d'un reflet plus fin qu'un pixel sur
-  // une carrosserie, que le MSAA ne voit pas (il échantillonne la couverture
-  // des triangles, mais n'ombre qu'une fois par pixel). SMAA, lui, travaille
-  // sur l'image finie et rattrape les marches d'escalier qui restent, y
-  // compris sur une géométrie sous-pixel — les lames d'une calandre.
+  // **Un seul levier, le suréchantillonnage**, et c'est le résultat d'un essai
+  // mené jusqu'au bout plutôt qu'un choix de départ. Une passe SMAA a été
+  // ajoutée, déplacée d'un espace colorimétrique à l'autre, puis retirée :
+  // comparée à l'écran sur le cas le plus défavorable qui soit — un jonc
+  // chromé quasi horizontal d'un pixel de haut sur fond noir — elle n'a jamais
+  // produit de différence visible, alors qu'elle imposait un `EffectComposer`,
+  // donc **deux** cibles RGBA16F multi-échantillonnées (il clone la sienne)
+  // plus ses deux tampons internes : près d'un gigaoctet de mémoire graphique
+  // sur une fiche large. Le suréchantillonnage, lui, se voit (§15 point 8).
+  //
+  // Ce qu'il faut retenir si l'idée revient : il ne suffit pas d'ajouter la
+  // passe, il faut prouver qu'elle se voit — et sur ce panneau, elle ne se
+  // voyait pas.
+  //
+  // Retirer la chaîne rend au passage le MSAA du contexte (`antialias: true`)
+  // à tous les niveaux, et avec lui `alphaToCoverage` sur les découpes en
+  // alpha : le montage post-traitement les avait justement contournés.
   const QUALITY = {
     /** Ce que faisait l'app avant ce réglage. */
-    standard: { supersampling: 1.5, smaa: false },
-    high: { supersampling: 2.5, smaa: true },
-    ultra: { supersampling: 4, smaa: true },
+    standard: { supersampling: 1.5 },
+    high: { supersampling: 2.5 },
+    // 5× a été essayé et ne se distinguait pas de 4× à l'écran.
+    ultra: { supersampling: 4 },
   } as const;
 
-  /** Borne dure du suréchantillonnage, pour la mémoire : la facture en pixels
-   * croît au carré, et chacun est en plus multi-échantillonné. À 4× sur un
-   * panneau de 780 px, la cible fait 3120×1760 en RGBA16F multi-échantillonné,
-   * soit ~175 Mio de mémoire graphique — assumé sur la machine visée (§Stack :
-   * qui active l'aperçu 3D a une carte dédiée), et c'est ce que veut dire
-   * « Ultra ». */
+  /** Borne dure du facteur, indépendamment de la taille du panneau. */
   const MAX_PIXEL_RATIO = 4;
+
+  /**
+   * Budget du tampon de rendu, en pixels.
+   *
+   * Le budget porte sur la **surface** et non sur le facteur : c'est la fenêtre
+   * qui décide de la taille du panneau, et le niveau de qualité ne doit pas la
+   * multiplier sans limite. Une allocation qui échoue ne rend pas une image
+   * dégradée — elle fait perdre le contexte WebGL et laisse le panneau noir.
+   *
+   * 16 Mpx en RGBA multi-échantillonné tient dans ~256 Mio depuis que la
+   * chaîne de post-traitement et ses cibles flottantes ont disparu. Sur un
+   * panneau ordinaire le budget ne mord pas.
+   */
+  const MAX_DRAWING_PIXELS = 16_000_000;
 
   // Effet d'entrée du plateau (§15). Deux gestes, et rien d'autre qu'un
   // facteur appliqué à la vitesse déjà calculée : aucune image de plus, aucun
@@ -181,62 +199,14 @@
    *
    * La densité de l'écran reste un plancher : rendre sous elle serait flou.
    */
-  function applyPixelRatio(renderer: ThreeModule.WebGLRenderer) {
-    const wanted = Math.max(window.devicePixelRatio, quality().supersampling);
-    renderer.setPixelRatio(Math.min(wanted, MAX_PIXEL_RATIO));
-  }
-
-  /**
-   * Chaîne SMAA.
-   *
-   * La cible est **multi-échantillonnée à la main** (`samples: 4`), et c'est
-   * le piège de tout le montage : dès qu'on passe par un `EffectComposer`, le
-   * rendu ne va plus dans le tampon d'écran, donc l'`antialias: true` du
-   * contexte ne s'applique plus à rien. Sans cette option, activer SMAA
-   * *retirerait* le MSAA — un antialiasing échangé contre un autre au lieu des
-   * deux cumulés.
-   *
-   * Ordre des passes : rendu → SMAA → sortie. SMAA **avant** `OutputPass`,
-   * et non après comme on l'écrirait spontanément pour un filtre
-   * morphologique : trois.js documente cette implémentation comme travaillant
-   * en `linear-srgb` (en-tête de `SMAAPass.js`, r185). Placée en dernier, la
-   * passe chercherait ses contours dans des valeurs déjà converties, ce pour
-   * quoi ses seuils ne sont pas réglés.
-   */
-  async function buildComposer(
-    THREE: typeof ThreeModule,
-    renderer: ThreeModule.WebGLRenderer,
-    scene: ThreeModule.Scene,
-    camera: ThreeModule.PerspectiveCamera,
-  ): Promise<EffectComposer> {
-    const [{ EffectComposer }, { RenderPass }, { OutputPass }, { SMAAPass }] = await Promise.all([
-      import("three/examples/jsm/postprocessing/EffectComposer.js"),
-      import("three/examples/jsm/postprocessing/RenderPass.js"),
-      import("three/examples/jsm/postprocessing/OutputPass.js"),
-      import("three/examples/jsm/postprocessing/SMAAPass.js"),
-    ]);
-    const size = renderer.getSize(new THREE.Vector2());
-    const ratio = renderer.getPixelRatio();
-    const target = new THREE.WebGLRenderTarget(
-      Math.max(Math.round(size.x * ratio), 1),
-      Math.max(Math.round(size.y * ratio), 1),
-      { type: THREE.HalfFloatType, samples: 4 },
-    );
-    const composer = new EffectComposer(renderer, target);
-    composer.setPixelRatio(ratio);
-    composer.addPass(new RenderPass(scene, camera));
-    composer.addPass(new SMAAPass());
-    composer.addPass(new OutputPass());
-    return composer;
-  }
-
-  /** Libère une chaîne de post-traitement. `EffectComposer.dispose()` ne
-   * s'occupe que de ses deux tampons : les passes gardent les leurs (SMAA en
-   * a deux, plus ses textures de recherche), et personne ne les libérerait. */
-  function disposeComposer(composer: EffectComposer | null) {
-    if (!composer) return;
-    for (const pass of composer.passes) pass.dispose?.();
-    composer.dispose();
+  function applyPixelRatio(renderer: ThreeModule.WebGLRenderer, host: HTMLElement) {
+    const wanted = Math.min(Math.max(window.devicePixelRatio, quality().supersampling), MAX_PIXEL_RATIO);
+    const area = host.clientWidth * host.clientHeight;
+    // Le facteur que le budget autorise sur ce panneau-ci. Jamais sous 1 :
+    // rendre sous la taille d'affichage serait flou, ce qui est pire que le
+    // crénelage qu'on cherche à retirer.
+    const affordable = area > 0 ? Math.max(Math.sqrt(MAX_DRAWING_PIXELS / area), 1) : wanted;
+    renderer.setPixelRatio(Math.min(wanted, affordable));
   }
 
   /**
@@ -342,8 +312,6 @@
       }
     });
     current.scene.clear();
-    disposeComposer(current.composer);
-    current.composer = null;
     current.controls.dispose();
     current.pmrem.dispose();
     current.renderer.dispose();
@@ -383,8 +351,7 @@
         current.turntable.rotation.y += SPIN_SPEED * (preview3dPrefs().spin / 100) * intro * elapsed;
       }
       const moving = current.controls.update();
-      if (current.composer) current.composer.render();
-      else current.renderer.render(current.scene, current.camera);
+      current.renderer.render(current.scene, current.camera);
       // Rien à ajouter pour l'effet d'entrée : il ne fait qu'accélérer un
       // plateau qui tourne, donc `turning()` le couvre déjà. L'ajouter ici
       // ferait tourner la boucle dans le vide si la vitesse passait à 0 en
@@ -445,7 +412,7 @@
     // Suréchantillonner puis réduire est le remède direct au scintillement des
     // reflets, et le panneau est assez petit pour qu'on puisse se le payer. Le
     // facteur vient du niveau de qualité (§15) — c'était 1,5 à 2 avant lui.
-    applyPixelRatio(renderer);
+    applyPixelRatio(renderer, host);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.shadowMap.enabled = true;
@@ -613,13 +580,10 @@
       observer: null,
       visibility: null,
       resize: () => {},
-      composer: null,
+      host,
       introAt: 0,
       disposed: false,
     };
-    // Chaîne SMAA d'emblée si le niveau de qualité la demande : la monter
-    // après la première image ferait clignoter le panneau à l'ouverture.
-    if (quality().smaa) built.composer = await buildComposer(THREE, renderer, scene, camera);
     // Reprise de la scène précédente, ou cadrage réglé si on part de zéro.
     const carried = carry?.();
     if (carried) {
@@ -635,12 +599,11 @@
       const width = host.clientWidth;
       const height = host.clientHeight;
       if (width === 0 || height === 0) return;
+      // Le budget de pixels dépend de la taille du panneau : il se recalcule
+      // ici, sinon agrandir la fenêtre garderait le facteur d'avant et ferait
+      // sauter le plafond mémoire au lieu de le respecter.
+      applyPixelRatio(renderer, host);
       renderer.setSize(width, height, false);
-      // `setPixelRatio` avant `setSize` : la chaîne multiplie la taille reçue
-      // par le ratio qu'elle connaît, et un ratio périmé lui ferait allouer
-      // des cibles de la mauvaise taille après un changement de qualité.
-      built.composer?.setPixelRatio(renderer.getPixelRatio());
-      built.composer?.setSize(width, height);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       requestRender(built);
@@ -841,24 +804,9 @@
    * rien de ce que le niveau change ne dépend du modèle, et recharger coûterait
    * le retour à la photo pour finir sur la même voiture.
    */
-  async function applyQuality(current: ThreeScene | null, level: PreviewQuality) {
+  function applyQuality(current: ThreeScene | null) {
     if (!current || current.disposed) return;
-    applyPixelRatio(current.renderer);
-    const wanted = QUALITY[level].smaa;
-    if (wanted && !current.composer) {
-      const composer = await buildComposer(current.THREE, current.renderer, current.scene, current.camera);
-      // Les imports dynamiques laissent le temps de changer d'avis : la scène
-      // a pu être libérée, ou le réglage repasser à un niveau sans SMAA.
-      if (current.disposed || !QUALITY[preview3dPrefs().quality].smaa) {
-        disposeComposer(composer);
-        return;
-      }
-      current.composer = composer;
-    } else if (!wanted && current.composer) {
-      disposeComposer(current.composer);
-      current.composer = null;
-    }
-    if (current.disposed) return;
+    applyPixelRatio(current.renderer, current.host);
     current.resize();
     requestRender(current);
   }
@@ -866,8 +814,9 @@
   // Niveau de qualité changé pendant qu'une fiche est ouverte : même principe
   // que le cadrage ci-dessous, l'aperçu suit sans être remonté.
   $effect(() => {
-    const level = preview3dPrefs().quality;
-    untrack(() => void applyQuality(scene, level));
+    // Lu à découvert : un effet ne suit que ce qu'il lit lui-même.
+    void preview3dPrefs().quality;
+    untrack(() => applyQuality(scene));
   });
 
   // Un réglage de cadrage changé pendant qu'une fiche est ouverte s'applique
