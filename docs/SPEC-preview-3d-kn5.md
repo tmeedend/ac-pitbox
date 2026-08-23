@@ -892,6 +892,10 @@ gêne constatée :
    Si l'idée d'une passe de post-traitement revient, la leçon est qu'il ne
    suffit pas de l'ajouter : il faut prouver qu'elle se voit sur ce panneau-là.
 
+   ⚠️ **Et surtout : ce point-ci ne parle que de crénelage *spatial*.** Le
+   défaut que l'utilisateur a signalé ensuite n'en était pas un — voir le
+   point 16, qui pose la distinction et la question à se poser en premier.
+
 9. ~~**Certains mods s'affichent en carré/nuage de triangles bleus.**~~
    ✅ **Corrigé.** Signalé par l'utilisateur sur deux mods
    (`ms_citroen_berlingo_2003_vts`, `gmp_w204_c63_c13`) — pas un problème de
@@ -969,9 +973,9 @@ gêne constatée :
     - **Le reflet ne montre que la voiture.** La flaque et l'ombre sont
       masquées le temps de la passe miroir, sans quoi elles se retrouvent dans
       leur propre reflet et le sol se dédouble.
-    - **Une image sur deux.** À 0,22 rad/s le plateau avance de deux dixièmes
-      de degré par image, invisible sur une surface floutée — alors que la
-      seconde passe, elle, se paie.
+    - **La cible du miroir suit le tampon de rendu**, elle n'a pas de taille à
+      elle. Voir le point 16 : elle a été fixe à 512×512 pendant deux lots, et
+      c'était la cause principale du scintillement.
     - **À 0 %, le miroir n'existe pas** plutôt que d'exister à l'opacité zéro.
       Et le remonter depuis 0 le construit **à chaud** : un curseur n'a pas à
       faire clignoter l'aperçu.
@@ -1046,6 +1050,91 @@ gêne constatée :
     son titre rouge, `.blk-sub` pour les sous-rubriques. Les groupes de boutons
     radio passent **côte à côte** : empilés, trois options mangeaient une
     hauteur d'écran pour trois mots.
+
+16. **Scintillement du reflet au sol** ✅ **Corrigé**, et le diagnostic vaut
+    plus que le correctif.
+
+    Signalé par l'utilisateur comme « de l'aliasing », particulièrement visible
+    sur le reflet du sol. La phrase qui a tout débloqué est venue avec sa
+    capture d'écran : **« ça choque beaucoup moins quand je fais une capture,
+    quand ça bouge ça scintille »**.
+
+    **Un défaut qu'on ne voit pas sur une image fixe n'est pas du crénelage
+    spatial.** C'est la première question à poser, avant toute hypothèse : le
+    défaut est-il sur l'image, ou entre deux images ? Elle sépare deux familles
+    de causes qui n'ont aucun remède commun, et elle coûte une capture d'écran.
+    Ici elle a éliminé d'un coup deux pistes que je tenais pour sérieuses — la
+    taille fractionnaire du canevas (`clientWidth` est arrondi, la boîte de
+    mise en page ne l'est pas) et un défaut de mipmapping — parce que l'une
+    comme l'autre se seraient vues sur la capture. Le convertisseur écrit bien
+    un échantillonneur trilinéaire (`minFilter: 9987`), vérifié au passage.
+
+    Restaient deux causes, toutes deux **temporelles**, toutes deux dans
+    `attachMirror`, et la seconde multipliant la première :
+
+    - **La cible du miroir était fixe à 512×512.** C'est une texture *projetée
+      à l'écran* : elle couvre le panneau, un texel pour un pixel quand les deux
+      coïncident. Sur un panneau de 1268 px suréchantillonné 2,5× — donc un
+      tampon de 3170 px — un texel couvrait **six pixels en largeur et quatre
+      en hauteur**, la cible carrée sur un panneau rectangulaire ajoutant son
+      anisotropie au manque de résolution. Une arête ne glissait donc pas dans
+      le reflet, elle **sautait de texel en texel, cinq pixels d'écran à la
+      fois**. En fixe, le grossissement bilinéaire adoucit tout ça — d'où une
+      capture qui ne choque pas.
+
+      Corollaire qu'il faut lire pour ce qu'il est : **le niveau de qualité
+      n'atteignait pas le miroir**. Le facteur de suréchantillonnage se pose sur
+      le tampon de rendu ; une cible dont la taille est un littéral y échappe
+      par construction. Tout le raisonnement du point 8 — seul le
+      suréchantillonnage augmente le taux d'ombrage, donc seul lui attaque un
+      reflet spéculaire sous-pixel — s'appliquait au miroir sans jamais
+      l'atteindre.
+
+    - **Le reflet ne se rafraîchissait qu'une image sur deux.** L'économie
+      était réelle et l'argument d'origine juste sur la *position* du reflet
+      (deux dixièmes de degré, invisible sur une surface floutée) — mais le prix
+      se payait sur sa **cadence**. Sauter une image ne fait pas retarder le
+      reflet d'un dixième de degré : elle le fait avancer **par pas doubles à
+      30 Hz sous une voiture qui tourne à 60**. Invisible en fixe, là encore.
+
+    **Ce qui est en place** : `sizeMirror` aligne la cible sur le tampon de
+    rendu à la construction, à chaque redimensionnement et à chaque changement
+    de qualité (`applyQuality` rejoue `resize`), avec son propre budget de
+    8 Mpx — plus bas que celui du tampon principal, parce qu'un reflet flouté
+    puis éteint radialement ne rend rien d'une résolution qui dépasse l'écran.
+    Le reflet se rafraîchit à chaque image.
+
+    **Le MSAA de la passe miroir est retiré** (`multisample: 0`) et la mémoire
+    part dans la résolution — même arbitrage qu'au point 8 : le MSAA
+    échantillonne la couverture des triangles mais n'ombre qu'une fois par
+    texel, alors que la cible suit désormais un tampon déjà suréchantillonné.
+    Quatre échantillons auraient coûté quatre fois la mémoire pour le seul bord
+    de géométrie.
+
+    ⚠️ **Le piège de la montée en résolution, qui n'est pas celui qu'on croit.**
+    Le pas du flou est exprimé en **UV**, donc en fraction du panneau : son
+    étendue à l'écran ne dépend pas de la résolution, et c'est bien ce qu'on
+    veut puisque c'est ce que l'utilisateur a calibré au banc. Mais 25 prises ne
+    couvrent que ±2 pas. À 512 le pas valait un texel et le noyau était plein ;
+    à 3170 il en vaut trois, et le noyau cesse de moyenner la cible pour en
+    **échantillonner un peigne** — un peigne qui, sur une image en mouvement,
+    scintille au lieu de masquer. Autrement dit, augmenter la résolution seule
+    aurait remplacé un défaut temporel par un autre.
+
+    Le remède est un uniforme `lod` passé en troisième argument de
+    `texture2D` : on lit le niveau de mip dont le texel est aussi large que le
+    pas, soit `log2(pas × largeur de la cible)`, borné à zéro. Les prises
+    redeviennent jointives à toute résolution. Deux effets de bord : la cible
+    demande ses mipmaps (three les régénère seul à chaque fois qu'il la délie,
+    `updateRenderTargetMipmap`), et **le réglage de flou fort était déjà
+    peigné avant ce correctif** — à 4,0 le pas valait quatre texels sur une
+    cible de 512.
+
+    Mesuré plutôt que supposé, parce que la spec WebGL2 ne le garantit pas :
+    `generateMipmap` sur une texture RGBA16F rend `NO_ERROR` sur le GPU de
+    l'utilisateur (AMD Radeon via ANGLE/D3D11, la pile de WebView2), avant comme
+    après attachement au framebuffer, `EXT_color_buffer_float` et
+    `OES_texture_float_linear` présents.
 
 Restent aussi, hérités du plan initial : le choix du LOD en config, et l'aperçu
 dans `ModDetail.svelte` (panneau latéral), qui n'a jamais été branché.

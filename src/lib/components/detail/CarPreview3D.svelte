@@ -89,8 +89,6 @@
     /** Miroir du sol. `null` quand le reflet est à 0 : c'est un second rendu
      * de la scène, autant ne pas le construire du tout. */
     mirror: Reflector | null;
-    /** Compteur d'images, pour ne rafraîchir le reflet qu'une fois sur deux. */
-    frames: number;
     /** Les deux plans réglables du sol, gardés pour leur appliquer les
      * préférences sans reconstruire la scène. */
     ground: ThreeModule.Mesh;
@@ -183,6 +181,17 @@
    */
   const MAX_DRAWING_PIXELS = 16_000_000;
 
+  /**
+   * Budget de la cible du miroir, en pixels.
+   *
+   * Plus bas que celui du tampon principal, et c'est délibéré : le reflet est
+   * flouté puis éteint radialement, donc il ne rend rien d'une résolution qui
+   * dépasse largement l'écran. 8 Mpx sans MSAA tiennent dans ~96 Mio (RGBA16F
+   * plus la profondeur), ce qui laisse le panneau loin du plafond mémoire même
+   * en Ultra.
+   */
+  const MAX_MIRROR_PIXELS = 8_000_000;
+
   // Effet d'entrée du plateau (§15). Deux gestes, et rien d'autre qu'un
   // facteur appliqué à la vitesse déjà calculée : aucune image de plus, aucun
   // coût GPU.
@@ -223,6 +232,45 @@
   }
 
   /**
+   * Aligns the reflection target on the drawing buffer, and reports the
+   * settings that depend on its size.
+   *
+   * **This is the whole point of the fix**, so it is worth stating why the
+   * fixed 512×512 that stood here was wrong. The target is a *screen-projected*
+   * texture: it covers the panel, one texel for one pixel when the two match.
+   * At 512² on a 1268-pixel panel supersampled 2,5×, one texel covered about
+   * six pixels horizontally and four vertically — the square target on a
+   * rectangular panel adding an anisotropy on top of the plain lack of
+   * resolution. A rasterised edge therefore did not slide across the
+   * reflection, it *jumped* from texel to texel, five screen pixels at a time.
+   * A still frame hides that behind bilinear magnification, which is exactly
+   * why the defect only ever showed in motion (retour utilisateur : « ça choque
+   * beaucoup moins quand je fais une capture, quand ça bouge ça scintille »).
+   *
+   * Every level of the quality setting missed the mirror for the same reason:
+   * the supersampling factor lands on the drawing buffer, never on a target
+   * whose size is a literal.
+   */
+  function sizeMirror(current: ThreeScene): void {
+    if (!current.mirror) return;
+    const buffer = current.renderer.getDrawingBufferSize(new current.THREE.Vector2());
+    let width = Math.max(Math.round(buffer.x), 1);
+    let height = Math.max(Math.round(buffer.y), 1);
+    const area = width * height;
+    if (area > MAX_MIRROR_PIXELS) {
+      // Le budget porte sur la surface, la forme reste celle du panneau : c'est
+      // la cible carrée qui étirait le reflet.
+      const factor = Math.sqrt(MAX_MIRROR_PIXELS / area);
+      width = Math.max(Math.round(width * factor), 1);
+      height = Math.max(Math.round(height * factor), 1);
+    }
+    const target = current.mirror.getRenderTarget();
+    if (target.width !== width || target.height !== height) target.setSize(width, height);
+    const material = current.mirror.material as ThreeModule.ShaderMaterial;
+    applyFloorMirror(material.uniforms, preview3dPrefs(), width);
+  }
+
+  /**
    * Pose le miroir du sol, ou ne fait rien si le reflet est réglé à 0 %.
    *
    * Séparée de `build` parce qu'elle sert deux fois : à la construction, et
@@ -241,14 +289,29 @@
     const THREE = current.THREE;
     const size = current.radius * 5;
     const mirror = new Reflector(new THREE.PlaneGeometry(size, size), {
-      // 512 et non 256 : c'est la résolution sur laquelle le réglage a été
-      // choisi, et le flou retenu est faible (0,5), ce qui ne pardonne pas une
-      // cible grossière.
+      // Taille provisoire : `sizeMirror` l'aligne sur le tampon de rendu juste
+      // en dessous, puis à chaque redimensionnement et à chaque changement de
+      // qualité. Aucune valeur écrite ici n'est un réglage.
       textureWidth: 512,
       textureHeight: 512,
       color: 0xffffff,
       shader: floorMirrorShader,
+      // No MSAA on the reflection pass, and the memory it would have taken goes
+      // into resolution instead. Same argument as §15: MSAA samples triangle
+      // *coverage* but still shades once per texel, so it can do nothing about
+      // a sub-pixel specular highlight — while the target now follows a drawing
+      // buffer already supersampled 1,5× to 4×, which is precisely what does
+      // raise the shading rate. Four samples would cost four times the memory
+      // for geometry edges alone.
+      multisample: 0,
     });
+    // Mipmaps on the target: the blur reads the level `applyFloorMirror` picks,
+    // so that its 25 taps stay edge to edge whatever the resolution. three
+    // regenerates them on its own every time it unbinds the target — they only
+    // have to be asked for.
+    const reflection = mirror.getRenderTarget().texture;
+    reflection.minFilter = THREE.LinearMipmapLinearFilter;
+    reflection.generateMipmaps = true;
     mirror.rotation.x = -Math.PI / 2;
     mirror.position.set(current.center.x, current.floorY + current.radius / 500, current.center.z);
     // `Reflector` hérite le type de matériau de `Mesh`, donc un `Material` tout
@@ -263,12 +326,17 @@
 
     // Le reflet ne doit montrer **que** la voiture : sans ça, la flaque et
     // l'ombre se retrouvent dans leur propre reflet et le sol se dédouble.
-    // Et il ne se rafraîchit qu'une image sur deux — à 0,22 rad/s un plateau
-    // avance de deux dixièmes de degré par image, invisible sur une surface
-    // floutée, alors que la seconde passe se paie, elle.
+    //
+    // ⚠️ **Refreshed on every frame**, where it used to be one frame in two.
+    // The saving was real and the reasoning behind it ("two tenths of a degree
+    // per frame, invisible on a blurred surface") was about the reflection's
+    // *position* — but the price was paid on its *cadence*. Skipping a frame
+    // does not make the reflection lag by a tenth of a degree, it makes it
+    // advance in double steps at 30 Hz under a car that turns at 60 Hz. That
+    // judder is invisible on a still frame and reads as shimmer in motion,
+    // which is exactly what the user reported.
     const reflect = mirror.onBeforeRender;
     mirror.onBeforeRender = function (...args: Parameters<typeof reflect>) {
-      if (current.frames % 2 !== 0) return;
       current.ground.visible = false;
       current.shadowCatcher.visible = false;
       reflect.apply(this, args);
@@ -278,7 +346,7 @@
 
     current.scene.add(mirror);
     current.mirror = mirror;
-    applyFloorMirror(material.uniforms, preview3dPrefs());
+    sizeMirror(current);
   }
 
   /**
@@ -302,7 +370,8 @@
     const shadow = current.shadowCatcher.material as ThreeModule.ShadowMaterial;
     shadow.opacity = prefs.shadow / 100;
     if (current.mirror) {
-      applyFloorMirror((current.mirror.material as ThreeModule.ShaderMaterial).uniforms, prefs);
+      const material = current.mirror.material as ThreeModule.ShaderMaterial;
+      applyFloorMirror(material.uniforms, prefs, current.mirror.getRenderTarget().width);
     }
   }
 
@@ -451,7 +520,6 @@
         const intro = introFactor(current, now);
         current.turntable.rotation.y += SPIN_SPEED * (preview3dPrefs().spin / 100) * intro * elapsed;
       }
-      current.frames += 1;
       const moving = current.controls.update();
       current.renderer.render(current.scene, current.camera);
       // Rien à ajouter pour l'effet d'entrée : il ne fait qu'accélérer un
@@ -695,7 +763,6 @@
       resize: () => {},
       host,
       mirror: null,
-      frames: 0,
       ground,
       shadowCatcher,
       floorY: box.min.y,
@@ -724,6 +791,10 @@
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+      // Après `setSize` : le miroir se cale sur le tampon, qui vient seulement
+      // d'être redimensionné. C'est aussi ce qui le fait suivre quand le niveau
+      // de qualité change — `applyQuality` rejoue `resize`.
+      sizeMirror(built);
       requestRender(built);
     };
     await attachMirror(built);

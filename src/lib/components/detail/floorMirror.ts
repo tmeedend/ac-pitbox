@@ -22,6 +22,9 @@
  *
  * - **un flou** en 25 prises pondérées. C'est ce qui coûte, et c'est ce qui
  *   décide de l'aspect : net, un sol paraît mouillé ; flouté, il paraît laqué.
+ *   Son pas est exprimé en UV — donc en fraction du panneau, indépendante de la
+ *   résolution de la cible — et `lod` choisit le niveau de mip qui garde les
+ *   prises jointives (voir `applyFloorMirror`).
  * - **une extinction radiale**, pour que le reflet meure près de la voiture
  *   plutôt que de couvrir un sol infini. Le seuil bas est fixé à une fraction
  *   du seuil haut : le reflet reste plein sous la caisse et s'éteint ensuite.
@@ -40,6 +43,7 @@ export const floorMirrorShader = {
     textureMatrix: { value: null },
     intensity: { value: 0.85 },
     blur: { value: 0.001 },
+    lod: { value: 0 },
     reach: { value: 0.75 },
   },
   vertexShader: /* glsl */ `
@@ -57,6 +61,7 @@ export const floorMirrorShader = {
     uniform sampler2D tDiffuse;
     uniform float intensity;
     uniform float blur;
+    uniform float lod;
     uniform float reach;
     varying vec4 vUv;
     varying vec2 vLocal;
@@ -70,7 +75,10 @@ export const floorMirrorShader = {
         for ( int j = -2; j <= 2; j ++ ) {
           vec2 offset = vec2( float( i ), float( j ) ) * blur;
           float weight = max( 1.0 - length( vec2( float( i ), float( j ) ) ) / 3.2, 0.0 );
-          sum += texture2D( tDiffuse, uv + offset ).rgb * weight;
+          // Third argument: the mip bias that keeps the 25 taps edge to edge.
+          // Sampling level 0 with a step wider than a texel turns the kernel
+          // into a comb, and a comb flickers in motion instead of hiding it.
+          sum += texture2D( tDiffuse, uv + offset, lod ).rgb * weight;
           total += weight;
         }
       }
@@ -96,17 +104,40 @@ export interface FloorMirrorSettings {
   reflectionReach: number;
 }
 
-/** Report des réglages sur les uniformes. Une fonction plutôt que trois lignes
- * recopiées : le miroir se règle depuis la construction **et** depuis l'effet
- * qui suit les préférences, et les deux doivent convertir pareil. */
+/**
+ * Reports the user's settings on the uniforms.
+ *
+ * A function rather than three copied lines: the mirror is set from `build`
+ * **and** from the effect that follows the preferences, and both have to
+ * convert the same way.
+ *
+ * `targetWidth` is the width of the reflection render target, which follows the
+ * drawing buffer and therefore the quality level — it is not a constant, and
+ * `lod` depends on it.
+ */
 export function applyFloorMirror(
   uniforms: Record<string, { value: unknown }>,
   settings: FloorMirrorSettings,
+  targetWidth: number,
 ): void {
   uniforms.intensity.value = settings.reflection / 100;
   // Le pas du curseur est le dixième ; le shader travaille en fraction de la
   // largeur de la cible, d'où la division. Calibré au banc contre la valeur
   // retenue par l'utilisateur (0,5).
-  uniforms.blur.value = (settings.reflectionBlur / 10) * 0.002;
-  uniforms.reach.value = settings.reflectionReach / 100;
+  const blur = (settings.reflectionBlur / 10) * 0.002;
+  uniforms.blur.value = blur;
+  // Mip level to read the taps from, so that one step between taps is one texel
+  // wide *at that level*.
+  //
+  // The step is in UV, i.e. a fraction of the panel: that is what the user
+  // calibrated on the bench, so its on-screen width must not follow the
+  // resolution of the target. But 25 taps only ever cover ±2 steps. As soon as
+  // a step is wider than a texel the kernel stops averaging the target and
+  // starts sampling a comb of it — and a comb of a moving image flickers,
+  // which is the exact defect this whole pass is meant to avoid. One mip level
+  // per doubling of the step puts the taps back edge to edge.
+  //
+  // `Math.log2(0)` is `-Infinity`, which the clamp turns into level 0: at blur
+  // zero every tap lands on the same texel, which is what "no blur" means.
+  uniforms.lod.value = Math.max(Math.log2(blur * targetWidth), 0);
 }
