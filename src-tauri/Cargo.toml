@@ -32,7 +32,7 @@ opt-level = 2
 
 [package]
 name = "pitbox"
-version = "0.2.0"
+version = "0.3.0"
 description = "Pit Box — gestionnaire de mods Assetto Corsa"
 authors = ["Theo"]
 edition = "2021"
