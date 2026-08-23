@@ -322,7 +322,7 @@
     "baseOnly": "Base content only",
     "baseExcluded": "Everything but base content",
     "baseNeutral": "Base content: no filter",
-    "unmanagedTooltip": "Mod installed outside Pit Box",
+    "unmanagedTooltip": "Installed in the game outside Pit Box. To manage it here, delete it from the game yourself, then import it into Pit Box.",
     "unmanagedBadge": "UNMANAGED",
     "unmanagedContent": "Unmanaged mods",
     "unmanagedOnly": "Unmanaged mods only",
@@ -578,7 +578,8 @@
     "deleteVersionPurged": "Version {label} deleted permanently: the recycle bin refused it.",
     "openPack": "Pack sheet",
     "unmanagedOrigin": "Installed outside Pit Box",
-    "unmanagedContentLabel": "Mod installed outside Pit Box"
+    "unmanagedContentLabel": "Installed in the game outside Pit Box",
+    "unmanagedHowTo": "Pit Box leaves this mod alone: it did not install it. To manage it here — activate, deactivate, keep several versions — delete its folder from the game yourself, then import the mod into Pit Box."
   },
   "lightbox": {
     "open": "View full size",
@@ -1074,7 +1075,7 @@
     "pendingNotice": "Author's notice — {name}",
     "pendingNoticeUnreadable": "{name} — open the folder to read it.",
     "outcomeUnmanaged": "UNMANAGED",
-    "unmanagedNote": "a mod installed outside Pit Box occupies this folder — nothing was changed"
+    "unmanagedNote": "a mod installed outside Pit Box occupies this folder — nothing was changed. Delete it from the game, then import again"
   },
   "bulkImport": {
     "analyzing": "Analyzing folder…",
@@ -1192,8 +1193,8 @@
     "pendingAlreadyKnown": "A mod by that name already exists.",
     "versionIsActive": "This is the installed version. Activate another one before deleting it.",
     "packNotFound": "This pack no longer exists: none of its mods are in the library.",
-    "unmanagedNotActivatable": "Mod installed outside Pit Box: already present in the game, cannot be activated until taken over.",
-    "unmanagedNoLayer": "Mod installed outside Pit Box: nothing can be layered on top until it is taken over."
+    "unmanagedNotActivatable": "This mod was installed in the game outside Pit Box: it is already there and cannot be activated from here. To manage it, delete its folder from the game, then import it into Pit Box.",
+    "unmanagedNoLayer": "This mod was installed in the game outside Pit Box: nothing can be layered on top. Delete its folder from the game and import the mod into Pit Box to manage it here."
   },
   "pack": {
     "tabMembers": "Mods",

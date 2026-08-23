@@ -62,7 +62,8 @@ export interface ModCard {
    * contenu de jeu. */
   is_stock: boolean;
   /** Mod installé hors Pit Box, trouvé dans `content/` à l'indexation
-   * (§12bis.1bis) : l'app n'y touche pas tant qu'il n'est pas pris en charge. */
+   * (§12bis.1bis) : l'app n'y touche pas — pour le gérer, l'utilisateur retire
+   * lui-même le dossier du jeu et importe le mod. */
   is_unmanaged: boolean;
   /** Date de publication estimée (dates de fichiers à l'import), remplaçable par L7 (§6.2). */
   published_at: string | null;

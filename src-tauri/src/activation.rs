@@ -205,9 +205,10 @@ pub fn activate(conn: &Connection, cfg: &AppConfig, mod_id: &str, version_id: Op
         .ok_or(crate::errors::MOD_NOT_FOUND)?;
     if m.is_stock {
         // Deux raisons distinctes de refuser, deux messages : le contenu de
-        // base est toujours là par nature, un mod non géré attend d'être pris
-        // en charge (§12bis.1bis) — dire « contenu de base » à quelqu'un qui
-        // regarde son propre mod ne lui apprend rien.
+        // base est toujours là par nature, un mod non géré attend d'être
+        // retiré du jeu puis importé (§12bis.1bis) — dire « contenu de base »
+        // à quelqu'un qui regarde son propre mod ne lui apprend rien, et ne
+        // lui dit pas ce qu'il peut faire.
         return Err(if m.is_unmanaged {
             crate::errors::UNMANAGED_NOT_ACTIVATABLE.into()
         } else {

@@ -44,8 +44,11 @@ pub fn store_layer(
     // de couche. Poser une couche entraîne la composition dans `content/`,
     // donc la sauvegarde puis **l'effacement** du vrai dossier par
     // `compose::recompose_stock` — sur un dossier que l'utilisateur a posé
-    // lui-même et que l'app n'a pas mis là. Tant qu'il ne l'a pas pris en
-    // charge, on n'y touche pas.
+    // lui-même et que l'app n'a pas mis là. L'app n'y touche donc jamais : le
+    // seul chemin vers un mod géré est que l'utilisateur retire lui-même le
+    // dossier du jeu et importe le mod (décision assumée — adopter un dossier
+    // en place demandait d'écrire dans `content/` pour un gain que le
+    // réimport donne sans risque).
     //
     // Le garde vit ici plutôt que chez les appelants parce qu'ils sont quatre
     // (import, dossier proposé par l'auteur §4.6ter, projection de sous-mod,

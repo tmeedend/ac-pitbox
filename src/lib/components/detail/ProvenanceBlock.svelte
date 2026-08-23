@@ -99,6 +99,14 @@
       </div>
     </dl>
 
+    <!-- Mod installé hors Pit Box (§8) : la fiche est la seule à pouvoir dire
+         quoi faire. Le pousser vers un réimport n'est pas une explication de
+         l'interface — c'est la seule action qui existe, l'app ne touchant
+         jamais à un dossier qu'elle n'a pas posé. -->
+    {#if detail.is_unmanaged}
+      <p class="unm">{t("detail.unmanagedHowTo")}</p>
+    {/if}
+
     {#if detail.source_pack}
       <div class="pack">
         <div class="blk-sub">{t("detail.siblingsLabel", { count: siblings.length })}</div>
@@ -130,6 +138,15 @@
 </section>
 
 <style>
+  /* Note d'action, pas un avertissement : la couleur des indications
+     secondaires, pas le jaune d'alerte — l'install de l'utilisateur va bien. */
+  .unm {
+    margin: 8px 0 0;
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+
   /* Habillage propre au bloc. L'encadré, le bandeau et la sous-rubrique
      viennent des classes globales `.blk*` (voir global.css). */
   .rows {

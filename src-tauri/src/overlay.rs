@@ -418,8 +418,9 @@ pub struct ModRow {
     /// `is_stock`. Contrairement au contenu de base, ce n'est **pas** du
     /// contenu de jeu : il ne reçoit ni couche, ni import par-dessus, et il
     /// n'est jamais sauvegardé/effacé de `content/` — l'app le laisse
-    /// strictement où l'utilisateur l'a mis tant qu'il ne l'a pas pris en
-    /// charge.
+    /// strictement où l'utilisateur l'a mis, définitivement. Le faire passer
+    /// sous gestion suppose que l'utilisateur retire lui-même le dossier du
+    /// jeu et importe le mod.
     pub is_unmanaged: bool,
     /// Date de publication estimée de la version active (§6.2).
     pub published_at: Option<String>,

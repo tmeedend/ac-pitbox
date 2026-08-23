@@ -322,7 +322,7 @@
     "baseOnly": "Contenu de base uniquement",
     "baseExcluded": "Tout sauf le contenu de base",
     "baseNeutral": "Contenu de base : sans filtre",
-    "unmanagedTooltip": "Mod installé hors Pit Box",
+    "unmanagedTooltip": "Installé dans le jeu hors Pit Box. Pour le gérer ici, supprimez-le du jeu vous-même, puis importez-le dans Pit Box.",
     "unmanagedBadge": "NON GÉRÉ",
     "unmanagedContent": "Mods non gérés",
     "unmanagedOnly": "Mods non gérés uniquement",
@@ -578,7 +578,8 @@
     "deleteVersionPurged": "Version {label} supprimée définitivement : la corbeille l'a refusée.",
     "openPack": "Fiche du pack",
     "unmanagedOrigin": "Installé hors Pit Box",
-    "unmanagedContentLabel": "Mod installé hors Pit Box"
+    "unmanagedContentLabel": "Installé dans le jeu hors Pit Box",
+    "unmanagedHowTo": "Pit Box ne touche pas à ce mod : il ne l'a pas installé. Pour le gérer ici — l'activer, le désactiver, en garder plusieurs versions — supprimez son dossier du jeu vous-même, puis importez le mod dans Pit Box."
   },
   "lightbox": {
     "open": "Voir en grand",
@@ -1074,7 +1075,7 @@
     "pendingNotice": "Notice de l'auteur — {name}",
     "pendingNoticeUnreadable": "{name} — ouvrez le dossier pour la lire.",
     "outcomeUnmanaged": "NON GÉRÉ",
-    "unmanagedNote": "un mod installé hors Pit Box occupe ce dossier — rien n'a été modifié"
+    "unmanagedNote": "un mod installé hors Pit Box occupe ce dossier — rien n'a été modifié. Supprimez-le du jeu, puis réimportez"
   },
   "bulkImport": {
     "analyzing": "Analyse du dossier…",
@@ -1192,8 +1193,8 @@
     "pendingAlreadyKnown": "Un mod porte déjà ce nom.",
     "versionIsActive": "C'est la version installée. Activez-en une autre avant de la supprimer.",
     "packNotFound": "Ce pack n'existe plus : aucun de ses mods n'est en bibliothèque.",
-    "unmanagedNotActivatable": "mod installé hors Pit Box : déjà présent dans le jeu, non activable tant qu'il n'est pas pris en charge.",
-    "unmanagedNoLayer": "mod installé hors Pit Box : rien ne peut être posé par-dessus tant qu'il n'est pas pris en charge."
+    "unmanagedNotActivatable": "ce mod a été installé dans le jeu hors Pit Box : il est déjà là et ne s'active pas d'ici. Pour le gérer, supprimez son dossier du jeu, puis importez-le dans Pit Box.",
+    "unmanagedNoLayer": "ce mod a été installé dans le jeu hors Pit Box : rien ne peut être posé par-dessus. Supprimez son dossier du jeu et importez le mod dans Pit Box pour le gérer ici."
   },
   "pack": {
     "tabMembers": "Mods",
