@@ -303,6 +303,14 @@
      * last column is the price — the surfaces come out about 12 % brighter and
      * flatter, chrome least like a mirror. That is a matter of taste, so both
      * knobs ship at the value the app had before they existed.
+     *
+     * ⚠️ **The quality level has nothing to do with any of this.** Measured on
+     * the same bench, modelling the compositor: 1,49 % of violent pixels at
+     * Standard, 1,47 % at Élevée, 1,48 % at the old Ultra — flat. Oversampling
+     * decides the *static* quality of edges and nothing else. A sharper image
+     * simply makes the same flicker easier to read, which is what made it look
+     * worse at the higher level. Lowering the level to hide it would blur the
+     * whole image to mask a defect that has its own remedy.
      */
 
     /**

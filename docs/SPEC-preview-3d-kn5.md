@@ -1248,6 +1248,33 @@ gêne constatée :
     arbitrage de goût, donc **les deux valeurs livrées sont celles d'avant** ;
     c'est l'utilisateur qui décide de les monter.
 
+    ⚠️ **Et le niveau de qualité n'a rien à voir avec le scintillement.**
+    Question posée au même banc après un retour de l'utilisateur (« ça scintille
+    plus en Élevée »), en modélisant cette fois la réduction du compositeur avant
+    de comparer les images :
+
+    | niveau | réduction | p99 | p99,9 | pixels sautant de +40 |
+    | --- | --- | --- | --- | --- |
+    | Standard (dpr ×1) | 1,00 | 54 | 116 | 1,49 % |
+    | Élevée (dpr ×2) | 2,00 | 54 | 114 | 1,47 % |
+    | ancien « Ultra » 4× | 2,67 | 54 | 116 | 1,48 % |
+    | Standard + les deux remèdes | 1,00 | 41 | 77 | 1,03 % |
+    | Élevée + les deux remèdes | 2,00 | 42 | 78 | 1,07 % |
+
+    Plat à un dixième de pour cent près. **Le suréchantillonnage joue sur la
+    qualité *statique* des bords — c'est ce que mesure le point 17 — et sur rien
+    d'autre.** Ce que l'utilisateur voit est réel mais n'est pas ce qu'il croit :
+    en Élevée l'image est plus nette, donc le même scintillement devient plus
+    lisible. Il n'augmente pas, il se voit mieux. Baisser le niveau pour le
+    masquer reviendrait à flouter toute l'image pour cacher un défaut qui a son
+    propre remède.
+
+    **Les deux axes sont donc indépendants**, et c'est ce qui a fait tourner en
+    rond pendant deux lots : chaque fois qu'un défaut de netteté était corrigé,
+    le scintillement restait, et inversement. Devant un défaut de l'aperçu, la
+    première question reste celle du point 16 — sur l'image, ou entre deux
+    images ? — et la réponse décide de quel axe on parle.
+
     Le plancher de rugosité est **injecté dans le shader** et non posé sur
     `material.roughness` : three *multiplie* ce dernier par le canal vert de la
     carte de rugosité, donc il mettrait la carte à l'échelle au lieu d'en
