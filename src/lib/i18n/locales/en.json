@@ -190,9 +190,7 @@
       "standard": "Standard",
       "standardHint": "The lightest. Pick it if the preview stutters.",
       "high": "High",
-      "highHint": "The default: clean edges, well within reach of a gaming graphics card.",
-      "ultra": "Ultra",
-      "ultraHint": "The cleanest result, on grilles and fine edges especially. Wants a recent graphics card."
+      "highHint": "The default: clean edges, well within reach of a gaming graphics card."
     },
     "preview3dIntro": "Entrance effect",
     "preview3dIntroOption": {

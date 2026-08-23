@@ -190,9 +190,7 @@
       "standard": "Estándar",
       "standardHint": "La más ligera. Elígela si la vista previa va a tirones.",
       "high": "Alta",
-      "highHint": "El ajuste por defecto: bordes limpios, sin esfuerzo para una tarjeta gráfica de juego.",
-      "ultra": "Ultra",
-      "ultraHint": "El resultado más limpio, sobre todo en parrillas y aristas finas. Pide una tarjeta gráfica reciente."
+      "highHint": "El ajuste por defecto: bordes limpios, sin esfuerzo para una tarjeta gráfica de juego."
     },
     "preview3dIntro": "Efecto de entrada",
     "preview3dIntroOption": {

@@ -141,7 +141,7 @@ export type IntroEffect = (typeof INTRO_EFFECTS)[number];
 /** Qualité de **rendu** — et d'elle seule : rien ici ne touche à la conversion
  * du modèle, donc changer de niveau n'invalide aucune entrée de cache et
  * s'applique à l'image suivante. */
-export const PREVIEW_QUALITIES = ["standard", "high", "ultra"] as const;
+export const PREVIEW_QUALITIES = ["standard", "high"] as const;
 export type PreviewQuality = (typeof PREVIEW_QUALITIES)[number];
 
 type NumericKey = keyof typeof PREVIEW3D_RANGES;

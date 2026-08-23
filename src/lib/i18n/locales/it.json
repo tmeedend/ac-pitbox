@@ -190,9 +190,7 @@
       "standard": "Standard",
       "standardHint": "La più leggera. Da scegliere se l'anteprima scatta.",
       "high": "Alta",
-      "highHint": "L'impostazione predefinita: bordi netti, senza sforzo per una scheda grafica da gioco.",
-      "ultra": "Ultra",
-      "ultraHint": "Il risultato più pulito, soprattutto su griglie e spigoli sottili. Richiede una scheda grafica recente."
+      "highHint": "L'impostazione predefinita: bordi netti, senza sforzo per una scheda grafica da gioco."
     },
     "preview3dIntro": "Effetto d'ingresso",
     "preview3dIntroOption": {

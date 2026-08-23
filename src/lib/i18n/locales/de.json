@@ -190,9 +190,7 @@
       "standard": "Standard",
       "standardHint": "Die leichteste. Zu wählen, wenn die Vorschau ruckelt.",
       "high": "Hoch",
-      "highHint": "Die Voreinstellung: saubere Kanten, mühelos für eine Gaming-Grafikkarte.",
-      "ultra": "Ultra",
-      "ultraHint": "Das sauberste Ergebnis, vor allem an Kühlergrills und feinen Kanten. Verlangt eine aktuelle Grafikkarte."
+      "highHint": "Die Voreinstellung: saubere Kanten, mühelos für eine Gaming-Grafikkarte."
     },
     "preview3dIntro": "Einstiegseffekt",
     "preview3dIntroOption": {

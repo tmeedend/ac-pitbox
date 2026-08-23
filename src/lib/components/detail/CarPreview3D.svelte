@@ -156,16 +156,52 @@
   // Retirer la chaîne rend au passage le MSAA du contexte (`antialias: true`)
   // à tous les niveaux, et avec lui `alphaToCoverage` sur les découpes en
   // alpha : le montage post-traitement les avait justement contournés.
+  // ------------------------------------------------------------------------
+  // **Et le facteur ne peut valoir que la densité de l'écran, ou son double.**
+  //
+  // Ce n'est pas un choix de confort, c'est une contrainte mesurée, et elle a
+  // coûté trois niveaux de réglage qui dégradaient l'image au lieu de
+  // l'améliorer. Le canevas est dessiné plus grand que le panneau, puis c'est
+  // le **compositeur du navigateur** qui le réduit à la taille écran — avec
+  // une seule prise bilinéaire, sans mipmap. Le résultat ne dépend donc pas du
+  // facteur mais du **rapport de réduction**, et il n'est bon qu'à 2 :
+  //
+  //   réduction 2 → le centre du pixel de sortie tombe sur le coin entre
+  //                 quatre texels : la bilinéaire les lit à poids égaux, c'est
+  //                 un filtre boîte 2×2 exact, et il est gratuit ;
+  //   réduction 3 → il tombe sur le **centre** d'un texel : la bilinéaire
+  //                 dégénère en plus proche voisin et ne lit qu'un texel sur
+  //                 neuf. Le pire cas de tous ;
+  //   réduction 4 → coin à nouveau, mais 4 texels lus sur 16 ;
+  //   non entier  → les prises dérivent, les poids se déséquilibrent, des
+  //                 texels sont sautés.
+  //
+  // Mesuré hors application (rendu de lignes claires quasi horizontales à
+  // chaque facteur, réduction bilinéaire sur GPU, comparaison à un filtre
+  // boîte depuis un rendu 16×), écart quadratique moyen sur 255 :
+  //
+  //   réduction  1,00  1,33  1,50  1,67  2,00  2,50  2,67  3,00  4,00
+  //   RMS        7,69  9,98  8,87 11,08  4,97 12,17 13,47 21,34 15,43
+  //
+  // Sur un écran à 1,5 — le cas de l'utilisateur — les anciens niveaux
+  // donnaient 1,00 / 1,67 / 2,67 : les deux niveaux « qualité » étaient
+  // **mesurablement pires que de ne rien faire**, et Ultra le pire des deux.
+  // C'est exactement ce que l'utilisateur voyait, et ça explique après coup le
+  // « aucune différence entre Standard et Ultra » du début du chantier ainsi
+  // que le « 5× ne se distingue pas de 4× ».
+  //
+  // Il ne reste donc que deux valeurs utiles, d'où deux niveaux et non trois.
+  // Aller au-delà demanderait de faire la réduction soi-même (cible hors écran
+  // à 4×, passe de filtre boîte) — donc un tone mapping à refaire à la main,
+  // `alphaToCoverage` perdu, et 133 Mio de cible : le montage qui a déjà été
+  // construit puis retiré une fois. Le gain irait de 4 à 16 échantillons par
+  // pixel écran ; à reprendre le jour où quelqu'un prouve qu'il se voit.
   const QUALITY = {
-    /** Ce que faisait l'app avant ce réglage. */
-    standard: { supersampling: 1.5 },
-    high: { supersampling: 2.5 },
-    // 5× a été essayé et ne se distinguait pas de 4× à l'écran.
-    ultra: { supersampling: 4 },
+    /** Un pixel de tampon pour un pixel d'écran : rien de plus. */
+    standard: { oversampling: 1 },
+    /** Le double, la seule autre valeur que le compositeur sache réduire. */
+    high: { oversampling: 2 },
   } as const;
-
-  /** Borne dure du facteur, indépendamment de la taille du panneau. */
-  const MAX_PIXEL_RATIO = 4;
 
   /**
    * Budget du tampon de rendu, en pixels.
@@ -211,24 +247,26 @@
   }
 
   /**
-   * Applique le suréchantillonnage du niveau courant.
+   * Applies the current level's oversampling.
    *
-   * Le niveau est une **cible**, pas un plafond, et la distinction est tout le
-   * réglage : écrit en plafond (`min(max(dpr, 1.5), niveau)`), il ne servait à
-   * rien sur un écran à 1 dpi — le plancher de 1,5 l'emportait et les trois
-   * niveaux rendaient à l'identique. Défaut réel, remonté par l'utilisateur
-   * qui ne voyait aucune différence entre Standard et Ultra.
+   * The factor is **always the screen density times a whole number**, for the
+   * reason spelled out where `QUALITY` is declared: the compositor reduces the
+   * canvas with a single bilinear tap, and only a reduction of exactly two
+   * lands where that tap averages four texels instead of skipping most of them.
    *
-   * La densité de l'écran reste un plancher : rendre sous elle serait flou.
+   * Which is also why the budget steps the *level* down rather than clamping
+   * the factor. Clamping would hand back a fractional reduction — the very
+   * defect this function exists to avoid — so the area is measured in physical
+   * pixels, before oversampling, and only whole steps are ever taken.
    */
   function applyPixelRatio(renderer: ThreeModule.WebGLRenderer, host: HTMLElement) {
-    const wanted = Math.min(Math.max(window.devicePixelRatio, quality().supersampling), MAX_PIXEL_RATIO);
-    const area = host.clientWidth * host.clientHeight;
-    // Le facteur que le budget autorise sur ce panneau-ci. Jamais sous 1 :
-    // rendre sous la taille d'affichage serait flou, ce qui est pire que le
-    // crénelage qu'on cherche à retirer.
-    const affordable = area > 0 ? Math.max(Math.sqrt(MAX_DRAWING_PIXELS / area), 1) : wanted;
-    renderer.setPixelRatio(Math.min(wanted, affordable));
+    const density = window.devicePixelRatio || 1;
+    const area = host.clientWidth * host.clientHeight * density * density;
+    let oversampling: number = quality().oversampling;
+    while (oversampling > 1 && area * oversampling * oversampling > MAX_DRAWING_PIXELS) {
+      oversampling -= 1;
+    }
+    renderer.setPixelRatio(density * oversampling);
   }
 
   /**

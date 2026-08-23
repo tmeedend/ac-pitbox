@@ -190,9 +190,7 @@
       "standard": "Padrão",
       "standardHint": "A mais leve. Escolhe-a se a pré-visualização engasgar.",
       "high": "Alta",
-      "highHint": "A predefinição: contornos limpos, sem esforço para uma placa gráfica de jogo.",
-      "ultra": "Ultra",
-      "ultraHint": "O resultado mais limpo, sobretudo em grelhas e arestas finas. Pede uma placa gráfica recente."
+      "highHint": "A predefinição: contornos limpos, sem esforço para uma placa gráfica de jogo."
     },
     "preview3dIntro": "Efeito de entrada",
     "preview3dIntroOption": {

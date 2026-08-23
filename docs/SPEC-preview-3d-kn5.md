@@ -835,6 +835,12 @@ gêne constatée :
    implémentation comme travaillant en `linear-srgb` (en-tête de
    `SMAAPass.js`, r185).
 
+   ⚠️ **Ce paragraphe est périmé sur les chiffres — voir le point 17.** Les
+   trois niveaux étaient 1,5× / 2,5× / 4× ; il n'en reste que deux, et ils ne
+   se comptent plus en valeur absolue mais en multiple de la densité de
+   l'écran. Le raisonnement qui suit reste juste, c'est son application qui
+   était fausse.
+
    Trois niveaux, **rendu seulement** : rien de ce qu'ils changent n'entre
    dans la conversion, donc en changer n'invalide aucune entrée de cache et
    s'applique à l'image suivante, sur une fiche déjà ouverte, sans recharger
@@ -1135,6 +1141,76 @@ gêne constatée :
     l'utilisateur (AMD Radeon via ANGLE/D3D11, la pile de WebView2), avant comme
     après attachement au framebuffer, `EXT_color_buffer_float` et
     `OES_texture_float_linear` présents.
+
+17. **Le suréchantillonnage n'a que deux valeurs possibles** ✅ **Corrigé**,
+    et c'est le résultat le plus contre-intuitif du chantier : **les deux
+    niveaux « qualité » dégradaient l'image**, et le plus élevé le plus
+    fortement.
+
+    Signalé par l'utilisateur juste après le point 16 : « en ultra sur le
+    modèle (pas le reflet) je vois encore plus d'aliasing », capture à l'appui —
+    des lignes claires quasi horizontales en marches d'escalier.
+
+    **La cause n'est pas dans le rendu, elle est dans la réduction.** Le canevas
+    est dessiné plus grand que le panneau, puis c'est le **compositeur du
+    navigateur** qui le ramène à la résolution de l'écran, avec une seule prise
+    bilinéaire et sans mipmap. Ce qui décide du résultat n'est donc pas le
+    facteur de suréchantillonnage mais le **rapport de réduction**, et une
+    prise bilinéaire ne tombe juste qu'à un seul rapport :
+
+    | rapport | où tombe la prise | ce qu'elle lit |
+    | --- | --- | --- |
+    | 2 | sur le coin entre quatre texels | les 4, à poids égaux — **filtre boîte 2×2 exact, gratuit** |
+    | 3 | sur le **centre** d'un texel | 1 texel sur 9 — la bilinéaire dégénère en plus proche voisin |
+    | 4 | sur un coin | 4 texels sur 16 |
+    | non entier | quelque part entre les deux | poids déséquilibrés, texels sautés |
+
+    **Mesuré**, hors application : la même scène — des lignes claires fines et
+    quasi horizontales, le défaut signalé — rendue à chaque facteur avec une
+    couverture analytique (donc parfaitement lissée *à sa propre résolution*,
+    pour que tout écart vienne de la réduction et non du rendu), réduite par
+    minification bilinéaire sur GPU, et comparée à une référence obtenue par
+    vrai filtre boîte depuis un rendu 16×. Écart quadratique moyen, sur 255 :
+
+    | réduction | 1,00 | 1,33 | 1,50 | 1,67 | **2,00** | 2,50 | 2,67 | 3,00 | 4,00 |
+    | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+    | RMS | 7,69 | 9,98 | 8,87 | 11,08 | **4,97** | 12,17 | 13,47 | **21,34** | 15,43 |
+
+    Sur l'écran de l'utilisateur (`devicePixelRatio` = 1,5), les anciens niveaux
+    donnaient des rapports de **1,00 / 1,67 / 2,67**. Autrement dit : Standard
+    ne suréchantillonnait pas du tout (7,69, la ligne de base), et les deux
+    niveaux censés améliorer l'image la **dégradaient** — Élevée à 11,08,
+    Ultra à 13,47. L'utilisateur avait raison de bout en bout.
+
+    Ça explique après coup deux observations du point 8 restées sans réponse :
+    le « aucune différence entre Standard et Ultra » du début, et le « 5× ne se
+    distinguait pas de 4× ». Et le correctif cible/plafond, juste dans son
+    intention, avait poussé le rapport **plus loin dans la zone morte**.
+
+    **Ce qui est en place** : le facteur vaut `devicePixelRatio × k` avec
+    `k ∈ {1, 2}`, jamais autre chose. Deux niveaux, donc, et non trois — Ultra
+    disparaît, y compris ses clés de locale ; une préférence `"ultra"` déjà
+    écrite retombe sur Élevée toute seule (`oneOf`, `preview3dPrefs`). Le
+    budget de pixels fait redescendre le **niveau** au lieu de borner le
+    facteur : borner rendrait un rapport fractionnaire, exactement le défaut
+    qu'on cherche à éviter. Il se mesure donc en pixels physiques, avant
+    suréchantillonnage.
+
+    **Pourquoi pas un troisième niveau** : il faudrait faire la réduction
+    soi-même — cible hors écran à 4×, passe de filtre boîte. Or three désactive
+    le tone mapping dès qu'on rend dans une cible (`WebGLPrograms`), donc il
+    faudrait le refaire à la main *par échantillon* sous peine de faire fleurir
+    les lucioles au lieu de les moyenner ; `alphaToCoverage` serait perdu avec
+    le MSAA du contexte ; et la cible pèserait 133 Mio. C'est le montage
+    construit puis retiré au point 8. Le gain irait de 4 à 16 échantillons par
+    pixel écran — à reprendre le jour où quelqu'un prouve qu'il se voit.
+
+    ⚠️ **Réserve de méthode, à ne pas oublier si on y revient** : le banc
+    **modèle** le compositeur (une prise bilinéaire, sans mipmap), il ne le
+    mesure pas — le code de Chromium n'a pas été lu. Ce qui le valide, c'est
+    que sa prédiction est exactement ce que l'utilisateur voyait à l'écran.
+    Si un jour Chromium mipmappe les calques de canevas, tout ce point est à
+    refaire.
 
 Restent aussi, hérités du plan initial : le choix du LOD en config, et l'aperçu
 dans `ModDetail.svelte` (panneau latéral), qui n'a jamais été branché.

@@ -190,9 +190,7 @@
       "standard": "Standard",
       "standardHint": "Le plus léger. À choisir si l'aperçu saccade.",
       "high": "Élevée",
-      "highHint": "Le réglage par défaut : des bords nets, sans effort particulier pour une carte graphique de jeu.",
-      "ultra": "Ultra",
-      "ultraHint": "Le rendu le plus propre, sur les calandres et les arêtes fines en particulier. Demande une carte graphique récente."
+      "highHint": "Le réglage par défaut : des bords nets, sans effort particulier pour une carte graphique de jeu."
     },
     "preview3dIntro": "Effet d'entrée",
     "preview3dIntroOption": {
