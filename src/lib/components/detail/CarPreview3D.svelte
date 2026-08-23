@@ -301,8 +301,13 @@
      * Two things to read off that table. The effect **saturates around
      * 0,08–0,15**: past that, more blur costs contrast and buys nothing. And the
      * last column is the price — the surfaces come out about 12 % brighter and
-     * flatter, chrome least like a mirror. That is a matter of taste, so both
-     * knobs ship at the value the app had before they existed.
+     * flatter, chrome least like a mirror.
+     *
+     * **The shipped pair is 0,08 / 0,15**, the marked row: the last one that
+     * still buys something. Since the price is a matter of taste and not of
+     * correctness, the values were put to the user and are his — same as the
+     * framing defaults (point 14). `environmentBlur: 0.04` with
+     * `roughnessFloor: 0` restores exactly the look the app had before.
      *
      * ⚠️ **The quality level has nothing to do with any of this.** Measured on
      * the same bench, modelling the compositor: 1,49 % of violent pixels at
@@ -317,12 +322,13 @@
      * Blur of the studio environment map — the `sigma` of `PMREMGenerator`.
      *
      * Softens every reflection at once, and costs nothing per frame: it is baked
-     * into the environment map when the scene is built. Try 0,08.
+     * into the environment map when the scene is built. 0,04 was the value the
+     * app shipped with before the flicker was measured.
      */
-    environmentBlur: 0.04,
+    environmentBlur: 0.08,
 
     /**
-     * Floor under the roughness of every material, 0 to disable. Try 0,15.
+     * Floor under the roughness of every material, 0 to disable.
      *
      * A perfect mirror (roughness near zero) has a highlight of *zero* width,
      * which no amount of sampling can resolve — AC's chrome and glass land
@@ -340,7 +346,7 @@
      * sparkle is in the sharpness of the reflection, not in the geometry. Do not
      * re-add it without measuring first.
      */
-    roughnessFloor: 0,
+    roughnessFloor: 0.15,
   };
 
   // Effet d'entrée du plateau (§15). Deux gestes, et rien d'autre qu'un

@@ -1244,9 +1244,13 @@ gêne constatée :
 
     L'effet **sature vers 0,08–0,15** : au-delà, plus de flou coûte du contraste
     et ne gagne rien. La dernière colonne est le prix — les surfaces ressortent
-    ~12 % plus claires et plus plates, le chrome le moins miroir. C'est un
-    arbitrage de goût, donc **les deux valeurs livrées sont celles d'avant** ;
-    c'est l'utilisateur qui décide de les monter.
+    ~12 % plus claires et plus plates, le chrome le moins miroir.
+
+    **Le couple livré est 0,08 / 0,15**, la ligne en gras : la dernière qui gagne
+    encore quelque chose. Le prix relevant du goût et non de la justesse, les
+    valeurs ont été soumises à l'utilisateur et sont les siennes — même règle que
+    les défauts de cadrage du point 14. `environmentBlur: 0.04` avec
+    `roughnessFloor: 0` rend exactement l'aspect d'avant.
 
     ⚠️ **Et le niveau de qualité n'a rien à voir avec le scintillement.**
     Question posée au même banc après un retour de l'utilisateur (« ça scintille
