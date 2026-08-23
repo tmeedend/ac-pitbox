@@ -1075,7 +1075,8 @@
     "pendingNotice": "Author's notice — {name}",
     "pendingNoticeUnreadable": "{name} — open the folder to read it.",
     "outcomeUnmanaged": "UNMANAGED",
-    "unmanagedNote": "a mod installed outside Pit Box occupies this folder — nothing was changed. Delete it from the game, then import again"
+    "unmanagedNote": "a mod installed outside Pit Box occupies this folder — nothing was changed. Delete it from the game, then import again",
+    "summarySkipped": ", {skipped} skipped"
   },
   "bulkImport": {
     "analyzing": "Analyzing folder…",

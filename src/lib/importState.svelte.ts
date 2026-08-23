@@ -316,17 +316,33 @@ export function reportBulkDone(report: ArchiveResult[]): void {
   bumpLibraryVersion();
 }
 
+/** Issues pour lesquelles **rien n'a été écrit** : l'archive identique qu'on ne
+ * réimporte pas, le mod resté ambigu qui attend une décision, et le mod déjà
+ * installé hors Pit Box qu'on ne touche pas (§8). Les compter comme importés
+ * faisait mentir le titre du toast — « 1 élément importé » quand l'app venait
+ * précisément de dire qu'elle n'avait rien fait (signalé à l'usage). */
+const WROTE_NOTHING = new Set(["DUPLICATE", "AMBIGUOUS", "UNMANAGED"]);
+
 /** Résumé chiffré d'un rapport (§4.2). Un import peut ne produire aucun mod de
  * premier niveau (ex. un pack de skins rattaché à une voiture déjà connue) sans
  * pour autant n'avoir « rien » importé — le titre compte donc tout ce qui a été
- * réellement ajouté, pas seulement les mods. */
+ * réellement ajouté, pas seulement les mods. Une extension compte : elle range
+ * bien une couche. */
 export function importSummary(report: ArchiveResult[]): string {
+  const written = (a: ArchiveResult) => a.mods.filter((m) => !WROTE_NOTHING.has(m.outcome));
   const n = report.reduce(
-    (acc, a) => acc + a.mods.length + (a.subs?.length ?? 0) + (a.apps?.length ?? 0) + (a.others?.length ?? 0),
+    (acc, a) => acc + written(a).length + (a.subs?.length ?? 0) + (a.apps?.length ?? 0) + (a.others?.length ?? 0),
     0,
   );
+  // Dit dans le titre pourquoi le compte est plus bas qu'attendu ; le détail
+  // (lequel, et pourquoi) est dans le corps du rapport, juste en dessous.
+  const skipped = report.reduce((acc, a) => acc + a.mods.length - written(a).length, 0);
   const errs = report.filter((a) => a.error).length;
-  return t("importOverlay.summaryBase", { n }) + (errs ? t("importOverlay.summaryErrs", { errs }) : "");
+  return (
+    t("importOverlay.summaryBase", { n }) +
+    (skipped ? t("importOverlay.summarySkipped", { skipped }) : "") +
+    (errs ? t("importOverlay.summaryErrs", { errs }) : "")
+  );
 }
 
 /** À appeler une seule fois, depuis la racine de l'app (§4.2 : glisser-déposer partout). */

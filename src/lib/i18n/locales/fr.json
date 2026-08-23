@@ -1075,7 +1075,8 @@
     "pendingNotice": "Notice de l'auteur — {name}",
     "pendingNoticeUnreadable": "{name} — ouvrez le dossier pour la lire.",
     "outcomeUnmanaged": "NON GÉRÉ",
-    "unmanagedNote": "un mod installé hors Pit Box occupe ce dossier — rien n'a été modifié. Supprimez-le du jeu, puis réimportez"
+    "unmanagedNote": "un mod installé hors Pit Box occupe ce dossier — rien n'a été modifié. Supprimez-le du jeu, puis réimportez",
+    "summarySkipped": ", {skipped} écarté(s)"
   },
   "bulkImport": {
     "analyzing": "Analyse du dossier…",
