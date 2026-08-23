@@ -74,7 +74,7 @@ pub fn recompose(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(),
     let layers = overlay::active_layers(conn, mod_id).map_err(|e| e.to_string())?;
 
     let result = if m.is_stock {
-        recompose_stock(&link, library, kind, mod_id, &layers)
+        recompose_stock(&link, library, kind, mod_id, &layers, m.is_unmanaged)
     } else {
         recompose_managed(conn, cfg, &m, kind, mod_id, &link, &layers)
     };
@@ -91,9 +91,28 @@ pub fn recompose(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(),
 
 /// Contenu de base Kunos : la base vit dans `content/` (ou déjà sauvegardée en
 /// `stock_base/`). Toujours « présent », donc toujours projeté quand il y a des
-/// couches ; restauré à l'original quand il n'y en a plus.
-fn recompose_stock(link: &Path, library: &Path, kind: ModKind, id: &str, layers: &[LayerRow]) -> Result<(), String> {
+/// couches ; restaurée à l'original quand il n'y en a plus.
+///
+/// `unmanaged` (§12bis.1bis) verrouille la **première** sauvegarde : un mod
+/// installé hors Pit Box ne voit jamais son vrai dossier copié puis effacé au
+/// profit d'un composé. `layers::store_layer` refuse déjà de lui poser une
+/// couche, donc le seul cas qui arrive encore ici est une couche posée
+/// **avant** cette distinction, quand tout ce qui traînait dans `content/`
+/// passait pour du Kunos : la sauvegarde existe alors déjà, et recomposer
+/// n'ajoute aucun risque — c'est la refuser qui casserait le retrait de la
+/// couche.
+fn recompose_stock(
+    link: &Path,
+    library: &Path,
+    kind: ModKind,
+    id: &str,
+    layers: &[LayerRow],
+    unmanaged: bool,
+) -> Result<(), String> {
     let stock_base = stock_base_dir(library, kind, id);
+    if unmanaged && !layers.is_empty() && !stock_base.is_dir() {
+        return Err(crate::errors::UNMANAGED_NO_LAYER.into());
+    }
 
     if layers.is_empty() {
         // Plus de couche : restaurer le vrai dossier Kunos d'origine.
@@ -406,7 +425,7 @@ mod tests {
         write(&link.join("ui").join("ui_track.json"), "{}");
 
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
-        overlay::upsert_stock_mod(&conn, "spa", "Track", Some("Kunos"), Some("Spa"), "now").unwrap();
+        overlay::upsert_stock_mod(&conn, "spa", "Track", Some("Kunos"), Some("Spa"), "now", false).unwrap();
         // Version synthétique telle que produite par un vrai « Indexer le
         // contenu de base » : mono-layout au départ (layout = chaîne vide).
         overlay::insert_version(
@@ -470,7 +489,7 @@ mod tests {
         write(&link.join("ui").join("ui_track.json"), "{}");
 
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
-        overlay::upsert_stock_mod(&conn, "spa", "Track", Some("Kunos"), Some("Spa"), "now").unwrap();
+        overlay::upsert_stock_mod(&conn, "spa", "Track", Some("Kunos"), Some("Spa"), "now", false).unwrap();
         let cfg = AppConfig {
             ac_install_path: Some(ac.clone()),
             library_path: Some(library.clone()),
@@ -527,7 +546,7 @@ mod tests {
         assert!(stale.is_dir());
 
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
-        overlay::upsert_stock_mod(&conn, "spa", "Track", Some("Kunos"), Some("Spa"), "now").unwrap();
+        overlay::upsert_stock_mod(&conn, "spa", "Track", Some("Kunos"), Some("Spa"), "now", false).unwrap();
         let cfg = AppConfig {
             ac_install_path: Some(ac),
             library_path: Some(library),

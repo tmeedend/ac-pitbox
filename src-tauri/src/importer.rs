@@ -2232,6 +2232,33 @@ fn process_found(
             });
         }
 
+        // Mod installé hors Pit Box (§12bis.1bis) : **rien n'est écrit**. Le
+        // dossier de `content/` est à l'utilisateur, l'app ne l'a pas mis là.
+        // Le classer en extension — ce que faisait la branche `is_stock`
+        // ci-dessous, qui ramassait tout ce qui traînait dans `content/` —
+        // revenait à sauvegarder puis **effacer** son vrai dossier pour
+        // reconstruire un composé à la place, sans le lui dire. Le décompte
+        // est calculé quand même : c'est ce qui permet au rapport de dire de
+        // quoi il s'agit avant qu'il décide.
+        if existing.is_unmanaged {
+            let diff = cfg.ac_install_path.as_ref().and_then(|ac| {
+                let base = ac.join("content").join(fm.kind.content_folder()).join(&id_interne);
+                base.is_dir().then(|| identity::diff_content(&fm.dir, &base))
+            });
+            return Ok(ImportedMod {
+                id_interne,
+                kind: kind_str,
+                display_name: Some(name),
+                outcome: "UNMANAGED".into(),
+                version_label: ui.version,
+                conflict: None,
+                added_count: diff.map(|d| d.added),
+                overwritten_count: diff.map(|d| d.overwritten),
+                existing_total: diff.map(|d| d.existing_total),
+                resources_extracted: 0,
+            });
+        }
+
         // Règle absolue (§4.4) : le contenu de base Kunos (is_stock) ne reçoit
         // JAMAIS de remplacement — toujours une couche par-dessus. Sinon,
         // comparer les fichiers pour classer update / extension / ambigu.
@@ -3046,7 +3073,7 @@ mod tests {
 
         // Contenu de base indexé (is_stock=1), sans version bibliothèque.
         let now = chrono::Local::now().to_rfc3339();
-        crate::overlay::upsert_stock_mod(&conn, "ks_spa", "Car", Some("Kunos"), Some("Spa"), &now).unwrap();
+        crate::overlay::upsert_stock_mod(&conn, "ks_spa", "Car", Some("Kunos"), Some("Spa"), &now, false).unwrap();
 
         // Import « version complète améliorée » par-dessus : recouvrement total.
         let src = base.join("src");
@@ -3062,6 +3089,44 @@ mod tests {
         assert!(
             crate::overlay::get_mod(&conn, "ks_spa").unwrap().unwrap().is_stock,
             "reste contenu de base"
+        );
+    }
+
+    #[test]
+    fn import_over_an_unmanaged_mod_writes_nothing() {
+        // Rule (§12bis.1bis): a mod the user installed outside Pit Box is
+        // never written over, not even as a layer. Before the distinction it
+        // was filed as Kunos content, so this very import turned into an
+        // "extension" — which copies the real folder to `stock_base/` and then
+        // **deletes** it to build a composed tree in its place. On someone's
+        // already-modded install, that moved their mod without telling them.
+        let base = crate::testutil::temp_dir("import-unmanaged");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let now = chrono::Local::now().to_rfc3339();
+        crate::overlay::upsert_stock_mod(&conn, "rss_formula_hybrid", "Car", None, Some("RSS"), &now, true).unwrap();
+
+        let src = base.join("src");
+        make_car_with_files(&src, "rss_formula_hybrid", &["model.kn5", "data/surfaces.ini"]);
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+
+        assert_eq!(r.mods[0].outcome, "UNMANAGED", "nothing decided, nothing written");
+        assert_eq!(
+            crate::overlay::get_versions(&conn, "rss_formula_hybrid").unwrap().len(),
+            0,
+            "no version stored"
+        );
+        assert_eq!(
+            crate::overlay::list_layers(&conn, "rss_formula_hybrid").unwrap().len(),
+            0,
+            "no layer either — that is the whole point"
         );
     }
 
@@ -3093,7 +3158,7 @@ mod tests {
         // Circuit de base Kunos : jamais remplacé, tout import dessus est une
         // couche (§4.4).
         let now = chrono::Local::now().to_rfc3339();
-        crate::overlay::upsert_stock_mod(&conn, "spa", "Track", None, Some("Spa"), &now).unwrap();
+        crate::overlay::upsert_stock_mod(&conn, "spa", "Track", None, Some("Spa"), &now, false).unwrap();
         let stock = ac.join("content").join("tracks").join("spa");
         std::fs::create_dir_all(&stock).unwrap();
         std::fs::write(stock.join("spa.kn5"), b"KUNOS").unwrap();

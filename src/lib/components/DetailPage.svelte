@@ -888,7 +888,7 @@
          indice). Même pastille que la colonne « État » du tableau. -->
     <Tabs flush tabs={tabItems} active={activeTab} onselect={(v) => (activeTab = v as DetailTab)}>
       {#snippet trailing()}
-        <StateBadge active={d.active} stock={d.is_stock} />
+        <StateBadge active={d.active} stock={d.is_stock} unmanaged={d.is_unmanaged} />
       {/snippet}
     </Tabs>
 

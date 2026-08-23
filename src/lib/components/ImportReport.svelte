@@ -25,6 +25,7 @@
     if (o === "UPDATE_REPLACE") return { cls: "upd", label: t("importOverlay.outcomeUpdate") };
     if (o === "DUPLICATE") return { cls: "dup", label: t("importOverlay.outcomeDuplicate") };
     if (o === "EXTENSION") return { cls: "ext", label: t("importOverlay.outcomeExtension") };
+    if (o === "UNMANAGED") return { cls: "unm", label: t("importOverlay.outcomeUnmanaged") };
     return { cls: "new", label: t("importOverlay.outcomeNew") };
   }
 
@@ -167,6 +168,8 @@
         <span class="r-conflict">{t("importOverlay.duplicateNote")}</span>
       {:else if m.outcome === "EXTENSION"}
         <span class="r-conflict">{t("importOverlay.extensionNote", { added: m.added_count ?? 0, overwritten: m.overwritten_count ?? 0 })}</span>
+      {:else if m.outcome === "UNMANAGED"}
+        <span class="r-conflict">{t("importOverlay.unmanagedNote")}</span>
       {/if}
     </div>
   {/each}
@@ -329,6 +332,12 @@
   .r-out.ext {
     color: var(--green);
     border-color: var(--green-border);
+  }
+  /* Rien n'a été écrit : le gris des mods non gérés, pas le vert de ce qui a
+     été rangé quelque part. */
+  .r-out.unm {
+    color: var(--muted);
+    border-color: var(--line);
   }
   .r-conflict {
     color: var(--yellow);

@@ -271,7 +271,8 @@
     "deactivate": "Deactivate",
     "remove": "Remove",
     "working": "…",
-    "description": "Description"
+    "description": "Description",
+    "unmanagedState": "Unmanaged"
   },
   "toast": {
     "expand": "Expand",
@@ -320,7 +321,13 @@
     "triedNeutral": "Already tried: no filter",
     "baseOnly": "Base content only",
     "baseExcluded": "Everything but base content",
-    "baseNeutral": "Base content: no filter"
+    "baseNeutral": "Base content: no filter",
+    "unmanagedTooltip": "Mod installed outside Pit Box",
+    "unmanagedBadge": "UNMANAGED",
+    "unmanagedContent": "Unmanaged mods",
+    "unmanagedOnly": "Unmanaged mods only",
+    "unmanagedExcluded": "Everything but unmanaged mods",
+    "unmanagedNeutral": "Unmanaged mods: no filter"
   },
   "bulk": {
     "runningActivate": "Activating {count} mods",
@@ -569,7 +576,9 @@
     "deleteVersionProfiles": "This version is pinned by: {profiles}. Those profiles will use the installed version instead.",
     "deleteVersionRecycled": "Version {label} sent to the recycle bin.",
     "deleteVersionPurged": "Version {label} deleted permanently: the recycle bin refused it.",
-    "openPack": "Pack sheet"
+    "openPack": "Pack sheet",
+    "unmanagedOrigin": "Installed outside Pit Box",
+    "unmanagedContentLabel": "Mod installed outside Pit Box"
   },
   "lightbox": {
     "open": "View full size",
@@ -1063,7 +1072,9 @@
     "pendingReplacesWhy": "These files apply to every session, not just to this mod. The originals are backed up and restored if you remove the addition.",
     "pendingNoSuggestion": "No answer is better up front — this one is yours to make.",
     "pendingNotice": "Author's notice — {name}",
-    "pendingNoticeUnreadable": "{name} — open the folder to read it."
+    "pendingNoticeUnreadable": "{name} — open the folder to read it.",
+    "outcomeUnmanaged": "UNMANAGED",
+    "unmanagedNote": "a mod installed outside Pit Box occupies this folder — nothing was changed"
   },
   "bulkImport": {
     "analyzing": "Analyzing folder…",
@@ -1180,7 +1191,9 @@
     "pendingUnknownAction": "That action does not apply to this folder.",
     "pendingAlreadyKnown": "A mod by that name already exists.",
     "versionIsActive": "This is the installed version. Activate another one before deleting it.",
-    "packNotFound": "This pack no longer exists: none of its mods are in the library."
+    "packNotFound": "This pack no longer exists: none of its mods are in the library.",
+    "unmanagedNotActivatable": "Mod installed outside Pit Box: already present in the game, cannot be activated until taken over.",
+    "unmanagedNoLayer": "Mod installed outside Pit Box: nothing can be layered on top until it is taken over."
   },
   "pack": {
     "tabMembers": "Mods",

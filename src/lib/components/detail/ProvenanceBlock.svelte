@@ -42,11 +42,18 @@
   /** Archive dont provient la version **active** (§4.2) — mod importé
    * uniquement. Pour le contenu de base Kunos (§10bis), il n'y a jamais eu
    * d'archive : jeu de base ou DLC (`detail.stock_pack`, résolu côté Rust
-   * depuis `docs/kunos_content_dates.json`), jamais les deux à la fois. */
+   * depuis `docs/kunos_content_dates.json`), jamais les deux à la fois.
+   *
+   * Un mod installé hors Pit Box (§12bis.1bis) partage `is_stock` sans être du
+   * contenu de jeu : il ne doit surtout pas hériter du « Jeu de base » par
+   * défaut ci-dessous — c'est justement le mensonge que cette distinction est
+   * venue corriger. On ne sait pas d'où il vient, et on le dit. */
   const provenance = $derived(
-    detail.is_stock
-      ? (detail.stock_pack ?? t("detail.baseGameLabel"))
-      : (detail.versions.find((v) => v.id === detail.active_version_id)?.source_archive ?? null),
+    detail.is_unmanaged
+      ? t("detail.unmanagedOrigin")
+      : detail.is_stock
+        ? (detail.stock_pack ?? t("detail.baseGameLabel"))
+        : (detail.versions.find((v) => v.id === detail.active_version_id)?.source_archive ?? null),
   );
 
   /** Date seule : l'heure d'une date estimée n'a aucun sens (§6.2). */

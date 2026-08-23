@@ -1077,6 +1077,7 @@ mod tests {
             None,
             Some("Black Cat County"),
             &now,
+            false,
         )
         .unwrap();
 
@@ -1232,6 +1233,7 @@ mod tests {
             None,
             Some("Black Cat County"),
             &now,
+            false,
         )
         .unwrap();
 
@@ -1312,6 +1314,7 @@ mod tests {
             None,
             Some("Black Cat County"),
             &now,
+            false,
         )
         .unwrap();
 
@@ -1364,6 +1367,7 @@ mod tests {
             None,
             Some("Black Cat County"),
             &now,
+            false,
         )
         .unwrap();
 

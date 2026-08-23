@@ -56,8 +56,14 @@ export interface ModCard {
   layouts: string[];
   /** Extensions CSP de la version active (colonne circuits §6.2). */
   csp_features: string[];
-  /** Contenu de base Kunos : lecture seule, non désactivable (§12bis.1). */
+  /** Indexé depuis `content/` : contenu de base Kunos **ou** mod installé hors
+   * Pit Box — lecture seule, non désactivable (§12bis.1). `is_unmanaged`
+   * distingue les deux ; ne jamais présenter un `is_stock` seul comme du
+   * contenu de jeu. */
   is_stock: boolean;
+  /** Mod installé hors Pit Box, trouvé dans `content/` à l'indexation
+   * (§12bis.1bis) : l'app n'y touche pas tant qu'il n'est pas pris en charge. */
+  is_unmanaged: boolean;
   /** Date de publication estimée (dates de fichiers à l'import), remplaçable par L7 (§6.2). */
   published_at: string | null;
   /** Taille sur disque cumulée de toutes les versions, octets (§9.4). `null`
@@ -158,7 +164,7 @@ export interface ImportedMod {
   display_name: string | null;
   /** EXTENSION : rangé comme couche à part (§4.4). AMBIGUOUS : rien écrit, à
    * trancher par l'utilisateur (mise à jour ou extension). */
-  outcome: "IMPORT" | "UPDATE_REPLACE" | "DUPLICATE" | "EXTENSION" | "AMBIGUOUS";
+  outcome: "IMPORT" | "UPDATE_REPLACE" | "DUPLICATE" | "EXTENSION" | "AMBIGUOUS" | "UNMANAGED";
   version_label: string | null;
   conflict: FuzzyConflict | null;
   /** Décompte de comparaison (§4.4), présent pour EXTENSION/AMBIGUOUS. */

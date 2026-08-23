@@ -204,7 +204,15 @@ pub fn activate(conn: &Connection, cfg: &AppConfig, mod_id: &str, version_id: Op
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_NOT_FOUND)?;
     if m.is_stock {
-        return Err(crate::errors::STOCK_NOT_ACTIVATABLE.into());
+        // Deux raisons distinctes de refuser, deux messages : le contenu de
+        // base est toujours là par nature, un mod non géré attend d'être pris
+        // en charge (§12bis.1bis) — dire « contenu de base » à quelqu'un qui
+        // regarde son propre mod ne lui apprend rien.
+        return Err(if m.is_unmanaged {
+            crate::errors::UNMANAGED_NOT_ACTIVATABLE.into()
+        } else {
+            crate::errors::STOCK_NOT_ACTIVATABLE.to_string()
+        });
     }
     let kind = kind_of(&m.kind);
 
@@ -586,5 +594,31 @@ mod tests {
         deactivate(&conn, &cfg, "sym_car").unwrap();
         assert!(!link.exists());
         assert!(carv.join("data.txt").is_file(), "bibliothèque intacte");
+    }
+
+    /// Rule (§12bis.1bis): a mod installed outside Pit Box is refused for
+    /// activation like base content — the app owns neither folder — but with
+    /// its own message. Being told "Kunos base content" about one's own mod
+    /// explains nothing.
+    #[test]
+    fn unmanaged_mod_is_refused_activation_with_its_own_reason() {
+        let base = crate::testutil::temp_dir("act-unmanaged");
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(base.join("ac")),
+            library_path: Some(base.join("library")),
+            ..Default::default()
+        };
+        overlay::upsert_stock_mod(&conn, "srp", "Track", None, Some("Shutoko"), "now", true).unwrap();
+        overlay::upsert_stock_mod(&conn, "monza", "Track", None, Some("Monza"), "now", false).unwrap();
+
+        assert_eq!(
+            activate(&conn, &cfg, "srp", None).unwrap_err(),
+            crate::errors::UNMANAGED_NOT_ACTIVATABLE,
+        );
+        assert_eq!(
+            activate(&conn, &cfg, "monza", None).unwrap_err(),
+            crate::errors::STOCK_NOT_ACTIVATABLE,
+        );
     }
 }

@@ -443,7 +443,7 @@ mod tests {
         let base = crate::testutil::temp_dir("active");
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let now = chrono::Local::now().to_rfc3339();
-        overlay::upsert_stock_mod(&conn, "ks_test_track", "Track", None, Some("Test"), &now).unwrap();
+        overlay::upsert_stock_mod(&conn, "ks_test_track", "Track", None, Some("Test"), &now, false).unwrap();
         let m = overlay::get_mod(&conn, "ks_test_track").unwrap().unwrap();
         assert!(is_active(&AppConfig::default(), &m));
     }
@@ -517,7 +517,7 @@ mod tests {
         std::fs::write(stale.join("ui").join("2022").join("ui_track.json"), "{}").unwrap();
 
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
-        overlay::upsert_stock_mod(&conn, "spa", "Track", Some("Kunos"), Some("Spa"), "now").unwrap();
+        overlay::upsert_stock_mod(&conn, "spa", "Track", Some("Kunos"), Some("Spa"), "now", false).unwrap();
         let cfg = AppConfig {
             ac_install_path: Some(ac),
             library_path: Some(lib),
@@ -553,7 +553,7 @@ mod tests {
 
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let now = chrono::Local::now().to_rfc3339();
-        overlay::upsert_stock_mod(&conn, "ks_ferrari", "Car", Some("Ferrari"), Some("488"), &now).unwrap();
+        overlay::upsert_stock_mod(&conn, "ks_ferrari", "Car", Some("Ferrari"), Some("488"), &now, false).unwrap();
 
         let cfg = AppConfig {
             ac_install_path: Some(ac.clone()),
@@ -582,7 +582,7 @@ mod tests {
 
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let now = chrono::Local::now().to_rfc3339();
-        overlay::upsert_stock_mod(&conn, "ks_ferrari", "Car", Some("Ferrari"), Some("488"), &now).unwrap();
+        overlay::upsert_stock_mod(&conn, "ks_ferrari", "Car", Some("Ferrari"), Some("488"), &now, false).unwrap();
 
         let cfg = AppConfig {
             ac_install_path: Some(ac.clone()),
@@ -636,7 +636,7 @@ mod tests {
         std::fs::create_dir_all(&base).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let now = chrono::Local::now().to_rfc3339();
-        overlay::upsert_stock_mod(&conn, "ks_test_track", "Track", None, Some("Test"), &now).unwrap();
+        overlay::upsert_stock_mod(&conn, "ks_test_track", "Track", None, Some("Test"), &now, false).unwrap();
 
         let cards = list_cards(&conn, &AppConfig::default()).unwrap();
         let stock = cards.iter().find(|c| c.base.id_interne == "ks_test_track").unwrap();

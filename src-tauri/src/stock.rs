@@ -1,14 +1,23 @@
-//! Indexation du contenu de base Kunos (§12bis.1). Référence les voitures et
-//! circuits **présents dans `content/` comme vrais dossiers** (pas des junctions
-//! gérées, pas déjà des mods) avec `is_stock=1` : lecture seule, non
-//! désactivable. But : permettre aux sous-éléments (skins, sons) de s'y
-//! rattacher, et afficher le contenu de base avec les mêmes métadonnées que les
-//! mods (nom, marque, tags harmonisés, fiche technique, vignette).
+//! Indexation de ce qui vit dans `content/` (§12bis.1). Référence les voitures
+//! et circuits **présents comme vrais dossiers** (pas des junctions gérées, pas
+//! déjà des mods) avec `is_stock=1` : lecture seule, non désactivable. But :
+//! permettre aux sous-éléments (skins, sons) de s'y rattacher, et les afficher
+//! avec les mêmes métadonnées que les mods (nom, marque, tags harmonisés, fiche
+//! technique, vignette).
+//!
+//! **Deux populations s'y trouvent** (§12bis.1bis) : le contenu de base Kunos,
+//! et les mods que l'utilisateur a installés lui-même avant Pit Box — sur une
+//! install déjà moddée, ces derniers sont largement majoritaires. La table du
+//! contenu officiel les sépare (`kunos_dates::is_official`) et le drapeau
+//! `is_unmanaged` le consigne. Tout les confondre était plus qu'un défaut
+//! d'étiquette : ça ouvrait sur les mods de l'utilisateur le chemin de couche,
+//! qui **sauvegarde puis efface** le vrai dossier de `content/` pour le
+//! remplacer par un composé.
 //!
 //! Chaque entrée reçoit une **version synthétique** pointant vers son dossier
 //! `content/` (pour preview/tags/specs) et passe par la **même harmonisation**
-//! que l'import. Auteur par défaut « Kunos ». Ré-indexation idempotente
-//! (`clear_stock` puis reconstruction).
+//! que l'import. Auteur par défaut « Kunos » pour le contenu de jeu seulement.
+//! Ré-indexation idempotente (`clear_stock` puis reconstruction).
 
 use std::path::Path;
 
@@ -133,8 +142,25 @@ pub fn index_stock_content(
             .or_else(|| ui.name.clone())
             .unwrap_or_else(|| id.clone());
 
-            overlay::upsert_stock_mod(conn, &id, &format!("{kind:?}"), ui.brand.as_deref(), Some(&name), &now)
-                .map_err(|e| e.to_string())?;
+            // Contenu de base, ou mod installé hors Pit Box ? (§12bis.1bis)
+            // Un vrai dossier dans `content/` est l'un ou l'autre, et seule la
+            // table du contenu officiel le dit de façon fiable — voir
+            // `kunos_dates::is_official`. Sur une install déjà moddée, ce test
+            // est ce qui évite de présenter 300 mods de l'utilisateur comme du
+            // contenu de jeu, avec tout ce que ça autorisait dessus (couches,
+            // sauvegarde/effacement du vrai dossier par `compose`).
+            let unmanaged = !kunos_dates::is_official(kind, &id);
+
+            overlay::upsert_stock_mod(
+                conn,
+                &id,
+                &format!("{kind:?}"),
+                ui.brand.as_deref(),
+                Some(&name),
+                &now,
+                unmanaged,
+            )
+            .map_err(|e| e.to_string())?;
 
             // Année du modèle (§6.2bis) : ui_car.json si renseigné, sinon la
             // table statique docs/kunos_content_dates.json (mods importés
@@ -161,7 +187,11 @@ pub fn index_stock_content(
             } else {
                 Vec::new()
             };
-            let author = ui.author.clone().or_else(|| Some("Kunos".to_string()));
+            // Auteur : « Kunos » par défaut pour le contenu de jeu seulement.
+            // Un mod non géré dont le `ui_*.json` ne dit rien reste sans
+            // auteur — inventer « Kunos » était précisément ce qui rendait la
+            // méprise invisible sur une install déjà moddée.
+            let author = ui.author.clone().or_else(|| (!unmanaged).then(|| "Kunos".to_string()));
             let published_at = kunos_dates::release_date(kind, &id);
             overlay::insert_version(
                 conn,
@@ -477,5 +507,79 @@ mod tests {
             !versions[0].layouts.iter().any(|l| l == "2022"),
             "indexé depuis la sauvegarde intacte, pas depuis le composé — le layout de couche n'est pas mis en cache comme s'il était Kunos"
         );
+    }
+
+    /// Rule: a real folder in `content/` is game content only when the official
+    /// table knows its id (§12bis.1bis). Anything else is a mod the user
+    /// installed by hand — and it must not be handed the "Kunos" author that
+    /// made the mistake invisible on an already-modded install.
+    #[test]
+    fn content_folder_unknown_to_the_official_table_is_an_unmanaged_mod() {
+        let base = crate::testutil::temp_dir("stock-unmanaged");
+        let ac = base.join("ac");
+        fake_stock_track(&ac, "mugello", "Mugello");
+        fake_stock_track(&ac, "shutoko_revival_project", "Shutoko Revival Project");
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+
+        index_stock_content(&conn, &cfg, &Rules::default(), false).unwrap();
+
+        let official = overlay::get_mod(&conn, "mugello").unwrap().unwrap();
+        assert!(official.is_stock, "Kunos track stays base content");
+        assert!(!official.is_unmanaged, "a Kunos track is not an unmanaged mod");
+        assert_eq!(
+            overlay::get_versions(&conn, "mugello").unwrap()[0].author.as_deref(),
+            Some("Kunos"),
+            "game content defaults to the Kunos author"
+        );
+
+        let mine = overlay::get_mod(&conn, "shutoko_revival_project").unwrap().unwrap();
+        assert!(mine.is_stock, "it does live in content/, like base content");
+        assert!(mine.is_unmanaged, "but it is a mod, not game content");
+        assert_eq!(
+            overlay::get_versions(&conn, "shutoko_revival_project").unwrap()[0].author,
+            None,
+            "no author is better than a made-up Kunos"
+        );
+    }
+
+    /// Rule: bases written before this distinction filed every real folder of
+    /// `content/` as Kunos content. A plain reindex reclassifies them **in
+    /// place** — the flag flips, everything the user typed on the mod stays
+    /// (§12bis.1bis).
+    #[test]
+    fn reindex_reclassifies_a_mod_previously_taken_for_base_content() {
+        let base = crate::testutil::temp_dir("stock-reclass");
+        let ac = base.join("ac");
+        fake_stock_track(&ac, "shutoko_revival_project", "Shutoko Revival Project");
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+
+        // État d'avant : indexé comme contenu de base, avec des saisies dessus.
+        overlay::upsert_stock_mod(
+            &conn,
+            "shutoko_revival_project",
+            "Track",
+            None,
+            Some("Shutoko Revival Project"),
+            "now",
+            false,
+        )
+        .unwrap();
+        overlay::set_mod_field(&conn, "shutoko_revival_project", "display_name_user", Some("Shuto C1")).unwrap();
+        overlay::set_favorite(&conn, "shutoko_revival_project", true).unwrap();
+
+        index_stock_content(&conn, &cfg, &Rules::default(), false).unwrap();
+
+        let m = overlay::get_mod(&conn, "shutoko_revival_project").unwrap().unwrap();
+        assert!(m.is_unmanaged, "reclassified as an unmanaged mod");
+        assert_eq!(m.display_name.as_deref(), Some("Shuto C1"), "the rename survives");
+        assert!(m.is_favorite, "the favourite survives");
     }
 }

@@ -45,6 +45,8 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         // Nom/description saisis par l'utilisateur (§5bis.3).
         "display_name_user TEXT",
         "description_user TEXT",
+        // Mod installé hors Pit Box, trouvé dans content/ à l'indexation (§12bis.1bis).
+        "is_unmanaged INTEGER NOT NULL DEFAULT 0",
     ];
     for col in cols {
         // Ignore l'erreur « duplicate column » si la colonne existe déjà.
@@ -102,7 +104,8 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             gearbox           TEXT,
             source_pack       TEXT,                   -- pack d'origine (§4.4)
             source_url        TEXT,                   -- URL d'origine (§4.4/§12ter)
-            is_stock          INTEGER NOT NULL DEFAULT 0, -- contenu de base Kunos (§12bis.1)
+            is_stock          INTEGER NOT NULL DEFAULT 0, -- indexé depuis content/ (§12bis.1)
+            is_unmanaged      INTEGER NOT NULL DEFAULT 0, -- ... et pas du Kunos (§12bis.1bis)
             active_version_id TEXT,
             created_at        TEXT NOT NULL
         );
@@ -402,8 +405,22 @@ pub struct ModRow {
     /// `ui_*.json` à chaque affichage — donc l'arbitrage se fait côté
     /// `library.rs`, pas en SQL.
     pub description_user: Option<String>,
-    /// Contenu de base Kunos : lecture seule, non désactivable (§12bis.1).
+    /// Indexé depuis `content/` : vit dans le dossier du jeu, sans version en
+    /// bibliothèque — lecture seule, non désactivable (§12bis.1). Vrai pour le
+    /// contenu de base Kunos **comme** pour un mod installé hors Pit Box :
+    /// c'est ce qui fait que tout ce qui protège l'un protège l'autre (lecture
+    /// des vignettes dans `content/`, refus d'activation, absence de date
+    /// d'ajout…). La distinction se lit sur `is_unmanaged`.
     pub is_stock: bool,
+    /// Mod installé hors Pit Box (§12bis.1bis) : présent dans `content/` comme
+    /// un vrai dossier, mais absent de la table du contenu officiel
+    /// ([`crate::kunos_dates::is_official`]). Toujours accompagné de
+    /// `is_stock`. Contrairement au contenu de base, ce n'est **pas** du
+    /// contenu de jeu : il ne reçoit ni couche, ni import par-dessus, et il
+    /// n'est jamais sauvegardé/effacé de `content/` — l'app le laisse
+    /// strictement où l'utilisateur l'a mis tant qu'il ne l'a pas pris en
+    /// charge.
+    pub is_unmanaged: bool,
     /// Date de publication estimée de la version active (§6.2).
     pub published_at: Option<String>,
     /// Taille sur disque cumulée de toutes les versions, octets (§9.4).
@@ -748,7 +765,8 @@ const MOD_SELECT: &str = r#"
            -- Le nom tel que l'annonce le fichier du mod, que `display_name`
            -- ci-dessus masque dès qu'une surcharge existe : c'est pourtant lui
            -- qu'il faut montrer à qui hésite à revenir en arrière.
-           m.display_name AS display_name_file
+           m.display_name AS display_name_file,
+           m.is_unmanaged
     FROM mods m
 "#;
 
@@ -794,6 +812,7 @@ fn map_mod(row: &rusqlite::Row) -> rusqlite::Result<ModRow> {
         display_name_user: row.get(31)?,
         description_user: row.get(32)?,
         display_name_file: row.get(33)?,
+        is_unmanaged: row.get::<_, i64>(34)? != 0,
     })
 }
 
@@ -1340,10 +1359,19 @@ pub fn list_media_links(conn: &Connection, entity_id: &str, kind: &str) -> rusql
     rows.collect()
 }
 
-// --- Contenu de base Kunos (§12bis.1) ---------------------------------------
+// --- Contenu trouvé dans content/ (§12bis.1) --------------------------------
 
-/// Indexe une voiture/circuit de base : ligne minimale `is_stock=1` (lecture
-/// seule). Ne touche pas un mod déjà présent (un vrai mod n'est jamais « stock »).
+/// Indexe une voiture/circuit vivant dans `content/` : ligne minimale
+/// `is_stock=1` (lecture seule). Ne touche pas un mod déjà présent (un vrai mod
+/// géré n'est jamais « stock »).
+///
+/// `unmanaged` distingue le mod installé hors Pit Box du contenu de base
+/// (§12bis.1bis). C'est le **seul** champ réécrit sur une ligne déjà indexée :
+/// c'est ce qui reclasse les bases d'avant cette distinction — où tout ce qui
+/// traînait dans `content/` passait pour du Kunos — sans perdre ce que
+/// l'utilisateur y a saisi (nom repris à la main, description, tags manuels,
+/// favori). Le `WHERE is_stock` protège d'une reclassification accidentelle
+/// d'un mod géré qui porterait le même id.
 pub fn upsert_stock_mod(
     conn: &Connection,
     id: &str,
@@ -1351,12 +1379,13 @@ pub fn upsert_stock_mod(
     brand: Option<&str>,
     name: Option<&str>,
     created_at: &str,
+    unmanaged: bool,
 ) -> rusqlite::Result<()> {
     conn.execute(
-        r#"INSERT INTO mods (id_interne, kind, brand, display_name, is_stock, created_at)
-           VALUES (?1, ?2, ?3, ?4, 1, ?5)
-           ON CONFLICT(id_interne) DO NOTHING"#,
-        params![id, kind, brand, name, created_at],
+        r#"INSERT INTO mods (id_interne, kind, brand, display_name, is_stock, is_unmanaged, created_at)
+           VALUES (?1, ?2, ?3, ?4, 1, ?6, ?5)
+           ON CONFLICT(id_interne) DO UPDATE SET is_unmanaged = ?6 WHERE is_stock = 1"#,
+        params![id, kind, brand, name, created_at, unmanaged as i64],
     )?;
     Ok(())
 }

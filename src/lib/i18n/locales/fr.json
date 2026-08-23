@@ -271,7 +271,8 @@
     "deactivate": "Désactiver",
     "remove": "Retirer",
     "working": "…",
-    "description": "Description"
+    "description": "Description",
+    "unmanagedState": "Non géré"
   },
   "toast": {
     "expand": "Déplier",
@@ -320,7 +321,13 @@
     "triedNeutral": "Déjà essayé : sans filtre",
     "baseOnly": "Contenu de base uniquement",
     "baseExcluded": "Tout sauf le contenu de base",
-    "baseNeutral": "Contenu de base : sans filtre"
+    "baseNeutral": "Contenu de base : sans filtre",
+    "unmanagedTooltip": "Mod installé hors Pit Box",
+    "unmanagedBadge": "NON GÉRÉ",
+    "unmanagedContent": "Mods non gérés",
+    "unmanagedOnly": "Mods non gérés uniquement",
+    "unmanagedExcluded": "Tout sauf les mods non gérés",
+    "unmanagedNeutral": "Mods non gérés : sans filtre"
   },
   "bulk": {
     "runningActivate": "Activation de {count} mods",
@@ -569,7 +576,9 @@
     "deleteVersionProfiles": "Cette version est épinglée par : {profiles}. Ces profils utiliseront la version installée à la place.",
     "deleteVersionRecycled": "Version {label} envoyée à la corbeille.",
     "deleteVersionPurged": "Version {label} supprimée définitivement : la corbeille l'a refusée.",
-    "openPack": "Fiche du pack"
+    "openPack": "Fiche du pack",
+    "unmanagedOrigin": "Installé hors Pit Box",
+    "unmanagedContentLabel": "Mod installé hors Pit Box"
   },
   "lightbox": {
     "open": "Voir en grand",
@@ -1063,7 +1072,9 @@
     "pendingReplacesWhy": "Ces fichiers s'appliquent à toutes les sessions, pas seulement à ce mod. Les originaux sont sauvegardés et restaurés si vous retirez l'ajout.",
     "pendingNoSuggestion": "Aucune réponse n'est meilleure a priori : c'est à vous de voir.",
     "pendingNotice": "Notice de l'auteur — {name}",
-    "pendingNoticeUnreadable": "{name} — ouvrez le dossier pour la lire."
+    "pendingNoticeUnreadable": "{name} — ouvrez le dossier pour la lire.",
+    "outcomeUnmanaged": "NON GÉRÉ",
+    "unmanagedNote": "un mod installé hors Pit Box occupe ce dossier — rien n'a été modifié"
   },
   "bulkImport": {
     "analyzing": "Analyse du dossier…",
@@ -1180,7 +1191,9 @@
     "pendingUnknownAction": "Action impossible pour ce dossier.",
     "pendingAlreadyKnown": "Un mod porte déjà ce nom.",
     "versionIsActive": "C'est la version installée. Activez-en une autre avant de la supprimer.",
-    "packNotFound": "Ce pack n'existe plus : aucun de ses mods n'est en bibliothèque."
+    "packNotFound": "Ce pack n'existe plus : aucun de ses mods n'est en bibliothèque.",
+    "unmanagedNotActivatable": "mod installé hors Pit Box : déjà présent dans le jeu, non activable tant qu'il n'est pas pris en charge.",
+    "unmanagedNoLayer": "mod installé hors Pit Box : rien ne peut être posé par-dessus tant qu'il n'est pas pris en charge."
   },
   "pack": {
     "tabMembers": "Mods",

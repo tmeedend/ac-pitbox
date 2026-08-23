@@ -98,6 +98,7 @@
   let favState = $state<TriState>(0);
   let triedState = $state<TriState>(0);
   let stockState = $state<TriState>(0);
+  let unmanagedState = $state<TriState>(0);
   let yearMin = $state<number>(NO_YEAR);
   let yearMax = $state<number>(NO_YEAR);
   let view = $state<"gallery" | "table">("gallery");
@@ -130,6 +131,7 @@
       favState,
       triedState,
       stockState,
+      unmanagedState,
       yearMin,
       yearMax,
     };
@@ -350,6 +352,7 @@
         // préférence enregistrée cochée devient donc l'état **rouge**.
         triedState = (sf.triedState as TriState) ?? (sf.neverTried ? -1 : 0);
         stockState = (sf.stockState as TriState) ?? (sf.hideBaseContent ? -1 : 0);
+        unmanagedState = (sf.unmanagedState as TriState) ?? 0;
         // Un filtre enregistré avant que « vide » n'existe portait les bornes
         // de la plage comme sentinelle de « pas de borne » : elles se lisent
         // donc comme un champ vide, ce qu'elles ont toujours voulu dire.
@@ -658,8 +661,14 @@
       if (favState === -1 && c.is_favorite) return false;
       if (triedState === 1 && !c.tried) return false;
       if (triedState === -1 && c.tried) return false;
-      if (stockState === 1 && !c.is_stock) return false;
-      if (stockState === -1 && c.is_stock) return false;
+      // `is_stock` couvre tout ce qui vit dans content/ : le contenu de jeu
+      // ET les mods installés hors Pit Box. Le filtre « contenu de base » ne
+      // parle que du premier, d'où le retrait explicite du second.
+      const isBase = c.is_stock && !c.is_unmanaged;
+      if (stockState === 1 && !isBase) return false;
+      if (stockState === -1 && isBase) return false;
+      if (unmanagedState === 1 && !c.is_unmanaged) return false;
+      if (unmanagedState === -1 && c.is_unmanaged) return false;
       // Champ vide = aucun filtre de ce côté, quelle que soit la plage de
       // saisie : c'est la borne saisie qui décide, pas sa distance aux bornes.
       if (yearMin !== NO_YEAR && (c.year ?? 0) < yearMin) return false;
@@ -689,6 +698,7 @@
       (favState !== 0 ? 1 : 0) +
       (triedState !== 0 ? 1 : 0) +
       (stockState !== 0 ? 1 : 0) +
+      (unmanagedState !== 0 ? 1 : 0) +
       (yearMin !== NO_YEAR ? 1 : 0) +
       (yearMax !== NO_YEAR ? 1 : 0),
   );
@@ -705,6 +715,7 @@
     favState = 0;
     triedState = 0;
     stockState = 0;
+    unmanagedState = 0;
     yearMin = NO_YEAR;
     yearMax = NO_YEAR;
   }
@@ -992,6 +1003,13 @@
             titleExclude={t("library.baseExcluded")}
             titleNeutral={t("library.baseNeutral")}
           />
+          <TriCheck
+            label={t("library.unmanagedContent")}
+            bind:value={unmanagedState}
+            titleInclude={t("library.unmanagedOnly")}
+            titleExclude={t("library.unmanagedExcluded")}
+            titleNeutral={t("library.unmanagedNeutral")}
+          />
         </div>
         <!-- Toujours présent, désactivé quand il n'y a rien à faire. Il
              disparaissait quand aucun filtre n'était posé : or c'est
@@ -1036,7 +1054,9 @@
               {:else}<div class="noprev">{isCar ? t("library.typeCar") : t("library.typeTrack")}</div>{/if}
               {#if !isCar && ol}<img class="outline" src={ol} alt="" loading="lazy" />{/if}
               {#if sessionId === c.id_interne}<span class="sessbadge">{t("library.sessionBadge")}</span>{/if}
-              {#if c.is_stock}
+              {#if c.is_unmanaged}
+                <span class="sbadge unm" title={t("library.unmanagedTooltip")}>{t("library.unmanagedBadge")}</span>
+              {:else if c.is_stock}
                 <span class="sbadge" title={t("library.stockTooltip")}>{t("library.baseBadge")}</span>
               {:else}
                 <span class="dot" class:active={c.active} title={c.active ? t("common.active") : t("common.inactive")}></span>
@@ -1155,7 +1175,7 @@
                     style={columnWidths[col.key] ? `width:${columnWidths[col.key]}px; max-width:${columnWidths[col.key]}px;` : undefined}
                   >
                     {#if col.key === "active"}
-                      <StateBadge active={c.active} stock={c.is_stock} />
+                      <StateBadge active={c.active} stock={c.is_stock} unmanaged={c.is_unmanaged} />
                     {:else if col.key === "brand"}
                       {#if c.badge}<img class="brand-badge" src={previewSrc(c.badge)} alt="" loading="lazy" />{/if}
                       {col.value(c)}
@@ -1504,6 +1524,12 @@
     font-family: var(--mono);
     letter-spacing: 0.5px;
     padding: 1px 4px;
+  }
+  /* Mod installé hors Pit Box (§12bis.1bis) : même badge, en gris — la même
+     grammaire de couleurs que la pastille d'état (StateBadge). */
+  .sbadge.unm {
+    color: var(--muted);
+    border-color: var(--line);
   }
   /* Mod cassé (§6.4) : signalement visuel sur la carte, même détection que
      l'écran Maintenance. */

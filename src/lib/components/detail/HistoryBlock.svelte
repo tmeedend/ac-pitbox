@@ -65,7 +65,7 @@
           when: "",
           label: "",
           installed: false,
-          event: t("detail.baseContentLabel"),
+          event: detail.is_unmanaged ? t("detail.unmanagedContentLabel") : t("detail.baseContentLabel"),
           detail: "",
           size: null,
         },

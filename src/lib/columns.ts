@@ -72,7 +72,14 @@ function commonTail(): ColumnDef[] {
       // `value` ne sert que de repli textuel, gardé cohérent avec lui.
       // `sortValue` est inchangé : le tri et le filtre d'état ne dépendent
       // pas de l'affichage — le contenu de base reste `active` pour eux.
-      value: (c) => (c.is_stock ? t("common.stockState") : c.active ? t("common.active") : t("common.inactive")),
+      value: (c) =>
+        c.is_unmanaged
+          ? t("common.unmanagedState")
+          : c.is_stock
+            ? t("common.stockState")
+            : c.active
+              ? t("common.active")
+              : t("common.inactive"),
       sortValue: (c) => (c.active ? 1 : 0),
     },
     {
