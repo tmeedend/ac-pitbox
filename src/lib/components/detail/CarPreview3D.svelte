@@ -204,29 +204,136 @@
   } as const;
 
   /**
-   * Budget du tampon de rendu, en pixels.
+   * **Every rendering knob, gathered here on purpose.** Change a value, reopen
+   * a car sheet, look.
    *
-   * Le budget porte sur la **surface** et non sur le facteur : c'est la fenêtre
-   * qui décide de la taille du panneau, et le niveau de qualité ne doit pas la
-   * multiplier sans limite. Une allocation qui échoue ne rend pas une image
-   * dégradée — elle fait perdre le contexte WebGL et laisse le panneau noir.
+   * Nothing below enters the model conversion, so no value here invalidates a
+   * cache entry: a change shows up on the next frame, never after a reconversion.
+   * Each entry says what it does and what is worth trying.
    *
-   * 16 Mpx en RGBA multi-échantillonné tient dans ~256 Mio depuis que la
-   * chaîne de post-traitement et ses cibles flottantes ont disparu. Sur un
-   * panneau ordinaire le budget ne mord pas.
+   * Two things deliberately stay outside this object:
+   *
+   * - the **oversampling factor**, in `QUALITY` just above. It is the one value
+   *   that cannot be freely picked — see the long comment there, and the table
+   *   of measurements that goes with it;
+   * - the **anisotropic filtering**, left at whatever the card's maximum is
+   *   (16 in practice). There is no reason to want less, and no way to want
+   *   more.
    */
-  const MAX_DRAWING_PIXELS = 16_000_000;
+  const TUNING = {
+    /**
+     * Budget of the drawing buffer, in pixels.
+     *
+     * On the **area**, not on the factor: the window decides the size of the
+     * panel, and the level must not multiply it without limit. An allocation
+     * that fails does not degrade the image — it loses the WebGL context and
+     * leaves the panel black. 16 Mpx of multisampled RGBA fits in ~256 MiB.
+     * Lower it if a very large window ever turns the preview black.
+     */
+    drawingPixels: 16_000_000,
 
-  /**
-   * Budget de la cible du miroir, en pixels.
-   *
-   * Plus bas que celui du tampon principal, et c'est délibéré : le reflet est
-   * flouté puis éteint radialement, donc il ne rend rien d'une résolution qui
-   * dépasse largement l'écran. 8 Mpx sans MSAA tiennent dans ~96 Mio (RGBA16F
-   * plus la profondeur), ce qui laisse le panneau loin du plafond mémoire même
-   * en Ultra.
-   */
-  const MAX_MIRROR_PIXELS = 8_000_000;
+    /**
+     * Budget of the mirror's own target, in pixels.
+     *
+     * Lower than the drawing buffer's on purpose: the reflection is blurred
+     * then faded out, so it gains nothing from a resolution far past the
+     * screen. 8 Mpx without MSAA fits in ~96 MiB. **This is the first knob to
+     * turn if the floor shimmers or if the panel drops frames** — halving it
+     * halves the cost of the mirror pass, which is a second render of the whole
+     * scene.
+     */
+    mirrorPixels: 8_000_000,
+
+    /**
+     * MSAA samples on the mirror pass. Zero on purpose.
+     *
+     * The memory goes into resolution instead: MSAA samples triangle coverage
+     * but still shades once per texel, so it does nothing for a sub-pixel
+     * specular highlight, while the target now follows a supersampled drawing
+     * buffer. Set it to 4 to trade the resolution back for coverage quality —
+     * it costs four times the memory of the mirror target.
+     */
+    mirrorSamples: 0,
+
+    /**
+     * Shadow map resolution — **and the softness of the shadow**, which is the
+     * counter-intuitive part.
+     *
+     * `PCFSoftShadowMap` has a fixed filter kernel counted in *texels*, so
+     * fewer texels means a wider blur. 512 gives the soft edge of a studio
+     * light; raising it makes the shadow harder, not better. It also crawls as
+     * the car turns, so lowering it further trades a soft edge for a mushy one.
+     */
+    shadowMapSize: 512,
+
+    /**
+     * Shadow map depth bias. Without it the map self-shadows in fine stripes on
+     * surfaces nearly parallel to the light — the bonnet, the roof. More
+     * negative pushes the stripes away but detaches the shadow from the car.
+     */
+    shadowBias: -0.0015,
+
+    /**
+     * **The two knobs against shimmer in motion**, and they are the only two
+     * that measured as working. Both attack the same cause and they add up.
+     *
+     * The cause: the car turns while the studio stays put, so the reflection of
+     * a ceiling strip sweeps across the bodywork. On a near-mirror surface that
+     * reflection is a band **narrower than a pixel**, and a pixel-wide band
+     * crossing a pixel grid flickers. It is perfectly still on a screenshot,
+     * which is what makes it so hard to chase — and why neither supersampling
+     * nor any post-pass ever touched it.
+     *
+     * Measured on a bench outside the app (a near-mirror knot turning half a
+     * degree between two frames, eight pairs, counting the pixels that jump by
+     * more than 40 out of 255 — a few pixels flipping hard is what reads as
+     * sparkle, not many pixels drifting a little):
+     *
+     * | `environmentBlur` | `roughnessFloor` | pixels jumping >40 | luminance |
+     * | --- | --- | --- | --- |
+     * | 0,04 | 0 | 1,50 % (référence) | 36,1 |
+     * | 0,08 | 0 | 1,34 % (−11 %) | 38,0 |
+     * | 0,04 | 0,15 | 1,21 % (−19 %) | 39,1 |
+     * | **0,08** | **0,15** | **0,97 % (−35 %)** | 40,5 |
+     * | 0,15 | 0,15 | 0,92 % (−38 %) | 41,0 |
+     * | 0,30 | 0,15 | 0,92 % (−38 %) | 41,1 |
+     *
+     * Two things to read off that table. The effect **saturates around
+     * 0,08–0,15**: past that, more blur costs contrast and buys nothing. And the
+     * last column is the price — the surfaces come out about 12 % brighter and
+     * flatter, chrome least like a mirror. That is a matter of taste, so both
+     * knobs ship at the value the app had before they existed.
+     */
+
+    /**
+     * Blur of the studio environment map — the `sigma` of `PMREMGenerator`.
+     *
+     * Softens every reflection at once, and costs nothing per frame: it is baked
+     * into the environment map when the scene is built. Try 0,08.
+     */
+    environmentBlur: 0.04,
+
+    /**
+     * Floor under the roughness of every material, 0 to disable. Try 0,15.
+     *
+     * A perfect mirror (roughness near zero) has a highlight of *zero* width,
+     * which no amount of sampling can resolve — AC's chrome and glass land
+     * there. A floor gives those highlights a width. Applied per pixel, inside
+     * the shader, because a plain `material.roughness` would only *scale* a
+     * roughness map instead of lifting its dark parts.
+     *
+     * ⚠️ **Geometric specular antialiasing was tried here and removed.** The
+     * textbook remedy (Kaplanyan/Frostbite: fold the screen derivative of the
+     * normal into the roughness) measured at **exactly nothing** — 1,50 % of
+     * violent pixels against 1,51 %, unchanged even at four times the standard
+     * strength. It keys on the normal varying fast across one pixel, which
+     * happens when geometry is undersampled; these cars are densely tessellated
+     * and fill the frame, so their normals barely move from pixel to pixel. The
+     * sparkle is in the sharpness of the reflection, not in the geometry. Do not
+     * re-add it without measuring first.
+     */
+    roughnessFloor: 0,
+  };
 
   // Effet d'entrée du plateau (§15). Deux gestes, et rien d'autre qu'un
   // facteur appliqué à la vitesse déjà calculée : aucune image de plus, aucun
@@ -247,6 +354,35 @@
   }
 
   /**
+   * Applies `TUNING.roughnessFloor`, per pixel, inside the shader.
+   *
+   * Injected rather than configured, because three has no such setting — and a
+   * plain `material.roughness` would not do: three *multiplies* it by the green
+   * channel of the roughness map (`roughnessmap_fragment`), so it scales the
+   * map instead of lifting its floor, and this project reads its roughness from
+   * `txMaps` on most materials.
+   *
+   * The insertion point is right after `<roughnessmap_fragment>`, which is where
+   * `roughnessFactor` is declared; `<lights_physical_fragment>` consumes it much
+   * further down. Verified against three r185.
+   */
+  function applyRoughnessFloor(material: ThreeModule.MeshStandardMaterial): void {
+    const floor = TUNING.roughnessFloor;
+    if (floor <= 0) return;
+    material.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <roughnessmap_fragment>",
+        `#include <roughnessmap_fragment>
+        roughnessFactor = max( roughnessFactor, ${floor.toFixed(4)} );`,
+      );
+    };
+    // Sans cette clé, three met en commun le programme compilé de deux
+    // matériaux qu'il croit identiques : il ne regarde pas ce qu'`onBeforeCompile`
+    // a changé.
+    material.customProgramCacheKey = () => `pitbox-roughfloor-${floor}`;
+  }
+
+  /**
    * Applies the current level's oversampling.
    *
    * The factor is **always the screen density times a whole number**, for the
@@ -263,7 +399,7 @@
     const density = window.devicePixelRatio || 1;
     const area = host.clientWidth * host.clientHeight * density * density;
     let oversampling: number = quality().oversampling;
-    while (oversampling > 1 && area * oversampling * oversampling > MAX_DRAWING_PIXELS) {
+    while (oversampling > 1 && area * oversampling * oversampling > TUNING.drawingPixels) {
       oversampling -= 1;
     }
     renderer.setPixelRatio(density * oversampling);
@@ -295,10 +431,10 @@
     let width = Math.max(Math.round(buffer.x), 1);
     let height = Math.max(Math.round(buffer.y), 1);
     const area = width * height;
-    if (area > MAX_MIRROR_PIXELS) {
+    if (area > TUNING.mirrorPixels) {
       // Le budget porte sur la surface, la forme reste celle du panneau : c'est
       // la cible carrée qui étirait le reflet.
-      const factor = Math.sqrt(MAX_MIRROR_PIXELS / area);
+      const factor = Math.sqrt(TUNING.mirrorPixels / area);
       width = Math.max(Math.round(width * factor), 1);
       height = Math.max(Math.round(height * factor), 1);
     }
@@ -341,7 +477,7 @@
       // buffer already supersampled 1,5× to 4×, which is precisely what does
       // raise the shading rate. Four samples would cost four times the memory
       // for geometry edges alone.
-      multisample: 0,
+      multisample: TUNING.mirrorSamples,
     });
     // Mipmaps on the target: the blur reads the level `applyFloorMirror` picks,
     // so that its 25 taps stay edge to edge whatever the resolution. three
@@ -641,7 +777,7 @@
     // dark on purpose — see `showroomEnvironment` for what a white room did to
     // the paint.
     const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmrem.fromScene(showroomEnvironment(THREE), 0.04).texture;
+    scene.environment = pmrem.fromScene(showroomEnvironment(THREE), TUNING.environmentBlur).texture;
 
     const gltf = await new GLTFLoader().loadAsync(url);
 
@@ -675,6 +811,9 @@
         if (standard.alphaTest > 0) {
           standard.alphaToCoverage = true;
         }
+        // L'un des deux leviers contre le scintillement en mouvement — voir le
+        // tableau de mesures devant `TUNING.roughnessFloor`.
+        if (standard.isMeshStandardMaterial) applyRoughnessFloor(standard);
       }
       if (materials.some((m) => (m as ThreeModule.Material).transparent)) {
         mesh.renderOrder = 1;
@@ -768,10 +907,10 @@
     // écarté : il zébrait le sol de barres grises (retour utilisateur).
     // 512 sur une rampe de plafond large donne le bord mou d'une ombre de
     // studio ; monter cette valeur la redurcit.
-    sun.shadow.mapSize.set(512, 512);
+    sun.shadow.mapSize.set(TUNING.shadowMapSize, TUNING.shadowMapSize);
     // Sans ce biais, la carte d'ombre s'auto-ombre en fines rayures sur les
     // surfaces presque parallèles à la lumière (le capot, le toit).
-    sun.shadow.bias = -0.0015;
+    sun.shadow.bias = TUNING.shadowBias;
 
     const shadowCatcher = new THREE.Mesh(
       new THREE.PlaneGeometry(radius * 5, radius * 5),

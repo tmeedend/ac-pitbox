@@ -1212,6 +1212,63 @@ gêne constatée :
     Si un jour Chromium mipmappe les calques de canevas, tout ce point est à
     refaire.
 
+18. **Les leviers de rendu sont regroupés** dans un objet `TUNING` en tête de
+    `CarPreview3D.svelte` (demande de l'utilisateur : « peux-tu me dire où sont
+    les paramètres à changer ? c'est regroupé au même endroit ? »). Budget du
+    tampon, budget et MSAA du miroir, taille et biais de la carte d'ombre, flou
+    de l'environnement, plancher de rugosité — chacun avec ce qu'il fait et ce
+    qu'il coûte. Rien de tout ça n'entre dans la conversion, donc une valeur
+    changée s'applique à l'image suivante sans invalider le cache.
+
+    Deux choses restent volontairement dehors : le **facteur de
+    suréchantillonnage** (point 17 — c'est la seule valeur qu'on ne choisit pas
+    librement) et le **filtrage anisotrope**, laissé au maximum de la carte.
+
+    **Et deux leviers mesurés contre le scintillement en mouvement**, qui
+    s'ajoutent l'un à l'autre. Banc hors application : un nœud torique
+    quasi-miroir tournant d'un demi-degré entre deux images, huit paires, en
+    comptant les pixels qui sautent de plus de 40 sur 255 — *quelques* pixels
+    qui basculent violemment, c'est ça qui se lit comme du scintillement, pas
+    beaucoup de pixels qui dérivent un peu. La moyenne des écarts avait d'abord
+    été prise comme mesure et elle disait exactement l'inverse : à retenir, un
+    défaut ne se mesure pas avec la première statistique venue.
+
+    | `environmentBlur` | `roughnessFloor` | pixels sautant de +40 | luminance |
+    | --- | --- | --- | --- |
+    | 0,04 | 0 | 1,50 % (référence) | 36,1 |
+    | 0,08 | 0 | 1,34 % (−11 %) | 38,0 |
+    | 0,04 | 0,15 | 1,21 % (−19 %) | 39,1 |
+    | **0,08** | **0,15** | **0,97 % (−35 %)** | 40,5 |
+    | 0,15 | 0,15 | 0,92 % (−38 %) | 41,0 |
+    | 0,30 | 0,15 | 0,92 % (−38 %) | 41,1 |
+
+    L'effet **sature vers 0,08–0,15** : au-delà, plus de flou coûte du contraste
+    et ne gagne rien. La dernière colonne est le prix — les surfaces ressortent
+    ~12 % plus claires et plus plates, le chrome le moins miroir. C'est un
+    arbitrage de goût, donc **les deux valeurs livrées sont celles d'avant** ;
+    c'est l'utilisateur qui décide de les monter.
+
+    Le plancher de rugosité est **injecté dans le shader** et non posé sur
+    `material.roughness` : three *multiplie* ce dernier par le canal vert de la
+    carte de rugosité, donc il mettrait la carte à l'échelle au lieu d'en
+    relever le plancher — et ici la rugosité vient de `txMaps` sur la plupart
+    des matériaux (écart n°7). Point d'insertion juste après
+    `<roughnessmap_fragment>`, vérifié sur three r185, avec un
+    `customProgramCacheKey` sans lequel three mettrait en commun le programme
+    compilé de deux matériaux qu'il croit identiques.
+
+    ⚠️ **L'anticrénelage spéculaire géométrique a été essayé, mesuré, retiré.**
+    C'était le remède que j'avais annoncé, celui que le point 8 appelait de ses
+    vœux en écrivant « le prochain essai est en amont », et c'est la recette
+    standard du domaine (Kaplanyan, puis Frostbite et Filament : replier la
+    dérivée d'écran de la normale dans la rugosité). Il ne fait **exactement
+    rien** ici : 1,50 % de pixels violents contre 1,51 %, inchangé jusqu'à
+    quatre fois la force standard. La raison est structurelle — il se déclenche
+    sur une normale qui varie vite d'un pixel à l'autre, c'est-à-dire sur une
+    géométrie sous-échantillonnée, alors que ces voitures sont densément
+    maillées et remplissent le cadre. **Le scintillement est dans la netteté du
+    reflet, pas dans la géométrie.** Ne pas le réintroduire sans mesurer.
+
 Restent aussi, hérités du plan initial : le choix du LOD en config, et l'aperçu
 dans `ModDetail.svelte` (panneau latéral), qui n'a jamais été branché.
 
