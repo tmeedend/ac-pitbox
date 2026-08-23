@@ -999,8 +999,8 @@ gêne constatée :
 
     **Les défauts de cadrage ne sont plus ceux des `preview.jpg` Kunos** : ce
     sont ceux que l'utilisateur a choisis sur l'aperçu de l'écran Réglages —
-    zoom 110 %, plongée 6°, hauteur −8 %, plateau à 50 %. Une vue plus basse et
-    plus proche, tournant moitié moins vite. Ils ne s'appliquent qu'aux
+    zoom 140 %, plongée 6°, hauteur −13 %, plateau à 50 %. Une vue nettement
+    plus basse et plus serrée, tournant moitié moins vite. Ils ne s'appliquent qu'aux
     installations neuves : une préférence déjà écrite dans `ui_prefs.json` a la
     priorité, et c'est le bouton « rétablir » du groupe qui les fait apparaître
     chez quelqu'un qui y a déjà touché.

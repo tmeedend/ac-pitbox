@@ -55,7 +55,7 @@ export const PREVIEW3D_RANGES = {
   /** 100 % = la distance calculée sur la taille du modèle. Bornes choisies pour
    * rester dans les limites de zoom des contrôles souris (`minDistance` /
    * `maxDistance`), sinon le réglage serait annulé au premier rendu. */
-  zoom: { min: 50, max: 200, step: 5, default: 110 },
+  zoom: { min: 50, max: 200, step: 5, default: 140 },
   /** Rotation de la caméra autour de l'axe vertical, en degrés. Le défaut est
    * l'angle des `preview.jpg` Kunos : trois-quarts avant **gauche**, comme
    * toutes les photos du jeu (§15 point 7). */
@@ -67,7 +67,7 @@ export const PREVIEW3D_RANGES = {
    * descend le point visé **sans toucher à la plongée** : c'est ce qui décide
    * de la place de la voiture dans le cadre, là où l'angle décide de ce qu'on
    * voit de son toit. 0 vise le centre du modèle. */
-  height: { min: -60, max: 60, step: 1, default: -8 },
+  height: { min: -60, max: 60, step: 1, default: -13 },
   /** Vitesse du plateau tournant. 0 % = plateau à l'arrêt. */
   spin: { min: 0, max: 200, step: 5, default: 50 },
   /** Focale, exprimée en champ de vision vertical (degrés). 20° reproduit le
