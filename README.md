@@ -115,15 +115,28 @@ and version numbers are consistent (see below).
 
 ## Releasing
 
-Version numbers live in four files that nothing keeps in sync on its own, so
-the bump goes through npm:
+**The tag goes last, and only once CI is green.** The tag is what builds the
+installer, so pushing it alongside the commits means the release starts before
+anything has been verified — and the one job that cannot be run locally, the
+installer bundle, is exactly the one that would fail. Ten minutes of waiting
+buys the certainty of never building a release on a broken commit.
+
+First, run everything the CI runs, in one command:
+
+```bash
+npm run verify
+```
+
+That chains the types and locale checks, the frontend build, `cargo fmt
+--check`, clippy with `-D warnings` and the test suite — the five gates that
+fail a CI run, in the order that satisfies them (`tauri-build` needs `build/`
+to exist, so the frontend build has to come before `cargo test`).
+
+Then bump the version. Numbers live in four files that nothing keeps in sync on
+its own, so it goes through npm:
 
 ```bash
 npm version 0.3.0
-```
-
-```bash
-git push --follow-tags
 ```
 
 `npm version` bumps `package.json`, then the `version` hook runs
@@ -132,11 +145,28 @@ number to `tauri.conf.json`, `Cargo.toml` and `Cargo.lock` and stages them —
 npm then makes the commit and the `v0.3.0` tag itself. It refuses to run on a
 dirty tree.
 
-Pushing the tag triggers [`release.yml`](.github/workflows/release.yml), which
-builds the installer and creates a **draft** release: nothing is public until
-you review the binaries and publish it. The workflow refuses a tag that does
-not match the version being built, rather than spending twenty minutes
-producing a `v0.3.0` release whose installer says 0.2.0.
+Push the commits **without** the tag, and wait for CI:
+
+```bash
+git push
+```
+
+```bash
+gh run watch
+```
+
+Only once the three jobs are green — including `Bundle (installateur)`, the one
+`npm run verify` cannot cover — push the tag:
+
+```bash
+git push origin v0.3.0
+```
+
+That triggers [`release.yml`](.github/workflows/release.yml), which builds the
+installer and creates a **draft** release: nothing is public until you review
+the binaries and publish it. The workflow refuses a tag that does not match the
+version being built, rather than spending twenty minutes producing a `v0.3.0`
+release whose installer says 0.2.0.
 
 ## Contributing
 

@@ -443,16 +443,18 @@ laisser pourrir ici.
 1. **Mettre à jour `docs/SPEC.md`** dès qu'une évolution change le
    comportement de l'app. Le SPEC décrit ce que l'app *est* : il doit rester
    synchrone avec le code. Une simple correction de bug ne s'y écrit pas.
-2. **Vérifier** — c'est exactement ce que rejoue la CI, autant le savoir avant
-   de pousser :
+2. **Vérifier** — une seule commande, qui enchaîne exactement les portes de la
+   CI dans l'ordre qui les satisfait (`tauri-build` exige que `build/` existe,
+   donc le build front précède `cargo test`) :
    ```bash
-   npm run check && npm run build
+   npm run verify
    ```
-   ```bash
-   cd src-tauri && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
-   ```
-   `npm run check` doit rester à 0 erreur **et 0 warning**, et **clippy à 0
-   warning** — la CI les traite en erreurs.
+   Types + locales + version, build front, `cargo fmt --check`, clippy et les
+   tests. `npm run check` doit rester à 0 erreur **et 0 warning**, et **clippy
+   à 0 warning** — la CI les traite en erreurs.
+   Elle ne couvre pas l'**empaquetage de l'installateur**, le seul job qui n'a
+   pas d'équivalent local : c'est pourquoi le tag d'une release ne se pousse
+   qu'après le vert de la CI (voir la section « Releasing » du README).
 3. **Commiter** — message en français, court et descriptif, sans préfixe
    imposé. Le `push` n'est pas automatique : le demander.
 4. **Démarrer l'application** pour que les développements soient disponibles,
