@@ -1,6 +1,6 @@
 {
   "name": "pitbox",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Pit Box — gestionnaire de mods Assetto Corsa",
   "type": "module",
   "scripts": {
