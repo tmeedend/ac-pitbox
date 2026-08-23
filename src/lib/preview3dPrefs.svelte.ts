@@ -15,7 +15,7 @@
 // et à chaque changement. Le backend ne lit jamais `ui_prefs.json` : le schéma
 // de ce fichier appartient au frontend (voir l'en-tête de `ui_prefs.rs`).
 import { setPreviewCacheCap } from "./preview";
-import { getUiPrefs, setUiPref, setUiPrefs } from "./uiPrefs.svelte";
+import { getUiPrefs, setUiPrefs } from "./uiPrefs.svelte";
 
 /** Clés de `ui_prefs.json`. `preview3d` seule existait avant les autres : elle
  * porte la bascule photo/3D de la zone héros, et garde donc son nom. */
@@ -26,6 +26,14 @@ const KEYS = {
   elevation: "pitbox.preview3d.elevation",
   height: "pitbox.preview3d.height",
   spin: "pitbox.preview3d.spin",
+  fov: "pitbox.preview3d.fov",
+  exposure: "pitbox.preview3d.exposure",
+  light: "pitbox.preview3d.light",
+  reflection: "pitbox.preview3d.reflection",
+  reflectionBlur: "pitbox.preview3d.reflectionBlur",
+  reflectionReach: "pitbox.preview3d.reflectionReach",
+  pool: "pitbox.preview3d.pool",
+  shadow: "pitbox.preview3d.shadow",
   cacheMb: "pitbox.preview3d.cacheMb",
   intro: "pitbox.preview3d.intro",
   quality: "pitbox.preview3d.quality",
@@ -34,28 +42,70 @@ const KEYS = {
 /**
  * Bornes et valeurs par défaut, en unités lisibles par l'utilisateur : des
  * degrés pour les angles, des pourcentages pour ce qui n'a pas d'unité
- * naturelle. Les défauts reproduisent **exactement** le cadrage d'origine, donc
- * quelqu'un qui n'ouvre jamais ces réglages ne voit rien changer.
+ * naturelle.
+ *
+ * Les défauts de cadrage sont ceux **choisis par l'utilisateur** sur l'aperçu
+ * de l'écran Réglages, et non plus ceux mesurés sur les `preview.jpg` Kunos :
+ * une vue plus basse et plus proche, tournant moitié moins vite. Ils ne
+ * s'appliquent qu'aux installations neuves — une préférence déjà écrite dans
+ * `ui_prefs.json` a la priorité, et le bouton « rétablir » du groupe est ce
+ * qui les fait apparaître chez quelqu'un qui y a déjà touché.
  */
 export const PREVIEW3D_RANGES = {
   /** 100 % = la distance calculée sur la taille du modèle. Bornes choisies pour
    * rester dans les limites de zoom des contrôles souris (`minDistance` /
    * `maxDistance`), sinon le réglage serait annulé au premier rendu. */
-  zoom: { min: 50, max: 200, step: 5, default: 100 },
+  zoom: { min: 50, max: 200, step: 5, default: 110 },
   /** Rotation de la caméra autour de l'axe vertical, en degrés. Le défaut est
    * l'angle des `preview.jpg` Kunos : trois-quarts avant **gauche**, comme
    * toutes les photos du jeu (§15 point 7). */
   azimuth: { min: 0, max: 359, step: 1, default: 318 },
   /** Plongée de la caméra, en degrés au-dessus de l'horizon. Plafonnée sous
    * l'angle polaire maximal des contrôles. */
-  elevation: { min: 0, max: 80, step: 1, default: 13 },
+  elevation: { min: 0, max: 80, step: 1, default: 6 },
   /** Hauteur de la caméra, en pourcentage du rayon du modèle. Monte ou
    * descend le point visé **sans toucher à la plongée** : c'est ce qui décide
    * de la place de la voiture dans le cadre, là où l'angle décide de ce qu'on
    * voit de son toit. 0 vise le centre du modèle. */
-  height: { min: -60, max: 60, step: 1, default: 0 },
+  height: { min: -60, max: 60, step: 1, default: -8 },
   /** Vitesse du plateau tournant. 0 % = plateau à l'arrêt. */
-  spin: { min: 0, max: 200, step: 5, default: 100 },
+  spin: { min: 0, max: 200, step: 5, default: 50 },
+  /** Focale, exprimée en champ de vision vertical (degrés). 20° reproduit le
+   * téléobjectif des `preview.jpg` Kunos ; descendre allonge encore la focale,
+   * monter dramatise. La **distance est recalculée** avec, pour que la voiture
+   * garde sa taille dans le cadre : c'est le zoom qui décide de la taille, la
+   * focale de la perspective. Sans ça les deux curseurs se marcheraient
+   * dessus. */
+  fov: { min: 10, max: 50, step: 1, default: 20 },
+  /** Exposition du rendu (`toneMappingExposure`). Le réglage le plus utile de
+   * ce groupe : les mods sortent avec des textures d'éclat très inégal, et
+   * certains rendent sombres sans que rien d'autre soit en cause. */
+  exposure: { min: 50, max: 200, step: 5, default: 100 },
+  /** Intensité de l'éclairage du studio (`scene.environmentIntensity`).
+   * **Pas** `material.envMapIntensity`, qui n'a aucun effet quand
+   * l'environnement vient de la scène — vérifié au banc, voir
+   * `docs/SPEC-preview-3d-kn5.md`. */
+  light: { min: 0, max: 300, step: 5, default: 100 },
+  /** Intensité du reflet de la voiture au sol. 0 % retire la passe miroir
+   * entière, pas seulement son opacité : c'est un second rendu de la scène,
+   * autant ne pas le payer quand on n'en veut pas. */
+  reflection: { min: 0, max: 100, step: 5, default: 85 },
+  /** Flou du reflet, en **dixièmes** — la mécanique de ce module travaille sur
+   * des entiers (`clamp` arrondit), et un dixième se voit à l'œil. 5 = 0,5.
+   * C'est ce qui sépare le sol de salon du sol mouillé de jeu vidéo.
+   * Plafonné à 4 : au-delà le reflet n'est plus qu'une tache, la plage haute
+   * ne servait qu'à rendre le curseur imprécis là où il compte (retour
+   * utilisateur). */
+  reflectionBlur: { min: 0, max: 40, step: 1, default: 5 },
+  /** Portée du reflet, en pourcentage de la demi-largeur du sol. Le défaut
+   * initial (30 %) éteignait le reflet **avant** d'atteindre la voiture : la
+   * borne basse est donc haute exprès. */
+  reflectionReach: { min: 20, max: 150, step: 5, default: 75 },
+  /** Flaque de lumière peinte sous la voiture. Existait pour signaler qu'il y
+   * a un sol ; le reflet le fait désormais mieux, d'où un défaut abaissé. */
+  pool: { min: 0, max: 200, step: 5, default: 85 },
+  /** Opacité de l'ombre portée. */
+  shadow: { min: 0, max: 100, step: 5, default: 50 },
   /** Plafond du cache d'aperçus, **en mégaoctets**. En Mo et non en Go parce
    * que toute la mécanique de ce module travaille sur des entiers (`clamp`
    * arrondit) : un pas d'un demi-gigaoctet s'exprime en 512 Mo sans flottant.
@@ -64,11 +114,23 @@ export const PREVIEW3D_RANGES = {
   cacheMb: { min: 512, max: 20480, step: 512, default: 2048 },
 } as const;
 
-/** Les seuls réglages que « Rétablir le cadrage d'origine » remet à zéro.
- * Le plafond de cache partage la mécanique des curseurs mais n'a rien à voir
- * avec la caméra : le remettre à 2 Go au passage évincerait des entrées pour
- * un bouton qui ne parle que de cadrage. */
-const FRAMING_KEYS = ["zoom", "azimuth", "elevation", "height", "spin"] as const;
+/**
+ * Les groupes de réglages, et l'ordre dans lequel ils se présentent.
+ *
+ * Un groupe est ce qu'un bouton « rétablir » remet à zéro, et ce qu'un écran
+ * affiche d'un bloc. Le plafond de cache n'en fait partie d'aucun : il partage
+ * la mécanique des curseurs mais touche au disque, et le remettre à 2 Go au
+ * passage évincerait des entrées pour un bouton qui parle de cadrage ou de sol.
+ */
+export const PREVIEW3D_GROUPS = {
+  /** Réglé sur la fiche, où le résultat est sous les yeux — c'est le seul
+   * groupe que porte aussi le panneau compact posé sur l'aperçu. */
+  framing: ["zoom", "azimuth", "elevation", "height", "fov", "spin"],
+  light: ["exposure", "light"],
+  floor: ["reflection", "reflectionBlur", "reflectionReach", "pool", "shadow"],
+} as const satisfies Record<string, readonly NumericKey[]>;
+
+export type Preview3dGroup = keyof typeof PREVIEW3D_GROUPS;
 
 /** Effet appliqué au plateau tournant quand un modèle s'affiche.
  * `ramp` monte en douceur jusqu'à la vitesse réglée ; `launch` part vite et
@@ -110,6 +172,14 @@ const values: Preview3dPrefs = $state({
   elevation: PREVIEW3D_RANGES.elevation.default,
   height: PREVIEW3D_RANGES.height.default,
   spin: PREVIEW3D_RANGES.spin.default,
+  fov: PREVIEW3D_RANGES.fov.default,
+  exposure: PREVIEW3D_RANGES.exposure.default,
+  light: PREVIEW3D_RANGES.light.default,
+  reflection: PREVIEW3D_RANGES.reflection.default,
+  reflectionBlur: PREVIEW3D_RANGES.reflectionBlur.default,
+  reflectionReach: PREVIEW3D_RANGES.reflectionReach.default,
+  pool: PREVIEW3D_RANGES.pool.default,
+  shadow: PREVIEW3D_RANGES.shadow.default,
   cacheMb: PREVIEW3D_RANGES.cacheMb.default,
 });
 
@@ -150,6 +220,9 @@ function ensureLoaded(): Promise<void> {
       const raw = stored[KEYS[key]];
       if (raw !== null) values[key] = clamp(key, Number(raw));
     }
+    // `stored` suit `values` : ce qui vient d'être lu **est** ce qui est sur
+    // disque, donc rien n'est en attente au démarrage.
+    Object.assign(stored, $state.snapshot(values));
     // Le backend part sur son propre défaut tant que personne ne lui a rien
     // dit : c'est ici, et seulement ici, qu'il apprend le réglage enregistré.
     pushCacheCap();
@@ -188,77 +261,87 @@ export function preview3dReady(): Promise<void> {
   return ensureLoaded();
 }
 
-// --- Persistance : appliquée tout de suite, écrite un peu après -----------
+// --- Persistance : appliquée à l'écran, écrite seulement sur demande ------
 //
-// Le réglage s'applique à l'image suivante (`values` est un `$state` lu par
-// l'aperçu), mais l'écriture disque attend que le curseur s'arrête. Sans ce
-// délai, un glissé de curseur réécrivait `ui_prefs.json` en entier à chaque
-// pas — une cinquantaine de fois pour un seul geste, fichier complet et
-// écriture Rust synchrone à chaque fois.
-const PERSIST_DEBOUNCE_MS = 400;
+// **Deux états, et c'est tout l'intérêt** : `values` est ce qu'on voit, `stored`
+// est ce qui est sur disque. Bouger un curseur ne touche que le premier —
+// l'aperçu suit à l'image suivante — et rien ne part sur disque avant que
+// l'utilisateur ne l'ait demandé.
+//
+// La version précédente écrivait toute seule, sur minuterie et au démontage des
+// curseurs. Conséquences relevées par l'utilisateur, et elles étaient justes :
+// le bouton Enregistrer ne décidait de rien, quitter l'écran validait en
+// silence, et **il n'y avait aucun moyen de revenir en arrière** — le réglage
+// d'avant était perdu dès le premier mouvement de souris.
+//
+// Même modèle que l'onglet Général (`Settings.svelte`), qui compare `config` à
+// `savedConfig` : la garde de navigation propose d'enregistrer ou d'annuler, et
+// annuler revient sur l'aperçu déjà appliqué.
 
-let pending: Record<string, string> = {};
-let timer: ReturnType<typeof setTimeout> | null = null;
-let dirty = $state(false);
+/** Les valeurs telles qu'elles sont **sur disque**. Toute différence avec
+ * `values` est un changement en attente. */
+const stored: Preview3dPrefs = $state({ ...values });
 
-/** Vrai tant qu'un réglage bougé n'est pas encore sur disque. */
+const pending = $derived(JSON.stringify(values) !== JSON.stringify(stored));
+
+/** Vrai tant qu'un réglage bougé n'a pas été enregistré. */
 export function preview3dDirty(): boolean {
-  return dirty;
+  return pending;
 }
 
-function queue(key: string, value: string): void {
-  pending[key] = value;
-  dirty = true;
-  if (timer) clearTimeout(timer);
-  timer = setTimeout(() => void flushPreview3dPrefs(), PERSIST_DEBOUNCE_MS);
-}
-
-/** Écrit tout de suite ce qui attend, et rend la main quand c'est **sur
- * disque** — ce que le bouton Enregistrer a besoin de savoir pour annoncer
- * « Enregistré » sans mentir. Appelé aussi au démontage des curseurs : le
- * délai ci-dessus ne doit pas survivre à la fermeture du panneau. */
-export async function flushPreview3dPrefs(): Promise<void> {
-  if (timer) {
-    clearTimeout(timer);
-    timer = null;
+/** Écrit tous les réglages et rend la main quand c'est **sur disque** — ce que
+ * le bouton Enregistrer a besoin de savoir pour annoncer « Enregistré » sans
+ * mentir. Tout est réécrit, pas seulement ce qui a bougé : le fichier de
+ * préférences est relu et réécrit en entier de toute façon, et suivre les
+ * clés modifiées une par une n'achèterait rien. */
+export async function savePreview3dPrefs(): Promise<void> {
+  const entries: Record<string, string> = {
+    [KEYS.enabled]: values.enabled ? "1" : "0",
+    [KEYS.intro]: values.intro,
+    [KEYS.quality]: values.quality,
+  };
+  for (const key of Object.keys(PREVIEW3D_RANGES) as NumericKey[]) {
+    entries[KEYS[key]] = String(values[key]);
   }
-  const entries = pending;
-  pending = {};
-  if (Object.keys(entries).length) await setUiPrefs(entries);
-  // Le plafond suit le même délai que l'écriture disque : sans ça, un glissé
-  // de curseur déclencherait une éviction par pas — et une éviction est
-  // irréversible, contrairement à une écriture de préférence.
-  if (KEYS.cacheMb in entries) pushCacheCap();
-  // Relu après l'attente : un réglage bougé pendant l'écriture est encore en
-  // attente, et effacer le drapeau ici le rendrait invisible.
-  dirty = Object.keys(pending).length > 0;
+  await setUiPrefs(entries);
+  Object.assign(stored, $state.snapshot(values));
+  // Le plafond de cache ne part au backend qu'ici : l'appliquer déclenche une
+  // éviction, et une éviction est **irréversible** — la faire à chaque pas de
+  // curseur effacerait des entrées pour un réglage que l'utilisateur peut
+  // encore annuler.
+  pushCacheCap();
+}
+
+/** Revient sur les valeurs enregistrées, y compris à l'écran : c'est le
+ * « annuler » de la garde de navigation. */
+export function revertPreview3dPrefs(): void {
+  Object.assign(values, $state.snapshot(stored));
 }
 
 export function setPreview3dEnabled(enabled: boolean): void {
   values.enabled = enabled;
-  // Une case à cocher n'est pas un geste continu : elle s'écrit tout de suite.
-  setUiPref(KEYS.enabled, enabled ? "1" : "0");
 }
 
 export function setPreview3dValue(key: NumericKey, value: number): void {
   values[key] = clamp(key, value);
-  queue(KEYS[key], String(values[key]));
 }
 
 export function setPreview3dIntro(intro: IntroEffect): void {
   values.intro = intro;
-  setUiPref(KEYS.intro, intro);
+  // Et on le **rejoue** aussitôt : un effet d'entrée ne se voit qu'à l'entrée,
+  // donc le choisir sans le déclencher revient à le régler à l'aveugle.
+  resetPreview3dView();
 }
 
 export function setPreview3dQuality(quality: PreviewQuality): void {
   values.quality = quality;
-  setUiPref(KEYS.quality, quality);
 }
 
-/** Remet le cadrage d'origine, sans toucher ni à la bascule photo/3D, ni à
- * quoi que ce soit qui ne concerne pas la caméra (voir `FRAMING_KEYS`). */
-export function resetPreview3dCamera(): void {
-  for (const key of FRAMING_KEYS) {
+/** Remet un groupe à ses valeurs d'origine — et lui seul : chaque bouton
+ * « rétablir » est posé à côté de ce qu'il remet à zéro (voir
+ * `PREVIEW3D_GROUPS`). */
+export function resetPreview3dGroup(group: Preview3dGroup): void {
+  for (const key of PREVIEW3D_GROUPS[group]) {
     setPreview3dValue(key, PREVIEW3D_RANGES[key].default);
   }
 }

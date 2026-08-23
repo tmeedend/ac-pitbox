@@ -14,7 +14,8 @@
   } from "$lib/config";
   import { t, setLocale, availableLocales, localeNames } from "$lib/i18n/index.svelte";
   import { setZoom, ZOOM_LEVELS } from "$lib/zoom.svelte";
-  import { setSectionGuard } from "$lib/nav.svelte";
+  import { nav, setSectionGuard } from "$lib/nav.svelte";
+  import { preview3dDirty, revertPreview3dPrefs, savePreview3dPrefs } from "$lib/preview3dPrefs.svelte";
   import { listShowrooms, type ShowroomOption } from "$lib/launch";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { resolveProfile, type ProfileSource } from "$lib/gamepadNav";
@@ -37,7 +38,12 @@
   // (`music.json`, voir MusicTab.svelte) donc son propre état.
   const TAB_IDS = ["general", "paths", "import", "preview", "music"] as const;
   type SettingsTab = (typeof TAB_IDS)[number];
-  let activeTab = $state<SettingsTab>("general");
+  // Onglet demandé depuis ailleurs (raccourci « régler l'aperçu » de la fiche
+  // voiture), consommé une fois : sans la remise à `null`, revenir plus tard
+  // dans les Réglages rouvrirait toujours le même onglet.
+  const requested = TAB_IDS.find((id) => id === nav.settingsTab);
+  nav.settingsTab = null;
+  let activeTab = $state<SettingsTab>(requested ?? "general");
   // Libellés recalculés à chaque changement de langue (`t` est réactif) — un
   // tableau `const` de clés figées les aurait laissés dans l'ancienne langue.
   const tabItems = $derived(
@@ -113,17 +119,28 @@
   // enregistrés propose d'enregistrer ou d'annuler (et dans ce cas, revient
   // sur l'aperçu live déjà appliqué — zoom, langue).
   setSectionGuard(async () => {
-    if (!dirty) return true;
+    // **Deux jeux de réglages, une seule garde.** L'onglet Aperçu ne passe pas
+    // par `config` (il vit dans `ui_prefs.json`) mais il a exactement le même
+    // besoin : ses curseurs s'appliquent à l'écran sans être enregistrés, donc
+    // quitter sans demander perdrait — ou pire, validerait en silence — ce que
+    // l'utilisateur était en train d'essayer. Une seconde garde n'est pas
+    // possible, `setSectionGuard` n'a qu'un emplacement : c'est donc celle-ci
+    // qui interroge les deux.
+    const previewDirty = preview3dDirty();
+    if (!dirty && !previewDirty) return true;
     const wantsSave = await confirm(t("settings.unsavedPrompt"), {
       title: t("settings.unsavedTitle"),
       okLabel: t("settings.save"),
       cancelLabel: t("settings.discard"),
     });
     if (wantsSave) {
+      if (previewDirty) await savePreview3dPrefs();
+      if (!dirty) return true;
       await save();
       return validation?.is_valid ?? false;
     }
     // Annulé : revient sur tout ce qui a été appliqué en aperçu live.
+    if (previewDirty) revertPreview3dPrefs();
     setZoom(savedConfig.prefs.ui_zoom);
     setLocale(savedConfig.prefs.language);
     config = structuredClone(savedConfig);
@@ -166,7 +183,7 @@
   }
 </script>
 
-<div class="settings">
+<div class="settings" class:wide={activeTab === "preview"}>
   <header>
     <h2 class="lbl-screen">{t("settings.title")}</h2>
   </header>
@@ -332,6 +349,13 @@
 <style>
   .settings {
     max-width: 640px;
+  }
+  /* L'onglet Aperçu prend toute la largeur : il porte un aperçu 3D et treize
+     curseurs, et le but est de voir l'effet d'un réglage **sans scroller**.
+     Les autres onglets restent en colonne étroite — un formulaire large est
+     plus difficile à lire, pas plus facile. */
+  .settings.wide {
+    max-width: none;
   }
   header {
     margin-bottom: 22px;

@@ -111,9 +111,15 @@ export const nav = $state<{
   /** Action « adversaires » en attente (§6.3ter), posée depuis la sélection
    * groupée de la bibliothèque voitures. */
   opponentsAction: OpponentsAction | null;
+  /** Onglet à ouvrir dans l'écran Réglages, posé avant d'y naviguer et
+   * consommé par `Settings.svelte` une fois monté — même schéma que
+   * `autoLaunch`. Sert au raccourci « régler l'aperçu » de la fiche voiture,
+   * qui doit tomber directement sur l'onglet Aperçu et non sur Général. */
+  settingsTab: string | null;
 }>({
   section: "cars",
   prefill: null,
+  settingsTab: null,
   openMod: null,
   search: null,
   // Hydraté juste en dessous, de façon asynchrone (lecture fichier côté

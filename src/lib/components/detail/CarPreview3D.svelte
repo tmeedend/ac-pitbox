@@ -18,6 +18,8 @@
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
   import type * as ThreeModule from "three";
+  import type { Reflector } from "three/addons/objects/Reflector.js";
+  import { applyFloorMirror, floorMirrorShader } from "./floorMirror";
 
   let {
     carId,
@@ -84,6 +86,17 @@
     /** Horodatage du début de l'effet d'entrée, 0 quand il n'y en a pas ou
      * qu'il est terminé (§15 — effet d'intro). */
     introAt: number;
+    /** Miroir du sol. `null` quand le reflet est à 0 : c'est un second rendu
+     * de la scène, autant ne pas le construire du tout. */
+    mirror: Reflector | null;
+    /** Compteur d'images, pour ne rafraîchir le reflet qu'une fois sur deux. */
+    frames: number;
+    /** Les deux plans réglables du sol, gardés pour leur appliquer les
+     * préférences sans reconstruire la scène. */
+    ground: ThreeModule.Mesh;
+    shadowCatcher: ThreeModule.Mesh;
+    /** Altitude du sol, pour poser le miroir quand il arrive après coup. */
+    floorY: number;
     /** Libérée : plus rien ne doit lui demander de rendu (une reprise de
      * rotation en attente, par exemple, survit à la scène qui l'a armée). */
     disposed: boolean;
@@ -210,6 +223,90 @@
   }
 
   /**
+   * Pose le miroir du sol, ou ne fait rien si le reflet est réglé à 0 %.
+   *
+   * Séparée de `build` parce qu'elle sert deux fois : à la construction, et
+   * quand l'utilisateur remonte le reflet depuis 0 — auquel cas il faut
+   * l'ajouter à chaud plutôt que de recharger la fiche, un curseur n'ayant pas
+   * à faire clignoter l'aperçu.
+   *
+   * À 0 % le miroir n'existe pas, plutôt que d'exister à l'opacité zéro :
+   * c'est un **second rendu de la scène**, le seul poste de ce panneau qui
+   * coûte vraiment.
+   */
+  async function attachMirror(current: ThreeScene): Promise<void> {
+    if (current.mirror || preview3dPrefs().reflection <= 0) return;
+    const { Reflector } = await import("three/addons/objects/Reflector.js");
+    if (current.disposed) return;
+    const THREE = current.THREE;
+    const size = current.radius * 5;
+    const mirror = new Reflector(new THREE.PlaneGeometry(size, size), {
+      // 512 et non 256 : c'est la résolution sur laquelle le réglage a été
+      // choisi, et le flou retenu est faible (0,5), ce qui ne pardonne pas une
+      // cible grossière.
+      textureWidth: 512,
+      textureHeight: 512,
+      color: 0xffffff,
+      shader: floorMirrorShader,
+    });
+    mirror.rotation.x = -Math.PI / 2;
+    mirror.position.set(current.center.x, current.floorY + current.radius / 500, current.center.z);
+    // `Reflector` hérite le type de matériau de `Mesh`, donc un `Material` tout
+    // court : c'est bien un `ShaderMaterial`, construit à partir du shader
+    // qu'on lui passe.
+    const material = mirror.material as ThreeModule.ShaderMaterial;
+    material.transparent = true;
+    material.depthWrite = false;
+    // Sous la flaque (-2) et sous l'ombre (-1) : le reflet est le sol, tout le
+    // reste se pose dessus.
+    mirror.renderOrder = -3;
+
+    // Le reflet ne doit montrer **que** la voiture : sans ça, la flaque et
+    // l'ombre se retrouvent dans leur propre reflet et le sol se dédouble.
+    // Et il ne se rafraîchit qu'une image sur deux — à 0,22 rad/s un plateau
+    // avance de deux dixièmes de degré par image, invisible sur une surface
+    // floutée, alors que la seconde passe se paie, elle.
+    const reflect = mirror.onBeforeRender;
+    mirror.onBeforeRender = function (...args: Parameters<typeof reflect>) {
+      if (current.frames % 2 !== 0) return;
+      current.ground.visible = false;
+      current.shadowCatcher.visible = false;
+      reflect.apply(this, args);
+      current.ground.visible = true;
+      current.shadowCatcher.visible = true;
+    };
+
+    current.scene.add(mirror);
+    current.mirror = mirror;
+    applyFloorMirror(material.uniforms, preview3dPrefs());
+  }
+
+  /**
+   * Reporte sur la scène tout ce qui se règle sans la reconstruire : le décor
+   * (exposition, éclairage) et le sol (reflet, flaque, ombre).
+   *
+   * Une seule fonction pour la construction et pour les changements de
+   * réglage — deux chemins auraient divergé au premier ajout, et c'est
+   * exactement ce qui rend un réglage « qui ne marche que si on rouvre la
+   * fiche ».
+   */
+  function applyScene(current: ThreeScene) {
+    const prefs = preview3dPrefs();
+    current.renderer.toneMappingExposure = prefs.exposure / 100;
+    // `scene.environmentIntensity`, et **pas** `material.envMapIntensity` :
+    // mesuré au banc, ce dernier n'a aucun effet quand l'environnement vient
+    // de la scène (voir `docs/SPEC-preview-3d-kn5.md` §15).
+    current.scene.environmentIntensity = prefs.light / 100;
+    const ground = current.ground.material as ThreeModule.MeshBasicMaterial;
+    ground.opacity = prefs.pool / 100;
+    const shadow = current.shadowCatcher.material as ThreeModule.ShadowMaterial;
+    shadow.opacity = prefs.shadow / 100;
+    if (current.mirror) {
+      applyFloorMirror((current.mirror.material as ThreeModule.ShaderMaterial).uniforms, prefs);
+    }
+  }
+
+  /**
    * Facteur appliqué à la vitesse du plateau pendant l'effet d'entrée (§15).
    *
    * Se désarme lui-même en écrivant `introAt = 0` : une fois l'effet fini, il
@@ -311,6 +408,10 @@
         m.dispose();
       }
     });
+    // Avant le parcours : le miroir possède une cible de rendu que ni
+    // `geometry.dispose()` ni `material.dispose()` ne libèrent.
+    current.mirror?.dispose();
+    current.mirror = null;
     current.scene.clear();
     current.controls.dispose();
     current.pmrem.dispose();
@@ -350,6 +451,7 @@
         const intro = introFactor(current, now);
         current.turntable.rotation.y += SPIN_SPEED * (preview3dPrefs().spin / 100) * intro * elapsed;
       }
+      current.frames += 1;
       const moving = current.controls.update();
       current.renderer.render(current.scene, current.camera);
       // Rien à ajouter pour l'effet d'entrée : il ne fait qu'accélérer un
@@ -373,7 +475,17 @@
    */
   function placeCamera(current: ThreeScene) {
     const prefs = preview3dPrefs();
-    const distance = (current.radius * FRAMING_DISTANCE * 100) / prefs.zoom;
+    // La focale change la perspective **sans** changer la taille de la voiture
+    // dans le cadre : la distance est recalculée pour compenser. Sans ça, les
+    // curseurs de focale et de zoom se marcheraient dessus, et le premier
+    // servirait surtout à recadrer — alors que c'est le second qui recadre.
+    const compensation =
+      Math.tan((FRAMING_FOV * Math.PI) / 360) / Math.tan((prefs.fov * Math.PI) / 360);
+    const distance = (current.radius * FRAMING_DISTANCE * 100 * compensation) / prefs.zoom;
+    if (current.camera.fov !== prefs.fov) {
+      current.camera.fov = prefs.fov;
+      current.camera.updateProjectionMatrix();
+    }
     const azimuth = (prefs.azimuth * Math.PI) / 180;
     const elevation = (prefs.elevation * Math.PI) / 180;
     // Le point visé monte ou descend avec la hauteur : c'est lui qui décide de
@@ -483,7 +595,7 @@
     turntable.add(gltf.scene);
     scene.add(turntable);
 
-    const camera = new THREE.PerspectiveCamera(FRAMING_FOV, 16 / 9, radius / 100, radius * 40);
+    const camera = new THREE.PerspectiveCamera(FRAMING_FOV, 16 / 9, radius / 100, radius * 90);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.copy(center);
@@ -491,10 +603,11 @@
     controls.dampingFactor = 0.08;
     controls.enablePan = false;
     controls.minDistance = radius * 1.1;
-    // Roomy enough for the whole zoom range of the settings: at 50 % the camera
-    // sits at nearly ten radii, and a tighter bound would silently cancel the
-    // setting on the first frame.
-    controls.maxDistance = radius * 12;
+    // Assez large pour toute la plage des réglages, sinon la borne annulerait
+    // le réglage en silence dès la première image. Le pire cas cumule le zoom
+    // le plus faible (50 %) et la focale la plus longue (10°, soit deux fois
+    // plus loin qu'à 20°) : environ vingt rayons.
+    controls.maxDistance = radius * 26;
     // Borne l'angle polaire pour qu'on ne puisse pas passer sous le sol.
     controls.maxPolarAngle = Math.PI * 0.495;
 
@@ -581,6 +694,11 @@
       visibility: null,
       resize: () => {},
       host,
+      mirror: null,
+      frames: 0,
+      ground,
+      shadowCatcher,
+      floorY: box.min.y,
       introAt: 0,
       disposed: false,
     };
@@ -608,6 +726,9 @@
       camera.updateProjectionMatrix();
       requestRender(built);
     };
+    await attachMirror(built);
+    applyScene(built);
+
     built.resize = resize;
     built.observer = new ResizeObserver(resize);
     built.observer.observe(host);
@@ -819,6 +940,29 @@
     untrack(() => applyQuality(scene));
   });
 
+  // Décor et sol : mêmes règles que le cadrage, l'aperçu suit sans être
+  // remonté. Le reflet fait exception sur un point — passer de 0 % à autre
+  // chose demande de **construire** le miroir, ce qu'on ne fait qu'au
+  // chargement : la scène est donc reconstruite dans ce seul cas.
+  $effect(() => {
+    const prefs = preview3dPrefs();
+    void [prefs.exposure, prefs.light, prefs.pool, prefs.shadow];
+    void [prefs.reflection, prefs.reflectionBlur, prefs.reflectionReach];
+    untrack(() => {
+      if (!scene) return;
+      const live = scene;
+      applyScene(live);
+      requestRender(live);
+      // Remonter le reflet depuis 0 demande de construire le miroir, ce que
+      // `applyScene` ne peut pas faire — il ne règle que ce qui existe.
+      if (prefs.reflection > 0 && !live.mirror) {
+        void attachMirror(live).then(() => {
+          if (!live.disposed) requestRender(live);
+        });
+      }
+    });
+  });
+
   // Un réglage de cadrage changé pendant qu'une fiche est ouverte s'applique
   // tout de suite : recadrer ne coûte qu'un rendu, alors que remonter le
   // composant relancerait tout le chargement du modèle.
@@ -826,7 +970,7 @@
     // Un effet ne suit que ce qu'il lit : les valeurs sont donc lues ici, à
     // découvert, et pas seulement à l'intérieur de `placeCamera`.
     const prefs = preview3dPrefs();
-    void [prefs.zoom, prefs.azimuth, prefs.elevation, prefs.height, prefs.spin];
+    void [prefs.zoom, prefs.azimuth, prefs.elevation, prefs.height, prefs.spin, prefs.fov];
     untrack(() => {
       if (!scene) return;
       placeCamera(scene);

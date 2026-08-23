@@ -29,8 +29,12 @@
   import StateBadge from "./StateBadge.svelte";
   import { tick, untrack } from "svelte";
   import { focusGamepadElement, isGamepadDriving } from "$lib/gamepadNav";
-  import { preview3dPrefs, setPreview3dEnabled, resetPreview3dView } from "$lib/preview3dPrefs.svelte";
-  import Preview3dControls from "./detail/Preview3dControls.svelte";
+  import {
+    preview3dPrefs,
+    resetPreview3dView,
+    savePreview3dPrefs,
+    setPreview3dEnabled,
+  } from "$lib/preview3dPrefs.svelte";
   import {
     exportMod,
     deletePack,
@@ -309,8 +313,21 @@
    * disparaître sous les doigts. */
   let preview3dPanel = $state(false);
 
+  /** Raccourci vers Réglages → Aperçu, qui porte l'aperçu 3D et les treize
+   * réglages. Passe par `nav.settingsTab` : l'onglet actif est un état interne
+   * de `Settings.svelte`, et le lui demander avant de naviguer évite de sortir
+   * cet état de son composant pour un seul appelant. */
+  function openPreviewSettings() {
+    nav.settingsTab = "preview";
+    nav.section = "settings";
+  }
+
   function togglePreview3d() {
     setPreview3dEnabled(!preview3d);
+    // Enregistré sur-le-champ, contrairement aux curseurs de l'écran Réglages :
+    // c'est un interrupteur, pas un formulaire. Personne ne s'attend à devoir
+    // aller valider ailleurs pour qu'une bascule d'un clic tienne.
+    void savePreview3dPrefs().catch((e) => console.error("save_ui_prefs", e));
   }
   // Résolu une fois les skins de la fiche courante chargés (§skin sélectionné) —
   // `openShowroom` l'attend pour ne jamais ouvrir avant de connaître le skin
@@ -910,95 +927,103 @@
               fallbackSrc={heroImg}
             />
           {/if}
-          {#if isCar}
-            <!-- Commandes de l'aperçu : révélées au survol de la zone héros, pour
-                 qu'elles ne mangent pas l'image le reste du temps. Le focus
-                 clavier les révèle aussi (`:focus-within`), sans quoi elles
-                 seraient inatteignables autrement qu'à la souris. -->
-            <div class="hero-tools" class:open={preview3dPanel}>
+        </div>
+        {#if isCar}
+          <!-- Commandes de l'aperçu : révélées au survol de la zone héros, pour
+               qu'elles ne mangent pas l'image le reste du temps. Le focus
+               clavier les révèle aussi (`:focus-within`), sans quoi elles
+               seraient inatteignables autrement qu'à la souris. -->
+          <div class="hero-tools" class:open={preview3dPanel}>
+            <button
+              class="hero-btn"
+              type="button"
+              onclick={togglePreview3d}
+              title={preview3d ? t("detail.preview3dShowPhoto") : t("detail.preview3dShow3d")}
+              aria-label={preview3d ? t("detail.preview3dShowPhoto") : t("detail.preview3dShow3d")}
+            >
+              {#if preview3d}
+                <!-- Retour à la photo : un cadre et sa montagne. -->
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <rect x="1.5" y="3.5" width="13" height="9" rx="1" />
+                  <path d="M2.5 11 L6 7.5 L8.5 10 L10.5 8.5 L13.5 11.5" fill="none" />
+                  <circle cx="5.5" cy="6" r="1" />
+                </svg>
+              {:else}
+                <!-- Passage en 3D : un volume en perspective. -->
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M8 1.8 L14 5 V11 L8 14.2 L2 11 V5 Z" fill="none" />
+                  <path d="M2 5 L8 8.2 L14 5" fill="none" />
+                  <path d="M8 8.2 V14.2" fill="none" />
+                </svg>
+              {/if}
+            </button>
+            {#if preview3d}
               <button
                 class="hero-btn"
                 type="button"
-                onclick={togglePreview3d}
-                title={preview3d ? t("detail.preview3dShowPhoto") : t("detail.preview3dShow3d")}
-                aria-label={preview3d ? t("detail.preview3dShowPhoto") : t("detail.preview3dShow3d")}
+                onclick={resetPreview3dView}
+                title={t("detail.preview3dReplace")}
+                aria-label={t("detail.preview3dReplace")}
               >
-                {#if preview3d}
-                  <!-- Retour à la photo : un cadre et sa montagne. -->
-                  <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <rect x="1.5" y="3.5" width="13" height="9" rx="1" />
-                    <path d="M2.5 11 L6 7.5 L8.5 10 L10.5 8.5 L13.5 11.5" fill="none" />
-                    <circle cx="5.5" cy="6" r="1" />
-                  </svg>
-                {:else}
-                  <!-- Passage en 3D : un volume en perspective. -->
-                  <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <path d="M8 1.8 L14 5 V11 L8 14.2 L2 11 V5 Z" fill="none" />
-                    <path d="M2 5 L8 8.2 L14 5" fill="none" />
-                    <path d="M8 8.2 V14.2" fill="none" />
-                  </svg>
-                {/if}
+                <!-- Replacer et relancer : une flèche qui reboucle. -->
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M13.2 8 A5.2 5.2 0 1 1 11.4 4.1" fill="none" />
+                  <path d="M11.9 1.2 V4.5 H8.6" fill="none" />
+                </svg>
               </button>
-              {#if preview3d}
-                <button
-                  class="hero-btn"
-                  type="button"
-                  onclick={resetPreview3dView}
-                  title={t("detail.preview3dReplace")}
-                  aria-label={t("detail.preview3dReplace")}
-                >
-                  <!-- Replacer et relancer : une flèche qui reboucle. -->
-                  <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <path d="M13.2 8 A5.2 5.2 0 1 1 11.4 4.1" fill="none" />
-                    <path d="M11.9 1.2 V4.5 H8.6" fill="none" />
-                  </svg>
-                </button>
-                <button
-                  class="hero-btn"
-                  class:on={preview3dPanel}
-                  type="button"
-                  onclick={() => (preview3dPanel = !preview3dPanel)}
-                  title={t("detail.preview3dSettings")}
-                  aria-label={t("detail.preview3dSettings")}
-                  aria-expanded={preview3dPanel}
-                >
-                  <!-- Réglages : deux curseurs. -->
-                  <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <path d="M2 5.5 H14" fill="none" />
-                    <path d="M2 10.5 H14" fill="none" />
-                    <circle cx="6" cy="5.5" r="1.8" />
-                    <circle cx="10.5" cy="10.5" r="1.8" />
-                  </svg>
-                </button>
-              {/if}
-            </div>
-            {#if preview3d && preview3dPanel}
-              <div class="hero-panel">
-                <Preview3dControls compact />
-              </div>
+              <button
+                class="hero-btn"
+                class:on={preview3dPanel}
+                type="button"
+                onclick={() => (preview3dPanel = !preview3dPanel)}
+                title={t("detail.preview3dSettings")}
+                aria-label={t("detail.preview3dSettings")}
+                aria-expanded={preview3dPanel}
+              >
+                <!-- Réglages : deux curseurs. -->
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M2 5.5 H14" fill="none" />
+                  <path d="M2 10.5 H14" fill="none" />
+                  <circle cx="6" cy="5.5" r="1.8" />
+                  <circle cx="10.5" cy="10.5" r="1.8" />
+                </svg>
+              </button>
             {/if}
-          {/if}
-          {#if showroomBusy}
-            <!-- Lancement d'acShowroom : pastille discrète le temps que le
-                 process démarre, il s'affichera ensuite par-dessus l'app. -->
-            <div class="hero-loading" title={t("detail.showroomLoading")}>
-              <span class="spinner"></span>
+          </div>
+          {#if preview3d && preview3dPanel}
+            <!-- Les curseurs vivaient ici, en version compacte. Ils sont
+                 partis dans Réglages → Aperçu, qui porte désormais son
+                 propre aperçu 3D : on y règle en voyant le résultat, sur les
+                 treize réglages et non sur les cinq qui tenaient dans ce
+                 panneau. Reste le raccourci. -->
+            <div class="hero-panel">
+              <p class="hero-panel-t">{t("detail.preview3dSettingsMoved")}</p>
+              <button class="btn" type="button" onclick={openPreviewSettings}>
+                {t("detail.preview3dSettingsOpen")}
+              </button>
             </div>
           {/if}
-          {#if !isCar}
-            {@const ol = previewSrc(d.track?.layouts[previewLayout]?.outline ?? null)}
-            {#if ol}<img class="hero-outline" src={ol} alt="" />{/if}
+        {/if}
+        {#if showroomBusy}
+          <!-- Lancement d'acShowroom : pastille discrète le temps que le
+               process démarre, il s'affichera ensuite par-dessus l'app. -->
+          <div class="hero-loading" title={t("detail.showroomLoading")}>
+            <span class="spinner"></span>
+          </div>
+        {/if}
+        {#if !isCar}
+          {@const ol = previewSrc(d.track?.layouts[previewLayout]?.outline ?? null)}
+          {#if ol}<img class="hero-outline" src={ol} alt="" />{/if}
+        {/if}
+        {#if isCar}
+          {@const hs = heroSpecs(d.specs)}
+          {#if hs}
+            <div class="hero-specs">
+              <div class="mono hs-line">{hs}</div>
+              <div class="mono hs-label">{t("detail.specNative")}</div>
+            </div>
           {/if}
-          {#if isCar}
-            {@const hs = heroSpecs(d.specs)}
-            {#if hs}
-              <div class="hero-specs">
-                <div class="mono hs-line">{hs}</div>
-                <div class="mono hs-label">{t("detail.specNative")}</div>
-              </div>
-            {/if}
-          {/if}
-        </div>
+        {/if}
       </div>
 
       <div class="data">
@@ -1453,9 +1478,24 @@
   }
 
   .hero {
-    /* Même fond que la page (`.page`, plus bas) : un dégradé rouge/gris ici
-       cassait cette continuité. */
+    /* **Même carte que ses voisines.** Le panneau de données d'à côté est fait
+       de `.blk` — encadré, fond `--panel2` — et le héros était un simple `div`
+       au fond `--card` sans bordure : deux traitements différents pour deux
+       blocs de la même rangée, ce qui se voyait (retour utilisateur). Il prend
+       essayé la bordure et le fond `--panel2` d'un `.blk` : **les deux ont été
+       retirés**. Le média n'occupe que l'intérieur du cadre, donc le fond plus
+       sombre se voyait en bandes le long des bords, et la bordure ressortait
+       comme un trait vertical au bord de l'aperçu — deux retours utilisateur
+       successifs. Ce qui fait la parenté avec les cartes voisines, ici, c'est
+       le retrait du média (`--hero-pad`, aligné sur `.blk-b`), pas un trait. */
     background: var(--card);
+    /* Retrait du média dans le cadre. Les incrustations (commandes, caracté-
+       ristiques, pastille de chargement) s'en déduisent : elles sont posées
+       sur `.hero` et non dans `.hero-inner`, sinon ce dernier les **rogne** au
+       bord du média — bug constaté, capture à l'appui : « Native spec » et les
+       trois boutons coupés en deux. Elles ne sont pas le média, rien ne les
+       oblige à partager son cadre. */
+    --hero-pad: 14px;
     min-height: 300px;
     display: flex;
     align-items: center;
@@ -1466,7 +1506,7 @@
        collée aux bords haut/gauche était un retour utilisateur direct.
        Pour une voiture, ce padding est repris par `.hero-inner` à la place
        (voir plus bas) : lui seul encadre aussi l'aperçu 3D. */
-    padding: 14px;
+    padding: var(--hero-pad);
   }
   /* Photo et aperçu 3D (voiture uniquement) partagent ce cadre : la photo y
      est un enfant normal, l'aperçu 3D s'y pose en absolu `inset:0` — sans ce
@@ -1495,6 +1535,7 @@
      taille de son média, l'espace qui reste dans sa ligne de grille montre le
      fond de `.row` (`--card`, identique au sien) plutôt que le sien propre. */
   .row.top:not(.track) .hero {
+    --hero-pad: 16px;
     aspect-ratio: 16 / 9;
     min-height: 0;
     align-self: start;
@@ -1502,7 +1543,9 @@
   }
   .row.top:not(.track) .hero-inner {
     position: absolute;
-    inset: 14px;
+    /* 16px comme le corps d'une carte (`.blk-b`) : c'est ce qui fait lire les
+       deux blocs de la rangée comme une paire. */
+    inset: var(--hero-pad);
   }
   .hero img {
     width: 100%;
@@ -1513,8 +1556,12 @@
      l'aperçu ni la pastille de lancement du showroom, tous deux en haut. */
   .hero-tools {
     position: absolute;
-    right: 10px;
-    bottom: 10px;
+    /* **Sur le média**, à dix pixels de son bord : leur fond est un noir
+       translucide, qui a besoin de l'image derrière lui pour se détacher.
+       Posées sur la bande de fond du cadre, elles devenaient quasi invisibles
+       — retour utilisateur. */
+    right: calc(var(--hero-pad) + 10px);
+    bottom: calc(var(--hero-pad) + 10px);
     display: flex;
     gap: 6px;
     z-index: 4;
@@ -1535,9 +1582,12 @@
     align-items: center;
     justify-content: center;
     padding: 0;
-    background: rgba(8, 8, 12, 0.62);
-    border: 1px solid var(--line);
-    color: var(--txt2);
+    /* Assez opaque pour se détacher d'une carrosserie claire comme d'un fond
+       noir, et une bordure plus franche que `--line`, qui disparaissait sur
+       les deux. */
+    background: rgba(6, 6, 9, 0.82);
+    border: 1px solid var(--muted2);
+    color: var(--txt);
     cursor: pointer;
   }
   .hero-btn:hover {
@@ -1561,20 +1611,29 @@
   }
   .hero-panel {
     position: absolute;
-    right: 10px;
-    bottom: 44px;
-    width: 208px;
-    padding: 10px 12px 8px;
+    right: calc(var(--hero-pad) + 10px);
+    bottom: calc(var(--hero-pad) + 44px);
+    /* Bornée à la largeur disponible : le panneau porte maintenant une phrase
+       et un bouton, et une largeur fixe le faisait déborder sur une fiche
+       étroite. */
+    width: min(240px, calc(100% - 2 * var(--hero-pad) - 20px));
+    padding: 10px 12px 12px;
     background: rgba(8, 8, 12, 0.9);
     border: 1px solid var(--line);
     z-index: 4;
+  }
+  .hero-panel-t {
+    margin: 0 0 10px;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--txt2);
   }
   /* Pastille de lancement de l'aperçu 3D : petite, en haut à droite, sans
      assombrir l'image — le showroom s'ouvrira par-dessus l'app. */
   .hero-loading {
     position: absolute;
-    top: 10px;
-    right: 10px;
+    top: calc(var(--hero-pad) + 10px);
+    right: calc(var(--hero-pad) + 10px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1610,8 +1669,9 @@
   }
   .hero-specs {
     position: absolute;
-    left: 16px;
-    bottom: 14px;
+    /* Mêmes retraits que les commandes d'en face. */
+    left: calc(var(--hero-pad) + 12px);
+    bottom: calc(var(--hero-pad) + 10px);
   }
   .hs-line {
     color: #e8e8ea;

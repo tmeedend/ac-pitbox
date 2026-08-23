@@ -1,38 +1,45 @@
 <script lang="ts">
   // Réglages de l'aperçu 3D des voitures (docs/SPEC-preview-3d-kn5.md §15).
   //
-  // Trois blocs, et ils ne se ressemblent pas : le **rendu** (qualité, effet
-  // d'entrée) et le **cadrage** s'appliquent à l'image suivante, alors que le
-  // **cache** touche au disque et évince pour de bon. D'où l'ordre : ce qui ne
+  // **L'aperçu est ici**, en haut de l'onglet, et c'est ce qui justifie que les
+  // treize curseurs y soient aussi : on règle en voyant le résultat. La fiche
+  // voiture n'en porte plus qu'un raccourci — son panneau compact ne tenait que
+  // cinq curseurs sur treize, et le reste s'y serait entassé.
+  //
+  // La voiture montrée est **celle de la session en cours** (barre latérale), à
+  // défaut la première de la bibliothèque : n'importe laquelle ferait l'affaire
+  // pour juger d'un sol ou d'une exposition, autant que ce soit celle que
+  // l'utilisateur a en tête.
+  //
+  // Cinq blocs, et ils ne se ressemblent pas : le rendu, le cadrage,
+  // l'éclairage et le sol s'appliquent tous à l'image suivante, alors que le
+  // cache touche au disque et évince pour de bon. D'où l'ordre : ce qui ne
   // coûte rien d'abord, ce qui efface des fichiers en dernier.
   //
   // Cet onglet ne passe pas par AppConfig : ses réglages vivent dans
-  // `ui_prefs.json` et s'appliquent à l'instant où on les bouge — une fiche
-  // ouverte derrière suit le curseur sans être rechargée, donc pas de garde de
-  // navigation à poser.
-  //
-  // Le bouton Enregistrer n'est pas décoratif pour autant : l'écriture disque
-  // est **différée** le temps que le curseur s'arrête (sinon un glissé
-  // réécrit `ui_prefs.json` cinquante fois). Il force cette écriture et attend
-  // qu'elle ait eu lieu — c'est ce que dit la pastille « Enregistré ».
-  //
-  // Les curseurs de cadrage vivent dans `Preview3dControls`, partagé avec le
-  // panneau posé sur la fiche voiture : c'est là qu'on les règle en voyant le
-  // résultat, ici qu'on les retrouve avec leur mode d'emploi. La qualité,
-  // l'effet d'entrée et le cache n'y sont **pas** : on ne les juge pas en les
-  // bougeant, et le panneau compact est déjà serré.
+  // `ui_prefs.json` et s'appliquent à l'instant où on les bouge, donc pas de
+  // garde de navigation à poser. Le bouton Enregistrer n'est pas décoratif pour
+  // autant : l'écriture disque est **différée** le temps que le curseur
+  // s'arrête (sinon un glissé réécrit `ui_prefs.json` cinquante fois). Il force
+  // cette écriture et attend qu'elle ait eu lieu — c'est ce que dit la pastille
+  // « Enregistré ».
+  import CarPreview3D from "../detail/CarPreview3D.svelte";
   import Preview3dControls from "../detail/Preview3dControls.svelte";
   import Slider from "../Slider.svelte";
   import { i18n, t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
+  import { listLibrary } from "$lib/library";
+  import { nav } from "$lib/nav.svelte";
   import { clearPreviewCache, previewCacheSize } from "$lib/preview";
   import {
     INTRO_EFFECTS,
     PREVIEW3D_RANGES,
     PREVIEW_QUALITIES,
-    flushPreview3dPrefs,
+    savePreview3dPrefs,
     preview3dDirty,
     preview3dPrefs,
+    resetPreview3dView,
+    revertPreview3dPrefs,
     setPreview3dEnabled,
     setPreview3dIntro,
     setPreview3dQuality,
@@ -47,7 +54,7 @@
   async function save() {
     saving = true;
     try {
-      await flushPreview3dPrefs();
+      await savePreview3dPrefs();
       saved = true;
     } finally {
       saving = false;
@@ -61,6 +68,23 @@
   // de l'état courant, pas du dernier clic.
   $effect(() => {
     if (preview3dDirty()) saved = false;
+  });
+
+  // --- Voiture montrée ----------------------------------------------------
+
+  let sampleCar = $state<string | null>(nav.sessionCar?.id ?? null);
+  const sampleSkin = nav.sessionCar?.skin ?? null;
+
+  // Aucune voiture de session : on prend la première de la bibliothèque. Une
+  // seule fois au montage — l'effet ne lit aucune valeur réactive.
+  $effect(() => {
+    if (sampleCar) return;
+    void listLibrary()
+      .then((mods) => {
+        const car = mods.find((m) => m.kind === "Car");
+        if (car) sampleCar = car.id_interne;
+      })
+      .catch((e) => console.error("list_library", e));
   });
 
   // --- Cache -------------------------------------------------------------
@@ -103,8 +127,6 @@
     await refreshCacheSize();
   }
 
-  // Une lecture au montage, et le nettoyage du minuteur au démontage : l'effet
-  // ne lit aucune valeur réactive, il ne se rejouera donc pas.
   $effect(() => {
     void refreshCacheSize();
     return () => {
@@ -124,135 +146,259 @@
   }
 </script>
 
-<section class="block">
-  <label class="check">
-    <input
-      type="checkbox"
-      checked={prefs.enabled}
-      onchange={(e) => setPreview3dEnabled(e.currentTarget.checked)}
-    />
-    <span>{t("settings.preview3dEnabled")}</span>
-  </label>
-  <p class="hint">{t("settings.preview3dEnabledHint")}</p>
-</section>
-
-<h3 class="lbl">{t("settings.preview3dGroupRender")}</h3>
-
-<section class="block">
-  <span class="lbl-key">{t("settings.preview3dQuality")}</span>
-  {#each PREVIEW_QUALITIES as level (level)}
-    <label class="radio-opt">
+<div class="cards">
+  {#if prefs.enabled && sampleCar}
+    <div class="stage">
+      <CarPreview3D carId={sampleCar} skinId={sampleSkin} />
+      <!-- Même bouton que sur la fiche voiture : replace la caméra selon les
+           réglages et relance le plateau. Ici il sert aussi à **revoir l'effet
+           d'entrée**, qui ne se joue par définition qu'à l'entrée. -->
+      <button
+        class="replace"
+        type="button"
+        onclick={resetPreview3dView}
+        title={t("detail.preview3dReplace")}
+        aria-label={t("detail.preview3dReplace")}
+      >
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" />
+          <path d="M13.5 2v3.2h-3.2" />
+        </svg>
+      </button>
+    </div>
+  {/if}
+  <section class="blk">
+  <div class="blk-h"><span class="blk-t">{t("settings.preview3dGroupRender")}</span></div>
+  <div class="blk-b">
+    <label class="check">
       <input
-        type="radio"
-        name="preview3d_quality"
-        value={level}
-        checked={prefs.quality === level}
-        onchange={() => setPreview3dQuality(level)}
+        type="checkbox"
+        checked={prefs.enabled}
+        onchange={(e) => setPreview3dEnabled(e.currentTarget.checked)}
       />
-      <span>
-        <span class="radio-title">{t("settings.preview3dQualityOption." + level)}</span>
-        <span class="radio-hint">{t("settings.preview3dQualityOption." + level + "Hint")}</span>
-      </span>
+      <span>{t("settings.preview3dEnabled")}</span>
     </label>
-  {/each}
-</section>
+    <p class="hint">{t("settings.preview3dEnabledHint")}</p>
 
-<section class="block">
-  <span class="lbl-key">{t("settings.preview3dIntro")}</span>
-  {#each INTRO_EFFECTS as effect (effect)}
-    <label class="radio-opt">
-      <input
-        type="radio"
-        name="preview3d_intro"
-        value={effect}
-        checked={prefs.intro === effect}
-        onchange={() => setPreview3dIntro(effect)}
-      />
-      <span>
-        <span class="radio-title">{t("settings.preview3dIntroOption." + effect)}</span>
-        <span class="radio-hint">{t("settings.preview3dIntroOption." + effect + "Hint")}</span>
-      </span>
-    </label>
-  {/each}
-</section>
+    <div class="field">
+      <span class="blk-sub">{t("settings.preview3dQuality")}</span>
+      <div class="radios">
+        {#each PREVIEW_QUALITIES as level (level)}
+          <label class="radio-opt">
+            <input
+              type="radio"
+              name="preview3d_quality"
+              value={level}
+              checked={prefs.quality === level}
+              onchange={() => setPreview3dQuality(level)}
+            />
+            <span>
+              <span class="radio-title">{t("settings.preview3dQualityOption." + level)}</span>
+              <span class="radio-hint">{t("settings.preview3dQualityOption." + level + "Hint")}</span>
+            </span>
+          </label>
+        {/each}
+      </div>
+    </div>
 
-<h3 class="lbl">{t("settings.preview3dGroupFraming")}</h3>
-
-<Preview3dControls />
-
-<h3 class="lbl">{t("settings.preview3dGroupCache")}</h3>
-
-<section class="block">
-  <Slider
-    label={t("settings.preview3dCache")}
-    value={prefs.cacheMb}
-    min={PREVIEW3D_RANGES.cacheMb.min}
-    max={PREVIEW3D_RANGES.cacheMb.max}
-    step={PREVIEW3D_RANGES.cacheMb.step}
-    display={gigabytes(prefs.cacheMb * 1024 * 1024)}
-    hint={t("settings.preview3dCacheHint")}
-    oninput={(v) => {
-      setPreview3dValue("cacheMb", v);
-      scheduleCacheRefresh();
-    }}
-  />
-  <div class="cache-row">
-    {#if cacheBytes !== null}
-      <span class="used mono">{t("settings.preview3dCacheUsed", { size: gigabytes(cacheBytes) })}</span>
-    {/if}
-    <button class="btn" type="button" onclick={clearCache} disabled={clearing || cacheBytes === 0}>
-      {t("settings.preview3dCacheClear")}
-    </button>
+    <div class="field">
+      <span class="blk-sub">{t("settings.preview3dIntro")}</span>
+      <div class="radios">
+        {#each INTRO_EFFECTS as effect (effect)}
+          <label class="radio-opt">
+            <input
+              type="radio"
+              name="preview3d_intro"
+              value={effect}
+              checked={prefs.intro === effect}
+              onchange={() => setPreview3dIntro(effect)}
+            />
+            <span>
+              <span class="radio-title">{t("settings.preview3dIntroOption." + effect)}</span>
+              <span class="radio-hint">{t("settings.preview3dIntroOption." + effect + "Hint")}</span>
+            </span>
+          </label>
+        {/each}
+      </div>
+    </div>
   </div>
-  {#if cacheError}<div class="err">{errorText(cacheError)}</div>{/if}
 </section>
+
+<section class="blk">
+  <div class="blk-h"><span class="blk-t">{t("settings.preview3dGroupFraming")}</span></div>
+  <div class="blk-b"><Preview3dControls group="framing" /></div>
+</section>
+
+<section class="blk">
+  <div class="blk-h"><span class="blk-t">{t("settings.preview3dGroupLight")}</span></div>
+  <div class="blk-b"><Preview3dControls group="light" /></div>
+</section>
+
+<section class="blk">
+  <div class="blk-h"><span class="blk-t">{t("settings.preview3dGroupFloor")}</span></div>
+  <div class="blk-b"><Preview3dControls group="floor" /></div>
+</section>
+
+<section class="blk">
+  <div class="blk-h">
+    <span class="blk-t">{t("settings.preview3dGroupCache")}</span>
+    {#if cacheBytes !== null}
+      <span class="blk-n">{t("settings.preview3dCacheUsed", { size: gigabytes(cacheBytes) })}</span>
+    {/if}
+  </div>
+  <div class="blk-b">
+    <Slider
+      label={t("settings.preview3dCache")}
+      value={prefs.cacheMb}
+      min={PREVIEW3D_RANGES.cacheMb.min}
+      max={PREVIEW3D_RANGES.cacheMb.max}
+      step={PREVIEW3D_RANGES.cacheMb.step}
+      display={gigabytes(prefs.cacheMb * 1024 * 1024)}
+      hint={t("settings.preview3dCacheHint")}
+      oninput={(v) => {
+        setPreview3dValue("cacheMb", v);
+        scheduleCacheRefresh();
+      }}
+    />
+    <div class="cache-row">
+      <button class="btn" type="button" onclick={clearCache} disabled={clearing || cacheBytes === 0}>
+        {t("settings.preview3dCacheClear")}
+      </button>
+    </div>
+    {#if cacheError}<div class="err">{errorText(cacheError)}</div>{/if}
+  </div>
+  </section>
+</div>
 
 <footer>
-  {#if saved}<span class="pill pill-ok">{t("settings.saved")}</span>{/if}
-  <button class="btn btn-primary" type="button" onclick={save} disabled={saving}>
+  {#if preview3dDirty()}
+    <span class="pill pill-warn">{t("settings.unsavedTitle")}</span>
+  {:else if saved}
+    <span class="pill pill-ok">{t("settings.saved")}</span>
+  {/if}
+  <!-- Annuler revient sur les valeurs enregistrées, **y compris à l'écran** :
+       sans lui, essayer un réglage était sans retour possible dès qu'on avait
+       oublié sa valeur d'avant (retour utilisateur). -->
+  <button
+    class="btn"
+    type="button"
+    onclick={revertPreview3dPrefs}
+    disabled={saving || !preview3dDirty()}
+  >
+    {t("settings.discard")}
+  </button>
+  <button
+    class="btn btn-primary"
+    type="button"
+    onclick={save}
+    disabled={saving || !preview3dDirty()}
+  >
     {saving ? t("settings.saving") : t("settings.save")}
   </button>
 </footer>
 
 <style>
-  /* Repris de Settings.svelte : le CSS Svelte est scopé par composant, ces
-     classes ne traversent pas depuis l'écran parent (§ conventions projet). */
-  .block {
-    margin-bottom: 22px;
-    padding-bottom: 18px;
-    border-bottom: 1px solid var(--line);
-  }
-  .block label {
+  /* L'aperçu occupe **une colonne**, pas toute la largeur : en pleine largeur
+     il devenait immense sur un écran 4K, et il ne ressemblait plus à ce qu'on
+     voit sur une fiche voiture — où il tient dans un cadre. En colonne, les
+     réglages viennent se ranger à sa droite et on en voit plusieurs d'un coup,
+     ce qui est tout l'intérêt de les avoir réunis ici.
+     Ratio 16:9, comme la zone héros d'une fiche : c'est le même composant, il
+     doit donner la même image. */
+  .replace {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    z-index: 4;
+    width: 26px;
+    height: 26px;
     display: flex;
-    flex-direction: column;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--txt2);
-    max-width: 340px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    /* Mêmes valeurs que `.hero-btn` de la fiche voiture : assez opaque pour se
+       détacher d'une carrosserie claire comme d'un fond noir. */
+    background: rgba(6, 6, 9, 0.82);
+    border: 1px solid var(--muted2);
+    color: var(--txt);
+    cursor: pointer;
   }
-  .block label.check {
-    flex-direction: row;
+  .replace:hover {
+    border-color: var(--rosso);
+    color: var(--rosso-bright);
+  }
+  .replace svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .stage {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    margin-bottom: 14px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    overflow: hidden;
+    break-inside: avoid;
+  }
+  /* Deux colonnes dès qu'il y a la place, trois sur un grand écran — c'est le
+     navigateur qui compte, à partir d'une largeur de colonne lisible. Les
+     cartes ne se coupent jamais en deux (`break-inside`), sans quoi un bloc
+     commencerait au bas d'une colonne pour finir en haut de la suivante. */
+  .cards {
+    /* **Deux colonnes au maximum**, et une seule quand la fenêtre est étroite.
+       Les deux propriétés se combinent : le navigateur prend le plus petit des
+       deux nombres, celui que `column-count` autorise et celui que
+       `column-width` permet. Sans le plafond, un écran 4K en donnait cinq — et
+       l'aperçu, qui occupe une colonne, devenait minuscule (retour
+       utilisateur). Deux colonnes larges valent mieux que cinq étroites quand
+       la première porte une image. */
+    column-count: 2;
+    column-width: 340px;
+    column-gap: 14px;
+  }
+  .cards .blk {
+    break-inside: avoid;
+    /* `columns` ignore les marges qui s'effondrent : sans cette précaution, la
+       première carte de chaque colonne perdait son écart avec le haut. */
+    margin-top: 0;
+  }
+  .check {
+    display: flex;
     align-items: center;
     gap: 8px;
-    max-width: none;
+    font-size: 12.5px;
+    color: var(--txt2);
     cursor: pointer;
   }
   .hint {
-    margin-top: 8px;
-    font-size: 11px;
-    color: var(--faint);
+    margin: 6px 0 0;
+    font-size: 11.5px;
+    color: var(--muted);
+    line-height: 1.5;
   }
-  h3 {
-    margin: 0 0 12px;
+  .field {
+    margin-top: 20px;
   }
-  /* Même groupe de boutons radio que le mode de déploiement (ConfigFields) :
-     titre par-dessus, explication en dessous, alignés sur le bouton. */
+  /* Côte à côte, et non les uns sous les autres : trois options empilées
+     mangeaient une hauteur d'écran pour trois mots. Chacune garde une largeur
+     confortable pour son explication, et le tout se replie quand la fenêtre
+     est étroite. */
+  .radios {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 24px;
+  }
   .radio-opt {
     display: flex;
     align-items: flex-start;
     gap: 9px;
-    margin-top: 10px;
-    max-width: 520px;
+    flex: 1 1 210px;
+    max-width: 320px;
     cursor: pointer;
   }
   .radio-opt input {
@@ -267,7 +413,7 @@
   }
   .radio-hint {
     display: block;
-    font-size: 11px;
+    font-size: 11.5px;
     color: var(--muted);
     line-height: 1.5;
     margin-top: 2px;
@@ -277,10 +423,6 @@
     align-items: center;
     gap: 12px;
     margin-top: 14px;
-  }
-  .used {
-    font-size: 11.5px;
-    color: var(--txt2);
   }
   .err {
     margin-top: 10px;

@@ -737,6 +737,41 @@ gêne constatée :
      rien (retour utilisateur). Le dégradé du sol ne garde qu'un
      assombrissement de contact, là où une carte d'ombre manque toujours de
      résolution.
+
+     ⚠️ **Sol brillant essayé, mesuré, abandonné.** Retour utilisateur : « la
+     flaque ne renvoie aucune lumière ». C'était exact — le sol est un
+     `MeshBasicMaterial`, donc de la peinture plate : un matériau « basic » ne
+     reçoit aucune lumière et n'échantillonne aucune carte d'environnement, par
+     construction. Le remède évident était un `MeshStandardMaterial`
+     diélectrique, sans passe supplémentaire. **Il ne produit rien**, et le
+     banc le montre au lieu de le supposer (`kn5`/three hors application,
+     lecture de pixels par `gl.readPixels`, pas de capture d'écran) :
+
+     | sol, à 13° de plongée | valeur des pixels (sur 255) |
+     | --- | --- |
+     | miroir parfait, studio nu | **1 à 11** |
+     | miroir parfait, un objet clair posé dessus | **109** |
+
+     Autrement dit : **le miroir marche, c'est le studio qui n'a rien à
+     refléter.** Ses deux seules sources vives sont les rampes zénithales, à la
+     verticale de la voiture ; à 13° de plongée, un sol renvoie l'horizon, et
+     l'horizon est ici une boîte noire (murs à 0,01, panneaux latéraux à 0,05).
+     Un sol brillant dans une pièce noire est un sol noir.
+
+     Conséquence : **seul le reflet de la voiture elle-même peut se voir**, ce
+     qui est d'ailleurs ce que l'utilisateur demandait au départ. La matière
+     seule est une fausse piste — pire, elle rend visible une large étendue
+     grise là où il n'y avait que du noir (l'éclairage diffus de
+     l'environnement, 5 à 33), ce que l'utilisateur a vu et signalé.
+
+     **Le vrai miroir a donc été fait**, et il est en place : voir le point 12
+     du §15 ci-dessous.
+
+     **Découverte annexe, à ne pas réapprendre** : quand l'environnement vient
+     de `scene.environment`, c'est **`scene.environmentIntensity`** qui le
+     dose. `material.envMapIntensity` n'a **aucun effet** — vérifié à 10, image
+     inchangée au pixel près, là où `scene.environmentIntensity = 8` change
+     tout.
      ⚠️ **VSM essayé puis écarté** : c'est le seul type d'ombre dont
      `shadow.radius` règle le flou, mais il zébrait le sol de barres grises
      (retour utilisateur). Retour à `PCFSoftShadowMap`, dont le noyau est fixe
@@ -915,6 +950,102 @@ gêne constatée :
 
     Vérifié : nombre de triangles **identique au triangle près** sur les cinq
     voitures, et `.glb` marginalement plus petit qu'avant (moins d'accesseurs).
+
+13. **Reflet de la voiture au sol** ✅ **Fait**, et c'est la demande d'origine
+    de l'utilisateur (« un effet vraiment sous la voiture, comme si elle était
+    posée sur du matériel un peu brillant comme dans un salon »).
+
+    `Reflector` de three.js, avec un shader dérivé du sien
+    (`components/detail/floorMirror.ts`). Le miroir brut de three est net et
+    infini, ce qui donne un sol mouillé de jeu vidéo ; trois ajouts en font un
+    sol de salon, et les trois sont exposés à l'utilisateur : un **flou** en 25
+    prises pondérées, une **extinction radiale** pour que le reflet meure près
+    de la voiture, et une **intensité** portée par l'alpha — le matériau est
+    transparent, donc le reflet se compose par-dessus la flaque et l'ombre au
+    lieu de les remplacer.
+
+    Trois précautions, chacune née d'un vrai défaut :
+
+    - **Le reflet ne montre que la voiture.** La flaque et l'ombre sont
+      masquées le temps de la passe miroir, sans quoi elles se retrouvent dans
+      leur propre reflet et le sol se dédouble.
+    - **Une image sur deux.** À 0,22 rad/s le plateau avance de deux dixièmes
+      de degré par image, invisible sur une surface floutée — alors que la
+      seconde passe, elle, se paie.
+    - **À 0 %, le miroir n'existe pas** plutôt que d'exister à l'opacité zéro.
+      Et le remonter depuis 0 le construit **à chaud** : un curseur n'a pas à
+      faire clignoter l'aperçu.
+
+    ⚠️ **Le piège qui a failli tout faire abandonner** : la portée par défaut
+    (30 %) éteignait le reflet **avant** qu'il n'atteigne la voiture. Le miroir
+    fonctionnait, le réglage le masquait, et le constat « je ne vois aucun
+    reflet » a bien failli conclure à un échec. La borne basse du curseur est
+    donc haute exprès (20 %).
+
+    **Méthode** : un banc hors application (three.js chargé à la main, la
+    vraie NSX convertie par Pit Box, le même studio et le même cadrage) avec
+    des curseurs, servi à l'utilisateur pour qu'il choisisse lui-même ses
+    valeurs. Ce sont les siennes qui sont devenues les défauts — reflet 85 %,
+    flou 0,5, portée 75 %, flaque 85 %, ombre 50 %.
+
+14. **Réglages de décor** ✅ **Faits**, dans la foulée : exposition
+    (`toneMappingExposure`), intensité de l'éclairage du studio et focale.
+    La **focale recalcule la distance** pour que la voiture garde sa taille
+    dans le cadre — sans quoi elle ferait doublon avec le zoom, alors qu'elle
+    doit ne changer que la perspective.
+
+    Les treize curseurs sont rangés en **groupes** (`PREVIEW3D_GROUPS`), chacun
+    avec son bouton de remise à zéro posé à côté de ce qu'il remet à zéro.
+
+    **Les défauts de cadrage ne sont plus ceux des `preview.jpg` Kunos** : ce
+    sont ceux que l'utilisateur a choisis sur l'aperçu de l'écran Réglages —
+    zoom 110 %, plongée 6°, hauteur −8 %, plateau à 50 %. Une vue plus basse et
+    plus proche, tournant moitié moins vite. Ils ne s'appliquent qu'aux
+    installations neuves : une préférence déjà écrite dans `ui_prefs.json` a la
+    priorité, et c'est le bouton « rétablir » du groupe qui les fait apparaître
+    chez quelqu'un qui y a déjà touché.
+
+    L'aperçu de l'écran Réglages porte le même bouton « replacer » que la fiche
+    voiture, et **changer l'effet d'entrée le rejoue** (`setPreview3dIntro`
+    appelle `resetPreview3dView`) : un effet d'entrée ne se voit qu'à l'entrée,
+    donc le choisir sans le déclencher revient à le régler à l'aveugle.
+
+    ⚠️ **Rien ne s'enregistre tout seul**, et c'est un correctif après coup. La
+    première version écrivait sur minuterie et au démontage des curseurs : le
+    bouton Enregistrer ne décidait de rien, quitter l'écran validait en
+    silence, et surtout **il n'y avait aucun retour en arrière possible** — le
+    réglage d'avant était perdu dès le premier mouvement de souris (retour
+    utilisateur). Le module tient donc deux états, `values` (ce qu'on voit) et
+    `stored` (ce qui est sur disque), exactement comme l'onglet Général compare
+    `config` à `savedConfig`. Un bouton **Annuler** revient sur l'enregistré, et
+    la **garde de navigation** de `Settings.svelte` interroge les deux jeux de
+    réglages — `setSectionGuard` n'ayant qu'un emplacement, c'est elle qui
+    couvre aussi l'onglet Aperçu.
+
+    Une seule exception, assumée : la **bascule photo/3D de la fiche voiture**
+    s'enregistre sur-le-champ. C'est un interrupteur d'un clic, pas un
+    formulaire, et personne ne s'attend à devoir aller valider ailleurs pour
+    qu'il tienne.
+
+15. **L'aperçu est passé dans l'écran Réglages** (idée de l'utilisateur), et
+    c'est ce qui rend les treize curseurs tenables : on règle en voyant le
+    résultat, sur le même composant `CarPreview3D` que la fiche. La voiture
+    montrée est **celle de la session en cours** — à défaut la première de la
+    bibliothèque : n'importe laquelle ferait l'affaire pour juger d'un sol ou
+    d'une exposition, autant que ce soit celle que l'utilisateur a en tête.
+
+    Le panneau compact posé sur la fiche voiture **disparaît** : il ne tenait
+    que cinq curseurs sur treize, et le reste s'y serait entassé. Il ne reste
+    qu'un raccourci vers l'onglet, qui passe par `nav.settingsTab` — l'onglet
+    actif est un état interne de `Settings.svelte`, et le lui *demander* avant
+    de naviguer évite de sortir cet état de son composant pour un seul
+    appelant (même schéma que `nav.autoLaunch`).
+
+    Côté présentation, les cinq blocs reprennent les classes globales du
+    projet plutôt que d'inventer : `.blk`/`.blk-h`/`.blk-t` pour la carte et
+    son titre rouge, `.blk-sub` pour les sous-rubriques. Les groupes de boutons
+    radio passent **côte à côte** : empilés, trois options mangeaient une
+    hauteur d'écran pour trois mots.
 
 Restent aussi, hérités du plan initial : le choix du LOD en config, et l'aperçu
 dans `ModDetail.svelte` (panneau latéral), qui n'a jamais été branché.
