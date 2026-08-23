@@ -15,6 +15,24 @@ use serde::{Deserialize, Serialize};
 /// État partagé Tauri : connexion SQLite protégée par un mutex.
 pub struct Db(pub Mutex<Connection>);
 
+/// Version of the harmonisation engine that produced the stored overlay (§5).
+pub const META_ENGINE_VERSION: &str = "engine_version";
+
+/// Reads a `meta` entry; `None` when the key was never written.
+pub fn get_meta(conn: &Connection, key: &str) -> rusqlite::Result<Option<String>> {
+    use rusqlite::OptionalExtension;
+    conn.query_row("SELECT value FROM meta WHERE key = ?1", [key], |r| r.get(0))
+        .optional()
+}
+
+pub fn set_meta(conn: &Connection, key: &str, value: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO meta(key, value) VALUES(?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        [key, value],
+    )?;
+    Ok(())
+}
+
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -333,6 +351,16 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             decided_at TEXT NOT NULL DEFAULT ''
         );
         CREATE INDEX IF NOT EXISTS idx_decisions_mod ON import_decisions(mod_id);
+
+        -- Petit magasin clé/valeur décrivant la base elle-même, par
+        -- opposition à ce qu'elle contient (§5 : version du moteur qui a
+        -- calculé l'harmonisation stockée). Volontairement pas dans
+        -- `config.json` : le frontend le réécrit en entier, un marqueur qu'il
+        -- ignore y disparaîtrait au premier enregistrement des réglages.
+        CREATE TABLE IF NOT EXISTS meta (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
 
         CREATE INDEX IF NOT EXISTS idx_versions_mod ON versions(mod_id);
         CREATE INDEX IF NOT EXISTS idx_history_mod  ON history(mod_id);

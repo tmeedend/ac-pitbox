@@ -354,21 +354,26 @@ Aucune règle ne les sépare depuis le disque, et c'est le fond du problème : l
 
 **Vocabulaire fermé (liste blanche)** : l'univers fini des tags autorisés (catégories `#gt3`/`#gte`/`#lmp1`, familles `prototype`/`endurance`/`vintage`, styles `#drift`/`#rally`/`#jdm`, propriétés CSP `rainfx`…). Tout tag entrant est mappé vers ce vocabulaire ou rejeté. C'est le vocabulaire borné qui harmonise, pas une meilleure détection.
 
+**Ce vocabulaire, c'est exactement ce que les règles savent produire** : les sorties des fusions et des déductions, plus la liste blanche des catégories de circuit (§5bis.2). Rien à tenir à jour en double — écrire une règle, c'est déclarer son vocabulaire. Un tag entrant qui n'y figure pas **n'est pas promu** : il reste le tag brut du mod, affiché comme tel et masqué avec les autres (voir plus bas). Il n'est donc jamais perdu, seulement privé d'un badge de règle qu'aucune règle ne lui a donné — et, s'il commence par `#`, privé de devenir une catégorie que personne n'a déclarée. C'est ce qui garde le filtre « catégorie » de la bibliothèque propre : sans ça, un `#` inventé par un seul auteur de mod y créait sa propre entrée.
+
 **Trois origines de tags, tracées séparément** (permis par l'overlay non destructif) :
-1. **Tags du mod** — lus dans `ui_*.json`, lecture seule, masquables.
+1. **Tags bruts du mod** — lus dans `ui_*.json`, lecture seule, masquables. S'y ajoute tout ce qu'aucune règle n'a reconnu : c'est la même chose du point de vue de l'utilisateur (« le fichier dit ça, Pit Box n'en fait rien »), donc c'est la même couleur et la même bascule.
 2. **Tags déduits par règle** — calculés par l'ontologie, dans l'overlay.
 3. **Tags manuels** — saisis, dans l'overlay, seuls directement supprimables.
 
-Distinction par **code couleur** (rouge = catégorie, vert = règle, gris = manuel, bleu = fichier mod), légende discrète unique. Ordre : catégorie `#` → règle → manuel → fichier mod (en dernier, masquable).
+Distinction par **code couleur** (rouge = catégorie, vert = règle, gris = manuel, bleu = brut du mod), légende discrète unique. Ordre : catégorie `#` → règle → manuel → brut du mod (en dernier, masquable). La bascule porte un **libellé stable** (« Tags bruts du mod ») avec une case à cocher, pas un verbe qui s'inverse à chaque clic : un état se lit plus vite qu'une action. Elle existe **dans les deux présentations de la fiche** (panneau latéral et page pleine) et partage la même préférence — c'est un seul réglage, pas deux.
 
 **Ontologie de règles** (données, pas code — fichier `default-tag-rules-enriched.json`, éditable, versionnable). Familles :
-- **Fusion** (synonymes → tag canonique), **Suppression** (bruit → rien), **Déduction** (tags implicites : `lmp1` → `#lmp1` + `prototype` + `endurance`), **Extraction** (tag → champ technique structuré), **brand_fix** (correction de marque depuis le nom).
+- **Fusion** (synonymes → tag canonique), **Déduction** (tags implicites : `lmp1` → `#lmp1` + `prototype` + `endurance`), **Extraction** (tag → champ technique structuré), **brand_fix** (correction de marque depuis le nom).
+- Il n'y a **pas de famille « suppression »**. Elle a existé — 314 tags de bruit listés à la main — parce que le moteur laissait passer les tags inconnus et qu'il fallait les rattraper un par un ; c'était une liste noire compensant l'absence de liste blanche. La reconnaissance étant devenue la règle, elle ne changeait plus rien et a été retirée. Un tag de bruit est simplement un tag qu'aucune règle ne produit.
 - **Aperçu d'impact** : avant validation d'une règle, afficher le nombre de mods affectés.
 - Écran graphique de gestion des règles.
 
+**Le résultat de l'harmonisation est stocké**, pas recalculé à l'affichage : faire évoluer le moteur ne change donc rien à ce qui est déjà en base. Un numéro de version (`rules::ENGINE_VERSION`) est incrémenté à chaque évolution qui produirait un résultat différent à règles égales, et une passe au démarrage recalcule toute la bibliothèque **une fois par version** — sans ça, il faudrait savoir qu'on doit rouvrir l'écran Règles et réenregistrer pour voir le changement. Le marqueur (table `meta` de l'overlay) n'est posé qu'en cas de succès, et rien n'est tenté bibliothèque inaccessible : un disque externe non monté ferait sinon passer un balayage à vide pour un rattrapage fait.
+
 **Comportement** : harmonisation automatique à l'import, édition manuelle à tout moment, détection CSP (lecture des `ext_config.ini` → `rainfx`, `grassfx`, `weatherfx`, `lightingfx`, `has-skins`), recherche/filtres par tag/marque/type/catégorie/année/auteur.
 
-**Catégorie = tag `#`** (convention CM) : le tag préfixé `#` identifie la catégorie de la voiture. Sert à la **composition de plateau** (§7), combiné à la fenêtre d'années.
+**Catégorie = tag `#` déclaré par les règles** (convention CM) : le tag préfixé `#` identifie la catégorie de la voiture — à condition qu'une règle sache le produire. Sinon la voiture n'a pas de catégorie, et le `#` en question reste visible parmi ses tags bruts ; l'ajouter au vocabulaire (écran Règles) est le geste qui le promeut. Sert à la **composition de plateau** (§7), combiné à la fenêtre d'années.
 
 ### 5bis.3 Nom et description repris à la main
 

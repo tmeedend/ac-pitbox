@@ -37,13 +37,11 @@ export interface CarRules {
   name_to_tag: NameToTag[];
   class_fix: ClassFix[];
   tag_merge: TagMerge[];
-  remove: string[];
   extraction_specs: ExtractionSpecs;
   extraction_country: ExtractionCountry;
 }
 export interface TrackRules {
   tag_merge: TagMerge[];
-  remove: string[];
   /** Catégories de circuit autorisées (§5bis.2), tags `#` par ordre de priorité. */
   category_allowlist: string[];
 }

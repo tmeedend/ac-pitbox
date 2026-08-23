@@ -15,8 +15,6 @@ use tauri::{AppHandle, Manager};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Prefs {
-    /// Afficher les tags issus du fichier mod (`tags_from_mod`). Défaut : oui.
-    pub show_mod_file_tags: bool,
     /// État global (ouvert/fermé) du panneau de suivi versions/historique.
     pub tracking_panel_open: bool,
     /// Vue bibliothèque par défaut : "gallery" | "table".
@@ -58,7 +56,6 @@ pub struct Prefs {
 impl Default for Prefs {
     fn default() -> Self {
         Self {
-            show_mod_file_tags: true,
             tracking_panel_open: true,
             library_view: "gallery".into(),
             default_cm_preset: None,

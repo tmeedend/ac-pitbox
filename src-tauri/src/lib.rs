@@ -132,6 +132,32 @@ pub fn run() {
                 _ => {}
             }
 
+            // L'harmonisation (§5) est calculée une fois à l'import puis
+            // stockée : faire évoluer le moteur ne change donc rien à ce qui
+            // est déjà en base, et personne ne devinerait qu'il faut rouvrir
+            // l'écran Règles et réenregistrer pour la recalculer. Une passe au
+            // démarrage, **une seule fois par version de moteur**, rattrape les
+            // bases écrites par la précédente. Marqueur posé seulement en cas
+            // de succès, et rien n'est tenté sans bibliothèque accessible :
+            // sinon un disque externe non monté ferait passer un balayage à
+            // vide pour un rattrapage fait, et la base resterait périmée pour
+            // toujours.
+            let lib_ready = cfg.library_path.as_deref().is_some_and(|p| p.is_dir());
+            let engine = rules::ENGINE_VERSION.to_string();
+            let stamped = overlay::get_meta(&conn, overlay::META_ENGINE_VERSION).unwrap_or(None);
+            if lib_ready && stamped.as_deref() != Some(engine.as_str()) {
+                let rules = rules::load(app.handle());
+                match harmonize::harmonize_all(&conn, &cfg, &rules) {
+                    Ok(n) => {
+                        log::warn!("re-harmonized {n} mods for engine v{engine}");
+                        if let Err(e) = overlay::set_meta(&conn, overlay::META_ENGINE_VERSION, &engine) {
+                            log::warn!("stamping engine version failed, catch-up will run again: {e}");
+                        }
+                    }
+                    Err(e) => log::warn!("re-harmonize at startup: {e}"),
+                }
+            }
+
             app.manage(Db(std::sync::Mutex::new(conn)));
             // Drapeau d'annulation d'un import en cours (§4.2bis).
             app.manage(commands::import::ImportControl::default());

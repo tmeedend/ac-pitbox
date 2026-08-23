@@ -2,7 +2,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export interface Prefs {
-  show_mod_file_tags: boolean;
   tracking_panel_open: boolean;
   library_view: "gallery" | "table";
   default_cm_preset: string | null;
@@ -64,7 +63,6 @@ export function emptyConfig(): AppConfig {
     quickbms_exe: null,
     acd_bms_script: null,
     prefs: {
-      show_mod_file_tags: true,
       tracking_panel_open: true,
       library_view: "gallery",
       default_cm_preset: null,

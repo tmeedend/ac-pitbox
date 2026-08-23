@@ -9,7 +9,6 @@
   let impact = $state<number | null>(null);
   let saving = $state(false);
   let savedMsg = $state("");
-  let removeInput = $state("");
 
   // Le map pays s'édite via une liste de paires synchronisée vers l'objet.
   let countryPairs = $state<{ tag: string; country: string }[]>([]);
@@ -53,11 +52,6 @@
   }
   function removeAt<T>(list: T[], i: number) {
     list.splice(i, 1);
-  }
-
-  function addRemove(list: string[], value: string) {
-    const v = value.trim().toLowerCase();
-    if (v && !list.includes(v)) list.unshift(v);
   }
 
   // --- Liste blanche des catégories de circuit (§5bis.2) : ordonnée par
@@ -124,20 +118,6 @@
             <input class="input mono" value={joinList(rule.to)} oninput={(e) => (rule.to = parseList(e.currentTarget.value))} placeholder="hatchback" />
             <button class="btn-ghost del" type="button" onclick={() => removeAt(fam.tag_merge, i)} title={t("common.delete")}>✕</button>
           </div>
-        {/each}
-      </div>
-    </section>
-
-    <!-- SUPPRESSION -->
-    <section>
-      <div class="s-head">
-        <h3>{t("rules.removalTitle")} <span class="cnt">{fam.remove.length}</span></h3>
-      </div>
-      <input class="input add-input" placeholder={t("rules.addRemovePlaceholder")} bind:value={removeInput}
-        onkeydown={(e) => { if (e.key === "Enter") { addRemove(fam.remove, removeInput); removeInput = ""; } }} />
-      <div class="chips">
-        {#each fam.remove as tag, i}
-          <span class="chip">{tag}<button class="x" type="button" onclick={() => removeAt(fam.remove, i)}>×</button></span>
         {/each}
       </div>
     </section>
@@ -363,30 +343,6 @@
   }
   .add-input {
     margin-bottom: 10px;
-  }
-  .chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-  }
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 11px;
-    padding: 2px 4px 2px 8px;
-    border: 1px solid var(--line);
-    color: var(--muted);
-  }
-  .chip .x {
-    background: transparent;
-    color: var(--muted2);
-    font-size: 13px;
-    line-height: 1;
-    padding: 0 2px;
-  }
-  .chip .x:hover {
-    color: var(--rosso-bright);
   }
   .sub-fam {
     margin: 10px 0;

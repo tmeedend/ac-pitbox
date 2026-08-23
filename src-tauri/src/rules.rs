@@ -1,7 +1,17 @@
-//! Ontologie de tags (§5.4) — **données, pas code**. Charge le jeu de règles
-//! (seed embarqué `default-tag-rules.json`, puis copie éditable dans le dossier
-//! de config), et applique les 6 familles + extraction de façon **non
-//! destructive** : la sortie alimente l'overlay, jamais le fichier du mod.
+//! Tag ontology (§5) — **data, not code**. Loads the rule set (embedded seed
+//! `default-tag-rules.json`, then an editable copy in the config directory) and
+//! applies it **non-destructively**: the output feeds the overlay, never the
+//! mod's own file.
+//!
+//! The vocabulary is a **closed allowlist**, as the spec always described it: a
+//! tag no rule is able to produce is not promoted to a rule tag at all — it
+//! simply stays the mod's raw file tag, displayed as such and hidden with the
+//! rest of them. The engine used to insert unknown tags verbatim instead, so
+//! the green "rule" badge meant "survived the pipeline", not "recognised"; that
+//! leak is why the seed carried a 314-entry `remove` blacklist to patch it back
+//! shut, and why one `#` tag invented by a single mod author became a category
+//! in the library filter. Recognition is now the rule, the blacklist is gone,
+//! and adding a merge rule is what extends the vocabulary.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -11,6 +21,15 @@ use tauri::{AppHandle, Manager};
 
 /// Jeu de règles par défaut, embarqué à la compilation (seed).
 const DEFAULT_RULES: &str = include_str!("../rules/default-tag-rules.json");
+
+/// Harmonisation engine version. Bumped whenever the same rules would now
+/// yield a different result — the overlay then holds a stale computation, and
+/// the startup catch-up in `lib.rs` recomputes it. Same need, and same remedy,
+/// as `preview::CONVERTER_VERSION`: a cached result has to be told when the
+/// code that produced it has moved on.
+///
+/// 2 — closed vocabulary: unknown tags are no longer promoted (§5).
+pub const ENGINE_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Rules {
@@ -31,8 +50,6 @@ pub struct CarRules {
     #[serde(default)]
     pub tag_merge: Vec<TagMerge>,
     #[serde(default)]
-    pub remove: Vec<String>,
-    #[serde(default)]
     pub extraction_specs: ExtractionSpecs,
     #[serde(default)]
     pub extraction_country: ExtractionCountry,
@@ -42,8 +59,6 @@ pub struct CarRules {
 pub struct TrackRules {
     #[serde(default)]
     pub tag_merge: Vec<TagMerge>,
-    #[serde(default)]
-    pub remove: Vec<String>,
     /// Catégories de circuit autorisées (§5bis.2), tags `#` par ordre de
     /// priorité décroissante. Un circuit peut en porter plusieurs (celles de
     /// ses tags présentes ici) ; la première de la liste qu'il possède est sa
@@ -193,6 +208,47 @@ fn merge_lookup<'a>(rules: &'a [TagMerge], tag: &str) -> Option<&'a [String]> {
         .map(|r| r.to.as_slice())
 }
 
+/// Closed vocabulary for cars: every tag some rule is able to produce.
+///
+/// Deriving it from the rule outputs rather than keeping a separate list is
+/// what makes it self-maintaining — writing a rule *is* declaring its
+/// vocabulary, so the two can never drift apart. An incoming tag is kept only
+/// if it belongs here, which also covers the case no merge rule can: a file
+/// already spelling the canonical form (`#gt3`), whose left-hand side no rule
+/// lists because there is nothing to correct.
+fn known_car_tags(c: &CarRules) -> BTreeSet<String> {
+    let mut known: BTreeSet<String> = BTreeSet::new();
+    for r in &c.tag_merge {
+        known.extend(r.to.iter().map(|t| norm_tag(t)));
+    }
+    for r in &c.name_to_tag {
+        known.extend(r.add.iter().map(|t| norm_tag(t)));
+    }
+    for r in &c.class_fix {
+        known.extend(r.add.iter().map(|t| norm_tag(t)));
+    }
+    known
+}
+
+/// Same for tracks, plus the category allowlist — under **both** spellings.
+///
+/// Six seeded categories (`#oval`, `#drag`, `#karting`, `#rallycross`, `#test`,
+/// `#touge`) are produced by no merge rule whatsoever: they only ever worked
+/// because unknown tags used to pass straight through, the bare `oval` reaching
+/// `track_categories` untouched. Accepting the `#` form alone would have
+/// silently stripped those tracks of their category.
+fn known_track_tags(t: &TrackRules) -> BTreeSet<String> {
+    let mut known: BTreeSet<String> = BTreeSet::new();
+    for r in &t.tag_merge {
+        known.extend(r.to.iter().map(|s| norm_tag(s)));
+    }
+    for c in &t.category_allowlist {
+        known.insert(strip_hash(c));
+        known.insert(norm_cat(c));
+    }
+    known
+}
+
 /// Harmonise une voiture. `country_empty` indique si le champ natif `country`
 /// est vide (auquel cas l'extraction de pays peut le remplir).
 pub fn apply_car(rules: &Rules, raw_tags: &[String], name: &str, class: &str, country_empty: bool) -> Harmonized {
@@ -232,8 +288,8 @@ pub fn apply_car(rules: &Rules, raw_tags: &[String], name: &str, class: &str, co
         }
     }
 
-    // Par tag : extraction specs → pays → suppression → fusion/déduction.
-    let remove: BTreeSet<String> = c.remove.iter().map(|s| norm_tag(s)).collect();
+    // Par tag : extraction specs → pays → fusion/déduction.
+    let known = known_car_tags(c);
     for raw in raw_tags {
         let tag = norm_tag(raw);
         if tag.is_empty() {
@@ -267,14 +323,13 @@ pub fn apply_car(rules: &Rules, raw_tags: &[String], name: &str, class: &str, co
                 continue;
             }
         }
-        // Suppression du bruit.
-        if remove.contains(&tag) {
-            continue;
-        }
-        // Fusion / déduction.
+        // Merge / deduction. A tag outside the vocabulary is deliberately
+        // dropped here rather than kept: it is still the mod's raw file tag,
+        // so nothing is lost — it is only denied the rule badge it never
+        // earned, and denied becoming a category nobody declared.
         if let Some(to) = merge_lookup(&c.tag_merge, &tag) {
             out.extend(to.iter().cloned());
-        } else {
+        } else if known.contains(&tag) {
             out.insert(tag);
         }
     }
@@ -284,21 +339,21 @@ pub fn apply_car(rules: &Rules, raw_tags: &[String], name: &str, class: &str, co
     h
 }
 
-/// Harmonise un circuit (tag_merge + remove ; pas de classe/specs). Catégories
-/// (§5bis.2) : sous-ensemble des tags présents dans la liste blanche, ordonné
-/// par priorité — multi-valué.
+/// Harmonises a track (tag_merge only; no class, no specs). Categories
+/// (§5bis.2): the subset of its tags found in the allowlist, ordered by
+/// priority — multi-valued.
 pub fn apply_track(rules: &Rules, raw_tags: &[String]) -> Harmonized {
     let t = &rules.track;
-    let remove: BTreeSet<String> = t.remove.iter().map(|s| norm_tag(s)).collect();
+    let known = known_track_tags(t);
     let mut out: BTreeSet<String> = BTreeSet::new();
     for raw in raw_tags {
         let tag = norm_tag(raw);
-        if tag.is_empty() || remove.contains(&tag) {
+        if tag.is_empty() {
             continue;
         }
         if let Some(to) = merge_lookup(&t.tag_merge, &tag) {
             out.extend(to.iter().cloned());
-        } else {
+        } else if known.contains(&tag) {
             out.insert(tag);
         }
     }
@@ -354,6 +409,13 @@ fn pick_category(tags: &BTreeSet<String>) -> Option<String> {
 mod tests {
     use super::*;
 
+    fn merge(from: &[&str], to: &[&str]) -> TagMerge {
+        TagMerge {
+            from: from.iter().map(|s| s.to_string()).collect(),
+            to: to.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
     fn track_rules(allowlist: &[&str]) -> Rules {
         Rules {
             track: TrackRules {
@@ -362,6 +424,20 @@ mod tests {
             },
             ..Default::default()
         }
+    }
+
+    fn car_rules(tag_merge: Vec<TagMerge>) -> Rules {
+        Rules {
+            car: CarRules {
+                tag_merge,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    fn tags(raw: &[&str]) -> Vec<String> {
+        raw.iter().map(|s| s.to_string()).collect()
     }
 
     #[test]
@@ -375,8 +451,75 @@ mod tests {
                                                            // Les catégories sont promues en tags `#` ; le tag hors liste est conservé.
         assert!(h.tags_from_rule.contains(&"#drift".to_string()));
         assert!(h.tags_from_rule.contains(&"#circuit".to_string()));
-        assert!(h.tags_from_rule.contains(&"gt".to_string()));
         assert!(!h.tags_from_rule.contains(&"drift".to_string()));
+    }
+
+    // §5 — Closed vocabulary: a tag no rule can produce is not promoted to a
+    // rule tag. It is not lost, it stays the mod's raw file tag.
+    #[test]
+    fn track_tag_outside_vocabulary_is_not_promoted() {
+        let rules = track_rules(&["#circuit"]);
+        let h = apply_track(&rules, &tags(&["circuit", "gt"]));
+        assert!(
+            h.tags_from_rule.contains(&"#circuit".to_string()),
+            "known category kept"
+        );
+        assert!(
+            !h.tags_from_rule.contains(&"gt".to_string()),
+            "unknown tag not promoted"
+        );
+    }
+
+    // §5bis.2 — Six seeded categories (#oval, #drag, #karting, #rallycross,
+    // #test, #touge) are the output of no merge rule at all: the allowlist is
+    // their only declaration. Recognising the bare spelling is what keeps them
+    // working now that unknown tags no longer pass through.
+    #[test]
+    fn track_allowlist_category_survives_without_merge_rule() {
+        let rules = track_rules(&["#oval"]);
+        let h = apply_track(&rules, &tags(&["oval"]));
+        assert_eq!(
+            h.categories,
+            vec!["#oval".to_string()],
+            "bare allowlist tag still promoted"
+        );
+        assert_eq!(h.category.as_deref(), Some("#oval"));
+    }
+
+    // §5 — Same rule on the car side.
+    #[test]
+    fn car_tag_outside_vocabulary_is_not_promoted() {
+        let rules = car_rules(vec![merge(&["gt3"], &["#gt3"])]);
+        let h = apply_car(&rules, &tags(&["gt3", "wobbly"]), "Some Car", "", false);
+        assert!(h.tags_from_rule.contains(&"#gt3".to_string()), "merged tag kept");
+        assert!(
+            !h.tags_from_rule.contains(&"wobbly".to_string()),
+            "unknown tag not promoted"
+        );
+    }
+
+    // §5bis — An unknown `#` tag used to become the car's category, which is
+    // what filled the library filter with one-off categories invented by a
+    // single mod author. It must now leave the car without one.
+    #[test]
+    fn car_unknown_hash_tag_is_not_a_category() {
+        let rules = car_rules(vec![merge(&["gt3"], &["#gt3"])]);
+        let h = apply_car(&rules, &tags(&["#homemade"]), "Some Car", "", false);
+        assert_eq!(h.category, None, "undeclared category refused");
+        assert!(h.tags_from_rule.is_empty(), "nothing promoted");
+    }
+
+    // §5 — A file already spelling the canonical form matches no merge rule
+    // (there is nothing to correct), so only the vocabulary can vouch for it.
+    #[test]
+    fn car_canonical_tag_survives_without_merge_rule() {
+        let rules = car_rules(vec![merge(&["gt3"], &["#gt3"])]);
+        let h = apply_car(&rules, &tags(&["#gt3"]), "Some Car", "", false);
+        assert_eq!(
+            h.category.as_deref(),
+            Some("#gt3"),
+            "canonical tag recognised as itself"
+        );
     }
 
     #[test]

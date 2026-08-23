@@ -183,17 +183,17 @@
   }
   // Défaut synchrone (affiché tant que la valeur sauvegardée n'a pas répondu,
   // §6.2) : true, comme l'ancien repli `localStorage`.
-  let showFileTags = $state(true);
+  let showRawTags = $state(true);
   let manualInput = $state("");
 
   onMount(async () => {
     const saved = await getUiPref(StorageKey.showFileTags);
-    if (saved != null) showFileTags = saved !== "false";
+    if (saved != null) showRawTags = saved !== "false";
   });
 
-  function toggleFileTags() {
-    showFileTags = !showFileTags;
-    setUiPref(StorageKey.showFileTags, String(showFileTags));
+  function toggleRawTags() {
+    showRawTags = !showRawTags;
+    setUiPref(StorageKey.showFileTags, String(showRawTags));
   }
 
   async function toggleFav() {
@@ -399,10 +399,10 @@
         <h3>
           {t("detail.tagsLabel")}
           <span class="legend">
-            <span class="lg cat">{t("modpanel.legendCategory")}</span>
-            <span class="lg rule">{t("modpanel.legendRule")}</span>
-            <span class="lg manual">{t("modpanel.legendManual")}</span>
-            <span class="lg file">{t("modpanel.legendFile")}</span>
+            <span class="lg cat">{t("detail.tagLegendCategory")}</span>
+            <span class="lg rule">{t("detail.tagLegendRule")}</span>
+            <span class="lg manual">{t("detail.tagLegendManual")}</span>
+            <span class="lg file">{t("detail.tagLegendMod")}</span>
           </span>
         </h3>
         <div class="tags">
@@ -417,7 +417,7 @@
               {tag}<button class="x" type="button" onclick={() => removeManual(tag)} title={t("common.remove")}>×</button>
             </span>
           {/each}
-          {#if showFileTags}
+          {#if showRawTags}
             {#each detail.tags_from_mod as tag}
               <span class="tag file">{tag}</span>
             {/each}
@@ -430,9 +430,10 @@
             bind:value={manualInput}
             onkeydown={(e) => e.key === "Enter" && addManual()}
           />
-          <button class="btn-ghost toggle-file" type="button" onclick={toggleFileTags}>
-            {showFileTags ? t("modpanel.hideFileTags") : t("modpanel.showFileTags")}
-          </button>
+          <label class="raw-toggle">
+            <input type="checkbox" checked={showRawTags} onchange={toggleRawTags} />
+            <span>{t("detail.rawModTags")}</span>
+          </label>
         </div>
       </section>
 
@@ -671,10 +672,14 @@
     padding: 5px 8px;
     font-size: 11.5px;
   }
-  .toggle-file {
+  .raw-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     font-size: 10px;
+    color: var(--txt2);
     white-space: nowrap;
-    padding: 4px 6px;
+    cursor: pointer;
   }
   .name-row {
     display: flex;
