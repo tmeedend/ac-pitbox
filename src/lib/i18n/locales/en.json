@@ -470,6 +470,8 @@
     "triedNo": "Never tried",
     "engineSound": "Engine sound",
     "soundOrigin": "Original",
+    "soundListen": "Listen to the engine",
+    "soundStop": "Stop the engine",
     "modTag": "MOD",
     "chooseLayoutTooltip": "Choose this layout for the session",
     "singleLayout": "Single layout.",

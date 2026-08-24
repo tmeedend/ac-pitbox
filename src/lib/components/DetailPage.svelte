@@ -71,6 +71,8 @@
   import MediaScreenshots from "./detail/MediaScreenshots.svelte";
   import MediaReplays from "./detail/MediaReplays.svelte";
   import MediaBackgrounds from "./detail/MediaBackgrounds.svelte";
+  import IgnitionKey from "./detail/IgnitionKey.svelte";
+  import { engineState, stopEngine, toggleEngine } from "$lib/enginePlayer.svelte";
 
   import { errorText } from "$lib/errors";
   interface Props {
@@ -532,6 +534,44 @@
       soundBusy = false;
     }
   }
+
+  /**
+   * Écouter une entrée, sans rien déployer — à ne pas confondre avec
+   * `pickSound` juste au-dessus, qui remplace les fichiers du jeu.
+   *
+   * Ne pose pas `soundBusy` : ce drapeau désarme les boutons radio le temps
+   * d'un déploiement, et écouter n'en est pas un. Les deux gestes doivent
+   * rester possibles en même temps.
+   */
+  async function listenSound(subId: string | null) {
+    if (!detail) return;
+    actionError = "";
+    try {
+      const clip = await toggleEngine(detail.id_interne, subId);
+      // Quel échantillon a été retenu, et comment : invisible à l'écran, mais
+      // c'est ce qu'il faut dans le journal quand quelqu'un rapporte avoir
+      // entendu le klaxon.
+      if (clip) {
+        console.info(
+          `[son moteur] ${clip.codec} #${clip.sampleIndex}` +
+            ` ${clip.sampleName ?? "(sans nom)"} par ${clip.pickedBy}, ${clip.seconds.toFixed(1)} s`,
+        );
+      }
+    } catch (e) {
+      actionError = errorText(e);
+    }
+  }
+
+  // Un moteur qui survit à son bouton est un moteur qu'on ne peut plus couper.
+  //
+  // L'effet **lit `id`** : sans cette lecture il ne se rejouerait jamais, et
+  // passer à une voiture voisine (`openSibling`, qui remplace le contenu sans
+  // démonter la fiche) laisserait tourner le moteur de la précédente sous la
+  // suivante.
+  $effect(() => {
+    void id;
+    return () => stopEngine();
+  });
 
   async function reload() {
     detail = await getModDetail(id);
@@ -1136,17 +1176,27 @@
             <header class="blk-h"><span class="blk-t">{t("detail.engineSound")}</span></header>
             <div class="blk-b">
           <div class="sounds">
-            <button class="sound" class:sel={!activeSound} type="button" onclick={() => pickSound(null)} disabled={soundBusy}>
-              <span class="radio"></span>
-              <span class="s-name">{t("detail.soundOrigin")}</span>
-              <span class="s-tag mono">{t("library.baseBadge")}</span>
-            </button>
-            {#each sounds as snd (snd.id)}
-              <button class="sound" class:sel={snd.is_active} type="button" onclick={() => pickSound(snd.id)} disabled={soundBusy}>
+            <!-- Deux boutons par ligne, et c'est délibéré : le premier **active**
+                 le son (il remplace les fichiers du jeu), la clé ne fait
+                 qu'écouter. Un bouton imbriqué dans un autre serait invalide, et
+                 surtout les deux gestes ne doivent pas se confondre. -->
+            <div class="sound-row">
+              <button class="sound" class:sel={!activeSound} type="button" onclick={() => pickSound(null)} disabled={soundBusy}>
                 <span class="radio"></span>
-                <span class="s-name">{snd.name}</span>
-                <span class="s-tag mono">{t("detail.modTag")}</span>
+                <span class="s-name">{t("detail.soundOrigin")}</span>
+                <span class="s-tag mono">{t("library.baseBadge")}</span>
               </button>
+              <IgnitionKey state={engineState(detail.id_interne, null)} onclick={() => listenSound(null)} />
+            </div>
+            {#each sounds as snd (snd.id)}
+              <div class="sound-row">
+                <button class="sound" class:sel={snd.is_active} type="button" onclick={() => pickSound(snd.id)} disabled={soundBusy}>
+                  <span class="radio"></span>
+                  <span class="s-name">{snd.name}</span>
+                  <span class="s-tag mono">{t("detail.modTag")}</span>
+                </button>
+                <IgnitionKey state={engineState(detail.id_interne, snd.id)} onclick={() => listenSound(snd.id)} />
+              </div>
             {/each}
           </div>
           <!-- L'exclusivité et l'absence de mod se lisent sur les boutons radio
@@ -1894,6 +1944,15 @@
     display: flex;
     flex-direction: column;
     gap: 5px;
+  }
+  .sound-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .sound-row .sound {
+    flex: 1;
+    min-width: 0;
   }
   .sound {
     display: flex;

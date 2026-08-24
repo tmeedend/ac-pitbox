@@ -470,6 +470,8 @@
     "triedNo": "Jamais essayée",
     "engineSound": "Son moteur",
     "soundOrigin": "Origine",
+    "soundListen": "Écouter le moteur",
+    "soundStop": "Couper le moteur",
     "modTag": "MOD",
     "chooseLayoutTooltip": "Choisir ce layout pour la session",
     "singleLayout": "Tracé unique.",
