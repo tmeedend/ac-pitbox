@@ -179,6 +179,64 @@ Le portage Rust a ensuite été comparé au prototype JavaScript **empreinte par
 empreinte** sur six échantillons de 48 000 valeurs : identiques au bit près.
 C'est ce qui permet de dire que le code livré est bien celui qui a été écouté.
 
+## Trouver le ralenti sans nom d'échantillon
+
+C'est le point **non résolu** de ce chantier, et il vaut d'être décrit : la
+moitié du corpus n'a pas de table de noms, et il faut alors reconnaître un
+ralenti à la seule analyse du signal.
+
+### Le piège central : l'autocorrélation mesure la boucle, pas le moteur
+
+Une couche moteur est une **boucle**. Son autocorrélation culmine donc sur la
+période de la boucle, pas sur celle de l'allumage : un lâcher de gaz de deux
+secondes y ressort à 20 Hz quel que soit son régime. Ranger les candidats par
+« fondamentale la plus basse » revenait à les ranger par « boucle la plus
+longue » — et un lâcher de gaz à 4000 tr/min passait sous un ralenti.
+
+### Comment on sait que l'estimateur est juste
+
+Les noms Kunos portent le **régime**. Pour un quatre temps, 
+vaut la moitié du nombre de cylindres : ce rapport doit donc être **constant**
+sur tous les échantillons d'une même voiture. Sur la BMW 1M (six cylindres,
+3,00 attendu) :
+
+| règle | rapport | dispersion |
+| --- | --- | --- |
+| maximum global de l'autocorrélation | 0,56 | 25 % |
+| plus petit retard ≥ 0,5 × pic | 2,77 | 21 % |
+| **premier maximum local ≥ 0,3 × pic, après la première descente sous zéro** | **2,92** | **9 %** |
+
+Trois règles, chacune née d'un défaut mesuré :
+
+- **le plus petit retard**, pas le maximum — sinon on mesure la boucle ;
+- **après la première descente sous zéro** — juste après le retard nul
+  l'autocorrélation est encore haute, et un son pur de 60 Hz y franchissait
+  n'importe quel seuil dès 600 Hz ;
+- **le premier maximum local**, pas le premier franchissement — le seuil est
+  franchi avant le sommet, ce qui donnait 75 Hz pour 60.
+
+### Ce que ça donne, et ce que ça ne donne pas
+
+Mesuré sur 91 banks Kunos, dont les noms donnent la bonne réponse :
+
+| version | choix acceptables |
+| --- | --- |
+| avant (maximum global, sonde 0,4 s) | 15 / 91 |
+| après (estimateur corrigé, sonde 1,2 s, filtre de stabilité) | 40 / 91 |
+
+Deux fois et demie mieux, et **toujours faux dans plus de la moitié des cas**.
+Les erreurs restantes ne sont pas absurdes — ce sont d'autres couches moteur à
+bas régime, intérieures plutôt qu'extérieures, en lâcher de gaz plutôt qu'en
+charge. Mais « le » ralenti n'est pas identifiable par l'analyse seule : rien
+dans le signal ne distingue un ralenti extérieur d'un régime bas en lâcher de
+gaz. **Ne pas repartir en réglage de seuils en espérant y arriver** — la suite
+est de laisser l'utilisateur choisir, pas de deviner mieux.
+
+Un filtre de **stabilité** s'ajoute à l'estimateur : l'écart-type du niveau sur
+des fenêtres de 50 ms, rapporté à sa moyenne. Un ralenti tient son niveau et
+reste sous 0,15 ; un son de mise en route enfle et meurt, et marquait 0,30 sur
+la variante CSP d'une vraie voiture, où l'app le jouait en boucle.
+
 ## Ce qui reste ouvert
 
 - **Choisir le ralenti sans nom d'échantillon.** Le `GUIDs.txt` ne donne que des
