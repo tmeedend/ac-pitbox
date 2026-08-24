@@ -67,6 +67,12 @@ export async function toggleEngine(
   subId: string | null,
 ): Promise<EngineClip | null> {
   const key = keyOf(parentId, subId);
+  // **Un clic pendant le chargement est ignoré.** Lire un bank de trente
+  // mégaoctets et y chercher le ralenti prend un instant, pendant lequel rien
+  // ne bougeait : l'utilisateur recliquait, et le second appel coupait le
+  // premier pour relancer un décodage par-dessus. La clé dit maintenant que ça
+  // vient (état `loading`), et les clics d'impatience ne font plus rien.
+  if (loading !== null) return null;
   if (playing === key) {
     stopEngine();
     return null;

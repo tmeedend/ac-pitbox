@@ -88,18 +88,26 @@
   .key.on svg {
     transform: rotate(38deg);
   }
-  /* Pendant la lecture du fichier, la clé hésite : un aller-retour court, qui
-     dit « ça vient » sans promettre que c'est parti. */
-  .key.loading svg {
-    animation: ignition-wait 0.9s ease-in-out infinite;
+  /* Pendant la lecture du fichier, la clé **lance le démarreur** : un
+     aller-retour ample et rapide, qui se lit comme un moteur qu'on vire sans
+     qu'il parte. Lire un bank de trente mégaoctets et y chercher le ralenti
+     prend un instant, et sans ce mouvement rien ne disait que ça venait. */
+  .key.loading {
+    color: var(--txt);
   }
-  @keyframes ignition-wait {
+  .key.loading svg {
+    animation: ignition-crank 0.55s ease-in-out infinite;
+  }
+  @keyframes ignition-crank {
     0%,
     100% {
       transform: rotate(0deg);
     }
-    50% {
-      transform: rotate(14deg);
+    45% {
+      transform: rotate(30deg);
+    }
+    60% {
+      transform: rotate(26deg);
     }
   }
 
