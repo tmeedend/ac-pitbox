@@ -81,6 +81,40 @@ pub fn is_car_sound(dir: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Le dossier d'emballage d'un pack de son, quand il y en a un : celui qui
+/// contient le dossier de son **et rien d'autre qu'des fichiers**.
+///
+/// Sert à rattacher au son ce qui est livré à côté de lui — un `ReadMe.txt`,
+/// une notice. Sans lui, ces fichiers n'ont aucun propriétaire possible et
+/// tombent en « autre mod » : bug réel, le `ReadMe.txt` d'un mod de son GT40
+/// est devenu un mod à lui tout seul, dont l'unique fichier a ensuite été
+/// classé annexe et déplacé dans ses ressources. Deux lignes de rapport et une
+/// entrée vide en bibliothèque, pour un fichier texte.
+///
+/// **Deux garde-fous**, sans lesquels on avalerait ce qui ne nous appartient
+/// pas :
+///
+/// - jamais sous `content/cars/<id>/` ou `content/tracks/<id>/` — là, les
+///   voisins du `sfx/` sont le contenu de la voiture (`data.acd`, `ui/`,
+///   `skins/`), pas des annexes du son ;
+/// - jamais si le dossier porte un **autre sous-dossier** : il livre alors
+///   plusieurs choses, et rien ne dit que ce qui l'entoure revient au son.
+fn sound_pack_root(dir: &Path) -> Option<PathBuf> {
+    let parent = dir.parent()?;
+    let grandparent_name = parent
+        .parent()
+        .and_then(|g| g.file_name())
+        .map(|n| n.to_string_lossy().to_ascii_lowercase());
+    if matches!(grandparent_name.as_deref(), Some("cars") | Some("tracks")) {
+        return None;
+    }
+    let only_child = std::fs::read_dir(parent)
+        .ok()?
+        .flatten()
+        .all(|e| !e.path().is_dir() || e.path() == dir);
+    only_child.then(|| parent.to_path_buf())
+}
+
 /// Le dossier contient au moins un sous-dossier.
 fn has_subdir(dir: &Path) -> bool {
     std::fs::read_dir(dir)
@@ -264,7 +298,7 @@ fn descend_subs(dir: &Path, out: &mut Vec<FoundSub>) {
             kind: SubKind::Sound,
             parent_id: dir_name,
             dir: dir.to_path_buf(),
-            extra_root: None,
+            extra_root: sound_pack_root(dir),
         });
         return;
     }

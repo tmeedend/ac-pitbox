@@ -768,6 +768,42 @@ fn resolve_sound_parent(conn: &Connection, sub: &FoundSub, source_name: &str) ->
         .unwrap_or_else(|| source_name.to_string())
 }
 
+/// Range en ressources les fichiers posés à côté du dossier de son.
+///
+/// Renvoie le nombre de fichiers rangés. Best-effort et journalisé : un fichier
+/// annexe qu'on n'arrive pas à copier ne doit pas faire échouer l'import du son
+/// lui-même, mais il ne doit pas non plus disparaître en silence.
+///
+/// En mode « Aucun », rien n'est copié — c'est la définition du mode (§11) : les
+/// annexes restent dans la source.
+fn sweep_pack_annexes(sub: &FoundSub, res_dir: &Path, mode: ExtractionMode) -> usize {
+    if mode == ExtractionMode::None {
+        return 0;
+    }
+    let Some(root) = sub.extra_root.as_deref() else {
+        return 0;
+    };
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return 0;
+    };
+    let mut done = 0;
+    for entry in entries.flatten() {
+        let src = entry.path();
+        if src.is_dir() {
+            continue;
+        }
+        let Some(name) = src.file_name() else { continue };
+        if std::fs::create_dir_all(res_dir).is_err() {
+            continue;
+        }
+        match std::fs::copy(&src, res_dir.join(name)) {
+            Ok(_) => done += 1,
+            Err(e) => log::warn!("annexe de mod de son non rangée ({}): {e}", src.display()),
+        }
+    }
+    done
+}
+
 #[allow(clippy::too_many_arguments)]
 fn import_sound(
     conn: &Connection,
@@ -820,6 +856,13 @@ fn import_sound(
                 return;
             }
         };
+
+    // Ce qui était livré **à côté** du dossier de son lui appartient : notice,
+    // changelog, capture. À ce niveau — un dossier qui ne contient qu'un `sfx/`
+    // — un fichier isolé est de la documentation, AC n'y lit rien ; il part donc
+    // en ressource sans tri par extension. Une ressource n'est jamais déployée,
+    // donc rien ne peut atterrir dans le jeu par ce chemin.
+    let resources_extracted = resources_extracted + sweep_pack_annexes(sub, &res_dir, mode);
 
     let id = Uuid::new_v4().to_string();
     let _ = overlay::insert_sub_mod(
@@ -1802,6 +1845,85 @@ mod tests {
             ExtractionMode::InfoOnly,
         );
         assert_eq!(res[0].parent_id, "ks_ford_gt40", "l'id visé par le bank");
+    }
+
+    /// Bug réel : le `ReadMe.txt` livré à côté du `sfx/` n'avait aucun
+    /// propriétaire possible et devenait un « autre mod » à lui tout seul, dont
+    /// l'unique fichier partait ensuite en ressources. Il appartient au son.
+    #[test]
+    fn a_file_beside_the_sound_folder_becomes_its_resource() {
+        let (base, library, conn, cfg) = sound_fixture("sndannexe", FORDS);
+        let archive_name = "FordGT40_SoundmodV097_AmplifiedNL";
+        let src = base.join("src").join(archive_name);
+        let sfx = src.join("sfx");
+        std::fs::create_dir_all(&sfx).unwrap();
+        std::fs::write(sfx.join("GUIDs.txt"), b"X").unwrap();
+        std::fs::write(sfx.join("ks_ford_gt40.bank"), b"Y").unwrap();
+        std::fs::write(src.join("ReadMe.txt"), b"notice").unwrap();
+
+        let subs = modscan::scan_subs(&src);
+        assert_eq!(
+            subs[0].extra_root.as_deref(),
+            Some(src.as_path()),
+            "le dossier du pack est déclaré, donc consommé : plus d'« autre mod »"
+        );
+
+        let res = import_subs(
+            &conn,
+            &cfg,
+            &library,
+            archive_name,
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+        );
+        assert_eq!(res[0].resources_extracted, 1, "la notice est comptée");
+        let stored =
+            resources::resources_dir_for(&library, "sounds", &["ks_ford_gt40", archive_name]).join("ReadMe.txt");
+        assert!(stored.is_file(), "la notice est rangée dans les ressources du son");
+    }
+
+    /// Le garde-fou : sous `content/cars/<id>/`, les voisins du `sfx/` sont le
+    /// contenu de la voiture. Les avaler comme annexes du son sortirait des
+    /// fichiers du mod — très exactement la règle d'or n°3.
+    #[test]
+    fn car_content_beside_sfx_is_never_taken_for_a_sound_annexe() {
+        let (base, _library, _conn, _cfg) = sound_fixture("sndguard", FORDS);
+        let car = base
+            .join("src")
+            .join("SCIBSOUND_Ford_GT40_1.1")
+            .join("content")
+            .join("cars")
+            .join("ks_ford_gt40");
+        let sfx = car.join("sfx");
+        std::fs::create_dir_all(&sfx).unwrap();
+        std::fs::write(sfx.join("GUIDs.txt"), b"X").unwrap();
+        std::fs::write(sfx.join("ks_ford_gt40.bank"), b"Y").unwrap();
+        std::fs::write(car.join("data.acd"), b"contenu voiture").unwrap();
+
+        let subs = modscan::scan_subs(&base.join("src").join("SCIBSOUND_Ford_GT40_1.1"));
+        assert_eq!(subs.len(), 1, "un seul son");
+        assert!(
+            subs[0].extra_root.is_none(),
+            "sous content/cars/<id>/, rien n'est une annexe du son"
+        );
+    }
+
+    /// Un dossier qui livre autre chose à côté du son n'est pas son emballage :
+    /// rien ne dit alors que ce qui l'entoure revient au son.
+    #[test]
+    fn a_pack_with_another_folder_is_not_a_sound_wrapper() {
+        let (base, _library, _conn, _cfg) = sound_fixture("sndmixed", FORDS);
+        let src = base.join("src").join("MixedPack");
+        let sfx = src.join("sfx");
+        std::fs::create_dir_all(&sfx).unwrap();
+        std::fs::write(sfx.join("GUIDs.txt"), b"X").unwrap();
+        std::fs::write(sfx.join("ks_ford_gt40.bank"), b"Y").unwrap();
+        std::fs::create_dir_all(src.join("autre_chose")).unwrap();
+
+        let subs = modscan::scan_subs(&src);
+        let sound = subs.iter().find(|s| matches!(s.kind, modscan::SubKind::Sound)).unwrap();
+        assert!(sound.extra_root.is_none(), "un second dossier annule l'emballage");
     }
 
     #[test]
