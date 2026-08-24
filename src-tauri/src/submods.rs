@@ -688,6 +688,86 @@ fn guess_sound_parent(conn: &Connection, source_name: &str) -> Option<String> {
     fuzzy.next().is_none().then(|| first.clone())
 }
 
+/// Le dossier nomme-t-il une voiture connue de la base ?
+fn is_known_car(conn: &Connection, id: &str) -> bool {
+    overlay::get_mod(conn, id)
+        .ok()
+        .flatten()
+        .is_some_and(|m| m.kind == "Car")
+}
+
+/// Le nom d'un `.bank` sans son extension, s'il y en a un dans le dossier.
+///
+/// **AC nomme toujours le bank d'après la voiture** — `content/cars/<id>/sfx/<id>.bank` —
+/// et c'est ainsi que le moteur audio le trouve. Vérifié sur les 296 voitures
+/// du corpus de référence qui en ont un : **296 sur 296**. C'est donc le
+/// signal le plus sûr dont on dispose pour savoir ce qu'un mod de son vise,
+/// bien plus que le nom de l'archive.
+fn bank_stem(dir: &Path) -> Option<String> {
+    std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .find(|e| e.path().extension().is_some_and(|ext| ext.eq_ignore_ascii_case("bank")))
+        .and_then(|e| e.path().file_stem().map(|s| s.to_string_lossy().into_owned()))
+}
+
+/// Un identifiant qui a la forme d'un id AC : un mot composé, pas un nom
+/// générique. Écarte les `car.bank` / `sound.bank` que certains packs livrent,
+/// dont le nom ne désigne rien.
+fn looks_like_ac_id(name: &str) -> bool {
+    name.len() >= 5 && name.contains('_')
+}
+
+/// À quelle voiture rattacher un mod de son.
+///
+/// `modscan` ne remonte jamais au-delà du dossier qui contient directement les
+/// `.bank`/`GUIDs.txt` : son `parent_id` vaut donc presque toujours "sfx"
+/// (convention AC) ou le nom du dossier importé, et **aucun des deux n'est un
+/// identifiant**. Quatre sources, de la plus sûre à la plus faible :
+///
+/// 1. le dossier lui-même nomme une voiture connue — un pack de la forme
+///    `<id>/` sans sous-dossier `sfx` ;
+/// 2. le **dossier parent** en nomme une : c'est la forme canonique
+///    `content/cars/<id>/sfx/`, où l'identifiant est écrit dans le chemin et
+///    où il n'y a rien à deviner ;
+/// 3. le **nom du bank**, quand il nomme une voiture connue (296/296 dans le
+///    corpus, voir [`bank_stem`]) ;
+/// 4. le nom de l'archive, par [`guess_sound_parent`].
+///
+/// Faute de tout cela, le nom du bank s'il a la forme d'un id AC — il désigne
+/// la voiture que le mod vise, même si elle n'est pas installée, ce qui range
+/// le mod au bon endroit pour le jour où elle le sera — et sinon le nom de
+/// l'archive, faute de mieux.
+///
+/// **Bug réel** que les règles 2 et 3 corrigent : un mod livré en
+/// `SCIBSOUND_Ford_GT40_1.1/content/cars/ks_ford_gt40/sfx/` atterrissait sous
+/// « SCIBSOUND_Ford_GT40_1.1 ». La devinette sur le nom d'archive ne pouvait
+/// pas aboutir — le nom ne contient pas `ks_ford_gt40`, seulement `ford`, qui
+/// désigne tout autant les cinq Mustang de la bibliothèque, donc ambiguïté et
+/// abandon. L'identifiant était pourtant écrit deux fois dans l'archive.
+fn resolve_sound_parent(conn: &Connection, sub: &FoundSub, source_name: &str) -> String {
+    if is_known_car(conn, &sub.parent_id) {
+        return sub.parent_id.clone();
+    }
+    let parent_dir = sub
+        .dir
+        .parent()
+        .and_then(|p| p.file_name())
+        .map(|n| n.to_string_lossy().into_owned());
+    if let Some(name) = parent_dir.filter(|n| is_known_car(conn, n)) {
+        return name;
+    }
+    let stem = bank_stem(&sub.dir);
+    if let Some(name) = stem.clone().filter(|n| is_known_car(conn, n)) {
+        return name;
+    }
+    if let Some(guessed) = guess_sound_parent(conn, source_name) {
+        return guessed;
+    }
+    stem.filter(|n| looks_like_ac_id(n))
+        .unwrap_or_else(|| source_name.to_string())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn import_sound(
     conn: &Connection,
@@ -700,32 +780,21 @@ fn import_sound(
     progress: &mut SubProgress,
 ) {
     progress.step(&sub.parent_id);
-    // `modscan` ne remonte jamais au-delà du dossier qui contient directement
-    // les `.bank`/GUIDs.txt (§12bis.2) : c'est presque toujours littéralement
-    // "sfx" (convention AC, `content/cars/<id>/sfx/`), mais un pack qui pose
-    // ses fichiers de son directement à la racine du dossier importé (sans
-    // sous-dossier sfx/) fait tomber `sub.parent_id` sur le nom du pack
-    // lui-même (ex. « 312T_amafmod ») — tout aussi peu identifiant qu'"sfx".
-    // Dans les deux cas, `sub.parent_id` n'est vérifiable qu'en le comparant à
-    // un id de voiture réellement connu ; sinon on retombe sur le nom
-    // d'archive/dossier importé pour deviner la voiture ciblée.
-    let known_car = overlay::get_mod(conn, &sub.parent_id)
-        .ok()
-        .flatten()
-        .is_some_and(|m| m.kind == "Car");
-    let generic = !known_car;
-    let parent = if generic {
-        guess_sound_parent(conn, source_name).unwrap_or_else(|| source_name.to_string())
-    } else {
-        sub.parent_id.clone()
-    };
-    let name = if generic {
+    let parent = resolve_sound_parent(conn, sub, source_name);
+    // Le **nom affiché** du mod, qui est une autre question que son parent : le
+    // nom du dossier ne vaut que s'il dit quelque chose. "sfx" ne dit rien, et
+    // un dossier qui porte l'id de la voiture non plus — deux mods de son pour
+    // la même voiture s'appelleraient alors pareil. Dans ces deux cas le nom de
+    // l'archive est le seul libellé lisible.
+    let dir_name = sub
+        .dir
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let name = if dir_name.is_empty() || dir_name.eq_ignore_ascii_case("sfx") || dir_name == parent {
         source_name.to_string()
     } else {
-        sub.dir
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| source_name.to_string())
+        dir_name
     };
 
     if overlay::sub_exists(conn, "SOUND", &parent, &name).unwrap_or(false) {
@@ -1580,6 +1649,159 @@ mod tests {
         restore_sound(&conn, &cfg, "snd_car").unwrap();
         assert_eq!(std::fs::read_to_string(sfx.join("GUIDs.txt")).unwrap(), "ORIG");
         assert!(!overlay::get_sub_mod(&conn, "s1").unwrap().unwrap().is_active);
+    }
+
+    /// Fabrique un décor : bibliothèque, base, et les voitures données.
+    fn sound_fixture(tag: &str, cars: &[&str]) -> (crate::testutil::TempDir, PathBuf, Connection, AppConfig) {
+        let base = crate::testutil::temp_dir(tag);
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let now = Local::now().to_rfc3339();
+        for car in cars {
+            overlay::upsert_mod(&conn, car, "Car", None, Some(car), "h", None, &now).unwrap();
+        }
+        (base, library, conn, cfg)
+    }
+
+    /// Les cinq Ford de la bibliothèque de l'utilisateur : c'est leur présence
+    /// qui rendait la devinette par nom d'archive ambiguë, donc inopérante.
+    const FORDS: &[&str] = &[
+        "ks_ford_gt40",
+        "ford_mustang_boss_302",
+        "ford_mustang_boss_429",
+        "ks_ford_escort_mk1",
+        "ks_ford_mustang_2015",
+    ];
+
+    /// Bug réel (`SCIBSOUND_Ford_GT40_1.1`) : l'archive livre l'arborescence de
+    /// jeu complète, donc l'identifiant est **écrit dans le chemin**, et le mod
+    /// atterrissait quand même sous le nom de l'archive. La devinette sur ce nom
+    /// ne pouvait pas trancher — « Ford » désigne cinq voitures ici.
+    #[test]
+    fn sound_parent_read_from_the_game_path() {
+        let (base, library, conn, cfg) = sound_fixture("sndpath", FORDS);
+        let archive_name = "SCIBSOUND_Ford_GT40_1.1";
+        let sfx = base
+            .join("src")
+            .join(archive_name)
+            .join("content")
+            .join("cars")
+            .join("ks_ford_gt40")
+            .join("sfx");
+        std::fs::create_dir_all(&sfx).unwrap();
+        std::fs::write(sfx.join("GUIDs.txt"), b"X").unwrap();
+        std::fs::write(sfx.join("ks_ford_gt40.bank"), b"Y").unwrap();
+
+        let subs = modscan::scan_subs(&base.join("src").join(archive_name));
+        assert_eq!(subs.len(), 1, "un seul son détecté");
+        assert_eq!(subs[0].parent_id, "sfx", "modscan seul ne voit que le nom du dossier");
+
+        let res = import_subs(
+            &conn,
+            &cfg,
+            &library,
+            archive_name,
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+        );
+        assert_eq!(res.len(), 1);
+        assert_eq!(
+            res[0].parent_id, "ks_ford_gt40",
+            "la voiture est lue dans le chemin, pas devinée"
+        );
+        assert_eq!(res[0].name, archive_name, "nom lisible, pas « sfx »");
+    }
+
+    /// Bug réel (`FordGT40_SoundmodV097_AmplifiedNL`) : rien dans le chemin, un
+    /// simple `sfx/` à la racine du pack. Mais AC nomme toujours le bank d'après
+    /// la voiture — 296 sur 296 dans le corpus — et c'est ce qui tranche.
+    #[test]
+    fn sound_parent_read_from_the_bank_filename() {
+        let (base, library, conn, cfg) = sound_fixture("sndbank", FORDS);
+        let archive_name = "FordGT40_SoundmodV097_AmplifiedNL";
+        let src = base.join("src").join(archive_name);
+        let sfx = src.join("sfx");
+        std::fs::create_dir_all(&sfx).unwrap();
+        std::fs::write(sfx.join("GUIDs.txt"), b"X").unwrap();
+        std::fs::write(sfx.join("ks_ford_gt40.bank"), b"Y").unwrap();
+
+        let subs = modscan::scan_subs(&src);
+        let res = import_subs(
+            &conn,
+            &cfg,
+            &library,
+            archive_name,
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+        );
+        assert_eq!(res.len(), 1);
+        assert_eq!(
+            res[0].parent_id, "ks_ford_gt40",
+            "la voiture est lue dans le nom du bank"
+        );
+    }
+
+    /// Un bank au nom générique ne doit **pas** l'emporter : « car » ne désigne
+    /// rien, et la devinette sur le nom d'archive reste alors le bon recours.
+    /// C'est exactement la forme du test `sound_parent_guessed_from_archive_name`
+    /// juste au-dessus, qui ne doit pas régresser.
+    #[test]
+    fn generic_bank_name_never_wins_over_the_archive_name() {
+        let (base, library, conn, cfg) = sound_fixture("sndgeneric", &["ks_lamborghini_huracan_performante"]);
+        let archive_name = "Sound - ks_lamborghini_huracan_performante by Marti";
+        let src = base.join("src").join(archive_name);
+        let sfx = src.join("sfx");
+        std::fs::create_dir_all(&sfx).unwrap();
+        std::fs::write(sfx.join("GUIDs.txt"), b"X").unwrap();
+        std::fs::write(sfx.join("car.bank"), b"Y").unwrap();
+
+        let subs = modscan::scan_subs(&src);
+        let res = import_subs(
+            &conn,
+            &cfg,
+            &library,
+            archive_name,
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+        );
+        assert_eq!(
+            res[0].parent_id, "ks_lamborghini_huracan_performante",
+            "« car » ne nomme rien, le nom d'archive reprend la main"
+        );
+    }
+
+    /// Une voiture que l'utilisateur n'a pas installée : le mod se range quand
+    /// même sous l'identifiant que le bank vise, prêt pour le jour où elle le
+    /// sera, plutôt que sous un nom d'archive qui ne se rattachera jamais.
+    #[test]
+    fn sound_for_an_absent_car_is_filed_under_the_id_its_bank_targets() {
+        let (base, library, conn, cfg) = sound_fixture("sndabsent", &[]);
+        let archive_name = "SomeSoundPack v3";
+        let src = base.join("src").join(archive_name);
+        let sfx = src.join("sfx");
+        std::fs::create_dir_all(&sfx).unwrap();
+        std::fs::write(sfx.join("GUIDs.txt"), b"X").unwrap();
+        std::fs::write(sfx.join("ks_ford_gt40.bank"), b"Y").unwrap();
+
+        let subs = modscan::scan_subs(&src);
+        let res = import_subs(
+            &conn,
+            &cfg,
+            &library,
+            archive_name,
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+        );
+        assert_eq!(res[0].parent_id, "ks_ford_gt40", "l'id visé par le bank");
     }
 
     #[test]
