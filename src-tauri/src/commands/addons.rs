@@ -89,6 +89,22 @@ pub fn activate_sound(app: AppHandle, db: State<Db>, sub_id: String) -> Result<(
     crate::submods::activate_sound(&conn, &cfg, &sub_id)
 }
 
+/// Écoute une entrée de la liste « Son du moteur » sans rien déployer.
+///
+/// `sub_id` à `null` désigne le son d'origine. Ne touche jamais à `content/` :
+/// c'est `activate_sound` qui déploie, et les deux ne doivent pas se confondre.
+#[tauri::command]
+pub fn audition_engine_sound(
+    app: AppHandle,
+    db: State<Db>,
+    parent_id: String,
+    sub_id: Option<String>,
+) -> Result<crate::enginesound::EngineClip, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::enginesound::audition(&conn, &cfg, &parent_id, sub_id.as_deref())
+}
+
 /// Restaure le son d'origine d'une voiture (§12bis.2).
 #[tauri::command]
 pub fn restore_sound(app: AppHandle, db: State<Db>, parent_id: String) -> Result<(), String> {

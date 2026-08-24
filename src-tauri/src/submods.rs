@@ -608,7 +608,9 @@ fn reconcile_track_skin_activation(conn: &Connection, track_id: &str, skins_dir:
 /// Dossier `<sub>/` de l'entité cible (voiture ou circuit) : version active en
 /// bibliothèque si c'est un mod géré, sinon `content/<type>s/<id>/<sub>` (base
 /// Kunos). Le type est déduit de l'overlay (Car → cars, Track → tracks).
-fn parent_subdir(conn: &Connection, cfg: &AppConfig, parent_id: &str, sub: &str) -> Option<PathBuf> {
+/// `pub(crate)` pour `enginesound`, qui doit trouver le `sfx/` d'une voiture
+/// sans supposer où vit sa version active.
+pub(crate) fn parent_subdir(conn: &Connection, cfg: &AppConfig, parent_id: &str, sub: &str) -> Option<PathBuf> {
     Some(parent_content_dir(conn, cfg, parent_id)?.join(sub))
 }
 
@@ -858,7 +860,10 @@ pub fn remove_sub(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<()
 }
 
 /// `<lib>/sounds/<parent>/__original__` : sauvegarde du son d'origine.
-fn sound_backup_dir(cfg: &AppConfig, parent_id: &str) -> Result<PathBuf, String> {
+/// `pub(crate)` pour `enginesound` : écouter « Origine » doit lire le vrai
+/// original, qui est ici dès qu'un mod a été activé une fois — et non le `sfx/`
+/// du jeu, qui contient alors le mod.
+pub(crate) fn sound_backup_dir(cfg: &AppConfig, parent_id: &str) -> Result<PathBuf, String> {
     let lib = cfg.library_path.as_ref().ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     Ok(lib.join("sounds").join(parent_id).join("__original__"))
 }

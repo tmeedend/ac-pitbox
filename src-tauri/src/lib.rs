@@ -10,9 +10,11 @@ mod compose;
 mod config;
 mod deploy;
 mod detect;
+mod enginesound;
 mod errors;
 mod export;
 mod extras;
+mod fsb5;
 mod gamebackup;
 mod harmonize;
 mod identity;
@@ -288,6 +290,7 @@ pub fn run() {
             commands::addons::list_track_skin_options,
             commands::addons::set_track_skin_active,
             commands::addons::activate_sound,
+            commands::addons::audition_engine_sound,
             commands::addons::restore_sound,
             commands::addons::delete_sub_mod,
             commands::addons::list_apps,
