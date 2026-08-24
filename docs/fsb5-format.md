@@ -195,7 +195,7 @@ longue » — et un lâcher de gaz à 4000 tr/min passait sous un ralenti.
 
 ### Comment on sait que l'estimateur est juste
 
-Les noms Kunos portent le **régime**. Pour un quatre temps, 
+Les noms Kunos portent le **régime**. Pour un quatre temps, `f0 × 60 / régime`
 vaut la moitié du nombre de cylindres : ce rapport doit donc être **constant**
 sur tous les échantillons d'une même voiture. Sur la BMW 1M (six cylindres,
 3,00 attendu) :
