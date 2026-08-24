@@ -25,28 +25,66 @@ use crate::fsb5::{self, Bank, Codec, Sample};
 /// base64-encoded inside the command's result, so length is bytes on the wire.
 const CLIP_SECONDS: f32 = 2.5;
 
-/// Seconds decoded per candidate while looking for the idle. Enough for the
-/// autocorrelation to lock onto a fundamental, short enough that scanning
-/// eighty samples stays instant.
-const PROBE_SECONDS: f32 = 0.4;
+/// Seconds decoded per candidate while looking for the idle.
+///
+/// 0,4 s was not enough and it showed: on one real bank the fundamental came
+/// out at 61 Hz against 79 Hz measured over a longer window, and that wrong low
+/// reading won the "lowest fundamental" contest. Measured over 91 banks, 1,2 s
+/// also happens to be *faster* than 0,4 s was, because the minimum duration
+/// below skips more candidates outright.
+const PROBE_SECONDS: f32 = 1.2;
 
-/// Decimation applied before autocorrelation. The fundamentals we are ranking
-/// sit under 400 Hz, so a quarter of the sample rate is plenty, and it divides
-/// the work by sixteen.
-const PROBE_DECIMATION: usize = 4;
+/// A candidate shorter than this is not an engine layer. Doors, gear shifts and
+/// backfires live below it.
+const MIN_CANDIDATE_SECONDS: f32 = 1.0;
+
+/// Decimation applied before autocorrelation. Fundamentals top out at 600 Hz,
+/// so an eighth of 48 kHz leaves a wide margin and divides the work by 64.
+const PROBE_DECIMATION: usize = 8;
 
 /// Below this, a sample is noise rather than an engine: a wind or skid loop
 /// scores around 0,10, a real engine 0,53 to 0,84 (measured against the PCM16
 /// bank of the same car — see `docs/fsb5-format.md`).
-const PERIODIC_ENOUGH: f32 = 0.45;
+const PERIODIC_ENOUGH: f32 = 0.5;
+
+/// How steady a candidate's level has to be over time.
+///
+/// An idle loop is flat; a starter, a rev or a one-shot swells and dies. On the
+/// CSP variant of one real car the app was playing the **ignition sound** on a
+/// loop — it scored 0,30 here where every genuine engine layer scores under
+/// 0,15.
+const MAX_STATIONARITY: f32 = 0.15;
+
+/// Fraction of the autocorrelation peak that identifies the **fundamental**
+/// rather than one of its multiples.
+///
+/// This one number decides whether the whole thing works, and it took a
+/// calibration to find. The global maximum of the autocorrelation of an engine
+/// loop falls on the **loop period**, not on the firing period: a two-second
+/// overrun loop peaks at 20 Hz whatever its engine speed. Ranking by "lowest
+/// fundamental" then ranks by "longest loop", which is how a 4000 rpm layer
+/// came out below an idle.
+///
+/// Calibrated against the engine speed Kunos writes into its sample names —
+/// for a four-stroke, `f0 × 60 / rpm` must equal half the cylinder count, so it
+/// must be **constant** across one car's samples. On the BMW 1M (inline six,
+/// expected 3,00):
+///
+/// | règle | rapport mesuré | dispersion |
+/// | --- | --- | --- |
+/// | maximum global | 0,56 | 25 % |
+/// | plus petit retard ≥ 0,5 × pic | 2,58 | 38 % |
+/// | **plus petit retard ≥ 0,3 × pic** | **3,23** | **10 %** |
+const FUNDAMENTAL_RATIO: f32 = 0.3;
 
 /// A sample sitting at the rails is either clipped at the source or wrongly
 /// decoded; either way it is a poor thing to audition.
 const MAX_CLIPPED: f32 = 0.02;
 
-/// Plausible engine fundamentals, in hertz. Below 20 Hz we are ranking noise;
-/// above 400 Hz we are past anything that could pass for an idle.
-const F0_RANGE: (f32, f32) = (20.0, 400.0);
+/// Plausible firing frequencies, in hertz. A V12 at 8000 rpm fires at 800 Hz,
+/// but nothing that high can pass for an idle; below 20 Hz we are measuring a
+/// loop, not an engine.
+const F0_RANGE: (f32, f32) = (20.0, 600.0);
 
 /// Base64, written here rather than pulled in as a dependency: it is twenty
 /// lines, it has no edge cases at this size, and the crate would exist in the
@@ -271,21 +309,61 @@ fn periodicity(pcm: &[i16], frequency: u32) -> (f32, f32) {
 
     let min_lag = (rate / F0_RANGE.1).floor().max(2.0) as usize;
     let max_lag = ((rate / F0_RANGE.0).ceil() as usize).min(centred.len() / 2);
+    if max_lag <= min_lag {
+        return (0.0, 0.0);
+    }
+    let mut curve = vec![0.0f32; max_lag];
     let mut best = 0.0f32;
-    let mut best_lag = 0usize;
     for lag in min_lag..max_lag {
         let mut acc = 0.0f32;
         for i in 0..centred.len() - lag {
             acc += centred[i] * centred[i + lag];
         }
-        let norm = acc / energy;
-        if norm > best {
-            best = norm;
-            best_lag = lag;
+        curve[lag] = acc / energy;
+        if curve[lag] > best {
+            best = curve[lag];
         }
     }
-    let f0 = if best_lag == 0 { 0.0 } else { rate / best_lag as f32 };
+    // **Le plus petit** retard qui approche le pic, pas le pic lui-même : le
+    // maximum global tombe sur la période de la boucle, et tous ses multiples
+    // sont presque aussi forts. Voir `FUNDAMENTAL_RATIO`.
+    //
+    // Et on ne cherche qu'**après la première descente sous zéro** : juste après
+    // le retard nul l'autocorrélation est encore élevée, et un signal très pur y
+    // franchirait n'importe quel seuil bien avant sa vraie période. Sans cette
+    // garde, un son pur de 60 Hz est mesuré à 600.
+    let from = (min_lag..max_lag).find(|&l| curve[l] <= 0.0).unwrap_or(min_lag);
+    // Et c'est le premier **maximum local** au-delà du seuil, pas le premier
+    // franchissement : le seuil est franchi avant le sommet, ce qui surestime la
+    // fréquence — un son pur de 60 Hz ressortait à 75.
+    let threshold = best * FUNDAMENTAL_RATIO;
+    let lag = ((from + 1)..max_lag.saturating_sub(1))
+        .find(|&l| curve[l] >= threshold && curve[l] >= curve[l - 1] && curve[l] >= curve[l + 1])
+        .unwrap_or(0);
+    let f0 = if lag == 0 { 0.0 } else { rate / lag as f32 };
     (best, f0)
+}
+
+/// How steady the level is over time — see [`MAX_STATIONARITY`].
+///
+/// The standard deviation of the level across 50 ms windows, over its mean. A
+/// loop that holds its level lands near zero; anything that starts, swells or
+/// dies away lands well above.
+fn stationarity(pcm: &[i16], frequency: u32) -> f32 {
+    let window = ((frequency as f32 * 0.05) as usize).max(1);
+    let levels: Vec<f32> = pcm
+        .chunks_exact(window)
+        .map(|w| (w.iter().map(|&v| (v as f32) * (v as f32)).sum::<f32>() / window as f32).sqrt())
+        .collect();
+    if levels.len() < 4 {
+        return 1.0;
+    }
+    let mean = levels.iter().sum::<f32>() / levels.len() as f32;
+    if mean < 1.0 {
+        return 1.0;
+    }
+    let variance = levels.iter().map(|l| (l - mean) * (l - mean)).sum::<f32>() / levels.len() as f32;
+    variance.sqrt() / mean
 }
 
 fn clipped_fraction(pcm: &[i16]) -> f32 {
@@ -343,7 +421,7 @@ fn pick_idle(bytes: &[u8], bank: &Bank) -> Option<(Sample, &'static str)> {
     // Otherwise, measure. `_off` layers are overrun, not idle.
     let mut best: Option<(f32, Sample)> = None;
     for sample in &bank.samples {
-        if sample.seconds() < 0.5 || sample.frequency == 0 {
+        if sample.seconds() < MIN_CANDIDATE_SECONDS || sample.frequency == 0 {
             continue;
         }
         if sample
@@ -357,7 +435,7 @@ fn pick_idle(bytes: &[u8], bank: &Bank) -> Option<(Sample, &'static str)> {
         let Ok(pcm) = fsb5::decode_with_bytes(bytes, bank, sample, 0, probe) else {
             continue;
         };
-        if clipped_fraction(&pcm) > MAX_CLIPPED {
+        if clipped_fraction(&pcm) > MAX_CLIPPED || stationarity(&pcm, sample.frequency) > MAX_STATIONARITY {
             continue;
         }
         let (peak, f0) = periodicity(&pcm, sample.frequency);
@@ -470,6 +548,57 @@ mod tests {
             .collect();
         let (peak, _) = periodicity(&noise, rate);
         assert!(peak < 0.3, "du bruit ne l'est pas (mesuré {peak})");
+    }
+
+    /// **Le piège qui rendait tout le choix faux.** Une couche moteur est une
+    /// boucle : son autocorrélation culmine sur la période de la **boucle**, pas
+    /// sur celle de l'allumage. Ranger par « fondamentale la plus basse »
+    /// revenait donc à ranger par « boucle la plus longue », et un lâcher de gaz
+    /// à 4000 tr/min sortait sous un ralenti.
+    #[test]
+    fn periodicity_finds_the_firing_period_not_the_loop_period() {
+        let rate = 48000u32;
+        let tone = 150.0f32; // la « période d'allumage »
+        let loop_hz = 25.0f32; // la boucle : six cycles
+        let pcm: Vec<i16> = (0..48000)
+            .map(|i| {
+                let t = i as f32 / rate as f32;
+                // Une enveloppe qui se répète à 25 Hz par-dessus un son à 150 Hz :
+                // le signal se répète exactement toutes les 1/25 s.
+                let envelope = 0.5 + 0.5 * (t * std::f32::consts::TAU * loop_hz).sin().abs();
+                ((t * std::f32::consts::TAU * tone).sin() * envelope * 9000.0) as i16
+            })
+            .collect();
+        let (peak, f0) = periodicity(&pcm, rate);
+        assert!(peak > 0.5, "le signal est franchement périodique (mesuré {peak})");
+        assert!(
+            (f0 - tone).abs() < tone * 0.15,
+            "c'est la période d'allumage qui est rendue, pas celle de la boucle (mesuré {f0} Hz pour {tone} attendus)"
+        );
+    }
+
+    /// Un ralenti tient son niveau ; un démarreur enfle et meurt. C'est ce qui
+    /// distinguait les deux sur la variante CSP d'une vraie voiture, où l'app
+    /// jouait le son de mise en route en boucle.
+    #[test]
+    fn stationarity_separates_a_steady_loop_from_a_swell() {
+        let rate = 48000u32;
+        let steady: Vec<i16> = (0..48000)
+            .map(|i| ((i as f32 / rate as f32 * std::f32::consts::TAU * 80.0).sin() * 8000.0) as i16)
+            .collect();
+        let swell: Vec<i16> = (0..48000)
+            .map(|i| {
+                let t = i as f32 / 48000.0;
+                ((t * std::f32::consts::TAU * 80.0).sin() * 8000.0 * t) as i16
+            })
+            .collect();
+        let flat = stationarity(&steady, rate);
+        let rising = stationarity(&swell, rate);
+        assert!(flat < MAX_STATIONARITY, "une boucle stable passe (mesuré {flat})");
+        assert!(
+            rising > MAX_STATIONARITY,
+            "un son qui enfle est écarté (mesuré {rising})"
+        );
     }
 
     #[test]
