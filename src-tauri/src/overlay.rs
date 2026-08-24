@@ -89,6 +89,10 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         "ALTER TABLE sub_mods ADD COLUMN removable INTEGER NOT NULL DEFAULT 1",
         [],
     );
+    // Auteur d'un sous-élément : saisi à la main, parce qu'il n'est écrit nulle
+    // part dans les fichiers. Un `.bank` FMOD ne le porte pas, et le lire dans
+    // une notice serait une devinette sur du texte libre.
+    let _ = conn.execute("ALTER TABLE sub_mods ADD COLUMN author TEXT", []);
     Ok(())
 }
 
@@ -1655,6 +1659,8 @@ pub struct SubModRow {
     /// §8) — non supprimable individuellement, seulement le mod entier.
     pub removable: bool,
     pub imported_at: String,
+    /// Auteur, saisi par l'utilisateur : aucun fichier de mod ne le porte.
+    pub author: Option<String>,
     /// Taille sur disque du dossier stocké, octets. Jamais mémorisée en base
     /// (le contenu d'un skin peut changer sous nos pieds) : mesurée à la
     /// demande, donc `None` partout sauf là où on la réclame explicitement
@@ -1712,12 +1718,13 @@ fn map_sub(row: &rusqlite::Row) -> rusqlite::Result<SubModRow> {
         is_active: row.get::<_, i64>(6)? != 0,
         removable: row.get::<_, i64>(7)? != 0,
         imported_at: row.get(8)?,
+        author: row.get(9)?,
         size_bytes: None,
     })
 }
 
 const SUB_SELECT: &str =
-    "SELECT id, sub_type, parent_id, name, library_path, source_archive, is_active, removable, imported_at FROM sub_mods";
+    "SELECT id, sub_type, parent_id, name, library_path, source_archive, is_active, removable, imported_at, author FROM sub_mods";
 
 /// Sous-éléments rattachés à une entité (fiche détail, §12bis.3).
 /// Sous-éléments (skins, sons) dont le parent n'existe plus (§9.3). Conservés
@@ -1758,6 +1765,16 @@ pub fn get_sub_mod(conn: &Connection, id: &str) -> rusqlite::Result<Option<SubMo
         Some(r) => Ok(Some(r?)),
         None => Ok(None),
     }
+}
+
+/// Enregistre l'auteur d'un sous-élément. `None` efface la saisie.
+pub fn set_sub_author(conn: &Connection, id: &str, author: Option<&str>) -> rusqlite::Result<()> {
+    let cleaned = author.map(str::trim).filter(|s| !s.is_empty());
+    conn.execute(
+        "UPDATE sub_mods SET author = ?2 WHERE id = ?1",
+        rusqlite::params![id, cleaned],
+    )?;
+    Ok(())
 }
 
 /// Existe-t-il déjà un sous-élément de ce type/parent/nom ? (idempotence import).

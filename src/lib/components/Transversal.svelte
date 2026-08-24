@@ -12,6 +12,7 @@
     type SubModRow,
   } from "$lib/submods";
   import { listLibrary, type ModCard } from "$lib/library";
+  import SoundDetail from "./SoundDetail.svelte";
   import { nav, requestSection } from "$lib/nav.svelte";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { t } from "$lib/i18n/index.svelte";
@@ -31,6 +32,10 @@
   // dans « Add-ons voiture ») — ni titre d'écran, ni onglets à lui, l'onglet
   // qui le contient le nomme déjà.
   let { variant, embedded = false }: { variant: "car" | "track" | "sound"; embedded?: boolean } = $props();
+  /** Mod de son dont la fiche est ouverte, `null` quand on voit la liste. Même
+   * schéma que la vue Apps : la fiche remplace la liste, elle ne s'y déplie pas
+   * (§8 — les listes de fichiers ne tiennent pas dans un dépliant). */
+  let fullSoundId = $state<string | null>(null);
   const isSound = $derived(variant === "sound");
   const isTrack = $derived(variant === "track");
 
@@ -269,6 +274,18 @@
   }
 </script>
 
+{#if fullSoundId}
+  <SoundDetail
+    subId={fullSoundId}
+    onclose={() => {
+      const closing = fullSoundId;
+      fullSoundId = null;
+      // L'auteur a pu être saisi, le mod supprimé : la liste se relit.
+      void closing;
+      load();
+    }}
+  />
+{:else}
 <div class="trans">
   {#if !embedded}
     <header class="head">
@@ -360,7 +377,19 @@
                 onkeydown={(e) => (e.key === " " || e.key === "Enter") && onItemClick(s.id, e as unknown as MouseEvent)}
               >
                 <div class="l-main">
-                  <span class="s-name">{s.name}</span>
+                  {#if isSound}
+                    <button
+                      class="s-name s-link"
+                      type="button"
+                      title={t("sounds.detailTooltip")}
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        fullSoundId = s.id;
+                      }}
+                    >{s.name}</button>
+                  {:else}
+                    <span class="s-name">{s.name}</span>
+                  {/if}
                   <button class="parent" type="button" onclick={(e) => { e.stopPropagation(); openParent(s.parent_id); }} title={t("detail.openSheetTooltip")}>
                     → {parentName(s.parent_id)}
                   </button>
@@ -394,6 +423,7 @@
     <LayersSection kind={isTrack ? "Track" : "Car"} heading={false} />
   {/if}
 </div>
+{/if}
 
 <style>
   .trans {
@@ -582,6 +612,24 @@
     font-weight: 600;
     color: var(--txt);
     font-size: 12.5px;
+  }
+
+  /* Le nom d'un mod de son ouvre sa fiche : c'est un bouton, mais il ne doit
+     pas en avoir l'air — la ligne entière est déjà cliquable pour la
+     sélection, un second bouton visible la brouillerait. */
+  .s-link {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-weight: 600;
+    font-size: 12.5px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .s-link:hover,
+  .s-link:focus-visible {
+    color: var(--rosso-bright);
   }
   .parent {
     background: transparent;

@@ -90,6 +90,112 @@ pub struct EngineClip {
     pub picked_by: &'static str,
 }
 
+/// What one bank holds, read on demand — the part of a sound mod's sheet that
+/// no other tool shows, because it means decoding the container.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BankFacts {
+    pub file_name: String,
+    pub codec: String,
+    pub sample_count: usize,
+    /// Highest sample rate found — banks are homogeneous in practice.
+    pub frequency: u32,
+    /// Total playing time of every sample, seconds.
+    pub seconds: f32,
+    /// Whether the bank kept its sample name table. Sound mods routinely strip
+    /// it, and its absence is why the idle has to be found by measurement.
+    pub named: bool,
+    pub size_bytes: u64,
+}
+
+/// Everything the sound mod's sheet displays.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SoundDetail {
+    pub id: String,
+    pub name: String,
+    pub parent_id: String,
+    /// Nom lisible de la voiture cible, quand elle est connue de la base.
+    pub parent_name: Option<String>,
+    pub author: Option<String>,
+    pub source_archive: Option<String>,
+    pub imported_at: String,
+    pub is_active: bool,
+    pub removable: bool,
+    pub size_bytes: u64,
+    /// `None` quand le bank est illisible : la fiche reste utile, elle dit
+    /// simplement qu'elle n'a pas pu l'ouvrir.
+    pub bank: Option<BankFacts>,
+}
+
+/// Lit la fiche d'un mod de son.
+pub fn detail(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<SoundDetail, String> {
+    let sub = crate::overlay::get_sub_mod(conn, sub_id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::SOUND_NOT_FOUND)?;
+    if sub.sub_type != "SOUND" {
+        return Err(crate::errors::NOT_A_SOUND_MOD.into());
+    }
+    let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &sub.library_path)
+        .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    let parent_name = crate::overlay::get_mod(conn, &sub.parent_id)
+        .ok()
+        .flatten()
+        .and_then(|m| m.display_name);
+
+    Ok(SoundDetail {
+        id: sub.id,
+        name: sub.name,
+        parent_id: sub.parent_id,
+        parent_name,
+        author: sub.author,
+        source_archive: sub.source_archive,
+        imported_at: sub.imported_at,
+        is_active: sub.is_active,
+        removable: sub.removable,
+        size_bytes: crate::inspect::dir_size_bytes(&dir),
+        bank: bank_facts(&dir),
+    })
+}
+
+/// Ouvre le bank et résume ce qu'il contient. Best-effort : un bank illisible
+/// ne doit pas empêcher la fiche de s'afficher, il doit se voir comme tel.
+fn bank_facts(dir: &Path) -> Option<BankFacts> {
+    let path = find_bank(dir)?;
+    let size_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    let bytes = std::fs::read(&path).ok()?;
+    let bank = match fsb5::parse(&bytes) {
+        Ok(b) => b,
+        Err(e) => {
+            log::warn!("bank illisible ({}): {e}", path.display());
+            return None;
+        }
+    };
+    Some(BankFacts {
+        file_name: path.file_name()?.to_string_lossy().into_owned(),
+        codec: bank.codec.label(),
+        sample_count: bank.samples.len(),
+        frequency: bank.samples.iter().map(|s| s.frequency).max().unwrap_or(0),
+        seconds: bank.samples.iter().map(|s| s.seconds()).sum(),
+        named: bank.samples.iter().any(|s| s.name.is_some()),
+        size_bytes,
+    })
+}
+
+/// Dossier des ressources d'un mod de son — le même que celui où l'import
+/// range ses annexes.
+pub fn resources_dir(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<PathBuf, String> {
+    let sub = crate::overlay::get_sub_mod(conn, sub_id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::SOUND_NOT_FOUND)?;
+    let library = cfg.library_path.as_ref().ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    Ok(crate::resources::resources_dir_for(
+        library,
+        "sounds",
+        &[&sub.parent_id, &sub.name],
+    ))
+}
+
 /// Finds the `.bank` inside a sound folder. AC puts exactly one there, next to
 /// `GUIDs.txt`; the largest wins if a pack ever ships more.
 fn find_bank(dir: &Path) -> Option<PathBuf> {

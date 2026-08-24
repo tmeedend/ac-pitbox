@@ -105,6 +105,91 @@ pub fn audition_engine_sound(
     crate::enginesound::audition(&conn, &cfg, &parent_id, sub_id.as_deref())
 }
 
+/// Fiche d'un mod de son : ce qu'il vise, ce qu'il pèse, et ce que son bank
+/// contient réellement (§8). Tout est lu à la demande — rien de ce qui décrit
+/// un fichier n'est mémorisé en base, il peut changer sous nos pieds.
+#[tauri::command]
+pub fn sound_detail(app: AppHandle, db: State<Db>, sub_id: String) -> Result<crate::enginesound::SoundDetail, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::enginesound::detail(&conn, &cfg, &sub_id)
+}
+
+/// Saisit l'auteur d'un mod de son. Vide efface.
+#[tauri::command]
+pub fn set_sound_author(db: State<Db>, sub_id: String, author: Option<String>) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::overlay::set_sub_author(&conn, &sub_id, author.as_deref()).map_err(|e| e.to_string())
+}
+
+// Les cinq commandes de ressources ci-dessous sont le quatrième exemplaire du
+// même quintuplet (mods, apps, packs, sons). La duplication est assumée pour
+// rester cohérente avec l'existant plutôt que d'entamer ici un refactor non
+// demandé ; le regroupement — un jeu de commandes prenant la portée en
+// paramètre, ou un `ResourcesBlock` prenant ses fonctions plutôt qu'un nom de
+// source — mérite son propre commit.
+
+/// Fichiers annexes d'un mod de son (§4.5.2) : notice, changelog livrés à côté
+/// du dossier `sfx/`.
+#[tauri::command]
+pub fn list_sound_resources(
+    app: AppHandle,
+    db: State<Db>,
+    sub_id: String,
+) -> Result<Vec<crate::resources::ResourceFile>, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(crate::resources::list_resources(&crate::enginesound::resources_dir(
+        &conn, &cfg, &sub_id,
+    )?))
+}
+
+/// Ouvre une annexe de mod de son avec l'application par défaut de l'OS.
+#[tauri::command]
+pub fn open_sound_resource(app: AppHandle, db: State<Db>, sub_id: String, rel_path: String) -> Result<(), String> {
+    let cfg = crate::config::load(&app);
+    let dir = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        crate::enginesound::resources_dir(&conn, &cfg, &sub_id)?
+    };
+    let path = crate::resources::resolve_resource_path(&dir, &rel_path)?;
+    app.opener()
+        .open_path(path.display().to_string(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+/// Chemin absolu d'une annexe de mod de son, pour l'afficher via `asset://`.
+#[tauri::command]
+pub fn get_sound_resource_path(
+    app: AppHandle,
+    db: State<Db>,
+    sub_id: String,
+    rel_path: String,
+) -> Result<String, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let dir = crate::enginesound::resources_dir(&conn, &cfg, &sub_id)?;
+    Ok(crate::resources::resolve_resource_path(&dir, &rel_path)?
+        .display()
+        .to_string())
+}
+
+/// Contenu brut d'une annexe de mod de son, pour la prévisualisation.
+#[tauri::command]
+pub fn read_sound_resource(
+    app: AppHandle,
+    db: State<Db>,
+    sub_id: String,
+    rel_path: String,
+) -> Result<tauri::ipc::Response, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let dir = crate::enginesound::resources_dir(&conn, &cfg, &sub_id)?;
+    Ok(tauri::ipc::Response::new(crate::resources::read_resource(
+        &dir, &rel_path,
+    )?))
+}
+
 /// Restaure le son d'origine d'une voiture (§12bis.2).
 #[tauri::command]
 pub fn restore_sound(app: AppHandle, db: State<Db>, parent_id: String) -> Result<(), String> {

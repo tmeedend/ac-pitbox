@@ -25,6 +25,13 @@
     packResourceSrc,
     readPackResource,
   } from "$lib/packs";
+  import {
+    listSoundResources,
+    openSoundResource,
+    soundResourcePath,
+    soundResourceSrc,
+    readSoundResource,
+  } from "$lib/enginesound";
   import { loadThumbnails } from "$lib/thumbnails";
   import Lightbox, { type LightboxItem } from "../Lightbox.svelte";
   import { previewKind, decodeText, type PreviewKind } from "$lib/resourcePreview";
@@ -45,7 +52,7 @@
      * résolution côté backend diffère. Le bloc est donc partagé plutôt que
      * recopié — c'est exactement le genre de duplication qui a produit 53
      * signatures visuelles pour 68 libellés (§chantier composants partagés). */
-    source?: "mod" | "app" | "pack";
+    source?: "mod" | "app" | "pack" | "sound";
     onerror: (message: string) => void;
   } = $props();
 
@@ -57,32 +64,48 @@
   // Un pack (§4.4) a le même dossier `resources/` qu'une app, et ses documents
   // sont déjà listés sur la fiche de chacun de ses membres, marqués « du
   // pack » — ici ils sont chez eux.
-  const load = (id: string) =>
-    source === "app" ? listAppResources(id) : source === "pack" ? listPackResources(id) : listModResources(id);
-  const openExternal = (id: string, rel: string, origin: string) =>
-    source === "app"
-      ? openAppResource(id, rel)
-      : source === "pack"
-        ? openPackResource(id, rel)
-        : openModResource(id, rel, origin);
-  const srcOf = (id: string, rel: string, origin: string) =>
-    source === "app"
-      ? appResourceSrc(id, rel)
-      : source === "pack"
-        ? packResourceSrc(id, rel)
-        : modResourceSrc(id, rel, origin);
-  const bytesOf = (id: string, rel: string, origin: string) =>
-    source === "app"
-      ? readAppResource(id, rel)
-      : source === "pack"
-        ? readPackResource(id, rel)
-        : readModResource(id, rel, origin);
-  const pathOf = (id: string, rel: string, origin: string) =>
-    source === "app"
-      ? appResourcePath(id, rel)
-      : source === "pack"
-        ? packResourcePath(id, rel)
-        : modResourcePath(id, rel, origin);
+  // Une table plutôt que cinq ternaires imbriqués : à trois sources c'était
+  // déjà pénible à lire, à quatre ce serait illisible, et ajouter la cinquième
+  // reviendrait à toucher cinq expressions au lieu d'une ligne. Seules les
+  // ressources de mod ont besoin de leur `origin` (§4.5.1 : un document resté
+  // dans le dossier du mod y est listé sans être déplacé) ; les autres l'ignorent.
+  const BACKENDS = {
+    mod: {
+      list: listModResources,
+      open: openModResource,
+      src: modResourceSrc,
+      path: modResourcePath,
+      read: readModResource,
+    },
+    app: {
+      list: listAppResources,
+      open: (id: string, rel: string, _origin: string) => openAppResource(id, rel),
+      src: (id: string, rel: string, _origin: string) => appResourceSrc(id, rel),
+      path: (id: string, rel: string, _origin: string) => appResourcePath(id, rel),
+      read: (id: string, rel: string, _origin: string) => readAppResource(id, rel),
+    },
+    pack: {
+      list: listPackResources,
+      open: (id: string, rel: string, _origin: string) => openPackResource(id, rel),
+      src: (id: string, rel: string, _origin: string) => packResourceSrc(id, rel),
+      path: (id: string, rel: string, _origin: string) => packResourcePath(id, rel),
+      read: (id: string, rel: string, _origin: string) => readPackResource(id, rel),
+    },
+    sound: {
+      list: listSoundResources,
+      open: (id: string, rel: string, _origin: string) => openSoundResource(id, rel),
+      src: (id: string, rel: string, _origin: string) => soundResourceSrc(id, rel),
+      path: (id: string, rel: string, _origin: string) => soundResourcePath(id, rel),
+      read: (id: string, rel: string, _origin: string) => readSoundResource(id, rel),
+    },
+  } as const;
+
+  const backend = $derived(BACKENDS[source]);
+  const load = (id: string) => backend.list(id);
+  const openExternal = (id: string, rel: string, origin: string) => backend.open(id, rel, origin);
+  const srcOf = (id: string, rel: string, origin: string) => backend.src(id, rel, origin);
+  const bytesOf = (id: string, rel: string, origin: string) => backend.read(id, rel, origin);
+  const pathOf = (id: string, rel: string, origin: string) => backend.path(id, rel, origin);
 
   let files = $state<ResourceFile[]>([]);
   /** Ressource ouverte en prévisualisation, `null` quand la liste seule est affichée. */

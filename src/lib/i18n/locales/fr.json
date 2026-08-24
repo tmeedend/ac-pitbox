@@ -1210,5 +1210,23 @@
     "tokenExclude": "Exclure",
     "tokenInputHint": "Taper pour chercher. Un « - » devant le mot l'exclut au lieu de l'inclure.",
     "tokenNoMatch": "Aucune correspondance."
+  },
+  "sounds": {
+    "back": "Retour aux sons",
+    "detailTooltip": "ouvrir la fiche de ce mod de son",
+    "carLabel": "Voiture",
+    "sizeLabel": "Taille",
+    "authorLabel": "Auteur",
+    "authorPlaceholder": "qui a fait ce son",
+    "bankLabel": "Fichier de son",
+    "bankFile": "Fichier",
+    "bankCodec": "Encodage",
+    "bankSamples": "Échantillons",
+    "bankRate": "Fréquence",
+    "bankDuration": "Durée totale",
+    "bankNames": "Échantillons nommés",
+    "bankUnreadable": "ce fichier de son n'a pas pu être lu.",
+    "bankNamesPresent": "présents",
+    "bankNamesAbsent": "absents"
   }
 }

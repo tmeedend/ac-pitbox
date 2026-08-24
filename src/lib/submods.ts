@@ -12,6 +12,8 @@ export interface SubModRow {
   /** Faux si fourni avec le contenu initial du mod (§8) — non supprimable individuellement. */
   removable: boolean;
   imported_at: string;
+  /** Auteur, saisi par l'utilisateur : aucun fichier de mod ne le porte. */
+  author: string | null;
   /** Taille sur disque, octets. Renseignée par `listSubsByType` (vue transversale), `null` ailleurs. */
   size_bytes: number | null;
 }

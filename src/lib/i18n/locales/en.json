@@ -1210,5 +1210,23 @@
     "tokenExclude": "Exclude",
     "tokenInputHint": "Type to search. A leading “-” excludes the word instead of including it.",
     "tokenNoMatch": "No match."
+  },
+  "sounds": {
+    "back": "Back to sounds",
+    "detailTooltip": "Open this sound mod's sheet",
+    "carLabel": "Car",
+    "sizeLabel": "Size",
+    "authorLabel": "Author",
+    "authorPlaceholder": "Who made this sound",
+    "bankLabel": "Sound bank",
+    "bankFile": "File",
+    "bankCodec": "Encoding",
+    "bankSamples": "Samples",
+    "bankRate": "Sample rate",
+    "bankDuration": "Total length",
+    "bankNames": "Named samples",
+    "bankUnreadable": "This sound bank could not be read.",
+    "bankNamesPresent": "Present",
+    "bankNamesAbsent": "Absent"
   }
 }
