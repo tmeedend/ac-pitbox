@@ -255,6 +255,11 @@
     if (isCar) {
       const s = await listModSkins(current);
       if (current === id) skins = s;
+      // Les sons aussi : importer un mod de son pendant que la fiche de sa
+      // voiture est ouverte doit le faire apparaître dans la liste. Ils
+      // manquaient ici, et seuls un aller-retour hors de la fiche ou une
+      // activation les rechargeaient.
+      await loadSounds(current);
     } else {
       await loadTrackSkins(current);
     }
