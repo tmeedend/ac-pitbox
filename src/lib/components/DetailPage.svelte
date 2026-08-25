@@ -75,8 +75,10 @@
   import {
     engineControls,
     engineRev,
+    engineShowcase,
     engineState,
     setEngineRev,
+    setEngineShowcase,
     stopEngine,
     toggleEngine,
   } from "$lib/enginePlayer.svelte";
@@ -1225,16 +1227,31 @@
                plage vient de la courbe de puissance de **cette** voiture, d'où
                un F1 qui monte à 19 500 et un utilitaire diesel à 5 000. -->
           {#if revControls}
-            <Slider
-              compact
-              label={t("detail.soundRev")}
-              min={revControls.revFloor}
-              max={revControls.revCeiling}
-              step={50}
-              value={engineRev()}
-              display={t("detail.soundRevValue", { rpm: Math.round(engineRev()).toLocaleString() })}
-              oninput={setEngineRev}
-            />
+            <div class="rev-row">
+              <!-- Le curseur disparaît pendant la démonstration : les deux
+                   pilotent le même paramètre, et un curseur qui ne suit pas ce
+                   qu'on entend serait pire qu'absent. -->
+              {#if !engineShowcase()}
+                <Slider
+                  compact
+                  label={t("detail.soundRev")}
+                  min={revControls.revFloor}
+                  max={revControls.revCeiling}
+                  step={50}
+                  value={engineRev()}
+                  display={t("detail.soundRevValue", { rpm: Math.round(engineRev()).toLocaleString() })}
+                  oninput={setEngineRev}
+                />
+              {/if}
+              <button
+                class="blip"
+                class:on={engineShowcase()}
+                type="button"
+                onclick={() => setEngineShowcase(!engineShowcase())}
+              >
+                {engineShowcase() ? t("detail.soundBlipStop") : t("detail.soundBlip")}
+              </button>
+            </div>
           {/if}
           <!-- L'exclusivité et l'absence de mod se lisent sur les boutons radio
                eux-mêmes : « Origine » seule et cochée dit tout. -->
@@ -1982,6 +1999,41 @@
     flex-direction: column;
     gap: 5px;
   }
+  .rev-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    margin-top: 10px;
+  }
+
+  /* Le curseur prend la place restante ; le bouton garde la sienne. */
+  .rev-row :global(.slider) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .blip {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 6px 12px;
+    border: 1px solid var(--rosso-border);
+    border-radius: 4px;
+    background: var(--rosso-dim);
+    color: var(--txt);
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+
+  .blip:hover {
+    border-color: var(--rosso-bright);
+  }
+
+  .blip.on {
+    background: var(--rosso-bright);
+    border-color: var(--rosso-bright);
+    color: #fff;
+  }
+
   .sound-row {
     display: flex;
     align-items: center;

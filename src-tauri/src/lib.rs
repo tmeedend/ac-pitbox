@@ -304,6 +304,10 @@ pub fn run() {
             #[cfg(windows)]
             commands::addons::set_audition_throttle,
             #[cfg(windows)]
+            commands::addons::set_audition_listener,
+            #[cfg(windows)]
+            commands::addons::set_audition_showcase,
+            #[cfg(windows)]
             commands::addons::stop_audition_native,
             commands::addons::sound_detail,
             commands::addons::set_sound_author,

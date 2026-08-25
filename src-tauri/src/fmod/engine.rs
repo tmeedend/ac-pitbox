@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use super::guids::Guid;
 use super::params::{self, Roles};
-use super::sys::{Bank, Fmod, PlaybackState, System};
+use super::sys::{Attributes3d, Bank, Fmod, PlaybackState, System};
 
 /// How often the system is pumped while idle or playing.
 ///
@@ -45,6 +45,76 @@ pub struct PlayRequest {
     pub event_path: String,
     pub rev: f32,
     pub throttle: f32,
+    /// Top of this car's rev range. Not decoration: the showcase routine needs
+    /// it to know what "a good blip" means on *this* engine — the same 5000 rpm
+    /// is the redline of a diesel van and half throttle on a Ferrari.
+    pub rev_ceiling: f32,
+}
+
+/// Where the ear sits relative to the car, in the terms the interface has:
+/// an orbit angle, a height angle and a distance. Turning that into vectors is
+/// this module's job, not the caller's.
+#[derive(Debug, Clone, Copy)]
+pub struct Listener {
+    /// Degrees around the car. 0 faces the nose, 180 the tail.
+    pub azimuth: f32,
+    /// Degrees above the horizon, clamped: at the poles "up" stops being
+    /// definable and the orientation degenerates.
+    pub elevation: f32,
+    pub distance: f32,
+}
+
+impl Default for Listener {
+    fn default() -> Self {
+        // Three-quarter front, at the distance someone would stand to listen —
+        // the same idea as the 3D preview's default framing.
+        Listener {
+            azimuth: 35.0,
+            elevation: 8.0,
+            distance: 4.0,
+        }
+    }
+}
+
+impl Listener {
+    /// The listener always **faces the car**, which is what a camera orbiting a
+    /// model does. That has a consequence worth stating: the source stays dead
+    /// ahead, so stereo panning barely moves. What changes is the *timbre*,
+    /// through `Event Cone Angle` — measured, and exactly the difference
+    /// between standing at the bonnet and standing at the exhaust.
+    fn attributes(&self) -> Attributes3d {
+        let az = self.azimuth.to_radians();
+        let el = self.elevation.clamp(-80.0, 80.0).to_radians();
+        let d = self.distance.max(0.5);
+        let position = [az.sin() * el.cos() * d, el.sin() * d, az.cos() * el.cos() * d];
+        let forward = normalize([-position[0], -position[1], -position[2]]);
+        let world_up = [0.0, 1.0, 0.0];
+        let right = normalize(cross(world_up, forward));
+        let up = normalize(cross(forward, right));
+        Attributes3d {
+            position,
+            velocity: [0.0; 3],
+            forward,
+            up,
+        }
+    }
+}
+
+fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
+fn normalize(v: [f32; 3]) -> [f32; 3] {
+    let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    if len <= f32::EPSILON {
+        [0.0, 0.0, 1.0]
+    } else {
+        [v[0] / len, v[1] / len, v[2] / len]
+    }
 }
 
 /// What actually happened, so the interface can show it and the caller can fall
@@ -65,6 +135,9 @@ pub enum Command {
     Play(PlayRequest, Sender<Result<PlayReport, String>>),
     SetRev(f32),
     SetThrottle(f32),
+    SetListener(Listener),
+    /// Start or stop the "showing off the engine" routine (§6bis).
+    Showcase(bool),
     Stop,
 }
 
@@ -100,6 +173,16 @@ impl FmodEngineHandle {
         self.send(Command::SetThrottle(value));
     }
 
+    /// Moves the ear. Sent without waiting: this follows a camera being
+    /// dragged, so it must never make the drag stutter.
+    pub fn set_listener(&self, listener: Listener) {
+        self.send(Command::SetListener(listener));
+    }
+
+    pub fn set_showcase(&self, on: bool) {
+        self.send(Command::Showcase(on));
+    }
+
     pub fn stop(&self) {
         self.send(Command::Stop);
     }
@@ -128,17 +211,168 @@ struct Loaded {
 struct Playing {
     instance: super::sys::EventInstance,
     roles: Roles,
+    rev_ceiling: f32,
+    /// The engine speed the manual slider last asked for. The showcase borrows
+    /// the engine while it runs and hands it back to this on the way out.
+    manual_rev: f32,
+    showcase: Option<Showcase>,
+}
+
+/// Idle for a few seconds, then a handful of short throttle blips — someone
+/// letting a bystander hear what the car has. §6bis.
+///
+/// It lives on the audio thread rather than in the interface for one reason:
+/// a blip is 200 ms of rising engine speed, and driving that from the webview
+/// would mean an IPC round trip per step. The 20 ms tick is already here.
+struct Showcase {
+    idle_rev: f32,
+    ceiling: f32,
+    phase: Phase,
+    since: std::time::Instant,
+    span: Duration,
+    /// Blips left in the current burst.
+    left: u32,
+    /// Engine speed this blip is reaching for.
+    peak: f32,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Phase {
+    /// Ticking over, waiting. This is most of the time.
+    Idle,
+    /// Foot going down.
+    Attack,
+    /// Held at the top, briefly.
+    Hold,
+    /// Foot off, revs falling.
+    Release,
+    /// Between two blips of the same burst.
+    Gap,
+}
+
+/// How long the engine idles between two bursts. The user asked for 3 to 7
+/// seconds, and the randomness is the point: a fixed interval reads as a
+/// machine, an irregular one as somebody being pleased with their car.
+const IDLE_SPAN: (f32, f32) = (3.0, 7.0);
+const BLIPS_PER_BURST: (u32, u32) = (2, 5);
+/// Milliseconds. A real blip rises faster than it falls — the engine is pulled
+/// up by the throttle and comes back down on its own inertia.
+const ATTACK_MS: (u32, u32) = (150, 260);
+const HOLD_MS: (u32, u32) = (60, 150);
+const RELEASE_MS: (u32, u32) = (380, 620);
+const GAP_MS: (u32, u32) = (120, 360);
+/// Fraction of the car's own ceiling a normal blip reaches.
+const PEAK_FRACTION: (f32, f32) = (0.50, 0.75);
+/// …and now and then, all the way up. This is the "arrivée au rupteur".
+const REDLINE_FRACTION: (f32, f32) = (0.88, 0.97);
+const REDLINE_ODDS: f32 = 0.28;
+
+fn span_ms(range: (u32, u32)) -> Duration {
+    Duration::from_millis(fastrand::u32(range.0..=range.1) as u64)
+}
+
+fn between(range: (f32, f32)) -> f32 {
+    range.0 + fastrand::f32() * (range.1 - range.0)
+}
+
+impl Showcase {
+    fn new(idle_rev: f32, ceiling: f32) -> Self {
+        let mut showcase = Showcase {
+            idle_rev,
+            ceiling,
+            phase: Phase::Idle,
+            since: std::time::Instant::now(),
+            span: Duration::from_secs_f32(between(IDLE_SPAN)),
+            left: 0,
+            peak: idle_rev,
+        };
+        // Start on a short idle rather than blipping the instant it is switched
+        // on: the first thing heard should be the engine ticking over.
+        showcase.span = Duration::from_secs_f32(between((1.5, 3.0)));
+        showcase
+    }
+
+    fn pick_peak(&self) -> f32 {
+        let fraction = if fastrand::f32() < REDLINE_ODDS {
+            between(REDLINE_FRACTION)
+        } else {
+            between(PEAK_FRACTION)
+        };
+        (self.ceiling * fraction).max(self.idle_rev + 500.0)
+    }
+
+    /// Advances the routine and returns the engine speed and throttle to apply.
+    fn tick(&mut self) -> (f32, f32) {
+        let elapsed = self.since.elapsed();
+        if elapsed >= self.span {
+            self.advance();
+            return self.tick();
+        }
+        let t = if self.span.is_zero() {
+            1.0
+        } else {
+            (elapsed.as_secs_f32() / self.span.as_secs_f32()).clamp(0.0, 1.0)
+        };
+        let reach = self.peak - self.idle_rev;
+        match self.phase {
+            Phase::Idle | Phase::Gap => (self.idle_rev, 0.0),
+            // Rises quickly then eases into the top, the way an engine under
+            // full throttle actually behaves.
+            Phase::Attack => (self.idle_rev + reach * t.powf(0.7), 1.0),
+            Phase::Hold => (self.peak, 1.0),
+            // Falls away fast at first, then hangs near idle.
+            Phase::Release => (self.idle_rev + reach * (1.0 - t).powf(1.6), 0.0),
+        }
+    }
+
+    fn advance(&mut self) {
+        self.since = std::time::Instant::now();
+        match self.phase {
+            Phase::Idle => {
+                self.left = fastrand::u32(BLIPS_PER_BURST.0..=BLIPS_PER_BURST.1);
+                self.peak = self.pick_peak();
+                self.phase = Phase::Attack;
+                self.span = span_ms(ATTACK_MS);
+            }
+            Phase::Attack => {
+                self.phase = Phase::Hold;
+                self.span = span_ms(HOLD_MS);
+            }
+            Phase::Hold => {
+                self.phase = Phase::Release;
+                self.span = span_ms(RELEASE_MS);
+            }
+            Phase::Release => {
+                self.left = self.left.saturating_sub(1);
+                if self.left == 0 {
+                    self.phase = Phase::Idle;
+                    self.span = Duration::from_secs_f32(between(IDLE_SPAN));
+                } else {
+                    self.phase = Phase::Gap;
+                    self.span = span_ms(GAP_MS);
+                }
+            }
+            Phase::Gap => {
+                self.peak = self.pick_peak();
+                self.phase = Phase::Attack;
+                self.span = span_ms(ATTACK_MS);
+            }
+        }
+    }
 }
 
 fn run(rx: Receiver<Command>) {
     let mut loaded: Option<Loaded> = None;
     let mut playing: Option<Playing> = None;
+    // Kept across plays: moving the camera, switching sound mod and listening
+    // again should not silently put the ear back in front of the car.
+    let mut listener = Listener::default();
 
     loop {
         match rx.recv_timeout(TICK) {
             Ok(Command::Play(request, reply)) => {
                 stop_current(&loaded, &mut playing);
-                let outcome = start(&mut loaded, &mut playing, request);
+                let outcome = start(&mut loaded, &mut playing, request, listener);
                 if let Err(e) = &outcome {
                     // Not an error the user sees: it is the switch to the
                     // in-house decoder (§4.2). But an install packaged as an
@@ -148,11 +382,58 @@ fn run(rx: Receiver<Command>) {
                 }
                 let _ = reply.send(outcome);
             }
-            Ok(Command::SetRev(value)) => set_role(&loaded, &playing, |roles| roles.rev.as_ref(), value),
+            Ok(Command::SetRev(value)) => {
+                if let Some(p) = &mut playing {
+                    p.manual_rev = value;
+                    // Dragging the slider is an explicit takeover: the routine
+                    // stops rather than fighting the hand that moved it.
+                    p.showcase = None;
+                }
+                set_role(&loaded, &playing, |roles| roles.rev.as_ref(), value);
+            }
             Ok(Command::SetThrottle(value)) => set_role(&loaded, &playing, |roles| roles.throttle.as_ref(), value),
+            Ok(Command::SetListener(next)) => {
+                listener = next;
+                if let Some(l) = &loaded {
+                    if let Err(e) = l.system.set_listener(&listener.attributes()) {
+                        log::warn!("fmod: could not move the listener: {e}");
+                    }
+                }
+            }
+            Ok(Command::Showcase(on)) => {
+                if let Some(p) = &mut playing {
+                    p.showcase = on.then(|| Showcase::new(p.manual_rev, p.rev_ceiling));
+                    if !on {
+                        // Hand the engine back to the slider where it left it,
+                        // rather than wherever the last blip happened to stop.
+                        let manual = p.manual_rev;
+                        set_role(&loaded, &playing, |r| r.throttle.as_ref(), 0.0);
+                        set_role(&loaded, &playing, |r| r.rev.as_ref(), manual);
+                    }
+                }
+            }
             Ok(Command::Stop) => stop_current(&loaded, &mut playing),
             Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+
+        // The showcase advances on the tick, which is why it lives here and not
+        // in the interface: a blip is a couple of hundred milliseconds of
+        // rising engine speed, sampled every 20 ms.
+        if let Some(p) = &mut playing {
+            if let Some(showcase) = &mut p.showcase {
+                let (rev, throttle) = showcase.tick();
+                if let (Some(l), Some(param)) = (&loaded, p.roles.rev.as_ref()) {
+                    let _ = l
+                        .system
+                        .set_parameter(p.instance, &param.name, rev.clamp(param.min, param.max));
+                }
+                if let (Some(l), Some(param)) = (&loaded, p.roles.throttle.as_ref()) {
+                    let _ = l
+                        .system
+                        .set_parameter(p.instance, &param.name, throttle.clamp(param.min, param.max));
+                }
+            }
         }
 
         // Every tick, whether or not anything is playing: this is where FMOD
@@ -172,6 +453,7 @@ fn start(
     loaded: &mut Option<Loaded>,
     playing: &mut Option<Playing>,
     request: PlayRequest,
+    listener: Listener,
 ) -> Result<PlayReport, String> {
     // Rebuild the system if the game path changed under us (a settings edit).
     if loaded.as_ref().is_some_and(|l| l.ac_root != request.ac_root) {
@@ -241,6 +523,22 @@ fn start(
             .set_parameter(instance, &p.name, request.rev.clamp(p.min, p.max));
     }
 
+    // The car sits at the origin, nose down +Z; the ear goes where the caller
+    // last put it. Both are needed before `start`, or the first mixed block is
+    // computed with the event at the default position.
+    let car = Attributes3d {
+        position: [0.0; 3],
+        velocity: [0.0; 3],
+        forward: [0.0, 0.0, 1.0],
+        up: [0.0, 1.0, 0.0],
+    };
+    if let Err(e) = l.system.set_instance_3d(instance, &car) {
+        log::warn!("fmod: could not place the event in space: {e}");
+    }
+    if let Err(e) = l.system.set_listener(&listener.attributes()) {
+        log::warn!("fmod: could not place the listener: {e}");
+    }
+
     l.system.start(instance).map_err(|e| e.to_string())?;
 
     // One pump, then check. "Started without error" and "actually audible" are
@@ -262,7 +560,13 @@ fn start(
         rev_max: roles.rev.as_ref().map(|p| p.max),
         throttle_param: roles.throttle.as_ref().map(|p| p.name.clone()),
     };
-    *playing = Some(Playing { instance, roles });
+    *playing = Some(Playing {
+        instance,
+        roles,
+        rev_ceiling: request.rev_ceiling,
+        manual_rev: request.rev,
+        showcase: None,
+    });
     Ok(report)
 }
 
@@ -351,6 +655,7 @@ mod tests {
                 event_path: event_path.clone(),
                 rev: 900.0,
                 throttle: 0.0,
+                rev_ceiling: 8000.0,
             })
             .expect("the native path must work against a real install");
 
@@ -373,7 +678,133 @@ mod tests {
             std::thread::sleep(Duration::from_millis(400));
         }
 
+        // Orbit the ear around the car. What should be heard is the *timbre*
+        // changing between nose and tail, not the sound moving left and right:
+        // the listener faces the car throughout, so the source stays centred.
+        eprintln!("orbiting the listener");
+        for azimuth in (0..360).step_by(15) {
+            handle.set_listener(Listener {
+                azimuth: azimuth as f32,
+                elevation: 8.0,
+                distance: 4.0,
+            });
+            std::thread::sleep(Duration::from_millis(120));
+        }
+
         handle.stop();
         std::thread::sleep(Duration::from_millis(200));
+    }
+
+    /// The blip routine, played for real. Ignored for the same reason as the
+    /// rest of this module's tests: it needs the game's DLLs and a sound card.
+    ///
+    /// ```text
+    /// PITBOX_AC_ROOT="D:\...ssettocorsa"     ///   cargo test --lib fmod::engine::tests::showcase -- --ignored --nocapture
+    /// ```
+    #[test]
+    #[ignore = "needs a real Assetto Corsa install and an audio device"]
+    fn showcase_blips_the_throttle() {
+        let Ok(ac_root) = std::env::var("PITBOX_AC_ROOT") else {
+            eprintln!("PITBOX_AC_ROOT unset — nothing to play against, skipping");
+            return;
+        };
+        let ac_root = PathBuf::from(ac_root);
+        let car = std::env::var("PITBOX_AC_CAR").unwrap_or_else(|_| "ks_ford_gt40".to_string());
+        let bank_dir = ac_root.join("content").join("cars").join(&car).join("sfx");
+        let (event_path, guid) =
+            super::super::guids::resolve_engine_event(&bank_dir, Some(&ac_root), &car, Default::default())
+                .unwrap_or_else(|| panic!("no engine event for {car}"));
+        let bank = crate::enginesound::find_bank(&bank_dir).expect("a bank next to the events");
+
+        let handle = spawn();
+        handle
+            .play(PlayRequest {
+                ac_root,
+                bank,
+                guid,
+                event_path,
+                rev: 900.0,
+                throttle: 0.0,
+                rev_ceiling: 8000.0,
+            })
+            .expect("the native path must work against a real install");
+
+        let seconds: u64 = std::env::var("PITBOX_SHOWCASE_SECONDS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(25);
+        eprintln!("showcase running for {seconds} s — idle, then bursts of blips");
+        handle.set_showcase(true);
+        std::thread::sleep(Duration::from_secs(seconds));
+
+        handle.stop();
+        std::thread::sleep(Duration::from_millis(200));
+    }
+
+    /// The geometry, without any DLL: the ear must end up where the angles say,
+    /// and its basis must be orthonormal or FMOD is entitled to refuse it.
+    #[test]
+    fn listener_geometry_is_orthonormal_and_faces_the_car() {
+        for azimuth in [0.0, 35.0, 90.0, 180.0, 275.0] {
+            for elevation in [-45.0, 0.0, 8.0, 60.0] {
+                let listener = Listener {
+                    azimuth,
+                    elevation,
+                    distance: 4.0,
+                };
+                let a = listener.attributes();
+
+                let len = |v: [f32; 3]| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+                let dot = |u: [f32; 3], v: [f32; 3]| u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+
+                assert!(
+                    (len(a.position) - 4.0).abs() < 1e-3,
+                    "the ear sits at the requested distance, got {}",
+                    len(a.position)
+                );
+                assert!((len(a.forward) - 1.0).abs() < 1e-4, "forward is normalised");
+                assert!((len(a.up) - 1.0).abs() < 1e-4, "up is normalised");
+                assert!(
+                    dot(a.forward, a.up).abs() < 1e-4,
+                    "forward and up must be perpendicular, dot = {}",
+                    dot(a.forward, a.up)
+                );
+                // Facing the car means forward points from the ear back to the
+                // origin — the whole reason the source stays centred.
+                let to_car = normalize([-a.position[0], -a.position[1], -a.position[2]]);
+                assert!(
+                    dot(a.forward, to_car) > 0.999,
+                    "the listener must look at the car, dot = {}",
+                    dot(a.forward, to_car)
+                );
+            }
+        }
+    }
+
+    /// A blip has to actually reach for the top of *this* engine, and come back
+    /// to idle. Pure logic, no audio: the routine is a state machine.
+    #[test]
+    fn the_showcase_idles_then_reaches_for_the_top() {
+        let mut showcase = Showcase::new(900.0, 8000.0);
+        let (mut peak, mut lowest, mut throttle_open) = (0.0_f32, f32::MAX, false);
+        // Simulated at the real tick rate, long enough to cover several bursts.
+        for _ in 0..(90 * 50) {
+            let (rev, throttle) = showcase.tick();
+            peak = peak.max(rev);
+            lowest = lowest.min(rev);
+            throttle_open |= throttle > 0.5;
+            // The routine is time-driven, so the clock has to be let run.
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert!(throttle_open, "a blip opens the throttle");
+        assert!(peak > 900.0 * 2.0, "a blip must be audible as one, peaked at {peak}");
+        assert!(
+            peak <= 8000.0,
+            "and must never exceed the car's own ceiling, peaked at {peak}"
+        );
+        assert!(
+            (lowest - 900.0).abs() < 1.0,
+            "and it must come back to idle, lowest was {lowest}"
+        );
     }
 }

@@ -78,6 +78,27 @@ export function setAuditionThrottle(throttle: number): Promise<void> {
   return invoke<void>("set_audition_throttle", { throttle });
 }
 
+/**
+ * Déplace l'oreille autour de la voiture : angle d'orbite et hauteur en degrés,
+ * distance en mètres.
+ *
+ * L'événement moteur d'AC est spatialisé et expose `Event Cone Angle` en
+ * paramètre **automatique** : c'est FMOD qui change le timbre entre l'avant et
+ * l'arrière, on ne fait que dire où on se trouve.
+ */
+export function setAuditionListener(
+  azimuth: number,
+  elevation: number,
+  distance: number,
+): Promise<void> {
+  return invoke<void>("set_audition_listener", { azimuth, elevation, distance });
+}
+
+/** Lance ou coupe les coups d'accélérateur. */
+export function setAuditionShowcase(on: boolean): Promise<void> {
+  return invoke<void>("set_audition_showcase", { on });
+}
+
 /** Coupe l'écoute native. Sans effet si rien ne joue. */
 export function stopAuditionNative(): Promise<void> {
   return invoke<void>("stop_audition_native");

@@ -222,6 +222,55 @@ Le taux de passages par zéro est ici un meilleur juge que l'autocorrélation :
 il reste monotone sur toute la plage, là où l'autocorrélation décroche au-delà
 de ~2000 tr/min.
 
+### L'auditeur atteint bien l'événement, et c'est le bank qui fait le timbre
+
+Ajouté après le lot 3 : le son doit changer selon qu'on regarde la voiture de
+face ou de derrière.
+
+**Il n'y a rien à modéliser.** Les événements moteur d'AC sont 3D (`Is3D` le
+confirme) et exposent `Event Cone Angle` en paramètre **automatique** : FMOD le
+recalcule à chaque `Update` à partir des attributs 3D, et le bank contient déjà
+la différence de timbre. Il suffit de dire où se trouve l'oreille.
+
+`FMOD_3D_ATTRIBUTES` = position, vitesse, avant, haut — quatre vecteurs de trois
+flottants, 48 octets. `SetListenerAttributes` prend bien un **index
+d'auditeur** (`system, 0, &attrs`), ce que `SetNumListeners` laissait supposer et
+que la mesure confirme.
+
+Mesuré sur la GT40, auditeur orbitant à 4 m et regardant la voiture :
+
+| azimut | 0 | 45 | 90 | 135 | 180 | 225 | 270 | 315 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `Distance` | 4,0 | 4,0 | 4,0 | 4,0 | 4,0 | 4,0 | 4,0 | 4,0 |
+| `Event Cone Angle` | 0 | 45 | 90 | 135 | **180** | 135 | 90 | 45 |
+
+La géométrie exacte, dans les deux sens.
+
+⚠️ **Deux pièges dans la lecture, et le second a bien failli faire conclure à
+un échec.**
+
+- Un paramètre automatique **ne se lit pas par son nom** :
+  `GetParameterValue("Distance", …)` rend `FMOD_ERR_INVALID_PARAM` (31). Par
+  index, il se lit. La recherche par nom ne voit que les `GAME_CONTROLLED`.
+- Des deux flottants rendus, **`finalvalue` vaut toujours 0** en 1.08 : c'est
+  `value` qui porte l'information. La première version du banc lisait
+  `finalvalue` et affichait des zéros à tous les angles — ce qui ressemble
+  exactement à « l'auditeur n'atteint pas l'événement ». **Ce qui a tranché,
+  c'est un paramètre témoin** : `rpms`, réglé à 900, relu à 900. Sans lui, le
+  tableau de zéros était indiscernable d'une vraie panne.
+
+**Le panoramique stéréo, lui, ne bouge presque pas — et c'est normal.** L'oreille
+regarde toujours la voiture, comme une caméra en orbite : la source reste droit
+devant. Mesuré sur les canaux gauche et droit de la capture, l'écart reste dans
+le bruit. Ce qui change est le **timbre**, pas la direction. Ne pas partir en
+chasse d'un panoramique manquant.
+
+**Côté interface, l'angle qui compte n'est pas celui de la caméra.** L'aperçu 3D
+fait tourner **le plateau, pas la caméra** (`CarPreview3D`), donc l'oreille doit
+recevoir l'azimut de la caméra **moins** la rotation du plateau. Sans cette
+soustraction, le son ne changerait pas d'un pouce pendant que la voiture pivote
+sur son socle — exactement le moment où il doit changer.
+
 ### Divers, vérifié au passage
 
 - **Chemins accentués : réglé.** `LoadBankFile` prend bien de l'UTF-8 en 1.08 —
@@ -496,3 +545,71 @@ Trois défauts que rien d'autre n'aurait montrés :
 Reste hors périmètre de ce chiffre : les **mods de son** installés en
 bibliothèque, que ce parcours ne visite pas — il regarde `content/cars`. Les
 trois essayés à la main passent, mais ce n'est pas un relevé.
+
+---
+
+## 6. Risques, et ce qu'on en fait
+
+| risque | traitement |
+| --- | --- |
+| **Un plantage de FMOD emporte l'app** (DLL dans notre processus) | Accepté au départ : c'est la DLL du jeu sur les banks du jeu, le chemin le plus éprouvé qui soit. Un processus compagnon isolerait totalement, au prix de la livraison — à ne faire que si un plantage réel est constaté. |
+| Les crates Rust FMOD (`libfmod`, `fmod-sys`) visent **2.x** | Inutilisables : l'API des paramètres a changé entre 1.x et 2.x. FFI écrite à la main — et donc **aucune dépendance ajoutée**, ce qui va dans le sens du projet. |
+| Version de bank incompatible | **Impossible par construction** : on utilise la DLL du jeu de l'utilisateur, donc tout ce que son jeu sait jouer, on sait le jouer. |
+| ~~Chemins avec accents / espaces~~ | **Clos au lot 0** : `LoadBankFile` prend bien de l'UTF-8 (§2bis). |
+| Un mod sans `engine_ext` | Essayer `engine_int`, puis n'importe quel événement dont le chemin contient `engine`, puis repli. |
+
+---
+
+## 6bis. Le coup d'accélérateur à l'arrêt ✅ fait
+
+**Décidé avec l'utilisateur après avoir entendu le balayage du lot 0**, réalisé
+après les cinq lots du §5.
+
+Reproduire ce que fait quelqu'un qui donne quelques coups d'accélérateur,
+voiture à l'arrêt, pour faire écouter son moteur — avec des arrivées près du
+rupteur.
+
+**C'est une machine à états sur le thread audio**, pas dans l'interface, et pour
+une raison précise : un coup d'accélérateur, c'est deux cents millisecondes de
+régime qui monte, échantillonnées toutes les 20 ms. Le piloter depuis la webview
+demanderait un aller-retour IPC par pas.
+
+Le cycle, tel que demandé : **3 à 7 secondes de ralenti** (tirées au sort), puis
+une rafale de **2 à 5 coups brefs**, puis on recommence. Chaque coup monte en
+150–260 ms, tient 60–150 ms, retombe en 380–620 ms, avec 120–360 ms entre deux.
+Il monte plus vite qu'il ne redescend, comme un vrai moteur qu'on tire puis
+qu'on lâche.
+
+**Le sommet se tire au sort par rapport au plafond de _cette_ voiture**, jamais
+en valeur absolue : 50 à 75 % du régime maximal la plupart du temps, et
+**28 % des fois entre 88 et 97 %** — l'arrivée au rupteur. Les mêmes 5000 tr/min
+sont la zone rouge d'un utilitaire diesel et la mi-course d'une Ferrari, donc un
+seuil fixe donnerait un moteur poussif ici et cassé là.
+
+L'aléatoire n'était pas une commodité : un intervalle fixe s'entend comme une
+machine, un intervalle irrégulier comme quelqu'un content de sa voiture.
+`fastrand` était déjà une dépendance du projet.
+
+Le rupteur reste un **événement séparé** (`event:/cars/<id>/limiter`) qu'on ne
+déclenche pas : on approche le haut de la plage, le bank fait le reste. Le vrai
+régime de coupure vit dans un `data.acd` chiffré — même impasse qu'au §4.4,
+même réponse.
+
+**Curseur et démonstration ne coexistent pas** : ils pilotent le même paramètre.
+Toucher le curseur arrête la démonstration (côté Rust aussi, pas seulement à
+l'écran), et pendant qu'elle tourne le curseur s'efface — un curseur qui ne suit
+pas ce qu'on entend serait pire qu'absent.
+
+---
+
+## 7. Questions ouvertes
+
+- **Quel événement par défaut**, `engine_ext` ou `engine_int` ? L'extérieur est
+  le plus flatteur et le plus comparable d'un mod à l'autre ; l'intérieur est ce
+  que le pilote entend. Peut-être les deux, en bascule — à trancher avec
+  l'utilisateur une fois qu'on les aura entendus.
+- **Les autres événements** (turbo, échappement, changements de rapport,
+  klaxon) deviennent jouables une fois la plomberie en place. Intéressant, mais
+  hors périmètre tant que le moteur ne marche pas.
+- **Faut-il couper la musique Big Picture pendant l'écoute ?** À juger à
+  l'oreille (§4.3).

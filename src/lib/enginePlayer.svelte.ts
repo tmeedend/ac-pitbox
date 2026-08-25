@@ -12,7 +12,9 @@ import {
   auditionEngineNative,
   auditionEngineSound,
   clipToBuffer,
+  setAuditionListener,
   setAuditionRev,
+  setAuditionShowcase,
   setAuditionThrottle,
   stopAuditionNative,
   type EngineClip,
@@ -33,6 +35,19 @@ let native = $state<NativeAudition | null>(null);
 /** Régime demandé, en tr/min. Vit ici et non dans le composant, pour la même
  * raison que le reste : la fiche se démonte, le son non. */
 let rev = $state(0);
+/** Les coups d'accélérateur tournent-ils ? */
+let showcase = $state(false);
+
+/** Dernier angle envoyé au moteur, pour ne pas répéter le même. */
+let lastAngle = { azimuth: 999, elevation: 999, distance: 0 };
+/** Horodatage du dernier envoi — l'aperçu 3D appelle à chaque image. */
+let lastAngleAt = 0;
+
+/** Écart minimal, en degrés, qui vaut la peine d'un aller vers Rust. */
+const ANGLE_EPSILON = 1.5;
+/** Et jamais plus souvent que ça, en millisecondes. Le timbre suit largement
+ * à cette cadence, et l'aperçu tourne lui à 60 images par seconde. */
+const ANGLE_INTERVAL = 60;
 
 let context: AudioContext | null = null;
 let source: AudioBufferSourceNode | null = null;
@@ -73,6 +88,9 @@ export function engineRev(): number {
  * sans conséquence — le thread ignore un réglage quand rien ne joue. */
 export function setEngineRev(value: number): void {
   rev = value;
+  // Prendre le curseur en main arrête la démonstration : côté Rust aussi, pour
+  // que les deux ne se disputent pas le même paramètre.
+  showcase = false;
   void setAuditionRev(value).catch(() => {});
 }
 
@@ -81,9 +99,41 @@ export function setEngineThrottle(value: number): void {
   void setAuditionThrottle(value).catch(() => {});
 }
 
+/** Les coups d'accélérateur tournent-ils ? */
+export function engineShowcase(): boolean {
+  return showcase;
+}
+
+/** Lance ou coupe les coups d'accélérateur. */
+export function setEngineShowcase(on: boolean): void {
+  showcase = on;
+  void setAuditionShowcase(on).catch(() => {});
+}
+
+/**
+ * Position de l'oreille, appelée par l'aperçu 3D **à chaque image**.
+ *
+ * D'où le filtrage ici plutôt que chez l'appelant : ce module sait s'il y a
+ * quelque chose à spatialiser, l'aperçu ne le sait pas et n'a pas à le savoir.
+ * Sans écoute native en cours, l'appel ne coûte rien.
+ */
+export function reportListenerAngle(azimuth: number, elevation: number, distance: number): void {
+  if (!native) return;
+  const now = performance.now();
+  const moved =
+    Math.abs(azimuth - lastAngle.azimuth) > ANGLE_EPSILON ||
+    Math.abs(elevation - lastAngle.elevation) > ANGLE_EPSILON ||
+    Math.abs(distance - lastAngle.distance) > 0.25;
+  if (!moved || now - lastAngleAt < ANGLE_INTERVAL) return;
+  lastAngle = { azimuth, elevation, distance };
+  lastAngleAt = now;
+  void setAuditionListener(azimuth, elevation, distance).catch(() => {});
+}
+
 /** Coupe ce qui tourne, en fondu. */
 export function stopEngine(): void {
   playing = null;
+  showcase = false;
   if (native) {
     native = null;
     void stopAuditionNative().catch(() => {});
@@ -139,6 +189,10 @@ export async function toggleEngine(
     const audition = await auditionEngineNative(parentId, subId);
     native = audition;
     rev = audition.revStart;
+    showcase = false;
+    // Un nouvel événement, une nouvelle instance : le prochain angle doit
+    // repartir, même si la caméra n'a pas bougé entre-temps.
+    lastAngle = { azimuth: 999, elevation: 999, distance: 0 };
     playing = key;
     return null;
   } catch (e) {

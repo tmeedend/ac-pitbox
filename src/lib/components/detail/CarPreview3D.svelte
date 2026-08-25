@@ -17,6 +17,9 @@
   } from "$lib/preview3dPrefs.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
+  // Le seul lien de l'aperçu vers le son : une fonction qui ne fait rien tant
+  // que rien ne joue. L'aperçu n'a pas à savoir ce qu'est une écoute native.
+  import { reportListenerAngle } from "$lib/enginePlayer.svelte";
   import type * as ThreeModule from "three";
   import type { Reflector } from "three/addons/objects/Reflector.js";
   import { applyFloorMirror, floorMirrorShader } from "./floorMirror";
@@ -59,6 +62,11 @@
       addEventListener(type: string, listener: () => void): void;
       /** Point visé, déplacé verticalement par le réglage de hauteur. */
       target: ThreeModule.Vector3;
+      /** Angle d'orbite, en radians depuis +Z vers +X — la même convention que
+       * le cadrage par réglages plus bas, et que l'oreille côté son. */
+      getAzimuthalAngle(): number;
+      /** Angle depuis +Y : 90° = horizon. */
+      getPolarAngle(): number;
     };
     pmrem: ThreeModule.PMREMGenerator;
     /** Le plateau : la voiture y est posée, l'ombre de contact non — un socle
@@ -687,6 +695,30 @@
   }
 
   /**
+   * Dit à l'écoute moteur où se trouve l'oreille, si elle joue.
+   *
+   * **L'angle qui compte est celui de la caméra dans le repère de la voiture,
+   * pas dans celui de la scène.** C'est le plateau qui tourne ici, pas la
+   * caméra (voir la boucle de rendu) : sans retrancher sa rotation, le son ne
+   * changerait pas d'un pouce pendant que la voiture pivote sur son socle —
+   * exactement le moment où il devrait.
+   *
+   * L'appel part à chaque image ; c'est `enginePlayer` qui décide de l'envoyer
+   * ou non, parce que lui seul sait si quelque chose est spatialisable.
+   */
+  function reportEar(current: ThreeScene) {
+    const camera = (current.controls.getAzimuthalAngle() * 180) / Math.PI;
+    const car = (current.turntable.rotation.y * 180) / Math.PI;
+    const azimuth = (((camera - car) % 360) + 360) % 360;
+    const elevation = 90 - (current.controls.getPolarAngle() * 180) / Math.PI;
+    // Les modèles AC sont en mètres. Borné : la courbe d'atténuation du jeu est
+    // faite pour des distances de piste, et un zoom arrière complet finirait
+    // par ne plus rien laisser entendre.
+    const distance = Math.min(Math.max(current.camera.position.distanceTo(current.controls.target), 1.5), 15);
+    reportListenerAngle(azimuth, elevation, distance);
+  }
+
+  /**
    * Une image. La boucle ne se prolonge que si quelque chose bouge encore :
    * le plateau, ou l'inertie d'OrbitControls après un lâcher de souris.
    */
@@ -709,6 +741,7 @@
         current.turntable.rotation.y += SPIN_SPEED * (preview3dPrefs().spin / 100) * intro * elapsed;
       }
       const moving = current.controls.update();
+      reportEar(current);
       current.renderer.render(current.scene, current.camera);
       // Rien à ajouter pour l'effet d'entrée : il ne fait qu'accélérer un
       // plateau qui tourne, donc `turning()` le couvre déjà. L'ajouter ici

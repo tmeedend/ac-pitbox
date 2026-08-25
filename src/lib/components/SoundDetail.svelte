@@ -20,8 +20,10 @@
   import {
     engineControls,
     engineRev,
+    engineShowcase,
     engineState,
     setEngineRev,
+    setEngineShowcase,
     stopEngine,
     toggleEngine,
   } from "$lib/enginePlayer.svelte";
@@ -105,16 +107,21 @@
 
   {#if revControls}
     <div class="rev">
-      <Slider
-        compact
-        label={t("detail.soundRev")}
-        min={revControls.revFloor}
-        max={revControls.revCeiling}
-        step={50}
-        value={engineRev()}
-        display={t("detail.soundRevValue", { rpm: Math.round(engineRev()).toLocaleString() })}
-        oninput={setEngineRev}
-      />
+      {#if !engineShowcase()}
+        <Slider
+          compact
+          label={t("detail.soundRev")}
+          min={revControls.revFloor}
+          max={revControls.revCeiling}
+          step={50}
+          value={engineRev()}
+          display={t("detail.soundRevValue", { rpm: Math.round(engineRev()).toLocaleString() })}
+          oninput={setEngineRev}
+        />
+      {/if}
+      <button class="blip" class:on={engineShowcase()} type="button" onclick={() => setEngineShowcase(!engineShowcase())}>
+        {engineShowcase() ? t("detail.soundBlipStop") : t("detail.soundBlip")}
+      </button>
     </div>
   {/if}
 
@@ -257,8 +264,38 @@
   }
   /* Le curseur prend la largeur du bandeau, sous l'en-tête qui porte la clé. */
   .rev {
-    max-width: 420px;
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    max-width: 520px;
     margin: 0 0 12px;
+  }
+
+  .rev :global(.slider) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .blip {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 6px 12px;
+    border: 1px solid var(--rosso-border);
+    border-radius: 4px;
+    background: var(--rosso-dim);
+    color: var(--txt);
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+
+  .blip:hover {
+    border-color: var(--rosso-bright);
+  }
+
+  .blip.on {
+    background: var(--rosso-bright);
+    border-color: var(--rosso-bright);
+    color: #fff;
   }
 
   .err {

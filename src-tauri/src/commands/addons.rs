@@ -146,6 +146,7 @@ pub fn audition_engine_native(
         // temps. Le curseur rend la question sans objet (§4.4).
         rev: rev.unwrap_or(DEFAULT_REV),
         throttle: 0.0,
+        rev_ceiling,
     })?;
     Ok(NativeAudition {
         play,
@@ -188,6 +189,35 @@ pub fn set_audition_rev(engine: State<crate::fmod::engine::FmodEngineHandle>, re
 #[tauri::command]
 pub fn set_audition_throttle(engine: State<crate::fmod::engine::FmodEngineHandle>, throttle: f32) {
     engine.set_throttle(throttle);
+}
+
+/// Déplace l'oreille autour de la voiture, en degrés et en mètres.
+///
+/// Branché sur l'orbite de l'aperçu 3D : l'événement moteur d'AC est spatialisé
+/// et expose `Event Cone Angle` en paramètre automatique, donc c'est FMOD qui
+/// change le timbre entre l'avant et l'arrière — on ne fait que dire où on se
+/// trouve. Envoyé sans réponse : ça suit une caméra qu'on fait tourner.
+#[cfg(windows)]
+#[tauri::command]
+pub fn set_audition_listener(
+    engine: State<crate::fmod::engine::FmodEngineHandle>,
+    azimuth: f32,
+    elevation: f32,
+    distance: f32,
+) {
+    engine.set_listener(crate::fmod::engine::Listener {
+        azimuth,
+        elevation,
+        distance,
+    });
+}
+
+/// Lance ou coupe les coups d'accélérateur (§6bis) : quelques secondes de
+/// ralenti, puis une rafale de brefs coups de gaz, en boucle.
+#[cfg(windows)]
+#[tauri::command]
+pub fn set_audition_showcase(engine: State<crate::fmod::engine::FmodEngineHandle>, on: bool) {
+    engine.set_showcase(on);
 }
 
 /// Coupe l'écoute native. Sans effet si rien ne joue.

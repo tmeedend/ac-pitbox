@@ -476,6 +476,8 @@
     "soundOrigin": "Origine",
     "soundListen": "Écouter le moteur",
     "soundStop": "Couper le moteur",
+    "soundBlip": "Coups d'accélérateur",
+    "soundBlipStop": "Arrêter",
     "soundRev": "Régime",
     "soundRevValue": "{rpm} tr/min",
     "modTag": "MOD",

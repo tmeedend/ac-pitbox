@@ -78,6 +78,24 @@ impl From<c_int> for PlaybackState {
     }
 }
 
+/// `FMOD_3D_ATTRIBUTES`: position, velocity, forward, up — four vectors of
+/// three floats, 48 bytes.
+///
+/// This is what makes an engine sound different from in front and from behind.
+/// AC's engine events are 3D (`Is3D` says so) and expose `Event Cone Angle` as
+/// an **automatic** parameter, which FMOD recomputes from these attributes on
+/// every update. Measured on the GT40 with the listener orbiting at 4 m: the
+/// cone angle reads 0, 45, 90, 135, 180, 135, 90, 45, 0 — the exact geometry.
+/// Nothing has to model the timbre change; the bank already contains it.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Attributes3d {
+    pub position: [f32; 3],
+    pub velocity: [f32; 3],
+    pub forward: [f32; 3],
+    pub up: [f32; 3],
+}
+
 /// `FMOD_STUDIO_PARAMETER_DESCRIPTION`, **as measured, not as documented**.
 ///
 /// The obvious 1.x layout ends at `maximum` and puts the type enum at offset
@@ -186,6 +204,11 @@ type FnInstanceStart = unsafe extern "C" fn(*mut c_void) -> FmodResult;
 type FnInstanceStop = unsafe extern "C" fn(*mut c_void, c_int) -> FmodResult;
 type FnInstanceRelease = unsafe extern "C" fn(*mut c_void) -> FmodResult;
 type FnInstanceGetPlaybackState = unsafe extern "C" fn(*mut c_void, *mut c_int) -> FmodResult;
+// The listener index is **not** guessed: 1.08 exports `SetNumListeners`, and
+// the three-argument form was confirmed against a real system — it returns
+// FMOD_OK and the automatic parameters then track the geometry.
+type FnSystemSetListenerAttributes = unsafe extern "C" fn(*mut c_void, c_int, *const Attributes3d) -> FmodResult;
+type FnInstanceSet3DAttributes = unsafe extern "C" fn(*mut c_void, *const Attributes3d) -> FmodResult;
 
 struct Api {
     system_create: FnSystemCreate,
@@ -205,6 +228,8 @@ struct Api {
     instance_stop: FnInstanceStop,
     instance_release: FnInstanceRelease,
     instance_get_playback_state: FnInstanceGetPlaybackState,
+    system_set_listener_attributes: FnSystemSetListenerAttributes,
+    instance_set_3d_attributes: FnInstanceSet3DAttributes,
 }
 
 /// Resolves one export and reinterprets it as a function pointer.
@@ -265,6 +290,8 @@ impl Fmod {
                 instance_stop: symbol(studio, "FMOD_Studio_EventInstance_Stop")?,
                 instance_release: symbol(studio, "FMOD_Studio_EventInstance_Release")?,
                 instance_get_playback_state: symbol(studio, "FMOD_Studio_EventInstance_GetPlaybackState")?,
+                system_set_listener_attributes: symbol(studio, "FMOD_Studio_System_SetListenerAttributes")?,
+                instance_set_3d_attributes: symbol(studio, "FMOD_Studio_EventInstance_Set3DAttributes")?,
             };
 
             Ok(Fmod { studio, low, api })
@@ -502,6 +529,26 @@ impl System {
         }
     }
 
+    /// Where the ear is. Index 0 — the only listener this app ever needs.
+    pub fn set_listener(&self, attributes: &Attributes3d) -> Result<(), FmodError> {
+        unsafe {
+            check(
+                "FMOD_Studio_System_SetListenerAttributes",
+                (self.fmod.api.system_set_listener_attributes)(self.raw, 0, attributes),
+            )
+        }
+    }
+
+    /// Where the car is, and which way it points.
+    pub fn set_instance_3d(&self, inst: EventInstance, attributes: &Attributes3d) -> Result<(), FmodError> {
+        unsafe {
+            check(
+                "FMOD_Studio_EventInstance_Set3DAttributes",
+                (self.fmod.api.instance_set_3d_attributes)(inst.0, attributes),
+            )
+        }
+    }
+
     pub fn playback_state(&self, inst: EventInstance) -> Result<PlaybackState, FmodError> {
         let mut state: c_int = 0;
         unsafe {
@@ -569,6 +616,15 @@ mod tests {
 
     /// A `Guid` is passed straight to `GetEventByID`, so its layout is FMOD's,
     /// not ours to rearrange.
+    #[test]
+    fn attributes_3d_is_forty_eight_bytes() {
+        assert_eq!(
+            std::mem::size_of::<Attributes3d>(),
+            48,
+            "FMOD_3D_ATTRIBUTES is four vectors of three floats"
+        );
+    }
+
     #[test]
     fn guid_is_sixteen_bytes() {
         assert_eq!(
