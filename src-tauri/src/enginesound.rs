@@ -236,7 +236,16 @@ pub fn resources_dir(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result
 
 /// Finds the `.bank` inside a sound folder. AC puts exactly one there, next to
 /// `GUIDs.txt`; the largest wins if a pack ever ships more.
-fn find_bank(dir: &Path) -> Option<PathBuf> {
+///
+/// Two names are refused outright rather than being left to the size contest.
+/// Some mods ship **their own `common.bank`** beside the car's — one real case
+/// in the reference corpus, `honda_acty_ha3`. It carries the same bank GUID as
+/// the game's master bank, so handing it to FMOD gets the whole audition
+/// refused with `FMOD_ERR_EVENT_ALREADY_LOADED`. Size alone happens to avoid it
+/// (12 KB against 12 MB), but by luck rather than by intent, and a smaller car
+/// bank would lose that coin toss. A `.strings.bank` is not an audio bank at
+/// all.
+pub(crate) fn find_bank(dir: &Path) -> Option<PathBuf> {
     let mut best: Option<(u64, PathBuf)> = None;
     for entry in std::fs::read_dir(dir).ok()?.flatten() {
         let path = entry.path();
@@ -246,6 +255,14 @@ fn find_bank(dir: &Path) -> Option<PathBuf> {
             .map(|e| e.eq_ignore_ascii_case("bank"))
             != Some(true)
         {
+            continue;
+        }
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if name == "common.bank" || name.ends_with(".strings.bank") {
             continue;
         }
         let size = entry.metadata().map(|m| m.len()).unwrap_or(0);

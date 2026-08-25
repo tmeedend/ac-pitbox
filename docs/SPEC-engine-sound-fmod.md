@@ -1,7 +1,8 @@
 # SPEC — Écouter le moteur avec le FMOD d'Assetto Corsa
 
 > Chantier suivant de l'écoute des sons moteur. Remplace une heuristique juste à
-> 44 % par le moteur audio du jeu lui-même.
+> 44 % par le moteur audio du jeu lui-même. **Mesuré à l'arrivée : 299 voitures
+> sur 299** (§5, lot 4).
 >
 > À lire avec `docs/fsb5-format.md`, qui décrit le format des banks et **pourquoi
 > l'approche actuelle plafonne**.
@@ -418,70 +419,48 @@ Vérifié ainsi sur trois voitures — la GT40 Kunos et deux mods (`art_skyline_
 **Lot 3 — l'interface.** La clé branchée sur le chemin natif, le curseur de
 régime, et la mention FMOD dans À propos (§3).
 
-**Lot 4 — le corpus.** Passer sur les 297 voitures : combien chargent, combien
-exposent un paramètre de régime reconnu, combien tombent au repli. Le chiffre
-va dans ce document.
+**Lot 4 — le corpus. ✅ fait.** Relevé par `fmod::sys::survey`, un test
+`#[ignore]` qui parcourt `content/cars`, résout l'événement, charge le bank et
+énumère — sans rien jouer, donc lançable à toute heure. Sur les **299 voitures**
+de l'installation de référence :
 
----
-
-## 6. Risques, et ce qu'on en fait
-
-| risque | traitement |
+| | |
 | --- | --- |
-| **Un plantage de FMOD emporte l'app** (DLL dans notre processus) | Accepté au départ : c'est la DLL du jeu sur les banks du jeu, le chemin le plus éprouvé qui soit. Un processus compagnon isolerait totalement, au prix de la livraison — à ne faire que si un plantage réel est constaté. |
-| Les crates Rust FMOD (`libfmod`, `fmod-sys`) visent **2.x** | Inutilisables : l'API des paramètres a changé entre 1.x et 2.x. FFI écrite à la main — et donc **aucune dépendance ajoutée**, ce qui va dans le sens du projet. |
-| Version de bank incompatible | **Impossible par construction** : on utilise la DLL du jeu de l'utilisateur, donc tout ce que son jeu sait jouer, on sait le jouer. |
-| ~~Chemins avec accents / espaces~~ | **Clos au lot 0** : `LoadBankFile` prend bien de l'UTF-8 (§2bis). |
-| Un mod sans `engine_ext` | Essayer `engine_int`, puis n'importe quel événement dont le chemin contient `engine`, puis repli. |
+| table `GUIDs.txt` propre | 122 (41 %) |
+| événement moteur résolu | **299 (100 %)** |
+| bank refusé par FMOD | 0 |
+| paramètre de régime reconnu | **299 (100 %)** |
+| paramètre d'accélérateur reconnu | **299 (100 %)** |
+| noms de paramètre de régime distincts | **un seul : `rpms`** |
 
----
+À comparer aux 40 sur 91 de l'heuristique qu'il remplace. Et le chiffre le plus
+utile n'est pas 100 % mais le dernier : **un seul nom sur tout le corpus**. La
+crainte du §2.4 — « les noms varient selon l'auteur » — ne s'est pas
+matérialisée ici, ce qui ne rend pas l'énumération inutile : c'est elle qui
+transforme cette uniformité en fait mesuré au lieu d'une supposition, et qui
+tiendra le jour où un auteur s'en écartera.
 
-## 6bis. La cible : le coup d'accélérateur à l'arrêt
+**Le relevé n'a pas donné 100 % du premier coup, et c'est tout son intérêt.**
+Trois défauts que rien d'autre n'aurait montrés :
 
-**Décidée avec l'utilisateur après avoir entendu le balayage du lot 0**, et
-placée ici pour ne pas se perdre. Elle ne remplace aucun lot du §5 : elle vient
-**après**, et le plan existant se termine d'abord.
+- **4 voitures dont la casse du dossier et celle du chemin d'événement
+  diffèrent** (`ford_mustang_boss_429_SE`, `ford_mustang_boss_SE`,
+  `traffic_aegis_daihatsu_Copen`, et `ks_ferrari_Sf15t` — du contenu **Kunos**,
+  pas un mod). Windows ignore la casse, donc les auteurs aussi. Une comparaison
+  exacte les perdait **en silence** : elles ne se sont pas manifestées comme un
+  bug, mais comme quatre trous inexpliqués dans un tableau. La comparaison est
+  désormais insensible à la casse, avec un test de régression bâti sur les
+  vraies données.
+- **1 mod qui livre son propre `common.bank`** à côté du bank de la voiture
+  (`honda_acty_ha3`). Son GUID de bank entre en collision avec celui du bank
+  maître du jeu, et FMOD refuse toute l'écoute avec
+  `FMOD_ERR_EVENT_ALREADY_LOADED`. La règle « le plus gros gagne » de
+  `find_bank` l'évitait — par chance (12 Ko contre 12 Mo), pas par intention, et
+  un bank de voiture plus petit aurait perdu ce tirage. Le nom est maintenant
+  refusé explicitement, ainsi que tout `.strings.bank`.
+- Le relevé utilise **le sélecteur de bank de la production**, pas le sien : un
+  relevé qui choisirait autrement mesurerait autre chose que ce que l'app fait.
 
-L'idée : depuis l'interface, reproduire ce que fait quelqu'un qui donne
-quelques coups d'accélérateur, voiture à l'arrêt, pour faire écouter son moteur
-aux autres — avec quelques arrivées au **rupteur**.
-
-Ce n'est pas un nouveau chantier technique, et c'est ce qui la rend
-intéressante : le lot 0 a déjà prouvé les deux mécaniques dont elle dépend.
-
-- Le régime **et** l'accélérateur se pilotent sur une instance qui tourne, à la
-  cadence de la boucle d'`Update` (§2bis). Un coup d'accélérateur n'est donc
-  qu'une **enveloppe** appliquée à ces deux paramètres — montée franche,
-  maintien court, retombée plus lente que la montée — là où le curseur du §4.4
-  suit la main de l'utilisateur.
-- La chute de RMS mesurée au passage `throttle` 1,0 → 0,0 montre que les
-  couches en charge et en lâcher de gaz se relaient bien. C'est ce contraste
-  qui fait qu'un coup d'accélérateur *sonne* comme tel plutôt que comme une
-  montée en régime.
-
-Deux points à traiter le moment venu, aucun tranché :
-
-- **Le rupteur est un événement séparé**, `event:/cars/<id>/limiter` dans
-  `GUIDs.txt` — pas une région de `engine_ext`. Il se déclenche donc comme
-  seconde instance, et « arriver au rupteur » veut dire savoir à quel régime.
-  Or ce régime vit dans `data/engine.ini`, donc dans `data.acd` chiffré : même
-  impasse qu'au §4.4 pour le ralenti, et probablement la même réponse —
-  approcher le haut de la plage du paramètre plutôt que chercher la vraie
-  valeur.
-- **Ne pas transformer ça en séquenceur.** Une poignée d'enveloppes crédibles
-  vaut mieux qu'un éditeur de courbes ; c'est un bouton qui fait chanter le
-  moteur, pas un outil d'automation.
-
----
-
-## 7. Questions ouvertes
-
-- **Quel événement par défaut**, `engine_ext` ou `engine_int` ? L'extérieur est
-  le plus flatteur et le plus comparable d'un mod à l'autre ; l'intérieur est ce
-  que le pilote entend. Peut-être les deux, en bascule — à trancher avec
-  l'utilisateur une fois qu'on les aura entendus.
-- **Les autres événements** (turbo, échappement, changements de rapport,
-  klaxon) deviennent jouables une fois la plomberie en place. Intéressant, mais
-  hors périmètre tant que le moteur ne marche pas.
-- **Faut-il couper la musique Big Picture pendant l'écoute ?** À juger à
-  l'oreille (§4.3).
+Reste hors périmètre de ce chiffre : les **mods de son** installés en
+bibliothèque, que ce parcours ne visite pas — il regarde `content/cars`. Les
+trois essayés à la main passent, mais ce n'est pas un relevé.

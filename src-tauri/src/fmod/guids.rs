@@ -120,11 +120,24 @@ fn entries(text: &str) -> impl Iterator<Item = (Guid, &str)> {
     })
 }
 
-/// Looks up one exact event path.
-pub fn lookup(text: &str, event_path: &str) -> Option<Guid> {
+/// Looks up one event path, **case-insensitively**, and returns it as written.
+///
+/// Not pedantry, and not a guess: four cars in the reference corpus declare
+/// their events under a differently-cased car id than their own folder name —
+/// `ford_mustang_boss_429_SE`, `ford_mustang_boss_SE`,
+/// `traffic_aegis_daihatsu_Copen`, and `ks_ferrari_Sf15t`, which is **Kunos's
+/// own content**, not a mod. Windows paths do not care about case, so the
+/// authors had no reason to. An exact comparison loses all four silently, which
+/// is exactly how it was found: as four unexplained gaps in the corpus survey,
+/// not as a bug anyone reported.
+///
+/// The path is returned as the file spells it, never as we asked for it: it is
+/// a diagnostic, and showing the caller its own guess back would be worthless.
+pub fn lookup(text: &str, event_path: &str) -> Option<(String, Guid)> {
+    let wanted = event_path.to_ascii_lowercase();
     entries(text)
-        .find(|(_, path)| *path == event_path)
-        .map(|(guid, _)| guid)
+        .find(|(_, path)| path.to_ascii_lowercase() == wanted)
+        .map(|(guid, path)| (path.to_string(), guid))
 }
 
 /// Finds a car's engine event, degrading rather than failing.
@@ -134,17 +147,19 @@ pub fn lookup(text: &str, event_path: &str) -> Option<Guid> {
 /// mentions the engine. A mod that names its events unusually still gets
 /// something to play; only a car with no engine event at all comes back empty.
 pub fn engine_event(text: &str, car_id: &str, view: EngineView) -> Option<(String, Guid)> {
-    let prefix = format!("event:/cars/{car_id}/");
+    let prefix = format!("event:/cars/{}/", car_id.to_ascii_lowercase());
 
     for candidate in [view, view.other()] {
-        let path = format!("{prefix}{}", candidate.suffix());
-        if let Some(guid) = lookup(text, &path) {
-            return Some((path, guid));
+        if let Some(found) = lookup(text, &format!("{prefix}{}", candidate.suffix())) {
+            return Some(found);
         }
     }
 
     entries(text)
-        .find(|(_, path)| path.starts_with(&prefix) && path[prefix.len()..].to_ascii_lowercase().contains("engine"))
+        .find(|(_, path)| {
+            let lower = path.to_ascii_lowercase();
+            lower.starts_with(&prefix) && lower[prefix.len()..].contains("engine")
+        })
         .map(|(guid, path)| (path.to_string(), guid))
 }
 
@@ -253,6 +268,33 @@ mod tests {
 
         let (path, _) = engine_event(GT40, "ks_ford_gt40", EngineView::Interior).expect("interior found");
         assert_eq!(path, "event:/cars/ks_ford_gt40/engine_int");
+    }
+
+    /// Regression, from four real cars found by the corpus survey rather than
+    /// by anyone reporting them: the folder is `ks_ferrari_sf15t`, the events
+    /// say `ks_ferrari_Sf15t`, and Kunos shipped it that way.
+    #[test]
+    fn a_car_id_cased_differently_from_its_folder_still_resolves() {
+        let real = "{e3496e07-0e50-4c55-9347-44fcf272476d} bank:/ks_ferrari_Sf15T
+{6d1f8671-b868-4b50-8a86-b7a3e4ecf447} event:/cars/ks_ferrari_Sf15t/engine_ext
+{245bc852-5d43-4d05-a7d7-fb13018d5919} event:/cars/ks_ferrari_Sf15t/engine_int
+";
+        let (path, guid) = engine_event(real, "ks_ferrari_sf15t", EngineView::Exterior)
+            .expect("the folder name must find the differently-cased event");
+        assert_eq!(
+            path, "event:/cars/ks_ferrari_Sf15t/engine_ext",
+            "the path comes back as the file spells it, not as we asked"
+        );
+        assert_eq!(guid, Guid::parse("{6d1f8671-b868-4b50-8a86-b7a3e4ecf447}").unwrap());
+    }
+
+    /// Case-insensitivity must not become "any car will do".
+    #[test]
+    fn case_insensitivity_does_not_blur_two_different_cars() {
+        assert!(
+            engine_event(GT40, "ks_ford_gt40_s3", EngineView::Exterior).is_none(),
+            "a longer id is a different car, not a casing variant"
+        );
     }
 
     /// §6: a mod with no `engine_ext` must still play something.

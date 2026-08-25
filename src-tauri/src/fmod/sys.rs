@@ -607,3 +607,136 @@ mod tests {
         assert!(text.contains("54"), "keeps the raw code: {text}");
     }
 }
+
+#[cfg(test)]
+mod survey {
+    use super::*;
+    use crate::fmod::guids::{resolve_engine_event, EngineView};
+    use crate::fmod::params;
+
+    /// Walks every installed car and reports what the native path would make of
+    /// it: does an engine event resolve, does the bank load, is a rev parameter
+    /// recognised. This is lot 4 of `docs/SPEC-engine-sound-fmod.md`, and its
+    /// output is what gets written back into that document.
+    ///
+    /// Ignored like the playback test and for the same reason — it needs a real
+    /// install. It plays nothing, so it is safe to run at any hour:
+    ///
+    /// ```text
+    /// PITBOX_AC_ROOT="D:\...\assettocorsa" \
+    ///   cargo test --lib fmod::sys::survey -- --ignored --nocapture
+    /// ```
+    #[test]
+    #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
+    fn surveys_every_installed_car() {
+        let Ok(ac_root) = std::env::var("PITBOX_AC_ROOT") else {
+            eprintln!("PITBOX_AC_ROOT unset — nothing to survey, skipping");
+            return;
+        };
+        let ac_root = std::path::PathBuf::from(ac_root);
+        let cars_dir = ac_root.join("content").join("cars");
+
+        let fmod = Fmod::load(&ac_root).expect("load the game's FMOD DLLs");
+        let system = System::new(fmod).expect("create the studio system");
+        let master = ac_root.join("content").join("sfx").join("common.bank");
+        system.load_bank(&master).expect("load the master bank");
+
+        let mut cars: Vec<_> = std::fs::read_dir(&cars_dir)
+            .expect("read content/cars")
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.is_dir())
+            .collect();
+        cars.sort();
+
+        let (mut total, mut no_event, mut no_bank) = (0, 0, 0);
+        let (mut bank_failed, mut event_failed) = (0, 0);
+        let (mut with_rev, mut with_throttle, mut played_blind) = (0, 0, 0);
+        let mut own_table = 0;
+        let mut rev_names: std::collections::BTreeMap<String, usize> = Default::default();
+        let mut failures: Vec<String> = Vec::new();
+
+        for car in &cars {
+            let car_id = car.file_name().unwrap().to_string_lossy().to_string();
+            let sfx = car.join("sfx");
+            if !sfx.is_dir() {
+                continue;
+            }
+            total += 1;
+            if sfx.join("GUIDs.txt").is_file() {
+                own_table += 1;
+            }
+
+            let Some((_, guid)) = resolve_engine_event(&sfx, Some(&ac_root), &car_id, EngineView::Exterior) else {
+                no_event += 1;
+                continue;
+            };
+            // The same picker the app uses, on purpose: a survey that chose
+            // banks differently from production would measure the wrong thing.
+            let Some(bank) = crate::enginesound::find_bank(&sfx) else {
+                no_bank += 1;
+                continue;
+            };
+
+            let handle = match system.load_bank(&bank) {
+                Ok(h) => h,
+                Err(e) => {
+                    bank_failed += 1;
+                    failures.push(format!("{car_id}: bank refused — {e}"));
+                    continue;
+                }
+            };
+
+            match system.event(&guid).and_then(|d| system.parameters(d)) {
+                Ok(parameters) => {
+                    let roles = params::classify(&parameters);
+                    match &roles.rev {
+                        Some(p) => {
+                            with_rev += 1;
+                            *rev_names.entry(p.name.clone()).or_default() += 1;
+                        }
+                        // Still playable — it just cannot be revved (§2.4).
+                        None => played_blind += 1,
+                    }
+                    if roles.throttle.is_some() {
+                        with_throttle += 1;
+                    }
+                }
+                Err(e) => {
+                    event_failed += 1;
+                    failures.push(format!("{car_id}: event unreachable — {e}"));
+                }
+            }
+
+            let _ = system.unload_bank(handle);
+            let _ = system.update();
+        }
+
+        let pct = |n: usize| {
+            if total == 0 {
+                0.0
+            } else {
+                n as f32 * 100.0 / total as f32
+            }
+        };
+        eprintln!("\n=== corpus: {total} cars with an sfx/ folder ===");
+        eprintln!("  own GUIDs.txt            {own_table:4}  ({:.0} %)", pct(own_table));
+        eprintln!("  no engine event          {no_event:4}");
+        eprintln!("  no .bank                 {no_bank:4}");
+        eprintln!("  bank refused by FMOD     {bank_failed:4}");
+        eprintln!("  event unreachable        {event_failed:4}");
+        eprintln!("  rev parameter found      {with_rev:4}  ({:.0} %)", pct(with_rev));
+        eprintln!(
+            "  throttle parameter found {with_throttle:4}  ({:.0} %)",
+            pct(with_throttle)
+        );
+        eprintln!("  playable but not revvable{played_blind:4}");
+        eprintln!("  rev parameter names: {rev_names:?}");
+        if !failures.is_empty() {
+            eprintln!("\n  failures ({}):", failures.len());
+            for f in failures.iter().take(40) {
+                eprintln!("    {f}");
+            }
+        }
+    }
+}
