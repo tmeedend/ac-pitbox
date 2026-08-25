@@ -168,6 +168,8 @@ pub async fn audition_engine_native(
         reverb_wet_db: crate::fmod::engine::DEFAULT_REVERB_WET_DB,
         limiter_guid: target.limiter_guid,
         limiter_rev: target.limiter_rev,
+        ignition_guid: target.ignition_guid,
+        idle_rev,
     })?;
     Ok(NativeAudition {
         play,

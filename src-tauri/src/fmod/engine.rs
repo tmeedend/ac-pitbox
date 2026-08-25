@@ -74,6 +74,13 @@ pub struct PlayRequest {
     /// Where that sound belongs, from the car's own physics. `None` means the
     /// limiter stays silent rather than being guessed at.
     pub limiter_rev: Option<f32>,
+    /// `event:/cars/<id>/ign_ext` or `ign_int`, when the car has one — CSP
+    /// builds do, Kunos cars do not. Its presence is what turns the audition
+    /// into a **start** rather than an engine already running (§6sexies).
+    pub ignition_guid: Option<Guid>,
+    /// Where the engine settles once it has caught. Also the speed the slider
+    /// starts at, so the two cannot disagree.
+    pub idle_rev: f32,
 }
 
 /// Where the ear sits relative to the car, in the terms the interface has:
@@ -244,7 +251,19 @@ struct Playing {
     /// The throttle the slider's direction implies, while the showcase is not
     /// the one driving.
     throttle: Throttle,
+    /// The start sequence, while it runs. `None` for a car with no ignition
+    /// event, and from the moment the engine has settled.
+    startup: Option<Startup>,
+    /// The starter itself, kept like the limiter is: a description ready to be
+    /// struck, and an instance only while it sounds.
+    ignition: Option<Ignition>,
     showcase: Option<Showcase>,
+}
+
+/// The ignition event, and the instance of it that is turning right now.
+struct Ignition {
+    description: super::sys::EventDesc,
+    instance: Option<super::sys::EventInstance>,
 }
 
 /// The limiter event, and the speed at which it belongs.
@@ -491,6 +510,97 @@ impl Showcase {
     }
 }
 
+/// How long the starter turns before the engine catches.
+///
+/// From what a CSP car does in the game: the key is held, a whine builds, and
+/// the engine picks up after a beat. Short enough not to become a wait on a
+/// button meant to start playing a sound.
+const CRANK: Duration = Duration::from_millis(1300);
+
+/// How long the engine takes to pick up once it fires.
+const CATCH: Duration = Duration::from_millis(400);
+
+/// And how long the flare takes to fall back to the idle.
+const SETTLE: Duration = Duration::from_millis(900);
+
+/// Cranking speed, as a fraction of the idle. A starter turns an engine far
+/// slower than it idles — the whine is the starter's, the rumble underneath is
+/// the engine being turned over.
+const CRANK_FRACTION: f32 = 0.3;
+
+/// How far past the idle it flares when it catches. Every engine does this; an
+/// engine that reached its idle without overshooting sounds like a fade-in.
+const CATCH_FLARE: f32 = 1.35;
+
+/// What the engine is doing at one instant of the start.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Cranking {
+    rev: f32,
+    throttle: f32,
+    /// Whether the starter should be sounding right now.
+    starter: bool,
+    /// Set on the tick that ends the sequence.
+    done: bool,
+}
+
+/// Starting the engine, for a car that has an ignition event (§6sexies).
+///
+/// Clockless like [`Throttle`] and [`Showcase`]: time comes in through `tick`.
+#[derive(Debug)]
+struct Startup {
+    idle: f32,
+    elapsed: Duration,
+}
+
+impl Startup {
+    fn new(idle: f32) -> Self {
+        Startup {
+            idle: idle.max(1.0),
+            elapsed: Duration::ZERO,
+        }
+    }
+
+    fn tick(&mut self, dt: Duration) -> Cranking {
+        self.elapsed += dt;
+        let crank_rev = self.idle * CRANK_FRACTION;
+
+        if self.elapsed < CRANK {
+            // Turning over: the speed wavers up as the starter takes hold
+            // rather than sitting flat, which would sound like a held note.
+            let progress = self.elapsed.as_secs_f32() / CRANK.as_secs_f32();
+            return Cranking {
+                rev: crank_rev * (0.55 + 0.45 * progress),
+                throttle: 0.0,
+                starter: true,
+                done: false,
+            };
+        }
+
+        let since = self.elapsed - CRANK;
+        if since < CATCH {
+            // It fires: the speed shoots past the idle, and the throttle opens
+            // with it — this is the moment that makes a start sound like a
+            // start and not like a volume fader.
+            let progress = since.as_secs_f32() / CATCH.as_secs_f32();
+            return Cranking {
+                rev: crank_rev + (self.idle * CATCH_FLARE - crank_rev) * progress,
+                throttle: 0.55 * (1.0 - progress),
+                starter: false,
+                done: false,
+            };
+        }
+
+        let since = since - CATCH;
+        let progress = (since.as_secs_f32() / SETTLE.as_secs_f32()).min(1.0);
+        Cranking {
+            rev: self.idle * CATCH_FLARE + (self.idle - self.idle * CATCH_FLARE) * progress,
+            throttle: 0.0,
+            starter: false,
+            done: progress >= 1.0,
+        }
+    }
+}
+
 /// Throttle held while the slider is not moving.
 ///
 /// Neither 0 nor 1: holding an engine at a speed takes a partly open throttle.
@@ -624,6 +734,14 @@ fn run(rx: Receiver<Command>) {
                     // compare against (§6quater).
                     p.throttle.slider_moved(p.manual_rev, value);
                     p.manual_rev = value;
+                    // Touching the slider mid-start is a takeover like any
+                    // other: the starter falls silent rather than turning under
+                    // an engine the user has already revved.
+                    if p.startup.take().is_some() {
+                        if let Some(l) = &loaded {
+                            drive_starter(l, &mut p.ignition, false);
+                        }
+                    }
                     // Dragging the slider is an explicit takeover: the routine
                     // stops rather than fighting the hand that moved it.
                     if p.showcase.take().is_some() {
@@ -642,6 +760,11 @@ fn run(rx: Receiver<Command>) {
             }
             Ok(Command::Showcase(on)) => {
                 if let Some(p) = &mut playing {
+                    if p.startup.take().is_some() {
+                        if let Some(l) = &loaded {
+                            drive_starter(l, &mut p.ignition, false);
+                        }
+                    }
                     p.showcase =
                         on.then(|| Showcase::new(p.manual_rev, p.rev_ceiling, p.limiter.as_ref().map(|l| l.at_rev)));
                     if !on {
@@ -664,7 +787,32 @@ fn run(rx: Receiver<Command>) {
         // in the interface: a blip is a couple of hundred milliseconds of
         // rising engine speed, sampled every 20 ms.
         if let Some(p) = &mut playing {
-            if let Some(showcase) = &mut p.showcase {
+            // The start owns the engine while it runs — before the showcase and
+            // before the slider's throttle, both of which would be arguing with
+            // it about the same two parameters.
+            if let Some(startup) = &mut p.startup {
+                let step = startup.tick(TICK);
+                if step.done {
+                    p.startup = None;
+                    p.manual_rev = step.rev;
+                    // Hand back where the engine actually is, not where the
+                    // slider was told it would be.
+                    p.throttle.take_over();
+                }
+                if let Some(l) = &loaded {
+                    drive_starter(l, &mut p.ignition, step.starter);
+                    if let Some(param) = p.roles.rev.as_ref() {
+                        let _ = l
+                            .system
+                            .set_parameter(p.instance, &param.name, step.rev.clamp(param.min, param.max));
+                    }
+                    if let Some(param) = p.roles.throttle.as_ref() {
+                        let _ = l
+                            .system
+                            .set_parameter(p.instance, &param.name, step.throttle.clamp(param.min, param.max));
+                    }
+                }
+            } else if let Some(showcase) = &mut p.showcase {
                 let (rev, throttle) = showcase.tick(TICK);
                 if let Some(l) = &loaded {
                     drive_limiter(l, &mut p.limiter, rev);
@@ -832,17 +980,38 @@ fn start(
         _ => None,
     };
 
+    // The starter, prepared but silent — same treatment as the limiter, and
+    // best effort for the same reason: a car whose ignition event will not load
+    // is a car that starts already running, which is what every Kunos car does.
+    let ignition = request.ignition_guid.and_then(|guid| match l.system.event(&guid) {
+        Ok(description) => {
+            let _ = l.system.load_sample_data(description);
+            Some(Ignition {
+                description,
+                instance: None,
+            })
+        }
+        Err(e) => {
+            log::warn!("fmod: no ignition event, starting already running: {e}");
+            None
+        }
+    });
+    // A car that has one starts **at rest**: the first mixed block must be a
+    // stopped engine, not an idling one, or the start is heard over a running
+    // motor (§6sexies).
+    let startup = ignition.is_some().then(|| Startup::new(request.idle_rev));
+    let (first_rev, first_throttle) = match &startup {
+        Some(_) => (0.0, 0.0),
+        None => (request.rev, request.throttle),
+    };
+
     // Set both before starting, so the very first mixed block is already at the
     // requested engine speed rather than sliding up to it.
     if let Some(p) = &roles.throttle {
-        let _ = l
-            .system
-            .set_parameter(instance, &p.name, request.throttle.clamp(p.min, p.max));
+        let _ = l.system.set_parameter(instance, &p.name, first_throttle.clamp(p.min, p.max));
     }
     if let Some(p) = &roles.rev {
-        let _ = l
-            .system
-            .set_parameter(instance, &p.name, request.rev.clamp(p.min, p.max));
+        let _ = l.system.set_parameter(instance, &p.name, first_rev.clamp(p.min, p.max));
     }
 
     // The car sits at the origin; the ear goes where the caller last put it.
@@ -922,6 +1091,8 @@ fn start(
         rev_ceiling: request.rev_ceiling,
         manual_rev: request.rev,
         throttle: Throttle::new(),
+        startup,
+        ignition,
         showcase: None,
     });
     Ok(report)
@@ -944,6 +1115,34 @@ fn set_role(
         .set_parameter(p.instance, &param.name, value.clamp(param.min, param.max))
     {
         log::warn!("fmod: could not set {}: {e}", param.name);
+    }
+}
+
+/// Turns the starter on and off, creating its instance on the way in and
+/// releasing it on the way out.
+///
+/// Nothing here is fatal: a car whose ignition event refuses to play simply
+/// starts quietly, exactly as a car without one does.
+fn drive_starter(l: &Loaded, ignition: &mut Option<Ignition>, wanted: bool) {
+    let Some(ignition) = ignition else { return };
+    match (wanted, ignition.instance) {
+        (true, None) => match l.system.create_instance(ignition.description) {
+            Ok(instance) => {
+                if let Err(e) = l.system.start(instance) {
+                    log::warn!("fmod: the starter would not play: {e}");
+                    let _ = l.system.release_instance(instance);
+                } else {
+                    ignition.instance = Some(instance);
+                }
+            }
+            Err(e) => log::warn!("fmod: no starter instance: {e}"),
+        },
+        (false, Some(instance)) => {
+            let _ = l.system.stop(instance);
+            let _ = l.system.release_instance(instance);
+            ignition.instance = None;
+        }
+        _ => {}
     }
 }
 
@@ -1003,6 +1202,12 @@ fn stop_current(loaded: &Option<Loaded>, playing: &mut Option<Playing>) {
             let _ = l.system.release_instance(instance);
         }
     }
+    if let Some(ignition) = &p.ignition {
+        if let Some(instance) = ignition.instance {
+            let _ = l.system.stop(instance);
+            let _ = l.system.release_instance(instance);
+        }
+    }
     if let Err(e) = l.system.stop(p.instance) {
         log::warn!("fmod: stop failed: {e}");
     }
@@ -1026,6 +1231,83 @@ mod tests {
             }
         }
         last
+    }
+
+    /// Walks a whole start and returns every step it went through.
+    fn whole_start(idle: f32) -> Vec<Cranking> {
+        let mut startup = Startup::new(idle);
+        let mut steps = Vec::new();
+        for _ in 0..400 {
+            let step = startup.tick(TICK);
+            let done = step.done;
+            steps.push(step);
+            if done {
+                break;
+            }
+        }
+        steps
+    }
+
+    /// The shape of a start, in the order a start has: the starter turns below
+    /// the idle, the engine catches above it, then it settles on it.
+    #[test]
+    fn a_start_cranks_then_catches_then_settles() {
+        let steps = whole_start(1000.0);
+        let last = steps.last().expect("the sequence ends");
+        assert!(last.done, "it finishes rather than running forever");
+
+        let cranking: Vec<_> = steps.iter().filter(|s| s.starter).collect();
+        assert!(!cranking.is_empty(), "the starter turns");
+        assert!(
+            cranking.iter().all(|s| s.rev < 1000.0),
+            "an engine being turned over never reaches its idle"
+        );
+
+        let peak = steps.iter().map(|s| s.rev).fold(0.0_f32, f32::max);
+        assert!(peak > 1000.0, "it flares past the idle when it fires, got {peak}");
+        assert!((last.rev - 1000.0).abs() < 20.0, "and settles on it, got {}", last.rev);
+    }
+
+    /// The starter stops the moment the engine fires — it must not still be
+    /// grinding under a running engine.
+    #[test]
+    fn the_starter_stops_when_the_engine_catches() {
+        let steps = whole_start(1000.0);
+        let last_crank = steps.iter().rposition(|s| s.starter).expect("the starter turns");
+        assert!(
+            steps[last_crank + 1..].iter().all(|s| !s.starter),
+            "once released it stays released"
+        );
+        assert!(
+            steps[last_crank + 1..].iter().any(|s| s.rev > 1000.0),
+            "and what follows is the engine picking up"
+        );
+    }
+
+    /// The flare comes with the throttle, which is what makes it sound like an
+    /// engine firing rather than a fader being pushed.
+    #[test]
+    fn catching_opens_the_throttle_briefly() {
+        let steps = whole_start(1000.0);
+        assert!(steps.iter().any(|s| s.throttle > 0.4), "it fires with some throttle");
+        let last = steps.last().expect("the sequence ends");
+        assert_eq!(last.throttle, 0.0, "and is off it again once settled");
+    }
+
+    /// Every engine speed handed to an event stays a plausible one, whatever
+    /// the idle — an F1 idling at 3900 and a van at 800 go through the same code.
+    #[test]
+    fn a_start_is_sane_at_both_ends_of_the_idle_range() {
+        for idle in [700.0, 1000.0, 3900.0] {
+            for step in whole_start(idle) {
+                assert!(
+                    step.rev >= 0.0 && step.rev <= idle * 2.0,
+                    "sane speed at idle {idle}: {}",
+                    step.rev
+                );
+                assert!((0.0..=1.0).contains(&step.throttle), "sane throttle: {}", step.throttle);
+            }
+        }
     }
 
     /// The rule of §6quater: pushing the slider up is accelerating.
@@ -1154,6 +1436,10 @@ mod tests {
             reverb_wet_db: reverb_wet(),
             limiter_guid: None,
             limiter_rev: None,
+            // No start sequence here: this bench times how fast a play answers,
+            // and a cranking engine would only make it harder to hear.
+            ignition_guid: None,
+            idle_rev: 1500.0,
         };
 
         eprintln!("
@@ -1240,6 +1526,11 @@ mod tests {
             crate::enginesound::find_bank(&bank_dir).unwrap_or_else(|| panic!("no .bank in {}", bank_dir.display()));
         let (ceiling, idle) = car_speeds(&ac_root, &car, &bank);
         let limiter = super::super::guids::resolve_event(&bank_dir, Some(&ac_root), &car, "limiter");
+        let ignition = super::super::guids::resolve_ignition_event(&bank_dir, Some(&ac_root), &car);
+        match &ignition {
+            Some((path, _)) => eprintln!("  starting through {path}"),
+            None => eprintln!("  no ignition event — the engine is found already running"),
+        }
 
         let handle = spawn();
         let report = handle
@@ -1254,8 +1545,14 @@ mod tests {
                 reverb_wet_db: reverb_wet(),
                 limiter_guid: limiter,
                 limiter_rev: Some(ceiling),
+                ignition_guid: ignition.map(|(_, guid)| guid),
+                idle_rev: idle,
             })
             .expect("the native path must work against a real install");
+
+        // Let the start finish before touching anything, or the sweep below
+        // would cancel it as a takeover.
+        std::thread::sleep(Duration::from_millis(3000));
 
         eprintln!("playing {event_path}");
         eprintln!(
@@ -1333,6 +1630,10 @@ mod tests {
                 reverb_wet_db: reverb_wet(),
                 limiter_guid: limiter,
                 limiter_rev: Some(ceiling),
+                // The blips are the subject here; starting the engine first
+                // would only delay them.
+                ignition_guid: None,
+                idle_rev: idle,
             })
             .expect("the native path must work against a real install");
 

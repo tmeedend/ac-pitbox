@@ -931,6 +931,81 @@ mod survey {
         }
     }
 
+    /// The ignition event alone, at each value of its `state` parameter.
+    ///
+    /// The one thing no amount of reading settles: `ign_int` exposes a single
+    /// `state` (0–1) and nothing says what it selects. This plays the event at
+    /// 0, then at 1, announcing each — the ear decides, and §6sexies records
+    /// the answer.
+    ///
+    /// ```text
+    /// PITBOX_AC_ROOT="D:\...ssettocorsa"     ///   PITBOX_CAR_DIR="D:\AC-Library\cars\<mod>\<version>"     ///   PITBOX_AC_CAR="<car id>"     ///   cargo test --lib fmod::sys::survey -- --ignored --nocapture ignition_event_at
+    /// ```
+    #[test]
+    #[ignore = "needs a real Assetto Corsa install and an audio device"]
+    fn ignition_event_at_each_state() {
+        let (Ok(ac_root), Ok(car_dir)) = (std::env::var("PITBOX_AC_ROOT"), std::env::var("PITBOX_CAR_DIR")) else {
+            eprintln!("PITBOX_AC_ROOT or PITBOX_CAR_DIR unset, skipping");
+            return;
+        };
+        let ac_root = std::path::PathBuf::from(ac_root);
+        let car_dir = std::path::PathBuf::from(car_dir);
+        let car = std::env::var("PITBOX_AC_CAR").unwrap_or_else(|_| {
+            car_dir
+                .parent()
+                .and_then(|p| p.file_name())
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned()
+        });
+        let sfx = car_dir.join("sfx");
+
+        let Some((path, guid)) = crate::fmod::guids::resolve_ignition_event(&sfx, Some(&ac_root), &car) else {
+            eprintln!("{car} has no ignition event — nothing to play");
+            return;
+        };
+
+        let fmod = Fmod::load(&ac_root).expect("load the game's FMOD DLLs");
+        let system = System::new(fmod).expect("create the studio system");
+        let master = ac_root.join("content").join("sfx").join("common.bank");
+        system.load_bank(&master).expect("load the master bank");
+        let bank = crate::enginesound::find_bank(&sfx).expect("a .bank beside the GUIDs.txt");
+        system.load_bank(&bank).expect("load the car bank");
+
+        let desc = system.event(&guid).expect("the ignition event");
+        system.load_sample_data(desc).expect("its samples");
+        for _ in 0..100 {
+            if system.samples_loaded(desc).unwrap_or(false) {
+                break;
+            }
+            let _ = system.update();
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let found = system.parameters(desc).unwrap_or_default();
+        eprintln!("
+{path}");
+        for p in &found {
+            eprintln!("  parameter {} {}..{}", p.name, p.min, p.max);
+        }
+
+        for state in [0.0_f32, 1.0] {
+            eprintln!("  --- state = {state} ---");
+            let instance = system.create_instance(desc).expect("an instance");
+            for p in found.iter().filter(|p| p.is_drivable()) {
+                let _ = system.set_parameter(instance, &p.name, state.clamp(p.min, p.max));
+            }
+            system.start(instance).expect("play it");
+            for _ in 0..150 {
+                let _ = system.update();
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            let _ = system.stop(instance);
+            let _ = system.update();
+            let _ = system.release_instance(instance);
+            std::thread::sleep(std::time::Duration::from_millis(600));
+        }
+    }
+
     #[test]
     #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
     fn surveys_every_installed_car() {

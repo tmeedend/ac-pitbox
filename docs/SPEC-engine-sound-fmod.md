@@ -946,10 +946,58 @@ ne l'entend pas. Le relevé de son bank dit exactement pourquoi :
   que vit le bruit de contact et de lancement, et il est **intérieur
   uniquement** — il n'existe pas d'`ign_ext`.
 
-Le faire entendre est donc une fonctionnalité à part entière : jouer `ign_int`
-puis faire monter `rpms` de 0 au ralenti. Reste à décider si elle se déclenche
-seule à la première écoute d'une voiture qui a cet événement, ou si elle est le
-geste explicite que la clé de contact de l'écran suggère déjà.
+---
+
+## 6sexies. Le démarreur : la clé démarre le moteur
+
+Décidé avec l'utilisateur : **cliquer sur la clé de contact démarre le moteur**,
+sans bouton supplémentaire. La clé était déjà la métaphore de l'écran ; elle en
+devient le geste réel. Une voiture sans événement d'allumage — c'est-à-dire
+toutes les Kunos — continue de se trouver moteur tournant, et rien ne change
+pour elle.
+
+### Quel événement
+
+`ign_ext` d'abord, `ign_int` ensuite. Aucune voiture de la bibliothèque de
+référence ne porte l'extérieur aujourd'hui : la préférence est écrite pour le
+jour où un bank en aura un, et en attendant c'est l'intérieur qui joue même en
+vue extérieure. Petit mensonge assumé — l'utilisateur l'entend déjà ainsi dans
+le jeu et l'a jugé préférable au silence.
+
+### La séquence
+
+Trois phases, toutes dans le thread FMOD (`Startup`), sans horloge à elles : le
+temps entre par `tick`, comme pour `Showcase` et `Throttle`. La règle de chaque
+phase est tenue par un test.
+
+| phase | durée | régime | gaz | démarreur |
+| --- | --- | --- | --- | --- |
+| lancement | 1300 ms | monte vers 30 % du ralenti | 0 | il tourne |
+| allumage | 400 ms | bondit à **1,35 × le ralenti** | s'ouvre à 0,55 puis retombe | relâché |
+| stabilisation | 900 ms | redescend au ralenti | 0 | — |
+
+Le dépassement au moment où le moteur prend est ce qui distingue un démarrage
+d'un fondu d'entrée : un moteur qui atteindrait son ralenti sans jamais le
+dépasser s'entend comme un curseur de volume qu'on pousse. Le lancement, lui,
+ne tient pas une note plate — le régime ondule en montant, parce qu'un démarreur
+qui prend n'est pas un régime constant.
+
+La voiture démarre **à l'arrêt** : le tout premier bloc mixé est à 0 tr/min et
+gaz fermé, sinon le démarrage s'entendrait par-dessus un moteur déjà lancé.
+
+Toucher le curseur ou lancer les coups d'accélérateur pendant la séquence
+l'annule — le démarreur se tait plutôt que de continuer à mouliner sous un
+moteur que l'utilisateur a déjà pris en main. Même arbitrage qu'ailleurs : la
+main gagne toujours.
+
+### Ce qui reste en suspens : `state`
+
+`ign_int` n'expose qu'un paramètre, `state` (0–1), et **rien ne dit ce qu'il
+sélectionne**. Sa valeur par défaut est 0 (`FMOD_STUDIO_PARAMETER_DESCRIPTION`
+la porte, et elle vaut 0 sur tout ce qui a été mesuré), et c'est ce qui est
+joué pour l'instant — sans prétendre que ce soit le bon choix. Le banc
+`ignition_event_at_each_state` joue l'événement à 0 puis à 1 en annonçant
+chaque valeur : c'est l'oreille qui tranchera, et la réponse s'écrira ici.
 
 ---
 

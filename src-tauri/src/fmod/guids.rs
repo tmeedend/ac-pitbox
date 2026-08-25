@@ -212,6 +212,31 @@ pub fn guid_files(bank_dir: &Path, ac_root: Option<&Path>) -> Vec<PathBuf> {
     files
 }
 
+/// The ignition event, when the car has one — CSP builds do, Kunos cars do not.
+///
+/// `ign_ext` wins over `ign_int` when both exist, for the same reason
+/// `engine_ext` is the default view: the audition is heard from outside the
+/// car. No car in the reference library ships an `ign_ext` today — every one
+/// found has only the interior event — so in practice this falls to `ign_int`,
+/// and the preference is there for the day a bank does carry the exterior one.
+///
+/// `None` is the ordinary answer, not a failure: a car with no ignition event
+/// simply starts already running (§6sexies).
+pub fn resolve_ignition_event(bank_dir: &Path, ac_root: Option<&Path>, car_id: &str) -> Option<(String, Guid)> {
+    for file in guid_files(bank_dir, ac_root) {
+        let Ok(text) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        for suffix in ["ign_ext", "ign_int"] {
+            let path = format!("event:/cars/{car_id}/{suffix}");
+            if let Some((path, guid)) = lookup(&text, &path) {
+                return Some((path, guid));
+            }
+        }
+    }
+    None
+}
+
 /// Reads the candidate files in order and returns the first engine event found.
 pub fn resolve_engine_event(
     bank_dir: &Path,
@@ -233,6 +258,50 @@ pub fn resolve_engine_event(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The exterior ignition event wins when a bank carries both — the
+    /// audition is heard from outside the car.
+    #[test]
+    fn ignition_prefers_the_exterior_event() {
+        let dir = crate::testutil::temp_dir("guids-ign");
+        std::fs::write(
+            dir.join("GUIDs.txt"),
+            "{11111111-1111-1111-1111-111111111111} event:/cars/a_car/ign_int
+             {22222222-2222-2222-2222-222222222222} event:/cars/a_car/ign_ext
+",
+        )
+        .expect("write the table");
+        let (path, _) = resolve_ignition_event(&dir, None, "a_car").expect("an ignition event");
+        assert_eq!(path, "event:/cars/a_car/ign_ext", "the exterior one is preferred");
+    }
+
+    /// And the interior one is taken when it is the only one — which is every
+    /// car measured so far.
+    #[test]
+    fn ignition_falls_back_to_the_interior_event() {
+        let dir = crate::testutil::temp_dir("guids-ign-int");
+        std::fs::write(
+            dir.join("GUIDs.txt"),
+            "{11111111-1111-1111-1111-111111111111} event:/cars/a_car/ign_int
+",
+        )
+        .expect("write the table");
+        let (path, _) = resolve_ignition_event(&dir, None, "a_car").expect("an ignition event");
+        assert_eq!(path, "event:/cars/a_car/ign_int", "better than nothing");
+    }
+
+    /// A Kunos car has none, and that is not an error.
+    #[test]
+    fn a_car_without_an_ignition_event_says_so() {
+        let dir = crate::testutil::temp_dir("guids-no-ign");
+        std::fs::write(
+            dir.join("GUIDs.txt"),
+            "{11111111-1111-1111-1111-111111111111} event:/cars/a_car/engine_ext
+",
+        )
+        .expect("write the table");
+        assert!(resolve_ignition_event(&dir, None, "a_car").is_none(), "nothing to start");
+    }
 
     /// The byte order of the three leading integers is the one thing this
     /// parser could get wrong silently, so it is pinned to a measured oracle:

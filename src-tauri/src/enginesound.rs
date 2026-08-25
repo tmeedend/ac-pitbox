@@ -323,6 +323,9 @@ pub struct NativeTarget {
     /// `event:/cars/<id>/limiter`, the separate event AC plays while the engine
     /// sits against its limit — the sound that makes a rev-out recognisable.
     pub limiter_guid: Option<crate::fmod::guids::Guid>,
+    /// Its GUID. Present means the audition **starts the engine** instead of
+    /// finding it running (§6sexies).
+    pub ignition_guid: Option<crate::fmod::guids::Guid>,
 }
 
 /// Lowest engine speed the slider offers. Below an idle nothing sounds like an
@@ -549,6 +552,11 @@ pub fn native_target(
     // The limiter event lives beside the engine one, in whichever table gave it.
     let limiter_guid = crate::fmod::guids::resolve_event(&dir, Some(&ac_root), parent_id, "limiter");
 
+    // And the starter, for the cars that have one (§6sexies). Absent on every
+    // Kunos car, which is why its absence has to mean "already running" rather
+    // than "something is missing".
+    let ignition = crate::fmod::guids::resolve_ignition_event(&dir, Some(&ac_root), parent_id);
+
     Ok(NativeTarget {
         ac_root,
         bank,
@@ -558,6 +566,7 @@ pub fn native_target(
         idle_rev,
         limiter_rev: physics.limiter_rev,
         limiter_guid,
+        ignition_guid: ignition.map(|(_, guid)| guid),
     })
 }
 
