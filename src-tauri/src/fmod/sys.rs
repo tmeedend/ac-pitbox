@@ -47,14 +47,12 @@ const LOAD_BANK_NORMAL: c_uint = 0;
 /// `FMOD_STUDIO_LOADING_STATE::LOADED`.
 const LOADING_STATE_LOADED: c_int = 2;
 
-/// `FMOD_STUDIO_STOP_MODE`.
-#[derive(Clone, Copy, Debug)]
-pub enum StopMode {
-    /// Let the event's release envelope run.
-    AllowFadeout = 0,
-    /// Cut now.
-    Immediate = 1,
-}
+/// `FMOD_STUDIO_STOP_MODE::IMMEDIATE`.
+///
+/// The only mode used: an audition the user just dismissed must not keep
+/// ringing over whatever they clicked next. `ALLOW_FADEOUT` (0) exists in the
+/// enum and can be added the day something wants a release tail.
+const STOP_IMMEDIATE: c_int = 1;
 
 /// `FMOD_STUDIO_PLAYBACK_STATE`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -176,6 +174,7 @@ type FnSystemInitialize = unsafe extern "C" fn(*mut c_void, c_int, c_uint, c_uin
 type FnSystemRelease = unsafe extern "C" fn(*mut c_void) -> FmodResult;
 type FnSystemUpdate = unsafe extern "C" fn(*mut c_void) -> FmodResult;
 type FnSystemLoadBankFile = unsafe extern "C" fn(*mut c_void, *const c_char, c_uint, *mut *mut c_void) -> FmodResult;
+type FnBankUnload = unsafe extern "C" fn(*mut c_void) -> FmodResult;
 type FnSystemGetEventByID = unsafe extern "C" fn(*mut c_void, *const Guid, *mut *mut c_void) -> FmodResult;
 type FnDescGetParameterCount = unsafe extern "C" fn(*mut c_void, *mut c_int) -> FmodResult;
 type FnDescGetParameterByIndex = unsafe extern "C" fn(*mut c_void, c_int, *mut u8) -> FmodResult;
@@ -194,6 +193,7 @@ struct Api {
     system_release: FnSystemRelease,
     system_update: FnSystemUpdate,
     system_load_bank_file: FnSystemLoadBankFile,
+    bank_unload: FnBankUnload,
     system_get_event_by_id: FnSystemGetEventByID,
     desc_get_parameter_count: FnDescGetParameterCount,
     desc_get_parameter_by_index: FnDescGetParameterByIndex,
@@ -253,6 +253,7 @@ impl Fmod {
                 system_release: symbol(studio, "FMOD_Studio_System_Release")?,
                 system_update: symbol(studio, "FMOD_Studio_System_Update")?,
                 system_load_bank_file: symbol(studio, "FMOD_Studio_System_LoadBankFile")?,
+                bank_unload: symbol(studio, "FMOD_Studio_Bank_Unload")?,
                 system_get_event_by_id: symbol(studio, "FMOD_Studio_System_GetEventByID")?,
                 desc_get_parameter_count: symbol(studio, "FMOD_Studio_EventDescription_GetParameterCount")?,
                 desc_get_parameter_by_index: symbol(studio, "FMOD_Studio_EventDescription_GetParameterByIndex")?,
@@ -290,6 +291,13 @@ unsafe fn load_dll(ac_root: &Path, name: &str) -> Result<HMODULE, FmodError> {
     })
 }
 
+/// A loaded bank. Unlike an event description, this one has to be given back:
+/// two sound mods for the same car carry the **same event GUIDs** in different
+/// files, so the previous bank must be unloaded before the next is loaded or
+/// `GetEventByID` resolves to whichever got there first.
+#[derive(Clone, Copy)]
+pub struct Bank(*mut c_void);
+
 /// An event description. Owned by the bank, so there is nothing to release.
 #[derive(Clone, Copy)]
 pub struct EventDesc(*mut c_void);
@@ -303,14 +311,19 @@ pub struct EventInstance(*mut c_void);
 /// Deliberately **not** `Send`: it holds raw pointers, and §4.3 requires that
 /// one thread own the system and be the only one to touch it. The type system
 /// enforcing that is a feature, not an obstacle to work around.
-pub struct System<'a> {
-    fmod: &'a Fmod,
+pub struct System {
+    /// Owned rather than borrowed. A borrow would make the pair
+    /// self-referential the moment a thread wants to hold both (§4.3), and
+    /// there is never a reason to keep the libraries alive without a system.
+    /// Field order matters: `Drop` releases the system, then this drops and
+    /// unloads the DLLs — never the other way round.
+    fmod: Fmod,
     raw: *mut c_void,
 }
 
-impl<'a> System<'a> {
+impl System {
     /// Creates and initialises the system.
-    pub fn new(fmod: &'a Fmod) -> Result<Self, FmodError> {
+    pub fn new(fmod: Fmod) -> Result<Self, FmodError> {
         let mut raw: *mut c_void = std::ptr::null_mut();
         unsafe {
             check(
@@ -330,7 +343,7 @@ impl<'a> System<'a> {
     /// Loads a bank file. The path travels as UTF-8, which lot 0 confirmed is
     /// what 1.08 expects — a bank under a path with accents and spaces opens
     /// without ceremony.
-    pub fn load_bank(&self, path: &Path) -> Result<(), FmodError> {
+    pub fn load_bank(&self, path: &Path) -> Result<Bank, FmodError> {
         let c_path = CString::new(path.to_string_lossy().as_bytes()).map_err(|_| FmodError::Call {
             call: "FMOD_Studio_System_LoadBankFile",
             code: 31, // FMOD_ERR_INVALID_PARAM: an interior NUL never reaches FMOD
@@ -340,8 +353,14 @@ impl<'a> System<'a> {
             check(
                 "FMOD_Studio_System_LoadBankFile",
                 (self.fmod.api.system_load_bank_file)(self.raw, c_path.as_ptr(), LOAD_BANK_NORMAL, &mut bank),
-            )
+            )?;
         }
+        Ok(Bank(bank))
+    }
+
+    /// Gives a bank back, along with every event it defined.
+    pub fn unload_bank(&self, bank: Bank) -> Result<(), FmodError> {
+        unsafe { check("FMOD_Studio_Bank_Unload", (self.fmod.api.bank_unload)(bank.0)) }
     }
 
     /// Must be called regularly: FMOD does its mixing bookkeeping and frees
@@ -465,11 +484,11 @@ impl<'a> System<'a> {
         }
     }
 
-    pub fn stop(&self, inst: EventInstance, mode: StopMode) -> Result<(), FmodError> {
+    pub fn stop(&self, inst: EventInstance) -> Result<(), FmodError> {
         unsafe {
             check(
                 "FMOD_Studio_EventInstance_Stop",
-                (self.fmod.api.instance_stop)(inst.0, mode as c_int),
+                (self.fmod.api.instance_stop)(inst.0, STOP_IMMEDIATE),
             )
         }
     }
@@ -495,7 +514,7 @@ impl<'a> System<'a> {
     }
 }
 
-impl Drop for System<'_> {
+impl Drop for System {
     fn drop(&mut self) {
         // Releasing the system takes every bank and instance with it, so
         // nothing else needs unwinding here.

@@ -17,12 +17,8 @@
 //! unit-tested without a DLL anywhere in sight. `sys` is the Windows-only FFI,
 //! and holds every fact about the ABI that FMOD's own headers get wrong.
 
-// Lot 1 is the bindings; lot 2 gives them an owning thread and lot 3 a command
-// to call it. Until then nothing outside the tests calls in here, and the
-// crate-wide `-D warnings` would turn that into a build failure. **Remove this
-// once the thread of §4.3 exists** — after that, anything unused really is.
-#![allow(dead_code)]
-
+#[cfg(windows)]
+pub mod engine;
 pub mod guids;
 pub mod params;
 #[cfg(windows)]

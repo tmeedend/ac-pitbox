@@ -285,6 +285,52 @@ fn sound_dir(conn: &Connection, cfg: &AppConfig, parent_id: &str, sub_id: Option
     }
 }
 
+/// Everything the native FMOD path needs, resolved **without loading a DLL**.
+///
+/// Kept here rather than in `fmod/` because it is the same directory lookup the
+/// WAV path already does (`sound_dir`): whichever route ends up playing, "which
+/// bank is this entry?" has exactly one answer.
+pub struct NativeTarget {
+    pub ac_root: PathBuf,
+    pub bank: PathBuf,
+    pub guid: crate::fmod::guids::Guid,
+    pub event_path: String,
+}
+
+/// Resolves a list entry to a playable FMOD event.
+///
+/// Every failure here is a **fallback trigger**, not something to show: no game
+/// configured, no bank, no engine event in the table. The caller drops back to
+/// the in-house decoder (§4.1) and the message only ever reaches the log, which
+/// is why these strings stay raw diagnostics rather than becoming i18n keys.
+pub fn native_target(
+    conn: &Connection,
+    cfg: &AppConfig,
+    parent_id: &str,
+    sub_id: Option<&str>,
+    view: crate::fmod::guids::EngineView,
+) -> Result<NativeTarget, String> {
+    let ac_root = cfg
+        .ac_install_path
+        .clone()
+        .ok_or_else(|| "no Assetto Corsa install configured".to_string())?;
+    let dir = sound_dir(conn, cfg, parent_id, sub_id)?;
+    let bank = find_bank(&dir).ok_or_else(|| format!("no .bank in {}", dir.display()))?;
+    let (event_path, guid) = crate::fmod::guids::resolve_engine_event(&dir, Some(&ac_root), parent_id, view)
+        .ok_or_else(|| {
+            format!(
+                "no engine event for {parent_id} in any GUIDs.txt near {}",
+                dir.display()
+            )
+        })?;
+    Ok(NativeTarget {
+        ac_root,
+        bank,
+        guid,
+        event_path,
+    })
+}
+
 /// How periodic a signal is, and at what lag — the measure that tells an engine
 /// from wind without knowing anything about either.
 ///

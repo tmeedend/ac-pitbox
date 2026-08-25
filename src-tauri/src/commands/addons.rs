@@ -105,6 +105,71 @@ pub fn audition_engine_sound(
     crate::enginesound::audition(&conn, &cfg, &parent_id, sub_id.as_deref())
 }
 
+/// Écoute une entrée par le **vrai moteur FMOD du jeu** (§4.1).
+///
+/// Renvoie une erreur — jamais montrée — quand le chemin natif n'est pas
+/// disponible : pas d'AC configuré, DLL introuvables, aucun événement moteur
+/// dans les `GUIDs.txt`. C'est le signal pour l'appelant de retomber sur
+/// `audition_engine_sound`, qui décode un échantillon lui-même. Les deux
+/// chemins coexistent, le repli n'est pas une panne.
+///
+/// Comme `audition_engine_sound`, ne touche jamais à `content/`.
+#[cfg(windows)]
+#[tauri::command]
+pub fn audition_engine_native(
+    app: AppHandle,
+    db: State<Db>,
+    engine: State<crate::fmod::engine::FmodEngineHandle>,
+    parent_id: String,
+    sub_id: Option<String>,
+    interior: Option<bool>,
+    rev: Option<f32>,
+) -> Result<crate::fmod::engine::PlayReport, String> {
+    let cfg = crate::config::load(&app);
+    let view = if interior.unwrap_or(false) {
+        crate::fmod::guids::EngineView::Interior
+    } else {
+        crate::fmod::guids::EngineView::Exterior
+    };
+    let target = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        crate::enginesound::native_target(&conn, &cfg, &parent_id, sub_id.as_deref(), view)?
+    };
+    engine.play(crate::fmod::engine::PlayRequest {
+        ac_root: target.ac_root,
+        bank: target.bank,
+        guid: target.guid,
+        event_path: target.event_path,
+        // 900 tr/min au départ : le régime de ralenti exact vit dans
+        // `data/engine.ini`, donc dans un `data.acd` chiffré la plupart du
+        // temps. Le curseur rend la question sans objet (§4.4).
+        rev: rev.unwrap_or(900.0),
+        throttle: 0.0,
+    })
+}
+
+/// Règle le régime de l'écoute en cours. Sans effet si rien ne joue.
+#[cfg(windows)]
+#[tauri::command]
+pub fn set_audition_rev(engine: State<crate::fmod::engine::FmodEngineHandle>, rev: f32) {
+    engine.set_rev(rev);
+}
+
+/// Règle l'accélérateur de l'écoute en cours (0 = lâcher de gaz, 1 = pleine
+/// charge). Sans effet si rien ne joue.
+#[cfg(windows)]
+#[tauri::command]
+pub fn set_audition_throttle(engine: State<crate::fmod::engine::FmodEngineHandle>, throttle: f32) {
+    engine.set_throttle(throttle);
+}
+
+/// Coupe l'écoute native. Sans effet si rien ne joue.
+#[cfg(windows)]
+#[tauri::command]
+pub fn stop_audition_native(engine: State<crate::fmod::engine::FmodEngineHandle>) {
+    engine.stop();
+}
+
 /// Fiche d'un mod de son : ce qu'il vise, ce qu'il pèse, et ce que son bank
 /// contient réellement (§8). Tout est lu à la demande — rien de ce qui décrit
 /// un fichier n'est mémorisé en base, il peut changer sous nos pieds.

@@ -368,10 +368,52 @@ d'un mod de son sont **absents** de la table globale, donc l'ordre de recherche
 (fichier de la voiture, puis table globale) n'est pas un raffinement : c'est ce
 qui fait qu'un mod se joue du tout.
 
-**Lot 2 — le thread et les commandes.** Retirer au passage le
-`#![allow(dead_code)]` de `fmod/mod.rs`, qui n'existe que le temps que ces
-liaisons n'aient pas d'appelant.  `Play`/`SetRpm`/`Stop`, l'état partagé,
-le basculement vers le repli quand FMOD n'est pas disponible.
+**Lot 2 — le thread et les commandes. ✅ fait.** `fmod/engine.rs` : un thread
+possède le système, reçoit `Play`/`SetRev`/`SetThrottle`/`Stop` et appelle
+`Update` toutes les 20 ms. Rien n'est chargé au démarrage de l'app — les DLL du
+jeu ne sont touchées qu'à la première écoute, donc une machine sans AC ne paie
+rien.
+
+`Play` **répond** (canal de retour, appel bloquant) : l'appelant a besoin de
+savoir si le chemin natif a marché pour retomber sur le décodeur maison, et la
+réponse coûte un chargement de bank, pas une attente visible.
+
+Quatre décisions qui ne se devinent pas :
+
+- **Un seul bank de voiture chargé à la fois.** Deux mods de son pour la même
+  voiture déclarent les **mêmes GUID d'événements** : laisser le précédent
+  chargé fait rendre à `GetEventByID` l'événement de l'autre bank — et ça se
+  présente comme « ce mod sonne pareil », pas comme un bug. D'où
+  `FMOD_Studio_Bank_Unload`, une entrée de plus que prévu.
+- **Le `GUIDs.txt` se cherche à côté du bank**, pas sous la voiture : un mod
+  s'auditionne depuis la bibliothèque, où la disposition du jeu ne s'applique
+  pas. Repli sur la table globale pour le contenu Kunos.
+- **`System` possède son `Fmod`** au lieu de l'emprunter, sinon le thread se
+  retrouve avec une structure auto-référentielle. Et `System` n'est pas `Send` :
+  la règle « un seul thread y touche » est tenue par le compilateur, pas par la
+  discipline.
+- **L'état de lecture est relu après `Start`.** « Démarré sans erreur » et
+  « réellement audible » sont deux affirmations différentes — une instance peut
+  revenir virtuelle ou déjà arrêtée, et c'est exactement le cas où l'utilisateur
+  dit « j'ai cliqué et je n'ai rien entendu ». Journalisé, pas fatal.
+
+Commandes : `audition_engine_native`, `set_audition_rev`,
+`set_audition_throttle`, `stop_audition_native`. Toute erreur de la première est
+un **signal de repli**, jamais un message à afficher — d'où des diagnostics
+bruts plutôt que des clés i18n.
+
+**Le seul test qui exerce une DLL est `#[ignore]`**, première occurrence dans le
+projet et pour une raison précise : aucun agent de CI n'a d'installation
+d'Assetto Corsa ni de carte son. Il se lance à la main et sans la variable il
+passe au lieu d'échouer faussement :
+
+```
+PITBOX_AC_ROOT="D:\...ssettocorsa" cargo test --lib fmod::engine -- --ignored --nocapture
+```
+
+Vérifié ainsi sur trois voitures — la GT40 Kunos et deux mods (`art_skyline_r32_gtr`,
+`bati_fd3s_rx7`) qui passent par leur propre table : `rpms` 0–20000 et
+`throttle` reconnus sur les trois, régime piloté en cours de lecture.
 
 **Lot 3 — l'interface.** La clé branchée sur le chemin natif, le curseur de
 régime, et la mention FMOD dans À propos (§3).

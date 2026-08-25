@@ -184,6 +184,11 @@ pub fn run() {
             // Aperçu 3D des voitures : jeton de génération + créneau unique de
             // conversion (docs/SPEC-preview-3d-kn5.md §7.3).
             app.manage(preview::PreviewState::default());
+            // Thread propriétaire du système FMOD (§4.3). Rien n'est chargé
+            // ici : les DLL du jeu ne sont touchées qu'à la première écoute,
+            // donc une install sans Assetto Corsa ne paie rien.
+            #[cfg(windows)]
+            app.manage(fmod::engine::spawn());
 
             Ok(())
         })
@@ -292,6 +297,14 @@ pub fn run() {
             commands::addons::set_track_skin_active,
             commands::addons::activate_sound,
             commands::addons::audition_engine_sound,
+            #[cfg(windows)]
+            commands::addons::audition_engine_native,
+            #[cfg(windows)]
+            commands::addons::set_audition_rev,
+            #[cfg(windows)]
+            commands::addons::set_audition_throttle,
+            #[cfg(windows)]
+            commands::addons::stop_audition_native,
             commands::addons::sound_detail,
             commands::addons::set_sound_author,
             commands::addons::list_sound_resources,

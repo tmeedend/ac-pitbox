@@ -148,29 +148,30 @@ pub fn engine_event(text: &str, car_id: &str, view: EngineView) -> Option<(Strin
         .map(|(guid, path)| (path.to_string(), guid))
 }
 
-/// Where a car's `GUIDs.txt` may live, most specific first.
+/// Where the table describing a given bank may live, most specific first.
 ///
-/// Measured on the reference install: **122 of 299 cars ship their own**
-/// `sfx/GUIDs.txt` — those are the mods, and theirs is the one that describes
-/// the bank sitting next to it. The Kunos cars have no such file and are all
-/// listed in the single global table instead. Trying the car's own file first
-/// is therefore not a nicety: a sound mod's events are simply absent from the
-/// global one.
-pub fn guid_files(ac_root: &Path, car_id: &str) -> Vec<PathBuf> {
-    vec![
-        ac_root
-            .join("content")
-            .join("cars")
-            .join(car_id)
-            .join("sfx")
-            .join("GUIDs.txt"),
-        ac_root.join("content").join("sfx").join("GUIDs.txt"),
-    ]
+/// The candidate that matters is **next to the bank**, not under the car:
+/// auditioning a sound mod reads its bank straight out of the library, where
+/// nothing of the game's layout applies. Measured on the reference install,
+/// **122 of 299 cars ship their own `sfx/GUIDs.txt`** — those are the mods, and
+/// a mod's events are simply *absent* from the global table. Kunos cars have no
+/// file of their own and fall through to it.
+pub fn guid_files(bank_dir: &Path, ac_root: Option<&Path>) -> Vec<PathBuf> {
+    let mut files = vec![bank_dir.join("GUIDs.txt")];
+    if let Some(root) = ac_root {
+        files.push(root.join("content").join("sfx").join("GUIDs.txt"));
+    }
+    files
 }
 
 /// Reads the candidate files in order and returns the first engine event found.
-pub fn resolve_engine_event(ac_root: &Path, car_id: &str, view: EngineView) -> Option<(String, Guid)> {
-    for file in guid_files(ac_root, car_id) {
+pub fn resolve_engine_event(
+    bank_dir: &Path,
+    ac_root: Option<&Path>,
+    car_id: &str,
+    view: EngineView,
+) -> Option<(String, Guid)> {
+    for file in guid_files(bank_dir, ac_root) {
         let Ok(text) = std::fs::read_to_string(&file) else {
             continue;
         };
@@ -291,45 +292,56 @@ mod tests {
         );
     }
 
-    /// The mod's own file wins: a sound mod's events are absent from the global
-    /// table, so preferring the global one would silently play the wrong bank's
-    /// event — or nothing at all.
+    /// The table sitting next to the bank wins. A sound mod is auditioned from
+    /// the library, and its events are absent from the game's global table —
+    /// preferring the global one would resolve to the *stock* bank's event, or
+    /// to nothing at all.
     #[test]
-    fn a_cars_own_guid_file_wins_over_the_global_one() {
+    fn the_table_next_to_the_bank_wins_over_the_global_one() {
         let base = crate::testutil::temp_dir("fmod-guids");
-        let car = base.join("content").join("cars").join("modcar").join("sfx");
-        let global = base.join("content").join("sfx");
-        std::fs::create_dir_all(&car).expect("create car sfx dir");
-        std::fs::create_dir_all(&global).expect("create global sfx dir");
+        let bank_dir = base.join("library").join("some_sound_mod");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&bank_dir).expect("create bank dir");
+        std::fs::create_dir_all(ac.join("content").join("sfx")).expect("create global sfx dir");
 
         std::fs::write(
-            global.join("GUIDs.txt"),
-            "{00000000-0000-0000-0000-000000000000} event:/cars/modcar/engine_ext\n",
+            ac.join("content").join("sfx").join("GUIDs.txt"),
+            "{00000000-0000-0000-0000-000000000000} event:/cars/modcar/engine_ext
+",
         )
         .expect("write global table");
         std::fs::write(
-            car.join("GUIDs.txt"),
-            "{d33f0a36-b38e-410f-b895-4797f5f77e18} event:/cars/modcar/engine_ext\n",
+            bank_dir.join("GUIDs.txt"),
+            "{d33f0a36-b38e-410f-b895-4797f5f77e18} event:/cars/modcar/engine_ext
+",
         )
         .expect("write the mod's own table");
 
-        let (_, guid) = resolve_engine_event(&base, "modcar", EngineView::Exterior).expect("resolved");
+        let (_, guid) = resolve_engine_event(&bank_dir, Some(&ac), "modcar", EngineView::Exterior).expect("resolved");
         assert_eq!(
             guid,
             Guid::parse("{d33f0a36-b38e-410f-b895-4797f5f77e18}").unwrap(),
-            "the car's own GUIDs.txt must take precedence"
+            "the table beside the bank must take precedence"
         );
     }
 
-    /// Kunos cars have no file of their own, and must fall through.
+    /// Kunos cars ship no table of their own, and must fall through.
     #[test]
     fn resolve_falls_through_to_the_global_table() {
         let base = crate::testutil::temp_dir("fmod-guids-global");
-        let global = base.join("content").join("sfx");
-        std::fs::create_dir_all(&global).expect("create global sfx dir");
-        std::fs::write(global.join("GUIDs.txt"), GT40).expect("write global table");
+        let bank_dir = base
+            .join("ac")
+            .join("content")
+            .join("cars")
+            .join("ks_ford_gt40")
+            .join("sfx");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&bank_dir).expect("create car sfx dir");
+        std::fs::create_dir_all(ac.join("content").join("sfx")).expect("create global sfx dir");
+        std::fs::write(ac.join("content").join("sfx").join("GUIDs.txt"), GT40).expect("write global table");
 
-        let (path, _) = resolve_engine_event(&base, "ks_ford_gt40", EngineView::Exterior).expect("resolved");
+        let (path, _) =
+            resolve_engine_event(&bank_dir, Some(&ac), "ks_ford_gt40", EngineView::Exterior).expect("resolved");
         assert_eq!(path, "event:/cars/ks_ford_gt40/engine_ext");
     }
 
@@ -337,7 +349,7 @@ mod tests {
     fn resolve_is_empty_when_no_table_exists() {
         let base = crate::testutil::temp_dir("fmod-guids-missing");
         assert!(
-            resolve_engine_event(&base, "modcar", EngineView::Exterior).is_none(),
+            resolve_engine_event(&base, None, "modcar", EngineView::Exterior).is_none(),
             "a missing GUIDs.txt is not an error, just nothing to play"
         );
     }
