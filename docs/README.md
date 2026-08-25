@@ -29,6 +29,7 @@ Documentation de conception de Pit Box (gestionnaire de mods Assetto Corsa). Ce 
 - **`SPEC-preview-3d-kn5.md`** — spécification du rendu 3D natif : parsing KN5 en Rust → glTF → three.js dans la webview. Décision d'architecture, layout binaire du format, plan par lots. **Point d'entrée du chantier.**
 - **`kn5-format.md`** — ce que le format fait *vraiment*, mesuré sur des fichiers réels : écarts constatés avec la spec et réponses à ses questions ouvertes, avec la méthode de vérification. À mettre à jour à chaque découverte.
 - **`fsb5-format.md`** — le format des banks de son FMOD (`.bank`), mesuré de la même façon : conteneur FSB5, codec FADPCM, et les hypothèses écartées. Lu pour auditionner un mod de son sans lancer le jeu.
+- **`SPEC-engine-sound-fmod.md`** — chantier suivant : jouer l'événement moteur avec le FMOD livré par Assetto Corsa, au lieu de deviner le ralenti. Faits vérifiés, position sur la licence, plan par lots.
 - **`showroom-3d-preview-research.md`** — recherche préalable : les trois pistes explorées (fenêtre Content Manager, parser maison, `acShowroom.exe`), et pourquoi l'intégration de la fenêtre native a été abandonnée. À lire avant de retenter quoi que ce soit dans cette direction.
 
 ## Code de référence
