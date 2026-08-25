@@ -865,12 +865,91 @@ survit au gel des clics et masque exactement le symptôme qu'elle devrait
 trahir. Les deux commandes sont passées en `async`, comme l'import et l'aperçu
 3D l'étaient déjà.
 
-Reste la durée elle-même, plus longue à la deuxième écoute qu'à la première.
-`start()` chronomètre désormais ses trois phases — chargement du bank, attente
-des échantillons, démarrage de l'instance — et **journalise au-delà de 600 ms**,
-au niveau Warn pour que la ligne existe aussi sur une install packagée. Le cas
-intéressant est justement la seconde écoute du même mod, où plus rien ne devrait
-avoir à charger.
+### `FMOD_STUDIO_LOADING_STATE::LOADED` vaut 3, pas 2
+
+La lenteur de la seconde écoute, elle, n'avait rien d'un chargement. Symptôme
+exact, et c'est lui qui donne la réponse : **changer de mod était instantané,
+rallumer le même mod prenait plus de cinq secondes.** Or c'est précisément le
+cas où `start()` *ne* recharge *pas* le bank.
+
+Mesuré au banc (`second_audition_of_the_same_bank`, dans `fmod::engine`) :
+
+| écoute | avant | après |
+| --- | --- | --- |
+| 1ʳᵉ | 185 ms | 191 ms |
+| 2ᵉ | **10,017 s** | **85 µs** |
+| 3ᵉ | **10,012 s** | 78 µs |
+
+10,017 s, c'est `SAMPLE_WAIT` au millième près : la boucle d'attente des
+échantillons allait au bout de son délai de garde puis jouait quand même. La
+constante `LOADING_STATE_LOADED` valait **2**, alors que l'énumération est
+`UNLOADING, UNLOADED, LOADING, LOADED, ERROR` — donc 2 est `LOADING`, l'état
+par lequel une description *passe* au lieu de s'y arrêter. Vérifié en lisant
+l'état brut au moment du renoncement : **3**.
+
+D'où un bug qui n'était faux qu'à la seconde tentative, et donc invisible :
+une première écoute passe transitoirement par `LOADING`, la boucle sortait tôt
+et tout paraissait normal ; une seconde écoute du même bank part déjà à
+`LOADED`, ne repasse jamais par 2, et attendait les dix secondes entières.
+Changer de mod recharge le bank, ce qui remet l'état à zéro et refait passer
+par `LOADING` — d'où l'instantanéité trompeuse de ce geste-là.
+
+Deux garde-fous restent en place : `start()` chronomètre ses trois phases et
+**journalise au-delà de 600 ms**, et la boucle d'attente qui renonce dit
+désormais *sur quel état* elle a renoncé — sans quoi une constante fausse est
+indiscernable d'un bank réellement lent.
+
+---
+
+## 6quinquies. `MINIMUM` négatif : ce qu'on en croit, et pourquoi si peu
+
+Une voiture rapportée comme tournant au ralenti « plutôt vers 2000 » affichait
+1105 tr/min. Le `data.acd` s'ouvre pourtant très bien — par la **route de
+récupération** et non par le nom du dossier, puisqu'en bibliothèque un dossier
+de voiture s'appelle `v1.3` et non `vrc_erc_1999_renoir_csp` (§6ter) — et il
+donne `LIMITER=8500`. Mais il donne aussi `MINIMUM=-2500`, **négatif**, que le
+lecteur jetait au profit d'une estimation à 13 % du rupteur.
+
+La tentation était de prendre la valeur absolue. **Le corpus l'interdit.** Sur
+les 122 voitures de la bibliothèque de référence, 11 déclarent un `MINIMUM`
+négatif, et ils se séparent nettement :
+
+| valeur | rupteur | fraction | voitures |
+| --- | --- | --- | --- |
+| −2500 | 8500 | 0,29 | `vrc_erc_1999_renoir_csp` |
+| −1500 | 8500 | 0,18 | `vrc_pt_2023_pageau_98_csp` |
+| −9000 | 8300–8500 | **1,08** | neuf variantes de Honda/Acura NSX |
+
+Les deux premières sont des builds CSP à démarreur manuel, et leur magnitude
+est un ralenti parfaitement ordinaire. Les neuf autres annoncent une magnitude
+**au-dessus de leur propre rupteur** : quoi que soit ce nombre, ce n'est pas un
+ralenti, et le croire serait pire que d'estimer.
+
+Donc **aucune théorie sur ce que le signe veut dire** — on n'en a pas les
+moyens. La magnitude est traitée comme un *candidat*, cru seulement à
+l'intérieur de la même bande de plausibilité qu'un nombre lu dans un nom
+d'échantillon (`IDLE_NAME_BAND`, 5 % à 35 % du rupteur). C'est la seule
+affirmation que les mesures soutiennent, et elle accepte les deux vrais
+ralentis en refusant les neuf impossibles. Un `MINIMUM` positif, lui, reste cru
+tel quel : c'est le champ faisant son travail documenté.
+
+### Le démarreur CSP : localisé, pas encore joué
+
+La même voiture a un démarreur en deux temps (contact, puis lancement), et on
+ne l'entend pas. Le relevé de son bank dit exactement pourquoi :
+
+- `engine_ext` et `engine_int` n'exposent que `rpms` (0–10000) et `throttle`.
+  **Aucun paramètre de démarreur** — le lancement n'est pas dans l'événement
+  moteur ;
+- le bank déclare en revanche un événement que les voitures Kunos n'ont pas :
+  `event:/cars/<id>/ign_int`, avec un unique paramètre `state` (0–1). C'est là
+  que vit le bruit de contact et de lancement, et il est **intérieur
+  uniquement** — il n'existe pas d'`ign_ext`.
+
+Le faire entendre est donc une fonctionnalité à part entière : jouer `ign_int`
+puis faire monter `rpms` de 0 au ralenti. Reste à décider si elle se déclenche
+seule à la première écoute d'une voiture qui a cet événement, ou si elle est le
+geste explicite que la clé de contact de l'écran suggère déjà.
 
 ---
 

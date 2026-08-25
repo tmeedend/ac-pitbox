@@ -49,6 +49,11 @@ use std::path::Path;
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct EngineData {
     /// `MINIMUM` of `[ENGINE_DATA]` — where the engine ticks over.
+    ///
+    /// **Reported as written, sign included.** A negative `MINIMUM` exists in
+    /// the wild and this module does not claim to know what it means; deciding
+    /// what to believe belongs to `enginesound::idle_from_minimum`, which has
+    /// the rev ceiling to judge it against.
     pub idle_rev: Option<f32>,
     /// `LIMITER` — where it stops. Zero means "no limiter" and is dropped.
     pub limiter_rev: Option<f32>,
@@ -430,7 +435,7 @@ pub fn read_engine_data(car_dir: &Path) -> Option<EngineData> {
     })?;
 
     let found = EngineData {
-        idle_rev: ini_number(&engine, "MINIMUM").filter(|v| *v > 0.0),
+        idle_rev: ini_number(&engine, "MINIMUM").filter(|v| *v != 0.0),
         // Some cars declare no limiter with a zero rather than by omission.
         limiter_rev: ini_number(&engine, "LIMITER").filter(|v| *v > 0.0),
     };
@@ -603,12 +608,151 @@ mod tests {
         }
     }
 
+    /// One folder, said out loud: which route opened it, and what it holds.
+    ///
+    /// The bench for "this car's idle looks wrong" — a library folder is named
+    /// after the *version* (`.../vrc_erc_1999_renoir_csp/v1.3`), not after the
+    /// car, so the fast route cannot work there and only the recovery one can:
+    ///
+    /// ```text
+    /// PITBOX_CAR_DIR="D:\AC-Library\cars\<mod>\<version>"     ///   cargo test --lib acd -- --ignored --nocapture one_car_folder
+    /// ```
+    #[test]
+    #[ignore = "needs a real car folder; measurement, not a check"]
+    fn one_car_folder_reports_what_it_found() {
+        let Ok(dir) = std::env::var("PITBOX_CAR_DIR") else {
+            eprintln!("PITBOX_CAR_DIR unset, skipping");
+            return;
+        };
+        let dir = std::path::PathBuf::from(dir);
+        let name = dir.file_name().unwrap_or_default().to_string_lossy().into_owned();
+        eprintln!("
+=== {} ===", dir.display());
+        eprintln!("  folder name used as the car id: {name:?}");
+
+        let bytes = std::fs::read(dir.join("data.acd")).expect("read data.acd");
+        let mut entries = entries(&bytes);
+        eprintln!("  {} entries in the container", entries.len());
+        let (_, ciphered) = entries
+            .iter()
+            .find(|(n, _)| n.eq_ignore_ascii_case("engine.ini"))
+            .cloned()
+            .expect("engine.ini in the container");
+
+        let fast = decrypt(&ciphered, &key_for(&name)).contains(ENGINE_SECTION);
+        eprintln!("  opened by the folder name:      {fast}");
+
+        entries.sort_by_key(|(_, data)| std::cmp::Reverse(data.len()));
+        let works = |key: &[u8]| decrypt(&ciphered, key).contains(ENGINE_SECTION);
+        let recovered = entries
+            .iter()
+            .take(LONGEST_TRIED)
+            .find_map(|(_, data)| recover_key(data, &works));
+        eprintln!("  recovered from the ciphertext:  {}", recovered.is_some());
+
+        match read_engine_data(&dir) {
+            Some(data) => eprintln!("  idle {:?}  limiter {:?}", data.idle_rev, data.limiter_rev),
+            None => eprintln!("  nothing read — the interface falls back on an estimate"),
+        }
+
+        // The section itself, because "idle None" says nothing about whether
+        // the number is absent or merely spelled otherwise.
+        if let Some(key) = recovered {
+            let text = decrypt(&ciphered, &key);
+            eprintln!("  --- engine.ini, first 40 lines ---");
+            for line in text.lines().take(40) {
+                eprintln!("  | {line}");
+            }
+        }
+    }
+
     /// The whole corpus, against the real files. Ignored like every test that
     /// needs the game installed:
     ///
     /// ```text
     /// PITBOX_AC_ROOT="D:\...\assettocorsa" cargo test --lib acd -- --ignored --nocapture
     /// ```
+    /// How `MINIMUM` is actually written across a whole corpus, sign included.
+    ///
+    /// Exists because one car declares `MINIMUM=-2500` and idles, by ear, at
+    /// around 2500 — a single sample proves nothing, so this counts them:
+    ///
+    /// ```text
+    /// PITBOX_CARS_ROOT="D:\AC-Library\cars"     ///   cargo test --lib acd -- --ignored --nocapture how_minimum_is_written
+    /// ```
+    #[test]
+    #[ignore = "needs a real corpus of cars; measurement, not a check"]
+    fn how_minimum_is_written_across_a_corpus() {
+        let Ok(root) = std::env::var("PITBOX_CARS_ROOT") else {
+            eprintln!("PITBOX_CARS_ROOT unset, skipping");
+            return;
+        };
+        // A library nests one level deeper than `content/cars` does
+        // (`<mod>/<version>/data.acd`), so look at both depths.
+        let mut folders = Vec::new();
+        for entry in std::fs::read_dir(&root).expect("read the corpus root").flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            if path.join("data.acd").is_file() {
+                folders.push(path);
+                continue;
+            }
+            for nested in std::fs::read_dir(&path).into_iter().flatten().flatten() {
+                let nested = nested.path();
+                if nested.join("data.acd").is_file() {
+                    folders.push(nested);
+                }
+            }
+        }
+
+        let (mut opened, mut positive, mut absent) = (0, 0, 0);
+        let mut negative: Vec<(String, f32, Option<f32>)> = Vec::new();
+        for dir in &folders {
+            let Ok(bytes) = std::fs::read(dir.join("data.acd")) else {
+                continue;
+            };
+            let mut entries = entries(&bytes);
+            let Some((_, ciphered)) = entries.iter().find(|(n, _)| n.eq_ignore_ascii_case("engine.ini")).cloned()
+            else {
+                continue;
+            };
+            let name = dir.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            let by_name = decrypt(&ciphered, &key_for(&name));
+            let text = if by_name.contains(ENGINE_SECTION) {
+                Some(by_name)
+            } else {
+                entries.sort_by_key(|(_, data)| std::cmp::Reverse(data.len()));
+                let works = |key: &[u8]| decrypt(&ciphered, key).contains(ENGINE_SECTION);
+                entries
+                    .iter()
+                    .take(LONGEST_TRIED)
+                    .find_map(|(_, data)| recover_key(data, &works))
+                    .map(|key| decrypt(&ciphered, &key))
+            };
+            let Some(text) = text else { continue };
+            opened += 1;
+            match ini_number(&text, "MINIMUM") {
+                Some(v) if v > 0.0 => positive += 1,
+                Some(v) if v < 0.0 => {
+                    let label = dir.strip_prefix(&root).unwrap_or(dir).to_string_lossy().into_owned();
+                    negative.push((label, v, ini_number(&text, "LIMITER")));
+                }
+                _ => absent += 1,
+            }
+        }
+
+        eprintln!("
+=== MINIMUM across {} cars ({opened} opened) ===", folders.len());
+        eprintln!("  positive  {positive}");
+        eprintln!("  negative  {}", negative.len());
+        eprintln!("  absent/0  {absent}");
+        for (name, value, limiter) in &negative {
+            eprintln!("    {value:>8.0}  (limiter {:>6.0})  {name}", limiter.unwrap_or(0.0));
+        }
+    }
+
     #[test]
     #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
     fn every_installed_car_gives_up_its_engine_data() {

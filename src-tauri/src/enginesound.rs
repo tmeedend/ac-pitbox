@@ -360,6 +360,36 @@ const IDLE_BOUNDS: (f32, f32) = (700.0, 4000.0);
 /// dropped.
 const IDLE_NAME_BAND: (f32, f32) = (0.05, 0.35);
 
+/// What to make of the `MINIMUM` a car declares, given where it revs to.
+///
+/// A **positive** value is the field doing its documented job and is taken as
+/// written. A **negative** one is where honesty is required: the sign is not
+/// understood, and measuring rather than guessing is what settles it. Across
+/// the 122-car reference library, 11 cars write one, and they split cleanly in
+/// two:
+///
+/// - `-2500` and `-1500`, both against an 8500 rpm limiter — 0,29 and 0,18 of
+///   the ceiling, and both cars are CSP builds with a manual starter. Their
+///   magnitudes are perfectly ordinary idles, and the ear agrees;
+/// - `-9000` on nine Honda/Acura NSX variants whose limiter is 8300 to 8500 —
+///   *above* the rev ceiling. Whatever that number is, it is not an idle.
+///
+/// So the magnitude is treated as a **candidate**, believed only inside the
+/// same plausibility band a number read out of a sample name has to pass
+/// ([`IDLE_NAME_BAND`]). That is deliberately not a theory about what the sign
+/// means: it is the one statement the measurements support, and it happens to
+/// accept both real idles and refuse all nine impossible ones.
+///
+/// `None` means "no usable reading", which sends the caller to the estimate.
+pub(crate) fn idle_from_minimum(minimum: f32, ceiling: f32) -> Option<f32> {
+    if minimum > 0.0 {
+        return Some(minimum);
+    }
+    let magnitude = -minimum;
+    let fraction = magnitude / ceiling;
+    (ceiling > 0.0 && (IDLE_NAME_BAND.0..=IDLE_NAME_BAND.1).contains(&fraction)).then_some(magnitude)
+}
+
 /// Idle engine speed for this car, in rpm.
 ///
 /// The authoritative source is `MINIMUM` in `data/engine.ini`, and it is out of
@@ -504,13 +534,17 @@ pub fn native_target(
         .limiter_rev
         .unwrap_or_else(|| car_dir.as_deref().map(rev_ceiling).unwrap_or(REV_CEILING_FALLBACK));
 
-    let idle_rev = physics.idle_rev.unwrap_or_else(|| {
-        // No physics: fall back on the bank's own sample names, and on the
-        // ratio after that. Reading the bank a second time — FMOD is about to
-        // read it too — buys the one thing FMOD cannot tell us, the names.
-        let parsed = std::fs::read(&bank).ok().and_then(|bytes| fsb5::parse(&bytes).ok());
-        idle_rev(parsed.as_ref(), parent_id, rev_ceiling)
-    });
+    let idle_rev = physics
+        .idle_rev
+        .and_then(|minimum| idle_from_minimum(minimum, rev_ceiling))
+        .unwrap_or_else(|| {
+            // Nothing usable in the physics: fall back on the bank's own
+            // sample names, and on the ratio after that. Reading the bank a
+            // second time — FMOD is about to read it too — buys the one thing
+            // FMOD cannot tell us, the names.
+            let parsed = std::fs::read(&bank).ok().and_then(|bytes| fsb5::parse(&bytes).ok());
+            idle_rev(parsed.as_ref(), parent_id, rev_ceiling)
+        });
 
     // The limiter event lives beside the engine one, in whichever table gave it.
     let limiter_guid = crate::fmod::guids::resolve_event(&dir, Some(&ac_root), parent_id, "limiter");
@@ -734,6 +768,40 @@ pub fn audition(
 
 #[cfg(test)]
 mod tests {
+
+    /// A `MINIMUM` doing its documented job is taken at face value.
+    #[test]
+    fn a_positive_minimum_is_the_idle_as_written() {
+        assert_eq!(idle_from_minimum(1050.0, 8000.0), Some(1050.0), "no second-guessing");
+    }
+
+    /// The two CSP cars of the reference library, with their real numbers: the
+    /// magnitude is an ordinary idle, and refusing it sent the slider to an
+    /// estimate 1400 rpm too low.
+    #[test]
+    fn a_plausible_negative_minimum_is_believed_as_a_magnitude() {
+        assert_eq!(
+            idle_from_minimum(-2500.0, 8500.0),
+            Some(2500.0),
+            "vrc_erc_1999_renoir_csp idles there"
+        );
+        assert_eq!(idle_from_minimum(-1500.0, 8500.0), Some(1500.0), "vrc_pt_2023_pageau_98_csp");
+    }
+
+    /// And the nine NSX variants, which write a magnitude *above* their own rev
+    /// ceiling. Whatever that number is, it is not an idle — and believing it
+    /// would be worse than estimating.
+    #[test]
+    fn a_negative_minimum_above_the_ceiling_is_refused() {
+        assert_eq!(idle_from_minimum(-9000.0, 8300.0), None, "9000 rpm is not an idle at 8300");
+        assert_eq!(idle_from_minimum(-9000.0, 8500.0), None, "same on the 8500 rpm variants");
+    }
+
+    /// No ceiling to judge against means no judgement: the estimate takes over.
+    #[test]
+    fn a_negative_minimum_needs_a_ceiling_to_be_judged() {
+        assert_eq!(idle_from_minimum(-2500.0, 0.0), None, "nothing to compare it to");
+    }
     use super::*;
 
     fn named_bank(names: &[&str]) -> Bank {

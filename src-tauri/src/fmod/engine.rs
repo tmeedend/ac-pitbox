@@ -782,8 +782,20 @@ fn start(
     // hundred milliseconds are silent.
     l.system.load_sample_data(desc).map_err(|e| e.to_string())?;
     let deadline = std::time::Instant::now() + SAMPLE_WAIT;
-    while std::time::Instant::now() < deadline {
+    loop {
         if l.system.samples_loaded(desc).map_err(|e| e.to_string())? {
+            break;
+        }
+        if std::time::Instant::now() >= deadline {
+            // Giving up has to say what it gave up on: a state that never
+            // becomes the one being waited for is indistinguishable, from the
+            // outside, from a bank that is genuinely slow to load.
+            log::warn!(
+                "fmod: samples for {} still not loaded after {:?}, state {:?} — playing anyway",
+                request.event_path,
+                SAMPLE_WAIT,
+                l.system.sample_loading_state(desc),
+            );
             break;
         }
         let _ = l.system.update();
@@ -1100,6 +1112,62 @@ mod tests {
         }
     }
 
+    /// Reproduces the reported freeze: listen, stop, listen to the **same** bank
+    /// again. Switching to another mod was instant, re-listening to the same one
+    /// took seconds — so the difference is the bank that `start()` keeps loaded
+    /// rather than swapping.
+    ///
+    /// Prints the durations rather than asserting a threshold: a bench, not a
+    /// check. Plays about a second of engine per round.
+    ///
+    /// ```text
+    /// PITBOX_AC_ROOT="D:\...ssettocorsa"     ///   cargo test --lib fmod::engine -- --ignored --nocapture second_audition
+    /// ```
+    #[test]
+    #[ignore = "needs a real Assetto Corsa install and an audio device"]
+    fn second_audition_of_the_same_bank() {
+        let Ok(ac_root) = std::env::var("PITBOX_AC_ROOT") else {
+            eprintln!("PITBOX_AC_ROOT unset, skipping");
+            return;
+        };
+        let ac_root = PathBuf::from(ac_root);
+        let car = std::env::var("PITBOX_AC_CAR").unwrap_or_else(|_| "ks_ford_gt40".to_string());
+        let bank_dir = match std::env::var("PITBOX_CAR_DIR") {
+            Ok(dir) => PathBuf::from(dir).join("sfx"),
+            Err(_) => ac_root.join("content").join("cars").join(&car).join("sfx"),
+        };
+        let (event_path, guid) =
+            super::super::guids::resolve_engine_event(&bank_dir, Some(&ac_root), &car, Default::default())
+                .unwrap_or_else(|| panic!("no engine event for {car} in {}", bank_dir.display()));
+        let bank =
+            crate::enginesound::find_bank(&bank_dir).unwrap_or_else(|| panic!("no .bank in {}", bank_dir.display()));
+
+        let handle = spawn();
+        let request = PlayRequest {
+            ac_root,
+            bank,
+            guid,
+            event_path: event_path.clone(),
+            rev: 1500.0,
+            throttle: HOLD_THROTTLE,
+            rev_ceiling: 8000.0,
+            reverb_wet_db: reverb_wet(),
+            limiter_guid: None,
+            limiter_rev: None,
+        };
+
+        eprintln!("
+{event_path}");
+        for round in 1..=3 {
+            let began = std::time::Instant::now();
+            handle.play(request.clone()).expect("the native path must work");
+            eprintln!("  play #{round} answered in {:?}", began.elapsed());
+            std::thread::sleep(Duration::from_millis(300));
+            handle.stop();
+            std::thread::sleep(Duration::from_millis(200));
+        }
+    }
+
     /// End-to-end through the real thread: loads the game's DLLs, plays an
     /// engine event, moves the rev parameter while it plays, stops.
     ///
@@ -1127,10 +1195,13 @@ mod tests {
         let ceiling = physics
             .limiter_rev
             .unwrap_or_else(|| crate::enginesound::rev_ceiling(&car_dir));
-        let idle = physics.idle_rev.unwrap_or_else(|| {
-            let parsed = std::fs::read(bank).ok().and_then(|b| crate::fsb5::parse(&b).ok());
-            crate::enginesound::idle_rev(parsed.as_ref(), car, ceiling)
-        });
+        let idle = physics
+            .idle_rev
+            .and_then(|minimum| crate::enginesound::idle_from_minimum(minimum, ceiling))
+            .unwrap_or_else(|| {
+                let parsed = std::fs::read(bank).ok().and_then(|b| crate::fsb5::parse(&b).ok());
+                crate::enginesound::idle_rev(parsed.as_ref(), car, ceiling)
+            });
         eprintln!(
             "  limiter {ceiling:.0} rpm, idle {idle:.0} rpm  ({})",
             if physics.limiter_rev.is_some() {

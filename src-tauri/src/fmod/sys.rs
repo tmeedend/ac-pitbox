@@ -53,7 +53,22 @@ const LOAD_BANK_NORMAL: c_uint = 0;
 const REVERB_DSP_TYPE: c_int = 19;
 
 /// `FMOD_STUDIO_LOADING_STATE::LOADED`.
-const LOADING_STATE_LOADED: c_int = 2;
+///
+/// **3, and it was 2 here for four lots.** The enum runs `UNLOADING`,
+/// `UNLOADED`, `LOADING`, `LOADED`, `ERROR` — so 2 is `LOADING`, the state a
+/// description passes *through* rather than settles on. Measured, not read off
+/// a header: `GetSampleLoadingState` returns 3 on a description whose samples
+/// are in memory.
+///
+/// The bug it caused is worth keeping in mind, because it hid so well: a
+/// **first** audition passes transiently through `LOADING`, so the wait broke
+/// early and everything looked right. A **second** audition of the same bank
+/// starts already `LOADED`, never equals 2 again, and sat out the full
+/// ten-second guard before playing — while switching to another mod stayed
+/// instant, because swapping the bank resets the state and makes it pass
+/// through `LOADING` once more. A wrong constant that is only wrong on the
+/// second try. See `docs/SPEC-engine-sound-fmod.md` §6quater.
+const LOADING_STATE_LOADED: c_int = 3;
 
 /// `FMOD_STUDIO_STOP_MODE::IMMEDIATE`.
 ///
@@ -498,6 +513,11 @@ impl System {
     }
 
     pub fn samples_loaded(&self, desc: EventDesc) -> Result<bool, FmodError> {
+        Ok(self.sample_loading_state(desc)? == LOADING_STATE_LOADED)
+    }
+
+    /// The raw state, so a wait that gives up can say *what* it was waiting on.
+    pub fn sample_loading_state(&self, desc: EventDesc) -> Result<c_int, FmodError> {
         let mut state: c_int = 0;
         unsafe {
             check(
@@ -505,7 +525,7 @@ impl System {
                 (self.fmod.api.desc_get_sample_loading_state)(desc.0, &mut state),
             )?;
         }
-        Ok(state == LOADING_STATE_LOADED)
+        Ok(state)
     }
 
     pub fn create_instance(&self, desc: EventDesc) -> Result<EventInstance, FmodError> {
@@ -843,6 +863,74 @@ mod survey {
     /// PITBOX_AC_ROOT="D:\...\assettocorsa" \
     ///   cargo test --lib fmod::sys::survey -- --ignored --nocapture
     /// ```
+    /// One bank, every event it declares, and every parameter of each.
+    ///
+    /// The bench for "this car does something the others do not" — a CSP car
+    /// with a manual starter, a turbo, an ignition switch. Plays nothing:
+    ///
+    /// ```text
+    /// PITBOX_AC_ROOT="D:\...ssettocorsa"     ///   PITBOX_CAR_DIR="D:\AC-Library\cars\<mod>\<version>"     ///   cargo test --lib fmod::sys::survey -- --ignored --nocapture lists_one_bank
+    /// ```
+    #[test]
+    #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
+    fn lists_one_bank_s_events_and_parameters() {
+        let (Ok(ac_root), Ok(car_dir)) = (std::env::var("PITBOX_AC_ROOT"), std::env::var("PITBOX_CAR_DIR")) else {
+            eprintln!("PITBOX_AC_ROOT or PITBOX_CAR_DIR unset, skipping");
+            return;
+        };
+        let ac_root = std::path::PathBuf::from(ac_root);
+        let sfx = std::path::PathBuf::from(car_dir).join("sfx");
+
+        let fmod = Fmod::load(&ac_root).expect("load the game's FMOD DLLs");
+        let system = System::new(fmod).expect("create the studio system");
+        let master = ac_root.join("content").join("sfx").join("common.bank");
+        system.load_bank(&master).expect("load the master bank");
+        let bank = crate::enginesound::find_bank(&sfx).expect("a .bank beside the GUIDs.txt");
+        system.load_bank(&bank).expect("load the car bank");
+
+        // The table next to the bank, read whole rather than looked up: the
+        // point here is to see what exists, not to find something expected.
+        let table = crate::fmod::guids::guid_files(&sfx, None)
+            .into_iter()
+            .find_map(|path| std::fs::read_to_string(path).ok())
+            .expect("a GUIDs.txt beside the bank");
+        let mut events: Vec<&str> = table
+            .lines()
+            .filter_map(|line| line.split_whitespace().nth(1))
+            .filter(|path| path.starts_with("event:/"))
+            .collect();
+        events.sort_unstable();
+
+        eprintln!("
+=== {} ===", bank.display());
+        for path in events {
+            let Some((_, guid)) = crate::fmod::guids::lookup(&table, path) else {
+                continue;
+            };
+            match system.event(&guid) {
+                Ok(desc) => {
+                    let found = system.parameters(desc).unwrap_or_default();
+                    eprintln!("  {path}");
+                    for p in &found {
+                        let kind = if p.kind == params::KIND_GAME_CONTROLLED {
+                            "ours"
+                        } else {
+                            "automatic"
+                        };
+                        eprintln!("      {:<24} {:>9.1}..{:<9.1} {kind}", p.name, p.min, p.max);
+                    }
+                    let roles = params::classify(&found);
+                    eprintln!(
+                        "      -> rev {:?}, throttle {:?}",
+                        roles.rev.as_ref().map(|p| &p.name),
+                        roles.throttle.as_ref().map(|p| &p.name)
+                    );
+                }
+                Err(e) => eprintln!("  {path}  (not in this bank: {e})"),
+            }
+        }
+    }
+
     #[test]
     #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
     fn surveys_every_installed_car() {
