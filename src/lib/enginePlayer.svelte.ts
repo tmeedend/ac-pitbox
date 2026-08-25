@@ -8,7 +8,16 @@
 // Rien à voir avec le moteur audio de la musique Big Picture (`music/engine.rs`,
 // côté Rust) : celui-ci est purement Web Audio, dans la webview, et n'a ni
 // playlist ni fondu enchaîné à gérer.
-import { auditionEngineSound, clipToBuffer, type EngineClip } from "$lib/enginesound";
+import {
+  auditionEngineNative,
+  auditionEngineSound,
+  clipToBuffer,
+  setAuditionRev,
+  setAuditionThrottle,
+  stopAuditionNative,
+  type EngineClip,
+  type NativeAudition,
+} from "$lib/enginesound";
 
 /** Fondu d'entrée et de sortie. Sans lui, démarrer ou couper claque. */
 const FADE_SECONDS = 0.12;
@@ -17,6 +26,13 @@ const FADE_SECONDS = 0.12;
 function keyOf(parentId: string, subId: string | null): string {
   return `${parentId}:${subId ?? ""}`;
 }
+
+/** L'écoute native tourne côté Rust, pas dans la webview : ceci n'en est que
+ * le reflet, pour savoir quoi couper et s'il faut afficher le curseur. */
+let native = $state<NativeAudition | null>(null);
+/** Régime demandé, en tr/min. Vit ici et non dans le composant, pour la même
+ * raison que le reste : la fiche se démonte, le son non. */
+let rev = $state(0);
 
 let context: AudioContext | null = null;
 let source: AudioBufferSourceNode | null = null;
@@ -39,9 +55,39 @@ export function engineState(parentId: string, subId: string | null): "off" | "lo
   return "off";
 }
 
+/** Réglages de l'écoute en cours, `null` quand c'est le repli Web Audio qui
+ * joue — le décodeur maison rend un échantillon figé, il n'y a rien à régler. */
+export function engineControls(): NativeAudition | null {
+  return native;
+}
+
+/** Régime actuellement demandé, en tr/min. */
+export function engineRev(): number {
+  return rev;
+}
+
+/** Déplace le régime de l'écoute native en cours.
+ *
+ * L'appel part sans être attendu : le curseur doit suivre la main, et une
+ * aller-retour vers Rust par pixel parcouru la ferait traîner. Un échec est
+ * sans conséquence — le thread ignore un réglage quand rien ne joue. */
+export function setEngineRev(value: number): void {
+  rev = value;
+  void setAuditionRev(value).catch(() => {});
+}
+
+/** Accélérateur, 0 = lâcher de gaz, 1 = pleine charge. */
+export function setEngineThrottle(value: number): void {
+  void setAuditionThrottle(value).catch(() => {});
+}
+
 /** Coupe ce qui tourne, en fondu. */
 export function stopEngine(): void {
   playing = null;
+  if (native) {
+    native = null;
+    void stopAuditionNative().catch(() => {});
+  }
   if (!context || !gain || !source) return;
   const stopping = source;
   const now = context.currentTime;
@@ -78,6 +124,28 @@ export async function toggleEngine(
     return null;
   }
   stopEngine();
+
+  // **Le vrai moteur du jeu d'abord.** Il joue l'événement `engine_ext` que le
+  // jeu jouerait, réglable en régime, au lieu d'un échantillon deviné — mesuré
+  // sur les 299 voitures de l'installation de référence, il aboutit à chaque
+  // fois (docs/SPEC-engine-sound-fmod.md §5, lot 4).
+  //
+  // Un échec ici n'est **pas** une erreur à montrer : pas d'AC configuré, DLL
+  // absentes, bank refusé. C'est le basculement vers le décodeur maison, qui
+  // reste le seul chemin fonctionnant sans installation du jeu (§4.1). Il n'en
+  // reste qu'une ligne de journal.
+  loading = key;
+  try {
+    const audition = await auditionEngineNative(parentId, subId);
+    native = audition;
+    rev = audition.revStart;
+    playing = key;
+    return null;
+  } catch (e) {
+    console.info(`[son moteur] chemin natif indisponible, repli sur le décodeur : ${e}`);
+  } finally {
+    if (loading === key) loading = null;
+  }
 
   context ??= new AudioContext();
   // Un contexte créé avant un geste peut être suspendu : le réveiller ne coûte

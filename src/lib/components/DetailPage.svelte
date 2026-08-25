@@ -72,7 +72,15 @@
   import MediaReplays from "./detail/MediaReplays.svelte";
   import MediaBackgrounds from "./detail/MediaBackgrounds.svelte";
   import IgnitionKey from "./detail/IgnitionKey.svelte";
-  import { engineState, stopEngine, toggleEngine } from "$lib/enginePlayer.svelte";
+  import {
+    engineControls,
+    engineRev,
+    engineState,
+    setEngineRev,
+    stopEngine,
+    toggleEngine,
+  } from "$lib/enginePlayer.svelte";
+  import Slider from "$lib/components/Slider.svelte";
 
   import { errorText } from "$lib/errors";
   interface Props {
@@ -548,6 +556,14 @@
    * d'un déploiement, et écouter n'en est pas un. Les deux gestes doivent
    * rester possibles en même temps.
    */
+  // `null` tant que le chemin natif ne joue pas, ou quand l'événement joué
+  // n'expose aucun paramètre de régime reconnaissable — il s'entend quand même,
+  // il ne se règle simplement pas (§2.4).
+  const revControls = $derived.by(() => {
+    const c = engineControls();
+    return c && c.revParam ? c : null;
+  });
+
   async function listenSound(subId: string | null) {
     if (!detail) return;
     actionError = "";
@@ -1204,6 +1220,22 @@
               </div>
             {/each}
           </div>
+          <!-- Le curseur n'apparaît que quand le vrai moteur du jeu tourne : le
+               repli joue un échantillon figé, qu'il n'y a rien à régler. Sa
+               plage vient de la courbe de puissance de **cette** voiture, d'où
+               un F1 qui monte à 19 500 et un utilitaire diesel à 5 000. -->
+          {#if revControls}
+            <Slider
+              compact
+              label={t("detail.soundRev")}
+              min={revControls.revFloor}
+              max={revControls.revCeiling}
+              step={50}
+              value={engineRev()}
+              display={t("detail.soundRevValue", { rpm: Math.round(engineRev()).toLocaleString() })}
+              oninput={setEngineRev}
+            />
+          {/if}
           <!-- L'exclusivité et l'absence de mod se lisent sur les boutons radio
                eux-mêmes : « Origine » seule et cochée dit tout. -->
             </div>

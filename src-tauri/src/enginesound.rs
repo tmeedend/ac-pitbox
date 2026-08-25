@@ -312,6 +312,47 @@ pub struct NativeTarget {
     pub bank: PathBuf,
     pub guid: crate::fmod::guids::Guid,
     pub event_path: String,
+    /// Top of the rev slider for **this** car.
+    pub rev_ceiling: f32,
+}
+
+/// Lowest engine speed the slider offers. Below an idle nothing sounds like an
+/// engine any more, and 900 rpm — the value §4.4 settles on for the start — has
+/// to sit comfortably inside the range.
+pub const REV_FLOOR: f32 = 500.0;
+
+/// Used when a car has no usable curve: 5 of 299 in the reference install.
+/// Close to the measured median (8300) rather than to either extreme.
+const REV_CEILING_FALLBACK: f32 = 8000.0;
+
+/// Top of the rev range, per car, taken from the **unencrypted** power curve.
+///
+/// The real redline lives in `data/engine.ini`, inside a `data.acd` that is
+/// encrypted most of the time, and §4.4 says not to go there. It does not have
+/// to: `ui/ui_car.json` carries `powerCurve` and `torqueCurve` in clear, and
+/// their last point sits at or just under the limiter.
+///
+/// Measured across the 299 cars of the reference install: **294 have a usable
+/// curve**, running from 5000 (a Berlingo diesel) to 19500 (an F2004), median
+/// 8300. No fixed default could have covered that spread — a slider stopping at
+/// 8000 would make an F1 sound broken, and one going to 19500 would leave the
+/// Berlingo's whole range in the first eighth of the travel.
+fn rev_ceiling(car_dir: &Path) -> f32 {
+    let Some(specs) = crate::uijson::read_car_specs(car_dir) else {
+        return REV_CEILING_FALLBACK;
+    };
+    let top = specs
+        .power_curve
+        .iter()
+        .chain(specs.torque_curve.iter())
+        .map(|point| point[0])
+        .fold(0.0_f64, f64::max);
+    // A curve that stops below 1000 rpm is not a curve, it is a stub.
+    if top >= 1000.0 {
+        top as f32
+    } else {
+        REV_CEILING_FALLBACK
+    }
 }
 
 /// Resolves a list entry to a playable FMOD event.
@@ -340,11 +381,17 @@ pub fn native_target(
                 dir.display()
             )
         })?;
+    // The curve belongs to the **car**, never to the sound mod being
+    // auditioned: swapping the sound does not change what the engine revs to.
+    let car_dir =
+        crate::submods::parent_subdir(conn, cfg, parent_id, "ui").and_then(|ui| ui.parent().map(Path::to_path_buf));
+    let rev_ceiling = car_dir.as_deref().map(rev_ceiling).unwrap_or(REV_CEILING_FALLBACK);
     Ok(NativeTarget {
         ac_root,
         bank,
         guid,
         event_path,
+        rev_ceiling,
     })
 }
 

@@ -11,6 +11,7 @@
   const AC_URL = "https://store.steampowered.com/app/244210/Assetto_Corsa/";
   const CM_URL = "https://acstuff.club/app/";
   const QUICKBMS_URL = "https://aluigi.altervista.org/quickbms.htm";
+  const FMOD_URL = "https://www.fmod.com/";
   const PIXABAY_URL = "https://pixabay.com/music/";
   const DONATE_URL = "https://paypal.me/ktulu77";
   const SOURCE_URL = "https://github.com/tmeedend/ac-pitbox";
@@ -67,6 +68,23 @@
         <div class="credit-author mono">{t("about.cmAuthor")}</div>
       </div>
       <button class="ext-link" type="button" onclick={() => go(CM_URL)} title={t("about.visitSite")}>↗</button>
+    </div>
+
+    <!-- Mention **obligatoire**, pas un remerciement : la clause 3 de la licence
+         FMOD impose un crédit visible contenant les mots « FMOD Studio » et
+         « Firelight Technologies Pty Ltd » (docs/SPEC-engine-sound-fmod.md §3).
+         D'où une chaîne littérale et non un `t()` : c'est un texte légal, il ne
+         se traduit pas et ne doit pas pouvoir se perdre dans une locale.
+         Aucune DLL FMOD n'est redistribuée — on charge celle que l'utilisateur
+         possède déjà avec son jeu. -->
+    <div class="credit">
+      <div class="credit-ico">🔊</div>
+      <div class="credit-b">
+        <div class="credit-name">FMOD Studio <span class="tag">{t("about.fmodTag")}</span></div>
+        <div class="credit-desc">{t("about.fmodDesc")}</div>
+        <div class="credit-author mono">Made with FMOD Studio by Firelight Technologies Pty Ltd.</div>
+      </div>
+      <button class="ext-link" type="button" onclick={() => go(FMOD_URL)} title={t("about.visitSite")}>↗</button>
     </div>
 
     <div class="credit">

@@ -17,7 +17,15 @@
   import IgnitionKey from "./detail/IgnitionKey.svelte";
   import InlineEdit from "./InlineEdit.svelte";
   import StateBadge from "./StateBadge.svelte";
-  import { engineState, toggleEngine, stopEngine } from "$lib/enginePlayer.svelte";
+  import {
+    engineControls,
+    engineRev,
+    engineState,
+    setEngineRev,
+    stopEngine,
+    toggleEngine,
+  } from "$lib/enginePlayer.svelte";
+  import Slider from "$lib/components/Slider.svelte";
 
   interface Props {
     subId: string;
@@ -66,6 +74,13 @@
     }
   }
 
+  // Voir `DetailPage` : le curseur n'existe que sur le chemin natif, et
+  // seulement quand l'événement expose un régime réglable.
+  const revControls = $derived.by(() => {
+    const c = engineControls();
+    return c && c.revParam ? c : null;
+  });
+
   /** Durée totale du bank, en minutes et secondes — des heures de son en
    * secondes ne se lisent pas. */
   function fmtDuration(seconds: number): string {
@@ -87,6 +102,21 @@
       </div>
     {/if}
   </header>
+
+  {#if revControls}
+    <div class="rev">
+      <Slider
+        compact
+        label={t("detail.soundRev")}
+        min={revControls.revFloor}
+        max={revControls.revCeiling}
+        step={50}
+        value={engineRev()}
+        display={t("detail.soundRevValue", { rpm: Math.round(engineRev()).toLocaleString() })}
+        oninput={setEngineRev}
+      />
+    </div>
+  {/if}
 
   {#if error}<div class="err">{error}</div>{/if}
 
@@ -225,6 +255,12 @@
   .body {
     margin-top: 14px;
   }
+  /* Le curseur prend la largeur du bandeau, sous l'en-tête qui porte la clé. */
+  .rev {
+    max-width: 420px;
+    margin: 0 0 12px;
+  }
+
   .err {
     margin-bottom: 10px;
     padding: 8px 10px;

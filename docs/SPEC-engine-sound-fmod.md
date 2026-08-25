@@ -416,8 +416,40 @@ Vérifié ainsi sur trois voitures — la GT40 Kunos et deux mods (`art_skyline_
 `bati_fd3s_rx7`) qui passent par leur propre table : `rpms` 0–20000 et
 `throttle` reconnus sur les trois, régime piloté en cours de lecture.
 
-**Lot 3 — l'interface.** La clé branchée sur le chemin natif, le curseur de
-régime, et la mention FMOD dans À propos (§3).
+**Lot 3 — l'interface. ✅ fait.** La clé de contact ne change pas d'aspect :
+elle essaie maintenant **le chemin natif d'abord** et retombe silencieusement
+sur le décodeur maison, avec une simple ligne de console. Un utilisateur sans
+Assetto Corsa configuré ne voit aucune différence — c'est le but du §4.1.
+
+S'y ajoute le **curseur de régime**, visible seulement là où le chemin natif
+joue *et* où l'événement expose un paramètre de régime reconnu. Le repli n'en
+montre pas : il rend un échantillon figé, il n'y a rien à régler.
+
+**La plage du curseur ne vient pas de l'événement mais de la voiture**, et c'est
+le point qui a demandé de chercher. Le paramètre `rpms` annonce 0–20000 sur tout
+le corpus : inexploitable, la moitié de la course d'un curseur ne servirait
+jamais. Le vrai régime maximal est dans `data/engine.ini`, donc dans un
+`data.acd` chiffré, et §4.4 dit de ne pas y aller. **Il n'y en a pas besoin :**
+`ui/ui_car.json` porte `powerCurve` et `torqueCurve` **en clair**, et leur
+dernier point est au rupteur ou juste dessous. `uijson::read_car_specs` les
+lisait déjà.
+
+Mesuré sur les 299 voitures : **294 ont une courbe exploitable**, de 5000 (un
+Berlingo HDi) à 19500 (une F2004), médiane 8300. Aucune valeur fixe ne pouvait
+couvrir ça — un curseur s'arrêtant à 8000 ferait passer une F1 pour cassée, et
+un curseur allant à 19500 tasserait toute la plage du Berlingo dans le premier
+huitième de la course. Les 5 sans courbe retombent sur 8000.
+
+**Mention FMOD (§3) : faite dans le même lot, comme prévu.** Écran À propos,
+parmi les outils tiers, avec le texte exigé par la clause 3 — « Made with FMOD
+Studio by Firelight Technologies Pty Ltd. » Elle est écrite **en dur et non via
+`t()`** : c'est un texte légal, il ne se traduit pas et ne doit pas pouvoir se
+perdre dans une locale incomplète.
+
+Laissé ouvert exprès : la bascule **extérieur / intérieur** (§7). Le backend
+prend déjà le paramètre, l'interface n'expose que l'extérieur — le plus
+comparable d'un mod à l'autre. Ce n'est pas un oubli, c'est une question de goût
+qui n'est pas tranchée.
 
 **Lot 4 — le corpus. ✅ fait.** Relevé par `fmod::sys::survey`, un test
 `#[ignore]` qui parcourt `content/cars`, résout l'événement, charge le bank et

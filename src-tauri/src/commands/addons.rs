@@ -124,7 +124,7 @@ pub fn audition_engine_native(
     sub_id: Option<String>,
     interior: Option<bool>,
     rev: Option<f32>,
-) -> Result<crate::fmod::engine::PlayReport, String> {
+) -> Result<NativeAudition, String> {
     let cfg = crate::config::load(&app);
     let view = if interior.unwrap_or(false) {
         crate::fmod::guids::EngineView::Interior
@@ -135,7 +135,8 @@ pub fn audition_engine_native(
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         crate::enginesound::native_target(&conn, &cfg, &parent_id, sub_id.as_deref(), view)?
     };
-    engine.play(crate::fmod::engine::PlayRequest {
+    let rev_ceiling = target.rev_ceiling;
+    let play = engine.play(crate::fmod::engine::PlayRequest {
         ac_root: target.ac_root,
         bank: target.bank,
         guid: target.guid,
@@ -143,9 +144,35 @@ pub fn audition_engine_native(
         // 900 tr/min au départ : le régime de ralenti exact vit dans
         // `data/engine.ini`, donc dans un `data.acd` chiffré la plupart du
         // temps. Le curseur rend la question sans objet (§4.4).
-        rev: rev.unwrap_or(900.0),
+        rev: rev.unwrap_or(DEFAULT_REV),
         throttle: 0.0,
+    })?;
+    Ok(NativeAudition {
+        play,
+        rev_floor: crate::enginesound::REV_FLOOR,
+        rev_ceiling,
+        rev_start: rev
+            .unwrap_or(DEFAULT_REV)
+            .clamp(crate::enginesound::REV_FLOOR, rev_ceiling),
     })
+}
+
+/// Régime de départ, faute de mieux : le vrai ralenti est dans un `data.acd`
+/// chiffré, et le curseur rend la question sans objet (§4.4).
+#[cfg(windows)]
+const DEFAULT_REV: f32 = 900.0;
+
+/// Ce que l'écoute native renvoie à l'écran : le compte rendu du thread, plus
+/// la plage du curseur, qui vient de la voiture et non de l'événement.
+#[cfg(windows)]
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeAudition {
+    #[serde(flatten)]
+    pub play: crate::fmod::engine::PlayReport,
+    pub rev_floor: f32,
+    pub rev_ceiling: f32,
+    pub rev_start: f32,
 }
 
 /// Règle le régime de l'écoute en cours. Sans effet si rien ne joue.

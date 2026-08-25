@@ -32,6 +32,57 @@ export function auditionEngineSound(parentId: string, subId: string | null): Pro
   return invoke<EngineClip>("audition_engine_sound", { parentId, subId });
 }
 
+// --- Écoute native, par le FMOD du jeu (docs/SPEC-engine-sound-fmod.md) -----
+
+/** Ce que le vrai moteur audio du jeu renvoie quand il a réussi à jouer. */
+export interface NativeAudition {
+  /** L'événement effectivement joué, tel que le `GUIDs.txt` l'orthographie —
+   * diagnostic, jamais affiché tel quel. */
+  eventPath: string;
+  /** Nom du paramètre de régime reconnu, `null` si l'événement n'en expose
+   * aucun : il se joue quand même, il ne se règle simplement pas. */
+  revParam: string | null;
+  revMin: number | null;
+  revMax: number | null;
+  throttleParam: string | null;
+  /** Plage du curseur, qui vient de la **voiture** (sa courbe de puissance) et
+   * non de l'événement — un F1 monte à 19 500, un Berlingo à 5 000. */
+  revFloor: number;
+  revCeiling: number;
+  revStart: number;
+}
+
+/**
+ * Joue l'événement moteur par les DLL FMOD d'Assetto Corsa.
+ *
+ * **Rejette quand le chemin natif n'est pas disponible** — pas d'AC configuré,
+ * DLL introuvables, aucun événement moteur. Ce rejet est un signal de repli
+ * vers `auditionEngineSound`, pas un message à afficher : `enginePlayer` s'en
+ * charge et n'en dit rien à l'écran.
+ */
+export function auditionEngineNative(
+  parentId: string,
+  subId: string | null,
+  interior = false,
+): Promise<NativeAudition> {
+  return invoke<NativeAudition>("audition_engine_native", { parentId, subId, interior });
+}
+
+/** Règle le régime de l'écoute native en cours. Sans effet si rien ne joue. */
+export function setAuditionRev(rev: number): Promise<void> {
+  return invoke<void>("set_audition_rev", { rev });
+}
+
+/** Règle l'accélérateur (0 = lâcher de gaz, 1 = pleine charge). */
+export function setAuditionThrottle(throttle: number): Promise<void> {
+  return invoke<void>("set_audition_throttle", { throttle });
+}
+
+/** Coupe l'écoute native. Sans effet si rien ne joue. */
+export function stopAuditionNative(): Promise<void> {
+  return invoke<void>("stop_audition_native");
+}
+
 /** Décode le base64 renvoyé par le backend en tampon prêt pour `decodeAudioData`. */
 export function clipToBuffer(clip: EngineClip): ArrayBuffer {
   const binary = atob(clip.wav);
