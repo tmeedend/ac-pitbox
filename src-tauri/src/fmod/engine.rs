@@ -228,8 +228,14 @@ struct Showcase {
     idle_rev: f32,
     ceiling: f32,
     phase: Phase,
-    since: std::time::Instant,
+    /// Time inside the current phase. Fed by the caller rather than read from a
+    /// clock, so the routine can be exercised in a test without sleeping
+    /// through a minute of engine noise.
+    elapsed: Duration,
     span: Duration,
+    /// Whether the blip under way is one of the ones that reaches the limiter —
+    /// the only ones allowed to hang there.
+    at_limiter: bool,
     /// Blips left in the current burst.
     left: u32,
     /// Engine speed this blip is reaching for.
@@ -255,11 +261,41 @@ enum Phase {
 /// machine, an irregular one as somebody being pleased with their car.
 const IDLE_SPAN: (f32, f32) = (3.0, 7.0);
 const BLIPS_PER_BURST: (u32, u32) = (2, 5);
-/// Milliseconds. A real blip rises faster than it falls — the engine is pulled
-/// up by the throttle and comes back down on its own inertia.
-const ATTACK_MS: (u32, u32) = (150, 260);
+
+/// Milliseconds a blip takes to rise, before the part that depends on how far
+/// it is reaching.
+///
+/// The first version drew this from a flat 150–260 ms and it was audibly wrong:
+/// a ratio of 1.7 between the fastest and the slowest is not enough to hear, so
+/// every prod of the throttle had the same urgency and the routine sounded
+/// mechanical. Two things fix it — the reach-proportional part below, and the
+/// occasional lazy one.
+const ATTACK_BASE_MS: (u32, u32) = (110, 230);
+/// …plus this much, in proportion to how far up the rev range the blip goes.
+/// A real engine has inertia: a flick to 3000 rpm is over before a pull to the
+/// limiter has got going. This is what makes a big blip *sound* big rather than
+/// just end higher.
+const ATTACK_REACH_MS: (u32, u32) = (150, 380);
+/// And now and then, someone leaning on it rather than flicking it.
+const LAZY_ODDS: f32 = 0.30;
+const LAZY_FACTOR: (f32, f32) = (1.45, 2.10);
+
 const HOLD_MS: (u32, u32) = (60, 150);
-const RELEASE_MS: (u32, u32) = (380, 620);
+/// Held **against the limiter**, when a blip went all the way up: the engine
+/// sits there bouncing instead of being let go straight away.
+///
+/// Capped at a second and a half on purpose. It is a demonstration of what the
+/// car can do, not a demonstration of abusing it, and a limiter held longer
+/// than that stops being impressive and becomes uncomfortable.
+const LIMITER_HOLD_MS: (u32, u32) = (700, 1500);
+/// Odds of hanging on the limiter, **among the blips that reach it** — so
+/// roughly one blip in seven overall.
+const LIMITER_HOLD_ODDS: f32 = 0.5;
+
+/// Falling back to idle, before the reach-proportional part: coming down from
+/// the limiter takes longer than coming down from 3000 rpm.
+const RELEASE_BASE_MS: (u32, u32) = (280, 420);
+const RELEASE_REACH_MS: (u32, u32) = (220, 420);
 const GAP_MS: (u32, u32) = (120, 360);
 /// Fraction of the car's own ceiling a normal blip reaches.
 const PEAK_FRACTION: (f32, f32) = (0.50, 0.75);
@@ -277,42 +313,67 @@ fn between(range: (f32, f32)) -> f32 {
 
 impl Showcase {
     fn new(idle_rev: f32, ceiling: f32) -> Self {
-        let mut showcase = Showcase {
+        Showcase {
             idle_rev,
             ceiling,
             phase: Phase::Idle,
-            since: std::time::Instant::now(),
-            span: Duration::from_secs_f32(between(IDLE_SPAN)),
+            elapsed: Duration::ZERO,
+            // Start on a short idle rather than blipping the instant it is
+            // switched on: the first thing heard should be the engine ticking
+            // over.
+            span: Duration::from_secs_f32(between((1.5, 3.0))),
+            at_limiter: false,
             left: 0,
             peak: idle_rev,
-        };
-        // Start on a short idle rather than blipping the instant it is switched
-        // on: the first thing heard should be the engine ticking over.
-        showcase.span = Duration::from_secs_f32(between((1.5, 3.0)));
-        showcase
+        }
     }
 
-    fn pick_peak(&self) -> f32 {
-        let fraction = if fastrand::f32() < REDLINE_ODDS {
+    /// Chooses the top of the next blip, and remembers whether it is one of the
+    /// ones that reaches the limiter.
+    fn pick_peak(&mut self) {
+        self.at_limiter = fastrand::f32() < REDLINE_ODDS;
+        let fraction = if self.at_limiter {
             between(REDLINE_FRACTION)
         } else {
             between(PEAK_FRACTION)
         };
-        (self.ceiling * fraction).max(self.idle_rev + 500.0)
+        self.peak = (self.ceiling * fraction).max(self.idle_rev + 500.0);
     }
 
-    /// Advances the routine and returns the engine speed and throttle to apply.
-    fn tick(&mut self) -> (f32, f32) {
-        let elapsed = self.since.elapsed();
-        if elapsed >= self.span {
-            self.advance();
-            return self.tick();
-        }
-        let t = if self.span.is_zero() {
-            1.0
+    /// How far up its own range this blip is reaching, 0 to 1. Both the rise
+    /// and the fall are stretched by it.
+    fn reach_fraction(&self) -> f32 {
+        ((self.peak - self.idle_rev) / (self.ceiling - self.idle_rev).max(1.0)).clamp(0.0, 1.0)
+    }
+
+    fn attack_span(&self) -> Duration {
+        let base = fastrand::u32(ATTACK_BASE_MS.0..=ATTACK_BASE_MS.1) as f32;
+        let reach = fastrand::u32(ATTACK_REACH_MS.0..=ATTACK_REACH_MS.1) as f32 * self.reach_fraction();
+        let lazy = if fastrand::f32() < LAZY_ODDS {
+            between(LAZY_FACTOR)
         } else {
-            (elapsed.as_secs_f32() / self.span.as_secs_f32()).clamp(0.0, 1.0)
+            1.0
         };
+        Duration::from_millis(((base + reach) * lazy) as u64)
+    }
+
+    fn release_span(&self) -> Duration {
+        let base = fastrand::u32(RELEASE_BASE_MS.0..=RELEASE_BASE_MS.1) as f32;
+        let reach = fastrand::u32(RELEASE_REACH_MS.0..=RELEASE_REACH_MS.1) as f32 * self.reach_fraction();
+        Duration::from_millis((base + reach) as u64)
+    }
+
+    /// Advances the routine by `dt` and returns the engine speed and throttle
+    /// to apply.
+    fn tick(&mut self, dt: Duration) -> (f32, f32) {
+        self.elapsed += dt;
+        // A `while`, not an `if`: a long stall — a debugger, a machine coming
+        // back from sleep — must not leave the routine several phases behind.
+        while self.elapsed >= self.span {
+            self.elapsed -= self.span;
+            self.advance();
+        }
+        let t = (self.elapsed.as_secs_f32() / self.span.as_secs_f32()).clamp(0.0, 1.0);
         let reach = self.peak - self.idle_rev;
         match self.phase {
             Phase::Idle | Phase::Gap => (self.idle_rev, 0.0),
@@ -326,21 +387,25 @@ impl Showcase {
     }
 
     fn advance(&mut self) {
-        self.since = std::time::Instant::now();
         match self.phase {
             Phase::Idle => {
                 self.left = fastrand::u32(BLIPS_PER_BURST.0..=BLIPS_PER_BURST.1);
-                self.peak = self.pick_peak();
+                self.pick_peak();
                 self.phase = Phase::Attack;
-                self.span = span_ms(ATTACK_MS);
+                self.span = self.attack_span();
             }
             Phase::Attack => {
                 self.phase = Phase::Hold;
-                self.span = span_ms(HOLD_MS);
+                // Only a blip that actually got to the limiter may sit on it.
+                self.span = if self.at_limiter && fastrand::f32() < LIMITER_HOLD_ODDS {
+                    span_ms(LIMITER_HOLD_MS)
+                } else {
+                    span_ms(HOLD_MS)
+                };
             }
             Phase::Hold => {
                 self.phase = Phase::Release;
-                self.span = span_ms(RELEASE_MS);
+                self.span = self.release_span();
             }
             Phase::Release => {
                 self.left = self.left.saturating_sub(1);
@@ -353,11 +418,13 @@ impl Showcase {
                 }
             }
             Phase::Gap => {
-                self.peak = self.pick_peak();
+                self.pick_peak();
                 self.phase = Phase::Attack;
-                self.span = span_ms(ATTACK_MS);
+                self.span = self.attack_span();
             }
         }
+        // A zero span would spin `tick`'s loop forever.
+        self.span = self.span.max(Duration::from_millis(1));
     }
 }
 
@@ -422,7 +489,7 @@ fn run(rx: Receiver<Command>) {
         // rising engine speed, sampled every 20 ms.
         if let Some(p) = &mut playing {
             if let Some(showcase) = &mut p.showcase {
-                let (rev, throttle) = showcase.tick();
+                let (rev, throttle) = showcase.tick(TICK);
                 if let (Some(l), Some(param)) = (&loaded, p.roles.rev.as_ref()) {
                     let _ = l
                         .system
@@ -523,13 +590,28 @@ fn start(
             .set_parameter(instance, &p.name, request.rev.clamp(p.min, p.max));
     }
 
-    // The car sits at the origin, nose down +Z; the ear goes where the caller
-    // last put it. Both are needed before `start`, or the first mixed block is
-    // computed with the event at the default position.
+    // The car sits at the origin; the ear goes where the caller last put it.
+    // Both are needed before `start`, or the first mixed block is computed with
+    // the event at the default position.
+    //
+    // **The event faces -Z, the car's tail, and that is deliberate.** The model
+    // itself faces +Z — measured, not assumed: in `ford_gt40.kn5` the
+    // `SUSP_FRONT_*` nodes sit at z = +1.08 to +1.36 and `SUSP_REAR_*` at
+    // z = -1.31, and the converter applies no change of frame at all (see the
+    // header of `kn5-gltf/src/geometry.rs`). Pointing the event at +Z along
+    // with the geometry therefore *looks* right and sounds backwards: standing
+    // at the bonnet gives you the exhaust.
+    //
+    // So `Event Cone Angle` = 0 is the **tail** in AC's banks, not the nose.
+    // Which end of that is responsible — the game passing the car's backward
+    // vector, or the sound designers authoring the cone from the exhaust — is
+    // not something this side can tell, and it does not change what to do.
+    // Only the ear could catch it: the cone readings are symmetric about the
+    // axis, so 0-at-the-nose and 0-at-the-tail measure identically.
     let car = Attributes3d {
         position: [0.0; 3],
         velocity: [0.0; 3],
-        forward: [0.0, 0.0, 1.0],
+        forward: [0.0, 0.0, -1.0],
         up: [0.0, 1.0, 0.0],
     };
     if let Err(e) = l.system.set_instance_3d(instance, &car) {
@@ -781,22 +863,43 @@ mod tests {
         }
     }
 
+    /// Runs the routine for a simulated stretch and reports, per blip, how long
+    /// each phase lasted and where it peaked. No sleeping: the clock is an
+    /// argument, which is the whole reason `tick` takes one.
+    fn simulate(seconds: u32) -> (Vec<Duration>, Vec<Duration>, f32, f32, bool) {
+        let mut showcase = Showcase::new(900.0, 8000.0);
+        let (mut attacks, mut holds) = (Vec::new(), Vec::new());
+        let (mut peak, mut lowest, mut throttle_open) = (0.0_f32, f32::MAX, false);
+        let (mut phase, mut phase_for) = (showcase.phase, Duration::ZERO);
+
+        for _ in 0..(seconds as u64 * 1000 / TICK.as_millis() as u64) {
+            let (rev, throttle) = showcase.tick(TICK);
+            peak = peak.max(rev);
+            lowest = lowest.min(rev);
+            throttle_open |= throttle > 0.5;
+
+            if showcase.phase == phase {
+                phase_for += TICK;
+            } else {
+                match phase {
+                    Phase::Attack => attacks.push(phase_for),
+                    Phase::Hold => holds.push(phase_for),
+                    _ => {}
+                }
+                phase = showcase.phase;
+                phase_for = Duration::ZERO;
+            }
+        }
+        (attacks, holds, peak, lowest, throttle_open)
+    }
+
     /// A blip has to actually reach for the top of *this* engine, and come back
     /// to idle. Pure logic, no audio: the routine is a state machine.
     #[test]
     fn the_showcase_idles_then_reaches_for_the_top() {
-        let mut showcase = Showcase::new(900.0, 8000.0);
-        let (mut peak, mut lowest, mut throttle_open) = (0.0_f32, f32::MAX, false);
-        // Simulated at the real tick rate, long enough to cover several bursts.
-        for _ in 0..(90 * 50) {
-            let (rev, throttle) = showcase.tick();
-            peak = peak.max(rev);
-            lowest = lowest.min(rev);
-            throttle_open |= throttle > 0.5;
-            // The routine is time-driven, so the clock has to be let run.
-            std::thread::sleep(Duration::from_millis(1));
-        }
+        let (attacks, _, peak, lowest, throttle_open) = simulate(180);
         assert!(throttle_open, "a blip opens the throttle");
+        assert!(!attacks.is_empty(), "three minutes must contain several blips");
         assert!(peak > 900.0 * 2.0, "a blip must be audible as one, peaked at {peak}");
         assert!(
             peak <= 8000.0,
@@ -806,5 +909,59 @@ mod tests {
             (lowest - 900.0).abs() < 1.0,
             "and it must come back to idle, lowest was {lowest}"
         );
+    }
+
+    /// The correction the user asked for: every blip used to be prodded at the
+    /// same speed, because the rise was drawn from a flat 150–260 ms. A rise
+    /// that also depends on how far it reaches, plus the occasional lazy one,
+    /// has to produce a spread wide enough to *hear*.
+    #[test]
+    fn blips_do_not_all_rise_at_the_same_speed() {
+        let (attacks, ..) = simulate(600);
+        let shortest = attacks.iter().min().copied().expect("blips happened");
+        let longest = attacks.iter().max().copied().expect("blips happened");
+        assert!(
+            longest.as_secs_f32() / shortest.as_secs_f32() >= 2.0,
+            "the slowest rise must be at least twice the quickest, got {shortest:?} to {longest:?}"
+        );
+    }
+
+    /// And the other correction: sometimes it reaches the limiter and *stays*
+    /// there — but never for long. The upper bound matters as much as the lower
+    /// one: a limiter held too long stops being a demonstration.
+    #[test]
+    fn some_blips_hang_on_the_limiter_but_never_for_long() {
+        let (_, holds, ..) = simulate(600);
+        let longest = holds.iter().max().copied().expect("blips happened");
+        assert!(
+            longest >= Duration::from_millis(LIMITER_HOLD_MS.0 as u64),
+            "ten minutes must contain at least one blip held on the limiter, longest was {longest:?}"
+        );
+        // One tick of slack: the phase is sampled every TICK, so the measured
+        // length can overshoot the span by that much.
+        assert!(
+            longest <= Duration::from_millis(LIMITER_HOLD_MS.1 as u64) + TICK,
+            "never held longer than the cap, got {longest:?}"
+        );
+        assert!(
+            holds
+                .iter()
+                .any(|h| *h <= Duration::from_millis(HOLD_MS.1 as u64) + TICK),
+            "and most blips are still short flicks, not sustained pulls"
+        );
+    }
+
+    /// A stalled thread — a debugger, a machine waking from sleep — must not
+    /// leave the routine several phases behind, replaying them one tick at a
+    /// time long after the fact.
+    #[test]
+    fn a_long_stall_does_not_leave_the_routine_behind() {
+        let mut showcase = Showcase::new(900.0, 8000.0);
+        let (rev, throttle) = showcase.tick(Duration::from_secs(30));
+        assert!(
+            rev.is_finite() && (900.0..=8000.0).contains(&rev),
+            "still a sane engine speed: {rev}"
+        );
+        assert!((0.0..=1.0).contains(&throttle), "still a sane throttle: {throttle}");
     }
 }

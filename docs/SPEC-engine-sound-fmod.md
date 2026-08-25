@@ -259,6 +259,23 @@ un échec.**
   c'est un paramètre témoin** : `rpms`, réglé à 900, relu à 900. Sans lui, le
   tableau de zéros était indiscernable d'une vraie panne.
 
+⚠️ **Le zéro du cône est à l'arrière de la voiture, pas à l'avant.** Constaté à
+l'oreille — « quand je regarde la voiture, j'entends le son de l'arrière » — et
+c'est le **seul** moyen de l'attraper : les relevés d'angle sont symétriques par
+rapport à l'axe, donc zéro-au-nez et zéro-à-la-queue se mesurent exactement
+pareil.
+
+Le modèle, lui, regarde bien vers **+Z**, et ça se mesure : dans
+`ford_gt40.kn5`, les nœuds `SUSP_FRONT_*` sont à z = +1,08 à +1,36 et les
+`SUSP_REAR_*` à z = −1,31 — et le convertisseur n'applique **aucune** conversion
+de repère (voir l'en-tête de `kn5-gltf/src/geometry.rs`). Orienter l'événement
+vers +Z avec le reste de la géométrie *paraît* donc juste et sonne à l'envers.
+
+L'événement est par conséquent orienté vers **−Z**, la queue. Savoir lequel des
+deux bouts en est responsable — le jeu qui passe le vecteur arrière de la
+voiture, ou les auteurs qui ont écrit le cône depuis l'échappement — n'est pas
+observable de notre côté, et ne change rien à ce qu'il faut faire.
+
 **Le panoramique stéréo, lui, ne bouge presque pas — et c'est normal.** L'oreille
 regarde toujours la voiture, comme une caméra en orbite : la source reste droit
 devant. Mesuré sur les canaux gauche et droit de la capture, l'écart reste dans
