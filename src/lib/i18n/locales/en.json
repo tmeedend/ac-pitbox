@@ -328,7 +328,10 @@
     "filterBrand": "Brand",
     "filterDescription": "Description",
     "filterDescriptionPlaceholder": "Contains…",
-    "results": "{count} results"
+    "results": "{count} results",
+    "filterBrandPlaceholder": "Add a brand…",
+    "filterAuthorPlaceholder": "Add an author…",
+    "filterCountryPlaceholder": "Add a country…"
   },
   "bulk": {
     "runningActivate": "Activating {count} mods",

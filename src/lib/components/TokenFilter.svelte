@@ -27,19 +27,12 @@
     /** Combien de mods portent cette valeur — affiché à droite de chaque ligne
      * du menu. Sans lui, choisir entre deux tags voisins se fait à l'aveugle. */
     countOf?: (value: string) => number;
-    /** Largeur minimale du champ ; il s'étire jusqu'à `maxWidth` quand les
-     * jetons s'accumulent, puis les fait passer à la ligne. */
-    minWidth?: number;
-    maxWidth?: number;
   }
-  let {
-    options,
-    tokens = $bindable(),
-    placeholder = "",
-    countOf,
-    minWidth = 220,
-    maxWidth = 340,
-  }: Props = $props();
+  // No width prop: the field fills whatever room its caller gives it. Sizing
+  // lives in ONE place, the caller's row, which is the only level that knows
+  // how many fields share the line - a min-width carried here used to fight
+  // that row and pushed the field over its neighbour.
+  let { options, tokens = $bindable(), placeholder = "", countOf }: Props = $props();
 
   let text = $state("");
   let open = $state(false);
@@ -98,7 +91,7 @@
   }
 </script>
 
-<div class="tf" style="min-width:{minWidth}px;max-width:{maxWidth}px">
+<div class="tf">
   <!-- Cliquer n'importe où dans le cadre donne le focus à la saisie : le champ
        se comporte comme un `<input>`, jetons compris. -->
   <div
@@ -185,7 +178,8 @@
 <style>
   .tf {
     position: relative;
-    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
   }
   .field {
     display: flex;

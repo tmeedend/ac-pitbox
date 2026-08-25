@@ -86,9 +86,13 @@
   let categoryFilter = $state<string>("all");
   let classFilter = $state<"all" | "race" | "street">("all");
   let stateFilter = $state<"all" | "active" | "inactive">("all");
-  let authorFilter = $state<string>("all");
-  let brandFilter = $state<string>("all");
-  let countryFilter = $state<string>("all");
+  // Author, brand and country are token fields, like tags and categories. A
+  // single-value `<select>` could only ever say "this one" - never "these two
+  // brands", never "everything but that author" - and the gesture differed from
+  // one field to the next on the same row for no legible reason.
+  let authorTokens = $state<Token[]>([]);
+  let brandTokens = $state<Token[]>([]);
+  let countryTokens = $state<Token[]>([]);
   // Free text matched against the EFFECTIVE description (SS6.1): the user's own
   // when they wrote one, the mod file's otherwise - the card already carries the
   // arbitration, nothing to decide here.
@@ -122,9 +126,9 @@
       category: categoryFilter,
       class: classFilter,
       state: stateFilter,
-      author: authorFilter,
-      brand: brandFilter,
-      country: countryFilter,
+      authorTokens,
+      brandTokens,
+      countryTokens,
       desc: descFilter,
       // Sérialisés sous des clés distinctes des anciennes (`tag`, `fav`,
        // `neverTried`, `hideBaseContent`) : une préférence enregistrée par une
@@ -322,7 +326,7 @@
       .filter(Boolean)
       .map((value) => ({ value, mode: "inc" as const }));
   }
-  function legacyCatTokens(raw: unknown): Token[] {
+  function legacySelectToken(raw: unknown): Token[] {
     return typeof raw === "string" && raw !== "" && raw !== "all" ? [{ value: raw, mode: "inc" }] : [];
   }
 
@@ -346,13 +350,13 @@
         query = (sf.query as string) ?? "";
         classFilter = (sf.class as "all" | "race" | "street") ?? "all";
         stateFilter = (sf.state as "all" | "active" | "inactive") ?? "all";
-        authorFilter = (sf.author as string) ?? "all";
-        brandFilter = (sf.brand as string) ?? "all";
-        countryFilter = (sf.country as string) ?? "all";
+        authorTokens = (sf.authorTokens as Token[]) ?? legacySelectToken(sf.author);
+        brandTokens = (sf.brandTokens as Token[]) ?? legacySelectToken(sf.brand);
+        countryTokens = (sf.countryTokens as Token[]) ?? legacySelectToken(sf.country);
         descFilter = (sf.desc as string) ?? "";
         tagTokens = (sf.tagTokens as Token[]) ?? legacyTagTokens(sf.tag);
         tagMode = (sf.tagMode as "and" | "or") ?? "and";
-        catTokens = (sf.catTokens as Token[]) ?? legacyCatTokens(sf.category);
+        catTokens = (sf.catTokens as Token[]) ?? legacySelectToken(sf.category);
         favState = (sf.favState as TriState) ?? (sf.fav ? 1 : 0);
         // Le sens s'est inversé : la case s'appelait « jamais essayé » (donc
         // cochée = jamais essayés), le tri-état s'appelle « déjà essayé ». Une
@@ -636,6 +640,45 @@
   const catsIncluded = $derived(picked(catTokens, "inc"));
   const catsExcluded = $derived(picked(catTokens, "exc"));
 
+  /** Test for a field a mod carries only ONE value of (author, brand,
+   * country): including several values is an OR - a mod holding just one, an
+   * AND would never have returned anything. Exclude always wins over include,
+   * same rule as tags and categories.
+   *
+   * Returns a closure so the two lists are split ONCE per token change, not
+   * once per card: the filter below runs this over the whole library on every
+   * keystroke of any other field. */
+  function singleMatcher(tokens: Token[]): (value: string | null) => boolean {
+    if (!tokens.length) return () => true;
+    const inc = picked(tokens, "inc");
+    const exc = picked(tokens, "exc");
+    return (value) => {
+      const v = (value ?? "").toLowerCase();
+      if (exc.includes(v)) return false;
+      return !inc.length || inc.includes(v);
+    };
+  }
+  const keepsAuthor = $derived(singleMatcher(authorTokens));
+  const keepsBrand = $derived(singleMatcher(brandTokens));
+  const keepsCountry = $derived(singleMatcher(countryTokens));
+
+  /** Per-value count, same mechanics as the tag one: a single pass over the
+   * cards of the current kind, run ONCE per list load - not on each keystroke,
+   * nor on each token dropped. Measured on a real library: 423 cards for 43
+   * distinct authors, well under a millisecond, and `countOf` is then a plain
+   * Map lookup per rendered row. */
+  function countBy(pick: (c: ModCard) => string | null): Map<string, number> {
+    const m = new Map<string, number>();
+    for (const c of typed) {
+      const v = pick(c);
+      if (v) m.set(v, (m.get(v) ?? 0) + 1);
+    }
+    return m;
+  }
+  const authorCounts = $derived.by(() => countBy((c) => c.author));
+  const brandCounts = $derived.by(() => countBy((c) => c.brand));
+  const countryCounts = $derived.by(() => countBy((c) => c.country));
+
   /** Catégories d'un mod, en minuscules — une seule pour une voiture,
    * plusieurs pour un circuit (§5bis.2). */
   function modCats(c: ModCard): string[] {
@@ -674,9 +717,9 @@
       if (classFilter !== "all" && c.car_class !== classFilter) return false;
       if (stateFilter === "active" && !c.active) return false;
       if (stateFilter === "inactive" && c.active) return false;
-      if (authorFilter !== "all" && c.author !== authorFilter) return false;
-      if (brandFilter !== "all" && c.brand !== brandFilter) return false;
-      if (countryFilter !== "all" && c.country !== countryFilter) return false;
+      if (!keepsAuthor(c.author)) return false;
+      if (!keepsBrand(c.brand)) return false;
+      if (!keepsCountry(c.country)) return false;
       if (tagTokens.length) {
         const mine = modTags(c).map((tg) => tg.toLowerCase());
         if (tagsExcluded.some((x) => mine.includes(x))) return false;
@@ -726,9 +769,9 @@
       (catTokens.length ? 1 : 0) +
       (classFilter !== "all" ? 1 : 0) +
       (stateFilter !== "all" ? 1 : 0) +
-      (authorFilter !== "all" ? 1 : 0) +
-      (brandFilter !== "all" ? 1 : 0) +
-      (countryFilter !== "all" ? 1 : 0) +
+      (authorTokens.length ? 1 : 0) +
+      (brandTokens.length ? 1 : 0) +
+      (countryTokens.length ? 1 : 0) +
       (descFilter.trim() !== "" ? 1 : 0) +
       (tagTokens.length ? 1 : 0) +
       (favState !== 0 ? 1 : 0) +
@@ -743,9 +786,9 @@
     catTokens = [];
     classFilter = "all";
     stateFilter = "all";
-    authorFilter = "all";
-    brandFilter = "all";
-    countryFilter = "all";
+    authorTokens = [];
+    brandTokens = [];
+    countryTokens = [];
     descFilter = "";
     tagTokens = [];
     tagMode = "and";
@@ -900,21 +943,25 @@
         <input class="input" placeholder={t("library.searchPlaceholder")} bind:value={query} />
       </label>
       {#if isCar}
-        <label>
-          <span>{t("library.filterBrand")}</span>
-          <select class="input" bind:value={brandFilter}>
-            <option value="all">{t("common.all")}</option>
-            {#each brands as b}<option value={b}>{b}</option>{/each}
-          </select>
-        </label>
+        <div class="fld brand">
+          <div class="tok-head"><span>{t("library.filterBrand")}</span></div>
+          <TokenFilter
+            options={brands}
+            bind:tokens={brandTokens}
+            placeholder={t("library.filterBrandPlaceholder")}
+            countOf={(v) => brandCounts.get(v) ?? 0}
+          />
+        </div>
       {/if}
-      <label>
-        <span>{t("library.filterCountry")}</span>
-        <select class="input" bind:value={countryFilter}>
-          <option value="all">{t("common.all")}</option>
-          {#each countries as c}<option value={c}>{c}</option>{/each}
-        </select>
-      </label>
+      <div class="fld country">
+        <div class="tok-head"><span>{t("library.filterCountry")}</span></div>
+        <TokenFilter
+          options={countries}
+          bind:tokens={countryTokens}
+          placeholder={t("library.filterCountryPlaceholder")}
+          countOf={(v) => countryCounts.get(v) ?? 0}
+        />
+      </div>
       {#if isCar}
         <!-- Both bounds bound each other, but an EMPTY field bounds nothing:
              without that fallback, clearing "min year" dragged the ceiling of
@@ -927,7 +974,7 @@
              current year for the other - exactly like typing that value;
              without it the up arrow fell back on `min` and the down arrow
              stayed disabled for want of a destination. -->
-        <label>
+        <label class="yr">
           <span>{t("library.yearMin")}</span>
           <NumberStepper
             width={80}
@@ -937,7 +984,7 @@
             bind:value={yearMin}
           />
         </label>
-        <label>
+        <label class="yr">
           <span>{t("library.yearMax")}</span>
           <NumberStepper
             width={80}
@@ -987,14 +1034,16 @@
             <option value="inactive">{t("common.inactive")}</option>
           </select>
         </label>
-        <label>
-          <span>{t("library.filterAuthor")}</span>
-          <select class="input" bind:value={authorFilter}>
-            <option value="all">{t("common.all")}</option>
-            {#each authors as a}<option value={a}>{a}</option>{/each}
-          </select>
-        </label>
-        <div class="tok-field">
+        <div class="fld author">
+          <div class="tok-head"><span>{t("library.filterAuthor")}</span></div>
+          <TokenFilter
+            options={authors}
+            bind:tokens={authorTokens}
+            placeholder={t("library.filterAuthorPlaceholder")}
+            countOf={(v) => authorCounts.get(v) ?? 0}
+          />
+        </div>
+        <div class="fld tag">
           <div class="tok-head">
             <span>{t("library.filterTag")}</span>
             <!-- ET/OU : seul réglage du champ qui ne se lit pas sur les jetons
@@ -1015,7 +1064,7 @@
             countOf={(v) => tagCounts.get(v) ?? 0}
           />
         </div>
-        <div class="tok-field cat">
+        <div class="fld cat">
           <div class="tok-head"><span>{t("library.filterCategory")}</span></div>
           <TokenFilter
             options={categories}
@@ -1329,23 +1378,60 @@
     margin-bottom: 16px;
     flex-wrap: wrap;
   }
-  /* Same label treatment in both rows: they hold fields of the same nature,
-     and the scoped CSS lets one rule serve them both. */
+  /* ONE sizing mechanism for every field of both rows. Each one starts from a
+     narrow basis, grows to absorb whatever room is left on its line, and only
+     wraps once that basis no longer fits. Without the grow, a wide window left
+     a dead band after the last field; without the cap, two fields alone on a
+     line stretched across the whole screen. Tuning is the two custom
+     properties below - a field never carries a width of its own again, which
+     is precisely what made the category field ride over its neighbour (an
+     inner min-width fighting an outer basis). */
   .toolbar > label,
-  .filters label {
+  .toolbar > .fld,
+  .filters > label,
+  .filters > .fld {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    flex: 1 1 var(--fb, 150px);
+    max-width: var(--fmax, 260px);
+    min-width: 0;
+  }
+  /* Typography on the `<label>` itself and not on `.fld`: `text-transform` is
+     inherited, and a token field would pass it down to its chips and to the
+     text being typed. The token fields carry it on their `.tok-head` instead. */
+  .toolbar > label,
+  .filters > label {
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--muted);
   }
-  .toolbar .input {
-    width: 120px;
+  /* Widths per field, in the order the eye meets them. The free-text search
+     gets the widest range: it is the one field whose content has no shape. */
+  .search {
+    --fb: 200px;
+    --fmax: 380px;
   }
-  .search .input {
-    width: 200px;
+  .brand,
+  .cat,
+  .desc {
+    --fb: 150px;
+    --fmax: 280px;
+  }
+  .country {
+    --fb: 130px;
+    --fmax: 220px;
+  }
+  .author,
+  .tag {
+    --fb: 170px;
+    --fmax: 340px;
+  }
+  /* A four-digit box has nothing to gain from stretching. */
+  .yr {
+    flex: 0 0 auto;
+    max-width: none;
   }
   /* Columns menu and view switch pushed to the far end, whatever the number of
      structuring fields shown before them (a track has fewer than a car). */
@@ -1420,27 +1506,9 @@
     background: var(--panel2);
     border: 1px solid var(--line);
   }
-  .filters .input {
-    width: 120px;
-  }
-  .filters .desc .input {
-    width: 180px;
-  }
-  /* Les deux champs à jetons ne sont pas des `label` : leur ligne de titre
-     porte aussi le sélecteur ET/OU, et le champ lui-même est un composant. */
-  .tok-field {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    flex: 1 1 220px;
-    max-width: 340px;
-    min-width: 0;
-  }
-  /* Categories are fewer, and their names shorter than a tag list: the field
-     does not need the same room as the tag one next to it. */
-  .tok-field.cat {
-    flex: 0 1 200px;
-  }
+
+  /* A token field is not a `label`: its title line also carries the AND/OR
+     switch, and the field itself is a component. */
   .tok-head {
     display: flex;
     align-items: center;
