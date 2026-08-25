@@ -26,7 +26,7 @@ const USAGE: &str = "\
 kn5-tool — inspect Assetto Corsa KN5 models
 
 USAGE:
-    kn5-tool inspect <file.kn5 | car_dir> [--tree] [--materials] [--textures]
+    kn5-tool inspect <file.kn5 | car_dir> [--tree] [--materials] [--textures] [--skin=<id>]
     kn5-tool scan <dir> [--details]
     kn5-tool extract-textures <car_dir> --out=<dir> [--skin=<id>]
     kn5-tool convert <car_dir> --out=<file.glb> [--skin=<id>]
@@ -148,7 +148,16 @@ fn model_path(path: &Path) -> Result<(PathBuf, Option<ModelSource>), String> {
 fn inspect(path: &Path, flags: &[&str]) -> Result<(), String> {
     let (file, source) = model_path(path)?;
     let bytes = std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?;
-    let model = kn5::parse(&bytes).map_err(|e| format!("{}: {e}", file.display()))?;
+    let mut model = kn5::parse(&bytes).map_err(|e| format!("{}: {e}", file.display()))?;
+
+    // Only when a whole car folder was named: `ext_config.ini` is relative to
+    // it, and inspecting a lone KN5 must keep showing that file untouched —
+    // that is the point of having an inspectable intermediate.
+    if path.is_dir() {
+        let skin = resolve_skin(path, option_value(flags, "--skin"));
+        let ext = kn5_gltf::apply_ext_config(&mut model, path, &file, skin.as_deref());
+        report_ext_config(&ext);
+    }
 
     let mut stats = Stats::default();
     stats.add(&model);
@@ -745,6 +754,22 @@ fn orientation_verdict(model: &kn5::Kn5Model) -> Option<String> {
     ))
 }
 
+/// Prints what the CSP replacement pass did, and only when it did something:
+/// the overwhelming majority of cars carry no `ext_config.ini` at all, and a
+/// line of zeroes on every one of them would drown the reports that matter.
+fn report_ext_config(ext: &kn5_gltf::ExtConfigStats) {
+    if ext.applied == 0 {
+        return;
+    }
+    println!(
+        "ext_config {} section(s), {} node(s) hidden, {} model(s) inserted (+{} triangles)",
+        ext.applied, ext.hidden_nodes, ext.inserted_models, ext.inserted_triangles
+    );
+    for failure in &ext.failures {
+        println!("           ! {failure}");
+    }
+}
+
 fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
     let out = option_value(flags, "--out").ok_or("convert needs --out=<file.glb>")?;
     let out = Path::new(out);
@@ -753,8 +778,14 @@ fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
 
     let bytes = std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?;
     let started = Instant::now();
-    let model = kn5::parse(&bytes).map_err(|e| format!("{}: {e}", file.display()))?;
+    let mut model = kn5::parse(&bytes).map_err(|e| format!("{}: {e}", file.display()))?;
     let parsed = started.elapsed();
+
+    // Same pass the application runs (`preview.rs`): a tuning mod keeps part
+    // of its geometry in separate KN5 files that only `ext_config.ini` knows
+    // about, so converting without it produces a car with holes in it.
+    let ext = kn5_gltf::apply_ext_config(&mut model, car_dir, &file, skin.as_deref());
+    report_ext_config(&ext);
 
     let started = Instant::now();
     let conversion = kn5_gltf::convert(

@@ -4,6 +4,7 @@
 //! (skin overrides live on disk next to the model) and pulls in image codecs,
 //! neither of which belong in a parser (spec §5.1).
 
+mod extconfig;
 mod geometry;
 mod glb;
 mod locate;
@@ -17,6 +18,7 @@ use std::path::Path;
 
 use kn5::Kn5Model;
 
+pub use extconfig::{apply_ext_config, ExtConfigStats, Replacement};
 pub use geometry::{node_world_centers, winding_consistency, FlatMesh, GeometryOptions, GeometryStats};
 pub use locate::{resolve_model, resolve_skin, ModelSource, ResolvedModel};
 pub use material::{AlphaMode, GltfMaterial, MaterialTextures};

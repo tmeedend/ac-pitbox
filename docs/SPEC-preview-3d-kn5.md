@@ -272,6 +272,63 @@ Le magic n'attrape pas tout : deux mods signalés cassés (`ms_citroen_berlingo_
 
 **Comportement attendu** : `preview::prepare` applique ce contrôle juste après celui du magic, avant `convert()` — jamais de conversion tentée sur une géométrie qui ne veut rien dire. Même repli que §4.5 : `errors.previewProtected`, badge, infobulle, rien d'agressif. `kn5-tool convert` (CLI de diagnostic, jamais livré à l'utilisateur) n'est pas concerné : il continue de convertir et de seulement avertir, pour rester utilisable comme outil d'inspection.
 
+### 4.5ter Modèles étendus par CSP (`ext_config.ini`)
+
+Beaucoup de mods de préparation livrent un KN5 **volontairement incomplet** et
+laissent Custom Shaders Patch y greffer, skin par skin, les pièces qui
+changent. Mesuré sur `ks_toyota_ae86_tuned` : les nœuds `WHEEL_*` ne
+contiennent **que le pneu** — aucune jante — et la barre d'optiques avant vit
+dans `extension/TOYOTA_HALOGEN.kn5`. Rendre le fichier principal seul montre
+donc une voiture trouée, ce qui n'est pas un défaut du parseur : la géométrie
+est ailleurs. Le showroom léger de Content Manager a exactement le même
+symptôme, pour exactement la même raison ; seul le jeu, avec CSP chargé,
+affiche la voiture entière.
+
+**Ce qui est implémenté** (`crates/kn5-gltf/src/extconfig.rs`) :
+
+- les sections `[MODEL_REPLACEMENT_*]` **littérales** de
+  `<voiture>/extension/ext_config.ini` **et** de
+  `<voiture>/skins/<skin>/ext_config.ini` — filtres `ACTIVE` / `FILE` /
+  `SKINS`, puis `HIDE`, `INSERT` avec `INSERT_IN` (l'insertion devient enfant
+  du nœud, donc suit ses mouvements) ou `INSERT_AFTER` (frère suivant),
+  `OFFSET` / `ROTATION` / `SCALE` / `MULTIPLE` ;
+- le template `[ReplaceRims]`, transcrit à la main depuis
+  `<AC>/extension/config/cars/common/custom_rims.ini`.
+
+**Ce qui ne l'est pas, et pourquoi.** `ext_config.ini` n'est pas un INI : c'est
+un langage à templates, avec expressions (`$" ... "`), générateurs `@GENERATOR`,
+includes, et un `read()` qui va chercher dans `data.acd` chiffré. Un moteur
+complet est hors périmètre. Mais tout template se réduit à la primitive
+`MODEL_REPLACEMENT`, qui est petite — d'où le choix de traiter la primitive et
+de coder à la main le seul template qui coûte ses roues à une voiture. Les
+remplacements de **matériau** et de **shader** (`[SHADER_REPLACEMENT_*]`,
+`[Material_*]`) restent ignorés : ils changent l'aspect d'une surface, pas son
+existence.
+
+**Deux limites assumées**, toutes deux dans le sens « on en montre plutôt trop
+que pas assez » :
+
+- `ACTIVE` est parfois une expression (`$" read('csp/version', 0) >= 2261 "`,
+  sur `vrc_erc_1999_renoir_csp`) et non un drapeau. Seul un `0` littéral
+  désactive une section ; ce qu'on ne sait pas évaluer est tenu pour actif, ce
+  que ces gardes de version valent de toute façon sur un CSP récent.
+- CSP lit le rayon et la largeur de jante visés dans `data/tyres.ini`, donc
+  dans le `data.acd` chiffré qu'on ne déchiffre pas (§4.2). À défaut d'un
+  `Radius`/`Width` explicite, la jante garde la taille que son propre modèle
+  déclare — un facteur d'échelle de 1, qui est la bonne réponse dès lors que le
+  moddeur a dimensionné la jante pour cette voiture. Sur l'AE86 : 0,195 m
+  déclarés contre 0,1905 m pour une jante de 15 pouces, soit 2 % d'écart.
+
+**Clé de cache.** Les `ext_config.ini` décident des morceaux greffés : ils
+entrent donc dans la clé au même titre que le `.kn5` (`preview::cache_key`).
+Sans ça, corriger une ligne de config laisserait l'ancien aperçu troué servi
+indéfiniment.
+
+**Portée mesurée** sur une install réelle de 299 voitures : 106 ont un
+`extension/ext_config.ini`, mais seules **14** y ont des `MODEL_REPLACEMENT` et
+**8** un `[ReplaceRims]` dans un skin — 19 voitures distinctes au total. Les
+autres traversent la passe sans que rien ne s'applique.
+
 ---
 
 ## 5. Pipeline de conversion (Rust)
@@ -588,6 +645,14 @@ posent au bon endroit.
 
 **Corpus** : 198 voitures sur 201 de la bibliothèque de référence se parsent
 et se convertissent sans échec (les 3 restantes n'ont pas de modèle).
+
+**Modèles étendus par CSP** (§4.5ter) : les mods de préparation qui laissent
+CSP greffer leurs pièces skin par skin s'affichaient troués — jantes absentes,
+boucliers et optiques manquants. Les `[MODEL_REPLACEMENT_*]` littéraux et le
+template `[ReplaceRims]` sont maintenant appliqués avant conversion. Validé à
+l'écran par l'utilisateur sur `ks_toyota_ae86_tuned` + son layer de
+préparation ; passé sans un seul échec de greffe sur les 19 voitures concernées
+de la bibliothèque de référence.
 
 ---
 

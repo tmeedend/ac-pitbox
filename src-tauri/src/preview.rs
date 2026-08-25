@@ -30,7 +30,7 @@ use crate::config::AppConfig;
 /// *reconnaître* pour libérer sa place. Trois incréments en une session de
 /// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
-const CONVERTER_VERSION: u32 = 13;
+const CONVERTER_VERSION: u32 = 14;
 
 /// Default cache ceiling (§5.3). Beyond it, the least recently used entries
 /// are evicted. Only a default: the real ceiling is a setting, carried by
@@ -200,16 +200,11 @@ fn sweep_foreign_versions(dir: &Path) {
     }
 }
 
-/// Clé de cache d'un couple (modèle, skin).
-///
-/// Inclut la date et la taille du `.kn5` : réimporter une version modifiée
-/// d'un mod invalide l'entrée sans qu'on ait à s'en occuper. Inclut le skin,
-/// puisqu'il surcharge les textures (§4.3). La version du convertisseur, elle,
-/// est portée par le nom du fichier (voir [`CONVERTER_VERSION`]).
-fn cache_key(model: &Path, skin: Option<&str>) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(model.to_string_lossy().to_lowercase().as_bytes());
-    if let Ok(meta) = std::fs::metadata(model) {
+/// Mêle la taille et la date d'un fichier au hachage, ou rien du tout s'il
+/// n'existe pas — un `ext_config.ini` absent est le cas courant, pas une
+/// erreur.
+fn stamp(hasher: &mut Sha256, path: &Path) {
+    if let Ok(meta) = std::fs::metadata(path) {
         hasher.update(meta.len().to_le_bytes());
         if let Ok(modified) = meta.modified() {
             if let Ok(since) = modified.duration_since(SystemTime::UNIX_EPOCH) {
@@ -217,7 +212,37 @@ fn cache_key(model: &Path, skin: Option<&str>) -> String {
             }
         }
     }
+}
+
+/// Les configs CSP qui peuvent modifier le modèle d'une voiture, dans l'ordre
+/// où [`kn5_gltf::apply_ext_config`] les lit.
+fn ext_config_paths(car_dir: &Path, skin_dir: Option<&Path>) -> Vec<PathBuf> {
+    let mut paths = vec![car_dir.join("extension").join("ext_config.ini")];
+    if let Some(skin) = skin_dir {
+        paths.push(skin.join("ext_config.ini"));
+    }
+    paths
+}
+
+/// Clé de cache d'un couple (modèle, skin).
+///
+/// Inclut la date et la taille du `.kn5` : réimporter une version modifiée
+/// d'un mod invalide l'entrée sans qu'on ait à s'en occuper. Inclut le skin,
+/// puisqu'il surcharge les textures (§4.3). La version du convertisseur, elle,
+/// est portée par le nom du fichier (voir [`CONVERTER_VERSION`]).
+fn cache_key(model: &Path, skin: Option<&str>, configs: &[PathBuf]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(model.to_string_lossy().to_lowercase().as_bytes());
+    stamp(&mut hasher, model);
     hasher.update(skin.unwrap_or("").as_bytes());
+    // Les `ext_config.ini` décident des morceaux greffés sur le modèle
+    // (`kn5_gltf::apply_ext_config`) : ils font donc partie de l'identité de
+    // l'entrée au même titre que le `.kn5`. Sans eux, corriger une ligne de
+    // config laisserait l'ancien aperçu servi indéfiniment.
+    for config in configs {
+        hasher.update(config.to_string_lossy().to_lowercase().as_bytes());
+        stamp(&mut hasher, config);
+    }
     // 32 caractères hexadécimaux suffisent largement à éviter toute collision
     // sur quelques milliers d'entrées, et gardent des noms de fichier courts.
     format!("{:x}", hasher.finalize())[..32].to_string()
@@ -242,7 +267,11 @@ pub fn prepare(
     if !state.swept.swap(true, Ordering::Relaxed) {
         sweep_foreign_versions(&dir);
     }
-    let stem = entry_stem(&cache_key(&resolved.path, skin_id));
+    // Le skin est résolu avant la clé : c'est lui qui désigne le dossier où
+    // vivent le `ext_config.ini` et les KN5 de jante (§4.3).
+    let skin_dir = kn5_gltf::resolve_skin(car_dir, skin_id);
+    let configs = ext_config_paths(car_dir, skin_dir.as_deref());
+    let stem = entry_stem(&cache_key(&resolved.path, skin_id, &configs));
     let file = dir.join(format!("{stem}.glb"));
 
     if let Ok(meta) = std::fs::metadata(&file) {
@@ -274,7 +303,7 @@ pub fn prepare(
     }
 
     let bytes = std::fs::read(&resolved.path).map_err(|e| format!("{} : {e}", resolved.path.display()))?;
-    let model = kn5::parse(&bytes).map_err(|e| match e {
+    let mut model = kn5::parse(&bytes).map_err(|e| match e {
         // Un KN5 chiffré (CSP) n'a pas la bonne magie : c'est la seule
         // détection dont on dispose, et on ne tente rien de plus (§4.5).
         kn5::Kn5Error::NotAKn5File => crate::errors::PREVIEW_PROTECTED.to_string(),
@@ -298,7 +327,16 @@ pub fn prepare(
         return Err(crate::errors::PREVIEW_PROTECTED.to_string());
     }
 
-    let skin_dir = kn5_gltf::resolve_skin(car_dir, skin_id);
+    // Beaucoup de mods de préparation livrent un KN5 volontairement incomplet
+    // et laissent CSP y greffer, skin par skin, les pièces qui changent :
+    // jantes, boucliers, optiques. Sans cette passe, l'aperçu montre une
+    // voiture trouée alors que le jeu l'affiche entière. Après le contrôle
+    // d'enroulement ci-dessus, qui doit juger le modèle d'origine et lui seul.
+    let ext = kn5_gltf::apply_ext_config(&mut model, car_dir, &resolved.path, skin_dir.as_deref());
+    for failure in &ext.failures {
+        log::warn!("preview: remplacement CSP ignoré — {failure}");
+    }
+
     let conversion = kn5_gltf::convert(
         &model,
         skin_dir.as_deref(),
@@ -583,14 +621,68 @@ mod tests {
         let base = crate::testutil::temp_dir("preview-key");
         let model = write_model(&base, "car.kn5", b"first");
 
-        let a = cache_key(&model, None);
-        assert_eq!(a, cache_key(&model, None), "clé stable à contenu identique");
-        assert_ne!(a, cache_key(&model, Some("red")), "le skin fait partie de la clé");
+        let a = cache_key(&model, None, &[]);
+        assert_eq!(a, cache_key(&model, None, &[]), "clé stable à contenu identique");
+        assert_ne!(a, cache_key(&model, Some("red"), &[]), "le skin fait partie de la clé");
 
         // Réécriture avec une taille différente : la clé doit bouger même si
         // l'horloge du système de fichiers a une granularité grossière.
         std::fs::write(&model, b"second and longer").unwrap();
-        assert_ne!(a, cache_key(&model, None), "un modèle modifié invalide son entrée");
+        assert_ne!(a, cache_key(&model, None, &[]), "un modèle modifié invalide son entrée");
+    }
+
+    // Règle : un `ext_config.ini` fait partie de la clé, parce qu'il décide
+    // des pièces greffées sur le modèle. Sans ça, corriger une ligne de config
+    // laisse l'ancien aperçu troué servi depuis le cache — exactement le piège
+    // « cache non versionné » du §10, sous une autre forme.
+    #[test]
+    fn cache_key_follows_the_ext_config() {
+        let base = crate::testutil::temp_dir("preview-key-ext");
+        let model = write_model(&base, "car.kn5", b"first");
+        let config = base.join("extension").join("ext_config.ini");
+
+        // Absent, le fichier ne doit pas empêcher de calculer une clé : c'est
+        // le cas de l'immense majorité des voitures.
+        let without = cache_key(&model, None, std::slice::from_ref(&config));
+        assert_eq!(
+            without,
+            cache_key(&model, None, std::slice::from_ref(&config)),
+            "clé stable quand la config n'existe pas"
+        );
+
+        write_model(config.parent().unwrap(), "ext_config.ini", b"[MODEL_REPLACEMENT_...]");
+        let with = cache_key(&model, None, std::slice::from_ref(&config));
+        assert_ne!(without, with, "l'apparition d'une config invalide l'entrée");
+
+        std::fs::write(
+            &config,
+            b"[MODEL_REPLACEMENT_...]
+INSERT = part.kn5",
+        )
+        .unwrap();
+        assert_ne!(with, cache_key(&model, None, &[config]), "une config modifiée aussi");
+    }
+
+    // Règle : les configs consultées sont celles que `apply_ext_config` lit,
+    // dans le même ordre — la voiture puis le skin, du général au particulier.
+    #[test]
+    fn ext_config_paths_follow_the_car_then_the_skin() {
+        let car = Path::new("D:/lib/ks_toyota_ae86_tuned");
+        let skin = car.join("skins").join("00_panda");
+
+        assert_eq!(
+            ext_config_paths(car, None),
+            vec![car.join("extension").join("ext_config.ini")],
+            "sans skin, seule la config de la voiture"
+        );
+        assert_eq!(
+            ext_config_paths(car, Some(&skin)),
+            vec![
+                car.join("extension").join("ext_config.ini"),
+                skin.join("ext_config.ini"),
+            ],
+            "la config du skin vient après celle de la voiture"
+        );
     }
 
     // Règle : le nom demandé par la webview ne sert jamais à construire un

@@ -689,6 +689,57 @@ symptôme côté utilisateur, donc le même traitement. Le libellé affiché res
 générique (« modèle protégé ») plutôt que de nommer une cause qu'on ne peut
 pas confirmer.
 
+## Découverte — un `WHEEL_*` peut ne contenir aucune jante
+
+**Le symptôme** : sur `ks_toyota_ae86_tuned` équipé de son layer de
+préparation, l'aperçu montrait un pneu noir, un disque clair et un étrier
+rouge — et un trou à la place de la jante. Le réflexe est de chercher une
+erreur de rendu ; il n'y en a pas.
+
+**La mesure** (`kn5-tool inspect --tree`) :
+
+```text
+[dummy] WHEEL_RF
+  [dummy] M_Tire_Max_Toyo_Proxes_R888R_Small.001
+    [mesh] ... — 1980 tris, material Tyre_TUned86
+[dummy] SUSP_RF
+  [dummy] 20_T    → material caliper
+  [dummy] DISC_RF → 209_T, material disk
+```
+
+Le nœud de roue **ne contient que le pneu**. Le disque et l'étrier pendent de
+la suspension, pas de la roue. La jante n'est nulle part dans le fichier :
+elle est livrée à part, un seul modèle de roue
+(`skins/00_panda/watanabe.kn5`, 0,39 m de diamètre), que CSP instancie quatre
+fois via `[ReplaceRims]`.
+
+**Ce qu'il faut en retenir** : devant une pièce manquante sur un mod de
+préparation, vérifier d'abord si elle existe dans le KN5 avant de soupçonner
+la conversion. `extension/*.kn5` et `skins/*/*.kn5` sont les deux endroits où
+regarder. La règle de traitement est au §4.5ter de `SPEC-preview-3d-kn5.md`.
+
+## Découverte — les conventions des configs CSP qui se devinent mal
+
+Deux détails de `ext_config.ini` qu'aucune documentation n'énonce, et qui
+produisent chacun un défaut silencieux.
+
+**`?` est un joker de longueur quelconque, y compris nulle** — pas un
+caractère unique comme dans un glob classique. Preuve locale et décisive : la
+config de l'AE86 filtre sur `SKINS = ?07_topaz?` alors que le dossier de skin
+s'appelle exactement `07_topaz`, donc le motif doit pouvoir ne rien capturer
+des deux côtés. Le wiki CSP ne montre que des exemples (`RIM_?`, `red?`) sans
+jamais énoncer la règle. Lu comme un caractère unique, ce filtre ne
+sélectionne aucun skin et toute la section est silencieusement ignorée.
+
+**`ROTATION` est heading, pitch, roll — pas X, Y, Z.** Soit une rotation
+autour de la verticale, puis de l'axe transversal, puis de l'axe
+longitudinal. Le template `[ReplaceRims]` écrit `ROTATION = 180, 0, 0` sur les
+roues de droite : c'est un retournement **gauche/droite** de la jante, qui
+n'est modélisée qu'une fois. Lu comme un XYZ, le même `180, 0, 0` la met la
+**tête en bas** — un défaut qu'un contrôle numérique ne voit pas (la matrice
+reste une rotation propre, déterminant +1, donc aucun avertissement
+d'enroulement) et qu'il faut regarder une roue de près pour attraper.
+
 ---
 
 ## Corpus de référence
