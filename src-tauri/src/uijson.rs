@@ -294,6 +294,19 @@ fn layout_dirs(track_dir: &Path) -> Vec<(PathBuf, String)> {
     out
 }
 
+/// Native description of a track, **without** the image scan of
+/// `read_track_detail`: the first layout that carries one (same arbitration as
+/// the detail view). Called for every track of the library list (description
+/// filter, §6.1), where also scanning each layout's previews would cost one
+/// directory walk per track for nothing.
+pub fn read_track_description(track_dir: &Path) -> Option<String> {
+    layout_dirs(track_dir).into_iter().find_map(|(dir, _)| {
+        read_json(&dir.join("ui_track.json"))?
+            .get("description")
+            .and_then(as_string)
+    })
+}
+
 /// Nom d'un circuit tel qu'il doit s'afficher (§5bis.3) : la racine commune de
 /// ses layouts quand il en a plusieurs, sinon le nom du seul qu'il a.
 ///

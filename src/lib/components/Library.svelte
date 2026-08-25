@@ -87,7 +87,12 @@
   let classFilter = $state<"all" | "race" | "street">("all");
   let stateFilter = $state<"all" | "active" | "inactive">("all");
   let authorFilter = $state<string>("all");
+  let brandFilter = $state<string>("all");
   let countryFilter = $state<string>("all");
+  // Free text matched against the EFFECTIVE description (SS6.1): the user's own
+  // when they wrote one, the mod file's otherwise - the card already carries the
+  // arbitration, nothing to decide here.
+  let descFilter = $state<string>("");
   // Jetons inclure/exclure (§6.3). Ils remplacent un champ texte à virgules
   // (tags) et un `<select>` mono-valué (catégorie), qui partageaient la même
   // limite : on ne savait dire que « ceux-ci », jamais « tous sauf ceux-là ».
@@ -98,7 +103,6 @@
   let favState = $state<TriState>(0);
   let triedState = $state<TriState>(0);
   let stockState = $state<TriState>(0);
-  let unmanagedState = $state<TriState>(0);
   let yearMin = $state<number>(NO_YEAR);
   let yearMax = $state<number>(NO_YEAR);
   let view = $state<"gallery" | "table">("gallery");
@@ -119,7 +123,9 @@
       class: classFilter,
       state: stateFilter,
       author: authorFilter,
+      brand: brandFilter,
       country: countryFilter,
+      desc: descFilter,
       // Sérialisés sous des clés distinctes des anciennes (`tag`, `fav`,
        // `neverTried`, `hideBaseContent`) : une préférence enregistrée par une
        // version antérieure garde son ancienne forme, que la relecture sait
@@ -131,7 +137,6 @@
       favState,
       triedState,
       stockState,
-      unmanagedState,
       yearMin,
       yearMax,
     };
@@ -342,7 +347,9 @@
         classFilter = (sf.class as "all" | "race" | "street") ?? "all";
         stateFilter = (sf.state as "all" | "active" | "inactive") ?? "all";
         authorFilter = (sf.author as string) ?? "all";
+        brandFilter = (sf.brand as string) ?? "all";
         countryFilter = (sf.country as string) ?? "all";
+        descFilter = (sf.desc as string) ?? "";
         tagTokens = (sf.tagTokens as Token[]) ?? legacyTagTokens(sf.tag);
         tagMode = (sf.tagMode as "and" | "or") ?? "and";
         catTokens = (sf.catTokens as Token[]) ?? legacyCatTokens(sf.category);
@@ -352,7 +359,6 @@
         // préférence enregistrée cochée devient donc l'état **rouge**.
         triedState = (sf.triedState as TriState) ?? (sf.neverTried ? -1 : 0);
         stockState = (sf.stockState as TriState) ?? (sf.hideBaseContent ? -1 : 0);
-        unmanagedState = (sf.unmanagedState as TriState) ?? 0;
         // Un filtre enregistré avant que « vide » n'existe portait les bornes
         // de la plage comme sentinelle de « pas de borne » : elles se lisent
         // donc comme un champ vide, ce qu'elles ont toujours voulu dire.
@@ -598,6 +604,26 @@
       a.toLowerCase().localeCompare(b.toLowerCase()),
     ),
   );
+  const brands = $derived(
+    [...new Set(typed.map((c) => c.brand).filter((c): c is string => !!c))].sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase()),
+    ),
+  );
+
+  // Descriptions ready to be matched, built ONCE per list load rather than on
+  // every keystroke: ~400 KB of prose over a full library, which is cheap to
+  // walk but not to lowercase again at each letter typed.
+  //
+  // Markup is stripped first: 116 of the 124 descriptions measured on a real
+  // library carry HTML (`<br>`, `<b>`, `<font color=...>`), so matching the raw
+  // text would make "b", "br", "font" or "color" hit nearly every mod.
+  const descIndex = $derived.by(() => {
+    const map = new Map<string, string>();
+    for (const c of typed) {
+      if (c.description) map.set(c.id_interne, c.description.replace(/<[^>]*>/g, " ").toLowerCase());
+    }
+    return map;
+  });
   const tags = $derived(
     [...new Set(typed.flatMap(modTags))].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())),
   );
@@ -649,6 +675,7 @@
       if (stateFilter === "active" && !c.active) return false;
       if (stateFilter === "inactive" && c.active) return false;
       if (authorFilter !== "all" && c.author !== authorFilter) return false;
+      if (brandFilter !== "all" && c.brand !== brandFilter) return false;
       if (countryFilter !== "all" && c.country !== countryFilter) return false;
       if (tagTokens.length) {
         const mine = modTags(c).map((tg) => tg.toLowerCase());
@@ -667,8 +694,6 @@
       const isBase = c.is_stock && !c.is_unmanaged;
       if (stockState === 1 && !isBase) return false;
       if (stockState === -1 && isBase) return false;
-      if (unmanagedState === 1 && !c.is_unmanaged) return false;
-      if (unmanagedState === -1 && c.is_unmanaged) return false;
       // Champ vide = aucun filtre de ce côté, quelle que soit la plage de
       // saisie : c'est la borne saisie qui décide, pas sa distance aux bornes.
       if (yearMin !== NO_YEAR && (c.year ?? 0) < yearMin) return false;
@@ -683,6 +708,15 @@
         const hay = `${c.display_name ?? ""} ${c.brand ?? ""} ${c.id_interne} ${c.category ?? ""} ${c.source_pack ?? ""} ${modTags(c).join(" ")}`.toLowerCase();
         if (!terms.every((term) => hay.includes(term))) return false;
       }
+      if (descFilter.trim()) {
+        // Same rule as the search field above: one term per word, AND between
+        // them, each a plain "contains". A mod with no description at all can
+        // never match - `.get` returning undefined is exactly that.
+        const hay = descIndex.get(c.id_interne);
+        if (!hay) return false;
+        const terms = descFilter.toLowerCase().split(/\s+/).filter(Boolean);
+        if (!terms.every((term) => hay.includes(term))) return false;
+      }
       return true;
     }),
   );
@@ -693,12 +727,13 @@
       (classFilter !== "all" ? 1 : 0) +
       (stateFilter !== "all" ? 1 : 0) +
       (authorFilter !== "all" ? 1 : 0) +
+      (brandFilter !== "all" ? 1 : 0) +
       (countryFilter !== "all" ? 1 : 0) +
+      (descFilter.trim() !== "" ? 1 : 0) +
       (tagTokens.length ? 1 : 0) +
       (favState !== 0 ? 1 : 0) +
       (triedState !== 0 ? 1 : 0) +
       (stockState !== 0 ? 1 : 0) +
-      (unmanagedState !== 0 ? 1 : 0) +
       (yearMin !== NO_YEAR ? 1 : 0) +
       (yearMax !== NO_YEAR ? 1 : 0),
   );
@@ -709,13 +744,14 @@
     classFilter = "all";
     stateFilter = "all";
     authorFilter = "all";
+    brandFilter = "all";
     countryFilter = "all";
+    descFilter = "";
     tagTokens = [];
     tagMode = "and";
     favState = 0;
     triedState = 0;
     stockState = 0;
-    unmanagedState = 0;
     yearMin = NO_YEAR;
     yearMax = NO_YEAR;
   }
@@ -854,36 +890,91 @@
   <div class="main" bind:this={mainEl}>
     <div class="pin-top" bind:this={pinTopEl}>
     <div class="toolbar">
-      <div class="search">
+      <!-- Free text kept deliberately narrow, with the structuring fields of
+           the entity right next to it: at full width it read as THE way to
+           search, and nothing said what it looked into. Small, and flanked by
+           named fields, it reads for what it is - the catch-all for what the
+           other fields do not cover. -->
+      <label class="search">
+        <span>{t("library.search")}</span>
         <input class="input" placeholder={t("library.searchPlaceholder")} bind:value={query} />
-      </div>
-
-      <span class="count-pill mono">{filtered.length}</span>
-
-      {#if view === "table"}
-        <div class="columns-wrap">
-          <button class="btn" type="button" onclick={() => (showColumns = !showColumns)}>{t("library.columns")}</button>
-          {#if showColumns}
-            <div class="columns-menu">
-              {#each columns as col}
-                <label class:fixed={col.fixed}>
-                  <input
-                    type="checkbox"
-                    checked={col.fixed || visibleKeys.includes(col.key)}
-                    disabled={col.fixed}
-                    onchange={() => toggleColumn(col.key)}
-                  />
-                  <span>{t(col.labelKey)}</span>
-                </label>
-              {/each}
-            </div>
-          {/if}
-        </div>
+      </label>
+      {#if isCar}
+        <label>
+          <span>{t("library.filterBrand")}</span>
+          <select class="input" bind:value={brandFilter}>
+            <option value="all">{t("common.all")}</option>
+            {#each brands as b}<option value={b}>{b}</option>{/each}
+          </select>
+        </label>
+      {/if}
+      <label>
+        <span>{t("library.filterCountry")}</span>
+        <select class="input" bind:value={countryFilter}>
+          <option value="all">{t("common.all")}</option>
+          {#each countries as c}<option value={c}>{c}</option>{/each}
+        </select>
+      </label>
+      {#if isCar}
+        <!-- Both bounds bound each other, but an EMPTY field bounds nothing:
+             without that fallback, clearing "min year" dragged the ceiling of
+             "max year" down to zero. No floor at 1950 nor ceiling at the
+             current year either: cars exist well before 1950, and a mod may
+             legitimately carry a future year (concept car, announced DLC) -
+             `YEAR_RANGE_MIN` therefore only serves `emptyStart`, a starting
+             point, never a bound. `emptyStart` makes the up and down arrows
+             land on the same mark from an empty field - 1950 for one, the
+             current year for the other - exactly like typing that value;
+             without it the up arrow fell back on `min` and the down arrow
+             stayed disabled for want of a destination. -->
+        <label>
+          <span>{t("library.yearMin")}</span>
+          <NumberStepper
+            width={80}
+            max={yearMax === NO_YEAR ? undefined : yearMax}
+            emptyValue={NO_YEAR}
+            emptyStart={YEAR_RANGE_MIN}
+            bind:value={yearMin}
+          />
+        </label>
+        <label>
+          <span>{t("library.yearMax")}</span>
+          <NumberStepper
+            width={80}
+            min={yearMin === NO_YEAR ? undefined : yearMin}
+            emptyValue={NO_YEAR}
+            emptyStart={YEAR_RANGE_MAX}
+            bind:value={yearMax}
+          />
+        </label>
       {/if}
 
-      <div class="seg view">
-        <button class:on={view === "gallery"} onclick={() => setView("gallery")} title={t("library.galleryView")}>▦</button>
-        <button class:on={view === "table"} onclick={() => setView("table")} title={t("library.tableView")}>≣</button>
+      <div class="tb-end">
+        {#if view === "table"}
+          <div class="columns-wrap">
+            <button class="btn" type="button" onclick={() => (showColumns = !showColumns)}>{t("library.columns")}</button>
+            {#if showColumns}
+              <div class="columns-menu">
+                {#each columns as col}
+                  <label class:fixed={col.fixed}>
+                    <input
+                      type="checkbox"
+                      checked={col.fixed || visibleKeys.includes(col.key)}
+                      disabled={col.fixed}
+                      onchange={() => toggleColumn(col.key)}
+                    />
+                    <span>{t(col.labelKey)}</span>
+                  </label>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
+
+        <div class="seg view">
+          <button class:on={view === "gallery"} onclick={() => setView("gallery")} title={t("library.galleryView")}>▦</button>
+          <button class:on={view === "table"} onclick={() => setView("table")} title={t("library.tableView")}>≣</button>
+        </div>
       </div>
     </div>
 
@@ -901,13 +992,6 @@
           <select class="input" bind:value={authorFilter}>
             <option value="all">{t("common.all")}</option>
             {#each authors as a}<option value={a}>{a}</option>{/each}
-          </select>
-        </label>
-        <label>
-          <span>{t("library.filterCountry")}</span>
-          <select class="input" bind:value={countryFilter}>
-            <option value="all">{t("common.all")}</option>
-            {#each countries as c}<option value={c}>{c}</option>{/each}
           </select>
         </label>
         <div class="tok-field">
@@ -931,7 +1015,7 @@
             countOf={(v) => tagCounts.get(v) ?? 0}
           />
         </div>
-        <div class="tok-field">
+        <div class="tok-field cat">
           <div class="tok-head"><span>{t("library.filterCategory")}</span></div>
           <TokenFilter
             options={categories}
@@ -940,6 +1024,10 @@
             countOf={(v) => catCounts.get(v) ?? 0}
           />
         </div>
+        <label class="desc">
+          <span>{t("library.filterDescription")}</span>
+          <input class="input" placeholder={t("library.filterDescriptionPlaceholder")} bind:value={descFilter} />
+        </label>
         {#if isCar}
           <label>
             <span>{t("library.filterClass")}</span>
@@ -948,37 +1036,6 @@
               <option value="race">race</option>
               <option value="street">street</option>
             </select>
-          </label>
-          <!-- Les deux champs se bornent l'un l'autre, mais un champ **vide**
-               ne borne rien : sans ce repli, vider « année min » ramenait le
-               plafond de « année max » à zéro. Pas de plancher ni de plafond
-               à l'année courante : des voitures existent bien avant 1950, et
-               un mod peut légitimement porter une année future (voiture
-               concept, DLC annoncé) — `YEAR_RANGE_MIN` ne sert donc plus
-               qu'à `emptyStart`, un point de départ, jamais une borne.
-               `emptyStart` fait atterrir ▲ et ▼ sur le même repère depuis un
-               champ vide — 1950 pour l'un, l'année courante pour l'autre —
-               exactement comme taper cette valeur ; sans lui ▲ retombait sur
-               `min` et ▼ restait désactivé faute de destination. -->
-          <label>
-            <span>{t("library.yearMin")}</span>
-            <NumberStepper
-              width={80}
-              max={yearMax === NO_YEAR ? undefined : yearMax}
-              emptyValue={NO_YEAR}
-              emptyStart={YEAR_RANGE_MIN}
-              bind:value={yearMin}
-            />
-          </label>
-          <label>
-            <span>{t("library.yearMax")}</span>
-            <NumberStepper
-              width={80}
-              min={yearMin === NO_YEAR ? undefined : yearMin}
-              emptyValue={NO_YEAR}
-              emptyStart={YEAR_RANGE_MAX}
-              bind:value={yearMax}
-            />
           </label>
         {/if}
         <div class="filter-checks">
@@ -1003,13 +1060,6 @@
             titleExclude={t("library.baseExcluded")}
             titleNeutral={t("library.baseNeutral")}
           />
-          <TriCheck
-            label={t("library.unmanagedContent")}
-            bind:value={unmanagedState}
-            titleInclude={t("library.unmanagedOnly")}
-            titleExclude={t("library.unmanagedExcluded")}
-            titleNeutral={t("library.unmanagedNeutral")}
-          />
         </div>
         <!-- Toujours présent, désactivé quand il n'y a rien à faire. Il
              disparaissait quand aucun filtre n'était posé : or c'est
@@ -1019,6 +1069,10 @@
              désactivé — un clic sans réaction laisse douter qu'il ait été
              pris. Le décompte dit du même coup combien de filtres sont
              actifs, ce que rien n'affichait jusqu'ici. -->
+        <!-- Result count next to the reset button rather than alone next to
+             the search field, where a bare number sat without saying what it
+             counted - and far from the filters that make it move. -->
+        <span class="results mono">{t("library.results", { count: filtered.length })}</span>
         <button
           class="btn clear"
           type="button"
@@ -1268,18 +1322,38 @@
   }
   .toolbar {
     display: flex;
-    align-items: center;
+    /* Bottom-aligned like `.filters`: the fields now carry a label above them,
+       and a `center` alignment would stagger the row against the view buttons. */
+    align-items: flex-end;
     gap: 10px;
     margin-bottom: 16px;
     flex-wrap: wrap;
   }
-  .search {
-    flex: 1;
-    min-width: 160px;
+  /* Same label treatment in both rows: they hold fields of the same nature,
+     and the scoped CSS lets one rule serve them both. */
+  .toolbar > label,
+  .filters label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
   }
-  .count-pill {
-    color: var(--faint);
-    font-size: 11px;
+  .toolbar .input {
+    width: 120px;
+  }
+  .search .input {
+    width: 200px;
+  }
+  /* Columns menu and view switch pushed to the far end, whatever the number of
+     structuring fields shown before them (a track has fewer than a car). */
+  .tb-end {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    margin-left: auto;
   }
   .columns-wrap {
     position: relative;
@@ -1346,17 +1420,11 @@
     background: var(--panel2);
     border: 1px solid var(--line);
   }
-  .filters label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--muted);
-  }
   .filters .input {
     width: 120px;
+  }
+  .filters .desc .input {
+    width: 180px;
   }
   /* Les deux champs à jetons ne sont pas des `label` : leur ligne de titre
      porte aussi le sélecteur ET/OU, et le champ lui-même est un composant. */
@@ -1367,6 +1435,11 @@
     flex: 1 1 220px;
     max-width: 340px;
     min-width: 0;
+  }
+  /* Categories are fewer, and their names shorter than a tag list: the field
+     does not need the same room as the tag one next to it. */
+  .tok-field.cat {
+    flex: 0 1 200px;
   }
   .tok-head {
     display: flex;
@@ -1406,12 +1479,16 @@
     align-items: center;
     flex-wrap: wrap;
   }
+  .results {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--faint);
+    /* Aligned on the reset button's own text, both sitting at the row's end. */
+    padding-bottom: 7px;
+  }
   /* Le `.btn` global plutôt qu'un `.btn-ghost` réduit à 11px : c'est le bouton
      du design system, et il n'y a pas de raison que celui-ci soit plus discret
      que les autres actions de l'écran. */
-  .clear {
-    margin-left: auto;
-  }
   .clear .n {
     color: var(--muted2);
     font-family: var(--mono);

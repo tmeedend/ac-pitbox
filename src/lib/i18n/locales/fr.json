@@ -279,7 +279,7 @@
     "collapse": "Replier"
   },
   "library": {
-    "searchPlaceholder": "Rechercher (nom, marque, tag…)",
+    "searchPlaceholder": "Nom, id, pack, tag…",
     "filters": "Filtres",
     "columns": "Colonnes",
     "dragColumnTooltip": "Glisser pour réordonner",
@@ -324,10 +324,11 @@
     "baseNeutral": "Contenu de base : sans filtre",
     "unmanagedTooltip": "Installé dans le jeu hors Pit Box. Pour le gérer ici, supprimez-le du jeu vous-même, puis importez-le dans Pit Box.",
     "unmanagedBadge": "NON GÉRÉ",
-    "unmanagedContent": "Mods non gérés",
-    "unmanagedOnly": "Mods non gérés uniquement",
-    "unmanagedExcluded": "Tout sauf les mods non gérés",
-    "unmanagedNeutral": "Mods non gérés : sans filtre"
+    "search": "Recherche",
+    "filterBrand": "Marque",
+    "filterDescription": "Description",
+    "filterDescriptionPlaceholder": "Contient…",
+    "results": "{count} résultats"
   },
   "bulk": {
     "runningActivate": "Activation de {count} mods",

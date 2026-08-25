@@ -31,6 +31,11 @@ pub struct ModCard {
     pub tried: bool,
     /// Poids natif (voitures), lu à la volée dans ui_car.json — colonne §6.2.
     pub weight: Option<String>,
+    /// Effective description: the user's own text (§5bis.3) when there is one,
+    /// otherwise the `ui_*.json` one. Same arbitration as the detail view, but
+    /// carried by the card so the library's description filter (§6.1) stays
+    /// purely client-side, with no backend round-trip per keystroke.
+    pub description: Option<String>,
     /// Badge/logo de la marque (`ui/badge.png`, voitures), à la place des initiales.
     pub badge: Option<String>,
     /// Mod cassé (fichiers de la version active manquants/invalides, §6.4) —
@@ -97,14 +102,31 @@ fn outline_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String>
     inspect::track_outline(&dir)
 }
 
-/// Poids natif (voitures uniquement), lu à la volée dans ui_car.json —
-/// donnée « native », jamais harmonisée par le moteur de règles (§5bis.1).
-fn weight_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
+/// Native spec sheet of a car (weight §6.2, description §6.1), read on the fly
+/// from ui_car.json - "native" data, never harmonized by the rule engine
+/// (§5bis.1). One read for both fields: two separate helpers would reopen and
+/// reparse the very same file for every card of the list.
+fn car_specs_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<NativeSpecs> {
     if m.kind != "Car" {
         return None;
     }
     let dir = entity_dir(conn, cfg, m)?;
-    uijson::read_car_specs(&dir)?.weight
+    uijson::read_car_specs(&dir)
+}
+
+/// Effective description of a card: the user's own text wins over the file
+/// (§5bis.3), exactly as on the detail view (`detail`, below). `native` is the
+/// sheet already read by `car_specs_for` - nothing to reread for a car; a track
+/// only opens its `ui_track.json` when no user text spares it, and through the
+/// light reader (not the image scan of `read_track_detail`).
+fn description_for(conn: &Connection, cfg: &AppConfig, m: &ModRow, native: Option<&NativeSpecs>) -> Option<String> {
+    if let Some(user) = &m.description_user {
+        return Some(user.clone());
+    }
+    match kind_of(&m.kind) {
+        ModKind::Car => native.and_then(|s| s.description.clone()),
+        ModKind::Track => uijson::read_track_description(&entity_dir(conn, cfg, m)?),
+    }
 }
 
 /// Badge/logo de la marque (voitures uniquement), lu à la volée dans `ui/badge.png`.
@@ -120,7 +142,9 @@ fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
     let preview = preview_for(conn, cfg, &m);
     let outline = outline_for(conn, cfg, &m);
     let active = is_active(cfg, &m);
-    let weight = weight_for(conn, cfg, &m);
+    let native = car_specs_for(conn, cfg, &m);
+    let weight = native.as_ref().and_then(|s| s.weight.clone());
+    let description = description_for(conn, cfg, &m, native.as_ref());
     let badge = badge_for(conn, cfg, &m);
     let broken = crate::maintenance::broken_reason(conn, cfg, &m).is_some();
     ModCard {
@@ -131,6 +155,7 @@ fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
         distance_km: None,
         tried: false,
         weight,
+        description,
         badge,
         broken,
     }
@@ -533,6 +558,68 @@ mod tests {
         assert!(
             !dir.join("ui").join("2022").is_dir(),
             "le layout périmé du reliquat ne doit pas apparaître"
+        );
+    }
+
+    /// Rule (§6.1): the description carried by a card - the one the library
+    /// filters on - is the one the USER typed (§5bis.3) as soon as there is
+    /// one, otherwise the `ui_*.json` one. Holds for both kinds: a car reads
+    /// `ui_car.json`, a track `ui_track.json`.
+    #[test]
+    fn card_description_prefers_user_text_over_the_ui_json() {
+        let base = crate::testutil::temp_dir("desc");
+        let ac = base.join("ac");
+        let car = ac.join("content").join("cars").join("ks_ferrari");
+        std::fs::create_dir_all(car.join("ui")).unwrap();
+        std::fs::write(
+            car.join("ui").join("ui_car.json"),
+            br#"{"name":"488","brand":"Ferrari","description":"Written by the modder."}"#,
+        )
+        .unwrap();
+        let track = ac.join("content").join("tracks").join("spa");
+        std::fs::create_dir_all(track.join("ui")).unwrap();
+        std::fs::write(
+            track.join("ui").join("ui_track.json"),
+            br#"{"name":"Spa","description":"Ardennes forest."}"#,
+        )
+        .unwrap();
+
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_stock_mod(&conn, "ks_ferrari", "Car", Some("Ferrari"), Some("488"), &now, false).unwrap();
+        overlay::upsert_stock_mod(&conn, "spa", "Track", Some("Kunos"), Some("Spa"), &now, false).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac),
+            ..Default::default()
+        };
+        let described = |id: &str| {
+            let m = overlay::get_mod(&conn, id).unwrap().unwrap();
+            to_card(&conn, &cfg, m).description
+        };
+
+        assert_eq!(
+            described("ks_ferrari").as_deref(),
+            Some("Written by the modder."),
+            "with no user text, the card carries the mod file's own description"
+        );
+        assert_eq!(
+            described("spa").as_deref(),
+            Some("Ardennes forest."),
+            "same for a track, read from ui_track.json"
+        );
+
+        overlay::set_mod_field(&conn, "ks_ferrari", "description_user", Some("My own words")).unwrap();
+        overlay::set_mod_field(&conn, "spa", "description_user", Some("My favourite track")).unwrap();
+
+        assert_eq!(
+            described("ks_ferrari").as_deref(),
+            Some("My own words"),
+            "user text replaces the file description, never the other way round"
+        );
+        assert_eq!(
+            described("spa").as_deref(),
+            Some("My favourite track"),
+            "same for a track"
         );
     }
 

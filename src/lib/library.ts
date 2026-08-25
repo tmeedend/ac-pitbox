@@ -80,6 +80,11 @@ export interface ModCard {
   tried: boolean;
   /** Poids natif (voitures), lu à la volée dans ui_car.json (§6.2). */
   weight: string | null;
+  /** Effective description (§6.1): the user's own text when they wrote one,
+   * the `ui_*.json` one otherwise - already arbitrated Rust-side. Carried by
+   * the card so the description filter runs client-side, with no backend
+   * round-trip per keystroke. */
+  description: string | null;
   /** Badge/logo de la marque (ui/badge.png, voitures), à la place des initiales. */
   badge: string | null;
   /** Mod cassé (fichiers de la version active manquants/invalides, §6.4) —
