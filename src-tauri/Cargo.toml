@@ -105,4 +105,9 @@ windows = { version = "0.61", features = [
     # refuser un lot qui ne peut pas tenir coûte moins cher que le nettoyage
     # d'un import mort à mi-parcours.
     "Win32_Storage_FileSystem",
+    # Chargement des DLL FMOD livrées avec Assetto Corsa
+    # (docs/SPEC-engine-sound-fmod.md) : `LoadLibraryW`/`GetProcAddress` à la
+    # main, faute de crate visant FMOD 1.x. Une feature de plus sur une
+    # dépendance déjà là, pas une dépendance de plus.
+    "Win32_System_LibraryLoader",
 ] }

@@ -14,6 +14,7 @@ mod enginesound;
 mod errors;
 mod export;
 mod extras;
+mod fmod;
 mod fsb5;
 mod gamebackup;
 mod harmonize;

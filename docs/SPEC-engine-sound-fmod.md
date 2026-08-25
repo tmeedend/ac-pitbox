@@ -75,10 +75,13 @@ On y lit le GUID et on appelle `GetEventByID`. **C'est précisément la raison
 d'être de ce fichier** — ne pas chercher à charger une banque de chaînes de
 voiture qui n'existe pas.
 
-`FMOD_Studio_ParseID` est exporté et transforme le texte `{…}` en `FMOD_GUID` :
-s'en servir plutôt que d'écrire le découpage à la main, l'ordre des octets des
-trois premiers champs étant précisément le genre de détail qu'on se trompe à
-réimplémenter.
+`FMOD_Studio_ParseID` est exporté et transforme le texte `{…}` en `FMOD_GUID`.
+Le lot 1 a malgré tout écrit l'analyse à la main (`fmod/guids.rs`) : elle rend
+un événement résoluble **avant** tout chargement de DLL — donc sur une machine
+sans jeu installé — et testable unitairement. L'ordre des octets, seul vrai
+risque de ce choix, est **figé par un test** sur ce que `ParseID` a réellement
+rendu au lot 0 (`guid_matches_what_fmod_parse_id_returned`). Ne pas défaire ce
+test : c'est lui qui remplace la fonction.
 
 ### 2.4 Les paramètres
 
@@ -337,12 +340,37 @@ deux DLL, ouvre le bank de la GT40, lit le GUID de `engine_ext` dans
 Les cinq surprises d'ABI qu'il a fait sortir sont en **§2bis** — ce sont elles
 le livrable du lot, pas le binaire.
 
-**Lot 1 — les liaisons.** Les douze fonctions et les deux structures
-(`FMOD_GUID`, `FMOD_STUDIO_PARAMETER_DESCRIPTION`) dans un module dédié, avec
-les tests qui peuvent l'être sans DLL (parsing de `GUIDs.txt`, reconnaissance
-des paramètres par nom et plage).
+**Lot 1 — les liaisons. ✅ fait.** `src-tauri/src/fmod/`, découpé pour que la
+partie qui décide *ce qu'on joue* se teste sans DLL :
 
-**Lot 2 — le thread et les commandes.** `Play`/`SetRpm`/`Stop`, l'état partagé,
+| fichier | rôle |
+| --- | --- |
+| `guids.rs` | `FMOD_GUID`, lecture de `GUIDs.txt`, chaîne de repli sur l'événement |
+| `params.rs` | reconnaissance des paramètres par type, nom et plage |
+| `sys.rs` | la FFI Windows — les seize entrées, les deux structures, le cycle de vie |
+
+Seize entrées et non douze : le lot 0 a montré que le chargement des
+échantillons n'est pas implicite et que l'état de lecture est le seul moyen de
+savoir qu'une instance est vivante.
+
+**21 tests, aucun n'ayant besoin d'une DLL.** Deux méritent d'être signalés
+parce qu'ils gèlent une erreur déjà commise plutôt qu'une intention :
+`parameter_description_keeps_its_measured_layout` échoue si quelqu'un
+« range » la structure vers la version plausible à 24 octets, et
+`guid_matches_what_fmod_parse_id_returned` fixe l'ordre des octets sur ce que
+`ParseID` a réellement rendu au lot 0 — c'est ce qui permet d'analyser un GUID
+**sans** charger la moindre DLL, donc de résoudre un événement sur une machine
+sans jeu installé.
+
+Découverte du lot, mesurée sur l'installation de référence : **122 voitures sur
+299 livrent leur propre `sfx/GUIDs.txt`** — ce sont les mods. Les événements
+d'un mod de son sont **absents** de la table globale, donc l'ordre de recherche
+(fichier de la voiture, puis table globale) n'est pas un raffinement : c'est ce
+qui fait qu'un mod se joue du tout.
+
+**Lot 2 — le thread et les commandes.** Retirer au passage le
+`#![allow(dead_code)]` de `fmod/mod.rs`, qui n'existe que le temps que ces
+liaisons n'aient pas d'appelant.  `Play`/`SetRpm`/`Stop`, l'état partagé,
 le basculement vers le repli quand FMOD n'est pas disponible.
 
 **Lot 3 — l'interface.** La clé branchée sur le chemin natif, le curseur de
@@ -363,6 +391,44 @@ va dans ce document.
 | Version de bank incompatible | **Impossible par construction** : on utilise la DLL du jeu de l'utilisateur, donc tout ce que son jeu sait jouer, on sait le jouer. |
 | ~~Chemins avec accents / espaces~~ | **Clos au lot 0** : `LoadBankFile` prend bien de l'UTF-8 (§2bis). |
 | Un mod sans `engine_ext` | Essayer `engine_int`, puis n'importe quel événement dont le chemin contient `engine`, puis repli. |
+
+---
+
+## 6bis. La cible : le coup d'accélérateur à l'arrêt
+
+**Décidée avec l'utilisateur après avoir entendu le balayage du lot 0**, et
+placée ici pour ne pas se perdre. Elle ne remplace aucun lot du §5 : elle vient
+**après**, et le plan existant se termine d'abord.
+
+L'idée : depuis l'interface, reproduire ce que fait quelqu'un qui donne
+quelques coups d'accélérateur, voiture à l'arrêt, pour faire écouter son moteur
+aux autres — avec quelques arrivées au **rupteur**.
+
+Ce n'est pas un nouveau chantier technique, et c'est ce qui la rend
+intéressante : le lot 0 a déjà prouvé les deux mécaniques dont elle dépend.
+
+- Le régime **et** l'accélérateur se pilotent sur une instance qui tourne, à la
+  cadence de la boucle d'`Update` (§2bis). Un coup d'accélérateur n'est donc
+  qu'une **enveloppe** appliquée à ces deux paramètres — montée franche,
+  maintien court, retombée plus lente que la montée — là où le curseur du §4.4
+  suit la main de l'utilisateur.
+- La chute de RMS mesurée au passage `throttle` 1,0 → 0,0 montre que les
+  couches en charge et en lâcher de gaz se relaient bien. C'est ce contraste
+  qui fait qu'un coup d'accélérateur *sonne* comme tel plutôt que comme une
+  montée en régime.
+
+Deux points à traiter le moment venu, aucun tranché :
+
+- **Le rupteur est un événement séparé**, `event:/cars/<id>/limiter` dans
+  `GUIDs.txt` — pas une région de `engine_ext`. Il se déclenche donc comme
+  seconde instance, et « arriver au rupteur » veut dire savoir à quel régime.
+  Or ce régime vit dans `data/engine.ini`, donc dans `data.acd` chiffré : même
+  impasse qu'au §4.4 pour le ralenti, et probablement la même réponse —
+  approcher le haut de la plage du paramètre plutôt que chercher la vraie
+  valeur.
+- **Ne pas transformer ça en séquenceur.** Une poignée d'enveloppes crédibles
+  vaut mieux qu'un éditeur de courbes ; c'est un bouton qui fait chanter le
+  moteur, pas un outil d'automation.
 
 ---
 
