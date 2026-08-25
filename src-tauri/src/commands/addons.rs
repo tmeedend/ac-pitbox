@@ -89,14 +89,19 @@ pub fn activate_sound(app: AppHandle, db: State<Db>, sub_id: String) -> Result<(
     crate::submods::activate_sound(&conn, &cfg, &sub_id)
 }
 
-/// Écoute une entrée de la liste « Son du moteur » sans rien déployer.
+/// Auditions one entry of the "engine sound" list, deploying nothing.
 ///
-/// `sub_id` à `null` désigne le son d'origine. Ne touche jamais à `content/` :
-/// c'est `activate_sound` qui déploie, et les deux ne doivent pas se confondre.
+/// `sub_id` at `null` means the stock sound. Never touches `content/`:
+/// `activate_sound` is what deploys, and the two must not be confused.
+///
+/// **`async` is mandatory**, for the reason spelled out on
+/// `audition_engine_native` just below. Decoding a bank and hunting its idle by
+/// autocorrelation takes as long as it takes, and that time must not be taken
+/// out of the main thread.
 #[tauri::command]
-pub fn audition_engine_sound(
+pub async fn audition_engine_sound(
     app: AppHandle,
-    db: State<Db>,
+    db: State<'_, Db>,
     parent_id: String,
     sub_id: Option<String>,
 ) -> Result<crate::enginesound::EngineClip, String> {
@@ -105,21 +110,29 @@ pub fn audition_engine_sound(
     crate::enginesound::audition(&conn, &cfg, &parent_id, sub_id.as_deref())
 }
 
-/// Écoute une entrée par le **vrai moteur FMOD du jeu** (§4.1).
+/// Auditions one entry through the **game's own FMOD engine** (§4.1).
 ///
-/// Renvoie une erreur — jamais montrée — quand le chemin natif n'est pas
-/// disponible : pas d'AC configuré, DLL introuvables, aucun événement moteur
-/// dans les `GUIDs.txt`. C'est le signal pour l'appelant de retomber sur
-/// `audition_engine_sound`, qui décode un échantillon lui-même. Les deux
-/// chemins coexistent, le repli n'est pas une panne.
+/// Returns an error — never shown — when the native path is unavailable: no
+/// Assetto Corsa configured, DLLs missing, no engine event in any `GUIDs.txt`.
+/// That is the caller's signal to fall back on `audition_engine_sound`, which
+/// decodes a sample itself. The two paths coexist; the fallback is not a fault.
 ///
-/// Comme `audition_engine_sound`, ne touche jamais à `content/`.
+/// Like `audition_engine_sound`, never touches `content/`.
+///
+/// **`async` is not decorative here.** A Tauri command declared `fn` runs on
+/// the **main thread**, hence inside the window's message loop — and this one
+/// takes its time: reading the `GUIDs.txt`, decrypting `data.acd`, sometimes
+/// parsing the whole bank, then `engine.play()`, which waits for the FMOD
+/// thread, which is itself waiting for sample data. Real bug: the app went
+/// unclickable for several seconds on the second audition while the ignition
+/// key kept spinning — WebView2 composes in another process, so the animation
+/// outlives the frozen clicks and hides the very symptom it should betray.
 #[cfg(windows)]
 #[tauri::command]
-pub fn audition_engine_native(
+pub async fn audition_engine_native(
     app: AppHandle,
-    db: State<Db>,
-    engine: State<crate::fmod::engine::FmodEngineHandle>,
+    db: State<'_, Db>,
+    engine: State<'_, crate::fmod::engine::FmodEngineHandle>,
     parent_id: String,
     sub_id: Option<String>,
     interior: Option<bool>,
@@ -136,35 +149,43 @@ pub fn audition_engine_native(
         crate::enginesound::native_target(&conn, &cfg, &parent_id, sub_id.as_deref(), view)?
     };
     let rev_ceiling = target.rev_ceiling;
+    let idle_rev = target.idle_rev;
     let play = engine.play(crate::fmod::engine::PlayRequest {
         ac_root: target.ac_root,
         bank: target.bank,
         guid: target.guid,
         event_path: target.event_path,
-        // 900 tr/min au départ : le régime de ralenti exact vit dans
-        // `data/engine.ini`, donc dans un `data.acd` chiffré la plupart du
-        // temps. Le curseur rend la question sans objet (§4.4).
-        rev: rev.unwrap_or(DEFAULT_REV),
-        throttle: 0.0,
+        // **This** car's idle, estimated by `enginesound::idle_rev`: a flat
+        // 900 rpm for everyone was out by a factor of four on a Formula 1,
+        // which would not even run at that speed.
+        rev: rev.unwrap_or(idle_rev),
+        // The slider has not moved yet, so start on the holding value — the one
+        // the model settles back to on its own the moment the slider is let go.
+        // Starting at 0 would put an audible swell in the first tenth of a
+        // second, meaning nothing at all.
+        throttle: crate::fmod::engine::HOLD_THROTTLE,
         rev_ceiling,
+        reverb_wet_db: crate::fmod::engine::DEFAULT_REVERB_WET_DB,
+        limiter_guid: target.limiter_guid,
+        limiter_rev: target.limiter_rev,
     })?;
     Ok(NativeAudition {
         play,
-        rev_floor: crate::enginesound::REV_FLOOR,
+        // **The bottom of the slider is the idle, not below it.** Going under
+        // the idle reveals no further sound: an engine would stall there, and
+        // the bank only has its idle loop pitched down. Set at the idle, the
+        // bottom of the travel becomes useful instead — it is where lifting off
+        // the throttle lands (§6quater).
+        rev_floor: idle_rev.max(crate::enginesound::REV_FLOOR),
         rev_ceiling,
         rev_start: rev
-            .unwrap_or(DEFAULT_REV)
-            .clamp(crate::enginesound::REV_FLOOR, rev_ceiling),
+            .unwrap_or(idle_rev)
+            .clamp(idle_rev.max(crate::enginesound::REV_FLOOR), rev_ceiling.max(idle_rev)),
     })
 }
 
-/// Régime de départ, faute de mieux : le vrai ralenti est dans un `data.acd`
-/// chiffré, et le curseur rend la question sans objet (§4.4).
-#[cfg(windows)]
-const DEFAULT_REV: f32 = 900.0;
-
-/// Ce que l'écoute native renvoie à l'écran : le compte rendu du thread, plus
-/// la plage du curseur, qui vient de la voiture et non de l'événement.
+/// What the native audition hands back to the interface: the thread's report,
+/// plus the slider's range, which comes from the car and not from the event.
 #[cfg(windows)]
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -181,14 +202,6 @@ pub struct NativeAudition {
 #[tauri::command]
 pub fn set_audition_rev(engine: State<crate::fmod::engine::FmodEngineHandle>, rev: f32) {
     engine.set_rev(rev);
-}
-
-/// Règle l'accélérateur de l'écoute en cours (0 = lâcher de gaz, 1 = pleine
-/// charge). Sans effet si rien ne joue.
-#[cfg(windows)]
-#[tauri::command]
-pub fn set_audition_throttle(engine: State<crate::fmod::engine::FmodEngineHandle>, throttle: f32) {
-    engine.set_throttle(throttle);
 }
 
 /// Déplace l'oreille autour de la voiture, en degrés et en mètres.

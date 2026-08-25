@@ -44,6 +44,14 @@ const INIT_ALLOW_MISSING_PLUGINS: c_uint = 0x0000_0002;
 const INIT_NORMAL: c_uint = 0;
 const LOAD_BANK_NORMAL: c_uint = 0;
 
+/// `FMOD_DSP_TYPE_SFXREVERB`.
+///
+/// Measured, not remembered: creating every type in turn and asking the DLL
+/// for its own name gives "FMOD Reverb" at 19. Note that the DLL's spelling is
+/// not the enum's — searching for "SFXReverb" finds nothing — and that type 32,
+/// "FMOD Convolution Reverb", is a different and far heavier unit.
+const REVERB_DSP_TYPE: c_int = 19;
+
 /// `FMOD_STUDIO_LOADING_STATE::LOADED`.
 const LOADING_STATE_LOADED: c_int = 2;
 
@@ -208,6 +216,15 @@ type FnInstanceGetPlaybackState = unsafe extern "C" fn(*mut c_void, *mut c_int) 
 // the three-argument form was confirmed against a real system — it returns
 // FMOD_OK and the automatic parameters then track the geometry.
 type FnSystemSetListenerAttributes = unsafe extern "C" fn(*mut c_void, c_int, *const Attributes3d) -> FmodResult;
+// The room reverb of §4.6. The first three live in the Studio DLL, the last
+// three in the low-level one — hence resolving symbols from both modules.
+type FnSystemGetLowLevelSystem = unsafe extern "C" fn(*mut c_void, *mut *mut c_void) -> FmodResult;
+type FnSystemGetBusByID = unsafe extern "C" fn(*mut c_void, *const Guid, *mut *mut c_void) -> FmodResult;
+type FnBusLockChannelGroup = unsafe extern "C" fn(*mut c_void) -> FmodResult;
+type FnBusGetChannelGroup = unsafe extern "C" fn(*mut c_void, *mut *mut c_void) -> FmodResult;
+type FnCreateDSPByType = unsafe extern "C" fn(*mut c_void, c_int, *mut *mut c_void) -> FmodResult;
+type FnChannelGroupAddDSP = unsafe extern "C" fn(*mut c_void, c_int, *mut c_void) -> FmodResult;
+type FnDspSetParameterFloat = unsafe extern "C" fn(*mut c_void, c_int, f32) -> FmodResult;
 type FnInstanceSet3DAttributes = unsafe extern "C" fn(*mut c_void, *const Attributes3d) -> FmodResult;
 
 struct Api {
@@ -229,6 +246,13 @@ struct Api {
     instance_release: FnInstanceRelease,
     instance_get_playback_state: FnInstanceGetPlaybackState,
     system_set_listener_attributes: FnSystemSetListenerAttributes,
+    system_get_low_level: FnSystemGetLowLevelSystem,
+    system_get_bus_by_id: FnSystemGetBusByID,
+    bus_lock_channel_group: FnBusLockChannelGroup,
+    bus_get_channel_group: FnBusGetChannelGroup,
+    create_dsp_by_type: FnCreateDSPByType,
+    channel_group_add_dsp: FnChannelGroupAddDSP,
+    dsp_set_parameter_float: FnDspSetParameterFloat,
     instance_set_3d_attributes: FnInstanceSet3DAttributes,
 }
 
@@ -291,6 +315,13 @@ impl Fmod {
                 instance_release: symbol(studio, "FMOD_Studio_EventInstance_Release")?,
                 instance_get_playback_state: symbol(studio, "FMOD_Studio_EventInstance_GetPlaybackState")?,
                 system_set_listener_attributes: symbol(studio, "FMOD_Studio_System_SetListenerAttributes")?,
+                system_get_low_level: symbol(studio, "FMOD_Studio_System_GetLowLevelSystem")?,
+                system_get_bus_by_id: symbol(studio, "FMOD_Studio_System_GetBusByID")?,
+                bus_lock_channel_group: symbol(studio, "FMOD_Studio_Bus_LockChannelGroup")?,
+                bus_get_channel_group: symbol(studio, "FMOD_Studio_Bus_GetChannelGroup")?,
+                create_dsp_by_type: symbol(low, "FMOD_System_CreateDSPByType")?,
+                channel_group_add_dsp: symbol(low, "FMOD_ChannelGroup_AddDSP")?,
+                dsp_set_parameter_float: symbol(low, "FMOD_DSP_SetParameterFloat")?,
                 instance_set_3d_attributes: symbol(studio, "FMOD_Studio_EventInstance_Set3DAttributes")?,
             };
 
@@ -317,6 +348,10 @@ unsafe fn load_dll(ac_root: &Path, name: &str) -> Result<HMODULE, FmodError> {
         detail: e.message(),
     })
 }
+
+/// The room reverb inserted on the master bus. Released with the system.
+#[derive(Clone, Copy)]
+pub struct Reverb(*mut c_void);
 
 /// A loaded bank. Unlike an event description, this one has to be given back:
 /// two sound mods for the same car carry the **same event GUIDs** in different
@@ -525,6 +560,132 @@ impl System {
             check(
                 "FMOD_Studio_EventInstance_Release",
                 (self.fmod.api.instance_release)(inst.0),
+            )
+        }
+    }
+
+    /// Inserts a small-room reverb on the master bus.
+    ///
+    /// Why this exists: played dry, an engine sounds like a recording rather
+    /// than like a car in front of you. Assetto Corsa has no reverb to borrow —
+    /// its banks contain **no snapshots at all** (0 of 3237 entries; 23 buses
+    /// and 6 VCAs, nothing else) and the game picks a reverb preset in its own
+    /// code. And 1.08 has no per-event reverb send to turn up:
+    /// `EventInstance_SetReverbLevel` is a 2.x addition, absent from this DLL.
+    ///
+    /// So the room is ours to add, as an insert on the master bus. The DSP type
+    /// and every parameter index below were **read back from the DLL** rather
+    /// than remembered: it reports type 19 as "FMOD Reverb" and names its
+    /// thirteen parameters in the order used here.
+    ///
+    /// `wet_db` is the only dial worth arguing about — the rest describes a
+    /// room, not a taste.
+    pub fn install_room_reverb(&self, master_bus: &Guid, wet_db: f32) -> Result<Reverb, FmodError> {
+        // Parameter indices, as the DSP names them. Order is not an assumption.
+        const DECAY_TIME: c_int = 0;
+        const EARLY_DELAY: c_int = 1;
+        const LATE_DELAY: c_int = 2;
+        const HF_REFERENCE: c_int = 3;
+        const HF_DECAY_RATIO: c_int = 4;
+        const DIFFUSION: c_int = 5;
+        const DENSITY: c_int = 6;
+        const LOW_SHELF_FREQ: c_int = 7;
+        const LOW_SHELF_GAIN: c_int = 8;
+        const HIGH_CUT: c_int = 9;
+        const EARLY_LATE_MIX: c_int = 10;
+        const WET_LEVEL: c_int = 11;
+        const DRY_LEVEL: c_int = 12;
+
+        unsafe {
+            let mut low: *mut c_void = std::ptr::null_mut();
+            check(
+                "FMOD_Studio_System_GetLowLevelSystem",
+                (self.fmod.api.system_get_low_level)(self.raw, &mut low),
+            )?;
+
+            let mut bus: *mut c_void = std::ptr::null_mut();
+            check(
+                "FMOD_Studio_System_GetBusByID",
+                (self.fmod.api.system_get_bus_by_id)(self.raw, master_bus, &mut bus),
+            )?;
+
+            // A bus has no channel group until something needs one, and locking
+            // is what forces it into existence — but only from the next update.
+            check(
+                "FMOD_Studio_Bus_LockChannelGroup",
+                (self.fmod.api.bus_lock_channel_group)(bus),
+            )?;
+
+            let mut group: *mut c_void = std::ptr::null_mut();
+            let mut last = FmodError::Call {
+                call: "FMOD_Studio_Bus_GetChannelGroup",
+                code: 46, // FMOD_ERR_NOTREADY, in case the loop never runs
+            };
+            for _ in 0..50 {
+                let _ = self.update();
+                let rc = (self.fmod.api.bus_get_channel_group)(bus, &mut group);
+                if rc == 0 && !group.is_null() {
+                    break;
+                }
+                last = FmodError::Call {
+                    call: "FMOD_Studio_Bus_GetChannelGroup",
+                    code: rc,
+                };
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            if group.is_null() {
+                return Err(last);
+            }
+
+            let mut dsp: *mut c_void = std::ptr::null_mut();
+            check(
+                "FMOD_System_CreateDSPByType",
+                (self.fmod.api.create_dsp_by_type)(low, REVERB_DSP_TYPE, &mut dsp),
+            )?;
+
+            let set = |index: c_int, value: f32| {
+                let rc = (self.fmod.api.dsp_set_parameter_float)(dsp, index, value);
+                if rc != 0 {
+                    log::warn!("fmod: reverb parameter {index} refused: {}", error_name(rc));
+                }
+            };
+            // A small, hard-surfaced room — the studio the 3D preview shows,
+            // not a hall. Short decay, early reflections favoured over the
+            // tail: that is what says "indoors" without smearing the engine.
+            set(DECAY_TIME, 700.0);
+            set(EARLY_DELAY, 8.0);
+            set(LATE_DELAY, 14.0);
+            set(HF_REFERENCE, 5000.0);
+            // Highs die faster than lows, as they do against any real surface.
+            set(HF_DECAY_RATIO, 60.0);
+            set(DIFFUSION, 100.0);
+            set(DENSITY, 100.0);
+            set(LOW_SHELF_FREQ, 250.0);
+            set(LOW_SHELF_GAIN, 0.0);
+            // Without this the tail fizzes on top of an engine that is already
+            // rich up there.
+            set(HIGH_CUT, 8000.0);
+            set(EARLY_LATE_MIX, 70.0);
+            set(WET_LEVEL, wet_db);
+            // Untouched dry path: the reverb adds a room, it does not stand
+            // between the listener and the engine.
+            set(DRY_LEVEL, 0.0);
+
+            check(
+                "FMOD_ChannelGroup_AddDSP",
+                (self.fmod.api.channel_group_add_dsp)(group, 0, dsp),
+            )?;
+            Ok(Reverb(dsp))
+        }
+    }
+
+    /// Changes how much room is mixed in, on a reverb already installed.
+    pub fn set_reverb_wet(&self, reverb: Reverb, wet_db: f32) -> Result<(), FmodError> {
+        const WET_LEVEL: c_int = 11;
+        unsafe {
+            check(
+                "FMOD_DSP_SetParameterFloat",
+                (self.fmod.api.dsp_set_parameter_float)(reverb.0, WET_LEVEL, wet_db),
             )
         }
     }

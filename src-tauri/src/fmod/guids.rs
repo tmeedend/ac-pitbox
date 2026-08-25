@@ -163,6 +163,39 @@ pub fn engine_event(text: &str, car_id: &str, view: EngineView) -> Option<(Strin
         .map(|(guid, path)| (path.to_string(), guid))
 }
 
+/// The master bus, into which every event eventually routes.
+///
+/// Read from the **global** table only, and that is not an oversight: a car's
+/// own `GUIDs.txt` declares its `grp_*` buses but never `bus:/` itself, so
+/// looking beside the bank would find nothing for any modded car.
+pub fn master_bus(ac_root: &Path) -> Option<Guid> {
+    let table = ac_root.join("content").join("sfx").join("GUIDs.txt");
+    let text = std::fs::read_to_string(table).ok()?;
+    text.lines().find_map(|line| {
+        let rest = line.trim().strip_prefix('{')?;
+        let (guid, path) = rest.split_once('}')?;
+        (path.trim() == "bus:/").then(|| Guid::parse(guid))?
+    })
+}
+
+/// Finds one named event of a car (`limiter`, `horn`, `gear_ext`…) in whichever
+/// table describes this bank.
+///
+/// Same search order as [`resolve_engine_event`], and the same reason for it:
+/// a sound mod's events live in its own table, never in the game's.
+pub fn resolve_event(bank_dir: &Path, ac_root: Option<&Path>, car_id: &str, event: &str) -> Option<Guid> {
+    let wanted = format!("event:/cars/{car_id}/{event}");
+    for file in guid_files(bank_dir, ac_root) {
+        let Ok(text) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        if let Some((_, guid)) = lookup(&text, &wanted) {
+            return Some(guid);
+        }
+    }
+    None
+}
+
 /// Where the table describing a given bank may live, most specific first.
 ///
 /// The candidate that matters is **next to the bank**, not under the car:

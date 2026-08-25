@@ -15,7 +15,6 @@ import {
   setAuditionListener,
   setAuditionRev,
   setAuditionShowcase,
-  setAuditionThrottle,
   stopAuditionNative,
   type EngineClip,
   type NativeAudition,
@@ -85,18 +84,18 @@ export function engineRev(): number {
  *
  * L'appel part sans être attendu : le curseur doit suivre la main, et une
  * aller-retour vers Rust par pixel parcouru la ferait traîner. Un échec est
- * sans conséquence — le thread ignore un réglage quand rien ne joue. */
+ * sans conséquence — le thread ignore un réglage quand rien ne joue.
+ *
+ * **Le sens du déplacement porte le gaz**, et c'est Rust qui le déduit : vers
+ * la droite on accélère, vers la gauche on lève le pied, curseur posé on tient
+ * le régime. Rien à envoyer d'autre d'ici — il n'y a volontairement plus de
+ * réglage d'accélérateur séparé, il serait écrasé au tick suivant. */
 export function setEngineRev(value: number): void {
   rev = value;
   // Prendre le curseur en main arrête la démonstration : côté Rust aussi, pour
   // que les deux ne se disputent pas le même paramètre.
   showcase = false;
   void setAuditionRev(value).catch(() => {});
-}
-
-/** Accélérateur, 0 = lâcher de gaz, 1 = pleine charge. */
-export function setEngineThrottle(value: number): void {
-  void setAuditionThrottle(value).catch(() => {});
 }
 
 /** Les coups d'accélérateur tournent-ils ? */

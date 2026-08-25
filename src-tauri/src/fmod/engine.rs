@@ -17,13 +17,19 @@ use std::time::Duration;
 
 use super::guids::Guid;
 use super::params::{self, Roles};
-use super::sys::{Attributes3d, Bank, Fmod, PlaybackState, System};
+use super::sys::{Attributes3d, Bank, Fmod, PlaybackState, Reverb, System};
 
 /// How often the system is pumped while idle or playing.
 ///
 /// 20 ms is the cadence lot 0 drove a rev sweep at, and it was smooth to the
 /// ear. It also bounds how long a `Stop` waits before being acted on.
 const TICK: Duration = Duration::from_millis(20);
+
+/// A play taking longer than this is worth a line in the log.
+///
+/// The ignition key spins while it waits, so nothing looks broken — which is
+/// exactly why a slow one goes unnoticed until someone complains about it.
+const SLOW_PLAY: Duration = Duration::from_millis(600);
 
 /// How long to wait for an event's samples before playing anyway.
 ///
@@ -32,6 +38,14 @@ const TICK: Duration = Duration::from_millis(20);
 /// is the slow case, hence seconds rather than milliseconds — but this is a
 /// ceiling, not a delay: the wait ends as soon as FMOD says loaded.
 const SAMPLE_WAIT: Duration = Duration::from_secs(10);
+
+/// How much of the room to mix in, in decibels.
+///
+/// The one number here that is a matter of taste rather than of physics, and it
+/// wants to stay timid: the engine samples already carry the acoustics of
+/// wherever they were recorded, so a room laid generously on top of that gives
+/// a bathroom rather than a showroom.
+pub const DEFAULT_REVERB_WET_DB: f32 = -14.0;
 
 /// What the caller wants played. Everything here is resolved **before** the
 /// message is sent, by pure code that needs no DLL — the thread does no lookup.
@@ -49,6 +63,17 @@ pub struct PlayRequest {
     /// it to know what "a good blip" means on *this* engine — the same 5000 rpm
     /// is the redline of a diesel van and half throttle on a Ferrari.
     pub rev_ceiling: f32,
+    /// How much room to mix in. Carried per play rather than fixed at build
+    /// time so that a dosage can be compared by ear without a rebuild — and so
+    /// that it can become a setting later without moving anything.
+    pub reverb_wet_db: f32,
+    /// `event:/cars/<id>/limiter`, when the car has one. AC keeps the limiter
+    /// out of the engine event entirely — it is its own sound, and the reason a
+    /// rev-out is instantly recognisable.
+    pub limiter_guid: Option<Guid>,
+    /// Where that sound belongs, from the car's own physics. `None` means the
+    /// limiter stays silent rather than being guessed at.
+    pub limiter_rev: Option<f32>,
 }
 
 /// Where the ear sits relative to the car, in the terms the interface has:
@@ -134,7 +159,6 @@ pub struct PlayReport {
 pub enum Command {
     Play(PlayRequest, Sender<Result<PlayReport, String>>),
     SetRev(f32),
-    SetThrottle(f32),
     SetListener(Listener),
     /// Start or stop the "showing off the engine" routine (§6bis).
     Showcase(bool),
@@ -167,10 +191,6 @@ impl FmodEngineHandle {
 
     pub fn set_rev(&self, value: f32) {
         self.send(Command::SetRev(value));
-    }
-
-    pub fn set_throttle(&self, value: f32) {
-        self.send(Command::SetThrottle(value));
     }
 
     /// Moves the ear. Sent without waiting: this follows a camera being
@@ -206,17 +226,43 @@ struct Loaded {
     /// previous one loaded would make `GetEventByID` return the wrong bank's
     /// event — and it would look like the mod simply sounds identical.
     bank: Option<(PathBuf, Bank)>,
+    /// `None` when the room could not be installed — the engine then plays dry,
+    /// which is worse but perfectly usable.
+    reverb: Option<Reverb>,
 }
 
 struct Playing {
     instance: super::sys::EventInstance,
     roles: Roles,
+    /// The limiter, ready to be struck. Its description is kept rather than an
+    /// instance: it only exists while the engine is actually against the stop.
+    limiter: Option<Limiter>,
     rev_ceiling: f32,
     /// The engine speed the manual slider last asked for. The showcase borrows
     /// the engine while it runs and hands it back to this on the way out.
     manual_rev: f32,
+    /// The throttle the slider's direction implies, while the showcase is not
+    /// the one driving.
+    throttle: Throttle,
     showcase: Option<Showcase>,
 }
+
+/// The limiter event, and the speed at which it belongs.
+struct Limiter {
+    description: super::sys::EventDesc,
+    at_rev: f32,
+    /// Playing right now. Started when the engine reaches the stop, stopped
+    /// when it leaves — the same thing the game does.
+    instance: Option<super::sys::EventInstance>,
+    roles: Roles,
+}
+
+/// How far below the limit the sound still belongs.
+///
+/// Not zero: an engine held against its limiter oscillates around it rather
+/// than sitting exactly on it, and a threshold with no width would make the
+/// sound stutter on and off across that oscillation.
+const LIMITER_MARGIN: f32 = 60.0;
 
 /// Idle for a few seconds, then a handful of short throttle blips — someone
 /// letting a bystander hear what the car has. §6bis.
@@ -227,6 +273,10 @@ struct Playing {
 struct Showcase {
     idle_rev: f32,
     ceiling: f32,
+    /// Where the limiter actually is, when the car states one. Kept apart from
+    /// `ceiling` because the two only coincide by accident — see
+    /// [`REDLINE_FRACTION`].
+    redline: f32,
     phase: Phase,
     /// Time inside the current phase. Fed by the caller rather than read from a
     /// clock, so the routine can be exercised in a test without sleeping
@@ -299,8 +349,17 @@ const RELEASE_REACH_MS: (u32, u32) = (220, 420);
 const GAP_MS: (u32, u32) = (120, 360);
 /// Fraction of the car's own ceiling a normal blip reaches.
 const PEAK_FRACTION: (f32, f32) = (0.50, 0.75);
-/// …and now and then, all the way up. This is the "arrivée au rupteur".
-const REDLINE_FRACTION: (f32, f32) = (0.88, 0.97);
+/// …and now and then, right onto the limiter. Slightly past it on purpose: an
+/// engine held against its stop bounces around it rather than resting below,
+/// and the limiter event only sounds while the needle is actually there.
+///
+/// **A fraction of the rev ceiling is not the same thing as the limiter**, and
+/// conflating the two silenced the limiter entirely for a while. When the
+/// ceiling came from the power curve the two were far apart — 8000 against a
+/// real 6500 on the GT40 — so 88–97 % of it landed *above* the stop. Once the
+/// ceiling became the stop itself, the same 88–97 % landed 130 rpm *below* the
+/// trigger, and the sound could never fire.
+const REDLINE_FRACTION: (f32, f32) = (1.0, 1.02);
 const REDLINE_ODDS: f32 = 0.28;
 
 fn span_ms(range: (u32, u32)) -> Duration {
@@ -312,10 +371,13 @@ fn between(range: (f32, f32)) -> f32 {
 }
 
 impl Showcase {
-    fn new(idle_rev: f32, ceiling: f32) -> Self {
+    fn new(idle_rev: f32, ceiling: f32, redline: Option<f32>) -> Self {
         Showcase {
             idle_rev,
             ceiling,
+            // Without a stated limiter there is no limiter sound either, so the
+            // top of the range is as good a place as any to reach for.
+            redline: redline.unwrap_or(ceiling * 0.95),
             phase: Phase::Idle,
             elapsed: Duration::ZERO,
             // Start on a short idle rather than blipping the instant it is
@@ -332,12 +394,13 @@ impl Showcase {
     /// ones that reaches the limiter.
     fn pick_peak(&mut self) {
         self.at_limiter = fastrand::f32() < REDLINE_ODDS;
-        let fraction = if self.at_limiter {
-            between(REDLINE_FRACTION)
+        self.peak = if self.at_limiter {
+            // Onto the stop itself, wherever the car says it is.
+            self.redline * between(REDLINE_FRACTION)
         } else {
-            between(PEAK_FRACTION)
-        };
-        self.peak = (self.ceiling * fraction).max(self.idle_rev + 500.0);
+            self.ceiling * between(PEAK_FRACTION)
+        }
+        .max(self.idle_rev + 500.0);
     }
 
     /// How far up its own range this blip is reaching, 0 to 1. Both the rise
@@ -428,6 +491,111 @@ impl Showcase {
     }
 }
 
+/// Throttle held while the slider is not moving.
+///
+/// Neither 0 nor 1: holding an engine at a speed takes a partly open throttle.
+/// At 0 the ear would get engine braking while the reading does not move — the
+/// two contradict each other, and the ear wins that argument.
+pub const HOLD_THROTTLE: f32 = 0.3;
+
+/// How long without slider movement counts as "put down".
+///
+/// A mouse drag arrives in bursts rather than continuously: too short a delay
+/// and every gap between two pixels would lift off the throttle.
+const SETTLE_AFTER: Duration = Duration::from_millis(180);
+
+/// Time constant of the throttle plate, in seconds.
+///
+/// A real one opens in a few tens of milliseconds; what matters here is mostly
+/// not switching abruptly between two layers of the bank, which is heard as a
+/// click rather than as a pedal.
+const THROTTLE_TAU: f32 = 0.07;
+
+/// Below this change, the value is not sent to FMOD: it has converged, and
+/// repeating it fifty times a second changes nothing.
+const THROTTLE_EPSILON: f32 = 0.002;
+
+/// The throttle, deduced from **which way the rev slider is moving**.
+///
+/// The slider states an engine speed, but the gesture says something its
+/// position cannot: one climbs to 5000 rpm *on the throttle* and comes back
+/// down *off* it. Without this a mod was only ever heard under load — half of
+/// what a bank holds, the off-throttle layers of §2.4, stayed inaudible.
+///
+/// Deliberately clockless: time comes in through `tick`, which makes the rule
+/// testable without FMOD running.
+#[derive(Debug)]
+struct Throttle {
+    /// Smoothed value, the one the event is given.
+    current: f32,
+    /// What it moves towards: 1 while rising, 0 while falling, hold at rest.
+    target: f32,
+    /// How long the slider has been still.
+    still: Duration,
+    /// Last value actually handed to FMOD. `None` until something has been,
+    /// and after a take-over, which has to force a send.
+    sent: Option<f32>,
+}
+
+impl Throttle {
+    fn new() -> Self {
+        // The slider has not moved yet, so the starting state is the resting
+        // one — which is also what the play command set before `Start`.
+        Throttle {
+            current: HOLD_THROTTLE,
+            target: HOLD_THROTTLE,
+            still: SETTLE_AFTER,
+            sent: Some(HOLD_THROTTLE),
+        }
+    }
+
+    /// The slider just went from `from` to `to`.
+    fn slider_moved(&mut self, from: f32, to: f32) {
+        self.still = Duration::ZERO;
+        // The same value sent again — which happens, the slider emits on every
+        // pixel it passes over — is not a movement and says nothing about a
+        // direction.
+        if to > from {
+            self.target = 1.0;
+        } else if to < from {
+            self.target = 0.0;
+        }
+    }
+
+    /// Takes back control from the showcase routine, which drove the throttle
+    /// itself: whatever the last blip left behind, this is the resting state.
+    fn take_over(&mut self) {
+        self.current = HOLD_THROTTLE;
+        self.target = HOLD_THROTTLE;
+        self.still = SETTLE_AFTER;
+        // `sent` is forgotten on purpose: the value has to reach FMOD again on
+        // the next tick, or the event would stay wherever the last blip left it.
+        self.sent = None;
+    }
+
+    /// Advances one tick and returns the value to hand over, or `None` when it
+    /// has not moved enough to be worth the trip.
+    fn tick(&mut self, dt: Duration) -> Option<f32> {
+        self.still += dt;
+        if self.still >= SETTLE_AFTER {
+            self.target = HOLD_THROTTLE;
+        }
+        // Exponential approach: the step follows `dt`, so a tick stretched by a
+        // command arriving in between does not make the value jump.
+        let k = 1.0 - (-dt.as_secs_f32() / THROTTLE_TAU).exp();
+        self.current += (self.target - self.current) * k;
+        self.current = self.current.clamp(0.0, 1.0);
+        if self
+            .sent
+            .is_some_and(|sent| (self.current - sent).abs() <= THROTTLE_EPSILON)
+        {
+            return None;
+        }
+        self.sent = Some(self.current);
+        Some(self.current)
+    }
+}
+
 fn run(rx: Receiver<Command>) {
     let mut loaded: Option<Loaded> = None;
     let mut playing: Option<Playing> = None;
@@ -451,14 +619,19 @@ fn run(rx: Receiver<Command>) {
             }
             Ok(Command::SetRev(value)) => {
                 if let Some(p) = &mut playing {
+                    // The direction of the move is the throttle: read it before
+                    // `manual_rev` is overwritten, or there is nothing to
+                    // compare against (§6quater).
+                    p.throttle.slider_moved(p.manual_rev, value);
                     p.manual_rev = value;
                     // Dragging the slider is an explicit takeover: the routine
                     // stops rather than fighting the hand that moved it.
-                    p.showcase = None;
+                    if p.showcase.take().is_some() {
+                        p.throttle.take_over();
+                    }
                 }
                 set_role(&loaded, &playing, |roles| roles.rev.as_ref(), value);
             }
-            Ok(Command::SetThrottle(value)) => set_role(&loaded, &playing, |roles| roles.throttle.as_ref(), value),
             Ok(Command::SetListener(next)) => {
                 listener = next;
                 if let Some(l) = &loaded {
@@ -469,12 +642,15 @@ fn run(rx: Receiver<Command>) {
             }
             Ok(Command::Showcase(on)) => {
                 if let Some(p) = &mut playing {
-                    p.showcase = on.then(|| Showcase::new(p.manual_rev, p.rev_ceiling));
+                    p.showcase =
+                        on.then(|| Showcase::new(p.manual_rev, p.rev_ceiling, p.limiter.as_ref().map(|l| l.at_rev)));
                     if !on {
                         // Hand the engine back to the slider where it left it,
                         // rather than wherever the last blip happened to stop.
+                        // The throttle goes back to its resting value the same
+                        // way — the next tick is what actually sends it.
+                        p.throttle.take_over();
                         let manual = p.manual_rev;
-                        set_role(&loaded, &playing, |r| r.throttle.as_ref(), 0.0);
                         set_role(&loaded, &playing, |r| r.rev.as_ref(), manual);
                     }
                 }
@@ -490,11 +666,23 @@ fn run(rx: Receiver<Command>) {
         if let Some(p) = &mut playing {
             if let Some(showcase) = &mut p.showcase {
                 let (rev, throttle) = showcase.tick(TICK);
+                if let Some(l) = &loaded {
+                    drive_limiter(l, &mut p.limiter, rev);
+                }
                 if let (Some(l), Some(param)) = (&loaded, p.roles.rev.as_ref()) {
                     let _ = l
                         .system
                         .set_parameter(p.instance, &param.name, rev.clamp(param.min, param.max));
                 }
+                if let (Some(l), Some(param)) = (&loaded, p.roles.throttle.as_ref()) {
+                    let _ = l
+                        .system
+                        .set_parameter(p.instance, &param.name, throttle.clamp(param.min, param.max));
+                }
+            // Nobody is showing off: the throttle follows the slider's own
+            // direction, which is the only thing that tells accelerating from
+            // lifting off at a given engine speed (§6quater).
+            } else if let Some(throttle) = p.throttle.tick(TICK) {
                 if let (Some(l), Some(param)) = (&loaded, p.roles.throttle.as_ref()) {
                     let _ = l
                         .system
@@ -522,6 +710,8 @@ fn start(
     request: PlayRequest,
     listener: Listener,
 ) -> Result<PlayReport, String> {
+    let began = std::time::Instant::now();
+
     // Rebuild the system if the game path changed under us (a settings edit).
     if loaded.as_ref().is_some_and(|l| l.ac_root != request.ac_root) {
         *loaded = None;
@@ -537,14 +727,38 @@ fn start(
         if let Err(e) = system.load_bank(&master) {
             log::warn!("fmod: master bank {} not loaded: {e}", master.display());
         }
+        // A room, once, for the life of the system. Best effort on purpose: a
+        // dry engine is worth playing, a silent one is not.
+        let reverb = match super::guids::master_bus(&request.ac_root) {
+            Some(bus) => match system.install_room_reverb(&bus, request.reverb_wet_db) {
+                Ok(handle) => Some(handle),
+                Err(e) => {
+                    log::warn!("fmod: no room reverb, playing dry: {e}");
+                    None
+                }
+            },
+            None => {
+                log::warn!("fmod: master bus not found in GUIDs.txt, playing dry");
+                None
+            }
+        };
         *loaded = Some(Loaded {
             ac_root: request.ac_root.clone(),
             system,
             bank: None,
+            reverb,
         });
     }
 
     let l = loaded.as_mut().expect("just built");
+
+    // A system built earlier keeps the room it was given; honour the dosage the
+    // caller is asking for now.
+    if let Some(reverb) = l.reverb {
+        if let Err(e) = l.system.set_reverb_wet(reverb, request.reverb_wet_db) {
+            log::warn!("fmod: could not set the room level: {e}");
+        }
+    }
 
     // Swap the car bank only when it actually changes: reloading a 30 MB bank
     // to play the same mod again would be pure waste.
@@ -558,6 +772,7 @@ fn start(
         let bank = l.system.load_bank(&request.bank).map_err(|e| e.to_string())?;
         l.bank = Some((request.bank.clone(), bank));
     }
+    let bank_ready = began.elapsed();
 
     let desc = l.system.event(&request.guid).map_err(|e| e.to_string())?;
     let parameters = l.system.parameters(desc).map_err(|e| e.to_string())?;
@@ -575,7 +790,35 @@ fn start(
         std::thread::sleep(TICK);
     }
 
+    let samples_ready = began.elapsed();
+
     let instance = l.system.create_instance(desc).map_err(|e| e.to_string())?;
+
+    // The limiter, prepared but silent. Best effort throughout: a car without
+    // one, or whose limiter event will not load, simply revs out quietly.
+    let limiter = match (request.limiter_guid, request.limiter_rev) {
+        (Some(guid), Some(at_rev)) => match l.system.event(&guid) {
+            Ok(description) => {
+                let _ = l.system.load_sample_data(description);
+                let roles = l
+                    .system
+                    .parameters(description)
+                    .map(|found| params::classify(&found))
+                    .unwrap_or_default();
+                Some(Limiter {
+                    description,
+                    at_rev,
+                    instance: None,
+                    roles,
+                })
+            }
+            Err(e) => {
+                log::warn!("fmod: no limiter event, revving out silently: {e}");
+                None
+            }
+        },
+        _ => None,
+    };
 
     // Set both before starting, so the very first mixed block is already at the
     // requested engine speed rather than sliding up to it.
@@ -635,6 +878,24 @@ fn start(
         Err(e) => log::warn!("fmod: could not read the playback state: {e}"),
     }
 
+    // **A slow play is felt as a frozen key, so it has to leave a trace.**
+    // The interesting case is the *second* audition of the same mod, where
+    // nothing should need loading at all — and where the breakdown says which
+    // of the three phases is actually paying. Warn rather than info: the file
+    // log is at Warn, so an info line would be written nowhere on a packaged
+    // install, which is precisely where the report comes from.
+    let total = began.elapsed();
+    if total >= SLOW_PLAY {
+        log::warn!(
+            "fmod: {} took {:?} to play (bank {:?}, samples {:?}, start {:?})",
+            request.event_path,
+            total,
+            bank_ready,
+            samples_ready - bank_ready,
+            total - samples_ready,
+        );
+    }
+
     let report = PlayReport {
         event_path: request.event_path,
         rev_param: roles.rev.as_ref().map(|p| p.name.clone()),
@@ -645,8 +906,10 @@ fn start(
     *playing = Some(Playing {
         instance,
         roles,
+        limiter,
         rev_ceiling: request.rev_ceiling,
         manual_rev: request.rev,
+        throttle: Throttle::new(),
         showcase: None,
     });
     Ok(report)
@@ -672,6 +935,49 @@ fn set_role(
     }
 }
 
+/// Strikes the limiter when the engine reaches its stop, and lets it go when
+/// it leaves.
+///
+/// Started and released rather than left running paused: a limiter is a short
+/// looping event, and one lingering across a whole idle would be worse than
+/// none at all.
+fn drive_limiter(loaded: &Loaded, limiter: &mut Option<Limiter>, rev: f32) {
+    let Some(limiter) = limiter else { return };
+    let against_the_stop = rev >= limiter.at_rev - LIMITER_MARGIN;
+
+    match (against_the_stop, limiter.instance) {
+        (true, None) => match loaded.system.create_instance(limiter.description) {
+            Ok(instance) => {
+                // Some limiter events are themselves driven by engine speed.
+                if let Some(p) = &limiter.roles.rev {
+                    let _ = loaded.system.set_parameter(instance, &p.name, rev.clamp(p.min, p.max));
+                }
+                if let Some(p) = &limiter.roles.throttle {
+                    let _ = loaded.system.set_parameter(instance, &p.name, p.max);
+                }
+                if let Err(e) = loaded.system.start(instance) {
+                    log::warn!("fmod: limiter would not start: {e}");
+                    let _ = loaded.system.release_instance(instance);
+                } else {
+                    limiter.instance = Some(instance);
+                }
+            }
+            Err(e) => log::warn!("fmod: could not instance the limiter: {e}"),
+        },
+        (true, Some(instance)) => {
+            if let Some(p) = &limiter.roles.rev {
+                let _ = loaded.system.set_parameter(instance, &p.name, rev.clamp(p.min, p.max));
+            }
+        }
+        (false, Some(instance)) => {
+            let _ = loaded.system.stop(instance);
+            let _ = loaded.system.release_instance(instance);
+            limiter.instance = None;
+        }
+        (false, None) => {}
+    }
+}
+
 fn stop_current(loaded: &Option<Loaded>, playing: &mut Option<Playing>) {
     let (Some(l), Some(p)) = (loaded, playing.take()) else {
         *playing = None;
@@ -679,6 +985,12 @@ fn stop_current(loaded: &Option<Loaded>, playing: &mut Option<Playing>) {
     };
     // Immediate rather than fading out: this is an audition the user just
     // dismissed, and a tail would play over whatever they clicked next.
+    if let Some(limiter) = &p.limiter {
+        if let Some(instance) = limiter.instance {
+            let _ = l.system.stop(instance);
+            let _ = l.system.release_instance(instance);
+        }
+    }
     if let Err(e) = l.system.stop(p.instance) {
         log::warn!("fmod: stop failed: {e}");
     }
@@ -691,6 +1003,102 @@ fn stop_current(loaded: &Option<Loaded>, playing: &mut Option<Playing>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Runs the model for `ms` with nobody touching the slider, and returns
+    /// where the throttle ended up.
+    fn coast(throttle: &mut Throttle, ms: u64) -> f32 {
+        let mut last = throttle.current;
+        for _ in 0..(ms / 20) {
+            if let Some(value) = throttle.tick(TICK) {
+                last = value;
+            }
+        }
+        last
+    }
+
+    /// The rule of §6quater: pushing the slider up is accelerating.
+    #[test]
+    fn pushing_the_slider_up_opens_the_throttle() {
+        let mut throttle = Throttle::new();
+        throttle.slider_moved(1000.0, 1400.0);
+        let after = coast(&mut throttle, 100);
+        assert!(after > 0.8, "climbing means on the throttle, got {after} after 100 ms");
+    }
+
+    /// And the half that was missing before: pulling it back down is lifting
+    /// off, which is what makes the off-throttle layers of the bank audible.
+    #[test]
+    fn pulling_the_slider_down_closes_the_throttle() {
+        let mut throttle = Throttle::new();
+        throttle.slider_moved(5000.0, 4600.0);
+        let after = coast(&mut throttle, 100);
+        assert!(after < 0.1, "coming down means off the throttle, got {after}");
+    }
+
+    /// A slider that is being dragged arrives in bursts, and the gaps between
+    /// two pixels must not be read as letting go.
+    #[test]
+    fn a_gap_inside_a_drag_does_not_lift_off() {
+        let mut throttle = Throttle::new();
+        throttle.slider_moved(1000.0, 1200.0);
+        coast(&mut throttle, 100);
+        throttle.slider_moved(1200.0, 1400.0);
+        let during = coast(&mut throttle, 100);
+        assert!(during > 0.8, "still accelerating across the gap, got {during}");
+    }
+
+    /// Slider put down: the engine holds its speed, so the throttle holds too —
+    /// neither wide open nor shut, which would be engine braking at a steady
+    /// reading.
+    #[test]
+    fn a_still_slider_settles_on_the_holding_throttle() {
+        let mut throttle = Throttle::new();
+        throttle.slider_moved(1000.0, 4000.0);
+        coast(&mut throttle, 100);
+        let settled = coast(&mut throttle, 1000);
+        assert!(
+            (settled - HOLD_THROTTLE).abs() < 0.02,
+            "settles on the holding value, got {settled}"
+        );
+    }
+
+    /// The same value sent twice — the slider emits on every pixel it crosses —
+    /// says nothing about a direction and must not change the throttle.
+    #[test]
+    fn a_repeated_value_is_not_a_direction() {
+        let mut throttle = Throttle::new();
+        throttle.slider_moved(3000.0, 2000.0);
+        coast(&mut throttle, 100);
+        throttle.slider_moved(2000.0, 2000.0);
+        let after = coast(&mut throttle, 60);
+        assert!(after < 0.1, "still off the throttle, got {after}");
+    }
+
+    /// Leaving the showcase must re-send the throttle even when the model's own
+    /// value has not changed: the routine drove the parameter directly, so FMOD
+    /// is wherever the last blip left it.
+    #[test]
+    fn taking_over_from_the_showcase_forces_a_send() {
+        let mut throttle = Throttle::new();
+        assert_eq!(throttle.tick(TICK), None, "nothing to send while at rest");
+        throttle.take_over();
+        assert!(
+            throttle.tick(TICK).is_some(),
+            "the holding value has to reach FMOD again"
+        );
+    }
+
+    /// Whatever the sequence, the value handed to an event stays a ratio.
+    #[test]
+    fn the_throttle_stays_between_zero_and_one() {
+        let mut throttle = Throttle::new();
+        for step in 0..200 {
+            let from = 1000.0 + (step % 7) as f32 * 500.0;
+            throttle.slider_moved(from, from + if step % 3 == 0 { -800.0 } else { 900.0 });
+            let value = coast(&mut throttle, 40);
+            assert!((0.0..=1.0).contains(&value), "sane throttle at step {step}: {value}");
+        }
+    }
 
     /// End-to-end through the real thread: loads the game's DLLs, plays an
     /// engine event, moves the rev parameter while it plays, stops.
@@ -707,6 +1115,42 @@ mod tests {
     ///
     /// Without the variable it reports and returns, so a stray `--ignored` run
     /// on a machine with no game is a pass rather than a spurious failure.
+    /// The same numbers the app derives, so a listening session hears what a
+    /// user would rather than a hardcoded 900 rpm on an 8000 rpm ceiling — which
+    /// is three times too slow for a Formula 1 and made the demo lie.
+    fn car_speeds(ac_root: &std::path::Path, car: &str, bank: &std::path::Path) -> (f32, f32) {
+        let car_dir = ac_root.join("content").join("cars").join(car);
+        // Same order the app uses: the car's own physics first, the estimates
+        // only if they are unreadable. Getting this wrong makes the demo lie
+        // about what a user would hear, which it has done twice already.
+        let physics = crate::acd::read_engine_data(&car_dir).unwrap_or_default();
+        let ceiling = physics
+            .limiter_rev
+            .unwrap_or_else(|| crate::enginesound::rev_ceiling(&car_dir));
+        let idle = physics.idle_rev.unwrap_or_else(|| {
+            let parsed = std::fs::read(bank).ok().and_then(|b| crate::fsb5::parse(&b).ok());
+            crate::enginesound::idle_rev(parsed.as_ref(), car, ceiling)
+        });
+        eprintln!(
+            "  limiter {ceiling:.0} rpm, idle {idle:.0} rpm  ({})",
+            if physics.limiter_rev.is_some() {
+                "from data.acd"
+            } else {
+                "estimated"
+            }
+        );
+        (ceiling, idle)
+    }
+
+    /// Lets a listening session compare dosages of room without a rebuild:
+    /// `PITBOX_REVERB_WET=-8`. Defaults to what the app ships.
+    fn reverb_wet() -> f32 {
+        std::env::var("PITBOX_REVERB_WET")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(DEFAULT_REVERB_WET_DB)
+    }
+
     #[test]
     #[ignore = "needs a real Assetto Corsa install and an audio device"]
     fn plays_a_real_engine_event_end_to_end() {
@@ -721,12 +1165,10 @@ mod tests {
         let (event_path, guid) =
             super::super::guids::resolve_engine_event(&bank_dir, Some(&ac_root), &car, Default::default())
                 .unwrap_or_else(|| panic!("no engine event for {car}"));
-        let bank = std::fs::read_dir(&bank_dir)
-            .expect("read the car's sfx folder")
-            .flatten()
-            .map(|e| e.path())
-            .find(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("bank")))
-            .unwrap_or_else(|| panic!("no .bank in {}", bank_dir.display()));
+        let bank =
+            crate::enginesound::find_bank(&bank_dir).unwrap_or_else(|| panic!("no .bank in {}", bank_dir.display()));
+        let (ceiling, idle) = car_speeds(&ac_root, &car, &bank);
+        let limiter = super::super::guids::resolve_event(&bank_dir, Some(&ac_root), &car, "limiter");
 
         let handle = spawn();
         let report = handle
@@ -735,9 +1177,12 @@ mod tests {
                 bank,
                 guid,
                 event_path: event_path.clone(),
-                rev: 900.0,
-                throttle: 0.0,
-                rev_ceiling: 8000.0,
+                rev: idle,
+                throttle: HOLD_THROTTLE,
+                rev_ceiling: ceiling,
+                reverb_wet_db: reverb_wet(),
+                limiter_guid: limiter,
+                limiter_rev: Some(ceiling),
             })
             .expect("the native path must work against a real install");
 
@@ -754,9 +1199,13 @@ mod tests {
 
         // Move it while it plays — the mechanic the rev slider depends on, and
         // a different thing from setting it before `start`.
+        //
+        // The throttle is **not** set here any more: it now follows the
+        // direction of these very moves (§6quater). What to listen for is that
+        // 6000 → 3000 does not sound like 4000 → 6000 played backwards — the
+        // way down should be off-throttle, and audibly quieter.
         for rev in [900.0, 2000.0, 4000.0, 6000.0, 3000.0, 900.0] {
             handle.set_rev(rev);
-            handle.set_throttle(if rev > 2500.0 { 1.0 } else { 0.0 });
             std::thread::sleep(Duration::from_millis(400));
         }
 
@@ -797,6 +1246,8 @@ mod tests {
             super::super::guids::resolve_engine_event(&bank_dir, Some(&ac_root), &car, Default::default())
                 .unwrap_or_else(|| panic!("no engine event for {car}"));
         let bank = crate::enginesound::find_bank(&bank_dir).expect("a bank next to the events");
+        let (ceiling, idle) = car_speeds(&ac_root, &car, &bank);
+        let limiter = super::super::guids::resolve_event(&bank_dir, Some(&ac_root), &car, "limiter");
 
         let handle = spawn();
         handle
@@ -805,9 +1256,12 @@ mod tests {
                 bank,
                 guid,
                 event_path,
-                rev: 900.0,
+                rev: idle,
                 throttle: 0.0,
-                rev_ceiling: 8000.0,
+                rev_ceiling: ceiling,
+                reverb_wet_db: reverb_wet(),
+                limiter_guid: limiter,
+                limiter_rev: Some(ceiling),
             })
             .expect("the native path must work against a real install");
 
@@ -867,7 +1321,7 @@ mod tests {
     /// each phase lasted and where it peaked. No sleeping: the clock is an
     /// argument, which is the whole reason `tick` takes one.
     fn simulate(seconds: u32) -> (Vec<Duration>, Vec<Duration>, f32, f32, bool) {
-        let mut showcase = Showcase::new(900.0, 8000.0);
+        let mut showcase = Showcase::new(900.0, 8000.0, Some(6500.0));
         let (mut attacks, mut holds) = (Vec::new(), Vec::new());
         let (mut peak, mut lowest, mut throttle_open) = (0.0_f32, f32::MAX, false);
         let (mut phase, mut phase_for) = (showcase.phase, Duration::ZERO);
@@ -926,6 +1380,44 @@ mod tests {
         );
     }
 
+    /// The regression this file most needed. A blip aiming at "88 % of the
+    /// ceiling" sounds fine and looks fine, and yet the limiter event never
+    /// fires — because the trigger sits at the stop itself, and 88 % of it is
+    /// below. Reaching *high* is not the same as reaching *the limiter*, and
+    /// nothing but this assertion tells the two apart.
+    #[test]
+    fn a_redline_blip_actually_crosses_the_limiter_threshold() {
+        const LIMITER: f32 = 6500.0;
+        let mut showcase = Showcase::new(900.0, LIMITER, Some(LIMITER));
+        let mut highest = 0.0_f32;
+        for _ in 0..(300 * 1000 / TICK.as_millis() as u64) {
+            let (rev, _) = showcase.tick(TICK);
+            highest = highest.max(rev);
+        }
+        assert!(
+            highest >= LIMITER - LIMITER_MARGIN,
+            "the limiter sound is gated on {} rpm and the routine only reached {highest:.0}",
+            LIMITER - LIMITER_MARGIN
+        );
+    }
+
+    /// Without a stated limiter there is no limiter sound, and nothing should
+    /// pretend there is one — but the routine must still rev out sensibly.
+    #[test]
+    fn a_car_with_no_stated_limiter_still_revs_out() {
+        let mut showcase = Showcase::new(900.0, 8000.0, None);
+        let mut highest = 0.0_f32;
+        for _ in 0..(300 * 1000 / TICK.as_millis() as u64) {
+            let (rev, _) = showcase.tick(TICK);
+            highest = highest.max(rev);
+        }
+        assert!(highest > 900.0 * 4.0, "still reaches for the top, got {highest:.0}");
+        assert!(
+            highest <= 8000.0,
+            "without ever inventing revs it has not got, got {highest:.0}"
+        );
+    }
+
     /// And the other correction: sometimes it reaches the limiter and *stays*
     /// there — but never for long. The upper bound matters as much as the lower
     /// one: a limiter held too long stops being a demonstration.
@@ -956,7 +1448,7 @@ mod tests {
     /// time long after the fact.
     #[test]
     fn a_long_stall_does_not_leave_the_routine_behind() {
-        let mut showcase = Showcase::new(900.0, 8000.0);
+        let mut showcase = Showcase::new(900.0, 8000.0, Some(6500.0));
         let (rev, throttle) = showcase.tick(Duration::from_secs(30));
         assert!(
             rev.is_finite() && (900.0..=8000.0).contains(&rev),

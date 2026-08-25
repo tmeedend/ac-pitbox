@@ -314,6 +314,15 @@ pub struct NativeTarget {
     pub event_path: String,
     /// Top of the rev slider for **this** car.
     pub rev_ceiling: f32,
+    /// Where this engine ticks over. A flat 900 rpm was wrong by a factor of
+    /// four on a Formula 1 car.
+    pub idle_rev: f32,
+    /// Where it stops, when the car says so. `None` falls back to approaching
+    /// the top of the range instead.
+    pub limiter_rev: Option<f32>,
+    /// `event:/cars/<id>/limiter`, the separate event AC plays while the engine
+    /// sits against its limit — the sound that makes a rev-out recognisable.
+    pub limiter_guid: Option<crate::fmod::guids::Guid>,
 }
 
 /// Lowest engine speed the slider offers. Below an idle nothing sounds like an
@@ -324,6 +333,101 @@ pub const REV_FLOOR: f32 = 500.0;
 /// Used when a car has no usable curve: 5 of 299 in the reference install.
 /// Close to the measured median (8300) rather than to either extreme.
 const REV_CEILING_FALLBACK: f32 = 8000.0;
+
+/// Fraction of the rev ceiling used as the idle when the bank names nothing.
+///
+/// **Measured**, not chosen: on the 98 cars whose bank names an idle sample
+/// *and* whose `ui_car.json` carries a curve, the ratio of idle to ceiling runs
+/// from 0,056 to 0,340, median 0,160, with p10 at 0,114. The median is pulled
+/// up by how many Kunos cars are racing cars, which idle high; 0,13 sits nearer
+/// the road cars that make up most of a real library, and is never absurd at
+/// either end. It gives 1040 rpm for the GT40, 975 for a Miata, and 2470 for an
+/// F2004 whose measured idle is 3896 — low, but a great deal closer than the
+/// flat 900 rpm it replaces, which for an F1 is below the speed at which the
+/// engine would even run.
+const IDLE_RATIO: f32 = 0.13;
+
+/// Absolute bounds on the estimate, whatever the ceiling says.
+const IDLE_BOUNDS: (f32, f32) = (700.0, 4000.0);
+
+/// A number read from a sample name is only believed inside this band, as a
+/// fraction of the ceiling — the measured extremes of the same 98 cars.
+///
+/// It is what makes a false positive harmless rather than dangerous: the
+/// `art_porsche_911_gt3_996` bank yields "911" from its own model name, and
+/// 911 rpm happens to be a perfectly plausible idle for it. A number that is
+/// *not* plausible — a year, a sample count — falls outside the band and is
+/// dropped.
+const IDLE_NAME_BAND: (f32, f32) = (0.05, 0.35);
+
+/// Idle engine speed for this car, in rpm.
+///
+/// The authoritative source is `MINIMUM` in `data/engine.ini`, and it is out of
+/// reach: measured across the reference install **and** the mod library, 0 of
+/// ~420 car folders ship that file unpacked — every one of them has an
+/// encrypted `data.acd` instead. (A mod *can* ship `data/` unpacked, and AC
+/// prefers it when present; reading it is left for the day a real example is
+/// available rather than guessed at.)
+///
+/// The target is **not** the car's datasheet idle, and that distinction is the
+/// point: what we want is the speed at which the bank's own idle layer plays
+/// *without being pitch-shifted*, because that is where it sounds like a
+/// recording rather than like a recording stretched. Kunos writes exactly that
+/// number into the sample name, so where a name exists it is the better answer
+/// even when it disagrees with the handbook.
+///
+/// So two tiers, and the first is exact where it applies: Kunos banks name
+/// their samples with the engine speed they were recorded at (`idle_1383`),
+/// which `docs/fsb5-format.md` established. Measured on the reference install,
+/// **117 of 299 cars** keep that table — sound mods strip it — and the other
+/// 182 fall back to the ratio.
+pub(crate) fn idle_rev(bank: Option<&Bank>, car_id: &str, ceiling: f32) -> f32 {
+    let fallback = (ceiling * IDLE_RATIO).clamp(IDLE_BOUNDS.0, IDLE_BOUNDS.1);
+    let Some(bank) = bank else { return fallback };
+    let car_id = car_id.to_ascii_lowercase();
+
+    let named = bank
+        .samples
+        .iter()
+        .filter_map(|sample| sample.name.as_deref())
+        .filter(|name| name.to_ascii_lowercase().contains("idle"))
+        .flat_map(rpm_numbers_in)
+        // A model designation is not an engine speed. `ks_ferrari_f2004` calls
+        // its samples `F2004_ex_idle` and `F2004_in_idle`, with no speed in
+        // them at all — and 2004 sits comfortably inside the plausible band for
+        // a 19500 rpm engine, so nothing else would catch it. Dropping any
+        // number the car is already named after is what separates the two.
+        .filter(|rpm| !car_id.contains(&format!("{rpm:.0}")))
+        .filter(|rpm| {
+            let fraction = rpm / ceiling;
+            (IDLE_NAME_BAND.0..=IDLE_NAME_BAND.1).contains(&fraction)
+        })
+        // The lowest plausible reading: a bank names several engine layers, and
+        // the idle is the slowest of them.
+        .min_by(f32::total_cmp);
+
+    named.unwrap_or(fallback)
+}
+
+/// Every run of 3 to 5 digits in a name, as a number. Shorter runs are model
+/// designations (`mk1`, `v8`) rather than engine speeds.
+fn rpm_numbers_in(name: &str) -> Vec<f32> {
+    let mut out = Vec::new();
+    let mut digits = String::new();
+    for ch in name.chars().chain(std::iter::once('_')) {
+        if ch.is_ascii_digit() {
+            digits.push(ch);
+        } else {
+            if (3..=5).contains(&digits.len()) {
+                if let Ok(value) = digits.parse::<f32>() {
+                    out.push(value);
+                }
+            }
+            digits.clear();
+        }
+    }
+    out
+}
 
 /// Top of the rev range, per car, taken from the **unencrypted** power curve.
 ///
@@ -337,7 +441,7 @@ const REV_CEILING_FALLBACK: f32 = 8000.0;
 /// 8300. No fixed default could have covered that spread — a slider stopping at
 /// 8000 would make an F1 sound broken, and one going to 19500 would leave the
 /// Berlingo's whole range in the first eighth of the travel.
-fn rev_ceiling(car_dir: &Path) -> f32 {
+pub(crate) fn rev_ceiling(car_dir: &Path) -> f32 {
     let Some(specs) = crate::uijson::read_car_specs(car_dir) else {
         return REV_CEILING_FALLBACK;
     };
@@ -385,13 +489,41 @@ pub fn native_target(
     // auditioned: swapping the sound does not change what the engine revs to.
     let car_dir =
         crate::submods::parent_subdir(conn, cfg, parent_id, "ui").and_then(|ui| ui.parent().map(Path::to_path_buf));
-    let rev_ceiling = car_dir.as_deref().map(rev_ceiling).unwrap_or(REV_CEILING_FALLBACK);
+
+    // The car's own physics, when they can be read: `LIMITER` and `MINIMUM` of
+    // `data.acd` beat every estimate below, because they are not estimates.
+    // Measured on the reference install, 298 of 298 cars give them up.
+    let physics = car_dir
+        .as_deref()
+        .and_then(crate::acd::read_engine_data)
+        .unwrap_or_default();
+
+    // The ceiling is the rev limit if the car states one; failing that, the top
+    // of its power curve; failing that, a default.
+    let rev_ceiling = physics
+        .limiter_rev
+        .unwrap_or_else(|| car_dir.as_deref().map(rev_ceiling).unwrap_or(REV_CEILING_FALLBACK));
+
+    let idle_rev = physics.idle_rev.unwrap_or_else(|| {
+        // No physics: fall back on the bank's own sample names, and on the
+        // ratio after that. Reading the bank a second time — FMOD is about to
+        // read it too — buys the one thing FMOD cannot tell us, the names.
+        let parsed = std::fs::read(&bank).ok().and_then(|bytes| fsb5::parse(&bytes).ok());
+        idle_rev(parsed.as_ref(), parent_id, rev_ceiling)
+    });
+
+    // The limiter event lives beside the engine one, in whichever table gave it.
+    let limiter_guid = crate::fmod::guids::resolve_event(&dir, Some(&ac_root), parent_id, "limiter");
+
     Ok(NativeTarget {
         ac_root,
         bank,
         guid,
         event_path,
         rev_ceiling,
+        idle_rev,
+        limiter_rev: physics.limiter_rev,
+        limiter_guid,
     })
 }
 
@@ -603,6 +735,104 @@ pub fn audition(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn named_bank(names: &[&str]) -> Bank {
+        Bank {
+            codec: Codec::Pcm16,
+            data_start: 0,
+            samples: names
+                .iter()
+                .enumerate()
+                .map(|(index, name)| Sample {
+                    index,
+                    name: Some((*name).to_string()),
+                    frequency: 44100,
+                    channels: 1,
+                    sample_count: 1000,
+                    data_offset: 0,
+                    data_len: 2000,
+                    loop_range: None,
+                })
+                .collect(),
+        }
+    }
+
+    /// The exact tier: Kunos writes the recorded engine speed into the name.
+    #[test]
+    fn idle_comes_from_the_sample_name_when_the_bank_has_one() {
+        let bank = named_bank(&["idle_1383", "mk1_5167b_off", "onload_4200"]);
+        assert_eq!(
+            idle_rev(Some(&bank), "any_car", 8000.0),
+            1383.0,
+            "the named idle wins over any estimate"
+        );
+    }
+
+    /// A bank names several engine layers; the idle is the slowest of them.
+    #[test]
+    fn the_lowest_plausible_named_speed_wins() {
+        let bank = named_bank(&["idle_2100", "idle_1655a", "idle_3000"]);
+        assert_eq!(idle_rev(Some(&bank), "any_car", 9000.0), 1655.0);
+    }
+
+    /// The band is what makes a false positive harmless. `art_porsche_911_gt3`
+    /// yields "911" from its own model name — and 911 rpm is a fine idle for
+    /// it, so it is accepted. A number that could not be an engine speed is not.
+    #[test]
+    fn a_number_that_could_not_be_an_idle_is_refused() {
+        // 4 % of the ceiling: too low to be an idle, so the estimate is used.
+        let bank = named_bank(&["idle_320"]);
+        let estimated = idle_rev(Some(&bank), "any_car", 8000.0);
+        assert_ne!(estimated, 320.0, "320 rpm is not an idle on an 8000 rpm engine");
+        assert_eq!(estimated, 8000.0 * IDLE_RATIO, "so the ratio takes over");
+    }
+
+    /// The real trap, straight from the corpus: `ks_ferrari_f2004` names its
+    /// samples `F2004_ex_idle` and `F2004_in_idle` — no speed in them at all —
+    /// and 2004 is a perfectly plausible idle for a 19500 rpm engine, so the
+    /// band lets it through. Only knowing what the car is called does not.
+    #[test]
+    fn the_cars_own_model_number_is_not_mistaken_for_a_speed() {
+        let bank = named_bank(&["F2004_ex_idle", "F2004_in_idle"]);
+        let picked = idle_rev(Some(&bank), "ks_ferrari_f2004", 19500.0);
+        assert_ne!(picked, 2004.0, "2004 is the model, not the engine speed");
+        assert_eq!(
+            picked,
+            (19500.0f32 * IDLE_RATIO).clamp(IDLE_BOUNDS.0, IDLE_BOUNDS.1),
+            "so the ratio takes over"
+        );
+    }
+
+    /// Sound mods strip the name table, which is the common case.
+    #[test]
+    fn without_names_the_estimate_scales_with_the_car() {
+        // A Formula 1 must not be told it idles at 900 rpm: it would not run.
+        let f1 = idle_rev(None, "any_car", 19000.0);
+        let road = idle_rev(None, "any_car", 8000.0);
+        assert!(
+            f1 > road * 2.0,
+            "a high-revving engine idles higher: {f1} against {road}"
+        );
+        assert!(
+            (IDLE_BOUNDS.0..=IDLE_BOUNDS.1).contains(&f1),
+            "and never outside the sane band, got {f1}"
+        );
+    }
+
+    /// Short digit runs are model designations, not engine speeds.
+    #[test]
+    fn model_designations_are_not_read_as_speeds() {
+        assert_eq!(
+            rpm_numbers_in("mk1_idle_1655a"),
+            vec![1655.0],
+            "mk1 is a name, 1655 a speed"
+        );
+        assert!(rpm_numbers_in("idle_v8").is_empty(), "no digits worth reading");
+        assert!(
+            rpm_numbers_in("idle_123456").is_empty(),
+            "six digits is not an engine speed either"
+        );
+    }
 
     /// Les trois cas de bourrage, qui sont tout ce que base64 a de piégeux.
     #[test]

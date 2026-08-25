@@ -73,11 +73,6 @@ export function setAuditionRev(rev: number): Promise<void> {
   return invoke<void>("set_audition_rev", { rev });
 }
 
-/** Règle l'accélérateur (0 = lâcher de gaz, 1 = pleine charge). */
-export function setAuditionThrottle(throttle: number): Promise<void> {
-  return invoke<void>("set_audition_throttle", { throttle });
-}
-
 /**
  * Déplace l'oreille autour de la voiture : angle d'orbite et hauteur en degrés,
  * distance en mètres.

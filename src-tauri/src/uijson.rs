@@ -190,6 +190,23 @@ pub struct NativeSpecs {
     pub torque_curve: Vec<[f64; 2]>,
 }
 
+/// Un nombre écrit comme nombre **ou comme chaîne**.
+///
+/// Ce n'est pas de la tolérance gratuite : sur les 299 voitures de
+/// l'installation de référence, **178 écrivent leurs courbes en chaînes**
+/// (`[["500", "33"], …]`) contre 120 en nombres JSON. `as_f64()` seul rendait
+/// donc une courbe vide six fois sur dix — et comme les deux fiches
+/// conditionnent le graphique à `power_curve.length > 1`, il ne s'affichait tout
+/// simplement pas, sans le moindre message. Le champ `year` juste en dessous
+/// gère déjà les deux formes ; la courbe l'avait oublié.
+fn as_number(v: &Value) -> Option<f64> {
+    match v {
+        Value::Number(n) => n.as_f64(),
+        Value::String(s) => s.trim().replace(',', ".").parse().ok(),
+        _ => None,
+    }
+}
+
 fn curve(v: &Value, key: &str) -> Vec<[f64; 2]> {
     v.get(key)
         .and_then(|c| c.as_array())
@@ -197,7 +214,7 @@ fn curve(v: &Value, key: &str) -> Vec<[f64; 2]> {
             arr.iter()
                 .filter_map(|pt| {
                     let p = pt.as_array()?;
-                    Some([p.first()?.as_f64()?, p.get(1)?.as_f64()?])
+                    Some([as_number(p.first()?)?, as_number(p.get(1)?)?])
                 })
                 .collect()
         })
@@ -401,6 +418,31 @@ pub fn read_car_specs(car_dir: &Path) -> Option<NativeSpecs> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Régression : 178 des 299 voitures de l'installation de référence
+    /// écrivent leurs courbes en **chaînes**, et `as_f64()` seul rendait alors
+    /// une courbe vide. Comme les deux fiches n'affichent le graphique que si
+    /// `power_curve.length > 1`, il disparaissait sans un mot sur six voitures
+    /// sur dix — et le plafond de régime de l'écoute moteur retombait sur sa
+    /// valeur par défaut, ce qui ne se voyait pas non plus.
+    #[test]
+    fn a_curve_written_with_quotes_is_read_like_one_written_without() {
+        let as_text: Value = serde_json::from_str(r#"{"powerCurve":[["500","33"],["17000","760"]]}"#).unwrap();
+        let as_numbers: Value = serde_json::from_str(r#"{"powerCurve":[[500,33],[17000,760]]}"#).unwrap();
+        assert_eq!(curve(&as_text, "powerCurve"), curve(&as_numbers, "powerCurve"));
+        assert_eq!(
+            curve(&as_text, "powerCurve").last().map(|p| p[0]),
+            Some(17000.0),
+            "the top of the range is what the rev slider is built on"
+        );
+    }
+
+    /// Une entrée illisible ne doit pas emporter la courbe entière.
+    #[test]
+    fn a_broken_point_is_skipped_not_fatal() {
+        let v: Value = serde_json::from_str(r#"{"powerCurve":[["500","33"],["oops","x"],[1500,99]]}"#).unwrap();
+        assert_eq!(curve(&v, "powerCurve"), vec![[500.0, 33.0], [1500.0, 99.0]]);
+    }
 
     /// Reproduit un vrai `ui_car.json` de contenu de base (ex. lotus_exige_s) :
     /// la description contient des retours à la ligne bruts non échappés,

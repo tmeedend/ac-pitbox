@@ -1,3 +1,4 @@
+mod acd;
 mod acpath;
 mod activation;
 mod apps;
@@ -302,7 +303,6 @@ pub fn run() {
             #[cfg(windows)]
             commands::addons::set_audition_rev,
             #[cfg(windows)]
-            commands::addons::set_audition_throttle,
             #[cfg(windows)]
             commands::addons::set_audition_listener,
             #[cfg(windows)]

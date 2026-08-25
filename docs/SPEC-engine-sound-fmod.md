@@ -118,8 +118,18 @@ Sans `FMOD_STUDIO_INIT_ALLOW_MISSING_PLUGINS` (0x02) passé à `Initialize`,
 sous **aucune** forme dans l'installation AC — vérifié : ni DLL à part, ni
 symbole dans `fmod64.dll` ou `fmodstudio64.dll`.
 
-Conséquence à ne pas manquer : **le jeu lui-même tourne donc avec ce drapeau**,
-et l'effet n'est pas davantage appliqué dans AC. On ne dégrade rien.
+⚠️ **Correction — la suite de ce paragraphe disait le contraire et se
+trompait.** Il y était écrit que, le plugin n'existant nulle part, le jeu devait
+tourner avec le même drapeau et qu'on ne dégradait donc rien. C'est faux :
+`acs.exe` contient la chaîne « FMOD Distance Filter », donc **le jeu enregistre
+ce plugin depuis son propre exécutable**, sans DLL séparée. C'est nous qui
+perdons un effet, pas lui.
+
+L'erreur consistait à conclure d'une absence de *fichier* à une absence tout
+court. Un plugin FMOD n'a pas besoin d'être une DLL. En pratique le manque est
+modeste — un filtre de distance agit surtout loin, et l'écoute se fait à
+quelques mètres — mais il faut le savoir avant de chercher pourquoi le rendu
+paraît sec.
 
 `common.bank` (le bank maître, reconnaissable à son `.strings.bank` voisin) se
 charge **avant** le bank de la voiture : c'est lui qui porte les bus dans
@@ -607,15 +617,260 @@ L'aléatoire n'était pas une commodité : un intervalle fixe s'entend comme une
 machine, un intervalle irrégulier comme quelqu'un content de sa voiture.
 `fastrand` était déjà une dépendance du projet.
 
-Le rupteur reste un **événement séparé** (`event:/cars/<id>/limiter`) qu'on ne
-déclenche pas : on approche le haut de la plage, le bank fait le reste. Le vrai
-régime de coupure vit dans un `data.acd` chiffré — même impasse qu'au §4.4,
-même réponse.
+Le rupteur est un **événement séparé** (`event:/cars/<id>/limiter`), et il est
+bel et bien joué — §6ter, qui explique aussi d'où vient désormais le régime de
+coupure.
 
 **Curseur et démonstration ne coexistent pas** : ils pilotent le même paramètre.
 Toucher le curseur arrête la démonstration (côté Rust aussi, pas seulement à
 l'écran), et pendant qu'elle tourne le curseur s'efface — un curseur qui ne suit
 pas ce qu'on entend serait pire qu'absent.
+
+---
+
+## 6ter. Le ralenti, et la salle
+
+Deux corrections venues de l'écoute, après le §6bis.
+
+### Le ralenti dépend de la voiture
+
+Partir de 900 tr/min pour tout le monde était faux d'un facteur quatre sur une
+Formule 1 — la SF15-T tourne au ralenti à **3041 tr/min**, régime auquel un
+moteur de route serait déjà bien au-dessus du sien. Le curseur rendait ça
+indolore pour l'écoute manuelle, mais la démonstration du §6bis **retombe** sur
+ce ralenti entre deux rafales, et là ça s'entend.
+
+**La source qui fait autorité nous est fermée**, et c'est mesuré : `MINIMUM` de
+`data/engine.ini` vit dans un `data.acd` chiffré, et **0 dossier `data/`
+déballé sur ~420 voitures** (299 dans l'install, 121 en bibliothèque). Un mod
+*peut* en livrer un — AC le préfère au `data.acd` quand il est là — et ce
+palier est **laissé de côté en attendant un exemple réel**, plutôt que d'être
+deviné à partir de l'exécutable du jeu.
+
+Deux paliers, donc :
+
+1. **Le nom d'échantillon**, quand le bank a gardé sa table. Kunos y écrit le
+   régime d'enregistrement (`idle_1383`). **98 voitures sur 299.**
+2. **Une fraction du plafond** sinon : `0,13 ×` le régime maximal, borné à
+   [700, 4000]. Mesuré sur les 98 voitures qui ont les deux, le rapport
+   ralenti/plafond va de 0,056 à 0,340, médiane 0,160 — la médiane étant tirée
+   vers le haut par les voitures de course, nombreuses chez Kunos, 0,13 colle
+   mieux aux voitures de route qui font l'essentiel d'une bibliothèque.
+
+Résultat sur le corpus : de **500 à 3896 tr/min**, médiane 1105.
+
+**Ce qu'on cherche n'est pas le ralenti du constructeur**, et la nuance porte :
+on veut le régime auquel la couche « ralenti » du bank joue **sans être
+transposée**, parce que c'est là qu'elle sonne comme un enregistrement plutôt
+que comme un enregistrement étiré. Le nom donne exactement ce nombre — donc là
+où il existe, il est meilleur que la fiche technique même s'il en diffère.
+
+⚠️ **Le piège, et il est réel** : `ks_ferrari_f2004` nomme ses échantillons
+`F2004_ex_idle` — **aucun régime dedans**, juste le millésime. Et 2004 tr/min
+est parfaitement plausible sur un moteur qui monte à 19500, donc la bande de
+plausibilité le laisse passer. Seul le fait de savoir **comment la voiture
+s'appelle** l'attrape : tout nombre déjà présent dans l'identifiant est écarté.
+Le filtre retire 19 faux positifs sur le corpus, dont le « 911 » d'une Porsche.
+
+### Un bug préexistant sorti en tirant ce fil
+
+Les courbes de `ui_car.json` sont écrites en **chaînes** par **178 voitures sur
+299** (`[["500", "33"], …]`) et en nombres JSON par 120. `uijson::curve`
+n'acceptait que les nombres, donc six voitures sur dix rendaient une **courbe
+vide**. Conséquences, toutes silencieuses :
+
+- le graphique de puissance des fiches (`PowerCurve`, conditionné à
+  `power_curve.length > 1`) ne s'affichait **jamais** pour ces voitures ;
+- le plafond de régime du lot 3 retombait sur sa valeur par défaut de 8000 pour
+  tout le monde — invisible parce que 8000 se trouve être le vrai plafond de la
+  GT40, la voiture sur laquelle j'avais vérifié.
+
+Corrigé dans `uijson::as_number`, avec deux tests de régression. Le champ `year`
+juste à côté gérait déjà les deux formes ; la courbe l'avait oublié. Morale
+répétée : **vérifier sur une voiture, c'est ne pas vérifier** — c'est le même
+piège que l'atlas symétrique de la MX-5 dans l'aperçu 3D.
+
+### Le rupteur, et les vrais chiffres de la voiture
+
+Le rupteur d'AC est un **événement à part** (`event:/cars/<id>/limiter`), pas
+une région de `engine_ext` — c'est pour ça qu'un rev-out s'identifie à l'oreille
+en une demi-seconde. La démonstration du §6bis se contentait d'approcher le haut
+de la plage sans jamais le déclencher : il manquait, et ça s'entendait. Il est
+maintenant frappé quand le régime atteint la butée (à 60 tr/min près, parce
+qu'un moteur en butée oscille autour et qu'un seuil sans largeur ferait
+bégayer le son), et relâché quand il en repart.
+
+Encore fallait-il savoir **où** est la butée. Elle est dans `data/engine.ini`,
+que le §4.4 disait de laisser dans son `data.acd` chiffré. C'était trop
+prudent : déchiffrer un fichier qu'on possède, sans rien redistribuer, ne pose
+pas de problème, et l'algorithme est publié depuis des années.
+
+`src-tauri/src/acd.rs` le fait, en **deux routes** :
+
+1. **La clé dérivée du nom de dossier** — instantanée. Les huit nombres de la
+   clé sont des petites fonctions du nom mis en minuscules, assemblées en
+   `"%d-%d-…"`. Algorithme appris de
+   [`bovis/acd_extractor`](https://github.com/bovis/acd_extractor), réécrit
+   ici, et surtout **vérifié** : d'abord contre des clés que j'avais extraites
+   *avant* de le connaître, puis sur le corpus. **298 voitures sur 298, en
+   0,47 s**, toutes par cette route.
+2. **La récupération depuis le texte chiffré** — gardée en second, et pas par
+   prudence : elle couvre un cas que la première ne *peut pas* traiter. Une
+   voiture renommée après son empaquetage garde l'ancienne clé, et son nom ne
+   la produit plus. Cette route ne regarde donc pas le nom du tout.
+
+Ce que ça donne, comparé aux estimations qu'il remplace :
+
+| voiture | ralenti estimé | ralenti réel | rupteur réel |
+| --- | --- | --- | --- |
+| GT40 | 1383 | **900** | 6500 |
+| MX-5 | 1318 | **850** | 7250 |
+| SF15-T | 3041 | **2950** | 15000 |
+| F2004 | 2535 | **4000** | 18800 |
+
+L'estimation était honorable sur la SF15-T et fausse d'un tiers ailleurs. Elle
+reste en repli pour une voiture dont le `data.acd` résiste (11 sur 298 ne
+déclarent pas de `MINIMUM`).
+
+⚠️ **Trois pièges, tous rencontrés en écrivant ce module.**
+
+- **Porter une boucle ne se fait pas en lisant les incréments.** La troisième
+  partie de la clé avance son index de `+1`, `−2`, `+4` — soit **3**, pas 4.
+  Écrire le 4 qui est dans la source donne une clé fausse.
+- **Un texte chiffré décalé de trois reste crédible.** `.ini` décalé reste
+  imprimable, et même ses retours à la ligne survivent : 10 décalé de 3 tombe
+  sur 13, un retour chariot parfaitement innocent. Pire, **les en-têtes de
+  section survivent aussi** — les crochets tombent sur des positions justes, si
+  bien qu'une clé fausse produisait `[HEADEU]` et `[HNGIQE_DITA]` et marquait
+  exactement autant de points que la vraie. Seul un texte connu de vraie
+  longueur les sépare : `[ENGINE_DATA]`.
+- **Un plafond global sur une recherche par périodes la casse en silence.** Les
+  mauvaises périodes produisent des centaines de clés valides de forme,
+  épuisent le budget, et la bonne période n'est jamais atteinte.
+
+⚠️ **Et un quatrième, celui-là dans la démonstration.** « Une fraction du
+plafond de régime » et « le rupteur » ne sont pas la même chose, et les
+confondre a rendu le rupteur **totalement muet** un moment. Tant que le plafond
+venait de la courbe de puissance, les deux étaient loin l'un de l'autre — 8000
+contre un vrai 6500 sur la GT40 — et 88–97 % du plafond tombaient *au-dessus* de
+la butée. Dès que le plafond est devenu la butée elle-même, les mêmes 88–97 %
+sont tombés 130 tr/min *en dessous* du seuil de déclenchement, et le son ne
+pouvait plus jamais partir. Rien ne le signalait : le moteur montait haut, la
+démonstration paraissait juste.
+
+Le remède n'est pas de retoucher la fraction mais de **séparer les deux
+notions** : la routine garde `ceiling` pour ses coups ordinaires et un
+`redline` distinct, tiré du `data.acd`, pour ceux qui vont taper. Et le test
+`a_redline_blip_actually_crosses_the_limiter_threshold` mesure ce qui compte —
+non pas que le régime monte, mais qu'il **franchisse le seuil**. Vérifié qu'il
+échoue bien avec l'ancienne valeur.
+
+### La salle
+
+Jouée à sec, une voiture sonne comme un enregistrement, pas comme une voiture
+devant soi. **Il n'y a rien à emprunter à AC** : ses banks ne contiennent
+**aucun snapshot** (0 sur 3237 entrées — 23 bus et 6 VCA, rien d'autre), le jeu
+choisissant son preset de réverbération dans son propre code. Et la 1.08 n'a
+pas de départ de réverbération par événement : `EventInstance_SetReverbLevel`
+est une API 2.x, absente de cette DLL.
+
+La salle est donc la nôtre, insérée sur le bus maître. **Le type de DSP et
+l'ordre des paramètres ont été relus dans la DLL** plutôt que rappelés de
+mémoire : créer chaque type et lui demander son nom donne « FMOD Reverb » au
+type **19** — noter que la DLL ne l'appelle pas « SFXReverb », qui n'est que
+l'orthographe de la constante, et que le type 32 est une réverbération à
+convolution, tout autre chose. Ses treize paramètres se nomment eux-mêmes, de
+`Decay Time` à `Dry Level`.
+
+Réglages : petite salle à surfaces dures — 700 ms de déclin, réflexions
+précoces favorisées (70 %), coupure à 8 kHz pour que la traîne ne pétille pas
+sur un moteur déjà riche dans l'aigu, et **niveau humide à −14 dB**. Ce dernier
+chiffre est le seul qui relève du goût, et il tient à rester timide : les
+échantillons portent déjà l'acoustique de leur enregistrement, et une salle
+posée généreusement par-dessus donne une salle de bains. Il voyage dans la
+requête plutôt que d'être figé à la compilation, ce qui permet de comparer des
+dosages à l'oreille sans recompiler — et d'en faire un réglage le jour où il le
+faudrait.
+
+Le bus maître se lit dans la table **globale** : un `GUIDs.txt` de mod déclare
+ses `grp_*` mais jamais `bus:/`.
+
+---
+
+## 6quater. Le gaz vient du geste, pas d'un second réglage
+
+Symptôme rapporté à l'usage : **on n'entendait jamais que l'accélération.** Le
+paramètre `throttle` était posé une fois avant `Start` et plus jamais touché, si
+bien que les couches de lâcher de gaz du bank — la moitié de ce qu'un mod
+contient (§2.4), et le RMS divisé par quatre mesuré au lot 0 — restaient
+inaudibles quoi qu'on fasse du curseur.
+
+**Ce qui manquait n'était pas un réglage de plus, c'était de lire le geste.** Le
+curseur énonce un régime, mais le mouvement dit autre chose que la position : on
+monte à 5000 tr/min *en accélérant*, on en redescend *en levant le pied*. À
+position égale, ce sont deux sons différents, et c'est précisément celui du bas
+qu'on n'entendait pas. Trois options ont été pesées — dériver le gaz du geste,
+transformer le curseur en pédale d'accélérateur (le régime monte seul, on perd
+la comparaison à régime figé), ou ajouter un second contrôle explicite. La
+première gagne : rien de plus à l'écran, et le geste que fait déjà l'utilisateur
+porte l'information.
+
+La déduction vit **côté Rust**, dans le thread FMOD (`Throttle`), et pas dans
+l'interface : le thread tick déjà toutes les 20 ms et connaît le dernier régime
+demandé, là où le front devrait monter une horloge à lui. Trois règles, chacune
+tenue par un test :
+
+| Le curseur | Le gaz |
+| --- | --- |
+| monte | va vers 1 — en charge |
+| descend | va vers 0 — lâcher de gaz, frein moteur |
+| ne bouge plus depuis 180 ms | revient à **0,3**, le maintien |
+
+Le maintien n'est ni 0 ni 1 parce que tenir un régime demande un papillon
+partiellement ouvert : à 0 on entendrait le frein moteur alors que l'aiguille ne
+bouge pas, et l'oreille tranche contre l'écran. Les 180 ms sont ce qui sépare un
+glissement à la souris — qui arrive par à-coups — d'un curseur réellement posé ;
+plus court, chaque micro-pause entre deux pixels relâcherait les gaz. Le passage
+d'une valeur à l'autre est lissé (constante de temps 70 ms) : une commutation
+nette entre deux couches du bank s'entend comme un clic.
+
+**Il n'y a volontairement plus de réglage d'accélérateur séparé.** La commande
+`set_audition_throttle` et son binding ont été retirés : le modèle réécrit le
+paramètre au tick suivant, donc une valeur posée de l'extérieur ne survivrait
+pas — une API qui ment est pire que pas d'API.
+
+### Le bas de course est le ralenti
+
+Le curseur descendait jusqu'à 60 % du ralenti, dans l'idée de comparer deux mods
+juste en dessous. À l'usage c'est une zone morte : un moteur y calerait, et le
+bank n'a rien d'autre à y jouer que sa boucle de ralenti transposée plus bas.
+Plancher remis **au ralenti exact** — lequel vient du `MINIMUM` de `data.acd`,
+donc d'un vrai chiffre et non d'une estimation sur la quasi-totalité des
+voitures (§6ter). Le bas de course devient du coup utile : c'est là qu'on
+retombe en lâchant les gaz.
+
+### L'écoute ne gèle plus l'interface
+
+Bug de la même campagne, sans rapport avec le son. `audition_engine_native` et
+`audition_engine_sound` étaient déclarées `fn` et non `async fn` : **une
+commande Tauri synchrone s'exécute sur le thread principal**, donc dans la
+boucle de messages de la fenêtre. Or celle-là prend son temps — `GUIDs.txt`,
+déchiffrement du `data.acd`, parfois parsing complet du bank, puis l'attente de
+la réponse du thread FMOD, qui attend lui-même le chargement des échantillons.
+Pendant ce temps, plus un clic ne passait.
+
+Ce qui rendait le diagnostic contre-intuitif : **la clé de contact continuait de
+tourner**. WebView2 compose son rendu dans un autre processus, donc l'animation
+survit au gel des clics et masque exactement le symptôme qu'elle devrait
+trahir. Les deux commandes sont passées en `async`, comme l'import et l'aperçu
+3D l'étaient déjà.
+
+Reste la durée elle-même, plus longue à la deuxième écoute qu'à la première.
+`start()` chronomètre désormais ses trois phases — chargement du bank, attente
+des échantillons, démarrage de l'instance — et **journalise au-delà de 600 ms**,
+au niveau Warn pour que la ligne existe aussi sur une install packagée. Le cas
+intéressant est justement la seconde écoute du même mod, où plus rien ne devrait
+avoir à charger.
 
 ---
 
