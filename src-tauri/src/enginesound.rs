@@ -794,7 +794,11 @@ mod tests {
             Some(2500.0),
             "vrc_erc_1999_renoir_csp idles there"
         );
-        assert_eq!(idle_from_minimum(-1500.0, 8500.0), Some(1500.0), "vrc_pt_2023_pageau_98_csp");
+        assert_eq!(
+            idle_from_minimum(-1500.0, 8500.0),
+            Some(1500.0),
+            "vrc_pt_2023_pageau_98_csp"
+        );
     }
 
     /// And the nine NSX variants, which write a magnitude *above* their own rev
@@ -802,8 +806,16 @@ mod tests {
     /// would be worse than estimating.
     #[test]
     fn a_negative_minimum_above_the_ceiling_is_refused() {
-        assert_eq!(idle_from_minimum(-9000.0, 8300.0), None, "9000 rpm is not an idle at 8300");
-        assert_eq!(idle_from_minimum(-9000.0, 8500.0), None, "same on the 8500 rpm variants");
+        assert_eq!(
+            idle_from_minimum(-9000.0, 8300.0),
+            None,
+            "9000 rpm is not an idle at 8300"
+        );
+        assert_eq!(
+            idle_from_minimum(-9000.0, 8500.0),
+            None,
+            "same on the 8500 rpm variants"
+        );
     }
 
     /// No ceiling to judge against means no judgement: the estimate takes over.

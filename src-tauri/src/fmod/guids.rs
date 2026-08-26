@@ -300,7 +300,10 @@ mod tests {
 ",
         )
         .expect("write the table");
-        assert!(resolve_ignition_event(&dir, None, "a_car").is_none(), "nothing to start");
+        assert!(
+            resolve_ignition_event(&dir, None, "a_car").is_none(),
+            "nothing to start"
+        );
     }
 
     /// The byte order of the three leading integers is the one thing this

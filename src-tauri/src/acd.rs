@@ -626,8 +626,11 @@ mod tests {
         };
         let dir = std::path::PathBuf::from(dir);
         let name = dir.file_name().unwrap_or_default().to_string_lossy().into_owned();
-        eprintln!("
-=== {} ===", dir.display());
+        eprintln!(
+            "
+=== {} ===",
+            dir.display()
+        );
         eprintln!("  folder name used as the car id: {name:?}");
 
         let bytes = std::fs::read(dir.join("data.acd")).expect("read data.acd");
@@ -714,7 +717,10 @@ mod tests {
                 continue;
             };
             let mut entries = entries(&bytes);
-            let Some((_, ciphered)) = entries.iter().find(|(n, _)| n.eq_ignore_ascii_case("engine.ini")).cloned()
+            let Some((_, ciphered)) = entries
+                .iter()
+                .find(|(n, _)| n.eq_ignore_ascii_case("engine.ini"))
+                .cloned()
             else {
                 continue;
             };
@@ -743,8 +749,11 @@ mod tests {
             }
         }
 
-        eprintln!("
-=== MINIMUM across {} cars ({opened} opened) ===", folders.len());
+        eprintln!(
+            "
+=== MINIMUM across {} cars ({opened} opened) ===",
+            folders.len()
+        );
         eprintln!("  positive  {positive}");
         eprintln!("  negative  {}", negative.len());
         eprintln!("  absent/0  {absent}");

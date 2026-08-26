@@ -901,8 +901,11 @@ mod survey {
             .collect();
         events.sort_unstable();
 
-        eprintln!("
-=== {} ===", bank.display());
+        eprintln!(
+            "
+=== {} ===",
+            bank.display()
+        );
         for path in events {
             let Some((_, guid)) = crate::fmod::guids::lookup(&table, path) else {
                 continue;
@@ -982,8 +985,10 @@ mod survey {
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
         let found = system.parameters(desc).unwrap_or_default();
-        eprintln!("
-{path}");
+        eprintln!(
+            "
+{path}"
+        );
         for p in &found {
             eprintln!("  parameter {} {}..{}", p.name, p.min, p.max);
         }

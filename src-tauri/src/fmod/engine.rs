@@ -807,9 +807,9 @@ fn run(rx: Receiver<Command>) {
                             .set_parameter(p.instance, &param.name, step.rev.clamp(param.min, param.max));
                     }
                     if let Some(param) = p.roles.throttle.as_ref() {
-                        let _ = l
-                            .system
-                            .set_parameter(p.instance, &param.name, step.throttle.clamp(param.min, param.max));
+                        let _ =
+                            l.system
+                                .set_parameter(p.instance, &param.name, step.throttle.clamp(param.min, param.max));
                     }
                 }
             } else if let Some(showcase) = &mut p.showcase {
@@ -1008,7 +1008,9 @@ fn start(
     // Set both before starting, so the very first mixed block is already at the
     // requested engine speed rather than sliding up to it.
     if let Some(p) = &roles.throttle {
-        let _ = l.system.set_parameter(instance, &p.name, first_throttle.clamp(p.min, p.max));
+        let _ = l
+            .system
+            .set_parameter(instance, &p.name, first_throttle.clamp(p.min, p.max));
     }
     if let Some(p) = &roles.rev {
         let _ = l.system.set_parameter(instance, &p.name, first_rev.clamp(p.min, p.max));
@@ -1442,8 +1444,10 @@ mod tests {
             idle_rev: 1500.0,
         };
 
-        eprintln!("
-{event_path}");
+        eprintln!(
+            "
+{event_path}"
+        );
         for round in 1..=3 {
             let began = std::time::Instant::now();
             handle.play(request.clone()).expect("the native path must work");
