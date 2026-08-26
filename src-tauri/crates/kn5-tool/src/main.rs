@@ -256,6 +256,17 @@ fn inspect(path: &Path, flags: &[&str]) -> Result<(), String> {
     }
 
     if flags.contains(&"--materials") {
+        // Empreinte alpha : la mesure qui tranche entre une découpe et un
+        // alpha qui veut dire autre chose (masque de peinture, opacité) sur un
+        // atlas partagé. Elle demande de décoder les textures, donc on ne la
+        // paie que quand `--materials` est demandé.
+        let footprints = kn5_gltf::prepare_textures(
+            &model,
+            resolve_skin(path, option_value(flags, "--skin")).as_deref(),
+            &kn5_gltf::TextureOptions::default(),
+        )
+        .footprint_alpha;
+
         println!("\nmaterials");
         for (index, material) in model.materials.iter().enumerate() {
             println!(
@@ -265,6 +276,15 @@ fn inspect(path: &Path, flags: &[&str]) -> Result<(), String> {
                 material.blend_mode,
                 if material.alpha_tested { ", alpha tested" } else { "" }
             );
+            if let Some(footprint) = footprints.get(&index) {
+                println!(
+                    "        empreinte alpha {}-{} sur {} points{}",
+                    footprint.min,
+                    footprint.max,
+                    footprint.samples,
+                    if footprint.is_blank() { " — invisible" } else { "" }
+                );
+            }
             for property in &material.properties {
                 let extra = if property.extra.iter().any(|v| *v != 0.0) {
                     format!("  extra {:?}", property.extra)

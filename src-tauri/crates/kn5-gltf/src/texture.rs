@@ -120,6 +120,9 @@ pub struct TextureWarning {
 
 #[derive(Debug, Default)]
 pub struct TextureSet {
+    /// Par matériau (index dans `model.materials`) : ce que vaut l'alpha de sa
+    /// diffuse **là où ce matériau l'échantillonne**. Voir [`FootprintAlpha`].
+    pub footprint_alpha: BTreeMap<usize, FootprintAlpha>,
     pub textures: Vec<PreparedTexture>,
     pub warnings: Vec<TextureWarning>,
     /// Embedded blobs no material ever binds. Left untouched — transcoding
@@ -227,6 +230,7 @@ struct TextureUse {
 /// decoded once (§5.4).
 pub fn prepare_textures(model: &Kn5Model, skin_dir: Option<&Path>, options: &TextureOptions) -> TextureSet {
     let roles = roles(model);
+    let footprints = diffuse_footprints(model);
     let referenced: BTreeSet<&str> = roles.keys().map(String::as_str).collect();
 
     let mut set = TextureSet::default();
@@ -241,7 +245,8 @@ pub fn prepare_textures(model: &Kn5Model, skin_dir: Option<&Path>, options: &Tex
     // result deterministic, which matters: the cache key must not depend on
     // how threads happened to be scheduled.
     let work: Vec<(&String, &TextureUse)> = roles.iter().collect();
-    let prepared: Vec<Result<PreparedTexture, TextureWarning>> = work
+    type Prepared = (PreparedTexture, Vec<(usize, FootprintAlpha)>);
+    let prepared: Vec<Result<Prepared, TextureWarning>> = work
         .par_iter()
         .map(|(name, role)| {
             let embedded = model.texture(name);
@@ -251,7 +256,8 @@ pub fn prepare_textures(model: &Kn5Model, skin_dir: Option<&Path>, options: &Tex
                     reason: "referenced by a material but neither embedded nor present in the skin folder".to_string(),
                 });
             };
-            prepare_one(name, &blob, origin, **role, options).map_err(|reason| TextureWarning {
+            let users = footprints.get(*name).map(Vec::as_slice).unwrap_or(&[]);
+            prepare_one(name, &blob, origin, **role, users, options).map_err(|reason| TextureWarning {
                 name: (*name).clone(),
                 reason,
             })
@@ -260,12 +266,140 @@ pub fn prepare_textures(model: &Kn5Model, skin_dir: Option<&Path>, options: &Tex
 
     for outcome in prepared {
         match outcome {
-            Ok(texture) => set.textures.push(texture),
+            Ok((texture, verdicts)) => {
+                set.textures.push(texture);
+                set.footprint_alpha.extend(verdicts);
+            }
             Err(warning) => set.warnings.push(warning),
         }
     }
 
     set
+}
+
+/// Ce que l'alpha d'une diffuse vaut **là où un matériau l'échantillonne**.
+///
+/// Mesuré sur des **points** — un par sommet, un par centre de triangle — et
+/// non sur le rectangle englobant des UV. La différence est décisive : sur
+/// `vrc_erc_1999_renoir_csp`, le rectangle du pare-brise couvre 27 % de
+/// l'atlas de carrosserie, où il attrape forcément de l'opaque comme du
+/// transparent — ce qui ne dit rien de la vitre elle-même.
+#[derive(Debug, Clone, Copy)]
+pub struct FootprintAlpha {
+    pub min: u8,
+    pub max: u8,
+    /// Nombre de points mesurés. Zéro quand l'alpha a été retiré à l'encodage,
+    /// auquel cas il n'y a rien à conclure.
+    pub samples: usize,
+}
+
+impl FootprintAlpha {
+    /// Ce matériau n'échantillonne **que** des texels transparents : lu comme
+    /// une découpe, cet alpha ne le découperait pas, il l'effacerait.
+    ///
+    /// Un auteur ne modélise pas une pièce pour qu'elle soit invisible. Quand
+    /// ça arrive, c'est que l'alpha n'était pas une transparence — sur
+    /// `vrc_erc_1999_renoir_csp`, `MAIN_WINDSCREEN` partage l'atlas
+    /// `MAIN_BODY.dds` du matériau `MAIN_BODY`, dont l'alpha est un **masque
+    /// de peinture** (écart n°5) : 0 y veut dire « peins ici », pas « perce
+    /// ici ». Le pare-brise disparaissait purement et simplement.
+    ///
+    /// Volontairement étroit : le cas « uniformément opaque » ne déclenche
+    /// rien, pour ne pas changer le rendu de tout ce qui marchait déjà.
+    pub fn is_blank(&self) -> bool {
+        self.samples > 0 && self.max <= BLANK_ALPHA
+    }
+}
+
+/// Au-dessus, il reste quelque chose à voir : on ne touche à rien.
+const BLANK_ALPHA: u8 = 8;
+
+/// Au-delà, un matériau en dit déjà bien assez sur son empreinte, et payer
+/// plus ne changerait aucun verdict.
+const MAX_FOOTPRINT_SAMPLES: usize = 20_000;
+
+/// Pour chaque texture servant de `txDiffuse`, les matériaux qui l'utilisent et
+/// les points UV où ils l'échantillonnent.
+fn diffuse_footprints(model: &Kn5Model) -> BTreeMap<String, Vec<DiffuseUser>> {
+    let mut samples: BTreeMap<usize, Vec<[f32; 2]>> = BTreeMap::new();
+    model.visit_nodes(&mut |node| {
+        let Some(mesh) = node.mesh() else { return };
+        // Un maillage que le rendu écartera de toute façon ne doit pas peser
+        // sur l'empreinte d'un matériau qu'il partage avec du visible.
+        if !mesh.is_visible || !mesh.is_renderable {
+            return;
+        }
+        let points = samples.entry(mesh.material_id as usize).or_default();
+        if points.len() >= MAX_FOOTPRINT_SAMPLES {
+            return;
+        }
+        points.extend(mesh.vertices.iter().map(|vertex| vertex.uv));
+        // Les sommets ne décrivent que le contour des triangles. Le centre
+        // coûte trois additions et évite qu'un quadrilatère dont les quatre
+        // coins tombent sur des texels identiques passe pour uniforme alors
+        // que son intérieur est découpé.
+        for triangle in mesh.indices.chunks_exact(3) {
+            let corners: Vec<[f32; 2]> = triangle
+                .iter()
+                .filter_map(|i| mesh.vertices.get(*i as usize).map(|v| v.uv))
+                .collect();
+            if let [a, b, c] = corners[..] {
+                points.push([(a[0] + b[0] + c[0]) / 3.0, (a[1] + b[1] + c[1]) / 3.0]);
+            }
+        }
+    });
+
+    let mut out: BTreeMap<String, Vec<DiffuseUser>> = BTreeMap::new();
+    for (index, material) in model.materials.iter().enumerate() {
+        let Some(texture) = material.texture_for("txDiffuse").filter(|name| !name.is_empty()) else {
+            continue;
+        };
+        let Some(points) = samples.get(&index) else {
+            continue;
+        };
+        out.entry(texture.to_string()).or_default().push(DiffuseUser {
+            material: index,
+            alpha_mode: crate::material::alpha_mode_of(material).0,
+            points: points.clone(),
+        });
+    }
+    out
+}
+
+/// Un matériau qui échantillonne une diffuse, et ce qu'il attend de son alpha.
+struct DiffuseUser {
+    material: usize,
+    alpha_mode: crate::material::AlphaMode,
+    points: Vec<[f32; 2]>,
+}
+
+/// Alpha minimal et maximal **aux points** où un matériau échantillonne.
+///
+/// Les UV ne sont pas normalisés dans `[0, 1]` : `vrc_erc_1999_renoir_csp`
+/// range tout son V dans `[-1, 0]`. Le rendu s'en moque, l'échantillonnage
+/// boucle — donc on boucle aussi, au lieu de rogner et de lire le mauvais
+/// texel.
+fn alpha_range_at(image: &RgbaImage, points: &[[f32; 2]]) -> (u8, u8) {
+    let (mut min, mut max) = (u8::MAX, u8::MIN);
+    for uv in points {
+        let alpha = image
+            .get_pixel(wrap(uv[0], image.width()), wrap(uv[1], image.height()))
+            .0[3];
+        min = min.min(alpha);
+        max = max.max(alpha);
+    }
+    if min > max {
+        return (0, 0);
+    }
+    (min, max)
+}
+
+/// Une coordonnée de texture en index de pixel, en répétant comme le rendu.
+fn wrap(coordinate: f32, size: u32) -> u32 {
+    if !coordinate.is_finite() {
+        return 0;
+    }
+    ((coordinate - coordinate.floor()) * size as f32) as u32 % size
 }
 
 /// Bakes the paint the plan asks for, and adds the results to the set.
@@ -453,29 +587,75 @@ fn prepare_one(
     blob: &[u8],
     origin: TextureOrigin,
     usage: TextureUse,
+    users: &[DiffuseUser],
     options: &TextureOptions,
-) -> Result<PreparedTexture, String> {
+) -> Result<(PreparedTexture, Vec<(usize, FootprintAlpha)>), String> {
     let source_bytes = blob.len();
     let decoded = decode(blob).map_err(|e| format!("decode failed: {e}"))?;
     let mut resized = downscale(decoded, usage.role.max_size(options));
-    if !usage.keep_alpha {
+
+    // Mesuré **avant** tout retrait d'alpha, et c'est tout l'objet de l'ordre
+    // choisi ici : c'est cette mesure qui décide si l'alpha doit survivre.
+    let verdicts: Vec<(usize, FootprintAlpha)> = users
+        .iter()
+        .map(|user| {
+            let (min, max) = alpha_range_at(&resized, &user.points);
+            (
+                user.material,
+                FootprintAlpha {
+                    min,
+                    max,
+                    samples: if usage.keep_alpha { user.points.len() } else { 0 },
+                },
+            )
+        })
+        .collect();
+
+    // **Un alpha dont personne ne découpe doit disparaître de l'image.**
+    //
+    // glTF multiplie `baseColorFactor.a` par l'alpha de la texture. Tant que
+    // celui-ci reste dans le PNG, l'opacité qu'on calcule pour une vitre ne
+    // s'ajoute pas : elle se **multiplie** à un alpha qui vaut déjà presque
+    // zéro. Sur `ks_toyota_ae86_tuned`, `glass.dds` vaut 13/255 partout et le
+    // matériau porte 0,15 — soit 0,76 % d'opacité finale, une vitre
+    // rigoureusement invisible. C'est le défaut que l'écart n°9 croyait avoir
+    // corrigé : le plancher d'opacité était bien posé, mais il ne pouvait rien
+    // tant que la texture continuait de multiplier par-dessus.
+    //
+    // On ne retire donc l'alpha que si **aucun** de ses utilisateurs n'en fait
+    // une découpe : un matériau alpha-testé (grille, jante ajourée) en vit,
+    // et un matériau en fondu dont l'alpha varie dans son empreinte découpe
+    // vraiment (décalcomanie, autocollant).
+    let cuts_out = users.iter().any(|user| match user.alpha_mode {
+        crate::material::AlphaMode::Mask => true,
+        crate::material::AlphaMode::Blend => verdicts
+            .iter()
+            .find(|(index, _)| *index == user.material)
+            .is_some_and(|(_, footprint)| footprint.min != footprint.max),
+        crate::material::AlphaMode::Opaque => false,
+    });
+    let keep_alpha = usage.keep_alpha && cuts_out;
+    if !keep_alpha {
         strip_alpha(&mut resized);
     }
     let (bytes, mime) = encode(&resized, usage.role, options)?;
 
-    Ok(PreparedTexture {
-        name: name.to_string(),
-        mime,
-        bytes,
-        width: resized.width(),
-        height: resized.height(),
-        role: usage.role,
-        origin,
-        source_bytes,
-        has_alpha: usage.keep_alpha && resized.pixels().any(|p| p.0[3] != u8::MAX),
-        alpha_varies: usage.keep_alpha && alpha_varies(&resized),
-        average: average_color(&resized),
-    })
+    Ok((
+        PreparedTexture {
+            name: name.to_string(),
+            mime,
+            bytes,
+            width: resized.width(),
+            height: resized.height(),
+            role: usage.role,
+            origin,
+            source_bytes,
+            has_alpha: keep_alpha && resized.pixels().any(|p| p.0[3] != u8::MAX),
+            alpha_varies: keep_alpha && alpha_varies(&resized),
+            average: average_color(&resized),
+        },
+        verdicts,
+    ))
 }
 
 /// L'alpha de cette image varie-t-il d'un pixel à l'autre ?
@@ -874,9 +1054,137 @@ mod tests {
                 role: TextureRole::Color,
                 keep_alpha: false,
             },
+            &[],
             &TextureOptions::default(),
         )
         .expect_err("garbage must not decode");
         assert!(error.contains("decode failed"), "reason names the failing stage");
+    }
+
+    /// A PNG blob of `image`, the shape `prepare_one` expects to be handed.
+    fn png(image: &RgbaImage) -> Vec<u8> {
+        encode(image, TextureRole::Color, &TextureOptions::default())
+            .expect("encoding a test image")
+            .0
+    }
+
+    fn user(material: usize, alpha_mode: crate::material::AlphaMode, points: Vec<[f32; 2]>) -> DiffuseUser {
+        DiffuseUser {
+            material,
+            alpha_mode,
+            points,
+        }
+    }
+
+    fn prepared(image: &RgbaImage, users: Vec<DiffuseUser>) -> PreparedTexture {
+        prepare_one(
+            "t.dds",
+            &png(image),
+            TextureOrigin::Embedded,
+            TextureUse {
+                role: TextureRole::Color,
+                keep_alpha: true,
+            },
+            &users,
+            &TextureOptions::default(),
+        )
+        .expect("a valid PNG must prepare")
+        .0
+    }
+
+    // Règle : un alpha dont personne ne découpe est retiré de l'image, sinon
+    // il **multiplie** l'opacité calculée pour le matériau au lieu de lui
+    // céder la place. Bug réel sur `ks_toyota_ae86_tuned` : `glass.dds` vaut
+    // 13/255 partout et le matériau porte 0,15, soit 0,76 % d'opacité finale
+    // — une vitre rigoureusement invisible. C'est ce que l'écart n°9 croyait
+    // avoir corrigé en posant le plancher d'opacité.
+    #[test]
+    fn an_alpha_nobody_cuts_with_is_dropped_so_the_shader_opacity_can_apply() {
+        let glass = solid(8, 8, [200, 200, 200, 13]);
+        let texture = prepared(
+            &glass,
+            vec![user(0, crate::material::AlphaMode::Blend, vec![[0.5, 0.5]])],
+        );
+        assert!(
+            !texture.has_alpha,
+            "l'alpha constant d'une vitre ne doit pas survivre à l'encodage"
+        );
+        assert_eq!(texture.mime, "image/jpeg", "sans alpha, le codec de couleur suffit");
+    }
+
+    // Règle : une découpe, elle, survit. C'est le garde-fou de la grille et de
+    // la jante ajourée — leur alpha retiré, elles deviennent des panneaux
+    // pleins.
+    #[test]
+    fn a_real_cutout_keeps_its_alpha() {
+        let mut grille = solid(8, 8, [255; 4]);
+        grille.put_pixel(2, 2, image::Rgba([255, 255, 255, 0]));
+
+        let masked = prepared(
+            &grille,
+            vec![user(0, crate::material::AlphaMode::Mask, vec![[0.5, 0.5]])],
+        );
+        assert!(masked.has_alpha, "un matériau alpha-testé vit de son alpha");
+
+        // En fondu, c'est la mesure de l'empreinte qui tranche : l'alpha varie
+        // là où ce matériau échantillonne, donc il découpe vraiment.
+        let decal = prepared(
+            &grille,
+            // Un point sur le trou (pixel 2,2), un point sur la matière.
+            vec![user(0, crate::material::AlphaMode::Blend, vec![[0.3, 0.3], [0.9, 0.9]])],
+        );
+        assert!(decal.has_alpha, "un alpha qui varie dans l'empreinte est une découpe");
+    }
+
+    // Règle : l'empreinte se mesure là où le matériau regarde, pas sur l'atlas
+    // entier. Bug réel sur `vrc_erc_1999_renoir_csp`, dont le pare-brise
+    // partage l'atlas de carrosserie : celui-ci porte un masque de peinture
+    // (écart n°5), donc son alpha varie forcément quelque part.
+    #[test]
+    fn the_footprint_is_measured_where_the_material_samples() {
+        let mut atlas = solid(8, 8, [255; 4]);
+        // Moitié gauche opaque (les décalcomanies), moitié droite à zéro (la
+        // zone que le shader repeindra).
+        for y in 0..8 {
+            for x in 4..8 {
+                atlas.put_pixel(x, y, image::Rgba([255, 255, 255, 0]));
+            }
+        }
+        let texture = prepared(
+            &atlas,
+            // Un seul matériau, qui n'échantillonne que la moitié droite.
+            vec![user(
+                0,
+                crate::material::AlphaMode::Blend,
+                vec![[0.7, 0.2], [0.8, 0.5], [0.9, 0.8]],
+            )],
+        );
+        assert!(
+            !texture.has_alpha,
+            "uniforme dans son empreinte, donc pas une découpe — même si l'atlas varie ailleurs"
+        );
+    }
+
+    // Règle : deux matériaux se partagent une image, l'un découpe et l'autre
+    // non — l'alpha reste, parce qu'un seul utilisateur suffit à en avoir
+    // besoin. C'est le sens de « on ne retire que si personne ne découpe ».
+    #[test]
+    fn one_user_that_cuts_is_enough_to_keep_the_alpha_for_everyone() {
+        let mut atlas = solid(8, 8, [255; 4]);
+        for y in 0..8 {
+            for x in 4..8 {
+                atlas.put_pixel(x, y, image::Rgba([255, 255, 255, 0]));
+            }
+        }
+        let texture = prepared(
+            &atlas,
+            vec![
+                // La vitre, uniforme dans son coin.
+                user(0, crate::material::AlphaMode::Blend, vec![[0.7, 0.5]]),
+                // La décalcomanie, qui traverse la frontière.
+                user(1, crate::material::AlphaMode::Blend, vec![[0.1, 0.5], [0.7, 0.5]]),
+            ],
+        );
+        assert!(texture.has_alpha, "la découpe de l'un protège l'alpha de l'image");
     }
 }

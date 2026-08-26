@@ -646,6 +646,21 @@ posent au bon endroit.
 **Corpus** : 198 voitures sur 201 de la bibliothèque de référence se parsent
 et se convertissent sans échec (les 3 restantes n'ont pas de modèle).
 
+**Vitrage** : il était rendu à moins de 1 % d'opacité sur la quasi-totalité
+des voitures — l'alpha de la texture se **multipliant** au plancher d'opacité
+au lieu de lui céder la place (écart n°11 de `kn5-format.md`). Un alpha dont
+aucun matériau ne se sert comme d'une découpe est maintenant retiré avant
+encodage ; les découpes réelles (grilles, jantes ajourées, décalcomanies) sont
+reconnues en mesurant l'alpha **dans l'empreinte UV du matériau**, point par
+point. Au passage, `ksAlphaRef = 0` est traité comme « non réglé » (écart
+n°12). Validé à l'écran par l'utilisateur : vitrage visible sur les voitures
+Kunos, panneau orange disparu sur `j8_mitsubishi_gto_twin_turbo_91`.
+**Reste ouvert** : `vrc_erc_1999_renoir_csp`, dont le pare-brise partage
+l'atlas de carrosserie et dont l'empreinte alpha varie réellement (0–255) —
+il garde donc sa découpe, et reste très peu marqué. CSP y remplace de toute
+façon `MAIN_GLASS` par ses propres shaders, donc les valeurs brutes du KN5 n'y
+sont pas ce que le jeu applique.
+
 **Modèles étendus par CSP** (§4.5ter) : les mods de préparation qui laissent
 CSP greffer leurs pièces skin par skin s'affichaient troués — jantes absentes,
 boucliers et optiques manquants. Les `[MODEL_REPLACEMENT_*]` littéraux et le

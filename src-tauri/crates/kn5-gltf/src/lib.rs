@@ -24,8 +24,8 @@ pub use locate::{resolve_model, resolve_skin, ModelSource, ResolvedModel};
 pub use material::{AlphaMode, GltfMaterial, MaterialTextures};
 pub use stats::{channel_stats, ChannelStats};
 pub use texture::{
-    alpha_stats, prepare_textures, PreparedTexture, TextureOptions, TextureOrigin, TextureRole, TextureSet,
-    TextureWarning,
+    alpha_stats, prepare_textures, FootprintAlpha, PreparedTexture, TextureOptions, TextureOrigin, TextureRole,
+    TextureSet, TextureWarning,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -146,6 +146,9 @@ pub fn convert(
                         .texture_for("txDiffuse")
                         .and_then(|name| textures.get(name))
                         .is_some_and(|t| t.alpha_varies),
+                    // Mesure faite sur les UV du matériau, pas sur l'atlas :
+                    // voir `texture::FootprintAlpha`.
+                    diffuse_alpha_blank: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_blank()),
                     painted_diffuse: paint.painted_diffuse(index),
                     roughness_texture: roughness.roughness_texture(index),
                 },

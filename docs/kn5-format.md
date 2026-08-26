@@ -689,6 +689,115 @@ symptôme côté utilisateur, donc le même traitement. Le libellé affiché res
 générique (« modèle protégé ») plutôt que de nommer une cause qu'on ne peut
 pas confirmer.
 
+## Écart n°11 — l'alpha d'une texture **multiplie** l'opacité du matériau
+
+**Symptôme** : vitrage quasi absent sur presque toutes les voitures. Signalé
+par l'utilisateur comme « il manque beaucoup de vitre », après que l'écart n°9
+ait cru régler la question.
+
+**Réel** : en glTF, la couleur de base vaut `baseColorFactor × baseColorTexture`
+— **canal alpha compris**. Le plancher d'opacité posé par l'écart n°9 ne
+*remplaçait* donc pas l'alpha de la texture : il se multipliait à lui.
+
+Mesuré sur `ks_toyota_ae86_tuned` :
+
+| | valeur |
+| --- | --- |
+| alpha de `glass.dds` | 13/255 partout |
+| `baseColorFactor.a` du matériau `glass` | 0,15 |
+| opacité réellement rendue | **0,0076**, soit 0,76 % |
+
+Même mécanisme sur `tint_windows` (53/255 × 0,15 = 3 %) et sur
+`blacked_windows` (181/255 × 0,15 = 10,6 %). Le correctif de l'écart n°9 était
+juste dans son intention et inopérant dans les faits — le plancher était bien
+posé, il ne pouvait simplement rien contre un facteur qui ne s'appliquait pas
+là où on croyait.
+
+**Correctif** : quand **aucun** utilisateur d'une diffuse ne se sert de son
+alpha comme d'une découpe, l'alpha est retiré de l'image avant encodage
+(`texture::prepare_one`). L'opacité calculée pour le matériau reprend alors
+seule la main. Volontairement conservateur : l'alpha reste dès qu'un matériau
+alpha-testé l'utilise (grille, jante ajourée — c'est de lui qu'elles vivent),
+ou qu'un matériau en fondu voit son alpha **varier dans sa propre empreinte**
+(décalcomanie, autocollant). Verrouillé par
+`an_alpha_nobody_cuts_with_is_dropped_so_the_shader_opacity_can_apply` et
+`a_real_cutout_keeps_its_alpha`.
+
+**L'empreinte, et pourquoi ce n'est pas l'image entière.** La question « cet
+alpha découpe-t-il ? » ne se pose pas au niveau de la texture : un atlas de
+carrosserie est partagé par la peinture, les décalcomanies et les vitres, et
+son alpha y est un **masque de peinture** (écart n°5) qui varie forcément
+quelque part. Elle se pose au niveau du **matériau**, sur la zone qu'il
+échantillonne réellement. Deux approximations ont été essayées et jetées :
+
+- marquer toute la texture comme masque de peinture dès qu'un matériau la
+  peint — ça effaçait les décalcomanies et les vis de
+  `vrc_erc_1999_renoir_csp`, qui partagent l'atlas et découpent vraiment ;
+- prendre le **rectangle englobant** des UV du matériau — sur le pare-brise du
+  même Renoir il couvre 27 % de l'atlas, où il attrape évidemment de l'opaque
+  comme du transparent, et ne mesure donc rien.
+
+Ce qui marche est l'échantillonnage par **points** : un par sommet, un par
+centre de triangle. Les sommets seuls ne suffisent pas — ils ne décrivent que
+le contour, et un quadrilatère dont les quatre coins tombent sur des texels
+identiques passerait pour uniforme alors que son intérieur est découpé.
+`kn5-tool inspect --materials` affiche la mesure (`empreinte alpha min-max sur
+N points`), et c'est avec elle qu'on tranche au lieu de deviner.
+
+> **Le motif de l'écart n°9 se retourne.** Il disait « un alpha constant est
+> une opacité, pas une découpe ». Le pendant manquait : **un alpha qui varie
+> n'est pas forcément une découpe non plus** — sur un atlas partagé, il varie
+> parce qu'il sert à autre chose. Et surtout : décider qu'un alpha « n'est pas
+> une transparence » ne suffit pas, encore faut-il **le retirer**, sinon il
+> continue de s'appliquer dans le dos de la décision.
+
+---
+
+## Écart n°12 — `ksAlphaRef = 0` veut dire « non réglé », pas « ne découpe rien »
+
+**Symptôme** : tout l'arrière de `j8_mitsubishi_gto_twin_turbo_91` uniformément
+orange.
+
+**Réel** : huit matériaux de cette voiture écrivent `ksAlphaRef = 0`, recopié
+tel quel en `alphaCutoff`. En glTF, un fragment passe dès que
+`alpha >= alphaCutoff` : **à zéro, plus rien n'est découpé**, y compris les
+pixels parfaitement transparents. La texture des lignes de dégivrage de la
+lunette (`window_heater_lines.dds`) est à **87,5 % à alpha nul**, avec du RVB
+`[165, 83, 0]` — de l'orange — sous ces pixels. Résultat : un panneau orange
+plein en travers de la lunette arrière. Le jeu, lui, découpe correctement :
+sa valeur par défaut n'est pas zéro.
+
+**Correctif** : un zéro explicite prend le **même** défaut qu'une valeur
+absente (`material::alpha_cutoff_of`, `DEFAULT_ALPHA_CUTOFF = 0.5`). Verrouillé
+par `a_zero_alpha_reference_falls_back_to_the_default_cutoff`.
+
+> Troisième fois que la même famille de pièges se referme : une valeur qu'AC
+> écrit sans s'en servir. `ksWindscreen` renseigne trois champs qu'il n'utilise
+> pas (écart n°6), `fresnelC` porte la métallicité que `txMaps` ne porte pas
+> (écarts n°7 et n°10), et ici un `0` veut dire « je n'ai rien mis ». Devant un
+> champ à zéro, se demander si c'est une valeur ou une absence.
+
+---
+
+## Découverte — les UV ne sont pas normalisés dans [0, 1]
+
+`vrc_erc_1999_renoir_csp` range **tout son V dans [-1, 0]** : le pare-brise y
+va de `v = -0.800` à `v = -0.200`, la carrosserie de `-0.997` à `-0.003`.
+
+Le **rendu** s'en moque, et c'est ce qui rend la chose sournoise :
+l'échantillonnage de texture boucle, donc `v = -0.8` lit le même texel que
+`v = 0.2` et la voiture s'affiche correctement. Mais toute **mesure** faite sur
+ces coordonnées au premier degré tombe entièrement hors de l'image. C'est ce
+qui a fait échouer silencieusement la première version du test d'empreinte de
+l'écart n°11 : elle concluait « UV répétés » sur *tous* les matériaux de la
+voiture et retombait sur l'image entière, sans rien mesurer du tout.
+
+**À retenir** : avant d'utiliser une coordonnée UV pour autre chose que du
+rendu, la ramener dans sa période (`u - u.floor()`). Ne jamais supposer
+`[0, 1]`.
+
+---
+
 ## Découverte — un `WHEEL_*` peut ne contenir aucune jante
 
 **Le symptôme** : sur `ks_toyota_ae86_tuned` équipé de son layer de

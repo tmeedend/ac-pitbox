@@ -55,6 +55,27 @@ pub struct GltfMaterial {
 /// Shaders whose name alone says the surface is glass.
 const GLASS_MARKERS: [&str; 3] = ["Glass", "Windscreen", "windscreen"];
 
+/// Seuil de découpe d'un matériau alpha-testé.
+///
+/// **Un `ksAlphaRef` nul veut dire « non réglé », pas « ne découpe rien ».**
+/// En glTF un fragment passe dès que `alpha >= alphaCutoff`, donc un seuil à 0
+/// laisse passer jusqu'aux pixels parfaitement transparents — le masque ne
+/// masque plus rien. Bug réel sur `j8_mitsubishi_gto_twin_turbo_91`, où huit
+/// matériaux écrivent `ksAlphaRef = 0` : les lignes de dégivrage de la lunette
+/// arrière (`window_heater_lines.dds`, 87,5 % des pixels à alpha 0 avec de
+/// l'orange dessous) se rendaient en panneau orange plein, et tout l'arrière de
+/// la voiture avec. Le jeu, lui, découpe bien — sa valeur par défaut n'est pas
+/// zéro. Un zéro explicite prend donc le **même** défaut qu'une valeur absente.
+fn alpha_cutoff_of(material: &Kn5Material) -> f32 {
+    match material.property("ksAlphaRef") {
+        Some(reference) if reference > 0.0 => reference.clamp(0.0, 1.0),
+        _ => DEFAULT_ALPHA_CUTOFF,
+    }
+}
+
+/// Seuil de découpe quand le matériau n'en donne pas d'utilisable.
+const DEFAULT_ALPHA_CUTOFF: f32 = 0.5;
+
 /// Mode de transparence d'un matériau, et son seuil de découpe.
 ///
 /// Extrait de [`convert`] parce que le pipeline de textures a besoin de la
@@ -69,10 +90,7 @@ pub(crate) fn alpha_mode_of(material: &Kn5Material) -> (AlphaMode, f32) {
     } else if material.alpha_tested {
         // Le drapeau décodé est le signal fiable ici, plus que `ksAlphaRef > 0`
         // — voir docs/kn5-format.md, §12 q2.
-        (
-            AlphaMode::Mask,
-            material.property("ksAlphaRef").unwrap_or(0.5).clamp(0.0, 1.0),
-        )
+        (AlphaMode::Mask, alpha_cutoff_of(material))
     } else {
         (AlphaMode::Opaque, 0.5)
     }
@@ -86,6 +104,10 @@ pub struct MaterialTextures {
     /// découpe ? Un alpha constant est une opacité, pas un masque — voir
     /// `PreparedTexture::alpha_varies`.
     pub diffuse_alpha_varies: bool,
+    /// Ce matériau n'échantillonne-t-il **que** des texels transparents ?
+    /// L'alpha le ferait alors disparaître au lieu de le découper — voir
+    /// `FootprintAlpha::is_blank`.
+    pub diffuse_alpha_blank: bool,
     /// Variante peinte de la texture diffuse, quand la carte de détail du
     /// matériau porte une couleur de peinture (voir [`crate::paint`]).
     pub painted_diffuse: Option<String>,
@@ -235,7 +257,14 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // l'alpha de cette texture, et un facteur global peindrait les
     // décalcomanies avec la carrosserie (voir [`crate::paint`]).
     let base_color_texture = textures.painted_diffuse.clone().or_else(|| base_color_map(material));
-    let texture_carries_alpha = base_color_texture.is_some() && textures.diffuse_alpha_varies;
+    // Troisième cas, découvert après les deux ci-dessus : l'alpha varie, mais
+    // pas là où **ce** matériau regarde. Un atlas de carrosserie porte un
+    // masque de peinture (écart n°5), et une vitre qui partage cet atlas
+    // n'échantillonne que des texels à zéro. Pris pour une découpe, il ne
+    // découpe pas la vitre : il l'efface. Un maillage qu'un auteur a pris la
+    // peine de modéliser n'est jamais censé être invisible.
+    let texture_carries_alpha =
+        base_color_texture.is_some() && textures.diffuse_alpha_varies && !textures.diffuse_alpha_blank;
     let base_color = match alpha_mode {
         AlphaMode::Blend if !texture_carries_alpha => [1.0, 1.0, 1.0, glass_opacity(material)],
         _ => [1.0, 1.0, 1.0, 1.0],
@@ -388,6 +417,33 @@ mod tests {
             (converted.alpha_cutoff - 0.3).abs() < 1e-6,
             "cutoff taken from ksAlphaRef"
         );
+    }
+
+    // Règle : un `ksAlphaRef` nul veut dire « non réglé », pas « ne découpe
+    // rien ». En glTF un fragment passe dès que `alpha >= alphaCutoff`, donc
+    // un seuil à zéro laisse passer jusqu'aux pixels parfaitement
+    // transparents. Bug réel sur `j8_mitsubishi_gto_twin_turbo_91` : les
+    // lignes de dégivrage de la lunette arrière, dont la texture est à 87,5 %
+    // transparente avec de l'orange dessous, se rendaient en panneau orange
+    // plein — tout l'arrière de la voiture avec.
+    #[test]
+    fn a_zero_alpha_reference_falls_back_to_the_default_cutoff() {
+        let unset = material("ksPerPixelAT", 0, true, &[("ksAlphaRef", 0.0)]);
+        assert_eq!(
+            alpha_mode_of(&unset).1,
+            DEFAULT_ALPHA_CUTOFF,
+            "un zéro explicite ne doit pas désarmer la découpe"
+        );
+
+        let absent = material("ksPerPixelAT", 0, true, &[]);
+        assert_eq!(
+            alpha_mode_of(&absent).1,
+            DEFAULT_ALPHA_CUTOFF,
+            "absente, la valeur prend le même défaut"
+        );
+
+        let set = material("ksPerPixelAT", 0, true, &[("ksAlphaRef", 0.3)]);
+        assert_eq!(alpha_mode_of(&set).1, 0.3, "une valeur utilisable est respectée");
     }
 
     // Rule: glass blends, whether it says so through its blend mode or only
