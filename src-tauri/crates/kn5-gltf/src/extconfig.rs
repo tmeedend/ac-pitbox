@@ -33,7 +33,7 @@
 //! the pattern has to be able to match nothing on both sides. The CSP wiki
 //! only shows examples (`RIM_?`, `red?`) without stating the rule.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 use kn5::{Kn5Model, Kn5Node, Kn5NodeKind};
@@ -44,6 +44,122 @@ use kn5::{Kn5Model, Kn5Node, Kn5NodeKind};
 /// can never match *inside* a part that was just inserted and send the walk
 /// round in circles.
 const GRAFT_MARKER: &str = "CSP_INSERT";
+
+/// Materials CSP turns into **physical glass**, with the index of refraction
+/// that drives their reflectance.
+///
+/// `[Material_Glass]` is not a tweak of the stock shader: it swaps in `smGlass`,
+/// a PBR glass whose transparency comes from an IOR and a thickness, never from
+/// an alpha channel. Reading the mod's own declaration is therefore the only
+/// way to know that a material is a windowpane rather than a translucent
+/// sticker — and it is the author of CSP who wrote the rule, in
+/// `<AC>/extension/config/cars/common/materials_glass.ini`.
+#[derive(Debug, Clone, Default)]
+pub struct GlassOverrides {
+    /// Material name patterns (CSP wildcards) → IOR.
+    materials: Vec<(String, f32)>,
+    /// Mesh name patterns → IOR. Rarer, but `ks_toyota_ae86_tuned` uses it.
+    meshes: Vec<(String, f32)>,
+}
+
+impl GlassOverrides {
+    pub fn is_empty(&self) -> bool {
+        self.materials.is_empty() && self.meshes.is_empty()
+    }
+
+    /// Resolves the declarations against a model: material index → IOR.
+    ///
+    /// Mesh-targeted declarations are folded in here, where the node tree is
+    /// available to say which material a mesh actually carries.
+    pub fn resolve(&self, model: &Kn5Model) -> BTreeMap<usize, f32> {
+        let mut out = BTreeMap::new();
+        for (index, material) in model.materials.iter().enumerate() {
+            if let Some((_, ior)) = self.materials.iter().find(|(p, _)| glob_match(p, &material.name)) {
+                out.insert(index, *ior);
+            }
+        }
+        if !self.meshes.is_empty() {
+            model.visit_nodes(&mut |node| {
+                let Some(mesh) = node.mesh() else { return };
+                if let Some((_, ior)) = self.meshes.iter().find(|(p, _)| glob_match(p, &node.name)) {
+                    out.insert(mesh.material_id as usize, *ior);
+                }
+            });
+        }
+        out
+    }
+}
+
+/// Indice de réfraction du verre par défaut, tel que `materials_glass.ini` le
+/// fixe. `FilmIOR` le remplace quand le mod veut plus de reflet.
+const DEFAULT_GLASS_IOR: f32 = 1.5;
+
+/// Reads the glass declarations of a car — `[Material_Glass]` and its variants,
+/// plus the `ExteriorGlass*` shorthands that `materials_glass.ini` defines.
+pub fn glass_overrides(car_dir: &Path, skin_dir: Option<&Path>) -> GlassOverrides {
+    let mut out = GlassOverrides::default();
+    let mut sources: Vec<PathBuf> = vec![car_dir.join("extension").join("ext_config.ini")];
+    if let Some(skin) = skin_dir {
+        sources.push(skin.join("ext_config.ini"));
+    }
+    // Les mods rangent souvent leurs matériaux dans un fichier à part, tiré par
+    // un `[INCLUDE: materials.ini]` — que l'on ne suit pas, mais dont le nom est
+    // assez stable pour être lu directement.
+    sources.push(car_dir.join("extension").join("materials.ini"));
+
+    for source in sources {
+        let Ok(text) = std::fs::read_to_string(&source) else {
+            continue;
+        };
+        collect_glass(&text, &mut out);
+    }
+    out
+}
+
+/// Les clés raccourcies de `materials_glass.ini`, qui évitent au moddeur
+/// d'écrire une section entière. Chacune a sa variante `…Meshes`.
+const GLASS_SHORTHANDS: [&str; 5] = [
+    "ExteriorGlassMaterials",
+    "ExteriorGlassTintedMaterials",
+    "ExteriorGlassFilmedMaterials",
+    "ExteriorGlassHeadlightsMaterials",
+    "ExteriorGlassPhotoelasticMaterials",
+];
+
+fn collect_glass(text: &str, out: &mut GlassOverrides) {
+    for section in parse_sections(text) {
+        // `Material_Glass`, `Material_GlassSide`, `Material_MultiEmissiveGlass`,
+        // `Material_PhotoelasticGlass` — tous héritent du même `smGlass`.
+        let is_glass_template = section.name.starts_with("Material_") && section.name.contains("Glass");
+        let ior = section
+            .get("FilmIOR")
+            .or_else(|| section.get("IOR"))
+            .and_then(|v| v.parse::<f32>().ok())
+            .filter(|v| *v > 1.0)
+            .unwrap_or(DEFAULT_GLASS_IOR);
+
+        if is_glass_template {
+            for name in section.list("Materials").unwrap_or_default() {
+                out.materials.push((name, ior));
+            }
+            for name in section.list("Meshes").unwrap_or_default() {
+                out.meshes.push((name, ior));
+            }
+        }
+
+        // Les raccourcis peuvent apparaître dans n'importe quelle section — ils
+        // sont posés juste sous le `[INCLUDE: common/materials_glass.ini]`.
+        for shorthand in GLASS_SHORTHANDS {
+            for name in section.list(shorthand).unwrap_or_default() {
+                out.materials.push((name, DEFAULT_GLASS_IOR));
+            }
+            let meshes = shorthand.replace("Materials", "Meshes");
+            for name in section.list(&meshes).unwrap_or_default() {
+                out.meshes.push((name, DEFAULT_GLASS_IOR));
+            }
+        }
+    }
+}
 
 /// One resolved replacement, after templates have been expanded and the
 /// skin/file filters have already been applied.
@@ -939,6 +1055,70 @@ OriginalRims = RIM_?
             2,
             "only the car's own wheels count, not the ones just inserted"
         );
+    }
+
+    // Règle : le verre se lit dans la déclaration du mod, pas dans le KN5.
+    // `[Material_Glass]` remplace le shader par `smGlass`, dont la
+    // transparence vient d'un IOR — c'est la seule façon de savoir qu'un
+    // matériau est une vitre et non un autocollant translucide.
+    #[test]
+    fn glass_is_read_from_the_mods_own_declaration() {
+        let text = "[Material_Glass]
+Materials = MAIN_GLASS
+FilmIOR = 1.8
+MaskPass = 1
+
+[Material_PhotoelasticGlass]
+Meshes = REAR_KOUKI_GLASS.004
+IOR = 4
+
+[Material_CarPaint_Metallic]
+Materials = MAIN_BODY
+";
+        let mut glass = GlassOverrides::default();
+        collect_glass(text, &mut glass);
+
+        assert_eq!(
+            glass.materials,
+            vec![("MAIN_GLASS".to_string(), 1.8)],
+            "FilmIOR l'emporte sur le défaut, et la peinture n'est pas du verre"
+        );
+        assert_eq!(
+            glass.meshes,
+            vec![("REAR_KOUKI_GLASS.004".to_string(), 4.0)],
+            "les variantes de Material_*Glass* comptent aussi, y compris par maillage"
+        );
+    }
+
+    // Règle : le raccourci `ExteriorGlassMaterials` vaut une section entière.
+    // `materials_glass.ini` le définit pour éviter au moddeur de l'écrire, et
+    // `ks_toyota_ae86_tuned` s'en sert.
+    #[test]
+    fn the_exterior_glass_shorthand_counts_as_a_declaration() {
+        let text = "[INCLUDE: common/materials_glass.ini]
+ExteriorGlassMaterials = glass, 
+";
+        let mut glass = GlassOverrides::default();
+        collect_glass(text, &mut glass);
+        assert_eq!(
+            glass.materials,
+            vec![("glass".to_string(), DEFAULT_GLASS_IOR)],
+            "le raccourci déclare du verre au défaut de 1,5"
+        );
+    }
+
+    // Règle : une voiture sans déclaration ne reçoit rien — le traitement
+    // habituel reste en place, et aucune passe de transmission n'est payée.
+    #[test]
+    fn a_car_without_a_declaration_gets_no_glass() {
+        let mut glass = GlassOverrides::default();
+        collect_glass(
+            "[Material_CarPaint]
+Materials = body
+",
+            &mut glass,
+        );
+        assert!(glass.is_empty(), "rien de déclaré, rien d'appliqué");
     }
 
     // Rule: `FrontOnly` / `RearOnly` split the axles, which is how a mod gives

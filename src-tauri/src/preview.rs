@@ -30,7 +30,7 @@ use crate::config::AppConfig;
 /// *reconnaître* pour libérer sa place. Trois incréments en une session de
 /// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
-const CONVERTER_VERSION: u32 = 15;
+const CONVERTER_VERSION: u32 = 16;
 
 /// Default cache ceiling (§5.3). Beyond it, the least recently used entries
 /// are evicted. Only a default: the real ceiling is a setting, carried by
@@ -337,15 +337,16 @@ pub fn prepare(
         log::warn!("preview: remplacement CSP ignoré — {failure}");
     }
 
-    let conversion = kn5_gltf::convert(
-        &model,
-        skin_dir.as_deref(),
-        &kn5_gltf::ConvertOptions::default(),
-        &|stage| {
-            use tauri::Emitter;
-            let _ = app.emit("preview://progress", stage.as_str());
-        },
-    )?;
+    // Le mod déclare lui-même quels matériaux sont du verre physique — c'est
+    // la seule façon de le savoir, le KN5 seul ne le dit pas (SPEC §4.5ter).
+    let options = kn5_gltf::ConvertOptions {
+        glass: kn5_gltf::glass_overrides(car_dir, skin_dir.as_deref()),
+        ..Default::default()
+    };
+    let conversion = kn5_gltf::convert(&model, skin_dir.as_deref(), &options, &|stage| {
+        use tauri::Emitter;
+        let _ = app.emit("preview://progress", stage.as_str());
+    })?;
 
     for warning in &conversion.texture_warnings {
         log::warn!("preview: texture `{}` ignorée — {}", warning.name, warning.reason);

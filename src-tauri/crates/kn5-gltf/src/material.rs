@@ -50,6 +50,11 @@ pub struct GltfMaterial {
     /// Base colour, alpha included. Only ever below 1 on blended materials
     /// that carry no texture of their own — see [`glass_opacity`].
     pub base_color: [f32; 4],
+    /// Fraction de lumière qui traverse la surface — `KHR_materials_transmission`.
+    /// Zéro sur tout ce qui n'est pas du verre déclaré tel quel.
+    pub transmission: f32,
+    /// `KHR_materials_ior`, quand il y a lieu.
+    pub ior: Option<f32>,
 }
 
 /// Shaders whose name alone says the surface is glass.
@@ -113,6 +118,14 @@ pub struct MaterialTextures {
     pub painted_diffuse: Option<String>,
     /// Carte métallique-rugosité tirée de `txMaps` (voir [`crate::roughness`]).
     pub roughness_texture: Option<String>,
+    /// Indice de réfraction quand CSP déclare ce matériau comme du **verre
+    /// physique** (`[Material_Glass]`, voir [`crate::GlassOverrides`]).
+    ///
+    /// Ce n'est pas un fait de texture comme les autres champs de cette
+    /// structure, mais il emprunte le même chemin : c'est une chose que le
+    /// pipeline apprend du mod et que la conversion ne peut pas deviner du
+    /// seul KN5.
+    pub pbr_glass_ior: Option<f32>,
 }
 
 /// Réflectance à incidence normale à partir de laquelle une surface commence
@@ -231,6 +244,45 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
 
     let (alpha_mode, alpha_cutoff) = alpha_mode_of(material);
 
+    // **Le verre que CSP déclare est du verre physique, pas un fondu.**
+    //
+    // `[Material_Glass]` remplace le shader par `smGlass`, dont la
+    // transparence vient d'un indice de réfraction et d'une épaisseur — jamais
+    // d'un canal alpha. Le rendre en fondu revient à atténuer *toute* la
+    // réponse du matériau, reflet spéculaire compris : une vitre à 15 %
+    // d'opacité ne renvoie que 15 % de son reflet, et c'est ce reflet qui fait
+    // qu'une vitre ressemble à une vitre. La transmission, elle, laisse passer
+    // le fond en gardant le reflet entier.
+    //
+    // La texture diffuse est écartée pour la même raison qu'un `ksWindscreen`
+    // (écart n°6) : `smGlass` ne s'en sert pas comme d'une couleur, et la
+    // garder pose un voile teinté devant l'habitacle.
+    if let Some(ior) = textures.pbr_glass_ior {
+        return GltfMaterial {
+            name: material.name.clone(),
+            shader: material.shader.clone(),
+            base_color_texture: None,
+            normal_texture: normal_map(material),
+            roughness_texture: None,
+            normal_scale: material.property("normalMult").filter(|v| *v > 0.0).unwrap_or(1.0),
+            emissive: [0.0; 3],
+            // Une vitre est lisse, et sa réflectance vient de l'IOR, pas d'une
+            // métallicité : glTF dérive le F0 de `ior` exactement comme la
+            // formule de Schlick que `materials_glass.ini` applique.
+            roughness: 0.02,
+            metallic: 0.0,
+            // La transmission porte la transparence, donc la surface est
+            // opaque au sens du tri glTF — et n'a plus besoin d'être triée
+            // après coup.
+            alpha_mode: AlphaMode::Opaque,
+            double_sided: false,
+            alpha_cutoff,
+            base_color: [1.0, 1.0, 1.0, 1.0],
+            transmission: 1.0,
+            ior: Some(ior),
+        };
+    }
+
     if !shader.starts_with("ks") {
         // Never a failure (§6.3), but worth collecting: the list of shaders met
         // in the wild is what drives the next round of material work.
@@ -286,6 +338,8 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
         double_sided: false,
         alpha_cutoff,
         base_color,
+        transmission: 0.0,
+        ior: None,
     }
 }
 

@@ -109,6 +109,25 @@ pub fn write_glb(meshes: &[FlatMesh], materials: &[GltfMaterial], textures: &Tex
         "buffers": [ { "byteLength": bin.len() } ],
     });
 
+    // Déclaration obligatoire : un lecteur qui ne connaît pas une extension
+    // doit pouvoir le dire. `extensionsUsed` (et non `extensionsRequired`) :
+    // le modèle reste lisible sans elles, le verre y perd seulement son reflet.
+    let extensions: Vec<&str> = used_materials
+        .iter()
+        .flat_map(|m| {
+            [
+                (m.transmission > 0.0).then_some("KHR_materials_transmission"),
+                m.ior.map(|_| "KHR_materials_ior"),
+            ]
+        })
+        .flatten()
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    if !extensions.is_empty() {
+        document["extensionsUsed"] = json!(extensions);
+    }
+
     if !json_materials.is_empty() {
         document["materials"] = json!(json_materials);
     }
@@ -145,6 +164,17 @@ fn material_json(material: &GltfMaterial, texture_index: &Map<String, Value>) ->
     });
     if material.alpha_mode == crate::material::AlphaMode::Mask {
         value["alphaCutoff"] = json!(material.alpha_cutoff);
+    }
+
+    let mut material_extensions = json!({});
+    if material.transmission > 0.0 {
+        material_extensions["KHR_materials_transmission"] = json!({ "transmissionFactor": material.transmission });
+    }
+    if let Some(ior) = material.ior {
+        material_extensions["KHR_materials_ior"] = json!({ "ior": ior });
+    }
+    if material_extensions.as_object().is_some_and(|o| !o.is_empty()) {
+        value["extensions"] = material_extensions;
     }
     if let Some(index) = material.normal_texture.as_ref().and_then(|n| texture_index.get(n)) {
         value["normalTexture"] = json!({ "index": index, "scale": material.normal_scale });
@@ -322,7 +352,52 @@ mod tests {
             alpha_cutoff: 0.5,
             double_sided: false,
             base_color: [1.0, 1.0, 1.0, 1.0],
+            transmission: 0.0,
+            ior: None,
         }
+    }
+
+    // Règle : le verre physique sort avec ses deux extensions, et le document
+    // les déclare. Un lecteur qui les ignore doit pouvoir le dire — d'où
+    // `extensionsUsed`, jamais `extensionsRequired` : sans elles le modèle
+    // reste lisible, la vitre y perd seulement son reflet.
+    #[test]
+    fn physical_glass_carries_its_extensions_and_declares_them() {
+        let mut glass = sample_material();
+        glass.transmission = 1.0;
+        glass.ior = Some(1.8);
+        let glb = write_glb(&[sample_mesh()], &[glass], &TextureSet::default()).expect("writes");
+        let document = parse(&glb);
+
+        let used = document["extensionsUsed"].as_array().expect("extensionsUsed present");
+        assert!(
+            used.iter().any(|v| v == "KHR_materials_transmission") && used.iter().any(|v| v == "KHR_materials_ior"),
+            "les deux extensions sont déclarées, got {used:?}"
+        );
+        assert!(
+            document["extensionsRequired"].is_null(),
+            "le modèle doit rester lisible sans elles"
+        );
+
+        let extensions = &document["materials"][0]["extensions"];
+        assert_eq!(
+            extensions["KHR_materials_transmission"]["transmissionFactor"], 1.0,
+            "la transmission porte la transparence"
+        );
+        // Tolérance : la valeur traverse un `f32`, elle ressort en `1.7999999…`.
+        let ior = extensions["KHR_materials_ior"]["ior"].as_f64().expect("un nombre");
+        assert!((ior - 1.8).abs() < 1e-6, "l'IOR déclaré par le mod, got {ior}");
+    }
+
+    // Règle : un matériau ordinaire n'écrit ni extension ni déclaration. Le
+    // contraire ferait payer à chaque voiture le coût d'une passe de rendu
+    // supplémentaire pour rien.
+    #[test]
+    fn an_ordinary_material_declares_no_extension() {
+        let glb = write_glb(&[sample_mesh()], &[sample_material()], &TextureSet::default()).expect("writes");
+        let document = parse(&glb);
+        assert!(document["extensionsUsed"].is_null(), "rien à déclarer");
+        assert!(document["materials"][0]["extensions"].is_null(), "rien à porter");
     }
 
     fn parse(glb: &[u8]) -> Value {

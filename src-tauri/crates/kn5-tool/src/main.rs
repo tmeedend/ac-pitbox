@@ -808,14 +808,13 @@ fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
     report_ext_config(&ext);
 
     let started = Instant::now();
-    let conversion = kn5_gltf::convert(
-        &model,
-        skin.as_deref(),
-        &kn5_gltf::ConvertOptions::default(),
-        &|stage| {
-            eprintln!("[stage] {}", stage.as_str());
-        },
-    )?;
+    let options = kn5_gltf::ConvertOptions {
+        glass: kn5_gltf::glass_overrides(car_dir, skin.as_deref()),
+        ..Default::default()
+    };
+    let conversion = kn5_gltf::convert(&model, skin.as_deref(), &options, &|stage| {
+        eprintln!("[stage] {}", stage.as_str());
+    })?;
     let converted = started.elapsed();
 
     if let Some(parent) = out.parent() {

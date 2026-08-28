@@ -388,6 +388,21 @@
    * `roughnessFactor` is declared; `<lights_physical_fragment>` consumes it much
    * further down. Verified against three r185.
    */
+  /**
+   * Is this material physical glass, i.e. does it carry
+   * `KHR_materials_transmission`?
+   *
+   * Glass declared by a mod's `ext_config.ini` is converted as transmissive
+   * rather than blended (`kn5-gltf`, SPEC §4.5ter): blending attenuates the
+   * whole surface response, specular reflection included, and it is that
+   * reflection that makes a pane read as glass. The consequence here is that
+   * such a material is **not** `transparent`, so every rule keyed on that flag
+   * misses it.
+   */
+  function isTransmissive(material: ThreeModule.Material): boolean {
+    return ((material as ThreeModule.MeshPhysicalMaterial).transmission ?? 0) > 0;
+  }
+
   function applyRoughnessFloor(material: ThreeModule.MeshStandardMaterial): void {
     const floor = TUNING.roughnessFloor;
     if (floor <= 0) return;
@@ -860,14 +875,21 @@
         }
         // L'un des deux leviers contre le scintillement en mouvement — voir le
         // tableau de mesures devant `TUNING.roughnessFloor`.
-        if (standard.isMeshStandardMaterial) applyRoughnessFloor(standard);
+        // Physical glass is exempt: three blurs the transmitted image by the
+        // same roughness, so a 0.15 floor would frost every windowpane.
+        if (standard.isMeshStandardMaterial && !isTransmissive(material)) applyRoughnessFloor(standard);
       }
       if (materials.some((m) => (m as ThreeModule.Material).transparent)) {
         mesh.renderOrder = 1;
         for (const m of materials) (m as ThreeModule.Material).depthWrite = false;
-      } else {
+      } else if (!materials.some(isTransmissive)) {
         // Only the opaque body casts: a windscreen that casts a shadow map
         // casts it solid black, and the car ends up sitting on a dark blob.
+        //
+        // Transmissive glass is opaque as far as the sorting goes — its
+        // transparency lives in `KHR_materials_transmission`, not in an alpha —
+        // so it lands in this branch and has to be excluded by hand, or the
+        // dark blob comes straight back.
         mesh.castShadow = true;
       }
     });
