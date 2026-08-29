@@ -15,6 +15,7 @@
   const PIXABAY_URL = "https://pixabay.com/music/";
   const DONATE_URL = "https://paypal.me/ktulu77";
   const SOURCE_URL = "https://github.com/tmeedend/ac-pitbox";
+  const DISCORD_URL = "https://discord.gg/hgWTC2s49M";
   const OVERTAKE_URL = "https://www.overtake.gg/members/ktulu77.1266672/";
   const BUG_URL = "https://github.com/tmeedend/ac-pitbox/issues/new";
   const CHANGELOG_URL = "https://github.com/tmeedend/ac-pitbox/commits/main";
@@ -129,6 +130,11 @@
       <button class="link-card" type="button" onclick={() => go(SOURCE_URL)}>
         <div class="link-ico">🐙</div>
         <div class="link-b"><div class="link-t">{t("about.sourceCode")}</div><div class="link-s">{t("about.sourceCodeSub")}</div></div>
+        <span class="go">↗</span>
+      </button>
+      <button class="link-card" type="button" onclick={() => go(DISCORD_URL)}>
+        <div class="link-ico">💬</div>
+        <div class="link-b"><div class="link-t">{t("about.discord")}</div><div class="link-s">{t("about.discordSub")}</div></div>
         <span class="go">↗</span>
       </button>
       <button class="link-card" type="button" onclick={() => go(OVERTAKE_URL)}>

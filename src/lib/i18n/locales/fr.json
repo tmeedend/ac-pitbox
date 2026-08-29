@@ -1143,7 +1143,9 @@
     "ossGenerated": "Liste générée automatiquement depuis Cargo.toml et package.json · {date}",
     "legal": "Pit Box est un projet indépendant réalisé par un passionné, sans affiliation avec Kunos Simulazioni, l'équipe de Content Manager, ou tout autre éditeur mentionné ci-dessus. Assetto Corsa est une marque déposée de Kunos Simulazioni S.r.l. Toutes les marques citées appartiennent à leurs propriétaires respectifs. Le code source de Pit Box est distribué sous licence GPL v3 — libre d'utilisation, de modification et de redistribution, à condition que toute version dérivée reste elle aussi sous GPL v3.",
     "license": "GPL v3 — Logiciel libre",
-    "madeWith": "Fait avec ♥ pour la communauté AC"
+    "madeWith": "Fait avec ♥ pour la communauté AC",
+    "discord": "Discord",
+    "discordSub": "Le salon de la communauté"
   },
   "errors": {
     "acNotConfigured": "dossier AC non configuré.",
