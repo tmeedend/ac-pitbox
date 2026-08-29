@@ -597,6 +597,8 @@ pub struct ExtConfigStats {
     pub hidden_nodes: usize,
     pub inserted_models: usize,
     pub inserted_triangles: usize,
+    /// Propriétés de matériau surchargées par la config.
+    pub overridden_properties: usize,
     /// Non-fatal problems: a missing KN5, an anchor node that does not exist.
     /// Never a reason to fail the whole preview — a car with one part missing
     /// still beats no preview at all.
@@ -633,7 +635,120 @@ pub fn apply_ext_config(
             apply_one(model, &replacement, &mut stats);
         }
     }
+
+    // Les surcharges de propriété viennent **après** les greffes, pour couvrir
+    // aussi les matériaux que celles-ci ont amenés.
+    stats.overridden_properties = apply_property_overrides(model, config, &skin_id);
     stats
+}
+
+/// Applique les propriétés que la configuration impose aux matériaux.
+///
+/// **Rien à traduire, et c'est ce qui rend l'opération sûre** : un
+/// `[SHADER_REPLACEMENT_...]` écrit `PROP_0 = fresnelC, 0.02`, c'est-à-dire la
+/// propriété qu'AC porte déjà, sous le même nom et avec le même sens. On la
+/// pose dans le matériau **avant** la conversion, et tout ce qui en dérive
+/// suit sans qu'il y ait une ligne à changer en aval : `fresnelC` et
+/// `fresnelMaxLevel` décident de la métallicité, `ksSpecularEXP` de la
+/// rugosité, `ksDiffuse` de l'opacité d'une vitre.
+///
+/// Mesuré sur la bibliothèque de référence : **4 549 surcharges, dont 2 056
+/// (45 %) portent sur une propriété qu'on interprète**. Ce n'est pas un
+/// réglage marginal — c'est un moddeur qui écrit, deux mille fois, qu'il veut
+/// autre chose que ce que son propre KN5 déclare.
+///
+/// **Le nom du shader n'est pas repris**, lui. CSP y met les siens (`smGlass`,
+/// `smCarPaint`), inconnus de la conversion, et les adopter ferait perdre les
+/// cas particuliers accrochés aux noms d'AC — `ksWindscreen` et sa texture de
+/// saleté (écart n°6), `ksTyres` et sa gomme, `ksBrokenGlass` et sa vitre
+/// brisée (écart n°8).
+fn apply_property_overrides(model: &mut Kn5Model, config: &CspConfig, skin_id: &str) -> usize {
+    // Quels maillages portent quel matériau : les sélecteurs `MESHES` visent la
+    // géométrie, les propriétés vivent sur le matériau.
+    let mut mesh_names: Vec<(String, usize)> = Vec::new();
+    model.visit_nodes(&mut |node| {
+        if let Some(mesh) = node.mesh() {
+            mesh_names.push((node.name.clone(), mesh.material_id as usize));
+        }
+    });
+
+    // Première source servie, première valeur retenue : `CspConfig` classe ses
+    // fichiers du plus spécifique au plus général, et un skin doit pouvoir
+    // contredire la config de la voiture.
+    let mut settled: HashMap<(usize, String), ()> = HashMap::new();
+    let mut count = 0usize;
+
+    for source in config.sources() {
+        let Ok(text) = std::fs::read_to_string(source) else {
+            continue;
+        };
+        for section in parse_sections(&text) {
+            count += apply_section_properties(model, &mesh_names, &section, skin_id, &mut settled);
+        }
+    }
+    count
+}
+
+/// Applique les propriétés d'une seule section. Renvoie le nombre posé.
+fn apply_section_properties(
+    model: &mut Kn5Model,
+    mesh_names: &[(String, usize)],
+    section: &Section,
+    skin_id: &str,
+    settled: &mut HashMap<(usize, String), ()>,
+) -> usize {
+    let properties = section.properties();
+    if properties.is_empty() || section.get("ACTIVE").is_some_and(|v| v.trim() == "0") {
+        return 0;
+    }
+    if let Some(skins) = section.list("Skins") {
+        if !skins.iter().any(|pattern| glob_match(pattern, skin_id)) {
+            return 0;
+        }
+    }
+
+    let mut targets: Vec<usize> = Vec::new();
+    for pattern in section.list("Materials").unwrap_or_default() {
+        for (index, material) in model.materials.iter().enumerate() {
+            if glob_match(&pattern, &material.name) {
+                targets.push(index);
+            }
+        }
+    }
+    for pattern in section.list("Meshes").unwrap_or_default() {
+        for (name, material) in mesh_names {
+            if glob_match(&pattern, name) {
+                targets.push(*material);
+            }
+        }
+    }
+    targets.sort_unstable();
+    targets.dedup();
+
+    let mut count = 0;
+    for index in targets {
+        for (name, value) in &properties {
+            if settled.insert((index, name.clone()), ()).is_some() {
+                continue;
+            }
+            let Some(material) = model.materials.get_mut(index) else {
+                continue;
+            };
+            count += 1;
+            match material.properties.iter_mut().find(|p| p.name == *name) {
+                Some(existing) => existing.value = *value,
+                // Une propriété absente du KN5 est **ajoutée** : un matériau
+                // sans `fresnelC` que le mod déclare réfléchissant doit le
+                // devenir, sans quoi la surcharge ne dirait rien.
+                None => material.properties.push(kn5::Kn5MaterialProperty {
+                    name: name.clone(),
+                    value: *value,
+                    extra: [0.0; 9],
+                }),
+            }
+        }
+    }
+    count
 }
 
 /// Parses one config and returns the replacements that concern this model and
@@ -1064,6 +1179,42 @@ impl Section {
                 .filter(|item| !item.is_empty())
                 .collect()
         })
+    }
+
+    /// Les propriétés de matériau que la section impose.
+    ///
+    /// Deux écritures, documentées par le wiki CSP et toutes deux rencontrées :
+    /// `PROP_<n> = nom, valeur` d'un seul tenant, ou la paire `KEY_<n>` /
+    /// `VALUE_<n>`. Le `<n>` est souvent `...`, que CSP remplit tout seul.
+    fn properties(&self) -> Vec<(String, f32)> {
+        let mut out: Vec<(String, f32)> = Vec::new();
+        for (key, value) in &self.entries {
+            let upper = key.to_ascii_uppercase();
+            if let Some(rest) = upper.strip_prefix("PROP_") {
+                // `PROP_0_KSAMBIENT = ksAmbient, 0.4` : le suffixe est
+                // décoratif, seule la valeur compte.
+                let _ = rest;
+                let mut parts = value.split(',');
+                let (Some(name), Some(number)) = (parts.next(), parts.next()) else {
+                    continue;
+                };
+                if let Ok(number) = number.trim().parse::<f32>() {
+                    out.push((name.trim().to_string(), number));
+                }
+            } else if let Some(index) = upper.strip_prefix("KEY_") {
+                let name = value.trim().to_string();
+                if name.is_empty() {
+                    continue;
+                }
+                if let Some(number) = self
+                    .get(&format!("VALUE_{index}"))
+                    .and_then(|v| v.trim().parse::<f32>().ok())
+                {
+                    out.push((name, number));
+                }
+            }
+        }
+        out
     }
 
     /// Valeur numérique d'une clé, quand elle en est une.
@@ -1593,6 +1744,118 @@ Materials = body
             Some((1.0, CLEARCOAT_ROUGHNESS)),
             "les peintures brillantes, elles, sont vernies"
         );
+    }
+
+    /// Un modèle d'un matériau, pour les surcharges de propriété.
+    fn model_with_material(name: &str, properties: &[(&str, f32)]) -> Kn5Model {
+        Kn5Model {
+            version: 6,
+            extra: None,
+            textures: Vec::new(),
+            materials: vec![kn5::Kn5Material {
+                name: name.to_string(),
+                shader: "ksPerPixel".to_string(),
+                blend_mode: 0,
+                alpha_tested: false,
+                reserved: 0,
+                properties: properties
+                    .iter()
+                    .map(|(n, v)| kn5::Kn5MaterialProperty {
+                        name: n.to_string(),
+                        value: *v,
+                        extra: [0.0; 9],
+                    })
+                    .collect(),
+                samplers: Vec::new(),
+            }],
+            root: Kn5Node {
+                name: "root".to_string(),
+                active: true,
+                kind: Kn5NodeKind::Dummy { transform: [0.0; 16] },
+                children: Vec::new(),
+            },
+        }
+    }
+
+    fn apply(model: &mut Kn5Model, text: &str) -> usize {
+        let mut settled = HashMap::new();
+        parse_sections(text)
+            .iter()
+            .map(|section| apply_section_properties(model, &[], section, "", &mut settled))
+            .sum()
+    }
+
+    fn value_of(model: &Kn5Model, name: &str) -> Option<f32> {
+        model.materials[0].property(name)
+    }
+
+    // Règle : les deux écritures de `PROP_` du wiki CSP sont lues — d'un seul
+    // tenant, ou en paire `KEY_`/`VALUE_`. Le suffixe est décoratif, CSP
+    // remplissant lui-même les `...`.
+    #[test]
+    fn both_property_syntaxes_are_read() {
+        let sections = parse_sections(
+            "[SHADER_REPLACEMENT_...]\nPROP_0_KSAMBIENT = ksAmbient, 0.4\nPROP_... = fresnelC,0.5\nKEY_3 = ksDiffuse\nVALUE_3 = 0.2\n",
+        );
+        assert_eq!(
+            sections[0].properties(),
+            vec![
+                ("ksAmbient".to_string(), 0.4),
+                ("fresnelC".to_string(), 0.5),
+                ("ksDiffuse".to_string(), 0.2),
+            ],
+        );
+    }
+
+    // Règle : une surcharge remplace ce que le KN5 déclare, et **ajoute** ce
+    // qu'il ne déclare pas. Bug réel évité : `INT_Logo_Cambio` de l'abarth500
+    // déclare `fresnelC = 0.05`, la config impose 0,5 — sans la surcharge le
+    // logo du pommeau reste du plastique au lieu de devenir un métal.
+    #[test]
+    fn an_override_replaces_what_the_kn5_says_and_adds_what_it_omits() {
+        let mut model = model_with_material("logo", &[("fresnelC", 0.05)]);
+        let posed = apply(
+            &mut model,
+            "[SHADER_REPLACEMENT_...]\nMATERIALS = logo\nPROP_... = fresnelC, 0.5\nPROP_... = fresnelMaxLevel, 1\n",
+        );
+        assert_eq!(posed, 2, "les deux propriétés sont posées");
+        assert_eq!(value_of(&model, "fresnelC"), Some(0.5), "la déclarée est remplacée");
+        assert_eq!(value_of(&model, "fresnelMaxLevel"), Some(1.0), "l'absente est ajoutée");
+    }
+
+    // Règle : première source servie, première valeur retenue. `CspConfig`
+    // classe ses fichiers du plus spécifique au plus général, donc un skin doit
+    // pouvoir contredire la config de la voiture, jamais l'inverse.
+    #[test]
+    fn the_first_source_to_set_a_property_keeps_it() {
+        let mut model = model_with_material("body", &[]);
+        let mut settled = HashMap::new();
+        let specific = parse_sections("[SHADER_REPLACEMENT_...]\nMATERIALS = body\nPROP_... = ksDiffuse, 0.9\n");
+        let general = parse_sections("[SHADER_REPLACEMENT_...]\nMATERIALS = body\nPROP_... = ksDiffuse, 0.1\n");
+        apply_section_properties(&mut model, &[], &specific[0], "", &mut settled);
+        apply_section_properties(&mut model, &[], &general[0], "", &mut settled);
+        assert_eq!(value_of(&model, "ksDiffuse"), Some(0.9), "le plus spécifique gagne");
+    }
+
+    // Règle : une section qui ne vise personne ne pose rien, et un `ACTIVE = 0`
+    // la désactive — mêmes filtres que pour les remplacements de modèle.
+    #[test]
+    fn a_property_section_without_a_target_or_disabled_poses_nothing() {
+        let mut model = model_with_material("body", &[]);
+        assert_eq!(
+            apply(&mut model, "[SHADER_REPLACEMENT_...]\nPROP_... = ksDiffuse, 0.9\n"),
+            0,
+            "aucun sélecteur, aucune cible"
+        );
+        assert_eq!(
+            apply(
+                &mut model,
+                "[SHADER_REPLACEMENT_...]\nACTIVE = 0\nMATERIALS = body\nPROP_... = ksDiffuse, 0.9\n"
+            ),
+            0,
+            "désactivée"
+        );
+        assert_eq!(value_of(&model, "ksDiffuse"), None, "rien posé");
     }
 
     // Règle : **`IOR`, jamais `FilmIOR`.** Les deux clés se ressemblent et ne

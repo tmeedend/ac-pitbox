@@ -973,12 +973,12 @@ fn report_tangents(model: &kn5::Kn5Model) {
 /// the overwhelming majority of cars carry no `ext_config.ini` at all, and a
 /// line of zeroes on every one of them would drown the reports that matter.
 fn report_ext_config(ext: &kn5_gltf::ExtConfigStats) {
-    if ext.applied == 0 {
+    if ext.applied == 0 && ext.overridden_properties == 0 {
         return;
     }
     println!(
-        "ext_config {} section(s), {} node(s) hidden, {} model(s) inserted (+{} triangles)",
-        ext.applied, ext.hidden_nodes, ext.inserted_models, ext.inserted_triangles
+        "ext_config {} section(s), {} node(s) hidden, {} model(s) inserted (+{} triangles), {} propriété(s) surchargée(s)",
+        ext.applied, ext.hidden_nodes, ext.inserted_models, ext.inserted_triangles, ext.overridden_properties
     );
     for failure in &ext.failures {
         println!("           ! {failure}");
