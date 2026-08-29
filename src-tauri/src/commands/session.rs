@@ -30,6 +30,28 @@ pub fn weather_conditions(intent: String, hour: f32, season: Option<String>) -> 
     crate::weather::implicit_conditions(&intent, hour, season.as_deref())
 }
 
+/// Lever/coucher de soleil du circuit, tels que CSP les calculera (§8.6ter) :
+/// coordonnées et fuseau de `data_track_params.ini`, date effective décidée
+/// par `[SEASONS] ALLOW_ADJUSTMENTS`. `None` quand le circuit n'a de position
+/// nulle part — pas de bande jour/nuit plutôt qu'une bande fausse.
+#[tauri::command]
+pub fn track_sun(
+    app: AppHandle,
+    track_id: String,
+    layout: Option<String>,
+    season_date: Option<String>,
+) -> Option<crate::sun::TrackSun> {
+    let cfg = crate::config::load(&app);
+    let ac = cfg.ac_install_path?;
+    crate::sun::track_sun(
+        &ac,
+        &track_id,
+        layout.as_deref(),
+        season_date.as_deref(),
+        chrono::Local::now().date_naive(),
+    )
+}
+
 /// Construit le preset Quick Drive et lance la session via Content Manager (§8.3).
 #[tauri::command]
 pub fn launch_session(app: AppHandle, db: State<Db>, setup: crate::launch::RaceSetup) -> Result<(), String> {

@@ -135,6 +135,40 @@ export function weatherConditions(intent: string, hour: number, season: string |
   return invoke<ImplicitConditions>("weather_conditions", { intent, hour, season });
 }
 
+/** Course du soleil sur le circuit choisi (§8.6ter), telle que CSP la
+ * calculera : coordonnées et fuseau de `data_track_params.ini`, date effective
+ * décidée par `[SEASONS] ALLOW_ADJUSTMENTS`. Toutes les heures sont en heures
+ * décimales sur l'horloge locale du circuit ; `null` quand le soleil ne passe
+ * pas l'horizon ce jour-là (nuit polaire ou soleil de minuit). */
+export interface TrackSun {
+  latitude: number;
+  longitude: number;
+  timezone: string | null;
+  utcOffsetHours: number;
+  /** "csp" = data_track_params.ini (ce que le jeu lira), "geotags" = position
+   * déclarée par le mod, fuseau approché d'après la longitude. */
+  source: "csp" | "geotags";
+  seasonalSetting: number;
+  dateBasis: "session" | "today" | "midsummer";
+  date: string;
+  sunrise: number | null;
+  sunset: number | null;
+  dawn: number | null;
+  dusk: number | null;
+  solarNoon: number;
+  polarNight: boolean;
+}
+
+/** `null` quand le circuit n'a de position nulle part : pas de bande jour/nuit
+ * plutôt qu'une bande fausse. */
+export function trackSun(
+  trackId: string,
+  layout: string | null,
+  seasonDate: string | null,
+): Promise<TrackSun | null> {
+  return invoke<TrackSun | null>("track_sun", { trackId, layout, seasonDate });
+}
+
 export function launchSession(setup: RaceSetup): Promise<void> {
   return invoke<void>("launch_session", { setup });
 }

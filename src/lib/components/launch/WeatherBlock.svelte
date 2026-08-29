@@ -6,7 +6,7 @@
   // (weatherConditions, mémorisation de l'override) reste dans Launch.svelte,
   // qui pilote aussi ce même état depuis d'autres sources (presets, sessions
   // sauvegardées) — ce bloc ne fait qu'afficher et notifier.
-  import type { RaceSetup, Season, WeatherOption } from "$lib/launch";
+  import type { RaceSetup, Season, TrackSun, WeatherOption } from "$lib/launch";
   import { t } from "$lib/i18n/index.svelte";
   import NumberStepper from "../NumberStepper.svelte";
   import Slider from "../Slider.svelte";
@@ -20,6 +20,7 @@
     trackSupportsSeason,
     trackSupportsRain,
     season,
+    sun,
     onselectintent,
     onselectseason,
     onoverridetemps,
@@ -32,6 +33,9 @@
     trackSupportsSeason: boolean;
     trackSupportsRain: boolean;
     season: Season;
+    /** Course du soleil du circuit (§8.6ter), ou `null` si sa position est
+     * inconnue — la bande jour/nuit ne s'affiche alors pas du tout. */
+    sun: TrackSun | null;
     onselectintent: (opt: WeatherOption) => void;
     onselectseason: (id: Season) => void;
     onoverridetemps: () => void;
@@ -68,9 +72,64 @@
     };
   });
 
+  // Arrondi sur les minutes totales, pas sur les minutes seules : un lever à
+  // 4,999 h donnait « 04:60 » (heure tronquée d'un côté, minutes arrondies de
+  // l'autre). Invisible tant que le curseur ne produisait que des demi-heures,
+  // pas depuis que les repères de lever/coucher affichent l'heure réelle.
   function fmtTime(h: number): string {
-    const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+    const total = Math.round(h * 60);
+    const hh = Math.floor(total / 60) % 24, mm = total % 60;
     return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  }
+
+  // --- Bande jour/nuit sous le curseur d'heure (§8.6ter) ---
+  // Borne haute du curseur : la bande couvre exactement la course du pouce,
+  // sinon un repère de coucher tombe à côté de l'heure qu'il désigne.
+  const BAND_MAX = 23.5;
+  const NIGHT = "var(--sky-night)";
+  const TWILIGHT = "var(--sky-twilight)";
+  const DAY = "var(--sky-day)";
+  /** Position d'une heure sur la bande, en pourcentage de la course du pouce. */
+  function bandPct(h: number): number {
+    return Math.max(0, Math.min(100, (h / BAND_MAX) * 100));
+  }
+  /** Dégradé du ciel : nuit, crépuscule civil, plein jour, et retour. Le
+   * crépuscule civil (soleil à -6°) est ce qui rend la bande lisible — entre
+   * lui et le lever, il y a la demi-heure où l'on voit sans phares, qu'une
+   * simple coupure nuit/jour ferait disparaître. */
+  function skyGradient(s: TrackSun): string {
+    if (s.sunrise === null || s.sunset === null) {
+      // Nuit polaire ou soleil de minuit : une seule couleur, et aucun repère.
+      return s.polarNight ? NIGHT : DAY;
+    }
+    const dawn = s.dawn ?? s.sunrise - 0.5;
+    const dusk = s.dusk ?? s.sunset + 0.5;
+    const at = (color: string, h: number) => `${color} ${bandPct(h)}%`;
+    // Le jour peut enjamber minuit très au nord (lever à 01:30, coucher à
+    // 23:40) : la bande commence alors en plein jour et la nuit est au milieu.
+    const stops =
+      s.sunset < s.sunrise
+        ? [
+            `${DAY} 0%`,
+            at(DAY, s.sunset - 0.7),
+            at(TWILIGHT, s.sunset),
+            at(NIGHT, dusk),
+            at(NIGHT, dawn),
+            at(TWILIGHT, s.sunrise),
+            at(DAY, s.sunrise + 0.7),
+            `${DAY} 100%`,
+          ]
+        : [
+            `${NIGHT} 0%`,
+            at(NIGHT, dawn),
+            at(TWILIGHT, s.sunrise),
+            at(DAY, Math.min(s.sunrise + 0.7, s.solarNoon)),
+            at(DAY, Math.max(s.sunset - 0.7, s.solarNoon)),
+            at(TWILIGHT, s.sunset),
+            at(NIGHT, dusk),
+            `${NIGHT} 100%`,
+          ];
+    return `linear-gradient(to right, ${stops.join(", ")})`;
   }
 
   // 8 directions cardinales, dans l'ordre de `compassKey` — le champ n'accepte
@@ -222,6 +281,50 @@
           display={fmtTime(setup.time_hours)}
           oninput={(v) => (setup.time_hours = v)}
         />
+        {#if sun}
+          <!-- Bande jour/nuit (§8.6ter) : la course du soleil sur ce circuit,
+               à la date que CSP utilisera. Alignée sur la course du pouce du
+               curseur (marges de 5px = demi-largeur du pouce), pour qu'un
+               repère de coucher désigne bien l'heure qu'il affiche. Les deux
+               repères sont cliquables : c'est le geste utile — se poser pile
+               au lever ou au coucher, ce qu'un curseur au pas d'une demi-heure
+               ne permet pas d'atteindre. -->
+          <div
+            class="sky"
+            title={t("launch.sunBandTitle", { date: sun.date }) +
+              (sun.source === "geotags" ? ` — ${t("launch.sunApprox")}` : "")}
+          >
+            <div
+              class="sky-band"
+              class:approx={sun.source === "geotags"}
+              style:background-image={skyGradient(sun)}
+            ></div>
+            {#if sun.sunrise !== null && sun.sunset !== null}
+              {@const rise = sun.sunrise}
+              {@const fall = sun.sunset}
+              <button
+                class="sun-mark"
+                type="button"
+                style:left="{bandPct(rise)}%"
+                title={t("launch.sunrise")}
+                onclick={() => (setup.time_hours = rise)}
+              >
+                <span class="sun-tick"></span>
+                <span class="sun-time mono">↑{fmtTime(rise)}</span>
+              </button>
+              <button
+                class="sun-mark"
+                type="button"
+                style:left="{bandPct(fall)}%"
+                title={t("launch.sunset")}
+                onclick={() => (setup.time_hours = fall)}
+              >
+                <span class="sun-tick"></span>
+                <span class="sun-time mono">↓{fmtTime(fall)}</span>
+              </button>
+            {/if}
+          </div>
+        {/if}
       </div>
     </div>
     <p class="implicit-note">{t("launch.implicitNote")}</p>
@@ -395,13 +498,69 @@
   .opt-name {
     text-transform: uppercase;
   }
-  /* Heure : 4e colonne de `.implicit`, à côté du vent (§8.6). Largeur figée
-     pour rester compacte comme les autres champs de la ligne plutôt que de
-     s'étirer en pleine largeur (son ancien emplacement, en rangée seule) —
-     `Slider` prend toute la largeur qu'on lui donne, donc c'est cette
-     largeur-là qui la fixe. */
+  /* Heure : sur sa propre ligne dans `.implicit`, sous les températures et le
+     vent (§8.6ter). Elle tenait dans 140px tant qu'elle n'était qu'un
+     curseur ; la bande jour/nuit en dessous porte deux heures lisibles et des
+     repères à placer au pixel, ce qui demande la largeur du bloc. */
   .time-imp {
-    width: 140px;
+    flex-basis: 100%;
+  }
+  /* Marges de 5px = demi-largeur du pouce du curseur (voir Slider.svelte) :
+     un `input[type=range]` réserve cette moitié à chaque bout, donc une bande
+     posée bord à bord désignerait des heures décalées aux extrémités. */
+  .sky {
+    position: relative;
+    margin: 7px 5px 0;
+    /* Couleurs du ciel, pas des couleurs d'interface : elles ne sortent pas
+       d'ici et n'ont donc rien à faire dans la palette globale. */
+    --sky-night: #0a0f1e;
+    --sky-twilight: #b5622c;
+    --sky-day: #5f8fb8;
+  }
+  .sky-band {
+    height: 14px;
+    border: 1px solid var(--line);
+  }
+  /* Même code visuel que `.wcard.unsupported` juste au-dessus : pointillé
+     jaune = ce n'est pas garanti. Ici, la position vient du mod et non de la
+     table de CSP, donc le fuseau n'est qu'approché — l'infobulle le dit, mais
+     une infobulle ne se survole que si quelque chose invite à le faire. */
+  .sky-band.approx {
+    border-style: dashed;
+    border-color: var(--yellow);
+  }
+  /* Repère cliquable : un trait sur la bande, l'heure dessous. Le bouton
+     lui-même est transparent — seul le trait et le texte se voient. */
+  .sun-mark {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+  }
+  .sun-tick {
+    width: 1px;
+    height: 16px;
+    background: rgba(255, 255, 255, 0.75);
+  }
+  .sun-time {
+    margin-top: 2px;
+    font-size: 9.5px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .sun-mark:hover .sun-time,
+  .sun-mark:focus-visible .sun-time {
+    color: var(--txt2);
+  }
+  .sun-mark:hover .sun-tick,
+  .sun-mark:focus-visible .sun-tick {
+    background: var(--rosso-bright);
   }
   .season-wrap {
     margin-top: 16px;

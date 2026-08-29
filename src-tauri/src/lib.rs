@@ -51,6 +51,7 @@ mod session_state;
 mod showroom;
 mod stock;
 mod submods;
+mod sun;
 #[cfg(test)]
 mod testutil;
 mod thumbnails;
@@ -246,6 +247,7 @@ pub fn run() {
             commands::session::weather_stack,
             commands::session::weather_options,
             commands::session::weather_conditions,
+            commands::session::track_sun,
             commands::session::launch_session,
             commands::session::is_steam_running,
             commands::session::open_content_manager,

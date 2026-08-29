@@ -60,6 +60,13 @@ sha2 = "0.10"
 walkdir = "2"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
+# Fuseau horaire du circuit (§8.6ter) : `data_track_params.ini` de CSP donne un
+# nom IANA ("Europe/Berlin"), et l'heure d'un lever de soleil se lit sur
+# l'horloge locale du circuit — donc décalage de base ET heure d'été, ce qu'un
+# `longitude / 15` ne sait pas faire (Barcelone serait donnée à UTC+0). Seule
+# la base de données tz sait le dire, et c'est la même information que CSP lit
+# de son côté (`ac.getTrackTimezoneBaseDst`).
+chrono-tz = "0.10"
 regex = "1.10"
 dirs = "5"
 tauri-plugin-window-state = "2.4.1"

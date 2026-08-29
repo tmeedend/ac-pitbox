@@ -8,6 +8,7 @@
     getModCspFeatures,
     weatherOptions,
     weatherConditions,
+    trackSun,
     type GridMode,
     SAME_CATEGORY,
     type Opponent,
@@ -16,6 +17,7 @@
     type Season,
     type SessionType,
     type SkinItem,
+    type TrackSun,
     type WeatherOption,
   } from "$lib/launch";
   import { getModDetail, listLibrary, previewSrc, type ModCard } from "$lib/library";
@@ -159,6 +161,27 @@
       })
       .catch(() => (trackCspFeatures = []));
   });
+  // --- Course du soleil du circuit (§8.6ter) : alimente la bande jour/nuit
+  // sous le curseur d'heure. Recalculée au changement de circuit, de layout ou
+  // de date de saison — les trois entrées dont dépendent lever et coucher. ---
+  let sun = $state<TrackSun | null>(null);
+  $effect(() => {
+    const id = setup.track_id;
+    const layout = setup.track_layout;
+    const date = setup.season_date;
+    if (!id) {
+      sun = null;
+      return;
+    }
+    trackSun(id, layout, date)
+      .then((s) => {
+        // Le circuit a pu changer pendant l'appel : ne pas écraser la course
+        // du soleil d'un autre circuit avec une réponse en retard.
+        if (setup.track_id === id && setup.track_layout === layout && setup.season_date === date) sun = s;
+      })
+      .catch(() => (sun = null));
+  });
+
   const trackSupportsSeason = $derived(trackCspFeatures.includes("season"));
   const trackSupportsRain = $derived(trackCspFeatures.includes("rainfx"));
 
@@ -978,6 +1001,7 @@
           {selectedIntent}
           {currentWeather}
           {trackSupportsSeason}
+          {sun}
           {trackSupportsRain}
           {season}
           onselectintent={selectIntent}
