@@ -26,12 +26,19 @@ export function applyZoomFor(prefs: { ui_zoom: number | null; bigpicture_zoom: n
 let previousZoom: number | null = null;
 let previousSize: PhysicalSize | null = null;
 let previousPosition: PhysicalPosition | null = null;
+// Une fenêtre maximisée ne se restaure PAS en lui rendant sa taille et sa
+// position : elle redevient une fenêtre normale qui se trouve avoir la taille
+// de l'écran, et le bouton d'agrandissement de Windows s'inverse (bug
+// signalé). L'état est donc mémorisé à part, et c'est `maximize()` qui le
+// rétablit à la sortie.
+let previousMaximized = false;
 
 export async function enterBigPicture(): Promise<void> {
   if (bigPictureState.active) return;
   const cfg = await getConfig();
   const win = getCurrentWindow();
   previousZoom = cfg.prefs.ui_zoom;
+  previousMaximized = await win.isMaximized();
   previousSize = await win.outerSize();
   previousPosition = await win.outerPosition();
 
@@ -62,11 +69,21 @@ export async function exitBigPicture(): Promise<void> {
   if (!bigPictureState.active) return;
   const win = getCurrentWindow();
   await win.setFullscreen(false);
-  // Restaure explicitement (voir le filet de sécurité ci-dessus : on a pu
-  // redimensionner nous-mêmes la fenêtre au-delà de ce que `setFullscreen`
-  // sait annuler tout seul).
-  if (previousSize) await win.setSize(previousSize);
-  if (previousPosition) await win.setPosition(previousPosition);
+  if (previousMaximized) {
+    // Maximisée avant d'entrer : la remettre à sa taille d'alors la laisserait
+    // « restaurée » à la taille de l'écran, ce qui n'est pas la même chose et
+    // se voit tout de suite (bouton d'agrandissement inversé, glisser la barre
+    // de titre ne la décolle plus). Pas de `setSize`/`setPosition` ici : ils
+    // écraseraient au passage la géométrie que Windows garde pour le retour à
+    // l'état restauré.
+    await win.maximize();
+  } else {
+    // Restaure explicitement (voir le filet de sécurité ci-dessus : on a pu
+    // redimensionner nous-mêmes la fenêtre au-delà de ce que `setFullscreen`
+    // sait annuler tout seul).
+    if (previousSize) await win.setSize(previousSize);
+    if (previousPosition) await win.setPosition(previousPosition);
+  }
   setZoom(previousZoom);
   bigPictureState.active = false;
   await musicExitBigPicture();

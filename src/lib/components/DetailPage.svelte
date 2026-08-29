@@ -55,6 +55,7 @@
   } from "$lib/submods";
   import { open, confirm } from "@tauri-apps/plugin-dialog";
   import PowerCurve from "./PowerCurve.svelte";
+  import TechSheet from "./detail/TechSheet.svelte";
   import ContextMenu from "./ContextMenu.svelte";
   import { nav, pickSession, requestSection } from "$lib/nav.svelte";
   import { libraryVersion } from "$lib/libraryVersion.svelte";
@@ -789,36 +790,6 @@
     return (src.slice(0, 2) || "??").toUpperCase();
   }
 
-  // Bandeau de specs natives en surimpression du héros (§6.3).
-  function heroSpecs(s: NativeSpecs | null): string {
-    if (!s) return "";
-    return [s.bhp, s.torque, s.weight, s.topspeed].filter((x): x is string => !!x).join(" · ");
-  }
-
-  const DASH = "—";
-
-  function posLabel(pos: string): string {
-    if (pos === "FRONT") return t("detail.posFront");
-    if (pos === "MID") return t("detail.posMid");
-    if (pos === "REAR") return t("detail.posRear");
-    return pos;
-  }
-
-  // Fiche technique (champs structurés) — abréviations façon maquette.
-  function ficheRows(d: ModDetail): [string, string][] {
-    const engine = [d.engine_config, d.engine_pos ? posLabel(d.engine_pos) : null]
-      .filter(Boolean)
-      .join(" · ");
-    return [
-      [t("detail.specEngine"), engine || DASH],
-      [t("detail.specAspiration"), d.aspiration ?? DASH],
-      [t("detail.specDrivetrain"), d.drivetrain ?? DASH],
-      [t("detail.specGearbox"), d.gearbox ?? DASH],
-      [t("detail.specCountry"), d.country ?? DASH],
-      [t("detail.specPowerWeight"), d.specs?.pwratio ?? DASH],
-    ];
-  }
-
   // Menu ⋮ (§6.3, revue de la fiche) : regroupe les actions autrefois alignées
   // en rangée dans l'en-tête, peu utilisées au regard de la place qu'elles
   // prenaient une fois les onglets ajoutés. Cœur favori et badge « Contenu de
@@ -1079,15 +1050,6 @@
           {@const ol = previewSrc(d.track?.layouts[previewLayout]?.outline ?? null)}
           {#if ol}<img class="hero-outline" src={ol} alt="" />{/if}
         {/if}
-        {#if isCar}
-          {@const hs = heroSpecs(d.specs)}
-          {#if hs}
-            <div class="hero-specs">
-              <div class="mono hs-line">{hs}</div>
-              <div class="mono hs-label">{t("detail.specNative")}</div>
-            </div>
-          {/if}
-        {/if}
       </div>
 
       <div class="data">
@@ -1096,11 +1058,7 @@
           <div class="tech-curve" class:with-curve={hasCurve}>
             <section class="blk fiche">
               <header class="blk-h"><span class="blk-t">{t("detail.techSheet")}</span></header>
-              <div class="specgrid">
-                {#each ficheRows(d) as [k, v]}
-                  <div><div class="k lbl-key">{k}</div><div class="v">{v}</div></div>
-                {/each}
-              </div>
+              <TechSheet detail={d} surface="panel2" framed={false} />
             </section>
             {#if hasCurve && d.specs}
               <section class="blk curve-col">
@@ -1184,18 +1142,10 @@
           </section>
         </div>
 
-        <!-- Distance + Son : placeholders « à venir » désactivés -->
+        <!-- La distance parcourue n'a plus sa carte : elle est devenue la ligne
+             « Odomètre » de la fiche technique, où on la cherche naturellement.
+             La colonne commence donc directement par le son. -->
         <div class="col">
-          <section class="blk">
-            <header class="blk-h"><span class="blk-t">{t("detail.distanceLabel")}</span></header>
-            <div class="blk-b">
-            <div class="dist">
-              <span class="dist-ic">🛣</span>
-              <span class="dist-km mono">{d.distance_km != null ? `${d.distance_km.toFixed(1)} km` : "—"}</span>
-              <span class="dist-state mono" class:on={d.tried}>{d.tried ? t("detail.triedYes") : t("detail.triedNo")}</span>
-            </div>
-            </div>
-          </section>
           <section class="blk">
             <header class="blk-h"><span class="blk-t">{t("detail.engineSound")}</span></header>
             <div class="blk-b">
@@ -1774,21 +1724,6 @@
     font-size: 90px;
     opacity: 0.5;
   }
-  .hero-specs {
-    position: absolute;
-    /* Mêmes retraits que les commandes d'en face. */
-    left: calc(var(--hero-pad) + 12px);
-    bottom: calc(var(--hero-pad) + 10px);
-  }
-  .hs-line {
-    color: #e8e8ea;
-    font-size: 13px;
-  }
-  .hs-label {
-    color: var(--muted);
-    font-size: 8px;
-    margin-top: 3px;
-  }
   .data {
     background: var(--card);
     padding: 14px;
@@ -1806,9 +1741,10 @@
     min-width: 0;
     margin-bottom: 0;
   }
-  .tech-curve.with-curve .specgrid {
-    grid-template-columns: 1fr 1fr;
-  }
+  /* Plus de règle de colonnes ici : la fiche technique partagée
+     (`TechSheet.svelte`) déduit leur nombre de la largeur qu'on lui donne,
+     donc elle se resserre d'elle-même quand la courbe occupe la moitié de la
+     rangée. */
   .curve-col {
     flex: 1 1 200px;
     max-width: 260px;

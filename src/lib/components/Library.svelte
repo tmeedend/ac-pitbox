@@ -403,26 +403,6 @@
   // central) : à défaut d'un clic explicite, on affiche le choix de session
   // courant. Défilement vers l'élément sélectionné à revenir sur cet écran.
   let mainEl = $state<HTMLDivElement | undefined>();
-  // Bandeau recherche+filtres épinglé : on mesure sa hauteur pour décaler
-  // d'autant les en-têtes de tableau sticky (sinon ils passeraient dessous).
-  let pinTopEl = $state<HTMLDivElement | undefined>();
-  $effect(() => {
-    const el = pinTopEl;
-    const main = mainEl;
-    if (!el || !main) return;
-    // `- 18` = le padding-top de `.main`, que `.pin-top` compense par sa marge
-    // négative (cf. son CSS `top: -18px`) ; sa hauteur visible une fois collé
-    // est donc offsetHeight - 18. Exposé en variable CSS lue par `thead th`.
-    const update = () => main.style.setProperty("--pin-h", `${el.offsetHeight - 18}px`);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    window.addEventListener("resize", update);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", update);
-    };
-  });
   let firstLoad = true;
   function scrollToEffective() {
     if (!effectiveId) return;
@@ -930,8 +910,20 @@
     </div>
   {:else}
   <div class="main-wrap" data-gp-region="list">
-  <div class="main" bind:this={mainEl}>
-    <div class="pin-top" bind:this={pinTopEl}>
+  <div class="main">
+    <!-- Header and scrolling list are SIBLINGS, and that is the whole point.
+         Both used to live in one box scrolling on both axes, the header held in
+         place by `position: sticky` - which only ever pins on the axis it is
+         given an offset on. Vertically it worked; horizontally the header was
+         an ordinary block, as wide as the VISIBLE area and not as the scrolled
+         content, so a table wide enough to scroll sideways slid it out of the
+         way and bared a strip of rows above it (reported, measured: scrolled
+         150 px right in a 411 px viewport, the header ended 150 px short).
+         Out of the scroller it cannot slide, because there is nothing left to
+         slide it - and the three patches that state used to need go with it:
+         negative margins, `top: -18px`, and a header height measured in JS to
+         offset the sticky table heads. -->
+    <div class="head">
     <div class="toolbar">
       <!-- Free text kept deliberately narrow, with the structuring fields of
            the entity right next to it: at full width it read as THE way to
@@ -1133,6 +1125,7 @@
       </div>
     </div>
 
+    <div class="scroll" bind:this={mainEl}>
     {#if loading}
       <LoadingState />
     {:else if filtered.length === 0}
@@ -1296,6 +1289,7 @@
         </table>
       </div>
     {/if}
+    </div>
   </div>
 
   {#if selectedIds.size >= 2}
@@ -1338,17 +1332,15 @@
     min-height: 0;
     display: flex;
   }
+  /* Ne défile pas lui-même : il empile un en-tête fixe et une zone qui, elle,
+     défile. `min-height: 0` sans quoi `.scroll` refuserait de rétrécir sous la
+     hauteur de son contenu et déborderait la fenêtre au lieu de défiler. */
   .main {
     flex: 1;
     min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    padding: 18px 22px;
-    overflow-y: auto;
-    /* Explicite plutôt que de compter sur la règle CSS qui promeut `visible`
-       en `auto` quand l'autre axe ne l'est pas (§6.2, tableau large) — pas de
-       doute possible sous WebView2. */
-    overflow-x: auto;
   }
   .full-wrap {
     flex: 1;
@@ -1356,18 +1348,40 @@
     overflow-y: auto;
     padding: 28px 32px; /* compense le margin négatif de .page */
   }
-  /* Recherche + filtres épinglés en haut du scroll de `.main` : reste visible
-     pendant qu'on défile la grille/le tableau. Marges négatives = compense le
-     padding de `.main` pour venir affleurer les bords (fond opaque, sinon les
-     cartes défileraient visiblement dessous) ; le `top` négatif équivalent
-     ancre le point de décrochage du sticky sur ce même bord. */
-  .pin-top {
-    position: sticky;
-    top: -18px;
-    z-index: 6;
-    margin: -18px -22px 0;
-    padding: 18px 22px 2px;
-    background: var(--bg);
+  /* Recherche + filtres. Hors du conteneur qui défile (voir le commentaire du
+     markup) : il ne bouge donc plus, sans rien qui l'y force. `z-index` pour
+     que les listes d'autocomplétion des champs à jetons, qui débordent
+     forcément sur la liste en dessous, passent par-dessus elle.
+     Le retrait à droite vaut celui des autres bords PLUS la gouttière de
+     défilement que `.scroll` réserve en permanence : sans lui, le tableau —
+     large de la zone moins sa barre de défilement — s'arrêtait 9 px avant le
+     bord du panneau de filtres, et le décalage se voyait sur les circuits, dont
+     le tableau tient dans la largeur. */
+  .head {
+    position: relative;
+    z-index: 2;
+    padding: 18px calc(22px + var(--scrollbar-w)) 2px 22px;
+  }
+  /* La seule chose qui défile, sur les deux axes : la grille ou le tableau.
+     `overflow-x` explicite plutôt que de compter sur la règle CSS qui promeut
+     `visible` en `auto` quand l'autre axe ne l'est pas (§6.2, tableau large) —
+     pas de doute possible sous WebView2.
+     `position` + `z-index` en font un contexte d'empilement à lui : sans ça,
+     les en-têtes de tableau collants (`thead th`, z-index 5) se comparaient
+     directement aux listes d'autocomplétion de l'en-tête et passaient
+     par-dessus elles (bug signalé). Les deux frères deviennent deux couches, et
+     ce que chacun empile à l'intérieur ne regarde plus que lui.
+     `scrollbar-gutter` : la gouttière est réservée même sans barre, sinon
+     l'apparition de celle-ci décalerait le tableau sous un en-tête, lui, fixe. */
+  .scroll {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: auto;
+    scrollbar-gutter: stable;
+    padding: 0 22px 18px;
   }
   .toolbar {
     display: flex;
@@ -1770,13 +1784,14 @@
     background: var(--panel2);
     white-space: nowrap;
   }
-  /* En-têtes collés en haut du scroll de `.main`, juste sous le bandeau
-     recherche+filtres (décalage --pin-h mesuré en JS). `box-shadow` = ligne
-     de séparation fiable (les bordures collapse ne « suivent » pas le sticky
-     sous Chromium/WebView2). */
+  /* En-têtes collés en haut de `.scroll`, dont le bord haut est déjà sous le
+     bandeau recherche+filtres : `top: 0` suffit, plus rien à mesurer. C'est ce
+     que la barre sortie du scroller a fait gagner. `box-shadow` = ligne de
+     séparation fiable (les bordures collapse ne « suivent » pas le sticky sous
+     Chromium/WebView2). */
   thead th {
     position: sticky;
-    top: var(--pin-h, 0px);
+    top: 0;
     z-index: 5;
     box-shadow: inset 0 -1px 0 var(--line);
   }

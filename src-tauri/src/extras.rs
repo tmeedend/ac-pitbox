@@ -617,6 +617,35 @@ pub struct ExtraFile {
     pub held_by_foreign_file: bool,
 }
 
+/// Authorises one path the date arbitration keeps refusing, then lays the mod's
+/// additions down again (§4.6ter).
+///
+/// The arbitration protects automatic deployments: a copy that is not newer than
+/// what already sits there never takes its place. That is right by default and
+/// wrong as a dead end - a file marked "waiting" on the sheet had no way out,
+/// and nothing said what to do about it (reported). This is the way out, and it
+/// stays safe: whatever occupies the path is backed up before being replaced
+/// (`gamebackup::protect`, §4.5.4) and restored when no mod claims it any more.
+///
+/// `rel_path` is validated here rather than trusted: the front sends the path it
+/// was shown, and a path is not an authorisation to write anywhere.
+pub fn force_one(
+    conn: &Connection,
+    cfg: &AppConfig,
+    owner: OwnerKind,
+    mod_id: &str,
+    rel_path: &str,
+) -> Result<usize, String> {
+    let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?;
+    let rel = Path::new(rel_path);
+    if !crate::acpath::is_ac_relative(rel) {
+        return Err(format!("chemin hors du jeu : {rel_path}"));
+    }
+    let target = ac.join(rel);
+    overlay::mark_forced_extra(conn, mod_id, &target.to_string_lossy()).map_err(|e| e.to_string())?;
+    deploy(conn, cfg, owner, mod_id)
+}
+
 /// Liste ce qu'un mod installe hors de `content/<type>/<id>`, **lu en direct
 /// sur disque** comme le bloc Ressources (§4.5.5) : un mod importé avant que
 /// l'app ne suive ces fichiers n'a rien à réimporter pour que l'onglet se
@@ -964,6 +993,58 @@ mod tests {
         assert!(!weather.externally_managed, "hors zone auto-gérée");
         assert!(!weather.held_by_foreign_file);
         assert!(weather.deployed);
+    }
+
+    /// Rule (§4.6ter): a file the date arbitration refuses is not a dead end.
+    /// Authorised explicitly, it is laid down - and what occupied the path is
+    /// backed up first, so the decision stays reversible.
+    #[test]
+    fn an_explicitly_authorised_extra_is_laid_down_over_the_foreign_file() {
+        let base = crate::testutil::temp_dir("sat-force");
+        let cfg = cfg_for(&base);
+        let library = cfg.library_path.clone().unwrap();
+        let ac = cfg.ac_install_path.clone().unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+
+        let rel = Path::new("extension").join("config").join("cars").join("lanzo.ini");
+        let sat = dir(&library, OwnerKind::Car, "lanzo");
+        write(&sat.join(&rel), b"MOD");
+        set_mtime(&sat.join(&rel), 1_000_000);
+        // Quelqu'un d'autre est passé avant, avec un exemplaire plus récent.
+        write(&ac.join(&rel), b"SOMEONE ELSE");
+        set_mtime(&ac.join(&rel), 2_000_000);
+
+        assert_eq!(
+            deploy(&conn, &cfg, OwnerKind::Car, "lanzo").unwrap(),
+            0,
+            "précondition : l'arbitrage par date refuse tout seul"
+        );
+        let waiting = list(&conn, &cfg, OwnerKind::Car, "lanzo");
+        assert!(waiting[0].held_by_foreign_file, "et la fiche le dit");
+
+        let rel_str = rel.to_string_lossy().into_owned();
+        force_one(&conn, &cfg, OwnerKind::Car, "lanzo", &rel_str).unwrap();
+
+        assert_eq!(
+            std::fs::read(ac.join(&rel)).unwrap(),
+            b"MOD",
+            "autorisé explicitement, le fichier du mod prend la place"
+        );
+        let after = list(&conn, &cfg, OwnerKind::Car, "lanzo");
+        assert!(after[0].deployed, "et la fiche ne dit plus « en attente »");
+        assert!(!after[0].held_by_foreign_file);
+
+        // Le fichier délogé est à l'abri, et c'est ce qui rend le geste
+        // réversible (§4.5.4) : il reviendra quand plus personne ne réclamera
+        // le chemin.
+        let saved = crate::overlay::game_backup_of(&conn, &ac.join(&rel).to_string_lossy())
+            .unwrap()
+            .expect("l'occupant délogé est sauvegardé");
+        assert_eq!(
+            std::fs::read(&saved).unwrap(),
+            b"SOMEONE ELSE",
+            "et c'est bien lui qu'on a mis de côté, pas le fichier du mod"
+        );
     }
 
     #[test]

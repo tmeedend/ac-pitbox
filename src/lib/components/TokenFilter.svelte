@@ -108,7 +108,7 @@
       <span class="chip {tk.mode}">
         <button type="button" class="body" title={t("filters.tokenToggle")} onclick={() => toggle(tk.value)}>
           <span class="state" aria-hidden="true">{tk.mode === "inc" ? "✓" : "⊘"}</span>
-          <span class="label">{tk.value}</span>
+          <span class="label" title={tk.value}>{tk.value}</span>
         </button>
         <button type="button" class="del" title={t("filters.tokenRemove")} onclick={() => remove(tk.value)}>×</button>
       </span>
@@ -232,6 +232,18 @@
     align-items: center;
     gap: 5px;
     padding: 2px 6px;
+    /* Or the label below could never shrink: an inner flex item defaults to
+       min-content, which for one unbreakable word is the whole word. */
+    min-width: 0;
+  }
+  /* A value is arbitrary text - an author name can be long enough to be wider
+     than the field itself. Left alone it would push the filter row out and hand
+     the screen a horizontal scrollbar it has no use for. Cut here rather than
+     allowed to resize the row; hovering shows it whole. */
+  .chip .label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 22ch;
   }
   .chip .state {
     font-size: 10px;

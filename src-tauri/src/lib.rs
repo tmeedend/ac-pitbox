@@ -220,6 +220,7 @@ pub fn run() {
             commands::library::open_mod_folder,
             commands::library::list_mod_resources,
             commands::library::list_mod_extras,
+            commands::library::force_mod_extra,
             commands::library::open_mod_resource,
             commands::library::list_import_decisions,
             commands::library::get_mod_resource_path,

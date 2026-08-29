@@ -87,16 +87,6 @@
           {/if}
         </dd>
       </div>
-      <div class="row">
-        <dt>{t("detail.originUrlLabel")}</dt>
-        <dd class="mono">
-          {#if detail.source_url}
-            <span class="url">{detail.source_url}</span>
-          {:else}
-            <span class="hint">{t("detail.noUrl")}</span>
-          {/if}
-        </dd>
-      </div>
     </dl>
 
     <!-- Mod installé hors Pit Box (§8) : la fiche est la seule à pouvoir dire
@@ -178,9 +168,6 @@
     color: var(--muted2);
     font-size: 11px;
     font-style: italic;
-  }
-  .url {
-    color: var(--blue);
   }
   .pack {
     margin-top: 20px;

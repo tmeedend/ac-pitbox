@@ -6,7 +6,8 @@
   //
   // Regroupé par dossier de destination : 69 lignes plates sont illisibles,
   // alors que quatre destinations disent tout de suite ce que le mod touche.
-  import { listModExtras, type ExtraFile } from "$lib/library";
+  import { listModExtras, forceModExtra, type ExtraFile } from "$lib/library";
+  import { errorText } from "$lib/errors";
   import { listAppExtras } from "$lib/apps";
   import { listPackExtras } from "$lib/packs";
   import { t } from "$lib/i18n/index.svelte";
@@ -25,6 +26,29 @@
   } = $props();
 
   let files = $state<ExtraFile[]>([]);
+  // Chemin en cours de pose forcée, et l'échec éventuel. Un seul à la fois :
+  // c'est un geste ponctuel sur une ligne, pas un lot.
+  let forcing = $state<string | null>(null);
+  let forceError = $state("");
+
+  /** « Poser quand même » (§4.6ter) : l'arbitrage par date protège les poses
+   * automatiques, il n'a rien à dire contre une décision prise en connaissance
+   * de cause. Sans ce bouton, un fichier « en attente » était une impasse — le
+   * dire sans donner de sortie, c'est la définition d'un cul-de-sac (retour
+   * utilisateur). Ce qui occupe le chemin est sauvegardé avant d'être
+   * remplacé, donc le geste reste réversible. */
+  async function force(rel: string) {
+    forcing = rel;
+    forceError = "";
+    try {
+      await forceModExtra(modId, rel);
+      files = await listModExtras(modId);
+    } catch (e) {
+      forceError = errorText(e);
+    } finally {
+      forcing = null;
+    }
+  }
 
   // Même garde que ResourcesBlock : une réponse tardive d'un mod précédent ne
   // doit pas écraser la liste du mod courant.
@@ -142,6 +166,17 @@
                       <span class="file-foreign" title={t("detail.extrasForeignHint")}
                         >{t("detail.extrasForeignFile")}</span
                       >
+                      {#if source === "mod"}
+                        <button
+                          class="file-force"
+                          type="button"
+                          disabled={forcing !== null}
+                          title={t("detail.extrasForceHint")}
+                          onclick={() => force(f.rel_path)}
+                        >
+                          {forcing === f.rel_path ? t("detail.extrasForcing") : t("detail.extrasForce")}
+                        </button>
+                      {/if}
                     {/if}
                     {#if f.externally_managed}
                       <span class="file-managed" title={t("detail.extrasManagedHint")}
@@ -165,6 +200,7 @@
     {:else}
       <p class="empty">{t("detail.noExtras")}</p>
     {/if}
+    {#if forceError}<p class="err">{forceError}</p>{/if}
   </div>
 </section>
 
@@ -253,6 +289,35 @@
     color: var(--yellow);
     font-size: 10.5px;
     white-space: nowrap;
+  }
+  /* Sortie de l'attente, posée juste après le mot qui l'annonce : c'est là
+     qu'on la cherche, pas dans un menu d'en-tête qui vaudrait pour tout le
+     groupe. */
+  .file-force {
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font: inherit;
+    font-size: 10px;
+    padding: 1px 6px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .file-force:hover:not(:disabled) {
+    color: var(--txt);
+    border-color: var(--muted2);
+  }
+  .file-force:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .err {
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: var(--rosso-dim);
+    border: 1px solid var(--rosso-border);
+    color: var(--rosso-bright);
+    font-size: 11.5px;
   }
   /* Jaune = alerte : ni une erreur, ni une action destructive — un fichier
      conservé mais que le jeu ne recevra pas. */

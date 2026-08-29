@@ -171,6 +171,21 @@ pub fn list_mod_extras(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<
     Ok(crate::extras::list(&conn, &cfg, mod_kind(&m.kind).into(), &id))
 }
 
+/// Pose quand même un ajout au jeu que l'arbitrage par date refusait (§4.6ter).
+///
+/// Le fichier qui occupe le chemin est sauvegardé avant d'être remplacé, et
+/// restauré quand plus aucun mod ne le réclame (§4.5.4) : l'autorisation est
+/// explicite, elle n'est pas irréversible.
+#[tauri::command]
+pub fn force_mod_extra(app: AppHandle, db: State<Db>, id: String, rel_path: String) -> Result<usize, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let m = crate::overlay::get_mod(&conn, &id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_NOT_FOUND)?;
+    crate::extras::force_one(&conn, &cfg, mod_kind(&m.kind).into(), &id, &rel_path)
+}
+
 /// Ouvre un fichier du dossier ressources avec l'application par défaut de
 /// l'OS (§4.5.2). `rel_path` est résolu et validé côté serveur (garde-fou
 /// anti-traversée) plutôt que de faire confiance à un chemin absolu envoyé

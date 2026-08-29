@@ -12,6 +12,7 @@
     type NativeSpecs,
   } from "$lib/library";
   import PowerCurve from "./PowerCurve.svelte";
+  import TechSheet from "./detail/TechSheet.svelte";
   import ContextMenu from "./ContextMenu.svelte";
   import { open, confirm } from "@tauri-apps/plugin-dialog";
   import { exportMod, deleteBrokenMod, reinstallFromArchive, type ExportReport } from "$lib/maintenance";
@@ -220,19 +221,6 @@
     onchange?.();
   }
 
-  function mechRows(d: ModDetail): [string, string][] {
-    const rows: [string, string][] = [];
-    const add = (label: string, v: string | null) => {
-      if (v) rows.push([label, v]);
-    };
-    add(t("columns.drivetrain"), d.drivetrain);
-    add(t("columns.aspiration"), d.aspiration);
-    add(t("columns.engineConfig"), d.engine_config);
-    add(t("columns.enginePos"), d.engine_pos);
-    add(t("columns.gearbox"), d.gearbox);
-    return rows;
-  }
-
   // Décode une description HTML (br + entités) en texte sûr (pas d'injection).
   function decodeDescription(html: string): string {
     return html
@@ -245,22 +233,6 @@
       .replace(/&quot;/g, '"')
       .replace(/&#39;|&apos;/g, "'")
       .trim();
-  }
-
-  function specRows(s: NativeSpecs): [string, string][] {
-    const rows: [string, string][] = [];
-    const add = (label: string, v: string | null) => {
-      if (v) rows.push([label, v]);
-    };
-    add(t("modpanel.specPower"), s.bhp);
-    add(t("modpanel.specTorque"), s.torque);
-    add(t("columns.weight"), s.weight);
-    add(t("modpanel.specTopSpeed"), s.topspeed);
-    add(t("modpanel.specAccel"), s.acceleration);
-    add(t("modpanel.specPwRatio"), s.pwratio);
-    add(t("modpanel.specRange"), s.range);
-    add(t("columns.country"), s.country);
-    return rows;
   }
 
   $effect(() => {
@@ -347,27 +319,10 @@
       {/if}
 
       {#if detail.kind === "Car"}
-        {@const rows = detail.specs ? specRows(detail.specs) : []}
-        {@const mech = mechRows(detail)}
-        {#if rows.length || mech.length}
-          <section>
-            <h3>{t("detail.techSheet")}</h3>
-            <div class="specs">
-              {#each rows as [label, value]}
-                <div class="spec">
-                  <span class="s-label">{label}</span>
-                  <span class="s-value">{value}</span>
-                </div>
-              {/each}
-              {#each mech as [label, value]}
-                <div class="spec derived" title={t("modpanel.derivedTooltip")}>
-                  <span class="s-label">{label}</span>
-                  <span class="s-value">{value}</span>
-                </div>
-              {/each}
-            </div>
-          </section>
-        {/if}
+        <section>
+          <h3>{t("detail.techSheet")}</h3>
+          <TechSheet {detail} />
+        </section>
       {/if}
 
       {#if detail.specs}
@@ -576,31 +531,6 @@
     color: var(--faint);
     font-family: var(--mono);
   }
-  .specs {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1px;
-    background: var(--line);
-    border: 1px solid var(--line);
-  }
-  .spec {
-    background: var(--panel);
-    padding: 6px 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .s-label {
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--muted);
-  }
-  .s-value {
-    font-size: 12px;
-    color: var(--txt);
-    font-family: var(--mono);
-  }
   .description {
     margin-top: 8px;
     font-size: 12px;
@@ -704,9 +634,6 @@
   }
   .fav:hover {
     color: var(--rosso-bright);
-  }
-  .spec.derived .s-value {
-    color: var(--green);
   }
   .empty {
     color: var(--muted);

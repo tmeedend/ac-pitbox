@@ -493,12 +493,12 @@
      (Library.svelte), un conteneur qui a son propre `padding: 28px 32px` pour
      compenser la marge négative de `.page` — et un `sticky` y décroche 28 px
      sous le bord visible, laissant un vide dans lequel le document défile
-     tandis que la barre recouvre les pages. C'est le même piège que celui
-     documenté sur `.pin-top` de la bibliothèque, qui s'en sort avec un `top`
-     négatif compensé par du padding ; ici la barre vit à l'intérieur d'un
-     panneau encadré et lui-même en retrait, donc la remonter jusqu'au bord de
-     la fenêtre déborderait sur la liste au-dessus. Elle défile avec le
-     document. */
+     tandis que la barre recouvre les pages. C'est le même piège que celui que
+     la bibliothèque a fini par retirer en sortant sa barre de filtres du
+     conteneur qui défile (`.head`/`.scroll` de `Library.svelte`) ; ici la
+     barre vit à l'intérieur d'un panneau encadré et lui-même en retrait, donc
+     la remonter jusqu'au bord de la fenêtre déborderait sur la liste au-dessus.
+     Elle défile avec le document. */
   .pv-h {
     display: flex;
     align-items: center;

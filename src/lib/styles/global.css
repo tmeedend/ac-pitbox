@@ -26,6 +26,13 @@
  * dans l'app le voit.
  */
 :root {
+  /* Largeur des barres de défilement (voir `::-webkit-scrollbar` plus bas).
+     Variable et non constante en dur parce qu'un écran peut avoir à réserver
+     la MÊME largeur en dehors du conteneur qui défile : la bibliothèque aligne
+     ainsi le bord droit de sa barre de filtres sur celui du tableau en dessous
+     (`scrollbar-gutter: stable` d'un côté, ce retrait de l'autre). Les deux
+     valeurs doivent bouger ensemble, donc elles n'en font qu'une. */
+  --scrollbar-w: 9px;
   --rosso: #d40000;
   --rosso-bright: #ff5555;
   --rosso-dim: #1a0606;
@@ -84,8 +91,8 @@ body {
    ::-webkit-scrollbar). Fines et carrées, cohérentes avec l'esthétique plate
    de l'app (pas de coins arrondis ailleurs). */
 ::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+  width: var(--scrollbar-w);
+  height: var(--scrollbar-w);
 }
 ::-webkit-scrollbar-track {
   background: transparent;

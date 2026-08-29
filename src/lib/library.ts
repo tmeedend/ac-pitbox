@@ -428,6 +428,13 @@ export function listModExtras(id: string): Promise<ExtraFile[]> {
   return invoke<ExtraFile[]>("list_mod_extras", { id });
 }
 
+/** Lays down an addition the date arbitration was refusing (§4.6ter), and
+ * returns how many files the mod now has in the game. Whatever occupies the
+ * path is backed up first and restored when no mod claims it any more. */
+export function forceModExtra(id: string, relPath: string): Promise<number> {
+  return invoke<number>("force_mod_extra", { id, relPath });
+}
+
 /**
  * Une décision que l'**app** a prise seule au dernier import du mod (§4.6).
  * À ne pas confondre avec `ImportDecision` ci-dessus, qui est la décision de

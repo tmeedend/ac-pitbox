@@ -693,7 +693,8 @@
       },
       {
         "from": [
-          "traffic"
+          "traffic",
+          "traffic-jp"
         ],
         "to": [
           "#traffic"
