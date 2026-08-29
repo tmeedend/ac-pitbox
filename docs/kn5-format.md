@@ -753,6 +753,43 @@ N points`), et c'est avec elle qu'on tranche au lieu de deviner.
 
 ---
 
+## Découverte — AC range **deux habitacles** dans le même fichier
+
+**Symptôme** : des taches claires à bords francs sur le tableau de bord, qui
+**scintillent quand la caméra bouge**. Signalé sur
+`ks_lamborghini_aventador_sv`.
+
+**Ce mot-là a tout décidé.** Une erreur d'éclairage — mauvaise normale,
+mauvaise carte, mauvais matériau — ne bouge pas avec la caméra. Un scintillement
+qui suit le mouvement, c'est du **z-fighting** : deux surfaces quasi coplanaires
+qui se disputent le tampon de profondeur, et le gagnant change d'un pixel et
+d'une image à l'autre. J'avais d'abord soupçonné le reflet du pare-brise ; c'est
+l'utilisateur qui a écarté la piste en décrivant le scintillement.
+
+**Réel** : AC livre `COCKPIT_HR` **et** `COCKPIT_LR` dans le même KN5, et n'en
+affiche qu'un à la fois — le détaillé depuis le poste de pilotage, une coque
+grossière de quelques milliers de triangles vue de l'extérieur. On dessinait
+les deux, superposés.
+
+**Mesuré sur 30 voitures** : 27 portent les deux, 3 n'ont que `COCKPIT_HR`, et
+**aucune n'a que `COCKPIT_LR`**. Le volume en jeu n'est pas anecdotique :
+33 maillages écartés sur `bati_fd3s_rx7`, 9 sur `ks_mazda_mx5_cup`.
+
+**Correctif** : `COCKPIT_LR` est écarté **avec tout son sous-arbre**, et
+seulement quand `COCKPIT_HR` existe. Le sous-arbre entier parce que
+`COCKPIT_LR` est un nœud de transformation, pas un maillage : le filtrage par
+nom de `classify` ne le voit jamais et ses enfants passeraient quand même. La
+garde parce qu'une voiture qui n'aurait que la coque perdrait tout son
+habitacle.
+
+> **À retenir : le symptôme dit le domaine.** Une tache fixe est un problème de
+> matériau ou de normale ; une tache qui scintille au mouvement est un problème
+> de profondeur, donc de géométrie en double. Les deux se ressemblent sur une
+> capture figée, et c'est exactement pourquoi une capture ne suffit pas à
+> diagnostiquer.
+
+---
+
 ## Écart n°14 — le repère tangent est dans le fichier, et on le jetait
 
 **Symptôme** : des stries blanches, dures, à bords francs, sur les surfaces

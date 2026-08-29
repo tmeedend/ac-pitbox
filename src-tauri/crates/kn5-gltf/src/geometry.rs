@@ -65,6 +65,8 @@ pub struct GeometryOptions {
     /// Drop meshes that only appear beyond a distance, i.e. lower LODs stored
     /// inside the same file.
     pub skip_distant_lods: bool,
+    /// Drop `COCKPIT_LR` when `COCKPIT_HR` is there too — see [`flatten`].
+    pub skip_low_res_cockpit: bool,
 }
 
 impl Default for GeometryOptions {
@@ -83,6 +85,7 @@ impl Default for GeometryOptions {
             // `AC_START_0`… They carry no geometry worth showing.
             excluded_name_prefixes: vec!["AC_".to_string()],
             skip_distant_lods: true,
+            skip_low_res_cockpit: true,
         }
     }
 }
@@ -96,6 +99,8 @@ pub struct GeometryStats {
     pub skipped_distant_lod: usize,
     /// Meshes carrying the car's *broken* glass — see [`Skip::BrokenGlass`].
     pub skipped_broken_glass: usize,
+    /// Meshes of the duplicate low-resolution interior — see [`flatten`].
+    pub skipped_low_res_cockpit: usize,
     /// Meshes whose accumulated transform mirrors space, and whose winding was
     /// flipped a second time as a result.
     pub mirrored: usize,
@@ -104,15 +109,35 @@ pub struct GeometryStats {
     pub merged: usize,
 }
 
+/// Nom des deux habitacles qu'AC range dans le même fichier.
+const HIGH_RES_COCKPIT: &str = "COCKPIT_HR";
+const LOW_RES_COCKPIT: &str = "COCKPIT_LR";
+
 /// Walks the tree, accumulates transforms and returns every mesh worth drawing.
+///
+/// **AC livre deux habitacles superposés**, et n'en montre qu'un à la fois :
+/// `COCKPIT_HR` depuis le poste de pilotage, `COCKPIT_LR` — une coque grossière
+/// de quelques milliers de triangles — vu de l'extérieur. Les dessiner tous les
+/// deux les fait se disputer le tampon de profondeur, et le tableau de bord se
+/// couvre de taches claires à bords francs qui **scintillent dès que la caméra
+/// bouge**. C'est ce scintillement qui a identifié le défaut : une erreur
+/// d'éclairage ne bouge pas avec la caméra, un z-fighting si.
+///
+/// On garde le détaillé, parce que la vue peut s'approcher et regarder dedans.
+/// Mesuré sur 30 voitures : 27 portent les deux, 3 n'ont que `COCKPIT_HR`, et
+/// **aucune n'a que `COCKPIT_LR`** — d'où la garde, qui ne retire la coque que
+/// lorsque le détaillé est bien là.
 pub fn flatten(model: &Kn5Model, options: &GeometryOptions) -> (Vec<FlatMesh>, GeometryStats) {
     let mut meshes = Vec::new();
     let mut stats = GeometryStats::default();
+    let drop_low_res_cockpit =
+        options.skip_low_res_cockpit && has_node(model, HIGH_RES_COCKPIT) && has_node(model, LOW_RES_COCKPIT);
     walk(
         &model.root,
         &IDENTITY,
         &model.materials,
         options,
+        drop_low_res_cockpit,
         &mut meshes,
         &mut stats,
     );
@@ -173,14 +198,40 @@ const IDENTITY: [f32; 16] = [
     0.0, 0.0, 0.0, 1.0,
 ];
 
+/// Le modèle porte-t-il un nœud de ce nom ?
+fn has_node(model: &Kn5Model, name: &str) -> bool {
+    let mut found = false;
+    model.visit_nodes(&mut |node| found |= node.name.eq_ignore_ascii_case(name));
+    found
+}
+
+/// Nombre de maillages non vides sous ce nœud, lui compris.
+fn mesh_count(node: &Kn5Node) -> usize {
+    let mut count = 0;
+    node.visit(&mut |n| {
+        if n.mesh().is_some_and(|m| !m.vertices.is_empty()) {
+            count += 1;
+        }
+    });
+    count
+}
+
 fn walk(
     node: &Kn5Node,
     parent_world: &[f32; 16],
     materials: &[Kn5Material],
     options: &GeometryOptions,
+    drop_low_res_cockpit: bool,
     meshes: &mut Vec<FlatMesh>,
     stats: &mut GeometryStats,
 ) {
+    // Écarté **avec tout son sous-arbre** : c'est un nœud de transformation,
+    // pas un maillage, donc le filtrage par nom de `classify` ne le verrait
+    // jamais et ses enfants passeraient quand même.
+    if drop_low_res_cockpit && node.name.eq_ignore_ascii_case(LOW_RES_COCKPIT) {
+        stats.skipped_low_res_cockpit += mesh_count(node);
+        return;
+    }
     // Row-vector convention: `world = local × parent` (§3.4). Getting this
     // order backwards leaves the hierarchy intact but scatters every part.
     let world = match node.transform() {
@@ -209,7 +260,7 @@ fn walk(
     }
 
     for child in &node.children {
-        walk(child, &world, materials, options, meshes, stats);
+        walk(child, &world, materials, options, drop_low_res_cockpit, meshes, stats);
     }
 }
 
@@ -644,6 +695,87 @@ mod tests {
             vec![0, 2, 1],
             "un nœud en miroir voit le sien rétabli en antihoraire"
         );
+    }
+
+    /// Un modèle minimal portant les nœuds nommés, chacun avec un maillage.
+    fn model_with(nodes: &[&str]) -> kn5::Kn5Model {
+        let mesh = |name: &str| kn5::Kn5Node {
+            name: name.to_string(),
+            active: true,
+            kind: kn5::Kn5NodeKind::Mesh(kn5::Kn5Mesh {
+                cast_shadows: true,
+                is_visible: true,
+                is_transparent: false,
+                vertices: vec![
+                    kn5::Kn5Vertex {
+                        position: [0.0; 3],
+                        normal: [0.0, 0.0, 1.0],
+                        uv: [0.0, 0.0],
+                        tangent: [1.0, 0.0, 0.0],
+                    };
+                    3
+                ],
+                indices: vec![0, 1, 2],
+                material_id: 0,
+                layer: 0,
+                lod_in: 0.0,
+                lod_out: 0.0,
+                bounding_sphere_center: [0.0; 3],
+                bounding_sphere_radius: 1.0,
+                is_renderable: true,
+            }),
+            children: Vec::new(),
+        };
+        kn5::Kn5Model {
+            version: 6,
+            extra: None,
+            textures: Vec::new(),
+            materials: vec![kn5::Kn5Material {
+                name: "m".to_string(),
+                shader: "ksPerPixel".to_string(),
+                blend_mode: 0,
+                alpha_tested: false,
+                reserved: 0,
+                properties: Vec::new(),
+                samplers: Vec::new(),
+            }],
+            root: kn5::Kn5Node {
+                name: "root".to_string(),
+                active: true,
+                kind: kn5::Kn5NodeKind::Dummy { transform: IDENTITY },
+                children: nodes
+                    .iter()
+                    .map(|name| kn5::Kn5Node {
+                        name: name.to_string(),
+                        active: true,
+                        kind: kn5::Kn5NodeKind::Dummy { transform: IDENTITY },
+                        children: vec![mesh(&format!("g_{name}"))],
+                    })
+                    .collect(),
+            },
+        }
+    }
+
+    // Règle : AC livre deux habitacles superposés et n'en montre qu'un ; les
+    // dessiner tous les deux les fait se disputer le tampon de profondeur, et
+    // le tableau de bord scintille. On garde le détaillé.
+    #[test]
+    fn the_low_resolution_cockpit_is_dropped_when_the_detailed_one_is_there() {
+        let options = GeometryOptions::default();
+        let (meshes, stats) = flatten(&model_with(&["COCKPIT_HR", "COCKPIT_LR"]), &options);
+        assert_eq!(stats.skipped_low_res_cockpit, 1, "la coque grossière est écartée");
+        assert_eq!(meshes.len(), 1, "il reste l'habitacle détaillé");
+        assert_eq!(meshes[0].name, "g_COCKPIT_HR", "et c'est bien le détaillé");
+    }
+
+    // Règle : et **seulement** quand il est là. Aucune voiture de l'échantillon
+    // n'a que la basse résolution, mais si l'une se présente, lui retirer son
+    // seul habitacle la viderait.
+    #[test]
+    fn a_car_with_only_the_low_resolution_cockpit_keeps_it() {
+        let (meshes, stats) = flatten(&model_with(&["COCKPIT_LR"]), &GeometryOptions::default());
+        assert_eq!(stats.skipped_low_res_cockpit, 0, "rien à écarter");
+        assert_eq!(meshes.len(), 1, "son unique habitacle reste");
     }
 
     // Règle : la latéralité du repère tangent se déduit de l'orientation des

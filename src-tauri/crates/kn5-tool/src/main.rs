@@ -953,7 +953,7 @@ fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
     );
     println!(
         "meshes    {} kept, merged into {} draw calls — skipped: {} hidden, {} by name, {} empty, {} distant LOD, \
-         {} broken glass ({} mirrored nodes)",
+         {} broken glass, {} low-res cockpit ({} mirrored nodes)",
         stats.kept,
         stats.merged,
         stats.skipped_hidden,
@@ -961,6 +961,7 @@ fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
         stats.skipped_empty,
         stats.skipped_distant_lod,
         stats.skipped_broken_glass,
+        stats.skipped_low_res_cockpit,
         stats.mirrored
     );
     println!(
