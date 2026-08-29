@@ -92,3 +92,18 @@ export async function deleteSavedSession(sessionType: SessionType, name: string)
   delete all[keyFor(sessionType, name)];
   await persist(all);
 }
+
+/** Date de sauvegarde, dans le fuseau de l'utilisateur.
+ *
+ * `savedAt` est un ISO **UTC** (`new Date().toISOString()`), et le tronquer à
+ * la main (`iso.slice(0, 16)`) affichait donc l'heure UTC : une sauvegarde
+ * faite à 14 h en France s'affichait « 12:00 ». Le stockage reste en UTC —
+ * c'est ce qui rend le tri par `localeCompare` correct — seul l'affichage
+ * repasse en heure locale. Format volontairement fixe (ISO court) plutôt que
+ * `toLocaleString` : la même colonne monospace pour les six locales. */
+export function formatSavedAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 16).replace("T", " ");
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}

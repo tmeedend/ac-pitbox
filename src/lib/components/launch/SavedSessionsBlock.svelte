@@ -6,7 +6,7 @@
   // touchent `setup` au niveau de l'écran entier) restent orchestrés par
   // Launch.svelte.
   import type { SessionType } from "$lib/launch";
-  import type { SavedSession } from "$lib/savedSessions";
+  import { formatSavedAt, type SavedSession } from "$lib/savedSessions";
   import { t } from "$lib/i18n/index.svelte";
   import SavedSessionsDialog from "../SavedSessionsDialog.svelte";
 
@@ -27,10 +27,6 @@
     onsave: (name: string) => void;
     onload: (s: SavedSession) => void;
   } = $props();
-
-  function fmtSavedAt(iso: string): string {
-    return iso.slice(0, 16).replace("T", " ");
-  }
 </script>
 
 {#if dialogOpen}
@@ -56,7 +52,7 @@
           <button class="saved-item" type="button" onclick={() => onload(s)}>
             <div class="saved-item-b">
               <div class="saved-item-name">{s.name}</div>
-              <div class="saved-item-meta mono">{fmtSavedAt(s.savedAt)}</div>
+              <div class="saved-item-meta mono">{formatSavedAt(s.savedAt)}</div>
             </div>
           </button>
         {/each}

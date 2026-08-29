@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import type { SessionType } from "$lib/launch";
   import { t } from "$lib/i18n/index.svelte";
-  import { listSavedSessions, deleteSavedSession, type SavedSession } from "$lib/savedSessions";
+  import { listSavedSessions, deleteSavedSession, formatSavedAt, type SavedSession } from "$lib/savedSessions";
 
   interface Props {
     sessionType: SessionType;
@@ -47,10 +47,6 @@
     }
     onsave(trimmed);
   }
-
-  function fmtDate(iso: string): string {
-    return iso.slice(0, 16).replace("T", " ");
-  }
 </script>
 
 <div class="backdrop">
@@ -89,7 +85,7 @@
           <button class="item" type="button" onclick={() => pick(s)}>
             <div class="item-b">
               <div class="item-name">{s.name}</div>
-              <div class="item-meta mono">{fmtDate(s.savedAt)}</div>
+              <div class="item-meta mono">{formatSavedAt(s.savedAt)}</div>
             </div>
             <span
               class="item-x"
