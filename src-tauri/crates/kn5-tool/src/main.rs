@@ -828,6 +828,11 @@ fn report_tangents(model: &kn5::Kn5Model) {
     let (mut vertices, mut usable) = (0usize, 0usize);
     let (mut triangles, mut degenerate) = (0usize, 0usize);
     let mut with_normal_map = 0usize;
+    // Longueur des normales et des tangentes : la mesure qui sépare « ce
+    // modèle est mal enroulé » de « on lit ses sommets au mauvais endroit ».
+    // Un vecteur exporté par un modeleur est unitaire ; des octets lus au
+    // mauvais décalage ne le sont pas.
+    let (mut unit_normals, mut unit_tangents) = (0usize, 0usize);
 
     model.visit_nodes(&mut |node| {
         let Some(mesh) = node.mesh() else { return };
@@ -836,8 +841,16 @@ fn report_tangents(model: &kn5::Kn5Model) {
         }
         for vertex in &mesh.vertices {
             vertices += 1;
+            let n = vertex.normal;
+            let normal_length = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+            if (normal_length - 1.0).abs() < 0.01 {
+                unit_normals += 1;
+            }
             let t = vertex.tangent;
             let length = (t[0] * t[0] + t[1] * t[1] + t[2] * t[2]).sqrt();
+            if (length - 1.0).abs() < 0.01 {
+                unit_tangents += 1;
+            }
             if length <= 1e-4 {
                 continue;
             }
@@ -879,6 +892,75 @@ fn report_tangents(model: &kn5::Kn5Model) {
             100.0 * part as f64 / whole as f64
         }
     };
+    // Motif des désaccords d'enroulement. « La moitié des triangles sont à
+    // l'envers » peut vouloir dire deux choses très différentes, et elles
+    // n'appellent pas le même remède :
+    //
+    //  - un désaccord **alternant** d'un triangle au suivant est la signature
+    //    d'une bande de triangles lue comme une liste ;
+    //  - des triangles **en double, sommets identiques et ordre inversé**,
+    //    sont de la géométrie doublée pour être vue des deux côtés.
+    let (mut pairs, mut alternating, mut mirrored) = (0usize, 0usize, 0usize);
+    model.visit_nodes(&mut |node| {
+        let Some(mesh) = node.mesh() else { return };
+        if !mesh.is_renderable || !mesh.is_visible {
+            return;
+        }
+        let agrees = |t: &[u16; 3]| -> Option<bool> {
+            let v: Vec<_> = t
+                .iter()
+                .map(|i| mesh.vertices.get(*i as usize))
+                .collect::<Option<_>>()?;
+            let e1 = [
+                v[1].position[0] - v[0].position[0],
+                v[1].position[1] - v[0].position[1],
+                v[1].position[2] - v[0].position[2],
+            ];
+            let e2 = [
+                v[2].position[0] - v[0].position[0],
+                v[2].position[1] - v[0].position[1],
+                v[2].position[2] - v[0].position[2],
+            ];
+            let face = [
+                e1[1] * e2[2] - e1[2] * e2[1],
+                e1[2] * e2[0] - e1[0] * e2[2],
+                e1[0] * e2[1] - e1[1] * e2[0],
+            ];
+            let n = v[0].normal;
+            let dot = face[0] * n[0] + face[1] * n[1] + face[2] * n[2];
+            (dot.abs() >= 1e-12).then_some(dot > 0.0)
+        };
+        let triangles = mesh.indices.as_chunks::<3>().0;
+        for window in triangles.windows(2) {
+            let (Some(a), Some(b)) = (agrees(&window[0]), agrees(&window[1])) else {
+                continue;
+            };
+            pairs += 1;
+            if a != b {
+                alternating += 1;
+            }
+            let mut left = window[0];
+            let mut right = window[1];
+            left.sort_unstable();
+            right.sort_unstable();
+            if left == right {
+                mirrored += 1;
+            }
+        }
+    });
+
+    let (agreeing, total) = kn5_gltf::winding_consistency(model);
+    println!(
+        "pattern   {:.1} % of consecutive triangles alternate, {:.1} % share their three vertices",
+        percent(alternating, pairs),
+        percent(mirrored, pairs),
+    );
+    println!(
+        "geometry  {:.1} % unit normals, {:.1} % unit tangents, {:.1} % winding agreement over {total} triangles",
+        percent(unit_normals, vertices),
+        percent(unit_tangents, vertices),
+        percent(agreeing, total),
+    );
     println!(
         "tangents  {:.1} % of {vertices} vertices carry a usable frame; {:.1} % of {triangles} triangles have degenerate UVs; {with_normal_map} of {} materials bind a normal map",
         percent(usable, vertices),
@@ -923,7 +1005,14 @@ fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
 
     let started = Instant::now();
     let options = kn5_gltf::ConvertOptions {
-        surfaces: kn5_gltf::material_overrides(&csp),
+        surfaces: kn5_gltf::material_overrides(
+            &csp,
+            skin.as_deref()
+                .and_then(|d| d.file_name())
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default()
+                .as_str(),
+        ),
         ..Default::default()
     };
     let conversion = kn5_gltf::convert(&model, skin.as_deref(), &options, &|stage| {

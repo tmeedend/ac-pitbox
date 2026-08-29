@@ -264,13 +264,36 @@ Certains mods payants publient des KN5 chiffrés. Détection : magic absent ou i
 
 **Comportement attendu** : ne pas tenter de déchiffrer. `preview::prepare` mappe l'erreur sur `errors.previewProtected`, l'UI retombe silencieusement sur `preview.jpg` avec un petit badge « aperçu 3D indisponible » et une infobulle explicative. Aucun message d'erreur agressif.
 
-### 4.5bis Magic valide, géométrie inexploitable
+### 4.5bis Magic valide, géométrie protégée
 
-Le magic n'attrape pas tout : deux mods signalés cassés (`ms_citroen_berlingo_2003_vts`, `gmp_w204_c63_c13`) parsent sans la moindre erreur mais ne s'affichent pas — la moitié de leurs triangles n'a plus de rapport cohérent avec sa normale (voir la découverte détaillée dans `docs/kn5-format.md`, avec le tableau de mesure sur l'échantillon de référence). On ne sait pas si c'est la même protection CSP sous une autre forme ou une corruption distincte ; les deux produisent le même symptôme, donc le même traitement.
+Certains mods parsent sans la moindre erreur et ne s'affichent pas — un carré
+bleu clignotant, une pluie de petits polygones. Le SPEC ne savait pas pourquoi ;
+c'est mesuré depuis (`docs/kn5-format.md`, découverte sur l'enroulement) : leurs
+**sommets sont intacts** — normales et tangentes unitaires à 100 %, dimensions
+d'une voiture, identifiants de matériaux valides — et seuls leurs *triangles*
+relient n'importe quoi. Quatre autres explications ont été éliminées une à une
+(décalage de lecture, bandes de triangles, géométrie doublée, variante de
+format).
 
-**Détection** : `kn5_gltf::winding_consistency` (déjà calculé pour l'avertissement de `convert()`, jusqu'ici jamais exploité) donne la fraction de triangles dont l'enroulement correspond à sa normale stockée. `kn5_gltf::is_geometry_sane`/`WINDING_SANITY_THRESHOLD` (0,9) en fait un verdict — mesuré sur l'échantillon de référence : tout mod sain est entre 99,5 % et 100 %, les mods cassés à ~50 % (littéralement un pile ou face), aucun cas intermédiaire observé.
+C'est la signature d'un **tampon d'index brouillé**, donc d'une protection : le
+fichier paraît sain à tout outil externe et ne se reconstitue qu'avec la clé.
 
-**Comportement attendu** : `preview::prepare` applique ce contrôle juste après celui du magic, avant `convert()` — jamais de conversion tentée sur une géométrie qui ne veut rien dire. Même repli que §4.5 : `errors.previewProtected`, badge, infobulle, rien d'agressif. `kn5-tool convert` (CLI de diagnostic, jamais livré à l'utilisateur) n'est pas concerné : il continue de convertir et de seulement avertir, pour rester utilisable comme outil d'inspection.
+**Détection** : `kn5_gltf::winding_consistency` donne la fraction de triangles
+dont l'enroulement correspond à sa normale stockée ;
+`kn5_gltf::is_geometry_sane`/`WINDING_SANITY_THRESHOLD` (0,9) en fait un
+verdict — les modèles sains sont entre 99,5 % et 100 %, les protégés à ~50 %.
+
+**Comportement attendu** : `preview::prepare` applique ce contrôle juste après
+celui du magic, avant `convert()`. Même repli que §4.5 :
+`errors.previewProtected`, badge, infobulle, rien d'agressif. **Ne pas essayer
+de rattraper ces modèles** — un rendu en double face a été tenté puis retiré :
+si l'assemblage est brouillé, il montre une toile de triangles à la place d'une
+photo propre. `kn5-tool convert` n'est pas concerné : il continue de convertir
+et de seulement avertir, pour rester utilisable comme outil d'inspection.
+
+**Portée mesurée** : 28 voitures sur 70, groupées par préfixe d'auteur
+(`art_`, `bati_`, `bksy_`, `ddm_`, `aegis_`) — des familles entières de mods
+protégés, là où le SPEC n'en connaissait que deux cas.
 
 ### 4.5ter Modèles étendus par CSP (`ext_config.ini`)
 

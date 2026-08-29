@@ -30,7 +30,7 @@ use crate::config::AppConfig;
 /// *reconnaître* pour libérer sa place. Trois incréments en une session de
 /// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
-const CONVERTER_VERSION: u32 = 20;
+const CONVERTER_VERSION: u32 = 22;
 
 /// Default cache ceiling (§5.3). Beyond it, the least recently used entries
 /// are evicted. Only a default: the real ceiling is a setting, carried by
@@ -307,17 +307,14 @@ pub fn prepare(
     })?;
 
     // Deuxième détection, complémentaire à la magie ci-dessus (§4.5bis) : un
-    // modèle peut avoir un en-tête KN5 parfaitement valide et pourtant ne
-    // rien avoir d'affichable — deux mods signalés cassés (un carré bleu qui
-    // clignote, une pluie de petits polygones bleus) parsent sans la moindre
-    // erreur mais n'orientent leurs triangles correctement qu'une fois sur
-    // deux, littéralement un résultat de pile ou face, là où les mods sains
-    // de la bibliothèque de référence sont tous au-dessus de 99,5 % (voir
-    // `kn5_gltf::WINDING_SANITY_THRESHOLD`, mesuré, pas deviné). On ne sait
-    // pas si c'est une protection CSP ou une autre corruption qui laisse le
-    // magic intact — l'un comme l'autre produisent la même chose côté
-    // utilisateur, donc le même traitement : repli silencieux sur la photo,
-    // jamais de tentative de rendu sur des triangles qui ne veulent rien dire.
+    // modèle peut avoir un en-tête KN5 parfaitement valide et pourtant ne rien
+    // avoir d'affichable. **Mesuré depuis** : leurs sommets sont intacts —
+    // normales et tangentes unitaires à 100 %, dimensions d'une voiture,
+    // identifiants de matériaux valides — et seuls leurs *triangles* relient
+    // n'importe quoi. C'est la signature d'un tampon d'index brouillé, donc
+    // d'une protection : le fichier reste valide en apparence et n'est
+    // exploitable qu'avec la clé. Repli silencieux sur la photo, jamais de
+    // rendu sur une géométrie qu'on ne saurait pas reconstituer.
     let (agreeing, total) = kn5_gltf::winding_consistency(&model);
     if !kn5_gltf::is_geometry_sane(agreeing, total) {
         return Err(crate::errors::PREVIEW_PROTECTED.to_string());
@@ -337,7 +334,15 @@ pub fn prepare(
     // carbone. C'est la seule façon de le savoir : le KN5 seul ne le dit pas
     // (SPEC §4.5ter).
     let options = kn5_gltf::ConvertOptions {
-        surfaces: kn5_gltf::material_overrides(&csp),
+        surfaces: kn5_gltf::material_overrides(
+            &csp,
+            skin_dir
+                .as_deref()
+                .and_then(|d| d.file_name())
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default()
+                .as_str(),
+        ),
         ..Default::default()
     };
     let conversion = kn5_gltf::convert(&model, skin_dir.as_deref(), &options, &|stage| {

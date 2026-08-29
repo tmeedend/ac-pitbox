@@ -790,6 +790,61 @@ habitacle.
 
 ---
 
+## Découverte — ce que « géométrie inexploitable » recouvre vraiment
+
+Le §4.5bis du SPEC refusait l'aperçu au-dessous de 90 % de cohérence
+d'enroulement, sans savoir ce qui se passait — « protection CSP ou corruption,
+on ne sait pas ». Voici la mesure, qui tranche.
+
+**Ce qui est intact** (`kn5-tool inspect --tangents`), sur cinq de ces modèles :
+
+| | modèles sains | modèles refusés |
+| --- | --- | --- |
+| normales unitaires | 100 % | **100 %** |
+| tangentes unitaires | 100 % | **100 %** |
+| dimensions | taille d'une voiture | taille d'une voiture |
+| identifiants de matériaux | valides | valides |
+| accord enroulement / normale | 99,5–100 % | **~50 %** |
+
+**Leurs sommets sont parfaitement lisibles.** Seuls leurs *triangles* relient
+n'importe quoi.
+
+**Quatre hypothèses éliminées, chacune par une mesure** :
+
+- *données lues au mauvais décalage* — normales et tangentes unitaires à 100 %,
+  ce que des octets mal alignés ne donnent jamais ;
+- *bandes de triangles lues comme des listes* — l'accord alternerait alors d'un
+  triangle au suivant à ~100 % ; mesuré à 50 %, donc aléatoire ;
+- *géométrie doublée pour être vue des deux côtés* — 0 % des triangles
+  consécutifs partagent leurs trois sommets ;
+- *variante de format* — les deux groupes contiennent du v5 comme du v6, avec
+  et sans mot d'en-tête supplémentaire.
+
+**Ce qui reste, et qui explique tout : un tampon d'index brouillé.** C'est une
+protection efficace et peu coûteuse — le fichier garde un magic valide, des
+sommets cohérents et des matériaux corrects, donc il *paraît* sain à tout outil
+externe, mais sa géométrie ne se reconstitue qu'avec la clé. Hypothèse de
+l'utilisateur, et c'est celle qui colle à la mesure : rien d'autre ne laisse les
+sommets intacts en ne détruisant que leur assemblage.
+
+**Conséquence pratique** : le refus est le bon comportement, et il faut y
+renoncer à l'idée de rattraper ces voitures. Rendre le modèle en **double face**
+a été essayé sur cette piste — l'idée étant qu'un enroulement seulement
+incohérent serait rétabli en dessinant les deux côtés — puis retiré : si
+l'assemblage lui-même est brouillé, on montrerait une toile de triangles à la
+place d'une photo propre.
+
+**Portée** : sur 70 voitures mesurées, 28 sont dans ce cas, groupées par préfixe
+d'auteur (`art_`, `bati_`, `bksy_`, `ddm_`, `aegis_`). Le SPEC n'en connaissait
+que deux ; ce sont en réalité des familles entières de mods protégés.
+
+> **Ce que l'épisode apprend.** Mesurer ce qu'un contrôle rejette ne sert pas
+> qu'à le corriger : ici la mesure a **confirmé** le contrôle, en remplaçant un
+> « on ne sait pas » par une cause nommée. Un rejet qu'on sait expliquer se
+> défend ; un rejet qu'on subit finit par être levé à tort.
+
+---
+
 ## Écart n°14 — le repère tangent est dans le fichier, et on le jetait
 
 **Symptôme** : des stries blanches, dures, à bords francs, sur les surfaces

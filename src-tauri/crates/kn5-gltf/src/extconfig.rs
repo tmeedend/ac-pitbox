@@ -160,8 +160,55 @@ impl MaterialOverrides {
 }
 
 /// Indice de réfraction du verre par défaut, tel que `materials_glass.ini` le
-/// fixe. `FilmIOR` le remplace quand le mod veut plus de reflet.
+/// fixe.
 const DEFAULT_GLASS_IOR: f32 = 1.5;
+
+/// Indice de réfraction d'une section de verre — **`IOR`, jamais `FilmIOR`**.
+///
+/// Les deux clés se ressemblent et ne désignent pas la même chose, ce que
+/// `materials_glass.ini` dit sans ambiguïté dès qu'on regarde ce qu'il passe
+/// à son shader :
+///
+/// ```ini
+/// IOR = 1.5       ; index of refraction for glass, usualy, 1.5
+/// FilmIOR = $IOR  ; redefine IOR for external film layer to increase reflections
+/// PROP_0_EXTIOR = extIOR, $IOR              ; ← le shader reçoit IOR
+/// FresnelC = $" _PBR_EstimateF0($FilmIOR or $IOR) "  ; ← FilmIOR ne pilote que le reflet
+/// ```
+///
+/// `FilmIOR` décrit une **fine couche** posée par-dessus, qui n'affecte que la
+/// réflectance ; `IOR` est celui du volume. Or le `KHR_materials_ior` de glTF
+/// pilote la réflectance de tout le volume, par la même formule de Schlick.
+/// Y écrire `FilmIOR` multiplie donc le reflet du verre entier :
+///
+/// | valeur posée | F0 obtenu |
+/// | --- | --- |
+/// | `IOR` 1,5 | 0,040 |
+/// | `FilmIOR` 2,2 (phares) | 0,141 |
+/// | `FilmIOR` 2,4 (filmé) | 0,170 |
+/// | `FilmIOR` 3,2 (teinté) | **0,274** |
+///
+/// Bug réel, et de mon fait : les vitres de `ks_lamborghini_aventador_sv`
+/// déclarent elles-mêmes `fresnelC = 0.1` et recevaient 0,274, soit près de
+/// trois fois trop — un miroir à la place d'une vitre.
+///
+/// La couche fine n'est pas modélisée : glTF ne sait pas augmenter la
+/// réflectance d'un diélectrique (`KHR_materials_specular` ne fait que la
+/// réduire), et la rendre par un vernis rajouterait un lobe spéculaire là où on
+/// vient d'en retirer un de trop.
+fn glass_ior_of(section: &Section) -> f32 {
+    section.number("IOR").filter(|v| *v > 1.0).unwrap_or(DEFAULT_GLASS_IOR)
+}
+
+/// Rugosité du vernis d'une peinture de carrosserie.
+///
+/// **Un choix, pas une transcription** : CSP n'exprime pas la rugosité de son
+/// vernis par une valeur qu'on puisse reprendre. Zéro — le défaut de glTF —
+/// donnerait un miroir parfait qui scintillerait au moindre mouvement, et le
+/// plancher anti-scintillement du viewer ne s'applique qu'à la couche de base,
+/// pas au vernis. Une valeur faible mais non nulle est le compromis ; à revoir
+/// à l'œil si la carrosserie paraît trop ou trop peu laquée.
+const CLEARCOAT_ROUGHNESS: f32 = 0.05;
 
 /// Ce qu'un template de CSP pose comme valeurs, avant surcharge par la section.
 #[derive(Debug, Clone, Copy)]
@@ -187,7 +234,7 @@ struct TemplateValues {
 /// métallicité la porte déjà, et sur un diélectrique glTF fixe F0 à 0,04 —
 /// exactement la valeur que la plupart de ces templates déclarent. La rendre
 /// demanderait `KHR_materials_specular` pour un écart invisible.
-const SURFACE_TEMPLATES: [(&str, TemplateValues); 16] = [
+const SURFACE_TEMPLATES: [(&str, TemplateValues); 20] = [
     // Famille autonome : `Smoothness` y est une vraie constante.
     (
         "Material_InteriorPBR",
@@ -269,6 +316,57 @@ const SURFACE_TEMPLATES: [(&str, TemplateValues); 16] = [
             clearcoat: None,
         },
     ),
+    // Peinture de carrosserie : **le vernis, et rien d'autre.**
+    //
+    // `materials_carpaint.ini` pose `ClearCoatIntensity = 1.0` sur toute la
+    // famille, et un vernis est littéralement ce qu'est une peinture de
+    // carrosserie : glTF le rend par une couche lisse de F0 0,04 par-dessus la
+    // base, ce qui est la description physique de la chose.
+    //
+    // **Ce qui est laissé de côté, et pourquoi.** Ces templates posent aussi un
+    // `FresnelC` de 0,08 à 0,16. Le traduire en `KHR_materials_ior` referait
+    // exactement l'erreur du `FilmIOR` (voir [`glass_ior_of`]) : un F0 de 0,16
+    // demande un indice de 2,33 et transformerait la carrosserie en miroir,
+    // alors que la conversion tire déjà sa réflectance du `fresnelC` que le
+    // KN5 déclare lui-même. `FlakesK`, `ColoredSpecular` et `PearlescentSpecular`
+    // n'ont pas d'équivalent glTF du tout.
+    //
+    // **La peinture mate n'a pas de vernis** : elle écrit `SpecularSun = 0, 1`,
+    // c'est-à-dire pas de reflet solaire. Lui en poser un serait le contraire
+    // de ce qu'elle demande, d'où son absence de cette table — elle retombe
+    // alors sur le traitement ordinaire, ce qui est le bon défaut.
+    (
+        "Material_CarPaint",
+        TemplateValues {
+            metalness: None,
+            smoothness: None,
+            clearcoat: Some((1.0, CLEARCOAT_ROUGHNESS)),
+        },
+    ),
+    (
+        "Material_CarPaint_Metallic",
+        TemplateValues {
+            metalness: None,
+            smoothness: None,
+            clearcoat: Some((1.0, CLEARCOAT_ROUGHNESS)),
+        },
+    ),
+    (
+        "Material_CarPaint_Solid",
+        TemplateValues {
+            metalness: None,
+            smoothness: None,
+            clearcoat: Some((1.0, CLEARCOAT_ROUGHNESS)),
+        },
+    ),
+    (
+        "Material_CarPaint_Pearl",
+        TemplateValues {
+            metalness: None,
+            smoothness: None,
+            clearcoat: Some((1.0, CLEARCOAT_ROUGHNESS)),
+        },
+    ),
     // Famille `_v2` : métallicité seulement, brillance laissée au KN5.
     (
         "Material_Metal_v2",
@@ -320,50 +418,87 @@ const SURFACE_TEMPLATES: [(&str, TemplateValues); 16] = [
     ),
 ];
 
+/// Matériau que vise une section de peinture qui ne nomme pas sa cible.
+///
+/// `materials_carpaint.ini` le pose dans ses `[DEFAULTS]` :
+/// `CarPaintMaterial = Carpaint`. **128 des 195 configs livrées par CSP s'en
+/// remettent à ce défaut** et n'écrivent aucune ligne `Materials` — les
+/// ignorer revenait à ne rien appliquer à la carrosserie de la plupart des
+/// voitures.
+const DEFAULT_CAR_PAINT_MATERIAL: &str = "Carpaint";
+
 /// Reads everything a car's configuration declares about its surfaces.
-pub fn material_overrides(config: &CspConfig) -> MaterialOverrides {
+///
+/// `skin_id` filtre les sections qui portent un `Skins` : un mod décrit
+/// couramment plusieurs peintures dans le même fichier et laisse le skin
+/// choisir — l'Aventador réserve ainsi sa peinture mate aux skins `?matt?`.
+pub fn material_overrides(config: &CspConfig, skin_id: &str) -> MaterialOverrides {
     let mut out = MaterialOverrides::default();
+    let mut car_paint = vec![DEFAULT_CAR_PAINT_MATERIAL.to_string()];
     for source in config.sources() {
         if let Ok(text) = std::fs::read_to_string(source) {
-            collect_materials(&text, &mut out);
+            collect_materials(&text, skin_id, &mut car_paint, &mut out);
         }
     }
     out
 }
 
-/// Les clés raccourcies de `materials_glass.ini`, avec **l'IOR que chacune
-/// pose**, et leur variante `…Meshes`.
+/// Les clés raccourcies de `materials_glass.ini`, et leur variante `…Meshes`.
 ///
-/// Transcrit du fichier lui-même : les quatre premières y sont quatre sections
-/// `[Material_Glass]` préréglées, la dernière un `[Material_PhotoelasticGlass]`.
-/// Les traiter toutes au défaut de 1,5 revenait à jeter le seul réglage qu'un
-/// moddeur exprime en les choisissant — un phare (2,2) ne renvoie pas comme un
-/// vitrage teinté (3,2).
-const GLASS_SHORTHANDS: [(&str, f32); 5] = [
-    ("ExteriorGlassMaterials", DEFAULT_GLASS_IOR),
-    ("ExteriorGlassTintedMaterials", 3.2),
-    ("ExteriorGlassFilmedMaterials", 2.4),
-    ("ExteriorGlassHeadlightsMaterials", 2.2),
-    ("ExteriorGlassPhotoelasticMaterials", 3.2),
+/// Elles ne portent **pas** d'indice de réfraction propre : ce qui les
+/// distingue dans le fichier de CSP est un `FilmIOR` et un `ThicknessMult`,
+/// dont ni l'un ni l'autre n'est l'IOR du verre — voir [`glass_ior_of`].
+const GLASS_SHORTHANDS: [&str; 5] = [
+    "ExteriorGlassMaterials",
+    "ExteriorGlassTintedMaterials",
+    "ExteriorGlassFilmedMaterials",
+    "ExteriorGlassHeadlightsMaterials",
+    "ExteriorGlassPhotoelasticMaterials",
 ];
 
-fn collect_materials(text: &str, out: &mut MaterialOverrides) {
+fn collect_materials(text: &str, skin_id: &str, car_paint: &mut Vec<String>, out: &mut MaterialOverrides) {
     for section in parse_sections(text) {
+        // Le raccourci se redéfinit en cours de fichier, et vaut pour tout ce
+        // qui suit — `ks_toyota_ae86_tuned` y liste ses onze pièces de
+        // carrosserie d'un coup.
+        if let Some(names) = section.list("CarPaintMaterial") {
+            if !names.is_empty() {
+                *car_paint = names;
+            }
+        }
+
+        // Un mod décrit plusieurs peintures dans le même fichier et laisse le
+        // skin choisir. Sans ce filtre, la peinture mate de l'Aventador
+        // s'appliquerait à ses skins brillants.
+        if let Some(skins) = section.list("Skins") {
+            if !skins.iter().any(|pattern| glob_match(pattern, skin_id)) {
+                continue;
+            }
+        }
+
         let over = section_override(&section);
         if !over.is_empty() {
-            for name in section.list("Materials").unwrap_or_default() {
+            let named = section.list("Materials").unwrap_or_default();
+            let meshes = section.list("Meshes").unwrap_or_default();
+            // Une section de peinture qui ne nomme personne vise le raccourci.
+            let named = if named.is_empty() && meshes.is_empty() && is_car_paint(&section.name) {
+                car_paint.clone()
+            } else {
+                named
+            };
+            for name in named {
                 out.materials.push((name, over));
             }
-            for name in section.list("Meshes").unwrap_or_default() {
+            for name in meshes {
                 out.meshes.push((name, over));
             }
         }
 
         // Les raccourcis peuvent apparaître dans n'importe quelle section — ils
         // sont posés juste sous le `[INCLUDE: common/materials_glass.ini]`.
-        for (shorthand, preset) in GLASS_SHORTHANDS {
+        for shorthand in GLASS_SHORTHANDS {
             let glass = SurfaceOverride {
-                glass_ior: Some(preset),
+                glass_ior: Some(DEFAULT_GLASS_IOR),
                 ..SurfaceOverride::default()
             };
             for name in section.list(shorthand).unwrap_or_default() {
@@ -377,6 +512,11 @@ fn collect_materials(text: &str, out: &mut MaterialOverrides) {
     }
 }
 
+/// Cette section décrit-elle une peinture de carrosserie ?
+fn is_car_paint(name: &str) -> bool {
+    name.starts_with("Material_CarPaint")
+}
+
 /// Ce qu'une section déclare : les valeurs de son template, surchargées par ce
 /// qu'elle écrit elle-même.
 fn section_override(section: &Section) -> SurfaceOverride {
@@ -387,13 +527,8 @@ fn section_override(section: &Section) -> SurfaceOverride {
     // `Material_Glass`, `Material_GlassSide`, `Material_MultiEmissiveGlass`,
     // `Material_PhotoelasticGlass` — tous héritent du même `smGlass`.
     if section.name.contains("Glass") {
-        let ior = section
-            .number("FilmIOR")
-            .or_else(|| section.number("IOR"))
-            .filter(|v| *v > 1.0)
-            .unwrap_or(DEFAULT_GLASS_IOR);
         return SurfaceOverride {
-            glass_ior: Some(ior),
+            glass_ior: Some(glass_ior_of(section)),
             ..SurfaceOverride::default()
         };
     }
@@ -1370,8 +1505,13 @@ OriginalRims = RIM_?
     }
 
     fn collected(text: &str) -> MaterialOverrides {
+        collected_for(text, "")
+    }
+
+    fn collected_for(text: &str, skin: &str) -> MaterialOverrides {
         let mut out = MaterialOverrides::default();
-        collect_materials(text, &mut out);
+        let mut car_paint = vec![DEFAULT_CAR_PAINT_MATERIAL.to_string()];
+        collect_materials(text, skin, &mut car_paint, &mut out);
         out
     }
 
@@ -1382,17 +1522,118 @@ OriginalRims = RIM_?
         }
     }
 
-    // Règle : chaque raccourci de `materials_glass.ini` pose son propre IOR.
-    // Les uniformiser jetterait le seul réglage qu'un moddeur exprime en
-    // choisissant l'un plutôt que l'autre — un phare ne renvoie pas comme un
-    // vitrage teinté.
+    // Règle : une section de peinture qui ne nomme personne vise le raccourci
+    // `CarPaintMaterial`, dont `materials_carpaint.ini` fixe le défaut à
+    // « Carpaint ». 128 des 195 configs livrées par CSP s'en remettent à ce
+    // défaut : les ignorer ne toucherait la carrosserie de presque aucune
+    // voiture.
     #[test]
-    fn each_glass_shorthand_carries_its_own_ior() {
+    fn a_paint_section_without_a_target_uses_the_shorthand() {
         let over = collected(
-            "\
-[INCLUDE: common/materials_glass.ini]
+            "[INCLUDE: common/materials_carpaint.ini]
+[Material_CarPaint_Metallic]
+",
+        );
+        assert_eq!(
+            over.materials.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(),
+            vec!["Carpaint"],
+            "la cible par défaut"
+        );
+        assert!(over.materials[0].1.clearcoat.is_some(), "et elle reçoit son vernis");
+
+        // Redéfini, le raccourci vaut pour tout ce qui suit — l'AE86 y liste
+        // ses onze pièces de carrosserie d'un coup.
+        let renamed = collected(
+            "[INCLUDE: common/materials_carpaint.ini]
+CarPaintMaterial = coupebody, body_1
+[Material_CarPaint_Solid]
+",
+        );
+        assert_eq!(
+            renamed.materials.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(),
+            vec!["coupebody", "body_1"],
+        );
+    }
+
+    // Règle : une section filtrée par `Skins` ne vaut que pour ces skins. Sans
+    // ce filtre, la peinture mate de l'Aventador — qui n'a pas de vernis —
+    // s'appliquerait aussi à ses skins brillants, et inversement.
+    #[test]
+    fn a_material_section_can_be_limited_to_some_skins() {
+        let text = "[Material_CarPaint_Metallic]
+Materials = body
+Skins = ?rosso?
+";
+        assert_eq!(collected_for(text, "rosso_corsa").materials.len(), 1, "le skin visé");
+        assert!(
+            collected_for(text, "bianco").materials.is_empty(),
+            "un autre skin n'est pas concerné"
+        );
+    }
+
+    // Règle : la peinture **mate** ne reçoit pas de vernis. Elle écrit
+    // `SpecularSun = 0, 1`, c'est-à-dire pas de reflet solaire ; lui en poser
+    // un serait le contraire de ce qu'elle demande.
+    #[test]
+    fn matte_paint_gets_no_clear_coat() {
+        let matte = collected(
+            "[Material_CarPaint_Matte]
+Materials = body
+",
+        );
+        assert!(matte.is_empty(), "rien appliqué, donc traitement ordinaire");
+
+        let glossy = collected(
+            "[Material_CarPaint_Pearl]
+Materials = body
+",
+        );
+        assert_eq!(
+            glossy.materials[0].1.clearcoat,
+            Some((1.0, CLEARCOAT_ROUGHNESS)),
+            "les peintures brillantes, elles, sont vernies"
+        );
+    }
+
+    // Règle : **`IOR`, jamais `FilmIOR`.** Les deux clés se ressemblent et ne
+    // désignent pas la même chose : `materials_glass.ini` passe `IOR` à son
+    // shader (`extIOR`) et ne se sert de `FilmIOR` que pour une fine couche de
+    // reflet. Le `KHR_materials_ior` de glTF, lui, pilote la réflectance de
+    // tout le volume — y écrire un `FilmIOR` de 3,2 donne un F0 de 0,274 là où
+    // la vitre en déclare 0,1, soit un miroir à la place d'une vitre.
+    #[test]
+    fn glass_takes_its_bulk_ior_never_the_film_one() {
+        let filmed = collected(
+            "[Material_Glass]
+Materials = pane
+FilmIOR = 3.2
+",
+        );
+        assert_eq!(
+            filmed.materials[0].1.glass_ior,
+            Some(1.5),
+            "la couche fine ne devient pas l'indice du volume"
+        );
+
+        let bulk = collected(
+            "[Material_Glass]
+Materials = pane
+IOR = 1.7
+FilmIOR = 3.2
+",
+        );
+        assert_eq!(bulk.materials[0].1.glass_ior, Some(1.7), "IOR est pris tel quel");
+    }
+
+    // Règle : les raccourcis `ExteriorGlass*` déclarent du verre, et rien de
+    // plus — ce qui les distingue chez CSP est un `FilmIOR` et un
+    // `ThicknessMult`, dont aucun n'est un indice de réfraction.
+    #[test]
+    fn the_exterior_glass_shorthands_all_declare_plain_glass() {
+        let over = collected(
+            "[INCLUDE: common/materials_glass.ini]
 ExteriorGlassFilmedMaterials=CAR_Vetro
-ExteriorGlassHeadlightsMaterials=CAR_Vetro_Fanali_ANTERIORI
+ExteriorGlassHeadlightsMaterials=CAR_Vetro_Fanali
 ExteriorGlassMaterials=plain
 ",
         );
@@ -1400,10 +1641,10 @@ ExteriorGlassMaterials=plain
             over.materials,
             vec![
                 ("plain".to_string(), glass(1.5)),
-                ("CAR_Vetro".to_string(), glass(2.4)),
-                ("CAR_Vetro_Fanali_ANTERIORI".to_string(), glass(2.2)),
+                ("CAR_Vetro".to_string(), glass(1.5)),
+                ("CAR_Vetro_Fanali".to_string(), glass(1.5)),
             ],
-            "les valeurs viennent de materials_glass.ini, pas d'un défaut unique"
+            "tous du verre ordinaire"
         );
     }
 
@@ -1428,9 +1669,9 @@ Materials = MAIN_BODY
 ",
         );
         assert_eq!(
-            over.materials,
-            vec![("MAIN_GLASS".to_string(), glass(1.8))],
-            "FilmIOR l'emporte sur le défaut, et la peinture n'est pas encore traitée"
+            over.materials[0],
+            ("MAIN_GLASS".to_string(), glass(1.5)),
+            "le FilmIOR de la section ne devient pas l'indice du volume"
         );
         assert_eq!(
             over.meshes,
@@ -1501,8 +1742,8 @@ Materials = MAIN_BODY
     #[test]
     fn an_unknown_template_changes_nothing() {
         assert!(
-            collected("[Material_CarPaint_Metallic]\nMaterials = body\n").is_empty(),
-            "la peinture n'est pas encore traduite : on n'invente pas"
+            collected("[Material_Fur]\nMaterials = rug\n").is_empty(),
+            "un template qu'on ne sait pas traduire : on n'invente pas"
         );
         assert!(
             collected("[LIGHTING]\nMaterials = body\n").is_empty(),
