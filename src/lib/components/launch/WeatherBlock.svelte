@@ -82,6 +82,14 @@
     return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
   }
 
+  /** Date de la journée représentée par la bande. Format court de la machine,
+   * comme partout ailleurs dans l'app (`ProvenanceBlock`, colonnes de
+   * bibliothèque). */
+  function fmtDate(iso: string): string {
+    const d = new Date(`${iso}T12:00:00`);
+    return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString();
+  }
+
   // --- Curseur d'heure (§8.6) ---
   // Pas de 10 minutes : une demi-heure passe à côté de la lumière qu'on vient
   // chercher — au bord d'un coucher, le ciel change complètement en dix
@@ -294,41 +302,48 @@
                repère de coucher désigne bien l'heure qu'il affiche. Les deux
                repères sont cliquables : c'est le geste utile — se poser pile
                au lever ou au coucher, ce qu'un curseur au pas d'une demi-heure
-               ne permet pas d'atteindre. -->
+               ne permet pas d'atteindre.
+               La date est affichée, pas seulement en infobulle : sans saison
+               choisie, le champ date reste vide alors que le jeu, lui, prend
+               la date du jour — un champ vide laisserait croire qu'aucune date
+               ne s'applique. C'est la journée qu'on regarde, donc elle se lit. -->
           <div
-            class="sky"
+            class="sky-wrap"
             title={t("launch.sunBandTitle", { date: sun.date }) +
               (sun.source === "geotags" ? ` — ${t("launch.sunApprox")}` : "")}
           >
-            <div
-              class="sky-band"
-              class:approx={sun.source === "geotags"}
-              style:background-image={skyGradient(sun)}
-            ></div>
-            {#if sun.sunrise !== null && sun.sunset !== null}
-              {@const rise = sun.sunrise}
-              {@const fall = sun.sunset}
-              <button
-                class="sun-mark"
-                type="button"
-                style:left="{bandPct(rise)}%"
-                title={t("launch.sunrise")}
-                onclick={() => (setup.time_hours = rise)}
-              >
-                <span class="sun-tick"></span>
-                <span class="sun-time mono">↑{fmtTime(rise)}</span>
-              </button>
-              <button
-                class="sun-mark"
-                type="button"
-                style:left="{bandPct(fall)}%"
-                title={t("launch.sunset")}
-                onclick={() => (setup.time_hours = fall)}
-              >
-                <span class="sun-tick"></span>
-                <span class="sun-time mono">↓{fmtTime(fall)}</span>
-              </button>
-            {/if}
+            <div class="sky-date mono">{fmtDate(sun.date)}</div>
+            <div class="sky">
+              <div
+                class="sky-band"
+                class:approx={sun.source === "geotags"}
+                style:background-image={skyGradient(sun)}
+              ></div>
+              {#if sun.sunrise !== null && sun.sunset !== null}
+                {@const rise = sun.sunrise}
+                {@const fall = sun.sunset}
+                <button
+                  class="sun-mark"
+                  type="button"
+                  style:left="{bandPct(rise)}%"
+                  title={t("launch.sunrise")}
+                  onclick={() => (setup.time_hours = rise)}
+                >
+                  <span class="sun-tick"></span>
+                  <span class="sun-time mono">↑{fmtTime(rise)}</span>
+                </button>
+                <button
+                  class="sun-mark"
+                  type="button"
+                  style:left="{bandPct(fall)}%"
+                  title={t("launch.sunset")}
+                  onclick={() => (setup.time_hours = fall)}
+                >
+                  <span class="sun-tick"></span>
+                  <span class="sun-time mono">↓{fmtTime(fall)}</span>
+                </button>
+              {/if}
+            </div>
           </div>
         {/if}
       </div>
@@ -514,9 +529,21 @@
   /* Marges de 5px = demi-largeur du pouce du curseur (voir Slider.svelte) :
      un `input[type=range]` réserve cette moitié à chaque bout, donc une bande
      posée bord à bord désignerait des heures décalées aux extrémités. */
+  /* Marge basse : les libellés des repères sont en position absolue et ne
+     poussent donc rien — sans elle, ils viendraient se poser sur la note
+     d'information qui suit le bloc. */
+  .sky-wrap {
+    margin: 6px 5px 0;
+    padding-bottom: 15px;
+  }
+  .sky-date {
+    font-size: 9.5px;
+    color: var(--faint);
+    text-align: right;
+    margin-bottom: 3px;
+  }
   .sky {
     position: relative;
-    margin: 7px 5px 0;
     /* Couleurs du ciel, pas des couleurs d'interface : elles ne sortent pas
        d'ici et n'ont donc rien à faire dans la palette globale. */
     --sky-night: #0a0f1e;
