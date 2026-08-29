@@ -999,6 +999,40 @@ joué pour l'instant — sans prétendre que ce soit le bon choix. Le banc
 `ignition_event_at_each_state` joue l'événement à 0 puis à 1 en annonçant
 chaque valeur : c'est l'oreille qui tranchera, et la réponse s'écrira ici.
 
+
+## 6septies. La pédale, c'est le bouton de la souris ✅ fait
+
+Le geste seul ne suffisait pas, et c'est le même symptôme qui l'a montré :
+**curseur tenu en place, le son retombait sur les couches de lâcher de gaz.**
+Rien ne bougeait, donc au bout de 180 ms le modèle en concluait « curseur posé »
+et ramenait le papillon au maintien (0,3) — alors que la main était toujours
+dessus, bouton enfoncé. Or tenir un curseur immobile pendant qu'on écoute, c'est
+exactement ce qu'on fait pour comparer deux mods à régime égal.
+
+**Le bouton de la souris dit ce qu'aucun mouvement ne peut dire.** Il est envoyé
+à part du régime (`set_audition_pedal`, `Command::Pedal`), et le modèle
+`Throttle` en tire la règle qui prime sur toutes les autres :
+
+| Le bouton | Le gaz |
+| --- | --- |
+| enfoncé sur le curseur | 1 — plein gaz, **aussi longtemps qu'il est tenu**, curseur immobile compris |
+| relâché | 0 — pied levé, et ça **y reste** (plus de retour au maintien) |
+| jamais touché (clavier, manette) | la règle du geste de §6quater, inchangée |
+
+Deux conséquences assumées. **Le sens du mouvement ne compte plus tant que le
+bouton est tenu** : redescendre le curseur pédale au plancher reste « en
+charge ». C'est ce que veut dire une pédale, et celui qui veut le frein moteur
+l'a désormais d'un simple relâchement, sans avoir à faire glisser quoi que ce
+soit. **Un bouton relâché ne dérive pas vers le maintien** : le lâcher de gaz
+soutenu devient une position d'écoute à part entière, ce qu'il n'était pas.
+
+Le clavier et la manette n'ont pas de bouton à tenir : bouger le curseur sans
+rien de tenu **rend la main à la règle du geste**, ce qui les laisse exactement
+comme avant. Côté interface, `Slider.svelte` gagne deux props optionnelles
+(`onpress`/`onrelease`) et écoute le relâchement **sur la fenêtre**, pas sur le
+champ : un glissement finit régulièrement pointeur hors de la piste, et un
+`pointerup` jamais reçu laisserait la pédale coincée au plancher.
+
 ---
 
 ## 7. Questions ouvertes

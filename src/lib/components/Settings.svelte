@@ -13,7 +13,8 @@
     type ConfigValidation,
   } from "$lib/config";
   import { t, setLocale, availableLocales, localeNames } from "$lib/i18n/index.svelte";
-  import { setZoom, ZOOM_LEVELS } from "$lib/zoom.svelte";
+  import { ZOOM_LEVELS } from "$lib/zoom.svelte";
+  import { applyZoomFor } from "$lib/bigpicture.svelte";
   import { nav, setSectionGuard } from "$lib/nav.svelte";
   import { preview3dDirty, revertPreview3dPrefs, savePreview3dPrefs } from "$lib/preview3dPrefs.svelte";
   import { listShowrooms, type ShowroomOption } from "$lib/launch";
@@ -141,7 +142,7 @@
     }
     // Annulé : revient sur tout ce qui a été appliqué en aperçu live.
     if (previewDirty) revertPreview3dPrefs();
-    setZoom(savedConfig.prefs.ui_zoom);
+    applyZoomFor(savedConfig.prefs);
     setLocale(savedConfig.prefs.language);
     config = structuredClone(savedConfig);
     return true;
@@ -179,7 +180,15 @@
 
   function onZoomChange(value: string) {
     config.prefs.ui_zoom = value ? Number(value) : null;
-    setZoom(config.prefs.ui_zoom);
+    applyZoomFor(config.prefs);
+  }
+
+  /** Live preview too, and that is the whole point: this zoom is only ever
+   * judged from inside Big Picture, and until now it applied on the NEXT entry
+   * - so, for anyone setting it from the mode itself, on nothing at all. */
+  function onBigPictureZoomChange(value: string) {
+    config.prefs.bigpicture_zoom = value ? Number(value) : null;
+    applyZoomFor(config.prefs);
   }
 </script>
 
@@ -234,7 +243,7 @@
           <select
             class="input"
             value={config.prefs.bigpicture_zoom ?? ""}
-            onchange={(e) => (config.prefs.bigpicture_zoom = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+            onchange={(e) => onBigPictureZoomChange(e.currentTarget.value)}
           >
             <option value="">{t("settings.bigpictureZoomDefault")}</option>
             {#each ZOOM_LEVELS as level}

@@ -22,7 +22,8 @@
     engineRev,
     engineShowcase,
     engineState,
-    setEngineRev,
+    setEnginePedal,
+  setEngineRev,
     setEngineShowcase,
     stopEngine,
     toggleEngine,
@@ -117,6 +118,8 @@
           value={engineRev()}
           display={t("detail.soundRevValue", { rpm: Math.round(engineRev()).toLocaleString() })}
           oninput={setEngineRev}
+          onpress={() => setEnginePedal(true)}
+          onrelease={() => setEnginePedal(false)}
         />
       {/if}
       <button class="blip" class:on={engineShowcase()} type="button" onclick={() => setEngineShowcase(!engineShowcase())}>

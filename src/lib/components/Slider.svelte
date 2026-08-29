@@ -29,8 +29,42 @@
     hint?: string;
     /** Tighter spacing, for a panel laid over the thing being adjusted. */
     compact?: boolean;
+    /** The pointer took hold of the thumb, and let go of it. Optional, and only
+     * the engine sound uses them so far: holding the button down there IS the
+     * throttle pedal, something no value change can report - a slider held
+     * still still has a hand on it. Keyboard and gamepad never fire these,
+     * which is deliberate: they have no button to hold. */
+    onpress?: () => void;
+    onrelease?: () => void;
   }
-  const { label, value, min, max, step = 1, display, oninput, hint, compact = false }: Props = $props();
+  const {
+    label,
+    value,
+    min,
+    max,
+    step = 1,
+    display,
+    oninput,
+    hint,
+    compact = false,
+    onpress,
+    onrelease,
+  }: Props = $props();
+
+  // The release is listened for on the WINDOW, not on the input: a drag
+  // routinely ends with the pointer well outside the track, and a `pointerup`
+  // that never comes would leave the pedal stuck down.
+  function press() {
+    onpress?.();
+    if (!onrelease) return;
+    const release = () => {
+      window.removeEventListener("pointerup", release);
+      window.removeEventListener("pointercancel", release);
+      onrelease();
+    };
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", release);
+  }
 
   // Filled part of the track, as a percentage of the range — computed here
   // rather than passed in. Every call site used to work it out by hand
@@ -53,6 +87,7 @@
       {value}
       style:--f="{fill}%"
       oninput={(e) => oninput(Number(e.currentTarget.value))}
+      onpointerdown={press}
     />
   </label>
   {#if hint && !compact}<p class="hint">{hint}</p>{/if}

@@ -341,6 +341,7 @@ impl Engine {
                 // réellement jouée sans forcément changer ces deux champs.
                 let old_menu = self.folder_for(Ambience::Menu);
                 let old_grid = self.folder_for(Ambience::Grid);
+                let was_enabled = self.config.enabled;
                 self.config = cfg;
                 if self.folder_for(Ambience::Menu) != old_menu {
                     self.playlists.remove(&Ambience::Menu);
@@ -352,6 +353,27 @@ impl Engine {
                 // tout de suite, pas seulement à la prochaine transition.
                 if self.fade.is_none() {
                     self.set_slot_volume(self.active_slot, self.effective_volume());
+                }
+                // La case « activer la musique » aussi : cochée ou décochée
+                // pendant qu'on est DÉJÀ en Big Picture, elle ne faisait
+                // jusqu'ici que régler le sort de la prochaine entrée — donc
+                // rien du tout, à l'oreille, pour qui la coche depuis le mode
+                // lui-même (bug signalé). Les deux fonctions appelées portent
+                // déjà toutes leurs gardes (AC lancé, session en cours, rien
+                // qui joue) : rien à dupliquer ici.
+                if was_enabled != self.config.enabled {
+                    if self.config.enabled {
+                        // `big_picture_active` et pas `state != Idle` : c'est
+                        // justement parce que rien ne joue qu'on rallume.
+                        if self.big_picture_active {
+                            self.enter_big_picture();
+                        }
+                    } else {
+                        // Sans toucher à `big_picture_active` : le mode reste
+                        // ouvert, c'est la musique qu'on vient de couper — et
+                        // c'est ce qui permet de la rallumer sans sortir.
+                        self.exit_big_picture();
+                    }
                 }
             }
             EngineCommand::EnterBigPicture => {

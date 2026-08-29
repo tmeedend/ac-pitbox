@@ -13,6 +13,7 @@ import {
   auditionEngineSound,
   clipToBuffer,
   setAuditionListener,
+  setAuditionPedal,
   setAuditionRev,
   setAuditionShowcase,
   stopAuditionNative,
@@ -34,7 +35,6 @@ let native = $state<NativeAudition | null>(null);
 /** Régime demandé, en tr/min. Vit ici et non dans le composant, pour la même
  * raison que le reste : la fiche se démonte, le son non. */
 let rev = $state(0);
-/** Les coups d'accélérateur tournent-ils ? */
 let showcase = $state(false);
 
 /** Dernier angle envoyé au moteur, pour ne pas répéter le même. */
@@ -96,6 +96,21 @@ export function setEngineRev(value: number): void {
   // que les deux ne se disputent pas le même paramètre.
   showcase = false;
   void setAuditionRev(value).catch(() => {});
+}
+
+/** Holding the mouse button down on the rev slider is holding the pedal down;
+ * letting go is lifting off.
+ *
+ * Sent apart from the engine speed because it says what a movement cannot: a
+ * slider held still, button down, is an engine held ON the throttle. Reported:
+ * keeping the slider in place made the sound fall back to the off-throttle
+ * layers, stillness alone reading as "slider put down".
+ *
+ * Pressing is a takeover like moving, showcase included - the routine drives
+ * the same parameters and would argue with the hand on the slider. */
+export function setEnginePedal(down: boolean): void {
+  if (down) showcase = false;
+  void setAuditionPedal(down).catch(() => {});
 }
 
 /** Les coups d'accélérateur tournent-ils ? */

@@ -8,6 +8,18 @@ import { musicEnterBigPicture, musicExitBigPicture } from "./music";
 
 export const bigPictureState = $state<{ active: boolean }>({ active: false });
 
+/** Applies the zoom of the mode currently ON SCREEN.
+ *
+ * Two zoom settings, only one of them showing at any time: Big Picture has its
+ * own, and falls back on the ordinary one when it has none. Anything applying a
+ * zoom live - the Settings screen previews both of them as they are picked -
+ * has to go through here, or changing the Big Picture zoom from inside Big
+ * Picture would show nothing, and changing the ordinary zoom from inside it
+ * would fight the mode's own. */
+export function applyZoomFor(prefs: { ui_zoom: number | null; bigpicture_zoom: number | null }): void {
+  setZoom(bigPictureState.active ? (prefs.bigpicture_zoom ?? prefs.ui_zoom) : prefs.ui_zoom);
+}
+
 // Restaurés à la sortie — taille/position/zoom en place avant l'entrée en
 // Big Picture, pas forcément les valeurs par défaut si l'utilisateur avait
 // déjà déplacé/redimensionné la fenêtre ou changé le zoom ailleurs.
@@ -36,8 +48,10 @@ export async function enterBigPicture(): Promise<void> {
     await win.setSize(monitor.size);
   }
 
-  setZoom(cfg.prefs.bigpicture_zoom ?? cfg.prefs.ui_zoom);
+  // Flag first, zoom after: `applyZoomFor` reads the flag to know which of the
+  // two settings is the one showing.
   bigPictureState.active = true;
+  applyZoomFor(cfg.prefs);
   // Musique après le passage en plein écran/zoom : si `enabled` est faux
   // côté réglages, le moteur ne joue rien (§2, coupe-circuit) — pas de
   // condition à dupliquer côté frontend.

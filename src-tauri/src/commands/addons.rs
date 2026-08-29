@@ -206,6 +206,18 @@ pub fn set_audition_rev(engine: State<crate::fmod::engine::FmodEngineHandle>, re
     engine.set_rev(rev);
 }
 
+/// Reports the mouse button being held down on the rev slider, or released.
+///
+/// Sent apart from the engine speed because it says what a movement cannot: a
+/// slider held still, button down, is an engine held ON the throttle. Without
+/// it, the stillness read as "slider put down" and the sound settled back to
+/// the off-throttle layers under a motionless hand.
+#[cfg(windows)]
+#[tauri::command]
+pub fn set_audition_pedal(engine: State<crate::fmod::engine::FmodEngineHandle>, down: bool) {
+    engine.set_pedal(down);
+}
+
 /// Déplace l'oreille autour de la voiture, en degrés et en mètres.
 ///
 /// Branché sur l'orbite de l'aperçu 3D : l'événement moteur d'AC est spatialisé

@@ -166,6 +166,8 @@ pub struct PlayReport {
 pub enum Command {
     Play(PlayRequest, Sender<Result<PlayReport, String>>),
     SetRev(f32),
+    /// The pointer took hold of the rev slider, or let go of it (§6septies).
+    Pedal(bool),
     SetListener(Listener),
     /// Start or stop the "showing off the engine" routine (§6bis).
     Showcase(bool),
@@ -198,6 +200,12 @@ impl FmodEngineHandle {
 
     pub fn set_rev(&self, value: f32) {
         self.send(Command::SetRev(value));
+    }
+
+    /// Holding the mouse button down on the rev slider is holding the pedal
+    /// down; letting go is lifting off.
+    pub fn set_pedal(&self, down: bool) {
+        self.send(Command::Pedal(down));
     }
 
     /// Moves the ear. Sent without waiting: this follows a camera being
@@ -642,6 +650,12 @@ struct Throttle {
     target: f32,
     /// How long the slider has been still.
     still: Duration,
+    /// What the pointer says about the pedal, when a pointer is on the slider
+    /// at all. `None`: nobody is holding it - keyboard, gamepad, or a slider
+    /// simply left alone - and the direction rule below decides on its own.
+    /// `Some(true)`: the button is down, which IS the pedal down. `Some(false)`:
+    /// it was released, foot off.
+    pedal: Option<bool>,
     /// Last value actually handed to FMOD. `None` until something has been,
     /// and after a take-over, which has to force a send.
     sent: Option<f32>,
@@ -655,13 +669,35 @@ impl Throttle {
             current: HOLD_THROTTLE,
             target: HOLD_THROTTLE,
             still: SETTLE_AFTER,
+            pedal: None,
             sent: Some(HOLD_THROTTLE),
         }
+    }
+
+    /// The pointer just took the slider, or let it go.
+    ///
+    /// Reported apart from the movement because it says what a movement cannot:
+    /// a slider held still, button down, is an engine held ON the throttle -
+    /// where the direction rule alone had no choice but to read the stillness
+    /// as "put down" and settle back (reported: holding the slider in place
+    /// dropped the sound to the off-throttle layers).
+    fn pedal_set(&mut self, down: bool) {
+        self.pedal = Some(down);
+        self.target = if down { 1.0 } else { 0.0 };
+        self.still = Duration::ZERO;
     }
 
     /// The slider just went from `from` to `to`.
     fn slider_moved(&mut self, from: f32, to: f32) {
         self.still = Duration::ZERO;
+        // A held button already states the throttle, and it wins: dragging back
+        // down with the pedal in still means on the throttle.
+        if self.pedal == Some(true) {
+            return;
+        }
+        // Moving with no button held is not the pointer: keyboard or gamepad,
+        // which have no pedal to press - the direction rule takes over again.
+        self.pedal = None;
         // The same value sent again — which happens, the slider emits on every
         // pixel it passes over — is not a movement and says nothing about a
         // direction.
@@ -678,6 +714,7 @@ impl Throttle {
         self.current = HOLD_THROTTLE;
         self.target = HOLD_THROTTLE;
         self.still = SETTLE_AFTER;
+        self.pedal = None;
         // `sent` is forgotten on purpose: the value has to reach FMOD again on
         // the next tick, or the event would stay wherever the last blip left it.
         self.sent = None;
@@ -687,8 +724,15 @@ impl Throttle {
     /// has not moved enough to be worth the trip.
     fn tick(&mut self, dt: Duration) -> Option<f32> {
         self.still += dt;
-        if self.still >= SETTLE_AFTER {
-            self.target = HOLD_THROTTLE;
+        match self.pedal {
+            // A button held down is a pedal held down, for as long as it takes:
+            // no settling back, however long the slider stays where it is.
+            Some(true) => self.target = 1.0,
+            // And released is released - it does not drift back to the holding
+            // value either, so the off-throttle layers stay listenable.
+            Some(false) => self.target = 0.0,
+            None if self.still >= SETTLE_AFTER => self.target = HOLD_THROTTLE,
+            None => {}
         }
         // Exponential approach: the step follows `dt`, so a tick stretched by a
         // command arriving in between does not make the value jump.
@@ -749,6 +793,22 @@ fn run(rx: Receiver<Command>) {
                     }
                 }
                 set_role(&loaded, &playing, |roles| roles.rev.as_ref(), value);
+            }
+            Ok(Command::Pedal(down)) => {
+                if let Some(p) = &mut playing {
+                    // Taking the slider in hand is a takeover, exactly like
+                    // moving it: the starter and the showcase both let go.
+                    if p.startup.take().is_some() {
+                        if let Some(l) = &loaded {
+                            drive_starter(l, &mut p.ignition, false);
+                        }
+                    }
+                    if p.showcase.take().is_some() {
+                        p.throttle.take_over();
+                    }
+                    // After `take_over`, which clears the pedal it just set.
+                    p.throttle.pedal_set(down);
+                }
             }
             Ok(Command::SetListener(next)) => {
                 listener = next;
@@ -1356,6 +1416,60 @@ mod tests {
             (settled - HOLD_THROTTLE).abs() < 0.02,
             "settles on the holding value, got {settled}"
         );
+    }
+
+    /// The reported bug, as a rule: a slider held still with the button down is
+    /// an engine held ON the throttle, for as long as it is held. The direction
+    /// rule alone read that stillness as "put down" and settled back, which is
+    /// what dropped the sound to the off-throttle layers under a motionless
+    /// hand.
+    #[test]
+    fn a_held_button_keeps_the_throttle_open_however_long_it_is_held() {
+        let mut throttle = Throttle::new();
+        throttle.pedal_set(true);
+        throttle.slider_moved(1000.0, 4000.0);
+        let opened = coast(&mut throttle, 100);
+        assert!(opened > 0.8, "on the throttle while climbing, got {opened}");
+        let still_held = coast(&mut throttle, 3000);
+        assert!(
+            still_held > 0.9,
+            "and three seconds of stillness change nothing, got {still_held}"
+        );
+    }
+
+    /// Letting go is lifting off, and it stays lifted: what makes the
+    /// off-throttle layers listenable without having to drag the slider down.
+    #[test]
+    fn releasing_the_button_lifts_off_and_stays_off() {
+        let mut throttle = Throttle::new();
+        throttle.pedal_set(true);
+        coast(&mut throttle, 100);
+        throttle.pedal_set(false);
+        // From wide open rather than from the holding value, so the plate takes
+        // a couple of time constants to shut - hence 300 ms and not 100.
+        let after = coast(&mut throttle, 300);
+        assert!(after < 0.05, "off the throttle on release, got {after}");
+        let later = coast(&mut throttle, 3000);
+        assert!(later < 0.1, "and it does not drift back to holding, got {later}");
+    }
+
+    /// With the button down the direction says nothing any more: coming back
+    /// down the range with the pedal in is still on the throttle. The keyboard
+    /// keeps the old rule, which is why moving with nothing held has to give
+    /// the slider back to it.
+    #[test]
+    fn moving_without_the_button_returns_to_the_direction_rule() {
+        let mut throttle = Throttle::new();
+        throttle.pedal_set(true);
+        throttle.slider_moved(4000.0, 3000.0);
+        let held = coast(&mut throttle, 100);
+        assert!(held > 0.8, "pedal in wins over the direction, got {held}");
+
+        throttle.pedal_set(false);
+        coast(&mut throttle, 60);
+        throttle.slider_moved(3000.0, 3400.0);
+        let arrows = coast(&mut throttle, 100);
+        assert!(arrows > 0.8, "climbing by keyboard opens it again, got {arrows}");
     }
 
     /// The same value sent twice — the slider emits on every pixel it crosses —

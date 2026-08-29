@@ -303,6 +303,7 @@ pub fn run() {
             #[cfg(windows)]
             commands::addons::set_audition_rev,
             #[cfg(windows)]
+            commands::addons::set_audition_pedal,
             #[cfg(windows)]
             commands::addons::set_audition_listener,
             #[cfg(windows)]

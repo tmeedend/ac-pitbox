@@ -73,6 +73,11 @@ export function setAuditionRev(rev: number): Promise<void> {
   return invoke<void>("set_audition_rev", { rev });
 }
 
+/** Reports the mouse button held down on the rev slider, or released. */
+export function setAuditionPedal(down: boolean): Promise<void> {
+  return invoke<void>("set_audition_pedal", { down });
+}
+
 /**
  * Déplace l'oreille autour de la voiture : angle d'orbite et hauteur en degrés,
  * distance en mètres.
