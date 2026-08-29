@@ -254,12 +254,47 @@ const TRACK_OUTLINE: [&str; 3] = ["outline.png", "outline.jpg", "map.png"];
 
 /// Lit la description et les layouts (avec images) d'un circuit. Gère le mono-
 /// layout (`ui/`) et le multi-layout (`ui/<layout>/`). Lecture seule.
-pub fn read_track_detail(track_dir: &Path) -> TrackDetail {
-    let mut layouts = Vec::new();
-    let mut description = None;
+///
+/// `dirs` est une **pile de composition** (§4.3), du plus prioritaire au moins :
+/// les couches actives puis la version de base. Chaque fichier est résolu
+/// indépendamment des autres, exactement comme `deploy::compose_tree` le pose
+/// dans `content/` — une couche qui ne remplace que le `preview.png` d'un
+/// layout ne doit pas emporter avec elle le `ui_track.json` de la base.
+///
+/// Bug réel : la fiche continuait d'afficher la photo d'origine d'un circuit
+/// dont une couche active fournissait la nouvelle, y compris après redémarrage,
+/// alors que le jeu, lui, voyait la bonne — parce que tout se lisait dans le
+/// dossier de la version de base, où la couche n'est par construction jamais
+/// écrite. Un seul dossier ne pouvait pas dire la vérité.
+pub fn read_track_detail(dirs: &[PathBuf]) -> TrackDetail {
+    // Union des layouts : une couche peut en **ajouter** un (cas le plus
+    // courant), pas seulement retoucher ceux de la base.
+    let mut ids: Vec<String> = Vec::new();
+    for d in dirs {
+        for (_, id) in layout_dirs(d) {
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+    }
+    // Ordre stable et indépendant de celui des couches : la racine (mono-layout)
+    // d'abord, le reste trié — `layout_dirs` le garantit par dossier, pas sur
+    // leur union.
+    ids.sort_by(|a, b| b.is_empty().cmp(&a.is_empty()).then(a.cmp(b)));
 
-    let mut add = |dir: &Path, id: String| {
-        let v = read_json(&dir.join("ui_track.json"));
+    let mut description = None;
+    let mut layouts = Vec::new();
+    for id in ids {
+        // `join("")` laisserait un séparateur en trop : le mono-layout se lit à
+        // la racine de `ui/`, pas dans un sous-dossier vide.
+        let of = |d: &PathBuf| {
+            if id.is_empty() {
+                d.join("ui")
+            } else {
+                d.join("ui").join(&id)
+            }
+        };
+        let v = dirs.iter().find_map(|d| read_json(&of(d).join("ui_track.json")));
         let name = v
             .as_ref()
             .and_then(|v| v.get("name").and_then(as_string))
@@ -268,17 +303,15 @@ pub fn read_track_detail(track_dir: &Path) -> TrackDetail {
             description = v.as_ref().and_then(|v| v.get("description").and_then(as_string));
         }
         let length = v.as_ref().and_then(|v| v.get("length").and_then(as_string));
+        let preview = dirs.iter().find_map(|d| first_file(&of(d), &TRACK_PREVIEW));
+        let outline = dirs.iter().find_map(|d| first_file(&of(d), &TRACK_OUTLINE));
         layouts.push(LayoutItem {
             id,
             name,
             length,
-            preview: first_file(dir, &TRACK_PREVIEW),
-            outline: first_file(dir, &TRACK_OUTLINE),
+            preview,
+            outline,
         });
-    };
-
-    for (dir, id) in layout_dirs(track_dir) {
-        add(&dir, id);
     }
 
     TrackDetail { description, layouts }

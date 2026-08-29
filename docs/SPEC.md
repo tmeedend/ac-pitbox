@@ -131,6 +131,14 @@ Pensé pour un lot de plusieurs dizaines de mods.
 
 **Contrôle** : ordre des couches modifiable + activation/désactivation par couche. Une couche peut se poser sur n'importe quel contenu (base ou mod).
 
+**Ce que l'app affiche est le résultat composé, pas la version de base** (`library::entity_dirs`). Photos, tracés, layouts, `ui_*.json`, extensions CSP : tout se lit à travers une **pile** — couches actives par priorité décroissante, puis la version de base — et **fichier par fichier**, exactement comme `deploy::compose_tree` pose dans `content/`. Une couche qui ne remplace qu'un `preview.png` ne masque donc pas le `ui_track.json` de la base, et un layout que la couche ne touche pas garde sa photo d'origine. Les layouts sont l'**union** des deux : une couche peut en ajouter un. Les extensions CSP aussi — une couche ajoute ses fonctionnalités, elle ne remplace pas celles de la base.
+
+*Pourquoi une pile et non une lecture de `content/`* : le résultat composé n'existe sur le disque que tant que le mod est **actif**. La fiche d'un mod désactivé doit dire la même chose que celle du même mod activé.
+
+*Bug réel* : une couche remplaçait le `preview.png` d'un circuit ; le jeu affichait bien la nouvelle image, la fiche et la carte de bibliothèque continuaient d'afficher l'ancienne, **y compris après redémarrage** — parce que tout se lisait dans le dossier de la version de base, où une couche n'est par construction jamais écrite. Symétriquement, désactiver une couche doit faire réapparaître la base à l'écran comme en jeu : une couche inactive est exclue de la pile.
+
+« Ouvrir le dossier » reste l'exception assumée : il désigne un vrai dossier de l'explorateur, donc la version de base (`entity_dir`), pas une pile.
+
 ### 4.3bis Fragments : une couche déguisée en mod
 
 Un dossier peut avoir **la forme** d'un mod sans en être un. La détection de type ne regarde que `ui/` (`ui_car.json`, `ui/<layout>/ui_track.json`), et un dossier conçu pour être **posé sur** un mod existant porte exactement le même `ui/` — l'auteur le recopie pour livrer ses `preview.png`. Ce qui sépare les deux, c'est la **géométrie** : une voiture a son `.kn5` à la racine, un circuit en a un aussi ou un `models*.ini` qui nomme ceux qu'il charge. Un dossier qui n'a ni l'un ni l'autre **ne peut pas être chargé par le jeu**.
@@ -148,6 +156,8 @@ Mesuré sur tout le corpus de référence, **sans une seule exception** : 103 ve
 5. **le recouvrement de chemins** — quel hôte possède déjà les fichiers que le fragment apporte. Exige un vrai écart (au moins 2 concordances et le double du suivant) : `extension/ext_config.ini` existe seul chez des dizaines de circuits.
 
 Deux candidats à égalité ne sont jamais départagés : poser le contenu sur un mod qu'il ne visait pas est pire que ne rien décider.
+
+**Le dossier d'extraction ne devient jamais une identité** (`importer::incoming_name`). 7-Zip extrait à plat dans un dossier de travail temporaire : une archive dont le contenu est à la racine — la forme habituelle d'un fragment, un vrai mod devant porter son dossier d'id puisque AC le lit dans `content/<type>s/<id>` — fait donc de ce dossier de travail le dossier du mod. Son nom est alors repris de l'**archive**, privé de son extension. Un uuid ne désigne rien (cas réel : une couche rangée sous « pitbox-import-4df3c112-8c51-… ») et surtout il **change à chaque extraction**, ce qui cassait aussi la reprise après arbitrage : elle retrouve son mod par ce nom dans une seconde extraction, donc sous un autre uuid.
 
 **Ce qui en découle** :
 

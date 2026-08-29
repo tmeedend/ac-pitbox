@@ -445,11 +445,15 @@ fn is_resume(decisions: &[ImportDecision]) -> bool {
 /// seul mod tranché** : rejouer les trente-neuf autres d'un pack les faisait
 /// revenir en « doublon » — donc sans dégât, mais au prix du lot entier, et la
 /// barre annonçait un travail qui n'en était pas un.
-fn targets_of<'a>(found: &'a [modscan::FoundMod], decisions: &[ImportDecision]) -> Vec<&'a modscan::FoundMod> {
+fn targets_of<'a>(
+    found: &'a [modscan::FoundMod],
+    decisions: &[ImportDecision],
+    archive_name: &str,
+) -> Vec<&'a modscan::FoundMod> {
     if is_resume(decisions) {
         found
             .iter()
-            .filter(|fm| decision_for(decisions, &fm_id(fm)).is_some())
+            .filter(|fm| decision_for(decisions, &incoming_name(&fm.dir, archive_name)).is_some())
             .collect()
     } else {
         found.iter().collect()
@@ -526,11 +530,57 @@ fn drop_unused_kept_source(conn: &Connection, cfg: &AppConfig, kept: Option<&str
 }
 
 /// Id interne dérivé du dossier d'un mod trouvé (nom du dossier `content/<type>s/<id>`).
+/// **Nom brut**, sans le repli de [`incoming_name`] : sert à reconnaître un id
+/// écrit dans le **chemin** d'un reste (`owners_of`), où c'est bien ce nom-là
+/// qui apparaît, et lui seul.
 fn fm_id(fm: &modscan::FoundMod) -> String {
     fm.dir
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default()
+}
+
+/// Préfixe des dossiers de travail d'extraction ([`make_temp_dir`]).
+///
+/// Nommé plutôt qu'écrit deux fois, parce que ce nom **ressort** : 7-Zip extrait
+/// à plat dedans, donc une archive dont le contenu est à la racine fait de ce
+/// dossier de travail le dossier du mod — et son nom devient son identité.
+/// Cas réel : une couche rangée sous « pitbox-import-4df3c112-8c51-… » dans
+/// « Couches & extensions ». C'est la forme habituelle d'un fragment (§4.3bis),
+/// un vrai mod devant porter son dossier d'id puisque AC le lit dans
+/// `content/<type>s/<id>`.
+const STAGING_PREFIX: &str = "pitbox-import-";
+
+/// Nom porteur d'identité d'un dossier de mod entrant : celui du dossier, sauf
+/// quand ce dossier est celui de l'extraction — alors celui de l'archive, privé
+/// de son extension.
+///
+/// Un uuid de dossier temporaire ne désigne rien et **change à chaque
+/// extraction** : s'en servir comme clé cassait aussi la reprise après
+/// arbitrage (§4.4), qui retrouve son mod par ce nom dans une seconde
+/// extraction, donc sous un autre uuid.
+fn incoming_name(dir: &Path, archive_name: &str) -> String {
+    let raw = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if !raw.starts_with(STAGING_PREFIX) {
+        return raw;
+    }
+    let archive = Path::new(archive_name);
+    let stem = match archive.extension().and_then(|e| e.to_str()) {
+        Some(ext) if NESTED_ARCHIVE_EXTS.iter().any(|k| ext.eq_ignore_ascii_case(k)) => archive
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| archive_name.to_string()),
+        _ => archive_name.to_string(),
+    };
+    let cleaned = sanitize(&stem);
+    if cleaned.is_empty() {
+        raw
+    } else {
+        cleaned
+    }
 }
 
 /// Extensions d'archives reconnues pour une extraction imbriquée (§7.3).
@@ -1448,7 +1498,7 @@ fn file_extracted(
         drop_unused_kept_source(conn, cfg, ex.kept.as_deref());
         return result;
     }
-    let targets = targets_of(&found, decisions);
+    let targets = targets_of(&found, decisions, &archive_name);
     ctx.sub(0, targets.len(), archive_name.clone());
     ctx.file_ratio(ex.index, SCAN_SHARE);
 
@@ -1465,9 +1515,10 @@ fn file_extracted(
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         ctx.phase(PHASE_FILING, label);
-        ctx.sub(i + 1, targets.len(), fm_id(fm));
+        let item = incoming_name(&fm.dir, &archive_name);
+        ctx.sub(i + 1, targets.len(), item.clone());
         // Archive : le contenu vient d'un dossier temp → toujours déplacé.
-        let decision = decision_for(decisions, &fm_id(fm));
+        let decision = decision_for(decisions, &item);
         match process_found(
             conn,
             cfg,
@@ -1640,7 +1691,7 @@ fn import_one_folder(
         drop_unused_kept_source(conn, cfg, kept_archive);
         return result;
     }
-    let targets = targets_of(&found, decisions);
+    let targets = targets_of(&found, decisions, &name);
     ctx.sub(0, targets.len(), name.clone());
     ctx.file_ratio(index, SCAN_SHARE);
 
@@ -1654,8 +1705,9 @@ fn import_one_folder(
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default(),
         );
-        ctx.sub(i + 1, targets.len(), fm_id(fm));
-        let decision = decision_for(decisions, &fm_id(fm));
+        let item = incoming_name(&fm.dir, &name);
+        ctx.sub(i + 1, targets.len(), item.clone());
+        let decision = decision_for(decisions, &item);
         match process_found(
             conn,
             cfg,
@@ -2180,11 +2232,10 @@ fn process_found(
     // à connaître les bandes de la barre ni le rang de l'item dans le lot.
     on_progress: &dyn Fn(f64),
 ) -> Result<ImportedMod, String> {
-    let folder_name = fm
-        .dir
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .ok_or(crate::errors::UNNAMED_MOD_FOLDER)?;
+    let folder_name = incoming_name(&fm.dir, archive_name);
+    if folder_name.is_empty() {
+        return Err(crate::errors::UNNAMED_MOD_FOLDER.into());
+    }
 
     // --- Fragment ou mod ? (§4.3bis) ---
     //
@@ -2680,11 +2731,7 @@ fn process_found(
 /// Nom de couche lisible : id du dossier entrant s'il diffère de l'archive,
 /// sinon nom de l'archive (assaini). Évite d'écraser une couche existante.
 fn layer_name(fm: &modscan::FoundMod, archive_name: &str) -> String {
-    let dir = fm
-        .dir
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
+    let dir = incoming_name(&fm.dir, archive_name);
     let base = if dir.is_empty() { archive_name.to_string() } else { dir };
     sanitize(&base)
 }
@@ -5274,6 +5321,35 @@ mod tests {
         assert!(
             crate::overlay::get_mod(&conn, "santa_monica_mtns").unwrap().is_none(),
             "aucun circuit inventé pour porter la couche"
+        );
+    }
+
+    #[test]
+    fn the_extraction_folder_never_becomes_an_identity() {
+        // Règle : 7-Zip extrait à plat dans le dossier de travail, donc une
+        // archive dont le contenu est à la racine fait de CE dossier le dossier
+        // du mod. Son nom est un uuid : il ne désigne rien, et il change à
+        // chaque extraction — donc il ne peut être ni une identité ni une clé
+        // de reprise. Bug réel : une couche rangée sous
+        // « pitbox-import-4df3c112-… » dans « Couches & extensions ».
+        let staging = Path::new(r"C:\Temp\pitbox-import-4df3c112-8c51-477b-b612-9726ec196631");
+        assert_eq!(
+            incoming_name(staging, "Mike08_santamonica01.rar"),
+            "Mike08_santamonica01",
+            "repli sur le nom de l'archive, sans son extension"
+        );
+        // Une source qui n'est pas une archive garde son nom entier : le point
+        // peut faire partie du nom d'un dossier (« Track v1.2 »).
+        assert_eq!(
+            incoming_name(staging, "Track v1.2"),
+            "Track v1.2",
+            "seules les extensions d'archive reconnues sont retirées"
+        );
+        // Un vrai dossier de mod n'est jamais touché.
+        assert_eq!(
+            incoming_name(Path::new(r"C:\Temp\wrap\ks_nordschleife"), "pack.zip"),
+            "ks_nordschleife",
+            "le nom du dossier reste l'identité quand il en est une"
         );
     }
 }

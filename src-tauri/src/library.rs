@@ -85,11 +85,16 @@ fn is_active(cfg: &AppConfig, m: &ModRow) -> bool {
 fn preview_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
     // Version active en bibliothèque, sinon content/ (contenu de base Kunos) —
     // c'est ce qui fait apparaître la vignette du stock, comme l'écran de session.
-    let dir = entity_dir(conn, cfg, m)?;
+    // Couches actives d'abord (§4.3) : ce que l'app montre doit être ce que le
+    // jeu voit, sinon une couche qui remplace un `preview.png` reste invisible.
+    let dirs = entity_dirs(conn, cfg, m);
     match kind_of(&m.kind) {
-        ModKind::Car => inspect::preview_path(ModKind::Car, &dir),
+        ModKind::Car => layered(&dirs, |d| inspect::preview_path(ModKind::Car, d)),
         // Circuit : la photo illustratrice (fond), repli sur le tracé si absente.
-        ModKind::Track => inspect::track_preview(&dir).or_else(|| inspect::track_outline(&dir)),
+        // Le repli se fait **pile épuisée**, pas couche par couche : une couche
+        // qui n'apporte qu'un tracé ne doit pas priver la carte de la photo de
+        // la base.
+        ModKind::Track => layered(&dirs, inspect::track_preview).or_else(|| layered(&dirs, inspect::track_outline)),
     }
 }
 
@@ -98,8 +103,7 @@ fn outline_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String>
     if m.kind != "Track" {
         return None;
     }
-    let dir = entity_dir(conn, cfg, m)?;
-    inspect::track_outline(&dir)
+    layered(&entity_dirs(conn, cfg, m), inspect::track_outline)
 }
 
 /// Native spec sheet of a car (weight §6.2, description §6.1), read on the fly
@@ -110,8 +114,7 @@ fn car_specs_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<Nativ
     if m.kind != "Car" {
         return None;
     }
-    let dir = entity_dir(conn, cfg, m)?;
-    uijson::read_car_specs(&dir)
+    layered(&entity_dirs(conn, cfg, m), uijson::read_car_specs)
 }
 
 /// Effective description of a card: the user's own text wins over the file
@@ -125,7 +128,7 @@ fn description_for(conn: &Connection, cfg: &AppConfig, m: &ModRow, native: Optio
     }
     match kind_of(&m.kind) {
         ModKind::Car => native.and_then(|s| s.description.clone()),
-        ModKind::Track => uijson::read_track_description(&entity_dir(conn, cfg, m)?),
+        ModKind::Track => layered(&entity_dirs(conn, cfg, m), uijson::read_track_description),
     }
 }
 
@@ -134,8 +137,7 @@ fn badge_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
     if m.kind != "Car" {
         return None;
     }
-    let dir = entity_dir(conn, cfg, m)?;
-    inspect::brand_badge(&dir)
+    layered(&entity_dirs(conn, cfg, m), inspect::brand_badge)
 }
 
 fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
@@ -304,6 +306,40 @@ fn entity_dir(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<PathBuf>
     })
 }
 
+/// Pile de composition d'un mod (§4.3), **du plus prioritaire au moins** : ses
+/// couches actives par priorité décroissante, puis la version de base.
+///
+/// C'est la même superposition que celle que `deploy::compose_tree` pose dans
+/// `content/`. Elle est refaite ici parce que le résultat composé n'existe sur
+/// le disque que tant que le mod est **actif** : la fiche d'un mod désactivé
+/// doit dire la même chose que celle du même mod activé, et la lire dans
+/// `content/` ne le permettrait pas.
+///
+/// Une couche **inactive** est exclue, exactement comme à la composition : la
+/// désactiver doit faire réapparaître la base, à l'écran comme dans le jeu.
+fn entity_dirs(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = overlay::list_layers(conn, &m.id_interne)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|l| l.is_active)
+        .filter_map(|l| crate::libpath::resolve(cfg.library_path.as_deref(), &l.library_path))
+        .collect();
+    // `list_layers` trie par priorité **croissante** et c'est la plus haute qui
+    // gagne (§4.3) : la pile de lecture est donc l'inverse de la liste.
+    dirs.reverse();
+    dirs.extend(entity_dir(conn, cfg, m));
+    dirs
+}
+
+/// Applique un lecteur à la pile de composition et retient la première réponse.
+///
+/// Résolution **fichier par fichier**, jamais dossier par dossier : une couche
+/// qui n'apporte qu'un `preview.png` ne doit pas masquer le `ui_car.json` de la
+/// base. Chaque appelant passe donc le lecteur du seul fichier qui l'intéresse.
+fn layered<T>(dirs: &[PathBuf], read: impl Fn(&Path) -> Option<T>) -> Option<T> {
+    dirs.iter().find_map(|d| read(d))
+}
+
 /// Dossier réel d'un mod (voiture/circuit, géré ou contenu de base), pour
 /// « Ouvrir le dossier » dans l'explorateur — même résolution que la fiche
 /// détail (`entity_dir`), exposée publiquement pour la commande dédiée.
@@ -324,8 +360,13 @@ pub fn mod_csp_features(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("mod introuvable : {id}"))?;
     let kind = kind_of(&m.kind);
-    let dir = entity_dir(conn, cfg, &m).ok_or_else(|| format!("dossier introuvable pour « {id} »"))?;
-    let mut feats = inspect::csp_features(&dir);
+    // Union sur la pile de composition, pas premier arrivé : une couche AJOUTE
+    // ses extensions CSP à celles de la base (une config météo posée sur un
+    // circuit qui n'en avait pas), elle ne les remplace pas.
+    let mut feats: Vec<String> = entity_dirs(conn, cfg, &m)
+        .iter()
+        .flat_map(|d| inspect::csp_features(d))
+        .collect();
     if let Some(ac) = &cfg.ac_install_path {
         feats.extend(inspect::csp_features_loaded(ac, kind, id));
     }
@@ -341,7 +382,7 @@ pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<
     let versions = overlay::get_versions(conn, id)?;
     let history = overlay::get_history(conn, id)?;
     // Dossier de l'entité : version active en bibliothèque, sinon content/ (stock).
-    let entity_dir = entity_dir(conn, cfg, &m);
+    let entity_dirs = entity_dirs(conn, cfg, &m);
     // Description saisie par l'utilisateur (§5bis.3) : contrairement au nom
     // (arbitré en SQL, voir `MOD_SELECT`), la description native n'est pas en
     // base — elle se relit dans le `ui_*.json` à chaque affichage. L'arbitrage
@@ -349,7 +390,7 @@ pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<
     let described = m.description_user.clone();
     // Fiche technique native lue à la demande (voitures).
     let specs = if m.kind == "Car" {
-        let native = entity_dir.as_deref().and_then(uijson::read_car_specs);
+        let native = layered(&entity_dirs, uijson::read_car_specs);
         // `or_else` et pas seulement `map` : un mod sans `ui_car.json` lisible
         // n'a pas de fiche native, mais peut très bien porter une description
         // écrite à la main — la perdre serait perdre la seule chose qu'on ait.
@@ -369,7 +410,7 @@ pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<
     };
     // Détail circuit (description + layouts illustrés).
     let track = if m.kind == "Track" {
-        let mut t = entity_dir.as_deref().map(uijson::read_track_detail).unwrap_or_default();
+        let mut t = uijson::read_track_detail(&entity_dirs);
         if described.is_some() {
             t.description = described.clone();
         }
@@ -728,5 +769,141 @@ mod tests {
         let cards = list_cards(&conn, &AppConfig::default()).unwrap();
         let stock = cards.iter().find(|c| c.base.id_interne == "ks_test_track").unwrap();
         assert!(!stock.broken);
+    }
+
+    /// Monte un circuit géré : version de base en bibliothèque + une couche.
+    /// Renvoie (conn, cfg, id de la couche).
+    fn track_with_layer(base: &Path) -> (Connection, AppConfig, String) {
+        let library = base.join("library");
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+
+        // Base : deux layouts, chacun avec sa photo.
+        let ver = library.join("tracks").join("smm").join("v1");
+        for l in ["a_race", "b_free"] {
+            let ui = ver.join("ui").join(l);
+            std::fs::create_dir_all(&ui).unwrap();
+            std::fs::write(ui.join("ui_track.json"), br#"{"name":"Base","description":"d"}"#).unwrap();
+            std::fs::write(ui.join("preview.png"), b"OLD").unwrap();
+        }
+        overlay::upsert_mod(&conn, "smm", "Track", None, Some("SMM"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn,
+            "v1",
+            "smm",
+            Some("1"),
+            None,
+            &now,
+            &ver.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "smm", "v1").unwrap();
+
+        // Couche : remplace la photo d'UN layout, en ajoute un troisième.
+        let layer = library.join("layers").join("smm").join("overhaul");
+        let a = layer.join("ui").join("a_race");
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::write(a.join("preview.png"), b"NEW").unwrap();
+        let c = layer.join("ui").join("c_extra");
+        std::fs::create_dir_all(&c).unwrap();
+        std::fs::write(c.join("ui_track.json"), r#"{"name":"Ajouté par la couche"}"#).unwrap();
+        overlay::insert_layer(
+            &conn,
+            "L1",
+            "smm",
+            "Track",
+            "overhaul",
+            &layer.to_string_lossy(),
+            Some("overhaul.zip"),
+            1,
+            1,
+            0,
+            &now,
+        )
+        .unwrap();
+
+        let cfg = AppConfig {
+            library_path: Some(library),
+            ..Default::default()
+        };
+        (conn, cfg, "L1".to_string())
+    }
+
+    #[test]
+    fn an_active_layer_shows_through_on_the_detail_view() {
+        // Règle (§4.3) : ce que l'app affiche est le **résultat composé**, pas
+        // la version de base. Bug réel : une couche remplaçait le `preview.png`
+        // d'un circuit, le jeu voyait bien la nouvelle image, et la fiche
+        // continuait d'afficher l'ancienne — même après redémarrage. Tout se
+        // lisait dans le dossier de la version de base, où une couche n'est par
+        // construction jamais écrite.
+        let base = crate::testutil::temp_dir("layered-read");
+        let (conn, cfg, layer_id) = track_with_layer(&base);
+
+        let t = detail(&conn, &cfg, "smm").unwrap().unwrap().track.unwrap();
+        let a = t
+            .layouts
+            .iter()
+            .find(|l| l.id == "a_race")
+            .expect("layout de base présent");
+        assert_eq!(
+            std::fs::read(a.preview.as_ref().unwrap()).unwrap(),
+            b"NEW",
+            "la photo de la couche l'emporte sur celle de la base"
+        );
+        let b = t
+            .layouts
+            .iter()
+            .find(|l| l.id == "b_free")
+            .expect("layout non touché présent");
+        assert_eq!(
+            std::fs::read(b.preview.as_ref().unwrap()).unwrap(),
+            b"OLD",
+            "un layout que la couche ne touche pas garde la photo de la base"
+        );
+        assert_eq!(
+            a.name, "Base",
+            "la couche n'apporte pas de ui_track.json ici : celui de la base reste"
+        );
+        assert!(
+            t.layouts.iter().any(|l| l.id == "c_extra"),
+            "un layout ajouté par la couche apparaît"
+        );
+
+        // Désactiver la couche doit tout rendre à la base, à l'écran comme en jeu.
+        overlay::set_layer_active(&conn, &layer_id, false).unwrap();
+        let t = detail(&conn, &cfg, "smm").unwrap().unwrap().track.unwrap();
+        let a = t.layouts.iter().find(|l| l.id == "a_race").unwrap();
+        assert_eq!(
+            std::fs::read(a.preview.as_ref().unwrap()).unwrap(),
+            b"OLD",
+            "couche désactivée : la base réapparaît"
+        );
+        assert!(
+            !t.layouts.iter().any(|l| l.id == "c_extra"),
+            "le layout apporté par la couche disparaît avec elle"
+        );
+    }
+
+    #[test]
+    fn the_library_card_shows_the_layers_preview() {
+        // Même règle, sur la vignette de la bibliothèque : c'est là qu'on
+        // regarde en premier, et c'est là que l'écart se voyait.
+        let base = crate::testutil::temp_dir("layered-card");
+        let (conn, cfg, _) = track_with_layer(&base);
+        let m = overlay::get_mod(&conn, "smm").unwrap().unwrap();
+        let preview = preview_for(&conn, &cfg, &m).expect("une vignette est trouvée");
+        assert_eq!(
+            std::fs::read(&preview).unwrap(),
+            b"NEW",
+            "la carte montre ce que le jeu montre"
+        );
     }
 }
