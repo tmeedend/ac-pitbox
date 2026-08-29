@@ -22,10 +22,12 @@
 //!   file documents its own values: `0` = "Never (use midsummer sun
 //!   trajectory)", `0.5` = "Never (use actual sun trajectory)", `1` = "With
 //!   date set" (the default), `2` = "Always on (use current date if not set)".
-//!   Hence `effective_date` below: at `0` the sun ignores the chosen season
-//!   entirely, and at `1` it only follows a date the session actually carries
-//!   (Pit Box writes one as `udt`/`dtv` in the Quick Drive preset whenever a
-//!   season is picked — see `quickdrive.rs`).
+//!   Only `0` pins the sun to midsummer; every other value follows the date
+//!   the session carries (Pit Box writes one as `udt`/`dtv` in the Quick Drive
+//!   preset whenever a season is picked — see `quickdrive.rs`), and today's
+//!   real date without one. See `effective_date`, whose comment records how
+//!   that was measured — the wording of `1` says otherwise, and the game says
+//!   what it says.
 //!
 //! CSP computes the sun direction natively (`ac.getSunDirectionTo`); the
 //! weather scripts (Sol, Pure) only *react* to its height, so they change
@@ -231,16 +233,20 @@ fn effective_date(setting: f64, session_date: Option<NaiveDate>, today: NaiveDat
             DateBasis::Midsummer,
         )
     };
+    // Only "Never (use midsummer sun trajectory)" detaches the sun from the
+    // calendar. Everything else follows a real date.
     if setting <= 0.0 {
         return midsummer();
     }
     match session_date {
         Some(d) => (d, DateBasis::Session),
-        // 0.5 ("never adjust, but keep the actual trajectory") and 2 ("always
-        // on, use current date if not set") both follow the real calendar; 1
-        // only adjusts "with date set", so without one the trajectory stays
-        // where vanilla AC left it — midsummer.
-        None if setting == 1.0 => midsummer(),
+        // MEASURED, not deduced. The wording of `1` ("With date set") reads as
+        // if no date meant no adjustment at all, so this first returned the
+        // midsummer trajectory. Checked in game on 29 August: at Barcelona
+        // with no season, the sun rose at 07:14 on the clock — the sunrise of
+        // that very day (the June solstice would have been 06:17, and a
+        // missing summer time 06:14 or 05:17, in the other direction). CSP
+        // takes today's date whenever the session carries none.
         None => (today, DateBasis::Today),
     }
 }
@@ -484,8 +490,8 @@ mod tests {
         );
         assert_eq!(
             effective_date(1.0, None, today).1,
-            DateBasis::Midsummer,
-            "1 without a date stays midsummer"
+            DateBasis::Today,
+            "1 without a date follows today (measured in game, see effective_date)"
         );
         assert_eq!(
             effective_date(0.5, None, today).1,
@@ -498,7 +504,7 @@ mod tests {
             "2 falls back to the real date"
         );
         assert_eq!(
-            effective_date(1.0, None, today).0,
+            effective_date(0.0, None, today).0,
             date(2026, 6, 21),
             "midsummer is the June solstice"
         );
