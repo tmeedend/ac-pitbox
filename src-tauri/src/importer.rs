@@ -24,14 +24,17 @@ pub struct FuzzyConflict {
     pub existing_name: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct ImportedMod {
     pub id_interne: String,
     pub kind: String,
     pub display_name: Option<String>,
-    /// "IMPORT" | "UPDATE_REPLACE" | "DUPLICATE" | "EXTENSION" | "AMBIGUOUS" (§4.4).
+    /// "IMPORT" | "UPDATE_REPLACE" | "DUPLICATE" | "EXTENSION" | "AMBIGUOUS" (§4.4)
+    /// | "PARKED" | "HOST_MISSING" | "HOST_UNKNOWN" (§4.3bis).
     /// - EXTENSION : rangé comme couche à part, la base n'est jamais touchée.
     /// - AMBIGUOUS : rien écrit, on attend le choix de l'utilisateur.
+    /// - PARKED : fragment rangé en couche d'un hôte absent, en attente de lui.
+    /// - HOST_MISSING / HOST_UNKNOWN : rien écrit, on attend le choix.
     pub outcome: String,
     pub version_label: Option<String>,
     /// Renseigné si un mod existant ressemble fortement à celui-ci (§4.2).
@@ -47,6 +50,18 @@ pub struct ImportedMod {
     /// Fichiers annexes redirigés vers le dossier ressources du mod (§4.5.2),
     /// selon le réglage global. 0 si rien n'a été filé (doublon, ambigu bloqué).
     pub resources_extracted: usize,
+    /// Dossier entrant dépourvu de géométrie (§4.3bis) : une couche déguisée en
+    /// mod, jamais jouable seule. Ce que l'app en a fait se lit dans `outcome`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fragment: bool,
+    /// Nom du dossier entrant, quand il diffère de `id_interne` — c'est le cas
+    /// d'un fragment rattaché : `id_interne` désigne alors l'hôte. Sans lui, le
+    /// rapport ne dit pas *ce qui* a été rangé, seulement où.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_name: Option<String>,
+    /// Hôte visé par un fragment, quand il a pu être nommé (§4.3bis).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host_id: Option<String>,
 }
 
 /// Décision explicite de l'utilisateur pour un mod resté ambigu (§4.4),
@@ -2165,11 +2180,29 @@ fn process_found(
     // à connaître les bandes de la barre ni le rang de l'item dans le lot.
     on_progress: &dyn Fn(f64),
 ) -> Result<ImportedMod, String> {
-    let id_interne = fm
+    let folder_name = fm
         .dir
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .ok_or(crate::errors::UNNAMED_MOD_FOLDER)?;
+
+    // --- Fragment ou mod ? (§4.3bis) ---
+    //
+    // L'identité d'un mod, c'était le nom de son dossier et rien d'autre. Un
+    // dossier nommé d'après son auteur (`Mike08_santamonica01`) ne rencontrait
+    // donc jamais l'arbitrage mise à jour / couche ci-dessous : il devenait un
+    // circuit de plus, que le jeu ne peut pas charger faute de géométrie.
+    // `fragment::resolve` répond d'abord à la vraie question — ce dossier
+    // tient-il debout seul ? — avant celle de son identité.
+    let host = crate::fragment::resolve(conn, cfg, fm.kind, &fm.dir);
+    let is_fragment = host != crate::fragment::Host::SelfStanding;
+    // Un fragment rattaché prend l'identité de son hôte : c'est ce qui le fait
+    // entrer dans le chemin « couche » plus bas, au lieu de créer une entrée.
+    let id_interne = match &host {
+        crate::fragment::Host::Known(id) => id.clone(),
+        _ => folder_name.clone(),
+    };
+    let source_name = is_fragment.then(|| folder_name.clone());
 
     let ui = match fm.kind {
         ModKind::Car => uijson::read_car(&fm.dir),
@@ -2207,6 +2240,84 @@ fn process_found(
     // Date de publication estimée (§6.2), lue sur les fichiers avant rangement.
     let published_at = inspect::estimate_published_at(&fm.dir);
 
+    // --- Fragment dont l'hôte n'est pas là (§4.3bis) ---
+    //
+    // Rien à composer : l'hôte n'existe pas. Poser le fragment comme un mod
+    // donnerait l'entrée fantôme qu'on cherche justement à éviter, alors on
+    // demande — et par défaut on propose de ne pas importer. En import de
+    // masse, où l'on ne peut pas demander, le défaut sûr est de **garder** :
+    // la couche est rangée sous l'id attendu, sans rien poser dans le jeu, et
+    // l'hôte la reprendra le jour où il arrivera (`compose::recompose` lit les
+    // couches par `parent_id`, que le mod existe ou non). Même parti que
+    // `submods::resolve_sound_parent` pour un son dont la voiture manque :
+    // ranger au bon endroit pour le jour où il y aura quelque chose dessous.
+    match &host {
+        crate::fragment::Host::Missing(host_id) => {
+            let park = match decision {
+                Some("standalone") => false,
+                Some("park") => true,
+                // Import unitaire : on ne décide pas à la place de l'utilisateur.
+                _ if block_ambiguous => {
+                    return Ok(ImportedMod {
+                        id_interne: folder_name,
+                        kind: kind_str,
+                        display_name: Some(name),
+                        outcome: "HOST_MISSING".into(),
+                        version_label: ui.version,
+                        fragment: true,
+                        host_id: Some(host_id.clone()),
+                        ..Default::default()
+                    });
+                }
+                _ => true,
+            };
+            if park {
+                let (_, resources_extracted) = layers::store_layer(
+                    conn,
+                    library,
+                    host_id,
+                    fm.kind,
+                    &layer_name(fm, archive_name),
+                    &fm.dir,
+                    copy,
+                    &crate::identity::DiffStats {
+                        added: 0,
+                        overwritten: 0,
+                        existing_total: 0,
+                    },
+                    archive_name,
+                    res_mode,
+                )?;
+                return Ok(ImportedMod {
+                    id_interne: folder_name,
+                    kind: kind_str,
+                    display_name: Some(name),
+                    outcome: "PARKED".into(),
+                    version_label: ui.version,
+                    resources_extracted,
+                    fragment: true,
+                    host_id: Some(host_id.clone()),
+                    ..Default::default()
+                });
+            }
+        }
+        // Aucun id à attendre : impossible de ranger la couche « quelque part ».
+        // Il ne reste que le choix entre renoncer et importer tel quel —
+        // c'est-à-dire l'ancien comportement, assumé cette fois.
+        crate::fragment::Host::Unknown if block_ambiguous && decision.is_none() => {
+            return Ok(ImportedMod {
+                id_interne: folder_name,
+                kind: kind_str,
+                display_name: Some(name),
+                outcome: "HOST_UNKNOWN".into(),
+                version_label: ui.version,
+                fragment: true,
+                ..Default::default()
+            });
+        }
+        _ => {}
+    }
+
     // --- Résolution d'identité (§4.2/§4.4) ---
     let existing = crate::overlay::get_mod(conn, &id_interne).map_err(|e| e.to_string())?;
     let is_update = existing.is_some();
@@ -2229,6 +2340,7 @@ fn process_found(
                 overwritten_count: None,
                 existing_total: None,
                 resources_extracted: 0,
+                ..Default::default()
             });
         }
 
@@ -2256,6 +2368,7 @@ fn process_found(
                 overwritten_count: diff.map(|d| d.overwritten),
                 existing_total: diff.map(|d| d.existing_total),
                 resources_extracted: 0,
+                ..Default::default()
             });
         }
 
@@ -2294,6 +2407,12 @@ fn process_found(
             Some("extension") => ImportClass::Extension,
             _ => class,
         };
+        // Sauf pour un fragment (§4.3bis) : **jamais** de mise à jour. Il n'a
+        // pas de géométrie — remplacer la base par lui la rendrait injouable,
+        // et c'est le seul cas où le décompte de fichiers peut mentir (un
+        // fragment qui ne fait que retoucher des `ui/` recouvre proportionnellement
+        // beaucoup d'un circuit qui en a peu). Même règle absolue que `is_stock`.
+        let resolved = if is_fragment { ImportClass::Extension } else { resolved };
 
         match resolved {
             ImportClass::Update => { /* poursuit vers le chemin UPDATE_REPLACE ci-dessous */ }
@@ -2368,6 +2487,9 @@ fn process_found(
                     overwritten_count: diff.map(|d| d.overwritten),
                     existing_total: diff.map(|d| d.existing_total),
                     resources_extracted,
+                    fragment: is_fragment,
+                    source_name,
+                    ..Default::default()
                 });
             }
             ImportClass::Ambiguous => {
@@ -2384,6 +2506,7 @@ fn process_found(
                         overwritten_count: diff.map(|d| d.overwritten),
                         existing_total: diff.map(|d| d.existing_total),
                         resources_extracted: 0,
+                        ..Default::default()
                     });
                 }
                 // Import en masse : défaut sûr = extension (jamais destructif).
@@ -2416,6 +2539,7 @@ fn process_found(
                     overwritten_count: diff.map(|d| d.overwritten),
                     existing_total: diff.map(|d| d.existing_total),
                     resources_extracted,
+                    ..Default::default()
                 });
             }
         }
@@ -2544,6 +2668,12 @@ fn process_found(
         overwritten_count: None,
         existing_total: None,
         resources_extracted,
+        // Un fragment qui arrive ici a été importé **comme mod** : hôte
+        // introuvable et décision prise en ce sens (ou import de masse, où l'on
+        // préfère un mod de trop à un contenu perdu). Le rapport doit le dire —
+        // c'est la seule issue où l'entrée créée risque d'être injouable.
+        fragment: is_fragment,
+        ..Default::default()
     })
 }
 
@@ -5005,6 +5135,145 @@ mod tests {
         assert!(
             !archives.exists() || std::fs::read_dir(&archives).unwrap().next().is_none(),
             "aucune copie de source laissée derrière"
+        );
+    }
+
+    /// Circuit synthétique <root>/<id> à plusieurs layouts, avec sa géométrie.
+    fn make_track_with_layouts(root: &Path, id: &str, layouts: &[&str], geometry: bool) {
+        let base = root.join(id);
+        for l in layouts {
+            let ui = base.join("ui").join(l);
+            std::fs::create_dir_all(&ui).unwrap();
+            std::fs::write(
+                ui.join("ui_track.json"),
+                format!(r#"{{"name":"Santa Monica -- {l}","tags":["road"],"version":"0.2"}}"#),
+            )
+            .unwrap();
+            std::fs::write(ui.join("preview.png"), b"PREVIEW").unwrap();
+        }
+        if geometry {
+            std::fs::write(base.join("model.kn5"), b"FAKE_KN5_DATA").unwrap();
+        }
+    }
+
+    #[test]
+    fn a_layer_folder_named_after_its_author_lands_on_its_track() {
+        // Règle (§4.3bis) : un dossier sans géométrie ne peut pas être chargé
+        // par le jeu — c'est une couche, quel que soit le nom qu'on lui a donné.
+        // Bug réel `Mike08_santamonica01`, une refonte visuelle de Santa Monica
+        // Mountains : nommée d'après son auteur, elle devenait un circuit à part
+        // entière, sans que rien ne soit demandé, parce que l'identité d'un mod
+        // se réduisait au nom de son dossier.
+        let base = crate::testutil::temp_dir("import-fragment");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let src1 = base.join("src1");
+        make_track_with_layouts(&src1, "santa_monica_mtns", &["a_stuntRace", "c_stuntFreeroam"], true);
+        let r1 = import_folder_for_test(&conn, &cfg, &rules, &src1, true, &[]);
+        assert_eq!(r1.mods[0].outcome, "IMPORT", "le circuit de base s'importe normalement");
+
+        // La couche : mêmes layouts, aucune géométrie, un nom qui ne dit rien.
+        let src2 = base.join("src2");
+        make_track_with_layouts(
+            &src2,
+            "Mike08_santamonica01",
+            &["a_stuntRace", "c_stuntFreeroam"],
+            false,
+        );
+        std::fs::create_dir_all(src2.join("Mike08_santamonica01").join("extension")).unwrap();
+        std::fs::write(
+            src2.join("Mike08_santamonica01")
+                .join("extension")
+                .join("ext_config.ini"),
+            b"[PURE]",
+        )
+        .unwrap();
+
+        let r2 = import_folder_for_test(&conn, &cfg, &rules, &src2, true, &[]);
+        assert_eq!(r2.mods.len(), 1, "un seul contenu rangé");
+        assert_eq!(r2.mods[0].outcome, "EXTENSION", "couche, pas circuit de plus");
+        assert_eq!(
+            r2.mods[0].id_interne, "santa_monica_mtns",
+            "rattachée au circuit qu'elle complète"
+        );
+        assert_eq!(
+            r2.mods[0].source_name.as_deref(),
+            Some("Mike08_santamonica01"),
+            "le rapport doit dire CE QUI a été rangé, pas seulement où"
+        );
+        assert!(r2.mods[0].fragment, "signalée comme couche déguisée en mod");
+        assert_eq!(
+            crate::overlay::list_layers(&conn, "santa_monica_mtns").unwrap().len(),
+            1,
+            "une couche posée sur la base"
+        );
+        assert!(
+            crate::overlay::get_mod(&conn, "Mike08_santamonica01")
+                .unwrap()
+                .is_none(),
+            "aucun circuit fantôme créé"
+        );
+    }
+
+    #[test]
+    fn a_fragment_whose_track_is_absent_is_never_imported_silently() {
+        // Règle (§4.3bis) : hôte absent = rien n'est écrit et on demande. Poser
+        // le fragment comme un mod donnerait l'entrée injouable qu'on cherche
+        // justement à éviter ; le jeter perdrait ce que l'utilisateur a
+        // téléchargé. Les deux issues sont à lui.
+        let base = crate::testutil::temp_dir("import-fragment-absent");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let src = base.join("src");
+        make_track_with_layouts(&src, "Mike08_santamonica01", &["a_stuntRace"], false);
+        // Le vao-patch nomme le modèle qu'il retouche : c'est ce qui permet de
+        // dire QUOI attendre, alors que le circuit n'est pas là.
+        std::fs::write(
+            src.join("Mike08_santamonica01").join("santa_monica_mtns.vao-patch"),
+            b"VAO",
+        )
+        .unwrap();
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert_eq!(r.mods[0].outcome, "HOST_MISSING", "on demande avant d'écrire");
+        assert_eq!(
+            r.mods[0].host_id.as_deref(),
+            Some("santa_monica_mtns"),
+            "le circuit attendu est nommé"
+        );
+        assert!(
+            crate::overlay::get_mod(&conn, "Mike08_santamonica01")
+                .unwrap()
+                .is_none(),
+            "rien écrit tant que l'utilisateur n'a pas tranché"
+        );
+
+        // « Garder pour plus tard » : rangé sous l'id attendu, rien dans le jeu.
+        let decisions = vec![ImportDecision {
+            id: "Mike08_santamonica01".into(),
+            decision: "park".into(),
+        }];
+        let r2 = import_folder_for_test(&conn, &cfg, &rules, &src, true, &decisions);
+        assert_eq!(r2.mods[0].outcome, "PARKED", "gardé de côté");
+        let layers = crate::overlay::list_layers(&conn, "santa_monica_mtns").unwrap();
+        assert_eq!(layers.len(), 1, "la couche attend son circuit sous son id");
+        assert!(
+            crate::overlay::get_mod(&conn, "santa_monica_mtns").unwrap().is_none(),
+            "aucun circuit inventé pour porter la couche"
         );
     }
 }

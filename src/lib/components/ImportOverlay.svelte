@@ -7,6 +7,7 @@
     importState,
     resolvePendingConflict,
     resolveAmbiguous,
+    resolveFragment,
   } from "$lib/importState.svelte";
   import { t } from "$lib/i18n/index.svelte";
 </script>
@@ -50,6 +51,42 @@
       </div>
       {#if importState.pendingAmbiguous.length > 1}
         <div class="modal-rest">{t("importOverlay.ambiguousRest", { count: importState.pendingAmbiguous.length - 1 })}</div>
+      {/if}
+    </div>
+  </div>
+{/if}
+
+<!-- Fragment dont l'hôte manque (§4.3bis). Le défaut proposé est de **ne pas
+     importer** : le dossier ne peut pas être chargé seul, donc l'importer tel
+     quel crée une entrée que le jeu ignorera. Quand l'hôte a pu être nommé, la
+     troisième issue vaut mieux que les deux autres — garder de côté ne pose
+     rien dans le jeu et le contenu retrouve sa base le jour où elle arrive. -->
+{#if importState.pendingFragments.length && !importState.pendingConflicts.length && !importState.pendingAmbiguous.length}
+  {@const f = importState.pendingFragments[0]}
+  <div class="modal-backdrop">
+    <div class="modal">
+      <h3>{t("importOverlay.fragmentTitle")}</h3>
+      {#if f.hostId}
+        <p>{t("importOverlay.fragmentBodyKnown", { name: f.name, host: f.hostId })}</p>
+      {:else}
+        <p>{t("importOverlay.fragmentBodyUnknown", { name: f.name })}</p>
+      {/if}
+      <div class="modal-actions">
+        {#if f.hostId}
+          <button class="btn" type="button" onclick={() => resolveFragment(f, "park")}>
+            {t("importOverlay.fragmentPark")}
+          </button>
+        {:else}
+          <button class="btn" type="button" onclick={() => resolveFragment(f, "standalone")}>
+            {t("importOverlay.fragmentStandalone")}
+          </button>
+        {/if}
+        <button class="btn btn-primary" type="button" onclick={() => resolveFragment(f, "skip")}>
+          {t("importOverlay.fragmentSkip")}
+        </button>
+      </div>
+      {#if importState.pendingFragments.length > 1}
+        <div class="modal-rest">{t("importOverlay.fragmentRest", { count: importState.pendingFragments.length - 1 })}</div>
       {/if}
     </div>
   </div>

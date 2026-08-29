@@ -26,6 +26,9 @@
     if (o === "DUPLICATE") return { cls: "dup", label: t("importOverlay.outcomeDuplicate") };
     if (o === "EXTENSION") return { cls: "ext", label: t("importOverlay.outcomeExtension") };
     if (o === "UNMANAGED") return { cls: "unm", label: t("importOverlay.outcomeUnmanaged") };
+    if (o === "PARKED") return { cls: "ext", label: t("importOverlay.outcomeParked") };
+    if (o === "HOST_MISSING" || o === "HOST_UNKNOWN")
+      return { cls: "unm", label: t("importOverlay.outcomeHostMissing") };
     return { cls: "new", label: t("importOverlay.outcomeNew") };
   }
 
@@ -153,8 +156,10 @@
   {#each a.mods as m}
     {@const chip = outcomeChip(m.outcome)}
     <!-- Un mod resté AMBIGU n'a rien écrit (§4.4) : il n'y a pas de fiche à
-         ouvrir tant que l'utilisateur n'a pas tranché. -->
-    {@const openable = m.outcome !== "AMBIGUOUS"}
+         ouvrir tant que l'utilisateur n'a pas tranché. Même chose pour un
+         fragment (§4.3bis) : écarté, il n'a rien écrit ; gardé en attente, la
+         fiche qu'il faudrait ouvrir est celle d'un mod qui n'existe pas encore. -->
+    {@const openable = !["AMBIGUOUS", "PARKED", "HOST_MISSING", "HOST_UNKNOWN"].includes(m.outcome)}
     <div class="r-line">
       <span class="r-out {chip.cls}">{chip.label}</span>
       {#if openable}
@@ -166,10 +171,22 @@
       {/if}
       {#if m.outcome === "DUPLICATE"}
         <span class="r-conflict">{t("importOverlay.duplicateNote")}</span>
+      {:else if m.outcome === "EXTENSION" && m.source_name}
+        <!-- Fragment rattaché (§4.3bis) : la décision a été prise sans rien
+             demander, elle doit donc se lire ici — quoi, et sur quoi. -->
+        <span class="r-conflict">{t("importOverlay.extensionFromNote", { source: m.source_name, added: m.added_count ?? 0, overwritten: m.overwritten_count ?? 0 })}</span>
       {:else if m.outcome === "EXTENSION"}
         <span class="r-conflict">{t("importOverlay.extensionNote", { added: m.added_count ?? 0, overwritten: m.overwritten_count ?? 0 })}</span>
       {:else if m.outcome === "UNMANAGED"}
         <span class="r-conflict">{t("importOverlay.unmanagedNote")}</span>
+      {:else if m.outcome === "PARKED"}
+        <span class="r-conflict">{t("importOverlay.parkedNote", { host: m.host_id ?? "" })}</span>
+      {:else if m.outcome === "HOST_MISSING" || m.outcome === "HOST_UNKNOWN"}
+        <span class="r-conflict">{t("importOverlay.hostMissingNote")}</span>
+      {:else if m.fragment}
+        <!-- Importé comme mod alors qu'il n'a pas de géométrie : le seul cas où
+             l'entrée créée risque de ne rien donner en jeu. -->
+        <span class="r-conflict">{t("importOverlay.fragmentImportedNote")}</span>
       {/if}
     </div>
   {/each}

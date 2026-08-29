@@ -169,8 +169,19 @@ export interface ImportedMod {
   kind: ModKind;
   display_name: string | null;
   /** EXTENSION : rangé comme couche à part (§4.4). AMBIGUOUS : rien écrit, à
-   * trancher par l'utilisateur (mise à jour ou extension). */
-  outcome: "IMPORT" | "UPDATE_REPLACE" | "DUPLICATE" | "EXTENSION" | "AMBIGUOUS" | "UNMANAGED";
+   * trancher par l'utilisateur (mise à jour ou extension). PARKED : fragment
+   * rangé sous un hôte absent, en attente de lui (§4.3bis). HOST_MISSING /
+   * HOST_UNKNOWN : rien écrit, fragment dont l'hôte manque ou reste inconnu. */
+  outcome:
+    | "IMPORT"
+    | "UPDATE_REPLACE"
+    | "DUPLICATE"
+    | "EXTENSION"
+    | "AMBIGUOUS"
+    | "UNMANAGED"
+    | "PARKED"
+    | "HOST_MISSING"
+    | "HOST_UNKNOWN";
   version_label: string | null;
   conflict: FuzzyConflict | null;
   /** Décompte de comparaison (§4.4), présent pour EXTENSION/AMBIGUOUS. */
@@ -179,12 +190,19 @@ export interface ImportedMod {
   existing_total?: number;
   /** Fichiers annexes redirigés vers le dossier ressources du mod (§4.5.2). */
   resources_extracted: number;
+  /** Dossier entrant sans géométrie : une couche déguisée en mod (§4.3bis). */
+  fragment?: boolean;
+  /** Nom du dossier entrant quand il diffère de `id_interne` — pour un fragment
+   * rattaché, `id_interne` désigne l'hôte, celui-ci ce qui a été rangé. */
+  source_name?: string;
+  /** Hôte visé par un fragment, quand il a pu être nommé (§4.3bis). */
+  host_id?: string;
 }
 
-/** Décision de reprise pour un import ambigu (§4.4). */
+/** Décision de reprise pour un import ambigu (§4.4) ou un fragment (§4.3bis). */
 export interface ImportDecision {
   id: string;
-  decision: "update" | "extension";
+  decision: "update" | "extension" | "park" | "standalone";
 }
 
 /** Couche/extension rattachée à une base (§4.4). */

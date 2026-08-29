@@ -16,6 +16,7 @@ mod errors;
 mod export;
 mod extras;
 mod fmod;
+mod fragment;
 mod fsb5;
 mod gamebackup;
 mod harmonize;

@@ -43,6 +43,15 @@ dossier reconnu n'est jamais exploré plus profond.
 | `modscan::scan_subs` | `<x>/skins/<skin>` · `skins/<voiture>/<skin>` · `skins/cm_skins/<skin>` · `GUIDs.txt` + `*.bank` | pack de skins · mod de son |
 | `modscan::scan_apps` | `<Nom>/<Nom>.py` · `<Nom>/<Nom>.lua` | app |
 
+**Un second filtre, sur les mods eux-mêmes** : `ui/` dit « en forme de mod »,
+pas « est un mod ». Un dossier conçu pour être **posé sur** un mod porte le même
+`ui/` — l'auteur le recopie pour livrer ses `preview.png`. Ce qui tranche, c'est
+la **géométrie** (`modscan::has_geometry`) : un `.kn5` à la racine, ou un
+`models*.ini` pour un circuit. Sans elle, le jeu ne peut rien charger, et
+`fragment::resolve` va chercher l'hôte au lieu de créer une entrée de plus
+(§4.3bis du SPEC). Mesuré sans exception sur 224 circuits et 123 voitures : un
+vrai mod porte toujours sa géométrie.
+
 **Un filtre après coup** : un pack de skins dont la voiture cible est inconnue
 **et** dont les livrées portent les noms de celles d'un contenu de la même
 source n'est pas un pack, c'est une **variante** — il n'est pas consommé
@@ -233,6 +242,8 @@ dans la tête de l'utilisateur, pas sur le disque.**
 | Deux versions du même mod | demande | intention |
 | Variante offerte par l'auteur | demande | intention |
 | Composant qui remplace le jeu de base | demande | aucun défaut n'est sûr |
+| Fragment dont l'hôte est trouvé | décide | déterminable, et la couche ne détruit rien |
+| Fragment dont l'hôte manque | demande | ni l'importer ni le jeter n'est bon par défaut |
 
 Deux contraintes encadrent toute question : **jamais de blocage en import de
 masse**, et **arbitrage groupé en fin de lot**. Ce qui a coûté cher n'a jamais
@@ -262,6 +273,7 @@ elles.
 | --- | --- |
 | Qu'est-ce qu'un chemin de jeu ? | `acpath.rs` |
 | Qu'est-ce qui est reconnu ? | `modscan.rs` |
+| Est-ce un mod, ou une couche déguisée ? | `fragment.rs` |
 | Orchestration, balayage des restes | `importer.rs` |
 | Annexes, extraction, prévisualisation | `resources.rs` |
 | Ajouts au jeu, arbitrage, réclamations | `extras.rs` |

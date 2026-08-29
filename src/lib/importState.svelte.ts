@@ -17,6 +17,8 @@ import {
   splitDroppedPaths,
   type ArchiveResult,
   type ImportProgress,
+  type ImportDecision,
+  type ModKind,
 } from "$lib/library";
 
 export interface PendingConflict {
@@ -33,6 +35,20 @@ export interface PendingAmbiguous {
   added: number;
   overwritten: number;
   total: number;
+  /** Source à ré-importer pour appliquer la décision. */
+  source: { paths: string[]; folder: boolean; copy: boolean };
+}
+
+/** Fragment dont l'hôte manque, à trancher (§4.3bis). Rien n'a été écrit : le
+ * dossier est une couche déguisée en mod, et le circuit/la voiture qu'il vise
+ * n'est pas là. `hostId` renseigné = on sait quoi attendre, donc on peut le
+ * garder de côté ; absent = il ne reste que « laisser tomber » ou « importer
+ * quand même », qui produira une entrée que le jeu ne saura pas charger. */
+export interface PendingFragment {
+  id: string;
+  name: string;
+  hostId: string | null;
+  kind: ModKind;
   /** Source à ré-importer pour appliquer la décision. */
   source: { paths: string[]; folder: boolean; copy: boolean };
 }
@@ -67,6 +83,7 @@ export const importState = $state<{
   lastReport: ArchiveResult[] | null;
   pendingConflicts: PendingConflict[];
   pendingAmbiguous: PendingAmbiguous[];
+  pendingFragments: PendingFragment[];
   copyMode: boolean;
   /** Arrêt demandé (§4.2bis) : le lot s'interrompt entre deux items, donc il
    * reste du travail en cours après le clic — le bouton doit le dire. */
@@ -88,6 +105,7 @@ export const importState = $state<{
   lastReport: null,
   pendingConflicts: [],
   pendingAmbiguous: [],
+  pendingFragments: [],
   // Défaut synchrone (état module-level, pas de composant/onMount ici),
   // corrigé de façon asynchrone juste en dessous dès que la valeur
   // sauvegardée répond (§6.2, même schéma que `nav.svelte.ts`).
@@ -174,6 +192,19 @@ async function runImport(source: { paths: string[]; folder: boolean; copy: boole
           source: { ...source, paths: [source.paths[i] ?? source.paths[0]] },
         })),
     );
+    // Fragments dont l'hôte manque (§4.3bis) : même mécanique de reprise que
+    // ci-dessus, seule la question posée change.
+    importState.pendingFragments = report.flatMap((a, i) =>
+      a.mods
+        .filter((m) => m.outcome === "HOST_MISSING" || m.outcome === "HOST_UNKNOWN")
+        .map((m) => ({
+          id: m.id_interne,
+          name: m.display_name ?? m.id_interne,
+          hostId: m.host_id ?? null,
+          kind: m.kind,
+          source: { ...source, paths: [source.paths[i] ?? source.paths[0]] },
+        })),
+    );
     bumpLibraryVersion();
   } finally {
     importState.importing = false;
@@ -204,6 +235,28 @@ export async function resolveAmbiguous(
   decision: "update" | "extension",
 ): Promise<void> {
   importState.pendingAmbiguous = importState.pendingAmbiguous.filter((p) => p.id !== item.id);
+  await resumeWithDecision(item, decision);
+}
+
+/** Tranche un fragment dont l'hôte manque (§4.3bis). « skip » ne réimporte
+ * rien : rien n'avait été écrit, il n'y a donc rien à défaire — la ligne du
+ * rapport reste, elle dit ce qui a été écarté et pourquoi. */
+export async function resolveFragment(
+  item: PendingFragment,
+  decision: "park" | "standalone" | "skip",
+): Promise<void> {
+  importState.pendingFragments = importState.pendingFragments.filter((p) => p.id !== item.id);
+  if (decision === "skip") return;
+  await resumeWithDecision(item, decision);
+}
+
+/** Rejoue une source en forçant une décision sur un seul de ses mods, et
+ * remplace sa ligne dans les rapports affichés. Commun aux deux arbitrages :
+ * la question diffère, la reprise est la même. */
+async function resumeWithDecision(
+  item: { id: string; source: { paths: string[]; folder: boolean; copy: boolean } },
+  decision: ImportDecision["decision"],
+): Promise<void> {
   importState.importing = true;
   importState.cancelling = false;
   importState.progress = queuedProgress(item.source.paths.length);
@@ -321,7 +374,7 @@ export function reportBulkDone(report: ArchiveResult[]): void {
  * installé hors Pit Box qu'on ne touche pas (§8). Les compter comme importés
  * faisait mentir le titre du toast — « 1 élément importé » quand l'app venait
  * précisément de dire qu'elle n'avait rien fait (signalé à l'usage). */
-const WROTE_NOTHING = new Set(["DUPLICATE", "AMBIGUOUS", "UNMANAGED"]);
+const WROTE_NOTHING = new Set(["DUPLICATE", "AMBIGUOUS", "UNMANAGED", "HOST_MISSING", "HOST_UNKNOWN"]);
 
 /** Résumé chiffré d'un rapport (§4.2). Un import peut ne produire aucun mod de
  * premier niveau (ex. un pack de skins rattaché à une voiture déjà connue) sans

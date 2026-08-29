@@ -61,6 +61,8 @@ Chaque mod a une **empreinte composite** stable. À l'import, l'app la compare �
 - **Match flou** (marque+nom proches, dossier différent) → demande explicite à l'utilisateur.
 - **Aucun match** → nouvel import.
 
+Avant tout cela, une question qui ne porte pas sur l'identité mais sur la nature : **ce dossier tient-il debout seul ?** Sans géométrie, il ne peut pas être un mod, quel que soit son nom — voir §4.3bis.
+
 ### 4.2 Sources d'import
 
 Deux sources, même pipeline d'analyse/identité/tagging :
@@ -128,6 +130,32 @@ Pensé pour un lot de plusieurs dizaines de mods.
 - **Composition** : même mécanisme, en superposant en plus chaque couche active (priorité croissante) sur la base — toujours un hardlink, jamais une copie de fusion. Retour au déploiement simple dès que la dernière couche est retirée.
 
 **Contrôle** : ordre des couches modifiable + activation/désactivation par couche. Une couche peut se poser sur n'importe quel contenu (base ou mod).
+
+### 4.3bis Fragments : une couche déguisée en mod
+
+Un dossier peut avoir **la forme** d'un mod sans en être un. La détection de type ne regarde que `ui/` (`ui_car.json`, `ui/<layout>/ui_track.json`), et un dossier conçu pour être **posé sur** un mod existant porte exactement le même `ui/` — l'auteur le recopie pour livrer ses `preview.png`. Ce qui sépare les deux, c'est la **géométrie** : une voiture a son `.kn5` à la racine, un circuit en a un aussi ou un `models*.ini` qui nomme ceux qu'il charge. Un dossier qui n'a ni l'un ni l'autre **ne peut pas être chargé par le jeu**.
+
+Mesuré sur tout le corpus de référence, **sans une seule exception** : 103 versions de circuit en bibliothèque, les 121 circuits de l'install AC et 123 versions de voiture portent leur géométrie. Le critère ne déclasse donc jamais un vrai mod — c'est ce qui permet d'**agir** dessus plutôt que de se contenter d'avertir.
+
+**Bug réel qui a motivé la règle** : `Mike08_santamonica01`, une refonte visuelle de Santa Monica Mountains (`ui/` de deux layouts, `texture/`, `extension/ext_config.ini`, un `.vao-patch` — aucune géométrie). Nommée d'après son auteur, elle devenait un circuit de plus, **sans qu'aucune question ne soit posée** : l'identité d'un mod se réduisait au nom de son dossier, donc un fragment ainsi nommé ne rencontrait jamais l'arbitrage du §4.3. Résultat : une entrée que le jeu ne peut pas charger, et un circuit de base qui ne reçoit jamais ce qui lui était destiné.
+
+**Trouver l'hôte** (`fragment.rs`), sources ordonnées de la plus sûre à la plus faible — même forme que `submods::resolve_sound_parent`, chacune chiffrée sur la bibliothèque de référence :
+
+1. **le dossier porte déjà le nom d'un mod connu** — la règle d'identité historique, inchangée ;
+2. **le `.vao-patch`** nomme le `.kn5` ou le `models*.ini` qu'il accompagne (**121/124** ; le nommer d'après l'id du circuit ne tient que pour 32/124, contrairement à l'intuition) ;
+3. **les noms de layout** (circuit) ou de livrée (voiture) partagés avec un seul hôte — 185 des 224 paires (layout, circuit) portent un nom qui n'appartient qu'à un circuit, mais 13 noms génériques (`reverse` et `normal` chez 6 circuits, `short` chez 4) sont partagés : deux concordances sur le même hôte tranchent, une seule non ;
+4. **un id d'hôte écrit dans le nom du dossier** ;
+5. **le recouvrement de chemins** — quel hôte possède déjà les fichiers que le fragment apporte. Exige un vrai écart (au moins 2 concordances et le double du suivant) : `extension/ext_config.ini` existe seul chez des dizaines de circuits.
+
+Deux candidats à égalité ne sont jamais départagés : poser le contenu sur un mod qu'il ne visait pas est pire que ne rien décider.
+
+**Ce qui en découle** :
+
+- **Hôte trouvé** → rangé en **couche**, automatiquement, sans rien demander : l'opération n'est pas destructive (§4.3) et la question n'a qu'une réponse. La décision est **visible** — la ligne du rapport nomme le dossier rangé *et* l'hôte, la couche apparaît dans « Couches & extensions » sous le nom de son dossier source, et l'historique de l'hôte porte sa ligne.
+- **Un fragment n'est jamais une mise à jour**, quel que soit le décompte de fichiers et quelle que soit la décision demandée. Même règle absolue que le contenu de base (§4.3) : sans géométrie, remplacer la base par lui la rendrait injouable. C'est aussi le seul cas où le décompte ment — un fragment qui ne retouche que des `ui/` recouvre proportionnellement beaucoup d'un circuit qui en a peu.
+- **Hôte nommé mais absent** → **rien n'est écrit**, on demande, et le défaut proposé est de **ne pas importer**. La troisième issue, « garder pour plus tard », range la couche sous l'id attendu sans rien poser dans le jeu : `compose::recompose` lit les couches par `parent_id`, que le mod existe ou non, donc l'hôte la reprend le jour où il arrive. Même parti que pour un son dont la voiture manque (§12bis.2).
+- **Hôte introuvable** → on demande aussi, avec pour seules issues « ne pas importer » (défaut) et « importer quand même », qui produit l'ancien comportement, cette fois assumé et signalé dans le rapport.
+- **En import de masse**, où l'on ne s'arrête jamais pour demander (§4.2bis), le défaut sûr est de **garder** : couche en attente si l'hôte est nommé, import tel quel sinon. Un mod de trop vaut mieux qu'un contenu perdu, et la ligne du rapport dit lequel.
 
 ### 4.4 Packs multi-voitures
 
