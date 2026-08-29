@@ -661,6 +661,13 @@ il garde donc sa découpe, et reste très peu marqué. CSP y remplace de toute
 façon `MAIN_GLASS` par ses propres shaders, donc les valeurs brutes du KN5 n'y
 sont pas ce que le jeu applique.
 
+**Repère tangent** : le `TANGENT` de glTF est écrit sur tout maillage dont le
+matériau porte une carte de normales. Il ne l'était pas, alors que le KN5 en
+donne un par sommet — d'où des stries blanches sur les intérieurs, là où la
+reconstruction par dérivées écran s'effondre sur des UV dégénérés (écart n°14
+de `kn5-format.md`). `kn5-tool inspect --tangents` mesure les deux grandeurs
+qui le décident.
+
 **Verre physique** : un matériau qu'un mod déclare en `[Material_Glass]` est
 converti en `KHR_materials_transmission` + `KHR_materials_ior` plutôt qu'en
 fondu — c'est ce que fait CSP, dont le template est livré dans

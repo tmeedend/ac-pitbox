@@ -753,6 +753,66 @@ N points`), et c'est avec elle qu'on tranche au lieu de deviner.
 
 ---
 
+## Écart n°14 — le repère tangent est dans le fichier, et on le jetait
+
+**Symptôme** : des stries blanches, dures, à bords francs, sur les surfaces
+sombres et brillantes des **intérieurs** — sièges, planches de bord, grilles
+d'aération. Signalé par l'utilisateur sur `ks_lamborghini_aventador_sv`,
+`bati_fd3s_rx7`, `ks_alfa_romeo_gta` et `a3dr_viper_rt10`, et déjà présent en
+v0.5.0 : rien à voir avec les matériaux CSP.
+
+**Les trois suspects évidents étaient tous faux** : ce n'était ni une texture
+mal décodée, ni un maillage cassé, ni la fusion par matériau (« la tentative
+d'optimisation »). La fusion concatène des sommets déjà en espace monde, elle
+ne peut rien déformer.
+
+**Réel** : une carte de normales s'exprime en **espace tangent**. L'éclairer
+demande un repère tangent, que glTF transporte dans l'attribut `TANGENT`.
+Quand il est absent, le lecteur doit le reconstruire **par pixel**, à partir
+des dérivées écran de la position et de l'UV. Ce repli s'effondre partout où la
+dérivée UV est nulle — un panneau entier plaqué sur un texel uniforme d'atlas,
+c'est-à-dire la façon ordinaire de déplier un intérieur de voiture. Le repère
+part à l'infini, et le spéculaire avec lui.
+
+**La mesure** (`kn5-tool inspect --tangents`, ajouté pour ça) :
+
+| voiture | sommets à tangente utilisable | triangles à UV dégénérés | matériaux à carte de normales |
+| --- | --- | --- | --- |
+| `ks_alfa_romeo_gta` | 100 % | 2,0 % | 39 / 59 |
+| `ks_lamborghini_aventador_sv` | 100 % | 0,2 % | 27 / 43 |
+| `bati_fd3s_rx7` | 100 % | 5,0 % | 77 / 111 |
+| `abarth500` | 99,9 % | **30,8 %** | 29 / 59 |
+| `a3dr_viper_rt10` | 100 % | 1,3 % | 37 / 53 |
+
+**Le KN5 écrit une tangente par sommet, sur 100 % des sommets.** Le parseur la
+lisait depuis le premier jour (`Kn5Vertex::tangent`) et `geometry.rs` la jetait
+sans un mot. Deux tiers des matériaux d'une voiture portent une carte de
+normales : la moitié du relief d'un intérieur était éclairée à l'aveugle.
+
+**Correctif** : la tangente est transformée par la matrice du modèle (et non
+par son inverse transposée — c'est une direction *dans* la surface, pas une
+normale), redressée par Gram-Schmidt pour rester orthogonale à la normale, et
+écrite en `VEC4`. Seuls les maillages dont le matériau porte une carte de
+normales la reçoivent : ailleurs elle ne change rien et coûte seize octets par
+sommet, soit huit mégaoctets sur une voiture de 500 000 sommets.
+
+**Le quatrième composant est le piège.** glTF y range la latéralité :
+`B = cross(N, T) × w`. Le KN5 n'écrit que trois composantes, donc le signe se
+retrouve à partir de l'aire signée du triangle dans l'espace UV — et il
+**change d'un îlot à l'autre** dès qu'une moitié du modèle est dépliée en
+miroir, ce qui est la règle sur une carrosserie. Vérifié sur l'Alfa GTA : les
+deux valeurs `+1` et `−1` coexistent dans un même maillage. Le supposer
+constant aurait remis des reliefs inversés là où on venait de corriger des
+stries. Une transformation de nœud en miroir le retourne une seconde fois,
+d'où un facteur global en plus du signe par sommet.
+
+> **Ce que l'épisode apprend.** Le défaut ne venait pas d'une donnée mal lue
+> mais d'une donnée **lue et abandonnée en route**. Devant un artefact
+> d'éclairage, vérifier d'abord ce que le format offre et qu'on n'exporte pas —
+> c'est moins cher que de soupçonner le décodeur, et ça se mesure.
+
+---
+
 ## Écart n°13 — le verre que déclare un mod est du verre **physique**
 
 **Le point de départ** : après l'écart n°11, le vitrage était visible mais

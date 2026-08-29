@@ -88,6 +88,19 @@ pub fn write_glb(meshes: &[FlatMesh], materials: &[GltfMaterial], textures: &Tex
         if let Some(Some(index)) = material_remap.get(mesh.material_id as usize) {
             primitive["material"] = json!(index);
         }
+        // **Le repère tangent n'est écrit que là où il sert.** Sans carte de
+        // normales il ne change rien au rendu, et il coûte seize octets par
+        // sommet — sur une voiture de 500 000 sommets, huit mégaoctets pour
+        // rien. Avec une carte, en revanche, il est ce qui évite au lecteur de
+        // reconstruire le repère à l'écran et d'exploser sur les UV dégénérés
+        // (voir `geometry::convert_mesh`).
+        let needs_tangents = materials
+            .get(mesh.material_id as usize)
+            .is_some_and(|m| m.normal_texture.is_some());
+        if needs_tangents && mesh.tangents.len() == mesh.positions.len() {
+            let tangents = push_accessor_vec4(&mut bin, &mut buffer_views, &mut accessors, &mesh.tangents);
+            primitive["attributes"]["TANGENT"] = json!(tangents);
+        }
 
         gltf_meshes.push(json!({ "name": mesh.name, "primitives": [primitive] }));
         nodes.push(json!({ "name": mesh.name, "mesh": gltf_meshes.len() - 1 }));
@@ -206,6 +219,28 @@ fn push_view(bin: &mut Vec<u8>, views: &mut Vec<Value>, data: &[u8], target: Opt
     }
     views.push(view);
     views.len() - 1
+}
+
+fn push_accessor_vec4(
+    bin: &mut Vec<u8>,
+    views: &mut Vec<Value>,
+    accessors: &mut Vec<Value>,
+    data: &[[f32; 4]],
+) -> usize {
+    let mut bytes = Vec::with_capacity(data.len() * 16);
+    for value in data {
+        for component in value {
+            bytes.extend_from_slice(&component.to_le_bytes());
+        }
+    }
+    let view = push_view(bin, views, &bytes, Some(TARGET_ARRAY_BUFFER));
+    accessors.push(json!({
+        "bufferView": view,
+        "componentType": COMPONENT_F32,
+        "count": data.len(),
+        "type": "VEC4",
+    }));
+    accessors.len() - 1
 }
 
 fn push_accessor_vec3(
@@ -339,6 +374,7 @@ mod tests {
             positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 2.0, 0.0]],
             normals: vec![[0.0, 0.0, 1.0]; 3],
             uvs: vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]],
+            tangents: vec![[1.0, 0.0, 0.0, 1.0]; 3],
             indices: vec![0, 1, 2],
             transparent: false,
         }
@@ -364,6 +400,30 @@ mod tests {
             clearcoat: 0.0,
             clearcoat_roughness: 0.0,
         }
+    }
+
+    // Règle : le repère tangent n'est écrit **que** là où une carte de normales
+    // s'en sert. Ailleurs il ne change rien au rendu et coûte seize octets par
+    // sommet — huit mégaoctets sur une voiture de 500 000 sommets.
+    #[test]
+    fn tangents_are_written_only_where_a_normal_map_uses_them() {
+        let plain = write_glb(&[sample_mesh()], &[sample_material()], &TextureSet::default()).expect("writes");
+        assert!(
+            parse(&plain)["meshes"][0]["primitives"][0]["attributes"]["TANGENT"].is_null(),
+            "sans carte de normales, rien à écrire"
+        );
+
+        let mut mapped = sample_material();
+        mapped.normal_texture = Some("nm.dds".to_string());
+        let with_map = write_glb(&[sample_mesh()], &[mapped], &TextureSet::default()).expect("writes");
+        let document = parse(&with_map);
+        let accessor = document["meshes"][0]["primitives"][0]["attributes"]["TANGENT"]
+            .as_u64()
+            .expect("TANGENT présent");
+        assert_eq!(
+            document["accessors"][accessor as usize]["type"], "VEC4",
+            "glTF range la latéralité dans un quatrième composant"
+        );
     }
 
     // Règle : le verre physique sort avec ses deux extensions, et le document
