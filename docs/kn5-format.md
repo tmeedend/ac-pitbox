@@ -753,6 +753,61 @@ N points`), et c'est avec elle qu'on tranche au lieu de deviner.
 
 ---
 
+## Écart n°13 — le verre que déclare un mod est du verre **physique**
+
+**Le point de départ** : après l'écart n°11, le vitrage était visible mais
+restait pâle et sans caractère. Le réflexe aurait été de monter l'opacité au
+jugé.
+
+**La source** : `<AC>/extension/config/cars/common/materials_glass.ini`, livré
+avec Custom Shaders Patch. Ce n'est pas de la documentation, c'est
+l'**implémentation** du template `[Material_Glass]` que les moddeurs
+invoquent — et elle dit exactement ce qu'est le verre d'AC sous CSP :
+
+```ini
+[TEMPLATE: Material_Glass EXTENDS _Base_Material_Custom]
+IOR = 1.5            ; index of refraction for glass, usualy, 1.5
+FilmIOR = $IOR       ; redefine IOR for external film layer to increase reflections
+ThicknessMult = 1.0  ; thicker glass passes less light through
+SHADER = smGlass
+FresnelC = $" _PBR_EstimateF0( $FilmIOR or $IOR ) "   ; approximation de Schlick
+```
+
+Donc : un indice de réfraction, une épaisseur, un Fresnel dérivé de l'IOR par
+Schlick. **Pas un canal alpha, pas un fondu.** `smGlass` n'utilise pas non plus
+sa `txDiffuse` comme une couleur — même situation que `ksWindscreen` (écart
+n°6).
+
+**Pourquoi le fondu était structurellement faux** : sous `alphaMode: BLEND`,
+glTF atténue *toute* la réponse du matériau, **reflet spéculaire compris**. Une
+vitre rendue à 15 % d'opacité ne renvoie donc que 15 % de son reflet — or c'est
+le reflet qui fait qu'une vitre ressemble à une vitre. On rendait une vitre de
+plus en plus pâle en croyant la rendre de plus en plus transparente.
+
+**Correctif** : un matériau que le mod déclare en `[Material_Glass]` (ou ses
+variantes `GlassSide`, `MultiEmissiveGlass`, `PhotoelasticGlass`, ou le
+raccourci `ExteriorGlassMaterials`) sort en `KHR_materials_transmission` +
+`KHR_materials_ior`, `alphaMode: OPAQUE`, sans texture diffuse. glTF dérive le
+F0 de `ior` par la même formule de Schlick que CSP applique — la conversion
+n'approxime donc rien, elle transcrit.
+
+**Deux pièges côté viewer**, tous deux parce qu'un matériau transmissif n'est
+**pas** `transparent` au sens de three.js, si bien que toute règle branchée sur
+ce drapeau le rate :
+
+- il tombe dans la branche « opaque » et se met à projeter une ombre **noire
+  pleine** — le « pâté sombre sous la voiture » que le code prend soin d'éviter ;
+- le plancher de rugosité anti-scintillement (0,15) s'y applique, et three
+  floute l'image transmise avec cette même rugosité : toutes les vitres
+  ressortent **dépolies**.
+
+> **Où chercher, la prochaine fois.** Avant de régler une valeur au jugé,
+> vérifier si CSP livre le template correspondant dans
+> `extension/config/cars/common/`. Le wiki est incomplet et se dit lui-même en
+> chantier ; ces fichiers-là, eux, sont la vérité exécutée par le jeu.
+
+---
+
 ## Écart n°12 — `ksAlphaRef = 0` veut dire « non réglé », pas « ne découpe rien »
 
 **Symptôme** : tout l'arrière de `j8_mitsubishi_gto_twin_turbo_91` uniformément

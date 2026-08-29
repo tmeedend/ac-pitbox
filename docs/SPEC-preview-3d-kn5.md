@@ -661,6 +661,14 @@ il garde donc sa découpe, et reste très peu marqué. CSP y remplace de toute
 façon `MAIN_GLASS` par ses propres shaders, donc les valeurs brutes du KN5 n'y
 sont pas ce que le jeu applique.
 
+**Verre physique** : un matériau qu'un mod déclare en `[Material_Glass]` est
+converti en `KHR_materials_transmission` + `KHR_materials_ior` plutôt qu'en
+fondu — c'est ce que fait CSP, dont le template est livré dans
+`<AC>/extension/config/cars/common/materials_glass.ini` (écart n°13 de
+`kn5-format.md`). 71 voitures sur 298 de la bibliothèque de référence sont
+concernées. Les voitures Kunos ne le sont pas : leur config vit dans
+`<AC>/extension/config/cars/loaded/`, que l'on ne lit pas encore.
+
 **Modèles étendus par CSP** (§4.5ter) : les mods de préparation qui laissent
 CSP greffer leurs pièces skin par skin s'affichaient troués — jantes absentes,
 boucliers et optiques manquants. Les `[MODEL_REPLACEMENT_*]` littéraux et le
