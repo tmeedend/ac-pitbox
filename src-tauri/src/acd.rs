@@ -264,7 +264,7 @@ fn recover_key(data: &[u8], accept: &dyn Fn(&[u8]) -> bool) -> Option<Vec<u8>> {
     if data.len() < MIN_TEXT {
         return None;
     }
-    const CANDIDATES: [u8; 11] = [b'-', b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9'];
+    const CANDIDATES: [u8; 11] = *b"-0123456789";
 
     for period in KEY_LEN {
         let mut columns: Vec<Vec<u8>> = Vec::with_capacity(period);
