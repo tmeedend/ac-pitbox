@@ -233,7 +233,10 @@ pub fn build_preset(s: &RaceSetup) -> Result<String, String> {
         "WeatherId": weather_id,
         "RealConditions": false,
         "Temperature": s.ambient_c.unwrap_or(22) as f64,
-        "Time": (s.time_hours * 3600.0) as i64,
+        // Rounded, not truncated: the time slider steps by ten minutes, so
+        // most values are thirds of an hour that no float holds exactly —
+        // truncating turns 10:00 into 09:59:59.
+        "Time": (s.time_hours * 3600.0).round() as i64,
         "TimeMultipler": 1,
         "udt": s.season_date.is_some(),
         "dtv": s.season_date.as_ref().map(|d| format!("{d}T00:00:00")),

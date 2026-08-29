@@ -82,10 +82,19 @@
     return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
   }
 
-  // --- Bande jour/nuit sous le curseur d'heure (§8.6ter) ---
-  // Borne haute du curseur : la bande couvre exactement la course du pouce,
-  // sinon un repère de coucher tombe à côté de l'heure qu'il désigne.
-  const BAND_MAX = 23.5;
+  // --- Curseur d'heure (§8.6) ---
+  // Pas de 10 minutes : une demi-heure passe à côté de la lumière qu'on vient
+  // chercher — au bord d'un coucher, le ciel change complètement en dix
+  // minutes. `time_hours` reste une heure décimale (le preset Quick Drive
+  // l'écrit en secondes), donc un tiers d'heure ne se note pas rond.
+  const TIME_STEP = 1 / 6;
+  // Journée entière : une session de nuit est légitime (CSP/Sol gèrent
+  // l'éclairage), rien dans le lancement ne dépend du jour. Un cran sous 24 h
+  // pour que le dernier pas affiche 23:50 et non un 24:00 qui n'existe pas.
+  const TIME_MAX = 24 - TIME_STEP;
+  // La bande couvre exactement la course du pouce du curseur, sinon un repère
+  // de coucher tombe à côté de l'heure qu'il désigne.
+  const BAND_MAX = TIME_MAX;
   const NIGHT = "var(--sky-night)";
   const TWILIGHT = "var(--sky-twilight)";
   const DAY = "var(--sky-day)";
@@ -269,15 +278,12 @@
         </div>
       </div>
       <div class="imp time-imp">
-        <!-- Full 24 h range: night sessions are legitimate (CSP/Sol handle lighting),
-             nothing in the launch path depends on daylight. Max is 23.5 rather than 24
-             so the last step reads 23:30 instead of a nonsensical 24:00. -->
         <Slider
           label={t("launch.timeLabelShort")}
           value={setup.time_hours}
           min={0}
-          max={23.5}
-          step={0.5}
+          max={TIME_MAX}
+          step={TIME_STEP}
           display={fmtTime(setup.time_hours)}
           oninput={(v) => (setup.time_hours = v)}
         />
