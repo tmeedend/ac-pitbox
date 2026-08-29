@@ -45,6 +45,59 @@ use kn5::{Kn5Model, Kn5Node, Kn5NodeKind};
 /// round in circles.
 const GRAFT_MARKER: &str = "CSP_INSERT";
 
+/// Where a car's CSP configuration lives.
+///
+/// Three places, and they are **not** interchangeable — CSP reads all of them
+/// and the more specific wins:
+///
+/// - the selected skin's `ext_config.ini`, which is how a mod varies one skin;
+/// - the car's own `extension/ext_config.ini` (plus the `materials.ini` it
+///   usually includes);
+/// - **`<AC>/extension/config/cars/loaded/<car_id>.ini`**, the config CSP
+///   itself ships. This is the only one that exists for a Kunos car: 195 of
+///   them are described there and nowhere else, which is why their glass and
+///   their paint were invisible to us until we read it.
+#[derive(Debug, Clone, Default)]
+pub struct CspConfig {
+    sources: Vec<PathBuf>,
+}
+
+impl CspConfig {
+    /// `ac_install` is the Assetto Corsa root; `car_id` names the folder under
+    /// `content/cars`, which is **not** always the name of `car_dir` — in the
+    /// library a car lives under `<library>/cars/<car_id>/<version>`.
+    pub fn locate(car_dir: &Path, skin_dir: Option<&Path>, ac_install: Option<&Path>, car_id: &str) -> Self {
+        // Ordre délibéré : du plus spécifique au plus général, parce que la
+        // résolution garde la **première** correspondance trouvée.
+        let mut sources = Vec::new();
+        if let Some(skin) = skin_dir {
+            sources.push(skin.join("ext_config.ini"));
+        }
+        sources.push(car_dir.join("extension").join("ext_config.ini"));
+        // Les mods rangent souvent leurs matériaux à part, tirés par un
+        // `[INCLUDE: materials.ini]` — que l'on ne suit pas, mais dont le nom
+        // est assez stable pour être lu directement.
+        sources.push(car_dir.join("extension").join("materials.ini"));
+        if let (Some(ac), false) = (ac_install, car_id.is_empty()) {
+            sources.push(
+                ac.join("extension")
+                    .join("config")
+                    .join("cars")
+                    .join("loaded")
+                    .join(format!("{car_id}.ini")),
+            );
+        }
+        Self { sources }
+    }
+
+    /// Every file that may carry a declaration, most specific first. Files that
+    /// do not exist are included: the caller stamps them into its cache key, and
+    /// one appearing later has to invalidate it.
+    pub fn sources(&self) -> &[PathBuf] {
+        &self.sources
+    }
+}
+
 /// Materials CSP turns into **physical glass**, with the index of refraction
 /// that drives their reflectance.
 ///
@@ -96,34 +149,30 @@ const DEFAULT_GLASS_IOR: f32 = 1.5;
 
 /// Reads the glass declarations of a car — `[Material_Glass]` and its variants,
 /// plus the `ExteriorGlass*` shorthands that `materials_glass.ini` defines.
-pub fn glass_overrides(car_dir: &Path, skin_dir: Option<&Path>) -> GlassOverrides {
+pub fn glass_overrides(config: &CspConfig) -> GlassOverrides {
     let mut out = GlassOverrides::default();
-    let mut sources: Vec<PathBuf> = vec![car_dir.join("extension").join("ext_config.ini")];
-    if let Some(skin) = skin_dir {
-        sources.push(skin.join("ext_config.ini"));
-    }
-    // Les mods rangent souvent leurs matériaux dans un fichier à part, tiré par
-    // un `[INCLUDE: materials.ini]` — que l'on ne suit pas, mais dont le nom est
-    // assez stable pour être lu directement.
-    sources.push(car_dir.join("extension").join("materials.ini"));
-
-    for source in sources {
-        let Ok(text) = std::fs::read_to_string(&source) else {
-            continue;
-        };
-        collect_glass(&text, &mut out);
+    for source in config.sources() {
+        if let Ok(text) = std::fs::read_to_string(source) {
+            collect_glass(&text, &mut out);
+        }
     }
     out
 }
 
-/// Les clés raccourcies de `materials_glass.ini`, qui évitent au moddeur
-/// d'écrire une section entière. Chacune a sa variante `…Meshes`.
-const GLASS_SHORTHANDS: [&str; 5] = [
-    "ExteriorGlassMaterials",
-    "ExteriorGlassTintedMaterials",
-    "ExteriorGlassFilmedMaterials",
-    "ExteriorGlassHeadlightsMaterials",
-    "ExteriorGlassPhotoelasticMaterials",
+/// Les clés raccourcies de `materials_glass.ini`, avec **l'IOR que chacune
+/// pose**, et leur variante `…Meshes`.
+///
+/// Transcrit du fichier lui-même : les quatre premières y sont quatre sections
+/// `[Material_Glass]` préréglées, la dernière un `[Material_PhotoelasticGlass]`.
+/// Les traiter toutes au défaut de 1,5 revenait à jeter le seul réglage qu'un
+/// moddeur exprime en les choisissant — un phare (2,2) ne renvoie pas comme un
+/// vitrage teinté (3,2).
+const GLASS_SHORTHANDS: [(&str, f32); 5] = [
+    ("ExteriorGlassMaterials", DEFAULT_GLASS_IOR),
+    ("ExteriorGlassTintedMaterials", 3.2),
+    ("ExteriorGlassFilmedMaterials", 2.4),
+    ("ExteriorGlassHeadlightsMaterials", 2.2),
+    ("ExteriorGlassPhotoelasticMaterials", 3.2),
 ];
 
 fn collect_glass(text: &str, out: &mut GlassOverrides) {
@@ -149,13 +198,13 @@ fn collect_glass(text: &str, out: &mut GlassOverrides) {
 
         // Les raccourcis peuvent apparaître dans n'importe quelle section — ils
         // sont posés juste sous le `[INCLUDE: common/materials_glass.ini]`.
-        for shorthand in GLASS_SHORTHANDS {
+        for (shorthand, preset) in GLASS_SHORTHANDS {
             for name in section.list(shorthand).unwrap_or_default() {
-                out.materials.push((name, DEFAULT_GLASS_IOR));
+                out.materials.push((name, preset));
             }
             let meshes = shorthand.replace("Materials", "Meshes");
             for name in section.list(&meshes).unwrap_or_default() {
-                out.meshes.push((name, DEFAULT_GLASS_IOR));
+                out.meshes.push((name, preset));
             }
         }
     }
@@ -204,27 +253,25 @@ pub struct ExtConfigStats {
 /// the main model.
 pub fn apply_ext_config(
     model: &mut Kn5Model,
-    car_dir: &Path,
     model_path: &Path,
     skin_dir: Option<&Path>,
+    config: &CspConfig,
 ) -> ExtConfigStats {
     let mut stats = ExtConfigStats::default();
     let model_file = file_name_of(model_path);
     let skin_id = skin_dir.map(file_name_of).unwrap_or_default();
 
-    let mut sources: Vec<PathBuf> = vec![car_dir.join("extension").join("ext_config.ini")];
-    // The skin's own config comes second on purpose: it is the more specific
-    // of the two, and `[ReplaceRims]` lives there.
-    if let Some(skin) = skin_dir {
-        sources.push(skin.join("ext_config.ini"));
-    }
-
-    for source in sources {
-        let Ok(text) = std::fs::read_to_string(&source) else {
+    // Les greffes s'additionnent, elles ne se remplacent pas : l'ordre importe
+    // peu ici, contrairement aux déclarations de matériau.
+    for source in config.sources() {
+        let Ok(text) = std::fs::read_to_string(source) else {
             continue;
         };
-        let dir = source.parent().unwrap_or(car_dir).to_path_buf();
-        for replacement in replacements_of(&text, &dir, &model_file, &skin_id) {
+        // `INSERT` nomme un KN5 posé **à côté de la config qui le nomme** —
+        // d'où la résolution relative à ce fichier-là et pas au dossier de la
+        // voiture.
+        let Some(dir) = source.parent() else { continue };
+        for replacement in replacements_of(&text, dir, &model_file, &skin_id) {
             stats.applied += 1;
             apply_one(model, &replacement, &mut stats);
         }
@@ -1054,6 +1101,68 @@ OriginalRims = RIM_?
             graft_into(&mut root, "WHEEL_??", &graft, true),
             2,
             "only the car's own wheels count, not the ones just inserted"
+        );
+    }
+
+    // Règle : les configs sont consultées du plus spécifique au plus général —
+    // skin, voiture, puis celle que CSP livre pour la voiture. La résolution
+    // gardant la première correspondance, c'est cet ordre qui décide qui gagne.
+    #[test]
+    fn config_sources_run_from_the_skin_down_to_the_one_csp_ships() {
+        let car = Path::new("D:/lib/cars/abarth500/v1.2");
+        let skin = car.join("skins").join("red");
+        let ac = Path::new("D:/AC");
+
+        let config = CspConfig::locate(car, Some(&skin), Some(ac), "abarth500");
+        assert_eq!(
+            config.sources(),
+            [
+                skin.join("ext_config.ini"),
+                car.join("extension").join("ext_config.ini"),
+                car.join("extension").join("materials.ini"),
+                ac.join("extension")
+                    .join("config")
+                    .join("cars")
+                    .join("loaded")
+                    .join("abarth500.ini"),
+            ],
+            "du plus spécifique au plus général"
+        );
+
+        // **L'identifiant n'est pas le nom du dossier** en bibliothèque : une
+        // voiture y vit sous `<car_id>/<version>`, donc le déduire du chemin
+        // pointerait sur `v1.2.ini` et ne trouverait jamais rien.
+        assert!(
+            config.sources().last().unwrap().ends_with("abarth500.ini"),
+            "la config livrée est nommée par l'identifiant, pas par la version"
+        );
+
+        // Sans install AC connue, on ne peut que lire le dossier de la voiture.
+        let alone = CspConfig::locate(car, None, None, "abarth500");
+        assert_eq!(alone.sources().len(), 2, "pas de skin, pas d'install : deux fichiers");
+    }
+
+    // Règle : chaque raccourci de `materials_glass.ini` pose son propre IOR.
+    // Les uniformiser jetterait le seul réglage qu'un moddeur exprime en
+    // choisissant l'un plutôt que l'autre — un phare ne renvoie pas comme un
+    // vitrage teinté.
+    #[test]
+    fn each_glass_shorthand_carries_its_own_ior() {
+        let text = "[INCLUDE: common/materials_glass.ini]
+ExteriorGlassFilmedMaterials=CAR_Vetro
+ExteriorGlassHeadlightsMaterials=CAR_Vetro_Fanali_ANTERIORI
+ExteriorGlassMaterials=plain
+";
+        let mut glass = GlassOverrides::default();
+        collect_glass(text, &mut glass);
+        assert_eq!(
+            glass.materials,
+            vec![
+                ("plain".to_string(), 1.5),
+                ("CAR_Vetro".to_string(), 2.4),
+                ("CAR_Vetro_Fanali_ANTERIORI".to_string(), 2.2),
+            ],
+            "les valeurs viennent de materials_glass.ini, pas d'un défaut unique"
         );
     }
 

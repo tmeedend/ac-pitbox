@@ -49,6 +49,10 @@ OPTIONS:
     --out=<path>  extract-textures: destination folder. convert: .glb file.
     --skin=<id>   extract-textures: skin whose files override the embedded ones
                   (default: first skin in alphabetical order).
+    --ac=<path>   Assetto Corsa root, so that the config CSP ships for the car
+                  (extension/config/cars/loaded/<car_id>.ini) is read too.
+    --car-id=<id> Car id when the folder is not named after it, e.g. a library
+                  entry stored as <car_id>/<version>.
 ";
 
 /// Minimal stderr logger. The parser reports its suspicions through the `log`
@@ -155,7 +159,12 @@ fn inspect(path: &Path, flags: &[&str]) -> Result<(), String> {
     // that is the point of having an inspectable intermediate.
     if path.is_dir() {
         let skin = resolve_skin(path, option_value(flags, "--skin"));
-        let ext = kn5_gltf::apply_ext_config(&mut model, path, &file, skin.as_deref());
+        let ext = kn5_gltf::apply_ext_config(
+            &mut model,
+            &file,
+            skin.as_deref(),
+            &csp_config(path, skin.as_deref(), flags),
+        );
         report_ext_config(&ext);
     }
 
@@ -774,6 +783,23 @@ fn orientation_verdict(model: &kn5::Kn5Model) -> Option<String> {
     ))
 }
 
+/// Locates a car's CSP configuration, including the one the patch ships for it.
+///
+/// `--ac=<path>` names the Assetto Corsa root. Without it only the car's own
+/// folder is read, which is what every Kunos car lacks — their materials live
+/// exclusively in `<AC>/extension/config/cars/loaded/<car_id>.ini`.
+///
+/// The car id is the folder name, except in a library where a car sits under
+/// `<car_id>/<version>`: `--car-id=<id>` overrides it for that case.
+fn csp_config(car_dir: &Path, skin: Option<&Path>, flags: &[&str]) -> kn5_gltf::CspConfig {
+    let folder = car_dir
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let car_id = option_value(flags, "--car-id").map(str::to_string).unwrap_or(folder);
+    kn5_gltf::CspConfig::locate(car_dir, skin, option_value(flags, "--ac").map(Path::new), &car_id)
+}
+
 /// Prints what the CSP replacement pass did, and only when it did something:
 /// the overwhelming majority of cars carry no `ext_config.ini` at all, and a
 /// line of zeroes on every one of them would drown the reports that matter.
@@ -804,12 +830,13 @@ fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
     // Same pass the application runs (`preview.rs`): a tuning mod keeps part
     // of its geometry in separate KN5 files that only `ext_config.ini` knows
     // about, so converting without it produces a car with holes in it.
-    let ext = kn5_gltf::apply_ext_config(&mut model, car_dir, &file, skin.as_deref());
+    let csp = csp_config(car_dir, skin.as_deref(), flags);
+    let ext = kn5_gltf::apply_ext_config(&mut model, &file, skin.as_deref(), &csp);
     report_ext_config(&ext);
 
     let started = Instant::now();
     let options = kn5_gltf::ConvertOptions {
-        glass: kn5_gltf::glass_overrides(car_dir, skin.as_deref()),
+        glass: kn5_gltf::glass_overrides(&csp),
         ..Default::default()
     };
     let conversion = kn5_gltf::convert(&model, skin.as_deref(), &options, &|stage| {

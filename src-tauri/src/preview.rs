@@ -30,7 +30,7 @@ use crate::config::AppConfig;
 /// *reconnaître* pour libérer sa place. Trois incréments en une session de
 /// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
-const CONVERTER_VERSION: u32 = 16;
+const CONVERTER_VERSION: u32 = 17;
 
 /// Default cache ceiling (§5.3). Beyond it, the least recently used entries
 /// are evicted. Only a default: the real ceiling is a setting, carried by
@@ -214,16 +214,6 @@ fn stamp(hasher: &mut Sha256, path: &Path) {
     }
 }
 
-/// Les configs CSP qui peuvent modifier le modèle d'une voiture, dans l'ordre
-/// où [`kn5_gltf::apply_ext_config`] les lit.
-fn ext_config_paths(car_dir: &Path, skin_dir: Option<&Path>) -> Vec<PathBuf> {
-    let mut paths = vec![car_dir.join("extension").join("ext_config.ini")];
-    if let Some(skin) = skin_dir {
-        paths.push(skin.join("ext_config.ini"));
-    }
-    paths
-}
-
 /// Clé de cache d'un couple (modèle, skin).
 ///
 /// Inclut la date et la taille du `.kn5` : réimporter une version modifiée
@@ -257,6 +247,7 @@ pub fn prepare(
     app: &tauri::AppHandle,
     state: &PreviewState,
     car_dir: &Path,
+    car_id: &str,
     skin_id: Option<&str>,
     token: u64,
 ) -> Result<CarPreview, String> {
@@ -270,8 +261,13 @@ pub fn prepare(
     // Le skin est résolu avant la clé : c'est lui qui désigne le dossier où
     // vivent le `ext_config.ini` et les KN5 de jante (§4.3).
     let skin_dir = kn5_gltf::resolve_skin(car_dir, skin_id);
-    let configs = ext_config_paths(car_dir, skin_dir.as_deref());
-    let stem = entry_stem(&cache_key(&resolved.path, skin_id, &configs));
+    let csp = kn5_gltf::CspConfig::locate(
+        car_dir,
+        skin_dir.as_deref(),
+        crate::config::load(app).ac_install_path.as_deref(),
+        car_id,
+    );
+    let stem = entry_stem(&cache_key(&resolved.path, skin_id, csp.sources()));
     let file = dir.join(format!("{stem}.glb"));
 
     if let Ok(meta) = std::fs::metadata(&file) {
@@ -332,7 +328,7 @@ pub fn prepare(
     // jantes, boucliers, optiques. Sans cette passe, l'aperçu montre une
     // voiture trouée alors que le jeu l'affiche entière. Après le contrôle
     // d'enroulement ci-dessus, qui doit juger le modèle d'origine et lui seul.
-    let ext = kn5_gltf::apply_ext_config(&mut model, car_dir, &resolved.path, skin_dir.as_deref());
+    let ext = kn5_gltf::apply_ext_config(&mut model, &resolved.path, skin_dir.as_deref(), &csp);
     for failure in &ext.failures {
         log::warn!("preview: remplacement CSP ignoré — {failure}");
     }
@@ -340,7 +336,7 @@ pub fn prepare(
     // Le mod déclare lui-même quels matériaux sont du verre physique — c'est
     // la seule façon de le savoir, le KN5 seul ne le dit pas (SPEC §4.5ter).
     let options = kn5_gltf::ConvertOptions {
-        glass: kn5_gltf::glass_overrides(car_dir, skin_dir.as_deref()),
+        glass: kn5_gltf::glass_overrides(&csp),
         ..Default::default()
     };
     let conversion = kn5_gltf::convert(&model, skin_dir.as_deref(), &options, &|stage| {
@@ -662,28 +658,6 @@ INSERT = part.kn5",
         )
         .unwrap();
         assert_ne!(with, cache_key(&model, None, &[config]), "une config modifiée aussi");
-    }
-
-    // Règle : les configs consultées sont celles que `apply_ext_config` lit,
-    // dans le même ordre — la voiture puis le skin, du général au particulier.
-    #[test]
-    fn ext_config_paths_follow_the_car_then_the_skin() {
-        let car = Path::new("D:/lib/ks_toyota_ae86_tuned");
-        let skin = car.join("skins").join("00_panda");
-
-        assert_eq!(
-            ext_config_paths(car, None),
-            vec![car.join("extension").join("ext_config.ini")],
-            "sans skin, seule la config de la voiture"
-        );
-        assert_eq!(
-            ext_config_paths(car, Some(&skin)),
-            vec![
-                car.join("extension").join("ext_config.ini"),
-                skin.join("ext_config.ini"),
-            ],
-            "la config du skin vient après celle de la voiture"
-        );
     }
 
     // Règle : le nom demandé par la webview ne sert jamais à construire un

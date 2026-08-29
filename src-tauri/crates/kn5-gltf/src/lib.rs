@@ -18,7 +18,7 @@ use std::path::Path;
 
 use kn5::Kn5Model;
 
-pub use extconfig::{apply_ext_config, glass_overrides, ExtConfigStats, GlassOverrides, Replacement};
+pub use extconfig::{apply_ext_config, glass_overrides, CspConfig, ExtConfigStats, GlassOverrides, Replacement};
 pub use geometry::{node_world_centers, winding_consistency, FlatMesh, GeometryOptions, GeometryStats};
 pub use locate::{resolve_model, resolve_skin, ModelSource, ResolvedModel};
 pub use material::{AlphaMode, GltfMaterial, MaterialTextures};
