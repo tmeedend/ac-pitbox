@@ -208,10 +208,12 @@ pub fn set_audition_rev(engine: State<crate::fmod::engine::FmodEngineHandle>, re
 
 /// Reports the mouse button being held down on the rev slider, or released.
 ///
-/// Sent apart from the engine speed because it says what a movement cannot: a
-/// slider held still, button down, is an engine held ON the throttle. Without
-/// it, the stillness read as "slider put down" and the sound settled back to
-/// the off-throttle layers under a motionless hand.
+/// Sent apart from the engine speed because it answers what a movement cannot:
+/// what a STILL slider means. Held still, button down, is an engine held ON the
+/// throttle - without it, that stillness read as "slider put down" and the sound
+/// settled back to the off-throttle layers under a motionless hand. A slider
+/// being dragged keeps saying what it always said (§6quater), the button
+/// included: down is a lift-off, which is the deceleration.
 #[cfg(windows)]
 #[tauri::command]
 pub fn set_audition_pedal(engine: State<crate::fmod::engine::FmodEngineHandle>, down: bool) {

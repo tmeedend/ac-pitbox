@@ -1009,22 +1009,32 @@ et ramenait le papillon au maintien (0,3) — alors que la main était toujours
 dessus, bouton enfoncé. Or tenir un curseur immobile pendant qu'on écoute, c'est
 exactement ce qu'on fait pour comparer deux mods à régime égal.
 
-**Le bouton de la souris dit ce qu'aucun mouvement ne peut dire.** Il est envoyé
-à part du régime (`set_audition_pedal`, `Command::Pedal`), et le modèle
-`Throttle` en tire la règle qui prime sur toutes les autres :
+**Le bouton de la souris dit ce qu'aucun mouvement ne peut dire** — mais rien de
+plus : il répond à la question « que veut dire un curseur immobile ? », jamais à
+« que veut dire un curseur qui bouge ? », qui reste celle du §6quater. Il est
+envoyé à part du régime (`set_audition_pedal`, `Command::Pedal`) :
 
-| Le bouton | Le gaz |
+| Le curseur | Le gaz |
 | --- | --- |
-| enfoncé sur le curseur | 1 — plein gaz, **aussi longtemps qu'il est tenu**, curseur immobile compris |
-| relâché | 0 — pied levé, et ça **y reste** (plus de retour au maintien) |
-| jamais touché (clavier, manette) | la règle du geste de §6quater, inchangée |
+| monte | 1 — en charge (§6quater, inchangé) |
+| **descend** | 0 — lâcher de gaz, **bouton tenu ou non** |
+| immobile, **bouton tenu** | 1 — le moteur est tenu là, aussi longtemps que le bouton l'est |
+| **bouton relâché** | 0 — pied levé, et ça **y reste** (plus de retour au maintien) |
+| immobile, jamais touché à la souris (clavier, manette) | 0,3 — le maintien du §6quater |
 
-Deux conséquences assumées. **Le sens du mouvement ne compte plus tant que le
-bouton est tenu** : redescendre le curseur pédale au plancher reste « en
-charge ». C'est ce que veut dire une pédale, et celui qui veut le frein moteur
-l'a désormais d'un simple relâchement, sans avoir à faire glisser quoi que ce
-soit. **Un bouton relâché ne dérive pas vers le maintien** : le lâcher de gaz
-soutenu devient une position d'écoute à part entière, ce qu'il n'était pas.
+**La descente reste un lâcher de gaz même pédale au plancher**, et c'est
+délibéré : c'est *la* décélération, et faire glisser le curseur est la seule
+manière qu'a l'oreille d'en contrôler l'ampleur et la vitesse. Un bouton qui
+écraserait le sens du mouvement la lui retirerait. Le bouton ne fait donc que
+remplacer le repli du curseur posé — maintien (0,3) sans lui, plein gaz avec.
+
+**Un bouton relâché ne dérive pas vers le maintien** : le lâcher de gaz soutenu
+devient une position d'écoute à part entière, ce qu'il n'était pas.
+
+Le délai de 180 ms du §6quater sert toujours, et pour la même raison : il sépare
+une pause à l'intérieur d'un glissement d'une main réellement arrêtée. Tant
+qu'on descend, les à-coups du glissement ne rouvrent pas les gaz ; dès qu'on
+s'arrête pour de bon, bouton tenu, le moteur se tient là.
 
 Le clavier et la manette n'ont pas de bouton à tenir : bouger le curseur sans
 rien de tenu **rend la main à la règle du geste**, ce qui les laisse exactement

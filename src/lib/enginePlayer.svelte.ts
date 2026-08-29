@@ -101,10 +101,12 @@ export function setEngineRev(value: number): void {
 /** Holding the mouse button down on the rev slider is holding the pedal down;
  * letting go is lifting off.
  *
- * Sent apart from the engine speed because it says what a movement cannot: a
- * slider held still, button down, is an engine held ON the throttle. Reported:
- * keeping the slider in place made the sound fall back to the off-throttle
- * layers, stillness alone reading as "slider put down".
+ * Sent apart from the engine speed because it answers what a movement cannot:
+ * what a STILL slider means. Held still, button down, is an engine held ON the
+ * throttle - reported: keeping the slider in place made the sound fall back to
+ * the off-throttle layers, stillness alone reading as "slider put down". What a
+ * MOVING slider means is unchanged: dragging down is a lift-off, button held or
+ * not, because that is the deceleration and the hand controls how far it goes.
  *
  * Pressing is a takeover like moving, showcase included - the routine drives
  * the same parameters and would argue with the hand on the slider. */

@@ -690,14 +690,12 @@ impl Throttle {
     /// The slider just went from `from` to `to`.
     fn slider_moved(&mut self, from: f32, to: f32) {
         self.still = Duration::ZERO;
-        // A held button already states the throttle, and it wins: dragging back
-        // down with the pedal in still means on the throttle.
-        if self.pedal == Some(true) {
-            return;
-        }
         // Moving with no button held is not the pointer: keyboard or gamepad,
-        // which have no pedal to press - the direction rule takes over again.
-        self.pedal = None;
+        // which have no pedal to press - what stillness means goes back to the
+        // direction rule's own answer. A held button keeps its meaning.
+        if self.pedal != Some(true) {
+            self.pedal = None;
+        }
         // The same value sent again — which happens, the slider emits on every
         // pixel it passes over — is not a movement and says nothing about a
         // direction.
@@ -724,15 +722,20 @@ impl Throttle {
     /// has not moved enough to be worth the trip.
     fn tick(&mut self, dt: Duration) -> Option<f32> {
         self.still += dt;
+        // What a slider that has stopped moving means - the direction it was
+        // last moving in has already had its say in `slider_moved`, and holds
+        // until the settling delay tells a paused drag from a hand at rest.
         match self.pedal {
-            // A button held down is a pedal held down, for as long as it takes:
-            // no settling back, however long the slider stays where it is.
-            Some(true) => self.target = 1.0,
-            // And released is released - it does not drift back to the holding
-            // value either, so the off-throttle layers stay listenable.
+            // Released is released: it does not drift back to anything, so the
+            // off-throttle layers stay listenable without holding a drag.
             Some(false) => self.target = 0.0,
+            // Held still is an engine held ON the throttle, for as long as the
+            // button is down. Coming back DOWN the range stays a lift-off all
+            // the same: that is the deceleration, and it is the hand that
+            // controls how far it goes - `slider_moved` above owns that half.
+            Some(true) if self.still >= SETTLE_AFTER => self.target = 1.0,
             None if self.still >= SETTLE_AFTER => self.target = HOLD_THROTTLE,
-            None => {}
+            _ => {}
         }
         // Exponential approach: the step follows `dt`, so a tick stretched by a
         // command arriving in between does not make the value jump.
@@ -1453,23 +1456,50 @@ mod tests {
         assert!(later < 0.1, "and it does not drift back to holding, got {later}");
     }
 
-    /// With the button down the direction says nothing any more: coming back
-    /// down the range with the pedal in is still on the throttle. The keyboard
-    /// keeps the old rule, which is why moving with nothing held has to give
-    /// the slider back to it.
+    /// The button says what stillness means, never what a movement means:
+    /// coming back down the range is a lift-off whether or not it is held. That
+    /// is the deceleration, and dragging is how the ear controls how far it
+    /// goes - a held button that overrode the direction would take it away.
+    #[test]
+    fn dragging_down_is_a_lift_off_even_with_the_button_held() {
+        let mut throttle = Throttle::new();
+        throttle.pedal_set(true);
+        throttle.slider_moved(5000.0, 4600.0);
+        let falling = coast(&mut throttle, 100);
+        assert!(falling < 0.1, "off the throttle on the way down, got {falling}");
+
+        // And it stays off for as long as the hand keeps pulling it down,
+        // gaps between two bursts of the drag included.
+        throttle.slider_moved(4600.0, 4200.0);
+        let still_falling = coast(&mut throttle, 100);
+        assert!(still_falling < 0.1, "still off further down, got {still_falling}");
+
+        // Stopping - button still down - is holding the engine there, which is
+        // the rule the button was added for.
+        let held_there = coast(&mut throttle, 1000);
+        assert!(held_there > 0.9, "held still means back on it, got {held_there}");
+    }
+
+    /// The keyboard has no button to hold, so it keeps the whole direction rule,
+    /// stillness included: it settles on the holding value rather than on wide
+    /// open. Moving with nothing held is what hands the slider back to it.
     #[test]
     fn moving_without_the_button_returns_to_the_direction_rule() {
         let mut throttle = Throttle::new();
         throttle.pedal_set(true);
-        throttle.slider_moved(4000.0, 3000.0);
-        let held = coast(&mut throttle, 100);
-        assert!(held > 0.8, "pedal in wins over the direction, got {held}");
-
         throttle.pedal_set(false);
         coast(&mut throttle, 60);
         throttle.slider_moved(3000.0, 3400.0);
+        // Not the 0.8 of the tests above: the plate starts from shut here
+        // rather than from the holding value, and the settling delay pulls it
+        // back down before it can get any higher than this.
         let arrows = coast(&mut throttle, 100);
-        assert!(arrows > 0.8, "climbing by keyboard opens it again, got {arrows}");
+        assert!(arrows > 0.7, "climbing by keyboard opens it again, got {arrows}");
+        let settled = coast(&mut throttle, 1000);
+        assert!(
+            (settled - HOLD_THROTTLE).abs() < 0.02,
+            "and a keyboard slider left alone settles on holding, got {settled}"
+        );
     }
 
     /// The same value sent twice — the slider emits on every pixel it crosses —
