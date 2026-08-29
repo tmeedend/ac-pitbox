@@ -26,7 +26,7 @@ const USAGE: &str = "\
 kn5-tool — inspect Assetto Corsa KN5 models
 
 USAGE:
-    kn5-tool inspect <file.kn5 | car_dir> [--tree] [--materials] [--textures] [--skin=<id>]
+    kn5-tool inspect <file.kn5 | car_dir> [--tree] [--materials] [--textures] [--tangents] [--skin=<id>]
     kn5-tool scan <dir> [--details]
     kn5-tool extract-textures <car_dir> --out=<dir> [--skin=<id>]
     kn5-tool convert <car_dir> --out=<file.glb> [--skin=<id>]
@@ -45,10 +45,17 @@ OPTIONS:
     --tree        Print the node hierarchy.
     --materials   Print every material with its shader, properties and samplers.
     --textures    Print every embedded texture with its sniffed format.
+    --tangents    Report the tangent frame: how many vertices carry a usable
+                  one, and how many triangles have degenerate UVs. Both decide
+                  whether a normal map can be lit correctly.
     --details     scan: also print the aggregate shader / property tables.
     --out=<path>  extract-textures: destination folder. convert: .glb file.
     --skin=<id>   extract-textures: skin whose files override the embedded ones
                   (default: first skin in alphabetical order).
+    --ac=<path>   Assetto Corsa root, so that the config CSP ships for the car
+                  (extension/config/cars/loaded/<car_id>.ini) is read too.
+    --car-id=<id> Car id when the folder is not named after it, e.g. a library
+                  entry stored as <car_id>/<version>.
 ";
 
 /// Minimal stderr logger. The parser reports its suspicions through the `log`
@@ -155,7 +162,12 @@ fn inspect(path: &Path, flags: &[&str]) -> Result<(), String> {
     // that is the point of having an inspectable intermediate.
     if path.is_dir() {
         let skin = resolve_skin(path, option_value(flags, "--skin"));
-        let ext = kn5_gltf::apply_ext_config(&mut model, path, &file, skin.as_deref());
+        let ext = kn5_gltf::apply_ext_config(
+            &mut model,
+            &file,
+            skin.as_deref(),
+            &csp_config(path, skin.as_deref(), flags),
+        );
         report_ext_config(&ext);
     }
 
@@ -253,6 +265,10 @@ fn inspect(path: &Path, flags: &[&str]) -> Result<(), String> {
                 texture.name
             );
         }
+    }
+
+    if flags.contains(&"--tangents") {
+        report_tangents(&model);
     }
 
     if flags.contains(&"--materials") {
@@ -774,16 +790,195 @@ fn orientation_verdict(model: &kn5::Kn5Model) -> Option<String> {
     ))
 }
 
+/// Locates a car's CSP configuration, including the one the patch ships for it.
+///
+/// `--ac=<path>` names the Assetto Corsa root. Without it only the car's own
+/// folder is read, which is what every Kunos car lacks — their materials live
+/// exclusively in `<AC>/extension/config/cars/loaded/<car_id>.ini`.
+///
+/// The car id is the folder name, except in a library where a car sits under
+/// `<car_id>/<version>`: `--car-id=<id>` overrides it for that case.
+fn csp_config(car_dir: &Path, skin: Option<&Path>, flags: &[&str]) -> kn5_gltf::CspConfig {
+    let folder = car_dir
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let car_id = option_value(flags, "--car-id").map(str::to_string).unwrap_or(folder);
+    kn5_gltf::CspConfig::locate(car_dir, skin, option_value(flags, "--ac").map(Path::new), &car_id)
+}
+
+/// Reports the health of the tangent frame — the instrument behind the
+/// "streaky white highlights on interior panels" investigation.
+///
+/// **Why it matters.** A normal map is expressed in tangent space, so lighting
+/// it needs a tangent frame. glTF carries one in a `TANGENT` attribute; when
+/// it is absent, a viewer has to rebuild it per pixel from the screen-space
+/// derivatives of position and UV. That fallback collapses wherever the UV
+/// derivative is zero — a whole panel mapped to a single flat texel of an
+/// atlas, which is exactly how car interiors are usually unwrapped — and the
+/// tangent frame then explodes into the hard white streaks that started this.
+///
+/// So two numbers, and they point at different remedies:
+///
+/// - **usable tangents in the KN5**: if the file carries them, exporting them
+///   fixes the problem outright, with nothing to guess;
+/// - **triangles with degenerate UVs**: how much geometry the screen-space
+///   fallback cannot serve at all, i.e. how bad it gets without tangents.
+fn report_tangents(model: &kn5::Kn5Model) {
+    let (mut vertices, mut usable) = (0usize, 0usize);
+    let (mut triangles, mut degenerate) = (0usize, 0usize);
+    let mut with_normal_map = 0usize;
+    // Longueur des normales et des tangentes : la mesure qui sépare « ce
+    // modèle est mal enroulé » de « on lit ses sommets au mauvais endroit ».
+    // Un vecteur exporté par un modeleur est unitaire ; des octets lus au
+    // mauvais décalage ne le sont pas.
+    let (mut unit_normals, mut unit_tangents) = (0usize, 0usize);
+
+    model.visit_nodes(&mut |node| {
+        let Some(mesh) = node.mesh() else { return };
+        if !mesh.is_visible || !mesh.is_renderable {
+            return;
+        }
+        for vertex in &mesh.vertices {
+            vertices += 1;
+            let n = vertex.normal;
+            let normal_length = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+            if (normal_length - 1.0).abs() < 0.01 {
+                unit_normals += 1;
+            }
+            let t = vertex.tangent;
+            let length = (t[0] * t[0] + t[1] * t[1] + t[2] * t[2]).sqrt();
+            if (length - 1.0).abs() < 0.01 {
+                unit_tangents += 1;
+            }
+            if length <= 1e-4 {
+                continue;
+            }
+            // Une tangente colinéaire à la normale ne définit aucun repère.
+            let n = vertex.normal;
+            let dot = (t[0] * n[0] + t[1] * n[1] + t[2] * n[2]) / length;
+            if dot.abs() < 0.99 {
+                usable += 1;
+            }
+        }
+        // `as_chunks` plutôt que `chunks_exact(3)` : la taille étant constante,
+        // clippy l'exige depuis Rust 1.98 — plus récent que la chaîne locale,
+        // donc invisible ici et vu seulement en CI.
+        for corners in mesh.indices.as_chunks::<3>().0 {
+            let uv = |i: u16| mesh.vertices.get(i as usize).map(|v| v.uv);
+            let (Some(a), Some(b), Some(c)) = (uv(corners[0]), uv(corners[1]), uv(corners[2])) else {
+                continue;
+            };
+            triangles += 1;
+            // Aire du triangle dans l'espace UV : nulle, le repère tangent
+            // reconstruit à l'écran n'a plus de direction.
+            let area = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
+            if area.abs() < 1e-10 {
+                degenerate += 1;
+            }
+        }
+    });
+
+    for material in &model.materials {
+        if material.texture_for("txNormal").is_some_and(|t| !t.is_empty()) {
+            with_normal_map += 1;
+        }
+    }
+
+    let percent = |part: usize, whole: usize| {
+        if whole == 0 {
+            0.0
+        } else {
+            100.0 * part as f64 / whole as f64
+        }
+    };
+    // Motif des désaccords d'enroulement. « La moitié des triangles sont à
+    // l'envers » peut vouloir dire deux choses très différentes, et elles
+    // n'appellent pas le même remède :
+    //
+    //  - un désaccord **alternant** d'un triangle au suivant est la signature
+    //    d'une bande de triangles lue comme une liste ;
+    //  - des triangles **en double, sommets identiques et ordre inversé**,
+    //    sont de la géométrie doublée pour être vue des deux côtés.
+    let (mut pairs, mut alternating, mut mirrored) = (0usize, 0usize, 0usize);
+    model.visit_nodes(&mut |node| {
+        let Some(mesh) = node.mesh() else { return };
+        if !mesh.is_renderable || !mesh.is_visible {
+            return;
+        }
+        let agrees = |t: &[u16; 3]| -> Option<bool> {
+            let v: Vec<_> = t
+                .iter()
+                .map(|i| mesh.vertices.get(*i as usize))
+                .collect::<Option<_>>()?;
+            let e1 = [
+                v[1].position[0] - v[0].position[0],
+                v[1].position[1] - v[0].position[1],
+                v[1].position[2] - v[0].position[2],
+            ];
+            let e2 = [
+                v[2].position[0] - v[0].position[0],
+                v[2].position[1] - v[0].position[1],
+                v[2].position[2] - v[0].position[2],
+            ];
+            let face = [
+                e1[1] * e2[2] - e1[2] * e2[1],
+                e1[2] * e2[0] - e1[0] * e2[2],
+                e1[0] * e2[1] - e1[1] * e2[0],
+            ];
+            let n = v[0].normal;
+            let dot = face[0] * n[0] + face[1] * n[1] + face[2] * n[2];
+            (dot.abs() >= 1e-12).then_some(dot > 0.0)
+        };
+        let triangles = mesh.indices.as_chunks::<3>().0;
+        for window in triangles.windows(2) {
+            let (Some(a), Some(b)) = (agrees(&window[0]), agrees(&window[1])) else {
+                continue;
+            };
+            pairs += 1;
+            if a != b {
+                alternating += 1;
+            }
+            let mut left = window[0];
+            let mut right = window[1];
+            left.sort_unstable();
+            right.sort_unstable();
+            if left == right {
+                mirrored += 1;
+            }
+        }
+    });
+
+    let (agreeing, total) = kn5_gltf::winding_consistency(model);
+    println!(
+        "pattern   {:.1} % of consecutive triangles alternate, {:.1} % share their three vertices",
+        percent(alternating, pairs),
+        percent(mirrored, pairs),
+    );
+    println!(
+        "geometry  {:.1} % unit normals, {:.1} % unit tangents, {:.1} % winding agreement over {total} triangles",
+        percent(unit_normals, vertices),
+        percent(unit_tangents, vertices),
+        percent(agreeing, total),
+    );
+    println!(
+        "tangents  {:.1} % of {vertices} vertices carry a usable frame; {:.1} % of {triangles} triangles have degenerate UVs; {with_normal_map} of {} materials bind a normal map",
+        percent(usable, vertices),
+        percent(degenerate, triangles),
+        model.materials.len()
+    );
+}
+
 /// Prints what the CSP replacement pass did, and only when it did something:
 /// the overwhelming majority of cars carry no `ext_config.ini` at all, and a
 /// line of zeroes on every one of them would drown the reports that matter.
 fn report_ext_config(ext: &kn5_gltf::ExtConfigStats) {
-    if ext.applied == 0 {
+    if ext.applied == 0 && ext.overridden_properties == 0 {
         return;
     }
     println!(
-        "ext_config {} section(s), {} node(s) hidden, {} model(s) inserted (+{} triangles)",
-        ext.applied, ext.hidden_nodes, ext.inserted_models, ext.inserted_triangles
+        "ext_config {} section(s), {} node(s) hidden, {} model(s) inserted (+{} triangles), {} propriété(s) surchargée(s)",
+        ext.applied, ext.hidden_nodes, ext.inserted_models, ext.inserted_triangles, ext.overridden_properties
     );
     for failure in &ext.failures {
         println!("           ! {failure}");
@@ -804,12 +999,20 @@ fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
     // Same pass the application runs (`preview.rs`): a tuning mod keeps part
     // of its geometry in separate KN5 files that only `ext_config.ini` knows
     // about, so converting without it produces a car with holes in it.
-    let ext = kn5_gltf::apply_ext_config(&mut model, car_dir, &file, skin.as_deref());
+    let csp = csp_config(car_dir, skin.as_deref(), flags);
+    let ext = kn5_gltf::apply_ext_config(&mut model, &file, skin.as_deref(), &csp);
     report_ext_config(&ext);
 
     let started = Instant::now();
     let options = kn5_gltf::ConvertOptions {
-        glass: kn5_gltf::glass_overrides(car_dir, skin.as_deref()),
+        surfaces: kn5_gltf::material_overrides(
+            &csp,
+            skin.as_deref()
+                .and_then(|d| d.file_name())
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default()
+                .as_str(),
+        ),
         ..Default::default()
     };
     let conversion = kn5_gltf::convert(&model, skin.as_deref(), &options, &|stage| {
@@ -839,7 +1042,7 @@ fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
     );
     println!(
         "meshes    {} kept, merged into {} draw calls — skipped: {} hidden, {} by name, {} empty, {} distant LOD, \
-         {} broken glass ({} mirrored nodes)",
+         {} broken glass, {} low-res cockpit ({} mirrored nodes)",
         stats.kept,
         stats.merged,
         stats.skipped_hidden,
@@ -847,6 +1050,7 @@ fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
         stats.skipped_empty,
         stats.skipped_distant_lod,
         stats.skipped_broken_glass,
+        stats.skipped_low_res_cockpit,
         stats.mirrored
     );
     println!(

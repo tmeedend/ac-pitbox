@@ -753,6 +753,213 @@ N points`), et c'est avec elle qu'on tranche au lieu de deviner.
 
 ---
 
+## Découverte — AC range **deux habitacles** dans le même fichier
+
+**Symptôme** : des taches claires à bords francs sur le tableau de bord, qui
+**scintillent quand la caméra bouge**. Signalé sur
+`ks_lamborghini_aventador_sv`.
+
+**Ce mot-là a tout décidé.** Une erreur d'éclairage — mauvaise normale,
+mauvaise carte, mauvais matériau — ne bouge pas avec la caméra. Un scintillement
+qui suit le mouvement, c'est du **z-fighting** : deux surfaces quasi coplanaires
+qui se disputent le tampon de profondeur, et le gagnant change d'un pixel et
+d'une image à l'autre. J'avais d'abord soupçonné le reflet du pare-brise ; c'est
+l'utilisateur qui a écarté la piste en décrivant le scintillement.
+
+**Réel** : AC livre `COCKPIT_HR` **et** `COCKPIT_LR` dans le même KN5, et n'en
+affiche qu'un à la fois — le détaillé depuis le poste de pilotage, une coque
+grossière de quelques milliers de triangles vue de l'extérieur. On dessinait
+les deux, superposés.
+
+**Mesuré sur 30 voitures** : 27 portent les deux, 3 n'ont que `COCKPIT_HR`, et
+**aucune n'a que `COCKPIT_LR`**. Le volume en jeu n'est pas anecdotique :
+33 maillages écartés sur `bati_fd3s_rx7`, 9 sur `ks_mazda_mx5_cup`.
+
+**Correctif** : `COCKPIT_LR` est écarté **avec tout son sous-arbre**, et
+seulement quand `COCKPIT_HR` existe. Le sous-arbre entier parce que
+`COCKPIT_LR` est un nœud de transformation, pas un maillage : le filtrage par
+nom de `classify` ne le voit jamais et ses enfants passeraient quand même. La
+garde parce qu'une voiture qui n'aurait que la coque perdrait tout son
+habitacle.
+
+> **À retenir : le symptôme dit le domaine.** Une tache fixe est un problème de
+> matériau ou de normale ; une tache qui scintille au mouvement est un problème
+> de profondeur, donc de géométrie en double. Les deux se ressemblent sur une
+> capture figée, et c'est exactement pourquoi une capture ne suffit pas à
+> diagnostiquer.
+
+---
+
+## Découverte — ce que « géométrie inexploitable » recouvre vraiment
+
+Le §4.5bis du SPEC refusait l'aperçu au-dessous de 90 % de cohérence
+d'enroulement, sans savoir ce qui se passait — « protection CSP ou corruption,
+on ne sait pas ». Voici la mesure, qui tranche.
+
+**Ce qui est intact** (`kn5-tool inspect --tangents`), sur cinq de ces modèles :
+
+| | modèles sains | modèles refusés |
+| --- | --- | --- |
+| normales unitaires | 100 % | **100 %** |
+| tangentes unitaires | 100 % | **100 %** |
+| dimensions | taille d'une voiture | taille d'une voiture |
+| identifiants de matériaux | valides | valides |
+| accord enroulement / normale | 99,5–100 % | **~50 %** |
+
+**Leurs sommets sont parfaitement lisibles.** Seuls leurs *triangles* relient
+n'importe quoi.
+
+**Quatre hypothèses éliminées, chacune par une mesure** :
+
+- *données lues au mauvais décalage* — normales et tangentes unitaires à 100 %,
+  ce que des octets mal alignés ne donnent jamais ;
+- *bandes de triangles lues comme des listes* — l'accord alternerait alors d'un
+  triangle au suivant à ~100 % ; mesuré à 50 %, donc aléatoire ;
+- *géométrie doublée pour être vue des deux côtés* — 0 % des triangles
+  consécutifs partagent leurs trois sommets ;
+- *variante de format* — les deux groupes contiennent du v5 comme du v6, avec
+  et sans mot d'en-tête supplémentaire.
+
+**Ce qui reste, et qui explique tout : un tampon d'index brouillé.** C'est une
+protection efficace et peu coûteuse — le fichier garde un magic valide, des
+sommets cohérents et des matériaux corrects, donc il *paraît* sain à tout outil
+externe, mais sa géométrie ne se reconstitue qu'avec la clé. Hypothèse de
+l'utilisateur, et c'est celle qui colle à la mesure : rien d'autre ne laisse les
+sommets intacts en ne détruisant que leur assemblage.
+
+**Conséquence pratique** : le refus est le bon comportement, et il faut y
+renoncer à l'idée de rattraper ces voitures. Rendre le modèle en **double face**
+a été essayé sur cette piste — l'idée étant qu'un enroulement seulement
+incohérent serait rétabli en dessinant les deux côtés — puis retiré : si
+l'assemblage lui-même est brouillé, on montrerait une toile de triangles à la
+place d'une photo propre.
+
+**Portée** : sur 70 voitures mesurées, 28 sont dans ce cas, groupées par préfixe
+d'auteur (`art_`, `bati_`, `bksy_`, `ddm_`, `aegis_`). Le SPEC n'en connaissait
+que deux ; ce sont en réalité des familles entières de mods protégés.
+
+> **Ce que l'épisode apprend.** Mesurer ce qu'un contrôle rejette ne sert pas
+> qu'à le corriger : ici la mesure a **confirmé** le contrôle, en remplaçant un
+> « on ne sait pas » par une cause nommée. Un rejet qu'on sait expliquer se
+> défend ; un rejet qu'on subit finit par être levé à tort.
+
+---
+
+## Écart n°14 — le repère tangent est dans le fichier, et on le jetait
+
+**Symptôme** : des stries blanches, dures, à bords francs, sur les surfaces
+sombres et brillantes des **intérieurs** — sièges, planches de bord, grilles
+d'aération. Signalé par l'utilisateur sur `ks_lamborghini_aventador_sv`,
+`bati_fd3s_rx7`, `ks_alfa_romeo_gta` et `a3dr_viper_rt10`, et déjà présent en
+v0.5.0 : rien à voir avec les matériaux CSP.
+
+**Les trois suspects évidents étaient tous faux** : ce n'était ni une texture
+mal décodée, ni un maillage cassé, ni la fusion par matériau (« la tentative
+d'optimisation »). La fusion concatène des sommets déjà en espace monde, elle
+ne peut rien déformer.
+
+**Réel** : une carte de normales s'exprime en **espace tangent**. L'éclairer
+demande un repère tangent, que glTF transporte dans l'attribut `TANGENT`.
+Quand il est absent, le lecteur doit le reconstruire **par pixel**, à partir
+des dérivées écran de la position et de l'UV. Ce repli s'effondre partout où la
+dérivée UV est nulle — un panneau entier plaqué sur un texel uniforme d'atlas,
+c'est-à-dire la façon ordinaire de déplier un intérieur de voiture. Le repère
+part à l'infini, et le spéculaire avec lui.
+
+**La mesure** (`kn5-tool inspect --tangents`, ajouté pour ça) :
+
+| voiture | sommets à tangente utilisable | triangles à UV dégénérés | matériaux à carte de normales |
+| --- | --- | --- | --- |
+| `ks_alfa_romeo_gta` | 100 % | 2,0 % | 39 / 59 |
+| `ks_lamborghini_aventador_sv` | 100 % | 0,2 % | 27 / 43 |
+| `bati_fd3s_rx7` | 100 % | 5,0 % | 77 / 111 |
+| `abarth500` | 99,9 % | **30,8 %** | 29 / 59 |
+| `a3dr_viper_rt10` | 100 % | 1,3 % | 37 / 53 |
+
+**Le KN5 écrit une tangente par sommet, sur 100 % des sommets.** Le parseur la
+lisait depuis le premier jour (`Kn5Vertex::tangent`) et `geometry.rs` la jetait
+sans un mot. Deux tiers des matériaux d'une voiture portent une carte de
+normales : la moitié du relief d'un intérieur était éclairée à l'aveugle.
+
+**Correctif** : la tangente est transformée par la matrice du modèle (et non
+par son inverse transposée — c'est une direction *dans* la surface, pas une
+normale), redressée par Gram-Schmidt pour rester orthogonale à la normale, et
+écrite en `VEC4`. Seuls les maillages dont le matériau porte une carte de
+normales la reçoivent : ailleurs elle ne change rien et coûte seize octets par
+sommet, soit huit mégaoctets sur une voiture de 500 000 sommets.
+
+**Le quatrième composant est le piège.** glTF y range la latéralité :
+`B = cross(N, T) × w`. Le KN5 n'écrit que trois composantes, donc le signe se
+retrouve à partir de l'aire signée du triangle dans l'espace UV — et il
+**change d'un îlot à l'autre** dès qu'une moitié du modèle est dépliée en
+miroir, ce qui est la règle sur une carrosserie. Vérifié sur l'Alfa GTA : les
+deux valeurs `+1` et `−1` coexistent dans un même maillage. Le supposer
+constant aurait remis des reliefs inversés là où on venait de corriger des
+stries. Une transformation de nœud en miroir le retourne une seconde fois,
+d'où un facteur global en plus du signe par sommet.
+
+> **Ce que l'épisode apprend.** Le défaut ne venait pas d'une donnée mal lue
+> mais d'une donnée **lue et abandonnée en route**. Devant un artefact
+> d'éclairage, vérifier d'abord ce que le format offre et qu'on n'exporte pas —
+> c'est moins cher que de soupçonner le décodeur, et ça se mesure.
+
+---
+
+## Écart n°13 — le verre que déclare un mod est du verre **physique**
+
+**Le point de départ** : après l'écart n°11, le vitrage était visible mais
+restait pâle et sans caractère. Le réflexe aurait été de monter l'opacité au
+jugé.
+
+**La source** : `<AC>/extension/config/cars/common/materials_glass.ini`, livré
+avec Custom Shaders Patch. Ce n'est pas de la documentation, c'est
+l'**implémentation** du template `[Material_Glass]` que les moddeurs
+invoquent — et elle dit exactement ce qu'est le verre d'AC sous CSP :
+
+```ini
+[TEMPLATE: Material_Glass EXTENDS _Base_Material_Custom]
+IOR = 1.5            ; index of refraction for glass, usualy, 1.5
+FilmIOR = $IOR       ; redefine IOR for external film layer to increase reflections
+ThicknessMult = 1.0  ; thicker glass passes less light through
+SHADER = smGlass
+FresnelC = $" _PBR_EstimateF0( $FilmIOR or $IOR ) "   ; approximation de Schlick
+```
+
+Donc : un indice de réfraction, une épaisseur, un Fresnel dérivé de l'IOR par
+Schlick. **Pas un canal alpha, pas un fondu.** `smGlass` n'utilise pas non plus
+sa `txDiffuse` comme une couleur — même situation que `ksWindscreen` (écart
+n°6).
+
+**Pourquoi le fondu était structurellement faux** : sous `alphaMode: BLEND`,
+glTF atténue *toute* la réponse du matériau, **reflet spéculaire compris**. Une
+vitre rendue à 15 % d'opacité ne renvoie donc que 15 % de son reflet — or c'est
+le reflet qui fait qu'une vitre ressemble à une vitre. On rendait une vitre de
+plus en plus pâle en croyant la rendre de plus en plus transparente.
+
+**Correctif** : un matériau que le mod déclare en `[Material_Glass]` (ou ses
+variantes `GlassSide`, `MultiEmissiveGlass`, `PhotoelasticGlass`, ou le
+raccourci `ExteriorGlassMaterials`) sort en `KHR_materials_transmission` +
+`KHR_materials_ior`, `alphaMode: OPAQUE`, sans texture diffuse. glTF dérive le
+F0 de `ior` par la même formule de Schlick que CSP applique — la conversion
+n'approxime donc rien, elle transcrit.
+
+**Deux pièges côté viewer**, tous deux parce qu'un matériau transmissif n'est
+**pas** `transparent` au sens de three.js, si bien que toute règle branchée sur
+ce drapeau le rate :
+
+- il tombe dans la branche « opaque » et se met à projeter une ombre **noire
+  pleine** — le « pâté sombre sous la voiture » que le code prend soin d'éviter ;
+- le plancher de rugosité anti-scintillement (0,15) s'y applique, et three
+  floute l'image transmise avec cette même rugosité : toutes les vitres
+  ressortent **dépolies**.
+
+> **Où chercher, la prochaine fois.** Avant de régler une valeur au jugé,
+> vérifier si CSP livre le template correspondant dans
+> `extension/config/cars/common/`. Le wiki est incomplet et se dit lui-même en
+> chantier ; ces fichiers-là, eux, sont la vérité exécutée par le jeu.
+
+---
+
 ## Écart n°12 — `ksAlphaRef = 0` veut dire « non réglé », pas « ne découpe rien »
 
 **Symptôme** : tout l'arrière de `j8_mitsubishi_gto_twin_turbo_91` uniformément

@@ -45,6 +45,9 @@ pub struct FlatMesh {
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
     pub uvs: Vec<[f32; 2]>,
+    /// Repère tangent, `xyz` normalisé et `w` la latéralité — le `TANGENT` de
+    /// glTF. Voir [`convert_mesh`] pour ce qu'il coûte de ne pas l'écrire.
+    pub tangents: Vec<[f32; 4]>,
     pub indices: Vec<u32>,
     /// Kept for reporting: a mesh flagged transparent needs the render-order
     /// treatment of §8.2 on the viewer side.
@@ -62,6 +65,8 @@ pub struct GeometryOptions {
     /// Drop meshes that only appear beyond a distance, i.e. lower LODs stored
     /// inside the same file.
     pub skip_distant_lods: bool,
+    /// Drop `COCKPIT_LR` when `COCKPIT_HR` is there too — see [`flatten`].
+    pub skip_low_res_cockpit: bool,
 }
 
 impl Default for GeometryOptions {
@@ -80,6 +85,7 @@ impl Default for GeometryOptions {
             // `AC_START_0`… They carry no geometry worth showing.
             excluded_name_prefixes: vec!["AC_".to_string()],
             skip_distant_lods: true,
+            skip_low_res_cockpit: true,
         }
     }
 }
@@ -93,6 +99,8 @@ pub struct GeometryStats {
     pub skipped_distant_lod: usize,
     /// Meshes carrying the car's *broken* glass — see [`Skip::BrokenGlass`].
     pub skipped_broken_glass: usize,
+    /// Meshes of the duplicate low-resolution interior — see [`flatten`].
+    pub skipped_low_res_cockpit: usize,
     /// Meshes whose accumulated transform mirrors space, and whose winding was
     /// flipped a second time as a result.
     pub mirrored: usize,
@@ -101,15 +109,35 @@ pub struct GeometryStats {
     pub merged: usize,
 }
 
+/// Nom des deux habitacles qu'AC range dans le même fichier.
+const HIGH_RES_COCKPIT: &str = "COCKPIT_HR";
+const LOW_RES_COCKPIT: &str = "COCKPIT_LR";
+
 /// Walks the tree, accumulates transforms and returns every mesh worth drawing.
+///
+/// **AC livre deux habitacles superposés**, et n'en montre qu'un à la fois :
+/// `COCKPIT_HR` depuis le poste de pilotage, `COCKPIT_LR` — une coque grossière
+/// de quelques milliers de triangles — vu de l'extérieur. Les dessiner tous les
+/// deux les fait se disputer le tampon de profondeur, et le tableau de bord se
+/// couvre de taches claires à bords francs qui **scintillent dès que la caméra
+/// bouge**. C'est ce scintillement qui a identifié le défaut : une erreur
+/// d'éclairage ne bouge pas avec la caméra, un z-fighting si.
+///
+/// On garde le détaillé, parce que la vue peut s'approcher et regarder dedans.
+/// Mesuré sur 30 voitures : 27 portent les deux, 3 n'ont que `COCKPIT_HR`, et
+/// **aucune n'a que `COCKPIT_LR`** — d'où la garde, qui ne retire la coque que
+/// lorsque le détaillé est bien là.
 pub fn flatten(model: &Kn5Model, options: &GeometryOptions) -> (Vec<FlatMesh>, GeometryStats) {
     let mut meshes = Vec::new();
     let mut stats = GeometryStats::default();
+    let drop_low_res_cockpit =
+        options.skip_low_res_cockpit && has_node(model, HIGH_RES_COCKPIT) && has_node(model, LOW_RES_COCKPIT);
     walk(
         &model.root,
         &IDENTITY,
         &model.materials,
         options,
+        drop_low_res_cockpit,
         &mut meshes,
         &mut stats,
     );
@@ -151,6 +179,7 @@ fn merge_by_material(meshes: Vec<FlatMesh>) -> Vec<FlatMesh> {
                 target.positions.extend(mesh.positions);
                 target.normals.extend(mesh.normals);
                 target.uvs.extend(mesh.uvs);
+                target.tangents.extend(mesh.tangents);
                 target.indices.extend(mesh.indices.iter().map(|index| index + offset));
             }
             None => {
@@ -169,14 +198,40 @@ const IDENTITY: [f32; 16] = [
     0.0, 0.0, 0.0, 1.0,
 ];
 
+/// Le modèle porte-t-il un nœud de ce nom ?
+fn has_node(model: &Kn5Model, name: &str) -> bool {
+    let mut found = false;
+    model.visit_nodes(&mut |node| found |= node.name.eq_ignore_ascii_case(name));
+    found
+}
+
+/// Nombre de maillages non vides sous ce nœud, lui compris.
+fn mesh_count(node: &Kn5Node) -> usize {
+    let mut count = 0;
+    node.visit(&mut |n| {
+        if n.mesh().is_some_and(|m| !m.vertices.is_empty()) {
+            count += 1;
+        }
+    });
+    count
+}
+
 fn walk(
     node: &Kn5Node,
     parent_world: &[f32; 16],
     materials: &[Kn5Material],
     options: &GeometryOptions,
+    drop_low_res_cockpit: bool,
     meshes: &mut Vec<FlatMesh>,
     stats: &mut GeometryStats,
 ) {
+    // Écarté **avec tout son sous-arbre** : c'est un nœud de transformation,
+    // pas un maillage, donc le filtrage par nom de `classify` ne le verrait
+    // jamais et ses enfants passeraient quand même.
+    if drop_low_res_cockpit && node.name.eq_ignore_ascii_case(LOW_RES_COCKPIT) {
+        stats.skipped_low_res_cockpit += mesh_count(node);
+        return;
+    }
     // Row-vector convention: `world = local × parent` (§3.4). Getting this
     // order backwards leaves the hierarchy intact but scatters every part.
     let world = match node.transform() {
@@ -205,7 +260,7 @@ fn walk(
     }
 
     for child in &node.children {
-        walk(child, &world, materials, options, meshes, stats);
+        walk(child, &world, materials, options, drop_low_res_cockpit, meshes, stats);
     }
 }
 
@@ -255,16 +310,46 @@ fn classify(node: &Kn5Node, mesh: &Kn5Mesh, materials: &[Kn5Material], options: 
     Keep::Yes
 }
 
+/// **Le KN5 porte un repère tangent par sommet, et il faut l'écrire.**
+///
+/// Une carte de normales s'exprime en espace tangent : sans repère, un lecteur
+/// glTF doit le reconstruire **par pixel**, à partir des dérivées écran de la
+/// position et de l'UV. Ce repli s'effondre là où la dérivée UV est nulle — un
+/// panneau entier plaqué sur un texel uniforme d'atlas, c'est-à-dire la façon
+/// ordinaire de déplier un intérieur de voiture — et le repère explose en
+/// stries blanches sur les surfaces sombres et brillantes. Défaut signalé par
+/// l'utilisateur sur l'Aventador, la RX-7 et l'Alfa GTA.
+///
+/// Mesuré (`kn5-tool inspect --tangents`) : **100 % des sommets** de toutes les
+/// voitures de l'échantillon portent une tangente utilisable, tandis que 0,2 %
+/// à 30,8 % de leurs triangles ont des UV dégénérés. La donnée était lue par le
+/// parseur depuis le début et jetée ici.
 fn convert_mesh(name: &str, mesh: &Kn5Mesh, world: &[f32; 16]) -> FlatMesh {
     let normal_matrix = inverse_transpose3(world);
     let mut positions = Vec::with_capacity(mesh.vertices.len());
     let mut normals = Vec::with_capacity(mesh.vertices.len());
     let mut uvs = Vec::with_capacity(mesh.vertices.len());
+    let mut tangents = Vec::with_capacity(mesh.vertices.len());
 
-    for vertex in &mesh.vertices {
+    // La latéralité ne se lit pas dans le KN5 : elle se déduit de l'orientation
+    // des UV, et un îlot en miroir la retourne. Une transformation en miroir la
+    // retourne une seconde fois, d'où le facteur global.
+    let handedness_flip = if determinant3(world) < 0.0 { -1.0 } else { 1.0 };
+    let uv_handedness = uv_handedness(mesh);
+
+    for (index, vertex) in mesh.vertices.iter().enumerate() {
         positions.push(transform_point(world, vertex.position));
-        normals.push(normalize(transform_direction(&normal_matrix, vertex.normal)));
+        let normal = normalize(transform_direction(&normal_matrix, vertex.normal));
+        normals.push(normal);
         uvs.push(vertex.uv);
+        // La tangente suit la matrice du modèle, pas son inverse transposée :
+        // c'est une direction *dans* la surface, pas une normale.
+        let tangent = transform_direction(&upper3(world), vertex.tangent);
+        // Gram-Schmidt : glTF veut la tangente orthogonale à la normale, et
+        // l'interpolation entre sommets ne la garde pas telle quelle.
+        let tangent = normalize(reject(tangent, normal));
+        let w = uv_handedness.get(index).copied().unwrap_or(1.0) * handedness_flip;
+        tangents.push([tangent[0], tangent[1], tangent[2], w]);
     }
 
     let mut indices: Vec<u32> = mesh.indices.iter().map(|i| u32::from(*i)).collect();
@@ -288,9 +373,62 @@ fn convert_mesh(name: &str, mesh: &Kn5Mesh, world: &[f32; 16]) -> FlatMesh {
         positions,
         normals,
         uvs,
+        tangents,
         indices,
         transparent: mesh.is_transparent,
     }
+}
+
+/// Latéralité du repère tangent de chaque sommet, `+1` ou `-1`.
+///
+/// glTF range dans le `w` de `TANGENT` le signe qui donne la bitangente :
+/// `B = cross(N, T) * w`. Le KN5 n'écrit qu'une tangente à trois composantes,
+/// donc le signe se retrouve à partir de l'orientation du triangle dans
+/// l'espace UV — et il **change** d'un îlot à l'autre dès qu'une moitié du
+/// modèle est dépliée en miroir, ce qui est la règle sur une carrosserie.
+/// Le supposer constant remettrait des reliefs inversés là où on vient de
+/// corriger des stries.
+fn uv_handedness(mesh: &Kn5Mesh) -> Vec<f32> {
+    let mut out = vec![0.0f32; mesh.vertices.len()];
+    for corners in mesh.indices.as_chunks::<3>().0 {
+        let vertices = corners.map(|i| mesh.vertices.get(i as usize));
+        let ([Some(a), Some(b), Some(c)], true) = (vertices, true) else {
+            continue;
+        };
+        // Aire signée dans l'espace UV : son signe est celui de la bitangente.
+        let area = (b.uv[0] - a.uv[0]) * (c.uv[1] - a.uv[1]) - (c.uv[0] - a.uv[0]) * (b.uv[1] - a.uv[1]);
+        if area == 0.0 {
+            continue;
+        }
+        let sign = if area < 0.0 { -1.0 } else { 1.0 };
+        for index in corners {
+            // Premier triangle rencontré : un sommet partagé entre deux îlots
+            // de latéralités opposées devrait être dédoublé, ce qu'AC fait déjà
+            // — il écrit une tangente par sommet, donc il a scindé ses coutures.
+            if let Some(slot) = out.get_mut(*index as usize) {
+                if *slot == 0.0 {
+                    *slot = sign;
+                }
+            }
+        }
+    }
+    for slot in &mut out {
+        if *slot == 0.0 {
+            *slot = 1.0;
+        }
+    }
+    out
+}
+
+/// Composante `v - n * dot(v, n)` : la part de `v` orthogonale à `n`.
+fn reject(v: [f32; 3], n: [f32; 3]) -> [f32; 3] {
+    let dot = v[0] * n[0] + v[1] * n[1] + v[2] * n[2];
+    [v[0] - n[0] * dot, v[1] - n[1] * dot, v[2] - n[2] * dot]
+}
+
+/// Bloc 3x3 supérieur gauche d'une matrice 4x4.
+fn upper3(m: &[f32; 16]) -> [f32; 9] {
+    [m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]]
 }
 
 /// Row-major 4x4 product, row-vector convention.
@@ -559,6 +697,159 @@ mod tests {
         );
     }
 
+    /// Un modèle minimal portant les nœuds nommés, chacun avec un maillage.
+    fn model_with(nodes: &[&str]) -> kn5::Kn5Model {
+        let mesh = |name: &str| kn5::Kn5Node {
+            name: name.to_string(),
+            active: true,
+            kind: kn5::Kn5NodeKind::Mesh(kn5::Kn5Mesh {
+                cast_shadows: true,
+                is_visible: true,
+                is_transparent: false,
+                vertices: vec![
+                    kn5::Kn5Vertex {
+                        position: [0.0; 3],
+                        normal: [0.0, 0.0, 1.0],
+                        uv: [0.0, 0.0],
+                        tangent: [1.0, 0.0, 0.0],
+                    };
+                    3
+                ],
+                indices: vec![0, 1, 2],
+                material_id: 0,
+                layer: 0,
+                lod_in: 0.0,
+                lod_out: 0.0,
+                bounding_sphere_center: [0.0; 3],
+                bounding_sphere_radius: 1.0,
+                is_renderable: true,
+            }),
+            children: Vec::new(),
+        };
+        kn5::Kn5Model {
+            version: 6,
+            extra: None,
+            textures: Vec::new(),
+            materials: vec![kn5::Kn5Material {
+                name: "m".to_string(),
+                shader: "ksPerPixel".to_string(),
+                blend_mode: 0,
+                alpha_tested: false,
+                reserved: 0,
+                properties: Vec::new(),
+                samplers: Vec::new(),
+            }],
+            root: kn5::Kn5Node {
+                name: "root".to_string(),
+                active: true,
+                kind: kn5::Kn5NodeKind::Dummy { transform: IDENTITY },
+                children: nodes
+                    .iter()
+                    .map(|name| kn5::Kn5Node {
+                        name: name.to_string(),
+                        active: true,
+                        kind: kn5::Kn5NodeKind::Dummy { transform: IDENTITY },
+                        children: vec![mesh(&format!("g_{name}"))],
+                    })
+                    .collect(),
+            },
+        }
+    }
+
+    // Règle : AC livre deux habitacles superposés et n'en montre qu'un ; les
+    // dessiner tous les deux les fait se disputer le tampon de profondeur, et
+    // le tableau de bord scintille. On garde le détaillé.
+    #[test]
+    fn the_low_resolution_cockpit_is_dropped_when_the_detailed_one_is_there() {
+        let options = GeometryOptions::default();
+        let (meshes, stats) = flatten(&model_with(&["COCKPIT_HR", "COCKPIT_LR"]), &options);
+        assert_eq!(stats.skipped_low_res_cockpit, 1, "la coque grossière est écartée");
+        assert_eq!(meshes.len(), 1, "il reste l'habitacle détaillé");
+        assert_eq!(meshes[0].name, "g_COCKPIT_HR", "et c'est bien le détaillé");
+    }
+
+    // Règle : et **seulement** quand il est là. Aucune voiture de l'échantillon
+    // n'a que la basse résolution, mais si l'une se présente, lui retirer son
+    // seul habitacle la viderait.
+    #[test]
+    fn a_car_with_only_the_low_resolution_cockpit_keeps_it() {
+        let (meshes, stats) = flatten(&model_with(&["COCKPIT_LR"]), &GeometryOptions::default());
+        assert_eq!(stats.skipped_low_res_cockpit, 0, "rien à écarter");
+        assert_eq!(meshes.len(), 1, "son unique habitacle reste");
+    }
+
+    // Règle : la latéralité du repère tangent se déduit de l'orientation des
+    // UV, et un îlot déplié en miroir la retourne. La supposer constante
+    // remettrait des reliefs inversés sur la moitié d'une carrosserie.
+    #[test]
+    fn tangent_handedness_follows_the_uv_winding() {
+        let vertex = |uv: [f32; 2]| kn5::Kn5Vertex {
+            position: [0.0; 3],
+            normal: [0.0, 0.0, 1.0],
+            uv,
+            tangent: [1.0, 0.0, 0.0],
+        };
+        // Deux triangles, l'un déplié à l'endroit, l'autre en miroir.
+        let mesh = kn5::Kn5Mesh {
+            cast_shadows: true,
+            is_visible: true,
+            is_transparent: false,
+            vertices: vec![
+                vertex([0.0, 0.0]),
+                vertex([1.0, 0.0]),
+                vertex([0.0, 1.0]),
+                vertex([0.0, 0.0]),
+                vertex([0.0, 1.0]),
+                vertex([1.0, 0.0]),
+            ],
+            indices: vec![0, 1, 2, 3, 4, 5],
+            material_id: 0,
+            layer: 0,
+            lod_in: 0.0,
+            lod_out: 0.0,
+            bounding_sphere_center: [0.0; 3],
+            bounding_sphere_radius: 1.0,
+            is_renderable: true,
+        };
+
+        let handedness = uv_handedness(&mesh);
+        assert_eq!(handedness[0], handedness[1], "un même triangle, une même latéralité");
+        assert_eq!(handedness[0], -handedness[3], "l'îlot en miroir prend le signe opposé");
+    }
+
+    // Règle : la tangente écrite est orthogonale à la normale et de norme 1,
+    // ce que glTF exige — l'interpolation entre sommets ne le garantit pas
+    // toute seule, d'où le Gram-Schmidt de `convert_mesh`.
+    #[test]
+    fn written_tangents_are_orthonormal_to_their_normal() {
+        let mesh = kn5::Kn5Mesh {
+            cast_shadows: true,
+            is_visible: true,
+            is_transparent: false,
+            vertices: vec![kn5::Kn5Vertex {
+                position: [0.0; 3],
+                normal: [0.0, 0.0, 1.0],
+                uv: [0.0, 0.0],
+                // Volontairement ni normalisée ni orthogonale à la normale.
+                tangent: [3.0, 0.0, 4.0],
+            }],
+            indices: vec![],
+            material_id: 0,
+            layer: 0,
+            lod_in: 0.0,
+            lod_out: 0.0,
+            bounding_sphere_center: [0.0; 3],
+            bounding_sphere_radius: 1.0,
+            is_renderable: true,
+        };
+
+        let flat = convert_mesh("m", &mesh, &IDENTITY);
+        let [x, y, z, w] = flat.tangents[0];
+        assert!((x * x + y * y + z * z - 1.0).abs() < 1e-5, "normalisée");
+        assert!(z.abs() < 1e-5, "redressée dans le plan de la surface, got z={z}");
+        assert!(w == 1.0 || w == -1.0, "la latéralité est un signe, got {w}");
+    }
+
     /// Maillage plat minimal, pour les règles de fusion : trois sommets, un
     /// triangle, tout le reste à zéro — seuls le matériau, la transparence et
     /// le décalage des index comptent ici.
@@ -569,6 +860,7 @@ mod tests {
             positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
             normals: vec![[0.0, 1.0, 0.0]; 3],
             uvs: vec![[0.0, 0.0]; 3],
+            tangents: vec![[1.0, 0.0, 0.0, 1.0]; 3],
             indices: vec![0, 1, 2],
             transparent,
         }

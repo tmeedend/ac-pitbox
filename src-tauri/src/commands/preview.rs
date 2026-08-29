@@ -29,7 +29,7 @@ pub async fn prepare_car_preview(
     let app_for_task = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let state = app_for_task.state::<crate::preview::PreviewState>();
-        crate::preview::prepare(&app_for_task, &state, &car_dir, skin_id.as_deref(), token)
+        crate::preview::prepare(&app_for_task, &state, &car_dir, &car_id, skin_id.as_deref(), token)
     })
     .await
     .map_err(|e| format!("tâche d'aperçu interrompue : {e}"))?

@@ -18,7 +18,9 @@ use std::path::Path;
 
 use kn5::Kn5Model;
 
-pub use extconfig::{apply_ext_config, glass_overrides, ExtConfigStats, GlassOverrides, Replacement};
+pub use extconfig::{
+    apply_ext_config, material_overrides, CspConfig, ExtConfigStats, MaterialOverrides, Replacement, SurfaceOverride,
+};
 pub use geometry::{node_world_centers, winding_consistency, FlatMesh, GeometryOptions, GeometryStats};
 pub use locate::{resolve_model, resolve_skin, ModelSource, ResolvedModel};
 pub use material::{AlphaMode, GltfMaterial, MaterialTextures};
@@ -32,10 +34,10 @@ pub use texture::{
 pub struct ConvertOptions {
     pub geometry: GeometryOptions,
     pub textures: TextureOptions,
-    /// Matériaux que le mod déclare comme du verre physique, lus dans son
-    /// `ext_config.ini` (voir [`glass_overrides`]). Vide par défaut : une
-    /// voiture sans config CSP garde le traitement habituel.
-    pub glass: GlassOverrides,
+    /// Ce que la configuration CSP de la voiture dit de ses surfaces (voir
+    /// [`material_overrides`]). Vide par défaut : une voiture sans config
+    /// garde le traitement habituel, tiré du seul KN5.
+    pub surfaces: MaterialOverrides,
 }
 
 /// Everything the conversion produced, alongside the numbers the caller needs
@@ -138,7 +140,7 @@ pub fn convert(
     // Les matériaux sont convertis **après** les textures : savoir si la
     // texture diffuse porte un alpha exploitable change la façon de traiter
     // un matériau en fondu (verre contre décalcomanie).
-    let glass = options.glass.resolve(model);
+    let surfaces = options.surfaces.resolve(model);
     let materials: Vec<GltfMaterial> = model
         .materials
         .iter()
@@ -156,7 +158,7 @@ pub fn convert(
                     diffuse_alpha_blank: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_blank()),
                     painted_diffuse: paint.painted_diffuse(index),
                     roughness_texture: roughness.roughness_texture(index),
-                    pbr_glass_ior: glass.get(&index).copied(),
+                    csp: surfaces.get(&index).copied(),
                 },
             )
         })
