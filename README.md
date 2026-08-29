@@ -121,7 +121,17 @@ anything has been verified — and the one job that cannot be run locally, the
 installer bundle, is exactly the one that would fail. Ten minutes of waiting
 buys the certainty of never building a release on a broken commit.
 
-First, run everything the CI runs, in one command:
+First, update the toolchain. CI installs whatever `stable` is on the day it
+runs, and clippy gains lints between releases: one added after your local
+toolchain was installed fails there and **nowhere else**, however green
+`npm run verify` was. It cost a round trip on 0.5.0 — local clippy 1.96 was
+happy with a `chunks_exact(3)` that 1.98 wanted written `as_chunks::<3>()`.
+
+```bash
+rustup update
+```
+
+Then run everything the CI runs, in one command:
 
 ```bash
 npm run verify

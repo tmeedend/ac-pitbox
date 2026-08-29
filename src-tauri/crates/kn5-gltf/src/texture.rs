@@ -338,7 +338,12 @@ fn diffuse_footprints(model: &Kn5Model) -> BTreeMap<String, Vec<DiffuseUser>> {
         // coûte trois additions et évite qu'un quadrilatère dont les quatre
         // coins tombent sur des texels identiques passe pour uniforme alors
         // que son intérieur est découpé.
-        for triangle in mesh.indices.chunks_exact(3) {
+        // `as_chunks` plutôt que `chunks_exact(3)` : la taille étant une
+        // constante, elle appartient au type (`&[u32; 3]`) et non à un
+        // argument que rien ne relie au `[a, b, c]` filtré plus bas. C'est
+        // aussi ce qu'exige clippy à partir de la version qui tourne en CI.
+        let (triangles, _) = mesh.indices.as_chunks::<3>();
+        for triangle in triangles {
             let corners: Vec<[f32; 2]> = triangle
                 .iter()
                 .filter_map(|i| mesh.vertices.get(*i as usize).map(|v| v.uv))
