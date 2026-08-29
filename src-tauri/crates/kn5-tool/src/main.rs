@@ -26,7 +26,7 @@ const USAGE: &str = "\
 kn5-tool — inspect Assetto Corsa KN5 models
 
 USAGE:
-    kn5-tool inspect <file.kn5 | car_dir> [--tree] [--materials] [--textures] [--skin=<id>]
+    kn5-tool inspect <file.kn5 | car_dir> [--tree] [--materials] [--textures] [--tangents] [--skin=<id>]
     kn5-tool scan <dir> [--details]
     kn5-tool extract-textures <car_dir> --out=<dir> [--skin=<id>]
     kn5-tool convert <car_dir> --out=<file.glb> [--skin=<id>]
@@ -45,6 +45,9 @@ OPTIONS:
     --tree        Print the node hierarchy.
     --materials   Print every material with its shader, properties and samplers.
     --textures    Print every embedded texture with its sniffed format.
+    --tangents    Report the tangent frame: how many vertices carry a usable
+                  one, and how many triangles have degenerate UVs. Both decide
+                  whether a normal map can be lit correctly.
     --details     scan: also print the aggregate shader / property tables.
     --out=<path>  extract-textures: destination folder. convert: .glb file.
     --skin=<id>   extract-textures: skin whose files override the embedded ones
@@ -262,6 +265,10 @@ fn inspect(path: &Path, flags: &[&str]) -> Result<(), String> {
                 texture.name
             );
         }
+    }
+
+    if flags.contains(&"--tangents") {
+        report_tangents(&model);
     }
 
     if flags.contains(&"--materials") {
@@ -800,6 +807,86 @@ fn csp_config(car_dir: &Path, skin: Option<&Path>, flags: &[&str]) -> kn5_gltf::
     kn5_gltf::CspConfig::locate(car_dir, skin, option_value(flags, "--ac").map(Path::new), &car_id)
 }
 
+/// Reports the health of the tangent frame — the instrument behind the
+/// "streaky white highlights on interior panels" investigation.
+///
+/// **Why it matters.** A normal map is expressed in tangent space, so lighting
+/// it needs a tangent frame. glTF carries one in a `TANGENT` attribute; when
+/// it is absent, a viewer has to rebuild it per pixel from the screen-space
+/// derivatives of position and UV. That fallback collapses wherever the UV
+/// derivative is zero — a whole panel mapped to a single flat texel of an
+/// atlas, which is exactly how car interiors are usually unwrapped — and the
+/// tangent frame then explodes into the hard white streaks that started this.
+///
+/// So two numbers, and they point at different remedies:
+///
+/// - **usable tangents in the KN5**: if the file carries them, exporting them
+///   fixes the problem outright, with nothing to guess;
+/// - **triangles with degenerate UVs**: how much geometry the screen-space
+///   fallback cannot serve at all, i.e. how bad it gets without tangents.
+fn report_tangents(model: &kn5::Kn5Model) {
+    let (mut vertices, mut usable) = (0usize, 0usize);
+    let (mut triangles, mut degenerate) = (0usize, 0usize);
+    let mut with_normal_map = 0usize;
+
+    model.visit_nodes(&mut |node| {
+        let Some(mesh) = node.mesh() else { return };
+        if !mesh.is_visible || !mesh.is_renderable {
+            return;
+        }
+        for vertex in &mesh.vertices {
+            vertices += 1;
+            let t = vertex.tangent;
+            let length = (t[0] * t[0] + t[1] * t[1] + t[2] * t[2]).sqrt();
+            if length <= 1e-4 {
+                continue;
+            }
+            // Une tangente colinéaire à la normale ne définit aucun repère.
+            let n = vertex.normal;
+            let dot = (t[0] * n[0] + t[1] * n[1] + t[2] * n[2]) / length;
+            if dot.abs() < 0.99 {
+                usable += 1;
+            }
+        }
+        // `as_chunks` plutôt que `chunks_exact(3)` : la taille étant constante,
+        // clippy l'exige depuis Rust 1.98 — plus récent que la chaîne locale,
+        // donc invisible ici et vu seulement en CI.
+        for corners in mesh.indices.as_chunks::<3>().0 {
+            let uv = |i: u16| mesh.vertices.get(i as usize).map(|v| v.uv);
+            let (Some(a), Some(b), Some(c)) = (uv(corners[0]), uv(corners[1]), uv(corners[2])) else {
+                continue;
+            };
+            triangles += 1;
+            // Aire du triangle dans l'espace UV : nulle, le repère tangent
+            // reconstruit à l'écran n'a plus de direction.
+            let area = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
+            if area.abs() < 1e-10 {
+                degenerate += 1;
+            }
+        }
+    });
+
+    for material in &model.materials {
+        if material.texture_for("txNormal").is_some_and(|t| !t.is_empty()) {
+            with_normal_map += 1;
+        }
+    }
+
+    let percent = |part: usize, whole: usize| {
+        if whole == 0 {
+            0.0
+        } else {
+            100.0 * part as f64 / whole as f64
+        }
+    };
+    println!(
+        "tangents  {:.1} % of {vertices} vertices carry a usable frame; {:.1} % of {triangles} triangles have degenerate UVs; {with_normal_map} of {} materials bind a normal map",
+        percent(usable, vertices),
+        percent(degenerate, triangles),
+        model.materials.len()
+    );
+}
+
 /// Prints what the CSP replacement pass did, and only when it did something:
 /// the overwhelming majority of cars carry no `ext_config.ini` at all, and a
 /// line of zeroes on every one of them would drown the reports that matter.
@@ -836,7 +923,7 @@ fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
 
     let started = Instant::now();
     let options = kn5_gltf::ConvertOptions {
-        glass: kn5_gltf::glass_overrides(&csp),
+        surfaces: kn5_gltf::material_overrides(&csp),
         ..Default::default()
     };
     let conversion = kn5_gltf::convert(&model, skin.as_deref(), &options, &|stage| {

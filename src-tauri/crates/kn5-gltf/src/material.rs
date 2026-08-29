@@ -55,6 +55,10 @@ pub struct GltfMaterial {
     pub transmission: f32,
     /// `KHR_materials_ior`, quand il y a lieu.
     pub ior: Option<f32>,
+    /// Vernis par-dessus la surface — `KHR_materials_clearcoat`. Zéro sur tout
+    /// ce qui n'en porte pas.
+    pub clearcoat: f32,
+    pub clearcoat_roughness: f32,
 }
 
 /// Shaders whose name alone says the surface is glass.
@@ -118,14 +122,14 @@ pub struct MaterialTextures {
     pub painted_diffuse: Option<String>,
     /// Carte métallique-rugosité tirée de `txMaps` (voir [`crate::roughness`]).
     pub roughness_texture: Option<String>,
-    /// Indice de réfraction quand CSP déclare ce matériau comme du **verre
-    /// physique** (`[Material_Glass]`, voir [`crate::GlassOverrides`]).
+    /// Ce que la configuration CSP dit de ce matériau (voir
+    /// [`crate::SurfaceOverride`]).
     ///
-    /// Ce n'est pas un fait de texture comme les autres champs de cette
-    /// structure, mais il emprunte le même chemin : c'est une chose que le
-    /// pipeline apprend du mod et que la conversion ne peut pas deviner du
+    /// Ce ne sont pas des faits de texture comme les autres champs de cette
+    /// structure, mais ils empruntent le même chemin : ce sont des choses que
+    /// le pipeline apprend du mod et que la conversion ne peut pas deviner du
     /// seul KN5.
-    pub pbr_glass_ior: Option<f32>,
+    pub csp: Option<crate::SurfaceOverride>,
 }
 
 /// Réflectance à incidence normale à partir de laquelle une surface commence
@@ -257,7 +261,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // La texture diffuse est écartée pour la même raison qu'un `ksWindscreen`
     // (écart n°6) : `smGlass` ne s'en sert pas comme d'une couleur, et la
     // garder pose un voile teinté devant l'habitacle.
-    if let Some(ior) = textures.pbr_glass_ior {
+    if let Some(ior) = textures.csp.and_then(|c| c.glass_ior) {
         return GltfMaterial {
             name: material.name.clone(),
             shader: material.shader.clone(),
@@ -280,6 +284,8 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
             base_color: [1.0, 1.0, 1.0, 1.0],
             transmission: 1.0,
             ior: Some(ior),
+            clearcoat: 0.0,
+            clearcoat_roughness: 0.0,
         };
     }
 
@@ -308,6 +314,16 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // variante de la texture diffuse : elle est masquée pixel par pixel par
     // l'alpha de cette texture, et un facteur global peindrait les
     // décalcomanies avec la carrosserie (voir [`crate::paint`]).
+    // **Ce que le mod déclare l'emporte sur ce qu'on a déduit** — mais
+    // seulement là où il déclare quelque chose. Un template de CSP dont la
+    // brillance dépend d'une texture de détail qu'on ne charge pas laisse
+    // `roughness` à `None`, et l'estimation tirée de `ksSpecularEXP` reste en
+    // place : mieux vaut une estimation qu'une valeur juste à moitié.
+    let csp = textures.csp.unwrap_or_default();
+    let roughness = csp.roughness.unwrap_or(roughness);
+    let metallic = csp.metallic.unwrap_or_else(|| metallic_of(material, shader));
+    let csp_clearcoat = csp.clearcoat.unwrap_or((0.0, 0.0));
+
     let base_color_texture = textures.painted_diffuse.clone().or_else(|| base_color_map(material));
     // Troisième cas, découvert après les deux ci-dessus : l'alpha varie, mais
     // pas là où **ce** matériau regarde. Un atlas de carrosserie porte un
@@ -331,7 +347,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
         normal_scale: material.property("normalMult").filter(|v| *v > 0.0).unwrap_or(1.0),
         emissive,
         roughness,
-        metallic: metallic_of(material, shader),
+        metallic,
         alpha_mode,
         // Glass rendered double-sided shows the inside of the far pane through
         // the near one; §6.1 asks for single-sided there specifically.
@@ -340,6 +356,8 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
         base_color,
         transmission: 0.0,
         ior: None,
+        clearcoat: csp_clearcoat.0,
+        clearcoat_roughness: csp_clearcoat.1,
     }
 }
 

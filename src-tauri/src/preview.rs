@@ -30,7 +30,7 @@ use crate::config::AppConfig;
 /// *reconnaître* pour libérer sa place. Trois incréments en une session de
 /// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
-const CONVERTER_VERSION: u32 = 17;
+const CONVERTER_VERSION: u32 = 18;
 
 /// Default cache ceiling (§5.3). Beyond it, the least recently used entries
 /// are evicted. Only a default: the real ceiling is a setting, carried by
@@ -333,10 +333,11 @@ pub fn prepare(
         log::warn!("preview: remplacement CSP ignoré — {failure}");
     }
 
-    // Le mod déclare lui-même quels matériaux sont du verre physique — c'est
-    // la seule façon de le savoir, le KN5 seul ne le dit pas (SPEC §4.5ter).
+    // Le mod déclare lui-même ce que sont ses surfaces — verre, chrome, cuir,
+    // carbone. C'est la seule façon de le savoir : le KN5 seul ne le dit pas
+    // (SPEC §4.5ter).
     let options = kn5_gltf::ConvertOptions {
-        glass: kn5_gltf::glass_overrides(&csp),
+        surfaces: kn5_gltf::material_overrides(&csp),
         ..Default::default()
     };
     let conversion = kn5_gltf::convert(&model, skin_dir.as_deref(), &options, &|stage| {

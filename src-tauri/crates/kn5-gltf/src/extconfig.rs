@@ -98,44 +98,60 @@ impl CspConfig {
     }
 }
 
-/// Materials CSP turns into **physical glass**, with the index of refraction
-/// that drives their reflectance.
+/// What CSP's material templates say a surface is.
 ///
-/// `[Material_Glass]` is not a tweak of the stock shader: it swaps in `smGlass`,
-/// a PBR glass whose transparency comes from an IOR and a thickness, never from
-/// an alpha channel. Reading the mod's own declaration is therefore the only
-/// way to know that a material is a windowpane rather than a translucent
-/// sticker — and it is the author of CSP who wrote the rule, in
-/// `<AC>/extension/config/cars/common/materials_glass.ini`.
-#[derive(Debug, Clone, Default)]
-pub struct GlassOverrides {
-    /// Material name patterns (CSP wildcards) → IOR.
-    materials: Vec<(String, f32)>,
-    /// Mesh name patterns → IOR. Rarer, but `ks_toyota_ae86_tuned` uses it.
-    meshes: Vec<(String, f32)>,
+/// Every field is optional, and `None` means **the mod said nothing** — the
+/// conversion then keeps whatever it derived from the KN5 itself. That
+/// distinction is the whole point: applying a template wholesale is worse than
+/// applying nothing, because several of them only make sense together with a
+/// texture we do not load (see [`SURFACE_TEMPLATES`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct SurfaceOverride {
+    pub metallic: Option<f32>,
+    pub roughness: Option<f32>,
+    /// Clear coat intensity and roughness — `KHR_materials_clearcoat`. A
+    /// varnish over the surface, which is what carbon fibre and car paint are.
+    pub clearcoat: Option<(f32, f32)>,
+    /// Physical glass: index of refraction, transmission coming with it.
+    pub glass_ior: Option<f32>,
 }
 
-impl GlassOverrides {
+impl SurfaceOverride {
+    fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+/// Everything a car's CSP configuration says about its surfaces, by name.
+#[derive(Debug, Clone, Default)]
+pub struct MaterialOverrides {
+    materials: Vec<(String, SurfaceOverride)>,
+    meshes: Vec<(String, SurfaceOverride)>,
+}
+
+impl MaterialOverrides {
     pub fn is_empty(&self) -> bool {
         self.materials.is_empty() && self.meshes.is_empty()
     }
 
-    /// Resolves the declarations against a model: material index → IOR.
+    /// Resolves the declarations against a model: material index → override.
     ///
     /// Mesh-targeted declarations are folded in here, where the node tree is
-    /// available to say which material a mesh actually carries.
-    pub fn resolve(&self, model: &Kn5Model) -> BTreeMap<usize, f32> {
+    /// available to say which material a mesh actually carries. First match
+    /// wins, and [`CspConfig`] orders its sources so that the most specific
+    /// file is read first.
+    pub fn resolve(&self, model: &Kn5Model) -> BTreeMap<usize, SurfaceOverride> {
         let mut out = BTreeMap::new();
         for (index, material) in model.materials.iter().enumerate() {
-            if let Some((_, ior)) = self.materials.iter().find(|(p, _)| glob_match(p, &material.name)) {
-                out.insert(index, *ior);
+            if let Some((_, over)) = self.materials.iter().find(|(p, _)| glob_match(p, &material.name)) {
+                out.insert(index, *over);
             }
         }
         if !self.meshes.is_empty() {
             model.visit_nodes(&mut |node| {
                 let Some(mesh) = node.mesh() else { return };
-                if let Some((_, ior)) = self.meshes.iter().find(|(p, _)| glob_match(p, &node.name)) {
-                    out.insert(mesh.material_id as usize, *ior);
+                if let Some((_, over)) = self.meshes.iter().find(|(p, _)| glob_match(p, &node.name)) {
+                    out.entry(mesh.material_id as usize).or_insert(*over);
                 }
             });
         }
@@ -147,13 +163,169 @@ impl GlassOverrides {
 /// fixe. `FilmIOR` le remplace quand le mod veut plus de reflet.
 const DEFAULT_GLASS_IOR: f32 = 1.5;
 
-/// Reads the glass declarations of a car — `[Material_Glass]` and its variants,
-/// plus the `ExteriorGlass*` shorthands that `materials_glass.ini` defines.
-pub fn glass_overrides(config: &CspConfig) -> GlassOverrides {
-    let mut out = GlassOverrides::default();
+/// Ce qu'un template de CSP pose comme valeurs, avant surcharge par la section.
+#[derive(Debug, Clone, Copy)]
+struct TemplateValues {
+    metalness: Option<f32>,
+    smoothness: Option<f32>,
+    clearcoat: Option<(f32, f32)>,
+}
+
+/// Les templates de surface de CSP, **transcrits** de
+/// `<AC>/extension/config/cars/common/materials_interior.ini`.
+///
+/// **`smoothness` vaut `None` sur toute la famille `_v2`**, et ce n'est pas un
+/// oubli : ces templates étendent `Material_InteriorPBRDetail`, qui pose
+/// `Smoothness = 0` *avant* mise à l'échelle par une texture PBR de détail
+/// carrelée (`common/pbr_metal.dds` et consorts) qu'on ne charge pas.
+/// Transcrire ce zéro rendrait tous les chromes et tous les alliages
+/// parfaitement mats — strictement pire que de laisser notre propre estimation
+/// tirée de `ksSpecularEXP`. Leur métallicité, elle, est une constante
+/// ordinaire et se prend sans réserve.
+///
+/// `Reflectance` est lue par CSP mais n'est pas reprise ici : sur un métal la
+/// métallicité la porte déjà, et sur un diélectrique glTF fixe F0 à 0,04 —
+/// exactement la valeur que la plupart de ces templates déclarent. La rendre
+/// demanderait `KHR_materials_specular` pour un écart invisible.
+const SURFACE_TEMPLATES: [(&str, TemplateValues); 16] = [
+    // Famille autonome : `Smoothness` y est une vraie constante.
+    (
+        "Material_InteriorPBR",
+        TemplateValues {
+            metalness: Some(0.0),
+            smoothness: Some(0.9),
+            clearcoat: None,
+        },
+    ),
+    (
+        "Material_Chrome",
+        TemplateValues {
+            metalness: Some(0.85),
+            smoothness: Some(0.95),
+            clearcoat: None,
+        },
+    ),
+    (
+        "Material_Carbon",
+        TemplateValues {
+            metalness: Some(0.0),
+            smoothness: Some(0.5),
+            clearcoat: Some((1.0, 0.1)),
+        },
+    ),
+    (
+        "Material_Leather",
+        TemplateValues {
+            metalness: Some(0.0),
+            smoothness: Some(0.65),
+            clearcoat: None,
+        },
+    ),
+    (
+        "Material_LeatherDetailed",
+        TemplateValues {
+            metalness: Some(0.0),
+            smoothness: Some(0.65),
+            clearcoat: None,
+        },
+    ),
+    (
+        "Material_DashboardLeather",
+        TemplateValues {
+            metalness: Some(0.0),
+            smoothness: Some(0.01),
+            clearcoat: None,
+        },
+    ),
+    (
+        "Material_Plastic",
+        TemplateValues {
+            metalness: Some(0.0),
+            smoothness: Some(0.7),
+            clearcoat: None,
+        },
+    ),
+    (
+        "Material_Fabric",
+        TemplateValues {
+            metalness: Some(0.0),
+            smoothness: Some(0.0),
+            clearcoat: None,
+        },
+    ),
+    (
+        "Material_Carpet",
+        TemplateValues {
+            metalness: Some(0.0),
+            smoothness: Some(0.0),
+            clearcoat: None,
+        },
+    ),
+    (
+        "Material_Velvet",
+        TemplateValues {
+            metalness: Some(0.0),
+            smoothness: Some(0.0),
+            clearcoat: None,
+        },
+    ),
+    // Famille `_v2` : métallicité seulement, brillance laissée au KN5.
+    (
+        "Material_Metal_v2",
+        TemplateValues {
+            metalness: Some(0.8),
+            smoothness: None,
+            clearcoat: None,
+        },
+    ),
+    (
+        "Material_MetalOld_v2",
+        TemplateValues {
+            metalness: Some(0.8),
+            smoothness: None,
+            clearcoat: None,
+        },
+    ),
+    (
+        "Material_Aluminium_v2",
+        TemplateValues {
+            metalness: Some(0.4),
+            smoothness: None,
+            clearcoat: None,
+        },
+    ),
+    (
+        "Material_AluminiumOld_v2",
+        TemplateValues {
+            metalness: Some(0.2),
+            smoothness: None,
+            clearcoat: None,
+        },
+    ),
+    (
+        "Material_Plastic_v2",
+        TemplateValues {
+            metalness: Some(0.0),
+            smoothness: None,
+            clearcoat: None,
+        },
+    ),
+    (
+        "Material_Leather_v2",
+        TemplateValues {
+            metalness: Some(0.0),
+            smoothness: None,
+            clearcoat: None,
+        },
+    ),
+];
+
+/// Reads everything a car's configuration declares about its surfaces.
+pub fn material_overrides(config: &CspConfig) -> MaterialOverrides {
+    let mut out = MaterialOverrides::default();
     for source in config.sources() {
         if let Ok(text) = std::fs::read_to_string(source) {
-            collect_glass(&text, &mut out);
+            collect_materials(&text, &mut out);
         }
     }
     out
@@ -175,38 +347,88 @@ const GLASS_SHORTHANDS: [(&str, f32); 5] = [
     ("ExteriorGlassPhotoelasticMaterials", 3.2),
 ];
 
-fn collect_glass(text: &str, out: &mut GlassOverrides) {
+fn collect_materials(text: &str, out: &mut MaterialOverrides) {
     for section in parse_sections(text) {
-        // `Material_Glass`, `Material_GlassSide`, `Material_MultiEmissiveGlass`,
-        // `Material_PhotoelasticGlass` — tous héritent du même `smGlass`.
-        let is_glass_template = section.name.starts_with("Material_") && section.name.contains("Glass");
-        let ior = section
-            .get("FilmIOR")
-            .or_else(|| section.get("IOR"))
-            .and_then(|v| v.parse::<f32>().ok())
-            .filter(|v| *v > 1.0)
-            .unwrap_or(DEFAULT_GLASS_IOR);
-
-        if is_glass_template {
+        let over = section_override(&section);
+        if !over.is_empty() {
             for name in section.list("Materials").unwrap_or_default() {
-                out.materials.push((name, ior));
+                out.materials.push((name, over));
             }
             for name in section.list("Meshes").unwrap_or_default() {
-                out.meshes.push((name, ior));
+                out.meshes.push((name, over));
             }
         }
 
         // Les raccourcis peuvent apparaître dans n'importe quelle section — ils
         // sont posés juste sous le `[INCLUDE: common/materials_glass.ini]`.
         for (shorthand, preset) in GLASS_SHORTHANDS {
+            let glass = SurfaceOverride {
+                glass_ior: Some(preset),
+                ..SurfaceOverride::default()
+            };
             for name in section.list(shorthand).unwrap_or_default() {
-                out.materials.push((name, preset));
+                out.materials.push((name, glass));
             }
             let meshes = shorthand.replace("Materials", "Meshes");
             for name in section.list(&meshes).unwrap_or_default() {
-                out.meshes.push((name, preset));
+                out.meshes.push((name, glass));
             }
         }
+    }
+}
+
+/// Ce qu'une section déclare : les valeurs de son template, surchargées par ce
+/// qu'elle écrit elle-même.
+fn section_override(section: &Section) -> SurfaceOverride {
+    if !section.name.starts_with("Material_") {
+        return SurfaceOverride::default();
+    }
+
+    // `Material_Glass`, `Material_GlassSide`, `Material_MultiEmissiveGlass`,
+    // `Material_PhotoelasticGlass` — tous héritent du même `smGlass`.
+    if section.name.contains("Glass") {
+        let ior = section
+            .number("FilmIOR")
+            .or_else(|| section.number("IOR"))
+            .filter(|v| *v > 1.0)
+            .unwrap_or(DEFAULT_GLASS_IOR);
+        return SurfaceOverride {
+            glass_ior: Some(ior),
+            ..SurfaceOverride::default()
+        };
+    }
+
+    let template = SURFACE_TEMPLATES
+        .iter()
+        .find(|(name, _)| section.name.eq_ignore_ascii_case(name))
+        .map(|(_, values)| *values);
+    let Some(template) = template else {
+        return SurfaceOverride::default();
+    };
+
+    // Une section peut redéfinir ce que son template pose — c'est même l'usage
+    // courant, `[Material_Chrome] Smoothness = 0.8` par exemple.
+    let metallic = section.number("Metalness").or(template.metalness);
+    let smoothness = section.number("Smoothness").or(template.smoothness);
+    let clearcoat = match section.number("UseClearCoat") {
+        Some(v) if v <= 0.0 => None,
+        _ => {
+            let (intensity, smooth) = template.clearcoat.unwrap_or((1.0, 0.1));
+            let intensity = section.number("ClearCoatIntensity").unwrap_or(intensity);
+            let roughness = section
+                .number("ClearCoatSmoothness")
+                .map(|s| (1.0 - s).clamp(0.0, 1.0))
+                .unwrap_or(smooth);
+            (section.number("UseClearCoat").is_some() || template.clearcoat.is_some())
+                .then_some((intensity.clamp(0.0, 1.0), roughness))
+        }
+    };
+
+    SurfaceOverride {
+        metallic: metallic.map(|v| v.clamp(0.0, 1.0)),
+        roughness: smoothness.map(|s| (1.0 - s).clamp(0.0, 1.0)),
+        clearcoat,
+        glass_ior: None,
     }
 }
 
@@ -709,6 +931,11 @@ impl Section {
         })
     }
 
+    /// Valeur numérique d'une clé, quand elle en est une.
+    fn number(&self, key: &str) -> Option<f32> {
+        self.get(key).and_then(|v| v.trim().parse().ok())
+    }
+
     /// A value written either once for both axles or twice, front then rear.
     fn axle_value(&self, key: &str, front: bool) -> Option<f32> {
         let values = self.list(key)?;
@@ -1142,25 +1369,39 @@ OriginalRims = RIM_?
         assert_eq!(alone.sources().len(), 2, "pas de skin, pas d'install : deux fichiers");
     }
 
+    fn collected(text: &str) -> MaterialOverrides {
+        let mut out = MaterialOverrides::default();
+        collect_materials(text, &mut out);
+        out
+    }
+
+    fn glass(ior: f32) -> SurfaceOverride {
+        SurfaceOverride {
+            glass_ior: Some(ior),
+            ..SurfaceOverride::default()
+        }
+    }
+
     // Règle : chaque raccourci de `materials_glass.ini` pose son propre IOR.
     // Les uniformiser jetterait le seul réglage qu'un moddeur exprime en
     // choisissant l'un plutôt que l'autre — un phare ne renvoie pas comme un
     // vitrage teinté.
     #[test]
     fn each_glass_shorthand_carries_its_own_ior() {
-        let text = "[INCLUDE: common/materials_glass.ini]
+        let over = collected(
+            "\
+[INCLUDE: common/materials_glass.ini]
 ExteriorGlassFilmedMaterials=CAR_Vetro
 ExteriorGlassHeadlightsMaterials=CAR_Vetro_Fanali_ANTERIORI
 ExteriorGlassMaterials=plain
-";
-        let mut glass = GlassOverrides::default();
-        collect_glass(text, &mut glass);
+",
+        );
         assert_eq!(
-            glass.materials,
+            over.materials,
             vec![
-                ("plain".to_string(), 1.5),
-                ("CAR_Vetro".to_string(), 2.4),
-                ("CAR_Vetro_Fanali_ANTERIORI".to_string(), 2.2),
+                ("plain".to_string(), glass(1.5)),
+                ("CAR_Vetro".to_string(), glass(2.4)),
+                ("CAR_Vetro_Fanali_ANTERIORI".to_string(), glass(2.2)),
             ],
             "les valeurs viennent de materials_glass.ini, pas d'un défaut unique"
         );
@@ -1172,10 +1413,11 @@ ExteriorGlassMaterials=plain
     // matériau est une vitre et non un autocollant translucide.
     #[test]
     fn glass_is_read_from_the_mods_own_declaration() {
-        let text = "[Material_Glass]
+        let over = collected(
+            "\
+[Material_Glass]
 Materials = MAIN_GLASS
 FilmIOR = 1.8
-MaskPass = 1
 
 [Material_PhotoelasticGlass]
 Meshes = REAR_KOUKI_GLASS.004
@@ -1183,51 +1425,89 @@ IOR = 4
 
 [Material_CarPaint_Metallic]
 Materials = MAIN_BODY
-";
-        let mut glass = GlassOverrides::default();
-        collect_glass(text, &mut glass);
-
-        assert_eq!(
-            glass.materials,
-            vec![("MAIN_GLASS".to_string(), 1.8)],
-            "FilmIOR l'emporte sur le défaut, et la peinture n'est pas du verre"
+",
         );
         assert_eq!(
-            glass.meshes,
-            vec![("REAR_KOUKI_GLASS.004".to_string(), 4.0)],
+            over.materials,
+            vec![("MAIN_GLASS".to_string(), glass(1.8))],
+            "FilmIOR l'emporte sur le défaut, et la peinture n'est pas encore traitée"
+        );
+        assert_eq!(
+            over.meshes,
+            vec![("REAR_KOUKI_GLASS.004".to_string(), glass(4.0))],
             "les variantes de Material_*Glass* comptent aussi, y compris par maillage"
         );
     }
 
-    // Règle : le raccourci `ExteriorGlassMaterials` vaut une section entière.
-    // `materials_glass.ini` le définit pour éviter au moddeur de l'écrire, et
-    // `ks_toyota_ae86_tuned` s'en sert.
+    // Règle : les templates de surface sont **transcrits** de CSP, pas devinés.
+    // `Smoothness` y est l'inverse de la rugosité de glTF.
     #[test]
-    fn the_exterior_glass_shorthand_counts_as_a_declaration() {
-        let text = "[INCLUDE: common/materials_glass.ini]
-ExteriorGlassMaterials = glass, 
-";
-        let mut glass = GlassOverrides::default();
-        collect_glass(text, &mut glass);
+    fn surface_templates_are_transcribed_from_csp() {
+        let over = collected("[Material_Chrome]\nMaterials = chrome_trim\n");
+        let (name, chrome) = &over.materials[0];
+        assert_eq!(name, "chrome_trim", "la section nomme sa cible");
+        assert_eq!(chrome.metallic, Some(0.85), "Metalness de materials_interior.ini");
+        // `1 - 0.95` ne tombe pas rond en `f32`, d'où la tolérance.
+        let roughness = chrome.roughness.expect("le chrome donne sa brillance");
+        assert!(
+            (roughness - 0.05).abs() < 1e-5,
+            "Smoothness 0,95 devient une rugosité de 0,05, got {roughness}"
+        );
+
+        // Le carbone porte un vernis, et c'est ce qui le distingue d'un
+        // plastique sombre.
+        let carbon = collected("[Material_Carbon]\nMaterials = weave\n");
         assert_eq!(
-            glass.materials,
-            vec![("glass".to_string(), DEFAULT_GLASS_IOR)],
-            "le raccourci déclare du verre au défaut de 1,5"
+            carbon.materials[0].1.clearcoat,
+            Some((1.0, 0.1)),
+            "UseClearCoat = 1, ClearCoatSmoothness = 0.9"
         );
     }
 
-    // Règle : une voiture sans déclaration ne reçoit rien — le traitement
-    // habituel reste en place, et aucune passe de transmission n'est payée.
+    // Règle : **la famille `_v2` ne donne pas sa brillance.** Ces templates
+    // posent `Smoothness = 0` avant mise à l'échelle par une texture PBR de
+    // détail qu'on ne charge pas ; transcrire ce zéro rendrait tous les
+    // chromes parfaitement mats, strictement pire que notre propre estimation.
+    // Leur métallicité, elle, est une constante ordinaire.
     #[test]
-    fn a_car_without_a_declaration_gets_no_glass() {
-        let mut glass = GlassOverrides::default();
-        collect_glass(
-            "[Material_CarPaint]
-Materials = body
-",
-            &mut glass,
+    fn the_detail_driven_family_only_gives_its_metalness() {
+        let over = collected("[Material_Metal_v2]\nMaterials = trim\n");
+        let value = over.materials[0].1;
+        assert_eq!(value.metallic, Some(0.8), "la métallicité est une constante");
+        assert_eq!(
+            value.roughness, None,
+            "la brillance vient d'une texture qu'on ne charge pas : on n'y touche pas"
         );
-        assert!(glass.is_empty(), "rien de déclaré, rien d'appliqué");
+    }
+
+    // Règle : ce que la section écrit l'emporte sur ce que son template pose.
+    // C'est l'usage courant — `ks_toyota_ae86_tuned` ramène son métal de 0,8 à
+    // 0,25 de cette façon.
+    #[test]
+    fn a_section_overrides_the_template_it_uses() {
+        let over = collected("[Material_Metal_v2]\nMaterials = int_metal\nMetalness=0.25\n");
+        assert_eq!(over.materials[0].1.metallic, Some(0.25), "0,25 et non 0,8");
+
+        let smooth = collected("[Material_Leather]\nMaterials = seat\nSmoothness=0.2\n");
+        assert_eq!(
+            smooth.materials[0].1.roughness,
+            Some(0.8),
+            "Smoothness explicite, converti en rugosité"
+        );
+    }
+
+    // Règle : une déclaration qu'on ne sait pas traduire ne produit rien — le
+    // traitement habituel reste en place, et rien n'est payé pour rien.
+    #[test]
+    fn an_unknown_template_changes_nothing() {
+        assert!(
+            collected("[Material_CarPaint_Metallic]\nMaterials = body\n").is_empty(),
+            "la peinture n'est pas encore traduite : on n'invente pas"
+        );
+        assert!(
+            collected("[LIGHTING]\nMaterials = body\n").is_empty(),
+            "une section qui n'est pas un matériau ne déclare rien"
+        );
     }
 
     // Rule: `FrontOnly` / `RearOnly` split the axles, which is how a mod gives

@@ -118,6 +118,7 @@ pub fn write_glb(meshes: &[FlatMesh], materials: &[GltfMaterial], textures: &Tex
             [
                 (m.transmission > 0.0).then_some("KHR_materials_transmission"),
                 m.ior.map(|_| "KHR_materials_ior"),
+                (m.clearcoat > 0.0).then_some("KHR_materials_clearcoat"),
             ]
         })
         .flatten()
@@ -172,6 +173,12 @@ fn material_json(material: &GltfMaterial, texture_index: &Map<String, Value>) ->
     }
     if let Some(ior) = material.ior {
         material_extensions["KHR_materials_ior"] = json!({ "ior": ior });
+    }
+    if material.clearcoat > 0.0 {
+        material_extensions["KHR_materials_clearcoat"] = json!({
+            "clearcoatFactor": material.clearcoat,
+            "clearcoatRoughnessFactor": material.clearcoat_roughness,
+        });
     }
     if material_extensions.as_object().is_some_and(|o| !o.is_empty()) {
         value["extensions"] = material_extensions;
@@ -354,6 +361,8 @@ mod tests {
             base_color: [1.0, 1.0, 1.0, 1.0],
             transmission: 0.0,
             ior: None,
+            clearcoat: 0.0,
+            clearcoat_roughness: 0.0,
         }
     }
 
