@@ -370,7 +370,7 @@ un dossier dont aucun fichier ne correspond ne change **rien**.
 
 **Seul le casque est lié au mannequin**, et il a fallu balayer le parc pour le
 voir. Les cinq mannequins Kunos réclament tous `2016_Suit_DIFF.dds` et
-`2016_Gloves_DIFF.dds` : les **53** dossiers de combinaison et les **67** de
+`2016_Gloves_DIFF.dds` : les **53** dossiers de combinaison et les **69** de
 gants marchent donc sur n'importe lequel. Le casque, lui, est daté —
 `driver`/`driver_no_HANS` veulent `HELMET_2012`, `driver_80` `HELMET_1985`,
 `driver_70` `HELMET_1975`, `driver_60` `HELMET_1969` — et les **176** dossiers

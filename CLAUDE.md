@@ -402,7 +402,7 @@ laisser pourrir ici.
       une voiture de course le pilote porte les couleurs de son écurie, donc
       du skin. L'emplacement dans l'UI reste à trouver.
       La mécanique est plus simple qu'elle n'en avait l'air : **trois listes
-      indépendantes** (53 combinaisons, 67 paires de gants, 176 casques), dont
+      indépendantes** (53 combinaisons, 69 paires de gants, 176 casques), dont
       seuls les casques sont filtrés par l'époque du mannequin — combinaisons
       et gants portent les mêmes noms de fichiers sur toute la famille Kunos.
       Compatibilité décidée par nom de fichier, pas déduite d'autres voitures ;

@@ -52,6 +52,35 @@ pub async fn prepare_car_preview(
     .map_err(|e| format!("tâche d'aperçu interrompue : {e}"))?
 }
 
+/// Les tenues de pilote qui marcheront sur le mannequin de cette voiture
+/// (§4.6ter).
+///
+/// Rendu au frontend pour peupler les trois menus de la surcharge de pilote.
+/// La compatibilité n'est pas devinée ni déduite d'autres voitures : un
+/// dossier est retenu s'il contient une texture que le mannequin utilise comme
+/// couleur de base — voir `driver::choices`.
+///
+/// Lit un KN5 de quatorze mégaoctets, donc `spawn_blocking` comme la
+/// conversion, même si le parsing seul se compte en millisecondes.
+#[tauri::command]
+pub async fn list_driver_choices(
+    app: AppHandle,
+    db: State<'_, Db>,
+    car_id: String,
+) -> Result<Option<crate::driver::DriverChoices>, String> {
+    let cfg = crate::config::load(&app);
+    let Some(ac_root) = cfg.ac_install_path.clone() else {
+        return Ok(None);
+    };
+    let car_dir = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        crate::preview::car_dir(&conn, &cfg, &car_id).ok_or(crate::errors::PREVIEW_MODEL_NOT_FOUND)?
+    };
+    tauri::async_runtime::spawn_blocking(move || crate::driver::choices(&ac_root, &car_dir, &car_id))
+        .await
+        .map_err(|e| format!("tâche de tenues interrompue : {e}"))
+}
+
 /// Vide le cache d'aperçus et renvoie le nombre d'octets libérés (§5.3).
 #[tauri::command]
 pub fn clear_preview_cache(app: AppHandle) -> Result<u64, String> {
