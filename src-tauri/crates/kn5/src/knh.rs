@@ -5,12 +5,12 @@
 //! car's own space, root included. All 312 cars of the reference install have
 //! one.
 //!
-//! That matters because the steering animation does *not* carry the placement:
-//! its `DRIVER:DRIVER` node is the identity on every file met. The two are
-//! meant to be read together — the hierarchy says where the body is, the
-//! animation says what the limbs are doing. Reading the animation alone puts
-//! the driver at the car's origin, which is how this file came to be found: a
-//! right-hand-drive Miata whose driver sat on the left.
+//! That matters because the steering animation cannot be relied on to carry
+//! the placement: 212 of the 271 that name the driver's root node leave it at
+//! the identity. The two are meant to be read together — the hierarchy says
+//! where the body is, the animation says what the limbs are doing. Reading the
+//! animation alone misplaces about one car in six, which is how this file came
+//! to be found: a right-hand-drive Miata whose driver sat on the left.
 //!
 //! # Layout
 //!

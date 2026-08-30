@@ -30,7 +30,7 @@ use crate::config::AppConfig;
 /// *reconnaître* pour libérer sa place. Trois incréments en une session de
 /// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
-const CONVERTER_VERSION: u32 = 24;
+const CONVERTER_VERSION: u32 = 25;
 
 /// Default cache ceiling (§5.3). Beyond it, the least recently used entries
 /// are evicted. Only a default: the real ceiling is a setting, carried by
@@ -238,7 +238,7 @@ fn cache_key(model: &Path, skin: Option<&str>, configs: &[PathBuf], driver: Opti
         // corrige la position d'assise doit reconvertir, pas resservir un
         // pilote assis à l'ancienne place.
         hasher.update([u8::from(driver.anchor.is_some())]);
-        for component in driver.anchor.unwrap_or_default().into_iter().chain(driver.position) {
+        for component in driver.anchor.unwrap_or_default() {
             hasher.update(component.to_le_bytes());
         }
         // La pose fait partie du modèle produit, donc de son identité :
@@ -752,7 +752,6 @@ INSERT = part.kn5",
         let graft = kn5_gltf::DriverGraft {
             model: mannequin.clone(),
             anchor: Some([0.33, 1.19, -0.49]),
-            position: [0.0; 3],
             texture_dirs: vec![base.join("suit")],
             base_pose: Some(base_pose.clone()),
             animation: Some(animation.clone()),
@@ -774,12 +773,6 @@ INSERT = part.kn5",
             ..graft.clone()
         };
         assert_ne!(with, cache_key(&model, None, &[], Some(&dressed)), "la tenue aussi");
-
-        let moved = kn5_gltf::DriverGraft {
-            position: [0.0, 0.02, 0.0],
-            ..graft.clone()
-        };
-        assert_ne!(with, cache_key(&model, None, &[], Some(&moved)), "et sa position");
 
         let seated = kn5_gltf::DriverGraft {
             anchor: Some([0.33, 1.10, -0.49]),

@@ -1053,8 +1053,9 @@ puis chaque enfant à l'identique. La racine s'appelle `SCENE_ROOT` ; sous deux
 dummies d'enrobage vient `DRIVER:DRIVER`, qui porte le décalage asseyant le
 corps. **Les 312 voitures de l'install de référence en livrent un.**
 
-**L'animation, elle, ne place rien** : son nœud `DRIVER:DRIVER` vaut l'identité
-dans tous les fichiers rencontrés. Le piège est qu'elle *a l'air* de placer —
+**L'animation, elle, ne place pas de façon fiable** : 212 des 271 qui nomment
+`DRIVER:DRIVER` lui laissent l'identité, les 59 autres lui donnent une
+transformation. Le piège est qu'elle *a l'air* de placer —
 sur deux tiers des voitures, appliquer la seule animation fait tomber la tête
 du mannequin à moins de 6 cm de `DRIVEREYES`, ce qui suffit à faire croire
 qu'elle suffit. C'est une coïncidence de forme : le rig commence naturellement
@@ -1079,6 +1080,23 @@ deux autres.
 `art_skyline_r32_gtr`, `ks_alfa_giulia_qv`, `rss_formula_1990_v10`. Ce n'est
 pas un défaut de lecture, c'est une façon de ne rien dire — le repli sur
 `DRIVEREYES` s'en charge.
+
+Et **`[MODEL] POSITION` de `driver3d.ini` n'est pas l'offset qui complète tout
+ça.** Il en a l'allure et il n'en est pas un : 288 des 301 voitures qui le
+déclarent écrivent `0,0,0` — inoffensif — et les treize autres écrivent des
+valeurs qui cassent visiblement le placement dès qu'on les applique.
+
+| voiture | POSITION | effet mesuré |
+| --- | --- | --- |
+| `j8_eunos_roadster_tuned` | `0,0,0.5` | corps 50 cm en avant, dans le volant |
+| `ks_porsche_919_hybrid_2016` | `0.25,0,0` | pilote 25 cm hors de la voiture |
+| `ks_mercedes_c9` | `0,-5,0` | cinq mètres sous la piste |
+| `ddm_honda_s2000_ap1` et 3 autres | `1,1,1` | ce n'est pas une position |
+| `ms_citroen_berlingo_2003_*` | `0,0,1` | un mètre en avant |
+
+Le jeu, lui, les assoit correctement — vérifié par l'utilisateur sur l'Eunos en
+session. Il ne l'ajoute donc pas non plus, et `1,1,1` sur quatre voitures
+achève de le montrer. La clé est lue et laissée de côté.
 
 Méthode de vérification : `cargo test -p kn5-gltf -- --ignored --nocapture
 every_installed_car_seats_its_driver`, avec `PITBOX_AC_ROOT` pointant sur une

@@ -24,13 +24,15 @@
 //! seventies mannequin never asks for. Any future driver picker has to offer
 //! **pairs**, never a model and an outfit chosen independently.
 //!
-//! **Where the driver sits** is a third file again: `car.ini`, whose
-//! `[GRAPHICS] DRIVEREYES` gives a pair of eyes in the car's own space. The
-//! mannequin is the same seated body whatever the car, so that line is what
-//! tells a formula car's driver from a saloon's — and, when its `x` is
-//! negative, a right-hand-drive one. `driver3d.ini`'s own `POSITION` is a
-//! fine-tuning offset added on top, and reads `0,0,0` on all 312 cars of the
-//! reference install.
+//! **Where the driver sits** is a fourth file: `<car>/driver_base_pos.knh`,
+//! the whole rig laid out in the car's own space. `car.ini`'s `[GRAPHICS]
+//! DRIVEREYES` — a pair of eyes in the same space — only stands in for it on
+//! a car that ships none.
+//!
+//! `driver3d.ini`'s own `[MODEL] POSITION` **looks** like the offset that
+//! completes them and is not: applying it misplaces thirteen cars of the
+//! reference install by up to five metres. It is read here and used nowhere;
+//! `kn5_gltf`'s `seating_offset` carries the measurement.
 //!
 //! Everything here is best-effort: a car whose driver cannot be resolved is
 //! previewed without one, which is exactly what the preview did before this
@@ -52,7 +54,10 @@ pub struct DriverOutfit {
     /// `car.ini` — the one line that says where the driver sits (see
     /// `kn5_gltf::DriverGraft::anchor`).
     pub eyes: Option<[f32; 3]>,
-    /// Offset the car applies to the mannequin, `[MODEL] POSITION`.
+    /// `[MODEL] POSITION` of `driver3d.ini`, **read and not used**. Kept
+    /// because a future driver picker will want to show what a car declares,
+    /// and because leaving it out would invite the next reader to add it back:
+    /// see `kn5_gltf`'s `seating_offset` for the thirteen cars it misplaces.
     pub position: [f32; 3],
     /// Total steering travel the car's animation spans, `[STEER_ANIMATION]
     /// LOCK` in degrees. 360 unless the car says otherwise.
@@ -199,7 +204,6 @@ pub fn graft_for(
     Some(kn5_gltf::DriverGraft {
         model,
         anchor: outfit.eyes,
-        position: outfit.position,
         texture_dirs,
         base_pose: base_pose.is_file().then_some(base_pose),
         animation: animation.is_file().then_some(animation),
@@ -417,5 +421,119 @@ SUIT=\\type1\\black_black
         assert_eq!(parse_position("0, 0"), None, "two numbers are not a position");
         assert_eq!(parse_position("0, 0, 0, 0"), None, "nor are four");
         assert_eq!(parse_position("0, x, 0"), None, "nor is a word");
+    }
+
+    /// Where the whole pipeline actually puts each driver, against what the car
+    /// says with `DRIVEREYES`.
+    ///
+    /// The instrument that matters, and the one the crate-level test cannot
+    /// be: only the application resolves the real mannequin (`driver3d.ini`
+    /// lives in the encrypted container) and the real anchor. A driver placed
+    /// by a metre reads here as a metre, before anyone has to notice it on
+    /// screen.
+    ///
+    /// The residual is expected to be the eye-above-bone offset — a few
+    /// centimetres up and forward, near zero sideways. Anything past 15 cm on
+    /// any axis is a car to go and look at.
+    ///
+    /// ```text
+    /// PITBOX_AC_ROOT="D:\...\assettocorsa" cargo test --lib driver -- --ignored --nocapture where_every
+    /// ```
+    #[test]
+    #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
+    fn where_every_installed_driver_lands() {
+        let Ok(ac_root) = std::env::var("PITBOX_AC_ROOT") else {
+            eprintln!("PITBOX_AC_ROOT unset, skipping");
+            return;
+        };
+        let root = PathBuf::from(ac_root);
+        let mut checked = 0usize;
+        let mut off: Vec<(f32, String, [f32; 3], [f32; 3])> = Vec::new();
+        let mut residuals: Vec<[f32; 3]> = Vec::new();
+
+        for entry in std::fs::read_dir(root.join("content").join("cars"))
+            .expect("read content/cars")
+            .flatten()
+        {
+            let car_dir = entry.path();
+            let car_id = car_dir.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            let Some(outfit) = outfit_of(&car_dir, &car_id, None) else {
+                continue;
+            };
+            let Some(eyes) = outfit.eyes else { continue };
+            let Some(wanted) = graft_for(&root, &car_dir, &outfit, 0.0) else {
+                continue;
+            };
+
+            // Grafted into an empty car, so what comes out is the driver alone,
+            // already in the car's own space — offset, hierarchy and all.
+            let mut host = kn5::Kn5Model {
+                version: 6,
+                extra: None,
+                textures: Vec::new(),
+                materials: Vec::new(),
+                root: kn5::Kn5Node {
+                    name: "root".to_string(),
+                    active: true,
+                    kind: kn5::Kn5NodeKind::Dummy {
+                        transform: [
+                            1.0, 0.0, 0.0, 0.0, //
+                            0.0, 1.0, 0.0, 0.0, //
+                            0.0, 0.0, 1.0, 0.0, //
+                            0.0, 0.0, 0.0, 1.0,
+                        ],
+                    },
+                    children: Vec::new(),
+                },
+            };
+            let stats = kn5_gltf::graft_driver(&mut host, &wanted);
+            let Some(head) = kn5_gltf::node_world_centers(&host)
+                .into_iter()
+                .find(|(name, _)| name.to_lowercase().ends_with("rig_head"))
+                .map(|(_, c)| c)
+            else {
+                continue;
+            };
+
+            checked += 1;
+            let residual = [eyes[0] - head[0], eyes[1] - head[1], eyes[2] - head[2]];
+            residuals.push(residual);
+            let worst = residual.iter().fold(0.0f32, |a, v| a.max(v.abs()));
+            if worst > 0.15 {
+                off.push((
+                    worst,
+                    format!(
+                        "{car_id} [{}{}]",
+                        if stats.seated.is_some() { "knh" } else { "eyes" },
+                        if stats.posed.is_some() { "+anim" } else { "" }
+                    ),
+                    head,
+                    eyes,
+                ));
+            }
+        }
+
+        for (axis, label) in [(0, "x"), (1, "y"), (2, "z")] {
+            let mut values: Vec<f32> = residuals.iter().map(|r| r[axis]).collect();
+            values.sort_by(|a, b| a.total_cmp(b));
+            let n = values.len();
+            eprintln!(
+                "  residual {label}: min {:+.3}  p10 {:+.3}  median {:+.3}  p90 {:+.3}  max {:+.3}",
+                values[0],
+                values[n / 10],
+                values[n / 2],
+                values[9 * n / 10],
+                values[n - 1]
+            );
+        }
+        off.sort_by(|a, b| b.0.total_cmp(&a.0));
+        eprintln!("\n=== {checked} drivers placed, {} past 15 cm ===", off.len());
+        for (worst, who, head, eyes) in off.iter().take(30) {
+            eprintln!(
+                "  {worst:.2} m  {who:52} head {:?} eyes {:?}",
+                head.map(|v| (v * 1000.0).round() / 1000.0),
+                eyes.map(|v| (v * 1000.0).round() / 1000.0)
+            );
+        }
     }
 }

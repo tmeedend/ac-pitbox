@@ -44,10 +44,6 @@ pub struct DriverGraft {
     /// `[GRAPHICS] DRIVEREYES` of `car.ini`. See [`HEAD_BONE`] for why that one
     /// line places a whole body, and what happens without it.
     pub anchor: Option<[f32; 3]>,
-    /// `[MODEL] POSITION` of the car's `driver3d.ini`, added on top of the
-    /// anchor and applied as-is: the conversion changes no frame of reference
-    /// (see `geometry.rs`), so AC's three numbers are already glTF's.
-    pub position: [f32; 3],
     /// Wardrobe folders, searched in order for a file named after one of the
     /// mannequin's own textures. First hit wins.
     pub texture_dirs: Vec<PathBuf>,
@@ -56,7 +52,10 @@ pub struct DriverGraft {
     /// one of the 312 cars of the reference install ships one.
     pub base_pose: Option<PathBuf>,
     /// The car's `animations/steer.ksanim`, which poses the arms (see
-    /// [`pose`]). It places nothing: its root node is the identity.
+    /// [`pose`]). It can carry a placement of its own — 59 of the 271 that
+    /// name the driver's root node give it a non-identity transform — but the
+    /// hierarchy is applied first and the animation simply wins on the nodes
+    /// it names, which is what AC's own layering amounts to.
     pub animation: Option<PathBuf>,
     /// `[STEER_ANIMATION] LOCK` of `driver3d.ini`: the total travel the
     /// animation spans, in degrees. 360 on 271 cars of the reference install,
@@ -109,9 +108,10 @@ const HEAD_BONE: &str = "RIG_Head";
 /// of the skull, `DRIVEREYES` is a pair of eyes, and seating one on the other
 /// buries the driver's head in the roof.
 ///
-/// **Only used when the car ships no `driver_base_pos.knh`**, which none of
-/// the 312 cars of the reference install is guilty of. It stays because a mod
-/// may leave the file out, and because it is what proved the hierarchy right:
+/// **The last resort**: used only when neither the car's hierarchy nor its
+/// animation placed the mannequin. No car of the reference install needs it —
+/// the three that ship an empty hierarchy are placed by their animation — but
+/// a mod may leave both out, and it is also what proved the hierarchy right:
 /// the two agree to within the figures below.
 ///
 /// **Calibrated against the install, not estimated.** On 69 cars drawn at
@@ -139,7 +139,7 @@ const EYES_ABOVE_HEAD_BONE: [f32; 3] = [0.0, 0.10, 0.08];
 ///
 /// **The car gets a fresh root**, rather than the driver being pushed among
 /// the existing root's children. The mannequin's coordinates are expressed in
-/// the car's *object* space — the space `POSITION` offsets from — which is the
+/// car's *object* space — the space its hierarchy places it in — which is the
 /// space the car's own root node transforms *into*, not out of. Grafting under
 /// that root would apply the car's root transform to the driver a second time.
 /// It is the identity on every model met so far, so the difference is
@@ -288,38 +288,55 @@ fn pose(driver: &mut Kn5Model, wanted: &DriverGraft, failures: &mut Vec<String>)
 
 /// Translation that seats this mannequin in this car.
 ///
-/// **Almost always nothing.** The car's own `driver_base_pos.knh` has already
-/// laid the rig out where the driver goes ([`base_pose`]), and it is the
-/// modder's own placement, so there is nothing left to correct — only the
-/// car's `POSITION` fine-tuning to add.
+/// **Nothing at all, normally.** The car's own `driver_base_pos.knh` has
+/// already laid the rig out where the driver goes ([`base_pose`]), in the
+/// car's own space, and it is the modder's own placement — there is nothing
+/// left to add. A steering animation counts too, when there is no usable
+/// hierarchy: on the three cars of the install that ship an empty one, the
+/// animation alone lands the head within the eye offset below, so it is
+/// placing the body just as absolutely.
 ///
-/// The fallback is for a car that ships no hierarchy: the mannequin then sits
-/// at the car's origin, standing on the road through the floor, and its eyes
-/// are brought onto `DRIVEREYES` instead — see [`EYES_ABOVE_HEAD_BONE`], which
-/// is what that costs in accuracy. With neither hierarchy nor eyes there is
-/// nothing left to go on, and it is reported rather than silently drawn.
+/// One rule, and no threshold: **whatever file placed the driver is trusted**.
+/// An earlier version second-guessed the animation against `DRIVEREYES` past
+/// 15 cm, which was a workaround for not having read the hierarchy — with it
+/// read, there is nothing left for a threshold to catch.
+///
+/// **`[MODEL] POSITION` of `driver3d.ini` is deliberately not added**, and
+/// that cost a round of wrong previews. It reads as an offset and is not one:
+/// 288 of the 301 cars that declare it write `0,0,0`, and the thirteen others
+/// write values that visibly break the placement when applied — 50 cm forward
+/// on `j8_eunos_roadster_tuned` (body through the steering wheel), 25 cm
+/// sideways on the Porsche 919, five metres down on `ks_mercedes_c9`, and
+/// `1,1,1` on four `ddm_*` cars, which is not a position at all. All of them
+/// are seated correctly by the game, so the game does not add it either.
+///
+/// The fallback below is for a car that ships no hierarchy: the mannequin then
+/// sits at the car's origin, standing on the road through the floor, and its
+/// eyes are brought onto `DRIVEREYES` instead — see [`EYES_ABOVE_HEAD_BONE`],
+/// which is what that costs in accuracy. With neither hierarchy nor eyes there
+/// is nothing left to go on, and it is reported rather than silently drawn.
 fn seating_offset(driver: &Kn5Model, wanted: &DriverGraft, stats: &mut DriverStats) -> [f32; 3] {
-    if stats.seated.is_some() {
-        return wanted.position;
+    if stats.seated.is_some() || stats.posed.is_some() {
+        return [0.0; 3];
     }
     let Some(anchor) = wanted.anchor else {
         stats.failures.push(format!(
             "{} : the car has neither a driver hierarchy nor DRIVEREYES to seat it by",
             wanted.model.display()
         ));
-        return wanted.position;
+        return [0.0; 3];
     };
     let Some(head) = head_of(driver) else {
         stats.failures.push(format!(
             "{} : no `{HEAD_BONE}` node to seat it by",
             wanted.model.display()
         ));
-        return wanted.position;
+        return [0.0; 3];
     };
     [
-        anchor[0] - head[0] - EYES_ABOVE_HEAD_BONE[0] + wanted.position[0],
-        anchor[1] - head[1] - EYES_ABOVE_HEAD_BONE[1] + wanted.position[1],
-        anchor[2] - head[2] - EYES_ABOVE_HEAD_BONE[2] + wanted.position[2],
+        anchor[0] - head[0] - EYES_ABOVE_HEAD_BONE[0],
+        anchor[1] - head[1] - EYES_ABOVE_HEAD_BONE[1],
+        anchor[2] - head[2] - EYES_ABOVE_HEAD_BONE[2],
     ]
 }
 
@@ -418,11 +435,10 @@ mod tests {
     }
 
     /// A graft with nothing but what a test names.
-    fn wanted(anchor: Option<[f32; 3]>, position: [f32; 3]) -> DriverGraft {
+    fn wanted(anchor: Option<[f32; 3]>) -> DriverGraft {
         DriverGraft {
             model: PathBuf::new(),
             anchor,
-            position,
             texture_dirs: Vec::new(),
             base_pose: None,
             animation: None,
@@ -443,7 +459,7 @@ mod tests {
         let anchor = [0.330737, 1.19075, -0.490002];
         let mut stats = DriverStats::default();
 
-        let offset = seating_offset(&driver, &wanted(Some(anchor), [0.0; 3]), &mut stats);
+        let offset = seating_offset(&driver, &wanted(Some(anchor)), &mut stats);
 
         assert!(
             stats.failures.is_empty(),
@@ -458,38 +474,16 @@ mod tests {
         }
     }
 
-    // Rule: the car's own `POSITION` is added on top of the seating, not
-    // instead of it.
+    // Rule: a car that placed nobody and declares no eyes leaves the mannequin
+    // at the origin, and says so — that driver stands through the floor.
     #[test]
-    fn the_cars_position_offsets_the_seating() {
-        let driver = mannequin_with_head_at(KUNOS_HEAD);
-        let seat = |position| {
-            seating_offset(
-                &driver,
-                &wanted(Some([0.0, 1.0, 0.0]), position),
-                &mut DriverStats::default(),
-            )
-        };
-        let plain = seat([0.0; 3]);
-        let nudged = seat([0.01, 0.02, 0.03]);
-        for axis in 0..3 {
-            assert!(
-                (nudged[axis] - plain[axis] - [0.01, 0.02, 0.03][axis]).abs() < 1e-6,
-                "axis {axis}: POSITION moves the mannequin from where it was seated"
-            );
-        }
-    }
-
-    // Rule: a car that declares no eyes leaves the mannequin unseated, and
-    // says so — a driver at the car's origin stands through the floor.
-    #[test]
-    fn a_car_without_driver_eyes_is_reported() {
+    fn a_car_that_places_nobody_is_reported() {
         let driver = mannequin_with_head_at(KUNOS_HEAD);
         let mut stats = DriverStats::default();
 
-        let offset = seating_offset(&driver, &wanted(None, [0.0, 0.5, 0.0]), &mut stats);
+        let offset = seating_offset(&driver, &wanted(None), &mut stats);
 
-        assert_eq!(offset, [0.0, 0.5, 0.0], "nothing but the car's own offset is applied");
+        assert_eq!(offset, [0.0; 3], "nothing to move it by");
         assert_eq!(stats.failures.len(), 1, "and it is reported rather than silently drawn");
     }
 
@@ -498,32 +492,33 @@ mod tests {
     #[test]
     fn a_seated_mannequin_keeps_the_placement_its_car_gave_it() {
         let driver = mannequin_with_head_at([0.0, 0.93, -0.19]);
-        // An anchor that disagrees by 36 cm: the earlier code would have
-        // dragged the mannequin across the car for it.
+        // An anchor that disagrees by 36 cm: an earlier version dragged the
+        // mannequin across the car for exactly this.
         let mut stats = DriverStats {
             seated: Some(60),
             ..DriverStats::default()
         };
 
-        let offset = seating_offset(&driver, &wanted(Some([-0.36, 0.98, -0.32]), [0.0; 3]), &mut stats);
+        let offset = seating_offset(&driver, &wanted(Some([-0.36, 0.98, -0.32])), &mut stats);
 
         assert_eq!(offset, [0.0; 3], "the hierarchy had already placed it");
         assert!(stats.failures.is_empty(), "and there is nothing to complain about");
     }
 
-    // Rule: `POSITION` still applies on top of a hierarchy placement — it is
-    // the car's own fine-tuning, not an alternative to it.
+    // Rule: an animation placed the driver too, when no hierarchy did — the
+    // three cars shipping an empty one rely on it (§4.6bis).
     #[test]
-    fn the_cars_position_applies_over_the_hierarchy_too() {
-        let driver = mannequin_with_head_at(KUNOS_HEAD);
+    fn a_posed_mannequin_is_left_where_its_animation_put_it() {
+        let driver = mannequin_with_head_at([0.386, 1.107, -0.205]);
         let mut stats = DriverStats {
-            seated: Some(60),
+            posed: Some(56),
             ..DriverStats::default()
         };
 
-        let offset = seating_offset(&driver, &wanted(None, [0.01, 0.02, 0.03]), &mut stats);
+        let offset = seating_offset(&driver, &wanted(Some([0.375, 1.152, -0.084])), &mut stats);
 
-        assert_eq!(offset, [0.01, 0.02, 0.03]);
+        assert_eq!(offset, [0.0; 3], "the animation placed it, to the millimetre");
+        assert!(stats.failures.is_empty());
     }
 
     // Rule: a driver whose KN5 cannot be read is reported, never fatal — the
@@ -536,7 +531,7 @@ mod tests {
             &mut host,
             &DriverGraft {
                 model: PathBuf::from("nowhere-at-all/driver.kn5"),
-                ..wanted(Some([0.0; 3]), [0.0; 3])
+                ..wanted(Some([0.0; 3]))
             },
         );
         assert_eq!(stats.failures.len(), 1, "the unreadable file is reported");
@@ -637,7 +632,6 @@ mod tests {
                 &DriverGraft {
                     model: mannequin,
                     anchor: None,
-                    position: [0.0; 3],
                     texture_dirs: Vec::new(),
                     base_pose: has_base_pose.then_some(base_pose),
                     animation: has_animation.then_some(animation),

@@ -400,8 +400,10 @@ garde entre le haut du casque et le point le plus haut de la voiture passe de
 6,5 cm au-dessus de l'os et la visière 10,7 cm ; et `driver3d.ini` **cache** le
 casque, la visière et le visage en vue cockpit — ce qu'AC n'aurait aucune
 raison de faire si `DRIVEREYES` n'était pas *dans* le casque. Le `POSITION` de
-`driver3d.ini`, lui, est un réglage fin ajouté par-dessus, et vaut `0,0,0` sur
-les 312 voitures de l'install.
+`driver3d.ini`, lui, **n'est pas appliqué** : il ressemble à un réglage fin et
+n'en est pas un — treize voitures de l'install y écrivent de quoi déplacer le
+pilote de 25 cm à cinq mètres, dont `1,1,1` sur quatre d'entre elles. Mesures
+dans `kn5-format.md`.
 
 **Ce qui est implémenté** (`crates/kn5-gltf/src/driver.rs` pour la greffe,
 `src/driver.rs` pour la résolution) : le mannequin est lu, habillé, puis greffé
@@ -452,7 +454,8 @@ créneau qu'occupe la matrice d'un dummy dans le modèle — poser revient donc 
 les échanger, et la hiérarchie fait le reste.
 
 **Ce n'est pas l'animation qui assoit le pilote**, contrairement à ce qu'elle
-laisse croire — son nœud racine vaut l'identité dans tous les fichiers. C'est
+laisse croire — 212 des 271 qui nomment son nœud racine lui laissent
+l'identité. C'est
 un quatrième fichier, `<voiture>/driver_base_pos.knh`, que **les 312 voitures**
 de l'install livrent : le rig entier, placé dans la voiture. Format récursif et
 minuscule, décrit dans `kn5::knh` et dans `docs/kn5-format.md`.
@@ -475,9 +478,12 @@ arrière. Le skinning linéaire est donc implémenté pour de bon dans
 de l'install** : la combinaison suit le rig partout, et les 297 animations se
 posent sans exception (`every_installed_car_seats_its_driver`, test de corpus).
 
-**`DRIVEREYES` reste le filet** : il ne sert plus qu'aux voitures sans `.knh`
-exploitable — trois en livrent un vide dans l'install de référence — et c'est
-là que l'écart œil / os de tête du §4.6 s'applique encore.
+**Une seule règle, sans seuil : le fichier qui a placé le pilote fait foi.**
+La hiérarchie d'abord ; à défaut l'animation, qui place bel et bien sur les
+trois voitures livrant une `.knh` vide — leur tête y tombe à l'écart œil près
+de `DRIVEREYES` ; et `DRIVEREYES` en dernier recours, quand rien n'a placé
+personne. C'est là, et là seulement, que l'écart œil / os de tête du §4.6
+s'applique encore.
 
 **L'angle du volant est un réglage.** L'animation couvre toute la course, donc
 choisir une image revient à choisir un angle — exprimé en degrés et rapporté au

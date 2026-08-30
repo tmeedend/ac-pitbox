@@ -28,6 +28,11 @@
 //!
 //! # What the frames mean
 //!
+//! **It says what the limbs do, not where the body is.** A car places its
+//! driver in `driver_base_pos.knh` (see `crate::knh`): 212 of the 271
+//! animations that name the driver's root node leave it at the identity, and
+//! trusting the other 59 to place anyone misseats about one car in six.
+//!
 //! A `steer.ksanim` holds the driver's whole rig — 60 nodes on the Kunos one —
 //! over 100 frames spanning the car's full steering lock, `[STEER_ANIMATION]
 //! LOCK` of `driver3d.ini` (360° on 271 cars, 180° on 14, and six other values
