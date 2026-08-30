@@ -765,7 +765,13 @@
     cursor: not-allowed;
   }
   .slot-img {
-    height: 96px;
+    /* **Un rapport, pas une hauteur fixe.** C'était `height: 96px`, et
+       élargir la colonne a rogné les photos : à largeur croissante et hauteur
+       figée, `object-fit: cover` agrandit l'image pour couvrir et coupe le
+       haut et le bas — les roues disparaissaient. Le rapport ci-dessous est
+       celui qu'avait la vignette à 222 px (222/96), donc le cadrage d'avant,
+       et il le reste quelle que soit la largeur de la colonne. */
+    aspect-ratio: 2.3;
     display: flex;
     align-items: center;
     justify-content: center;
