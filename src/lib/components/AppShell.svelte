@@ -522,7 +522,12 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: 222px 1fr;
+    /* 222px tant que la bibliothèque gardait son panneau de détail à droite ;
+       celui-ci retiré, la zone principale n'a plus besoin d'autant de largeur
+       et la colonne de session peut respirer — c'est elle qui porte le duo
+       voiture/circuit et ses menus. Sa contrainte reste la **hauteur** : tout
+       ce qu'on y ajoute doit tenir sans allonger la colonne. */
+    grid-template-columns: 252px 1fr;
   }
   .side {
     background: var(--bg);

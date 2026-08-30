@@ -200,10 +200,10 @@ refusera ensuite de reposer quoi que ce soit.
 | `apps` / `others` | `Apps` / `OtherMods` | |
 | `settings` / `about` | `Settings` / `About` | |
 
-Deux présentations coexistent pour une entité et **ne sont pas
-interchangeables** (§6) : `ModDetail.svelte` = panneau latéral,
-`DetailPage.svelte` = page pleine (ouverte par `Library` via son état
-`fullId`). Une évolution de fiche est souvent à faire **dans les deux**.
+**Une seule fiche** : `DetailPage.svelte`, la page pleine, ouverte par
+`Library` au double-clic sur une carte ou une ligne (état `nav.openFull`). Le
+panneau latéral compact qui la doublait à droite de la grille a été retiré —
+il montrait moins, et toute évolution de fiche était à faire deux fois.
 
 Hors aiguillage : `TitleBar`, `ImportOverlay` (les modales d'arbitrage) et
 `ToastStack` (`ImportToasts` + `ControllerToast`) — tous dans `AppShell` —,
@@ -367,10 +367,11 @@ laisser pourrir ici.
       `Slider` (tous les curseurs de l'app),
       `InlineEdit` (nom et description repris à la main — SPEC §5bis.3).
       **Inventaire de ce qui reste**, mesuré le 2026-08-18 :
-      - **Boîte d'erreur : 15 définitions locales** (`.err` / `.error` /
+      - **Boîte d'erreur : 14 définitions locales** (`.err` / `.error` /
         `.action-err` dans Apps, BulkEditPanel, BulkImport, DetailPage,
-        Launch, LayersSection, Maintenance, ModDetail, OtherMods, Profiles,
-        Settings, SetupWizard, Transversal, MusicTab). Mêmes trois couleurs
+        Launch, LayersSection, Maintenance, OtherMods, Profiles,
+        Settings, SetupWizard, Transversal, MusicTab — la quinzième est partie
+        avec le panneau latéral). Mêmes trois couleurs
         partout (`--rosso-dim` / `--rosso-border` / `--rosso-bright`), seuls
         le padding (8/10 vs 10/12), la taille (11,5 vs 12px) et les marges
         diffèrent. Le cas le plus net : une classe globale `.errbox` suffit,
@@ -439,7 +440,7 @@ laisser pourrir ici.
       fois de suite (texture, opacité, exposant spéculaire). Donc : devant un
       défaut visuel, **ne pas s'arrêter au premier champ coupable**, et
       regarder aussi ce qui est dessiné par-dessus.
-      Reste surtout le choix du LOD et l'aperçu dans `ModDetail` — §15.
+      Reste surtout le choix du LOD — §15.
       Le réglage de qualité se réduit au suréchantillonnage : une passe SMAA
       a été essayée, déplacée, puis retirée faute de gain visible pour un
       gigaoctet de mémoire. Il subsiste du crénelage sur les lignes claires

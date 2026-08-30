@@ -302,7 +302,6 @@ Deux onglets frères sur la fiche pleine (`DetailPage`), **Ressources** et **Ajo
 
   Deux signalements de plus, au fichier comme au dossier, parce que le silence y était trompeur. **Zone Content Manager** (bleu, information) : le chemin est dans un dossier qu'un outil externe synchronise (§4.5.3) ; le survol dit que CM peut y remplacer la version du mod par la sienne et que ce n'est pas l'emplacement recommandé. Un bandeau reprend l'avertissement en tête de bloc dès qu'un fichier est concerné. **En attente** (jaune, alerte) : un fichier étranger — ni le nôtre, ni celui d'un autre mod, ni un fichier du jeu qu'on a remplacé — occupe déjà le chemin ; l'exemplaire du mod reste en bibliothèque et sera posé si l'autre disparaît. Ce dernier cas est le plus fréquent en zone Content Manager et il était totalement muet : les configs du dépôt CSP sont remises à jour en continu quand une archive porte la date de son packaging, donc **CM gagne presque toujours l'arbitrage par date**, et rien à l'écran ne disait pourquoi le fichier du mod n'arrivait pas.
 
-Les deux onglets sont **absents du panneau latéral `ModDetail`** (§6) : les listes de fichiers vivent dans la page pleine.
 
 ### 4.6 Décider ou demander, et rendre compte
 
@@ -453,9 +452,9 @@ Les caractéristiques mécaniques ne sont **pas** des tags (un tag filtre/groupe
 
 **Favori** : état personnel (cœur), ni tag ni caractéristique.
 
-**Onglets de premier niveau** en haut de la fiche (`DetailPage.svelte` — la
-page pleine, pas `ModDetail.svelte` qui reste un panneau compact avec son
-propre menu clic-droit) : **Fiche · Screenshots · Replays · Resources ·
+**Onglets de premier niveau** en haut de la fiche (`DetailPage.svelte`, la
+page pleine — désormais la seule fiche : le panneau latéral compact qui la
+doublait dans la liste a été retiré) : **Fiche · Screenshots · Replays · Resources ·
 Ajouts au jeu · Backgrounds** (ce dernier affiché seulement pour un circuit).
 Ressources et Ajouts au jeu vivent dans leur propre onglet plutôt que dans la
 colonne de la fiche (§4.5.5). Les actions secondaires de l'en-tête (Activer/Désactiver, Exporter,

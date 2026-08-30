@@ -1,6 +1,7 @@
-// Actions de clic droit partagées entre la liste (Library.svelte, cartes/lignes)
-// et le panneau compact (ModDetail.svelte) — activer/désactiver, ouvrir dossier,
-// exporter, supprimer. Pas de « réinstaller » ici (nécessite l'archive source
+// Actions de clic droit de la liste (Library.svelte, cartes et lignes) —
+// activer/désactiver, ouvrir dossier, exporter, supprimer. Elles étaient
+// partagées avec le panneau compact, retiré depuis ; le module reste séparé
+// parce que la liste n'a pas à porter cette table d'actions. Pas de « réinstaller » ici (nécessite l'archive source
 // conservée de la version active, seulement connue via la fiche complète) —
 // reste disponible sur la fiche détail.
 //
