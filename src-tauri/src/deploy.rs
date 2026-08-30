@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use walkdir::WalkDir;
 
-use crate::modscan::ModKind;
+use crate::layers::HostKind;
 
 /// Fichier caché posé à la racine de chaque dossier déployé par hardlinks —
 /// le garde-fou de suppression en dépend, ne jamais le supprimer à la main.
@@ -105,10 +105,10 @@ fn overlay_tree(source: &Path, dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn write_marker(dest: &Path, mod_id: &str, kind: ModKind) -> Result<(), String> {
+fn write_marker(dest: &Path, mod_id: &str, kind: HostKind) -> Result<(), String> {
     let marker = Marker {
         mod_id: mod_id.to_string(),
-        kind: format!("{kind:?}"),
+        kind: kind.as_str().to_string(),
         deployed_at: chrono::Local::now().to_rfc3339(),
     };
     let json = serde_json::to_string_pretty(&marker).map_err(|e| e.to_string())?;
@@ -119,7 +119,7 @@ fn write_marker(dest: &Path, mod_id: &str, kind: ModKind) -> Result<(), String> 
 /// Kunos sauvegardé) directement dans `dest` (`content/<type>s/<id>`) par
 /// hardlinks. `dest` ne doit pas exister — l'appelant (`activation.rs`,
 /// `compose.rs`) a déjà retiré tout déploiement précédent (garde-fou compris).
-pub fn deploy_tree(source: &Path, dest: &Path, mod_id: &str, kind: ModKind) -> Result<(), String> {
+pub fn deploy_tree(source: &Path, dest: &Path, mod_id: &str, kind: HostKind) -> Result<(), String> {
     link_tree(source, dest)?;
     write_marker(dest, mod_id, kind)
 }
@@ -128,7 +128,7 @@ pub fn deploy_tree(source: &Path, dest: &Path, mod_id: &str, kind: ModKind) -> R
 /// directement dans `dest`, en hardlinks (§4.3) — composition base + couches
 /// sans dossier de composition intermédiaire : `dest` (`content/<type>s/<id>`)
 /// EST le résultat composé, pas une projection d'une copie ailleurs.
-pub fn compose_tree(base: &Path, layers: &[PathBuf], dest: &Path, mod_id: &str, kind: ModKind) -> Result<(), String> {
+pub fn compose_tree(base: &Path, layers: &[PathBuf], dest: &Path, mod_id: &str, kind: HostKind) -> Result<(), String> {
     link_tree(base, dest)?;
     for layer_dir in layers {
         overlay_tree(layer_dir, dest)?;
@@ -184,7 +184,7 @@ mod tests {
         std::fs::write(source.join("model.kn5"), b"FAKE").unwrap();
         let dest = base.join("dest");
 
-        deploy_tree(&source, &dest, "spa", ModKind::Track).unwrap();
+        deploy_tree(&source, &dest, "spa", HostKind::Track).unwrap();
 
         assert!(dest.join("ui").join("ui_track.json").is_file());
         assert!(dest.join("model.kn5").is_file());
@@ -218,7 +218,7 @@ mod tests {
         std::fs::create_dir_all(&source).unwrap();
         std::fs::write(source.join("f.txt"), "data").unwrap();
         let dest = base.join("dest");
-        deploy_tree(&source, &dest, "car1", ModKind::Car).unwrap();
+        deploy_tree(&source, &dest, "car1", HostKind::Car).unwrap();
 
         remove_deployment(&dest).unwrap();
 
@@ -245,7 +245,7 @@ mod tests {
         std::fs::write(lb.join("only_b.txt"), "new").unwrap();
 
         let dest = base.join("dest");
-        compose_tree(&src, &[la.clone(), lb.clone()], &dest, "spa", ModKind::Track).unwrap();
+        compose_tree(&src, &[la.clone(), lb.clone()], &dest, "spa", HostKind::Track).unwrap();
 
         assert_eq!(
             std::fs::read_to_string(dest.join("conf.txt")).unwrap(),

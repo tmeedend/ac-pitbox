@@ -779,7 +779,7 @@ fn into_layer(
         conn,
         library,
         owner,
-        kind,
+        kind.into(),
         &leaf_name(&row.rel_path),
         dir,
         false,

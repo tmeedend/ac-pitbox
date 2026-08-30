@@ -12,6 +12,7 @@
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
   import ExtrasBlock from "./detail/ExtrasBlock.svelte";
+  import LayersBlock from "./detail/LayersBlock.svelte";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
   import StateBadge from "./StateBadge.svelte";
   import Tabs from "./Tabs.svelte";
@@ -32,6 +33,7 @@
   const tabs = $derived([
     { id: "resources", label: t("detail.tabResources") },
     { id: "extras", label: t("detail.tabExtras") },
+    { id: "layers", label: t("detail.layersTitle") },
   ]);
 
   async function toggle(): Promise<void> {
@@ -117,8 +119,13 @@
   <div class="body">
     {#if tab === "resources"}
       <ResourcesBlock modId={app.id} source="app" onerror={(m) => (error = m)} />
-    {:else}
+    {:else if tab === "extras"}
       <ExtrasBlock modId={app.id} source="app" />
+    {:else}
+      <!-- Le composant des couches d'un mod, repris tel quel : il ne connaît
+           qu'un id et quatre commandes, et une app est un hôte comme un autre
+           (§12bis.4). Recomposer change l'état de l'app — d'où `onchange`. -->
+      <LayersBlock modId={app.id} onchanged={onchange} onerror={(m) => (error = m)} />
     {/if}
   </div>
 </div>

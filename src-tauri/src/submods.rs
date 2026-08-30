@@ -36,7 +36,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::config::AppConfig;
-use crate::modscan::{FoundSub, ModKind, SubKind};
+use crate::modscan::{FoundSub, SubKind};
 use crate::resources::{self, ExtractionMode};
 use crate::{activation, archive, compose, deploy, identity, layers, library, overlay};
 
@@ -371,7 +371,7 @@ fn import_track_pack_extras(
             conn,
             library,
             parent_id,
-            ModKind::Track,
+            crate::layers::HostKind::Track,
             layer_name,
             &staging,
             true,

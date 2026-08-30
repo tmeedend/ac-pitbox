@@ -21,6 +21,7 @@ use crate::activation::{self, is_junction};
 use crate::archive;
 use crate::config::AppConfig;
 use crate::deploy;
+use crate::layers::HostKind;
 use crate::modscan::ModKind;
 use crate::overlay::{self, LayerRow};
 
@@ -52,12 +53,28 @@ fn clear_link(link: &Path) -> Result<(), String> {
     }
 }
 
-/// Rend `content/<type>s/<id>` conforme à l'état courant (version active + couches
+/// Rend le déploiement d'un hôte conforme à l'état courant (base + couches
 /// actives). Best-effort : sans dossier AC/bibliothèque configuré, no-op.
-pub fn recompose(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(), String> {
-    let m = overlay::get_mod(conn, mod_id)
-        .map_err(|e| e.to_string())?
-        .ok_or(crate::errors::MOD_NOT_FOUND)?;
+///
+/// **Un seul point d'entrée pour les trois types d'hôte** (§4.4, §12bis.4) :
+/// l'id est cherché parmi les mods, puis parmi les apps. C'est ce qui fait que
+/// les actions de couche — activer, réordonner, supprimer — n'ont pas eu à
+/// connaître la différence : elles appellent toutes `recompose(parent_id)`, et
+/// une couche d'app y passe exactement comme une couche de circuit.
+pub fn recompose(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
+    match overlay::get_mod(conn, id).map_err(|e| e.to_string())? {
+        Some(m) => recompose_mod(conn, cfg, &m, id),
+        // Les mods d'abord : un id d'app ne collisionne pas avec un id de
+        // contenu (espaces de noms disjoints côté AC), mais l'ordre fixe le
+        // comportement si cela arrivait un jour.
+        None => match overlay::get_app(conn, id).map_err(|e| e.to_string())? {
+            Some(app) => recompose_app(conn, cfg, &app),
+            None => Err(crate::errors::MOD_NOT_FOUND.into()),
+        },
+    }
+}
+
+fn recompose_mod(conn: &Connection, cfg: &AppConfig, m: &overlay::ModRow, mod_id: &str) -> Result<(), String> {
     let kind = kind_of(&m.kind);
     let (Some(library), Some(link)) = (cfg.library_path.as_ref(), activation::content_link(cfg, kind, mod_id)) else {
         return Ok(()); // rien à projeter tant que les chemins ne sont pas configurés
@@ -76,7 +93,7 @@ pub fn recompose(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<(),
     let result = if m.is_stock {
         recompose_stock(&link, library, kind, mod_id, &layers, m.is_unmanaged)
     } else {
-        recompose_managed(conn, cfg, &m, kind, mod_id, &link, &layers)
+        recompose_managed(conn, cfg, m, kind, mod_id, &link, &layers)
     };
     result?;
 
@@ -153,7 +170,7 @@ fn recompose_stock(
         .iter()
         .filter_map(|l| crate::libpath::resolve(Some(library), &l.library_path))
         .collect();
-    deploy::compose_tree(&stock_base, &layer_paths, link, id, kind)
+    deploy::compose_tree(&stock_base, &layer_paths, link, id, kind.into())
 }
 
 /// Mod géré : la base est sa version active en bibliothèque (intacte). On ne
@@ -191,8 +208,53 @@ fn recompose_managed(
             .iter()
             .filter_map(|l| crate::libpath::resolve(cfg.library_path.as_deref(), &l.library_path))
             .collect();
-        deploy::compose_tree(&base, &layer_paths, link, mod_id, kind)
+        deploy::compose_tree(&base, &layer_paths, link, mod_id, kind.into())
     }
+}
+
+/// Une app (§12bis.4) : sa base est son dossier de bibliothèque, sa cible est
+/// `apps/<lang>/<id>`.
+///
+/// **Même règle qu'au §2 pour les mods, et pour la même raison physique** : une
+/// junction ne pointe que vers *une* cible, elle ne sait rien fusionner. Une app
+/// nue reste donc jonctionnée — c'est plus léger, et c'est ce qui existait — et
+/// bascule en composition par hardlinks dès qu'une couche est active.
+///
+/// Le **langage se lit sur la base**, jamais sur le composé : il décide de la
+/// cible (`apps/python/` ou `apps/lua/`), et une couche qui apporterait un
+/// `<id>.lua` à une app Python ferait autrement bouger le dossier de
+/// destination sous nos pieds, junction déjà posée ailleurs.
+fn recompose_app(conn: &Connection, cfg: &AppConfig, app: &overlay::AppRow) -> Result<(), String> {
+    let Some(base) = crate::libpath::resolve(cfg.library_path.as_deref(), &app.library_path) else {
+        return Ok(()); // bibliothèque non configurée : rien à projeter
+    };
+    let Some(link) = crate::apps::app_link(cfg, &app.id, crate::apps::app_lang(&base, &app.id)) else {
+        return Ok(()); // install AC non configurée
+    };
+    // App inactive : rien à projeter. L'état des couches est mémorisé et
+    // s'appliquera à la prochaine activation — même parti que pour un mod.
+    if !crate::apps::is_app_active(cfg, &app.id) {
+        return Ok(());
+    }
+    // Garde-fou (§12bis.4) : ne jamais recouvrir un vrai dossier d'app que nous
+    // n'avons pas posé nous-mêmes.
+    if link.exists() && !is_junction(&link) && !deploy::is_deployed(&link) {
+        return Err(crate::errors::REAL_APP_FOLDER_EXISTS.into());
+    }
+    clear_link(&link)?;
+
+    let layers = overlay::active_layers(conn, &app.id).map_err(|e| e.to_string())?;
+    if layers.is_empty() {
+        if let Some(parent) = link.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        return activation::create_junction(&link, &base);
+    }
+    let layer_paths: Vec<PathBuf> = layers
+        .iter()
+        .filter_map(|l| crate::libpath::resolve(cfg.library_path.as_deref(), &l.library_path))
+        .collect();
+    deploy::compose_tree(&base, &layer_paths, &link, &app.id, HostKind::App)
 }
 
 // --- Actions couche (recomposent après coup) --------------------------------

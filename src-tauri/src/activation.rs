@@ -192,7 +192,7 @@ pub(crate) fn deploy_base(
     if cfg.prefs.deploy_mode == "symlink" {
         create_junction(link, source)
     } else {
-        deploy::deploy_tree(source, link, mod_id, kind)
+        deploy::deploy_tree(source, link, mod_id, kind.into())
     }
 }
 

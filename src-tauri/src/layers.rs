@@ -23,6 +23,53 @@ use crate::modscan::ModKind;
 use crate::resources::{self, ExtractionMode};
 use crate::{importer, overlay};
 
+/// Ce à quoi une couche peut se rattacher (§4.4). C'est exactement ce que porte
+/// `layers.parent_kind`, et ce que le marqueur de déploiement enregistre.
+///
+/// Distinct de [`ModKind`] parce qu'une **app** en reçoit elle aussi : un mod
+/// qui ajoute des fichiers dans le dossier d'une app est très exactement une
+/// couche (§12bis.4). Elle n'a pourtant ni dossier `content/<type>s/`, ni
+/// version, ni fiche technique — ce n'est pas un mod, et l'élargissement de
+/// `ModKind` aurait contaminé tout ce qui s'en sert pour choisir un dossier de
+/// contenu.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostKind {
+    Car,
+    Track,
+    App,
+}
+
+impl HostKind {
+    /// Valeur persistée (`layers.parent_kind`, marqueur de déploiement).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            HostKind::Car => "Car",
+            HostKind::Track => "Track",
+            HostKind::App => "App",
+        }
+    }
+
+    /// Segment de bibliothèque du dossier ressources : `<lib>/resources/<cat>/<id>`.
+    /// Aligné sur ce qu'écrivent déjà `resources_dir` (mods) et `import_apps`
+    /// (apps) — une couche range ses annexes au même endroit que son hôte.
+    pub fn resources_category(self) -> &'static str {
+        match self {
+            HostKind::Car => "cars",
+            HostKind::Track => "tracks",
+            HostKind::App => "apps",
+        }
+    }
+}
+
+impl From<ModKind> for HostKind {
+    fn from(k: ModKind) -> Self {
+        match k {
+            ModKind::Car => HostKind::Car,
+            ModKind::Track => HostKind::Track,
+        }
+    }
+}
+
 /// Range un contenu entrant comme couche/extension rattachée à `parent_id`.
 /// Ne modifie jamais la base. Fichiers annexes (§4.5.2) redirigés vers le
 /// dossier ressources du mod, jamais dans la couche elle-même. Renvoie l'id de
@@ -32,7 +79,7 @@ pub fn store_layer(
     conn: &Connection,
     library: &Path,
     parent_id: &str,
-    kind: ModKind,
+    kind: HostKind,
     name: &str,
     src_dir: &Path,
     copy: bool,
@@ -60,7 +107,7 @@ pub fn store_layer(
         }
     }
     let dest = importer::unique_dir(&library.join("layers").join(parent_id).join(name));
-    let res_dir = resources::resources_dir(library, kind, parent_id);
+    let res_dir = resources::resources_dir_for(library, kind.resources_category(), &[parent_id]);
     let extracted = resources::file_mod(src_dir, &dest, &res_dir, mode, !copy, resources::Source::ModFolder)?;
 
     let now = Local::now().to_rfc3339();
@@ -70,7 +117,7 @@ pub fn store_layer(
         conn,
         &id,
         parent_id,
-        &format!("{kind:?}"),
+        kind.as_str(),
         name,
         &crate::libpath::to_relative(Some(library), &dest),
         Some(archive_name),
@@ -130,7 +177,7 @@ mod tests {
             &conn,
             &library,
             "srp",
-            ModKind::Track,
+            HostKind::Track,
             "extra",
             &src,
             true,
