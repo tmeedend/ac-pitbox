@@ -41,6 +41,14 @@
     "activateFailedTitle": "Échec de l'activation",
     "pickSkin": "Choisir un skin…",
     "noSkinsAvailable": "Aucun skin",
+    "driverTooltip": "Choisir la tenue du pilote",
+    "driverRaceTooltip": "Sur une voiture de course, le pilote porte les couleurs de son écurie : sa tenue vient du skin.",
+    "driverNone": "Aucun compatible",
+    "driverPiece": {
+      "helmet": "Casque du skin",
+      "suit": "Combinaison du skin",
+      "gloves": "Gants du skin"
+    },
     "pickLayout": "Choisir un layout…",
     "noLayoutsAvailable": "Aucun layout",
     "trackSkinsNone": "Aucun skin actif",

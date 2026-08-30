@@ -41,6 +41,14 @@
     "activateFailedTitle": "Activation failed",
     "pickSkin": "Choose a skin…",
     "noSkinsAvailable": "No skin",
+    "driverTooltip": "Choose what the driver wears",
+    "driverRaceTooltip": "On a race car the driver wears the team colours: the outfit comes from the skin.",
+    "driverNone": "None compatible",
+    "driverPiece": {
+      "helmet": "Helmet from the skin",
+      "suit": "Suit from the skin",
+      "gloves": "Gloves from the skin"
+    },
     "pickLayout": "Choose a layout…",
     "noLayoutsAvailable": "No layout",
     "trackSkinsNone": "No active skin",

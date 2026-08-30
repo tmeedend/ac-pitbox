@@ -9,7 +9,8 @@
   // dépendance du front, et elle ne doit peser ni au démarrage de l'app ni sur
   // les écrans qui n'affichent aucun aperçu.
   import { onDestroy, untrack } from "svelte";
-  import { prepareCarPreview, onPreviewProgress, type PreviewStage } from "$lib/preview";
+  import { prepareCarPreview, onPreviewProgress, type DriverView, type PreviewStage } from "$lib/preview";
+  import { driverOverridePayload } from "$lib/driverOverride.svelte";
   import {
     preview3dPrefs,
     preview3dReady,
@@ -50,8 +51,8 @@
 
   /** Les trois choses dont dépend le `.glb` demandé, en une clé comparable.
    * `driver` vaut l'angle du volant, ou `null` quand il n'y a pas de pilote. */
-  function sceneKey(car: string, skin: string | null | undefined, driver: number | null): string {
-    return `${car}|${skin}|${driver ?? ""}`;
+  function sceneKey(car: string, skin: string | null | undefined, driver: DriverView | null): string {
+    return `${car}|${skin}|${driver ? JSON.stringify(driver) : ""}`;
   }
   /** Voiture du modèle en place — la moitié de `loaded` qui décide si un
    * changement de skin peut se faire à chaud (même géométrie) ou non. */
@@ -1147,7 +1148,9 @@
     // changent le `.glb` lui-même — le pilote y est greffé et sa pose y est
     // cuite — donc les bouger doit relancer une conversion. Les autres
     // s'appliquent à la scène en place, plus bas.
-    const driver = preview3dPrefs().driver ? preview3dPrefs().steer : null;
+    const driver = preview3dPrefs().driver
+      ? { steer: preview3dPrefs().steer, ...(driverOverridePayload() ?? {}) }
+      : null;
 
     // Garde-fou : une scène déjà posée sur ce couple voiture/skin n'est pas
     // reconstruite. Recharger coûte le retour à la photo puis une conversion,

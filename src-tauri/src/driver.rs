@@ -116,9 +116,57 @@ pub fn resolve(
     car_id: &str,
     skin_dir: Option<&Path>,
     steer_degrees: f32,
+    chosen: &OutfitOverride,
 ) -> Option<kn5_gltf::DriverGraft> {
-    let outfit = outfit_of(car_dir, car_id, skin_dir)?;
+    let mut outfit = outfit_of(car_dir, car_id, skin_dir)?;
+    chosen.apply(&mut outfit);
     graft_for(ac_root, car_dir, &outfit, steer_degrees)
+}
+
+/// Ce que le frontend demande pour le pilote de l'aperçu : l'angle du volant,
+/// et la tenue qu'il impose éventuellement.
+///
+/// Un seul objet plutôt que trois paramètres : la commande d'aperçu en portait
+/// déjà quatre, et « pas de pilote » se dit alors par l'absence de l'objet
+/// entier plutôt que par une combinaison de `None`.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DriverView {
+    /// Degrés, 0 = volant droit.
+    #[serde(default)]
+    pub steer: f32,
+    #[serde(default, flatten)]
+    pub outfit: OutfitOverride,
+}
+
+/// Ce que l'utilisateur impose par-dessus la tenue déclarée par le skin.
+///
+/// Une pièce à `None` laisse celle du skin. Le **mannequin n'y figure pas** :
+/// il vit dans `driver3d.ini`, donc dans `data.acd`, le conteneur que le
+/// serveur de course vérifie — le changer coûterait l'accès en ligne, alors
+/// que la tenue ne tient qu'au `skin.ini` (§4.6ter).
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OutfitOverride {
+    pub suit: Option<String>,
+    pub gloves: Option<String>,
+    pub helmet: Option<String>,
+}
+
+impl OutfitOverride {
+    fn apply(&self, outfit: &mut DriverOutfit) {
+        // `clone_from` sur ce qui est demandé seulement : une pièce non
+        // choisie garde celle du skin, elle ne devient pas nue.
+        for (chosen, target) in [
+            (&self.suit, &mut outfit.suit),
+            (&self.gloves, &mut outfit.gloves),
+            (&self.helmet, &mut outfit.helmet),
+        ] {
+            if let Some(value) = chosen.as_ref().filter(|v| !v.is_empty()) {
+                *target = Some(value.clone());
+            }
+        }
+    }
 }
 
 /// Reads what the car and its skin declare, without touching the AC install.

@@ -85,7 +85,7 @@
     visibility: visible;
   }
   /* Bord gauche aligné sur le déclencheur plutôt que centré : évite le
-     débordement/rognage contre un bord étroit (ex. barre latérale, 252px).
+     débordement/rognage contre un bord étroit (ex. barre latérale, 328px).
      `max-width` réduit en plus, sinon la bulle grandit vers la droite et se
      fait quand même rogner par le contenu central — quitte à passer sur
      plus de lignes dans un espace aussi étroit. */

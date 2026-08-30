@@ -28,16 +28,25 @@ export type PreviewStage = "geometry" | "textures" | "writing";
  * quand l'utilisateur a changé de voiture avant la fin de la conversion, et
  * l'appelant doit simplement l'ignorer.
  *
- * `driver` vaut `null` pour ne pas afficher de pilote, ou l'angle du volant en
- * degrés pour l'afficher. Il fait partie de l'identité de l'entrée de cache —
+ * `driver` vaut `null` pour ne pas afficher de pilote, sinon l'angle du volant
+ * et la tenue imposée. Il fait partie de l'identité de l'entrée de cache —
  * le pilote est greffé dans le `.glb` et sa pose y est cuite — donc le changer
  * demande une conversion, une seule, après quoi les versions déjà vues se
  * rendent instantanément.
  */
+export interface DriverView {
+  /** Angle du volant en degrés, 0 = volant droit. */
+  steer: number;
+  /** Tenue imposée, `null` par pièce = celle que le skin déclare. */
+  suit?: string | null;
+  gloves?: string | null;
+  helmet?: string | null;
+}
+
 export function prepareCarPreview(
   carId: string,
   skinId?: string | null,
-  driver: number | null = null,
+  driver: DriverView | null = null,
 ): Promise<CarPreview> {
   return invoke<CarPreview>("prepare_car_preview", { carId, skinId: skinId ?? null, driver });
 }

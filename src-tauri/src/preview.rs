@@ -278,7 +278,7 @@ pub fn prepare(
     car_dir: &Path,
     car_id: &str,
     skin_id: Option<&str>,
-    driver: Option<f32>,
+    driver: Option<&crate::driver::DriverView>,
     token: u64,
 ) -> Result<CarPreview, String> {
     let resolved = kn5_gltf::resolve_model(car_dir).ok_or(crate::errors::PREVIEW_MODEL_NOT_FOUND)?;
@@ -298,7 +298,9 @@ pub fn prepare(
     // mannequin dans la même tenue n'en partagent pas l'entrée pour autant —
     // le modèle de la voiture est dans la clé aussi.
     let driver = match (driver, ac_install.as_deref()) {
-        (Some(steer), Some(ac)) => crate::driver::resolve(ac, car_dir, car_id, skin_dir.as_deref(), steer),
+        (Some(view), Some(ac)) => {
+            crate::driver::resolve(ac, car_dir, car_id, skin_dir.as_deref(), view.steer, &view.outfit)
+        }
         _ => None,
     };
     let stem = entry_stem(&cache_key(&resolved.path, skin_id, csp.sources(), driver.as_ref()));
