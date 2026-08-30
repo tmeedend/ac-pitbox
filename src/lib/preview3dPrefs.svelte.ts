@@ -35,6 +35,7 @@ const KEYS = {
   pool: "pitbox.preview3d.pool",
   shadow: "pitbox.preview3d.shadow",
   cacheMb: "pitbox.preview3d.cacheMb",
+  steer: "pitbox.preview3d.steer",
   intro: "pitbox.preview3d.intro",
   quality: "pitbox.preview3d.quality",
   driver: "pitbox.preview3d.driver",
@@ -113,6 +114,14 @@ export const PREVIEW3D_RANGES = {
    * Bornes reprises telles quelles côté Rust, qui borne à son tour — la
    * validation ne dépend pas de l'écran qui envoie la valeur. */
   cacheMb: { min: 512, max: 20480, step: 512, default: 2048 },
+  /** Angle du volant, en degrés, pilote affiché. La voiture porte sa propre
+   * animation de braquage : c'est elle qui pose les bras, et l'angle ne fait
+   * qu'y choisir une image. Bornes larges exprès — une voiture dont la course
+   * est plus courte ramène l'angle à sa butée d'elle-même, plutôt que
+   * d'imposer ici la course la plus faible de la bibliothèque. Pas de plus
+   * fin que 5° : chaque valeur est une conversion, et une image d'animation
+   * vaut déjà 3,6° sur la plupart des voitures. */
+  steer: { min: -180, max: 180, step: 5, default: 0 },
 } as const;
 
 /**
@@ -173,6 +182,7 @@ const values: Preview3dPrefs = $state({
   // convertir en plus de la voiture, et l'aperçu sert d'abord à regarder
   // celle-ci.
   driver: false,
+  steer: PREVIEW3D_RANGES.steer.default,
   zoom: PREVIEW3D_RANGES.zoom.default,
   azimuth: PREVIEW3D_RANGES.azimuth.default,
   elevation: PREVIEW3D_RANGES.elevation.default,

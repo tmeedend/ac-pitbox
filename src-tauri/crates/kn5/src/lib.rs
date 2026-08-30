@@ -20,6 +20,7 @@
 //! no `panic!` and no indexing by a value read from the file.
 
 mod error;
+mod ksanim;
 mod limits;
 mod model;
 mod parse;
@@ -27,6 +28,7 @@ mod reader;
 mod texture;
 
 pub use error::{Kn5Error, Result};
+pub use ksanim::{parse_animation, parse_animation_with_limits, Kn5AnimatedNode, Kn5Animation};
 pub use limits::Limits;
 pub use model::{
     Kn5Bone, Kn5Material, Kn5MaterialProperty, Kn5Mesh, Kn5Model, Kn5Node, Kn5NodeKind, Kn5Sampler, Kn5SkinBinding,

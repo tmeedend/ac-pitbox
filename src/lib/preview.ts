@@ -28,16 +28,18 @@ export type PreviewStage = "geometry" | "textures" | "writing";
  * quand l'utilisateur a changé de voiture avant la fin de la conversion, et
  * l'appelant doit simplement l'ignorer.
  *
- * `withDriver` fait partie de l'identité de l'entrée de cache : le basculer
- * demande une conversion, une seule, après quoi les deux versions de la
- * voiture se rendent l'une l'autre instantanément.
+ * `driver` vaut `null` pour ne pas afficher de pilote, ou l'angle du volant en
+ * degrés pour l'afficher. Il fait partie de l'identité de l'entrée de cache —
+ * le pilote est greffé dans le `.glb` et sa pose y est cuite — donc le changer
+ * demande une conversion, une seule, après quoi les versions déjà vues se
+ * rendent instantanément.
  */
 export function prepareCarPreview(
   carId: string,
   skinId?: string | null,
-  withDriver = false,
+  driver: number | null = null,
 ): Promise<CarPreview> {
-  return invoke<CarPreview>("prepare_car_preview", { carId, skinId: skinId ?? null, withDriver });
+  return invoke<CarPreview>("prepare_car_preview", { carId, skinId: skinId ?? null, driver });
 }
 
 /** Vide le cache d'aperçus, renvoie le nombre d'octets libérés. */

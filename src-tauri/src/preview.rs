@@ -30,7 +30,7 @@ use crate::config::AppConfig;
 /// *reconnaître* pour libérer sa place. Trois incréments en une session de
 /// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
-const CONVERTER_VERSION: u32 = 23;
+const CONVERTER_VERSION: u32 = 24;
 
 /// Default cache ceiling (§5.3). Beyond it, the least recently used entries
 /// are evicted. Only a default: the real ceiling is a setting, carried by
@@ -241,6 +241,15 @@ fn cache_key(model: &Path, skin: Option<&str>, configs: &[PathBuf], driver: Opti
         for component in driver.anchor.unwrap_or_default().into_iter().chain(driver.position) {
             hasher.update(component.to_le_bytes());
         }
+        // La pose fait partie du modèle produit, donc de son identité :
+        // l'animation elle-même — corriger un `steer.ksanim` doit invalider
+        // l'entrée — et l'angle auquel on l'a échantillonnée.
+        if let Some(animation) = &driver.animation {
+            hasher.update(animation.to_string_lossy().to_lowercase().as_bytes());
+            stamp(&mut hasher, animation);
+        }
+        hasher.update(driver.lock_degrees.to_le_bytes());
+        hasher.update(driver.steer_degrees.to_le_bytes());
         for dir in &driver.texture_dirs {
             hasher.update(dir.to_string_lossy().to_lowercase().as_bytes());
         }
@@ -269,7 +278,7 @@ pub fn prepare(
     car_dir: &Path,
     car_id: &str,
     skin_id: Option<&str>,
-    with_driver: bool,
+    driver: Option<f32>,
     token: u64,
 ) -> Result<CarPreview, String> {
     let resolved = kn5_gltf::resolve_model(car_dir).ok_or(crate::errors::PREVIEW_MODEL_NOT_FOUND)?;
@@ -288,8 +297,8 @@ pub fn prepare(
     // en fait partie, pas la case à cocher. Deux voitures qui portent le même
     // mannequin dans la même tenue n'en partagent pas l'entrée pour autant —
     // le modèle de la voiture est dans la clé aussi.
-    let driver = match (with_driver, ac_install.as_deref()) {
-        (true, Some(ac)) => crate::driver::resolve(ac, car_dir, car_id, skin_dir.as_deref()),
+    let driver = match (driver, ac_install.as_deref()) {
+        (Some(steer), Some(ac)) => crate::driver::resolve(ac, car_dir, car_id, skin_dir.as_deref(), steer),
         _ => None,
     };
     let stem = entry_stem(&cache_key(&resolved.path, skin_id, csp.sources(), driver.as_ref()));
@@ -364,10 +373,15 @@ pub fn prepare(
             log::warn!("preview: pilote ignoré — {failure}");
         }
         log::debug!(
-            "preview: pilote {} greffé — {} triangles, {} texture(s) habillée(s)",
+            "preview: pilote {} greffé — {} triangles, {} texture(s) habillée(s), {}{}",
             driver.model.display(),
             stats.triangles,
-            stats.dressed
+            stats.dressed,
+            match stats.posed {
+                Some(nodes) => format!("{nodes} nœud(s) posé(s)"),
+                None => "pose de repos".to_string(),
+            },
+            if stats.reseated { ", rassis par la voiture" } else { "" }
         );
     }
 
@@ -729,11 +743,16 @@ INSERT = part.kn5",
         let model = write_model(&base, "car.kn5", b"first");
         let mannequin = write_model(&base, "driver_80.kn5", b"mannequin");
 
+        let animation = write_model(&base, "steer.ksanim", b"pose");
+
         let graft = kn5_gltf::DriverGraft {
             model: mannequin.clone(),
             anchor: Some([0.33, 1.19, -0.49]),
             position: [0.0; 3],
             texture_dirs: vec![base.join("suit")],
+            animation: Some(animation.clone()),
+            lock_degrees: 360.0,
+            steer_degrees: 0.0,
         };
 
         let without = cache_key(&model, None, &[], None);
@@ -763,12 +782,32 @@ INSERT = part.kn5",
         };
         assert_ne!(with, cache_key(&model, None, &[], Some(&seated)), "et son assise");
 
+        let turned = kn5_gltf::DriverGraft {
+            steer_degrees: 45.0,
+            ..graft.clone()
+        };
+        assert_ne!(
+            with,
+            cache_key(&model, None, &[], Some(&turned)),
+            "et l'angle du volant, qui est cuit dans la pose"
+        );
+
         // Mannequin réécrit : même chemin, contenu différent.
         std::fs::write(&mannequin, b"mannequin, but longer").unwrap();
         assert_ne!(
             with,
             cache_key(&model, None, &[], Some(&graft)),
             "un mannequin modifié invalide son entrée"
+        );
+
+        // Animation réécrite : c'est elle qui pose les mains, la corriger doit
+        // se voir.
+        let with_fresh_mannequin = cache_key(&model, None, &[], Some(&graft));
+        std::fs::write(&animation, b"a different pose entirely").unwrap();
+        assert_ne!(
+            with_fresh_mannequin,
+            cache_key(&model, None, &[], Some(&graft)),
+            "une animation modifiée aussi"
         );
     }
 

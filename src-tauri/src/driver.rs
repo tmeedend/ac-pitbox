@@ -54,6 +54,12 @@ pub struct DriverOutfit {
     pub eyes: Option<[f32; 3]>,
     /// Offset the car applies to the mannequin, `[MODEL] POSITION`.
     pub position: [f32; 3],
+    /// Total steering travel the car's animation spans, `[STEER_ANIMATION]
+    /// LOCK` in degrees. 360 unless the car says otherwise.
+    pub lock: f32,
+    /// File name of the steering animation, `[STEER_ANIMATION] NAME`, sought
+    /// under the car's own `animations/` folder.
+    pub animation: String,
     /// Wardrobe paths as `skin.ini` writes them, relative to their kind's
     /// folder: `plain/red`, `helmet_1985/blue`. `None` when the skin says
     /// nothing, in which case the mannequin keeps its own textures.
@@ -70,6 +76,14 @@ const HELMET_DIR: &str = "driver_helmet";
 /// Section every `driver3d.ini` carries — the known plaintext that says a
 /// `data.acd` key is the right one (see [`acd::read_text`]).
 const MODEL_SECTION: &str = "[MODEL]";
+/// Section naming the steering animation and the travel it spans.
+const STEER_SECTION: &str = "[STEER_ANIMATION]";
+/// What `[STEER_ANIMATION] NAME` reads on all 298 cars that ship one — used
+/// only when the car does not name it.
+const DEFAULT_STEER_ANIMATION: &str = "steer.ksanim";
+/// Travel assumed when the car does not say — what 271 of the 312 cars of the
+/// reference install declare anyway.
+const DEFAULT_LOCK: f32 = 360.0;
 /// Same role for `car.ini`, whose `[GRAPHICS]` section carries `DRIVEREYES`.
 const GRAPHICS_SECTION: &str = "[GRAPHICS]";
 
@@ -78,9 +92,15 @@ const GRAPHICS_SECTION: &str = "[GRAPHICS]";
 /// `None` — never an error — when the car names no driver, when the mannequin
 /// is not installed, or when Assetto Corsa itself is not configured: a preview
 /// without a driver is the normal outcome in all three cases.
-pub fn resolve(ac_root: &Path, car_dir: &Path, car_id: &str, skin_dir: Option<&Path>) -> Option<kn5_gltf::DriverGraft> {
+pub fn resolve(
+    ac_root: &Path,
+    car_dir: &Path,
+    car_id: &str,
+    skin_dir: Option<&Path>,
+    steer_degrees: f32,
+) -> Option<kn5_gltf::DriverGraft> {
     let outfit = outfit_of(car_dir, car_id, skin_dir)?;
-    graft_for(ac_root, &outfit)
+    graft_for(ac_root, car_dir, &outfit, steer_degrees)
 }
 
 /// Reads what the car and its skin declare, without touching the AC install.
@@ -93,6 +113,17 @@ pub fn outfit_of(car_dir: &Path, car_id: &str, skin_dir: Option<&Path>) -> Optio
     let position = ini_value(&ini, MODEL_SECTION, "POSITION")
         .and_then(parse_position)
         .unwrap_or([0.0; 3]);
+    let lock = ini_value(&ini, STEER_SECTION, "LOCK")
+        .and_then(|v| v.parse::<f32>().ok())
+        .filter(|v| *v > 0.0)
+        .unwrap_or(DEFAULT_LOCK);
+    // A bare file name and nothing else: the value comes out of a mod's own
+    // file, and `animations/..\..\something` has no business being opened.
+    let animation = ini_value(&ini, STEER_SECTION, "NAME")
+        .map(str::trim)
+        .filter(|name| !name.is_empty() && !name.contains(['\\', '/', ':']) && *name != "..")
+        .unwrap_or(DEFAULT_STEER_ANIMATION)
+        .to_string();
 
     // The skin's wardrobe is read under the mannequin's name: a `skin.ini`
     // written for `driver_80` says nothing about the `driver` a CSP config may
@@ -113,6 +144,8 @@ pub fn outfit_of(car_dir: &Path, car_id: &str, skin_dir: Option<&Path>) -> Optio
             .and_then(parse_position),
         model,
         position,
+        lock,
+        animation,
     })
 }
 
@@ -123,7 +156,16 @@ pub fn outfit_of(car_dir: &Path, car_id: &str, skin_dir: Option<&Path>) -> Optio
 /// — some mods drop `2016_Helmet_Base_D.dds` straight into the skin folder —
 /// are handled a layer further down, by the texture loader, which already
 /// prefers a skin file over an embedded blob for every texture in the model.
-pub fn graft_for(ac_root: &Path, outfit: &DriverOutfit) -> Option<kn5_gltf::DriverGraft> {
+///
+/// The steering animation comes from the **car**, not the AC root: it is the
+/// one piece of a driver a car keeps to itself, because it was posed for that
+/// car's own steering wheel.
+pub fn graft_for(
+    ac_root: &Path,
+    car_dir: &Path,
+    outfit: &DriverOutfit,
+    steer_degrees: f32,
+) -> Option<kn5_gltf::DriverGraft> {
     let model = ac_root
         .join("content")
         .join("driver")
@@ -146,11 +188,16 @@ pub fn graft_for(ac_root: &Path, outfit: &DriverOutfit) -> Option<kn5_gltf::Driv
         .filter_map(|(kind, wanted)| wardrobe_dir(&textures.join(kind), (*wanted)?))
         .collect();
 
+    let animation = car_dir.join("animations").join(&outfit.animation);
+
     Some(kn5_gltf::DriverGraft {
         model,
         anchor: outfit.eyes,
         position: outfit.position,
         texture_dirs,
+        animation: animation.is_file().then_some(animation),
+        lock_degrees: outfit.lock,
+        steer_degrees,
     })
 }
 

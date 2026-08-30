@@ -6,11 +6,13 @@ use super::prelude::*;
 
 /// Prépare l'aperçu 3D d'une voiture et renvoie l'URL de son `.glb`.
 ///
-/// `with_driver` est poussé par le frontend, où vit le réglage
-/// (`ui_prefs.json`) : le backend ne lit jamais ce fichier, dont le schéma
-/// appartient à l'UI. Il fait partie de l'identité de l'entrée de cache :
-/// basculer le réglage convertit une fois, puis les deux versions de la
-/// voiture coexistent et se rendent l'une l'autre instantanément (§4.6).
+/// `driver` porte le réglage du frontend, où il vit (`ui_prefs.json`) : le
+/// backend ne lit jamais ce fichier, dont le schéma appartient à l'UI. `None`
+/// = pas de pilote ; `Some(angle)` = pilote, volant tourné de cet angle en
+/// degrés. Les deux font partie de l'identité de l'entrée de cache — le
+/// pilote est greffé dans le `.glb` et sa pose y est cuite — donc changer
+/// l'un ou l'autre convertit une fois, après quoi les versions déjà vues se
+/// rendent instantanément (§4.6).
 ///
 /// La conversion est bloquante et gourmande en CPU : elle part sur
 /// `spawn_blocking`, jamais sur le thread principal (§7.3). Le jeton de
@@ -23,7 +25,7 @@ pub async fn prepare_car_preview(
     state: State<'_, crate::preview::PreviewState>,
     car_id: String,
     skin_id: Option<String>,
-    with_driver: bool,
+    driver: Option<f32>,
 ) -> Result<crate::preview::CarPreview, String> {
     let token = state.next_generation();
 
@@ -42,7 +44,7 @@ pub async fn prepare_car_preview(
             &car_dir,
             &car_id,
             skin_id.as_deref(),
-            with_driver,
+            driver,
             token,
         )
     })

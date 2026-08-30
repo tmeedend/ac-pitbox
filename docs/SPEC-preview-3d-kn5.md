@@ -433,6 +433,62 @@ même raison.
 
 ---
 
+### 4.6bis Les mains sur le volant
+
+Le mannequin est modelé bras tendus devant lui : c'est sa pose de liaison, et
+elle ne conduit rien. Ce qui lui met les mains sur le volant est un fichier de
+la voiture, `animations/steer.ksanim`, que **298 des 312 voitures** de
+l'install de référence embarquent.
+
+**Rien n'est calculé.** Le moddeur pose les bras pour son propre volant et
+livre le résultat : pas de cinématique inverse, pas de rayon de jante mesuré,
+donc rien à résoudre de notre côté — et, en contrepartie, des mains dans le
+vide sur un mod dont le volant aurait été redimensionné après coup.
+
+Le format est décrit dans `kn5::ksanim` : deux versions, l'une rangeant chaque
+image en quaternion + translation + échelle (271 voitures), l'autre en matrice
+4×4 (27). Une image est la transformation **locale** d'un nœud, exactement le
+créneau qu'occupe la matrice d'un dummy dans le modèle — poser revient donc à
+les échanger, et la hiérarchie fait le reste.
+
+**L'animation place aussi le pilote**, et c'est la découverte qui a fait
+reculer le mécanisme du §4.6 au rang de filet. Mesuré sur l'install : sur les
+251 voitures dont l'animation nomme un rig complet, **213** placent la tête à
+moins de 6 cm en x de leur propre `DRIVEREYES`, avec un résidu constant de +6 à
++14 cm en hauteur — soit précisément l'écart œil/os de tête calibré par ailleurs
+à 10 cm. Deux méthodes indépendantes qui concordent. L'animation étant l'œuvre
+du moddeur, c'est elle qui fait foi.
+
+Sauf quand elle est manifestement recopiée d'une autre voiture : les **38**
+restantes s'écartent de 35 cm ou plus, jamais entre les deux. Toute une famille
+de mods japonais partage un seul fichier qui assoit le pilote sur l'axe alors
+que leur `car.ini` place le volant à droite. Au-delà de 15 cm — le vide au
+milieu des deux populations — l'assise de l'animation est écartée et le pilote
+est ramené sur le `DRIVEREYES` de la voiture.
+
+**Le skinning devient obligatoire.** La combinaison et les gants sont des
+maillages skinnés ; jusqu'ici ils s'affichaient juste par chance, la pose de
+liaison rendant le skinning équivalent à l'identité. Dès qu'on pose le rig,
+cette équivalence tombe : sans skinning, le casque et le visage — simples
+enfants de l'os de tête — suivraient le rig pendant que le corps resterait en
+arrière. Le skinning linéaire est donc implémenté pour de bon dans
+`geometry.rs`, normales et tangentes comprises. **Vérifié sur les 311 voitures
+de l'install** : la combinaison suit le rig partout, et les 297 animations se
+posent sans exception (`every_installed_car_seats_its_driver`, test de corpus).
+
+**L'angle du volant est un réglage.** L'animation couvre toute la course, donc
+choisir une image revient à choisir un angle — exprimé en degrés et rapporté au
+`LOCK` de la voiture, puisqu'il vaut 360 sur 271 voitures mais 180 sur
+quatorze. L'image du milieu est le volant droit. L'angle **est cuit dans le
+`.glb`** : il entre dans la clé de cache au même titre que le pilote lui-même,
+donc le bouger demande une conversion. C'est un réglage qu'on pose une fois, et
+les valeurs déjà vues se rendent ensuite instantanément ; si cela devenait
+gênant, la sortie propre serait d'exporter le squelette et l'animation dans le
+glTF pour laisser three.js poser le mannequin au rendu — beaucoup plus de
+travail, et sans intérêt tant qu'on ne veut pas d'un volant qui bouge.
+
+---
+
 ---
 
 ## 5. Pipeline de conversion (Rust)

@@ -11,6 +11,7 @@ mod glb;
 mod locate;
 mod material;
 mod paint;
+mod pose;
 mod roughness;
 mod stats;
 #[cfg(test)]
