@@ -256,7 +256,12 @@
 
   /** Les trois menus, dans l'ordre où on s'habille. Une liste vide — un
    * mannequin de mod dont aucun casque du jeu ne porte les bons noms — n'est
-   * pas affichée du tout. */
+   * pas affichée du tout.
+   *
+   * **Chaque liste s'ouvre sur une sortie**, du même libellé que le
+   * placeholder («&nbsp;Casque du skin&nbsp;») : sans elle, une pièce choisie
+   * ne se relâchait plus, et il n'y avait aucun moyen de rendre la main au
+   * skin sans décocher toute la surcharge. */
   const driverPickers = $derived(
     (
       [
@@ -268,7 +273,10 @@
       .filter(([, options]) => options.length > 0)
       .map(([piece, options]) => ({
         piece,
-        options: options.map((o) => ({ id: o.id, name: o.label, image: previewSrc(o.thumbnail) })),
+        options: [
+          { id: "", name: t("session.driverPiece." + piece), image: null },
+          ...options.map((o) => ({ id: o.id, name: o.label, image: previewSrc(o.thumbnail) })),
+        ],
       })),
   );
   const trackInactive = $derived(nav.sessionTrack != null && trackDetail != null && !trackDetail.active);
@@ -452,7 +460,7 @@
                     selectedId={driverPrefs[picker.piece]}
                     placeholder={t("session.driverPiece." + picker.piece)}
                     emptyText={t("session.driverNone")}
-                    onselect={(id) => setDriverPiece(picker.piece, id)}
+                    onselect={(id) => setDriverPiece(picker.piece, id || null)}
                   />
                 {/each}
               {/if}
