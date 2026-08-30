@@ -37,6 +37,7 @@ const KEYS = {
   cacheMb: "pitbox.preview3d.cacheMb",
   intro: "pitbox.preview3d.intro",
   quality: "pitbox.preview3d.quality",
+  driver: "pitbox.preview3d.driver",
 } as const;
 
 /**
@@ -152,6 +153,7 @@ export type Preview3dPrefs = {
   enabled: boolean;
   intro: IntroEffect;
   quality: PreviewQuality;
+  driver: boolean;
 } & Record<NumericKey, number>;
 
 function clamp(key: NumericKey, value: number): number {
@@ -167,6 +169,10 @@ const values: Preview3dPrefs = $state({
   // remarque à peine, là où un départ lancé est un parti pris.
   intro: "ramp",
   quality: "high",
+  // Éteint par défaut : le mannequin est un modèle de quatorze mégaoctets à
+  // convertir en plus de la voiture, et l'aperçu sert d'abord à regarder
+  // celle-ci.
+  driver: false,
   zoom: PREVIEW3D_RANGES.zoom.default,
   azimuth: PREVIEW3D_RANGES.azimuth.default,
   elevation: PREVIEW3D_RANGES.elevation.default,
@@ -212,12 +218,17 @@ function oneOf<T extends string>(raw: string | null, allowed: readonly T[], fall
 }
 
 function ensureLoaded(): Promise<void> {
-  loaded ??= getUiPrefs(Object.values(KEYS)).then((stored) => {
-    if (stored[KEYS.enabled] !== null) values.enabled = stored[KEYS.enabled] === "1";
-    values.intro = oneOf(stored[KEYS.intro], INTRO_EFFECTS, values.intro);
-    values.quality = oneOf(stored[KEYS.quality], PREVIEW_QUALITIES, values.quality);
+  // Le paramètre ne s'appelle pas `stored` : il masquerait la constante du
+  // même nom plus bas, et la remise à niveau de fin de fonction n'irait alors
+  // nulle part — la pastille « non enregistré » s'allumait au démarrage chez
+  // quiconque avait des réglages différents des défauts.
+  loaded ??= getUiPrefs(Object.values(KEYS)).then((read) => {
+    if (read[KEYS.enabled] !== null) values.enabled = read[KEYS.enabled] === "1";
+    values.intro = oneOf(read[KEYS.intro], INTRO_EFFECTS, values.intro);
+    values.quality = oneOf(read[KEYS.quality], PREVIEW_QUALITIES, values.quality);
+    if (read[KEYS.driver] !== null) values.driver = read[KEYS.driver] === "1";
     for (const key of Object.keys(PREVIEW3D_RANGES) as NumericKey[]) {
-      const raw = stored[KEYS[key]];
+      const raw = read[KEYS[key]];
       if (raw !== null) values[key] = clamp(key, Number(raw));
     }
     // `stored` suit `values` : ce qui vient d'être lu **est** ce qui est sur
@@ -299,6 +310,7 @@ export async function savePreview3dPrefs(): Promise<void> {
     [KEYS.enabled]: values.enabled ? "1" : "0",
     [KEYS.intro]: values.intro,
     [KEYS.quality]: values.quality,
+    [KEYS.driver]: values.driver ? "1" : "0",
   };
   for (const key of Object.keys(PREVIEW3D_RANGES) as NumericKey[]) {
     entries[KEYS[key]] = String(values[key]);
@@ -335,6 +347,17 @@ export function setPreview3dIntro(intro: IntroEffect): void {
 
 export function setPreview3dQuality(quality: PreviewQuality): void {
   values.quality = quality;
+}
+
+/** Affiche ou retire le pilote au volant.
+ *
+ * **Le seul réglage de ce module qui touche à la conversion** et non au seul
+ * rendu : le mannequin est greffé dans le `.glb`, donc le basculer demande une
+ * conversion — et l'aperçu ouvert la déclenche de lui-même, en suivant cette
+ * valeur (voir `CarPreview3D`). Les deux versions restent ensuite en cache
+ * côte à côte. */
+export function setPreview3dDriver(driver: boolean): void {
+  values.driver = driver;
 }
 
 /** Remet un groupe à ses valeurs d'origine — et lui seul : chaque bouton

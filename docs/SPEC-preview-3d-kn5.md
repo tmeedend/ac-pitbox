@@ -352,6 +352,87 @@ indéfiniment.
 **8** un `[ReplaceRims]` dans un skin — 19 voitures distinctes au total. Les
 autres traversent la passe sans que rien ne s'applique.
 
+### 4.6 Le pilote
+
+Assetto Corsa range un pilote **en trois endroits**, et aucun n'est la
+voiture :
+
+| | Où | Qui le choisit |
+| --- | --- | --- |
+| **mannequin** (3D) | `<AC>/content/driver/<nom>.kn5` | la voiture, `driver3d.ini` `[MODEL] NAME` |
+| **garde-robe** (textures) | `<AC>/content/texture/driver_{suit,gloves,helmet}/…` | le skin, `skin.ini` |
+| **place assise** | `car.ini` `[GRAPHICS] DRIVEREYES` | la voiture |
+
+C'est ce découpage qui rend un futur *sélecteur* de pilote plus difficile qu'il
+n'y paraît : ce que l'utilisateur voit est un **couple** (mannequin, tenue), et
+une tenue n'est pas portable d'un mannequin à l'autre. Les `.dds` d'un dossier
+de garde-robe portent le nom exact que les matériaux du mannequin réclament
+(`2016_Suit_DIFF.dds`, `HELMET_1985.dds`) : un dossier de casque moderne, qui
+contient `HELMET_2012.dds`, ne change **rien** sur le mannequin des années 80.
+La surcharge se fait par nom de fichier, exactement comme un skin surcharge une
+voiture (§4.3) — d'où sa gratuité, et d'où sa limite.
+
+Le `skin.ini` nomme sa garde-robe **sous le nom du mannequin**, ce qui est la
+façon dont AC évite d'habiller le mauvais corps :
+
+```ini
+[driver_80]                    ; lu seulement si driver3d.ini demande driver_80
+SUIT=\plain\red                ; → content/texture/driver_suit/plain/red/
+GLOVES=\classicpastel\blue_lite
+HELMET=\helmet_1985\blue
+[CREW]                         ; le personnel de stand, hors sujet ici
+```
+
+**Où le pilote s'assoit.** Le mannequin est le même corps assis pour toutes les
+voitures ; ses coordonnées propres ne l'assoient nulle part. La voiture le
+place en une ligne, `DRIVEREYES` — une paire d'yeux dans le repère du modèle —
+et le mannequin y répond par son os de tête `DRIVER:RIG_Head`, qui vaut
+**exactement (0, 1.1994, 0.0305) sur neuf des dix mannequins** de l'install de
+référence, tiers compris (`rss_driver_80`, `gt-m24`, `woman_driver`). Le
+dixième (`new_driver.kn5`) suffit à ce qu'on lise l'os dans le fichier plutôt
+que de coder la constante.
+
+Les yeux ne sont pas l'os : ils sont **10 cm au-dessus et 8 cm devant**, et
+cette valeur est calibrée, pas estimée. Sur 69 voitures tirées au hasard, la
+garde entre le haut du casque et le point le plus haut de la voiture passe de
+« 15 voitures traversées, jusqu'à −7 cm » à « aucune, au pire +3 cm, médiane
++15 cm ». Deux mesures indépendantes la recoupent : le maillage du visage est
+6,5 cm au-dessus de l'os et la visière 10,7 cm ; et `driver3d.ini` **cache** le
+casque, la visière et le visage en vue cockpit — ce qu'AC n'aurait aucune
+raison de faire si `DRIVEREYES` n'était pas *dans* le casque. Le `POSITION` de
+`driver3d.ini`, lui, est un réglage fin ajouté par-dessus, et vaut `0,0,0` sur
+les 312 voitures de l'install.
+
+**Ce qui est implémenté** (`crates/kn5-gltf/src/driver.rs` pour la greffe,
+`src/driver.rs` pour la résolution) : le mannequin est lu, habillé, puis greffé
+dans le modèle de la voiture **après** la passe CSP (§4.5ter), par la même
+mécanique de fusion d'assets — donc avec le même arbitrage sur les collisions
+de nom de texture. La voiture reçoit une racine neuve : les coordonnées du
+mannequin sont dans l'espace *objet* de la voiture, pas sous la transformation
+de sa racine.
+
+**Ce qui ne l'est pas.** L'animation `steer.ksanim` qui pose les mains sur le
+volant : le mannequin est donc figé dans sa pose de repos, bras tendus devant
+lui. Les `HIDE_OBJECT_*` de `driver3d.ini` non plus — ils ne servent qu'à la
+vue cockpit, où la caméra est dans la tête. Ni la substitution de mannequin par
+`ext_config.ini`, qui existe mais n'a pas été rencontrée.
+
+**Réglage et cache.** L'affichage du pilote est une option de l'écran Réglages
+(éteinte par défaut : c'est un modèle de quatorze mégaoctets à convertir en
+plus de la voiture). Elle entre dans la **clé de cache**, et n'y ajoute rien
+quand elle est éteinte — les entrées écrites avant que le pilote n'existe
+restent valides. Basculer l'option convertit une fois ; les deux versions de la
+voiture coexistent ensuite et se rendent l'une l'autre instantanément.
+
+**`data.acd` est déchiffré** pour lire `driver3d.ini` et `car.ini` quand la
+voiture est packagée, ce qui est le cas général — `acd::read_text`, le lecteur
+qui servait déjà au régime moteur. Le §4.5ter dit encore que ce conteneur n'est
+pas déchiffré : ce n'est plus vrai côté application, et la limite qu'il
+documente sur la taille des jantes (`data/tyres.ini`) pourrait tomber pour la
+même raison.
+
+---
+
 ---
 
 ## 5. Pipeline de conversion (Rust)

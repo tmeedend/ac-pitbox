@@ -151,6 +151,8 @@
     "tabPreviewHint": "Aperçu 3D affiché dans la fiche d'une voiture. Les changements s'appliquent tout de suite.",
     "preview3dEnabled": "Afficher l'aperçu 3D dans les fiches",
     "preview3dEnabledHint": "Décoché, les fiches voiture montrent la photo du skin. La bascule de la fiche revient au même.",
+    "preview3dDriver": "Afficher le pilote au volant",
+    "preview3dDriverHint": "Le pilote et sa tenue sont ceux que la voiture et son skin déclarent. La première conversion avec pilote prend quelques secondes de plus.",
     "preview3dSlider": {
       "zoom": "Zoom",
       "zoomHint": "Taille de la voiture dans le cadre. La molette de la souris fait la même chose, le temps d'une visite.",

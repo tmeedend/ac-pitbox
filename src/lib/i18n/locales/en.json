@@ -151,6 +151,8 @@
     "tabPreviewHint": "3D preview shown on a car sheet. Changes apply right away.",
     "preview3dEnabled": "Show the 3D preview on car sheets",
     "preview3dEnabledHint": "Unchecked, car sheets show the skin photo instead. The toggle on the sheet does the same thing.",
+    "preview3dDriver": "Show the driver at the wheel",
+    "preview3dDriverHint": "The driver and the outfit are the ones the car and its skin declare. The first conversion with a driver takes a few seconds longer.",
     "preview3dSlider": {
       "zoom": "Zoom",
       "zoomHint": "How large the car sits in the frame. The mouse wheel does the same, for one visit.",

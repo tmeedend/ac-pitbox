@@ -6,6 +6,12 @@ use super::prelude::*;
 
 /// Prépare l'aperçu 3D d'une voiture et renvoie l'URL de son `.glb`.
 ///
+/// `with_driver` est poussé par le frontend, où vit le réglage
+/// (`ui_prefs.json`) : le backend ne lit jamais ce fichier, dont le schéma
+/// appartient à l'UI. Il fait partie de l'identité de l'entrée de cache :
+/// basculer le réglage convertit une fois, puis les deux versions de la
+/// voiture coexistent et se rendent l'une l'autre instantanément (§4.6).
+///
 /// La conversion est bloquante et gourmande en CPU : elle part sur
 /// `spawn_blocking`, jamais sur le thread principal (§7.3). Le jeton de
 /// génération est pris **avant** de céder la main, pour qu'une sélection
@@ -17,6 +23,7 @@ pub async fn prepare_car_preview(
     state: State<'_, crate::preview::PreviewState>,
     car_id: String,
     skin_id: Option<String>,
+    with_driver: bool,
 ) -> Result<crate::preview::CarPreview, String> {
     let token = state.next_generation();
 
@@ -29,7 +36,15 @@ pub async fn prepare_car_preview(
     let app_for_task = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let state = app_for_task.state::<crate::preview::PreviewState>();
-        crate::preview::prepare(&app_for_task, &state, &car_dir, &car_id, skin_id.as_deref(), token)
+        crate::preview::prepare(
+            &app_for_task,
+            &state,
+            &car_dir,
+            &car_id,
+            skin_id.as_deref(),
+            with_driver,
+            token,
+        )
     })
     .await
     .map_err(|e| format!("tâche d'aperçu interrompue : {e}"))?

@@ -40,6 +40,7 @@
     preview3dPrefs,
     resetPreview3dView,
     revertPreview3dPrefs,
+    setPreview3dDriver,
     setPreview3dEnabled,
     setPreview3dIntro,
     setPreview3dQuality,
@@ -179,6 +180,16 @@
       <span>{t("settings.preview3dEnabled")}</span>
     </label>
     <p class="hint">{t("settings.preview3dEnabledHint")}</p>
+
+    <label class="check">
+      <input
+        type="checkbox"
+        checked={prefs.driver}
+        onchange={(e) => setPreview3dDriver(e.currentTarget.checked)}
+      />
+      <span>{t("settings.preview3dDriver")}</span>
+    </label>
+    <p class="hint">{t("settings.preview3dDriverHint")}</p>
 
     <div class="field">
       <span class="blk-sub">{t("settings.preview3dQuality")}</span>

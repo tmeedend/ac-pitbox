@@ -44,9 +44,14 @@
   /** Tout ce qui doit être libéré : vit hors des runes, ce n'est pas de l'état
    * d'affichage et le rendre réactif ne ferait que déclencher des effets. */
   let scene: ThreeScene | null = null;
-  /** Couple voiture/skin réellement en place, pour ne pas reconstruire une
-   * scène identique. Vide tant que rien n'est chargé. */
+  /** Ce qui est réellement en place — voiture, skin, pilote — pour ne pas
+   * reconstruire une scène identique. Vide tant que rien n'est chargé. */
   let loaded = "";
+
+  /** Les trois choses dont dépend le `.glb` demandé, en une clé comparable. */
+  function sceneKey(car: string, skin: string | null | undefined, withDriver: boolean): string {
+    return `${car}|${skin}|${withDriver ? "driver" : ""}`;
+  }
   /** Voiture du modèle en place — la moitié de `loaded` qui décide si un
    * changement de skin peut se faire à chaud (même géométrie) ou non. */
   let loadedCar = "";
@@ -1129,14 +1134,18 @@
     return texture;
   }
 
-  // Chargement, et rechargement complet à chaque changement de voiture ou de
-  // skin. `untrack` sur tout le reste : un effet Svelte 5 suit **toute** valeur
+  // Chargement, et rechargement complet à chaque changement de voiture, de skin
+  // ou de présence du pilote — les trois décident du `.glb` demandé. `untrack` sur tout le reste : un effet Svelte 5 suit **toute** valeur
   // réactive lue pendant son exécution, pas seulement celles nommées en tête —
   // c'est exactement ce qui avait fait se refermer l'ancien aperçu natif dès
   // qu'il s'ouvrait (voir showroom-3d-preview-research.md, test réel n°5).
   $effect(() => {
     const car = carId;
     const skin = skinId;
+    // Lu à découvert, et volontairement : c'est le seul réglage qui change le
+    // `.glb` lui-même, donc le bouger doit relancer une conversion. Les autres
+    // s'appliquent à la scène en place, plus bas.
+    const withDriver = preview3dPrefs().driver;
 
     // Garde-fou : une scène déjà posée sur ce couple voiture/skin n'est pas
     // reconstruite. Recharger coûte le retour à la photo puis une conversion,
@@ -1144,7 +1153,7 @@
     // un effet parent réévalué relançant tout (voir `untrack` dans
     // `DetailPage`). La cause est corrigée là-bas ; ceci empêche la classe
     // entière de se voir à l'écran.
-    if (untrack(() => loaded) === `${car}|${skin}`) return;
+    if (untrack(() => loaded) === sceneKey(car, skin, withDriver)) return;
 
     // Remplacement **à chaud** : même voiture, seul le skin change, et un
     // modèle tourne déjà à l'écran. Il y reste, et continue de tourner, le
@@ -1180,7 +1189,7 @@
     let cancelled = false;
     (async () => {
       try {
-        const handle = await prepareCarPreview(car, skin);
+        const handle = await prepareCarPreview(car, skin, withDriver);
         // La fiche a pu changer pendant la conversion : ne jamais poser le
         // modèle d'une voiture sur la fiche d'une autre.
         if (cancelled || car !== untrack(() => carId)) return;
@@ -1206,7 +1215,7 @@
         // ce qui évite le trou noir d'une image entre les deux.
         disposeScene(untrack(() => scene));
         scene = built;
-        loaded = `${car}|${skin}`;
+        loaded = sceneKey(car, skin, withDriver);
         loadedCar = car;
         phase = "ready";
         swapping = false;

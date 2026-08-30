@@ -11,6 +11,7 @@ mod compose;
 mod config;
 mod deploy;
 mod detect;
+mod driver;
 mod enginesound;
 mod errors;
 mod export;

@@ -27,9 +27,17 @@ export type PreviewStage = "geometry" | "textures" | "writing";
  * `errors.previewSuperseded` n'est pas une panne : c'est la réponse normale
  * quand l'utilisateur a changé de voiture avant la fin de la conversion, et
  * l'appelant doit simplement l'ignorer.
+ *
+ * `withDriver` fait partie de l'identité de l'entrée de cache : le basculer
+ * demande une conversion, une seule, après quoi les deux versions de la
+ * voiture se rendent l'une l'autre instantanément.
  */
-export function prepareCarPreview(carId: string, skinId?: string | null): Promise<CarPreview> {
-  return invoke<CarPreview>("prepare_car_preview", { carId, skinId: skinId ?? null });
+export function prepareCarPreview(
+  carId: string,
+  skinId?: string | null,
+  withDriver = false,
+): Promise<CarPreview> {
+  return invoke<CarPreview>("prepare_car_preview", { carId, skinId: skinId ?? null, withDriver });
 }
 
 /** Vide le cache d'aperçus, renvoie le nombre d'octets libérés. */

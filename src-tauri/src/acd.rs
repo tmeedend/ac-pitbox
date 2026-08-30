@@ -2,8 +2,9 @@
 //!
 //! Only ever **read**, and only from the user's own install — nothing is
 //! written back and nothing is redistributed, exactly like the KN5 and FSB5
-//! readers elsewhere in this crate. What it buys is two numbers no other file
-//! carries in the clear: the engine's idle speed and its rev limit.
+//! readers elsewhere in this crate. What it buys is what no other file of a
+//! packed car carries in the clear: the engine's idle speed and its rev limit
+//! (`engine.ini`), and the mannequin the car seats (`driver3d.ini`).
 //!
 //! The position on formats is the project's existing one (§2 of
 //! `docs/SPEC-preview-3d-kn5.md`): the offsets, constants and arithmetic of a
@@ -400,39 +401,54 @@ fn ini_number(text: &str, key: &str) -> Option<f32> {
     None
 }
 
+/// Reads one entry of a car's `data.acd` as text, decrypted.
+///
+/// `car_id` is the folder name the container was **packed** under, which is not
+/// always the folder it sits in today — a library entry lives under
+/// `<library>/cars/<car_id>/<version>`, and mod packs rename folders. The
+/// caller therefore says which name to try; the ciphertext route below covers
+/// it being wrong.
+///
+/// `marker` is a string the decrypted text must contain (`[ENGINE_DATA]`,
+/// `[MODEL]`…). It does double duty: it accepts or rejects a candidate key,
+/// and it rejects a file that decrypted into noise. Without it there would be
+/// no way to tell a wrong key from an unexpected file — both produce bytes.
+pub fn read_text(car_dir: &Path, car_id: &str, entry: &str, marker: &str) -> Option<String> {
+    let bytes = std::fs::read(car_dir.join("data.acd")).ok()?;
+
+    let mut all = entries(&bytes);
+    let ciphered = all
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case(entry))
+        .map(|(_, data)| data.clone())?;
+
+    let opened = |key: &[u8]| -> Option<String> {
+        let text = decrypt(&ciphered, key);
+        text.contains(marker).then_some(text)
+    };
+
+    // The folder name first: instant, and right on every car of the reference
+    // install.
+    opened(&key_for(car_id)).or_else(|| {
+        // Renamed since it was packed, then. Work from the ciphertext instead —
+        // and note this route must ignore the folder name entirely, since a
+        // wrong name is the whole reason for being here.
+        all.sort_by_key(|(_, data)| std::cmp::Reverse(data.len()));
+        let works = |key: &[u8]| decrypt(&ciphered, key).contains(marker);
+        all.iter()
+            .take(LONGEST_TRIED)
+            .find_map(|(_, data)| recover_key(data, &works))
+            .and_then(|key| opened(&key))
+    })
+}
+
 /// Idle speed and rev limit for a car, straight from its own physics.
 ///
 /// `None` when the file is absent, unreadable, or refuses every key — each of
 /// which is a reason to fall back on an estimate, never to fail.
 pub fn read_engine_data(car_dir: &Path) -> Option<EngineData> {
     let car_id = car_dir.file_name()?.to_string_lossy().to_string();
-    let bytes = std::fs::read(car_dir.join("data.acd")).ok()?;
-
-    let mut entries = entries(&bytes);
-    let engine_ciphered = entries
-        .iter()
-        .find(|(name, _)| name.eq_ignore_ascii_case("engine.ini"))
-        .map(|(_, data)| data.clone())?;
-
-    let opened = |key: &[u8]| -> Option<String> {
-        let text = decrypt(&engine_ciphered, key);
-        text.contains(ENGINE_SECTION).then_some(text)
-    };
-
-    // The folder name first: instant, and right on every car of the reference
-    // install.
-    let engine = opened(&key_for(&car_id)).or_else(|| {
-        // Renamed since it was packed, then. Work from the ciphertext instead —
-        // and note this route must ignore the folder name entirely, since a
-        // wrong name is the whole reason for being here.
-        entries.sort_by_key(|(_, data)| std::cmp::Reverse(data.len()));
-        let works = |key: &[u8]| decrypt(&engine_ciphered, key).contains(ENGINE_SECTION);
-        entries
-            .iter()
-            .take(LONGEST_TRIED)
-            .find_map(|(_, data)| recover_key(data, &works))
-            .and_then(|key| opened(&key))
-    })?;
+    let engine = read_text(car_dir, &car_id, "engine.ini", ENGINE_SECTION)?;
 
     let found = EngineData {
         idle_rev: ini_number(&engine, "MINIMUM").filter(|v| *v != 0.0),

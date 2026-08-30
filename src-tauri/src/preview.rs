@@ -220,11 +220,31 @@ fn stamp(hasher: &mut Sha256, path: &Path) {
 /// d'un mod invalide l'entrée sans qu'on ait à s'en occuper. Inclut le skin,
 /// puisqu'il surcharge les textures (§4.3). La version du convertisseur, elle,
 /// est portée par le nom du fichier (voir [`CONVERTER_VERSION`]).
-fn cache_key(model: &Path, skin: Option<&str>, configs: &[PathBuf]) -> String {
+fn cache_key(model: &Path, skin: Option<&str>, configs: &[PathBuf], driver: Option<&kn5_gltf::DriverGraft>) -> String {
     let mut hasher = Sha256::new();
     hasher.update(model.to_string_lossy().to_lowercase().as_bytes());
     stamp(&mut hasher, model);
     hasher.update(skin.unwrap_or("").as_bytes());
+    // Le pilote entre dans la clé, et **rien du tout quand il n'y en a pas** :
+    // une voiture montrée sans lui garde la clé qu'elle avait avant que le
+    // pilote n'existe, donc son entrée de cache. Deux entrées coexistent pour
+    // une voiture qu'on regarde des deux façons — c'est le prix de ne pas
+    // convertir un mannequin de quatorze mégaoctets pour qui ne l'affiche
+    // jamais.
+    if let Some(driver) = driver {
+        hasher.update(driver.model.to_string_lossy().to_lowercase().as_bytes());
+        stamp(&mut hasher, &driver.model);
+        // L'ancrage (`DRIVEREYES`) autant que l'offset : une voiture dont on
+        // corrige la position d'assise doit reconvertir, pas resservir un
+        // pilote assis à l'ancienne place.
+        hasher.update([u8::from(driver.anchor.is_some())]);
+        for component in driver.anchor.unwrap_or_default().into_iter().chain(driver.position) {
+            hasher.update(component.to_le_bytes());
+        }
+        for dir in &driver.texture_dirs {
+            hasher.update(dir.to_string_lossy().to_lowercase().as_bytes());
+        }
+    }
     // Les `ext_config.ini` décident des morceaux greffés sur le modèle
     // (`kn5_gltf::apply_ext_config`) : ils font donc partie de l'identité de
     // l'entrée au même titre que le `.kn5`. Sans eux, corriger une ligne de
@@ -249,6 +269,7 @@ pub fn prepare(
     car_dir: &Path,
     car_id: &str,
     skin_id: Option<&str>,
+    with_driver: bool,
     token: u64,
 ) -> Result<CarPreview, String> {
     let resolved = kn5_gltf::resolve_model(car_dir).ok_or(crate::errors::PREVIEW_MODEL_NOT_FOUND)?;
@@ -261,13 +282,17 @@ pub fn prepare(
     // Le skin est résolu avant la clé : c'est lui qui désigne le dossier où
     // vivent le `ext_config.ini` et les KN5 de jante (§4.3).
     let skin_dir = kn5_gltf::resolve_skin(car_dir, skin_id);
-    let csp = kn5_gltf::CspConfig::locate(
-        car_dir,
-        skin_dir.as_deref(),
-        crate::config::load(app).ac_install_path.as_deref(),
-        car_id,
-    );
-    let stem = entry_stem(&cache_key(&resolved.path, skin_id, csp.sources()));
+    let ac_install = crate::config::load(app).ac_install_path;
+    let csp = kn5_gltf::CspConfig::locate(car_dir, skin_dir.as_deref(), ac_install.as_deref(), car_id);
+    // Résolu avant la clé, comme le skin et pour la même raison : c'est lui qui
+    // en fait partie, pas la case à cocher. Deux voitures qui portent le même
+    // mannequin dans la même tenue n'en partagent pas l'entrée pour autant —
+    // le modèle de la voiture est dans la clé aussi.
+    let driver = match (with_driver, ac_install.as_deref()) {
+        (true, Some(ac)) => crate::driver::resolve(ac, car_dir, car_id, skin_dir.as_deref()),
+        _ => None,
+    };
+    let stem = entry_stem(&cache_key(&resolved.path, skin_id, csp.sources(), driver.as_ref()));
     let file = dir.join(format!("{stem}.glb"));
 
     if let Ok(meta) = std::fs::metadata(&file) {
@@ -328,6 +353,22 @@ pub fn prepare(
     let ext = kn5_gltf::apply_ext_config(&mut model, &resolved.path, skin_dir.as_deref(), &csp);
     for failure in &ext.failures {
         log::warn!("preview: remplacement CSP ignoré — {failure}");
+    }
+
+    // Le pilote **après** les greffes CSP : celles-ci visent des nœuds de la
+    // voiture par motif de nom, et un mannequin déjà en place pourrait s'y
+    // faire prendre. Après, il n'est visible que de la conversion.
+    if let Some(driver) = &driver {
+        let stats = kn5_gltf::graft_driver(&mut model, driver);
+        for failure in &stats.failures {
+            log::warn!("preview: pilote ignoré — {failure}");
+        }
+        log::debug!(
+            "preview: pilote {} greffé — {} triangles, {} texture(s) habillée(s)",
+            driver.model.display(),
+            stats.triangles,
+            stats.dressed
+        );
     }
 
     // Le mod déclare lui-même ce que sont ses surfaces — verre, chrome, cuir,
@@ -624,14 +665,22 @@ mod tests {
         let base = crate::testutil::temp_dir("preview-key");
         let model = write_model(&base, "car.kn5", b"first");
 
-        let a = cache_key(&model, None, &[]);
-        assert_eq!(a, cache_key(&model, None, &[]), "clé stable à contenu identique");
-        assert_ne!(a, cache_key(&model, Some("red"), &[]), "le skin fait partie de la clé");
+        let a = cache_key(&model, None, &[], None);
+        assert_eq!(a, cache_key(&model, None, &[], None), "clé stable à contenu identique");
+        assert_ne!(
+            a,
+            cache_key(&model, Some("red"), &[], None),
+            "le skin fait partie de la clé"
+        );
 
         // Réécriture avec une taille différente : la clé doit bouger même si
         // l'horloge du système de fichiers a une granularité grossière.
         std::fs::write(&model, b"second and longer").unwrap();
-        assert_ne!(a, cache_key(&model, None, &[]), "un modèle modifié invalide son entrée");
+        assert_ne!(
+            a,
+            cache_key(&model, None, &[], None),
+            "un modèle modifié invalide son entrée"
+        );
     }
 
     // Règle : un `ext_config.ini` fait partie de la clé, parce qu'il décide
@@ -646,15 +695,15 @@ mod tests {
 
         // Absent, le fichier ne doit pas empêcher de calculer une clé : c'est
         // le cas de l'immense majorité des voitures.
-        let without = cache_key(&model, None, std::slice::from_ref(&config));
+        let without = cache_key(&model, None, std::slice::from_ref(&config), None);
         assert_eq!(
             without,
-            cache_key(&model, None, std::slice::from_ref(&config)),
+            cache_key(&model, None, std::slice::from_ref(&config), None),
             "clé stable quand la config n'existe pas"
         );
 
         write_model(config.parent().unwrap(), "ext_config.ini", b"[MODEL_REPLACEMENT_...]");
-        let with = cache_key(&model, None, std::slice::from_ref(&config));
+        let with = cache_key(&model, None, std::slice::from_ref(&config), None);
         assert_ne!(without, with, "l'apparition d'une config invalide l'entrée");
 
         std::fs::write(
@@ -663,7 +712,64 @@ mod tests {
 INSERT = part.kn5",
         )
         .unwrap();
-        assert_ne!(with, cache_key(&model, None, &[config]), "une config modifiée aussi");
+        assert_ne!(
+            with,
+            cache_key(&model, None, &[config], None),
+            "une config modifiée aussi"
+        );
+    }
+
+    // Règle : le pilote fait partie de la clé — sinon cocher la case
+    // laisserait servir l'aperçu sans pilote déjà en cache (§4.6). Et son
+    // absence n'y ajoute **rien** : les entrées écrites avant qu'il n'existe
+    // restent valides.
+    #[test]
+    fn cache_key_follows_the_driver() {
+        let base = crate::testutil::temp_dir("preview-key-driver");
+        let model = write_model(&base, "car.kn5", b"first");
+        let mannequin = write_model(&base, "driver_80.kn5", b"mannequin");
+
+        let graft = kn5_gltf::DriverGraft {
+            model: mannequin.clone(),
+            anchor: Some([0.33, 1.19, -0.49]),
+            position: [0.0; 3],
+            texture_dirs: vec![base.join("suit")],
+        };
+
+        let without = cache_key(&model, None, &[], None);
+        let with = cache_key(&model, None, &[], Some(&graft));
+        assert_ne!(without, with, "afficher le pilote change l'entrée");
+        assert_eq!(
+            with,
+            cache_key(&model, None, &[], Some(&graft)),
+            "clé stable à pilote identique"
+        );
+
+        let dressed = kn5_gltf::DriverGraft {
+            texture_dirs: vec![base.join("other-suit")],
+            ..graft.clone()
+        };
+        assert_ne!(with, cache_key(&model, None, &[], Some(&dressed)), "la tenue aussi");
+
+        let moved = kn5_gltf::DriverGraft {
+            position: [0.0, 0.02, 0.0],
+            ..graft.clone()
+        };
+        assert_ne!(with, cache_key(&model, None, &[], Some(&moved)), "et sa position");
+
+        let seated = kn5_gltf::DriverGraft {
+            anchor: Some([0.33, 1.10, -0.49]),
+            ..graft.clone()
+        };
+        assert_ne!(with, cache_key(&model, None, &[], Some(&seated)), "et son assise");
+
+        // Mannequin réécrit : même chemin, contenu différent.
+        std::fs::write(&mannequin, b"mannequin, but longer").unwrap();
+        assert_ne!(
+            with,
+            cache_key(&model, None, &[], Some(&graft)),
+            "un mannequin modifié invalide son entrée"
+        );
     }
 
     // Règle : le nom demandé par la webview ne sert jamais à construire un
