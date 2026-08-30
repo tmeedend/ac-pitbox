@@ -451,20 +451,19 @@ image en quaternion + translation + échelle (271 voitures), l'autre en matrice
 créneau qu'occupe la matrice d'un dummy dans le modèle — poser revient donc à
 les échanger, et la hiérarchie fait le reste.
 
-**L'animation place aussi le pilote**, et c'est la découverte qui a fait
-reculer le mécanisme du §4.6 au rang de filet. Mesuré sur l'install : sur les
-251 voitures dont l'animation nomme un rig complet, **213** placent la tête à
-moins de 6 cm en x de leur propre `DRIVEREYES`, avec un résidu constant de +6 à
-+14 cm en hauteur — soit précisément l'écart œil/os de tête calibré par ailleurs
-à 10 cm. Deux méthodes indépendantes qui concordent. L'animation étant l'œuvre
-du moddeur, c'est elle qui fait foi.
+**Ce n'est pas l'animation qui assoit le pilote**, contrairement à ce qu'elle
+laisse croire — son nœud racine vaut l'identité dans tous les fichiers. C'est
+un quatrième fichier, `<voiture>/driver_base_pos.knh`, que **les 312 voitures**
+de l'install livrent : le rig entier, placé dans la voiture. Format récursif et
+minuscule, décrit dans `kn5::knh` et dans `docs/kn5-format.md`.
 
-Sauf quand elle est manifestement recopiée d'une autre voiture : les **38**
-restantes s'écartent de 35 cm ou plus, jamais entre les deux. Toute une famille
-de mods japonais partage un seul fichier qui assoit le pilote sur l'axe alors
-que leur `car.ini` place le volant à droite. Au-delà de 15 cm — le vide au
-milieu des deux populations — l'assise de l'animation est écartée et le pilote
-est ramené sur le `DRIVEREYES` de la voiture.
+Le piège valait d'être documenté : appliquer la seule animation fait tomber la
+tête à moins de 6 cm de `DRIVEREYES` sur 213 des 251 voitures dont elle nomme
+un rig complet — assez pour croire qu'elle suffit. Les 38 autres s'écartent de
+35 cm ou plus, sans rien entre les deux, et c'est ce qu'un utilisateur a vu :
+un pilote mal assis sur une conduite à droite. En lisant le `.knh` comme socle
+et l'animation par-dessus, **les 269 voitures mesurables tombent à moins de
+6 cm**, sans seconde population.
 
 **Le skinning devient obligatoire.** La combinaison et les gants sont des
 maillages skinnés ; jusqu'ici ils s'affichaient juste par chance, la pose de
@@ -475,6 +474,10 @@ arrière. Le skinning linéaire est donc implémenté pour de bon dans
 `geometry.rs`, normales et tangentes comprises. **Vérifié sur les 311 voitures
 de l'install** : la combinaison suit le rig partout, et les 297 animations se
 posent sans exception (`every_installed_car_seats_its_driver`, test de corpus).
+
+**`DRIVEREYES` reste le filet** : il ne sert plus qu'aux voitures sans `.knh`
+exploitable — trois en livrent un vide dans l'install de référence — et c'est
+là que l'écart œil / os de tête du §4.6 s'applique encore.
 
 **L'angle du volant est un réglage.** L'animation couvre toute la course, donc
 choisir une image revient à choisir un angle — exprimé en degrés et rapporté au

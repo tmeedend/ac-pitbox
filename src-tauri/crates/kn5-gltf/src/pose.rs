@@ -1,10 +1,18 @@
 //! Posing a rig from a `.ksanim` frame (spec §4.6bis).
 //!
-//! An animation holds one **local** transform per node per frame — the same
-//! slot a dummy node carries in the model. Posing is therefore nothing but
-//! swapping those matrices in; the hierarchy walk in `geometry` does the rest,
-//! and every rigid mesh hanging off a bone (a helmet under `RIG_Head`) follows
-//! for free.
+//! Two files describe a seated driver, and this module applies both the same
+//! way — by swapping local transforms into the model tree by node name:
+//!
+//! - `driver_base_pos.knh`, the car's own copy of the rig **placed in the
+//!   car** (`kn5::knh`). This is what seats the body;
+//! - `<car>/animations/steer.ksanim`, which says what the limbs are doing
+//!   (`kn5::ksanim`). Its root node is the identity on every file met, so it
+//!   places nothing at all.
+//!
+//! Both hold one **local** transform per node — the same slot a dummy node
+//! carries in the model — so applying either is nothing but swapping matrices
+//! in; the hierarchy walk in `geometry` does the rest, and every rigid mesh
+//! hanging off a bone (a helmet under `RIG_Head`) follows for free.
 //!
 //! What does **not** follow for free is the skinned geometry — the suit and the
 //! gloves are bound to the rig by weights, not by parentage. See
@@ -18,7 +26,7 @@
 //! would mean blending quaternions we deliberately turned into matrices at
 //! parse time.
 
-use kn5::{Kn5Animation, Kn5Model, Kn5Node, Kn5NodeKind};
+use kn5::{Kn5Animation, Kn5Hierarchy, Kn5Model, Kn5Node, Kn5NodeKind};
 
 /// Applies one frame of `animation` to `model`, in place. Returns how many
 /// nodes were actually posed.
@@ -27,25 +35,46 @@ use kn5::{Kn5Animation, Kn5Model, Kn5Node, Kn5NodeKind};
 /// with — which is how the twenty-odd animations that carry no head chain
 /// still pose a body correctly.
 pub(crate) fn apply(model: &mut Kn5Model, animation: &Kn5Animation, frame: usize) -> usize {
+    apply_locals(model, &|name| {
+        let animated = animation.node(name)?;
+        // `min` rather than a bounds check that gives up: a node with fewer
+        // frames than the rest still has a last pose, and holding it beats
+        // leaving that limb in its bind pose while the others move.
+        animated
+            .frames
+            .get(frame.min(animated.frames.len().saturating_sub(1)))
+            .copied()
+    })
+}
+
+/// Applies a base hierarchy — `driver_base_pos.knh`, which is what actually
+/// seats the mannequin in the car (see `kn5::knh`).
+///
+/// Same operation as posing a frame, and deliberately so: both are a set of
+/// local transforms addressed by node name. The hierarchy goes on **first**,
+/// the animation over it, so that a rig node named by both ends up doing what
+/// the animation says while the root the animation never mentions keeps the
+/// placement only the hierarchy knows.
+pub(crate) fn apply_hierarchy(model: &mut Kn5Model, hierarchy: &Kn5Hierarchy) -> usize {
+    apply_locals(model, &|name| hierarchy.local(name))
+}
+
+/// Replaces the local transform of every dummy the lookup answers for.
+fn apply_locals(model: &mut Kn5Model, local: &dyn Fn(&str) -> Option<[f32; 16]>) -> usize {
     let mut posed = 0;
-    pose_node(&mut model.root, animation, frame, &mut posed);
+    pose_node(&mut model.root, local, &mut posed);
     posed
 }
 
-fn pose_node(node: &mut Kn5Node, animation: &Kn5Animation, frame: usize, posed: &mut usize) {
+fn pose_node(node: &mut Kn5Node, local: &dyn Fn(&str) -> Option<[f32; 16]>, posed: &mut usize) {
     if let Kn5NodeKind::Dummy { transform } = &mut node.kind {
-        if let Some(animated) = animation.node(&node.name) {
-            // `min` rather than a bounds check that gives up: a node with
-            // fewer frames than the rest still has a last pose, and holding it
-            // beats leaving that limb in its bind pose while the others move.
-            if let Some(frame) = animated.frames.get(frame.min(animated.frames.len().saturating_sub(1))) {
-                *transform = *frame;
-                *posed += 1;
-            }
+        if let Some(fresh) = local(&node.name) {
+            *transform = fresh;
+            *posed += 1;
         }
     }
     for child in &mut node.children {
-        pose_node(child, animation, frame, posed);
+        pose_node(child, local, posed);
     }
 }
 

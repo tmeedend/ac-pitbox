@@ -20,6 +20,7 @@
 //! no `panic!` and no indexing by a value read from the file.
 
 mod error;
+mod knh;
 mod ksanim;
 mod limits;
 mod model;
@@ -28,6 +29,7 @@ mod reader;
 mod texture;
 
 pub use error::{Kn5Error, Result};
+pub use knh::{parse_hierarchy, parse_hierarchy_with_limits, Kn5Hierarchy};
 pub use ksanim::{parse_animation, parse_animation_with_limits, Kn5AnimatedNode, Kn5Animation};
 pub use limits::Limits;
 pub use model::{

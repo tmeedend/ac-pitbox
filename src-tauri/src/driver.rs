@@ -78,6 +78,10 @@ const HELMET_DIR: &str = "driver_helmet";
 const MODEL_SECTION: &str = "[MODEL]";
 /// Section naming the steering animation and the travel it spans.
 const STEER_SECTION: &str = "[STEER_ANIMATION]";
+/// The driver's rig, laid out in the car's own space, at the root of the car
+/// folder. Not named by any ini — AC looks for it under this name, and all 312
+/// cars of the reference install ship one.
+const BASE_POSE: &str = "driver_base_pos.knh";
 /// What `[STEER_ANIMATION] NAME` reads on all 298 cars that ship one — used
 /// only when the car does not name it.
 const DEFAULT_STEER_ANIMATION: &str = "steer.ksanim";
@@ -157,9 +161,10 @@ pub fn outfit_of(car_dir: &Path, car_id: &str, skin_dir: Option<&Path>) -> Optio
 /// are handled a layer further down, by the texture loader, which already
 /// prefers a skin file over an embedded blob for every texture in the model.
 ///
-/// The steering animation comes from the **car**, not the AC root: it is the
-/// one piece of a driver a car keeps to itself, because it was posed for that
-/// car's own steering wheel.
+/// The steering animation and the rig layout come from the **car**, not the AC
+/// root: they are the two pieces of a driver a car keeps to itself, because
+/// both were authored for that car's own cockpit — where the seat is, and how
+/// the arms reach its steering wheel.
 pub fn graft_for(
     ac_root: &Path,
     car_dir: &Path,
@@ -189,12 +194,14 @@ pub fn graft_for(
         .collect();
 
     let animation = car_dir.join("animations").join(&outfit.animation);
+    let base_pose = car_dir.join(BASE_POSE);
 
     Some(kn5_gltf::DriverGraft {
         model,
         anchor: outfit.eyes,
         position: outfit.position,
         texture_dirs,
+        base_pose: base_pose.is_file().then_some(base_pose),
         animation: animation.is_file().then_some(animation),
         lock_degrees: outfit.lock,
         steer_degrees,

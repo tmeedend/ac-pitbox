@@ -244,9 +244,9 @@ fn cache_key(model: &Path, skin: Option<&str>, configs: &[PathBuf], driver: Opti
         // La pose fait partie du modèle produit, donc de son identité :
         // l'animation elle-même — corriger un `steer.ksanim` doit invalider
         // l'entrée — et l'angle auquel on l'a échantillonnée.
-        if let Some(animation) = &driver.animation {
-            hasher.update(animation.to_string_lossy().to_lowercase().as_bytes());
-            stamp(&mut hasher, animation);
+        for source in [&driver.base_pose, &driver.animation].into_iter().flatten() {
+            hasher.update(source.to_string_lossy().to_lowercase().as_bytes());
+            stamp(&mut hasher, source);
         }
         hasher.update(driver.lock_degrees.to_le_bytes());
         hasher.update(driver.steer_degrees.to_le_bytes());
@@ -377,11 +377,14 @@ pub fn prepare(
             driver.model.display(),
             stats.triangles,
             stats.dressed,
-            match stats.posed {
-                Some(nodes) => format!("{nodes} nœud(s) posé(s)"),
-                None => "pose de repos".to_string(),
+            match stats.seated {
+                Some(nodes) => format!("{nodes} nœud(s) assis"),
+                None => "assis par DRIVEREYES".to_string(),
             },
-            if stats.reseated { ", rassis par la voiture" } else { "" }
+            match stats.posed {
+                Some(nodes) => format!(", {nodes} nœud(s) posé(s)"),
+                None => ", pose de repos".to_string(),
+            }
         );
     }
 
@@ -744,12 +747,14 @@ INSERT = part.kn5",
         let mannequin = write_model(&base, "driver_80.kn5", b"mannequin");
 
         let animation = write_model(&base, "steer.ksanim", b"pose");
+        let base_pose = write_model(&base, "driver_base_pos.knh", b"seat");
 
         let graft = kn5_gltf::DriverGraft {
             model: mannequin.clone(),
             anchor: Some([0.33, 1.19, -0.49]),
             position: [0.0; 3],
             texture_dirs: vec![base.join("suit")],
+            base_pose: Some(base_pose.clone()),
             animation: Some(animation.clone()),
             lock_degrees: 360.0,
             steer_degrees: 0.0,
@@ -804,10 +809,18 @@ INSERT = part.kn5",
         // se voir.
         let with_fresh_mannequin = cache_key(&model, None, &[], Some(&graft));
         std::fs::write(&animation, b"a different pose entirely").unwrap();
+        let with_fresh_animation = cache_key(&model, None, &[], Some(&graft));
         assert_ne!(
-            with_fresh_mannequin,
-            cache_key(&model, None, &[], Some(&graft)),
+            with_fresh_mannequin, with_fresh_animation,
             "une animation modifiée aussi"
+        );
+
+        // Hiérarchie réécrite : c'est elle qui assoit le pilote.
+        std::fs::write(&base_pose, b"a different seat entirely").unwrap();
+        assert_ne!(
+            with_fresh_animation,
+            cache_key(&model, None, &[], Some(&graft)),
+            "et la hiérarchie qui l'assoit"
         );
     }
 
