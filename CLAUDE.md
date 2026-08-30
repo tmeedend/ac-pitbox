@@ -388,6 +388,25 @@ laisser pourrir ici.
       Un lot de ce genre est du **reformatage pur sur une quinzaine de
       fichiers** : le faire dans son propre commit, jamais mélangé à un
       changement fonctionnel (sinon `git blame` devient inexploitable).
+- [ ] **Sélection du pilote** (branche `feature/drivers`). L'affichage est
+      fait : le pilote est greffé dans l'aperçu 3D, habillé par le `skin.ini`,
+      assis par le `driver_base_pos.knh` de la voiture, posé sur le volant par
+      son `steer.ksanim`, avec un réglage d'angle de braquage. Tout est
+      documenté au §4.6 et §4.6bis de `docs/SPEC-preview-3d-kn5.md`, et les
+      formats découverts (`.knh`, `.ksanim`) dans `docs/kn5-format.md`.
+      **Reste la cible** : proposer à l'utilisateur de *choisir* son pilote,
+      d'abord dans l'aperçu puis en session. Le point dur est connu et
+      l'architecture le prépare — un pilote est un **couple** (mannequin,
+      tenue) et non deux listes indépendantes, parce que les `.dds` d'un
+      dossier de garde-robe portent le nom exact que réclament les matériaux
+      d'un mannequin donné : un casque moderne ne change rien sur un mannequin
+      des années 80. `DriverOutfit` (dans `src/driver.rs`) est déjà la forme
+      qu'un sélecteur produira, et `graft_for` la transforme en fichiers.
+      Intéressant surtout pour les voitures de rue ; sur une voiture de course
+      le pilote porte les couleurs de son écurie, donc du skin.
+      Deux mesures à garder en tête : les trois voitures dont la `.knh` est
+      vide retombent sur `DRIVEREYES`, et `[MODEL] POSITION` ne doit **pas**
+      être appliqué (voir `seating_offset`).
 - [ ] **Aperçu 3D natif des voitures** (branche `feature/3dpreview`).
       **L'avancement détaillé, les écarts assumés vis-à-vis de la spec et le
       reste à faire sont dans `docs/SPEC-preview-3d-kn5.md` §13 à §15** — c'est
