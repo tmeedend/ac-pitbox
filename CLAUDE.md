@@ -395,15 +395,26 @@ laisser pourrir ici.
       documenté au §4.6 et §4.6bis de `docs/SPEC-preview-3d-kn5.md`, et les
       formats découverts (`.knh`, `.ksanim`) dans `docs/kn5-format.md`.
       **Reste la cible** : proposer à l'utilisateur de *choisir* son pilote,
-      d'abord dans l'aperçu puis en session. Le point dur est connu et
-      l'architecture le prépare — un pilote est un **couple** (mannequin,
-      tenue) et non deux listes indépendantes, parce que les `.dds` d'un
-      dossier de garde-robe portent le nom exact que réclament les matériaux
-      d'un mannequin donné : un casque moderne ne change rien sur un mannequin
-      des années 80. `DriverOutfit` (dans `src/driver.rs`) est déjà la forme
-      qu'un sélecteur produira, et `graft_for` la transforme en fichiers.
-      Intéressant surtout pour les voitures de rue ; sur une voiture de course
-      le pilote porte les couleurs de son écurie, donc du skin.
+      d'abord dans l'aperçu puis en session. Décidé avec l'utilisateur : ce
+      n'est **pas** un réglage par skin de voiture mais une **surcharge
+      globale**, décochée par défaut, et pensée pour les voitures de rue — sur
+      une voiture de course le pilote porte les couleurs de son écurie, donc
+      du skin. L'emplacement dans l'UI reste à trouver.
+      La mécanique est plus simple qu'elle n'en avait l'air : **trois listes
+      indépendantes** (53 combinaisons, 67 paires de gants, 176 casques), dont
+      seuls les casques sont filtrés par l'époque du mannequin — combinaisons
+      et gants portent les mêmes noms de fichiers sur toute la famille Kunos.
+      Compatibilité décidée par nom de fichier, pas déduite d'autres voitures ;
+      vignettes déjà présentes (173 casques sur 176). `DriverOutfit` (dans
+      `src/driver.rs`) est la forme qu'un sélecteur produira, `graft_for` la
+      transforme en fichiers.
+      **Ce qui n'est pas tranché** : ce qu'AC met dans son checksum en ligne.
+      Le mannequin est hors de portée sans risque (les 312 voitures ont leur
+      `driver3d.ini` dans `data.acd`, conteneur de physique) ; la tenue ne
+      demande qu'un `skin.ini`, fichier de skin — probablement sûr, non
+      prouvé. Et Pit Box déployant en hardlink, écrire ce `skin.ini` toucherait
+      la copie de bibliothèque : il faudra casser le lien et passer par
+      `gamebackup.rs`.
       Deux mesures à garder en tête : les trois voitures dont la `.knh` est
       vide retombent sur `DRIVEREYES`, et `[MODEL] POSITION` ne doit **pas**
       être appliqué (voir `seating_offset`).

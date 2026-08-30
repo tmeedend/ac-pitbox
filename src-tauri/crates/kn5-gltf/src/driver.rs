@@ -9,16 +9,18 @@
 //!   picked by the *skin*'s `skin.ini` — a suit, a pair of gloves, a helmet.
 //!
 //! Which is why a driver cannot be listed as one thing: what the user sees is
-//! a pair (mannequin, outfit), and the two are chosen by two different files.
-//! This module only performs the graft; deciding *which* pair belongs to a car
-//! is AC domain knowledge and lives in the application's own `driver.rs`.
+//! a mannequin plus an outfit, and the two are chosen by two different files.
+//! This module only performs the graft; deciding *what* a car wears is AC
+//! domain knowledge and lives in the application's own `driver.rs`.
 //!
 //! The wardrobe overrides work **by file name**: a folder holding
 //! `2016_Suit_DIFF.dds` replaces the mannequin's embedded texture of that
 //! name, exactly as a car skin overrides a car's. A folder whose files match
-//! nothing — a modern helmet handed to a seventies mannequin, whose material
-//! asks for `HELMET_1985.dds` — therefore changes nothing at all, which is the
-//! honest outcome: we do not know how to translate one wardrobe into another.
+//! nothing — a modern helmet handed to a seventies mannequin, which asks for
+//! `HELMET_1985.dds` and not `HELMET_2012.dds` — therefore changes nothing at
+//! all. Suits and gloves, on the other hand, carry the same file names on
+//! every Kunos mannequin and are interchangeable; only the helmet is tied to
+//! one.
 
 use std::path::PathBuf;
 

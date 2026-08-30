@@ -363,14 +363,25 @@ voiture :
 | **garde-robe** (textures) | `<AC>/content/texture/driver_{suit,gloves,helmet}/…` | le skin, `skin.ini` |
 | **place assise** | `car.ini` `[GRAPHICS] DRIVEREYES` | la voiture |
 
-C'est ce découpage qui rend un futur *sélecteur* de pilote plus difficile qu'il
-n'y paraît : ce que l'utilisateur voit est un **couple** (mannequin, tenue), et
-une tenue n'est pas portable d'un mannequin à l'autre. Les `.dds` d'un dossier
-de garde-robe portent le nom exact que les matériaux du mannequin réclament
-(`2016_Suit_DIFF.dds`, `HELMET_1985.dds`) : un dossier de casque moderne, qui
-contient `HELMET_2012.dds`, ne change **rien** sur le mannequin des années 80.
 La surcharge se fait par nom de fichier, exactement comme un skin surcharge une
-voiture (§4.3) — d'où sa gratuité, et d'où sa limite.
+voiture (§4.3) — d'où sa gratuité, et d'où sa limite : les `.dds` d'un dossier
+de garde-robe portent le nom exact que les matériaux du mannequin réclament, et
+un dossier dont aucun fichier ne correspond ne change **rien**.
+
+**Seul le casque est lié au mannequin**, et il a fallu balayer le parc pour le
+voir. Les cinq mannequins Kunos réclament tous `2016_Suit_DIFF.dds` et
+`2016_Gloves_DIFF.dds` : les **53** dossiers de combinaison et les **67** de
+gants marchent donc sur n'importe lequel. Le casque, lui, est daté —
+`driver`/`driver_no_HANS` veulent `HELMET_2012`, `driver_80` `HELMET_1985`,
+`driver_70` `HELMET_1975`, `driver_60` `HELMET_1969` — et les **176** dossiers
+de casque se répartissent en 100 / 11 / 44 / 21 selon l'époque.
+
+Ce qu'un futur *sélecteur* de pilote doit donc offrir : **trois listes
+indépendantes**, dont seule celle des casques est filtrée par le mannequin de
+la voiture. La compatibilité se décide par nom de fichier, elle ne se déduit
+pas de ce que d'autres voitures déclarent. Les vignettes existent déjà à côté
+des `.dds` (173 des 176 casques en ont une), donc la sélection peut être
+visuelle sans rien produire.
 
 Le `skin.ini` nomme sa garde-robe **sous le nom du mannequin**, ce qui est la
 façon dont AC évite d'habiller le mauvais corps :

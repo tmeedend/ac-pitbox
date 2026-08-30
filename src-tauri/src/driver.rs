@@ -18,11 +18,17 @@
 //! ```
 //!
 //! …and the folder it points at holds `.dds` files named exactly as the
-//! mannequin's materials ask for them (`2016_Suit_DIFF.dds`,
-//! `HELMET_1985.dds`). That is why a wardrobe is not portable between
-//! mannequins: a modern helmet folder holds `HELMET_2012.dds`, which the
-//! seventies mannequin never asks for. Any future driver picker has to offer
-//! **pairs**, never a model and an outfit chosen independently.
+//! mannequin's materials ask for them. **Only the helmet is tied to the
+//! mannequin**, and it took a corpus scan to see it: the five Kunos mannequins
+//! all ask for `2016_Suit_DIFF.dds` and `2016_Gloves_DIFF.dds`, so every suit
+//! folder (53 of them) and every glove folder (67) works on any of them. The
+//! helmet does not — `driver`/`driver_no_HANS` ask for `HELMET_2012`,
+//! `driver_80` for `HELMET_1985`, `driver_70` for `HELMET_1975`, `driver_60`
+//! for `HELMET_1969` — and a folder of the wrong era simply changes nothing.
+//!
+//! A driver picker therefore offers **three independent lists**, of which only
+//! the helmet is filtered by the car's mannequin. Compatibility is decided by
+//! file name, not inferred from what other cars happen to declare.
 //!
 //! **Where the driver sits** is a fourth file: `<car>/driver_base_pos.knh`,
 //! the whole rig laid out in the car's own space. `car.ini`'s `[GRAPHICS]
