@@ -1049,6 +1049,8 @@
     "optionalInstalled": "installed",
     "optionalSkipped": "skipped",
     "appsImported": "+ {count} app(s) imported",
+    "appLayerAdded": "{count} file(s) from “{name}” added inside the {app} app",
+    "appLayerReplacesMain": "⚠ replaces the app's main script",
     "othersImported": "+ {count} other mod(s) imported",
     "resourcesExtracted": "+ {count} ancillary file(s) extracted to resources",
     "extrasAttached": "{count} game addition(s)",

@@ -239,6 +239,17 @@ export interface SubImported {
   awaiting_decision?: boolean;
 }
 
+/** Une couche rangée sur une app pendant cet import (§12bis.4). */
+export interface AppLayerImported {
+  app_id: string;
+  name: string;
+  files: number;
+  /** L'app est-elle en bibliothèque ? Faux = la couche attend (§4.3bis). */
+  host_known: boolean;
+  /** Remplace le script principal de l'app : autorisé, mais signalé. */
+  replaces_main_script: boolean;
+}
+
 /** App Python importée (§12bis.4). */
 export interface AppImported {
   name: string;
@@ -264,6 +275,9 @@ export interface ArchiveResult {
   subs: SubImported[];
   apps: AppImported[];
   others: OtherImported[];
+  /** Couches posées sur une app (§12bis.4) : ce qui va DANS une app, à part
+   * des ajouts au jeu, qui vont à côté. */
+  app_layers?: AppLayerImported[];
   /** Fichiers livrés à côté du mod et rattachés à lui (§4.5.3). */
   extras?: number;
   /** Dossiers que l'auteur propose et dont le sort revient à l'utilisateur

@@ -131,6 +131,29 @@ pub struct ArchiveResult {
     /// de lot puisse annoncer qu'il y a une question à trancher.
     #[serde(default)]
     pub pending: usize,
+    /// Couches posées sur une app (§12bis.4). À part des ajouts au jeu : ce
+    /// n'est pas la même chose, et les compter avec eux faisait annoncer au
+    /// rapport « N fichiers ajoutés au jeu » pour des fichiers qui vont en
+    /// réalité **dans** une app.
+    #[serde(default)]
+    pub app_layers: Vec<AppLayerImported>,
+}
+
+/// Une couche rangée sur une app pendant cet import (§12bis.4).
+#[derive(Debug, Clone, Serialize)]
+pub struct AppLayerImported {
+    /// App visée — présente en bibliothèque ou non.
+    pub app_id: String,
+    /// Nom de la couche : le mod qui la livre, sinon l'archive.
+    pub name: String,
+    pub files: usize,
+    /// L'app n'est pas (encore) en bibliothèque : la couche attend (§4.3bis).
+    pub host_known: bool,
+    /// La couche remplace le **script principal** de l'app (`<id>.py` /
+    /// `<id>.lua`). Autorisé, mais signalé : ça change ce que l'app *est*.
+    /// Rien à sauvegarder pour autant, contrairement à un fichier du jeu de
+    /// base — la base reste intacte dessous et retirer la couche la restitue.
+    pub replaces_main_script: bool,
 }
 
 /// Marge appliquée à la taille d'un lot pour le contrôle d'espace disque
@@ -426,6 +449,7 @@ fn failed_result(label: &str, error: String) -> ArchiveResult {
         others: Vec::new(),
         extras: 0,
         pending: 0,
+        app_layers: Vec::new(),
     }
 }
 
@@ -1321,7 +1345,22 @@ fn flush_app_layers(
             res_mode,
         ) {
             Ok(_) => {
-                result.extras += placed;
+                // Remplacer le script principal d'une app change ce qu'elle
+                // *est* : autorisé, mais jamais en silence (§12bis.4). Lu sur
+                // le staging, avant qu'il ne soit consommé.
+                let replaces_main_script = ["py", "lua"]
+                    .iter()
+                    .any(|ext| staged.join(format!("{app_id}.{ext}")).is_file());
+                if replaces_main_script {
+                    log::warn!("app layer {name}: replaces the main script of {app_id}");
+                }
+                result.app_layers.push(AppLayerImported {
+                    app_id: app_id.clone(),
+                    name: name.clone(),
+                    files: placed,
+                    host_known: base.is_some(),
+                    replaces_main_script,
+                });
                 if let Err(e) = crate::compose::recompose(conn, cfg, &app_id) {
                     // App absente : c'est le cas normal d'une couche en attente
                     // (§4.3bis), pas une anomalie — elle sera reprise le jour
@@ -1680,6 +1719,7 @@ fn file_extracted(
         others: Vec::new(),
         extras: 0,
         pending: 0,
+        app_layers: Vec::new(),
     };
 
     let Some(library) = &cfg.library_path else {
@@ -1876,6 +1916,7 @@ fn import_one_folder(
         others: Vec::new(),
         extras: 0,
         pending: 0,
+        app_layers: Vec::new(),
     };
 
     let Some(library) = &cfg.library_path else {
@@ -2299,6 +2340,7 @@ fn exec_one(
         others: Vec::new(),
         extras: 0,
         pending: 0,
+        app_layers: Vec::new(),
     };
 
     let Some(library) = &cfg.library_path else {
@@ -5636,6 +5678,21 @@ mod tests {
 
         let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert_eq!(r.mods.len(), 1, "le circuit s'importe normalement");
+
+        // Le rapport la nomme pour ce qu'elle est : une couche d'app, pas des
+        // « ajouts au jeu » — ces fichiers vont DANS l'app, pas à côté.
+        assert_eq!(r.app_layers.len(), 1, "une ligne de rapport pour la couche d'app");
+        assert_eq!(r.app_layers[0].app_id, "CamTool_2");
+        assert_eq!(r.app_layers[0].files, 2, "les deux fichiers de caméras");
+        assert!(
+            !r.app_layers[0].host_known,
+            "l'app n'est pas en bibliothèque : la couche attend"
+        );
+        assert!(
+            !r.app_layers[0].replaces_main_script,
+            "elle n'apporte que des données, pas le script de l'app"
+        );
+        assert_eq!(r.extras, 0, "et rien n'est compté en ajouts au jeu");
 
         let layers = crate::overlay::list_layers(&conn, "CamTool_2").unwrap();
         assert_eq!(layers.len(), 1, "une seule couche pour les deux fichiers");

@@ -214,6 +214,20 @@
       {/if}
     </div>
   {/each}
+  {#each a.app_layers ?? [] as l}
+    <!-- Une couche d'app n'est pas un ajout au jeu : ces fichiers vont DANS
+         l'app, pas à côté d'elle. D'où sa propre ligne (§12bis.4). -->
+    <div class="r-line shared">
+      {t("importOverlay.appLayerAdded", { name: l.name, app: l.app_id, count: l.files })}
+      {#if !l.host_known}
+        <span class="r-conflict">{t("importOverlay.subHostMissingNote")}</span>
+      {/if}
+      {#if l.replaces_main_script}
+        <span class="r-warn">{t("importOverlay.appLayerReplacesMain")}</span>
+      {/if}
+    </div>
+  {/each}
+
   {#if (a.apps ?? []).length}
     <div class="r-line shared">
       <button class="r-open" type="button" onclick={() => openSection("apps")}>
@@ -374,6 +388,14 @@
   }
   .r-conflict {
     color: var(--yellow);
+    margin-left: 6px;
+    font-size: 11px;
+  }
+  /* Orange et non jaune : ce n'est pas « on n'a rien fait », c'est « on l'a
+     fait, et tu dois le savoir » — une couche qui remplace le script principal
+     d'une app change ce que l'app est (§12bis.4). */
+  .r-warn {
+    color: var(--orange);
     margin-left: 6px;
     font-size: 11px;
   }
