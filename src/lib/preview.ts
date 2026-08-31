@@ -37,6 +37,10 @@ export type PreviewStage = "geometry" | "textures" | "writing";
 export interface DriverView {
   /** Angle du volant en degrés, 0 = volant droit. */
   steer: number;
+  /** Corps substitué à celui de la voiture, `null` = le sien. Le substituer
+   * fait tomber la garde-robe de la livrée avec lui, côté backend : elle est
+   * nommée d'après l'ancien corps (SPEC-ecran-pilote §10.1). */
+  model?: string | null;
   /** Tenue imposée, `null` par pièce = celle que le skin déclare. */
   suit?: string | null;
   gloves?: string | null;
