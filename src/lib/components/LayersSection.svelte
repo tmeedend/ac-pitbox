@@ -10,6 +10,9 @@
     setLayerActive,
     reorderLayer,
     deleteLayer,
+    listLayerFiles,
+    openLayerFolder,
+    type LayerFile,
     type LayerRow,
     type ModCard,
     type ModKind,
@@ -84,6 +87,34 @@
   const toggle = (l: LayerRow) => run(() => setLayerActive(l.id, !l.is_active));
   const move = (l: LayerRow, dir: "up" | "down") => run(() => reorderLayer(l.id, dir));
 
+  // Ce que la couche apporte, et son dossier — mêmes deux besoins que sur la
+  // fiche détail, et pour la même raison : deux décomptes ne disent pas *quoi*.
+  let openId = $state<string | null>(null);
+  let files = $state<LayerFile[]>([]);
+  let filesFor = $state<string | null>(null);
+
+  async function toggleFiles(l: LayerRow) {
+    if (openId === l.id) {
+      openId = null;
+      return;
+    }
+    openId = l.id;
+    if (filesFor !== l.id) {
+      files = [];
+      const got = await listLayerFiles(l.id).catch(() => [] as LayerFile[]);
+      if (openId === l.id) {
+        files = got;
+        filesFor = l.id;
+      }
+    }
+  }
+
+  function size(bytes: number): string {
+    if (bytes < 1024) return `${bytes} o`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  }
+
   async function remove(l: LayerRow) {
     const ok = await confirm(t("detail.layerDeleteConfirm", { name: l.source_archive ?? l.name }), {
       title: t("detail.layerDeleteTitle"),
@@ -129,16 +160,36 @@
                 <label class="tog" title={l.is_active ? t("detail.layerActiveOn") : t("detail.layerActiveOff")}>
                   <input type="checkbox" checked={l.is_active} disabled={busy} onchange={() => toggle(l)} />
                 </label>
-                <div class="main">
+                <button class="main" type="button" aria-expanded={openId === l.id} onclick={() => toggleFiles(l)}>
                   <span class="nm">{l.source_archive ?? l.name}</span>
                   <span class="counts mono">{t("detail.layerCounts", { added: l.added_count, overwritten: l.overwritten_count })}</span>
-                </div>
+                </button>
+                <button class="icon" type="button" title={t("detail.layerOpenFolder")} onclick={() => openLayerFolder(l.id)}>🗀</button>
                 <div class="ord">
                   <button class="arrow" type="button" title={t("detail.layerUp")} disabled={busy || i === 0} onclick={() => move(l, "up")}>▲</button>
                   <button class="arrow" type="button" title={t("detail.layerDown")} disabled={busy || i === g.items.length - 1} onclick={() => move(l, "down")}>▼</button>
                 </div>
                 <button class="x" type="button" title={t("detail.layerDeleteTitle")} disabled={busy} onclick={() => remove(l)}>✕</button>
               </li>
+              {#if openId === l.id}
+                <li class="files">
+                  {#if filesFor !== l.id}
+                    <span class="fl-empty">{t("common.loading")}</span>
+                  {:else if !files.length}
+                    <span class="fl-empty">{t("detail.layerNoFiles")}</span>
+                  {:else}
+                    <ul class="fl">
+                      {#each files as f (f.rel_path)}
+                        <li class="fl-row" class:over={f.overwrites}>
+                          <span class="fl-p mono">{f.rel_path}</span>
+                          {#if f.overwrites}<span class="fl-tag">{t("detail.layerFileOverwrites")}</span>{/if}
+                          <span class="fl-s mono">{size(f.size_bytes)}</span>
+                        </li>
+                      {/each}
+                    </ul>
+                  {/if}
+                </li>
+              {/if}
             {/each}
           </ul>
         </div>
@@ -235,12 +286,82 @@
     align-items: center;
     cursor: pointer;
   }
+  /* Devenu un bouton (déplie les fichiers) : habillage de bouton retiré, il
+     doit rester la ligne de texte qu'il était. */
   .main {
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
     gap: 2px;
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .main:hover .nm {
+    color: var(--txt);
+  }
+  .icon {
+    flex: none;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 4px;
+  }
+  .icon:hover {
+    color: var(--blue);
+  }
+  .files {
+    list-style: none;
+    margin: 0 0 4px;
+    padding: 6px 8px 8px 30px;
+    border: 1px solid var(--line);
+    border-top: none;
+  }
+  .fl {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .fl-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 10px;
+  }
+  .fl-p {
+    flex: 1;
+    min-width: 0;
+    color: var(--txt2);
+    overflow-wrap: anywhere;
+  }
+  .fl-row.over .fl-p,
+  .fl-tag {
+    color: var(--orange);
+  }
+  .fl-tag {
+    flex: none;
+    font-size: 9px;
+  }
+  .fl-s {
+    flex: none;
+    color: var(--muted2);
+    font-size: 9px;
+  }
+  .fl-empty {
+    font-size: 10px;
+    color: var(--muted);
   }
   .nm {
     font-size: 12px;

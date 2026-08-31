@@ -343,6 +343,25 @@ export function reorderLayer(id: string, direction: "up" | "down"): Promise<void
   return invoke<void>("reorder_layer", { id, direction });
 }
 
+/** Un fichier apporté par une couche (§4.4). */
+export interface LayerFile {
+  /** Chemin relatif au dossier de l'hôte : où le fichier atterrit une fois composé. */
+  rel_path: string;
+  size_bytes: number;
+  /** Le chemin existe déjà dans la base : la couche le remplace au lieu d'ajouter. */
+  overwrites: boolean;
+}
+
+/** Fichiers apportés par une couche, avec ce que chacun fait à la base (§4.4). */
+export function listLayerFiles(id: string): Promise<LayerFile[]> {
+  return invoke<LayerFile[]>("list_layer_files", { id });
+}
+
+/** Ouvre le dossier d'une couche dans l'explorateur (§4.4). */
+export function openLayerFolder(id: string): Promise<void> {
+  return invoke<void>("open_layer_folder", { id });
+}
+
 // --- Import en masse (§4.2) ---
 export type BulkStatus = "new" | "update" | "duplicate" | "ambiguous";
 

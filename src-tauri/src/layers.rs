@@ -12,7 +12,7 @@
 //! destructive à « copiez ces fichiers dans le dossier du mod », que ce soit
 //! une extension importée ou un dossier proposé par l'auteur (§4.6ter).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use chrono::Local;
 use rusqlite::Connection;
@@ -147,6 +147,76 @@ pub fn store_layer(
     .map_err(|e| e.to_string())?;
 
     Ok((id, extracted))
+}
+
+/// Un fichier apporté par une couche (§4.4).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct LayerFile {
+    /// Chemin **relatif au dossier de l'hôte** — c'est l'information utile :
+    /// elle dit où le fichier atterrit une fois composé (`ui/<layout>/preview.png`,
+    /// `data/<circuit>.json` pour une couche d'app).
+    pub rel_path: String,
+    pub size_bytes: u64,
+    /// Ce chemin existe déjà dans la base : la couche le **remplace** au lieu
+    /// de l'ajouter. C'est le seul détail qui mérite d'être vu d'un coup d'œil,
+    /// les décomptes globaux ne disant pas *lesquels*.
+    pub overwrites: bool,
+}
+
+/// Fichiers apportés par une couche, avec ce que chacun fait à la base.
+///
+/// La fiche n'affichait que deux décomptes (« n ajoutés · m écrasés ») : de quoi
+/// savoir qu'il se passe quelque chose, pas de quoi savoir quoi. Sur une couche
+/// d'app — un `.lua` de réglages, des fichiers de caméras — c'est précisément
+/// la liste qui dit à quoi elle sert.
+pub fn list_files(conn: &Connection, cfg: &crate::config::AppConfig, layer_id: &str) -> Result<Vec<LayerFile>, String> {
+    let layer = overlay::get_layer(conn, layer_id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::LAYER_NOT_FOUND)?;
+    let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &layer.library_path)
+        .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    // Base de l'hôte, quand il est là : c'est elle qui dit si un chemin est un
+    // ajout ou un remplacement. Absente (couche en attente de son hôte), tout
+    // est un ajout — ce qui est exact.
+    let base = host_base_dir(conn, cfg, &layer.parent_id);
+
+    let mut out: Vec<LayerFile> = walkdir::WalkDir::new(&dir)
+        .into_iter()
+        .flatten()
+        .filter(|e| e.file_type().is_file())
+        .filter_map(|e| {
+            let rel = e.path().strip_prefix(&dir).ok()?;
+            Some(LayerFile {
+                // Séparateurs unifiés : le chemin est affiché tel quel, et un
+                // mélange `\`/`/` selon la plateforme d'origine se voit.
+                rel_path: rel.to_string_lossy().replace('\\', "/"),
+                size_bytes: e.metadata().map(|m| m.len()).unwrap_or(0),
+                overwrites: base.as_ref().is_some_and(|b| b.join(rel).is_file()),
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
+    Ok(out)
+}
+
+/// Dossier de la couche, pour l'ouvrir dans l'explorateur.
+pub fn folder_path(conn: &Connection, cfg: &crate::config::AppConfig, layer_id: &str) -> Result<PathBuf, String> {
+    let layer = overlay::get_layer(conn, layer_id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::LAYER_NOT_FOUND)?;
+    crate::libpath::resolve(cfg.library_path.as_deref(), &layer.library_path)
+        .ok_or_else(|| crate::errors::LIBRARY_NOT_CONFIGURED.to_string())
+}
+
+/// Dossier de base de l'hôte d'une couche, quel que soit son type (§4.4) : la
+/// version active pour un mod, le dossier de bibliothèque pour une app.
+/// `None` quand l'hôte n'est pas (encore) là — une couche en attente.
+fn host_base_dir(conn: &Connection, cfg: &crate::config::AppConfig, parent_id: &str) -> Option<PathBuf> {
+    if overlay::get_mod(conn, parent_id).ok().flatten().is_some() {
+        return crate::submods::parent_content_dir(conn, cfg, parent_id);
+    }
+    let app = overlay::get_app(conn, parent_id).ok().flatten()?;
+    crate::libpath::resolve(cfg.library_path.as_deref(), &app.library_path)
 }
 
 #[cfg(test)]

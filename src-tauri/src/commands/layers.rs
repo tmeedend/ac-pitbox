@@ -41,3 +41,26 @@ pub fn reorder_layer(app: AppHandle, db: State<Db>, id: String, direction: Strin
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::compose::reorder_layer(&conn, &cfg, &id, &direction)
 }
+
+/// Fichiers apportés par une couche, avec ce que chacun fait à la base (§4.4).
+#[tauri::command]
+pub fn list_layer_files(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<crate::layers::LayerFile>, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::layers::list_files(&conn, &cfg, &id)
+}
+
+/// Ouvre le dossier d'une couche dans l'explorateur. Même rationale que
+/// `open_mod_folder` : le chemin est résolu côté Rust depuis l'overlay, jamais
+/// donné par le front, donc pas de scope ACL large à ouvrir.
+#[tauri::command]
+pub fn open_layer_folder(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let cfg = crate::config::load(&app);
+    let path = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        crate::layers::folder_path(&conn, &cfg, &id)?
+    };
+    app.opener()
+        .open_path(path.display().to_string(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
