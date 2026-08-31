@@ -257,6 +257,21 @@ fn project_skin(
     store: &Path,
     track: bool,
 ) -> (bool, Option<String>) {
+    // Garde-fou (§4.3bis) : rien n'est posé dans le jeu pour un hôte qui n'y
+    // est pas. `parent_content_dir` retombe sur `content/<type>s/<id>` quand
+    // l'overlay ne connaît pas l'id — c'est voulu pour le contenu Kunos, qui
+    // vit là — mais pour un id **inconnu** ce chemin ne désigne rien, et le
+    // `create_dir_all` juste en dessous le **créait** : un vrai dossier
+    // `content/cars/<absent>/skins/` dans l'install, exactement le dossier
+    // fantôme qu'on vient de supprimer côté apps (§12bis.4). Pire, ce dossier
+    // ferait ensuite échouer l'import de la vraie voiture, que le garde-fou
+    // `REAL_FOLDER_IN_CONTENT` refuse de recouvrir.
+    if !host_exists(conn, parent_id) {
+        return (
+            false,
+            Some("cible absente de la bibliothèque : skin non projeté".into()),
+        );
+    }
     let Some(skins_dir) = parent_skins_dir(conn, cfg, parent_id) else {
         return (false, Some("cible inconnue : skin non projeté".into()));
     };
@@ -2270,5 +2285,46 @@ mod tests {
 
         let sized = list_by_type_sized(&conn, &AppConfig::default(), "SKIN").unwrap();
         assert_eq!(sized[0].size_bytes, Some(1024), "somme récursive des fichiers réels");
+    }
+
+    /// Règle (§4.3bis) : rien n'est posé dans le jeu pour un hôte qui n'y est pas.
+    ///
+    /// Bug réel de la même famille que le dossier fantôme de CamTool :
+    /// `parent_content_dir` retombe sur `content/<type>s/<id>` pour un id
+    /// inconnu — voulu pour le contenu Kunos, qui vit là — et la projection
+    /// **créait** ce dossier. Un `content/cars/<absent>/skins/` apparaissait
+    /// donc dans l'install, et faisait ensuite échouer l'import de la vraie
+    /// voiture, que le garde-fou `REAL_FOLDER_IN_CONTENT` refuse de recouvrir.
+    #[test]
+    fn a_skin_for_an_absent_car_creates_nothing_in_the_game() {
+        let base = crate::testutil::temp_dir("skin-absent-car");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+
+        // Un pack de livrées pour une voiture qui n'est pas dans la bibliothèque.
+        let pack = base.join("src").join("rss_formula_hybrid_2025");
+        let skin = pack.join("skins").join("Alpine");
+        std::fs::create_dir_all(&skin).unwrap();
+        std::fs::write(skin.join("preview.jpg"), b"IMG").unwrap();
+
+        let subs = crate::modscan::scan_subs(&base.join("src"));
+        assert_eq!(subs.len(), 1, "le pack est bien détecté");
+        let out = import_subs(&conn, &cfg, &library, "pack.7z", &subs, true, ExtractionMode::InfoOnly);
+
+        assert_eq!(out.len(), 1, "la livrée est rangée en bibliothèque, jamais perdue");
+        assert!(!out[0].projected, "mais pas projetée : la voiture n'est pas là");
+        assert!(!out[0].parent_known, "et le rapport peut le dire");
+        assert!(
+            !ac.join("content").join("cars").join("rss_formula_hybrid_2025").exists(),
+            "aucun dossier de voiture fantôme créé dans l'install"
+        );
     }
 }
