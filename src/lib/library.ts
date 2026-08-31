@@ -4,6 +4,10 @@ import { bumpLibraryVersion } from "./libraryVersion.svelte";
 
 export type ModKind = "Car" | "Track";
 
+/** Ce à quoi une couche se rattache (§4.4) : un mod, ou une app — qui vit dans
+ * une autre table, avec sa propre clé. */
+export type LayerHostKind = ModKind | "App";
+
 export interface ModCard {
   id_interne: string;
   kind: ModKind;
@@ -339,8 +343,11 @@ export function importFolders(
 }
 
 /** Couches/extensions rattachées à une base (§4.4). */
-export function listLayers(parentId: string): Promise<LayerRow[]> {
-  return invoke<LayerRow[]>("list_layers", { parentId });
+/** Couches d'un hôte (§4.4). `kind` sépare les espaces de noms : une app vit
+ * dans une autre table qu'un mod, donc rien n'empêche un circuit et une app de
+ * porter le même id — sans lui, les couches de l'un remonteraient sur l'autre. */
+export function listLayers(parentId: string, kind: LayerHostKind): Promise<LayerRow[]> {
+  return invoke<LayerRow[]>("list_layers", { parentId, kind });
 }
 
 /** Toutes les couches d'un type (vue transversale add-ons, §4.4). */

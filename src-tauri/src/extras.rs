@@ -1450,7 +1450,7 @@ mod tests {
         let created = migrate_app_extras_to_layers(&conn, &cfg);
         assert_eq!(created, 1, "une couche créée pour CamTool_2");
 
-        let layers = overlay::list_layers(&conn, "CamTool_2").unwrap();
+        let layers = overlay::list_layers(&conn, "CamTool_2", crate::layers::HostKind::App).unwrap();
         assert_eq!(layers.len(), 1, "une seule couche, pas une par fichier");
         assert_eq!(layers[0].name, "gunma", "nommée d'après le circuit qui la livre");
         let dir_l = crate::libpath::resolve(Some(&library), &layers[0].library_path).unwrap();
@@ -1475,7 +1475,9 @@ mod tests {
             "rien à reprendre au deuxième démarrage"
         );
         assert_eq!(
-            overlay::list_layers(&conn, "CamTool_2").unwrap().len(),
+            overlay::list_layers(&conn, "CamTool_2", crate::layers::HostKind::App)
+                .unwrap()
+                .len(),
             1,
             "pas de couche en double"
         );

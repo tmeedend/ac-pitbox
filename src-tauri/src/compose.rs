@@ -88,7 +88,7 @@ fn recompose_mod(conn: &Connection, cfg: &AppConfig, m: &overlay::ModRow, mod_id
     // le préférer au contenu réellement déployé (bug réel).
     let _ = std::fs::remove_dir_all(library.join("composed").join(kind.content_folder()).join(mod_id));
 
-    let layers = overlay::active_layers(conn, mod_id).map_err(|e| e.to_string())?;
+    let layers = overlay::active_layers(conn, mod_id, kind.into()).map_err(|e| e.to_string())?;
 
     let result = if m.is_stock {
         recompose_stock(&link, library, kind, mod_id, &layers, m.is_unmanaged)
@@ -243,7 +243,7 @@ fn recompose_app(conn: &Connection, cfg: &AppConfig, app: &overlay::AppRow) -> R
     }
     clear_link(&link)?;
 
-    let layers = overlay::active_layers(conn, &app.id).map_err(|e| e.to_string())?;
+    let layers = overlay::active_layers(conn, &app.id, HostKind::App).map_err(|e| e.to_string())?;
     if layers.is_empty() {
         if let Some(parent) = link.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -274,7 +274,8 @@ pub fn reorder_layer(conn: &Connection, cfg: &AppConfig, layer_id: &str, directi
     let layer = overlay::get_layer(conn, layer_id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::LAYER_NOT_FOUND)?;
-    let siblings = overlay::list_layers(conn, &layer.parent_id).map_err(|e| e.to_string())?;
+    let siblings =
+        overlay::list_layers(conn, &layer.parent_id, HostKind::parse(&layer.parent_kind)).map_err(|e| e.to_string())?;
     let pos = siblings
         .iter()
         .position(|l| l.id == layer_id)
@@ -323,7 +324,7 @@ mod tests {
 
     fn add_layer(conn: &Connection, parent: &str, kind: ModKind, dir: &Path) -> String {
         let id = Uuid::new_v4().to_string();
-        let prio = overlay::next_layer_priority(conn, parent).unwrap();
+        let prio = overlay::next_layer_priority(conn, parent, HostKind::Track).unwrap();
         overlay::insert_layer(
             conn,
             &id,

@@ -502,7 +502,7 @@ mod tests {
         std::fs::create_dir_all(layerdir.join("ui").join("2022")).unwrap();
         std::fs::write(layerdir.join("ui").join("2022").join("ui_track.json"), "{}").unwrap();
         let lid = uuid::Uuid::new_v4().to_string();
-        let prio = overlay::next_layer_priority(&conn, "spa").unwrap();
+        let prio = overlay::next_layer_priority(&conn, "spa", crate::layers::HostKind::Track).unwrap();
         overlay::insert_layer(
             &conn,
             &lid,

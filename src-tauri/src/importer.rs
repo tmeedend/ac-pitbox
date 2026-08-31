@@ -2779,7 +2779,7 @@ fn process_found(
                 // avoir été mise à jour, et c'est ce que fait déjà un mod
                 // réimporté (§4.3). La priorité de la couche est reprise, sans
                 // quoi elle repasserait en tête de pile à chaque réimport.
-                let replaced_priority = crate::overlay::list_layers(conn, &id_interne)
+                let replaced_priority = crate::overlay::list_layers(conn, &id_interne, fm.kind.into())
                     .unwrap_or_default()
                     .into_iter()
                     .find(|l| l.source_archive.as_deref() == Some(archive_name))
@@ -3516,7 +3516,7 @@ mod tests {
             "contenu de base préservé"
         );
         // La couche est rangée à part.
-        let layers = crate::overlay::list_layers(&conn, "spa").unwrap();
+        let layers = crate::overlay::list_layers(&conn, "spa", crate::layers::HostKind::Track).unwrap();
         assert_eq!(layers.len(), 1);
         assert!(library
             .join(&layers[0].library_path)
@@ -3554,7 +3554,12 @@ mod tests {
             0,
             "aucune version : base intacte"
         );
-        assert_eq!(crate::overlay::list_layers(&conn, "ks_spa").unwrap().len(), 1);
+        assert_eq!(
+            crate::overlay::list_layers(&conn, "ks_spa", crate::layers::HostKind::Track)
+                .unwrap()
+                .len(),
+            1
+        );
         assert!(
             crate::overlay::get_mod(&conn, "ks_spa").unwrap().unwrap().is_stock,
             "reste contenu de base"
@@ -3593,7 +3598,9 @@ mod tests {
             "no version stored"
         );
         assert_eq!(
-            crate::overlay::list_layers(&conn, "rss_formula_hybrid").unwrap().len(),
+            crate::overlay::list_layers(&conn, "rss_formula_hybrid", crate::layers::HostKind::Track)
+                .unwrap()
+                .len(),
             0,
             "no layer either — that is the whole point"
         );
@@ -3637,14 +3644,19 @@ mod tests {
 
         let first = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert_eq!(first.mods[0].outcome, "EXTENSION", "premier import : une extension");
-        assert_eq!(crate::overlay::list_layers(&conn, "spa").unwrap().len(), 1);
+        assert_eq!(
+            crate::overlay::list_layers(&conn, "spa", crate::layers::HostKind::Track)
+                .unwrap()
+                .len(),
+            1
+        );
 
         let second = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert_eq!(
             second.mods[0].outcome, "UPDATE_REPLACE",
             "réimport : la couche est remplacée, et la fiche doit le dire"
         );
-        let layers = crate::overlay::list_layers(&conn, "spa").unwrap();
+        let layers = crate::overlay::list_layers(&conn, "spa", crate::layers::HostKind::Track).unwrap();
         assert_eq!(layers.len(), 1, "une seule couche, pas deux : {layers:?}");
         assert!(
             library.join(&layers[0].library_path).join("ui").is_dir(),
@@ -3658,7 +3670,9 @@ mod tests {
         make_fake_track(&other.join("content").join("tracks"), "spa");
         import_folder_for_test(&conn, &cfg, &rules, &other, true, &[]);
         assert_eq!(
-            crate::overlay::list_layers(&conn, "spa").unwrap().len(),
+            crate::overlay::list_layers(&conn, "spa", crate::layers::HostKind::Track)
+                .unwrap()
+                .len(),
             2,
             "deux archives distinctes, deux couches"
         );
@@ -3696,7 +3710,12 @@ mod tests {
             1,
             "rien écrit tant qu'on n'a pas décidé"
         );
-        assert_eq!(crate::overlay::list_layers(&conn, "amb").unwrap().len(), 0);
+        assert_eq!(
+            crate::overlay::list_layers(&conn, "amb", crate::layers::HostKind::Track)
+                .unwrap()
+                .len(),
+            0
+        );
 
         // Reprise avec la décision "update".
         let decisions = vec![ImportDecision {
@@ -5549,7 +5568,9 @@ mod tests {
         );
         assert!(r2.mods[0].fragment, "signalée comme couche déguisée en mod");
         assert_eq!(
-            crate::overlay::list_layers(&conn, "santa_monica_mtns").unwrap().len(),
+            crate::overlay::list_layers(&conn, "santa_monica_mtns", crate::layers::HostKind::Track)
+                .unwrap()
+                .len(),
             1,
             "une couche posée sur la base"
         );
@@ -5608,7 +5629,7 @@ mod tests {
         }];
         let r2 = import_folder_for_test(&conn, &cfg, &rules, &src, true, &decisions);
         assert_eq!(r2.mods[0].outcome, "PARKED", "gardé de côté");
-        let layers = crate::overlay::list_layers(&conn, "santa_monica_mtns").unwrap();
+        let layers = crate::overlay::list_layers(&conn, "santa_monica_mtns", crate::layers::HostKind::Track).unwrap();
         assert_eq!(layers.len(), 1, "la couche attend son circuit sous son id");
         assert!(
             crate::overlay::get_mod(&conn, "santa_monica_mtns").unwrap().is_none(),
@@ -5694,7 +5715,7 @@ mod tests {
         );
         assert_eq!(r.extras, 0, "et rien n'est compté en ajouts au jeu");
 
-        let layers = crate::overlay::list_layers(&conn, "CamTool_2").unwrap();
+        let layers = crate::overlay::list_layers(&conn, "CamTool_2", crate::layers::HostKind::App).unwrap();
         assert_eq!(layers.len(), 1, "une seule couche pour les deux fichiers");
         assert_eq!(layers[0].name, "gunma", "nommée d'après le mod qui la livre");
 

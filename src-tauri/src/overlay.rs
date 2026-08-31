@@ -10,6 +10,8 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use rusqlite::{params, Connection};
+
+use crate::layers::HostKind;
 use serde::{Deserialize, Serialize};
 
 /// État partagé Tauri : connexion SQLite protégée par un mutex.
@@ -1529,11 +1531,25 @@ pub struct LayerRow {
     pub imported_at: String,
 }
 
+/// Fragment SQL isolant les couches d'un hôte : son id **et son espace de noms**.
+///
+/// `parent_id` seul ne suffit pas depuis que les apps reçoivent des couches
+/// (§12bis.4). Une voiture et un circuit, eux, ne peuvent **pas** porter le même
+/// id — ils vivent dans la même table, dont `id_interne` est la clé primaire —
+/// mais une app vit dans `apps`, avec sa propre clé : rien n'empêche un circuit
+/// et une app de s'appeler pareil. Sans ce filtre, les couches de l'un
+/// remonteraient sur l'autre, et `recompose` composerait celles de l'app dans le
+/// dossier du circuit.
+///
+/// Seule la distinction app / pas-app est donc nécessaire, et c'est tout ce que
+/// ce fragment fait — comparer `parent_kind` à `'App'`.
+const LAYER_HOST: &str = "parent_id = ?1 AND (parent_kind = 'App') = ?2";
+
 /// Priorité à attribuer à une nouvelle couche du parent (max + 1 : empilée en tête).
-pub fn next_layer_priority(conn: &Connection, parent_id: &str) -> rusqlite::Result<i64> {
+pub fn next_layer_priority(conn: &Connection, parent_id: &str, host: HostKind) -> rusqlite::Result<i64> {
     conn.query_row(
-        "SELECT COALESCE(MAX(priority), -1) + 1 FROM layers WHERE parent_id = ?1",
-        [parent_id],
+        &format!("SELECT COALESCE(MAX(priority), -1) + 1 FROM layers WHERE {LAYER_HOST}"),
+        params![parent_id, host == HostKind::App],
         |r| r.get(0),
     )
 }
@@ -1592,9 +1608,9 @@ fn map_layer(row: &rusqlite::Row) -> rusqlite::Result<LayerRow> {
 const LAYER_SELECT: &str = "SELECT id, parent_id, parent_kind, name, library_path, source_archive, added_count, overwritten_count, is_active, priority, imported_at FROM layers";
 
 /// Couches/extensions rattachées à une base (fiche détail, §4.4), par priorité.
-pub fn list_layers(conn: &Connection, parent_id: &str) -> rusqlite::Result<Vec<LayerRow>> {
-    let mut stmt = conn.prepare(&format!("{LAYER_SELECT} WHERE parent_id = ?1 ORDER BY priority"))?;
-    let rows = stmt.query_map([parent_id], map_layer)?;
+pub fn list_layers(conn: &Connection, parent_id: &str, host: HostKind) -> rusqlite::Result<Vec<LayerRow>> {
+    let mut stmt = conn.prepare(&format!("{LAYER_SELECT} WHERE {LAYER_HOST} ORDER BY priority"))?;
+    let rows = stmt.query_map(params![parent_id, host == HostKind::App], map_layer)?;
     rows.collect()
 }
 
@@ -1609,11 +1625,11 @@ pub fn list_layers_by_kind(conn: &Connection, kind: &str) -> rusqlite::Result<Ve
 
 /// Couches **actives** d'une base, dans l'ordre de priorité (la + haute en dernier
 /// → gagne à la superposition). Base de la composition (§4.4).
-pub fn active_layers(conn: &Connection, parent_id: &str) -> rusqlite::Result<Vec<LayerRow>> {
+pub fn active_layers(conn: &Connection, parent_id: &str, host: HostKind) -> rusqlite::Result<Vec<LayerRow>> {
     let mut stmt = conn.prepare(&format!(
-        "{LAYER_SELECT} WHERE parent_id = ?1 AND is_active = 1 ORDER BY priority"
+        "{LAYER_SELECT} WHERE {LAYER_HOST} AND is_active = 1 ORDER BY priority"
     ))?;
-    let rows = stmt.query_map([parent_id], map_layer)?;
+    let rows = stmt.query_map(params![parent_id, host == HostKind::App], map_layer)?;
     rows.collect()
 }
 
@@ -2137,4 +2153,78 @@ pub fn orphan_layers(conn: &Connection) -> rusqlite::Result<Vec<LayerRow>> {
     ))?;
     let rows = stmt.query_map([], map_layer)?;
     rows.collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    /// Règle (§4.4) : les couches d'une app et celles d'un mod ne se mélangent
+    /// pas, **même à id identique**.
+    ///
+    /// Une voiture et un circuit ne peuvent pas porter le même id : ils vivent
+    /// dans `mods`, dont `id_interne` est la clé primaire. Une app, elle, vit
+    /// dans `apps` avec sa propre clé — rien n'empêche donc un circuit et une
+    /// app de s'appeler pareil. `parent_id` seul a cessé d'être une clé unique
+    /// le jour où les apps ont reçu des couches (§12bis.4) ; sans le filtre sur
+    /// l'espace de noms, `recompose` composerait les couches de l'app dans le
+    /// dossier du circuit.
+    #[test]
+    fn an_app_and_a_track_sharing_an_id_do_not_share_their_layers() {
+        let base = crate::testutil::temp_dir("layer-namespace");
+        let conn = open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+
+        // Le même id des deux côtés : c'est tout le sujet.
+        upsert_mod(&conn, "shuto", "Track", None, Some("Shuto"), "h", None, &now).unwrap();
+        insert_app(&conn, "shuto", "apps/shuto", None, &now).unwrap();
+
+        insert_layer(
+            &conn,
+            "L_t",
+            "shuto",
+            "Track",
+            "pour le circuit",
+            "layers/tracks/shuto/a",
+            None,
+            1,
+            0,
+            0,
+            &now,
+        )
+        .unwrap();
+        insert_layer(
+            &conn,
+            "L_a",
+            "shuto",
+            "App",
+            "pour l'app",
+            "layers/apps/shuto/b",
+            None,
+            1,
+            0,
+            0,
+            &now,
+        )
+        .unwrap();
+
+        let t = list_layers(&conn, "shuto", HostKind::Track).unwrap();
+        assert_eq!(t.len(), 1, "le circuit ne voit que la sienne");
+        assert_eq!(t[0].id, "L_t");
+
+        let a = list_layers(&conn, "shuto", HostKind::App).unwrap();
+        assert_eq!(a.len(), 1, "l'app ne voit que la sienne");
+        assert_eq!(a[0].id, "L_a");
+
+        // Une voiture partage l'espace de noms des circuits : la distinction ne
+        // porte que sur app / pas-app, et c'est suffisant par construction.
+        assert_eq!(
+            list_layers(&conn, "shuto", HostKind::Car).unwrap().len(),
+            1,
+            "Car et Track désignent le même espace de noms"
+        );
+
+        // Les priorités ne se marchent pas dessus non plus.
+        assert_eq!(next_layer_priority(&conn, "shuto", HostKind::Track).unwrap(), 1);
+        assert_eq!(next_layer_priority(&conn, "shuto", HostKind::App).unwrap(), 1);
+    }
 }

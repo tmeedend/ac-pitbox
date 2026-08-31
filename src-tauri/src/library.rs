@@ -318,7 +318,7 @@ fn entity_dir(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<PathBuf>
 /// Une couche **inactive** est exclue, exactement comme à la composition : la
 /// désactiver doit faire réapparaître la base, à l'écran comme dans le jeu.
 fn entity_dirs(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = overlay::list_layers(conn, &m.id_interne)
+    let mut dirs: Vec<PathBuf> = overlay::list_layers(conn, &m.id_interne, kind_of(&m.kind).into())
         .unwrap_or_default()
         .into_iter()
         .filter(|l| l.is_active)

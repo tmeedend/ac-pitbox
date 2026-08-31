@@ -125,7 +125,7 @@
       <!-- Le composant des couches d'un mod, repris tel quel : il ne connaît
            qu'un id et quatre commandes, et une app est un hôte comme un autre
            (§12bis.4). Recomposer change l'état de l'app — d'où `onchange`. -->
-      <LayersBlock modId={app.id} onchanged={onchange} onerror={(m) => (error = m)} />
+      <LayersBlock modId={app.id} hostKind="App" onchanged={onchange} onerror={(m) => (error = m)} />
     {/if}
   </div>
 </div>

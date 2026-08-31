@@ -5,9 +5,9 @@ use super::prelude::*;
 
 /// Couches/extensions rattachées à une base (§4.4), pour la fiche détail.
 #[tauri::command]
-pub fn list_layers(db: State<Db>, parent_id: String) -> Result<Vec<crate::overlay::LayerRow>, String> {
+pub fn list_layers(db: State<Db>, parent_id: String, kind: String) -> Result<Vec<crate::overlay::LayerRow>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::overlay::list_layers(&conn, &parent_id).map_err(|e| e.to_string())
+    crate::overlay::list_layers(&conn, &parent_id, crate::layers::HostKind::parse(&kind)).map_err(|e| e.to_string())
 }
 
 /// Toutes les couches d'un type (Car|Track), vue transversale add-ons (§4.4).

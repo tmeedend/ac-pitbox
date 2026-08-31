@@ -49,6 +49,21 @@ impl HostKind {
         }
     }
 
+    /// Relit ce qu'[`Self::as_str`] a écrit dans `layers.parent_kind`.
+    /// Tolérante à la casse et au pluriel, pour la raison qui vaut déjà pour
+    /// `OwnerKind::parse` : ce type est persisté et comparé à plusieurs
+    /// endroits, et un écart y serait **silencieux** — la couche irait chercher
+    /// son hôte dans le mauvais espace de noms et n'y trouverait rien.
+    /// Repli sur `Car` : les deux types de mod partagent un espace de noms, donc
+    /// seule la confusion avec `App` aurait des conséquences.
+    pub fn parse(s: &str) -> Self {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "app" | "apps" => HostKind::App,
+            "track" | "tracks" => HostKind::Track,
+            _ => HostKind::Car,
+        }
+    }
+
     /// Segment de bibliothèque du dossier ressources : `<lib>/resources/<cat>/<id>`.
     /// Aligné sur ce qu'écrivent déjà `resources_dir` (mods) et `import_apps`
     /// (apps) — une couche range ses annexes au même endroit que son hôte.
@@ -112,7 +127,7 @@ pub fn store_layer(
 
     let now = Local::now().to_rfc3339();
     let id = Uuid::new_v4().to_string();
-    let priority = overlay::next_layer_priority(conn, parent_id).map_err(|e| e.to_string())?;
+    let priority = overlay::next_layer_priority(conn, parent_id, kind).map_err(|e| e.to_string())?;
     overlay::insert_layer(
         conn,
         &id,
@@ -258,7 +273,11 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(err, crate::errors::UNMANAGED_NO_LAYER, "refused, with a reason");
-        assert_eq!(overlay::list_layers(&conn, "srp").unwrap().len(), 0, "no layer stored");
+        assert_eq!(
+            overlay::list_layers(&conn, "srp", HostKind::Track).unwrap().len(),
+            0,
+            "no layer stored"
+        );
         assert!(
             !library.join("layers").join("srp").exists(),
             "nothing written to the library either"

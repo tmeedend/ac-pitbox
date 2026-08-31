@@ -14,6 +14,7 @@
     openLayerFolder,
     type LayerRow,
     type LayerFile,
+    type LayerHostKind,
   } from "$lib/library";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
@@ -21,10 +22,17 @@
 
   let {
     modId,
+    hostKind = "Car",
     onchanged,
     onerror,
   }: {
     modId: string;
+    /** Espace de noms de l'hôte (§4.4). Une app vit dans une autre table qu'un
+     * mod : rien n'empêche un circuit et une app de porter le même id, et sans
+     * ce paramètre les couches de l'un remonteraient sur l'autre. Voiture et
+     * circuit, eux, partagent une table à clé primaire — ils ne peuvent pas se
+     * confondre, d'où le défaut. */
+    hostKind?: LayerHostKind;
     /** La recomposition de content/ change l'état du mod : la fiche se relit. */
     onchanged: () => void;
     onerror: (message: string) => void;
@@ -38,13 +46,13 @@
   $effect(() => {
     const current = modId;
     layers = [];
-    listLayers(current).then((ls) => {
+    listLayers(current, hostKind).then((ls) => {
       if (current === modId) layers = ls;
     });
   });
 
   async function reload() {
-    layers = await listLayers(modId);
+    layers = await listLayers(modId, hostKind);
   }
 
   // --- Ce que la couche apporte --------------------------------------------

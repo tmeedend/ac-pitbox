@@ -499,8 +499,10 @@ fn import_track_pack_extras(
     }
 }
 
+/// Une couche de ce nom existe-t-elle déjà sur ce circuit ? Seul appelant :
+/// le pack de skins de circuit (§8), d'où le type figé.
 fn layer_exists(conn: &Connection, parent_id: &str, name: &str) -> bool {
-    overlay::list_layers(conn, parent_id)
+    overlay::list_layers(conn, parent_id, crate::layers::HostKind::Track)
         .map(|v| v.iter().any(|l| l.name == name))
         .unwrap_or(false)
 }
@@ -1660,7 +1662,7 @@ mod tests {
         assert_eq!(stored[0].name, "Black Cat County CF1");
 
         // Routé comme couche…
-        let layers = overlay::list_layers(&conn, "ks_black_cat_county").unwrap();
+        let layers = overlay::list_layers(&conn, "ks_black_cat_county", crate::layers::HostKind::Track).unwrap();
         assert_eq!(layers.len(), 1);
         assert_eq!(layers[0].name, "ext_config");
 
