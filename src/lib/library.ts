@@ -234,6 +234,9 @@ export interface SubImported {
   /** La voiture/le circuit visé est-il dans la bibliothèque ? Faux = rangé sous
    * l'id visé, mais rien n'est posé dans le jeu tant que l'hôte manque (§4.3bis). */
   parent_known: boolean;
+  /** Rien n'a été rangé : l'hôte manque et l'utilisateur n'a pas encore tranché
+   * (§4.3bis). Même question, et même réponse, que pour une couche sans sa base. */
+  awaiting_decision?: boolean;
 }
 
 /** App Python importée (§12bis.4). */

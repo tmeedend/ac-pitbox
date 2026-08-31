@@ -1789,6 +1789,10 @@ fn file_extracted(
             pack,
             false,
             res_mode,
+            // Import unitaire des deux côtés : c'est aussi ce que `process_found`
+            // reçoit juste au-dessus. L'import de masse passe ailleurs.
+            true,
+            decisions,
             &mut result,
         );
     }
@@ -1976,6 +1980,8 @@ fn import_one_folder(
             pack,
             copy,
             res_mode,
+            true,
+            decisions,
             &mut result,
         );
     }
@@ -2007,6 +2013,11 @@ fn file_tail(
     pack: Option<&str>,
     copy: bool,
     res_mode: crate::resources::ExtractionMode,
+    // Arbitrage des sous-éléments dont la voiture manque (§4.3bis) : on ne
+    // demande qu'en import unitaire, et `decisions` porte ce qui est déjà
+    // tranché — même mécanique de reprise que pour les mods.
+    block_ambiguous: bool,
+    decisions: &[ImportDecision],
     result: &mut ArchiveResult,
 ) {
     // Une variante de livrées n'est pas un pack de skins (§4.6ter). Cas réel,
@@ -2027,6 +2038,18 @@ fn file_tail(
     let subs = subs.as_slice();
 
     if !subs.is_empty() {
+        // Sous-éléments dont la voiture manque (§4.3bis) : on demande, sauf en
+        // import de masse. Les clés déjà tranchées portent un `/`, qu'un id de
+        // mod ne contient jamais — les deux cohabitent dans `decisions`.
+        let approved: Vec<String> = decisions
+            .iter()
+            .filter(|d| d.id.contains('/') && d.decision == "park")
+            .map(|d| d.id.clone())
+            .collect();
+        let gate = crate::submods::SubGate {
+            ask: block_ambiguous,
+            approved: &approved,
+        };
         result.subs = crate::submods::import_subs_reported(
             conn,
             cfg,
@@ -2035,7 +2058,8 @@ fn file_tail(
             subs,
             copy,
             res_mode,
-            &|done, total, sub_name| {
+            &gate,
+            &|done, total, sub_name: &str| {
                 ctx.sub(done, total, sub_name.to_string());
                 ctx.file_ratio(index, tail_ratio(TAIL_START, TAIL_SUBS_END, done, total));
             },

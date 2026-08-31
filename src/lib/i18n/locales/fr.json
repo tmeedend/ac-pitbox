@@ -1091,6 +1091,8 @@
     "hostMissingNote": "ce dossier complète un autre contenu et ne peut pas se charger seul — rien n'a été écrit",
     "subHostMissingNote": "absent de la bibliothèque — gardé de côté, rien n'a été posé dans le jeu",
     "fragmentImportedNote": "importé tel quel, mais sans modèle 3D : le jeu ne pourra pas le charger",
+    "subTitle": "Ce contenu appartient à une voiture que vous n'avez pas",
+    "subBodyKnown": "« {name} » se pose dans « {host} », qui n'est pas dans votre bibliothèque. Rien ne sera visible dans le jeu tant que ce contenu n'est pas là.",
     "fragmentTitle": "Ce dossier complète un autre contenu",
     "fragmentBodyKnown": "« {name} » n'a pas de modèle 3D : c'est une couche à poser sur « {host} », qui n'est pas dans votre bibliothèque. Importé tel quel, il apparaîtrait comme un contenu que le jeu ne sait pas charger.",
     "fragmentBodyUnknown": "« {name} » n'a pas de modèle 3D : il complète un autre contenu, que je n'ai pas su identifier. Importé tel quel, il apparaîtrait comme un contenu que le jeu ne sait pas charger.",

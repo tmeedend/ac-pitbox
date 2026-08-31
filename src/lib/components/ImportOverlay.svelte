@@ -65,8 +65,12 @@
   {@const f = importState.pendingFragments[0]}
   <div class="modal-backdrop">
     <div class="modal">
-      <h3>{t("importOverlay.fragmentTitle")}</h3>
-      {#if f.hostId}
+      <h3>{f.isSub ? t("importOverlay.subTitle") : t("importOverlay.fragmentTitle")}</h3>
+      {#if f.isSub}
+        <!-- Une livrée ou un son : même question, mais rien à dire d'un modèle
+             3D manquant — ce contenu se pose DANS une voiture qu'on n'a pas. -->
+        <p>{t("importOverlay.subBodyKnown", { name: f.name, host: f.hostId ?? "" })}</p>
+      {:else if f.hostId}
         <p>{t("importOverlay.fragmentBodyKnown", { name: f.name, host: f.hostId })}</p>
       {:else}
         <p>{t("importOverlay.fragmentBodyUnknown", { name: f.name })}</p>

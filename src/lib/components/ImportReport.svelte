@@ -96,7 +96,10 @@
     subs: SubImported[],
   ): { id: string; kind: string; skins: number; sounds: number; orphan: boolean }[] {
     const groups = new Map<string, { id: string; kind: string; skins: number; sounds: number; orphan: boolean }>();
-    for (const s of subs) {
+    // Un sous-élément en attente de décision n'a **rien** rangé : le compter
+    // ferait annoncer au rapport une livrée qui n'existe nulle part. Il vit
+    // dans la fenêtre d'arbitrage, pas ici.
+    for (const s of subs.filter((x) => !x.awaiting_decision)) {
       const g = groups.get(s.parent_id) ?? {
         id: s.parent_id,
         kind: s.sub_type === "TRACK_SKIN" ? "Track" : "Car",

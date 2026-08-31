@@ -58,8 +58,51 @@ pub struct SubImported {
     /// intraduisible et de fait jamais affiché. Ce booléen est ce que le
     /// rapport peut montrer dans les six locales.
     pub parent_known: bool,
+    /// **Rien n'a été rangé** : l'hôte manque et l'utilisateur n'a pas encore
+    /// dit s'il fallait garder (§4.3bis). Une livrée est du contenu posé
+    /// *dans* une voiture — la même question qu'une couche sans sa base mérite
+    /// la même réponse.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub awaiting_decision: bool,
     /// Fichiers annexes redirigés vers le dossier ressources (§4.5.2).
     pub resources_extracted: usize,
+}
+
+/// Ce que l'import a le droit de ranger quand l'hôte d'un sous-élément manque
+/// (§4.3bis).
+///
+/// La clé d'un sous-élément est `<parent_id>/<name>` — stable d'une extraction
+/// à l'autre, contrairement au dossier temporaire d'où il sort, et c'est ce qui
+/// permet à une reprise après arbitrage de retrouver *le* sous-élément tranché.
+/// Elle contient un `/`, qu'un id de mod ne porte jamais : les deux espaces de
+/// clés cohabitent donc sans ambiguïté dans la même liste de décisions.
+#[derive(Debug, Clone, Copy)]
+pub struct SubGate<'a> {
+    /// Import unitaire : on s'arrête et on demande. Import de masse : jamais
+    /// (§4.2bis), le défaut sûr étant de garder.
+    pub ask: bool,
+    /// Clés déjà tranchées « garder » par l'utilisateur.
+    pub approved: &'a [String],
+}
+
+impl SubGate<'_> {
+    /// Aucun blocage — le comportement des chemins qui ne posent pas de
+    /// question : archive imbriquée, import de masse, tests.
+    pub fn open() -> Self {
+        SubGate {
+            ask: false,
+            approved: &[],
+        }
+    }
+}
+
+/// Faut-il s'arrêter et demander avant de ranger ce sous-élément ?
+fn gated(conn: &Connection, gate: &SubGate, parent_id: &str, name: &str) -> bool {
+    if !gate.ask || host_exists(conn, parent_id) {
+        return false;
+    }
+    let key = format!("{parent_id}/{name}");
+    !gate.approved.iter().any(|k| k == &key)
 }
 
 /// Signalement d'avancement des sous-éléments : `(rangés, total, nom)`.
@@ -107,7 +150,17 @@ pub fn import_subs(
     copy: bool,
     mode: ExtractionMode,
 ) -> Vec<SubImported> {
-    import_subs_reported(conn, cfg, library, source_name, subs, copy, mode, &|_, _, _| {})
+    import_subs_reported(
+        conn,
+        cfg,
+        library,
+        source_name,
+        subs,
+        copy,
+        mode,
+        &SubGate::open(),
+        &|_, _, _| {},
+    )
 }
 
 /// Comme [`import_subs`], en signalant chaque sous-élément rangé (§4.2bis).
@@ -125,6 +178,7 @@ pub fn import_subs_reported(
     subs: &[FoundSub],
     copy: bool,
     mode: ExtractionMode,
+    gate: &SubGate,
     report: &SubReport,
 ) -> Vec<SubImported> {
     let mut out = Vec::new();
@@ -143,10 +197,21 @@ pub fn import_subs_reported(
                 sub,
                 copy,
                 mode,
+                gate,
                 &mut out,
                 &mut progress,
             ),
-            SubKind::Sound => import_sound(conn, library, source_name, sub, copy, mode, &mut out, &mut progress),
+            SubKind::Sound => import_sound(
+                conn,
+                library,
+                source_name,
+                sub,
+                copy,
+                mode,
+                gate,
+                &mut out,
+                &mut progress,
+            ),
         }
     }
     out
@@ -161,6 +226,7 @@ fn import_skin_pack(
     sub: &FoundSub,
     copy: bool,
     mode: ExtractionMode,
+    gate: &SubGate,
     out: &mut Vec<SubImported>,
     progress: &mut SubProgress,
 ) {
@@ -184,7 +250,26 @@ fn import_skin_pack(
         progress.step(&name);
 
         // Idempotence : ne ré-importe pas un skin déjà connu pour ce parent.
+        // C'est aussi ce qui rend la reprise après arbitrage sûre — rejouer
+        // l'archive entière ne duplique rien.
         if overlay::sub_exists(conn, sub_type, parent, &name).unwrap_or(false) {
+            continue;
+        }
+
+        // Voiture absente et pas encore tranché (§4.3bis) : rien n'est écrit,
+        // on demande. Le défaut proposé est de ne pas importer, comme pour une
+        // couche sans sa base.
+        if gated(conn, gate, parent, &name) {
+            out.push(SubImported {
+                sub_type: sub_type.into(),
+                parent_id: parent.clone(),
+                name,
+                projected: false,
+                warning: None,
+                parent_known: false,
+                awaiting_decision: true,
+                resources_extracted: 0,
+            });
             continue;
         }
 
@@ -204,6 +289,7 @@ fn import_skin_pack(
                         warning: Some(format!("stockage : {err}")),
                         resources_extracted: 0,
                         parent_known: host_exists(conn, parent),
+                        awaiting_decision: false,
                     });
                     continue;
                 }
@@ -232,6 +318,7 @@ fn import_skin_pack(
             warning,
             resources_extracted,
             parent_known: host_exists(conn, parent),
+            awaiting_decision: false,
         });
     }
 
@@ -848,6 +935,7 @@ fn import_sound(
     sub: &FoundSub,
     copy: bool,
     mode: ExtractionMode,
+    gate: &SubGate,
     out: &mut Vec<SubImported>,
     progress: &mut SubProgress,
 ) {
@@ -873,6 +961,22 @@ fn import_sound(
         return;
     }
 
+    // Voiture absente et pas encore tranché (§4.3bis) : rien n'est écrit, on
+    // demande — même règle que pour une livrée et pour une couche sans sa base.
+    if gated(conn, gate, &parent, &name) {
+        out.push(SubImported {
+            sub_type: "SOUND".into(),
+            parent_id: parent,
+            name,
+            projected: false,
+            warning: None,
+            parent_known: false,
+            awaiting_decision: true,
+            resources_extracted: 0,
+        });
+        return;
+    }
+
     let dest = library.join("sounds").join(&parent).join(&name);
     // Fichiers annexes (§4.5.2) redirigés à part (GUIDs.txt reste toujours du
     // contenu, voir resources::classify — jamais confondu avec une annexe).
@@ -884,6 +988,7 @@ fn import_sound(
                 out.push(SubImported {
                     sub_type: "SOUND".into(),
                     parent_known: host_exists(conn, &parent),
+                    awaiting_decision: false,
                     parent_id: parent,
                     name,
                     projected: false,
@@ -915,6 +1020,7 @@ fn import_sound(
     out.push(SubImported {
         sub_type: "SOUND".into(),
         parent_known: host_exists(conn, &parent),
+        awaiting_decision: false,
         parent_id: parent,
         name,
         projected: false,
@@ -1639,7 +1745,8 @@ mod tests {
             &subs,
             true,
             ExtractionMode::InfoOnly,
-            &|done, total, name| seen.borrow_mut().push((done, total, name.to_string())),
+            &SubGate::open(),
+            &|done, total, name: &str| seen.borrow_mut().push((done, total, name.to_string())),
         );
 
         let seen = seen.into_inner();
@@ -2325,6 +2432,81 @@ mod tests {
         assert!(
             !ac.join("content").join("cars").join("rss_formula_hybrid_2025").exists(),
             "aucun dossier de voiture fantôme créé dans l'install"
+        );
+    }
+
+    /// Règle (§4.3bis) : une livrée dont la voiture manque n'est pas rangée en
+    /// silence — rien n'est écrit et on demande. Une livrée est du contenu posé
+    /// *dans* une voiture : même question, et même réponse, qu'une couche dont
+    /// le contenu de base manque.
+    #[test]
+    fn a_livery_without_its_car_waits_for_a_decision_then_lands() {
+        let base = crate::testutil::temp_dir("skin-gate");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+
+        let pack = base.join("src").join("rss_formula_hybrid_2025");
+        let skin = pack.join("skins").join("Alpine");
+        std::fs::create_dir_all(&skin).unwrap();
+        std::fs::write(skin.join("preview.jpg"), b"IMG").unwrap();
+        let subs = crate::modscan::scan_subs(&base.join("src"));
+
+        // On demande : rien n'est écrit.
+        let gate = SubGate {
+            ask: true,
+            approved: &[],
+        };
+        let out = import_subs_reported(
+            &conn,
+            &cfg,
+            &library,
+            "pack.7z",
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+            &gate,
+            &|_, _, _: &str| {},
+        );
+        assert_eq!(out.len(), 1, "la livrée est signalée");
+        assert!(out[0].awaiting_decision, "on attend la décision");
+        assert!(
+            !library.join("skins").join("rss_formula_hybrid_2025").exists(),
+            "rien n'a été rangé tant qu'on n'a pas tranché"
+        );
+
+        // « Garder » : la clé tranchée est <parent>/<nom>, stable d'une
+        // extraction à l'autre — c'est ce qui permet la reprise.
+        let approved = vec!["rss_formula_hybrid_2025/Alpine".to_string()];
+        let gate = SubGate {
+            ask: true,
+            approved: &approved,
+        };
+        let out = import_subs_reported(
+            &conn,
+            &cfg,
+            &library,
+            "pack.7z",
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+            &gate,
+            &|_, _, _: &str| {},
+        );
+        assert_eq!(out.len(), 1);
+        assert!(!out[0].awaiting_decision, "tranché : plus en attente");
+        assert!(!out[0].parent_known, "la voiture manque toujours");
+        assert!(
+            library
+                .join("skins")
+                .join("rss_formula_hybrid_2025")
+                .join("Alpine")
+                .is_dir(),
+            "rangée sous l'id visé, prête pour le jour où la voiture arrive"
         );
     }
 }

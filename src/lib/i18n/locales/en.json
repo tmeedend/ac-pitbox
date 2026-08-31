@@ -1091,6 +1091,8 @@
     "hostMissingNote": "this folder extends other content and cannot load on its own — nothing was written",
     "subHostMissingNote": "not in the library — kept aside, nothing was placed in the game",
     "fragmentImportedNote": "imported as is, but with no 3D model: the game will not be able to load it",
+    "subTitle": "This belongs to a car you do not have",
+    "subBodyKnown": "“{name}” goes inside “{host}”, which is not in your library. Nothing will show up in the game until that content is there.",
     "fragmentTitle": "This folder extends other content",
     "fragmentBodyKnown": "“{name}” has no 3D model: it is a layer meant for “{host}”, which is not in your library. Imported as is, it would show up as content the game cannot load.",
     "fragmentBodyUnknown": "“{name}” has no 3D model: it extends other content, which I could not identify. Imported as is, it would show up as content the game cannot load.",

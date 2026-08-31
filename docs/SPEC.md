@@ -167,7 +167,15 @@ Deux candidats à égalité ne sont jamais départagés : poser le contenu sur u
 - **Hôte introuvable** → on demande aussi, avec pour seules issues « ne pas importer » (défaut) et « importer quand même », qui produit l'ancien comportement, cette fois assumé et signalé dans le rapport.
 - **En import de masse**, où l'on ne s'arrête jamais pour demander (§4.2bis), le défaut sûr est de **garder** : couche en attente si l'hôte est nommé, import tel quel sinon. Un mod de trop vaut mieux qu'un contenu perdu, et la ligne du rapport dit lequel.
 
-**Un skin ou un son dont la voiture manque suit la même logique** (§12bis.2) : il est rangé sous l'id qu'il vise, rien n'est posé dans le jeu, et l'hôte le reprendra. C'était déjà le comportement — mais **en silence** : `SubImported` portait bien un `warning`, en texte libre français, donc intraduisible et de fait affiché nulle part. Le rapport porte désormais le fait sous forme structurée (`parent_known`), donc localisable, et le dit sur la ligne du groupe.
+**Un skin ou un son dont la voiture manque suit exactement la même règle** (§12bis.2) : rien n'est écrit, on demande, défaut « ne pas importer », et « garder pour plus tard » range sous l'id visé. Une livrée est du contenu posé **dans** une voiture — c'est la même chose qu'une couche, et deux comportements différents pour la même question ne se justifiaient pas.
+
+Trois choses rendent cette reprise sûre, et elles existaient déjà :
+
+- **Une clé stable** : `<parent_id>/<nom>`, qui ne dépend pas du dossier temporaire d'extraction. Elle contient un `/`, qu'un id de mod ne porte jamais, donc les deux espaces de clés cohabitent dans la même liste de décisions.
+- **L'idempotence** : `sub_exists` empêche de réimporter un sous-élément déjà connu, donc rejouer l'archive entière pour trancher un seul élément ne duplique rien.
+- **Un garde-fou de projection** : rien n'est posé dans le jeu pour un hôte absent. *Bug réel corrigé au passage* — `parent_content_dir` retombe sur `content/<type>s/<id>` pour un id inconnu (voulu pour le contenu Kunos, qui vit là), et la projection **créait** ce dossier : un `content/cars/<absente>/skins/` apparaissait dans l'install, et faisait ensuite échouer l'import de la vraie voiture, que `REAL_FOLDER_IN_CONTENT` refuse de recouvrir. Le même dossier fantôme que côté apps, en troisième variante.
+
+Le fait est aussi rendu **localisable** : `SubImported` portait déjà un `warning`, mais en texte libre français, donc intraduisible sur six locales et de fait affiché nulle part. Deux booléens le remplacent (`parent_known`, `awaiting_decision`), que le rapport et la fenêtre d'arbitrage rendent correctement.
 
 **Ce qui attend un hôte est listé sur l'écran Maintenance** (§9.3, `waiting_layers`). Ce n'est **pas une anomalie** — c'est le rangement voulu pour un contenu téléchargé avant sa base — et ça n'entre donc pas dans le « rien à signaler » de l'écran. Mais sans cette liste, une couche en attente est strictement invisible : la fiche qu'il faudrait ouvrir pour la voir est celle d'un mod qui n'existe pas encore. On peut y renoncer d'un bouton. Les apps comptent dans le test d'existence, sans quoi **toute** couche d'app passerait pour en attente — une app ne vit pas dans `mods`.
 

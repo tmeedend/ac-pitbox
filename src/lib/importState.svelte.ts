@@ -49,6 +49,9 @@ export interface PendingFragment {
   name: string;
   hostId: string | null;
   kind: ModKind;
+  /** Livrée ou son plutôt que dossier de mod : la question est la même, le
+   * texte non — une livrée n'a pas de "modèle 3D manquant" à expliquer. */
+  isSub: boolean;
   /** Source à ré-importer pour appliquer la décision. */
   source: { paths: string[]; folder: boolean; copy: boolean };
 }
@@ -194,17 +197,35 @@ async function runImport(source: { paths: string[]; folder: boolean; copy: boole
     );
     // Fragments dont l'hôte manque (§4.3bis) : même mécanique de reprise que
     // ci-dessus, seule la question posée change.
-    importState.pendingFragments = report.flatMap((a, i) =>
-      a.mods
+    //
+    // Les livrées et les sons sans leur voiture y sont joints : c'est la même
+    // question — « ce contenu se pose DANS quelque chose que tu n'as pas » —
+    // donc la même fenêtre. Leur clé porte un `/`, jamais présent dans un id de
+    // mod, ce qui les distingue côté backend.
+    importState.pendingFragments = report.flatMap((a, i) => {
+      const src = { ...source, paths: [source.paths[i] ?? source.paths[0]] };
+      const mods = a.mods
         .filter((m) => m.outcome === "HOST_MISSING" || m.outcome === "HOST_UNKNOWN")
         .map((m) => ({
           id: m.id_interne,
           name: m.display_name ?? m.id_interne,
           hostId: m.host_id ?? null,
           kind: m.kind,
-          source: { ...source, paths: [source.paths[i] ?? source.paths[0]] },
-        })),
-    );
+          isSub: false,
+          source: src,
+        }));
+      const subs = (a.subs ?? [])
+        .filter((s) => s.awaiting_decision)
+        .map((s) => ({
+          id: `${s.parent_id}/${s.name}`,
+          name: s.name,
+          hostId: s.parent_id,
+          kind: (s.sub_type === "TRACK_SKIN" ? "Track" : "Car") as ModKind,
+          isSub: true,
+          source: src,
+        }));
+      return [...mods, ...subs];
+    });
     bumpLibraryVersion();
   } finally {
     importState.importing = false;
@@ -275,6 +296,18 @@ async function resumeWithDecision(
         for (const a of entry.report) {
           const i = a.mods.findIndex((m) => m.id_interne === item.id);
           if (i >= 0) a.mods[i] = resolved;
+        }
+      }
+    }
+    // Même remplacement pour un sous-élément tranché, repéré par sa clé
+    // `<parent>/<nom>` : sans ça la ligne du rapport continuerait d'annoncer
+    // « en attente » une livrée qu'on vient de ranger.
+    const sub = report.flatMap((a) => a.subs ?? []).find((s) => `${s.parent_id}/${s.name}` === item.id);
+    if (sub) {
+      for (const entry of importState.reports) {
+        for (const a of entry.report) {
+          const i = (a.subs ?? []).findIndex((s) => `${s.parent_id}/${s.name}` === item.id);
+          if (i >= 0) a.subs[i] = sub;
         }
       }
     }
