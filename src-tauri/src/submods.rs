@@ -49,6 +49,15 @@ pub struct SubImported {
     /// Skin projeté (visible par AC) ; faux si le parent est inconnu/conflit.
     pub projected: bool,
     pub warning: Option<String>,
+    /// La voiture/le circuit visé est-il **dans la bibliothèque** ?
+    ///
+    /// Faux = le sous-élément est rangé sous l'id qu'il vise, mais rien n'est
+    /// posé dans le jeu et rien ne le sera tant que l'hôte n'est pas là
+    /// (§4.3bis). C'est exactement ce que faisait déjà l'app — en silence :
+    /// `warning` porte bien le fait, mais en texte libre français, donc
+    /// intraduisible et de fait jamais affiché. Ce booléen est ce que le
+    /// rapport peut montrer dans les six locales.
+    pub parent_known: bool,
     /// Fichiers annexes redirigés vers le dossier ressources (§4.5.2).
     pub resources_extracted: usize,
 }
@@ -194,6 +203,7 @@ fn import_skin_pack(
                         projected: false,
                         warning: Some(format!("stockage : {err}")),
                         resources_extracted: 0,
+                        parent_known: host_exists(conn, parent),
                     });
                     continue;
                 }
@@ -221,6 +231,7 @@ fn import_skin_pack(
             projected,
             warning,
             resources_extracted,
+            parent_known: host_exists(conn, parent),
         });
     }
 
@@ -688,6 +699,16 @@ fn guess_sound_parent(conn: &Connection, source_name: &str) -> Option<String> {
     fuzzy.next().is_none().then(|| first.clone())
 }
 
+/// L'hôte visé par un sous-élément est-il dans la bibliothèque ?
+///
+/// Sans lui, rien n'est posé dans le jeu — le sous-élément est simplement rangé
+/// sous l'id qu'il vise, en attendant (§4.3bis). Ce n'est pas une erreur, mais
+/// ça ne doit plus être silencieux : c'est le seul cas où l'utilisateur croit
+/// avoir installé quelque chose qui n'apparaîtra nulle part.
+fn host_exists(conn: &Connection, id: &str) -> bool {
+    overlay::get_mod(conn, id).ok().flatten().is_some()
+}
+
 /// Le dossier nomme-t-il une voiture connue de la base ?
 fn is_known_car(conn: &Connection, id: &str) -> bool {
     overlay::get_mod(conn, id)
@@ -847,6 +868,7 @@ fn import_sound(
             Err(err) => {
                 out.push(SubImported {
                     sub_type: "SOUND".into(),
+                    parent_known: host_exists(conn, &parent),
                     parent_id: parent,
                     name,
                     projected: false,
@@ -877,6 +899,7 @@ fn import_sound(
     );
     out.push(SubImported {
         sub_type: "SOUND".into(),
+        parent_known: host_exists(conn, &parent),
         parent_id: parent,
         name,
         projected: false,

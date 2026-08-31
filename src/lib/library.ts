@@ -231,6 +231,9 @@ export interface SubImported {
   warning: string | null;
   /** Fichiers annexes redirigés vers le dossier ressources (§4.5.2). */
   resources_extracted: number;
+  /** La voiture/le circuit visé est-il dans la bibliothèque ? Faux = rangé sous
+   * l'id visé, mais rien n'est posé dans le jeu tant que l'hôte manque (§4.3bis). */
+  parent_known: boolean;
 }
 
 /** App Python importée (§12bis.4). */

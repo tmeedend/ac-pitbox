@@ -9,7 +9,9 @@
     repairAll,
     purgeOrphanSubs,
     type MaintenanceReport,
+    type WaitingLayer,
   } from "$lib/maintenance";
+  import { deleteLayer } from "$lib/library";
   import { indexStockContent } from "$lib/submods";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { t } from "$lib/i18n/index.svelte";
@@ -80,6 +82,26 @@
     error = "";
     try {
       await purgeOrphanSubs();
+      await scan();
+    } catch (e) {
+      error = errorText(e);
+    } finally {
+      busy = "";
+    }
+  }
+
+  /** Renonce à une couche qui attend un hôte (§4.3bis). Rien à recomposer —
+   * l'hôte n'est pas là — mais `deleteLayer` s'en charge tout seul. */
+  async function doDeleteWaitingLayer(w: WaitingLayer) {
+    const ok = await confirm(t("maintenance.waitingLayerDeleteConfirm", { name: w.name, host: w.parent_id }), {
+      title: t("maintenance.waitingLayersTitle"),
+      kind: "warning",
+    });
+    if (!ok) return;
+    busy = `waiting-${w.id}`;
+    error = "";
+    try {
+      await deleteLayer(w.id);
       await scan();
     } catch (e) {
       error = errorText(e);
@@ -171,6 +193,8 @@
     }
   }
 
+  // Les couches en attente n'entrent pas dans « rien à signaler » : ce n'est
+  // pas un défaut de la bibliothèque, juste du contenu qui précède sa base.
   const isClean = $derived(
     report && report.broken.length === 0 && report.orphans.length === 0 && report.orphan_subs.length === 0,
   );
@@ -304,6 +328,37 @@
             {busy === "orphan-subs" ? t("common.working") : t("maintenance.purgeOrphanSubs")}
           </button>
         </div>
+      </section>
+    {/if}
+
+    {#if report.waiting_layers.length}
+      <!-- Pas une anomalie (§4.3bis) : une couche téléchargée avant sa base est
+           rangée sous l'id qu'elle vise et l'hôte la reprendra en arrivant. Mais
+           elle n'est visible nulle part ailleurs — la fiche qu'il faudrait
+           ouvrir est celle d'un mod qui n'existe pas encore. D'où cette liste,
+           et de quoi renoncer. -->
+      <section>
+        <h3>{t("maintenance.waitingLayersTitle")} <span class="count mono">{report.waiting_layers.length}</span></h3>
+        <p class="hint">{t("maintenance.waitingLayersHint")}</p>
+        <ul class="list">
+          {#each report.waiting_layers as w (w.id)}
+            <li>
+              <div class="l-main">
+                <span class="l-name mono">{w.name}</span>
+                <span class="l-kind mono">{w.parent_kind}</span>
+                <span class="l-path mono">{w.parent_id}</span>
+              </div>
+              <button
+                class="btn danger"
+                type="button"
+                disabled={busy === `waiting-${w.id}`}
+                onclick={() => doDeleteWaitingLayer(w)}
+              >
+                {busy === `waiting-${w.id}` ? t("common.working") : t("common.delete")}
+              </button>
+            </li>
+          {/each}
+        </ul>
       </section>
     {/if}
 

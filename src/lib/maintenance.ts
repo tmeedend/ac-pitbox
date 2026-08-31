@@ -15,10 +15,24 @@ export interface OrphanJunction {
   path: string;
 }
 
+/** Couche dont l'hôte n'est pas (ou plus) dans la bibliothèque (§4.3bis). */
+export interface WaitingLayer {
+  id: string;
+  /** Hôte attendu : id de voiture, de circuit ou d'app. */
+  parent_id: string;
+  parent_kind: string;
+  name: string;
+  added_count: number;
+  overwritten_count: number;
+}
+
 export interface MaintenanceReport {
   broken: BrokenMod[];
   orphans: OrphanJunction[];
   orphan_subs: OrphanSub[];
+  /** Couches en attente de leur hôte (§4.3bis) — pas une anomalie, mais
+   * invisibles partout ailleurs : aucune fiche ne peut les montrer. */
+  waiting_layers: WaitingLayer[];
 }
 
 export interface ExportReport {

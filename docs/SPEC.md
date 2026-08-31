@@ -167,6 +167,10 @@ Deux candidats à égalité ne sont jamais départagés : poser le contenu sur u
 - **Hôte introuvable** → on demande aussi, avec pour seules issues « ne pas importer » (défaut) et « importer quand même », qui produit l'ancien comportement, cette fois assumé et signalé dans le rapport.
 - **En import de masse**, où l'on ne s'arrête jamais pour demander (§4.2bis), le défaut sûr est de **garder** : couche en attente si l'hôte est nommé, import tel quel sinon. Un mod de trop vaut mieux qu'un contenu perdu, et la ligne du rapport dit lequel.
 
+**Un skin ou un son dont la voiture manque suit la même logique** (§12bis.2) : il est rangé sous l'id qu'il vise, rien n'est posé dans le jeu, et l'hôte le reprendra. C'était déjà le comportement — mais **en silence** : `SubImported` portait bien un `warning`, en texte libre français, donc intraduisible et de fait affiché nulle part. Le rapport porte désormais le fait sous forme structurée (`parent_known`), donc localisable, et le dit sur la ligne du groupe.
+
+**Ce qui attend un hôte est listé sur l'écran Maintenance** (§9.3, `waiting_layers`). Ce n'est **pas une anomalie** — c'est le rangement voulu pour un contenu téléchargé avant sa base — et ça n'entre donc pas dans le « rien à signaler » de l'écran. Mais sans cette liste, une couche en attente est strictement invisible : la fiche qu'il faudrait ouvrir pour la voir est celle d'un mod qui n'existe pas encore. On peut y renoncer d'un bouton. Les apps comptent dans le test d'existence, sans quoi **toute** couche d'app passerait pour en attente — une app ne vit pas dans `mods`.
+
 ### 4.4 Packs multi-voitures
 
 Chaque voiture d'un pack est une **entité de premier niveau** (activable/tagguable séparément), liée aux autres par une métadonnée `source_pack` (nom d'archive/dossier, connu dès l'import).

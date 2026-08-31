@@ -92,17 +92,24 @@
   /** Skins et sons regroupés par contenu parent : un pack de quarante livrées
    * ferait déborder le rapport à raison d'une ligne chacune, alors qu'il n'y a
    * qu'une seule fiche à ouvrir au bout. */
-  function subsByParent(subs: SubImported[]): { id: string; kind: string; skins: number; sounds: number }[] {
-    const groups = new Map<string, { id: string; kind: string; skins: number; sounds: number }>();
+  function subsByParent(
+    subs: SubImported[],
+  ): { id: string; kind: string; skins: number; sounds: number; orphan: boolean }[] {
+    const groups = new Map<string, { id: string; kind: string; skins: number; sounds: number; orphan: boolean }>();
     for (const s of subs) {
       const g = groups.get(s.parent_id) ?? {
         id: s.parent_id,
         kind: s.sub_type === "TRACK_SKIN" ? "Track" : "Car",
         skins: 0,
         sounds: 0,
+        // Hôte absent (§4.3bis) : rangé sous l'id visé, mais rien n'est posé
+        // dans le jeu. C'était le cas le plus silencieux de l'import — le
+        // backend le savait, aucun écran ne le disait.
+        orphan: false,
       };
       if (s.sub_type === "SOUND") g.sounds++;
       else g.skins++;
+      if (!s.parent_known) g.orphan = true;
       groups.set(s.parent_id, g);
     }
     return [...groups.values()];
@@ -195,7 +202,13 @@
       {t("importOverlay.subsAttached", {
         parts: `${g.skins ? t("importOverlay.skinCount", { count: g.skins }) : ""}${g.skins && g.sounds ? " · " : ""}${g.sounds ? t("importOverlay.soundCount", { count: g.sounds }) : ""}`,
       })}
-      <button class="r-open" type="button" onclick={() => openContent(g.id, g.kind)}>{g.id}</button>
+      {#if g.orphan}
+        <!-- Pas de fiche à ouvrir : l'hôte n'est pas dans la bibliothèque. -->
+        <span class="mono">{g.id}</span>
+        <span class="r-conflict">{t("importOverlay.subHostMissingNote")}</span>
+      {:else}
+        <button class="r-open" type="button" onclick={() => openContent(g.id, g.kind)}>{g.id}</button>
+      {/if}
     </div>
   {/each}
   {#if (a.apps ?? []).length}

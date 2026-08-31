@@ -45,6 +45,18 @@ pub struct OrphanSub {
     pub name: String,
 }
 
+/// Couche dont l'hôte n'est pas (ou plus) dans la bibliothèque (§4.3bis).
+#[derive(Debug, Clone, Serialize)]
+pub struct WaitingLayer {
+    pub id: String,
+    /// Hôte attendu — un id de voiture, de circuit ou d'app.
+    pub parent_id: String,
+    pub parent_kind: String,
+    pub name: String,
+    pub added_count: i64,
+    pub overwritten_count: i64,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct MaintenanceReport {
     pub broken: Vec<BrokenMod>,
@@ -53,6 +65,13 @@ pub struct MaintenanceReport {
     /// suppression d'un mod — réimporter le même id les retrouve — donc jamais
     /// nettoyés automatiquement : seulement listés, pour décision.
     pub orphan_subs: Vec<OrphanSub>,
+    /// Couches en attente de leur hôte (§4.3bis). **Ce n'est pas une anomalie** :
+    /// c'est le rangement voulu pour un contenu téléchargé avant sa base, et
+    /// l'hôte la reprendra le jour où il arrive. Listées ici parce que sans ça
+    /// elles sont strictement invisibles — aucune fiche ne peut les montrer,
+    /// puisque la fiche qu'il faudrait ouvrir est celle d'un mod qui n'existe
+    /// pas encore.
+    pub waiting_layers: Vec<WaitingLayer>,
 }
 
 /// Un mod est-il cassé (fichiers de sa version active manquants/invalides) ?
@@ -134,10 +153,25 @@ pub fn scan(conn: &Connection, cfg: &AppConfig) -> Result<MaintenanceReport, Str
         })
         .collect();
 
+    // --- Couches en attente de leur hôte (§4.3bis) ---
+    let waiting_layers = overlay::orphan_layers(conn)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|l| WaitingLayer {
+            id: l.id,
+            parent_id: l.parent_id,
+            parent_kind: l.parent_kind,
+            name: l.source_archive.unwrap_or(l.name),
+            added_count: l.added_count,
+            overwritten_count: l.overwritten_count,
+        })
+        .collect();
+
     Ok(MaintenanceReport {
         broken,
         orphans,
         orphan_subs,
+        waiting_layers,
     })
 }
 
@@ -1250,5 +1284,61 @@ mod tests {
         reindex_mod(&conn, &AppConfig::default(), "abarth500", true).unwrap();
         let m = overlay::get_mod(&conn, "abarth500").unwrap().unwrap();
         assert!(m.size_bytes.unwrap() >= 1000, "au moins les 1000 octets de data.acd");
+    }
+
+    /// Règle (§4.3bis) : une couche dont l'hôte n'est pas là est **en attente**,
+    /// pas orpheline — et elle doit être visible quelque part, sinon elle dort
+    /// dans la bibliothèque sans qu'aucun écran ne puisse la montrer (la fiche
+    /// qu'il faudrait ouvrir est celle d'un mod qui n'existe pas encore).
+    ///
+    /// Les couches d'app en font partie et ne doivent PAS y figurer quand leur
+    /// app est là : une app ne vit pas dans `mods`, un test naïf les aurait
+    /// toutes déclarées orphelines.
+    #[test]
+    fn layers_waiting_for_a_missing_host_are_listed_but_app_layers_are_not() {
+        let base = crate::testutil::temp_dir("waiting-layers");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+
+        // Un circuit présent, une app présente, et un id qui n'existe nulle part.
+        overlay::upsert_mod(&conn, "spa", "Track", None, Some("Spa"), "h", None, &now).unwrap();
+        overlay::insert_app(&conn, "CamTool_2", "apps/CamTool_2", None, &now).unwrap();
+
+        let mk = |id: &str, parent: &str, kind: &str| {
+            overlay::insert_layer(
+                &conn,
+                id,
+                parent,
+                kind,
+                id,
+                &format!("layers/{parent}/{id}"),
+                Some("a.7z"),
+                1,
+                0,
+                0,
+                &now,
+            )
+            .unwrap()
+        };
+        mk("L_track", "spa", "Track");
+        mk("L_app", "CamTool_2", "App");
+        mk("L_wait", "santa_monica_mtns", "Track");
+
+        let waiting = scan(&conn, &cfg).unwrap().waiting_layers;
+        assert_eq!(waiting.len(), 1, "seule la couche sans hôte est en attente");
+        assert_eq!(
+            waiting[0].parent_id, "santa_monica_mtns",
+            "elle nomme ce qu'elle attend"
+        );
+        assert_eq!(
+            waiting[0].id, "L_wait",
+            "une couche d'app dont l'app est là n'est pas en attente"
+        );
     }
 }

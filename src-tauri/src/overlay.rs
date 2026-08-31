@@ -2121,3 +2121,20 @@ pub fn launched_ids(conn: &Connection) -> rusqlite::Result<std::collections::Has
     let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
     rows.collect()
 }
+
+/// Couches dont l'hôte n'est **ni** un mod **ni** une app de la bibliothèque
+/// (§4.3bis) : une couche « en attente », rangée sous l'id qu'elle vise avant
+/// que celui-ci n'arrive — ou dont l'hôte a été supprimé depuis.
+///
+/// Les apps comptent, sans quoi toute couche d'app passerait pour orpheline :
+/// une app ne vit pas dans `mods`.
+pub fn orphan_layers(conn: &Connection) -> rusqlite::Result<Vec<LayerRow>> {
+    let mut stmt = conn.prepare(&format!(
+        "{LAYER_SELECT}
+          WHERE parent_id NOT IN (SELECT id_interne FROM mods)
+            AND parent_id NOT IN (SELECT id FROM apps)
+          ORDER BY parent_id, priority"
+    ))?;
+    let rows = stmt.query_map([], map_layer)?;
+    rows.collect()
+}
