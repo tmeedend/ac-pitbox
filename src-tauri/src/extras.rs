@@ -688,6 +688,168 @@ pub fn list(conn: &Connection, cfg: &AppConfig, owner: OwnerKind, mod_id: &str) 
     out
 }
 
+/// Reprise unique : les ajouts au jeu qui visaient l'intérieur du dossier d'une
+/// app deviennent des **couches de cette app** (§12bis.4).
+///
+/// Ces fichiers n'ont jamais été des ajouts au jeu : ils sont posés *dans* une
+/// app, pas à côté d'elle. Rangés en ajouts, ils produisaient deux défauts —
+/// le dossier de l'app **créé en vrai dossier** quand elle n'était pas
+/// installée, bloquant définitivement son installation ultérieure, et une
+/// écriture **à travers la junction** dans son dossier de bibliothèque une fois
+/// l'app active, qu'un réimport de celle-ci effaçait.
+///
+/// **Idempotente par construction** : une fois déplacés, plus aucun chemin
+/// `apps/<lang>/<id>/…` ne subsiste dans l'arbre des ajouts, donc un second
+/// passage ne trouve rien. Pas de drapeau à mémoriser.
+///
+/// **Sans risque de perte** : l'arbre des ajouts est la source, et il n'est
+/// touché qu'après un `undeploy` réussi. Un exemplaire posé dans le jeu est un
+/// **hardlink** de celui du magasin (compte de liens ≥ 2) — le retirer du jeu
+/// ne fait que décrémenter le compteur, l'exemplaire du magasin reste intact,
+/// y compris dans le cas tordu où le chemin de jeu traversait la junction d'une
+/// app et pointait donc dans la bibliothèque.
+///
+/// Renvoie le nombre de couches créées.
+pub fn migrate_app_extras_to_layers(conn: &Connection, cfg: &AppConfig) -> usize {
+    let Some(library) = cfg.library_path.as_ref() else {
+        return 0;
+    };
+    let mut created = 0usize;
+    for owner in [OwnerKind::Car, OwnerKind::Track, OwnerKind::App, OwnerKind::Pack] {
+        let cat = library.join("extras").join(owner.category());
+        let owners: Vec<String> = std::fs::read_dir(&cat)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.path().is_dir())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        for owner_id in owners {
+            created += migrate_one_owner(conn, cfg, library, owner, &owner_id);
+        }
+    }
+    created
+}
+
+fn migrate_one_owner(conn: &Connection, cfg: &AppConfig, library: &Path, owner: OwnerKind, owner_id: &str) -> usize {
+    let sat = root_of(&dir(library, owner, owner_id));
+    // `(id d'app, chemin dans l'app, fichier du magasin)`.
+    let mut parts: Vec<(String, PathBuf, PathBuf)> = Vec::new();
+    for e in WalkDir::new(&sat).into_iter().flatten() {
+        if !e.file_type().is_file() {
+            continue;
+        }
+        let Ok(rel) = e.path().strip_prefix(&sat) else { continue };
+        if let Some((app_id, inner)) = crate::apps::app_layer_target(rel) {
+            parts.push((app_id, inner, e.path().to_path_buf()));
+        }
+    }
+    if parts.is_empty() {
+        return 0;
+    }
+
+    // Retrait complet des ajouts de ce mod : c'est la seule opération qui sait
+    // défaire proprement une pose (compteur de références, restauration des
+    // fichiers du jeu sauvegardés). Ce qui n'est pas migré est reposé juste
+    // après.
+    if let Err(e) = undeploy(conn, cfg, owner_id) {
+        log::warn!("migrate_app_extras {owner_id}: undeploy: {e}");
+        return 0;
+    }
+
+    let mut apps_seen: Vec<String> = parts.iter().map(|(a, _, _)| a.clone()).collect();
+    apps_seen.sort();
+    apps_seen.dedup();
+
+    let mut created = 0usize;
+    for app_id in &apps_seen {
+        let Ok(staged) = crate::importer::make_temp_dir() else {
+            continue;
+        };
+        let mut moved = 0usize;
+        for (_, inner, src) in parts.iter().filter(|(a, _, _)| a == app_id) {
+            let dest = staged.join(inner);
+            if let Some(parent) = dest.parent() {
+                if std::fs::create_dir_all(parent).is_err() {
+                    continue;
+                }
+            }
+            if std::fs::rename(src, &dest).is_ok() || std::fs::copy(src, &dest).map(|_| ()).is_ok() {
+                let _ = std::fs::remove_file(src);
+                moved += 1;
+            }
+        }
+        if moved == 0 {
+            let _ = std::fs::remove_dir_all(&staged);
+            continue;
+        }
+        let base = overlay::get_app(conn, app_id)
+            .ok()
+            .flatten()
+            .and_then(|a| crate::libpath::resolve(cfg.library_path.as_deref(), &a.library_path));
+        let diff = match &base {
+            Some(d) => crate::identity::diff_content(&staged, d),
+            None => crate::identity::DiffStats {
+                added: moved,
+                overwritten: 0,
+                existing_total: 0,
+            },
+        };
+        match crate::layers::store_layer(
+            conn,
+            library,
+            app_id,
+            crate::layers::HostKind::App,
+            owner_id,
+            &staged,
+            false,
+            &diff,
+            &format!("migration:{owner_id}"),
+            crate::resources::ExtractionMode::InfoOnly,
+        ) {
+            Ok(_) => {
+                created += 1;
+                log::info!("migrate_app_extras: {moved} fichier(s) de {owner_id} -> couche de {app_id}");
+                if let Err(e) = crate::compose::recompose(conn, cfg, app_id) {
+                    // App absente : cas normal d'une couche en attente.
+                    log::warn!("migrate_app_extras: recompose {app_id}: {e}");
+                }
+            }
+            Err(e) => log::warn!("migrate_app_extras {owner_id} -> {app_id}: {e}"),
+        }
+        let _ = std::fs::remove_dir_all(&staged);
+    }
+
+    // Dossiers vidés par le déplacement : sans ce nettoyage, `apps/python/<id>/`
+    // subsisterait vide dans le magasin et serait reposé à chaque activation.
+    prune_empty_dirs(&sat.join("apps"));
+
+    // Ce qui restait d'ajouts légitimes est reposé — mais seulement si le mod
+    // est effectivement déployé, même règle qu'à l'import.
+    if crate::importer::is_owner_active(conn, cfg, owner, owner_id) {
+        if let Err(e) = deploy(conn, cfg, owner, owner_id) {
+            log::warn!("migrate_app_extras {owner_id}: redeploy: {e}");
+        }
+    }
+    created
+}
+
+/// Retire récursivement les dossiers devenus vides sous `root`, `root` compris.
+fn prune_empty_dirs(root: &Path) {
+    if !root.is_dir() {
+        return;
+    }
+    for e in std::fs::read_dir(root).into_iter().flatten().flatten() {
+        if e.path().is_dir() {
+            prune_empty_dirs(&e.path());
+        }
+    }
+    let empty = std::fs::read_dir(root).map(|mut d| d.next().is_none()).unwrap_or(false);
+    if empty {
+        let _ = std::fs::remove_dir(root);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1253,5 +1415,69 @@ mod tests {
         assert!(sat.join("extension").join("config").join("a.ini").is_file());
         assert!(sat.join("system").join("old.fxo").is_file(), "l'existant est conservé");
         assert!(src.join("config").join("a.ini").is_file(), "copie : source intacte");
+    }
+
+    /// Règle (§12bis.4) : un ajout au jeu qui visait l'intérieur d'une app
+    /// devient une couche de cette app, sans rien perdre ni laisser de dossier
+    /// fantôme derrière.
+    ///
+    /// Cas réels migrés : `pk_gunma_cycle_sports_center` livrant ses caméras à
+    /// CamTool_2, et une voiture RSS livrant son `.lua` à RSS_Settings.
+    #[test]
+    fn app_extras_become_app_layers_and_leave_no_phantom_folder() {
+        let base = crate::testutil::temp_dir("migrate-app-extras");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(&ac).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+
+        // Un circuit avec deux ajouts au jeu : un légitime, un qui vise une app.
+        let sat = dir(&library, OwnerKind::Track, "gunma");
+        let cams = sat.join("apps").join("python").join("CamTool_2").join("data");
+        std::fs::create_dir_all(&cams).unwrap();
+        std::fs::write(cams.join("gunma-1.json"), b"{}").unwrap();
+        std::fs::write(cams.join("gunma-2.json"), b"{}").unwrap();
+        let ext = sat.join("extension").join("config");
+        std::fs::create_dir_all(&ext).unwrap();
+        std::fs::write(ext.join("gunma.ini"), b"[LIGHT]").unwrap();
+
+        let created = migrate_app_extras_to_layers(&conn, &cfg);
+        assert_eq!(created, 1, "une couche créée pour CamTool_2");
+
+        let layers = overlay::list_layers(&conn, "CamTool_2").unwrap();
+        assert_eq!(layers.len(), 1, "une seule couche, pas une par fichier");
+        assert_eq!(layers[0].name, "gunma", "nommée d'après le circuit qui la livre");
+        let dir_l = crate::libpath::resolve(Some(&library), &layers[0].library_path).unwrap();
+        assert!(
+            dir_l.join("data").join("gunma-1.json").is_file(),
+            "chemin relatif au dossier de l'app, préfixe apps/<lang>/<id> retiré"
+        );
+        assert!(dir_l.join("data").join("gunma-2.json").is_file(), "les deux fichiers");
+
+        // L'ajout au jeu légitime n'a pas bougé.
+        assert!(
+            ext.join("gunma.ini").is_file(),
+            "ce qui n'était pas destiné à une app reste un ajout au jeu"
+        );
+        // Et le magasin ne garde pas un `apps/` vide qui serait reposé.
+        assert!(!sat.join("apps").exists(), "les dossiers vidés sont retirés du magasin");
+
+        // Idempotente : un second passage ne trouve plus rien.
+        assert_eq!(
+            migrate_app_extras_to_layers(&conn, &cfg),
+            0,
+            "rien à reprendre au deuxième démarrage"
+        );
+        assert_eq!(
+            overlay::list_layers(&conn, "CamTool_2").unwrap().len(),
+            1,
+            "pas de couche en double"
+        );
     }
 }

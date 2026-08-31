@@ -880,6 +880,11 @@ fn sweep_leftovers(
     // leur arbre n'existe pas encore — sans ce rattrapage, ils ne
     // seraient posés qu'à la réactivation suivante.
     let mut owners_with_extras: Vec<(String, OwnerKind)> = Vec::new();
+    // Restes qui visent l'intérieur du dossier d'une app (§12bis.4).
+    // **Accumulés, pas rangés au vol** : un circuit qui livre neuf fichiers de
+    // caméras à CamTool doit produire UNE couche, pas neuf. Vidés après la
+    // boucle, groupés par app.
+    let mut app_layer_parts: Vec<AppLayerPart> = Vec::new();
 
     // Les archives imbriquées passent AVANT leurs voisins : ce qui en sort peut
     // devenir le propriétaire de ce qui les entoure. Cas réel : une archive qui
@@ -948,6 +953,38 @@ fn sweep_leftovers(
             }
             // Rangement en attente impossible : on retombe sur le classement
             // d'avant, qui ne perd rien non plus.
+        }
+
+        // Couche d'app (§12bis.4) : le chemin vise l'intérieur du dossier d'une
+        // app, donc ce n'est pas un ajout au jeu — c'est une couche de cette
+        // app. Le test passe **avant** la recherche de propriétaire : la cible
+        // est écrite dans le chemin, elle ne dépend pas de qui livre le
+        // fichier. Le propriétaire sert ensuite à nommer la couche, pas à la
+        // router.
+        let aimed = app_layer_targets_under(&rel, &p);
+        if !aimed.consumed_everything {
+            // Reste **mixte** (`apps/` livré en bloc avec du non-app à côté) :
+            // on ne prend rien du tout et on retombe sur le classement d'avant.
+            // Consommer la moitié dupliquerait les fichiers en import « copie »
+            // et laisserait `extras::store` ranger un dossier amputé en
+            // « déplacement » — mieux vaut le comportement connu.
+            if !aimed.parts.is_empty() {
+                log::warn!(
+                    "app layer: {} mélange des chemins d'app et d'autres, laissé en ajouts au jeu",
+                    rel.display()
+                );
+            }
+        } else if !aimed.parts.is_empty() {
+            let provider = owner_of_leftover(&rel, &owners, pack.as_ref()).map(|(id, _)| id.clone());
+            for (app_id, inner, source) in aimed.parts {
+                app_layer_parts.push(AppLayerPart {
+                    app_id,
+                    inner,
+                    source,
+                    provider: provider.clone(),
+                });
+            }
+            continue;
         }
 
         {
@@ -1097,6 +1134,17 @@ fn sweep_leftovers(
         );
     }
 
+    flush_app_layers(
+        conn,
+        cfg,
+        library,
+        archive_name,
+        app_layer_parts,
+        copy,
+        res_mode,
+        result,
+    );
+
     for (id, owner) in owners_with_extras {
         // Seulement si le mod est effectivement déployé : poser les ajouts au jeu
         // d'un mod inactif mettrait dans AC du contenu que rien n'y annonce.
@@ -1109,11 +1157,189 @@ fn sweep_leftovers(
     }
 }
 
+/// Ce qu'un reste vise à l'intérieur d'apps, et s'il n'y a que ça dedans.
+struct AimedAtApps {
+    /// `(id d'app, chemin dans l'app, fichier source)`.
+    parts: Vec<(String, PathBuf, PathBuf)>,
+    /// Tous les fichiers du reste visent une app. Faux dès qu'il en reste un
+    /// seul qui n'en vise pas — auquel cas on n'y touche pas du tout.
+    consumed_everything: bool,
+}
+
+/// Cherche, **à toute profondeur** sous un reste, les fichiers qui visent
+/// l'intérieur du dossier d'une app (§12bis.4).
+///
+/// Le balayage ramasse les restes **en bloc** : un `apps/` livré à côté d'un
+/// circuit arrive ici comme un seul dossier nommé `apps`, pas comme ses
+/// fichiers. Tester le seul chemin du reste ne voyait donc jamais rien —
+/// `apps` n'a pas assez de composants pour désigner une app. Chaque fichier
+/// porte en revanche son propre chemin de jeu, et c'est lui qui décide.
+fn app_layer_targets_under(rel: &Path, p: &Path) -> AimedAtApps {
+    if p.is_file() {
+        let parts = crate::apps::app_layer_target(rel)
+            .map(|(id, inner)| (id, inner, p.to_path_buf()))
+            .into_iter()
+            .collect::<Vec<_>>();
+        let consumed_everything = !parts.is_empty();
+        return AimedAtApps {
+            parts,
+            consumed_everything,
+        };
+    }
+    let mut parts = Vec::new();
+    let mut total = 0usize;
+    for e in walkdir::WalkDir::new(p).into_iter().flatten() {
+        if !e.file_type().is_file() {
+            continue;
+        }
+        total += 1;
+        let Ok(sub) = e.path().strip_prefix(p) else { continue };
+        if let Some((id, inner)) = crate::apps::app_layer_target(&rel.join(sub)) {
+            parts.push((id, inner, e.path().to_path_buf()));
+        }
+    }
+    let consumed_everything = total > 0 && parts.len() == total;
+    AimedAtApps {
+        parts,
+        consumed_everything,
+    }
+}
+
+/// Un reste destiné à l'intérieur du dossier d'une app (§12bis.4).
+struct AppLayerPart {
+    /// App visée, lue dans le chemin (`apps/<lang>/<app_id>/…`).
+    app_id: String,
+    /// Chemin **dans** le dossier de l'app — ce que la couche reconstitue.
+    inner: PathBuf,
+    /// Fichier ou dossier d'où il vient.
+    source: PathBuf,
+    /// Mod qui le livre, quand il y en a un : sert à **nommer** la couche, pas
+    /// à la router. C'est ce qui rend « les caméras de tel circuit »
+    /// identifiable et supprimable à la main sur la fiche de l'app.
+    provider: Option<String>,
+}
+
+/// Range en couches les restes qui visaient l'intérieur d'une app : **une
+/// couche par app**, quel qu'en soit le nombre de fichiers (§12bis.4).
+///
+/// Chaque groupe est reconstitué dans un dossier temporaire qui rejoue les
+/// chemins **relatifs au dossier de l'app** — une couche se compose par-dessus
+/// la base de son hôte, donc `data/x.json`, jamais `apps/python/<id>/data/x.json`,
+/// qui donnerait `apps/python/<id>/apps/python/<id>/data/x.json` à la
+/// composition.
+#[allow(clippy::too_many_arguments)]
+fn flush_app_layers(
+    conn: &Connection,
+    cfg: &AppConfig,
+    library: &Path,
+    archive_name: &str,
+    parts: Vec<AppLayerPart>,
+    copy: bool,
+    res_mode: crate::resources::ExtractionMode,
+    result: &mut ArchiveResult,
+) {
+    let mut by_app: Vec<String> = parts.iter().map(|p| p.app_id.clone()).collect();
+    by_app.sort();
+    by_app.dedup();
+
+    for app_id in by_app {
+        let group: Vec<&AppLayerPart> = parts.iter().filter(|p| p.app_id == app_id).collect();
+        let Ok(staged) = make_temp_dir() else { continue };
+        let mut placed = 0usize;
+        for part in &group {
+            // `inner` vide = le reste EST le dossier de l'app : son contenu est
+            // la couche, et la racine du staging est donc sa destination.
+            let dest = if part.inner.as_os_str().is_empty() {
+                staged.clone()
+            } else {
+                staged.join(&part.inner)
+            };
+            if let Some(parent) = dest.parent() {
+                if let Err(e) = std::fs::create_dir_all(parent) {
+                    log::warn!("app layer {app_id}: create staging dir: {e}");
+                    continue;
+                }
+            }
+            // `copy` = la source appartient à l'utilisateur (dossier qu'il
+            // désigne) : on n'y touche pas, exactement comme `import_leftover`.
+            let ok = if part.source.is_dir() {
+                if copy {
+                    archive::copy_dir(&part.source, &dest).is_ok()
+                } else {
+                    archive::move_dir(&part.source, &dest).is_ok()
+                }
+            } else if copy {
+                std::fs::copy(&part.source, &dest).is_ok()
+            } else {
+                std::fs::rename(&part.source, &dest).is_ok() || std::fs::copy(&part.source, &dest).is_ok()
+            };
+            if ok {
+                placed += 1;
+            } else {
+                log::warn!("app layer {app_id}: could not stage {}", part.inner.display());
+            }
+        }
+        if placed == 0 {
+            let _ = std::fs::remove_dir_all(&staged);
+            continue;
+        }
+
+        // Décompte face à la base de l'app, quand elle est là. Absente, il n'y a
+        // rien à comparer : la couche attend son hôte, et le rapport le dira.
+        let base = crate::overlay::get_app(conn, &app_id)
+            .ok()
+            .flatten()
+            .and_then(|a| crate::libpath::resolve(cfg.library_path.as_deref(), &a.library_path));
+        let diff = match &base {
+            Some(dir) => identity::diff_content(&staged, dir),
+            None => crate::identity::DiffStats {
+                added: placed,
+                overwritten: 0,
+                existing_total: 0,
+            },
+        };
+        // Nommée d'après le mod qui la livre : c'est ainsi qu'on reconnaît
+        // « les caméras de tel circuit » dans « Couches & extensions ».
+        let name = sanitize(
+            group
+                .iter()
+                .find_map(|p| p.provider.clone())
+                .unwrap_or_else(|| archive_name.to_string())
+                .as_str(),
+        );
+        // `copy: false` : le staging est un temporaire à nous, il se vide.
+        match layers::store_layer(
+            conn,
+            library,
+            &app_id,
+            crate::layers::HostKind::App,
+            &name,
+            &staged,
+            false,
+            &diff,
+            archive_name,
+            res_mode,
+        ) {
+            Ok(_) => {
+                result.extras += placed;
+                if let Err(e) = crate::compose::recompose(conn, cfg, &app_id) {
+                    // App absente : c'est le cas normal d'une couche en attente
+                    // (§4.3bis), pas une anomalie — elle sera reprise le jour
+                    // où l'app arrive.
+                    log::warn!("recompose app {app_id} after layer: {e}");
+                }
+            }
+            Err(e) => log::warn!("app layer {app_id}: {e}"),
+        }
+        let _ = std::fs::remove_dir_all(&staged);
+    }
+}
+
 /// Le propriétaire est-il posé dans le jeu ? Chaque type a son mécanisme —
 /// hardlinks/junction dans `content/` pour un mod, junction dans `apps/` pour
 /// une app — mais la question posée avant de déployer des ajouts au jeu est la
 /// même : ne rien mettre dans AC au nom de quelque chose qui n'y est pas.
-fn is_owner_active(conn: &Connection, cfg: &AppConfig, owner: OwnerKind, id: &str) -> bool {
+pub(crate) fn is_owner_active(conn: &Connection, cfg: &AppConfig, owner: OwnerKind, id: &str) -> bool {
     match owner {
         OwnerKind::Car => crate::activation::is_mod_active(cfg, ModKind::Car, id),
         OwnerKind::Track => crate::activation::is_mod_active(cfg, ModKind::Track, id),
@@ -2773,7 +2999,7 @@ pub(crate) fn unique_dir(base: &Path) -> PathBuf {
     PathBuf::from(p)
 }
 
-fn make_temp_dir() -> std::io::Result<PathBuf> {
+pub(crate) fn make_temp_dir() -> std::io::Result<PathBuf> {
     let dir = std::env::temp_dir().join(format!("pitbox-import-{}", Uuid::new_v4()));
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
@@ -5350,6 +5576,67 @@ mod tests {
             incoming_name(Path::new(r"C:\Temp\wrap\ks_nordschleife"), "pack.zip"),
             "ks_nordschleife",
             "le nom du dossier reste l'identité quand il en est une"
+        );
+    }
+
+    #[test]
+    fn files_aimed_inside_an_app_become_one_layer_of_that_app() {
+        // Règle (§12bis.4) : des fichiers posés DANS le dossier d'une app sont
+        // une couche de cette app, pas des ajouts au jeu du mod qui les livre.
+        // Cas réel : le circuit `pk_gunma_cycle_sports_center` livre neuf
+        // fichiers de caméras pour CamTool 2. Rangés en ajouts au jeu, ils
+        // créaient `apps/python/CamTool_2/` en VRAI dossier — ce qui bloquait
+        // définitivement l'installation de CamTool ensuite (§12bis.1bis).
+        //
+        // Et **une seule** couche, pas une par fichier.
+        let base = crate::testutil::temp_dir("app-layer-import");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(&ac).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        // Un circuit, et à côté de lui les caméras destinées à CamTool.
+        let src = base.join("src");
+        make_fake_track(&src.join("content").join("tracks"), "gunma");
+        let cams = src.join("apps").join("python").join("CamTool_2").join("data");
+        std::fs::create_dir_all(&cams).unwrap();
+        std::fs::write(cams.join("gunma-1.json"), b"{}").unwrap();
+        std::fs::write(cams.join("gunma-2.json"), b"{}").unwrap();
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert_eq!(r.mods.len(), 1, "le circuit s'importe normalement");
+
+        let layers = crate::overlay::list_layers(&conn, "CamTool_2").unwrap();
+        assert_eq!(layers.len(), 1, "une seule couche pour les deux fichiers");
+        assert_eq!(layers[0].name, "gunma", "nommée d'après le mod qui la livre");
+
+        // Les chemins de la couche sont relatifs au dossier de l'app, sinon la
+        // composition donnerait apps/python/<id>/apps/python/<id>/data/…
+        let dir = crate::libpath::resolve(Some(&library), &layers[0].library_path).unwrap();
+        assert!(
+            dir.join("data").join("gunma-1.json").is_file(),
+            "chemin relatif à l'app"
+        );
+        assert!(
+            dir.join("data").join("gunma-2.json").is_file(),
+            "les deux fichiers y sont"
+        );
+        assert!(
+            !dir.join("apps").exists(),
+            "le préfixe apps/<lang>/<id> a bien été retiré"
+        );
+
+        // Et surtout : rien n'a été créé dans le jeu pour une app absente.
+        assert!(
+            !ac.join("apps").join("python").join("CamTool_2").exists(),
+            "aucun dossier d'app fantôme dans l'install"
         );
     }
 }

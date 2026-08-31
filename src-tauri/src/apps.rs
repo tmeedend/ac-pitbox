@@ -50,6 +50,35 @@ pub(crate) fn app_lang(stored_dir: &Path, id: &str) -> &'static str {
     }
 }
 
+/// Un chemin de jeu qui vise **l'intérieur** du dossier d'une app :
+/// `apps/<lang>/<AppId>[/<reste>]` → (`AppId`, `<reste>`).
+///
+/// C'est ce qui sépare une **couche d'app** (§12bis.4) d'un ajout au jeu
+/// (§4.5.3) : ces fichiers ne sont pas posés *à côté* de l'app, ils sont posés
+/// **dedans**, et c'est très exactement la définition d'une couche. Les traiter
+/// comme des ajouts au jeu produisait deux défauts — le dossier de l'app créé
+/// en vrai dossier quand elle n'est pas installée (bloquant son installation
+/// ultérieure), et une écriture **à travers la junction** dans son dossier de
+/// bibliothèque une fois active, qu'un réimport de l'app effaçait.
+///
+/// Le reste peut être vide : le reste balayé est alors le dossier de l'app
+/// lui-même, et son contenu est la couche.
+pub fn app_layer_target(rel: &Path) -> Option<(String, PathBuf)> {
+    let mut it = rel.components();
+    let first = it.next()?.as_os_str().to_str()?;
+    if !first.eq_ignore_ascii_case("apps") {
+        return None;
+    }
+    let lang = it.next()?.as_os_str().to_str()?;
+    // Seulement les deux dossiers qu'AC lit réellement : `apps/` en contient
+    // d'autres (`gui/`, `shaders/`…) qui ne sont pas des dossiers d'app.
+    if !lang.eq_ignore_ascii_case("python") && !lang.eq_ignore_ascii_case("lua") {
+        return None;
+    }
+    let id = it.next()?.as_os_str().to_str()?.to_string();
+    Some((id, it.as_path().to_path_buf()))
+}
+
 /// Lien d'activation d'une app : `<ac>/apps/<lang>/<id>`.
 pub(crate) fn app_link(cfg: &AppConfig, id: &str, lang: &str) -> Option<PathBuf> {
     cfg.ac_install_path

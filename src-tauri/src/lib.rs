@@ -138,6 +138,17 @@ pub fn run() {
                 _ => {}
             }
 
+            // Reprise (§12bis.4) : les ajouts au jeu qui visaient l'intérieur du
+            // dossier d'une app deviennent des couches de cette app. Rangés
+            // avant que les couches d'app n'existent, ils créaient le dossier de
+            // l'app en vrai dossier — ce qui bloquait ensuite son installation.
+            // Idempotente par construction (plus aucun chemin `apps/<lang>/…`
+            // ne subsiste après coup), donc sans drapeau à mémoriser.
+            match extras::migrate_app_extras_to_layers(&conn, &cfg) {
+                0 => {}
+                n => log::warn!("migrated {n} app extra tree(s) to app layers"),
+            }
+
             // L'harmonisation (§5) est calculée une fois à l'import puis
             // stockée : faire évoluer le moteur ne change donc rien à ce qui
             // est déjà en base, et personne ne devinerait qu'il faut rouvrir

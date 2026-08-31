@@ -119,6 +119,13 @@ flowchart TD
     PATH -->|oui| EXT["AJOUTS AU JEU du mod"]
 ```
 
+**Un test passe avant le propriétaire** : si le chemin de jeu du fichier est
+`apps/<lang>/<AppId>/…`, il vise l'intérieur d'une app — c'est une **couche de
+cette app** (§12bis.4 du SPEC), pas un ajout au jeu. La cible est écrite dans le
+chemin, elle ne dépend donc pas de qui livre le fichier ; le propriétaire ne
+sert ensuite qu'à nommer la couche. Une seule couche par app, quel qu'en soit le
+nombre de fichiers.
+
 **Le propriétaire**, dans cet ordre :
 
 1. le chemin contient l'id d'exactement **un** mod reconnu de la source ;
