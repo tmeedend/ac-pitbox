@@ -416,13 +416,22 @@ const WROTE_NOTHING = new Set(["DUPLICATE", "AMBIGUOUS", "UNMANAGED", "HOST_MISS
  * bien une couche. */
 export function importSummary(report: ArchiveResult[]): string {
   const written = (a: ArchiveResult) => a.mods.filter((m) => !WROTE_NOTHING.has(m.outcome));
+  // Même règle pour les sous-éléments que pour les mods : un sous-élément resté
+  // en attente de décision n'a **rien** rangé. Les compter faisait annoncer
+  // « 6 éléments importés » juste après que l'utilisateur ait répondu six fois
+  // « ne pas importer » — le titre démentait la fenêtre (signalé à l'usage,
+  // même défaut que celui qui avait motivé `WROTE_NOTHING` pour les mods).
+  const subsWritten = (a: ArchiveResult) => (a.subs ?? []).filter((s) => !s.awaiting_decision);
   const n = report.reduce(
-    (acc, a) => acc + written(a).length + (a.subs?.length ?? 0) + (a.apps?.length ?? 0) + (a.others?.length ?? 0),
+    (acc, a) => acc + written(a).length + subsWritten(a).length + (a.apps?.length ?? 0) + (a.others?.length ?? 0),
     0,
   );
   // Dit dans le titre pourquoi le compte est plus bas qu'attendu ; le détail
   // (lequel, et pourquoi) est dans le corps du rapport, juste en dessous.
-  const skipped = report.reduce((acc, a) => acc + a.mods.length - written(a).length, 0);
+  const skipped = report.reduce(
+    (acc, a) => acc + (a.mods.length - written(a).length) + ((a.subs?.length ?? 0) - subsWritten(a).length),
+    0,
+  );
   const errs = report.filter((a) => a.error).length;
   return (
     t("importOverlay.summaryBase", { n }) +
