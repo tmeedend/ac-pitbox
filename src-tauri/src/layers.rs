@@ -64,10 +64,10 @@ impl HostKind {
         }
     }
 
-    /// Segment de bibliothèque du dossier ressources : `<lib>/resources/<cat>/<id>`.
-    /// Aligné sur ce qu'écrivent déjà `resources_dir` (mods) et `import_apps`
-    /// (apps) — une couche range ses annexes au même endroit que son hôte.
-    pub fn resources_category(self) -> &'static str {
+    /// Segment de bibliothèque par type : `<lib>/layers/<cat>/<id>` et
+    /// `<lib>/resources/<cat>/<id>`. Aligné sur ce qu'écrivent déjà
+    /// `resources_dir` (mods), `import_apps` (apps) et `extras::dir`.
+    pub fn category(self) -> &'static str {
         match self {
             HostKind::Car => "cars",
             HostKind::Track => "tracks",
@@ -121,8 +121,13 @@ pub fn store_layer(
             return Err(crate::errors::UNMANAGED_NO_LAYER.into());
         }
     }
-    let dest = importer::unique_dir(&library.join("layers").join(parent_id).join(name));
-    let res_dir = resources::resources_dir_for(library, kind.resources_category(), &[parent_id]);
+    // `<lib>/layers/<type>/<hôte>/<nom>` — le segment de type aligne cet arbre
+    // sur `extras/` et `resources/`, et rend lisible à l'œil ce que la base sait
+    // déjà : un circuit et une app peuvent porter le même id (§4.4). Les couches
+    // rangées **avant** ce segment gardent leur chemin, qui est lu en base et
+    // jamais recalculé — elles continuent donc de fonctionner là où elles sont.
+    let dest = importer::unique_dir(&library.join("layers").join(kind.category()).join(parent_id).join(name));
+    let res_dir = resources::resources_dir_for(library, kind.category(), &[parent_id]);
     let extracted = resources::file_mod(src_dir, &dest, &res_dir, mode, !copy, resources::Source::ModFolder)?;
 
     let now = Local::now().to_rfc3339();
@@ -281,6 +286,64 @@ mod tests {
         assert!(
             !library.join("layers").join("srp").exists(),
             "nothing written to the library either"
+        );
+    }
+
+    /// Règle (§4.4) : une couche est rangée sous le type de son hôte —
+    /// `<lib>/layers/<type>/<hôte>/<nom>` — comme `extras/` et `resources/`.
+    ///
+    /// Ce n'est pas une exigence de correction : la base distingue déjà les
+    /// espaces de noms. C'est de la lisibilité sur le disque, et ça évite qu'un
+    /// circuit et une app homonymes voient leurs couches se mêler dans un même
+    /// dossier. Les couches rangées avant ce segment gardent leur chemin, lu en
+    /// base et jamais recalculé.
+    #[test]
+    fn a_layer_is_filed_under_its_host_type() {
+        let base = crate::testutil::temp_dir("layer-path");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_mod(&conn, "shuto", "Track", None, Some("Shuto"), "h", None, &now).unwrap();
+        overlay::insert_app(&conn, "shuto", "apps/shuto", None, &now).unwrap();
+
+        let src = base.join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("a.ini"), b"[X]").unwrap();
+
+        let zero = DiffStats {
+            added: 1,
+            overwritten: 0,
+            existing_total: 0,
+        };
+        for kind in [HostKind::Track, HostKind::App] {
+            store_layer(
+                &conn,
+                &library,
+                "shuto",
+                kind,
+                "pack",
+                &src,
+                true,
+                &zero,
+                "pack.7z",
+                ExtractionMode::None,
+            )
+            .unwrap();
+        }
+
+        assert!(
+            library
+                .join("layers")
+                .join("tracks")
+                .join("shuto")
+                .join("pack")
+                .is_dir(),
+            "la couche du circuit sous tracks/"
+        );
+        assert!(
+            library.join("layers").join("apps").join("shuto").join("pack").is_dir(),
+            "celle de l'app sous apps/, sans se mêler à la précédente"
         );
     }
 }
