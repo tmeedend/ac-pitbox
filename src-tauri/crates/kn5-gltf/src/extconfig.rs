@@ -924,7 +924,12 @@ fn apply_one(model: &mut Kn5Model, replacement: &Replacement, stats: &mut ExtCon
     };
 
     let triangles = inserted.triangle_count();
-    let graft = merge_assets(model, inserted, replacement);
+    let graft = merge_assets(
+        model,
+        inserted,
+        GRAFT_MARKER,
+        compose(replacement.scale, replacement.rotation, replacement.offset),
+    );
     let anchored = anchor(&mut model.root, graft, replacement);
     if anchored == 0 {
         stats.failures.push(format!(
@@ -940,15 +945,24 @@ fn apply_one(model: &mut Kn5Model, replacement: &Replacement, stats: &mut ExtCon
 }
 
 /// Moves the inserted model's textures and materials into the host, rewrites
-/// the grafted subtree's material indices, and wraps it in a dummy carrying
-/// the section's offset/rotation/scale.
+/// the grafted subtree's material indices, and wraps it in a dummy named
+/// `wrapper` carrying `transform`.
+///
+/// Shared with `driver.rs`, which grafts a whole mannequin the same way — the
+/// asset merge below is the part that has nothing to do with CSP, and writing
+/// it twice would mean two answers to the texture clash question.
 ///
 /// Textures are keyed **by name** in a KN5, so two files can disagree about
 /// what `black.dds` contains. An identical blob is shared; a genuine clash is
 /// renamed and the inserted materials are pointed at the new name. Renaming
 /// costs that one texture its skin override, which is a far smaller price than
 /// showing the wrong image.
-fn merge_assets(host: &mut Kn5Model, mut inserted: Kn5Model, replacement: &Replacement) -> Kn5Node {
+pub(crate) fn merge_assets(
+    host: &mut Kn5Model,
+    mut inserted: Kn5Model,
+    wrapper: &str,
+    transform: [f32; 16],
+) -> Kn5Node {
     let mut renamed: HashMap<String, String> = HashMap::new();
     for texture in inserted.textures.drain(..) {
         if !texture.has_data() {
@@ -983,11 +997,9 @@ fn merge_assets(host: &mut Kn5Model, mut inserted: Kn5Model, replacement: &Repla
     shift_materials(&mut root, material_base);
 
     Kn5Node {
-        name: GRAFT_MARKER.to_string(),
+        name: wrapper.to_string(),
         active: true,
-        kind: Kn5NodeKind::Dummy {
-            transform: compose(replacement.scale, replacement.rotation, replacement.offset),
-        },
+        kind: Kn5NodeKind::Dummy { transform },
         children: vec![root],
     }
 }
@@ -1115,7 +1127,7 @@ fn hide_matching(node: &mut Kn5Node, pattern: &str) -> usize {
 /// Rotation is heading (around Y, up), pitch (around X) and roll (around Z),
 /// applied roll → pitch → heading. Right-handed, consistent with the "no
 /// handedness conversion" finding in `geometry.rs`.
-fn compose(scale: [f32; 3], rotation_deg: [f32; 3], offset: [f32; 3]) -> [f32; 16] {
+pub(crate) fn compose(scale: [f32; 3], rotation_deg: [f32; 3], offset: [f32; 3]) -> [f32; 16] {
     let [heading, pitch, roll] = rotation_deg.map(f32::to_radians);
     let (sh, ch) = heading.sin_cos();
     let (sp, cp) = pitch.sin_cos();

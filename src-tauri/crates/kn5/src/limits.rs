@@ -31,6 +31,10 @@ pub struct Limits {
     /// Nesting depth of the node tree — guards the recursion (stack overflow
     /// is not recoverable, so this cap is the only defence).
     pub max_depth: usize,
+    /// Nodes a single `.ksanim` animates. A driver rig is 60.
+    pub max_animated_nodes: usize,
+    /// Frames a single animated node carries. A steering animation is 100.
+    pub max_frames: usize,
 }
 
 impl Default for Limits {
@@ -47,6 +51,8 @@ impl Default for Limits {
             max_vertices: 8_000_000,
             max_indices: 32_000_000,
             max_depth: 256,
+            max_animated_nodes: 8_192,
+            max_frames: 65_536,
         }
     }
 }

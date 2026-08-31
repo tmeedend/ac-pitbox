@@ -4,7 +4,9 @@
 //! flattening the hierarchy, changing handedness, and dropping the nodes that
 //! are not meant to be drawn.
 
-use kn5::{Kn5Material, Kn5Mesh, Kn5Model, Kn5Node};
+use std::collections::BTreeMap;
+
+use kn5::{Kn5Material, Kn5Mesh, Kn5Model, Kn5Node, Kn5NodeKind, Kn5SkinBinding};
 
 // **Aucune conversion de repère, et aucune inversion de la coordonnée V.**
 // Le §4.4 de la spec demande les deux ; les deux sont fausses, et il a fallu
@@ -132,12 +134,22 @@ pub fn flatten(model: &Kn5Model, options: &GeometryOptions) -> (Vec<FlatMesh>, G
     let mut stats = GeometryStats::default();
     let drop_low_res_cockpit =
         options.skip_low_res_cockpit && has_node(model, HIGH_RES_COCKPIT) && has_node(model, LOW_RES_COCKPIT);
+    // Calculé en amont, et seulement s'il y a de quoi s'en servir : c'est un
+    // second parcours complet de l'arbre, que la quasi-totalité des modèles
+    // n'a aucune raison de payer — un maillage skinné sur une voiture, ça
+    // n'existe pas. Le pilote greffé en apporte deux (§4.6bis).
+    let bones = if has_skinned_mesh(model) {
+        node_world_matrices(model)
+    } else {
+        BTreeMap::new()
+    };
     walk(
         &model.root,
         &IDENTITY,
         &model.materials,
         options,
         drop_low_res_cockpit,
+        &bones,
         &mut meshes,
         &mut stats,
     );
@@ -216,12 +228,14 @@ fn mesh_count(node: &Kn5Node) -> usize {
     count
 }
 
+#[allow(clippy::too_many_arguments)]
 fn walk(
     node: &Kn5Node,
     parent_world: &[f32; 16],
     materials: &[Kn5Material],
     options: &GeometryOptions,
     drop_low_res_cockpit: bool,
+    bones: &BTreeMap<String, [f32; 16]>,
     meshes: &mut Vec<FlatMesh>,
     stats: &mut GeometryStats,
 ) {
@@ -249,7 +263,15 @@ fn walk(
                 Skip::BrokenGlass => stats.skipped_broken_glass += 1,
             },
             Keep::Yes => {
-                let flat = convert_mesh(&node.name, mesh, &world);
+                // Un maillage skinné n'est pas placé par son nœud mais par ses
+                // os : la transformation accumulée ne le concerne pas. Repli
+                // sur le traitement rigide si un seul os manque à l'appel — en
+                // pose de repos les deux donnent le même résultat, ce qui est
+                // exactement ce qu'il faut quand on ne sait pas poser.
+                let flat = match skinning_matrices(&node.kind, bones) {
+                    Some(matrices) => convert_skinned_mesh(&node.name, &node.kind, &matrices),
+                    None => convert_mesh(&node.name, mesh, &world),
+                };
                 if determinant3(&world) < 0.0 {
                     stats.mirrored += 1;
                 }
@@ -260,8 +282,160 @@ fn walk(
     }
 
     for child in &node.children {
-        walk(child, &world, materials, options, drop_low_res_cockpit, meshes, stats);
+        walk(
+            child,
+            &world,
+            materials,
+            options,
+            drop_low_res_cockpit,
+            bones,
+            meshes,
+            stats,
+        );
     }
+}
+
+/// Le modèle porte-t-il au moins un maillage skinné ?
+fn has_skinned_mesh(model: &Kn5Model) -> bool {
+    let mut found = false;
+    model.visit_nodes(&mut |node| found |= matches!(node.kind, Kn5NodeKind::SkinnedMesh(_)));
+    found
+}
+
+/// Transformation monde de chaque nœud, par nom — ce dont les os ont besoin,
+/// puisqu'un os désigne un nœud de l'arbre par son nom et rien d'autre.
+///
+/// Premier nom gagnant en cas d'homonymie. Le cas existe dans les modèles
+/// (un maillage porte souvent le nom du dummy qui le tient), mais pas sur un
+/// os : les noms de rig sont uniques.
+fn node_world_matrices(model: &Kn5Model) -> BTreeMap<String, [f32; 16]> {
+    let mut out = BTreeMap::new();
+    collect_matrices(&model.root, &IDENTITY, &mut out);
+    out
+}
+
+fn collect_matrices(node: &Kn5Node, parent_world: &[f32; 16], out: &mut BTreeMap<String, [f32; 16]>) {
+    let world = match node.transform() {
+        Some(local) => multiply(local, parent_world),
+        None => *parent_world,
+    };
+    out.entry(node.name.clone()).or_insert(world);
+    for child in &node.children {
+        collect_matrices(child, &world, out);
+    }
+}
+
+/// Une matrice par os : inverse de la pose de liaison, puis transformation
+/// monde courante — dans cet ordre, convention vecteur-ligne, donc un sommet
+/// la traverse de gauche à droite.
+///
+/// `None` dès qu'un seul os manque. Un skinning partiel ne se rattrape pas :
+/// les sommets rattachés à l'os absent partiraient à l'origine, ce qui étire
+/// le maillage entier en éventail. La pose de repos entière vaut mieux.
+fn skinning_matrices(kind: &Kn5NodeKind, bones: &BTreeMap<String, [f32; 16]>) -> Option<Vec<[f32; 16]>> {
+    let Kn5NodeKind::SkinnedMesh(skinned) = kind else {
+        return None;
+    };
+    if skinned.skin.is_empty() || skinned.bones.is_empty() {
+        return None;
+    }
+    skinned
+        .bones
+        .iter()
+        .map(|bone| {
+            bones
+                .get(&bone.name)
+                .map(|world| multiply(&bone.inverse_bind_matrix, world))
+        })
+        .collect()
+}
+
+/// Skinning linéaire : chaque sommet suit la moyenne pondérée des matrices de
+/// ses quatre os.
+///
+/// **En pose de liaison, ce calcul rend l'identité** — c'est ce qui rend son
+/// absence invisible tant qu'on n'anime rien, et c'est aussi pourquoi il n'est
+/// pas optionnel dès qu'on anime : sans lui, la combinaison et les gants
+/// resteraient en arrière pendant que le casque, simple enfant de l'os de
+/// tête, suivrait le rig. Le pilote se démembrerait à l'écran.
+///
+/// Les normales passent par l'inverse transposée de la matrice mélangée, comme
+/// dans le cas rigide : un mélange de matrices n'est plus une rotation, même
+/// quand chacune en était une.
+fn convert_skinned_mesh(name: &str, kind: &Kn5NodeKind, matrices: &[[f32; 16]]) -> FlatMesh {
+    let Kn5NodeKind::SkinnedMesh(skinned) = kind else {
+        unreachable!("skinning_matrices ne répond que pour un maillage skinné")
+    };
+    let mesh = &skinned.mesh;
+
+    let mut positions = Vec::with_capacity(mesh.vertices.len());
+    let mut normals = Vec::with_capacity(mesh.vertices.len());
+    let mut uvs = Vec::with_capacity(mesh.vertices.len());
+    let mut tangents = Vec::with_capacity(mesh.vertices.len());
+    let uv_handedness = uv_handedness(mesh);
+
+    for (index, vertex) in mesh.vertices.iter().enumerate() {
+        let blended = match skinned.skin.get(index) {
+            Some(binding) => blend(binding, matrices),
+            None => IDENTITY,
+        };
+        positions.push(transform_point(&blended, vertex.position));
+        let normal = normalize(transform_direction(&inverse_transpose3(&blended), vertex.normal));
+        normals.push(normal);
+        uvs.push(vertex.uv);
+        let tangent = transform_direction(&upper3(&blended), vertex.tangent);
+        let tangent = normalize(reject(tangent, normal));
+        let w = uv_handedness.get(index).copied().unwrap_or(1.0);
+        tangents.push([tangent[0], tangent[1], tangent[2], w]);
+    }
+
+    FlatMesh {
+        name: name.to_string(),
+        material_id: mesh.material_id,
+        positions,
+        normals,
+        uvs,
+        tangents,
+        // Aucune inversion d'enroulement : un mélange de matrices d'os ne met
+        // pas l'espace en miroir, et aucun mannequin de l'échantillon ne porte
+        // d'os à échelle négative.
+        indices: mesh.indices.iter().map(|i| u32::from(*i)).collect(),
+        transparent: mesh.is_transparent,
+    }
+}
+
+/// Moyenne pondérée des matrices des quatre os d'un sommet.
+///
+/// Les poids sont **renormalisés** : ils somment à 1 dans les fichiers vus,
+/// mais un fichier de mod qui sommerait à 0,9 rétrécirait son maillage de 10 %
+/// en silence, et un qui sommerait à 0 l'enverrait à l'origine.
+fn blend(binding: &Kn5SkinBinding, matrices: &[[f32; 16]]) -> [f32; 16] {
+    let mut out = [0.0f32; 16];
+    let mut total = 0.0f32;
+    for (weight, index) in binding.weights.iter().zip(binding.bone_indices) {
+        if *weight <= 0.0 {
+            continue;
+        }
+        // L'indice est stocké en flottant (§3.4) ; négatif ou hors bornes, il
+        // ne désigne rien, et l'os est ignoré plutôt que de faire paniquer.
+        let matrix = if index >= 0.0 {
+            matrices.get(index as usize)
+        } else {
+            None
+        };
+        let Some(matrix) = matrix else { continue };
+        for (slot, value) in out.iter_mut().zip(matrix) {
+            *slot += weight * value;
+        }
+        total += weight;
+    }
+    if total <= f32::EPSILON {
+        return IDENTITY;
+    }
+    for slot in &mut out {
+        *slot /= total;
+    }
+    out
 }
 
 enum Keep {

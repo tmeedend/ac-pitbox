@@ -27,9 +27,28 @@ export type PreviewStage = "geometry" | "textures" | "writing";
  * `errors.previewSuperseded` n'est pas une panne : c'est la réponse normale
  * quand l'utilisateur a changé de voiture avant la fin de la conversion, et
  * l'appelant doit simplement l'ignorer.
+ *
+ * `driver` vaut `null` pour ne pas afficher de pilote, sinon l'angle du volant
+ * et la tenue imposée. Il fait partie de l'identité de l'entrée de cache —
+ * le pilote est greffé dans le `.glb` et sa pose y est cuite — donc le changer
+ * demande une conversion, une seule, après quoi les versions déjà vues se
+ * rendent instantanément.
  */
-export function prepareCarPreview(carId: string, skinId?: string | null): Promise<CarPreview> {
-  return invoke<CarPreview>("prepare_car_preview", { carId, skinId: skinId ?? null });
+export interface DriverView {
+  /** Angle du volant en degrés, 0 = volant droit. */
+  steer: number;
+  /** Tenue imposée, `null` par pièce = celle que le skin déclare. */
+  suit?: string | null;
+  gloves?: string | null;
+  helmet?: string | null;
+}
+
+export function prepareCarPreview(
+  carId: string,
+  skinId?: string | null,
+  driver: DriverView | null = null,
+): Promise<CarPreview> {
+  return invoke<CarPreview>("prepare_car_preview", { carId, skinId: skinId ?? null, driver });
 }
 
 /** Vide le cache d'aperçus, renvoie le nombre d'octets libérés. */

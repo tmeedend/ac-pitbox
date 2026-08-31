@@ -1,8 +1,7 @@
 <script lang="ts">
   // Édition groupée (§6.3bis/§6.3ter) : panneau bas en surimpression quand
-  // plusieurs mods sont sélectionnés (Ctrl/Maj-clic, Ctrl+A) — ne remplace pas
-  // le panneau de détail (ModDetail reste sur le dernier mod cliqué) ni ne
-  // réduit la largeur de la grille.
+  // plusieurs mods sont sélectionnés (Ctrl/Maj-clic, Ctrl+A) — il flotte
+  // par-dessus la grille sans en réduire la largeur.
   //
   // Il ne garde que **ce qu'un menu contextuel ne peut pas porter** : un champ
   // de saisie (catégorie, tag) et une paire de boutons sans argument (favori).

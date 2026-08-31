@@ -352,6 +352,163 @@ indéfiniment.
 **8** un `[ReplaceRims]` dans un skin — 19 voitures distinctes au total. Les
 autres traversent la passe sans que rien ne s'applique.
 
+### 4.6 Le pilote
+
+Assetto Corsa range un pilote **en trois endroits**, et aucun n'est la
+voiture :
+
+| | Où | Qui le choisit |
+| --- | --- | --- |
+| **mannequin** (3D) | `<AC>/content/driver/<nom>.kn5` | la voiture, `driver3d.ini` `[MODEL] NAME` |
+| **garde-robe** (textures) | `<AC>/content/texture/driver_{suit,gloves,helmet}/…` | le skin, `skin.ini` |
+| **place assise** | `car.ini` `[GRAPHICS] DRIVEREYES` | la voiture |
+
+La surcharge se fait par nom de fichier, exactement comme un skin surcharge une
+voiture (§4.3) — d'où sa gratuité, et d'où sa limite : les `.dds` d'un dossier
+de garde-robe portent le nom exact que les matériaux du mannequin réclament, et
+un dossier dont aucun fichier ne correspond ne change **rien**.
+
+**Seul le casque est lié au mannequin**, et il a fallu balayer le parc pour le
+voir. Les cinq mannequins Kunos réclament tous `2016_Suit_DIFF.dds` et
+`2016_Gloves_DIFF.dds` : les **53** dossiers de combinaison et les **69** de
+gants marchent donc sur n'importe lequel. Le casque, lui, est daté —
+`driver`/`driver_no_HANS` veulent `HELMET_2012`, `driver_80` `HELMET_1985`,
+`driver_70` `HELMET_1975`, `driver_60` `HELMET_1969` — et les **176** dossiers
+de casque se répartissent en 100 / 11 / 44 / 21 selon l'époque.
+
+Ce qu'un futur *sélecteur* de pilote doit donc offrir : **trois listes
+indépendantes**, dont seule celle des casques est filtrée par le mannequin de
+la voiture. La compatibilité se décide par nom de fichier, elle ne se déduit
+pas de ce que d'autres voitures déclarent. Les vignettes existent déjà à côté
+des `.dds` (173 des 176 casques en ont une), donc la sélection peut être
+visuelle sans rien produire.
+
+Le `skin.ini` nomme sa garde-robe **sous le nom du mannequin**, ce qui est la
+façon dont AC évite d'habiller le mauvais corps :
+
+```ini
+[driver_80]                    ; lu seulement si driver3d.ini demande driver_80
+SUIT=\plain\red                ; → content/texture/driver_suit/plain/red/
+GLOVES=\classicpastel\blue_lite
+HELMET=\helmet_1985\blue
+[CREW]                         ; le personnel de stand, hors sujet ici
+```
+
+**Où le pilote s'assoit.** Le mannequin est le même corps assis pour toutes les
+voitures ; ses coordonnées propres ne l'assoient nulle part. La voiture le
+place en une ligne, `DRIVEREYES` — une paire d'yeux dans le repère du modèle —
+et le mannequin y répond par son os de tête `DRIVER:RIG_Head`, qui vaut
+**exactement (0, 1.1994, 0.0305) sur neuf des dix mannequins** de l'install de
+référence, tiers compris (`rss_driver_80`, `gt-m24`, `woman_driver`). Le
+dixième (`new_driver.kn5`) suffit à ce qu'on lise l'os dans le fichier plutôt
+que de coder la constante.
+
+Les yeux ne sont pas l'os : ils sont **10 cm au-dessus et 8 cm devant**, et
+cette valeur est calibrée, pas estimée. Sur 69 voitures tirées au hasard, la
+garde entre le haut du casque et le point le plus haut de la voiture passe de
+« 15 voitures traversées, jusqu'à −7 cm » à « aucune, au pire +3 cm, médiane
++15 cm ». Deux mesures indépendantes la recoupent : le maillage du visage est
+6,5 cm au-dessus de l'os et la visière 10,7 cm ; et `driver3d.ini` **cache** le
+casque, la visière et le visage en vue cockpit — ce qu'AC n'aurait aucune
+raison de faire si `DRIVEREYES` n'était pas *dans* le casque. Le `POSITION` de
+`driver3d.ini`, lui, **n'est pas appliqué** : il ressemble à un réglage fin et
+n'en est pas un — treize voitures de l'install y écrivent de quoi déplacer le
+pilote de 25 cm à cinq mètres, dont `1,1,1` sur quatre d'entre elles. Mesures
+dans `kn5-format.md`.
+
+**Ce qui est implémenté** (`crates/kn5-gltf/src/driver.rs` pour la greffe,
+`src/driver.rs` pour la résolution) : le mannequin est lu, habillé, puis greffé
+dans le modèle de la voiture **après** la passe CSP (§4.5ter), par la même
+mécanique de fusion d'assets — donc avec le même arbitrage sur les collisions
+de nom de texture. La voiture reçoit une racine neuve : les coordonnées du
+mannequin sont dans l'espace *objet* de la voiture, pas sous la transformation
+de sa racine.
+
+**Ce qui ne l'est pas.** L'animation `steer.ksanim` qui pose les mains sur le
+volant : le mannequin est donc figé dans sa pose de repos, bras tendus devant
+lui. Les `HIDE_OBJECT_*` de `driver3d.ini` non plus — ils ne servent qu'à la
+vue cockpit, où la caméra est dans la tête. Ni la substitution de mannequin par
+`ext_config.ini`, qui existe mais n'a pas été rencontrée.
+
+**Réglage et cache.** L'affichage du pilote est une option de l'écran Réglages
+(éteinte par défaut : c'est un modèle de quatorze mégaoctets à convertir en
+plus de la voiture). Elle entre dans la **clé de cache**, et n'y ajoute rien
+quand elle est éteinte — les entrées écrites avant que le pilote n'existe
+restent valides. Basculer l'option convertit une fois ; les deux versions de la
+voiture coexistent ensuite et se rendent l'une l'autre instantanément.
+
+**`data.acd` est déchiffré** pour lire `driver3d.ini` et `car.ini` quand la
+voiture est packagée, ce qui est le cas général — `acd::read_text`, le lecteur
+qui servait déjà au régime moteur. Le §4.5ter dit encore que ce conteneur n'est
+pas déchiffré : ce n'est plus vrai côté application, et la limite qu'il
+documente sur la taille des jantes (`data/tyres.ini`) pourrait tomber pour la
+même raison.
+
+---
+
+### 4.6bis Les mains sur le volant
+
+Le mannequin est modelé bras tendus devant lui : c'est sa pose de liaison, et
+elle ne conduit rien. Ce qui lui met les mains sur le volant est un fichier de
+la voiture, `animations/steer.ksanim`, que **298 des 312 voitures** de
+l'install de référence embarquent.
+
+**Rien n'est calculé.** Le moddeur pose les bras pour son propre volant et
+livre le résultat : pas de cinématique inverse, pas de rayon de jante mesuré,
+donc rien à résoudre de notre côté — et, en contrepartie, des mains dans le
+vide sur un mod dont le volant aurait été redimensionné après coup.
+
+Le format est décrit dans `kn5::ksanim` : deux versions, l'une rangeant chaque
+image en quaternion + translation + échelle (271 voitures), l'autre en matrice
+4×4 (27). Une image est la transformation **locale** d'un nœud, exactement le
+créneau qu'occupe la matrice d'un dummy dans le modèle — poser revient donc à
+les échanger, et la hiérarchie fait le reste.
+
+**Ce n'est pas l'animation qui assoit le pilote**, contrairement à ce qu'elle
+laisse croire — 212 des 271 qui nomment son nœud racine lui laissent
+l'identité. C'est
+un quatrième fichier, `<voiture>/driver_base_pos.knh`, que **les 312 voitures**
+de l'install livrent : le rig entier, placé dans la voiture. Format récursif et
+minuscule, décrit dans `kn5::knh` et dans `docs/kn5-format.md`.
+
+Le piège valait d'être documenté : appliquer la seule animation fait tomber la
+tête à moins de 6 cm de `DRIVEREYES` sur 213 des 251 voitures dont elle nomme
+un rig complet — assez pour croire qu'elle suffit. Les 38 autres s'écartent de
+35 cm ou plus, sans rien entre les deux, et c'est ce qu'un utilisateur a vu :
+un pilote mal assis sur une conduite à droite. En lisant le `.knh` comme socle
+et l'animation par-dessus, **les 269 voitures mesurables tombent à moins de
+6 cm**, sans seconde population.
+
+**Le skinning devient obligatoire.** La combinaison et les gants sont des
+maillages skinnés ; jusqu'ici ils s'affichaient juste par chance, la pose de
+liaison rendant le skinning équivalent à l'identité. Dès qu'on pose le rig,
+cette équivalence tombe : sans skinning, le casque et le visage — simples
+enfants de l'os de tête — suivraient le rig pendant que le corps resterait en
+arrière. Le skinning linéaire est donc implémenté pour de bon dans
+`geometry.rs`, normales et tangentes comprises. **Vérifié sur les 311 voitures
+de l'install** : la combinaison suit le rig partout, et les 297 animations se
+posent sans exception (`every_installed_car_seats_its_driver`, test de corpus).
+
+**Une seule règle, sans seuil : le fichier qui a placé le pilote fait foi.**
+La hiérarchie d'abord ; à défaut l'animation, qui place bel et bien sur les
+trois voitures livrant une `.knh` vide — leur tête y tombe à l'écart œil près
+de `DRIVEREYES` ; et `DRIVEREYES` en dernier recours, quand rien n'a placé
+personne. C'est là, et là seulement, que l'écart œil / os de tête du §4.6
+s'applique encore.
+
+**L'angle du volant est un réglage.** L'animation couvre toute la course, donc
+choisir une image revient à choisir un angle — exprimé en degrés et rapporté au
+`LOCK` de la voiture, puisqu'il vaut 360 sur 271 voitures mais 180 sur
+quatorze. L'image du milieu est le volant droit. L'angle **est cuit dans le
+`.glb`** : il entre dans la clé de cache au même titre que le pilote lui-même,
+donc le bouger demande une conversion. C'est un réglage qu'on pose une fois, et
+les valeurs déjà vues se rendent ensuite instantanément ; si cela devenait
+gênant, la sortie propre serait d'exporter le squelette et l'animation dans le
+glTF pour laisser three.js poser le mannequin au rendu — beaucoup plus de
+travail, et sans intérêt tant qu'on ne veut pas d'un volant qui bouge.
+
+---
+
 ---
 
 ## 5. Pipeline de conversion (Rust)

@@ -20,6 +20,12 @@
   import TitleBar from "./TitleBar.svelte";
   import ControllerSetup from "./ControllerSetup.svelte";
   import ImageSelectDropdown from "./ImageSelectDropdown.svelte";
+  import { listDriverChoices, type DriverChoices } from "$lib/driver";
+  import {
+    driverOverride,
+    setDriverOverrideOn,
+    setDriverPiece,
+  } from "$lib/driverOverride.svelte";
   import TrackSkinChecklistDropdown from "./TrackSkinChecklistDropdown.svelte";
   import { nav, requestSection, pickSession } from "$lib/nav.svelte";
   import { previewSrc, getModDetail, activateMod } from "$lib/library";
@@ -213,6 +219,66 @@
   // sélection) : pas d'avertissement affiché dans ce court intervalle plutôt
   // que de risquer un faux positif pendant le chargement.
   const carInactive = $derived(nav.sessionCar != null && carDetail != null && !carDetail.active);
+
+  // --- Surcharge de pilote (§4.6ter) --------------------------------------
+  //
+  // Proposée pour les voitures de rue seulement : sur une voiture de course le
+  // pilote porte les couleurs de son écurie, donc celles du skin, et lui en
+  // mettre d'autres est un contresens. La bascule reste **visible et
+  // désactivée** plutôt que masquée — une option qui disparaît sans un mot
+  // laisse chercher.
+  const carIsRace = $derived((carDetail?.car_class ?? "").toLowerCase() === "race");
+  const driverPrefs = $derived(driverOverride());
+
+  let driverChoices = $state<DriverChoices | null>(null);
+
+  // Rechargé au changement de voiture : la liste des casques dépend de son
+  // mannequin. Seulement quand la bascule est active — lire les tenues coûte
+  // la lecture d'un mannequin de quatorze mégaoctets, inutile tant que
+  // personne n'a demandé à choisir.
+  $effect(() => {
+    const carId = nav.sessionCar?.id ?? null;
+    const wanted = driverPrefs.on;
+    if (!carId || !wanted) {
+      driverChoices = null;
+      return;
+    }
+    let cancelled = false;
+    void listDriverChoices(carId)
+      .then((choices) => {
+        if (!cancelled) driverChoices = choices;
+      })
+      .catch((e) => console.error("list_driver_choices", e));
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  /** Les trois menus, dans l'ordre où on s'habille. Une liste vide — un
+   * mannequin de mod dont aucun casque du jeu ne porte les bons noms — n'est
+   * pas affichée du tout.
+   *
+   * **Chaque liste s'ouvre sur une sortie**, du même libellé que le
+   * placeholder («&nbsp;Casque du skin&nbsp;») : sans elle, une pièce choisie
+   * ne se relâchait plus, et il n'y avait aucun moyen de rendre la main au
+   * skin sans décocher toute la surcharge. */
+  const driverPickers = $derived(
+    (
+      [
+        ["helmet", driverChoices?.helmets ?? []],
+        ["suit", driverChoices?.suits ?? []],
+        ["gloves", driverChoices?.gloves ?? []],
+      ] as const
+    )
+      .filter(([, options]) => options.length > 0)
+      .map(([piece, options]) => ({
+        piece,
+        options: [
+          { id: "", name: t("session.driverPiece." + piece), image: null },
+          ...options.map((o) => ({ id: o.id, name: o.label, image: previewSrc(o.thumbnail) })),
+        ],
+      })),
+  );
   const trackInactive = $derived(nav.sessionTrack != null && trackDetail != null && !trackDetail.active);
 
   // Bouton rouge « Démarrer la session » : lance directement avec les
@@ -360,13 +426,44 @@
           </button>
           {#if nav.sessionCar}
             <div class="slot-pick">
-              <ImageSelectDropdown
-                options={carSkinOptions}
-                selectedId={nav.sessionCar.skin}
-                placeholder={t("session.pickSkin")}
-                emptyText={t("session.noSkinsAvailable")}
-                onselect={pickCarSkin}
-              />
+              <!-- Le skin et la bascule pilote partagent une ligne : la
+                   contrainte de cette colonne est la hauteur, et une bascule
+                   décochée ne doit rien coûter (§4.6ter). -->
+              <div class="pick-row">
+                <ImageSelectDropdown
+                  options={carSkinOptions}
+                  selectedId={nav.sessionCar.skin}
+                  placeholder={t("session.pickSkin")}
+                  emptyText={t("session.noSkinsAvailable")}
+                  onselect={pickCarSkin}
+                />
+                <button
+                  class="driver-toggle"
+                  class:on={driverPrefs.on && !carIsRace}
+                  type="button"
+                  disabled={carIsRace}
+                  aria-pressed={driverPrefs.on && !carIsRace}
+                  title={carIsRace ? t("session.driverRaceTooltip") : t("session.driverTooltip")}
+                  aria-label={carIsRace ? t("session.driverRaceTooltip") : t("session.driverTooltip")}
+                  onclick={() => setDriverOverrideOn(!driverPrefs.on)}
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M2.5 9.5a5.5 5.5 0 0 1 11 0v1.2a1.3 1.3 0 0 1-1.3 1.3H3.8a1.3 1.3 0 0 1-1.3-1.3z" />
+                    <path d="M6.2 12v-1.6a1.8 1.8 0 0 1 1.8-1.8h5.5" />
+                  </svg>
+                </button>
+              </div>
+              {#if driverPrefs.on && !carIsRace}
+                {#each driverPickers as picker (picker.piece)}
+                  <ImageSelectDropdown
+                    options={picker.options}
+                    selectedId={driverPrefs[picker.piece]}
+                    placeholder={t("session.driverPiece." + picker.piece)}
+                    emptyText={t("session.driverNone")}
+                    onselect={(id) => setDriverPiece(picker.piece, id || null)}
+                  />
+                {/each}
+              {/if}
             </div>
           {/if}
         </div>
@@ -522,7 +619,13 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: 222px 1fr;
+    /* 222px tant que la bibliothèque gardait son panneau de détail à droite ;
+       celui-ci retiré, la zone principale n'a plus besoin d'autant de largeur
+       et la colonne de session peut respirer — c'est elle qui porte le duo
+       voiture/circuit et ses menus. Sa contrainte reste la **hauteur** : tout
+       ce qu'on y ajoute doit tenir sans allonger la colonne, d'où la largeur
+       prise ici (réglée à l'œil avec l'utilisateur). */
+    grid-template-columns: 328px 1fr;
   }
   .side {
     background: var(--bg);
@@ -623,8 +726,60 @@
     padding: 8px;
     border-top: 1px solid var(--line);
   }
+  /* Le menu de skin prend la place restante, la bascule ce qu'il lui faut. */
+  .pick-row {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .pick-row > :global(*:first-child) {
+    flex: 1;
+    min-width: 0;
+  }
+  .driver-toggle {
+    flex: 0 0 auto;
+    width: 30px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .driver-toggle svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .driver-toggle:hover:not(:disabled) {
+    border-color: var(--rosso-border);
+    color: var(--txt);
+  }
+  .driver-toggle.on {
+    border-color: var(--rosso-border);
+    background: var(--rosso-dim);
+    color: var(--rosso-bright);
+  }
+  /* Désactivée sur une voiture de course, mais toujours là : l'infobulle dit
+     pourquoi, ce qu'une option disparue ne peut pas faire. */
+  .driver-toggle:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
   .slot-img {
-    height: 96px;
+    /* **Un rapport, pas une hauteur fixe.** C'était `height: 96px`, et
+       élargir la colonne a rogné les photos : à largeur croissante et hauteur
+       figée, `object-fit: cover` agrandit l'image pour couvrir et coupe le
+       haut et le bas — les roues disparaissaient. Le rapport ci-dessous est
+       celui qu'avait la vignette à 222 px (222/96), donc le cadrage d'avant,
+       et il le reste quelle que soit la largeur de la colonne. */
+    aspect-ratio: 2.3;
     display: flex;
     align-items: center;
     justify-content: center;

@@ -41,6 +41,14 @@
     "activateFailedTitle": "Échec de l'activation",
     "pickSkin": "Choisir un skin…",
     "noSkinsAvailable": "Aucun skin",
+    "driverTooltip": "Choisir la tenue du pilote",
+    "driverRaceTooltip": "Sur une voiture de course, le pilote porte les couleurs de son écurie : sa tenue vient du skin.",
+    "driverNone": "Aucun compatible",
+    "driverPiece": {
+      "helmet": "Casque du skin",
+      "suit": "Combinaison du skin",
+      "gloves": "Gants du skin"
+    },
     "pickLayout": "Choisir un layout…",
     "noLayoutsAvailable": "Aucun layout",
     "trackSkinsNone": "Aucun skin actif",
@@ -151,6 +159,10 @@
     "tabPreviewHint": "Aperçu 3D affiché dans la fiche d'une voiture. Les changements s'appliquent tout de suite.",
     "preview3dEnabled": "Afficher l'aperçu 3D dans les fiches",
     "preview3dEnabledHint": "Décoché, les fiches voiture montrent la photo du skin. La bascule de la fiche revient au même.",
+    "preview3dDriver": "Afficher le pilote au volant",
+    "preview3dDriverHint": "Le pilote et sa tenue sont ceux que la voiture et son skin déclarent. La première conversion avec pilote prend quelques secondes de plus.",
+    "preview3dSteer": "Angle du volant",
+    "preview3dSteerHint": "Les bras suivent l'animation de braquage de la voiture. Une voiture dont la course est plus courte s'arrête à sa butée.",
     "preview3dSlider": {
       "zoom": "Zoom",
       "zoomHint": "Taille de la voiture dans le cadre. La molette de la souris fait la même chose, le temps d'une visite.",

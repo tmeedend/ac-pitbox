@@ -1,8 +1,10 @@
 <script lang="ts">
-  // The one tech sheet of a car — side panel (`ModDetail.svelte`) and full page
-  // (`DetailPage.svelte`) render the SAME rows, from here.
+  // The one tech sheet of a car. Only the full detail page
+  // (`DetailPage.svelte`) draws it now, since the compact side panel was
+  // removed — but the rows stay here rather than inlined there, because of how
+  // they came to be shared in the first place.
   //
-  // They used to each build their own list, and they had drifted: the panel
+  // The two used to each build their own list, and they had drifted: the panel
   // showed the whole native sheet (power, torque, weight, top speed, 0-100,
   // power/weight, range, country) plus the five harmonized fields, while the
   // page showed six rows and left out everything the engine actually says about
@@ -10,8 +12,8 @@
   // user, and exactly what the "shared components" chantier is about: two
   // copies of one thing drift, and nothing flags it.
   //
-  // The frame stays the host's business (the panel draws its own, the page has
-  // its card): what is shared is the content and the row itself.
+  // The frame stays the host's business: what is shared is the content and the
+  // row itself.
   import { t } from "$lib/i18n/index.svelte";
   import type { ModDetail } from "$lib/library";
 

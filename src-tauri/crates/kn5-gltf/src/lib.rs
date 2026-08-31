@@ -4,20 +4,25 @@
 //! (skin overrides live on disk next to the model) and pulls in image codecs,
 //! neither of which belong in a parser (spec §5.1).
 
+mod driver;
 mod extconfig;
 mod geometry;
 mod glb;
 mod locate;
 mod material;
 mod paint;
+mod pose;
 mod roughness;
 mod stats;
+#[cfg(test)]
+mod testutil;
 mod texture;
 
 use std::path::Path;
 
 use kn5::Kn5Model;
 
+pub use driver::{graft as graft_driver, DriverGraft, DriverStats};
 pub use extconfig::{
     apply_ext_config, material_overrides, CspConfig, ExtConfigStats, MaterialOverrides, Replacement, SurfaceOverride,
 };

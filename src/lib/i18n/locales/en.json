@@ -41,6 +41,14 @@
     "activateFailedTitle": "Activation failed",
     "pickSkin": "Choose a skin…",
     "noSkinsAvailable": "No skin",
+    "driverTooltip": "Choose what the driver wears",
+    "driverRaceTooltip": "On a race car the driver wears the team colours: the outfit comes from the skin.",
+    "driverNone": "None compatible",
+    "driverPiece": {
+      "helmet": "Helmet from the skin",
+      "suit": "Suit from the skin",
+      "gloves": "Gloves from the skin"
+    },
     "pickLayout": "Choose a layout…",
     "noLayoutsAvailable": "No layout",
     "trackSkinsNone": "No active skin",
@@ -151,6 +159,10 @@
     "tabPreviewHint": "3D preview shown on a car sheet. Changes apply right away.",
     "preview3dEnabled": "Show the 3D preview on car sheets",
     "preview3dEnabledHint": "Unchecked, car sheets show the skin photo instead. The toggle on the sheet does the same thing.",
+    "preview3dDriver": "Show the driver at the wheel",
+    "preview3dDriverHint": "The driver and the outfit are the ones the car and its skin declare. The first conversion with a driver takes a few seconds longer.",
+    "preview3dSteer": "Steering angle",
+    "preview3dSteerHint": "The arms follow the car's own steering animation. A car with less travel stops at its own lock.",
     "preview3dSlider": {
       "zoom": "Zoom",
       "zoomHint": "How large the car sits in the frame. The mouse wheel does the same, for one visit.",

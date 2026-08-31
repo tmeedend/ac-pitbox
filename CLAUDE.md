@@ -200,10 +200,10 @@ refusera ensuite de reposer quoi que ce soit.
 | `apps` / `others` | `Apps` / `OtherMods` | |
 | `settings` / `about` | `Settings` / `About` | |
 
-Deux présentations coexistent pour une entité et **ne sont pas
-interchangeables** (§6) : `ModDetail.svelte` = panneau latéral,
-`DetailPage.svelte` = page pleine (ouverte par `Library` via son état
-`fullId`). Une évolution de fiche est souvent à faire **dans les deux**.
+**Une seule fiche** : `DetailPage.svelte`, la page pleine, ouverte par
+`Library` au double-clic sur une carte ou une ligne (état `nav.openFull`). Le
+panneau latéral compact qui la doublait à droite de la grille a été retiré —
+il montrait moins, et toute évolution de fiche était à faire deux fois.
 
 Hors aiguillage : `TitleBar`, `ImportOverlay` (les modales d'arbitrage) et
 `ToastStack` (`ImportToasts` + `ControllerToast`) — tous dans `AppShell` —,
@@ -367,10 +367,11 @@ laisser pourrir ici.
       `Slider` (tous les curseurs de l'app),
       `InlineEdit` (nom et description repris à la main — SPEC §5bis.3).
       **Inventaire de ce qui reste**, mesuré le 2026-08-18 :
-      - **Boîte d'erreur : 15 définitions locales** (`.err` / `.error` /
+      - **Boîte d'erreur : 14 définitions locales** (`.err` / `.error` /
         `.action-err` dans Apps, BulkEditPanel, BulkImport, DetailPage,
-        Launch, LayersSection, Maintenance, ModDetail, OtherMods, Profiles,
-        Settings, SetupWizard, Transversal, MusicTab). Mêmes trois couleurs
+        Launch, LayersSection, Maintenance, OtherMods, Profiles,
+        Settings, SetupWizard, Transversal, MusicTab — la quinzième est partie
+        avec le panneau latéral). Mêmes trois couleurs
         partout (`--rosso-dim` / `--rosso-border` / `--rosso-bright`), seuls
         le padding (8/10 vs 10/12), la taille (11,5 vs 12px) et les marges
         diffèrent. Le cas le plus net : une classe globale `.errbox` suffit,
@@ -388,6 +389,36 @@ laisser pourrir ici.
       Un lot de ce genre est du **reformatage pur sur une quinzaine de
       fichiers** : le faire dans son propre commit, jamais mélangé à un
       changement fonctionnel (sinon `git blame` devient inexploitable).
+- [ ] **Sélection du pilote** (branche `feature/drivers`). L'affichage est
+      fait : le pilote est greffé dans l'aperçu 3D, habillé par le `skin.ini`,
+      assis par le `driver_base_pos.knh` de la voiture, posé sur le volant par
+      son `steer.ksanim`, avec un réglage d'angle de braquage. Tout est
+      documenté au §4.6 et §4.6bis de `docs/SPEC-preview-3d-kn5.md`, et les
+      formats découverts (`.knh`, `.ksanim`) dans `docs/kn5-format.md`.
+      **Reste la cible** : proposer à l'utilisateur de *choisir* son pilote,
+      d'abord dans l'aperçu puis en session. Décidé avec l'utilisateur : ce
+      n'est **pas** un réglage par skin de voiture mais une **surcharge
+      globale**, décochée par défaut, et pensée pour les voitures de rue — sur
+      une voiture de course le pilote porte les couleurs de son écurie, donc
+      du skin. L'emplacement dans l'UI reste à trouver.
+      La mécanique est plus simple qu'elle n'en avait l'air : **trois listes
+      indépendantes** (53 combinaisons, 69 paires de gants, 176 casques), dont
+      seuls les casques sont filtrés par l'époque du mannequin — combinaisons
+      et gants portent les mêmes noms de fichiers sur toute la famille Kunos.
+      Compatibilité décidée par nom de fichier, pas déduite d'autres voitures ;
+      vignettes déjà présentes (173 casques sur 176). `DriverOutfit` (dans
+      `src/driver.rs`) est la forme qu'un sélecteur produira, `graft_for` la
+      transforme en fichiers.
+      **Ce qui n'est pas tranché** : ce qu'AC met dans son checksum en ligne.
+      Le mannequin est hors de portée sans risque (les 312 voitures ont leur
+      `driver3d.ini` dans `data.acd`, conteneur de physique) ; la tenue ne
+      demande qu'un `skin.ini`, fichier de skin — probablement sûr, non
+      prouvé. Et Pit Box déployant en hardlink, écrire ce `skin.ini` toucherait
+      la copie de bibliothèque : il faudra casser le lien et passer par
+      `gamebackup.rs`.
+      Deux mesures à garder en tête : les trois voitures dont la `.knh` est
+      vide retombent sur `DRIVEREYES`, et `[MODEL] POSITION` ne doit **pas**
+      être appliqué (voir `seating_offset`).
 - [ ] **Aperçu 3D natif des voitures** (branche `feature/3dpreview`).
       **L'avancement détaillé, les écarts assumés vis-à-vis de la spec et le
       reste à faire sont dans `docs/SPEC-preview-3d-kn5.md` §13 à §15** — c'est
@@ -409,7 +440,7 @@ laisser pourrir ici.
       fois de suite (texture, opacité, exposant spéculaire). Donc : devant un
       défaut visuel, **ne pas s'arrêter au premier champ coupable**, et
       regarder aussi ce qui est dessiné par-dessus.
-      Reste surtout le choix du LOD et l'aperçu dans `ModDetail` — §15.
+      Reste surtout le choix du LOD — §15.
       Le réglage de qualité se réduit au suréchantillonnage : une passe SMAA
       a été essayée, déplacée, puis retirée faute de gain visible pour un
       gigaoctet de mémoire. Il subsiste du crénelage sur les lignes claires

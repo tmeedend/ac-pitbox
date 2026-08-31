@@ -1,6 +1,5 @@
 <script lang="ts">
   import { tick, untrack, onMount, onDestroy } from "svelte";
-  import ModDetail from "./ModDetail.svelte";
   import DetailPage from "./DetailPage.svelte";
   import PackDetail from "./PackDetail.svelte";
   import TokenFilter, { type Token } from "./TokenFilter.svelte";
@@ -498,9 +497,10 @@
   }
 
   // Sélection multiple (§6.3bis) ; clic simple = comportement normal (sélection
-  // de session) et efface toute sélection groupée en cours. Le panneau de droite
-  // (ModDetail) reste rempli en permanence, y compris pendant une sélection
-  // groupée : il suit le dernier mod cliqué (§6.3ter).
+  // de session) et efface toute sélection groupée en cours. `effectiveId` suit
+  // le dernier mod cliqué et ne sert plus qu'à le surligner : le panneau de
+  // détail latéral a été retiré, la fiche s'ouvre en page pleine au
+  // double-clic.
   // - Ctrl-clic : bascule un mod (ajout/retrait individuel).
   // - Maj-clic : sélectionne toute la plage entre l'ancre (dernier mod cliqué)
   //   et celui-ci, dans l'ordre affiché courant — combinable avec des Ctrl-clic
@@ -1293,9 +1293,8 @@
   </div>
 
   {#if selectedIds.size >= 2}
-    <!-- Panneau bas en surimpression (§6.3ter) : ne remplace plus le panneau
-         de droite (ModDetail, toujours affiché) ni ne réduit la largeur de la
-         grille — flotte par-dessus `.main`, indépendant de son défilement
+    <!-- Panneau bas en surimpression (§6.3ter) : ne réduit pas la largeur de
+         la grille — flotte par-dessus `.main`, indépendant de son défilement
          interne (sibling non-scrollant dans `.main-wrap`, cf. style). -->
     <BulkEditPanel
       ids={[...selectedIds]}
@@ -1306,11 +1305,6 @@
   {/if}
   </div>
 
-  <ModDetail
-    id={effectiveId}
-    onchange={refresh}
-    onexpand={() => (nav.openFull = effectiveId)}
-  />
   {/if}
   {#if ctxMenu}
     <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={contextItems} onclose={() => (ctxMenu = null)} />

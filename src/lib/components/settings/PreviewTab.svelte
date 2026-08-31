@@ -40,6 +40,7 @@
     preview3dPrefs,
     resetPreview3dView,
     revertPreview3dPrefs,
+    setPreview3dDriver,
     setPreview3dEnabled,
     setPreview3dIntro,
     setPreview3dQuality,
@@ -134,6 +135,13 @@
     };
   });
 
+  /** Degrés signés : le signe dit de quel côté le volant est tourné, et un
+   * zéro n'a pas à en porter un. */
+  function degrees(value: number): string {
+    const sign = value > 0 ? "+" : "";
+    return sign + value.toLocaleString(i18n.locale) + "°";
+  }
+
   /** Gigaoctets, une décimale, dans la langue de l'app — « 1.5 » et « 1,5 » ne
    * s'écrivent pas de la même façon selon la locale. */
   function gigabytes(bytes: number): string {
@@ -179,6 +187,29 @@
       <span>{t("settings.preview3dEnabled")}</span>
     </label>
     <p class="hint">{t("settings.preview3dEnabledHint")}</p>
+
+    <label class="check">
+      <input
+        type="checkbox"
+        checked={prefs.driver}
+        onchange={(e) => setPreview3dDriver(e.currentTarget.checked)}
+      />
+      <span>{t("settings.preview3dDriver")}</span>
+    </label>
+    <p class="hint">{t("settings.preview3dDriverHint")}</p>
+
+    {#if prefs.driver}
+      <Slider
+        label={t("settings.preview3dSteer")}
+        value={prefs.steer}
+        min={PREVIEW3D_RANGES.steer.min}
+        max={PREVIEW3D_RANGES.steer.max}
+        step={PREVIEW3D_RANGES.steer.step}
+        display={degrees(prefs.steer)}
+        hint={t("settings.preview3dSteerHint")}
+        oninput={(v) => setPreview3dValue("steer", v)}
+      />
+    {/if}
 
     <div class="field">
       <span class="blk-sub">{t("settings.preview3dQuality")}</span>
