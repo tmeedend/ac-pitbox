@@ -85,6 +85,50 @@ pub async fn list_driver_choices(
         .map_err(|e| format!("tâche de tenues interrompue : {e}"))
 }
 
+/// Prépare le mannequin seul, habillé, pour le plateau d'essayage de l'écran
+/// Pilote (`docs/SPEC-ecran-pilote.md` §5.1).
+///
+/// Le pilote y est **sans voiture autour** : ni assise, ni pose des bras, ni
+/// ancrage — trois choses qui n'ont de sens que dans un habitacle. La voiture
+/// reste néanmoins la source du corps (`driver3d.ini`) et de la tenue par
+/// défaut (`skin.ini` de la livrée), d'où `car_id` et `skin_id`.
+///
+/// `Ok(None)` — jamais une erreur — quand Assetto Corsa n'est pas configuré ou
+/// que le corps n'est pas installé : le plateau retombe alors sur
+/// l'échantillon plat, et la galerie reste entièrement utilisable (§12.4).
+#[tauri::command]
+pub async fn prepare_driver_preview(
+    app: AppHandle,
+    db: State<'_, Db>,
+    state: State<'_, crate::preview::PreviewState>,
+    car_id: String,
+    skin_id: Option<String>,
+    outfit: crate::driver::OutfitOverride,
+) -> Result<Option<crate::preview::DriverPreview>, String> {
+    let token = state.next_generation();
+
+    let cfg = crate::config::load(&app);
+    let Some(ac_root) = cfg.ac_install_path.clone() else {
+        return Ok(None);
+    };
+    let car_dir = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        crate::preview::car_dir(&conn, &cfg, &car_id).ok_or(crate::errors::PREVIEW_MODEL_NOT_FOUND)?
+    };
+
+    let app_for_task = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let skin_dir = kn5_gltf::resolve_skin(&car_dir, skin_id.as_deref());
+        let Some(graft) = crate::driver::standalone(&ac_root, &car_dir, &car_id, skin_dir.as_deref(), &outfit) else {
+            return Ok(None);
+        };
+        let state = app_for_task.state::<crate::preview::PreviewState>();
+        crate::preview::prepare_driver(&app_for_task, &state, &graft, token).map(Some)
+    })
+    .await
+    .map_err(|e| format!("tâche de pilote interrompue : {e}"))?
+}
+
 /// Les mannequins installés, pour la galerie des corps (§9.1).
 ///
 /// Liste vide — jamais une erreur — quand Assetto Corsa n'est pas configuré :

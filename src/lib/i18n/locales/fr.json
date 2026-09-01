@@ -1350,7 +1350,9 @@
       "trial": "Essai — {name}",
       "substituted": "Corps substitué · aperçu seulement",
       "noSample": "Assetto Corsa ne fournit pas d'image pour celui-ci.",
-      "pending": "L'essayage en 3D arrive : pour l'instant, le plateau montre l'image que le jeu fournit pour la pièce essayée."
+      "no3d": "L'essayage en 3D n'a pas pu démarrer. La galerie reste utilisable.",
+      "noBody": "Aucun corps à afficher : la voiture n'en nomme aucun, ou il n'est pas installé.",
+      "drag": "glisser pour tourner"
     },
     "notice": {
       "title": "Ce corps n'est pas celui de la voiture. Ce qui tombe :",

@@ -426,6 +426,153 @@ pub fn prepare(
     })
 }
 
+/// Ce que le plateau d'essayage de l'écran Pilote reçoit
+/// (`docs/SPEC-ecran-pilote.md` §5.1).
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DriverPreview {
+    /// URL à donner à `GLTFLoader`, servie par le même protocole que les
+    /// voitures.
+    pub url: String,
+    pub triangle_count: u32,
+    pub from_cache: bool,
+    pub rig: DriverRig,
+}
+
+/// Les repères du rig, en mètres, dans l'espace du `.glb`.
+///
+/// **Renvoyés au frontend plutôt que cuits dans le modèle** : le volant est un
+/// objet de présentation que l'application dessine (§D5), pas une pièce du
+/// mannequin. Trois lignes de `TorusGeometry` côté three.js valent mieux qu'un
+/// maillage généré en Rust et transporté dans chaque entrée de cache.
+#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DriverRig {
+    /// Main gauche puis main droite. `None` quand le mannequin n'a pas d'os de
+    /// main sous un nom connu — le plateau se passe alors de volant plutôt que
+    /// d'en poser un au hasard.
+    pub hands: Option<[[f32; 3]; 2]>,
+    pub head: Option<[f32; 3]>,
+    pub hips: Option<[f32; 3]>,
+}
+
+impl From<kn5_gltf::DriverRig> for DriverRig {
+    fn from(rig: kn5_gltf::DriverRig) -> Self {
+        Self {
+            hands: rig.hands,
+            head: rig.head,
+            hips: rig.hips,
+        }
+    }
+}
+
+/// Prépare le mannequin seul, habillé, pour le plateau d'essayage.
+///
+/// Même cache et même éviction que les voitures — c'est le même protocole qui
+/// sert les deux, et un pilote pèse moins qu'une voiture. La clé n'a en
+/// revanche rien à voir : elle ne tient qu'au mannequin et à sa garde-robe,
+/// donc **deux voitures qui habillent le même corps pareil partagent
+/// l'entrée**, ce qui est exactement ce qu'on veut d'un choix global.
+pub fn prepare_driver(
+    app: &tauri::AppHandle,
+    state: &PreviewState,
+    graft: &kn5_gltf::DriverGraft,
+    token: u64,
+) -> Result<DriverPreview, String> {
+    let dir = cache_dir(app)?;
+    if !state.swept.swap(true, Ordering::Relaxed) {
+        sweep_foreign_versions(&dir);
+    }
+    let stem = format!("{}d{}", version_prefix(), driver_cache_key(graft));
+    let file = dir.join(format!("{stem}.glb"));
+
+    if let Ok(meta) = std::fs::metadata(&file) {
+        // Le rig est relu avec les compteurs : sans lui on saurait afficher le
+        // pilote mais plus où poser son volant, et reparser quinze mégaoctets
+        // de mannequin pour trois vecteurs à chaque changement de casque
+        // annulerait tout l'intérêt du cache.
+        if let (true, Some(rig)) = (meta.len() > 0, read_rig(&dir, &stem)) {
+            touch(&file);
+            return Ok(DriverPreview {
+                url: url_for(&stem),
+                triangle_count: read_counts(&dir, &stem).unwrap_or_default().0,
+                from_cache: true,
+                rig,
+            });
+        }
+    }
+
+    let _slot = state
+        .slot
+        .lock()
+        .map_err(|_| "verrou d'aperçu empoisonné".to_string())?;
+    if !state.is_current(token) {
+        return Err(crate::errors::PREVIEW_SUPERSEDED.to_string());
+    }
+
+    let (model, stats, rig) = kn5_gltf::standalone_driver(graft)?;
+    for failure in &stats.failures {
+        log::warn!("preview: pilote — {failure}");
+    }
+    log::debug!(
+        "preview: mannequin {} seul — {} triangles, {} texture(s) habillée(s)",
+        graft.model.display(),
+        stats.triangles,
+        stats.dressed
+    );
+
+    let conversion = kn5_gltf::convert(&model, None, &kn5_gltf::ConvertOptions::default(), &|stage| {
+        use tauri::Emitter;
+        let _ = app.emit("preview://progress", stage.as_str());
+    })?;
+    for warning in &conversion.texture_warnings {
+        log::warn!("preview: texture `{}` ignorée — {}", warning.name, warning.reason);
+    }
+
+    let rig = DriverRig::from(rig);
+    write_entry(&dir, &stem, &conversion)?;
+    write_rig(&dir, &stem, &rig);
+    evict_to(&dir, state.cache_cap());
+
+    Ok(DriverPreview {
+        url: url_for(&stem),
+        triangle_count: conversion.triangle_count,
+        from_cache: false,
+        rig,
+    })
+}
+
+/// Clé de cache d'un mannequin habillé. Le mannequin et sa garde-robe, rien
+/// d'autre : ni voiture, ni skin, ni angle de volant, parce qu'aucun des trois
+/// n'entre dans ce qu'on rend ici.
+fn driver_cache_key(graft: &kn5_gltf::DriverGraft) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(graft.model.to_string_lossy().to_lowercase().as_bytes());
+    stamp(&mut hasher, &graft.model);
+    for dir in &graft.texture_dirs {
+        hasher.update(dir.to_string_lossy().to_lowercase().as_bytes());
+    }
+    format!("{:x}", hasher.finalize())[..32].to_string()
+}
+
+/// Le rig, à côté du `.glb`. Best-effort : une écriture manquée coûte une
+/// reconversion, pas un bug.
+fn write_rig(dir: &Path, key: &str, rig: &DriverRig) {
+    match serde_json::to_vec(rig) {
+        Ok(bytes) => {
+            if let Err(e) = std::fs::write(dir.join(format!("{key}.rig")), bytes) {
+                log::warn!("preview: rig de pilote non écrit — {e}");
+            }
+        }
+        Err(e) => log::warn!("preview: rig de pilote non sérialisé — {e}"),
+    }
+}
+
+fn read_rig(dir: &Path, key: &str) -> Option<DriverRig> {
+    let bytes = std::fs::read(dir.join(format!("{key}.rig"))).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
 /// URL servie par le protocole custom (§7.2).
 ///
 /// Forme Windows d'un scheme custom sous Tauri v2 — l'app ne cible que
@@ -491,6 +638,7 @@ fn evict_to(dir: &Path, cap: u64) {
         }
         if std::fs::remove_file(&path).is_ok() {
             let _ = std::fs::remove_file(path.with_extension("txt"));
+            let _ = std::fs::remove_file(path.with_extension("rig"));
             total = total.saturating_sub(size);
             log::warn!("preview: entrée de cache évincée ({})", path.display());
         }

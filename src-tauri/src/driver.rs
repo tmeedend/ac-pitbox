@@ -285,6 +285,35 @@ pub fn graft_for(
     })
 }
 
+/// Le mannequin seul, habillé comme l'écran Pilote le demande — pas de
+/// voiture autour (`docs/SPEC-ecran-pilote.md` §5.1).
+///
+/// Même résolution que [`resolve`] jusqu'à la garde-robe, puis on retire les
+/// trois choses qui parlent de la voiture : l'assise, la pose des bras et
+/// l'ancrage. Elles ont un sens dans un habitacle et aucun sur un plateau, où
+/// le pilote est seul devant un volant générique — c'est la pose de repos du
+/// mannequin qui sert, et elle tient déjà les mains à un volant sur 41 des 44
+/// mannequins de l'installation de référence (voir `kn5_gltf::DriverRig`).
+///
+/// La voiture reste dans la boucle malgré tout : c'est son `driver3d.ini` qui
+/// nomme le corps, et le `skin.ini` de sa livrée qui fournit les pièces que
+/// l'utilisateur n'a pas choisies.
+pub fn standalone(
+    ac_root: &Path,
+    car_dir: &Path,
+    car_id: &str,
+    skin_dir: Option<&Path>,
+    chosen: &OutfitOverride,
+) -> Option<kn5_gltf::DriverGraft> {
+    let mut outfit = outfit_of(car_dir, car_id, skin_dir)?;
+    chosen.apply(&mut outfit);
+    let mut graft = graft_for(ac_root, car_dir, &outfit, 0.0)?;
+    graft.anchor = None;
+    graft.base_pose = None;
+    graft.animation = None;
+    Some(graft)
+}
+
 /// Joins a `skin.ini` wardrobe path onto its kind's folder, refusing anything
 /// that would leave it.
 ///
@@ -843,6 +872,91 @@ SUIT=\\type1\\black_black
         assert_eq!(era(&["helmet_1969.dds"]), Some("1960s"));
         assert_eq!(era(&["rss_helmet.dds", "2016_suit_diff.dds"]), None, "un casque de mod");
         assert_eq!(era(&[]), None, "et un mannequin sans texture du tout");
+    }
+
+    /// Ce que le `.glb` d'un mannequin garde comme noms : c'est ce qui décide
+    /// si le frontend peut retrouver la texture d'une pièce pour l'échanger
+    /// lui-même, au lieu de redemander une conversion à chaque survol.
+    ///
+    /// ```text
+    /// PITBOX_AC_ROOT="D:\...\assettocorsa" cargo test --lib driver -- --ignored --nocapture what_the_glb
+    /// ```
+    #[test]
+    #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
+    fn what_the_glb_keeps_of_the_names() {
+        let Ok(ac_root) = std::env::var("PITBOX_AC_ROOT") else {
+            eprintln!("PITBOX_AC_ROOT unset, skipping");
+            return;
+        };
+        let root = PathBuf::from(ac_root);
+        let graft = kn5_gltf::DriverGraft {
+            model: body_file(&root, "driver"),
+            anchor: None,
+            texture_dirs: Vec::new(),
+            base_pose: None,
+            animation: None,
+            lock_degrees: 360.0,
+            steer_degrees: 0.0,
+        };
+        let (model, stats, rig) = kn5_gltf::standalone_driver(&graft).expect("mannequin converti");
+        eprintln!("rig: {rig:?}");
+        eprintln!("stats: {} triangles, {} habillées", stats.triangles, stats.dressed);
+
+        let conversion =
+            kn5_gltf::convert(&model, None, &kn5_gltf::ConvertOptions::default(), &|_| {}).expect("conversion");
+        // Chunk JSON d'un GLB : en-tête de 12 octets, puis longueur + type.
+        let len = u32::from_le_bytes(conversion.glb[12..16].try_into().unwrap()) as usize;
+        let json: serde_json::Value = serde_json::from_slice(&conversion.glb[20..20 + len]).expect("json");
+        for key in ["images", "textures", "materials"] {
+            let names: Vec<String> = json[key]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .map(|v| v["name"].as_str().unwrap_or("<sans nom>").to_string())
+                        .collect()
+                })
+                .unwrap_or_default();
+            eprintln!("{key} ({}) : {}", names.len(), names.join(", "));
+        }
+    }
+
+    /// Où un mannequin tient ses mains, sa tête et ses pieds dans sa **pose de
+    /// repos** — celle qu'il a sans voiture autour de lui, donc celle du
+    /// plateau d'essayage (SPEC-ecran-pilote §5.1).
+    ///
+    /// La question à laquelle ce test répond : peut-on poser un volant
+    /// générique à un endroit fixe, ou faut-il le calculer par mannequin ?
+    ///
+    /// ```text
+    /// PITBOX_AC_ROOT="D:\...\assettocorsa" cargo test --lib driver -- --ignored --nocapture where_the_hands
+    /// ```
+    #[test]
+    #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
+    fn where_the_hands_rest() {
+        let Ok(ac_root) = std::env::var("PITBOX_AC_ROOT") else {
+            eprintln!("PITBOX_AC_ROOT unset, skipping");
+            return;
+        };
+        let root = PathBuf::from(ac_root);
+        let wanted = ["RIG_HAND_L", "RIG_HAND_R", "RIG_Head", "RIG_Hips"];
+        for body in bodies(&root) {
+            let Ok(bytes) = std::fs::read(body_file(&root, &body.id)) else {
+                continue;
+            };
+            let Ok(model) = kn5::parse(&bytes) else { continue };
+            let centers = kn5_gltf::node_world_centers(&model);
+            let mut line = format!("{:32}", body.id);
+            for name in wanted {
+                let found = centers
+                    .iter()
+                    .find(|(n, _)| n.len() >= name.len() && n[n.len() - name.len()..].eq_ignore_ascii_case(name));
+                match found {
+                    Some((_, c)) => line.push_str(&format!(" {name}[{:+.3} {:+.3} {:+.3}]", c[0], c[1], c[2])),
+                    None => line.push_str(&format!(" {name}[—]")),
+                }
+            }
+            eprintln!("{line}");
+        }
     }
 
     /// Les corps que l'écran proposerait sur l'installation de référence, et

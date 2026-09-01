@@ -230,6 +230,21 @@
   const appliedCell = $derived(options.find((c) => c.id === applied) ?? null);
   const appliedLabel = $derived(appliedCell?.label ?? defaultLabel());
 
+  /** Ce que le plateau doit échanger pendant un survol : la vignette d'AC, et
+   * le nom de fichier de la texture qu'elle remplace — le même, à l'extension
+   * près (`HELMET_2012.jpg` à côté de `HELMET_2012.dds`).
+   *
+   * `null` sur la piste Corps et sur la case par défaut : un corps n'est pas
+   * une texture, il demande une vraie conversion (§9.2), et le défaut se
+   * rétablit en retirant l'essai plutôt qu'en en posant un autre. */
+  const trialTexture = $derived.by(() => {
+    if (lane === "body" || trying == null || trying === DEFAULT_ID) return null;
+    const thumb = options.find((c) => c.id === trying)?.thumb;
+    if (!thumb) return null;
+    const name = decodeURIComponent(thumb.split("/").pop() ?? "");
+    return name ? { url: thumb, texture: name } : null;
+  });
+
   function defaultLabel(): string {
     if (lane === "body") return choices?.model ?? t("driver.defaultBody");
     return t((substituted ? "driver.none." : "driver.fromLivery.") + lane);
@@ -382,7 +397,17 @@
 
     <div class="body">
       <section class="fitting">
-        <DriverStage applied={appliedLabel} sample={appliedCell?.thumb ?? null} trying={trying != null} {substituted} />
+        <DriverStage
+          carId={nav.sessionCar.id}
+          skinId={nav.sessionCar.skin}
+          outfit={{ model: prefs.body, suit: prefs.suit, gloves: prefs.gloves, helmet: prefs.helmet }}
+          {lane}
+          trial={trialTexture}
+          applied={appliedLabel}
+          sample={appliedCell?.thumb ?? null}
+          trying={trying != null}
+          {substituted}
+        />
 
         <div class="lanes">
           <div class="lane-sep">{t("driver.laneGroup.commands")}</div>

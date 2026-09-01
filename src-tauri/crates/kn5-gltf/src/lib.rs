@@ -22,7 +22,7 @@ use std::path::Path;
 
 use kn5::Kn5Model;
 
-pub use driver::{graft as graft_driver, DriverGraft, DriverStats};
+pub use driver::{graft as graft_driver, standalone as standalone_driver, DriverGraft, DriverRig, DriverStats};
 pub use extconfig::{
     apply_ext_config, material_overrides, CspConfig, ExtConfigStats, MaterialOverrides, Replacement, SurfaceOverride,
 };

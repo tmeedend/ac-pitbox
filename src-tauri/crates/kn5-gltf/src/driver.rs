@@ -343,17 +343,20 @@ fn seating_offset(driver: &Kn5Model, wanted: &DriverGraft, stats: &mut DriverSta
 }
 
 /// Where the mannequin's head bone sits in its own space.
+fn head_of(driver: &Kn5Model) -> Option<[f32; 3]> {
+    bone_of(&crate::geometry::node_world_centers(driver), HEAD_BONE)
+}
+
+/// One bone of a rig, by name, among centres already computed.
 ///
 /// Matched on the **end** of the node name, not the whole of it: AC prefixes
 /// every node of a mannequin with `DRIVER:`, but a mod that dropped the prefix
-/// still has a rig, and the bone is unambiguous either way.
-fn head_of(driver: &Kn5Model) -> Option<[f32; 3]> {
-    crate::geometry::node_world_centers(driver)
-        .into_iter()
-        .find(|(name, _)| {
-            name.len() >= HEAD_BONE.len() && name[name.len() - HEAD_BONE.len()..].eq_ignore_ascii_case(HEAD_BONE)
-        })
-        .map(|(_, center)| center)
+/// still has a rig, and the bones are unambiguous either way.
+fn bone_of(centers: &[(String, [f32; 3])], bone: &str) -> Option<[f32; 3]> {
+    centers
+        .iter()
+        .find(|(name, _)| name.len() >= bone.len() && name[name.len() - bone.len()..].eq_ignore_ascii_case(bone))
+        .map(|(_, center)| *center)
 }
 
 const IDENTITY: [f32; 16] = [
@@ -399,6 +402,66 @@ fn read_first(dirs: &[PathBuf], name: &str, failures: &mut Vec<String>) -> Optio
         }
     }
     None
+}
+
+// --- Le mannequin seul, pour le plateau d'essayage --------------------------
+
+/// The bones the fitting stage needs, on top of the head it already knew.
+///
+/// **Measured across the reference install, and the measurement is the reason
+/// the wheel is derived rather than fixed**: 41 of the 44 offerable mannequins
+/// share one rest pose to the millimetre — hands at (±0.277, 1.027, 0.530),
+/// head at (0, 1.199, 0.031), hips at (0, 0.695, 0.050). The three that differ
+/// (`driver_back`, `driver_ocolus`, `new_driver`) hold their arms **down at
+/// their sides**, at (±0.45, 0.50, 0.14): a wheel placed where the other 41
+/// want one would float in front of an empty lap. Reading the hands costs
+/// nothing and gets all 44 right.
+const HAND_BONES: [&str; 2] = ["RIG_HAND_L", "RIG_HAND_R"];
+/// The other end of the torso, which frames the bust.
+const HIPS_BONE: &str = "RIG_Hips";
+
+/// Where a mannequin's rig sits in the space of the model it is converted
+/// into — metres, and the same axes the `.glb` uses.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct DriverRig {
+    /// Left then right. `None` when the mannequin has no hand bone under a
+    /// name we know.
+    pub hands: Option<[[f32; 3]; 2]>,
+    pub head: Option<[f32; 3]>,
+    pub hips: Option<[f32; 3]>,
+}
+
+/// The mannequin alone, dressed, in its **rest pose** — what the fitting
+/// stage of the driver screen shows (`docs/SPEC-ecran-pilote.md` §5.1).
+///
+/// Deliberately not [`graft`] with an empty host. Three of that function's
+/// four jobs are about a car that is not here: seating the rig where the car
+/// puts it, posing the arms on the car's own wheel, and offsetting the whole
+/// body onto the car's `DRIVEREYES`. What is left — read, dress — is this.
+///
+/// The rest pose is the right one and that is a measurement, not a hope: it
+/// already holds the hands out at a wheel on 41 of the 44 mannequins the
+/// reference install can offer (see [`HAND_BONES`]).
+///
+/// `base_pose`, `animation`, `anchor` and the steering angle of `wanted` are
+/// **ignored**, and the caller is not expected to fill them.
+pub fn standalone(wanted: &DriverGraft) -> Result<(Kn5Model, DriverStats, DriverRig), String> {
+    let mut stats = DriverStats::default();
+    let bytes = std::fs::read(&wanted.model).map_err(|e| format!("{} : {e}", wanted.model.display()))?;
+    let mut driver = kn5::parse(&bytes).map_err(|e| format!("{} : {e}", wanted.model.display()))?;
+
+    stats.dressed = dress(&mut driver, &wanted.texture_dirs, &mut stats.failures);
+    stats.triangles = driver.triangle_count();
+
+    let centers = crate::geometry::node_world_centers(&driver);
+    let rig = DriverRig {
+        hands: bone_of(&centers, HAND_BONES[0])
+            .zip(bone_of(&centers, HAND_BONES[1]))
+            .map(|(left, right)| [left, right]),
+        head: bone_of(&centers, HEAD_BONE),
+        hips: bone_of(&centers, HIPS_BONE),
+    };
+    Ok((driver, stats, rig))
 }
 
 #[cfg(test)]

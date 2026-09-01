@@ -84,3 +84,41 @@ export function setPreviewCacheCap(bytes: number): Promise<void> {
 export function onPreviewProgress(handler: (stage: PreviewStage) => void): Promise<() => void> {
   return listen<PreviewStage>("preview://progress", (event) => handler(event.payload));
 }
+
+/** Repères du rig d'un mannequin, en mètres, dans l'espace du `.glb`
+ * (SPEC-ecran-pilote §5.1). Le volant générique s'y pose et la caméra s'y
+ * vise : l'application le dessine elle-même, il n'est pas dans le modèle. */
+export interface DriverRig {
+  /** Main gauche puis main droite, ou `null` si le mannequin n'a pas d'os de
+   * main sous un nom connu — le plateau se passe alors de volant. */
+  hands: [[number, number, number], [number, number, number]] | null;
+  head: [number, number, number] | null;
+  hips: [number, number, number] | null;
+}
+
+export interface DriverPreview {
+  url: string;
+  triangleCount: number;
+  fromCache: boolean;
+  rig: DriverRig;
+}
+
+/**
+ * Prépare le mannequin seul, habillé, pour le plateau d'essayage.
+ *
+ * `null` quand Assetto Corsa n'est pas configuré ou que le corps n'est pas
+ * installé : le plateau retombe alors sur l'échantillon plat et la galerie
+ * reste utilisable (§12.4), jamais une erreur.
+ *
+ * La tenue **adoptée** entre dans la clé de cache, donc l'adopter convertit
+ * une fois. L'essai au survol, lui, ne repasse jamais par ici : le frontend
+ * échange la texture sur place, avec le `.jpg` qu'AC range à côté de son
+ * `.dds` — même image, mêmes dimensions (vérifié).
+ */
+export function prepareDriverPreview(
+  carId: string,
+  skinId: string | null,
+  outfit: Omit<DriverView, "steer">,
+): Promise<DriverPreview | null> {
+  return invoke<DriverPreview | null>("prepare_driver_preview", { carId, skinId, outfit });
+}

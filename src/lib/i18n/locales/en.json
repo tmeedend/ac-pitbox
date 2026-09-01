@@ -1350,7 +1350,9 @@
       "trial": "Trying — {name}",
       "substituted": "Body substituted · preview only",
       "noSample": "Assetto Corsa ships no image for this one.",
-      "pending": "3D fitting is on its way: for now the stage shows the image the game ships for the piece being tried."
+      "no3d": "3D fitting could not start. The gallery is still yours to use.",
+      "noBody": "No body to show: the car names none, or it is not installed.",
+      "drag": "drag to turn"
     },
     "notice": {
       "title": "This body is not the car's. What falls away:",

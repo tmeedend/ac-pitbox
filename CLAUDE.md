@@ -402,28 +402,39 @@ laisser pourrir ici.
       menus déroulants), panneau d'essayage + galerie, survol = essai / clic =
       adoption, favoris, récents, recherche, regroupement, bannière
       d'invalidation, états vides.
+      Le plateau est en 3D : le mannequin seul (`kn5_gltf::standalone_driver`,
+      pas `graft` avec un hôte vide — trois de ses quatre tâches parlent d'une
+      voiture qui n'est pas là), un tore déduit de l'écartement des mains, un
+      cadrage par piste déduit du rig.
+      **La mesure qui a débloqué le lot** : 41 des 44 mannequins proposables
+      partagent une pose de repos au millimètre — mains à (±0,277, 1,027,
+      0,530), tête à (0, 1,199, 0,031) — donc les mains sont déjà sur un
+      volant sans qu'on ait rien à poser. Les trois autres (`driver_back`,
+      `driver_ocolus`, `new_driver`) ont les bras le long du corps et
+      n'obtiennent pas de volant.
+      **La deuxième mesure, celle qui rend le survol possible** : le `.jpg`
+      qu'AC range à côté de chaque `.dds` de garde-robe est la **même image
+      aux mêmes dimensions** (`HELMET_2012.dds` 2048×512 DXT5, son `.jpg`
+      2048×512). Le survol échange donc la texture côté three.js — quelques
+      millisecondes, comme la spec le suppose — au lieu de redemander une
+      conversion. L'adoption, elle, reconvertit. Les noms d'image survivent
+      dans le glTF (`2016_Suit_DIFF.dds#paint-babbba`), ce qui permet de
+      retrouver le matériau à échanger ; les noms de *texture*, eux, sont
+      vides — se fier aux images.
       **Reste, dans cet ordre :**
-      1. **Le plateau en 3D** — c'est le morceau qui manque, et c'est le
-         mécanisme central de l'écran (§D2 : sans lui, le survol n'a rien à
-         appliquer). Demande un chemin de conversion qui n'existe pas : un
-         `.glb` de **mannequin seul**, sans voiture autour, avec le volant
-         générique que l'app dessine (§D5) et le recadrage par piste (§D4).
-         `kn5_gltf::graft` sait greffer un pilote dans un modèle hôte ; il
-         faudra lui donner un hôte vide. Mesure déjà prise : le mannequin ship
-         **assis** (bornes 0,67 × 1,48 × 1,15 m sur `driver.kn5`), donc la pose
-         de repos est déjà la bonne — reste à placer le tore.
-         En attendant, `DriverStage.svelte` montre l'échantillon plat en grand
-         et le dit ; son interface est déjà celle du plateau final.
-      2. **Vignettes de corps** (§9.1) : la galerie des corps n'a aucune image,
-         faute d'échantillon plat signifiant. La spec prévoit un rendu 3D
-         généré une fois et conservé — donc après le point 1.
-      3. **Écart spec/réalité à trancher avec l'utilisateur** : le §6.3 range
+      1. **Vignettes de corps** (§9.1) : la galerie des corps n'a aucune
+         image, faute d'échantillon plat signifiant. La spec prévoit un rendu
+         3D généré une fois et conservé — le chemin de conversion existe
+         maintenant, il manque la capture.
+      2. **Écart spec/réalité à trancher avec l'utilisateur** : le §6.3 range
          les époques par ce que désigne la *famille*, mais mesuré sur
          l'installation, c'est la *variante* qui porte le sens en 1969
          (amon, clark…) et en 1985 (les couleurs). D'où le repli implémenté :
          un regroupement qui ne produirait qu'un groupe passe en grille plate.
-      4. **Favori** : se pose au clic droit, ce qui ne s'invente pas. Passer
+      3. **Favori** : se pose au clic droit, ce qui ne s'invente pas. Passer
          par `ContextMenu.svelte` comme la bibliothèque, ou trouver mieux.
+      4. **Clavier** (§12.2) : le focus vaut survol, ce qui marche déjà par
+         `onfocus`. Les flèches dans la grille, non.
       **Ce qui n'est pas tranché** : ce qu'AC met dans son checksum en ligne.
       Le corps est hors de portée sans risque (les 312 voitures ont leur
       `driver3d.ini` dans `data.acd`, conteneur de physique) — d'où le bandeau
