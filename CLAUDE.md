@@ -427,9 +427,14 @@ laisser pourrir ici.
       vides — se fier aux images.
       **Reste, dans cet ordre :**
       1. **Vignettes de corps** (§9.1) : la galerie des corps n'a aucune
-         image, faute d'échantillon plat signifiant. La spec prévoit un rendu
-         3D généré une fois et conservé — le chemin de conversion existe
-         maintenant, il manque la capture.
+         image, faute d'échantillon plat signifiant — c'est **normal et
+         attendu**, pas un bug. La spec prévoit un rendu 3D généré une fois
+         et conservé ; le chemin de conversion existe maintenant, il manque
+         la capture. Piste la moins chère : rendre hors écran dans le
+         plateau déjà monté, une vignette à la fois et seulement pour les
+         cases visibles, puis garder le PNG. Compter ~1 s par corps la
+         première fois, 45 corps sur l'installation de référence — donc
+         paresseux obligatoire, jamais un balayage au chargement de l'écran.
       2. **Écart spec/réalité à trancher avec l'utilisateur** : le §6.3 range
          les époques par ce que désigne la *famille*, mais mesuré sur
          l'installation, c'est la *variante* qui porte le sens en 1969
