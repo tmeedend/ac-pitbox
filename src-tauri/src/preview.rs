@@ -542,9 +542,13 @@ pub fn prepare_driver(
     })
 }
 
-/// Clé de cache d'un mannequin habillé. Le mannequin et sa garde-robe, rien
-/// d'autre : ni voiture, ni skin, ni angle de volant, parce qu'aucun des trois
-/// n'entre dans ce qu'on rend ici.
+/// Clé de cache d'un mannequin habillé et posé.
+///
+/// Le mannequin, sa garde-robe, **et la pose** : celle-ci vient de la voiture
+/// (`driver_base_pos.knh` et `steer.ksanim`), donc deux voitures qui habillent
+/// le même corps pareil ne partagent l'entrée que si elles l'assoient pareil —
+/// ce qui est bien ce qu'on veut, puisque c'est la pose qui décide de l'écart
+/// des mains, donc du volant qu'on leur dessine.
 fn driver_cache_key(graft: &kn5_gltf::DriverGraft) -> String {
     let mut hasher = Sha256::new();
     hasher.update(graft.model.to_string_lossy().to_lowercase().as_bytes());
@@ -552,6 +556,12 @@ fn driver_cache_key(graft: &kn5_gltf::DriverGraft) -> String {
     for dir in &graft.texture_dirs {
         hasher.update(dir.to_string_lossy().to_lowercase().as_bytes());
     }
+    for source in [&graft.base_pose, &graft.animation].into_iter().flatten() {
+        hasher.update(source.to_string_lossy().to_lowercase().as_bytes());
+        stamp(&mut hasher, source);
+    }
+    hasher.update(graft.lock_degrees.to_le_bytes());
+    hasher.update(graft.steer_degrees.to_le_bytes());
     format!("{:x}", hasher.finalize())[..32].to_string()
 }
 

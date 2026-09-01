@@ -27,6 +27,7 @@
   import { getUiPrefs, setUiPref } from "$lib/uiPrefs.svelte";
   import LoadingState from "../LoadingState.svelte";
   import DriverStage from "./DriverStage.svelte";
+  import DriverOutfits from "./DriverOutfits.svelte";
 
   /** Les quatre pistes, dans l'ordre où elles s'empilent (§5.5). */
   type Lane = "body" | "helmet" | "suit" | "gloves";
@@ -200,7 +201,7 @@
       if (!group) {
         group =
           lane === "body"
-            ? { key, name: t("driver.era." + key), folder: null, cells: [] }
+            ? { key, name: t("driver.eraGroup." + key), folder: null, cells: [] }
             : { key, name: key, folder: key, cells: [] };
         out.push(group);
       }
@@ -317,6 +318,9 @@
   ];
 
   const axis = $derived.by(() => {
+    // Côté corps, l'axe n'est pas une famille de dossiers mais l'époque des
+    // casques que le corps accepte — ce que le libellé doit dire, sans quoi
+    // « grouper par époque » ne veut rien dire appliqué à un mannequin.
     if (lane === "body") return "era";
     const first = options[0]?.id.split("/")[0]?.toLowerCase() ?? "";
     return AXES.find(([prefix]) => first.startsWith(prefix))?.[1] ?? "family";
@@ -433,6 +437,8 @@
           <button class="reset" type="button" onclick={exit}>
             {substituted ? t("driver.reset.body") : t("driver.reset.livery")}
           </button>
+
+          <DriverOutfits />
         </div>
       </section>
 
@@ -501,20 +507,29 @@
                 <button
                   class="cell"
                   class:sel={kept === cell.id}
-                  class:fav={favorites.includes(tag(cell.id))}
                   type="button"
                   onmouseenter={() => (trying = cell.id)}
                   onmouseleave={() => (trying = null)}
                   onfocus={() => (trying = cell.id)}
                   onblur={() => (trying = null)}
                   onclick={() => adopt(cell.id)}
-                  oncontextmenu={(e) => (e.preventDefault(), toggleFavorite(cell.id))}
                   title={cell.id}
                 >
                   <span class="art">
                     {#if cell.thumb}<img src={cell.thumb} alt="" />{:else}<span class="noart">{cell.label}</span>{/if}
                   </span>
-                  <span class="nm mono">{cell.label}</span>
+                  <span class="nm-row">
+                    <span class="nm mono">{cell.label}</span>
+                    <span
+                      class="fav"
+                      class:on={favorites.includes(tag(cell.id))}
+                      role="button"
+                      tabindex="-1"
+                      title={t("common.favorite")}
+                      onclick={(e) => (e.stopPropagation(), toggleFavorite(cell.id))}
+                      onkeydown={(e) => e.key === "Enter" && (e.stopPropagation(), toggleFavorite(cell.id))}
+                    >{favorites.includes(tag(cell.id)) ? "♥" : "♡"}</span>
+                  </span>
                 </button>
               {/each}
             </div>
@@ -803,6 +818,10 @@
   }
   .cell {
     display: block;
+    /* Ne pas s'étirer à la hauteur de la rangée : une case est carrée, et une
+       case étirée déforme tout ce qu'elle contient. */
+    align-self: start;
+    min-width: 0;
     border: 0;
     padding: 0;
     background: transparent;
@@ -826,17 +845,24 @@
     height: 100%;
     object-fit: cover;
   }
+  /* `height: 100%` ici **et** `aspect-ratio: 1` hérité de `.cell .art`, c'est
+     le bug : le bouton de la grille s'étire à la hauteur de sa rangée, la case
+     prend cette hauteur, et le rapport la rend d'autant plus large — elle
+     débordait sur ses voisines. Le remplissage n'appartient qu'au texte qui
+     est *dans* la case, jamais à la case elle-même. */
   .noart,
   .cell.special .art {
     display: flex;
     align-items: center;
     justify-content: center;
     text-align: center;
-    height: 100%;
     padding: 8px;
     font-size: 10px;
     color: var(--faint);
     line-height: 1.4;
+  }
+  .noart {
+    height: 100%;
   }
   .cell.special .art {
     background: repeating-linear-gradient(
@@ -874,11 +900,34 @@
   .cell.sel .nm {
     color: var(--txt);
   }
-  /* L'image est le contenu : on ne pose rien dessus, l'étoile préfixe le nom
-     (§7.3). */
-  .cell.fav .nm::before {
-    content: "★ ";
-    color: var(--rosso-border);
+  /* Le cœur de la bibliothèque, **sous** l'image et non dessus.
+     La spec écarte le bouton flottant parce que l'échantillon est montré
+     entier, sans découpe : c'est la texture elle-même qu'on juge, et un
+     bouton posé dans un coin en cache un morceau. Elle en tirait une étoile
+     en préfixe du nom ; on garde son argument (rien sur l'image) et on prend
+     le glyphe de la bibliothèque, pour que « mettre en favori » se fasse
+     partout du même geste sur la même icône. */
+  .nm-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .nm-row .nm {
+    margin-top: 0;
+    flex: 1;
+    min-width: 0;
+  }
+  .fav {
+    flex: 0 0 auto;
+    font-size: 12px;
+    line-height: 1;
+    color: var(--faint);
+    cursor: pointer;
+  }
+  .fav.on,
+  .fav:hover {
+    color: var(--rosso-bright);
   }
 
   .empty {

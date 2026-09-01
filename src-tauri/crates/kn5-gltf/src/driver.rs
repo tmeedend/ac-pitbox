@@ -408,14 +408,14 @@ fn read_first(dirs: &[PathBuf], name: &str, failures: &mut Vec<String>) -> Optio
 
 /// The bones the fitting stage needs, on top of the head it already knew.
 ///
-/// **Measured across the reference install, and the measurement is the reason
-/// the wheel is derived rather than fixed**: 41 of the 44 offerable mannequins
-/// share one rest pose to the millimetre — hands at (±0.277, 1.027, 0.530),
-/// head at (0, 1.199, 0.031), hips at (0, 0.695, 0.050). The three that differ
-/// (`driver_back`, `driver_ocolus`, `new_driver`) hold their arms **down at
-/// their sides**, at (±0.45, 0.50, 0.14): a wheel placed where the other 41
-/// want one would float in front of an empty lap. Reading the hands costs
-/// nothing and gets all 44 right.
+/// **The measurement that decided how the stage is built.** In its *rest*
+/// pose a mannequin holds its hands 55 cm apart — 41 of the 44 offerable ones
+/// to the millimetre, at (±0.277, 1.027, 0.530). That looks like a grip and is
+/// not one: no steering wheel is 55 cm across, and a ring drawn through those
+/// hands reads as a bus wheel the fingers do not touch. Apply the car's own
+/// hierarchy and steering animation and the same hands close to **35–43 cm**,
+/// car by car — a real wheel, of that car's real size. So the stage poses the
+/// driver like the car does, and the ring is read off the result.
 const HAND_BONES: [&str; 2] = ["RIG_HAND_L", "RIG_HAND_R"];
 /// The other end of the torso, which frames the bust.
 const HIPS_BONE: &str = "RIG_Hips";
@@ -431,20 +431,18 @@ pub struct DriverRig {
     pub hips: Option<[f32; 3]>,
 }
 
-/// The mannequin alone, dressed, in its **rest pose** — what the fitting
-/// stage of the driver screen shows (`docs/SPEC-ecran-pilote.md` §5.1).
+/// The mannequin alone, dressed and posed — what the fitting stage of the
+/// driver screen shows (`docs/SPEC-ecran-pilote.md` §5.1).
 ///
-/// Deliberately not [`graft`] with an empty host. Three of that function's
-/// four jobs are about a car that is not here: seating the rig where the car
-/// puts it, posing the arms on the car's own wheel, and offsetting the whole
-/// body onto the car's `DRIVEREYES`. What is left — read, dress — is this.
+/// Deliberately not [`graft`] with an empty host, but for **one** of that
+/// function's four jobs rather than three: the body is not offset onto the
+/// car's `DRIVEREYES` (`anchor` is ignored, and the caller need not fill it),
+/// because a stage has no cockpit to fit into. The other two — laying the rig
+/// out from the car's `driver_base_pos.knh`, and posing the arms with its
+/// steering animation — are kept, and they are what makes the hands close on
+/// a wheel-sized ring instead of hanging 55 cm apart (see [`HAND_BONES`]).
 ///
-/// The rest pose is the right one and that is a measurement, not a hope: it
-/// already holds the hands out at a wheel on 41 of the 44 mannequins the
-/// reference install can offer (see [`HAND_BONES`]).
-///
-/// `base_pose`, `animation`, `anchor` and the steering angle of `wanted` are
-/// **ignored**, and the caller is not expected to fill them.
+/// The rig comes back **after** posing, for the same reason.
 pub fn standalone(wanted: &DriverGraft) -> Result<(Kn5Model, DriverStats, DriverRig), String> {
     let mut stats = DriverStats::default();
     let bytes = std::fs::read(&wanted.model).map_err(|e| format!("{} : {e}", wanted.model.display()))?;
@@ -452,6 +450,10 @@ pub fn standalone(wanted: &DriverGraft) -> Result<(Kn5Model, DriverStats, Driver
 
     stats.dressed = dress(&mut driver, &wanted.texture_dirs, &mut stats.failures);
     stats.triangles = driver.triangle_count();
+    // Même ordre que dans `graft` : la hiérarchie place le corps, l'animation
+    // reprend par-dessus les membres qu'elle nomme.
+    stats.seated = base_pose(&mut driver, wanted, &mut stats.failures);
+    stats.posed = pose(&mut driver, wanted, &mut stats.failures);
 
     let centers = crate::geometry::node_world_centers(&driver);
     let rig = DriverRig {

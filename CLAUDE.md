@@ -406,12 +406,16 @@ laisser pourrir ici.
       pas `graft` avec un hôte vide — trois de ses quatre tâches parlent d'une
       voiture qui n'est pas là), un tore déduit de l'écartement des mains, un
       cadrage par piste déduit du rig.
-      **La mesure qui a débloqué le lot** : 41 des 44 mannequins proposables
-      partagent une pose de repos au millimètre — mains à (±0,277, 1,027,
-      0,530), tête à (0, 1,199, 0,031) — donc les mains sont déjà sur un
-      volant sans qu'on ait rien à poser. Les trois autres (`driver_back`,
-      `driver_ocolus`, `new_driver`) ont les bras le long du corps et
-      n'obtiennent pas de volant.
+      **La mesure qui a débloqué le lot, et la correction qui a suivi** : les
+      41 mannequins sur 44 qui partagent une pose de repos au millimètre
+      (mains à ±0,277, 1,027, 0,530) *ressemblent* à une prise de volant et
+      n'en sont pas — 55 cm d'écart, un volant de car, que les doigts ne
+      touchent pas. Rendu à l'écran, c'était le principal défaut du premier
+      essai. Appliquer la hiérarchie d'assise **et** l'animation de braquage
+      de la voiture ramène l'écart à 35–43 cm selon la voiture, mesuré sur
+      douze : le diamètre de son vrai volant. Donc `standalone` ne retire que
+      l'ancrage (`DRIVEREYES`), jamais la pose — et la clé de cache porte la
+      pose, puisque c'est elle qui décide du volant dessiné.
       **La deuxième mesure, celle qui rend le survol possible** : le `.jpg`
       qu'AC range à côté de chaque `.dds` de garde-robe est la **même image
       aux mêmes dimensions** (`HELMET_2012.dds` 2048×512 DXT5, son `.jpg`
@@ -431,10 +435,16 @@ laisser pourrir ici.
          l'installation, c'est la *variante* qui porte le sens en 1969
          (amon, clark…) et en 1985 (les couleurs). D'où le repli implémenté :
          un regroupement qui ne produirait qu'un groupe passe en grille plate.
-      3. **Favori** : se pose au clic droit, ce qui ne s'invente pas. Passer
-         par `ContextMenu.svelte` comme la bibliothèque, ou trouver mieux.
-      4. **Clavier** (§12.2) : le focus vaut survol, ce qui marche déjà par
+      3. **Clavier** (§12.2) : le focus vaut survol, ce qui marche déjà par
          `onfocus`. Les flèches dans la grille, non.
+      **Écarts assumés vis-à-vis de la spec, décidés avec l'utilisateur** :
+      le favori se pose sur le cœur de la bibliothèque (`♥`/`♡`) placé sous
+      l'image et non sur elle — on garde l'argument du §7.3 (l'échantillon est
+      montré entier, un bouton posé dessus en cache un morceau) en prenant le
+      glyphe du reste de l'app ; et les **tenues enregistrées**
+      (`driverOutfits.svelte.ts`, §13 complété) reposent les quatre pièces
+      d'un clic — le corps d'abord, sinon `setDriverBody` efface les trois
+      autres juste après les avoir posées.
       **Ce qui n'est pas tranché** : ce qu'AC met dans son checksum en ligne.
       Le corps est hors de portée sans risque (les 312 voitures ont leur
       `driver3d.ini` dans `data.acd`, conteneur de physique) — d'où le bandeau

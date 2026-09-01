@@ -285,19 +285,18 @@ pub fn graft_for(
     })
 }
 
-/// Le mannequin seul, habillé comme l'écran Pilote le demande — pas de
-/// voiture autour (`docs/SPEC-ecran-pilote.md` §5.1).
+/// Le mannequin seul, habillé comme l'écran Pilote le demande — sans habitacle
+/// autour (`docs/SPEC-ecran-pilote.md` §5.1).
 ///
-/// Même résolution que [`resolve`] jusqu'à la garde-robe, puis on retire les
-/// trois choses qui parlent de la voiture : l'assise, la pose des bras et
-/// l'ancrage. Elles ont un sens dans un habitacle et aucun sur un plateau, où
-/// le pilote est seul devant un volant générique — c'est la pose de repos du
-/// mannequin qui sert, et elle tient déjà les mains à un volant sur 41 des 44
-/// mannequins de l'installation de référence (voir `kn5_gltf::DriverRig`).
+/// Même résolution que [`resolve`], à une chose près : **l'ancrage tombe**. Il
+/// pose le corps sur le `DRIVEREYES` de la voiture, c'est-à-dire à sa place
+/// dans un habitacle qui n'est pas là.
 ///
-/// La voiture reste dans la boucle malgré tout : c'est son `driver3d.ini` qui
-/// nomme le corps, et le `skin.ini` de sa livrée qui fournit les pièces que
-/// l'utilisateur n'a pas choisies.
+/// L'assise et l'animation de braquage, elles, **restent**, et c'est la
+/// correction du premier essai : sans elles le mannequin garde sa pose de
+/// modélisation, bras écartés de 55 cm, et le volant générique qu'on lui pose
+/// entre les mains a le diamètre d'un volant de car. Avec elles, l'écart
+/// tombe à 35–43 cm selon la voiture — la taille de son vrai volant.
 pub fn standalone(
     ac_root: &Path,
     car_dir: &Path,
@@ -309,8 +308,6 @@ pub fn standalone(
     chosen.apply(&mut outfit);
     let mut graft = graft_for(ac_root, car_dir, &outfit, 0.0)?;
     graft.anchor = None;
-    graft.base_pose = None;
-    graft.animation = None;
     Some(graft)
 }
 
@@ -872,6 +869,76 @@ SUIT=\\type1\\black_black
         assert_eq!(era(&["helmet_1969.dds"]), Some("1960s"));
         assert_eq!(era(&["rss_helmet.dds", "2016_suit_diff.dds"]), None, "un casque de mod");
         assert_eq!(era(&[]), None, "et un mannequin sans texture du tout");
+    }
+
+    /// La question du volant : la pose de repos écarte les mains de 55 cm, ce
+    /// qui n'est pas une prise de volant. **Est-ce que la pose de la voiture
+    /// (hiérarchie + animation de braquage) les rapproche d'un cerceau
+    /// crédible ?**
+    ///
+    /// ```text
+    /// PITBOX_AC_ROOT="D:\...\assettocorsa" PITBOX_CARS="D:\...\content\cars" cargo test --lib driver -- --ignored --nocapture what_the_car_pose
+    /// ```
+    #[test]
+    #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
+    fn what_the_car_pose_does_to_the_grip() {
+        let (Ok(ac_root), Ok(cars)) = (std::env::var("PITBOX_AC_ROOT"), std::env::var("PITBOX_CARS")) else {
+            eprintln!("PITBOX_AC_ROOT / PITBOX_CARS unset, skipping");
+            return;
+        };
+        let root = PathBuf::from(ac_root);
+        let mut checked = 0;
+        for entry in std::fs::read_dir(PathBuf::from(cars)).expect("content/cars").flatten() {
+            if checked >= 12 {
+                break;
+            }
+            let car_dir = entry.path();
+            if !car_dir.is_dir() {
+                continue;
+            }
+            let car_id = entry.file_name().to_string_lossy().into_owned();
+            let Some(graft) = resolve(&root, &car_dir, &car_id, None, 0.0, &OutfitOverride::default()) else {
+                continue;
+            };
+            // Hôte vide : `graft` place le mannequin dans l'espace de la
+            // voiture, ce qui est exactement ce qu'on veut mesurer.
+            let mut host = kn5::Kn5Model {
+                version: 6,
+                extra: None,
+                textures: Vec::new(),
+                materials: Vec::new(),
+                root: kn5::Kn5Node {
+                    name: "ROOT".into(),
+                    active: true,
+                    kind: kn5::Kn5NodeKind::Dummy {
+                        transform: [
+                            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+                        ],
+                    },
+                    children: Vec::new(),
+                },
+            };
+            let stats = kn5_gltf::graft_driver(&mut host, &graft);
+            let centers = kn5_gltf::node_world_centers(&host);
+            let find = |bone: &str| {
+                centers
+                    .iter()
+                    .find(|(n, _)| n.len() >= bone.len() && n[n.len() - bone.len()..].eq_ignore_ascii_case(bone))
+                    .map(|(_, c)| *c)
+            };
+            let (Some(l), Some(r)) = (find("RIG_HAND_L"), find("RIG_HAND_R")) else {
+                continue;
+            };
+            let span = ((l[0] - r[0]).powi(2) + (l[1] - r[1]).powi(2) + (l[2] - r[2]).powi(2)).sqrt();
+            eprintln!(
+                "{car_id:44} écart {:.3} m  (Ø {:.0} cm)  posé:{}  assis:{}",
+                span,
+                span * 100.0,
+                stats.posed.map(|n| n.to_string()).unwrap_or_else(|| "non".into()),
+                stats.seated.map(|n| n.to_string()).unwrap_or_else(|| "non".into()),
+            );
+            checked += 1;
+        }
     }
 
     /// Ce que le `.glb` d'un mannequin garde comme noms : c'est ce qui décide

@@ -1286,7 +1286,7 @@
       "colour": "Grouper par couleur",
       "pilot": "Grouper par pilote",
       "family": "Grouper par famille",
-      "era": "Grouper par époque"
+      "era": "Grouper par époque de casque"
     },
     "favorites": "Favoris",
     "recents": "Récents",
@@ -1379,6 +1379,21 @@
       "pick": "Choisir une voiture"
     },
     "noResults": "Aucun résultat pour « {query} ».",
-    "clearSearch": "Effacer la recherche"
+    "clearSearch": "Effacer la recherche",
+    "eraGroup": {
+      "modern": "Casques modernes",
+      "1980s": "Casques des années 80",
+      "1970s": "Casques des années 70",
+      "1960s": "Casques des années 60",
+      "custom": "Casque propre au corps"
+    },
+    "outfits": {
+      "title": "Mes tenues",
+      "save": "Enregistrer",
+      "saveHint": "Garder le corps et les trois pièces sous un nom, pour les reposer d'un clic",
+      "placeholder": "Nom de la tenue",
+      "delete": "Supprimer",
+      "none": "Rien d'enregistré. Une tenue gardée ici repose le corps, le casque, la combinaison et les gants d'un seul clic."
+    }
   }
 }

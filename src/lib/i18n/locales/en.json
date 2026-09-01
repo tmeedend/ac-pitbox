@@ -1286,7 +1286,7 @@
       "colour": "Group by colour",
       "pilot": "Group by driver",
       "family": "Group by family",
-      "era": "Group by era"
+      "era": "Group by helmet era"
     },
     "favorites": "Favourites",
     "recents": "Recent",
@@ -1379,6 +1379,21 @@
       "pick": "Choose a car"
     },
     "noResults": "No result for {query}.",
-    "clearSearch": "Clear the search"
+    "clearSearch": "Clear the search",
+    "eraGroup": {
+      "modern": "Modern helmets",
+      "1980s": "1980s helmets",
+      "1970s": "1970s helmets",
+      "1960s": "1960s helmets",
+      "custom": "Helmet built into the body"
+    },
+    "outfits": {
+      "title": "My outfits",
+      "save": "Save",
+      "saveHint": "Keep the body and all three pieces under a name, to put them back in one click",
+      "placeholder": "Outfit name",
+      "delete": "Delete",
+      "none": "Nothing saved yet. An outfit kept here puts the body, helmet, suit and gloves back in a single click."
+    }
   }
 }

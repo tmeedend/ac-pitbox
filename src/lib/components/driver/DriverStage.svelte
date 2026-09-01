@@ -252,7 +252,14 @@
   /** Marge autour du sujet, en fraction du rayon cadré. */
   const MARGIN = 1.25;
   /** Section du tore, en mètres — un jonc de volant. */
-  const WHEEL_TUBE = 0.019;
+  const WHEEL_TUBE = 0.016;
+  /** Rayons acceptables, en mètres. Mesuré sur l'installation : une fois le
+   * mannequin posé par la voiture, l'écart des mains donne 17 à 22 cm de
+   * rayon. En dehors de cette plage, les mains ne tiennent pas un volant —
+   * bras le long du corps des trois mannequins « oculus », ou pose de
+   * modélisation restée en place faute d'assise — et **on ne dessine rien**
+   * plutôt qu'un cerceau qui ne touche personne. */
+  const WHEEL_RADIUS = { min: 0.12, max: 0.28 };
 
   async function build(node: HTMLDivElement, url: string, rig: DriverRig): Promise<Stage> {
     const THREE = await import("three");
@@ -308,17 +315,28 @@
       }
     });
 
+    // Plateau tournant centré sur l'axe vertical du pilote. La pose vient de
+    // la voiture, donc le mannequin n'est pas à l'origine — il est à sa place
+    // dans l'habitacle, jusqu'à 40 cm sur le côté dans une conduite à droite.
+    // Le faire tourner autour de l'origine lui ferait décrire un cercle au
+    // lieu de pivoter sur lui-même.
+    const axis = new THREE.Vector3(rig.head?.[0] ?? 0, 0, rig.head?.[2] ?? 0);
     const pivot = new THREE.Group();
+    pivot.position.copy(axis);
+    gltf.scene.position.copy(axis.clone().negate());
     pivot.add(gltf.scene);
     world.add(pivot);
 
     // Le volant est **dessiné par l'application**, jamais celui de la voiture
     // (§D5) : coût nul et constant, indépendant du nommage des mods, et
     // honnête — on essaie une tenue, on ne prévisualise pas un habitacle. Il
-    // se déduit des mains, parce que trois mannequins sur quarante-quatre
-    // gardent les bras le long du corps et n'ont aucun volant à tenir.
+    // se déduit des mains une fois posées, et il n'apparaît pas quand elles ne
+    // tiennent visiblement rien.
     const wheel = buildWheel(THREE, rig);
-    if (wheel) pivot.add(wheel);
+    if (wheel) {
+      wheel.position.sub(axis);
+      pivot.add(wheel);
+    }
 
     const camera = new THREE.PerspectiveCamera(FOV, 1, 0.02, 40);
     world.add(camera);
@@ -469,27 +487,34 @@
   /** Le tore, ou `null` quand ce mannequin n'a pas les mains sur un volant. */
   function buildWheel(THREE: typeof ThreeModule, rig: DriverRig): ThreeModule.Mesh | null {
     const { hands, hips, head } = rig;
-    if (!hands) return null;
-    const [left, right] = hands.map((h) => new THREE.Vector3(...h));
-    if (!left || !right) return null;
+    if (!hands || !hips || !head) return null;
+    const left = new THREE.Vector3(...hands[0]);
+    const right = new THREE.Vector3(...hands[1]);
     const center = left.clone().add(right).multiplyScalar(0.5);
     const radius = left.distanceTo(right) / 2;
-    if (radius < 0.05) return null;
-    // Bras le long du corps : les trois mannequins « oculus » de l'install
-    // sont dans ce cas, et un volant devant un giron vide serait absurde.
-    if (hips && center.z - hips[2] < 0.2) return null;
+    if (radius < WHEEL_RADIUS.min || radius > WHEEL_RADIUS.max) return null;
+
+    const chest = new THREE.Vector3(...hips).lerp(new THREE.Vector3(...head), 0.5);
+    // Base orthonormée construite à la main plutôt qu'un `lookAt`. `lookAt`
+    // ne garantit qu'une chose — l'axe du tore pointe vers le buste — et
+    // laisse le roulis libre : les deux mains se retrouvent alors à côté du
+    // cerceau au lieu d'être dessus. Ici l'axe X **est** la ligne des mains,
+    // donc elles sont sur le jonc par construction, et il ne reste au buste
+    // qu'à décider de l'inclinaison.
+    const x = left.clone().sub(right).normalize();
+    const z = center.clone().sub(chest).normalize();
+    const y = new THREE.Vector3().crossVectors(z, x).normalize();
+    z.crossVectors(x, y).normalize();
+    const basis = new THREE.Matrix4().makeBasis(x, y, z);
 
     const wheel = new THREE.Mesh(
-      new THREE.TorusGeometry(radius, WHEEL_TUBE, 12, 64),
+      new THREE.TorusGeometry(radius, WHEEL_TUBE, 14, 72),
       // Sombre et mat, dans la matière du plateau : il donne aux doigts une
       // géométrie de contact sans prétendre représenter l'habitacle (§5.3).
-      new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.85, metalness: 0.05 }),
+      new THREE.MeshStandardMaterial({ color: 0x111216, roughness: 0.9, metalness: 0 }),
     );
+    wheel.quaternion.setFromRotationMatrix(basis);
     wheel.position.copy(center);
-    // L'axe du tore est son +Z : le pointer vers le buste incline le volant
-    // comme un vrai, sans avoir à inventer un angle.
-    const chest = hips && head ? new THREE.Vector3(0, (hips[1] + head[1]) / 2, (hips[2] + head[2]) / 2) : null;
-    if (chest) wheel.lookAt(chest);
     return wheel;
   }
 
