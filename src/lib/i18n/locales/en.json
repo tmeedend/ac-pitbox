@@ -1394,6 +1394,13 @@
       "placeholder": "Outfit name",
       "delete": "Delete",
       "none": "Nothing saved yet. An outfit kept here puts the body, helmet, suit and gloves back in a single click."
-    }
+    },
+    "fittingTitle": "Fitting",
+    "favOnly": "Favourites only",
+    "favExcluded": "Excluding favourites",
+    "favNeutral": "Favourites: no filter",
+    "recentOnly": "Recent only",
+    "recentExcluded": "Excluding recent",
+    "recentNeutral": "Recent: no filter"
   }
 }

@@ -445,13 +445,19 @@ pub struct DriverPreview {
 /// objet de présentation que l'application dessine (§D5), pas une pièce du
 /// mannequin. Trois lignes de `TorusGeometry` côté three.js valent mieux qu'un
 /// maillage généré en Rust et transporté dans chaque entrée de cache.
+// `default` sur la désérialisation : le fichier `.rig` posé à côté du `.glb`
+// est un cache, et un champ ajouté ici ne doit pas rendre illisibles ceux
+// écrits par la version précédente — c'est une reconversion évitable.
 #[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct DriverRig {
-    /// Main gauche puis main droite. `None` quand le mannequin n'a pas d'os de
+    /// Poignet gauche puis droit. `None` quand le mannequin n'a pas d'os de
     /// main sous un nom connu — le plateau se passe alors de volant plutôt que
     /// d'en poser un au hasard.
     pub hands: Option<[[f32; 3]; 2]>,
+    /// Là où les doigts se referment, 13 cm devant les poignets : c'est par là
+    /// que passe le volant, pas par les poignets.
+    pub grip: Option<[[f32; 3]; 2]>,
     pub head: Option<[f32; 3]>,
     pub hips: Option<[f32; 3]>,
 }
@@ -460,6 +466,7 @@ impl From<kn5_gltf::DriverRig> for DriverRig {
     fn from(rig: kn5_gltf::DriverRig) -> Self {
         Self {
             hands: rig.hands,
+            grip: rig.grip,
             head: rig.head,
             hips: rig.hips,
         }

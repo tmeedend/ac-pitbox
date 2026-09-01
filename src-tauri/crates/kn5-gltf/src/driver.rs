@@ -417,6 +417,20 @@ fn read_first(dirs: &[PathBuf], name: &str, failures: &mut Vec<String>) -> Optio
 /// car by car — a real wheel, of that car's real size. So the stage poses the
 /// driver like the car does, and the ring is read off the result.
 const HAND_BONES: [&str; 2] = ["RIG_HAND_L", "RIG_HAND_R"];
+/// Where the fingers actually close, left then right — the second phalanx of
+/// each middle finger.
+///
+/// **A wrist is not a grip**, and the difference is not subtle: measured on
+/// twelve posed cars, the midpoint of the two middle fingers sits a steady
+/// **13 cm in front** of the midpoint of the two wrists (+0.127 to +0.138 m,
+/// twelve out of twelve). A ring drawn on the wrists is therefore a ring the
+/// hands do not touch — reported from the screen before it was measured here.
+///
+/// The numbering is AC's, and it is asymmetric: the left hand carries
+/// `HAND_Index1..3` / `HAND_Middle1..3`, the right one `HAND_Index4..6` /
+/// `HAND_Middle4..6`. Hence `Middle2` and `Middle5` rather than a shared name
+/// with a side suffix.
+const GRIP_BONES: [&str; 2] = ["HAND_Middle2", "HAND_Middle5"];
 /// The other end of the torso, which frames the bust.
 const HIPS_BONE: &str = "RIG_Hips";
 
@@ -424,9 +438,13 @@ const HIPS_BONE: &str = "RIG_Hips";
 /// into — metres, and the same axes the `.glb` uses.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct DriverRig {
-    /// Left then right. `None` when the mannequin has no hand bone under a
-    /// name we know.
+    /// Wrists, left then right. `None` when the mannequin has no hand bone
+    /// under a name we know.
     pub hands: Option<[[f32; 3]; 2]>,
+    /// Where the fingers close, left then right — see [`GRIP_BONES`]. This is
+    /// what a steering wheel has to pass through; [`DriverRig::hands`] is 13 cm
+    /// behind it.
+    pub grip: Option<[[f32; 3]; 2]>,
     pub head: Option<[f32; 3]>,
     pub hips: Option<[f32; 3]>,
 }
@@ -456,10 +474,14 @@ pub fn standalone(wanted: &DriverGraft) -> Result<(Kn5Model, DriverStats, Driver
     stats.posed = pose(&mut driver, wanted, &mut stats.failures);
 
     let centers = crate::geometry::node_world_centers(&driver);
+    let pair = |bones: [&str; 2]| {
+        bone_of(&centers, bones[0])
+            .zip(bone_of(&centers, bones[1]))
+            .map(|(left, right)| [left, right])
+    };
     let rig = DriverRig {
-        hands: bone_of(&centers, HAND_BONES[0])
-            .zip(bone_of(&centers, HAND_BONES[1]))
-            .map(|(left, right)| [left, right]),
+        hands: pair(HAND_BONES),
+        grip: pair(GRIP_BONES),
         head: bone_of(&centers, HEAD_BONE),
         hips: bone_of(&centers, HIPS_BONE),
     };

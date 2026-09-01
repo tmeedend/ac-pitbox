@@ -89,9 +89,12 @@ export function onPreviewProgress(handler: (stage: PreviewStage) => void): Promi
  * (SPEC-ecran-pilote §5.1). Le volant générique s'y pose et la caméra s'y
  * vise : l'application le dessine elle-même, il n'est pas dans le modèle. */
 export interface DriverRig {
-  /** Main gauche puis main droite, ou `null` si le mannequin n'a pas d'os de
+  /** Poignet gauche puis droit, ou `null` si le mannequin n'a pas d'os de
    * main sous un nom connu — le plateau se passe alors de volant. */
   hands: [[number, number, number], [number, number, number]] | null;
+  /** Là où les doigts se referment : 13 cm devant les poignets, mesuré sur
+   * douze voitures posées. C'est par là que passe le volant. */
+  grip: [[number, number, number], [number, number, number]] | null;
   head: [number, number, number] | null;
   hips: [number, number, number] | null;
 }

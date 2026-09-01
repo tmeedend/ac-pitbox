@@ -918,7 +918,7 @@ SUIT=\\type1\\black_black
                     children: Vec::new(),
                 },
             };
-            let stats = kn5_gltf::graft_driver(&mut host, &graft);
+            let _ = kn5_gltf::graft_driver(&mut host, &graft);
             let centers = kn5_gltf::node_world_centers(&host);
             let find = |bone: &str| {
                 centers
@@ -929,13 +929,27 @@ SUIT=\\type1\\black_black
             let (Some(l), Some(r)) = (find("RIG_HAND_L"), find("RIG_HAND_R")) else {
                 continue;
             };
-            let span = ((l[0] - r[0]).powi(2) + (l[1] - r[1]).powi(2) + (l[2] - r[2]).powi(2)).sqrt();
+            let dist = |a: [f32; 3], b: [f32; 3]| {
+                ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+            };
+            // Le poignet n'est pas le jonc : les doigts se referment devant la
+            // paume. `HAND_Middle2` / `HAND_Middle5` sont les deuxièmes
+            // phalanges des majeurs gauche et droit, au contact du cerceau.
+            let (fl, fr) = (find("HAND_Middle2"), find("HAND_Middle5"));
+            let offset = fl.zip(fr).map(|(a, b)| {
+                let mid_w = [(l[0] + r[0]) / 2.0, (l[1] + r[1]) / 2.0, (l[2] + r[2]) / 2.0];
+                let mid_f = [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0, (a[2] + b[2]) / 2.0];
+                [mid_f[0] - mid_w[0], mid_f[1] - mid_w[1], mid_f[2] - mid_w[2]]
+            });
             eprintln!(
-                "{car_id:44} écart {:.3} m  (Ø {:.0} cm)  posé:{}  assis:{}",
-                span,
-                span * 100.0,
-                stats.posed.map(|n| n.to_string()).unwrap_or_else(|| "non".into()),
-                stats.seated.map(|n| n.to_string()).unwrap_or_else(|| "non".into()),
+                "{car_id:38} poignets {:.3}  doigts {}  décalage {}",
+                dist(l, r),
+                fl.zip(fr)
+                    .map(|(a, b)| format!("{:.3}", dist(a, b)))
+                    .unwrap_or_else(|| "—".into()),
+                offset
+                    .map(|o| format!("[{:+.3} {:+.3} {:+.3}]", o[0], o[1], o[2]))
+                    .unwrap_or_else(|| "—".into()),
             );
             checked += 1;
         }

@@ -484,9 +484,15 @@
   const VIEW_AZIMUTH = -0.42;
   const VIEW_ELEVATION = 0.14;
 
-  /** Le tore, ou `null` quand ce mannequin n'a pas les mains sur un volant. */
+  /** Le tore, ou `null` quand ce mannequin n'a pas les mains sur un volant.
+   *
+   * **Construit sur les doigts, pas sur les poignets.** Le premier essai
+   * passait par les poignets et le cerceau se retrouvait 13 cm trop près du
+   * buste — les mains ne le tenaient pas. Repli sur les poignets seulement si
+   * le rig d'un mod ne nomme pas ses phalanges. */
   function buildWheel(THREE: typeof ThreeModule, rig: DriverRig): ThreeModule.Mesh | null {
-    const { hands, hips, head } = rig;
+    const { hips, head } = rig;
+    const hands = rig.grip ?? rig.hands;
     if (!hands || !hips || !head) return null;
     const left = new THREE.Vector3(...hands[0]);
     const right = new THREE.Vector3(...hands[1]);
@@ -528,7 +534,10 @@
     const at = (p: [number, number, number] | null) => (p ? new THREE.Vector3(...p) : null);
     const head = at(rig.head);
     const hips = at(rig.hips);
-    const hands = rig.hands ? at(rig.hands[0])!.add(at(rig.hands[1])!).multiplyScalar(0.5) : null;
+    // Le cadrage « gants » vise les doigts, comme le volant : c'est là que se
+    // passe ce qu'on regarde.
+    const held = rig.grip ?? rig.hands;
+    const grip = held ? at(held[0])!.add(at(held[1])!).multiplyScalar(0.5) : null;
     const whole = {
       target: box.getCenter(new THREE.Vector3()),
       radius: box.getSize(new THREE.Vector3()).length() / 2,
@@ -541,7 +550,7 @@
           ? { target: head.clone().add(hips).multiplyScalar(0.5), radius: 0.42 }
           : whole;
       case "gloves":
-        return hands ? { target: hands, radius: 0.36 } : whole;
+        return grip ? { target: grip, radius: 0.34 } : whole;
       default:
         return whole;
     }
@@ -578,13 +587,17 @@
 <style>
   /* Dégradé radial du gris panneau vers le noir de fond (§5.1) : une livrée
      sombre doit rester lisible, donc le contraste prime sur le réalisme. */
+  /* Le plateau vit dans une carte `.blk`, dont le fond est `--panel2` : le
+     dégradé part du gris de carte et y retombe, au lieu d'ouvrir un trou plus
+     clair que tout le reste de l'écran. */
   .stage {
     position: relative;
     flex: 1;
-    min-height: 380px;
+    min-height: 340px;
     display: flex;
     flex-direction: column;
-    background: radial-gradient(72% 68% at 50% 40%, var(--raised) 0%, var(--bg) 78%);
+    background: radial-gradient(72% 68% at 50% 40%, var(--card) 0%, var(--panel2) 78%);
+    border-bottom: 1px solid var(--line);
     overflow: hidden;
   }
 
@@ -600,17 +613,21 @@
     display: none;
   }
 
+  /* Mêmes couleurs que `.warnbox` (jaune d'alerte du design system) que la
+     bannière d'invalidation de la galerie : c'est le même avertissement, dit
+     deux fois à deux endroits, il ne doit pas changer de teinte en route. */
   .subst {
     position: absolute;
-    left: 12px;
-    top: 12px;
+    left: 10px;
+    top: 10px;
     z-index: 2;
-    font-size: 10px;
-    letter-spacing: 0.14em;
-    color: var(--orange);
-    border: 1px solid var(--line);
-    background: var(--panel);
-    border-radius: 2px;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--yellow);
+    border: 1px solid #4a4426;
+    background: #1a1708;
     padding: 3px 7px;
   }
 
@@ -648,7 +665,6 @@
     max-width: 232px;
     aspect-ratio: 1;
     border: 1px solid var(--line);
-    border-radius: 2px;
     overflow: hidden;
     background: var(--card);
     display: flex;
@@ -685,12 +701,14 @@
     font-size: 10.5px;
     color: var(--muted);
     border-top: 1px solid var(--line);
-    background: color-mix(in srgb, var(--bg) 75%, transparent);
+    background: color-mix(in srgb, var(--panel2) 82%, transparent);
   }
   /* Un des trois seuls emplois du rouge saturé sur cet écran (§15). */
   .live {
+    font-family: var(--mono);
     color: var(--rosso-bright);
-    letter-spacing: 0.1em;
+    letter-spacing: 1px;
+    text-transform: uppercase;
     flex: 0 0 auto;
   }
   .hint {

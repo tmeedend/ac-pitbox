@@ -55,7 +55,7 @@
 
 <div class="outfits">
   <div class="head">
-    <span class="k">{t("driver.outfits.title")}</span>
+    <span class="lbl-key mono k">{t("driver.outfits.title")}</span>
     {#if naming}
       <input
         class="input name"
@@ -70,7 +70,7 @@
         onblur={confirm}
       />
     {:else}
-      <button class="add" type="button" disabled={empty} title={t("driver.outfits.saveHint")} onclick={open}>
+      <button class="btn add" type="button" disabled={empty} title={t("driver.outfits.saveHint")} onclick={open}>
         {t("driver.outfits.save")}
       </button>
     {/if}
@@ -101,35 +101,21 @@
     align-items: center;
     gap: 8px;
   }
+  /* Couleur, taille et interlettrage viennent de `.lbl-key` : ne restent ici
+     que les majuscules. */
   .k {
-    font-size: 9.5px;
-    letter-spacing: 0.2em;
-    color: var(--faint);
     text-transform: uppercase;
-  }
-  .add {
-    margin-left: auto;
-    font-size: 10.5px;
-    color: var(--muted);
-    border: 1px solid var(--line);
-    background: transparent;
-    border-radius: 2px;
-    padding: 3px 8px;
-    cursor: pointer;
-  }
-  .add:hover:not(:disabled) {
-    border-color: var(--rosso-border);
-    color: var(--txt);
   }
   /* Désactivé et non masqué : quand rien n'est choisi il n'y a rien à
      enregistrer, et l'infobulle le dit — un bouton disparu laisse chercher. */
-  .add:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+  .add {
+    margin-left: auto;
+    padding: 4px 10px;
+    font-size: 11px;
   }
   .name {
     margin-left: auto;
-    height: 24px;
+    height: 26px;
     max-width: 170px;
     font-size: 11.5px;
   }
@@ -139,28 +125,29 @@
     gap: 5px;
     margin-top: 8px;
   }
+  /* Même vocabulaire que les groupes segmentés de la barre d'outils : fond de
+     carte au repos, rouge plein pour ce qui est en place. */
   .chip {
     display: flex;
     align-items: center;
     border: 1px solid var(--line);
-    border-radius: 2px;
-    overflow: hidden;
+    background: var(--panel2);
   }
   .chip.on {
-    border-color: var(--rosso-border);
-    background: var(--rosso-dim);
+    background: var(--rosso);
+    border-color: var(--rosso);
   }
   .chip-name,
   .chip-x {
     border: 0;
     background: transparent;
     color: var(--muted);
-    font-size: 10.5px;
-    cursor: pointer;
-    padding: 4px 7px;
+    font-size: 11px;
+    padding: 4px 8px;
   }
-  .chip.on .chip-name {
-    color: var(--rosso-bright);
+  .chip.on .chip-name,
+  .chip.on .chip-x {
+    color: #fff;
   }
   .chip-name:hover {
     color: var(--txt);
@@ -168,7 +155,7 @@
   .chip-x {
     padding-left: 0;
     color: var(--faint);
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1;
   }
   .chip-x:hover {

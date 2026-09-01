@@ -1394,6 +1394,13 @@
       "placeholder": "Nom de la tenue",
       "delete": "Supprimer",
       "none": "Rien d'enregistré. Une tenue gardée ici repose le corps, le casque, la combinaison et les gants d'un seul clic."
-    }
+    },
+    "fittingTitle": "Essayage",
+    "favOnly": "Favoris uniquement",
+    "favExcluded": "Hors favoris",
+    "favNeutral": "Favoris : sans filtre",
+    "recentOnly": "Récents uniquement",
+    "recentExcluded": "Hors récents",
+    "recentNeutral": "Récents : sans filtre"
   }
 }

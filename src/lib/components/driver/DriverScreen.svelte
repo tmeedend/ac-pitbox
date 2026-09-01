@@ -26,6 +26,7 @@
   } from "$lib/driverOverride.svelte";
   import { getUiPrefs, setUiPref } from "$lib/uiPrefs.svelte";
   import LoadingState from "../LoadingState.svelte";
+  import TriCheck, { type TriState } from "../TriCheck.svelte";
   import DriverStage from "./DriverStage.svelte";
   import DriverOutfits from "./DriverOutfits.svelte";
 
@@ -62,8 +63,10 @@
   let trying = $state<string | null>(null);
   let query = $state("");
   let grouped = $state(true);
-  let onlyFavorites = $state(false);
-  let onlyRecents = $state(false);
+  /** Trois états comme les filtres de la bibliothèque : neutre, uniquement,
+   * tout sauf. Une case booléenne ne sait dire que la moitié de ce qu'on veut. */
+  let favState = $state<TriState>(0);
+  let recentState = $state<TriState>(0);
   let favorites = $state<string[]>([]);
   let recents = $state<string[]>([]);
   /** Bannière d'invalidation : elle se referme au premier choix effectué ou
@@ -75,6 +78,12 @@
 
   const carIsRace = $derived(carClass.toLowerCase() === "race");
   const substituted = $derived(choices?.substituted ?? false);
+  /** **Seul le tout premier chargement remplace la galerie.** Les suivants la
+   * laissent en place et se contentent de l'estomper : changer de corps
+   * recharge les trois listes, et démonter la grille pour l'occasion renvoyait
+   * le défilement tout en haut — on perdait sa place à chaque clic (bug réel).
+   * Même principe que le plateau, qui garde le corps précédent affiché. */
+  const firstLoad = $derived(loading && choices == null);
 
   // --- Chargement ----------------------------------------------------------
 
@@ -182,8 +191,9 @@
 
   const filtered = $derived(
     options.filter((cell) => {
-      if (onlyFavorites && !favorites.includes(tag(cell.id))) return false;
-      if (onlyRecents && !recents.includes(tag(cell.id))) return false;
+      const entry = tag(cell.id);
+      if (favState !== 0 && favorites.includes(entry) !== (favState === 1)) return false;
+      if (recentState !== 0 && recents.includes(entry) !== (recentState === 1)) return false;
       if (!query.trim()) return true;
       const needle = query.trim().toLowerCase();
       return cell.id.toLowerCase().includes(needle) || cell.label.toLowerCase().includes(needle);
@@ -337,6 +347,8 @@
   const causeLabel = $derived(
     choices ? t("driver.cause", { body: choices.model, era: t("driver.era." + (choices.era ?? "custom")) }) : "",
   );
+  /** Le nom lisible du corps courant, pour le bandeau du panneau. */
+  const bodyLabel = $derived(choices?.model ?? "—");
 
   /** Ce qui tombe quand on substitue le corps (§10.2) — et rien que ça : une
    * puce dont l'objet n'a pas réellement été perdu ne s'affiche pas. */
@@ -351,56 +363,56 @@
 </script>
 
 <div class="screen">
-  <div class="head">
-    <span class="lbl-screen">{t("driver.title")}</span>
-    <span class="sub">{t("driver.subtitle")}</span>
-  </div>
+  <header class="head">
+    <h2 class="lbl-screen">{t("driver.title")}</h2>
+    <p class="sub">{t("driver.subtitle")}</p>
+  </header>
 
   {#if !nav.sessionCar}
     <div class="empty">
-      <div class="h">{t("driver.noCar.title")}</div>
-      <p class="p">{t("driver.noCar.body")}</p>
+      <p>{t("driver.noCar.title")}</p>
+      <p class="hint">{t("driver.noCar.body")}</p>
       <button class="btn" type="button" onclick={() => requestSection("cars")}>{t("driver.noCar.pick")}</button>
     </div>
   {:else if carIsRace && !raceAcknowledged}
     <div class="empty">
-      <div class="h">{t("driver.race.title")}</div>
-      <p class="p">{t("driver.race.body")}</p>
+      <p>{t("driver.race.title")}</p>
+      <p class="hint">{t("driver.race.body")}</p>
       <button class="btn" type="button" onclick={() => (raceAcknowledged = true)}>{t("driver.race.anyway")}</button>
     </div>
   {:else}
     <div class="toolbar">
-      <label class="field">
-        <span class="lbl-key">{t("driver.search")}</span>
-        <input class="input" type="search" bind:value={query} placeholder={t("driver.searchPlaceholder")} />
-      </label>
-      <div class="field">
-        <span class="lbl-key">{t("driver.display")}</span>
-        <div class="seg">
-          <button class="sg" class:on={grouped} type="button" onclick={() => setGrouped(true)}>
-            {t("driver.groupBy." + axis)}
-          </button>
-          <button class="sg" class:on={!grouped} type="button" onclick={() => setGrouped(false)}>
-            {t("driver.groupAll")}
-          </button>
-        </div>
+      <input class="input search" placeholder={t("driver.searchPlaceholder")} bind:value={query} />
+      <span class="seg-lbl lbl-key mono">{t("driver.display")}</span>
+      <div class="seg">
+        <button class:on={grouped} type="button" onclick={() => setGrouped(true)}>{t("driver.groupBy." + axis)}</button>
+        <button class:on={!grouped} type="button" onclick={() => setGrouped(false)}>{t("driver.groupAll")}</button>
       </div>
-      <label class="chk">
-        <input type="checkbox" bind:checked={onlyFavorites} />
-        <span>{t("driver.favorites")}</span>
-      </label>
-      <label class="chk">
-        <input type="checkbox" bind:checked={onlyRecents} />
-        <span>{t("driver.recents")}</span>
-      </label>
-      <div class="count">
-        <b>{countLabel}</b>
-        <span>{causeLabel}</span>
-      </div>
+      <TriCheck
+        label={t("driver.favorites")}
+        bind:value={favState}
+        titleInclude={t("driver.favOnly")}
+        titleExclude={t("driver.favExcluded")}
+        titleNeutral={t("driver.favNeutral")}
+      />
+      <TriCheck
+        label={t("driver.recents")}
+        bind:value={recentState}
+        titleInclude={t("driver.recentOnly")}
+        titleExclude={t("driver.recentExcluded")}
+        titleNeutral={t("driver.recentNeutral")}
+      />
+      <div class="spacer"></div>
+      <span class="count mono">{countLabel} · {causeLabel}</span>
     </div>
 
     <div class="body">
-      <section class="fitting">
+      <section class="blk fitting">
+        <div class="blk-h">
+          <span class="blk-t">{t("driver.fittingTitle")}</span>
+          <span class="blk-n">{bodyLabel}</span>
+        </div>
+
         <DriverStage
           carId={nav.sessionCar.id}
           skinId={nav.sessionCar.skin}
@@ -413,28 +425,28 @@
           {substituted}
         />
 
-        <div class="lanes">
-          <div class="lane-sep">{t("driver.laneGroup.commands")}</div>
-          <button class="lane body-lane" class:on={lane === "body"} type="button" onclick={() => (lane = "body")}>
-            <span class="k">{t("driver.lane.body")}</span>
-            <span class="v mono">{choices?.model ?? "—"}</span>
-            <span class="n">{substituted ? t("driver.bodySubstituted") : t("driver.bodyFromCar")}</span>
+        <div class="blk-b lanes">
+          <div class="blk-sub">{t("driver.laneGroup.commands")}</div>
+          <button class="lane" class:on={lane === "body"} type="button" onclick={() => (lane = "body")}>
+            <span class="lbl-key">{t("driver.lane.body")}</span>
+            <span class="v mono">{bodyLabel}</span>
+            <span class="n mono">{substituted ? t("driver.bodySubstituted") : t("driver.bodyFromCar")}</span>
           </button>
 
-          <div class="lane-sep">{t("driver.laneGroup.follows")}</div>
+          <div class="blk-sub follows">{t("driver.laneGroup.follows")}</div>
           {#each OUTFIT_LANES as piece (piece)}
             <button class="lane" class:on={lane === piece} type="button" onclick={() => (lane = piece)}>
-              <span class="k">{t("driver.lane." + piece)}</span>
+              <span class="lbl-key">{t("driver.lane." + piece)}</span>
               {#if prefs[piece]}
                 <span class="v mono">{readable(prefs[piece])}</span>
               {:else}
                 <span class="v def">{t((substituted ? "driver.none." : "driver.fromLivery.") + piece)}</span>
               {/if}
-              <span class="n">{choices?.[plural(piece)].length ?? 0}</span>
+              <span class="n mono">{choices?.[plural(piece)].length ?? 0}</span>
             </button>
           {/each}
 
-          <button class="reset" type="button" onclick={exit}>
+          <button class="btn btn-ghost reset" type="button" onclick={exit}>
             {substituted ? t("driver.reset.body") : t("driver.reset.livery")}
           </button>
 
@@ -442,30 +454,30 @@
         </div>
       </section>
 
-      <section class="gallery">
+      <section class="gallery" class:busy={loading && !firstLoad}>
         {#if showNotice}
-          <div class="notice">
-            <div class="notice-txt">
-              <div class="t">{t("driver.notice.title")}</div>
+          <div class="warnbox notice">
+            <div>
+              <div class="notice-t">{t("driver.notice.title")}</div>
               <ul>
                 {#each noticeItems as item (item)}<li>{item}</li>{/each}
               </ul>
             </div>
             <div class="acts">
-              <button class="mini on" type="button" onclick={() => ((lane = "helmet"), (noticeSeen = true))}>
+              <button class="btn" type="button" onclick={() => ((lane = "helmet"), (noticeSeen = true))}>
                 {t("driver.notice.choose")}
               </button>
-              <button class="mini" type="button" onclick={exit}>{t("driver.notice.revert")}</button>
+              <button class="btn" type="button" onclick={exit}>{t("driver.notice.revert")}</button>
             </div>
           </div>
         {/if}
 
-        {#if loading}
+        {#if firstLoad}
           <LoadingState />
         {:else if lane === "helmet" && (choices?.helmets.length ?? 0) === 0}
           <div class="empty">
-            <div class="h">{t("driver.ownHelmet.title")}</div>
-            <p class="p">{t("driver.ownHelmet.body", { body: choices?.model ?? "" })}</p>
+            <p>{t("driver.ownHelmet.title")}</p>
+            <p class="hint">{t("driver.ownHelmet.body", { body: choices?.model ?? "" })}</p>
             <div class="row-acts">
               <button class="btn" type="button" onclick={() => (lane = "suit")}>{t("driver.ownHelmet.toSuit")}</button>
               <button class="btn" type="button" onclick={() => (lane = "body")}>{t("driver.ownHelmet.toBody")}</button>
@@ -474,15 +486,15 @@
         {:else if !groups.length}
           <p class="noresult">
             {t("driver.noResults", { query })}
-            <button class="link" type="button" onclick={() => (query = "")}>{t("driver.clearSearch")}</button>
+            <button class="btn btn-ghost" type="button" onclick={() => (query = "")}>{t("driver.clearSearch")}</button>
           </p>
         {:else}
           {#each groups as group, gi (group.key)}
             {#if group.name}
               <div class="grp">
-                <span>{group.name}</span>
-                {#if group.folder}<span class="id mono">{group.folder}</span>{/if}
-                <span class="n">{group.cells.length}</span>
+                <span class="sec-t">{group.name}</span>
+                {#if group.folder}<span class="grp-id mono">{group.folder}</span>{/if}
+                <span class="grp-n mono">{group.cells.length}</span>
               </div>
             {/if}
             <div class="grid">
@@ -500,7 +512,7 @@
                   onclick={() => adopt(DEFAULT_ID)}
                 >
                   <span class="art">{defaultCellText()}</span>
-                  <span class="nm">{defaultCellName()}</span>
+                  <span class="nm-row"><span class="nm">{defaultCellName()}</span></span>
                 </button>
               {/if}
               {#each group.cells as cell (cell.id)}
@@ -541,6 +553,11 @@
 </div>
 
 <style>
+  /* Mise en page et couleurs reprises du design system (`global.css`) : même
+     en-tête d'écran que les Add-ons, même barre d'outils que la vue
+     transversale, mêmes cartes `.blk` que partout ailleurs. Ne restent ici que
+     les deux choses que cet écran est seul à avoir : la colonne d'essayage
+     fixe, et la grille d'échantillons. */
   .screen {
     display: flex;
     flex-direction: column;
@@ -549,87 +566,64 @@
   }
 
   .head {
-    display: flex;
-    align-items: baseline;
-    gap: 14px;
-    padding: 0 0 12px;
+    margin-bottom: 18px;
   }
   .sub {
-    font-size: 11.5px;
     color: var(--muted);
-    max-width: 560px;
+    font-size: 12px;
+    margin-top: 6px;
+    line-height: 1.5;
+    max-width: 540px;
   }
 
-  /* --- barre d'outils (§8.1) --- */
   .toolbar {
     display: flex;
-    align-items: flex-end;
-    gap: 18px;
-    padding: 0 0 14px;
-    border-bottom: 1px solid var(--line);
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
   }
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-  .field .input {
-    min-width: 210px;
+  .search {
+    width: 200px;
+    flex: none;
   }
   .seg {
     display: flex;
     border: 1px solid var(--line);
-    border-radius: 2px;
-    overflow: hidden;
-    height: 32px;
   }
-  .sg {
-    display: flex;
-    align-items: center;
-    padding: 0 12px;
-    font-size: 11px;
+  .seg button {
+    background: var(--panel2);
     color: var(--muted);
-    background: var(--raised);
-    border: 0;
+    padding: 6px 14px;
+    font-size: 11px;
     border-right: 1px solid var(--line);
-    cursor: pointer;
   }
-  .sg:last-child {
-    border-right: 0;
+  .seg button:last-child {
+    border-right: none;
   }
-  .sg.on {
-    background: var(--card);
-    color: var(--txt);
+  .seg button.on {
+    background: var(--rosso);
+    color: #fff;
   }
-  .chk {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    height: 32px;
-    font-size: 12px;
-    color: var(--muted);
-    cursor: pointer;
+  /* Couleur/taille/interlettrage viennent de `.lbl-key` : ne restent ici que
+     les majuscules, que la classe globale ne couvre pas. */
+  .seg-lbl {
+    text-transform: uppercase;
   }
-  /* Deux lignes, alignées à droite, repli plutôt que troncature — le risque
-     est la largeur en allemand, pas le sens (§8.3). */
+  .spacer {
+    flex: 1;
+  }
   .count {
-    margin-left: auto;
-    text-align: right;
-    font-size: 11px;
     color: var(--faint);
-    line-height: 1.6;
-    max-width: 240px;
-    display: flex;
-    flex-direction: column;
-  }
-  .count b {
-    color: var(--muted);
-    font-weight: 500;
+    font-size: 11px;
+    text-align: right;
+    max-width: 320px;
   }
 
   /* --- corps de l'écran --- */
   .body {
     display: flex;
+    gap: 14px;
     flex: 1;
     min-height: 0;
   }
@@ -638,74 +632,48 @@
   .fitting {
     width: 392px;
     flex: 0 0 392px;
-    border-right: 1px solid var(--line);
-    background: var(--panel);
     display: flex;
     flex-direction: column;
     min-height: 0;
+    margin-bottom: 0;
+    overflow: auto;
   }
 
   /* --- les pistes (§5.5) --- */
   .lanes {
     border-top: 1px solid var(--line);
-    padding: 12px 12px 14px;
   }
-  .lane-sep {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 2px 2px 8px;
-    font-size: 9px;
-    letter-spacing: 0.2em;
-    color: var(--faint);
-  }
-  .lane-sep::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background: var(--line);
-  }
-  /* L'intertitre qui suit une piste, pas celui de tête. */
-  .lane + .lane-sep {
-    margin-top: 12px;
+  .follows {
+    margin-top: 14px;
   }
   .lane {
     display: grid;
-    grid-template-columns: 96px 1fr auto;
+    grid-template-columns: 92px 1fr auto;
     align-items: center;
     gap: 10px;
     width: 100%;
-    padding: 9px 10px;
-    border-radius: 2px;
+    padding: 8px 10px;
     border: 1px solid transparent;
     border-left: 2px solid transparent;
     background: transparent;
     text-align: left;
-    cursor: pointer;
   }
   .lane + .lane {
     margin-top: 2px;
   }
-  .body-lane {
-    background: var(--card);
-    border-color: var(--line);
-    border-left-color: var(--faint);
-  }
-  /* Bordure gauche en accent : un des trois seuls emplois du rouge saturé
-     sur cet écran (§15). */
-  .lane.on {
+  .lane:hover {
     background: var(--raised);
+  }
+  /* Bordure gauche en accent : un des trois seuls emplois du rouge saturé sur
+     cet écran (§15). */
+  .lane.on {
+    background: var(--panel);
     border-color: var(--line);
     border-left-color: var(--rosso);
   }
-  .lane .k {
-    font-size: 9.5px;
-    letter-spacing: 0.2em;
-    color: var(--faint);
-  }
   .lane .v {
-    font-size: 12.5px;
-    color: var(--txt);
+    font-size: 12px;
+    color: var(--txt2);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -719,21 +687,10 @@
     color: var(--faint);
   }
   .reset {
-    display: block;
     width: 100%;
+    justify-content: center;
     margin-top: 12px;
-    padding-top: 11px;
-    text-align: center;
-    font-size: 10.5px;
-    letter-spacing: 0.12em;
-    color: var(--muted);
-    border: 0;
-    border-top: 1px solid var(--line);
-    background: transparent;
-    cursor: pointer;
-  }
-  .reset:hover {
-    color: var(--txt);
+    font-size: 11px;
   }
 
   /* --- galerie (§6, §7) --- */
@@ -741,29 +698,30 @@
     flex: 1;
     min-width: 0;
     overflow: auto;
-    padding: 0 20px 30px;
+    scrollbar-gutter: stable;
+    padding-right: 4px;
   }
+  /* Rechargement en cours : la galerie s'estompe mais **reste en place**,
+     défilement compris. */
+  .gallery.busy {
+    opacity: 0.55;
+  }
+
   .notice {
     display: flex;
     gap: 12px;
     align-items: flex-start;
-    margin: 16px 0 4px;
-    padding: 11px 13px;
-    border: 1px solid var(--line);
-    border-left: 2px solid var(--orange);
-    background: var(--card);
-    border-radius: 2px;
+    margin-bottom: 14px;
   }
-  .notice .t {
+  .notice-t {
     font-size: 12px;
-    color: var(--orange);
   }
   .notice ul {
     margin: 6px 0 0;
     padding-left: 16px;
     font-size: 11.5px;
-    color: var(--muted);
     line-height: 1.6;
+    opacity: 0.85;
   }
   .acts {
     margin-left: auto;
@@ -771,35 +729,18 @@
     gap: 8px;
     flex: 0 0 auto;
   }
-  .mini {
-    font-size: 10.5px;
-    letter-spacing: 0.1em;
-    color: var(--muted);
-    border: 1px solid var(--line);
-    background: transparent;
-    border-radius: 2px;
-    padding: 5px 9px;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-  .mini.on {
-    border-color: var(--rosso-border);
-    color: var(--rosso-bright);
-  }
 
   .grp {
     display: flex;
     align-items: baseline;
-    gap: 9px;
-    margin: 22px 0 9px;
-    font-size: 12.5px;
-    color: var(--muted);
+    gap: 10px;
+    margin: 20px 0 9px;
   }
-  .grp .id {
-    font-size: 10px;
-    color: var(--faint);
+  .grp:first-child {
+    margin-top: 0;
   }
-  .grp .n {
+  .grp-id,
+  .grp-n {
     font-size: 10px;
     color: var(--faint);
   }
@@ -826,7 +767,6 @@
     padding: 0;
     background: transparent;
     text-align: left;
-    cursor: pointer;
   }
   /* Carré plein, filet franc, aucune ombre : l'échantillon doit être
      lisiblement une image et non un aperçu du résultat (§7.3). */
@@ -835,9 +775,9 @@
     aspect-ratio: 1;
     border: 1px solid var(--line);
     overflow: hidden;
-    background: var(--card);
+    background: var(--panel2);
     filter: saturate(0.86) brightness(0.94);
-    transition: filter 0.12s;
+    transition: filter 0.12s, border-color 0.12s;
   }
   .cell .art img {
     display: block;
@@ -845,11 +785,9 @@
     height: 100%;
     object-fit: cover;
   }
-  /* `height: 100%` ici **et** `aspect-ratio: 1` hérité de `.cell .art`, c'est
-     le bug : le bouton de la grille s'étire à la hauteur de sa rangée, la case
-     prend cette hauteur, et le rapport la rend d'autant plus large — elle
-     débordait sur ses voisines. Le remplissage n'appartient qu'au texte qui
-     est *dans* la case, jamais à la case elle-même. */
+  /* Le remplissage n'appartient qu'au texte qui est *dans* la case : lui
+     donner une hauteur alors qu'elle a déjà un rapport de forme la faisait
+     déborder sur ses voisines (bug réel). */
   .noart,
   .cell.special .art {
     display: flex;
@@ -867,16 +805,22 @@
   .cell.special .art {
     background: repeating-linear-gradient(
       135deg,
-      var(--card),
+      var(--panel2),
+      var(--panel2) 5px,
       var(--card) 5px,
-      var(--raised) 5px,
-      var(--raised) 10px
+      var(--card) 10px
     );
     filter: none;
   }
-  .cell .nm {
-    display: block;
+  .nm-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     margin-top: 6px;
+  }
+  .nm {
+    flex: 1;
+    min-width: 0;
     font-size: 10px;
     color: var(--faint);
     white-space: nowrap;
@@ -886,7 +830,7 @@
   .cell:hover .art,
   .cell:focus-visible .art {
     filter: none;
-    border-color: var(--rosso-border);
+    border-color: var(--faint);
   }
   .cell:hover .nm,
   .cell:focus-visible .nm {
@@ -898,32 +842,19 @@
     box-shadow: inset 0 0 0 1px var(--rosso);
   }
   .cell.sel .nm {
-    color: var(--txt);
+    color: var(--txt2);
   }
-  /* Le cœur de la bibliothèque, **sous** l'image et non dessus.
-     La spec écarte le bouton flottant parce que l'échantillon est montré
-     entier, sans découpe : c'est la texture elle-même qu'on juge, et un
-     bouton posé dans un coin en cache un morceau. Elle en tirait une étoile
-     en préfixe du nom ; on garde son argument (rien sur l'image) et on prend
-     le glyphe de la bibliothèque, pour que « mettre en favori » se fasse
-     partout du même geste sur la même icône. */
-  .nm-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 6px;
-  }
-  .nm-row .nm {
-    margin-top: 0;
-    flex: 1;
-    min-width: 0;
-  }
+  /* Le cœur de la bibliothèque, **sous** l'image et non dessus. La spec écarte
+     le bouton flottant parce que l'échantillon est montré entier, sans
+     découpe : c'est la texture elle-même qu'on juge, et un bouton posé dans un
+     coin en cache un morceau. On garde son argument et on prend le glyphe du
+     reste de l'app, pour que « mettre en favori » soit partout le même geste
+     sur la même icône. */
   .fav {
     flex: 0 0 auto;
     font-size: 12px;
     line-height: 1;
     color: var(--faint);
-    cursor: pointer;
   }
   .fav.on,
   .fav:hover {
@@ -931,23 +862,16 @@
   }
 
   .empty {
-    border: 1px dashed var(--line);
-    border-radius: 2px;
-    padding: 34px 18px;
+    color: var(--muted);
     text-align: center;
-    margin-top: 22px;
+    padding: 50px 0;
   }
-  .empty .h {
-    font-size: 13px;
-    color: var(--txt);
-    margin-bottom: 6px;
-  }
-  .empty .p {
-    font-size: 11.5px;
+  .empty .hint {
+    font-size: 12px;
     color: var(--faint);
+    margin: 8px auto 16px;
+    max-width: 420px;
     line-height: 1.6;
-    max-width: 380px;
-    margin: 0 auto 16px;
   }
   .row-acts {
     display: flex;
@@ -955,16 +879,8 @@
     justify-content: center;
   }
   .noresult {
-    font-size: 11.5px;
+    font-size: 12px;
     color: var(--muted);
     margin: 18px 0 0;
-  }
-  .link {
-    border: 0;
-    background: transparent;
-    color: var(--rosso-bright);
-    font-size: 11.5px;
-    cursor: pointer;
-    padding: 0 0 0 6px;
   }
 </style>
