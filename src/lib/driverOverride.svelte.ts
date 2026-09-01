@@ -7,24 +7,25 @@
 // est justement de se reconnaître d'une voiture à l'autre.
 //
 // Persistance dans `ui_prefs.json` (règle d'or n°6 : jamais `localStorage`
-// pour un réglage qui doit survivre à un redémarrage). Cinq entrées, ça ne
+// pour un réglage qui doit survivre à un redémarrage). Quatre entrées, ça ne
 // justifie pas un fichier Rust dédié.
 import type { DriverView } from "./preview";
-import { getUiPrefs, setUiPref } from "./uiPrefs.svelte";
+import { getUiPrefs, removeUiPref, setUiPref } from "./uiPrefs.svelte";
 
 const KEYS = {
-  on: "pitbox.driver.override",
   body: "pitbox.driver.body",
   suit: "pitbox.driver.suit",
   gloves: "pitbox.driver.gloves",
   helmet: "pitbox.driver.helmet",
 } as const;
 
+/** Ancienne bascule « surcharger le pilote », retirée avec les trois menus de
+ * la colonne de session : avoir choisi quelque chose **est** l'activation
+ * (SPEC-ecran-pilote §3.2, où le badge se déduit du choix et non d'un
+ * interrupteur). Lue une dernière fois pour la migration, puis effacée. */
+const LEGACY_ON = "pitbox.driver.override";
+
 export interface DriverOverride {
-  /** Décoché par défaut : la très grande majorité des voitures habillent déjà
-   * leur pilote correctement, et une voiture de course lui met les couleurs de
-   * son écurie. */
-  on: boolean;
   /** Corps substitué à celui de la voiture (`driver_60`), `null` = le sien.
    * Ce n'est pas une pièce de plus : il **commande** les trois autres, et le
    * substituer supprime la référence « livrée » (SPEC-ecran-pilote §1.3,
@@ -37,17 +38,29 @@ export interface DriverOverride {
   helmet: string | null;
 }
 
-const values: DriverOverride = $state({ on: false, body: null, suit: null, gloves: null, helmet: null });
+const values: DriverOverride = $state({ body: null, suit: null, gloves: null, helmet: null });
 
 let loaded: Promise<void> | null = null;
 
 function ensureLoaded(): Promise<void> {
-  loaded ??= getUiPrefs(Object.values(KEYS)).then((read) => {
-    values.on = read[KEYS.on] === "1";
+  loaded ??= getUiPrefs([...Object.values(KEYS), LEGACY_ON]).then((read) => {
     values.body = read[KEYS.body] || null;
     values.suit = read[KEYS.suit] || null;
     values.gloves = read[KEYS.gloves] || null;
     values.helmet = read[KEYS.helmet] || null;
+    if (read[LEGACY_ON] != null) {
+      // Migration : la bascule décochée voulait dire « ces choix dorment ».
+      // Sans elle ils s'appliqueraient d'un coup au premier lancement après
+      // la mise à jour, ce que personne n'a demandé — donc on les efface,
+      // plutôt que de les réveiller dans le dos de l'utilisateur.
+      if (read[LEGACY_ON] !== "1") {
+        for (const piece of ["body", "suit", "gloves", "helmet"] as const) {
+          values[piece] = null;
+          setUiPref(KEYS[piece], "");
+        }
+      }
+      removeUiPref(LEGACY_ON);
+    }
   });
   return loaded;
 }
@@ -58,11 +71,6 @@ void ensureLoaded();
  * déstructurée : la réactivité se perd à la déstructuration. */
 export function driverOverride(): DriverOverride {
   return values;
-}
-
-export function setDriverOverrideOn(on: boolean): void {
-  values.on = on;
-  setUiPref(KEYS.on, on ? "1" : "0");
 }
 
 export function setDriverPiece(piece: "suit" | "gloves" | "helmet", id: string | null): void {
@@ -104,7 +112,6 @@ export function resetDriverOutfit(): void {
  * que le `skin.ini` de la livrée déclare, plutôt que de déshabiller le pilote.
  */
 export function driverOverridePayload(): Omit<DriverView, "steer"> | null {
-  if (!values.on) return null;
   const { body, suit, gloves, helmet } = values;
   // `body` ici, `model` là-bas : le backend nomme le mannequin comme
   // `driver3d.ini` le nomme, l'écran l'appelle « le corps ».

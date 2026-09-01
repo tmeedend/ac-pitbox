@@ -15,7 +15,8 @@
     "maintenance": "Maintenance",
     "openCm": "Open CM",
     "settings": "Settings",
-    "about": "About"
+    "about": "About",
+    "driver": "My driver"
   },
   "titlebar": {
     "bigPicture": "Big Picture mode (fullscreen)",
@@ -41,20 +42,18 @@
     "activateFailedTitle": "Activation failed",
     "pickSkin": "Choose a skin…",
     "noSkinsAvailable": "No skin",
-    "driverTooltip": "Choose what the driver wears",
-    "driverRaceTooltip": "On a race car the driver wears the team colours: the outfit comes from the skin.",
-    "driverNone": "None compatible",
-    "driverPiece": {
-      "helmet": "Helmet from the skin",
-      "suit": "Suit from the skin",
-      "gloves": "Gloves from the skin"
-    },
+    "driverTooltip": "Choose the driver's body and outfit",
     "pickLayout": "Choose a layout…",
     "noLayoutsAvailable": "No layout",
     "trackSkinsNone": "No active skin",
     "trackSkinsEmpty": "No track skin",
     "trackSkinsCount": "{count} active skins",
-    "trackSkinsTooltip": "Track skins — several can be active"
+    "trackSkinsTooltip": "Track skins — several can be active",
+    "driverBadge": {
+      "modified": "Modified",
+      "substituted": "Substituted",
+      "disabled": "Disabled"
+    }
   },
   "controller": {
     "banner": {
@@ -1275,5 +1274,109 @@
     "bankUnreadable": "This sound bank could not be read.",
     "bankNamesPresent": "Present",
     "bankNamesAbsent": "Absent"
+  },
+  "driver": {
+    "title": "Driver",
+    "subtitle": "The driver's body and outfit — helmet, suit, gloves. The choice is global: it follows you from one car to the next.",
+    "search": "Search",
+    "searchPlaceholder": "Folder name, family…",
+    "display": "Display",
+    "groupAll": "All",
+    "groupBy": {
+      "colour": "Group by colour",
+      "pilot": "Group by driver",
+      "family": "Group by family",
+      "era": "Group by era"
+    },
+    "favorites": "Favourites",
+    "recents": "Recent",
+    "count": {
+      "body": "{count} bodies available",
+      "helmet": "{count} compatible helmets",
+      "suit": "{count} compatible suits",
+      "gloves": "{count} compatible glove pairs"
+    },
+    "countEmpty": {
+      "body": "No body available",
+      "helmet": "No helmet applies",
+      "suit": "No suit applies",
+      "gloves": "No gloves apply"
+    },
+    "cause": "body {body} · {era} era",
+    "era": {
+      "modern": "modern",
+      "1980s": "1980s",
+      "1970s": "1970s",
+      "1960s": "1960s",
+      "custom": "own naming"
+    },
+    "lane": {
+      "body": "Body",
+      "helmet": "Helmet",
+      "suit": "Suit",
+      "gloves": "Gloves"
+    },
+    "laneGroup": {
+      "commands": "The body commands",
+      "follows": "The outfit follows"
+    },
+    "bodyFromCar": "the car's own",
+    "bodySubstituted": "substituted",
+    "defaultBody": "none",
+    "fromLivery": {
+      "helmet": "The livery's",
+      "suit": "The livery's",
+      "gloves": "The livery's"
+    },
+    "none": {
+      "helmet": "None",
+      "suit": "None",
+      "gloves": "None"
+    },
+    "reset": {
+      "livery": "Put everything back on the livery",
+      "body": "Back to the car's body"
+    },
+    "defaultCell": {
+      "body": "The car's own",
+      "livery": "The livery's",
+      "none": "The livery has nothing for this body",
+      "name": "Default",
+      "noneName": "None"
+    },
+    "stage": {
+      "live": "Fitting",
+      "hint": "Hover a thumbnail to try it on · click to keep it",
+      "trial": "Trying — {name}",
+      "substituted": "Body substituted · preview only",
+      "noSample": "Assetto Corsa ships no image for this one.",
+      "pending": "3D fitting is on its way: for now the stage shows the image the game ships for the piece being tried."
+    },
+    "notice": {
+      "title": "This body is not the car's. What falls away:",
+      "helmet": "The helmet you kept — it is dated and does not apply to this body.",
+      "outfit": "The livery's outfit — it is named after the previous body and no longer has a referent.",
+      "race": "Use on track — a substituted body only lives in this preview.",
+      "choose": "Choose an outfit",
+      "revert": "Back to the car's body"
+    },
+    "ownHelmet": {
+      "title": "This body wears its own helmet.",
+      "body": "{body} names its images differently: no helmet from the game can sit on it. The suit and gloves are still yours to change.",
+      "toSuit": "Move on to the suit",
+      "toBody": "Change body"
+    },
+    "race": {
+      "title": "This driver wears the team's colours.",
+      "body": "On a race car the outfit is part of the livery. Your driver picks its outfit back up as soon as you choose a road car.",
+      "anyway": "Show my driver anyway"
+    },
+    "noCar": {
+      "title": "No car chosen.",
+      "body": "The driver is set up on a car: the car decides the body, and its livery the starting outfit.",
+      "pick": "Choose a car"
+    },
+    "noResults": "No result for {query}.",
+    "clearSearch": "Clear the search"
   }
 }

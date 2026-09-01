@@ -8,6 +8,7 @@
   import Launch from "./Launch.svelte";
   import Maintenance from "./Maintenance.svelte";
   import Transversal from "./Transversal.svelte";
+  import DriverScreen from "./driver/DriverScreen.svelte";
   import Apps from "./Apps.svelte";
   import OtherMods from "./OtherMods.svelte";
   import Import from "./Import.svelte";
@@ -20,12 +21,8 @@
   import TitleBar from "./TitleBar.svelte";
   import ControllerSetup from "./ControllerSetup.svelte";
   import ImageSelectDropdown from "./ImageSelectDropdown.svelte";
-  import { listDriverChoices, type DriverChoices } from "$lib/driver";
-  import {
-    driverOverride,
-    setDriverOverrideOn,
-    setDriverPiece,
-  } from "$lib/driverOverride.svelte";
+
+import { driverOverride } from "$lib/driverOverride.svelte";
   import TrackSkinChecklistDropdown from "./TrackSkinChecklistDropdown.svelte";
   import { nav, requestSection, pickSession } from "$lib/nav.svelte";
   import { previewSrc, getModDetail, activateMod } from "$lib/library";
@@ -220,65 +217,28 @@
   // que de risquer un faux positif pendant le chargement.
   const carInactive = $derived(nav.sessionCar != null && carDetail != null && !carDetail.active);
 
-  // --- Surcharge de pilote (§4.6ter) --------------------------------------
+  // --- Point d'entrée de l'écran Pilote (SPEC-ecran-pilote §3.2) ---------
   //
-  // Proposée pour les voitures de rue seulement : sur une voiture de course le
-  // pilote porte les couleurs de son écurie, donc celles du skin, et lui en
-  // mettre d'autres est un contresens. La bascule reste **visible et
-  // désactivée** plutôt que masquée — une option qui disparaît sans un mot
-  // laisse chercher.
+  // Une ligne, pas trois menus : le choix a quitté cette colonne pour son
+  // propre écran, parce que la hauteur y est la ressource rare et que
+  // l'arrivée du corps y portait le nombre de listes à quatre (§D1). La ligne
+  // porte le libellé, et un badge qui dit en un mot où en est le pilote.
+  //
+  // Proposé pour les voitures de rue seulement : sur une voiture de course le
+  // pilote porte les couleurs de son écurie, donc celles du skin. La ligne
+  // reste **visible et badgée**, jamais masquée — une option qui disparaît
+  // sans un mot laisse chercher, et l'écran lui-même explique pourquoi.
   const carIsRace = $derived((carDetail?.car_class ?? "").toLowerCase() === "race");
   const driverPrefs = $derived(driverOverride());
 
-  let driverChoices = $state<DriverChoices | null>(null);
-
-  // Rechargé au changement de voiture : la liste des casques dépend de son
-  // mannequin. Seulement quand la bascule est active — lire les tenues coûte
-  // la lecture d'un mannequin de quatorze mégaoctets, inutile tant que
-  // personne n'a demandé à choisir.
-  $effect(() => {
-    const carId = nav.sessionCar?.id ?? null;
-    const wanted = driverPrefs.on;
-    if (!carId || !wanted) {
-      driverChoices = null;
-      return;
-    }
-    let cancelled = false;
-    void listDriverChoices(carId)
-      .then((choices) => {
-        if (!cancelled) driverChoices = choices;
-      })
-      .catch((e) => console.error("list_driver_choices", e));
-    return () => {
-      cancelled = true;
-    };
+  /** Clé du badge, ou `null` quand tout est sur la livrée (§3.2). */
+  const driverBadge = $derived.by(() => {
+    if (carIsRace) return "disabled";
+    if (driverPrefs.body) return "substituted";
+    if (driverPrefs.suit || driverPrefs.gloves || driverPrefs.helmet) return "modified";
+    return null;
   });
 
-  /** Les trois menus, dans l'ordre où on s'habille. Une liste vide — un
-   * mannequin de mod dont aucun casque du jeu ne porte les bons noms — n'est
-   * pas affichée du tout.
-   *
-   * **Chaque liste s'ouvre sur une sortie**, du même libellé que le
-   * placeholder («&nbsp;Casque du skin&nbsp;») : sans elle, une pièce choisie
-   * ne se relâchait plus, et il n'y avait aucun moyen de rendre la main au
-   * skin sans décocher toute la surcharge. */
-  const driverPickers = $derived(
-    (
-      [
-        ["helmet", driverChoices?.helmets ?? []],
-        ["suit", driverChoices?.suits ?? []],
-        ["gloves", driverChoices?.gloves ?? []],
-      ] as const
-    )
-      .filter(([, options]) => options.length > 0)
-      .map(([piece, options]) => ({
-        piece,
-        options: [
-          { id: "", name: t("session.driverPiece." + piece), image: null },
-          ...options.map((o) => ({ id: o.id, name: o.label, image: previewSrc(o.thumbnail) })),
-        ],
-      })),
-  );
   const trackInactive = $derived(nav.sessionTrack != null && trackDetail != null && !trackDetail.active);
 
   // Bouton rouge « Démarrer la session » : lance directement avec les
@@ -429,41 +389,31 @@
               <!-- Le skin et la bascule pilote partagent une ligne : la
                    contrainte de cette colonne est la hauteur, et une bascule
                    décochée ne doit rien coûter (§4.6ter). -->
-              <div class="pick-row">
-                <ImageSelectDropdown
-                  options={carSkinOptions}
-                  selectedId={nav.sessionCar.skin}
-                  placeholder={t("session.pickSkin")}
-                  emptyText={t("session.noSkinsAvailable")}
-                  onselect={pickCarSkin}
-                />
-                <button
-                  class="driver-toggle"
-                  class:on={driverPrefs.on && !carIsRace}
-                  type="button"
-                  disabled={carIsRace}
-                  aria-pressed={driverPrefs.on && !carIsRace}
-                  title={carIsRace ? t("session.driverRaceTooltip") : t("session.driverTooltip")}
-                  aria-label={carIsRace ? t("session.driverRaceTooltip") : t("session.driverTooltip")}
-                  onclick={() => setDriverOverrideOn(!driverPrefs.on)}
-                >
-                  <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <path d="M2.5 9.5a5.5 5.5 0 0 1 11 0v1.2a1.3 1.3 0 0 1-1.3 1.3H3.8a1.3 1.3 0 0 1-1.3-1.3z" />
-                    <path d="M6.2 12v-1.6a1.8 1.8 0 0 1 1.8-1.8h5.5" />
-                  </svg>
-                </button>
-              </div>
-              {#if driverPrefs.on && !carIsRace}
-                {#each driverPickers as picker (picker.piece)}
-                  <ImageSelectDropdown
-                    options={picker.options}
-                    selectedId={driverPrefs[picker.piece]}
-                    placeholder={t("session.driverPiece." + picker.piece)}
-                    emptyText={t("session.driverNone")}
-                    onselect={(id) => setDriverPiece(picker.piece, id || null)}
-                  />
-                {/each}
-              {/if}
+              <ImageSelectDropdown
+                options={carSkinOptions}
+                selectedId={nav.sessionCar.skin}
+                placeholder={t("session.pickSkin")}
+                emptyText={t("session.noSkinsAvailable")}
+                onselect={pickCarSkin}
+              />
+              <button
+                class="driver-line"
+                class:on={nav.section === "driver"}
+                type="button"
+                title={t("session.driverTooltip")}
+                onclick={() => requestSection("driver")}
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M2.5 9.5a5.5 5.5 0 0 1 11 0v1.2a1.3 1.3 0 0 1-1.3 1.3H3.8a1.3 1.3 0 0 1-1.3-1.3z" />
+                  <path d="M6.2 12v-1.6a1.8 1.8 0 0 1 1.8-1.8h5.5" />
+                </svg>
+                <span class="dl-name">{t("nav.driver")}</span>
+                {#if driverBadge}
+                  <span class="dl-badge" class:off={driverBadge === "disabled"}>
+                    {t("session.driverBadge." + driverBadge)}
+                  </span>
+                {/if}
+              </button>
             </div>
           {/if}
         </div>
@@ -551,6 +501,8 @@
           <RulesEditor />
         {:else if nav.section === "profiles"}
           <Profiles />
+        {:else if nav.section === "driver"}
+          <DriverScreen />
         {:else if nav.section === "race"}
           <Launch />
         {:else if nav.section === "maintenance"}
@@ -727,28 +679,25 @@
     border-top: 1px solid var(--line);
   }
   /* Le menu de skin prend la place restante, la bascule ce qu'il lui faut. */
-  .pick-row {
-    display: flex;
-    align-items: stretch;
-    gap: 6px;
-  }
-  .pick-row > :global(*:first-child) {
-    flex: 1;
-    min-width: 0;
-  }
-  .driver-toggle {
-    flex: 0 0 auto;
-    width: 30px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    color: var(--muted);
-    cursor: pointer;
+  /* Ligne « Mon pilote » : le point d'entrée de l'écran, sous le sélecteur de
+     livrée. Un clic, jamais plus (§3.2). */
+  .driver-line {
     display: flex;
     align-items: center;
-    justify-content: center;
-    padding: 0;
+    gap: 8px;
+    width: 100%;
+    height: 30px;
+    padding: 0 9px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
   }
-  .driver-toggle svg {
+  .driver-line svg {
+    flex: 0 0 auto;
     width: 15px;
     height: 15px;
     fill: none;
@@ -757,20 +706,31 @@
     stroke-linecap: round;
     stroke-linejoin: round;
   }
-  .driver-toggle:hover:not(:disabled) {
+  .driver-line:hover,
+  .driver-line.on {
     border-color: var(--rosso-border);
     color: var(--txt);
   }
-  .driver-toggle.on {
-    border-color: var(--rosso-border);
-    background: var(--rosso-dim);
-    color: var(--rosso-bright);
+  .dl-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  /* Désactivée sur une voiture de course, mais toujours là : l'infobulle dit
-     pourquoi, ce qu'une option disparue ne peut pas faire. */
-  .driver-toggle:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+  .dl-badge {
+    margin-left: auto;
+    flex: 0 0 auto;
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    color: var(--rosso-bright);
+    border: 1px solid var(--rosso-border);
+    border-radius: 2px;
+    padding: 1px 5px;
+  }
+  /* Voiture de course : le badge dit que le choix est suspendu, pas perdu —
+     donc gris, pas rouge. */
+  .dl-badge.off {
+    color: var(--faint);
+    border-color: var(--line);
   }
   .slot-img {
     /* **Un rapport, pas une hauteur fixe.** C'était `height: 96px`, et

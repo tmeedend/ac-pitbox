@@ -15,7 +15,8 @@
     "maintenance": "Maintenance",
     "openCm": "Ouvrir CM",
     "settings": "Réglages",
-    "about": "À propos"
+    "about": "À propos",
+    "driver": "Mon pilote"
   },
   "titlebar": {
     "bigPicture": "Mode Big Picture (plein écran)",
@@ -41,20 +42,18 @@
     "activateFailedTitle": "Échec de l'activation",
     "pickSkin": "Choisir un skin…",
     "noSkinsAvailable": "Aucun skin",
-    "driverTooltip": "Choisir la tenue du pilote",
-    "driverRaceTooltip": "Sur une voiture de course, le pilote porte les couleurs de son écurie : sa tenue vient du skin.",
-    "driverNone": "Aucun compatible",
-    "driverPiece": {
-      "helmet": "Casque du skin",
-      "suit": "Combinaison du skin",
-      "gloves": "Gants du skin"
-    },
+    "driverTooltip": "Choisir le corps et la tenue du pilote",
     "pickLayout": "Choisir un layout…",
     "noLayoutsAvailable": "Aucun layout",
     "trackSkinsNone": "Aucun skin actif",
     "trackSkinsEmpty": "Aucun skin de circuit",
     "trackSkinsCount": "{count} skins actifs",
-    "trackSkinsTooltip": "Skins de circuit — plusieurs actifs possible"
+    "trackSkinsTooltip": "Skins de circuit — plusieurs actifs possible",
+    "driverBadge": {
+      "modified": "Modifié",
+      "substituted": "Substitué",
+      "disabled": "Désactivé"
+    }
   },
   "controller": {
     "banner": {
@@ -1275,5 +1274,109 @@
     "bankUnreadable": "ce fichier de son n'a pas pu être lu.",
     "bankNamesPresent": "présents",
     "bankNamesAbsent": "absents"
+  },
+  "driver": {
+    "title": "Pilote",
+    "subtitle": "Le corps du pilote et sa tenue — casque, combinaison, gants. Le choix est global : il vous suit d'une voiture à l'autre.",
+    "search": "Recherche",
+    "searchPlaceholder": "Nom de dossier, famille…",
+    "display": "Affichage",
+    "groupAll": "Tout",
+    "groupBy": {
+      "colour": "Grouper par couleur",
+      "pilot": "Grouper par pilote",
+      "family": "Grouper par famille",
+      "era": "Grouper par époque"
+    },
+    "favorites": "Favoris",
+    "recents": "Récents",
+    "count": {
+      "body": "{count} corps disponibles",
+      "helmet": "{count} casques compatibles",
+      "suit": "{count} combinaisons compatibles",
+      "gloves": "{count} paires de gants compatibles"
+    },
+    "countEmpty": {
+      "body": "Aucun corps disponible",
+      "helmet": "Aucun casque applicable",
+      "suit": "Aucune combinaison applicable",
+      "gloves": "Aucuns gants applicables"
+    },
+    "cause": "corps {body} · époque {era}",
+    "era": {
+      "modern": "moderne",
+      "1980s": "années 80",
+      "1970s": "années 70",
+      "1960s": "années 60",
+      "custom": "nommage propre"
+    },
+    "lane": {
+      "body": "Corps",
+      "helmet": "Casque",
+      "suit": "Combinaison",
+      "gloves": "Gants"
+    },
+    "laneGroup": {
+      "commands": "Le corps commande",
+      "follows": "La tenue en découle"
+    },
+    "bodyFromCar": "celui de la voiture",
+    "bodySubstituted": "substitué",
+    "defaultBody": "aucun",
+    "fromLivery": {
+      "helmet": "Celui de la livrée",
+      "suit": "Celle de la livrée",
+      "gloves": "Ceux de la livrée"
+    },
+    "none": {
+      "helmet": "Aucun",
+      "suit": "Aucune",
+      "gloves": "Aucuns"
+    },
+    "reset": {
+      "livery": "Tout remettre sur la livrée",
+      "body": "Revenir au corps de la voiture"
+    },
+    "defaultCell": {
+      "body": "Celui de la voiture",
+      "livery": "Celui de la livrée",
+      "none": "La livrée ne prévoit rien pour ce corps",
+      "name": "Par défaut",
+      "noneName": "Aucun"
+    },
+    "stage": {
+      "live": "Essayage",
+      "hint": "Survolez une vignette pour essayer · cliquez pour garder",
+      "trial": "Essai — {name}",
+      "substituted": "Corps substitué · aperçu seulement",
+      "noSample": "Assetto Corsa ne fournit pas d'image pour celui-ci.",
+      "pending": "L'essayage en 3D arrive : pour l'instant, le plateau montre l'image que le jeu fournit pour la pièce essayée."
+    },
+    "notice": {
+      "title": "Ce corps n'est pas celui de la voiture. Ce qui tombe :",
+      "helmet": "Le casque retenu — il est daté et ne s'applique pas à ce corps.",
+      "outfit": "La tenue de la livrée — elle est nommée d'après l'ancien corps et n'a plus de référent.",
+      "race": "L'application en course — un corps substitué ne vit que dans cet aperçu.",
+      "choose": "Choisir une tenue",
+      "revert": "Revenir au corps de la voiture"
+    },
+    "ownHelmet": {
+      "title": "Ce corps porte son propre casque.",
+      "body": "{body} nomme ses images autrement : aucun casque du jeu ne peut s'y poser. La combinaison et les gants, eux, restent modifiables.",
+      "toSuit": "Passer à la combinaison",
+      "toBody": "Changer de corps"
+    },
+    "race": {
+      "title": "Ce pilote porte les couleurs de son écurie.",
+      "body": "Sur une voiture de course, la tenue fait partie de la livrée. Votre pilote reprendra sa tenue dès que vous choisirez une voiture de rue.",
+      "anyway": "Voir mon pilote quand même"
+    },
+    "noCar": {
+      "title": "Aucune voiture choisie.",
+      "body": "Le pilote se règle sur une voiture : c'est elle qui décide du corps, et sa livrée de la tenue de départ.",
+      "pick": "Choisir une voiture"
+    },
+    "noResults": "Aucun résultat pour « {query} ».",
+    "clearSearch": "Effacer la recherche"
   }
 }

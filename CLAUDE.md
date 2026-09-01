@@ -389,33 +389,48 @@ laisser pourrir ici.
       Un lot de ce genre est du **reformatage pur sur une quinzaine de
       fichiers** : le faire dans son propre commit, jamais mélangé à un
       changement fonctionnel (sinon `git blame` devient inexploitable).
-- [ ] **Sélection du pilote** (branche `feature/drivers`). L'affichage est
-      fait : le pilote est greffé dans l'aperçu 3D, habillé par le `skin.ini`,
-      assis par le `driver_base_pos.knh` de la voiture, posé sur le volant par
-      son `steer.ksanim`, avec un réglage d'angle de braquage. Tout est
-      documenté au §4.6 et §4.6bis de `docs/SPEC-preview-3d-kn5.md`, et les
-      formats découverts (`.knh`, `.ksanim`) dans `docs/kn5-format.md`.
-      **Reste la cible** : proposer à l'utilisateur de *choisir* son pilote,
-      d'abord dans l'aperçu puis en session. Décidé avec l'utilisateur : ce
-      n'est **pas** un réglage par skin de voiture mais une **surcharge
-      globale**, décochée par défaut, et pensée pour les voitures de rue — sur
-      une voiture de course le pilote porte les couleurs de son écurie, donc
-      du skin. L'emplacement dans l'UI reste à trouver.
-      La mécanique est plus simple qu'elle n'en avait l'air : **trois listes
-      indépendantes** (53 combinaisons, 69 paires de gants, 176 casques), dont
-      seuls les casques sont filtrés par l'époque du mannequin — combinaisons
-      et gants portent les mêmes noms de fichiers sur toute la famille Kunos.
-      Compatibilité décidée par nom de fichier, pas déduite d'autres voitures ;
-      vignettes déjà présentes (173 casques sur 176). `DriverOutfit` (dans
-      `src/driver.rs`) est la forme qu'un sélecteur produira, `graft_for` la
-      transforme en fichiers.
+- [ ] **Écran Pilote** (branche `feature/ecran-pilote`). Spec et maquette dans
+      `docs/SPEC-ecran-pilote.md` + `docs/pitbox-ecran-pilote.html`, résumé au
+      §9.5 du SPEC. **À lire avant de reprendre** — l'asymétrie qui structure
+      tout l'écran (le corps commande, la tenue en découle) y est expliquée une
+      fois pour toutes.
+      Fait : le backend liste les corps installés et écarte ceux sans squelette
+      (`driver::bodies`, 45 sur 52 à la référence) ; l'époque d'un corps se lit
+      sur sa texture de casque ; substituer le corps fait tomber la garde-robe
+      de la livrée. Côté écran : section `driver`, ligne « Mon pilote » avec
+      badge dans la colonne de session (elle remplace la bascule et les trois
+      menus déroulants), panneau d'essayage + galerie, survol = essai / clic =
+      adoption, favoris, récents, recherche, regroupement, bannière
+      d'invalidation, états vides.
+      **Reste, dans cet ordre :**
+      1. **Le plateau en 3D** — c'est le morceau qui manque, et c'est le
+         mécanisme central de l'écran (§D2 : sans lui, le survol n'a rien à
+         appliquer). Demande un chemin de conversion qui n'existe pas : un
+         `.glb` de **mannequin seul**, sans voiture autour, avec le volant
+         générique que l'app dessine (§D5) et le recadrage par piste (§D4).
+         `kn5_gltf::graft` sait greffer un pilote dans un modèle hôte ; il
+         faudra lui donner un hôte vide. Mesure déjà prise : le mannequin ship
+         **assis** (bornes 0,67 × 1,48 × 1,15 m sur `driver.kn5`), donc la pose
+         de repos est déjà la bonne — reste à placer le tore.
+         En attendant, `DriverStage.svelte` montre l'échantillon plat en grand
+         et le dit ; son interface est déjà celle du plateau final.
+      2. **Vignettes de corps** (§9.1) : la galerie des corps n'a aucune image,
+         faute d'échantillon plat signifiant. La spec prévoit un rendu 3D
+         généré une fois et conservé — donc après le point 1.
+      3. **Écart spec/réalité à trancher avec l'utilisateur** : le §6.3 range
+         les époques par ce que désigne la *famille*, mais mesuré sur
+         l'installation, c'est la *variante* qui porte le sens en 1969
+         (amon, clark…) et en 1985 (les couleurs). D'où le repli implémenté :
+         un regroupement qui ne produirait qu'un groupe passe en grille plate.
+      4. **Favori** : se pose au clic droit, ce qui ne s'invente pas. Passer
+         par `ContextMenu.svelte` comme la bibliothèque, ou trouver mieux.
       **Ce qui n'est pas tranché** : ce qu'AC met dans son checksum en ligne.
-      Le mannequin est hors de portée sans risque (les 312 voitures ont leur
-      `driver3d.ini` dans `data.acd`, conteneur de physique) ; la tenue ne
-      demande qu'un `skin.ini`, fichier de skin — probablement sûr, non
-      prouvé. Et Pit Box déployant en hardlink, écrire ce `skin.ini` toucherait
-      la copie de bibliothèque : il faudra casser le lien et passer par
-      `gamebackup.rs`.
+      Le corps est hors de portée sans risque (les 312 voitures ont leur
+      `driver3d.ini` dans `data.acd`, conteneur de physique) — d'où le bandeau
+      « aperçu seulement ». La tenue ne demande qu'un `skin.ini`, fichier de
+      skin — probablement sûr, non prouvé. Et Pit Box déployant en hardlink,
+      écrire ce `skin.ini` toucherait la copie de bibliothèque : il faudra
+      casser le lien et passer par `gamebackup.rs`.
       Deux mesures à garder en tête : les trois voitures dont la `.knh` est
       vide retombent sur `DRIVEREYES`, et `[MODEL] POSITION` ne doit **pas**
       être appliqué (voir `seating_offset`).
