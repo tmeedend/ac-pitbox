@@ -272,6 +272,7 @@ pub fn run() {
             commands::preview::list_driver_choices,
             commands::preview::list_driver_bodies,
             commands::preview::prepare_driver_preview,
+            commands::preview::prepare_body_preview,
             commands::preview::clear_preview_cache,
             commands::preview::preview_cache_size,
             commands::preview::set_preview_cache_cap,

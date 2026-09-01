@@ -477,14 +477,21 @@ impl From<kn5_gltf::DriverRig> for DriverRig {
 ///
 /// Même cache et même éviction que les voitures — c'est le même protocole qui
 /// sert les deux, et un pilote pèse moins qu'une voiture. La clé n'a en
-/// revanche rien à voir : elle ne tient qu'au mannequin et à sa garde-robe,
-/// donc **deux voitures qui habillent le même corps pareil partagent
-/// l'entrée**, ce qui est exactement ce qu'on veut d'un choix global.
+/// revanche rien à voir : elle ne tient qu'au mannequin, à sa pose et à sa
+/// garde-robe, donc **deux voitures qui habillent et assoient le même corps
+/// pareil partagent l'entrée**, ce qui est exactement ce qu'on veut d'un choix
+/// global.
+///
+/// `token` à `None` = « ne me périme pas, et ne périme personne ». C'est le
+/// mode des **vignettes de corps** (§9.1), qui en demandent quarante-cinq à la
+/// file : avec un jeton, chacune rendrait obsolète la conversion du plateau
+/// lancée juste avant, et le plateau ne se chargerait jamais. Le verrou de
+/// conversion, lui, s'applique quand même — une conversion à la fois.
 pub fn prepare_driver(
     app: &tauri::AppHandle,
     state: &PreviewState,
     graft: &kn5_gltf::DriverGraft,
-    token: u64,
+    token: Option<u64>,
 ) -> Result<DriverPreview, String> {
     let dir = cache_dir(app)?;
     if !state.swept.swap(true, Ordering::Relaxed) {
@@ -513,7 +520,7 @@ pub fn prepare_driver(
         .slot
         .lock()
         .map_err(|_| "verrou d'aperçu empoisonné".to_string())?;
-    if !state.is_current(token) {
+    if token.is_some_and(|token| !state.is_current(token)) {
         return Err(crate::errors::PREVIEW_SUPERSEDED.to_string());
     }
 

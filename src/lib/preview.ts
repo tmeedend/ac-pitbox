@@ -125,3 +125,19 @@ export function prepareDriverPreview(
 ): Promise<DriverPreview | null> {
   return invoke<DriverPreview | null>("prepare_driver_preview", { carId, skinId, outfit });
 }
+
+/**
+ * Le même mannequin, pour la **vignette** d'un corps dans la galerie (§9.1).
+ *
+ * Deux différences avec le plateau, une seule raison derrière : il y en a
+ * quarante-cinq à produire. Aucune n'en périme une autre ni ne périme le
+ * plateau, et toutes montrent le corps dans la tenue de la livrée, pour se
+ * comparer entre elles.
+ */
+export function prepareBodyPreview(
+  carId: string,
+  skinId: string | null,
+  body: string,
+): Promise<DriverPreview | null> {
+  return invoke<DriverPreview | null>("prepare_body_preview", { carId, skinId, body });
+}

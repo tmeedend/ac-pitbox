@@ -13,6 +13,16 @@
   // | survol | la texture est échangée **ici**, sur le matériau déjà chargé | une image |
   // | clic | la tenue part au backend, qui reconvertit le `.glb` | ~1 s, puis cache |
   //
+  // **Pas de volant.** La spec en prévoyait un (§D5, un tore générique dessiné
+  // par l'app) pour donner aux doigts une géométrie de contact. Essayé deux
+  // fois : sur les poignets d'abord — cerceau de 55 cm, personne ne le touche
+  // —, puis sur les phalanges des majeurs, 13 cm plus en avant, ce qui le met
+  // au bon endroit. Il n'est toujours pas convaincant à l'écran, et il n'a pas
+  // assez d'intérêt pour qu'on continue à le chercher : le pilote seul se lit
+  // mieux qu'un pilote accompagné d'un objet approximatif. Le rig continue de
+  // servir au cadrage, `DriverRig.grip` compris — c'est lui que vise la piste
+  // Gants.
+  //
   // L'échange local est possible parce qu'AC range un `.jpg` à côté de chaque
   // `.dds` de garde-robe — **la même image, aux mêmes dimensions** (vérifié :
   // `HELMET_2012.dds` en 2048×512 DXT5 et son `.jpg` en 2048×512). C'est déjà
@@ -87,7 +97,6 @@
     /** Le pilote, dans un groupe qu'on fait tourner (§5.1 : glisser = pivoter
      * autour de l'axe vertical, rien d'autre). */
     pivot: ThreeModule.Group;
-    wheel: ThreeModule.Mesh | null;
     rig: DriverRig;
     /** Les matériaux par nom de texture de base, pour l'échange au survol.
      * Clé : le nom de fichier sans extension, en minuscules. */
@@ -251,16 +260,6 @@
   const FOV = 32;
   /** Marge autour du sujet, en fraction du rayon cadré. */
   const MARGIN = 1.25;
-  /** Section du tore, en mètres — un jonc de volant. */
-  const WHEEL_TUBE = 0.016;
-  /** Rayons acceptables, en mètres. Mesuré sur l'installation : une fois le
-   * mannequin posé par la voiture, l'écart des mains donne 17 à 22 cm de
-   * rayon. En dehors de cette plage, les mains ne tiennent pas un volant —
-   * bras le long du corps des trois mannequins « oculus », ou pose de
-   * modélisation restée en place faute d'assise — et **on ne dessine rien**
-   * plutôt qu'un cerceau qui ne touche personne. */
-  const WHEEL_RADIUS = { min: 0.12, max: 0.28 };
-
   async function build(node: HTMLDivElement, url: string, rig: DriverRig): Promise<Stage> {
     const THREE = await import("three");
     const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
@@ -326,17 +325,6 @@
     gltf.scene.position.copy(axis.clone().negate());
     pivot.add(gltf.scene);
     world.add(pivot);
-
-    // Le volant est **dessiné par l'application**, jamais celui de la voiture
-    // (§D5) : coût nul et constant, indépendant du nommage des mods, et
-    // honnête — on essaie une tenue, on ne prévisualise pas un habitacle. Il
-    // se déduit des mains une fois posées, et il n'apparaît pas quand elles ne
-    // tiennent visiblement rien.
-    const wheel = buildWheel(THREE, rig);
-    if (wheel) {
-      wheel.position.sub(axis);
-      pivot.add(wheel);
-    }
 
     const camera = new THREE.PerspectiveCamera(FOV, 1, 0.02, 40);
     world.add(camera);
@@ -456,8 +444,6 @@
           material.dispose();
         }
       });
-      wheel?.geometry.dispose();
-      (wheel?.material as ThreeModule.Material | undefined)?.dispose();
       pmrem.dispose();
       renderer.dispose();
     };
@@ -468,7 +454,6 @@
       scene: world,
       camera,
       pivot,
-      wheel,
       rig,
       slots,
       trials: new Map(),
@@ -483,46 +468,6 @@
    * légèrement au-dessus de l'horizontale — en radians. */
   const VIEW_AZIMUTH = -0.42;
   const VIEW_ELEVATION = 0.14;
-
-  /** Le tore, ou `null` quand ce mannequin n'a pas les mains sur un volant.
-   *
-   * **Construit sur les doigts, pas sur les poignets.** Le premier essai
-   * passait par les poignets et le cerceau se retrouvait 13 cm trop près du
-   * buste — les mains ne le tenaient pas. Repli sur les poignets seulement si
-   * le rig d'un mod ne nomme pas ses phalanges. */
-  function buildWheel(THREE: typeof ThreeModule, rig: DriverRig): ThreeModule.Mesh | null {
-    const { hips, head } = rig;
-    const hands = rig.grip ?? rig.hands;
-    if (!hands || !hips || !head) return null;
-    const left = new THREE.Vector3(...hands[0]);
-    const right = new THREE.Vector3(...hands[1]);
-    const center = left.clone().add(right).multiplyScalar(0.5);
-    const radius = left.distanceTo(right) / 2;
-    if (radius < WHEEL_RADIUS.min || radius > WHEEL_RADIUS.max) return null;
-
-    const chest = new THREE.Vector3(...hips).lerp(new THREE.Vector3(...head), 0.5);
-    // Base orthonormée construite à la main plutôt qu'un `lookAt`. `lookAt`
-    // ne garantit qu'une chose — l'axe du tore pointe vers le buste — et
-    // laisse le roulis libre : les deux mains se retrouvent alors à côté du
-    // cerceau au lieu d'être dessus. Ici l'axe X **est** la ligne des mains,
-    // donc elles sont sur le jonc par construction, et il ne reste au buste
-    // qu'à décider de l'inclinaison.
-    const x = left.clone().sub(right).normalize();
-    const z = center.clone().sub(chest).normalize();
-    const y = new THREE.Vector3().crossVectors(z, x).normalize();
-    z.crossVectors(x, y).normalize();
-    const basis = new THREE.Matrix4().makeBasis(x, y, z);
-
-    const wheel = new THREE.Mesh(
-      new THREE.TorusGeometry(radius, WHEEL_TUBE, 14, 72),
-      // Sombre et mat, dans la matière du plateau : il donne aux doigts une
-      // géométrie de contact sans prétendre représenter l'habitacle (§5.3).
-      new THREE.MeshStandardMaterial({ color: 0x111216, roughness: 0.9, metalness: 0 }),
-    );
-    wheel.quaternion.setFromRotationMatrix(basis);
-    wheel.position.copy(center);
-    return wheel;
-  }
 
   /** Le cadrage d'une piste (§5.2), déduit du rig et non codé en dur. */
   function framingFor(

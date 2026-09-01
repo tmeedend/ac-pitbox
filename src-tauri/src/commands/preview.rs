@@ -88,10 +88,11 @@ pub async fn list_driver_choices(
 /// Prépare le mannequin seul, habillé, pour le plateau d'essayage de l'écran
 /// Pilote (`docs/SPEC-ecran-pilote.md` §5.1).
 ///
-/// Le pilote y est **sans voiture autour** : ni assise, ni pose des bras, ni
-/// ancrage — trois choses qui n'ont de sens que dans un habitacle. La voiture
-/// reste néanmoins la source du corps (`driver3d.ini`) et de la tenue par
-/// défaut (`skin.ini` de la livrée), d'où `car_id` et `skin_id`.
+/// Le pilote y est **sans habitacle autour**, mais posé comme sa voiture le
+/// pose : seul l'ancrage sur les yeux tombe, l'assise et l'animation de
+/// braquage restent — sans elles le mannequin garde sa pose de modélisation.
+/// La voiture est donc aussi la source du corps (`driver3d.ini`) et de la
+/// tenue par défaut (`skin.ini` de la livrée), d'où `car_id` et `skin_id`.
 ///
 /// `Ok(None)` — jamais une erreur — quand Assetto Corsa n'est pas configuré ou
 /// que le corps n'est pas installé : le plateau retombe alors sur
@@ -105,8 +106,44 @@ pub async fn prepare_driver_preview(
     skin_id: Option<String>,
     outfit: crate::driver::OutfitOverride,
 ) -> Result<Option<crate::preview::DriverPreview>, String> {
-    let token = state.next_generation();
+    // Le plateau **prend** un jeton : une nouvelle tenue demandée rend
+    // obsolète la conversion en cours, sinon parcourir la galerie vite
+    // laisserait une file de conversions orphelines.
+    let token = Some(state.next_generation());
+    driver_glb(app, db, car_id, skin_id, outfit, token).await
+}
 
+/// Le même mannequin, pour la **vignette** d'un corps dans la galerie (§9.1).
+///
+/// Deux différences avec le plateau, et une seule raison derrière les deux :
+/// il y en a quarante-cinq à produire. Pas de jeton de génération, donc — une
+/// vignette ne périme pas le plateau et ne se périme pas elle-même — et une
+/// tenue vide, pour que toutes les vignettes d'une même voiture montrent les
+/// corps dans la même tenue et se comparent.
+#[tauri::command]
+pub async fn prepare_body_preview(
+    app: AppHandle,
+    db: State<'_, Db>,
+    car_id: String,
+    skin_id: Option<String>,
+    body: String,
+) -> Result<Option<crate::preview::DriverPreview>, String> {
+    let outfit = crate::driver::OutfitOverride {
+        model: Some(body),
+        ..Default::default()
+    };
+    driver_glb(app, db, car_id, skin_id, outfit, None).await
+}
+
+/// Le tronc commun des deux : résoudre la voiture, greffer, convertir.
+async fn driver_glb(
+    app: AppHandle,
+    db: State<'_, Db>,
+    car_id: String,
+    skin_id: Option<String>,
+    outfit: crate::driver::OutfitOverride,
+    token: Option<u64>,
+) -> Result<Option<crate::preview::DriverPreview>, String> {
     let cfg = crate::config::load(&app);
     let Some(ac_root) = cfg.ac_install_path.clone() else {
         return Ok(None);

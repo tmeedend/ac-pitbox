@@ -25,6 +25,7 @@
     type DriverOverride,
   } from "$lib/driverOverride.svelte";
   import { getUiPrefs, setUiPref } from "$lib/uiPrefs.svelte";
+  import { bodyThumb, requestBodyThumb } from "$lib/driverThumbs.svelte";
   import LoadingState from "../LoadingState.svelte";
   import TriCheck, { type TriState } from "../TriCheck.svelte";
   import DriverStage from "./DriverStage.svelte";
@@ -168,15 +169,46 @@
     ickx: "Jacky Ickx",
   };
 
+  /** La voiture pose le mannequin, donc deux voitures ne donnent pas la même
+   * vignette du même corps : elle entre dans la clé, et dans celle de la
+   * boucle `{#each}` pour que les cases se redemandent au changement. */
+  const carKey = $derived(nav.sessionCar?.id ?? "");
+
   const options = $derived<Cell[]>(
     lane === "body"
-      ? bodies.map((b) => ({ id: b.id, label: b.id, thumb: null }))
+      ? // La vignette d'un corps est un rendu 3D produit à la demande
+        // (`driverThumbs`) : `null` tant qu'il n'est pas tombé, et la case
+        // affiche son nom en attendant.
+        bodies.map((b) => ({ id: b.id, label: b.id, thumb: bodyThumb(carKey + "|" + b.id) }))
       : (choices?.[plural(lane)] ?? []).map((o) => ({
           id: o.id,
           label: readable(o.id),
           thumb: previewSrc(o.thumbnail),
         })),
   );
+
+  /**
+   * Action « quand ça devient visible, une fois ».
+   *
+   * Les vignettes de corps se demandent au défilement et jamais au chargement
+   * de la liste : il y en a 45, chacune coûte une conversion la première fois,
+   * et personne ne regarde les quarante-cinq. La marge fait démarrer le rendu
+   * un peu avant que la case n'arrive à l'écran, pour qu'elle soit peinte
+   * quand elle y arrive.
+   */
+  function whenVisible(node: HTMLElement, onSeen: () => void) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          onSeen();
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "240px" },
+    );
+    observer.observe(node);
+    return { destroy: () => observer.disconnect() };
+  }
 
   function plural(piece: Piece): "helmets" | "suits" | "gloves" {
     return piece === "helmet" ? "helmets" : piece === "suit" ? "suits" : "gloves";
@@ -515,11 +547,13 @@
                   <span class="nm-row"><span class="nm">{defaultCellName()}</span></span>
                 </button>
               {/if}
-              {#each group.cells as cell (cell.id)}
+              {#each group.cells as cell (cell.id + "|" + carKey)}
                 <button
                   class="cell"
                   class:sel={kept === cell.id}
                   type="button"
+                  use:whenVisible={() =>
+                    lane === "body" && requestBodyThumb(carKey, nav.sessionCar?.skin ?? null, cell.id)}
                   onmouseenter={() => (trying = cell.id)}
                   onmouseleave={() => (trying = null)}
                   onfocus={() => (trying = cell.id)}
@@ -527,7 +561,7 @@
                   onclick={() => adopt(cell.id)}
                   title={cell.id}
                 >
-                  <span class="art">
+                  <span class="art" class:rendering={lane === "body" && !cell.thumb}>
                     {#if cell.thumb}<img src={cell.thumb} alt="" />{:else}<span class="noart">{cell.label}</span>{/if}
                   </span>
                   <span class="nm-row">
@@ -801,6 +835,12 @@
   }
   .noart {
     height: 100%;
+  }
+  /* Vignette de corps pas encore rendue : la case porte son nom sur une trame
+     discrète, et se remplit quand le rendu tombe. Pas d'animation d'attente —
+     quarante-cinq cases qui pulsent ensemble font une galerie illisible. */
+  .cell .art.rendering {
+    background: var(--card);
   }
   .cell.special .art {
     background: repeating-linear-gradient(

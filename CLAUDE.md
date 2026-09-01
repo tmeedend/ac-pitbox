@@ -404,8 +404,15 @@ laisser pourrir ici.
       d'invalidation, états vides.
       Le plateau est en 3D : le mannequin seul (`kn5_gltf::standalone_driver`,
       pas `graft` avec un hôte vide — trois de ses quatre tâches parlent d'une
-      voiture qui n'est pas là), un tore déduit de l'écartement des mains, un
-      cadrage par piste déduit du rig.
+      voiture qui n'est pas là) et un cadrage par piste déduit du rig. La
+      galerie des corps porte des vignettes rendues à la demande
+      (`driverThumbs.svelte.ts`), une à la fois, au défilement.
+      **Le volant générique du §D5 est abandonné**, décidé avec l'utilisateur
+      après deux essais : sur les poignets (cerceau de 55 cm, personne ne le
+      touche), puis sur les phalanges des majeurs — 13 cm plus en avant,
+      mesuré, ce qui le met pourtant au bon endroit. Il ne convainc toujours
+      pas à l'écran et n'a pas assez d'intérêt pour continuer. `DriverRig`
+      garde `grip` : c'est le point que vise le cadrage « Gants ».
       **La mesure qui a débloqué le lot, et la correction qui a suivi** : les
       41 mannequins sur 44 qui partagent une pose de repos au millimètre
       (mains à ±0,277, 1,027, 0,530) *ressemblent* à une prise de volant et
@@ -426,21 +433,12 @@ laisser pourrir ici.
       retrouver le matériau à échanger ; les noms de *texture*, eux, sont
       vides — se fier aux images.
       **Reste, dans cet ordre :**
-      1. **Vignettes de corps** (§9.1) : la galerie des corps n'a aucune
-         image, faute d'échantillon plat signifiant — c'est **normal et
-         attendu**, pas un bug. La spec prévoit un rendu 3D généré une fois
-         et conservé ; le chemin de conversion existe maintenant, il manque
-         la capture. Piste la moins chère : rendre hors écran dans le
-         plateau déjà monté, une vignette à la fois et seulement pour les
-         cases visibles, puis garder le PNG. Compter ~1 s par corps la
-         première fois, 45 corps sur l'installation de référence — donc
-         paresseux obligatoire, jamais un balayage au chargement de l'écran.
-      2. **Écart spec/réalité à trancher avec l'utilisateur** : le §6.3 range
+      1. **Écart spec/réalité à trancher avec l'utilisateur** : le §6.3 range
          les époques par ce que désigne la *famille*, mais mesuré sur
          l'installation, c'est la *variante* qui porte le sens en 1969
          (amon, clark…) et en 1985 (les couleurs). D'où le repli implémenté :
          un regroupement qui ne produirait qu'un groupe passe en grille plate.
-      3. **Clavier** (§12.2) : le focus vaut survol, ce qui marche déjà par
+      2. **Clavier** (§12.2) : le focus vaut survol, ce qui marche déjà par
          `onfocus`. Les flèches dans la grille, non.
       **Écarts assumés vis-à-vis de la spec, décidés avec l'utilisateur** :
       le favori se pose sur le cœur de la bibliothèque (`♥`/`♡`) placé sous
