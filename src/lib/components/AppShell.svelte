@@ -22,7 +22,7 @@
   import ControllerSetup from "./ControllerSetup.svelte";
   import ImageSelectDropdown from "./ImageSelectDropdown.svelte";
 
-import { driverOverride } from "$lib/driverOverride.svelte";
+  import { driverFor, isEmpty, wearsFallback } from "$lib/driverOverride.svelte";
   import { wornOutfit } from "$lib/driverOutfits.svelte";
   import TrackSkinChecklistDropdown from "./TrackSkinChecklistDropdown.svelte";
   import { nav, requestSection, pickSession } from "$lib/nav.svelte";
@@ -230,12 +230,12 @@ import { driverOverride } from "$lib/driverOverride.svelte";
   // reste **visible et badgée**, jamais masquée — une option qui disparaît
   // sans un mot laisse chercher, et l'écran lui-même explique pourquoi.
   const carIsRace = $derived((carDetail?.car_class ?? "").toLowerCase() === "race");
-  const driverPrefs = $derived(driverOverride());
+  /** La tenue de **cette** voiture, cascade résolue : la sienne si elle en a
+   * une, la tenue par défaut si l'option est active, la livrée sinon. */
+  const driverPrefs = $derived(driverFor(nav.sessionCar?.id ?? null));
 
   /** Rien de choisi : la voiture et sa livrée décident de tout. */
-  const driverUntouched = $derived(
-    !driverPrefs.body && !driverPrefs.suit && !driverPrefs.gloves && !driverPrefs.helmet,
-  );
+  const driverUntouched = $derived(isEmpty(driverPrefs));
 
   /**
    * Ce que la ligne annonce.
@@ -248,7 +248,12 @@ import { driverOverride } from "$lib/driverOverride.svelte";
    */
   const driverLabel = $derived.by(() => {
     if (driverUntouched) return t("session.driverStock");
-    return wornOutfit(driverPrefs)?.name ?? t("session.driverCustom");
+    const named = wornOutfit(driverPrefs)?.name;
+    if (named) return named;
+    // Une tenue héritée du défaut sans nom ne devrait pas exister — le défaut
+    // *est* une tenue enregistrée — mais le dire plutôt que de mentir coûte
+    // une ligne.
+    return wearsFallback(nav.sessionCar?.id ?? null) ? t("session.driverFallback") : t("session.driverCustom");
   });
 
   /** Clé du badge, ou `null` (§3.2). « Modifié » a disparu de la liste : le

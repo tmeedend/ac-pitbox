@@ -437,6 +437,14 @@ laisser pourrir ici.
       dans le glTF (`2016_Suit_DIFF.dds#paint-babbba`), ce qui permet de
       retrouver le matériau à échanger ; les noms de *texture*, eux, sont
       vides — se fier aux images.
+      **Le choix est passé par voiture** (`driverOverride.svelte.ts`), contre
+      la spec qui le voulait global : une tenue choisie une fois s'imposait aux
+      312 voitures, en silence. Cascade à trois niveaux — la tenue de cette
+      voiture, puis la tenue par défaut si l'option est cochée, puis la livrée
+      — le niveau 1 gagnant toujours. Rangé une clé par voiture dans
+      `ui_prefs.json` sur le patron de `preferred.ts`, **parce que le filtre
+      « Pilote choisi » de la bibliothèque lit ce drapeau par carte**, donc de
+      façon synchrone (`peekUiPref`).
       **Reste, dans cet ordre :**
       1. **Écart spec/réalité à trancher avec l'utilisateur** : le §6.3 range
          les époques par ce que désigne la *famille*, mais mesuré sur
@@ -445,6 +453,26 @@ laisser pourrir ici.
          un regroupement qui ne produirait qu'un groupe passe en grille plate.
       2. **Clavier** (§12.2) : le focus vaut survol, ce qui marche déjà par
          `onfocus`. Les flèches dans la grille, non.
+      3. **Poser la tenue en jeu** — le gros morceau, discuté et non commencé.
+         Décidé : écriture **au lancement de la session**, dans le `skin.ini`
+         de la livrée lancée, et seulement si elle ne porte pas déjà la bonne
+         tenue. C'est la stratégie qui écrit le moins. Quatre obstacles connus,
+         à ne pas redécouvrir : (a) `content/cars/<id>` est un hardlink ou une
+         junction vers la bibliothèque, donc écrire là **modifie la copie de
+         bibliothèque du mod** — casser le lien en mode hardlink, sauvegarder
+         l'original en mode junction ; (b) la tenue appartient à une *livrée*,
+         pas à une voiture, donc c'est une écriture par livrée réellement
+         pilotée ; (c) le retour en arrière exige un **registre de ce qui a été
+         posé et de ce qui était là avant**, faute de quoi l'option est un
+         aller sans retour — c'est la discipline de `gamebackup.rs` ; (d) le
+         checksum en ligne ne peut être qu'argumenté (un `skin.ini` est hors de
+         `data.acd`, et tout le monde roule en ligne avec des skins
+         personnalisés), jamais promis.
+         **À vérifier avant d'écrire une ligne** : CSP sait-il imposer une
+         tenue de pilote par `extension/config/cars/loaded/<car_id>.ini` ? Si
+         oui, on écrirait dans un fichier prévu pour la surcharge, dans le
+         dossier du jeu, que `gamebackup.rs` couvre déjà — (a) et (c)
+         disparaissent.
       **Un défaut de rendu trouvé par là** : les casques de mannequin déclarent
       `nmObjectSpace = 1` et leur `txNormal` est en espace **objet**, que glTF
       ne sait pas lire — le sommet du casque s'éteignait. Mesuré, écarté,

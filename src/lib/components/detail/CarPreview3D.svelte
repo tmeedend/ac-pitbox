@@ -1149,7 +1149,7 @@
     // cuite — donc les bouger doit relancer une conversion. Les autres
     // s'appliquent à la scène en place, plus bas.
     const driver = preview3dPrefs().driver
-      ? { steer: preview3dPrefs().steer, ...(driverOverridePayload() ?? {}) }
+      ? { steer: preview3dPrefs().steer, ...(driverOverridePayload(carId) ?? {}) }
       : null;
 
     // Garde-fou : une scène déjà posée sur ce couple voiture/skin n'est pas

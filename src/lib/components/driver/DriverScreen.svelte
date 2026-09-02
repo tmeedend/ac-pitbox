@@ -18,11 +18,11 @@
   import { nav, requestSection } from "$lib/nav.svelte";
   import { listDriverBodies, listDriverChoices, type BodyOption, type DriverChoices } from "$lib/driver";
   import {
-    driverOverride,
+    driverFor,
     resetDriverOutfit,
     setDriverBody,
     setDriverPiece,
-    type DriverOverride,
+    type DriverOutfit,
   } from "$lib/driverOverride.svelte";
   import { getUiPrefs, setUiPref } from "$lib/uiPrefs.svelte";
   import { bodyThumb, requestBodyThumb } from "$lib/driverThumbs.svelte";
@@ -50,7 +50,11 @@
     grouped: "pitbox.driver.grouped",
   } as const;
 
-  const prefs: DriverOverride = $derived(driverOverride());
+  /** L'identifiant de la voiture réglée. `""` quand il n'y en a pas — l'écran
+   * affiche alors son état vide et n'appelle rien de ce qui suit. */
+  const carId = $derived(nav.sessionCar?.id ?? "");
+  /** La tenue de cette voiture, cascade résolue. */
+  const prefs: DriverOutfit = $derived(driverFor(carId || null));
 
   let bodies = $state<BodyOption[]>([]);
   let choices = $state<DriverChoices | null>(null);
@@ -169,17 +173,12 @@
     ickx: "Jacky Ickx",
   };
 
-  /** La voiture pose le mannequin, donc deux voitures ne donnent pas la même
-   * vignette du même corps : elle entre dans la clé, et dans celle de la
-   * boucle `{#each}` pour que les cases se redemandent au changement. */
-  const carKey = $derived(nav.sessionCar?.id ?? "");
-
   const options = $derived<Cell[]>(
     lane === "body"
       ? // La vignette d'un corps est un rendu 3D produit à la demande
         // (`driverThumbs`) : `null` tant qu'il n'est pas tombé, et la case
         // affiche son nom en attendant.
-        bodies.map((b) => ({ id: b.id, label: b.id, thumb: bodyThumb(carKey + "|" + b.id) }))
+        bodies.map((b) => ({ id: b.id, label: b.id, thumb: bodyThumb(carId + "|" + b.id) }))
       : (choices?.[plural(lane)] ?? []).map((o) => ({
           id: o.id,
           label: readable(o.id),
@@ -307,11 +306,12 @@
   }
 
   function adopt(id: string) {
+    if (!carId) return;
     if (lane === "body") {
-      setDriverBody(id || null);
+      setDriverBody(carId, id || null);
       noticeSeen = false;
     } else {
-      setDriverPiece(lane, id || null);
+      setDriverPiece(carId, lane, id || null);
       noticeSeen = true;
     }
     remember(tag(id));
@@ -338,11 +338,12 @@
   /** Sortie unique (§5.6) : en mode substitué, la livrée n'est pas une
    * destination atteignable sans d'abord rétablir le corps. */
   function exit() {
+    if (!carId) return;
     if (substituted) {
-      setDriverBody(null);
+      setDriverBody(carId, null);
       noticeSeen = false;
     } else {
-      resetDriverOutfit();
+      resetDriverOutfit(carId);
     }
   }
 
@@ -501,7 +502,7 @@
             {substituted ? t("driver.reset.body") : t("driver.reset.livery")}
           </button>
 
-          <DriverOutfits />
+          <DriverOutfits {carId} />
         </div>
       </section>
 
@@ -566,13 +567,13 @@
                   <span class="nm-row"><span class="nm">{defaultCellName()}</span></span>
                 </button>
               {/if}
-              {#each group.cells as cell (cell.id + "|" + carKey)}
+              {#each group.cells as cell (cell.id + "|" + carId)}
                 <button
                   class="cell"
                   class:sel={kept === cell.id}
                   type="button"
                   use:whenVisible={() =>
-                    lane === "body" && requestBodyThumb(carKey, nav.sessionCar?.skin ?? null, cell.id)}
+                    lane === "body" && requestBodyThumb(carId, nav.sessionCar?.skin ?? null, cell.id)}
                   onmouseenter={() => (trying = cell.id)}
                   onmouseleave={() => (trying = null)}
                   onfocus={() => (trying = cell.id)}

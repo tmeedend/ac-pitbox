@@ -55,7 +55,8 @@
     },
     "driverStock": "Tenue d'origine",
     "driverStockTooltip": "Le casque, la combinaison et les gants sont ceux que la livrée de cette voiture prévoit. Cliquez pour en changer.",
-    "driverCustom": "Tenue personnalisée"
+    "driverCustom": "Tenue personnalisée",
+    "driverFallback": "Tenue par défaut"
   },
   "controller": {
     "banner": {
@@ -344,7 +345,11 @@
     "results": "{count} résultats",
     "filterBrandPlaceholder": "Ajouter une marque…",
     "filterAuthorPlaceholder": "Ajouter un auteur…",
-    "filterCountryPlaceholder": "Ajouter un pays…"
+    "filterCountryPlaceholder": "Ajouter un pays…",
+    "driverSet": "Pilote choisi",
+    "driverSetOnly": "Uniquement les voitures auxquelles vous avez choisi une tenue de pilote",
+    "driverSetExcluded": "Uniquement les voitures qui gardent le pilote de leur livrée",
+    "driverSetNeutral": "Pilote choisi : sans filtre"
   },
   "bulk": {
     "runningActivate": "Activation de {count} mods",
@@ -1404,6 +1409,11 @@
     "recentOnly": "Récents uniquement",
     "recentExcluded": "Hors récents",
     "recentNeutral": "Récents : sans filtre",
-    "inert": "Gardé, mais sans effet sur ce corps : ce dossier ne contient aucune image que ce mannequin utilise. Il reviendra sur une voiture compatible."
+    "inert": "Gardé, mais sans effet sur ce corps : ce dossier ne contient aucune image que ce mannequin utilise. Il reviendra sur une voiture compatible.",
+    "fallback": {
+      "label": "Appliquer cette tenue aux autres voitures",
+      "none": "Aucune",
+      "hint": "Les voitures pour lesquelles vous avez choisi une tenue gardent la leur. Ce réglage ne vaut aujourd'hui que dans Pit Box : il ne modifie aucun fichier du jeu."
+    }
   }
 }

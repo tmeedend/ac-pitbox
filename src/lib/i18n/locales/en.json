@@ -55,7 +55,8 @@
     },
     "driverStock": "Stock outfit",
     "driverStockTooltip": "The helmet, suit and gloves are the ones this car's livery specifies. Click to change them.",
-    "driverCustom": "Custom outfit"
+    "driverCustom": "Custom outfit",
+    "driverFallback": "Default outfit"
   },
   "controller": {
     "banner": {
@@ -344,7 +345,11 @@
     "results": "{count} results",
     "filterBrandPlaceholder": "Add a brand…",
     "filterAuthorPlaceholder": "Add an author…",
-    "filterCountryPlaceholder": "Add a country…"
+    "filterCountryPlaceholder": "Add a country…",
+    "driverSet": "Driver set",
+    "driverSetOnly": "Only cars you have given a driver outfit",
+    "driverSetExcluded": "Only cars still wearing their livery's driver",
+    "driverSetNeutral": "Driver set: no filter"
   },
   "bulk": {
     "runningActivate": "Activating {count} mods",
@@ -1404,6 +1409,11 @@
     "recentOnly": "Recent only",
     "recentExcluded": "Excluding recent",
     "recentNeutral": "Recent: no filter",
-    "inert": "Kept, but it does nothing on this body: this folder holds no image that this mannequin uses. It comes back on a compatible car."
+    "inert": "Kept, but it does nothing on this body: this folder holds no image that this mannequin uses. It comes back on a compatible car.",
+    "fallback": {
+      "label": "Use this outfit on other cars",
+      "none": "None",
+      "hint": "Cars you have given an outfit keep theirs. For now this setting only applies inside Pit Box: it changes no game file."
+    }
   }
 }

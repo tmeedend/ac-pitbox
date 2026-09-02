@@ -83,6 +83,13 @@ export function saveOutfit(outfit: SavedOutfit): void {
   persist();
 }
 
+/** Les quatre pièces d'une tenue enregistrée, par son nom. Sert à résoudre la
+ * tenue par défaut : c'est le **nom** qui est stocké ailleurs, pas les pièces,
+ * pour que modifier une tenue suive partout où elle sert. */
+export function outfitByName(name: string): SavedOutfit | null {
+  return values.list.find((o) => o.name === name) ?? null;
+}
+
 /**
  * La tenue enregistrée que le pilote porte en ce moment, s'il en porte une.
  *

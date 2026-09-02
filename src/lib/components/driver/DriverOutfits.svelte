@@ -1,23 +1,37 @@
 <script lang="ts">
-  // Tenues enregistrées, en pied du panneau d'essayage.
+  // Tenues enregistrées et tenue par défaut, en pied du panneau d'essayage.
   //
-  // Reposer une tenue complète, c'est **quatre choix d'un coup** — d'où
-  // l'ordre d'application ci-dessous, qui n'est pas indifférent : le corps
-  // commande, et le poser fait tomber les trois autres (§D6). Il faut donc
-  // le poser en premier, puis les pièces, jamais l'inverse.
+  // Deux choses de nature différente, dans le même bloc parce qu'elles parlent
+  // du même objet : une tenue nommée, et laquelle de ces tenues sert quand une
+  // voiture n'a rien de choisi.
+  //
+  // Reposer une tenue complète, c'est **quatre choix d'un coup**, écrits en une
+  // fois : poser le corps puis les pièces les effacerait, `setDriverBody`
+  // remettant les trois autres au défaut (§D6).
   import { t } from "$lib/i18n/index.svelte";
   import { deleteOutfit, saveOutfit, savedOutfits, wornOutfit, type SavedOutfit } from "$lib/driverOutfits.svelte";
-  import { driverOverride, setDriverBody, setDriverPiece } from "$lib/driverOverride.svelte";
+  import {
+    applyFallback,
+    driverFor,
+    fallbackName,
+    isEmpty,
+    setApplyFallback,
+    setDriverOutfit,
+    setFallbackName,
+  } from "$lib/driverOverride.svelte";
 
-  const prefs = $derived(driverOverride());
+  let { carId }: { carId: string } = $props();
+
+  const prefs = $derived(driverFor(carId || null));
   const outfits = $derived(savedOutfits());
+  const currentlyWorn = $derived(wornOutfit(prefs));
 
   let naming = $state(false);
   let draft = $state("");
   let input = $state<HTMLInputElement | null>(null);
 
   /** Rien à enregistrer tant que tout vient de la voiture et de sa livrée. */
-  const empty = $derived(!prefs.body && !prefs.helmet && !prefs.suit && !prefs.gloves);
+  const empty = $derived(isEmpty(prefs));
 
   function open() {
     naming = true;
@@ -34,18 +48,24 @@
   }
 
   function apply(outfit: SavedOutfit) {
-    // Le corps d'abord : `setDriverBody` remet les trois pièces au défaut,
-    // donc les poser avant reviendrait à les effacer aussitôt.
-    setDriverBody(outfit.body);
-    setDriverPiece("helmet", outfit.helmet);
-    setDriverPiece("suit", outfit.suit);
-    setDriverPiece("gloves", outfit.gloves);
+    if (!carId) return;
+    setDriverOutfit(carId, {
+      body: outfit.body,
+      helmet: outfit.helmet,
+      suit: outfit.suit,
+      gloves: outfit.gloves,
+    });
   }
 
-  /** Une tenue est « portée » quand ses quatre pièces sont celles en place. */
-  const currentlyWorn = $derived(wornOutfit(prefs));
   function worn(outfit: SavedOutfit): boolean {
     return currentlyWorn?.name === outfit.name;
+  }
+
+  function remove(name: string) {
+    deleteOutfit(name);
+    // Une tenue par défaut supprimée ne doit pas laisser l'option pointer dans
+    // le vide : le nom se libère avec elle.
+    if (fallbackName() === name) setFallbackName("");
   }
 </script>
 
@@ -77,9 +97,33 @@
       {#each outfits as outfit (outfit.name)}
         <span class="chip" class:on={worn(outfit)}>
           <button class="chip-name" type="button" onclick={() => apply(outfit)}>{outfit.name}</button>
-          <button class="chip-x" type="button" title={t("driver.outfits.delete")} onclick={() => deleteOutfit(outfit.name)}>×</button>
+          <button class="chip-x" type="button" title={t("driver.outfits.delete")} onclick={() => remove(outfit.name)}
+            >×</button
+          >
         </span>
       {/each}
+    </div>
+
+    <!-- La tenue par défaut : ce qui s'applique aux voitures pour lesquelles on
+         n'a rien choisi. Absente tant qu'aucune tenue n'est enregistrée — il
+         n'y aurait rien à désigner. -->
+    <div class="fallback">
+      <label class="row">
+        <input
+          type="checkbox"
+          checked={applyFallback()}
+          disabled={!fallbackName()}
+          onchange={(e) => setApplyFallback(e.currentTarget.checked)}
+        />
+        <span>{t("driver.fallback.label")}</span>
+      </label>
+      <select class="input" value={fallbackName()} onchange={(e) => setFallbackName(e.currentTarget.value)}>
+        <option value="">{t("driver.fallback.none")}</option>
+        {#each outfits as outfit (outfit.name)}
+          <option value={outfit.name}>{outfit.name}</option>
+        {/each}
+      </select>
+      <p class="hint">{t("driver.fallback.hint")}</p>
     </div>
   {:else if !naming}
     <p class="none">{t("driver.outfits.none")}</p>
@@ -157,10 +201,35 @@
   .chip-x:hover {
     color: var(--rosso-bright);
   }
+
+  .fallback {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--txt2);
+    cursor: pointer;
+  }
+  .fallback .input {
+    height: 26px;
+    font-size: 11.5px;
+  }
+  .hint,
   .none {
-    margin: 7px 0 0;
+    margin: 0;
     font-size: 10.5px;
     color: var(--faint);
     line-height: 1.5;
+  }
+  .none {
+    margin-top: 7px;
   }
 </style>
