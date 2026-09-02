@@ -10,15 +10,7 @@
   // remettant les trois autres au défaut (§D6).
   import { t } from "$lib/i18n/index.svelte";
   import { deleteOutfit, saveOutfit, savedOutfits, wornOutfit, type SavedOutfit } from "$lib/driverOutfits.svelte";
-  import {
-    applyFallback,
-    driverFor,
-    fallbackName,
-    isEmpty,
-    setApplyFallback,
-    setDriverOutfit,
-    setFallbackName,
-  } from "$lib/driverOverride.svelte";
+  import { driverFor, fallbackName, isEmpty, setDriverOutfit, setFallbackName } from "$lib/driverOverride.svelte";
 
   let { carId }: { carId: string } = $props();
 
@@ -104,25 +96,20 @@
       {/each}
     </div>
 
-    <!-- La tenue par défaut : ce qui s'applique aux voitures pour lesquelles on
-         n'a rien choisi. Absente tant qu'aucune tenue n'est enregistrée — il
-         n'y aurait rien à désigner. -->
+    <!-- La tenue par défaut : celle qui habille les voitures pour lesquelles on
+         n'a rien choisi. **Un seul contrôle** — désigner une tenue l'active,
+         « Aucune » la désactive. Absente tant qu'aucune tenue n'est
+         enregistrée : il n'y aurait rien à désigner. -->
     <div class="fallback">
       <label class="row">
-        <input
-          type="checkbox"
-          checked={applyFallback()}
-          disabled={!fallbackName()}
-          onchange={(e) => setApplyFallback(e.currentTarget.checked)}
-        />
-        <span>{t("driver.fallback.label")}</span>
+        <span class="lbl-key mono k">{t("driver.fallback.label")}</span>
+        <select class="input" value={fallbackName()} onchange={(e) => setFallbackName(e.currentTarget.value)}>
+          <option value="">{t("driver.fallback.none")}</option>
+          {#each outfits as outfit (outfit.name)}
+            <option value={outfit.name}>{outfit.name}</option>
+          {/each}
+        </select>
       </label>
-      <select class="input" value={fallbackName()} onchange={(e) => setFallbackName(e.currentTarget.value)}>
-        <option value="">{t("driver.fallback.none")}</option>
-        {#each outfits as outfit (outfit.name)}
-          <option value={outfit.name}>{outfit.name}</option>
-        {/each}
-      </select>
       <p class="hint">{t("driver.fallback.hint")}</p>
     </div>
   {:else if !naming}
@@ -214,9 +201,10 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
-    color: var(--txt2);
-    cursor: pointer;
+  }
+  .row .input {
+    margin-left: auto;
+    max-width: 170px;
   }
   .fallback .input {
     height: 26px;

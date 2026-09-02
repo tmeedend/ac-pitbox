@@ -55,6 +55,15 @@
   const carId = $derived(nav.sessionCar?.id ?? "");
   /** La tenue de cette voiture, cascade résolue. */
   const prefs: DriverOutfit = $derived(driverFor(carId || null));
+  /** Le corps courant, **isolé** de l'objet qui le porte.
+   *
+   * `prefs` est reconstruit à chaque écriture dans `ui_prefs.json`, quelle
+   * qu'elle soit — un favori, un récent, un filtre d'un autre écran : la
+   * lecture passe par le cache global des préférences. L'effet de rechargement
+   * plus bas dépendait donc de l'objet, et se redéclenchait pour un rien, ce
+   * qui faisait clignoter la galerie à chaque clic. Un dérivé sur la chaîne
+   * seule ne notifie que si elle change vraiment. */
+  const chosenBody = $derived(prefs.body);
 
   let bodies = $state<BodyOption[]>([]);
   let choices = $state<DriverChoices | null>(null);
@@ -118,7 +127,7 @@
   // (§1.3). Recalculées à chaque changement de voiture ou de corps.
   $effect(() => {
     const carId = nav.sessionCar?.id ?? null;
-    const body = prefs.body;
+    const body = chosenBody;
     if (!carId) {
       choices = null;
       carClass = "";

@@ -1411,9 +1411,9 @@
     "recentNeutral": "Recent: no filter",
     "inert": "Kept, but it does nothing on this body: this folder holds no image that this mannequin uses. It comes back on a compatible car.",
     "fallback": {
-      "label": "Use this outfit on other cars",
+      "label": "Default outfit",
       "none": "None",
-      "hint": "Cars you have given an outfit keep theirs. For now this setting only applies inside Pit Box: it changes no game file."
+      "hint": "It dresses the cars you have not set up. Cars you have given an outfit keep theirs. For now this setting only applies inside Pit Box: it changes no game file."
     }
   }
 }

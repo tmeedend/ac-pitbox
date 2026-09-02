@@ -1411,9 +1411,9 @@
     "recentNeutral": "Récents : sans filtre",
     "inert": "Gardé, mais sans effet sur ce corps : ce dossier ne contient aucune image que ce mannequin utilise. Il reviendra sur une voiture compatible.",
     "fallback": {
-      "label": "Appliquer cette tenue aux autres voitures",
+      "label": "Tenue par défaut",
       "none": "Aucune",
-      "hint": "Les voitures pour lesquelles vous avez choisi une tenue gardent la leur. Ce réglage ne vaut aujourd'hui que dans Pit Box : il ne modifie aucun fichier du jeu."
+      "hint": "Elle habille les voitures pour lesquelles vous n'avez rien choisi. Celles que vous avez réglées gardent leur tenue. Ce réglage ne vaut aujourd'hui que dans Pit Box : il ne modifie aucun fichier du jeu."
     }
   }
 }

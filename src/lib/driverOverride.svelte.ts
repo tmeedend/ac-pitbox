@@ -28,12 +28,13 @@ import { StorageKey } from "./storage";
 import type { DriverView } from "./preview";
 import { getUiPref, peekUiPref, removeUiPref, setUiPref } from "./uiPrefs.svelte";
 
-const KEYS = {
-  /** Nom de la tenue enregistrée qui sert de tenue par défaut, ou vide. */
-  fallbackName: "pitbox.driver.fallback",
-  /** La tenue par défaut s'applique-t-elle aux voitures non réglées ? */
-  applyFallback: "pitbox.driver.applyFallback",
-} as const;
+/** Nom de la tenue enregistrée qui sert de tenue par défaut, ou vide.
+ *
+ * **Une seule clé, pas deux.** Il y avait aussi une case « appliquer », qui
+ * doublait l'information : désigner une tenue par défaut *est* l'activation,
+ * et « aucune » *est* la désactivation. La case ne servait qu'à créer un état
+ * grisé incompréhensible tant que rien n'était désigné. */
+const FALLBACK_KEY = "pitbox.driver.fallback";
 
 /** Les quatre pièces. `null` = ce que la voiture ou sa livrée décide. */
 export interface DriverOutfit {
@@ -139,14 +140,13 @@ export function resetDriverOutfit(carId: string): void {
 
 // --- La tenue par défaut ----------------------------------------------------
 
-const fallback = $state<{ name: string; on: boolean }>({ name: "", on: false });
+const fallback = $state<{ name: string }>({ name: "" });
 
 let loaded: Promise<void> | null = null;
 
 function ensureLoaded(): Promise<void> {
-  loaded ??= getUiPref(KEYS.applyFallback).then(async (on) => {
-    fallback.on = on === "1";
-    fallback.name = (await getUiPref(KEYS.fallbackName)) ?? "";
+  loaded ??= getUiPref(FALLBACK_KEY).then((name) => {
+    fallback.name = name ?? "";
   });
   return loaded;
 }
@@ -158,8 +158,9 @@ export function fallbackName(): string {
   return fallback.name;
 }
 
+/** Y a-t-il une tenue par défaut ? Désigner, c'est activer. */
 export function applyFallback(): boolean {
-  return fallback.on && fallback.name !== "";
+  return fallback.name !== "";
 }
 
 /** Les quatre pièces de la tenue par défaut, résolues depuis les tenues
@@ -172,12 +173,7 @@ export function fallbackOutfit(): DriverOutfit {
 
 export function setFallbackName(name: string): void {
   fallback.name = name;
-  setUiPref(KEYS.fallbackName, name);
-}
-
-export function setApplyFallback(on: boolean): void {
-  fallback.on = on;
-  setUiPref(KEYS.applyFallback, on ? "1" : "0");
+  setUiPref(FALLBACK_KEY, name);
 }
 
 // --- Ce qui part au backend -------------------------------------------------
