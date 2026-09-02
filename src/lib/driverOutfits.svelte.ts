@@ -83,6 +83,30 @@ export function saveOutfit(outfit: SavedOutfit): void {
   persist();
 }
 
+/**
+ * La tenue enregistrée que le pilote porte en ce moment, s'il en porte une.
+ *
+ * Sert au libellé de la colonne de session : quand on a nommé une tenue, c'est
+ * son nom qui doit s'afficher, pas un « Mon pilote » qui ne dit rien de ce
+ * qu'on a mis.
+ */
+export function wornOutfit(current: {
+  body: string | null;
+  helmet: string | null;
+  suit: string | null;
+  gloves: string | null;
+}): SavedOutfit | null {
+  return (
+    values.list.find(
+      (o) =>
+        o.body === current.body &&
+        o.helmet === current.helmet &&
+        o.suit === current.suit &&
+        o.gloves === current.gloves,
+    ) ?? null
+  );
+}
+
 export function deleteOutfit(name: string): void {
   values.list = values.list.filter((o) => o.name !== name);
   persist();

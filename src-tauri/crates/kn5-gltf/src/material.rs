@@ -383,7 +383,12 @@ pub(crate) fn base_color_map(material: &Kn5Material) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Normal map d'un matériau, **sauf quand c'en est une de dégâts**.
+/// Nom de la propriété par laquelle un matériau annonce que sa `txNormal` est
+/// en espace **objet** et non en espace tangent (voir [`normal_map`]).
+const OBJECT_SPACE_NORMALS: &str = "nmObjectSpace";
+
+/// Normal map d'un matériau, **sauf quand c'en est une de dégâts, et sauf
+/// quand elle est en espace objet**.
 ///
 /// Les shaders de la famille `*_damage*` réservent `txNormal` à la déformation
 /// des tôles, qu'AC ne mélange qu'à proportion des dégâts subis — nulle sur une
@@ -394,8 +399,36 @@ pub(crate) fn base_color_map(material: &Kn5Material) -> Option<String> {
 /// Vérifié sur quatre voitures, sans exception : `ks_toyota_supra_mkiv`
 /// (`exterior_damage_NM.dds`), `ks_mazda_mx5_cup` (`Damage_NM.dds`),
 /// `abarth500` (`NORMAL MAP DAMAGE_TEMP.dds`), `ks_ford_gt40` (`damageNM.dds`).
+///
+/// **L'espace objet est le second cas, et glTF ne sait pas le lire** : son
+/// `normalTexture` est définie en espace tangent, point. Lui donner une carte
+/// objet fait dépendre l'erreur d'éclairage de l'orientation de la surface —
+/// le sommet d'un casque, où la normale objet pointe vers le haut, s'aplatit
+/// et s'éteint pendant que les flancs restent à peu près justes. C'est le
+/// défaut remonté par l'utilisateur sur le casque du pilote.
+///
+/// **Mesuré, pas déduit du nom du fichier.** `HELMET_2012_OS.dds` a une
+/// moyenne RGB de (127, 115, 147) pour un écart-type de (77, 74, 63) : elle
+/// balaie tout le cube, comme une carte objet. Les quatre cartes tangentes du
+/// même mannequin sont à (127, 127, 254) avec un écart-type de 5 sur le bleu —
+/// une normale qui ne s'écarte guère de la surface, comme le veut l'espace
+/// tangent.
+///
+/// **Et ça ne concerne que les mannequins** : sur l'installation de référence,
+/// les cinq matériaux qui déclarent `nmObjectSpace = 1` sont les casques des
+/// mannequins Kunos, et pas un seul matériau de voiture (mesuré sur cinq
+/// voitures, entre 13 et 38 matériaux chacune à déclarer la propriété, toujours
+/// à 0).
+///
+/// La carte est **abandonnée** plutôt que convertie : reconstruire une carte
+/// tangente demanderait un repère par sommet et un recuit complet, pour un
+/// casque lisse dont la géométrie porte déjà l'essentiel du relief. Une carte
+/// qu'on ne sait pas lire vaut moins que pas de carte du tout.
 fn normal_map(material: &Kn5Material) -> Option<String> {
     if material.shader.to_ascii_lowercase().contains("damage") {
+        return None;
+    }
+    if material.property(OBJECT_SPACE_NORMALS).is_some_and(|v| v != 0.0) {
         return None;
     }
     material
@@ -590,6 +623,37 @@ mod tests {
         assert!(
             convert(&decal, MaterialTextures::default()).base_color[3] < 1.0,
             "sans alpha exploitable, la transparence vient du shader"
+        );
+    }
+
+    /// Règle : une normal map en espace objet n'est pas exportée. `normalTexture`
+    /// de glTF est définie en espace tangent, et lui donner une carte objet
+    /// éteint le sommet d'un casque tout en laissant ses flancs à peu près
+    /// justes — bug réel remonté par l'utilisateur.
+    #[test]
+    fn object_space_normal_maps_are_dropped() {
+        let mut helmet = material("ksPerPixelMultiMap", 0, false, &[("nmObjectSpace", 1.0)]);
+        helmet.samplers.push(kn5::Kn5Sampler {
+            name: "txNormal".to_string(),
+            slot: 1,
+            texture: "HELMET_2012_OS.dds".to_string(),
+        });
+        assert_eq!(
+            convert(&helmet, MaterialTextures::default()).normal_texture,
+            None,
+            "une carte que glTF ne sait pas lire vaut moins que pas de carte"
+        );
+
+        let mut tangent = material("ksPerPixelMultiMap", 0, false, &[("nmObjectSpace", 0.0)]);
+        tangent.samplers.push(kn5::Kn5Sampler {
+            name: "txNormal".to_string(),
+            slot: 1,
+            texture: "DRIVER_Face_NM.dds".to_string(),
+        });
+        assert_eq!(
+            convert(&tangent, MaterialTextures::default()).normal_texture.as_deref(),
+            Some("DRIVER_Face_NM.dds"),
+            "la propriété à zéro, elle, ne retire rien"
         );
     }
 

@@ -6,7 +6,7 @@
   // commande, et le poser fait tomber les trois autres (§D6). Il faut donc
   // le poser en premier, puis les pièces, jamais l'inverse.
   import { t } from "$lib/i18n/index.svelte";
-  import { deleteOutfit, saveOutfit, savedOutfits, type SavedOutfit } from "$lib/driverOutfits.svelte";
+  import { deleteOutfit, saveOutfit, savedOutfits, wornOutfit, type SavedOutfit } from "$lib/driverOutfits.svelte";
   import { driverOverride, setDriverBody, setDriverPiece } from "$lib/driverOverride.svelte";
 
   const prefs = $derived(driverOverride());
@@ -43,13 +43,9 @@
   }
 
   /** Une tenue est « portée » quand ses quatre pièces sont celles en place. */
+  const currentlyWorn = $derived(wornOutfit(prefs));
   function worn(outfit: SavedOutfit): boolean {
-    return (
-      outfit.body === prefs.body &&
-      outfit.helmet === prefs.helmet &&
-      outfit.suit === prefs.suit &&
-      outfit.gloves === prefs.gloves
-    );
+    return currentlyWorn?.name === outfit.name;
   }
 </script>
 

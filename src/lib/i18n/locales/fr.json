@@ -42,7 +42,7 @@
     "activateFailedTitle": "Échec de l'activation",
     "pickSkin": "Choisir un skin…",
     "noSkinsAvailable": "Aucun skin",
-    "driverTooltip": "Choisir le corps et la tenue du pilote",
+    "driverTooltip": "Voir et changer le corps et la tenue du pilote",
     "pickLayout": "Choisir un layout…",
     "noLayoutsAvailable": "Aucun layout",
     "trackSkinsNone": "Aucun skin actif",
@@ -50,10 +50,12 @@
     "trackSkinsCount": "{count} skins actifs",
     "trackSkinsTooltip": "Skins de circuit — plusieurs actifs possible",
     "driverBadge": {
-      "modified": "Modifié",
       "substituted": "Substitué",
       "disabled": "Désactivé"
-    }
+    },
+    "driverStock": "Tenue d'origine",
+    "driverStockTooltip": "Le casque, la combinaison et les gants sont ceux que la livrée de cette voiture prévoit. Cliquez pour en changer.",
+    "driverCustom": "Tenue personnalisée"
   },
   "controller": {
     "banner": {
@@ -1321,7 +1323,7 @@
       "follows": "La tenue en découle"
     },
     "bodyFromCar": "celui de la voiture",
-    "bodySubstituted": "substitué",
+    "bodySubstituted": "choisi par vous",
     "defaultBody": "aucun",
     "fromLivery": {
       "helmet": "Celui de la livrée",
@@ -1348,17 +1350,17 @@
       "live": "Essayage",
       "hint": "Survolez une vignette pour essayer · cliquez pour garder",
       "trial": "Essai — {name}",
-      "substituted": "Corps substitué · aperçu seulement",
+      "substituted": "Aperçu seulement · pas appliqué en course",
       "noSample": "Assetto Corsa ne fournit pas d'image pour celui-ci.",
       "no3d": "L'essayage en 3D n'a pas pu démarrer. La galerie reste utilisable.",
       "noBody": "Aucun corps à afficher : la voiture n'en nomme aucun, ou il n'est pas installé.",
       "drag": "glisser pour tourner"
     },
     "notice": {
-      "title": "Ce corps n'est pas celui de la voiture. Ce qui tombe :",
-      "helmet": "Le casque retenu — il est daté et ne s'applique pas à ce corps.",
-      "outfit": "La tenue de la livrée — elle est nommée d'après l'ancien corps et n'a plus de référent.",
-      "race": "L'application en course — un corps substitué ne vit que dans cet aperçu.",
+      "title": "Vous avez changé le corps du pilote. Ce que ça change :",
+      "helmet": "Votre casque est retiré : un casque ne va qu'aux corps de son époque, et celui-ci n'est pas de la même.",
+      "outfit": "La combinaison et les gants de la livrée ne s'appliquent plus. Ce corps porte les siens tant que vous n'en choisissez pas d'autres.",
+      "race": "Ce corps ne sert qu'ici : en course, la voiture garde le pilote qu'elle a prévu.",
       "choose": "Choisir une tenue",
       "revert": "Revenir au corps de la voiture"
     },
@@ -1401,6 +1403,7 @@
     "favNeutral": "Favoris : sans filtre",
     "recentOnly": "Récents uniquement",
     "recentExcluded": "Hors récents",
-    "recentNeutral": "Récents : sans filtre"
+    "recentNeutral": "Récents : sans filtre",
+    "inert": "Gardé, mais sans effet sur ce corps : ce dossier ne contient aucune image que ce mannequin utilise. Il reviendra sur une voiture compatible."
   }
 }

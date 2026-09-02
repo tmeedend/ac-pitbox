@@ -382,6 +382,23 @@
   /** Le nom lisible du corps courant, pour le bandeau du panneau. */
   const bodyLabel = $derived(choices?.model ?? "—");
 
+  /**
+   * Une pièce retenue qui **ne s'applique pas** au corps courant.
+   *
+   * Le choix est global et il est conservé au changement de voiture (§13) :
+   * c'est voulu, et c'est ce qui permet de se reconnaître d'une voiture à
+   * l'autre. Mais un casque de 1969 gardé sur une voiture moderne ne change
+   * rien du tout — le dossier existe, ses fichiers ne portent simplement aucun
+   * des noms que ce mannequin réclame. Sans ce marquage, la piste affiche
+   * fièrement un casque que le plateau ne montre pas, et on cherche l'erreur
+   * ailleurs.
+   */
+  function inert(piece: Piece): boolean {
+    const chosen = prefs[piece];
+    if (!chosen || !choices) return false;
+    return !choices[plural(piece)].some((o) => o.id === chosen);
+  }
+
   /** Ce qui tombe quand on substitue le corps (§10.2) — et rien que ça : une
    * puce dont l'objet n'a pas réellement été perdu ne s'affiche pas. */
   const noticeItems = $derived(
@@ -470,7 +487,9 @@
             <button class="lane" class:on={lane === piece} type="button" onclick={() => (lane = piece)}>
               <span class="lbl-key">{t("driver.lane." + piece)}</span>
               {#if prefs[piece]}
-                <span class="v mono">{readable(prefs[piece])}</span>
+                <span class="v mono" class:inert={inert(piece)} title={inert(piece) ? t("driver.inert") : ""}>
+                  {readable(prefs[piece])}{#if inert(piece)}<span class="inert-mark"> ⚠</span>{/if}
+                </span>
               {:else}
                 <span class="v def">{t((substituted ? "driver.none." : "driver.fromLivery.") + piece)}</span>
               {/if}
@@ -715,6 +734,16 @@
   .lane .v.def {
     color: var(--faint);
     font-style: italic;
+  }
+  /* Pièce gardée mais sans effet sur ce corps : barrée, pas retirée — le choix
+     est conservé et reviendra sur une voiture compatible (§13). */
+  .lane .v.inert {
+    color: var(--faint);
+    text-decoration: line-through;
+  }
+  .inert-mark {
+    text-decoration: none;
+    color: var(--orange);
   }
   .lane .n {
     font-size: 11px;

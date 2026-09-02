@@ -1151,3 +1151,38 @@ rejouer la mesure :
 ```bash
 cargo run --release -p kn5-tool -- scan "D:/SteamLibrary/steamapps/common/assettocorsa/content/cars" --details
 ```
+
+## `nmObjectSpace = 1` : une carte de normales que glTF ne sait pas lire
+
+**Constat.** Les matériaux de casque des mannequins Kunos déclarent
+`nmObjectSpace = 1` et pointent `txNormal` vers `HELMET_2012_OS.dds`. Le
+`normalTexture` de glTF est définie en espace **tangent** et n'a pas de mode
+objet : lui donner cette carte fait dépendre l'erreur d'éclairage de
+l'orientation de la surface. Le sommet d'un casque, où la normale objet pointe
+vers le haut, s'aplatit et s'éteint pendant que les flancs restent à peu près
+justes — c'est un défaut visible, remonté depuis l'écran Pilote.
+
+**Méthode de vérification.** Moyenne et écart-type par canal des cartes de
+normales d'un mannequin (`driver.kn5`), via `channel_stats` :
+
+| matériau | `nmObjectSpace` | texture | moyenne RGB | écart-type |
+| --- | --- | --- | --- | --- |
+| `RT_Helemt` | 1 | `HELMET_2012_OS.dds` | (127, 115, 147) | (77, 74, 63) |
+| `RT_DRIVER_Face` | 0 | `DRIVER_Face_NM.dds` | (127, 127, 254) | (15, 16, 5) |
+| `RT_HANS` | 0 | `HANS_NM.dds` | (126, 126, 240) | (45, 30, 16) |
+| `RT_DriverSuit` | 0 | `2016_Suit_NM.dds` | (95, 95, 182) | (60, 59, 106) |
+
+Une carte tangente reste près de (128, 128, 255) : la normale ne s'écarte guère
+de la surface, d'où un bleu quasi saturé et un écart-type de 5 sur le visage.
+La carte de casque, elle, a un bleu moyen de 147 et balaie tout le cube — c'est
+une direction dans l'espace du modèle, pas une perturbation locale.
+
+**Portée.** Cinq matériaux sur l'installation de référence, tous des casques de
+mannequins. **Aucun matériau de voiture** : sur cinq voitures prises au hasard,
+entre 13 et 38 matériaux déclarent la propriété, toujours à 0.
+
+**Décision.** La carte est **abandonnée** quand le drapeau est levé
+(`material::normal_map`), pas convertie. Reconstruire une carte tangente
+demanderait un repère par sommet et un recuit complet, pour un casque lisse
+dont la géométrie porte déjà l'essentiel du relief. Une carte qu'on ne sait pas
+lire vaut moins que pas de carte du tout.

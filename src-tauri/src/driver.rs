@@ -955,6 +955,50 @@ SUIT=\\type1\\black_black
         }
     }
 
+    /// Les cartes de normales d'un mannequin sont-elles vraiment en espace
+    /// **objet**, comme `nmObjectSpace = 1` et le suffixe `_OS` l'annoncent ?
+    ///
+    /// La différence se voit dans la moyenne : une carte **tangente** est
+    /// quasi plate autour de (128, 128, 255) — la normale ne s'écarte guère de
+    /// la surface — alors qu'une carte **objet** encode la direction dans
+    /// l'espace du modèle, donc balaie tout le cube et s'étale.
+    ///
+    /// ```text
+    /// PITBOX_AC_ROOT="D:\...\assettocorsa" cargo test --lib driver -- --ignored --nocapture what_normal_maps
+    /// ```
+    #[test]
+    #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
+    fn what_normal_maps_a_mannequin_carries() {
+        let Ok(ac_root) = std::env::var("PITBOX_AC_ROOT") else {
+            eprintln!("PITBOX_AC_ROOT unset, skipping");
+            return;
+        };
+        let root = PathBuf::from(ac_root);
+        let bytes = std::fs::read(body_file(&root, "driver")).expect("driver.kn5");
+        let model = kn5::parse(&bytes).expect("parse");
+
+        for material in &model.materials {
+            let Some(normal) = material.texture_for("txNormal").filter(|n| !n.is_empty()) else {
+                continue;
+            };
+            let flag = material.property("nmObjectSpace").unwrap_or(0.0);
+            let Some(texture) = model.texture(normal) else { continue };
+            match kn5_gltf::channel_stats(&texture.data) {
+                Ok(stats) => eprintln!(
+                    "{:26} nmObjectSpace={flag}  {normal:24} moyenne RGB ({:.0} {:.0} {:.0})  écart-type ({:.0} {:.0} {:.0})",
+                    material.name,
+                    stats.mean[0],
+                    stats.mean[1],
+                    stats.mean[2],
+                    stats.stddev[0],
+                    stats.stddev[1],
+                    stats.stddev[2],
+                ),
+                Err(e) => eprintln!("{:26} {normal} illisible — {e}", material.name),
+            }
+        }
+    }
+
     /// Ce que le `.glb` d'un mannequin garde comme noms : c'est ce qui décide
     /// si le frontend peut retrouver la texture d'une pièce pour l'échanger
     /// lui-même, au lieu de redemander une conversion à chaque survol.

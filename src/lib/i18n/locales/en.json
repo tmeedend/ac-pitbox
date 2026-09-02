@@ -42,7 +42,7 @@
     "activateFailedTitle": "Activation failed",
     "pickSkin": "Choose a skin…",
     "noSkinsAvailable": "No skin",
-    "driverTooltip": "Choose the driver's body and outfit",
+    "driverTooltip": "See and change the driver's body and outfit",
     "pickLayout": "Choose a layout…",
     "noLayoutsAvailable": "No layout",
     "trackSkinsNone": "No active skin",
@@ -50,10 +50,12 @@
     "trackSkinsCount": "{count} active skins",
     "trackSkinsTooltip": "Track skins — several can be active",
     "driverBadge": {
-      "modified": "Modified",
       "substituted": "Substituted",
       "disabled": "Disabled"
-    }
+    },
+    "driverStock": "Stock outfit",
+    "driverStockTooltip": "The helmet, suit and gloves are the ones this car's livery specifies. Click to change them.",
+    "driverCustom": "Custom outfit"
   },
   "controller": {
     "banner": {
@@ -1321,7 +1323,7 @@
       "follows": "The outfit follows"
     },
     "bodyFromCar": "the car's own",
-    "bodySubstituted": "substituted",
+    "bodySubstituted": "your choice",
     "defaultBody": "none",
     "fromLivery": {
       "helmet": "The livery's",
@@ -1348,17 +1350,17 @@
       "live": "Fitting",
       "hint": "Hover a thumbnail to try it on · click to keep it",
       "trial": "Trying — {name}",
-      "substituted": "Body substituted · preview only",
+      "substituted": "Preview only · not used on track",
       "noSample": "Assetto Corsa ships no image for this one.",
       "no3d": "3D fitting could not start. The gallery is still yours to use.",
       "noBody": "No body to show: the car names none, or it is not installed.",
       "drag": "drag to turn"
     },
     "notice": {
-      "title": "This body is not the car's. What falls away:",
-      "helmet": "The helmet you kept — it is dated and does not apply to this body.",
-      "outfit": "The livery's outfit — it is named after the previous body and no longer has a referent.",
-      "race": "Use on track — a substituted body only lives in this preview.",
+      "title": "You changed the driver's body. Here is what that changes:",
+      "helmet": "Your helmet is removed: a helmet only fits bodies of its own era, and this one is from another.",
+      "outfit": "The livery's suit and gloves no longer apply. This body wears its own until you pick others.",
+      "race": "This body only exists here: on track, the car keeps the driver it ships with.",
       "choose": "Choose an outfit",
       "revert": "Back to the car's body"
     },
@@ -1401,6 +1403,7 @@
     "favNeutral": "Favourites: no filter",
     "recentOnly": "Recent only",
     "recentExcluded": "Excluding recent",
-    "recentNeutral": "Recent: no filter"
+    "recentNeutral": "Recent: no filter",
+    "inert": "Kept, but it does nothing on this body: this folder holds no image that this mannequin uses. It comes back on a compatible car."
   }
 }

@@ -445,14 +445,24 @@ laisser pourrir ici.
          un regroupement qui ne produirait qu'un groupe passe en grille plate.
       2. **Clavier** (§12.2) : le focus vaut survol, ce qui marche déjà par
          `onfocus`. Les flèches dans la grille, non.
+      **Un défaut de rendu trouvé par là** : les casques de mannequin déclarent
+      `nmObjectSpace = 1` et leur `txNormal` est en espace **objet**, que glTF
+      ne sait pas lire — le sommet du casque s'éteignait. Mesuré, écarté,
+      documenté dans `kn5-format.md`. Cinq matériaux concernés sur
+      l'installation, tous des casques, aucun matériau de voiture.
       **Écarts assumés vis-à-vis de la spec, décidés avec l'utilisateur** :
       le favori se pose sur le cœur de la bibliothèque (`♥`/`♡`) placé sous
       l'image et non sur elle — on garde l'argument du §7.3 (l'échantillon est
       montré entier, un bouton posé dessus en cache un morceau) en prenant le
-      glyphe du reste de l'app ; et les **tenues enregistrées**
+      glyphe du reste de l'app ; les **tenues enregistrées**
       (`driverOutfits.svelte.ts`, §13 complété) reposent les quatre pièces
       d'un clic — le corps d'abord, sinon `setDriverBody` efface les trois
-      autres juste après les avoir posées.
+      autres juste après les avoir posées ; le badge `MODIFIÉ` du §3.2 est
+      retiré, la ligne de session disant désormais elle-même « Tenue
+      d'origine », le nom de la tenue enregistrée, ou « Tenue personnalisée » ;
+      et une pièce gardée qui ne s'applique pas au corps courant est **barrée**
+      dans sa piste au lieu d'être affichée comme active — elle est conservée
+      (§13) mais ne change rien, ce que rien ne disait.
       **Ce qui n'est pas tranché** : ce qu'AC met dans son checksum en ligne.
       Le corps est hors de portée sans risque (les 312 voitures ont leur
       `driver3d.ini` dans `data.acd`, conteneur de physique) — d'où le bandeau

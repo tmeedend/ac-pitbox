@@ -23,6 +23,7 @@
   import ImageSelectDropdown from "./ImageSelectDropdown.svelte";
 
 import { driverOverride } from "$lib/driverOverride.svelte";
+  import { wornOutfit } from "$lib/driverOutfits.svelte";
   import TrackSkinChecklistDropdown from "./TrackSkinChecklistDropdown.svelte";
   import { nav, requestSection, pickSession } from "$lib/nav.svelte";
   import { previewSrc, getModDetail, activateMod } from "$lib/library";
@@ -231,11 +232,31 @@ import { driverOverride } from "$lib/driverOverride.svelte";
   const carIsRace = $derived((carDetail?.car_class ?? "").toLowerCase() === "race");
   const driverPrefs = $derived(driverOverride());
 
-  /** Clé du badge, ou `null` quand tout est sur la livrée (§3.2). */
+  /** Rien de choisi : la voiture et sa livrée décident de tout. */
+  const driverUntouched = $derived(
+    !driverPrefs.body && !driverPrefs.suit && !driverPrefs.gloves && !driverPrefs.helmet,
+  );
+
+  /**
+   * Ce que la ligne annonce.
+   *
+   * « Mon pilote » ne disait rien de ce qu'on porte. Trois cas, trois
+   * réponses : le **nom de la tenue** quand on en a enregistré une et qu'on la
+   * porte — c'est l'information la plus utile et c'est l'utilisateur qui l'a
+   * écrite —, sinon la mention que rien n'a été touché, sinon qu'on a composé
+   * quelque chose sans le nommer.
+   */
+  const driverLabel = $derived.by(() => {
+    if (driverUntouched) return t("session.driverStock");
+    return wornOutfit(driverPrefs)?.name ?? t("session.driverCustom");
+  });
+
+  /** Clé du badge, ou `null` (§3.2). « Modifié » a disparu de la liste : le
+   * libellé le dit déjà, et un badge qui répète la ligne qu'il accompagne
+   * n'est que du bruit. */
   const driverBadge = $derived.by(() => {
     if (carIsRace) return "disabled";
     if (driverPrefs.body) return "substituted";
-    if (driverPrefs.suit || driverPrefs.gloves || driverPrefs.helmet) return "modified";
     return null;
   });
 
@@ -400,14 +421,14 @@ import { driverOverride } from "$lib/driverOverride.svelte";
                 class="driver-line"
                 class:on={nav.section === "driver"}
                 type="button"
-                title={t("session.driverTooltip")}
+                title={driverUntouched ? t("session.driverStockTooltip") : t("session.driverTooltip")}
                 onclick={() => requestSection("driver")}
               >
                 <svg viewBox="0 0 16 16" aria-hidden="true">
                   <path d="M2.5 9.5a5.5 5.5 0 0 1 11 0v1.2a1.3 1.3 0 0 1-1.3 1.3H3.8a1.3 1.3 0 0 1-1.3-1.3z" />
                   <path d="M6.2 12v-1.6a1.8 1.8 0 0 1 1.8-1.8h5.5" />
                 </svg>
-                <span class="dl-name">{t("nav.driver")}</span>
+                <span class="dl-name" class:stock={driverUntouched}>{driverLabel}</span>
                 {#if driverBadge}
                   <span class="dl-badge" class:off={driverBadge === "disabled"}>
                     {t("session.driverBadge." + driverBadge)}
@@ -715,6 +736,12 @@ import { driverOverride } from "$lib/driverOverride.svelte";
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  /* Rien de choisi : la ligne dit d'où vient la tenue, en retrait — c'est un
+     état de fait, pas un réglage de l'utilisateur. */
+  .dl-name.stock {
+    color: var(--faint);
+    font-style: italic;
   }
   .dl-badge {
     margin-left: auto;
