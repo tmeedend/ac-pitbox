@@ -11,6 +11,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import { deleteOutfit, saveOutfit, savedOutfits, wornOutfit, type SavedOutfit } from "$lib/driverOutfits.svelte";
   import { driverFor, fallbackName, isEmpty, setDriverOutfit, setFallbackName } from "$lib/driverOverride.svelte";
+  import ImageSelectDropdown from "../ImageSelectDropdown.svelte";
 
   let { carId }: { carId: string } = $props();
 
@@ -52,6 +53,16 @@
   function worn(outfit: SavedOutfit): boolean {
     return currentlyWorn?.name === outfit.name;
   }
+
+  /** Les entrées du sélecteur : « Aucune » d'abord, puis les tenues. Sans
+   * image — ce sont des noms, pas des livrées — mais avec le même composant
+   * que le sélecteur de livrée de la colonne de session : sa liste s'ouvre en
+   * `position: fixed` et prend la largeur de son plus long libellé, là où un
+   * `<select>` contraint à 170 px dans ce panneau coupait les noms. */
+  const fallbackOptions = $derived([
+    { id: "", name: t("driver.fallback.none"), image: null },
+    ...outfits.map((o) => ({ id: o.name, name: o.name, image: null })),
+  ]);
 
   function remove(name: string) {
     deleteOutfit(name);
@@ -101,15 +112,14 @@
          « Aucune » la désactive. Absente tant qu'aucune tenue n'est
          enregistrée : il n'y aurait rien à désigner. -->
     <div class="fallback">
-      <label class="row">
-        <span class="lbl-key mono k">{t("driver.fallback.label")}</span>
-        <select class="input" value={fallbackName()} onchange={(e) => setFallbackName(e.currentTarget.value)}>
-          <option value="">{t("driver.fallback.none")}</option>
-          {#each outfits as outfit (outfit.name)}
-            <option value={outfit.name}>{outfit.name}</option>
-          {/each}
-        </select>
-      </label>
+      <span class="lbl-key mono k">{t("driver.fallback.label")}</span>
+      <ImageSelectDropdown
+        options={fallbackOptions}
+        selectedId={fallbackName()}
+        placeholder={t("driver.fallback.none")}
+        emptyText={t("driver.fallback.none")}
+        onselect={(id) => setFallbackName(id)}
+      />
       <p class="hint">{t("driver.fallback.hint")}</p>
     </div>
   {:else if !naming}
@@ -196,19 +206,6 @@
     display: flex;
     flex-direction: column;
     gap: 7px;
-  }
-  .row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .row .input {
-    margin-left: auto;
-    max-width: 170px;
-  }
-  .fallback .input {
-    height: 26px;
-    font-size: 11.5px;
   }
   .hint,
   .none {
