@@ -287,6 +287,12 @@ pub fn prepare(
     // démarrage, pour ne rien coûter à qui n'en ouvre jamais.
     if !state.swept.swap(true, Ordering::Relaxed) {
         sweep_foreign_versions(&dir);
+        // Les vignettes de corps portent le même préfixe de version : elles
+        // se périment donc avec le convertisseur, et rien d'autre ne les
+        // ramasserait — leur dossier est hors du plafond, donc hors éviction.
+        if let Ok(thumbs) = thumb_dir(app) {
+            sweep_foreign_versions(&thumbs);
+        }
     }
     // Le skin est résolu avant la clé : c'est lui qui désigne le dossier où
     // vivent le `ext_config.ini` et les KN5 de jante (§4.3).
@@ -496,8 +502,14 @@ pub fn prepare_driver(
     let dir = cache_dir(app)?;
     if !state.swept.swap(true, Ordering::Relaxed) {
         sweep_foreign_versions(&dir);
+        // Les vignettes de corps portent le même préfixe de version : elles
+        // se périment donc avec le convertisseur, et rien d'autre ne les
+        // ramasserait — leur dossier est hors du plafond, donc hors éviction.
+        if let Ok(thumbs) = thumb_dir(app) {
+            sweep_foreign_versions(&thumbs);
+        }
     }
-    let stem = format!("{}d{}", version_prefix(), driver_cache_key(graft));
+    let stem = driver_entry_stem(graft);
     let file = dir.join(format!("{stem}.glb"));
 
     if let Ok(meta) = std::fs::metadata(&file) {
@@ -556,6 +568,16 @@ pub fn prepare_driver(
     })
 }
 
+/// Le nom d'entrée d'un mannequin habillé et posé, **sans rien convertir**.
+///
+/// Séparé de [`prepare_driver`] parce que les vignettes de corps s'en servent
+/// comme identité : savoir si la vignette d'un corps est déjà rendue ne doit
+/// pas coûter une conversion, et elle doit se périmer exactement quand
+/// l'entrée de cache correspondante se périmerait.
+pub fn driver_entry_stem(graft: &kn5_gltf::DriverGraft) -> String {
+    format!("{}d{}", version_prefix(), driver_cache_key(graft))
+}
+
 /// Clé de cache d'un mannequin habillé et posé.
 ///
 /// Le mannequin, sa garde-robe, **et la pose** : celle-ci vient de la voiture
@@ -577,6 +599,43 @@ fn driver_cache_key(graft: &kn5_gltf::DriverGraft) -> String {
     hasher.update(graft.lock_degrees.to_le_bytes());
     hasher.update(graft.steer_degrees.to_le_bytes());
     format!("{:x}", hasher.finalize())[..32].to_string()
+}
+
+// --- Vignettes de corps (§9.1) ----------------------------------------------
+
+/// Où vivent les vignettes de corps : à côté du cache d'aperçus, **et hors de
+/// son plafond**.
+///
+/// Le pourquoi est mesuré. Rendre les 45 vignettes de l'installation de
+/// référence convertit 45 mannequins, soit ~180 Mo de `.glb` dans un pool qui
+/// est déjà à son plafond de 2 Gio : chacune pousse dehors une entrée plus
+/// ancienne, y compris les mannequins des vignettes précédentes, qu'il faut
+/// alors reconvertir à la visite suivante. Une vignette pèse quelques dizaines
+/// de kilo-octets et n'a aucune raison d'entrer dans cette compétition — donc
+/// elle n'y entre pas, et le `.glb` qui l'a produite peut être évincé sans
+/// qu'on ait à le reconvertir jamais.
+fn thumb_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    use tauri::Manager;
+    let dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| format!("dossier de cache indisponible : {e}"))?
+        .join("bodies");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("création du cache de vignettes : {e}"))?;
+    Ok(dir)
+}
+
+/// La vignette déjà rendue pour cette entrée, s'il y en a une.
+pub fn body_thumb(app: &tauri::AppHandle, stem: &str) -> Option<PathBuf> {
+    let file = thumb_dir(app).ok()?.join(format!("{stem}.png"));
+    file.is_file().then_some(file)
+}
+
+/// Range le PNG rendu par le frontend et renvoie son chemin.
+pub fn write_body_thumb(app: &tauri::AppHandle, stem: &str, png: &[u8]) -> Result<PathBuf, String> {
+    let file = thumb_dir(app)?.join(format!("{stem}.png"));
+    std::fs::write(&file, png).map_err(|e| format!("{} : {e}", file.display()))?;
+    Ok(file)
 }
 
 /// Le rig, à côté du `.glb`. Best-effort : une écriture manquée coûte une

@@ -7,9 +7,8 @@
 // très différents donneraient exactement la même case. Ce qui les distingue
 // est leur géométrie : forme de casque, HANS ou pas, carrure, visage.
 //
-// **Pourquoi c'est paresseux et sérialisé.** Produire une vignette, c'est
-// convertir un mannequin (~1 s la première fois, instantané ensuite puisque le
-// `.glb` est mis en cache côté Rust) puis le rendre une fois. Il y en a 45 sur
+// **Pourquoi c'est paresseux et sérialisé.** Produire une vignette la première
+// fois, c'est convertir un mannequin (~1 s) puis le rendre. Il y en a 45 sur
 // l'installation de référence : les demander toutes au chargement de l'écran
 // bloquerait une minute de travail pour des cases que personne ne regarde. On
 // n'en demande donc que ce qui devient visible, une à la fois, et l'écran se
@@ -18,13 +17,27 @@
 // **Un seul contexte WebGL pour toutes.** Un `WebGLRenderer` par case
 // épuiserait la limite du navigateur (16 contextes en pratique) dès la
 // première rangée. Celui-ci est créé à la première demande, gardé pour la
-// session, et il ne rend jamais à l'écran : il produit un PNG en `dataURL`.
+// session, et il ne rend jamais à l'écran : il produit un PNG.
 //
-// Le résultat vit en mémoire pour la session, pas sur disque. Ce qui coûte
-// cher — la conversion — est déjà persisté par le cache d'aperçus ; regénérer
-// une vignette depuis un `.glb` déjà converti se compte en dizaines de
-// millisecondes, ce qui ne justifie pas un second cache à invalider.
-import { prepareBodyPreview, type DriverRig } from "./preview";
+// **Le PNG est gardé sur disque**, et ce n'était pas le premier choix. Le
+// raisonnement initial — « la conversion est déjà en cache, refaire l'image
+// depuis le `.glb` ne coûte rien » — est faux deux fois, et les deux se
+// mesurent :
+//
+//  1. le `.glb` d'un mannequin pèse ~4 Mo, qu'il faut retélécharger et
+//     reparser dans three.js à chaque fois : une seconde pour quarante-cinq
+//     cases, pas des millisecondes ;
+//  2. surtout, les 45 conversions écrivent ~180 Mo dans un pool d'aperçus qui
+//     est déjà à son plafond de 2 Gio, donc chacune **évince** une entrée plus
+//     ancienne — y compris les mannequins des vignettes précédentes, qu'il
+//     faut alors reconvertir. Le cache se mangeait lui-même.
+//
+// Une vignette rangée à part, hors du plafond, coupe court aux deux : le
+// `.glb` ne sert qu'une fois dans la vie d'un corps, et peut être évincé sans
+// conséquence. Son identité est celle de l'entrée de cache du mannequin, donc
+// elle se périme quand le mod change, sans invalidation à écrire.
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { bodyThumbnail, prepareBodyPreview, saveBodyThumbnail, type DriverRig } from "./preview";
 import type * as ThreeModule from "three";
 
 /** Côté de la vignette, en pixels de rendu. Deux fois la taille d'affichage
@@ -79,7 +92,10 @@ async function drain(): Promise<void> {
     let job = queue.shift();
     while (job) {
       try {
-        const url = await render(job);
+        // Le disque d'abord, toujours : c'est un aller-retour de quelques
+        // millisecondes contre une conversion.
+        const stored = await bodyThumbnail(job.carId, job.skinId, job.bodyId);
+        const url = stored ? convertFileSrc(stored) : await render(job);
         cache[job.key] = url ? { url } : { failed: true };
       } catch (e) {
         // Une vignette manquante n'est pas une panne : la case garde son nom,
@@ -154,14 +170,29 @@ async function render(job: Job): Promise<string | null> {
   const { THREE, renderer, scene, camera, load } = await ensureEngine();
   const model = await load(preview.url);
   scene.add(model);
+  let png: Blob | null = null;
   try {
     frame(THREE, camera, preview.rig, model);
     renderer.render(scene, camera);
-    return renderer.domElement.toDataURL("image/png");
+    png = await toPng(renderer.domElement);
   } finally {
     scene.remove(model);
     dispose(THREE, model);
   }
+  if (!png) return null;
+
+  // Rangée pour les fois suivantes, mais affichée tout de suite depuis la
+  // mémoire : attendre l'écriture disque pour peindre une case déjà rendue
+  // serait un aller-retour pour rien.
+  const bytes = new Uint8Array(await png.arrayBuffer());
+  void saveBodyThumbnail(job.carId, job.skinId, job.bodyId, bytes).catch((e) =>
+    console.error("driver: vignette non rangée", job.bodyId, e),
+  );
+  return URL.createObjectURL(png);
+}
+
+function toPng(canvas: HTMLCanvasElement): Promise<Blob | null> {
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
 }
 
 /**

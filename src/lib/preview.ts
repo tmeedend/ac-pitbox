@@ -141,3 +141,26 @@ export function prepareBodyPreview(
 ): Promise<DriverPreview | null> {
   return invoke<DriverPreview | null>("prepare_body_preview", { carId, skinId, body });
 }
+
+/**
+ * La vignette déjà rendue pour ce corps, ou `null` s'il faut la produire.
+ *
+ * Ne convertit rien : le backend recalcule le nom d'entrée du mannequin —
+ * quelques `stat` — et regarde si le PNG est là. C'est ce qui permet de la
+ * demander pour chaque case sans rien payer quand la réponse est oui.
+ */
+export function bodyThumbnail(carId: string, skinId: string | null, body: string): Promise<string | null> {
+  return invoke<string | null>("body_thumbnail", { carId, skinId, body });
+}
+
+/** Range la vignette qu'on vient de rendre. Le nom sous lequel elle atterrit
+ * appartient au backend : c'est celui de l'entrée de cache du mannequin, donc
+ * elle se périme exactement quand celle-ci se périmerait. */
+export function saveBodyThumbnail(
+  carId: string,
+  skinId: string | null,
+  body: string,
+  png: Uint8Array,
+): Promise<string | null> {
+  return invoke<string | null>("save_body_thumbnail", { carId, skinId, body, png: Array.from(png) });
+}

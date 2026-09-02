@@ -406,7 +406,12 @@ laisser pourrir ici.
       pas `graft` avec un hôte vide — trois de ses quatre tâches parlent d'une
       voiture qui n'est pas là) et un cadrage par piste déduit du rig. La
       galerie des corps porte des vignettes rendues à la demande
-      (`driverThumbs.svelte.ts`), une à la fois, au défilement.
+      (`driverThumbs.svelte.ts`), une à la fois, au défilement, et **le PNG est
+      conservé hors du plafond du cache d'aperçus**. Ce dernier point est un
+      bug corrigé, pas une précaution : les 45 conversions écrivent ~180 Mo
+      dans un pool déjà à ses 2 Gio, donc chacune évinçait une entrée plus
+      ancienne — y compris les mannequins des vignettes précédentes. Le cache
+      se mangeait lui-même et tout se recalculait à chaque visite.
       **Le volant générique du §D5 est abandonné**, décidé avec l'utilisateur
       après deux essais : sur les poignets (cerceau de 55 cm, personne ne le
       touche), puis sur les phalanges des majeurs — 13 cm plus en avant,
