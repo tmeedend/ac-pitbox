@@ -43,6 +43,16 @@ pub struct ConvertOptions {
     /// [`material_overrides`]). Vide par défaut : une voiture sans config
     /// garde le traitement habituel, tiré du seul KN5.
     pub surfaces: MaterialOverrides,
+    /// Ce modèle est-il un **mannequin seul** ?
+    ///
+    /// Un mannequin est une personne : ni sa peau, ni ses cheveux, ni ses
+    /// vêtements ne renvoient d'image nette. La famille de shader ne suffit
+    /// pas à le savoir — `woman_driver` habille son visage d'un
+    /// `ksPerPixelMultiMap`, le shader des carrosseries, et son visage
+    /// brillait comme une carrosserie (signalé à l'écran). Quand l'appelant
+    /// *sait* qu'il convertit un mannequin, il le dit, et le plancher de
+    /// rugosité s'applique à tous ses matériaux (voir `roughness::floor_for`).
+    pub mannequin: bool,
 }
 
 /// Everything the conversion produced, alongside the numbers the caller needs
@@ -139,7 +149,7 @@ pub fn convert(
 
     // Même temps, même raison : savoir si un `txMaps` est une vraie carte de
     // surface demande de connaître le rôle de chaque texture (§12 q3).
-    let mut roughness = roughness::plan(model, &textures);
+    let mut roughness = roughness::plan(model, &textures, options.mannequin);
     texture::bake_roughness(&mut textures, &mut roughness, model, skin_dir, &options.textures);
 
     // Les matériaux sont convertis **après** les textures : savoir si la
@@ -161,6 +171,7 @@ pub fn convert(
                     // Mesure faite sur les UV du matériau, pas sur l'atlas :
                     // voir `texture::FootprintAlpha`.
                     diffuse_alpha_blank: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_blank()),
+                    diffuse_alpha_opaque: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_opaque()),
                     painted_diffuse: paint.painted_diffuse(index),
                     roughness_texture: roughness.roughness_texture(index),
                     csp: surfaces.get(&index).copied(),

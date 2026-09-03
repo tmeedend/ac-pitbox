@@ -1186,3 +1186,135 @@ entre 13 et 38 matériaux déclarent la propriété, toujours à 0.
 demanderait un repère par sommet et un recuit complet, pour un casque lisse
 dont la géométrie porte déjà l'essentiel du relief. Une carte qu'on ne sait pas
 lire vaut moins que pas de carte du tout.
+
+---
+
+## Écart n°15 — `blend_mode = 1` ne veut pas toujours dire « du verre »
+
+**Symptôme.** Aperçu 3D remonté par l'utilisateur : la tête d'un mannequin
+(`senna.kn5`, mod de pilote tiers) rendue quasi transparente.
+
+**Attendu (§12 q2)** : `blend_mode = 1` marque un matériau en fondu, et sur le
+corpus voiture ça ne s'est vu que sur du verre et des décalcomanies —
+d'où l'approximation de vitre (`glass_opacity`, dérivée de `ksDiffuse`) posée
+sur tout matériau en fondu dont la texture ne porte pas d'alpha exploitable
+(écart n°11 et suivants).
+
+**Réel** : le matériau `senna_head` du mannequin porte `blend_mode = 1` sur un
+shader tout à fait ordinaire (`ksSkinnedMesh_NMDetaill`, le même que les sept
+autres matériaux du fichier, tous à `blend_mode = 0`) — ce n'est ni un nom de
+verre, ni un shader de verre. Sa diffuse (`senna_head_2.png`) n'a pas d'alpha
+exploitable non plus : empreinte constante à 255 (`kn5-tool inspect
+--materials`), donc uniformément **opaque**, pas absente. L'approximation de
+vitre s'applique quand même, faute de distinguer les deux, et calcule une
+opacité de 0,3 depuis `ksDiffuse` — la tête entière devient translucide.
+
+**Portée mesurée** : sur les sept autres mannequins du corpus d'exemples
+(`tom`, `jp_police_man`, `FemaleAsianDriver`, `DORIKIN`, `Mai Shiranui`…),
+aucun autre matériau `blend_mode = 1` hors verre. Un cas isolé, mais réel —
+et rien ne garantit qu'il soit unique sur le corpus de mods de pilote total.
+
+**Correctif** : une empreinte alpha uniformément **opaque** (symétrique du
+« blank » de l'écart n°9, `FootprintAlpha::is_opaque`) court-circuite
+l'approximation de verre — mais seulement quand le shader n'est *pas* du
+verre. Un vrai `ksWindscreen`/`*Glass` garde son approximation même si son
+alpha se mesure opaque : la transparence d'une vitre AC vient du reflet
+(fresnel), pas de l'alpha de sa diffuse (voir le commentaire sur
+`GLASS_MIN_OPACITY`) — lui appliquer la même règle l'aurait rendue opaque à
+tort.
+
+---
+
+## Écart n°16 — `fresnelC` au-delà de 2 est du bruit, pas une intention
+
+**Symptôme** : le mannequin `ada.kn5` rendu en **statue dorée**, visage compris.
+
+**Ce qu'on croyait** : `fresnelC` étant la réflectance à incidence normale
+(écart n°10), une valeur hors plage exprimait quand même une intention — « le
+plus réfléchissant possible » — et se ramenait donc à 1, soit un métal plein.
+
+**Réel** : `ada` écrit `fresnelC = 100` sur son visage, son torse, ses jambes
+et ses yeux, avec `fresnelMaxLevel = 10` (hors plage lui aussi). Ce n'est pas
+un curseur poussé, c'est un champ jamais relu.
+
+**Mesure** — la propriété sur 312 voitures et 52 mannequins, valeurs au-dessus
+de 1 :
+
+| Valeur | Occurrences | Qui |
+| --- | --- | --- |
+| 1,2 · 1,3 · 1,4 · 1,5 · 2 | 163 | mods, toujours des valeurs rondes et serrées |
+| 3 · 5 · 5,5 | ~40 | mods |
+| 10 · 12 · 100 | 8 | **Kunos compris** — `lotus_elise_sc`, `mercedes_sls`, `ks_ford_escort_mk1`, et `ada` |
+
+Le studio qui a écrit le shader met 100 dans le champ, sur un matériau isolé
+d'une voiture par ailleurs normale : la valeur n'est donc pas lue comme une
+réflectance par le moteur non plus.
+
+**Décision** : au-delà de **2**, la propriété est traitée comme **absente**
+(diélectrique) plutôt que ramenée à 1. La coupure est posée là où la suite des
+valeurs cesse d'être serrée autour du maximum. En dessous, rien ne change.
+
+---
+
+## Écart n°17 — sur un shader de mannequin, `txMaps` n'est pas une carte de surface
+
+**Symptôme** : des pilotes « qui transpirent » — peau, cheveux et vêtements
+rendus spéculaires (`rinoa`, `jill_re3`, `lm_mai_shiranui`), signalés par
+l'utilisateur.
+
+**Réel** : le vert de `txMaps` est bien une brillance (écart n°7), mais
+**seulement là où le shader la lit**. Mesuré sur 62 voitures : des 1 371
+matériaux dont le `txMaps` est exploité, **98 % appartiennent à la famille
+`ksPerPixelMultiMap`** — celle dont le nom dit qu'elle lit plusieurs cartes.
+Les 2 % restants sont des `ksSkinnedMesh*`, le shader des mannequins.
+
+Sur ces derniers, les moddeurs rangent dans le slot ce qui leur passe par la
+main, et le suffixe du nom de fichier le dit tout haut :
+
+| Mannequin | matériau | `txMaps` | vert moyen | rendu obtenu |
+| --- | --- | --- | --- | --- |
+| `rinoa` | peau du torse | `Rinoa_Skin_L.dds` (éclairage) | 235 | rugosité 0,08 — miroir |
+| `rinoa` | collier | `Rinoa_Necklace_N.dds` (**normale**) | 127 | 0,50 |
+| `jill_re3` | cheveux | `hairsh_d.png` (**diffuse**) | 40 | 0,84 |
+| `jill_re3` | jambes | `legs_s.dds` (**spéculaire**, la bonne carte) | 15 | 0,94 |
+| Kunos `driver` | gants | `MAT_white.dds` | 255 plat | 0,08 — miroir |
+| Kunos `driver` | combinaison | `2016_Suit_MAP.dds` | 3 | 0,99 |
+
+**Décision : un plancher, pas un abandon.** Certaines de ces cartes *sont*
+justes (`legs_s.dds`), et s'en passer serait pire : ce mannequin écrit
+`ksSpecularEXP = 1000`, que la formule de repli rend mirifiquement lisse. Sur
+un shader `ksSkinnedMesh*`, la rugosité ne descend donc pas sous **0,35** — ni
+peau ni tissu ne renvoient d'image nette. Ce qui est juste dans la carte est
+conservé, seul l'impossible est coupé. Corollaire heureux : les gants de
+Kunos, en miroir depuis toujours, redeviennent du tissu.
+
+---
+
+## Écart n°18 — au-delà de 1, `ksAlphaRef` est un octet, pas une fraction
+
+**Symptôme** : les cheveux d'`ada.kn5` rendus en **mèches déchiquetées**, le
+crâne visible au travers, là où le jeu les montre pleins (comparaison à l'appui
+fournie par l'utilisateur).
+
+**Ce qu'on croyait** : `ksAlphaRef` est un seuil de découpe dans [0, 1] —
+l'écart n°12 avait déjà établi qu'un zéro y veut dire « non réglé ». Une valeur
+au-dessus de 1 était simplement ramenée à 1.
+
+**Réel** : ramener à 1 veut dire « seuls les texels **parfaitement** opaques
+passent », ce qui découpe une chevelure en charpie. Et les mannequins écrivent
+couramment cette propriété sur l'échelle **0-255**, celle de l'alpha lui-même.
+
+**Mesure** — la propriété sur 62 voitures et les 52 mannequins :
+
+| Corpus | Valeurs non nulles rencontrées |
+| --- | --- |
+| voitures | 0,001 · 0,05 · 0,1 · 0,2 · 0,24 · 0,25 · **0,5** (87×) · 0,7 · 0,8 · 0,9 · 1 (81×) — plus trois `-193` et un `5` |
+| mannequins | 0,001 · 0,1 · **0,2** (21×) · 0,5 · 1 (24×) · 3 · 10 · 20 · **30** (40×) · 50 · **100** (14×) · 1000 |
+
+Les deux corpus ne parlent pas la même langue : Kunos tient dans [0, 1], les
+mods de mannequin sortent de la plage sur 97 matériaux.
+
+**Décision** : `(0, 1]` reste une fraction ; `(1, 255]` se lit **sur 255** — les
+cheveux d'`ada` passent ainsi de 1,0 à 0,39, un seuil ordinaire ; au-delà, plus
+aucune lecture ne tient et on reprend le défaut (0,5). Une valeur négative
+aussi. Le corpus voiture est inchangé.

@@ -309,10 +309,30 @@ impl FootprintAlpha {
     pub fn is_blank(&self) -> bool {
         self.samples > 0 && self.max <= BLANK_ALPHA
     }
+
+    /// Ce matériau n'échantillonne **que** des texels opaques : son alpha ne
+    /// porte aucune transparence, quoi que dise par ailleurs le `blend_mode`
+    /// du matériau.
+    ///
+    /// Bug réel sur un mod de pilote tiers (`senna.kn5`) : le matériau de la
+    /// tête porte `blend_mode = 1` sans être du verre — shader
+    /// `ksSkinnedMesh_NMDetaill`, comme le reste du mannequin — et sa diffuse
+    /// n'a pas d'alpha exploitable (empreinte constante à 255). Traité comme
+    /// une vitre par [`crate::material::alpha_mode_of`], il recevait
+    /// l'approximation de transparence du verre (`ksDiffuse` clampé), et la
+    /// tête entière devenait translucide. Une empreinte uniformément opaque
+    /// dit littéralement le contraire : rien à découper, rien à fondre.
+    pub fn is_opaque(&self) -> bool {
+        self.samples > 0 && self.min >= OPAQUE_ALPHA
+    }
 }
 
 /// Au-dessus, il reste quelque chose à voir : on ne touche à rien.
 const BLANK_ALPHA: u8 = 8;
+
+/// En dessous, il manque déjà de la transparence : ce n'est plus uniforme.
+/// Symétrique de [`BLANK_ALPHA`].
+const OPAQUE_ALPHA: u8 = 255 - BLANK_ALPHA;
 
 /// Au-delà, un matériau en dit déjà bien assez sur son empreinte, et payer
 /// plus ne changerait aucun verdict.
@@ -487,10 +507,14 @@ pub(crate) fn bake_roughness(
                     }),
                 );
             };
-            let outcome = roughness_one(name, &blob, origin, options).map_err(|reason| TextureWarning {
-                name: name.clone(),
-                reason,
-            });
+            // Le plancher dépend des shaders qui consomment cette carte : une
+            // peau ne descend pas aussi bas qu'une carrosserie (voir
+            // `roughness::floor_for`).
+            let outcome =
+                roughness_one(name, &blob, origin, plan.floor_of(name), options).map_err(|reason| TextureWarning {
+                    name: name.clone(),
+                    reason,
+                });
             (name.clone(), outcome)
         })
         .collect();
@@ -513,6 +537,7 @@ fn roughness_one(
     name: &str,
     blob: &[u8],
     origin: TextureOrigin,
+    floor: f32,
     options: &TextureOptions,
 ) -> Result<Option<PreparedTexture>, String> {
     let source_bytes = blob.len();
@@ -520,7 +545,7 @@ fn roughness_one(
     // Rôle `Data` : jamais de JPEG sur une carte de rugosité, ses artefacts se
     // liraient comme des variations de brillance sur une carrosserie.
     let mut resized = downscale(decoded, TextureRole::Data.max_size(options));
-    if !crate::roughness::apply(&mut resized) {
+    if !crate::roughness::apply(&mut resized, floor) {
         return Ok(None);
     }
     let (bytes, mime) = encode(&resized, TextureRole::Data, options)?;

@@ -52,10 +52,20 @@ impl Kn5Hierarchy {
     /// First match wins. Names do repeat in these files (a mesh under a dummy
     /// of the same name), never on a rig bone.
     pub fn local(&self, name: &str) -> Option<[f32; 16]> {
+        self.local_at(name).map(|(_, m)| m)
+    }
+
+    /// Same lookup, **with the index of the entry that answered**.
+    ///
+    /// L'index sert à savoir qu'une entrée a déjà servi : la correspondance
+    /// portant sur la fin du nom, une même entrée peut répondre pour plusieurs
+    /// nœuds du modèle (`DRIVER:HELMET` répond aussi à un `helmet` niché
+    /// dessous), et un os ne place qu'un nœud. Voir `kn5_gltf::pose`.
+    pub fn local_at(&self, name: &str) -> Option<(usize, [f32; 16])> {
         self.nodes
             .iter()
-            .find(|(n, _)| ends_with_ignore_case(n, name))
-            .map(|(_, m)| *m)
+            .position(|(n, _)| ends_with_ignore_case(n, name))
+            .map(|i| (i, self.nodes[i].1))
     }
 }
 

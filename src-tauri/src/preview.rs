@@ -30,7 +30,7 @@ use crate::config::AppConfig;
 /// *reconnaître* pour libérer sa place. Trois incréments en une session de
 /// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
-const CONVERTER_VERSION: u32 = 26;
+const CONVERTER_VERSION: u32 = 30;
 
 /// Default cache ceiling (§5.3). Beyond it, the least recently used entries
 /// are evicted. Only a default: the real ceiling is a setting, carried by
@@ -547,7 +547,15 @@ pub fn prepare_driver(
         stats.dressed
     );
 
-    let conversion = kn5_gltf::convert(&model, None, &kn5_gltf::ConvertOptions::default(), &|stage| {
+    // `mannequin` : ce qu'on convertit ici est une personne, seule, et rien sur
+    // une personne ne renvoie d'image nette. C'est le seul endroit qui le
+    // sache — la famille de shader ne suffit pas (`woman_driver` habille son
+    // visage d'un shader de carrosserie).
+    let options = kn5_gltf::ConvertOptions {
+        mannequin: true,
+        ..Default::default()
+    };
+    let conversion = kn5_gltf::convert(&model, None, &options, &|stage| {
         use tauri::Emitter;
         let _ = app.emit("preview://progress", stage.as_str());
     })?;

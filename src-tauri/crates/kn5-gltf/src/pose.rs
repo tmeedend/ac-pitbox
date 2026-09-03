@@ -28,6 +28,11 @@
 
 use kn5::{Kn5Animation, Kn5Hierarchy, Kn5Model, Kn5Node, Kn5NodeKind};
 
+/// Ce qu'un fichier de pose répond pour un nœud : **l'index de l'entrée** qui
+/// a répondu, et la transformation locale qu'elle porte. L'index sert à ne
+/// laisser une entrée placer qu'un seul nœud (voir [`apply_locals`]).
+type LocalLookup<'a> = dyn Fn(&str) -> Option<(usize, [f32; 16])> + 'a;
+
 /// Applies one frame of `animation` to `model`, in place. Returns how many
 /// nodes were actually posed.
 ///
@@ -36,14 +41,15 @@ use kn5::{Kn5Animation, Kn5Hierarchy, Kn5Model, Kn5Node, Kn5NodeKind};
 /// still pose a body correctly.
 pub(crate) fn apply(model: &mut Kn5Model, animation: &Kn5Animation, frame: usize) -> usize {
     apply_locals(model, &|name| {
-        let animated = animation.node(name)?;
+        let (index, animated) = animation.node_at(name)?;
         // `min` rather than a bounds check that gives up: a node with fewer
         // frames than the rest still has a last pose, and holding it beats
         // leaving that limb in its bind pose while the others move.
-        animated
+        let matrix = animated
             .frames
             .get(frame.min(animated.frames.len().saturating_sub(1)))
-            .copied()
+            .copied()?;
+        Some((index, matrix))
     })
 }
 
@@ -56,25 +62,45 @@ pub(crate) fn apply(model: &mut Kn5Model, animation: &Kn5Animation, frame: usize
 /// the animation says while the root the animation never mentions keeps the
 /// placement only the hierarchy knows.
 pub(crate) fn apply_hierarchy(model: &mut Kn5Model, hierarchy: &Kn5Hierarchy) -> usize {
-    apply_locals(model, &|name| hierarchy.local(name))
+    apply_locals(model, &|name| hierarchy.local_at(name))
 }
 
 /// Replaces the local transform of every dummy the lookup answers for.
-fn apply_locals(model: &mut Kn5Model, local: &dyn Fn(&str) -> Option<[f32; 16]>) -> usize {
+///
+/// **Une entrée du rig ne place qu'un seul nœud**, le premier rencontré — et
+/// c'est ce qui empêche un rig de démonter un mannequin qu'il ne connaît pas.
+/// La correspondance porte sur la **fin** du nom (`kn5::knh`), pour qu'un mod
+/// ayant laissé tomber le préfixe `DRIVER:` décrive quand même le même rig ;
+/// la contrepartie est qu'une entrée peut répondre à plusieurs nœuds du
+/// modèle.
+///
+/// Bug réel, `rh_schuberth_helmet_driver_19` : ce mannequin range ses pièces
+/// de casque sous un dummy `helmet`, **niché dans** le `DRIVER:HELMET`
+/// standard, et y garde la rotation de 79° qui compense l'orientation dans
+/// laquelle il a été exporté. Le `driver_base_pos.knh` de chaque voiture
+/// contenant `DRIVER:HELMET`, cette entrée répondait aux deux nœuds : le
+/// second perdait sa compensation et le casque se retrouvait à l'envers sur la
+/// figure (capture à l'appui). Le format donne d'ailleurs la règle — les noms
+/// s'y répètent « never on a rig bone » —, elle n'était simplement pas
+/// appliquée.
+fn apply_locals(model: &mut Kn5Model, local: &LocalLookup) -> usize {
+    let mut used = std::collections::HashSet::new();
     let mut posed = 0;
-    pose_node(&mut model.root, local, &mut posed);
+    pose_node(&mut model.root, local, &mut used, &mut posed);
     posed
 }
 
-fn pose_node(node: &mut Kn5Node, local: &dyn Fn(&str) -> Option<[f32; 16]>, posed: &mut usize) {
+fn pose_node(node: &mut Kn5Node, local: &LocalLookup, used: &mut std::collections::HashSet<usize>, posed: &mut usize) {
     if let Kn5NodeKind::Dummy { transform } = &mut node.kind {
-        if let Some(fresh) = local(&node.name) {
-            *transform = fresh;
-            *posed += 1;
+        if let Some((index, fresh)) = local(&node.name) {
+            if used.insert(index) {
+                *transform = fresh;
+                *posed += 1;
+            }
         }
     }
     for child in &mut node.children {
-        pose_node(child, local, posed);
+        pose_node(child, local, used, posed);
     }
 }
 
@@ -195,6 +221,77 @@ mod tests {
             panic!("still a dummy");
         };
         assert_eq!(transform, identity, "the other kept what it was shipped with");
+    }
+
+    /// Règle : une entrée du rig ne place **qu'un** nœud, le premier rencontré.
+    ///
+    /// La correspondance portant sur la fin du nom, l'entrée `DRIVER:HELMET`
+    /// d'un `driver_base_pos.knh` répond aussi à un dummy `helmet` niché sous
+    /// le premier. Bug réel sur `rh_schuberth_helmet_driver_19`, dont le
+    /// `helmet` porte la rotation qui redresse sa géométrie : écrasée, le
+    /// casque se retrouvait à l'envers sur la figure.
+    #[test]
+    fn a_rig_entry_places_one_node_only() {
+        let identity = {
+            let mut m = [0.0f32; 16];
+            m[0] = 1.0;
+            m[5] = 1.0;
+            m[10] = 1.0;
+            m[15] = 1.0;
+            m
+        };
+        // La compensation d'orientation de l'auteur, reconnaissable à sa
+        // translation.
+        let authored = {
+            let mut m = identity;
+            m[13] = 0.1112;
+            m
+        };
+        let node = |name: &str, transform: [f32; 16], children: Vec<Kn5Node>| Kn5Node {
+            name: name.to_string(),
+            active: true,
+            kind: Kn5NodeKind::Dummy { transform },
+            children,
+        };
+        let mut model = Kn5Model {
+            version: 6,
+            extra: None,
+            textures: Vec::new(),
+            materials: Vec::new(),
+            root: node(
+                "root",
+                identity,
+                vec![node(
+                    "DRIVER:HELMET",
+                    identity,
+                    vec![node("helmet", authored, Vec::new())],
+                )],
+            ),
+        };
+
+        let seated = {
+            let mut m = identity;
+            m[13] = 9.0; // ce que la voiture dit du casque standard
+            m
+        };
+        let hierarchy = Kn5Hierarchy {
+            nodes: vec![("DRIVER:HELMET".to_string(), seated)],
+        };
+        let posed = apply_hierarchy(&mut model, &hierarchy);
+
+        assert_eq!(posed, 1, "une entrée, un nœud placé");
+        let helmet_root = &model.root.children[0];
+        let Kn5NodeKind::Dummy { transform } = helmet_root.kind else {
+            panic!("still a dummy");
+        };
+        assert_eq!(transform[13], 9.0, "le nœud standard prend la place de la voiture");
+        let Kn5NodeKind::Dummy { transform } = helmet_root.children[0].kind else {
+            panic!("still a dummy");
+        };
+        assert_eq!(
+            transform[13], 0.1112,
+            "et le nœud de l'auteur, niché dessous, garde la sienne"
+        );
     }
 
     // Rule: a node with fewer frames than the rest holds its last pose rather

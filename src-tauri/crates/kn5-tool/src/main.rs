@@ -43,6 +43,7 @@ COMMANDS:
 
 OPTIONS:
     --tree        Print the node hierarchy.
+    --transforms  With --tree: print each dummy's local matrix (row-vector).
     --materials   Print every material with its shader, properties and samplers.
     --textures    Print every embedded texture with its sniffed format.
     --tangents    Report the tangent frame: how many vertices carry a usable
@@ -320,17 +321,30 @@ fn inspect(path: &Path, flags: &[&str]) -> Result<(), String> {
 
     if flags.contains(&"--tree") {
         println!("\nnodes");
-        print_tree(&model.root, 0, &model);
+        print_tree(&model.root, 0, &model, flags.contains(&"--transforms"));
     }
 
     Ok(())
 }
 
-fn print_tree(node: &kn5::Kn5Node, depth: usize, model: &Kn5Model) {
+fn print_tree(node: &kn5::Kn5Node, depth: usize, model: &Kn5Model, transforms: bool) {
     let indent = "  ".repeat(depth + 1);
     match &node.kind {
-        Kn5NodeKind::Dummy { .. } => {
+        Kn5NodeKind::Dummy { transform } => {
             println!("{indent}[dummy] {}", node.name);
+            if transforms {
+                // Convention vecteur-ligne (§3.4) : les trois premières lignes
+                // portent la base, la quatrième la translation. C'est la base
+                // qui dit si un auteur a compensé l'orientation de sa
+                // géométrie sur le nœud qui la porte.
+                for row in 0..4 {
+                    let r = &transform[row * 4..row * 4 + 4];
+                    println!(
+                        "{indent}         {:>8.4} {:>8.4} {:>8.4} {:>8.4}",
+                        r[0], r[1], r[2], r[3]
+                    );
+                }
+            }
         }
         Kn5NodeKind::Mesh(mesh) | Kn5NodeKind::SkinnedMesh(kn5::Kn5SkinnedMesh { mesh, .. }) => {
             let skinned = matches!(node.kind, Kn5NodeKind::SkinnedMesh(_));
@@ -350,7 +364,7 @@ fn print_tree(node: &kn5::Kn5Node, depth: usize, model: &Kn5Model) {
         }
     }
     for child in &node.children {
-        print_tree(child, depth + 1, model);
+        print_tree(child, depth + 1, model, transforms);
     }
 }
 

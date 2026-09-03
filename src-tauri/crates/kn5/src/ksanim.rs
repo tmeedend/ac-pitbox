@@ -77,7 +77,16 @@ impl Kn5Animation {
     /// AC prefixes a mannequin's nodes with `DRIVER:`, and a mod that dropped
     /// the prefix still animates the same rig.
     pub fn node(&self, name: &str) -> Option<&Kn5AnimatedNode> {
-        self.nodes.iter().find(|node| ends_with_ignore_case(&node.name, name))
+        self.node_at(name).map(|(_, node)| node)
+    }
+
+    /// Same lookup, **with the index of the node that answered** — voir
+    /// `Kn5Hierarchy::local_at` pour ce que l'index sert à distinguer.
+    pub fn node_at(&self, name: &str) -> Option<(usize, &Kn5AnimatedNode)> {
+        self.nodes
+            .iter()
+            .enumerate()
+            .find(|(_, node)| ends_with_ignore_case(&node.name, name))
     }
 }
 
