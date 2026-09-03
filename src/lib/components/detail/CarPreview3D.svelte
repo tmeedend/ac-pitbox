@@ -10,7 +10,7 @@
   // les écrans qui n'affichent aucun aperçu.
   import { onDestroy, untrack } from "svelte";
   import { prepareCarPreview, onPreviewProgress, type DriverView, type PreviewStage } from "$lib/preview";
-  import { driverOverridePayload } from "$lib/driverOverride.svelte";
+  import { carClassOf, driverOverridePayload } from "$lib/driverOverride.svelte";
   import {
     preview3dPrefs,
     preview3dReady,
@@ -29,7 +29,11 @@
     carId,
     skinId = null,
     fallbackSrc = null,
-  }: { carId: string; skinId?: string | null; fallbackSrc?: string | null } = $props();
+    /** Classe de la voiture (`ui_car.json`), qui décide de laquelle des deux
+     * tenues par défaut habille son pilote — course ou rue. La fiche la
+     * connaît, l'aperçu non. */
+    carClass = null,
+  }: { carId: string; skinId?: string | null; fallbackSrc?: string | null; carClass?: string | null } = $props();
 
   type Phase = "loading" | "ready" | "unavailable";
 
@@ -1149,7 +1153,7 @@
     // cuite — donc les bouger doit relancer une conversion. Les autres
     // s'appliquent à la scène en place, plus bas.
     const driver = preview3dPrefs().driver
-      ? { steer: preview3dPrefs().steer, ...(driverOverridePayload(carId) ?? {}) }
+      ? { steer: preview3dPrefs().steer, ...(driverOverridePayload(carId, carClassOf(carClass)) ?? {}) }
       : null;
 
     // Garde-fou : une scène déjà posée sur ce couple voiture/skin n'est pas

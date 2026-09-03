@@ -36,7 +36,13 @@ pub fn save(app: &AppHandle, prefs: &serde_json::Value) -> Result<(), String> {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let json = serde_json::to_string_pretty(prefs).map_err(|e| e.to_string())?;
-    std::fs::write(&path, json).map_err(|e| format!("écriture ui_prefs.json échouée : {e}"))
+    // Journalisé **ici** en plus d'être remonté : un échec d'écriture est une
+    // perte de réglage, et c'est la seule trace qui survivra à la fermeture de
+    // l'app chez un utilisateur qui rapporte « mes favoris disparaissent ».
+    std::fs::write(&path, json).map_err(|e| {
+        log::warn!("ui_prefs: écriture de {} échouée — {e}", path.display());
+        format!("écriture ui_prefs.json échouée : {e}")
+    })
 }
 
 #[cfg(test)]

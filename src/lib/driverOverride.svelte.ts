@@ -26,7 +26,7 @@
 import { outfitByName } from "./driverOutfits.svelte";
 import { StorageKey } from "./storage";
 import type { DriverView } from "./preview";
-import { getUiPref, peekUiPref, removeUiPref, setUiPref } from "./uiPrefs.svelte";
+import { getUiPrefs, peekUiPref, removeUiPref, setUiPref } from "./uiPrefs.svelte";
 
 /** Nom de la tenue enregistrée qui sert de tenue par défaut, ou vide.
  *
@@ -34,7 +34,13 @@ import { getUiPref, peekUiPref, removeUiPref, setUiPref } from "./uiPrefs.svelte
  * doublait l'information : désigner une tenue par défaut *est* l'activation,
  * et « aucune » *est* la désactivation. La case ne servait qu'à créer un état
  * grisé incompréhensible tant que rien n'était désigné. */
-const FALLBACK_KEY = "pitbox.driver.fallback";
+const FALLBACK_KEYS: Record<"race" | "street", string> = {
+  race: "pitbox.driver.fallback.race",
+  street: "pitbox.driver.fallback.street",
+};
+/** L'ancien réglage unique, relu une dernière fois pour être réparti sur les
+ * deux classes puis effacé (voir `ensureLoaded`). */
+const LEGACY_FALLBACK_KEY = "pitbox.driver.fallback";
 
 /** Les quatre pièces. `null` = ce que la voiture ou sa livrée décide. */
 export interface DriverOutfit {
@@ -89,15 +95,15 @@ export function hasOwnDriver(carId: string): boolean {
 /** La tenue effectivement portée par le pilote de cette voiture, cascade
  * résolue. C'est ce que l'aperçu affiche, et ce que la pose au lancement
  * écrira le jour où elle existera. */
-export function driverFor(carId: string | null): DriverOutfit {
+export function driverFor(carId: string | null, kind: CarClass): DriverOutfit {
   if (!carId) return EMPTY_OUTFIT;
-  return driverOwn(carId) ?? (applyFallback() ? fallbackOutfit() : EMPTY_OUTFIT);
+  return driverOwn(carId) ?? (applyFallback(kind) ? fallbackOutfit(kind) : EMPTY_OUTFIT);
 }
 
 /** Vrai quand ce que porte cette voiture vient de la tenue par défaut et non
  * d'un choix fait sur elle — ce que la ligne de session doit distinguer. */
-export function wearsFallback(carId: string | null): boolean {
-  return !!carId && driverOwn(carId) == null && applyFallback() && !isEmpty(fallbackOutfit());
+export function wearsFallback(carId: string | null, kind: CarClass): boolean {
+  return !!carId && driverOwn(carId) == null && applyFallback(kind) && !isEmpty(fallbackOutfit(kind));
 }
 
 function write(carId: string, outfit: DriverOutfit): void {
@@ -111,7 +117,10 @@ function write(carId: string, outfit: DriverOutfit): void {
 }
 
 export function setDriverPiece(carId: string, piece: Piece, id: string | null): void {
-  const current = driverFor(carId);
+  // Le choix **propre** à la voiture, jamais la cascade : partir de la tenue
+  // par défaut inscrirait celle-ci en dur sur cette voiture au premier clic,
+  // et la détacherait du réglage qu'elle est censée suivre.
+  const current = driverOwn(carId) ?? EMPTY_OUTFIT;
   write(carId, { ...current, [piece]: id });
 }
 
@@ -123,7 +132,7 @@ export function setDriverPiece(carId: string, piece: Piece, id: string | null): 
  * trois choix — il supprime l'option par défaut elle-même (§D6).
  */
 export function setDriverBody(carId: string, id: string | null): void {
-  const current = driverFor(carId);
+  const current = driverOwn(carId) ?? EMPTY_OUTFIT;
   if (current.body === id) return;
   write(carId, { ...EMPTY_OUTFIT, body: id });
 }
@@ -138,42 +147,80 @@ export function resetDriverOutfit(carId: string): void {
   removeUiPref(StorageKey.driverOutfit(carId));
 }
 
-// --- La tenue par défaut ----------------------------------------------------
+// --- Les tenues par défaut, une par classe de voiture ------------------------
 
-const fallback = $state<{ name: string }>({ name: "" });
+/**
+ * Les deux familles de voitures, du point de vue du pilote.
+ *
+ * **Une tenue par défaut ne veut pas dire la même chose des deux côtés.** Sur
+ * une voiture de course, la tenue fait partie de la livrée — c'est l'écurie
+ * qui habille son pilote, et beaucoup voudront la garder telle quelle. Sur une
+ * voiture de rue, personne n'a rien prévu, et c'est justement là qu'une tenue
+ * à soi a le plus de sens. Un réglage unique obligeait à choisir entre les
+ * deux ; il y en a donc deux, et chacun peut valoir « aucune ».
+ *
+ * Tout ce qui n'est pas annoncé `race` compte comme `street` : c'est le cas
+ * de la majorité des mods, dont beaucoup ne renseignent aucune classe, et le
+ * défaut sûr est celui où la livrée n'a rien prévu.
+ */
+export type CarClass = "race" | "street";
+
+export function carClassOf(raw: string | null | undefined): CarClass {
+  return (raw ?? "").trim().toLowerCase() === "race" ? "race" : "street";
+}
+
+const fallback = $state<Record<CarClass, string>>({ race: "", street: "" });
 
 let loaded: Promise<void> | null = null;
 
 function ensureLoaded(): Promise<void> {
-  loaded ??= getUiPref(FALLBACK_KEY).then((name) => {
-    fallback.name = name ?? "";
+  loaded ??= getUiPrefs([FALLBACK_KEYS.race, FALLBACK_KEYS.street, LEGACY_FALLBACK_KEY]).then((read) => {
+    const legacy = read[LEGACY_FALLBACK_KEY] ?? "";
+    // Migration : le réglage unique d'avant vaut pour les deux classes. Le
+    // recopier plutôt que de le ranger d'un seul côté — un utilisateur qui
+    // avait désigné une tenue la voit se comporter comme avant, et c'est à
+    // lui de décider laquelle des deux il rend à la livrée.
+    fallback.race = read[FALLBACK_KEYS.race] ?? legacy;
+    fallback.street = read[FALLBACK_KEYS.street] ?? legacy;
+    if (legacy) {
+      setUiPref(FALLBACK_KEYS.race, fallback.race);
+      setUiPref(FALLBACK_KEYS.street, fallback.street);
+      removeUiPref(LEGACY_FALLBACK_KEY);
+    }
   });
   return loaded;
 }
 
 void ensureLoaded();
 
-/** Nom de la tenue enregistrée désignée comme tenue par défaut, ou "". */
-export function fallbackName(): string {
-  return fallback.name;
+/** Nom de la tenue enregistrée désignée comme tenue par défaut de cette
+ * classe, ou "". */
+export function fallbackName(kind: CarClass): string {
+  return fallback[kind];
 }
 
-/** Y a-t-il une tenue par défaut ? Désigner, c'est activer. */
-export function applyFallback(): boolean {
-  return fallback.name !== "";
+/** Y a-t-il une tenue par défaut pour cette classe ? Désigner, c'est activer. */
+export function applyFallback(kind: CarClass): boolean {
+  return fallback[kind] !== "";
 }
 
 /** Les quatre pièces de la tenue par défaut, résolues depuis les tenues
  * enregistrées. Le nom est stocké, pas les pièces : renommer ou modifier une
  * tenue enregistrée doit suivre partout, et deux copies d'une même tenue
  * finiraient par diverger. */
-export function fallbackOutfit(): DriverOutfit {
-  return outfitByName(fallback.name) ?? EMPTY_OUTFIT;
+export function fallbackOutfit(kind: CarClass): DriverOutfit {
+  return outfitByName(fallback[kind]) ?? EMPTY_OUTFIT;
 }
 
-export function setFallbackName(name: string): void {
-  fallback.name = name;
-  setUiPref(FALLBACK_KEY, name);
+export function setFallbackName(kind: CarClass, name: string): void {
+  fallback[kind] = name;
+  // Attendre la lecture avant d'écrire : `ensureLoaded` termine par une
+  // affectation en bloc, qui écraserait ce choix s'il arrivait après. Même
+  // défaut, même remède que `driverOutfits.saveOutfit`.
+  void ensureLoaded().then(() => {
+    fallback[kind] = name;
+    setUiPref(FALLBACK_KEYS[kind], name);
+  });
 }
 
 // --- Ce qui part au backend -------------------------------------------------
@@ -185,8 +232,8 @@ export function setFallbackName(name: string): void {
  * Une pièce laissée à `null` n'est pas envoyée : le backend garde alors celle
  * que le `skin.ini` de la livrée déclare, plutôt que de déshabiller le pilote.
  */
-export function driverOverridePayload(carId: string | null): Omit<DriverView, "steer"> | null {
-  const outfit = driverFor(carId);
+export function driverOverridePayload(carId: string | null, kind: CarClass): Omit<DriverView, "steer"> | null {
+  const outfit = driverFor(carId, kind);
   if (isEmpty(outfit)) return null;
   // `body` ici, `model` là-bas : le backend nomme le mannequin comme
   // `driver3d.ini` le nomme, l'écran l'appelle « le corps ».

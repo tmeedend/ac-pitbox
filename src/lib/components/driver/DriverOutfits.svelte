@@ -10,14 +10,24 @@
   // remettant les trois autres au défaut (§D6).
   import { t } from "$lib/i18n/index.svelte";
   import { deleteOutfit, saveOutfit, savedOutfits, wornOutfit, type SavedOutfit } from "$lib/driverOutfits.svelte";
-  import { driverFor, fallbackName, isEmpty, setDriverOutfit, setFallbackName } from "$lib/driverOverride.svelte";
+  import {
+    driverFor,
+    fallbackName,
+    isEmpty,
+    setDriverOutfit,
+    setFallbackName,
+    type CarClass,
+  } from "$lib/driverOverride.svelte";
   import ImageSelectDropdown from "../ImageSelectDropdown.svelte";
 
-  let { carId }: { carId: string } = $props();
+  let { carId, kind }: { carId: string; kind: CarClass } = $props();
 
-  const prefs = $derived(driverFor(carId || null));
+  const prefs = $derived(driverFor(carId || null, kind));
   const outfits = $derived(savedOutfits());
   const currentlyWorn = $derived(wornOutfit(prefs));
+
+  /** Les deux classes, dans l'ordre d'affichage. */
+  const FALLBACKS: CarClass[] = ["street", "race"];
 
   let naming = $state(false);
   let draft = $state("");
@@ -68,7 +78,9 @@
     deleteOutfit(name);
     // Une tenue par défaut supprimée ne doit pas laisser l'option pointer dans
     // le vide : le nom se libère avec elle.
-    if (fallbackName() === name) setFallbackName("");
+    for (const k of FALLBACKS) {
+      if (fallbackName(k) === name) setFallbackName(k, "");
+    }
   }
 </script>
 
@@ -107,19 +119,25 @@
       {/each}
     </div>
 
-    <!-- La tenue par défaut : celle qui habille les voitures pour lesquelles on
-         n'a rien choisi. **Un seul contrôle** — désigner une tenue l'active,
-         « Aucune » la désactive. Absente tant qu'aucune tenue n'est
-         enregistrée : il n'y aurait rien à désigner. -->
+    <!-- Les tenues par défaut : celles qui habillent les voitures pour
+         lesquelles on n'a rien choisi. **Un contrôle par classe** — sur une
+         voiture de course la tenue fait partie de la livrée, et beaucoup
+         voudront la lui laisser tout en s'habillant sur une voiture de rue.
+         Désigner une tenue l'active, « Aucune » la désactive. Absentes tant
+         qu'aucune tenue n'est enregistrée : il n'y aurait rien à désigner. -->
     <div class="fallback">
-      <span class="lbl-key mono k">{t("driver.fallback.label")}</span>
-      <ImageSelectDropdown
-        options={fallbackOptions}
-        selectedId={fallbackName()}
-        placeholder={t("driver.fallback.none")}
-        emptyText={t("driver.fallback.none")}
-        onselect={(id) => setFallbackName(id)}
-      />
+      {#each FALLBACKS as k (k)}
+        <div class="fb-row" class:here={k === kind}>
+          <span class="lbl-key mono k">{t("driver.fallback.label." + k)}</span>
+          <ImageSelectDropdown
+            options={fallbackOptions}
+            selectedId={fallbackName(k)}
+            placeholder={t("driver.fallback.none")}
+            emptyText={t("driver.fallback.none")}
+            onselect={(id) => setFallbackName(k, id)}
+          />
+        </div>
+      {/each}
       <p class="hint">{t("driver.fallback.hint")}</p>
     </div>
   {:else if !naming}
@@ -205,7 +223,17 @@
     border-top: 1px solid var(--line);
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: 9px;
+  }
+  .fb-row {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  /* Celle qui s'applique à la voiture courante, en clair : sans ce repère,
+     deux champs identiques laissent chercher lequel agit ici et maintenant. */
+  .fb-row.here .k {
+    color: var(--txt2);
   }
   .hint,
   .none {

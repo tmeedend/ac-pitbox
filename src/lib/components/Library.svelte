@@ -31,6 +31,7 @@
   import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
   import { buildModContextItems } from "$lib/modContextActions";
   import { t } from "$lib/i18n/index.svelte";
+  import { zoomFactor } from "$lib/zoom.svelte";
   import { getUiPrefs, setUiPref } from "$lib/uiPrefs.svelte";
 
   import { StorageKey } from "$lib/storage";
@@ -261,6 +262,12 @@
   let resizingKey = $state<string | null>(null);
   let resizeStartX = 0;
   let resizeStartWidth = 0;
+  /** Une largeur **mesurée** (pixels réels de la fenêtre) ramenée en pixels
+   * CSS, seuls acceptés par la feuille de style — voir `zoomFactor`. Sans ça,
+   * saisir une poignée à 110 % élargissait la colonne de 10 % d'un coup, et le
+   * glissé avançait 10 % trop vite. */
+  const measured = (width: number) => width / zoomFactor();
+
   function startResize(e: MouseEvent, key: string, currentWidth: number) {
     e.preventDefault();
     e.stopPropagation();
@@ -271,13 +278,13 @@
     stopResizeListeners();
     resizingKey = key;
     resizeStartX = e.clientX;
-    resizeStartWidth = currentWidth;
+    resizeStartWidth = measured(currentWidth);
     window.addEventListener("mousemove", onResizeMove);
     window.addEventListener("mouseup", onResizeUp);
   }
   function onResizeMove(e: MouseEvent) {
     if (!resizingKey) return;
-    const next = Math.max(MIN_COLUMN_WIDTH, Math.round(resizeStartWidth + (e.clientX - resizeStartX)));
+    const next = Math.max(MIN_COLUMN_WIDTH, Math.round(resizeStartWidth + measured(e.clientX - resizeStartX)));
     columnWidths = { ...columnWidths, [resizingKey]: next };
   }
   function stopResizeListeners() {
@@ -296,7 +303,7 @@
    * accessible qu'à la souris. `currentWidth` = largeur affichée actuelle
    * (naturelle si jamais redimensionnée), pas de branchement particulier. */
   function adjustColumnWidth(key: string, currentWidth: number, delta: number) {
-    columnWidths = { ...columnWidths, [key]: Math.max(MIN_COLUMN_WIDTH, Math.round(currentWidth + delta)) };
+    columnWidths = { ...columnWidths, [key]: Math.max(MIN_COLUMN_WIDTH, Math.round(measured(currentWidth) + delta)) };
     persistColumnsPrefs();
   }
   /** Double-clic (ou Entrée au clavier) sur la poignée = revenir à la largeur

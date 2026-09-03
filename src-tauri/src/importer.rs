@@ -837,6 +837,34 @@ fn deployable(src: &Path, rel: &Path) -> bool {
     }
 }
 
+/// Où va ce reste, quand son propre chemin ne le dit pas.
+///
+/// Deux règles, dans cet ordre, et le chemin d'origine si aucune ne s'applique :
+///
+/// 1. un dossier `driver/` livré à nu devient `content/driver`
+///    ([`crate::acpath::normalize_leftover`]) — règle de chemin pur ;
+/// 2. un **`.kn5` isolé** qui ne mène nulle part dans le jeu et qui *est* un
+///    mannequin ([`crate::driver::is_driver_model`]) devient
+///    `content/driver/<nom>`.
+///
+/// La seconde ouvre le fichier, ce que la première se garde bien de faire :
+/// c'est pour ça qu'elle passe en dernier et seulement sur ce qui n'a pas déjà
+/// une destination. Un mod de pilote se distribue couramment comme un `.kn5`
+/// nu — quatre des huit exemples réels examinés — et rien dans son chemin ne
+/// dit où il va.
+fn leftover_rel(raw: &Path, src: &Path) -> Option<PathBuf> {
+    if let Some(normalized) = crate::acpath::normalize_leftover(raw, src) {
+        return Some(normalized);
+    }
+    let is_kn5 = src.extension().is_some_and(|e| e.eq_ignore_ascii_case("kn5"));
+    if !is_kn5 || crate::acpath::leads_into_game(raw) || !crate::driver::is_driver_model(src) {
+        return None;
+    }
+    let name = raw.file_name()?;
+    log::info!("import: {} reconnu comme mannequin de pilote", name.to_string_lossy());
+    Some(Path::new("content").join("driver").join(name))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn sweep_leftovers(
     ctx: &ImportCtx,
@@ -944,7 +972,7 @@ fn sweep_leftovers(
         // Dossier de jeu livré à nu (`driver/` au lieu de `content/driver/`) :
         // corrigé avant tout usage, car ce chemin est ce que l'activation
         // rejouera depuis la racine d'AC (§4.5.3).
-        let normalized = crate::acpath::normalize_leftover(&raw, &p);
+        let normalized = leftover_rel(&raw, &p);
         let rel = normalized.clone().unwrap_or(raw.clone());
 
         // Dossier proposé (§4.6ter). Un **dossier** qui ne mène nulle part dans
@@ -1474,7 +1502,7 @@ fn import_leftover(
     // Même correction que dans le balayage : un `driver/` à nu doit devenir
     // `content/driver` **aussi** quand le reste part en « autre mod », sinon la
     // destination dépendrait de la présence d'un mod voisin à qui le rattacher.
-    let normalized = crate::acpath::normalize_leftover(raw, p);
+    let normalized = leftover_rel(raw, p);
     let rel: &Path = normalized.as_deref().unwrap_or(raw);
     let label = rel.to_string_lossy().into_owned();
     let nested_name = format!("{archive_name}__{label}");
@@ -1876,7 +1904,18 @@ pub fn import_folders(
         if ctx.cancelled() {
             break;
         }
-        let dir = Path::new(p);
+        let source = Path::new(p);
+        // Mannequin livré nu (§7.3) : mis en boîte avant tout le reste, pour
+        // que la suite ne voie qu'un dossier ordinaire.
+        let staged = match stage_loose_model(source) {
+            Ok(staged) => staged,
+            Err(e) => {
+                results.push(failed_result(&source_label(source), e));
+                ctx.finish_item(i);
+                continue;
+            }
+        };
+        let dir = staged.as_deref().unwrap_or(source);
         let label = source_label(dir);
         ctx.set_current(i, PHASE_SCAN, label.clone());
         // Conservation du dossier source (§10/§11) : hors verrou, comme pour
@@ -1887,11 +1926,66 @@ pub fn import_folders(
             Ok(conn) => import_one_folder(ctx, &conn, cfg, rules, i, dir, copy, decisions, kept.as_deref()),
             Err(e) => failed_result(&label, e.to_string()),
         };
+        if let Some(staged) = staged {
+            // La boîte a fait son office ; le `.kn5` d'origine, lui, n'a jamais
+            // été touché (voir `stage_loose_model`).
+            if let Some(parent) = staged.parent() {
+                let _ = std::fs::remove_dir_all(parent);
+            }
+        }
         ctx.record(bucket, sizes[i], started.elapsed().as_secs_f64());
         results.push(result);
         ctx.finish_item(i);
     }
     Ok(results)
+}
+
+/// Met un `.kn5` livré nu dans une boîte que le reste de l'import sait ouvrir.
+///
+/// **Pourquoi** : beaucoup de mods de pilote se téléchargent comme un fichier
+/// unique, sans archive ni dossier autour — l'utilisateur en a huit sur dix.
+/// Jusqu'ici un tel fichier déposé sur l'app ne déclenchait *rien*, pas même un
+/// message : `split_dropped_paths` ne connaissait que les dossiers et les trois
+/// extensions d'archive.
+///
+/// **Ce que ça ne fait pas** : deviner. Un `.kn5` qui n'est pas un mannequin
+/// ([`crate::driver::is_driver_model`]) est **refusé**, et non rangé « quelque
+/// part » — une carrosserie de voiture arrachée à son dossier n'a pas de
+/// destination qui ait un sens, et l'inventer poserait un fichier inerte dans
+/// le jeu. Le coût du parsing (une quinzaine de millisecondes) n'est payé que
+/// sur un fichier isolé, jamais pendant un import ordinaire.
+///
+/// `Ok(None)` pour tout ce qui n'est pas un fichier `.kn5` : le chemin passe
+/// alors tel quel, un dossier reste un dossier.
+///
+/// **Le fichier de l'utilisateur n'est jamais déplacé** — il est copié dans la
+/// boîte, même en mode « déplacer ». C'est la seule différence assumée avec
+/// l'import d'un dossier : consommer un fichier isolé posé sur l'app, dont
+/// l'utilisateur n'a souvent pas d'autre exemplaire, ne vaut pas l'espace
+/// disque économisé.
+fn stage_loose_model(source: &Path) -> Result<Option<PathBuf>, String> {
+    if !source.is_file() || !source.extension().is_some_and(|e| e.eq_ignore_ascii_case("kn5")) {
+        return Ok(None);
+    }
+    if !crate::driver::is_driver_model(source) {
+        return Err(crate::errors::NOT_A_DRIVER_MODEL.into());
+    }
+    let stem = source
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .ok_or(crate::errors::NOT_A_DIRECTORY)?;
+    let name = source.file_name().ok_or(crate::errors::NOT_A_DIRECTORY)?;
+    let temp = make_temp_dir().map_err(|e| e.to_string())?;
+    // `<temp>/<nom du fichier>/content/driver/<fichier>.kn5` : le dossier
+    // intermédiaire porte le nom du mod (c'est lui que `source_label` lira),
+    // et le chemin sous lui est déjà celui que l'activation rejouera depuis la
+    // racine d'AC (§4.5.3).
+    let boxed = temp.join(&stem);
+    let dest = boxed.join("content").join("driver");
+    std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+    std::fs::copy(source, dest.join(name)).map_err(|e| e.to_string())?;
+    log::info!("import: {stem} mis en boîte comme mannequin de pilote");
+    Ok(Some(boxed))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2188,6 +2282,18 @@ fn classify(
     }
 }
 
+/// Ce dossier contient-il ne serait-ce qu'un fichier, à quelque profondeur
+/// que ce soit ? Distingue un sous-dossier réellement vide (rien à importer,
+/// « ignoré » à bon droit) d'un sous-dossier dont le contenu n'a simplement
+/// pas la structure d'une voiture ou d'un circuit — celui-ci finira en
+/// « autre mod » (§7.3) plutôt que d'être écarté avant même l'exécution.
+fn dir_has_any_file(dir: &Path) -> bool {
+    walkdir::WalkDir::new(dir)
+        .into_iter()
+        .flatten()
+        .any(|entry| entry.file_type().is_file())
+}
+
 /// Phase d'analyse (§4.2) : scanne chaque sous-dossier direct du parent et
 /// classe les mods **sans rien écrire**. Un seul niveau de sous-dossiers.
 pub fn analyze_bulk(conn: &Connection, _cfg: &AppConfig, parent: &Path) -> Result<Vec<BulkEntry>, String> {
@@ -2210,7 +2316,15 @@ pub fn analyze_bulk(conn: &Connection, _cfg: &AppConfig, parent: &Path) -> Resul
             .unwrap_or_default();
         let path = sub.to_string_lossy().into_owned();
         let found = modscan::scan(&sub);
-        if found.is_empty() {
+        // « Ignoré » veut dire « rien à importer », pas seulement « pas de
+        // voiture ni de circuit ». Un sous-dossier sans structure reconnue
+        // mais non vide (mannequin de pilote nu, notice, images d'un mod
+        // « autre ») est traité en exécution comme `import_folder` le ferait
+        // seul (§7.3) — encore fallait-il ne pas l'écarter ici avant même
+        // d'y arriver. Bug réel : un dossier ne contenant qu'un
+        // `jp_police_man.kn5` (mannequin de pilote sans structure de voiture)
+        // s'affichait « ignoré » et n'était jamais envoyé à l'exécution.
+        if found.is_empty() && !dir_has_any_file(&sub) {
             entries.push(BulkEntry {
                 subfolder,
                 path,
@@ -2347,8 +2461,48 @@ fn exec_one(
         result.error = Some(crate::errors::LIBRARY_NOT_CONFIGURED.into());
         return result;
     };
+    let res_mode = crate::resources::ExtractionMode::parse(&cfg.prefs.resource_extraction_mode);
 
     let found = modscan::scan(dir);
+    let subs = modscan::scan_subs(dir);
+    let apps = modscan::scan_apps(dir);
+    if found.is_empty() && subs.is_empty() && apps.is_empty() {
+        // Rien de reconnu (§7.3) : même repli que l'import d'un dossier isolé
+        // (`import_folder`), dont ce chemin en masse s'était affranchi. Un
+        // mannequin de pilote nu (`jp_police_man.kn5`, aucune structure de
+        // voiture/circuit) tombait ici en « dossier proposé » (§4.6ter, un
+        // arbitrage qui attend l'utilisateur) faute d'appeler `import_other` —
+        // qui, lui, sait déjà le ranger via `others::relocate_driver_models`.
+        ctx.sub(0, 1, name.clone());
+        ctx.file_ratio(index, SCAN_SHARE);
+        let kept_archive = keep_source(cfg, dir, &name);
+        let rescued = rescue_nested_archives(
+            ctx,
+            index,
+            conn,
+            cfg,
+            rules,
+            library,
+            &name,
+            dir,
+            copy,
+            res_mode,
+            &mut result,
+        );
+        if !rescued {
+            if let Some(other) = crate::others::import_other(conn, library, &name, dir, copy, res_mode) {
+                if let Err(e) = crate::others::activate_other(conn, cfg, &other.id) {
+                    log::warn!("auto_activate_other {}: {e}", other.id);
+                }
+                result.others.push(other);
+            } else {
+                result.error = Some(crate::errors::NOTHING_TO_IMPORT_IN_FOLDER.into());
+            }
+        }
+        drop_unused_kept_source(conn, cfg, kept_archive.as_deref());
+        return result;
+    }
+
     ctx.sub(0, found.len(), name.clone());
     ctx.file_ratio(index, SCAN_SHARE);
     // Conservation du dossier source (§10/§11), avant tout rangement.
@@ -2411,11 +2565,10 @@ fn exec_one(
     // globale attrapait au passage. Skins, sons et apps sont marqués consommés
     // sans être importés — l'import en masse ne les traite pas davantage
     // qu'avant, mais il ne les prend plus pour des restes.
-    let subs = modscan::scan_subs(dir);
-    let apps = modscan::scan_apps(dir);
+    // (`subs`, `apps` et `res_mode` déjà calculés plus haut, pour le repli
+    // vers `import_other` quand rien n'est reconnu.)
     let consumed = consumed_paths(&found, &subs, &apps);
     let owners = owners_of(&found, &apps);
-    let res_mode = crate::resources::ExtractionMode::parse(&cfg.prefs.resource_extraction_mode);
     sweep_leftovers(
         ctx,
         index,
@@ -3074,6 +3227,93 @@ pub(crate) fn make_temp_dir() -> std::io::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Sonde : ce que `leftover_rel` répond sur un vrai mod de pilote.
+    ///
+    /// ```text
+    /// PITBOX_DRIVER_KN5="C:\...\jp_police_man.kn5" cargo test --lib importer -- --ignored --nocapture probe_leftover
+    /// ```
+    #[test]
+    #[ignore = "needs a real driver mod on disk; probe, not a check"]
+    fn probe_leftover_on_a_real_driver() {
+        let Ok(file) = std::env::var("PITBOX_DRIVER_KN5") else {
+            eprintln!("PITBOX_DRIVER_KN5 unset, skipping");
+            return;
+        };
+        let src = PathBuf::from(&file);
+        let name = src.file_name().unwrap();
+        let raw = Path::new(name);
+        eprintln!("fichier      : {}", src.display());
+        eprintln!("raw          : {}", raw.display());
+        eprintln!("extension    : {:?}", src.extension());
+        eprintln!("leads_into_game : {}", crate::acpath::leads_into_game(raw));
+        eprintln!("is_driver_model : {}", crate::driver::is_driver_model(&src));
+        eprintln!("leftover_rel    : {:?}", leftover_rel(raw, &src));
+    }
+
+    /// Règle : un `.kn5` déposé seul qui n'est pas un mannequin est **refusé**,
+    /// pas rangé au hasard — et un dossier passe sans être touché.
+    ///
+    /// Le cas positif se mesure sur de vrais mods (voir
+    /// `driver::tests::what_the_detector_says_about_real_mods`) : un mannequin
+    /// synthétique n'existe pas, `is_driver_model` lit un vrai KN5.
+    #[test]
+    fn a_loose_model_is_boxed_only_when_it_is_a_driver() {
+        let base = crate::testutil::temp_dir("import-loose-model");
+        let junk = base.join("body.kn5");
+        std::fs::write(&junk, b"not a kn5").expect("écriture");
+        assert_eq!(
+            stage_loose_model(&junk),
+            Err(crate::errors::NOT_A_DRIVER_MODEL.to_string()),
+            "un .kn5 qui n'est pas un mannequin n'a pas de destination"
+        );
+
+        let folder = base.join("un_dossier");
+        std::fs::create_dir_all(&folder).expect("dossier");
+        assert_eq!(
+            stage_loose_model(&folder),
+            Ok(None),
+            "un dossier n'est pas mis en boîte, il est déjà une boîte"
+        );
+
+        let text = base.join("notice.txt");
+        std::fs::write(&text, b"hi").expect("écriture");
+        assert_eq!(stage_loose_model(&text), Ok(None), "et un fichier quelconque passe");
+    }
+
+    /// Règle : un `.kn5` isolé qui n'est pas un mannequin garde son chemin.
+    ///
+    /// C'est la moitié qui protège — sans elle, tout `.kn5` traînant à la
+    /// racine d'une archive partirait dans `content/driver/`. Le pendant
+    /// positif se mesure sur de vrais mods, hors tests unitaires : voir
+    /// `driver::tests::what_the_detector_says_about_real_mods`.
+    #[test]
+    fn a_loose_kn5_that_is_not_a_driver_keeps_its_path() {
+        let base = crate::testutil::temp_dir("import-loose-kn5");
+        let src = base.join("something.kn5");
+        std::fs::write(&src, b"not a kn5 at all").expect("écriture");
+        assert_eq!(
+            leftover_rel(Path::new("something.kn5"), &src),
+            None,
+            "illisible, donc pas un mannequin, donc on ne le déplace pas"
+        );
+    }
+
+    /// Règle : un `.kn5` qui a déjà une destination dans le jeu n'est même pas
+    /// ouvert — c'est ce qui empêche le détecteur de coûter un parsing par
+    /// modèle de voiture.
+    #[test]
+    fn a_kn5_already_bound_for_the_game_is_left_alone() {
+        let base = crate::testutil::temp_dir("import-bound-kn5");
+        let src = base.join("model.kn5");
+        std::fs::write(&src, b"x").expect("écriture");
+        assert_eq!(
+            leftover_rel(Path::new("content/cars/x/model.kn5"), &src),
+            None,
+            "son chemin mène déjà dans le jeu"
+        );
+    }
+
     use crate::config::AppConfig;
     use std::process::Command;
 
@@ -5180,10 +5420,16 @@ mod tests {
         let parent = base.join("catalog");
         std::fs::create_dir_all(&parent).unwrap();
         make_fake_car(&parent, "bulk_car"); // sous-dossier = voiture
-                                            // Sous-dossier sans structure AC → ignoré.
+                                            // Sous-dossier sans structure AC mais non vide : pas ignoré, il
+                                            // finira en « autre mod » à l'exécution — comme un import de
+                                            // dossier isolé le ferait (§7.3). Seul un dossier réellement vide
+                                            // est ignoré (voir `bulk_unrecognized_folder_is_not_lost`).
         let notes = parent.join("notes");
         std::fs::create_dir_all(&notes).unwrap();
         std::fs::write(notes.join("readme.txt"), b"hi").unwrap();
+        // Sous-dossier réellement vide → ignoré.
+        let empty = parent.join("empty");
+        std::fs::create_dir_all(&empty).unwrap();
 
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
@@ -5194,13 +5440,20 @@ mod tests {
         };
         let rules = crate::rules::default_rules();
 
-        // Analyse : 1 nouveau (bulk_car), 1 ignoré (notes). Aucune écriture.
+        // Analyse : 1 nouveau (bulk_car), 1 non ignoré sans mods (notes),
+        // 1 ignoré (empty). Aucune écriture.
         let entries = analyze_bulk(&conn, &cfg, &parent).unwrap();
-        assert_eq!(entries.len(), 2);
+        assert_eq!(entries.len(), 3);
         let car = entries.iter().find(|e| e.subfolder == "bulk_car").unwrap();
         assert!(!car.ignored);
         assert_eq!(car.mods[0].status, "new");
-        assert!(entries.iter().find(|e| e.subfolder == "notes").unwrap().ignored);
+        let notes_entry = entries.iter().find(|e| e.subfolder == "notes").unwrap();
+        assert!(!notes_entry.ignored, "non vide : ce n'est pas rien à importer");
+        assert!(notes_entry.mods.is_empty(), "rien de reconnu comme voiture/circuit");
+        assert!(
+            entries.iter().find(|e| e.subfolder == "empty").unwrap().ignored,
+            "vide : ici, ignoré est le mot juste"
+        );
         assert!(!library.join("cars").join("bulk_car").exists(), "analyse n'écrit rien");
 
         // Exécution (copie).
@@ -5217,6 +5470,46 @@ mod tests {
         let entries2 = analyze_bulk(&conn, &cfg, &parent).unwrap();
         let car2 = entries2.iter().find(|e| e.subfolder == "bulk_car").unwrap();
         assert_eq!(car2.mods[0].status, "duplicate");
+    }
+
+    /// Règle : un sous-dossier sans structure de voiture/circuit mais non vide
+    /// n'est pas perdu (§7.3) — il devient un « autre mod », comme le ferait
+    /// un import de dossier isolé (`import_folder`). Couvre le double bug
+    /// remonté par l'utilisateur : un mannequin de pilote nu importé en masse
+    /// (1) s'affichait « ignoré » en analyse et (2) même arbitré manuellement,
+    /// `exec_one` n'avait aucun repli vers `import_other`.
+    #[test]
+    fn bulk_unrecognized_folder_is_not_lost() {
+        let base = crate::testutil::temp_dir("import-bulk-other");
+        let parent = base.join("catalog");
+        let sub = parent.join("notes");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(sub.join("readme.txt"), b"hi").unwrap();
+
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let entries = analyze_bulk(&conn, &cfg, &parent).unwrap();
+        let entry = entries.iter().find(|e| e.subfolder == "notes").unwrap();
+        assert!(!entry.ignored, "non ignoré en analyse (précondition du bug)");
+
+        let item = BulkExecItem {
+            path: entry.path.clone(),
+            skip_ids: vec![],
+            replace_ids: vec![],
+        };
+        let r = exec_one(&ImportCtx::silent(), &conn, &cfg, &rules, 0, &item, true);
+        assert_eq!(r.others.len(), 1, "rangé comme autre mod, pas perdu");
+        assert!(
+            crate::overlay::other_exists(&conn, &r.others[0].id).unwrap(),
+            "et vraiment inséré dans l'overlay"
+        );
     }
 
     #[test]

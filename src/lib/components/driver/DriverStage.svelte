@@ -64,7 +64,6 @@
      * corps, qui n'ont pas de texture à échanger, et la ligne d'état doit les
      * nommer comme les autres (§5.4). */
     trying = false,
-    substituted = false,
   }: {
     carId: string;
     skinId?: string | null;
@@ -74,7 +73,6 @@
     applied: string;
     sample?: string | null;
     trying?: boolean;
-    substituted?: boolean;
   } = $props();
 
   type Phase = "loading" | "ready" | "unavailable";
@@ -82,6 +80,12 @@
   /** Clé i18n ou message technique, en infobulle — jamais bloquant. */
   let reason = $state<string | null>(null);
   let host = $state<HTMLDivElement | null>(null);
+  /** Un nouveau mannequin se prépare pendant que le précédent reste à
+   * l'écran. Adopter un corps ou une pièce demande une conversion complète au
+   * backend (~1 s) : sans ce témoin, le clic ne produit rien de visible et on
+   * clique une deuxième fois. Même badge que l'aperçu 3D d'une voiture, qui a
+   * exactement le même moment à couvrir. */
+  let swapping = $state(false);
 
   /** Tout ce qui doit être libéré. Hors des runes : ce n'est pas de l'état
    * d'affichage, et le rendre réactif ne ferait que déclencher des effets. */
@@ -123,6 +127,7 @@
     if (!node) return;
     if (untrack(() => loaded) === key) return;
     let cancelled = false;
+    swapping = untrack(() => scene) != null;
     void (async () => {
       try {
         const preview = await prepareDriverPreview(carId, skinId, outfit);
@@ -153,10 +158,13 @@
         phase = "unavailable";
         reason = errorText(e);
         console.error("driver: plateau indisponible", e);
+      } finally {
+        if (!cancelled) swapping = false;
       }
     })();
     return () => {
       cancelled = true;
+      swapping = false;
     };
   });
 
@@ -345,13 +353,26 @@
     // et faire orbiter la caméra le laisserait derrière le sujet dès qu'on
     // regarde son dos. Un plateau tournant garde la lumière du côté du
     // spectateur, quelle que soit la face montrée.
+    // Facteur de zoom appliqué **par-dessus** le cadrage de la piste, jamais à
+    // sa place : le cadrage se recalcule à chaque changement de piste, et
+    // écrire directement dans `distance` verrait ce réglage effacé au premier
+    // clic sur « Casque ». Un multiplicateur survit à ces recadrages — se
+    // rapprocher une fois vaut pour toutes les pistes.
+    let zoom = 1;
+    // Décalage vertical du regard, en mètres, appliqué à la caméra **et** au
+    // point visé : les deux ensemble font une translation, un seul ferait une
+    // plongée.
+    let height = 0;
     const place = () => {
+      const d = distance * zoom;
+      const at = target.clone();
+      at.y += height;
       camera.position.set(
-        target.x + distance * Math.sin(VIEW_AZIMUTH) * Math.cos(VIEW_ELEVATION),
-        target.y + distance * Math.sin(VIEW_ELEVATION),
-        target.z + distance * Math.cos(VIEW_AZIMUTH) * Math.cos(VIEW_ELEVATION),
+        at.x + d * Math.sin(VIEW_AZIMUTH) * Math.cos(VIEW_ELEVATION),
+        at.y + d * Math.sin(VIEW_ELEVATION),
+        at.z + d * Math.cos(VIEW_AZIMUTH) * Math.cos(VIEW_ELEVATION),
       );
-      camera.lookAt(target);
+      camera.lookAt(at);
     };
 
     const frame = (wanted: StageLane, instant: boolean) => {
@@ -368,27 +389,68 @@
       animation = { from: target.clone(), to: shot.target, d0: distance, d1: wantedDistance, t: 0 };
     };
 
-    // --- rotation à la souris (§5.1 : horizontale seulement) ---
+    // --- souris : le pilote tourne, la caméra monte et descend ---
+    //
+    // Deux gestes sur un seul glissé, et ils n'agissent pas sur le même objet :
+    // à l'horizontale c'est le **plateau** qui pivote (l'éclairage reste du
+    // côté du spectateur, §5.1), à la verticale c'est la **caméra** qui monte
+    // ou descend le long du sujet. Faire pivoter la caméra en site l'aurait
+    // fait plonger sur le crâne ou remonter sous le menton ; ce qu'on veut en
+    // regardant une tenue, c'est passer du casque aux gants sans changer de
+    // point de vue.
     let dragging = false;
     let lastX = 0;
+    let lastY = 0;
     const onDown = (e: PointerEvent) => {
       dragging = true;
       lastX = e.clientX;
+      lastY = e.clientY;
       renderer.domElement.setPointerCapture(e.pointerId);
     };
     const onMove = (e: PointerEvent) => {
       if (!dragging) return;
       pivot.rotation.y += (e.clientX - lastX) * 0.008;
+      // Le déplacement se mesure en fraction du cadrage courant, pas en
+      // mètres : de près un pixel doit valoir moins qu'en plan large, sinon
+      // le sujet saute hors champ au premier geste.
+      const span = distance * zoom;
+      height = Math.max(-HEIGHT_RANGE, Math.min(HEIGHT_RANGE, height + (e.clientY - lastY) * 0.0016 * span));
       lastX = e.clientX;
+      lastY = e.clientY;
+      place();
     };
     const onUp = (e: PointerEvent) => {
       dragging = false;
       renderer.domElement.releasePointerCapture(e.pointerId);
     };
-    // Double-clic : remise de face (§5.1).
+    // Molette : zoom, comme sur l'aperçu 3D de la voiture (qui l'a par ses
+    // `OrbitControls`, absents ici — le plateau tourne le sujet, pas la
+    // caméra). `passive: false` et `preventDefault` : sans ça la molette
+    // ferait défiler le panneau d'essayage, qui a son propre `overflow`, et
+    // le pilote sortirait de l'écran au lieu de grossir.
+    // Un pilote assis tient dans deux mètres : au-delà, on ne regarde plus rien.
+    const HEIGHT_RANGE = 1.0;
+    const ZOOM_MIN = 0.35;
+    const ZOOM_MAX = 2.5;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      // Pas multiplicatif : un cran donne le même rapport de près comme de
+      // loin, là où un pas fixe traverserait le sujet en deux crans au plus
+      // près et n'avancerait plus au plus loin.
+      const factor = Math.exp(e.deltaY * 0.001);
+      zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom * factor));
+      place();
+    };
+    // Double-clic : remise de face **et** cadrage d'origine (§5.1). Le zoom
+    // n'ayant pas de commande à l'écran, il lui faut une marche arrière, et
+    // c'est déjà le geste « remets tout comme c'était ».
     const onDouble = () => {
       pivot.rotation.y = 0;
+      zoom = 1;
+      height = 0;
+      place();
     };
+    renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
     renderer.domElement.addEventListener("pointerdown", onDown);
     renderer.domElement.addEventListener("pointermove", onMove);
     renderer.domElement.addEventListener("pointerup", onUp);
@@ -429,6 +491,7 @@
     const dispose = () => {
       cancelAnimationFrame(raf);
       observer.disconnect();
+      renderer.domElement.removeEventListener("wheel", onWheel);
       renderer.domElement.removeEventListener("pointerdown", onDown);
       renderer.domElement.removeEventListener("pointermove", onMove);
       renderer.domElement.removeEventListener("pointerup", onUp);
@@ -503,10 +566,6 @@
 </script>
 
 <div class="stage">
-  {#if substituted}
-    <div class="subst">{t("driver.stage.substituted")}</div>
-  {/if}
-
   <div class="canvas" bind:this={host} class:hidden={phase === "unavailable"}></div>
 
   {#if phase === "unavailable"}
@@ -520,6 +579,13 @@
     </div>
   {:else if phase === "loading"}
     <div class="bar"></div>
+  {/if}
+
+  {#if swapping}
+    <div class="badge">
+      <span class="spinner"></span>
+      <span class="mono">{t("driver.stage.updating")}</span>
+    </div>
   {/if}
 
   <div class="foot">
@@ -558,26 +624,40 @@
     display: none;
   }
 
-  /* Mêmes couleurs que `.warnbox` (jaune d'alerte du design system) que la
-     bannière d'invalidation de la galerie : c'est le même avertissement, dit
-     deux fois à deux endroits, il ne doit pas changer de teinte en route. */
-  .subst {
-    position: absolute;
-    left: 10px;
-    top: 10px;
-    z-index: 2;
-    font-family: var(--mono);
-    font-size: 9.5px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    color: var(--yellow);
-    border: 1px solid #4a4426;
-    background: #1a1708;
-    padding: 3px 7px;
-  }
 
   /* Filet de progression en pied de plateau (§9.2). Le corps précédent reste
      affiché derrière : jamais de plateau vide. */
+  /* Même badge, même serpent que l'aperçu 3D d'une voiture (`CarPreview3D`) :
+     c'est le même moment — un modèle se prépare pendant que le précédent
+     reste affiché — et deux témoins différents pour un même état se lisent
+     comme deux choses différentes. */
+  .badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 8px;
+    background: rgba(8, 8, 12, 0.62);
+    border: 1px solid var(--line);
+    font-size: 11px;
+    color: var(--muted);
+    z-index: 3;
+  }
+  .spinner {
+    width: 11px;
+    height: 11px;
+    border: 2px solid var(--line);
+    border-top-color: var(--rosso);
+    border-radius: 50%;
+    animation: driver-stage-spin 0.8s linear infinite;
+  }
+  @keyframes driver-stage-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
   .bar {
     position: absolute;
     left: 0;

@@ -16,6 +16,7 @@
 // préférence resterait invisible jusqu'au prochain rendu déclenché par autre
 // chose (bug réel évité, pas seulement une préférence de style).
 import { untrack } from "svelte";
+import { invoke } from "@tauri-apps/api/core";
 import { invokeSafe } from "./invokeSafe";
 
 const PREFIX = "pitbox.";
@@ -49,8 +50,50 @@ function migrateLegacyLocalStorage(): Record<string, string> {
   return migrated;
 }
 
-function persist(all: Record<string, string>): Promise<void> {
-  return invokeSafe<void>("save_ui_prefs", { prefs: all }, undefined);
+/**
+ * Écrit le fichier, **sans repli silencieux**.
+ *
+ * `invokeSafe` était employé ici comme pour les lectures : au bout de cinq
+ * secondes il rendait la main comme si tout allait bien. Sur une lecture c'est
+ * un bon compromis (un réglage manquant vaut mieux qu'un écran figé) ; sur une
+ * écriture c'est la perte de donnée elle-même, déguisée en succès. Constaté :
+ * `ui_prefs.json` inchangé pendant six heures d'utilisation, alors que
+ * favoris, tenues et corps de pilote étaient adoptés — tout vivait en mémoire
+ * et rien n'atteignait le disque. Personne ne l'a vu avant un redémarrage.
+ *
+ * L'appel n'a donc plus de délai : une écriture lente reste une écriture, et
+ * rien à l'écran ne l'attend (tous les appelants sont en `void`). Un échec
+ * réel est **réessayé une fois** — un fichier verrouillé une seconde par un
+ * antivirus est le cas courant — puis journalisé sans être caché.
+ */
+async function persist(all: Record<string, string>): Promise<void> {
+  try {
+    await invoke<void>("save_ui_prefs", { prefs: all });
+    failure.since = null;
+  } catch (first) {
+    console.error("save_ui_prefs : premier essai échoué, nouvelle tentative", first);
+    try {
+      await invoke<void>("save_ui_prefs", { prefs: all });
+      failure.since = null;
+    } catch (second) {
+      console.error("save_ui_prefs : réglages non enregistrés sur disque", second);
+      failure.since ??= Date.now();
+      failure.reason = String(second);
+    }
+  }
+}
+
+/** Une écriture qui n'atteint pas le disque, et depuis quand.
+ *
+ * **Elle se voit à l'écran** (`PrefsToast`), et c'est le vrai enseignement de
+ * ce bug : un réglage perdu en silence ne se découvre qu'au redémarrage
+ * suivant, quand plus personne ne peut relier la perte au geste qui l'a
+ * causée. Un `console.error` ne suffit pas — personne n'ouvre la console d'une
+ * app empaquetée. */
+const failure = $state<{ since: number | null; reason: string }>({ since: null, reason: "" });
+
+export function prefsWriteFailure(): { since: number | null; reason: string } {
+  return failure;
 }
 
 // Chargé une seule fois pour toute la session (plusieurs composants lisent
@@ -147,15 +190,23 @@ let writing: Promise<void> = Promise.resolve();
 
 function enqueue(mutate: (all: Record<string, string>) => Record<string, string> | null): Promise<void> {
   return untrack(() => {
-    writing = writing.then(async () => {
-      await ensureLoaded();
-      // `cache` relu ICI, après l'attente, et jamais l'instantané capturé
-      // avant : c'est toute la correction.
-      const next = mutate(cache ?? {});
-      if (!next) return;
-      cache = next;
-      await persist(next);
-    });
+    writing = writing
+      .then(async () => {
+        await ensureLoaded();
+        // `cache` relu ICI, après l'attente, et jamais l'instantané capturé
+        // avant : c'est toute la correction.
+        const next = mutate(cache ?? {});
+        if (!next) return;
+        cache = next;
+        await persist(next);
+      })
+      // **Un maillon rompu ne casse pas la chaîne.** Sans ce `catch`, une seule
+      // écriture en échec laisse `writing` rejetée, et tous les `.then` suivants
+      // sont sautés : plus aucun réglage n'est jamais enregistré jusqu'au
+      // prochain démarrage, sans le moindre signe à l'écran.
+      .catch((e: unknown) => {
+        console.error("ui_prefs : écriture abandonnée", e);
+      });
     return writing;
   });
 }

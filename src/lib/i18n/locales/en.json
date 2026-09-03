@@ -50,8 +50,7 @@
     "trackSkinsCount": "{count} active skins",
     "trackSkinsTooltip": "Track skins — several can be active",
     "driverBadge": {
-      "substituted": "Substituted",
-      "disabled": "Disabled"
+      "substituted": "Substituted"
     },
     "driverStock": "Stock outfit",
     "driverStockTooltip": "The helmet, suit and gloves are the ones this car's livery specifies. Click to change them.",
@@ -975,6 +974,9 @@
     "openFolder": "Open folder",
     "managed": "{count} in Content Manager territory",
     "managedTooltip": "Content Manager syncs these folders from the CSP config repository. It may replace these files with its own versions at any time. This is not the recommended location for a mod.",
+    "back": "← Back to other mods",
+    "detailTooltip": "Open this mod's sheet",
+    "categoriesLabel": "Areas touched",
     "cat": {
       "all": "All",
       "extension": "Extensions",
@@ -994,10 +996,10 @@
     "subtitlePrefix": "Adds mods to the library. An imported (or updated) mod is ",
     "subtitleBold": "activated right away",
     "subtitleSuffix": " — no separate step needed to drive it.",
-    "archiveTitle": "An archive",
-    "archiveHint": "The common case: a .zip, .rar, or .7z file downloaded as-is. The app extracts it, detects the type (car, track, skin, sound…), and files it into the library.",
+    "archiveTitle": "An archive, or a driver",
+    "archiveHint": "The common case: a .zip, .rar or .7z file downloaded as is. The app extracts it, detects the type (car, track, skin, sound…) and files it in the library. A driver model shipped as a bare .kn5 is accepted too.",
     "importing": "Importing…",
-    "chooseArchive": "Choose an archive…",
+    "chooseArchive": "Choose a file…",
     "folderTitle": "An already-extracted folder",
     "folderHint": "For a mod you've already extracted yourself, without going back through the original archive.",
     "copyChoiceLabel": "On import:",
@@ -1032,6 +1034,15 @@
     "cancel": "Stop",
     "cancelling": "Stopping…",
     "summaryBase": "{n} item(s) imported",
+    "summaryNatures": "{list} imported",
+    "natureOther": "{n} {what}",
+    "nature": {
+      "car": "{n} car(s)",
+      "track": "{n} track(s)",
+      "skin": "{n} skin(s)",
+      "sound": "{n} sound(s)",
+      "app": "{n} app(s)"
+    },
     "summaryErrs": ", {errs} archive(s) failed",
     "outcomeUpdate": "UPDATE",
     "outcomeDuplicate": "ALREADY PRESENT",
@@ -1213,6 +1224,7 @@
     "notEnoughDiskSpace": "Not enough free space on the library volume for this import.",
     "nothingToImportInArchive": "No car, track, skin, sound or app found in the archive.",
     "nothingToImportInFolder": "No car, track, skin, sound or app found in the folder.",
+    "notADriverModel": "This .kn5 file is not a driver model. Only a driver model can be imported on its own: for anything else, import the folder or archive around it.",
     "tempDirUnavailable": "Could not create the temporary extraction folder.",
     "notAJunction": "Refused: this path is not a junction.",
     "notASoundMod": "This sub-item is not a sound mod.",
@@ -1287,14 +1299,6 @@
     "subtitle": "The driver's body and outfit — helmet, suit, gloves. The choice is global: it follows you from one car to the next.",
     "search": "Search",
     "searchPlaceholder": "Folder name, family…",
-    "display": "Display",
-    "groupAll": "All",
-    "groupBy": {
-      "colour": "Group by colour",
-      "pilot": "Group by driver",
-      "family": "Group by family",
-      "era": "Group by helmet era"
-    },
     "favorites": "Favourites",
     "recents": "Recent",
     "count": {
@@ -1355,17 +1359,16 @@
       "live": "Fitting",
       "hint": "Hover a thumbnail to try it on · click to keep it",
       "trial": "Trying — {name}",
-      "substituted": "Preview only · not put in the game yet",
       "noSample": "Assetto Corsa ships no image for this one.",
       "no3d": "3D fitting could not start. The gallery is still yours to use.",
       "noBody": "No body to show: the car names none, or it is not installed.",
-      "drag": "drag to turn"
+      "drag": "drag to turn",
+      "updating": "Updating…"
     },
     "notice": {
       "title": "You changed the driver's body. Here is what that changes:",
       "helmet": "Your helmet is removed: a helmet only fits bodies of its own era, and this one is from another.",
       "outfit": "The livery's suit and gloves no longer apply. This body wears its own until you pick others.",
-      "race": "This body only changes the preview for now: Pit Box cannot put it in the game yet.",
       "choose": "Choose an outfit",
       "revert": "Back to the car's body"
     },
@@ -1374,11 +1377,6 @@
       "body": "{body} names its images differently: no helmet from the game can sit on it. The suit and gloves are still yours to change.",
       "toSuit": "Move on to the suit",
       "toBody": "Change body"
-    },
-    "race": {
-      "title": "This driver wears the team's colours.",
-      "body": "On a race car the outfit is part of the livery. Your driver picks its outfit back up as soon as you choose a road car.",
-      "anyway": "Show my driver anyway"
     },
     "noCar": {
       "title": "No car chosen.",
@@ -1411,9 +1409,17 @@
     "recentNeutral": "Recent: no filter",
     "inert": "Kept, but it does nothing on this body: this folder holds no image that this mannequin uses. It comes back on a compatible car.",
     "fallback": {
-      "label": "Default outfit",
+      "label": {
+        "street": "Default outfit · road cars",
+        "race": "Default outfit · race cars"
+      },
       "none": "None",
-      "hint": "It dresses the cars you have not set up. Cars you have given an outfit keep theirs. For now this setting only applies inside Pit Box: it changes no game file."
-    }
+      "hint": "Each dresses the cars of its class you have not set up; cars you have given an outfit keep theirs. Leaving \"None\" on the race side hands those cars back to their livery's outfit."
+    },
+    "groupOther": "Others"
+  },
+  "prefs": {
+    "writeFailedTitle": "Your settings are not being saved",
+    "writeFailedBody": "Pit Box cannot write its preferences to disk. What you set stays active until you close the app, then it is lost — favourites, driver outfits, filters and views included."
   }
 }

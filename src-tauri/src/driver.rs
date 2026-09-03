@@ -666,6 +666,52 @@ pub fn bodies(ac_root: &Path) -> Vec<BodyOption> {
     out
 }
 
+/// Préfixe dont AC affuble chaque nœud d'un mannequin. C'est par lui qu'il
+/// retrouve le rig, et aucun autre type de modèle ne le porte.
+const DRIVER_NODE_PREFIX: &str = "DRIVER:";
+
+/// Ce `.kn5` est-il un mannequin de pilote ?
+///
+/// **La question se pose vraiment** : un mod de pilote se distribue souvent
+/// comme un `.kn5` nu, sans le moindre dossier pour dire où il va — quatre des
+/// huit exemples réels examinés (`senna.kn5`, `tom.kn5`, `jp_police_man.kn5`,
+/// `FemaleAsianDriver.kn5`). Sans réponse, ces fichiers atterrissent n'importe
+/// où plutôt que dans `content/driver/`.
+///
+/// **Deux critères, tous deux nécessaires, mesurés et sans exception** :
+///
+/// | | meshes skinnés | nœuds `DRIVER:` | roues |
+/// | --- | --- | --- | --- |
+/// | six mods de pilote trouvés en ligne | 2 à 10 | 57 à 76 | 0 |
+/// | `driver.kn5` de Kunos | 2 | 72 | 0 |
+/// | **une voiture** (`thefuckingsabre.kn5`) | 0 | 0 | 2 |
+/// | **un collider** | 0 | 0 | 0 |
+///
+/// Le squelette seul ne suffirait pas — rien n'interdit à une voiture d'animer
+/// une pièce — et le préfixe seul non plus, un mod pouvant nommer ainsi un
+/// accessoire. Les deux ensemble n'ont donné aucun faux positif.
+///
+/// **Coût** : le parsing complet du fichier, une quinzaine de millisecondes
+/// pour un mannequin de quinze mégaoctets. À n'appeler que sur un `.kn5` dont
+/// on ne connaît pas déjà la destination — sur les autres, le chemin répond
+/// déjà, et gratuitement.
+pub fn is_driver_model(path: &Path) -> bool {
+    let Ok(bytes) = std::fs::read(path) else { return false };
+    let Ok(model) = kn5::parse(&bytes) else { return false };
+    if !has_skeleton(&model) {
+        return false;
+    }
+    let mut prefixed = false;
+    model.visit_nodes(&mut |node| {
+        if node.name.len() >= DRIVER_NODE_PREFIX.len()
+            && node.name[..DRIVER_NODE_PREFIX.len()].eq_ignore_ascii_case(DRIVER_NODE_PREFIX)
+        {
+            prefixed = true;
+        }
+    });
+    prefixed
+}
+
 /// Un rig que la pose de la voiture et son animation de volant peuvent bouger.
 fn has_skeleton(model: &kn5::Kn5Model) -> bool {
     let mut found = false;
@@ -1082,6 +1128,41 @@ SUIT=\\type1\\black_black
             }
             eprintln!("{line}");
         }
+    }
+
+    /// Ce que le détecteur dit des mods de pilote réels, et des contre-exemples.
+    ///
+    /// Le corpus est un dossier de mods téléchargés tels quels : `.kn5` nus,
+    /// dossiers maison, archives imbriquées. Attendu : **tous** les mannequins
+    /// reconnus, **aucune** voiture ni collider.
+    ///
+    /// ```text
+    /// PITBOX_DRIVER_MODS="C:\...\exemples-drivers" cargo test --lib driver -- --ignored --nocapture what_the_detector
+    /// ```
+    #[test]
+    #[ignore = "needs a folder of real driver mods; measurement, not a check"]
+    fn what_the_detector_says_about_real_mods() {
+        let Ok(root) = std::env::var("PITBOX_DRIVER_MODS") else {
+            eprintln!("PITBOX_DRIVER_MODS unset, skipping");
+            return;
+        };
+        let mut seen = 0;
+        let mut drivers = 0;
+        for entry in walkdir::WalkDir::new(root).into_iter().flatten() {
+            let path = entry.path();
+            if !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("kn5")) {
+                continue;
+            }
+            let verdict = is_driver_model(path);
+            seen += 1;
+            drivers += usize::from(verdict);
+            eprintln!(
+                "{:>8}  {}",
+                if verdict { "PILOTE" } else { "—" },
+                path.file_name().unwrap_or_default().to_string_lossy()
+            );
+        }
+        eprintln!("\n=== {drivers} mannequins sur {seen} fichiers .kn5 ===");
     }
 
     /// Les corps que l'écran proposerait sur l'installation de référence, et

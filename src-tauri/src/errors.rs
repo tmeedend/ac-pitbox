@@ -68,6 +68,9 @@ pub const IMPORT_CANCELLED: &str = "errors.importCancelled";
 pub const NOT_ENOUGH_DISK_SPACE: &str = "errors.notEnoughDiskSpace";
 pub const NOTHING_TO_IMPORT_IN_ARCHIVE: &str = "errors.nothingToImportInArchive";
 pub const NOTHING_TO_IMPORT_IN_FOLDER: &str = "errors.nothingToImportInFolder";
+/// Un `.kn5` déposé seul, qui n'est pas un mannequin de pilote : rien ne dit
+/// où il irait (voir `importer::stage_loose_model`).
+pub const NOT_A_DRIVER_MODEL: &str = "errors.notADriverModel";
 pub const TEMP_DIR_UNAVAILABLE: &str = "errors.tempDirUnavailable";
 // Aperçu 3D des voitures (docs/SPEC-preview-3d-kn5.md §7.1). Aucune de ces
 // erreurs ne doit ressembler à une panne : l'aperçu 3D est un bonus visuel,

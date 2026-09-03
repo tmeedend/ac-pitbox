@@ -18,6 +18,7 @@
   import { nav, requestSection } from "$lib/nav.svelte";
   import { listDriverBodies, listDriverChoices, type BodyOption, type DriverChoices } from "$lib/driver";
   import {
+    carClassOf,
     driverFor,
     resetDriverOutfit,
     setDriverBody,
@@ -47,14 +48,18 @@
   const KEYS = {
     favorites: "pitbox.driver.favorites",
     recents: "pitbox.driver.recents",
-    grouped: "pitbox.driver.grouped",
   } as const;
 
   /** L'identifiant de la voiture réglée. `""` quand il n'y en a pas — l'écran
    * affiche alors son état vide et n'appelle rien de ce qui suit. */
   const carId = $derived(nav.sessionCar?.id ?? "");
+  /** Classe de la voiture réglée : elle décide de **laquelle** des deux
+   * tenues par défaut s'applique (course ou rue). Relue à chaque changement de
+   * voiture, jamais devinée. */
+  let carClass = $state<string | null>(null);
+  const carKind = $derived(carClassOf(carClass));
   /** La tenue de cette voiture, cascade résolue. */
-  const prefs: DriverOutfit = $derived(driverFor(carId || null));
+  const prefs: DriverOutfit = $derived(driverFor(carId || null, carKind));
   /** Le corps courant, **isolé** de l'objet qui le porte.
    *
    * `prefs` est reconstruit à chaque écriture dans `ui_prefs.json`, quelle
@@ -67,7 +72,6 @@
 
   let bodies = $state<BodyOption[]>([]);
   let choices = $state<DriverChoices | null>(null);
-  let carClass = $state<string>("");
   let loading = $state(true);
   /** Piste active. **De session, pas globale** (§13) : on rouvre l'écran sur
    * le casque, qui est ce qu'on vient y changer neuf fois sur dix. */
@@ -76,7 +80,6 @@
    * survol est exploratoire par nature. */
   let trying = $state<string | null>(null);
   let query = $state("");
-  let grouped = $state(true);
   /** Trois états comme les filtres de la bibliothèque : neutre, uniquement,
    * tout sauf. Une case booléenne ne sait dire que la moitié de ce qu'on veut. */
   let favState = $state<TriState>(0);
@@ -86,11 +89,7 @@
   /** Bannière d'invalidation : elle se referme au premier choix effectué ou
    * par son propre bouton de marche arrière (§10.2), pas toute seule. */
   let noticeSeen = $state(false);
-  /** Voiture de course : l'écran reste accessible, jamais grisé sans un mot
-   * (§11.2), et ce bouton ouvre le panneau quand même. */
-  let raceAcknowledged = $state(false);
 
-  const carIsRace = $derived(carClass.toLowerCase() === "race");
   const substituted = $derived(choices?.substituted ?? false);
   /** **Seul le tout premier chargement remplace la galerie.** Les suivants la
    * laissent en place et se contentent de l'estomper : changer de corps
@@ -105,7 +104,6 @@
     void getUiPrefs(Object.values(KEYS)).then((read) => {
       favorites = parseList(read[KEYS.favorites]);
       recents = parseList(read[KEYS.recents]);
-      grouped = read[KEYS.grouped] !== "0";
     });
     void listDriverBodies().then((list) => {
       bodies = list;
@@ -130,17 +128,21 @@
     const body = chosenBody;
     if (!carId) {
       choices = null;
-      carClass = "";
+      carClass = null;
       loading = false;
       return;
     }
     let cancelled = false;
     loading = true;
-    void Promise.all([listDriverChoices(carId, body), getModDetail(carId)])
-      .then(([read, detail]) => {
+    void getModDetail(carId)
+      .then((detail) => {
+        if (!cancelled) carClass = detail?.car_class ?? null;
+      })
+      .catch(() => {});
+    void listDriverChoices(carId, body)
+      .then((read) => {
         if (cancelled) return;
         choices = read;
-        carClass = detail?.car_class ?? "";
       })
       .catch((e) => console.error("driver: listes indisponibles", e))
       .finally(() => {
@@ -243,29 +245,98 @@
   const groups = $derived<Group[]>(buildGroups(filtered));
 
   function buildGroups(cells: Cell[]): Group[] {
-    if (!grouped) return cells.length ? [{ key: "", name: "", folder: null, cells }] : [];
+    // **Les corps sont toujours rangés par pack**, sans commande pour en
+    // sortir : décidé avec l'utilisateur après essai des trois axes. L'époque
+    // et la grille plate étaient des variantes qu'on ne rouvrait jamais, et
+    // une bascule à trois crans coûtait de la place dans une barre déjà dense
+    // pour un choix que personne ne refaisait. Les pistes de tenue gardent le
+    // leur : leur premier niveau de dossier n'est pas toujours parlant.
+    const body = lane === "body";
+    const packs = body ? packKeys(cells) : null;
     const out: Group[] = [];
     for (const cell of cells) {
-      const key = lane === "body" ? eraOf(cell.id) : (cell.id.split("/")[0] ?? cell.id);
+      const key =
+        lane === "body" ? (packs?.get(cell.id) ?? eraOf(cell.id)) : (cell.id.split("/")[0] ?? cell.id);
       let group = out.find((g) => g.key === key);
       if (!group) {
         group =
           lane === "body"
-            ? { key, name: t("driver.eraGroup." + key), folder: null, cells: [] }
+            ? { key, name: bodyGroupName(key), folder: null, cells: [] }
             : { key, name: key, folder: key, cells: [] };
         out.push(group);
       }
       group.cells.push(cell);
     }
-    // Un seul groupe ne regroupe rien : `HELMET_1969` porte ses vingt et un
-    // casques à lui seul, et une bannière de groupe unique n'est qu'un filet
-    // de plus à lire. Mesuré sur l'installation de référence — 1969 et 1985
-    // sont dans ce cas, 1975 et les modernes non.
+    // Un groupe trop petit ne regroupe rien : il coûte une bannière pour une
+    // case ou deux. Ses corps rejoignent « Autres », qui n'apparaît que s'il
+    // reste quelque chose dedans.
+    fold_small(out);
+    // Un seul groupe ne regroupe rien non plus : `HELMET_1969` porte ses vingt
+    // et un casques à lui seul, et une bannière de groupe unique n'est qu'un
+    // filet de plus à lire. Mesuré sur l'installation de référence — 1969 et
+    // 1985 sont dans ce cas, 1975 et les modernes non.
     return out.length > 1 ? out : cells.length ? [{ key: "", name: "", folder: null, cells }] : [];
   }
 
+  /** Nombre de cases sous lequel un groupe ne vaut pas sa bannière. */
+  const MIN_GROUP = 3;
+  /** Clé du groupe fourre-tout, côté corps. */
+  const OTHER_GROUP = "__other";
+
+  function fold_small(groups: Group[]) {
+    const small = groups.filter((g) => g.cells.length < MIN_GROUP && g.key !== OTHER_GROUP);
+    if (!small.length) return;
+    const rest = small.flatMap((g) => g.cells);
+    for (const g of small) groups.splice(groups.indexOf(g), 1);
+    const existing = groups.find((g) => g.key === OTHER_GROUP);
+    if (existing) existing.cells.push(...rest);
+    else groups.push({ key: OTHER_GROUP, name: t("driver.groupOther"), folder: null, cells: rest });
+  }
+
+  function bodyGroupName(key: string): string {
+    if (key === OTHER_GROUP) return t("driver.groupOther");
+    // Un nom de pack ne se traduit pas — c'est celui que l'auteur a donné à
+    // ses fichiers, et c'est sous celui-là qu'on le reconnaît.
+    return key.startsWith("era:") ? t("driver.eraGroup." + key.slice(4)) : key;
+  }
+
   function eraOf(bodyId: string): string {
-    return bodies.find((b) => b.id === bodyId)?.era ?? "custom";
+    return "era:" + (bodies.find((b) => b.id === bodyId)?.era ?? "custom");
+  }
+
+  /**
+   * Le pack d'un corps : ce que son nom de fichier porte avant le premier `_`.
+   *
+   * **Le seul regroupement que les données portent réellement.** Un mannequin
+   * n'a ni `ui_*.json`, ni marque, ni catégorie : son nom de fichier est toute
+   * son identité, et les packs s'y annoncent — `rss_*` (13 corps sur
+   * l'installation de référence), `rh_*` (5), `gt-m_*` (5), `mp-h_*` (3).
+   *
+   * **`driver` est écarté**, parce qu'il ne dit rien : tous les mannequins sont
+   * des pilotes, et les quinze fichiers qui commencent ainsi sont la famille
+   * livrée avec le jeu. Ils retombent sur leur **époque**, qui les sépare
+   * utilement (1960, 1970, 1980, moderne) là où « driver » les entasserait
+   * sous une étiquette vide. Chaque groupe de la liste porte ainsi un nom qui
+   * veut dire quelque chose, qu'il vienne d'un pack ou d'une époque.
+   */
+  const GENERIC_PREFIXES = new Set(["driver", "drivers", "pilote"]);
+
+  function packKeys(cells: Cell[]): Map<string, string> {
+    const prefixOf = (id: string) => (id.split("_")[0] ?? id).toLowerCase();
+    const counts = new Map<string, number>();
+    for (const cell of cells) {
+      const prefix = prefixOf(cell.id);
+      if (GENERIC_PREFIXES.has(prefix)) continue;
+      counts.set(prefix, (counts.get(prefix) ?? 0) + 1);
+    }
+    const keys = new Map<string, string>();
+    for (const cell of cells) {
+      const prefix = prefixOf(cell.id);
+      // Sous le seuil, ou générique : l'époque reprend la main, et le repli
+      // vers « Autres » se fait ensuite comme pour tout groupe trop petit.
+      keys.set(cell.id, (counts.get(prefix) ?? 0) >= MIN_GROUP ? prefix : eraOf(cell.id));
+    }
+    return keys;
   }
 
   /** Clé de favori/récent : la piste et l'option, parce que `plain/red` existe
@@ -339,11 +410,6 @@
     setUiPref(KEYS.favorites, JSON.stringify(favorites));
   }
 
-  function setGrouped(value: boolean) {
-    grouped = value;
-    setUiPref(KEYS.grouped, value ? "1" : "0");
-  }
-
   /** Sortie unique (§5.6) : en mode substitué, la livrée n'est pas une
    * destination atteignable sans d'abord rétablir le corps. */
   function exit() {
@@ -357,26 +423,6 @@
   }
 
   // --- Barre d'outils ------------------------------------------------------
-
-  /** Ce que le premier niveau d'un identifiant désigne, donc ce que la
-   * bascule de regroupement peut annoncer (§D7, §6.3). Table indexée sur le
-   * préfixe, **repli silencieux** sur « famille » pour un pack de mod dont le
-   * premier niveau ne veut rien dire de connu. */
-  const AXES: [string, string][] = [
-    ["helmet_base", "colour"],
-    ["helmet_1975", "colour"],
-    ["helmet_1985", "colour"],
-    ["helmet_1969", "pilot"],
-  ];
-
-  const axis = $derived.by(() => {
-    // Côté corps, l'axe n'est pas une famille de dossiers mais l'époque des
-    // casques que le corps accepte — ce que le libellé doit dire, sans quoi
-    // « grouper par époque » ne veut rien dire appliqué à un mannequin.
-    if (lane === "body") return "era";
-    const first = options[0]?.id.split("/")[0]?.toLowerCase() ?? "";
-    return AXES.find(([prefix]) => first.startsWith(prefix))?.[1] ?? "family";
-  });
 
   /** Compteur : le nombre, et la cause du filtrage — jamais le filtre seul
    * (§8.3). Il porte implicitement l'avertissement que changer de corps
@@ -412,13 +458,55 @@
   /** Ce qui tombe quand on substitue le corps (§10.2) — et rien que ça : une
    * puce dont l'objet n'a pas réellement été perdu ne s'affiche pas. */
   const noticeItems = $derived(
-    [
-      choices?.helmets.length === 0 ? t("driver.notice.helmet") : "",
-      t("driver.notice.outfit"),
-      t("driver.notice.race"),
-    ].filter(Boolean),
+    [choices?.helmets.length === 0 ? t("driver.notice.helmet") : "", t("driver.notice.outfit")].filter(Boolean),
   );
   const showNotice = $derived(substituted && !noticeSeen);
+
+  /**
+   * Les flèches parcourent la grille (§12.2).
+   *
+   * Rien ne bloquait : `Tab` fonctionnait déjà (les cases sont des `<button>`,
+   * et `onfocus` vaut survol), mais il faut vingt frappes pour traverser une
+   * rangée, ce qui n'est pas parcourir une galerie. La manette y arrivait
+   * parce qu'elle passe par son propre parcours de focus (`gamepadNav`).
+   *
+   * **Par la géométrie, pas par un index.** Les cases sont réparties en
+   * plusieurs grilles (une par groupe), de largeurs différentes selon la
+   * place : un index plat sauterait d'un groupe à l'autre en biais dès que
+   * les rangées ne s'alignent pas. On cherche donc la case la plus proche
+   * dans la direction demandée, ce qui traverse les groupes exactement comme
+   * l'œil le fait.
+   */
+  function arrowMove(e: KeyboardEvent) {
+    const DIRECTIONS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
+    if (!DIRECTIONS.includes(e.key) || e.ctrlKey || e.altKey || e.metaKey) return;
+    const current = document.activeElement;
+    if (!(current instanceof HTMLElement) || !current.classList.contains("cell")) return;
+    const cells = [...(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>("button.cell")];
+    const from = current.getBoundingClientRect();
+    const horizontal = e.key === "ArrowLeft" || e.key === "ArrowRight";
+    const forward = e.key === "ArrowRight" || e.key === "ArrowDown";
+    let best: { el: HTMLElement; main: number; cross: number } | null = null;
+    for (const el of cells) {
+      if (el === current) continue;
+      const r = el.getBoundingClientRect();
+      // Distance dans l'axe du déplacement, et écart dans l'autre : la case
+      // retenue est la plus proche devant, puis la mieux alignée.
+      const main = horizontal ? r.left - from.left : r.top - from.top;
+      const cross = horizontal ? Math.abs(r.top - from.top) : Math.abs(r.left - from.left);
+      if (forward ? main <= 1 : main >= -1) continue;
+      const distance = Math.abs(main);
+      if (!best || cross < best.cross - 1 || (Math.abs(cross - best.cross) <= 1 && distance < best.main)) {
+        best = { el, main: distance, cross };
+      }
+    }
+    if (!best) return;
+    // Le défilement suit le focus, sans saut : la case visée est souvent à
+    // demi sortie du champ.
+    e.preventDefault();
+    best.el.focus();
+    best.el.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
 </script>
 
 <div class="screen">
@@ -433,20 +521,14 @@
       <p class="hint">{t("driver.noCar.body")}</p>
       <button class="btn" type="button" onclick={() => requestSection("cars")}>{t("driver.noCar.pick")}</button>
     </div>
-  {:else if carIsRace && !raceAcknowledged}
-    <div class="empty">
-      <p>{t("driver.race.title")}</p>
-      <p class="hint">{t("driver.race.body")}</p>
-      <button class="btn" type="button" onclick={() => (raceAcknowledged = true)}>{t("driver.race.anyway")}</button>
-    </div>
   {:else}
     <div class="toolbar">
       <input class="input search" placeholder={t("driver.searchPlaceholder")} bind:value={query} />
-      <span class="seg-lbl lbl-key mono">{t("driver.display")}</span>
-      <div class="seg">
-        <button class:on={grouped} type="button" onclick={() => setGrouped(true)}>{t("driver.groupBy." + axis)}</button>
-        <button class:on={!grouped} type="button" onclick={() => setGrouped(false)}>{t("driver.groupAll")}</button>
-      </div>
+      <!-- Aucune commande de regroupement, sur aucune piste : tout est
+           toujours groupé (voir `buildGroups`). Décidé avec l'utilisateur
+           après essai — la grille plate n'est pas praticable passé quelques
+           dizaines de cases, et une bascule qu'on ne rouvre jamais prend la
+           place de la recherche et des filtres. -->
       <TriCheck
         label={t("driver.favorites")}
         bind:value={favState}
@@ -481,7 +563,6 @@
           applied={appliedLabel}
           sample={appliedCell?.thumb ?? null}
           trying={trying != null}
-          {substituted}
         />
 
         <div class="blk-b lanes">
@@ -511,11 +592,15 @@
             {substituted ? t("driver.reset.body") : t("driver.reset.livery")}
           </button>
 
-          <DriverOutfits {carId} />
+          <DriverOutfits {carId} kind={carKind} />
         </div>
       </section>
 
-      <section class="gallery" class:busy={loading && !firstLoad}>
+      <!-- Le conteneur ne fait que relayer les flèches vers les cases, qui
+           sont, elles, de vrais boutons focusables : il n'a pas de rôle ARIA à
+           lui, et lui en inventer un mentirait sur ce qu'il est. -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <section class="gallery" class:busy={loading && !firstLoad} onkeydown={arrowMove}>
         {#if showNotice}
           <div class="warnbox notice">
             <div>
@@ -649,29 +734,6 @@
   .search {
     width: 200px;
     flex: none;
-  }
-  .seg {
-    display: flex;
-    border: 1px solid var(--line);
-  }
-  .seg button {
-    background: var(--panel2);
-    color: var(--muted);
-    padding: 6px 14px;
-    font-size: 11px;
-    border-right: 1px solid var(--line);
-  }
-  .seg button:last-child {
-    border-right: none;
-  }
-  .seg button.on {
-    background: var(--rosso);
-    color: #fff;
-  }
-  /* Couleur/taille/interlettrage viennent de `.lbl-key` : ne restent ici que
-     les majuscules, que la classe globale ne couvre pas. */
-  .seg-lbl {
-    text-transform: uppercase;
   }
   .spacer {
     flex: 1;

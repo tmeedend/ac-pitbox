@@ -78,9 +78,17 @@ export function savedOutfits(): SavedOutfit[] {
 export function saveOutfit(outfit: SavedOutfit): void {
   const name = outfit.name.trim();
   if (!name) return;
-  const kept = values.list.filter((o) => o.name.toLowerCase() !== name.toLowerCase());
-  values.list = [{ ...outfit, name }, ...kept].slice(0, MAX);
-  persist();
+  // **Attendre la lecture avant d'écrire.** `ensureLoaded` finit par
+  // `values.list = parse(raw)`, une affectation en bloc : une tenue
+  // enregistrée avant que le disque n'ait répondu était effacée par cette
+  // réponse, quelques centaines de millisecondes plus tard. Bug réel,
+  // remonté deux fois — la tenue apparaissait dans la liste puis
+  // disparaissait, et ne revenait jamais au redémarrage.
+  void ensureLoaded().then(() => {
+    const kept = values.list.filter((o) => o.name.toLowerCase() !== name.toLowerCase());
+    values.list = [{ ...outfit, name }, ...kept].slice(0, MAX);
+    persist();
+  });
 }
 
 /** Les quatre pièces d'une tenue enregistrée, par son nom. Sert à résoudre la
@@ -115,6 +123,10 @@ export function wornOutfit(current: {
 }
 
 export function deleteOutfit(name: string): void {
-  values.list = values.list.filter((o) => o.name !== name);
-  persist();
+  // Même raison que `saveOutfit` : supprimer avant la réponse du disque
+  // ressuscitait la tenue quand elle arrivait.
+  void ensureLoaded().then(() => {
+    values.list = values.list.filter((o) => o.name !== name);
+    persist();
+  });
 }

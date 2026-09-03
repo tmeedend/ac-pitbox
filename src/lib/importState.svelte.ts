@@ -237,10 +237,21 @@ async function runImport(source: { paths: string[]; folder: boolean; copy: boole
 export async function pickAndImportArchive(): Promise<void> {
   const sel = await open({
     multiple: true,
-    filters: [{ name: "Archives", extensions: ["zip", "rar", "7z"] }],
+    filters: [{ name: "Archives", extensions: ["zip", "rar", "7z", "kn5"] }],
   });
   if (!sel) return;
-  await runImport({ paths: Array.isArray(sel) ? sel : [sel], folder: false, copy: false });
+  // Le tri revient au backend, comme pour le glisser-déposer : un `.kn5` de
+  // pilote se choisit ici (c'est ainsi qu'ils se téléchargent, sans archive
+  // autour) mais s'importe par le chemin des dossiers, qui sait le mettre en
+  // boîte. Deux appels d'import concurrents étant exclus, les archives
+  // passent d'abord — la même règle qu'au dépôt.
+  const picked = Array.isArray(sel) ? sel : [sel];
+  const { archives, folders } = await splitDroppedPaths(picked);
+  if (archives.length) {
+    await runImport({ paths: archives, folder: false, copy: false });
+  } else if (folders.length) {
+    await runImport({ paths: folders, folder: true, copy: importState.copyMode });
+  }
 }
 
 export async function pickAndImportFolder(): Promise<void> {
@@ -434,10 +445,50 @@ export function importSummary(report: ArchiveResult[]): string {
   );
   const errs = report.filter((a) => a.error).length;
   return (
-    t("importOverlay.summaryBase", { n }) +
+    (natureBreakdown(report) ?? t("importOverlay.summaryBase", { n })) +
     (skipped ? t("importOverlay.summarySkipped", { skipped }) : "") +
     (errs ? t("importOverlay.summaryErrs", { errs }) : "")
   );
+}
+
+/**
+ * Ce qui est entré, **par nature** : « 1 voiture, 3 circuits, 2 pilotes ».
+ *
+ * Un décompte unique disait « 1 élément importé » sur un lot d'une voiture et
+ * de dix pilotes : le chiffre était juste au sens strict — un pilote est un
+ * « autre mod », pas un mod — mais il donnait à croire que les dix autres
+ * avaient été perdus. Les fondre dans un même total effacerait au contraire la
+ * distinction qui dit **où** les retrouver ; les nommer règle les deux.
+ *
+ * Un mod « autre » est nommé par la zone du jeu qu'il touche, seul nom de
+ * nature qu'il ait ; celui qui en touche plusieurs compte pour la première,
+ * faute de pouvoir se compter deux fois dans un total.
+ *
+ * `null` quand rien n'a été écrit : le titre retombe alors sur le décompte
+ * générique, qui sait dire zéro.
+ */
+function natureBreakdown(report: ArchiveResult[]): string | null {
+  const counts = new Map<string, number>();
+  const add = (key: string, n = 1) => counts.set(key, (counts.get(key) ?? 0) + n);
+  for (const archive of report) {
+    for (const mod of archive.mods) {
+      if (WROTE_NOTHING.has(mod.outcome)) continue;
+      add(mod.kind === "Track" ? "track" : "car");
+    }
+    for (const sub of archive.subs ?? []) {
+      if (sub.awaiting_decision) continue;
+      add(sub.sub_type === "SOUND" ? "sound" : "skin");
+    }
+    for (const _app of archive.apps ?? []) add("app");
+    for (const other of archive.others ?? []) add(`other:${other.categories?.[0] ?? "other"}`);
+  }
+  if (counts.size === 0) return null;
+  const parts = [...counts].map(([key, n]) =>
+    key.startsWith("other:")
+      ? t("importOverlay.natureOther", { n, what: t(`others.cat.${key.slice("other:".length)}`).toLowerCase() })
+      : t(`importOverlay.nature.${key}`, { n }),
+  );
+  return t("importOverlay.summaryNatures", { list: parts.join(", ") });
 }
 
 /** À appeler une seule fois, depuis la racine de l'app (§4.2 : glisser-déposer partout). */

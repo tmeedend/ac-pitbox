@@ -17,12 +17,13 @@
   import ImportToasts from "./ImportToasts.svelte";
   import ToastStack from "./ToastStack.svelte";
   import ControllerToast from "./ControllerToast.svelte";
+  import PrefsToast from "./PrefsToast.svelte";
   import BulkToasts from "./BulkToasts.svelte";
   import TitleBar from "./TitleBar.svelte";
   import ControllerSetup from "./ControllerSetup.svelte";
   import ImageSelectDropdown from "./ImageSelectDropdown.svelte";
 
-  import { driverFor, isEmpty, wearsFallback } from "$lib/driverOverride.svelte";
+  import { carClassOf, driverFor, isEmpty, wearsFallback } from "$lib/driverOverride.svelte";
   import { wornOutfit } from "$lib/driverOutfits.svelte";
   import TrackSkinChecklistDropdown from "./TrackSkinChecklistDropdown.svelte";
   import { nav, requestSection, pickSession } from "$lib/nav.svelte";
@@ -225,14 +226,18 @@
   // l'arrivée du corps y portait le nombre de listes à quatre (§D1). La ligne
   // porte le libellé, et un badge qui dit en un mot où en est le pilote.
   //
-  // Proposé pour les voitures de rue seulement : sur une voiture de course le
-  // pilote porte les couleurs de son écurie, donc celles du skin. La ligne
-  // reste **visible et badgée**, jamais masquée — une option qui disparaît
-  // sans un mot laisse chercher, et l'écran lui-même explique pourquoi.
-  const carIsRace = $derived((carDetail?.car_class ?? "").toLowerCase() === "race");
+  // Ouvert aussi sur une voiture de course : le corps s'y pose comme sur
+  // n'importe quelle voiture (§DRIVER3D_MODEL, docs/csp-driver-research.md),
+  // et un verrou qui n'empêchait plus rien — un simple clic le franchissait —
+  // ne faisait que décrire un état qui n'était même plus vrai. Retiré avec
+  // l'utilisateur : le §11.2 de la spec (voiture de course grisée) est donc
+  // un écart assumé.
   /** La tenue de **cette** voiture, cascade résolue : la sienne si elle en a
    * une, la tenue par défaut si l'option est active, la livrée sinon. */
-  const driverPrefs = $derived(driverFor(nav.sessionCar?.id ?? null));
+  /** La classe décide de **laquelle** des deux tenues par défaut s'applique
+   * (course ou rue) ; `carDetail` la porte déjà. */
+  const sessionCarClass = $derived(carClassOf(carDetail?.car_class));
+  const driverPrefs = $derived(driverFor(nav.sessionCar?.id ?? null, sessionCarClass));
 
   /** Rien de choisi : la voiture et sa livrée décident de tout. */
   const driverUntouched = $derived(isEmpty(driverPrefs));
@@ -253,17 +258,15 @@
     // Une tenue héritée du défaut sans nom ne devrait pas exister — le défaut
     // *est* une tenue enregistrée — mais le dire plutôt que de mentir coûte
     // une ligne.
-    return wearsFallback(nav.sessionCar?.id ?? null) ? t("session.driverFallback") : t("session.driverCustom");
+    return wearsFallback(nav.sessionCar?.id ?? null, sessionCarClass)
+      ? t("session.driverFallback")
+      : t("session.driverCustom");
   });
 
   /** Clé du badge, ou `null` (§3.2). « Modifié » a disparu de la liste : le
    * libellé le dit déjà, et un badge qui répète la ligne qu'il accompagne
    * n'est que du bruit. */
-  const driverBadge = $derived.by(() => {
-    if (carIsRace) return "disabled";
-    if (driverPrefs.body) return "substituted";
-    return null;
-  });
+  const driverBadge = $derived(driverPrefs.body ? "substituted" : null);
 
   const trackInactive = $derived(nav.sessionTrack != null && trackDetail != null && !trackDetail.active);
 
@@ -435,9 +438,7 @@
                 </svg>
                 <span class="dl-name" class:stock={driverUntouched}>{driverLabel}</span>
                 {#if driverBadge}
-                  <span class="dl-badge" class:off={driverBadge === "disabled"}>
-                    {t("session.driverBadge." + driverBadge)}
-                  </span>
+                  <span class="dl-badge">{t("session.driverBadge." + driverBadge)}</span>
                 {/if}
               </button>
             </div>
@@ -555,6 +556,7 @@
 <!-- Tout ce que l'app a à dire sans interrompre, dans une seule colonne en bas
      à droite : progression et rapports d'import, nouveau périphérique. -->
 <ToastStack>
+  <PrefsToast />
   <ControllerToast />
   <BulkToasts />
   <ImportToasts />
@@ -757,12 +759,6 @@
     border: 1px solid var(--rosso-border);
     border-radius: 2px;
     padding: 1px 5px;
-  }
-  /* Voiture de course : le badge dit que le choix est suspendu, pas perdu —
-     donc gris, pas rouge. */
-  .dl-badge.off {
-    color: var(--faint);
-    border-color: var(--line);
   }
   .slot-img {
     /* **Un rapport, pas une hauteur fixe.** C'était `height: 96px`, et

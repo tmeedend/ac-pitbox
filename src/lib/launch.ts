@@ -31,9 +31,22 @@ export interface Opponent {
   car_skin: string | null;
 }
 
+/** Les quatre pièces telles que le backend les nomme — `model` est le corps,
+ * comme `driver3d.ini` l'appelle. */
+export interface DriverChoice {
+  model: string | null;
+  suit: string | null;
+  gloves: string | null;
+  helmet: string | null;
+}
+
 export interface RaceSetup {
   car_id: string;
   car_skin: string | null;
+  /** Le pilote choisi pour cette voiture, posé dans son dossier juste avant le
+   * lancement (`driverapply` côté Rust). `null` = cette voiture n'a rien de
+   * particulier, et ce qui avait été posé pour elle est retiré. */
+  driver: DriverChoice | null;
   track_id: string;
   track_layout: string | null;
   session_type: SessionType;

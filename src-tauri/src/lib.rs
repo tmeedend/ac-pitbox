@@ -12,6 +12,7 @@ mod config;
 mod deploy;
 mod detect;
 mod driver;
+mod driverapply;
 mod enginesound;
 mod errors;
 mod export;
@@ -357,6 +358,10 @@ pub fn run() {
             commands::others::deactivate_other,
             commands::others::delete_other_mod,
             commands::others::open_other_mod_folder,
+            commands::others::list_other_resources,
+            commands::others::open_other_resource,
+            commands::others::get_other_resource_path,
+            commands::others::read_other_resource,
             commands::addons::delete_app,
             commands::rules::get_rules,
             commands::rules::save_rules,

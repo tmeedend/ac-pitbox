@@ -273,6 +273,7 @@ mod tests {
         RaceSetup {
             car_id: "ks_praga_r1".into(),
             car_skin: None,
+            driver: None,
             track_id: "spa".into(),
             track_layout: None,
             session_type,

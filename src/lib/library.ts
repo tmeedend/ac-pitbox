@@ -264,6 +264,9 @@ export interface AppImported {
 export interface OtherImported {
   id: string;
   resources_extracted: number;
+  /** Zones du jeu touchées (§7.3) — ce qui permet au rapport de dire
+   * « 2 pilotes » plutôt que « 2 éléments ». */
+  categories?: string[];
   /** Composant optionnel (§4.6bis) : livré dans une archive à part **et**
    * modifiant le jeu de base. Importé, mais laissé inactif — à l'utilisateur
    * de trancher. */

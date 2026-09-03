@@ -140,6 +140,16 @@ Jamais d'élévation admin — l'app doit fonctionner en utilisateur standard.
    expression de template appelée pour chaque carte d'une liste) passe par
    `peekUiPref` (cache réactif, `$state`) plutôt que l'API asynchrone —
    `preferred.ts` en est l'exemple.
+   **Corollaire découvert à l'usage : une écriture ne se rate jamais en
+   silence.** Le fichier ne suffit pas si l'appel qui l'écrit a un repli
+   muet. `invokeSafe` (délai de 5 s puis valeur par défaut) protège une
+   *lecture* — un réglage manquant vaut mieux qu'un écran figé — mais appliqué
+   à une *écriture* il rend « enregistré » une commande qui n'a rien écrit.
+   Constaté : `ui_prefs.json` inchangé pendant six heures d'utilisation, corps
+   et tenues de pilote adoptés puis disparus au redémarrage, sans un mot nulle
+   part. Donc : écriture sans délai, échec réessayé puis journalisé, et la file
+   d'écritures munie d'un `catch` — une promesse rejetée y gèle sinon toutes
+   les suivantes jusqu'au prochain démarrage.
    `localStorage` reste acceptable pour un état **purement transitoire**,
    jamais relu après redémarrage (aucun cas de ce genre dans le projet
    aujourd'hui) — dans le doute, c'est un fichier Rust.
@@ -236,6 +246,18 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
   l'ouverture n'est pas une dépendance : l'entourer d'`untrack`. Le symétrique
   côté écriture est déjà documenté dans `uiPrefs.svelte.ts` (`setUiPref` est
   `untrack`é pour la même raison, après une boucle infinie de 285 000 appels).
+- **Une mesure de pixels ne s'écrit jamais telle quelle dans un `style`.** Le
+  zoom d'interface est un `zoom` CSS posé sur `<html>` : `getBoundingClientRect`,
+  `clientX/clientY` et `innerWidth/Height` rendent des pixels **réels de la
+  fenêtre**, déjà multipliés, alors qu'un `left`/`top`/`width` écrit sur un
+  descendant est en pixels CSS que le zoom multipliera à son tour. Reporter
+  l'un dans l'autre applique donc le facteur deux fois, et l'écart grandit avec
+  la distance au coin haut-gauche — invisible à 100 %, donc invisible en
+  développement. Trois fois le même bug : le menu contextuel décalé, puis les
+  listes déroulantes (skin de la colonne de session, tenue par défaut) ouvertes
+  très en dessous de leur bouton jusqu'à sortir de l'écran, puis les colonnes
+  de bibliothèque élargies de 10 % à la première prise de poignée. Diviser par
+  `zoomFactor()` (`zoom.svelte.ts`) avant d'écrire, toujours.
 - **`t("clé")` renvoie la clé elle-même si elle manque** en anglais aussi.
   Une clé oubliée n'explose donc pas : elle s'affiche telle quelle à l'écran
   (`detail.showroom`). C'est ce qui rend `errorText()` sûr, et c'est aussi
@@ -386,6 +408,15 @@ laisser pourrir ici.
         SessionTypeBlock. Deux orientations (horizontale/verticale) et deux
         traitements de l'état actif (fond rouge plein vs fond surélevé) : un
         vrai composant avec une prop d'orientation, pas juste une classe.
+      - **Enregistrer / charger / supprimer une liste nommée : 2 copies**, et
+        c'est la seule entrée de cet inventaire qui ne soit pas du style mais
+        du **comportement**. Les sessions enregistrées (`SavedSessionsDialog`
+        pour le nom, la liste de chargement restée inline dans `Launch.svelte`)
+        et les tenues de pilote (`DriverOutfits.svelte`) font le même geste
+        avec deux implémentations. Demandé par l'utilisateur, qui l'a reconnu
+        d'un écran à l'autre. **Le mutualiser demande d'abord d'extraire la
+        moitié « liste » de `Launch.svelte`** — c'est là qu'est le travail, pas
+        dans le dialogue de nommage.
       Un lot de ce genre est du **reformatage pur sur une quinzaine de
       fichiers** : le faire dans son propre commit, jamais mélangé à un
       changement fonctionnel (sinon `git blame` devient inexploitable).
@@ -451,25 +482,31 @@ laisser pourrir ici.
          l'installation, c'est la *variante* qui porte le sens en 1969
          (amon, clark…) et en 1985 (les couleurs). D'où le repli implémenté :
          un regroupement qui ne produirait qu'un groupe passe en grille plate.
-      2. **Clavier** (§12.2) : le focus vaut survol, ce qui marche déjà par
-         `onfocus`. Les flèches dans la grille, non.
-      3. **Poser le pilote en jeu** — discuté, recherché, non commencé. **Les
-         deux mécanismes sont identifiés et le premier est vérifié à l'écran**,
-         tout est dans `docs/csp-driver-research.md` : le **corps** par une
-         section `[DRIVER3D_MODEL] NAME=…` dans `<voiture>/extension/
-         ext_config.ini` (CSP surcharge une section de `data.acd` en préfixant
-         le nom du fichier ; `data.acd` n'est pas touché, donc le checksum
-         tient), la **tenue** par le `skin.ini` de la livrée, sous le nom du
-         mannequin — il n'existe aucune route CSP pour celle-là, cherchée et
-         non trouvée. Conséquence à ne pas rater : remplacer le corps rend la
-         section de la livrée inopérante, la tenue doit être réécrite sous le
-         **nouveau** nom de mannequin. Reste de l'ingénierie : les deux
-         fichiers sont dans le mod (hardlink/junction vers la bibliothèque), il
-         faut fusionner et non écraser (735 lignes d'`ext_config.ini` sur une
-         NSX de l'installation), et tenir un registre pour pouvoir défaire.
-         **Ne pas écrire `POSITION`** dans `[DRIVER3D_MODEL]`, contrairement à
-         ce que suggèrent les réponses trouvées en ligne : c'est le même
-         `[MODEL] POSITION` que `seating_offset` a mesuré comme inapplicable.
+      2. **Casque posé de travers sur un mannequin à pièces statiques.**
+         `rh_schuberth_helmet_driver_19` traverse sa propre figure. Il est le
+         cas que rien d'autre ne représente : cinq maillages **statiques**
+         (casque, visière, HANS, prise d'air, visage) accrochés au nœud
+         `DRIVER:RIG_Head`, là où les autres mannequins sont entièrement
+         skinnés. Or `pose::apply_locals` ne remplace la transformation **que
+         des nœuds `Dummy`** — un maillage nommé par la hiérarchie est ignoré.
+         À vérifier avant de corriger : c'est le casque qui bouge, ou la tête ?
+      3. **Poser le pilote en jeu — fait.** Le **corps** passe par une section
+         `[DRIVER3D_MODEL] NAME=…` dans `<voiture>/extension/ext_config.ini`
+         (CSP surcharge une section de `data.acd` en préfixant le nom du
+         fichier ; `data.acd` n'est pas touché, donc le checksum tient), la
+         **tenue** par le `skin.ini` de la livrée, sous le nom du mannequin —
+         il n'existe aucune route CSP pour celle-là, cherchée et non trouvée.
+         Tout est dans `docs/csp-driver-research.md`, et le code dans
+         `driverapply.rs`, appelé par `launch()` : une seule entrée `sync()`
+         qui pose quand la voiture a un choix et **retire** quand elle n'en a
+         plus. Conséquence à ne pas rater : remplacer le corps rend la section
+         de la livrée inopérante, la tenue doit être réécrite sous le
+         **nouveau** nom de mannequin. Le déploiement étant en hardlink,
+         l'écriture efface le fichier avant de le réécrire — sinon c'est la
+         copie de bibliothèque qu'on modifie. **Ne pas écrire `POSITION`**
+         dans `[DRIVER3D_MODEL]`, contrairement à ce que suggèrent les réponses
+         trouvées en ligne : c'est le même `[MODEL] POSITION` que
+         `seating_offset` a mesuré comme inapplicable.
       **Écarts assumés vis-à-vis de la spec, décidés avec l'utilisateur** :
       le favori se pose sur le cœur de la bibliothèque (`♥`/`♡`) placé sous
       l'image et non sur elle — on garde l'argument du §7.3 (l'échantillon est
@@ -483,13 +520,12 @@ laisser pourrir ici.
       et une pièce gardée qui ne s'applique pas au corps courant est **barrée**
       dans sa piste au lieu d'être affichée comme active — elle est conservée
       (§13) mais ne change rien, ce que rien ne disait.
+      Le **verrou « voiture de course »** du §11.2 est retiré (décidé avec
+      l'utilisateur) : son texte était devenu faux, le corps se pose là comme
+      ailleurs, et un écran intermédiaire qu'un clic franchit ne protège rien.
       **Ce qui n'est pas tranché** : ce qu'AC met dans son checksum en ligne.
-      Le corps est hors de portée sans risque (les 312 voitures ont leur
-      `driver3d.ini` dans `data.acd`, conteneur de physique) — d'où le bandeau
-      « aperçu seulement ». La tenue ne demande qu'un `skin.ini`, fichier de
-      skin — probablement sûr, non prouvé. Et Pit Box déployant en hardlink,
-      écrire ce `skin.ini` toucherait la copie de bibliothèque : il faudra
-      casser le lien et passer par `gamebackup.rs`.
+      La tenue ne demande qu'un `skin.ini`, fichier de skin — probablement sûr,
+      non prouvé ; le corps ne touche qu'`ext_config.ini`, hors `data.acd`.
       Deux mesures à garder en tête : les trois voitures dont la `.knh` est
       vide retombent sur `DRIVEREYES`, et `[MODEL] POSITION` ne doit **pas**
       être appliqué (voir `seating_offset`).
