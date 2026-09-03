@@ -1355,7 +1355,7 @@
       "live": "Essayage",
       "hint": "Survolez une vignette pour essayer · cliquez pour garder",
       "trial": "Essai — {name}",
-      "substituted": "Aperçu seulement · pas appliqué en course",
+      "substituted": "Aperçu seulement · pas encore posé en jeu",
       "noSample": "Assetto Corsa ne fournit pas d'image pour celui-ci.",
       "no3d": "L'essayage en 3D n'a pas pu démarrer. La galerie reste utilisable.",
       "noBody": "Aucun corps à afficher : la voiture n'en nomme aucun, ou il n'est pas installé.",
@@ -1365,7 +1365,7 @@
       "title": "Vous avez changé le corps du pilote. Ce que ça change :",
       "helmet": "Votre casque est retiré : un casque ne va qu'aux corps de son époque, et celui-ci n'est pas de la même.",
       "outfit": "La combinaison et les gants de la livrée ne s'appliquent plus. Ce corps porte les siens tant que vous n'en choisissez pas d'autres.",
-      "race": "Ce corps ne sert qu'ici : en course, la voiture garde le pilote qu'elle a prévu.",
+      "race": "Ce corps ne change encore que l'aperçu : Pit Box ne sait pas encore le poser en jeu.",
       "choose": "Choisir une tenue",
       "revert": "Revenir au corps de la voiture"
     },

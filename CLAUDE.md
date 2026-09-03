@@ -453,31 +453,23 @@ laisser pourrir ici.
          un regroupement qui ne produirait qu'un groupe passe en grille plate.
       2. **Clavier** (§12.2) : le focus vaut survol, ce qui marche déjà par
          `onfocus`. Les flèches dans la grille, non.
-      3. **Poser la tenue en jeu** — le gros morceau, discuté et non commencé.
-         Décidé : écriture **au lancement de la session**, dans le `skin.ini`
-         de la livrée lancée, et seulement si elle ne porte pas déjà la bonne
-         tenue. C'est la stratégie qui écrit le moins. Quatre obstacles connus,
-         à ne pas redécouvrir : (a) `content/cars/<id>` est un hardlink ou une
-         junction vers la bibliothèque, donc écrire là **modifie la copie de
-         bibliothèque du mod** — casser le lien en mode hardlink, sauvegarder
-         l'original en mode junction ; (b) la tenue appartient à une *livrée*,
-         pas à une voiture, donc c'est une écriture par livrée réellement
-         pilotée ; (c) le retour en arrière exige un **registre de ce qui a été
-         posé et de ce qui était là avant**, faute de quoi l'option est un
-         aller sans retour — c'est la discipline de `gamebackup.rs` ; (d) le
-         checksum en ligne ne peut être qu'argumenté (un `skin.ini` est hors de
-         `data.acd`, et tout le monde roule en ligne avec des skins
-         personnalisés), jamais promis.
-         **À vérifier avant d'écrire une ligne** : CSP sait-il imposer une
-         tenue de pilote par `extension/config/cars/loaded/<car_id>.ini` ? Si
-         oui, on écrirait dans un fichier prévu pour la surcharge, dans le
-         dossier du jeu, que `gamebackup.rs` couvre déjà — (a) et (c)
-         disparaissent.
-      **Un défaut de rendu trouvé par là** : les casques de mannequin déclarent
-      `nmObjectSpace = 1` et leur `txNormal` est en espace **objet**, que glTF
-      ne sait pas lire — le sommet du casque s'éteignait. Mesuré, écarté,
-      documenté dans `kn5-format.md`. Cinq matériaux concernés sur
-      l'installation, tous des casques, aucun matériau de voiture.
+      3. **Poser le pilote en jeu** — discuté, recherché, non commencé. **Les
+         deux mécanismes sont identifiés et le premier est vérifié à l'écran**,
+         tout est dans `docs/csp-driver-research.md` : le **corps** par une
+         section `[DRIVER3D_MODEL] NAME=…` dans `<voiture>/extension/
+         ext_config.ini` (CSP surcharge une section de `data.acd` en préfixant
+         le nom du fichier ; `data.acd` n'est pas touché, donc le checksum
+         tient), la **tenue** par le `skin.ini` de la livrée, sous le nom du
+         mannequin — il n'existe aucune route CSP pour celle-là, cherchée et
+         non trouvée. Conséquence à ne pas rater : remplacer le corps rend la
+         section de la livrée inopérante, la tenue doit être réécrite sous le
+         **nouveau** nom de mannequin. Reste de l'ingénierie : les deux
+         fichiers sont dans le mod (hardlink/junction vers la bibliothèque), il
+         faut fusionner et non écraser (735 lignes d'`ext_config.ini` sur une
+         NSX de l'installation), et tenir un registre pour pouvoir défaire.
+         **Ne pas écrire `POSITION`** dans `[DRIVER3D_MODEL]`, contrairement à
+         ce que suggèrent les réponses trouvées en ligne : c'est le même
+         `[MODEL] POSITION` que `seating_offset` a mesuré comme inapplicable.
       **Écarts assumés vis-à-vis de la spec, décidés avec l'utilisateur** :
       le favori se pose sur le cœur de la bibliothèque (`♥`/`♡`) placé sous
       l'image et non sur elle — on garde l'argument du §7.3 (l'échantillon est

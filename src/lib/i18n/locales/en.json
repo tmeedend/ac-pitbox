@@ -1355,7 +1355,7 @@
       "live": "Fitting",
       "hint": "Hover a thumbnail to try it on · click to keep it",
       "trial": "Trying — {name}",
-      "substituted": "Preview only · not used on track",
+      "substituted": "Preview only · not put in the game yet",
       "noSample": "Assetto Corsa ships no image for this one.",
       "no3d": "3D fitting could not start. The gallery is still yours to use.",
       "noBody": "No body to show: the car names none, or it is not installed.",
@@ -1365,7 +1365,7 @@
       "title": "You changed the driver's body. Here is what that changes:",
       "helmet": "Your helmet is removed: a helmet only fits bodies of its own era, and this one is from another.",
       "outfit": "The livery's suit and gloves no longer apply. This body wears its own until you pick others.",
-      "race": "This body only exists here: on track, the car keeps the driver it ships with.",
+      "race": "This body only changes the preview for now: Pit Box cannot put it in the game yet.",
       "choose": "Choose an outfit",
       "revert": "Back to the car's body"
     },
