@@ -1215,9 +1215,14 @@ aucun autre matériau `blend_mode = 1` hors verre. Un cas isolé, mais réel —
 et rien ne garantit qu'il soit unique sur le corpus de mods de pilote total.
 
 **Correctif** : une empreinte alpha uniformément **opaque** (symétrique du
-« blank » de l'écart n°9, `FootprintAlpha::is_opaque`) court-circuite
-l'approximation de verre — mais seulement quand le shader n'est *pas* du
-verre. Un vrai `ksWindscreen`/`*Glass` garde son approximation même si son
+« blank » de l'écart n°9, `FootprintAlpha::is_opaque`) rend le matériau
+**opaque**, et pas seulement d'opacité 1 — la première version ne
+court-circuitait que l'approximation de verre, laissant le mode `BLEND`. La
+couleur était alors juste mais la mécanique du transparent restait : tri après
+l'opaque, et sur le plateau du pilote rendu sans écrire la profondeur (règle
+de la visière). La tête de `senna.kn5` passait par-dessus tout, un morceau
+d'oreille restant visible à travers le visage quel que soit l'angle. Le
+court-circuit ne vaut que quand le shader n'est *pas* du verre. Un vrai `ksWindscreen`/`*Glass` garde son approximation même si son
 alpha se mesure opaque : la transparence d'une vitre AC vient du reflet
 (fresnel), pas de l'alpha de sa diffuse (voir le commentaire sur
 `GLASS_MIN_OPACITY`) — lui appliquer la même règle l'aurait rendue opaque à

@@ -225,20 +225,31 @@ fn metallic_of(material: &Kn5Material, shader: &str) -> f32 {
     if ceiling < METALLIC_MIN_REFLECTION {
         return 0.0;
     }
-    // **Un plafond de reflet impossible ne dit rien de la métallicité, et on
-    // n'en tire donc rien.** Il l'a un temps annulée, par symétrie avec le veto
-    // posé plus bas sur `fresnelC` : `fresnelMaxLevel = 100` avec
-    // `fresnelC = 0.5` est un gabarit recopié, présent à l'identique sur cinq
-    // mannequins d'auteurs différents (`ada`, `jill_re3`, `rinoa`,
-    // `Sienna_Guillory`, `t-800`). La symétrie était fausse. Sur `t-800`, ce
-    // gabarit porte **tout le corps** d'un endosquelette de Terminator, en
-    // chrome : la règle l'a rendu mat, signalé à l'écran avec la comparaison au
-    // jeu. Or `fresnelC = 0.5` *est* la réflectance d'un chrome (le haut de la
-    // plage que Kunos s'autorise), la même des deux côtés — rien dans le bloc
-    // fresnel ne sépare le vrai métal du faux, et il n'y a donc pas de règle à
-    // écrire ici. La brillance parasite des autres mannequins vient d'ailleurs
-    // et est traitée ailleurs : plancher de rugosité (`roughness::floor_for`)
-    // et `fresnelC` aberrante ci-dessous.
+    // Un plafond de reflet impossible annule le bloc entier, comme le fait
+    // plus bas une `fresnelC` aberrante : `fresnelMaxLevel = 100` est un
+    // gabarit recopié, présent à l'identique sur cinq mannequins d'auteurs
+    // différents (`ada`, `jill_re3`, `rinoa`, `Sienna_Guillory`, `t-800`),
+    // toujours avec `fresnelC = 0.5`. Rendus pleinement métalliques, ces
+    // matériaux mettent une coque de chrome sur des vêtements et des visages —
+    // le haut du corps de `jill_re3` en entier, signalé deux fois à l'écran.
+    //
+    // **Ce que ça coûte, et pourquoi on l'accepte quand même.** Sur `t-800`,
+    // le même gabarit porte le corps d'un endosquelette de Terminator, qui est
+    // réellement en chrome : la règle le rend mat. Les deux matériaux sont
+    // **identiques propriété par propriété** — `ksAmbient` 0,01, `ksDiffuse` 1,
+    // `ksSpecular` 150, `fresnelC` 0,5, `fresnelMaxLevel` 100, même shader,
+    // même mode de fusion, seul l'exposant spéculaire diffère (400 contre
+    // 1000). Rien ici ne peut les séparer.
+    //
+    // La seule chose qui les distingue est la **part du modèle** qui porte la
+    // signature — 83 % sur `t-800`, 6 à 14 % sur les autres — mais
+    // `Sienna_Guillory`, une humaine, est à 56 % : la ligne tiendrait sur deux
+    // points, dont un qui deviendrait une femme en chrome. Décision prise avec
+    // l'utilisateur : garder les nombreux justes plutôt que le cas unique,
+    // faute de critère qui tienne.
+    if ceiling > METALLIC_F0_ABSURD {
+        return 0.0;
+    }
     // Au-delà de 1, ce n'est plus une réflectance — mais tout ce qui dépasse ne
     // se vaut pas, et les traiter pareil donnait des mannequins en or.
     //
@@ -413,6 +424,19 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // approximation même si son alpha se mesure opaque, pour la raison ci-
     // dessus (la transparence d'une vitre vient du reflet, pas de l'alpha).
     let opaque_by_alpha = !is_glass_shader(shader) && textures.diffuse_alpha_opaque;
+    // **Et il est opaque pour de bon, pas seulement à opacité 1.** Le laisser
+    // en fondu avec un alpha plein donnait la bonne couleur mais gardait la
+    // mécanique du transparent : trié après l'opaque, et — sur le plateau du
+    // pilote — rendu sans écrire la profondeur, comme une visière. La tête de
+    // `senna.kn5` passait ainsi par-dessus tout, un morceau d'oreille restant
+    // visible à travers le visage quel que soit l'angle (bug réel, signalé à
+    // l'écran). Un matériau dont l'alpha ne découpe rien n'a rien à faire dans
+    // la passe transparente.
+    let alpha_mode = if alpha_mode == AlphaMode::Blend && opaque_by_alpha {
+        AlphaMode::Opaque
+    } else {
+        alpha_mode
+    };
     let base_color = match alpha_mode {
         AlphaMode::Blend if !texture_carries_alpha && !opaque_by_alpha => [1.0, 1.0, 1.0, glass_opacity(material)],
         _ => [1.0, 1.0, 1.0, 1.0],
@@ -741,17 +765,21 @@ mod tests {
     #[test]
     fn opaque_footprint_overrides_the_glass_approximation_off_glass() {
         let head = material("ksSkinnedMesh_NMDetaill", 1, false, &[("ksDiffuse", 0.3)]);
+        let converted = convert(
+            &head,
+            MaterialTextures {
+                diffuse_alpha_opaque: true,
+                ..Default::default()
+            },
+        );
         assert_eq!(
-            convert(
-                &head,
-                MaterialTextures {
-                    diffuse_alpha_opaque: true,
-                    ..Default::default()
-                }
-            )
-            .base_color[3],
-            1.0,
+            converted.base_color[3], 1.0,
             "alpha uniformément opaque : rien à fondre, malgré blend_mode = 1"
+        );
+        assert_eq!(
+            converted.alpha_mode,
+            AlphaMode::Opaque,
+            "et opaque pour de bon : pas de tri transparent, pas de profondeur ignorée"
         );
         let glass = material("ksWindscreen", 1, false, &[("ksDiffuse", 0.3)]);
         assert!(
@@ -931,19 +959,21 @@ mod tests {
             "une valeur absurde ne dit rien : diélectrique, pas miroir (ada.kn5 en statue dorée)"
         );
 
-        // Un plafond de reflet hors plage ne dit rien : il ne fait pas d'un
-        // chrome un diélectrique. Le corps du Terminator `t-800` porte
-        // `fresnelC = 0.5` / `fresnelMaxLevel = 100`, et il est en métal.
-        let chrome = material(
+        // Le même veto sur l'autre moitié du bloc fresnel : le gabarit
+        // `fresnelC = 0.5` / `fresnelMaxLevel = 100` des maillages de
+        // brillance des mannequins, qui chromait le haut du corps de
+        // `jill_re3`. Il chromait aussi, à raison, le Terminator `t-800` —
+        // perte assumée, faute de pouvoir les distinguer (voir `metallic_of`).
+        let shine = material(
             "ksSkinnedMesh",
             0,
             false,
             &[("fresnelC", 0.5), ("fresnelMaxLevel", 100.0)],
         );
         assert_eq!(
-            metallic_of(&chrome, "ksSkinnedMesh"),
-            1.0,
-            "0,5 reste la réflectance d'un chrome, quel que soit le plafond annoncé"
+            metallic_of(&shine, "ksSkinnedMesh"),
+            0.0,
+            "un plafond de reflet impossible annule le bloc entier"
         );
     }
 
