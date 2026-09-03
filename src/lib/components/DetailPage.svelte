@@ -974,10 +974,19 @@
              `.hero` sans aucun pour l'autre), d'où le décalage constaté entre
              les deux vues. -->
         <div class="hero-inner">
-          {#if heroImg}
-            <img src={heroImg} alt={d.display_name ?? d.id_interne} />
-          {:else}
-            <div class="hero-icon">{isCar ? "🚗" : "🏁"}</div>
+          <!-- **Rien sous l'aperçu 3D.** La photo est un enfant normal et
+               l'aperçu se pose par-dessus en absolu : tant que le modèle n'est
+               pas prêt, son canevas est transparent et c'est donc la photo
+               qu'on voyait — celle du premier skin, derrière le témoin de
+               chargement. Quand l'aperçu 3D tient la zone, il la tient
+               entièrement ; c'est lui qui remet la photo, entière, s'il ne peut
+               pas aboutir (`fallbackSrc`). -->
+          {#if !(isCar && preview3d)}
+            {#if heroImg}
+              <img src={heroImg} alt={d.display_name ?? d.id_interne} />
+            {:else}
+              <div class="hero-icon">{isCar ? "🚗" : "🏁"}</div>
+            {/if}
           {/if}
           {#if isCar && preview3d}
             <CarPreview3D
