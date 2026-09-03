@@ -28,6 +28,7 @@
   } from "$lib/driverOverride.svelte";
   import TrackSkinChecklistDropdown from "./TrackSkinChecklistDropdown.svelte";
   import { nav, requestSection, pickSession } from "$lib/nav.svelte";
+  import { recordScreen, goBack, goForward } from "$lib/navHistory";
   import { previewSrc, getModDetail, activateMod } from "$lib/library";
   import { confirm, message } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
@@ -118,6 +119,41 @@
     const cfg = await getConfig();
     if (cfg.prefs.language) setLocale(cfg.prefs.language);
     setZoom(cfg.prefs.ui_zoom);
+  });
+
+  // Historique de navigation (§7.2bis) : l'écran affiché est noté à chaque
+  // fois qu'il change, quel que soit le chemin emprunté pour y arriver — la
+  // douzaine d'endroits qui posent `nav.openFull` ou appellent
+  // `requestSection` n'a donc rien à déclarer. Le détail est dans
+  // `navHistory.ts`.
+  $effect(() => {
+    recordScreen({ section: nav.section, openFull: nav.openFull, openPack: nav.openPack });
+  });
+
+  // Boutons latéraux de la souris = précédent/suivant, comme dans un
+  // navigateur. `preventDefault` sur le `mousedown` ET sur l'`auxclick` :
+  // WebView2 mappe ces deux boutons sur SON historique de navigation, et une
+  // app à route unique (adapter-static, SPA) n'a rien où reculer — au mieux il
+  // ne se passe rien, au pire la webview quitte la page et l'app se retrouve
+  // devant une fenêtre blanche.
+  onMount(() => {
+    const onMouseDown = (e: MouseEvent) => {
+      // 3 et 4 = les deux boutons latéraux (« précédent » et « suivant » chez
+      // Chromium), pas les trois boutons principaux.
+      if (e.button !== 3 && e.button !== 4) return;
+      e.preventDefault();
+      if (e.button === 3) void goBack();
+      else void goForward();
+    };
+    const swallow = (e: MouseEvent) => {
+      if (e.button === 3 || e.button === 4) e.preventDefault();
+    };
+    window.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("auxclick", swallow);
+    return () => {
+      window.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("auxclick", swallow);
+    };
   });
 
   // Sortie du mode Big Picture au clavier — pas d'autre chrome de fenêtre

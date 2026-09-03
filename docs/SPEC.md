@@ -590,6 +590,19 @@ Une **colonne latérale unique** (maquette de référence `pitbox-biblio-session
 - **ADD-ONS** (titre rouge/mono) en deux colonnes : Skins | Sons, Apps, Autres mods.
 - **ATELIER** (même style) : Règles | Importer, Réglages.
 
+### 7.2bis Historique de navigation
+
+Les deux **boutons latéraux de la souris** font ce qu'ils font dans un navigateur : revenir à l'écran précédent, y retourner. Un « écran » est la section affichée **plus les fiches empilées dessus** (fiche pleine page, fiche de pack) : c'est l'adresse visible de l'app. Le reste de `nav` n'en fait pas partie — c'est soit une demande transitoire consommée par l'écran destinataire (`openMod`, `search`, `autoLaunch`, `settingsTab`), soit l'état interne d'un écran.
+
+L'historique **observe** cette adresse plutôt que d'être alimenté par ceux qui la changent. Une douzaine d'endroits ouvrent une fiche ou changent de section — double-clic sur une carte, menu contextuel, manette, vue transversale, barre latérale, bloc Session. Leur demander à chacun de pousser aussi une entrée, c'est un historique qui devient faux le jour où un treizième apparaît ; il regarde donc le triplet changer et note ce qu'il voit (`navHistory.ts`, effet dans `AppShell`).
+
+Trois points de comportement :
+- **Naviguer après un retour efface l'avance**, comme dans un navigateur.
+- **La garde de §10bis s'applique** : reculer depuis les Réglages avec des changements non enregistrés propose de les enregistrer, exactement comme un clic dans la barre latérale. Un refus laisse l'historique où il était.
+- **Rien n'est persisté** : une app rouverte le lendemain n'a pas d'écran précédent, pas plus qu'un onglet neuf n'a de bouton retour actif.
+
+WebView2 mappe ces deux boutons sur **son** historique de navigation ; l'app à route unique (SPA `adapter-static`) n'a rien où reculer, et la webview quitterait la page pour une fenêtre blanche. Ils sont donc interceptés (`preventDefault` sur `mousedown` et sur `auxclick`) avant d'être traduits en navigation Pit Box.
+
 ### 7.3 Type « Autres mods »
 
 Mods de type non reconnu (shaders, configs CSP, mods d'UI, weather patterns…) : listés dans « Autres mods », activables/désactivables (hardlinks) comme les autres. Priorité notée + conflits signalés (pas de moteur de superposition type MO2). Chaque entrée a un bouton **« ouvrir le dossier »** vers son emplacement en bibliothèque — le chemin est résolu côté Rust depuis l'overlay, jamais reçu du front, ce qui permet de garder fermé le scope ACL du plugin `opener` (même rationale que `open_mod_folder`).
