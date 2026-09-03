@@ -4,6 +4,7 @@
   import PackDetail from "./PackDetail.svelte";
   import TokenFilter, { type Token } from "./TokenFilter.svelte";
   import TriCheck, { type TriState } from "./TriCheck.svelte";
+  import { hasOwnDriver } from "$lib/driverOverride.svelte";
   import BulkEditPanel from "./BulkEditPanel.svelte";
   import ContextMenu from "./ContextMenu.svelte";
   import LoadingState from "./LoadingState.svelte";
@@ -30,6 +31,7 @@
   import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
   import { buildModContextItems } from "$lib/modContextActions";
   import { t } from "$lib/i18n/index.svelte";
+  import { zoomFactor } from "$lib/zoom.svelte";
   import { getUiPrefs, setUiPref } from "$lib/uiPrefs.svelte";
 
   import { StorageKey } from "$lib/storage";
@@ -106,6 +108,9 @@
   let favState = $state<TriState>(0);
   let triedState = $state<TriState>(0);
   let stockState = $state<TriState>(0);
+  /** « Pilote modifié » : les voitures auxquelles on a choisi une tenue.
+   * Voitures seulement — un circuit n'a pas de pilote. */
+  let driverState = $state<TriState>(0);
   let yearMin = $state<number>(NO_YEAR);
   let yearMax = $state<number>(NO_YEAR);
   let view = $state<"gallery" | "table">("gallery");
@@ -140,6 +145,7 @@
       favState,
       triedState,
       stockState,
+      driverState,
       yearMin,
       yearMax,
     };
@@ -256,6 +262,12 @@
   let resizingKey = $state<string | null>(null);
   let resizeStartX = 0;
   let resizeStartWidth = 0;
+  /** Une largeur **mesurée** (pixels réels de la fenêtre) ramenée en pixels
+   * CSS, seuls acceptés par la feuille de style — voir `zoomFactor`. Sans ça,
+   * saisir une poignée à 110 % élargissait la colonne de 10 % d'un coup, et le
+   * glissé avançait 10 % trop vite. */
+  const measured = (width: number) => width / zoomFactor();
+
   function startResize(e: MouseEvent, key: string, currentWidth: number) {
     e.preventDefault();
     e.stopPropagation();
@@ -266,13 +278,13 @@
     stopResizeListeners();
     resizingKey = key;
     resizeStartX = e.clientX;
-    resizeStartWidth = currentWidth;
+    resizeStartWidth = measured(currentWidth);
     window.addEventListener("mousemove", onResizeMove);
     window.addEventListener("mouseup", onResizeUp);
   }
   function onResizeMove(e: MouseEvent) {
     if (!resizingKey) return;
-    const next = Math.max(MIN_COLUMN_WIDTH, Math.round(resizeStartWidth + (e.clientX - resizeStartX)));
+    const next = Math.max(MIN_COLUMN_WIDTH, Math.round(resizeStartWidth + measured(e.clientX - resizeStartX)));
     columnWidths = { ...columnWidths, [resizingKey]: next };
   }
   function stopResizeListeners() {
@@ -291,7 +303,7 @@
    * accessible qu'à la souris. `currentWidth` = largeur affichée actuelle
    * (naturelle si jamais redimensionnée), pas de branchement particulier. */
   function adjustColumnWidth(key: string, currentWidth: number, delta: number) {
-    columnWidths = { ...columnWidths, [key]: Math.max(MIN_COLUMN_WIDTH, Math.round(currentWidth + delta)) };
+    columnWidths = { ...columnWidths, [key]: Math.max(MIN_COLUMN_WIDTH, Math.round(measured(currentWidth) + delta)) };
     persistColumnsPrefs();
   }
   /** Double-clic (ou Entrée au clavier) sur la poignée = revenir à la largeur
@@ -357,6 +369,7 @@
         tagMode = (sf.tagMode as "and" | "or") ?? "and";
         catTokens = (sf.catTokens as Token[]) ?? legacySelectToken(sf.category);
         favState = (sf.favState as TriState) ?? (sf.fav ? 1 : 0);
+        driverState = (sf.driverState as TriState) ?? 0;
         // Le sens s'est inversé : la case s'appelait « jamais essayé » (donc
         // cochée = jamais essayés), le tri-état s'appelle « déjà essayé ». Une
         // préférence enregistrée cochée devient donc l'état **rouge**.
@@ -709,6 +722,10 @@
       }
       if (favState === 1 && !c.is_favorite) return false;
       if (favState === -1 && c.is_favorite) return false;
+      // Lecture synchrone d'`ui_prefs.json` (`peekUiPref`), une fois par carte :
+      // c'est ce pour quoi la tenue est rangée par voiture plutôt que dans un
+      // fichier que seul le backend saurait lire.
+      if (driverState !== 0 && hasOwnDriver(c.id_interne) !== (driverState === 1)) return false;
       if (triedState === 1 && !c.tried) return false;
       if (triedState === -1 && c.tried) return false;
       // `is_stock` couvre tout ce qui vit dans content/ : le contenu de jeu
@@ -757,6 +774,7 @@
       (favState !== 0 ? 1 : 0) +
       (triedState !== 0 ? 1 : 0) +
       (stockState !== 0 ? 1 : 0) +
+      (driverState !== 0 ? 1 : 0) +
       (yearMin !== NO_YEAR ? 1 : 0) +
       (yearMax !== NO_YEAR ? 1 : 0),
   );
@@ -1087,6 +1105,15 @@
             titleExclude={t("library.favExcluded")}
             titleNeutral={t("library.favNeutral")}
           />
+          {#if isCar}
+            <TriCheck
+              label={t("library.driverSet")}
+              bind:value={driverState}
+              titleInclude={t("library.driverSetOnly")}
+              titleExclude={t("library.driverSetExcluded")}
+              titleNeutral={t("library.driverSetNeutral")}
+            />
+          {/if}
           <TriCheck
             label={t("library.tried")}
             bind:value={triedState}

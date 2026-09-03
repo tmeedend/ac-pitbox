@@ -14,8 +14,10 @@
 
   interface Props {
     title: string;
-    /** Blue = information (red is taken by category/session/destructive). */
-    tone?: "default" | "info";
+    /** Blue = information, yellow = warning (red is taken by
+     * category/session/destructive — couleurs sémantiques, §chantier
+     * libellés). */
+    tone?: "default" | "info" | "warn";
     /** Small emoji ahead of the title. */
     icon?: string;
     /** Single-line title, ellipsised. For a title that is a moving value (an
@@ -49,7 +51,7 @@
   const foldable = $derived(ontoggle != null && children != null);
 </script>
 
-<div class="toast" class:info={tone === "info"}>
+<div class="toast" class:info={tone === "info"} class:warn={tone === "warn"}>
   <div class="t-head">
     {#if icon}<span class="t-ic">{icon}</span>{/if}
     <!-- The whole title is the toggle, not just a chevron: a collapsed toast is
@@ -102,6 +104,11 @@
   .toast.info {
     border-color: var(--blue-border);
   }
+  /* Mêmes teintes que `.warnbox` de `global.css` — le jaune d'alerte n'a pas
+     de jeton dédié, et en inventer un ici en ferait un deuxième. */
+  .toast.warn {
+    border-color: #4a4426;
+  }
   .t-head {
     display: flex;
     align-items: center;
@@ -113,6 +120,10 @@
   /* Header and body share one background when there is nothing to separate. */
   .toast.info .t-head {
     background: var(--blue-dim);
+  }
+  .toast.warn .t-head {
+    background: #1a1708;
+    color: var(--yellow);
   }
   .t-ic {
     flex: none;

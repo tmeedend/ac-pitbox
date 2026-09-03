@@ -16,6 +16,7 @@
 // préférence resterait invisible jusqu'au prochain rendu déclenché par autre
 // chose (bug réel évité, pas seulement une préférence de style).
 import { untrack } from "svelte";
+import { invoke } from "@tauri-apps/api/core";
 import { invokeSafe } from "./invokeSafe";
 
 const PREFIX = "pitbox.";
@@ -49,8 +50,50 @@ function migrateLegacyLocalStorage(): Record<string, string> {
   return migrated;
 }
 
-function persist(all: Record<string, string>): Promise<void> {
-  return invokeSafe<void>("save_ui_prefs", { prefs: all }, undefined);
+/**
+ * Écrit le fichier, **sans repli silencieux**.
+ *
+ * `invokeSafe` était employé ici comme pour les lectures : au bout de cinq
+ * secondes il rendait la main comme si tout allait bien. Sur une lecture c'est
+ * un bon compromis (un réglage manquant vaut mieux qu'un écran figé) ; sur une
+ * écriture c'est la perte de donnée elle-même, déguisée en succès. Constaté :
+ * `ui_prefs.json` inchangé pendant six heures d'utilisation, alors que
+ * favoris, tenues et corps de pilote étaient adoptés — tout vivait en mémoire
+ * et rien n'atteignait le disque. Personne ne l'a vu avant un redémarrage.
+ *
+ * L'appel n'a donc plus de délai : une écriture lente reste une écriture, et
+ * rien à l'écran ne l'attend (tous les appelants sont en `void`). Un échec
+ * réel est **réessayé une fois** — un fichier verrouillé une seconde par un
+ * antivirus est le cas courant — puis journalisé sans être caché.
+ */
+async function persist(all: Record<string, string>): Promise<void> {
+  try {
+    await invoke<void>("save_ui_prefs", { prefs: all });
+    failure.since = null;
+  } catch (first) {
+    console.error("save_ui_prefs : premier essai échoué, nouvelle tentative", first);
+    try {
+      await invoke<void>("save_ui_prefs", { prefs: all });
+      failure.since = null;
+    } catch (second) {
+      console.error("save_ui_prefs : réglages non enregistrés sur disque", second);
+      failure.since ??= Date.now();
+      failure.reason = String(second);
+    }
+  }
+}
+
+/** Une écriture qui n'atteint pas le disque, et depuis quand.
+ *
+ * **Elle se voit à l'écran** (`PrefsToast`), et c'est le vrai enseignement de
+ * ce bug : un réglage perdu en silence ne se découvre qu'au redémarrage
+ * suivant, quand plus personne ne peut relier la perte au geste qui l'a
+ * causée. Un `console.error` ne suffit pas — personne n'ouvre la console d'une
+ * app empaquetée. */
+const failure = $state<{ since: number | null; reason: string }>({ since: null, reason: "" });
+
+export function prefsWriteFailure(): { since: number | null; reason: string } {
+  return failure;
 }
 
 // Chargé une seule fois pour toute la session (plusieurs composants lisent
@@ -113,66 +156,85 @@ export function peekUiPref(key: string): string | null {
   return cache?.[key] ?? null;
 }
 
-/** Écrit un réglage. Asynchrone en interne (recharge-modifie-réécrit le
- * fichier entier, comme les autres modules de persistance) mais l'appel
- * lui-même ne s'attend pas : mêmes usages fire-and-forget que
- * `persistLaunchState`/`persistColumnsPrefs` ailleurs dans le projet.
+/**
+ * Toutes les écritures passent par ici, **en file**.
  *
- * `untrack` autour de tout le corps — pas juste par prudence : bug réel
+ * Elles ne l'étaient pas, et ça perdait des réglages. `ensureLoaded()` rend
+ * `Promise.resolve(cache)` en capturant `cache` **au moment de l'appel** :
+ * deux `setUiPref` dans le même tick recevaient donc le même instantané
+ * d'avant les deux écritures, et le second `cache = { ...all, … }` effaçait la
+ * clé du premier. Bug réel : adopter un casque dans l'écran Pilote écrivait la
+ * tenue *puis* la liste des récents, et la tenue disparaissait aussitôt —
+ * l'écran clignotait sans rien retenir. Il dormait depuis longtemps, masqué
+ * partout où l'appelant gardait sa propre copie en mémoire.
+ *
+ * Deux remèdes en un : la file sérialise les écritures, et chacune relit
+ * `cache` **après** son attente au lieu de réutiliser l'instantané d'avant.
+ * La file protège aussi le fichier — deux `save_ui_prefs` concurrents
+ * pouvaient arriver dans le désordre et écraser le plus complet par le plus
+ * ancien.
+ *
+ * `untrack` autour de la mise en file — pas juste par prudence, bug réel
  * trouvé ici. Un `async () => { await ensureLoaded(); ... }` s'exécute de
  * façon SYNCHRONE jusqu'à son premier `await` (sémantique standard des
- * fonctions async JS) — donc si `setUiPref` est appelé depuis un `$effect`
+ * fonctions async JS) — donc si l'écriture est déclenchée depuis un `$effect`
  * (cas des réglages auto-sauvegardés à chaque changement, ex. filtres de
  * `Library.svelte`), la lecture `if (cache)` au tout début d'`ensureLoaded`
- * s'exécute encore dans le contexte réactif de CET effet, ce qui l'abonne
- * silencieusement à `cache`. Le `cache = updated` qui suit (après l'await)
- * redéclenche alors ce même effet, qui rappelle `setUiPref`, qui relit
- * `cache`… boucle infinie sans qu'aucun des champs lus explicitement par
- * l'effet n'ait jamais changé (constaté : 285 000+ appels, `save_ui_prefs`
- * en rafale, effet qui se redéclenche avec un snapshot strictement
- * identique). N'affecte que les appelants réactifs : `toggleSort`/`setView`
- * (clic), `persistColumnsPrefs` (mouseup) ne passent jamais par un contexte
- * traqué, d'où leur immunité déjà observée. */
-export function setUiPref(key: string, value: string): void {
-  untrack(() => {
-    void (async () => {
-      const all = await ensureLoaded();
-      const updated = { ...all, [key]: value };
-      cache = updated;
-      await persist(updated);
-    })();
+ * s'exécutait encore dans le contexte réactif de CET effet, ce qui l'abonnait
+ * silencieusement à `cache`. Le `cache = updated` qui suit redéclenchait alors
+ * ce même effet, qui réécrivait, qui relisait `cache`… boucle infinie sans
+ * qu'aucun des champs lus explicitement par l'effet n'ait changé (constaté :
+ * 285 000+ appels, `save_ui_prefs` en rafale).
+ */
+let writing: Promise<void> = Promise.resolve();
+
+function enqueue(mutate: (all: Record<string, string>) => Record<string, string> | null): Promise<void> {
+  return untrack(() => {
+    writing = writing
+      .then(async () => {
+        await ensureLoaded();
+        // `cache` relu ICI, après l'attente, et jamais l'instantané capturé
+        // avant : c'est toute la correction.
+        const next = mutate(cache ?? {});
+        if (!next) return;
+        cache = next;
+        await persist(next);
+      })
+      // **Un maillon rompu ne casse pas la chaîne.** Sans ce `catch`, une seule
+      // écriture en échec laisse `writing` rejetée, et tous les `.then` suivants
+      // sont sautés : plus aucun réglage n'est jamais enregistré jusqu'au
+      // prochain démarrage, sans le moindre signe à l'écran.
+      .catch((e: unknown) => {
+        console.error("ui_prefs : écriture abandonnée", e);
+      });
+    return writing;
   });
+}
+
+/** Écrit un réglage. L'appel ne s'attend pas : mêmes usages fire-and-forget
+ * que `persistLaunchState`/`persistColumnsPrefs` ailleurs dans le projet. */
+export function setUiPref(key: string, value: string): void {
+  void enqueue((all) => ({ ...all, [key]: value }));
 }
 
 /** Writes several settings in one go, and **awaits the disk**. Two reasons to
  * exist next to `setUiPref`: a caller that saves five values (the 3D preview
  * sliders) would otherwise rewrite the whole file five times, and a caller
- * that displays "saved" has to know when it really is. Same `untrack`
- * reasoning as `setUiPref`. */
+ * that displays "saved" has to know when it really is. */
 export function setUiPrefs(entries: Record<string, string>): Promise<void> {
-  return untrack(() =>
-    (async () => {
-      const all = await ensureLoaded();
-      const updated = { ...all, ...entries };
-      cache = updated;
-      await persist(updated);
-    })(),
-  );
+  return enqueue((all) => ({ ...all, ...entries }));
 }
 
 /** Drops a setting for good — for a key that has been read one last time and
- * replaced by something else (migration), not for "reset to default": writing
- * an empty string would leave the old key lying around forever, and the next
- * migration would keep finding it. Same `untrack` reasoning as `setUiPref`. */
+ * replaced by something else (migration), or for a per-entity entry whose
+ * absence *is* the information (aucune tenue choisie pour cette voiture).
+ * Écrire une chaîne vide laisserait la clé traîner, et la prochaine migration
+ * la retrouverait. */
 export function removeUiPref(key: string): void {
-  untrack(() => {
-    void (async () => {
-      const all = await ensureLoaded();
-      if (!(key in all)) return;
-      const updated = { ...all };
-      delete updated[key];
-      cache = updated;
-      await persist(updated);
-    })();
+  void enqueue((all) => {
+    if (!(key in all)) return null;
+    const next = { ...all };
+    delete next[key];
+    return next;
   });
 }

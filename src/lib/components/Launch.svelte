@@ -20,6 +20,7 @@
     type TrackSun,
     type WeatherOption,
   } from "$lib/launch";
+  import { carClassOf, driverFor, isEmpty } from "$lib/driverOverride.svelte";
   import { getModDetail, listLibrary, previewSrc, type ModCard } from "$lib/library";
   import { getSessionBackground } from "$lib/media";
   import { nav, pickSession, type OpponentsAction } from "$lib/nav.svelte";
@@ -71,6 +72,7 @@
   let setup = $state<RaceSetup>({
     car_id: "",
     car_skin: null,
+    driver: null,
     track_id: "",
     track_layout: null,
     session_type: "practice",
@@ -762,7 +764,20 @@
     // une fois la session lancée telle qu'elle est, il n'a plus d'objet.
     error = ""; info = ""; warning = "";
     try {
-      await launchSession($state.snapshot(setup));
+      // Le pilote est résolu **au moment du lancement**, pas tenu à jour dans
+      // `setup` : sa source est la cascade par voiture (`driverFor`), qui
+      // dépend de la voiture choisie et de la tenue par défaut, deux choses qui
+      // bougent ailleurs dans l'app.
+      // La classe de la voiture décide de laquelle des deux tenues par défaut
+      // s'applique : demandée ici, une fois, au moment où elle sert.
+      const carDetail = setup.car_id ? await getModDetail(setup.car_id).catch(() => null) : null;
+      const outfit = driverFor(setup.car_id || null, carClassOf(carDetail?.car_class));
+      await launchSession({
+        ...$state.snapshot(setup),
+        driver: isEmpty(outfit)
+          ? null
+          : { model: outfit.body, suit: outfit.suit, gloves: outfit.gloves, helmet: outfit.helmet },
+      });
       info = t("launch.launchSuccess");
     } catch (e) {
       error = errorText(e);

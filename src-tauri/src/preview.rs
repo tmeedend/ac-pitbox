@@ -30,7 +30,7 @@ use crate::config::AppConfig;
 /// *reconnaître* pour libérer sa place. Trois incréments en une session de
 /// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
-const CONVERTER_VERSION: u32 = 25;
+const CONVERTER_VERSION: u32 = 30;
 
 /// Default cache ceiling (§5.3). Beyond it, the least recently used entries
 /// are evicted. Only a default: the real ceiling is a setting, carried by
@@ -287,6 +287,12 @@ pub fn prepare(
     // démarrage, pour ne rien coûter à qui n'en ouvre jamais.
     if !state.swept.swap(true, Ordering::Relaxed) {
         sweep_foreign_versions(&dir);
+        // Les vignettes de corps portent le même préfixe de version : elles
+        // se périment donc avec le convertisseur, et rien d'autre ne les
+        // ramasserait — leur dossier est hors du plafond, donc hors éviction.
+        if let Ok(thumbs) = thumb_dir(app) {
+            sweep_foreign_versions(&thumbs);
+        }
     }
     // Le skin est résolu avant la clé : c'est lui qui désigne le dossier où
     // vivent le `ext_config.ini` et les KN5 de jante (§4.3).
@@ -426,6 +432,238 @@ pub fn prepare(
     })
 }
 
+/// Ce que le plateau d'essayage de l'écran Pilote reçoit
+/// (`docs/SPEC-ecran-pilote.md` §5.1).
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DriverPreview {
+    /// URL à donner à `GLTFLoader`, servie par le même protocole que les
+    /// voitures.
+    pub url: String,
+    pub triangle_count: u32,
+    pub from_cache: bool,
+    pub rig: DriverRig,
+}
+
+/// Les repères du rig, en mètres, dans l'espace du `.glb`.
+///
+/// **Renvoyés au frontend plutôt que cuits dans le modèle** : le volant est un
+/// objet de présentation que l'application dessine (§D5), pas une pièce du
+/// mannequin. Trois lignes de `TorusGeometry` côté three.js valent mieux qu'un
+/// maillage généré en Rust et transporté dans chaque entrée de cache.
+// `default` sur la désérialisation : le fichier `.rig` posé à côté du `.glb`
+// est un cache, et un champ ajouté ici ne doit pas rendre illisibles ceux
+// écrits par la version précédente — c'est une reconversion évitable.
+#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DriverRig {
+    /// Poignet gauche puis droit. `None` quand le mannequin n'a pas d'os de
+    /// main sous un nom connu — le plateau se passe alors de volant plutôt que
+    /// d'en poser un au hasard.
+    pub hands: Option<[[f32; 3]; 2]>,
+    /// Là où les doigts se referment, 13 cm devant les poignets : c'est par là
+    /// que passe le volant, pas par les poignets.
+    pub grip: Option<[[f32; 3]; 2]>,
+    pub head: Option<[f32; 3]>,
+    pub hips: Option<[f32; 3]>,
+}
+
+impl From<kn5_gltf::DriverRig> for DriverRig {
+    fn from(rig: kn5_gltf::DriverRig) -> Self {
+        Self {
+            hands: rig.hands,
+            grip: rig.grip,
+            head: rig.head,
+            hips: rig.hips,
+        }
+    }
+}
+
+/// Prépare le mannequin seul, habillé, pour le plateau d'essayage.
+///
+/// Même cache et même éviction que les voitures — c'est le même protocole qui
+/// sert les deux, et un pilote pèse moins qu'une voiture. La clé n'a en
+/// revanche rien à voir : elle ne tient qu'au mannequin, à sa pose et à sa
+/// garde-robe, donc **deux voitures qui habillent et assoient le même corps
+/// pareil partagent l'entrée**, ce qui est exactement ce qu'on veut d'un choix
+/// global.
+///
+/// `token` à `None` = « ne me périme pas, et ne périme personne ». C'est le
+/// mode des **vignettes de corps** (§9.1), qui en demandent quarante-cinq à la
+/// file : avec un jeton, chacune rendrait obsolète la conversion du plateau
+/// lancée juste avant, et le plateau ne se chargerait jamais. Le verrou de
+/// conversion, lui, s'applique quand même — une conversion à la fois.
+pub fn prepare_driver(
+    app: &tauri::AppHandle,
+    state: &PreviewState,
+    graft: &kn5_gltf::DriverGraft,
+    token: Option<u64>,
+) -> Result<DriverPreview, String> {
+    let dir = cache_dir(app)?;
+    if !state.swept.swap(true, Ordering::Relaxed) {
+        sweep_foreign_versions(&dir);
+        // Les vignettes de corps portent le même préfixe de version : elles
+        // se périment donc avec le convertisseur, et rien d'autre ne les
+        // ramasserait — leur dossier est hors du plafond, donc hors éviction.
+        if let Ok(thumbs) = thumb_dir(app) {
+            sweep_foreign_versions(&thumbs);
+        }
+    }
+    let stem = driver_entry_stem(graft);
+    let file = dir.join(format!("{stem}.glb"));
+
+    if let Ok(meta) = std::fs::metadata(&file) {
+        // Le rig est relu avec les compteurs : sans lui on saurait afficher le
+        // pilote mais plus où poser son volant, et reparser quinze mégaoctets
+        // de mannequin pour trois vecteurs à chaque changement de casque
+        // annulerait tout l'intérêt du cache.
+        if let (true, Some(rig)) = (meta.len() > 0, read_rig(&dir, &stem)) {
+            touch(&file);
+            return Ok(DriverPreview {
+                url: url_for(&stem),
+                triangle_count: read_counts(&dir, &stem).unwrap_or_default().0,
+                from_cache: true,
+                rig,
+            });
+        }
+    }
+
+    let _slot = state
+        .slot
+        .lock()
+        .map_err(|_| "verrou d'aperçu empoisonné".to_string())?;
+    if token.is_some_and(|token| !state.is_current(token)) {
+        return Err(crate::errors::PREVIEW_SUPERSEDED.to_string());
+    }
+
+    let (model, stats, rig) = kn5_gltf::standalone_driver(graft)?;
+    for failure in &stats.failures {
+        log::warn!("preview: pilote — {failure}");
+    }
+    log::debug!(
+        "preview: mannequin {} seul — {} triangles, {} texture(s) habillée(s)",
+        graft.model.display(),
+        stats.triangles,
+        stats.dressed
+    );
+
+    // `mannequin` : ce qu'on convertit ici est une personne, seule, et rien sur
+    // une personne ne renvoie d'image nette. C'est le seul endroit qui le
+    // sache — la famille de shader ne suffit pas (`woman_driver` habille son
+    // visage d'un shader de carrosserie).
+    let options = kn5_gltf::ConvertOptions {
+        mannequin: true,
+        ..Default::default()
+    };
+    let conversion = kn5_gltf::convert(&model, None, &options, &|stage| {
+        use tauri::Emitter;
+        let _ = app.emit("preview://progress", stage.as_str());
+    })?;
+    for warning in &conversion.texture_warnings {
+        log::warn!("preview: texture `{}` ignorée — {}", warning.name, warning.reason);
+    }
+
+    let rig = DriverRig::from(rig);
+    write_entry(&dir, &stem, &conversion)?;
+    write_rig(&dir, &stem, &rig);
+    evict_to(&dir, state.cache_cap());
+
+    Ok(DriverPreview {
+        url: url_for(&stem),
+        triangle_count: conversion.triangle_count,
+        from_cache: false,
+        rig,
+    })
+}
+
+/// Le nom d'entrée d'un mannequin habillé et posé, **sans rien convertir**.
+///
+/// Séparé de [`prepare_driver`] parce que les vignettes de corps s'en servent
+/// comme identité : savoir si la vignette d'un corps est déjà rendue ne doit
+/// pas coûter une conversion, et elle doit se périmer exactement quand
+/// l'entrée de cache correspondante se périmerait.
+pub fn driver_entry_stem(graft: &kn5_gltf::DriverGraft) -> String {
+    format!("{}d{}", version_prefix(), driver_cache_key(graft))
+}
+
+/// Clé de cache d'un mannequin habillé et posé.
+///
+/// Le mannequin, sa garde-robe, **et la pose** : celle-ci vient de la voiture
+/// (`driver_base_pos.knh` et `steer.ksanim`), donc deux voitures qui habillent
+/// le même corps pareil ne partagent l'entrée que si elles l'assoient pareil —
+/// ce qui est bien ce qu'on veut, puisque c'est la pose qui décide de l'écart
+/// des mains, donc du volant qu'on leur dessine.
+fn driver_cache_key(graft: &kn5_gltf::DriverGraft) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(graft.model.to_string_lossy().to_lowercase().as_bytes());
+    stamp(&mut hasher, &graft.model);
+    for dir in &graft.texture_dirs {
+        hasher.update(dir.to_string_lossy().to_lowercase().as_bytes());
+    }
+    for source in [&graft.base_pose, &graft.animation].into_iter().flatten() {
+        hasher.update(source.to_string_lossy().to_lowercase().as_bytes());
+        stamp(&mut hasher, source);
+    }
+    hasher.update(graft.lock_degrees.to_le_bytes());
+    hasher.update(graft.steer_degrees.to_le_bytes());
+    format!("{:x}", hasher.finalize())[..32].to_string()
+}
+
+// --- Vignettes de corps (§9.1) ----------------------------------------------
+
+/// Où vivent les vignettes de corps : à côté du cache d'aperçus, **et hors de
+/// son plafond**.
+///
+/// Le pourquoi est mesuré. Rendre les 45 vignettes de l'installation de
+/// référence convertit 45 mannequins, soit ~180 Mo de `.glb` dans un pool qui
+/// est déjà à son plafond de 2 Gio : chacune pousse dehors une entrée plus
+/// ancienne, y compris les mannequins des vignettes précédentes, qu'il faut
+/// alors reconvertir à la visite suivante. Une vignette pèse quelques dizaines
+/// de kilo-octets et n'a aucune raison d'entrer dans cette compétition — donc
+/// elle n'y entre pas, et le `.glb` qui l'a produite peut être évincé sans
+/// qu'on ait à le reconvertir jamais.
+fn thumb_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    use tauri::Manager;
+    let dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| format!("dossier de cache indisponible : {e}"))?
+        .join("bodies");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("création du cache de vignettes : {e}"))?;
+    Ok(dir)
+}
+
+/// La vignette déjà rendue pour cette entrée, s'il y en a une.
+pub fn body_thumb(app: &tauri::AppHandle, stem: &str) -> Option<PathBuf> {
+    let file = thumb_dir(app).ok()?.join(format!("{stem}.png"));
+    file.is_file().then_some(file)
+}
+
+/// Range le PNG rendu par le frontend et renvoie son chemin.
+pub fn write_body_thumb(app: &tauri::AppHandle, stem: &str, png: &[u8]) -> Result<PathBuf, String> {
+    let file = thumb_dir(app)?.join(format!("{stem}.png"));
+    std::fs::write(&file, png).map_err(|e| format!("{} : {e}", file.display()))?;
+    Ok(file)
+}
+
+/// Le rig, à côté du `.glb`. Best-effort : une écriture manquée coûte une
+/// reconversion, pas un bug.
+fn write_rig(dir: &Path, key: &str, rig: &DriverRig) {
+    match serde_json::to_vec(rig) {
+        Ok(bytes) => {
+            if let Err(e) = std::fs::write(dir.join(format!("{key}.rig")), bytes) {
+                log::warn!("preview: rig de pilote non écrit — {e}");
+            }
+        }
+        Err(e) => log::warn!("preview: rig de pilote non sérialisé — {e}"),
+    }
+}
+
+fn read_rig(dir: &Path, key: &str) -> Option<DriverRig> {
+    let bytes = std::fs::read(dir.join(format!("{key}.rig"))).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
 /// URL servie par le protocole custom (§7.2).
 ///
 /// Forme Windows d'un scheme custom sous Tauri v2 — l'app ne cible que
@@ -491,6 +729,7 @@ fn evict_to(dir: &Path, cap: u64) {
         }
         if std::fs::remove_file(&path).is_ok() {
             let _ = std::fs::remove_file(path.with_extension("txt"));
+            let _ = std::fs::remove_file(path.with_extension("rig"));
             total = total.saturating_sub(size);
             log::warn!("preview: entrée de cache évincée ({})", path.display());
         }

@@ -21,3 +21,24 @@ export function setZoom(level: number | null): void {
     document.documentElement.style.setProperty("--ui-zoom", String(lvl / 100));
   }
 }
+
+/**
+ * Facteur du zoom d'interface, et **le seul endroit qui explique pourquoi il
+ * faut y penser**.
+ *
+ * Le zoom est un `zoom` CSS posé sur `<html>`. Tout ce qu'on **mesure** —
+ * `getBoundingClientRect`, `clientX/clientY`, `innerWidth/innerHeight` — est
+ * en pixels réels de la fenêtre, donc déjà multiplié par ce facteur. Tout ce
+ * qu'on **écrit** dans un `style` d'un descendant de `<html>` est en pixels
+ * CSS, que le zoom multipliera à son tour. Reporter une mesure dans un
+ * `left`/`top` sans repasser par ici applique donc le zoom deux fois, et le
+ * décalage grandit avec la distance au coin haut-gauche : à 110 %, une liste
+ * ouverte en bas de fenêtre sort de l'écran (bug réel, signalé deux fois — le
+ * menu contextuel d'abord, la liste déroulante des skins et des tenues
+ * ensuite).
+ *
+ * Règle : `mesure / zoomFactor()` avant d'écrire, jamais l'inverse.
+ */
+export function zoomFactor(): number {
+  return zoomState.level / 100;
+}

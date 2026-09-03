@@ -24,6 +24,12 @@ Documentation de conception de Pit Box (gestionnaire de mods Assetto Corsa). Ce 
 - **`pitbox-source-pack.html`** — affichage du pack d'origine (voitures sœurs, filtrer/désinstaller par pack).
 - **`pitbox-a-propos.html`** — écran « À propos » : identité, outils tiers (Assetto Corsa/Content Manager/QuickBMS), soutien (Patreon/OverTake), licences open source, mentions légales.
 
+## Écran Pilote (chantier en cours)
+
+- **`SPEC-ecran-pilote.md`** — spécification UX/UI de l'écran de choix du pilote : le corps (mannequin 3D) et la tenue en trois pièces. Porte l'asymétrie fondatrice — le corps est imposé par la physique de la voiture, la tenue tient à un fichier de skin — et les sept décisions dont tout le reste découle. **Point d'entrée du chantier.**
+- **`csp-driver-research.md`** — **appliquer le pilote en jeu** : ce qui marche (`[DRIVER3D_MODEL]` d'un `ext_config.ini` pour le corps, le `skin.ini` de la livrée pour la tenue), ce qui ne marche pas, et les quatre pistes explorées puis écartées. À lire **avant** de retenter quoi que ce soit dans cette direction.
+- **`pitbox-ecran-pilote.html`** — la maquette qui l'accompagne, interactive : survol = essai, clic = adoption, et les trois modes (corps d'origine, corps substitué, corps sans casque applicable).
+
 ## Aperçu 3D des voitures (chantier en cours)
 
 - **`SPEC-preview-3d-kn5.md`** — spécification du rendu 3D natif : parsing KN5 en Rust → glTF → three.js dans la webview. Décision d'architecture, layout binaire du format, plan par lots. **Point d'entrée du chantier.**

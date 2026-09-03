@@ -140,6 +140,16 @@ Jamais d'élévation admin — l'app doit fonctionner en utilisateur standard.
    expression de template appelée pour chaque carte d'une liste) passe par
    `peekUiPref` (cache réactif, `$state`) plutôt que l'API asynchrone —
    `preferred.ts` en est l'exemple.
+   **Corollaire découvert à l'usage : une écriture ne se rate jamais en
+   silence.** Le fichier ne suffit pas si l'appel qui l'écrit a un repli
+   muet. `invokeSafe` (délai de 5 s puis valeur par défaut) protège une
+   *lecture* — un réglage manquant vaut mieux qu'un écran figé — mais appliqué
+   à une *écriture* il rend « enregistré » une commande qui n'a rien écrit.
+   Constaté : `ui_prefs.json` inchangé pendant six heures d'utilisation, corps
+   et tenues de pilote adoptés puis disparus au redémarrage, sans un mot nulle
+   part. Donc : écriture sans délai, échec réessayé puis journalisé, et la file
+   d'écritures munie d'un `catch` — une promesse rejetée y gèle sinon toutes
+   les suivantes jusqu'au prochain démarrage.
    `localStorage` reste acceptable pour un état **purement transitoire**,
    jamais relu après redémarrage (aucun cas de ce genre dans le projet
    aujourd'hui) — dans le doute, c'est un fichier Rust.
@@ -236,6 +246,18 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
   l'ouverture n'est pas une dépendance : l'entourer d'`untrack`. Le symétrique
   côté écriture est déjà documenté dans `uiPrefs.svelte.ts` (`setUiPref` est
   `untrack`é pour la même raison, après une boucle infinie de 285 000 appels).
+- **Une mesure de pixels ne s'écrit jamais telle quelle dans un `style`.** Le
+  zoom d'interface est un `zoom` CSS posé sur `<html>` : `getBoundingClientRect`,
+  `clientX/clientY` et `innerWidth/Height` rendent des pixels **réels de la
+  fenêtre**, déjà multipliés, alors qu'un `left`/`top`/`width` écrit sur un
+  descendant est en pixels CSS que le zoom multipliera à son tour. Reporter
+  l'un dans l'autre applique donc le facteur deux fois, et l'écart grandit avec
+  la distance au coin haut-gauche — invisible à 100 %, donc invisible en
+  développement. Trois fois le même bug : le menu contextuel décalé, puis les
+  listes déroulantes (skin de la colonne de session, tenue par défaut) ouvertes
+  très en dessous de leur bouton jusqu'à sortir de l'écran, puis les colonnes
+  de bibliothèque élargies de 10 % à la première prise de poignée. Diviser par
+  `zoomFactor()` (`zoom.svelte.ts`) avant d'écrire, toujours.
 - **`t("clé")` renvoie la clé elle-même si elle manque** en anglais aussi.
   Une clé oubliée n'explose donc pas : elle s'affiche telle quelle à l'écran
   (`detail.showroom`). C'est ce qui rend `errorText()` sûr, et c'est aussi
@@ -386,36 +408,124 @@ laisser pourrir ici.
         SessionTypeBlock. Deux orientations (horizontale/verticale) et deux
         traitements de l'état actif (fond rouge plein vs fond surélevé) : un
         vrai composant avec une prop d'orientation, pas juste une classe.
+      - **Enregistrer / charger / supprimer une liste nommée : 2 copies**, et
+        c'est la seule entrée de cet inventaire qui ne soit pas du style mais
+        du **comportement**. Les sessions enregistrées (`SavedSessionsDialog`
+        pour le nom, la liste de chargement restée inline dans `Launch.svelte`)
+        et les tenues de pilote (`DriverOutfits.svelte`) font le même geste
+        avec deux implémentations. Demandé par l'utilisateur, qui l'a reconnu
+        d'un écran à l'autre. **Le mutualiser demande d'abord d'extraire la
+        moitié « liste » de `Launch.svelte`** — c'est là qu'est le travail, pas
+        dans le dialogue de nommage.
       Un lot de ce genre est du **reformatage pur sur une quinzaine de
       fichiers** : le faire dans son propre commit, jamais mélangé à un
       changement fonctionnel (sinon `git blame` devient inexploitable).
-- [ ] **Sélection du pilote** (branche `feature/drivers`). L'affichage est
-      fait : le pilote est greffé dans l'aperçu 3D, habillé par le `skin.ini`,
-      assis par le `driver_base_pos.knh` de la voiture, posé sur le volant par
-      son `steer.ksanim`, avec un réglage d'angle de braquage. Tout est
-      documenté au §4.6 et §4.6bis de `docs/SPEC-preview-3d-kn5.md`, et les
-      formats découverts (`.knh`, `.ksanim`) dans `docs/kn5-format.md`.
-      **Reste la cible** : proposer à l'utilisateur de *choisir* son pilote,
-      d'abord dans l'aperçu puis en session. Décidé avec l'utilisateur : ce
-      n'est **pas** un réglage par skin de voiture mais une **surcharge
-      globale**, décochée par défaut, et pensée pour les voitures de rue — sur
-      une voiture de course le pilote porte les couleurs de son écurie, donc
-      du skin. L'emplacement dans l'UI reste à trouver.
-      La mécanique est plus simple qu'elle n'en avait l'air : **trois listes
-      indépendantes** (53 combinaisons, 69 paires de gants, 176 casques), dont
-      seuls les casques sont filtrés par l'époque du mannequin — combinaisons
-      et gants portent les mêmes noms de fichiers sur toute la famille Kunos.
-      Compatibilité décidée par nom de fichier, pas déduite d'autres voitures ;
-      vignettes déjà présentes (173 casques sur 176). `DriverOutfit` (dans
-      `src/driver.rs`) est la forme qu'un sélecteur produira, `graft_for` la
-      transforme en fichiers.
+- [ ] **Écran Pilote** (branche `feature/ecran-pilote`). Spec et maquette dans
+      `docs/SPEC-ecran-pilote.md` + `docs/pitbox-ecran-pilote.html`, résumé au
+      §9.5 du SPEC. **À lire avant de reprendre** — l'asymétrie qui structure
+      tout l'écran (le corps commande, la tenue en découle) y est expliquée une
+      fois pour toutes.
+      Fait : le backend liste les corps installés et écarte ceux sans squelette
+      (`driver::bodies`, 45 sur 52 à la référence) ; l'époque d'un corps se lit
+      sur sa texture de casque ; substituer le corps fait tomber la garde-robe
+      de la livrée. Côté écran : section `driver`, ligne « Mon pilote » avec
+      badge dans la colonne de session (elle remplace la bascule et les trois
+      menus déroulants), panneau d'essayage + galerie, survol = essai / clic =
+      adoption, favoris, récents, recherche, regroupement, bannière
+      d'invalidation, états vides.
+      Le plateau est en 3D : le mannequin seul (`kn5_gltf::standalone_driver`,
+      pas `graft` avec un hôte vide — trois de ses quatre tâches parlent d'une
+      voiture qui n'est pas là) et un cadrage par piste déduit du rig. La
+      galerie des corps porte des vignettes rendues à la demande
+      (`driverThumbs.svelte.ts`), une à la fois, au défilement, et **le PNG est
+      conservé hors du plafond du cache d'aperçus**. Ce dernier point est un
+      bug corrigé, pas une précaution : les 45 conversions écrivent ~180 Mo
+      dans un pool déjà à ses 2 Gio, donc chacune évinçait une entrée plus
+      ancienne — y compris les mannequins des vignettes précédentes. Le cache
+      se mangeait lui-même et tout se recalculait à chaque visite.
+      **Le volant générique du §D5 est abandonné**, décidé avec l'utilisateur
+      après deux essais : sur les poignets (cerceau de 55 cm, personne ne le
+      touche), puis sur les phalanges des majeurs — 13 cm plus en avant,
+      mesuré, ce qui le met pourtant au bon endroit. Il ne convainc toujours
+      pas à l'écran et n'a pas assez d'intérêt pour continuer. `DriverRig`
+      garde `grip` : c'est le point que vise le cadrage « Gants ».
+      **La mesure qui a débloqué le lot, et la correction qui a suivi** : les
+      41 mannequins sur 44 qui partagent une pose de repos au millimètre
+      (mains à ±0,277, 1,027, 0,530) *ressemblent* à une prise de volant et
+      n'en sont pas — 55 cm d'écart, un volant de car, que les doigts ne
+      touchent pas. Rendu à l'écran, c'était le principal défaut du premier
+      essai. Appliquer la hiérarchie d'assise **et** l'animation de braquage
+      de la voiture ramène l'écart à 35–43 cm selon la voiture, mesuré sur
+      douze : le diamètre de son vrai volant. Donc `standalone` ne retire que
+      l'ancrage (`DRIVEREYES`), jamais la pose — et la clé de cache porte la
+      pose, puisque c'est elle qui décide du volant dessiné.
+      **La deuxième mesure, celle qui rend le survol possible** : le `.jpg`
+      qu'AC range à côté de chaque `.dds` de garde-robe est la **même image
+      aux mêmes dimensions** (`HELMET_2012.dds` 2048×512 DXT5, son `.jpg`
+      2048×512). Le survol échange donc la texture côté three.js — quelques
+      millisecondes, comme la spec le suppose — au lieu de redemander une
+      conversion. L'adoption, elle, reconvertit. Les noms d'image survivent
+      dans le glTF (`2016_Suit_DIFF.dds#paint-babbba`), ce qui permet de
+      retrouver le matériau à échanger ; les noms de *texture*, eux, sont
+      vides — se fier aux images.
+      **Le choix est passé par voiture** (`driverOverride.svelte.ts`), contre
+      la spec qui le voulait global : une tenue choisie une fois s'imposait aux
+      312 voitures, en silence. Cascade à trois niveaux — la tenue de cette
+      voiture, puis la tenue par défaut si l'option est cochée, puis la livrée
+      — le niveau 1 gagnant toujours. Rangé une clé par voiture dans
+      `ui_prefs.json` sur le patron de `preferred.ts`, **parce que le filtre
+      « Pilote choisi » de la bibliothèque lit ce drapeau par carte**, donc de
+      façon synchrone (`peekUiPref`).
+      **Reste, dans cet ordre :**
+      1. **Écart spec/réalité à trancher avec l'utilisateur** : le §6.3 range
+         les époques par ce que désigne la *famille*, mais mesuré sur
+         l'installation, c'est la *variante* qui porte le sens en 1969
+         (amon, clark…) et en 1985 (les couleurs). D'où le repli implémenté :
+         un regroupement qui ne produirait qu'un groupe passe en grille plate.
+      2. **Casque posé de travers sur un mannequin à pièces statiques.**
+         `rh_schuberth_helmet_driver_19` traverse sa propre figure. Il est le
+         cas que rien d'autre ne représente : cinq maillages **statiques**
+         (casque, visière, HANS, prise d'air, visage) accrochés au nœud
+         `DRIVER:RIG_Head`, là où les autres mannequins sont entièrement
+         skinnés. Or `pose::apply_locals` ne remplace la transformation **que
+         des nœuds `Dummy`** — un maillage nommé par la hiérarchie est ignoré.
+         À vérifier avant de corriger : c'est le casque qui bouge, ou la tête ?
+      3. **Poser le pilote en jeu — fait.** Le **corps** passe par une section
+         `[DRIVER3D_MODEL] NAME=…` dans `<voiture>/extension/ext_config.ini`
+         (CSP surcharge une section de `data.acd` en préfixant le nom du
+         fichier ; `data.acd` n'est pas touché, donc le checksum tient), la
+         **tenue** par le `skin.ini` de la livrée, sous le nom du mannequin —
+         il n'existe aucune route CSP pour celle-là, cherchée et non trouvée.
+         Tout est dans `docs/csp-driver-research.md`, et le code dans
+         `driverapply.rs`, appelé par `launch()` : une seule entrée `sync()`
+         qui pose quand la voiture a un choix et **retire** quand elle n'en a
+         plus. Conséquence à ne pas rater : remplacer le corps rend la section
+         de la livrée inopérante, la tenue doit être réécrite sous le
+         **nouveau** nom de mannequin. Le déploiement étant en hardlink,
+         l'écriture efface le fichier avant de le réécrire — sinon c'est la
+         copie de bibliothèque qu'on modifie. **Ne pas écrire `POSITION`**
+         dans `[DRIVER3D_MODEL]`, contrairement à ce que suggèrent les réponses
+         trouvées en ligne : c'est le même `[MODEL] POSITION` que
+         `seating_offset` a mesuré comme inapplicable.
+      **Écarts assumés vis-à-vis de la spec, décidés avec l'utilisateur** :
+      le favori se pose sur le cœur de la bibliothèque (`♥`/`♡`) placé sous
+      l'image et non sur elle — on garde l'argument du §7.3 (l'échantillon est
+      montré entier, un bouton posé dessus en cache un morceau) en prenant le
+      glyphe du reste de l'app ; les **tenues enregistrées**
+      (`driverOutfits.svelte.ts`, §13 complété) reposent les quatre pièces
+      d'un clic — le corps d'abord, sinon `setDriverBody` efface les trois
+      autres juste après les avoir posées ; le badge `MODIFIÉ` du §3.2 est
+      retiré, la ligne de session disant désormais elle-même « Tenue
+      d'origine », le nom de la tenue enregistrée, ou « Tenue personnalisée » ;
+      et une pièce gardée qui ne s'applique pas au corps courant est **barrée**
+      dans sa piste au lieu d'être affichée comme active — elle est conservée
+      (§13) mais ne change rien, ce que rien ne disait.
+      Le **verrou « voiture de course »** du §11.2 est retiré (décidé avec
+      l'utilisateur) : son texte était devenu faux, le corps se pose là comme
+      ailleurs, et un écran intermédiaire qu'un clic franchit ne protège rien.
       **Ce qui n'est pas tranché** : ce qu'AC met dans son checksum en ligne.
-      Le mannequin est hors de portée sans risque (les 312 voitures ont leur
-      `driver3d.ini` dans `data.acd`, conteneur de physique) ; la tenue ne
-      demande qu'un `skin.ini`, fichier de skin — probablement sûr, non
-      prouvé. Et Pit Box déployant en hardlink, écrire ce `skin.ini` toucherait
-      la copie de bibliothèque : il faudra casser le lien et passer par
-      `gamebackup.rs`.
+      La tenue ne demande qu'un `skin.ini`, fichier de skin — probablement sûr,
+      non prouvé ; le corps ne touche qu'`ext_config.ini`, hors `data.acd`.
       Deux mesures à garder en tête : les trois voitures dont la `.knh` est
       vide retombent sur `DRIVEREYES`, et `[MODEL] POSITION` ne doit **pas**
       être appliqué (voir `seating_offset`).

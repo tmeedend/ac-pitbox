@@ -3,6 +3,7 @@
   // miniature (skin voiture, layout circuit…) — un <select> natif ne peut
   // pas afficher d'image par option, d'où ce composant maison.
   import { tick } from "svelte";
+  import { zoomFactor } from "$lib/zoom.svelte";
 
   interface ImageOption {
     id: string;
@@ -35,11 +36,22 @@
   // réelle connue (elle grandit avec son plus long libellé, `width:
   // max-content`, jusqu'à ce que ça ne tienne plus).
   let listStyle = $state("");
+  /** Même valeur que le `max-height` de `.isd-list` : le calcul de place ne
+   * fait que la réduire, jamais l'augmenter. */
+  const LIST_MAX_HEIGHT = 260;
 
   function positionList() {
     if (!triggerEl) return;
+    // **Tout est ramené en pixels CSS avant d'être écrit** : la mesure est en
+    // pixels réels, et un `position: fixed` sous un `<html>` zoomé
+    // remultiplierait par le même facteur (voir `zoomFactor`). Sans ça, la
+    // liste s'ouvrait très en dessous de son bouton — d'autant plus bas que le
+    // bouton était bas dans la fenêtre, jusqu'à sortir de l'écran par le bas
+    // sur la tenue par défaut (bug réel, à 110 % comme à 125 %).
+    const f = zoomFactor();
     const r = triggerEl.getBoundingClientRect();
-    listStyle = `top:${r.bottom + 4}px; left:${r.left}px; min-width:${r.width}px;`;
+    const top = r.bottom / f + 4;
+    listStyle = `top:${top}px; left:${r.left / f}px; min-width:${r.width / f}px;`;
   }
 
   function toggle(e: MouseEvent) {
@@ -105,10 +117,30 @@
     tick().then(() => {
       if (!listEl || !triggerEl) return;
       const margin = 8;
+      const f = zoomFactor();
       const r = listEl.getBoundingClientRect();
       if (r.right > window.innerWidth - margin) {
-        const shifted = Math.max(margin, window.innerWidth - r.width - margin);
+        const shifted = Math.max(margin, (window.innerWidth - r.width) / f - margin);
         listStyle = listStyle.replace(/left:[^;]+;/, `left:${shifted}px;`);
+      }
+      // **Et le même soin en bas**, qui manquait : un sélecteur posé en pied de
+      // panneau (la tenue par défaut) ouvrait une liste tronquée par le bord de
+      // la fenêtre, sans rien pour atteindre le reste. Elle bascule donc
+      // au-dessus du bouton quand la place manque dessous, et se contente de la
+      // hauteur disponible si elle manque des deux côtés — sa propre barre de
+      // défilement fait le reste.
+      const trigger = triggerEl.getBoundingClientRect();
+      const below = window.innerHeight - trigger.bottom - margin;
+      const above = trigger.top - margin;
+      // Le plafond de la feuille de style reste la hauteur voulue ; ce calcul
+      // ne fait que la réduire quand la fenêtre est plus courte.
+      const cap = (available: number) => `${Math.min(LIST_MAX_HEIGHT, Math.max(available, 0) / f)}px`;
+      if (r.height > below && above > below) {
+        const top = (trigger.top - Math.min(r.height, above)) / f - 4;
+        listStyle = listStyle.replace(/top:[^;]+;/, `top:${top}px;`);
+        listEl.style.maxHeight = cap(above);
+      } else {
+        listEl.style.maxHeight = cap(below);
       }
     });
   });

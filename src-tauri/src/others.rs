@@ -36,6 +36,11 @@ pub struct OtherImported {
     pub id: String,
     /// Fichiers annexes redirigés vers le dossier ressources (§4.5.2).
     pub resources_extracted: usize,
+    /// Zones du jeu touchées (§7.3), pour que le rapport d'import puisse dire
+    /// « 2 pilotes » plutôt que « 2 éléments » — un mod « autre » n'a pas
+    /// d'autre nom de nature que celle-là.
+    #[serde(default)]
+    pub categories: Vec<String>,
     /// Composant **optionnel** (§4.6bis) : livré par l'auteur dans une archive
     /// à part **et** modifiant le jeu de base. Importé mais laissé inactif —
     /// c'est à l'utilisateur de dire s'il le veut.
@@ -106,6 +111,7 @@ pub fn import_other(
     let res_dir = resources::resources_dir_for(library, "others", &[&id]);
     let resources_extracted =
         resources::file_mod(root, &dest, &res_dir, mode, !copy, resources::Source::BesideMod).ok()?;
+    relocate_driver_models(&dest);
     overlay::insert_other_mod(
         conn,
         &id,
@@ -115,11 +121,63 @@ pub fn import_other(
     )
     .ok()?;
     Some(OtherImported {
+        // Relues sur l'arbre rangé, donc **après** le déplacement des
+        // mannequins : un `.kn5` nu compte comme pilote, ce qu'il n'était pas
+        // encore une ligne plus haut.
+        categories: categories_of(&relative_files(&dest)),
         id,
         resources_extracted,
         optional: false,
         game_files_replaced: 0,
     })
+}
+
+/// Range les mannequins de pilote là où le jeu les lit.
+///
+/// **Pourquoi ici et pas dans l'importeur** : un dossier dont rien n'est
+/// reconnu part *en bloc* dans `import_other`, sans passer par le balayage des
+/// restes qui normalise les chemins. C'est le cas de tous les mods de pilote
+/// distribués comme un `.kn5` nu — quatre des huit exemples réels examinés —
+/// et sans cette passe ils atterrissaient à la racine, invisibles du jeu comme
+/// de la galerie des corps. `import_other` est le seul entonnoir commun à
+/// toutes les routes, donc c'est ici que la règle tient.
+///
+/// **On réorganise la copie de bibliothèque, pas le mod de l'auteur.** Ce n'est
+/// pas la règle d'or n°3, qui protège le dossier d'un mod de voiture ou de
+/// circuit : un « autre mod » n'a pas de dossier de mod, son arborescence
+/// **est** une liste de chemins relatifs à la racine d'AC. Lui donner une
+/// destination valide est exactement ce que `acpath::normalize_leftover` fait
+/// déjà pour un dossier `driver/` livré à nu.
+fn relocate_driver_models(dest: &Path) {
+    let mut moves: Vec<(PathBuf, PathBuf)> = Vec::new();
+    for entry in WalkDir::new(dest).into_iter().flatten() {
+        let path = entry.path();
+        if !path.is_file() || !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("kn5")) {
+            continue;
+        }
+        let Ok(rel) = path.strip_prefix(dest) else { continue };
+        // Un `.kn5` dont le chemin mène déjà dans le jeu sait où il va, et
+        // l'ouvrir coûterait un parsing par modèle de voiture.
+        if crate::acpath::leads_into_game(rel) {
+            continue;
+        }
+        let Some(name) = rel.file_name() else { continue };
+        if crate::driver::is_driver_model(path) {
+            moves.push((path.to_path_buf(), dest.join("content").join("driver").join(name)));
+        }
+    }
+    for (from, to) in moves {
+        if let Some(parent) = to.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                log::warn!("others: {} — {e}", parent.display());
+                continue;
+            }
+        }
+        match std::fs::rename(&from, &to) {
+            Ok(()) => log::info!("others: mannequin {} rangé en content/driver", to.display()),
+            Err(e) => log::warn!("others: {} non rangé — {e}", from.display()),
+        }
+    }
 }
 
 /// Combien de fichiers du **jeu de base** cet arbre remplacerait s'il était posé.
@@ -366,6 +424,18 @@ pub fn folder_path(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<PathB
         .ok_or_else(|| crate::errors::MOD_NOT_FOUND.to_string())
 }
 
+/// Dossier des ressources d'un « autre mod » (§4.5.2) : mêmes annexes qu'un
+/// mod voiture/circuit ou une app, mais un « autre mod » n'a pas de dossier
+/// de mod dont dériver `origin` — toutes ses ressources viennent de
+/// `resources/others/<id>/` (`import_other` les y range en `BesideMod`).
+pub fn resources_dir(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<PathBuf, String> {
+    overlay::get_other_mod(conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_UNKNOWN)?;
+    let library = cfg.library_path.as_ref().ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    Ok(resources::resources_dir_for(library, "others", &[id]))
+}
+
 pub fn set_priority(conn: &Connection, id: &str, priority: bool) -> Result<(), String> {
     overlay::set_other_priority(conn, id, priority).map_err(|e| e.to_string())
 }
@@ -576,6 +646,39 @@ pub fn delete_other(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Règle : un `.kn5` qui a déjà une destination dans le jeu n'est pas
+    /// déplacé — et n'est même pas ouvert, ce qui évite un parsing par modèle
+    /// de voiture sur un pack qui en contient dix.
+    #[test]
+    fn a_model_already_bound_for_the_game_is_not_relocated() {
+        let base = crate::testutil::temp_dir("others-relocate-bound");
+        let kept = base.join("content").join("cars").join("x").join("model.kn5");
+        std::fs::create_dir_all(kept.parent().unwrap()).expect("arbo");
+        std::fs::write(&kept, b"x").expect("écriture");
+
+        relocate_driver_models(&base);
+
+        assert!(kept.is_file(), "le modèle de la voiture n'a pas bougé");
+        assert!(
+            !base.join("content").join("driver").exists(),
+            "et aucun dossier de pilote n'a été inventé"
+        );
+    }
+
+    /// Règle : un `.kn5` isolé qui n'est pas un mannequin reste où il est.
+    /// C'est la moitié qui protège — sans elle, tout `.kn5` traînant à la
+    /// racine d'un « autre mod » partirait dans `content/driver`.
+    #[test]
+    fn a_loose_model_that_is_not_a_driver_stays_put() {
+        let base = crate::testutil::temp_dir("others-relocate-loose");
+        let loose = base.join("something.kn5");
+        std::fs::write(&loose, b"not a kn5 at all").expect("écriture");
+
+        relocate_driver_models(&base);
+
+        assert!(loose.is_file(), "illisible, donc pas un mannequin, donc intouché");
+    }
 
     fn make_tree(root: &Path, files: &[&str]) {
         for f in files {

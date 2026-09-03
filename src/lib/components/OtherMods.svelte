@@ -19,6 +19,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import LoadingState from "./LoadingState.svelte";
   import Tabs, { type TabItem } from "./Tabs.svelte";
+  import OtherModDetail from "./OtherModDetail.svelte";
 
   import { errorText } from "$lib/errors";
 
@@ -33,6 +34,9 @@
   let loading = $state(true);
   let error = $state("");
   let warnings = $state<Record<string, string[]>>({});
+  /** Fiche ouverte (§7.3, sur le patron de `SoundDetail`/`fullSoundId`). */
+  let fullId = $state<string | null>(null);
+  const fullRow = $derived(others.find((o) => o.id === fullId) ?? null);
 
   async function load() {
     try {
@@ -99,6 +103,7 @@
     error = "";
     try {
       await deleteOtherMod(o.id);
+      if (fullId === o.id) fullId = null;
       await load();
     } catch (e) {
       error = errorText(e);
@@ -143,6 +148,18 @@
   );
 </script>
 
+{#if fullRow}
+  <OtherModDetail
+    row={fullRow}
+    busy={busy === fullRow.id}
+    warnings={warnings[fullRow.id] ?? []}
+    onclose={() => (fullId = null)}
+    ontoggle={() => toggle(fullRow)}
+    ontogglePriority={() => togglePriority(fullRow)}
+    onopenFolder={() => openFolder(fullRow)}
+    ondelete={() => remove(fullRow)}
+  />
+{:else}
 <div class="others">
   <header class="head">
     <div>
@@ -172,7 +189,9 @@
       {#each filtered as o (o.id)}
         <li class:active={o.is_active}>
           <div class="row">
-            <span class="o-name mono">{o.id}</span>
+            <button class="o-name o-link mono" type="button" title={t("others.detailTooltip")} onclick={() => (fullId = o.id)}>
+              {o.id}
+            </button>
             <span class="cats">
               {#each o.categories as c}
                 <span class="cat" class:here={c === tab}>{t(`others.cat.${c}`)}</span>
@@ -211,6 +230,7 @@
     </ul>
   {/if}
 </div>
+{/if}
 
 <style>
   .others {
@@ -274,6 +294,20 @@
     font-weight: 600;
     color: var(--txt);
     font-size: 12.5px;
+  }
+  /* Le nom ouvre la fiche du mod : un bouton, mais qui n'en a pas l'air —
+     même patron que `.s-link` sur la fiche des sons (Transversal.svelte). */
+  .o-link {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .o-link:hover,
+  .o-link:focus-visible {
+    color: var(--rosso-bright);
   }
   /* Zones touchées par le mod. Un mod qui en touche deux est listé sous les
      deux onglets : ces pastilles sont ce qui permet de reconnaître le même

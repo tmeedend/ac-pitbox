@@ -12,6 +12,7 @@ mod config;
 mod deploy;
 mod detect;
 mod driver;
+mod driverapply;
 mod enginesound;
 mod errors;
 mod export;
@@ -270,6 +271,11 @@ pub fn run() {
             commands::session::list_showrooms,
             commands::preview::prepare_car_preview,
             commands::preview::list_driver_choices,
+            commands::preview::list_driver_bodies,
+            commands::preview::prepare_driver_preview,
+            commands::preview::prepare_body_preview,
+            commands::preview::body_thumbnail,
+            commands::preview::save_body_thumbnail,
             commands::preview::clear_preview_cache,
             commands::preview::preview_cache_size,
             commands::preview::set_preview_cache_cap,
@@ -352,6 +358,10 @@ pub fn run() {
             commands::others::deactivate_other,
             commands::others::delete_other_mod,
             commands::others::open_other_mod_folder,
+            commands::others::list_other_resources,
+            commands::others::open_other_resource,
+            commands::others::get_other_resource_path,
+            commands::others::read_other_resource,
             commands::addons::delete_app,
             commands::rules::get_rules,
             commands::rules::save_rules,

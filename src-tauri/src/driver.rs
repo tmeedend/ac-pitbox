@@ -139,15 +139,22 @@ pub struct DriverView {
     pub outfit: OutfitOverride,
 }
 
-/// Ce que l'utilisateur impose par-dessus la tenue déclarée par le skin.
+/// Ce que l'utilisateur impose par-dessus ce que la voiture et son skin
+/// déclarent.
 ///
-/// Une pièce à `None` laisse celle du skin. Le **mannequin n'y figure pas** :
-/// il vit dans `driver3d.ini`, donc dans `data.acd`, le conteneur que le
-/// serveur de course vérifie — le changer coûterait l'accès en ligne, alors
-/// que la tenue ne tient qu'au `skin.ini` (§4.6ter).
+/// Une pièce à `None` laisse celle du skin. Le **mannequin, lui, n'a pas le
+/// même statut que les trois autres** et c'est l'asymétrie qui structure tout
+/// l'écran Pilote (`docs/SPEC-ecran-pilote.md` §1.3) : la tenue ne tient qu'au
+/// `skin.ini`, un fichier de skin, alors que le mannequin est nommé par
+/// `driver3d.ini`, donc par le `data.acd` que le serveur de course vérifie.
+/// Le substituer ne vaut **que dans l'aperçu** — d'où le bandeau permanent que
+/// l'écran affiche tant que dure ce mode (§10.1).
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OutfitOverride {
+    /// Mannequin substitué à celui de la voiture, sans extension. `None` =
+    /// celui que `driver3d.ini` nomme.
+    pub model: Option<String>,
     pub suit: Option<String>,
     pub gloves: Option<String>,
     pub helmet: Option<String>,
@@ -155,8 +162,20 @@ pub struct OutfitOverride {
 
 impl OutfitOverride {
     fn apply(&self, outfit: &mut DriverOutfit) {
-        // `clone_from` sur ce qui est demandé seulement : une pièce non
-        // choisie garde celle du skin, elle ne devient pas nue.
+        // Corps substitué : la garde-robe du skin tombe avec lui (§10.1).
+        // Elle est lue sous le nom de l'ancien mannequin — la section
+        // `[driver_80]` d'un `skin.ini` ne dit rien du `driver_60` qu'on vient
+        // de mettre à sa place, et la lui appliquer quand même reviendrait à
+        // croire que deux mannequins nomment leurs textures pareil, ce qui est
+        // justement faux pour les casques.
+        if let Some(model) = self.model.as_deref().filter(|m| !m.is_empty() && *m != outfit.model) {
+            outfit.model = model.to_string();
+            outfit.suit = None;
+            outfit.gloves = None;
+            outfit.helmet = None;
+        }
+        // Puis ce qui est demandé seulement : une pièce non choisie garde
+        // celle du skin, elle ne devient pas nue.
         for (chosen, target) in [
             (&self.suit, &mut outfit.suit),
             (&self.gloves, &mut outfit.gloves),
@@ -233,10 +252,7 @@ pub fn graft_for(
     outfit: &DriverOutfit,
     steer_degrees: f32,
 ) -> Option<kn5_gltf::DriverGraft> {
-    let model = ac_root
-        .join("content")
-        .join("driver")
-        .join(format!("{}.kn5", outfit.model));
+    let model = body_file(ac_root, &outfit.model);
     if !model.is_file() {
         // Common enough to not deserve a warning at every preview: a mod car
         // may ask for a mannequin its author shipped separately, or not at all.
@@ -267,6 +283,32 @@ pub fn graft_for(
         lock_degrees: outfit.lock,
         steer_degrees,
     })
+}
+
+/// Le mannequin seul, habillé comme l'écran Pilote le demande — sans habitacle
+/// autour (`docs/SPEC-ecran-pilote.md` §5.1).
+///
+/// Même résolution que [`resolve`], à une chose près : **l'ancrage tombe**. Il
+/// pose le corps sur le `DRIVEREYES` de la voiture, c'est-à-dire à sa place
+/// dans un habitacle qui n'est pas là.
+///
+/// L'assise et l'animation de braquage, elles, **restent**, et c'est la
+/// correction du premier essai : sans elles le mannequin garde sa pose de
+/// modélisation, bras écartés de 55 cm, et le volant générique qu'on lui pose
+/// entre les mains a le diamètre d'un volant de car. Avec elles, l'écart
+/// tombe à 35–43 cm selon la voiture — la taille de son vrai volant.
+pub fn standalone(
+    ac_root: &Path,
+    car_dir: &Path,
+    car_id: &str,
+    skin_dir: Option<&Path>,
+    chosen: &OutfitOverride,
+) -> Option<kn5_gltf::DriverGraft> {
+    let mut outfit = outfit_of(car_dir, car_id, skin_dir)?;
+    chosen.apply(&mut outfit);
+    let mut graft = graft_for(ac_root, car_dir, &outfit, 0.0)?;
+    graft.anchor = None;
+    Some(graft)
 }
 
 /// Joins a `skin.ini` wardrobe path onto its kind's folder, refusing anything
@@ -374,8 +416,17 @@ pub struct WardrobeOption {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DriverChoices {
-    /// Le mannequin que la voiture impose — il ne se choisit pas (§4.6ter).
+    /// Le mannequin sur lequel ces listes ont été calculées : celui de la
+    /// voiture, ou celui que l'utilisateur lui a substitué.
     pub model: String,
+    /// `true` quand ce mannequin n'est pas celui que la voiture nomme — le
+    /// mode « corps substitué » de l'écran Pilote (§10), qui ne vaut que dans
+    /// l'aperçu.
+    pub substituted: bool,
+    /// Époque de la boîte à casques du mannequin, clé de la table [`ERAS`].
+    /// `None` = mannequin qui nomme ses images autrement, donc aucun casque du
+    /// jeu ne s'y pose (§11.1).
+    pub era: Option<&'static str>,
     pub suits: Vec<WardrobeOption>,
     pub gloves: Vec<WardrobeOption>,
     pub helmets: Vec<WardrobeOption>,
@@ -399,21 +450,31 @@ pub struct DriverChoices {
 ///
 /// Aucune liste codée en dur, donc, et un mannequin de mod inconnu est traité
 /// comme les autres.
-pub fn choices(ac_root: &Path, car_dir: &Path, car_id: &str) -> Option<DriverChoices> {
-    let outfit = outfit_of(car_dir, car_id, None)?;
-    let mannequin = ac_root
-        .join("content")
-        .join("driver")
-        .join(format!("{}.kn5", outfit.model));
-    let diffuse = diffuse_textures(&mannequin)?;
+pub fn choices(ac_root: &Path, car_dir: &Path, car_id: &str, body: Option<&str>) -> Option<DriverChoices> {
+    let declared = outfit_of(car_dir, car_id, None)?.model;
+    // Le corps substitué commande les trois listes (§1.3) : c'est lui qui
+    // porte les noms de texture, donc lui qui décide de ce qui s'y pose.
+    let model = body
+        .map(str::trim)
+        .filter(|m| !m.is_empty())
+        .unwrap_or(&declared)
+        .to_string();
+    let diffuse = diffuse_textures(&body_file(ac_root, &model))?;
 
     let textures = ac_root.join("content").join("texture");
     Some(DriverChoices {
         suits: wardrobe_options(&textures.join(SUIT_DIR), &diffuse),
         gloves: wardrobe_options(&textures.join(GLOVES_DIR), &diffuse),
         helmets: wardrobe_options(&textures.join(HELMET_DIR), &diffuse),
-        model: outfit.model,
+        era: era_of(&diffuse),
+        substituted: model != declared,
+        model,
     })
+}
+
+/// Le `.kn5` d'un mannequin dans l'installation d'AC.
+fn body_file(ac_root: &Path, model: &str) -> PathBuf {
+    ac_root.join("content").join("driver").join(format!("{model}.kn5"))
 }
 
 /// Noms des textures que le mannequin échantillonne comme couleur de base.
@@ -509,6 +570,157 @@ fn thumbnail_of(files: &[PathBuf], matches: &dyn Fn(&Path) -> bool) -> Option<Pa
         })
         .or_else(|| files.iter().find(|p| is_image(p)))
         .cloned()
+}
+
+// --- Les corps installés (§9) -----------------------------------------------
+
+/// Époque d'un mannequin, lue sur le nom de la texture de casque qu'il
+/// échantillonne, et clé i18n du libellé que l'écran en affiche.
+///
+/// **Table maintenue en code, indexée sur le préfixe** (§6.3) : c'est une
+/// convention de nommage Kunos, pas une donnée du format, et un mannequin de
+/// mod qui nomme ses images autrement tombe simplement en `None` — sans
+/// erreur, et l'écran le dit en toutes lettres plutôt que de proposer un choix
+/// sans effet (§11.1). Mesuré sur les 52 mannequins de l'installation de
+/// référence : les quatre préfixes ci-dessous couvrent tous ceux dont un
+/// casque du jeu peut changer l'apparence, les autres (`RSS_Helmet`,
+/// `HELMET_HR2`, `helmet_2019`, `2016_Suit_DIFFc` de `yk2_kana`) portent leur
+/// casque avec eux.
+const ERAS: [(&str, &str); 4] = [
+    ("helmet_2012", "modern"),
+    ("helmet_1985", "1980s"),
+    ("helmet_1975", "1970s"),
+    ("helmet_1969", "1960s"),
+];
+
+fn era_of(diffuse: &BTreeSet<String>) -> Option<&'static str> {
+    ERAS.iter()
+        .find(|(prefix, _)| diffuse.iter().any(|name| name.starts_with(prefix)))
+        .map(|(_, era)| *era)
+}
+
+/// Un mannequin installé, tel qu'il s'offre au choix (§9.1).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BodyOption {
+    /// Nom de fichier sans extension, tel que `driver3d.ini` l'écrirait :
+    /// `driver_60`, `gt-m_pro`. Ne se traduit pas.
+    pub id: String,
+    /// Clé de la table [`ERAS`], ou `None` — un mannequin sur lequel aucun
+    /// casque du jeu ne se pose.
+    pub era: Option<&'static str>,
+}
+
+/// Les mannequins qu'on peut proposer, triés par nom.
+///
+/// **Un corps qu'on ne peut pas prendre n'a pas à être montré** (§9.3) : les
+/// illisibles et ceux sans squelette sont écartés en silence. Le critère est
+/// mesuré, pas supposé — un mannequin sans *skinned mesh* n'a pas de rig, donc
+/// ni le `driver_base_pos.knh` de la voiture ni son `steer.ksanim` n'ont prise
+/// sur lui, et il s'afficherait dans sa pose de repos au travers de
+/// l'habitacle. Sur l'installation de référence ça écarte exactement sept
+/// fichiers sur 52 : les six variantes de LOD B, qui sont des copies rigides
+/// des mannequins qu'elles doublent, et une blague (`cheems.kn5`, un chien).
+///
+/// Le coût est celui d'un parcours complet du dossier — **0,3 s pour les 52
+/// mannequins de l'installation de référence**, soit 800 Mo lus et parsés, ce
+/// qui surprend jusqu'à ce qu'on se rappelle que le gros d'un KN5 est en
+/// textures et qu'on ne les décode pas ici. Pas de cache disque, donc : ce
+/// serait un fichier de plus à invalider pour économiser un tiers de seconde
+/// sur un écran qu'on ouvre rarement.
+pub fn bodies(ac_root: &Path) -> Vec<BodyOption> {
+    let dir = ac_root.join("content").join("driver");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        log::warn!("driver: {} illisible", dir.display());
+        return Vec::new();
+    };
+    let mut out: Vec<BodyOption> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|e| e.eq_ignore_ascii_case("kn5")))
+        .filter_map(|path| {
+            let id = path.file_stem()?.to_string_lossy().into_owned();
+            let bytes = std::fs::read(&path)
+                .inspect_err(|e| log::warn!("driver: {} illisible — {e}", path.display()))
+                .ok()?;
+            let model = kn5::parse(&bytes)
+                .inspect_err(|e| log::debug!("driver: {id} écarté, illisible — {e}"))
+                .ok()?;
+            if !has_skeleton(&model) {
+                log::debug!("driver: {id} écarté, aucun squelette");
+                return None;
+            }
+            let diffuse: BTreeSet<String> = model
+                .materials
+                .iter()
+                .filter_map(|m| m.texture_for("txDiffuse"))
+                .map(str::to_lowercase)
+                .collect();
+            Some(BodyOption {
+                era: era_of(&diffuse),
+                id,
+            })
+        })
+        .collect();
+    out.sort_by_key(|body| body.id.to_lowercase());
+    out
+}
+
+/// Préfixe dont AC affuble chaque nœud d'un mannequin. C'est par lui qu'il
+/// retrouve le rig, et aucun autre type de modèle ne le porte.
+const DRIVER_NODE_PREFIX: &str = "DRIVER:";
+
+/// Ce `.kn5` est-il un mannequin de pilote ?
+///
+/// **La question se pose vraiment** : un mod de pilote se distribue souvent
+/// comme un `.kn5` nu, sans le moindre dossier pour dire où il va — quatre des
+/// huit exemples réels examinés (`senna.kn5`, `tom.kn5`, `jp_police_man.kn5`,
+/// `FemaleAsianDriver.kn5`). Sans réponse, ces fichiers atterrissent n'importe
+/// où plutôt que dans `content/driver/`.
+///
+/// **Deux critères, tous deux nécessaires, mesurés et sans exception** :
+///
+/// | | meshes skinnés | nœuds `DRIVER:` | roues |
+/// | --- | --- | --- | --- |
+/// | six mods de pilote trouvés en ligne | 2 à 10 | 57 à 76 | 0 |
+/// | `driver.kn5` de Kunos | 2 | 72 | 0 |
+/// | **une voiture** (`thefuckingsabre.kn5`) | 0 | 0 | 2 |
+/// | **un collider** | 0 | 0 | 0 |
+///
+/// Le squelette seul ne suffirait pas — rien n'interdit à une voiture d'animer
+/// une pièce — et le préfixe seul non plus, un mod pouvant nommer ainsi un
+/// accessoire. Les deux ensemble n'ont donné aucun faux positif.
+///
+/// **Coût** : le parsing complet du fichier, une quinzaine de millisecondes
+/// pour un mannequin de quinze mégaoctets. À n'appeler que sur un `.kn5` dont
+/// on ne connaît pas déjà la destination — sur les autres, le chemin répond
+/// déjà, et gratuitement.
+pub fn is_driver_model(path: &Path) -> bool {
+    let Ok(bytes) = std::fs::read(path) else { return false };
+    let Ok(model) = kn5::parse(&bytes) else { return false };
+    if !has_skeleton(&model) {
+        return false;
+    }
+    let mut prefixed = false;
+    model.visit_nodes(&mut |node| {
+        if node.name.len() >= DRIVER_NODE_PREFIX.len()
+            && node.name[..DRIVER_NODE_PREFIX.len()].eq_ignore_ascii_case(DRIVER_NODE_PREFIX)
+        {
+            prefixed = true;
+        }
+    });
+    prefixed
+}
+
+/// Un rig que la pose de la voiture et son animation de volant peuvent bouger.
+fn has_skeleton(model: &kn5::Kn5Model) -> bool {
+    let mut found = false;
+    model.visit_nodes(&mut |node| {
+        if matches!(node.kind, kn5::Kn5NodeKind::SkinnedMesh(_)) {
+            found = true;
+        }
+    });
+    found
 }
 
 #[cfg(test)]
@@ -637,6 +849,356 @@ SUIT=\\type1\\black_black
         assert_eq!(parse_position("0, x, 0"), None, "nor is a word");
     }
 
+    /// Règle §10.1 : substituer le corps supprime la référence « livrée ».
+    ///
+    /// La garde-robe du `skin.ini` est écrite sous le nom de l'ancien
+    /// mannequin ; la garder reviendrait à habiller le nouveau avec des
+    /// fichiers qui ne le concernent pas — ce que l'écran annonce d'ailleurs
+    /// en toutes lettres avant de le faire (bannière d'invalidation, §10.2).
+    #[test]
+    fn a_substituted_body_drops_the_wardrobe_of_the_livery() {
+        let tmp = crate::testutil::temp_dir("driver_substitute");
+        let (car, skin) = fake_car(&tmp, Some(SKIN_INI));
+        let mut outfit = outfit_of(&car, "ks_fake", skin.as_deref()).expect("un pilote");
+        assert!(outfit.helmet.is_some(), "la livrée habille bien le mannequin déclaré");
+
+        OutfitOverride {
+            model: Some("driver_60".into()),
+            helmet: Some("helmet_1969/clark".into()),
+            ..Default::default()
+        }
+        .apply(&mut outfit);
+
+        assert_eq!(
+            outfit.model, "driver_60",
+            "le corps demandé remplace celui de la voiture"
+        );
+        assert_eq!(
+            outfit.helmet.as_deref(),
+            Some("helmet_1969/clark"),
+            "la pièce choisie, elle, s'applique"
+        );
+        assert_eq!(
+            outfit.suit, None,
+            "la combinaison de la livrée n'a plus de destinataire"
+        );
+        assert_eq!(outfit.gloves, None, "les gants non plus");
+    }
+
+    /// Le même corps que celui de la voiture n'est pas une substitution : la
+    /// livrée reste la référence, et ses pièces avec elle.
+    #[test]
+    fn asking_for_the_car_own_body_changes_nothing() {
+        let tmp = crate::testutil::temp_dir("driver_same_body");
+        let (car, skin) = fake_car(&tmp, Some(SKIN_INI));
+        let mut outfit = outfit_of(&car, "ks_fake", skin.as_deref()).expect("un pilote");
+        let before = outfit.clone();
+
+        OutfitOverride {
+            model: Some("driver_80".into()),
+            ..Default::default()
+        }
+        .apply(&mut outfit);
+
+        assert_eq!(outfit, before, "rien ne bouge quand on redemande le corps déclaré");
+    }
+
+    /// Règle §6.2 : l'époque se lit sur la texture de casque que le mannequin
+    /// échantillonne, et rien d'autre — un mannequin de mod qui nomme ses
+    /// images à lui n'a pas d'époque, il n'a pas non plus de casque à proposer.
+    #[test]
+    fn an_era_is_read_on_the_helmet_texture_the_mannequin_asks_for() {
+        let era = |names: &[&str]| era_of(&names.iter().map(|n| n.to_string()).collect());
+        assert_eq!(era(&["2016_suit_diff.dds", "helmet_2012.dds"]), Some("modern"));
+        assert_eq!(era(&["helmet_1985.dds"]), Some("1980s"));
+        assert_eq!(era(&["helmet_1975.dds"]), Some("1970s"));
+        assert_eq!(era(&["helmet_1969.dds"]), Some("1960s"));
+        assert_eq!(era(&["rss_helmet.dds", "2016_suit_diff.dds"]), None, "un casque de mod");
+        assert_eq!(era(&[]), None, "et un mannequin sans texture du tout");
+    }
+
+    /// La question du volant : la pose de repos écarte les mains de 55 cm, ce
+    /// qui n'est pas une prise de volant. **Est-ce que la pose de la voiture
+    /// (hiérarchie + animation de braquage) les rapproche d'un cerceau
+    /// crédible ?**
+    ///
+    /// ```text
+    /// PITBOX_AC_ROOT="D:\...\assettocorsa" PITBOX_CARS="D:\...\content\cars" cargo test --lib driver -- --ignored --nocapture what_the_car_pose
+    /// ```
+    #[test]
+    #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
+    fn what_the_car_pose_does_to_the_grip() {
+        let (Ok(ac_root), Ok(cars)) = (std::env::var("PITBOX_AC_ROOT"), std::env::var("PITBOX_CARS")) else {
+            eprintln!("PITBOX_AC_ROOT / PITBOX_CARS unset, skipping");
+            return;
+        };
+        let root = PathBuf::from(ac_root);
+        let mut checked = 0;
+        for entry in std::fs::read_dir(PathBuf::from(cars)).expect("content/cars").flatten() {
+            if checked >= 12 {
+                break;
+            }
+            let car_dir = entry.path();
+            if !car_dir.is_dir() {
+                continue;
+            }
+            let car_id = entry.file_name().to_string_lossy().into_owned();
+            let Some(graft) = resolve(&root, &car_dir, &car_id, None, 0.0, &OutfitOverride::default()) else {
+                continue;
+            };
+            // Hôte vide : `graft` place le mannequin dans l'espace de la
+            // voiture, ce qui est exactement ce qu'on veut mesurer.
+            let mut host = kn5::Kn5Model {
+                version: 6,
+                extra: None,
+                textures: Vec::new(),
+                materials: Vec::new(),
+                root: kn5::Kn5Node {
+                    name: "ROOT".into(),
+                    active: true,
+                    kind: kn5::Kn5NodeKind::Dummy {
+                        transform: [
+                            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+                        ],
+                    },
+                    children: Vec::new(),
+                },
+            };
+            let _ = kn5_gltf::graft_driver(&mut host, &graft);
+            let centers = kn5_gltf::node_world_centers(&host);
+            let find = |bone: &str| {
+                centers
+                    .iter()
+                    .find(|(n, _)| n.len() >= bone.len() && n[n.len() - bone.len()..].eq_ignore_ascii_case(bone))
+                    .map(|(_, c)| *c)
+            };
+            let (Some(l), Some(r)) = (find("RIG_HAND_L"), find("RIG_HAND_R")) else {
+                continue;
+            };
+            let dist = |a: [f32; 3], b: [f32; 3]| {
+                ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+            };
+            // Le poignet n'est pas le jonc : les doigts se referment devant la
+            // paume. `HAND_Middle2` / `HAND_Middle5` sont les deuxièmes
+            // phalanges des majeurs gauche et droit, au contact du cerceau.
+            let (fl, fr) = (find("HAND_Middle2"), find("HAND_Middle5"));
+            let offset = fl.zip(fr).map(|(a, b)| {
+                let mid_w = [(l[0] + r[0]) / 2.0, (l[1] + r[1]) / 2.0, (l[2] + r[2]) / 2.0];
+                let mid_f = [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0, (a[2] + b[2]) / 2.0];
+                [mid_f[0] - mid_w[0], mid_f[1] - mid_w[1], mid_f[2] - mid_w[2]]
+            });
+            eprintln!(
+                "{car_id:38} poignets {:.3}  doigts {}  décalage {}",
+                dist(l, r),
+                fl.zip(fr)
+                    .map(|(a, b)| format!("{:.3}", dist(a, b)))
+                    .unwrap_or_else(|| "—".into()),
+                offset
+                    .map(|o| format!("[{:+.3} {:+.3} {:+.3}]", o[0], o[1], o[2]))
+                    .unwrap_or_else(|| "—".into()),
+            );
+            checked += 1;
+        }
+    }
+
+    /// Les cartes de normales d'un mannequin sont-elles vraiment en espace
+    /// **objet**, comme `nmObjectSpace = 1` et le suffixe `_OS` l'annoncent ?
+    ///
+    /// La différence se voit dans la moyenne : une carte **tangente** est
+    /// quasi plate autour de (128, 128, 255) — la normale ne s'écarte guère de
+    /// la surface — alors qu'une carte **objet** encode la direction dans
+    /// l'espace du modèle, donc balaie tout le cube et s'étale.
+    ///
+    /// ```text
+    /// PITBOX_AC_ROOT="D:\...\assettocorsa" cargo test --lib driver -- --ignored --nocapture what_normal_maps
+    /// ```
+    #[test]
+    #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
+    fn what_normal_maps_a_mannequin_carries() {
+        let Ok(ac_root) = std::env::var("PITBOX_AC_ROOT") else {
+            eprintln!("PITBOX_AC_ROOT unset, skipping");
+            return;
+        };
+        let root = PathBuf::from(ac_root);
+        let bytes = std::fs::read(body_file(&root, "driver")).expect("driver.kn5");
+        let model = kn5::parse(&bytes).expect("parse");
+
+        for material in &model.materials {
+            let Some(normal) = material.texture_for("txNormal").filter(|n| !n.is_empty()) else {
+                continue;
+            };
+            let flag = material.property("nmObjectSpace").unwrap_or(0.0);
+            let Some(texture) = model.texture(normal) else { continue };
+            match kn5_gltf::channel_stats(&texture.data) {
+                Ok(stats) => eprintln!(
+                    "{:26} nmObjectSpace={flag}  {normal:24} moyenne RGB ({:.0} {:.0} {:.0})  écart-type ({:.0} {:.0} {:.0})",
+                    material.name,
+                    stats.mean[0],
+                    stats.mean[1],
+                    stats.mean[2],
+                    stats.stddev[0],
+                    stats.stddev[1],
+                    stats.stddev[2],
+                ),
+                Err(e) => eprintln!("{:26} {normal} illisible — {e}", material.name),
+            }
+        }
+    }
+
+    /// Ce que le `.glb` d'un mannequin garde comme noms : c'est ce qui décide
+    /// si le frontend peut retrouver la texture d'une pièce pour l'échanger
+    /// lui-même, au lieu de redemander une conversion à chaque survol.
+    ///
+    /// ```text
+    /// PITBOX_AC_ROOT="D:\...\assettocorsa" cargo test --lib driver -- --ignored --nocapture what_the_glb
+    /// ```
+    #[test]
+    #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
+    fn what_the_glb_keeps_of_the_names() {
+        let Ok(ac_root) = std::env::var("PITBOX_AC_ROOT") else {
+            eprintln!("PITBOX_AC_ROOT unset, skipping");
+            return;
+        };
+        let root = PathBuf::from(ac_root);
+        let graft = kn5_gltf::DriverGraft {
+            model: body_file(&root, "driver"),
+            anchor: None,
+            texture_dirs: Vec::new(),
+            base_pose: None,
+            animation: None,
+            lock_degrees: 360.0,
+            steer_degrees: 0.0,
+        };
+        let (model, stats, rig) = kn5_gltf::standalone_driver(&graft).expect("mannequin converti");
+        eprintln!("rig: {rig:?}");
+        eprintln!("stats: {} triangles, {} habillées", stats.triangles, stats.dressed);
+
+        let conversion =
+            kn5_gltf::convert(&model, None, &kn5_gltf::ConvertOptions::default(), &|_| {}).expect("conversion");
+        // Chunk JSON d'un GLB : en-tête de 12 octets, puis longueur + type.
+        let len = u32::from_le_bytes(conversion.glb[12..16].try_into().unwrap()) as usize;
+        let json: serde_json::Value = serde_json::from_slice(&conversion.glb[20..20 + len]).expect("json");
+        for key in ["images", "textures", "materials"] {
+            let names: Vec<String> = json[key]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .map(|v| v["name"].as_str().unwrap_or("<sans nom>").to_string())
+                        .collect()
+                })
+                .unwrap_or_default();
+            eprintln!("{key} ({}) : {}", names.len(), names.join(", "));
+        }
+    }
+
+    /// Où un mannequin tient ses mains, sa tête et ses pieds dans sa **pose de
+    /// repos** — celle qu'il a sans voiture autour de lui, donc celle du
+    /// plateau d'essayage (SPEC-ecran-pilote §5.1).
+    ///
+    /// La question à laquelle ce test répond : peut-on poser un volant
+    /// générique à un endroit fixe, ou faut-il le calculer par mannequin ?
+    ///
+    /// ```text
+    /// PITBOX_AC_ROOT="D:\...\assettocorsa" cargo test --lib driver -- --ignored --nocapture where_the_hands
+    /// ```
+    #[test]
+    #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
+    fn where_the_hands_rest() {
+        let Ok(ac_root) = std::env::var("PITBOX_AC_ROOT") else {
+            eprintln!("PITBOX_AC_ROOT unset, skipping");
+            return;
+        };
+        let root = PathBuf::from(ac_root);
+        let wanted = ["RIG_HAND_L", "RIG_HAND_R", "RIG_Head", "RIG_Hips"];
+        for body in bodies(&root) {
+            let Ok(bytes) = std::fs::read(body_file(&root, &body.id)) else {
+                continue;
+            };
+            let Ok(model) = kn5::parse(&bytes) else { continue };
+            let centers = kn5_gltf::node_world_centers(&model);
+            let mut line = format!("{:32}", body.id);
+            for name in wanted {
+                let found = centers
+                    .iter()
+                    .find(|(n, _)| n.len() >= name.len() && n[n.len() - name.len()..].eq_ignore_ascii_case(name));
+                match found {
+                    Some((_, c)) => line.push_str(&format!(" {name}[{:+.3} {:+.3} {:+.3}]", c[0], c[1], c[2])),
+                    None => line.push_str(&format!(" {name}[—]")),
+                }
+            }
+            eprintln!("{line}");
+        }
+    }
+
+    /// Ce que le détecteur dit des mods de pilote réels, et des contre-exemples.
+    ///
+    /// Le corpus est un dossier de mods téléchargés tels quels : `.kn5` nus,
+    /// dossiers maison, archives imbriquées. Attendu : **tous** les mannequins
+    /// reconnus, **aucune** voiture ni collider.
+    ///
+    /// ```text
+    /// PITBOX_DRIVER_MODS="C:\...\exemples-drivers" cargo test --lib driver -- --ignored --nocapture what_the_detector
+    /// ```
+    #[test]
+    #[ignore = "needs a folder of real driver mods; measurement, not a check"]
+    fn what_the_detector_says_about_real_mods() {
+        let Ok(root) = std::env::var("PITBOX_DRIVER_MODS") else {
+            eprintln!("PITBOX_DRIVER_MODS unset, skipping");
+            return;
+        };
+        let mut seen = 0;
+        let mut drivers = 0;
+        for entry in walkdir::WalkDir::new(root).into_iter().flatten() {
+            let path = entry.path();
+            if !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("kn5")) {
+                continue;
+            }
+            let verdict = is_driver_model(path);
+            seen += 1;
+            drivers += usize::from(verdict);
+            eprintln!(
+                "{:>8}  {}",
+                if verdict { "PILOTE" } else { "—" },
+                path.file_name().unwrap_or_default().to_string_lossy()
+            );
+        }
+        eprintln!("\n=== {drivers} mannequins sur {seen} fichiers .kn5 ===");
+    }
+
+    /// Les corps que l'écran proposerait sur l'installation de référence, et
+    /// ceux qu'il écarte — la mesure qui a fixé le critère de [`bodies`].
+    ///
+    /// ```text
+    /// PITBOX_AC_ROOT="D:\...\assettocorsa" cargo test --lib driver -- --ignored --nocapture which_bodies
+    /// ```
+    #[test]
+    #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
+    fn which_bodies_can_be_offered() {
+        let Ok(ac_root) = std::env::var("PITBOX_AC_ROOT") else {
+            eprintln!("PITBOX_AC_ROOT unset, skipping");
+            return;
+        };
+        let root = PathBuf::from(ac_root);
+        let installed = std::fs::read_dir(root.join("content").join("driver"))
+            .expect("read content/driver")
+            .flatten()
+            .filter(|e| e.path().extension().is_some_and(|x| x.eq_ignore_ascii_case("kn5")))
+            .count();
+        let offered = bodies(&root);
+        let mut by_era: std::collections::BTreeMap<&str, Vec<&str>> = Default::default();
+        for body in &offered {
+            by_era.entry(body.era.unwrap_or("—")).or_default().push(&body.id);
+        }
+        for (era, ids) in &by_era {
+            eprintln!("{era:>8} : {:3} — {}", ids.len(), ids.join(", "));
+        }
+        eprintln!(
+            "
+=== {} corps proposés sur {installed} installés ===",
+            offered.len()
+        );
+    }
+
     /// Ce que chaque mannequin de l'install peut porter, par la règle de
     /// [`choices`] — la mesure qui a servi à la fixer.
     ///
@@ -646,7 +1208,7 @@ SUIT=\\type1\\black_black
     /// 1985. Un écart ici veut dire que la règle a changé de sens.
     ///
     /// ```text
-    /// PITBOX_AC_ROOT="D:\...ssettocorsa" cargo test --lib driver -- --ignored --nocapture what_each
+    /// PITBOX_AC_ROOT="D:\...\assettocorsa" cargo test --lib driver -- --ignored --nocapture what_each
     /// ```
     #[test]
     #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]

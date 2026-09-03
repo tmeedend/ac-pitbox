@@ -15,7 +15,8 @@
     "maintenance": "Maintenance",
     "openCm": "Ouvrir CM",
     "settings": "Réglages",
-    "about": "À propos"
+    "about": "À propos",
+    "driver": "Mon pilote"
   },
   "titlebar": {
     "bigPicture": "Mode Big Picture (plein écran)",
@@ -41,20 +42,20 @@
     "activateFailedTitle": "Échec de l'activation",
     "pickSkin": "Choisir un skin…",
     "noSkinsAvailable": "Aucun skin",
-    "driverTooltip": "Choisir la tenue du pilote",
-    "driverRaceTooltip": "Sur une voiture de course, le pilote porte les couleurs de son écurie : sa tenue vient du skin.",
-    "driverNone": "Aucun compatible",
-    "driverPiece": {
-      "helmet": "Casque du skin",
-      "suit": "Combinaison du skin",
-      "gloves": "Gants du skin"
-    },
+    "driverTooltip": "Voir et changer le corps et la tenue du pilote",
     "pickLayout": "Choisir un layout…",
     "noLayoutsAvailable": "Aucun layout",
     "trackSkinsNone": "Aucun skin actif",
     "trackSkinsEmpty": "Aucun skin de circuit",
     "trackSkinsCount": "{count} skins actifs",
-    "trackSkinsTooltip": "Skins de circuit — plusieurs actifs possible"
+    "trackSkinsTooltip": "Skins de circuit — plusieurs actifs possible",
+    "driverBadge": {
+      "substituted": "Substitué"
+    },
+    "driverStock": "Tenue d'origine",
+    "driverStockTooltip": "Le casque, la combinaison et les gants sont ceux que la livrée de cette voiture prévoit. Cliquez pour en changer.",
+    "driverCustom": "Tenue personnalisée",
+    "driverFallback": "Tenue par défaut"
   },
   "controller": {
     "banner": {
@@ -343,7 +344,11 @@
     "results": "{count} résultats",
     "filterBrandPlaceholder": "Ajouter une marque…",
     "filterAuthorPlaceholder": "Ajouter un auteur…",
-    "filterCountryPlaceholder": "Ajouter un pays…"
+    "filterCountryPlaceholder": "Ajouter un pays…",
+    "driverSet": "Pilote choisi",
+    "driverSetOnly": "Uniquement les voitures auxquelles vous avez choisi une tenue de pilote",
+    "driverSetExcluded": "Uniquement les voitures qui gardent le pilote de leur livrée",
+    "driverSetNeutral": "Pilote choisi : sans filtre"
   },
   "bulk": {
     "runningActivate": "Activation de {count} mods",
@@ -976,6 +981,9 @@
     "openFolder": "Ouvrir le dossier",
     "managed": "{count} en zone Content Manager",
     "managedTooltip": "Content Manager synchronise ces dossiers depuis le dépôt de configs CSP. Il peut y remplacer ces fichiers par ses propres versions à tout moment. Ce n'est pas l'emplacement recommandé pour un mod.",
+    "back": "← Retour aux autres mods",
+    "detailTooltip": "ouvrir la fiche de ce mod",
+    "categoriesLabel": "Zones touchées",
     "cat": {
       "all": "Tous",
       "extension": "Extensions",
@@ -995,10 +1003,10 @@
     "subtitlePrefix": "Ajoute des mods à la bibliothèque. Un mod importé (ou mis à jour) est ",
     "subtitleBold": "activé tout de suite",
     "subtitleSuffix": " — pas d'étape séparée pour pouvoir le conduire.",
-    "archiveTitle": "Une archive",
-    "archiveHint": "Le cas courant : un fichier .zip, .rar ou .7z téléchargé tel quel. L'app l'extrait, détecte le type (voiture, circuit, skin, son…) et le range dans la bibliothèque.",
+    "archiveTitle": "Une archive, ou un pilote",
+    "archiveHint": "Le cas courant : un fichier .zip, .rar ou .7z téléchargé tel quel. L'app l'extrait, détecte le type (voiture, circuit, skin, son…) et le range dans la bibliothèque. Un mannequin de pilote livré en .kn5 nu s'accepte aussi.",
     "importing": "Import…",
-    "chooseArchive": "Choisir une archive…",
+    "chooseArchive": "Choisir un fichier…",
     "folderTitle": "Un dossier déjà décompressé",
     "folderHint": "Pour un mod que tu as déjà extrait toi-même, sans repasser par l'archive d'origine.",
     "copyChoiceLabel": "À l'import :",
@@ -1033,6 +1041,15 @@
     "cancel": "Arrêter",
     "cancelling": "Arrêt…",
     "summaryBase": "{n} élément(s) importé(s)",
+    "summaryNatures": "{list} importé(s)",
+    "natureOther": "{n} {what}",
+    "nature": {
+      "car": "{n} voiture(s)",
+      "track": "{n} circuit(s)",
+      "skin": "{n} skin(s)",
+      "sound": "{n} son(s)",
+      "app": "{n} app(s)"
+    },
     "summaryErrs": ", {errs} archive(s) en erreur",
     "outcomeUpdate": "MAJ",
     "outcomeDuplicate": "DÉJÀ PRÉSENT",
@@ -1214,6 +1231,7 @@
     "notEnoughDiskSpace": "espace disque insuffisant sur le volume de la bibliothèque pour cet import.",
     "nothingToImportInArchive": "aucune voiture, circuit, skin, son ou app trouvé dans l'archive.",
     "nothingToImportInFolder": "aucune voiture, circuit, skin, son ou app trouvé dans le dossier.",
+    "notADriverModel": "Ce fichier .kn5 n'est pas un mannequin de pilote. Seul un modèle de pilote peut s'importer seul : pour tout le reste, importez le dossier ou l'archive qui l'entoure.",
     "tempDirUnavailable": "impossible de créer le dossier temporaire d'extraction.",
     "notAJunction": "refus : le chemin n'est pas une junction.",
     "notASoundMod": "ce sous-élément n'est pas un mod de son.",
@@ -1282,5 +1300,133 @@
     "bankUnreadable": "ce fichier de son n'a pas pu être lu.",
     "bankNamesPresent": "présents",
     "bankNamesAbsent": "absents"
+  },
+  "driver": {
+    "title": "Pilote",
+    "subtitle": "Le corps du pilote et sa tenue — casque, combinaison, gants. Le choix est global : il vous suit d'une voiture à l'autre.",
+    "search": "Recherche",
+    "searchPlaceholder": "Nom de dossier, famille…",
+    "favorites": "Favoris",
+    "recents": "Récents",
+    "count": {
+      "body": "{count} corps disponibles",
+      "helmet": "{count} casques compatibles",
+      "suit": "{count} combinaisons compatibles",
+      "gloves": "{count} paires de gants compatibles"
+    },
+    "countEmpty": {
+      "body": "Aucun corps disponible",
+      "helmet": "Aucun casque applicable",
+      "suit": "Aucune combinaison applicable",
+      "gloves": "Aucuns gants applicables"
+    },
+    "cause": "corps {body} · époque {era}",
+    "era": {
+      "modern": "moderne",
+      "1980s": "années 80",
+      "1970s": "années 70",
+      "1960s": "années 60",
+      "custom": "nommage propre"
+    },
+    "lane": {
+      "body": "Corps",
+      "helmet": "Casque",
+      "suit": "Combinaison",
+      "gloves": "Gants"
+    },
+    "laneGroup": {
+      "commands": "Le corps commande",
+      "follows": "La tenue en découle"
+    },
+    "bodyFromCar": "celui de la voiture",
+    "bodySubstituted": "choisi par vous",
+    "defaultBody": "aucun",
+    "fromLivery": {
+      "helmet": "Celui de la livrée",
+      "suit": "Celle de la livrée",
+      "gloves": "Ceux de la livrée"
+    },
+    "none": {
+      "helmet": "Aucun",
+      "suit": "Aucune",
+      "gloves": "Aucuns"
+    },
+    "reset": {
+      "livery": "Tout remettre sur la livrée",
+      "body": "Revenir au corps de la voiture"
+    },
+    "defaultCell": {
+      "body": "Celui de la voiture",
+      "livery": "Celui de la livrée",
+      "none": "La livrée ne prévoit rien pour ce corps",
+      "name": "Par défaut",
+      "noneName": "Aucun"
+    },
+    "stage": {
+      "live": "Essayage",
+      "hint": "Survolez une vignette pour essayer · cliquez pour garder",
+      "trial": "Essai — {name}",
+      "noSample": "Assetto Corsa ne fournit pas d'image pour celui-ci.",
+      "no3d": "L'essayage en 3D n'a pas pu démarrer. La galerie reste utilisable.",
+      "noBody": "Aucun corps à afficher : la voiture n'en nomme aucun, ou il n'est pas installé.",
+      "drag": "glisser pour tourner",
+      "updating": "Mise à jour…"
+    },
+    "notice": {
+      "title": "Vous avez changé le corps du pilote. Ce que ça change :",
+      "helmet": "Votre casque est retiré : un casque ne va qu'aux corps de son époque, et celui-ci n'est pas de la même.",
+      "outfit": "La combinaison et les gants de la livrée ne s'appliquent plus. Ce corps porte les siens tant que vous n'en choisissez pas d'autres.",
+      "choose": "Choisir une tenue",
+      "revert": "Revenir au corps de la voiture"
+    },
+    "ownHelmet": {
+      "title": "Ce corps porte son propre casque.",
+      "body": "{body} nomme ses images autrement : aucun casque du jeu ne peut s'y poser. La combinaison et les gants, eux, restent modifiables.",
+      "toSuit": "Passer à la combinaison",
+      "toBody": "Changer de corps"
+    },
+    "noCar": {
+      "title": "Aucune voiture choisie.",
+      "body": "Le pilote se règle sur une voiture : c'est elle qui décide du corps, et sa livrée de la tenue de départ.",
+      "pick": "Choisir une voiture"
+    },
+    "noResults": "Aucun résultat pour « {query} ».",
+    "clearSearch": "Effacer la recherche",
+    "eraGroup": {
+      "modern": "Casques modernes",
+      "1980s": "Casques des années 80",
+      "1970s": "Casques des années 70",
+      "1960s": "Casques des années 60",
+      "custom": "Casque propre au corps"
+    },
+    "outfits": {
+      "title": "Mes tenues",
+      "save": "Enregistrer",
+      "saveHint": "Garder le corps et les trois pièces sous un nom, pour les reposer d'un clic",
+      "placeholder": "Nom de la tenue",
+      "delete": "Supprimer",
+      "none": "Rien d'enregistré. Une tenue gardée ici repose le corps, le casque, la combinaison et les gants d'un seul clic."
+    },
+    "fittingTitle": "Essayage",
+    "favOnly": "Favoris uniquement",
+    "favExcluded": "Hors favoris",
+    "favNeutral": "Favoris : sans filtre",
+    "recentOnly": "Récents uniquement",
+    "recentExcluded": "Hors récents",
+    "recentNeutral": "Récents : sans filtre",
+    "inert": "Gardé, mais sans effet sur ce corps : ce dossier ne contient aucune image que ce mannequin utilise. Il reviendra sur une voiture compatible.",
+    "fallback": {
+      "label": {
+        "street": "Tenue par défaut · voitures de rue",
+        "race": "Tenue par défaut · voitures de course"
+      },
+      "none": "Aucune",
+      "hint": "Chacune habille les voitures de sa classe pour lesquelles vous n'avez rien choisi ; celles que vous avez réglées gardent la leur. Laisser « Aucune » du côté course rend ces voitures à la tenue de leur livrée."
+    },
+    "groupOther": "Autres"
+  },
+  "prefs": {
+    "writeFailedTitle": "Vos réglages ne sont pas enregistrés",
+    "writeFailedBody": "Pit Box n'arrive pas à écrire ses préférences sur le disque. Ce que vous réglez reste actif jusqu'à la fermeture, puis sera perdu — favoris, tenues de pilote, filtres et vues comprises."
   }
 }

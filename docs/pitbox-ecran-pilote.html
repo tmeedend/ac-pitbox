@@ -1,0 +1,412 @@
+<meta charset="utf-8">
+<title>Pit Box — écran Pilote (maquette v2)</title>
+<style>
+  :root{
+    --bg:#0b0b0d;--panel:#141416;--panel-2:#191a1d;--cell:#1a1b1e;
+    --line:#26272b;--line-soft:#1f2023;
+    --txt:#dcdcdd;--txt-2:#8d8e92;--txt-3:#5c5d62;
+    --accent:#c9331f;--accent-dim:#7e2415;--warn:#c88a2a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font:13px/1.45 "Inter","Segoe UI",Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+
+  .win{border-top:2px solid var(--accent);min-height:100vh;display:flex;flex-direction:column}
+  .titlebar{height:34px;display:flex;align-items:center;padding:0 16px;
+    border-bottom:1px solid var(--line-soft);font-size:11px;letter-spacing:.22em;color:var(--txt-2)}
+  .titlebar .dots{margin-left:auto;color:var(--txt-3);letter-spacing:.4em}
+  .app{display:flex;flex:1;min-height:0}
+
+  /* colonne session */
+  .session{width:328px;flex:0 0 328px;border-right:1px solid var(--line-soft);padding:14px;background:var(--panel)}
+  .sec{font-size:10px;letter-spacing:.24em;color:var(--txt-2);padding-bottom:6px;
+    border-bottom:1px solid var(--accent-dim);margin-bottom:12px}
+  .thumb{height:96px;border:1px solid var(--line);border-radius:2px;
+    background:radial-gradient(60% 90% at 50% 55%,#232428 0%,#131316 100%);
+    display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+  .card-title{font-size:13px;margin:0 0 1px}
+  .card-sub{font-size:11px;color:var(--txt-3);margin:0 0 12px}
+  .row{display:flex;align-items:center;gap:8px;height:34px;padding:0 9px;background:var(--panel-2);
+    border:1px solid var(--line);border-radius:2px;margin-bottom:6px;font-size:12px;color:var(--txt-2)}
+  .row .chev{margin-left:auto;color:var(--txt-3);font-size:10px}
+  .row.driver{border-color:var(--accent);color:var(--txt)}
+  .row.driver .badge{margin-left:auto;font-size:9.5px;letter-spacing:.12em;color:var(--accent);
+    border:1px solid var(--accent-dim);border-radius:2px;padding:1px 5px}
+  .swatch{width:14px;height:14px;border-radius:2px;flex:0 0 14px}
+  .btn{height:38px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);
+    border-radius:2px;font-size:11px;letter-spacing:.18em;color:var(--txt-2);margin-top:14px}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;margin-top:8px}
+
+  /* écran */
+  .screen{flex:1;min-width:0;display:flex;flex-direction:column}
+  .toolbar{display:flex;align-items:flex-end;gap:18px;padding:16px 20px 14px;border-bottom:1px solid var(--line-soft)}
+  .field label{display:block;font-size:9.5px;letter-spacing:.2em;color:var(--txt-3);margin-bottom:5px}
+  .input{height:32px;background:var(--panel-2);border:1px solid var(--line);border-radius:2px;
+    display:flex;align-items:center;padding:0 10px;color:var(--txt-3);font-size:12px;min-width:210px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:2px;overflow:hidden;height:32px}
+  .seg span{display:flex;align-items:center;padding:0 12px;font-size:11px;color:var(--txt-3);
+    background:var(--panel-2);border-right:1px solid var(--line);cursor:default}
+  .seg span:last-child{border-right:0}
+  .seg span.on{background:#232428;color:var(--txt)}
+  .chk{display:flex;align-items:center;gap:8px;height:32px;font-size:12px;color:var(--txt-2)}
+  .box{width:13px;height:13px;border:1px solid #3a3b40;border-radius:2px}
+  .count{margin-left:auto;text-align:right;font-size:11px;color:var(--txt-3);line-height:1.6}
+  .count b{color:var(--txt-2);font-weight:500}
+  .body{display:flex;flex:1;min-height:0}
+
+  /* essayage */
+  .fitting{width:392px;flex:0 0 392px;border-right:1px solid var(--line-soft);background:var(--panel);
+    display:flex;flex-direction:column}
+  .stage{flex:1;min-height:380px;position:relative;
+    background:radial-gradient(72% 68% at 50% 40%,#202126 0%,#0e0e11 78%);
+    display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .stage svg{transition:none}
+  .subst-note{position:absolute;left:12px;top:12px;font-size:10px;letter-spacing:.14em;
+    color:var(--warn);border:1px solid #4a3a1c;background:#1b1811;border-radius:2px;padding:3px 7px;display:none}
+  .subst .subst-note{display:block}
+  .stage-foot{position:absolute;left:0;right:0;bottom:0;padding:8px 14px;display:flex;align-items:center;gap:10px;
+    font-size:10.5px;color:var(--txt-3);border-top:1px solid var(--line-soft);background:rgba(11,11,13,.75)}
+  .stage-foot .live{color:var(--accent);letter-spacing:.1em}
+  .bar{position:absolute;left:0;bottom:0;height:2px;width:0;background:var(--accent);transition:width .4s linear}
+
+  .lanes{border-top:1px solid var(--line-soft);padding:12px 12px 14px}
+  .lane-sep{display:flex;align-items:center;gap:8px;margin:2px 2px 8px;font-size:9px;letter-spacing:.2em;color:var(--txt-3)}
+  .lane-sep::after{content:"";flex:1;height:1px;background:var(--line-soft)}
+  .lane{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:2px;
+    border:1px solid transparent;border-left:2px solid transparent;cursor:default}
+  .lane+.lane{margin-top:2px}
+  .lane .ico{width:20px;flex:0 0 20px;display:flex;justify-content:center;opacity:.75}
+  .lane .k{font-size:9.5px;letter-spacing:.2em;color:var(--txt-3)}
+  .lane .v{font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px}
+  .lane .v.def{color:var(--txt-3);font-style:italic}
+  .lane .n{margin-left:auto;font-size:11px;color:var(--txt-3)}
+  .lane.on{background:#1e1f23;border-color:var(--line);border-left-color:var(--accent)}
+  .body-lane{background:#161719;border:1px solid var(--line);border-left:2px solid #3a3b40;
+    border-radius:2px;padding:9px 10px}
+  .body-lane.on{border-left-color:var(--accent);background:#1e1f23}
+  .body-pick{display:flex;gap:5px;margin-top:8px;padding-left:30px}
+  .chip{font-size:10.5px;padding:4px 8px;border:1px solid var(--line);border-radius:2px;color:var(--txt-3);cursor:default}
+  .chip.on{border-color:var(--accent);color:var(--txt);background:#231a18}
+  .reset{margin-top:12px;text-align:center;font-size:10.5px;letter-spacing:.12em;color:var(--txt-3);
+    border-top:1px solid var(--line-soft);padding-top:11px}
+
+  /* galerie */
+  .gallery{flex:1;min-width:0;overflow:auto;padding:0 20px 30px}
+  .notice{display:flex;gap:12px;align-items:flex-start;margin:16px 0 4px;padding:11px 13px;
+    border:1px solid #4a3a1c;border-left:2px solid var(--warn);background:#1b1811;border-radius:2px;display:none}
+  .notice.show{display:flex}
+  .notice .t{font-size:12px;color:#e0cfa6}
+  .notice ul{margin:6px 0 0;padding-left:16px;font-size:11.5px;color:#9a8f74;line-height:1.6}
+  .notice .acts{margin-left:auto;display:flex;gap:8px;flex:0 0 auto}
+  .mini{font-size:10.5px;letter-spacing:.1em;color:var(--txt-2);border:1px solid var(--line);
+    border-radius:2px;padding:5px 9px;white-space:nowrap}
+  .mini.on{border-color:var(--accent-dim);color:#e3a99c}
+
+  .grp{display:flex;align-items:baseline;gap:9px;margin:22px 0 9px;font-size:12.5px;color:var(--txt-2)}
+  .grp .id{font-size:10px;color:var(--txt-3);letter-spacing:.04em}
+  .grp .n{font-size:10px;color:var(--txt-3)}
+  .grp::after{content:"";flex:1;height:1px;background:var(--line-soft);align-self:center}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:9px}
+  .cell{cursor:default}
+  .cell .art{aspect-ratio:1;border:1px solid var(--line-soft);overflow:hidden;
+    filter:saturate(.86) brightness(.94);transition:filter .12s}
+  .cell .art svg{display:block;width:100%;height:100%}
+  .cell .nm{margin-top:6px;font-size:10px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cell:hover .art{filter:none;border-color:var(--accent-dim)}
+  .cell:hover .nm{color:var(--txt-2)}
+  .cell.sel .art{filter:none;border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+  .cell.sel .nm{color:var(--txt)}
+  .cell.fav .nm::before{content:"★ ";color:var(--accent-dim)}
+  .cell.special .art{background:repeating-linear-gradient(135deg,#161719,#161719 5px,#1c1d21 5px,#1c1d21 10px);
+    display:flex;align-items:center;justify-content:center;text-align:center;padding:8px;
+    font-size:10px;color:var(--txt-3);line-height:1.4;filter:none}
+
+  .empty{border:1px dashed var(--line);border-radius:2px;padding:34px 18px;text-align:center;margin-top:22px}
+  .empty .h{font-size:13px;color:var(--txt);margin-bottom:6px}
+  .empty .p{font-size:11.5px;color:var(--txt-3);line-height:1.6;max-width:380px;margin:0 auto 16px}
+  .empty .row-acts{display:flex;gap:8px;justify-content:center}
+</style>
+
+<div class="win">
+  <div class="titlebar">PIT BOX <span class="dots">— □ ×</span></div>
+  <div class="app">
+
+    <aside class="session">
+      <div class="sec">SESSION</div>
+      <div class="thumb">
+        <svg width="150" height="60" viewBox="0 0 150 60">
+          <path d="M12 44c2-9 10-13 20-15 8-8 20-12 34-12s24 5 31 13c11 2 20 6 22 14 1 5-2 8-7 8H18c-5 0-7-3-6-8z" fill="#2f7fb8" opacity=".85"/>
+          <path d="M42 30c6-6 14-9 24-9s18 3 24 9z" fill="#0e0e11" opacity=".55"/>
+          <circle cx="38" cy="46" r="9" fill="#0e0e11"/><circle cx="38" cy="46" r="4" fill="#3a3b40"/>
+          <circle cx="112" cy="46" r="9" fill="#0e0e11"/><circle cx="112" cy="46" r="4" fill="#3a3b40"/>
+        </svg>
+      </div>
+      <p class="card-title">Porsche 718 Boxster S</p>
+      <p class="card-sub">Porsche · #sportscars · skin: Miami Blue</p>
+      <div class="row"><span class="swatch" style="background:#3f9bd6"></span> Miami Blue <span class="chev">▾</span></div>
+      <div class="row driver">
+        <svg width="15" height="15" viewBox="0 0 100 100">
+          <path d="M50 14c-19 0-30 14-30 33 0 15 6 26 15 30 5 2 10 3 15 3s10-1 15-3c9-4 15-15 15-30 0-19-11-33-30-33z" fill="#c9331f"/>
+          <path d="M25 45c8-7 17-10 27-10 7 0 13 1 18 4l-2 16c-5-3-11-4-17-4-10 0-19 3-26 8z" fill="#0e0e11"/>
+        </svg>
+        Mon pilote <span class="badge" id="sess-badge">MODIFIÉ</span>
+      </div>
+      <div class="sec" style="margin-top:20px">CIRCUIT</div>
+      <div class="thumb" style="height:78px">
+        <svg width="120" height="52" viewBox="0 0 120 52">
+          <path d="M14 38c-8-6-6-18 4-21 12-4 18 6 30 4 10-2 12-12 24-13 12-1 22 6 26 15 4 9-2 17-12 18-16 2-24-6-38-3-12 3-24 6-34 0z" fill="none" stroke="#c9c9cb" stroke-width="2.2"/>
+        </svg>
+      </div>
+      <p class="card-title">Imola</p>
+      <p class="card-sub">Imola · Kunos</p>
+      <div class="btn">PARAMÉTRAGE DE LA SESSION</div>
+      <div class="btn primary">▶ DÉMARRER LA SESSION</div>
+    </aside>
+
+    <main class="screen">
+      <div class="toolbar">
+        <div class="field"><label>RECHERCHE</label><div class="input">Nom de dossier, famille…</div></div>
+        <div class="field"><label>AFFICHAGE</label>
+          <div class="seg"><span class="on" id="grp-label">Grouper par couleur</span><span>Tout</span></div>
+        </div>
+        <div class="chk" style="align-self:flex-end"><span class="box"></span> Favoris</div>
+        <div class="chk" style="align-self:flex-end"><span class="box"></span> Récents</div>
+        <div class="count" id="count"></div>
+      </div>
+
+      <div class="body">
+        <section class="fitting" id="fitting">
+          <div class="stage">
+            <div class="subst-note">CORPS SUBSTITUÉ · APERÇU SEULEMENT</div>
+            <svg id="pilot" width="330" height="340" viewBox="0 0 400 520" preserveAspectRatio="xMidYMid meet">
+              <defs><clipPath id="shell">
+                <path d="M200 34c-40 0-64 30-64 70 0 34 12 56 32 66 10 5 20 7 32 7s22-2 32-7c20-10 32-32 32-66 0-40-24-70-64-70z"/>
+              </clipPath></defs>
+
+              <!-- volant générique -->
+              <ellipse cx="200" cy="404" rx="132" ry="44" fill="none" stroke="#131417" stroke-width="19"/>
+              <ellipse cx="200" cy="401" rx="132" ry="44" fill="none" stroke="#2c2e33" stroke-width="2" opacity=".55"/>
+
+              <!-- buste -->
+              <path d="M78 520c0-92 54-146 122-146s122 54 122 146z" fill="#202126"/>
+              <path id="p-suit" d="M88 520c0-84 50-133 112-133s112 49 112 133z" fill="#3a3d44"/>
+              <path d="M200 387c-22 0-38 8-38 8l12 125h52l12-125s-16-8-38-8z" fill="#000" opacity=".18"/>
+              <!-- bras -->
+              <path d="M104 470c-6-34 6-62 22-74l26 22c-14 12-22 34-20 56z" fill="#33363c"/>
+              <path d="M296 470c6-34-6-62-22-74l-26 22c14 12 22 34 20 56z" fill="#33363c"/>
+              <!-- gants -->
+              <path id="p-glove-l" d="M96 372c14-9 32-6 39 6 6 11 1 24-12 30-14 6-31 3-38-8-6-11-3-22 11-28z" fill="#2b2d33"/>
+              <path id="p-glove-r" d="M304 372c-14-9-32-6-39 6-6 11-1 24 12 30 14 6 31 3 38-8 6-11 3-22-11-28z" fill="#2b2d33"/>
+
+              <!-- casque -->
+              <path id="p-shell" d="M200 34c-40 0-64 30-64 70 0 34 12 56 32 66 10 5 20 7 32 7s22-2 32-7c20-10 32-32 32-66 0-40-24-70-64-70z" fill="#c9331f"/>
+              <rect id="p-stripe" x="186" y="30" width="28" height="152" fill="#f2f2f2" clip-path="url(#shell)"/>
+              <path d="M146 102c16-16 34-22 54-22 16 0 30 4 40 10l-4 36c-12-6-24-10-38-10-20 0-38 6-52 18z" fill="#0b0b0d"/>
+              <path d="M146 102c16-16 34-22 54-22 16 0 30 4 40 10l-2 10c-12-6-24-8-38-8-20 0-38 6-54 18z" fill="#4a4b52" opacity=".5"/>
+            </svg>
+            <div class="stage-foot">
+              <span class="live">ESSAYAGE</span>
+              <span id="hint">Survolez une vignette pour essayer · cliquez pour garder</span>
+              <span style="margin-left:auto">⟲ glisser</span>
+              <div class="bar" id="bar"></div>
+            </div>
+          </div>
+
+          <div class="lanes">
+            <div class="lane-sep">LE CORPS COMMANDE</div>
+            <div class="body-lane" id="lane-corps" data-lane="corps">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span class="ico"><svg width="16" height="16" viewBox="0 0 100 100"><circle cx="50" cy="26" r="17" fill="#6c6e75"/><path d="M14 100c0-24 16-40 36-40s36 16 36 40z" fill="#6c6e75"/></svg></span>
+                <span><span class="k">CORPS</span><br><span class="v mono" id="v-corps">driver</span></span>
+                <span class="n" id="n-corps">celui de la voiture</span>
+              </div>
+              <div class="body-pick">
+                <span class="chip on" data-body="driver">driver</span>
+                <span class="chip" data-body="driver_60">driver_60</span>
+                <span class="chip" data-body="yk2_kana">yk2_kana</span>
+              </div>
+            </div>
+
+            <div class="lane-sep" style="margin-top:12px">LA TENUE EN DÉCOULE</div>
+            <div class="lane on" data-lane="casque">
+              <span class="ico"><svg width="16" height="16" viewBox="0 0 100 100"><path d="M50 14c-19 0-30 14-30 33 0 15 6 26 15 30 5 2 10 3 15 3s10-1 15-3c9-4 15-15 15-30 0-19-11-33-30-33z" fill="#c9331f"/><path d="M25 45c8-7 17-10 27-10 7 0 13 1 18 4l-2 16c-5-3-11-4-17-4-10 0-19 3-26 8z" fill="#0e0e11"/></svg></span>
+              <span><span class="k">CASQUE</span><br><span class="v mono" id="v-casque">HELMET_BASE_Red / 7</span></span>
+              <span class="n" id="n-casque">100</span>
+            </div>
+            <div class="lane" data-lane="combinaison">
+              <span class="ico"><svg width="16" height="16" viewBox="0 0 100 100"><path d="M30 12h40l16 16-10 12v48H24V40L14 28z" fill="#6c6e75"/></svg></span>
+              <span><span class="k">COMBINAISON</span><br><span class="v def" id="v-comb">Celle de la livrée</span></span>
+              <span class="n">53</span>
+            </div>
+            <div class="lane" data-lane="gants">
+              <span class="ico"><svg width="16" height="16" viewBox="0 0 100 100"><path d="M32 40V20a8 8 0 0116 0v18h6V16a8 8 0 0116 0v24h6a8 8 0 018 8v22c0 16-12 24-28 24S28 86 28 70V48a8 8 0 018-8z" fill="#6c6e75"/></svg></span>
+              <span><span class="k">GANTS</span><br><span class="v def" id="v-gants">Ceux de la livrée</span></span>
+              <span class="n">69</span>
+            </div>
+            <div class="reset" id="reset">TOUT REMETTRE SUR LA LIVRÉE</div>
+          </div>
+        </section>
+
+        <section class="gallery">
+          <div class="notice" id="notice">
+            <div>
+              <div class="t">Ce corps n'est pas celui de la voiture. Ce qui tombe :</div>
+              <ul id="notice-list"></ul>
+            </div>
+            <div class="acts">
+              <span class="mini on">Choisir une tenue</span>
+              <span class="mini">Revenir à <span class="mono">driver</span></span>
+            </div>
+          </div>
+          <div id="groups"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+/* ---------- données ---------- */
+const S = (b,m)=>({b,m});
+const MODERN = [
+  {name:'Red',   id:'HELMET_BASE_Red',   v:[[7,'#c9331f','#f2f2f2',1],[8,'#a3241a','#2b2b2e'],[3,'#8e1f14','#d8b12b']]},
+  {name:'Blue',  id:'HELMET_BASE_Blue',  v:[[1,'#22528f','#f2f2f2'],[4,'#16386b','#c9331f'],[6,'#2e6bb0','#1a1a1d']]},
+  {name:'White', id:'HELMET_BASE_White', v:[[2,'#e2e2e4','#1b1b1d',1],[5,'#cfd0d4','#22528f']]},
+  {name:'Black', id:'HELMET_BASE_Black', v:[[1,'#1e1e21','#7a7b80'],[3,'#141416','#d8b12b']]},
+  {name:'Green', id:'HELMET_BASE_Green', v:[[5,'#1f6b45','#e8e8e8'],[2,'#134a30','#d8b12b']]},
+  {name:'Yellow',id:'HELMET_BASE_Yellow',v:[[3,'#d8b12b','#1a1a1d'],[6,'#b8901c','#e8e8e8']]}
+];
+const H1969 = [
+  {name:'Chris Amon',      id:'HELMET_1969/amon',    v:[['','#1d3f76','#e8e8e8',1]]},
+  {name:'Lorenzo Bandini', id:'HELMET_1969/bandini', v:[['','#b8171a','#f0f0f0']]},
+  {name:'Jim Clark',       id:'HELMET_1969/clark',   v:[['','#0f2f52','#d8d8d8']]},
+  {name:'Graham Hill',     id:'HELMET_1969/hill',    v:[['','#16223f','#e0e0e2']]},
+  {name:'Jacky Ickx',      id:'HELMET_1969/ickx',    v:[['','#1c1c1f','#d8b12b']]}
+];
+const BODIES = {
+  driver:   {epoch:'moderne',      n:100, grp:'Grouper par couleur', fams:MODERN, subst:false},
+  driver_60:{epoch:'années 60',    n:21,  grp:'Grouper par pilote',  fams:H1969,  subst:true},
+  yk2_kana: {epoch:'nommage propre',n:0,  grp:'Grouper par auteur',  fams:[],     subst:true}
+};
+
+/* ---------- échantillon plat ---------- */
+function sample(base, mark, seed){
+  const s = seed % 3;
+  return `<svg viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="${base}"/>
+    <rect x="0" y="0" width="100" height="26" fill="#000" opacity=".18"/>
+    <rect x="${38+s*3}" y="0" width="${18+s*2}" height="100" fill="${mark}"/>
+    <rect x="0" y="${64+s}" width="100" height="7" fill="${mark}" opacity=".85"/>
+    <rect x="6" y="34" width="42" height="20" rx="3" fill="#0c0c0e" opacity=".9"/>
+    <rect x="70" y="36" width="24" height="14" rx="2" fill="#0c0c0e" opacity=".55"/>
+    <rect x="0" y="88" width="100" height="12" fill="#000" opacity=".22"/>
+  </svg>`;
+}
+
+/* ---------- état ---------- */
+const el = id => document.getElementById(id);
+let body = 'driver', lane = 'casque';
+let kept = {name:'HELMET_BASE_Red / 7', b:'#c9331f', m:'#f2f2f2'};
+
+const shell = el('p-shell'), stripe = el('p-stripe'), pilot = el('pilot');
+const VIEW = {corps:'0 0 400 520', casque:'118 12 164 176', combinaison:'54 300 292 220', gants:'32 330 336 130'};
+
+function paint(b,m){ shell.setAttribute('fill',b); stripe.setAttribute('fill',m); }
+function frame(){ pilot.setAttribute('viewBox', VIEW[lane]); }
+
+function renderCount(){
+  const B = BODIES[body];
+  el('count').innerHTML = B.n
+    ? `<b>${B.n} casques</b> compatibles<br>corps <span class="mono">${body}</span> · ${B.epoch}`
+    : `<b>Aucun casque</b> applicable<br>corps <span class="mono">${body}</span> · ${B.epoch}`;
+  el('grp-label').textContent = B.grp;
+  el('n-casque').textContent = B.n;
+  el('v-corps').textContent = body;
+  el('n-corps').textContent = B.subst ? 'substitué' : 'celui de la voiture';
+  el('fitting').classList.toggle('subst', B.subst);
+  el('sess-badge').textContent = B.subst ? 'SUBSTITUÉ' : 'MODIFIÉ';
+
+  // pistes non choisies
+  const def = B.subst ? 'Aucune' : 'Celle de la livrée';
+  el('v-comb').textContent = def;
+  el('v-gants').textContent = B.subst ? 'Aucuns' : 'Ceux de la livrée';
+  el('reset').textContent = B.subst ? 'REVENIR AU CORPS DE LA VOITURE' : 'TOUT REMETTRE SUR LA LIVRÉE';
+
+  el('notice').classList.toggle('show', B.subst);
+  el('notice-list').innerHTML = B.subst ? `
+    <li>Le casque retenu — il est daté et ne s'applique pas à ce corps.</li>
+    <li>La tenue de la livrée — elle est nommée d'après <span class="mono">driver</span> et n'a plus de référent.</li>
+    <li>L'application en course — un corps substitué ne vit que dans cet aperçu.</li>` : '';
+}
+
+let seed = 0;
+function renderGrid(){
+  const B = BODIES[body], host = el('groups');
+  host.innerHTML = '';
+  if(!B.fams.length){
+    host.innerHTML = `<div class="empty">
+      <div class="h">Ce corps porte son propre casque.</div>
+      <div class="p"><span class="mono">yk2_kana</span> nomme ses images autrement : aucun casque du jeu ne peut s'y poser.
+      La combinaison et les gants, eux, restent modifiables.</div>
+      <div class="row-acts"><span class="mini on">Passer à la combinaison</span><span class="mini">Changer de corps</span></div>
+    </div>`;
+    return;
+  }
+  B.fams.forEach(f=>{
+    const h = document.createElement('div');
+    h.className='grp';
+    h.innerHTML = `<span>${f.name}</span><span class="id mono">${f.id}</span><span class="n">${f.v.length}</span>`;
+    host.appendChild(h);
+    const g = document.createElement('div'); g.className='grid';
+    if(f === B.fams[0]){
+      const d = document.createElement('div');
+      d.className = 'cell special';
+      d.innerHTML = `<div class="art">${B.subst ? 'La livrée ne prévoit rien pour ce corps' : 'Celui de la livrée'}</div>
+        <div class="nm">${B.subst ? 'Aucun' : 'Par défaut'}</div>`;
+      g.appendChild(d);
+    }
+    f.v.forEach(([num,b,m,fav])=>{
+      const label = num === '' ? f.id.split('/')[1] : `${f.id} / ${num}`;
+      const c = document.createElement('div');
+      c.className = 'cell' + (fav?' fav':'') + (label === kept.name ? ' sel':'');
+      c.innerHTML = `<div class="art">${sample(b,m,seed++)}</div><div class="nm mono">${label}</div>`;
+      c.onmouseenter = ()=>{ paint(b,m); el('hint').textContent = 'Essai — ' + label; };
+      c.onmouseleave = ()=>{ paint(kept.b,kept.m); el('hint').textContent = 'Survolez une vignette pour essayer · cliquez pour garder'; };
+      c.onclick = ()=>{ kept={name:label,b,m}; paint(b,m); el('v-casque').textContent = label;
+        document.querySelectorAll('.cell.sel').forEach(x=>x.classList.remove('sel')); c.classList.add('sel'); };
+      g.appendChild(c);
+    });
+    host.appendChild(g);
+  });
+}
+
+/* pistes */
+document.querySelectorAll('[data-lane]').forEach(n=>{
+  n.onclick = ()=>{
+    lane = n.dataset.lane; frame();
+    document.querySelectorAll('.lane,.body-lane').forEach(x=>x.classList.remove('on'));
+    n.classList.add('on');
+  };
+});
+
+/* corps — chargement 0,4 s, ancien corps maintenu */
+document.querySelectorAll('[data-body]').forEach(n=>{
+  n.onclick = ()=>{
+    if(n.dataset.body === body) return;
+    const bar = el('bar'), prev = el('hint').textContent;
+    el('hint').textContent = 'Chargement du corps…';
+    bar.style.width = '0'; requestAnimationFrame(()=>bar.style.width='100%');
+    setTimeout(()=>{
+      document.querySelectorAll('[data-body]').forEach(x=>x.classList.remove('on'));
+      n.classList.add('on');
+      body = n.dataset.body;
+      renderCount(); renderGrid();
+      bar.style.width = '0'; el('hint').textContent = prev;
+    }, 400);
+  };
+});
+
+frame(); renderCount(); renderGrid(); paint(kept.b, kept.m);
+</script>

@@ -68,6 +68,12 @@ pub struct RaceSetup {
     /// pour cette voiture. Appliqué en réécrivant le `race.ini` juste après CM
     /// et avant que le jeu ne le lise — voir `raceini.rs` (§9.2).
     pub car_skin: Option<String>,
+    /// Le pilote choisi pour cette voiture, posé dans son dossier juste avant
+    /// de lancer (`driverapply`). Vient du frontend, où il vit
+    /// (`ui_prefs.json`, une entrée par voiture). `None` = cette voiture n'a
+    /// rien de particulier, et ce qu'on avait posé pour elle est retiré.
+    #[serde(default)]
+    pub driver: Option<crate::driver::OutfitOverride>,
     pub track_id: String,
     pub track_layout: Option<String>,
     pub session_type: SessionType,
@@ -299,6 +305,26 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
     if matches!(setup.session_type, SessionType::Race | SessionType::TrackDay) {
         for opp in &setup.opponents {
             let _ = ensure_available(conn, cfg, ModKind::Car, &opp.car_id);
+        }
+    }
+
+    // Le pilote, **après** `ensure_available` et avant de lancer : la voiture
+    // doit être déployée pour qu'on ait où écrire, et le jeu doit lire le
+    // fichier après nous. On vise le dossier du **jeu**, jamais celui de la
+    // bibliothèque : c'est celui-là qu'AC ouvre.
+    if let Some(ac) = cfg.ac_install_path.as_ref() {
+        let car_dir = ac.join("content").join("cars").join(&setup.car_id);
+        let skin_dir = kn5_gltf::resolve_skin(&car_dir, setup.car_skin.as_deref());
+        let applied = crate::driverapply::sync(
+            conn,
+            cfg,
+            &car_dir,
+            &setup.car_id,
+            skin_dir.as_deref(),
+            setup.driver.as_ref(),
+        );
+        for file in &applied.written {
+            log::info!("driver: pilote posé dans {file}");
         }
     }
 

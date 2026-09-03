@@ -1,0 +1,1027 @@
+<script lang="ts">
+  // Écran Pilote (docs/SPEC-ecran-pilote.md) : choisir le corps du pilote et
+  // sa tenue en trois pièces.
+  //
+  // **L'asymétrie fondatrice structure l'écran** (§1.3) : le corps est un
+  // modèle 3D que la physique de la voiture désigne — il ne se substitue que
+  // dans l'aperçu — alors que le casque, la combinaison et les gants ne sont
+  // que des images posées dessus, que la livrée choisit déjà et qu'on peut
+  // donc choisir à sa place. D'où le corps au-dessus, séparé, et les trois
+  // autres en dessous.
+  //
+  // Le geste central est le survol (§D2) : parcourir la galerie applique
+  // chaque option sur le pilote affiché, cliquer l'adopte. Une texture à plat
+  // ne dit rien du résultat — c'est tout le problème que cet écran résout.
+  import { onMount } from "svelte";
+  import { t } from "$lib/i18n/index.svelte";
+  import { getModDetail, previewSrc } from "$lib/library";
+  import { nav, requestSection } from "$lib/nav.svelte";
+  import { listDriverBodies, listDriverChoices, type BodyOption, type DriverChoices } from "$lib/driver";
+  import {
+    carClassOf,
+    driverFor,
+    resetDriverOutfit,
+    setDriverBody,
+    setDriverPiece,
+    type DriverOutfit,
+  } from "$lib/driverOverride.svelte";
+  import { getUiPrefs, setUiPref } from "$lib/uiPrefs.svelte";
+  import { bodyThumb, requestBodyThumb } from "$lib/driverThumbs.svelte";
+  import LoadingState from "../LoadingState.svelte";
+  import TriCheck, { type TriState } from "../TriCheck.svelte";
+  import DriverStage from "./DriverStage.svelte";
+  import DriverOutfits from "./DriverOutfits.svelte";
+
+  /** Les quatre pistes, dans l'ordre où elles s'empilent (§5.5). */
+  type Lane = "body" | "helmet" | "suit" | "gloves";
+  /** Les trois pièces de tenue — le corps n'en est pas une (§1.3). */
+  type Piece = "helmet" | "suit" | "gloves";
+  const OUTFIT_LANES: Piece[] = ["helmet", "suit", "gloves"];
+
+  /** Ce que la case par défaut vaut : « celui de la livrée » côté tenue,
+   * « celui de la voiture » côté corps. La chaîne vide plutôt qu'un `null`
+   * parce qu'une case de galerie a toujours une identité, y compris celle-là :
+   * le défaut est un choix parmi les autres, pas une case à cocher à part
+   * (§6.5). */
+  const DEFAULT_ID = "";
+
+  const KEYS = {
+    favorites: "pitbox.driver.favorites",
+    recents: "pitbox.driver.recents",
+  } as const;
+
+  /** L'identifiant de la voiture réglée. `""` quand il n'y en a pas — l'écran
+   * affiche alors son état vide et n'appelle rien de ce qui suit. */
+  const carId = $derived(nav.sessionCar?.id ?? "");
+  /** Classe de la voiture réglée : elle décide de **laquelle** des deux
+   * tenues par défaut s'applique (course ou rue). Relue à chaque changement de
+   * voiture, jamais devinée. */
+  let carClass = $state<string | null>(null);
+  const carKind = $derived(carClassOf(carClass));
+  /** La tenue de cette voiture, cascade résolue. */
+  const prefs: DriverOutfit = $derived(driverFor(carId || null, carKind));
+  /** Le corps courant, **isolé** de l'objet qui le porte.
+   *
+   * `prefs` est reconstruit à chaque écriture dans `ui_prefs.json`, quelle
+   * qu'elle soit — un favori, un récent, un filtre d'un autre écran : la
+   * lecture passe par le cache global des préférences. L'effet de rechargement
+   * plus bas dépendait donc de l'objet, et se redéclenchait pour un rien, ce
+   * qui faisait clignoter la galerie à chaque clic. Un dérivé sur la chaîne
+   * seule ne notifie que si elle change vraiment. */
+  const chosenBody = $derived(prefs.body);
+
+  let bodies = $state<BodyOption[]>([]);
+  let choices = $state<DriverChoices | null>(null);
+  let loading = $state(true);
+  /** Piste active. **De session, pas globale** (§13) : on rouvre l'écran sur
+   * le casque, qui est ce qu'on vient y changer neuf fois sur dix. */
+  let lane = $state<Lane>("helmet");
+  /** Ce qu'on essaie en ce moment, `null` au repos. Jamais persisté : le
+   * survol est exploratoire par nature. */
+  let trying = $state<string | null>(null);
+  let query = $state("");
+  /** Trois états comme les filtres de la bibliothèque : neutre, uniquement,
+   * tout sauf. Une case booléenne ne sait dire que la moitié de ce qu'on veut. */
+  let favState = $state<TriState>(0);
+  let recentState = $state<TriState>(0);
+  let favorites = $state<string[]>([]);
+  let recents = $state<string[]>([]);
+  /** Bannière d'invalidation : elle se referme au premier choix effectué ou
+   * par son propre bouton de marche arrière (§10.2), pas toute seule. */
+  let noticeSeen = $state(false);
+
+  const substituted = $derived(choices?.substituted ?? false);
+  /** **Seul le tout premier chargement remplace la galerie.** Les suivants la
+   * laissent en place et se contentent de l'estomper : changer de corps
+   * recharge les trois listes, et démonter la grille pour l'occasion renvoyait
+   * le défilement tout en haut — on perdait sa place à chaque clic (bug réel).
+   * Même principe que le plateau, qui garde le corps précédent affiché. */
+  const firstLoad = $derived(loading && choices == null);
+
+  // --- Chargement ----------------------------------------------------------
+
+  onMount(() => {
+    void getUiPrefs(Object.values(KEYS)).then((read) => {
+      favorites = parseList(read[KEYS.favorites]);
+      recents = parseList(read[KEYS.recents]);
+    });
+    void listDriverBodies().then((list) => {
+      bodies = list;
+    });
+  });
+
+  function parseList(raw: string | null): string[] {
+    if (!raw) return [];
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+
+  // Les listes dépendent du corps courant, pas de celui de la voiture : c'est
+  // lui qui porte les noms de texture, donc lui qui décide de ce qui s'y pose
+  // (§1.3). Recalculées à chaque changement de voiture ou de corps.
+  $effect(() => {
+    const carId = nav.sessionCar?.id ?? null;
+    const body = chosenBody;
+    if (!carId) {
+      choices = null;
+      carClass = null;
+      loading = false;
+      return;
+    }
+    let cancelled = false;
+    loading = true;
+    void getModDetail(carId)
+      .then((detail) => {
+        if (!cancelled) carClass = detail?.car_class ?? null;
+      })
+      .catch(() => {});
+    void listDriverChoices(carId, body)
+      .then((read) => {
+        if (cancelled) return;
+        choices = read;
+      })
+      .catch((e) => console.error("driver: listes indisponibles", e))
+      .finally(() => {
+        if (!cancelled) loading = false;
+      });
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  // --- Les options de la piste active --------------------------------------
+
+  interface Cell {
+    /** Valeur telle que `skin.ini` l'écrit, ou nom de fichier du corps. */
+    id: string;
+    /** Ce qu'on affiche sous la case. Ne se traduit pas (§14). */
+    label: string;
+    thumb: string | null;
+  }
+  interface Group {
+    key: string;
+    /** Nom lisible, en tête de groupe (§6.4). */
+    name: string;
+    /** Identifiant de dossier, en mono à côté du nom. `null` pour un
+     * regroupement qui n'en est pas un (l'époque, côté corps). */
+    folder: string | null;
+    cells: Cell[];
+  }
+
+  /** Noms complets des cinq casques de 1969 qui portent celui d'un pilote —
+   * table statique, et le seul endroit du produit où le catalogue raconte
+   * quelque chose (§6.4). Les seize autres entrées de cette famille sont des
+   * couleurs, qui se lisent très bien telles quelles. */
+  const HISTORIC: Record<string, string> = {
+    amon: "Chris Amon",
+    bandini: "Lorenzo Bandini",
+    clark: "Jim Clark",
+    hill: "Graham Hill",
+    ickx: "Jacky Ickx",
+  };
+
+  const options = $derived<Cell[]>(
+    lane === "body"
+      ? // La vignette d'un corps est un rendu 3D produit à la demande
+        // (`driverThumbs`) : `null` tant qu'il n'est pas tombé, et la case
+        // affiche son nom en attendant.
+        bodies.map((b) => ({ id: b.id, label: b.id, thumb: bodyThumb(carId + "|" + b.id) }))
+      : (choices?.[plural(lane)] ?? []).map((o) => ({
+          id: o.id,
+          label: readable(o.id),
+          thumb: previewSrc(o.thumbnail),
+        })),
+  );
+
+  /**
+   * Action « quand ça devient visible, une fois ».
+   *
+   * Les vignettes de corps se demandent au défilement et jamais au chargement
+   * de la liste : il y en a 45, chacune coûte une conversion la première fois,
+   * et personne ne regarde les quarante-cinq. La marge fait démarrer le rendu
+   * un peu avant que la case n'arrive à l'écran, pour qu'elle soit peinte
+   * quand elle y arrive.
+   */
+  function whenVisible(node: HTMLElement, onSeen: () => void) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          onSeen();
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "240px" },
+    );
+    observer.observe(node);
+    return { destroy: () => observer.disconnect() };
+  }
+
+  function plural(piece: Piece): "helmets" | "suits" | "gloves" {
+    return piece === "helmet" ? "helmets" : piece === "suit" ? "suits" : "gloves";
+  }
+
+  /** Le dernier segment d'un identifiant, qui est ce qui distingue une option
+   * de ses sœurs — le premier est déjà en tête de groupe. */
+  function readable(id: string): string {
+    const leaf = id.split("/").pop() ?? id;
+    return HISTORIC[leaf.toLowerCase()] ?? leaf;
+  }
+
+  const filtered = $derived(
+    options.filter((cell) => {
+      const entry = tag(cell.id);
+      if (favState !== 0 && favorites.includes(entry) !== (favState === 1)) return false;
+      if (recentState !== 0 && recents.includes(entry) !== (recentState === 1)) return false;
+      if (!query.trim()) return true;
+      const needle = query.trim().toLowerCase();
+      return cell.id.toLowerCase().includes(needle) || cell.label.toLowerCase().includes(needle);
+    }),
+  );
+
+  const groups = $derived<Group[]>(buildGroups(filtered));
+
+  function buildGroups(cells: Cell[]): Group[] {
+    // **Les corps sont toujours rangés par pack**, sans commande pour en
+    // sortir : décidé avec l'utilisateur après essai des trois axes. L'époque
+    // et la grille plate étaient des variantes qu'on ne rouvrait jamais, et
+    // une bascule à trois crans coûtait de la place dans une barre déjà dense
+    // pour un choix que personne ne refaisait. Les pistes de tenue gardent le
+    // leur : leur premier niveau de dossier n'est pas toujours parlant.
+    const body = lane === "body";
+    const packs = body ? packKeys(cells) : null;
+    const out: Group[] = [];
+    for (const cell of cells) {
+      const key =
+        lane === "body" ? (packs?.get(cell.id) ?? eraOf(cell.id)) : (cell.id.split("/")[0] ?? cell.id);
+      let group = out.find((g) => g.key === key);
+      if (!group) {
+        group =
+          lane === "body"
+            ? { key, name: bodyGroupName(key), folder: null, cells: [] }
+            : { key, name: key, folder: key, cells: [] };
+        out.push(group);
+      }
+      group.cells.push(cell);
+    }
+    // Un groupe trop petit ne regroupe rien : il coûte une bannière pour une
+    // case ou deux. Ses corps rejoignent « Autres », qui n'apparaît que s'il
+    // reste quelque chose dedans.
+    fold_small(out);
+    // Un seul groupe ne regroupe rien non plus : `HELMET_1969` porte ses vingt
+    // et un casques à lui seul, et une bannière de groupe unique n'est qu'un
+    // filet de plus à lire. Mesuré sur l'installation de référence — 1969 et
+    // 1985 sont dans ce cas, 1975 et les modernes non.
+    return out.length > 1 ? out : cells.length ? [{ key: "", name: "", folder: null, cells }] : [];
+  }
+
+  /** Nombre de cases sous lequel un groupe ne vaut pas sa bannière. */
+  const MIN_GROUP = 3;
+  /** Clé du groupe fourre-tout, côté corps. */
+  const OTHER_GROUP = "__other";
+
+  function fold_small(groups: Group[]) {
+    const small = groups.filter((g) => g.cells.length < MIN_GROUP && g.key !== OTHER_GROUP);
+    if (!small.length) return;
+    const rest = small.flatMap((g) => g.cells);
+    for (const g of small) groups.splice(groups.indexOf(g), 1);
+    const existing = groups.find((g) => g.key === OTHER_GROUP);
+    if (existing) existing.cells.push(...rest);
+    else groups.push({ key: OTHER_GROUP, name: t("driver.groupOther"), folder: null, cells: rest });
+  }
+
+  function bodyGroupName(key: string): string {
+    if (key === OTHER_GROUP) return t("driver.groupOther");
+    // Un nom de pack ne se traduit pas — c'est celui que l'auteur a donné à
+    // ses fichiers, et c'est sous celui-là qu'on le reconnaît.
+    return key.startsWith("era:") ? t("driver.eraGroup." + key.slice(4)) : key;
+  }
+
+  function eraOf(bodyId: string): string {
+    return "era:" + (bodies.find((b) => b.id === bodyId)?.era ?? "custom");
+  }
+
+  /**
+   * Le pack d'un corps : ce que son nom de fichier porte avant le premier `_`.
+   *
+   * **Le seul regroupement que les données portent réellement.** Un mannequin
+   * n'a ni `ui_*.json`, ni marque, ni catégorie : son nom de fichier est toute
+   * son identité, et les packs s'y annoncent — `rss_*` (13 corps sur
+   * l'installation de référence), `rh_*` (5), `gt-m_*` (5), `mp-h_*` (3).
+   *
+   * **`driver` est écarté**, parce qu'il ne dit rien : tous les mannequins sont
+   * des pilotes, et les quinze fichiers qui commencent ainsi sont la famille
+   * livrée avec le jeu. Ils retombent sur leur **époque**, qui les sépare
+   * utilement (1960, 1970, 1980, moderne) là où « driver » les entasserait
+   * sous une étiquette vide. Chaque groupe de la liste porte ainsi un nom qui
+   * veut dire quelque chose, qu'il vienne d'un pack ou d'une époque.
+   */
+  const GENERIC_PREFIXES = new Set(["driver", "drivers", "pilote"]);
+
+  function packKeys(cells: Cell[]): Map<string, string> {
+    const prefixOf = (id: string) => (id.split("_")[0] ?? id).toLowerCase();
+    const counts = new Map<string, number>();
+    for (const cell of cells) {
+      const prefix = prefixOf(cell.id);
+      if (GENERIC_PREFIXES.has(prefix)) continue;
+      counts.set(prefix, (counts.get(prefix) ?? 0) + 1);
+    }
+    const keys = new Map<string, string>();
+    for (const cell of cells) {
+      const prefix = prefixOf(cell.id);
+      // Sous le seuil, ou générique : l'époque reprend la main, et le repli
+      // vers « Autres » se fait ensuite comme pour tout groupe trop petit.
+      keys.set(cell.id, (counts.get(prefix) ?? 0) >= MIN_GROUP ? prefix : eraOf(cell.id));
+    }
+    return keys;
+  }
+
+  /** Clé de favori/récent : la piste et l'option, parce que `plain/red` existe
+   * en combinaison comme en gants. */
+  function tag(id: string): string {
+    return lane + "|" + id;
+  }
+
+  // --- Ce qui est retenu, ce qui est essayé --------------------------------
+
+  const kept = $derived(lane === "body" ? (prefs.body ?? DEFAULT_ID) : (prefs[lane] ?? DEFAULT_ID));
+  const applied = $derived(trying ?? kept);
+  const appliedCell = $derived(options.find((c) => c.id === applied) ?? null);
+  const appliedLabel = $derived(appliedCell?.label ?? defaultLabel());
+
+  /** Ce que le plateau doit échanger pendant un survol : la vignette d'AC, et
+   * le nom de fichier de la texture qu'elle remplace — le même, à l'extension
+   * près (`HELMET_2012.jpg` à côté de `HELMET_2012.dds`).
+   *
+   * `null` sur la piste Corps et sur la case par défaut : un corps n'est pas
+   * une texture, il demande une vraie conversion (§9.2), et le défaut se
+   * rétablit en retirant l'essai plutôt qu'en en posant un autre. */
+  const trialTexture = $derived.by(() => {
+    if (lane === "body" || trying == null || trying === DEFAULT_ID) return null;
+    const thumb = options.find((c) => c.id === trying)?.thumb;
+    if (!thumb) return null;
+    const name = decodeURIComponent(thumb.split("/").pop() ?? "");
+    return name ? { url: thumb, texture: name } : null;
+  });
+
+  function defaultLabel(): string {
+    if (lane === "body") return choices?.model ?? t("driver.defaultBody");
+    return t((substituted ? "driver.none." : "driver.fromLivery.") + lane);
+  }
+
+  /** Ce que la case par défaut annonce (§6.5). Elle n'est pas une case à
+   * cocher à part : elle se survole et s'adopte comme les autres, et en mode
+   * substitué elle retire simplement la pièce au lieu de rendre la main à la
+   * livrée — qui n'a plus de destinataire. */
+  function defaultCellText(): string {
+    if (lane === "body") return t("driver.defaultCell.body");
+    return t(substituted ? "driver.defaultCell.none" : "driver.defaultCell.livery");
+  }
+
+  function defaultCellName(): string {
+    return substituted && lane !== "body" ? t("driver.defaultCell.noneName") : t("driver.defaultCell.name");
+  }
+
+  function adopt(id: string) {
+    if (!carId) return;
+    if (lane === "body") {
+      setDriverBody(carId, id || null);
+      noticeSeen = false;
+    } else {
+      setDriverPiece(carId, lane, id || null);
+      noticeSeen = true;
+    }
+    remember(tag(id));
+  }
+
+  /** Douze derniers essais **adoptés**, pas survolés (§8.4) : le survol est
+   * exploratoire par nature et polluerait l'historique. */
+  function remember(entry: string) {
+    recents = [entry, ...recents.filter((r) => r !== entry)].slice(0, 12);
+    setUiPref(KEYS.recents, JSON.stringify(recents));
+  }
+
+  function toggleFavorite(id: string) {
+    const entry = tag(id);
+    favorites = favorites.includes(entry) ? favorites.filter((f) => f !== entry) : [...favorites, entry];
+    setUiPref(KEYS.favorites, JSON.stringify(favorites));
+  }
+
+  /** Sortie unique (§5.6) : en mode substitué, la livrée n'est pas une
+   * destination atteignable sans d'abord rétablir le corps. */
+  function exit() {
+    if (!carId) return;
+    if (substituted) {
+      setDriverBody(carId, null);
+      noticeSeen = false;
+    } else {
+      resetDriverOutfit(carId);
+    }
+  }
+
+  // --- Barre d'outils ------------------------------------------------------
+
+  /** Compteur : le nombre, et la cause du filtrage — jamais le filtre seul
+   * (§8.3). Il porte implicitement l'avertissement que changer de corps
+   * changera ce nombre. */
+  const countLabel = $derived(
+    options.length
+      ? t("driver.count." + lane, { count: String(options.length) })
+      : t("driver.countEmpty." + lane),
+  );
+  const causeLabel = $derived(
+    choices ? t("driver.cause", { body: choices.model, era: t("driver.era." + (choices.era ?? "custom")) }) : "",
+  );
+  /** Le nom lisible du corps courant, pour le bandeau du panneau. */
+  const bodyLabel = $derived(choices?.model ?? "—");
+
+  /**
+   * Une pièce retenue qui **ne s'applique pas** au corps courant.
+   *
+   * Le choix est global et il est conservé au changement de voiture (§13) :
+   * c'est voulu, et c'est ce qui permet de se reconnaître d'une voiture à
+   * l'autre. Mais un casque de 1969 gardé sur une voiture moderne ne change
+   * rien du tout — le dossier existe, ses fichiers ne portent simplement aucun
+   * des noms que ce mannequin réclame. Sans ce marquage, la piste affiche
+   * fièrement un casque que le plateau ne montre pas, et on cherche l'erreur
+   * ailleurs.
+   */
+  function inert(piece: Piece): boolean {
+    const chosen = prefs[piece];
+    if (!chosen || !choices) return false;
+    return !choices[plural(piece)].some((o) => o.id === chosen);
+  }
+
+  /** Ce qui tombe quand on substitue le corps (§10.2) — et rien que ça : une
+   * puce dont l'objet n'a pas réellement été perdu ne s'affiche pas. */
+  const noticeItems = $derived(
+    [choices?.helmets.length === 0 ? t("driver.notice.helmet") : "", t("driver.notice.outfit")].filter(Boolean),
+  );
+  const showNotice = $derived(substituted && !noticeSeen);
+
+  /**
+   * Les flèches parcourent la grille (§12.2).
+   *
+   * Rien ne bloquait : `Tab` fonctionnait déjà (les cases sont des `<button>`,
+   * et `onfocus` vaut survol), mais il faut vingt frappes pour traverser une
+   * rangée, ce qui n'est pas parcourir une galerie. La manette y arrivait
+   * parce qu'elle passe par son propre parcours de focus (`gamepadNav`).
+   *
+   * **Par la géométrie, pas par un index.** Les cases sont réparties en
+   * plusieurs grilles (une par groupe), de largeurs différentes selon la
+   * place : un index plat sauterait d'un groupe à l'autre en biais dès que
+   * les rangées ne s'alignent pas. On cherche donc la case la plus proche
+   * dans la direction demandée, ce qui traverse les groupes exactement comme
+   * l'œil le fait.
+   */
+  function arrowMove(e: KeyboardEvent) {
+    const DIRECTIONS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
+    if (!DIRECTIONS.includes(e.key) || e.ctrlKey || e.altKey || e.metaKey) return;
+    const current = document.activeElement;
+    if (!(current instanceof HTMLElement) || !current.classList.contains("cell")) return;
+    const cells = [...(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>("button.cell")];
+    const from = current.getBoundingClientRect();
+    const horizontal = e.key === "ArrowLeft" || e.key === "ArrowRight";
+    const forward = e.key === "ArrowRight" || e.key === "ArrowDown";
+    let best: { el: HTMLElement; main: number; cross: number } | null = null;
+    for (const el of cells) {
+      if (el === current) continue;
+      const r = el.getBoundingClientRect();
+      // Distance dans l'axe du déplacement, et écart dans l'autre : la case
+      // retenue est la plus proche devant, puis la mieux alignée.
+      const main = horizontal ? r.left - from.left : r.top - from.top;
+      const cross = horizontal ? Math.abs(r.top - from.top) : Math.abs(r.left - from.left);
+      if (forward ? main <= 1 : main >= -1) continue;
+      const distance = Math.abs(main);
+      if (!best || cross < best.cross - 1 || (Math.abs(cross - best.cross) <= 1 && distance < best.main)) {
+        best = { el, main: distance, cross };
+      }
+    }
+    if (!best) return;
+    // Le défilement suit le focus, sans saut : la case visée est souvent à
+    // demi sortie du champ.
+    e.preventDefault();
+    best.el.focus();
+    best.el.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+</script>
+
+<div class="screen">
+  <header class="head">
+    <h2 class="lbl-screen">{t("driver.title")}</h2>
+    <p class="sub">{t("driver.subtitle")}</p>
+  </header>
+
+  {#if !nav.sessionCar}
+    <div class="empty">
+      <p>{t("driver.noCar.title")}</p>
+      <p class="hint">{t("driver.noCar.body")}</p>
+      <button class="btn" type="button" onclick={() => requestSection("cars")}>{t("driver.noCar.pick")}</button>
+    </div>
+  {:else}
+    <div class="toolbar">
+      <input class="input search" placeholder={t("driver.searchPlaceholder")} bind:value={query} />
+      <!-- Aucune commande de regroupement, sur aucune piste : tout est
+           toujours groupé (voir `buildGroups`). Décidé avec l'utilisateur
+           après essai — la grille plate n'est pas praticable passé quelques
+           dizaines de cases, et une bascule qu'on ne rouvre jamais prend la
+           place de la recherche et des filtres. -->
+      <TriCheck
+        label={t("driver.favorites")}
+        bind:value={favState}
+        titleInclude={t("driver.favOnly")}
+        titleExclude={t("driver.favExcluded")}
+        titleNeutral={t("driver.favNeutral")}
+      />
+      <TriCheck
+        label={t("driver.recents")}
+        bind:value={recentState}
+        titleInclude={t("driver.recentOnly")}
+        titleExclude={t("driver.recentExcluded")}
+        titleNeutral={t("driver.recentNeutral")}
+      />
+      <div class="spacer"></div>
+      <span class="count mono">{countLabel} · {causeLabel}</span>
+    </div>
+
+    <div class="body">
+      <section class="blk fitting">
+        <div class="blk-h">
+          <span class="blk-t">{t("driver.fittingTitle")}</span>
+          <span class="blk-n">{bodyLabel}</span>
+        </div>
+
+        <DriverStage
+          carId={nav.sessionCar.id}
+          skinId={nav.sessionCar.skin}
+          outfit={{ model: prefs.body, suit: prefs.suit, gloves: prefs.gloves, helmet: prefs.helmet }}
+          {lane}
+          trial={trialTexture}
+          applied={appliedLabel}
+          sample={appliedCell?.thumb ?? null}
+          trying={trying != null}
+        />
+
+        <div class="blk-b lanes">
+          <div class="blk-sub">{t("driver.laneGroup.commands")}</div>
+          <button class="lane" class:on={lane === "body"} type="button" onclick={() => (lane = "body")}>
+            <span class="lbl-key">{t("driver.lane.body")}</span>
+            <span class="v mono">{bodyLabel}</span>
+            <span class="n mono">{substituted ? t("driver.bodySubstituted") : t("driver.bodyFromCar")}</span>
+          </button>
+
+          <div class="blk-sub follows">{t("driver.laneGroup.follows")}</div>
+          {#each OUTFIT_LANES as piece (piece)}
+            <button class="lane" class:on={lane === piece} type="button" onclick={() => (lane = piece)}>
+              <span class="lbl-key">{t("driver.lane." + piece)}</span>
+              {#if prefs[piece]}
+                <span class="v mono" class:inert={inert(piece)} title={inert(piece) ? t("driver.inert") : ""}>
+                  {readable(prefs[piece])}{#if inert(piece)}<span class="inert-mark"> ⚠</span>{/if}
+                </span>
+              {:else}
+                <span class="v def">{t((substituted ? "driver.none." : "driver.fromLivery.") + piece)}</span>
+              {/if}
+              <span class="n mono">{choices?.[plural(piece)].length ?? 0}</span>
+            </button>
+          {/each}
+
+          <button class="btn btn-ghost reset" type="button" onclick={exit}>
+            {substituted ? t("driver.reset.body") : t("driver.reset.livery")}
+          </button>
+
+          <DriverOutfits {carId} kind={carKind} />
+        </div>
+      </section>
+
+      <!-- Le conteneur ne fait que relayer les flèches vers les cases, qui
+           sont, elles, de vrais boutons focusables : il n'a pas de rôle ARIA à
+           lui, et lui en inventer un mentirait sur ce qu'il est. -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <section class="gallery" class:busy={loading && !firstLoad} onkeydown={arrowMove}>
+        {#if showNotice}
+          <div class="warnbox notice">
+            <div>
+              <div class="notice-t">{t("driver.notice.title")}</div>
+              <ul>
+                {#each noticeItems as item (item)}<li>{item}</li>{/each}
+              </ul>
+            </div>
+            <div class="acts">
+              <button class="btn" type="button" onclick={() => ((lane = "helmet"), (noticeSeen = true))}>
+                {t("driver.notice.choose")}
+              </button>
+              <button class="btn" type="button" onclick={exit}>{t("driver.notice.revert")}</button>
+            </div>
+          </div>
+        {/if}
+
+        {#if firstLoad}
+          <LoadingState />
+        {:else if lane === "helmet" && (choices?.helmets.length ?? 0) === 0}
+          <div class="empty">
+            <p>{t("driver.ownHelmet.title")}</p>
+            <p class="hint">{t("driver.ownHelmet.body", { body: choices?.model ?? "" })}</p>
+            <div class="row-acts">
+              <button class="btn" type="button" onclick={() => (lane = "suit")}>{t("driver.ownHelmet.toSuit")}</button>
+              <button class="btn" type="button" onclick={() => (lane = "body")}>{t("driver.ownHelmet.toBody")}</button>
+            </div>
+          </div>
+        {:else if !groups.length}
+          <p class="noresult">
+            {t("driver.noResults", { query })}
+            <button class="btn btn-ghost" type="button" onclick={() => (query = "")}>{t("driver.clearSearch")}</button>
+          </p>
+        {:else}
+          {#each groups as group, gi (group.key)}
+            {#if group.name}
+              <div class="grp">
+                <span class="sec-t">{group.name}</span>
+                {#if group.folder}<span class="grp-id mono">{group.folder}</span>{/if}
+                <span class="grp-n mono">{group.cells.length}</span>
+              </div>
+            {/if}
+            <div class="grid">
+              {#if gi === 0}
+                <!-- Le défaut est un choix parmi les autres, en première
+                     position du premier groupe, toujours (§6.5). -->
+                <button
+                  class="cell special"
+                  class:sel={kept === DEFAULT_ID}
+                  type="button"
+                  onmouseenter={() => (trying = DEFAULT_ID)}
+                  onmouseleave={() => (trying = null)}
+                  onfocus={() => (trying = DEFAULT_ID)}
+                  onblur={() => (trying = null)}
+                  onclick={() => adopt(DEFAULT_ID)}
+                >
+                  <span class="art">{defaultCellText()}</span>
+                  <span class="nm-row"><span class="nm">{defaultCellName()}</span></span>
+                </button>
+              {/if}
+              {#each group.cells as cell (cell.id + "|" + carId)}
+                <button
+                  class="cell"
+                  class:sel={kept === cell.id}
+                  type="button"
+                  use:whenVisible={() =>
+                    lane === "body" && requestBodyThumb(carId, nav.sessionCar?.skin ?? null, cell.id)}
+                  onmouseenter={() => (trying = cell.id)}
+                  onmouseleave={() => (trying = null)}
+                  onfocus={() => (trying = cell.id)}
+                  onblur={() => (trying = null)}
+                  onclick={() => adopt(cell.id)}
+                  title={cell.id}
+                >
+                  <span class="art" class:rendering={lane === "body" && !cell.thumb}>
+                    {#if cell.thumb}<img src={cell.thumb} alt="" />{:else}<span class="noart">{cell.label}</span>{/if}
+                  </span>
+                  <span class="nm-row">
+                    <span class="nm mono">{cell.label}</span>
+                    <span
+                      class="fav"
+                      class:on={favorites.includes(tag(cell.id))}
+                      role="button"
+                      tabindex="-1"
+                      title={t("common.favorite")}
+                      onclick={(e) => (e.stopPropagation(), toggleFavorite(cell.id))}
+                      onkeydown={(e) => e.key === "Enter" && (e.stopPropagation(), toggleFavorite(cell.id))}
+                    >{favorites.includes(tag(cell.id)) ? "♥" : "♡"}</span>
+                  </span>
+                </button>
+              {/each}
+            </div>
+          {/each}
+        {/if}
+      </section>
+    </div>
+  {/if}
+</div>
+
+<style>
+  /* Mise en page et couleurs reprises du design system (`global.css`) : même
+     en-tête d'écran que les Add-ons, même barre d'outils que la vue
+     transversale, mêmes cartes `.blk` que partout ailleurs. Ne restent ici que
+     les deux choses que cet écran est seul à avoir : la colonne d'essayage
+     fixe, et la grille d'échantillons. */
+  .screen {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .head {
+    margin-bottom: 18px;
+  }
+  .sub {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 6px;
+    line-height: 1.5;
+    max-width: 540px;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .search {
+    width: 200px;
+    flex: none;
+  }
+  .spacer {
+    flex: 1;
+  }
+  .count {
+    color: var(--faint);
+    font-size: 11px;
+    text-align: right;
+    max-width: 320px;
+  }
+
+  /* --- corps de l'écran --- */
+  .body {
+    display: flex;
+    gap: 14px;
+    flex: 1;
+    min-height: 0;
+  }
+  /* Le panneau d'essayage est fixe, seule la galerie défile (§4) : le pilote
+     ne quitte jamais le champ de vision. */
+  .fitting {
+    width: 392px;
+    flex: 0 0 392px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin-bottom: 0;
+    overflow: auto;
+  }
+
+  /* --- les pistes (§5.5) --- */
+  .lanes {
+    border-top: 1px solid var(--line);
+  }
+  .follows {
+    margin-top: 14px;
+  }
+  .lane {
+    display: grid;
+    grid-template-columns: 92px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid transparent;
+    border-left: 2px solid transparent;
+    background: transparent;
+    text-align: left;
+  }
+  .lane + .lane {
+    margin-top: 2px;
+  }
+  .lane:hover {
+    background: var(--raised);
+  }
+  /* Bordure gauche en accent : un des trois seuls emplois du rouge saturé sur
+     cet écran (§15). */
+  .lane.on {
+    background: var(--panel);
+    border-color: var(--line);
+    border-left-color: var(--rosso);
+  }
+  .lane .v {
+    font-size: 12px;
+    color: var(--txt2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .lane .v.def {
+    color: var(--faint);
+    font-style: italic;
+  }
+  /* Pièce gardée mais sans effet sur ce corps : barrée, pas retirée — le choix
+     est conservé et reviendra sur une voiture compatible (§13). */
+  .lane .v.inert {
+    color: var(--faint);
+    text-decoration: line-through;
+  }
+  .inert-mark {
+    text-decoration: none;
+    color: var(--orange);
+  }
+  .lane .n {
+    font-size: 11px;
+    color: var(--faint);
+  }
+  .reset {
+    width: 100%;
+    justify-content: center;
+    margin-top: 12px;
+    font-size: 11px;
+  }
+
+  /* --- galerie (§6, §7) --- */
+  .gallery {
+    flex: 1;
+    min-width: 0;
+    overflow: auto;
+    scrollbar-gutter: stable;
+    padding-right: 4px;
+  }
+  /* Rechargement en cours : la galerie s'estompe mais **reste en place**,
+     défilement compris. */
+  .gallery.busy {
+    opacity: 0.55;
+  }
+
+  .notice {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 14px;
+  }
+  .notice-t {
+    font-size: 12px;
+  }
+  .notice ul {
+    margin: 6px 0 0;
+    padding-left: 16px;
+    font-size: 11.5px;
+    line-height: 1.6;
+    opacity: 0.85;
+  }
+  .acts {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+
+  .grp {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 20px 0 9px;
+  }
+  .grp:first-child {
+    margin-top: 0;
+  }
+  .grp-id,
+  .grp-n {
+    font-size: 10px;
+    color: var(--faint);
+  }
+  .grp::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+    align-self: center;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    gap: 9px;
+  }
+  .cell {
+    display: block;
+    /* Ne pas s'étirer à la hauteur de la rangée : une case est carrée, et une
+       case étirée déforme tout ce qu'elle contient. */
+    align-self: start;
+    min-width: 0;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    text-align: left;
+  }
+  /* Carré plein, filet franc, aucune ombre : l'échantillon doit être
+     lisiblement une image et non un aperçu du résultat (§7.3). */
+  .cell .art {
+    display: block;
+    aspect-ratio: 1;
+    border: 1px solid var(--line);
+    overflow: hidden;
+    background: var(--panel2);
+    filter: saturate(0.86) brightness(0.94);
+    transition: filter 0.12s, border-color 0.12s;
+  }
+  .cell .art img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  /* Le remplissage n'appartient qu'au texte qui est *dans* la case : lui
+     donner une hauteur alors qu'elle a déjà un rapport de forme la faisait
+     déborder sur ses voisines (bug réel). */
+  .noart,
+  .cell.special .art {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 8px;
+    font-size: 10px;
+    color: var(--faint);
+    line-height: 1.4;
+  }
+  .noart {
+    height: 100%;
+  }
+  /* Vignette de corps pas encore rendue : la case porte son nom sur une trame
+     discrète, et se remplit quand le rendu tombe. Pas d'animation d'attente —
+     quarante-cinq cases qui pulsent ensemble font une galerie illisible. */
+  .cell .art.rendering {
+    background: var(--card);
+  }
+  .cell.special .art {
+    background: repeating-linear-gradient(
+      135deg,
+      var(--panel2),
+      var(--panel2) 5px,
+      var(--card) 5px,
+      var(--card) 10px
+    );
+    filter: none;
+  }
+  .nm-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .nm {
+    flex: 1;
+    min-width: 0;
+    font-size: 10px;
+    color: var(--faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cell:hover .art,
+  .cell:focus-visible .art {
+    filter: none;
+    border-color: var(--faint);
+  }
+  .cell:hover .nm,
+  .cell:focus-visible .nm {
+    color: var(--muted);
+  }
+  .cell.sel .art {
+    filter: none;
+    border-color: var(--rosso);
+    box-shadow: inset 0 0 0 1px var(--rosso);
+  }
+  .cell.sel .nm {
+    color: var(--txt2);
+  }
+  /* Le cœur de la bibliothèque, **sous** l'image et non dessus. La spec écarte
+     le bouton flottant parce que l'échantillon est montré entier, sans
+     découpe : c'est la texture elle-même qu'on juge, et un bouton posé dans un
+     coin en cache un morceau. On garde son argument et on prend le glyphe du
+     reste de l'app, pour que « mettre en favori » soit partout le même geste
+     sur la même icône. */
+  .fav {
+    flex: 0 0 auto;
+    font-size: 12px;
+    line-height: 1;
+    color: var(--faint);
+  }
+  .fav.on,
+  .fav:hover {
+    color: var(--rosso-bright);
+  }
+
+  .empty {
+    color: var(--muted);
+    text-align: center;
+    padding: 50px 0;
+  }
+  .empty .hint {
+    font-size: 12px;
+    color: var(--faint);
+    margin: 8px auto 16px;
+    max-width: 420px;
+    line-height: 1.6;
+  }
+  .row-acts {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+  }
+  .noresult {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 18px 0 0;
+  }
+</style>

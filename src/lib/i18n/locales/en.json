@@ -15,7 +15,8 @@
     "maintenance": "Maintenance",
     "openCm": "Open CM",
     "settings": "Settings",
-    "about": "About"
+    "about": "About",
+    "driver": "My driver"
   },
   "titlebar": {
     "bigPicture": "Big Picture mode (fullscreen)",
@@ -41,20 +42,20 @@
     "activateFailedTitle": "Activation failed",
     "pickSkin": "Choose a skin…",
     "noSkinsAvailable": "No skin",
-    "driverTooltip": "Choose what the driver wears",
-    "driverRaceTooltip": "On a race car the driver wears the team colours: the outfit comes from the skin.",
-    "driverNone": "None compatible",
-    "driverPiece": {
-      "helmet": "Helmet from the skin",
-      "suit": "Suit from the skin",
-      "gloves": "Gloves from the skin"
-    },
+    "driverTooltip": "See and change the driver's body and outfit",
     "pickLayout": "Choose a layout…",
     "noLayoutsAvailable": "No layout",
     "trackSkinsNone": "No active skin",
     "trackSkinsEmpty": "No track skin",
     "trackSkinsCount": "{count} active skins",
-    "trackSkinsTooltip": "Track skins — several can be active"
+    "trackSkinsTooltip": "Track skins — several can be active",
+    "driverBadge": {
+      "substituted": "Substituted"
+    },
+    "driverStock": "Stock outfit",
+    "driverStockTooltip": "The helmet, suit and gloves are the ones this car's livery specifies. Click to change them.",
+    "driverCustom": "Custom outfit",
+    "driverFallback": "Default outfit"
   },
   "controller": {
     "banner": {
@@ -343,7 +344,11 @@
     "results": "{count} results",
     "filterBrandPlaceholder": "Add a brand…",
     "filterAuthorPlaceholder": "Add an author…",
-    "filterCountryPlaceholder": "Add a country…"
+    "filterCountryPlaceholder": "Add a country…",
+    "driverSet": "Driver set",
+    "driverSetOnly": "Only cars you have given a driver outfit",
+    "driverSetExcluded": "Only cars still wearing their livery's driver",
+    "driverSetNeutral": "Driver set: no filter"
   },
   "bulk": {
     "runningActivate": "Activating {count} mods",
@@ -976,6 +981,9 @@
     "openFolder": "Open folder",
     "managed": "{count} in Content Manager territory",
     "managedTooltip": "Content Manager syncs these folders from the CSP config repository. It may replace these files with its own versions at any time. This is not the recommended location for a mod.",
+    "back": "← Back to other mods",
+    "detailTooltip": "Open this mod's sheet",
+    "categoriesLabel": "Areas touched",
     "cat": {
       "all": "All",
       "extension": "Extensions",
@@ -995,10 +1003,10 @@
     "subtitlePrefix": "Adds mods to the library. An imported (or updated) mod is ",
     "subtitleBold": "activated right away",
     "subtitleSuffix": " — no separate step needed to drive it.",
-    "archiveTitle": "An archive",
-    "archiveHint": "The common case: a .zip, .rar, or .7z file downloaded as-is. The app extracts it, detects the type (car, track, skin, sound…), and files it into the library.",
+    "archiveTitle": "An archive, or a driver",
+    "archiveHint": "The common case: a .zip, .rar or .7z file downloaded as is. The app extracts it, detects the type (car, track, skin, sound…) and files it in the library. A driver model shipped as a bare .kn5 is accepted too.",
     "importing": "Importing…",
-    "chooseArchive": "Choose an archive…",
+    "chooseArchive": "Choose a file…",
     "folderTitle": "An already-extracted folder",
     "folderHint": "For a mod you've already extracted yourself, without going back through the original archive.",
     "copyChoiceLabel": "On import:",
@@ -1033,6 +1041,15 @@
     "cancel": "Stop",
     "cancelling": "Stopping…",
     "summaryBase": "{n} item(s) imported",
+    "summaryNatures": "{list} imported",
+    "natureOther": "{n} {what}",
+    "nature": {
+      "car": "{n} car(s)",
+      "track": "{n} track(s)",
+      "skin": "{n} skin(s)",
+      "sound": "{n} sound(s)",
+      "app": "{n} app(s)"
+    },
     "summaryErrs": ", {errs} archive(s) failed",
     "outcomeUpdate": "UPDATE",
     "outcomeDuplicate": "ALREADY PRESENT",
@@ -1214,6 +1231,7 @@
     "notEnoughDiskSpace": "Not enough free space on the library volume for this import.",
     "nothingToImportInArchive": "No car, track, skin, sound or app found in the archive.",
     "nothingToImportInFolder": "No car, track, skin, sound or app found in the folder.",
+    "notADriverModel": "This .kn5 file is not a driver model. Only a driver model can be imported on its own: for anything else, import the folder or archive around it.",
     "tempDirUnavailable": "Could not create the temporary extraction folder.",
     "notAJunction": "Refused: this path is not a junction.",
     "notASoundMod": "This sub-item is not a sound mod.",
@@ -1282,5 +1300,133 @@
     "bankUnreadable": "This sound bank could not be read.",
     "bankNamesPresent": "Present",
     "bankNamesAbsent": "Absent"
+  },
+  "driver": {
+    "title": "Driver",
+    "subtitle": "The driver's body and outfit — helmet, suit, gloves. The choice is global: it follows you from one car to the next.",
+    "search": "Search",
+    "searchPlaceholder": "Folder name, family…",
+    "favorites": "Favourites",
+    "recents": "Recent",
+    "count": {
+      "body": "{count} bodies available",
+      "helmet": "{count} compatible helmets",
+      "suit": "{count} compatible suits",
+      "gloves": "{count} compatible glove pairs"
+    },
+    "countEmpty": {
+      "body": "No body available",
+      "helmet": "No helmet applies",
+      "suit": "No suit applies",
+      "gloves": "No gloves apply"
+    },
+    "cause": "body {body} · {era} era",
+    "era": {
+      "modern": "modern",
+      "1980s": "1980s",
+      "1970s": "1970s",
+      "1960s": "1960s",
+      "custom": "own naming"
+    },
+    "lane": {
+      "body": "Body",
+      "helmet": "Helmet",
+      "suit": "Suit",
+      "gloves": "Gloves"
+    },
+    "laneGroup": {
+      "commands": "The body commands",
+      "follows": "The outfit follows"
+    },
+    "bodyFromCar": "the car's own",
+    "bodySubstituted": "your choice",
+    "defaultBody": "none",
+    "fromLivery": {
+      "helmet": "The livery's",
+      "suit": "The livery's",
+      "gloves": "The livery's"
+    },
+    "none": {
+      "helmet": "None",
+      "suit": "None",
+      "gloves": "None"
+    },
+    "reset": {
+      "livery": "Put everything back on the livery",
+      "body": "Back to the car's body"
+    },
+    "defaultCell": {
+      "body": "The car's own",
+      "livery": "The livery's",
+      "none": "The livery has nothing for this body",
+      "name": "Default",
+      "noneName": "None"
+    },
+    "stage": {
+      "live": "Fitting",
+      "hint": "Hover a thumbnail to try it on · click to keep it",
+      "trial": "Trying — {name}",
+      "noSample": "Assetto Corsa ships no image for this one.",
+      "no3d": "3D fitting could not start. The gallery is still yours to use.",
+      "noBody": "No body to show: the car names none, or it is not installed.",
+      "drag": "drag to turn",
+      "updating": "Updating…"
+    },
+    "notice": {
+      "title": "You changed the driver's body. Here is what that changes:",
+      "helmet": "Your helmet is removed: a helmet only fits bodies of its own era, and this one is from another.",
+      "outfit": "The livery's suit and gloves no longer apply. This body wears its own until you pick others.",
+      "choose": "Choose an outfit",
+      "revert": "Back to the car's body"
+    },
+    "ownHelmet": {
+      "title": "This body wears its own helmet.",
+      "body": "{body} names its images differently: no helmet from the game can sit on it. The suit and gloves are still yours to change.",
+      "toSuit": "Move on to the suit",
+      "toBody": "Change body"
+    },
+    "noCar": {
+      "title": "No car chosen.",
+      "body": "The driver is set up on a car: the car decides the body, and its livery the starting outfit.",
+      "pick": "Choose a car"
+    },
+    "noResults": "No result for {query}.",
+    "clearSearch": "Clear the search",
+    "eraGroup": {
+      "modern": "Modern helmets",
+      "1980s": "1980s helmets",
+      "1970s": "1970s helmets",
+      "1960s": "1960s helmets",
+      "custom": "Helmet built into the body"
+    },
+    "outfits": {
+      "title": "My outfits",
+      "save": "Save",
+      "saveHint": "Keep the body and all three pieces under a name, to put them back in one click",
+      "placeholder": "Outfit name",
+      "delete": "Delete",
+      "none": "Nothing saved yet. An outfit kept here puts the body, helmet, suit and gloves back in a single click."
+    },
+    "fittingTitle": "Fitting",
+    "favOnly": "Favourites only",
+    "favExcluded": "Excluding favourites",
+    "favNeutral": "Favourites: no filter",
+    "recentOnly": "Recent only",
+    "recentExcluded": "Excluding recent",
+    "recentNeutral": "Recent: no filter",
+    "inert": "Kept, but it does nothing on this body: this folder holds no image that this mannequin uses. It comes back on a compatible car.",
+    "fallback": {
+      "label": {
+        "street": "Default outfit · road cars",
+        "race": "Default outfit · race cars"
+      },
+      "none": "None",
+      "hint": "Each dresses the cars of its class you have not set up; cars you have given an outfit keep theirs. Leaving \"None\" on the race side hands those cars back to their livery's outfit."
+    },
+    "groupOther": "Others"
+  },
+  "prefs": {
+    "writeFailedTitle": "Your settings are not being saved",
+    "writeFailedBody": "Pit Box cannot write its preferences to disk. What you set stays active until you close the app, then it is lost — favourites, driver outfits, filters and views included."
   }
 }

@@ -1,5 +1,6 @@
 // Pont typé vers les commandes « Autres mods » (§7.3).
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import type { ResourceFile } from "$lib/library";
 
 export interface ConflictInfo {
   other_id: string;
@@ -71,4 +72,27 @@ export function deleteOtherMod(id: string): Promise<void> {
  * résolu et ouvert côté backend, comme `openModFolder`. */
 export function openOtherModFolder(id: string): Promise<void> {
   return invoke<void>("open_other_mod_folder", { id });
+}
+
+// Cinquième exemplaire du même quintuplet que les mods/apps/packs/sons — voir
+// `ResourcesBlock.svelte`.
+
+export function listOtherResources(id: string): Promise<ResourceFile[]> {
+  return invoke<ResourceFile[]>("list_other_resources", { id });
+}
+
+export function openOtherResource(id: string, relPath: string): Promise<void> {
+  return invoke<void>("open_other_resource", { id, relPath });
+}
+
+export function otherResourcePath(id: string, relPath: string): Promise<string> {
+  return invoke<string>("get_other_resource_path", { id, relPath });
+}
+
+export async function otherResourceSrc(id: string, relPath: string): Promise<string> {
+  return convertFileSrc(await otherResourcePath(id, relPath));
+}
+
+export function readOtherResource(id: string, relPath: string): Promise<ArrayBuffer> {
+  return invoke<ArrayBuffer>("read_other_resource", { id, relPath });
 }

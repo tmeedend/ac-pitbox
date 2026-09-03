@@ -56,3 +56,62 @@ pub fn delete_other_mod(app: AppHandle, db: State<Db>, id: String) -> Result<(),
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::others::delete_other(&conn, &cfg, &id)
 }
+
+// Cinquième exemplaire du même quintuplet que les mods/apps/packs/sons — voir
+// la note dans `commands/addons.rs`.
+
+/// Fichiers annexes d'un « autre mod » (§4.5.2) : notice, images livrées à
+/// côté d'un mannequin de pilote nu, par exemple.
+#[tauri::command]
+pub fn list_other_resources(
+    app: AppHandle,
+    db: State<Db>,
+    id: String,
+) -> Result<Vec<crate::resources::ResourceFile>, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(crate::resources::list_resources(&crate::others::resources_dir(
+        &conn, &cfg, &id,
+    )?))
+}
+
+/// Ouvre une annexe d'« autre mod » avec l'application par défaut de l'OS.
+#[tauri::command]
+pub fn open_other_resource(app: AppHandle, db: State<Db>, id: String, rel_path: String) -> Result<(), String> {
+    let cfg = crate::config::load(&app);
+    let dir = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        crate::others::resources_dir(&conn, &cfg, &id)?
+    };
+    let path = crate::resources::resolve_resource_path(&dir, &rel_path)?;
+    app.opener()
+        .open_path(path.display().to_string(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+/// Chemin absolu d'une annexe d'« autre mod », pour l'afficher via `asset://`.
+#[tauri::command]
+pub fn get_other_resource_path(app: AppHandle, db: State<Db>, id: String, rel_path: String) -> Result<String, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let dir = crate::others::resources_dir(&conn, &cfg, &id)?;
+    Ok(crate::resources::resolve_resource_path(&dir, &rel_path)?
+        .display()
+        .to_string())
+}
+
+/// Contenu brut d'une annexe d'« autre mod », pour la prévisualisation.
+#[tauri::command]
+pub fn read_other_resource(
+    app: AppHandle,
+    db: State<Db>,
+    id: String,
+    rel_path: String,
+) -> Result<tauri::ipc::Response, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let dir = crate::others::resources_dir(&conn, &cfg, &id)?;
+    Ok(tauri::ipc::Response::new(crate::resources::read_resource(
+        &dir, &rel_path,
+    )?))
+}

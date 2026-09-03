@@ -149,6 +149,12 @@ pub fn split_dropped_paths(paths: Vec<String>) -> DroppedPaths {
                 .any(|a| a.eq_ignore_ascii_case(e))
         }) {
             archives.push(p);
+        } else if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("kn5")) {
+            // Un modèle nu voyage avec les dossiers : c'est `import_folders`
+            // qui sait le mettre en boîte (`stage_loose_model`), et lui seul
+            // qui peut dire si c'en est un — la question coûte un parsing, pas
+            // une extension, donc elle ne se tranche pas ici.
+            folders.push(p);
         }
         // Tout le reste (un .txt lâché par mégarde) est ignoré : c'est le seul
         // cas où ne rien faire est la bonne réponse.

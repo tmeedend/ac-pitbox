@@ -32,6 +32,13 @@
     soundResourceSrc,
     readSoundResource,
   } from "$lib/enginesound";
+  import {
+    listOtherResources,
+    openOtherResource,
+    otherResourcePath,
+    otherResourceSrc,
+    readOtherResource,
+  } from "$lib/others";
   import { loadThumbnails } from "$lib/thumbnails";
   import Lightbox, { type LightboxItem } from "../Lightbox.svelte";
   import { previewKind, decodeText, type PreviewKind } from "$lib/resourcePreview";
@@ -52,7 +59,7 @@
      * résolution côté backend diffère. Le bloc est donc partagé plutôt que
      * recopié — c'est exactement le genre de duplication qui a produit 53
      * signatures visuelles pour 68 libellés (§chantier composants partagés). */
-    source?: "mod" | "app" | "pack" | "sound";
+    source?: "mod" | "app" | "pack" | "sound" | "other";
     onerror: (message: string) => void;
   } = $props();
 
@@ -97,6 +104,13 @@
       src: (id: string, rel: string, _origin: string) => soundResourceSrc(id, rel),
       path: (id: string, rel: string, _origin: string) => soundResourcePath(id, rel),
       read: (id: string, rel: string, _origin: string) => readSoundResource(id, rel),
+    },
+    other: {
+      list: listOtherResources,
+      open: (id: string, rel: string, _origin: string) => openOtherResource(id, rel),
+      src: (id: string, rel: string, _origin: string) => otherResourceSrc(id, rel),
+      path: (id: string, rel: string, _origin: string) => otherResourcePath(id, rel),
+      read: (id: string, rel: string, _origin: string) => readOtherResource(id, rel),
     },
   } as const;
 

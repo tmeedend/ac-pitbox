@@ -960,6 +960,7 @@
               carId={d.id_interne}
               skinId={skins[previewSkin]?.id ?? null}
               fallbackSrc={heroImg}
+              carClass={d.car_class}
             />
           {/if}
         </div>

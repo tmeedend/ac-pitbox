@@ -343,17 +343,20 @@ fn seating_offset(driver: &Kn5Model, wanted: &DriverGraft, stats: &mut DriverSta
 }
 
 /// Where the mannequin's head bone sits in its own space.
+fn head_of(driver: &Kn5Model) -> Option<[f32; 3]> {
+    bone_of(&crate::geometry::node_world_centers(driver), HEAD_BONE)
+}
+
+/// One bone of a rig, by name, among centres already computed.
 ///
 /// Matched on the **end** of the node name, not the whole of it: AC prefixes
 /// every node of a mannequin with `DRIVER:`, but a mod that dropped the prefix
-/// still has a rig, and the bone is unambiguous either way.
-fn head_of(driver: &Kn5Model) -> Option<[f32; 3]> {
-    crate::geometry::node_world_centers(driver)
-        .into_iter()
-        .find(|(name, _)| {
-            name.len() >= HEAD_BONE.len() && name[name.len() - HEAD_BONE.len()..].eq_ignore_ascii_case(HEAD_BONE)
-        })
-        .map(|(_, center)| center)
+/// still has a rig, and the bones are unambiguous either way.
+fn bone_of(centers: &[(String, [f32; 3])], bone: &str) -> Option<[f32; 3]> {
+    centers
+        .iter()
+        .find(|(name, _)| name.len() >= bone.len() && name[name.len() - bone.len()..].eq_ignore_ascii_case(bone))
+        .map(|(_, center)| *center)
 }
 
 const IDENTITY: [f32; 16] = [
@@ -399,6 +402,90 @@ fn read_first(dirs: &[PathBuf], name: &str, failures: &mut Vec<String>) -> Optio
         }
     }
     None
+}
+
+// --- Le mannequin seul, pour le plateau d'essayage --------------------------
+
+/// The bones the fitting stage needs, on top of the head it already knew.
+///
+/// **The measurement that decided how the stage is built.** In its *rest*
+/// pose a mannequin holds its hands 55 cm apart — 41 of the 44 offerable ones
+/// to the millimetre, at (±0.277, 1.027, 0.530). That looks like a grip and is
+/// not one: no steering wheel is 55 cm across, and a ring drawn through those
+/// hands reads as a bus wheel the fingers do not touch. Apply the car's own
+/// hierarchy and steering animation and the same hands close to **35–43 cm**,
+/// car by car — a real wheel, of that car's real size. So the stage poses the
+/// driver like the car does, and the ring is read off the result.
+const HAND_BONES: [&str; 2] = ["RIG_HAND_L", "RIG_HAND_R"];
+/// Where the fingers actually close, left then right — the second phalanx of
+/// each middle finger.
+///
+/// **A wrist is not a grip**, and the difference is not subtle: measured on
+/// twelve posed cars, the midpoint of the two middle fingers sits a steady
+/// **13 cm in front** of the midpoint of the two wrists (+0.127 to +0.138 m,
+/// twelve out of twelve). A ring drawn on the wrists is therefore a ring the
+/// hands do not touch — reported from the screen before it was measured here.
+///
+/// The numbering is AC's, and it is asymmetric: the left hand carries
+/// `HAND_Index1..3` / `HAND_Middle1..3`, the right one `HAND_Index4..6` /
+/// `HAND_Middle4..6`. Hence `Middle2` and `Middle5` rather than a shared name
+/// with a side suffix.
+const GRIP_BONES: [&str; 2] = ["HAND_Middle2", "HAND_Middle5"];
+/// The other end of the torso, which frames the bust.
+const HIPS_BONE: &str = "RIG_Hips";
+
+/// Where a mannequin's rig sits in the space of the model it is converted
+/// into — metres, and the same axes the `.glb` uses.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct DriverRig {
+    /// Wrists, left then right. `None` when the mannequin has no hand bone
+    /// under a name we know.
+    pub hands: Option<[[f32; 3]; 2]>,
+    /// Where the fingers close, left then right — see [`GRIP_BONES`]. This is
+    /// what a steering wheel has to pass through; [`DriverRig::hands`] is 13 cm
+    /// behind it.
+    pub grip: Option<[[f32; 3]; 2]>,
+    pub head: Option<[f32; 3]>,
+    pub hips: Option<[f32; 3]>,
+}
+
+/// The mannequin alone, dressed and posed — what the fitting stage of the
+/// driver screen shows (`docs/SPEC-ecran-pilote.md` §5.1).
+///
+/// Deliberately not [`graft`] with an empty host, but for **one** of that
+/// function's four jobs rather than three: the body is not offset onto the
+/// car's `DRIVEREYES` (`anchor` is ignored, and the caller need not fill it),
+/// because a stage has no cockpit to fit into. The other two — laying the rig
+/// out from the car's `driver_base_pos.knh`, and posing the arms with its
+/// steering animation — are kept, and they are what makes the hands close on
+/// a wheel-sized ring instead of hanging 55 cm apart (see [`HAND_BONES`]).
+///
+/// The rig comes back **after** posing, for the same reason.
+pub fn standalone(wanted: &DriverGraft) -> Result<(Kn5Model, DriverStats, DriverRig), String> {
+    let mut stats = DriverStats::default();
+    let bytes = std::fs::read(&wanted.model).map_err(|e| format!("{} : {e}", wanted.model.display()))?;
+    let mut driver = kn5::parse(&bytes).map_err(|e| format!("{} : {e}", wanted.model.display()))?;
+
+    stats.dressed = dress(&mut driver, &wanted.texture_dirs, &mut stats.failures);
+    stats.triangles = driver.triangle_count();
+    // Même ordre que dans `graft` : la hiérarchie place le corps, l'animation
+    // reprend par-dessus les membres qu'elle nomme.
+    stats.seated = base_pose(&mut driver, wanted, &mut stats.failures);
+    stats.posed = pose(&mut driver, wanted, &mut stats.failures);
+
+    let centers = crate::geometry::node_world_centers(&driver);
+    let pair = |bones: [&str; 2]| {
+        bone_of(&centers, bones[0])
+            .zip(bone_of(&centers, bones[1]))
+            .map(|(left, right)| [left, right])
+    };
+    let rig = DriverRig {
+        hands: pair(HAND_BONES),
+        grip: pair(GRIP_BONES),
+        head: bone_of(&centers, HEAD_BONE),
+        hips: bone_of(&centers, HIPS_BONE),
+    };
+    Ok((driver, stats, rig))
 }
 
 #[cfg(test)]

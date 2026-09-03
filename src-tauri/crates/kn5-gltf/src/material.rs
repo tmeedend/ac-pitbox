@@ -64,6 +64,16 @@ pub struct GltfMaterial {
 /// Shaders whose name alone says the surface is glass.
 const GLASS_MARKERS: [&str; 3] = ["Glass", "Windscreen", "windscreen"];
 
+/// Le nom du shader suffit-il à dire que la surface est du verre ?
+///
+/// Partagé par [`alpha_mode_of`] (qui décide *si* on fond) et [`convert`]
+/// (qui décide *avec quelle opacité*) — les deux doivent s'accorder sur ce
+/// qui est vraiment du verre, pas seulement sur ce qui a `blend_mode = 1`
+/// (voir la note sur `senna_head` dans [`convert`]).
+fn is_glass_shader(shader: &str) -> bool {
+    GLASS_MARKERS.iter().any(|marker| shader.contains(marker))
+}
+
 /// Seuil de découpe d'un matériau alpha-testé.
 ///
 /// **Un `ksAlphaRef` nul veut dire « non réglé », pas « ne découpe rien ».**
@@ -75,9 +85,21 @@ const GLASS_MARKERS: [&str; 3] = ["Glass", "Windscreen", "windscreen"];
 /// l'orange dessous) se rendaient en panneau orange plein, et tout l'arrière de
 /// la voiture avec. Le jeu, lui, découpe bien — sa valeur par défaut n'est pas
 /// zéro. Un zéro explicite prend donc le **même** défaut qu'une valeur absente.
+///
+/// **Et au-delà de 1, ce n'est plus une fraction : c'est un octet.** Mesuré sur
+/// 62 voitures et les 52 mannequins de l'installation : côté voiture la
+/// propriété tient dans [0, 1] (Kunos écrit 0,1 · 0,2 · 0,5 · 0,9), côté
+/// mannequin les mods écrivent 3 · 10 · 20 · 30 · 50 · **100** · 1000 — quatre
+/// vingt-dix-sept matériaux, l'échelle 0-255 de l'alpha lui-même. Ramenés à 1,
+/// ils ne laissaient passer que les texels parfaitement opaques : les cheveux
+/// d'`ada.kn5` (`ksAlphaRef = 100`) se rendaient en mèches déchiquetées
+/// laissant voir le crâne au travers, là où le jeu les montre pleins (capture
+/// à l'appui). Ramenée sur 255, la même valeur donne 0,39 — un seuil ordinaire.
+/// Au-delà de 255, plus aucune lecture ne tient : on reprend le défaut.
 fn alpha_cutoff_of(material: &Kn5Material) -> f32 {
     match material.property("ksAlphaRef") {
-        Some(reference) if reference > 0.0 => reference.clamp(0.0, 1.0),
+        Some(reference) if reference > 0.0 && reference <= 1.0 => reference,
+        Some(reference) if reference > 1.0 && reference <= 255.0 => reference / 255.0,
         _ => DEFAULT_ALPHA_CUTOFF,
     }
 }
@@ -93,7 +115,7 @@ const DEFAULT_ALPHA_CUTOFF: f32 = 0.5;
 /// s'en sert vraiment.
 pub(crate) fn alpha_mode_of(material: &Kn5Material) -> (AlphaMode, f32) {
     let shader = material.shader.as_str();
-    let is_glass = GLASS_MARKERS.iter().any(|marker| shader.contains(marker));
+    let is_glass = is_glass_shader(shader);
     if material.blend_mode == 1 || is_glass {
         (AlphaMode::Blend, 0.5)
     } else if material.alpha_tested {
@@ -117,6 +139,12 @@ pub struct MaterialTextures {
     /// L'alpha le ferait alors disparaître au lieu de le découper — voir
     /// `FootprintAlpha::is_blank`.
     pub diffuse_alpha_blank: bool,
+    /// Ce matériau n'échantillonne-t-il **que** des texels opaques ? Un
+    /// matériau en fondu (`blend_mode = 1`) qui n'est pas du verre et dont
+    /// l'alpha ne dit rien ne devrait pas fondre pour autant — voir
+    /// `FootprintAlpha::is_opaque` et la note sur `senna_head` dans
+    /// [`convert`].
+    pub diffuse_alpha_opaque: bool,
     /// Variante peinte de la texture diffuse, quand la carte de détail du
     /// matériau porte une couleur de peinture (voir [`crate::paint`]).
     pub painted_diffuse: Option<String>,
@@ -144,6 +172,12 @@ pub struct MaterialTextures {
 /// plafond au sommet de la plage que Kunos s'autorise.
 const METALLIC_F0_FLOOR: f32 = 0.10;
 const METALLIC_F0_FULL: f32 = 0.40;
+
+/// Au-delà, `fresnelC` ne dit plus rien du tout — voir la mesure dans
+/// [`metallic_of`]. Les valeurs relevées au-dessus de 1 sont 1,2 · 1,3 · 1,4 ·
+/// 1,5 · 2, puis 3 · 5 · 5,5 · 10 · 12 · 100 : la coupure est posée là où la
+/// suite cesse d'être serrée autour du maximum.
+const METALLIC_F0_ABSURD: f32 = 2.0;
 
 /// Niveau de réflexion en dessous duquel une surface ne peut pas être un
 /// métal, quelle que soit sa `fresnelC`.
@@ -187,14 +221,44 @@ fn metallic_of(material: &Kn5Material, shader: &str) -> f32 {
     // Le veto du plafond de reflet, avant tout calcul : une surface qui ne
     // renvoie rien n'est pas un métal, même si elle annonce une réflectance
     // franche à incidence normale.
-    if material.property("fresnelMaxLevel").unwrap_or(0.0) < METALLIC_MIN_REFLECTION {
+    let ceiling = material.property("fresnelMaxLevel").unwrap_or(0.0);
+    if ceiling < METALLIC_MIN_REFLECTION {
         return 0.0;
     }
-    // Au-delà de 1, ce n'est plus une réflectance. Des auteurs de mods y
-    // écrivent 1,2 pour dire « le plus réfléchissant possible » (11 % de leurs
-    // matériaux passent 0,5, là où Kunos n'y va jamais), et l'un d'eux a laissé
-    // 100. Ramené à 1 plutôt qu'écarté : l'intention reste lisible, et une
-    // valeur aberrante donne un miroir, pas un plantage.
+    // Et le veto symétrique de celui posé plus bas sur `fresnelC` : un plafond
+    // de reflet impossible ne dit pas « le plus réfléchissant possible », il
+    // dit que ce bloc fresnel ne veut rien dire. **C'est une signature**, pas
+    // un cas isolé : `fresnelC = 0.5` avec `fresnelMaxLevel = 100` se retrouve
+    // à l'identique sur cinq mannequins d'auteurs différents (`ada`, `jill_re3`,
+    // `rinoa`, `Sienna_Guillory`, `t-800`), toujours sur les maillages de
+    // brillance posés par-dessus la peau et les cheveux — un gabarit recopié.
+    // Rendus pleinement métalliques, ils donnaient des visages luisants
+    // signalés à l'écran. Mesuré : 36 matériaux de mannequin, et 0,05 % des
+    // matériaux de voiture.
+    if ceiling > METALLIC_F0_ABSURD {
+        return 0.0;
+    }
+    // Au-delà de 1, ce n'est plus une réflectance — mais tout ce qui dépasse ne
+    // se vaut pas, et les traiter pareil donnait des mannequins en or.
+    //
+    // **Mesuré sur tout le corpus** (14 558 matériaux de voiture, 611 de
+    // mannequin) : 1,2 à 2 est le geste d'un moddeur qui pousse le curseur
+    // au-delà du maximum — 163 matériaux, toujours des valeurs rondes et
+    // proches (1,2 · 1,3 · 1,4 · 1,5 · 2). Au-delà, ce n'est plus un geste :
+    // 5, 10, 12, 100 apparaissent **chez Kunos aussi** (`lotus_elise_sc`,
+    // `mercedes_sls`, `ks_ford_escort_mk1`), sur un matériau isolé d'une
+    // voiture par ailleurs normale. Un studio qui écrit 100 dans un champ dont
+    // il a écrit le shader n'exprime pas « miroir parfait » : le shader ignore
+    // la valeur, et personne ne l'a jamais vue à l'écran.
+    //
+    // Bug réel : `ada.kn5` porte `fresnelC = 100` sur son visage, son torse,
+    // ses jambes et ses yeux. Ramenés à 1, ils devenaient pleinement
+    // métalliques — une statue dorée, signalée par l'utilisateur. Au-dessus du
+    // seuil, la propriété est donc traitée comme **absente** (diélectrique),
+    // ce qui est le repli sûr : un matériau sans `fresnelC` ne brille pas.
+    if f0 > METALLIC_F0_ABSURD {
+        return 0.0;
+    }
     let f0 = f0.clamp(0.0, 1.0);
     ((f0 - METALLIC_F0_FLOOR) / (METALLIC_F0_FULL - METALLIC_F0_FLOOR)).clamp(0.0, 1.0)
 }
@@ -314,6 +378,17 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // variante de la texture diffuse : elle est masquée pixel par pixel par
     // l'alpha de cette texture, et un facteur global peindrait les
     // décalcomanies avec la carrosserie (voir [`crate::paint`]).
+    //
+    // **Troisième endroit, hors verre** : `blend_mode = 1` sur un matériau qui
+    // n'est ni du verre ni une découpe. Mesuré sur `senna.kn5` (mod de pilote
+    // tiers) — le matériau `senna_head`, shader `ksSkinnedMesh_NMDetaill`
+    // ordinaire, porte `blend_mode = 1` sans raison identifiée, et sa diffuse
+    // est uniformément opaque (empreinte constante à 255). L'approximer comme
+    // une vitre (`glass_opacity`, dérivée de `ksDiffuse = 0.3`) rendait la
+    // tête entière translucide. Le verre garde son approximation — c'est elle
+    // qui donne une vitre plausible sans reflet à afficher — mais un matériau
+    // qui n'est pas du verre et dont l'alpha dit « rien à fondre » n'a pas de
+    // raison de la subir.
     // **Ce que le mod déclare l'emporte sur ce qu'on a déduit** — mais
     // seulement là où il déclare quelque chose. Un template de CSP dont la
     // brillance dépend d'une texture de détail qu'on ne charge pas laisse
@@ -333,8 +408,12 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // peine de modéliser n'est jamais censé être invisible.
     let texture_carries_alpha =
         base_color_texture.is_some() && textures.diffuse_alpha_varies && !textures.diffuse_alpha_blank;
+    // Uniquement hors verre : un vrai `ksWindscreen`/`*Glass` garde son
+    // approximation même si son alpha se mesure opaque, pour la raison ci-
+    // dessus (la transparence d'une vitre vient du reflet, pas de l'alpha).
+    let opaque_by_alpha = !is_glass_shader(shader) && textures.diffuse_alpha_opaque;
     let base_color = match alpha_mode {
-        AlphaMode::Blend if !texture_carries_alpha => [1.0, 1.0, 1.0, glass_opacity(material)],
+        AlphaMode::Blend if !texture_carries_alpha && !opaque_by_alpha => [1.0, 1.0, 1.0, glass_opacity(material)],
         _ => [1.0, 1.0, 1.0, 1.0],
     };
 
@@ -383,7 +462,12 @@ pub(crate) fn base_color_map(material: &Kn5Material) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Normal map d'un matériau, **sauf quand c'en est une de dégâts**.
+/// Nom de la propriété par laquelle un matériau annonce que sa `txNormal` est
+/// en espace **objet** et non en espace tangent (voir [`normal_map`]).
+const OBJECT_SPACE_NORMALS: &str = "nmObjectSpace";
+
+/// Normal map d'un matériau, **sauf quand c'en est une de dégâts, et sauf
+/// quand elle est en espace objet**.
 ///
 /// Les shaders de la famille `*_damage*` réservent `txNormal` à la déformation
 /// des tôles, qu'AC ne mélange qu'à proportion des dégâts subis — nulle sur une
@@ -394,8 +478,36 @@ pub(crate) fn base_color_map(material: &Kn5Material) -> Option<String> {
 /// Vérifié sur quatre voitures, sans exception : `ks_toyota_supra_mkiv`
 /// (`exterior_damage_NM.dds`), `ks_mazda_mx5_cup` (`Damage_NM.dds`),
 /// `abarth500` (`NORMAL MAP DAMAGE_TEMP.dds`), `ks_ford_gt40` (`damageNM.dds`).
+///
+/// **L'espace objet est le second cas, et glTF ne sait pas le lire** : son
+/// `normalTexture` est définie en espace tangent, point. Lui donner une carte
+/// objet fait dépendre l'erreur d'éclairage de l'orientation de la surface —
+/// le sommet d'un casque, où la normale objet pointe vers le haut, s'aplatit
+/// et s'éteint pendant que les flancs restent à peu près justes. C'est le
+/// défaut remonté par l'utilisateur sur le casque du pilote.
+///
+/// **Mesuré, pas déduit du nom du fichier.** `HELMET_2012_OS.dds` a une
+/// moyenne RGB de (127, 115, 147) pour un écart-type de (77, 74, 63) : elle
+/// balaie tout le cube, comme une carte objet. Les quatre cartes tangentes du
+/// même mannequin sont à (127, 127, 254) avec un écart-type de 5 sur le bleu —
+/// une normale qui ne s'écarte guère de la surface, comme le veut l'espace
+/// tangent.
+///
+/// **Et ça ne concerne que les mannequins** : sur l'installation de référence,
+/// les cinq matériaux qui déclarent `nmObjectSpace = 1` sont les casques des
+/// mannequins Kunos, et pas un seul matériau de voiture (mesuré sur cinq
+/// voitures, entre 13 et 38 matériaux chacune à déclarer la propriété, toujours
+/// à 0).
+///
+/// La carte est **abandonnée** plutôt que convertie : reconstruire une carte
+/// tangente demanderait un repère par sommet et un recuit complet, pour un
+/// casque lisse dont la géométrie porte déjà l'essentiel du relief. Une carte
+/// qu'on ne sait pas lire vaut moins que pas de carte du tout.
 fn normal_map(material: &Kn5Material) -> Option<String> {
     if material.shader.to_ascii_lowercase().contains("damage") {
+        return None;
+    }
+    if material.property(OBJECT_SPACE_NORMALS).is_some_and(|v| v != 0.0) {
         return None;
     }
     material
@@ -518,6 +630,31 @@ mod tests {
         assert_eq!(alpha_mode_of(&set).1, 0.3, "une valeur utilisable est respectée");
     }
 
+    /// Règle : au-delà de 1, `ksAlphaRef` est un octet, pas une fraction.
+    ///
+    /// Bug réel sur les cheveux d'`ada.kn5` (`ksAlphaRef = 100`) : ramenés à 1,
+    /// seuls les texels parfaitement opaques passaient, et les mèches se
+    /// rendaient déchiquetées avec le crâne visible au travers.
+    #[test]
+    fn an_alpha_reference_above_one_is_read_as_a_byte() {
+        let hair = material("ksSkinnedMesh_NMDetaill", 0, true, &[("ksAlphaRef", 100.0)]);
+        let cutoff = alpha_mode_of(&hair).1;
+        assert!(
+            (cutoff - 100.0 / 255.0).abs() < 1e-6,
+            "100 se lit sur 255, soit 0,39 (obtenu {cutoff})"
+        );
+
+        let absurd = material("ksSkinnedMesh_NMDetaill", 0, true, &[("ksAlphaRef", 1000.0)]);
+        assert_eq!(
+            alpha_mode_of(&absurd).1,
+            DEFAULT_ALPHA_CUTOFF,
+            "au-delà de 255, aucune lecture ne tient : le défaut"
+        );
+
+        let kunos = material("ksPerPixelAT", 0, true, &[("ksAlphaRef", 1.0)]);
+        assert_eq!(alpha_mode_of(&kunos).1, 1.0, "une valeur pile à 1 reste une fraction");
+    }
+
     // Rule: glass blends, whether it says so through its blend mode or only
     // through its shader name.
     #[test]
@@ -590,6 +727,74 @@ mod tests {
         assert!(
             convert(&decal, MaterialTextures::default()).base_color[3] < 1.0,
             "sans alpha exploitable, la transparence vient du shader"
+        );
+    }
+
+    // Règle : un matériau en fondu qui n'est pas du verre, dont l'alpha se
+    // mesure uniformément opaque, rend opaque — pas l'approximation de verre.
+    //
+    // Bug réel sur `senna.kn5` (mod de pilote tiers) : le matériau de la tête,
+    // shader ordinaire mais `blend_mode = 1`, se rendait à 30 % d'opacité
+    // (`ksDiffuse`) faute de mieux. Le verre, lui, garde son approximation :
+    // c'est elle qui lui donne un aspect plausible.
+    #[test]
+    fn opaque_footprint_overrides_the_glass_approximation_off_glass() {
+        let head = material("ksSkinnedMesh_NMDetaill", 1, false, &[("ksDiffuse", 0.3)]);
+        assert_eq!(
+            convert(
+                &head,
+                MaterialTextures {
+                    diffuse_alpha_opaque: true,
+                    ..Default::default()
+                }
+            )
+            .base_color[3],
+            1.0,
+            "alpha uniformément opaque : rien à fondre, malgré blend_mode = 1"
+        );
+        let glass = material("ksWindscreen", 1, false, &[("ksDiffuse", 0.3)]);
+        assert!(
+            convert(
+                &glass,
+                MaterialTextures {
+                    diffuse_alpha_opaque: true,
+                    ..Default::default()
+                }
+            )
+            .base_color[3]
+                < 1.0,
+            "le verre garde son approximation même si son alpha se mesure opaque"
+        );
+    }
+
+    /// Règle : une normal map en espace objet n'est pas exportée. `normalTexture`
+    /// de glTF est définie en espace tangent, et lui donner une carte objet
+    /// éteint le sommet d'un casque tout en laissant ses flancs à peu près
+    /// justes — bug réel remonté par l'utilisateur.
+    #[test]
+    fn object_space_normal_maps_are_dropped() {
+        let mut helmet = material("ksPerPixelMultiMap", 0, false, &[("nmObjectSpace", 1.0)]);
+        helmet.samplers.push(kn5::Kn5Sampler {
+            name: "txNormal".to_string(),
+            slot: 1,
+            texture: "HELMET_2012_OS.dds".to_string(),
+        });
+        assert_eq!(
+            convert(&helmet, MaterialTextures::default()).normal_texture,
+            None,
+            "une carte que glTF ne sait pas lire vaut moins que pas de carte"
+        );
+
+        let mut tangent = material("ksPerPixelMultiMap", 0, false, &[("nmObjectSpace", 0.0)]);
+        tangent.samplers.push(kn5::Kn5Sampler {
+            name: "txNormal".to_string(),
+            slot: 1,
+            texture: "DRIVER_Face_NM.dds".to_string(),
+        });
+        assert_eq!(
+            convert(&tangent, MaterialTextures::default()).normal_texture.as_deref(),
+            Some("DRIVER_Face_NM.dds"),
+            "la propriété à zéro, elle, ne retire rien"
         );
     }
 
@@ -715,9 +920,29 @@ mod tests {
             "le haut de la plage Kunos est un métal plein"
         );
         assert_eq!(
-            metallic_of(&with(100.0), "ksPerPixelMultiMap"),
+            metallic_of(&with(1.2), "ksPerPixelMultiMap"),
             1.0,
-            "une valeur aberrante donne un miroir, pas un débordement"
+            "un moddeur qui pousse le curseur juste au-delà du maximum est entendu"
+        );
+        assert_eq!(
+            metallic_of(&with(100.0), "ksPerPixelMultiMap"),
+            0.0,
+            "une valeur absurde ne dit rien : diélectrique, pas miroir (ada.kn5 en statue dorée)"
+        );
+
+        // Le même veto sur l'autre moitié du bloc fresnel : le gabarit
+        // `fresnelC = 0.5` / `fresnelMaxLevel = 100` des maillages de
+        // brillance des mannequins.
+        let shine = material(
+            "ksSkinnedMesh",
+            0,
+            false,
+            &[("fresnelC", 0.5), ("fresnelMaxLevel", 100.0)],
+        );
+        assert_eq!(
+            metallic_of(&shine, "ksSkinnedMesh"),
+            0.0,
+            "un plafond de reflet impossible annule le bloc entier"
         );
     }
 
