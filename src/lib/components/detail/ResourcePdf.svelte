@@ -466,35 +466,29 @@
   });
 
   /**
-   * Applies a new scale while keeping the reading position.
+   * Applies a new scale **without moving the scrollbar**.
    *
-   * Content height is proportional to the scale, so the distance already
-   * scrolled INTO the document scales with it. Without this, zooming in on
-   * page 9 of a manual lands somewhere around page 3.
+   * The first version corrected `scrollTop` in the ratio of the two scales, on
+   * the theory that the reader wants to stay on the same line of the same page
+   * — the document being taller, the distance already scrolled into it grows
+   * with it. Tried on the real app, that theory is wrong: pressing − or +
+   * makes the view slide under the cursor, which is exactly what one does NOT
+   * want from a button one is about to press again. The scrollbar staying put
+   * is what makes a zoom feel like a zoom rather than a jump.
    *
-   * `getBoundingClientRect` is in the zoomed coordinate space of the viewport
-   * while `scrollTop` is in layout pixels, so the measured offset is divided
-   * by the UI zoom factor before the two are mixed.
+   * So: read `scrollTop`, let the boxes resize, put it back if anything moved
+   * it. Something else *does* move it — see `overflow-anchor` in the style
+   * block below, which is the browser doing the same well-meant correction on
+   * its own.
    */
   async function applyScale(next: FitMode, value?: number) {
     const el = root;
-    const stack = host;
-    const before = scale;
     const scroller = el ? scrollerOf(el) : null;
-    let anchor: { top: number; documentTop: number } | null = null;
-    if (scroller && stack) {
-      const factor = zoomState.level / 100;
-      const documentTop =
-        (stack.getBoundingClientRect().top - scroller.getBoundingClientRect().top) / factor + scroller.scrollTop;
-      anchor = { top: scroller.scrollTop, documentTop };
-    }
+    const before = scroller?.scrollTop;
     if (value !== undefined) customScale = clamp(value);
     fit = next;
     await tick();
-    if (anchor && scroller && before > 0) {
-      const ratio = scale / before;
-      scroller.scrollTop = anchor.documentTop + (anchor.top - anchor.documentTop) * ratio;
-    }
+    if (scroller && before !== undefined && scroller.scrollTop !== before) scroller.scrollTop = before;
   }
 
   /** Walks the ladder from wherever the current scale is — so a step out of
@@ -648,6 +642,16 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+    /* Sans ça, le navigateur corrige le défilement de lui-même : c'est
+       l'ancrage de défilement (`overflow-anchor`), qui repère un élément
+       visible et compense en `scrollTop` tout ce qui change de taille
+       au-dessus de lui. Excellent pour une image qui arrive en cours de
+       lecture, désastreux ici — les pages changent de taille *à la demande de
+       l'utilisateur*, et la barre bougeait donc à chaque clic sur − / + malgré
+       la remise en place faite dans `applyScale`. La propriété se pose sur le
+       sous-arbre à exclure, pas sur le conteneur qui défile (qui appartient à
+       la fiche, pas à ce composant). */
+    overflow-anchor: none;
   }
   /* White backing: a PDF page is drawn with a transparent background, and the
      dark theme behind it would otherwise leave black text on black. The box
