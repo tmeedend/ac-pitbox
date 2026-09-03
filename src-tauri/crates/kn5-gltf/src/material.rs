@@ -225,19 +225,20 @@ fn metallic_of(material: &Kn5Material, shader: &str) -> f32 {
     if ceiling < METALLIC_MIN_REFLECTION {
         return 0.0;
     }
-    // Et le veto symétrique de celui posé plus bas sur `fresnelC` : un plafond
-    // de reflet impossible ne dit pas « le plus réfléchissant possible », il
-    // dit que ce bloc fresnel ne veut rien dire. **C'est une signature**, pas
-    // un cas isolé : `fresnelC = 0.5` avec `fresnelMaxLevel = 100` se retrouve
-    // à l'identique sur cinq mannequins d'auteurs différents (`ada`, `jill_re3`,
-    // `rinoa`, `Sienna_Guillory`, `t-800`), toujours sur les maillages de
-    // brillance posés par-dessus la peau et les cheveux — un gabarit recopié.
-    // Rendus pleinement métalliques, ils donnaient des visages luisants
-    // signalés à l'écran. Mesuré : 36 matériaux de mannequin, et 0,05 % des
-    // matériaux de voiture.
-    if ceiling > METALLIC_F0_ABSURD {
-        return 0.0;
-    }
+    // **Un plafond de reflet impossible ne dit rien de la métallicité, et on
+    // n'en tire donc rien.** Il l'a un temps annulée, par symétrie avec le veto
+    // posé plus bas sur `fresnelC` : `fresnelMaxLevel = 100` avec
+    // `fresnelC = 0.5` est un gabarit recopié, présent à l'identique sur cinq
+    // mannequins d'auteurs différents (`ada`, `jill_re3`, `rinoa`,
+    // `Sienna_Guillory`, `t-800`). La symétrie était fausse. Sur `t-800`, ce
+    // gabarit porte **tout le corps** d'un endosquelette de Terminator, en
+    // chrome : la règle l'a rendu mat, signalé à l'écran avec la comparaison au
+    // jeu. Or `fresnelC = 0.5` *est* la réflectance d'un chrome (le haut de la
+    // plage que Kunos s'autorise), la même des deux côtés — rien dans le bloc
+    // fresnel ne sépare le vrai métal du faux, et il n'y a donc pas de règle à
+    // écrire ici. La brillance parasite des autres mannequins vient d'ailleurs
+    // et est traitée ailleurs : plancher de rugosité (`roughness::floor_for`)
+    // et `fresnelC` aberrante ci-dessous.
     // Au-delà de 1, ce n'est plus une réflectance — mais tout ce qui dépasse ne
     // se vaut pas, et les traiter pareil donnait des mannequins en or.
     //
@@ -930,19 +931,19 @@ mod tests {
             "une valeur absurde ne dit rien : diélectrique, pas miroir (ada.kn5 en statue dorée)"
         );
 
-        // Le même veto sur l'autre moitié du bloc fresnel : le gabarit
-        // `fresnelC = 0.5` / `fresnelMaxLevel = 100` des maillages de
-        // brillance des mannequins.
-        let shine = material(
+        // Un plafond de reflet hors plage ne dit rien : il ne fait pas d'un
+        // chrome un diélectrique. Le corps du Terminator `t-800` porte
+        // `fresnelC = 0.5` / `fresnelMaxLevel = 100`, et il est en métal.
+        let chrome = material(
             "ksSkinnedMesh",
             0,
             false,
             &[("fresnelC", 0.5), ("fresnelMaxLevel", 100.0)],
         );
         assert_eq!(
-            metallic_of(&shine, "ksSkinnedMesh"),
-            0.0,
-            "un plafond de reflet impossible annule le bloc entier"
+            metallic_of(&chrome, "ksSkinnedMesh"),
+            1.0,
+            "0,5 reste la réflectance d'un chrome, quel que soit le plafond annoncé"
         );
     }
 

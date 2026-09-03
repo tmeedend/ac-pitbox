@@ -1254,6 +1254,19 @@ réflectance par le moteur non plus.
 (diélectrique) plutôt que ramenée à 1. La coupure est posée là où la suite des
 valeurs cesse d'être serrée autour du maximum. En dessous, rien ne change.
 
+**Piste abandonnée, et pourquoi.** La même règle a été essayée sur l'autre
+moitié du bloc, `fresnelMaxLevel` : le gabarit `fresnelC = 0.5` /
+`fresnelMaxLevel = 100` se retrouve à l'identique sur cinq mannequins
+d'auteurs différents (`ada`, `jill_re3`, `rinoa`, `Sienna_Guillory`,
+`t-800`), et un plafond de reflet à 100 est tout aussi impossible qu'une
+réflectance à 100. La symétrie était pourtant fausse : sur `t-800`, ce
+gabarit porte **tout le corps** d'un endosquelette de Terminator, en chrome,
+que la règle a rendu mat — signalé à l'écran, comparaison au jeu à l'appui.
+Et `fresnelC = 0.5` *est* la réflectance d'un chrome, le haut de la plage que
+Kunos s'autorise : rien dans ce bloc ne sépare le vrai métal du faux. La règle
+a donc été retirée. La brillance parasite des autres mannequins vient
+d'ailleurs, et est traitée ailleurs (écart n°17).
+
 ---
 
 ## Écart n°17 — sur un shader de mannequin, `txMaps` n'est pas une carte de surface
