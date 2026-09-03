@@ -185,7 +185,11 @@
   // que de compter sur le padding + le scroll de `.content` (évite le hack
   // de marge négative — cause probable de l'espace perdu au-dessus du titre
   // « Réglages » signalé par l'utilisateur, cf. Launch.svelte).
-  const noPad = $derived(isLibrary || nav.section === "race");
+  // « Règles » en fait partie depuis que sa barre d'action du bas est un vrai
+  // frère de la zone qui défile : en `position: fixed`, elle se plaçait dans
+  // le repère de `100vh` (non divisé par le zoom d'interface) et passait donc
+  // sous le bord bas de la fenêtre — voir le commentaire de `.r-footer`.
+  const noPad = $derived(isLibrary || nav.section === "race" || nav.section === "rules");
 
   // Double-clic sur le slot de session : ouvre directement la fiche détail de
   // l'entité choisie (skin, layout…) plutôt que la liste de la bibliothèque.
