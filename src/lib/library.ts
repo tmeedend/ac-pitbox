@@ -582,6 +582,16 @@ export function reapplyRules(): Promise<number> {
 }
 
 /** Transforme un chemin de fichier local en URL utilisable par <img>. */
-export function previewSrc(path: string | null): string | null {
-  return path ? convertFileSrc(path) : null;
+export function previewSrc(path: string | null, revision?: number): string | null {
+  if (!path) return null;
+  const url = convertFileSrc(path);
+  // **Une révision quand le fichier a pu changer sous le même chemin.** Le
+  // protocole `asset://` sert un fichier local par son chemin, et le navigateur
+  // le met en cache par URL : activer ou désactiver une couche remplace
+  // `skins/<nom>/preview.jpg` sans que son chemin bouge, et l'ancienne image
+  // restait affichée (bug réel, `ks_toyota_ae86_tuned`). Le paramètre n'est pas
+  // lu côté Rust — le protocole ne regarde que le chemin — il ne sert qu'à
+  // donner une URL neuve. Absent, rien ne change : la quasi-totalité des
+  // appels n'en ont pas besoin.
+  return revision ? `${url}?v=${revision}` : url;
 }

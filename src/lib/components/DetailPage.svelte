@@ -150,11 +150,26 @@
 
   // Image héros : voiture → skin sélectionné ; circuit → preview du layout
   // sélectionné ; sinon preview par défaut du mod.
+  /**
+   * Compteur de recomposition de `content/`.
+   *
+   * Activer, déplacer ou supprimer une **couche** remplace des fichiers sans
+   * changer un seul chemin : le `.kn5` de la voiture et ses `skins/<nom>/
+   * preview.jpg` gardent leur nom. La liste des skins se relisait donc bien
+   * (le nombre changeait), mais les images restaient celles d'avant — le
+   * navigateur les sert par URL — et l'aperçu 3D continuait de montrer le
+   * modèle précédent, faute de voir bouger la voiture ou le skin dont il
+   * dépend. Ce compteur est la seule chose qui bouge dans ces cas-là, et il
+   * suffit à les rafraîchir tous les deux. Bug réel remonté sur
+   * `ks_toyota_ae86_tuned`, dont la couche change le modèle **et** les skins.
+   */
+  let contentRevision = $state(0);
+
   const heroImg = $derived.by(() => {
-    if (isCar && skins[previewSkin]?.preview) return previewSrc(skins[previewSkin].preview);
+    if (isCar && skins[previewSkin]?.preview) return previewSrc(skins[previewSkin].preview, contentRevision);
     const lay = detail?.track?.layouts[previewLayout];
-    if (!isCar && lay?.preview) return previewSrc(lay.preview);
-    return previewSrc(detail?.preview ?? null);
+    if (!isCar && lay?.preview) return previewSrc(lay.preview, contentRevision);
+    return previewSrc(detail?.preview ?? null, contentRevision);
   });
 
   async function filterByPack() {
@@ -265,8 +280,17 @@
       }
     }
     if (isCar) {
+      // Le skin regardé se retrouve **par son identité**, jamais par son rang :
+      // une couche qui va et vient ajoute ou retire des skins, et un index
+      // conservé tel quel désigne alors une autre livrée — ou plus rien. Même
+      // règle que le layout d'un circuit, quelques lignes plus haut.
+      const prevSkinId = skins[previewSkin]?.id;
       const s = await listModSkins(current);
-      if (current === id) skins = s;
+      if (current === id) {
+        skins = s;
+        const si = s.findIndex((sk) => sk.id === prevSkinId);
+        previewSkin = si >= 0 ? si : Math.min(previewSkin, Math.max(0, s.length - 1));
+      }
       // Les sons aussi : importer un mod de son pendant que la fiche de sa
       // voiture est ouverte doit le faire apparaître dans la liste. Ils
       // manquaient ici, et seuls un aller-retour hors de la fiche ou une
@@ -961,6 +985,7 @@
               skinId={skins[previewSkin]?.id ?? null}
               fallbackSrc={heroImg}
               carClass={d.car_class}
+              revision={contentRevision}
             />
           {/if}
         </div>
@@ -1111,8 +1136,8 @@
           {#if skins.length}
             <div class="skins">
               {#each skins as sk, i (sk.id)}
-                {@const sp = previewSrc(sk.preview)}
-                {@const lv = previewSrc(sk.livery)}
+                {@const sp = previewSrc(sk.preview, contentRevision)}
+                {@const lv = previewSrc(sk.livery, contentRevision)}
                 <button
                   class="skin"
                   class:preview={i === previewSkin}
@@ -1224,7 +1249,17 @@
             ondeleteversion={deleteVersion}
           />
           <ProvenanceBlock detail={d} {siblings} busy={packBusy} onfilterbypack={filterByPack} onopenpack={openPack} onopensibling={openSibling} onuninstallpack={uninstallPack} />
-          <LayersBlock modId={id} onchanged={refreshEntity} onerror={(m) => (actionError = m)} />
+          <LayersBlock
+            modId={id}
+            onchanged={() => {
+              // Le contenu déployé vient de changer sous les mêmes chemins :
+              // relire ne suffit pas, il faut aussi le dire (voir
+              // `contentRevision`).
+              contentRevision += 1;
+              void refreshEntity();
+            }}
+            onerror={(m) => (actionError = m)}
+          />
           <!-- Sous Provenance : c'est du même ordre — d'où vient ce mod et ce
                que l'app en a fait. Le bloc s'efface quand il n'y a rien à dire. -->
           <DecisionsBlock modId={id} />

@@ -33,7 +33,19 @@
      * tenues par défaut habille son pilote — course ou rue. La fiche la
      * connaît, l'aperçu non. */
     carClass = null,
-  }: { carId: string; skinId?: string | null; fallbackSrc?: string | null; carClass?: string | null } = $props();
+    /** Incrémentée quand le contenu déployé de la voiture a changé sans que son
+     * id ni son skin ne bougent — activation d'une couche, typiquement, qui
+     * remplace le `.kn5` et les skins en place. Le backend s'en aperçoit tout
+     * seul (la clé de cache porte la date du modèle), mais l'écran, lui, ne
+     * redemandait rien : le modèle d'avant restait à tourner. */
+    revision = 0,
+  }: {
+    carId: string;
+    skinId?: string | null;
+    fallbackSrc?: string | null;
+    carClass?: string | null;
+    revision?: number;
+  } = $props();
 
   type Phase = "loading" | "ready" | "unavailable";
 
@@ -56,7 +68,7 @@
   /** Les trois choses dont dépend le `.glb` demandé, en une clé comparable.
    * `driver` vaut l'angle du volant, ou `null` quand il n'y a pas de pilote. */
   function sceneKey(car: string, skin: string | null | undefined, driver: DriverView | null): string {
-    return `${car}|${skin}|${driver ? JSON.stringify(driver) : ""}`;
+    return `${car}|${skin}|${revision}|${driver ? JSON.stringify(driver) : ""}`;
   }
   /** Voiture du modèle en place — la moitié de `loaded` qui décide si un
    * changement de skin peut se faire à chaud (même géométrie) ou non. */
@@ -1148,6 +1160,9 @@
   $effect(() => {
     const car = carId;
     const skin = skinId;
+    // Lue ici pour que l'effet s'y abonne : sans cette ligne, une couche
+    // activée ne relancerait rien tant que la voiture et le skin ne bougent pas.
+    void revision;
     // Lus à découvert, et volontairement : ce sont les seuls réglages qui
     // changent le `.glb` lui-même — le pilote y est greffé et sa pose y est
     // cuite — donc les bouger doit relancer une conversion. Les autres
@@ -1362,16 +1377,31 @@
 </script>
 
 <div class="preview3d" class:ready={phase === "ready"}>
-  {#if fallbackSrc}
-    <!-- La photo reste dessous, telle quelle : c'est déjà l'aperçu habituel de
-         la fiche, et la flouter pendant la préparation la rendait illisible
-         juste au moment où elle sert le plus (§8.5). -->
+  {#if fallbackSrc && phase === "unavailable"}
+    <!-- **La photo n'est plus qu'un recours**, et non plus le fond permanent
+         de l'aperçu 3D. Elle servait de patience pendant la préparation, mais
+         montrer une voiture pour en montrer une autre trois secondes plus tard
+         fait deux images là où on en attend une, et le fondu de l'une à
+         l'autre attirait l'œil sur le remplacement plutôt que sur le modèle.
+         Elle reste, entière, quand la 3D ne peut pas aboutir — modèle chiffré,
+         pas de WebGL, conversion en échec (§8.5). -->
     <img class="fallback" src={fallbackSrc} alt="" />
   {/if}
 
   <div class="host" bind:this={canvasHost}></div>
 
-  {#if phase === "loading" || swapping}
+  {#if phase === "loading"}
+    <!-- Au centre, et non dans le coin : sans la photo dessous, il n'y a plus
+         rien d'autre à regarder, et un témoin réfugié en haut à droite d'une
+         zone vide se cherche. -->
+    <div class="preparing">
+      <span class="spinner"></span>
+      <span class="mono">{stage ? t(`detail.preview3dStage.${stage}`) : t("detail.preview3dLoading")}</span>
+    </div>
+  {:else if swapping}
+    <!-- Le changement de skin garde le badge de coin : le modèle précédent est
+         toujours à l'écran, et c'est lui qu'on regarde — un témoin centré le
+         recouvrirait. -->
     <div class="badge">
       <span class="spinner"></span>
       <span class="mono">{stage ? t(`detail.preview3dStage.${stage}`) : t("detail.preview3dLoading")}</span>
@@ -1394,11 +1424,20 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: opacity 0.25s ease;
   }
-  /* Fondu depuis l'image une fois le modèle en place (§8.5). */
-  .preview3d.ready .fallback {
-    opacity: 0;
+  /* Le témoin de préparation, au centre de la zone vide. Même serpent que
+     partout ailleurs ; seule la place change. */
+  .preparing {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--muted);
+    z-index: 3;
   }
   .host {
     position: absolute;
