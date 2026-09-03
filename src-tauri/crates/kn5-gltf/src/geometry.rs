@@ -60,9 +60,12 @@ pub struct FlatMesh {
 pub struct GeometryOptions {
     /// Node name patterns that mark helpers rather than geometry. Kept as
     /// configuration rather than hard-coded in the middle of the walk (§3.5),
-    /// because mods invent their own conventions.
+    /// because mods invent their own conventions. A match drops the node
+    /// **and everything under it**: the telling name is on the group, not on
+    /// the meshes inside it.
     pub excluded_name_patterns: Vec<String>,
-    /// Node name prefixes with the same effect.
+    /// Node name prefixes with the same effect, but on that node alone — see
+    /// the note in `classify`.
     pub excluded_name_prefixes: Vec<String>,
     /// Drop meshes that only appear beyond a distance, i.e. lower LODs stored
     /// inside the same file.
@@ -244,6 +247,18 @@ fn walk(
     // jamais et ses enfants passeraient quand même.
     if drop_low_res_cockpit && node.name.eq_ignore_ascii_case(LOW_RES_COCKPIT) {
         stats.skipped_low_res_cockpit += mesh_count(node);
+        return;
+    }
+    // Même raison, pour les motifs de nom : le nom qui désigne un accessoire
+    // est porté par le **groupe**, pas par les maillages dedans. `RIM_BLUR_LF`
+    // contient `Object190` et `Object193` — deux noms qui ne disent rien —,
+    // et tester le seul nom du maillage laissait donc passer la jante floutée
+    // par-dessus la vraie. Mesuré sur 134 voitures de la bibliothèque :
+    // 33 en portaient au moins un, toujours sous `RIM_BLUR_*` ou
+    // `DAMAGE_GLASS_*`, jamais sous autre chose — aucun vrai morceau de
+    // voiture ne se perd à couper au groupe.
+    if matches_excluded_pattern(&node.name, options) {
+        stats.skipped_by_name += mesh_count(node);
         return;
     }
     // Row-vector convention: `world = local × parent` (§3.4). Getting this
@@ -457,6 +472,12 @@ enum Skip {
     BrokenGlass,
 }
 
+/// Le nom de ce nœud désigne-t-il un accessoire dont **rien** n'est à garder ?
+fn matches_excluded_pattern(name: &str, options: &GeometryOptions) -> bool {
+    let name = name.to_ascii_uppercase();
+    options.excluded_name_patterns.iter().any(|p| name.contains(p))
+}
+
 fn classify(node: &Kn5Node, mesh: &Kn5Mesh, materials: &[Kn5Material], options: &GeometryOptions) -> Keep {
     if mesh.vertices.is_empty() || mesh.indices.len() < 3 {
         return Keep::No(Skip::Empty);
@@ -470,10 +491,14 @@ fn classify(node: &Kn5Node, mesh: &Kn5Mesh, materials: &[Kn5Material], options: 
     {
         return Keep::No(Skip::BrokenGlass);
     }
+    // Les motifs, eux, sont traités un cran plus haut, sur le groupe entier
+    // (voir `walk`). Ne reste ici que le préfixe, volontairement laissé au
+    // maillage seul : mesuré sur la bibliothèque, le seul nœud de voiture
+    // préfixé `AC_` est `ac_black_metal`, un groupe nommé d'après son matériau
+    // par un export Blender, au milieu de `plastic_interior_plastic.*` — le
+    // couper avec son sous-arbre retirerait de la vraie garniture.
     let name = node.name.to_ascii_uppercase();
-    if options.excluded_name_prefixes.iter().any(|p| name.starts_with(p))
-        || options.excluded_name_patterns.iter().any(|p| name.contains(p))
-    {
+    if options.excluded_name_prefixes.iter().any(|p| name.starts_with(p)) {
         return Keep::No(Skip::Name);
     }
     // `lod_in` is the distance at which a mesh *starts* being drawn: anything
@@ -871,8 +896,9 @@ mod tests {
         );
     }
 
-    /// Un modèle minimal portant les nœuds nommés, chacun avec un maillage.
-    fn model_with(nodes: &[&str]) -> kn5::Kn5Model {
+    /// Un modèle minimal : pour chaque paire, un groupe et le maillage qu'il
+    /// contient, nommés indépendamment l'un de l'autre.
+    fn model_with_meshes(nodes: &[(&str, &str)]) -> kn5::Kn5Model {
         let mesh = |name: &str| kn5::Kn5Node {
             name: name.to_string(),
             active: true,
@@ -919,15 +945,36 @@ mod tests {
                 kind: kn5::Kn5NodeKind::Dummy { transform: IDENTITY },
                 children: nodes
                     .iter()
-                    .map(|name| kn5::Kn5Node {
-                        name: name.to_string(),
+                    .map(|(group, inside)| kn5::Kn5Node {
+                        name: group.to_string(),
                         active: true,
                         kind: kn5::Kn5NodeKind::Dummy { transform: IDENTITY },
-                        children: vec![mesh(&format!("g_{name}"))],
+                        children: vec![mesh(inside)],
                     })
                     .collect(),
             },
         }
+    }
+
+    /// Un modèle minimal portant les nœuds nommés, chacun avec un maillage qui
+    /// porte le même nom préfixé — le cas ordinaire.
+    fn model_with(nodes: &[&str]) -> kn5::Kn5Model {
+        let pairs: Vec<(String, String)> = nodes.iter().map(|n| (n.to_string(), format!("g_{n}"))).collect();
+        model_with_meshes(&pairs.iter().map(|(g, m)| (g.as_str(), m.as_str())).collect::<Vec<_>>())
+    }
+
+    // Règle : un motif de nom écarte le nœud **et tout son sous-arbre**, parce
+    // que le nom qui trahit l'accessoire est sur le groupe, pas sur ce qu'il
+    // contient. Bug réel : `a3dr_viper_rt10` montrait une jante floutée
+    // par-dessus la vraie, ses maillages s'appelant `Object190`/`Object193`
+    // sous un `RIM_BLUR_LF`. 33 voitures sur 134 dans le même cas.
+    #[test]
+    fn an_excluded_group_takes_its_meshes_with_it() {
+        let model = model_with_meshes(&[("RIM_BLUR_LF", "Object190"), ("RIM_LF", "Object051")]);
+        let (meshes, stats) = flatten(&model, &GeometryOptions::default());
+        assert_eq!(stats.skipped_by_name, 1, "le maillage sous le groupe flouté est écarté");
+        assert_eq!(meshes.len(), 1, "il ne reste que la vraie jante");
+        assert_eq!(meshes[0].name, "Object051", "et c'est bien elle");
     }
 
     // Règle : AC livre deux habitacles superposés et n'en montre qu'un ; les

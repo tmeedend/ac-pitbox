@@ -30,7 +30,7 @@ use crate::config::AppConfig;
 /// *reconnaître* pour libérer sa place. Trois incréments en une session de
 /// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
-const CONVERTER_VERSION: u32 = 32;
+const CONVERTER_VERSION: u32 = 33;
 
 /// Default cache ceiling (§5.3). Beyond it, the least recently used entries
 /// are evicted. Only a default: the real ceiling is a setting, carried by
@@ -72,8 +72,9 @@ pub struct PreviewState {
     /// transcodage parallèle des textures, en lancer deux ne ferait que les
     /// ralentir mutuellement.
     slot: Mutex<()>,
-    /// Le ménage des entrées d'une version antérieure a-t-il déjà eu lieu ?
-    /// Une fois par exécution suffit — le dossier ne se périme pas tout seul.
+    /// Le ménage des **vignettes** d'une version antérieure a-t-il déjà eu
+    /// lieu ? Une fois par exécution suffit : rien ne les écrit hors de l'app,
+    /// et leur dossier n'a pas de passe d'éviction où s'accrocher.
     swept: std::sync::atomic::AtomicBool,
     /// Cache ceiling in bytes, as the user set it. Held here rather than read
     /// from `ui_prefs.json`: that file's schema belongs to the frontend (see
@@ -171,7 +172,17 @@ fn entry_stem(key: &str) -> String {
 /// Elles ne seront plus jamais servies — leur nom ne peut plus être demandé —
 /// mais elles occupent le disque et poussent les entrées vivantes vers
 /// l'éviction. Best-effort : un fichier verrouillé n'est pas un problème, on
-/// repassera au prochain démarrage.
+/// repassera à la conversion suivante.
+///
+/// **Appelé à chaque passe d'éviction, et non une fois par exécution.** Un
+/// balayage unique au premier aperçu laisse échapper ce qui est écrit
+/// *ensuite* par une autre version : deux instances ouvertes en même temps —
+/// l'app installée et la version en développement — et celle de l'ancienne
+/// version repose ses entrées juste après le ménage de l'autre. Constaté :
+/// quatre entrées `v25` survivantes, écrites dans la même minute, encore là
+/// après 312 conversions en `v32` et sept incréments de version. Rattachée à
+/// [`evict_to`], qui liste déjà le dossier à chaque conversion, la reprise ne
+/// coûte rien de plus et ne dépend plus de l'ordre de démarrage.
 fn sweep_foreign_versions(dir: &Path) {
     let prefix = version_prefix();
     let Ok(read) = std::fs::read_dir(dir) else { return };
@@ -181,6 +192,11 @@ fn sweep_foreign_versions(dir: &Path) {
         let name = entry.file_name();
         let name = name.to_string_lossy();
         if name.starts_with(&prefix) {
+            continue;
+        }
+        // Un dossier n'est pas une entrée périmée, et `remove_file` y échouera
+        // à chaque conversion : le journal se remplirait pour rien.
+        if entry.file_type().is_ok_and(|t| t.is_dir()) {
             continue;
         }
         let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
@@ -285,11 +301,11 @@ pub fn prepare(
     let dir = cache_dir(app)?;
     // Une seule fois par exécution : au premier aperçu demandé, pas au
     // démarrage, pour ne rien coûter à qui n'en ouvre jamais.
+    // Les vignettes de corps portent le même préfixe de version : elles se
+    // périment donc avec le convertisseur, et rien d'autre ne les ramasserait
+    // — leur dossier est hors du plafond, donc hors éviction. Le dossier des
+    // aperçus, lui, est repris par `evict_to` à chaque conversion.
     if !state.swept.swap(true, Ordering::Relaxed) {
-        sweep_foreign_versions(&dir);
-        // Les vignettes de corps portent le même préfixe de version : elles
-        // se périment donc avec le convertisseur, et rien d'autre ne les
-        // ramasserait — leur dossier est hors du plafond, donc hors éviction.
         if let Ok(thumbs) = thumb_dir(app) {
             sweep_foreign_versions(&thumbs);
         }
@@ -500,11 +516,11 @@ pub fn prepare_driver(
     token: Option<u64>,
 ) -> Result<DriverPreview, String> {
     let dir = cache_dir(app)?;
+    // Les vignettes de corps portent le même préfixe de version : elles se
+    // périment donc avec le convertisseur, et rien d'autre ne les ramasserait
+    // — leur dossier est hors du plafond, donc hors éviction. Le dossier des
+    // aperçus, lui, est repris par `evict_to` à chaque conversion.
     if !state.swept.swap(true, Ordering::Relaxed) {
-        sweep_foreign_versions(&dir);
-        // Les vignettes de corps portent le même préfixe de version : elles
-        // se périment donc avec le convertisseur, et rien d'autre ne les
-        // ramasserait — leur dossier est hors du plafond, donc hors éviction.
         if let Ok(thumbs) = thumb_dir(app) {
             sweep_foreign_versions(&thumbs);
         }
@@ -706,6 +722,11 @@ fn touch(file: &Path) {
 /// utilisées (§5.3). Le plafond est un paramètre pour que le test puisse
 /// prouver l'éviction sans écrire deux gigaoctets.
 fn evict_to(dir: &Path, cap: u64) {
+    // Avant de mesurer : ce qui appartient à une autre version ne se compte
+    // pas, il se reprend. Sinon une entrée morte pousse une entrée vivante
+    // dehors, et le plafond se remplit de fichiers que rien ne sert jamais.
+    sweep_foreign_versions(dir);
+
     let mut entries: Vec<(SystemTime, u64, PathBuf)> = Vec::new();
     let Ok(read) = std::fs::read_dir(dir) else { return };
     for entry in read.flatten() {
@@ -1127,6 +1148,35 @@ INSERT = part.kn5",
         );
     }
 
+    // Règle : la reprise a lieu à **chaque** passe d'éviction, y compris très
+    // en dessous du plafond. Bug réel : quatre entrées `v25` posées par une
+    // seconde instance restée ouverte survivaient à 312 conversions en `v32`,
+    // le balayage n'ayant lieu qu'une fois par exécution, avant elles.
+    #[test]
+    fn a_stale_entry_written_after_the_first_sweep_is_still_reclaimed() {
+        let base = crate::testutil::temp_dir("preview-sweep-late");
+        let dir = base.join("previews");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mine = entry_stem("abcdef0123456789abcdef0123456789");
+        std::fs::write(dir.join(format!("{mine}.glb")), b"glb").unwrap();
+        std::fs::write(dir.join("v25-d0123456789abcdef0123456789abcdef.glb"), b"vieux").unwrap();
+        std::fs::write(dir.join("v25-d0123456789abcdef0123456789abcdef.rig"), b"rig").unwrap();
+
+        // Un plafond très large : rien à évincer, et la reprise doit avoir
+        // lieu quand même.
+        evict_to(&dir, u64::MAX);
+
+        assert!(
+            dir.join(format!("{mine}.glb")).is_file(),
+            "l'entrée de la version courante survit"
+        );
+        assert!(
+            !dir.join("v25-d0123456789abcdef0123456789abcdef.glb").exists()
+                && !dir.join("v25-d0123456789abcdef0123456789abcdef.rig").exists(),
+            "celle d'une autre version part, plafond ou pas"
+        );
+    }
+
     // Règle : au-delà du plafond, on évince les entrées les plus anciennement
     // utilisées — et le fichier de compteurs part avec.
     #[test]
@@ -1135,8 +1185,11 @@ INSERT = part.kn5",
         let dir = base.join("previews");
         std::fs::create_dir_all(&dir).unwrap();
 
-        let old = dir.join("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.glb");
-        let fresh = dir.join("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.glb");
+        // Des noms de la version courante : `evict_to` reprend d'abord les
+        // entrées d'une autre version, et sans préfixe elles partiraient là
+        // au lieu d'être évincées par ancienneté.
+        let old = dir.join(format!("{}.glb", entry_stem("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")));
+        let fresh = dir.join(format!("{}.glb", entry_stem("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")));
         std::fs::write(&old, vec![0u8; 16]).unwrap();
         std::fs::write(old.with_extension("txt"), "1 2 3").unwrap();
         std::fs::write(&fresh, vec![0u8; 16]).unwrap();

@@ -204,10 +204,12 @@ Filtrer à la conversion :
 
 - `is_renderable == 0` ou `is_visible == 0`
 - nom commençant par `AC_` (helpers : `AC_POS_0`, `AC_START_0`, `AC_PIT_0`…)
-- noms contenant `COLLIDER`, `_SHADOW`, `AC_CRASH`, `DAMAGE_GLASS`
+- noms contenant `COLLIDER`, `_SHADOW`, `AC_CRASH`, `DAMAGE_GLASS`, `BLUR`
 - meshes à `vertex_count == 0` ou `index_count == 0`
 
 Ce filtrage doit être **paramétrable** (liste de patterns dans la config du convertisseur), pas codé en dur au milieu du parser.
+
+**Un motif de nom écarte le nœud et tout son sous-arbre ; un préfixe n'écarte que le nœud.** Le nom qui trahit l'accessoire est presque toujours porté par le **groupe**, pas par les maillages dedans : `RIM_BLUR_LF` contient `Object190` et `Object193`, deux noms qui ne disent rien, et la jante floutée se superposait donc à la vraie. Mesuré sur 134 voitures de la bibliothèque : 33 portaient au moins un maillage qui échappait au filtre, toujours sous `RIM_BLUR_*` ou `DAMAGE_GLASS_*` — jamais sous autre chose, donc rien de réel ne se perd à couper au groupe. Le préfixe `AC_` reste au maillage seul : le seul nœud de voiture de la bibliothèque qui le porte est `ac_black_metal`, un groupe nommé d'après son matériau par un export Blender, qui contient de la vraie garniture.
 
 ---
 
@@ -556,6 +558,8 @@ Clé de hash (BLAKE3 ou xxhash) sur : `chemin absolu du kn5` + `mtime` + `taille
 Le champ **version du convertisseur** est indispensable : il invalide tout le cache quand le mapping matériaux évolue.
 
 Prévoir une commande de purge (`clear_preview_cache`) et un plafond de taille du cache (ex. 2 Go, éviction LRU).
+
+**Les entrées d'une autre version sont reprises à chaque passe d'éviction**, pas une seule fois par exécution : la version étant dans le *nom* de l'entrée, on sait les reconnaître, et une entrée qu'on ne servira plus jamais n'a pas à occuper le plafond. Une seule reprise au premier aperçu laissait échapper ce qu'une **autre instance** encore ouverte — l'app installée à côté de la version en développement — écrivait juste après. Constaté : quatre entrées `v25` survivantes après sept incréments de version et 312 conversions.
 
 ### 5.4 Textures
 
