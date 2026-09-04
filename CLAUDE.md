@@ -580,16 +580,6 @@ laisser pourrir ici.
       source), réponse attendue par email. Si refus ou trop long, plan B
       documenté : Certum Open Source Code Signing (~49€/an, cloud SimplySign,
       pas de jeton USB).
-- [ ] **Filtres à puces — navigation manette (lot 2).** Le nouveau système
-      (§7.1 du SPEC, `src/lib/filters.ts` + `src/lib/components/filters/`) est
-      posé et se pilote à la souris et au clavier. **Décidé avec
-      l'utilisateur : la manette vient dans un second lot**, elle n'a pas été
-      traitée. Aujourd'hui `moveFocus` traverse la barre comme n'importe quel
-      autre bouton, mais rien ne fait entrer le curseur *dans* un popover
-      (menu d'ajout, éditeur) ni ne l'en fait sortir — c'est ça le travail.
-      À regarder à ce moment-là : `data-gp-region`, et le fait que les
-      popovers sont en `position: fixed` hors du flux, donc invisibles à la
-      recherche du plus proche voisin géométrique.
 - [ ] **Runner de tests frontend** : délibérément absent. À reconsidérer
       seulement le jour où de la logique pure sera extraite des composants
       (le tri/regroupement/cumul de `Transversal.svelte` en est proche) — pour

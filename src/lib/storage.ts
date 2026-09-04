@@ -46,6 +46,12 @@ export const StorageKey = {
   librarySortKey: (kind: ModKind) => `${PREFIX}.sort.${kindKey(kind)}.key`,
   librarySortDir: (kind: ModKind) => `${PREFIX}.sort.${kindKey(kind)}.dir`,
   libraryFilters: (kind: ModKind) => `${PREFIX}.filters.${kindKey(kind)}`,
+  /** Filtres épinglés (§6.3), et leur ordre. Suffixée par type comme le reste
+   * de l'écran, et pas seulement par symétrie : marque, année, classe et
+   * pilote n'existent que pour les voitures — une liste partagée aurait posé
+   * des fantômes sans objet sur l'écran des circuits. Cette clé-ci n'a jamais
+   * connu `localStorage` : elle naît dans `ui_prefs.json`. */
+  libraryPinned: (kind: ModKind) => `${PREFIX}.pinned.${kindKey(kind)}`,
   preferredSkin: (carId: string) => `${PREFIX}.skin.${carId}`,
   preferredLayout: (trackId: string) => `${PREFIX}.layout.${trackId}`,
   /** Tenue de pilote choisie pour cette voiture (SPEC-ecran-pilote §1.4).

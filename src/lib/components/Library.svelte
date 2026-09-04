@@ -2,13 +2,11 @@
   import { tick, untrack, onMount, onDestroy } from "svelte";
   import DetailPage from "./DetailPage.svelte";
   import PackDetail from "./PackDetail.svelte";
-  import TokenFilter, { type Token } from "./TokenFilter.svelte";
-  import TriCheck, { type TriState } from "./TriCheck.svelte";
+  import FilterBar from "./filters/FilterBar.svelte";
   import { hasOwnDriver } from "$lib/driverOverride.svelte";
   import BulkEditPanel from "./BulkEditPanel.svelte";
   import ContextMenu from "./ContextMenu.svelte";
   import LoadingState from "./LoadingState.svelte";
-  import NumberStepper from "./NumberStepper.svelte";
   import StateBadge from "./StateBadge.svelte";
   import Tooltip from "./Tooltip.svelte";
   import {
@@ -33,6 +31,18 @@
   import { t } from "$lib/i18n/index.svelte";
   import { zoomFactor } from "$lib/zoom.svelte";
   import { getUiPrefs, setUiPref } from "$lib/uiPrefs.svelte";
+  import {
+    buildPredicate,
+    decadePresets,
+    filterDefs,
+    optionsOf,
+    parseFilters,
+    parsePinned,
+    serializeFilters,
+    type FilterContext,
+    type FilterMap,
+    type FilterOption,
+  } from "$lib/filters";
 
   import { StorageKey } from "$lib/storage";
   // Une bibliothèque par type (§6.1) : ce composant est rendu une fois pour les
@@ -47,10 +57,14 @@
   // rester indépendant entre voitures et circuits (§6.1).
   const KEYS = untrack(() => ({
     filters: StorageKey.libraryFilters(kind),
+    pinned: StorageKey.libraryPinned(kind),
     view: StorageKey.libraryView(kind),
     sortKey: StorageKey.librarySortKey(kind),
     sortDir: StorageKey.librarySortDir(kind),
   }));
+  /** Catalogue des filtres de CE type (§6.3) : marque, année, classe et
+   * pilote n'existent que côté voitures. */
+  const defs = untrack(() => filterDefs(kind));
 
   let cards = $state<ModCard[]>([]);
   // Distinct de « bibliothèque vide » : sans lui, la liste encore vide au
@@ -63,17 +77,6 @@
   // Édition groupée (§6.3bis) : Ctrl/Alt-clic ajoute/retire de la sélection
   // multiple. Un clic simple retombe toujours en sélection simple.
   let selectedIds = $state<Set<string>>(new Set());
-  // Bornes de saisie de la fourchette d'année (mêmes constantes que le vivier
-  // d'adversaires de Launch.svelte, §8.6).
-  const YEAR_RANGE_MIN = 1950;
-  const YEAR_RANGE_MAX = new Date().getFullYear();
-  // « Pas de borne de ce côté », et c'est l'état par défaut : le champ est
-  // alors **vide** (`emptyValue` du NumberStepper) et ne filtre rien.
-  // Auparavant le défaut était 1950/2026, ce qui affichait deux bornes qu'on
-  // n'avait pas demandées et ne pouvait pas effacer — vider le champ le
-  // ramenait à sa borne, et vider « année max » l'écrasait même à 1950, ne
-  // laissant plus rien remonter.
-  const NO_YEAR = 0;
   // Page détail pleine page (§6.3) : double-clic sur une carte, ou bouton
   // « Agrandir » du panneau latéral. État centralisé dans nav.openFull (voir
   // nav.svelte.ts) — la navigation manette globale (AppShell) doit savoir si
@@ -83,36 +86,17 @@
   // synchrones à l'affichage initial, remplacés par les valeurs sauvegardées
   // dès que l'onMount plus bas répond (même schéma que les colonnes, §6.2).
   const FKEY = KEYS.filters;
+  /** Recherche libre : le seul filtre qui n'a pas de puce. Il traverse
+   * plusieurs champs à la fois (nom, marque, id, catégorie, pack, tags), ce
+   * qu'aucune puce ne saurait résumer — c'est le rattrapage de ce que les
+   * champs nommés ne couvrent pas, pas un filtre de plus. */
   let query = $state<string>("");
-  let categoryFilter = $state<string>("all");
-  let classFilter = $state<"all" | "race" | "street">("all");
-  let stateFilter = $state<"all" | "active" | "inactive">("all");
-  // Author, brand and country are token fields, like tags and categories. A
-  // single-value `<select>` could only ever say "this one" - never "these two
-  // brands", never "everything but that author" - and the gesture differed from
-  // one field to the next on the same row for no legible reason.
-  let authorTokens = $state<Token[]>([]);
-  let brandTokens = $state<Token[]>([]);
-  let countryTokens = $state<Token[]>([]);
-  // Free text matched against the EFFECTIVE description (SS6.1): the user's own
-  // when they wrote one, the mod file's otherwise - the card already carries the
-  // arbitration, nothing to decide here.
-  let descFilter = $state<string>("");
-  // Jetons inclure/exclure (§6.3). Ils remplacent un champ texte à virgules
-  // (tags) et un `<select>` mono-valué (catégorie), qui partageaient la même
-  // limite : on ne savait dire que « ceux-ci », jamais « tous sauf ceux-là ».
-  let tagTokens = $state<Token[]>([]);
-  let tagMode = $state<"and" | "or">("and");
-  let catTokens = $state<Token[]>([]);
-  // Trois états chacune : neutre, « uniquement ceux-ci », « tous sauf ceux-ci ».
-  let favState = $state<TriState>(0);
-  let triedState = $state<TriState>(0);
-  let stockState = $state<TriState>(0);
-  /** « Pilote modifié » : les voitures auxquelles on a choisi une tenue.
-   * Voitures seulement — un circuit n'a pas de pilote. */
-  let driverState = $state<TriState>(0);
-  let yearMin = $state<number>(NO_YEAR);
-  let yearMax = $state<number>(NO_YEAR);
+  /** Filtres posés (§6.3). Une clé absente = filtre inactif : jamais de valeur
+   * vide conservée pour dire « indifférent ». */
+  let filters = $state<FilterMap>({});
+  /** Filtres épinglés : ils restent visibles en fantôme même sans valeur, et
+   * leur ordre est celui des fantômes dans la barre. */
+  let pinned = $state<string[]>([]);
   let view = $state<"gallery" | "table">("gallery");
   let sortKey = $state<string>("name");
   let sortDir = $state<1 | -1>(1);
@@ -123,33 +107,17 @@
   // que `ready` dans Launch.svelte).
   let prefsReady = false;
 
-  // Persistance des filtres (champ libre + rubrique Filtres).
+  // Persistance des filtres (champ libre + puces). L'instantané est écrit sous
+  // une forme nouvelle (`{ query, filters }`) que la relecture distingue des
+  // deux générations précédentes — voir `parseFilters`, qui les convertit
+  // toutes plutôt que de repartir de zéro.
   $effect(() => {
-    const snapshot = {
-      query,
-      category: categoryFilter,
-      class: classFilter,
-      state: stateFilter,
-      authorTokens,
-      brandTokens,
-      countryTokens,
-      desc: descFilter,
-      // Sérialisés sous des clés distinctes des anciennes (`tag`, `fav`,
-       // `neverTried`, `hideBaseContent`) : une préférence enregistrée par une
-       // version antérieure garde son ancienne forme, que la relecture sait
-       // encore convertir (voir l'onMount). Réutiliser les mêmes clés avec un
-       // type différent aurait rendu les deux indiscernables.
-      tagTokens,
-      tagMode,
-      catTokens,
-      favState,
-      triedState,
-      stockState,
-      driverState,
-      yearMin,
-      yearMax,
-    };
-    if (prefsReady) setUiPref(FKEY, JSON.stringify(snapshot));
+    const snapshot = serializeFilters(query, filters);
+    if (prefsReady) setUiPref(FKEY, snapshot);
+  });
+  $effect(() => {
+    const list = JSON.stringify(pinned);
+    if (prefsReady) setUiPref(KEYS.pinned, list);
   });
 
   // Colonnes (§6.2) : définitions propres au type + visibilité/ordre persistés
@@ -315,32 +283,6 @@
   }
   onDestroy(stopResizeListeners);
 
-  /** Borne d'année lue depuis les filtres enregistrés. `legacyNone` est
-   * l'ancienne sentinelle « pas de borne » de ce côté (la borne de la plage
-   * elle-même), traduite en champ vide : elle n'a jamais rien filtré, elle ne
-   * doit pas se mettre à le faire ni à compter comme un filtre actif. */
-  function readYearFilter(raw: unknown, legacyNone: number): number {
-    const v = raw as number | null | undefined;
-    if (v == null || v === legacyNone) return NO_YEAR;
-    return v;
-  }
-
-  // Conversion des filtres enregistrés par une version antérieure. Les tags
-  // étaient un texte à virgules, tous inclus ; la catégorie un choix unique,
-  // `"all"` valant « pas de filtre ». Rien à jeter : les deux se traduisent
-  // exactement en jetons « inclure ».
-  function legacyTagTokens(raw: unknown): Token[] {
-    if (typeof raw !== "string") return [];
-    return raw
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map((value) => ({ value, mode: "inc" as const }));
-  }
-  function legacySelectToken(raw: unknown): Token[] {
-    return typeof raw === "string" && raw !== "" && raw !== "all" ? [{ value: raw, mode: "inc" }] : [];
-  }
-
   // Restauration au montage (§6.2/§8.6) : colonnes (fichier dédié,
   // `columns.ts`) et le reste des petits réglages d'écran (`uiPrefs.ts`) en
   // parallèle, un seul aller-retour chacun. `prefsReady` n'est levé qu'une
@@ -349,41 +291,16 @@
   onMount(async () => {
     const [colPrefs, saved] = await Promise.all([
       loadColumnsPrefs(kind),
-      getUiPrefs([FKEY, KEYS.view, KEYS.sortKey, KEYS.sortDir]),
+      getUiPrefs([FKEY, KEYS.pinned, KEYS.view, KEYS.sortKey, KEYS.sortDir]),
     ]);
     visibleKeys = colPrefs.visible;
     columnOrder = colPrefs.order;
     columnWidths = colPrefs.widths;
 
-    if (saved[FKEY]) {
-      try {
-        const sf: Record<string, unknown> = JSON.parse(saved[FKEY]);
-        query = (sf.query as string) ?? "";
-        classFilter = (sf.class as "all" | "race" | "street") ?? "all";
-        stateFilter = (sf.state as "all" | "active" | "inactive") ?? "all";
-        authorTokens = (sf.authorTokens as Token[]) ?? legacySelectToken(sf.author);
-        brandTokens = (sf.brandTokens as Token[]) ?? legacySelectToken(sf.brand);
-        countryTokens = (sf.countryTokens as Token[]) ?? legacySelectToken(sf.country);
-        descFilter = (sf.desc as string) ?? "";
-        tagTokens = (sf.tagTokens as Token[]) ?? legacyTagTokens(sf.tag);
-        tagMode = (sf.tagMode as "and" | "or") ?? "and";
-        catTokens = (sf.catTokens as Token[]) ?? legacySelectToken(sf.category);
-        favState = (sf.favState as TriState) ?? (sf.fav ? 1 : 0);
-        driverState = (sf.driverState as TriState) ?? 0;
-        // Le sens s'est inversé : la case s'appelait « jamais essayé » (donc
-        // cochée = jamais essayés), le tri-état s'appelle « déjà essayé ». Une
-        // préférence enregistrée cochée devient donc l'état **rouge**.
-        triedState = (sf.triedState as TriState) ?? (sf.neverTried ? -1 : 0);
-        stockState = (sf.stockState as TriState) ?? (sf.hideBaseContent ? -1 : 0);
-        // Un filtre enregistré avant que « vide » n'existe portait les bornes
-        // de la plage comme sentinelle de « pas de borne » : elles se lisent
-        // donc comme un champ vide, ce qu'elles ont toujours voulu dire.
-        yearMin = readYearFilter(sf.yearMin, YEAR_RANGE_MIN);
-        yearMax = readYearFilter(sf.yearMax, YEAR_RANGE_MAX);
-      } catch {
-        /* repli sur les défauts déjà en place */
-      }
-    }
+    const restored = parseFilters(saved[FKEY], defs);
+    query = restored.query;
+    filters = restored.filters;
+    pinned = parsePinned(saved[KEYS.pinned], defs);
     const savedView = saved[KEYS.view];
     if (savedView === "gallery" || savedView === "table") view = savedView;
     const savedSortKey = saved[KEYS.sortKey];
@@ -584,29 +501,6 @@
     return [...c.tags_from_mod, ...c.tags_from_rule, ...c.tags_manual];
   }
 
-  // Catégories du filtre : voiture = catégorie unique (`category`) ; circuit =
-  // multi-valué (`categories`, §5bis.2), on agrège toutes les valeurs vues.
-  const categories = $derived(
-    isCar
-      ? [...new Set(typed.map((c) => c.category).filter((c): c is string => !!c))].sort()
-      : [...new Set(typed.flatMap((c) => c.categories))].sort(),
-  );
-  const authors = $derived(
-    [...new Set(typed.map((c) => c.author).filter((c): c is string => !!c))].sort((a, b) =>
-      a.toLowerCase().localeCompare(b.toLowerCase()),
-    ),
-  );
-  const countries = $derived(
-    [...new Set(typed.map((c) => c.country).filter((c): c is string => !!c))].sort((a, b) =>
-      a.toLowerCase().localeCompare(b.toLowerCase()),
-    ),
-  );
-  const brands = $derived(
-    [...new Set(typed.map((c) => c.brand).filter((c): c is string => !!c))].sort((a, b) =>
-      a.toLowerCase().localeCompare(b.toLowerCase()),
-    ),
-  );
-
   // Descriptions ready to be matched, built ONCE per list load rather than on
   // every keystroke: ~400 KB of prose over a full library, which is cheap to
   // walk but not to lowercase again at each letter typed.
@@ -621,123 +515,34 @@
     }
     return map;
   });
-  const tags = $derived(
-    [...new Set(typed.flatMap(modTags))].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())),
-  );
-  /** Valeurs d'un lot de jetons pour un sens donné, en minuscules. */
-  function picked(tokens: Token[], mode: "inc" | "exc"): string[] {
-    return tokens.filter((tk) => tk.mode === mode).map((tk) => tk.value.toLowerCase());
-  }
-  const tagsIncluded = $derived(picked(tagTokens, "inc"));
-  const tagsExcluded = $derived(picked(tagTokens, "exc"));
-  const catsIncluded = $derived(picked(catTokens, "inc"));
-  const catsExcluded = $derived(picked(catTokens, "exc"));
 
-  /** Test for a field a mod carries only ONE value of (author, brand,
-   * country): including several values is an OR - a mod holding just one, an
-   * AND would never have returned anything. Exclude always wins over include,
-   * same rule as tags and categories.
-   *
-   * Returns a closure so the two lists are split ONCE per token change, not
-   * once per card: the filter below runs this over the whole library on every
-   * keystroke of any other field. */
-  function singleMatcher(tokens: Token[]): (value: string | null) => boolean {
-    if (!tokens.length) return () => true;
-    const inc = picked(tokens, "inc");
-    const exc = picked(tokens, "exc");
-    return (value) => {
-      const v = (value ?? "").toLowerCase();
-      if (exc.includes(v)) return false;
-      return !inc.length || inc.includes(v);
-    };
-  }
-  const keepsAuthor = $derived(singleMatcher(authorTokens));
-  const keepsBrand = $derived(singleMatcher(brandTokens));
-  const keepsCountry = $derived(singleMatcher(countryTokens));
-
-  /** Per-value count, same mechanics as the tag one: a single pass over the
-   * cards of the current kind, run ONCE per list load - not on each keystroke,
-   * nor on each token dropped. Measured on a real library: 423 cards for 43
-   * distinct authors, well under a millisecond, and `countOf` is then a plain
-   * Map lookup per rendered row. */
-  function countBy(pick: (c: ModCard) => string | null): Map<string, number> {
-    const m = new Map<string, number>();
-    for (const c of typed) {
-      const v = pick(c);
-      if (v) m.set(v, (m.get(v) ?? 0) + 1);
-    }
-    return m;
-  }
-  const authorCounts = $derived.by(() => countBy((c) => c.author));
-  const brandCounts = $derived.by(() => countBy((c) => c.brand));
-  const countryCounts = $derived.by(() => countBy((c) => c.country));
-
-  /** Catégories d'un mod, en minuscules — une seule pour une voiture,
-   * plusieurs pour un circuit (§5bis.2). */
-  function modCats(c: ModCard): string[] {
-    return (isCar ? [c.category].filter((x): x is string => !!x) : c.categories).map((x) => x.toLowerCase());
-  }
-
-  /** Combien de mods portent ce tag / cette catégorie — le décompte affiché
-   * dans l'autocomplétion. Calculé sur le type courant, pas sur les résultats
-   * filtrés : un chiffre qui bouge à chaque jeton posé ne sert à rien pour
-   * décider du jeton suivant. */
-  const tagCounts = $derived.by(() => {
-    const m = new Map<string, number>();
-    for (const c of typed) for (const tg of modTags(c)) m.set(tg, (m.get(tg) ?? 0) + 1);
-    return m;
+  /** Ce que le moteur de filtres a besoin de savoir lire sur une carte. Les
+   * trois origines de tags sont équivalentes ici ; seule la fiche détail les
+   * distingue par origine. */
+  const ctx: FilterContext = $derived({
+    isCar,
+    tagsOf: modTags,
+    descOf: (c) => descIndex.get(c.id_interne),
+    hasDriver: hasOwnDriver,
   });
-  const catCounts = $derived.by(() => {
-    const m = new Map<string, number>();
-    for (const c of typed) for (const cat of isCar ? [c.category].filter(Boolean) : c.categories) {
-      m.set(cat as string, (m.get(cat as string) ?? 0) + 1);
+
+  /** Valeurs proposées par filtre, avec leur décompte. Calculées sur le type
+   * courant et **pas** sur les résultats filtrés : un chiffre qui bouge à
+   * chaque jeton posé ne sert à rien pour décider du jeton suivant. */
+  const optionIndex = $derived.by(() => {
+    const map = new Map<string, FilterOption[]>();
+    for (const def of defs) {
+      if (def.type === "val") map.set(def.key, optionsOf(def, typed, ctx));
     }
-    return m;
+    return map;
   });
+  const yearPresets = $derived(isCar ? decadePresets(typed.map((c) => c.year ?? 0)) : []);
+
+  const matchesFilters = $derived(buildPredicate(defs, filters, ctx));
 
   const filtered = $derived(
     typed.filter((c) => {
-      // Exclure l'emporte toujours sur inclure : un mod qui porte un critère
-      // refusé sort, même s'il en porte un autre demandé. C'est ce qu'on attend
-      // d'un « sauf » — sinon « avec jdm, sans wip » laisserait passer les mods
-      // marqués les deux.
-      const cats = modCats(c);
-      if (catsExcluded.some((x) => cats.includes(x))) return false;
-      // Plusieurs catégories incluses = OU. Une voiture n'en a qu'une, donc un
-      // ET n'aurait jamais rien remonté ; un circuit en a plusieurs, mais on
-      // garde le même sens des deux côtés.
-      if (catsIncluded.length && !catsIncluded.some((x) => cats.includes(x))) return false;
-      if (classFilter !== "all" && c.car_class !== classFilter) return false;
-      if (stateFilter === "active" && !c.active) return false;
-      if (stateFilter === "inactive" && c.active) return false;
-      if (!keepsAuthor(c.author)) return false;
-      if (!keepsBrand(c.brand)) return false;
-      if (!keepsCountry(c.country)) return false;
-      if (tagTokens.length) {
-        const mine = modTags(c).map((tg) => tg.toLowerCase());
-        if (tagsExcluded.some((x) => mine.includes(x))) return false;
-        const ok =
-          tagMode === "and" ? tagsIncluded.every((x) => mine.includes(x)) : tagsIncluded.some((x) => mine.includes(x));
-        if (tagsIncluded.length && !ok) return false;
-      }
-      if (favState === 1 && !c.is_favorite) return false;
-      if (favState === -1 && c.is_favorite) return false;
-      // Lecture synchrone d'`ui_prefs.json` (`peekUiPref`), une fois par carte :
-      // c'est ce pour quoi la tenue est rangée par voiture plutôt que dans un
-      // fichier que seul le backend saurait lire.
-      if (driverState !== 0 && hasOwnDriver(c.id_interne) !== (driverState === 1)) return false;
-      if (triedState === 1 && !c.tried) return false;
-      if (triedState === -1 && c.tried) return false;
-      // `is_stock` couvre tout ce qui vit dans content/ : le contenu de jeu
-      // ET les mods installés hors Pit Box. Le filtre « contenu de base » ne
-      // parle que du premier, d'où le retrait explicite du second.
-      const isBase = c.is_stock && !c.is_unmanaged;
-      if (stockState === 1 && !isBase) return false;
-      if (stockState === -1 && isBase) return false;
-      // Champ vide = aucun filtre de ce côté, quelle que soit la plage de
-      // saisie : c'est la borne saisie qui décide, pas sa distance aux bornes.
-      if (yearMin !== NO_YEAR && (c.year ?? 0) < yearMin) return false;
-      if (yearMax !== NO_YEAR && (c.year ?? 9999) > yearMax) return false;
+      if (!matchesFilters(c)) return false;
       if (query.trim()) {
         // Un terme par mot séparé par un espace, ET entre eux mais chacun en
         // simple "contains" (pas besoin d'être collés ni dans l'ordre) — bug
@@ -745,57 +550,13 @@
         // recherché comme une seule sous-chaîne collée.
         const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
         // Inclut le pack (§4.4) : rechercher son nom remonte toutes ses voitures.
-        const hay = `${c.display_name ?? ""} ${c.brand ?? ""} ${c.id_interne} ${c.category ?? ""} ${c.source_pack ?? ""} ${modTags(c).join(" ")}`.toLowerCase();
-        if (!terms.every((term) => hay.includes(term))) return false;
-      }
-      if (descFilter.trim()) {
-        // Same rule as the search field above: one term per word, AND between
-        // them, each a plain "contains". A mod with no description at all can
-        // never match - `.get` returning undefined is exactly that.
-        const hay = descIndex.get(c.id_interne);
-        if (!hay) return false;
-        const terms = descFilter.toLowerCase().split(/\s+/).filter(Boolean);
+        const hay =
+          `${c.display_name ?? ""} ${c.brand ?? ""} ${c.id_interne} ${c.category ?? ""} ${c.source_pack ?? ""} ${modTags(c).join(" ")}`.toLowerCase();
         if (!terms.every((term) => hay.includes(term))) return false;
       }
       return true;
     }),
   );
-
-  const activeFilterCount = $derived(
-    (query.trim() !== "" ? 1 : 0) +
-      (catTokens.length ? 1 : 0) +
-      (classFilter !== "all" ? 1 : 0) +
-      (stateFilter !== "all" ? 1 : 0) +
-      (authorTokens.length ? 1 : 0) +
-      (brandTokens.length ? 1 : 0) +
-      (countryTokens.length ? 1 : 0) +
-      (descFilter.trim() !== "" ? 1 : 0) +
-      (tagTokens.length ? 1 : 0) +
-      (favState !== 0 ? 1 : 0) +
-      (triedState !== 0 ? 1 : 0) +
-      (stockState !== 0 ? 1 : 0) +
-      (driverState !== 0 ? 1 : 0) +
-      (yearMin !== NO_YEAR ? 1 : 0) +
-      (yearMax !== NO_YEAR ? 1 : 0),
-  );
-
-  function clearFilters() {
-    query = "";
-    catTokens = [];
-    classFilter = "all";
-    stateFilter = "all";
-    authorTokens = [];
-    brandTokens = [];
-    countryTokens = [];
-    descFilter = "";
-    tagTokens = [];
-    tagMode = "and";
-    favState = 0;
-    triedState = 0;
-    stockState = 0;
-    yearMin = NO_YEAR;
-    yearMax = NO_YEAR;
-  }
 
   const sorted = $derived.by(() => {
     const col = columns.find((c) => c.key === sortKey);
@@ -942,71 +703,21 @@
          negative margins, `top: -18px`, and a header height measured in JS to
          offset the sticky table heads. -->
     <div class="head">
-    <div class="toolbar">
-      <!-- Free text kept deliberately narrow, with the structuring fields of
-           the entity right next to it: at full width it read as THE way to
-           search, and nothing said what it looked into. Small, and flanked by
-           named fields, it reads for what it is - the catch-all for what the
-           other fields do not cover. -->
-      <label class="search">
-        <span>{t("library.search")}</span>
-        <input class="input" placeholder={t("library.searchPlaceholder")} bind:value={query} />
-      </label>
-      {#if isCar}
-        <div class="fld brand">
-          <div class="tok-head"><span>{t("library.filterBrand")}</span></div>
-          <TokenFilter
-            options={brands}
-            bind:tokens={brandTokens}
-            placeholder={t("library.filterBrandPlaceholder")}
-            countOf={(v) => brandCounts.get(v) ?? 0}
-          />
-        </div>
-      {/if}
-      <div class="fld country">
-        <div class="tok-head"><span>{t("library.filterCountry")}</span></div>
-        <TokenFilter
-          options={countries}
-          bind:tokens={countryTokens}
-          placeholder={t("library.filterCountryPlaceholder")}
-          countOf={(v) => countryCounts.get(v) ?? 0}
-        />
-      </div>
-      {#if isCar}
-        <!-- Both bounds bound each other, but an EMPTY field bounds nothing:
-             without that fallback, clearing "min year" dragged the ceiling of
-             "max year" down to zero. No floor at 1950 nor ceiling at the
-             current year either: cars exist well before 1950, and a mod may
-             legitimately carry a future year (concept car, announced DLC) -
-             `YEAR_RANGE_MIN` therefore only serves `emptyStart`, a starting
-             point, never a bound. `emptyStart` makes the up and down arrows
-             land on the same mark from an empty field - 1950 for one, the
-             current year for the other - exactly like typing that value;
-             without it the up arrow fell back on `min` and the down arrow
-             stayed disabled for want of a destination. -->
-        <label class="yr">
-          <span>{t("library.yearMin")}</span>
-          <NumberStepper
-            width={80}
-            max={yearMax === NO_YEAR ? undefined : yearMax}
-            emptyValue={NO_YEAR}
-            emptyStart={YEAR_RANGE_MIN}
-            bind:value={yearMin}
-          />
-        </label>
-        <label class="yr">
-          <span>{t("library.yearMax")}</span>
-          <NumberStepper
-            width={80}
-            min={yearMin === NO_YEAR ? undefined : yearMin}
-            emptyValue={NO_YEAR}
-            emptyStart={YEAR_RANGE_MAX}
-            bind:value={yearMax}
-          />
-        </label>
-      {/if}
-
-      <div class="tb-end">
+    <!-- Toute la barre de filtres tient ici (§6.3) : une ligne permanente et
+         une rangée de puces, quels que soient les filtres posés. Elle a
+         remplacé onze contrôles affichés en permanence sur deux rangées.
+         L'écran garde la fin de ligne — colonnes et bascule de vue — parce
+         qu'elle ne parle pas de filtrage. -->
+    <FilterBar
+      {defs}
+      bind:filters
+      bind:pinned
+      bind:query
+      optionsFor={(key) => optionIndex.get(key) ?? []}
+      presets={yearPresets}
+      resultCount={filtered.length}
+    >
+      {#snippet end()}
         {#if view === "table"}
           <div class="columns-wrap">
             <button class="btn" type="button" onclick={() => (showColumns = !showColumns)}>{t("library.columns")}</button>
@@ -1032,124 +743,8 @@
           <button class:on={view === "gallery"} onclick={() => setView("gallery")} title={t("library.galleryView")}>▦</button>
           <button class:on={view === "table"} onclick={() => setView("table")} title={t("library.tableView")}>≣</button>
         </div>
-      </div>
-    </div>
-
-      <div class="filters">
-        <label>
-          <span>{t("library.filterState")}</span>
-          <select class="input" bind:value={stateFilter}>
-            <option value="all">{t("common.all")}</option>
-            <option value="active">{t("common.active")}</option>
-            <option value="inactive">{t("common.inactive")}</option>
-          </select>
-        </label>
-        <div class="fld author">
-          <div class="tok-head"><span>{t("library.filterAuthor")}</span></div>
-          <TokenFilter
-            options={authors}
-            bind:tokens={authorTokens}
-            placeholder={t("library.filterAuthorPlaceholder")}
-            countOf={(v) => authorCounts.get(v) ?? 0}
-          />
-        </div>
-        <div class="fld tag">
-          <div class="tok-head">
-            <span>{t("library.filterTag")}</span>
-            <!-- ET/OU : seul réglage du champ qui ne se lit pas sur les jetons
-                 eux-mêmes, donc posé au-dessus d'eux plutôt que dedans. -->
-            <span class="seg">
-              <button type="button" class:on={tagMode === "and"} onclick={() => (tagMode = "and")}>
-                {t("library.tagModeAnd")}
-              </button>
-              <button type="button" class:on={tagMode === "or"} onclick={() => (tagMode = "or")}>
-                {t("library.tagModeOr")}
-              </button>
-            </span>
-          </div>
-          <TokenFilter
-            options={tags}
-            bind:tokens={tagTokens}
-            placeholder={t("library.filterTagPlaceholder")}
-            countOf={(v) => tagCounts.get(v) ?? 0}
-          />
-        </div>
-        <div class="fld cat">
-          <div class="tok-head"><span>{t("library.filterCategory")}</span></div>
-          <TokenFilter
-            options={categories}
-            bind:tokens={catTokens}
-            placeholder={t("library.filterCategoryPlaceholder")}
-            countOf={(v) => catCounts.get(v) ?? 0}
-          />
-        </div>
-        <label class="desc">
-          <span>{t("library.filterDescription")}</span>
-          <input class="input" placeholder={t("library.filterDescriptionPlaceholder")} bind:value={descFilter} />
-        </label>
-        {#if isCar}
-          <label>
-            <span>{t("library.filterClass")}</span>
-            <select class="input" bind:value={classFilter}>
-              <option value="all">{t("common.allFem")}</option>
-              <option value="race">race</option>
-              <option value="street">street</option>
-            </select>
-          </label>
-        {/if}
-        <div class="filter-checks">
-          <TriCheck
-            label={t("library.favorites")}
-            bind:value={favState}
-            titleInclude={t("library.favOnly")}
-            titleExclude={t("library.favExcluded")}
-            titleNeutral={t("library.favNeutral")}
-          />
-          {#if isCar}
-            <TriCheck
-              label={t("library.driverSet")}
-              bind:value={driverState}
-              titleInclude={t("library.driverSetOnly")}
-              titleExclude={t("library.driverSetExcluded")}
-              titleNeutral={t("library.driverSetNeutral")}
-            />
-          {/if}
-          <TriCheck
-            label={t("library.tried")}
-            bind:value={triedState}
-            titleInclude={t("library.triedOnly")}
-            titleExclude={t("library.triedExcluded")}
-            titleNeutral={t("library.triedNeutral")}
-          />
-          <TriCheck
-            label={t("library.baseContent")}
-            bind:value={stockState}
-            titleInclude={t("library.baseOnly")}
-            titleExclude={t("library.baseExcluded")}
-            titleNeutral={t("library.baseNeutral")}
-          />
-        </div>
-        <!-- Toujours présent, désactivé quand il n'y a rien à faire. Il
-             disparaissait quand aucun filtre n'était posé : or c'est
-             exactement la personne perdue dans ses propres filtres qui a
-             besoin de voir la sortie, et on ne trouve pas un bouton qu'on n'a
-             jamais vu. « Visible mais sans effet » aurait été pire que
-             désactivé — un clic sans réaction laisse douter qu'il ait été
-             pris. Le décompte dit du même coup combien de filtres sont
-             actifs, ce que rien n'affichait jusqu'ici. -->
-        <!-- Result count next to the reset button rather than alone next to
-             the search field, where a bare number sat without saying what it
-             counted - and far from the filters that make it move. -->
-        <span class="results mono">{t("library.results", { count: filtered.length })}</span>
-        <button
-          class="btn clear"
-          type="button"
-          disabled={activeFilterCount === 0}
-          onclick={clearFilters}
-        >
-          {t("common.reset")}{#if activeFilterCount}<span class="n">{activeFilterCount}</span>{/if}
-        </button>
-      </div>
+      {/snippet}
+    </FilterBar>
     </div>
 
     <div class="scroll" bind:this={mainEl}>
@@ -1404,78 +999,6 @@
     scrollbar-gutter: stable;
     padding: 0 22px 18px;
   }
-  .toolbar {
-    display: flex;
-    /* Bottom-aligned like `.filters`: the fields now carry a label above them,
-       and a `center` alignment would stagger the row against the view buttons. */
-    align-items: flex-end;
-    gap: 10px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-  }
-  /* ONE sizing mechanism for every field of both rows. Each one starts from a
-     narrow basis, grows to absorb whatever room is left on its line, and only
-     wraps once that basis no longer fits. Without the grow, a wide window left
-     a dead band after the last field; without the cap, two fields alone on a
-     line stretched across the whole screen. Tuning is the two custom
-     properties below - a field never carries a width of its own again, which
-     is precisely what made the category field ride over its neighbour (an
-     inner min-width fighting an outer basis). */
-  .toolbar > label,
-  .toolbar > .fld,
-  .filters > label,
-  .filters > .fld {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    flex: 1 1 var(--fb, 150px);
-    max-width: var(--fmax, 260px);
-    min-width: 0;
-  }
-  /* Typography on the `<label>` itself and not on `.fld`: `text-transform` is
-     inherited, and a token field would pass it down to its chips and to the
-     text being typed. The token fields carry it on their `.tok-head` instead. */
-  .toolbar > label,
-  .filters > label {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--muted);
-  }
-  /* Widths per field, in the order the eye meets them. The free-text search
-     gets the widest range: it is the one field whose content has no shape. */
-  .search {
-    --fb: 200px;
-    --fmax: 380px;
-  }
-  .brand,
-  .cat,
-  .desc {
-    --fb: 150px;
-    --fmax: 280px;
-  }
-  .country {
-    --fb: 130px;
-    --fmax: 220px;
-  }
-  .author,
-  .tag {
-    --fb: 170px;
-    --fmax: 340px;
-  }
-  /* A four-digit box has nothing to gain from stretching. */
-  .yr {
-    flex: 0 0 auto;
-    max-width: none;
-  }
-  /* Columns menu and view switch pushed to the far end, whatever the number of
-     structuring fields shown before them (a track has fewer than a car). */
-  .tb-end {
-    display: flex;
-    align-items: flex-end;
-    gap: 10px;
-    margin-left: auto;
-  }
   .columns-wrap {
     position: relative;
   }
@@ -1531,72 +1054,6 @@
     font-size: 14px;
     padding: 6px 10px;
   }
-  .filters {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 12px;
-    padding: 12px;
-    margin-bottom: 16px;
-    background: var(--panel2);
-    border: 1px solid var(--line);
-  }
-
-  /* A token field is not a `label`: its title line also carries the AND/OR
-     switch, and the field itself is a component. */
-  .tok-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--muted);
-    /* Même hauteur que les libellés des `<select>` voisins, pour que tous les
-       champs de la rangée s'alignent sur leur bas. */
-    min-height: 13px;
-  }
-  .seg {
-    display: inline-flex;
-    border: 1px solid var(--line);
-  }
-  .seg button {
-    background: none;
-    border: 0;
-    color: var(--muted);
-    font: inherit;
-    font-size: 9.5px;
-    letter-spacing: 0.5px;
-    padding: 1px 6px;
-    cursor: pointer;
-  }
-  .seg button.on {
-    background: var(--raised);
-    color: var(--txt);
-  }
-  .filter-checks {
-    display: flex;
-    flex-direction: row;
-    gap: 8px;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-  .results {
-    margin-left: auto;
-    font-size: 11px;
-    color: var(--faint);
-    /* Aligned on the reset button's own text, both sitting at the row's end. */
-    padding-bottom: 7px;
-  }
-  /* Le `.btn` global plutôt qu'un `.btn-ghost` réduit à 11px : c'est le bouton
-     du design system, et il n'y a pas de raison que celui-ci soit plus discret
-     que les autres actions de l'écran. */
-  .clear .n {
-    color: var(--muted2);
-    font-family: var(--mono);
-  }
-
   .empty {
     color: var(--muted);
     text-align: center;

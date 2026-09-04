@@ -15,9 +15,15 @@
 // Approche générique par géométrie (plus proche voisin dans la direction
 // visée), plutôt que du câblage par écran : marche pour n'importe quelle vue
 // sans code spécifique, y compris pour passer de la grille au menu latéral en
-// allant à gauche. Limite connue : ne « piège » pas le focus dans une modale
-// ouverte par-dessus (BulkImport, sélection d'adversaire…) — hors périmètre
-// demandé pour l'instant.
+// allant à gauche.
+//
+// **Un panneau flottant fait exception**, et c'est la seule : popover de
+// filtre, menu contextuel (`data-gp-overlay`, voir `OVERLAY_ATTR`). La
+// géométrie seule n'y suffit pas — un panneau n'appartient à aucune zone de
+// mise en page, et sa `position: fixed` le rend même invisible au parcours.
+// Tant qu'il est ouvert, la croix ne circule que dedans et Annuler le referme.
+// Limite connue, toujours là : les **modales** (BulkImport, sélection
+// d'adversaire…) ne piègent pas le focus — hors périmètre demandé.
 
 import { nav } from "$lib/nav.svelte";
 import { deviceRecords, gamepadEnabled } from "$lib/gamepadDevices.svelte";
@@ -54,9 +60,46 @@ const FOCUSABLE =
  * qu'à une bordure, et l'entête lui-même restait inatteignable. */
 export const GP_SKIP_ATTR = "data-gp-skip";
 
+/** Panneau flottant ouvert par-dessus l'écran — popover de filtre, menu
+ * contextuel (§7.1, §6.3ter). Tant qu'il est là, la croix ne circule QUE
+ * dedans, Annuler le referme, et le curseur revient d'où il venait.
+ *
+ * Deux raisons de le traiter à part plutôt que de laisser la géométrie faire :
+ * un panneau flottant n'appartient à aucune zone de mise en page, donc le plus
+ * proche voisin y entre et en sort au hasard ; et surtout il est en
+ * `position: fixed`, ce qui le rendait purement et simplement **invisible** à
+ * la navigation (voir `isVisible`). Le menu contextuel était dans ce cas
+ * depuis le début : le bouton menu de la manette l'ouvrait, et rien ne
+ * permettait ensuite d'en choisir une ligne. */
+export const OVERLAY_ATTR = "data-gp-overlay";
+
+/** Visible à l'écran.
+ *
+ * `offsetParent` est le test habituel, et il reste celui du flux normal. Mais
+ * il vaut **`null` pour tout élément en `position: fixed`** (spec HTML), ce
+ * qui écartait d'un coup tout le contenu d'un panneau flottant. D'où le repli
+ * sur les rectangles de rendu, réservé à ce cas : l'élargir à toute
+ * l'application ferait entrer d'un coup la barre de titre, les notifications
+ * et les modales dans le parcours de la croix — un autre sujet, et un autre
+ * risque (le bouton « fermer la fenêtre » deviendrait atteignable). */
+function isVisible(el: HTMLElement, inOverlay: boolean): boolean {
+  return inOverlay ? el.getClientRects().length > 0 : el.offsetParent !== null;
+}
+
+/** Le panneau flottant ouvert, s'il y en a un — le plus récent quand plusieurs
+ * se superposent (un menu ouvert par-dessus un popover). */
+export function openOverlay(): HTMLElement | null {
+  const all = Array.from(document.querySelectorAll<HTMLElement>(`[${OVERLAY_ATTR}]`)).filter(
+    (el) => el.getClientRects().length > 0,
+  );
+  return all.length ? all[all.length - 1] : null;
+}
+
 function focusableElements(): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-    (el) => el.offsetParent !== null && !el.hasAttribute(GP_SKIP_ATTR),
+  const overlay = openOverlay();
+  const root: ParentNode = overlay ?? document;
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+    (el) => isVisible(el, overlay !== null) && !el.hasAttribute(GP_SKIP_ATTR),
   );
 }
 
@@ -296,6 +339,9 @@ function rememberInRegion(el: HTMLElement) {
 
 /** Zone suivante/précédente, curseur posé là où on l'avait laissé. */
 function cycleRegion(delta: 1 | -1): void {
+  // Un panneau flottant ouvert prend toute la navigation : changer de zone
+  // en sortirait sans le refermer, et le curseur atterrirait derrière lui.
+  if (openOverlay()) return;
   const zones = regions();
   if (zones.length < 2) return;
   const current = document.activeElement as HTMLElement | null;
@@ -309,6 +355,67 @@ function cycleRegion(delta: 1 | -1): void {
       ? remembered
       : focusableElements().find((el) => next.contains(el));
   if (target) setGamepadFocus(target);
+}
+
+// --- Panneaux flottants (§7.1) --------------------------------------------
+//
+// Trois règles, et ce sont exactement celles qu'on attend d'un menu :
+// quand un panneau s'ouvre le curseur y entre, tant qu'il est ouvert la croix
+// n'en sort pas (`focusableElements` ne rend que son contenu), et Annuler le
+// referme en rendant le curseur à l'élément d'où il venait.
+
+/** Panneau ouvert à l'image précédente, pour ne réagir qu'aux changements. */
+let lastOverlay: HTMLElement | null = null;
+/** Où rendre le curseur à la fermeture : la puce, ou le bouton « + Filtre ».
+ * Sans lui, refermer un éditeur laisserait le curseur en haut de l'écran et le
+ * geste « ouvrir, regarder, refermer » coûterait toute la traversée. */
+let beforeOverlay: HTMLElement | null = null;
+/** Dernier élément visé à la manette **hors** panneau, suivi en continu — y
+ * compris sa remise à `null` quand la souris reprend la main.
+ *
+ * Deux raisons de ne pas simplement lire le repère au moment de l'ouverture :
+ * un panneau qui pose lui-même son focus (le menu d'ajout, dans son champ de
+ * recherche) l'a déjà effacé à ce moment-là ; et c'est ce qui fait que la
+ * manette ne vole PAS le curseur d'une souris qui vient d'ouvrir un panneau —
+ * pas de repère avant, donc pas d'entrée d'autorité. */
+let lastOutsideFocus: HTMLElement | null = null;
+
+function syncOverlayFocus(): void {
+  const overlay = openOverlay();
+  if (!overlay) {
+    lastOutsideFocus = gpFocusEl;
+    if (lastOverlay) {
+      if (beforeOverlay?.isConnected) setGamepadFocus(beforeOverlay);
+      beforeOverlay = null;
+      lastOverlay = null;
+    }
+    return;
+  }
+  // Un second panneau par-dessus le premier ne redéfinit pas le point de
+  // retour : on veut revenir à la puce, pas à une ligne du panneau précédent.
+  if (!lastOverlay) {
+    beforeOverlay = lastOutsideFocus;
+    const active = document.activeElement as HTMLElement | null;
+    // N'entrer que si la manette pilotait, et seulement si le panneau n'a pas
+    // déjà posé son propre curseur (le menu d'ajout le fait, et son champ de
+    // recherche est le bon point de départ — le lui reprendre serait pire).
+    if (beforeOverlay && (!active || !overlay.contains(active))) {
+      const first = focusableElements()[0];
+      if (first) setGamepadFocus(first);
+    }
+  }
+  lastOverlay = overlay;
+}
+
+/** Referme le panneau ouvert, s'il y en a un. Rend `true` quand il y avait
+ * quelque chose à fermer — l'appelant sait alors que cet appui est consommé. */
+function closeOverlay(): boolean {
+  if (!openOverlay()) return false;
+  // Un vrai Échap qui remonte : chaque panneau porte déjà sa propre fermeture
+  // sur cette touche (clic ailleurs ou Échap), il n'y a pas de registre à
+  // tenir. Même raisonnement que le `contextmenu` synthétisé plus bas.
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  return true;
 }
 
 /** Bouton « Démarrer la session » de la barre latérale (§7.4bis) : le bouton
@@ -752,8 +859,13 @@ export function startGamepadNav(): () => void {
         if (cur.start && !last.start) focusLaunchButton();
         if (cur.menu && !last.menu) {
           const el = document.activeElement as HTMLElement | null;
-          if (el) openContextMenuAt(el);
+          // Jamais depuis l'intérieur d'un panneau flottant : ses lignes n'ont
+          // pas de menu contextuel, et en empiler un second par-dessus le
+          // premier n'a aucun sens.
+          if (el && !openOverlay()) openContextMenuAt(el);
         }
+
+        syncOverlayFocus();
 
         const active = document.activeElement;
         if (entered && active !== entered) setEntered(null);
@@ -770,8 +882,16 @@ export function startGamepadNav(): () => void {
         // avant, ce qui rendait ses propres commandes — skins, onglets,
         // boutons — inatteignables à la manette). Mod précédent/suivant a
         // désormais ses deux boutons dédiés, ci-dessus.
-        if (nav.openPack && backPressed && !leftField) nav.openPack = null;
-        else if (nav.openFull && backPressed && !leftField) nav.openFull = null;
+        // Annuler referme d'abord le panneau flottant ouvert, et rien
+        // d'autre : sinon le même appui refermerait aussi la fiche derrière.
+        // Un vrai Échap synthétisé plutôt qu'un registre de fermetures — le
+        // popover comme le menu contextuel s'y ferment déjà tout seuls, et
+        // c'est le même raisonnement que le bouton menu ci-dessus.
+        const closedOverlay = backPressed && !leftField && closeOverlay();
+        if (!closedOverlay) {
+          if (nav.openPack && backPressed && !leftField) nav.openPack = null;
+          else if (nav.openFull && backPressed && !leftField) nav.openFull = null;
+        }
 
         if (needsEntry(active)) {
           if (active === entered) {

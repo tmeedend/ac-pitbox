@@ -67,7 +67,7 @@
   });
 </script>
 
-<ul class="ctx" bind:this={root} style="left:{pos.left}px; top:{pos.top}px;">
+<ul class="ctx" bind:this={root} data-gp-overlay style="left:{pos.left}px; top:{pos.top}px;">
   {#each items as it}
     <li>
       <button type="button" class:danger={it.danger} disabled={it.disabled} onclick={() => pick(it)}>

@@ -4,13 +4,13 @@
 </script>
 
 <script lang="ts">
-  // Case à cocher à trois états, pour les filtres de la bibliothèque (§6.3).
+  // Case à cocher à trois états (filtres de l'écran Pilote, §9.5).
   //
   // Une case booléenne ne sait dire qu'une moitié de ce qu'on veut : « favoris
   // uniquement » se cochait, « tout sauf les favoris » ne s'exprimait pas. D'où
   // trois états et non deux — et un libellé **neutre** (« Favoris », pas
   // « Masquer les favoris ») : c'est la couleur qui porte le sens, vert pour ce
-  // qu'on garde, rouge pour ce qu'on écarte, comme les jetons de `TokenFilter`.
+  // qu'on garde, rouge pour ce qu'on écarte.
   //
   // L'infobulle dit l'état courant en toutes lettres. Elle est là parce que
   // vert et rouge ne se distinguent pas pour tout le monde, pas pour expliquer
