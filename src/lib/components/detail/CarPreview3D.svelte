@@ -12,6 +12,7 @@
   import { prepareCarPreview, onPreviewProgress, type DriverView, type PreviewStage } from "$lib/preview";
   import { carClassOf, driverOverridePayload } from "$lib/driverOverride.svelte";
   import {
+    preview3dGraftsDriver,
     preview3dPrefs,
     preview3dReady,
     preview3dResets,
@@ -20,7 +21,8 @@
   import { errorText } from "$lib/errors";
   // Le seul lien de l'aperçu vers le son : une fonction qui ne fait rien tant
   // que rien ne joue. L'aperçu n'a pas à savoir ce qu'est une écoute native.
-  import { reportListenerAngle } from "$lib/enginePlayer.svelte";
+  import { engineRunning, reportListenerAngle } from "$lib/enginePlayer.svelte";
+  import { DRIVER_MESH_PREFIX } from "$lib/preview";
   import type * as ThreeModule from "three";
   import type { Reflector } from "three/addons/objects/Reflector.js";
   import { applyFloorMirror, floorMirrorShader } from "./floorMirror";
@@ -39,12 +41,17 @@
      * seul (la clé de cache porte la date du modèle), mais l'écran, lui, ne
      * redemandait rien : le modèle d'avant restait à tourner. */
     revision = 0,
+    /** Montre le pilote sans attendre de clé de contact. L'écran Réglages n'en
+     * a pas à tourner, et y régler un pilote qu'on ne voit jamais n'aurait pas
+     * de sens — c'est le seul appelant qui le pose. */
+    driverAlways = false,
   }: {
     carId: string;
     skinId?: string | null;
     fallbackSrc?: string | null;
     carClass?: string | null;
     revision?: number;
+    driverAlways?: boolean;
   } = $props();
 
   type Phase = "loading" | "ready" | "unavailable";
@@ -67,8 +74,13 @@
 
   /** Les trois choses dont dépend le `.glb` demandé, en une clé comparable.
    * `driver` vaut l'angle du volant, ou `null` quand il n'y a pas de pilote. */
-  function sceneKey(car: string, skin: string | null | undefined, driver: DriverView | null): string {
-    return `${car}|${skin}|${revision}|${driver ? JSON.stringify(driver) : ""}`;
+  function sceneKey(
+    car: string,
+    skin: string | null | undefined,
+    steer: number,
+    driver: DriverView | null,
+  ): string {
+    return `${car}|${skin}|${revision}|${steer}|${driver ? JSON.stringify(driver) : ""}`;
   }
   /** Voiture du modèle en place — la moitié de `loaded` qui décide si un
    * changement de skin peut se faire à chaud (même géométrie) ou non. */
@@ -126,6 +138,16 @@
     shadowCatcher: ThreeModule.Mesh;
     /** Altitude du sol, pour poser le miroir quand il arrive après coup. */
     floorY: number;
+    /** Les maillages du pilote greffé, repérés à leur préfixe de nom
+     * (`DRIVER_MESH_PREFIX`), et les matériaux qu'ils portent. Vides quand la
+     * conversion n'a pas greffé de mannequin. */
+    driver: ThreeModule.Mesh[];
+    driverMaterials: ThreeModule.Material[];
+    /** Opacité actuelle du pilote, et celle vers laquelle il va. Le fondu est
+     * mené par la boucle de rendu, comme la rotation du plateau : c'est le
+     * seul endroit qui connaisse le temps écoulé. */
+    driverOpacity: number;
+    driverTarget: number;
     /** Libérée : plus rien ne doit lui demander de rendu (une reprise de
      * rotation en attente, par exemple, survit à la scène qui l'a armée). */
     disposed: boolean;
@@ -756,6 +778,71 @@
     reportListenerAngle(azimuth, elevation, distance);
   }
 
+  /** Durée du fondu du pilote, en secondes. Assez court pour qu'on ne
+   * l'attende pas, assez long pour qu'on le voie : c'est une arrivée, pas une
+   * apparition. */
+  const DRIVER_FADE_SECONDS = 0.45;
+
+  /** Le pilote doit-il être visible **maintenant** ?
+   *
+   * `always` le montre tout le temps ; `ignition` le fait arriver quand une
+   * clé de contact tourne. `driverAlways` court-circuite le second : l'écran
+   * Réglages n'a pas de clé à tourner, et y régler un pilote qu'on ne voit
+   * jamais n'aurait pas de sens.
+   *
+   * Rien ici ne parle de `never` : dans ce mode la conversion ne greffe aucun
+   * mannequin, donc il n'y a rien à montrer et `driver` est vide. */
+  function driverWanted(): boolean {
+    const mode = preview3dPrefs().driver;
+    if (mode === "never") return false;
+    return mode === "always" || driverAlways || engineRunning();
+  }
+
+  /** Écrit une opacité sur le pilote.
+   *
+   * **Le passage en fondu ne se fait qu'aux extrémités**, et c'est ce qui rend
+   * l'effet gratuit : changer `transparent` recompile le programme du
+   * matériau, alors que changer `opacity` ne fait qu'écrire un uniforme. On
+   * bascule donc en fondu au départ, on rend l'état d'origine à l'arrivée, et
+   * entre les deux on n'écrit qu'un nombre. Sans profondeur pendant le fondu,
+   * sinon le pilote se découperait dans son propre corps. */
+  function applyDriverOpacity(current: ThreeScene, opacity: number) {
+    const fading = opacity > 0 && opacity < 1;
+    for (const material of current.driverMaterials) {
+      const state = material as ThreeModule.Material & {
+        __wasTransparent?: boolean;
+        __wroteDepth?: boolean;
+      };
+      state.__wasTransparent ??= material.transparent;
+      state.__wroteDepth ??= material.depthWrite;
+      const wanted = fading || state.__wasTransparent;
+      if (material.transparent !== wanted) {
+        material.transparent = wanted;
+        material.needsUpdate = true;
+      }
+      material.depthWrite = fading ? false : (state.__wroteDepth ?? true);
+      material.opacity = fading ? opacity : 1;
+    }
+    // Retiré de la scène quand il n'est plus là du tout : un mannequin à
+    // opacité nulle coûterait encore ses appels de dessin et son ombre.
+    for (const mesh of current.driver) mesh.visible = opacity > 0.002;
+  }
+
+  /** Avance le fondu d'une image. Rend `true` tant qu'il reste à faire, ce qui
+   * suffit à garder la boucle de rendu en vie. */
+  function stepDriverFade(current: ThreeScene, elapsed: number): boolean {
+    if (current.driver.length === 0) return false;
+    const target = current.driverTarget;
+    if (current.driverOpacity === target) return false;
+    const step = elapsed / DRIVER_FADE_SECONDS;
+    current.driverOpacity =
+      target > current.driverOpacity
+        ? Math.min(target, current.driverOpacity + step)
+        : Math.max(target, current.driverOpacity - step);
+    applyDriverOpacity(current, current.driverOpacity);
+    return current.driverOpacity !== target;
+  }
+
   /**
    * Une image. La boucle ne se prolonge que si quelque chose bouge encore :
    * le plateau, ou l'inertie d'OrbitControls après un lâcher de souris.
@@ -778,6 +865,7 @@
         const intro = introFactor(current, now);
         current.turntable.rotation.y += SPIN_SPEED * (preview3dPrefs().spin / 100) * intro * elapsed;
       }
+      const fading = stepDriverFade(current, elapsed);
       const moving = current.controls.update();
       reportEar(current);
       current.renderer.render(current.scene, current.camera);
@@ -786,7 +874,7 @@
       // ferait tourner la boucle dans le vide si la vitesse passait à 0 en
       // cours d'effet — l'effet resterait armé, plus rien ne bougerait, et le
       // panneau redemanderait une image soixante fois par seconde.
-      if (moving || turning()) requestRender(current);
+      if (moving || turning() || fading) requestRender(current);
       else current.lastFrameAt = 0;
     });
   }
@@ -1014,6 +1102,22 @@
     shadowCatcher.renderOrder = -1;
     scene.add(shadowCatcher);
 
+    // Le pilote greffé, repéré à son préfixe de nom : c'est ce qui permet de le
+    // montrer et de le retirer sans reconvertir (voir `DRIVER_MESH_PREFIX`
+    // côté Rust). Les matériaux sont collectés à part et **dédoublonnés** :
+    // un même matériau sert plusieurs maillages, et lui écrire son opacité
+    // plusieurs fois par image ne coûterait que du temps.
+    const driverMeshes: ThreeModule.Mesh[] = [];
+    const driverMaterials = new Set<ThreeModule.Material>();
+    gltf.scene.traverse((object) => {
+      const mesh = object as ThreeModule.Mesh;
+      if (!mesh.isMesh || !mesh.name.startsWith(DRIVER_MESH_PREFIX)) return;
+      driverMeshes.push(mesh);
+      for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        driverMaterials.add(material);
+      }
+    });
+
     host.appendChild(renderer.domElement);
     const built: ThreeScene = {
       THREE,
@@ -1036,8 +1140,15 @@
       shadowCatcher,
       floorY: box.min.y,
       introAt: 0,
+      driver: driverMeshes,
+      driverMaterials: [...driverMaterials],
+      // Il commence là où il doit finir : un pilote déjà attendu ne doit pas
+      // entrer en fondu à chaque changement de skin.
+      driverOpacity: driverWanted() ? 1 : 0,
+      driverTarget: driverWanted() ? 1 : 0,
       disposed: false,
     };
+    applyDriverOpacity(built, built.driverOpacity);
     // Reprise de la scène précédente, ou cadrage réglé si on part de zéro.
     const carried = carry?.();
     if (carried) {
@@ -1167,9 +1278,14 @@
     // changent le `.glb` lui-même — le pilote y est greffé et sa pose y est
     // cuite — donc les bouger doit relancer une conversion. Les autres
     // s'appliquent à la scène en place, plus bas.
-    const driver = preview3dPrefs().driver
-      ? { steer: preview3dPrefs().steer, ...(driverOverridePayload(carId, carClassOf(carClass)) ?? {}) }
-      : null;
+    // `preview3dGraftsDriver` et non le mode brut : `always` et `ignition`
+    // convertissent tous deux **avec** le mannequin, seule la vue les
+    // distingue. Sans ça, tourner une clé de contact demanderait une
+    // conversion de quatorze mégaoctets avant que le pilote n'arrive.
+    const driver = preview3dGraftsDriver() ? (driverOverridePayload(carId, carClassOf(carClass)) ?? {}) : null;
+    // Le braquage est cuit dans la géométrie — roues avant, volant, bras du
+    // pilote — donc il décide du `.glb` demandé, avec ou sans mannequin.
+    const steer = preview3dPrefs().steer;
 
     // Garde-fou : une scène déjà posée sur ce couple voiture/skin n'est pas
     // reconstruite. Recharger coûte le retour à la photo puis une conversion,
@@ -1177,7 +1293,7 @@
     // un effet parent réévalué relançant tout (voir `untrack` dans
     // `DetailPage`). La cause est corrigée là-bas ; ceci empêche la classe
     // entière de se voir à l'écran.
-    if (untrack(() => loaded) === sceneKey(car, skin, driver)) return;
+    if (untrack(() => loaded) === sceneKey(car, skin, steer, driver)) return;
 
     // Remplacement **à chaud** : même voiture, seul le skin change, et un
     // modèle tourne déjà à l'écran. Il y reste, et continue de tourner, le
@@ -1213,7 +1329,7 @@
     let cancelled = false;
     (async () => {
       try {
-        const handle = await prepareCarPreview(car, skin, driver);
+        const handle = await prepareCarPreview(car, skin, steer, driver);
         // La fiche a pu changer pendant la conversion : ne jamais poser le
         // modèle d'une voiture sur la fiche d'une autre.
         if (cancelled || car !== untrack(() => carId)) return;
@@ -1239,7 +1355,7 @@
         // ce qui évite le trou noir d'une image entre les deux.
         disposeScene(untrack(() => scene));
         scene = built;
-        loaded = sceneKey(car, skin, driver);
+        loaded = sceneKey(car, skin, steer, driver);
         loadedCar = car;
         phase = "ready";
         swapping = false;
@@ -1288,6 +1404,21 @@
     // Lu à découvert : un effet ne suit que ce qu'il lit lui-même.
     void preview3dPrefs().quality;
     untrack(() => applyQuality(scene));
+  });
+
+  // Le pilote entre et sort **sans reconversion** : la clé de contact d'un mod
+  // son le fait arriver, la couper le fait partir, et entre les deux le `.glb`
+  // ne bouge pas. Seule la cible change ici ; c'est la boucle de rendu qui
+  // mène le fondu, elle seule connaissant le temps écoulé.
+  $effect(() => {
+    // Lus à découvert pour que l'effet s'y abonne — le mode et la clé.
+    const wanted = driverWanted();
+    untrack(() => {
+      if (!scene || scene.disposed || scene.driver.length === 0) return;
+      if (scene.driverTarget === (wanted ? 1 : 0)) return;
+      scene.driverTarget = wanted ? 1 : 0;
+      requestRender(scene);
+    });
   });
 
   // Décor et sol : mêmes règles que le cadrage, l'aperçu suit sans être

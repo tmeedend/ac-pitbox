@@ -232,7 +232,7 @@ export function setFallbackName(kind: CarClass, name: string): void {
  * Une pièce laissée à `null` n'est pas envoyée : le backend garde alors celle
  * que le `skin.ini` de la livrée déclare, plutôt que de déshabiller le pilote.
  */
-export function driverOverridePayload(carId: string | null, kind: CarClass): Omit<DriverView, "steer"> | null {
+export function driverOverridePayload(carId: string | null, kind: CarClass): DriverView | null {
   const outfit = driverFor(carId, kind);
   if (isEmpty(outfit)) return null;
   // `body` ici, `model` là-bas : le backend nomme le mannequin comme

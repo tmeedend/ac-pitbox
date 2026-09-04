@@ -14,6 +14,7 @@ mod paint;
 mod pose;
 mod roughness;
 mod stats;
+mod steer;
 #[cfg(test)]
 mod testutil;
 mod texture;
@@ -30,6 +31,7 @@ pub use geometry::{node_world_centers, winding_consistency, FlatMesh, GeometryOp
 pub use locate::{resolve_model, resolve_skin, ModelSource, ResolvedModel};
 pub use material::{AlphaMode, GltfMaterial, MaterialTextures};
 pub use stats::{channel_stats, ChannelStats};
+pub use steer::SteerPose;
 pub use texture::{
     alpha_stats, prepare_textures, FootprintAlpha, PreparedTexture, TextureOptions, TextureOrigin, TextureRole,
     TextureSet, TextureWarning,

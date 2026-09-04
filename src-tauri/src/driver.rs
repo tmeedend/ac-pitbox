@@ -123,18 +123,18 @@ pub fn resolve(
     graft_for(ac_root, car_dir, &outfit, steer_degrees)
 }
 
-/// Ce que le frontend demande pour le pilote de l'aperçu : l'angle du volant,
-/// et la tenue qu'il impose éventuellement.
+/// Ce que le frontend demande pour le pilote de l'aperçu : la tenue qu'il
+/// impose éventuellement.
 ///
-/// Un seul objet plutôt que trois paramètres : la commande d'aperçu en portait
-/// déjà quatre, et « pas de pilote » se dit alors par l'absence de l'objet
-/// entier plutôt que par une combinaison de `None`.
+/// Un objet plutôt que des paramètres épars : « pas de pilote » se dit alors
+/// par l'absence de l'objet entier plutôt que par une combinaison de `None`.
+///
+/// **L'angle de braquage n'est plus ici** : il tourne aussi les roues avant et
+/// le volant de la voiture (`steering`), donc il vaut avec ou sans pilote et
+/// voyage à part.
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DriverView {
-    /// Degrés, 0 = volant droit.
-    #[serde(default)]
-    pub steer: f32,
     #[serde(default, flatten)]
     pub outfit: OutfitOverride,
 }

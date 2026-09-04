@@ -33,6 +33,25 @@ use kn5::{Kn5Model, Kn5Node, Kn5NodeKind};
 /// appeared out of nowhere should say where it came from.
 const DRIVER_MARKER: &str = "PITBOX_DRIVER";
 
+/// Préfixe posé sur le nom de **chaque maillage** du mannequin avant la greffe.
+///
+/// Sans lui, la vue n'a aucun moyen de retrouver le pilote dans le `.glb` : la
+/// conversion aplatit l'arbre, donc le dummy [`DRIVER_MARKER`] ne survit pas,
+/// et le regroupement par matériau ne garde que le nom du premier maillage de
+/// chaque lot. Le préfixe, lui, traverse — un maillage de mannequin ne partage
+/// jamais son matériau avec la voiture (les deux listes sont concaténées à la
+/// greffe), donc tout lot qui en contient un est du pilote et rien d'autre.
+///
+/// C'est ce qui permet de le **montrer ou de le retirer sans reconvertir** :
+/// au contact d'une clé de mod son, l'aperçu le fait apparaître en fondu au
+/// lieu d'attendre une conversion de quatorze mégaoctets (`CarPreview3D`).
+///
+/// Posé après la pose et l'habillage : les deux se repèrent par nom de nœud
+/// (`pose::apply_locals`, `dress`), et renommer avant les aveuglerait. Les
+/// *dummies* du rig gardent leur nom pour la même raison — seuls les maillages
+/// sont préfixés, et un maillage n'est jamais un os.
+pub const DRIVER_MESH_PREFIX: &str = "PITBOX_DRIVER:";
+
 /// A driver, resolved down to files on disk.
 ///
 /// Deliberately says nothing about *how* it was chosen — read from the car's
@@ -171,6 +190,8 @@ pub fn graft(host: &mut Kn5Model, wanted: &DriverGraft) -> DriverStats {
     stats.seated = base_pose(&mut driver, wanted, &mut stats.failures);
     stats.posed = pose(&mut driver, wanted, &mut stats.failures);
 
+    mark_driver_meshes(&mut driver.root);
+
     let offset = seating_offset(&driver, wanted, &mut stats);
     let placed = crate::extconfig::merge_assets(
         host,
@@ -191,6 +212,16 @@ pub fn graft(host: &mut Kn5Model, wanted: &DriverGraft) -> DriverStats {
     host.root.children.push(car);
     host.root.children.push(placed);
     stats
+}
+
+/// Préfixe le nom de chaque maillage du mannequin (voir [`DRIVER_MESH_PREFIX`]).
+fn mark_driver_meshes(node: &mut Kn5Node) {
+    if !matches!(node.kind, Kn5NodeKind::Dummy { .. }) {
+        node.name = format!("{DRIVER_MESH_PREFIX}{}", node.name);
+    }
+    for child in &mut node.children {
+        mark_driver_meshes(child);
+    }
 }
 
 /// Lays the rig out where the car puts it, from its own `driver_base_pos.knh`.

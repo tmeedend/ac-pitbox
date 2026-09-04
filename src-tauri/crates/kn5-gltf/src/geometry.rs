@@ -72,6 +72,10 @@ pub struct GeometryOptions {
     pub skip_distant_lods: bool,
     /// Drop `COCKPIT_LR` when `COCKPIT_HR` is there too — see [`flatten`].
     pub skip_low_res_cockpit: bool,
+    /// Roues braquées : les roues avant et le volant du poste de pilotage
+    /// (voir [`crate::steer`]). Droites par défaut, auquel cas rien n'est
+    /// touché et la conversion est celle d'avant, octet pour octet.
+    pub steer: crate::steer::SteerPose,
 }
 
 impl Default for GeometryOptions {
@@ -91,6 +95,7 @@ impl Default for GeometryOptions {
             excluded_name_prefixes: vec!["AC_".to_string()],
             skip_distant_lods: true,
             skip_low_res_cockpit: true,
+            steer: crate::steer::SteerPose::default(),
         }
     }
 }
@@ -263,10 +268,22 @@ fn walk(
     }
     // Row-vector convention: `world = local × parent` (§3.4). Getting this
     // order backwards leaves the hierarchy intact but scatters every part.
-    let world = match node.transform() {
+    let mut world = match node.transform() {
         Some(local) => multiply(local, parent_world),
         None => *parent_world,
     };
+    // Braquage : la roue avant, ou le volant, tourne **avec tout ce qu'il
+    // porte** — jante, pneu, étrier, rayons. C'est donc la transformation
+    // accumulée qu'on prolonge, pas les sommets qu'on retouche, et les
+    // enfants héritent du braquage sans rien savoir de lui.
+    if !options.steer.is_straight() {
+        if let Some(what) = crate::steer::steered(&node.name) {
+            if let Some(turn) = crate::steer::turn(node, what, &world, &options.steer) {
+                world = multiply(&world, &turn);
+            }
+        }
+    }
+    let world = world;
 
     if let Some(mesh) = node.mesh() {
         match classify(node, mesh, materials, options) {
@@ -323,7 +340,7 @@ fn has_skinned_mesh(model: &Kn5Model) -> bool {
 /// Premier nom gagnant en cas d'homonymie. Le cas existe dans les modèles
 /// (un maillage porte souvent le nom du dummy qui le tient), mais pas sur un
 /// os : les noms de rig sont uniques.
-fn node_world_matrices(model: &Kn5Model) -> BTreeMap<String, [f32; 16]> {
+pub(crate) fn node_world_matrices(model: &Kn5Model) -> BTreeMap<String, [f32; 16]> {
     let mut out = BTreeMap::new();
     collect_matrices(&model.root, &IDENTITY, &mut out);
     out

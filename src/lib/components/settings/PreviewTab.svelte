@@ -25,6 +25,7 @@
   // « Enregistré ».
   import CarPreview3D from "../detail/CarPreview3D.svelte";
   import Preview3dControls from "../detail/Preview3dControls.svelte";
+  import Field from "../Field.svelte";
   import Slider from "../Slider.svelte";
   import { i18n, t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
@@ -32,9 +33,11 @@
   import { nav } from "$lib/nav.svelte";
   import { clearPreviewCache, previewCacheSize } from "$lib/preview";
   import {
+    DRIVER_MODES,
     INTRO_EFFECTS,
     PREVIEW3D_RANGES,
     PREVIEW_QUALITIES,
+    type DriverMode,
     savePreview3dPrefs,
     preview3dDirty,
     preview3dPrefs,
@@ -155,9 +158,12 @@
 </script>
 
 <div class="cards">
+  <div class="col">
   {#if prefs.enabled && sampleCar}
     <div class="stage">
-      <CarPreview3D carId={sampleCar} skinId={sampleSkin} />
+      <!-- `driverAlways` : il n'y a pas de clé de contact sur cet écran, et
+           régler un pilote qu'on ne voit jamais n'aurait pas de sens. -->
+      <CarPreview3D carId={sampleCar} skinId={sampleSkin} driverAlways />
       <!-- Même bouton que sur la fiche voiture : replace la caméra selon les
            réglages et relance le plateau. Ici il sert aussi à **revoir l'effet
            d'entrée**, qui ne se joue par définition qu'à l'entrée. -->
@@ -178,27 +184,30 @@
   <section class="blk">
   <div class="blk-h"><span class="blk-t">{t("settings.preview3dGroupRender")}</span></div>
   <div class="blk-b">
-    <label class="check">
-      <input
-        type="checkbox"
-        checked={prefs.enabled}
-        onchange={(e) => setPreview3dEnabled(e.currentTarget.checked)}
-      />
-      <span>{t("settings.preview3dEnabled")}</span>
-    </label>
-    <p class="hint">{t("settings.preview3dEnabledHint")}</p>
+    <Field hint={t("settings.preview3dEnabledHint")}>
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={prefs.enabled}
+          onchange={(e) => setPreview3dEnabled(e.currentTarget.checked)}
+        />
+        <span>{t("settings.preview3dEnabled")}</span>
+      </label>
+    </Field>
 
-    <label class="check">
-      <input
-        type="checkbox"
-        checked={prefs.driver}
-        onchange={(e) => setPreview3dDriver(e.currentTarget.checked)}
-      />
-      <span>{t("settings.preview3dDriver")}</span>
-    </label>
-    <p class="hint">{t("settings.preview3dDriverHint")}</p>
+    <Field label={t("settings.preview3dDriver")} hint={t("settings.preview3dDriverHint")}>
+      <select
+        class="input"
+        value={prefs.driver}
+        onchange={(e) => setPreview3dDriver(e.currentTarget.value as DriverMode)}
+      >
+        {#each DRIVER_MODES as mode (mode)}
+          <option value={mode}>{t("settings.preview3dDriverOption." + mode)}</option>
+        {/each}
+      </select>
+    </Field>
 
-    {#if prefs.driver}
+    <Field>
       <Slider
         label={t("settings.preview3dSteer")}
         value={prefs.steer}
@@ -209,10 +218,9 @@
         hint={t("settings.preview3dSteerHint")}
         oninput={(v) => setPreview3dValue("steer", v)}
       />
-    {/if}
+    </Field>
 
-    <div class="field">
-      <span class="blk-sub">{t("settings.preview3dQuality")}</span>
+    <Field label={t("settings.preview3dQuality")}>
       <div class="radios">
         {#each PREVIEW_QUALITIES as level (level)}
           <label class="radio-opt">
@@ -230,10 +238,9 @@
           </label>
         {/each}
       </div>
-    </div>
+    </Field>
 
-    <div class="field">
-      <span class="blk-sub">{t("settings.preview3dIntro")}</span>
+    <Field label={t("settings.preview3dIntro")}>
       <div class="radios">
         {#each INTRO_EFFECTS as effect (effect)}
           <label class="radio-opt">
@@ -251,13 +258,8 @@
           </label>
         {/each}
       </div>
-    </div>
+    </Field>
   </div>
-</section>
-
-<section class="blk">
-  <div class="blk-h"><span class="blk-t">{t("settings.preview3dGroupFraming")}</span></div>
-  <div class="blk-b"><Preview3dControls group="framing" /></div>
 </section>
 
 <section class="blk">
@@ -268,6 +270,13 @@
 <section class="blk">
   <div class="blk-h"><span class="blk-t">{t("settings.preview3dGroupFloor")}</span></div>
   <div class="blk-b"><Preview3dControls group="floor" /></div>
+</section>
+  </div>
+
+  <div class="col">
+<section class="blk">
+  <div class="blk-h"><span class="blk-t">{t("settings.preview3dGroupFraming")}</span></div>
+  <div class="blk-b"><Preview3dControls group="framing" /></div>
 </section>
 
 <section class="blk">
@@ -299,6 +308,7 @@
     {#if cacheError}<div class="err">{errorText(cacheError)}</div>{/if}
   </div>
   </section>
+  </div>
 </div>
 
 <footer>
@@ -374,29 +384,36 @@
     border: 1px solid var(--line);
     background: var(--card);
     overflow: hidden;
-    break-inside: avoid;
   }
-  /* Deux colonnes dès qu'il y a la place, trois sur un grand écran — c'est le
-     navigateur qui compte, à partir d'une largeur de colonne lisible. Les
-     cartes ne se coupent jamais en deux (`break-inside`), sans quoi un bloc
-     commencerait au bas d'une colonne pour finir en haut de la suivante. */
+  /* **Deux colonnes assignées, pas un flux.** `columns` laissait le navigateur
+     répartir les cartes, et l'ordre obtenu ne pouvait pas être choisi : ce qui
+     se règle le plus souvent — le cadrage — tombait où il tombait. Ici la
+     colonne de gauche porte l'aperçu et ce qu'on regarde en même temps que lui
+     (rendu, éclairage, sol), la droite ce qu'on manipule le plus (cadrage)
+     puis le cache, seul bloc qui touche au disque et qui reste donc en
+     dernier. Une seule colonne quand la fenêtre est trop étroite pour deux
+     lisibles. */
   .cards {
-    /* **Deux colonnes au maximum**, et une seule quand la fenêtre est étroite.
-       Les deux propriétés se combinent : le navigateur prend le plus petit des
-       deux nombres, celui que `column-count` autorise et celui que
-       `column-width` permet. Sans le plafond, un écran 4K en donnait cinq — et
-       l'aperçu, qui occupe une colonne, devenait minuscule (retour
-       utilisateur). Deux colonnes larges valent mieux que cinq étroites quand
-       la première porte une image. */
-    column-count: 2;
-    column-width: 340px;
-    column-gap: 14px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
   }
+  @media (max-width: 780px) {
+    .cards {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  .col {
+    min-width: 0;
+  }
+  /* Les cartes se suivent dans leur colonne ; la première n'a rien au-dessus
+     d'elle, la grille posant déjà l'écart entre colonnes. */
   .cards .blk {
-    break-inside: avoid;
-    /* `columns` ignore les marges qui s'effondrent : sans cette précaution, la
-       première carte de chaque colonne perdait son écart avec le haut. */
     margin-top: 0;
+  }
+  .cards .blk + .blk {
+    margin-top: 14px;
   }
   .check {
     display: flex;
@@ -405,15 +422,6 @@
     font-size: 12.5px;
     color: var(--txt2);
     cursor: pointer;
-  }
-  .hint {
-    margin: 6px 0 0;
-    font-size: 11.5px;
-    color: var(--muted);
-    line-height: 1.5;
-  }
-  .field {
-    margin-top: 20px;
   }
   /* Côte à côte, et non les uns sous les autres : trois options empilées
      mangeaient une hauteur d'écran pour trois mots. Chacune garde une largeur

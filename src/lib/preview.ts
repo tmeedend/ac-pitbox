@@ -6,6 +6,18 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
+/**
+ * Préfixe que la conversion pose sur le nom de chaque maillage du mannequin
+ * greffé — `DRIVER_MESH_PREFIX` de `kn5-gltf/src/driver.rs`, **à garder
+ * identique des deux côtés**.
+ *
+ * C'est le seul repère qui traverse la conversion : l'arbre est aplati et les
+ * maillages sont regroupés par matériau, donc le dummy qui portait le pilote
+ * ne survit pas. Il permet à la vue de le montrer ou de le retirer sans
+ * reconvertir.
+ */
+export const DRIVER_MESH_PREFIX = "PITBOX_DRIVER:";
+
 export interface CarPreview {
   /** URL à donner à `GLTFLoader`. */
   url: string;
@@ -35,8 +47,6 @@ export type PreviewStage = "geometry" | "textures" | "writing";
  * rendent instantanément.
  */
 export interface DriverView {
-  /** Angle du volant en degrés, 0 = volant droit. */
-  steer: number;
   /** Corps substitué à celui de la voiture, `null` = le sien. Le substituer
    * fait tomber la garde-robe de la livrée avec lui, côté backend : elle est
    * nommée d'après l'ancien corps (SPEC-ecran-pilote §10.1). */
@@ -47,12 +57,18 @@ export interface DriverView {
   helmet?: string | null;
 }
 
+/**
+ * `steer` est l'angle du volant en degrés : il tourne les roues avant, le
+ * volant du poste de pilotage et, quand il y en a un, les bras du pilote. Il
+ * vaut donc avec ou sans mannequin, d'où sa place hors de `driver`.
+ */
 export function prepareCarPreview(
   carId: string,
   skinId?: string | null,
+  steer = 0,
   driver: DriverView | null = null,
 ): Promise<CarPreview> {
-  return invoke<CarPreview>("prepare_car_preview", { carId, skinId: skinId ?? null, driver });
+  return invoke<CarPreview>("prepare_car_preview", { carId, skinId: skinId ?? null, steer, driver });
 }
 
 /** Vide le cache d'aperçus, renvoie le nombre d'octets libérés. */
@@ -121,7 +137,7 @@ export interface DriverPreview {
 export function prepareDriverPreview(
   carId: string,
   skinId: string | null,
-  outfit: Omit<DriverView, "steer">,
+  outfit: DriverView,
 ): Promise<DriverPreview | null> {
   return invoke<DriverPreview | null>("prepare_driver_preview", { carId, skinId, outfit });
 }

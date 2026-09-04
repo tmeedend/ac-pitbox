@@ -30,7 +30,7 @@ use crate::config::AppConfig;
 /// *reconnaître* pour libérer sa place. Trois incréments en une session de
 /// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
-const CONVERTER_VERSION: u32 = 34;
+const CONVERTER_VERSION: u32 = 35;
 
 /// Default cache ceiling (§5.3). Beyond it, the least recently used entries
 /// are evicted. Only a default: the real ceiling is a setting, carried by
@@ -236,11 +236,25 @@ fn stamp(hasher: &mut Sha256, path: &Path) {
 /// d'un mod invalide l'entrée sans qu'on ait à s'en occuper. Inclut le skin,
 /// puisqu'il surcharge les textures (§4.3). La version du convertisseur, elle,
 /// est portée par le nom du fichier (voir [`CONVERTER_VERSION`]).
-fn cache_key(model: &Path, skin: Option<&str>, configs: &[PathBuf], driver: Option<&kn5_gltf::DriverGraft>) -> String {
+fn cache_key(
+    model: &Path,
+    skin: Option<&str>,
+    configs: &[PathBuf],
+    pose: &kn5_gltf::SteerPose,
+    driver: Option<&kn5_gltf::DriverGraft>,
+) -> String {
     let mut hasher = Sha256::new();
     hasher.update(model.to_string_lossy().to_lowercase().as_bytes());
     stamp(&mut hasher, model);
     hasher.update(skin.unwrap_or("").as_bytes());
+    // Le braquage est cuit dans la géométrie — roues avant et volant tournés —
+    // donc il fait partie de l'identité de l'entrée. Roues droites n'ajoute
+    // rien au hachage : une voiture jamais braquée garde l'entrée qu'elle
+    // avait avant que le réglage n'existe.
+    if !pose.is_straight() {
+        hasher.update(pose.road_wheel_degrees.to_le_bytes());
+        hasher.update(pose.steering_wheel_degrees.to_le_bytes());
+    }
     // Le pilote entre dans la clé, et **rien du tout quand il n'y en a pas** :
     // une voiture montrée sans lui garde la clé qu'elle avait avant que le
     // pilote n'existe, donc son entrée de cache. Deux entrées coexistent pour
@@ -265,7 +279,6 @@ fn cache_key(model: &Path, skin: Option<&str>, configs: &[PathBuf], driver: Opti
             stamp(&mut hasher, source);
         }
         hasher.update(driver.lock_degrees.to_le_bytes());
-        hasher.update(driver.steer_degrees.to_le_bytes());
         for dir in &driver.texture_dirs {
             hasher.update(dir.to_string_lossy().to_lowercase().as_bytes());
         }
@@ -283,6 +296,23 @@ fn cache_key(model: &Path, skin: Option<&str>, configs: &[PathBuf], driver: Opti
     format!("{:x}", hasher.finalize())[..32].to_string()
 }
 
+/// Ce que l'appelant veut voir, en plus de la voiture elle-même.
+///
+/// Groupés parce qu'ils vont ensemble et qu'ils partent ensemble dans la clé
+/// de cache : chacun d'eux décide du `.glb` produit, aucun ne s'applique après
+/// coup.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PreviewRequest<'a> {
+    /// Livrée dont les textures surchargent celles du modèle (§4.3).
+    pub skin_id: Option<&'a str>,
+    /// Angle du **volant**, en degrés : il tourne les roues avant, le volant
+    /// du poste de pilotage et, quand il y en a un, les bras du pilote.
+    pub steer_degrees: f32,
+    /// Le pilote à greffer, et la tenue qu'on lui impose. `None` = personne au
+    /// volant, et la conversion ne lit alors aucun mannequin.
+    pub driver: Option<&'a crate::driver::DriverView>,
+}
+
 /// Prépare l'aperçu d'une voiture : renvoie l'entrée de cache si elle existe,
 /// convertit sinon.
 ///
@@ -293,10 +323,14 @@ pub fn prepare(
     state: &PreviewState,
     car_dir: &Path,
     car_id: &str,
-    skin_id: Option<&str>,
-    driver: Option<&crate::driver::DriverView>,
+    what: &PreviewRequest<'_>,
     token: u64,
 ) -> Result<CarPreview, String> {
+    let PreviewRequest {
+        skin_id,
+        steer_degrees,
+        driver,
+    } = *what;
     let resolved = kn5_gltf::resolve_model(car_dir).ok_or(crate::errors::PREVIEW_MODEL_NOT_FOUND)?;
     let dir = cache_dir(app)?;
     // Une seule fois par exécution : au premier aperçu demandé, pas au
@@ -321,11 +355,26 @@ pub fn prepare(
     // le modèle de la voiture est dans la clé aussi.
     let driver = match (driver, ac_install.as_deref()) {
         (Some(view), Some(ac)) => {
-            crate::driver::resolve(ac, car_dir, car_id, skin_dir.as_deref(), view.steer, &view.outfit)
+            crate::driver::resolve(ac, car_dir, car_id, skin_dir.as_deref(), steer_degrees, &view.outfit)
         }
         _ => None,
     };
-    let stem = entry_stem(&cache_key(&resolved.path, skin_id, csp.sources(), driver.as_ref()));
+    // Le braquage vaut avec ou sans pilote : c'est la voiture qu'il tourne —
+    // ses roues avant et son volant —, et les bras du mannequin suivent parce
+    // que l'animation de la voiture les pose au même angle. L'angle des roues
+    // se déduit de la démultiplication que la voiture déclare (`car.ini`), pas
+    // d'une constante : elle va de 10 à 24 sur la bibliothèque.
+    let pose = kn5_gltf::SteerPose {
+        road_wheel_degrees: crate::steering::read(car_dir, car_id).road_wheel_degrees(steer_degrees),
+        steering_wheel_degrees: steer_degrees,
+    };
+    let stem = entry_stem(&cache_key(
+        &resolved.path,
+        skin_id,
+        csp.sources(),
+        &pose,
+        driver.as_ref(),
+    ));
     let file = dir.join(format!("{stem}.glb"));
 
     if let Ok(meta) = std::fs::metadata(&file) {
@@ -416,6 +465,10 @@ pub fn prepare(
     // carbone. C'est la seule façon de le savoir : le KN5 seul ne le dit pas
     // (SPEC §4.5ter).
     let options = kn5_gltf::ConvertOptions {
+        geometry: kn5_gltf::GeometryOptions {
+            steer: pose,
+            ..Default::default()
+        },
         surfaces: kn5_gltf::material_overrides(
             &csp,
             skin_dir
@@ -930,6 +983,12 @@ pub fn car_dir(conn: &rusqlite::Connection, cfg: &AppConfig, car_id: &str) -> Op
 mod tests {
     use super::*;
 
+    /// Roues droites : ce que la quasi-totalité des entrées porte.
+    const STRAIGHT: kn5_gltf::SteerPose = kn5_gltf::SteerPose {
+        road_wheel_degrees: 0.0,
+        steering_wheel_degrees: 0.0,
+    };
+
     fn write_model(dir: &Path, name: &str, contents: &[u8]) -> PathBuf {
         std::fs::create_dir_all(dir).unwrap();
         let path = dir.join(name);
@@ -944,11 +1003,15 @@ mod tests {
         let base = crate::testutil::temp_dir("preview-key");
         let model = write_model(&base, "car.kn5", b"first");
 
-        let a = cache_key(&model, None, &[], None);
-        assert_eq!(a, cache_key(&model, None, &[], None), "clé stable à contenu identique");
+        let a = cache_key(&model, None, &[], &STRAIGHT, None);
+        assert_eq!(
+            a,
+            cache_key(&model, None, &[], &STRAIGHT, None),
+            "clé stable à contenu identique"
+        );
         assert_ne!(
             a,
-            cache_key(&model, Some("red"), &[], None),
+            cache_key(&model, Some("red"), &[], &STRAIGHT, None),
             "le skin fait partie de la clé"
         );
 
@@ -957,7 +1020,7 @@ mod tests {
         std::fs::write(&model, b"second and longer").unwrap();
         assert_ne!(
             a,
-            cache_key(&model, None, &[], None),
+            cache_key(&model, None, &[], &STRAIGHT, None),
             "un modèle modifié invalide son entrée"
         );
     }
@@ -974,15 +1037,15 @@ mod tests {
 
         // Absent, le fichier ne doit pas empêcher de calculer une clé : c'est
         // le cas de l'immense majorité des voitures.
-        let without = cache_key(&model, None, std::slice::from_ref(&config), None);
+        let without = cache_key(&model, None, std::slice::from_ref(&config), &STRAIGHT, None);
         assert_eq!(
             without,
-            cache_key(&model, None, std::slice::from_ref(&config), None),
+            cache_key(&model, None, std::slice::from_ref(&config), &STRAIGHT, None),
             "clé stable quand la config n'existe pas"
         );
 
         write_model(config.parent().unwrap(), "ext_config.ini", b"[MODEL_REPLACEMENT_...]");
-        let with = cache_key(&model, None, std::slice::from_ref(&config), None);
+        let with = cache_key(&model, None, std::slice::from_ref(&config), &STRAIGHT, None);
         assert_ne!(without, with, "l'apparition d'une config invalide l'entrée");
 
         std::fs::write(
@@ -993,7 +1056,7 @@ INSERT = part.kn5",
         .unwrap();
         assert_ne!(
             with,
-            cache_key(&model, None, &[config], None),
+            cache_key(&model, None, &[config], &STRAIGHT, None),
             "une config modifiée aussi"
         );
     }
@@ -1021,12 +1084,12 @@ INSERT = part.kn5",
             steer_degrees: 0.0,
         };
 
-        let without = cache_key(&model, None, &[], None);
-        let with = cache_key(&model, None, &[], Some(&graft));
+        let without = cache_key(&model, None, &[], &STRAIGHT, None);
+        let with = cache_key(&model, None, &[], &STRAIGHT, Some(&graft));
         assert_ne!(without, with, "afficher le pilote change l'entrée");
         assert_eq!(
             with,
-            cache_key(&model, None, &[], Some(&graft)),
+            cache_key(&model, None, &[], &STRAIGHT, Some(&graft)),
             "clé stable à pilote identique"
         );
 
@@ -1034,37 +1097,53 @@ INSERT = part.kn5",
             texture_dirs: vec![base.join("other-suit")],
             ..graft.clone()
         };
-        assert_ne!(with, cache_key(&model, None, &[], Some(&dressed)), "la tenue aussi");
+        assert_ne!(
+            with,
+            cache_key(&model, None, &[], &STRAIGHT, Some(&dressed)),
+            "la tenue aussi"
+        );
 
         let seated = kn5_gltf::DriverGraft {
             anchor: Some([0.33, 1.10, -0.49]),
             ..graft.clone()
         };
-        assert_ne!(with, cache_key(&model, None, &[], Some(&seated)), "et son assise");
+        assert_ne!(
+            with,
+            cache_key(&model, None, &[], &STRAIGHT, Some(&seated)),
+            "et son assise"
+        );
 
-        let turned = kn5_gltf::DriverGraft {
-            steer_degrees: 45.0,
-            ..graft.clone()
+        // L'angle de braquage n'est plus porté par le pilote : il tourne aussi
+        // les roues avant et le volant de la voiture, donc il entre dans la clé
+        // par la pose, avec ou sans mannequin.
+        let turned = kn5_gltf::SteerPose {
+            road_wheel_degrees: 3.2,
+            steering_wheel_degrees: 45.0,
         };
         assert_ne!(
             with,
-            cache_key(&model, None, &[], Some(&turned)),
-            "et l'angle du volant, qui est cuit dans la pose"
+            cache_key(&model, None, &[], &turned, Some(&graft)),
+            "et l'angle de braquage, qui est cuit dans la géométrie"
+        );
+        assert_ne!(
+            cache_key(&model, None, &[], &STRAIGHT, None),
+            cache_key(&model, None, &[], &turned, None),
+            "y compris sans pilote — ce sont les roues de la voiture qui tournent"
         );
 
         // Mannequin réécrit : même chemin, contenu différent.
         std::fs::write(&mannequin, b"mannequin, but longer").unwrap();
         assert_ne!(
             with,
-            cache_key(&model, None, &[], Some(&graft)),
+            cache_key(&model, None, &[], &STRAIGHT, Some(&graft)),
             "un mannequin modifié invalide son entrée"
         );
 
         // Animation réécrite : c'est elle qui pose les mains, la corriger doit
         // se voir.
-        let with_fresh_mannequin = cache_key(&model, None, &[], Some(&graft));
+        let with_fresh_mannequin = cache_key(&model, None, &[], &STRAIGHT, Some(&graft));
         std::fs::write(&animation, b"a different pose entirely").unwrap();
-        let with_fresh_animation = cache_key(&model, None, &[], Some(&graft));
+        let with_fresh_animation = cache_key(&model, None, &[], &STRAIGHT, Some(&graft));
         assert_ne!(
             with_fresh_mannequin, with_fresh_animation,
             "une animation modifiée aussi"
@@ -1074,7 +1153,7 @@ INSERT = part.kn5",
         std::fs::write(&base_pose, b"a different seat entirely").unwrap();
         assert_ne!(
             with_fresh_animation,
-            cache_key(&model, None, &[], Some(&graft)),
+            cache_key(&model, None, &[], &STRAIGHT, Some(&graft)),
             "et la hiérarchie qui l'assoit"
         );
     }

@@ -6,13 +6,17 @@ use super::prelude::*;
 
 /// Prépare l'aperçu 3D d'une voiture et renvoie l'URL de son `.glb`.
 ///
+/// `steer` est l'angle du volant en degrés : il tourne les roues avant, le
+/// volant du poste de pilotage et — quand il y en a un — les bras du pilote,
+/// que l'animation de la voiture pose au même angle. Il vaut donc avec ou sans
+/// mannequin, d'où sa place hors de `driver`.
+///
 /// `driver` porte les réglages du frontend, où ils vivent (`ui_prefs.json`) :
 /// le backend ne lit jamais ce fichier, dont le schéma appartient à l'UI.
-/// `None` = pas de pilote ; sinon l'angle du volant et la tenue imposée. Tout
-/// cela fait partie de l'identité de l'entrée de cache — le
-/// pilote est greffé dans le `.glb` et sa pose y est cuite — donc changer
-/// l'un ou l'autre convertit une fois, après quoi les versions déjà vues se
-/// rendent instantanément (§4.6).
+/// `None` = pas de pilote ; sinon la tenue imposée. Tout cela fait partie de
+/// l'identité de l'entrée de cache — le pilote est greffé dans le `.glb` et sa
+/// pose y est cuite — donc changer l'un ou l'autre convertit une fois, après
+/// quoi les versions déjà vues se rendent instantanément (§4.6).
 ///
 /// La conversion est bloquante et gourmande en CPU : elle part sur
 /// `spawn_blocking`, jamais sur le thread principal (§7.3). Le jeton de
@@ -25,6 +29,7 @@ pub async fn prepare_car_preview(
     state: State<'_, crate::preview::PreviewState>,
     car_id: String,
     skin_id: Option<String>,
+    steer: Option<f32>,
     driver: Option<crate::driver::DriverView>,
 ) -> Result<crate::preview::CarPreview, String> {
     let token = state.next_generation();
@@ -43,8 +48,11 @@ pub async fn prepare_car_preview(
             &state,
             &car_dir,
             &car_id,
-            skin_id.as_deref(),
-            driver.as_ref(),
+            &crate::preview::PreviewRequest {
+                skin_id: skin_id.as_deref(),
+                steer_degrees: steer.unwrap_or(0.0),
+                driver: driver.as_ref(),
+            },
             token,
         )
     })

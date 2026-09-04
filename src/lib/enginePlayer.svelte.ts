@@ -62,6 +62,15 @@ let loading = $state<string | null>(null);
  * une attente qu'on peut s'épargner. */
 const decoded = new Map<string, AudioBuffer>();
 
+/** Un moteur tourne-t-il, quel qu'il soit ?
+ *
+ * Sans l'entrée qui joue : l'aperçu 3D n'a qu'une question, « y a-t-il
+ * quelqu'un pour tourner la clé », et il n'affiche jamais qu'une voiture à la
+ * fois — celle dont on écoute le son. */
+export function engineRunning(): boolean {
+  return playing !== null;
+}
+
 export function engineState(parentId: string, subId: string | null): "off" | "loading" | "on" {
   const key = keyOf(parentId, subId);
   if (playing === key) return "on";

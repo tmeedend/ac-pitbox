@@ -51,6 +51,7 @@ mod rules;
 mod saved_sessions;
 mod session_state;
 mod showroom;
+mod steering;
 mod stock;
 mod submods;
 mod sun;

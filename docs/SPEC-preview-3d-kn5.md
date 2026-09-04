@@ -433,11 +433,23 @@ vue cockpit, où la caméra est dans la tête. Ni la substitution de mannequin p
 `ext_config.ini`, qui existe mais n'a pas été rencontrée.
 
 **Réglage et cache.** L'affichage du pilote est une option de l'écran Réglages
-(éteinte par défaut : c'est un modèle de quatorze mégaoctets à convertir en
-plus de la voiture). Elle entre dans la **clé de cache**, et n'y ajoute rien
-quand elle est éteinte — les entrées écrites avant que le pilote n'existe
-restent valides. Basculer l'option convertit une fois ; les deux versions de la
-voiture coexistent ensuite et se rendent l'une l'autre instantanément.
+à **trois valeurs** : toujours, jamais, ou **au démarrage du moteur** — le
+défaut. Dans ce dernier mode le pilote s'installe quand une clé de contact
+tourne sur une fiche (§4.2bis, écoute d'un son moteur) et repart quand elle se
+coupe, en fondu de 0,45 s.
+
+Deux entrées de cache et non trois : « toujours » et « au démarrage » greffent
+toutes deux le mannequin, seule la vue les distingue. C'est délibéré — laisser
+la conversion suivre la clé demanderait quatorze mégaoctets de mannequin à
+convertir au moment où on tourne la clé, ce qu'aucun fondu ne rattraperait. La
+vue retrouve le pilote dans le `.glb` au **préfixe posé sur le nom de ses
+maillages** (`PITBOX_DRIVER:`), seul repère qui traverse l'aplatissement de
+l'arbre et le regroupement par matériau.
+
+« Jamais » n'ajoute rien à la clé — les entrées écrites avant que le pilote
+n'existe restent valides. Basculer entre les deux familles convertit une fois ;
+les deux versions de la voiture coexistent ensuite et se rendent l'une l'autre
+instantanément.
 
 **`data.acd` est déchiffré** pour lire `driver3d.ini` et `car.ini` quand la
 voiture est packagée, ce qui est le cas général — `acd::read_text`, le lecteur
@@ -498,16 +510,41 @@ de `DRIVEREYES` ; et `DRIVEREYES` en dernier recours, quand rien n'a placé
 personne. C'est là, et là seulement, que l'écart œil / os de tête du §4.6
 s'applique encore.
 
-**L'angle du volant est un réglage.** L'animation couvre toute la course, donc
-choisir une image revient à choisir un angle — exprimé en degrés et rapporté au
-`LOCK` de la voiture, puisqu'il vaut 360 sur 271 voitures mais 180 sur
-quatorze. L'image du milieu est le volant droit. L'angle **est cuit dans le
-`.glb`** : il entre dans la clé de cache au même titre que le pilote lui-même,
-donc le bouger demande une conversion. C'est un réglage qu'on pose une fois, et
-les valeurs déjà vues se rendent ensuite instantanément ; si cela devenait
-gênant, la sortie propre serait d'exporter le squelette et l'animation dans le
-glTF pour laisser three.js poser le mannequin au rendu — beaucoup plus de
-travail, et sans intérêt tant qu'on ne veut pas d'un volant qui bouge.
+**Le braquage est un réglage, et il tourne trois choses.** L'animation couvre
+toute la course, donc choisir une image revient à choisir un angle — exprimé en
+degrés au **volant** et rapporté au `LOCK` de la voiture, puisqu'il vaut 360 sur
+271 voitures mais 180 sur quatorze. L'image du milieu est le volant droit.
+
+Les bras seuls n'ont pas de sens : un pilote qui braque devant des roues droites
+et un volant immobile ne braque rien. Le même angle tourne donc aussi :
+
+- **le volant du poste de pilotage** (`STEER_HR` / `STEER_LR`), du même angle.
+  L'axe de la colonne est **mesuré sur le volant lui-même** — c'est un disque,
+  donc l'axe local selon lequel il est plat est celui autour duquel il tourne.
+  Aucune convention ne tient : sur la bibliothèque c'est Z sur 95 voitures et Y
+  sur 4. Mais la direction que ces axes désignent dans l'espace de la voiture
+  est longitudinale à chaque fois (composante latérale 0,000 à la médiane,
+  0,070 au pire), ce qui est ce qui valide la mesure ;
+- **les roues avant** (`WHEEL_LF` / `WHEEL_RF`), autour de la verticale, de
+  l'angle du volant divisé par la démultiplication que la voiture déclare
+  (`car.ini`, `[CONTROLS] STEER_RATIO` — de 10 à 24 sur la bibliothèque, 14 sur
+  la moitié d'entre elles), borné par sa butée (`STEER_LOCK`). Le pivot est le
+  **milieu de la géométrie**, pas l'origine du nœud : une rotation ne dépend pas
+  du point de l'axe qu'on choisit, mais certains mods accrochent le volant à un
+  nœud posé à l'origine de la voiture, et un demi-tour autour d'un point à deux
+  mètres l'envoie à travers l'habitacle.
+
+Rien de tout cela n'est dans le modèle : le `steer.ksanim` d'une voiture ne
+contient que le rig du pilote — mesuré, pas un seul nœud en dehors — et AC
+tourne les roues depuis la physique.
+
+L'angle **est cuit dans le `.glb`** : il entre dans la clé de cache, avec ou
+sans pilote puisque ce sont les roues de la voiture qu'il tourne. Roues droites
+n'y ajoute rien. C'est un réglage qu'on pose une fois, et les valeurs déjà vues
+se rendent ensuite instantanément ; si cela devenait gênant, la sortie propre
+serait d'exporter le squelette et l'animation dans le glTF pour laisser three.js
+poser le mannequin au rendu — beaucoup plus de travail, et sans intérêt tant
+qu'on ne veut pas d'un volant qui bouge en continu.
 
 ---
 

@@ -114,13 +114,21 @@ export const PREVIEW3D_RANGES = {
    * Bornes reprises telles quelles côté Rust, qui borne à son tour — la
    * validation ne dépend pas de l'écran qui envoie la valeur. */
   cacheMb: { min: 512, max: 20480, step: 512, default: 2048 },
-  /** Angle du volant, en degrés, pilote affiché. La voiture porte sa propre
-   * animation de braquage : c'est elle qui pose les bras, et l'angle ne fait
-   * qu'y choisir une image. Bornes larges exprès — une voiture dont la course
-   * est plus courte ramène l'angle à sa butée d'elle-même, plutôt que
-   * d'imposer ici la course la plus faible de la bibliothèque. Pas de plus
-   * fin que 5° : chaque valeur est une conversion, et une image d'animation
-   * vaut déjà 3,6° sur la plupart des voitures. */
+  /** Angle du **volant**, en degrés, et trois choses tournent avec lui : les
+   * roues avant, le volant du poste de pilotage et — quand il y en a un — les
+   * bras du pilote.
+   *
+   * L'unité est celle du volant et non celle des roues parce que c'est elle
+   * qui commande les trois : la voiture porte sa propre animation de braquage,
+   * qui pose les bras, et l'angle ne fait qu'y choisir une image. Les roues,
+   * elles, suivent la démultiplication que la voiture déclare (`STEER_RATIO`,
+   * de 10 à 24 sur la bibliothèque, 14 sur la moitié des voitures).
+   *
+   * Bornes larges exprès — une voiture dont la course est plus courte ramène
+   * l'angle à sa butée d'elle-même, plutôt que d'imposer ici la course la plus
+   * faible de la bibliothèque. Pas de plus fin que 5° : chaque valeur est une
+   * conversion, et une image d'animation vaut déjà 3,6° sur la plupart des
+   * voitures. */
   steer: { min: -180, max: 180, step: 5, default: 0 },
 } as const;
 
@@ -154,6 +162,22 @@ export type IntroEffect = (typeof INTRO_EFFECTS)[number];
 export const PREVIEW_QUALITIES = ["standard", "high"] as const;
 export type PreviewQuality = (typeof PREVIEW_QUALITIES)[number];
 
+/**
+ * Quand le pilote est au volant.
+ *
+ * `ignition` est le défaut, et c'est le mode qui donne son sens au pilote :
+ * il apparaît quand on tourne la clé de contact d'un mod son, comme quelqu'un
+ * qui s'installe pour démarrer. Il ne marche pas jusqu'à la voiture pour
+ * autant — un fondu suffit à dire l'arrivée (voir `CarPreview3D`).
+ *
+ * Le mannequin étant **greffé dans le `.glb`**, `ignition` convertit avec lui
+ * comme `always` : ce qui change est ce que la vue affiche, pas ce qu'elle
+ * charge. Sans quoi tourner la clé demanderait une conversion de quatorze
+ * mégaoctets avant que le pilote n'arrive, ce qu'aucun fondu ne rattraperait.
+ */
+export const DRIVER_MODES = ["always", "ignition", "never"] as const;
+export type DriverMode = (typeof DRIVER_MODES)[number];
+
 type NumericKey = keyof typeof PREVIEW3D_RANGES;
 
 /** Type écrit à la main plutôt qu'inféré de l'objet : sans lui, TypeScript
@@ -162,7 +186,7 @@ export type Preview3dPrefs = {
   enabled: boolean;
   intro: IntroEffect;
   quality: PreviewQuality;
-  driver: boolean;
+  driver: DriverMode;
 } & Record<NumericKey, number>;
 
 function clamp(key: NumericKey, value: number): number {
@@ -178,10 +202,11 @@ const values: Preview3dPrefs = $state({
   // remarque à peine, là où un départ lancé est un parti pris.
   intro: "ramp",
   quality: "high",
-  // Éteint par défaut : le mannequin est un modèle de quatorze mégaoctets à
-  // convertir en plus de la voiture, et l'aperçu sert d'abord à regarder
-  // celle-ci.
-  driver: false,
+  // Au contact plutôt qu'en permanence : le mannequin est un modèle de
+  // quatorze mégaoctets à convertir en plus de la voiture, et l'aperçu sert
+  // d'abord à regarder celle-ci — mais une voiture qu'on démarre a quelqu'un
+  // dedans.
+  driver: "ignition",
   steer: PREVIEW3D_RANGES.steer.default,
   zoom: PREVIEW3D_RANGES.zoom.default,
   azimuth: PREVIEW3D_RANGES.azimuth.default,
@@ -236,7 +261,13 @@ function ensureLoaded(): Promise<void> {
     if (read[KEYS.enabled] !== null) values.enabled = read[KEYS.enabled] === "1";
     values.intro = oneOf(read[KEYS.intro], INTRO_EFFECTS, values.intro);
     values.quality = oneOf(read[KEYS.quality], PREVIEW_QUALITIES, values.quality);
-    if (read[KEYS.driver] !== null) values.driver = read[KEYS.driver] === "1";
+    // Le réglage a été un booléen (`"1"` / `"0"`) avant d'avoir trois valeurs :
+    // un fichier écrit par une version antérieure se relit donc encore, sans
+    // quoi tout le monde repartirait du défaut au premier lancement.
+    const driver = read[KEYS.driver];
+    if (driver === "1") values.driver = "always";
+    else if (driver === "0") values.driver = "never";
+    else values.driver = oneOf(driver, DRIVER_MODES, values.driver);
     for (const key of Object.keys(PREVIEW3D_RANGES) as NumericKey[]) {
       const raw = read[KEYS[key]];
       if (raw !== null) values[key] = clamp(key, Number(raw));
@@ -320,7 +351,7 @@ export async function savePreview3dPrefs(): Promise<void> {
     [KEYS.enabled]: values.enabled ? "1" : "0",
     [KEYS.intro]: values.intro,
     [KEYS.quality]: values.quality,
-    [KEYS.driver]: values.driver ? "1" : "0",
+    [KEYS.driver]: values.driver,
   };
   for (const key of Object.keys(PREVIEW3D_RANGES) as NumericKey[]) {
     entries[KEYS[key]] = String(values[key]);
@@ -366,8 +397,17 @@ export function setPreview3dQuality(quality: PreviewQuality): void {
  * conversion — et l'aperçu ouvert la déclenche de lui-même, en suivant cette
  * valeur (voir `CarPreview3D`). Les deux versions restent ensuite en cache
  * côte à côte. */
-export function setPreview3dDriver(driver: boolean): void {
+export function setPreview3dDriver(driver: DriverMode): void {
   values.driver = driver;
+}
+
+/** Le mannequin doit-il être **greffé** dans le `.glb` de cet aperçu ?
+ *
+ * Vrai pour `always` comme pour `ignition` : dans les deux cas la conversion
+ * le porte, et seule la vue décide de le montrer. Ce sont donc bien deux
+ * entrées de cache et non trois — `never` seul convertit sans lui. */
+export function preview3dGraftsDriver(): boolean {
+  return values.driver !== "never";
 }
 
 /** Remet un groupe à ses valeurs d'origine — et lui seul : chaque bouton
