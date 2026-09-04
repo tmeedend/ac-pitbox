@@ -696,6 +696,46 @@ mod tests {
         assert!(failures.is_empty(), "an absent file is not a failure");
     }
 
+    // Règle : chaque **maillage** du mannequin part préfixé, jamais un dummy.
+    // C'est le seul repère qui traverse l'aplatissement de l'arbre, et c'est
+    // lui qui permet à la vue de montrer ou de retirer le pilote sans
+    // reconvertir. Les dummies gardent leur nom parce que le rig s'y retrouve
+    // par nom (`pose::apply_locals`).
+    #[test]
+    fn every_driver_mesh_leaves_marked_and_no_bone_does() {
+        let mut root = Kn5Node {
+            name: "DRIVER:RIG_Head".to_string(),
+            active: true,
+            kind: Kn5NodeKind::Dummy { transform: IDENTITY },
+            children: vec![Kn5Node {
+                name: "HELMET".to_string(),
+                active: true,
+                kind: Kn5NodeKind::Mesh(kn5::Kn5Mesh {
+                    cast_shadows: true,
+                    is_visible: true,
+                    is_transparent: false,
+                    vertices: Vec::new(),
+                    indices: Vec::new(),
+                    material_id: 0,
+                    layer: 0,
+                    lod_in: 0.0,
+                    lod_out: 0.0,
+                    bounding_sphere_center: [0.0; 3],
+                    bounding_sphere_radius: 1.0,
+                    is_renderable: true,
+                }),
+                children: Vec::new(),
+            }],
+        };
+        mark_driver_meshes(&mut root);
+        assert_eq!(root.name, "DRIVER:RIG_Head", "un os garde son nom");
+        assert_eq!(
+            root.children[0].name,
+            format!("{DRIVER_MESH_PREFIX}HELMET"),
+            "un maillage part marqué"
+        );
+    }
+
     /// Grafts a real driver into every car of a real install and reports what
     /// happened — the measurement to re-run whenever the seating or the
     /// skinning changes.
