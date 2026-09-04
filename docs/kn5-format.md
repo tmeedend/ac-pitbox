@@ -1336,3 +1336,54 @@ mods de mannequin sortent de la plage sur 97 matériaux.
 cheveux d'`ada` passent ainsi de 1,0 à 0,39, un seuil ordinaire ; au-delà, plus
 aucune lecture ne tient et on reprend le défaut (0,5). Une valeur négative
 aussi. Le corpus voiture est inchangé.
+
+---
+
+## Écart n°19 — un alpha de découpe et un alpha de fondu portent le même `blend_mode`
+
+**Symptôme.** Aperçu 3D signalé par l'utilisateur, `rss_gtm_lanzo_v10` : le
+numéro `20` de la portière disparaît **d'un bloc** pendant la rotation, alors
+que la plaque blanche autour de lui et les logos qui l'encadrent restent.
+
+**Attendu (écart n°15 et suivants)** : `blend_mode = 1` marque un matériau en
+fondu, qu'on rend dans la passe transparente sans écriture de profondeur — la
+règle qui garde l'habitacle visible derrière le pare-brise (SPEC §8.2).
+
+**Réel** : le numéro est un maillage à part (`CM_1_*_DOOR`, les plaques que
+Content Manager pose), posé **2,3 mm devant** sa plaque, et sa plaque appartient
+au calque de décalcomanies de toute la voiture. Deux matériaux en fondu, donc
+deux surfaces qui renoncent toutes deux à la profondeur : plus rien n'arbitre
+par la géométrie, et c'est l'**ordre des matériaux dans le fichier** qui décide.
+Le calque de décalcomanies vient après le numéro et le recouvre.
+
+La disparition n'affecte qu'un côté de la voiture parce que les deux portières
+n'échantillonnent pas la même région de l'atlas de décalcomanies : l'une y
+trouve des texels opaques, l'autre pas. D'où l'apparence d'un bug d'angle.
+
+**Mesure** — part de valeurs d'alpha strictement intermédiaires (ni < 8, ni
+> 247) sur la texture entière :
+
+| Matériau | Vide | Plein | Intermédiaire |
+| --- | --- | --- | --- |
+| `2019_Driver_Details_A` (le numéro) | 86,9 % | 12,3 % | **0,78 %** |
+| `EXT_Decals` (l'atlas de logos) | 78,4 % | 20,4 % | **1,23 %** |
+| `EXT_Glass` (la vitre) | 0 % | 0 % | **100 %** |
+
+Il n'y a pas de zone grise à arbitrer : une découpe ne prend que ses deux
+extrêmes, aux bords adoucis près ; une vitre ne prend que des valeurs
+intermédiaires.
+
+**Correctif** : `FootprintAlpha::is_cutout` — mesurée là où le matériau
+échantillonne, comme `is_blank` et `is_opaque` — fait passer un `BLEND` dont
+l'alpha découpe en **`MASK`**. L'image est identique (l'alpha ne vaut que 0 ou
+255) mais le rendu se fait dans la passe opaque, où la profondeur arbitre. Seuil
+posé au large, 10 % d'intermédiaires. Le crénelage du seuil est repris par
+`alphaToCoverage`, déjà posé par la vue sur tout `alphaTest > 0`. Le verre en
+est exempté par son shader, comme pour l'écart n°15.
+
+**Portée mesurée** sur la bibliothèque : 129 matériaux, sur 55 voitures de 133,
+quittent la passe transparente. Les noms disent la famille visée —
+décalcomanies, autocollants, badges, numéros (`MAIN_CAR_NUMBER`, `CM_Num`,
+`FW_Numbers`), surpiqûres de sellerie, grilles, rivets, chiffres de cadrans. Le
+seul nom qui inquiétait, `ext_window` sur deux mods, mesure 99 % de vide et
+0,47 % d'intermédiaires : c'est un pochoir, pas une vitre.

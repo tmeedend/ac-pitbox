@@ -691,6 +691,12 @@ Les vitres sont le principal piège visuel. Traitement :
 - forcer `renderOrder = 1` sur les meshes transparents pour qu'ils passent après l'opaque
 - si des artefacts persistent, envisager `side: FrontSide` strict et un tri par distance caméra
 
+**Mais tout ce qu'AC déclare en fondu n'est pas une vitre, et le renoncement à la profondeur ne vaut que pour la vitre.** Une décalcomanie porte le même `blend_mode = 1` : posée dans la passe transparente sans écriture de profondeur, elle perd la géométrie comme arbitre, et c'est l'ordre des matériaux dans le fichier qui décide de qui passe devant qui. Ça ne se voit que quand deux calques se superposent — précisément la façon dont un mod pose une décalcomanie sur une plaque.
+
+La mesure sépare les deux sans ambiguïté : **l'alpha d'une découpe ne prend que ses deux extrêmes** (0 ou 255, aux bords adoucis près), celui d'une vitre s'étale entre les deux. Mesuré sur `rss_gtm_lanzo_v10` : le numéro de portière 0,78 % de valeurs intermédiaires, l'atlas de décalcomanies 1,23 %, la vitre **100 %**. Un alpha qui découpe passe donc en `MASK` avec son seuil — même image, l'alpha ne valant que 0 ou 255, mais rendue dans la passe opaque, où la profondeur arbitre. Le crénelage du seuil est rattrapé par `alphaToCoverage`, déjà posé sur tout `alphaTest > 0`. Le verre en est exempté par son shader, comme pour l'approximation d'opacité.
+
+Bug réel qui a fait écrire la règle : le numéro `20` de la portière de `rss_gtm_lanzo_v10`, posé 2,3 mm devant sa plaque, était recouvert par le calque de décalcomanies de toute la voiture — dessiné après lui. Il disparaissait **d'un bloc** d'un côté de la voiture et pas de l'autre, les deux portières n'échantillonnant pas la même région de l'atlas : seule l'une des deux y trouve des texels opaques. Mesuré sur banc, le numéro passait de 4 558 à 119 pixels selon l'angle. Portée sur la bibliothèque : **129 matériaux sur 55 voitures de 133** quittent la passe transparente — décalcomanies, autocollants, numéros, surpiqûres, grilles, rivets, chiffres de cadrans.
+
 ### 8.3 Cycle de vie — obligatoire
 
 Les fuites mémoire GPU sont la première cause de crash dans ce type de composant : l'utilisateur parcourt 200 voitures, chacune laisse ses géométries et textures sur le GPU.

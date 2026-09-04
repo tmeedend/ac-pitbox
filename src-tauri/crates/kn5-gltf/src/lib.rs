@@ -172,6 +172,7 @@ pub fn convert(
                     // voir `texture::FootprintAlpha`.
                     diffuse_alpha_blank: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_blank()),
                     diffuse_alpha_opaque: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_opaque()),
+                    diffuse_alpha_cutout: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_cutout()),
                     painted_diffuse: paint.painted_diffuse(index),
                     roughness_texture: roughness.roughness_texture(index),
                     csp: surfaces.get(&index).copied(),

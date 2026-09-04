@@ -288,6 +288,10 @@ pub fn prepare_textures(model: &Kn5Model, skin_dir: Option<&Path>, options: &Tex
 pub struct FootprintAlpha {
     pub min: u8,
     pub max: u8,
+    /// Points tombés **entre** les deux extrêmes — ni transparents, ni
+    /// opaques. C'est ce qui sépare une découpe d'un dégradé : voir
+    /// [`FootprintAlpha::is_cutout`].
+    pub midtones: usize,
     /// Nombre de points mesurés. Zéro quand l'alpha a été retiré à l'encodage,
     /// auquel cas il n'y a rien à conclure.
     pub samples: usize,
@@ -325,7 +329,45 @@ impl FootprintAlpha {
     pub fn is_opaque(&self) -> bool {
         self.samples > 0 && self.min >= OPAQUE_ALPHA
     }
+
+    /// Cet alpha **découpe** au lieu de fondre : il ne prend que ses deux
+    /// extrêmes, aux bords adoucis près.
+    ///
+    /// La distinction n'est pas cosmétique, c'est celle qui décide dans quelle
+    /// passe le matériau est rendu. Une décalcomanie et une vitre portent le
+    /// même `blend_mode = 1`, et le traiter pareil met les deux dans la passe
+    /// transparente, **sans écriture de profondeur** (§8.2) — indispensable
+    /// pour la vitre, désastreux pour la décalcomanie : deux calques posés à
+    /// 2 mm l'un de l'autre n'ont alors plus la géométrie pour les départager,
+    /// c'est l'ordre des matériaux dans le fichier qui tranche.
+    ///
+    /// Bug réel, `rss_gtm_lanzo_v10` : le numéro de portière (`CM_1_*_DOOR`,
+    /// posé 2,3 mm devant sa plaque) était recouvert par le calque de
+    /// décalcomanies de toute la voiture, dessiné après lui. Il disparaissait
+    /// d'un bloc sur un côté de la voiture et pas sur l'autre — les deux
+    /// portières n'échantillonnant pas la même région de l'atlas, seule l'une
+    /// des deux y trouve des texels opaques.
+    ///
+    /// Une découpe rendue en `MASK` donne exactement la même image — l'alpha
+    /// ne vaut que 0 ou 255 — mais dans la passe opaque, où la profondeur
+    /// arbitre. Les bords crénelés que le seuil produit sont rattrapés par
+    /// `alphaToCoverage`, déjà posé par la vue sur tout `alphaTest > 0`.
+    pub fn is_cutout(&self) -> bool {
+        self.samples > 0
+            && self.min <= BLANK_ALPHA
+            && self.max >= OPAQUE_ALPHA
+            && self.midtones * 100 <= self.samples * MAX_MIDTONE_PERCENT
+    }
 }
+
+/// Part de points intermédiaires qu'une découpe s'autorise. Ce ne sont pas des
+/// demi-teintes voulues mais les bords adoucis du masque, et un contour est
+/// toujours petit devant la surface qu'il entoure.
+///
+/// Mesuré sur la bibliothèque avant de fixer le seuil : voir le tableau du
+/// commit qui l'introduit. Le verre, lui, est à 100 % d'intermédiaires — il
+/// n'y a pas d'ambiguïté à arbitrer, seulement une frontière à poser au large.
+const MAX_MIDTONE_PERCENT: usize = 10;
 
 /// Au-dessus, il reste quelque chose à voir : on ne touche à rien.
 const BLANK_ALPHA: u8 = 8;
@@ -404,19 +446,23 @@ struct DiffuseUser {
 /// range tout son V dans `[-1, 0]`. Le rendu s'en moque, l'échantillonnage
 /// boucle — donc on boucle aussi, au lieu de rogner et de lire le mauvais
 /// texel.
-fn alpha_range_at(image: &RgbaImage, points: &[[f32; 2]]) -> (u8, u8) {
+fn alpha_range_at(image: &RgbaImage, points: &[[f32; 2]]) -> (u8, u8, usize) {
     let (mut min, mut max) = (u8::MAX, u8::MIN);
+    let mut midtones = 0usize;
     for uv in points {
         let alpha = image
             .get_pixel(wrap(uv[0], image.width()), wrap(uv[1], image.height()))
             .0[3];
         min = min.min(alpha);
         max = max.max(alpha);
+        if alpha > BLANK_ALPHA && alpha < OPAQUE_ALPHA {
+            midtones += 1;
+        }
     }
     if min > max {
-        return (0, 0);
+        return (0, 0, 0);
     }
-    (min, max)
+    (min, max, midtones)
 }
 
 /// Une coordonnée de texture en index de pixel, en répétant comme le rendu.
@@ -629,12 +675,13 @@ fn prepare_one(
     let verdicts: Vec<(usize, FootprintAlpha)> = users
         .iter()
         .map(|user| {
-            let (min, max) = alpha_range_at(&resized, &user.points);
+            let (min, max, midtones) = alpha_range_at(&resized, &user.points);
             (
                 user.material,
                 FootprintAlpha {
                     min,
                     max,
+                    midtones,
                     samples: if usage.keep_alpha { user.points.len() } else { 0 },
                 },
             )
@@ -900,6 +947,59 @@ fn encode(image: &RgbaImage, role: TextureRole, options: &TextureOptions) -> Res
 
 #[cfg(test)]
 mod tests {
+
+    // Règle : un alpha qui ne prend que ses deux extrêmes **découpe**, et se
+    // rend donc dans la passe opaque où la profondeur arbitre ; un alpha qui
+    // s'étale entre les deux **fond**, et reste transparent. C'est la
+    // distinction qui sépare une décalcomanie d'une vitre, et le numéro de
+    // portière de `rss_gtm_lanzo_v10` en dépendait.
+    #[test]
+    fn a_binary_alpha_cuts_out_and_a_gradient_blends() {
+        let cutout = FootprintAlpha {
+            min: 0,
+            max: 255,
+            midtones: 8,
+            samples: 1000,
+        };
+        assert!(cutout.is_cutout(), "0 ou 255, quelques bords adoucis : une découpe");
+
+        // Le verre du même mod : 100 % d'intermédiaires, mesuré.
+        let glass = FootprintAlpha {
+            min: 90,
+            max: 140,
+            midtones: 1000,
+            samples: 1000,
+        };
+        assert!(!glass.is_cutout(), "un dégradé n'est pas une découpe");
+
+        // Un masque bien binaire mais dont la part d'intermédiaires dépasse le
+        // seuil : dans le doute, on ne touche pas au rendu qui marchait.
+        let fuzzy = FootprintAlpha {
+            min: 0,
+            max: 255,
+            midtones: 300,
+            samples: 1000,
+        };
+        assert!(!fuzzy.is_cutout(), "trop de demi-teintes pour une découpe");
+
+        // Uniformément opaque : c'est `is_opaque` qui répond, pas celle-ci.
+        let opaque = FootprintAlpha {
+            min: 255,
+            max: 255,
+            midtones: 0,
+            samples: 1000,
+        };
+        assert!(!opaque.is_cutout(), "rien à découper");
+
+        // Alpha retiré à l'encodage : aucune mesure, aucun verdict.
+        let unmeasured = FootprintAlpha {
+            min: 0,
+            max: 255,
+            midtones: 0,
+            samples: 0,
+        };
+        assert!(!unmeasured.is_cutout(), "sans point mesuré, on ne conclut rien");
+    }
     use super::*;
 
     fn solid(width: u32, height: u32, pixel: [u8; 4]) -> RgbaImage {

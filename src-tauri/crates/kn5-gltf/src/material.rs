@@ -145,6 +145,10 @@ pub struct MaterialTextures {
     /// `FootprintAlpha::is_opaque` et la note sur `senna_head` dans
     /// [`convert`].
     pub diffuse_alpha_opaque: bool,
+    /// L'alpha de ce matériau **découpe** au lieu de fondre — voir
+    /// `FootprintAlpha::is_cutout` et la note sur le numéro de portière de
+    /// `rss_gtm_lanzo_v10` dans [`convert`].
+    pub diffuse_alpha_cutout: bool,
     /// Variante peinte de la texture diffuse, quand la carte de détail du
     /// matériau porte une couleur de peinture (voir [`crate::paint`]).
     pub painted_diffuse: Option<String>,
@@ -436,6 +440,25 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
         AlphaMode::Opaque
     } else {
         alpha_mode
+    };
+    // **Et le symétrique : un alpha qui ne fait que découper n'est pas un
+    // fondu.** Même image — il ne vaut que 0 ou 255 —, mais rendue dans la
+    // passe opaque, où la profondeur arbitre. En fondu, elle ne le fait pas :
+    // §8.2 retire l'écriture de profondeur à tout le transparent, pour que
+    // l'habitacle reste visible derrière le pare-brise. C'est juste pour une
+    // vitre et faux pour une décalcomanie, qui se retrouve départagée par
+    // l'ordre des matériaux dans le fichier au lieu de sa position.
+    //
+    // Bug réel, `rss_gtm_lanzo_v10` : le numéro de portière, posé 2,3 mm
+    // devant sa plaque, était recouvert par le calque de décalcomanies de
+    // toute la voiture, dessiné après lui — et seulement d'un côté, les deux
+    // portières n'échantillonnant pas la même région de l'atlas. Mesuré sur le
+    // banc : le numéro passait de 4 558 à 119 pixels selon l'angle.
+    let cutout = !is_glass_shader(shader) && textures.diffuse_alpha_cutout;
+    let (alpha_mode, alpha_cutoff) = if alpha_mode == AlphaMode::Blend && cutout {
+        (AlphaMode::Mask, DEFAULT_ALPHA_CUTOFF)
+    } else {
+        (alpha_mode, alpha_cutoff)
     };
     let base_color = match alpha_mode {
         AlphaMode::Blend if !texture_carries_alpha && !opaque_by_alpha => [1.0, 1.0, 1.0, glass_opacity(material)],
@@ -762,6 +785,46 @@ mod tests {
     // shader ordinaire mais `blend_mode = 1`, se rendait à 30 % d'opacité
     // (`ksDiffuse`) faute de mieux. Le verre, lui, garde son approximation :
     // c'est elle qui lui donne un aspect plausible.
+    // Règle : un `blend_mode = 1` dont l'alpha ne fait que découper se rend en
+    // `MASK`, dans la passe opaque. Bug réel, `rss_gtm_lanzo_v10` : en fondu,
+    // le numéro de portière n'écrivait pas la profondeur (§8.2) et le calque de
+    // décalcomanies de toute la voiture, dessiné après lui, le recouvrait —
+    // 4 558 pixels d'un côté de la voiture, 119 de l'autre.
+    #[test]
+    fn a_cutout_alpha_leaves_the_transparent_pass() {
+        let decal = material("ksPerPixelNM_UVMult", 1, false, &[("ksDiffuse", 0.4)]);
+        let converted = convert(
+            &decal,
+            MaterialTextures {
+                diffuse_alpha_varies: true,
+                diffuse_alpha_cutout: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            converted.alpha_mode,
+            AlphaMode::Mask,
+            "une découpe se rend dans la passe opaque, où la profondeur arbitre"
+        );
+
+        // Et le verre garde son fondu : sa transparence vient du reflet, pas
+        // de l'alpha, et le cockpit doit rester visible derrière (§8.2).
+        let glass = material("ksWindscreen", 1, false, &[("ksDiffuse", 0.3)]);
+        assert_eq!(
+            convert(
+                &glass,
+                MaterialTextures {
+                    diffuse_alpha_varies: true,
+                    diffuse_alpha_cutout: true,
+                    ..Default::default()
+                }
+            )
+            .alpha_mode,
+            AlphaMode::Blend,
+            "une vitre reste en fondu, quoi que dise son alpha"
+        );
+    }
+
     #[test]
     fn opaque_footprint_overrides_the_glass_approximation_off_glass() {
         let head = material("ksSkinnedMesh_NMDetaill", 1, false, &[("ksDiffuse", 0.3)]);
