@@ -1,10 +1,15 @@
 //! What a car says about its steering — `car.ini`, section `[CONTROLS]`.
 //!
-//! Read for one thing only: turning the **road wheels** of the 3D preview by
-//! the angle the user asks for at the steering wheel (`docs/SPEC-preview-3d-kn5.md`
-//! §15). AC turns them from physics, so nothing in the model says how far they
-//! go — no animation covers them, unlike the driver's arms, which the car's own
-//! `steer.ksanim` poses.
+//! Read for one thing only: saying how far the **road wheels** of the 3D
+//! preview turn for a given angle at the steering wheel
+//! (`docs/SPEC-preview-3d-kn5.md` §15). AC turns them from physics, so nothing
+//! in the model says how far they go — no animation covers them, unlike the
+//! driver's arms, which the car's own `steer.ksanim` poses.
+//!
+//! The two values travel **into the converted model** (`kn5_gltf::SteerLimits`)
+//! rather than being applied here: the angle is not baked, it is turned at
+//! render time, so it is the viewer that divides by the ratio and stops at the
+//! lock.
 //!
 //! Same two-source rule as the rest of the physics files: the unpacked `data/`
 //! folder first, `data.acd` after (see `driver::data_file`).
@@ -35,20 +40,6 @@ impl Default for Steering {
             lock: 360.0,
             ratio: 14.0,
         }
-    }
-}
-
-impl Steering {
-    /// Road-wheel angle for a steering-wheel angle, both in degrees.
-    ///
-    /// **Clamped at the car's own lock**, and that is not decoration: the
-    /// preview's slider spans ±180° so that a car with a short rack reaches
-    /// its stop, and past the stop a wheel does not keep turning.
-    pub fn road_wheel_degrees(&self, steer_degrees: f32) -> f32 {
-        if self.ratio.abs() < f32::EPSILON {
-            return 0.0;
-        }
-        steer_degrees.clamp(-self.lock, self.lock) / self.ratio
     }
 }
 
@@ -106,43 +97,6 @@ fn number(text: &str, key: &str) -> Option<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // Règle : l'angle des roues est celui du volant divisé par la
-    // démultiplication, borné par la butée de la voiture.
-    #[test]
-    fn road_wheels_follow_the_ratio_up_to_the_lock() {
-        let steering = Steering {
-            lock: 400.0,
-            ratio: 12.0,
-        };
-        assert!(
-            (steering.road_wheel_degrees(120.0) - 10.0).abs() < 1e-4,
-            "120° de volant pour un rapport de 12 : 10° de roue"
-        );
-        assert!(
-            (steering.road_wheel_degrees(-120.0) + 10.0).abs() < 1e-4,
-            "et symétrique de l'autre côté"
-        );
-        let short = Steering {
-            lock: 90.0,
-            ratio: 12.0,
-        };
-        assert!(
-            (short.road_wheel_degrees(180.0) - 7.5).abs() < 1e-4,
-            "au-delà de la butée, la roue s'arrête à la butée"
-        );
-    }
-
-    // Règle : une démultiplication nulle ne fait pas diverger l'angle. Elle ne
-    // devrait pas exister, mais elle vient d'un fichier de mod.
-    #[test]
-    fn a_zero_ratio_leaves_the_wheels_straight() {
-        let broken = Steering {
-            lock: 400.0,
-            ratio: 0.0,
-        };
-        assert_eq!(broken.road_wheel_degrees(180.0), 0.0, "pas de division par zéro");
-    }
 
     #[test]
     fn values_are_read_past_comments() {
@@ -205,9 +159,22 @@ mod tests {
             } else {
                 read_ok += 1;
             }
+            if std::env::var("PITBOX_CAR").is_ok_and(|want| id.contains(&want) || key.contains(&want)) {
+                eprintln!(
+                    "  {id} : STEER_LOCK {} · STEER_RATIO {} · butée {:.1}° aux roues",
+                    steering.lock,
+                    steering.ratio,
+                    steering.lock / steering.ratio
+                );
+            }
             *locks.entry(steering.lock.round() as i32).or_default() += 1;
             *ratios.entry(steering.ratio.round() as i32).or_default() += 1;
-            full_lock.push(steering.road_wheel_degrees(steering.lock));
+            // L'angle de roue à fond de course, tel que la vue le calcule.
+            full_lock.push(if steering.ratio.abs() < f32::EPSILON {
+                0.0
+            } else {
+                steering.lock / steering.ratio
+            });
         }
         full_lock.sort_by(|a, b| a.partial_cmp(b).unwrap());
         eprintln!("{} dossiers, {read_ok} lus, {defaulted} au défaut", folders.len());

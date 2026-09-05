@@ -103,7 +103,25 @@ pub fn write_glb(meshes: &[FlatMesh], materials: &[GltfMaterial], textures: &Tex
         }
 
         gltf_meshes.push(json!({ "name": mesh.name, "primitives": [primitive] }));
-        nodes.push(json!({ "name": mesh.name, "mesh": gltf_meshes.len() - 1 }));
+        let mut node = json!({ "name": mesh.name, "mesh": gltf_meshes.len() - 1 });
+        // **Un maillage braqué garde son pivot et son axe**, et ses sommets
+        // sont déjà relatifs au pivot (voir `geometry::walk`). La vue n'a donc
+        // qu'une rotation à écrire sur le nœud pour tourner une roue, sans rien
+        // reconvertir — c'est ce qui sort l'angle de braquage de la clé de
+        // cache. `extras` et non une extension : rien ici ne demande à être
+        // compris par un autre lecteur glTF, et un lecteur qui l'ignore voit la
+        // voiture roues droites, ce qui est le repli qu'on veut.
+        if let Some(steer) = mesh.steer {
+            node["translation"] = json!(steer.pivot);
+            let mut described = json!({ "axis": steer.axis, "gain": steer.gain });
+            // Absente quand rien n'arrête ce nœud : c'est le cas des roues,
+            // que l'aperçu laisse aller jusqu'où le réglage le demande.
+            if let Some(limit) = steer.limit {
+                described["limit"] = json!(limit);
+            }
+            node["extras"] = json!({ "pitboxSteer": described });
+        }
+        nodes.push(node);
     }
 
     let json_materials: Vec<Value> = used_materials
@@ -377,6 +395,7 @@ mod tests {
             tangents: vec![[1.0, 0.0, 0.0, 1.0]; 3],
             indices: vec![0, 1, 2],
             transparent: false,
+            steer: None,
         }
     }
 

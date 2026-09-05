@@ -35,7 +35,7 @@ const KEYS = {
   pool: "pitbox.preview3d.pool",
   shadow: "pitbox.preview3d.shadow",
   cacheMb: "pitbox.preview3d.cacheMb",
-  steer: "pitbox.preview3d.steer",
+  steer: "pitbox.preview3d.wheelSteer",
   intro: "pitbox.preview3d.intro",
   quality: "pitbox.preview3d.quality",
   driver: "pitbox.preview3d.driver",
@@ -114,22 +114,29 @@ export const PREVIEW3D_RANGES = {
    * Bornes reprises telles quelles côté Rust, qui borne à son tour — la
    * validation ne dépend pas de l'écran qui envoie la valeur. */
   cacheMb: { min: 512, max: 20480, step: 512, default: 2048 },
-  /** Angle du **volant**, en degrés, et trois choses tournent avec lui : les
-   * roues avant, le volant du poste de pilotage et — quand il y en a un — les
-   * bras du pilote.
+  /** Angle des **roues avant**, en degrés, et trois choses tournent avec :
+   * les roues, le volant du poste de pilotage — d'autant plus de tours que la
+   * voiture est démultipliée — et, quand il y en a un, les bras du pilote.
    *
-   * L'unité est celle du volant et non celle des roues parce que c'est elle
-   * qui commande les trois : la voiture porte sa propre animation de braquage,
-   * qui pose les bras, et l'angle ne fait qu'y choisir une image. Les roues,
-   * elles, suivent la démultiplication que la voiture déclare (`STEER_RATIO`,
-   * de 10 à 24 sur la bibliothèque, 14 sur la moitié des voitures).
+   * **Gradué aux roues et non au volant**, contrairement au premier jet. C'est
+   * ce qu'on veut régler en regardant une voiture à l'arrêt, et c'est ce qui se
+   * voit : un demi-tour de volant ne braque les roues que de 13° sur une
+   * démultiplication de 14, si bien qu'un curseur de ±180° au volant
+   * s'arrêtait à moins de la moitié de la butée (signalé à l'écran).
    *
-   * Bornes larges exprès — une voiture dont la course est plus courte ramène
-   * l'angle à sa butée d'elle-même, plutôt que d'imposer ici la course la plus
-   * faible de la bibliothèque. Pas de plus fin que 5° : chaque valeur est une
-   * conversion, et une image d'animation vaut déjà 3,6° sur la plupart des
-   * voitures. */
-  steer: { min: -180, max: 180, step: 5, default: 0 },
+   * **±35°, et aucune butée par voiture.** Ce que la voiture déclare
+   * (`STEER_LOCK / STEER_RATIO`) est juste pour une voiture de route — 33,6° à
+   * la MX-5, 32,1° à l'AE86, 29,6° à l'Abarth 500, la réalité — mais AC y met
+   * le débattement **utile** d'un volant de simulation, pas la butée mécanique,
+   * et les voitures de course y déclarent très peu : 20,2° à la 488 GT3, 12,0°
+   * à la Huracán GT3. S'en servir pour borner les roues laissait une GT3 posée
+   * pour la photo quasi droite. Le réglage donne donc l'angle des roues, point ;
+   * seul le volant garde la butée déclarée. 35° est le haut de ce que braque
+   * une vraie voiture.
+   *
+   * Pas de plus fin que 5° tant que les bras du pilote sont cuits dans le
+   * modèle : eux seuls font encore d'une valeur d'angle une conversion. */
+  steer: { min: -35, max: 35, step: 5, default: 0 },
 } as const;
 
 /**

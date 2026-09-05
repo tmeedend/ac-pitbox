@@ -168,7 +168,7 @@
       "never": "Never"
     },
     "preview3dSteer": "Steering",
-    "preview3dSteerHint": "Front wheels, steering wheel and the driver's arms turn together. The wheels follow the ratio the car declares, and stop at its own lock.",
+    "preview3dSteerHint": "The angle of the front wheels. The steering wheel and the driver's arms follow, turning further the higher the car's ratio, and stop at the lock it declares.",
     "preview3dSlider": {
       "zoom": "Zoom",
       "zoomHint": "How large the car sits in the frame. The mouse wheel does the same, for one visit.",

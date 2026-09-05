@@ -510,25 +510,53 @@ de `DRIVEREYES` ; et `DRIVEREYES` en dernier recours, quand rien n'a placé
 personne. C'est là, et là seulement, que l'écart œil / os de tête du §4.6
 s'applique encore.
 
-**Le braquage est un réglage, et il tourne trois choses.** L'animation couvre
-toute la course, donc choisir une image revient à choisir un angle — exprimé en
-degrés au **volant** et rapporté au `LOCK` de la voiture, puisqu'il vaut 360 sur
-271 voitures mais 180 sur quatorze. L'image du milieu est le volant droit.
+**Le braquage est un réglage, et il tourne trois choses.** Il est exprimé en
+degrés **aux roues avant**, de −35° à +35°, et non au volant : c'est ce qu'on
+veut régler en regardant une voiture à l'arrêt, et c'est ce qui se voit. Gradué
+au volant d'abord, il s'arrêtait à moins de la moitié de la butée — un
+demi-tour de volant ne braque les roues que de 13° sur une démultiplication de
+14 (signalé à l'écran).
+
+**Et rien ne borne les roues par voiture**, ce qui est un second correctif. La
+butée déclarée (`STEER_LOCK / STEER_RATIO`) est pourtant juste : mesurée sur les
+voitures de route de l'installation, elle donne 33,6° à la MX-5, 32,1° à
+l'AE86, 29,6° à l'Abarth 500 — la réalité. Mais AC met dans `STEER_LOCK` le
+débattement **utile** d'un volant de simulation, pas la butée mécanique, et les
+voitures de course y déclarent très peu : 22,9° à l'Evora GTC, 20,2° à la
+488 GT3, **12,0° à la Huracán GT3**. S'en servir pour borner les roues laissait
+une GT3 posée pour la photo quasi droite (signalé à l'écran). L'aperçu n'est pas
+une simulation : le réglage donne l'angle des roues, point, et 35° est le haut
+de ce que braque une vraie voiture. Le **volant**, lui, garde cette butée — la
+course du volant est la seule chose qu'AC en dise sans ambiguïté.
+
+L'animation de bras, elle, est indexée sur l'angle du **volant** : la
+démultiplication fait le pont. Elle couvre toute la course, donc choisir une
+image revient à choisir un angle, rapporté au `LOCK` de `driver3d.ini` — 360 sur
+271 voitures, 180 sur quatorze. L'image du milieu est le volant droit.
 
 Les bras seuls n'ont pas de sens : un pilote qui braque devant des roues droites
 et un volant immobile ne braque rien. Le même angle tourne donc aussi :
 
 - **le volant du poste de pilotage** (`STEER_HR` / `STEER_LR`), du même angle.
-  L'axe de la colonne est **mesuré sur le volant lui-même** — c'est un disque,
-  donc l'axe local selon lequel il est plat est celui autour duquel il tourne.
-  Aucune convention ne tient : sur la bibliothèque c'est Z sur 95 voitures et Y
-  sur 4. Mais la direction que ces axes désignent dans l'espace de la voiture
-  est longitudinale à chaque fois (composante latérale 0,000 à la médiane,
-  0,070 au pire), ce qui est ce qui valide la mesure ;
+  L'axe de la colonne est **mesuré**, et par deux critères géométriques : le
+  plan d'un volant contient forcément la direction 9 h – 3 h, donc l'axe local
+  le plus latéral y est et n'est jamais la colonne ; des deux qui restent —
+  perpendiculaires entre eux et tous deux dans le plan vertical longitudinal —
+  la colonne est le **moins vertical**, un volant faisant face au pilote.
+  Deux critères de forme ont été essayés avant et échouent tous deux : « le plus
+  plat des trois » perd neuf voitures, parce qu'un `STEER_HR` porte aussi la
+  colonne, les palettes et parfois un écran, qui s'étendent le long de l'axe
+  qu'on cherche à trouver court ; « le plus court des deux restants » en met
+  sept debout, parce qu'un volant de monoplace est large et bas. Résultat :
+  103 volants décrits sur les 108 nommés, axe longitudinal à chaque fois
+  (composante latérale 0,000 à la médiane, 0,070 au pire) et **incliné de 20°
+  à la médiane**, ce qui est la nappe d'une vraie colonne. Les cinq indécis sont
+  des monoplaces dont le nœud est plus profond que large ;
 - **les roues avant** (`WHEEL_LF` / `WHEEL_RF`), autour de la verticale, de
-  l'angle du volant divisé par la démultiplication que la voiture déclare
-  (`car.ini`, `[CONTROLS] STEER_RATIO` — de 10 à 24 sur la bibliothèque, 14 sur
-  la moitié d'entre elles), borné par sa butée (`STEER_LOCK`). Le pivot est le
+  l'angle demandé tel quel — c'est le volant qui le multiplie par la
+  démultiplication que la voiture déclare (`car.ini`, `[CONTROLS] STEER_RATIO` —
+  de 10 à 24 sur la bibliothèque, 14 sur la moitié d'entre elles). Seul le
+  volant s'arrête, à `STEER_LOCK / STEER_RATIO` ramené aux roues. Le pivot est le
   **milieu de la géométrie**, pas l'origine du nœud : une rotation ne dépend pas
   du point de l'axe qu'on choisit, mais certains mods accrochent le volant à un
   nœud posé à l'origine de la voiture, et un demi-tour autour d'un point à deux
@@ -538,13 +566,30 @@ Rien de tout cela n'est dans le modèle : le `steer.ksanim` d'une voiture ne
 contient que le rig du pilote — mesuré, pas un seul nœud en dehors — et AC
 tourne les roues depuis la physique.
 
-L'angle **est cuit dans le `.glb`** : il entre dans la clé de cache, avec ou
-sans pilote puisque ce sont les roues de la voiture qu'il tourne. Roues droites
-n'y ajoute rien. C'est un réglage qu'on pose une fois, et les valeurs déjà vues
-se rendent ensuite instantanément ; si cela devenait gênant, la sortie propre
-serait d'exporter le squelette et l'animation dans le glTF pour laisser three.js
-poser le mannequin au rendu — beaucoup plus de travail, et sans intérêt tant
-qu'on ne veut pas d'un volant qui bouge en continu.
+**L'angle n'est pas cuit dans le `.glb`, et c'est un correctif.** Il l'a été, et
+la mesure a dit pourquoi il ne fallait pas : l'angle entrant dans la clé de
+cache, chaque valeur essayée laissait une entrée complète — **onze entrées de
+42 Mo pour une seule voiture**, relevées sur le poste, sur un plafond de 2 Gio.
+Un curseur se balaye ; un réglage qui coûte une conversion par valeur ne peut
+pas être un curseur.
+
+La conversion **décrit** donc ce qui tourne au lieu de le tourner : chaque nœud
+braqué sort en nœud glTF à part, ses sommets exprimés relativement à son pivot,
+le pivot en translation et l'axe et le facteur en `extras` (`pitboxSteer`). La
+vue n'écrit qu'une rotation dessus. Le braquage est alors **gratuit et
+instantané**, et n'apparaît plus dans la clé.
+
+Deux conséquences à connaître. La fusion par matériau doit désormais **séparer
+les nœuds braqués** : deux roues tournent du même angle autour du même axe mais
+pas autour du même pivot, donc elles ne peuvent pas partager un lot même à
+matériau égal (sur beaucoup de voitures les quatre jantes partagent le leur).
+Et ce que la voiture déclare de sa direction — `STEER_LOCK`, `STEER_RATIO` —
+est écrit dans le `.glb`, donc *cela* fait partie de la clé.
+
+**Reste les bras du pilote**, écrits en sommets figés : eux seuls obligent
+encore à reconvertir quand l'angle change, et seulement quand un mannequin est
+greffé. La sortie propre est d'exporter le squelette et l'animation dans le
+glTF pour laisser three.js poser le mannequin au rendu.
 
 ---
 

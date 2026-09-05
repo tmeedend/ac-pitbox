@@ -1,51 +1,95 @@
-//! Turning a parked car's wheels — the road wheels and the steering wheel
+//! Les roues braquées d'une voiture à l'arrêt — les roues avant et le volant
 //! (`docs/SPEC-preview-3d-kn5.md` §15).
 //!
-//! **Nothing in a car model says how far they turn.** The car's own
-//! `steer.ksanim` poses the driver's limbs and *only* those — measured on the
-//! reference library, not one of its animated nodes is outside the driver's
-//! rig. AC turns the road wheels from physics and the steering wheel from the
-//! player's input, so a still preview has to do both itself.
+//! **Rien dans un modèle de voiture ne dit de combien elles tournent.** Le
+//! `steer.ksanim` d'une voiture pose les membres du pilote et **eux seuls** —
+//! mesuré sur la bibliothèque, pas un de ses nœuds animés n'est en dehors du
+//! rig. AC tourne les roues depuis la physique et le volant depuis la manette.
 //!
-//! Two rotations, and they do not share an axis:
+//! **Et la rotation n'est pas cuite dans le modèle converti.** Elle l'a été, et
+//! c'était une erreur mesurée à l'usage : l'angle entrait alors dans la clé de
+//! cache, si bien que chaque valeur essayée laissait une entrée complète —
+//! onze entrées de 42 Mo pour une seule voiture, sur un plafond de 2 Gio, parce
+//! qu'un curseur se balaye. Ce module ne fait donc tourner personne : il
+//! **décrit** ce qui tourne, et la vue applique l'angle à l'affichage.
 //!
-//! - the **road wheels** turn about the vertical, through their own centre.
-//!   The real kingpin leans (caster, inclination), but by a few degrees on a
-//!   road car — invisible next to the twenty the wheel itself turns by, and
-//!   the axis it leans about is nowhere in the model;
-//! - the **steering wheel** turns about its column, which every car orients
-//!   differently. The axis is therefore *measured on the wheel itself*: it is
-//!   a disc, so the local axis it is flattest along is the one it spins about
-//!   (see [`disc_axis`]). Measured over the library: Z on 95 cars, Y on 4 —
-//!   no convention to hard-code, but the direction those axes point in world
-//!   space is longitudinal every time, which is what says the measurement is
-//!   sound (see [`column_axis`]).
+//! Deux rotations, et elles ne partagent pas leur axe :
 //!
-//! **What turning actually moves**, measured over the library
-//! (`what_turning_the_wheels_actually_moves`): 2 to 27 % of a car's vertices,
-//! travelling 0.07 m at the least and 0.44 m at the ninetieth percentile —
-//! twice the radius of a steering wheel doing half a turn, which is the figure
-//! to expect. One car reads 4.3 m, `ms_citroen_berlingo_2003_hdi`, and it is
-//! not the steering: that model's own geometry spans **616 m**, a stray rim
-//! vertex nineteen metres from its wheel. Broken before anything turned.
+//! - les **roues avant** tournent autour de la verticale, par leur centre. Le
+//!   vrai pivot de fusée est incliné (chasse, inclinaison), mais de quelques
+//!   degrés sur une voiture de route — invisible à côté de la vingtaine dont la
+//!   roue tourne, et l'axe de cette inclinaison n'est nulle part dans le
+//!   modèle ;
+//! - le **volant** tourne autour de sa colonne, que chaque voiture oriente à sa
+//!   façon. L'axe est donc *mesuré sur le volant lui-même* : c'est un disque,
+//!   donc l'axe local selon lequel il est plat est celui autour duquel il
+//!   tourne (voir [`disc_axis`]). Mesuré sur la bibliothèque : Z sur 95
+//!   voitures, Y sur 4 — aucune convention à coder en dur, mais la direction
+//!   que ces axes désignent dans l'espace de la voiture est longitudinale à
+//!   chaque fois, et c'est ce qui dit que la mesure tient (voir
+//!   [`column_axis`]).
 
 use kn5::{Kn5Mesh, Kn5Node};
 
-/// How far to turn what, in degrees. Zero on both counts leaves the model
-/// exactly as it was — the ordinary case, and it costs nothing.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct SteerPose {
-    /// Front road wheels, about the vertical. The application works this out
-    /// from the car's own `STEER_RATIO` (`steering::Steering`).
-    pub road_wheel_degrees: f32,
-    /// The steering wheel the driver holds, about its column.
-    pub steering_wheel_degrees: f32,
+/// Ce que la voiture déclare de sa direction, et qui décide de combien ses
+/// roues tournent pour un angle de volant donné.
+///
+/// Traverse jusqu'ici plutôt que de rester dans l'application parce que c'est
+/// le convertisseur qui l'écrit dans le modèle : la vue tourne les roues sans
+/// rien savoir du `car.ini`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SteerLimits {
+    /// Course du volant, du centre à la butée, en degrés (`STEER_LOCK`).
+    pub lock: f32,
+    /// Degrés de volant par degré de roue (`STEER_RATIO`).
+    pub ratio: f32,
 }
 
-impl SteerPose {
-    pub fn is_straight(&self) -> bool {
-        self.road_wheel_degrees == 0.0 && self.steering_wheel_degrees == 0.0
+/// Ce que la bibliothèque déclare le plus souvent — voir
+/// `steering::how_steering_is_written_across_a_corpus`.
+impl Default for SteerLimits {
+    fn default() -> Self {
+        Self {
+            lock: 360.0,
+            ratio: 14.0,
+        }
     }
+}
+
+/// Un nœud qui tourne avec le braquage, décrit pour la vue.
+///
+/// Écrit dans le `.glb` en `extras` du nœud glTF, avec les sommets exprimés
+/// **relativement au pivot** et le pivot posé en translation : la vue n'a plus
+/// qu'à écrire une rotation sur le nœud, et tout ce qu'il porte suit.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SteerNode {
+    /// Regroupe les maillages d'un même nœud braqué. Deux roues tournent du
+    /// même angle autour du même axe mais **pas autour du même pivot**, donc
+    /// elles ne peuvent pas fusionner, même à matériau égal.
+    pub group: u32,
+    /// Centre de rotation, en espace monde.
+    pub pivot: [f32; 3],
+    /// Axe de rotation, en espace monde, normalisé.
+    pub axis: [f32; 3],
+    /// Facteur appliqué à l'angle demandé, qui est celui des **roues** : 1
+    /// pour une roue, la démultiplication de la voiture pour le volant, qui
+    /// tourne d'autant plus.
+    pub gain: f32,
+    /// Au-delà de cet angle **aux roues**, ce nœud-ci ne tourne plus. `None`
+    /// quand rien ne l'arrête.
+    ///
+    /// **Seul le volant en a un.** Les roues, non — délibérément. La butée
+    /// déclarée (`STEER_LOCK / STEER_RATIO`) est juste : mesurée sur les
+    /// voitures de route de l'installation, elle donne 33,6° à la MX-5, 32,1°
+    /// à l'AE86, 29,6° à l'Abarth 500, ce qui est la réalité. Mais AC met dans
+    /// `STEER_LOCK` le débattement **utile** d'un volant de simulation, pas la
+    /// butée mécanique, et les voitures de course y déclarent très peu :
+    /// 20,2° à la 488 GT3, **12,0° à la Huracán GT3**. Une voiture de course
+    /// posée pour la photo se retrouvait roues quasi droites (signalé à
+    /// l'écran). L'aperçu n'est pas une simulation : le réglage donne l'angle
+    /// des roues, point. Le volant, lui, garde sa butée — c'est la seule chose
+    /// qu'`AC` dise sans ambiguïté de la course du volant.
+    pub limit: Option<f32>,
 }
 
 /// The two nodes AC steers, by the names every car uses.
@@ -77,30 +121,42 @@ pub(crate) fn steered(name: &str) -> Option<Steered> {
     None
 }
 
-/// The extra world-space transform that turns this node's whole subtree.
-///
-/// Row-vector convention throughout (`world = local × parent`), so a transform
-/// applied **after** the accumulated one is appended on the right: the caller
-/// does `world × turn(...)`.
-pub(crate) fn turn(node: &Kn5Node, what: Steered, world: &[f32; 16], pose: &SteerPose) -> Option<[f32; 16]> {
-    let (degrees, axis) = match what {
-        Steered::RoadWheel => (pose.road_wheel_degrees, [0.0, 1.0, 0.0]),
-        // The column axis is a direction of the node's *local* frame, and the
-        // rotation happens in world space: it has to be carried over.
-        Steered::SteeringWheel => (pose.steering_wheel_degrees, column_axis(node, world)?),
-    };
-    if degrees == 0.0 {
+/// Décrit le nœud braqué qu'on vient de rencontrer, ou `None` quand il n'y a
+/// rien de fiable à faire tourner ici.
+pub(crate) fn describe(
+    node: &Kn5Node,
+    what: Steered,
+    world: &[f32; 16],
+    limits: &SteerLimits,
+    group: u32,
+) -> Option<SteerNode> {
+    // **L'angle demandé est celui des roues**, pas celui du volant. C'est ce
+    // qu'on veut régler en regardant une voiture à l'arrêt, et c'est ce qui se
+    // voit : un volant tourné d'un demi-tour ne braque les roues que de treize
+    // degrés sur une démultiplication de quatorze, et le curseur, gradué au
+    // volant, s'arrêtait alors bien avant la butée (signalé à l'écran).
+    if limits.ratio.abs() < f32::EPSILON {
         return None;
     }
-    // **The pivot is the middle of the geometry, not the node's origin.** A
-    // rotation about an axis does not care which point of that axis it is
-    // written about, so the two agree whenever the origin sits on the axis —
-    // and they part company when it does not. Measured over the library with
-    // the origin as pivot: a vertex travelled up to **4,3 m** on the worst car,
-    // where a steering wheel turned half a turn should move by twice its own
-    // radius. Some models hang the wheel off a node parked at the car's origin,
-    // and half a turn about a point two metres away throws it across the
-    // cockpit. The middle of the wheel is on its axis by construction.
+    let (gain, limit, axis) = match what {
+        Steered::RoadWheel => (1.0, None, [0.0, 1.0, 0.0]),
+        // Le volant tourne, lui, autant de fois plus que la démultiplication,
+        // et s'arrête à la course que la voiture déclare.
+        Steered::SteeringWheel => (
+            limits.ratio,
+            Some(limits.lock / limits.ratio),
+            column_axis(node, world)?,
+        ),
+    };
+    // **Le pivot est le milieu de la géométrie, pas l'origine du nœud.** Une
+    // rotation ne dépend pas du point de son axe qu'on choisit, donc les deux
+    // s'accordent tant que l'origine est sur l'axe — et divergent sinon.
+    // Mesuré avec l'origine pour pivot : un sommet parcourait jusqu'à **4,3 m**
+    // sur la pire voiture, là où un volant qui fait un demi-tour se déplace de
+    // deux fois son rayon. Certains mods accrochent le volant à un nœud posé à
+    // l'origine de la voiture, et un demi-tour autour d'un point à deux mètres
+    // l'envoie à travers l'habitacle. Le milieu du volant est sur son axe par
+    // construction.
     let centre = local_bounds(node).map(|(min, max)| {
         [
             (min[0] + max[0]) / 2.0,
@@ -108,23 +164,84 @@ pub(crate) fn turn(node: &Kn5Node, what: Steered, world: &[f32; 16], pose: &Stee
             (min[2] + max[2]) / 2.0,
         ]
     })?;
-    Some(about(axis, degrees.to_radians(), transform_point(world, centre)))
+    let length = (axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]).sqrt();
+    if length <= f32::EPSILON {
+        return None;
+    }
+    Some(SteerNode {
+        group,
+        pivot: transform_point(world, centre),
+        axis: [axis[0] / length, axis[1] / length, axis[2] / length],
+        gain,
+        limit,
+    })
 }
 
-/// The measured column axis, in world space, or `None` when it does not look
-/// like a steering column.
+/// L'axe de la colonne de direction, en espace monde, ou `None` quand rien ici
+/// n'y ressemble.
 ///
-/// **The veto is a safety net, not a filter.** Measured on the library, the
-/// axis found this way is longitudinal on every car that has one: its sideways
-/// component reads 0.000 at the median and 0.070 at the worst, over 99 cars —
-/// and that includes the four whose *local* flat axis is Y where the other 95
-/// use Z. The convention differs, the direction does not. A wheel that came out
-/// pointing across the car would therefore be a measurement gone wrong, and the
-/// honest answer is to leave it alone.
+/// **Deux critères, tous deux géométriques.** Le plan d'un volant contient
+/// forcément la direction 9 h – 3 h, c'est-à-dire la largeur de la voiture :
+/// l'axe local le plus **latéral** est donc dans le plan de la roue, jamais sa
+/// colonne, et on l'écarte d'abord. Les deux qui restent sont perpendiculaires
+/// entre eux et tous deux perpendiculaires à cette largeur : ils vivent donc
+/// dans le plan vertical longitudinal, à 90° l'un de l'autre. Des deux, la
+/// colonne est la **moins verticale** — un volant fait face au pilote, donc sa
+/// colonne pointe vers l'arrière en montant un peu, quand la hauteur du volant,
+/// elle, est presque debout.
+///
+/// **Deux critères de forme ont été essayés avant, et tous deux échouent.**
+/// « Le plus plat des trois » : un `STEER_HR` ne contient pas qu'une couronne,
+/// il porte la colonne, les palettes, parfois un écran, et ces excroissances
+/// s'étendent le long de l'axe qu'on cherche à trouver court — neuf voitures y
+/// perdaient leur volant. « Le plus court des deux restants » : un volant de
+/// formule est large et bas, donc sa hauteur est plus courte que sa
+/// profondeur, et sept voitures ressortaient avec une colonne inclinée à 75° ou
+/// plus, c'est-à-dire debout. Prendre les déciles plutôt que la boîte entière
+/// était pire encore : les sommets d'un volant sont massés au centre (boutons,
+/// écran, moyeu), donc le décile mesure ce paquet-là et plus du tout la
+/// couronne.
+///
+/// **Ce qui dit que le critère tient.** Sur la bibliothèque, 103 volants sur
+/// les 108 nommés se décrivent, et l'axe trouvé est longitudinal à chaque fois
+/// — composante latérale 0,000 à la médiane, 0,070 au pire. Son inclinaison
+/// médiane est de **20°**, ce qui est la nappe d'une vraie colonne de
+/// direction ; l'inclinaison ne peut pas dépasser 45° par construction, donc
+/// c'est la médiane qui informe, pas la borne. Les cinq indécis sont des
+/// monoplaces dont le nœud est plus profond que large.
+///
+/// Le veto latéral reste en garde-fou pour les voitures qu'on n'a pas vues :
+/// un axe qui ressortirait en travers de la voiture serait une mesure ratée, et
+/// la réponse honnête est alors de ne rien tourner.
 fn column_axis(node: &Kn5Node, world: &[f32; 16]) -> Option<[f32; 3]> {
-    let axis = transform_direction(world, disc_axis(node)?);
-    let length = (axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]).sqrt();
-    if length <= f32::EPSILON || (axis[0] / length).abs() > MAX_LATERAL_AXIS {
+    let (min, max) = local_bounds(node)?;
+    let extents = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
+    // La direction que chaque axe local désigne dans l'espace de la voiture.
+    let directions: Vec<[f32; 3]> = (0..3)
+        .map(|axis| {
+            let mut local = [0.0f32; 3];
+            local[axis] = 1.0;
+            let d = transform_direction(world, local);
+            let length = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+            if length <= f32::EPSILON {
+                [0.0; 3]
+            } else {
+                [d[0] / length, d[1] / length, d[2] / length]
+            }
+        })
+        .collect();
+    let across = (0..3).max_by(|a, b| directions[*a][0].abs().total_cmp(&directions[*b][0].abs()))?;
+    let column = (0..3)
+        .filter(|axis| *axis != across)
+        .min_by(|a, b| directions[*a][1].abs().total_cmp(&directions[*b][1].abs()))?;
+    // Garde-fou de forme, et le seul : un volant est **plus large que profond**.
+    // Un nœud qui porterait ce nom sans être une roue — un cube, un moyeu —
+    // s'arrête ici plutôt que de tourner autour d'une direction arbitraire.
+    if extents[across] <= 0.0 || extents[column] >= extents[across] {
+        return None;
+    }
+    let axis = directions[column];
+    if axis[0].abs() > MAX_LATERAL_AXIS {
         return None;
     }
     Some(axis)
@@ -133,36 +250,6 @@ fn column_axis(node: &Kn5Node, world: &[f32; 16]) -> Option<[f32; 3]> {
 /// How far across the car a steering column may point before the measurement
 /// is disbelieved. Nothing in the library comes close (worst 0.070).
 const MAX_LATERAL_AXIS: f32 = 0.5;
-
-/// Direction the geometry under this node is **flattest** along, in the node's
-/// own local frame — a steering wheel is a disc, so that is its column.
-///
-/// Read off the model rather than assumed, because no convention holds: on the
-/// reference library the flattest local axis is X on some cars, Y or Z on
-/// others, and the ratio to the next axis says how sure one can be (measured
-/// in `flattest_axis_of_every_steering_wheel`).
-///
-/// `None` when the subtree carries no vertices, or when it is not flat enough
-/// to call — a shape that is as thick as it is wide has no obvious axis, and
-/// guessing one would send the wheel spinning about something arbitrary.
-pub(crate) fn disc_axis(node: &Kn5Node) -> Option<[f32; 3]> {
-    let (min, max) = local_bounds(node)?;
-    let extents = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
-    let flattest = (0..3).min_by(|a, b| extents[*a].total_cmp(&extents[*b]))?;
-    let others: Vec<f32> = (0..3).filter(|i| *i != flattest).map(|i| extents[i]).collect();
-    let widest = others.iter().copied().fold(0.0f32, f32::max);
-    if widest <= 0.0 || extents[flattest] > widest * MAX_DISC_THICKNESS {
-        return None;
-    }
-    let mut axis = [0.0f32; 3];
-    axis[flattest] = 1.0;
-    Some(axis)
-}
-
-/// A disc is at most this fraction as thick as it is wide. A steering wheel
-/// with its column stub is thicker than a coin, hence a generous figure — but
-/// not so generous that a lump gets called a disc.
-const MAX_DISC_THICKNESS: f32 = 0.6;
 
 /// Bounding box of every vertex under this node, in the node's own frame —
 /// i.e. its own local transform is **not** applied, its children's are.
@@ -202,47 +289,6 @@ fn add_vertices(mesh: &Kn5Mesh, world: &[f32; 16], min: &mut [f32; 3], max: &mut
         }
         *any = true;
     }
-}
-
-/// Rotation of `angle` about `axis`, through `pivot`, row-vector convention.
-fn about(axis: [f32; 3], angle: f32, pivot: [f32; 3]) -> [f32; 16] {
-    let length = (axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]).sqrt();
-    if length <= f32::EPSILON {
-        return IDENTITY;
-    }
-    let (x, y, z) = (axis[0] / length, axis[1] / length, axis[2] / length);
-    let (s, c) = angle.sin_cos();
-    let t = 1.0 - c;
-    // Rodrigues, transposed for row vectors: `v' = v × R`.
-    let rotation = [
-        t * x * x + c,
-        t * x * y + s * z,
-        t * x * z - s * y,
-        0.0,
-        t * x * y - s * z,
-        t * y * y + c,
-        t * y * z + s * x,
-        0.0,
-        t * x * z + s * y,
-        t * y * z - s * x,
-        t * z * z + c,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-    ];
-    let to_origin = translation([-pivot[0], -pivot[1], -pivot[2]]);
-    let back = translation(pivot);
-    multiply(&multiply(&to_origin, &rotation), &back)
-}
-
-fn translation(t: [f32; 3]) -> [f32; 16] {
-    let mut m = IDENTITY;
-    m[12] = t[0];
-    m[13] = t[1];
-    m[14] = t[2];
-    m
 }
 
 const IDENTITY: [f32; 16] = [
@@ -325,182 +371,117 @@ mod tests {
         }
     }
 
-    // Règle : l'axe du volant se **mesure** sur sa géométrie — c'est la
-    // direction selon laquelle il est plat. Aucune convention de nom ou d'axe
-    // ne tient sur le corpus.
+    // Règle : l'axe du volant se **mesure**. L'axe latéral est dans le plan de
+    // la roue par construction, donc écarté ; des deux qui restent, la colonne
+    // est le plus court.
     #[test]
-    fn a_flat_disc_names_the_axis_it_is_flat_along() {
-        assert_eq!(disc_axis(&disc(0.05)), Some([0.0, 0.0, 1.0]), "plat en Z, donc axe Z");
+    fn the_column_is_the_short_axis_that_is_not_the_lateral_one() {
+        assert_eq!(
+            column_axis(&disc(0.05), &IDENTITY),
+            Some([0.0, 0.0, 1.0]),
+            "plat en Z, X étant latéral : la colonne est Z"
+        );
     }
 
-    // Règle : et un objet qui n'est pas plat n'a pas d'axe évident. Le faire
-    // tourner autour d'une direction arbitraire serait pire que ne rien faire.
+    // Règle : et deux directions qui se valent ne désignent rien. Faire tourner
+    // le volant autour d'un axe tiré au hasard serait pire que ne rien faire.
     #[test]
-    fn a_lump_has_no_axis() {
-        assert_eq!(disc_axis(&disc(0.4)), None, "aussi épais que large : rien à conclure");
+    fn a_lump_has_no_column() {
+        assert_eq!(
+            column_axis(&disc(0.4), &IDENTITY),
+            None,
+            "aussi épais que large : rien à conclure"
+        );
     }
 
-    // Règle : la rotation se fait autour du **centre du nœud**, pas de
-    // l'origine du modèle — sinon une roue braquée part à l'autre bout de la
-    // voiture.
+    // Règle : un axe qui ressortirait en travers de la voiture est une mesure
+    // ratée. Aucune voiture de la bibliothèque n'en produit ; le veto est là
+    // pour celles qu'on n'a pas vues.
     #[test]
-    fn the_turn_pivots_on_the_node_not_the_origin() {
-        let mut world = IDENTITY;
-        world[12] = 0.8; // la roue avant gauche, à 80 cm de l'axe
-        world[14] = 1.4;
-        let pose = SteerPose {
-            road_wheel_degrees: 90.0,
-            steering_wheel_degrees: 0.0,
+    fn an_axis_pointing_across_the_car_is_disbelieved() {
+        // Un quart de tour autour de Y envoie l'axe Z du disque sur X.
+        let sideways = [
+            0.0, 0.0, -1.0, 0.0, //
+            0.0, 1.0, 0.0, 0.0, //
+            1.0, 0.0, 0.0, 0.0, //
+            0.0, 0.0, 0.0, 1.0,
+        ];
+        assert_eq!(column_axis(&disc(0.05), &sideways), None);
+    }
+
+    // Règle : le pivot décrit est le **centre de la géométrie**, pas l'origine
+    // du nœud — sinon un volant accroché à un nœud posé à l'origine de la
+    // voiture traverse l'habitacle au premier demi-tour.
+    #[test]
+    fn the_pivot_is_the_middle_of_the_geometry() {
+        let mut node = disc(0.05);
+        for vertex in match &mut node.kind {
+            Kn5NodeKind::Mesh(mesh) => &mut mesh.vertices,
+            _ => unreachable!(),
+        } {
+            vertex.position[1] += 0.8;
+        }
+        let described = describe(&node, Steered::SteeringWheel, &IDENTITY, &SteerLimits::default(), 3)
+            .expect("un volant se décrit");
+        assert!(
+            (described.pivot[1] - 0.8).abs() < 1e-4,
+            "le pivot suit la géométrie : {:?}",
+            described.pivot
+        );
+        assert_eq!(described.group, 3, "le groupe est celui qu'on lui donne");
+    }
+
+    // Règle : l'angle demandé est celui des **roues**. Une roue le prend tel
+    // quel, le volant le multiplie par la démultiplication, et les deux
+    // s'arrêtent ensemble à la butée de la voiture ramenée aux roues.
+    #[test]
+    fn the_angle_asked_for_is_the_one_the_road_wheels_take() {
+        let limits = SteerLimits {
+            lock: 480.0,
+            ratio: 12.0,
         };
-        let node = disc(0.05);
-        let turn = turn(&node, Steered::RoadWheel, &world, &pose).expect("un angle non nul tourne");
-        let moved = multiply(&world, &turn);
-        assert!(
-            (moved[12] - 0.8).abs() < 1e-4 && (moved[14] - 1.4).abs() < 1e-4,
-            "le centre de la roue ne bouge pas : {:?}",
-            [moved[12], moved[13], moved[14]]
+        let wheel =
+            describe(&disc(0.05), Steered::RoadWheel, &IDENTITY, &limits, 0).expect("une roue se décrit toujours");
+        assert_eq!(wheel.axis, [0.0, 1.0, 0.0], "autour de la verticale");
+        assert_eq!(wheel.gain, 1.0, "la roue tourne de l'angle demandé");
+        assert_eq!(
+            wheel.limit, None,
+            "et rien ne l'arrête : l'aperçu n'est pas une simulation"
         );
-        // Un point 30 cm devant la roue se retrouve 30 cm sur son côté.
-        let ahead = transform_point(&moved, [0.0, 0.0, 0.3]);
-        assert!(
-            (ahead[2] - 1.4).abs() < 1e-3 && ahead[0].abs() > 1.0,
-            "braquée d'un quart de tour : {ahead:?}"
-        );
+
+        let rim = describe(&disc(0.05), Steered::SteeringWheel, &IDENTITY, &limits, 1).expect("un volant se décrit");
+        assert_eq!(rim.gain, 12.0, "le volant tourne douze fois plus que la roue");
+        assert_eq!(rim.limit, Some(40.0), "et bute à 480° de volant, soit 40° de roue");
     }
 
-    // Règle : un angle nul ne produit aucune transformation — la conversion
-    // d'une voiture roues droites doit rester octet pour octet celle d'avant.
+    // Règle : une démultiplication nulle ne décrit rien plutôt que de diviser
+    // par zéro. Elle ne devrait pas exister, mais elle vient d'un fichier de
+    // mod.
     #[test]
-    fn a_straight_wheel_is_left_alone() {
-        let node = disc(0.05);
-        assert_eq!(turn(&node, Steered::RoadWheel, &IDENTITY, &SteerPose::default()), None);
-        assert!(SteerPose::default().is_straight());
+    fn a_zero_ratio_describes_nothing() {
+        let broken = SteerLimits {
+            lock: 400.0,
+            ratio: 0.0,
+        };
+        assert_eq!(describe(&disc(0.05), Steered::RoadWheel, &IDENTITY, &broken, 0), None);
     }
 
-    /// Ce que le braquage déplace **réellement**, voiture par voiture : la
-    /// mesure qui dit que la rotation ne fuit pas ailleurs que sur les roues.
+    /// Combien de volants de la bibliothèque se décrivent, et vers où pointe
+    /// l'axe trouvé.
     ///
     /// ```text
-    /// PITBOX_CARS_ROOT="D:\AC-Library\cars" cargo test -p kn5-gltf -- --ignored --nocapture what_turning
+    /// PITBOX_CARS_ROOT=... cargo test -p kn5-gltf -- --ignored --nocapture columns
     /// ```
     #[test]
     #[ignore = "needs a real corpus of cars; measurement, not a check"]
-    fn what_turning_the_wheels_actually_moves() {
+    fn columns_of_every_steering_wheel() {
         let Ok(root) = std::env::var("PITBOX_CARS_ROOT") else {
             eprintln!("PITBOX_CARS_ROOT unset, skipping");
             return;
         };
-        let pose = SteerPose {
-            road_wheel_degrees: 13.0,
-            steering_wheel_degrees: 180.0,
-        };
-        let (mut cars, mut wheels_moved, mut nothing_moved) = (0, 0, 0);
-        let mut moved_share: Vec<f32> = Vec::new();
-        let mut travel: Vec<f32> = Vec::new();
-        for entry in std::fs::read_dir(&root).expect("read the corpus root").flatten() {
-            let car = entry.path();
-            if !car.is_dir() {
-                continue;
-            }
-            let Some(version) = std::fs::read_dir(&car)
-                .into_iter()
-                .flatten()
-                .flatten()
-                .map(|e| e.path())
-                .find(|p| p.is_dir())
-            else {
-                continue;
-            };
-            let Some(model) = crate::resolve_model(&version) else {
-                continue;
-            };
-            let Ok(bytes) = std::fs::read(&model.path) else {
-                continue;
-            };
-            let Ok(parsed) = kn5::parse(&bytes) else { continue };
-            cars += 1;
-
-            let straight = crate::GeometryOptions::default();
-            let turned = crate::GeometryOptions {
-                steer: pose,
-                ..Default::default()
-            };
-            let (before, _) = crate::geometry::flatten(&parsed, &straight);
-            let (after, _) = crate::geometry::flatten(&parsed, &turned);
-            if before.len() != after.len() {
-                eprintln!("  {} : le braquage a changé le découpage !", car.display());
-                continue;
-            }
-            let (mut moved_vertices, mut total_vertices, mut worst) = (0usize, 0usize, 0.0f32);
-            let mut culprit = String::new();
-            for (a, b) in before.iter().zip(after.iter()) {
-                for (p, q) in a.positions.iter().zip(b.positions.iter()) {
-                    total_vertices += 1;
-                    let d = ((p[0] - q[0]).powi(2) + (p[1] - q[1]).powi(2) + (p[2] - q[2]).powi(2)).sqrt();
-                    if d > 1e-5 {
-                        moved_vertices += 1;
-                        if d > worst {
-                            worst = d;
-                            culprit = a.name.clone();
-                        }
-                    }
-                }
-            }
-            // Un demi-mètre est déjà large : un volant d'un rayon de 18 cm qui
-            // fait un demi-tour déplace ses rayons de 36 cm, et une roue avant
-            // braquée de 13° de moins de 10. Au-delà, c'est la voiture qu'il
-            // faut regarder, pas le braquage.
-            if worst > 0.8 {
-                eprintln!(
-                    "  {} : {worst:.2} m sur `{culprit}`",
-                    car.file_name().unwrap().to_string_lossy()
-                );
-            }
-            if moved_vertices == 0 {
-                nothing_moved += 1;
-                continue;
-            }
-            wheels_moved += 1;
-            moved_share.push(moved_vertices as f32 / total_vertices.max(1) as f32);
-            travel.push(worst);
-        }
-        moved_share.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        travel.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        eprintln!("{cars} voitures, {wheels_moved} braquées, {nothing_moved} inchangées");
-        if !moved_share.is_empty() {
-            eprintln!(
-                "part des sommets déplacés : min {:.2} % · médiane {:.2} % · max {:.2} %",
-                moved_share[0] * 100.0,
-                moved_share[moved_share.len() / 2] * 100.0,
-                moved_share[moved_share.len() - 1] * 100.0
-            );
-            eprintln!(
-                "déplacement maximal : min {:.3} m · médiane {:.3} m · 90e {:.3} m · max {:.3} m",
-                travel[0],
-                travel[travel.len() / 2],
-                travel[travel.len() * 9 / 10],
-                travel[travel.len() - 1]
-            );
-        }
-    }
-
-    /// Selon quel axe local chaque volant de la bibliothèque est plat, et à
-    /// quel point le verdict est net.
-    ///
-    /// ```text
-    /// PITBOX_CARS_ROOT="D:\AC-Library\cars" cargo test -p kn5-gltf -- --ignored --nocapture flattest
-    /// ```
-    #[test]
-    #[ignore = "needs a real corpus of cars; measurement, not a check"]
-    fn flattest_axis_of_every_steering_wheel() {
-        let Ok(root) = std::env::var("PITBOX_CARS_ROOT") else {
-            eprintln!("PITBOX_CARS_ROOT unset, skipping");
-            return;
-        };
-        let mut axes = [0usize; 3];
-        let (mut undecided, mut missing, mut total) = (0, 0, 0);
-        let mut ratios: Vec<f32> = Vec::new();
+        let (mut total, mut missing, mut undecided, mut decided) = (0, 0, 0, 0);
         let mut lateral: Vec<f32> = Vec::new();
+        let mut tilt: Vec<f32> = Vec::new();
         for entry in std::fs::read_dir(&root).expect("read the corpus root").flatten() {
             let car = entry.path();
             if !car.is_dir() {
@@ -523,6 +504,7 @@ mod tests {
             };
             let Ok(parsed) = kn5::parse(&bytes) else { continue };
             total += 1;
+            let worlds = crate::geometry::node_world_matrices(&parsed);
             let mut found = None;
             parsed.visit_nodes(&mut |node| {
                 if found.is_none() && steered(&node.name) == Some(Steered::SteeringWheel) {
@@ -533,55 +515,38 @@ mod tests {
                 missing += 1;
                 continue;
             };
-            let Some(([lo, hi], _)) = local_bounds(&node).map(|(a, b)| ([a, b], ())) else {
-                missing += 1;
-                continue;
-            };
-            let extents = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
-            let flattest = (0..3).min_by(|a, b| extents[*a].total_cmp(&extents[*b])).unwrap();
-            let widest = (0..3)
-                .filter(|i| *i != flattest)
-                .map(|i| extents[i])
-                .fold(0.0f32, f32::max);
-            if widest > 0.0 {
-                ratios.push(extents[flattest] / widest);
-            }
-            match disc_axis(&node) {
-                Some(_) => {
-                    axes[flattest] += 1;
-                    // L'axe ramené dans l'espace de la voiture : une colonne de
-                    // direction est longitudinale et penchée, jamais latérale.
-                    let world = crate::geometry::node_world_matrices(&parsed);
-                    if let Some(m) = world.get(&node.name) {
-                        let mut a = [0.0f32; 3];
-                        a[flattest] = 1.0;
-                        let d = transform_direction(m, a);
-                        let n = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(1e-6);
-                        lateral.push((d[0] / n).abs());
-                    }
+            let world = worlds.get(&node.name).copied().unwrap_or(IDENTITY);
+            match column_axis(&node, &world) {
+                Some(axis) => {
+                    decided += 1;
+                    lateral.push(axis[0].abs());
+                    // Inclinaison de la colonne sur l'horizontale.
+                    tilt.push(axis[1].abs().asin().to_degrees());
                 }
-                None => undecided += 1,
+                None => {
+                    undecided += 1;
+                    eprintln!(
+                        "  {} : volant non décrit",
+                        car.file_name().unwrap_or_default().to_string_lossy()
+                    );
+                }
             }
         }
-        ratios.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        eprintln!("{total} voitures, {missing} sans volant nommé, {undecided} trop épais pour conclure");
-        eprintln!("axe plat : X {} · Y {} · Z {}", axes[0], axes[1], axes[2]);
-        if !ratios.is_empty() {
-            eprintln!(
-                "épaisseur / largeur : min {:.3} médiane {:.3} max {:.3}",
-                ratios[0],
-                ratios[ratios.len() / 2],
-                ratios[ratios.len() - 1]
-            );
-        }
-        lateral.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        lateral.sort_by(f32::total_cmp);
+        tilt.sort_by(f32::total_cmp);
+        eprintln!("{total} voitures, {missing} sans volant nommé, {decided} décrits, {undecided} indécis");
         if !lateral.is_empty() {
             eprintln!(
-                "part latérale de l'axe (0 = longitudinal) : médiane {:.3} · 90e {:.3} · max {:.3} · au-dessus de 0,5 : {}",
+                "part latérale de l'axe (0 = longitudinal) : médiane {:.3} · 90e {:.3} · max {:.3}",
                 lateral[lateral.len() / 2],
                 lateral[lateral.len() * 9 / 10],
-                lateral[lateral.len() - 1],
-                lateral.iter().filter(|v| **v > 0.5).count()
+                lateral[lateral.len() - 1]
+            );
+            eprintln!(
+                "inclinaison de la colonne : min {:.0}° · médiane {:.0}° · max {:.0}°",
+                tilt[0],
+                tilt[tilt.len() / 2],
+                tilt[tilt.len() - 1]
             );
         }
     }

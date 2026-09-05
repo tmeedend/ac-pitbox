@@ -54,6 +54,12 @@ pub struct FlatMesh {
     /// Kept for reporting: a mesh flagged transparent needs the render-order
     /// treatment of §8.2 on the viewer side.
     pub transparent: bool,
+    /// Ce maillage tourne-t-il avec le braquage, et autour de quoi ?
+    ///
+    /// **Ses positions sont alors relatives au pivot**, pas en espace monde
+    /// comme les autres : le pivot part en translation du nœud glTF, et la vue
+    /// n'a plus qu'à écrire une rotation dessus (voir [`crate::steer`]).
+    pub steer: Option<crate::steer::SteerNode>,
 }
 
 #[derive(Debug, Clone)]
@@ -72,10 +78,10 @@ pub struct GeometryOptions {
     pub skip_distant_lods: bool,
     /// Drop `COCKPIT_LR` when `COCKPIT_HR` is there too — see [`flatten`].
     pub skip_low_res_cockpit: bool,
-    /// Roues braquées : les roues avant et le volant du poste de pilotage
-    /// (voir [`crate::steer`]). Droites par défaut, auquel cas rien n'est
-    /// touché et la conversion est celle d'avant, octet pour octet.
-    pub steer: crate::steer::SteerPose,
+    /// Ce que la voiture déclare de sa direction : de combien ses roues
+    /// tournent pour un angle de volant donné (voir [`crate::steer`]). Aucun
+    /// angle ici — il n'est plus cuit dans le modèle, seulement décrit.
+    pub steering: crate::steer::SteerLimits,
 }
 
 impl Default for GeometryOptions {
@@ -95,7 +101,7 @@ impl Default for GeometryOptions {
             excluded_name_prefixes: vec!["AC_".to_string()],
             skip_distant_lods: true,
             skip_low_res_cockpit: true,
-            steer: crate::steer::SteerPose::default(),
+            steering: crate::steer::SteerLimits::default(),
         }
     }
 }
@@ -151,6 +157,7 @@ pub fn flatten(model: &Kn5Model, options: &GeometryOptions) -> (Vec<FlatMesh>, G
     } else {
         BTreeMap::new()
     };
+    let mut next_group = 0u32;
     walk(
         &model.root,
         &IDENTITY,
@@ -158,6 +165,8 @@ pub fn flatten(model: &Kn5Model, options: &GeometryOptions) -> (Vec<FlatMesh>, G
         options,
         drop_low_res_cockpit,
         &bones,
+        None,
+        &mut next_group,
         &mut meshes,
         &mut stats,
     );
@@ -190,9 +199,10 @@ fn merge_by_material(meshes: Vec<FlatMesh>) -> Vec<FlatMesh> {
     // L'ordre de première apparition est conservé : deux conversions du même
     // modèle doivent produire le même fichier, octet pour octet, sinon le
     // cache disque perd son sens.
-    let mut slot_of: std::collections::BTreeMap<(u32, bool), usize> = std::collections::BTreeMap::new();
+    let mut slot_of: std::collections::BTreeMap<(u32, bool, Option<u32>), usize> = std::collections::BTreeMap::new();
     for mesh in meshes {
-        match slot_of.get(&(mesh.material_id, mesh.transparent)) {
+        let key = (mesh.material_id, mesh.transparent, mesh.steer.map(|s| s.group));
+        match slot_of.get(&key) {
             Some(&slot) => {
                 let target: &mut FlatMesh = &mut merged[slot];
                 let offset = target.positions.len() as u32;
@@ -203,7 +213,7 @@ fn merge_by_material(meshes: Vec<FlatMesh>) -> Vec<FlatMesh> {
                 target.indices.extend(mesh.indices.iter().map(|index| index + offset));
             }
             None => {
-                slot_of.insert((mesh.material_id, mesh.transparent), merged.len());
+                slot_of.insert(key, merged.len());
                 merged.push(mesh);
             }
         }
@@ -244,6 +254,8 @@ fn walk(
     options: &GeometryOptions,
     drop_low_res_cockpit: bool,
     bones: &BTreeMap<String, [f32; 16]>,
+    steer: Option<crate::steer::SteerNode>,
+    next_group: &mut u32,
     meshes: &mut Vec<FlatMesh>,
     stats: &mut GeometryStats,
 ) {
@@ -268,22 +280,24 @@ fn walk(
     }
     // Row-vector convention: `world = local × parent` (§3.4). Getting this
     // order backwards leaves the hierarchy intact but scatters every part.
-    let mut world = match node.transform() {
+    let world = match node.transform() {
         Some(local) => multiply(local, parent_world),
         None => *parent_world,
     };
     // Braquage : la roue avant, ou le volant, tourne **avec tout ce qu'il
-    // porte** — jante, pneu, étrier, rayons. C'est donc la transformation
-    // accumulée qu'on prolonge, pas les sommets qu'on retouche, et les
-    // enfants héritent du braquage sans rien savoir de lui.
-    if !options.steer.is_straight() {
-        if let Some(what) = crate::steer::steered(&node.name) {
-            if let Some(turn) = crate::steer::turn(node, what, &world, &options.steer) {
-                world = multiply(&world, &turn);
+    // porte** — jante, pneu, étrier, rayons. On ne le tourne pas ici, on le
+    // décrit une fois pour tout son sous-arbre, et les enfants héritent de la
+    // description sans rien savoir d'elle.
+    let steer = match crate::steer::steered(&node.name) {
+        Some(what) if steer.is_none() => {
+            let described = crate::steer::describe(node, what, &world, &options.steering, *next_group);
+            if described.is_some() {
+                *next_group += 1;
             }
+            described.or(steer)
         }
-    }
-    let world = world;
+        _ => steer,
+    };
 
     if let Some(mesh) = node.mesh() {
         match classify(node, mesh, materials, options) {
@@ -300,10 +314,22 @@ fn walk(
                 // sur le traitement rigide si un seul os manque à l'appel — en
                 // pose de repos les deux donnent le même résultat, ce qui est
                 // exactement ce qu'il faut quand on ne sait pas poser.
-                let flat = match skinning_matrices(&node.kind, bones) {
+                // Un maillage braqué est écrit **relativement à son pivot** :
+                // c'est ce qui permet au nœud glTF de porter le pivot en
+                // translation et à la vue de n'écrire qu'une rotation dessus.
+                let origin = steer.map(|s| s.pivot).unwrap_or([0.0; 3]);
+                let mut flat = match skinning_matrices(&node.kind, bones) {
                     Some(matrices) => convert_skinned_mesh(&node.name, &node.kind, &matrices),
                     None => convert_mesh(&node.name, mesh, &world),
                 };
+                if origin != [0.0; 3] {
+                    for position in &mut flat.positions {
+                        for axis in 0..3 {
+                            position[axis] -= origin[axis];
+                        }
+                    }
+                }
+                flat.steer = steer;
                 if determinant3(&world) < 0.0 {
                     stats.mirrored += 1;
                 }
@@ -321,6 +347,8 @@ fn walk(
             options,
             drop_low_res_cockpit,
             bones,
+            steer,
+            next_group,
             meshes,
             stats,
         );
@@ -433,6 +461,7 @@ fn convert_skinned_mesh(name: &str, kind: &Kn5NodeKind, matrices: &[[f32; 16]]) 
         // d'os à échelle négative.
         indices: mesh.indices.iter().map(|i| u32::from(*i)).collect(),
         transparent: mesh.is_transparent,
+        steer: None,
     }
 }
 
@@ -592,6 +621,7 @@ fn convert_mesh(name: &str, mesh: &Kn5Mesh, world: &[f32; 16]) -> FlatMesh {
         tangents,
         indices,
         transparent: mesh.is_transparent,
+        steer: None,
     }
 }
 
@@ -1101,6 +1131,7 @@ mod tests {
             tangents: vec![[1.0, 0.0, 0.0, 1.0]; 3],
             indices: vec![0, 1, 2],
             transparent,
+            steer: None,
         }
     }
 

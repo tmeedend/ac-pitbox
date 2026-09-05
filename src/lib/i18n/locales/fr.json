@@ -168,7 +168,7 @@
       "never": "Jamais"
     },
     "preview3dSteer": "Braquage",
-    "preview3dSteerHint": "Roues avant, volant et bras du pilote tournent ensemble. L'angle des roues suit la démultiplication que la voiture déclare, et s'arrête à sa butée.",
+    "preview3dSteerHint": "L'angle des roues avant. Le volant et les bras du pilote suivent, d'autant plus de tours que la voiture est démultipliée, et s'arrêtent à la butée qu'elle déclare.",
     "preview3dSlider": {
       "zoom": "Zoom",
       "zoomHint": "Taille de la voiture dans le cadre. La molette de la souris fait la même chose, le temps d'une visite.",

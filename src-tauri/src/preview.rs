@@ -30,7 +30,7 @@ use crate::config::AppConfig;
 /// *reconnaître* pour libérer sa place. Trois incréments en une session de
 /// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
-const CONVERTER_VERSION: u32 = 35;
+const CONVERTER_VERSION: u32 = 38;
 
 /// Default cache ceiling (§5.3). Beyond it, the least recently used entries
 /// are evicted. Only a default: the real ceiling is a setting, carried by
@@ -240,21 +240,21 @@ fn cache_key(
     model: &Path,
     skin: Option<&str>,
     configs: &[PathBuf],
-    pose: &kn5_gltf::SteerPose,
+    limits: &kn5_gltf::SteerLimits,
     driver: Option<&kn5_gltf::DriverGraft>,
 ) -> String {
     let mut hasher = Sha256::new();
     hasher.update(model.to_string_lossy().to_lowercase().as_bytes());
     stamp(&mut hasher, model);
     hasher.update(skin.unwrap_or("").as_bytes());
-    // Le braquage est cuit dans la géométrie — roues avant et volant tournés —
-    // donc il fait partie de l'identité de l'entrée. Roues droites n'ajoute
-    // rien au hachage : une voiture jamais braquée garde l'entrée qu'elle
-    // avait avant que le réglage n'existe.
-    if !pose.is_straight() {
-        hasher.update(pose.road_wheel_degrees.to_le_bytes());
-        hasher.update(pose.steering_wheel_degrees.to_le_bytes());
-    }
+    // **L'angle de braquage n'est pas ici, et c'est le but.** Il l'a été, et
+    // chaque valeur essayée laissait alors une entrée complète — onze entrées
+    // de 42 Mo pour une seule voiture, mesuré sur le poste, parce qu'un curseur
+    // se balaye. Seules les deux valeurs que la voiture déclare de sa direction
+    // entrent dans la clé : elles sont écrites dans le `.glb`, donc corriger un
+    // `car.ini` doit bien invalider l'entrée.
+    hasher.update(limits.lock.to_le_bytes());
+    hasher.update(limits.ratio.to_le_bytes());
     // Le pilote entre dans la clé, et **rien du tout quand il n'y en a pas** :
     // une voiture montrée sans lui garde la clé qu'elle avait avant que le
     // pilote n'existe, donc son entrée de cache. Deux entrées coexistent pour
@@ -279,6 +279,10 @@ fn cache_key(
             stamp(&mut hasher, source);
         }
         hasher.update(driver.lock_degrees.to_le_bytes());
+        // La pose des bras, elle, est toujours cuite : le mannequin est écrit
+        // en sommets figés, pas en squelette. C'est le seul reste de l'angle
+        // dans la clé, et il ne coûte que quand un pilote est greffé.
+        hasher.update(driver.steer_degrees.to_le_bytes());
         for dir in &driver.texture_dirs {
             hasher.update(dir.to_string_lossy().to_lowercase().as_bytes());
         }
@@ -353,26 +357,35 @@ pub fn prepare(
     // en fait partie, pas la case à cocher. Deux voitures qui portent le même
     // mannequin dans la même tenue n'en partagent pas l'entrée pour autant —
     // le modèle de la voiture est dans la clé aussi.
+    // L'angle demandé est celui des **roues** ; l'animation de braquage, elle,
+    // est indexée sur celui du volant. La démultiplication de la voiture fait
+    // le pont, et la butée borne les deux.
+    let steering = crate::steering::read(car_dir, car_id);
+    let wheel_degrees = steer_degrees.clamp(-steering.lock / steering.ratio, steering.lock / steering.ratio);
     let driver = match (driver, ac_install.as_deref()) {
-        (Some(view), Some(ac)) => {
-            crate::driver::resolve(ac, car_dir, car_id, skin_dir.as_deref(), steer_degrees, &view.outfit)
-        }
+        (Some(view), Some(ac)) => crate::driver::resolve(
+            ac,
+            car_dir,
+            car_id,
+            skin_dir.as_deref(),
+            wheel_degrees * steering.ratio,
+            &view.outfit,
+        ),
         _ => None,
     };
-    // Le braquage vaut avec ou sans pilote : c'est la voiture qu'il tourne —
-    // ses roues avant et son volant —, et les bras du mannequin suivent parce
-    // que l'animation de la voiture les pose au même angle. L'angle des roues
-    // se déduit de la démultiplication que la voiture déclare (`car.ini`), pas
-    // d'une constante : elle va de 10 à 24 sur la bibliothèque.
-    let pose = kn5_gltf::SteerPose {
-        road_wheel_degrees: crate::steering::read(car_dir, car_id).road_wheel_degrees(steer_degrees),
-        steering_wheel_degrees: steer_degrees,
+    // Ce que la voiture déclare de sa direction. **Pas l'angle** : il n'est
+    // plus cuit dans le modèle, seulement décrit, et c'est la vue qui le
+    // tourne. Ces deux nombres-là, en revanche, sont écrits dans le `.glb` et
+    // font donc partie de son identité.
+    let limits = kn5_gltf::SteerLimits {
+        lock: steering.lock,
+        ratio: steering.ratio,
     };
     let stem = entry_stem(&cache_key(
         &resolved.path,
         skin_id,
         csp.sources(),
-        &pose,
+        &limits,
         driver.as_ref(),
     ));
     let file = dir.join(format!("{stem}.glb"));
@@ -466,7 +479,7 @@ pub fn prepare(
     // (SPEC §4.5ter).
     let options = kn5_gltf::ConvertOptions {
         geometry: kn5_gltf::GeometryOptions {
-            steer: pose,
+            steering: limits,
             ..Default::default()
         },
         surfaces: kn5_gltf::material_overrides(
@@ -983,10 +996,10 @@ pub fn car_dir(conn: &rusqlite::Connection, cfg: &AppConfig, car_id: &str) -> Op
 mod tests {
     use super::*;
 
-    /// Roues droites : ce que la quasi-totalité des entrées porte.
-    const STRAIGHT: kn5_gltf::SteerPose = kn5_gltf::SteerPose {
-        road_wheel_degrees: 0.0,
-        steering_wheel_degrees: 0.0,
+    /// Ce que la moitié de la bibliothèque déclare de sa direction.
+    const STRAIGHT: kn5_gltf::SteerLimits = kn5_gltf::SteerLimits {
+        lock: 360.0,
+        ratio: 14.0,
     };
 
     fn write_model(dir: &Path, name: &str, contents: &[u8]) -> PathBuf {
@@ -1113,22 +1126,28 @@ INSERT = part.kn5",
             "et son assise"
         );
 
-        // L'angle de braquage n'est plus porté par le pilote : il tourne aussi
-        // les roues avant et le volant de la voiture, donc il entre dans la clé
-        // par la pose, avec ou sans mannequin.
-        let turned = kn5_gltf::SteerPose {
-            road_wheel_degrees: 3.2,
-            steering_wheel_degrees: 45.0,
+        // L'angle de braquage **ne doit plus** faire partie de la clé quand
+        // personne n'est au volant : les roues tournent à l'affichage. Il en
+        // reste dans la branche pilote, dont les bras sont encore cuits.
+        let turned = kn5_gltf::DriverGraft {
+            steer_degrees: 45.0,
+            ..graft.clone()
         };
         assert_ne!(
             with,
-            cache_key(&model, None, &[], &turned, Some(&graft)),
-            "et l'angle de braquage, qui est cuit dans la géométrie"
+            cache_key(&model, None, &[], &STRAIGHT, Some(&turned)),
+            "les bras du pilote sont cuits, donc son angle compte"
         );
+        // Ce que la voiture déclare de sa direction est écrit dans le `.glb`,
+        // donc corriger un `car.ini` doit invalider l'entrée.
+        let quicker = kn5_gltf::SteerLimits {
+            lock: 400.0,
+            ratio: 12.0,
+        };
         assert_ne!(
             cache_key(&model, None, &[], &STRAIGHT, None),
-            cache_key(&model, None, &[], &turned, None),
-            "y compris sans pilote — ce sont les roues de la voiture qui tournent"
+            cache_key(&model, None, &[], &quicker, None),
+            "la démultiplication déclarée fait partie de l'entrée"
         );
 
         // Mannequin réécrit : même chemin, contenu différent.

@@ -86,6 +86,18 @@
    * changement de skin peut se faire à chaud (même géométrie) ou non. */
   let loadedCar = "";
 
+  /** Un nœud braqué et ce que la conversion en dit (voir `steer.rs`). */
+  interface SteeredNode {
+    node: ThreeModule.Object3D;
+    axis: ThreeModule.Vector3;
+    /** Facteur sur l'angle du volant : 1 pour le volant, 1/démultiplication
+     * pour une roue. */
+    gain: number;
+    /** Butée, en degrés aux roues. `null` quand rien n'arrête ce nœud — ce qui
+     * est le cas des roues elles-mêmes, voir `SteerNode::limit`. */
+    limit: number | null;
+  }
+
   interface ThreeScene {
     THREE: typeof ThreeModule;
     renderer: ThreeModule.WebGLRenderer;
@@ -138,6 +150,11 @@
     shadowCatcher: ThreeModule.Mesh;
     /** Altitude du sol, pour poser le miroir quand il arrive après coup. */
     floorY: number;
+    /** Les nœuds que le braquage fait tourner — roues avant et volant —,
+     * repérés à l'`extras` que la conversion leur pose. Chacun porte son axe,
+     * son pivot (déjà en translation du nœud) et le facteur à appliquer à
+     * l'angle du volant. */
+    steered: SteeredNode[];
     /** Les maillages du pilote greffé, repérés à leur préfixe de nom
      * (`DRIVER_MESH_PREFIX`), et les matériaux qu'ils portent. Vides quand la
      * conversion n'a pas greffé de mannequin. */
@@ -778,6 +795,31 @@
     reportListenerAngle(azimuth, elevation, distance);
   }
 
+  /**
+   * Braque les roues et le volant du modèle en place.
+   *
+   * **Rien n'est reconverti ici**, et c'est tout l'objet : l'angle a été cuit
+   * dans le `.glb` pendant un temps, si bien que chaque valeur essayée laissait
+   * une entrée de cache complète — onze entrées de 42 Mo pour une seule
+   * voiture, mesuré sur le poste, parce qu'un curseur se balaye. La conversion
+   * ne fait plus que **décrire** ce qui tourne (pivot en translation du nœud,
+   * axe et facteur en `extras`), et le braquage est ici une rotation de nœud :
+   * gratuit, instantané, et invisible à la clé de cache.
+   *
+   * L'angle est celui des **roues**, et elles le prennent tel quel : rien ne
+   * les arrête. Le volant, lui, le multiplie par la démultiplication de la
+   * voiture et s'arrête à la course qu'elle déclare — voir `SteerNode::limit`
+   * pour ce que cette dissymétrie coûte et pourquoi elle est voulue.
+   */
+  function applySteer(current: ThreeScene) {
+    if (current.steered.length === 0) return;
+    const steer = preview3dPrefs().steer;
+    for (const { node, axis, gain, limit } of current.steered) {
+      const stopped = limit === null ? steer : Math.max(-limit, Math.min(limit, steer));
+      node.quaternion.setFromAxisAngle(axis, (stopped * gain * Math.PI) / 180);
+    }
+  }
+
   /** Durée du fondu du pilote, en secondes. Assez court pour qu'on ne
    * l'attende pas, assez long pour qu'on le voie : c'est une arrivée, pas une
    * apparition. */
@@ -1107,6 +1149,23 @@
     // côté Rust). Les matériaux sont collectés à part et **dédoublonnés** :
     // un même matériau sert plusieurs maillages, et lui écrire son opacité
     // plusieurs fois par image ne coûterait que du temps.
+    // Les nœuds braqués, repérés à l'`extras` que la conversion leur pose. Le
+    // pivot est déjà leur translation et leurs sommets lui sont relatifs, donc
+    // il n'y a qu'une rotation à écrire — c'est ce qui sort l'angle de la clé
+    // de cache (voir `steer.rs`).
+    const steered: SteeredNode[] = [];
+    gltf.scene.traverse((object) => {
+      const described = (object.userData as { pitboxSteer?: { axis: number[]; gain: number; limit?: number } })
+        .pitboxSteer;
+      if (!described || described.axis.length !== 3) return;
+      steered.push({
+        node: object,
+        axis: new THREE.Vector3(described.axis[0], described.axis[1], described.axis[2]).normalize(),
+        gain: described.gain,
+        limit: described.limit ?? null,
+      });
+    });
+
     const driverMeshes: ThreeModule.Mesh[] = [];
     const driverMaterials = new Set<ThreeModule.Material>();
     gltf.scene.traverse((object) => {
@@ -1140,6 +1199,7 @@
       shadowCatcher,
       floorY: box.min.y,
       introAt: 0,
+      steered,
       driver: driverMeshes,
       driverMaterials: [...driverMaterials],
       // Il commence là où il doit finir : un pilote déjà attendu ne doit pas
@@ -1149,6 +1209,9 @@
       disposed: false,
     };
     applyDriverOpacity(built, built.driverOpacity);
+    // Avant le cadrage : la boîte englobante se calcule ensuite, et une roue
+    // braquée déborde un peu.
+    applySteer(built);
     // Reprise de la scène précédente, ou cadrage réglé si on part de zéro.
     const carried = carry?.();
     if (carried) {
@@ -1283,9 +1346,12 @@
     // distingue. Sans ça, tourner une clé de contact demanderait une
     // conversion de quatorze mégaoctets avant que le pilote n'arrive.
     const driver = preview3dGraftsDriver() ? (driverOverridePayload(carId, carClassOf(carClass)) ?? {}) : null;
-    // Le braquage est cuit dans la géométrie — roues avant, volant, bras du
-    // pilote — donc il décide du `.glb` demandé, avec ou sans mannequin.
+    // **Le braquage ne décide du `.glb` que s'il y a un pilote dedans.** Les
+    // roues et le volant tournent à l'affichage ; seuls les bras du mannequin
+    // sont écrits en sommets figés, donc eux seuls obligent à reconvertir. Sans
+    // pilote, bouger le curseur ne recharge rien.
     const steer = preview3dPrefs().steer;
+    const bakedSteer = driver ? steer : 0;
 
     // Garde-fou : une scène déjà posée sur ce couple voiture/skin n'est pas
     // reconstruite. Recharger coûte le retour à la photo puis une conversion,
@@ -1293,7 +1359,7 @@
     // un effet parent réévalué relançant tout (voir `untrack` dans
     // `DetailPage`). La cause est corrigée là-bas ; ceci empêche la classe
     // entière de se voir à l'écran.
-    if (untrack(() => loaded) === sceneKey(car, skin, steer, driver)) return;
+    if (untrack(() => loaded) === sceneKey(car, skin, bakedSteer, driver)) return;
 
     // Remplacement **à chaud** : même voiture, seul le skin change, et un
     // modèle tourne déjà à l'écran. Il y reste, et continue de tourner, le
@@ -1355,7 +1421,7 @@
         // ce qui évite le trou noir d'une image entre les deux.
         disposeScene(untrack(() => scene));
         scene = built;
-        loaded = sceneKey(car, skin, steer, driver);
+        loaded = sceneKey(car, skin, bakedSteer, driver);
         loadedCar = car;
         phase = "ready";
         swapping = false;
@@ -1404,6 +1470,19 @@
     // Lu à découvert : un effet ne suit que ce qu'il lit lui-même.
     void preview3dPrefs().quality;
     untrack(() => applyQuality(scene));
+  });
+
+  // Le braquage s'applique **sans reconversion** : une rotation de nœud sur le
+  // modèle en place. Seuls les bras du pilote font encore exception — ils sont
+  // écrits en sommets figés, donc les bouger demande une conversion, et c'est
+  // l'effet de chargement plus bas qui s'en charge.
+  $effect(() => {
+    void preview3dPrefs().steer;
+    untrack(() => {
+      if (!scene || scene.disposed) return;
+      applySteer(scene);
+      requestRender(scene);
+    });
   });
 
   // Le pilote entre et sort **sans reconversion** : la clé de contact d'un mod
