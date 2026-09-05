@@ -290,8 +290,6 @@
     "columns": "Spalten",
     "dragColumnTooltip": "Zum Umsortieren ziehen",
     "resizeColumnTooltip": "Zum Ändern der Breite ziehen · Doppelklick zum Zurücksetzen",
-    "galleryView": "Galerie",
-    "tableView": "Tabelle",
     "filterState": "Status",
     "filterAuthor": "Autor",
     "filterCountry": "Land",
@@ -310,8 +308,14 @@
     "stockTooltip": "Kunos-Basisinhalt",
     "baseBadge": "BASIS",
     "tried": "Schon gefahren",
-    "brokenBadge": "DEFEKT",
-    "brokenTooltip": "Defekte Mod: fehlende oder ungültige Dateien (siehe Wartung)"
+    "brokenTooltip": "Defekte Mod: fehlende oder ungültige Dateien (siehe Wartung)",
+    "inactiveTooltip": "Mod deaktiviert: das Spiel lädt ihn nicht. Aktiviere ihn auf seiner Detailseite oder in der Tabellenansicht.",
+    "viewDense": "Kompaktes Raster",
+    "viewComfortable": "Weites Raster",
+    "viewList": "Liste",
+    "displayMenu": "Anzeigeoptionen",
+    "density": "Dichte",
+    "hideBrand": "Marke im Namen ausblenden"
   },
   "bulk": {
     "runningActivate": "{count} Mods werden aktiviert",

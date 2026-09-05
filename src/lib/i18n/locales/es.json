@@ -290,8 +290,6 @@
     "columns": "Columnas",
     "dragColumnTooltip": "Arrastra para reordenar",
     "resizeColumnTooltip": "Arrastra para redimensionar · doble clic para restablecer",
-    "galleryView": "Galería",
-    "tableView": "Tabla",
     "filterState": "Estado",
     "filterAuthor": "Autor",
     "filterCountry": "País",
@@ -310,8 +308,14 @@
     "stockTooltip": "Contenido de serie de Kunos",
     "baseBadge": "SERIE",
     "tried": "Ya probado",
-    "brokenBadge": "ROTO",
-    "brokenTooltip": "Mod roto: archivos ausentes o no válidos (ver Mantenimiento)"
+    "brokenTooltip": "Mod roto: archivos ausentes o no válidos (ver Mantenimiento)",
+    "inactiveTooltip": "Mod desactivado: el juego no lo cargará. Actívalo desde su ficha o en la vista de tabla.",
+    "viewDense": "Cuadrícula densa",
+    "viewComfortable": "Cuadrícula amplia",
+    "viewList": "Lista",
+    "displayMenu": "Opciones de visualización",
+    "density": "Densidad",
+    "hideBrand": "Ocultar la marca en el nombre"
   },
   "bulk": {
     "runningActivate": "Activando {count} mods",

@@ -290,8 +290,6 @@
     "columns": "Colunas",
     "dragColumnTooltip": "Arraste para reordenar",
     "resizeColumnTooltip": "Arraste para redimensionar · clique duplo para redefinir",
-    "galleryView": "Galeria",
-    "tableView": "Tabela",
     "filterState": "Estado",
     "filterAuthor": "Autor",
     "filterCountry": "País",
@@ -310,8 +308,14 @@
     "stockTooltip": "Conteúdo de fábrica da Kunos",
     "baseBadge": "FÁBRICA",
     "tried": "Já pilotado",
-    "brokenBadge": "QUEBRADO",
-    "brokenTooltip": "Mod quebrado: arquivos ausentes ou inválidos (veja Manutenção)"
+    "brokenTooltip": "Mod quebrado: arquivos ausentes ou inválidos (veja Manutenção)",
+    "inactiveTooltip": "Mod desativado: o jogo não o vai carregar. Ative-o na sua ficha ou na vista de tabela.",
+    "viewDense": "Grelha densa",
+    "viewComfortable": "Grelha ampla",
+    "viewList": "Lista",
+    "displayMenu": "Opções de apresentação",
+    "density": "Densidade",
+    "hideBrand": "Ocultar a marca no nome"
   },
   "bulk": {
     "runningActivate": "Ativando {count} mods",

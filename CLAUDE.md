@@ -594,9 +594,15 @@ laisser pourrir ici.
       documenté : Certum Open Source Code Signing (~49€/an, cloud SimplySign,
       pas de jeton USB).
 - [ ] **Runner de tests frontend** : délibérément absent. À reconsidérer
-      seulement le jour où de la logique pure sera extraite des composants
-      (le tri/regroupement/cumul de `Transversal.svelte` en est proche) — pour
-      tester *cette* logique, pas l'affichage.
+      seulement le jour où de la logique pure sera extraite des composants —
+      pour tester *cette* logique, pas l'affichage. **Ce jour est arrivé** :
+      `src/lib/displayName.ts` (retrait du préfixe de marque) est une fonction
+      pure avec une table d'alias, des règles de coupe qui se contredisent
+      volontairement (comparaison insensible aux tirets, coupe seulement sur
+      une espace) et des cas qui ne se vérifient qu'en les exécutant
+      (`Mercedes-Benz SLS`, `Mercedes AMG GT`, `Ferrari` tout seul). Le
+      tri/regroupement/cumul de `Transversal.svelte` en est toujours proche.
+      Décision à prendre avec l'utilisateur : c'est une dépendance de plus.
 ## Fin de tâche — dans cet ordre
 
 1. **Mettre à jour `docs/SPEC.md`** dès qu'une évolution change le

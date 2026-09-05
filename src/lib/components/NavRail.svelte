@@ -124,7 +124,7 @@
         </svg>
         {#if alert}<span class="dot"></span>{/if}
       </span>
-      <span class="lbl">{t(e.labelKey)}</span>
+      <span class="name">{t(e.labelKey)}</span>
     </button>
   {/each}
 </nav>
@@ -133,11 +133,12 @@
   .rail {
     display: flex;
     flex-direction: column;
-    /* Un cran sous le fond de contenu (`--panel` porté par `.frame`) : c'est
-       le même écart que la colonne de session, les deux territoires de gauche
-       se lisent donc comme un seul plan, en retrait de ce qu'on consulte. */
-    background: var(--bg);
-    border-right: 1px solid var(--line);
+    /* Une SURFACE, pas une découpe (voir `--rail` dans `global.css`). Le rail
+       partageait la valeur du fond de contenu et de la barre de titre : rien
+       ne le posait sur l'écran. Il monte donc d'un ton — et perd son filet
+       droit du même coup, parce que relief et trait font le même travail et
+       que les cumuler surcharge un bord qu'on longe en permanence. */
+    background: var(--rail);
     overflow-y: auto;
     padding: 8px 0;
   }
@@ -181,14 +182,32 @@
     stroke-linecap: round;
     stroke-linejoin: round;
   }
-  .lbl {
+  /* **`.name` et non `.lbl` : `.lbl` est une classe GLOBALE** (une rubrique de
+     formulaire, `global.css`), que le rail attrapait sans le vouloir. Elle lui
+     imposait trois choses non désirées — capitales, `--muted` en dur, qui
+     annulait l'éclaircissement de l'entrée active, et 8 px de marge basse. */
+  .name {
     /* Le rail n'est PAS iconographique seul : « Add-ons voiture » contre
        « Compléments » n'est pas une distinction qu'une icône peut porter, et
        un rail muet se paie en infobulles pour un gain de largeur sans valeur
-       ici. D'où deux lignes autorisées. */
-    font-size: 8.5px;
-    letter-spacing: 0.04em;
+       ici. D'où deux lignes autorisées.
+       Casse normale : c'est de la NAVIGATION, elle se lit d'un coup d'œil, et
+       les capitales espacées se paient en vitesse de lecture. Elles gardent
+       tout leur sens sur les titres de section, plus courts et plus rares. Un
+       demi-point de plus qu'avant compense la bas-de-casse, dont la hauteur
+       d'x est plus petite que celle des capitales qu'elle remplace. */
+    font-size: 9.5px;
     line-height: 1.25;
+    /* **Deux lignes réservées pour TOUTES les entrées**, pas seulement pour
+       celles qui en ont besoin : sinon « Add-ons voiture » (deux lignes) et
+       « Pilote » (une) donnent deux hauteurs de bloc, et l'espacement des
+       icônes sautille sur toute la colonne. Dans un rail, c'est l'alignement
+       des icônes ENTRE ELLES qu'on lit — l'inverse d'une carte, où c'est le
+       haut du bloc qui compte. */
+    min-height: 2.5em;
+    /* Une locale peut poser un mot plus large que les 66 px utiles du rail
+       (« Einstellungen ») : il se coupe plutôt qu'il ne déborde. */
+    overflow-wrap: break-word;
   }
   .entry:hover {
     color: var(--txt2);
@@ -226,6 +245,6 @@
     background: var(--orange);
     /* La bordure est la couleur du rail, pas une couleur en plus : elle
        détache la pastille du trait de l'icône qu'elle chevauche. */
-    border: 1.5px solid var(--bg);
+    border: 1.5px solid var(--rail);
   }
 </style>

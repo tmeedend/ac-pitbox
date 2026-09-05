@@ -23,6 +23,7 @@
     type ColumnDef,
   } from "$lib/columns";
   import { nav, pickSession } from "$lib/nav.svelte";
+  import { withoutBrand } from "$lib/displayName";
   import { moveFocus } from "$lib/gamepadNav";
   import { registerModNav } from "$lib/screenActions";
   import { libraryVersion } from "$lib/libraryVersion.svelte";
@@ -52,6 +53,9 @@
   // `kind` ne change jamais pour une instance montée (§6.1, deux instances
   // fixes voitures/circuits) — `untrack` documente que ces lectures ne
   // capturent la prop qu'une fois, volontairement, pour le compilateur.
+  /** Les trois positions de la bascule de vue (§7.4). */
+  type GridView = "dense" | "comfortable" | "table";
+
   const isCar = untrack(() => kind === "Car");
   // Clés de persistance bâties une fois, au même endroit : chaque réglage doit
   // rester indépendant entre voitures et circuits (§6.1).
@@ -59,6 +63,7 @@
     filters: StorageKey.libraryFilters(kind),
     pinned: StorageKey.libraryPinned(kind),
     view: StorageKey.libraryView(kind),
+    hideBrand: StorageKey.gridHideBrand,
     sortKey: StorageKey.librarySortKey(kind),
     sortDir: StorageKey.librarySortDir(kind),
   }));
@@ -97,7 +102,16 @@
   /** Filtres épinglés : ils restent visibles en fantôme même sans valeur, et
    * leur ordre est celui des fantômes dans la barre. */
   let pinned = $state<string[]>([]);
-  let view = $state<"gallery" | "table">("gallery");
+  /** Trois positions et non deux (SPEC §7.4) : la grille a deux densités, la
+   * liste reste la liste. Persistée **par type**, comme le tri et les colonnes
+   * — voitures et circuits ne se regardent pas de la même façon, et c'est déjà
+   * la règle de tout le reste de cet écran. */
+  let view = $state<GridView>("dense");
+  /** Préférence de présentation, pas d'identité : le nom stocké n'est jamais
+   * touché (voir `displayName.ts`). */
+  let hideBrand = $state(false);
+  let showDisplay = $state(false);
+  const isGrid = $derived(view !== "table");
   let sortKey = $state<string>("name");
   let sortDir = $state<1 | -1>(1);
   // Garde toutes les persistances ci-dessous tant que l'onMount plus bas n'a
@@ -291,7 +305,7 @@
   onMount(async () => {
     const [colPrefs, saved] = await Promise.all([
       loadColumnsPrefs(kind),
-      getUiPrefs([FKEY, KEYS.pinned, KEYS.view, KEYS.sortKey, KEYS.sortDir]),
+      getUiPrefs([FKEY, KEYS.pinned, KEYS.view, KEYS.sortKey, KEYS.sortDir, KEYS.hideBrand]),
     ]);
     visibleKeys = colPrefs.visible;
     columnOrder = colPrefs.order;
@@ -301,8 +315,13 @@
     query = restored.query;
     filters = restored.filters;
     pinned = parsePinned(saved[KEYS.pinned], defs);
+    // `gallery` est l'ancienne valeur, d'avant la seconde densité : relue une
+    // dernière fois pour ne pas renvoyer en grille dense quelqu'un qui était
+    // en tableau, et réécrite au premier changement de vue.
     const savedView = saved[KEYS.view];
-    if (savedView === "gallery" || savedView === "table") view = savedView;
+    if (savedView === "dense" || savedView === "comfortable" || savedView === "table") view = savedView;
+    else if (savedView === "gallery") view = "dense";
+    hideBrand = saved[KEYS.hideBrand] === "1";
     const savedSortKey = saved[KEYS.sortKey];
     if (savedSortKey) sortKey = savedSortKey;
     const savedSortDir = saved[KEYS.sortDir];
@@ -323,9 +342,20 @@
     }
   }
 
-  function setView(v: "gallery" | "table") {
+  function setView(v: GridView) {
     view = v;
     if (prefsReady) setUiPref(KEYS.view, v);
+  }
+
+  function setHideBrand(on: boolean) {
+    hideBrand = on;
+    if (prefsReady) setUiPref(KEYS.hideBrand, on ? "1" : "0");
+  }
+
+  /** Ce que la carte écrit, jamais ce sur quoi on trie ou on cherche. */
+  function cardName(c: ModCard): string {
+    const full = c.display_name ?? c.id_interne;
+    return hideBrand ? withoutBrand(full, c.brand) : full;
   }
 
   // Panneau latéral toujours ouvert (jamais de saut de largeur du panneau
@@ -407,6 +437,27 @@
       select(sorted[0]);
     }
   });
+  /**
+   * Ce qui empêche de **jouer** cette voiture, ou `null`.
+   *
+   * Les autres états — installé, activé, déjà essayé, contenu de base — ont
+   * quitté la grille (SPEC §7.4bis) : on joue dans la grille, on gère dans le
+   * tableau, et un état d'installation ne change rien à la décision « je
+   * prends celle-là ce soir ». Celui-ci reste parce qu'il la change : sans
+   * marquage, on choisit la voiture, on lance, et on découvre le problème
+   * dans le jeu.
+   *
+   * Un mod installé hors Pit Box n'est PAS concerné : il n'est pas « actif »
+   * au sens du déploiement géré, mais il est bien dans le jeu et se lance
+   * parfaitement — l'éteindre serait un contresens sur une install déjà
+   * moddée, où il y en a des centaines.
+   */
+  function unusableReason(c: ModCard): string | null {
+    if (c.broken) return "library.brokenTooltip";
+    if (!c.active && !c.is_unmanaged) return "library.inactiveTooltip";
+    return null;
+  }
+
   function select(c: ModCard) {
     selectedId = c.id_interne;
     // Restaure les préférences mémorisées de l'entité (skin voiture, layout circuit).
@@ -744,9 +795,42 @@
           </div>
         {/if}
 
-        <div class="seg view">
-          <button class:on={view === "gallery"} onclick={() => setView("gallery")} title={t("library.galleryView")}>▦</button>
-          <button class:on={view === "table"} onclick={() => setView("table")} title={t("library.tableView")}>≣</button>
+        <!-- Chevron ACCOLÉ à la bascule, pas posé à côté : les deux bords se
+             partagent, sinon le menu se lit comme un contrôle de plus au lieu
+             du complément de celui-ci. -->
+        <div class="view-wrap">
+          <div class="seg view">
+            <button class:on={view === "dense"} onclick={() => setView("dense")} title={t("library.viewDense")}>▦</button>
+            <button class:on={view === "comfortable"} onclick={() => setView("comfortable")} title={t("library.viewComfortable")}>▤</button>
+            <button class:on={view === "table"} onclick={() => setView("table")} title={t("library.viewList")}>☰</button>
+          </div>
+        <!-- Les préférences de présentation vivent **ici** et non dans les
+             réglages globaux : il faut en voir l'effet pour les juger, et un
+             écran de réglages les rend invisibles. -->
+        <div class="display-wrap">
+          <button class="disp-toggle" type="button" aria-expanded={showDisplay} title={t("library.displayMenu")} onclick={() => (showDisplay = !showDisplay)}>▾</button>
+          {#if showDisplay}
+            <div class="columns-menu display-menu">
+              <span class="dm-title">{t("library.density")}</span>
+              {#each [["dense", "library.viewDense"], ["comfortable", "library.viewComfortable"], ["table", "library.viewList"]] as [id, key] (id)}
+                <label>
+                  <!-- `name` partagé : sans lui les trois boutons sont trois
+                       cases indépendantes pour le navigateur, et le clavier
+                       n'y circule plus comme dans un groupe. -->
+                  <input type="radio" name="pitbox-density" checked={view === id} onchange={() => setView(id as GridView)} />
+                  <span>{t(key)}</span>
+                </label>
+              {/each}
+              {#if isCar}
+                <span class="dm-sep"></span>
+                <label>
+                  <input type="checkbox" checked={hideBrand} onchange={(e) => setHideBrand(e.currentTarget.checked)} />
+                  <span>{t("library.hideBrand")}</span>
+                </label>
+              {/if}
+            </div>
+          {/if}
+        </div>
         </div>
       {/snippet}
     </FilterBar>
@@ -764,27 +848,20 @@
           <p>{t("library.noResults")}</p>
         {/if}
       </div>
-    {:else if view === "gallery"}
-      <div class="grid">
+    {:else if isGrid}
+      <div class="grid" class:comfortable={view === "comfortable"}>
         {#each filtered as c (c.id_interne)}
           {@const prefSkin = isCar ? getPreferredSkin(c.id_interne) : null}
           {@const prefLayout = !isCar ? getPreferredLayout(c.id_interne) : null}
           {@const src = previewSrc(prefSkin?.preview ?? prefLayout?.preview ?? c.preview)}
           {@const ol = previewSrc(prefLayout?.outline ?? c.outline)}
-          <button data-id={c.id_interne} class="card" class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} oncontextmenu={(e) => openCardContextMenu(e, c)} title={t("library.cardTooltip")}>
+          {@const blocked = unusableReason(c)}
+          <button data-id={c.id_interne} class="card" class:unusable={blocked !== null} class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} oncontextmenu={(e) => openCardContextMenu(e, c)} title={blocked ? `${t(blocked)}\n${t("library.cardTooltip")}` : t("library.cardTooltip")}>
             <div class="thumb">
               {#if src}<img src={src} alt={c.display_name ?? c.id_interne} loading="lazy" />
               {:else}<div class="noprev">{isCar ? t("library.typeCar") : t("library.typeTrack")}</div>{/if}
               {#if !isCar && ol}<img class="outline" src={ol} alt="" loading="lazy" />{/if}
               {#if sessionId === c.id_interne}<span class="sessbadge">{t("library.sessionBadge")}</span>{/if}
-              {#if c.is_unmanaged}
-                <span class="sbadge unm" title={t("library.unmanagedTooltip")}>{t("library.unmanagedBadge")}</span>
-              {:else if c.is_stock}
-                <span class="sbadge" title={t("library.stockTooltip")}>{t("library.baseBadge")}</span>
-              {:else}
-                <span class="dot" class:active={c.active} title={c.active ? t("common.active") : t("common.inactive")}></span>
-              {/if}
-              {#if c.broken}<span class="brokenbadge" title={t("library.brokenTooltip")}>⚠ {t("library.brokenBadge")}</span>{/if}
               <span
                 class="card-fav"
                 class:on={c.is_favorite}
@@ -795,11 +872,26 @@
                 onkeydown={(e) => e.key === "Enter" && toggleFav(c, e)}
               >{c.is_favorite ? "♥" : "♡"}</span>
             </div>
-            <div class="c-name">{c.display_name ?? c.id_interne}</div>
-            <div class="c-sub">
-              {#if c.badge}<img class="brand-badge" src={previewSrc(c.badge)} alt="" loading="lazy" />{/if}
-              {c.brand ?? ""}{c.year ? ` · ${c.year}` : ""}
-            </div>
+            <!-- L'identification AVANT le nom : logo et marque à gauche,
+                 année à droite, puis le modèle en dessous. C'est l'ordre dans
+                 lequel on cherche une voiture — on sait la marque avant de se
+                 souvenir du modèle — et l'année, poussée au bord droit,
+                 s'aligne d'une carte à l'autre : elle se compare alors en
+                 colonne, ce qu'un « · Nissan · 1999 » au fil du texte
+                 interdisait.
+                 **Une seule couleur pour les trois.** Marque et année étaient
+                 deux gris plus sombres que le nom, sans que rien ne le
+                 justifie : ce ne sont pas des informations moins sûres ni
+                 moins utiles, juste d'une autre nature. La hiérarchie tient à
+                 la taille et à la place, pas à l'extinction. -->
+            {#if c.badge || c.brand || c.year}
+              <div class="c-sub">
+                {#if c.badge}<img class="brand-badge" src={previewSrc(c.badge)} alt="" loading="lazy" />{/if}
+                {#if c.brand}<span class="c-brand">{c.brand}</span>{/if}
+                {#if c.year}<span class="c-year">{c.year}</span>{/if}
+              </div>
+            {/if}
+            <div class="c-name">{cardName(c)}</div>
           </button>
         {/each}
       </div>
@@ -1037,6 +1129,45 @@
     color: var(--muted);
     cursor: default;
   }
+  .view-wrap {
+    display: flex;
+    align-items: stretch;
+  }
+  .display-wrap {
+    position: relative;
+    display: flex;
+  }
+  .disp-toggle {
+    height: 32px;
+    padding: 0 7px;
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    border-left: none;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1;
+  }
+  .disp-toggle:hover,
+  .disp-toggle[aria-expanded="true"] {
+    color: var(--txt);
+    border-color: var(--faint2);
+  }
+  .display-menu {
+    min-width: 200px;
+  }
+  .display-menu .dm-title {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 2px 4px 4px;
+  }
+  .display-menu .dm-sep {
+    height: 1px;
+    background: var(--line);
+    margin: 6px 0;
+  }
   .seg {
     display: flex;
     border: 1px solid var(--line);
@@ -1075,15 +1206,32 @@
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 9px;
+    /* Le détachement de la carte, en une valeur : un liseré clair en haut
+       (la lumière tombe d'en haut) et une ombre portée. Nommé ici parce que
+       chaque état de carte redéfinit `box-shadow` en entier et doit le
+       remettre — un `box-shadow` ne se cumule pas d'une règle à l'autre. */
+    --card-lift: inset 0 1px 0 rgba(255, 255, 255, 0.025), 0 4px 14px rgba(0, 0, 0, 0.35);
   }
+  .grid.comfortable {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+  /* **La carte se détache de la page.** Fond au-dessus de celui de la grille,
+     bordure enfin visible, et une élévation : c'est le CONTENANT qui répond au
+     « les voitures sombres sont indiscernables », pas l'image. Les previews
+     sont opaques et portent leur propre fond, cuit dedans — aucun réglage de
+     la carte ne peut agir derrière la voiture, et certaines voitures sont
+     chiffrées, donc la grille restera hétérogène pour toujours. Ce traitement
+     n'attend donc rien : il confine la disparité à l'intérieur de l'image au
+     lieu de la laisser contaminer la carte. */
   .card {
-    background: var(--card);
-    border: 1px solid var(--line);
-    padding: 0;
+    background: var(--cell);
+    border: 1px solid var(--cell-line);
+    padding: 8px;
     text-align: left;
     overflow: hidden;
+    box-shadow: var(--card-lift);
     transition: border-color 0.12s;
     /* Évite la sélection de texte (surlignage bleu) lors des clics de
        sélection multiple Ctrl/Maj. */
@@ -1097,11 +1245,26 @@
   }
   .card.multisel {
     border-color: var(--blue);
-    box-shadow: 0 0 0 1px var(--blue);
+    box-shadow: 0 0 0 1px var(--blue), var(--card-lift);
   }
   .card.session {
     border-color: var(--rosso);
-    box-shadow: 0 0 0 1px var(--rosso);
+    box-shadow: 0 0 0 1px var(--rosso), var(--card-lift);
+  }
+  /* Ce qui empêche de jouer se dit en éteignant la carte, pas par un badge :
+     une carte éteinte se comprend au premier regard, sans légende et sans
+     traduction, là où un badge demanderait un vocabulaire à apprendre dans six
+     langues. La RAISON est dans l'infobulle et dans la fiche, pas ici. Et la
+     carte n'est jamais masquée : une voiture qui disparaît produit le « où est
+     passée ma Skyline », bien pire qu'une carte éteinte. */
+  .card.unusable {
+    opacity: 0.42;
+  }
+  /* Les deux lignes ensemble : marque, année et modèle ne font qu'une couleur,
+     donc elles s'éteignent ensemble aussi. */
+  .card.unusable .c-name,
+  .card.unusable .c-sub {
+    color: var(--muted);
   }
   .sessbadge {
     position: absolute;
@@ -1118,19 +1281,30 @@
   tbody tr.session {
     box-shadow: inset 2px 0 0 var(--rosso);
   }
+  /* **Le mat.** L'image n'est plus à ras du bord : elle est posée sur un
+     rectangle neutre un ton au-dessus de la carte. Il ne se voit presque pas
+     quand la preview est sombre et remplit son cadre ; il devient le liant dès
+     que les previews sont hétérogènes, parce qu'il donne à toutes les cartes
+     le même encadrement. C'est aussi lui qui absorbe une preview absente ou de
+     format inattendu : ce qui manque montre le mat plutôt qu'un trou noir. */
   .thumb {
     position: relative;
     aspect-ratio: 16 / 9;
-    background: var(--bg);
+    background: var(--mat);
+    border: 1px solid var(--mat-line);
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
   }
+  /* `contain` et non `cover` : les images ne sont JAMAIS retouchées — ni
+     filtre, ni correction de luminosité, ni masque. Une preview soignée par
+     son auteur ne doit pas être dégradée pour compenser celles qui ne le sont
+     pas. Elle est donc montrée entière, et ce qui reste est du mat. */
   .thumb img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
   }
   /* Tracé du circuit superposé à la photo (§6.1). */
   .thumb img.outline {
@@ -1144,52 +1318,6 @@
     font-size: 10px;
     letter-spacing: 1px;
     text-transform: uppercase;
-  }
-  .dot {
-    position: absolute;
-    top: 6px;
-    left: 6px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--muted2);
-    box-shadow: 0 0 0 2px var(--bg);
-  }
-  .dot.active {
-    background: var(--green);
-  }
-  .sbadge {
-    position: absolute;
-    top: 5px;
-    left: 5px;
-    background: var(--raised);
-    color: var(--blue);
-    border: 1px solid var(--blue-border);
-    font-size: 8px;
-    font-family: var(--mono);
-    letter-spacing: 0.5px;
-    padding: 1px 4px;
-  }
-  /* Mod installé hors Pit Box (§12bis.1bis) : même badge, en gris — la même
-     grammaire de couleurs que la pastille d'état (StateBadge). */
-  .sbadge.unm {
-    color: var(--muted);
-    border-color: var(--line);
-  }
-  /* Mod cassé (§6.4) : signalement visuel sur la carte, même détection que
-     l'écran Maintenance. */
-  .brokenbadge {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    background: #1a1708;
-    color: var(--yellow);
-    border: 1px solid #4a4426;
-    font-size: 8px;
-    font-family: var(--mono);
-    letter-spacing: 0.5px;
-    padding: 1px 4px;
-    z-index: 1;
   }
   .broken-flag {
     color: var(--yellow);
@@ -1211,26 +1339,58 @@
   .card-fav:hover {
     color: var(--rosso-bright);
   }
+  /* **Deux lignes, et c'est la correction principale.** Sur une ligne, trois
+     Skyline s'affichaient à l'identique — `Nissan Skyline GT-R R3…` — la
+     troncature tombant exactement avant ce qui les distingue (R32, R33, R34).
+     Le `min-height` n'est pas cosmétique : sans lui, une carte à nom court et
+     une carte à nom long n'ont pas la même hauteur et la grille se déchire.
+     Le retrait horizontal, lui, appartient désormais à la carte. */
   .c-name {
-    font-size: 12px;
-    font-weight: 600;
-    padding: 7px 8px 2px;
-    white-space: nowrap;
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1.28;
+    margin-top: 2px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
+    min-height: 32px;
+  }
+  /* Une carte sans marque ni année (un circuit) n'a pas de ligne
+     d'identification : le nom reprend alors l'écart que celle-ci portait. */
+  .thumb + .c-name {
+    margin-top: 8px;
   }
   .c-sub {
-    font-size: 11px;
-    color: var(--muted);
-    padding: 0 8px 8px;
+    display: flex;
+    align-items: center;
+    /* Réservée même quand l'année manque : sans hauteur minimale, une voiture
+       sans millésime remonte son nom d'une ligne et casse l'alignement du
+       haut des blocs, qui est ce qu'on lit en balayant une grille. */
+    min-height: 15px;
+    margin-top: 8px;
+    font-size: 10.5px;
+    letter-spacing: 0.02em;
     white-space: nowrap;
+    overflow: hidden;
+  }
+  .c-brand {
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* Poussée au bord droit : c'est l'alignement qui remplace le séparateur. */
+  .c-year {
+    margin-left: auto;
+    padding-left: 8px;
+  }
   .brand-badge {
+    flex: none;
     width: 13px;
     height: 13px;
     object-fit: contain;
+    /* Pour la colonne « Marque » du tableau, où le logo est en ligne dans du
+       texte — sans effet dans la carte, qui est en flex. */
     vertical-align: -2px;
     margin-right: 4px;
   }

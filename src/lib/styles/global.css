@@ -38,11 +38,37 @@
   --rosso-dim: #1a0606;
   --rosso-border: #5c1212;
   --bg: #08080c;
+  /* Le rail de navigation, et lui seul : un ton AU-DESSUS du fond, pour qu'il
+     se lise comme une surface posée sur l'écran. À `--bg`, il avait exactement
+     la valeur de la barre de titre et du fond de contenu, donc rien ne le
+     posait — il se lisait comme une découpe, d'autant que son filet droit en
+     `--line` ne se voit pas sur un fond aussi sombre. Le relief remplace ce
+     filet, il ne s'y ajoute pas : on délimite par la valeur OU par le trait,
+     jamais par les deux. */
+  --rail: #101013;
   --panel: #0d0d12;
   --panel2: #0a0a0f;
   --card: #13131a;
   --raised: #15151c;
   --line: #1e1e26;
+  /* --- Surfaces de la grille de bibliothèque -----------------------------
+   *
+   * Quatre valeurs à part, et c'est délibéré : la carte de la grille doit se
+   * DÉTACHER de la page, ce que l'échelle habituelle (`--card` à +6 sur le
+   * fond, `--raised` à +8) ne fait pas — sa bordure en `--line` était
+   * simplement invisible. Celles-ci montent d'un cran à chaque plan :
+   *
+   *   --panel  #0d0d12   le fond derrière la grille
+   *   --cell   #1a1b1e   la carte             (+13)
+   *   --mat    #242529   le mat sous l'image  (+10 sur la carte)
+   *
+   * Chacune avec son propre filet, un ton au-dessus d'elle. Ne pas les
+   * réemployer ailleurs sans raison : elles répondent à un problème de
+   * lisibilité propre à une grille de vignettes hétérogènes. */
+  --cell: #1a1b1e;
+  --cell-line: #2e2f34;
+  --mat: #242529;
+  --mat-line: #2b2c31;
   --txt: #f2f2f4;
   --txt2: #cfd2d9;
   --muted: #86868f;

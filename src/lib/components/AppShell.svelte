@@ -21,6 +21,7 @@
   import ImageSelectDropdown from "./ImageSelectDropdown.svelte";
 
   import { carClassOf, driverFor, isEmpty, wearsFallback } from "$lib/driverOverride.svelte";
+  import { bodyThumb, requestBodyThumb } from "$lib/driverThumbs.svelte";
   import { wornOutfit } from "$lib/driverOutfits.svelte";
   import TrackSkinChecklistDropdown from "./TrackSkinChecklistDropdown.svelte";
   import { nav, requestSection, pickSession } from "$lib/nav.svelte";
@@ -390,6 +391,32 @@
    * n'est que du bruit. */
   const driverBadge = $derived(driverPrefs.body ? "substituted" : null);
 
+  /**
+   * Vignette du corps substitué, dans la même colonne que celle de la livrée
+   * juste au-dessus.
+   *
+   * La ligne « Mon pilote » disait qui pilote sans le montrer, seule de la
+   * colonne dans ce cas : la voiture, la livrée et le circuit ont tous leur
+   * image. Rien à rendre en plus pour autant — c'est la vignette de la
+   * galerie de l'écran Pilote (`driverThumbs`), déjà sur disque dès qu'on y
+   * est passé une fois, et la clé est celle de cet écran.
+   *
+   * **Vide quand aucun corps n'est substitué**, et c'est exact : le pilote
+   * est alors celui que la voiture embarque, dont on ne connaît pas
+   * l'identifiant côté interface. La case reste, la colonne tient.
+   */
+  const driverBodyThumb = $derived(
+    nav.sessionCar && driverPrefs.body ? bodyThumb(nav.sessionCar.id + "|" + driverPrefs.body) : null,
+  );
+  $effect(() => {
+    const car = nav.sessionCar;
+    const body = driverPrefs.body;
+    // `requestBodyThumb` est idempotent (il sort tout de suite si la vignette
+    // est faite ou en cours) : cet effet, abonné à toutes les préférences par
+    // `driverPrefs`, peut donc se redéclencher sans rien coûter.
+    if (car && body) requestBodyThumb(car.id, car.skin ?? null, body);
+  });
+
   const trackInactive = $derived(nav.sessionTrack != null && trackDetail != null && !trackDetail.active);
 
   // Bouton rouge « Démarrer la session » : lance directement avec les
@@ -576,6 +603,9 @@
               onclick={() => requestSection("driver")}
             >
               <span class="k">{t("session.fieldDriver")}</span>
+              <span class="dthumb">
+                {#if driverBodyThumb}<img src={driverBodyThumb} alt="" />{/if}
+              </span>
               <span class="v" class:stock={driverUntouched}>{driverLabel}</span>
               {#if driverBadge}
                 <span class="dl-badge">{t("session.driverBadge." + driverBadge)}</span>
@@ -1006,7 +1036,12 @@
   .field {
     display: flex;
     align-items: center;
-    gap: 9px;
+    /* 8 px et non 9 : la même gouttière que `.isd-trigger` juste au-dessus.
+       Les deux lignes partagent la colonne d'intitulé et portent chacune une
+       vignette de 13 px — un pixel d'écart ici décale la valeur de l'une par
+       rapport à l'autre, ce qui se voit d'autant mieux qu'elles sont
+       voisines. */
+    gap: 8px;
     width: 100%;
     height: 30px;
     padding: 0 9px;
@@ -1030,6 +1065,26 @@
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--muted);
+  }
+  /* Même case que `.isd-thumb.labelled` du sélecteur de livrée, aux mêmes
+     dimensions : c'est leur alignement vertical qui fait tout l'intérêt. Elle
+     est posée même vide — un cadre qui apparaît et disparaît décalerait le
+     nom du pilote d'une voiture à l'autre. */
+  .dthumb {
+    flex: none;
+    width: 13px;
+    height: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .dthumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
   .field .v {
     flex: 1;

@@ -43,6 +43,10 @@ export const StorageKey = {
   transversalGroupBy: `${PREFIX}.transversal.groupBy`,
   transversalSortBy: `${PREFIX}.transversal.sortBy`,
   libraryView: (kind: ModKind) => `${PREFIX}.view.${kindKey(kind)}`,
+  /** Retrait du préfixe de marque dans le nom affiché en grille (§7.4). Non
+   * suffixée par type, contrairement à ses voisines : seules les voitures ont
+   * une marque, il n'y a donc rien à distinguer. */
+  gridHideBrand: `${PREFIX}.grid.hideBrand`,
   librarySortKey: (kind: ModKind) => `${PREFIX}.sort.${kindKey(kind)}.key`,
   librarySortDir: (kind: ModKind) => `${PREFIX}.sort.${kindKey(kind)}.dir`,
   libraryFilters: (kind: ModKind) => `${PREFIX}.filters.${kindKey(kind)}`,
