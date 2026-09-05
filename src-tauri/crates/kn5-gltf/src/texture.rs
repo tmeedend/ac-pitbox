@@ -7,21 +7,27 @@
 //! here and re-encoding to PNG/JPEG is what makes the result portable
 //! (spec §5.4).
 //!
-//! ## Why JPEG rather than WebP
+//! ## Pourquoi JPEG et pas WebP — question rouverte, puis refermée
 //!
-//! §5.4 asks for WebP quality 85 on colour maps. Two things argue against it,
-//! and they come from the spec itself:
+//! §5.4 demandait du WebP qualité 85 sur les cartes de couleur. Trois choses
+//! s'y opposent, dont une mesurée depuis :
 //!
-//! - core glTF 2.0 only allows `image/png` and `image/jpeg`; WebP needs the
-//!   `EXT_texture_webp` extension. Lot 3's acceptance criterion is that the
-//!   produced `.glb` opens **in Blender and in an online glTF viewer** — an
-//!   extension is exactly what breaks that;
-//! - the `image` crate dropped its WebP encoder in 0.25, so it would mean a
-//!   third-party binding to libwebp, i.e. a C toolchain in CI.
+//! - le glTF 2.0 de base n'autorise que `image/png` et `image/jpeg` ; WebP
+//!   passe par l'extension `EXT_texture_webp`, et le critère d'acceptation du
+//!   lot 3 est que le `.glb` s'ouvre **dans Blender et dans un visualiseur en
+//!   ligne** — une extension est exactement ce qui casse ça ;
+//! - `image` 0.25 a bien un encodeur WebP, mais **sans perte seulement**, et
+//!   sa propre documentation prévient qu'il « n'atteint pas le plein potentiel
+//!   du WebP sans perte ». Mesuré sur les 70 cartes de données d'une F40 :
+//!   **+10 % par rapport au PNG**, et 38 textures sur 70 individuellement plus
+//!   grosses. Il est plus rapide, ce qui ne sert à rien quand c'est plus lourd.
+//! - le vrai WebP — celui qui donne les −43 % mesurés par ailleurs avec
+//!   libwebp — demande donc une liaison C, donc une chaîne de compilation C
+//!   en CI.
 //!
-//! JPEG at the same quality lands within ~30 % of WebP's size, and the resize
-//! step already divides the payload by 4 to 16. Correctness of the acceptance
-//! test wins over the last 30 %.
+//! Le gain qu'on cherchait par le WebP a été pris ailleurs : en autorisant la
+//! perte sur les cartes de DONNÉES opaques (voir `encode`), ce que le JPEG
+//! déjà présent sait faire.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -36,9 +42,10 @@ use rayon::prelude::*;
 pub enum TextureRole {
     /// Bound to `txDiffuse`: the visible colour of the surface, sRGB.
     Color,
-    /// Everything else — normal maps, `txMaps`, masks, detail maps. Never
-    /// encoded lossily: JPEG artefacts on a normal map show up as visible
-    /// ripples across a car body panel.
+    /// Everything else — normal maps, `txMaps`, masks, detail maps. Encoded
+    /// lossily too, mais à une qualité bien plus haute et **seulement sans
+    /// alpha** : voir `TextureOptions::data_jpeg_quality` et la mesure dans
+    /// `encode`.
     Data,
 }
 
@@ -69,6 +76,15 @@ pub struct TextureOptions {
     /// Longest side of every other map.
     pub max_data_size: u32,
     pub jpeg_quality: u8,
+    /// Qualité JPEG des cartes de DONNÉES sans alpha, ou `None` pour les
+    /// garder sans perte.
+    ///
+    /// Séparée de `jpeg_quality`, et bien plus haute : une carte de couleur
+    /// est regardée, une carte de données est *calculée*, et l'œil ne juge pas
+    /// l'erreur au même endroit. Le repli en `None` est là pour être utilisé —
+    /// c'est le seul réglage de cette passe dont la bonne valeur soit une
+    /// question de goût plutôt que de mesure.
+    pub data_jpeg_quality: Option<u8>,
 }
 
 impl Default for TextureOptions {
@@ -77,6 +93,7 @@ impl Default for TextureOptions {
             max_color_size: 2048,
             max_data_size: 1024,
             jpeg_quality: 85,
+            data_jpeg_quality: Some(95),
         }
     }
 }
@@ -177,9 +194,9 @@ pub fn alpha_stats(texture: &PreparedTexture) -> Option<(usize, usize, [u8; 3])>
 /// Role of every texture referenced by a material, keyed by texture name.
 ///
 /// A texture bound to `txDiffuse` anywhere is treated as colour everywhere:
-/// mods do reuse the same file across slots, and getting it wrong in the
-/// lossy direction (a normal map encoded as JPEG) is far worse than the
-/// opposite.
+/// mods do reuse the same file across slots, and the two roles ne se
+/// compressent pas à la même qualité (§`data_jpeg_quality`) : se tromper coûte
+/// des artefacts sur une carte que rien ne signale.
 fn roles(model: &Kn5Model) -> BTreeMap<String, TextureUse> {
     let mut roles: BTreeMap<String, TextureUse> = BTreeMap::new();
     for material in &model.materials {
@@ -920,13 +937,54 @@ fn encode(image: &RgbaImage, role: TextureRole, options: &TextureOptions) -> Res
     // JPEG would silently drop that channel, filling every opening (§10,
     // "`ksAlphaRef` ignoré").
     let has_alpha = image.pixels().any(|p| p.0[3] != u8::MAX);
-    if role == TextureRole::Color && !has_alpha {
-        let mut bytes = Vec::new();
+    let lossy = match role {
+        TextureRole::Color => Some(options.jpeg_quality),
+        TextureRole::Data => options.data_jpeg_quality,
+    };
+    // **Une carte de données sans alpha peut aussi être lossy**, et c'est un
+    // revirement mesuré. Le commentaire d'en-tête de ce module l'excluait sur
+    // le principe — « les artefacts JPEG d'une carte de normales se voient en
+    // ondulations sur un panneau » — ce qui reste vrai d'un JPEG ordinaire :
+    // son sous-échantillonnage de chrominance écrase le R et le V, où vivent
+    // justement le X et le Y de la normale. Mais l'encodeur du crate `image`
+    // **n'en fait pas** (h=1, v=1 sur les trois composantes, donc du 4:4:4), et
+    // le dégât réel se mesure : sur les 35 cartes de normales d'une F40, à
+    // q95, **0,75° d'écart angulaire moyen, 0,57 % des pixels au-delà de 5°,
+    // 0,0035 % au-delà de 15°** — le pire cas (50°) étant une poignée de
+    // pixels isolés sur des coutures. Pour −26 % sur des cartes qui font 65 %
+    // du poids des données.
+    //
+    // Sans alpha seulement : le JPEG ne sait pas transporter de quatrième
+    // canal, et chez une carte de données c'en est un qui porte de
+    // l'information (voir `roles`), pas une découpe à jeter.
+    if let (Some(quality), false) = (lossy, has_alpha) {
         let rgb = image::DynamicImage::ImageRgba8(image.clone()).to_rgb8();
-        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, options.jpeg_quality)
+        let mut bytes = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, quality)
             .encode(rgb.as_raw(), rgb.width(), rgb.height(), image::ExtendedColorType::Rgb8)
             .map_err(|e| format!("jpeg encoding failed: {e}"))?;
-        return Ok((bytes, "image/jpeg"));
+
+        // **Le JPEG n'est gardé que s'il est vraiment plus petit**, et pour une
+        // carte de données ce n'est pas acquis. Mesuré : sur `ks_nissan_gtr`,
+        // dont les cartes de données sont synthétiques — larges aplats, dégradés
+        // francs —, le q95 rendait un fichier **plus gros** que le PNG (2,48 →
+        // 2,50 Mo d'images), là où l'Abarth 500 et la 911 RSR y gagnaient 12 à
+        // 14 %. Un aplat, c'est le cas idéal du PNG et le cas médiocre du JPEG.
+        // Comparer coûte un encodage de plus ; se tromper coûte de la place ET
+        // de la qualité, ce qui est le pire échange possible.
+        //
+        // Seulement pour les cartes de données : à q85, une livrée
+        // photographique est toujours très loin devant son PNG, et l'encodage
+        // de comparaison serait payé pour rien à chaque texture de couleur.
+        if role == TextureRole::Color {
+            return Ok((bytes, "image/jpeg"));
+        }
+        let lossless = encode_png(&rgb, image::ExtendedColorType::Rgb8, rgb.width(), rgb.height())?;
+        return Ok(if bytes.len() < lossless.len() {
+            (bytes, "image/jpeg")
+        } else {
+            (lossless, "image/png")
+        });
     }
 
     // **Un alpha qui ne dit rien ne s'écrit pas.** `has_alpha` servait
@@ -941,28 +999,32 @@ fn encode(image: &RgbaImage, role: TextureRole, options: &TextureOptions) -> Res
     // Le test est celui de l'information, pas du rôle : une carte de données
     // qui découpe vraiment (masque, décalcomanie) garde son canal, et une carte
     // de couleur transparente n'arrive même pas ici.
+    let bytes = if has_alpha {
+        encode_png(
+            image.as_raw(),
+            image::ExtendedColorType::Rgba8,
+            image.width(),
+            image.height(),
+        )?
+    } else {
+        let rgb = image::DynamicImage::ImageRgba8(image.clone()).to_rgb8();
+        encode_png(rgb.as_raw(), image::ExtendedColorType::Rgb8, rgb.width(), rgb.height())?
+    };
+    Ok((bytes, "image/png"))
+}
+
+/// Le PNG tel que cette passe l'écrit partout : compression par défaut, filtre
+/// adaptatif. `Best` a été essayé — 2 % de moins pour 2,8 fois le temps.
+fn encode_png(raw: &[u8], kind: image::ExtendedColorType, width: u32, height: u32) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::new();
-    let encoder = image::codecs::png::PngEncoder::new_with_quality(
+    image::codecs::png::PngEncoder::new_with_quality(
         &mut bytes,
         image::codecs::png::CompressionType::Default,
         image::codecs::png::FilterType::Adaptive,
-    );
-    if has_alpha {
-        encoder
-            .write_image(
-                image.as_raw(),
-                image.width(),
-                image.height(),
-                image::ExtendedColorType::Rgba8,
-            )
-            .map_err(|e| format!("png encoding failed: {e}"))?;
-    } else {
-        let rgb = image::DynamicImage::ImageRgba8(image.clone()).to_rgb8();
-        encoder
-            .write_image(rgb.as_raw(), rgb.width(), rgb.height(), image::ExtendedColorType::Rgb8)
-            .map_err(|e| format!("png encoding failed: {e}"))?;
-    }
-    Ok((bytes, "image/png"))
+    )
+    .write_image(raw, width, height, kind)
+    .map_err(|e| format!("png encoding failed: {e}"))?;
+    Ok(bytes)
 }
 
 #[cfg(test)]
@@ -1041,32 +1103,42 @@ mod tests {
         );
     }
 
-    // Rule: transparency survives encoding. This is the guard behind alpha
-    // masking — a grille whose alpha is dropped renders as a solid panel.
-    // Règle : un alpha constant ne s'écrit pas. Il ne porte aucune information
-    // — un glTF sans canal alpha se lit avec une opacité de 1, ce que valait
-    // le canal — et il coûte 10 % du poids de la texture (mesuré sur les 55
-    // cartes opaques d'une F40 sur 70). Un alpha qui VARIE, lui, découpe, et
-    // reste écrit.
+    // Règle : un alpha qui VARIE rend la texture intouchable — ni perte, ni
+    // canal retiré. C'est le garde-fou du masquage (une grille dont l'alpha
+    // saute se rend en panneau plein), et le JPEG ne sait de toute façon pas
+    // transporter un quatrième canal.
     #[test]
-    fn a_constant_alpha_is_not_written_but_a_varying_one_is() {
+    fn an_alpha_that_varies_keeps_the_texture_lossless_and_four_channelled() {
         let options = TextureOptions::default();
+        let mut cutting = solid(8, 8, [80, 90, 100, 255]);
+        cutting.get_pixel_mut(0, 0).0[3] = 0;
 
+        let (cut, mime) = encode(&cutting, TextureRole::Data, &options).expect("encodes");
+        assert_eq!(mime, "image/png", "un alpha interdit la perte");
+        assert_eq!(
+            image::load_from_memory(&cut).expect("relit").color(),
+            image::ColorType::Rgba8,
+            "et il est écrit, puisqu'il découpe"
+        );
+    }
+
+    // Règle : un alpha CONSTANT ne s'écrit pas — il ne porte aucune
+    // information (un glTF sans canal alpha se lit avec une opacité de 1, ce
+    // que valait le canal) et il coûte 10 % du poids, mesuré sur les 55 cartes
+    // opaques d'une F40 sur 70. Vérifié dans le mode sans perte, le seul qui
+    // écrive encore un PNG pour une texture opaque.
+    #[test]
+    fn a_constant_alpha_is_not_written() {
+        let options = TextureOptions {
+            data_jpeg_quality: None,
+            ..TextureOptions::default()
+        };
         let (opaque, mime) = encode(&solid(8, 8, [80, 90, 100, 255]), TextureRole::Data, &options).expect("encodes");
-        assert_eq!(mime, "image/png", "une carte de données reste sans perte");
+        assert_eq!(mime, "image/png", "sans perte sur demande");
         assert_eq!(
             image::load_from_memory(&opaque).expect("relit").color(),
             image::ColorType::Rgb8,
             "le canal muet n'est pas écrit"
-        );
-
-        let mut cutting = solid(8, 8, [80, 90, 100, 255]);
-        cutting.get_pixel_mut(0, 0).0[3] = 0;
-        let (cut, _) = encode(&cutting, TextureRole::Data, &options).expect("encodes");
-        assert_eq!(
-            image::load_from_memory(&cut).expect("relit").color(),
-            image::ColorType::Rgba8,
-            "un alpha qui découpe est gardé"
         );
     }
 
@@ -1083,16 +1155,58 @@ mod tests {
         assert_eq!(opaque_mime, "image/jpeg", "fully opaque colour map may be lossy");
     }
 
-    // Rule: normal maps and masks are never lossy, whatever their alpha.
+    // Règle : une carte de données opaque **ne coûte jamais plus que sa forme
+    // sans perte**. C'est l'invariant du « on garde le plus petit des deux » —
+    // et il se teste sur n'importe quel contenu, là où « ça part en JPEG »
+    // dépendrait de qui gagne la course, donc du contenu et des codecs.
+    //
+    // Il n'est pas théorique : sur `ks_nissan_gtr`, dont les cartes de données
+    // sont synthétiques, le q95 rendait 2,50 Mo d'images contre 2,48 en PNG,
+    // là où l'Abarth 500 et la 911 RSR y gagnaient 12 à 14 %.
     #[test]
-    fn data_textures_are_always_lossless() {
-        let (_, mime) = encode(
-            &solid(8, 8, [128, 128, 255, 255]),
-            TextureRole::Data,
-            &TextureOptions::default(),
-        )
-        .expect("encodes");
-        assert_eq!(mime, "image/png", "a normal map must not go through JPEG");
+    fn an_opaque_data_map_never_costs_more_than_its_lossless_form() {
+        let lossless = TextureOptions {
+            data_jpeg_quality: None,
+            ..TextureOptions::default()
+        };
+        // Un aplat (le cas idéal du PNG) et un dégradé fin (celui du JPEG) :
+        // la règle doit tenir des deux côtés de la bascule.
+        let flat = solid(64, 64, [128, 128, 255, 255]);
+        let mut ramp = flat.clone();
+        for (x, y, pixel) in ramp.enumerate_pixels_mut() {
+            pixel.0[0] = (x * 4) as u8;
+            pixel.0[1] = (y * 4) as u8;
+        }
+
+        for (label, sample) in [("aplat", &flat), ("dégradé", &ramp)] {
+            let (chosen, _) = encode(sample, TextureRole::Data, &TextureOptions::default()).expect("encodes");
+            let (reference, mime) = encode(sample, TextureRole::Data, &lossless).expect("encodes");
+            assert_eq!(mime, "image/png", "{label} : le mode sans perte écrit bien un PNG");
+            assert!(
+                chosen.len() <= reference.len(),
+                "{label} : {} octets contre {} sans perte — le plus petit doit gagner",
+                chosen.len(),
+                reference.len()
+            );
+        }
+    }
+
+    // Règle : le mode sans perte est une porte de sortie réelle — il rend un
+    // PNG même là où le JPEG serait plus petit. C'est ce qui permet de revenir
+    // en arrière si le rendu dément la mesure d'`encode`.
+    #[test]
+    fn the_lossless_option_forces_png_even_when_jpeg_would_win() {
+        let mut detailed = solid(128, 128, [128, 128, 255, 255]);
+        for (x, y, pixel) in detailed.enumerate_pixels_mut() {
+            pixel.0[0] = ((x * 7 + y * 3) % 256) as u8;
+            pixel.0[1] = ((x * 3 + y * 11) % 256) as u8;
+        }
+        let lossless = TextureOptions {
+            data_jpeg_quality: None,
+            ..TextureOptions::default()
+        };
+        let (_, mime) = encode(&detailed, TextureRole::Data, &lossless).expect("encodes");
+        assert_eq!(mime, "image/png", "aucune perte quand on la refuse");
     }
 
     // Rule: the role comes from the sampler slot, and a texture used as a

@@ -1784,6 +1784,28 @@ aussi du temps. Effet réel sur quatre voitures : **−1,7 %** des fichiers, le 
 n'en faisant qu'un quart. Le test porte sur l'information et non sur le rôle :
 une carte de données qui découpe vraiment garde son canal.
 
+**Retenu — les cartes de données opaques peuvent perdre un peu.** Le module
+l'excluait sur le principe : « les artefacts JPEG d'une carte de normales se
+voient en ondulations sur un panneau ». C'est vrai d'un JPEG *ordinaire*, dont
+le sous-échantillonnage de chrominance écrase le R et le V — là où vivent
+justement le X et le Y de la normale. Or l'encodeur du crate `image` **n'en
+fait pas** : h=1, v=1 sur les trois composantes, donc du 4:4:4. Le dégât se
+mesure alors, et il est petit : sur les 35 cartes de normales d'une F40, à
+q95, **0,75° d'écart angulaire moyen, 0,57 % des pixels au-delà de 5°, 0,0035 %
+au-delà de 15°** — le pire cas (50°) étant une poignée de pixels isolés sur des
+coutures. Les cartes de normales pèsent **65 % des octets de données** (5151 Ko
+sur 7923) : les épargner ne laisserait qu'un tiers du gain.
+
+**Mais le JPEG n'est gardé que s'il est réellement plus petit**, et ce
+garde-fou n'est pas théorique : sur `ks_nissan_gtr`, dont les cartes de données
+sont synthétiques (larges aplats, dégradés francs — le cas idéal du PNG et le
+cas médiocre du JPEG), le q95 rendait un fichier **plus gros**, 2,50 Mo
+d'images contre 2,48. Sans la comparaison, on aurait payé de la place *et* de
+la qualité. Avec, aucune voiture ne régresse : Abarth 500 −9 %, 911 RSR −7 %,
+MX-5 −4 %, GT-R −2 %, soit **−6 %** sur les quatre. `data_jpeg_quality: None`
+ramène tout au sans-perte en une valeur — c'est le seul réglage de cette passe
+dont la bonne valeur soit une affaire de goût plutôt que de mesure.
+
 **Abandonné — WebP sans perte.** C'était la piste la plus prometteuse sur le
 papier, et elle l'est toujours *avec libwebp* : mesuré par ffmpeg sur les mêmes
 70 textures, **−43 %**. Mais l'encodeur disponible sans compilateur C — celui
@@ -1794,7 +1816,8 @@ grosses**. Il est trois fois plus rapide, ce qui ne sert à rien quand le
 résultat est plus lourd. Reprendre cette piste veut donc dire : libwebp (donc
 une chaîne C en CI) *et* `EXT_texture_webp`, l'extension même que le critère
 d'acceptation du lot 3 (« s'ouvre dans Blender et dans un visualiseur en
-ligne ») cherchait à éviter.
+ligne ») cherchait à éviter. Le gain qu'on y cherchait a été pris autrement,
+par la perte sur les cartes de données ci-dessus.
 
 **Abandonné — les cartes en niveaux de gris.** L'idée était de ranger en L8 les
 cartes dont les trois canaux sont égaux (rugosité, occlusion, masques), ce qui
