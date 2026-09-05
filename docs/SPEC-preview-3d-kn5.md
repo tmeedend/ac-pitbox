@@ -1717,6 +1717,58 @@ gêne constatée :
 Restent aussi, hérités du plan initial : le choix du LOD en config, et l'aperçu
 dans `ModDetail.svelte` (panneau latéral), qui n'a jamais été branché.
 
+### 15.0bis Taille du `.glb` — attributs quantifiés
+
+Question posée à l'envers pendant longtemps. « Réduire le cache » faisait
+penser aux textures ; la mesure dit l'inverse. Sur onze entrées réelles :
+**133 Mo de géométrie contre 92 Mo d'images**, soit 59 / 41. Le poste le plus
+lourd n'était pas ce qu'on regarde mais quatre attributs écrits en `f32` alors
+qu'aucun n'a besoin de 32 bits.
+
+D'où `KHR_mesh_quantization` (extension ratifiée Khronos, gérée nativement par
+`GLTFLoader` et par l'importeur Blender) :
+
+| Attribut | Avant | Après | Pourquoi c'est sans risque |
+| --- | --- | --- | --- |
+| `NORMAL` | 12 o | 8 o (`short` normalisé + complément) | 0,002° d'erreur |
+| `TANGENT` | 16 o | 4 o (`byte` normalisé) | oriente une carte de normales, dont le bruit de texel domine |
+| `TEXCOORD_0` | 8 o | 4 o (`short` normalisé) | 1/32767 d'atlas, six centièmes de texel sur 2048 |
+| `WEIGHTS_0` | 16 o | 4 o (`ubyte` normalisé) | 1/255 par poids, somme corrigée à 255 |
+
+**Mesuré sur quatre voitures** (MX-5 Cup, GT-R, 911 RSR 2017, Abarth 500) :
+géométrie **26,5 → 18,2 Mo (−31 %)**, fichiers **41,5 → 33,2 Mo (−20 %)**.
+
+Trois choix méritent d'être retenus, parce qu'ils ne se devinent pas :
+
+- **`short` pour les normales, `byte` pour les tangentes**, et pas `byte`
+  partout (quatre octets de plus par sommet à gagner). La normale est ce que
+  tout calcul d'éclairage consomme directement, et l'erreur d'un byte — un demi
+  degré — se voit d'abord en bandes dans un reflet net qui balaie une grande
+  surface courbe : le capot d'une voiture, exactement. La tangente ne fait
+  qu'orienter une carte de normales. Le passage des normales en byte reste une
+  ligne à changer si la place manque plus que la finesse.
+- **Les UV se quantifient sur `[-1,1]` et pas sur le carré unité.** Le premier
+  jet testait `[0,1]`, la plage d'un normalisé non signé, et n'a rien rapporté :
+  **2 primitives sur 301** y tenaient. Les îlots d'UV d'AC débordent presque
+  toujours un peu sans pour autant répéter — et la fusion par matériau
+  (`geometry::merge_by_material`) aggrave tout, puisqu'un seul détail qui répète
+  entraîne la carrosserie entière. En signé, **242 primitives passent, 3,6 Mo
+  sur 4,1**. Il ne reste que 46 primitives qui répètent vraiment, et elles
+  restent en flottants : un normalisé les écrêterait, et une texture posée de
+  travers ne se signalerait nulle part.
+- **`extensionsRequired`, et c'est la seule du projet.** Les extensions de
+  matériau ne vont qu'en `extensionsUsed` : un lecteur qui les ignore rend un
+  modèle un peu terne. Celle-ci change le *type* des octets d'un attribut — un
+  lecteur qui la passerait sous silence relirait des entiers courts comme des
+  flottants, donc un tas de triangles. Le refus franc vaut mieux.
+
+`POSITION` reste en `f32` (6,2 Mo sur 18,2, le premier poste restant). Le
+quantifier demande de rendre l'échelle par la transformation du nœud, or celle
+d'un maillage skinné est **ignorée** par la spec : il faudrait la cuire dans les
+matrices de liaison du mannequin. C'est le lot suivant, avec la déduplication
+entre skins — mesurée à 34 Mo de géométrie strictement identique sur onze
+entrées, une voiture à trois livrées écrivant trois fois les mêmes sommets.
+
 ### 15.1 Cache — ce qui est en place
 
 Rappel, parce que la question revient : le cache est **sur disque**

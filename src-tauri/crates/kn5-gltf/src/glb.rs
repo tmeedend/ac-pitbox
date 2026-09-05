@@ -15,8 +15,15 @@ use crate::texture::TextureSet;
 // glTF component and target constants, spelled out so the JSON below reads as
 // the specification does.
 const COMPONENT_F32: u32 = 5126;
+const COMPONENT_I8: u32 = 5120;
+const COMPONENT_U8: u32 = 5121;
+const COMPONENT_I16: u32 = 5122;
 const COMPONENT_U16: u32 = 5123;
 const COMPONENT_U32: u32 = 5125;
+/// La seule extension que le document exige, plutôt que de simplement s'en
+/// servir (voir la déclaration dans `write_glb`).
+const MESH_QUANTIZATION: &str = "KHR_mesh_quantization";
+
 const TARGET_ARRAY_BUFFER: u32 = 34962;
 const TARGET_ELEMENT_ARRAY_BUFFER: u32 = 34963;
 
@@ -180,7 +187,7 @@ pub fn write_glb(
         let mut skinned_roots: Vec<usize> = Vec::new();
         for skinned in &rig.skinned {
             let joints_accessor = push_accessor_joints(&mut bin, &mut buffer_views, &mut accessors, &skinned.joints);
-            let weights_accessor = push_accessor_vec4(&mut bin, &mut buffer_views, &mut accessors, &skinned.weights);
+            let weights_accessor = push_accessor_weights(&mut bin, &mut buffer_views, &mut accessors, &skinned.weights);
             let mesh_index = push_mesh(
                 &mut bin,
                 &mut buffer_views,
@@ -284,10 +291,10 @@ pub fn write_glb(
         "buffers": [ { "byteLength": bin.len() } ],
     });
 
-    // Déclaration obligatoire : un lecteur qui ne connaît pas une extension
-    // doit pouvoir le dire. `extensionsUsed` (et non `extensionsRequired`) :
-    // le modèle reste lisible sans elles, le verre y perd seulement son reflet.
-    let extensions: Vec<&str> = used_materials
+    // Déclaration obligatoire : un lecteur qui ne connaît pas une extension doit
+    // pouvoir le dire. Celles des matériaux ne vont qu'en `extensionsUsed` — le
+    // modèle reste lisible sans elles, le verre y perd seulement son reflet.
+    let mut extensions: std::collections::BTreeSet<&str> = used_materials
         .iter()
         .flat_map(|m| {
             [
@@ -298,12 +305,20 @@ pub fn write_glb(
             ]
         })
         .flatten()
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
         .collect();
-    if !extensions.is_empty() {
-        document["extensionsUsed"] = json!(extensions);
-    }
+
+    // **`KHR_mesh_quantization` fait exception : elle est EXIGÉE**, et c'est la
+    // spec de l'extension qui l'impose autant que le bon sens. Les autres
+    // décrivent un raffinement qu'on peut ignorer ; celle-ci change le TYPE des
+    // octets d'un attribut. Un lecteur qui la passerait sous silence relirait
+    // des entiers courts comme des flottants — pas un modèle terne, un tas de
+    // triangles. Mieux vaut un refus franc.
+    //
+    // Toujours présente : il y a au moins un maillage (`write_glb` refuse le
+    // contraire) et tout maillage écrit ses normales quantifiées.
+    extensions.insert(MESH_QUANTIZATION);
+    document["extensionsUsed"] = json!(extensions.iter().collect::<Vec<_>>());
+    document["extensionsRequired"] = json!([MESH_QUANTIZATION]);
 
     if !skins.is_empty() {
         document["skins"] = json!(skins);
@@ -408,8 +423,8 @@ fn push_mesh(
     skin: Option<(usize, usize)>,
 ) -> usize {
     let positions = push_accessor_vec3(bin, views, accessors, &mesh.positions, true);
-    let normals = push_accessor_vec3(bin, views, accessors, &mesh.normals, false);
-    let uvs = push_accessor_vec2(bin, views, accessors, &mesh.uvs);
+    let normals = push_accessor_normals(bin, views, accessors, &mesh.normals);
+    let uvs = push_accessor_uvs(bin, views, accessors, &mesh.uvs);
     let indices = push_accessor_indices(bin, views, accessors, &mesh.indices);
 
     let mut primitive = json!({
@@ -430,7 +445,7 @@ fn push_mesh(
         .get(mesh.material_id as usize)
         .is_some_and(|m| m.normal_texture.is_some());
     if needs_tangents && mesh.tangents.len() == mesh.positions.len() {
-        let tangents = push_accessor_vec4(bin, views, accessors, &mesh.tangents);
+        let tangents = push_accessor_tangents(bin, views, accessors, &mesh.tangents);
         primitive["attributes"]["TANGENT"] = json!(tangents);
     }
     if let Some((joints, weights)) = skin {
@@ -439,6 +454,224 @@ fn push_mesh(
     }
     gltf_meshes.push(json!({ "name": mesh.name, "primitives": [primitive] }));
     gltf_meshes.len() - 1
+}
+
+// --- Attributs quantifiés (`KHR_mesh_quantization`) -------------------------
+//
+// Un aperçu de voiture, c'est 60 % de géométrie et 40 % d'images — mesuré sur
+// le cache : 133 Mo contre 92 sur onze entrées. Le poste le plus lourd n'était
+// donc pas les textures mais quatre attributs écrits en `f32` alors qu'aucun
+// n'a besoin de 32 bits de précision :
+//
+//   NORMAL      12 o → 8 (short normalisé + complément)
+//   TANGENT     16 o → 4 (byte normalisé)
+//   TEXCOORD_0   8 o → 4 (ushort normalisé, quand les UV tiennent dans [0,1])
+//   WEIGHTS_0   16 o → 4 (ubyte normalisé)
+//
+// **Pourquoi `short` pour les normales et `byte` pour les tangentes**, et pas
+// `byte` partout (qui rapporterait quatre octets de plus par sommet) : la
+// normale est ce que TOUT calcul d'éclairage consomme directement, et 0,5°
+// d'erreur — ce que donne un byte — se voit d'abord en bandes dans un reflet
+// net qui balaie une grande surface courbe, exactement le capot d'une voiture.
+// La tangente, elle, ne fait qu'orienter une carte de normales dont le bruit
+// de texel dépasse largement cet écart. Passer les normales en byte reste une
+// ligne à changer si la place manque plus que la finesse.
+//
+// `POSITION` reste en `f32` : le quantifier demande de rendre l'échelle par la
+// transformation du nœud, or celle d'un maillage skinné est ignorée par la
+// spec — il faudrait la cuire dans les matrices de liaison du mannequin. C'est
+// le lot suivant, pas celui-ci.
+
+/// Vers un entier court signé normalisé (`-32767..=32767` pour `-1..=1`).
+fn quantize_i16(value: f32) -> i16 {
+    (value.clamp(-1.0, 1.0) * 32767.0).round() as i16
+}
+
+/// Vers un octet signé normalisé (`-127..=127` pour `-1..=1`).
+fn quantize_i8(value: f32) -> i8 {
+    (value.clamp(-1.0, 1.0) * 127.0).round() as i8
+}
+
+/// Un vecteur ramené à la longueur 1, ou `None` s'il est nul.
+///
+/// La quantification normalisée suppose des composantes dans `[-1,1]` : une
+/// normale d'un poil plus longue que 1 — ce que produit une interpolation —
+/// serait écrêtée composante par composante, donc **déviée**, alors que la
+/// renormaliser ne coûte rien.
+fn unit(value: [f32; 3]) -> Option<[f32; 3]> {
+    let length = (value[0] * value[0] + value[1] * value[1] + value[2] * value[2]).sqrt();
+    (length > 1e-6).then(|| [value[0] / length, value[1] / length, value[2] / length])
+}
+
+/// `NORMAL` : trois entiers courts signés normalisés, complétés à huit octets.
+fn push_accessor_normals(
+    bin: &mut Vec<u8>,
+    views: &mut Vec<Value>,
+    accessors: &mut Vec<Value>,
+    data: &[[f32; 3]],
+) -> usize {
+    let mut bytes = Vec::with_capacity(data.len() * 8);
+    for value in data {
+        let normal = unit(*value).unwrap_or([0.0, 0.0, 0.0]);
+        for component in normal {
+            bytes.extend_from_slice(&quantize_i16(component).to_le_bytes());
+        }
+        // Le complément à quatre octets exigé par la spec (voir
+        // `push_view_strided`).
+        bytes.extend_from_slice(&[0, 0]);
+    }
+    let view = push_view_strided(bin, views, &bytes, Some(TARGET_ARRAY_BUFFER), Some(8));
+    accessors.push(json!({
+        "bufferView": view,
+        "componentType": COMPONENT_I16,
+        "normalized": true,
+        "count": data.len(),
+        "type": "VEC3",
+    }));
+    accessors.len() - 1
+}
+
+/// `TANGENT` : le repère en octets signés normalisés, latéralité comprise.
+///
+/// Le quatrième composant vaut ±1 et se quantifie comme les autres : ±127
+/// redonne exactement ±1 une fois déquantifié, la latéralité ne s'abîme pas.
+fn push_accessor_tangents(
+    bin: &mut Vec<u8>,
+    views: &mut Vec<Value>,
+    accessors: &mut Vec<Value>,
+    data: &[[f32; 4]],
+) -> usize {
+    let mut bytes = Vec::with_capacity(data.len() * 4);
+    for value in data {
+        let axis = unit([value[0], value[1], value[2]]).unwrap_or([1.0, 0.0, 0.0]);
+        for component in axis {
+            bytes.push(quantize_i8(component) as u8);
+        }
+        bytes.push(quantize_i8(if value[3] < 0.0 { -1.0 } else { 1.0 }) as u8);
+    }
+    let view = push_view(bin, views, &bytes, Some(TARGET_ARRAY_BUFFER));
+    accessors.push(json!({
+        "bufferView": view,
+        "componentType": COMPONENT_I8,
+        "normalized": true,
+        "count": data.len(),
+        "type": "VEC4",
+    }));
+    accessors.len() - 1
+}
+
+/// `TEXCOORD_0` : entiers courts normalisés quand l'atlas tient dans la plage
+/// d'un normalisé, flottants sinon.
+///
+/// Un accesseur normalisé ne sait couvrir que `[0,1]` (non signé) ou `[-1,1]`
+/// (signé) : au-delà, il écrête, et une texture posée de travers ne se
+/// signalerait nulle part. D'où un test primitive par primitive, et le repli en
+/// flottants pour ce qui déborde.
+///
+/// **Les deux plages, et pas seulement la première** — c'est la mesure qui l'a
+/// imposé. Le carré unité seul ne servait à rien : sur quatre voitures de
+/// référence, **2 primitives sur 301** y tenaient, soit 0 Mo gagné sur 4,1. Les
+/// îlots d'UV d'AC débordent presque toujours un peu, sans pour autant répéter.
+/// En ouvrant à `[-1,1]`, **242 primitives passent, soit 3,6 Mo sur 4,1** ; il
+/// ne reste que 46 primitives qui répètent vraiment (au-delà de 1) et 11 qui
+/// débordent d'un côté seulement. Le coût est le même — quatre octets — et la
+/// perte vaut 1/32767 d'atlas, six centièmes de texel sur une texture de 2048.
+///
+/// La fusion par matériau (`geometry::merge_by_material`) explique la sévérité
+/// du premier test : une primitive couvre TOUT un matériau, donc un seul
+/// détail qui répète y entraînait la carrosserie entière.
+fn push_accessor_uvs(
+    bin: &mut Vec<u8>,
+    views: &mut Vec<Value>,
+    accessors: &mut Vec<Value>,
+    data: &[[f32; 2]],
+) -> usize {
+    let mut min = f32::INFINITY;
+    let mut max = f32::NEG_INFINITY;
+    for value in data {
+        for component in value {
+            min = min.min(*component);
+            max = max.max(*component);
+        }
+    }
+    // Comparaisons fausses pour un NaN, qui part donc en flottants : c'est le
+    // bon défaut, on ne quantifie pas ce qu'on ne comprend pas.
+    let unsigned = min >= 0.0 && max <= 1.0;
+    let signed = min >= -1.0 && max <= 1.0;
+    if !unsigned && !signed {
+        return push_accessor_vec2(bin, views, accessors, data);
+    }
+
+    let mut bytes = Vec::with_capacity(data.len() * 4);
+    for value in data {
+        for component in value {
+            if unsigned {
+                bytes.extend_from_slice(&((component.clamp(0.0, 1.0) * 65535.0).round() as u16).to_le_bytes());
+            } else {
+                bytes.extend_from_slice(&quantize_i16(*component).to_le_bytes());
+            }
+        }
+    }
+    let view = push_view(bin, views, &bytes, Some(TARGET_ARRAY_BUFFER));
+    accessors.push(json!({
+        "bufferView": view,
+        "componentType": if unsigned { COMPONENT_U16 } else { COMPONENT_I16 },
+        "normalized": true,
+        "count": data.len(),
+        "type": "VEC2",
+    }));
+    accessors.len() - 1
+}
+
+/// `WEIGHTS_0` : quatre octets non signés normalisés, de somme exactement 255.
+///
+/// La somme est corrigée et pas seulement arrondie : glTF exige des poids de
+/// somme 1, et quatre arrondis indépendants la manquent d'une unité ou deux
+/// une fois sur deux. L'écart est infime, mais il se produit **à chaque
+/// sommet** d'un mannequin entier, et c'est le genre de dérive qui fait fondre
+/// un doigt sans qu'on sache d'où elle vient. Le reste va aux plus grandes
+/// parties fractionnaires — la règle du plus fort reste.
+fn push_accessor_weights(
+    bin: &mut Vec<u8>,
+    views: &mut Vec<Value>,
+    accessors: &mut Vec<Value>,
+    data: &[[f32; 4]],
+) -> usize {
+    let mut bytes = Vec::with_capacity(data.len() * 4);
+    for value in data {
+        let total: f32 = value.iter().map(|w| w.max(0.0)).sum();
+        let mut quantized = [0u8; 4];
+        if total > 1e-6 {
+            let exact = value.map(|w| w.max(0.0) / total * 255.0);
+            let mut sum = 0u32;
+            for slot in 0..4 {
+                quantized[slot] = exact[slot].floor() as u8;
+                sum += u32::from(quantized[slot]);
+            }
+            let fract = |i: usize| exact[i] - exact[i].floor();
+            let mut order = [0usize, 1, 2, 3];
+            order.sort_by(|a, b| fract(*b).total_cmp(&fract(*a)));
+            for slot in order {
+                if sum >= 255 {
+                    break;
+                }
+                if quantized[slot] < u8::MAX {
+                    quantized[slot] += 1;
+                    sum += 1;
+                }
+            }
+        }
+        bytes.extend_from_slice(&quantized);
+    }
+    let view = push_view(bin, views, &bytes, Some(TARGET_ARRAY_BUFFER));
+    accessors.push(json!({
+        "bufferView": view,
+        "componentType": COMPONENT_U8,
+        "normalized": true,
+        "count": data.len(),
+        "type": "VEC4",
+    }));
+    accessors.len() - 1
 }
 
 /// `JOINTS_0` : quatre indices d'os par sommet, en entiers courts non signés.
@@ -513,6 +746,23 @@ fn push_accessor_scalar(bin: &mut Vec<u8>, views: &mut Vec<Value>, accessors: &m
 }
 
 fn push_view(bin: &mut Vec<u8>, views: &mut Vec<Value>, data: &[u8], target: Option<u32>) -> usize {
+    push_view_strided(bin, views, data, target, None)
+}
+
+/// Idem, mais en déclarant le pas entre deux éléments.
+///
+/// **Obligatoire dès qu'un élément est complété.** glTF impose qu'un attribut
+/// de sommet commence sur une frontière de quatre octets, or un `VEC3` de
+/// `SHORT` en fait six : on écrit donc huit octets par normale, et sans
+/// `byteStride` le lecteur relirait la donnée avec un pas de six — c'est-à-dire
+/// n'importe quoi dès le deuxième sommet.
+fn push_view_strided(
+    bin: &mut Vec<u8>,
+    views: &mut Vec<Value>,
+    data: &[u8],
+    target: Option<u32>,
+    stride: Option<usize>,
+) -> usize {
     while !bin.len().is_multiple_of(4) {
         bin.push(0);
     }
@@ -521,6 +771,9 @@ fn push_view(bin: &mut Vec<u8>, views: &mut Vec<Value>, data: &[u8], target: Opt
     let mut view = json!({ "buffer": 0, "byteOffset": offset, "byteLength": data.len() });
     if let Some(target) = target {
         view["target"] = json!(target);
+    }
+    if let Some(stride) = stride {
+        view["byteStride"] = json!(stride);
     }
     views.push(view);
     views.len() - 1
@@ -749,9 +1002,13 @@ mod tests {
             used.iter().any(|v| v == "KHR_materials_transmission") && used.iter().any(|v| v == "KHR_materials_ior"),
             "les deux extensions sont déclarées, got {used:?}"
         );
+        let required = document["extensionsRequired"]
+            .as_array()
+            .expect("extensionsRequired present");
         assert!(
-            document["extensionsRequired"].is_null(),
-            "le modèle doit rester lisible sans elles"
+            !required.iter().any(|v| v == "KHR_materials_transmission")
+                && !required.iter().any(|v| v == "KHR_materials_ior"),
+            "le modèle doit rester lisible sans elles, got {required:?}"
         );
 
         let extensions = &document["materials"][0]["extensions"];
@@ -766,13 +1023,149 @@ mod tests {
 
     // Règle : un matériau ordinaire n'écrit ni extension ni déclaration. Le
     // contraire ferait payer à chaque voiture le coût d'une passe de rendu
-    // supplémentaire pour rien.
+    // supplémentaire pour rien. (La quantification, elle, est toujours
+    // déclarée : elle porte sur la géométrie, pas sur les matériaux.)
     #[test]
     fn an_ordinary_material_declares_no_extension() {
         let glb = write_glb(&[sample_mesh()], None, &[sample_material()], &TextureSet::default()).expect("writes");
         let document = parse(&glb);
-        assert!(document["extensionsUsed"].is_null(), "rien à déclarer");
+        let used = document["extensionsUsed"].as_array().expect("extensionsUsed present");
+        assert_eq!(used, &[Value::from(MESH_QUANTIZATION)], "rien à déclarer de plus");
         assert!(document["materials"][0]["extensions"].is_null(), "rien à porter");
+    }
+
+    // Règle : les attributs quantifiés se déclarent en `extensionsRequired`, et
+    // pas seulement en `extensionsUsed`. Un lecteur qui ignorerait l'extension
+    // relirait des entiers courts comme des flottants — un tas de triangles,
+    // pas un modèle terne. Le refus franc vaut mieux.
+    #[test]
+    fn quantized_attributes_declare_the_extension_as_required() {
+        let glb = write_glb(&[sample_mesh()], None, &[sample_material()], &TextureSet::default()).expect("writes");
+        let document = parse(&glb);
+
+        let used = document["extensionsUsed"].as_array().expect("extensionsUsed present");
+        assert!(used.iter().any(|v| v == MESH_QUANTIZATION), "déclarée comme employée");
+        let required = document["extensionsRequired"]
+            .as_array()
+            .expect("extensionsRequired present");
+        assert!(required.iter().any(|v| v == MESH_QUANTIZATION), "et comme exigée");
+
+        let attributes = &document["meshes"][0]["primitives"][0]["attributes"];
+        let normals = attributes["NORMAL"].as_u64().expect("NORMAL présent") as usize;
+        let accessor = &document["accessors"][normals];
+        assert_eq!(accessor["componentType"], COMPONENT_I16, "normales en entiers courts");
+        assert_eq!(accessor["normalized"], true, "lues comme des réels de [-1,1]");
+
+        // Le pas est ce qui rend la donnée relisible : un `VEC3` de `SHORT` fait
+        // six octets, la spec en exige huit, et sans `byteStride` le lecteur
+        // relirait tout de travers dès le deuxième sommet.
+        let view = accessor["bufferView"].as_u64().expect("une vue") as usize;
+        assert_eq!(
+            document["bufferViews"][view]["byteStride"], 8,
+            "le complément à quatre octets doit être annoncé"
+        );
+    }
+
+    // Règle : une coordonnée de texture se quantifie tant qu'elle tient dans la
+    // plage d'un normalisé — `[0,1]` non signé, `[-1,1]` signé — et retombe en
+    // flottants dès qu'elle répète. Un normalisé écrêterait, et la texture se
+    // poserait de travers sans un mot. Les trois cas, parce que n'en tester que
+    // le premier avait laissé la quantification sans effet sur 299 primitives
+    // de référence sur 301 (voir `push_accessor_uvs`).
+    #[test]
+    fn uvs_quantise_within_a_normalised_range_and_fall_back_when_they_tile() {
+        let component_of = |mesh: FlatMesh| {
+            let glb = write_glb(&[mesh], None, &[sample_material()], &TextureSet::default()).expect("writes");
+            let document = parse(&glb);
+            let uvs = document["meshes"][0]["primitives"][0]["attributes"]["TEXCOORD_0"]
+                .as_u64()
+                .expect("TEXCOORD_0 présent") as usize;
+            document["accessors"][uvs]["componentType"].clone()
+        };
+
+        assert_eq!(component_of(sample_mesh()), COMPONENT_U16, "dans [0,1], non signé");
+
+        let mut spilling = sample_mesh();
+        spilling.uvs = vec![[-0.4, 0.0], [1.0, 0.0], [0.0, 0.8]];
+        assert_eq!(
+            component_of(spilling),
+            COMPONENT_I16,
+            "un îlot qui déborde un peu reste quantifiable en signé"
+        );
+
+        let mut tiled = sample_mesh();
+        tiled.uvs = vec![[0.0, 0.0], [4.0, 0.0], [0.0, 4.0]];
+        assert_eq!(
+            component_of(tiled),
+            COMPONENT_F32,
+            "une UV qui répète vraiment reste en flottants"
+        );
+    }
+
+    // Règle : les poids d'un sommet somment exactement à 255 après
+    // quantification. Quatre arrondis indépendants manquent la cible une fois
+    // sur deux, et l'écart se produirait à chaque sommet du mannequin.
+    #[test]
+    fn skin_weights_quantise_to_an_exact_sum() {
+        let mut bin = Vec::new();
+        let mut views = Vec::new();
+        let mut accessors = Vec::new();
+        // Un tiers/tiers/tiers ne tombe pas juste, et des poids qui ne somment
+        // pas à 1 doivent être ramenés avant d'être arrondis.
+        let data = [
+            [1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0, 0.0],
+            [0.5, 0.25, 0.15, 0.10],
+            [0.8, 0.8, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0],
+        ];
+        push_accessor_weights(&mut bin, &mut views, &mut accessors, &data);
+
+        let offset = views[0]["byteOffset"].as_u64().expect("un décalage") as usize;
+        for (index, vertex) in bin[offset..offset + data.len() * 4].chunks(4).enumerate() {
+            let sum: u32 = vertex.iter().map(|w| u32::from(*w)).sum();
+            let expected = if index == 3 { 0 } else { 255 };
+            assert_eq!(
+                sum, expected,
+                "sommet {index} : poids de somme {expected}, got {vertex:?}"
+            );
+        }
+    }
+
+    // Règle : une normale non unitaire est RENORMALISÉE avant d'être
+    // quantifiée, jamais écrêtée composante par composante — l'écrêtage la
+    // ferait dévier, ce qui se verrait dans un reflet.
+    #[test]
+    fn an_overlong_normal_is_renormalised_not_clipped() {
+        let mut long = sample_mesh();
+        // Même direction que [1,1,0] normalisé, mais deux fois trop longue.
+        long.normals = vec![[1.4, 1.4, 0.0]; 3];
+        let glb = write_glb(&[long], None, &[sample_material()], &TextureSet::default()).expect("writes");
+        let document = parse(&glb);
+        let normals = document["meshes"][0]["primitives"][0]["attributes"]["NORMAL"]
+            .as_u64()
+            .expect("NORMAL présent") as usize;
+        let view = document["accessors"][normals]["bufferView"].as_u64().expect("une vue") as usize;
+        let offset = document["bufferViews"][view]["byteOffset"]
+            .as_u64()
+            .expect("un décalage") as usize;
+
+        let bin = bin_chunk(&glb);
+        let x = i16::from_le_bytes(bin[offset..offset + 2].try_into().unwrap());
+        let y = i16::from_le_bytes(bin[offset + 2..offset + 4].try_into().unwrap());
+        let expected = (std::f32::consts::FRAC_1_SQRT_2 * 32767.0).round() as i16;
+        assert_eq!(
+            (x, y),
+            (expected, expected),
+            "la direction est gardée, la longueur ramenée à 1"
+        );
+    }
+
+    /// Le contenu du second chunk (`BIN`), là où vivent les accesseurs.
+    fn bin_chunk(glb: &[u8]) -> &[u8] {
+        let json_len = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
+        let start = 20 + json_len;
+        let bin_len = u32::from_le_bytes(glb[start..start + 4].try_into().unwrap()) as usize;
+        &glb[start + 8..start + 8 + bin_len]
     }
 
     fn parse(glb: &[u8]) -> Value {
