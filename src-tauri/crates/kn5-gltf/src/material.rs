@@ -38,7 +38,8 @@ pub struct GltfMaterial {
     /// Carte métallique-rugosité dérivée de `txMaps`, quand le matériau en a
     /// une exploitable (voir [`crate::roughness`]).
     pub roughness_texture: Option<String>,
-    pub normal_scale: f32,
+    /// Répétition des UV demandée par le shader — voir [`UvScale`].
+    pub uv_scale: UvScale,
     pub emissive: [f32; 3],
     /// Facteur de rugosité. glTF le **multiplie** par la carte ci-dessus, donc
     /// il vaut 1 dès qu'une carte est là : c'est elle qui décide.
@@ -59,6 +60,67 @@ pub struct GltfMaterial {
     /// ce qui n'en porte pas.
     pub clearcoat: f32,
     pub clearcoat_roughness: f32,
+}
+
+/// De combien de fois une texture se répète sur la surface.
+///
+/// **Écart n°11 : `ksPerPixelNM_UVMult` multiplie les UV, et le nom du shader
+/// le dit.** Ses deux propriétés `diffuseMult` et `normalMult` ne sont pas des
+/// intensités mais des facteurs de répétition : la texture posée est un grain
+/// (alcantara, cuir, moquette) prévu pour être répété des dizaines de fois.
+/// Rendue à l'échelle 1, une seule copie s'étale sur toute la pièce et donne
+/// de grandes taches noires et blanches — vu sur le volant de
+/// `bmw_m3_e30_dtm`, dont l'alcantara demande **40**.
+///
+/// `normalMult` était en plus lu comme la *force* de la carte de normales
+/// (`normalTexture.scale` en glTF), ce qui posait un relief quarante fois trop
+/// marqué par-dessus. Mesuré sur la bibliothèque installée : `diffuseMult` et
+/// `normalMult` apparaissent **336 fois chacun, et `ksPerPixelNM_UVMult` 336
+/// fois** — ces propriétés n'existent nulle part ailleurs, et aucune source de
+/// force de normales n'existe donc dans le format. glTF n'ayant pas de
+/// répétition par matériau, c'est `KHR_texture_transform` qui la porte.
+///
+/// Cousins non traités, faute d'un défaut visible qui les désigne :
+/// `detailUVMultiplier` (7091) et `normalUVMultiplier` (346), qui règlent le
+/// pavage des cartes de *détail* de la famille `MultiMap` — que la conversion
+/// ne pose pas comme textures (voir [`crate::paint`]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct UvScale {
+    pub diffuse: f32,
+    pub normal: f32,
+}
+
+impl Default for UvScale {
+    fn default() -> Self {
+        Self {
+            diffuse: 1.0,
+            normal: 1.0,
+        }
+    }
+}
+
+impl UvScale {
+    fn of(material: &Kn5Material) -> Self {
+        // Lues sans regarder le shader : elles ne co-existent qu'avec
+        // `ksPerPixelNM_UVMult` sur tout le corpus, donc le filtre n'aurait
+        // rien à écarter — et si un mod les posait ailleurs, elles voudraient
+        // encore dire la même chose.
+        let read = |name: &str| {
+            material
+                .property(name)
+                .filter(|v| v.is_finite() && *v > 0.0)
+                .unwrap_or(1.0)
+        };
+        Self {
+            diffuse: read("diffuseMult"),
+            normal: read("normalMult"),
+        }
+    }
+
+    /// Rien à écrire : la texture est posée telle quelle.
+    pub fn is_identity(&self) -> bool {
+        (self.diffuse - 1.0).abs() < f32::EPSILON && (self.normal - 1.0).abs() < f32::EPSILON
+    }
 }
 
 /// Shaders whose name alone says the surface is glass.
@@ -348,7 +410,9 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
             base_color_texture: None,
             normal_texture: normal_map(material),
             roughness_texture: None,
-            normal_scale: material.property("normalMult").filter(|v| *v > 0.0).unwrap_or(1.0),
+            // Une vitre n'a pas de grain répété, et son shader n'en déclare
+            // pas : rien à transformer.
+            uv_scale: UvScale::default(),
             emissive: [0.0; 3],
             // Une vitre est lisse, et sa réflectance vient de l'IOR, pas d'une
             // métallicité : glTF dérive le F0 de `ior` exactement comme la
@@ -471,7 +535,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
         base_color_texture,
         normal_texture: normal_map(material),
         roughness_texture: textures.roughness_texture.clone(),
-        normal_scale: material.property("normalMult").filter(|v| *v > 0.0).unwrap_or(1.0),
+        uv_scale: UvScale::of(material),
         emissive,
         roughness,
         metallic,
@@ -775,6 +839,43 @@ mod tests {
         assert!(
             convert(&decal, MaterialTextures::default()).base_color[3] < 1.0,
             "sans alpha exploitable, la transparence vient du shader"
+        );
+    }
+
+    // Règle : `diffuseMult` et `normalMult` répètent les UV, ils ne mesurent
+    // pas une intensité. Bug réel : l'alcantara du volant de `bmw_m3_e30_dtm`
+    // demande 40, et une seule copie étalée sur la couronne donnait de grandes
+    // taches noires et blanches (signalé à l'écran).
+    #[test]
+    fn uv_multipliers_repeat_the_texture_instead_of_stretching_it() {
+        let alcantara = material(
+            "ksPerPixelNM_UVMult",
+            0,
+            false,
+            &[("diffuseMult", 40.0), ("normalMult", 40.0)],
+        );
+        let converted = convert(&alcantara, MaterialTextures::default());
+        assert_eq!(converted.uv_scale.diffuse, 40.0, "la diffuse se répète quarante fois");
+        assert_eq!(converted.uv_scale.normal, 40.0, "et la carte de normales avec elle");
+        assert!(
+            !converted.uv_scale.is_identity(),
+            "il y a donc bien quelque chose à écrire"
+        );
+    }
+
+    // Règle : sans ces propriétés, la texture est posée telle quelle — c'est le
+    // cas de la quasi-totalité des matériaux, et rien ne doit être écrit pour
+    // eux. Une valeur nulle ou absurde ne réduit pas la texture à un point,
+    // elle est simplement ignorée.
+    #[test]
+    fn a_material_without_multipliers_keeps_its_uvs() {
+        let plain = material("ksPerPixelNM", 0, false, &[("ksDiffuse", 0.5)]);
+        assert!(convert(&plain, MaterialTextures::default()).uv_scale.is_identity());
+
+        let broken = material("ksPerPixelNM_UVMult", 0, false, &[("diffuseMult", 0.0)]);
+        assert!(
+            convert(&broken, MaterialTextures::default()).uv_scale.is_identity(),
+            "un multiplicateur nul vient d'un fichier de mod, pas d'une intention"
         );
     }
 

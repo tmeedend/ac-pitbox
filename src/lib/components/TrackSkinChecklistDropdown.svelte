@@ -14,18 +14,30 @@
     options: TrackSkinOption[];
     busy?: boolean;
     ontoggle: (name: string, active: boolean) => void;
+    /** Intitulé du champ, en colonne (SPEC §9.1) — largeur partagée par
+     * `--sess-lblw` avec les autres champs de la colonne de session. */
+    label?: string;
   }
-  let { options, busy = false, ontoggle }: Props = $props();
+  let { options, busy = false, ontoggle, label }: Props = $props();
 
   let open = $state(false);
   let root = $state<HTMLDivElement | undefined>(undefined);
 
   const activeCount = $derived(options.filter((o) => o.active).length);
-  const label = $derived.by(() => {
-    if (activeCount === 0) return t("session.trackSkinsNone");
+  /** **L'état vide est une valeur, pas un intitulé.** « Aucun skin actif » se
+   * nommait parfaitement lui-même tant qu'il était vide, et l'information de
+   * nature disparaissait dès qu'un skin était coché. Le défaut se dit donc
+   * comme partout ailleurs dans le produit — un possessif en italique grise
+   * (« Celui d'origine », comme « Celle de la livrée » de l'écran Pilote),
+   * jamais une négation. */
+  const valueText = $derived.by(() => {
+    if (activeCount === 0) return t("session.trackSkinsStock");
     if (activeCount === 1) return options.find((o) => o.active)!.name;
     return t("session.trackSkinsCount", { count: activeCount });
   });
+  /** Aucun skin livré avec le circuit : rien à choisir, donc pas de contrôle —
+   * mais la ligne reste, elle dit ce que la session utilisera. */
+  const isStatic = $derived(options.length === 0);
 
   function toggle(e: MouseEvent) {
     e.stopPropagation();
@@ -51,8 +63,21 @@
 </script>
 
 <div class="isd" bind:this={root}>
-  <button class="isd-trigger" type="button" onclick={toggle} disabled={options.length === 0} title={t("session.trackSkinsTooltip")}>
-    <span class="isd-name" class:muted={activeCount === 0}>{options.length ? label : t("session.trackSkinsEmpty")}</span>
+  {#if isStatic}
+    <div class="isd-static">
+      {#if label}<span class="isd-k">{label}</span>{/if}
+      <span class="isd-name stock">{t("session.trackSkinsStock")}</span>
+    </div>
+  {:else}
+  <button
+    class="isd-trigger"
+    class:labelled={label != null}
+    type="button"
+    onclick={toggle}
+    title={t("session.trackSkinsTooltip")}
+  >
+    {#if label}<span class="isd-k">{label}</span>{/if}
+    <span class="isd-name" class:stock={activeCount === 0}>{valueText}</span>
     <span class="isd-caret">▾</span>
   </button>
   {#if open}
@@ -74,6 +99,7 @@
         </li>
       {/each}
     </ul>
+  {/if}
   {/if}
 </div>
 
@@ -97,8 +123,36 @@
   .isd-trigger:hover:not(:disabled) {
     border-color: var(--faint2);
   }
-  .isd-trigger:disabled {
-    opacity: 0.5;
+  .isd-trigger.labelled {
+    height: 30px;
+    padding: 0 9px;
+    gap: 9px;
+  }
+  /* Mêmes valeurs que `ImageSelectDropdown` : les deux composants posent des
+     lignes de la même colonne, elles doivent s'aligner au pixel. */
+  .isd-k {
+    flex: 0 0 var(--sess-lblw, 60px);
+    max-width: 88px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 8.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .isd-static {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 26px;
+    padding: 0 9px;
+    font-size: 11px;
+  }
+  /* Valeur par défaut : italique grise, jamais une négation. */
+  .isd-name.stock {
+    color: var(--muted);
+    font-style: italic;
   }
   .isd-name {
     flex: 1;
@@ -107,9 +161,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--txt);
-  }
-  .isd-name.muted {
-    color: var(--muted);
   }
   .isd-caret {
     flex: none;

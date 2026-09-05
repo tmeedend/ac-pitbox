@@ -3,9 +3,13 @@
   // haut de la bibliothèque — trop discrète pour expliquer les choix, et
   // limitée à Voitures/Circuits. Le glisser-déposer reste le geste rapide,
   // disponible partout dans l'app (voir initGlobalDragDrop dans AppShell).
+  import { onMount } from "svelte";
   import { open } from "@tauri-apps/plugin-dialog";
   import BulkImport from "./BulkImport.svelte";
   import ImportReport from "./ImportReport.svelte";
+  import Field from "./Field.svelte";
+  import { getConfig, saveConfig, type AppConfig } from "$lib/config";
+  import { errorText } from "$lib/errors";
   import {
     importState,
     importSummary,
@@ -16,6 +20,38 @@
   } from "$lib/importState.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
+  // --- Préférences d'import (SPEC §7.2quater) -------------------------------
+  //
+  // Elles vivaient dans un onglet « Import » des Réglages, à deux noms quasi
+  // identiques de cet écran-ci : l'un l'action, l'autre ses préférences. Les
+  // préférences d'une opération se consultent à côté de l'opération. Section
+  // repliable et non onglet : cet écran est DÉJÀ un onglet de l'Atelier, et
+  // des onglets dedans recréeraient le double niveau interdit.
+  //
+  // Écriture immédiate, sans bouton « Enregistrer » : deux réglages, aucun
+  // aperçu live à valider ou à annuler — la garde de navigation des Réglages
+  // n'aurait rien à garder ici. Un échec se dit (`prefsError`), il ne se
+  // perd pas en silence.
+  let config = $state<AppConfig | null>(null);
+  let prefsOpen = $state(false);
+  let prefsError = $state("");
+  onMount(async () => {
+    try {
+      config = await getConfig();
+    } catch (e) {
+      prefsError = errorText(e);
+    }
+  });
+  async function persistPrefs() {
+    if (!config) return;
+    try {
+      await saveConfig($state.snapshot(config));
+      prefsError = "";
+    } catch (e) {
+      prefsError = errorText(e);
+    }
+  }
+
   let bulkParent = $state<string | null>(null);
   async function pickBulkImport() {
     const sel = await open({ directory: true, multiple: false });
@@ -24,8 +60,8 @@
 </script>
 
 <div class="import-screen">
+  <!-- Onglet de l'Atelier : le titre d'écran est porté par l'Atelier. -->
   <header class="head">
-    <h2 class="lbl-screen">{t("nav.import")}</h2>
     <p class="sub">
       {t("import.subtitlePrefix")}<b>{t("import.subtitleBold")}</b>{t("import.subtitleSuffix")}
     </p>
@@ -88,6 +124,32 @@
       </div>
     </section>
   {/if}
+
+  {#if config}
+    <section class="prefs">
+      <button class="prefs-h" type="button" aria-expanded={prefsOpen} onclick={() => (prefsOpen = !prefsOpen)}>
+        <span class="chev" aria-hidden="true">{prefsOpen ? "▾" : "▸"}</span>{t("import.prefsTitle")}
+      </button>
+      {#if prefsOpen}
+        <div class="prefs-b">
+          <Field label={t("settings.resourceExtraction")} hint={t("settings.resourceExtractionHint")}>
+            <select class="input" bind:value={config.prefs.resource_extraction_mode} onchange={persistPrefs}>
+              <option value="none">{t("settings.resourceExtractionNone")}</option>
+              <option value="info_only">{t("settings.resourceExtractionInfo")}</option>
+              <option value="all">{t("settings.resourceExtractionAll")}</option>
+            </select>
+          </Field>
+          <Field hint={t("settings.keepSourceArchiveHint")}>
+            <label class="check">
+              <input type="checkbox" bind:checked={config.prefs.keep_source_archive} onchange={persistPrefs} />
+              <span>{t("settings.keepSourceArchive")}</span>
+            </label>
+          </Field>
+          {#if prefsError}<div class="errbox">{prefsError}</div>{/if}
+        </div>
+      {/if}
+    </section>
+  {/if}
 </div>
 
 {#if bulkParent}
@@ -105,6 +167,52 @@
 <style>
   .import-screen {
     max-width: 760px;
+  }
+  /* Repliée par défaut : on vient ici pour importer, pas pour régler. */
+  .prefs {
+    margin-top: 26px;
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+  }
+  .prefs-h {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: none;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .prefs-h:hover {
+    color: var(--txt2);
+  }
+  .prefs-h .chev {
+    font-size: 9px;
+  }
+  .prefs-b {
+    margin-top: 16px;
+    max-width: 420px;
+  }
+  .prefs-b .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--txt2);
+    cursor: pointer;
+  }
+  .prefs-b .input {
+    max-width: 260px;
+  }
+  .errbox {
+    margin-top: 12px;
+    background: var(--rosso-dim);
+    border: 1px solid var(--rosso-border);
+    color: var(--rosso-bright);
+    padding: 8px 10px;
+    font-size: 11.5px;
   }
   .head {
     margin-bottom: 22px;

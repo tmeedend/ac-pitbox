@@ -1,32 +1,41 @@
 {
   "nav": {
     "session": "Sessão",
-    "addons": "Add-ons",
     "atelier": "Oficina",
     "skins": "Skins",
     "carAddons": "Add-ons de carro",
     "trackAddons": "Add-ons de pista",
     "sounds": "Sons",
-    "others": "Outros mods",
+    "others": "Extras",
     "apps": "Apps",
     "rules": "Regras",
     "import": "Importar",
     "profiles": "Perfis",
     "maintenance": "Manutenção",
-    "openCm": "Abrir o CM",
+    "openCm": "Abrir o Content Manager",
     "settings": "Configurações",
-    "about": "Sobre"
+    "about": "Sobre",
+    "cars": "Carros",
+    "tracks": "Circuitos",
+    "railLabel": "Navegação principal",
+    "alertLabel": "elementos a verificar"
   },
   "titlebar": {
     "bigPicture": "Modo Big Picture (tela cheia)",
     "minimize": "Minimizar",
     "maximize": "Maximizar",
     "restore": "Restaurar",
-    "close": "Fechar"
+    "close": "Fechar",
+    "bigPictureLabel": "BIG PICTURE"
   },
   "session": {
-    "carTag": "CARRO",
     "trackTag": "PISTA",
+    "fieldLivery": "Pintura",
+    "fieldDriver": "Piloto",
+    "fieldLayout": "Layout",
+    "fieldTrackSkin": "Skin",
+    "layoutSingle": "layout único",
+    "trackSkinsStock": "O original",
     "changeCar": "Mudar de carro",
     "changeTrack": "Mudar de circuito",
     "chooseCar": "Escolher um carro",
@@ -46,8 +55,6 @@
     "noSkinsAvailable": "Nenhum skin",
     "pickLayout": "Escolher um layout…",
     "noLayoutsAvailable": "Nenhum layout",
-    "trackSkinsNone": "Nenhum skin ativo",
-    "trackSkinsEmpty": "Nenhum skin de pista",
     "trackSkinsCount": "{count} skins ativos",
     "trackSkinsTooltip": "Skins de pista — vários podem estar ativos"
   },
@@ -145,12 +152,10 @@
     "title": "Configurações",
     "tabGeneral": "Geral",
     "tabPaths": "Caminhos",
-    "tabImport": "Importação",
-    "tabPreview": "Pré-visualização",
+    "tabPreview": "Pré-visualização 3D",
     "tabMusic": "Música",
     "tabGeneralHint": "Idioma, escala da interface, showroom padrão da pré-visualização 3D.",
     "tabPathsHint": "Configuração do ambiente. A biblioteca, a sobreposição e as regras são armazenamentos distintos.",
-    "tabImportHint": "Comportamento do app ao importar um mod.",
     "tabPreviewHint": "Pré-visualização 3D exibida na página de um carro. As mudanças se aplicam na hora.",
     "preview3dEnabled": "Mostrar a pré-visualização 3D nas páginas dos carros",
     "preview3dEnabledHint": "Desmarcado, as páginas mostram a foto do skin. O botão na página faz a mesma coisa.",
@@ -917,7 +922,6 @@
     "managed": "{count} em território do Content Manager",
     "managedTooltip": "O Content Manager sincroniza estas pastas a partir do repositório de configurações CSP. Ele pode substituir estes arquivos pelas suas próprias versões a qualquer momento. Não é o local recomendado para um mod.",
     "cat": {
-      "all": "Todos",
       "extension": "Extensões",
       "weather": "Clima",
       "gui": "Interface",
@@ -929,7 +933,10 @@
       "showrooms": "Showrooms",
       "other": "Outros"
     },
-    "noMatch": "Nenhum mod corresponde."
+    "noMatch": "Nenhum mod corresponde.",
+    "driverTitle": "Manequim",
+    "driverInactive": "Ative o mod para ver o manequim: o que é renderizado é o ficheiro instalado no jogo.",
+    "driverNeedsCar": "Escolha um carro de sessão: é o carro que dá a pose ao manequim."
   },
   "import": {
     "subtitlePrefix": "Adiciona mods à biblioteca. Um mod importado (ou atualizado) é ",
@@ -957,7 +964,8 @@
     "chooseParentFolder": "Escolher uma pasta superior…",
     "lastReportTitle": "Última importação",
     "dndTitle": "Arrastar e soltar",
-    "dndHint": "O gesto rápido: solte um arquivo em qualquer ponto da janela, em qualquer tela — a importação começa imediatamente, com o modo copiar/mover escolhido acima para uma pasta."
+    "dndHint": "O gesto rápido: solte um arquivo em qualquer ponto da janela, em qualquer tela — a importação começa imediatamente, com o modo copiar/mover escolhido acima para uma pasta.",
+    "prefsTitle": "Preferências de importação"
   },
   "importOverlay": {
     "queued": "{n} arquivo(s) recolhido(s), importando…",

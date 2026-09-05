@@ -202,8 +202,8 @@
 
 <div class="maint">
   <header class="head">
+    <!-- Onglet de l'Atelier : le titre d'écran est porté par l'Atelier. -->
     <div>
-      <h2 class="lbl-screen">{t("nav.maintenance")}</h2>
       <p class="sub">{t("maintenance.subtitle")}</p>
     </div>
     <button class="btn btn-primary" type="button" onclick={scan} disabled={scanning}>

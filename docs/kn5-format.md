@@ -1443,3 +1443,50 @@ repère posé côté conversion avec un deux-points ne répond jamais côté vue
 Mesuré au banc en listant les noms après chargement. D'où le préfixe
 `PITBOX_DRIVER_`, au souligné : il traverse intact.
 
+---
+
+## Écart n°22 — `diffuseMult` et `normalMult` répètent les UV, ils ne dosent rien
+
+**Attendu** : un nom en `…Mult` sur un matériau, c'est une intensité — le
+facteur qu'on applique à une carte. `normalMult` partait donc dans
+`normalTexture.scale` de glTF, la force de la carte de normales.
+
+**Réel** : ce sont des **facteurs de répétition d'UV**, et le nom du shader le
+dit — `ksPerPixelNM_UVMult`. La texture posée n'est pas l'image de la pièce
+mais un **grain** (alcantara, cuir, moquette, tôle gaufrée) prévu pour être
+pavé des dizaines de fois dessus. Rendu à l'échelle 1, une seule copie s'étale
+sur toute la surface : de grandes taches noires et blanches là où l'œil attend
+un tissu uni. Vu sur le volant de `bmw_m3_e30_dtm` (`INT_Volante_Alcantara`,
+`diffuseMult = normalMult = 40`) et signalé à l'écran ; la même voiture porte
+un `INT_METAL_Plate_NM` à `normalMult = 80`, qui rendait en plus un relief
+quatre-vingts fois trop marqué.
+
+**La mesure qui tranche**, sur les 312 voitures installées :
+
+| Ce qu'on compte | Occurrences |
+| --- | --- |
+| matériaux en `ksPerPixelNM_UVMult` | 336 |
+| propriétés `diffuseMult` | 336 |
+| propriétés `normalMult` | 336 |
+
+Les trois nombres sont **égaux**, et aucun autre shader ne porte ces deux
+propriétés. Elles ne sont donc jamais autre chose que le multiplicateur d'UV de
+ce shader — et il n'existe, du même coup, **aucune source de force de carte de
+normales dans le format** : le champ glTF est laissé à sa valeur par défaut.
+
+**Comment c'est écrit** : `KHR_texture_transform` (`scale: [n, n]`) sur la
+référence de texture, en `extensionsUsed` seulement — un lecteur qui l'ignore
+retrouve exactement l'ancien rendu. Pas des UV recalculés dans le maillage : la
+répétition appartient au matériau, pas à la géométrie, et un même maillage peut
+porter une diffuse pavée quarante fois sous une normale pavée autrement.
+L'échantillonneur du document répète déjà sur les deux axes (`wrapS`/`wrapT`
+`10497`), ce qu'AC suppose aussi pour ses bandes de roulement.
+
+**Deux cousins non traités**, faute d'un défaut visible qui les désigne :
+`detailUVMultiplier` (7091 occurrences) et `normalUVMultiplier` (346), qui
+pavent les cartes de *détail* de la famille `MultiMap` — que la conversion ne
+pose pas comme textures mais mélange au facteur de couleur (voir `paint.rs`).
+
+```text
+cargo run -p kn5-tool -- scan "…/content/cars" --details
+```

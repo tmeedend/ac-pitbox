@@ -19,8 +19,32 @@
     onselect: (id: string) => void;
     /** "contain" pour un tracé (forme complète, pas de recadrage) — défaut "cover" pour une photo/skin. */
     fit?: "cover" | "contain";
+    /** Intitulé du champ, en colonne à gauche de la valeur (SPEC §9.1). Sa
+     * largeur est partagée par tous les champs de la colonne de session via
+     * `--sess-lblw` : c'est l'alignement des valeurs qui fait tout l'intérêt
+     * du dispositif, et il disparaît si chaque ligne se dimensionne seule. */
+    label?: string;
+    /** Un sélecteur à une seule option n'en est pas un : il devient une ligne
+     * statique — même colonne d'intitulé, ni bordure ni chevron. La ligne
+     * n'est PAS masquée pour autant : elle dit ce que la session utilisera,
+     * c'est le contrôle qui disparaît, pas le fait. */
+    staticWhenSingle?: boolean;
+    /** Mention accolée à la valeur d'une ligne statique à une seule option
+     * (« Imola — tracé unique ») : elle explique pourquoi il n'y a rien à
+     * choisir, là où le nom seul laisserait croire à un menu cassé. */
+    singleNote?: string;
   }
-  let { options, selectedId, placeholder, emptyText, onselect, fit = "cover" }: Props = $props();
+  let {
+    options,
+    selectedId,
+    placeholder,
+    emptyText,
+    onselect,
+    fit = "cover",
+    label,
+    staticWhenSingle = false,
+    singleNote,
+  }: Props = $props();
 
   let open = $state(false);
   let root = $state<HTMLDivElement | undefined>(undefined);
@@ -28,7 +52,15 @@
   let listEl = $state<HTMLUListElement | undefined>(undefined);
 
   const selected = $derived(options.find((o) => o.id === selectedId) ?? null);
-  const label = $derived(selected?.name ?? (options.length ? placeholder : emptyText));
+  const valueText = $derived(selected?.name ?? (options.length ? placeholder : emptyText));
+  const isStatic = $derived(staticWhenSingle && options.length < 2);
+  /** Ce que dit la ligne statique : l'option unique — c'est bien celle que la
+   * session utilisera, choisie ou non — sinon l'état vide. */
+  const staticText = $derived.by(() => {
+    const only = options[0];
+    if (!only) return emptyText;
+    return singleNote ? `${only.name} — ${singleNote}` : only.name;
+  });
 
   // Position de la liste ouverte, en `position: fixed` (voir plus bas pour le
   // pourquoi) : calculée à l'ouverture depuis le déclencheur, puis resserrée
@@ -147,17 +179,25 @@
 </script>
 
 <div class="isd" bind:this={root}>
+  {#if isStatic}
+    <div class="isd-static">
+      {#if label}<span class="isd-k">{label}</span>{/if}
+      <span class="isd-name muted">{staticText}</span>
+    </div>
+  {:else}
   <button
     bind:this={triggerEl}
     class="isd-trigger"
+    class:labelled={label != null}
     type="button"
     onclick={toggle}
     disabled={options.length === 0}
   >
+    {#if label}<span class="isd-k">{label}</span>{/if}
     <span class="isd-thumb" class:contain={fit === "contain"}>
       {#if selected?.image}<img src={selected.image} alt="" />{:else}<span class="isd-noimg"></span>{/if}
     </span>
-    <span class="isd-name" class:muted={!selected}>{label}</span>
+    <span class="isd-name" class:muted={!selected}>{valueText}</span>
     <span class="isd-caret">▾</span>
   </button>
   <!-- Info-bulle maison plutôt que `Tooltip.svelte` : celui-ci enveloppe son
@@ -172,7 +212,7 @@
        position, elle ferait doublon avec elle (qui montre déjà les noms en
        entier) et se chevaucherait visuellement. -->
   {#if !open}
-    <span class="isd-tt" role="tooltip">{label}</span>
+    <span class="isd-tt" role="tooltip">{valueText}</span>
   {/if}
   {#if open}
     <ul class="isd-list" bind:this={listEl} style={listStyle}>
@@ -187,6 +227,7 @@
         </li>
       {/each}
     </ul>
+  {/if}
   {/if}
 </div>
 
@@ -205,6 +246,45 @@
     padding: 5px 8px;
     font-size: 11px;
     text-align: left;
+  }
+  /* Version « champ nommé » de la colonne de session : hauteur fixe pour que
+     les lignes s'alignent, et une vignette réduite au rôle de pastille de
+     couleur — à 13 px, ce qu'on lit d'un skin c'est sa teinte, pas son motif. */
+  .isd-trigger.labelled {
+    height: 30px;
+    padding: 0 9px;
+    gap: 9px;
+  }
+  .isd-trigger.labelled .isd-thumb {
+    width: 13px;
+    height: 13px;
+  }
+  /* Le libellé ne bouge jamais, la valeur change : c'est toute la règle. Un
+     intitulé qui se nomme lui-même (« Aucun skin de circuit ») disparaît dès
+     que la valeur est renseignée, et l'utilisateur perd la nature du champ. */
+  .isd-k {
+    flex: 0 0 var(--sess-lblw, 60px);
+    /* Plafond de la colonne : au-delà, l'intitulé tronque plutôt que de
+       manger la valeur (une locale peut être bien plus longue — LACKIERUNG). */
+    max-width: 88px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 8.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .isd-static {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 26px;
+    padding: 0 9px;
+    font-size: 11px;
+  }
+  .isd-static .isd-name {
+    color: var(--muted);
   }
   /* Survol neutre : un menu de livrée est un contrôle secondaire, il n'a pas
      droit au rouge au repos, donc pas davantage sous le curseur (SPEC

@@ -552,15 +552,38 @@ et un volant immobile ne braque rien. Le même angle tourne donc aussi :
   (composante latérale 0,000 à la médiane, 0,070 au pire) et **incliné de 20°
   à la médiane**, ce qui est la nappe d'une vraie colonne. Les cinq indécis sont
   des monoplaces dont le nœud est plus profond que large ;
-- **les roues avant** (`WHEEL_LF` / `WHEEL_RF`), autour de la verticale, de
-  l'angle demandé tel quel — c'est le volant qui le multiplie par la
-  démultiplication que la voiture déclare (`car.ini`, `[CONTROLS] STEER_RATIO` —
-  de 10 à 24 sur la bibliothèque, 14 sur la moitié d'entre elles). Seul le
-  volant s'arrête, à `STEER_LOCK / STEER_RATIO` ramené aux roues. Le pivot est le
-  **milieu de la géométrie**, pas l'origine du nœud : une rotation ne dépend pas
-  du point de l'axe qu'on choisit, mais certains mods accrochent le volant à un
-  nœud posé à l'origine de la voiture, et un demi-tour autour d'un point à deux
-  mètres l'envoie à travers l'habitacle.
+- **les coins avant**, autour de la verticale, de l'angle demandé tel quel —
+  c'est le volant qui le multiplie par la démultiplication que la voiture
+  déclare (`car.ini`, `[CONTROLS] STEER_RATIO` — de 10 à 24 sur la
+  bibliothèque, 14 sur la moitié d'entre elles). Seul le volant s'arrête, à
+  `STEER_LOCK / STEER_RATIO` ramené aux roues. Le pivot est le **milieu de la
+  géométrie**, pas l'origine du nœud : une rotation ne dépend pas du point de
+  l'axe qu'on choisit, mais certains mods accrochent le volant à un nœud posé à
+  l'origine de la voiture, et un demi-tour autour d'un point à deux mètres
+  l'envoie à travers l'habitacle.
+
+  **Un coin avant est en TROIS nœuds frères, pas un.** C'était le défaut : ne
+  tourner que `WHEEL_?F` laissait l'étrier de frein immobile, et il ressortait
+  à travers le flanc du pneu dès quelques degrés (signalé à l'écran sur
+  `bmw_m3_e30_dtm`). Mesuré sur six voitures — MX-5 Cup, 911 GT3 RS, Abarth
+  500, R8 LMS, M3 E30, M3 E30 DTM — AC découpe toujours de la même façon :
+
+  | Nœud | Contenu | Matériaux vus |
+  | --- | --- | --- |
+  | `WHEEL_?F` | pneu + jante | `EXT_Tyre`, `Rim_BASE` |
+  | `DISC_?F` | disque de frein | `EXT_Disc`, `CAR_DiscoFreni` |
+  | `SUSP_?F` | fusée + étrier | `EXT_Calipers`, `CAR_PinzaFreni`, `EXT_Caliper_base` |
+
+  Les noms de matériaux changent d'un studio à l'autre, le découpage non. Les
+  trois tournent donc ensemble — et **autour du centre de la roue**, jamais du
+  leur : l'étrier n'est pas sur l'axe de braquage, il est à côté du disque, et
+  le faire pivoter sur son propre milieu le fait tourner sur lui-même en
+  restant où il est, c'est-à-dire traverser le pneu. Le pivot du coin se mesure
+  donc **avant le parcours de l'arbre**, dans une passe à part : rien ne
+  garantit l'ordre des frères — sur la M3 E30 DTM la roue précède l'étrier,
+  sur la MX-5 Cup c'est l'inverse. Les trois partagent aussi leur **groupe**,
+  ce qui laisse leurs maillages fusionner par matériau ; les deux coins, eux,
+  restent deux groupes, parce que deux pivots distincts ne se fusionnent pas.
 
 Rien de tout cela n'est dans le modèle : le `steer.ksanim` d'une voiture ne
 contient que le rig du pilote — mesuré, pas un seul nœud en dehors — et AC

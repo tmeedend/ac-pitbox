@@ -37,7 +37,12 @@
   // musique). Général/Chemins/Import partagent le même AppConfig + garde de
   // navigation ci-dessous ; Musique gère son propre fichier séparé
   // (`music.json`, voir MusicTab.svelte) donc son propre état.
-  const TAB_IDS = ["general", "paths", "import", "preview", "music"] as const;
+  // « Import » n'est plus ici : les préférences d'une opération se consultent
+  // à côté de l'opération (SPEC §7.2quater) — deux noms quasi identiques dans
+  // deux endroits différents, l'un l'action et l'autre ses préférences,
+  // produisaient des allers-retours. Elles vivent désormais en section
+  // repliable au pied de l'écran `Atelier › Importer`.
+  const TAB_IDS = ["general", "paths", "preview", "music"] as const;
   type SettingsTab = (typeof TAB_IDS)[number];
   // Onglet demandé depuis ailleurs (raccourci « régler l'aperçu » de la fiche
   // voiture), consommé une fois : sans la remise à `null`, revenir plus tard
@@ -315,28 +320,6 @@
     {:else if activeTab === "paths"}
       <p class="sub">{t("settings.tabPathsHint")}</p>
       <ConfigFields bind:config {validation} />
-    {:else if activeTab === "import"}
-      <p class="sub">{t("settings.tabImportHint")}</p>
-
-      <section class="lang-section">
-        <label>
-          <span>{t("settings.resourceExtraction")}</span>
-          <select class="input" bind:value={config.prefs.resource_extraction_mode}>
-            <option value="none">{t("settings.resourceExtractionNone")}</option>
-            <option value="info_only">{t("settings.resourceExtractionInfo")}</option>
-            <option value="all">{t("settings.resourceExtractionAll")}</option>
-          </select>
-        </label>
-        <p class="hint">{t("settings.resourceExtractionHint")}</p>
-      </section>
-
-      <section class="lang-section">
-        <label class="check">
-          <input type="checkbox" bind:checked={config.prefs.keep_source_archive} />
-          <span>{t("settings.keepSourceArchive")}</span>
-        </label>
-        <p class="hint">{t("settings.keepSourceArchiveHint")}</p>
-      </section>
     {/if}
 
     {#if error}<div class="error">{error}</div>{/if}

@@ -67,8 +67,8 @@
 </script>
 
 <div class="profiles">
+  <!-- Onglet de l'Atelier : le titre d'écran est porté par l'Atelier. -->
   <header>
-    <h2 class="lbl-screen">{t("nav.profiles")}</h2>
     <p class="sub">{t("profiles.subtitle")}</p>
   </header>
 

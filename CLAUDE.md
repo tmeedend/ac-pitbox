@@ -197,25 +197,33 @@ refusera ensuite de reposer quoi que ce soit.
 
 ### Carte des écrans
 
-`AppShell.svelte` est la coquille : barre latérale + aiguillage sur
-`nav.section` (`src/lib/nav.svelte.ts`). Correspondance section → composant :
+`AppShell.svelte` est la coquille : **rail de navigation** (`NavRail.svelte`,
+les lieux) + **colonne de session** (ce qu'on lance) + aiguillage sur
+`nav.section` (`src/lib/nav.svelte.ts`). Les trois territoires et leur
+frontière étanche sont au §7.2 du SPEC. Correspondance section → composant :
 
 | Section | Composant | Note |
 | --- | --- | --- |
 | `cars` / `tracks` | `Library.svelte` | **rendu deux fois**, prop `kind` — persistance suffixée par type |
 | `carskins` / `trackskins` / `sounds` | `Transversal.svelte` | **un seul composant pour trois entrées**, prop `variant` |
+| `driver` | `driver/DriverScreen.svelte` | |
 | `race` | `Launch.svelte` | |
-| `import` | `Import.svelte` | contient `BulkImport` |
-| `rules` / `profiles` / `maintenance` | `RulesEditor` / `Profiles` / `Maintenance` | |
-| `apps` / `others` | `Apps` / `OtherMods` | |
+| `rules` / `import` / `profiles` / `maintenance` | `Workshop.svelte` | **un écran, quatre onglets** — l'onglet EST la section, pas un état local |
+| `others` / `apps` | `OtherMods.svelte` | Apps y est un onglet (`<Apps embedded />`), `apps` ouvre l'écran dessus |
 | `settings` / `about` | `Settings` / `About` | |
+
+Deux pièges de ce regroupement : l'onglet de l'Atelier étant `nav.section`, un
+`requestSection("import")` posé ailleurs (glisser-déposer global, rapport
+d'import) continue d'atterrir au bon endroit — ne pas le remplacer par un état
+local ; et `RulesEditor` reste le seul des quatre à gérer son propre
+défilement (`noPad`), d'où le mode `full` de `Workshop`.
 
 **Une seule fiche** : `DetailPage.svelte`, la page pleine, ouverte par
 `Library` au double-clic sur une carte ou une ligne (état `nav.openFull`). Le
 panneau latéral compact qui la doublait à droite de la grille a été retiré —
 il montrait moins, et toute évolution de fiche était à faire deux fois.
 
-Hors aiguillage : `TitleBar`, `ImportOverlay` (les modales d'arbitrage) et
+Hors aiguillage : `NavRail`, `TitleBar`, `ImportOverlay` (les modales d'arbitrage) et
 `ToastStack` (`ImportToasts` + `ControllerToast`) — tous dans `AppShell` —,
 `SetupWizard` (dans `routes/+page.svelte`, première configuration),
 `BulkEditPanel` / `ContextMenu` (dans `Library`), `OpponentPicker` /

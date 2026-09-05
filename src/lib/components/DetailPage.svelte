@@ -633,7 +633,9 @@
     if (!detail) return;
     const sk = skins[i];
     if (sk) setPreferredSkin(detail.id_interne, sk);
-    const meta = [detail.brand, sk ? `skin: ${sk.name}` : null].filter(Boolean).join(" · ");
+    // Marque et année seulement (SPEC §9.1) : la livrée a sa propre ligne
+    // dans la colonne de session.
+    const meta = [detail.brand, detail.year].filter(Boolean).join(" · ");
     pickSession("Car", {
       id: detail.id_interne,
       name: detail.display_name ?? detail.id_interne,
@@ -667,7 +669,8 @@
     if (!detail?.track) return;
     const l = detail.track.layouts[i];
     if (l) setPreferredLayout(detail.id_interne, l);
-    const meta = [l?.name, detail.author].filter(Boolean).join(" · ");
+    // L'auteur seul : le tracé a sa propre ligne, le nom est juste au-dessus.
+    const meta = detail.author ?? "";
     pickSession("Track", {
       id: detail.id_interne,
       name: detail.display_name ?? detail.id_interne,
@@ -1835,6 +1838,13 @@
     font-size: 11px;
     line-height: 1.55;
     white-space: pre-line;
+    /* Une description de mod contient volontiers une URL de cent caractères
+       sans une seule césure possible (bug réel : `ddm_daihatsu_copen_street`
+       et son lien vers un dyno, qui poussait la carte hors de la colonne et
+       décalait toute la fiche). `anywhere` et non `break-word` : le second
+       n'agit qu'après avoir déjà tenté de placer le mot entier, donc il ne
+       corrige la mise en page qu'une fois sur deux. */
+    overflow-wrap: anywhere;
   }
   .csp-row {
     display: flex;

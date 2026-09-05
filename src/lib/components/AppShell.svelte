@@ -3,15 +3,12 @@
   import Settings from "./Settings.svelte";
   import About from "./About.svelte";
   import Library from "./Library.svelte";
-  import RulesEditor from "./RulesEditor.svelte";
-  import Profiles from "./Profiles.svelte";
   import Launch from "./Launch.svelte";
-  import Maintenance from "./Maintenance.svelte";
   import Transversal from "./Transversal.svelte";
   import DriverScreen from "./driver/DriverScreen.svelte";
-  import Apps from "./Apps.svelte";
   import OtherMods from "./OtherMods.svelte";
-  import Import from "./Import.svelte";
+  import NavRail from "./NavRail.svelte";
+  import Workshop from "./Workshop.svelte";
   import ImportOverlay from "./ImportOverlay.svelte";
   import PendingDialog from "./PendingDialog.svelte";
   import ImportToasts from "./ImportToasts.svelte";
@@ -34,10 +31,11 @@
   import { initGlobalDragDrop } from "$lib/importState.svelte";
   import { initBulkProgress } from "$lib/bulkState.svelte";
   import { openContentManager, listModSkins, type SkinItem } from "$lib/launch";
+  import { listOtherMods } from "$lib/others";
   import { setPreferredSkin, setPreferredLayout } from "$lib/preferred";
   import { syncTrackSkins, listTrackSkinOptions, setTrackSkinActive, type TrackSkinOption } from "$lib/submods";
   import { t, setLocale } from "$lib/i18n/index.svelte";
-  import { setZoom } from "$lib/zoom.svelte";
+  import { setZoom, zoomFactor } from "$lib/zoom.svelte";
   import { getConfig, validateConfig } from "$lib/config";
   import { LAUNCH_BUTTON_ATTR, startGamepadNav } from "$lib/gamepadNav";
   import { controllers, startControllerWatch } from "$lib/gamepadDevices.svelte";
@@ -45,40 +43,18 @@
   import { musicEnterMenu, musicEnterGrid } from "$lib/music";
   import { libraryVersion } from "$lib/libraryVersion.svelte";
 
-  // Barre latérale unifiée (maquette pitbox-biblio-session2.html) : bloc
-  // SESSION (le duo sélectionné = point d'accès aux bibliothèques) puis
-  // ADD-ONS et ATELIER en deux colonnes.
-  type NavBtn = { id: string; labelKey: string; action?: boolean };
-  const addons: NavBtn[] = [
-    { id: "carskins", labelKey: "nav.carAddons" },
-    { id: "trackskins", labelKey: "nav.trackAddons" },
-    { id: "others", labelKey: "nav.others" },
-    { id: "apps", labelKey: "nav.apps" },
-  ];
-  const atelier: NavBtn[] = [
-    { id: "rules", labelKey: "nav.rules" },
-    { id: "import", labelKey: "nav.import" },
-    { id: "profiles", labelKey: "nav.profiles" },
-    { id: "maintenance", labelKey: "nav.maintenance" },
-    // Action directe, pas un écran : n'affecte jamais nav.section.
-    { id: "opencm", labelKey: "nav.openCm", action: true },
-    // Réglages partage la ligne d'Ouvrir CM ; « À propos » vit désormais
-    // dans la barre de titre (icône ?), pas dans la navigation.
-    { id: "settings", labelKey: "nav.settings" },
-  ];
-
-  async function handleAtelierClick(b: NavBtn) {
-    if (b.action) {
-      if (b.id === "opencm") {
-        try {
-          await openContentManager();
-        } catch (e) {
-          console.error(e);
-        }
-      }
-      return;
+  // Trois territoires étanches (SPEC §7.2) : le RAIL porte les lieux
+  // (`NavRail.svelte`), la BARRE DE TITRE la forme de la fenêtre, cette
+  // COLONNE ce qu'on lance. Les deux grilles de boutons « Add-ons » et
+  // « Atelier » qui vivaient ici sont parties dans le rail : elles n'étaient
+  // pas mal dessinées, elles étaient mal placées — la colonne de session
+  // faisait office de navigation en plus de son travail propre.
+  async function openCm() {
+    try {
+      await openContentManager();
+    } catch (e) {
+      console.error(e);
     }
-    await requestSection(b.id);
   }
 
   // Glisser-déposer disponible partout : un seul listener, monté ici à la
@@ -129,15 +105,22 @@
   // destination (Réglages › Chemins).
   type SlotState = "picked" | "empty" | "broken";
   let pathsBroken = $state(false);
+  /** Content Manager introuvable : le lien de sortie ne s'affiche pas du tout
+   * (SPEC §9.1). Ni bouton grisé ni message d'erreur au clic — une sortie vers
+   * un outil absent n'a pas à occuper une ligne dans une colonne dont la
+   * hauteur est comptée. */
+  let cmAvailable = $state(false);
 
   async function refreshPaths() {
     try {
       const v = await validateConfig(await getConfig());
       pathsBroken = !v.ac_install.ok || !v.content_dir.ok;
+      cmAvailable = v.content_manager.ok;
     } catch {
       // Le diagnostic lui-même a échoué : ne pas accuser les chemins pour
       // autant, l'état vide normal reste plus juste qu'une fausse impasse.
       pathsBroken = false;
+      cmAvailable = false;
     }
   }
   onMount(refreshPaths);
@@ -150,12 +133,61 @@
     return () => void refreshPaths();
   });
 
+  // --- Pastilles d'alerte du rail (SPEC §7.2) -------------------------------
+  //
+  // Un signal de rubrique, pas un agrégat : il faut voir LAQUELLE aller
+  // regarder. Une seule source réelle aujourd'hui — les conflits de fichiers
+  // entre « autres mods », que le backend calcule déjà. Les autres inventaires
+  // n'ont pas de notion de « problème » à remonter ; leur en inventer une
+  // serait une décision produit, pas une conséquence de cette spec.
+  let alerts = $state<Record<string, boolean>>({});
+  $effect(() => {
+    libraryVersion();
+    listOtherMods()
+      .then((rows) => (alerts = { others: rows.some((o) => o.conflicts.length > 0) }))
+      .catch(() => (alerts = {}));
+  });
+
   const carSlot = $derived<SlotState>(nav.sessionCar ? "picked" : pathsBroken ? "broken" : "empty");
   const trackSlot = $derived<SlotState>(nav.sessionTrack ? "picked" : pathsBroken ? "broken" : "empty");
   /** Tant que le duo n'est pas complet, il n'y a ni session à paramétrer ni
    * session à lancer (SPEC §9.1) — l'app ne choisit pas une voiture à la place de
    * l'utilisateur pour se donner un bouton à activer. */
   const sessionReady = $derived(nav.sessionCar != null && nav.sessionTrack != null);
+
+  // --- Colonne d'intitulés partagée (SPEC §9.1) -----------------------------
+  //
+  // Les quatre champs alignent leurs valeurs sur une même colonne d'intitulé :
+  // c'est ce qui fait lire le bloc comme une fiche technique plutôt que comme
+  // une pile de menus, et ça disparaît si chaque ligne se dimensionne seule.
+  // 60 px conviennent au français ; une autre langue peut demander plus
+  // (LACKIERUNG en allemand), d'où une mesure une fois par langue plutôt
+  // qu'une constante — plafonnée à 88 px, au-delà l'intitulé tronque.
+  const FIELD_LABELS = $derived([
+    t("session.fieldLivery"),
+    t("session.fieldDriver"),
+    t("session.fieldLayout"),
+    t("session.fieldTrackSkin"),
+  ]);
+  let labelProbe = $state<HTMLElement | null>(null);
+  let labelWidth = $state(60);
+  $effect(() => {
+    // Dépendance explicite : c'est le changement de langue qui doit relancer
+    // la mesure, et il ne passe que par le contenu du gabarit caché.
+    FIELD_LABELS;
+    const el = labelProbe;
+    if (!el) return;
+    // `getBoundingClientRect` rend des pixels RÉELS de fenêtre, déjà
+    // multipliés par le zoom d'interface, alors que la valeur repart dans un
+    // `style` en pixels CSS que le zoom multipliera à son tour — sans cette
+    // division, la colonne s'élargirait à chaque cran de zoom.
+    const f = zoomFactor();
+    let widest = 0;
+    for (const child of Array.from(el.children)) {
+      widest = Math.max(widest, (child as HTMLElement).getBoundingClientRect().width / f);
+    }
+    labelWidth = Math.min(88, Math.max(60, Math.ceil(widest)));
+  });
 
   /** Clic sur la vignette ou le nom : c'est la zone qui NAVIGUE (SPEC §9.1). Les
    * menus de livrée/layout et la ligne « Mon pilote » sont ses frères dans le
@@ -423,10 +455,10 @@
     const sk = carSkins.find((s) => s.id === skinId);
     if (!car || !sk) return;
     setPreferredSkin(car.id, sk);
-    const base = car.meta.replace(/\s*·\s*skin:\s*[^·]+$/i, "").trim();
+    // `meta` ne porte plus la livrée (SPEC §9.1) : elle a sa propre ligne
+    // juste dessous, il n'y a donc plus rien à y réécrire.
     pickSession("Car", {
       ...car,
-      meta: [base, `skin: ${sk.name}`].filter(Boolean).join(" · "),
       preview: sk.preview ?? car.preview,
       skin: sk.id,
     });
@@ -438,9 +470,9 @@
     const l = d?.track?.layouts.find((x) => x.id === layoutId);
     if (!track || !d || !l) return;
     setPreferredLayout(d.id_interne, l);
+    // Idem pour le tracé : sa ligne est juste dessous.
     pickSession("Track", {
       ...track,
-      meta: [l.name, d.author].filter(Boolean).join(" · "),
       preview: l.preview ?? track.preview,
       layout: l.id,
       outline: l.outline,
@@ -470,6 +502,7 @@
          la barre latérale d'un côté, l'écran actif de l'autre. La
          bibliothèque redécoupe sa moitié en deux (liste et fiche) — les zones
          imbriquées les plus internes gagnent, voir `regions()`. -->
+    <NavRail {alerts} />
     <aside class="side" data-gp-region="sidebar">
       <div class="brand">
         <div class="logo"><span>PB</span></div>
@@ -479,132 +512,132 @@
         </div>
       </div>
 
-      <!-- SESSION : duo sélectionné, point d'accès aux bibliothèques -->
-      <div class="session">
+      <!-- SESSION : le duo choisi, et rien d'autre. La colonne répond à une
+           seule question — « qu'est-ce que je lance ? » — et les deux blocs
+           ont exactement la même anatomie : vignette, nom, source, champs.
+           Plus de traitement d'exception sur le bloc voiture. -->
+      <div class="session" style="--sess-lblw:{labelWidth}px">
         <div class="nsec">{t("nav.session")}</div>
-        <div class="slot" class:on={nav.section === "cars"} class:vacant={carSlot !== "picked"}>
+        <div class="blk">
           <button
-            class="slot-main"
+            class="pick"
             type="button"
             onclick={() => openSlot("cars", carSlot)}
             ondblclick={() => openSessionDetail("cars", nav.sessionCar?.id)}
             title={carSlot === "picked" ? t("session.carTooltip") : undefined}
             aria-label={nav.sessionCar ? `${nav.sessionCar.name} — ${t("session.changeCar")}` : undefined}
           >
-            <div class="slot-img car" class:vacant={carSlot !== "picked"}>
+            <div class="thumb car" class:vacant={carSlot !== "picked"} class:photo={carSlot === "picked" && carPrev}>
               {#if carSlot === "picked"}
-                {#if carPrev}<img src={carPrev} alt="" />{:else}<span class="slot-ic">🚗</span>{/if}
-                <span class="slot-tag">{t("session.carTag")}</span>
-                <!-- Le libellé n'est pas supprimé, il est différé (SPEC §9.1) : au survol
-                     et au focus clavier seulement, sur un voile PLEIN — au moment
-                     où l'on décide de changer, la voiture actuelle n'est plus
-                     l'information utile, et un voile partiel rendrait le libellé
-                     illisible sur une photo imprévisible. -->
-                <span class="slot-veil"><span aria-hidden="true">✎</span>{t("session.changeCar")}</span>
+                {#if carPrev}<img src={carPrev} alt="" />{:else}<span class="thumb-ic">🚗</span>{/if}
+                <!-- Le libellé n'est pas supprimé, il est différé (SPEC §9.1) : au
+                     survol et au focus clavier seulement, sur un voile PLEIN — au
+                     moment où l'on décide de changer, la voiture actuelle n'est
+                     plus l'information utile, et un voile partiel rendrait le
+                     libellé illisible sur une photo imprévisible. -->
+                <span class="veil"><span aria-hidden="true">✎</span>{t("session.changeCar")}</span>
               {:else if carSlot === "empty"}
-                <span class="slot-invite"><span aria-hidden="true">＋</span>{t("session.chooseCar")}</span>
+                <span class="invite"><span aria-hidden="true">＋</span>{t("session.chooseCar")}</span>
               {:else}
-                <!-- Impasse (SPEC §9.1) : même trame que l'état initial, autre destination — ici
-                     l'invitation à choisir mènerait à une bibliothèque vide. -->
-                <span class="slot-invite">
+                <!-- Impasse (SPEC §9.1) : même trame que l'état initial, autre
+                     destination — ici l'invitation à choisir mènerait à une
+                     bibliothèque vide. -->
+                <span class="invite">
                   {t("session.noCarDetected")}
                   <small>{t("session.checkPaths")}</small>
                 </span>
               {/if}
             </div>
             {#if nav.sessionCar}
-              <div class="slot-b">
-                <div class="slot-name">
-                  {nav.sessionCar.name}
-                  {#if carInactive}<span class="slot-warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
-                </div>
-                <div class="slot-meta">{nav.sessionCar.meta}</div>
+              <div class="pname">
+                {nav.sessionCar.name}
+                {#if carInactive}<span class="warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
               </div>
+              {#if nav.sessionCar.meta}<div class="psrc">{nav.sessionCar.meta}</div>{/if}
             {/if}
           </button>
           {#if nav.sessionCar}
-            <div class="slot-pick">
-              <!-- Le skin et la bascule pilote partagent une ligne : la
-                   contrainte de cette colonne est la hauteur, et une bascule
-                   décochée ne doit rien coûter (§4.6ter). -->
-              <ImageSelectDropdown
-                options={carSkinOptions}
-                selectedId={nav.sessionCar.skin}
-                placeholder={t("session.pickSkin")}
-                emptyText={t("session.noSkinsAvailable")}
-                onselect={pickCarSkin}
-              />
-              <button
-                class="driver-line"
-                class:on={nav.section === "driver"}
-                type="button"
-                title={driverUntouched ? t("session.driverStockTooltip") : t("session.driverTooltip")}
-                onclick={() => requestSection("driver")}
-              >
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M2.5 9.5a5.5 5.5 0 0 1 11 0v1.2a1.3 1.3 0 0 1-1.3 1.3H3.8a1.3 1.3 0 0 1-1.3-1.3z" />
-                  <path d="M6.2 12v-1.6a1.8 1.8 0 0 1 1.8-1.8h5.5" />
-                </svg>
-                <span class="dl-name" class:stock={driverUntouched}>{driverLabel}</span>
-                {#if driverBadge}
-                  <span class="dl-badge">{t("session.driverBadge." + driverBadge)}</span>
-                {/if}
-              </button>
-            </div>
+            <ImageSelectDropdown
+              label={t("session.fieldLivery")}
+              options={carSkinOptions}
+              selectedId={nav.sessionCar.skin}
+              placeholder={t("session.pickSkin")}
+              emptyText={t("session.noSkinsAvailable")}
+              staticWhenSingle
+              onselect={pickCarSkin}
+            />
+            <!-- Le chevron est `›` et non `▾` : ce champ n'ouvre pas un menu
+                 mais l'écran Pilote. Bas pour un menu, droite pour une
+                 destination — la distinction est ténue mais constante. -->
+            <button
+              class="field"
+              type="button"
+              title={driverUntouched ? t("session.driverStockTooltip") : t("session.driverTooltip")}
+              onclick={() => requestSection("driver")}
+            >
+              <span class="k">{t("session.fieldDriver")}</span>
+              <span class="v" class:stock={driverUntouched}>{driverLabel}</span>
+              {#if driverBadge}
+                <span class="dl-badge">{t("session.driverBadge." + driverBadge)}</span>
+              {/if}
+              <span class="chev" aria-hidden="true">›</span>
+            </button>
           {/if}
         </div>
-        <div class="slot" class:on={nav.section === "tracks"} class:vacant={trackSlot !== "picked"}>
+
+        <div class="nsec section">{t("session.trackTag")}</div>
+        <div class="blk">
           <button
-            class="slot-main"
+            class="pick"
             type="button"
             onclick={() => openSlot("tracks", trackSlot)}
             ondblclick={() => openSessionDetail("tracks", nav.sessionTrack?.id)}
             title={trackSlot === "picked" ? t("session.trackTooltip") : undefined}
             aria-label={nav.sessionTrack ? `${nav.sessionTrack.name} — ${t("session.changeTrack")}` : undefined}
           >
-            <div class="slot-img track" class:vacant={trackSlot !== "picked"}>
+            <div class="thumb track" class:vacant={trackSlot !== "picked"} class:photo={trackSlot === "picked" && trackPrev}>
               {#if trackSlot === "picked"}
-                {#if trackPrev}<img src={trackPrev} alt="" />{:else}<span class="slot-ic">🏁</span>{/if}
-                {#if trackOutline}<img class="slot-outline" src={trackOutline} alt="" />{/if}
-                <span class="slot-tag">{t("session.trackTag")}</span>
-                <span class="slot-veil"><span aria-hidden="true">✎</span>{t("session.changeTrack")}</span>
+                {#if trackPrev}<img src={trackPrev} alt="" />{:else}<span class="thumb-ic">🏁</span>{/if}
+                {#if trackOutline}<img class="outline" src={trackOutline} alt="" />{/if}
+                <span class="veil"><span aria-hidden="true">✎</span>{t("session.changeTrack")}</span>
               {:else if trackSlot === "empty"}
-                <span class="slot-invite"><span aria-hidden="true">＋</span>{t("session.chooseTrack")}</span>
+                <span class="invite"><span aria-hidden="true">＋</span>{t("session.chooseTrack")}</span>
               {:else}
-                <span class="slot-invite">
+                <span class="invite">
                   {t("session.noTrackDetected")}
                   <small>{t("session.checkPaths")}</small>
                 </span>
               {/if}
             </div>
             {#if nav.sessionTrack}
-              <div class="slot-b">
-                <div class="slot-name">
-                  {nav.sessionTrack.name}
-                  {#if trackInactive}<span class="slot-warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
-                </div>
-                <div class="slot-meta">{nav.sessionTrack.meta}</div>
+              <div class="pname">
+                {nav.sessionTrack.name}
+                {#if trackInactive}<span class="warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
               </div>
+              {#if nav.sessionTrack.meta}<div class="psrc">{nav.sessionTrack.meta}</div>{/if}
             {/if}
           </button>
           {#if nav.sessionTrack}
-            <div class="slot-pick">
-              <ImageSelectDropdown
-                options={trackLayoutOptions}
-                selectedId={nav.sessionTrack.layout}
-                placeholder={t("session.pickLayout")}
-                emptyText={t("session.noLayoutsAvailable")}
-                onselect={pickTrackLayout}
-                fit="contain"
-              />
-              <TrackSkinChecklistDropdown
-                options={trackSkinChecklist}
-                busy={trackSkinBusy}
-                ontoggle={toggleTrackSkinFromSlot}
-              />
-            </div>
+            <ImageSelectDropdown
+              label={t("session.fieldLayout")}
+              options={trackLayoutOptions}
+              selectedId={nav.sessionTrack.layout}
+              placeholder={t("session.pickLayout")}
+              emptyText={t("session.noLayoutsAvailable")}
+              staticWhenSingle
+              singleNote={t("session.layoutSingle")}
+              onselect={pickTrackLayout}
+              fit="contain"
+            />
+            <TrackSkinChecklistDropdown
+              label={t("session.fieldTrackSkin")}
+              options={trackSkinChecklist}
+              busy={trackSkinBusy}
+              ontoggle={toggleTrackSkinFromSlot}
+            />
           {/if}
         </div>
+
         <button class="btn-configure" disabled={!sessionReady} onclick={() => requestSection("race")}
           >{t("session.configure")}</button
         >
@@ -613,20 +646,25 @@
         <button class="btn-launch" disabled={!sessionReady} {...{ [LAUNCH_BUTTON_ATTR]: "" }} onclick={launchNow}
           >{t("session.start")}</button
         >
+        <!-- Sortie vers Content Manager : un lien texte, jamais un troisième
+             bouton encadré — trois blocs de même gabarit empilés annuleraient
+             la hiérarchie que le bordé et le plein viennent d'établir. Le
+             libellé ne dit pas « dans » : CM ne reçoit ni la voiture ni le
+             circuit, il s'ouvre sur son propre état, et « ouvrir dans »
+             annoncerait un transfert de contexte qui n'a pas lieu. -->
+        {#if cmAvailable}
+          <div class="cm-sep"></div>
+          <button class="cm-link" type="button" onclick={openCm}>
+            <span aria-hidden="true">↗</span>{t("nav.openCm")}
+          </button>
+        {/if}
       </div>
 
-      <div class="nsec">{t("nav.addons")}</div>
-      <div class="navgrid">
-        {#each addons as b}
-          <button class="nb" class:on={nav.section === b.id} onclick={() => requestSection(b.id)}>{t(b.labelKey)}</button>
-        {/each}
-      </div>
-
-      <div class="nsec">{t("nav.atelier")}</div>
-      <div class="navgrid">
-        {#each atelier as b}
-          <button class="nb" class:on={!b.action && nav.section === b.id} onclick={() => handleAtelierClick(b)}>{t(b.labelKey)}</button>
-        {/each}
+      <!-- Gabarit de mesure des intitulés de champ : hors flux, invisible, et
+           surtout NON contraint en largeur — c'est la largeur naturelle du
+           plus long qui décide de la colonne. -->
+      <div class="lbl-probe" aria-hidden="true" bind:this={labelProbe}>
+        {#each FIELD_LABELS as l}<span>{l}</span>{/each}
       </div>
 
       {#if bigPictureState.active}
@@ -649,25 +687,20 @@
           <Library kind="Car" />
         {:else if nav.section === "tracks"}
           <Library kind="Track" />
-        {:else if nav.section === "rules"}
-          <RulesEditor />
-        {:else if nav.section === "profiles"}
-          <Profiles />
+        {:else if nav.section === "rules" || nav.section === "import" || nav.section === "profiles" || nav.section === "maintenance"}
+          <Workshop />
         {:else if nav.section === "driver"}
           <DriverScreen />
         {:else if nav.section === "race"}
           <Launch />
-        {:else if nav.section === "maintenance"}
-          <Maintenance />
-        {:else if nav.section === "import"}
-          <Import />
         {:else if nav.section === "carskins"}
           <Transversal variant="car" />
         {:else if nav.section === "trackskins"}
           <Transversal variant="track" />
-        {:else if nav.section === "apps"}
-          <Apps />
-        {:else if nav.section === "others"}
+        {:else if nav.section === "others" || nav.section === "apps"}
+          <!-- Un seul écran pour les deux adresses : les apps sont un onglet
+               de « Compléments » (SPEC §7.3), et `apps` reste une adresse
+               valide — c'est ce qui la fait ouvrir directement sur son onglet. -->
           <OtherMods />
         {/if}
       </main>
@@ -724,13 +757,14 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    /* 222px tant que la bibliothèque gardait son panneau de détail à droite ;
+    /* Rail (lieux) · colonne de session (ce qu'on lance) · contenu.
+       222px tant que la bibliothèque gardait son panneau de détail à droite ;
        celui-ci retiré, la zone principale n'a plus besoin d'autant de largeur
        et la colonne de session peut respirer — c'est elle qui porte le duo
        voiture/circuit et ses menus. Sa contrainte reste la **hauteur** : tout
        ce qu'on y ajoute doit tenir sans allonger la colonne, d'où la largeur
        prise ici (réglée à l'œil avec l'utilisateur). */
-    grid-template-columns: 328px 1fr;
+    grid-template-columns: 74px 328px 1fr;
   }
   .side {
     background: var(--bg);
@@ -807,153 +841,88 @@
     padding-left: 0;
     padding-right: 0;
   }
-  .slot {
+  /* Le second titre suit un champ, pas une marge de bloc : il lui faut un peu
+     plus d'air pour que les deux blocs se lisent comme deux blocs. */
+  .session .nsec.section {
+    padding-top: 18px;
+  }
+  /* Un bloc = vignette cliquable + champs. Aucun encadré autour : une bordure
+     de sélection n'a de sens que parmi des pairs, or il n'y a qu'une voiture,
+     et l'entrée active se dit désormais dans le rail (SPEC §7.2). */
+  .blk {
+    display: block;
+  }
+  .blk > * + * {
+    margin-top: 5px;
+  }
+  /* Zone qui NAVIGUE (SPEC §9.1) : vignette + nom + source, et rien d'autre.
+     C'est un `<button>` FRÈRE des champs, jamais leur parent — un bouton qui
+     contient des contrôles interactifs est invalide en HTML et casse la
+     navigation clavier, et un clic qui visait un menu ne doit jamais éjecter
+     vers la bibliothèque. */
+  .pick {
     display: block;
     width: 100%;
-    border: 1px solid var(--line);
-    background: var(--panel);
-    margin-bottom: 9px;
-  }
-  /* Le survol n'introduit jamais de rouge sur un élément qui n'y a pas droit
-     au repos (SPEC §7.2ter) : sinon le rouge prend un quatrième sens,
-     « sous le curseur », qui annule tout le barème. */
-  .slot:hover {
-    border-color: var(--faint2);
-  }
-  /* Écran ouvert = entrée de navigation active : filet gauche de 2 px, pas un
-     encadré. Une bordure de sélection n'a de sens que parmi des pairs, or il
-     n'y a qu'une voiture ; et en `box-shadow` plutôt qu'en `border-left`, une
-     bordure de 2 px décalerait le contenu d'un pixel à chaque changement
-     d'écran. */
-  .slot.on {
-    box-shadow: inset 2px 0 0 var(--rosso);
-  }
-  .slot-main {
-    display: block;
-    width: 100%;
-    text-align: left;
-    background: transparent;
-    border: none;
     padding: 0;
-    cursor: pointer;
-  }
-  .slot-pick {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 8px;
-    border-top: 1px solid var(--line);
-  }
-  /* Le menu de skin prend la place restante, la bascule ce qu'il lui faut. */
-  /* Ligne « Mon pilote » : le point d'entrée de l'écran, sous le sélecteur de
-     livrée. Un clic, jamais plus (§3.2). */
-  .driver-line {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    height: 30px;
-    padding: 0 9px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 2px;
-    color: var(--muted);
-    font-size: 12px;
+    background: none;
+    border: none;
     text-align: left;
     cursor: pointer;
   }
-  .driver-line svg {
-    flex: 0 0 auto;
-    width: 15px;
-    height: 15px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.4;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  .driver-line:hover {
-    border-color: var(--faint2);
-    color: var(--txt);
-  }
-  /* Même règle que `.slot.on` : l'écran ouvert se dit par un filet gauche. */
-  .driver-line.on {
-    border-color: var(--faint2);
-    color: var(--txt);
-    box-shadow: inset 2px 0 0 var(--rosso);
-  }
-  .dl-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  /* Rien de choisi : la ligne dit d'où vient la tenue, en retrait — c'est un
-     état de fait, pas un réglage de l'utilisateur. */
-  .dl-name.stock {
-    color: var(--faint);
-    font-style: italic;
-  }
-  .dl-badge {
-    margin-left: auto;
-    flex: 0 0 auto;
-    font-size: 9.5px;
-    letter-spacing: 0.12em;
-    color: var(--muted);
-    border: 1px solid var(--line);
-    border-radius: 2px;
-    padding: 1px 5px;
-  }
-  .slot-img {
-    /* **Un rapport, pas une hauteur fixe.** C'était `height: 96px`, et
-       élargir la colonne a rogné les photos : à largeur croissante et hauteur
-       figée, `object-fit: cover` agrandit l'image pour couvrir et coupe le
-       haut et le bas — les roues disparaissaient. Le rapport ci-dessous est
-       celui qu'avait la vignette à 222 px (222/96), donc le cadrage d'avant,
-       et il le reste quelle que soit la largeur de la colonne. */
+  .thumb {
+    /* Rapport de repli, pour les états qui n'ont pas d'image à montrer
+       (emplacement vide, chemins cassés, mod sans photo) : sans lui la boîte
+       n'aurait aucune hauteur. Dès qu'il y a une photo, c'est ELLE qui donne
+       la hauteur — voir `.thumb.photo`. */
     aspect-ratio: 2.3;
     display: flex;
     align-items: center;
     justify-content: center;
     position: relative;
-    border-bottom: 1px solid var(--line);
+    border: 1px solid var(--line);
     overflow: hidden;
     background: linear-gradient(135deg, #1a0808, var(--panel));
   }
-  .slot-img.track {
+  .thumb.track {
+    aspect-ratio: 2.9;
     background: linear-gradient(135deg, #0a1a14, var(--panel));
   }
-  .slot-img img {
+  /* **La photo est montrée entière.** Elle l'était en `cover` sous un rapport
+     imposé, donc rognée en haut et en bas — les roues d'une voiture et les
+     bords d'un tracé y passaient, et ça se voyait (signalé à l'écran). C'est
+     donc la boîte qui prend le rapport de l'image, jamais l'inverse : ni
+     recadrage, ni bandes vides. */
+  .thumb.photo {
+    aspect-ratio: auto;
+  }
+  .thumb.photo img {
+    display: block;
     width: 100%;
-    height: 100%;
-    object-fit: cover;
+    height: auto;
   }
   /* Tracé du layout superposé à la photo du circuit (comme la fiche). */
-  .slot-img img.slot-outline {
+  /* Le tracé est un CALQUE, pas la photo : il garde la boîte entière, quelle
+     que soit la hauteur que la photo lui a donnée (sans les deux dimensions
+     explicites, le `height: auto` de la règle du dessus le ferait retomber
+     sur sa taille intrinsèque et déborder). */
+  .thumb img.outline {
     position: absolute;
     inset: 0;
+    width: 100%;
+    height: 100%;
     object-fit: contain;
     padding: 8px;
   }
-  .slot-ic {
+  .thumb-ic {
     font-size: 34px;
     opacity: 0.6;
   }
-  .slot-tag {
-    position: absolute;
-    top: 6px;
-    left: 6px;
-    background: rgba(8, 8, 12, 0.75);
-    color: var(--muted);
-    font-size: 7px;
-    letter-spacing: 1.5px;
-    font-family: var(--mono);
-    padding: 2px 6px;
-  }
-  /* Voile du libellé différé (SPEC §9.1) : plein, pas dégradé — au moment où l'on
-     décide de changer, la photo n'est plus l'information utile, et un voile
-     partiel rendrait le texte illisible sur une image imprévisible. Au focus
-     clavier comme au survol : le libellé doit être atteignable sans souris. */
-  .slot-veil {
+  /* Voile du libellé différé (SPEC §9.1) : plein, pas dégradé — au moment où
+     l'on décide de changer, la photo n'est plus l'information utile, et un
+     voile partiel rendrait le texte illisible sur une image imprévisible. Au
+     focus clavier comme au survol : le libellé doit être atteignable sans
+     souris. */
+  .veil {
     position: absolute;
     inset: 0;
     display: flex;
@@ -968,28 +937,22 @@
     opacity: 0;
     transition: opacity 0.13s;
   }
-  .slot-main:hover .slot-veil,
-  .slot-main:focus-visible .slot-veil {
+  .pick:hover .veil,
+  .pick:focus-visible .veil {
     opacity: 1;
   }
-  /* Rien de choisi : trame diagonale et bordure pointillée disent « emplacement
-     à remplir » sans imiter une vignette vide, qui se lirait comme un mod sans
-     photo. La pointillée est portée par `.slot` — l'emplacement n'a alors plus
-     rien d'autre à l'intérieur, deux bordures imbriquées se verraient. */
-  .slot.vacant {
+  .pick:hover .thumb {
+    border-color: var(--faint2);
+  }
+  /* Rien de choisi : trame diagonale et bordure pointillée disent
+     « emplacement à remplir » sans imiter une vignette vide, qui se lirait
+     comme un mod sans photo. */
+  .thumb.vacant {
+    background: repeating-linear-gradient(135deg, #141518, #141518 6px, #17181c 6px, #17181c 12px);
     border-style: dashed;
     border-color: var(--faint2);
   }
-  /* Même spécificité que `.slot:hover` et déclarée après : sans cette règle,
-     un emplacement vide ne réagirait pas du tout au survol. */
-  .slot.vacant:hover {
-    border-color: var(--faint);
-  }
-  .slot-img.vacant {
-    background: repeating-linear-gradient(135deg, #141518, #141518 6px, #17181c 6px, #17181c 12px);
-    border-bottom: none;
-  }
-  .slot-invite {
+  .invite {
     color: var(--txt2);
     font-size: 11.5px;
     letter-spacing: 0.06em;
@@ -998,22 +961,20 @@
   }
   /* Le glyphe est un frère en ligne du libellé, pas un élément de grille :
      l'écart se pose ici plutôt qu'avec une espace dans la chaîne traduite. */
-  .slot-invite span {
+  .invite span {
     margin-right: 5px;
   }
-  .slot-invite small {
+  .invite small {
     display: block;
     margin-top: 3px;
     color: var(--muted);
     font-size: 10px;
     letter-spacing: 0;
   }
-  .slot-b {
-    padding: 7px 10px;
-  }
-  .slot-name {
-    font-size: 11.5px;
-    font-weight: 600;
+  .pname {
+    margin-top: 8px;
+    font-size: 12.5px;
+    line-height: 1.3;
     color: var(--txt);
     white-space: nowrap;
     overflow: hidden;
@@ -1021,18 +982,98 @@
   }
   /* Mod sélectionné mais non activé (§ garde-fou lancement) : jaune = alerte,
      cohérent avec les couleurs sémantiques du projet. */
-  .slot-warn {
+  .warn {
     color: var(--yellow);
     margin-left: 4px;
   }
-  .slot-meta {
+  /* Source, pas résumé : la marque et l'année pour une voiture, l'auteur pour
+     un circuit. Ce qui est déjà écrit au-dessus (le nom) ou juste en dessous
+     (la livrée, le tracé) n'y est pas répété — on ne paie pas des caractères
+     pour une information présente à quelques pixels. */
+  .psrc {
+    margin-top: 1px;
+    font-size: 10.5px;
     color: var(--muted);
-    font-size: 8.5px;
-    font-family: var(--mono);
-    margin-top: 2px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  /* Champ nommé : l'intitulé est une COLONNE, pas une ligne au-dessus. Coût
+     en hauteur : zéro — la ligne reste à 30 px, là où un intitulé posé
+     au-dessus aurait coûté 14 px par champ pour le même service. Mêmes
+     valeurs que `ImageSelectDropdown` : ces lignes doivent s'aligner au pixel
+     avec les siennes. */
+  .field {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    height: 30px;
+    padding: 0 9px;
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    color: var(--txt2);
+    font-size: 11px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .field:hover {
+    border-color: var(--faint2);
+  }
+  .field .k {
+    flex: 0 0 var(--sess-lblw, 60px);
+    max-width: 88px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 8.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .field .v {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--txt);
+  }
+  /* Valeur par défaut : un possessif en italique grise, jamais une négation —
+     même formulation que « Celle de la livrée » de l'écran Pilote. */
+  .field .v.stock {
+    color: var(--muted);
+    font-style: italic;
+  }
+  .field .chev {
+    flex: none;
+    color: var(--faint);
+    font-size: 9px;
+  }
+  .dl-badge {
+    flex: 0 0 auto;
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 1px 5px;
+  }
+  /* Hors flux et sans contrainte de largeur : sert uniquement à mesurer le
+     plus long intitulé de la locale courante. `visibility: hidden` et non
+     `display: none` — un élément non rendu n'a pas de largeur à lire. */
+  .lbl-probe {
+    position: absolute;
+    visibility: hidden;
+    pointer-events: none;
+    font-size: 8.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .lbl-probe span {
+    display: block;
+    width: max-content;
+    white-space: nowrap;
   }
   .btn-configure {
     width: 100%;
@@ -1076,29 +1117,29 @@
     cursor: not-allowed;
   }
 
-  .navgrid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1px;
+  /* Un filet et une respiration séparent le lien du bloc de lancement :
+     collé sous le bouton rouge, il se lirait comme la suite du bloc —
+     l'adjacence promet toute seule, même sans le mot. */
+  .cm-sep {
+    height: 1px;
     background: var(--line);
-    border: 1px solid var(--line);
-    margin: 0 13px;
+    margin-top: 12px;
   }
-  .nb {
-    background: var(--bg);
+  .cm-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    height: 26px;
+    margin-top: 10px;
+    background: none;
+    border: none;
     color: var(--muted);
-    padding: 9px 10px;
-    text-align: left;
-    font-size: 11px;
+    font-size: 10px;
   }
-  .nb:hover {
-    background: var(--raised);
-    color: var(--txt);
-  }
-  .nb.on {
-    background: var(--raised);
-    color: var(--txt);
-    box-shadow: inset 2px 0 0 var(--rosso);
+  .cm-link:hover {
+    color: var(--txt2);
   }
 
   .main-col {

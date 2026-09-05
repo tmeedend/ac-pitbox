@@ -1,33 +1,42 @@
 {
   "nav": {
     "session": "Session",
-    "addons": "Add-ons",
     "atelier": "Atelier",
     "skins": "Skins",
     "carAddons": "Add-ons voiture",
     "trackAddons": "Add-ons circuit",
     "sounds": "Sons",
-    "others": "Autres mods",
+    "others": "Compléments",
     "apps": "Apps",
     "rules": "Règles",
     "import": "Importer",
     "profiles": "Profils",
     "maintenance": "Maintenance",
-    "openCm": "Ouvrir CM",
+    "openCm": "Ouvrir Content Manager",
     "settings": "Réglages",
     "about": "À propos",
-    "driver": "Mon pilote"
+    "driver": "Pilote",
+    "cars": "Voitures",
+    "tracks": "Circuits",
+    "railLabel": "Navigation principale",
+    "alertLabel": "éléments à vérifier"
   },
   "titlebar": {
     "bigPicture": "Mode Big Picture (plein écran)",
     "minimize": "Réduire",
     "maximize": "Agrandir",
     "restore": "Restaurer",
-    "close": "Fermer"
+    "close": "Fermer",
+    "bigPictureLabel": "BIG PICTURE"
   },
   "session": {
-    "carTag": "VOITURE",
     "trackTag": "CIRCUIT",
+    "fieldLivery": "Livrée",
+    "fieldDriver": "Pilote",
+    "fieldLayout": "Layout",
+    "fieldTrackSkin": "Skin",
+    "layoutSingle": "layout unique",
+    "trackSkinsStock": "Celui d'origine",
     "changeCar": "Changer de voiture",
     "changeTrack": "Changer de circuit",
     "chooseCar": "Choisir une voiture",
@@ -48,8 +57,6 @@
     "driverTooltip": "Voir et changer le corps et la tenue du pilote",
     "pickLayout": "Choisir un layout…",
     "noLayoutsAvailable": "Aucun layout",
-    "trackSkinsNone": "Aucun skin actif",
-    "trackSkinsEmpty": "Aucun skin de circuit",
     "trackSkinsCount": "{count} skins actifs",
     "trackSkinsTooltip": "Skins de circuit — plusieurs actifs possible",
     "driverBadge": {
@@ -154,12 +161,10 @@
     "title": "Réglages",
     "tabGeneral": "Général",
     "tabPaths": "Chemins",
-    "tabImport": "Import",
-    "tabPreview": "Aperçu",
+    "tabPreview": "Aperçu 3D",
     "tabMusic": "Musique",
     "tabGeneralHint": "Langue, mise à l'échelle de l'interface, décor par défaut de l'aperçu 3D.",
     "tabPathsHint": "Configuration de l'environnement. Bibliothèque, overlay et règles sont des bases distinctes.",
-    "tabImportHint": "Comportement de l'app à l'import d'un mod.",
     "tabPreviewHint": "Aperçu 3D affiché dans la fiche d'une voiture. Les changements s'appliquent tout de suite.",
     "preview3dEnabled": "Afficher l'aperçu 3D dans les fiches",
     "preview3dEnabledHint": "Décoché, les fiches voiture montrent la photo du skin. La bascule de la fiche revient au même.",
@@ -960,7 +965,7 @@
     "detailTooltip": "Ouvrir la fiche de l'app"
   },
   "others": {
-    "subtitle": "Mods d'un type non reconnu (shaders, configs CSP, mods d'UI…) — jamais perdus. Activés par junction comme les autres types, ou par lien fichier pour un simple ajout dans un dossier déjà existant (jamais un remplacement de fichier existant). En cas d'emplacement disputé entre deux « autres mods », le mod marqué prioritaire l'emporte à sa prochaine activation.",
+    "subtitle": "Tout ce qui n'est ni voiture ni circuit : apps, shaders, configs CSP, mods d'UI… — jamais perdu. Les mods d'un type non reconnu sont activés par junction comme les autres types, ou par lien fichier pour un simple ajout dans un dossier déjà existant (jamais un remplacement de fichier existant). En cas d'emplacement disputé entre deux d'entre eux, le mod marqué prioritaire l'emporte à sa prochaine activation.",
     "searchPlaceholder": "Rechercher…",
     "empty": "Aucun mod « autre » importé.",
     "emptyHint": "Un mod dont le type n'est reconnu par aucun import (voiture, circuit, skin, son, app) atterrit ici automatiquement.",
@@ -975,7 +980,6 @@
     "detailTooltip": "ouvrir la fiche de ce mod",
     "categoriesLabel": "Zones touchées",
     "cat": {
-      "all": "Tous",
       "extension": "Extensions",
       "weather": "Météo",
       "gui": "Interface",
@@ -987,7 +991,10 @@
       "showrooms": "Showrooms",
       "other": "Autres"
     },
-    "noMatch": "Aucun mod ne correspond."
+    "noMatch": "Aucun mod ne correspond.",
+    "driverTitle": "Mannequin",
+    "driverInactive": "Activez le mod pour voir son mannequin : c'est le fichier posé dans le jeu qui est rendu.",
+    "driverNeedsCar": "Choisissez une voiture de session : c'est elle qui pose le mannequin."
   },
   "import": {
     "subtitlePrefix": "Ajoute des mods à la bibliothèque. Un mod importé (ou mis à jour) est ",
@@ -1015,7 +1022,8 @@
     "chooseParentFolder": "Choisir un dossier parent…",
     "lastReportTitle": "Dernier import",
     "dndTitle": "Glisser-déposer",
-    "dndHint": "Le geste rapide : dépose une archive n'importe où dans la fenêtre, sur n'importe quel écran — l'import démarre immédiatement, avec le mode copier/déplacer choisi ci-dessus pour un éventuel dossier."
+    "dndHint": "Le geste rapide : dépose une archive n'importe où dans la fenêtre, sur n'importe quel écran — l'import démarre immédiatement, avec le mode copier/déplacer choisi ci-dessus pour un éventuel dossier.",
+    "prefsTitle": "Préférences d'import"
   },
   "importOverlay": {
     "queued": "{n} fichier(s) pris en compte, import en cours…",

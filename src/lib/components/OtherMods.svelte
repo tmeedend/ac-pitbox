@@ -20,16 +20,35 @@
   import LoadingState from "./LoadingState.svelte";
   import Tabs, { type TabItem } from "./Tabs.svelte";
   import OtherModDetail from "./OtherModDetail.svelte";
+  import Apps from "./Apps.svelte";
+  import { listApps } from "$lib/apps";
+  import { nav } from "$lib/nav.svelte";
 
   import { errorText } from "$lib/errors";
 
-  const ALL_TAB = "all";
+  /** Les apps sont un onglet de plus, pas une entrée de rail (SPEC §7.3) :
+   * cet écran est déjà le tiroir de ce qui n'est ni voiture ni circuit, et le
+   * jeu d'onglets existait déjà — c'est une entrée de plus, pas une structure
+   * de plus. **En tête de bande** : c'est la rubrique qu'on vient voir, les
+   * zones du jeu sont le fourre-tout derrière.
+   *
+   * Il n'y a **plus d'onglet « Tous »** : sur une vraie collection il ramassait
+   * tout ce que l'écran contient, ce qui n'est pas une vue mais une absence de
+   * vue — et c'était celle qui s'ouvrait par défaut. */
+  const APPS_TAB = "apps";
   let others = $state<OtherModRow[]>([]);
   let query = $state("");
   /** Onglet courant. `ALL_TAB` n'est pas une catégorie du backend : c'est
    * l'écran d'avant les onglets, gardé parce qu'il reste la seule vue où deux
    * mods de zones différentes se comparent. */
-  let tab = $state(ALL_TAB);
+  let tab = $state(APPS_TAB);
+  /** Décompte des apps, pour l'onglet. Chargé ici et pas remonté depuis
+   * `Apps.svelte` : ce composant n'est monté que lorsque son onglet est
+   * ouvert, or le décompte doit s'afficher même quand on regarde ailleurs. */
+  let appCount = $state<number | null>(null);
+  /** Une fiche d'app est ouverte dans l'onglet Apps : cet écran retire alors
+   * son propre en-tête, comme il le fait pour ses propres fiches. */
+  let appsDetail = $state(false);
   let busy = $state<string | null>(null);
   let loading = $state(true);
   let error = $state("");
@@ -46,6 +65,13 @@
     }
   }
   onMount(load);
+  // Un échec laisse l'onglet sans décompte plutôt que d'afficher zéro : « 0 »
+  // dirait qu'il n'y a pas d'app, ce qu'on ne sait pas.
+  onMount(() => {
+    listApps()
+      .then((apps) => (appCount = apps.length))
+      .catch(() => (appCount = null));
+  });
 
   function name(id: string): string {
     return others.find((o) => o.id === id)?.id ?? id;
@@ -136,16 +162,14 @@
   // Décomptes sur la totalité, pas sur la recherche : un onglet qui se vide
   // en cours de frappe fait sauter la sélection d'un onglet à l'autre.
   const tabs = $derived<TabItem[]>([
-    { id: ALL_TAB, label: t("others.cat.all"), count: others.length },
+    { id: APPS_TAB, label: t("nav.apps"), count: appCount ?? undefined },
     ...categoryIds.map((c) => {
       const count = others.filter((o) => o.categories.includes(c)).length;
       return { id: c, label: t(`others.cat.${c}`), count, disabled: count === 0 };
     }),
   ]);
 
-  const filtered = $derived(
-    tab === ALL_TAB ? searched : searched.filter((o) => o.categories.includes(tab)),
-  );
+  const filtered = $derived(searched.filter((o) => o.categories.includes(tab)));
 </script>
 
 {#if fullRow}
@@ -161,27 +185,36 @@
   />
 {:else}
 <div class="others">
-  <header class="head">
-    <div>
-      <h2 class="lbl-screen">{t("nav.others")}</h2>
-      <p class="sub">{t("others.subtitle")}</p>
-    </div>
-    {#if others.length}
-      <input class="input search" placeholder={t("others.searchPlaceholder")} bind:value={query} />
+  {#if !appsDetail}
+    <header class="head">
+      <div>
+        <h2 class="lbl-screen">{t("nav.others")}</h2>
+        <p class="sub">{t("others.subtitle")}</p>
+      </div>
+      {#if others.length && tab !== APPS_TAB}
+        <input class="input search" placeholder={t("others.searchPlaceholder")} bind:value={query} />
+      {/if}
+    </header>
+
+    {#if error}<div class="err">{error}</div>{/if}
+
+    {#if loading}
+      <LoadingState />
+    {:else}
+      <!-- La barre d'onglets ne dépend plus de la présence d'autres mods :
+           sinon une collection qui n'en compte aucun rendrait l'onglet Apps
+           inatteignable, alors qu'il ne parle pas d'eux. -->
+      <Tabs {tabs} active={tab} onselect={(id) => (tab = id)} />
     {/if}
-  </header>
-
-  {#if error}<div class="err">{error}</div>{/if}
-
-  {#if loading}
-    <LoadingState />
-  {:else if others.length === 0}
+  {/if}
+  {#if !loading && tab === APPS_TAB}
+    <Apps embedded bind:detailOpen={appsDetail} />
+  {:else if !loading && others.length === 0}
     <div class="empty">
       <p>{t("others.empty")}</p>
       <p class="hint">{t("others.emptyHint")}</p>
     </div>
-  {:else}
-    <Tabs {tabs} active={tab} onselect={(id) => (tab = id)} />
+  {:else if !loading}
     {#if filtered.length === 0}
       <div class="empty"><p>{t("others.noMatch")}</p></div>
     {/if}

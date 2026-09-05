@@ -294,6 +294,7 @@ pub fn write_glb(
                 (m.transmission > 0.0).then_some("KHR_materials_transmission"),
                 m.ior.map(|_| "KHR_materials_ior"),
                 (m.clearcoat > 0.0).then_some("KHR_materials_clearcoat"),
+                (!m.uv_scale.is_identity()).then_some("KHR_texture_transform"),
             ]
         })
         .flatten()
@@ -332,7 +333,7 @@ fn material_json(material: &GltfMaterial, texture_index: &Map<String, Value>) ->
         "baseColorFactor": material.base_color,
     });
     if let Some(index) = material.base_color_texture.as_ref().and_then(|n| texture_index.get(n)) {
-        pbr["baseColorTexture"] = json!({ "index": index });
+        pbr["baseColorTexture"] = texture_info(index, material.uv_scale.diffuse);
     }
     if let Some(index) = material.roughness_texture.as_ref().and_then(|n| texture_index.get(n)) {
         pbr["metallicRoughnessTexture"] = json!({ "index": index });
@@ -366,9 +367,23 @@ fn material_json(material: &GltfMaterial, texture_index: &Map<String, Value>) ->
         value["extensions"] = material_extensions;
     }
     if let Some(index) = material.normal_texture.as_ref().and_then(|n| texture_index.get(n)) {
-        value["normalTexture"] = json!({ "index": index, "scale": material.normal_scale });
+        value["normalTexture"] = texture_info(index, material.uv_scale.normal);
     }
     value
+}
+
+/// Une référence de texture, avec sa répétition d'UV quand il y en a une.
+///
+/// `KHR_texture_transform` et non des UV recalculés dans le maillage : la
+/// répétition appartient au matériau, pas à la géométrie, et un même maillage
+/// peut porter une diffuse répétée quarante fois sous une normale répétée
+/// autrement. L'échantillonneur du document répète déjà sur les deux axes.
+fn texture_info(index: &Value, scale: f32) -> Value {
+    let mut info = json!({ "index": index });
+    if (scale - 1.0).abs() > f32::EPSILON {
+        info["extensions"] = json!({ "KHR_texture_transform": { "scale": [scale, scale] } });
+    }
+    info
 }
 
 /// Appends bytes to the binary chunk and registers a buffer view over them.
@@ -678,7 +693,7 @@ mod tests {
             base_color_texture: None,
             normal_texture: None,
             roughness_texture: None,
-            normal_scale: 1.0,
+            uv_scale: crate::material::UvScale::default(),
             emissive: [0.0; 3],
             roughness: 0.5,
             metallic: 0.0,

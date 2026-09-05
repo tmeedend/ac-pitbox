@@ -164,7 +164,9 @@ pub fn flatten(model: &Kn5Model, options: &GeometryOptions) -> (Vec<FlatMesh>, G
     } else {
         BTreeMap::new()
     };
-    let mut next_group = 0u32;
+    // Les pivots de braquage se mesurent avant le parcours : rien ne garantit
+    // qu'on croise la roue d'un coin avant son disque ou son étrier.
+    let mut steering = crate::steer::SteerContext::new(&model.root);
     walk(
         &model.root,
         &IDENTITY,
@@ -173,7 +175,7 @@ pub fn flatten(model: &Kn5Model, options: &GeometryOptions) -> (Vec<FlatMesh>, G
         drop_low_res_cockpit,
         &bones,
         None,
-        &mut next_group,
+        &mut steering,
         &mut meshes,
         &mut stats,
     );
@@ -262,7 +264,7 @@ fn walk(
     drop_low_res_cockpit: bool,
     bones: &BTreeMap<String, [f32; 16]>,
     steer: Option<crate::steer::SteerNode>,
-    next_group: &mut u32,
+    steering: &mut crate::steer::SteerContext,
     meshes: &mut Vec<FlatMesh>,
     stats: &mut GeometryStats,
 ) {
@@ -297,18 +299,14 @@ fn walk(
         Some(local) => multiply(local, parent_world),
         None => *parent_world,
     };
-    // Braquage : la roue avant, ou le volant, tourne **avec tout ce qu'il
-    // porte** — jante, pneu, étrier, rayons. On ne le tourne pas ici, on le
-    // décrit une fois pour tout son sous-arbre, et les enfants héritent de la
-    // description sans rien savoir d'elle.
+    // Braquage : le coin avant, ou le volant, tourne **avec tout ce qu'il
+    // porte** — jante, pneu, disque, étrier, rayons. On ne le tourne pas ici,
+    // on le décrit une fois pour tout son sous-arbre, et les enfants héritent
+    // de la description sans rien savoir d'elle. Un coin avant est en trois
+    // nœuds frères (`WHEEL_`, `DISC_`, `SUSP_`) : ils partagent leur pivot et
+    // leur groupe, c'est `SteerContext` qui s'en charge.
     let steer = match crate::steer::steered(&node.name) {
-        Some(what) if steer.is_none() => {
-            let described = crate::steer::describe(node, what, &world, &options.steering, *next_group);
-            if described.is_some() {
-                *next_group += 1;
-            }
-            described.or(steer)
-        }
+        Some(what) if steer.is_none() => steering.describe(node, what, &world, &options.steering).or(steer),
         _ => steer,
     };
 
@@ -361,7 +359,7 @@ fn walk(
             drop_low_res_cockpit,
             bones,
             steer,
-            next_group,
+            steering,
             meshes,
             stats,
         );

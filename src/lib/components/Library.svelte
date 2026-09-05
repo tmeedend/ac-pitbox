@@ -412,9 +412,14 @@
     // Restaure les préférences mémorisées de l'entité (skin voiture, layout circuit).
     const sk = isCar ? getPreferredSkin(c.id_interne) : null;
     const lay = !isCar ? getPreferredLayout(c.id_interne) : null;
+    // Source, pas résumé (SPEC §9.1) : la livrée et le tracé sont affichés
+    // juste dessous dans la colonne de session, et le nom juste au-dessus —
+    // les répéter ici coûtait des caractères pour rien. Le tag, lui, est un
+    // critère de recherche : sa place est dans la bibliothèque et sur la
+    // fiche, pas dans un résumé de session.
     const meta = isCar
-      ? [c.brand, sk ? `skin: ${sk.name}` : c.category].filter(Boolean).join(" · ")
-      : [lay?.name ?? c.category, c.author].filter(Boolean).join(" · ");
+      ? [c.brand, c.year].filter(Boolean).join(" · ")
+      : (c.author ?? "");
     pickSession(kind, {
       id: c.id_interne,
       name: c.display_name ?? c.id_interne,

@@ -15,6 +15,21 @@
   import StateBadge from "./StateBadge.svelte";
 
   import { errorText } from "$lib/errors";
+
+  /** Rendue comme onglet de « Compléments » (SPEC §7.3) : le titre d'écran
+   * est alors porté par l'écran hôte. Le sous-titre et la recherche restent
+   * ici — ils décrivent et filtrent CETTE liste, pas celle des autres mods.
+   *
+   * `detailOpen` remonte à l'hôte l'ouverture d'une fiche d'app : sans lui,
+   * la fiche s'afficherait SOUS l'en-tête et la barre d'onglets de l'écran
+   * qui l'héberge, alors qu'elle est une page pleine avec son propre retour. */
+  let {
+    embedded = false,
+    detailOpen = $bindable(false),
+  }: { embedded?: boolean; detailOpen?: boolean } = $props();
+  $effect(() => {
+    detailOpen = fullId !== null;
+  });
   let apps = $state<AppItem[]>([]);
   let query = $state("");
   let busy = $state<string | null>(null);
@@ -101,7 +116,7 @@
   <div class="apps">
     <header class="head">
       <div>
-        <h2 class="lbl-screen">{t("nav.apps")}</h2>
+        {#if !embedded}<h2 class="lbl-screen">{t("nav.apps")}</h2>{/if}
         <p class="sub">{t("apps.subtitle")}</p>
       </div>
       {#if apps.length}

@@ -30,6 +30,7 @@
 //!   [`column_axis`]).
 
 use kn5::{Kn5Mesh, Kn5Node};
+use std::collections::BTreeMap;
 
 /// Ce que la voiture déclare de sa direction, et qui décide de combien ses
 /// roues tournent pour un angle de volant donné.
@@ -92,28 +93,53 @@ pub struct SteerNode {
     pub limit: Option<f32>,
 }
 
-/// The two nodes AC steers, by the names every car uses.
+/// Which side of the car a steered node belongs to.
+///
+/// **A front corner is three nodes, not one**, and they must turn together
+/// about the same point. Measured on six cars — MX-5 Cup, 911 GT3 RS, Abarth
+/// 500, R8 LMS, M3 E30, M3 E30 DTM — AC splits it the same way every time:
+/// `WHEEL_?F` carries the tyre and the rim, `DISC_?F` the brake disc, and
+/// `SUSP_?F` the upright and the caliper (`EXT_Calipers`, `CAR_PinzaFreni`,
+/// `EXT_Caliper_base` — the material names differ, the split does not).
+/// Turning only the wheel left the caliper standing still in mid-air, poking
+/// out through the sidewall as soon as the angle passed a few degrees
+/// (reported on screen, `bmw_m3_e30_dtm`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum Side {
+    Left,
+    Right,
+}
+
+/// The nodes AC steers, by the names every car uses.
 ///
 /// Measured on the reference library: `WHEEL_LF` and `WHEEL_RF` on 144 models
 /// of 134, `STEER_HR` on 108 and `STEER_LR` on 69 — the two cockpits, high and
 /// low resolution, the same way `COCKPIT_HR` and `COCKPIT_LR` come in pairs.
 /// A car naming them otherwise simply keeps its wheels straight; there is
 /// nothing to break.
-const FRONT_WHEELS: [&str; 2] = ["WHEEL_LF", "WHEEL_RF"];
+const FRONT_LEFT: [&str; 3] = ["WHEEL_LF", "DISC_LF", "SUSP_LF"];
+const FRONT_RIGHT: [&str; 3] = ["WHEEL_RF", "DISC_RF", "SUSP_RF"];
 const STEERING_WHEELS: [&str; 2] = ["STEER_HR", "STEER_LR"];
+
+/// The node whose geometry gives a corner its pivot — see [`front_pivots`].
+const PIVOT_NODES: [(&str, Side); 2] = [("WHEEL_LF", Side::Left), ("WHEEL_RF", Side::Right)];
 
 /// What this node is to the steering, if anything.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum Steered {
-    /// A front road wheel: turns about the vertical, through its own centre.
-    RoadWheel,
+    /// Part of a front corner: turns about the vertical, through the centre of
+    /// that corner's wheel.
+    RoadWheel(Side),
     /// The wheel in the driver's hands: turns about its own column.
     SteeringWheel,
 }
 
 pub(crate) fn steered(name: &str) -> Option<Steered> {
-    if FRONT_WHEELS.iter().any(|n| name.eq_ignore_ascii_case(n)) {
-        return Some(Steered::RoadWheel);
+    if FRONT_LEFT.iter().any(|n| name.eq_ignore_ascii_case(n)) {
+        return Some(Steered::RoadWheel(Side::Left));
+    }
+    if FRONT_RIGHT.iter().any(|n| name.eq_ignore_ascii_case(n)) {
+        return Some(Steered::RoadWheel(Side::Right));
     }
     if STEERING_WHEELS.iter().any(|n| name.eq_ignore_ascii_case(n)) {
         return Some(Steered::SteeringWheel);
@@ -121,14 +147,107 @@ pub(crate) fn steered(name: &str) -> Option<Steered> {
     None
 }
 
-/// Décrit le nœud braqué qu'on vient de rencontrer, ou `None` quand il n'y a
-/// rien de fiable à faire tourner ici.
-pub(crate) fn describe(
+/// Ce que le braquage a besoin de savoir pendant le parcours de l'arbre : où
+/// est le centre de chaque roue avant, et quel groupe porte déjà chaque côté.
+///
+/// **Les pivots sont mesurés d'abord, en un parcours à part**, parce que rien
+/// ne garantit l'ordre : sur la M3 E30 DTM `WHEEL_LF` précède `DISC_LF`, sur
+/// la MX-5 Cup `SUSP_LF` vient bien avant `WHEEL_LF`. Une description qui
+/// attendrait d'avoir croisé la roue laisserait donc l'étrier sur place selon
+/// la voiture.
+pub(crate) struct SteerContext {
+    /// Centre de la roue avant de chaque côté, en espace monde.
+    pivots: BTreeMap<Side, [f32; 3]>,
+    /// Groupe déjà attribué à un côté (ou au volant, clé `None`) : les trois
+    /// nœuds d'un même coin tournent du même angle autour du même pivot, donc
+    /// leurs maillages peuvent fusionner.
+    groups: BTreeMap<Option<Side>, u32>,
+    next: u32,
+}
+
+impl SteerContext {
+    pub(crate) fn new(root: &Kn5Node) -> Self {
+        Self {
+            pivots: front_pivots(root),
+            groups: BTreeMap::new(),
+            next: 0,
+        }
+    }
+
+    /// Décrit le nœud braqué qu'on vient de rencontrer, ou `None` quand il n'y
+    /// a rien de fiable à faire tourner ici.
+    pub(crate) fn describe(
+        &mut self,
+        node: &Kn5Node,
+        what: Steered,
+        world: &[f32; 16],
+        limits: &SteerLimits,
+    ) -> Option<SteerNode> {
+        let key = match what {
+            Steered::RoadWheel(side) => Some(side),
+            Steered::SteeringWheel => None,
+        };
+        let existing = self.groups.get(&key).copied();
+        let pivot = match what {
+            Steered::RoadWheel(side) => self.pivots.get(&side).copied(),
+            Steered::SteeringWheel => None,
+        };
+        let described = describe(node, what, world, limits, existing.unwrap_or(self.next), pivot)?;
+        if existing.is_none() {
+            self.groups.insert(key, self.next);
+            self.next += 1;
+        }
+        Some(described)
+    }
+}
+
+/// Le centre de chaque roue avant, en espace monde.
+///
+/// **Le disque et l'étrier n'ont pas de pivot à eux.** Une rotation ne dépend
+/// pas du point de son axe qu'on choisit, mais l'étrier n'est pas *sur* l'axe
+/// de braquage — il est à côté du disque, à une dizaine de centimètres. Le
+/// faire tourner autour de son propre milieu le fait pivoter sur lui-même en
+/// restant où il est, c'est-à-dire traverser le pneu. C'est la roue qui porte
+/// le seul point sûr : son milieu est sur l'axe par construction.
+fn front_pivots(root: &Kn5Node) -> BTreeMap<Side, [f32; 3]> {
+    let mut found = BTreeMap::new();
+    collect_pivots(root, &IDENTITY, &mut found);
+    found
+}
+
+fn collect_pivots(node: &Kn5Node, parent_world: &[f32; 16], found: &mut BTreeMap<Side, [f32; 3]>) {
+    let world = match node.transform() {
+        Some(local) => multiply(local, parent_world),
+        None => *parent_world,
+    };
+    if let Some((_, side)) = PIVOT_NODES.iter().find(|(n, _)| node.name.eq_ignore_ascii_case(n)) {
+        if let Some(centre) = bounds_centre(node) {
+            found.entry(*side).or_insert_with(|| transform_point(&world, centre));
+        }
+    }
+    for child in &node.children {
+        collect_pivots(child, &world, found);
+    }
+}
+
+/// Milieu de la boîte englobante de ce nœud, dans son propre repère.
+fn bounds_centre(node: &Kn5Node) -> Option<[f32; 3]> {
+    local_bounds(node).map(|(min, max)| {
+        [
+            (min[0] + max[0]) / 2.0,
+            (min[1] + max[1]) / 2.0,
+            (min[2] + max[2]) / 2.0,
+        ]
+    })
+}
+
+fn describe(
     node: &Kn5Node,
     what: Steered,
     world: &[f32; 16],
     limits: &SteerLimits,
     group: u32,
+    pivot: Option<[f32; 3]>,
 ) -> Option<SteerNode> {
     // **L'angle demandé est celui des roues**, pas celui du volant. C'est ce
     // qu'on veut régler en regardant une voiture à l'arrêt, et c'est ce qui se
@@ -139,7 +258,7 @@ pub(crate) fn describe(
         return None;
     }
     let (gain, limit, axis) = match what {
-        Steered::RoadWheel => (1.0, None, [0.0, 1.0, 0.0]),
+        Steered::RoadWheel(_) => (1.0, None, [0.0, 1.0, 0.0]),
         // Le volant tourne, lui, autant de fois plus que la démultiplication,
         // et s'arrête à la course que la voiture déclare.
         Steered::SteeringWheel => (
@@ -157,20 +276,20 @@ pub(crate) fn describe(
     // l'origine de la voiture, et un demi-tour autour d'un point à deux mètres
     // l'envoie à travers l'habitacle. Le milieu du volant est sur son axe par
     // construction.
-    let centre = local_bounds(node).map(|(min, max)| {
-        [
-            (min[0] + max[0]) / 2.0,
-            (min[1] + max[1]) / 2.0,
-            (min[2] + max[2]) / 2.0,
-        ]
-    })?;
+    // Le pivot du coin quand on le connaît (il est déjà en espace monde),
+    // sinon le milieu de ce nœud-ci — repli qui redonne exactement le
+    // comportement d'avant pour une voiture dont on n'a pas trouvé la roue.
+    let pivot = match pivot {
+        Some(known) => known,
+        None => transform_point(world, bounds_centre(node)?),
+    };
     let length = (axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]).sqrt();
     if length <= f32::EPSILON {
         return None;
     }
     Some(SteerNode {
         group,
-        pivot: transform_point(world, centre),
+        pivot,
         axis: [axis[0] / length, axis[1] / length, axis[2] / length],
         gain,
         limit,
@@ -421,8 +540,15 @@ mod tests {
         } {
             vertex.position[1] += 0.8;
         }
-        let described = describe(&node, Steered::SteeringWheel, &IDENTITY, &SteerLimits::default(), 3)
-            .expect("un volant se décrit");
+        let described = describe(
+            &node,
+            Steered::SteeringWheel,
+            &IDENTITY,
+            &SteerLimits::default(),
+            3,
+            None,
+        )
+        .expect("un volant se décrit");
         assert!(
             (described.pivot[1] - 0.8).abs() < 1e-4,
             "le pivot suit la géométrie : {:?}",
@@ -440,8 +566,8 @@ mod tests {
             lock: 480.0,
             ratio: 12.0,
         };
-        let wheel =
-            describe(&disc(0.05), Steered::RoadWheel, &IDENTITY, &limits, 0).expect("une roue se décrit toujours");
+        let wheel = describe(&disc(0.05), Steered::RoadWheel(Side::Left), &IDENTITY, &limits, 0, None)
+            .expect("une roue se décrit toujours");
         assert_eq!(wheel.axis, [0.0, 1.0, 0.0], "autour de la verticale");
         assert_eq!(wheel.gain, 1.0, "la roue tourne de l'angle demandé");
         assert_eq!(
@@ -449,9 +575,104 @@ mod tests {
             "et rien ne l'arrête : l'aperçu n'est pas une simulation"
         );
 
-        let rim = describe(&disc(0.05), Steered::SteeringWheel, &IDENTITY, &limits, 1).expect("un volant se décrit");
+        let rim =
+            describe(&disc(0.05), Steered::SteeringWheel, &IDENTITY, &limits, 1, None).expect("un volant se décrit");
         assert_eq!(rim.gain, 12.0, "le volant tourne douze fois plus que la roue");
         assert_eq!(rim.limit, Some(40.0), "et bute à 480° de volant, soit 40° de roue");
+    }
+
+    /// Un nœud nommé, posé à `x` mètres du milieu de la voiture.
+    fn corner_part(name: &str, x: f32) -> Kn5Node {
+        let mut node = disc(0.05);
+        node.name = name.to_string();
+        if let Kn5NodeKind::Mesh(mesh) = &mut node.kind {
+            for vertex in &mut mesh.vertices {
+                vertex.position[0] += x;
+            }
+        }
+        node
+    }
+
+    fn car_with_front_corner() -> Kn5Node {
+        Kn5Node {
+            name: "root".to_string(),
+            active: true,
+            kind: Kn5NodeKind::Dummy { transform: IDENTITY },
+            // L'étrier AVANT la roue dans l'arbre : c'est l'ordre de la MX-5
+            // Cup, et c'est lui qui casse une résolution de pivot faite au fil
+            // du parcours.
+            children: vec![
+                corner_part("SUSP_LF", -0.95),
+                corner_part("DISC_LF", -0.70),
+                corner_part("WHEEL_LF", -0.70),
+            ],
+        }
+    }
+
+    // Règle : un coin avant est en trois nœuds (roue, disque, étrier) et ils
+    // tournent **ensemble, autour du centre de la roue**. Bug réel : l'étrier
+    // restait sur place et sortait à travers le pneu dès quelques degrés
+    // (`bmw_m3_e30_dtm`, signalé à l'écran).
+    #[test]
+    fn a_front_corner_turns_about_the_wheel_centre() {
+        let root = car_with_front_corner();
+        let mut ctx = SteerContext::new(&root);
+        let limits = SteerLimits::default();
+        let described: Vec<_> = root
+            .children
+            .iter()
+            .map(|node| {
+                let what = steered(&node.name).expect("les trois nœuds du coin sont braqués");
+                ctx.describe(node, what, &IDENTITY, &limits)
+                    .expect("et tous les trois se décrivent")
+            })
+            .collect();
+
+        let wheel = described[2];
+        for (node, part) in root.children.iter().zip(&described) {
+            assert!(
+                (part.pivot[0] - wheel.pivot[0]).abs() < 1e-4,
+                "{} tourne autour du centre de la roue ({:?}), pas du sien ({:?})",
+                node.name,
+                wheel.pivot,
+                part.pivot
+            );
+            assert_eq!(part.group, wheel.group, "{} partage le groupe du coin", node.name);
+            assert_eq!(
+                part.axis,
+                [0.0, 1.0, 0.0],
+                "{} tourne autour de la verticale",
+                node.name
+            );
+        }
+    }
+
+    // Règle : les deux coins ne partagent pas leur pivot, donc pas leur
+    // groupe — sinon leurs maillages fusionneraient et les deux roues
+    // tourneraient autour du même point.
+    #[test]
+    fn the_two_front_corners_are_two_groups() {
+        let root = Kn5Node {
+            name: "root".to_string(),
+            active: true,
+            kind: Kn5NodeKind::Dummy { transform: IDENTITY },
+            children: vec![corner_part("WHEEL_LF", -0.70), corner_part("WHEEL_RF", 0.70)],
+        };
+        let mut ctx = SteerContext::new(&root);
+        let limits = SteerLimits::default();
+        let left = ctx
+            .describe(&root.children[0], steered("WHEEL_LF").unwrap(), &IDENTITY, &limits)
+            .unwrap();
+        let right = ctx
+            .describe(&root.children[1], steered("WHEEL_RF").unwrap(), &IDENTITY, &limits)
+            .unwrap();
+        assert_ne!(left.group, right.group, "deux coins, deux groupes");
+        assert!(
+            (left.pivot[0] - right.pivot[0]).abs() > 1.0,
+            "et deux pivots distincts : {:?} vs {:?}",
+            left.pivot,
+            right.pivot
+        );
     }
 
     // Règle : une démultiplication nulle ne décrit rien plutôt que de diviser
@@ -463,7 +684,10 @@ mod tests {
             lock: 400.0,
             ratio: 0.0,
         };
-        assert_eq!(describe(&disc(0.05), Steered::RoadWheel, &IDENTITY, &broken, 0), None);
+        assert_eq!(
+            describe(&disc(0.05), Steered::RoadWheel(Side::Left), &IDENTITY, &broken, 0, None),
+            None
+        );
     }
 
     /// Combien de volants de la bibliothèque se décrivent, et vers où pointe

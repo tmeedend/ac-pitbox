@@ -91,8 +91,9 @@
 <div class="screen">
   <div class="scroll">
     <div class="rules">
+      <!-- Pas de titre d'écran : c'est un onglet de l'Atelier, qui porte le
+           sien. Le sous-titre reste, lui — il décrit l'outil, pas le lieu. -->
       <header class="r-header">
-        <h2 class="lbl-screen">{t("rules.title")}</h2>
         <p class="sub">{t("rules.subtitle")}</p>
       </header>
 
@@ -299,8 +300,9 @@
     min-height: 0;
     overflow-y: auto;
     /* Le retrait que `.content` appliquait avant que cet écran ne prenne son
-       défilement en main. */
-    padding: 28px 32px;
+       défilement en main — sans le haut, désormais donné par la barre
+       d'onglets de l'Atelier juste au-dessus. */
+    padding: 0 32px 28px;
   }
   .rules {
     max-width: 760px;

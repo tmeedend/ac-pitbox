@@ -1,32 +1,41 @@
 {
   "nav": {
     "session": "Session",
-    "addons": "Add-ons",
     "atelier": "Werkstatt",
     "skins": "Skins",
     "carAddons": "Fahrzeug-Add-ons",
     "trackAddons": "Strecken-Add-ons",
     "sounds": "Sounds",
-    "others": "Andere Mods",
+    "others": "Extras",
     "apps": "Apps",
     "rules": "Regeln",
     "import": "Importieren",
     "profiles": "Profile",
     "maintenance": "Wartung",
-    "openCm": "CM öffnen",
+    "openCm": "Content Manager öffnen",
     "settings": "Einstellungen",
-    "about": "Über"
+    "about": "Über",
+    "cars": "Fahrzeuge",
+    "tracks": "Strecken",
+    "railLabel": "Hauptnavigation",
+    "alertLabel": "zu prüfende Einträge"
   },
   "titlebar": {
     "bigPicture": "Big-Picture-Modus (Vollbild)",
     "minimize": "Minimieren",
     "maximize": "Maximieren",
     "restore": "Wiederherstellen",
-    "close": "Schließen"
+    "close": "Schließen",
+    "bigPictureLabel": "BIG PICTURE"
   },
   "session": {
-    "carTag": "FAHRZEUG",
     "trackTag": "STRECKE",
+    "fieldLivery": "Lackierung",
+    "fieldDriver": "Fahrer",
+    "fieldLayout": "Layout",
+    "fieldTrackSkin": "Skin",
+    "layoutSingle": "einziges Layout",
+    "trackSkinsStock": "Das Original",
     "changeCar": "Fahrzeug wechseln",
     "changeTrack": "Strecke wechseln",
     "chooseCar": "Fahrzeug wählen",
@@ -46,8 +55,6 @@
     "noSkinsAvailable": "Kein Skin",
     "pickLayout": "Layout auswählen…",
     "noLayoutsAvailable": "Kein Layout",
-    "trackSkinsNone": "Kein aktiver Skin",
-    "trackSkinsEmpty": "Kein Streckenskin",
     "trackSkinsCount": "{count} aktive Skins",
     "trackSkinsTooltip": "Streckenskins — mehrere können aktiv sein"
   },
@@ -145,12 +152,10 @@
     "title": "Einstellungen",
     "tabGeneral": "Allgemein",
     "tabPaths": "Pfade",
-    "tabImport": "Import",
-    "tabPreview": "Vorschau",
+    "tabPreview": "3D-Vorschau",
     "tabMusic": "Musik",
     "tabGeneralHint": "Sprache, Skalierung der Oberfläche, Standard-Showroom der 3D-Vorschau.",
     "tabPathsHint": "Konfiguration der Umgebung. Bibliothek, Overlay und Regeln sind getrennte Speicher.",
-    "tabImportHint": "Verhalten der App beim Import einer Mod.",
     "tabPreviewHint": "3D-Vorschau auf der Seite eines Fahrzeugs. Änderungen wirken sofort.",
     "preview3dEnabled": "3D-Vorschau auf Fahrzeugseiten anzeigen",
     "preview3dEnabledHint": "Nicht angehakt zeigen die Fahrzeugseiten stattdessen das Skin-Foto. Der Schalter auf der Seite macht dasselbe.",
@@ -917,7 +922,6 @@
     "managed": "{count} in Content-Manager-Gebiet",
     "managedTooltip": "Content Manager synchronisiert diese Ordner aus dem CSP-Konfigurations-Repository. Er kann diese Dateien jederzeit durch seine eigenen Versionen ersetzen. Das ist nicht der empfohlene Ort für eine Mod.",
     "cat": {
-      "all": "Alle",
       "extension": "Erweiterungen",
       "weather": "Wetter",
       "gui": "Oberfläche",
@@ -929,7 +933,10 @@
       "showrooms": "Showrooms",
       "other": "Andere"
     },
-    "noMatch": "Keine Mod passt."
+    "noMatch": "Keine Mod passt.",
+    "driverTitle": "Fahrermodell",
+    "driverInactive": "Aktiviere den Mod, um das Fahrermodell zu sehen: gerendert wird die im Spiel abgelegte Datei.",
+    "driverNeedsCar": "Wähle ein Fahrzeug für die Session: das Fahrzeug gibt dem Fahrermodell seine Pose."
   },
   "import": {
     "subtitlePrefix": "Fügt der Bibliothek Mods hinzu. Eine importierte (oder aktualisierte) Mod wird ",
@@ -957,7 +964,8 @@
     "chooseParentFolder": "Übergeordneten Ordner wählen…",
     "lastReportTitle": "Letzter Import",
     "dndTitle": "Ziehen und Ablegen",
-    "dndHint": "Die schnelle Geste: lege ein Archiv irgendwo im Fenster ab, auf jedem Bildschirm — der Import startet sofort, mit dem oben für einen Ordner gewählten Kopieren/Verschieben-Modus."
+    "dndHint": "Die schnelle Geste: lege ein Archiv irgendwo im Fenster ab, auf jedem Bildschirm — der Import startet sofort, mit dem oben für einen Ordner gewählten Kopieren/Verschieben-Modus.",
+    "prefsTitle": "Import-Einstellungen"
   },
   "importOverlay": {
     "queued": "{n} Datei(en) übernommen, wird importiert…",

@@ -613,14 +613,33 @@ Trois règles portent le système :
 
 **Catégories pour les circuits** : les circuits ont aussi des catégories (comme les voitures), pour filtrer et composer.
 
-### 7.2 Barre latérale unifiée
+### 7.2 Trois territoires
 
-Une **colonne latérale unique** (maquette de référence `pitbox-biblio-session2.html`) :
-- **Bloc SESSION en haut** : previews du duo sélectionné (voiture + circuit), chacune cliquable pour ouvrir la bibliothèque correspondante — le bloc Session est le point d'accès aux bibliothèques (pas d'entrées « Voitures »/« Circuits » séparées). Bouton **« Démarrer une session »** qui ouvre l'écran de réglages à droite.
-- **ADD-ONS** (titre mono, majuscules espacées) en deux colonnes : Skins | Sons, Apps, Autres mods.
-- **ATELIER** (même style) : Règles | Importer, Réglages.
+L'application compte une douzaine de destinations. Elles se répartissent en trois zones dont la frontière doit rester **étanche** — toute entrée d'interface nouvelle se rattache à l'une des trois :
 
-L'entrée active — celle dont l'écran est affiché — se marque par un **filet gauche rouge de 2 px** (`box-shadow: inset`, jamais une bordure : 2 px de bordure décaleraient le contenu d'un pixel à chaque changement d'écran). Vaut pour les deux emplacements de session, la ligne « Mon pilote » et les boutons Add-ons/Atelier. Les titres de section, eux, ne sont plus rouges — voir §7.2ter.
+| Territoire | Question | Contenu |
+| --- | --- | --- |
+| **Rail** (à gauche, `NavRail.svelte`) | *où je vais* | les destinations — des lieux qu'on parcourt |
+| **Barre de titre** (en haut, `TitleBar.svelte`) | *quelle forme a la fenêtre* | réduire, agrandir, fermer, Big Picture |
+| **Colonne de session** (`AppShell.svelte`) | *ce que je lance* | voiture, livrée, pilote, circuit, paramétrage, lancement, **Ouvrir CM** |
+
+Avant ce découpage, la colonne de session faisait office de navigation en plus de son travail propre, et les deux grilles de boutons `ADD-ONS` et `ATELIER` qu'elle portait en pied étaient orphelines : elles n'étaient pas mal dessinées, elles étaient mal placées. Deux conséquences qui ne se devinent pas : **« À propos » quitte la barre de titre** (c'est du contenu — version, liens, dépôt — pas un état de fenêtre) et descend au pied du rail ; **« Ouvrir CM » quitte la navigation pour la colonne de session** (ce n'est pas une destination mais un chemin de lancement alternatif, pour qui préfère démarrer depuis Content Manager — le critère de rangement est l'intention, pas le fait que la cible soit externe).
+
+**Règle d'architecture : le rail porte les lieux, les onglets vivent à l'intérieur d'un lieu, aucun lieu n'a deux niveaux d'onglets.** C'est elle qui décide de tout le reste. Les quatre inventaires (add-ons voiture, add-ons circuit, compléments, apps) possèdent déjà leurs propres onglets internes : les ranger sous un onglet supplémentaire produirait deux rangées horizontales de forme identique, sans que rien n'indique laquelle commande l'autre. Ils sont donc des entrées de rail à part entière. Les quatre outils de l'Atelier, à l'inverse, n'ont **aucune** sous-rubrique — c'est la seule raison pour laquelle ce regroupement-là est légitime et l'autre non (§7.2quater).
+
+**Neuf entrées, trois filets** : Voitures · Circuits · Pilote — *ce avec quoi on roule* — puis Add-ons voiture · Add-ons circuit · Compléments — *ce qu'on possède* — puis Atelier, et en pied Réglages · À propos. Chaque entrée porte une **icône et un libellé** : le rail n'est pas iconographique seul, « Add-ons voiture » contre « Compléments » n'étant pas une distinction qu'une icône peut porter, et un rail muet se paie en infobulles pour un gain de largeur sans valeur ici.
+
+L'entrée active — celle dont l'écran est affiché — se marque par un **filet gauche rouge de 2 px** (`box-shadow: inset`, jamais une bordure : 2 px de bordure décaleraient le contenu d'un pixel à chaque changement d'écran), plus une icône pleine et un libellé en pleine lumière. C'est la seule apparition du rouge dans le rail (§7.2ter), et le seul repère d'écran actif de l'application : la colonne de session ne le porte plus, elle qui n'est plus de la navigation (§9.1). Au clavier, flèches haut/bas pour circuler dans le rail (bouclé aux deux extrémités), `Entrée` pour activer, `aria-current="page"` sur l'entrée active.
+
+**Pastille d'alerte** : un point de 6 px en haut à droite de l'icône, bordé de la couleur du rail, sur une rubrique qui contient un problème. Pas d'agrégat sur une entrée parente et **pas de compteur** — il faut voir *laquelle* aller regarder, et le nombre exact ne change pas cette décision. Une seule source aujourd'hui : les conflits de fichiers entre compléments, que `list_others` calcule déjà. Les autres inventaires n'ont pas de notion de « problème » à remonter.
+
+### 7.2quater Atelier
+
+Règles, Importer, Profils et Maintenance sont les quatre **onglets d'un même écran** (`Workshop.svelte`), titré `Atelier`. Chacun est un écran à une tâche sans sous-rubrique : c'est ce qui rend le regroupement possible sans créer le double niveau d'onglets que §7.2 interdit. Quatre entrées de rail économisées, et les quatre outils gagnent une maison visible au lieu d'être quatre boutons dans une grille. Chaque onglet garde son propre **sous-titre** — il décrit l'outil, là où le titre décrit le lieu.
+
+**L'onglet reste porté par `nav.section`**, pas par un état local, et c'est ce qui compte à l'usage : la douzaine d'endroits qui appellent déjà `requestSection("import")` (le glisser-déposer global, un rapport d'import, un renvoi depuis la bibliothèque) atterrissent sur le bon onglet sans rien savoir de cet écran, la garde de navigation (§10bis) et l'historique (§7.2bis) restent en place, et l'entrée du rail — qui vise `rules` — repart forcément du premier onglet. **L'onglet actif n'est pas mémorisé.**
+
+Les **préférences d'import** ont suivi l'opération : elles ont quitté les Réglages pour une **section repliable en pied de l'onglet Importer**, repliée par défaut. Deux noms quasi identiques dans deux endroits différents — l'un l'action, l'autre ses préférences — produisaient des allers-retours. Une section et non un onglet : cet écran est déjà un onglet de l'Atelier. Écriture immédiate, sans bouton Enregistrer (deux réglages, aucun aperçu live à valider ou annuler), un échec s'affichant plutôt que de se perdre.
 
 ### 7.2ter Barème de l'accent rouge
 
@@ -654,7 +673,15 @@ Trois points de comportement :
 
 WebView2 mappe ces deux boutons sur **son** historique de navigation ; l'app à route unique (SPA `adapter-static`) n'a rien où reculer, et la webview quitterait la page pour une fenêtre blanche. Ils sont donc interceptés (`preventDefault` sur `mousedown` et sur `auxclick`) avant d'être traduits en navigation Pit Box.
 
-### 7.3 Type « Autres mods »
+### 7.3 Type « Autres mods » (écran « Compléments »)
+
+**L'écran s'appelle « Compléments » et absorbe les apps**, en onglet de plus aux côtés des zones du jeu. Il est déjà le tiroir de ce qui n'est ni voiture ni circuit : les apps y entrent sans forcer, et le jeu d'onglets existait — c'est une entrée de plus, pas une structure de plus (§7.2). Le mot « autres mods » désigne encore, dans tout ce qui suit, le **type** de mod ; il ne désigne plus l'écran.
+
+**Apps ouvre la bande d'onglets**, avec son décompte, et c'est l'onglet par défaut : c'est la rubrique qu'on vient consulter, les zones du jeu sont le fourre-tout derrière. Le décompte est chargé par l'écran lui-même et non remonté par l'onglet Apps, qui n'est monté que lorsqu'il est ouvert — sinon le nombre disparaîtrait dès qu'on regarde ailleurs ; un chargement raté laisse l'onglet **sans** décompte plutôt qu'à zéro, qui affirmerait qu'il n'y a pas d'app.
+
+**Il n'y a plus d'onglet « Tous ».** Sur une vraie collection il ramassait tout ce que l'écran contient, ce qui n'est pas une vue mais une absence de vue — et c'était celle qui s'ouvrait par défaut.
+
+**L'onglet Pilotes montre le mannequin.** Un mannequin ne se reconnaît qu'à sa géométrie — forme de casque, HANS ou pas, carrure, visage — et sa fiche ne portait que son id de fichier, ce qui ne dit rien de ce qu'on vient d'importer. Elle rend donc le corps en 3D, avec la galerie de l'écran Pilote (§9.5) telle quelle, PNG gardé sur disque compris. Deux dépendances qui se disent à l'écran plutôt que d'afficher un cadre vide : le mod doit être **actif** — les mannequins se lisent dans les jonctions posées, AC ne connaissant un corps que par le nom de fichier trouvé dans `content/driver/` — et une **voiture de session** doit être choisie, puisque c'est elle qui pose le mannequin (`prepare_body_preview`).
 
 Mods de type non reconnu (shaders, configs CSP, mods d'UI, weather patterns…) : listés dans « Autres mods », activables/désactivables (hardlinks) comme les autres. Priorité notée + conflits signalés (pas de moteur de superposition type MO2). Chaque entrée a un bouton **« ouvrir le dossier »** vers son emplacement en bibliothèque — le chemin est résolu côté Rust depuis l'overlay, jamais reçu du front, ce qui permet de garder fermé le scope ACL du plugin `opener` (même rationale que `open_mod_folder`).
 
@@ -887,12 +914,47 @@ Deux précautions dans ce classement :
 
 ### 9.1 La bibliothèque est le sélecteur
 
-Pas d'écran séparé de sélection : la voiture/le circuit sélectionnés dans la bibliothèque sont ceux de la session. Le **bloc Session** de la barre latérale montre en permanence le duo courant. La page « Démarrer une session » ne contient aucune sélection de voiture/circuit — seulement les réglages + Lancer.
+Pas d'écran séparé de sélection : la voiture/le circuit sélectionnés dans la bibliothèque sont ceux de la session. La **colonne de session** montre en permanence le duo courant. La page « Démarrer une session » ne contient aucune sélection de voiture/circuit — seulement les réglages + Lancer.
+
+**La colonne répond à une seule question : *qu'est-ce que je lance ?*** Tout ce qui n'y répond pas en est sorti — les boutons de navigation dans le rail (§7.2), les trois menus de tenue dans l'écran Pilote (§9.5). Restent **deux blocs à l'anatomie strictement identique** — vignette, nom, source, puis les champs — et trois actions :
+
+```
+SESSION
+  [ vignette ]                     ← cliquable : ouvre la bibliothèque
+  Porsche 718 Boxster S            ← cliquable, même zone
+  Porsche · 2016
+  LIVRÉE   ▪ Miami Blue         ▾
+  PILOTE     Mon pilote         ›
+CIRCUIT
+  [ vignette ]
+  Imola
+  Kunos
+  LAYOUT     Imola — layout unique     (statique : une seule option)
+  SKIN       Celui d'origine     ▾
+  [ PARAMÉTRAGE DE LA SESSION ]
+  [ ▶ DÉMARRER LA SESSION      ]
+  ─────────────────────────────
+    ↗ Ouvrir Content Manager
+```
+
+**L'intitulé d'un champ est une colonne, pas une ligne au-dessus.** Largeur fixe à gauche, valeur alignée à droite, la ligne restant à 30 px : **coût en hauteur zéro**, là où un intitulé posé au-dessus aurait coûté 14 px par champ pour le même service. Effet recherché : les valeurs s'alignent verticalement et la colonne se lit comme une fiche technique, pas comme une pile de menus. Cet alignement **est** tout l'intérêt du dispositif, donc la largeur est partagée par les quatre champs (variable CSS `--sess-lblw`) et **mesurée une fois par langue** — 60 px conviennent au français, l'allemand demande plus (`LACKIERUNG`), 88 px plafonnent et l'intitulé tronque au-delà. La mesure divise par `zoomFactor()` avant d'écrire, comme toute mesure de pixels qui repart dans un style (§13).
+
+**L'état vide est une valeur, pas un intitulé.** Piège réel : `Aucun skin de circuit` se nomme parfaitement lui-même — tant qu'il est vide. Dès qu'un skin est coché, la ligne affiche `Gulf Racing` et la nature du champ disparaît. L'état vide rassure le concepteur, l'état rempli perd l'utilisateur. Donc l'intitulé ne bouge jamais (`SKIN`), et le défaut devient une valeur : *Celui d'origine*, italique grise — **partout où un défaut existe dans le produit, il se dit de la même façon**, un possessif et une italique, jamais une négation (même formulation que « Celle de la livrée » de l'écran Pilote, §9.5).
+
+**Un sélecteur à une seule option n'en est pas un.** Un menu qui affiche `Imola` sous un titre `Imola` ne propose rien et fait douter. Le champ devient alors une **ligne statique** : même colonne d'intitulé, 26 px au lieu de 30, ni bordure ni fond ni chevron, valeur en gris, plus une mention qui dit pourquoi il n'y a rien à choisir (`Imola — layout unique`). La règle vaut pour tous les champs — une voiture à livrée unique n'a pas de menu non plus. **La ligne n'est pas masquée pour autant** : elle dit ce que la session utilisera, c'est le contrôle qui disparaît, pas le fait.
+
+**Le chevron dit où l'on va** : `▾` pour un menu qui s'ouvre sur place, `›` pour une destination — le champ `PILOTE` ouvre l'écran Pilote, pas une liste. Ténu, mais constant dans tout le produit.
+
+**La source n'est pas un résumé.** `Porsche · #sportscars · skin: Miami Blue` répétait la livrée affichée juste dessous ; elle devient `Porsche · 2016`. `Imola · Kunos` répétait le nom écrit au-dessus ; elle devient `Kunos`. Même principe que le retrait de la marque dans le nom des cartes : ne pas payer des caractères pour une information présente à quelques pixels. Le tag quitte la colonne — c'est un critère de recherche, sa place est dans la bibliothèque et sur la fiche.
 
 **Chaque emplacement a trois états**, et aucun bouton « Changer » : c'est la vignette et le nom qui ouvrent la bibliothèque.
 - **Choisi** : photo, nom, métadonnée. Le libellé d'action n'est pas supprimé, il est **différé** — au survol *et au focus clavier*, un voile plein (`rgba(8,8,10,.72)`, 130 ms) porte « ✎ Changer de voiture / de circuit ». Le voile est plein parce qu'au moment où l'on décide de changer, la photo n'est plus l'information utile, et un voile partiel rendrait le libellé illisible sur une image imprévisible. Le bouton porte un `aria-label` complet (« Porsche 718 Boxster S — changer de voiture »).
 - **Vide** : trame diagonale, bordure pointillée, « ＋ Choisir une voiture », ni nom ni métadonnée. **L'app ne choisit jamais une voiture à la place de l'utilisateur** au premier démarrage : « la première du catalogue » est une voiture arbitraire, et démarrer sur un bouton rouge qui lancerait une session au hasard installe le mauvais modèle mental. Tant que le duo est incomplet, « Paramétrage » et « Démarrer la session » sont **désactivés** — ce dernier gardant son fond rouge en opacité réduite : il reste la destination visible de l'écran, le griser effacerait le but à atteindre. C'est aussi ce premier démarrage qui enseigne le geste : sans autre chemin que le bloc, l'utilisateur apprend qu'il est cliquable, et le bouton permanent n'avait plus rien à enseigner ensuite.
 - **Impasse** : Assetto Corsa introuvable ou chemin mal renseigné (`validate_config`, relu en quittant les Réglages). Même trame que l'état vide, mais « Aucune voiture détectée » + « Vérifiez le chemin d'installation », et le clic ouvre **Réglages › Chemins** au lieu d'une bibliothèque nécessairement vide — le problème à résoudre n'est pas le même.
+
+**Ouvrir Content Manager** ferme la colonne, sous le bouton de lancement. **Un lien texte, jamais un troisième bouton encadré** : trois blocs de même gabarit empilés annuleraient la hiérarchie que le bordé (paramétrage) et le plein (lancement) viennent d'établir. Un filet et une respiration l'en séparent — collé sous le bouton rouge il se lirait comme la suite du bloc, l'adjacence promettant toute seule même sans le mot. Le libellé ne dit **pas** « ouvrir *dans* » : CM ne reçoit ni la voiture ni le circuit, il s'ouvre sur son propre état, et « dans » annoncerait un transfert de contexte qui n'a pas lieu. Si CM n'est pas détecté au chemin configuré (`validate_config`), **le lien ne s'affiche pas du tout** — ni bouton grisé ni message d'erreur au clic : une sortie vers un outil absent n'a pas à occuper une ligne dans une colonne dont la hauteur est comptée.
+
+**Deux chemins vers les bibliothèques, deux intentions.** L'entrée du rail dit *je vais parcourir ma collection* ; le clic sur la vignette dit *je change la voiture de cette session*. Ce n'est pas une redondance. En l'absence de décision sur un cadrage différent (positionner la liste sur la voiture courante ?), les deux chemins sont strictement identiques — défaut acceptable.
 
 **Frontière des zones cliquables.** Le bloc porte aussi le menu de livrée, celui de layout, la liste des skins de circuit et la ligne « Mon pilote » : un clic qui visait un menu ne doit jamais éjecter vers la bibliothèque. La zone qui navigue est donc un `<button>` **frère** de ces menus, jamais leur parent — un bouton contenant des contrôles interactifs est de surcroît invalide en HTML et casse la navigation clavier.
 
@@ -1078,7 +1140,7 @@ Ce n'est un déchet que si le parent ne revient jamais. Ils sont donc **listés 
 
 **Préférences persistantes** : affichage des tags du fichier mod (masquables), état du panneau de suivi (global), vue bibliothèque + colonnes (par type), presets de session (par type), preset CM graphique/FFB par défaut, décor de l'aperçu 3D natif (§9.4), **aperçu 3D intégré affiché ou non sur la fiche voiture** (défaut affiché — §9.4), regroupement des skins (archive/voiture), extraction des fichiers annexes (Aucun / Informations seulement / Tout — §4.5.2), **conservation de l'archive source** (défaut désactivé — §10), **mode de déploiement** (hardlink/symlink, défaut hardlink — §2), **zoom du mode Big Picture** (§16, distinct du zoom normal — `None` reprend ce dernier).
 
-**Écran Réglages en onglets** (Général / Chemins / Import / Aperçu / Musique) depuis le mode Big Picture (§16) — Général/Chemins/Import partagent `AppConfig` et sa garde de navigation (§10bis) ; Aperçu et Musique ont chacun leur propre stockage et **s'appliquent sans bouton Enregistrer** (`ui_prefs.json` pour l'un, `music.json` pour l'autre).
+**Écran Réglages en onglets** (Général / Chemins / Aperçu 3D / Musique) depuis le mode Big Picture (§16) — Général et Chemins partagent `AppConfig` et sa garde de navigation (§10bis) ; Aperçu 3D et Musique ont chacun leur propre stockage et **s'appliquent sans bouton Enregistrer** (`ui_prefs.json` pour l'un, `music.json` pour l'autre). L'onglet **Import** n'est plus ici : ses deux préférences vivent au pied de l'écran `Atelier › Importer` (§7.2quater).
 
 **Onglet Aperçu** (`components/settings/PreviewTab.svelte`) : **il porte son propre aperçu 3D**, en haut, et c'est ce qui justifie que les treize curseurs y soient — on règle en voyant le résultat. La voiture montrée est celle de la session en cours, à défaut la première de la bibliothèque. La fiche voiture, elle, n'en garde qu'un raccourci : son panneau compact ne tenait que cinq curseurs sur treize. Réglages de l'aperçu 3D intégré (§9.4), en **deux colonnes assignées** : sous l'aperçu, ce qu'on regarde en même temps que lui — **Rendu**, **Éclairage**, **Sol** ; à sa droite, ce qu'on manipule le plus — **Cadrage**, puis **Cache**, seul bloc qui efface des fichiers pour de bon et donc placé en dernier. Les colonnes sont assignées et non laissées au flux du navigateur : celui-ci répartissait les cartes comme il voulait, et le bloc le plus utilisé tombait où il tombait. *Rendu* : affichage de l'aperçu, **pilote au volant** (Toujours / Au démarrage du moteur / Jamais), **braquage**, qualité (Standard / Élevée) et effet d'entrée du plateau (Aucun / Progressif / Lancé). *Cadrage* : affiché ou non sur les fiches (même réglage que la bascule de la zone héros), zoom, orientation, angle de plongée, hauteur de caméra, **focale** et vitesse du plateau tournant. La focale recalcule la distance pour que la voiture garde sa taille dans le cadre : elle ne change que la perspective, le zoom restant ce qui recadre. *Éclairage* : exposition et intensité des rampes du studio. *Sol* : **reflet de la voiture** (intensité, flou, portée), flaque de lumière et ombre portée. Chaque groupe porte son propre bouton de remise à zéro, qui ne touche qu'à lui. *Cache* : plafond du cache d'aperçus (0,5 à 20 Go, défaut 2 Go), taille réellement occupée, et un bouton qui vide le cache. **Comme l'onglet Général, rien ne s'enregistre tout seul** : les réglages s'appliquent à l'aperçu mais n'atteignent le disque qu'au clic sur Enregistrer, un bouton Annuler revient sur l'enregistré, et quitter l'écran avec des changements en attente demande quoi en faire. Seule exception, la bascule photo/3D de la fiche voiture, qui est un interrupteur d'un clic. Baisser le plafond évince tout de suite, sans attendre la prochaine conversion. La qualité ne touche **que** le rendu : en changer n'invalide aucune entrée de cache. Les curseurs eux-mêmes sont dans `components/detail/Preview3dControls.svelte`, **partagé avec le panneau posé sur la fiche voiture** : on les règle là où on voit le résultat, on les retrouve ici avec leur mode d'emploi. Les valeurs par défaut sont celles mesurées sur les `preview.jpg` de Kunos, pour que la bascule photo/3D ne saute pas à l'œil (trois-quarts avant gauche, vue basse — détail dans `SPEC-preview-3d-kn5.md` §15), et un changement s'applique à une fiche déjà ouverte sans recharger son modèle.
 
@@ -1086,7 +1148,7 @@ Ce n'est un déchet que si le parent ne revient jamais. Ils sont donc **listés 
 
 ## 12. Écran « À propos »
 
-Maquette de référence `pitbox-a-propos.html`. Contenu :
+Atteint par la **dernière entrée du rail** (§7.2) : c'est du contenu, pas un état de fenêtre, et il n'a donc rien à faire dans la barre de titre où il vivait sous forme d'icône « ? ». Maquette de référence `pitbox-a-propos.html`. Contenu :
 - **Identité** : nom, version/build, courte phrase de philosophie (non-destructif).
 - **Outils tiers** (Assetto Corsa, Content Manager, QuickBMS) : description, auteur/studio, lien externe, mention **non-affiliation** par outil (Kunos Simulazioni, gro-ove, Luigi Auriemma). Content Manager marqué **requis**, QuickBMS marqué **optionnel** (non embarqué — export seulement, §10).
 - **Soutien & communauté** : lien **PayPal** (don libre, pas d'abonnement), profil OverTake, lien vers le **dépôt source** (code ouvert), lien « signaler un bug », journal des versions.

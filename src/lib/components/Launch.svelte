@@ -878,7 +878,7 @@
     const skin = skinId ? skins.find((sk) => sk.id === skinId) ?? null : null;
     if (skinId && !skin) warnings.push(t("launch.loadWarnCarSkinMissing", { id: skinId }));
     if (skin) setPreferredSkin(carId, skin);
-    const meta = [card.brand, skin ? `skin: ${skin.name}` : card.category].filter(Boolean).join(" · ");
+    const meta = [card.brand, card.year].filter(Boolean).join(" · ");
     pickSession("Car", {
       id: carId,
       name: card.display_name ?? carId,
@@ -910,7 +910,7 @@
     // afficherait les cases de l'état précédent jusqu'au prochain changement
     // de circuit.
     await restoreTrackSkins(trackId, trackSkins, warnings);
-    const meta = [layout?.name ?? card.category, card.author].filter(Boolean).join(" · ");
+    const meta = card.author ?? "";
     pickSession("Track", {
       id: trackId,
       name: card.display_name ?? trackId,
