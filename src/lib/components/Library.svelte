@@ -976,7 +976,7 @@
   .head {
     position: relative;
     z-index: 2;
-    padding: 18px calc(22px + var(--scrollbar-w)) 2px 22px;
+    padding: 14px calc(22px + var(--scrollbar-w)) 2px 22px;
   }
   /* La seule chose qui défile, sur les deux axes : la grille ou le tableau.
      `overflow-x` explicite plutôt que de compter sur la règle CSS qui promeut
@@ -1036,10 +1036,13 @@
     display: flex;
     border: 1px solid var(--line);
   }
+  /* 32 px comme la recherche et le bouton « + Filtre » : ce sont des contrôles,
+     et la barre de filtres n'en connaît que deux hauteurs (§7.1). */
   .seg button {
     background: var(--panel2);
     color: var(--muted);
-    padding: 7px 11px;
+    height: 32px;
+    padding: 0 11px;
     font-size: 11.5px;
     border-right: 1px solid var(--line);
   }
@@ -1052,7 +1055,7 @@
   }
   .seg.view button {
     font-size: 14px;
-    padding: 6px 10px;
+    padding: 0 10px;
   }
   .empty {
     color: var(--muted);

@@ -4,7 +4,7 @@
 // height - for a user who reaches for one or two of them. Every filter now
 // lives as a CHIP, and its editor in a popover anchored to that chip, so the
 // complexity of a filter no longer costs any room in the bar: a multi-token
-// field with an operator takes the same 28 px as a checkbox.
+// field with an operator takes the same 26 px as a checkbox.
 //
 // Three rules carry the whole thing:
 //   R1  the chip is an anchor, not a control;

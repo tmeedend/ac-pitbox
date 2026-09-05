@@ -1,13 +1,14 @@
 <script lang="ts">
   // Barre de filtres de la bibliothèque (§6.3).
   //
-  // Une **ligne permanente** (recherche libre, « + Filtre », décompte, et ce
-  // que l'écran appelant range à droite), puis une **rangée de puces**. Chaque
-  // filtre posé est une puce ; son éditeur vit dans un popover accroché à
-  // elle, jamais dans la barre. C'est ce qui fait qu'un filtre à jetons
-  // multiples avec opérateur ne coûte pas un pixel de plus qu'une case à
-  // cocher — l'ancienne barre affichait onze contrôles en permanence, sur
-  // environ 200 px de hauteur, pour quelqu'un qui en emploie un ou deux.
+  // **Une seule ligne** : recherche, « + Filtre », puces et « Tout effacer »
+  // dans une coulée qui passe à la ligne, plus un bloc calé à droite pour le
+  // décompte et ce que l'écran appelant y range. Chaque filtre posé est une
+  // puce ; son éditeur vit dans un popover accroché à elle, jamais dans la
+  // barre. C'est ce qui fait qu'un filtre à jetons multiples avec opérateur ne
+  // coûte pas un pixel de plus qu'une case à cocher — l'ancienne barre
+  // affichait onze contrôles en permanence, sur environ 200 px de hauteur,
+  // pour quelqu'un qui en emploie un ou deux.
   //
   // Deux règles gouvernent tous les gestes :
   //   — **le clic modifie, la croix retire**, sans exception ni type de puce
@@ -43,7 +44,7 @@
     /** Raccourcis de décennie du filtre d'année, déduits de la bibliothèque. */
     presets: { label: string; min: number; max: number }[];
     resultCount: number;
-    /** Ce que l'écran range en fin de ligne permanente (colonnes, vue). */
+    /** Ce que l'écran range dans le bloc de droite (colonnes, vue). */
     end?: Snippet;
   }
   let {
@@ -178,7 +179,12 @@
   }
 </script>
 
-<div class="bar">
+<!-- UNE seule coulée : recherche, bouton, puces et « Tout effacer » passent à
+     la ligne ensemble. Le décompte et la bascule de vue sont dans un bloc à
+     part, calé en haut à droite — c'est ce qui les empêche de descendre avec
+     les puces quand la coulée grandit. -->
+<div class="filters">
+  <div class="flow">
   <label class="search">
     <span class="sr">{t("library.search")}</span>
     <span class="field">
@@ -200,12 +206,11 @@
     }}><span class="plus" aria-hidden="true">+</span>{t("filters.filter")}</button
   >
 
-  <div class="spacer"></div>
-  <span class="count mono">{t("library.results", { count: resultCount })}</span>
-  {@render end?.()}
-</div>
+  <!-- Filet de 1 px : il sépare l'outil de son résultat sans boîte ni fond,
+       et c'est lui qui empêche de lire « le bouton fait partie des puces ».
+       Rien à séparer quand il n'y a pas de puce, donc il n'apparaît pas. -->
+  {#if chipKeys.length}<span class="rule" aria-hidden="true"></span>{/if}
 
-<div class="chips">
   {#each chipKeys as key (key)}
     {@const def = defOf(key)}
     {#if def}
@@ -261,6 +266,12 @@
   {#if canClear}
     <button type="button" class="clear" onclick={clearAll}>{t("filters.clearAll")}</button>
   {/if}
+  </div>
+
+  <div class="aside">
+    <span class="count mono">{t("library.results", { count: resultCount })}</span>
+    {@render end?.()}
+  </div>
 </div>
 
 {#if menuOpen && addEl}
@@ -282,19 +293,53 @@
 {/if}
 
 <style>
-  .bar {
+  /* `flex-start` sur le conteneur, et c'est le détail qui compte : sans lui,
+     le bloc de droite se centrerait sur toute la hauteur de la coulée et
+     descendrait avec elle dès que les puces passent à la ligne. */
+  .filters {
+    /* Deux hauteurs, deux natures : on AGIT sur un contrôle, une puce est
+       l'état qui en résulte. L'écart se lit sans avoir à l'écrire. */
+    --ctl-h: 32px;
+    --chip-h: 26px;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .flow {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .aside {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 10px;
-    min-height: 34px;
+    height: var(--ctl-h);
   }
+  /* Largeur fixe, pas de `flex: 1` : à s'étirer, la recherche mangeait toute
+     la ligne et refoulait la première puce au rang suivant — c'est-à-dire
+     qu'elle produisait exactement la deuxième rangée qu'on cherche à éviter. */
   .search {
-    flex: 1 1 240px;
-    max-width: 380px;
-    min-width: 0;
+    flex: none;
+    width: 300px;
+    max-width: 100%;
+  }
+  /* Le filet ne porte aucun fond ni cadre : il sépare l'outil de son
+     résultat, il ne les met pas en boîte. */
+  .rule {
+    flex: none;
+    width: 1px;
+    height: 18px;
+    background: var(--line);
+    margin: 0 4px;
   }
   /* Le libellé « Recherche » ne s'affiche plus : le placeholder dit déjà ce
-     que le champ cherche, et la ligne permanente n'a que 34 px de haut. Il
+     que le champ cherche, et la barre n'a qu'une ligne de haut. Il
      reste pour le lecteur d'écran, qui n'a pas le placeholder. */
   .sr {
     position: absolute;
@@ -310,6 +355,7 @@
   }
   .field .input {
     width: 100%;
+    height: var(--ctl-h);
     padding-right: 26px;
   }
   .wipe {
@@ -334,7 +380,7 @@
     display: flex;
     align-items: center;
     gap: 7px;
-    height: 32px;
+    height: var(--ctl-h);
     padding: 0 12px;
     background: none;
     border: 1px dashed var(--faint2);
@@ -354,26 +400,16 @@
     font-size: 14px;
     line-height: 1;
   }
-  .spacer {
-    flex: 1;
-  }
   .count {
     font-size: 11px;
     color: var(--faint);
     white-space: nowrap;
   }
 
-  .chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    align-items: center;
-    padding: 11px 0 12px;
-  }
   .chip {
     display: inline-flex;
     align-items: center;
-    height: 28px;
+    height: var(--chip-h);
     border: 1px solid var(--rosso-border);
     background: var(--panel2);
     max-width: 100%;
@@ -462,7 +498,7 @@
     color: var(--txt);
   }
   .clear {
-    height: 28px;
+    height: var(--chip-h);
     padding: 0 6px;
     background: none;
     border: 0;
