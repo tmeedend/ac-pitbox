@@ -360,47 +360,6 @@
     if (prefsReady) setUiPref(KEYS.hideBrand, on ? "1" : "0");
   }
 
-  /**
-   * Info-bulle sur le nom d'une carte, **et seulement s'il est coupé**.
-   *
-   * Un `title` posé systématiquement volerait celui de la carte (« double-clic
-   * pour ouvrir la fiche ») sur toute la surface du nom, pour ne rien ajouter
-   * dans l'immense majorité des cas où le nom tient. On ne le pose donc que
-   * quand le texte déborde réellement de sa boîte — ce qui dépend de la
-   * largeur de colonne autant que du nom, d'où l'observateur de
-   * redimensionnement plutôt qu'une mesure unique au montage.
-   */
-  const clipSync = new WeakMap<Element, () => void>();
-  const clipObserver =
-    typeof ResizeObserver === "undefined"
-      ? null
-      : new ResizeObserver((entries) => {
-          for (const e of entries) clipSync.get(e.target)?.();
-        });
-
-  // Le paramètre n'est pas lu : il n'est là que pour que Svelte rappelle
-  // `update` quand le nom change (renommage, bascule « masquer la marque »),
-  // sinon la mesure resterait celle du premier rendu.
-  function titleIfClipped(node: HTMLElement, _name: string) {
-    const sync = () => {
-      // Le +1 absorbe les largeurs fractionnaires : sous zoom d'interface,
-      // `scrollWidth` dépasse `clientWidth` d'un demi-pixel sur du texte qui
-      // n'est pas coupé, ce qui collerait une info-bulle à toutes les cartes.
-      if (node.scrollWidth > node.clientWidth + 1) node.title = node.textContent ?? "";
-      else node.removeAttribute("title");
-    };
-    sync();
-    clipSync.set(node, sync);
-    clipObserver?.observe(node);
-    return {
-      update: sync,
-      destroy() {
-        clipObserver?.unobserve(node);
-        clipSync.delete(node);
-      },
-    };
-  }
-
   /** Ce que la carte écrit, jamais ce sur quoi on trie ou on cherche. */
   function cardName(c: ModCard): string {
     const full = c.display_name ?? c.id_interne;
@@ -921,12 +880,9 @@
                 onkeydown={(e) => e.key === "Enter" && toggleFav(c, e)}
               >{c.is_favorite ? "♥" : "♡"}</span>
             </div>
-            <!-- L'identification AVANT le nom : c'est l'ordre dans lequel on
-                 cherche une voiture — on sait la marque avant de se souvenir
-                 du modèle. Le reste (année à droite, couleur unique) est dans
-                 `ModIdentity`, partagé avec la colonne de session. -->
-            <ModIdentity badge={c.badge} brand={c.brand} year={c.year} dim={blocked !== null} />
-            <div class="c-name" use:titleIfClipped={cardName(c)}>{cardName(c)}</div>
+            <!-- Marque, modèle et année d'un seul tenant : voir `ModIdentity`,
+                 partagé avec la colonne de session. -->
+            <ModIdentity name={cardName(c)} badge={c.badge} brand={c.brand} year={c.year} dim={blocked !== null} />
           </button>
         {/each}
       </div>
@@ -1243,6 +1199,10 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
     gap: 9px;
+    /* Taille du nom (marque + modèle + année, `ModIdentity`). La grille dense
+       en met deux fois plus par écran : elle prend la petite des deux tailles
+       qui cohabitaient avant, la confortable la grande. */
+    --ident-size: 10.5px;
     /* Le détachement de la carte, en une valeur : un liseré clair en haut
        (la lumière tombe d'en haut) et une ombre portée. Nommé ici parce que
        chaque état de carte redéfinit `box-shadow` en entier et doit le
@@ -1251,6 +1211,7 @@
   }
   .grid.comfortable {
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    --ident-size: 12.5px;
   }
   /* **La carte se détache de la page.** Fond au-dessus de celui de la grille,
      bordure enfin visible, et une élévation : c'est le CONTENANT qui répond au
@@ -1294,12 +1255,6 @@
      passée ma Skyline », bien pire qu'une carte éteinte. */
   .card.unusable {
     opacity: 0.42;
-  }
-  /* Marque, année et modèle ne font qu'une couleur, donc ils s'éteignent
-     ensemble — pour la ligne d'identification, par la prop `dim` : le CSS
-     scopé d'un parent n'atteint pas l'intérieur d'un composant enfant. */
-  .card.unusable .c-name {
-    color: var(--muted);
   }
   .sessbadge {
     position: absolute;
@@ -1373,29 +1328,6 @@
   }
   .card-fav:hover {
     color: var(--rosso-bright);
-  }
-  /* **Retour à une seule ligne, et c'est la marque qui l'a permis.** Deux
-     lignes avaient été ouvertes pour un vrai problème : trois Skyline
-     s'affichaient à l'identique — `Nissan Skyline GT-R R3…` —, la troncature
-     tombant juste avant ce qui les distingue. La marque partie sur sa propre
-     ligne, le nom perd les huit caractères qui le faisaient déborder, et le
-     cas devient assez rare pour ne plus valoir une ligne réservée sur chacune
-     des 312 cartes — c'était du vide partout pour deux ou trois exceptions.
-     Celles-ci sont couvertes par l'info-bulle (`titleIfClipped`), qui ne se
-     pose que là où le texte est réellement coupé. */
-  .c-name {
-    font-size: 12.5px;
-    font-weight: 500;
-    line-height: 1.3;
-    margin-top: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  /* Une carte sans marque ni année (un circuit) n'a pas de ligne
-     d'identification : le nom reprend alors l'écart que celle-ci portait. */
-  .thumb + .c-name {
-    margin-top: 8px;
   }
   /* `.brand-badge` reste ici pour la colonne « Marque » du TABLEAU seule — la
      grille, elle, passe par `ModIdentity`, qui porte le sien. */

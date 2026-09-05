@@ -597,16 +597,21 @@
               {/if}
             </div>
             {#if nav.sessionCar}
-              <!-- Exactement la carte de bibliothèque, composant compris :
-                   marque et année au-dessus, modèle en dessous. `meta` (qui
-                   valait « Nissan · 1999 ») disparaît du même coup — la ligne
-                   du dessus le dit mieux, et le répéter ferait deux fois la
-                   même phrase dans huit pixels de haut. -->
-              <ModIdentity badge={carDetail?.badge} brand={carDetail?.brand} year={carDetail?.year} reserve />
-              <div class="pname">
-                {sessionCarName}
-                {#if carInactive}<span class="warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
-              </div>
+              <!-- Exactement la carte de bibliothèque, composant compris.
+                   `meta` (qui valait « Nissan · 1999 ») disparaît du même
+                   coup — cette ligne le dit mieux, et le répéter ferait deux
+                   fois la même phrase dans huit pixels de haut. -->
+              <ModIdentity
+                name={sessionCarName}
+                badge={carDetail?.badge}
+                brand={carDetail?.brand}
+                year={carDetail?.year}
+                reserve
+              >
+                {#snippet after()}
+                  {#if carInactive}<span class="warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
+                {/snippet}
+              </ModIdentity>
             {/if}
           </button>
           {#if nav.sessionCar}
@@ -666,10 +671,15 @@
               {/if}
             </div>
             {#if nav.sessionTrack}
-              <div class="pname">
-                {nav.sessionTrack.name}
-                {#if trackInactive}<span class="warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
-              </div>
+              <!-- Même composant que la voiture : les deux blocs ont la même
+                   anatomie, et un circuit n'a simplement ni marque ni année.
+                   Son auteur reste en dessous — c'est une source, pas une
+                   partie de son nom. -->
+              <ModIdentity name={nav.sessionTrack.name}>
+                {#snippet after()}
+                  {#if trackInactive}<span class="warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
+                {/snippet}
+              </ModIdentity>
               {#if nav.sessionTrack.meta}<div class="psrc">{nav.sessionTrack.meta}</div>{/if}
             {/if}
           </button>
@@ -902,11 +912,23 @@
   .session .nsec.section {
     padding-top: 18px;
   }
-  /* Un bloc = vignette cliquable + champs. Aucun encadré autour : une bordure
-     de sélection n'a de sens que parmi des pairs, or il n'y a qu'une voiture,
-     et l'entrée active se dit désormais dans le rail (SPEC §7.2). */
+  /* Un bloc = vignette cliquable + champs. Aucune bordure de SÉLECTION : elle
+     n'aurait de sens que parmi des pairs, or il n'y a qu'une voiture, et
+     l'entrée active se dit dans le rail (SPEC §7.2).
+     Mais un plan, oui — et le même que la carte de bibliothèque (`--cell` /
+     `--cell-line`), puisque les deux montrent désormais la même chose avec le
+     même composant. Le `.blk` global posait l'inverse : un fond PLUS SOMBRE
+     que la colonne, sans marge intérieure — donc un texte collé au filet, et
+     une boîte qui se lisait comme un trou plutôt que comme une carte. Les
+     8 px sont ceux de `.card`, pas une valeur de plus à faire diverger. */
   .blk {
     display: block;
+    background: var(--cell);
+    border-color: var(--cell-line);
+    padding: 8px;
+    /* La colonne de session est large de 328 px : le nom y a la place de la
+       grille confortable, pas celle de la dense. */
+    --ident-size: 12.5px;
   }
   .blk > * + * {
     margin-top: 5px;
@@ -1026,21 +1048,6 @@
     color: var(--muted);
     font-size: 10px;
     letter-spacing: 0;
-  }
-  .pname {
-    margin-top: 2px;
-    font-size: 12.5px;
-    line-height: 1.3;
-    color: var(--txt);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  /* Le circuit n'a pas de ligne d'identification (ni marque ni année) : son
-     nom reprend alors l'écart que celle-ci portait sous la vignette. Même
-     bascule que sur la carte de bibliothèque. */
-  .thumb + .pname {
-    margin-top: 8px;
   }
   /* Mod sélectionné mais non activé (§ garde-fou lancement) : jaune = alerte,
      cohérent avec les couleurs sémantiques du projet. */
