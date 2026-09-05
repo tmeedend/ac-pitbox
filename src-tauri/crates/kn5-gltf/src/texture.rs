@@ -929,19 +929,39 @@ fn encode(image: &RgbaImage, role: TextureRole, options: &TextureOptions) -> Res
         return Ok((bytes, "image/jpeg"));
     }
 
+    // **Un alpha qui ne dit rien ne s'écrit pas.** `has_alpha` servait
+    // uniquement à choisir le JPEG ci-dessus ; tout le reste partait en RGBA8,
+    // quatrième canal constant compris. Mesuré sur les 70 cartes de données
+    // d'une F40 : **55 portent un alpha à 255 partout**, et le laisser leur
+    // coûte 10 % de leur poids — sans rien apporter, puisqu'un glTF sans canal
+    // alpha se lit avec une opacité de 1, exactement ce que valait le canal.
+    // L'encodage y gagne aussi du temps : un quart d'octets en moins à
+    // filtrer et à dégonfler.
+    //
+    // Le test est celui de l'information, pas du rôle : une carte de données
+    // qui découpe vraiment (masque, décalcomanie) garde son canal, et une carte
+    // de couleur transparente n'arrive même pas ici.
     let mut bytes = Vec::new();
-    image::codecs::png::PngEncoder::new_with_quality(
+    let encoder = image::codecs::png::PngEncoder::new_with_quality(
         &mut bytes,
         image::codecs::png::CompressionType::Default,
         image::codecs::png::FilterType::Adaptive,
-    )
-    .write_image(
-        image.as_raw(),
-        image.width(),
-        image.height(),
-        image::ExtendedColorType::Rgba8,
-    )
-    .map_err(|e| format!("png encoding failed: {e}"))?;
+    );
+    if has_alpha {
+        encoder
+            .write_image(
+                image.as_raw(),
+                image.width(),
+                image.height(),
+                image::ExtendedColorType::Rgba8,
+            )
+            .map_err(|e| format!("png encoding failed: {e}"))?;
+    } else {
+        let rgb = image::DynamicImage::ImageRgba8(image.clone()).to_rgb8();
+        encoder
+            .write_image(rgb.as_raw(), rgb.width(), rgb.height(), image::ExtendedColorType::Rgb8)
+            .map_err(|e| format!("png encoding failed: {e}"))?;
+    }
     Ok((bytes, "image/png"))
 }
 
@@ -1023,6 +1043,33 @@ mod tests {
 
     // Rule: transparency survives encoding. This is the guard behind alpha
     // masking — a grille whose alpha is dropped renders as a solid panel.
+    // Règle : un alpha constant ne s'écrit pas. Il ne porte aucune information
+    // — un glTF sans canal alpha se lit avec une opacité de 1, ce que valait
+    // le canal — et il coûte 10 % du poids de la texture (mesuré sur les 55
+    // cartes opaques d'une F40 sur 70). Un alpha qui VARIE, lui, découpe, et
+    // reste écrit.
+    #[test]
+    fn a_constant_alpha_is_not_written_but_a_varying_one_is() {
+        let options = TextureOptions::default();
+
+        let (opaque, mime) = encode(&solid(8, 8, [80, 90, 100, 255]), TextureRole::Data, &options).expect("encodes");
+        assert_eq!(mime, "image/png", "une carte de données reste sans perte");
+        assert_eq!(
+            image::load_from_memory(&opaque).expect("relit").color(),
+            image::ColorType::Rgb8,
+            "le canal muet n'est pas écrit"
+        );
+
+        let mut cutting = solid(8, 8, [80, 90, 100, 255]);
+        cutting.get_pixel_mut(0, 0).0[3] = 0;
+        let (cut, _) = encode(&cutting, TextureRole::Data, &options).expect("encodes");
+        assert_eq!(
+            image::load_from_memory(&cut).expect("relit").color(),
+            image::ColorType::Rgba8,
+            "un alpha qui découpe est gardé"
+        );
+    }
+
     #[test]
     fn colour_texture_with_alpha_stays_png() {
         let mut image = solid(8, 8, [255; 4]);

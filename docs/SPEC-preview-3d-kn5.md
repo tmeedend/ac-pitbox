@@ -1769,6 +1769,42 @@ matrices de liaison du mannequin. C'est le lot suivant, avec la déduplication
 entre skins — mesurée à 34 Mo de géométrie strictement identique sur onze
 entrées, une voiture à trois livrées écrivant trois fois les mêmes sommets.
 
+### 15.0ter Taille des textures — ce qui marche et ce qui ne marche pas
+
+L'autre moitié du poids (41 %). Quatre pistes essayées, **une seule retenue**,
+et les trois abandons valent d'être écrits : ils reviendront sinon.
+
+**Retenu — l'alpha constant ne s'écrit pas.** `texture::encode` calculait déjà
+`has_alpha`, mais ne s'en servait que pour choisir le JPEG d'une carte de
+couleur ; tout le reste partait en RGBA8, quatrième canal muet compris. Sur les
+70 cartes de données d'une F40, **55 portent un alpha à 255 partout**, et le
+laisser leur coûte 10 % de leur poids pour rien — un glTF sans canal alpha se
+lit avec une opacité de 1, exactement ce que valait le canal. L'encodage y gagne
+aussi du temps. Effet réel sur quatre voitures : **−1,7 %** des fichiers, le PNG
+n'en faisant qu'un quart. Le test porte sur l'information et non sur le rôle :
+une carte de données qui découpe vraiment garde son canal.
+
+**Abandonné — WebP sans perte.** C'était la piste la plus prometteuse sur le
+papier, et elle l'est toujours *avec libwebp* : mesuré par ffmpeg sur les mêmes
+70 textures, **−43 %**. Mais l'encodeur disponible sans compilateur C — celui
+d'`image` 0.25, en Rust pur via `image-webp`, dont la propre documentation
+prévient qu'il « n'atteint pas le plein potentiel du WebP sans perte » — donne
+**+10 %**, et **38 textures sur 70 en ressortent individuellement plus
+grosses**. Il est trois fois plus rapide, ce qui ne sert à rien quand le
+résultat est plus lourd. Reprendre cette piste veut donc dire : libwebp (donc
+une chaîne C en CI) *et* `EXT_texture_webp`, l'extension même que le critère
+d'acceptation du lot 3 (« s'ouvre dans Blender et dans un visualiseur en
+ligne ») cherchait à éviter.
+
+**Abandonné — les cartes en niveaux de gris.** L'idée était de ranger en L8 les
+cartes dont les trois canaux sont égaux (rugosité, occlusion, masques), ce qui
+les diviserait par trois. Mesuré : **5 sur 70**, soit 215 Ko sur 7,9 Mo. La
+plupart des `txMaps` d'AC empaquettent réellement trois choses différentes dans
+leurs trois canaux.
+
+**Abandonné — `CompressionType::Best`.** −2 % pour 2,8 fois le temps
+d'encodage.
+
 ### 15.1 Cache — ce qui est en place
 
 Rappel, parce que la question revient : le cache est **sur disque**
