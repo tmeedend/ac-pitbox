@@ -78,6 +78,12 @@ pub struct GeometryOptions {
     pub skip_distant_lods: bool,
     /// Drop `COCKPIT_LR` when `COCKPIT_HR` is there too — see [`flatten`].
     pub skip_low_res_cockpit: bool,
+    /// Le mannequin greffé est-il exporté **en squelette** plutôt que cuit ?
+    ///
+    /// Vrai, son sous-arbre est laissé entier à [`crate::rig`] et cette passe
+    /// ne le voit pas. Faux — mannequin sans peau, sans animation, ou voiture
+    /// sans pilote — il est aplati comme le reste, ce qui est le repli.
+    pub skip_driver_rig: bool,
     /// Ce que la voiture déclare de sa direction : de combien ses roues
     /// tournent pour un angle de volant donné (voir [`crate::steer`]). Aucun
     /// angle ici — il n'est plus cuit dans le modèle, seulement décrit.
@@ -101,6 +107,7 @@ impl Default for GeometryOptions {
             excluded_name_prefixes: vec!["AC_".to_string()],
             skip_distant_lods: true,
             skip_low_res_cockpit: true,
+            skip_driver_rig: false,
             steering: crate::steer::SteerLimits::default(),
         }
     }
@@ -266,6 +273,12 @@ fn walk(
         stats.skipped_low_res_cockpit += mesh_count(node);
         return;
     }
+    // Le mannequin exporté en squelette n'est pas de ce parcours : sa
+    // hiérarchie est écrite telle quelle, ses sommets restent en pose de
+    // liaison, et c'est glTF qui les posera (voir `rig`).
+    if options.skip_driver_rig && node.name == crate::rig::DRIVER_WRAPPER {
+        return;
+    }
     // Même raison, pour les motifs de nom : le nom qui désigne un accessoire
     // est porté par le **groupe**, pas par les maillages dedans. `RIM_BLUR_LF`
     // contient `Object190` et `Object193` — deux noms qui ne disent rien —,
@@ -408,6 +421,40 @@ fn skinning_matrices(kind: &Kn5NodeKind, bones: &BTreeMap<String, [f32; 16]>) ->
                 .map(|world| multiply(&bone.inverse_bind_matrix, world))
         })
         .collect()
+}
+
+/// Un maillage écrit **tel qu'il est dans le fichier**, sans transformation.
+///
+/// C'est ce que demande un squelette vivant : glTF applique lui-même les
+/// matrices des os aux sommets en espace de liaison, et les transformer ici
+/// reviendrait à les poser deux fois. Sert aussi aux maillages rigides
+/// accrochés à un os, dont le nœud glTF porte la transformation ([`crate::rig`]).
+pub(crate) fn bind_pose_mesh(name: &str, mesh: &Kn5Mesh) -> FlatMesh {
+    let uv_handedness = uv_handedness(mesh);
+    let mut positions = Vec::with_capacity(mesh.vertices.len());
+    let mut normals = Vec::with_capacity(mesh.vertices.len());
+    let mut uvs = Vec::with_capacity(mesh.vertices.len());
+    let mut tangents = Vec::with_capacity(mesh.vertices.len());
+    for (index, vertex) in mesh.vertices.iter().enumerate() {
+        positions.push(vertex.position);
+        let normal = normalize(vertex.normal);
+        normals.push(normal);
+        uvs.push(vertex.uv);
+        let tangent = normalize(reject(vertex.tangent, normal));
+        let w = uv_handedness.get(index).copied().unwrap_or(1.0);
+        tangents.push([tangent[0], tangent[1], tangent[2], w]);
+    }
+    FlatMesh {
+        name: name.to_string(),
+        material_id: mesh.material_id,
+        positions,
+        normals,
+        uvs,
+        tangents,
+        indices: mesh.indices.iter().map(|i| *i as u32).collect(),
+        transparent: mesh.is_transparent,
+        steer: None,
+    }
 }
 
 /// Skinning linéaire : chaque sommet suit la moyenne pondérée des matrices de

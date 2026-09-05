@@ -74,13 +74,8 @@
 
   /** Les trois choses dont dépend le `.glb` demandé, en une clé comparable.
    * `driver` vaut l'angle du volant, ou `null` quand il n'y a pas de pilote. */
-  function sceneKey(
-    car: string,
-    skin: string | null | undefined,
-    steer: number,
-    driver: DriverView | null,
-  ): string {
-    return `${car}|${skin}|${revision}|${steer}|${driver ? JSON.stringify(driver) : ""}`;
+  function sceneKey(car: string, skin: string | null | undefined, driver: DriverView | null): string {
+    return `${car}|${skin}|${revision}|${driver ? JSON.stringify(driver) : ""}`;
   }
   /** Voiture du modèle en place — la moitié de `loaded` qui décide si un
    * changement de skin peut se faire à chaud (même géométrie) ou non. */
@@ -96,6 +91,26 @@
     /** Butée, en degrés aux roues. `null` quand rien n'arrête ce nœud — ce qui
      * est le cas des roues elles-mêmes, voir `SteerNode::limit`. */
     limit: number | null;
+  }
+
+  /** De quoi poser les bras du pilote à un angle donné, **sans reconvertir**.
+   *
+   * La conversion exporte le mannequin en squelette vivant : ses os, sa peau et
+   * l'animation de braquage de la voiture (`kn5-gltf/src/rig.rs`). Poser les
+   * bras revient donc à choisir un instant dans ce clip. */
+  interface DriverPose {
+    mixer: ThreeModule.AnimationMixer;
+    action: ThreeModule.AnimationAction;
+    frames: number;
+    /** Les trois images qui comptent, **mesurées** sur l'animation : à fond
+     * d'un côté, volant droit, à fond de l'autre. Ses bouts ne sont pas des
+     * butées — voir `Rig::extremes`. */
+    low: number;
+    centre: number;
+    high: number;
+    /** Angle de roue au-delà duquel le volant est en butée : les bras le
+     * tiennent, donc ils s'arrêtent avec lui. */
+    wheelLimit: number;
   }
 
   interface ThreeScene {
@@ -150,6 +165,10 @@
     shadowCatcher: ThreeModule.Mesh;
     /** Altitude du sol, pour poser le miroir quand il arrive après coup. */
     floorY: number;
+    /** L'animation de braquage du pilote, et de quoi y choisir une image.
+     * `null` quand la conversion n'a pas exporté de squelette — mannequin sans
+     * peau, sans animation, ou pas de pilote du tout. */
+    driverPose: DriverPose | null;
     /** Les nœuds que le braquage fait tourner — roues avant et volant —,
      * repérés à l'`extras` que la conversion leur pose. Chacun porte son axe,
      * son pivot (déjà en translation du nœud) et le facteur à appliquer à
@@ -201,10 +220,6 @@
   const FRAMING_FOV = 20;
   /** Camera distance at zoom 100 %, in multiples of the model's radius. */
   const FRAMING_DISTANCE = 4.9;
-  /** Reprise après un lâcher de souris. Assez long pour examiner un détail
-   * sans que le plateau ne redémarre sous les doigts. */
-  const SPIN_RESUME_MS = 4000;
-
   // Qualité de rendu (§15). Ne touche **que** l'affichage : aucun de ces
   // réglages n'entre dans la conversion, donc en changer n'invalide aucune
   // entrée de cache et s'applique à l'image suivante.
@@ -687,21 +702,6 @@
 
   let spinning = !reducedMotion;
   let onScreen = true;
-  let resumeTimer: ReturnType<typeof setTimeout> | null = null;
-
-  /** La scène en place à cet instant. Passe par une fonction parce que `build`
-   * a sa propre `scene` — celle de three.js — qui masque celle-ci. */
-  function liveScene(): ThreeScene | null {
-    return scene;
-  }
-
-  /** Annule une reprise de rotation en attente. Séparée de `disposeScene` : un
-   * changement de skin remplace la scène sans rien changer à ce que
-   * l'utilisateur était en train de faire avec la souris. */
-  function stopResume() {
-    if (resumeTimer) clearTimeout(resumeTimer);
-    resumeTimer = null;
-  }
 
   /**
    * WebGL indisponible = repli silencieux sur la photo (§8.5) : ce n'est pas
@@ -818,6 +818,36 @@
       const stopped = limit === null ? steer : Math.max(-limit, Math.min(limit, steer));
       node.quaternion.setFromAxisAngle(axis, (stopped * gain * Math.PI) / 180);
     }
+    poseDriver(current, steer);
+  }
+
+  /**
+   * Pose les bras du pilote au même angle, **sans reconvertir**.
+   *
+   * Le mannequin est exporté en squelette vivant, avec l'animation de braquage
+   * de la voiture (`kn5-gltf/src/rig.rs`) : poser les bras revient à choisir un
+   * instant dans ce clip, ce que `AnimationMixer` sait faire pour rien. C'est
+   * le dernier endroit où bouger le curseur coûtait une conversion.
+   *
+   * **Les bras suivent le volant, pas les roues** : ils le tiennent, donc ils
+   * s'arrêtent avec lui à la butée que la voiture déclare, pendant que les
+   * roues, elles, continuent jusqu'où le réglage demande.
+   *
+   * Et l'image se cherche **entre les extrêmes mesurés**, pas entre les bouts
+   * du clip : une animation de braquage est une oscillation complète, dont les
+   * bouts sont le volant droit (voir `Rig::extremes`).
+   */
+  function poseDriver(current: ThreeScene, wheelDegrees: number) {
+    const pose = current.driverPose;
+    if (!pose || pose.frames < 2 || pose.wheelLimit <= 0) return;
+    const held = Math.max(-pose.wheelLimit, Math.min(pose.wheelLimit, wheelDegrees)) / pose.wheelLimit;
+    const frame =
+      held >= 0 ? pose.centre + held * (pose.high - pose.centre) : pose.centre + held * (pose.centre - pose.low);
+    // Le temps du clip **est** l'indice d'image : la conversion écrit une
+    // entrée par image, aux temps 0, 1, 2… (voir `push_accessor_scalar`).
+    pose.action.time = frame;
+    // Un pas nul : on ne fait pas avancer l'animation, on s'y positionne.
+    pose.mixer.update(0);
   }
 
   /** Durée du fondu du pilote, en secondes. Assez court pour qu'on ne
@@ -1166,6 +1196,27 @@
       });
     });
 
+    // L'animation de braquage du mannequin, quand la conversion l'a exportée.
+    // Elle n'est jamais jouée : on y **saute** à l'image que l'angle désigne.
+    let driverPose: DriverPose | null = null;
+    for (const clip of gltf.animations) {
+      const described = (
+        clip.userData as {
+          pitboxDriver?: { frames: number; low: number; centre: number; high: number; wheelLimit: number };
+        }
+      ).pitboxDriver;
+      if (!described) continue;
+      const mixer = new THREE.AnimationMixer(gltf.scene);
+      const action = mixer.clipAction(clip);
+      // `LoopOnce` et non la boucle par défaut : sans elle la dernière image se
+      // replie sur la première, et l'angle maximal rendrait le volant droit.
+      action.loop = THREE.LoopOnce;
+      action.clampWhenFinished = true;
+      action.play();
+      driverPose = { mixer, action, ...described };
+      break;
+    }
+
     const driverMeshes: ThreeModule.Mesh[] = [];
     const driverMaterials = new Set<ThreeModule.Material>();
     gltf.scene.traverse((object) => {
@@ -1199,6 +1250,7 @@
       shadowCatcher,
       floorY: box.min.y,
       introAt: 0,
+      driverPose,
       steered,
       driver: driverMeshes,
       driverMaterials: [...driverMaterials],
@@ -1251,22 +1303,14 @@
     controls.addEventListener("change", () => requestRender(built));
     // Première image, puis la boucle s'entretient tant que le plateau tourne.
     requestRender(built);
-    // La main de l'utilisateur prime sur le plateau : il s'arrête à la prise,
-    // et ne repart qu'après un temps de repos.
+    // **La main de l'utilisateur prime, et définitivement** : le plateau
+    // s'arrête à la prise et ne repart pas tout seul. Il repartait après
+    // quelques secondes d'inactivité, et c'était une gêne plutôt qu'un
+    // service — on règle un cadrage en regardant la voiture, et elle se
+    // remettait à tourner sous les doigts, deux écrans concernés. Le bouton de
+    // remise en place, lui, la relance quand on le veut.
     controls.addEventListener("start", () => {
       spinning = false;
-      stopResume();
-    });
-    controls.addEventListener("end", () => {
-      if (reducedMotion) return;
-      stopResume();
-      resumeTimer = setTimeout(() => {
-        spinning = true;
-        // La scène en place, pas celle qui a armé le minuteur : un changement
-        // de skin peut l'avoir remplacée entre-temps.
-        const live = liveScene();
-        if (live) requestRender(live);
-      }, SPIN_RESUME_MS);
     });
 
     // Fiche sortie de l'écran par le scroll : plus rien à rendre.
@@ -1346,12 +1390,11 @@
     // distingue. Sans ça, tourner une clé de contact demanderait une
     // conversion de quatorze mégaoctets avant que le pilote n'arrive.
     const driver = preview3dGraftsDriver() ? (driverOverridePayload(carId, carClassOf(carClass)) ?? {}) : null;
-    // **Le braquage ne décide du `.glb` que s'il y a un pilote dedans.** Les
-    // roues et le volant tournent à l'affichage ; seuls les bras du mannequin
-    // sont écrits en sommets figés, donc eux seuls obligent à reconvertir. Sans
-    // pilote, bouger le curseur ne recharge rien.
-    const steer = preview3dPrefs().steer;
-    const bakedSteer = driver ? steer : 0;
+    // **Le braquage n'est pas lu ici, et surtout pas** : un effet suit tout ce
+    // qu'il lit, donc le nommer suffirait à relancer ce chargement à chaque pas
+    // de curseur. Roues, volant et bras du pilote tournent tous à l'affichage,
+    // le `.glb` ne dépend plus de l'angle — c'est justement ce qui a fait
+    // tomber la conversion par valeur essayée.
 
     // Garde-fou : une scène déjà posée sur ce couple voiture/skin n'est pas
     // reconstruite. Recharger coûte le retour à la photo puis une conversion,
@@ -1359,7 +1402,7 @@
     // un effet parent réévalué relançant tout (voir `untrack` dans
     // `DetailPage`). La cause est corrigée là-bas ; ceci empêche la classe
     // entière de se voir à l'écran.
-    if (untrack(() => loaded) === sceneKey(car, skin, bakedSteer, driver)) return;
+    if (untrack(() => loaded) === sceneKey(car, skin, driver)) return;
 
     // Remplacement **à chaud** : même voiture, seul le skin change, et un
     // modèle tourne déjà à l'écran. Il y reste, et continue de tourner, le
@@ -1375,7 +1418,6 @@
       } else {
         disposeScene(scene);
         scene = null;
-        stopResume();
         loadedCar = "";
         phase = "loading";
       }
@@ -1395,7 +1437,7 @@
     let cancelled = false;
     (async () => {
       try {
-        const handle = await prepareCarPreview(car, skin, steer, driver);
+        const handle = await prepareCarPreview(car, skin, driver);
         // La fiche a pu changer pendant la conversion : ne jamais poser le
         // modèle d'une voiture sur la fiche d'une autre.
         if (cancelled || car !== untrack(() => carId)) return;
@@ -1421,7 +1463,7 @@
         // ce qui évite le trou noir d'une image entre les deux.
         disposeScene(untrack(() => scene));
         scene = built;
-        loaded = sceneKey(car, skin, bakedSteer, driver);
+        loaded = sceneKey(car, skin, driver);
         loadedCar = car;
         phase = "ready";
         swapping = false;
@@ -1545,7 +1587,6 @@
     preview3dResets();
     untrack(() => {
       if (!scene) return;
-      stopResume();
       scene.turntable.rotation.y = 0;
       spinning = !reducedMotion;
       armIntro(scene);
@@ -1581,7 +1622,6 @@
   onDestroy(() => {
     disposeScene(scene);
     scene = null;
-    stopResume();
     unlisten?.();
   });
 </script>

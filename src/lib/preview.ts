@@ -15,8 +15,14 @@ import { listen } from "@tauri-apps/api/event";
  * maillages sont regroupés par matériau, donc le dummy qui portait le pilote
  * ne survit pas. Il permet à la vue de le montrer ou de le retirer sans
  * reconvertir.
+ *
+ * **Souligné et non deux-points** : three.js **retire** les caractères
+ * réservés (`[ ] . : /`) des noms de nœuds à la lecture du glTF
+ * (`PropertyBinding.sanitizeNodeName`). Mesuré au banc,
+ * `PITBOX_DRIVER:DRIVER:suit` arrivait en `PITBOX_DRIVERDRIVERsuit` et le
+ * préfixe ne répondait jamais.
  */
-export const DRIVER_MESH_PREFIX = "PITBOX_DRIVER:";
+export const DRIVER_MESH_PREFIX = "PITBOX_DRIVER_";
 
 export interface CarPreview {
   /** URL à donner à `GLTFLoader`. */
@@ -58,17 +64,17 @@ export interface DriverView {
 }
 
 /**
- * `steer` est l'angle du volant en degrés : il tourne les roues avant, le
- * volant du poste de pilotage et, quand il y en a un, les bras du pilote. Il
- * vaut donc avec ou sans mannequin, d'où sa place hors de `driver`.
+ * **Aucun angle de braquage ici** : roues, volant et bras du pilote tournent à
+ * l'affichage, à partir de ce que la conversion écrit dans le `.glb` — un pivot
+ * et un axe pour les premiers, un squelette et une animation pour les derniers.
+ * Le régler ne demande donc aucune conversion, et il n'entre pas dans le cache.
  */
 export function prepareCarPreview(
   carId: string,
   skinId?: string | null,
-  steer = 0,
   driver: DriverView | null = null,
 ): Promise<CarPreview> {
-  return invoke<CarPreview>("prepare_car_preview", { carId, skinId: skinId ?? null, steer, driver });
+  return invoke<CarPreview>("prepare_car_preview", { carId, skinId: skinId ?? null, driver });
 }
 
 /** Vide le cache d'aperçus, renvoie le nombre d'octets libérés. */

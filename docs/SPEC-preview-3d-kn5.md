@@ -586,10 +586,34 @@ matériau égal (sur beaucoup de voitures les quatre jantes partagent le leur).
 Et ce que la voiture déclare de sa direction — `STEER_LOCK`, `STEER_RATIO` —
 est écrit dans le `.glb`, donc *cela* fait partie de la clé.
 
-**Reste les bras du pilote**, écrits en sommets figés : eux seuls obligent
-encore à reconvertir quand l'angle change, et seulement quand un mannequin est
-greffé. La sortie propre est d'exporter le squelette et l'animation dans le
-glTF pour laisser three.js poser le mannequin au rendu.
+**Et les bras du pilote suivent le même chemin.** Ils étaient écrits en sommets
+figés, donc eux seuls obligeaient encore à reconvertir quand l'angle changeait.
+Le mannequin est désormais exporté **vivant** (`kn5-gltf/src/rig.rs`) : ses os en
+nœuds glTF, sa peau en `skin` — les `inverse_bind_matrix` et les quatre
+poids/indices par sommet que le KN5 porte déjà sont exactement ce que glTF
+réclame —, ses pièces rigides en enfants de l'os qui les porte, et l'animation de
+braquage de la voiture en animation glTF. Poser les bras revient alors à choisir
+un instant dans ce clip, ce que `AnimationMixer` fait pour rien.
+
+Trois choses à ne pas perdre de vue :
+
+- **les matrices ne sont pas transposées**, et ce n'est pas un oubli : le KN5
+  travaille en ligne-vecteur rangé par lignes, glTF en colonne-vecteur rangé par
+  colonnes, et le rangement par colonnes de `Mᵀ` est la même suite d'octets que
+  celui par lignes de `M`. Les deux conventions se croisent et s'annulent ;
+- **une pièce rigide accrochée à un os doit devenir son enfant.** Elle suivait
+  jusqu'ici par la transformation accumulée, cuite dans ses sommets ; avec un
+  squelette vivant elle resterait en arrière. Cas réel :
+  `rh_schuberth_helmet_driver_19`, dont le casque est cinq maillages statiques
+  sous `DRIVER:RIG_Head` ;
+- **les bouts d'une animation de braquage ne sont pas des butées** — voir l'écart
+  n°20 de `kn5-format.md`. La conversion mesure les trois images qui comptent et
+  les écrit dans le `.glb`.
+
+La pose de repos reste celle du volant droit : la greffe pose l'assise et l'image
+centrale exactement comme avant, si bien que tout ce qui a été mesuré sur
+l'assise tient sans changer. Un mannequin sans peau ni animation exploitable
+retombe sur le chemin cuit.
 
 ---
 

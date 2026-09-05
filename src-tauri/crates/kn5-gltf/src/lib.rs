@@ -12,6 +12,7 @@ mod locate;
 mod material;
 mod paint;
 mod pose;
+mod rig;
 mod roughness;
 mod stats;
 mod steer;
@@ -55,6 +56,19 @@ pub struct ConvertOptions {
     /// *sait* qu'il convertit un mannequin, il le dit, et le plancher de
     /// rugosité s'applique à tous ses matériaux (voir `roughness::floor_for`).
     pub mannequin: bool,
+    /// Ce qu'il faut pour exporter le mannequin greffé **en squelette vivant**
+    /// plutôt que cuit dans les sommets (voir [`rig`]). `None` = pas de pilote,
+    /// ou un pilote qu'on préfère cuire.
+    pub driver_rig: Option<DriverRigSource>,
+}
+
+/// L'animation de braquage de la voiture, et ce qu'il faut pour y choisir une
+/// image — passées par l'appelant, qui les a déjà lues pour greffer le pilote.
+#[derive(Debug, Clone)]
+pub struct DriverRigSource {
+    pub animation: kn5::Kn5Animation,
+    /// Course que l'animation couvre en entier, `[STEER_ANIMATION] LOCK`.
+    pub lock_degrees: f32,
 }
 
 /// Everything the conversion produced, alongside the numbers the caller needs
@@ -138,7 +152,22 @@ pub fn convert(
     }
 
     progress(ConvertStage::Geometry);
-    let (meshes, geometry) = geometry::flatten(model, &options.geometry);
+    // Le squelette d'abord : c'est lui qui décide si l'aplatissement doit
+    // laisser le mannequin de côté. Un mannequin sans peau ni animation ne
+    // gagnerait rien à être exporté vivant, et retombe sur le chemin cuit.
+    let rig = options.driver_rig.as_ref().and_then(|source| {
+        let mut rig = rig::extract(model, Some(&source.animation))?;
+        rig.lock_degrees = source.lock_degrees;
+        // Les bras tiennent le volant : ils s'arrêtent donc là où il s'arrête,
+        // à la butée que la voiture déclare, ramenée aux roues.
+        rig.wheel_limit = options.geometry.steering.lock / options.geometry.steering.ratio.max(f32::EPSILON);
+        rig.is_worth_exporting().then_some(rig)
+    });
+    let geometry_options = geometry::GeometryOptions {
+        skip_driver_rig: rig.is_some(),
+        ..options.geometry.clone()
+    };
+    let (meshes, geometry) = geometry::flatten(model, &geometry_options);
 
     progress(ConvertStage::Textures);
     let mut textures = prepare_textures(model, skin_dir, &options.textures);
@@ -184,8 +213,20 @@ pub fn convert(
         .collect();
 
     progress(ConvertStage::Writing);
-    let triangle_count = meshes.iter().map(|m| m.indices.len() / 3).sum::<usize>() as u32;
-    let glb = glb::write_glb(&meshes, &materials, &textures)?;
+    // Le mannequin compte dans le décompte de triangles comme le reste : il
+    // est bien à l'écran, même s'il ne passe pas par l'aplatissement.
+    let rig_triangles: usize = rig
+        .iter()
+        .flat_map(|r| {
+            r.skinned
+                .iter()
+                .map(|s| &s.mesh)
+                .chain(r.attached.iter().map(|a| &a.mesh))
+        })
+        .map(|m| m.indices.len() / 3)
+        .sum();
+    let triangle_count = (meshes.iter().map(|m| m.indices.len() / 3).sum::<usize>() + rig_triangles) as u32;
+    let glb = glb::write_glb(&meshes, rig.as_ref(), &materials, &textures)?;
 
     Ok(Conversion {
         glb,

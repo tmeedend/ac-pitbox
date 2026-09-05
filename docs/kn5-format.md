@@ -1387,3 +1387,59 @@ décalcomanies, autocollants, badges, numéros (`MAIN_CAR_NUMBER`, `CM_Num`,
 `FW_Numbers`), surpiqûres de sellerie, grilles, rivets, chiffres de cadrans. Le
 seul nom qui inquiétait, `ext_window` sur deux mods, mesure 99 % de vide et
 0,47 % d'intermédiaires : c'est un pochoir, pas une vitre.
+
+---
+
+## Écart n°20 — une animation de braquage est une oscillation, pas une rampe
+
+**Ce que la spec supposait.** `[STEER_ANIMATION] LOCK` de `driver3d.ini` donne
+la course que l'animation couvre, et on en déduisait que la **première** image
+est la butée d'un côté, la **dernière** celle de l'autre, et celle du milieu le
+volant droit. C'est ce qu'implémente `pose::frame_for`.
+
+**Ce que la mesure dit.** Sur les **120** `steer.ksanim` de la bibliothèque,
+l'image qui s'écarte le plus de celle du milieu tombe à :
+
+| fraction du clip | voitures |
+| --- | --- |
+| 10–15 % | 5 |
+| **20 %** | **39** |
+| 25–35 % | 12 |
+| 65–75 % | 4 |
+| **80 %** | **57** |
+| 85–90 % | 3 |
+
+Presque rien aux extrémités. Vérifié à l'écran sur `lotus_evora_gtc` en pilotant
+l'animation image par image : les images 0, 50 et 99 donnent toutes le **volant
+droit**, et les deux poses braquées sont aux alentours des quarts, dans des sens
+opposés. Le clip est une oscillation complète — droit, à fond, droit, à fond de
+l'autre côté, droit — et non un balayage d'une butée à l'autre.
+
+**Conséquence.** Lire les bouts comme des butées rend le volant droit
+précisément là où on le voulait à fond. La conversion **mesure** donc les trois
+images qui comptent sur l'animation elle-même (`rig::extremes`) et les écrit
+dans le `.glb` ; la vue y cherche son image. `pose::frame_for` garde l'ancienne
+lecture pour le seul repli — un mannequin sans peau ni animation exploitable —
+et son écart y est documenté.
+
+**Méthode de vérification.**
+
+```text
+PITBOX_CARS_ROOT="D:\AC-Library\cars" cargo test -p kn5-gltf -- --ignored --nocapture where_the_extremes
+```
+
+---
+
+## Écart n°21 — three.js retire les caractères réservés d'un nom de nœud
+
+Pas un écart du format KN5 mais de la chaîne qui le lit, et il se manifeste de
+la même façon : silencieusement.
+
+`GLTFLoader` passe chaque nom de nœud par `PropertyBinding.sanitizeNodeName`,
+qui **supprime** `[`, `]`, `.`, `:` et `/`. Un maillage écrit
+`PITBOX_DRIVER:DRIVER:suit` arrive donc en `PITBOX_DRIVERDRIVERsuit`, et un
+repère posé côté conversion avec un deux-points ne répond jamais côté vue.
+
+Mesuré au banc en listant les noms après chargement. D'où le préfixe
+`PITBOX_DRIVER_`, au souligné : il traverse intact.
+

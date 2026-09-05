@@ -111,6 +111,17 @@ fn pose_node(node: &mut Kn5Node, local: &LocalLookup, used: &mut std::collection
 /// at the last, with the **middle frame centred** (measured, see
 /// `kn5::ksanim`). An angle beyond the car's own lock is clamped rather than
 /// wrapped: a wheel does not keep turning past its stop.
+///
+/// **Ses bouts ne sont pourtant pas des butées.** Mesuré depuis sur 120
+/// animations de la bibliothèque : l'image qui s'écarte le plus de celle du
+/// milieu tombe à **20 % du clip sur 39 voitures et 80 % sur 57**, et presque
+/// jamais aux extrémités. Une animation de braquage est une oscillation
+/// complète — droit, à fond, droit, à fond de l'autre côté, droit — de sorte
+/// que cette fonction rend le volant **droit** précisément là où on le voulait
+/// à fond. Le chemin normal ne passe plus par ici : le mannequin est exporté en
+/// squelette vivant et la vue cherche son image entre les extrêmes mesurés
+/// (`rig::extremes`). Ce qui reste ici ne sert qu'au repli, pour un mannequin
+/// sans peau ni animation exploitable, et l'écart est connu.
 pub(crate) fn frame_for(animation: &Kn5Animation, lock_degrees: f32, steer_degrees: f32) -> usize {
     let frames = animation.frame_count();
     if frames <= 1 {

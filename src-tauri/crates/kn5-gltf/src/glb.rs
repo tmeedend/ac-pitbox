@@ -21,7 +21,12 @@ const TARGET_ARRAY_BUFFER: u32 = 34962;
 const TARGET_ELEMENT_ARRAY_BUFFER: u32 = 34963;
 
 /// Assembles the whole preview into a single self-contained `.glb`.
-pub fn write_glb(meshes: &[FlatMesh], materials: &[GltfMaterial], textures: &TextureSet) -> Result<Vec<u8>, String> {
+pub fn write_glb(
+    meshes: &[FlatMesh],
+    rig: Option<&crate::rig::Rig>,
+    materials: &[GltfMaterial],
+    textures: &TextureSet,
+) -> Result<Vec<u8>, String> {
     if meshes.is_empty() {
         return Err("no drawable mesh left after filtering".to_string());
     }
@@ -35,7 +40,18 @@ pub fn write_glb(meshes: &[FlatMesh], materials: &[GltfMaterial], textures: &Tex
     // LODs drag whole texture sets behind them otherwise.
     let mut material_remap: Vec<Option<usize>> = vec![None; materials.len()];
     let mut used_materials: Vec<&GltfMaterial> = Vec::new();
-    for mesh in meshes {
+    // Les maillages du mannequin comptent comme les autres : leurs matériaux
+    // doivent survivre au tri, sinon le pilote sort sans texture.
+    let rig_meshes: Vec<&FlatMesh> = rig
+        .into_iter()
+        .flat_map(|r| {
+            r.skinned
+                .iter()
+                .map(|s| &s.mesh)
+                .chain(r.attached.iter().map(|a| &a.mesh))
+        })
+        .collect();
+    for mesh in meshes.iter().chain(rig_meshes.iter().copied()) {
         let source = mesh.material_id as usize;
         if let Some(slot) = material_remap.get_mut(source) {
             if slot.is_none() {
@@ -74,36 +90,23 @@ pub fn write_glb(meshes: &[FlatMesh], materials: &[GltfMaterial], textures: &Tex
 
     let mut gltf_meshes: Vec<Value> = Vec::new();
     let mut nodes: Vec<Value> = Vec::new();
+    let mut skins: Vec<Value> = Vec::new();
+    let mut animations: Vec<Value> = Vec::new();
+    // Les nœuds que la scène liste directement. Tout n'en est plus un : les os
+    // du mannequin et ce qui leur est accroché pendent de leur parent.
+    let mut roots: Vec<usize> = Vec::new();
     for mesh in meshes {
-        let positions = push_accessor_vec3(&mut bin, &mut buffer_views, &mut accessors, &mesh.positions, true);
-        let normals = push_accessor_vec3(&mut bin, &mut buffer_views, &mut accessors, &mesh.normals, false);
-        let uvs = push_accessor_vec2(&mut bin, &mut buffer_views, &mut accessors, &mesh.uvs);
-        let indices = push_accessor_indices(&mut bin, &mut buffer_views, &mut accessors, &mesh.indices);
-
-        let mut primitive = json!({
-            "attributes": { "POSITION": positions, "NORMAL": normals, "TEXCOORD_0": uvs },
-            "indices": indices,
-            "mode": 4,
-        });
-        if let Some(Some(index)) = material_remap.get(mesh.material_id as usize) {
-            primitive["material"] = json!(index);
-        }
-        // **Le repère tangent n'est écrit que là où il sert.** Sans carte de
-        // normales il ne change rien au rendu, et il coûte seize octets par
-        // sommet — sur une voiture de 500 000 sommets, huit mégaoctets pour
-        // rien. Avec une carte, en revanche, il est ce qui évite au lecteur de
-        // reconstruire le repère à l'écran et d'exploser sur les UV dégénérés
-        // (voir `geometry::convert_mesh`).
-        let needs_tangents = materials
-            .get(mesh.material_id as usize)
-            .is_some_and(|m| m.normal_texture.is_some());
-        if needs_tangents && mesh.tangents.len() == mesh.positions.len() {
-            let tangents = push_accessor_vec4(&mut bin, &mut buffer_views, &mut accessors, &mesh.tangents);
-            primitive["attributes"]["TANGENT"] = json!(tangents);
-        }
-
-        gltf_meshes.push(json!({ "name": mesh.name, "primitives": [primitive] }));
-        let mut node = json!({ "name": mesh.name, "mesh": gltf_meshes.len() - 1 });
+        let mesh_index = push_mesh(
+            &mut bin,
+            &mut buffer_views,
+            &mut accessors,
+            &mut gltf_meshes,
+            mesh,
+            &material_remap,
+            materials,
+            None,
+        );
+        let mut node = json!({ "name": mesh.name, "mesh": mesh_index });
         // **Un maillage braqué garde son pivot et son axe**, et ses sommets
         // sont déjà relatifs au pivot (voir `geometry::walk`). La vue n'a donc
         // qu'une rotation à écrire sur le nœud pour tourner une roue, sans rien
@@ -122,6 +125,147 @@ pub fn write_glb(meshes: &[FlatMesh], materials: &[GltfMaterial], textures: &Tex
             node["extras"] = json!({ "pitboxSteer": described });
         }
         nodes.push(node);
+        roots.push(nodes.len() - 1);
+    }
+
+    // --- Le mannequin, en squelette vivant (voir `rig`) ---------------------
+    //
+    // Écrit après la voiture pour que les index de nœud de celle-ci ne bougent
+    // pas, et parce que rien de tout ceci n'existe sur la plupart des modèles.
+    if let Some(rig) = rig {
+        let first_joint = nodes.len();
+        // Les os d'abord, à plat : leurs enfants sont recousus juste après,
+        // une fois que tous les index existent.
+        for joint in &rig.joints {
+            nodes.push(json!({
+                "name": joint.name,
+                "translation": joint.rest.translation,
+                "rotation": joint.rest.rotation,
+                "scale": joint.rest.scale,
+            }));
+        }
+        let mut children: Vec<Vec<usize>> = vec![Vec::new(); rig.joints.len()];
+        for (index, joint) in rig.joints.iter().enumerate() {
+            if let Some(parent) = joint.parent {
+                children[parent].push(first_joint + index);
+            }
+        }
+
+        // Un maillage rigide accroché à un os devient **enfant de cet os**.
+        // Sans ça il resterait en arrière dès que l'os bouge : c'est le cas du
+        // casque en cinq pièces de `rh_schuberth_helmet_driver_19`.
+        for attached in &rig.attached {
+            let mesh_index = push_mesh(
+                &mut bin,
+                &mut buffer_views,
+                &mut accessors,
+                &mut gltf_meshes,
+                &attached.mesh,
+                &material_remap,
+                materials,
+                None,
+            );
+            nodes.push(json!({ "name": attached.mesh.name, "mesh": mesh_index }));
+            children[attached.joint].push(nodes.len() - 1);
+        }
+        for (index, list) in children.into_iter().enumerate() {
+            if !list.is_empty() {
+                nodes[first_joint + index]["children"] = json!(list);
+            }
+        }
+
+        // **Une peau par maillage skinné**, et non une pour tout le mannequin :
+        // les indices d'os d'un maillage désignent les entrées de *sa* peau,
+        // et chaque maillage n'utilise qu'un sous-ensemble des os.
+        let mut skinned_roots: Vec<usize> = Vec::new();
+        for skinned in &rig.skinned {
+            let joints_accessor = push_accessor_joints(&mut bin, &mut buffer_views, &mut accessors, &skinned.joints);
+            let weights_accessor = push_accessor_vec4(&mut bin, &mut buffer_views, &mut accessors, &skinned.weights);
+            let mesh_index = push_mesh(
+                &mut bin,
+                &mut buffer_views,
+                &mut accessors,
+                &mut gltf_meshes,
+                &skinned.mesh,
+                &material_remap,
+                materials,
+                Some((joints_accessor, weights_accessor)),
+            );
+            let binds = push_accessor_mat4(&mut bin, &mut buffer_views, &mut accessors, &skinned.inverse_binds);
+            skins.push(json!({
+                "inverseBindMatrices": binds,
+                "joints": skinned.bones.iter().map(|b| first_joint + b).collect::<Vec<_>>(),
+            }));
+            // **À la racine de la scène**, pas sous le squelette : glTF ignore
+            // la transformation d'un nœud skinné, et l'y ranger inviterait un
+            // lecteur à l'appliquer deux fois.
+            nodes.push(json!({
+                "name": skinned.mesh.name,
+                "mesh": mesh_index,
+                "skin": skins.len() - 1,
+            }));
+            skinned_roots.push(nodes.len() - 1);
+        }
+
+        // L'animation de braquage : une entrée par image, et par os animé une
+        // piste de translation, une de rotation, une d'échelle.
+        if !rig.tracks.is_empty() {
+            let times: Vec<f32> = (0..rig.frames).map(|f| f as f32).collect();
+            let input = push_accessor_scalar(&mut bin, &mut buffer_views, &mut accessors, &times);
+            let mut samplers: Vec<Value> = Vec::new();
+            let mut channels: Vec<Value> = Vec::new();
+            for track in &rig.tracks {
+                let translations: Vec<[f32; 3]> = track.frames.iter().map(|f| f.translation).collect();
+                let rotations: Vec<[f32; 4]> = track.frames.iter().map(|f| f.rotation).collect();
+                let scales: Vec<[f32; 3]> = track.frames.iter().map(|f| f.scale).collect();
+                for (path, output) in [
+                    (
+                        "translation",
+                        push_accessor_vec3(&mut bin, &mut buffer_views, &mut accessors, &translations, false),
+                    ),
+                    (
+                        "rotation",
+                        push_accessor_vec4(&mut bin, &mut buffer_views, &mut accessors, &rotations),
+                    ),
+                    (
+                        "scale",
+                        push_accessor_vec3(&mut bin, &mut buffer_views, &mut accessors, &scales, false),
+                    ),
+                ] {
+                    samplers.push(json!({ "input": input, "output": output, "interpolation": "LINEAR" }));
+                    channels.push(json!({
+                        "sampler": samplers.len() - 1,
+                        "target": { "node": first_joint + track.joint, "path": path },
+                    }));
+                }
+            }
+            animations.push(json!({
+                "name": "steer",
+                "samplers": samplers,
+                "channels": channels,
+                // Ce qu'il faut à la vue pour choisir une image à partir de
+                // l'angle réglé — qui est celui des **roues**. Les trois images
+                // sont mesurées sur l'animation, pas déduites de sa longueur :
+                // ses bouts ne sont pas des butées (voir `Rig::extremes`).
+                "extras": {
+                    "pitboxDriver": {
+                        "frames": rig.frames,
+                        "low": rig.extremes.0,
+                        "centre": rig.extremes.1,
+                        "high": rig.extremes.2,
+                        "wheelLimit": rig.wheel_limit,
+                    }
+                },
+            }));
+        }
+        roots.extend(
+            rig.joints
+                .iter()
+                .enumerate()
+                .filter(|(_, joint)| joint.parent.is_none())
+                .map(|(index, _)| first_joint + index),
+        );
+        roots.extend(skinned_roots);
     }
 
     let json_materials: Vec<Value> = used_materials
@@ -132,7 +276,7 @@ pub fn write_glb(meshes: &[FlatMesh], materials: &[GltfMaterial], textures: &Tex
     let mut document = json!({
         "asset": { "version": "2.0", "generator": "Pit Box kn5-gltf" },
         "scene": 0,
-        "scenes": [ { "nodes": (0..nodes.len()).collect::<Vec<_>>() } ],
+        "scenes": [ { "nodes": roots } ],
         "nodes": nodes,
         "meshes": gltf_meshes,
         "accessors": accessors,
@@ -158,6 +302,13 @@ pub fn write_glb(meshes: &[FlatMesh], materials: &[GltfMaterial], textures: &Tex
         .collect();
     if !extensions.is_empty() {
         document["extensionsUsed"] = json!(extensions);
+    }
+
+    if !skins.is_empty() {
+        document["skins"] = json!(skins);
+    }
+    if !animations.is_empty() {
+        document["animations"] = json!(animations);
     }
 
     if !json_materials.is_empty() {
@@ -225,6 +376,127 @@ fn material_json(material: &GltfMaterial, texture_index: &Map<String, Value>) ->
 /// Every view starts on a four-byte boundary. glTF only requires alignment to
 /// the component size, but four satisfies every type used here and costs three
 /// padding bytes at worst.
+/// Écrit un maillage et sa primitive, et rend l'index du `mesh` glTF.
+///
+/// Partagé par la voiture et le mannequin : les deux écrivent les mêmes
+/// attributs, seul le mannequin ajoute sa peau. En faire deux copies aurait
+/// suffi à ce qu'un jour l'une écrive les tangentes et pas l'autre.
+#[allow(clippy::too_many_arguments)]
+fn push_mesh(
+    bin: &mut Vec<u8>,
+    views: &mut Vec<Value>,
+    accessors: &mut Vec<Value>,
+    gltf_meshes: &mut Vec<Value>,
+    mesh: &FlatMesh,
+    material_remap: &[Option<usize>],
+    materials: &[GltfMaterial],
+    skin: Option<(usize, usize)>,
+) -> usize {
+    let positions = push_accessor_vec3(bin, views, accessors, &mesh.positions, true);
+    let normals = push_accessor_vec3(bin, views, accessors, &mesh.normals, false);
+    let uvs = push_accessor_vec2(bin, views, accessors, &mesh.uvs);
+    let indices = push_accessor_indices(bin, views, accessors, &mesh.indices);
+
+    let mut primitive = json!({
+        "attributes": { "POSITION": positions, "NORMAL": normals, "TEXCOORD_0": uvs },
+        "indices": indices,
+        "mode": 4,
+    });
+    if let Some(Some(index)) = material_remap.get(mesh.material_id as usize) {
+        primitive["material"] = json!(index);
+    }
+    // **Le repère tangent n'est écrit que là où il sert.** Sans carte de
+    // normales il ne change rien au rendu, et il coûte seize octets par
+    // sommet — sur une voiture de 500 000 sommets, huit mégaoctets pour
+    // rien. Avec une carte, en revanche, il est ce qui évite au lecteur de
+    // reconstruire le repère à l'écran et d'exploser sur les UV dégénérés
+    // (voir `geometry::convert_mesh`).
+    let needs_tangents = materials
+        .get(mesh.material_id as usize)
+        .is_some_and(|m| m.normal_texture.is_some());
+    if needs_tangents && mesh.tangents.len() == mesh.positions.len() {
+        let tangents = push_accessor_vec4(bin, views, accessors, &mesh.tangents);
+        primitive["attributes"]["TANGENT"] = json!(tangents);
+    }
+    if let Some((joints, weights)) = skin {
+        primitive["attributes"]["JOINTS_0"] = json!(joints);
+        primitive["attributes"]["WEIGHTS_0"] = json!(weights);
+    }
+    gltf_meshes.push(json!({ "name": mesh.name, "primitives": [primitive] }));
+    gltf_meshes.len() - 1
+}
+
+/// `JOINTS_0` : quatre indices d'os par sommet, en entiers courts non signés.
+fn push_accessor_joints(
+    bin: &mut Vec<u8>,
+    views: &mut Vec<Value>,
+    accessors: &mut Vec<Value>,
+    data: &[[u16; 4]],
+) -> usize {
+    let mut bytes = Vec::with_capacity(data.len() * 8);
+    for value in data {
+        for component in value {
+            bytes.extend_from_slice(&component.to_le_bytes());
+        }
+    }
+    let view = push_view(bin, views, &bytes, Some(TARGET_ARRAY_BUFFER));
+    accessors.push(json!({
+        "bufferView": view,
+        "componentType": COMPONENT_U16,
+        "count": data.len(),
+        "type": "VEC4",
+    }));
+    accessors.len() - 1
+}
+
+/// `inverseBindMatrices` : les matrices telles que le KN5 les range, sans
+/// transposition — les deux conventions se croisent et s'annulent (voir
+/// l'en-tête de [`crate::rig`]).
+fn push_accessor_mat4(
+    bin: &mut Vec<u8>,
+    views: &mut Vec<Value>,
+    accessors: &mut Vec<Value>,
+    data: &[[f32; 16]],
+) -> usize {
+    let mut bytes = Vec::with_capacity(data.len() * 64);
+    for value in data {
+        for component in value {
+            bytes.extend_from_slice(&component.to_le_bytes());
+        }
+    }
+    // Pas de `target` : ce n'est ni un tampon de sommets ni un tampon d'index.
+    let view = push_view(bin, views, &bytes, None);
+    accessors.push(json!({
+        "bufferView": view,
+        "componentType": COMPONENT_F32,
+        "count": data.len(),
+        "type": "MAT4",
+    }));
+    accessors.len() - 1
+}
+
+/// L'entrée d'une animation : le temps de chaque image. glTF exige que
+/// l'accesseur d'entrée porte ses bornes, faute de quoi un lecteur ne sait pas
+/// quelle est la durée du clip.
+fn push_accessor_scalar(bin: &mut Vec<u8>, views: &mut Vec<Value>, accessors: &mut Vec<Value>, data: &[f32]) -> usize {
+    let mut bytes = Vec::with_capacity(data.len() * 4);
+    for value in data {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+    let view = push_view(bin, views, &bytes, None);
+    let min = data.iter().copied().fold(f32::INFINITY, f32::min);
+    let max = data.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    accessors.push(json!({
+        "bufferView": view,
+        "componentType": COMPONENT_F32,
+        "count": data.len(),
+        "type": "SCALAR",
+        "min": [min],
+        "max": [max],
+    }));
+    accessors.len() - 1
+}
+
 fn push_view(bin: &mut Vec<u8>, views: &mut Vec<Value>, data: &[u8], target: Option<u32>) -> usize {
     while !bin.len().is_multiple_of(4) {
         bin.push(0);
@@ -426,7 +698,7 @@ mod tests {
     // sommet — huit mégaoctets sur une voiture de 500 000 sommets.
     #[test]
     fn tangents_are_written_only_where_a_normal_map_uses_them() {
-        let plain = write_glb(&[sample_mesh()], &[sample_material()], &TextureSet::default()).expect("writes");
+        let plain = write_glb(&[sample_mesh()], None, &[sample_material()], &TextureSet::default()).expect("writes");
         assert!(
             parse(&plain)["meshes"][0]["primitives"][0]["attributes"]["TANGENT"].is_null(),
             "sans carte de normales, rien à écrire"
@@ -434,7 +706,7 @@ mod tests {
 
         let mut mapped = sample_material();
         mapped.normal_texture = Some("nm.dds".to_string());
-        let with_map = write_glb(&[sample_mesh()], &[mapped], &TextureSet::default()).expect("writes");
+        let with_map = write_glb(&[sample_mesh()], None, &[mapped], &TextureSet::default()).expect("writes");
         let document = parse(&with_map);
         let accessor = document["meshes"][0]["primitives"][0]["attributes"]["TANGENT"]
             .as_u64()
@@ -454,7 +726,7 @@ mod tests {
         let mut glass = sample_material();
         glass.transmission = 1.0;
         glass.ior = Some(1.8);
-        let glb = write_glb(&[sample_mesh()], &[glass], &TextureSet::default()).expect("writes");
+        let glb = write_glb(&[sample_mesh()], None, &[glass], &TextureSet::default()).expect("writes");
         let document = parse(&glb);
 
         let used = document["extensionsUsed"].as_array().expect("extensionsUsed present");
@@ -482,7 +754,7 @@ mod tests {
     // supplémentaire pour rien.
     #[test]
     fn an_ordinary_material_declares_no_extension() {
-        let glb = write_glb(&[sample_mesh()], &[sample_material()], &TextureSet::default()).expect("writes");
+        let glb = write_glb(&[sample_mesh()], None, &[sample_material()], &TextureSet::default()).expect("writes");
         let document = parse(&glb);
         assert!(document["extensionsUsed"].is_null(), "rien à déclarer");
         assert!(document["materials"][0]["extensions"].is_null(), "rien à porter");
@@ -498,7 +770,7 @@ mod tests {
     // file usually does so here, before ever looking at the scene.
     #[test]
     fn container_header_and_chunks_are_well_formed() {
-        let glb = write_glb(&[sample_mesh()], &[sample_material()], &TextureSet::default()).expect("writes");
+        let glb = write_glb(&[sample_mesh()], None, &[sample_material()], &TextureSet::default()).expect("writes");
 
         assert_eq!(&glb[0..4], b"glTF", "magic");
         assert_eq!(u32::from_le_bytes(glb[4..8].try_into().unwrap()), 2, "version 2");
@@ -522,7 +794,7 @@ mod tests {
     // them, and those that accept it cannot frame the model.
     #[test]
     fn position_accessor_declares_its_bounds() {
-        let glb = write_glb(&[sample_mesh()], &[sample_material()], &TextureSet::default()).expect("writes");
+        let glb = write_glb(&[sample_mesh()], None, &[sample_material()], &TextureSet::default()).expect("writes");
         let document = parse(&glb);
         let position = &document["accessors"][0];
         assert_eq!(position["min"], json!([0.0, 0.0, 0.0]), "min over the three vertices");
@@ -537,7 +809,13 @@ mod tests {
             name: "collider".to_string(),
             ..sample_material()
         };
-        let glb = write_glb(&[sample_mesh()], &[sample_material(), unused], &TextureSet::default()).expect("writes");
+        let glb = write_glb(
+            &[sample_mesh()],
+            None,
+            &[sample_material(), unused],
+            &TextureSet::default(),
+        )
+        .expect("writes");
         let document = parse(&glb);
         assert_eq!(
             document["materials"].as_array().map(Vec::len),
@@ -555,7 +833,13 @@ mod tests {
         // An odd-length index buffer forces padding before the next view.
         let mut mesh = sample_mesh();
         mesh.indices = vec![0, 1, 2, 0, 2, 1, 1, 2, 0];
-        let glb = write_glb(&[mesh, sample_mesh()], &[sample_material()], &TextureSet::default()).expect("writes");
+        let glb = write_glb(
+            &[mesh, sample_mesh()],
+            None,
+            &[sample_material()],
+            &TextureSet::default(),
+        )
+        .expect("writes");
         let document = parse(&glb);
         for view in document["bufferViews"].as_array().expect("views") {
             let offset = view["byteOffset"].as_u64().expect("offset");

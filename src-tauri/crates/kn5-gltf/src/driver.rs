@@ -31,7 +31,10 @@ use kn5::{Kn5Model, Kn5Node, Kn5NodeKind};
 ///
 /// Visible in `kn5-tool inspect --tree`, which is the point: a node that
 /// appeared out of nowhere should say where it came from.
-const DRIVER_MARKER: &str = "PITBOX_DRIVER";
+const DRIVER_MARKER: &str = crate::rig::DRIVER_WRAPPER;
+
+/// Nom de la racine fraîche construite au-dessus de la voiture (voir [`graft`]).
+const DRIVER_ROOT: &str = "PITBOX_ROOT";
 
 /// Préfixe posé sur le nom de **chaque maillage** du mannequin avant la greffe.
 ///
@@ -50,7 +53,14 @@ const DRIVER_MARKER: &str = "PITBOX_DRIVER";
 /// (`pose::apply_locals`, `dress`), et renommer avant les aveuglerait. Les
 /// *dummies* du rig gardent leur nom pour la même raison — seuls les maillages
 /// sont préfixés, et un maillage n'est jamais un os.
-pub const DRIVER_MESH_PREFIX: &str = "PITBOX_DRIVER:";
+///
+/// **Souligné et non deux-points**, et ce n'est pas cosmétique : three.js
+/// **retire** les caractères réservés d'un nom de nœud à la lecture du glTF
+/// (`PropertyBinding.sanitizeNodeName` : `[`, `]`, `.`, `:`, `/`). Mesuré au
+/// banc, `PITBOX_DRIVER:DRIVER:suit` arrivait en `PITBOX_DRIVERDRIVERsuit`, et
+/// le préfixe cherché côté vue ne répondait donc jamais — le pilote ne
+/// s'estompait pas, faute d'être reconnu.
+pub const DRIVER_MESH_PREFIX: &str = "PITBOX_DRIVER_";
 
 /// A driver, resolved down to files on disk.
 ///
@@ -203,7 +213,11 @@ pub fn graft(host: &mut Kn5Model, wanted: &DriverGraft) -> DriverStats {
     let car = std::mem::replace(
         &mut host.root,
         Kn5Node {
-            name: DRIVER_MARKER.to_string(),
+            // **Un autre nom que l'enveloppe du mannequin**, qui est son
+            // frère : `rig::extract` cherche celle-ci par son nom, et une
+            // racine homonyme lui ferait prendre la voiture entière pour un
+            // pilote.
+            name: DRIVER_ROOT.to_string(),
             active: true,
             kind: Kn5NodeKind::Dummy { transform: IDENTITY },
             children: Vec::new(),

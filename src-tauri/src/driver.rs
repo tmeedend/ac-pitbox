@@ -1373,4 +1373,90 @@ SUIT=\\type1\\black_black
             );
         }
     }
+
+    /// Convertit une voiture **avec son pilote** et écrit le `.glb`, pour
+    /// pouvoir le regarder.
+    ///
+    /// C'est l'instrument qui manquait : `kn5-tool` ne sait pas greffer de
+    /// pilote — la résolution passe par `data.acd`, que le crate de conversion
+    /// ne lit délibérément pas — donc rien ne permettait d'inspecter un
+    /// mannequin exporté en squelette sans lancer l'application entière.
+    ///
+    /// ```text
+    /// PITBOX_AC_ROOT=... PITBOX_CAR_DIR=... PITBOX_GLB_OUT=...
+    ///   cargo test --lib driver -- --ignored --nocapture convert_one_car_with_its_driver
+    /// ```
+    #[test]
+    #[ignore = "needs a real Assetto Corsa install; instrument, not a check"]
+    fn convert_one_car_with_its_driver() {
+        let (Ok(ac_root), Ok(car_dir), Ok(out)) = (
+            std::env::var("PITBOX_AC_ROOT"),
+            std::env::var("PITBOX_CAR_DIR"),
+            std::env::var("PITBOX_GLB_OUT"),
+        ) else {
+            eprintln!("PITBOX_AC_ROOT / PITBOX_CAR_DIR / PITBOX_GLB_OUT unset, skipping");
+            return;
+        };
+        let car_dir = std::path::PathBuf::from(car_dir);
+        let car_id = car_dir.file_name().unwrap_or_default().to_string_lossy().into_owned();
+        let skin = kn5_gltf::resolve_skin(&car_dir, None);
+        let graft = resolve(
+            std::path::Path::new(&ac_root),
+            &car_dir,
+            &car_id,
+            skin.as_deref(),
+            0.0,
+            &OutfitOverride::default(),
+        )
+        .expect("cette voiture nomme un pilote installé");
+
+        let resolved = kn5_gltf::resolve_model(&car_dir).expect("un modèle");
+        let bytes = std::fs::read(&resolved.path).expect("lire le modèle");
+        let mut model = kn5::parse(&bytes).expect("parser le modèle");
+        let stats = kn5_gltf::graft_driver(&mut model, &graft);
+        eprintln!(
+            "pilote : {} triangles, {} texture(s) habillée(s), {:?} assis, {:?} posés",
+            stats.triangles, stats.dressed, stats.seated, stats.posed
+        );
+        for failure in &stats.failures {
+            eprintln!("  échec : {failure}");
+        }
+
+        let steering = crate::steering::read(&car_dir, &car_id);
+        let animation = graft.animation.as_ref().and_then(|path| {
+            let bytes = std::fs::read(path).ok()?;
+            kn5::parse_animation(&bytes).ok()
+        });
+        eprintln!(
+            "animation : {} nœud(s), {} image(s), lock {}°, ratio {}",
+            animation.as_ref().map(|a| a.nodes.len()).unwrap_or(0),
+            animation.as_ref().map(|a| a.frame_count()).unwrap_or(0),
+            graft.lock_degrees,
+            steering.ratio
+        );
+        let options = kn5_gltf::ConvertOptions {
+            geometry: kn5_gltf::GeometryOptions {
+                steering: kn5_gltf::SteerLimits {
+                    lock: steering.lock,
+                    ratio: steering.ratio,
+                },
+                ..Default::default()
+            },
+            driver_rig: animation.map(|animation| kn5_gltf::DriverRigSource {
+                animation,
+                lock_degrees: graft.lock_degrees,
+            }),
+            ..Default::default()
+        };
+        let conversion = kn5_gltf::convert(&model, skin.as_deref(), &options, &|_| {}).expect("convertir");
+        eprintln!(
+            "converti : {} triangles, {} matériaux, {} textures, {:.1} Mo",
+            conversion.triangle_count,
+            conversion.material_count,
+            conversion.texture_count,
+            conversion.glb.len() as f32 / (1024.0 * 1024.0)
+        );
+        std::fs::write(&out, &conversion.glb).expect("écrire le glb");
+        eprintln!("écrit dans {out}");
+    }
 }

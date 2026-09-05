@@ -30,7 +30,7 @@ use crate::config::AppConfig;
 /// *reconnaître* pour libérer sa place. Trois incréments en une session de
 /// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
-const CONVERTER_VERSION: u32 = 38;
+const CONVERTER_VERSION: u32 = 39;
 
 /// Default cache ceiling (§5.3). Beyond it, the least recently used entries
 /// are evicted. Only a default: the real ceiling is a setting, carried by
@@ -278,11 +278,10 @@ fn cache_key(
             hasher.update(source.to_string_lossy().to_lowercase().as_bytes());
             stamp(&mut hasher, source);
         }
+        // La course de l'animation, oui — elle est écrite dans le `.glb` et sert
+        // à y choisir une image. L'**angle**, non : il ne décide plus de rien
+        // dans le fichier.
         hasher.update(driver.lock_degrees.to_le_bytes());
-        // La pose des bras, elle, est toujours cuite : le mannequin est écrit
-        // en sommets figés, pas en squelette. C'est le seul reste de l'angle
-        // dans la clé, et il ne coûte que quand un pilote est greffé.
-        hasher.update(driver.steer_degrees.to_le_bytes());
         for dir in &driver.texture_dirs {
             hasher.update(dir.to_string_lossy().to_lowercase().as_bytes());
         }
@@ -305,13 +304,14 @@ fn cache_key(
 /// Groupés parce qu'ils vont ensemble et qu'ils partent ensemble dans la clé
 /// de cache : chacun d'eux décide du `.glb` produit, aucun ne s'applique après
 /// coup.
+///
+/// **L'angle de braquage n'en fait pas partie**, et c'est le résultat d'un
+/// correctif : roues, volant et bras du pilote tournent tous à l'affichage, si
+/// bien que l'angle ne décide plus de rien dans le fichier produit.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PreviewRequest<'a> {
     /// Livrée dont les textures surchargent celles du modèle (§4.3).
     pub skin_id: Option<&'a str>,
-    /// Angle du **volant**, en degrés : il tourne les roues avant, le volant
-    /// du poste de pilotage et, quand il y en a un, les bras du pilote.
-    pub steer_degrees: f32,
     /// Le pilote à greffer, et la tenue qu'on lui impose. `None` = personne au
     /// volant, et la conversion ne lit alors aucun mannequin.
     pub driver: Option<&'a crate::driver::DriverView>,
@@ -330,11 +330,7 @@ pub fn prepare(
     what: &PreviewRequest<'_>,
     token: u64,
 ) -> Result<CarPreview, String> {
-    let PreviewRequest {
-        skin_id,
-        steer_degrees,
-        driver,
-    } = *what;
+    let PreviewRequest { skin_id, driver } = *what;
     let resolved = kn5_gltf::resolve_model(car_dir).ok_or(crate::errors::PREVIEW_MODEL_NOT_FOUND)?;
     let dir = cache_dir(app)?;
     // Une seule fois par exécution : au premier aperçu demandé, pas au
@@ -361,16 +357,13 @@ pub fn prepare(
     // est indexée sur celui du volant. La démultiplication de la voiture fait
     // le pont, et la butée borne les deux.
     let steering = crate::steering::read(car_dir, car_id);
-    let wheel_degrees = steer_degrees.clamp(-steering.lock / steering.ratio, steering.lock / steering.ratio);
+    // **Le mannequin est greffé volant droit, et son angle n'entre plus nulle
+    // part.** Ses bras sont désormais posés à l'affichage, par le squelette et
+    // l'animation écrits dans le `.glb` (`kn5_gltf::rig`) : l'angle ne décide
+    // plus du fichier produit, donc plus de la clé de cache. C'était le dernier
+    // endroit où bouger le curseur coûtait une conversion.
     let driver = match (driver, ac_install.as_deref()) {
-        (Some(view), Some(ac)) => crate::driver::resolve(
-            ac,
-            car_dir,
-            car_id,
-            skin_dir.as_deref(),
-            wheel_degrees * steering.ratio,
-            &view.outfit,
-        ),
+        (Some(view), Some(ac)) => crate::driver::resolve(ac, car_dir, car_id, skin_dir.as_deref(), 0.0, &view.outfit),
         _ => None,
     };
     // Ce que la voiture déclare de sa direction. **Pas l'angle** : il n'est
@@ -482,6 +475,19 @@ pub fn prepare(
             steering: limits,
             ..Default::default()
         },
+        // L'animation de braquage voyage jusqu'au convertisseur : c'est elle
+        // qui devient l'animation glTF du mannequin. Relue plutôt que reprise
+        // de la greffe — quelques millisecondes contre un aller-retour de
+        // structure à travers trois modules.
+        driver_rig: driver.as_ref().and_then(|graft| {
+            let path = graft.animation.as_ref()?;
+            let bytes = std::fs::read(path).ok()?;
+            let animation = kn5::parse_animation(&bytes).ok()?;
+            Some(kn5_gltf::DriverRigSource {
+                animation,
+                lock_degrees: graft.lock_degrees,
+            })
+        }),
         surfaces: kn5_gltf::material_overrides(
             &csp,
             skin_dir
@@ -1126,17 +1132,17 @@ INSERT = part.kn5",
             "et son assise"
         );
 
-        // L'angle de braquage **ne doit plus** faire partie de la clé quand
-        // personne n'est au volant : les roues tournent à l'affichage. Il en
-        // reste dans la branche pilote, dont les bras sont encore cuits.
+        // **L'angle de braquage ne fait plus partie de la clé du tout**, pilote
+        // ou pas : roues, volant et bras tournent à l'affichage. C'est la règle
+        // qui a fait tomber les onze entrées de 42 Mo d'une même voiture.
         let turned = kn5_gltf::DriverGraft {
             steer_degrees: 45.0,
             ..graft.clone()
         };
-        assert_ne!(
+        assert_eq!(
             with,
             cache_key(&model, None, &[], &STRAIGHT, Some(&turned)),
-            "les bras du pilote sont cuits, donc son angle compte"
+            "l'angle ne décide plus de rien dans le fichier produit"
         );
         // Ce que la voiture déclare de sa direction est écrit dans le `.glb`,
         // donc corriger un `car.ini` doit invalider l'entrée.
