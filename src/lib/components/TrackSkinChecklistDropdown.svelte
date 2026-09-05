@@ -93,8 +93,9 @@
     font-size: 11px;
     text-align: left;
   }
+  /* Survol neutre, comme `ImageSelectDropdown` : contrôle secondaire (SPEC §7.2ter). */
   .isd-trigger:hover:not(:disabled) {
-    border-color: var(--rosso-border);
+    border-color: var(--faint2);
   }
   .isd-trigger:disabled {
     opacity: 0.5;

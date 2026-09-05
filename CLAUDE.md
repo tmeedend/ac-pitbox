@@ -373,9 +373,14 @@ laisser pourrir ici.
       d'une clé de fiche technique en lecture seule, même si visuellement
       proche) et les titres de popup (`OpponentPicker`/`SavedSessionsDialog`,
       13px/majuscules, identiques entre eux mais ne correspondant à aucun des
-      trois niveaux). **Couleurs sémantiques** : pas encore attaquées — le
-      `--orange` ajouté pour « mod inactif » (`StateBadge`) est le premier pas
-      dans cette direction (ni le jaune d'alerte, ni le rouge destructif).
+      trois niveaux). **Couleurs sémantiques** : le **rouge** a désormais son
+      barème, écrit au §7.2ter du SPEC — quatre niveaux, un quota par niveau,
+      et la règle « le survol n'introduit jamais de rouge sur un élément qui
+      n'y a pas droit au repos ». Appliqué au rail de navigation et à la
+      colonne de session ; **les filtres et la grille de bibliothèque restent
+      à faire** (specs séparées). Le reste n'est pas attaqué — le `--orange`
+      ajouté pour « mod inactif » (`StateBadge`) est le premier pas dans cette
+      direction (ni le jaune d'alerte, ni le rouge destructif).
 - [ ] **Composants partagés plutôt que styles recopiés.** Même cause que le
       chantier ci-dessus, un cran au-dessus : le CSS Svelte étant **scopé par
       composant**, une même brique recopiée dans dix écrans y dérive sans que

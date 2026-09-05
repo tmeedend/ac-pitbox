@@ -390,7 +390,12 @@
     cursor: pointer;
     white-space: nowrap;
   }
-  .add:hover,
+  /* Le survol éclaircit le gris ; seul le menu OUVERT prend l'accent éteint —
+     un état, pas un passage de curseur (SPEC §7.2ter). */
+  .add:hover {
+    border-color: var(--faint);
+    color: var(--txt);
+  }
   .add[aria-expanded="true"] {
     border-color: var(--rosso-border);
     color: var(--txt);

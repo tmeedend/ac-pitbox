@@ -617,8 +617,29 @@ Trois règles portent le système :
 
 Une **colonne latérale unique** (maquette de référence `pitbox-biblio-session2.html`) :
 - **Bloc SESSION en haut** : previews du duo sélectionné (voiture + circuit), chacune cliquable pour ouvrir la bibliothèque correspondante — le bloc Session est le point d'accès aux bibliothèques (pas d'entrées « Voitures »/« Circuits » séparées). Bouton **« Démarrer une session »** qui ouvre l'écran de réglages à droite.
-- **ADD-ONS** (titre rouge/mono) en deux colonnes : Skins | Sons, Apps, Autres mods.
+- **ADD-ONS** (titre mono, majuscules espacées) en deux colonnes : Skins | Sons, Apps, Autres mods.
 - **ATELIER** (même style) : Règles | Importer, Réglages.
+
+L'entrée active — celle dont l'écran est affiché — se marque par un **filet gauche rouge de 2 px** (`box-shadow: inset`, jamais une bordure : 2 px de bordure décaleraient le contenu d'un pixel à chaque changement d'écran). Vaut pour les deux emplacements de session, la ligne « Mon pilote » et les boutons Add-ons/Atelier. Les titres de section, eux, ne sont plus rouges — voir §7.2ter.
+
+### 7.2ter Barème de l'accent rouge
+
+**Ce que le rouge signifie, en une phrase : *ce qui est retenu pour la session, et l'action qui la lance*.** Tout ce qui relève de la structure, de la navigation ou d'une action secondaire n'y a pas droit. Le rouge servait à huit choses (bordure de fenêtre, logo, filet sous chaque titre de section, encadré du bloc voiture, boutons « Changer », bouton de livrée, carte en session, bouton de lancement) : quand tout est accent, rien ne l'est, et « Démarrer la session » — la seule action que l'écran doit pousser — se retrouvait en concurrence avec quatre titres et deux boutons secondaires.
+
+Quatre niveaux. Tout élément rouge doit pouvoir se rattacher à l'un d'eux ; sinon il ne prend pas de rouge.
+
+| Niveau | Traitement | Sens | Quota |
+| --- | --- | --- | --- |
+| **1 — plein** | fond `--rosso`, texte blanc | l'action qui engage la session | **un seul élément à l'écran** (aujourd'hui : « ▶ Démarrer la session ») |
+| **2 — trait** | bordure ou filet `--rosso`, 1 à 2 px | ce qui est retenu pour la session, ou ce qui a le focus | un par famille d'objets |
+| **3 — éteint** | bordure `--rosso-border`, fond `--rosso-dim` | actif mais secondaire | libre |
+| **0 — marque** | `--rosso` | identité, hors zone de contenu | deux occurrences fixes : le filet supérieur de la fenêtre et le carré du logo |
+
+Niveau 2 : entrée active du rail, carte du duo en session dans la grille (+ badge `SESSION`), onglet actif, piste active de l'écran Pilote, case retenue dans une galerie. Le **focus** est le seul emploi qui peut apparaître n'importe où — c'est cohérent, il désigne « où je suis » — et il reste **jaune** dans Pit Box (`:focus-visible`, `global.css`) : la carte en session portant elle-même une bordure rouge, un focus rouge s'y fondrait, ce qui était déjà la raison du jaune avant ce barème.
+
+**Le survol n'introduit jamais de rouge sur un élément qui n'y a pas droit au repos.** Sinon le rouge acquiert un quatrième sens — « sous le curseur » — qui annule le barème. Un contrôle neutre (bouton secondaire, menu, champ, « + Filtre ») éclaircit son gris (`--line` → `--faint2`/`--faint`) ; seul un élément *sélectionnable* (carte, case de galerie, puce, option de liste) peut aller jusqu'au niveau 3, et l'action principale éclaircit son rouge plein.
+
+**Test de conformité** : effondrer tous les tons neutres vers le fond et ne garder que `--rosso` et `--rosso-border`. Ce qui reste visible doit être exactement le filet de fenêtre, le logo, le filet de l'entrée active du rail, la carte en session, le bouton de lancement, et les puces actives en rouge éteint. Tout point rouge de plus est une régression.
 
 ### 7.2bis Historique de navigation
 
@@ -867,6 +888,13 @@ Deux précautions dans ce classement :
 ### 9.1 La bibliothèque est le sélecteur
 
 Pas d'écran séparé de sélection : la voiture/le circuit sélectionnés dans la bibliothèque sont ceux de la session. Le **bloc Session** de la barre latérale montre en permanence le duo courant. La page « Démarrer une session » ne contient aucune sélection de voiture/circuit — seulement les réglages + Lancer.
+
+**Chaque emplacement a trois états**, et aucun bouton « Changer » : c'est la vignette et le nom qui ouvrent la bibliothèque.
+- **Choisi** : photo, nom, métadonnée. Le libellé d'action n'est pas supprimé, il est **différé** — au survol *et au focus clavier*, un voile plein (`rgba(8,8,10,.72)`, 130 ms) porte « ✎ Changer de voiture / de circuit ». Le voile est plein parce qu'au moment où l'on décide de changer, la photo n'est plus l'information utile, et un voile partiel rendrait le libellé illisible sur une image imprévisible. Le bouton porte un `aria-label` complet (« Porsche 718 Boxster S — changer de voiture »).
+- **Vide** : trame diagonale, bordure pointillée, « ＋ Choisir une voiture », ni nom ni métadonnée. **L'app ne choisit jamais une voiture à la place de l'utilisateur** au premier démarrage : « la première du catalogue » est une voiture arbitraire, et démarrer sur un bouton rouge qui lancerait une session au hasard installe le mauvais modèle mental. Tant que le duo est incomplet, « Paramétrage » et « Démarrer la session » sont **désactivés** — ce dernier gardant son fond rouge en opacité réduite : il reste la destination visible de l'écran, le griser effacerait le but à atteindre. C'est aussi ce premier démarrage qui enseigne le geste : sans autre chemin que le bloc, l'utilisateur apprend qu'il est cliquable, et le bouton permanent n'avait plus rien à enseigner ensuite.
+- **Impasse** : Assetto Corsa introuvable ou chemin mal renseigné (`validate_config`, relu en quittant les Réglages). Même trame que l'état vide, mais « Aucune voiture détectée » + « Vérifiez le chemin d'installation », et le clic ouvre **Réglages › Chemins** au lieu d'une bibliothèque nécessairement vide — le problème à résoudre n'est pas le même.
+
+**Frontière des zones cliquables.** Le bloc porte aussi le menu de livrée, celui de layout, la liste des skins de circuit et la ligne « Mon pilote » : un clic qui visait un menu ne doit jamais éjecter vers la bibliothèque. La zone qui navigue est donc un `<button>` **frère** de ces menus, jamais leur parent — un bouton contenant des contrôles interactifs est de surcroît invalide en HTML et casse la navigation clavier.
 
 **`ImageSelectDropdown.svelte` (sélecteur de skin/layout du bloc Session) échappe au clip de la barre latérale.** La barre latérale (`.side`) défile verticalement (`overflow-y: auto`) — et une règle CSS fait qu'un seul axe posé à `auto` calcule l'autre à `auto` aussi, donc `.side` rogne également tout ce qui déborde en largeur. Un `position: absolute` classique en aurait fait les frais dès qu'un libellé de layout dépassait la largeur de la barre latérale : la liste ouverte restait aussi étroite que le déclencheur, ellipsée à mi-mot, sans le moindre moyen de lire le nom en entier. Corrigé sur deux fronts, indépendants l'un de l'autre :
 - **La liste ouverte passe en `position: fixed`**, positionnée en JS depuis le rectangle du déclencheur (`getBoundingClientRect`), avec `width: max-content` (elle grandit jusqu'à son plus long libellé, plafonnée à `min(420px, 100vw - 16px)`) plutôt que calée sur la largeur du déclencheur. `fixed` échappe au clip de n'importe quel ancêtre à `overflow` — aucun n'y pose de `transform`/`filter`/`will-change`, ce qui aurait recréé un cadre de référence local et annulé l'échappée — et se repositionne au plus près du bord droit de la fenêtre si son plus long libellé la ferait déborder, une fois sa largeur réelle connue après rendu. Se ferme sur un défilement de n'importe quel ancêtre (sans ça, une liste `fixed` resterait figée pendant qu'un `.side` défilerait sous elle) — sauf le sien propre, sans quoi parcourir une longue liste la refermerait avant qu'on ait pu cliquer. **Piège vérifié plutôt que supposé** : un élément `position: fixed` reste un `offsetParent` valide pour ses propres enfants (seul lui-même, interrogé directement, renvoie `offsetParent === null`) — la navigation manette (`gamepadNav.ts`, filtre `offsetParent !== null`) continue donc de trouver les boutons de la liste sans adaptation.

@@ -38,7 +38,7 @@
   import { syncTrackSkins, listTrackSkinOptions, setTrackSkinActive, type TrackSkinOption } from "$lib/submods";
   import { t, setLocale } from "$lib/i18n/index.svelte";
   import { setZoom } from "$lib/zoom.svelte";
-  import { getConfig } from "$lib/config";
+  import { getConfig, validateConfig } from "$lib/config";
   import { LAUNCH_BUTTON_ATTR, startGamepadNav } from "$lib/gamepadNav";
   import { controllers, startControllerWatch } from "$lib/gamepadDevices.svelte";
   import { bigPictureState, exitBigPicture } from "$lib/bigpicture.svelte";
@@ -119,6 +119,56 @@
     if (cfg.prefs.language) setLocale(cfg.prefs.language);
     setZoom(cfg.prefs.ui_zoom);
   });
+
+  // --- Colonne de session : ce que les deux emplacements ont à dire ---------
+  //
+  // Trois états, pas deux (SPEC §9.1) : un mod choisi, rien de
+  // choisi, ou des chemins cassés. Le troisième existe parce que l'invitation
+  // « choisir une voiture » mène à une bibliothèque vide quand Assetto Corsa
+  // est introuvable — ce n'est pas le même problème, donc pas la même
+  // destination (Réglages › Chemins).
+  type SlotState = "picked" | "empty" | "broken";
+  let pathsBroken = $state(false);
+
+  async function refreshPaths() {
+    try {
+      const v = await validateConfig(await getConfig());
+      pathsBroken = !v.ac_install.ok || !v.content_dir.ok;
+    } catch {
+      // Le diagnostic lui-même a échoué : ne pas accuser les chemins pour
+      // autant, l'état vide normal reste plus juste qu'une fausse impasse.
+      pathsBroken = false;
+    }
+  }
+  onMount(refreshPaths);
+  // Les chemins ne se réparent que depuis les Réglages : relire en sortant de
+  // cet écran suffit, plutôt que de valider à chaque rendu. Le nettoyage d'un
+  // effet dont la seule dépendance est `nav.section` s'exécute exactement au
+  // moment où l'on quitte l'écran.
+  $effect(() => {
+    if (nav.section !== "settings") return;
+    return () => void refreshPaths();
+  });
+
+  const carSlot = $derived<SlotState>(nav.sessionCar ? "picked" : pathsBroken ? "broken" : "empty");
+  const trackSlot = $derived<SlotState>(nav.sessionTrack ? "picked" : pathsBroken ? "broken" : "empty");
+  /** Tant que le duo n'est pas complet, il n'y a ni session à paramétrer ni
+   * session à lancer (SPEC §9.1) — l'app ne choisit pas une voiture à la place de
+   * l'utilisateur pour se donner un bouton à activer. */
+  const sessionReady = $derived(nav.sessionCar != null && nav.sessionTrack != null);
+
+  /** Clic sur la vignette ou le nom : c'est la zone qui NAVIGUE (SPEC §9.1). Les
+   * menus de livrée/layout et la ligne « Mon pilote » sont ses frères dans le
+   * DOM, jamais ses enfants — un clic qui visait un menu ne doit pas éjecter
+   * vers la bibliothèque. */
+  async function openSlot(section: "cars" | "tracks", state: SlotState) {
+    if (state === "broken") {
+      nav.settingsTab = "paths";
+      await requestSection("settings");
+      return;
+    }
+    await requestSection(section);
+  }
 
   // Historique de navigation (§7.2bis) : l'écran affiché est noté à chaque
   // fois qu'il change, quel que soit le chemin emprunté pour y arriver — la
@@ -432,26 +482,45 @@
       <!-- SESSION : duo sélectionné, point d'accès aux bibliothèques -->
       <div class="session">
         <div class="nsec">{t("nav.session")}</div>
-        <div class="slot" class:on={nav.section === "cars"}>
+        <div class="slot" class:on={nav.section === "cars"} class:vacant={carSlot !== "picked"}>
           <button
             class="slot-main"
             type="button"
-            onclick={() => requestSection("cars")}
+            onclick={() => openSlot("cars", carSlot)}
             ondblclick={() => openSessionDetail("cars", nav.sessionCar?.id)}
-            title={t("session.carTooltip")}
+            title={carSlot === "picked" ? t("session.carTooltip") : undefined}
+            aria-label={nav.sessionCar ? `${nav.sessionCar.name} — ${t("session.changeCar")}` : undefined}
           >
-            <div class="slot-img car">
-              {#if carPrev}<img src={carPrev} alt="" />{:else}<span class="slot-ic">🚗</span>{/if}
-              <span class="slot-tag">{t("session.carTag")}</span>
-              <span class="slot-edit">{t("session.change")}</span>
+            <div class="slot-img car" class:vacant={carSlot !== "picked"}>
+              {#if carSlot === "picked"}
+                {#if carPrev}<img src={carPrev} alt="" />{:else}<span class="slot-ic">🚗</span>{/if}
+                <span class="slot-tag">{t("session.carTag")}</span>
+                <!-- Le libellé n'est pas supprimé, il est différé (SPEC §9.1) : au survol
+                     et au focus clavier seulement, sur un voile PLEIN — au moment
+                     où l'on décide de changer, la voiture actuelle n'est plus
+                     l'information utile, et un voile partiel rendrait le libellé
+                     illisible sur une photo imprévisible. -->
+                <span class="slot-veil"><span aria-hidden="true">✎</span>{t("session.changeCar")}</span>
+              {:else if carSlot === "empty"}
+                <span class="slot-invite"><span aria-hidden="true">＋</span>{t("session.chooseCar")}</span>
+              {:else}
+                <!-- Impasse (SPEC §9.1) : même trame que l'état initial, autre destination — ici
+                     l'invitation à choisir mènerait à une bibliothèque vide. -->
+                <span class="slot-invite">
+                  {t("session.noCarDetected")}
+                  <small>{t("session.checkPaths")}</small>
+                </span>
+              {/if}
             </div>
-            <div class="slot-b">
-              <div class="slot-name">
-                {nav.sessionCar?.name ?? t("session.noCar")}
-                {#if carInactive}<span class="slot-warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
+            {#if nav.sessionCar}
+              <div class="slot-b">
+                <div class="slot-name">
+                  {nav.sessionCar.name}
+                  {#if carInactive}<span class="slot-warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
+                </div>
+                <div class="slot-meta">{nav.sessionCar.meta}</div>
               </div>
-              <div class="slot-meta">{nav.sessionCar?.meta || t("session.clickToChoose")}</div>
-            </div>
+            {/if}
           </button>
           {#if nav.sessionCar}
             <div class="slot-pick">
@@ -484,27 +553,39 @@
             </div>
           {/if}
         </div>
-        <div class="slot" class:on={nav.section === "tracks"}>
+        <div class="slot" class:on={nav.section === "tracks"} class:vacant={trackSlot !== "picked"}>
           <button
             class="slot-main"
             type="button"
-            onclick={() => requestSection("tracks")}
+            onclick={() => openSlot("tracks", trackSlot)}
             ondblclick={() => openSessionDetail("tracks", nav.sessionTrack?.id)}
-            title={t("session.trackTooltip")}
+            title={trackSlot === "picked" ? t("session.trackTooltip") : undefined}
+            aria-label={nav.sessionTrack ? `${nav.sessionTrack.name} — ${t("session.changeTrack")}` : undefined}
           >
-            <div class="slot-img track">
-              {#if trackPrev}<img src={trackPrev} alt="" />{:else}<span class="slot-ic">🏁</span>{/if}
-              {#if trackOutline}<img class="slot-outline" src={trackOutline} alt="" />{/if}
-              <span class="slot-tag">{t("session.trackTag")}</span>
-              <span class="slot-edit">{t("session.change")}</span>
+            <div class="slot-img track" class:vacant={trackSlot !== "picked"}>
+              {#if trackSlot === "picked"}
+                {#if trackPrev}<img src={trackPrev} alt="" />{:else}<span class="slot-ic">🏁</span>{/if}
+                {#if trackOutline}<img class="slot-outline" src={trackOutline} alt="" />{/if}
+                <span class="slot-tag">{t("session.trackTag")}</span>
+                <span class="slot-veil"><span aria-hidden="true">✎</span>{t("session.changeTrack")}</span>
+              {:else if trackSlot === "empty"}
+                <span class="slot-invite"><span aria-hidden="true">＋</span>{t("session.chooseTrack")}</span>
+              {:else}
+                <span class="slot-invite">
+                  {t("session.noTrackDetected")}
+                  <small>{t("session.checkPaths")}</small>
+                </span>
+              {/if}
             </div>
-            <div class="slot-b">
-              <div class="slot-name">
-                {nav.sessionTrack?.name ?? t("session.noTrack")}
-                {#if trackInactive}<span class="slot-warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
+            {#if nav.sessionTrack}
+              <div class="slot-b">
+                <div class="slot-name">
+                  {nav.sessionTrack.name}
+                  {#if trackInactive}<span class="slot-warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
+                </div>
+                <div class="slot-meta">{nav.sessionTrack.meta}</div>
               </div>
-              <div class="slot-meta">{nav.sessionTrack?.meta || t("session.clickToChoose")}</div>
-            </div>
+            {/if}
           </button>
           {#if nav.sessionTrack}
             <div class="slot-pick">
@@ -524,10 +605,14 @@
             </div>
           {/if}
         </div>
-        <button class="btn-configure" onclick={() => requestSection("race")}>{t("session.configure")}</button>
+        <button class="btn-configure" disabled={!sessionReady} onclick={() => requestSection("race")}
+          >{t("session.configure")}</button
+        >
         <!-- Cible du bouton Start de la manette (§7.4bis) : il y amène le
              curseur depuis n'importe quel écran, il ne lance pas lui-même. -->
-        <button class="btn-launch" {...{ [LAUNCH_BUTTON_ATTR]: "" }} onclick={launchNow}>{t("session.start")}</button>
+        <button class="btn-launch" disabled={!sessionReady} {...{ [LAUNCH_BUTTON_ATTR]: "" }} onclick={launchNow}
+          >{t("session.start")}</button
+        >
       </div>
 
       <div class="nsec">{t("nav.addons")}</div>
@@ -684,15 +769,20 @@
     line-height: 1;
   }
   .brand-sub {
-    color: var(--rosso);
+    color: var(--muted);
     font-size: 6.5px;
     letter-spacing: 2.5px;
     margin-top: 3px;
   }
 
-  /* Titres de section : rouge, mono, séparateur (§6.1ter). */
+  /* Titres de section du rail : mono, majuscules espacées, séparateur.
+     Plus rouges depuis le barème de l'accent (SPEC §7.2ter) : un titre de section est de la
+     STRUCTURE, pas un état — et ils sont assez nombreux, répartis sur toute
+     la hauteur de la colonne, pour que leur filet mette le seul bouton rouge
+     de l'écran (« Démarrer la session ») en concurrence avec quatre titres.
+     Les capitales espacées suffisent à les faire lire comme des titres. */
   .nsec {
-    color: var(--rosso);
+    color: var(--muted);
     font-size: 9px;
     font-weight: 600;
     letter-spacing: 2px;
@@ -707,7 +797,7 @@
     content: "";
     flex: 1;
     height: 1px;
-    background: var(--rosso-border);
+    background: var(--line);
   }
 
   .session {
@@ -724,11 +814,19 @@
     background: var(--panel);
     margin-bottom: 9px;
   }
+  /* Le survol n'introduit jamais de rouge sur un élément qui n'y a pas droit
+     au repos (SPEC §7.2ter) : sinon le rouge prend un quatrième sens,
+     « sous le curseur », qui annule tout le barème. */
   .slot:hover {
-    border-color: var(--rosso-border);
+    border-color: var(--faint2);
   }
+  /* Écran ouvert = entrée de navigation active : filet gauche de 2 px, pas un
+     encadré. Une bordure de sélection n'a de sens que parmi des pairs, or il
+     n'y a qu'une voiture ; et en `box-shadow` plutôt qu'en `border-left`, une
+     bordure de 2 px décalerait le contenu d'un pixel à chaque changement
+     d'écran. */
   .slot.on {
-    border-color: var(--rosso);
+    box-shadow: inset 2px 0 0 var(--rosso);
   }
   .slot-main {
     display: block;
@@ -774,10 +872,15 @@
     stroke-linecap: round;
     stroke-linejoin: round;
   }
-  .driver-line:hover,
-  .driver-line.on {
-    border-color: var(--rosso-border);
+  .driver-line:hover {
+    border-color: var(--faint2);
     color: var(--txt);
+  }
+  /* Même règle que `.slot.on` : l'écran ouvert se dit par un filet gauche. */
+  .driver-line.on {
+    border-color: var(--faint2);
+    color: var(--txt);
+    box-shadow: inset 2px 0 0 var(--rosso);
   }
   .dl-name {
     overflow: hidden;
@@ -795,8 +898,8 @@
     flex: 0 0 auto;
     font-size: 9.5px;
     letter-spacing: 0.12em;
-    color: var(--rosso-bright);
-    border: 1px solid var(--rosso-border);
+    color: var(--muted);
+    border: 1px solid var(--line);
     border-radius: 2px;
     padding: 1px 5px;
   }
@@ -846,16 +949,64 @@
     font-family: var(--mono);
     padding: 2px 6px;
   }
-  .slot-edit {
+  /* Voile du libellé différé (SPEC §9.1) : plein, pas dégradé — au moment où l'on
+     décide de changer, la photo n'est plus l'information utile, et un voile
+     partiel rendrait le texte illisible sur une image imprévisible. Au focus
+     clavier comme au survol : le libellé doit être atteignable sans souris. */
+  .slot-veil {
     position: absolute;
-    bottom: 6px;
-    right: 6px;
-    background: rgba(8, 8, 12, 0.8);
-    color: var(--rosso-bright);
-    font-size: 7px;
-    letter-spacing: 1px;
-    font-family: var(--mono);
-    padding: 2px 7px;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    background: rgba(8, 8, 10, 0.72);
+    color: var(--txt);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    opacity: 0;
+    transition: opacity 0.13s;
+  }
+  .slot-main:hover .slot-veil,
+  .slot-main:focus-visible .slot-veil {
+    opacity: 1;
+  }
+  /* Rien de choisi : trame diagonale et bordure pointillée disent « emplacement
+     à remplir » sans imiter une vignette vide, qui se lirait comme un mod sans
+     photo. La pointillée est portée par `.slot` — l'emplacement n'a alors plus
+     rien d'autre à l'intérieur, deux bordures imbriquées se verraient. */
+  .slot.vacant {
+    border-style: dashed;
+    border-color: var(--faint2);
+  }
+  /* Même spécificité que `.slot:hover` et déclarée après : sans cette règle,
+     un emplacement vide ne réagirait pas du tout au survol. */
+  .slot.vacant:hover {
+    border-color: var(--faint);
+  }
+  .slot-img.vacant {
+    background: repeating-linear-gradient(135deg, #141518, #141518 6px, #17181c 6px, #17181c 12px);
+    border-bottom: none;
+  }
+  .slot-invite {
+    color: var(--txt2);
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    text-align: center;
+    padding: 0 10px;
+  }
+  /* Le glyphe est un frère en ligne du libellé, pas un élément de grille :
+     l'écart se pose ici plutôt qu'avec une espace dans la chaîne traduite. */
+  .slot-invite span {
+    margin-right: 5px;
+  }
+  .slot-invite small {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0;
   }
   .slot-b {
     padding: 7px 10px;
@@ -895,9 +1046,13 @@
     font-family: var(--mono);
     margin-top: 8px;
   }
-  .btn-configure:hover {
+  .btn-configure:hover:not(:disabled) {
     background: var(--card);
     border-color: var(--faint);
+  }
+  .btn-configure:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
   .btn-launch {
     width: 100%;
@@ -910,8 +1065,15 @@
     font-family: var(--mono);
     margin-top: 2px;
   }
-  .btn-launch:hover {
+  .btn-launch:hover:not(:disabled) {
     background: var(--rosso-bright);
+  }
+  /* Garde son fond rouge à l'état désactivé, en opacité réduite (SPEC §9.1) : il
+     reste la destination visible de l'écran, et le griser complètement
+     effacerait le but à atteindre. */
+  .btn-launch:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 
   .navgrid {
@@ -935,7 +1097,8 @@
   }
   .nb.on {
     background: var(--raised);
-    color: var(--rosso-bright);
+    color: var(--txt);
+    box-shadow: inset 2px 0 0 var(--rosso);
   }
 
   .main-col {

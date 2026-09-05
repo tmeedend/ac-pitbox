@@ -164,9 +164,10 @@ body {
  * Autres mods) avaient déjà convergé sur 18px/600 sans se concerter — Réglages
  * (15px) est l'écart, pas la référence.
  *
- * La navigation garde son identité rouge (`.nsec` d'AppShell, 9px/2px) :
- * c'est délibéré, elle n'est pas du contenu et la distinguer aide à
- * s'orienter.
+ * La navigation, elle, n'a plus d'identité rouge : ses titres de section
+ * (`.nsec` d'AppShell) sont de la STRUCTURE, pas un état. Le rouge y est
+ * désormais réservé au filet de l'entrée active et au bouton de lancement
+ * (barème de la spec accent) — quand tout est accent, rien ne l'est.
  *
  * Ces trois classes sont GLOBALES : ne pas les redéfinir dans un composant.
  * C'est précisément ce qui avait produit six copies identiques de `.lbl`.

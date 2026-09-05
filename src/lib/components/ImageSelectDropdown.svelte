@@ -206,8 +206,11 @@
     font-size: 11px;
     text-align: left;
   }
+  /* Survol neutre : un menu de livrée est un contrôle secondaire, il n'a pas
+     droit au rouge au repos, donc pas davantage sous le curseur (SPEC
+     §7.2ter). */
   .isd-trigger:hover:not(:disabled) {
-    border-color: var(--rosso-border);
+    border-color: var(--faint2);
   }
   .isd-trigger:disabled {
     opacity: 0.5;
