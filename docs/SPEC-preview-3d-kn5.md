@@ -1828,6 +1828,70 @@ leurs trois canaux.
 **Abandonné — `CompressionType::Best`.** −2 % pour 2,8 fois le temps
 d'encodage.
 
+### 15.0quater Déduplication entre skins — le cache éclaté
+
+Le plus gros des trois gains, et le seul qui **grandit avec l'usage**.
+
+La clé de cache contient le skin, ce qui est correct — deux livrées ne donnent
+pas le même rendu — mais chaque entrée écrivait un `.glb` autonome. Or, mesuré
+sur trois skins de deux voitures : **une seule variante de géométrie pour les
+trois** (au bit près), et les images partagées aux deux tiers. Seule la livrée
+diffère vraiment. Une voiture à trois livrées écrivait donc trois fois les
+mêmes sommets et deux fois sur trois les mêmes textures.
+
+**Le rangement change, pas le format.** Une entrée est désormais un `.gltf`
+(le document JSON) qui référence des blobs **adressés par leur contenu**,
+rangés dans `previews/blobs/<empreinte SHA-256>.<bin|png|jpg>` :
+
+- `buffers[0].uri` → la géométrie, un seul blob ;
+- `images[i].uri` → une texture, un blob chacune.
+
+`GLTFLoader` résout une URI relative depuis l'adresse du document, donc
+`blobs/…` se demande au même protocole `carpreview` — c'est pourquoi le nom du
+sous-dossier et le préfixe des URI ne font qu'une constante (`BLOBS`). Le
+`.glb` autonome, lui, reste ce que produit `kn5-tool` : sa sortie doit s'ouvrir
+telle quelle dans Blender, et un fichier éclaté ne le ferait pas. D'où
+`ConvertOptions::layout`, autonome par défaut.
+
+**Mesuré sur le cache réel de l'application**, quatre entrées d'une même
+voiture : **123,5 Mo en monolithique → 43,2 Mo sur disque, soit −65 %.** Un
+seul blob de géométrie de 11,4 Mo pour les quatre. Bénéfice qui n'est pas que
+la place : le deuxième skin d'une voiture ne réécrit plus que ses textures
+propres.
+
+**Ce que l'éviction devient, et pourquoi elle compte à l'envers.** Un blob
+n'appartient à personne : sa place ne se libère qu'une fois partie la dernière
+entrée qui le cite. L'éviction parcourt donc les entrées de la plus récente à
+la plus ancienne pour décider **qui reste**, en cumulant la taille de chaque
+entrée plus celle des blobs qu'elle est la première à réclamer ; tout ce qui
+suit le dépassement du plafond est supprimé, puis un balayage efface les blobs
+que plus aucune entrée survivante ne cite. Compter en supprimant aurait
+demandé de refaire la somme après chaque suppression.
+
+Le balayage relit les entrées survivantes plutôt que de faire confiance à
+l'ensemble accumulé : une suppression peut échouer, et effacer le blob d'une
+entrée encore là donnerait un modèle sans texture — un dégât **silencieux**,
+bien pire qu'un octet de trop. Il tourne aussi après un changement de version
+du convertisseur : de nouveaux octets produisent de nouvelles empreintes, donc
+laissent l'intégralité des anciens blobs derrière eux, de loin le plus gros tas
+de fichiers morts que ce cache puisse accumuler.
+
+**Deux pièges rencontrés à l'écriture, tous deux silencieux :**
+
+- **Lire une référence de blob s'arrête au point, pas au premier caractère non
+  hexadécimal.** Le `b` de `.bin` est un chiffre hexadécimal : la première
+  version relisait `<empreinte>.b`, ne le retrouvait jamais parmi les fichiers,
+  et **aurait effacé tous les blobs à la première éviction**. Un test le
+  verrouille.
+- **Un blob s'écrit sous un nom temporaire puis se renomme.** Un blob tronqué
+  par une fermeture brutale serait ensuite réputé bon par toutes les entrées
+  qui le citent, puisqu'on ne vérifie que son existence. Le renommage est
+  atomique, donc un blob présent est un blob complet.
+
+Et l'ordre d'écriture est fixe : **les blobs, puis le document**. Une entrée qui
+cite un blob absent est un modèle cassé ; un blob que rien ne cite encore sera
+simplement repris par le balayage suivant.
+
 ### 15.1 Cache — ce qui est en place
 
 Rappel, parce que la question revient : le cache est **sur disque**

@@ -7,6 +7,7 @@
 //! deviendrait ~40 Mo de chaîne à parser côté JS — blocage de l'UI et pic
 //! mémoire garantis.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -30,7 +31,7 @@ use crate::config::AppConfig;
 /// *reconnaître* pour libérer sa place. Trois incréments en une session de
 /// travail avaient laissé plusieurs centaines de Mo d'entrées mortes, que rien
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
-const CONVERTER_VERSION: u32 = 44;
+const CONVERTER_VERSION: u32 = 45;
 
 /// Default cache ceiling (§5.3). Beyond it, the least recently used entries
 /// are evicted. Only a default: the real ceiling is a setting, carried by
@@ -131,18 +132,35 @@ pub fn set_cache_cap(app: &tauri::AppHandle, state: &PreviewState, bytes: u64) -
     Ok(())
 }
 
-/// Bytes currently held by the cache, entries and counter files alike.
+/// Bytes currently held by the cache, entries, blobs and counter files alike.
 pub fn cache_usage(app: &tauri::AppHandle) -> Result<u64, String> {
-    let dir = cache_dir(app)?;
+    Ok(dir_size(&cache_dir(app)?))
+}
+
+/// Octets occupés par un dossier et son sous-dossier de blobs.
+///
+/// Un seul niveau de récursion, et c'est voulu : le cache n'a qu'un
+/// sous-dossier, et une descente générale irait un jour compter autre chose.
+fn dir_size(dir: &Path) -> u64 {
     let mut total = 0u64;
-    for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
-        if let Ok(meta) = entry.metadata() {
-            if meta.is_file() {
-                total += meta.len();
+    let Ok(read) = std::fs::read_dir(dir) else { return 0 };
+    for entry in read.flatten() {
+        match entry.metadata() {
+            Ok(meta) if meta.is_file() => total += meta.len(),
+            Ok(meta) if meta.is_dir() && entry.file_name() == BLOBS => {
+                if let Ok(blobs) = std::fs::read_dir(entry.path()) {
+                    total += blobs
+                        .flatten()
+                        .filter_map(|b| b.metadata().ok())
+                        .filter(|m| m.is_file())
+                        .map(|m| m.len())
+                        .sum::<u64>();
+                }
             }
+            _ => {}
         }
     }
-    Ok(total)
+    total
 }
 
 /// Dossier du cache, créé au besoin.
@@ -213,6 +231,7 @@ fn sweep_foreign_versions(dir: &Path) {
             "preview: {removed} entrée(s) de cache d'une version antérieure effacée(s), {} Mio libérés",
             freed / (1024 * 1024)
         );
+        sweep_unreferenced_blobs(dir);
     }
 }
 
@@ -381,7 +400,7 @@ pub fn prepare(
         &limits,
         driver.as_ref(),
     ));
-    let file = dir.join(format!("{stem}.glb"));
+    let file = dir.join(format!("{stem}.gltf"));
 
     if let Ok(meta) = std::fs::metadata(&file) {
         if meta.len() > 0 {
@@ -471,6 +490,9 @@ pub fn prepare(
     // carbone. C'est la seule façon de le savoir : le KN5 seul ne le dit pas
     // (SPEC §4.5ter).
     let options = kn5_gltf::ConvertOptions {
+        // Rangement éclaté : c'est le cache, et deux skins d'une même voiture y
+        // partagent tout sauf leur livrée (voir `write_entry`).
+        layout: kn5_gltf::glb::Layout::Split,
         geometry: kn5_gltf::GeometryOptions {
             steering: limits,
             ..Default::default()
@@ -598,7 +620,7 @@ pub fn prepare_driver(
         }
     }
     let stem = driver_entry_stem(graft);
-    let file = dir.join(format!("{stem}.glb"));
+    let file = dir.join(format!("{stem}.gltf"));
 
     if let Ok(meta) = std::fs::metadata(&file) {
         // Le rig est relu avec les compteurs : sans lui on saurait afficher le
@@ -641,6 +663,7 @@ pub fn prepare_driver(
     // visage d'un shader de carrosserie).
     let options = kn5_gltf::ConvertOptions {
         mannequin: true,
+        layout: kn5_gltf::glb::Layout::Split,
         ..Default::default()
     };
     let conversion = kn5_gltf::convert(&model, None, &options, &|stage| {
@@ -757,15 +780,84 @@ fn read_rig(dir: &Path, key: &str) -> Option<DriverRig> {
 /// Forme Windows d'un scheme custom sous Tauri v2 — l'app ne cible que
 /// Windows (§Stack).
 fn url_for(key: &str) -> String {
-    format!("http://carpreview.localhost/{key}.glb")
+    format!("http://carpreview.localhost/{key}.gltf")
 }
 
-/// Écrit le `.glb` et, à côté, les compteurs à renvoyer sur un futur succès
-/// de cache. Fichier séparé plutôt que relecture du `.glb` : reparser 40 Mo
-/// de glTF pour trois entiers serait absurde.
+/// Sous-dossier des blobs adressés par leur contenu, et le préfixe que les URI
+/// du document portent — les deux doivent rester identiques, puisque
+/// `GLTFLoader` résout une URI relative depuis l'adresse du `.gltf`.
+const BLOBS: &str = "blobs";
+
+/// Range un blob sous le nom de son empreinte, et rend ce nom.
+///
+/// **Adressé par son contenu**, donc écrit une seule fois quel que soit le
+/// nombre d'entrées qui le réclament : c'est tout le mécanisme de la
+/// déduplication entre skins. Deux skins d'une même voiture partagent leur
+/// géométrie au bit près (mesuré : une seule variante pour trois skins) et les
+/// deux tiers de leurs textures — seule la livrée diffère.
+///
+/// Écrit sous un nom temporaire puis renommé. Ce n'est pas une précaution de
+/// principe : un blob tronqué par une fermeture brutale serait ensuite
+/// **réputé bon** par toutes les entrées qui le citent, puisqu'on ne vérifie
+/// que son existence. Le renommage est atomique, donc un blob présent est un
+/// blob complet.
+fn write_blob(dir: &Path, bytes: &[u8], extension: &str) -> Result<String, String> {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let name = format!("{:x}.{extension}", hasher.finalize());
+    let blobs = dir.join(BLOBS);
+    let path = blobs.join(&name);
+    if path.is_file() {
+        return Ok(name);
+    }
+    std::fs::create_dir_all(&blobs).map_err(|e| format!("{} : {e}", blobs.display()))?;
+    let staging = blobs.join(format!("{name}.part"));
+    std::fs::write(&staging, bytes).map_err(|e| format!("{} : {e}", staging.display()))?;
+    // Une course entre deux conversions ne peut pas produire un contenu
+    // différent — le nom EST le contenu — donc un renommage qui écrase est
+    // sans danger, et un échec veut dire que l'autre a gagné.
+    if let Err(e) = std::fs::rename(&staging, &path) {
+        let _ = std::fs::remove_file(&staging);
+        if !path.is_file() {
+            return Err(format!("{} : {e}", path.display()));
+        }
+    }
+    Ok(name)
+}
+
+/// Écrit le document et ses blobs, plus les compteurs à renvoyer sur un futur
+/// succès de cache. Fichier séparé pour les compteurs plutôt que relecture du
+/// document : reparser des mégaoctets de glTF pour trois entiers serait
+/// absurde.
+///
+/// **Un `.gltf` et des blobs, pas un `.glb`.** Le fichier autonome reste ce
+/// que produit `kn5-tool`, parce qu'il doit s'ouvrir tel quel ailleurs ; dans
+/// le cache, il faisait écrire à chaque skin d'une même voiture une copie
+/// complète de la géométrie et des textures. Mesuré sur trois skins de deux
+/// voitures : **−53 % et −61 %** (§15.0quater).
 fn write_entry(dir: &Path, key: &str, conversion: &kn5_gltf::Conversion) -> Result<(), String> {
-    let file = dir.join(format!("{key}.glb"));
-    std::fs::write(&file, &conversion.glb).map_err(|e| format!("{} : {e}", file.display()))?;
+    let mut json = conversion.document.json.clone();
+
+    let geometry = write_blob(dir, &conversion.document.buffer, "bin")?;
+    json["buffers"][0]["uri"] = serde_json::json!(format!("{BLOBS}/{geometry}"));
+    for (index, bytes) in conversion.document.images.iter().enumerate() {
+        // L'extension suit le type MIME que la passe de textures a décidé :
+        // elle ne sert qu'à ce que le protocole rende le bon `Content-Type`,
+        // mais sans lui la webview refuse l'image sans un mot.
+        let extension = match json["images"][index]["mimeType"].as_str() {
+            Some("image/jpeg") => "jpg",
+            _ => "png",
+        };
+        let name = write_blob(dir, bytes, extension)?;
+        json["images"][index]["uri"] = serde_json::json!(format!("{BLOBS}/{name}"));
+    }
+
+    let file = dir.join(format!("{key}.gltf"));
+    let text = serde_json::to_vec(&json).map_err(|e| format!("document illisible : {e}"))?;
+    // Le document APRÈS ses blobs, jamais l'inverse : une entrée qui cite un
+    // blob absent est un modèle cassé, alors qu'un blob que rien ne cite
+    // encore sera repris par le balayage.
+    std::fs::write(&file, &text).map_err(|e| format!("{} : {e}", file.display()))?;
     let counts = format!(
         "{} {} {}",
         conversion.triangle_count, conversion.material_count, conversion.texture_count
@@ -799,33 +891,162 @@ fn evict_to(dir: &Path, cap: u64) {
     // dehors, et le plafond se remplit de fichiers que rien ne sert jamais.
     sweep_foreign_versions(dir);
 
+    // Les entrées, de la plus récemment utilisée à la plus ancienne. C'est
+    // dans cet ordre qu'on décide **qui reste**, et non qui part : un blob
+    // n'appartient à personne, sa place ne se libère qu'une fois la dernière
+    // entrée qui le cite disparue. Compter en gardant, c'est compter juste du
+    // premier coup ; compter en supprimant demanderait de refaire la somme
+    // après chaque suppression.
     let mut entries: Vec<(SystemTime, u64, PathBuf)> = Vec::new();
     let Ok(read) = std::fs::read_dir(dir) else { return };
     for entry in read.flatten() {
         let path = entry.path();
-        if path.extension().is_none_or(|e| e != "glb") {
+        if path.extension().is_none_or(|e| e != "gltf") {
             continue;
         }
         let Ok(meta) = entry.metadata() else { continue };
         let used = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
         entries.push((used, meta.len(), path));
     }
+    entries.sort_by_key(|(used, _, _)| std::cmp::Reverse(*used));
 
-    let mut total: u64 = entries.iter().map(|(_, size, _)| size).sum();
-    if total <= cap {
+    let sizes = blob_sizes(dir);
+    let mut kept: BTreeSet<String> = BTreeSet::new();
+    let mut total = 0u64;
+    let mut doomed: Vec<PathBuf> = Vec::new();
+
+    for (_, size, path) in entries {
+        // Dès qu'une entrée ne rentre plus, tout ce qui est plus ancien part
+        // aussi — sans quoi une petite entrée oubliée depuis un mois survivrait
+        // à une grosse consultée hier, et le « moins récemment utilisé » ne
+        // voudrait plus rien dire.
+        if !doomed.is_empty() {
+            doomed.push(path);
+            continue;
+        }
+        let referenced = blob_references(&path);
+        let added: u64 = referenced
+            .iter()
+            .filter(|name| !kept.contains(*name))
+            .filter_map(|name| sizes.get(name))
+            .sum();
+        // La plus récente est gardée quoi qu'il arrive : un plafond plus petit
+        // qu'une seule entrée l'évincerait à l'instant où elle est écrite, donc
+        // la ferait reconvertir à chaque visite — un cache désactivé sans le
+        // dire. `CACHE_CAP_MIN_BYTES` rend le cas improbable, il ne le rend pas
+        // impossible (une voiture de 500 Mo).
+        if total > 0 && total + size + added > cap {
+            doomed.push(path);
+            continue;
+        }
+        total += size + added;
+        kept.extend(referenced);
+    }
+
+    if doomed.is_empty() {
         return;
     }
-    entries.sort_by_key(|(used, _, _)| *used);
-    for (_, size, path) in entries {
-        if total <= cap {
-            break;
-        }
+    for path in doomed {
         if std::fs::remove_file(&path).is_ok() {
             let _ = std::fs::remove_file(path.with_extension("txt"));
             let _ = std::fs::remove_file(path.with_extension("rig"));
-            total = total.saturating_sub(size);
             log::warn!("preview: entrée de cache évincée ({})", path.display());
         }
+    }
+
+    // Puis les blobs que plus personne ne cite. Relire les entrées survivantes
+    // plutôt que de faire confiance à `kept` : une suppression a pu échouer, et
+    // effacer le blob d'une entrée toujours là donnerait un modèle sans
+    // texture — un dégât silencieux, bien pire qu'un octet de trop.
+    sweep_unreferenced_blobs(dir);
+}
+
+/// Nom et taille de chaque blob présent.
+fn blob_sizes(dir: &Path) -> std::collections::BTreeMap<String, u64> {
+    let mut sizes = std::collections::BTreeMap::new();
+    let Ok(read) = std::fs::read_dir(dir.join(BLOBS)) else {
+        return sizes;
+    };
+    for entry in read.flatten() {
+        if let Ok(meta) = entry.metadata() {
+            if meta.is_file() {
+                sizes.insert(entry.file_name().to_string_lossy().to_string(), meta.len());
+            }
+        }
+    }
+    sizes
+}
+
+/// Les blobs qu'une entrée cite, lus dans son document.
+///
+/// Par balayage d'octets et non par analyse JSON : on cherche des noms d'une
+/// forme fixe (`blobs/<hexadécimal>.<ext>`) dans un fichier qu'on a écrit
+/// soi-même, et parser plusieurs centaines de kilo-octets de glTF par entrée à
+/// chaque éviction coûterait mille fois plus cher pour la même réponse.
+fn blob_references(entry: &Path) -> BTreeSet<String> {
+    let mut found = BTreeSet::new();
+    let Ok(text) = std::fs::read_to_string(entry) else {
+        return found;
+    };
+    let needle = format!("{BLOBS}/");
+    for (index, _) in text.match_indices(&needle) {
+        let rest = &text[index + needle.len()..];
+        // L'empreinte d'abord, jusqu'au point. Pas « tout ce qui est
+        // hexadécimal » : le `b` de `.bin` en est un, et le nom se serait
+        // arrêté à `.b`.
+        let Some(dot) = rest.find('.') else { continue };
+        let (stem, tail) = rest.split_at(dot);
+        if stem.is_empty() || !stem.chars().all(|c| c.is_ascii_hexdigit()) {
+            continue;
+        }
+        let tail = &tail[1..];
+        let end = tail.find(|c: char| !c.is_ascii_alphanumeric()).unwrap_or(tail.len());
+        if matches!(&tail[..end], "bin" | "png" | "jpg") {
+            found.insert(format!("{stem}.{}", &tail[..end]));
+        }
+    }
+    found
+}
+
+/// Efface les blobs qu'aucune entrée ne cite plus.
+///
+/// Appelé après une éviction, et **aussi après un balayage de version** : un
+/// incrément du convertisseur change les octets produits, donc les empreintes,
+/// donc laisse derrière lui l'intégralité des anciens blobs — de très loin le
+/// plus gros tas de fichiers morts que ce cache puisse accumuler.
+fn sweep_unreferenced_blobs(dir: &Path) {
+    let Ok(read) = std::fs::read_dir(dir) else { return };
+    let mut referenced: BTreeSet<String> = BTreeSet::new();
+    for entry in read.flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|e| e == "gltf") {
+            referenced.extend(blob_references(&path));
+        }
+    }
+
+    let Ok(blobs) = std::fs::read_dir(dir.join(BLOBS)) else {
+        return;
+    };
+    let (mut removed, mut freed) = (0u32, 0u64);
+    for blob in blobs.flatten() {
+        let name = blob.file_name().to_string_lossy().to_string();
+        if referenced.contains(&name) {
+            continue;
+        }
+        let size = blob.metadata().map(|m| m.len()).unwrap_or(0);
+        match std::fs::remove_file(blob.path()) {
+            Ok(()) => {
+                removed += 1;
+                freed += size;
+            }
+            Err(e) => log::warn!("preview: blob {name} non supprimé — {e}"),
+        }
+    }
+    if removed > 0 {
+        log::info!(
+            "preview: {removed} blob(s) sans référence effacé(s), {} Mio libérés",
+            freed / (1024 * 1024)
+        );
     }
 }
 
@@ -838,6 +1059,12 @@ pub fn clear_cache(app: &tauri::AppHandle) -> Result<u64, String> {
         if meta.is_file() && std::fs::remove_file(entry.path()).is_ok() {
             freed += meta.len();
         }
+        // Les blobs sont dans un sous-dossier : sans cette branche, « vider le
+        // cache » laissait derrière lui la quasi-totalité des octets.
+        if meta.is_dir() && entry.file_name() == BLOBS {
+            freed += dir_size(&dir.join(BLOBS));
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
     }
     Ok(freed)
 }
@@ -847,7 +1074,23 @@ pub fn clear_cache(app: &tauri::AppHandle) -> Result<u64, String> {
 /// d'une source qu'on ne contrôle pas entièrement.
 pub fn cached_file(dir: &Path, requested: &str) -> Option<PathBuf> {
     let name = requested.trim_start_matches('/');
-    let stem = name.strip_suffix(".glb")?;
+
+    // Un blob : `blobs/<empreinte hexadécimale>.<extension>`. Le nom est un
+    // hachage, donc entièrement hexadécimal — rien d'autre n'est accepté, et
+    // surtout aucun séparateur de plus.
+    if let Some(blob) = name.strip_prefix(&format!("{BLOBS}/")) {
+        let (stem, extension) = blob.rsplit_once('.')?;
+        if stem.is_empty()
+            || !stem.chars().all(|c| c.is_ascii_hexdigit())
+            || !matches!(extension, "bin" | "png" | "jpg")
+        {
+            return None;
+        }
+        let file = dir.join(BLOBS).join(blob);
+        return file.is_file().then_some(file);
+    }
+
+    let stem = name.strip_suffix(".gltf")?;
     // Un nom d'entrée est `v<version>-<hachage hexadécimal>` : tout le reste
     // (séparateurs, `..`) est refusé avant de toucher au disque.
     let key = stem
@@ -941,9 +1184,18 @@ pub fn serve(dir: &Path, request: &tauri::http::Request<Vec<u8>>) -> tauri::http
         .and_then(|v| v.to_str().ok())
         .and_then(|v| parse_range(v, total));
 
+    // Le type suit l'extension : la webview refuse une image servie en
+    // `model/gltf-binary`, et sans type correct sur le `.bin` certains chemins
+    // de `GLTFLoader` refont une requête pour rien.
+    let content_type = match file.extension().and_then(|e| e.to_str()) {
+        Some("gltf") => "model/gltf+json",
+        Some("png") => "image/png",
+        Some("jpg") => "image/jpeg",
+        _ => "application/octet-stream",
+    };
     let builder = with_cors(
         Response::builder()
-            .header(header::CONTENT_TYPE, "model/gltf-binary")
+            .header(header::CONTENT_TYPE, content_type)
             .header(header::CACHE_CONTROL, "public, max-age=31536000, immutable")
             .header(header::ACCEPT_RANGES, "bytes"),
     );
@@ -1192,27 +1444,210 @@ INSERT = part.kn5",
         let dir = base.join("previews");
         std::fs::create_dir_all(&dir).unwrap();
         let stem = entry_stem("abcdef0123456789abcdef0123456789");
-        std::fs::write(dir.join(format!("{stem}.glb")), b"glb").unwrap();
+        std::fs::write(dir.join(format!("{stem}.gltf")), b"glb").unwrap();
         std::fs::write(base.join("secret.txt"), b"nope").unwrap();
 
-        assert!(cached_file(&dir, &format!("/{stem}.glb")).is_some(), "nom valide servi");
+        assert!(
+            cached_file(&dir, &format!("/{stem}.gltf")).is_some(),
+            "nom valide servi"
+        );
         assert!(
             cached_file(&dir, "/../secret.txt").is_none(),
             "remontée de dossier refusée"
         );
         assert!(
-            cached_file(&dir, "/v7-nothex.glb").is_none(),
+            cached_file(&dir, "/v7-nothex.gltf").is_none(),
             "clé non hexadécimale refusée"
         );
         assert!(
-            cached_file(&dir, "/abcdef0123456789abcdef0123456789.glb").is_none(),
+            cached_file(&dir, "/abcdef0123456789abcdef0123456789.gltf").is_none(),
             "préfixe de version obligatoire"
         );
-        assert!(cached_file(&dir, "/v7-.glb").is_none(), "clé vide refusée");
+        assert!(cached_file(&dir, "/v7-.gltf").is_none(), "clé vide refusée");
         assert!(
             cached_file(&dir, &format!("/{stem}")).is_none(),
             "extension obligatoire"
         );
+    }
+
+    /// Une conversion minimale, montée à la main : un tampon de géométrie et
+    /// deux images, ce qu'il faut pour éprouver le rangement et rien de plus.
+    fn fake_conversion(geometry: &[u8], images: Vec<Vec<u8>>) -> kn5_gltf::Conversion {
+        let json = serde_json::json!({
+            "buffers": [ { "byteLength": geometry.len() } ],
+            "images": images
+                .iter()
+                .enumerate()
+                .map(|(index, _)| serde_json::json!({
+                    "mimeType": if index == 0 { "image/jpeg" } else { "image/png" },
+                }))
+                .collect::<Vec<_>>(),
+        });
+        kn5_gltf::Conversion {
+            document: kn5_gltf::glb::Document {
+                json,
+                buffer: geometry.to_vec(),
+                images,
+            },
+            geometry: Default::default(),
+            triangle_count: 1,
+            material_count: 1,
+            texture_count: 2,
+            texture_warnings: Vec::new(),
+        }
+    }
+
+    // Règle : **chaque URI qu'une entrée écrit est servie par le protocole.**
+    // C'est le point de rupture de tout ce rangement : le document est lu par
+    // `GLTFLoader`, qui résout ses URI relatives depuis l'adresse du `.gltf` —
+    // une seule qui ne résout pas donne une voiture sans texture, sans erreur
+    // visible et sans rien dans le journal.
+    #[test]
+    fn every_uri_an_entry_writes_is_served_back() {
+        let base = crate::testutil::temp_dir("preview-roundtrip");
+        let dir = base.join("previews");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let images = vec![b"a jpeg, pretend".to_vec(), b"a png, pretend".to_vec()];
+        let conversion = fake_conversion(b"geometry bytes", images.clone());
+        let stem = entry_stem("abcdef0123456789abcdef0123456789");
+        write_entry(&dir, &stem, &conversion).expect("écrit");
+
+        let document: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(dir.join(format!("{stem}.gltf"))).unwrap()).unwrap();
+
+        let mut uris = vec![document["buffers"][0]["uri"].as_str().unwrap().to_string()];
+        for index in 0..images.len() {
+            uris.push(document["images"][index]["uri"].as_str().unwrap().to_string());
+        }
+        for uri in &uris {
+            let served = cached_file(&dir, &format!("/{uri}"))
+                .unwrap_or_else(|| panic!("`{uri}` doit être servie par le protocole"));
+            assert!(served.is_file(), "`{uri}` pointe sur un fichier réel");
+        }
+
+        // L'extension suit le type MIME, sans quoi la webview refuse l'image.
+        assert!(
+            uris[1].ends_with(".jpg"),
+            "un JPEG s'annonce comme tel, got {}",
+            uris[1]
+        );
+        assert!(uris[2].ends_with(".png"), "et un PNG aussi, got {}", uris[2]);
+        assert_eq!(
+            std::fs::read(cached_file(&dir, &format!("/{}", uris[1])).unwrap()).unwrap(),
+            images[0],
+            "le blob rend bien les octets qu'on lui a confiés"
+        );
+    }
+
+    // Règle : deux entrées qui produisent les mêmes octets partagent leur blob,
+    // écrit une seule fois. C'est tout l'intérêt du rangement — mesuré sur
+    // trois skins d'une voiture, une seule variante de géométrie pour les trois.
+    #[test]
+    fn two_entries_with_the_same_geometry_write_it_once() {
+        let base = crate::testutil::temp_dir("preview-share");
+        let dir = base.join("previews");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let geometry = b"the very same vertices";
+        write_entry(
+            &dir,
+            &entry_stem("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+            &fake_conversion(geometry, vec![b"livery one".to_vec()]),
+        )
+        .expect("écrit");
+        write_entry(
+            &dir,
+            &entry_stem("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+            &fake_conversion(geometry, vec![b"livery two".to_vec()]),
+        )
+        .expect("écrit");
+
+        let blobs: Vec<_> = std::fs::read_dir(dir.join(BLOBS))
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(
+            blobs.iter().filter(|n| n.ends_with(".bin")).count(),
+            1,
+            "une seule géométrie pour les deux entrées, got {blobs:?}"
+        );
+        assert_eq!(
+            blobs.iter().filter(|n| n.ends_with(".jpg")).count(),
+            2,
+            "mais deux livrées, got {blobs:?}"
+        );
+    }
+
+    // Règle : un blob n'est effacé qu'une fois la DERNIÈRE entrée qui le cite
+    // partie. C'est toute la correction de la déduplication : deux skins d'une
+    // même voiture partagent leur géométrie au bit près, et évincer l'un ne
+    // doit pas vider l'autre de sa substance.
+    #[test]
+    fn a_shared_blob_survives_until_its_last_reader_is_gone() {
+        let base = crate::testutil::temp_dir("preview-blobs");
+        let dir = base.join("previews");
+        std::fs::create_dir_all(dir.join(BLOBS)).unwrap();
+
+        let shared = "a".repeat(64) + ".bin";
+        let alone = "b".repeat(64) + ".png";
+        std::fs::write(dir.join(BLOBS).join(&shared), vec![0u8; 400]).unwrap();
+        std::fs::write(dir.join(BLOBS).join(&alone), vec![0u8; 400]).unwrap();
+
+        let old = dir.join(format!("{}.gltf", entry_stem("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")));
+        let fresh = dir.join(format!("{}.gltf", entry_stem("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")));
+        // L'ancienne cite les deux blobs, la récente n'en cite qu'un.
+        std::fs::write(&old, format!(r#"{{"a":"{BLOBS}/{shared}","b":"{BLOBS}/{alone}"}}"#)).unwrap();
+        std::fs::write(&fresh, format!(r#"{{"a":"{BLOBS}/{shared}"}}"#)).unwrap();
+        let now = SystemTime::now();
+        std::fs::File::options()
+            .write(true)
+            .open(&old)
+            .unwrap()
+            .set_modified(now - std::time::Duration::from_secs(600))
+            .unwrap();
+
+        // Un plafond qui ne laisse de la place que pour la plus récente.
+        evict_to(&dir, 500);
+
+        assert!(!old.exists(), "la moins récente est évincée");
+        assert!(fresh.is_file(), "la plus récente reste");
+        assert!(
+            dir.join(BLOBS).join(&shared).is_file(),
+            "le blob que la survivante cite encore doit rester"
+        );
+        assert!(
+            !dir.join(BLOBS).join(&alone).exists(),
+            "celui que plus personne ne cite est repris"
+        );
+    }
+
+    // Règle : les noms de blobs se relisent correctement dans un document.
+    // Écrit parce que la première version se trompait : elle lisait « tout ce
+    // qui est hexadécimal », or le `b` de `.bin` en est un — chaque référence
+    // ressortait tronquée en `<empreinte>.b`, donc introuvable, donc **tous les
+    // blobs auraient été effacés à la première éviction**.
+    #[test]
+    fn blob_references_read_the_whole_name_extension_included() {
+        let base = crate::testutil::temp_dir("preview-refs");
+        std::fs::create_dir_all(&base).unwrap();
+        let entry = base.join("doc.gltf");
+        let geometry = "0".repeat(64);
+        let image = "f".repeat(64);
+        std::fs::write(
+            &entry,
+            format!(r#"{{"buffers":[{{"uri":"{BLOBS}/{geometry}.bin"}}],"images":[{{"uri":"{BLOBS}/{image}.jpg"}}]}}"#),
+        )
+        .unwrap();
+
+        let found = blob_references(&entry);
+        assert!(
+            found.contains(&format!("{geometry}.bin")),
+            "la géométrie, extension comprise, got {found:?}"
+        );
+        assert!(found.contains(&format!("{image}.jpg")), "et l'image");
+        assert_eq!(found.len(), 2, "rien de plus, got {found:?}");
     }
 
     // Règle : les entrées d'une version antérieure du convertisseur sont
@@ -1225,21 +1660,21 @@ INSERT = part.kn5",
         let dir = base.join("previews");
         std::fs::create_dir_all(&dir).unwrap();
         let mine = entry_stem("abcdef0123456789abcdef0123456789");
-        std::fs::write(dir.join(format!("{mine}.glb")), b"glb").unwrap();
+        std::fs::write(dir.join(format!("{mine}.gltf")), b"glb").unwrap();
         std::fs::write(dir.join(format!("{mine}.txt")), b"1 2 3").unwrap();
-        std::fs::write(dir.join("v1-abcdef0123456789abcdef0123456789.glb"), b"vieux").unwrap();
+        std::fs::write(dir.join("v1-abcdef0123456789abcdef0123456789.gltf"), b"vieux").unwrap();
         std::fs::write(dir.join("v1-abcdef0123456789abcdef0123456789.txt"), b"1 2 3").unwrap();
         // Nom de l'époque où la version vivait dans le hachage, sans préfixe.
-        std::fs::write(dir.join("0123456789abcdef0123456789abcdef.glb"), b"ancien").unwrap();
+        std::fs::write(dir.join("0123456789abcdef0123456789abcdef.gltf"), b"ancien").unwrap();
 
         sweep_foreign_versions(&dir);
 
         assert!(
-            dir.join(format!("{mine}.glb")).is_file() && dir.join(format!("{mine}.txt")).is_file(),
+            dir.join(format!("{mine}.gltf")).is_file() && dir.join(format!("{mine}.txt")).is_file(),
             "l'entrée de la version courante survit, compteurs compris"
         );
         assert!(
-            !dir.join("v1-abcdef0123456789abcdef0123456789.glb").exists(),
+            !dir.join("v1-abcdef0123456789abcdef0123456789.gltf").exists(),
             "l'entrée d'une version antérieure est effacée"
         );
         assert!(
@@ -1247,7 +1682,7 @@ INSERT = part.kn5",
             "son fichier de compteurs part avec"
         );
         assert!(
-            !dir.join("0123456789abcdef0123456789abcdef.glb").exists(),
+            !dir.join("0123456789abcdef0123456789abcdef.gltf").exists(),
             "et les noms sans préfixe, d'avant ce nommage, aussi"
         );
     }
@@ -1262,8 +1697,8 @@ INSERT = part.kn5",
         let dir = base.join("previews");
         std::fs::create_dir_all(&dir).unwrap();
         let mine = entry_stem("abcdef0123456789abcdef0123456789");
-        std::fs::write(dir.join(format!("{mine}.glb")), b"glb").unwrap();
-        std::fs::write(dir.join("v25-d0123456789abcdef0123456789abcdef.glb"), b"vieux").unwrap();
+        std::fs::write(dir.join(format!("{mine}.gltf")), b"glb").unwrap();
+        std::fs::write(dir.join("v25-d0123456789abcdef0123456789abcdef.gltf"), b"vieux").unwrap();
         std::fs::write(dir.join("v25-d0123456789abcdef0123456789abcdef.rig"), b"rig").unwrap();
 
         // Un plafond très large : rien à évincer, et la reprise doit avoir
@@ -1271,11 +1706,11 @@ INSERT = part.kn5",
         evict_to(&dir, u64::MAX);
 
         assert!(
-            dir.join(format!("{mine}.glb")).is_file(),
+            dir.join(format!("{mine}.gltf")).is_file(),
             "l'entrée de la version courante survit"
         );
         assert!(
-            !dir.join("v25-d0123456789abcdef0123456789abcdef.glb").exists()
+            !dir.join("v25-d0123456789abcdef0123456789abcdef.gltf").exists()
                 && !dir.join("v25-d0123456789abcdef0123456789abcdef.rig").exists(),
             "celle d'une autre version part, plafond ou pas"
         );
@@ -1292,8 +1727,8 @@ INSERT = part.kn5",
         // Des noms de la version courante : `evict_to` reprend d'abord les
         // entrées d'une autre version, et sans préfixe elles partiraient là
         // au lieu d'être évincées par ancienneté.
-        let old = dir.join(format!("{}.glb", entry_stem("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")));
-        let fresh = dir.join(format!("{}.glb", entry_stem("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")));
+        let old = dir.join(format!("{}.gltf", entry_stem("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")));
+        let fresh = dir.join(format!("{}.gltf", entry_stem("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")));
         std::fs::write(&old, vec![0u8; 16]).unwrap();
         std::fs::write(old.with_extension("txt"), "1 2 3").unwrap();
         std::fs::write(&fresh, vec![0u8; 16]).unwrap();
@@ -1364,9 +1799,9 @@ INSERT = part.kn5",
         let dir = base.join("previews");
         std::fs::create_dir_all(&dir).unwrap();
         let key = entry_stem("abcdef0123456789abcdef0123456789");
-        std::fs::write(dir.join(format!("{key}.glb")), b"glTFbody").unwrap();
+        std::fs::write(dir.join(format!("{key}.gltf")), b"glTFbody").unwrap();
 
-        let ok = serve(&dir, &request("GET", &format!("/{key}.glb"), None));
+        let ok = serve(&dir, &request("GET", &format!("/{key}.gltf"), None));
         assert_eq!(ok.status(), 200, "entrée servie");
         assert_eq!(
             ok.headers()
@@ -1377,7 +1812,7 @@ INSERT = part.kn5",
         );
         assert_eq!(ok.body(), b"glTFbody", "corps complet");
 
-        let missing = serve(&dir, &request("GET", "/00000000000000000000000000000000.glb", None));
+        let missing = serve(&dir, &request("GET", "/00000000000000000000000000000000.gltf", None));
         assert_eq!(missing.status(), 404, "entrée absente");
         assert!(
             missing.headers().contains_key(ACCESS_CONTROL_ALLOW_ORIGIN),
@@ -1386,14 +1821,14 @@ INSERT = part.kn5",
 
         // `Range` n'étant pas un en-tête sûr au sens CORS, une lecture
         // partielle commence par un préchargement `OPTIONS`.
-        let preflight = serve(&dir, &request("OPTIONS", &format!("/{key}.glb"), None));
+        let preflight = serve(&dir, &request("OPTIONS", &format!("/{key}.gltf"), None));
         assert_eq!(preflight.status(), 204, "préchargement accepté");
         assert!(
             preflight.headers().contains_key(ACCESS_CONTROL_ALLOW_ORIGIN),
             "préchargement porte les en-têtes CORS"
         );
 
-        let partial = serve(&dir, &request("GET", &format!("/{key}.glb"), Some("bytes=4-7")));
+        let partial = serve(&dir, &request("GET", &format!("/{key}.gltf"), Some("bytes=4-7")));
         assert_eq!(partial.status(), 206, "contenu partiel");
         assert_eq!(partial.body(), b"body", "tranche demandée");
         assert!(
@@ -1429,7 +1864,7 @@ INSERT = part.kn5",
     #[test]
     fn a_cache_hit_refreshes_the_usage_date() {
         let base = crate::testutil::temp_dir("preview-touch");
-        let file = base.join("entry.glb");
+        let file = base.join("entry.gltf");
         std::fs::write(&file, b"glb").unwrap();
         let handle = std::fs::File::options().write(true).open(&file).unwrap();
         handle

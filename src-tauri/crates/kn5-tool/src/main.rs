@@ -1039,7 +1039,8 @@ fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
             std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
         }
     }
-    std::fs::write(out, &conversion.glb).map_err(|e| format!("{}: {e}", out.display()))?;
+    let glb = conversion.to_glb();
+    std::fs::write(out, &glb).map_err(|e| format!("{}: {e}", out.display()))?;
 
     let stats = &conversion.geometry;
     println!("model     {}", file.display());
@@ -1049,11 +1050,7 @@ fn convert(car_dir: &Path, flags: &[&str]) -> Result<(), String> {
             .map(|p| p.display().to_string())
             .unwrap_or_else(|| "none".to_string())
     );
-    println!(
-        "output    {} ({})",
-        out.display(),
-        human_bytes(conversion.glb.len() as u64)
-    );
+    println!("output    {} ({})", out.display(), human_bytes(glb.len() as u64));
     println!(
         "meshes    {} kept, merged into {} draw calls — skipped: {} hidden, {} by name, {} empty, {} distant LOD, \
          {} broken glass, {} low-res cockpit ({} mirrored nodes)",

@@ -7,7 +7,7 @@
 mod driver;
 mod extconfig;
 mod geometry;
-mod glb;
+pub mod glb;
 mod locate;
 mod material;
 mod paint;
@@ -60,6 +60,10 @@ pub struct ConvertOptions {
     /// plutôt que cuit dans les sommets (voir [`rig`]). `None` = pas de pilote,
     /// ou un pilote qu'on préfère cuire.
     pub driver_rig: Option<DriverRigSource>,
+    /// Où vont les images du document (voir [`glb::Layout`]). Autonome par
+    /// défaut : c'est ce qu'attend qui écrit un fichier, et seul le cache a
+    /// intérêt à éclater.
+    pub layout: glb::Layout,
 }
 
 /// L'animation de braquage de la voiture, et ce qu'il faut pour y choisir une
@@ -75,12 +79,28 @@ pub struct DriverRigSource {
 /// to report — the Tauri command answers with these (§7.1) and `kn5-tool`
 /// prints them.
 pub struct Conversion {
-    pub glb: Vec<u8>,
+    /// Le document et ses données. Sa forme dépend de `ConvertOptions::layout` :
+    /// [`Conversion::into_glb`] pour le `.glb` autonome, les champs de
+    /// [`glb::Document`] pour le rangement éclaté du cache.
+    pub document: glb::Document,
     pub geometry: GeometryStats,
     pub triangle_count: u32,
     pub material_count: u32,
     pub texture_count: u32,
     pub texture_warnings: Vec<TextureWarning>,
+}
+
+impl Conversion {
+    /// Le `.glb` autonome, à n'appeler que sur une conversion demandée en
+    /// [`glb::Layout::Embedded`] — en `Split`, les images ne sont pas dans le
+    /// tampon et le fichier sortirait sans texture.
+    ///
+    /// Emprunte plutôt que de consommer : tous les appelants lisent aussi les
+    /// compteurs de la conversion pour rendre compte, et les leur faire
+    /// recopier avant d'écrire le fichier serait un ordre imposé sans raison.
+    pub fn to_glb(&self) -> Vec<u8> {
+        glb::container(&self.document.json, &self.document.buffer)
+    }
 }
 
 /// Stage the conversion has reached, reported as it goes.
@@ -226,10 +246,10 @@ pub fn convert(
         .map(|m| m.indices.len() / 3)
         .sum();
     let triangle_count = (meshes.iter().map(|m| m.indices.len() / 3).sum::<usize>() + rig_triangles) as u32;
-    let glb = glb::write_glb(&meshes, rig.as_ref(), &materials, &textures)?;
+    let document = glb::build(&meshes, rig.as_ref(), &materials, &textures, options.layout)?;
 
     Ok(Conversion {
-        glb,
+        document,
         geometry,
         triangle_count,
         material_count: materials.len() as u32,

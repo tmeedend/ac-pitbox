@@ -27,6 +27,37 @@ const MESH_QUANTIZATION: &str = "KHR_mesh_quantization";
 const TARGET_ARRAY_BUFFER: u32 = 34962;
 const TARGET_ELEMENT_ARRAY_BUFFER: u32 = 34963;
 
+/// Où vont les images du document.
+///
+/// **Deux rangements pour un seul document**, et la raison est le cache, pas
+/// le format. Un `.glb` est autonome — c'est ce qu'il faut à `kn5-tool`, dont
+/// la sortie doit s'ouvrir telle quelle dans Blender. Mais dans le cache, deux
+/// skins d'une même voiture écrivent alors deux fois la même géométrie et les
+/// mêmes textures : mesuré sur trois skins, **une seule variante de géométrie
+/// pour les trois**, et les images partagées aux deux tiers. Éclatées, elles
+/// s'adressent par leur contenu et ne s'écrivent qu'une fois (§15.0quater).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Layout {
+    /// Tout dans le tampon binaire : le `.glb` autonome. C'est le défaut :
+    /// écrire un fichier est le cas courant, seul le cache a intérêt à éclater.
+    #[default]
+    Embedded,
+    /// Images sorties du tampon, à ranger et à nommer par l'appelant.
+    Split,
+}
+
+/// Un document glTF et ses données, avant qu'on décide comment les ranger.
+pub struct Document {
+    /// Le document lui-même. En `Split`, `buffers[0].uri` et chaque
+    /// `images[].uri` valent la chaîne vide : c'est à l'appelant de les
+    /// remplir, puisque c'est lui qui nomme les blobs.
+    pub json: Value,
+    /// Géométrie seule en `Split`, géométrie et images en `Embedded`.
+    pub buffer: Vec<u8>,
+    /// Les images, dans l'ordre de `json["images"]`. Vide en `Embedded`.
+    pub images: Vec<Vec<u8>>,
+}
+
 /// Assembles the whole preview into a single self-contained `.glb`.
 pub fn write_glb(
     meshes: &[FlatMesh],
@@ -34,6 +65,18 @@ pub fn write_glb(
     materials: &[GltfMaterial],
     textures: &TextureSet,
 ) -> Result<Vec<u8>, String> {
+    let document = build(meshes, rig, materials, textures, Layout::Embedded)?;
+    Ok(container(&document.json, &document.buffer))
+}
+
+/// Le même document, images sorties du tampon (voir [`Layout`]).
+pub fn build(
+    meshes: &[FlatMesh],
+    rig: Option<&crate::rig::Rig>,
+    materials: &[GltfMaterial],
+    textures: &TextureSet,
+    layout: Layout,
+) -> Result<Document, String> {
     if meshes.is_empty() {
         return Err("no drawable mesh left after filtering".to_string());
     }
@@ -70,6 +113,7 @@ pub fn write_glb(
 
     // Images, deduplicated by texture name: one embedded blob however many
     // materials point at it (§5.4).
+    let mut image_blobs: Vec<Vec<u8>> = Vec::new();
     let mut images: Vec<Value> = Vec::new();
     let mut gltf_textures: Vec<Value> = Vec::new();
     let mut texture_index: Map<String, Value> = Map::new();
@@ -88,8 +132,20 @@ pub fn write_glb(
             let Some(prepared) = textures.get(name) else {
                 continue;
             };
-            let view = push_view(&mut bin, &mut buffer_views, &prepared.bytes, None);
-            images.push(json!({ "bufferView": view, "mimeType": prepared.mime, "name": name }));
+            let mut image = json!({ "mimeType": prepared.mime, "name": name });
+            match layout {
+                Layout::Embedded => {
+                    let view = push_view(&mut bin, &mut buffer_views, &prepared.bytes, None);
+                    image["bufferView"] = json!(view);
+                }
+                // L'URI reste vide jusqu'à ce que l'appelant ait haché le blob :
+                // c'est lui qui décide du nom, donc de l'adresse.
+                Layout::Split => {
+                    image["uri"] = json!("");
+                    image_blobs.push(prepared.bytes.clone());
+                }
+            }
+            images.push(image);
             gltf_textures.push(json!({ "sampler": 0, "source": images.len() - 1 }));
             texture_index.insert(name.clone(), json!(gltf_textures.len() - 1));
         }
@@ -338,7 +394,15 @@ pub fn write_glb(
         document["samplers"] = json!([ { "magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 10497 } ]);
     }
 
-    Ok(container(&document, &bin))
+    if layout == Layout::Split {
+        document["buffers"][0]["uri"] = json!("");
+    }
+
+    Ok(Document {
+        json: document,
+        buffer: bin,
+        images: image_blobs,
+    })
 }
 
 fn material_json(material: &GltfMaterial, texture_index: &Map<String, Value>) -> Value {
@@ -894,7 +958,7 @@ fn push_accessor_indices(bin: &mut Vec<u8>, views: &mut Vec<Value>, accessors: &
 /// header then two length-prefixed chunks, each padded to four bytes — the
 /// JSON one with spaces, the binary one with zeros, as the specification
 /// requires.
-fn container(document: &Value, bin: &[u8]) -> Vec<u8> {
+pub(crate) fn container(document: &Value, bin: &[u8]) -> Vec<u8> {
     let mut json_chunk = serde_json::to_vec(document).unwrap_or_default();
     while !json_chunk.len().is_multiple_of(4) {
         json_chunk.push(b' ');

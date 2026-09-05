@@ -1076,8 +1076,9 @@ SUIT=\\type1\\black_black
         let conversion =
             kn5_gltf::convert(&model, None, &kn5_gltf::ConvertOptions::default(), &|_| {}).expect("conversion");
         // Chunk JSON d'un GLB : en-tête de 12 octets, puis longueur + type.
-        let len = u32::from_le_bytes(conversion.glb[12..16].try_into().unwrap()) as usize;
-        let json: serde_json::Value = serde_json::from_slice(&conversion.glb[20..20 + len]).expect("json");
+        let glb = conversion.to_glb();
+        let len = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
+        let json: serde_json::Value = serde_json::from_slice(&glb[20..20 + len]).expect("json");
         for key in ["images", "textures", "materials"] {
             let names: Vec<String> = json[key]
                 .as_array()
@@ -1449,14 +1450,15 @@ SUIT=\\type1\\black_black
             ..Default::default()
         };
         let conversion = kn5_gltf::convert(&model, skin.as_deref(), &options, &|_| {}).expect("convertir");
+        let glb = conversion.to_glb();
         eprintln!(
             "converti : {} triangles, {} matériaux, {} textures, {:.1} Mo",
             conversion.triangle_count,
             conversion.material_count,
             conversion.texture_count,
-            conversion.glb.len() as f32 / (1024.0 * 1024.0)
+            glb.len() as f32 / (1024.0 * 1024.0)
         );
-        std::fs::write(&out, &conversion.glb).expect("écrire le glb");
+        std::fs::write(&out, &glb).expect("écrire le glb");
         eprintln!("écrit dans {out}");
     }
 }
