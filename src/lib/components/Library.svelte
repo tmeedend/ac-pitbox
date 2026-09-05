@@ -24,6 +24,7 @@
   } from "$lib/columns";
   import { nav, pickSession } from "$lib/nav.svelte";
   import { withoutBrand } from "$lib/displayName";
+  import ModIdentity from "./ModIdentity.svelte";
   import { moveFocus } from "$lib/gamepadNav";
   import { registerModNav } from "$lib/screenActions";
   import { libraryVersion } from "$lib/libraryVersion.svelte";
@@ -109,7 +110,12 @@
   let view = $state<GridView>("dense");
   /** Préférence de présentation, pas d'identité : le nom stocké n'est jamais
    * touché (voir `displayName.ts`). */
-  let hideBrand = $state(false);
+  /** **Vrai par défaut** depuis que la marque a sa propre ligne au-dessus du
+   * modèle : l'y laisser aussi écrirait « Nissan » deux fois par carte, et
+   * c'est la répétition qui pousse le nom du modèle à la troncature. Un
+   * utilisateur qui décoche garde son choix — seule l'absence de réglage
+   * bascule (voir la lecture dans `loadPrefs`). */
+  let hideBrand = $state(true);
   let showDisplay = $state(false);
   const isGrid = $derived(view !== "table");
   let sortKey = $state<string>("name");
@@ -321,7 +327,9 @@
     const savedView = saved[KEYS.view];
     if (savedView === "dense" || savedView === "comfortable" || savedView === "table") view = savedView;
     else if (savedView === "gallery") view = "dense";
-    hideBrand = saved[KEYS.hideBrand] === "1";
+    // `!== "0"` et non `=== "1"` : sans réglage enregistré, c'est le nouveau
+    // défaut qui s'applique, pas l'ancien.
+    hideBrand = saved[KEYS.hideBrand] !== "0";
     const savedSortKey = saved[KEYS.sortKey];
     if (savedSortKey) sortKey = savedSortKey;
     const savedSortDir = saved[KEYS.sortDir];
@@ -350,6 +358,47 @@
   function setHideBrand(on: boolean) {
     hideBrand = on;
     if (prefsReady) setUiPref(KEYS.hideBrand, on ? "1" : "0");
+  }
+
+  /**
+   * Info-bulle sur le nom d'une carte, **et seulement s'il est coupé**.
+   *
+   * Un `title` posé systématiquement volerait celui de la carte (« double-clic
+   * pour ouvrir la fiche ») sur toute la surface du nom, pour ne rien ajouter
+   * dans l'immense majorité des cas où le nom tient. On ne le pose donc que
+   * quand le texte déborde réellement de sa boîte — ce qui dépend de la
+   * largeur de colonne autant que du nom, d'où l'observateur de
+   * redimensionnement plutôt qu'une mesure unique au montage.
+   */
+  const clipSync = new WeakMap<Element, () => void>();
+  const clipObserver =
+    typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver((entries) => {
+          for (const e of entries) clipSync.get(e.target)?.();
+        });
+
+  // Le paramètre n'est pas lu : il n'est là que pour que Svelte rappelle
+  // `update` quand le nom change (renommage, bascule « masquer la marque »),
+  // sinon la mesure resterait celle du premier rendu.
+  function titleIfClipped(node: HTMLElement, _name: string) {
+    const sync = () => {
+      // Le +1 absorbe les largeurs fractionnaires : sous zoom d'interface,
+      // `scrollWidth` dépasse `clientWidth` d'un demi-pixel sur du texte qui
+      // n'est pas coupé, ce qui collerait une info-bulle à toutes les cartes.
+      if (node.scrollWidth > node.clientWidth + 1) node.title = node.textContent ?? "";
+      else node.removeAttribute("title");
+    };
+    sync();
+    clipSync.set(node, sync);
+    clipObserver?.observe(node);
+    return {
+      update: sync,
+      destroy() {
+        clipObserver?.unobserve(node);
+        clipSync.delete(node);
+      },
+    };
   }
 
   /** Ce que la carte écrit, jamais ce sur quoi on trie ou on cherche. */
@@ -872,26 +921,12 @@
                 onkeydown={(e) => e.key === "Enter" && toggleFav(c, e)}
               >{c.is_favorite ? "♥" : "♡"}</span>
             </div>
-            <!-- L'identification AVANT le nom : logo et marque à gauche,
-                 année à droite, puis le modèle en dessous. C'est l'ordre dans
-                 lequel on cherche une voiture — on sait la marque avant de se
-                 souvenir du modèle — et l'année, poussée au bord droit,
-                 s'aligne d'une carte à l'autre : elle se compare alors en
-                 colonne, ce qu'un « · Nissan · 1999 » au fil du texte
-                 interdisait.
-                 **Une seule couleur pour les trois.** Marque et année étaient
-                 deux gris plus sombres que le nom, sans que rien ne le
-                 justifie : ce ne sont pas des informations moins sûres ni
-                 moins utiles, juste d'une autre nature. La hiérarchie tient à
-                 la taille et à la place, pas à l'extinction. -->
-            {#if c.badge || c.brand || c.year}
-              <div class="c-sub">
-                {#if c.badge}<img class="brand-badge" src={previewSrc(c.badge)} alt="" loading="lazy" />{/if}
-                {#if c.brand}<span class="c-brand">{c.brand}</span>{/if}
-                {#if c.year}<span class="c-year">{c.year}</span>{/if}
-              </div>
-            {/if}
-            <div class="c-name">{cardName(c)}</div>
+            <!-- L'identification AVANT le nom : c'est l'ordre dans lequel on
+                 cherche une voiture — on sait la marque avant de se souvenir
+                 du modèle. Le reste (année à droite, couleur unique) est dans
+                 `ModIdentity`, partagé avec la colonne de session. -->
+            <ModIdentity badge={c.badge} brand={c.brand} year={c.year} dim={blocked !== null} />
+            <div class="c-name" use:titleIfClipped={cardName(c)}>{cardName(c)}</div>
           </button>
         {/each}
       </div>
@@ -1260,10 +1295,10 @@
   .card.unusable {
     opacity: 0.42;
   }
-  /* Les deux lignes ensemble : marque, année et modèle ne font qu'une couleur,
-     donc elles s'éteignent ensemble aussi. */
-  .card.unusable .c-name,
-  .card.unusable .c-sub {
+  /* Marque, année et modèle ne font qu'une couleur, donc ils s'éteignent
+     ensemble — pour la ligne d'identification, par la prop `dim` : le CSS
+     scopé d'un parent n'atteint pas l'intérieur d'un composant enfant. */
+  .card.unusable .c-name {
     color: var(--muted);
   }
   .sessbadge {
@@ -1339,51 +1374,31 @@
   .card-fav:hover {
     color: var(--rosso-bright);
   }
-  /* **Deux lignes, et c'est la correction principale.** Sur une ligne, trois
-     Skyline s'affichaient à l'identique — `Nissan Skyline GT-R R3…` — la
-     troncature tombant exactement avant ce qui les distingue (R32, R33, R34).
-     Le `min-height` n'est pas cosmétique : sans lui, une carte à nom court et
-     une carte à nom long n'ont pas la même hauteur et la grille se déchire.
-     Le retrait horizontal, lui, appartient désormais à la carte. */
+  /* **Retour à une seule ligne, et c'est la marque qui l'a permis.** Deux
+     lignes avaient été ouvertes pour un vrai problème : trois Skyline
+     s'affichaient à l'identique — `Nissan Skyline GT-R R3…` —, la troncature
+     tombant juste avant ce qui les distingue. La marque partie sur sa propre
+     ligne, le nom perd les huit caractères qui le faisaient déborder, et le
+     cas devient assez rare pour ne plus valoir une ligne réservée sur chacune
+     des 312 cartes — c'était du vide partout pour deux ou trois exceptions.
+     Celles-ci sont couvertes par l'info-bulle (`titleIfClipped`), qui ne se
+     pose que là où le texte est réellement coupé. */
   .c-name {
     font-size: 12.5px;
     font-weight: 500;
-    line-height: 1.28;
+    line-height: 1.3;
     margin-top: 2px;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
+    white-space: nowrap;
     overflow: hidden;
-    min-height: 32px;
+    text-overflow: ellipsis;
   }
   /* Une carte sans marque ni année (un circuit) n'a pas de ligne
      d'identification : le nom reprend alors l'écart que celle-ci portait. */
   .thumb + .c-name {
     margin-top: 8px;
   }
-  .c-sub {
-    display: flex;
-    align-items: center;
-    /* Réservée même quand l'année manque : sans hauteur minimale, une voiture
-       sans millésime remonte son nom d'une ligne et casse l'alignement du
-       haut des blocs, qui est ce qu'on lit en balayant une grille. */
-    min-height: 15px;
-    margin-top: 8px;
-    font-size: 10.5px;
-    letter-spacing: 0.02em;
-    white-space: nowrap;
-    overflow: hidden;
-  }
-  .c-brand {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  /* Poussée au bord droit : c'est l'alignement qui remplace le séparateur. */
-  .c-year {
-    margin-left: auto;
-    padding-left: 8px;
-  }
+  /* `.brand-badge` reste ici pour la colonne « Marque » du TABLEAU seule — la
+     grille, elle, passe par `ModIdentity`, qui porte le sien. */
   .brand-badge {
     flex: none;
     width: 13px;

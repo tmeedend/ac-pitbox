@@ -19,6 +19,7 @@
   import TitleBar from "./TitleBar.svelte";
   import ControllerSetup from "./ControllerSetup.svelte";
   import ImageSelectDropdown from "./ImageSelectDropdown.svelte";
+  import ModIdentity from "./ModIdentity.svelte";
 
   import { carClassOf, driverFor, isEmpty, wearsFallback } from "$lib/driverOverride.svelte";
   import { bodyThumb, requestBodyThumb } from "$lib/driverThumbs.svelte";
@@ -27,6 +28,9 @@
   import { nav, requestSection, pickSession } from "$lib/nav.svelte";
   import { recordScreen, goBack, goForward } from "$lib/navHistory";
   import { previewSrc, getModDetail, activateMod } from "$lib/library";
+  import { withoutBrand } from "$lib/displayName";
+  import { peekUiPref } from "$lib/uiPrefs.svelte";
+  import { StorageKey } from "$lib/storage";
   import { confirm, message } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
   import { initGlobalDragDrop } from "$lib/importState.svelte";
@@ -342,6 +346,23 @@
   // que de risquer un faux positif pendant le chargement.
   const carInactive = $derived(nav.sessionCar != null && carDetail != null && !carDetail.active);
 
+  /**
+   * Le nom de la voiture tel que la colonne l'écrit — sans sa marque, qui est
+   * juste au-dessus.
+   *
+   * Suit le réglage de la bibliothèque plutôt que de trancher dans son coin :
+   * c'est la même décision d'affichage, elle n'a pas à se prendre deux fois.
+   * `!== "0"` parce que l'option est désormais active par défaut, et
+   * `peekUiPref` parce qu'un nom se rend, il ne s'attend pas — la valeur est
+   * dans le cache réactif dès que la bibliothèque a chargé ses préférences, et
+   * son absence donne le défaut, pas un écran vide.
+   */
+  const hideBrandPref = $derived(peekUiPref(StorageKey.gridHideBrand) !== "0");
+  const sessionCarName = $derived.by(() => {
+    const name = nav.sessionCar?.name ?? "";
+    return hideBrandPref ? withoutBrand(name, carDetail?.brand ?? null) : name;
+  });
+
   // --- Point d'entrée de l'écran Pilote (SPEC-ecran-pilote §3.2) ---------
   //
   // Une ligne, pas trois menus : le choix a quitté cette colonne pour son
@@ -576,11 +597,16 @@
               {/if}
             </div>
             {#if nav.sessionCar}
+              <!-- Exactement la carte de bibliothèque, composant compris :
+                   marque et année au-dessus, modèle en dessous. `meta` (qui
+                   valait « Nissan · 1999 ») disparaît du même coup — la ligne
+                   du dessus le dit mieux, et le répéter ferait deux fois la
+                   même phrase dans huit pixels de haut. -->
+              <ModIdentity badge={carDetail?.badge} brand={carDetail?.brand} year={carDetail?.year} reserve />
               <div class="pname">
-                {nav.sessionCar.name}
+                {sessionCarName}
                 {#if carInactive}<span class="warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
               </div>
-              {#if nav.sessionCar.meta}<div class="psrc">{nav.sessionCar.meta}</div>{/if}
             {/if}
           </button>
           {#if nav.sessionCar}
@@ -1002,13 +1028,19 @@
     letter-spacing: 0;
   }
   .pname {
-    margin-top: 8px;
+    margin-top: 2px;
     font-size: 12.5px;
     line-height: 1.3;
     color: var(--txt);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  /* Le circuit n'a pas de ligne d'identification (ni marque ni année) : son
+     nom reprend alors l'écart que celle-ci portait sous la vignette. Même
+     bascule que sur la carte de bibliothèque. */
+  .thumb + .pname {
+    margin-top: 8px;
   }
   /* Mod sélectionné mais non activé (§ garde-fou lancement) : jaune = alerte,
      cohérent avec les couleurs sémantiques du projet. */
@@ -1085,6 +1117,17 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    /* **Recadrage sur la tête, en CSS et pas au rendu.** La vignette est un
+       buste (du haut du casque à la poitrine) : à 13 px, le casque n'en fait
+       plus que trois et on ne distingue rien. Mesuré sur les 85 vignettes du
+       cache : la tête va du bord haut (médiane 4 %, au pire 16 %) à 39 % de la
+       hauteur (p90 47 %). Ce couple montre donc la tranche 0-52 % de l'image
+       source, soit la tête entière et un doigt d'épaules.
+       En CSS et non dans `driverThumbs` parce que le même PNG sert la galerie
+       de l'écran Pilote, où il est affiché à 104 px et où le buste est le bon
+       cadrage — et parce que le recalculer invaliderait les 85 vignettes déjà
+       sur disque pour un problème qui n'existe qu'ici. */
+    transform: translateY(46%) scale(1.9);
   }
   .field .v {
     flex: 1;
