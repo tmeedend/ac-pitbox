@@ -134,9 +134,13 @@ export const PREVIEW3D_RANGES = {
    * seul le volant garde la butée déclarée. 35° est le haut de ce que braque
    * une vraie voiture.
    *
-   * Pas de plus fin que 5° tant que les bras du pilote sont cuits dans le
-   * modèle : eux seuls font encore d'une valeur d'angle une conversion. */
-  steer: { min: -35, max: 35, step: 5, default: 0 },
+   * **Au degré près**, et c'est le squelette du pilote qui l'a permis. Le pas
+   * était à 5° tant que l'angle décidait du modèle converti : chaque valeur
+   * essayée coûtait une conversion et laissait une entrée de cache, donc il
+   * fallait en offrir peu. Roues, volant et bras tournant tous à l'affichage,
+   * une valeur ne coûte plus rien et il n'y a plus de raison de brider la
+   * main. */
+  steer: { min: -35, max: 35, step: 1, default: 0 },
 } as const;
 
 /**
