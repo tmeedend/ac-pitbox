@@ -438,46 +438,40 @@ laisser pourrir ici.
       fichiers** : le faire dans son propre commit, jamais mélangé à un
       changement fonctionnel (sinon `git blame` devient inexploitable).
 - [ ] **Vignettes régénérées de la grille** (branche `feature/vignettes-grille`).
-      Spec dans `docs/SPEC-grille.md` ; la partie A (traitement de la carte,
-      nom sur deux lignes, densité — §2 à §4) est **faite et livrée**, ce
-      chantier ne porte que la **partie B**, §5 à §8 : produire les images.
-      Fait : la voie parallèle complète. `preview::prepare_scratch` convertit
-      une voiture dans un brouillon (`previews/scratch/`) vidé avant chaque
-      conversion et jeté après le rendu — **ne jamais la faire repasser par
-      `prepare_car_preview`**, c'est le piège que le §5.3 nomme : 312
-      conversions dans un cache déjà à son plafond évincent les aperçus que
-      l'utilisateur consulte vraiment. `gridthumbs.rs` range les PNG hors du
-      plafond, sous un nom qui mêle l'entrée de cache de la voiture (donc le
-      `.kn5`, sa date, la livrée, les configs CSP, la version du convertisseur)
-      et l'empreinte du gabarit, ce qui règle l'invalidation sans une ligne de
-      migration. `gridThumbs.svelte.ts` tient la file (demande à la visibilité,
-      ce qui devient visible passe devant) et le rendu three.js hors écran, sur
-      le patron de `driverThumbs.svelte.ts`. Interrupteur, compteur et bouton
-      d'effacement dans `Réglages › Aperçu 3D`, éteint par défaut.
-      **Écart assumé vis-à-vis du §5.6, à valider à l'œil** : l'ombre de
-      contact est une vraie ombre projetée (`ShadowMaterial` + projecteur à
-      intensité nulle, comme l'aperçu de la fiche) et non l'ellipse peinte que
-      la spec décrit — elle suit la silhouette et coûte le même prix. Et
-      l'azimut n'a pas été « relevé sur les previews Kunos » comme le demande
-      le §5.6 : c'est déjà fait, c'est le 318° de l'aperçu 3D.
-      **Reste, dans cet ordre :**
-      1. **Regarder le résultat** et régler le trio lumière/environnement.
-         `ENVIRONMENT = 0.55` partage l'éclairage entre le showroom calibré sur
-         les photos Kunos et les trois lampes du §5.6 ; c'est un point de
-         départ, pas une mesure.
-      2. **L'écran de réglage du gabarit** (§6) : les huit curseurs existent
-         déjà dans `gridThumbPrefs.svelte.ts` avec leurs bornes, le modèle
-         « rien ne s'applique avant Appliquer » et le balayage du gabarit
-         précédent. Manquent l'écran lui-même et surtout son aperçu — **une
-         grille de six voitures de gabarits différents, pas une voiture** :
-         régler l'angle sur une seule conduit à l'optimiser pour elle et à
-         massacrer les autres.
-      3. **La tâche de fond du §8** : ce n'est pas un toast. Cinq minutes de
-         travail demandent quelque chose qui ne se ferme pas seul, survit à la
-         navigation, se réduit et porte une annulation. `gridThumbProgress()`
-         expose déjà l'avancement.
-      4. **Les profils à l'installation** (§5.5), qui sont ce qui allume
-         l'option pour de bon.
+      Spec dans `docs/SPEC-grille.md`. La partie A (§2 à §4) était déjà livrée ;
+      la **partie B** (§5 à §8) l'est maintenant en entier — pipeline, tâche de
+      fond, écran de réglage du gabarit, profils à l'installation.
+      **Les trois pièges à ne pas réintroduire**, tous mesurés ou vécus :
+      1. **Ne jamais faire passer la génération par `prepare_car_preview`.**
+         C'est le §5.3, et il a une raison chiffrée : 312 conversions dans un
+         cache déjà à son plafond évincent une entrée vivante chacune, donc les
+         aperçus que l'utilisateur consulte vraiment. La voie parallèle est
+         `preview::prepare_scratch` → brouillon vidé avant chaque conversion,
+         jeté après le rendu.
+      2. **Le brouillon a un verrou côté frontend** (`withScratch`), en plus du
+         verrou de conversion côté Rust. Celui-ci ne protège que la conversion ;
+         la fenêtre pendant laquelle three.js va chercher géométrie et textures
+         vient après, et la conversion suivante vide le dossier en commençant.
+         Symptôme d'un oubli : une voiture blanche, sans texture.
+      3. **Un rendu abîmé ne se voit plus une fois le PNG écrit.** Contexte
+         WebGL perdu (recompilation, veille, pilote qui redémarre) ou textures
+         non arrivées : le fichier existe et son nom est valide, donc il est
+         resservi pour toujours. D'où le contrôle de plausibilité avant écriture
+         (`checkPlausible`, réduction à 64×36) **et** le bouton « refaire la
+         vignette » de la fiche — le contrôle n'attrape que ce qu'on a su
+         décrire.
+      **Écarts assumés vis-à-vis de la spec** : l'ombre de contact est une vraie
+      ombre projetée (`ShadowMaterial` + projecteur à intensité nulle) et non
+      l'ellipse peinte du §5.6 ; l'azimut n'a pas été « relevé sur les previews
+      Kunos » puisque c'est déjà fait — c'est le 318° de l'aperçu 3D ; la tâche
+      de fond réduite est une barre et non une pastille à anneau (la pile
+      bas-droite n'a qu'une forme) ; et les six voitures de l'aperçu de réglage
+      sont prises **par catégorie** et non par silhouette, que rien dans les
+      données ne dit.
+      **Reste à faire :** le regarder et régler le trio lumière/environnement.
+      `ENVIRONMENT = 0.55` dans `gridThumbs.svelte.ts` partage l'éclairage entre
+      le showroom calibré sur les photos Kunos et les trois lampes du §5.6 ;
+      c'est un point de départ, pas une mesure.
 - [ ] **Écran Pilote** (branche `feature/ecran-pilote`). Spec et maquette dans
       `docs/SPEC-ecran-pilote.md` + `docs/pitbox-ecran-pilote.html`, résumé au
       §9.5 du SPEC. **À lire avant de reprendre** — l'asymétrie qui structure

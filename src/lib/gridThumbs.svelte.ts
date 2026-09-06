@@ -83,39 +83,162 @@ export function gridThumb(carId: string, skinId: string | null): string | null {
 interface Job {
   carId: string;
   skinId: string | null;
+  /** Nom lisible, pour la tâche de fond : le §8.2 y montre « Nissan Skyline
+   * GT-R R34 » et non un identifiant de dossier. */
+  name: string;
   key: string;
 }
 
 const queue: Job[] = [];
 let running = false;
 
-/** Avancement de la génération, pour la tâche de fond du §8. */
-const progress = $state({ done: 0, failed: 0, queued: 0, current: null as string | null });
+/**
+ * Verrou du **brouillon**, côté frontend.
+ *
+ * Le backend sérialise déjà les conversions, mais pas la fenêtre qui suit :
+ * entre le moment où `prepareGridModel` rend son URL et celui où three.js a
+ * fini d'aller chercher la géométrie et les textures, le dossier doit rester
+ * en place. Or la conversion suivante le vide en commençant. Un seul client
+ * (la file) ne se marche jamais dessus ; deux — la file et l'aperçu de
+ * réglages — si, et le symptôme serait une voiture sans texture, c'est-à-dire
+ * blanche.
+ */
+let scratchLock: Promise<unknown> = Promise.resolve();
+
+function withScratch<T>(work: () => Promise<T>): Promise<T> {
+  // `catch` sur la chaîne, pas sur le travail : un échec ne doit pas geler
+  // toutes les prises de verrou suivantes (même piège que la file d'écriture
+  // de `ui_prefs.json`).
+  const next = scratchLock.then(work, work);
+  scratchLock = next.catch(() => undefined);
+  return next;
+}
+
+/** La file est-elle suspendue ? L'aperçu de l'écran de réglages la met en
+ * pause : ses six conversions et le rendu qu'on manipule ne doivent pas se
+ * disputer le brouillon ni le processeur (§6.3 — manipuler les réglages ne
+ * régénère rien). */
+let paused = false;
+
+export function pauseGridThumbs(): void {
+  paused = true;
+}
+
+export function resumeGridThumbs(): void {
+  if (!paused) return;
+  paused = false;
+  void drain();
+}
+
+/**
+ * Avancement de la génération, pour la tâche de fond du §8.
+ *
+ * `total` est **cumulatif sur le lot** et non la taille de la file : celle-ci
+ * se vide au fur et à mesure, donc s'en servir donnerait une barre qui recule.
+ * Un lot commence quand la file part de zéro et finit quand elle se vide.
+ */
+const progress = $state({
+  total: 0,
+  done: 0,
+  failed: 0,
+  current: null as string | null,
+  running: false,
+  cancelling: false,
+  /** Le lot est fini et son rapport attend d'être fermé à la main (§8.2). */
+  finished: false,
+  startedAt: 0,
+});
 
 export function gridThumbProgress() {
   return progress;
 }
 
 /**
- * Demande la vignette d'une voiture devenue visible.
+ * Temps restant estimé, en secondes, ou `null` tant qu'il serait fantaisiste.
  *
- * Déjà en file mais pas encore commencée, elle **remonte en tête** : changer de
- * filtre ou faire défiler réordonne la file, ce qui est nouvellement visible
- * passe devant (§8.4).
+ * **Rien avant une dizaine de voitures** (§8.3) : une estimation tirée de deux
+ * mesures est fausse d'un facteur trois, et elle détruit la confiance dans
+ * toutes les suivantes. Afficher le décompte seul coûte moins cher.
  */
-export function requestGridThumb(carId: string, skinId: string | null): void {
-  if (!gridThumbsOn()) return;
+export function gridThumbEta(): number | null {
+  if (!progress.running || progress.done < 10) return null;
+  const elapsed = (Date.now() - progress.startedAt) / 1000;
+  const remaining = progress.total - progress.done - progress.failed;
+  if (remaining <= 0) return null;
+  return (elapsed / progress.done) * remaining;
+}
+
+/**
+ * Arrête le lot. **Ce qui est fait est gardé**, et le rapport le dit — sans
+ * cette phrase, on se retrouve avec une grille mixte sans savoir qu'on peut
+ * reprendre (§8.3).
+ */
+export function cancelGridThumbs(): void {
+  queue.length = 0;
+  progress.cancelling = true;
+}
+
+/** Ferme le rapport de fin. Il ne part jamais tout seul : cinq minutes de
+ * travail méritent qu'on ait le temps de lire ce qu'elles ont donné. */
+export function dismissGridThumbReport(): void {
+  progress.finished = false;
+}
+
+/** Ouvre un lot si la file était vide. */
+function beginBatch(): void {
+  if (progress.running || queue.length > 0) return;
+  progress.total = 0;
+  progress.done = 0;
+  progress.failed = 0;
+  progress.cancelling = false;
+  progress.finished = false;
+  progress.startedAt = Date.now();
+}
+
+/** Met une voiture en file si elle n'y est pas déjà. `front` = elle passe
+ * devant tout le reste. */
+function enqueue(carId: string, skinId: string | null, name: string, front: boolean): void {
   const key = keyOf(carId, skinId);
   if (cache[key]) {
     // Déjà rendue, déjà ratée, ou déjà en file — dans ce dernier cas elle
-    // remonte en tête, sans se dupliquer.
+    // remonte en tête si on la redemande en priorité, sans se dupliquer.
+    if (!front) return;
     const queued = queue.findIndex((job) => job.key === key);
     if (queued > 0) queue.unshift(...queue.splice(queued, 1));
     return;
   }
+  beginBatch();
   cache[key] = { pending: true };
-  queue.unshift({ carId, skinId, key });
-  progress.queued = queue.length;
+  const job = { carId, skinId, name, key };
+  if (front) queue.unshift(job);
+  else queue.push(job);
+  progress.total += 1;
+}
+
+/**
+ * Demande la vignette d'une voiture **devenue visible**.
+ *
+ * Elle passe devant tout le reste de la file : faire défiler ou changer de
+ * filtre la réordonne donc de lui-même, ce qui est nouvellement visible
+ * d'abord (§8.4).
+ */
+export function requestGridThumb(carId: string, skinId: string | null, name = carId): void {
+  if (!gridThumbsOn()) return;
+  enqueue(carId, skinId, name, true);
+  void drain();
+}
+
+/**
+ * Met en file tout ce qui reste, derrière ce qui est visible (§5.4).
+ *
+ * Sans cette seconde moitié, la génération ne produirait que ce qu'on a
+ * regardé, et le décompte de la tâche de fond n'aurait pas de dénominateur : la
+ * file se viderait à chaque arrêt du défilement. C'est elle qui fait de la
+ * génération un travail qui finit.
+ */
+export function enqueueGridThumbs(cars: { id: string; skin: string | null; name: string }[]): void {
+  if (!gridThumbsOn()) return;
+  for (const car of cars) enqueue(car.id, car.skin, car.name, false);
   void drain();
 }
 
@@ -131,44 +254,52 @@ export function requestGridThumb(carId: string, skinId: string | null): void {
  * toujours. Le contrôle de plausibilité ci-dessous en attrape une partie, pas
  * toutes — d'où un bouton, en plus.
  */
-export async function regenerateGridThumb(carId: string, skinId: string | null): Promise<void> {
+export async function regenerateGridThumb(
+  carId: string,
+  skinId: string | null,
+  name?: string,
+): Promise<void> {
   const template = appliedTemplate();
   const known = await gridThumbnail(carId, skinId, template);
   await forgetGridThumbnail(known.stem);
-  const key = keyOf(carId, skinId);
-  delete cache[key];
-  cache[key] = { pending: true };
-  queue.unshift({ carId, skinId, key });
-  progress.queued = queue.length;
+  delete cache[keyOf(carId, skinId)];
+  enqueue(carId, skinId, name ?? carId, true);
   void drain();
 }
 
 async function drain(): Promise<void> {
-  if (running) return;
+  if (running || paused) return;
   running = true;
+  progress.running = true;
   // Les réglages enregistrés avant la première vignette : produire trois cents
   // images sur les valeurs par défaut pour découvrir ensuite que l'utilisateur
   // en avait d'autres serait cinq minutes de travail à refaire.
   await gridThumbsReady();
   try {
     let job = queue.shift();
-    while (job) {
-      progress.queued = queue.length;
-      progress.current = job.carId;
+    while (job && !paused) {
+      progress.current = job.name;
       try {
         cache[job.key] = await produce(job);
       } catch (e) {
         // Une vignette manquante n'est pas une panne : la carte garde la
         // `preview.png` du mod, qui est exactement le comportement d'avant.
+        // Rien n'est mémorisé — un accident de rendu n'est pas un verdict sur
+        // le mod, la voiture repassera normalement à la prochaine demande.
         console.error("vignette de grille", job.carId, e);
         delete cache[job.key];
+        progress.total -= 1;
       }
       job = queue.shift();
     }
   } finally {
     running = false;
+    progress.running = false;
     progress.current = null;
-    progress.queued = 0;
+    // Le rapport reste, y compris après une annulation : le §8.3 veut
+    // « 148 vignettes générées, reprendre plus tard » plutôt qu'une
+    // disparition silencieuse.
+    progress.finished = progress.done > 0 || progress.failed > 0;
   }
 }
 
@@ -187,9 +318,8 @@ async function produce(job: Job): Promise<Entry> {
     return { failed: known.failed };
   }
 
-  let url: string;
   try {
-    url = await prepareGridModel(job.carId, job.skinId);
+    return await withScratch(() => convert(job, known.stem, template));
   } catch (e) {
     const reason = typeof e === "string" ? e : String(e);
     // Une voiture chiffrée ne rendra **jamais** : on le note à côté de l'image
@@ -204,12 +334,17 @@ async function produce(job: Job): Promise<Entry> {
     }
     throw e;
   }
+}
 
+/** Convertir, rendre, ranger, jeter — la séquence du §5.3, sous le verrou du
+ * brouillon. */
+async function convert(job: Job, stem: string, template: GridTemplate): Promise<Entry> {
+  const url = await prepareGridModel(job.carId, job.skinId);
   try {
     const png = await render(url, template);
     if (!png) throw new Error("rendu vide");
     const bytes = new Uint8Array(await png.arrayBuffer());
-    const path = await saveGridThumbnail(known.stem, bytes);
+    const path = await saveGridThumbnail(stem, bytes);
     progress.done += 1;
     // Affichée depuis le disque et non depuis le blob mémoire : c'est le même
     // fichier que toutes les visites suivantes serviront, autant qu'il soit à
@@ -222,9 +357,20 @@ async function produce(job: Job): Promise<Entry> {
   }
 }
 
-// --- Le moteur de rendu, monté une fois -------------------------------------
+// --- Le moteur de rendu ------------------------------------------------------
+//
+// **Un banc, deux clients.** La file en monte un seul, à la taille de sortie,
+// gardé pour la session : un `WebGLRenderer` par carte épuiserait la limite du
+// navigateur (seize contextes en pratique) dès la première rangée. L'aperçu de
+// l'écran de réglages (§6.2) en monte un second, plus petit, avec ses six
+// voitures gardées en mémoire — bouger un curseur doit redessiner, jamais
+// reconvertir.
+//
+// Ils ne peuvent pas partager le même : le rendu de la file s'étend de
+// `renderer.render` à `toBlob`, qui est asynchrone, et une image dessinée entre
+// les deux repartirait dans le PNG de l'autre.
 
-interface Engine {
+interface Rig {
   THREE: typeof ThreeModule;
   renderer: ThreeModule.WebGLRenderer;
   scene: ThreeModule.Scene;
@@ -236,10 +382,16 @@ interface Engine {
   load: (url: string) => Promise<ThreeModule.Group>;
 }
 
-let engine: Promise<Engine> | null = null;
+let engine: Promise<Rig> | null = null;
 
-function ensureEngine(): Promise<Engine> {
-  engine ??= (async () => {
+/** Le banc de la file, monté une fois pour la session. */
+function ensureEngine(): Promise<Rig> {
+  engine ??= createRig(WIDTH, HEIGHT);
+  return engine;
+}
+
+async function createRig(width: number, height: number): Promise<Rig> {
+  {
     const THREE = await import("three");
     const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
     const { showroomEnvironment } = await import("./components/detail/showroomEnvironment");
@@ -252,7 +404,7 @@ function ensureEngine(): Promise<Engine> {
     // demander de régénérer une image.
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     renderer.setPixelRatio(1);
-    renderer.setSize(WIDTH, HEIGHT, false);
+    renderer.setSize(width, height, false);
     // Neutre et **fixe pour les 312** : une auto-exposition ramènerait une
     // voiture noire et une voiture blanche au même gris moyen, c'est-à-dire
     // qu'elle effacerait exactement la différence qu'on cherche à montrer.
@@ -289,7 +441,7 @@ function ensureEngine(): Promise<Engine> {
     sun.shadow.bias = -0.0015;
     scene.add(sun, sun.target);
 
-    const camera = new THREE.PerspectiveCamera(22, WIDTH / HEIGHT, 0.05, 500);
+    const camera = new THREE.PerspectiveCamera(22, width / height, 0.05, 500);
     const loader = new GLTFLoader();
     return {
       THREE,
@@ -302,20 +454,19 @@ function ensureEngine(): Promise<Engine> {
       sun,
       load: async (url: string) => (await loader.loadAsync(url)).scene,
     };
-  })();
-  return engine;
+  }
 }
 
-async function render(url: string, template: GridTemplate): Promise<Blob | null> {
-  const e = await ensureEngine();
-  const { THREE, renderer, scene, camera } = e;
-  const model = await e.load(url);
-  model.traverse((object) => {
-    const mesh = object as ThreeModule.Mesh;
-    if (mesh.isMesh) mesh.castShadow = true;
-  });
-  scene.add(model);
-
+/**
+ * Pose la voiture, la caméra, les lampes et le sol, puis dessine.
+ *
+ * Le modèle est ajouté et retiré **par l'appelant** : la file le jette après
+ * une image, l'aperçu de réglages le garde pour la suivante. Tout le reste —
+ * le sol notamment, qui dépend de la taille de la voiture et de l'opacité
+ * réglée — appartient à l'image et repart avec elle.
+ */
+function drawModel(rig: Rig, model: ThreeModule.Group, template: GridTemplate): void {
+  const { THREE, renderer, scene, camera } = rig;
   const box = new THREE.Box3().setFromObject(model);
   const center = box.getCenter(new THREE.Vector3());
   const radius = box.getSize(new THREE.Vector3()).length() / 2;
@@ -333,17 +484,39 @@ async function render(url: string, template: GridTemplate): Promise<Blob | null>
   scene.add(ground);
 
   placeCamera(THREE, camera, box, center, template);
-  placeLights(e, camera, center, radius, template);
+  placeLights(rig, camera, center, radius, template);
+
+  try {
+    renderer.render(scene, camera);
+  } finally {
+    scene.remove(ground);
+    ground.geometry.dispose();
+    ground.material.dispose();
+  }
+}
+
+/** Prépare un modèle à être dessiné : tout ce qui est maillage projette une
+ * ombre, sinon le sol reste vide et la voiture flotte. */
+function castShadows(model: ThreeModule.Group): void {
+  model.traverse((object) => {
+    const mesh = object as ThreeModule.Mesh;
+    if (mesh.isMesh) mesh.castShadow = true;
+  });
+}
+
+async function render(url: string, template: GridTemplate): Promise<Blob | null> {
+  const rig = await ensureEngine();
+  const model = await rig.load(url);
+  castShadows(model);
+  rig.scene.add(model);
 
   let png: Blob | null = null;
   try {
-    renderer.render(scene, camera);
-    checkPlausible(renderer.domElement);
-    png = await toPng(renderer.domElement);
+    drawModel(rig, model, template);
+    checkPlausible(rig.renderer.domElement);
+    png = await toPng(rig.renderer.domElement);
   } finally {
-    scene.remove(model, ground);
-    ground.geometry.dispose();
-    ground.material.dispose();
+    rig.scene.remove(model);
     dispose(model);
   }
   return png;
@@ -409,13 +582,13 @@ function placeCamera(
 
 /** Les trois lampes, posées relativement à la caméra (§5.6). */
 function placeLights(
-  e: Engine,
+  rig: Rig,
   camera: ThreeModule.PerspectiveCamera,
   center: ThreeModule.Vector3,
   radius: number,
   template: GridTemplate,
 ): void {
-  const { key, fill, rim, sun } = e;
+  const { key, fill, rim, sun } = rig;
   const intensity = (KEY_BASE * template.key) / 100;
   key.intensity = intensity;
   fill.intensity = (intensity * template.fill) / 100;
@@ -456,6 +629,77 @@ function placeLights(
   shadow.near = radius * 0.5;
   shadow.far = radius * 8;
   shadow.updateProjectionMatrix();
+}
+
+// --- L'aperçu de l'écran de réglages (§6.2) ---------------------------------
+
+/** Une voiture chargée une fois et gardée, pour être redessinée à chaque
+ * mouvement de curseur. */
+export interface StudioCar {
+  id: string;
+  name: string;
+  model: ThreeModule.Group;
+}
+
+export interface GridStudio {
+  /** Convertit et garde une voiture. `null` si elle ne rend pas — une voiture
+   * protégée dans l'échantillon ne doit pas vider l'aperçu. */
+  load(carId: string, skinId: string | null, name: string): Promise<StudioCar | null>;
+  /** Redessine une voiture au gabarit donné et rend une URL d'image. Synchrone
+   * côté GPU : c'est ce qui permet de suivre un curseur. */
+  draw(car: StudioCar, template: GridTemplate): string;
+  dispose(): void;
+}
+
+/**
+ * Monte le banc de l'aperçu de réglages : **six voitures gardées en mémoire**,
+ * redessinées à chaque mouvement de curseur.
+ *
+ * C'est la décision structurante du §6.2. Régler l'angle sur une seule voiture
+ * conduit à l'optimiser pour elle et à massacrer les autres : on édite un
+ * catalogue, l'aperçu doit être un catalogue. Et garder les modèles chargés est
+ * ce qui rend le geste possible — reconvertir six voitures à chaque pixel de
+ * curseur prendrait six secondes par image.
+ *
+ * Son propre contexte WebGL, plus petit : voir l'en-tête du moteur.
+ */
+export async function createGridStudio(width: number, height: number): Promise<GridStudio> {
+  const rig = await createRig(width, height);
+  const held: ThreeModule.Group[] = [];
+  return {
+    async load(carId, skinId, name) {
+      try {
+        return await withScratch(async () => {
+          const url = await prepareGridModel(carId, skinId);
+          try {
+            const model = await rig.load(url);
+            castShadows(model);
+            held.push(model);
+            return { id: carId, name, model };
+          } finally {
+            await releaseGridModel().catch(() => undefined);
+          }
+        });
+      } catch (e) {
+        console.error("aperçu de gabarit", carId, e);
+        return null;
+      }
+    },
+    draw(car, template) {
+      rig.scene.add(car.model);
+      try {
+        drawModel(rig, car.model, template);
+        return rig.renderer.domElement.toDataURL("image/png");
+      } finally {
+        rig.scene.remove(car.model);
+      }
+    },
+    dispose() {
+      for (const model of held) dispose(model);
+      held.length = 0;
+      rig.renderer.dispose();
+    },
+  };
 }
 
 /**

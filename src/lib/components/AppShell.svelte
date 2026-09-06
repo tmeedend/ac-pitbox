@@ -14,6 +14,7 @@
   import ImportToasts from "./ImportToasts.svelte";
   import ToastStack from "./ToastStack.svelte";
   import ControllerToast from "./ControllerToast.svelte";
+  import GridThumbToast from "./GridThumbToast.svelte";
   import PrefsToast from "./PrefsToast.svelte";
   import BulkToasts from "./BulkToasts.svelte";
   import TitleBar from "./TitleBar.svelte";
@@ -788,6 +789,10 @@
   <ControllerToast />
   <BulkToasts />
   <ImportToasts />
+  <!-- La génération des vignettes en dernier, donc au plus près du coin : elle
+       dure des minutes là où les autres passent, et c'est celle qu'on revient
+       consulter. -->
+  <GridThumbToast />
 </ToastStack>
 {#if controllers.setupOpen}
   <ControllerSetup onclose={() => (controllers.setupOpen = false)} />

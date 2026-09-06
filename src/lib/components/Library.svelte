@@ -30,7 +30,8 @@
   import { registerModNav } from "$lib/screenActions";
   import { libraryVersion } from "$lib/libraryVersion.svelte";
   import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
-  import { gridThumb, requestGridThumb } from "$lib/gridThumbs.svelte";
+  import { enqueueGridThumbs, gridThumb, requestGridThumb } from "$lib/gridThumbs.svelte";
+  import { gridThumbsOn } from "$lib/gridThumbPrefs.svelte";
   import { buildModContextItems } from "$lib/modContextActions";
   import { t } from "$lib/i18n/index.svelte";
   import { zoomFactor } from "$lib/zoom.svelte";
@@ -326,7 +327,7 @@
   // normalise pendant qu'on l'utilise. Un seul observateur pour toute la
   // grille : un par carte coûterait trois cents abonnements pour la même
   // information.
-  type ThumbWant = { car: string; skin: string | null; want: boolean };
+  type ThumbWant = { car: string; skin: string | null; name: string; want: boolean };
   const wanted = new WeakMap<Element, ThumbWant>();
   let visibility: IntersectionObserver | null = null;
 
@@ -339,7 +340,7 @@
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
           const target = wanted.get(entry.target);
-          if (target?.want) requestGridThumb(target.car, target.skin);
+          if (target?.want) requestGridThumb(target.car, target.skin, target.name);
         }
       },
       // Un peu avant le bord : la vignette d'une carte qui arrive a une
@@ -362,6 +363,29 @@
   onDestroy(() => {
     visibility?.disconnect();
     visibility = null;
+  });
+
+  // **Et tout le reste derrière**, une fois la liste filtrée connue (§5.4).
+  // Sans cette seconde moitié, la génération ne produirait que ce qu'on a
+  // regardé : le travail n'aurait pas de fin, et la tâche de fond pas de
+  // dénominateur — sa file se viderait à chaque arrêt du défilement. Les
+  // cartes visibles, elles, continuent de passer devant.
+  //
+  // `untrack` sur la mise en file : elle lit le cache des vignettes, qui est un
+  // `$state` que la génération réécrit à chaque image — sans lui, cet effet se
+  // redéclencherait trois cents fois pour trois cents vignettes.
+  $effect(() => {
+    if (!isCar || !gridThumbsOn()) return;
+    const list = filtered;
+    untrack(() =>
+      enqueueGridThumbs(
+        list.map((c) => ({
+          id: c.id_interne,
+          skin: getPreferredSkin(c.id_interne)?.id ?? null,
+          name: cardName(c),
+        })),
+      ),
+    );
   });
 
   // Restauration au montage (§6.2/§8.6) : colonnes (fichier dédié,
@@ -943,7 +967,7 @@
           {@const ol = previewSrc(prefLayout?.outline ?? c.outline)}
           {@const blocked = unusableReason(c)}
           <button data-id={c.id_interne} class="card" class:unusable={blocked !== null} class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} oncontextmenu={(e) => openCardContextMenu(e, c)} title={blocked ? `${t(blocked)}\n${t("library.cardTooltip")}` : t("library.cardTooltip")}>
-            <div class="thumb" use:whenVisible={{ car: c.id_interne, skin: prefSkin?.id ?? null, want: isCar }}>
+            <div class="thumb" use:whenVisible={{ car: c.id_interne, skin: prefSkin?.id ?? null, name: cardName(c), want: isCar }}>
               {#if regen ?? src}<img src={regen ?? src} alt={c.display_name ?? c.id_interne} loading="lazy" />
               {:else}<div class="noprev">{isCar ? t("library.typeCar") : t("library.typeTrack")}</div>{/if}
               {#if !isCar && ol}<img class="outline" src={ol} alt="" loading="lazy" />{/if}

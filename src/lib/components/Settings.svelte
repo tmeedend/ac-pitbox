@@ -4,6 +4,7 @@
   import Tabs from "./Tabs.svelte";
   import MusicTab from "./settings/MusicTab.svelte";
   import PreviewTab from "./settings/PreviewTab.svelte";
+  import ThumbsTab from "./settings/ThumbsTab.svelte";
   import {
     emptyConfig,
     getConfig,
@@ -43,7 +44,12 @@
   // deux endroits différents, l'un l'action et l'autre ses préférences,
   // produisaient des allers-retours. Elles vivent désormais en section
   // repliable au pied de l'écran `Atelier › Importer`.
-  const TAB_IDS = ["general", "paths", "preview", "music"] as const;
+  // « Vignettes » est un onglet à part de « Aperçu », et c'est le §6.1 de
+  // `SPEC-grille.md` : les deux règlent une caméra, mais l'un n'engage rien et
+  // l'autre régénère 312 images. C'est cette asymétrie qui rend acceptable
+  // qu'un écran affiche une facture — et qui interdit de la faire apparaître
+  // dans celui qui n'en a pas besoin.
+  const TAB_IDS = ["general", "paths", "preview", "thumbs", "music"] as const;
   type SettingsTab = (typeof TAB_IDS)[number];
   // Onglet demandé depuis ailleurs (raccourci « régler l'aperçu » de la fiche
   // voiture), consommé une fois : sans la remise à `null`, revenir plus tard
@@ -215,7 +221,7 @@
   }
 </script>
 
-<div class="settings" class:wide={activeTab === "preview"}>
+<div class="settings" class:wide={activeTab === "preview" || activeTab === "thumbs"}>
   <header>
     <h2 class="lbl-screen">{t("settings.title")}</h2>
   </header>
@@ -224,6 +230,9 @@
 
   {#if activeTab === "music"}
     <MusicTab />
+  {:else if activeTab === "thumbs"}
+    <p class="sub">{t("settings.tabThumbsHint")}</p>
+    <ThumbsTab />
   {:else if activeTab === "preview"}
     <!-- Réglages appliqués tout de suite, donc pas de garde de navigation :
          celle-ci ne porte que sur AppConfig. L'onglet a son propre bouton
