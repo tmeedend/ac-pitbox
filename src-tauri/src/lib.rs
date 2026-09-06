@@ -292,6 +292,7 @@ pub fn run() {
             commands::gridthumbs::prepare_grid_model,
             commands::gridthumbs::save_grid_thumbnail,
             commands::gridthumbs::mark_grid_thumbnail_failed,
+            commands::gridthumbs::forget_grid_thumbnail,
             commands::gridthumbs::release_grid_model,
             commands::gridthumbs::grid_thumbnail_stats,
             commands::gridthumbs::clear_grid_thumbnails,

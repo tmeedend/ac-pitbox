@@ -81,6 +81,19 @@ pub fn mark_grid_thumbnail_failed(app: AppHandle, stem: String, reason: String) 
     crate::gridthumbs::mark_failed(&app, &stem, &reason);
 }
 
+/// Forgets one car thumbnail — image and failure marker alike — so the next
+/// request converts again.
+///
+/// The manual escape hatch for a thumbnail that came out wrong without the mod
+/// being at fault: a render interrupted by a lost WebGL context, a texture that
+/// did not reach the page. Nothing distinguishes such an image from a good one
+/// once it is written, so the judgement is the user's, and this is the button
+/// behind it.
+#[tauri::command]
+pub fn forget_grid_thumbnail(app: AppHandle, stem: String) -> Result<bool, String> {
+    crate::gridthumbs::forget(&app, &stem)
+}
+
 /// Drops the scratch model. Called once the render is done — and at startup,
 /// where a brutal shutdown may have left one behind.
 #[tauri::command]

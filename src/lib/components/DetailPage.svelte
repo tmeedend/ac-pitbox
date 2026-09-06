@@ -24,6 +24,8 @@
   import { listMediaScreenshots, listMediaReplays, listMediaBackgrounds } from "$lib/media";
   import { listModSkins, openNativeShowroom, type SkinItem } from "$lib/launch";
   import CarPreview3D from "./detail/CarPreview3D.svelte";
+  import { gridThumbsOn } from "$lib/gridThumbPrefs.svelte";
+  import { regenerateGridThumb } from "$lib/gridThumbs.svelte";
   import InlineEdit from "./InlineEdit.svelte";
   import Tabs from "./Tabs.svelte";
   import StateBadge from "./StateBadge.svelte";
@@ -363,6 +365,30 @@
   function openPreviewSettings() {
     nav.settingsTab = "preview";
     nav.section = "settings";
+  }
+
+  // --- Vignette de la grille (docs/SPEC-grille.md §5) ----------------------
+  //
+  // **Le bouton est ici, pas l'image.** Refaire la vignette d'une voiture se
+  // demande là où on regarde cette voiture, et c'est la fiche. L'image, elle,
+  // n'a rien à y faire : la zone héros porte déjà l'aperçu 3D **vivant**, dont
+  // la vignette n'est qu'une image figée à 1024×576 — sur un héros deux fois
+  // plus large, elle serait un aperçu 3D en moins bien.
+  const gridThumbs = $derived(gridThumbsOn());
+  let regenerating = $state(false);
+
+  async function regenerateThumb() {
+    if (!isCar || regenerating) return;
+    regenerating = true;
+    try {
+      const id = detail?.id_interne;
+      if (!id) return;
+      await regenerateGridThumb(id, skins[previewSkin]?.id ?? null);
+    } catch (e) {
+      console.error("regenerate_grid_thumbnail", e);
+    } finally {
+      regenerating = false;
+    }
   }
 
   function togglePreview3d() {
@@ -1030,6 +1056,26 @@
                 </svg>
               {/if}
             </button>
+            {#if isCar && gridThumbs}
+              <!-- Refaire la vignette de la grille. Visible en photo comme en
+                   3D : on vient souvent de la voir de travers dans la grille,
+                   et c'est justement pour ça qu'on est sur la photo. -->
+              <button
+                class="hero-btn"
+                type="button"
+                disabled={regenerating}
+                onclick={regenerateThumb}
+                title={t("detail.gridThumbRegen")}
+                aria-label={t("detail.gridThumbRegen")}
+              >
+                <!-- Une carte de grille et sa flèche qui reboucle. -->
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <rect x="1.5" y="2.5" width="13" height="8" rx="1" fill="none" />
+                  <path d="M12.8 14 A3 3 0 1 1 11.8 11.6" fill="none" />
+                  <path d="M12.1 8.8 V11.8 H9.3" fill="none" />
+                </svg>
+              </button>
+            {/if}
             {#if preview3d}
               <button
                 class="hero-btn"

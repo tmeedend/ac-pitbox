@@ -26,6 +26,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import type * as ThreeModule from "three";
 
 import {
+  forgetGridThumbnail,
   gridThumbnail,
   markGridThumbnailFailed,
   prepareGridModel,
@@ -112,6 +113,30 @@ export function requestGridThumb(carId: string, skinId: string | null): void {
     if (queued > 0) queue.unshift(...queue.splice(queued, 1));
     return;
   }
+  cache[key] = { pending: true };
+  queue.unshift({ carId, skinId, key });
+  progress.queued = queue.length;
+  void drain();
+}
+
+/**
+ * Refait la vignette d'une seule voiture, quel que soit son état.
+ *
+ * **Le cas qui l'a rendue nécessaire n'est pas celui qu'on croit.** Ce n'est
+ * pas un mod modifié — celui-là change son empreinte et se régénère tout seul —
+ * mais un rendu **abîmé sans que le mod y soit pour rien** : contexte WebGL
+ * perdu, textures qui n'arrivent pas jusqu'à la page. Rien ne distingue une
+ * telle image d'une bonne une fois écrite, et la clé de cache, elle, est
+ * parfaitement valide : sans cette porte, l'image reste à l'écran pour
+ * toujours. Le contrôle de plausibilité ci-dessous en attrape une partie, pas
+ * toutes — d'où un bouton, en plus.
+ */
+export async function regenerateGridThumb(carId: string, skinId: string | null): Promise<void> {
+  const template = appliedTemplate();
+  const known = await gridThumbnail(carId, skinId, template);
+  await forgetGridThumbnail(known.stem);
+  const key = keyOf(carId, skinId);
+  delete cache[key];
   cache[key] = { pending: true };
   queue.unshift({ carId, skinId, key });
   progress.queued = queue.length;
@@ -313,6 +338,7 @@ async function render(url: string, template: GridTemplate): Promise<Blob | null>
   let png: Blob | null = null;
   try {
     renderer.render(scene, camera);
+    checkPlausible(renderer.domElement);
     png = await toPng(renderer.domElement);
   } finally {
     scene.remove(model, ground);
@@ -430,6 +456,51 @@ function placeLights(
   shadow.near = radius * 0.5;
   shadow.far = radius * 8;
   shadow.updateProjectionMatrix();
+}
+
+/**
+ * Refuse une image qui ne peut pas être ce qu'on voulait rendre.
+ *
+ * Deux avaries observées en développement, l'une et l'autre invisibles une fois
+ * le PNG écrit — c'est bien le problème : le fichier existe, son nom est
+ * valide, donc il est resservi pour toujours.
+ *
+ *  - **Rien du tout.** Un contexte WebGL perdu (recompilation, veille, pilote
+ *    qui redémarre) rend un canevas vide, qui donne un PNG entièrement
+ *    transparent : à l'écran, une carte au mat nu.
+ *  - **Tout blanc.** Une voiture dont les textures ne sont pas arrivées jusqu'à
+ *    la page rend en matériau par défaut, que l'éclairage du studio sature.
+ *
+ * Le contrôle est fait sur une réduction à 64×36 — deux mille pixels suffisent
+ * à distinguer « une voiture » de « rien » ou de « un aplat », et coûtent
+ * quelques dixièmes de milliseconde sur un rendu qui en a pris mille.
+ *
+ * Lève plutôt que de renvoyer un booléen : l'appelant ne doit **ni ranger
+ * l'image, ni mémoriser un échec** — c'est un accident, pas un verdict sur le
+ * mod, et la voiture doit repasser normalement à la prochaine demande.
+ */
+function checkPlausible(canvas: HTMLCanvasElement): void {
+  const probe = document.createElement("canvas");
+  probe.width = 64;
+  probe.height = 36;
+  const ctx = probe.getContext("2d", { willReadFrequently: true });
+  // Pas de contexte 2D : on ne peut pas juger, donc on ne juge pas. Refuser par
+  // précaution reviendrait à ne jamais rien produire.
+  if (!ctx) return;
+  ctx.drawImage(canvas, 0, 0, probe.width, probe.height);
+  const { data } = ctx.getImageData(0, 0, probe.width, probe.height);
+  let opaque = 0;
+  let white = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 24) continue;
+    opaque += 1;
+    if (data[i] > 244 && data[i + 1] > 244 && data[i + 2] > 244) white += 1;
+  }
+  const pixels = probe.width * probe.height;
+  // Le seuil est bas exprès : une monoplace vue de trois-quarts couvre peu de
+  // cadre, et l'ombre de contact compte à peine. Sous 2 %, il n'y a rien.
+  if (opaque < pixels * 0.02) throw new Error("rendu vide (contexte WebGL perdu ?)");
+  if (white > opaque * 0.9) throw new Error("rendu saturé (textures manquantes ?)");
 }
 
 function toPng(canvas: HTMLCanvasElement): Promise<Blob | null> {

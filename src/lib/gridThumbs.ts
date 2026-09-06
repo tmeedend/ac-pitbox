@@ -84,6 +84,20 @@ export function markGridThumbnailFailed(stem: string, reason: string): Promise<v
   return invoke<void>("mark_grid_thumbnail_failed", { stem, reason });
 }
 
+/**
+ * Oublie une vignette — image et marqueur d'échec — pour que la prochaine
+ * demande reconvertisse.
+ *
+ * La sortie de secours d'une image sortie de travers sans que le mod y soit
+ * pour quelque chose : un contexte WebGL perdu en cours de rendu, une texture
+ * qui n'est pas arrivée jusqu'à la page. Rien ne distingue une telle image
+ * d'une bonne une fois écrite — le jugement est celui de l'utilisateur, et
+ * c'est le bouton derrière.
+ */
+export function forgetGridThumbnail(stem: string): Promise<boolean> {
+  return invoke<boolean>("forget_grid_thumbnail", { stem });
+}
+
 /** Jette le modèle du brouillon. */
 export function releaseGridModel(): Promise<void> {
   return invoke<void>("release_grid_model");

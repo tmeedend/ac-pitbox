@@ -445,6 +445,7 @@
       "writing": "Assembling"
     },
     "preview3dUnavailable": "3D preview unavailable",
+    "gridThumbRegen": "Rebuild the library thumbnail",
     "preview3dReplace": "Reset the view and start the turntable",
     "preview3dSettings": "Preview settings",
     "preview3dSettingsMoved": "The preview settings live in Settings → Preview, with a 3D preview of their own.",

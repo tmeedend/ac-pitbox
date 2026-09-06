@@ -205,6 +205,24 @@ pub fn mark_failed(app: &tauri::AppHandle, stem: &str, reason: &str) {
     }
 }
 
+/// Oublie ce qu'on sait de cette entrée : l'image et le marqueur d'échec.
+///
+/// C'est le « refaire celle-là » d'une seule voiture. Il n'y a rien à
+/// invalider pour ça — le nom d'entrée ne change pas — donc il suffit de
+/// retirer le fichier pour que la prochaine demande reparte de la conversion.
+///
+/// Rendu au bouton qui l'appelle : `true` s'il y avait effectivement quelque
+/// chose à oublier. Utile pour ne pas annoncer un travail qui n'a pas eu lieu.
+pub fn forget(app: &tauri::AppHandle, stem: &str) -> Result<bool, String> {
+    if !is_entry_stem(stem) {
+        return Err(format!("nom de vignette refusé : {stem}"));
+    }
+    let dir = dir(app)?;
+    let png = std::fs::remove_file(dir.join(format!("{stem}.png"))).is_ok();
+    let failed = std::fs::remove_file(dir.join(format!("{stem}.fail"))).is_ok();
+    Ok(png || failed)
+}
+
 /// Counters for the generation report and the settings screen (§8.2).
 #[derive(Debug, Clone, Copy, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
