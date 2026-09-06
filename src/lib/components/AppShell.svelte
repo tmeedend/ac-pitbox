@@ -679,7 +679,7 @@
                    anatomie, et un circuit n'a simplement ni marque ni année.
                    Son auteur reste en dessous — c'est une source, pas une
                    partie de son nom. -->
-              <ModIdentity name={nav.sessionTrack.name}>
+              <ModIdentity name={nav.sessionTrack.name} year={trackDetail?.year}>
                 {#snippet after()}
                   {#if trackInactive}<span class="warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
                 {/snippet}
@@ -934,15 +934,25 @@
        grille confortable, pas celle de la dense. */
     --ident-size: 12.5px;
   }
-  .blk > * + * {
+  /* **`:global` obligatoire, et ce n'était pas une précaution de style.** Les
+     enfants de ce bloc sont des COMPOSANTS (`ImageSelectDropdown`,
+     `TrackSkinChecklistDropdown`) : leur élément racine porte le hachage de
+     leur propre fichier, pas celui-ci. Svelte compilait donc
+     `.blk > * + *` en `.blk.svelte-xxx > :where(.svelte-xxx) + :where(.svelte-xxx)`,
+     que le `<div class="isd">` du sélecteur ne satisfait jamais — **la règle
+     des cinq pixels n'a donc jamais rien espacé**, et la correction de la
+     marge sous le nom, écrite de la même façon, n'a rien corrigé non plus.
+     Cherché dans le CSS compilé après un premier essai infructueux ; c'est le
+     seul endroit où ça se voit. */
+  .blk > :global(* + *) {
     margin-top: 5px;
   }
   /* **Le nom du mod ne touche pas le champ qui suit.** Cinq pixels séparent
      bien deux champs entre eux — ils forment une liste — mais pas une identité
-     d'un contrôle : le nom de la voiture se lisait collé à la liste déroulante
-     « Livrée », comme s'il en était l'étiquette. L'écart marque la frontière
-     entre ce qu'on a choisi et ce qu'on règle dessus. */
-  .blk > .pick + * {
+     d'un contrôle : le nom se lisait collé à la liste déroulante « Livrée »,
+     comme s'il en était l'étiquette. L'écart marque la frontière entre ce
+     qu'on a choisi et ce qu'on règle dessus. */
+  .blk > :global(.pick + *) {
     margin-top: 12px;
   }
   /* Zone qui NAVIGUE (SPEC §9.1) : vignette + nom + source, et rien d'autre.
