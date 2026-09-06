@@ -1056,10 +1056,12 @@
                 </svg>
               {/if}
             </button>
-            {#if isCar && gridThumbs}
-              <!-- Refaire la vignette de la grille. Visible en photo comme en
-                   3D : on vient souvent de la voir de travers dans la grille,
-                   et c'est justement pour ça qu'on est sur la photo. -->
+            {#if isCar && gridThumbs && !preview3d}
+              <!-- Refaire la vignette de la grille — **en mode photo
+                   seulement**. La vignette EST une image, et c'est l'image
+                   qu'on est en train de regarder : la refaire depuis l'aperçu
+                   3D, qui est vivant et qu'aucun bouton ne fige, demandait de
+                   se souvenir qu'il existe une deuxième image ailleurs. -->
               <button
                 class="hero-btn"
                 type="button"
