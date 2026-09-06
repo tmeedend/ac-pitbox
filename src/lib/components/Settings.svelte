@@ -14,7 +14,7 @@
   } from "$lib/config";
   import { t, setLocale, availableLocales, localeNames } from "$lib/i18n/index.svelte";
   import { ZOOM_LEVELS } from "$lib/zoom.svelte";
-  import { applyZoomFor } from "$lib/bigpicture.svelte";
+  import { applyZoomFor, bigPictureState, bigPictureView, forcedViewFor } from "$lib/bigpicture.svelte";
   import { nav, setSectionGuard } from "$lib/nav.svelte";
   import { preview3dDirty, revertPreview3dPrefs, savePreview3dPrefs } from "$lib/preview3dPrefs.svelte";
   import { listShowrooms, type ShowroomOption } from "$lib/launch";
@@ -195,6 +195,17 @@
     config.prefs.bigpicture_zoom = value ? Number(value) : null;
     applyZoomFor(config.prefs);
   }
+
+  /** Les vues proposées, plus « garder la vue en cours ». */
+  const BIGPICTURE_VIEWS = ["comfortable", "dense", "table", "keep"] as const;
+
+  /** Aperçu immédiat, comme pour le zoom voisin et pour la même raison : ce
+   * réglage ne se juge que depuis le Big Picture, et n'agir qu'à la prochaine
+   * entrée revient à n'agir sur rien pour qui le règle depuis le mode. */
+  function onBigPictureViewChange(value: string) {
+    config.prefs.bigpicture_view = value || null;
+    if (bigPictureState.active) bigPictureView.forced = forcedViewFor(config.prefs.bigpicture_view);
+  }
 </script>
 
 <div class="settings" class:wide={activeTab === "preview"}>
@@ -257,6 +268,22 @@
           </select>
         </label>
         <p class="hint">{t("settings.bigpictureZoomHint")}</p>
+      </section>
+
+      <section class="lang-section">
+        <label>
+          <span>{t("settings.bigpictureView")}</span>
+          <select
+            class="input"
+            value={config.prefs.bigpicture_view ?? "comfortable"}
+            onchange={(e) => onBigPictureViewChange(e.currentTarget.value)}
+          >
+            {#each BIGPICTURE_VIEWS as id (id)}
+              <option value={id}>{t(`settings.bigpictureView.${id}`)}</option>
+            {/each}
+          </select>
+        </label>
+        <p class="hint">{t("settings.bigpictureViewHint")}</p>
       </section>
 
       <section class="lang-section">

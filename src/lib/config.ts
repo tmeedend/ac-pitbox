@@ -11,6 +11,9 @@ export interface Prefs {
   ui_zoom: number | null;
   /** Zoom appliqué en plus de `ui_zoom` en mode Big Picture ; `null` = reprend `ui_zoom`. */
   bigpicture_zoom: number | null;
+  /** Vue imposée en Big Picture : "dense" | "comfortable" | "table" | "keep".
+   * `null` = le défaut, les vignettes espacées. */
+  bigpicture_view: string | null;
   /** Scène de l'aperçu 3D (`content/showroom/<id>`) ; `null` = la plus légère. */
   showroom_scene: string | null;
   /** Extraction des fichiers annexes du mod à l'import (§4.5.2) — jamais reposée
@@ -69,6 +72,7 @@ export function emptyConfig(): AppConfig {
       language: null,
       ui_zoom: null,
       bigpicture_zoom: null,
+      bigpicture_view: null,
       showroom_scene: null,
       resource_extraction_mode: "info_only",
       keep_source_archive: false,

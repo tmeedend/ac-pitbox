@@ -263,7 +263,13 @@
     "saving": "Saving…",
     "discard": "Discard changes",
     "unsavedTitle": "Unsaved changes",
-    "unsavedPrompt": "Some settings were changed (and already applied as a live preview, e.g. zoom/language) but not saved. Save, or discard and revert?"
+    "unsavedPrompt": "Some settings were changed (and already applied as a live preview, e.g. zoom/language) but not saved. Save, or discard and revert?",
+    "bigpictureView": "Library view",
+    "bigpictureView.comfortable": "Spacious thumbnails",
+    "bigpictureView.dense": "Dense thumbnails",
+    "bigpictureView.table": "Table",
+    "bigpictureView.keep": "Keep the current view",
+    "bigpictureViewHint": "What the library shows in Big Picture. Your usual setting comes back on the way out."
   },
   "bigpicture": {
     "exit": "✕ Exit Big Picture (Esc)"
@@ -1388,7 +1394,7 @@
       "noSample": "Assetto Corsa ships no image for this one.",
       "no3d": "3D fitting could not start. The gallery is still yours to use.",
       "noBody": "No body to show: the car names none, or it is not installed.",
-      "drag": "right-drag to move",
+      "drag": "drag to turn · right-drag to move",
       "updating": "Updating…"
     },
     "notice": {

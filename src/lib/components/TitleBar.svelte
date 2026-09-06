@@ -30,7 +30,55 @@
   function closeWin() {
     win.close();
   }
+
+  /**
+   * Les huit bords de la fenêtre, en poignées invisibles.
+   *
+   * **Sans elles, la fenêtre n'est pas redimensionnable du tout** —
+   * `decorations: false` (tauri.conf.json) retire la zone non-cliente de
+   * Windows, et avec elle les bordures de redimensionnement ET le curseur en
+   * double flèche qui les annonce. Le défaut est là depuis que la barre de
+   * titre est faite maison ; il ne se voyait pas fenêtre maximisée, qui est
+   * l'état dans lequel on développe.
+   *
+   * Rien à dessiner : chaque poignée est une bande transparente de six pixels
+   * posée sur le bord, dont le seul rôle est de porter un curseur et de passer
+   * la main à `startResizeDragging`. C'est Windows qui redimensionne ensuite,
+   * donc l'aperçu d'accrochage et le double-clic d'étirement vertical
+   * fonctionnent comme sur n'importe quelle fenêtre.
+   *
+   * Les coins passent devant les côtés (`z-index`) : sur six pixels, viser un
+   * coin est déjà difficile, et un côté qui gagnerait la superposition rendrait
+   * la diagonale inatteignable.
+   */
+  const EDGES = [
+    ["n", "North"],
+    ["s", "South"],
+    ["e", "East"],
+    ["w", "West"],
+    ["nw", "NorthWest"],
+    ["ne", "NorthEast"],
+    ["sw", "SouthWest"],
+    ["se", "SouthEast"],
+  ] as const;
+
+  function grab(event: PointerEvent, direction: (typeof EDGES)[number][1]) {
+    // Bouton gauche seulement : un clic droit sur un bord n'est pas un geste
+    // de redimensionnement, et l'attraper couperait le menu contextuel.
+    if (event.button !== 0) return;
+    event.preventDefault();
+    void win.startResizeDragging(direction);
+  }
 </script>
+
+<!-- Masquées quand la fenêtre est maximisée : il n'y a plus de bord à tirer, et
+     une bande active sur le bord de l'écran gênerait le pointage des boutons. -->
+{#if !maximized}
+  {#each EDGES as [side, direction] (side)}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="edge {side}" onpointerdown={(e) => grab(e, direction)}></div>
+  {/each}
+{/if}
 
 <div class="titlebar">
   <!-- Zone de déplacement de fenêtre (chrome OS, pas du contenu de document) :
@@ -78,6 +126,70 @@
 </div>
 
 <style>
+  .edge {
+    position: fixed;
+    z-index: 1000;
+  }
+  .n,
+  .s {
+    left: 0;
+    right: 0;
+    height: 6px;
+    cursor: ns-resize;
+  }
+  .e,
+  .w {
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    cursor: ew-resize;
+  }
+  .n {
+    top: 0;
+  }
+  .s {
+    bottom: 0;
+  }
+  .w {
+    left: 0;
+  }
+  .e {
+    right: 0;
+  }
+  /* Les coins par-dessus les côtés : sur six pixels, un côté qui gagnerait la
+     superposition rendrait la diagonale inatteignable. */
+  .nw,
+  .ne,
+  .sw,
+  .se {
+    width: 12px;
+    height: 12px;
+    z-index: 1001;
+  }
+  .nw,
+  .ne {
+    top: 0;
+  }
+  .sw,
+  .se {
+    bottom: 0;
+  }
+  .nw,
+  .sw {
+    left: 0;
+  }
+  .ne,
+  .se {
+    right: 0;
+  }
+  .nw,
+  .se {
+    cursor: nwse-resize;
+  }
+  .ne,
+  .sw {
+    cursor: nesw-resize;
+  }
   /* Position fixe (pas un enfant flex de .frame) : garantit qu'elle reste
      toujours visible en haut de la fenêtre, quel que soit ce qui défile
      dans le contenu en dessous (bug signalé : les boutons disparaissaient

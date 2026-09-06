@@ -263,7 +263,13 @@
     "saving": "Enregistrement…",
     "discard": "Annuler les modifications",
     "unsavedTitle": "Modifications non enregistrées",
-    "unsavedPrompt": "Des réglages ont été modifiés (et déjà appliqués en aperçu, ex. zoom/langue) mais pas enregistrés. Enregistrer, ou annuler et revenir en arrière ?"
+    "unsavedPrompt": "Des réglages ont été modifiés (et déjà appliqués en aperçu, ex. zoom/langue) mais pas enregistrés. Enregistrer, ou annuler et revenir en arrière ?",
+    "bigpictureView": "Vue de bibliothèque",
+    "bigpictureView.comfortable": "Vignettes espacées",
+    "bigpictureView.dense": "Vignettes denses",
+    "bigpictureView.table": "Tableau",
+    "bigpictureView.keep": "Garder la vue en cours",
+    "bigpictureViewHint": "Ce que la bibliothèque affiche en Big Picture. Le réglage habituel est retrouvé en sortant."
   },
   "bigpicture": {
     "exit": "✕ Quitter Big Picture (Échap)"
@@ -1388,7 +1394,7 @@
       "noSample": "Assetto Corsa ne fournit pas d'image pour celui-ci.",
       "no3d": "L'essayage en 3D n'a pas pu démarrer. La galerie reste utilisable.",
       "noBody": "Aucun corps à afficher : la voiture n'en nomme aucun, ou il n'est pas installé.",
-      "drag": "clic droit pour déplacer",
+      "drag": "glisser pour tourner · clic droit pour déplacer",
       "updating": "Mise à jour…"
     },
     "notice": {

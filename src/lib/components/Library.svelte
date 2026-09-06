@@ -23,6 +23,7 @@
     type ColumnDef,
   } from "$lib/columns";
   import { nav, pickSession } from "$lib/nav.svelte";
+  import { bigPictureView } from "$lib/bigpicture.svelte";
   import { withoutBrand } from "$lib/displayName";
   import ModIdentity from "./ModIdentity.svelte";
   import { moveFocus } from "$lib/gamepadNav";
@@ -107,7 +108,11 @@
    * liste reste la liste. Persistée **par type**, comme le tri et les colonnes
    * — voitures et circuits ne se regardent pas de la même façon, et c'est déjà
    * la règle de tout le reste de cet écran. */
+  /** La vue que l'utilisateur a choisie, et que `ui_prefs.json` garde. */
   let view = $state<GridView>("dense");
+  /** Celle qu'on AFFICHE : le Big Picture peut en imposer une autre le temps
+   * qu'il dure, sans toucher au réglage (voir `bigPictureView`). */
+  const shown = $derived(bigPictureView.forced ?? view);
   /** Préférence de présentation, pas d'identité : le nom stocké n'est jamais
    * touché (voir `displayName.ts`). */
   /** **Vrai par défaut** depuis que la marque a sa propre ligne au-dessus du
@@ -117,7 +122,7 @@
    * bascule (voir la lecture dans `loadPrefs`). */
   let hideBrand = $state(true);
   let showDisplay = $state(false);
-  const isGrid = $derived(view !== "table");
+  const isGrid = $derived(shown !== "table");
   let sortKey = $state<string>("name");
   let sortDir = $state<1 | -1>(1);
   // Garde toutes les persistances ci-dessous tant que l'onMount plus bas n'a
@@ -351,6 +356,10 @@
   }
 
   function setView(v: GridView) {
+    // Un choix explicite l'emporte sur le défaut du Big Picture : sans cette
+    // ligne, cliquer sur « tableau » en mode salon ne changerait rien à
+    // l'écran, la surcouche continuant de gagner.
+    bigPictureView.forced = null;
     view = v;
     if (prefsReady) setUiPref(KEYS.view, v);
   }
@@ -782,7 +791,7 @@
       resultCount={filtered.length}
     >
       {#snippet end()}
-        {#if view === "table"}
+        {#if shown === "table"}
           <div class="columns-wrap">
             <button class="btn" type="button" onclick={() => (showColumns = !showColumns)}>{t("library.columns")}</button>
             {#if showColumns}
@@ -808,9 +817,9 @@
              du complément de celui-ci. -->
         <div class="view-wrap">
           <div class="seg view">
-            <button class:on={view === "dense"} onclick={() => setView("dense")} title={t("library.viewDense")}>▦</button>
-            <button class:on={view === "comfortable"} onclick={() => setView("comfortable")} title={t("library.viewComfortable")}>▤</button>
-            <button class:on={view === "table"} onclick={() => setView("table")} title={t("library.viewList")}>☰</button>
+            <button class:on={shown === "dense"} onclick={() => setView("dense")} title={t("library.viewDense")}>▦</button>
+            <button class:on={shown === "comfortable"} onclick={() => setView("comfortable")} title={t("library.viewComfortable")}>▤</button>
+            <button class:on={shown === "table"} onclick={() => setView("table")} title={t("library.viewList")}>☰</button>
           </div>
         <!-- Les préférences de présentation vivent **ici** et non dans les
              réglages globaux : il faut en voir l'effet pour les juger, et un
@@ -825,7 +834,7 @@
                   <!-- `name` partagé : sans lui les trois boutons sont trois
                        cases indépendantes pour le navigateur, et le clavier
                        n'y circule plus comme dans un groupe. -->
-                  <input type="radio" name="pitbox-density" checked={view === id} onchange={() => setView(id as GridView)} />
+                  <input type="radio" name="pitbox-density" checked={shown === id} onchange={() => setView(id as GridView)} />
                   <span>{t(key)}</span>
                 </label>
               {/each}
@@ -857,7 +866,7 @@
         {/if}
       </div>
     {:else if isGrid}
-      <div class="grid" class:comfortable={view === "comfortable"}>
+      <div class="grid" class:comfortable={shown === "comfortable"}>
         {#each filtered as c (c.id_interne)}
           {@const prefSkin = isCar ? getPreferredSkin(c.id_interne) : null}
           {@const prefLayout = !isCar ? getPreferredLayout(c.id_interne) : null}

@@ -31,6 +31,15 @@ pub struct Prefs {
     /// est actif (§ mode Big Picture). `None` = pas de zoom supplémentaire
     /// (reprend `ui_zoom`). Utile en usage salon/manette, écran vu de loin.
     pub bigpicture_zoom: Option<u32>,
+    /// Vue de bibliothèque imposée à l'entrée en Big Picture : `"dense"`,
+    /// `"comfortable"`, `"table"`, ou `"keep"` pour garder celle en cours.
+    /// `None` = `"comfortable"`, les vignettes espacées — un écran regardé de
+    /// loin veut de grandes images, pas de la densité.
+    ///
+    /// Chaîne libre et non énumération : le champ traverse la config en JSON,
+    /// et la liste des vues appartient au frontend, qui est le seul à savoir
+    /// ce qu'il sait afficher.
+    pub bigpicture_view: Option<String>,
     /// Scène utilisée par l'aperçu 3D (`content/showroom/<id>`, nom de dossier).
     /// `None` = `showroom::DEFAULT_SHOWROOM`, la plus légère.
     pub showroom_scene: Option<String>,
@@ -62,6 +71,7 @@ impl Default for Prefs {
             language: None,
             ui_zoom: None,
             bigpicture_zoom: None,
+            bigpicture_view: None,
             showroom_scene: None,
             resource_extraction_mode: "info_only".into(),
             keep_source_archive: false,

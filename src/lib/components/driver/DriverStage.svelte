@@ -271,6 +271,7 @@
   async function build(node: HTMLDivElement, url: string, rig: DriverRig): Promise<Stage> {
     const THREE = await import("three");
     const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
+    const { OrbitControls } = await import("three/examples/jsm/controls/OrbitControls.js");
     const { showroomEnvironment } = await import("../detail/showroomEnvironment");
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -287,12 +288,17 @@
     // reste rien à voir, or ici **le contraste prime sur le réalisme** (§5.1).
     // D'où deux lampes explicites par-dessus l'environnement, l'une de face à
     // gauche, l'autre en contre pour décoller la silhouette du fond.
+    //
+    // **Accrochées à la caméra, et c'est ce qui rend l'orbite possible.** Le
+    // plateau tournait autrefois le sujet plutôt que la caméra, précisément
+    // pour garder la lumière du côté du spectateur ; des lampes filles de la
+    // caméra obtiennent le même résultat en laissant la caméra bouger, donc
+    // sans interdire le second axe de rotation. Leurs positions sont désormais
+    // relatives à la caméra, pas au monde.
     const key = new THREE.DirectionalLight(0xffffff, 2.4);
     key.position.set(-1.2, 1.4, 2.2);
-    world.add(key);
     const rim = new THREE.DirectionalLight(0xffffff, 0.9);
     rim.position.set(1.4, 0.8, -1.8);
-    world.add(rim);
     world.add(new THREE.AmbientLight(0xffffff, 0.35));
 
     const gltf = await new GLTFLoader().loadAsync(url);
@@ -335,6 +341,11 @@
     world.add(pivot);
 
     const camera = new THREE.PerspectiveCamera(FOV, 1, 0.02, 40);
+    camera.add(key);
+    camera.add(rim);
+    // Une caméra rend même hors du graphe, mais **ses enfants non** : sans
+    // cette ligne, les deux lampes n'éclaireraient rien.
+    world.add(camera);
     world.add(camera);
 
     node.replaceChildren(renderer.domElement);
@@ -353,29 +364,21 @@
     // et faire orbiter la caméra le laisserait derrière le sujet dès qu'on
     // regarde son dos. Un plateau tournant garde la lumière du côté du
     // spectateur, quelle que soit la face montrée.
-    // Facteur de zoom appliqué **par-dessus** le cadrage de la piste, jamais à
-    // sa place : le cadrage se recalcule à chaque changement de piste, et
-    // écrire directement dans `distance` verrait ce réglage effacé au premier
-    // clic sur « Casque ». Un multiplicateur survit à ces recadrages — se
-    // rapprocher une fois vaut pour toutes les pistes.
-    let zoom = 1;
-    // Décalage vertical du regard, en mètres, appliqué à la caméra **et** au
-    // point visé : les deux ensemble font une translation, un seul ferait une
-    // plongée.
-    let height = 0;
+    /** Pose la caméra au cadrage voulu, vue de trois-quarts avant gauche. */
     const place = () => {
-      const d = distance * zoom;
-      const at = target.clone();
-      at.y += height;
       camera.position.set(
-        at.x + d * Math.sin(VIEW_AZIMUTH) * Math.cos(VIEW_ELEVATION),
-        at.y + d * Math.sin(VIEW_ELEVATION),
-        at.z + d * Math.cos(VIEW_AZIMUTH) * Math.cos(VIEW_ELEVATION),
+        target.x + distance * Math.sin(VIEW_AZIMUTH) * Math.cos(VIEW_ELEVATION),
+        target.y + distance * Math.sin(VIEW_ELEVATION),
+        target.z + distance * Math.cos(VIEW_AZIMUTH) * Math.cos(VIEW_ELEVATION),
       );
-      camera.lookAt(at);
+      controls.target.copy(target);
+      controls.update();
     };
 
+    /** La piste cadrée en dernier : c'est là que le double-clic ramène. */
+    let framed: StageLane = "body";
     const frame = (wanted: StageLane, instant: boolean) => {
+      framed = wanted;
       const box = new THREE.Box3().setFromObject(gltf.scene);
       const shot = framingFor(THREE, wanted, rig, box);
       const wantedDistance = (shot.radius * MARGIN) / Math.tan((FOV * Math.PI) / 360);
@@ -389,87 +392,37 @@
       animation = { from: target.clone(), to: shot.target, d0: distance, d1: wantedDistance, t: 0 };
     };
 
-    // --- souris : le pilote tourne, la caméra monte et descend ---
+    // --- souris : les mêmes gestes que l'aperçu de la voiture -------------
     //
-    // Deux gestes sur un seul glissé, et ils n'agissent pas sur le même objet :
-    // à l'horizontale c'est le **plateau** qui pivote (l'éclairage reste du
-    // côté du spectateur, §5.1), à la verticale c'est la **caméra** qui monte
-    // ou descend le long du sujet. Faire pivoter la caméra en site l'aurait
-    // fait plonger sur le crâne ou remonter sous le menton ; ce qu'on veut en
-    // regardant une tenue, c'est passer du casque aux gants sans changer de
-    // point de vue.
-    let dragging = false;
-    let lastX = 0;
-    let lastY = 0;
-    // **Bouton droit seulement.** Le geste est le même que sur l'aperçu de la
-    // voiture — déplacer le sujet dans le plan de l'écran — et il doit donc se
-    // faire du même doigt. Le bouton gauche n'a plus rien à faire ici : il ne
-    // portait que ce geste-là, contrairement à l'aperçu voiture où il garde
-    // l'orbite. Le laisser en double aurait surtout appris deux gestes
-    // différents pour deux écrans qui montrent la même chose.
-    const RIGHT_BUTTON = 2;
-    const onDown = (e: PointerEvent) => {
-      if (e.button !== RIGHT_BUTTON) return;
-      e.preventDefault();
-      dragging = true;
-      lastX = e.clientX;
-      lastY = e.clientY;
-      renderer.domElement.setPointerCapture(e.pointerId);
-    };
-    const onMove = (e: PointerEvent) => {
-      if (!dragging) return;
-      pivot.rotation.y += (e.clientX - lastX) * 0.008;
-      // Le déplacement se mesure en fraction du cadrage courant, pas en
-      // mètres : de près un pixel doit valoir moins qu'en plan large, sinon
-      // le sujet saute hors champ au premier geste.
-      const span = distance * zoom;
-      height = Math.max(-HEIGHT_RANGE, Math.min(HEIGHT_RANGE, height + (e.clientY - lastY) * 0.0016 * span));
-      lastX = e.clientX;
-      lastY = e.clientY;
-      place();
-    };
-    const onUp = (e: PointerEvent) => {
-      if (!dragging) return;
-      dragging = false;
-      renderer.domElement.releasePointerCapture(e.pointerId);
-    };
-    // Sans quoi le menu du navigateur s'ouvrirait sur le plateau au premier
-    // geste. `OrbitControls` fait de même de son côté pour l'aperçu voiture.
-    const onContextMenu = (e: Event) => e.preventDefault();
-    // Molette : zoom, comme sur l'aperçu 3D de la voiture (qui l'a par ses
-    // `OrbitControls`, absents ici — le plateau tourne le sujet, pas la
-    // caméra). `passive: false` et `preventDefault` : sans ça la molette
-    // ferait défiler le panneau d'essayage, qui a son propre `overflow`, et
-    // le pilote sortirait de l'écran au lieu de grossir.
-    // Un pilote assis tient dans deux mètres : au-delà, on ne regarde plus rien.
-    const HEIGHT_RANGE = 1.0;
-    const ZOOM_MIN = 0.35;
-    const ZOOM_MAX = 2.5;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      // Pas multiplicatif : un cran donne le même rapport de près comme de
-      // loin, là où un pas fixe traverserait le sujet en deux crans au plus
-      // près et n'avancerait plus au plus loin.
-      const factor = Math.exp(e.deltaY * 0.001);
-      zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom * factor));
-      place();
-    };
+    // **Les mêmes, littéralement : les `OrbitControls` de three.** Le plateau
+    // avait sa mécanique à lui — glisser à l'horizontale tournait le sujet, à
+    // la verticale montait la caméra — et cette moitié verticale n'était pas
+    // une rotation : impossible de regarder le pilote d'en haut ou d'en bas.
+    // Deux écrans qui montrent la même chose ne doivent pas demander deux
+    // gestes différents, et le second axe manquait vraiment.
+    //
+    // Ce que le plateau protégeait — la lumière reste du côté du spectateur —
+    // est repris par les lampes filles de la caméra, plus haut.
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    // Clic droit : déplacer, dans le plan de l'écran.
+    controls.enablePan = true;
+    controls.screenSpacePanning = true;
+    // Un pilote assis n'a pas de sol sous lui, mais passer par-dessus le pôle
+    // retourne l'image : on s'arrête juste avant, des deux côtés.
+    controls.minPolarAngle = 0.08;
+    controls.maxPolarAngle = Math.PI - 0.08;
+    controls.minDistance = 0.15;
+    controls.maxDistance = 8;
+
     // Double-clic : remise de face **et** cadrage d'origine (§5.1). Le zoom
     // n'ayant pas de commande à l'écran, il lui faut une marche arrière, et
     // c'est déjà le geste « remets tout comme c'était ».
     const onDouble = () => {
-      pivot.rotation.y = 0;
-      zoom = 1;
-      height = 0;
-      place();
+      frame(framed, true);
     };
-    renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
-    renderer.domElement.addEventListener("pointerdown", onDown);
-    renderer.domElement.addEventListener("pointermove", onMove);
-    renderer.domElement.addEventListener("pointerup", onUp);
-    renderer.domElement.addEventListener("pointercancel", onUp);
     renderer.domElement.addEventListener("dblclick", onDouble);
-    renderer.domElement.addEventListener("contextmenu", onContextMenu);
 
     const resize = () => {
       const width = node.clientWidth;
@@ -498,6 +451,9 @@
         place();
         if (animation.t >= 1) animation = null;
       }
+      // L'amortissement des contrôles ne bouge que si on le lui demande, à
+      // chaque image.
+      controls.update();
       renderer.render(world, camera);
     };
     raf = requestAnimationFrame(tick);
@@ -505,13 +461,8 @@
     const dispose = () => {
       cancelAnimationFrame(raf);
       observer.disconnect();
-      renderer.domElement.removeEventListener("wheel", onWheel);
-      renderer.domElement.removeEventListener("contextmenu", onContextMenu);
-      renderer.domElement.removeEventListener("pointerdown", onDown);
-      renderer.domElement.removeEventListener("pointermove", onMove);
-      renderer.domElement.removeEventListener("pointerup", onUp);
-      renderer.domElement.removeEventListener("pointercancel", onUp);
       renderer.domElement.removeEventListener("dblclick", onDouble);
+      controls.dispose();
       gltf.scene.traverse((object) => {
         const mesh = object as ThreeModule.Mesh;
         if (!mesh.isMesh) return;

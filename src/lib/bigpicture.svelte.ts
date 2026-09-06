@@ -8,6 +8,31 @@ import { musicEnterBigPicture, musicExitBigPicture } from "./music";
 
 export const bigPictureState = $state<{ active: boolean }>({ active: false });
 
+/** Les vues de bibliothèque, plus la valeur qui dit « n'y touche pas ». */
+export type BigPictureView = "dense" | "comfortable" | "table" | "keep";
+
+/** Ce que la bibliothèque affiche **tant que le Big Picture est actif**.
+ *
+ * Une surcouche et non une écriture du réglage : le mode est passager, et
+ * revenir en fenêtré doit rendre à l'utilisateur la vue qu'il avait choisie —
+ * pas celle que le salon lui a imposée entre-temps. `Library` lit donc ceci
+ * par-dessus sa propre préférence, sans jamais la remplacer.
+ *
+ * `null` quand rien n'est imposé : hors Big Picture, ou quand le réglage vaut
+ * « garder la vue en cours », ou quand l'utilisateur a lui-même changé de vue
+ * une fois dedans — un choix explicite l'emporte toujours sur un défaut.
+ */
+export const bigPictureView = $state<{ forced: Exclude<BigPictureView, "keep"> | null }>({ forced: null });
+
+/** La vue à imposer d'après le réglage, ou `null` s'il n'y a rien à imposer. */
+export function forcedViewFor(setting: string | null | undefined): Exclude<BigPictureView, "keep"> | null {
+    if (setting === "keep") return null;
+    if (setting === "dense" || setting === "comfortable" || setting === "table") return setting;
+    // Défaut, réglage absent ou valeur devenue inconnue : les vignettes
+    // espacées. Un écran regardé de loin veut de grandes images.
+    return "comfortable";
+}
+
 /** Applies the zoom of the mode currently ON SCREEN.
  *
  * Two zoom settings, only one of them showing at any time: Big Picture has its
@@ -55,6 +80,8 @@ export async function enterBigPicture(): Promise<void> {
     await win.setSize(monitor.size);
   }
 
+  bigPictureView.forced = forcedViewFor(cfg.prefs.bigpicture_view);
+
   // Flag first, zoom after: `applyZoomFor` reads the flag to know which of the
   // two settings is the one showing.
   bigPictureState.active = true;
@@ -85,6 +112,9 @@ export async function exitBigPicture(): Promise<void> {
     if (previousPosition) await win.setPosition(previousPosition);
   }
   setZoom(previousZoom);
+  // La surcouche tombe avec le mode : la bibliothèque retrouve la vue que
+  // l'utilisateur avait choisie, jamais celle du salon.
+  bigPictureView.forced = null;
   bigPictureState.active = false;
   await musicExitBigPicture();
 }
