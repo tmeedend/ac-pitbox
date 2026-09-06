@@ -75,8 +75,9 @@ impl CspConfig {
         }
         sources.push(car_dir.join("extension").join("ext_config.ini"));
         // Les mods rangent souvent leurs matériaux à part, tirés par un
-        // `[INCLUDE: materials.ini]` — que l'on ne suit pas, mais dont le nom
-        // est assez stable pour être lu directement.
+        // `[INCLUDE: materials.ini]`. Le nom est assez stable pour être listé
+        // ici même quand le fichier ne l'inclut pas ; les autres arrivent par
+        // [`with_includes`].
         sources.push(car_dir.join("extension").join("materials.ini"));
         if let (Some(ac), false) = (ac_install, car_id.is_empty()) {
             sources.push(
@@ -87,7 +88,11 @@ impl CspConfig {
                     .join(format!("{car_id}.ini")),
             );
         }
-        Self { sources }
+        let mut expanded = Vec::new();
+        for source in sources {
+            with_includes(source, &mut expanded);
+        }
+        Self { sources: expanded }
     }
 
     /// Every file that may carry a declaration, most specific first. Files that
@@ -96,6 +101,60 @@ impl CspConfig {
     pub fn sources(&self) -> &[PathBuf] {
         &self.sources
     }
+}
+
+/// Plafond de fichiers lus pour une voiture, cycles d'inclusion compris.
+const MAX_CONFIG_SOURCES: usize = 32;
+
+/// Ajoute un fichier de configuration, puis ceux qu'il inclut, dans cet ordre.
+///
+/// **Un mod range rarement tout dans `ext_config.ini`** : il découpe en
+/// `materials.ini`, `pbr.ini`, `lights.ini`, `refraction.ini`… et les rappelle
+/// par `[INCLUDE: …]`. Seul `materials.ini` était lu, par son nom ; tout le
+/// reste était invisible. Bug réel sur `rj_honda_civic_eg6_tuned`, dont les
+/// phares sortaient en aplat noir : ce qui les rend transparents est une
+/// section `[REFRACTING_HEADLIGHT_…]` de `refraction.ini`, fichier que rien
+/// n'ouvrait.
+///
+/// **Seuls les fichiers frères sont suivis.** Un `[INCLUDE: common/…]` ne
+/// désigne pas un fichier de la voiture mais un template de CSP, résolu contre
+/// son propre dossier — et ces templates sont précisément ce que ce module
+/// renonce à interpréter (voir la documentation du module). D'où le filtre sur
+/// le séparateur de chemin, qui écarte aussi tout échappement hors du dossier.
+///
+/// L'ordre compte : la résolution garde la **première** correspondance, donc
+/// un fichier inclus se range juste derrière celui qui l'inclut, et devant les
+/// sources plus générales. Le doublon est écarté (`materials.ini` est à la
+/// fois listé d'office et inclus par la plupart des mods), ce qui suffit aussi
+/// à rompre un cycle.
+fn with_includes(path: PathBuf, out: &mut Vec<PathBuf>) {
+    if out.len() >= MAX_CONFIG_SOURCES || out.contains(&path) {
+        return;
+    }
+    let text = std::fs::read_to_string(&path).ok();
+    let dir = path.parent().map(Path::to_path_buf);
+    out.push(path);
+    let (Some(dir), Some(text)) = (dir, text) else {
+        return;
+    };
+    for name in includes(&text) {
+        with_includes(dir.join(name), out);
+    }
+}
+
+/// Les fichiers frères qu'un texte de configuration inclut.
+fn includes(text: &str) -> Vec<String> {
+    parse_sections(text)
+        .into_iter()
+        .filter_map(|section| {
+            let (keyword, name) = section.name.split_once(':')?;
+            if !keyword.trim().eq_ignore_ascii_case("INCLUDE") {
+                return None;
+            }
+            let name = name.trim();
+            (!name.is_empty() && !name.contains(['/', '\\'])).then(|| name.to_string())
+        })
+        .collect()
 }
 
 /// What CSP's material templates say a surface is.
@@ -114,6 +173,10 @@ pub struct SurfaceOverride {
     pub clearcoat: Option<(f32, f32)>,
     /// Physical glass: index of refraction, transmission coming with it.
     pub glass_ior: Option<f32>,
+    /// Ce verre-là ne remplace la conversion que là où elle produirait une
+    /// surface **opaque** — voir la section `REFRACTING_HEADLIGHT` de
+    /// [`collect_materials`].
+    pub glass_only_if_opaque: bool,
 }
 
 impl SurfaceOverride {
@@ -476,6 +539,49 @@ fn collect_materials(text: &str, skin_id: &str, car_paint: &mut Vec<String>, out
             }
         }
 
+        // **Un phare est du verre que rien d'autre ne déclare comme tel.**
+        //
+        // `[REFRACTING_HEADLIGHT_…]` n'est pas un template de matériau : c'est
+        // l'optique entière que CSP reconstruit — la vitre, ce qu'il y a
+        // derrière (`INSIDE`), les ampoules, le miroir du réflecteur. On n'en
+        // retient que la vitre, et seulement le fait qu'elle est du verre
+        // d'indice `IOR`.
+        //
+        // Sans ça, la vitre est prise au mot de sa diffuse, qui n'est pas une
+        // couleur : `ext_headlight_glass` de `rj_honda_civic_eg6_tuned` est un
+        // `ksPerPixelNM` opaque dont la texture (`glass.dds`, 64×64) vaut
+        // (32,32,32) et (0,0,0) — un phare bouché en noir, alors que le jeu
+        // montre le réflecteur au travers. Même famille d'écart que les neuf
+        // de `docs/kn5-format.md` : AC remplit un champ standard d'une valeur
+        // que son shader n'utilise pas comme une couleur.
+        //
+        // `SURFACE` nomme des **maillages**, vérifié sur les deux voitures :
+        // le maillage `83` de la Civic porte `ext_headlight_glass`, et
+        // `tailights_glass_red` d'`amy_ek_cup` porte `glass_taillight`.
+        //
+        // **Et la déclaration ne vaut que là où la conversion échoue** :
+        // `glass_only_if_opaque`. Mesuré sur la bibliothèque — 74 voitures
+        // portent ces sections, pour 655 surfaces retrouvées dans leur
+        // modèle. **571 sont déjà en fondu ou en découpe** : leur verre rouge
+        // ou orange est rendu correctement, et le traitement CSP, qui jette la
+        // texture diffuse au motif que `smGlass` ne s'en sert pas comme d'une
+        // couleur, décolorerait tous les feux arrière de la bibliothèque.
+        // **84 sortent opaques, sur 27 voitures** — 81 en `ksPerPixelNM` —, et
+        // celles-là sont bouchées faute de savoir qu'il s'agit d'une optique.
+        // C'est exactement la population à corriger, `amy_ek_cup` et
+        // `rj_honda_civic_eg6_tuned` comprises.
+        if section.name.to_ascii_uppercase().starts_with("REFRACTING_HEADLIGHT") {
+            let glass = SurfaceOverride {
+                glass_ior: Some(glass_ior_of(&section)),
+                glass_only_if_opaque: true,
+                ..SurfaceOverride::default()
+            };
+            for name in section.list("SURFACE").unwrap_or_default() {
+                out.meshes.push((name, glass));
+            }
+            continue;
+        }
+
         let over = section_override(&section);
         if !over.is_empty() {
             let named = section.list("Materials").unwrap_or_default();
@@ -564,6 +670,7 @@ fn section_override(section: &Section) -> SurfaceOverride {
         roughness: smoothness.map(|s| (1.0 - s).clamp(0.0, 1.0)),
         clearcoat,
         glass_ior: None,
+        glass_only_if_opaque: false,
     }
 }
 
@@ -1665,6 +1772,82 @@ OriginalRims = RIM_?
         // Sans install AC connue, on ne peut que lire le dossier de la voiture.
         let alone = CspConfig::locate(car, None, None, "abarth500");
         assert_eq!(alone.sources().len(), 2, "pas de skin, pas d'install : deux fichiers");
+    }
+
+    // Règle : un `[INCLUDE: …]` qui nomme un fichier frère est suivi, un
+    // `common/…` ne l'est pas — celui-là désigne un template de CSP, résolu
+    // contre son propre dossier, et ce module ne les interprète pas.
+    //
+    // Bug réel sur `rj_honda_civic_eg6_tuned` : seul `materials.ini` était lu,
+    // par son nom, et les phares se déclarent dans `refraction.ini`.
+    #[test]
+    fn a_sibling_include_is_followed_and_a_template_one_is_not() {
+        let base = crate::testutil::temp_dir("includes");
+        let extension = base.join("extension");
+        std::fs::create_dir_all(&extension).unwrap();
+        std::fs::write(
+            extension.join("ext_config.ini"),
+            "[INCLUDE: common/materials_glass.ini]\n[INCLUDE: refraction.ini]\n[INCLUDE: absent.ini]\n",
+        )
+        .unwrap();
+        std::fs::write(extension.join("refraction.ini"), "[INCLUDE: deeper.ini]\n").unwrap();
+        std::fs::write(extension.join("deeper.ini"), "").unwrap();
+
+        let sources = CspConfig::locate(&base, None, None, "").sources().to_vec();
+        assert!(
+            sources.contains(&extension.join("refraction.ini")),
+            "le fichier frère inclus est lu"
+        );
+        assert!(
+            sources.contains(&extension.join("deeper.ini")),
+            "et ce qu'il inclut à son tour aussi"
+        );
+        assert!(
+            sources.contains(&extension.join("absent.ini")),
+            "un inclus absent reste listé : le voir apparaître doit invalider le cache"
+        );
+        assert!(
+            !sources.iter().any(|p| p.ends_with("materials_glass.ini")),
+            "un template de CSP n'est pas un fichier de la voiture"
+        );
+        assert!(
+            sources.iter().position(|p| p.ends_with("refraction.ini"))
+                > sources.iter().position(|p| p.ends_with("ext_config.ini")),
+            "un fichier inclus se range derrière celui qui l'inclut"
+        );
+    }
+
+    // Règle : `[REFRACTING_HEADLIGHT_…]` déclare que le maillage de son
+    // `SURFACE` est une optique, et rien d'autre de la section n'est retenu.
+    #[test]
+    fn a_refracting_headlight_declares_its_surface_to_be_glass() {
+        let over = collected(
+            "[REFRACTING_HEADLIGHT_...]
+SURFACE = 83
+INSIDE = 55_T
+IOR = 1.73
+GLASS_COLOR = 0.25,0.25,0.25
+",
+        );
+        assert!(over.materials.is_empty(), "la section ne nomme pas de matériau");
+        assert_eq!(
+            over.meshes,
+            vec![(
+                "83".to_string(),
+                SurfaceOverride {
+                    glass_ior: Some(1.73),
+                    glass_only_if_opaque: true,
+                    ..SurfaceOverride::default()
+                }
+            )],
+            "le maillage de la vitre devient du verre, et seulement là où la conversion le rendrait opaque"
+        );
+
+        // `INSIDE` nomme le réflecteur et les ampoules : ils restent opaques.
+        assert!(
+            !over.meshes.iter().any(|(name, _)| name == "55_T"),
+            "ce qu'il y a derrière la vitre n'est pas de la vitre"
+        );
     }
 
     fn collected(text: &str) -> MaterialOverrides {

@@ -224,6 +224,10 @@ pub fn convert(
                     diffuse_alpha_blank: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_blank()),
                     diffuse_alpha_opaque: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_opaque()),
                     diffuse_alpha_cutout: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_cutout()),
+                    diffuse_average: m
+                        .texture_for("txDiffuse")
+                        .and_then(|name| textures.get(name))
+                        .map(|t| t.average),
                     painted_diffuse: paint.painted_diffuse(index),
                     roughness_texture: roughness.roughness_texture(index),
                     csp: surfaces.get(&index).copied(),

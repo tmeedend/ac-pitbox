@@ -211,6 +211,10 @@ pub struct MaterialTextures {
     /// `FootprintAlpha::is_cutout` et la note sur le numéro de portière de
     /// `rss_gtm_lanzo_v10` dans [`convert`].
     pub diffuse_alpha_cutout: bool,
+    /// Couleur moyenne de la texture diffuse, quand il y en a une — la seule
+    /// chose qui sépare une lentille teintée d'un simple gabarit de vitre
+    /// (voir [`diffuse_carries_a_colour`]).
+    pub diffuse_average: Option<[f32; 3]>,
     /// Variante peinte de la texture diffuse, quand la carte de détail du
     /// matériau porte une couleur de peinture (voir [`crate::paint`]).
     pub painted_diffuse: Option<String>,
@@ -403,11 +407,33 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // La texture diffuse est écartée pour la même raison qu'un `ksWindscreen`
     // (écart n°6) : `smGlass` ne s'en sert pas comme d'une couleur, et la
     // garder pose un voile teinté devant l'habitacle.
-    if let Some(ior) = textures.csp.and_then(|c| c.glass_ior) {
+    // Une optique déclarée par `[REFRACTING_HEADLIGHT_…]` ne prend ce chemin
+    // qu'à deux conditions : que le KN5 la rende opaque, et que sa diffuse ne
+    // porte pas de couleur. Ce chemin **jette la texture** — juste pour un
+    // gabarit de vitre, ruineux pour une lentille teintée.
+    if let Some(ior) = textures
+        .csp
+        .filter(|csp| {
+            !csp.glass_only_if_opaque
+                || (alpha_mode == AlphaMode::Opaque && !diffuse_carries_a_colour(textures.diffuse_average))
+        })
+        .and_then(|csp| csp.glass_ior)
+    {
         return GltfMaterial {
             name: material.name.clone(),
+            // **Sauf quand cette diffuse est une couleur.** La règle ci-dessus
+            // vaut pour un pare-brise, dont la texture est une carte de
+            // saleté ; elle est ruineuse pour une lentille teintée, que les
+            // mods déclarent en verre tout autant. `amy_ek_cup` met ainsi ses
+            // feux arrière (`rgbab60000ff.dds`, rouge plein) dans un
+            // `[Material_Glass]` — décolorés, ils deviennent des vitres
+            // blanches à l'arrière d'une voiture. glTF teinte ce qui traverse
+            // par la couleur de base : la garder est exactement ce qu'il faut
+            // pour un verre coloré.
+            base_color_texture: diffuse_carries_a_colour(textures.diffuse_average)
+                .then(|| base_color_map(material))
+                .flatten(),
             shader: material.shader.clone(),
-            base_color_texture: None,
             normal_texture: normal_map(material),
             roughness_texture: None,
             // Une vitre n'a pas de grain répété, et son shader n'en déclare
@@ -491,7 +517,14 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // Uniquement hors verre : un vrai `ksWindscreen`/`*Glass` garde son
     // approximation même si son alpha se mesure opaque, pour la raison ci-
     // dessus (la transparence d'une vitre vient du reflet, pas de l'alpha).
-    let opaque_by_alpha = !is_glass_shader(shader) && textures.diffuse_alpha_opaque;
+    // **Ce que le matériau déclare l'emporte sur ce qu'on déduit de sa
+    // texture** (voir [`declared_opacity`]). Une opacité déclarée sous 1 dit
+    // « fais-moi fondre » : ni l'empreinte opaque ci-dessous, ni la découpe
+    // plus bas, ne doivent la contredire — le premier rendrait `overlay` noir
+    // plein, la seconde effacerait une décalcomanie en fondu.
+    let declared_opacity = declared_opacity(material);
+    let fades_by_declaration = declared_opacity.is_some_and(|opacity| opacity < 1.0);
+    let opaque_by_alpha = !is_glass_shader(shader) && textures.diffuse_alpha_opaque && !fades_by_declaration;
     // **Et il est opaque pour de bon, pas seulement à opacité 1.** Le laisser
     // en fondu avec un alpha plein donnait la bonne couleur mais gardait la
     // mécanique du transparent : trié après l'opaque, et — sur le plateau du
@@ -518,7 +551,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // toute la voiture, dessiné après lui — et seulement d'un côté, les deux
     // portières n'échantillonnant pas la même région de l'atlas. Mesuré sur le
     // banc : le numéro passait de 4 558 à 119 pixels selon l'angle.
-    let cutout = !is_glass_shader(shader) && textures.diffuse_alpha_cutout;
+    let cutout = !is_glass_shader(shader) && textures.diffuse_alpha_cutout && !fades_by_declaration;
     let (alpha_mode, alpha_cutoff) = if alpha_mode == AlphaMode::Blend && cutout {
         (AlphaMode::Mask, DEFAULT_ALPHA_CUTOFF)
     } else {
@@ -527,8 +560,19 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     let base_color = match alpha_mode {
         AlphaMode::Blend if !texture_carries_alpha && !opaque_by_alpha => {
             let tint = windscreen_tint(material);
-            [tint, tint, tint, glass_opacity(material)]
+            // L'opacité déclarée n'a pas de plancher : c'est une valeur
+            // d'auteur, pas une approximation à rattraper.
+            [
+                tint,
+                tint,
+                tint,
+                declared_opacity.unwrap_or_else(|| glass_opacity(material)),
+            ]
         }
+        // La texture porte la découpe, et l'opacité déclarée la module :
+        // glTF multiplie le facteur par l'alpha du texel, exactement comme
+        // le fait `ksPerPixelAlpha`.
+        AlphaMode::Blend => [1.0, 1.0, 1.0, declared_opacity.unwrap_or(1.0)],
         _ => [1.0, 1.0, 1.0, 1.0],
     };
 
@@ -650,6 +694,64 @@ fn normal_map(material: &Kn5Material) -> Option<String> {
 /// reflection layer of the glass (`INT_Glass_REFLEX`, `INT_Vetro`,
 /// `Windshield`), so the pane itself is clear and what should show is the
 /// environment reflected in it.
+/// Saturation au-delà de laquelle la diffuse d'une optique est **sa couleur**,
+/// et non le gabarit de vitre gris qu'AC pose partout ailleurs.
+///
+/// **Mesurée sur les 52 optiques opaques que la bibliothèque déclare en
+/// `[REFRACTING_HEADLIGHT_…]`** (saturation = écart entre le canal le plus
+/// fort et le plus faible de la moyenne de l'image). Les deux populations ne
+/// se touchent pas :
+///
+/// | | saturation | exemples |
+/// | --- | --- | --- |
+/// | gabarit de vitre | 0 à 0,06 | `glass.dds` (16,16,16) · `EXT_GLASS.dds` (0,0,0) · `ext_glass.dds` (41,52,57) |
+/// | lentille teintée | 0,35 à 1,00 | `turn.dds` (255,139,0) · `red.dds` (217,0,0) · `rgbab60000ff.dds` (180,0,0) |
+///
+/// Le seuil est posé dans le vide qui les sépare, au double de la plus
+/// saturée des premières.
+const LENS_COLOUR_SATURATION: f32 = 0.15;
+
+/// Cette diffuse porte-t-elle une couleur, ou n'est-ce qu'un gabarit de vitre ?
+fn diffuse_carries_a_colour(average: Option<[f32; 3]>) -> bool {
+    let Some([r, g, b]) = average else {
+        // Pas de texture du tout : rien à préserver.
+        return false;
+    };
+    let high = r.max(g).max(b);
+    let low = r.min(g).min(b);
+    high - low > LENS_COLOUR_SATURATION
+}
+
+/// L'opacité que le matériau **déclare** lui-même, quand il en déclare une.
+///
+/// `ksPerPixelAlpha` porte une propriété `alpha` qui est son opacité, tout
+/// simplement — pas une approximation à reconstituer depuis `ksDiffuse` comme
+/// pour une vitre. Ne pas la lire revenait à ignorer la seule chose que
+/// l'auteur ait dite explicitement.
+///
+/// **Deux bugs réels sur `amy_ek_cup`**, tous deux sur les phares :
+/// `EXT_overlay_black` (matériau `overlay`, `alpha = 0`, texture noire
+/// `rgba000000ff.dds` d'alpha constant 255) était pris pour opaque par son
+/// empreinte et rendu en **noir plein** de 1 904 triangles ; les trois
+/// maillages `vray_*` (`alpha = 0.01`, calques d'éclairage précuits au
+/// rendu V-Ray) sortaient au plancher de 15 % du verre. Le jeu, lui, ne
+/// montre ni l'un ni l'autre.
+///
+/// **Mesuré sur toute la bibliothèque** (131 voitures, 8 500 matériaux) :
+/// 211 matériaux portent `alpha`, et **tous** ont le shader
+/// `ksPerPixelAlpha` — la propriété n'existe nulle part ailleurs, donc rien
+/// à filtrer sur le nom du shader (même raisonnement que [`UvScale::of`]).
+/// Les valeurs se répartissent en 147 à 1,0 — un matériau qui ne fond pas,
+/// dont la découpe vient de sa texture — et 64 en dessous : 0 (8×), 0,001
+/// (18×), 0,01 (18×), 0,1 (16×), plus 0,03 · 0,04 · 0,8. Aucun shader de la
+/// famille verre n'en porte, donc le plancher [`GLASS_MIN_OPACITY`] et cette
+/// déclaration ne se rencontrent jamais sur le corpus.
+fn declared_opacity(material: &Kn5Material) -> Option<f32> {
+    material
+        .property("alpha")
+        .filter(|value| value.is_finite() && (0.0..=1.0).contains(value))
+}
+
 fn glass_opacity(material: &Kn5Material) -> f32 {
     if material.shader.contains("ksWindscreen") {
         return WINDSCREEN_OPACITY;
@@ -1001,6 +1103,116 @@ mod tests {
                 < 1.0,
             "le verre garde son approximation même si son alpha se mesure opaque"
         );
+    }
+
+    // Règle : une optique déclarée par `[REFRACTING_HEADLIGHT_…]` ne devient du
+    // verre CSP que là où le KN5 la rendrait opaque **et** où sa diffuse ne
+    // porte pas de couleur.
+    //
+    // Les trois cas comptent, et chacun a son contre-exemple réel : sans la
+    // règle, `ext_headlight_glass` de `rj_honda_civic_eg6_tuned` reste un
+    // aplat noir ; appliquée à tout ce qui est déclaré, elle décolore les 571
+    // surfaces déjà en fondu de la bibliothèque, donc tous les feux arrière ;
+    // appliquée à tout ce qui est opaque, elle vide de son orange le
+    // clignotant `ext_indicator_glass` de la même Civic.
+    #[test]
+    fn a_refracting_lens_only_replaces_an_opaque_and_colourless_surface() {
+        let lens = crate::SurfaceOverride {
+            glass_ior: Some(1.73),
+            glass_only_if_opaque: true,
+            ..crate::SurfaceOverride::default()
+        };
+        // `glass.dds` : le gabarit de vitre, gris très sombre.
+        let template = MaterialTextures {
+            csp: Some(lens),
+            diffuse_average: Some([0.06, 0.06, 0.06]),
+            ..Default::default()
+        };
+
+        let opaque = convert(
+            &material("ksPerPixelNM", 0, false, &[("ksDiffuse", 0.1)]),
+            template.clone(),
+        );
+        assert_eq!(opaque.transmission, 1.0, "le phare bouché devient une vitre");
+        assert_eq!(opaque.ior, Some(1.73), "avec l'indice que la section déclare");
+        assert!(opaque.base_color_texture.is_none(), "sa diffuse n'est pas une couleur");
+
+        let blended = convert(
+            &material("ksPerPixelNM", 1, false, &[("ksDiffuse", 0.1)]),
+            template.clone(),
+        );
+        assert_eq!(blended.transmission, 0.0, "un feu déjà en fondu garde sa conversion");
+        assert_eq!(
+            blended.base_color_texture.as_deref(),
+            Some("body.dds"),
+            "et surtout sa texture, qui porte sa couleur"
+        );
+
+        // `turn.dds` : l'orange d'un clignotant, opaque comme le phare.
+        let amber = convert(
+            &material("ksPerPixelNM", 0, false, &[("ksDiffuse", 0.1)]),
+            MaterialTextures {
+                diffuse_average: Some([1.0, 0.55, 0.0]),
+                ..template
+            },
+        );
+        assert_eq!(amber.transmission, 0.0, "une lentille teintée n'est pas un gabarit");
+        assert_eq!(
+            amber.base_color_texture.as_deref(),
+            Some("body.dds"),
+            "sa couleur est dans sa texture, et elle y reste"
+        );
+    }
+
+    // Règle : l'opacité que `ksPerPixelAlpha` déclare est son opacité, et elle
+    // l'emporte sur ce qu'on déduit de la texture.
+    //
+    // Bug réel sur `amy_ek_cup` : `overlay` (`alpha = 0`, texture noire à
+    // l'alpha constant 255) sortait en noir plein sur les phares, et les
+    // calques `vray_*` (`alpha = 0.01`) au plancher de 15 % du verre.
+    #[test]
+    fn a_declared_alpha_beats_the_footprint_and_the_glass_floor() {
+        let overlay = material("ksPerPixelAlpha", 1, false, &[("alpha", 0.0), ("ksDiffuse", 0.0)]);
+        let converted = convert(
+            &overlay,
+            MaterialTextures {
+                // Ce que mesure la texture noire de `EXT_overlay_black`.
+                diffuse_alpha_opaque: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            converted.alpha_mode,
+            AlphaMode::Blend,
+            "un alpha déclaré nul reste en fondu, il ne devient pas un aplat opaque"
+        );
+        assert_eq!(converted.base_color[3], 0.0, "invisible, comme le jeu le rend");
+
+        let vray = material("ksPerPixelAlpha", 1, false, &[("alpha", 0.01), ("ksDiffuse", 0.1)]);
+        assert_eq!(
+            convert(&vray, MaterialTextures::default()).base_color[3],
+            0.01,
+            "une valeur d'auteur ne subit pas le plancher d'opacité du verre"
+        );
+    }
+
+    // Règle : un `alpha` déclaré à 1 ne change rien — c'est le cas des 147
+    // matériaux sur 211 dont la découpe vient de leur texture.
+    #[test]
+    fn a_declared_alpha_of_one_leaves_the_texture_in_charge() {
+        let decal = material("ksPerPixelAlpha", 1, false, &[("alpha", 1.0), ("ksDiffuse", 0.3)]);
+        let converted = convert(
+            &decal,
+            MaterialTextures {
+                diffuse_alpha_varies: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            converted.base_color[3], 1.0,
+            "rien à fondre par-dessus l'alpha du texel"
+        );
+        assert_eq!(converted.alpha_mode, AlphaMode::Blend, "le mode ne change pas non plus");
     }
 
     /// Règle : une normal map en espace objet n'est pas exportée. `normalTexture`

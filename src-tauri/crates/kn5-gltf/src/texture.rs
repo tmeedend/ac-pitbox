@@ -814,7 +814,7 @@ pub(crate) fn decode(blob: &[u8]) -> Result<RgbaImage, String> {
                 // `DdsFormatInfo { dxgi: None, d3d: None, fourcc: None }`.
                 // Measured on twelve cars of the reference library: 117 of 938
                 // textures, up to 26 % on `ks_ford_gt40`. Far too many to drop.
-                Err(compressed_error) => decode_uncompressed_dds(&dds)
+                Err(compressed_error) => decode_uncompressed_dds(&dds, raw_bit_count(blob))
                     .map_err(|e| format!("unsupported DDS payload: {compressed_error}; as uncompressed: {e}")),
             }
         }
@@ -832,14 +832,37 @@ pub(crate) fn decode(blob: &[u8]) -> Result<RgbaImage, String> {
 /// relatives — rather than enumerating named formats, because the masks *are*
 /// the format. Anything with a FourCC (block compression) never reaches here:
 /// `image_dds` owns those.
-fn decode_uncompressed_dds(dds: &image_dds::ddsfile::Dds) -> Result<RgbaImage, String> {
+/// `dwRGBBitCount` lu directement dans l'en-tête, à son décalage fixe.
+///
+/// `ddsfile` ne rend ce champ que si le bloc `DDS_PIXELFORMAT` déclare `RGB`
+/// ou `LUMINANCE`, et **certains exportateurs ne déclarent ni l'un ni
+/// l'autre** : `c4_tire0_bump.dds` de `some1_corvette_c4_zr1_1990` porte
+/// `0x20`, qui n'est aucun des drapeaux du format (`LUMINANCE` vaut
+/// `0x20000`). Le champ, lui, est parfaitement rempli — 8 bits pour une
+/// surface 2048×1024 dont la charge fait exactement ce compte —, si bien que
+/// la seule chose qui manquait pour lire ce relief de pneu était de regarder
+/// l'octet plutôt que le drapeau qui le décrit.
+fn raw_bit_count(blob: &[u8]) -> Option<u32> {
+    // 4 (magic) + 72 (en-tête jusqu'au bloc de format) + 12 (taille, drapeaux,
+    // fourcc).
+    let bytes: [u8; 4] = blob.get(88..92)?.try_into().ok()?;
+    Some(u32::from_le_bytes(bytes))
+}
+
+fn decode_uncompressed_dds(
+    dds: &image_dds::ddsfile::Dds,
+    fallback_bit_count: Option<u32>,
+) -> Result<RgbaImage, String> {
     use image_dds::ddsfile::PixelFormatFlags;
 
     let spf = &dds.header.spf;
     if spf.fourcc.is_some() {
         return Err("block-compressed surface".to_string());
     }
-    let bit_count = spf.rgb_bit_count.ok_or("no bit count in the pixel format")?;
+    let bit_count = spf
+        .rgb_bit_count
+        .or(fallback_bit_count)
+        .ok_or("no bit count in the pixel format")?;
     if !matches!(bit_count, 8 | 16 | 24 | 32) {
         return Err(format!("unsupported bit count {bit_count}"));
     }
@@ -847,7 +870,26 @@ fn decode_uncompressed_dds(dds: &image_dds::ddsfile::Dds) -> Result<RgbaImage, S
 
     let width = dds.get_width();
     let height = dds.get_height();
-    let data = dds.get_data(0).map_err(|e| e.to_string())?;
+    // **Mip 0 est en tête du bloc de données, et c'est le seul dont on ait
+    // besoin** — d'où la lecture directe plutôt que `dds.get_data(0)`.
+    //
+    // Cet accesseur valide la **chaîne de mips entière** avant de rendre le
+    // moindre octet, et il la calcule en divisant chaque niveau par 4
+    // (`ddsfile::get_array_stride`). C'est exact seulement si les dimensions
+    // sont carrées et puissances de deux. Sur `amy_ek_cup`, `tyre.dds` fait
+    // 2048×320 en 12 niveaux : le 7ᵉ mesure 16×2 = 32 octets, pas 40. Le
+    // total réclamé dépasse le fichier de 7 octets, `get_data` répond
+    // `OutOfBounds`, et une texture parfaitement lisible est jetée — pneus
+    // blancs à l'écran, faute de diffuse *et* de carte de normales.
+    // Trois textures dans ce cas sur la bibliothèque de référence (195
+    // modèles) : `tyre.dds` (873 807 octets contre 873 814 réclamés),
+    // `tyre_nm.dds` (2 621 421 contre 2 621 443) et le `SWATCH_GRAY.dds`
+    // 20×20 de `nissan_skyline_r34_v-specperformance` (530 contre 532) — la
+    // taille non-puissance de deux produit le même écart.
+    //
+    // Le contrôle de taille quelques lignes plus bas reste le garde-fou : il
+    // porte sur ce que mip 0 demande réellement.
+    let data = dds.data.as_slice();
 
     // Rows can be padded when the header advertises a pitch; otherwise they
     // are packed tight. Trusting the header blindly would misread the many
@@ -1331,6 +1373,88 @@ mod tests {
         assert_eq!((image.width(), image.height()), (2, 1), "dimensions from the header");
         assert_eq!(image.get_pixel(0, 0).0, [255, 0, 0, 255], "opaque red");
         assert_eq!(image.get_pixel(1, 0).0, [0, 0, 255, 128], "blue at half alpha");
+    }
+
+    /// Uncompressed L8 DDS carrying a full mip chain, like the tyre textures
+    /// of `amy_ek_cup`: `DDSD_LINEARSIZE` rather than `DDSD_PITCH`, and one
+    /// byte per pixel described by the luminance flag alone.
+    fn mipped_luminance_dds(width: u32, height: u32, mips: u32) -> Vec<u8> {
+        let mut blob = Vec::new();
+        blob.extend_from_slice(b"DDS ");
+        let mut word = |v: u32| blob.extend_from_slice(&v.to_le_bytes());
+        word(124); // header size
+        word(0xA_1007); // CAPS | HEIGHT | WIDTH | PIXELFORMAT | MIPMAPCOUNT | LINEARSIZE
+        word(height);
+        word(width);
+        word(width * height); // linear size: the whole of mip 0, one byte per pixel
+        word(0); // depth
+        word(mips);
+        for _ in 0..11 {
+            word(0); // reserved
+        }
+        word(32); // pixel format size
+        word(0x2_0000); // LUMINANCE
+        word(0); // fourcc: none
+        word(8); // bits per pixel
+        word(0xFF); // the luminance channel names itself in the red mask
+        for _ in 0..3 {
+            word(0);
+        }
+        word(0x40_1008); // caps: COMPLEX | TEXTURE | MIPMAP
+        for _ in 0..4 {
+            word(0);
+        }
+        // The real chain: each level halves both dimensions, floored at one.
+        let (mut w, mut h) = (width, height);
+        for level in 0..mips {
+            // Une valeur par niveau, pour que le test prouve qu'on lit bien le
+            // premier et pas un autre.
+            blob.extend(std::iter::repeat_n((level as u8 + 1) * 16, (w * h) as usize));
+            w = (w / 2).max(1);
+            h = (h / 2).max(1);
+        }
+        blob
+    }
+
+    // Rule: a mip chain whose levels do not divide by exactly four still
+    // decodes — only mip 0 is ever needed.
+    //
+    // Bug réel sur `amy_ek_cup` : `tyre.dds` (2048×320) et `tyre_nm.dds`
+    // étaient rejetés parce que `ddsfile::get_data` valide toute la chaîne en
+    // la supposant divisée par quatre à chaque niveau, ce qui réclame 7 octets
+    // de plus que le fichier n'en contient. Résultat à l'écran : des pneus
+    // tout blancs. 10×6 en quatre niveaux reproduit l'écart en miniature —
+    // 78 octets réels contre 79 réclamés.
+    #[test]
+    fn mipped_non_square_dds_decodes_from_its_first_level() {
+        let blob = mipped_luminance_dds(10, 6, 4);
+        assert_eq!(blob.len() - 128, 78, "la vraie chaîne de mips, pas celle de ddsfile");
+
+        let image = decode(&blob).expect("mip 0 se lit, quoi que dise la chaîne");
+        assert_eq!((image.width(), image.height()), (10, 6), "dimensions from the header");
+        assert_eq!(
+            image.get_pixel(9, 5).0,
+            [16, 16, 16, 255],
+            "la luminance du niveau 0 se répète sur RVB, alpha plein"
+        );
+    }
+
+    // Rule: a pixel format that declares no known flag still decodes, as long
+    // as its bit count is there.
+    //
+    // Bug réel : `c4_tire0_bump.dds` de `some1_corvette_c4_zr1_1990` écrit
+    // `0x20` — aucun drapeau connu —, ce qui fait taire le champ côté
+    // `ddsfile` et perdait le relief du pneu.
+    #[test]
+    fn an_unknown_pixel_format_flag_still_yields_its_bit_count() {
+        let mut blob = uncompressed_dds(2, 1, [0, 0, 0, 0], 8, &[0x40, 0x80]);
+        // Le bloc de format commence à 76 ; ses drapeaux sont quatre octets
+        // plus loin.
+        blob[80..84].copy_from_slice(&0x20_u32.to_le_bytes());
+
+        let image = decode(&blob).expect("le champ suffit, le drapeau n'est pas indispensable");
+        assert_eq!(image.get_pixel(0, 0).0, [0x40, 0x40, 0x40, 255], "gris répété sur RVB");
+        assert_eq!(image.get_pixel(1, 0).0, [0x80, 0x80, 0x80, 255], "et opaque");
     }
 
     // Rule: a blob that decodes to nothing usable is a warning, not a failure

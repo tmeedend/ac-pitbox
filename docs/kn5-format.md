@@ -1490,3 +1490,142 @@ pose pas comme textures mais mélange au facteur de couleur (voir `paint.rs`).
 ```text
 cargo run -p kn5-tool -- scan "…/content/cars" --details
 ```
+
+---
+
+## Écart n°23 — `ksPerPixelAlpha` porte son opacité dans une propriété `alpha`
+
+**Attendu** : la transparence d'un matériau se déduit de son `blend_mode`, de
+l'alpha de sa texture et — pour le verre — d'une approximation tirée de
+`ksDiffuse` (écarts n°9 et n°13).
+
+**Réel** : un shader écrit son opacité noir sur blanc, et personne ne la
+lisait. `ksPerPixelAlpha` déclare une propriété `alpha` qui **est** son
+opacité, sans détour.
+
+**Mesure**, sur les 131 voitures lisibles de la bibliothèque (8 500 matériaux) :
+
+| Ce qu'on compte | Occurrences |
+| --- | --- |
+| matériaux portant `alpha` | 211 |
+| … dont le shader est `ksPerPixelAlpha` | **211** |
+| valeurs à 1,0 | 147 |
+| valeurs en dessous | 64 (0 ×8 · 0,001 ×18 · 0,01 ×18 · 0,1 ×16 · 0,03 · 0,04 · 0,8) |
+
+La propriété n'existe sur **aucun** autre shader : comme `diffuseMult`
+(écart n°22), elle n'a pas besoin d'être filtrée sur le nom du shader.
+
+**Ce que ça donnait à l'écran**, sur `amy_ek_cup`, aux deux extrémités de la
+plage :
+
+- `overlay` (`alpha = 0`, texture `rgba000000ff.dds` — noir, alpha constant
+  255) est **invisible en jeu**. Son empreinte uniformément opaque le faisait
+  passer pour un matériau opaque (écart n°15), et ses 1 904 triangles
+  sortaient en **aplat noir** posé sur les phares.
+- les trois maillages `vray_*` (`alpha = 0.01`) sont des calques d'éclairage
+  précuits au rendu V-Ray, eux aussi invisibles en jeu. Ils sortaient au
+  plancher d'opacité du verre, 15 %, soit quinze fois trop.
+
+**Correctif** : la valeur déclarée devient `baseColorFactor.a`, elle ne subit
+pas le plancher du verre — c'est une valeur d'auteur, pas une approximation à
+rattraper — et une valeur sous 1 l'emporte sur les deux verdicts déduits de la
+texture (« uniformément opaque », « découpe »). À 1, rien ne change : c'est la
+texture qui découpe, comme pour les 147 matériaux du tableau.
+
+---
+
+## Écart n°24 — une chaîne de mips qui ne divise pas par quatre fait rejeter toute la texture
+
+Pas un écart du format mais de la bibliothèque qui le lit, avec le symptôme
+habituel : une texture qui disparaît sans que rien ne s'affiche à la place.
+
+**Réel** : le décodeur de repli de l'écart n°2 demandait ses pixels à
+`ddsfile::Dds::get_data(0)`. Cet accesseur valide la **chaîne de mips
+entière** avant de rendre le moindre octet, et il la calcule en divisant
+chaque niveau par quatre (`get_array_stride`). C'est exact tant que les
+dimensions sont carrées **et** puissances de deux ; sinon le compte dérape de
+quelques octets et l'appel répond `OutOfBounds`.
+
+| Texture | Taille | Charge réelle | Réclamé |
+| --- | --- | --- | --- |
+| `amy_ek_cup` / `tyre.dds` | 2048×320, 12 mips, L8 | 873 807 | 873 814 |
+| `amy_ek_cup` / `tyre_nm.dds` | 2048×320, 12 mips, 24 bpp | 2 621 421 | 2 621 443 |
+| `nissan_skyline_r34_v-spec…` / `SWATCH_GRAY.dds` | 20×20, 5 mips, L8 | 530 | 532 |
+
+Sur 2048×320, le 7ᵉ niveau mesure 16×2 = 32 octets et non 40 ; sur 20×20, le
+4ᵉ mesure 2×2 = 4 et non 6. Sept octets manquants sur 873 807 suffisent à
+perdre **la diffuse et la carte de normales d'un pneu**, qui ressort alors
+blanc — c'est le défaut signalé à l'écran.
+
+**Correctif** : lire mip 0 directement, en tête du bloc de données. C'est le
+seul niveau dont la conversion ait besoin, le contrôle de taille qui suit
+porte sur ce qu'il demande réellement, et la chaîne complète n'a plus à être
+validée pour rien.
+
+**Deuxième cause, même symptôme** : `ddsfile` ne rend `rgb_bit_count` que si le
+bloc de format déclare `RGB` ou `LUMINANCE`. `c4_tire0_bump.dds` de
+`some1_corvette_c4_zr1_1990` écrit `0x20`, qui n'est aucun des drapeaux du
+format (`LUMINANCE` vaut `0x20000`), alors que le champ lui-même est
+parfaitement rempli — 8 bits pour une surface 2048×1024 dont la charge fait
+exactement ce compte. D'où la lecture directe de `dwRGBBitCount` en repli.
+
+Après ces deux correctifs, **la bibliothèque entière (132 modèles convertis)
+ne rejette plus une seule texture**.
+
+---
+
+## Écart n°25 — le phare est du verre, et c'est une section CSP qui le dit
+
+**Attendu** : ce qu'un mod déclare de ses surfaces tient dans les sections
+`[Material_*]` de sa configuration CSP (écart n°13).
+
+**Réel** : une optique se déclare ailleurs, par une section
+`[REFRACTING_HEADLIGHT_…]` qui décrit l'optique entière — la vitre
+(`SURFACE`), ce qu'il y a derrière (`INSIDE`), les ampoules, le miroir du
+réflecteur. Sans elle, la vitre est prise au mot de sa diffuse, qui n'en est
+pas une : `ext_headlight_glass` de `rj_honda_civic_eg6_tuned` est un
+`ksPerPixelNM` **opaque** dont la texture `glass.dds` (64×64 DXT5) vaut
+(32,32,32) et (0,0,0) — un phare bouché en noir, là où le jeu montre le
+réflecteur au travers. Même famille que les écarts n°6 et n°8 : AC remplit un
+champ standard d'une valeur que son shader n'utilise pas comme on le croirait.
+
+`SURFACE` nomme des **maillages**, vérifié des deux côtés : le maillage `83`
+de la Civic porte `ext_headlight_glass`, et `tailights_glass_red`
+d'`amy_ek_cup` porte `glass_taillight`.
+
+**Et la déclaration ne vaut pas partout.** Mesuré sur la bibliothèque : 74
+voitures portent ces sections, pour 655 surfaces retrouvées dans leur modèle.
+
+| Surface | Nombre | Ce qu'il faut en faire |
+| --- | --- | --- |
+| déjà en fondu ou en découpe | 571 | rien : leur rouge ou leur orange est déjà juste |
+| opaques | 84, sur 27 voitures | les rendre en verre |
+
+Appliquer le traitement à tout ce qui est déclaré décolorerait **tous les feux
+arrière de la bibliothèque**, puisque ce chemin jette la texture diffuse.
+
+**Deuxième filtre, mesuré aussi** : parmi les surfaces opaques, toutes ne sont
+pas des vitres incolores. La saturation de la diffuse (écart entre le canal le
+plus fort et le plus faible de sa moyenne) sépare les deux populations sans
+qu'elles se touchent :
+
+| | Saturation | Exemples |
+| --- | --- | --- |
+| gabarit de vitre | 0 à 0,06 | `glass.dds` (16,16,16) · `EXT_GLASS.dds` (0,0,0) · `ext_glass.dds` (41,52,57) |
+| lentille teintée | 0,35 à 1,00 | `turn.dds` (255,139,0) · `red.dds` (217,0,0) · `rgbab60000ff.dds` (180,0,0) |
+
+Sans ce filtre, le clignotant `ext_indicator_glass` de la même Civic — opaque,
+mais franchement orange — devenait une vitre incolore. La règle vaut dans les
+deux sens : le chemin du verre **garde** désormais une diffuse qui porte une
+couleur, ce qui rend son rouge au feu arrière d'`amy_ek_cup`, qu'un
+`[Material_Glass]` déclarait et que la conversion décolorait.
+
+**Troisième découverte, celle qui rendait tout le reste invisible** : un mod
+range rarement sa configuration dans le seul `ext_config.ini`. Il la découpe
+en `materials.ini`, `pbr.ini`, `lights.ini`, `refraction.ini`… et les rappelle
+par `[INCLUDE: …]`. Seul `materials.ini` était lu, par son nom — les phares de
+la Civic se déclarent dans `refraction.ini`, que rien n'ouvrait. Les fichiers
+**frères** inclus sont désormais suivis, récursivement ; un `[INCLUDE:
+common/…]` ne l'est pas, car il désigne un template de CSP résolu contre son
+propre dossier, et ces templates sont précisément ce que la conversion renonce
+à interpréter.

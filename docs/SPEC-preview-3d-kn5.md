@@ -318,7 +318,20 @@ affiche la voiture entière.
   du nœud, donc suit ses mouvements) ou `INSERT_AFTER` (frère suivant),
   `OFFSET` / `ROTATION` / `SCALE` / `MULTIPLE` ;
 - le template `[ReplaceRims]`, transcrit à la main depuis
-  `<AC>/extension/config/cars/common/custom_rims.ini`.
+  `<AC>/extension/config/cars/common/custom_rims.ini` ;
+- les sections `[Material_*]`, qui disent de quelle matière est une surface
+  (§6.3), et les `[REFRACTING_HEADLIGHT_…]`, qui disent qu'un maillage est une
+  optique — sans elles, une vitre de phare dont la diffuse est un gabarit gris
+  sort en aplat noir (`docs/kn5-format.md`, écart n°25).
+
+**Quels fichiers sont lus**, du plus spécifique au plus général : le
+`ext_config.ini` du skin, celui de la voiture, son `materials.ini`, puis la
+config que CSP livre pour la voiture (`<AC>/extension/config/cars/loaded/`).
+S'y ajoutent les fichiers **frères** que ceux-là incluent par `[INCLUDE: …]`,
+suivis récursivement et rangés juste derrière celui qui les inclut — un mod
+découpe couramment sa config en `pbr.ini`, `lights.ini`, `refraction.ini`. Un
+`[INCLUDE: common/…]` n'est pas suivi : il désigne un template de CSP, résolu
+contre son propre dossier, et c'est précisément ce qu'on renonce à interpréter.
 
 **Ce qui ne l'est pas, et pourquoi.** `ext_config.ini` n'est pas un INI : c'est
 un langage à templates, avec expressions (`$" ... "`), générateurs `@GENERATOR`,
@@ -326,9 +339,8 @@ includes, et un `read()` qui va chercher dans `data.acd` chiffré. Un moteur
 complet est hors périmètre. Mais tout template se réduit à la primitive
 `MODEL_REPLACEMENT`, qui est petite — d'où le choix de traiter la primitive et
 de coder à la main le seul template qui coûte ses roues à une voiture. Les
-remplacements de **matériau** et de **shader** (`[SHADER_REPLACEMENT_*]`,
-`[Material_*]`) restent ignorés : ils changent l'aspect d'une surface, pas son
-existence.
+remplacements de **shader** (`[SHADER_REPLACEMENT_*]`) restent ignorés : ils
+changent l'aspect d'une surface, pas son existence.
 
 **Deux limites assumées**, toutes deux dans le sens « on en montre plutôt trop
 que pas assez » :
@@ -745,6 +757,9 @@ Tant que ce n'est pas tranché : `metallicFactor = 0.0`, `roughnessFactor` issu 
 - `ksPerPixelReflection`, `ksPerPixelMultiMap_damage_dirt` → traiter comme le cas standard.
 - `ksTyres` → roughness élevée (≈ 0.9), metallic 0.
 - Matériaux de vitre → `alphaMode: BLEND`, `roughness` basse ; leur ordre de rendu est géré côté three.js (§9).
+- `ksPerPixelAlpha` → son opacité est écrite dans sa propriété `alpha`, qui
+  l'emporte sur tout ce qu'on déduirait de sa texture et ne subit aucun
+  plancher (`docs/kn5-format.md`, écart n°23).
 - Shaders inconnus → **ne jamais échouer** : matériau standard par défaut + log `warn` listant le nom du shader. Collecter ces logs, ils orienteront les itérations suivantes.
 
 ---
