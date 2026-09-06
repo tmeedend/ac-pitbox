@@ -401,7 +401,16 @@
     let dragging = false;
     let lastX = 0;
     let lastY = 0;
+    // **Bouton droit seulement.** Le geste est le même que sur l'aperçu de la
+    // voiture — déplacer le sujet dans le plan de l'écran — et il doit donc se
+    // faire du même doigt. Le bouton gauche n'a plus rien à faire ici : il ne
+    // portait que ce geste-là, contrairement à l'aperçu voiture où il garde
+    // l'orbite. Le laisser en double aurait surtout appris deux gestes
+    // différents pour deux écrans qui montrent la même chose.
+    const RIGHT_BUTTON = 2;
     const onDown = (e: PointerEvent) => {
+      if (e.button !== RIGHT_BUTTON) return;
+      e.preventDefault();
       dragging = true;
       lastX = e.clientX;
       lastY = e.clientY;
@@ -420,9 +429,13 @@
       place();
     };
     const onUp = (e: PointerEvent) => {
+      if (!dragging) return;
       dragging = false;
       renderer.domElement.releasePointerCapture(e.pointerId);
     };
+    // Sans quoi le menu du navigateur s'ouvrirait sur le plateau au premier
+    // geste. `OrbitControls` fait de même de son côté pour l'aperçu voiture.
+    const onContextMenu = (e: Event) => e.preventDefault();
     // Molette : zoom, comme sur l'aperçu 3D de la voiture (qui l'a par ses
     // `OrbitControls`, absents ici — le plateau tourne le sujet, pas la
     // caméra). `passive: false` et `preventDefault` : sans ça la molette
@@ -456,6 +469,7 @@
     renderer.domElement.addEventListener("pointerup", onUp);
     renderer.domElement.addEventListener("pointercancel", onUp);
     renderer.domElement.addEventListener("dblclick", onDouble);
+    renderer.domElement.addEventListener("contextmenu", onContextMenu);
 
     const resize = () => {
       const width = node.clientWidth;
@@ -492,6 +506,7 @@
       cancelAnimationFrame(raf);
       observer.disconnect();
       renderer.domElement.removeEventListener("wheel", onWheel);
+      renderer.domElement.removeEventListener("contextmenu", onContextMenu);
       renderer.domElement.removeEventListener("pointerdown", onDown);
       renderer.domElement.removeEventListener("pointermove", onMove);
       renderer.domElement.removeEventListener("pointerup", onUp);

@@ -525,7 +525,10 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
         (alpha_mode, alpha_cutoff)
     };
     let base_color = match alpha_mode {
-        AlphaMode::Blend if !texture_carries_alpha && !opaque_by_alpha => [1.0, 1.0, 1.0, glass_opacity(material)],
+        AlphaMode::Blend if !texture_carries_alpha && !opaque_by_alpha => {
+            let tint = windscreen_tint(material);
+            [tint, tint, tint, glass_opacity(material)]
+        }
         _ => [1.0, 1.0, 1.0, 1.0],
     };
 
@@ -667,10 +670,50 @@ fn glass_opacity(material: &Kn5Material) -> f32 {
 /// présence, faute de pouvoir lui rendre son reflet.
 const GLASS_MIN_OPACITY: f32 = 0.15;
 
-/// Ce qu'il reste d'une vitre propre : un voile, pas une teinte. Assez pour
-/// que la vitre attrape un reflet du studio et ne disparaisse pas, trop peu
-/// pour laver ce qu'il y a derrière.
-const WINDSCREEN_OPACITY: f32 = 0.1;
+/// Ce que vaut le panneau qu'on synthétise pour un `ksWindscreen`.
+///
+/// **C'était la COULEUR le vrai coupable, pas l'opacité** — quatrième erreur de
+/// suite sur ce shader, et la plus instructive. N'ayant pas de texture
+/// exploitable (sa `txDiffuse` est une carte de saleté), le pare-brise sortait
+/// en aplat **blanc**. À 45 % d'opacité, ce blanc lavait la cabine : c'est le
+/// voile signalé sur la Supra. La correction d'alors a baissé l'opacité à 0,1,
+/// ce qui a soigné le symptôme en créant l'inverse — un pare-brise quatre fois
+/// plus transparent que la vitre d'à côté, signalé sur `rss_gtm_lanzo_v10`.
+///
+/// Mesuré sur sept voitures, la vitre voisine — celle que l'utilisateur juge
+/// correcte — n'est **jamais blanche** :
+///
+/// | voiture | vitre texturée | pare-brise (avant) |
+/// | --- | --- | --- |
+/// | `rss_gtm_lanzo_v10` | gris 129, 0,42 | blanc, 0,10 |
+/// | `ks_mazda_mx5_cup` | gris 60, 0,42 | blanc, 0,10 |
+/// | `abarth500` | gris 2, 0,55 | blanc, 0,10 |
+/// | `ks_porsche_911_rsr_2017` | gris 102, 0,81 | — |
+/// | `ks_toyota_supra_mkiv` | gris 0, 0,15 | — |
+///
+/// Le cas le plus net est le Lanzo, où `INTERNAL_glass.dds` (pare-brise) et
+/// `INTERNAL_glass_2.dds` (vitre de porte) sont **deux couches intérieures du
+/// même rôle** sur la même voiture : l'une blanche à 0,10, l'autre grise à
+/// 0,42.
+///
+/// D'où un panneau gris et non blanc, à une opacité prise dans la bande
+/// observée mais dans son bas — la couche de pare-brise se superpose parfois à
+/// une vitre extérieure, et deux panneaux se cumulent.
+const WINDSCREEN_TINT: f32 = 0.22;
+const WINDSCREEN_OPACITY: f32 = 0.35;
+
+/// Le gris du panneau synthétisé, ou blanc pour tout le reste.
+///
+/// Blanc reste le bon défaut partout ailleurs : un matériau qui porte sa propre
+/// texture doit la rendre telle quelle, et un facteur de teinte l'assombrirait
+/// deux fois.
+fn windscreen_tint(material: &Kn5Material) -> f32 {
+    if material.shader.contains("ksWindscreen") {
+        WINDSCREEN_TINT
+    } else {
+        1.0
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -1053,6 +1096,34 @@ mod tests {
         );
     }
 
+    // Règle : le panneau synthétisé pour un pare-brise est GRIS, pas blanc, et
+    // son opacité est celle d'une vitre voisine. Sans texture exploitable, un
+    // `ksWindscreen` sort en aplat : blanc, il lave la cabine (voile signalé
+    // sur la Supra) ; blanc et transparent pour compenser, il disparaît à côté
+    // de la vitre de porte (signalé sur `rss_gtm_lanzo_v10`). C'est la couleur
+    // qu'il fallait corriger.
+    #[test]
+    fn a_windscreen_pane_is_grey_and_as_present_as_the_window_beside_it() {
+        let windscreen = material("ksWindscreen", 1, false, &[("ksDiffuse", 0.4)]);
+        let converted = convert(&windscreen, MaterialTextures::default());
+        assert!(
+            converted.base_color[0] < 0.5,
+            "un panneau blanc lave la cabine, got {}",
+            converted.base_color[0]
+        );
+        assert!(
+            converted.base_color[3] > 0.25,
+            "et un panneau trop transparent disparaît, got {}",
+            converted.base_color[3]
+        );
+
+        // Une vitre ordinaire, elle, garde son blanc : sa couleur vient de sa
+        // texture, et une teinte l'assombrirait deux fois.
+        let window = material("ksPerPixelAlpha_Glass", 1, false, &[("ksDiffuse", 0.3)]);
+        let converted = convert(&window, MaterialTextures::default());
+        assert_eq!(converted.base_color[0], 1.0, "pas de teinte sur une vitre ordinaire");
+    }
+
     // Règle : un pare-brise n'emprunte pas sa couleur à sa texture. Bug réel
     // remonté par l'utilisateur : le vitrage paraissait constellé de taches,
     // parce que `ksWindscreen` réserve sa `txDiffuse` aux rayures et à la
@@ -1216,17 +1287,22 @@ mod tests {
     // réel remonté par l'utilisateur : un voile blanc sur tout l'habitacle de
     // `ks_toyota_supra_mkiv`. La valeur vaut 0,45 sur quatre voitures mesurées
     // et 0,75 sur une cinquième — c'est une constante de famille de shaders,
-    // pas un réglage de vitre.
+    // pas un réglage de vitre. Le test porte sur l'INDÉPENDANCE et non sur une
+    // valeur : ce qu'elle vaut est un réglage d'apparence (voir
+    // `WINDSCREEN_OPACITY`), ce qu'elle ne suit pas est la règle.
     #[test]
     fn a_windscreen_stays_clear_whatever_its_ksdiffuse_says() {
         let windscreen = convert(
             &material("ksWindscreen", 1, false, &[("ksDiffuse", 0.45)]),
             MaterialTextures::default(),
         );
-        assert!(
-            windscreen.base_color[3] <= 0.15,
-            "une vitre propre laisse passer, elle ne lave pas l'habitacle (obtenu {})",
-            windscreen.base_color[3]
+        let thicker = convert(
+            &material("ksWindscreen", 1, false, &[("ksDiffuse", 0.75)]),
+            MaterialTextures::default(),
+        );
+        assert_eq!(
+            windscreen.base_color[3], thicker.base_color[3],
+            "la constante du shader ne décide pas de l'épaisseur du verre"
         );
 
         // La règle ne déborde pas sur le reste du vitrage, où `ksDiffuse`

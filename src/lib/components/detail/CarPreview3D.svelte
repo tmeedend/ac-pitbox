@@ -1098,7 +1098,17 @@
     controls.target.copy(center);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.enablePan = false;
+    // **Clic droit : déplacer.** Le bouton gauche fait tourner, la molette
+    // rapproche, et il manquait de quoi décentrer — sur une voiture longue,
+    // aucun réglage ne permettait de venir regarder une roue de près. C'est le
+    // partage par défaut d'`OrbitControls` (gauche = orbite, droit =
+    // déplacement), qui supprime aussi le menu contextuel du bouton droit
+    // pendant le geste.
+    controls.enablePan = true;
+    // Dans le plan de l'écran, et non dans celui du sol : l'utilisateur demande
+    // X et Y, pas « avance et recule ». C'est déjà le défaut de three, écrit
+    // ici parce que la nuance ne se devine pas au nom du réglage.
+    controls.screenSpacePanning = true;
     controls.minDistance = radius * 1.1;
     // Assez large pour toute la plage des réglages, sinon la borne annulerait
     // le réglage en silence dès la première image. Le pire cas cumule le zoom
