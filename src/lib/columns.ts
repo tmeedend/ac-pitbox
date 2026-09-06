@@ -130,7 +130,10 @@ const CAR_COLUMNS: ColumnDef[] = [
   { key: "brand", labelKey: "columns.brand", sortable: true, defaultVisible: true, value: (c) => c.brand ?? DASH },
   {
     key: "name",
-    labelKey: "columns.name",
+    // « Modèle » et non « Nom », puisque la colonne d'à côté porte la marque et
+    // que le nom en est désormais privé. Clé propre aux voitures : un circuit a
+    // un nom, pas un modèle, et les deux types partageaient le même libellé.
+    labelKey: "columns.model",
     sortable: true,
     defaultVisible: true,
     fixed: true,

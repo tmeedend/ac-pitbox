@@ -399,6 +399,7 @@
   },
   "columns": {
     "name": "Name",
+    "model": "Model",
     "brand": "Brand",
     "category": "Category",
     "carClass": "Class",
