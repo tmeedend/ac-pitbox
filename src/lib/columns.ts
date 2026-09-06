@@ -5,10 +5,19 @@ import type { ModCard, ModKind } from "./library";
 import { t } from "./i18n/index.svelte";
 import { fmtSize } from "./format";
 import { StorageKey, kindKey } from "./storage";
+import { peekUiPref } from "./uiPrefs.svelte";
+import { withoutBrand } from "./displayName";
 
 // `kindKey` a déménagé dans storage.ts (il ne servait qu'à bâtir des clés) ;
 // ré-exporté ici pour les appelants existants.
 export { kindKey };
+
+/** Le tableau retire-t-il la marque du nom ? Vrai par défaut : la colonne
+ * « Marque » est visible par défaut elle aussi, et les deux ensemble
+ * écriraient la marque deux fois par ligne. */
+export function tableHidesBrand(): boolean {
+  return peekUiPref(StorageKey.tableHideBrand) !== "0";
+}
 
 export interface ColumnDef {
   key: string;
@@ -18,7 +27,11 @@ export interface ColumnDef {
   sortable: boolean;
   /** Affichée par défaut (avant tout choix utilisateur). */
   defaultVisible: boolean;
-  /** Toujours affichée, absente du sélecteur, jamais déplaçable (colonne essentielle). */
+  /** Toujours affichée et absente du sélecteur (colonne essentielle).
+   *
+   * **Ne veut plus dire « immobile ».** Les deux allaient ensemble, sans que
+   * rien ne l'exige : une colonne qu'on ne peut pas masquer peut très bien se
+   * déplacer, et le nom devait pouvoir passer après la marque. */
   fixed?: boolean;
   /** Valeur d'affichage ; « — » si la donnée n'existe pas encore. */
   value: (c: ModCard) => string;
@@ -111,8 +124,26 @@ function commonTail(): ColumnDef[] {
 }
 
 const CAR_COLUMNS: ColumnDef[] = [
-  { key: "name", labelKey: "columns.name", sortable: true, defaultVisible: true, fixed: true, value: (c) => c.display_name ?? c.id_interne },
+  // **La marque en tête, le nom ensuite.** C'est l'ordre dans lequel on cherche
+  // une voiture, le même que sur la carte de la grille — et cet ordre-là n'est
+  // qu'un défaut : la colonne se déplace comme les autres.
   { key: "brand", labelKey: "columns.brand", sortable: true, defaultVisible: true, value: (c) => c.brand ?? DASH },
+  {
+    key: "name",
+    labelKey: "columns.name",
+    sortable: true,
+    defaultVisible: true,
+    fixed: true,
+    // La marque retirée du nom quand la colonne d'à côté la porte déjà —
+    // « Nissan | Nissan Skyline GT-R R34 » écrit deux fois la même chose. Le
+    // réglage est celui du TABLEAU, distinct de celui des grilles : deux
+    // présentations, deux décisions.
+    //
+    // Lu ici et pas au rendu pour que le TRI suive ce qui est affiché : une
+    // colonne triée sur un texte qu'on ne voit pas se lit comme non triée.
+    // `peekUiPref` est fait pour ça — lecture synchrone, une fois par ligne.
+    value: (c) => (tableHidesBrand() ? withoutBrand(c.display_name ?? c.id_interne, c.brand) : (c.display_name ?? c.id_interne)),
+  },
   { key: "category", labelKey: "columns.category", sortable: true, defaultVisible: true, value: (c) => c.category ?? DASH },
   { key: "car_class", labelKey: "columns.carClass", sortable: true, defaultVisible: false, value: (c) => c.car_class ?? DASH },
   { key: "year", labelKey: "columns.year", sortable: true, defaultVisible: true, mono: true, value: (c) => c.year?.toString() ?? DASH, sortValue: (c) => c.year ?? 0 },

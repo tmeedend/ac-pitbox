@@ -120,7 +120,16 @@
    * c'est la répétition qui pousse le nom du modèle à la troncature. Un
    * utilisateur qui décoche garde son choix — seule l'absence de réglage
    * bascule (voir la lecture dans `loadPrefs`). */
-  let hideBrand = $state(true);
+  let hideBrandGrid = $state(true);
+  /** Le même réglage pour le tableau, **et séparé**. La grille porte une ligne
+   * d'identification, le tableau une colonne « Marque » : ce sont deux
+   * présentations, et vouloir la marque dans le nom de l'une n'a aucune raison
+   * de l'imposer à l'autre. Le tableau la lit aussi de son côté
+   * (`columns.ts`), pour que le tri suive l'affichage. */
+  let hideBrandTable = $state(true);
+  /** Celui des deux que la vue courante commande — une seule case à l'écran,
+   * qui agit là où on la voit agir. */
+  const hideBrand = $derived(shown === "table" ? hideBrandTable : hideBrandGrid);
   let showDisplay = $state(false);
   const isGrid = $derived(shown !== "table");
   let sortKey = $state<string>("name");
@@ -187,17 +196,18 @@
   }
   /** Réordonnance : déplace `sourceKey` juste avant ou après `targetKey` dans
    * l'ordre complet (colonnes masquées comprises, pour qu'elles gardent leur
-   * position relative une fois réaffichées). Colonne fixe jamais déplaçable —
-   * ni comme source, ni comme cible ne bougeant elle-même (on peut déposer
-   * dessus : la colonne déplacée vient alors juste après elle, seule place
-   * valide avant la 1ʳᵉ colonne libre). */
+   * position relative une fois réaffichées).
+   *
+   * **Toutes les colonnes se déplacent, la colonne fixe comprise.** Elle ne
+   * bougeait pas, et rien ne l'exigeait : `fixed` dit qu'on ne peut pas la
+   * masquer, pas qu'elle est clouée en première position. La conséquence était
+   * qu'aucune colonne ne pouvait passer avant le nom — or c'est la marque qu'on
+   * lit d'abord. */
   function reorderColumn(sourceKey: string, targetKey: string, before: boolean) {
     if (sourceKey === targetKey) return;
-    if (columns.find((c) => c.key === sourceKey)?.fixed) return;
     const rest = columnOrder.filter((k) => k !== sourceKey);
-    const targetIsFixed = columns.find((c) => c.key === targetKey)?.fixed;
     const targetIdx = rest.indexOf(targetKey);
-    const insertAt = targetIsFixed ? targetIdx + 1 : before ? targetIdx : targetIdx + 1;
+    const insertAt = before ? targetIdx : targetIdx + 1;
     columnOrder = [...rest.slice(0, insertAt), sourceKey, ...rest.slice(insertAt)];
     persistColumnsPrefs();
   }
@@ -211,7 +221,6 @@
    * simple clic (sinon `toggleSort` ne se déclencherait plus jamais). */
   function startHeaderDrag(e: MouseEvent, key: string) {
     if (e.button !== 0) return;
-    if (columns.find((c) => c.key === key)?.fixed) return;
     const startX = e.clientX;
     const startY = e.clientY;
     let moved = false;
@@ -316,7 +325,7 @@
   onMount(async () => {
     const [colPrefs, saved] = await Promise.all([
       loadColumnsPrefs(kind),
-      getUiPrefs([FKEY, KEYS.pinned, KEYS.view, KEYS.sortKey, KEYS.sortDir, KEYS.hideBrand]),
+      getUiPrefs([FKEY, KEYS.pinned, KEYS.view, KEYS.sortKey, KEYS.sortDir, KEYS.hideBrand, StorageKey.tableHideBrand]),
     ]);
     visibleKeys = colPrefs.visible;
     columnOrder = colPrefs.order;
@@ -334,7 +343,8 @@
     else if (savedView === "gallery") view = "dense";
     // `!== "0"` et non `=== "1"` : sans réglage enregistré, c'est le nouveau
     // défaut qui s'applique, pas l'ancien.
-    hideBrand = saved[KEYS.hideBrand] !== "0";
+    hideBrandGrid = saved[KEYS.hideBrand] !== "0";
+    hideBrandTable = saved[StorageKey.tableHideBrand] !== "0";
     const savedSortKey = saved[KEYS.sortKey];
     if (savedSortKey) sortKey = savedSortKey;
     const savedSortDir = saved[KEYS.sortDir];
@@ -365,14 +375,20 @@
   }
 
   function setHideBrand(on: boolean) {
-    hideBrand = on;
-    if (prefsReady) setUiPref(KEYS.hideBrand, on ? "1" : "0");
+    if (shown === "table") {
+      hideBrandTable = on;
+      if (prefsReady) setUiPref(StorageKey.tableHideBrand, on ? "1" : "0");
+    } else {
+      hideBrandGrid = on;
+      if (prefsReady) setUiPref(KEYS.hideBrand, on ? "1" : "0");
+    }
   }
 
   /** Ce que la carte écrit, jamais ce sur quoi on trie ou on cherche. */
   function cardName(c: ModCard): string {
     const full = c.display_name ?? c.id_interne;
-    return hideBrand ? withoutBrand(full, c.brand) : full;
+    // La préférence des GRILLES : une carte n'existe pas dans le tableau.
+    return hideBrandGrid ? withoutBrand(full, c.brand) : full;
   }
 
   // Panneau latéral toujours ouvert (jamais de saut de largeur du panneau
@@ -903,14 +919,14 @@
               {#each visibleColumns as col (col.key)}
                 <th
                   data-col-key={col.key}
+                  class="draggable"
                   class:sortable={col.sortable}
-                  class:draggable={!col.fixed}
                   class:dragging={dragKey === col.key}
                   class:resizing={resizingKey === col.key}
                   class:drop-before={dropTarget?.key === col.key && dropTarget.before}
                   class:drop-after={dropTarget?.key === col.key && !dropTarget.before}
                   style={columnWidths[col.key] ? `width:${columnWidths[col.key]}px; max-width:${columnWidths[col.key]}px;` : undefined}
-                  title={col.fixed ? undefined : t("library.dragColumnTooltip")}
+                  title={t("library.dragColumnTooltip")}
                   onclick={() => col.sortable && !suppressSortClick && toggleSort(col.key)}
                   onmousedown={(e) => startHeaderDrag(e, col.key)}
                 >

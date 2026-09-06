@@ -47,6 +47,10 @@ export const StorageKey = {
    * suffixée par type, contrairement à ses voisines : seules les voitures ont
    * une marque, il n'y a donc rien à distinguer. */
   gridHideBrand: `${PREFIX}.grid.hideBrand`,
+  /** Le même réglage pour la vue TABLEAU, et volontairement séparé : la
+   * grille montre une ligne d'identification, le tableau une colonne
+   * « Marque » — deux présentations, deux décisions. */
+  tableHideBrand: `${PREFIX}.table.hideBrand`,
   librarySortKey: (kind: ModKind) => `${PREFIX}.sort.${kindKey(kind)}.key`,
   librarySortDir: (kind: ModKind) => `${PREFIX}.sort.${kindKey(kind)}.dir`,
   libraryFilters: (kind: ModKind) => `${PREFIX}.filters.${kindKey(kind)}`,

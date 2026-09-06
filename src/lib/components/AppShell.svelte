@@ -612,6 +612,10 @@
                   {#if carInactive}<span class="warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
                 {/snippet}
               </ModIdentity>
+              <!-- L'auteur, comme sous le circuit : les deux blocs ont la même
+                   anatomie, et il n'y avait pas de raison que la voiture soit
+                   la seule à taire d'où elle vient. -->
+              {#if carDetail?.author}<div class="psrc">{carDetail.author}</div>{/if}
             {/if}
           </button>
           {#if nav.sessionCar}
@@ -932,6 +936,14 @@
   }
   .blk > * + * {
     margin-top: 5px;
+  }
+  /* **Le nom du mod ne touche pas le champ qui suit.** Cinq pixels séparent
+     bien deux champs entre eux — ils forment une liste — mais pas une identité
+     d'un contrôle : le nom de la voiture se lisait collé à la liste déroulante
+     « Livrée », comme s'il en était l'étiquette. L'écart marque la frontière
+     entre ce qu'on a choisi et ce qu'on règle dessus. */
+  .blk > .pick + * {
+    margin-top: 12px;
   }
   /* Zone qui NAVIGUE (SPEC §9.1) : vignette + nom + source, et rien d'autre.
      C'est un `<button>` FRÈRE des champs, jamais leur parent — un bouton qui
