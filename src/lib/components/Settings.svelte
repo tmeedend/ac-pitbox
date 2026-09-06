@@ -17,6 +17,7 @@
   import { applyZoomFor, bigPictureState, bigPictureView, forcedViewFor } from "$lib/bigpicture.svelte";
   import { nav, setSectionGuard } from "$lib/nav.svelte";
   import { preview3dDirty, revertPreview3dPrefs, savePreview3dPrefs } from "$lib/preview3dPrefs.svelte";
+  import { gridThumbsDirty, revertGridThumbPrefs, saveGridThumbPrefs } from "$lib/gridThumbPrefs.svelte";
   import { listShowrooms, type ShowroomOption } from "$lib/launch";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { resolveProfile, type ProfileSource } from "$lib/gamepadNav";
@@ -132,8 +133,12 @@
     // l'utilisateur était en train d'essayer. Une seconde garde n'est pas
     // possible, `setSectionGuard` n'a qu'un emplacement : c'est donc celle-ci
     // qui interroge les deux.
+    // Les vignettes de la grille sont un troisième jeu, avec le même besoin :
+    // elles partagent l'onglet Aperçu, donc son bouton Enregistrer, donc sa
+    // garde.
     const previewDirty = preview3dDirty();
-    if (!dirty && !previewDirty) return true;
+    const gridDirty = gridThumbsDirty();
+    if (!dirty && !previewDirty && !gridDirty) return true;
     const wantsSave = await confirm(t("settings.unsavedPrompt"), {
       title: t("settings.unsavedTitle"),
       okLabel: t("settings.save"),
@@ -141,12 +146,14 @@
     });
     if (wantsSave) {
       if (previewDirty) await savePreview3dPrefs();
+      if (gridDirty) await saveGridThumbPrefs();
       if (!dirty) return true;
       await save();
       return validation?.is_valid ?? false;
     }
     // Annulé : revient sur tout ce qui a été appliqué en aperçu live.
     if (previewDirty) revertPreview3dPrefs();
+    if (gridDirty) revertGridThumbPrefs();
     applyZoomFor(savedConfig.prefs);
     setLocale(savedConfig.prefs.language);
     config = structuredClone(savedConfig);

@@ -163,6 +163,15 @@ export function gridThumbPrefs(): Values {
   return values;
 }
 
+/** La génération est-elle allumée **sur disque** ?
+ *
+ * `stored` et non `values` : cocher la case ne doit pas lancer trois cents
+ * conversions avant Enregistrer, pas plus que bouger un curseur ne doit mettre
+ * les images au rebut (§6.3). C'est ce que la grille lit. */
+export function gridThumbsOn(): boolean {
+  return stored.enabled;
+}
+
 /** Le gabarit **enregistré** — celui sous lequel les images existent, et donc
  * le seul avec lequel la grille a le droit de chercher ou de produire. Bouger
  * un curseur ne doit pas mettre trois cents vignettes au rebut avant que
@@ -190,17 +199,19 @@ export function newerDefaultTemplate(): boolean {
 }
 
 /**
- * Allume ou éteint les vignettes régénérées, **et l'écrit tout de suite**.
+ * Allume ou éteint les vignettes régénérées — **à l'écran seulement**.
  *
- * C'est un interrupteur, pas un gabarit : il ne périme aucune image et ne
- * déclenche aucun travail par lui-même — les cartes visibles demanderont les
- * leurs, ou reprendront la `preview.png` du mod. Il n'a donc rien à faire dans
- * la facture du §6.3, qui n'a de sens que pour ce qui régénère.
+ * Rien n'est écrit avant Enregistrer, comme tout le reste de l'onglet où la
+ * case vit. Une première version écrivait à la volée, au motif qu'un
+ * interrupteur ne périme aucune image : c'était vrai et ça n'a pas suffi.
+ * Une case qui s'enregistre seule au milieu d'un écran doté d'un bouton
+ * Enregistrer et d'un avertissement « non enregistré » apprend à
+ * l'utilisateur que ce bouton ne décide pas de tout — et il n'a alors plus
+ * aucun moyen de savoir ce qui est déjà écrit et ce qui ne l'est pas (retour
+ * utilisateur).
  */
-export async function setGridThumbsEnabled(enabled: boolean): Promise<void> {
+export function setGridThumbsEnabled(enabled: boolean): void {
   values.enabled = enabled;
-  stored.enabled = enabled;
-  await setUiPrefs({ [KEYS.enabled]: enabled ? "1" : "0" });
 }
 
 export function setGridThumbValue(key: TemplateKey, value: number): void {
@@ -220,14 +231,14 @@ export function revertGridThumbPrefs(): void {
 }
 
 /**
- * Applique : écrit le gabarit, puis efface ce que le précédent avait produit.
+ * Enregistre : écrit le gabarit, puis efface ce que le précédent avait produit.
  *
  * L'ordre compte peu ici, mais le balayage, lui, n'est pas optionnel : le
  * magasin de vignettes n'a **aucune passe d'éviction** — c'est ce qui le garde
  * hors du plafond du cache — donc rien d'autre ne ramasserait les 312 images du
  * gabarit d'avant.
  */
-export async function applyGridThumbPrefs(): Promise<void> {
+export async function saveGridThumbPrefs(): Promise<void> {
   const entries: Record<string, string> = {
     [KEYS.enabled]: values.enabled ? "1" : "0",
     [KEYS.version]: String(TEMPLATE_VERSION),

@@ -33,7 +33,7 @@ import {
   saveGridThumbnail,
   type GridTemplate,
 } from "./gridThumbs";
-import { appliedTemplate, gridThumbPrefs, gridThumbsReady } from "./gridThumbPrefs.svelte";
+import { appliedTemplate, gridThumbsOn, gridThumbsReady } from "./gridThumbPrefs.svelte";
 
 /** Taille de rendu (§5.6). 16:9 parce que c'est le rapport des `preview.png`
  * d'Assetto Corsa : la grille restant mixte pour toujours (§7), les deux
@@ -103,7 +103,7 @@ export function gridThumbProgress() {
  * passe devant (§8.4).
  */
 export function requestGridThumb(carId: string, skinId: string | null): void {
-  if (!gridThumbPrefs().enabled) return;
+  if (!gridThumbsOn()) return;
   const key = keyOf(carId, skinId);
   if (cache[key]) {
     // Déjà rendue, déjà ratée, ou déjà en file — dans ce dernier cas elle

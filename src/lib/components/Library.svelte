@@ -1358,7 +1358,9 @@
   .thumb {
     position: relative;
     aspect-ratio: 16 / 9;
-    background: var(--mat);
+    /* Dégradé radial, pas un ton plat : voir `--mat-hi`/`--mat-lo`. Le centre
+       est légèrement au-dessus du milieu, là où se pose une voiture. */
+    background: radial-gradient(ellipse at 50% 44%, var(--mat-hi) 0%, var(--mat-lo) 76%);
     border: 1px solid var(--mat-line);
     display: flex;
     align-items: center;

@@ -69,6 +69,16 @@
   --cell-line: #2e2f34;
   --mat: #242529;
   --mat-line: #2b2c31;
+  /* Les deux bouts du **dégradé radial** du mat (SPEC-grille §2.2) : clair au
+     centre, sombre aux bords. Le ton plat ci-dessus a suffi tant que les
+     images étaient opaques et le recouvraient — il ne se voyait qu'en bordure.
+     Il ne suffit plus depuis que les vignettes régénérées sont transparentes
+     (§5.6) : le mat est alors le fond réel de la voiture, et un panneau uni
+     plus clair que la carte se lit comme une erreur au lieu d'un fond de
+     studio. Le dégradé fait les deux métiers d'un coup — il porte les
+     vignettes détourées et il encadre les `preview.png` d'origine. */
+  --mat-hi: #2b2d33;
+  --mat-lo: #17181c;
   --txt: #f2f2f4;
   --txt2: #cfd2d9;
   --muted: #86868f;

@@ -33,7 +33,13 @@
   import { nav } from "$lib/nav.svelte";
   import { clearPreviewCache, previewCacheSize } from "$lib/preview";
   import { clearGridThumbnails, gridThumbnailStats, type GridThumbStats } from "$lib/gridThumbs";
-  import { gridThumbPrefs, setGridThumbsEnabled } from "$lib/gridThumbPrefs.svelte";
+  import {
+    gridThumbPrefs,
+    gridThumbsDirty,
+    revertGridThumbPrefs,
+    saveGridThumbPrefs,
+    setGridThumbsEnabled,
+  } from "$lib/gridThumbPrefs.svelte";
   import {
     DRIVER_MODES,
     INTRO_EFFECTS,
@@ -60,7 +66,12 @@
   async function save() {
     saving = true;
     try {
-      await savePreview3dPrefs();
+      // Les deux ensemble : les vignettes de la grille sont un autre fichier de
+      // réglages, mais elles partagent cet écran, donc son bouton. Une case qui
+      // s'enregistrerait toute seule à côté d'un bouton Enregistrer apprendrait
+      // à l'utilisateur que ce bouton ne décide pas de tout (retour
+      // utilisateur).
+      await Promise.all([savePreview3dPrefs(), saveGridThumbPrefs()]);
       saved = true;
     } finally {
       saving = false;
@@ -72,8 +83,16 @@
 
   // La pastille ne survit pas au réglage suivant : « Enregistré » doit parler
   // de l'état courant, pas du dernier clic.
+  /** Un réglage en attente, de l'un ou l'autre des deux jeux. */
+  const dirty = $derived(preview3dDirty() || gridThumbsDirty());
+
+  function discard() {
+    revertPreview3dPrefs();
+    revertGridThumbPrefs();
+  }
+
   $effect(() => {
-    if (preview3dDirty()) saved = false;
+    if (dirty) saved = false;
   });
 
   // --- Voiture montrée ----------------------------------------------------
@@ -398,7 +417,7 @@
 </div>
 
 <footer>
-  {#if preview3dDirty()}
+  {#if dirty}
     <span class="pill pill-warn">{t("settings.unsavedTitle")}</span>
   {:else if saved}
     <span class="pill pill-ok">{t("settings.saved")}</span>
@@ -409,8 +428,8 @@
   <button
     class="btn"
     type="button"
-    onclick={revertPreview3dPrefs}
-    disabled={saving || !preview3dDirty()}
+    onclick={discard}
+    disabled={saving || !dirty}
   >
     {t("settings.discard")}
   </button>
@@ -418,7 +437,7 @@
     class="btn btn-primary"
     type="button"
     onclick={save}
-    disabled={saving || !preview3dDirty()}
+    disabled={saving || !dirty}
   >
     {saving ? t("settings.saving") : t("settings.save")}
   </button>
