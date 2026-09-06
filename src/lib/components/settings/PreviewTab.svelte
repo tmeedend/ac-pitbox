@@ -32,6 +32,8 @@
   import { listLibrary } from "$lib/library";
   import { nav } from "$lib/nav.svelte";
   import { clearPreviewCache, previewCacheSize } from "$lib/preview";
+  import { clearGridThumbnails, gridThumbnailStats, type GridThumbStats } from "$lib/gridThumbs";
+  import { gridThumbPrefs, setGridThumbsEnabled } from "$lib/gridThumbPrefs.svelte";
   import {
     DRIVER_MODES,
     INTRO_EFFECTS,
@@ -143,6 +145,53 @@
   function degrees(value: number): string {
     const sign = value > 0 ? "+" : "";
     return sign + value.toLocaleString(i18n.locale) + "°";
+  }
+
+  // --- Vignettes régénérées de la grille (docs/SPEC-grille.md §5) ----------
+  //
+  // Posées ici et non dans leur propre écran, contrairement au §6.1, parce que
+  // le gabarit n'est pas encore réglable : il n'y a pour l'instant qu'un
+  // interrupteur et un compteur, et un écran entier pour une case à cocher
+  // serait un rangement, pas une séparation. Ce que le §6.1 sépare — un réglage
+  // qui ne coûte rien contre un réglage qui régénère 312 images — n'apparaîtra
+  // qu'avec les curseurs de cadrage.
+  const grid = $derived(gridThumbPrefs());
+  let gridStats = $state<GridThumbStats | null>(null);
+  let gridClearing = $state(false);
+  let gridError = $state<string | null>(null);
+
+  async function refreshGridStats() {
+    try {
+      gridStats = await gridThumbnailStats();
+    } catch (e) {
+      // Un compteur indisponible n'est pas une panne : la case à cocher reste
+      // utilisable, elle ne dit simplement pas où on en est.
+      console.error("grid_thumbnail_stats", e);
+    }
+  }
+
+  async function clearGrid() {
+    gridClearing = true;
+    try {
+      await clearGridThumbnails();
+      gridError = null;
+    } catch (e) {
+      gridError = String(e);
+    } finally {
+      gridClearing = false;
+    }
+    await refreshGridStats();
+  }
+
+  $effect(() => {
+    void refreshGridStats();
+  });
+
+  /** Mégaoctets, sans décimale : un magasin de vignettes se compte en dizaines
+   * de mégaoctets, et « 0,0 Go » ne dit rien à personne. */
+  function megabytes(bytes: number): string {
+    const value = Math.round(bytes / (1024 * 1024));
+    return value.toLocaleString(i18n.locale) + " " + t("settings.gridThumbsMb");
   }
 
   /** Gigaoctets, une décimale, dans la langue de l'app — « 1.5 » et « 1,5 » ne
@@ -308,6 +357,43 @@
     {#if cacheError}<div class="err">{errorText(cacheError)}</div>{/if}
   </div>
   </section>
+
+<section class="blk">
+  <div class="blk-h">
+    <span class="blk-t">{t("settings.gridThumbsGroup")}</span>
+    {#if gridStats && gridStats.generated > 0}
+      <span class="blk-n">{t("settings.gridThumbsSize", { size: megabytes(gridStats.bytes) })}</span>
+    {/if}
+  </div>
+  <div class="blk-b">
+    <Field hint={t("settings.gridThumbsHint")}>
+      <label class="check">
+        <input type="checkbox" checked={grid.enabled} onchange={(e) => setGridThumbsEnabled(e.currentTarget.checked)} />
+        <span>{t("settings.gridThumbs")}</span>
+      </label>
+    </Field>
+    <!-- Le décompte des impossibles se dit **une fois, sans tonalité
+         d'échec** : l'utilisateur n'y peut rien, aucune action n'est
+         proposable, et la carte concernée reste parfaitement utilisable avec sa
+         photo d'origine (SPEC-grille §7). -->
+    <Field hint={t("settings.gridThumbsClearHint")}>
+      <div class="cache-row">
+        <button
+          class="btn"
+          type="button"
+          onclick={clearGrid}
+          disabled={gridClearing || !gridStats || (gridStats.generated === 0 && gridStats.failed === 0)}
+        >
+          {t("settings.gridThumbsClear")}
+        </button>
+        {#if gridStats && gridStats.failed > 0}
+          <span class="muted">{t("settings.gridThumbsFailed", { count: String(gridStats.failed) })}</span>
+        {/if}
+      </div>
+    </Field>
+    {#if gridError}<div class="err">{errorText(gridError)}</div>{/if}
+  </div>
+</section>
   </div>
 </div>
 
@@ -462,6 +548,12 @@
     align-items: center;
     gap: 12px;
     margin-top: 14px;
+  }
+  /* Le décompte des voitures protégées : factuel, à côté du bouton, sans
+     couleur d'alerte — ce n'est pas un problème à régler (SPEC-grille §7). */
+  .muted {
+    color: var(--txt-3);
+    font-size: 11.5px;
   }
   .err {
     margin-top: 10px;

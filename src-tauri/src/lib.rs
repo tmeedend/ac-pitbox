@@ -21,6 +21,7 @@ mod fmod;
 mod fragment;
 mod fsb5;
 mod gamebackup;
+mod gridthumbs;
 mod harmonize;
 mod identity;
 mod import_bench;
@@ -109,6 +110,13 @@ pub fn run() {
             // une app tuée entre la sauvegarde et la pose, ou entre le retrait
             // et la restauration.
             gamebackup::restore_orphans(&conn);
+
+            // Filet de sécurité : le brouillon de conversion des vignettes de
+            // grille (`SPEC-grille.md` §5.3) est effacé dès l'image rendue,
+            // mais une fermeture brutale en laisse un — vingt mégaoctets que
+            // rien d'autre ne ramasse, son dossier étant hors du plafond du
+            // cache exprès.
+            preview::release_scratch(app.handle());
 
             // Filet de sécurité (§8.7bis) : restaure video.ini si une
             // sauvegarde laissée par l'ancien aperçu 3D intégré traîne encore
@@ -280,6 +288,14 @@ pub fn run() {
             commands::preview::clear_preview_cache,
             commands::preview::preview_cache_size,
             commands::preview::set_preview_cache_cap,
+            commands::gridthumbs::grid_thumbnail,
+            commands::gridthumbs::prepare_grid_model,
+            commands::gridthumbs::save_grid_thumbnail,
+            commands::gridthumbs::mark_grid_thumbnail_failed,
+            commands::gridthumbs::release_grid_model,
+            commands::gridthumbs::grid_thumbnail_stats,
+            commands::gridthumbs::clear_grid_thumbnails,
+            commands::gridthumbs::sweep_grid_templates,
             commands::session_state::get_session_picks,
             commands::session_state::save_session_picks,
             commands::session_state::get_launch_state,

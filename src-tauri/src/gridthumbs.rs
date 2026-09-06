@@ -1,0 +1,359 @@
+//! Regenerated thumbnails for the library grid (`docs/SPEC-grille.md` §5).
+//!
+//! The grid shows whatever the mod author shipped as `preview.png`: renders on
+//! black, renders on white, in-game captures, photographs. The eye re-adapts to
+//! a new background on every card, so it never gets to compare the *shapes* —
+//! which is what identifying a car is. Rendering all of them through the same
+//! rig, with the same framing and the same light, is what turns that grid into
+//! a catalogue.
+//!
+//! Three properties hold this module together, and each of them is a decision
+//! taken against an obvious alternative:
+//!
+//! **The store sits outside the preview cache ceiling.** A thumbnail is a PNG
+//! of a couple hundred kilobytes that must survive; the `.glb` that produced it
+//! is twenty megabytes that must not. Same reasoning — and same measurement —
+//! as the driver body thumbnails: 312 conversions poured into a pool that is
+//! already at its 2 GiB cap evict the entries the user actually consults, and
+//! the cache starts working against them (§5.3).
+//!
+//! **A thumbnail identity is the car cache entry name plus the template.** The
+//! first half already tracks the `.kn5`, its date, the skin, the CSP configs and
+//! the converter version, so a mod updated on disk regenerates on its own; the
+//! second is what makes "Appliquer" in the settings screen mean something.
+//! Nothing here needs a migration or an invalidation pass.
+//!
+//! **A failure is remembered, next to the image it could not produce.** Some
+//! cars are encrypted and will never be renderable (§7): retrying fourteen
+//! protected models on every launch would cost fourteen KN5 parses for an
+//! answer that cannot change until the mod itself does — and the fingerprint in
+//! the name is exactly what notices that it did.
+
+use std::path::PathBuf;
+
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+
+/// Rendering template, as the settings screen holds it (§5.6).
+///
+/// Every field is an integer in user-facing units — degrees for angles,
+/// percentages for the rest — because that is what the sliders produce and what
+/// `ui_prefs.json` stores. The frontend owns the values and the defaults; the
+/// backend only needs them to be *stable*, since they are half of a thumbnail
+/// identity.
+///
+/// What is **not** here is as deliberate as what is: format, transparency,
+/// fixed exposure and the absence of post-processing are the properties that
+/// guarantee 312 cars are comparable, so they are not settings at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GridTemplate {
+    /// Camera rotation around the vertical axis, in degrees.
+    pub azimuth: i32,
+    /// Camera pitch above the horizon, in degrees.
+    pub elevation: i32,
+    /// Vertical field of view, in degrees.
+    pub fov: i32,
+    /// Framing margin around the bounding box, in percent.
+    pub margin: i32,
+    /// Key light intensity, in percent.
+    pub key: i32,
+    /// Fill light, in percent of the key.
+    pub fill: i32,
+    /// Rim light, in percent of the key.
+    pub rim: i32,
+    /// Contact shadow opacity, in percent.
+    pub shadow: i32,
+}
+
+impl GridTemplate {
+    /// Eight hex characters of the template, to append to a car entry name.
+    ///
+    /// Short on purpose: it is a suffix on a name that already carries a
+    /// 32-character hash, and it only has to separate the handful of templates
+    /// one user will ever try.
+    fn fingerprint(&self) -> String {
+        let mut hasher = Sha256::new();
+        for value in [
+            self.azimuth,
+            self.elevation,
+            self.fov,
+            self.margin,
+            self.key,
+            self.fill,
+            self.rim,
+            self.shadow,
+        ] {
+            hasher.update(value.to_le_bytes());
+        }
+        format!("{:x}", hasher.finalize())[..8].to_string()
+    }
+}
+
+/// What the grid knows about one car thumbnail, without converting anything.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GridThumb {
+    /// Entry name, to hand back when saving or when recording a failure. The
+    /// frontend never builds it: identity belongs here, with the fingerprints
+    /// it is made of.
+    pub stem: String,
+    /// Path of the PNG, when it is already rendered.
+    pub path: Option<String>,
+    /// Why this car will not render, when a previous attempt said so. An i18n
+    /// key (`errors.preview*`), never a sentence.
+    pub failed: Option<String>,
+}
+
+/// Where thumbnails live: next to the preview cache, and **outside its
+/// ceiling** — see the module header.
+pub fn dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    use tauri::Manager;
+    let dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| format!("dossier de cache indisponible : {e}"))?
+        .join("gridthumbs");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("création du cache de vignettes : {e}"))?;
+    Ok(dir)
+}
+
+/// Name of the thumbnail produced for `car_stem` under `template`.
+///
+/// `car_stem` is the car preview cache entry name, version prefix included
+/// (`crate::preview::car_entry_stem`), so incrementing the converter retires
+/// every thumbnail with it — and the sweep that already clears foreign versions
+/// picks them up.
+pub fn entry_stem(car_stem: &str, template: &GridTemplate) -> String {
+    format!("{car_stem}-t{}", template.fingerprint())
+}
+
+/// Le nom d'entrée est-il bien un nom d'entrée ?
+///
+/// Il fait l'aller-retour par le frontend — rendu par `grid_thumbnail`, rendu
+/// tel quel à `save_grid_thumbnail` — donc il revient d'une source qu'on ne
+/// contrôle pas entièrement, et il sert à composer un nom de fichier. Forme
+/// attendue : `v<chiffres>-<hexadécimal>-t<hexadécimal>`, rien d'autre, et
+/// surtout aucun séparateur.
+pub fn is_entry_stem(stem: &str) -> bool {
+    let Some((car, template)) = stem.rsplit_once("-t") else {
+        return false;
+    };
+    let Some((version, key)) = car.strip_prefix('v').and_then(|rest| rest.split_once('-')) else {
+        return false;
+    };
+    !version.is_empty()
+        && version.chars().all(|c| c.is_ascii_digit())
+        && !key.is_empty()
+        && key.chars().all(|c| c.is_ascii_hexdigit())
+        && !template.is_empty()
+        && template.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// What exists on disk for this entry: the image, or the reason there is none.
+pub fn look_up(app: &tauri::AppHandle, stem: &str) -> GridThumb {
+    let dir = dir(app).ok();
+    let png = dir.as_ref().map(|d| d.join(format!("{stem}.png")));
+    let failed = dir
+        .as_ref()
+        .and_then(|d| std::fs::read_to_string(d.join(format!("{stem}.fail"))).ok())
+        .map(|reason| reason.trim().to_string())
+        .filter(|reason| !reason.is_empty());
+    GridThumb {
+        stem: stem.to_string(),
+        path: png.filter(|p| p.is_file()).map(|p| p.to_string_lossy().into_owned()),
+        failed,
+    }
+}
+
+/// Stores the PNG the frontend just rendered, and returns its path.
+///
+/// Written under a temporary name then renamed: a thumbnail truncated by a
+/// brutal shutdown would be served forever afterwards, since its name is what
+/// says it exists.
+pub fn write(app: &tauri::AppHandle, stem: &str, png: &[u8]) -> Result<PathBuf, String> {
+    if !is_entry_stem(stem) {
+        return Err(format!("nom de vignette refusé : {stem}"));
+    }
+    let dir = dir(app)?;
+    let file = dir.join(format!("{stem}.png"));
+    let tmp = dir.join(format!("{stem}.{}.tmp", std::process::id()));
+    std::fs::write(&tmp, png).map_err(|e| format!("{} : {e}", tmp.display()))?;
+    std::fs::rename(&tmp, &file).map_err(|e| format!("{} : {e}", file.display()))?;
+    // A car that used to fail and now renders must stop being skipped.
+    let _ = std::fs::remove_file(dir.join(format!("{stem}.fail")));
+    Ok(file)
+}
+
+/// Remembers that this entry cannot be rendered, and why (§7).
+///
+/// `reason` is an i18n key. Best-effort: failing to write it costs one retry at
+/// the next launch, not a bug — but it is logged, because a store that silently
+/// forgets its failures looks exactly like a generation pass that never ends.
+pub fn mark_failed(app: &tauri::AppHandle, stem: &str, reason: &str) {
+    if !is_entry_stem(stem) {
+        log::warn!("gridthumbs: nom de vignette refusé — {stem}");
+        return;
+    }
+    let Ok(dir) = dir(app) else { return };
+    // Une clé i18n, pas un roman : ce que le frontend passe finit relu et
+    // affiché, et un message technique de plusieurs kilo-octets n'a rien à
+    // faire dans un marqueur qu'on garde pour toujours.
+    let reason: String = reason.trim().chars().filter(|c| !c.is_control()).take(120).collect();
+    if let Err(e) = std::fs::write(dir.join(format!("{stem}.fail")), reason.as_bytes()) {
+        log::warn!("gridthumbs: échec de {stem} non mémorisé — {e}");
+    }
+}
+
+/// Counters for the generation report and the settings screen (§8.2).
+#[derive(Debug, Clone, Copy, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GridThumbStats {
+    pub generated: u32,
+    pub failed: u32,
+    pub bytes: u64,
+}
+
+pub fn stats(app: &tauri::AppHandle) -> Result<GridThumbStats, String> {
+    let dir = dir(app)?;
+    let mut stats = GridThumbStats::default();
+    let Ok(read) = std::fs::read_dir(&dir) else {
+        return Ok(stats);
+    };
+    for entry in read.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        let Ok(meta) = entry.metadata() else { continue };
+        if !meta.is_file() {
+            continue;
+        }
+        if name.ends_with(".png") {
+            stats.generated += 1;
+            stats.bytes += meta.len();
+        } else if name.ends_with(".fail") {
+            stats.failed += 1;
+        }
+    }
+    Ok(stats)
+}
+
+/// Empties the store and returns the bytes freed.
+///
+/// Failures go with the images: someone who asks for a clean slate is usually
+/// asking precisely for the protected cars to be tried again.
+pub fn clear(app: &tauri::AppHandle) -> Result<u64, String> {
+    let dir = dir(app)?;
+    let mut freed = 0u64;
+    for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
+        let Ok(meta) = entry.metadata() else { continue };
+        if meta.is_file() && std::fs::remove_file(entry.path()).is_ok() {
+            freed += meta.len();
+        }
+    }
+    Ok(freed)
+}
+
+/// Removes what belongs to a template other than the one in use.
+///
+/// Not a nicety. Changing the framing rewrites 312 names, and nothing else would
+/// ever collect the previous set — the store has no eviction pass to hook onto,
+/// by design. Called when a template is applied.
+pub fn sweep_other_templates(app: &tauri::AppHandle, template: &GridTemplate) -> Result<u32, String> {
+    let dir = dir(app)?;
+    let suffix = format!("-t{}", template.fingerprint());
+    let mut removed = 0u32;
+    for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
+        let path = entry.path();
+        let Some(stem) = path.file_stem().map(|s| s.to_string_lossy().into_owned()) else {
+            continue;
+        };
+        if stem.ends_with(&suffix) || !entry.metadata().is_ok_and(|m| m.is_file()) {
+            continue;
+        }
+        match std::fs::remove_file(&path) {
+            Ok(()) => removed += 1,
+            Err(e) => log::warn!("gridthumbs: vignette d'un autre gabarit non supprimée — {e}"),
+        }
+    }
+    if removed > 0 {
+        log::info!("gridthumbs: {removed} vignette(s) d'un gabarit antérieur effacée(s)");
+    }
+    Ok(removed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn template() -> GridTemplate {
+        GridTemplate {
+            azimuth: 318,
+            elevation: 8,
+            fov: 22,
+            margin: 6,
+            key: 100,
+            fill: 25,
+            rim: 60,
+            shadow: 35,
+        }
+    }
+
+    /// §5.6 — every template value is part of a thumbnail identity: two
+    /// templates that differ anywhere must not share an image.
+    #[test]
+    fn every_template_field_changes_the_entry_name() {
+        let base = template();
+        let name = entry_stem("v46-abc", &base);
+        let mut variants = vec![base; 8];
+        variants[0].azimuth += 1;
+        variants[1].elevation += 1;
+        variants[2].fov += 1;
+        variants[3].margin += 1;
+        variants[4].key += 1;
+        variants[5].fill += 1;
+        variants[6].rim += 1;
+        variants[7].shadow += 1;
+        for variant in variants {
+            assert_ne!(
+                name,
+                entry_stem("v46-abc", &variant),
+                "un gabarit modifié doit donner une autre vignette : {variant:?}"
+            );
+        }
+    }
+
+    /// The entry name makes a round trip through the frontend before coming
+    /// back as half a file name: anything that is not one is refused.
+    #[test]
+    fn only_an_entry_name_is_accepted_as_one() {
+        assert!(is_entry_stem(&entry_stem("v46-abc123", &template())), "un vrai nom");
+        for refused in [
+            "",
+            "v46-abc123",
+            "..-t0011aabb",
+            "v46-abc123-tzz",
+            "v46-../x-t0011aabb",
+            "46-abc123-t0011aabb",
+            "v46-abc/123-t0011aabb",
+            "v46-abc123-t0011aabb/../evil",
+        ] {
+            assert!(!is_entry_stem(refused), "doit être refusé : {refused}");
+        }
+    }
+
+    /// §5.7 — the car own fingerprint stays in the name, so an updated mod
+    /// regenerates without any invalidation pass.
+    #[test]
+    fn entry_name_keeps_the_car_fingerprint() {
+        let base = template();
+        assert_ne!(
+            entry_stem("v46-abc", &base),
+            entry_stem("v46-def", &base),
+            "deux voitures différentes ne partagent pas leur vignette"
+        );
+        assert!(
+            entry_stem("v46-abc", &base).starts_with("v46-abc"),
+            "le nom d'entrée de la voiture reste le préfixe : c'est lui que le balayage de version reconnaît"
+        );
+    }
+}

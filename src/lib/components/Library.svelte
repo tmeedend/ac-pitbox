@@ -30,6 +30,7 @@
   import { registerModNav } from "$lib/screenActions";
   import { libraryVersion } from "$lib/libraryVersion.svelte";
   import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
+  import { gridThumb, requestGridThumb } from "$lib/gridThumbs.svelte";
   import { buildModContextItems } from "$lib/modContextActions";
   import { t } from "$lib/i18n/index.svelte";
   import { zoomFactor } from "$lib/zoom.svelte";
@@ -316,6 +317,52 @@
     persistColumnsPrefs();
   }
   onDestroy(stopResizeListeners);
+
+  // --- Vignettes régénérées : demandées à la visibilité (SPEC-grille §5.4) ---
+  //
+  // **Pas au chargement de la liste.** Trois cents conversions demandées d'un
+  // coup, c'est cinq minutes de travail pour des cartes que personne ne
+  // regarde ; demandées à l'entrée dans le champ de vision, la bibliothèque se
+  // normalise pendant qu'on l'utilise. Un seul observateur pour toute la
+  // grille : un par carte coûterait trois cents abonnements pour la même
+  // information.
+  type ThumbWant = { car: string; skin: string | null; want: boolean };
+  const wanted = new WeakMap<Element, ThumbWant>();
+  let visibility: IntersectionObserver | null = null;
+
+  function whenVisible(node: HTMLElement, want: ThumbWant) {
+    // `IntersectionObserver` manque dans certains contextes de test : son
+    // absence doit coûter la fonctionnalité, jamais l'écran.
+    if (typeof IntersectionObserver === "undefined") return;
+    visibility ??= new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const target = wanted.get(entry.target);
+          if (target?.want) requestGridThumb(target.car, target.skin);
+        }
+      },
+      // Un peu avant le bord : la vignette d'une carte qui arrive a une
+      // chance d'être là quand elle arrive vraiment.
+      { rootMargin: "300px" },
+    );
+    wanted.set(node, want);
+    visibility.observe(node);
+    return {
+      update(next: ThumbWant) {
+        wanted.set(node, next);
+      },
+      destroy() {
+        visibility?.unobserve(node);
+        wanted.delete(node);
+      },
+    };
+  }
+
+  onDestroy(() => {
+    visibility?.disconnect();
+    visibility = null;
+  });
 
   // Restauration au montage (§6.2/§8.6) : colonnes (fichier dédié,
   // `columns.ts`) et le reste des petits réglages d'écran (`uiPrefs.ts`) en
@@ -887,11 +934,17 @@
           {@const prefSkin = isCar ? getPreferredSkin(c.id_interne) : null}
           {@const prefLayout = !isCar ? getPreferredLayout(c.id_interne) : null}
           {@const src = previewSrc(prefSkin?.preview ?? prefLayout?.preview ?? c.preview)}
+          <!-- La vignette régénérée prend le pas sur la `preview.png` du mod
+               quand elle existe (SPEC-grille §5). Quand elle n'existe pas — et
+               une voiture chiffrée n'en aura jamais — la carte garde la photo
+               d'origine : la grille reste mixte pour toujours, et c'est le mat
+               qui les rend comparables. -->
+          {@const regen = isCar ? gridThumb(c.id_interne, prefSkin?.id ?? null) : null}
           {@const ol = previewSrc(prefLayout?.outline ?? c.outline)}
           {@const blocked = unusableReason(c)}
           <button data-id={c.id_interne} class="card" class:unusable={blocked !== null} class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} oncontextmenu={(e) => openCardContextMenu(e, c)} title={blocked ? `${t(blocked)}\n${t("library.cardTooltip")}` : t("library.cardTooltip")}>
-            <div class="thumb">
-              {#if src}<img src={src} alt={c.display_name ?? c.id_interne} loading="lazy" />
+            <div class="thumb" use:whenVisible={{ car: c.id_interne, skin: prefSkin?.id ?? null, want: isCar }}>
+              {#if regen ?? src}<img src={regen ?? src} alt={c.display_name ?? c.id_interne} loading="lazy" />
               {:else}<div class="noprev">{isCar ? t("library.typeCar") : t("library.typeTrack")}</div>{/if}
               {#if !isCar && ol}<img class="outline" src={ol} alt="" loading="lazy" />{/if}
               {#if sessionId === c.id_interne}<span class="sessbadge">{t("library.sessionBadge")}</span>{/if}

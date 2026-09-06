@@ -13,6 +13,7 @@ pub mod activation;
 pub mod addons;
 pub mod bulk_ops;
 pub mod config;
+pub mod gridthumbs;
 pub mod import;
 pub mod layers;
 pub mod library;

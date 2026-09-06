@@ -336,6 +336,75 @@ pub struct PreviewRequest<'a> {
     pub driver: Option<&'a crate::driver::DriverView>,
 }
 
+/// Tout ce qu'une voiture apporte à sa propre conversion, résolu **sans rien
+/// lire de lourd** : quelques `stat`, un `ext_config.ini`, un `car.ini`.
+///
+/// Extrait de [`prepare`] parce que la voie des **vignettes de grille**
+/// (`gridthumbs.rs`) en a besoin deux fois sans convertir : pour connaître le
+/// nom d'entrée d'une voiture — donc savoir si sa vignette est déjà là — et
+/// pour la convertir ailleurs que dans le cache (§5.3 de `SPEC-grille.md`).
+struct CarSources {
+    resolved: kn5_gltf::ResolvedModel,
+    /// Livrée résolue : c'est elle qui désigne le dossier où vivent le
+    /// `ext_config.ini` et les KN5 de jante (§4.3).
+    skin_dir: Option<PathBuf>,
+    csp: kn5_gltf::CspConfig,
+    /// Ce que la voiture déclare de sa direction. **Pas l'angle** : il n'est
+    /// plus cuit dans le modèle, seulement décrit, et c'est la vue qui le
+    /// tourne. Ces deux nombres-là, en revanche, sont écrits dans le `.glb` et
+    /// font donc partie de son identité.
+    limits: kn5_gltf::SteerLimits,
+    ac_install: Option<PathBuf>,
+}
+
+fn resolve_car(
+    app: &tauri::AppHandle,
+    car_dir: &Path,
+    car_id: &str,
+    skin_id: Option<&str>,
+) -> Result<CarSources, String> {
+    let resolved = kn5_gltf::resolve_model(car_dir).ok_or(crate::errors::PREVIEW_MODEL_NOT_FOUND)?;
+    let skin_dir = kn5_gltf::resolve_skin(car_dir, skin_id);
+    let ac_install = crate::config::load(app).ac_install_path;
+    let csp = kn5_gltf::CspConfig::locate(car_dir, skin_dir.as_deref(), ac_install.as_deref(), car_id);
+    // L'angle demandé est celui des **roues** ; l'animation de braquage, elle,
+    // est indexée sur celui du volant. La démultiplication de la voiture fait
+    // le pont, et la butée borne les deux.
+    let steering = crate::steering::read(car_dir, car_id);
+    Ok(CarSources {
+        resolved,
+        skin_dir,
+        csp,
+        limits: kn5_gltf::SteerLimits {
+            lock: steering.lock,
+            ratio: steering.ratio,
+        },
+        ac_install,
+    })
+}
+
+/// Le ménage des dossiers **hors éviction**, une seule fois par exécution.
+///
+/// Vignettes de corps et vignettes de grille portent le même préfixe de
+/// version que les entrées d'aperçu : elles se périment donc avec le
+/// convertisseur, et rien d'autre ne les ramasserait — leurs dossiers n'ont pas
+/// de passe d'éviction où s'accrocher. Le dossier des aperçus, lui, est repris
+/// par [`evict_to`] à chaque conversion.
+///
+/// Au premier aperçu demandé, pas au démarrage : qui n'en ouvre jamais ne paie
+/// rien.
+fn sweep_side_stores(app: &tauri::AppHandle, state: &PreviewState) {
+    if state.swept.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    if let Ok(thumbs) = thumb_dir(app) {
+        sweep_foreign_versions(&thumbs);
+    }
+    if let Ok(grid) = crate::gridthumbs::dir(app) {
+        sweep_foreign_versions(&grid);
+    }
+}
+
 /// Prépare l'aperçu d'une voiture : renvoie l'entrée de cache si elle existe,
 /// convertit sinon.
 ///
@@ -350,32 +419,21 @@ pub fn prepare(
     token: u64,
 ) -> Result<CarPreview, String> {
     let PreviewRequest { skin_id, driver } = *what;
-    let resolved = kn5_gltf::resolve_model(car_dir).ok_or(crate::errors::PREVIEW_MODEL_NOT_FOUND)?;
+    let sources = resolve_car(app, car_dir, car_id, skin_id)?;
+    let CarSources {
+        ref resolved,
+        ref skin_dir,
+        ref csp,
+        limits,
+        ref ac_install,
+    } = sources;
     let dir = cache_dir(app)?;
-    // Une seule fois par exécution : au premier aperçu demandé, pas au
-    // démarrage, pour ne rien coûter à qui n'en ouvre jamais.
-    // Les vignettes de corps portent le même préfixe de version : elles se
-    // périment donc avec le convertisseur, et rien d'autre ne les ramasserait
-    // — leur dossier est hors du plafond, donc hors éviction. Le dossier des
-    // aperçus, lui, est repris par `evict_to` à chaque conversion.
-    if !state.swept.swap(true, Ordering::Relaxed) {
-        if let Ok(thumbs) = thumb_dir(app) {
-            sweep_foreign_versions(&thumbs);
-        }
-    }
-    // Le skin est résolu avant la clé : c'est lui qui désigne le dossier où
-    // vivent le `ext_config.ini` et les KN5 de jante (§4.3).
-    let skin_dir = kn5_gltf::resolve_skin(car_dir, skin_id);
-    let ac_install = crate::config::load(app).ac_install_path;
-    let csp = kn5_gltf::CspConfig::locate(car_dir, skin_dir.as_deref(), ac_install.as_deref(), car_id);
+    sweep_side_stores(app, state);
     // Résolu avant la clé, comme le skin et pour la même raison : c'est lui qui
     // en fait partie, pas la case à cocher. Deux voitures qui portent le même
     // mannequin dans la même tenue n'en partagent pas l'entrée pour autant —
     // le modèle de la voiture est dans la clé aussi.
-    // L'angle demandé est celui des **roues** ; l'animation de braquage, elle,
-    // est indexée sur celui du volant. La démultiplication de la voiture fait
-    // le pont, et la butée borne les deux.
-    let steering = crate::steering::read(car_dir, car_id);
+    //
     // **Le mannequin est greffé volant droit, et son angle n'entre plus nulle
     // part.** Ses bras sont désormais posés à l'affichage, par le squelette et
     // l'animation écrits dans le `.glb` (`kn5_gltf::rig`) : l'angle ne décide
@@ -384,14 +442,6 @@ pub fn prepare(
     let driver = match (driver, ac_install.as_deref()) {
         (Some(view), Some(ac)) => crate::driver::resolve(ac, car_dir, car_id, skin_dir.as_deref(), 0.0, &view.outfit),
         _ => None,
-    };
-    // Ce que la voiture déclare de sa direction. **Pas l'angle** : il n'est
-    // plus cuit dans le modèle, seulement décrit, et c'est la vue qui le
-    // tourne. Ces deux nombres-là, en revanche, sont écrits dans le `.glb` et
-    // font donc partie de son identité.
-    let limits = kn5_gltf::SteerLimits {
-        lock: steering.lock,
-        ratio: steering.ratio,
     };
     let stem = entry_stem(&cache_key(
         &resolved.path,
@@ -430,6 +480,42 @@ pub fn prepare(
         return Err(crate::errors::PREVIEW_SUPERSEDED.to_string());
     }
 
+    let conversion = convert_car(app, &sources, driver.as_ref(), true)?;
+
+    write_entry(&dir, &stem, &conversion)?;
+    evict_to(&dir, state.cache_cap());
+
+    Ok(CarPreview {
+        url: url_for(&stem),
+        triangle_count: conversion.triangle_count,
+        material_count: conversion.material_count,
+        texture_count: conversion.texture_count,
+        from_cache: false,
+    })
+}
+
+/// Parse le KN5, y greffe ce qu'il faut et le convertit.
+///
+/// Le cœur commun de [`prepare`] et de [`prepare_scratch`] : les deux
+/// produisent exactement le même modèle, seul l'endroit où il atterrit change.
+///
+/// `progress` dit s'il faut émettre `preview://progress`. La voie des vignettes
+/// de grille ne le fait **pas** : cet événement pilote le squelette de
+/// chargement de la fiche détail, et une file de trois cents conversions le
+/// ferait clignoter derrière un aperçu qui, lui, ne charge rien.
+fn convert_car(
+    app: &tauri::AppHandle,
+    sources: &CarSources,
+    driver: Option<&kn5_gltf::DriverGraft>,
+    progress: bool,
+) -> Result<kn5_gltf::Conversion, String> {
+    let CarSources {
+        resolved,
+        skin_dir,
+        csp,
+        limits,
+        ..
+    } = sources;
     let bytes = std::fs::read(&resolved.path).map_err(|e| format!("{} : {e}", resolved.path.display()))?;
     let mut model = kn5::parse(&bytes).map_err(|e| match e {
         // Un KN5 chiffré (CSP) n'a pas la bonne magie : c'est la seule
@@ -457,7 +543,7 @@ pub fn prepare(
     // jantes, boucliers, optiques. Sans cette passe, l'aperçu montre une
     // voiture trouée alors que le jeu l'affiche entière. Après le contrôle
     // d'enroulement ci-dessus, qui doit juger le modèle d'origine et lui seul.
-    let ext = kn5_gltf::apply_ext_config(&mut model, &resolved.path, skin_dir.as_deref(), &csp);
+    let ext = kn5_gltf::apply_ext_config(&mut model, &resolved.path, skin_dir.as_deref(), csp);
     for failure in &ext.failures {
         log::warn!("preview: remplacement CSP ignoré — {failure}");
     }
@@ -465,7 +551,7 @@ pub fn prepare(
     // Le pilote **après** les greffes CSP : celles-ci visent des nœuds de la
     // voiture par motif de nom, et un mannequin déjà en place pourrait s'y
     // faire prendre. Après, il n'est visible que de la conversion.
-    if let Some(driver) = &driver {
+    if let Some(driver) = driver {
         let stats = kn5_gltf::graft_driver(&mut model, driver);
         for failure in &stats.failures {
             log::warn!("preview: pilote ignoré — {failure}");
@@ -494,14 +580,14 @@ pub fn prepare(
         // partagent tout sauf leur livrée (voir `write_entry`).
         layout: kn5_gltf::glb::Layout::Split,
         geometry: kn5_gltf::GeometryOptions {
-            steering: limits,
+            steering: *limits,
             ..Default::default()
         },
         // L'animation de braquage voyage jusqu'au convertisseur : c'est elle
         // qui devient l'animation glTF du mannequin. Relue plutôt que reprise
         // de la greffe — quelques millisecondes contre un aller-retour de
         // structure à travers trois modules.
-        driver_rig: driver.as_ref().and_then(|graft| {
+        driver_rig: driver.and_then(|graft| {
             let path = graft.animation.as_ref()?;
             let bytes = std::fs::read(path).ok()?;
             let animation = kn5::parse_animation(&bytes).ok()?;
@@ -511,7 +597,7 @@ pub fn prepare(
             })
         }),
         surfaces: kn5_gltf::material_overrides(
-            &csp,
+            csp,
             skin_dir
                 .as_deref()
                 .and_then(|d| d.file_name())
@@ -522,24 +608,115 @@ pub fn prepare(
         ..Default::default()
     };
     let conversion = kn5_gltf::convert(&model, skin_dir.as_deref(), &options, &|stage| {
-        use tauri::Emitter;
-        let _ = app.emit("preview://progress", stage.as_str());
+        if progress {
+            use tauri::Emitter;
+            let _ = app.emit("preview://progress", stage.as_str());
+        }
     })?;
 
     for warning in &conversion.texture_warnings {
         log::warn!("preview: texture `{}` ignorée — {}", warning.name, warning.reason);
     }
+    Ok(conversion)
+}
 
+// --- Vignettes de la grille : la voie parallèle (`SPEC-grille.md` §5.3) -----
+
+/// Sous-dossier du brouillon, à côté des entrées de cache.
+///
+/// **Il n'est pas une entrée du cache et n'en suit pas les règles** : ni
+/// [`evict_to`] ni [`dir_size`] ne le regardent, tous deux ne parcourant qu'un
+/// niveau et ne connaissant que [`BLOBS`]. C'est exactement ce qu'on veut —
+/// convertir trois cents voitures pour leurs vignettes ne doit rien peser dans
+/// un plafond qui protège les voitures que l'utilisateur consulte vraiment.
+const SCRATCH: &str = "scratch";
+
+/// Le dossier de brouillon, **vidé d'abord**.
+///
+/// Un modèle à la fois sur le disque : la conversion précédente est effacée
+/// avant que la suivante n'écrive. Le pic disque d'une génération complète est
+/// donc celui d'une seule voiture, pas de trois cents.
+fn reset_scratch(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = cache_dir(app)?.join(SCRATCH);
+    // Best-effort : un fichier encore ouvert par la webview qui vient de lire
+    // le modèle précédent ne doit pas empêcher la conversion suivante.
+    if let Err(e) = std::fs::remove_dir_all(&dir) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            log::warn!("preview: brouillon de vignette non vidé — {e}");
+        }
+    }
+    std::fs::create_dir_all(&dir).map_err(|e| format!("création du brouillon : {e}"))?;
+    Ok(dir)
+}
+
+/// Efface le brouillon. Appelé quand le frontend a fini d'en tirer son image,
+/// et au démarrage : une fermeture brutale en laisserait un derrière elle.
+pub fn release_scratch(app: &tauri::AppHandle) {
+    let Ok(dir) = cache_dir(app) else { return };
+    if let Err(e) = std::fs::remove_dir_all(dir.join(SCRATCH)) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            log::warn!("preview: brouillon de vignette non effacé — {e}");
+        }
+    }
+}
+
+/// Le nom d'entrée d'une voiture **sans pilote**, sans rien convertir.
+///
+/// C'est la moitié « voiture » de l'identité d'une vignette de grille : elle
+/// porte déjà le `.kn5` et sa date, la livrée, les `ext_config.ini` et la
+/// version du convertisseur, donc un mod mis à jour se régénère tout seul.
+/// Quelques `stat`, aucun octet de géométrie lu.
+pub fn car_entry_stem(
+    app: &tauri::AppHandle,
+    car_dir: &Path,
+    car_id: &str,
+    skin_id: Option<&str>,
+) -> Result<String, String> {
+    let sources = resolve_car(app, car_dir, car_id, skin_id)?;
+    Ok(entry_stem(&cache_key(
+        &sources.resolved.path,
+        skin_id,
+        sources.csp.sources(),
+        &sources.limits,
+        None,
+    )))
+}
+
+/// Convertit une voiture **hors du cache**, pour en tirer une vignette.
+///
+/// Renvoie l'URL du modèle dans le brouillon. L'appelant rend l'image puis
+/// appelle [`release_scratch`] : convertir → rendre → écrire le PNG → jeter, la
+/// séquence du §5.3. Rien n'entre dans le cache LRU, donc rien n'en sort.
+///
+/// **Sans jeton de génération**, comme les vignettes de corps : une vignette ne
+/// périme pas l'aperçu de la fiche et ne se périme pas elle-même. Le verrou de
+/// conversion, lui, s'applique — une conversion à la fois, sinon les deux se
+/// disputent tous les cœurs du transcodage de textures.
+pub fn prepare_scratch(
+    app: &tauri::AppHandle,
+    state: &PreviewState,
+    car_dir: &Path,
+    car_id: &str,
+    skin_id: Option<&str>,
+) -> Result<String, String> {
+    let sources = resolve_car(app, car_dir, car_id, skin_id)?;
+    sweep_side_stores(app, state);
+    let stem = entry_stem(&cache_key(
+        &sources.resolved.path,
+        skin_id,
+        sources.csp.sources(),
+        &sources.limits,
+        None,
+    ));
+
+    let _slot = state
+        .slot
+        .lock()
+        .map_err(|_| "verrou d'aperçu empoisonné".to_string())?;
+    let dir = reset_scratch(app)?;
+    let conversion = convert_car(app, &sources, None, false)?;
     write_entry(&dir, &stem, &conversion)?;
-    evict_to(&dir, state.cache_cap());
-
-    Ok(CarPreview {
-        url: url_for(&stem),
-        triangle_count: conversion.triangle_count,
-        material_count: conversion.material_count,
-        texture_count: conversion.texture_count,
-        from_cache: false,
-    })
+    Ok(format!("http://carpreview.localhost/{SCRATCH}/{stem}.gltf"))
 }
 
 /// Ce que le plateau d'essayage de l'écran Pilote reçoit
@@ -610,15 +787,7 @@ pub fn prepare_driver(
     token: Option<u64>,
 ) -> Result<DriverPreview, String> {
     let dir = cache_dir(app)?;
-    // Les vignettes de corps portent le même préfixe de version : elles se
-    // périment donc avec le convertisseur, et rien d'autre ne les ramasserait
-    // — leur dossier est hors du plafond, donc hors éviction. Le dossier des
-    // aperçus, lui, est repris par `evict_to` à chaque conversion.
-    if !state.swept.swap(true, Ordering::Relaxed) {
-        if let Ok(thumbs) = thumb_dir(app) {
-            sweep_foreign_versions(&thumbs);
-        }
-    }
+    sweep_side_stores(app, state);
     let stem = driver_entry_stem(graft);
     let file = dir.join(format!("{stem}.gltf"));
 
@@ -1065,6 +1234,13 @@ pub fn clear_cache(app: &tauri::AppHandle) -> Result<u64, String> {
             freed += dir_size(&dir.join(BLOBS));
             let _ = std::fs::remove_dir_all(entry.path());
         }
+        // Le brouillon d'une vignette en cours : il ne compte dans aucun
+        // plafond, mais « vider le cache » doit le vider aussi — sinon vingt
+        // mégaoctets survivent à un bouton qui promet le contraire.
+        if meta.is_dir() && entry.file_name() == SCRATCH {
+            freed += dir_size(&dir.join(SCRATCH));
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
     }
     Ok(freed)
 }
@@ -1074,7 +1250,19 @@ pub fn clear_cache(app: &tauri::AppHandle) -> Result<u64, String> {
 /// d'une source qu'on ne contrôle pas entièrement.
 pub fn cached_file(dir: &Path, requested: &str) -> Option<PathBuf> {
     let name = requested.trim_start_matches('/');
+    // Le brouillon des vignettes de grille (§5.3) : mêmes noms, même
+    // validation, un dossier plus bas. Le préfixe est retiré **une seule
+    // fois** — la suite passe par le contrôle habituel, qui refuse tout ce qui
+    // n'est pas un nom d'entrée. Les URI du document restent relatives
+    // (`blobs/…`), donc la webview les résout d'elle-même dans le brouillon.
+    match name.strip_prefix(SCRATCH).and_then(|rest| rest.strip_prefix('/')) {
+        Some(rest) => cached_entry(&dir.join(SCRATCH), rest),
+        None => cached_entry(dir, name),
+    }
+}
 
+/// Le contrôle de nom lui-même, sans le détour par le brouillon.
+fn cached_entry(dir: &Path, name: &str) -> Option<PathBuf> {
     // Un blob : `blobs/<empreinte hexadécimale>.<extension>`. Le nom est un
     // hachage, donc entièrement hexadécimal — rien d'autre n'est accepté, et
     // surtout aucun séparateur de plus.
@@ -1467,6 +1655,63 @@ INSERT = part.kn5",
         assert!(
             cached_file(&dir, &format!("/{stem}")).is_none(),
             "extension obligatoire"
+        );
+    }
+
+    /// Le brouillon des vignettes de grille (`SPEC-grille.md` §5.3) est servi
+    /// par le même protocole, un dossier plus bas, et **avec la même
+    /// validation** : le préfixe n'ouvre pas une porte dérobée.
+    #[test]
+    fn cached_file_serves_the_scratch_folder_under_the_same_rules() {
+        let base = crate::testutil::temp_dir("preview-scratch-serve");
+        let dir = base.join("previews");
+        let scratch = dir.join(SCRATCH);
+        std::fs::create_dir_all(scratch.join(BLOBS)).unwrap();
+        let stem = entry_stem("abcdef0123456789abcdef0123456789");
+        std::fs::write(scratch.join(format!("{stem}.gltf")), b"glb").unwrap();
+        std::fs::write(scratch.join(BLOBS).join("beef.bin"), b"bin").unwrap();
+        std::fs::write(dir.join("secret.txt"), b"nope").unwrap();
+
+        assert!(
+            cached_file(&dir, &format!("/{SCRATCH}/{stem}.gltf")).is_some(),
+            "le modèle du brouillon est servi"
+        );
+        assert!(
+            cached_file(&dir, &format!("/{SCRATCH}/{BLOBS}/beef.bin")).is_some(),
+            "ses blobs le sont aussi : les URI du document sont relatives, la webview les résout ici"
+        );
+        assert!(
+            cached_file(&dir, &format!("/{SCRATCH}/../secret.txt")).is_none(),
+            "remontée de dossier refusée sous le brouillon aussi"
+        );
+        assert!(
+            cached_file(&dir, &format!("/{stem}.gltf")).is_none(),
+            "une entrée du brouillon n'est pas servie comme une entrée du cache"
+        );
+    }
+
+    /// §5.3 — le brouillon ne pèse dans aucun plafond : ni l'éviction ni la
+    /// mesure d'occupation ne le regardent. Sans quoi convertir trois cents
+    /// voitures pour leurs vignettes évincerait les aperçus que l'utilisateur
+    /// consulte vraiment, et le cache travaillerait contre lui.
+    #[test]
+    fn the_scratch_folder_stays_out_of_the_cache_ceiling() {
+        let base = crate::testutil::temp_dir("preview-scratch-cap");
+        let dir = base.join("previews");
+        let scratch = dir.join(SCRATCH);
+        std::fs::create_dir_all(&scratch).unwrap();
+        let kept = entry_stem("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        std::fs::write(dir.join(format!("{kept}.gltf")), vec![0u8; 4096]).unwrap();
+        let draft = entry_stem("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        std::fs::write(scratch.join(format!("{draft}.gltf")), vec![0u8; 1024 * 1024]).unwrap();
+
+        assert_eq!(dir_size(&dir), 4096, "l'occupation du cache ignore le brouillon");
+        // Un plafond ridicule : tout ce que l'éviction voit devrait partir,
+        // sauf l'entrée la plus récente, qu'elle garde toujours.
+        evict_to(&dir, 1);
+        assert!(
+            scratch.join(format!("{draft}.gltf")).is_file(),
+            "l'éviction ne touche pas au brouillon"
         );
     }
 

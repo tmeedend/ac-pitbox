@@ -24,6 +24,10 @@ Documentation de conception de Pit Box (gestionnaire de mods Assetto Corsa). Ce 
 - **`pitbox-source-pack.html`** — affichage du pack d'origine (voitures sœurs, filtrer/désinstaller par pack).
 - **`pitbox-a-propos.html`** — écran « À propos » : identité, outils tiers (Assetto Corsa/Content Manager/QuickBMS), soutien (Patreon/OverTake), licences open source, mentions légales.
 
+## Grille de la bibliothèque (chantier en cours)
+
+- **`SPEC-grille.md`** — lisibilité des cartes, affichage du nom, et **régénération des vignettes**. Porte la distinction qui structure tout le reste : « les voitures sombres sont indiscernables » recouvre deux problèmes — la carte qui ne se détache pas de la page (réglé par le contenant, §2) et deux voitures sombres qui se ressemblent (réglé par la source, §5). Les confondre conduit à régler le mauvais. **Point d'entrée du chantier.**
+
 ## Écran Pilote (chantier en cours)
 
 - **`SPEC-ecran-pilote.md`** — spécification UX/UI de l'écran de choix du pilote : le corps (mannequin 3D) et la tenue en trois pièces. Porte l'asymétrie fondatrice — le corps est imposé par la physique de la voiture, la tenue tient à un fichier de skin — et les sept décisions dont tout le reste découle. **Point d'entrée du chantier.**
