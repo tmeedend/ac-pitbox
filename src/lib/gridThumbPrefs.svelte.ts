@@ -73,10 +73,18 @@ export const GRID_THUMB_RANGES = {
    * vignette est lisible à 190 px — pour un catalogue dont le métier est
    * l'identification, c'est le bon échange (§5.6).
    *
-   * **La borne haute vient d'une mesure, pas d'une intuition.** Sur les 178
-   * voitures officielles, la voiture n'occupe que **66 % de la largeur** du
-   * cadre (médiane) : imiter ce cadrage demande une marge de l'ordre de 50 %,
-   * là où le plafond était à 25. */
+   * **Ce n'est pas « le pourcentage de cadre laissé vide ».** À marge nulle, la
+   * voiture n'occupe déjà que ~75 % de la largeur : le cadrage ajuste la
+   * **boîte englobante en 3D**, projetée, qui est plus grande que la silhouette
+   * visible — coins de la boîte, rétroviseurs, pare-chocs. C'est la constante
+   * qui manquait pour traduire une mesure en réglage, et elle a coûté un
+   * aller-retour : les 66 % relevés sur les images du jeu avaient été lus comme
+   * « marge ≈ 50 % », ce qui donnait 51 % d'occupation, très en dessous. La
+   * relation est `occupation ≈ 75 / (1 + marge/100)`, vérifiée à deux marges
+   * (4 % → 72,7 %, 48 % → 50,8 %), donc viser 66 % demande **15 %**.
+   *
+   * La borne haute reste large : elle n'interdit plus rien, et un preset peut
+   * vouloir laisser respirer. */
   margin: { min: 0, max: 70, step: 1, default: 6 },
   /** Intensité de la lumière principale, en pourcentage. */
   key: { min: 0, max: 300, step: 5, default: 100 },
@@ -307,15 +315,23 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
     // réduite en 128×72, boîte des pixels qui s'écartent du fond) :
     //
     //  - la voiture occupe **66 % de la largeur** du cadre — d'où une marge de
-    //    ~48 %, là où le catalogue serre à 6 % ;
-    //  - elle est **basse** : 33 % de marge en haut contre 17 % en bas, centre
-    //    à 58 % de la hauteur — d'où une hauteur de cadrage positive ;
+    //    15 %, la relation entre les deux n'étant pas celle qu'on croit (voir
+    //    `margin` : à marge nulle, la voiture n'occupe déjà que ~75 %) ;
+    //  - elle est **basse** : 33 % de marge en haut contre 18 % en bas, centre
+    //    à 57 % de la hauteur — d'où une hauteur de cadrage positive ;
     //  - le fond est **plat et quasi noir** (luminance 4 dans les coins comme
     //    au-dessus de la voiture) et ce qui éclaire, c'est le **sol** :
     //    luminance 15 en bas du cadre. Ce n'est donc pas un halo derrière la
     //    voiture, contrairement à ce que l'œil croit y voir — c'est une flaque
     //    au sol sur un fond uni.
     //  - format : 1022×574 en médiane, soit le 16:9 que la sortie utilise déjà.
+    //
+    // **Les deux côtés ont été mesurés avec le même instrument**, et c'est la
+    // seule façon de comparer deux cadrages : mesurer le leur et estimer le
+    // nôtre a produit une marge trois fois trop grande. Piège rencontré au
+    // passage — le seuil de détection doit exclure la flaque de lumière au sol,
+    // sinon elle entre dans la boîte et augmenter la marge semble augmenter la
+    // largeur mesurée.
     //
     // Ce qui reste à l'œil, c'est l'équilibre des trois lampes : la mesure dit
     // où poser la voiture et de quelle couleur est le vide, pas comment la
@@ -329,12 +345,12 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       azimuth: 318,
       elevation: 6,
       fov: 20,
-      margin: 48,
+      margin: 15,
       key: 100,
       fill: 25,
       rim: 45,
       shadow: 30,
-      height: 10,
+      height: 6,
       // La flaque fait tout le travail de lumière du fond, et **aucun reflet** :
       // les images du jeu éclairent le sol, elles n'y mirent pas la voiture.
       floor: 100,
