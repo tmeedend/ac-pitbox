@@ -31,6 +31,16 @@ export interface GridTemplate {
   height: number;
   floor: number;
   reflection: number;
+  /** Fond cuit dans l'image, en pourcentage. Zéro laisse le cadre transparent —
+   * la carte possède le fond, la règle sur laquelle tout le reste repose. Au-
+   * dessus, le rendu porte le sien, seule façon qu'une vignette régénérée soit
+   * **indiscernable** d'une `preview.png` d'origine posée à côté d'elle. */
+  background: number;
+  /** Les deux bouts du dégradé de la carte. Ils appartiennent à la carte et non
+   * au rendu — **sauf** quand le fond les cuit, et c'est exactement à ce
+   * moment-là qu'ils entrent dans l'empreinte, côté backend. */
+  matHi: string;
+  matLo: string;
 }
 
 /** Ce que la grille a déjà pour une voiture, sans rien convertir. */

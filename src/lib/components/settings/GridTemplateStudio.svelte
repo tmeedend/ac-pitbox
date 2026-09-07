@@ -16,11 +16,12 @@
   // Les six modèles sont **chargés une fois et gardés** : bouger un curseur
   // redessine, ne reconvertit jamais. Sans ça, chaque pixel de curseur coûterait
   // six conversions, soit six secondes par image.
-  import { listLibrary, type ModCard } from "$lib/library";
+  import { listLibrary, previewSrc, type ModCard } from "$lib/library";
   import { nav } from "$lib/nav.svelte";
   import { createGridStudio, pauseGridThumbs, resumeGridThumbs, type GridStudio, type StudioCar } from "$lib/gridThumbs.svelte";
   import type { GridTemplate } from "$lib/gridThumbs";
   import type { GridMat } from "$lib/gridThumbPrefs.svelte";
+  import { t } from "$lib/i18n/index.svelte";
   import LoadingState from "../LoadingState.svelte";
 
   // Le mat vient du preset comme le gabarit : la moitié de ce qui distingue
@@ -42,11 +43,25 @@
   // montage, qui doit relancer le dessin — voir le commentaire de l'effet.
   let studio = $state<GridStudio | null>(null);
   let cars = $state<StudioCar[]>([]);
+  /** La `preview.png` d'origine de chaque voiture de l'échantillon, par id. */
+  let originals = $state<Record<string, string>>({});
   let images = $state<Record<string, string>>({});
   /** Le miroir du sol est monté à la demande, et son import est asynchrone :
    * `draw` étant synchrone — c'est ce qui lui permet de suivre un curseur — il
    * faut un passage séparé, et de quoi redessiner une fois qu'il est là. */
   let mirrorReady = $state(false);
+  /**
+   * Montre la `preview.png` d'origine à côté de chaque rendu.
+   *
+   * **C'est l'instrument du preset Officiel**, dont le critère n'est pas « est-
+   * ce beau » mais « est-ce indiscernable » — un critère mesurable, donc qui se
+   * règle contre la vraie image et jamais de mémoire. Utile aux deux autres
+   * aussi, où il dit ce qu'on gagne.
+   *
+   * Volontairement **non persistée** : c'est un geste de comparaison, pas un
+   * réglage. Rien à écrire, donc rien à faire survivre à un redémarrage.
+   */
+  let compare = $state(false);
   let loading = $state(true);
 
   /**
@@ -108,7 +123,12 @@
           if (!alive) return;
           const car = await handle.load(card.id_interne, null, card.display_name ?? card.id_interne);
           if (!alive) return;
-          if (car) cars = [...cars, car];
+          if (!car) continue;
+          // La `preview.png` d'origine voyage avec la voiture : c'est elle que
+          // la bascule de comparaison montre à côté du rendu.
+          const original = previewSrc(card.preview);
+          if (original) originals = { ...originals, [car.id]: original };
+          cars = [...cars, car];
         }
       } catch (e) {
         // Pas de contexte WebGL, pas de bibliothèque : l'écran reste utilisable
@@ -166,14 +186,32 @@
   });
 </script>
 
-<div class="studio" style:--mat-hi={mat.hi} style:--mat-lo={mat.lo}>
+<label class="compare">
+  <input type="checkbox" bind:checked={compare} />
+  <span>{t("settings.gridStudioCompare")}</span>
+</label>
+
+<div class="studio" class:paired={compare} style:--mat-hi={mat.hi} style:--mat-lo={mat.lo}>
   {#if loading && cars.length === 0}
     <LoadingState />
   {:else}
     {#each cars as car (car.id)}
       <figure>
-        <div class="frame">
-          {#if images[car.id]}<img src={images[car.id]} alt={car.name} />{/if}
+        <div class="pair">
+          <div class="frame">
+            {#if images[car.id]}<img src={images[car.id]} alt={car.name} />{/if}
+          </div>
+          <!-- L'image d'origine **sur le même mat** : les comparer sur deux
+               fonds différents ne dirait rien de ce qui les sépare vraiment. -->
+          {#if compare}
+            <div class="frame">
+              {#if originals[car.id]}
+                <img src={originals[car.id]} alt={car.name} />
+              {:else}
+                <span class="none">{t("settings.gridStudioNoOriginal")}</span>
+              {/if}
+            </div>
+          {/if}
         </div>
         <figcaption>{car.name}</figcaption>
       </figure>
@@ -182,20 +220,51 @@
       <!-- L'échantillon se remplit une voiture à la fois : les cases déjà là
            sont utilisables tout de suite, on ne fait pas attendre six
            conversions pour montrer la première. -->
-      <figure class="pending"><div class="frame"></div></figure>
+      <figure class="pending"><div class="pair"><div class="frame"></div></div></figure>
     {/if}
   {/if}
 </div>
 
 <style>
+  .compare {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 11.5px;
+    color: var(--txt2);
+    cursor: pointer;
+  }
   .studio {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 10px;
   }
+  /* Deux images côte à côte prennent deux fois la place : les cases s'élargissent
+     plutôt que de rétrécir chaque image de moitié. */
+  .studio.paired {
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  }
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .studio.paired .pair {
+    grid-template-columns: 1fr 1fr;
+  }
+  .none {
+    color: var(--muted2);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
   /* Le même mat que la grille de bibliothèque : on règle une image qui sera
      posée dessus, la juger sur un autre fond n'aurait pas de sens. */
   .frame {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     aspect-ratio: 16 / 9;
     background: radial-gradient(ellipse at 50% 44%, var(--mat-hi) 0%, var(--mat-lo) 76%);
     border: 1px solid var(--mat-line);

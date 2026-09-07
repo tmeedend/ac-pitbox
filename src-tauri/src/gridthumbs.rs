@@ -45,7 +45,7 @@ use sha2::{Digest, Sha256};
 /// What is **not** here is as deliberate as what is: format, transparency,
 /// fixed exposure and the absence of post-processing are the properties that
 /// guarantee 312 cars are comparable, so they are not settings at all.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GridTemplate {
     /// Camera rotation around the vertical axis, in degrees.
@@ -75,6 +75,17 @@ pub struct GridTemplate {
     /// reflection is a modulation of a floor's brightness, and there is nothing
     /// to modulate on a transparent background.
     pub reflection: i32,
+    /// Backdrop baked into the image, in percent. Zero leaves the frame
+    /// transparent — the card owns the background, which is the rule the whole
+    /// design rests on. Above zero the render carries its own, which is the
+    /// only way a regenerated thumbnail can be **indistinguishable** from an
+    /// untouched `preview.png` sitting next to it in the same grid.
+    pub background: i32,
+    /// The two ends of the card's radial gradient, as CSS colours. They belong
+    /// to the card, not to the render — except when the backdrop bakes them in,
+    /// which is exactly when they enter the fingerprint below.
+    pub mat_hi: String,
+    pub mat_lo: String,
 }
 
 impl GridTemplate {
@@ -97,8 +108,21 @@ impl GridTemplate {
             self.height,
             self.floor,
             self.reflection,
+            self.background,
         ] {
             hasher.update(value.to_le_bytes());
+        }
+        // **The mat enters the fingerprint only when it is baked.** It is a
+        // card colour, so changing it normally costs nothing and must not
+        // reprint 312 images — that is what keeps a theme change free. But a
+        // preset with a backdrop paints those very colours *into* the PNG, and
+        // an image that no longer matches its card is the one defect this whole
+        // arrangement exists to avoid. Conditional, therefore: not a special
+        // case, the honest reading of "the fingerprint covers what decides the
+        // image".
+        if self.background > 0 {
+            hasher.update(self.mat_hi.as_bytes());
+            hasher.update(self.mat_lo.as_bytes());
         }
         format!("{:x}", hasher.finalize())[..8].to_string()
     }
@@ -339,6 +363,9 @@ mod tests {
             height: 0,
             floor: 0,
             reflection: 0,
+            background: 0,
+            mat_hi: "#2b2d33".to_string(),
+            mat_lo: "#17181c".to_string(),
         }
     }
 
@@ -348,7 +375,7 @@ mod tests {
     fn every_template_field_changes_the_entry_name() {
         let base = template();
         let name = entry_stem("v46-abc", &base);
-        let mut variants = vec![base; 11];
+        let mut variants = vec![base.clone(); 12];
         variants[0].azimuth += 1;
         variants[1].elevation += 1;
         variants[2].fov += 1;
@@ -360,6 +387,7 @@ mod tests {
         variants[8].height += 1;
         variants[9].floor += 1;
         variants[10].reflection += 1;
+        variants[11].background += 1;
         for variant in variants {
             assert_ne!(
                 name,
@@ -367,6 +395,30 @@ mod tests {
                 "un gabarit modifié doit donner une autre vignette : {variant:?}"
             );
         }
+    }
+
+    /// The mat is a card colour, not a render value — until a preset bakes it
+    /// into the image, and then it is both. Getting this backwards costs either
+    /// 312 needless regenerations (always hashing it) or a baked backdrop that
+    /// no longer matches its card (never hashing it).
+    #[test]
+    fn the_mat_counts_only_when_it_is_baked() {
+        let mut plain = template();
+        let mut repainted = template();
+        repainted.mat_hi = "#000000".to_string();
+        assert_eq!(
+            entry_stem("v46-aaa", &plain),
+            entry_stem("v46-aaa", &repainted),
+            "sans fond cuit, changer la couleur de carte ne périme aucune image"
+        );
+
+        plain.background = 100;
+        repainted.background = 100;
+        assert_ne!(
+            entry_stem("v46-aaa", &plain),
+            entry_stem("v46-aaa", &repainted),
+            "avec fond cuit, la couleur est dans l'image : elle doit périmer"
+        );
     }
 
     /// Two presets are legitimately alive at once — one per grid density — so

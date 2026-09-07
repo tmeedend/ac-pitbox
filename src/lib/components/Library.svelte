@@ -31,7 +31,7 @@
   import { libraryVersion } from "$lib/libraryVersion.svelte";
   import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
   import { enqueueGridThumbs, gridThumb, requestGridThumb } from "$lib/gridThumbs.svelte";
-  import { gridThumbsOn, presetForDensity } from "$lib/gridThumbPrefs.svelte";
+  import { gridThumbsOn, presetForDensity, renderTemplate } from "$lib/gridThumbPrefs.svelte";
   import { buildModContextItems } from "$lib/modContextActions";
   import { t } from "$lib/i18n/index.svelte";
   import { zoomFactor } from "$lib/zoom.svelte";
@@ -337,6 +337,9 @@
   // instantané une fois les deux produits — c'est le balayage qui garde les
   // images de tous les presets vivants qui rend ça vrai.
   const preset = $derived(presetForDensity(shown === "comfortable" ? "comfortable" : "dense"));
+  /** Le gabarit tel qu'il part au rendu : les valeurs du preset **plus son
+   * mat**, que le fond cuit d'un preset comme Officiel reprend. */
+  const template = $derived(renderTemplate(preset));
 
   type ThumbWant = { car: string; skin: string | null; name: string; want: boolean };
   const wanted = new WeakMap<Element, ThumbWant>();
@@ -351,7 +354,7 @@
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
           const target = wanted.get(entry.target);
-          if (target?.want) requestGridThumb(preset.template, target.car, target.skin, target.name);
+          if (target?.want) requestGridThumb(template, target.car, target.skin, target.name);
         }
       },
       // Un peu avant le bord : la vignette d'une carte qui arrive a une
@@ -388,7 +391,7 @@
   $effect(() => {
     if (!isCar || !gridThumbsOn()) return;
     const list = filtered;
-    const template = preset.template;
+    const wanted = template;
     // « Laisser le contenu de base tel quel » : les voitures Kunos ont déjà
     // exactement le rendu qu'un preset qui les imite produirait, donc les
     // régénérer coûte trois minutes pour un résultat identique. Avec un preset
@@ -397,7 +400,7 @@
     const skipStock = preset.skipStock;
     untrack(() =>
       enqueueGridThumbs(
-        template,
+        wanted,
         list
           .filter((c) => !skipStock || !c.is_stock)
           .map((c) => ({
@@ -989,7 +992,7 @@
                une voiture chiffrée n'en aura jamais — la carte garde la photo
                d'origine : la grille reste mixte pour toujours, et c'est le mat
                qui les rend comparables. -->
-          {@const regen = isCar ? gridThumb(preset.template, c.id_interne, prefSkin?.id ?? null) : null}
+          {@const regen = isCar ? gridThumb(template, c.id_interne, prefSkin?.id ?? null) : null}
           {@const ol = previewSrc(prefLayout?.outline ?? c.outline)}
           {@const blocked = unusableReason(c)}
           <button data-id={c.id_interne} class="card" class:unusable={blocked !== null} class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} oncontextmenu={(e) => openCardContextMenu(e, c)} title={blocked ? `${t(blocked)}\n${t("library.cardTooltip")}` : t("library.cardTooltip")}>

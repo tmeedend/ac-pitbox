@@ -35,6 +35,7 @@
     gridThumbPrefs,
     gridThumbsDirty,
     renamePreset,
+    renderTemplate,
     revertGridThumbPrefs,
     saveGridThumbPrefs,
     setPresetSkipStock,
@@ -61,7 +62,7 @@
   /** Le sol est un groupe à lui : c'est ce qui sépare le plus nettement un
    * preset de catalogue — voiture détourée, rien d'autre — d'un preset de
    * vitrine, où la flaque et le reflet sont l'essentiel de l'effet. */
-  const GROUND = ["floor", "reflection", "shadow"] as const;
+  const GROUND = ["floor", "reflection", "shadow", "background"] as const;
   const DENSITIES: GridDensity[] = ["dense", "comfortable"];
 
   let applying = $state(false);
@@ -165,7 +166,7 @@
       if (!preset || seen.has(preset.id)) continue;
       seen.add(preset.id);
       enqueueGridThumbs(
-        preset.template,
+        renderTemplate(preset),
         list
           .filter((c) => !preset.skipStock || !c.is_stock)
           .map((c) => ({
@@ -196,7 +197,7 @@
     <!-- L'aperçu en tête, comme l'onglet Aperçu 3D : on règle en voyant le
          résultat, et sur un catalogue puisque c'est un catalogue qu'on édite. -->
     {#if selected}
-      <GridTemplateStudio template={selected.template} mat={selected.mat} />
+      <GridTemplateStudio template={renderTemplate(selected)} mat={selected.mat} />
     {/if}
 
     <section class="blk">

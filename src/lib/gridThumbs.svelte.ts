@@ -413,6 +413,13 @@ interface Rig {
    * qu'aucun preset ne reflète — c'est une seconde passe de rendu complète,
    * inutile de la payer pour un catalogue. */
   mirror: MirrorHandle | null;
+  /** Le fond cuit dans l'image, accroché à la caméra. Invisible tant qu'aucun
+   * preset ne le demande — une vignette détourée est le cas normal. */
+  backdrop: ThreeModule.Mesh<ThreeModule.PlaneGeometry, ThreeModule.MeshBasicMaterial>;
+  /** Les couleurs actuellement peintes dessus, pour ne repeindre son canevas
+   * que quand elles changent : c'est un `CanvasTexture` de 512 px, pas quelque
+   * chose qu'on refait trois cents fois. */
+  painted: string;
   /** Taille du tampon, pour le calcul de flou du miroir. */
   width: number;
   load: (url: string) => Promise<ThreeModule.Group>;
@@ -511,6 +518,31 @@ async function createRig(width: number, height: number): Promise<Rig> {
     scene.add(shadow);
 
     const camera = new THREE.PerspectiveCamera(22, width / height, 0.05, 500);
+
+    // **Le fond, enfant de la caméra.** Accroché à elle plutôt que posé dans la
+    // scène : il doit rester exactement derrière tout, quel que soit l'angle et
+    // quelle que soit la taille de la voiture — et une caméra qui bouge
+    // l'emmène avec elle sans qu'on ait à le replacer dans le monde.
+    //
+    // La caméra doit alors être **dans la scène** : three ne parcourt pas les
+    // enfants d'une caméra qui n'y est pas, et le fond ne serait jamais dessiné.
+    const backdrop = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({
+        transparent: true,
+        depthWrite: false,
+        depthTest: false,
+        // Le dégradé est déjà la couleur voulue à l'écran ; le passer au tone
+        // mapping l'assombrirait, et il doit correspondre au CSS de la carte au
+        // ton près.
+        toneMapped: false,
+      }),
+    );
+    backdrop.renderOrder = -10;
+    backdrop.visible = false;
+    camera.add(backdrop);
+    scene.add(camera);
+
     const loader = new GLTFLoader();
     return {
       THREE,
@@ -524,6 +556,8 @@ async function createRig(width: number, height: number): Promise<Rig> {
       pool,
       shadow,
       mirror: null,
+      backdrop,
+      painted: "",
       width,
       load: async (url: string) => (await loader.loadAsync(url)).scene,
     };
@@ -633,8 +667,76 @@ function drawModel(rig: Rig, model: ThreeModule.Group, template: GridTemplate): 
 
   placeCamera(THREE, camera, box, center, radius, template);
   placeLights(rig, camera, center, radius, template);
+  placeBackdrop(rig, template);
 
   renderer.render(scene, camera);
+}
+
+/**
+ * Peint et dimensionne le fond cuit (§ preset Officiel).
+ *
+ * Il couvre exactement le tronc de vision à la distance où il est posé, donc
+ * ses dimensions se recalculent avec la focale — qui est réglable. Posé loin
+ * mais **avant** le plan éloigné de la caméra : au-delà, il serait découpé.
+ */
+function placeBackdrop(rig: Rig, template: GridTemplate): void {
+  const { backdrop, camera, THREE } = rig;
+  backdrop.visible = template.background > 0;
+  if (!backdrop.visible) return;
+
+  const key = `${template.matHi}|${template.matLo}`;
+  if (rig.painted !== key) {
+    backdrop.material.map?.dispose();
+    backdrop.material.map = backdropTexture(THREE, template.matHi, template.matLo);
+    backdrop.material.needsUpdate = true;
+    rig.painted = key;
+  }
+  backdrop.material.opacity = template.background / 100;
+
+  const distance = camera.far * 0.5;
+  const height = 2 * Math.tan((camera.fov * Math.PI) / 360) * distance;
+  backdrop.position.set(0, 0, -distance);
+  backdrop.scale.set(height * camera.aspect, height, 1);
+}
+
+/**
+ * Le dégradé du fond : **exactement celui du mat de la carte**, peint dans
+ * l'image.
+ *
+ * Les mêmes deux couleurs des deux côtés, et ce n'est pas une commodité : une
+ * vignette qui porte son fond et une carte qui en porte un autre se voient au
+ * premier coup d'œil, et c'est précisément le défaut que ce preset existe pour
+ * effacer. C'est aussi pourquoi le backend fait entrer le mat dans l'empreinte
+ * dès que le fond est cuit.
+ *
+ * Une ellipse et non un cercle : le cadre est en 16:9, un dégradé circulaire y
+ * laisserait deux coins plus clairs que les deux autres.
+ */
+function backdropTexture(THREE: typeof ThreeModule, hi: string, lo: string): ThreeModule.Texture {
+  const width = 256;
+  const height = 144;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    ctx.fillStyle = lo;
+    ctx.fillRect(0, 0, width, height);
+    // Le centre du dégradé est un peu au-dessus du milieu, là où se pose une
+    // voiture — même géométrie que le mat CSS de la carte (`ellipse at 50% 44%`).
+    ctx.save();
+    ctx.translate(width / 2, height * 0.44);
+    ctx.scale(width / height, 1);
+    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, height * 0.76);
+    glow.addColorStop(0, hi);
+    glow.addColorStop(1, lo);
+    ctx.fillStyle = glow;
+    ctx.fillRect(-width, -height, width * 2, height * 2);
+    ctx.restore();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 /** Prépare un modèle à être dessiné : tout ce qui est maillage projette une
@@ -896,16 +998,27 @@ function checkPlausible(canvas: HTMLCanvasElement): void {
   const { data } = ctx.getImageData(0, 0, probe.width, probe.height);
   let opaque = 0;
   let white = 0;
+  let min = 255;
+  let max = 0;
   for (let i = 0; i < data.length; i += 4) {
     if (data[i + 3] < 24) continue;
     opaque += 1;
     if (data[i] > 244 && data[i + 1] > 244 && data[i + 2] > 244) white += 1;
+    const luma = (data[i] * 299 + data[i + 1] * 587 + data[i + 2] * 114) / 1000;
+    if (luma < min) min = luma;
+    if (luma > max) max = luma;
   }
   const pixels = probe.width * probe.height;
   // Le seuil est bas exprès : une monoplace vue de trois-quarts couvre peu de
   // cadre, et l'ombre de contact compte à peine. Sous 2 %, il n'y a rien.
   if (opaque < pixels * 0.02) throw new Error("rendu vide (contexte WebGL perdu ?)");
   if (white > opaque * 0.9) throw new Error("rendu saturé (textures manquantes ?)");
+  // **Un fond cuit rend le contrôle du vide inopérant** : l'image est opaque
+  // partout, donc « rien n'a été dessiné » ressemble à « tout va bien ». Ce qui
+  // le trahit, c'est l'écart : un fond seul est un dégradé très doux, une
+  // voiture y ajoute forcément des clairs et des sombres. Mesuré sur le seul
+  // dégradé, l'écart reste sous une dizaine de niveaux.
+  if (max - min < 12) throw new Error("rendu sans voiture (fond seul ?)");
 }
 
 function toPng(canvas: HTMLCanvasElement): Promise<Blob | null> {

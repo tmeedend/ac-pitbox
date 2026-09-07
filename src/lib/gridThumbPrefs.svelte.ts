@@ -99,7 +99,24 @@ export const GRID_THUMB_RANGES = {
    * part de son fond dans l'image, là où un preset de catalogue n'en cuit
    * aucune. */
   reflection: { min: 0, max: 100, step: 5, default: 0 },
-} as const satisfies Record<keyof GridTemplate, { min: number; max: number; step: number; default: number }>;
+  /** Fond cuit dans l'image. **Zéro laisse la vignette détourée** et c'est le
+   * cas normal : la carte fournit le fond, donc il suit le thème sans jamais
+   * demander de régénérer. Au-dessus, le rendu porte son propre fond — la seule
+   * façon qu'une vignette soit indiscernable d'une `preview.png` d'origine dans
+   * la même grille, ce qui **retourne** le problème de la grille mixte au lieu
+   * de le contenir. Il reprend les couleurs du mat du preset, pour que l'image
+   * et sa carte ne puissent pas diverger. */
+  background: { min: 0, max: 100, step: 5, default: 0 },
+} as const satisfies Record<keyof GridTemplateValues, { min: number; max: number; step: number; default: number }>;
+
+/**
+ * Les valeurs **réglées** d'un preset : le gabarit moins le mat.
+ *
+ * Le mat est une couleur de carte que `renderTemplate` ajoute au moment de
+ * rendre. Le garder hors de ce type est ce qui empêche de l'enregistrer deux
+ * fois — une dans le preset, une dans son gabarit — et de les voir diverger.
+ */
+export type GridTemplateValues = Omit<GridTemplate, "matHi" | "matLo">;
 
 type TemplateKey = keyof typeof GRID_THUMB_RANGES;
 
@@ -121,7 +138,7 @@ export interface GridPreset {
    * pas une étiquette de produit. */
   name: string;
   builtin: boolean;
-  template: GridTemplate;
+  template: GridTemplateValues;
   mat: GridMat;
   /** Laisser le contenu de base tel quel.
    *
@@ -136,7 +153,7 @@ export interface GridPreset {
 /** Reprend les huit valeurs d'une source quelconque. Écrit champ par champ et
  * non par `Object.fromEntries` : c'est ce qui fait vérifier par TypeScript
  * qu'aucune n'est oubliée le jour où le gabarit en gagne une. */
-function template(read: (key: TemplateKey) => number): GridTemplate {
+function template(read: (key: TemplateKey) => number): GridTemplateValues {
   return {
     azimuth: read("azimuth"),
     elevation: read("elevation"),
@@ -149,10 +166,27 @@ function template(read: (key: TemplateKey) => number): GridTemplate {
     height: read("height"),
     floor: read("floor"),
     reflection: read("reflection"),
+    background: read("background"),
   };
 }
 
-function defaultTemplate(): GridTemplate {
+/**
+ * Le gabarit tel qu'il part au rendu : les valeurs du preset **plus son mat**.
+ *
+ * Le mat vit à part dans l'écran parce que c'est une couleur de carte, pas un
+ * réglage de rendu — et le backend ne le compte dans l'empreinte que quand le
+ * preset le cuit. Mais il doit voyager avec le reste, sans quoi un fond cuit ne
+ * saurait pas de quelle couleur être.
+ *
+ * **Tout ce qui rend ou cherche une image passe par ici**, jamais par
+ * `preset.template` directement : c'est cet objet-là qui fait la clé, des deux
+ * côtés de l'IPC.
+ */
+export function renderTemplate(preset: GridPreset): GridTemplate {
+  return { ...preset.template, matHi: preset.mat.hi, matLo: preset.mat.lo };
+}
+
+function defaultTemplate(): GridTemplateValues {
   return template((key) => GRID_THUMB_RANGES[key].default);
 }
 
@@ -199,6 +233,7 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       fill: 15,
       rim: 140,
       shadow: 45,
+      background: 0,
       // La voiture remonte dans le cadre pour laisser la place au reflet, et
       // le sol arrive : flaque de lumière, puis reflet court dessus. C'est ce
       // qui sépare une photo de studio d'un détourage — et c'est aussi ce qui
@@ -212,6 +247,49 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
     // s'écrit chez nous : dans la carte.
     mat: { hi: "#191a1e", lo: "#0a0a0c" },
     skipStock: false,
+  },
+  {
+    // **Le preset qui retourne le problème de la grille mixte** au lieu de le
+    // contenir. Les voitures chiffrées et le contenu de base gardent leur
+    // `preview.png` pour toujours (§7) ; plutôt que d'encadrer cette disparité,
+    // celui-ci l'efface — il imite ce rendu, donc une voiture régénérée ne se
+    // distingue plus de celle d'à côté.
+    //
+    // Deux conséquences, et elles sont le preset :
+    //  - **Son fond est cuit dans l'image.** Indiscernable exige que le fond
+    //    soit dans le fichier, comme il l'est chez Kunos. La transparence était
+    //    un moyen, pas une fin.
+    //  - **Il ne régénère pas le contenu de base.** Les 178 voitures du jeu ont
+    //    déjà exactement ce rendu : les refaire coûterait trois minutes pour un
+    //    résultat identique. C'est ce qui rend ce preset le moins cher des
+    //    trois, alors qu'il est le plus ambitieux.
+    //
+    // Les valeurs sont à arrêter dans l'atelier, bascule « comparer à l'image
+    // d'origine » allumée : le critère de ce preset est mesurable — il ne doit
+    // pas se voir — donc il se règle contre la vraie image, jamais de mémoire.
+    id: "officiel",
+    name: "",
+    builtin: true,
+    template: {
+      azimuth: 318,
+      elevation: 6,
+      fov: 20,
+      margin: 4,
+      key: 100,
+      fill: 25,
+      rim: 60,
+      shadow: 30,
+      height: -5,
+      // Une flaque discrète et **aucun reflet** : les previews du jeu montrent
+      // un halo au sol sous la voiture, jamais un miroir.
+      floor: 50,
+      reflection: 0,
+      background: 100,
+    },
+    // Le fond des previews du jeu, mesuré sur un `preview.jpg` : rgb(12,13,15)
+    // sous la voiture, rgb(2,3,5) dans les coins.
+    mat: { hi: "#0c0d0f", lo: "#020305" },
+    skipStock: true,
   },
 ];
 
@@ -228,6 +306,12 @@ const DENSITIES: GridDensity[] = ["dense", "comfortable"];
 
 /** Sur quoi retombe une densité dont le preset a disparu. */
 const FALLBACK: Record<GridDensity, string> = { dense: "catalogue", comfortable: "vitrine" };
+
+/** Le preset lié à une densité **en cours d'édition** (par opposition à
+ * `presetForDensity`, qui lit ce qui est enregistré). */
+export function editedPresetFor(density: GridDensity): GridPreset | undefined {
+  return [...BUILTIN_PRESETS, ...values.user].find((p) => p.id === values.bound[density]);
+}
 
 interface Values {
   enabled: boolean;
@@ -446,7 +530,11 @@ export async function saveGridThumbPrefs(): Promise<void> {
     [KEYS.comfortable]: values.bound.comfortable,
   });
   Object.assign(stored, structuredClone($state.snapshot(values)));
-  await sweepGridTemplates(livePresets().map((p) => p.template)).catch((e) => {
+  // `renderTemplate` et non `p.template` : c'est l'empreinte du gabarit **tel
+  // qu'il a rendu** que le magasin porte dans ses noms de fichier, mat compris
+  // quand le preset le cuit. La comparer sans le mat garderait les mauvaises
+  // images, et effacerait les bonnes.
+  await sweepGridTemplates(livePresets().map(renderTemplate)).catch((e) => {
     // Best-effort : des images d'un preset disparu qui traînent coûtent du
     // disque, pas une erreur d'affichage — leur nom ne peut plus être demandé.
     console.error("sweep_grid_templates", e);

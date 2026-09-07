@@ -484,6 +484,18 @@ laisser pourrir ici.
          seulement le dernier appliqué. Sinon chaque changement de densité
          relance cinq minutes de travail, et la coexistence des deux jeux — tout
          l'intérêt du preset par densité — tombe.
+      6. **Le mat n'entre dans l'empreinte que quand un preset le cuit**
+         (`background > 0`). Toujours le hacher ferait régénérer 312 images pour
+         un changement de thème ; ne jamais le hacher laisserait un fond cuit
+         qui ne correspond plus à sa carte. Le `renderTemplate` de
+         `gridThumbPrefs` est le seul endroit où le gabarit et le mat se
+         rejoignent : **tout ce qui rend ou cherche une image passe par lui**,
+         jamais par `preset.template` directement.
+      7. **Un fond cuit rend le contrôle du vide inopérant** : l'image est
+         opaque partout, donc « rien n'a été dessiné » ressemble à « tout va
+         bien ». D'où le troisième critère de `checkPlausible`, l'écart de
+         luminance — un fond seul est un dégradé très doux, une voiture y ajoute
+         forcément des clairs et des sombres.
       **Écarts assumés vis-à-vis de la spec** : l'ombre de contact est une vraie
       ombre projetée et non l'ellipse peinte du §5.6 ; l'azimut n'a pas été
       « relevé sur les previews Kunos » puisque c'est déjà fait (318°, l'aperçu
@@ -493,27 +505,19 @@ laisser pourrir ici.
       silhouette, que rien dans les données ne dit ; et le §5.7 (versionnage du
       gabarit d'origine) est **supprimé**, rendu inutile par les presets
       embarqués.
-      **Reste à faire, décidé avec l'utilisateur :**
+      **Trois embarqués**, et ils ne poursuivent pas le même but : *Catalogue*
+      (identifier vite, image détourée), *Vitrine* (avoir envie de regarder,
+      flaque + reflet cuits dans l'image), *Officiel* (être indiscernable d'une
+      `preview.png` du jeu, fond cuit, contenu de base laissé tel quel).
+      **Reste à faire, et c'est du réglage, pas du code :**
       1. **Arrêter les valeurs de Vitrine.** Celles livrées sont un point de
-         départ, pas une mesure — le critère de ce preset est le plaisir des
-         yeux, qui n'a pas de valeur numérique. Elles se figent dans l'atelier,
-         comme les défauts de l'aperçu 3D l'ont été.
-      2. **Le sol et le reflet de Vitrine.** Une flaque de lumière et un reflet
-         court, comme l'aperçu de la fiche. Conséquence à ne pas rater : un
-         reflet a besoin d'un sol **visible**, donc d'une flaque cuite dans
-         l'image — la vignette n'est alors plus entièrement transparente, et son
-         mat doit correspondre à celui de la carte sous peine de soucoupe. Le
-         gabarit y gagne aussi une **hauteur de cadrage** (la voiture se pose
-         dans le tiers supérieur). Le sol existe déjà dans `CarPreview3D`
-         (`floorMirror.ts`) : à **extraire**, pas à recopier.
-      3. **Un troisième embarqué, « Officiel »**, qui reproduit le rendu des
-         previews Kunos. Il est le plus argumenté des trois : il **retourne** le
-         problème de la grille mixte au lieu de le contenir, et fait tomber ~178
-         conversions (`skipStock`, déjà dans le modèle). Il demande un **fond
-         opaque cuit dans l'image** — la transparence était un moyen, pas une
-         fin — et une bascule « comparer à l'image d'origine » dans l'atelier,
-         sans quoi on règle « exactement pareil » de mémoire. Piège documenté :
-         le `preview.jpg` d'un skin est une référence de **cadrage**, jamais de
+         départ, pas une mesure — son critère est le plaisir des yeux, qui n'a
+         pas de valeur numérique. Elles se figent dans l'atelier, comme les
+         défauts de l'aperçu 3D l'ont été.
+      2. **Arrêter celles d'Officiel**, bascule « comparer à l'image d'origine »
+         allumée. Son critère est mesurable — il ne doit pas se voir — donc il
+         se règle contre la vraie image, jamais de mémoire. Piège documenté : le
+         `preview.jpg` d'un skin est une référence de **cadrage**, jamais de
          luminosité (il est plus sombre que le rendu du jeu).
 - [ ] **Écran Pilote** (branche `feature/ecran-pilote`). Spec et maquette dans
       `docs/SPEC-ecran-pilote.md` + `docs/pitbox-ecran-pilote.html`, résumé au
