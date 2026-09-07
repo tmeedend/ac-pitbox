@@ -413,12 +413,10 @@ interface Rig {
    * qu'aucun preset ne reflète — c'est une seconde passe de rendu complète,
    * inutile de la payer pour un catalogue. */
   mirror: MirrorHandle | null;
-  /** Le fond cuit dans l'image, accroché à la caméra. Invisible tant qu'aucun
-   * preset ne le demande — une vignette détourée est le cas normal. */
-  backdrop: ThreeModule.Mesh<ThreeModule.PlaneGeometry, ThreeModule.MeshBasicMaterial>;
-  /** Les couleurs actuellement peintes dessus, pour ne repeindre son canevas
-   * que quand elles changent : c'est un `CanvasTexture` de 512 px, pas quelque
-   * chose qu'on refait trois cents fois. */
+  /** Le fond cuit dans l'image, et les couleurs actuellement peintes dessus —
+   * pour ne repeindre son canevas que quand elles changent, plutôt qu'une fois
+   * par vignette. */
+  backdrop: ThreeModule.Texture | null;
   painted: string;
   /** Taille du tampon, pour le calcul de flou du miroir. */
   width: number;
@@ -518,31 +516,6 @@ async function createRig(width: number, height: number): Promise<Rig> {
     scene.add(shadow);
 
     const camera = new THREE.PerspectiveCamera(22, width / height, 0.05, 500);
-
-    // **Le fond, enfant de la caméra.** Accroché à elle plutôt que posé dans la
-    // scène : il doit rester exactement derrière tout, quel que soit l'angle et
-    // quelle que soit la taille de la voiture — et une caméra qui bouge
-    // l'emmène avec elle sans qu'on ait à le replacer dans le monde.
-    //
-    // La caméra doit alors être **dans la scène** : three ne parcourt pas les
-    // enfants d'une caméra qui n'y est pas, et le fond ne serait jamais dessiné.
-    const backdrop = new THREE.Mesh(
-      new THREE.PlaneGeometry(1, 1),
-      new THREE.MeshBasicMaterial({
-        transparent: true,
-        depthWrite: false,
-        depthTest: false,
-        // Le dégradé est déjà la couleur voulue à l'écran ; le passer au tone
-        // mapping l'assombrirait, et il doit correspondre au CSS de la carte au
-        // ton près.
-        toneMapped: false,
-      }),
-    );
-    backdrop.renderOrder = -10;
-    backdrop.visible = false;
-    camera.add(backdrop);
-    scene.add(camera);
-
     const loader = new GLTFLoader();
     return {
       THREE,
@@ -556,7 +529,7 @@ async function createRig(width: number, height: number): Promise<Rig> {
       pool,
       shadow,
       mirror: null,
-      backdrop,
+      backdrop: null,
       painted: "",
       width,
       load: async (url: string) => (await loader.loadAsync(url)).scene,
@@ -667,36 +640,40 @@ function drawModel(rig: Rig, model: ThreeModule.Group, template: GridTemplate): 
 
   placeCamera(THREE, camera, box, center, radius, template);
   placeLights(rig, camera, center, radius, template);
-  placeBackdrop(rig, template);
+  applyBackdrop(rig, template);
 
   renderer.render(scene, camera);
 }
 
 /**
- * Peint et dimensionne le fond cuit (§ preset Officiel).
+ * Pose le fond cuit (preset Officiel), ou le retire.
  *
- * Il couvre exactement le tronc de vision à la distance où il est posé, donc
- * ses dimensions se recalculent avec la focale — qui est réglable. Posé loin
- * mais **avant** le plan éloigné de la caméra : au-delà, il serait découpé.
+ * **`scene.background` et non un plan dans la scène**, et c'est un correctif :
+ * un plan avait été essayé, accroché à la caméra, transparent, avec
+ * `renderOrder: -10` pour passer en premier. Il passait en dernier et
+ * recouvrait la voiture — toutes les vignettes sortaient noires. La raison ne
+ * se devine pas : three.js dessine **toute** la liste des objets opaques avant
+ * la liste des transparents, et `renderOrder` ne trie qu'à l'intérieur d'une
+ * liste. Un fond transparent est donc structurellement condamné à passer après
+ * une voiture opaque, quel que soit son ordre de rendu.
+ *
+ * `scene.background` échappe entièrement à ce classement : three le dessine
+ * avant tout, comme un fond, ce qu'il est. Et il rend l'image **opaque**, ce
+ * que ce preset veut — c'est la seule façon qu'une vignette soit indiscernable
+ * d'une `preview.png` d'origine posée à côté d'elle.
  */
-function placeBackdrop(rig: Rig, template: GridTemplate): void {
-  const { backdrop, camera, THREE } = rig;
-  backdrop.visible = template.background > 0;
-  if (!backdrop.visible) return;
-
+function applyBackdrop(rig: Rig, template: GridTemplate): void {
+  if (template.background <= 0) {
+    rig.scene.background = null;
+    return;
+  }
   const key = `${template.matHi}|${template.matLo}`;
-  if (rig.painted !== key) {
-    backdrop.material.map?.dispose();
-    backdrop.material.map = backdropTexture(THREE, template.matHi, template.matLo);
-    backdrop.material.needsUpdate = true;
+  if (rig.painted !== key || !rig.backdrop) {
+    rig.backdrop?.dispose();
+    rig.backdrop = backdropTexture(rig.THREE, template.matHi, template.matLo);
     rig.painted = key;
   }
-  backdrop.material.opacity = template.background / 100;
-
-  const distance = camera.far * 0.5;
-  const height = 2 * Math.tan((camera.fov * Math.PI) / 360) * distance;
-  backdrop.position.set(0, 0, -distance);
-  backdrop.scale.set(height * camera.aspect, height, 1);
+  rig.scene.background = rig.backdrop;
 }
 
 /**

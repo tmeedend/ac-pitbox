@@ -81,6 +81,18 @@ pub struct GridTemplate {
     /// only way a regenerated thumbnail can be **indistinguishable** from an
     /// untouched `preview.png` sitting next to it in the same grid.
     pub background: i32,
+    /// Version of the **frontend renderer**, incremented whenever the drawing
+    /// code changes the pixels it produces.
+    ///
+    /// The exact analogue of `preview::CONVERTER_VERSION`, and it exists for
+    /// the same reason, learnt the same way: a rendering fixed in the app is a
+    /// rendering nothing on disk knows about. The thumbnails were carrying the
+    /// `.kn5`, the skin, the CSP configs, the converter and the template —
+    /// everything except the code that draws. So the first rendering bug (a
+    /// backdrop that covered the car, every Officiel thumbnail solid black)
+    /// left its images served for ever, correct by every measure the name
+    /// could check.
+    pub renderer: i32,
     /// The two ends of the card's radial gradient, as CSS colours. They belong
     /// to the card, not to the render — except when the backdrop bakes them in,
     /// which is exactly when they enter the fingerprint below.
@@ -109,6 +121,7 @@ impl GridTemplate {
             self.floor,
             self.reflection,
             self.background,
+            self.renderer,
         ] {
             hasher.update(value.to_le_bytes());
         }
@@ -364,6 +377,7 @@ mod tests {
             floor: 0,
             reflection: 0,
             background: 0,
+            renderer: 1,
             mat_hi: "#2b2d33".to_string(),
             mat_lo: "#17181c".to_string(),
         }
@@ -375,7 +389,7 @@ mod tests {
     fn every_template_field_changes_the_entry_name() {
         let base = template();
         let name = entry_stem("v46-abc", &base);
-        let mut variants = vec![base.clone(); 12];
+        let mut variants = vec![base.clone(); 13];
         variants[0].azimuth += 1;
         variants[1].elevation += 1;
         variants[2].fov += 1;
@@ -388,6 +402,7 @@ mod tests {
         variants[9].floor += 1;
         variants[10].reflection += 1;
         variants[11].background += 1;
+        variants[12].renderer += 1;
         for variant in variants {
             assert_ne!(
                 name,

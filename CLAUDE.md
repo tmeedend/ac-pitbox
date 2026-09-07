@@ -491,7 +491,14 @@ laisser pourrir ici.
          `gridThumbPrefs` est le seul endroit où le gabarit et le mat se
          rejoignent : **tout ce qui rend ou cherche une image passe par lui**,
          jamais par `preset.template` directement.
-      7. **Un fond cuit rend le contrôle du vide inopérant** : l'image est
+      7. **`RENDERER_VERSION` s'incrémente dès qu'une correction change les
+         pixels produits** (`gridThumbPrefs.svelte.ts`) — même règle et même
+         raison que `preview::CONVERTER_VERSION`. Une vignette porte le `.kn5`,
+         la livrée, les configs CSP, la version du convertisseur et le
+         gabarit… mais rien du code qui dessine : sans cette version, une image
+         fausse reste servie pour toujours, parfaitement valide au regard de
+         tout ce que son nom sait vérifier. Vécu au premier bug de rendu.
+      8. **Un fond cuit rend le contrôle du vide inopérant** : l'image est
          opaque partout, donc « rien n'a été dessiné » ressemble à « tout va
          bien ». D'où le troisième critère de `checkPlausible`, l'écart de
          luminance — un fond seul est un dégradé très doux, une voiture y ajoute

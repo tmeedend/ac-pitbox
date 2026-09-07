@@ -41,6 +41,8 @@ export interface GridTemplate {
    * moment-là qu'ils entrent dans l'empreinte, côté backend. */
   matHi: string;
   matLo: string;
+  /** Version du **moteur de rendu** — voir `RENDERER_VERSION`. */
+  renderer: number;
 }
 
 /** Ce que la grille a déjà pour une voiture, sans rien convertir. */

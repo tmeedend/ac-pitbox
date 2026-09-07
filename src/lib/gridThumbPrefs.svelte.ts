@@ -105,22 +105,47 @@ export const GRID_THUMB_RANGES = {
    * façon qu'une vignette soit indiscernable d'une `preview.png` d'origine dans
    * la même grille, ce qui **retourne** le problème de la grille mixte au lieu
    * de le contenir. Il reprend les couleurs du mat du preset, pour que l'image
-   * et sa carte ne puissent pas diverger. */
-  background: { min: 0, max: 100, step: 5, default: 0 },
+   * et sa carte ne puissent pas diverger.
+   *
+   * **Tout ou rien**, d'où le pas de 100 : un fond à moitié cuit empile deux
+   * fonds l'un sur l'autre, ce qui n'est ni l'un ni l'autre des deux objectifs.
+   * L'écran le présente donc en case à cocher. */
+  background: { min: 0, max: 100, step: 100, default: 0 },
 } as const satisfies Record<keyof GridTemplateValues, { min: number; max: number; step: number; default: number }>;
 
 /**
  * Les valeurs **réglées** d'un preset : le gabarit moins le mat.
  *
- * Le mat est une couleur de carte que `renderTemplate` ajoute au moment de
- * rendre. Le garder hors de ce type est ce qui empêche de l'enregistrer deux
- * fois — une dans le preset, une dans son gabarit — et de les voir diverger.
+ * Le mat est une couleur de carte, et la version du moteur n'appartient à
+ * personne : `renderTemplate` les ajoute au moment de rendre. Les garder hors
+ * de ce type est ce qui empêche de les enregistrer dans le preset — donc de
+ * figer une version de moteur dans un preset dupliqué il y a six mois.
  */
-export type GridTemplateValues = Omit<GridTemplate, "matHi" | "matLo">;
+export type GridTemplateValues = Omit<GridTemplate, "matHi" | "matLo" | "renderer">;
 
 type TemplateKey = keyof typeof GRID_THUMB_RANGES;
 
 export const TEMPLATE_KEYS = Object.keys(GRID_THUMB_RANGES) as TemplateKey[];
+
+/**
+ * Version du **moteur de rendu**, dans l'empreinte de chaque vignette.
+ *
+ * **À incrémenter dès qu'une correction change les pixels produits** — même
+ * règle, et même raison, que `preview::CONVERTER_VERSION` côté conversion.
+ * Sans elle, une vignette porte le `.kn5`, la livrée, les configs CSP, la
+ * version du convertisseur et le gabarit… mais rien du code qui dessine : une
+ * image fausse reste donc servie pour toujours, parfaitement valide au regard
+ * de tout ce que son nom sait vérifier.
+ *
+ * Historique, parce que c'est ce qui donne la règle :
+ *  - **1** — première version.
+ *  - **2** — le fond cuit était un plan transparent accroché à la caméra, donc
+ *    dessiné *après* la voiture (three.js rend toute la liste opaque avant la
+ *    liste transparente, et `renderOrder` ne trie qu'à l'intérieur d'une
+ *    liste). Toutes les vignettes du preset Officiel sortaient noires. Il passe
+ *    par `scene.background`, qui échappe à ce classement.
+ */
+export const RENDERER_VERSION = 2;
 
 /** Le fond de carte d'un preset : les deux bouts du dégradé radial du mat
  * (§2.2). Clair au centre pour décoller la voiture, sombre aux bords pour
@@ -183,7 +208,7 @@ function template(read: (key: TemplateKey) => number): GridTemplateValues {
  * côtés de l'IPC.
  */
 export function renderTemplate(preset: GridPreset): GridTemplate {
-  return { ...preset.template, matHi: preset.mat.hi, matLo: preset.mat.lo };
+  return { ...preset.template, matHi: preset.mat.hi, matLo: preset.mat.lo, renderer: RENDERER_VERSION };
 }
 
 function defaultTemplate(): GridTemplateValues {

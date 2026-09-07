@@ -62,7 +62,7 @@
   /** Le sol est un groupe à lui : c'est ce qui sépare le plus nettement un
    * preset de catalogue — voiture détourée, rien d'autre — d'un preset de
    * vitrine, où la flaque et le reflet sont l'essentiel de l'effet. */
-  const GROUND = ["floor", "reflection", "shadow", "background"] as const;
+  const GROUND = ["floor", "reflection", "shadow"] as const;
   const DENSITIES: GridDensity[] = ["dense", "comfortable"];
 
   let applying = $state(false);
@@ -285,6 +285,21 @@
               value={selected.name}
               oninput={(e) => renamePreset(selected.id, e.currentTarget.value)}
             />
+          </Field>
+          <!-- **Une case et non un curseur.** Un fond à moitié cuit n'a pas de
+               sens : ou bien la carte possède le fond — la vignette est
+               détourée et le fond suit le thème — ou bien l'image le porte,
+               pour ne pas se distinguer d'une preview d'origine. Entre les
+               deux, on empile deux fonds l'un sur l'autre. -->
+          <Field hint={t("settings.gridThumbHint_background")}>
+            <label class="check">
+              <input
+                type="checkbox"
+                checked={selected.template.background > 0}
+                onchange={(e) => setPresetValue(selected.id, "background", e.currentTarget.checked ? 100 : 0)}
+              />
+              <span>{t("settings.gridThumb_background")}</span>
+            </label>
           </Field>
           <Field hint={t("settings.gridPresetSkipStockHint")}>
             <label class="check">
