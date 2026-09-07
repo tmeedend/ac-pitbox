@@ -113,8 +113,10 @@ export function clearGridThumbnails(): Promise<number> {
   return invoke<number>("clear_grid_thumbnails");
 }
 
-/** Efface ce qu'un gabarit antérieur a produit. Rien d'autre ne le ferait : le
- * magasin n'a pas de passe d'éviction, par construction. */
-export function sweepGridTemplates(template: GridTemplate): Promise<number> {
-  return invoke<number>("sweep_grid_templates", { template });
+/** Efface les images qu'aucun preset vivant ne réclame plus. Rien d'autre ne le
+ * ferait : le magasin n'a pas de passe d'éviction, par construction. **Tous**
+ * les gabarits en usage, pas seulement le dernier appliqué — la grille en lie
+ * un par densité, donc deux jeux d'images coexistent légitimement. */
+export function sweepGridTemplates(templates: GridTemplate[]): Promise<number> {
+  return invoke<number>("sweep_grid_templates", { templates });
 }

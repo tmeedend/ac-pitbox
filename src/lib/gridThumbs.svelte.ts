@@ -34,7 +34,7 @@ import {
   saveGridThumbnail,
   type GridTemplate,
 } from "./gridThumbs";
-import { appliedTemplate, gridThumbsOn, gridThumbsReady } from "./gridThumbPrefs.svelte";
+import { gridThumbsOn, gridThumbsReady } from "./gridThumbPrefs.svelte";
 
 /** Taille de rendu (§5.6). 16:9 parce que c'est le rapport des `preview.png`
  * d'Assetto Corsa : la grille restant mixte pour toujours (§7), les deux
@@ -57,14 +57,17 @@ type Entry = { url: string } | { pending: true } | { failed: string };
 
 const cache = $state<Record<string, Entry>>({});
 
-/** Empreinte du gabarit **appliqué**, dans la clé du cache mémoire : appliquer
- * un nouveau gabarit fait donc manquer toutes les lectures, et chaque carte
- * visible redemande la sienne d'elle-même. Rien à réinitialiser à la main, et
- * surtout pas d'appel de l'écran de réglages vers ce module. */
-const fingerprint = $derived(JSON.stringify(appliedTemplate()));
-
-function keyOf(carId: string, skinId: string | null): string {
-  return `${fingerprint}|${carId}|${skinId ?? ""}`;
+/**
+ * La clé mêle le **gabarit**, pas le preset.
+ *
+ * Deux presets aux mêmes valeurs de rendu produisent la même image et doivent
+ * la partager ; ce qui les distingue par ailleurs — leur nom, leur mat — ne
+ * change pas un pixel. C'est la même règle que côté disque, où le nom de
+ * fichier porte l'empreinte du gabarit et rien d'autre : changer la couleur de
+ * fond d'un preset ne doit pas régénérer trois cents images.
+ */
+function keyOf(template: GridTemplate, carId: string, skinId: string | null): string {
+  return `${JSON.stringify(template)}|${carId}|${skinId ?? ""}`;
 }
 
 /**
@@ -75,12 +78,17 @@ function keyOf(carId: string, skinId: string | null): string {
  * `requestGridThumb` qui met en file, et seulement quand la carte devient
  * visible.
  */
-export function gridThumb(carId: string, skinId: string | null): string | null {
-  const entry = cache[keyOf(carId, skinId)];
+export function gridThumb(template: GridTemplate, carId: string, skinId: string | null): string | null {
+  const entry = cache[keyOf(template, carId, skinId)];
   return entry && "url" in entry ? entry.url : null;
 }
 
 interface Job {
+  /** Le gabarit sous lequel produire. Porté par le travail et non lu au moment
+   * de le faire : la file peut mêler deux presets — la grille en lie un par
+   * densité — et une voiture mise en file pour l'un ne doit pas se retrouver
+   * rendue avec l'autre parce qu'on a changé de vue entre-temps. */
+  template: GridTemplate;
   carId: string;
   skinId: string | null;
   /** Nom lisible, pour la tâche de fond : le §8.2 y montre « Nissan Skyline
@@ -197,8 +205,14 @@ function beginBatch(): void {
 
 /** Met une voiture en file si elle n'y est pas déjà. `front` = elle passe
  * devant tout le reste. */
-function enqueue(carId: string, skinId: string | null, name: string, front: boolean): void {
-  const key = keyOf(carId, skinId);
+function enqueue(
+  template: GridTemplate,
+  carId: string,
+  skinId: string | null,
+  name: string,
+  front: boolean,
+): void {
+  const key = keyOf(template, carId, skinId);
   if (cache[key]) {
     // Déjà rendue, déjà ratée, ou déjà en file — dans ce dernier cas elle
     // remonte en tête si on la redemande en priorité, sans se dupliquer.
@@ -209,7 +223,7 @@ function enqueue(carId: string, skinId: string | null, name: string, front: bool
   }
   beginBatch();
   cache[key] = { pending: true };
-  const job = { carId, skinId, name, key };
+  const job = { template, carId, skinId, name, key };
   if (front) queue.unshift(job);
   else queue.push(job);
   progress.total += 1;
@@ -222,9 +236,14 @@ function enqueue(carId: string, skinId: string | null, name: string, front: bool
  * filtre la réordonne donc de lui-même, ce qui est nouvellement visible
  * d'abord (§8.4).
  */
-export function requestGridThumb(carId: string, skinId: string | null, name = carId): void {
+export function requestGridThumb(
+  template: GridTemplate,
+  carId: string,
+  skinId: string | null,
+  name = carId,
+): void {
   if (!gridThumbsOn()) return;
-  enqueue(carId, skinId, name, true);
+  enqueue(template, carId, skinId, name, true);
   void drain();
 }
 
@@ -236,9 +255,12 @@ export function requestGridThumb(carId: string, skinId: string | null, name = ca
  * file se viderait à chaque arrêt du défilement. C'est elle qui fait de la
  * génération un travail qui finit.
  */
-export function enqueueGridThumbs(cars: { id: string; skin: string | null; name: string }[]): void {
+export function enqueueGridThumbs(
+  template: GridTemplate,
+  cars: { id: string; skin: string | null; name: string }[],
+): void {
   if (!gridThumbsOn()) return;
-  for (const car of cars) enqueue(car.id, car.skin, car.name, false);
+  for (const car of cars) enqueue(template, car.id, car.skin, car.name, false);
   void drain();
 }
 
@@ -255,15 +277,15 @@ export function enqueueGridThumbs(cars: { id: string; skin: string | null; name:
  * toutes — d'où un bouton, en plus.
  */
 export async function regenerateGridThumb(
+  template: GridTemplate,
   carId: string,
   skinId: string | null,
   name?: string,
 ): Promise<void> {
-  const template = appliedTemplate();
   const known = await gridThumbnail(carId, skinId, template);
   await forgetGridThumbnail(known.stem);
-  delete cache[keyOf(carId, skinId)];
-  enqueue(carId, skinId, name ?? carId, true);
+  delete cache[keyOf(template, carId, skinId)];
+  enqueue(template, carId, skinId, name ?? carId, true);
   void drain();
 }
 
@@ -304,7 +326,7 @@ async function drain(): Promise<void> {
 }
 
 async function produce(job: Job): Promise<Entry> {
-  const template = appliedTemplate();
+  const template = job.template;
   // Le disque d'abord, toujours : quelques `stat` contre une conversion. C'est
   // aussi ce qui répond « déjà essayé, impossible » sans reparser un KN5 de
   // quatorze mégaoctets à chaque lancement (§7).

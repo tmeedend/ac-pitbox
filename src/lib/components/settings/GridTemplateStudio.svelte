@@ -17,11 +17,16 @@
   // redessine, ne reconvertit jamais. Sans ça, chaque pixel de curseur coûterait
   // six conversions, soit six secondes par image.
   import { listLibrary, type ModCard } from "$lib/library";
+  import { nav } from "$lib/nav.svelte";
   import { createGridStudio, pauseGridThumbs, resumeGridThumbs, type GridStudio, type StudioCar } from "$lib/gridThumbs.svelte";
   import type { GridTemplate } from "$lib/gridThumbs";
+  import type { GridMat } from "$lib/gridThumbPrefs.svelte";
   import LoadingState from "../LoadingState.svelte";
 
-  const { template }: { template: GridTemplate } = $props();
+  // Le mat vient du preset comme le gabarit : la moitié de ce qui distingue
+  // deux presets est leur fond, et régler un éclairage de vitrine sur le fond
+  // clair du catalogue reviendrait à le juger sur ce qu'il ne sera pas.
+  const { template, mat }: { template: GridTemplate; mat: GridMat } = $props();
 
   /** Taille de rendu de l'aperçu. Bien plus petit que les 1024×576 de sortie :
    * six cases dans une colonne d'écran de réglages, et il faut pouvoir en
@@ -47,6 +52,11 @@
    */
   function sample(list: ModCard[]): ModCard[] {
     const cars = list.filter((c) => c.kind === "Car" && c.active_version_id);
+    // **La voiture de la session en première case.** C'est une voiture que
+    // l'utilisateur a choisie lui-même, donc qu'il connaît, donc dont il sait à
+    // quoi elle doit ressembler — un repère qu'aucune sélection automatique ne
+    // vaut. Les cinq autres restent prises par catégorie.
+    const session = cars.find((c) => c.id_interne === nav.sessionCar?.id) ?? null;
     const byCategory = new Map<string, ModCard[]>();
     for (const car of cars) {
       const key = (car.category ?? car.car_class ?? "").toLowerCase();
@@ -56,13 +66,13 @@
     }
     // Un tour par catégorie avant d'en reprendre une : avec moins de six
     // catégories, on complète plutôt que de rendre un aperçu à trois cases.
-    const picked: ModCard[] = [];
+    const picked: ModCard[] = session ? [session] : [];
     const buckets = [...byCategory.values()];
     for (let round = 0; picked.length < SAMPLE && round < 40; round += 1) {
       let added = false;
       for (const bucket of buckets) {
         const car = bucket[round];
-        if (!car) continue;
+        if (!car || picked.some((p) => p.id_interne === car.id_interne)) continue;
         picked.push(car);
         added = true;
         if (picked.length >= SAMPLE) break;
@@ -116,7 +126,7 @@
   });
 </script>
 
-<div class="studio">
+<div class="studio" style:--mat-hi={mat.hi} style:--mat-lo={mat.lo}>
   {#if loading && cars.length === 0}
     <LoadingState />
   {:else}

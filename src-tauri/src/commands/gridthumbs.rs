@@ -113,13 +113,15 @@ pub fn clear_grid_thumbnails(app: AppHandle) -> Result<u64, String> {
     crate::gridthumbs::clear(&app)
 }
 
-/// Drops what a previous template produced, keeping only the one in use.
+/// Drops the images no live preset claims any more.
 ///
-/// Called when a template is applied: nothing else would ever collect the old
-/// set, the store having no eviction pass by design.
+/// Called when presets are saved: nothing else would ever collect the set of a
+/// preset that was deleted or edited, the store having no eviction pass by
+/// design. Takes every live template — the grid binds one preset per density,
+/// so two sets are legitimately alive at once.
 #[tauri::command]
-pub fn sweep_grid_templates(app: AppHandle, template: GridTemplate) -> Result<u32, String> {
-    crate::gridthumbs::sweep_other_templates(&app, &template)
+pub fn sweep_grid_templates(app: AppHandle, templates: Vec<GridTemplate>) -> Result<u32, String> {
+    crate::gridthumbs::sweep_other_templates(&app, &templates)
 }
 
 /// Resolves a car folder: library first, `content/` next — same rule as the

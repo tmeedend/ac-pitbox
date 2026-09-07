@@ -271,30 +271,39 @@ pub fn clear(app: &tauri::AppHandle) -> Result<u64, String> {
     Ok(freed)
 }
 
-/// Removes what belongs to a template other than the one in use.
+/// Removes the images no live preset claims any more.
 ///
-/// Not a nicety. Changing the framing rewrites 312 names, and nothing else would
-/// ever collect the previous set — the store has no eviction pass to hook onto,
-/// by design. Called when a template is applied.
-pub fn sweep_other_templates(app: &tauri::AppHandle, template: &GridTemplate) -> Result<u32, String> {
+/// Not a nicety. Changing a framing value rewrites 312 names, and nothing else
+/// would ever collect the previous set — the store has no eviction pass to hook
+/// onto, by design.
+///
+/// Takes **every** live template rather than one, and that is the whole point:
+/// the grid binds a preset per density (dense and comfortable), so two sets of
+/// images are legitimately alive at once. Keeping both is what makes switching
+/// density instant once they are produced; keeping only the last one applied
+/// would make every switch a five-minute job.
+///
+/// An empty list keeps nothing — it is the honest reading of "no preset is in
+/// use", and it cannot happen from the UI, which always binds two.
+pub fn sweep_other_templates(app: &tauri::AppHandle, templates: &[GridTemplate]) -> Result<u32, String> {
     let dir = dir(app)?;
-    let suffix = format!("-t{}", template.fingerprint());
+    let keep: Vec<String> = templates.iter().map(|t| format!("-t{}", t.fingerprint())).collect();
     let mut removed = 0u32;
     for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
         let path = entry.path();
         let Some(stem) = path.file_stem().map(|s| s.to_string_lossy().into_owned()) else {
             continue;
         };
-        if stem.ends_with(&suffix) || !entry.metadata().is_ok_and(|m| m.is_file()) {
+        if keep.iter().any(|suffix| stem.ends_with(suffix)) || !entry.metadata().is_ok_and(|m| m.is_file()) {
             continue;
         }
         match std::fs::remove_file(&path) {
             Ok(()) => removed += 1,
-            Err(e) => log::warn!("gridthumbs: vignette d'un autre gabarit non supprimée — {e}"),
+            Err(e) => log::warn!("gridthumbs: vignette d'un preset disparu non supprimée — {e}"),
         }
     }
     if removed > 0 {
-        log::info!("gridthumbs: {removed} vignette(s) d'un gabarit antérieur effacée(s)");
+        log::info!("gridthumbs: {removed} vignette(s) d'un preset disparu effacée(s)");
     }
     Ok(removed)
 }
@@ -338,6 +347,59 @@ mod tests {
                 "un gabarit modifié doit donner une autre vignette : {variant:?}"
             );
         }
+    }
+
+    /// Two presets are legitimately alive at once — one per grid density — so
+    /// the sweep keeps both sets. Keeping only the last applied would turn
+    /// every density switch into a five-minute job.
+    #[test]
+    fn the_sweep_keeps_every_live_preset() {
+        let dir = crate::testutil::temp_dir("gridthumbs-sweep");
+        let store = dir.join("gridthumbs");
+        std::fs::create_dir_all(&store).unwrap();
+
+        let mut vitrine = template();
+        vitrine.rim = 140;
+        let mut gone = template();
+        gone.rim = 200;
+
+        let names = [
+            entry_stem("v46-aaa", &template()),
+            entry_stem("v46-aaa", &vitrine),
+            entry_stem("v46-aaa", &gone),
+        ];
+        for name in &names {
+            std::fs::write(store.join(format!("{name}.png")), b"png").unwrap();
+        }
+
+        // Ce que ferait `sweep_other_templates` avec les deux presets vivants :
+        // le corps du balayage, sans `AppHandle` — le module n'a pas de quoi en
+        // fabriquer un, et c'est la règle qu'on veut prouver, pas le chemin du
+        // dossier.
+        let keep: Vec<String> = [template(), vitrine]
+            .iter()
+            .map(|t| format!("-t{}", t.fingerprint()))
+            .collect();
+        for entry in std::fs::read_dir(&store).unwrap().flatten() {
+            let path = entry.path();
+            let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+            if !keep.iter().any(|suffix| stem.ends_with(suffix)) {
+                std::fs::remove_file(&path).unwrap();
+            }
+        }
+
+        assert!(
+            store.join(format!("{}.png", names[0])).is_file(),
+            "le preset de la grille dense survit"
+        );
+        assert!(
+            store.join(format!("{}.png", names[1])).is_file(),
+            "celui de la grille confortable aussi"
+        );
+        assert!(
+            !store.join(format!("{}.png", names[2])).is_file(),
+            "celui d'un preset supprimé part : rien d'autre ne le ramasserait"
+        );
     }
 
     /// The entry name makes a round trip through the frontend before coming

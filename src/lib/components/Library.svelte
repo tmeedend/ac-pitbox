@@ -31,7 +31,7 @@
   import { libraryVersion } from "$lib/libraryVersion.svelte";
   import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
   import { enqueueGridThumbs, gridThumb, requestGridThumb } from "$lib/gridThumbs.svelte";
-  import { gridThumbsOn } from "$lib/gridThumbPrefs.svelte";
+  import { gridThumbsOn, presetForDensity } from "$lib/gridThumbPrefs.svelte";
   import { buildModContextItems } from "$lib/modContextActions";
   import { t } from "$lib/i18n/index.svelte";
   import { zoomFactor } from "$lib/zoom.svelte";
@@ -327,6 +327,17 @@
   // normalise pendant qu'on l'utilise. Un seul observateur pour toute la
   // grille : un par carte coûterait trois cents abonnements pour la même
   // information.
+  // **Le preset suit la densité de la grille** (SPEC-grille §6bis). La densité
+  // est déjà une déclaration d'intention : passer en dense, c'est dire « je
+  // cherche » ; passer en confortable, c'est dire « je regarde ». Y accrocher le
+  // style n'ajoute donc pas un réglage, ça donne un second sens à un contrôle
+  // qui le portait déjà.
+  //
+  // Les deux jeux d'images coexistent sur disque, donc rebasculer est
+  // instantané une fois les deux produits — c'est le balayage qui garde les
+  // images de tous les presets vivants qui rend ça vrai.
+  const preset = $derived(presetForDensity(shown === "comfortable" ? "comfortable" : "dense"));
+
   type ThumbWant = { car: string; skin: string | null; name: string; want: boolean };
   const wanted = new WeakMap<Element, ThumbWant>();
   let visibility: IntersectionObserver | null = null;
@@ -340,7 +351,7 @@
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
           const target = wanted.get(entry.target);
-          if (target?.want) requestGridThumb(target.car, target.skin, target.name);
+          if (target?.want) requestGridThumb(preset.template, target.car, target.skin, target.name);
         }
       },
       // Un peu avant le bord : la vignette d'une carte qui arrive a une
@@ -377,13 +388,23 @@
   $effect(() => {
     if (!isCar || !gridThumbsOn()) return;
     const list = filtered;
+    const template = preset.template;
+    // « Laisser le contenu de base tel quel » : les voitures Kunos ont déjà
+    // exactement le rendu qu'un preset qui les imite produirait, donc les
+    // régénérer coûte trois minutes pour un résultat identique. Avec un preset
+    // qui cherche l'homogénéité, au contraire, les sauter ruine ce qu'on
+    // cherche — d'où une propriété du preset et non un réglage global.
+    const skipStock = preset.skipStock;
     untrack(() =>
       enqueueGridThumbs(
-        list.map((c) => ({
-          id: c.id_interne,
-          skin: getPreferredSkin(c.id_interne)?.id ?? null,
-          name: cardName(c),
-        })),
+        template,
+        list
+          .filter((c) => !skipStock || !c.is_stock)
+          .map((c) => ({
+            id: c.id_interne,
+            skin: getPreferredSkin(c.id_interne)?.id ?? null,
+            name: cardName(c),
+          })),
       ),
     );
   });
@@ -953,7 +974,12 @@
         {/if}
       </div>
     {:else if isGrid}
-      <div class="grid" class:comfortable={shown === "comfortable"}>
+      <div
+        class="grid"
+        class:comfortable={shown === "comfortable"}
+        style:--mat-hi={isCar && gridThumbsOn() ? preset.mat.hi : undefined}
+        style:--mat-lo={isCar && gridThumbsOn() ? preset.mat.lo : undefined}
+      >
         {#each filtered as c (c.id_interne)}
           {@const prefSkin = isCar ? getPreferredSkin(c.id_interne) : null}
           {@const prefLayout = !isCar ? getPreferredLayout(c.id_interne) : null}
@@ -963,11 +989,11 @@
                une voiture chiffrée n'en aura jamais — la carte garde la photo
                d'origine : la grille reste mixte pour toujours, et c'est le mat
                qui les rend comparables. -->
-          {@const regen = isCar ? gridThumb(c.id_interne, prefSkin?.id ?? null) : null}
+          {@const regen = isCar ? gridThumb(preset.template, c.id_interne, prefSkin?.id ?? null) : null}
           {@const ol = previewSrc(prefLayout?.outline ?? c.outline)}
           {@const blocked = unusableReason(c)}
           <button data-id={c.id_interne} class="card" class:unusable={blocked !== null} class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} oncontextmenu={(e) => openCardContextMenu(e, c)} title={blocked ? `${t(blocked)}\n${t("library.cardTooltip")}` : t("library.cardTooltip")}>
-            <div class="thumb" use:whenVisible={{ car: c.id_interne, skin: prefSkin?.id ?? null, name: cardName(c), want: isCar }}>
+            <div class="thumb" use:whenVisible={{ car: c.id_interne, skin: prefSkin?.id ?? null, name: cardName(c), want: isCar && !(preset.skipStock && c.is_stock) }}>
               {#if regen ?? src}<img src={regen ?? src} alt={c.display_name ?? c.id_interne} loading="lazy" />
               {:else}<div class="noprev">{isCar ? t("library.typeCar") : t("library.typeTrack")}</div>{/if}
               {#if !isCar && ol}<img class="outline" src={ol} alt="" loading="lazy" />{/if}
@@ -1383,7 +1409,10 @@
     position: relative;
     aspect-ratio: 16 / 9;
     /* Dégradé radial, pas un ton plat : voir `--mat-hi`/`--mat-lo`. Le centre
-       est légèrement au-dessus du milieu, là où se pose une voiture. */
+       est légèrement au-dessus du milieu, là où se pose une voiture.
+       Les deux bouts viennent du **preset** quand les vignettes régénérées sont
+       allumées : la moitié de ce qui rend une preview d'Assetto Corsa belle est
+       son fond, et le nôtre s'écrit ici plutôt que dans l'image. */
     background: radial-gradient(ellipse at 50% 44%, var(--mat-hi) 0%, var(--mat-lo) 76%);
     border: 1px solid var(--mat-line);
     display: flex;

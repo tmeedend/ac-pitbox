@@ -1,58 +1,61 @@
-// Gabarit des vignettes régénérées de la grille (docs/SPEC-grille.md §5.6, §6).
+// Presets de vignettes de la grille (docs/SPEC-grille.md §5.6, §6).
 //
-// **Séparé des réglages de l'aperçu 3D, et ce n'est pas un rangement.** Les
-// deux règlent une caméra et des lumières, mais tourner l'aperçu d'une fiche ne
-// coûte rien et ne dure que le temps qu'on la regarde, là où toucher à ce
-// gabarit-ci périme les 312 images de la grille. C'est cette asymétrie qui
-// justifie qu'un écran prévienne et que l'autre n'avertisse jamais (§6.1).
+// **Un preset, pas un gabarit unique.** La première version n'avait qu'un jeu
+// de valeurs, et elle butait sur un constat de l'utilisateur : la preview
+// d'origine d'Assetto Corsa est plus *jolie* que notre rendu, plus vitrine,
+// alors que le nôtre est plus *lisible*. Ce ne sont pas deux qualités
+// d'exécution du même objectif, ce sont deux objectifs — identifier vite, ou
+// avoir envie de regarder. Un compromis unique les aurait mal servis tous les
+// deux.
 //
-// D'où le modèle « rien ne s'applique avant Appliquer » (§6.3), repris de
-// `preview3dPrefs` : `values` est ce qu'on voit, `stored` ce qui est sur
-// disque, et la différence est la facture affichée en pied d'écran.
+// Ça ne touche pas à la propriété non négociable du §5.6 : « toute valeur doit
+// rester identique pour les 312 ». Elle porte sur un jeu d'images, pas sur le
+// nombre de jeux possibles — chaque preset reste uniforme chez lui.
 //
-// Persistance via `ui_prefs.json` — règle d'or n°6, jamais `localStorage` : un
-// réglage qui doit survivre à un redémarrage n'a rien à faire dans un stockage
-// que WebView2 n'écrit pas forcément sur disque.
+// **Trois choix de structure, chacun contre une solution plus évidente :**
+//
+//  1. *Les embarqués sont en lecture seule, et on les duplique.* Un preset vide
+//     est une douzaine de curseurs de rien ; une copie de Vitrine est à un
+//     réglage d'être la sienne. Bénéfice inattendu : ça supprime tout le
+//     versionnage du §5.7 — plus besoin de deviner « l'utilisateur a-t-il
+//     personnalisé ? » pour savoir s'il hérite du nouveau défaut. Les embarqués
+//     évoluent avec l'app, les copies ne bougent jamais.
+//  2. *Le mat fait partie du preset.* La moitié de ce qui rend la preview d'AC
+//     belle est son **fond**, cuit dans l'image. Le nôtre est du CSS : c'est
+//     donc là qu'il se règle. Un Vitrine à l'éclairage dramatique sur un fond
+//     gris moyen ne donnerait que la moitié de l'effet, et la moins
+//     spectaculaire.
+//  3. *Le mat n'entre pas dans l'empreinte.* Il ne change aucun pixel du PNG —
+//     changer une couleur de carte ne doit pas régénérer 312 images. Deux
+//     presets aux gabarits identiques et aux mats différents partagent donc
+//     leurs images, ce qui est exactement ce qu'on veut.
+//
+// Persistance dans `ui_prefs.json` (règle d'or n°6, jamais `localStorage`), une
+// clé pour la liste des presets de l'utilisateur, sur le patron de
+// `driverOutfits.svelte.ts` — une liste de quelques objets ne justifie pas un
+// fichier Rust dédié.
 import type { GridTemplate } from "./gridThumbs";
 import { sweepGridTemplates } from "./gridThumbs";
 import { getUiPrefs, setUiPrefs } from "./uiPrefs.svelte";
 
-/** Clés de `ui_prefs.json`. */
 const KEYS = {
   enabled: "pitbox.gridThumbs",
-  version: "pitbox.gridThumbs.version",
-  azimuth: "pitbox.gridThumbs.azimuth",
-  elevation: "pitbox.gridThumbs.elevation",
-  fov: "pitbox.gridThumbs.fov",
-  margin: "pitbox.gridThumbs.margin",
-  key: "pitbox.gridThumbs.key",
-  fill: "pitbox.gridThumbs.fill",
-  rim: "pitbox.gridThumbs.rim",
-  shadow: "pitbox.gridThumbs.shadow",
+  /** Les presets de l'utilisateur, en JSON. Les embarqués vivent dans le code. */
+  presets: "pitbox.gridThumbs.presets",
+  /** Quel preset pour quelle densité de grille. */
+  dense: "pitbox.gridThumbs.preset.dense",
+  comfortable: "pitbox.gridThumbs.preset.comfortable",
 } as const;
 
 /**
- * Version du **gabarit d'origine** (§5.7).
+ * Les huit valeurs de rendu, et leurs bornes.
  *
- * À incrémenter quand les défauts ci-dessous changent. Qui n'y a jamais touché
- * hérite du nouveau sans rien faire — ses valeurs ne sont pas sur disque ; qui
- * l'a personnalisé garde le sien, et cette version est ce qui permet de le lui
- * dire. Dans les deux cas la régénération est **proposée, jamais forcée** : une
- * grille reste parfaitement utilisable avec des vignettes d'un gabarit
- * antérieur.
- */
-export const TEMPLATE_VERSION = 1;
-
-/**
- * Bornes et valeurs de départ, en unités lisibles par l'utilisateur.
- *
- * Ce sont les valeurs du §5.6, à un écart près, assumé : **l'azimut n'a pas été
- * réinventé**. Le §5.6 demande de le relever sur les previews Kunos plutôt que
- * de l'inventer ; c'est déjà fait, et c'est le défaut de l'aperçu 3D — 318°,
- * trois-quarts avant **gauche**, la convention de toutes les photos du jeu. La
- * grille restant mixte pour toujours (§7), aligner l'angle sur celui des
- * previews d'origine est ce qui réduit le plus durablement l'écart entre les
- * deux sources.
+ * Un écart assumé vis-à-vis du §5.6, qui demande de relever l'azimut sur les
+ * previews Kunos plutôt que de l'inventer : c'est déjà fait, et c'est le défaut
+ * de l'aperçu 3D — 318°, trois-quarts avant **gauche**, la convention de toutes
+ * les photos du jeu. La grille restant mixte pour toujours (§7), aligner
+ * l'angle sur celui des previews d'origine est ce qui réduit le plus
+ * durablement l'écart entre les deux sources.
  */
 export const GRID_THUMB_RANGES = {
   /** Rotation de la caméra autour de l'axe vertical, en degrés. */
@@ -85,7 +88,35 @@ export const GRID_THUMB_RANGES = {
 
 type TemplateKey = keyof typeof GRID_THUMB_RANGES;
 
-const TEMPLATE_KEYS = Object.keys(GRID_THUMB_RANGES) as TemplateKey[];
+export const TEMPLATE_KEYS = Object.keys(GRID_THUMB_RANGES) as TemplateKey[];
+
+/** Le fond de carte d'un preset : les deux bouts du dégradé radial du mat
+ * (§2.2). Clair au centre pour décoller la voiture, sombre aux bords pour
+ * contenir l'image. */
+export interface GridMat {
+  hi: string;
+  lo: string;
+}
+
+export interface GridPreset {
+  id: string;
+  /** Nom tapé par l'utilisateur. **Vide pour un embarqué** : le sien est une
+   * clé i18n, pour suivre la langue de l'app. Une copie, elle, garde le nom
+   * qu'on lui a donné quelle que soit la langue — c'est le nom de quelqu'un,
+   * pas une étiquette de produit. */
+  name: string;
+  builtin: boolean;
+  template: GridTemplate;
+  mat: GridMat;
+  /** Laisser le contenu de base tel quel.
+   *
+   * N'a de sens que pour un preset qui **imite** les previews d'origine : les
+   * 178 voitures Kunos ont déjà exactement ce rendu, les régénérer coûterait
+   * trois minutes pour un résultat identique. Avec un preset qui cherche
+   * l'homogénéité, au contraire, les sauter ruine précisément ce qu'on
+   * cherche. */
+  skipStock: boolean;
+}
 
 /** Reprend les huit valeurs d'une source quelconque. Écrit champ par champ et
  * non par `Object.fromEntries` : c'est ce qui fait vérifier par TypeScript
@@ -103,10 +134,60 @@ function template(read: (key: TemplateKey) => number): GridTemplate {
   };
 }
 
-/** Le gabarit d'origine, celui que rétablit le bouton du §6.3. */
-export function originalTemplate(): GridTemplate {
+function defaultTemplate(): GridTemplate {
   return template((key) => GRID_THUMB_RANGES[key].default);
 }
+
+/** Le mat d'origine : celui de la grille depuis le §2.2. */
+const CATALOGUE_MAT: GridMat = { hi: "#2b2d33", lo: "#17181c" };
+
+/**
+ * Les presets livrés avec l'app. **En lecture seule** : on les duplique pour
+ * s'en faire un.
+ *
+ * `id` est stable et ne se traduit jamais — c'est lui qui est enregistré, pas
+ * le nom affiché.
+ */
+export const BUILTIN_PRESETS: readonly GridPreset[] = [
+  {
+    id: "catalogue",
+    name: "",
+    builtin: true,
+    template: defaultTemplate(),
+    mat: CATALOGUE_MAT,
+    skipStock: false,
+  },
+  {
+    // Le problème B du §1 pris par l'autre bout : ici on ne cherche pas à
+    // identifier vite, on cherche à avoir envie de regarder. Contre-jour poussé
+    // — c'est lui qui découpe une silhouette sombre sur un fond sombre —,
+    // principale retenue, complément réduit pour garder les ombres fermées,
+    // cadrage plus serré et plus bas : la « pub » tient autant au cadrage qu'à
+    // la lumière.
+    //
+    // **Ces valeurs sont un point de départ, pas une mesure.** Le critère de ce
+    // preset est le plaisir des yeux, qui n'a pas de valeur numérique : elles
+    // sont faites pour être arrêtées dans l'atelier, comme les défauts de
+    // l'aperçu 3D l'ont été.
+    id: "vitrine",
+    name: "",
+    builtin: true,
+    template: {
+      azimuth: 318,
+      elevation: 5,
+      fov: 20,
+      margin: 1,
+      key: 90,
+      fill: 15,
+      rim: 140,
+      shadow: 45,
+    },
+    // Le fond quasi noir des previews d'Assetto Corsa, reproduit là où il
+    // s'écrit chez nous : dans la carte.
+    mat: { hi: "#191a1e", lo: "#0a0a0c" },
+    skipStock: false,
+  },
+];
 
 function clamp(key: TemplateKey, value: number): number {
   const range = GRID_THUMB_RANGES[key];
@@ -114,38 +195,87 @@ function clamp(key: TemplateKey, value: number): number {
   return Math.min(range.max, Math.max(range.min, Math.round(value)));
 }
 
-type Values = GridTemplate & { enabled: boolean };
+/** Les deux densités de grille, qui choisissent chacune leur preset. */
+export type GridDensity = "dense" | "comfortable";
+
+const DENSITIES: GridDensity[] = ["dense", "comfortable"];
+
+/** Sur quoi retombe une densité dont le preset a disparu. */
+const FALLBACK: Record<GridDensity, string> = { dense: "catalogue", comfortable: "vitrine" };
+
+interface Values {
+  enabled: boolean;
+  /** Les presets de l'utilisateur, dans l'ordre où il les a créés. */
+  user: GridPreset[];
+  /** L'id du preset de chaque densité. */
+  bound: Record<GridDensity, string>;
+}
 
 // `$state` de module : lu par la grille et par l'écran de réglages, écrit par
-// les setters ci-dessous.
+// les fonctions ci-dessous.
 const values: Values = $state({
   // Éteint par défaut, comme le profil « Normal » du §5.5 : régénérer trois
   // cents voitures est un travail qu'on choisit, pas un défaut qu'on subit.
   enabled: false,
-  ...originalTemplate(),
+  user: [],
+  // **La densité est déjà une déclaration d'intention** : passer en dense,
+  // c'est dire « je cherche » ; passer en confortable, c'est dire « je
+  // regarde ». Accrocher le style à ce geste n'ajoute pas un réglage, ça donne
+  // un second sens à un contrôle qui le portait déjà.
+  bound: { ...FALLBACK },
 });
 
-/** Les valeurs telles qu'elles sont **sur disque**. */
-const stored: Values = $state({ ...values });
-
-/** Version du gabarit d'origine que l'utilisateur a vue la dernière fois qu'il
- * a enregistré le sien. `null` = il n'a jamais personnalisé. */
-let storedVersion = $state<number | null>(null);
+/** Ce qui est **sur disque**. La différence avec `values` est ce que le pied de
+ * l'écran chiffre, et ce que « Annuler » jette (§6.3). */
+const stored: Values = $state({ enabled: false, user: [], bound: { ...FALLBACK } });
 
 let loaded: Promise<void> | null = null;
 
 function ensureLoaded(): Promise<void> {
   loaded ??= getUiPrefs(Object.values(KEYS)).then((read) => {
     if (read[KEYS.enabled] !== null) values.enabled = read[KEYS.enabled] === "1";
-    for (const key of TEMPLATE_KEYS) {
-      const raw = read[KEYS[key]];
-      if (raw !== null) values[key] = clamp(key, Number(raw));
-    }
-    const version = read[KEYS.version];
-    storedVersion = version === null ? null : Number(version);
+    values.user = parsePresets(read[KEYS.presets]);
+    // Un preset supprimé laisse une densité orpheline : elle retombe sur son
+    // embarqué plutôt que de ne rien afficher.
+    values.bound = {
+      dense: known(read[KEYS.dense]) ?? FALLBACK.dense,
+      comfortable: known(read[KEYS.comfortable]) ?? FALLBACK.comfortable,
+    };
     Object.assign(stored, $state.snapshot(values));
   });
   return loaded;
+}
+
+function known(id: string | null): string | null {
+  if (!id) return null;
+  return BUILTIN_PRESETS.some((p) => p.id === id) || values.user.some((p) => p.id === id) ? id : null;
+}
+
+/** Relit la liste enregistrée. Une entrée abîmée — fichier édité à la main,
+ * champ ajouté depuis — est **complétée** plutôt que jetée : perdre le preset
+ * de quelqu'un pour un champ manquant serait un mauvais échange. */
+function parsePresets(raw: string | null): GridPreset[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((entry): entry is Partial<GridPreset> => !!entry && typeof entry === "object")
+      .filter((entry) => typeof entry.id === "string" && entry.id.length > 0)
+      .map((entry) => ({
+        id: entry.id as string,
+        name: typeof entry.name === "string" ? entry.name : "",
+        builtin: false,
+        template: template((key) => clamp(key, Number(entry.template?.[key]))),
+        mat: {
+          hi: typeof entry.mat?.hi === "string" ? entry.mat.hi : CATALOGUE_MAT.hi,
+          lo: typeof entry.mat?.lo === "string" ? entry.mat.lo : CATALOGUE_MAT.lo,
+        },
+        skipStock: entry.skipStock === true,
+      }));
+  } catch {
+    return [];
+  }
 }
 
 void ensureLoaded();
@@ -158,31 +288,49 @@ export function gridThumbsReady(): Promise<void> {
   return ensureLoaded();
 }
 
-/** Les réglages courants, réactifs. */
-export function gridThumbPrefs(): Values {
-  return values;
-}
-
-/** La génération est-elle allumée **sur disque** ?
- *
- * `stored` et non `values` : cocher la case ne doit pas lancer trois cents
- * conversions avant Enregistrer, pas plus que bouger un curseur ne doit mettre
- * les images au rebut (§6.3). C'est ce que la grille lit. */
+/** La génération est-elle allumée **sur disque** ? `stored` et non `values` :
+ * cocher la case ne doit pas lancer trois cents conversions avant Enregistrer. */
 export function gridThumbsOn(): boolean {
   return stored.enabled;
 }
 
-/** Le gabarit **enregistré** — celui sous lequel les images existent, et donc
- * le seul avec lequel la grille a le droit de chercher ou de produire. Bouger
- * un curseur ne doit pas mettre trois cents vignettes au rebut avant que
- * l'utilisateur n'ait dit « Appliquer » (§6.3). */
-export function appliedTemplate(): GridTemplate {
-  return template((key) => stored[key]);
+/** Les réglages en cours d'édition, réactifs. */
+export function gridThumbPrefs(): Values {
+  return values;
 }
 
-/** Le gabarit **en cours d'édition**, celui que l'aperçu de réglage montre. */
-export function editedTemplate(): GridTemplate {
-  return template((key) => values[key]);
+/** Tous les presets, embarqués d'abord. Réactif. */
+export function allPresets(): GridPreset[] {
+  return [...BUILTIN_PRESETS, ...values.user];
+}
+
+/** Les presets **enregistrés**, seuls à avoir des images sur disque. */
+function storedPresets(): GridPreset[] {
+  return [...BUILTIN_PRESETS, ...stored.user];
+}
+
+function find(list: readonly GridPreset[], id: string): GridPreset | undefined {
+  return list.find((p) => p.id === id);
+}
+
+/**
+ * Le preset **enregistré** d'une densité de grille — celui sous lequel les
+ * images existent, et donc le seul avec lequel la grille a le droit de chercher
+ * ou de produire.
+ *
+ * Bouger un curseur ne doit pas mettre trois cents vignettes au rebut avant que
+ * l'utilisateur n'ait dit « Appliquer » (§6.3).
+ */
+export function presetForDensity(density: GridDensity): GridPreset {
+  const list = storedPresets();
+  return find(list, stored.bound[density]) ?? list[0];
+}
+
+/** Les presets réellement en usage — un par densité, dédoublonnés. Ce sont eux
+ * dont les images doivent survivre au balayage. */
+export function livePresets(): GridPreset[] {
+  const ids = new Set(Object.values(stored.bound));
+  return storedPresets().filter((p) => ids.has(p.id));
 }
 
 const pending = $derived(JSON.stringify(values) !== JSON.stringify(stored));
@@ -192,63 +340,88 @@ export function gridThumbsDirty(): boolean {
   return pending;
 }
 
-/** Un gabarit d'origine plus récent existe-t-il, alors que l'utilisateur a le
- * sien ? (§5.7) */
-export function newerDefaultTemplate(): boolean {
-  return storedVersion !== null && storedVersion < TEMPLATE_VERSION;
-}
-
-/**
- * Allume ou éteint les vignettes régénérées — **à l'écran seulement**.
- *
- * Rien n'est écrit avant Enregistrer, comme tout le reste de l'onglet où la
- * case vit. Une première version écrivait à la volée, au motif qu'un
- * interrupteur ne périme aucune image : c'était vrai et ça n'a pas suffi.
- * Une case qui s'enregistre seule au milieu d'un écran doté d'un bouton
- * Enregistrer et d'un avertissement « non enregistré » apprend à
- * l'utilisateur que ce bouton ne décide pas de tout — et il n'a alors plus
- * aucun moyen de savoir ce qui est déjà écrit et ce qui ne l'est pas (retour
- * utilisateur).
- */
 export function setGridThumbsEnabled(enabled: boolean): void {
   values.enabled = enabled;
 }
 
-export function setGridThumbValue(key: TemplateKey, value: number): void {
-  values[key] = clamp(key, value);
+export function bindPreset(density: GridDensity, id: string): void {
+  values.bound = { ...values.bound, [density]: id };
 }
 
-/** Rétablit le gabarit d'origine — à l'écran seulement, tant que rien n'est
- * appliqué. */
-export function resetGridTemplate(): void {
-  Object.assign(values, originalTemplate());
+/** Modifie une valeur d'un preset de l'utilisateur. Un embarqué est en lecture
+ * seule : il faut le dupliquer, et c'est ce que dit l'écran. */
+export function setPresetValue(id: string, key: TemplateKey, value: number): void {
+  const preset = find(values.user, id);
+  if (!preset) return;
+  preset.template = { ...preset.template, [key]: clamp(key, value) };
+}
+
+export function setPresetSkipStock(id: string, skip: boolean): void {
+  const preset = find(values.user, id);
+  if (preset) preset.skipStock = skip;
+}
+
+export function renamePreset(id: string, name: string): void {
+  const preset = find(values.user, id);
+  if (preset) preset.name = name.trim();
+}
+
+/**
+ * Duplique un preset — c'est **le seul moyen** d'en avoir un à soi.
+ *
+ * Un preset vide serait une douzaine de curseurs de rien ; une copie de Vitrine
+ * est à un réglage d'être la sienne. Renvoie l'id de la copie, pour que l'écran
+ * la sélectionne aussitôt.
+ */
+export function duplicatePreset(id: string, name: string): string | null {
+  const source = find(allPresets(), id);
+  if (!source) return null;
+  const copy: GridPreset = {
+    id: "u" + Date.now().toString(36),
+    name: name.trim(),
+    builtin: false,
+    template: { ...source.template },
+    mat: { ...source.mat },
+    skipStock: source.skipStock,
+  };
+  values.user = [...values.user, copy];
+  return copy.id;
+}
+
+/** Supprime un preset de l'utilisateur. Les densités qui le montraient
+ * retombent sur leur embarqué — jamais sur rien. */
+export function deletePreset(id: string): void {
+  values.user = values.user.filter((p) => p.id !== id);
+  for (const density of DENSITIES) {
+    if (values.bound[density] === id) values.bound = { ...values.bound, [density]: FALLBACK[density] };
+  }
 }
 
 /** Revient sur ce qui est enregistré : le « Annuler » du §6.3, qui ne coûte
  * rien et rend l'expérimentation gratuite. */
 export function revertGridThumbPrefs(): void {
-  Object.assign(values, $state.snapshot(stored));
+  Object.assign(values, structuredClone($state.snapshot(stored)));
 }
 
 /**
- * Enregistre : écrit le gabarit, puis efface ce que le précédent avait produit.
+ * Enregistre, puis efface les images qu'aucun preset vivant ne réclame plus.
  *
- * L'ordre compte peu ici, mais le balayage, lui, n'est pas optionnel : le
- * magasin de vignettes n'a **aucune passe d'éviction** — c'est ce qui le garde
- * hors du plafond du cache — donc rien d'autre ne ramasserait les 312 images du
- * gabarit d'avant.
+ * Le balayage n'est pas optionnel : le magasin de vignettes n'a **aucune passe
+ * d'éviction** — c'est ce qui le garde hors du plafond du cache — donc rien
+ * d'autre ne ramasserait les images d'un preset supprimé ou modifié. Il garde
+ * en revanche celles de **tous** les presets en usage, et c'est ce qui rend le
+ * changement de densité instantané une fois les deux jeux produits.
  */
 export async function saveGridThumbPrefs(): Promise<void> {
-  const entries: Record<string, string> = {
+  await setUiPrefs({
     [KEYS.enabled]: values.enabled ? "1" : "0",
-    [KEYS.version]: String(TEMPLATE_VERSION),
-  };
-  for (const key of TEMPLATE_KEYS) entries[KEYS[key]] = String(values[key]);
-  await setUiPrefs(entries);
-  Object.assign(stored, $state.snapshot(values));
-  storedVersion = TEMPLATE_VERSION;
-  await sweepGridTemplates(appliedTemplate()).catch((e) => {
-    // Best-effort : des images d'un gabarit antérieur qui traînent coûtent du
+    [KEYS.presets]: JSON.stringify($state.snapshot(values.user)),
+    [KEYS.dense]: values.bound.dense,
+    [KEYS.comfortable]: values.bound.comfortable,
+  });
+  Object.assign(stored, structuredClone($state.snapshot(values)));
+  await sweepGridTemplates(livePresets().map((p) => p.template)).catch((e) => {
+    // Best-effort : des images d'un preset disparu qui traînent coûtent du
     // disque, pas une erreur d'affichage — leur nom ne peut plus être demandé.
     console.error("sweep_grid_templates", e);
     return 0;

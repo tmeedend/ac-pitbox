@@ -1,16 +1,21 @@
 <script lang="ts">
-  // Réglage du gabarit des vignettes de la grille (docs/SPEC-grille.md §6).
+  // Presets de vignettes de la grille (docs/SPEC-grille.md §6).
   //
   // **Un onglet à part de l'aperçu 3D, et ce n'est pas un rangement** (§6.1).
   // Les deux règlent une caméra et des lumières, mais tourner l'aperçu d'une
   // fiche ne coûte rien et ne dure que le temps qu'on la regarde, alors que
-  // toucher à ce gabarit-ci périme les 312 images de la grille. C'est cette
+  // toucher à un preset périme les images de toute la grille. C'est cette
   // asymétrie qui rend acceptable qu'un écran affiche une facture et prévienne,
   // et que l'autre n'avertisse jamais.
   //
   // D'où la règle du §6.3 : **rien ne s'applique avant Appliquer.** Manipuler
-  // les curseurs ne régénère rien, le pied de l'écran chiffre ce que ça coûtera,
-  // et Annuler ne coûte rien — ce qui rend l'expérimentation gratuite.
+  // les curseurs ne régénère rien, le pied de l'écran chiffre ce que ça
+  // coûtera, et Annuler ne coûte rien — ce qui rend l'expérimentation gratuite.
+  //
+  // **Les embarqués sont en lecture seule, on les duplique.** Un preset vide
+  // serait une douzaine de curseurs de rien ; une copie de Vitrine est à un
+  // réglage d'être la sienne. C'est aussi ce qui remplace le bouton « rétablir
+  // le gabarit d'origine » : l'original est toujours là, juste à côté, intact.
   import Field from "../Field.svelte";
   import GridTemplateStudio from "./GridTemplateStudio.svelte";
   import Slider from "../Slider.svelte";
@@ -23,31 +28,50 @@
   import { withoutBrand } from "$lib/displayName";
   import {
     GRID_THUMB_RANGES,
-    editedTemplate,
+    allPresets,
+    bindPreset,
+    deletePreset,
+    duplicatePreset,
     gridThumbPrefs,
     gridThumbsDirty,
-    newerDefaultTemplate,
-    resetGridTemplate,
+    renamePreset,
     revertGridThumbPrefs,
     saveGridThumbPrefs,
-    setGridThumbValue,
+    setPresetSkipStock,
+    setPresetValue,
     setGridThumbsEnabled,
+    type GridDensity,
+    type GridPreset,
   } from "$lib/gridThumbPrefs.svelte";
 
   const prefs = $derived(gridThumbPrefs());
-  const template = $derived(editedTemplate());
+  const presets = $derived(allPresets());
   const dirty = $derived(gridThumbsDirty());
+
+  /** Le preset en cours d'édition. Par défaut celui de la grille dense — c'est
+   * la vue par défaut, donc celui qu'on vient régler. */
+  let selectedId = $state<string | null>(null);
+  const selected = $derived(presets.find((p) => p.id === (selectedId ?? prefs.bound.dense)) ?? presets[0]);
+  const editable = $derived(selected && !selected.builtin);
 
   /** Les deux groupes de curseurs, et leur ordre. Le cadrage d'abord — c'est
    * lui qu'on vient régler — la lumière ensuite. */
   const FRAMING = ["azimuth", "elevation", "fov", "margin"] as const;
   const LIGHT = ["key", "fill", "rim", "shadow"] as const;
+  const DENSITIES: GridDensity[] = ["dense", "comfortable"];
 
   let applying = $state(false);
   let stats = $state<GridThumbStats | null>(null);
   let clearing = $state(false);
   let error = $state<string | null>(null);
   let carCount = $state<number | null>(null);
+
+  /** Le nom affiché d'un preset : sa clé i18n s'il est livré avec l'app — pour
+   * qu'il suive la langue — le nom tapé sinon, qui appartient à quelqu'un et ne
+   * se traduit donc pas. */
+  function presetName(preset: GridPreset): string {
+    return preset.builtin ? t("settings.gridPreset_" + preset.id) : preset.name;
+  }
 
   async function refresh() {
     try {
@@ -68,15 +92,15 @@
    * La facture du §6.3, affichée en continu.
    *
    * **Toutes les voitures**, moins celles qu'on sait protégées : changer un
-   * seul degré change l'empreinte du gabarit, donc le nom des 312 images, donc
-   * aucune n'est réutilisable. C'est précisément ce que l'utilisateur doit
+   * seul degré change l'empreinte du gabarit, donc le nom de toutes les images,
+   * donc aucune n'est réutilisable. C'est précisément ce que l'utilisateur doit
    * savoir avant de cliquer.
    */
   const bill = $derived.by(() => {
     if (!dirty || carCount === null) return null;
     const count = Math.max(0, carCount - (stats?.failed ?? 0));
     // Une seconde et demie par voiture, mesurée sur la conversion complète.
-    // Approximatif et annoncé comme tel — c'est un ordre de grandeur, pas une
+    // Approximatif et annoncé comme tel — un ordre de grandeur, pas une
     // promesse.
     const minutes = Math.max(1, Math.round((count * 1.5) / 60));
     return t("settings.gridThumbsBill", { count: String(count), minutes: String(minutes) });
@@ -108,26 +132,45 @@
     await refresh();
   }
 
+  function duplicate() {
+    if (!selected) return;
+    const id = duplicatePreset(selected.id, t("settings.gridPresetCopy", { name: presetName(selected) }));
+    if (id) selectedId = id;
+  }
+
+  function remove() {
+    if (!selected || selected.builtin) return;
+    deletePreset(selected.id);
+    selectedId = null;
+  }
+
   /**
    * « Générer toute la bibliothèque » (§5.4).
    *
    * Ce n'est pas le même besoin que la génération au fil de l'eau : à
    * l'installation on exprime une intention, ici on déclenche un travail —
-   * typiquement après avoir ajouté cinquante mods. Il met simplement tout en
-   * file ; la tâche de fond en bas à droite montre où ça en est et sait
-   * s'arrêter.
+   * typiquement après avoir ajouté cinquante mods. Il met en file **les deux
+   * presets en usage**, pas seulement celui de la vue courante : sinon changer
+   * de densité juste après relancerait tout, et le bouton aurait menti.
    */
   async function generateAll() {
-    const list = await listLibrary().catch(() => []);
-    enqueueGridThumbs(
-      list
-        .filter((c) => c.kind === "Car")
-        .map((c) => ({
-          id: c.id_interne,
-          skin: getPreferredSkin(c.id_interne)?.id ?? null,
-          name: withoutBrand(c.display_name ?? c.id_interne, c.brand ?? null),
-        })),
-    );
+    const list = (await listLibrary().catch(() => [])).filter((c) => c.kind === "Car");
+    const seen = new Set<string>();
+    for (const density of DENSITIES) {
+      const preset = presets.find((p) => p.id === prefs.bound[density]);
+      if (!preset || seen.has(preset.id)) continue;
+      seen.add(preset.id);
+      enqueueGridThumbs(
+        preset.template,
+        list
+          .filter((c) => !preset.skipStock || !c.is_stock)
+          .map((c) => ({
+            id: c.id_interne,
+            skin: getPreferredSkin(c.id_interne)?.id ?? null,
+            name: withoutBrand(c.display_name ?? c.id_interne, c.brand ?? null),
+          })),
+      );
+    }
   }
 
   function degrees(value: number): string {
@@ -148,7 +191,9 @@
   <div class="col">
     <!-- L'aperçu en tête, comme l'onglet Aperçu 3D : on règle en voyant le
          résultat, et sur un catalogue puisque c'est un catalogue qu'on édite. -->
-    <GridTemplateStudio {template} />
+    {#if selected}
+      <GridTemplateStudio template={selected.template} mat={selected.mat} />
+    {/if}
 
     <section class="blk">
       <div class="blk-h">
@@ -168,6 +213,21 @@
             <span>{t("settings.gridThumbs")}</span>
           </label>
         </Field>
+
+        <!-- **Le preset suit la densité de la grille.** La densité est déjà une
+             déclaration d'intention : dense = « je cherche », confortable =
+             « je regarde ». Les deux jeux d'images coexistent, donc rebasculer
+             est instantané une fois les deux produits. -->
+        {#each DENSITIES as density (density)}
+          <Field label={t("settings.gridThumbsFor_" + density)}>
+            <select class="input" value={prefs.bound[density]} onchange={(e) => bindPreset(density, e.currentTarget.value)}>
+              {#each presets as preset (preset.id)}
+                <option value={preset.id}>{presetName(preset)}</option>
+              {/each}
+            </select>
+          </Field>
+        {/each}
+
         <Field hint={t("settings.gridThumbsClearHint")}>
           <div class="row">
             <button class="btn" type="button" onclick={generateAll} disabled={!prefs.enabled}>
@@ -197,52 +257,92 @@
 
   <div class="col">
     <section class="blk">
-      <div class="blk-h"><span class="blk-t">{t("settings.gridThumbsFraming")}</span></div>
+      <div class="blk-h"><span class="blk-t">{t("settings.gridPresets")}</span></div>
       <div class="blk-b">
-        {#each FRAMING as key (key)}
-          <Slider
-            label={t("settings.gridThumb_" + key)}
-            value={template[key]}
-            min={GRID_THUMB_RANGES[key].min}
-            max={GRID_THUMB_RANGES[key].max}
-            step={GRID_THUMB_RANGES[key].step}
-            display={unit(key, template[key])}
-            hint={t("settings.gridThumbHint_" + key)}
-            oninput={(v) => setGridThumbValue(key, v)}
-          />
-        {/each}
+        <Field label={t("settings.gridPresetEdited")}>
+          <select class="input" value={selected?.id} onchange={(e) => (selectedId = e.currentTarget.value)}>
+            {#each presets as preset (preset.id)}
+              <option value={preset.id}>{presetName(preset)}</option>
+            {/each}
+          </select>
+        </Field>
+        <div class="row">
+          <button class="btn" type="button" onclick={duplicate}>{t("settings.gridPresetDuplicate")}</button>
+          <button class="btn" type="button" onclick={remove} disabled={!editable}>
+            {t("settings.gridPresetDelete")}
+          </button>
+        </div>
+        {#if editable && selected}
+          <Field label={t("settings.gridPresetName")}>
+            <input
+              class="input"
+              type="text"
+              value={selected.name}
+              oninput={(e) => renamePreset(selected.id, e.currentTarget.value)}
+            />
+          </Field>
+          <Field hint={t("settings.gridPresetSkipStockHint")}>
+            <label class="check">
+              <input
+                type="checkbox"
+                checked={selected.skipStock}
+                onchange={(e) => setPresetSkipStock(selected.id, e.currentTarget.checked)}
+              />
+              <span>{t("settings.gridPresetSkipStock")}</span>
+            </label>
+          </Field>
+        {:else}
+          <!-- Un embarqué ne se modifie pas : il est la référence à laquelle on
+               revient, donc il doit rester exactement ce qu'il était. -->
+          <p class="notice">{t("settings.gridPresetReadOnly")}</p>
+        {/if}
       </div>
     </section>
 
-    <section class="blk">
-      <div class="blk-h"><span class="blk-t">{t("settings.gridThumbsLight")}</span></div>
-      <div class="blk-b">
-        {#each LIGHT as key (key)}
-          <Slider
-            label={t("settings.gridThumb_" + key)}
-            value={template[key]}
-            min={GRID_THUMB_RANGES[key].min}
-            max={GRID_THUMB_RANGES[key].max}
-            step={GRID_THUMB_RANGES[key].step}
-            display={percent(template[key])}
-            hint={t("settings.gridThumbHint_" + key)}
-            oninput={(v) => setGridThumbValue(key, v)}
-          />
-        {/each}
-      </div>
-    </section>
+    {#if selected}
+      <section class="blk">
+        <div class="blk-h"><span class="blk-t">{t("settings.gridThumbsFraming")}</span></div>
+        <div class="blk-b">
+          {#each FRAMING as key (key)}
+            <Slider
+              label={t("settings.gridThumb_" + key)}
+              value={selected.template[key]}
+              min={GRID_THUMB_RANGES[key].min}
+              max={GRID_THUMB_RANGES[key].max}
+              step={GRID_THUMB_RANGES[key].step}
+              display={unit(key, selected.template[key])}
+              hint={t("settings.gridThumbHint_" + key)}
+              disabled={!editable}
+              oninput={(v) => setPresetValue(selected.id, key, v)}
+            />
+          {/each}
+        </div>
+      </section>
 
-    {#if newerDefaultTemplate()}
-      <!-- Un gabarit d'origine plus récent existe, et l'utilisateur a le sien :
-           on le signale, on ne le remplace pas (§5.7). -->
-      <p class="notice">{t("settings.gridThumbsNewerDefault")}</p>
+      <section class="blk">
+        <div class="blk-h"><span class="blk-t">{t("settings.gridThumbsLight")}</span></div>
+        <div class="blk-b">
+          {#each LIGHT as key (key)}
+            <Slider
+              label={t("settings.gridThumb_" + key)}
+              value={selected.template[key]}
+              min={GRID_THUMB_RANGES[key].min}
+              max={GRID_THUMB_RANGES[key].max}
+              step={GRID_THUMB_RANGES[key].step}
+              display={percent(selected.template[key])}
+              hint={t("settings.gridThumbHint_" + key)}
+              disabled={!editable}
+              oninput={(v) => setPresetValue(selected.id, key, v)}
+            />
+          {/each}
+        </div>
+      </section>
     {/if}
   </div>
 </div>
 
 <footer>
   {#if bill}<span class="bill">{bill}</span>{/if}
-  <button class="btn" type="button" onclick={resetGridTemplate}>{t("settings.gridThumbsResetTemplate")}</button>
   <button class="btn" type="button" onclick={revertGridThumbPrefs} disabled={applying || !dirty}>
     {t("settings.discard")}
   </button>
@@ -282,7 +382,7 @@
     font-size: 11.5px;
   }
   .notice {
-    margin: 0;
+    margin: 14px 0 0;
     padding: 8px 10px;
     background: var(--raised);
     border: 1px solid var(--line);

@@ -439,9 +439,14 @@ laisser pourrir ici.
       changement fonctionnel (sinon `git blame` devient inexploitable).
 - [ ] **Vignettes régénérées de la grille** (branche `feature/vignettes-grille`).
       Spec dans `docs/SPEC-grille.md`. La partie A (§2 à §4) était déjà livrée ;
-      la **partie B** (§5 à §8) l'est maintenant en entier — pipeline, tâche de
-      fond, écran de réglage du gabarit, profils à l'installation.
-      **Les trois pièges à ne pas réintroduire**, tous mesurés ou vécus :
+      la **partie B** (§5 à §8) l'est — pipeline, tâche de fond, écran de
+      réglage, profils à l'installation — et le modèle de **presets** est venu
+      après, d'une remarque de l'utilisateur : la preview d'origine d'Assetto
+      Corsa est plus *jolie* que notre rendu, le nôtre plus *lisible*. Deux
+      objectifs, pas deux qualités d'exécution du même — d'où *Catalogue* et
+      *Vitrine*, embarqués et en lecture seule, qu'on duplique pour s'en faire
+      un, et un preset **par densité de grille**.
+      **Les pièges à ne pas réintroduire**, tous mesurés ou vécus :
       1. **Ne jamais faire passer la génération par `prepare_car_preview`.**
          C'est le §5.3, et il a une raison chiffrée : 312 conversions dans un
          cache déjà à son plafond évincent une entrée vivante chacune, donc les
@@ -454,24 +459,50 @@ laisser pourrir ici.
          vient après, et la conversion suivante vide le dossier en commençant.
          Symptôme d'un oubli : une voiture blanche, sans texture.
       3. **Un rendu abîmé ne se voit plus une fois le PNG écrit.** Contexte
-         WebGL perdu (recompilation, veille, pilote qui redémarre) ou textures
-         non arrivées : le fichier existe et son nom est valide, donc il est
-         resservi pour toujours. D'où le contrôle de plausibilité avant écriture
-         (`checkPlausible`, réduction à 64×36) **et** le bouton « refaire la
-         vignette » de la fiche — le contrôle n'attrape que ce qu'on a su
-         décrire.
+         WebGL perdu ou textures non arrivées : le fichier existe et son nom est
+         valide, donc il est resservi pour toujours. D'où `checkPlausible`
+         (réduction à 64×36, refus du vide et du saturé) **avant** l'écriture.
+         Le bouton « refaire la vignette » de la fiche a existé puis a été
+         retiré, à la demande de l'utilisateur : on parie sur le contrôle, et
+         `regenerateGridThumb` reste, un `{#if}` de le ramener si le cas revient.
+      4. **Le mat n'entre pas dans l'empreinte d'une vignette** et ne doit
+         jamais y entrer : il ne change aucun pixel du PNG. L'y mettre ferait
+         régénérer trois cents images pour un changement de couleur de carte.
+      5. **Le balayage garde les gabarits de *tous* les presets vivants**, pas
+         seulement le dernier appliqué. Sinon chaque changement de densité
+         relance cinq minutes de travail, et la coexistence des deux jeux — tout
+         l'intérêt du preset par densité — tombe.
       **Écarts assumés vis-à-vis de la spec** : l'ombre de contact est une vraie
-      ombre projetée (`ShadowMaterial` + projecteur à intensité nulle) et non
-      l'ellipse peinte du §5.6 ; l'azimut n'a pas été « relevé sur les previews
-      Kunos » puisque c'est déjà fait — c'est le 318° de l'aperçu 3D ; la tâche
-      de fond réduite est une barre et non une pastille à anneau (la pile
-      bas-droite n'a qu'une forme) ; et les six voitures de l'aperçu de réglage
-      sont prises **par catégorie** et non par silhouette, que rien dans les
-      données ne dit.
-      **Reste à faire :** le regarder et régler le trio lumière/environnement.
-      `ENVIRONMENT = 0.55` dans `gridThumbs.svelte.ts` partage l'éclairage entre
-      le showroom calibré sur les photos Kunos et les trois lampes du §5.6 ;
-      c'est un point de départ, pas une mesure.
+      ombre projetée et non l'ellipse peinte du §5.6 ; l'azimut n'a pas été
+      « relevé sur les previews Kunos » puisque c'est déjà fait (318°, l'aperçu
+      3D) ; la tâche de fond réduite est une barre et non une pastille à anneau
+      (la pile bas-droite n'a qu'une forme) ; les six voitures de l'atelier sont
+      prises par **catégorie** (plus la voiture de session en tête) et non par
+      silhouette, que rien dans les données ne dit ; et le §5.7 (versionnage du
+      gabarit d'origine) est **supprimé**, rendu inutile par les presets
+      embarqués.
+      **Reste à faire, décidé avec l'utilisateur :**
+      1. **Arrêter les valeurs de Vitrine.** Celles livrées sont un point de
+         départ, pas une mesure — le critère de ce preset est le plaisir des
+         yeux, qui n'a pas de valeur numérique. Elles se figent dans l'atelier,
+         comme les défauts de l'aperçu 3D l'ont été.
+      2. **Le sol et le reflet de Vitrine.** Une flaque de lumière et un reflet
+         court, comme l'aperçu de la fiche. Conséquence à ne pas rater : un
+         reflet a besoin d'un sol **visible**, donc d'une flaque cuite dans
+         l'image — la vignette n'est alors plus entièrement transparente, et son
+         mat doit correspondre à celui de la carte sous peine de soucoupe. Le
+         gabarit y gagne aussi une **hauteur de cadrage** (la voiture se pose
+         dans le tiers supérieur). Le sol existe déjà dans `CarPreview3D`
+         (`floorMirror.ts`) : à **extraire**, pas à recopier.
+      3. **Un troisième embarqué, « Officiel »**, qui reproduit le rendu des
+         previews Kunos. Il est le plus argumenté des trois : il **retourne** le
+         problème de la grille mixte au lieu de le contenir, et fait tomber ~178
+         conversions (`skipStock`, déjà dans le modèle). Il demande un **fond
+         opaque cuit dans l'image** — la transparence était un moyen, pas une
+         fin — et une bascule « comparer à l'image d'origine » dans l'atelier,
+         sans quoi on règle « exactement pareil » de mémoire. Piège documenté :
+         le `preview.jpg` d'un skin est une référence de **cadrage**, jamais de
+         luminosité (il est plus sombre que le rendu du jeu).
 - [ ] **Écran Pilote** (branche `feature/ecran-pilote`). Spec et maquette dans
       `docs/SPEC-ecran-pilote.md` + `docs/pitbox-ecran-pilote.html`, résumé au
       §9.5 du SPEC. **À lire avant de reprendre** — l'asymétrie qui structure

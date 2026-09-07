@@ -29,6 +29,11 @@
     hint?: string;
     /** Tighter spacing, for a panel laid over the thing being adjusted. */
     compact?: boolean;
+    /** Shown but not movable — a value one is meant to read, not set. Used by
+     * the read-only presets of the thumbnail screen, where the point is that
+     * the built-in one stays exactly what it was. The whole row dims, not just
+     * the track: a lively label over a dead slider reads as a bug. */
+    disabled?: boolean;
     /** The pointer took hold of the thumb, and let go of it. Optional, and only
      * the engine sound uses them so far: holding the button down there IS the
      * throttle pedal, something no value change can report - a slider held
@@ -47,6 +52,7 @@
     oninput,
     hint,
     compact = false,
+    disabled = false,
     onpress,
     onrelease,
   }: Props = $props();
@@ -73,7 +79,7 @@
   const fill = $derived(max > min ? ((value - min) / (max - min)) * 100 : 0);
 </script>
 
-<div class="slider" class:compact>
+<div class="slider" class:compact class:off={disabled}>
   <label>
     <span class="head">
       <span class="name lbl-key">{label}</span>
@@ -85,6 +91,7 @@
       {max}
       {step}
       {value}
+      {disabled}
       style:--f="{fill}%"
       oninput={(e) => oninput(Number(e.currentTarget.value))}
       onpointerdown={press}
@@ -94,6 +101,13 @@
 </div>
 
 <style>
+  .slider.off {
+    opacity: 0.5;
+  }
+  .slider.off input {
+    cursor: default;
+  }
+
   .slider {
     min-width: 0;
   }
