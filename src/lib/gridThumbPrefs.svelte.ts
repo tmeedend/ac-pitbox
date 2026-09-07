@@ -71,8 +71,13 @@ export const GRID_THUMB_RANGES = {
    * **ajusté et non à l'échelle** : chaque voiture remplit le cadre quelle que
    * soit sa taille réelle. On perd le gabarit relatif, on gagne que chaque
    * vignette est lisible à 190 px — pour un catalogue dont le métier est
-   * l'identification, c'est le bon échange (§5.6). */
-  margin: { min: 0, max: 25, step: 1, default: 6 },
+   * l'identification, c'est le bon échange (§5.6).
+   *
+   * **La borne haute vient d'une mesure, pas d'une intuition.** Sur les 178
+   * voitures officielles, la voiture n'occupe que **66 % de la largeur** du
+   * cadre (médiane) : imiter ce cadrage demande une marge de l'ordre de 50 %,
+   * là où le plafond était à 25. */
+  margin: { min: 0, max: 70, step: 1, default: 6 },
   /** Intensité de la lumière principale, en pourcentage. */
   key: { min: 0, max: 300, step: 5, default: 100 },
   /** Complément, en pourcentage de la principale. */
@@ -85,9 +90,12 @@ export const GRID_THUMB_RANGES = {
   /** Opacité de l'ombre de contact. Sans elle la voiture flotte. */
   shadow: { min: 0, max: 100, step: 5, default: 35 },
   /** Où la caméra vise, en pourcentage du rayon au-dessus du centre du modèle.
+   *
    * **Négatif remonte la voiture dans le cadre** — ce dont un preset à reflet a
-   * besoin, le reflet prenant la place en dessous. Zéro vise le centre, ce que
-   * fait un catalogue : la voiture au milieu, rien autour. */
+   * besoin, le reflet prenant la place en dessous. Positif la descend, ce que
+   * font les images du jeu : mesuré sur les 178 officielles, leur voiture est
+   * **basse dans le cadre**, marge haute de 33 % contre 17 % en bas, centre à
+   * 58 % de la hauteur. Zéro vise le centre, ce que fait un catalogue. */
   height: { min: -40, max: 40, step: 1, default: 0 },
   /** Flaque de lumière peinte au sol. **Zéro retire le sol entièrement**, et
    * l'image ne porte alors que la voiture — c'est ce qui garde une vignette de
@@ -136,6 +144,11 @@ export const TEMPLATE_KEYS = Object.keys(GRID_THUMB_RANGES) as TemplateKey[];
  * version du convertisseur et le gabarit… mais rien du code qui dessine : une
  * image fausse reste donc servie pour toujours, parfaitement valide au regard
  * de tout ce que son nom sait vérifier.
+ *
+ * Elle ne bouge que pour du **code**. Une valeur de preset qui change — le
+ * cadrage d'Officiel repris sur une mesure, par exemple — est déjà couverte par
+ * l'empreinte du gabarit, et l'incrémenter ferait alors régénérer les autres
+ * presets pour rien.
  *
  * Historique, parce que c'est ce qui donne la règle :
  *  - **1** — première version.
@@ -289,9 +302,26 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
     //    résultat identique. C'est ce qui rend ce preset le moins cher des
     //    trois, alors qu'il est le plus ambitieux.
     //
-    // Les valeurs sont à arrêter dans l'atelier, bascule « comparer à l'image
-    // d'origine » allumée : le critère de ce preset est mesurable — il ne doit
-    // pas se voir — donc il se règle contre la vraie image, jamais de mémoire.
+    // **Cadrage et fond viennent d'une mesure sur les 178 voitures
+    // officielles**, pas d'un coup d'œil (`preview.jpg` de la première livrée,
+    // réduite en 128×72, boîte des pixels qui s'écartent du fond) :
+    //
+    //  - la voiture occupe **66 % de la largeur** du cadre — d'où une marge de
+    //    ~48 %, là où le catalogue serre à 6 % ;
+    //  - elle est **basse** : 33 % de marge en haut contre 17 % en bas, centre
+    //    à 58 % de la hauteur — d'où une hauteur de cadrage positive ;
+    //  - le fond est **plat et quasi noir** (luminance 4 dans les coins comme
+    //    au-dessus de la voiture) et ce qui éclaire, c'est le **sol** :
+    //    luminance 15 en bas du cadre. Ce n'est donc pas un halo derrière la
+    //    voiture, contrairement à ce que l'œil croit y voir — c'est une flaque
+    //    au sol sur un fond uni.
+    //  - format : 1022×574 en médiane, soit le 16:9 que la sortie utilise déjà.
+    //
+    // Ce qui reste à l'œil, c'est l'équilibre des trois lampes : la mesure dit
+    // où poser la voiture et de quelle couleur est le vide, pas comment la
+    // peinture accroche la lumière. À arrêter dans l'atelier, bascule
+    // « comparer à l'image d'origine » allumée — le critère de ce preset est
+    // mesurable, il ne doit pas se voir.
     id: "officiel",
     name: "",
     builtin: true,
@@ -299,21 +329,23 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       azimuth: 318,
       elevation: 6,
       fov: 20,
-      margin: 4,
+      margin: 48,
       key: 100,
       fill: 25,
-      rim: 60,
+      rim: 45,
       shadow: 30,
-      height: -5,
-      // Une flaque discrète et **aucun reflet** : les previews du jeu montrent
-      // un halo au sol sous la voiture, jamais un miroir.
-      floor: 50,
+      height: 10,
+      // La flaque fait tout le travail de lumière du fond, et **aucun reflet** :
+      // les images du jeu éclairent le sol, elles n'y mirent pas la voiture.
+      floor: 100,
       reflection: 0,
       background: 100,
     },
-    // Le fond des previews du jeu, mesuré sur un `preview.jpg` : rgb(12,13,15)
-    // sous la voiture, rgb(2,3,5) dans les coins.
-    mat: { hi: "#0c0d0f", lo: "#020305" },
+    // Quasi noir et **quasi plat** : mesuré, le fond des images du jeu vaut 4
+    // en luminance dans les coins comme au-dessus de la voiture. Le dégradé
+    // radial du catalogue n'a rien à faire ici — ce qu'on prend pour un halo
+    // derrière la voiture est la flaque au sol devant elle.
+    mat: { hi: "#060607", lo: "#030304" },
     skipStock: true,
   },
 ];
