@@ -254,6 +254,18 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
   l'ouverture n'est pas une dépendance : l'entourer d'`untrack`. Le symétrique
   côté écriture est déjà documenté dans `uiPrefs.svelte.ts` (`setUiPref` est
   `untrack`é pour la même raison, après une boucle infinie de 285 000 appels).
+- **Un `$effect` ne s'abonne qu'à ce qu'il a lu avant de sortir.** Une garde
+  placée en tête (`if (!x) return;`) tronque donc la liste des dépendances au
+  premier passage — et un premier passage a lieu au montage, quand rien n'est
+  encore prêt. Ce qui est lu *sous* la garde n'est jamais enregistré, si bien
+  que la valeur qu'on attendait peut arriver sans rien redéclencher. Bug réel :
+  l'aperçu de l'écran des vignettes n'affichait que son fond à la première
+  ouverture, et il fallait changer de preset — donc toucher à la seule
+  dépendance qui, elle, avait été lue — pour que les voitures apparaissent. Le
+  remède est mécanique : **lire toutes les dépendances en tête, avant la
+  moindre sortie**. Corollaire : une variable dont l'affectation doit
+  redéclencher un effet est un `$state`, jamais un `let` ordinaire — celui-ci
+  ne s'observe pas.
 - **Une mesure de pixels ne s'écrit jamais telle quelle dans un `style`.** Le
   zoom d'interface est un `zoom` CSS posé sur `<html>` : `getBoundingClientRect`,
   `clientX/clientY` et `innerWidth/Height` rendent des pixels **réels de la

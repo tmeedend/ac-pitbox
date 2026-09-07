@@ -38,7 +38,9 @@
    * voir un réglage rater une silhouette, assez peu pour tenir à l'écran. */
   const SAMPLE = 6;
 
-  let studio: GridStudio | null = null;
+  // `$state` et non une variable ordinaire : c'est son affectation, à la fin du
+  // montage, qui doit relancer le dessin — voir le commentaire de l'effet.
+  let studio = $state<GridStudio | null>(null);
   let cars = $state<StudioCar[]>([]);
   let images = $state<Record<string, string>>({});
   let loading = $state(true);
@@ -89,21 +91,29 @@
     // que manipuler les réglages ne régénère rien.
     pauseGridThumbs();
     void (async () => {
-      const list = await listLibrary().catch(() => [] as ModCard[]);
-      if (!alive) return;
-      const handle = await createGridStudio(W, H);
-      if (!alive) {
-        handle.dispose();
-        return;
-      }
-      studio = handle;
-      for (const card of sample(list)) {
+      try {
+        const list = await listLibrary().catch(() => [] as ModCard[]);
         if (!alive) return;
-        const car = await handle.load(card.id_interne, null, card.display_name ?? card.id_interne);
-        if (!alive) return;
-        if (car) cars = [...cars, car];
+        const handle = await createGridStudio(W, H);
+        if (!alive) {
+          handle.dispose();
+          return;
+        }
+        studio = handle;
+        for (const card of sample(list)) {
+          if (!alive) return;
+          const car = await handle.load(card.id_interne, null, card.display_name ?? card.id_interne);
+          if (!alive) return;
+          if (car) cars = [...cars, car];
+        }
+      } catch (e) {
+        // Pas de contexte WebGL, pas de bibliothèque : l'écran reste utilisable
+        // sans son aperçu. Sans ce `catch`, `loading` ne redescendait jamais et
+        // le spinner tournait pour toujours.
+        console.error("aperçu de gabarit indisponible", e);
+      } finally {
+        loading = false;
       }
-      loading = false;
     })();
     return () => {
       alive = false;
@@ -116,12 +126,23 @@
   // Redessine à chaque changement de gabarit. Six images de 384×216 se rendent
   // en quelques millisecondes chacune — l'`$effect` suffit, sans temporisation :
   // c'est le chargement qui coûtait, et il est fait.
+  //
+  // **Les trois dépendances sont lues AVANT la sortie anticipée**, et ce n'est
+  // pas du style. Un `$effect` ne s'abonne qu'à ce qu'il a effectivement lu
+  // pendant son exécution : en plaçant le `return` avant la boucle, le premier
+  // passage — celui du montage, où le banc n'est pas encore là — ne voyait
+  // jamais `cars`, donc les voitures qui arrivaient ensuite ne le
+  // redéclenchaient pas. Bug réel signalé : à la première ouverture de l'écran,
+  // le mat s'affichait vide, et il fallait choisir un autre preset dans la
+  // liste — c'est-à-dire changer `template`, la seule dépendance enregistrée —
+  // pour que les voitures apparaissent.
   $effect(() => {
-    const t = template;
     const handle = studio;
-    if (!handle) return;
+    const list = cars;
+    const t = template;
+    if (!handle || list.length === 0) return;
     const next: Record<string, string> = {};
-    for (const car of cars) next[car.id] = handle.draw(car, t);
+    for (const car of list) next[car.id] = handle.draw(car, t);
     images = next;
   });
 </script>
