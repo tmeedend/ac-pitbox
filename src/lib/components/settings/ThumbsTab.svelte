@@ -56,8 +56,12 @@
 
   /** Les deux groupes de curseurs, et leur ordre. Le cadrage d'abord — c'est
    * lui qu'on vient régler — la lumière ensuite. */
-  const FRAMING = ["azimuth", "elevation", "fov", "margin"] as const;
-  const LIGHT = ["key", "fill", "rim", "shadow"] as const;
+  const FRAMING = ["azimuth", "elevation", "fov", "margin", "height"] as const;
+  const LIGHT = ["key", "fill", "rim"] as const;
+  /** Le sol est un groupe à lui : c'est ce qui sépare le plus nettement un
+   * preset de catalogue — voiture détourée, rien d'autre — d'un preset de
+   * vitrine, où la flaque et le reflet sont l'essentiel de l'effet. */
+  const GROUND = ["floor", "reflection", "shadow"] as const;
   const DENSITIES: GridDensity[] = ["dense", "comfortable"];
 
   let applying = $state(false);
@@ -311,6 +315,25 @@
               max={GRID_THUMB_RANGES[key].max}
               step={GRID_THUMB_RANGES[key].step}
               display={unit(key, selected.template[key])}
+              hint={t("settings.gridThumbHint_" + key)}
+              disabled={!editable}
+              oninput={(v) => setPresetValue(selected.id, key, v)}
+            />
+          {/each}
+        </div>
+      </section>
+
+      <section class="blk">
+        <div class="blk-h"><span class="blk-t">{t("settings.gridThumbsGround")}</span></div>
+        <div class="blk-b">
+          {#each GROUND as key (key)}
+            <Slider
+              label={t("settings.gridThumb_" + key)}
+              value={selected.template[key]}
+              min={GRID_THUMB_RANGES[key].min}
+              max={GRID_THUMB_RANGES[key].max}
+              step={GRID_THUMB_RANGES[key].step}
+              display={percent(selected.template[key])}
               hint={t("settings.gridThumbHint_" + key)}
               disabled={!editable}
               oninput={(v) => setPresetValue(selected.id, key, v)}

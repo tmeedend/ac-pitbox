@@ -35,6 +35,7 @@ import {
   type GridTemplate,
 } from "./gridThumbs";
 import { gridThumbsOn, gridThumbsReady } from "./gridThumbPrefs.svelte";
+import { applyFloorMirror } from "./components/detail/floorMirror";
 
 /** Taille de rendu (§5.6). 16:9 parce que c'est le rapport des `preview.png`
  * d'Assetto Corsa : la grille restant mixte pour toujours (§7), les deux
@@ -401,7 +402,26 @@ interface Rig {
   fill: ThreeModule.DirectionalLight;
   rim: ThreeModule.DirectionalLight;
   sun: ThreeModule.DirectionalLight;
+  /** La flaque peinte, montée une fois : sa texture est un canevas de 512 px
+   * qu'on ne repeint pas à chaque image. Invisible quand le preset n'a pas de
+   * sol. */
+  pool: ThreeModule.Mesh<ThreeModule.PlaneGeometry, ThreeModule.MeshBasicMaterial>;
+  /** Le receveur d'ombre, toujours là : l'ombre de contact existe même sans
+   * sol visible, et c'est elle qui empêche la voiture de flotter. */
+  shadow: ThreeModule.Mesh<ThreeModule.PlaneGeometry, ThreeModule.ShadowMaterial>;
+  /** Le miroir, monté à la première image qui en demande un. `null` tant
+   * qu'aucun preset ne reflète — c'est une seconde passe de rendu complète,
+   * inutile de la payer pour un catalogue. */
+  mirror: MirrorHandle | null;
+  /** Taille du tampon, pour le calcul de flou du miroir. */
+  width: number;
   load: (url: string) => Promise<ThreeModule.Group>;
+}
+
+interface MirrorHandle {
+  mesh: ThreeModule.Mesh;
+  material: ThreeModule.ShaderMaterial;
+  targetWidth: number;
 }
 
 let engine: Promise<Rig> | null = null;
@@ -463,6 +483,33 @@ async function createRig(width: number, height: number): Promise<Rig> {
     sun.shadow.bias = -0.0015;
     scene.add(sun, sun.target);
 
+    // Les deux plans du sol, montés une fois et repositionnés à chaque voiture.
+    // Leur géométrie est un carré unitaire mis à l'échelle : recréer un
+    // `PlaneGeometry` par vignette allouerait trois cents tampons pour rien.
+    const { poolTexture } = await import("./components/detail/studioFloor");
+    const plane = new THREE.PlaneGeometry(1, 1);
+    const pool = new THREE.Mesh(
+      plane,
+      new THREE.MeshBasicMaterial({
+        map: poolTexture(THREE),
+        transparent: true,
+        depthWrite: false,
+        // Le dégradé est déjà la valeur voulue à l'écran : le faire passer par
+        // le tone mapping l'assombrirait d'un tiers.
+        toneMapped: false,
+      }),
+    );
+    pool.rotation.x = -Math.PI / 2;
+    pool.renderOrder = -2;
+    pool.visible = false;
+    scene.add(pool);
+
+    const shadow = new THREE.Mesh(plane, new THREE.ShadowMaterial({ opacity: 0.35 }));
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.receiveShadow = true;
+    shadow.renderOrder = -1;
+    scene.add(shadow);
+
     const camera = new THREE.PerspectiveCamera(22, width / height, 0.05, 500);
     const loader = new GLTFLoader();
     return {
@@ -474,9 +521,69 @@ async function createRig(width: number, height: number): Promise<Rig> {
       fill,
       rim,
       sun,
+      pool,
+      shadow,
+      mirror: null,
+      width,
       load: async (url: string) => (await loader.loadAsync(url)).scene,
     };
   }
+}
+
+/** Flou et portée du reflet : deux constantes, pas deux curseurs.
+ *
+ * Ce sont les valeurs que l'utilisateur a arrêtées sur l'aperçu de la fiche
+ * (0,5 et 75 %), et les rouvrir ici ferait un écran de treize curseurs pour un
+ * réglage qui décide de peu. Le preset garde la seule commande qui change
+ * vraiment l'image : l'intensité. */
+const MIRROR_BLUR = 5;
+const MIRROR_REACH = 75;
+
+/**
+ * Monte le miroir du sol, à la première image qui en demande un.
+ *
+ * Une **seconde passe de rendu complète** de la scène depuis une caméra
+ * symétrique : c'est la seule façon d'obtenir un reflet, une carte
+ * d'environnement ne reflétant que le studio figé et jamais la voiture (mesuré
+ * au banc, `floorMirror.ts`). Elle double le temps GPU d'une vignette, ce qui
+ * reste négligeable devant la seconde de conversion.
+ */
+async function ensureMirror(rig: Rig): Promise<MirrorHandle> {
+  if (rig.mirror) return rig.mirror;
+  const { Reflector } = await import("three/addons/objects/Reflector.js");
+  const { floorMirrorShader } = await import("./components/detail/floorMirror");
+  const THREE = rig.THREE;
+  const mesh = new Reflector(new THREE.PlaneGeometry(1, 1), {
+    textureWidth: rig.width,
+    textureHeight: Math.round((rig.width * 9) / 16),
+    shader: floorMirrorShader,
+  });
+  const target = mesh.getRenderTarget().texture;
+  // Les mipmaps servent le flou : il lit le niveau que `applyFloorMirror`
+  // choisit, pour que ses 25 prises restent jointives.
+  target.minFilter = THREE.LinearMipmapLinearFilter;
+  target.generateMipmaps = true;
+  mesh.rotation.x = -Math.PI / 2;
+  const material = mesh.material as ThreeModule.ShaderMaterial;
+  material.transparent = true;
+  material.depthWrite = false;
+  // Sous la flaque (-2) et sous l'ombre (-1) : le reflet est le sol, tout le
+  // reste se pose dessus.
+  mesh.renderOrder = -3;
+
+  // Le reflet ne doit montrer **que** la voiture : sans ça, la flaque et
+  // l'ombre se retrouvent dans leur propre reflet et le sol se dédouble.
+  const reflect = mesh.onBeforeRender;
+  mesh.onBeforeRender = function (...args: Parameters<typeof reflect>) {
+    rig.pool.visible = false;
+    rig.shadow.visible = false;
+    reflect.apply(this, args);
+    rig.pool.visible = true;
+    rig.shadow.visible = true;
+  };
+  rig.scene.add(mesh);
+  rig.mirror = { mesh, material, targetWidth: mesh.getRenderTarget().width };
+  return rig.mirror;
 }
 
 /**
@@ -493,28 +600,41 @@ function drawModel(rig: Rig, model: ThreeModule.Group, template: GridTemplate): 
   const center = box.getCenter(new THREE.Vector3());
   const radius = box.getSize(new THREE.Vector3()).length() / 2;
 
-  // Le sol : rien d'autre que l'ombre. Pas de reflet miroir (§5.6) — il exige
-  // un sol visible, donc un fond, et à une centaine de pixels de haut il
-  // consommerait la moitié du cadre.
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(radius * 6, radius * 6),
-    new THREE.ShadowMaterial({ opacity: template.shadow / 100 }),
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.set(center.x, box.min.y, center.z);
-  ground.receiveShadow = true;
-  scene.add(ground);
+  // **Le sol se compose en trois couches**, dans cet ordre de bas en haut : le
+  // reflet (le sol est laqué), la flaque (il y a un sol), l'ombre portée (la
+  // voiture le touche). Un preset de catalogue n'en garde que la troisième et
+  // reste entièrement détouré ; un preset de vitrine les allume toutes, et cuit
+  // alors une part de son fond dans l'image — c'est le prix d'un reflet, qui
+  // n'a rien à moduler sur du transparent.
+  const floorY = box.min.y;
+  const span = radius * 6;
 
-  placeCamera(THREE, camera, box, center, template);
+  rig.shadow.position.set(center.x, floorY + radius / 300, center.z);
+  rig.shadow.scale.set(span, span, 1);
+  rig.shadow.material.opacity = template.shadow / 100;
+
+  rig.pool.visible = template.floor > 0;
+  rig.pool.position.set(center.x, floorY + radius / 400, center.z);
+  rig.pool.scale.set(span, span, 1);
+  rig.pool.material.opacity = template.floor / 100;
+
+  if (rig.mirror) {
+    // Le miroir suit le preset : allumé, il se pose ; éteint, il disparaît sans
+    // être démonté — le remonter coûterait une cible de rendu à chaque bascule.
+    rig.mirror.mesh.visible = template.reflection > 0 && template.floor > 0;
+    rig.mirror.mesh.position.set(center.x, floorY + radius / 500, center.z);
+    rig.mirror.mesh.scale.set(span, span, 1);
+    applyFloorMirror(
+      rig.mirror.material.uniforms,
+      { reflection: template.reflection, reflectionBlur: MIRROR_BLUR, reflectionReach: MIRROR_REACH },
+      rig.mirror.targetWidth,
+    );
+  }
+
+  placeCamera(THREE, camera, box, center, radius, template);
   placeLights(rig, camera, center, radius, template);
 
-  try {
-    renderer.render(scene, camera);
-  } finally {
-    scene.remove(ground);
-    ground.geometry.dispose();
-    ground.material.dispose();
-  }
+  renderer.render(scene, camera);
 }
 
 /** Prépare un modèle à être dessiné : tout ce qui est maillage projette une
@@ -528,6 +648,7 @@ function castShadows(model: ThreeModule.Group): void {
 
 async function render(url: string, template: GridTemplate): Promise<Blob | null> {
   const rig = await ensureEngine();
+  if (template.reflection > 0 && template.floor > 0) await ensureMirror(rig);
   const model = await rig.load(url);
   castShadows(model);
   rig.scene.add(model);
@@ -559,6 +680,7 @@ function placeCamera(
   camera: ThreeModule.PerspectiveCamera,
   box: ThreeModule.Box3,
   center: ThreeModule.Vector3,
+  radius: number,
   template: GridTemplate,
 ): void {
   camera.fov = template.fov;
@@ -579,12 +701,20 @@ function placeCamera(
   const tanV = Math.tan((camera.fov * Math.PI) / 360) / margin;
   const tanH = tanV * camera.aspect;
 
+  // Le point visé monte ou descend avec la hauteur de cadrage : c'est lui qui
+  // décide de la place de la voiture dans le cadre, là où la plongée décide de
+  // ce qu'on voit de son toit. Viser **sous** la voiture la remonte dans
+  // l'image, ce que demande un preset à reflet — le reflet prend la place
+  // libérée en dessous.
+  const target = center.clone();
+  target.y += (radius * template.height) / 100;
+
   let distance = 0;
   const corner = new THREE.Vector3();
   for (const x of [box.min.x, box.max.x]) {
     for (const y of [box.min.y, box.max.y]) {
       for (const z of [box.min.z, box.max.z]) {
-        corner.set(x, y, z).sub(center);
+        corner.set(x, y, z).sub(target);
         const depth = corner.dot(dir);
         distance = Math.max(
           distance,
@@ -595,10 +725,10 @@ function placeCamera(
     }
   }
 
-  camera.position.copy(center).addScaledVector(dir, distance);
+  camera.position.copy(target).addScaledVector(dir, distance);
   camera.near = Math.max(distance / 100, 0.01);
   camera.far = distance * 4;
-  camera.lookAt(center);
+  camera.lookAt(target);
   camera.updateProjectionMatrix();
 }
 
@@ -670,6 +800,10 @@ export interface GridStudio {
   /** Redessine une voiture au gabarit donné et rend une URL d'image. Synchrone
    * côté GPU : c'est ce qui permet de suivre un curseur. */
   draw(car: StudioCar, template: GridTemplate): string;
+  /** Monte ce que ce gabarit demande et que `draw` ne peut pas charger lui-même
+   * — le miroir, dont l'import est asynchrone. À appeler avant de dessiner un
+   * gabarit qu'on n'a pas encore dessiné. */
+  prepare(template: GridTemplate): Promise<void>;
   dispose(): void;
 }
 
@@ -715,6 +849,11 @@ export async function createGridStudio(width: number, height: number): Promise<G
       } finally {
         rig.scene.remove(car.model);
       }
+    },
+    async prepare(template) {
+      // Le miroir se monte hors du dessin : `draw` est synchrone — c'est ce qui
+      // lui permet de suivre un curseur — et un `import()` ne l'est pas.
+      if (template.reflection > 0 && template.floor > 0) await ensureMirror(rig);
     },
     dispose() {
       for (const model of held) dispose(model);

@@ -26,6 +26,7 @@
   import type * as ThreeModule from "three";
   import type { Reflector } from "three/addons/objects/Reflector.js";
   import { applyFloorMirror, floorMirrorShader } from "./floorMirror";
+  import { poolTexture } from "./studioFloor";
 
   let {
     carId,
@@ -1125,7 +1126,7 @@
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(radius * 5, radius * 5),
       new THREE.MeshBasicMaterial({
-        map: groundTexture(THREE),
+        map: poolTexture(THREE),
         transparent: true,
         depthWrite: false,
         // Le dégradé est déjà la valeur voulue à l'écran : le faire passer par
@@ -1345,40 +1346,6 @@
    * Stops are in fractions of the plane's half-width, so changing the plane's
    * size keeps their proportions.
    */
-  function groundTexture(THREE: typeof ThreeModule): ThreeModule.Texture {
-    const size = 512;
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      const middle = size / 2;
-      // Parti de la photo — le fond d'un `preview.jpg` passe de rgb(2,3,5)
-      // dans les coins à rgb(12,13,15) sous la voiture — puis remonté d'un
-      // cran : ici le sol est aussi le seul repère de profondeur, alors que
-      // la photo, elle, montre le décor du showroom autour.
-      const pool = ctx.createRadialGradient(middle, middle, 0, middle, middle, middle);
-      pool.addColorStop(0, "rgba(255,255,255,0.11)");
-      pool.addColorStop(0.45, "rgba(255,255,255,0.066)");
-      pool.addColorStop(0.75, "rgba(255,255,255,0.018)");
-      pool.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = pool;
-      ctx.fillRect(0, 0, size, size);
-
-      // Assombrissement de contact seulement. L'ombre de la voiture, elle, est
-      // désormais **projetée** (voir la lumière directionnelle plus haut) ; ce
-      // dégradé ne fait plus que noircir le dernier centimètre sous la caisse,
-      // là où une carte d'ombre manque toujours de résolution.
-      const contact = ctx.createRadialGradient(middle, middle, 0, middle, middle, middle * 0.34);
-      contact.addColorStop(0, "rgba(0,0,0,0.3)");
-      contact.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = contact;
-      ctx.fillRect(0, 0, size, size);
-    }
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    return texture;
-  }
 
   // Chargement, et rechargement complet à chaque changement de voiture, de
   // skin ou de pilote — les trois décident du `.glb` demandé. `untrack` sur tout le reste : un effet Svelte 5 suit **toute** valeur

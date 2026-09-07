@@ -28,6 +28,9 @@ export interface GridTemplate {
   fill: number;
   rim: number;
   shadow: number;
+  height: number;
+  floor: number;
+  reflection: number;
 }
 
 /** Ce que la grille a déjà pour une voiture, sans rien convertir. */

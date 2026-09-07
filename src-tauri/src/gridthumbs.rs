@@ -64,6 +64,17 @@ pub struct GridTemplate {
     pub rim: i32,
     /// Contact shadow opacity, in percent.
     pub shadow: i32,
+    /// Where the camera looks, as a percentage of the model radius above its
+    /// centre. Negative lifts the car in the frame — which is what a preset
+    /// with a reflection needs, the reflection taking the space below.
+    pub height: i32,
+    /// Pool of light painted on the ground, in percent. Zero means no floor at
+    /// all, and the render then carries nothing but the car.
+    pub floor: i32,
+    /// Mirror reflection on that floor, in percent. It needs the pool: a
+    /// reflection is a modulation of a floor's brightness, and there is nothing
+    /// to modulate on a transparent background.
+    pub reflection: i32,
 }
 
 impl GridTemplate {
@@ -83,6 +94,9 @@ impl GridTemplate {
             self.fill,
             self.rim,
             self.shadow,
+            self.height,
+            self.floor,
+            self.reflection,
         ] {
             hasher.update(value.to_le_bytes());
         }
@@ -322,6 +336,9 @@ mod tests {
             fill: 25,
             rim: 60,
             shadow: 35,
+            height: 0,
+            floor: 0,
+            reflection: 0,
         }
     }
 
@@ -331,7 +348,7 @@ mod tests {
     fn every_template_field_changes_the_entry_name() {
         let base = template();
         let name = entry_stem("v46-abc", &base);
-        let mut variants = vec![base; 8];
+        let mut variants = vec![base; 11];
         variants[0].azimuth += 1;
         variants[1].elevation += 1;
         variants[2].fov += 1;
@@ -340,6 +357,9 @@ mod tests {
         variants[5].fill += 1;
         variants[6].rim += 1;
         variants[7].shadow += 1;
+        variants[8].height += 1;
+        variants[9].floor += 1;
+        variants[10].reflection += 1;
         for variant in variants {
             assert_ne!(
                 name,

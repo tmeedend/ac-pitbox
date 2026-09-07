@@ -43,6 +43,10 @@
   let studio = $state<GridStudio | null>(null);
   let cars = $state<StudioCar[]>([]);
   let images = $state<Record<string, string>>({});
+  /** Le miroir du sol est monté à la demande, et son import est asynchrone :
+   * `draw` étant synchrone — c'est ce qui lui permet de suivre un curseur — il
+   * faut un passage séparé, et de quoi redessiner une fois qu'il est là. */
+  let mirrorReady = $state(false);
   let loading = $state(true);
 
   /**
@@ -136,10 +140,25 @@
   // le mat s'affichait vide, et il fallait choisir un autre preset dans la
   // liste — c'est-à-dire changer `template`, la seule dépendance enregistrée —
   // pour que les voitures apparaissent.
+  // Monte le miroir quand le gabarit en demande un. Se relance à chaque
+  // changement de gabarit, ne fait rien une fois le miroir là — pas de boucle :
+  // `mirrorReady` est lu, donc son écriture redéclenche l'effet, qui sort
+  // aussitôt.
+  $effect(() => {
+    const handle = studio;
+    const wants = template.reflection > 0 && template.floor > 0;
+    const ready = mirrorReady;
+    if (!handle || !wants || ready) return;
+    void handle.prepare($state.snapshot(template)).then(() => (mirrorReady = true));
+  });
+
   $effect(() => {
     const handle = studio;
     const list = cars;
     const t = template;
+    // Lu pour que l'arrivée du miroir redessine : sans cette ligne, le premier
+    // gabarit à reflet s'affiche sans lui.
+    void mirrorReady;
     if (!handle || list.length === 0) return;
     const next: Record<string, string> = {};
     for (const car of list) next[car.id] = handle.draw(car, t);

@@ -84,6 +84,21 @@ export const GRID_THUMB_RANGES = {
   rim: { min: 0, max: 200, step: 5, default: 60 },
   /** Opacité de l'ombre de contact. Sans elle la voiture flotte. */
   shadow: { min: 0, max: 100, step: 5, default: 35 },
+  /** Où la caméra vise, en pourcentage du rayon au-dessus du centre du modèle.
+   * **Négatif remonte la voiture dans le cadre** — ce dont un preset à reflet a
+   * besoin, le reflet prenant la place en dessous. Zéro vise le centre, ce que
+   * fait un catalogue : la voiture au milieu, rien autour. */
+  height: { min: -40, max: 40, step: 1, default: 0 },
+  /** Flaque de lumière peinte au sol. **Zéro retire le sol entièrement**, et
+   * l'image ne porte alors que la voiture — c'est ce qui garde une vignette de
+   * catalogue parfaitement détourée, donc posable sur n'importe quel fond. */
+  floor: { min: 0, max: 200, step: 5, default: 0 },
+  /** Reflet de la voiture sur ce sol. **Il exige la flaque** : un reflet est
+   * une modulation de la luminosité d'un sol, et il n'y a rien à moduler sur du
+   * transparent. C'est la raison pour laquelle un preset qui reflète cuit une
+   * part de son fond dans l'image, là où un preset de catalogue n'en cuit
+   * aucune. */
+  reflection: { min: 0, max: 100, step: 5, default: 0 },
 } as const satisfies Record<keyof GridTemplate, { min: number; max: number; step: number; default: number }>;
 
 type TemplateKey = keyof typeof GRID_THUMB_RANGES;
@@ -131,6 +146,9 @@ function template(read: (key: TemplateKey) => number): GridTemplate {
     fill: read("fill"),
     rim: read("rim"),
     shadow: read("shadow"),
+    height: read("height"),
+    floor: read("floor"),
+    reflection: read("reflection"),
   };
 }
 
@@ -181,6 +199,14 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       fill: 15,
       rim: 140,
       shadow: 45,
+      // La voiture remonte dans le cadre pour laisser la place au reflet, et
+      // le sol arrive : flaque de lumière, puis reflet court dessus. C'est ce
+      // qui sépare une photo de studio d'un détourage — et c'est aussi ce qui
+      // fait que cette vignette-là n'est plus entièrement transparente, donc
+      // qu'elle veut le mat sombre ci-dessous sous peine de soucoupe.
+      height: -12,
+      floor: 85,
+      reflection: 55,
     },
     // Le fond quasi noir des previews d'Assetto Corsa, reproduit là où il
     // s'écrit chez nous : dans la carte.
