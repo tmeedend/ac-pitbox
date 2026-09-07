@@ -15,6 +15,7 @@
   import ToastStack from "./ToastStack.svelte";
   import ControllerToast from "./ControllerToast.svelte";
   import GridThumbToast from "./GridThumbToast.svelte";
+  import { PAUSE_SESSION, nudgeGridThumbs, resumeGridThumbs } from "$lib/gridThumbs.svelte";
   import PrefsToast from "./PrefsToast.svelte";
   import BulkToasts from "./BulkToasts.svelte";
   import TitleBar from "./TitleBar.svelte";
@@ -71,6 +72,19 @@
   // comme le glisser-déposer — un lot lancé depuis la bibliothèque doit rester
   // visible même si on change d'écran pendant.
   onMount(() => initBulkProgress());
+
+  // **Le retour dans l'app lève la pause du lancement.** On ne sait pas voir la
+  // fin d'une course — le jeu est un autre processus, et guetter sa fermeture
+  // demanderait de le surveiller pour un gain nul. On sait voir quelqu'un qui
+  // revient : la fenêtre reprend le focus, la génération repart.
+  onMount(() => {
+    const onFocus = () => {
+      resumeGridThumbs(PAUSE_SESSION);
+      nudgeGridThumbs();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  });
 
   // Navigation manette dans toute l'app (croix/stick = déplace le focus,
   // A/Croix = valide, B/Rond = ferme la fiche pleine page). Un seul scrutin

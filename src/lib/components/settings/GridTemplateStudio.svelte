@@ -18,7 +18,14 @@
   // six conversions, soit six secondes par image.
   import { listLibrary, previewSrc, type ModCard } from "$lib/library";
   import { nav } from "$lib/nav.svelte";
-  import { createGridStudio, pauseGridThumbs, resumeGridThumbs, type GridStudio, type StudioCar } from "$lib/gridThumbs.svelte";
+  import {
+    PAUSE_STUDIO,
+    createGridStudio,
+    pauseGridThumbs,
+    resumeGridThumbs,
+    type GridStudio,
+    type StudioCar,
+  } from "$lib/gridThumbs.svelte";
   import type { GridTemplate } from "$lib/gridThumbs";
   import type { GridMat } from "$lib/gridThumbPrefs.svelte";
   import { t } from "$lib/i18n/index.svelte";
@@ -29,11 +36,21 @@
   // clair du catalogue reviendrait à le juger sur ce qu'il ne sera pas.
   const { template, mat }: { template: GridTemplate; mat: GridMat } = $props();
 
-  /** Taille de rendu de l'aperçu. Bien plus petit que les 1024×576 de sortie :
-   * six cases dans une colonne d'écran de réglages, et il faut pouvoir en
-   * redessiner six par mouvement de curseur. */
-  const W = 384;
-  const H = 216;
+  /**
+   * Taille de rendu de l'aperçu.
+   *
+   * **Relevée de 384 à 768** après un constat d'usage : à 384, notre image
+   * était *agrandie* pour tenir dans sa case pendant que la `preview.png`
+   * d'origine, elle, était réduite depuis 1022 px. La comparaison accusait donc
+   * notre rendu d'un flou et d'un crénelage qui n'étaient que ceux de l'aperçu,
+   * pas ceux du fichier produit. Une comparaison doit être juste avant d'être
+   * rapide.
+   *
+   * Six cases à 768×432 restent quelques millisecondes par curseur bougé — le
+   * coût est dans le chargement des modèles, qui n'a pas changé.
+   */
+  const W = 768;
+  const H = 432;
 
   /** Combien de voitures dans l'échantillon. Six, comme la spec — assez pour
    * voir un réglage rater une silhouette, assez peu pour tenir à l'écran. */
@@ -108,7 +125,7 @@
     // La file est suspendue le temps de l'aperçu : ses conversions et
     // celles-ci se disputeraient le brouillon et le processeur, et le §6.3 dit
     // que manipuler les réglages ne régénère rien.
-    pauseGridThumbs();
+    pauseGridThumbs(PAUSE_STUDIO);
     void (async () => {
       try {
         const list = await listLibrary().catch(() => [] as ModCard[]);
@@ -143,7 +160,7 @@
       alive = false;
       studio?.dispose();
       studio = null;
-      resumeGridThumbs();
+      resumeGridThumbs(PAUSE_STUDIO);
     };
   });
 

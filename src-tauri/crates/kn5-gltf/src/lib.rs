@@ -77,6 +77,38 @@ pub struct DriverRigSource {
 
 /// Everything the conversion produced, alongside the numbers the caller needs
 /// to report — the Tauri command answers with these (§7.1) and `kn5-tool`
+/// Exécute un travail de conversion sur un pool **restreint**, pour laisser
+/// des cœurs à l'interface.
+///
+/// La conversion sature naturellement toutes les unités de calcul : le
+/// transcodage des textures est un `par_iter` sur le pool global de rayon, et
+/// c'est ce qu'on veut quand quelqu'un attend un aperçu devant son écran. C'est
+/// exactement ce qu'on ne veut pas quand trois cents vignettes se produisent en
+/// arrière-plan pendant qu'on se sert de l'app : la machine était prise en
+/// entier, et l'interface saccadait — signalé sur une grosse machine, où c'est
+/// d'autant plus net que les cœurs sont nombreux.
+///
+/// La moitié des cœurs, donc, et jamais moins d'un. Un pool à part plutôt qu'un
+/// réglage du pool global : celui-ci sert aussi l'aperçu interactif, qui doit
+/// continuer de tout prendre.
+pub fn with_background_pool<T: Send>(work: impl FnOnce() -> T + Send) -> T {
+    static POOL: std::sync::OnceLock<Option<rayon::ThreadPool>> = std::sync::OnceLock::new();
+    let pool = POOL.get_or_init(|| {
+        let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+        rayon::ThreadPoolBuilder::new()
+            .num_threads((cores / 2).max(1))
+            .thread_name(|i| format!("pitbox-bg-{i}"))
+            .build()
+            .ok()
+    });
+    // Pool indisponible : on convertit sur le pool global plutôt que de ne rien
+    // faire. Une interface qui saccade vaut mieux qu'une vignette qui manque.
+    match pool {
+        Some(pool) => pool.install(work),
+        None => work(),
+    }
+}
+
 /// prints them.
 pub struct Conversion {
     /// Le document et ses données. Sa forme dépend de `ConvertOptions::layout` :

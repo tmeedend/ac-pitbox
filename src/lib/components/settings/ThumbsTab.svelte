@@ -62,7 +62,7 @@
   /** Le sol est un groupe à lui : c'est ce qui sépare le plus nettement un
    * preset de catalogue — voiture détourée, rien d'autre — d'un preset de
    * vitrine, où la flaque et le reflet sont l'essentiel de l'effet. */
-  const GROUND = ["floor", "reflection", "shadow"] as const;
+  const GROUND = ["floor", "reflection", "reflectionBlur", "shadow"] as const;
   const DENSITIES: GridDensity[] = ["dense", "comfortable"];
 
   let applying = $state(false);
@@ -180,6 +180,11 @@
 
   function degrees(value: number): string {
     return value.toLocaleString(i18n.locale) + "°";
+  }
+  /** Le flou se règle au dixième : la mécanique travaille sur des entiers, mais
+   * un dixième se voit à l'œil. */
+  function tenths(value: number): string {
+    return (value / 10).toLocaleString(i18n.locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   }
   function percent(value: number): string {
     return value.toLocaleString(i18n.locale) + " %";
@@ -349,7 +354,7 @@
               min={GRID_THUMB_RANGES[key].min}
               max={GRID_THUMB_RANGES[key].max}
               step={GRID_THUMB_RANGES[key].step}
-              display={percent(selected.template[key])}
+              display={key === "reflectionBlur" ? tenths(selected.template[key]) : percent(selected.template[key])}
               hint={t("settings.gridThumbHint_" + key)}
               disabled={!editable}
               oninput={(v) => setPresetValue(selected.id, key, v)}

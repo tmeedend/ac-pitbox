@@ -31,6 +31,9 @@ export interface GridTemplate {
   height: number;
   floor: number;
   reflection: number;
+  /** Flou du reflet, en **dixièmes** (5 = 0,5). C'est lui qui sépare un sol
+   * laqué d'un sol mouillé de jeu vidéo. */
+  reflectionBlur: number;
   /** Fond cuit dans l'image, en pourcentage. Zéro laisse le cadre transparent —
    * la carte possède le fond, la règle sur laquelle tout le reste repose. Au-
    * dessus, le rendu porte le sien, seule façon qu'une vignette régénérée soit

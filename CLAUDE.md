@@ -498,7 +498,17 @@ laisser pourrir ici.
          gabarit… mais rien du code qui dessine : sans cette version, une image
          fausse reste servie pour toujours, parfaitement valide au regard de
          tout ce que son nom sait vérifier. Vécu au premier bug de rendu.
-      8. **Un fond cuit rend le contrôle du vide inopérant** : l'image est
+      8. **La génération est un travail de fond, et ça se paie en cœurs.**
+         `kn5_gltf::with_background_pool` la borne à la moitié des unités de
+         calcul ; sans ça la machine est prise en entier et l'interface saccade
+         — d'autant plus visible sur une grosse machine. La file rend aussi la
+         main 16 ms entre deux voitures (rendu et écriture du PNG sont sur le
+         fil principal), et elle **se suspend au lancement d'une session**,
+         jusqu'au retour du focus dans l'app : on ne sait pas voir la fin d'une
+         course, on sait voir quelqu'un qui revient. Les pauses sont un
+         **ensemble de raisons** et non un booléen — fermer l'atelier ne doit
+         pas relancer la génération pendant que le jeu tourne.
+      9. **Un fond cuit rend le contrôle du vide inopérant** : l'image est
          opaque partout, donc « rien n'a été dessiné » ressemble à « tout va
          bien ». D'où le troisième critère de `checkPlausible`, l'écart de
          luminance — un fond seul est un dégradé très doux, une voiture y ajoute

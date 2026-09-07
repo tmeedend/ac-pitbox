@@ -261,6 +261,8 @@
     "gridThumbHint_floor": "À zéro, la vignette ne porte que la voiture, détourée. Au-dessus, elle pose un sol sous elle.",
     "gridThumb_reflection": "Reflet",
     "gridThumbHint_reflection": "Demande une flaque : un reflet a besoin d'un sol pour s'y poser.",
+    "gridThumb_reflectionBlur": "Flou du reflet",
+    "gridThumbHint_reflectionBlur": "Net, le sol paraît mouillé ; flouté, il paraît laqué.",
     "gridStudioCompare": "Comparer à l'image d'origine",
     "gridStudioNoOriginal": "Pas d'image",
     "gridThumb_background": "Fond dans l'image",

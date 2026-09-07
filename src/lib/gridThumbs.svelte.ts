@@ -37,11 +37,25 @@ import {
 import { gridThumbsOn, gridThumbsReady } from "./gridThumbPrefs.svelte";
 import { applyFloorMirror } from "./components/detail/floorMirror";
 
-/** Taille de rendu (§5.6). 16:9 parce que c'est le rapport des `preview.png`
+/** Taille de sortie (§5.6). 16:9 parce que c'est le rapport des `preview.png`
  * d'Assetto Corsa : la grille restant mixte pour toujours (§7), les deux
  * sources doivent occuper le même cadre sans bande noire ni recadrage. */
 const WIDTH = 1024;
 const HEIGHT = 576;
+
+/**
+ * Facteur de suréchantillonnage : on rend deux fois plus grand, puis on réduit.
+ *
+ * **Le MSAA ne suffit pas ici**, et c'est le même constat que sur l'aperçu de
+ * la fiche : il échantillonne la *couverture* des triangles mais n'ombre qu'une
+ * fois par texel, donc il ne peut rien contre un reflet spéculaire plus fin
+ * qu'un pixel — exactement ce qui crénèle une arête de toit ou une jante. Rendre
+ * en 2048×1152 puis réduire ombre quatre fois plus de points et règle les deux.
+ *
+ * Le coût est payé une fois par vignette, en arrière-plan, sur une image qui
+ * sera servie des milliers de fois : c'est le bon endroit pour dépenser.
+ */
+const SUPERSAMPLE = 2;
 
 /** Intensité de la lumière principale à 100 %, en unités three.js. Le gabarit
  * exprime tout en pourcentage d'elle. */
@@ -123,20 +137,37 @@ function withScratch<T>(work: () => Promise<T>): Promise<T> {
   return next;
 }
 
-/** La file est-elle suspendue ? L'aperçu de l'écran de réglages la met en
- * pause : ses six conversions et le rendu qu'on manipule ne doivent pas se
- * disputer le brouillon ni le processeur (§6.3 — manipuler les réglages ne
- * régénère rien). */
-let paused = false;
+/**
+ * Pourquoi la file est suspendue, et par qui.
+ *
+ * **Un ensemble de raisons plutôt qu'un booléen**, parce qu'elles se
+ * superposent et ne se lèvent pas ensemble : l'aperçu de l'écran de réglages
+ * suspend le temps qu'on manipule ses curseurs, une session lancée suspend
+ * jusqu'au retour dans l'app. Avec un booléen, fermer l'écran de réglages
+ * relancerait la génération pendant que le jeu tourne.
+ */
+const pauses = new Set<string>();
 
-export function pauseGridThumbs(): void {
-  paused = true;
+/** L'aperçu de réglages : ses six conversions et le rendu qu'on manipule ne
+ * doivent pas se disputer le brouillon ni le processeur (§6.3). */
+export const PAUSE_STUDIO = "studio";
+/** Une session lancée. **La demande la plus forte de l'utilisateur** : le jeu
+ * démarre, il veut toute la machine, et trois cents conversions en arrière-plan
+ * sont exactement ce qu'il ne faut pas. Levée au retour dans l'app, pas à la
+ * fin d'une course qu'on ne sait pas voir. */
+export const PAUSE_SESSION = "session";
+
+export function pauseGridThumbs(reason: string): void {
+  pauses.add(reason);
 }
 
-export function resumeGridThumbs(): void {
-  if (!paused) return;
-  paused = false;
+export function resumeGridThumbs(reason: string): void {
+  if (!pauses.delete(reason) || pauses.size > 0) return;
   void drain();
+}
+
+export function gridThumbsPaused(): boolean {
+  return pauses.size > 0;
 }
 
 /**
@@ -185,6 +216,12 @@ export function gridThumbEta(): number | null {
 export function cancelGridThumbs(): void {
   queue.length = 0;
   progress.cancelling = true;
+}
+
+/** Reprend là où on en était, si rien ne suspend plus. Appelé au retour dans
+ * l'app : ce qui reste en file repart, ce qui a été fait est gardé. */
+export function nudgeGridThumbs(): void {
+  if (pauses.size === 0) void drain();
 }
 
 /** Ferme le rapport de fin. Il ne part jamais tout seul : cinq minutes de
@@ -291,7 +328,7 @@ export async function regenerateGridThumb(
 }
 
 async function drain(): Promise<void> {
-  if (running || paused) return;
+  if (running || pauses.size > 0) return;
   running = true;
   progress.running = true;
   // Les réglages enregistrés avant la première vignette : produire trois cents
@@ -300,7 +337,7 @@ async function drain(): Promise<void> {
   await gridThumbsReady();
   try {
     let job = queue.shift();
-    while (job && !paused) {
+    while (job && pauses.size === 0) {
       progress.current = job.name;
       try {
         cache[job.key] = await produce(job);
@@ -313,6 +350,11 @@ async function drain(): Promise<void> {
         delete cache[job.key];
         progress.total -= 1;
       }
+      // **Une respiration entre deux voitures.** Le rendu et l'écriture du PNG
+      // se font sur le fil principal ; enchaîner sans rendre la main laisse
+      // l'interface hachée même quand la conversion, elle, est bornée. Un
+      // soixantième de seconde suffit à laisser passer une image.
+      await new Promise((resolve) => setTimeout(resolve, 16));
       job = queue.shift();
     }
   } finally {
@@ -433,8 +475,27 @@ let engine: Promise<Rig> | null = null;
 
 /** Le banc de la file, monté une fois pour la session. */
 function ensureEngine(): Promise<Rig> {
-  engine ??= createRig(WIDTH, HEIGHT);
+  engine ??= createRig(WIDTH * SUPERSAMPLE, HEIGHT * SUPERSAMPLE);
   return engine;
+}
+
+/**
+ * Réduit le rendu à la taille de sortie.
+ *
+ * `drawImage` avec le lissage de qualité : c'est le filtre du navigateur, et il
+ * est bien meilleur qu'une réduction naïve — c'est tout l'intérêt d'avoir rendu
+ * plus grand.
+ */
+function downsample(source: HTMLCanvasElement): HTMLCanvasElement {
+  const out = document.createElement("canvas");
+  out.width = WIDTH;
+  out.height = HEIGHT;
+  const ctx = out.getContext("2d");
+  if (!ctx) return source;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(source, 0, 0, WIDTH, HEIGHT);
+  return out;
 }
 
 async function createRig(width: number, height: number): Promise<Rig> {
@@ -537,13 +598,12 @@ async function createRig(width: number, height: number): Promise<Rig> {
   }
 }
 
-/** Flou et portée du reflet : deux constantes, pas deux curseurs.
+/** Portée du reflet : une constante, pas un curseur.
  *
- * Ce sont les valeurs que l'utilisateur a arrêtées sur l'aperçu de la fiche
- * (0,5 et 75 %), et les rouvrir ici ferait un écran de treize curseurs pour un
- * réglage qui décide de peu. Le preset garde la seule commande qui change
- * vraiment l'image : l'intensité. */
-const MIRROR_BLUR = 5;
+ * C'est la valeur arrêtée sur l'aperçu de la fiche (75 %), et la rouvrir ici
+ * ferait un curseur de plus pour un réglage qui décide de peu. Le **flou**, en
+ * revanche, est passé dans le gabarit : c'est lui qui sépare un sol laqué d'un
+ * sol mouillé, et c'est ce qu'on vient régler sur un preset de vitrine. */
 const MIRROR_REACH = 75;
 
 /**
@@ -633,7 +693,7 @@ function drawModel(rig: Rig, model: ThreeModule.Group, template: GridTemplate): 
     rig.mirror.mesh.scale.set(span, span, 1);
     applyFloorMirror(
       rig.mirror.material.uniforms,
-      { reflection: template.reflection, reflectionBlur: MIRROR_BLUR, reflectionReach: MIRROR_REACH },
+      { reflection: template.reflection, reflectionBlur: template.reflectionBlur, reflectionReach: MIRROR_REACH },
       rig.mirror.targetWidth,
     );
   }
@@ -736,7 +796,7 @@ async function render(url: string, template: GridTemplate): Promise<Blob | null>
   try {
     drawModel(rig, model, template);
     checkPlausible(rig.renderer.domElement);
-    png = await toPng(rig.renderer.domElement);
+    png = await toPng(downsample(rig.renderer.domElement));
   } finally {
     rig.scene.remove(model);
     dispose(model);

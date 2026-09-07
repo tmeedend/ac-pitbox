@@ -1,6 +1,8 @@
 // Pont typé vers le lancement de session (L4, §8).
 import { invoke } from "@tauri-apps/api/core";
 
+import { PAUSE_SESSION, pauseGridThumbs } from "./gridThumbs.svelte";
+
 export type SessionType = "practice" | "hotlap" | "race" | "trackday";
 
 /** Départ en Practice (§8.4) : "pit"/"track"/"hotlap" → `StartType` du preset
@@ -182,7 +184,17 @@ export function trackSun(
   return invoke<TrackSun | null>("track_sun", { trackId, layout, seasonDate });
 }
 
+/**
+ * Lance la session, et **suspend la génération des vignettes** le temps que le
+ * jeu tourne.
+ *
+ * Ici plutôt que dans l'écran qui appelle : c'est le lancement lui-même qui
+ * doit rendre la machine, quel que soit le bouton qui l'a déclenché. La pause
+ * est levée au retour dans Pit Box (`AppShell`) — on ne sait pas voir la fin
+ * d'une course, on sait voir quelqu'un qui revient.
+ */
 export function launchSession(setup: RaceSetup): Promise<void> {
+  pauseGridThumbs(PAUSE_SESSION);
   return invoke<void>("launch_session", { setup });
 }
 

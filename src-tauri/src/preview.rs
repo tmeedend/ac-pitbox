@@ -714,7 +714,11 @@ pub fn prepare_scratch(
         .lock()
         .map_err(|_| "verrou d'aperçu empoisonné".to_string())?;
     let dir = reset_scratch(app)?;
-    let conversion = convert_car(app, &sources, None, false)?;
+    // **Sur un pool restreint** : trois cents vignettes qui prennent la machine
+    // en entier rendent l'app inutilisable pendant qu'elles se produisent, et
+    // la génération est explicitement un travail de fond (§5.4). L'aperçu de la
+    // fiche, lui, garde tous les cœurs — quelqu'un l'attend.
+    let conversion = kn5_gltf::with_background_pool(|| convert_car(app, &sources, None, false))?;
     write_entry(&dir, &stem, &conversion)?;
     Ok(format!("http://carpreview.localhost/{SCRATCH}/{stem}.gltf"))
 }

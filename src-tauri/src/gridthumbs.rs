@@ -75,6 +75,10 @@ pub struct GridTemplate {
     /// reflection is a modulation of a floor's brightness, and there is nothing
     /// to modulate on a transparent background.
     pub reflection: i32,
+    /// Blur of that reflection, in tenths. It is what separates a floor read as
+    /// lacquered from one read as wet — the single most visible knob of a
+    /// showcase preset once the reflection is there at all.
+    pub reflection_blur: i32,
     /// Backdrop baked into the image, in percent. Zero leaves the frame
     /// transparent — the card owns the background, which is the rule the whole
     /// design rests on. Above zero the render carries its own, which is the
@@ -120,6 +124,7 @@ impl GridTemplate {
             self.height,
             self.floor,
             self.reflection,
+            self.reflection_blur,
             self.background,
             self.renderer,
         ] {
@@ -376,6 +381,7 @@ mod tests {
             height: 0,
             floor: 0,
             reflection: 0,
+            reflection_blur: 5,
             background: 0,
             renderer: 1,
             mat_hi: "#2b2d33".to_string(),
@@ -389,7 +395,7 @@ mod tests {
     fn every_template_field_changes_the_entry_name() {
         let base = template();
         let name = entry_stem("v46-abc", &base);
-        let mut variants = vec![base.clone(); 13];
+        let mut variants = vec![base.clone(); 14];
         variants[0].azimuth += 1;
         variants[1].elevation += 1;
         variants[2].fov += 1;
@@ -403,6 +409,7 @@ mod tests {
         variants[10].reflection += 1;
         variants[11].background += 1;
         variants[12].renderer += 1;
+        variants[13].reflection_blur += 1;
         for variant in variants {
             assert_ne!(
                 name,

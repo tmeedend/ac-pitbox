@@ -115,6 +115,14 @@ export const GRID_THUMB_RANGES = {
    * part de son fond dans l'image, là où un preset de catalogue n'en cuit
    * aucune. */
   reflection: { min: 0, max: 100, step: 5, default: 0 },
+  /** Flou du reflet, en **dixièmes** — la mécanique de ce module travaille sur
+   * des entiers, et un dixième se voit à l'œil. C'est ce qui sépare le sol de
+   * salon du sol mouillé de jeu vidéo, et c'est le réglage le plus visible d'un
+   * preset de vitrine une fois le reflet allumé. Plafonné à 4 : au-delà, le
+   * reflet n'est plus qu'une tache, et la plage haute ne servait qu'à rendre le
+   * curseur imprécis là où il compte (même constat que sur l'aperçu de la
+   * fiche). */
+  reflectionBlur: { min: 0, max: 40, step: 1, default: 5 },
   /** Fond cuit dans l'image. **Zéro laisse la vignette détourée** et c'est le
    * cas normal : la carte fournit le fond, donc il suit le thème sans jamais
    * demander de régénérer. Au-dessus, le rendu porte son propre fond — la seule
@@ -160,13 +168,16 @@ export const TEMPLATE_KEYS = Object.keys(GRID_THUMB_RANGES) as TemplateKey[];
  *
  * Historique, parce que c'est ce qui donne la règle :
  *  - **1** — première version.
+ *  - **3** — rendu **suréchantillonné** : 2048×1152 réduit en 1024×576. Le MSAA
+ *    seul laissait du crénelage sur les arêtes claires et les jantes, parce
+ *    qu'il échantillonne la couverture des triangles et non l'ombrage.
  *  - **2** — le fond cuit était un plan transparent accroché à la caméra, donc
  *    dessiné *après* la voiture (three.js rend toute la liste opaque avant la
  *    liste transparente, et `renderOrder` ne trie qu'à l'intérieur d'une
  *    liste). Toutes les vignettes du preset Officiel sortaient noires. Il passe
  *    par `scene.background`, qui échappe à ce classement.
  */
-export const RENDERER_VERSION = 2;
+export const RENDERER_VERSION = 3;
 
 /** Le fond de carte d'un preset : les deux bouts du dégradé radial du mat
  * (§2.2). Clair au centre pour décoller la voiture, sombre aux bords pour
@@ -212,6 +223,7 @@ function template(read: (key: TemplateKey) => number): GridTemplateValues {
     height: read("height"),
     floor: read("floor"),
     reflection: read("reflection"),
+    reflectionBlur: read("reflectionBlur"),
     background: read("background"),
   };
 }
@@ -288,6 +300,7 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       height: -12,
       floor: 85,
       reflection: 55,
+      reflectionBlur: 5,
     },
     // Le fond quasi noir des previews d'Assetto Corsa, reproduit là où il
     // s'écrit chez nous : dans la carte.
@@ -355,6 +368,7 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       // les images du jeu éclairent le sol, elles n'y mirent pas la voiture.
       floor: 100,
       reflection: 0,
+      reflectionBlur: 5,
       background: 100,
     },
     // Quasi noir et **quasi plat** : mesuré, le fond des images du jeu vaut 4

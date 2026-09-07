@@ -261,6 +261,8 @@
     "gridThumbHint_floor": "At zero the thumbnail carries nothing but the car, cut out. Above it, a floor appears beneath it.",
     "gridThumb_reflection": "Reflection",
     "gridThumbHint_reflection": "Needs a pool of light: a reflection has to land on a floor.",
+    "gridThumb_reflectionBlur": "Reflection blur",
+    "gridThumbHint_reflectionBlur": "Sharp, the floor reads as wet; blurred, it reads as lacquered.",
     "gridStudioCompare": "Compare with the original image",
     "gridStudioNoOriginal": "No image",
     "gridThumb_background": "Background in the image",
