@@ -1,5 +1,6 @@
 // Pont typé vers le lancement de session (L4, §8).
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 import { PAUSE_SESSION, pauseGridThumbs } from "./gridThumbs.svelte";
 
@@ -185,17 +186,35 @@ export function trackSun(
 }
 
 /**
- * Lance la session, et **suspend la génération des vignettes** le temps que le
- * jeu tourne.
+ * Lance la session, et **suspend la génération des vignettes** dès le clic.
  *
  * Ici plutôt que dans l'écran qui appelle : c'est le lancement lui-même qui
- * doit rendre la machine, quel que soit le bouton qui l'a déclenché. La pause
- * est levée au retour dans Pit Box (`AppShell`) — on ne sait pas voir la fin
- * d'une course, on sait voir quelqu'un qui revient.
+ * doit rendre la machine, quel que soit le bouton qui l'a déclenché.
+ *
+ * **Dès le clic, et non à l'apparition du process** — c'est la différence avec
+ * la musique, qui, elle, continue de jouer pendant tout l'écran de chargement
+ * et ne se coupe qu'une fois la voiture pilotable (`music/watch.rs`). Les deux
+ * n'ont pas le même besoin : la musique accompagne l'attente, alors que trois
+ * cents conversions pendant qu'Assetto Corsa charge sont exactement ce qui
+ * rallonge cette attente.
+ *
+ * La reprise, elle, est bien celle de la musique : voir `onAcRunning`.
  */
 export function launchSession(setup: RaceSetup): Promise<void> {
   pauseGridThumbs(PAUSE_SESSION);
   return invoke<void>("launch_session", { setup });
+}
+
+/**
+ * S'abonne à la présence du process d'Assetto Corsa. Renvoie la fonction de
+ * désabonnement.
+ *
+ * **Le fil qui l'annonce existait déjà** : c'est celui qui coupe et reprend la
+ * musique de Big Picture (`music/watch.rs`, sondage de `acs.exe` toutes les
+ * 500 ms). Le redécouvrir aurait été un second sondage pour la même question.
+ */
+export function onAcRunning(handler: (running: boolean) => void): Promise<() => void> {
+  return listen<boolean>("ac://running", (event) => handler(event.payload));
 }
 
 /** Ouvre Content Manager sans argument (§12bis.5). */

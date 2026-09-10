@@ -143,7 +143,7 @@ function withScratch<T>(work: () => Promise<T>): Promise<T> {
  * **Un ensemble de raisons plutôt qu'un booléen**, parce qu'elles se
  * superposent et ne se lèvent pas ensemble : l'aperçu de l'écran de réglages
  * suspend le temps qu'on manipule ses curseurs, une session lancée suspend
- * jusqu'au retour dans l'app. Avec un booléen, fermer l'écran de réglages
+ * jusqu'à la fermeture du jeu. Avec un booléen, fermer l'écran de réglages
  * relancerait la génération pendant que le jeu tourne.
  */
 const pauses = new Set<string>();
@@ -151,10 +151,21 @@ const pauses = new Set<string>();
 /** L'aperçu de réglages : ses six conversions et le rendu qu'on manipule ne
  * doivent pas se disputer le brouillon ni le processeur (§6.3). */
 export const PAUSE_STUDIO = "studio";
-/** Une session lancée. **La demande la plus forte de l'utilisateur** : le jeu
+/**
+ * Une session lancée. **La demande la plus forte de l'utilisateur** : le jeu
  * démarre, il veut toute la machine, et trois cents conversions en arrière-plan
- * sont exactement ce qu'il ne faut pas. Levée au retour dans l'app, pas à la
- * fin d'une course qu'on ne sait pas voir. */
+ * sont exactement ce qu'il ne faut pas.
+ *
+ * Posée **dès le clic** sur « Démarrer » (`launchSession`) et levée à la
+ * **fermeture du jeu**, que l'app sait voir : le fil qui coupe et reprend la
+ * musique de Big Picture surveille déjà le process d'Assetto Corsa
+ * (`music/watch.rs`), et `AppShell` s'abonne à ce qu'il annonce.
+ *
+ * Les deux bouts ne suivent pas le même signal, et c'est voulu : la musique
+ * continue pendant tout l'écran de chargement et ne se coupe qu'une fois la
+ * voiture pilotable, alors que les conversions doivent cesser tout de suite —
+ * elles rallongeraient précisément ce chargement.
+ */
 export const PAUSE_SESSION = "session";
 
 export function pauseGridThumbs(reason: string): void {
@@ -218,11 +229,6 @@ export function cancelGridThumbs(): void {
   progress.cancelling = true;
 }
 
-/** Reprend là où on en était, si rien ne suspend plus. Appelé au retour dans
- * l'app : ce qui reste en file repart, ce qui a été fait est gardé. */
-export function nudgeGridThumbs(): void {
-  if (pauses.size === 0) void drain();
-}
 
 /** Ferme le rapport de fin. Il ne part jamais tout seul : cinq minutes de
  * travail méritent qu'on ait le temps de lire ce qu'elles ont donné. */

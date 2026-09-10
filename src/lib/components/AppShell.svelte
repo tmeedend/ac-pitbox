@@ -15,7 +15,8 @@
   import ToastStack from "./ToastStack.svelte";
   import ControllerToast from "./ControllerToast.svelte";
   import GridThumbToast from "./GridThumbToast.svelte";
-  import { PAUSE_SESSION, nudgeGridThumbs, resumeGridThumbs } from "$lib/gridThumbs.svelte";
+  import { PAUSE_SESSION, pauseGridThumbs, resumeGridThumbs } from "$lib/gridThumbs.svelte";
+  import { onAcRunning } from "$lib/launch";
   import PrefsToast from "./PrefsToast.svelte";
   import BulkToasts from "./BulkToasts.svelte";
   import TitleBar from "./TitleBar.svelte";
@@ -73,17 +74,24 @@
   // visible même si on change d'écran pendant.
   onMount(() => initBulkProgress());
 
-  // **Le retour dans l'app lève la pause du lancement.** On ne sait pas voir la
-  // fin d'une course — le jeu est un autre processus, et guetter sa fermeture
-  // demanderait de le surveiller pour un gain nul. On sait voir quelqu'un qui
-  // revient : la fenêtre reprend le focus, la génération repart.
+  // **La fin de la session lève la pause de la génération.**
+  //
+  // Premier essai : le retour du focus dans la fenêtre, au motif qu'on ne
+  // saurait pas voir la fin d'une course. On sait très bien — l'app surveille
+  // déjà le process d'Assetto Corsa depuis le début, pour couper et reprendre
+  // la musique de Big Picture. Le focus était donc à la fois moins juste (une
+  // fenêtre reprise en alt-tab pendant une course aurait relancé les trois
+  // cents conversions) et redondant.
+  //
+  // Le process, et non le statut « en piste » : ce dernier retombe à chaque
+  // retour aux stands. C'est la fermeture du jeu qui rend la machine.
   onMount(() => {
-    const onFocus = () => {
-      resumeGridThumbs(PAUSE_SESSION);
-      nudgeGridThumbs();
-    };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+    let stop: (() => void) | null = null;
+    void onAcRunning((running) => {
+      if (running) pauseGridThumbs(PAUSE_SESSION);
+      else resumeGridThumbs(PAUSE_SESSION);
+    }).then((off) => (stop = off));
+    return () => stop?.();
   });
 
   // Navigation manette dans toute l'app (croix/stick = déplace le focus,

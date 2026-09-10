@@ -30,7 +30,23 @@ fn ac_running(sys: &System) -> bool {
 /// Démarre le thread de surveillance, pour toute la durée de vie de l'app
 /// (coût négligeable) — y compris quand Big Picture n'est pas actif, le
 /// moteur ignore lui-même les commandes hors état pertinent.
-pub fn spawn(tx: Sender<EngineCommand>) {
+///
+/// `on_running` reçoit chaque changement de présence du process, et rien
+/// d'autre : ce fil sait déjà quand Assetto Corsa démarre et s'arrête, et le
+/// redécouvrir ailleurs serait un second sondage pour la même information. Il
+/// sert à la génération des vignettes, qui doit rendre la machine pendant une
+/// session (`SPEC-grille.md` §5.4bis).
+///
+/// **Une fermeture, pas un `AppHandle`.** Un module métier qui importe
+/// `tauri::Emitter` rend le binaire de test de la lib inexécutable — mesuré,
+/// voir `CLAUDE.md` — donc c'est la façade qui émet.
+///
+/// À ne pas confondre avec `EnterSession`/`ExitSession` : le process tourne dès
+/// l'écran de chargement, alors que « en piste » attend que la voiture soit
+/// pilotable. La musique se coupe sur le second ; les vignettes, elles, sont
+/// déjà suspendues depuis le clic sur « Démarrer », et n'attendent de ce fil
+/// que la **fin**.
+pub fn spawn(tx: Sender<EngineCommand>, on_running: impl Fn(bool) + Send + 'static) {
     std::thread::spawn(move || {
         let mut sys = System::new_all();
         sys.refresh_processes(ProcessesToUpdate::All, true);
@@ -41,6 +57,10 @@ pub fn spawn(tx: Sender<EngineCommand>) {
         // moteur tant que Big Picture n'a pas été ouvert, `AcProcessStarted`
         // suffit comme garde), juste mémorisé pour détecter la transition.
         let mut live = running && ac_status::is_live();
+        // L'état de départ est annoncé lui aussi : le jeu peut déjà tourner
+        // quand l'app démarre, et un abonné qui n'entend que les transitions
+        // croirait la machine libre.
+        on_running(running);
         if running && tx.send(EngineCommand::AcProcessStarted).is_err() {
             return; // canal fermé : l'app se ferme, plus rien à surveiller
         }
@@ -58,6 +78,7 @@ pub fn spawn(tx: Sender<EngineCommand>) {
                     return;
                 }
                 running = now_running;
+                on_running(running);
                 if !running {
                     live = false;
                 }
