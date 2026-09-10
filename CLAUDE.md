@@ -533,16 +533,14 @@ laisser pourrir ici.
       (identifier vite, image détourée), *Vitrine* (avoir envie de regarder,
       flaque + reflet cuits dans l'image), *Officiel* (être indiscernable d'une
       `preview.png` du jeu, fond cuit, contenu de base laissé tel quel).
-      **Reste à faire, et c'est du réglage, pas du code :**
-      1. **Arrêter les valeurs de Vitrine.** Celles livrées sont un point de
-         départ, pas une mesure — son critère est le plaisir des yeux, qui n'a
-         pas de valeur numérique. Elles se figent dans l'atelier, comme les
-         défauts de l'aperçu 3D l'ont été.
-      2. **Arrêter celles d'Officiel**, bascule « comparer à l'image d'origine »
-         allumée. Son critère est mesurable — il ne doit pas se voir — donc il
-         se règle contre la vraie image, jamais de mémoire. Piège documenté : le
-         `preview.jpg` d'un skin est une référence de **cadrage**, jamais de
-         luminosité (il est plus sombre que le rendu du jeu).
+      **Les valeurs des trois sont arrêtées** par l'utilisateur dans l'atelier,
+      comme les défauts de l'aperçu 3D l'ont été — les trois partagent son
+      cadrage (angle 320°, focale 26°, hauteur 8 %). À noter pour Vitrine : sa
+      principale à 30 % n'est pas une erreur, c'est le réglage qui fait le
+      preset — complément et contre-jour s'exprimant en pourcentage d'elle, la
+      descendre éteint tout l'éclairage direct et laisse le showroom seul.
+      **Reste : la fusion dans `main`.** Le `docs/SPEC-grille.md` d'origine a
+      été remis d'aplomb (§11, ce que l'implémentation a changé et pourquoi).
 - [ ] **Écran Pilote** (branche `feature/ecran-pilote`). Spec et maquette dans
       `docs/SPEC-ecran-pilote.md` + `docs/pitbox-ecran-pilote.html`, résumé au
       §9.5 du SPEC. **À lire avant de reprendre** — l'asymétrie qui structure

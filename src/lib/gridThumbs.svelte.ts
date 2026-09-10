@@ -212,7 +212,9 @@ export function gridThumbProgress() {
  * toutes les suivantes. Afficher le décompte seul coûte moins cher.
  */
 export function gridThumbEta(): number | null {
-  if (!progress.running || progress.done < 10) return null;
+  // Rien pendant une pause : le temps écoulé continue de courir alors que rien
+  // n'avance, donc l'estimation gonflerait à chaque seconde de course.
+  if (!progress.running || pauses.size > 0 || progress.done < 10) return null;
   const elapsed = (Date.now() - progress.startedAt) / 1000;
   const remaining = progress.total - progress.done - progress.failed;
   if (remaining <= 0) return null;
@@ -365,12 +367,20 @@ async function drain(): Promise<void> {
     }
   } finally {
     running = false;
-    progress.running = false;
     progress.current = null;
-    // Le rapport reste, y compris après une annulation : le §8.3 veut
-    // « 148 vignettes générées, reprendre plus tard » plutôt qu'une
+    // **Suspendue n'est pas terminée**, et la nuance se voyait à l'écran :
+    // sortir de la boucle sur une pause laisse la file pleine, si bien que le
+    // rapport de fin annonçait « 148 vignettes générées » pendant que cent
+    // soixante attendaient encore. Le lot reste donc « en cours » tant qu'il
+    // reste du travail — la tâche de fond dit alors pourquoi il n'avance pas —
+    // et le rapport n'arrive que la file vide.
+    //
+    // Le rapport, lui, reste affiché y compris après une annulation : le §8.3
+    // veut « 148 vignettes générées, reprendre plus tard » plutôt qu'une
     // disparition silencieuse.
-    progress.finished = progress.done > 0 || progress.failed > 0;
+    const remaining = queue.length > 0;
+    progress.running = remaining;
+    progress.finished = !remaining && (progress.done > 0 || progress.failed > 0);
   }
 }
 

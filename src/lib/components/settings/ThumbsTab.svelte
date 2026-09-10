@@ -38,6 +38,7 @@
     renderTemplate,
     revertGridThumbPrefs,
     saveGridThumbPrefs,
+    setPresetMat,
     setPresetSkipStock,
     setPresetValue,
     setGridThumbsEnabled,
@@ -296,6 +297,35 @@
                détourée et le fond suit le thème — ou bien l'image le porte,
                pour ne pas se distinguer d'une preview d'origine. Entre les
                deux, on empile deux fonds l'un sur l'autre. -->
+          <!-- Le fond de carte : deux couleurs, celle du centre et celle des
+               bords. Sur un preset détouré c'est un réglage gratuit — le mat
+               est du CSS. Sur un preset à fond cuit, ce sont les couleurs
+               peintes dans l'image, donc les changer régénère : c'est la seule
+               exception à « le mat n'entre pas dans l'empreinte ». -->
+          <Field label={t("settings.gridPresetMat")} hint={t("settings.gridPresetMatHint")}>
+            <div class="mat">
+              <label>
+                <input
+                  type="color"
+                  value={selected.mat.hi}
+                  oninput={(e) => setPresetMat(selected.id, { hi: e.currentTarget.value })}
+                />
+                <span>{t("settings.gridPresetMatHi")}</span>
+              </label>
+              <label>
+                <input
+                  type="color"
+                  value={selected.mat.lo}
+                  oninput={(e) => setPresetMat(selected.id, { lo: e.currentTarget.value })}
+                />
+                <span>{t("settings.gridPresetMatLo")}</span>
+              </label>
+              <span
+                class="swatch"
+                style:background="radial-gradient(ellipse at 50% 44%, {selected.mat.hi} 0%, {selected.mat.lo} 76%)"
+              ></span>
+            </div>
+          </Field>
           <Field hint={t("settings.gridThumbHint_background")}>
             <label class="check">
               <input
@@ -420,6 +450,35 @@
     align-items: center;
     gap: 8px;
     cursor: pointer;
+  }
+  .mat {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 6px;
+  }
+  .mat label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    color: var(--txt2);
+    cursor: pointer;
+  }
+  .mat input {
+    width: 34px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--line);
+    background: none;
+    cursor: pointer;
+  }
+  /* Le dégradé tel qu'il sera, à côté de ses deux bouts : deux carrés de
+     couleur ne disent pas ce que donne leur mélange. */
+  .swatch {
+    flex: 1;
+    height: 22px;
+    border: 1px solid var(--mat-line);
   }
   .muted {
     color: var(--muted2);

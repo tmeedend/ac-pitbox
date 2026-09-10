@@ -59,14 +59,14 @@ const KEYS = {
  */
 export const GRID_THUMB_RANGES = {
   /** Rotation de la caméra autour de l'axe vertical, en degrés. */
-  azimuth: { min: 0, max: 359, step: 1, default: 318 },
+  azimuth: { min: 0, max: 359, step: 1, default: 320 },
   /** Plongée au-dessus de l'horizon. Basse : une vignette de catalogue montre
    * le profil d'une voiture, pas son toit. */
   elevation: { min: 0, max: 40, step: 1, default: 8 },
   /** Champ de vision vertical, en degrés. 22° est un équivalent long focal :
    * peu de distorsion, donc des proportions qui se comparent d'une voiture à
    * l'autre. */
-  fov: { min: 10, max: 50, step: 1, default: 22 },
+  fov: { min: 10, max: 50, step: 1, default: 26 },
   /** Marge autour de la boîte englobante, en pourcentage. Le cadrage est
    * **ajusté et non à l'échelle** : chaque voiture remplit le cadre quelle que
    * soit sa taille réelle. On perd le gabarit relatif, on gagne que chaque
@@ -99,12 +99,12 @@ export const GRID_THUMB_RANGES = {
   shadow: { min: 0, max: 100, step: 5, default: 35 },
   /** Où la caméra vise, en pourcentage du rayon au-dessus du centre du modèle.
    *
-   * **Négatif remonte la voiture dans le cadre** — ce dont un preset à reflet a
-   * besoin, le reflet prenant la place en dessous. Positif la descend, ce que
-   * font les images du jeu : mesuré sur les 178 officielles, leur voiture est
-   * **basse dans le cadre**, marge haute de 33 % contre 17 % en bas, centre à
-   * 58 % de la hauteur. Zéro vise le centre, ce que fait un catalogue. */
-  height: { min: -40, max: 40, step: 1, default: 0 },
+   * **Négatif remonte la voiture dans le cadre**, positif la descend. Les
+   * images du jeu la posent bas — mesuré sur les 178 officielles : marge haute
+   * de 33 % contre 17 % en bas, centre à 58 % de la hauteur — et c'est un
+   * cadrage qui a plu au-delà de ce seul preset, puisque les trois embarqués
+   * l'ont adopté. Zéro viserait le centre du modèle. */
+  height: { min: -40, max: 40, step: 1, default: 8 },
   /** Flaque de lumière peinte au sol. **Zéro retire le sol entièrement**, et
    * l'image ne porte alors que la voiture — c'est ce qui garde une vignette de
    * catalogue parfaitement détourée, donc posable sur n'importe quel fond. */
@@ -283,11 +283,17 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
     name: "",
     builtin: true,
     template: {
-      azimuth: 318,
+      azimuth: 320,
       elevation: 5,
-      fov: 20,
+      fov: 26,
       margin: 1,
-      key: 90,
+      // **Une principale très basse, et c'est le réglage qui fait le preset.**
+      // Le complément et le contre-jour s'expriment en pourcentage d'elle : la
+      // descendre à 30 % éteint donc tout l'éclairage direct, et ce qui reste
+      // vient presque entièrement du showroom. La voiture n'est plus posée sous
+      // des projecteurs, elle baigne dans une pièce sombre — d'où le contraste
+      // profond et les reflets étirés qu'on cherchait.
+      key: 30,
       fill: 15,
       rim: 140,
       shadow: 45,
@@ -297,10 +303,13 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       // qui sépare une photo de studio d'un détourage — et c'est aussi ce qui
       // fait que cette vignette-là n'est plus entièrement transparente, donc
       // qu'elle veut le mat sombre ci-dessous sous peine de soucoupe.
-      height: -12,
+      height: 8,
       floor: 85,
-      reflection: 55,
-      reflectionBlur: 5,
+      // Un reflet **franc et très flou** : à 90 % il porte l'image, et à 3,5 il
+      // est laqué et non mouillé. C'est le couple qui sépare une photo de
+      // showroom d'un rendu de jeu vidéo.
+      reflection: 90,
+      reflectionBlur: 35,
     },
     // Le fond quasi noir des previews d'Assetto Corsa, reproduit là où il
     // s'écrit chez nous : dans la carte.
@@ -355,15 +364,18 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
     name: "",
     builtin: true,
     template: {
-      azimuth: 318,
+      azimuth: 320,
       elevation: 6,
-      fov: 20,
+      fov: 26,
       margin: 15,
       key: 100,
       fill: 25,
       rim: 45,
+      // 8 et non les 6 que la mesure donnait : arrêté à l'œil sur la
+      // comparaison, et repris par les deux autres presets. Une mesure pose le
+      // point de départ ; c'est le regard qui tranche à un ou deux pour cent.
       shadow: 30,
-      height: 6,
+      height: 8,
       // La flaque fait tout le travail de lumière du fond, et **aucun reflet** :
       // les images du jeu éclairent le sol, elles n'y mirent pas la voiture.
       floor: 100,
@@ -551,6 +563,19 @@ export function setPresetValue(id: string, key: TemplateKey, value: number): voi
   const preset = find(values.user, id);
   if (!preset) return;
   preset.template = { ...preset.template, [key]: clamp(key, value) };
+}
+
+/**
+ * Change le fond de carte d'un preset de l'utilisateur.
+ *
+ * Rappel de ce que ça coûte, parce que ce n'est pas symétrique : sur un preset
+ * détouré, changer ces deux couleurs est **gratuit** — le mat est du CSS, aucune
+ * image ne le porte. Sur un preset à fond cuit, elles sont peintes dans le PNG,
+ * donc l'empreinte les compte et les images se refont (voir `renderTemplate`).
+ */
+export function setPresetMat(id: string, mat: Partial<GridMat>): void {
+  const preset = find(values.user, id);
+  if (preset) preset.mat = { ...preset.mat, ...mat };
 }
 
 export function setPresetSkipStock(id: string, skip: boolean): void {

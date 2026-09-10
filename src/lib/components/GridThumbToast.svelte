@@ -23,6 +23,7 @@
     dismissGridThumbReport,
     gridThumbEta,
     gridThumbProgress,
+    gridThumbsPaused,
   } from "$lib/gridThumbs.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
@@ -46,6 +47,17 @@
 
   const eta = $derived(gridThumbEta());
 
+  /**
+   * Suspendue — session lancée, ou atelier ouvert.
+   *
+   * **Une barre figée sans un mot passe pour une panne.** C'est le défaut que
+   * la tâche de fond existe pour éviter : elle dure des minutes, donc tout ce
+   * qu'elle ne dit pas, l'utilisateur le devine, et il devine mal. La barre
+   * garde sa position — ce qui est fait reste fait — et la ligne du dessous dit
+   * pourquoi plus rien n'avance.
+   */
+  const paused = $derived(gridThumbsPaused());
+
   /** Le rapport de fin. Une ligne factuelle, **sans tonalité d'échec** : les
    * voitures protégées ne sont pas un problème à régler, l'utilisateur n'y peut
    * rien et sa grille reste parfaitement utilisable (§7). */
@@ -61,7 +73,9 @@
   <Toast
     title={collapsed
       ? t("gridThumbs.taskCollapsed", { percent: String(percent) })
-      : t("gridThumbs.taskTitle")}
+      : paused
+        ? t("gridThumbs.taskTitlePaused")
+        : t("gridThumbs.taskTitle")}
     collapsed={collapsed}
     ontoggle={() => (collapsed = !collapsed)}
   >
@@ -71,14 +85,19 @@
       </button>
     {/snippet}
     <div class="g-bar">
-      <div class="g-fill" style:width="{ratio * 100}%"></div>
+      <div class="g-fill" class:paused style:width="{ratio * 100}%"></div>
     </div>
     <div class="g-row">
       <span class="mono">{t("gridThumbs.taskCount", { done: String(settled), total: String(p.total) })}</span>
       {#if eta !== null}<span class="g-eta mono">{etaText(eta)}</span>{/if}
     </div>
-    <!-- La voiture en cours : ici et jamais dans l'état réduit. -->
-    {#if p.current}<div class="g-car">{p.current}</div>{/if}
+    <!-- La voiture en cours : ici et jamais dans l'état réduit. Remplacée par
+         la raison de l'arrêt quand il y en a une — c'est ce qu'on vient lire. -->
+    {#if paused}
+      <div class="g-car g-paused">{t("gridThumbs.paused")}</div>
+    {:else if p.current}
+      <div class="g-car">{p.current}</div>
+    {/if}
   </Toast>
 {:else if p.finished}
   <Toast title={report} onclose={dismissGridThumbReport} />
@@ -95,6 +114,14 @@
     height: 100%;
     background: var(--blue);
     transition: width 0.25s;
+  }
+  /* Grise plutôt que colorée : la barre ne ment pas sur ce qui est fait, elle
+     dit seulement que rien n'avance. */
+  .g-fill.paused {
+    background: var(--muted2);
+  }
+  .g-paused {
+    color: var(--txt2);
   }
   .g-row {
     display: flex;

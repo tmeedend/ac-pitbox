@@ -4,6 +4,13 @@
 
 *Lisibilité des cartes, affichage du nom, et régénération des vignettes. Ne concerne ni les filtres (spec séparée, close) ni l'écran de détail d'un mod. Maquette de référence : `pit-box-barre-et-grille.html`, section 2.*
 
+> **État : implémenté, avec un écart de structure.** Ce document reste
+> l'intention d'origine et l'argumentaire qui la porte — c'est pour ça qu'on le
+> relit. Mais il décrit **un** gabarit de rendu, là où l'implémentation en porte
+> **trois**, et le §5.7 qu'il consacre au versionnage de ce gabarit unique est
+> devenu sans objet. Le §11, en fin de document, dit ce qui a changé et
+> pourquoi. En cas d'écart, `SPEC.md` fait foi.
+
 ---
 
 # 1. Diagnostic
@@ -285,7 +292,7 @@ Aucune dominante colorée non plus : les livrées de mods couvrent tout le spect
 
 Le gabarit exposé dans `Réglages › Vignettes` couvre : azimut, élévation, champ, marge de cadrage, intensité des trois lumières, opacité de l'ombre. Le format, la transparence, l'exposition fixe et l'absence de post-traitement **ne sont pas réglables** — ce sont les propriétés qui garantissent la comparabilité.
 
-## 5.7 Versionnage du gabarit d'origine
+## 5.7 Versionnage du gabarit d'origine — *abandonné, voir §11*
 
 Le gabarit d'origine porte un numéro de version, stocké avec le cache.
 
@@ -295,6 +302,14 @@ Le gabarit d'origine porte un numéro de version, stocké avec le cache.
 | L'utilisateur a personnalisé | son gabarit est conservé, et un message discret dans `Réglages › Vignettes` signale qu'un nouveau défaut existe |
 
 Dans les deux cas la régénération est **proposée, jamais forcée** (§6.5).
+
+> **Ce mécanisme n'existe pas, et n'a pas besoin d'exister.** Il répond à une
+> question — « l'utilisateur a-t-il personnalisé le gabarit ? » — que les
+> presets embarqués rendent sans objet : ceux-ci sont en lecture seule et
+> évoluent avec l'app, une copie ne bouge jamais, et il n'y a donc plus rien à
+> deviner. Ce qui reste utile du §5.7 a été gardé ailleurs et sous une autre
+> forme : `RENDERER_VERSION` périme les images quand le **code de rendu**
+> change, ce que ni le gabarit ni le convertisseur ne savent voir (§11).
 
 ## 5.5 Profils à l'installation
 
@@ -463,6 +478,98 @@ La génération ne bloque rien : filtres, tri, navigation, lancement de session 
 **Le traitement des images d'origine** — correction de luminosité, détourage, harmonisation automatique — est écarté. Soit on garde la source telle quelle, soit on change de source (§5). Il n'y a pas de milieu satisfaisant.
 
 **La vue liste et la vue tableau** ne sont pas couvertes ici, sauf pour les trois interdits de §3.5 qui s'y appliquent identiquement.
+
+---
+
+# 11. Ce que l'implémentation a changé
+
+Trois écarts de **structure** — ceux qui changent la forme de la solution, pas
+ses valeurs. Les écarts de détail sont consignés dans `CLAUDE.md`.
+
+## 11.1 Un gabarit est devenu trois presets
+
+Le §5.6 décrit un gabarit unique, et sa propriété non négociable : « toute
+valeur doit rester identique pour les 312 ». Cette propriété tient toujours —
+elle porte sur un jeu d'images, pas sur le nombre de jeux possibles.
+
+Ce qui l'a fait bouger est un constat d'usage : **la preview d'origine
+d'Assetto Corsa est plus jolie que notre rendu, et le nôtre plus lisible.** Ce
+ne sont pas deux qualités d'exécution du même objectif, ce sont deux
+objectifs — identifier vite, ou avoir envie de regarder — et un compromis
+unique les servait mal tous les deux. D'où trois presets embarqués :
+
+| | Ce qu'il cherche | Ce que porte l'image |
+|---|---|---|
+| **Catalogue** | identifier vite | la voiture seule, détourée |
+| **Vitrine** | avoir envie de regarder | + une flaque de lumière et un reflet |
+| **Officiel** | être indiscernable d'une `preview.png` du jeu | + son fond entier |
+
+Ils sont **en lecture seule et se dupliquent** : un preset vide serait une
+douzaine de curseurs de rien, une copie de Vitrine est à un réglage d'être la
+sienne. C'est aussi ce qui remplace le « Rétablir le gabarit d'origine » du
+§6.3 — l'original est toujours là, juste à côté, intact — et ce qui rend le
+§5.7 sans objet.
+
+**Un preset est lié à chaque densité de grille** (dense → Catalogue,
+confortable → Vitrine par défaut). La densité était déjà une déclaration
+d'intention : passer en dense, c'est dire « je cherche » ; passer en
+confortable, c'est dire « je regarde ». Les deux jeux d'images coexistent sur
+disque, donc rebasculer est instantané une fois les deux produits.
+
+## 11.2 La transparence était un moyen, pas une fin
+
+Le §5.6 impose un fond entièrement transparent, et son argument est juste : le
+fond devient du CSS, donc il suit le thème sans jamais régénérer une image.
+Mais c'est un moyen au service d'un but — que la carte possède le fond — et
+deux des trois presets poursuivent un autre but :
+
+- un **reflet** est une modulation de la luminosité d'un sol ; il n'a rien à
+  moduler sur du transparent. Vitrine cuit donc une flaque dans l'image.
+- **indiscernable** exige que le fond soit dans le fichier, comme il l'est chez
+  Kunos. Officiel cuit son fond entier.
+
+Conséquence à ne pas rater : une image qui porte son fond doit **correspondre à
+sa carte**, sinon la flaque se lit comme une soucoupe posée dessus. C'est
+pourquoi le fond de carte fait partie du preset, et pourquoi il entre dans
+l'empreinte d'une vignette — mais **seulement quand il est cuit**. Toujours le
+compter ferait régénérer 312 images pour un changement de thème ; ne jamais le
+compter laisserait un fond peint qui ne correspond plus à rien.
+
+Le §5.6 écarte aussi le reflet miroir : « il consommerait la moitié du cadre ».
+L'argument valait pour un objectif de lisibilité et pour un reflet pleine
+hauteur ; coupé court, il en prend un quart, et c'est un échange légitime quand
+l'objectif est le plaisir des yeux.
+
+## 11.3 Ce que le §5.6 ne pouvait pas prévoir : la version du code qui dessine
+
+Une vignette porte le `.kn5` et sa date, la livrée, les `ext_config.ini`, la
+version du convertisseur et le gabarit. Elle ne portait **rien du code qui
+dessine** — si bien qu'une correction de rendu laissait ses images fausses
+servies pour toujours, parfaitement valides au regard de tout ce que leur nom
+savait vérifier. Vécu au premier bug de rendu : un fond cuit qui recouvrait la
+voiture, et 107 vignettes noires que rien n'aurait ramassées.
+
+`RENDERER_VERSION` comble ça, exact analogue de `CONVERTER_VERSION` côté
+conversion : à incrémenter dès qu'une correction change les pixels produits.
+
+## 11.4 Deux mesures qui ont corrigé la spec
+
+Le §5.6 demande de relever l'azimut et le cadrage sur les previews Kunos plutôt
+que de les inventer. Fait, sur les 178 voitures officielles — et deux résultats
+allaient contre ce que l'œil suggérait :
+
+- **leur fond est plat et quasi noir** (luminance 4 dans les coins comme
+  au-dessus de la voiture). Ce qu'on prend pour un halo derrière la voiture est
+  la flaque au sol devant elle, seule zone claire du cadre. Un dégradé radial
+  derrière la voiture aurait été une erreur ;
+- **la voiture n'occupe que 66 % de la largeur** du cadre, et elle y est basse.
+
+Piège méthodologique qui a coûté un aller-retour : **les deux côtés se mesurent
+avec le même instrument**. Mesurer leur cadrage et *estimer* le nôtre a donné
+une marge trois fois trop grande, parce que la marge de Pit Box n'est pas « le
+pourcentage de cadre laissé vide » — à marge nulle, la voiture n'occupe déjà
+que ~75 % de la largeur, le cadrage ajustant la boîte englobante **en 3D**
+projetée, plus grande que la silhouette visible.
 
 ---
 
