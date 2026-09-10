@@ -449,15 +449,17 @@ laisser pourrir ici.
       Un lot de ce genre est du **reformatage pur sur une quinzaine de
       fichiers** : le faire dans son propre commit, jamais mélangé à un
       changement fonctionnel (sinon `git blame` devient inexploitable).
-- [ ] **Vignettes régénérées de la grille** (branche `feature/vignettes-grille`).
-      Spec dans `docs/SPEC-grille.md`. La partie A (§2 à §4) était déjà livrée ;
-      la **partie B** (§5 à §8) l'est — pipeline, tâche de fond, écran de
-      réglage, profils à l'installation — et le modèle de **presets** est venu
-      après, d'une remarque de l'utilisateur : la preview d'origine d'Assetto
-      Corsa est plus *jolie* que notre rendu, le nôtre plus *lisible*. Deux
-      objectifs, pas deux qualités d'exécution du même — d'où *Catalogue* et
-      *Vitrine*, embarqués et en lecture seule, qu'on duplique pour s'en faire
-      un, et un preset **par densité de grille**.
+- [ ] **Vignettes régénérées de la grille** — **fusionné dans `main`**, il ne
+      reste qu'un réglage. Spec dans `docs/SPEC-grille.md`, dont le §11 dit ce
+      que l'implémentation a changé et pourquoi. La partie A (§2 à §4) était
+      déjà livrée ; la **partie B** (§5 à §8) l'est — pipeline, tâche de fond,
+      écran de réglage, profils à l'installation — et le modèle de **presets**
+      est venu après, d'une remarque de l'utilisateur : la preview d'origine
+      d'Assetto Corsa est plus *jolie* que notre rendu, le nôtre plus
+      *lisible*. Deux objectifs, pas deux qualités d'exécution du même — d'où
+      *Catalogue*, *Vitrine* et *Officiel*, embarqués et en lecture seule,
+      qu'on duplique pour s'en faire un, et un preset **par densité de
+      grille**.
       **Les pièges à ne pas réintroduire**, tous mesurés ou vécus :
       1. **Ne jamais faire passer la génération par `prepare_car_preview`.**
          C'est le §5.3, et il a une raison chiffrée : 312 conversions dans un
@@ -533,14 +535,22 @@ laisser pourrir ici.
       (identifier vite, image détourée), *Vitrine* (avoir envie de regarder,
       flaque + reflet cuits dans l'image), *Officiel* (être indiscernable d'une
       `preview.png` du jeu, fond cuit, contenu de base laissé tel quel).
-      **Les valeurs des trois sont arrêtées** par l'utilisateur dans l'atelier,
-      comme les défauts de l'aperçu 3D l'ont été — les trois partagent son
-      cadrage (angle 320°, focale 26°, hauteur 8 %). À noter pour Vitrine : sa
-      principale à 30 % n'est pas une erreur, c'est le réglage qui fait le
-      preset — complément et contre-jour s'exprimant en pourcentage d'elle, la
-      descendre éteint tout l'éclairage direct et laisse le showroom seul.
-      **Reste : la fusion dans `main`.** Le `docs/SPEC-grille.md` d'origine a
-      été remis d'aplomb (§11, ce que l'implémentation a changé et pourquoi).
+      **Reste — et c'est la seule chose qui reste : finaliser les valeurs par
+      défaut des trois presets.** Celles livrées sont une passe de réglage, pas
+      un point d'arrivée : l'utilisateur les a posées à l'écran et les reprendra
+      plus tard, le travail étant fastidieux. Elles se figent dans l'atelier
+      (`Réglages › Vignettes`), comme les défauts de l'aperçu 3D l'ont été, et
+      il n'y a **rien à coder pour ça** — seulement à recopier les nombres
+      arrêtés dans `BUILTIN_PRESETS`.
+      Trois choses à savoir avant d'y toucher :
+      - les trois partagent le cadrage arrêté à l'écran (angle 320°, focale
+        26°, hauteur 8 %) ; les séparer est possible mais c'était un choix ;
+      - la principale de Vitrine à 30 % **n'est pas une coquille** : complément
+        et contre-jour s'expriment en pourcentage d'elle, donc la descendre
+        éteint tout l'éclairage direct et laisse le showroom seul. La remonter
+        remonte aussi les deux autres ;
+      - le cadrage d'Officiel a une **mesure** derrière lui (§11.4 de la spec) ;
+        s'en écarter est permis, l'ignorer serait dommage.
 - [ ] **Écran Pilote** (branche `feature/ecran-pilote`). Spec et maquette dans
       `docs/SPEC-ecran-pilote.md` + `docs/pitbox-ecran-pilote.html`, résumé au
       §9.5 du SPEC. **À lire avant de reprendre** — l'asymétrie qui structure
