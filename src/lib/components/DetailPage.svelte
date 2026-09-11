@@ -133,6 +133,11 @@
    * laquelle une déduction de rattachement peut se tromper sans dommage : au
    * pire il manque un raccourci ici, le mod restant listé là-bas. */
   let attached = $state<InventoryRow[]>([]);
+  /** Les documents rattachés : ceux dont tout le contenu est une annexe
+   * (§4.5.2). Ils ont leur place dans l'onglet Médias **et** dans le bloc
+   * « Posé sur ce mod » — l'un pour les lire, l'autre pour les gérer. */
+  const attachedDocs = $derived(attached.filter((a) => a.kind === "DOCUMENT"));
+
   /** Fiche d'un mod greffé, ouverte par-dessus celle de l'hôte — comme celle
    * d'une couche, et pour la même raison : on y est arrivé DEPUIS ce mod. */
   let openAttached = $state<OtherModRow | null>(null);
@@ -272,7 +277,11 @@
   const mediaCount = $derived.by(() => {
     const parts = [screenshotsCount, replaysCount, resourcesCount, isCar ? null : backgroundsCount];
     const known = parts.filter((n): n is number => n !== null);
-    return known.length ? known.reduce((a, b) => a + b, 0) : null;
+    if (!known.length) return null;
+    // Les livraisons de documents rattachées comptent pour une chacune : leur
+    // nombre de fichiers demanderait autant d'allers-retours, et l'onglet dit
+    // « il y a quelque chose », pas « combien exactement ».
+    return known.reduce((a, b) => a + b, 0) + attachedDocs.length;
   });
 
   const tabItems = $derived.by(() => {
@@ -280,7 +289,11 @@
     return [
       { id: "content", label: isCar ? t("detail.tabCar") : t("detail.tabTrack") },
       { id: "media", label: t("detail.tabMedia") + count(mediaCount) },
-      { id: "install", label: t("detail.tabInstall") + count(extrasCount) },
+      // Pas de décompte sur Installation : l'onglet n'est pas une collection
+      // mais une section — origine, couches, étiquettes, ajouts au jeu. Y
+      // afficher le seul nombre d'ajouts au jeu donnait un « (0) » qui avait
+      // l'air de dire que l'onglet était vide (signalé).
+      { id: "install", label: t("detail.tabInstall") },
     ];
   });
 
@@ -1567,6 +1580,19 @@
         <MediaScreenshots modId={id} onerror={(m) => (actionError = m)} />
         <MediaReplays modId={id} onerror={(m) => (actionError = m)} />
         <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
+        <!-- Les documents livrés AVEC ce mod mais rangés à part (§7.8) : une
+             notice, un manuel, des notes de version. L'import les a stockés
+             comme des mods à eux, leurs fichiers ne sont donc pas dans les
+             ressources de la voiture — mais c'est bien ici qu'on les cherche.
+             Chaque livraison garde son bloc et sa visionneuse. -->
+        {#each attachedDocs as doc (doc.uid)}
+          <ResourcesBlock
+            modId={doc.id}
+            source="other"
+            title={doc.name}
+            onerror={(m) => (actionError = m)}
+          />
+        {/each}
         {#if !isCar}
           <MediaBackgrounds
             modId={id}

@@ -503,6 +503,14 @@ circuits). Le décompte de l'onglet est la somme des quatre. Aucun bloc n'est
 masqué quand il est vide : ses actions « Ouvrir le dossier » et « Lier un
 fichier… » sont la seule voie pour y ajouter quelque chose.
 
+**Les documents livrés avec le mod mais rangés à part y figurent aussi** : une
+notice, un manuel, des notes de version que l'import a stockés comme des mods à
+eux (§4.5.2) parce qu'ils étaient hors du dossier du mod. Leurs fichiers ne sont
+donc pas dans les ressources de la voiture — mais c'est bien là qu'on les
+cherche. Chaque livraison garde son bloc, son intitulé et sa visionneuse ; elle
+reste par ailleurs gérable depuis « Posé sur ce mod » (§4.3) et depuis
+l'inventaire.
+
 Rattachement par simple **`nom_de_fichier.contains(id)`**
 sur l'ensemble des id de la bibliothèque (voitures ∪ circuits, stock inclus) —
 pas de découpage voiture/circuit dans le nom : les deux espaces de noms ne se

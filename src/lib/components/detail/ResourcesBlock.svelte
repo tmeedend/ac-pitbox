@@ -51,9 +51,14 @@
   let {
     modId,
     source = "mod",
+    title,
     onerror,
   }: {
     modId: string;
+    /** Intitulé du bandeau. Par défaut « Ressources » — mais la fiche d'une
+     * voiture en rend **plusieurs**, un par livraison de documents rattachée
+     * (§7.8), et trois bandeaux identiques ne diraient pas de quoi il s'agit. */
+    title?: string;
     /** D'où viennent les ressources. Une app a le même dossier `resources/`
      * qu'une voiture (§4.5.2) et la même prévisualisation ; seul le chemin de
      * résolution côté backend diffère. Le bloc est donc partagé plutôt que
@@ -286,7 +291,7 @@
 
 <section class="blk">
   <header class="blk-h">
-    <span class="blk-t">{t("detail.resourcesTitle")}</span>
+    <span class="blk-t">{title ?? t("detail.resourcesTitle")}</span>
     <span class="blk-n">{files.length}</span>
   </header>
   <div class="blk-b">
