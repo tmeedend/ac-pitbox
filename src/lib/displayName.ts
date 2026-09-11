@@ -40,6 +40,18 @@ const ALIASES: Record<string, string[]> = {
   "land rover": ["land"],
 };
 
+/**
+ * La même table, indexée par marque **normalisée**.
+ *
+ * Les clés ci-dessus s'écrivent comme la marque s'écrit (`mercedes-benz`),
+ * alors que la recherche se fait sur une marque passée par [`normalise`], qui
+ * ne laisse jamais de tiret. L'entrée la plus utile de la table était donc
+ * inatteignable : toutes les Mercedes gardaient leur marque sur la carte, et
+ * « Mercedes AMG GT » ne tombait jamais sur son alias. Trouvé par le premier
+ * test de `displayName.test.ts` — à l'œil, la table paraît juste.
+ */
+const ALIASES_BY_BRAND = new Map(Object.entries(ALIASES).map(([brand, forms]) => [normalise(brand), forms]));
+
 /** Minuscules, tirets et underscores ramenés à l'espace, espaces resserrés. */
 function normalise(text: string): string {
   return text
@@ -62,7 +74,7 @@ export function withoutBrand(name: string, brand: string | null): string {
   if (!wanted) return name;
   // Le plus long d'abord : « mercedes amg » avant « mercedes », sinon le second
   // gagne et laisse un « Mercedes AMG GT » amputé en « AMG GT ».
-  const candidates = [wanted, ...(ALIASES[wanted] ?? [])].sort((a, b) => b.length - a.length);
+  const candidates = [wanted, ...(ALIASES_BY_BRAND.get(wanted) ?? [])].sort((a, b) => b.length - a.length);
   for (const candidate of candidates) {
     const rest = afterPrefix(name, candidate);
     if (rest) return rest;

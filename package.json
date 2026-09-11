@@ -17,7 +17,8 @@
     "tauri": "tauri",
     "check:locales": "node scripts/check-locales.mjs",
     "check:version": "node scripts/check-version.mjs",
-    "verify": "npm run check && npm run build && npm run verify:rust",
+    "test": "vitest run",
+    "verify": "npm run check && npm run test && npm run build && npm run verify:rust",
     "verify:rust": "cd src-tauri && cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace",
     "version": "node scripts/sync-version.mjs && git add src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock"
   },
@@ -38,6 +39,7 @@
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
     "typescript": "~5.6.2",
-    "vite": "^6.0.3"
+    "vite": "^6.0.3",
+    "vitest": "^5.0.0"
   }
 }
