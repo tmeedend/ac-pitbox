@@ -29,7 +29,7 @@
   import { bodyThumb, requestBodyThumb } from "$lib/driverThumbs.svelte";
   import { wornOutfit } from "$lib/driverOutfits.svelte";
   import TrackSkinChecklistDropdown from "./TrackSkinChecklistDropdown.svelte";
-  import { nav, requestSection, pickSession } from "$lib/nav.svelte";
+  import { nav, requestSection, openInSection, pickSession } from "$lib/nav.svelte";
   import { recordScreen, goBack, goForward } from "$lib/navHistory";
   import { previewSrc, getModDetail, activateMod } from "$lib/library";
   import { withoutBrand } from "$lib/displayName";
@@ -304,7 +304,12 @@
   // Double-clic sur le slot de session : ouvre directement la fiche détail de
   // l'entité choisie (skin, layout…) plutôt que la liste de la bibliothèque.
   async function openSessionDetail(section: "cars" | "tracks", id: string | null | undefined) {
-    if (await requestSection(section) && id) nav.openMod = id;
+    // `openInSection` plutôt que `requestSection` puis `openMod` : les deux
+    // écritures d'affilée n'exposent qu'un seul état, sinon l'historique
+    // enregistre la liste de la bibliothèque comme un écran traversé et
+    // « précédent » y ramène au lieu de rendre l'écran d'où l'on vient.
+    if (id) await openInSection(section, id);
+    else await requestSection(section);
   }
 
   // --- Sélecteurs rapides skin voiture / layout+skins circuit, directement

@@ -15,7 +15,7 @@
   import { fmtSize } from "$lib/format";
   import { listInventory, type InventoryRow } from "$lib/inventory";
   import { layerDisplayName } from "$lib/layerName";
-  import { nav, requestSection } from "$lib/nav.svelte";
+  import { nav, openInSection } from "$lib/nav.svelte";
   import LoadingState from "./LoadingState.svelte";
   import Seg from "./Seg.svelte";
   import StateBadge from "./StateBadge.svelte";
@@ -262,11 +262,14 @@
     const target = r.attachment.target_id;
     if (!target) return;
     const section = r.attachment.kind === "TRACK" ? "tracks" : r.attachment.kind === "APP" ? "apps" : "cars";
-    // Une livrée arrive sur la fiche de sa voiture **déjà montrée** : y
-    // atterrir sur une autre livrée obligerait à la chercher dans le
-    // sélecteur, alors qu'on vient précisément de cliquer celle-là.
+    // Une livrée arrive sur la fiche de sa voiture **déjà montrée**, et devient
+    // la livrée de session — c'est ce que fait déjà la bibliothèque quand on y
+    // sélectionne une voiture (`Library::select`). Aller voir une livrée vaut
+    // donc la choisir, comme partout ailleurs dans l'app.
     if (r.kind === "SKIN") nav.openSkin = r.tech_id;
-    if (await requestSection(section)) nav.openFull = target;
+    // Section et fiche d'un seul tenant : sinon l'historique enregistre la
+    // liste d'arrivée comme un écran, et « précédent » y ramène.
+    await openInSection(section, target);
   }
 
   const FACETS: { axis: string; labelKey: string; values: string[] }[] = [

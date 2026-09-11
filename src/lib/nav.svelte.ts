@@ -208,3 +208,27 @@ export async function requestSection(id: string): Promise<boolean> {
   nav.openPack = null;
   return true;
 }
+
+/**
+ * Change de section **et** ouvre une fiche, d'un seul tenant.
+ *
+ * `requestSection` remet `openFull` à zéro, et l'appelant qui la pose juste
+ * après le fait forcément dans un autre tour de boucle — l'`await` le garantit.
+ * L'observateur d'historique (`navHistory.ts`) voit donc passer un écran
+ * intermédiaire que personne n'a regardé : la liste de la section d'arrivée.
+ * Revenir en arrière ramenait à cette liste au lieu de l'écran d'où l'on
+ * venait — signalé depuis l'inventaire des compléments.
+ *
+ * Les deux écritures d'affilée, sans `await` entre elles, n'en font qu'un seul
+ * état observable.
+ */
+export async function openInSection(section: string, openFull: string): Promise<boolean> {
+  if (sectionGuard) {
+    const ok = await sectionGuard();
+    if (!ok) return false;
+  }
+  nav.section = section;
+  nav.openFull = openFull;
+  nav.openPack = null;
+  return true;
+}

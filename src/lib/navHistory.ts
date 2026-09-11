@@ -81,11 +81,31 @@ async function apply(target: Screen): Promise<boolean> {
  * then compare the restored screen against the entry we are leaving, decide it
  * is new, and truncate the very future we are walking into.
  */
-export async function goBack(): Promise<void> {
-  if (index <= 0) return;
+export async function goBack(): Promise<boolean> {
+  if (index <= 0) return false;
   const from = index;
   index -= 1;
-  if (!(await apply(entries[index]))) index = from;
+  if (!(await apply(entries[index]))) {
+    index = from;
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Le **retour arrière de l'application**, celui des flèches « ← » d'écran et du
+ * bouton B de la manette : l'historique d'abord, le repli ensuite.
+ *
+ * C'est le travers classique des applications Android, et il a été signalé ici :
+ * une flèche qui ramène toujours au même endroit — la liste de l'écran courant —
+ * au lieu de revenir d'où l'on vient. Arrivé sur une voiture depuis l'inventaire
+ * des compléments, « précédent » doit rendre l'inventaire, pas la bibliothèque.
+ *
+ * Le repli sert quand il n'y a pas d'historique derrière : une fiche ouverte au
+ * tout premier écran de la session doit quand même pouvoir se fermer.
+ */
+export async function goBackOr(fallback: () => void): Promise<void> {
+  if (!(await goBack())) fallback();
 }
 
 export async function goForward(): Promise<void> {

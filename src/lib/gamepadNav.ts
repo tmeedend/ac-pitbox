@@ -28,6 +28,7 @@
 import { nav } from "$lib/nav.svelte";
 import { deviceRecords, gamepadEnabled } from "$lib/gamepadDevices.svelte";
 import { cycleTab, navigateMod } from "$lib/screenActions";
+import { goBackOr } from "$lib/navHistory";
 import {
   EMPTY_REST,
   bindingActive,
@@ -890,7 +891,7 @@ export function startGamepadNav(): () => void {
         const closedOverlay = backPressed && !leftField && closeOverlay();
         if (!closedOverlay) {
           if (nav.openPack && backPressed && !leftField) nav.openPack = null;
-          else if (nav.openFull && backPressed && !leftField) nav.openFull = null;
+          else if (nav.openFull && backPressed && !leftField) void goBackOr(() => (nav.openFull = null));
         }
 
         if (needsEntry(active)) {

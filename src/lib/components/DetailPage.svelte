@@ -521,11 +521,17 @@
           if (current !== id) return;
           skins = s;
           // La demande l'emporte sur la préférence enregistrée : on vient de
-          // cliquer cette livrée-là. Elle n'écrit rien pour autant — le choix
-          // de session reste celui d'avant.
+          // cliquer cette livrée-là.
           const wi = wanted ? s.findIndex((x) => x.id === wanted) : -1;
           const pi = wi >= 0 ? wi : s.findIndex((x) => x.id === savedSkin?.id);
           previewSkin = pi >= 0 ? pi : 0;
+          // Venir voir une livrée vaut la choisir : `selectSkin` la mémorise et
+          // met à jour le duo de session, exactement comme un clic dans le
+          // sélecteur. C'est la convention de l'app — la bibliothèque met déjà
+          // la voiture en session dès qu'on la sélectionne — et s'en écarter
+          // ici laisserait l'utilisateur sans moyen évident de choisir ce qu'il
+          // a sous les yeux.
+          if (wi >= 0) selectSkin(wi);
         })
         .finally(() => skinsLoadResolve?.());
       loadSounds(current);

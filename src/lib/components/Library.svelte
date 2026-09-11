@@ -24,6 +24,7 @@
     type ColumnDef,
   } from "$lib/columns";
   import { nav, pickSession } from "$lib/nav.svelte";
+  import { goBackOr } from "$lib/navHistory";
   import { bigPictureView } from "$lib/bigpicture.svelte";
   import { withoutBrand } from "$lib/displayName";
   import ModIdentity from "./ModIdentity.svelte";
@@ -871,7 +872,7 @@
     <div class="full-wrap">
       <PackDetail
         pack={nav.openPack}
-        onclose={() => (nav.openPack = null)}
+        onclose={() => void goBackOr(() => (nav.openPack = null))}
         onopenmod={(id) => { nav.openPack = null; nav.openFull = id; }}
         onuninstalled={() => { nav.openFull = null; refresh(); }}
       />
@@ -881,7 +882,7 @@
       <DetailPage
         id={nav.openFull}
         {kind}
-        onclose={() => { nav.openFull = null; scrollToEffective(); }}
+        onclose={() => void goBackOr(() => { nav.openFull = null; scrollToEffective(); })}
         onchange={refresh}
       />
     </div>
