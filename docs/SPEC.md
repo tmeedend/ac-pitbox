@@ -1017,6 +1017,45 @@ Le **décompte de résultats** ne porte plus de badge de nombre de filtres actif
 
 ---
 
+## 7bis. Écran Compléments — l'inventaire (refonte §4)
+
+**Tout ce qui n'est pas un contenu autonome**, dans une seule liste : livrées,
+sons, habillages de circuit, couches, mods « autres », et tout ce que Pit Box
+n'a pas su reconnaître. Les quatre contenus autonomes — voitures, circuits,
+modèles de pilote, apps — ont leur écran et n'y figurent pas.
+
+Trois écrans le précédaient (Add-ons voiture, Add-ons circuit, Compléments) :
+ils classaient par **mécanique d'installation**, c'est-à-dire par la complexité
+que l'app existe pour absorber, et un même mod pouvait y figurer deux fois sans
+que rien ne le dise.
+
+**Deux axes, indépendants du type** (`attach.rs`) :
+
+- **le rattachement** — une voiture, un circuit, une app, le jeu, autonome —
+  déduit par ordre de force décroissante, le **signal voyageant avec la
+  réponse** : chemin posé (quasi certain), hôte écrit dans la ligne (certain),
+  nom de config formé sur une entité (fort), même archive (conjecture).
+  Corrigeable à la main, et seule la correction est stockée ;
+- **la nature** — apparence, comportement, dépendance, non reconnu — déduite
+  des zones du jeu touchées, la plus conséquente l'emportant.
+
+**Facettes tri-état**, chaque valeur avec son compteur : un clic inclut, un
+deuxième exclut. Les décomptes se calculent sur la recherche et non sur le
+résultat filtré — un chiffre qui bouge à chaque facette posée ne sert à rien
+pour décider de la suivante.
+
+**La ligne est à deux niveaux** (nom lisible, identifiant technique en
+dessous), ce qui est la condition pour renommer sans rien perdre, et **aucun
+bouton n'y est exposé** : ouvrir, prioriser, désactiver, supprimer passent par
+le ⋮. Reste visible ce qui se *lit* — le rattachement (lien vers l'hôte), la
+nature, l'étoile de priorité quand elle est posée, le marqueur de note, l'état.
+
+**Groupement par archive ou par hôte.** Le second remplace le regroupement par
+voiture des anciennes vues transversales : sans lui, « voir toutes les livrées
+de cette voiture » se perdait.
+
+---
+
 ## 8. Skins, sons, apps
 
 **Base Kunos indexée** en lecture seule (`is_stock`), non désactivable, pour que skins/sons puissent s'attacher à une voiture/circuit de base comme à un mod.
