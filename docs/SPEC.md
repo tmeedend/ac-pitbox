@@ -872,6 +872,8 @@ Mods de type non reconnu (shaders, configs CSP, mods d'UI, weather patterns…) 
 
 **Chaque entrée a sa fiche**, ouverte en cliquant son nom — comme un mod de son (§8). Elle porte les mêmes actions que la ligne, et surtout le bloc **Ressources** (§4.5.2), qui n'avait nulle part où vivre dans une liste plate : c'est là que se lisent la notice et les images qu'un auteur livre à côté de son mod. Le bloc est celui de la fiche voiture, pas une copie.
 
+**La provenance d'un reste se lit sur deux lignes.** Un reste (voir plus bas) est nommé d'après l'archive **et** l'endroit d'où il en a été tiré — `<archive>__<chemin dedans>` —, parce que c'est cette chaîne qui forme aussi son identifiant. Les deux moitiés sont utiles et ne répondent pas à la même question : la fiche affiche donc « Provenance » (l'archive seule, le même mot que sur une fiche voiture) puis « Emplacement dans l'archive », et cette seconde ligne disparaît quand la livraison était l'archive entière. C'est l'archive seule, également, qui sert de clé au regroupement « par archive » de l'inventaire — sans quoi chaque reste forme un groupe d'une ligne au lieu de rejoindre les contenus arrivés avec lui.
+
 **Un mannequin de pilote s'importe même livré nu.** Beaucoup se téléchargent comme un `.kn5` seul, sans archive ni dossier autour. Un tel fichier — déposé sur l'app ou choisi dans le sélecteur — est reconnu par son **contenu** (maillage skinné *et* nœuds préfixés `DRIVER:`, aucun faux positif sur voiture ou collider), mis en boîte sous `content/driver/` et rangé comme « autre mod », onglet Pilotes. Un `.kn5` qui n'est **pas** un mannequin est refusé avec un message : une carrosserie arrachée à son dossier n'a pas de destination qui ait un sens, et lui en inventer une poserait un fichier inerte dans le jeu. Le fichier d'origine n'est jamais déplacé, même en mode « déplacer » — seule différence assumée avec l'import d'un dossier, parce qu'un fichier isolé posé sur l'app n'a souvent pas d'autre exemplaire. Un mannequin trouvé **dans** une archive ou un dossier suit le même chemin sans être détecté par le contenu : son chemin le dit déjà.
 
 **Classés par zone du jeu.** « Autres mods » est un fourre-tout par construction — un shader, une police et un pack de drapeaux n'ont rien à faire dans la même liste. Chaque entrée est donc classée d'après **les chemins de ses fichiers**, en dix zones. Ce classement ne dessine plus des onglets : il alimente la **nature** de l'inventaire (§7bis) — comportement, apparence, dépendance — et c'est la même donnée qui sert aux deux. Les zones : Extensions (`extension/`), Météo (`content/weather/`), Interface (`content/gui/`), Pilotes (`content/driver/`), Textures (`content/texture/` et `extension/textures/`), Objets 3D (`content/objects3D/`), Polices (`content/fonts/`), Filtres PP (`system/cfg/ppfilters/`), Showrooms (`content/showroom/`), le `extension/` **d'une voiture ou d'un circuit** (`content/cars/<id>/extension/`, une config CSP qui ne vaut que pour ce contenu — typiquement celle qui rattrape le volume d'un mod de son) et Autres — ce dernier ramassant ce qu'aucune règle ne reconnaît, y compris une entrée sans aucun fichier stocké (livraison partie entièrement en ressources, §4.5.2). Quatre points :
@@ -1093,6 +1095,16 @@ que rien ne le dise.
 deuxième exclut. Les décomptes se calculent sur la recherche et non sur le
 résultat filtré — un chiffre qui bouge à chaque facette posée ne sert à rien
 pour décider de la suivante.
+
+**Le type d'une ligne se dit par ce qu'elle touche.** Livrée, Son, Habillage,
+Couche, Mannequin et Document se nomment d'eux-mêmes ; il restait « Mod », qui
+est le mot qu'on écrit quand on n'a rien de plus précis à dire. Une ligne issue
+d'un mod « autre » affiche donc **les zones du jeu qu'elle touche** (§7.3) —
+« Polices », « Interface », « Extensions », plusieurs séparées par un point
+médian — et ne retombe sur « Mod » que lorsque aucune n'est reconnue, ce qui
+est exactement ce que ce mot veut dire. Ce n'est pas une classification de
+plus : c'est la donnée dont la **nature** est déjà tirée, remontée d'un cran, et
+c'est le vocabulaire de la fiche, pas un second.
 
 **La ligne est à deux niveaux** (nom lisible, identifiant technique en
 dessous), ce qui est la condition pour renommer sans rien perdre, et **aucun

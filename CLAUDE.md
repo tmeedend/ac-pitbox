@@ -315,6 +315,17 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
   voitures et circuits. Ces clés ne servent plus qu'à nommer les entrées dans
   `ui_prefs.json`/les fichiers Rust dédiés (règle d'or n°5) — `localStorage`
   lui-même n'est plus écrit nulle part, seulement lu une fois en migration.
+- **Une `Map` ou un `Set` clés par objet ne retrouvent rien si l'objet vient
+  d'un `$state`.** `$state` enveloppe tableaux et objets dans un **proxy
+  profond** : l'objet relu dans un `{#each}` (ou par un `$derived` qui filtre
+  la liste) n'est pas celui qu'on avait rangé dans la table, et
+  `map.get(f)` rend `undefined` — toujours, jamais par intermittence. Comme
+  ce genre de table a presque toujours un repli raisonnable, l'échec est
+  muet et le symptôme sort ailleurs : la carte Ressources fusionnée demandait
+  la notice d'une livraison voisine au mod de la fiche, d'où « dossier
+  ressources introuvable » sur une voiture qui n'a pas de dossier ressources.
+  Le remède est de ne pas dépendre de l'identité : **l'information voyage avec
+  l'élément** (`{ ...file, owner }`), ou la clé est une valeur (`id:origin:chemin`).
 - **Une prop Svelte ne peut pas s'appeler `state`.** Svelte 5 y voit une
   ambiguïté avec la rune `$state` — un `$state` préfixant une variable locale
   crée un abonnement de store — et refuse de compiler. `FicheHeader` nomme donc
