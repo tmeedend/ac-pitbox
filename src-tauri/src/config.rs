@@ -60,6 +60,23 @@ pub struct Prefs {
     /// sources en une seule ne se fait pas via une simple junction, voir
     /// `compose.rs`.
     pub deploy_mode: String,
+    /// Seuils de l'appariement Wikipédia (§4 et §13 de
+    /// `docs/SPEC-wikipedia-fiche-detail.md`). Ils vivent ici et non dans le
+    /// code parce que ce sont précisément les nombres que la commande de
+    /// calibration existe pour régler : la spec les donne comme points de
+    /// départ, pas comme cibles.
+    ///
+    /// Score minimal en dessous duquel le meilleur candidat n'est l'article de
+    /// personne.
+    pub wiki_match_min_score: f64,
+    /// Écart minimal entre le premier et le deuxième candidat (§4.1.5). En
+    /// dessous, l'ambiguïté l'emporte et on n'affiche rien.
+    pub wiki_match_min_margin: f64,
+    /// Rayon de la recherche géographique des circuits, en mètres (§4.2.1).
+    pub wiki_track_radius_m: u32,
+    /// Deux candidats circuit plus proches que ça l'un de l'autre, en mètres,
+    /// sont à égalité — donc ambigus.
+    pub wiki_track_tie_margin_m: f64,
 }
 
 impl Default for Prefs {
@@ -76,6 +93,11 @@ impl Default for Prefs {
             resource_extraction_mode: "info_only".into(),
             keep_source_archive: false,
             deploy_mode: "hardlink".into(),
+            // Points de départ, à régler sur le rapport de calibration.
+            wiki_match_min_score: 0.55,
+            wiki_match_min_margin: 0.12,
+            wiki_track_radius_m: 5_000,
+            wiki_track_tie_margin_m: 150.0,
         }
     }
 }

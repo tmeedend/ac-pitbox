@@ -26,11 +26,16 @@
 // surface nobody calls just to keep clippy quiet.
 
 pub mod api;
+pub mod calibrate;
+pub mod clean;
+pub mod ids;
 pub mod lang;
+pub mod matchcar;
+pub mod matching;
+pub mod matchtrack;
 pub mod store;
 
 mod http;
-mod ids;
 
 use chrono::{Duration, Local};
 use rusqlite::Connection;
@@ -53,6 +58,33 @@ fn best_effort<T>(what: &str, result: rusqlite::Result<T>) -> Option<T> {
             None
         }
     }
+}
+
+/// The entity to climb to for §5.3, fetched and **checked**.
+///
+/// `part of` is trusted outright: it is the relation the spec names, and it is
+/// what a generation or a configuration uses to point at its whole.
+///
+/// `subclass of` is not, and that is a correction born of a measurement: the
+/// AE86's `P279` is "sport compact", a *classification*. Climbing it would have
+/// offered an article about a category of cars under the heading "Article
+/// général". So a `P279` target is only accepted when it is of the same nature
+/// as the entity itself — a car model's parent must be a car model.
+fn parent_to_climb(net: &WikiClient, facts: &api::EntityFacts) -> Option<api::EntityFacts> {
+    if let Some(parent_id) = &facts.parent {
+        return net.entity(parent_id).found();
+    }
+    let candidate = facts.parent_fallback.as_ref()?;
+    let parent = net.entity(candidate).found()?;
+    let same_nature = parent.types.iter().any(|t| facts.types.contains(t));
+    if !same_nature {
+        log::debug!(
+            "wiki: {candidate} n'est pas de la nature de {} — pas de remontée",
+            facts.entity_id
+        );
+        return None;
+    }
+    Some(parent)
 }
 
 /// The article to show for a mod, in the requested language (§5).
@@ -115,9 +147,10 @@ pub fn resolve_article(
     // language, which is the only case where level 2 can win (§5.2). When it
     // can, level 1 takes it and the second request would be pure politeness
     // debt against §6.2.
-    let parent = match &facts.parent {
-        Some(parent_id) if !facts.titles.contains_key(&lang) => net.entity(parent_id).found(),
-        _ => None,
+    let parent = if facts.titles.contains_key(&lang) {
+        None
+    } else {
+        parent_to_climb(net, &facts)
     };
 
     let entity_articles = EntityArticles::new(facts.entity_id.clone(), facts.titles.clone());

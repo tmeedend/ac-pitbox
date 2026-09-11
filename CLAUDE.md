@@ -785,12 +785,44 @@ laisser pourrir ici.
       négociable : le texte reste une **collection** (jamais fusionné à la
       description, jamais reformulé, résumé ni traduit — surtout pas par un
       modèle de langage), sinon le ShareAlike de CC BY-SA remonte sur l'app.
-      **Fait : le lot 1 (le socle), sans interface** — `src-tauri/src/wiki/` :
-      les trois tables dans l'overlay (§3), la chaîne de repli et la remontée
-      d'un cran vers l'entité parente (§5), le client Action API (§6).
+      **Fait : les lots 1 à 3, sans interface** — `src-tauri/src/wiki/` : les
+      trois tables dans l'overlay (§3), la chaîne de repli et la remontée d'un
+      cran (§5), le client Action API (§6), et l'appariement automatique des
+      voitures et des circuits (§4) avec sa commande de calibration.
       Le module porte un `allow(dead_code)` **assumé et daté** : rien ne
-      l'appelle tant que l'appariement (§4) n'écrit pas de `wiki_link`. À
-      retirer au premier client.
+      l'appelle tant que l'interface (§7) n'existe pas. À retirer au premier
+      client.
+      **Les identifiants Wikidata sont dans `wiki/ids.rs`**, un par un relevés
+      sur l'API vivante (§4.4 l'exige) — le libellé en commentaire est celui
+      que l'API a rendu, et chaque entrée dit sur quel item réel elle a été
+      confirmée. Ne pas en ajouter de mémoire.
+      **Les seuils sont dans `Prefs`** (`wiki_match_*`, `wiki_track_*`) et la
+      liste de nettoyage des noms dans `rules/wiki-matching.json`, semée dans
+      le dossier de config et éditable — §4.3 l'exige, et c'est ce qui permet
+      de régler la reconnaissance sans release.
+      **Pour calibrer** (rien n'est persisté, le rapport sort en Markdown) :
+      ```
+      PITBOX_WIKI_LIMIT=20 cargo test --lib wiki -- --ignored --nocapture calibrate_the_library
+      ```
+      Quatre mesures ont corrigé la spec, et elles ne se retrouvent pas deux
+      fois :
+      - **La recherche géographique des circuits tourne sur Wikidata, pas sur
+        Wikipédia.** L'article anglais « Nürburgring » n'a *aucune* coordonnée
+        GeoData (Suzuka non plus) : le `list=geosearch` de la §4.2 ne peut
+        structurellement pas rendre le circuit qui lui sert d'exemple. L'item
+        Wikidata porte bien P625, et y chercher rend des Q-ids directement.
+      - **Le filtre de type porte toute la stratégie circuit.** À 5 m du
+        Nordschleife, les vingt items les plus proches sont dix-neuf éditions
+        de Grand Prix, un village, un château et un ruisseau — le circuit n'y
+        est pas, une vingtaine d'items partageant la coordonnée exacte. D'où
+        `gslimit=50` et l'allowlist de `ids::TRACK_TYPES`.
+      - **Les coordonnées viennent de CSP, pas des `geotags`.**
+        `sun::track_location` les résout déjà pour 445 circuits ; les `geotags`
+        des circuits Kunos sont le littéral `["lat", "lon"]`.
+      - **L'année n'existe presque jamais** : aucune voiture mesurée ne porte
+        P571, seules les générations portent P580/P582. Elle est donc un bonus
+        quand elle existe et jamais une pénalité quand elle manque — son poids
+        quitte le dénominateur.
       Trois choses à savoir avant d'y toucher :
       - **Le client HTTP est WinHTTP**, via le crate `windows` déjà présent
         (`wiki/http.rs`) : le projet n'avait aucun client HTTP, et deux GET
@@ -810,13 +842,22 @@ laisser pourrir ici.
       - **Un 404 et un réseau coupé ne sont pas le même non-résultat**
         (`api::Fetched`). Les confondre écrirait « pas d'article » dans le
         cache négatif pour 90 jours à cause d'un tunnel.
-      **Reste** : les lots 2 à 6 du §12 — appariement voitures (§4.1),
-      appariement circuits par coordonnées (§4.2, indépendant du précédent),
+      **Reste** : **régler les seuils sur un vrai passage de calibration** —
+      les valeurs livrées sont celles du §13, un point de départ, et un premier
+      échantillon de huit mods n'en a retenu qu'un : le plancher de score et le
+      signal « marque » méritent d'être revus sur les 312 (une Acura NSX ne
+      correspond pas à la Honda NSX par la marque). Puis les lots 4 à 6 du §12 :
       interface (§7), correction manuelle (§7.6), réglages (§8, dont
       l'interrupteur « enrichissement en ligne » que `resolve_article` attend
-      déjà sous la forme d'un `net: Option<&WikiClient>`). Les quatre points
-      du §13 sont tranchés pour ce qui touche au socle : TTL 30 jours en
-      positif, 90 en négatif.
+      déjà sous la forme d'un `net: Option<&WikiClient>`).
+      **Un trou de la spec à combler au lot 5** : la §7.6 accroche « Ce n'est
+      pas le bon article ? » au menu de l'onglet, mais la §7.1 masque l'onglet
+      quand il n'y a pas de contenu — donc un mod rejeté pour ambiguïté n'a
+      aucun point d'entrée vers la correction manuelle, alors que c'est
+      exactement le cas où choisir servirait. Décidé : déplacer l'entrée vers
+      le menu ⋮ de la fiche, toujours présent. La plomberie existe déjà
+      (`set_link` + précédence).
+      TTL : 30 jours en positif, 90 en négatif.
 - [ ] **Signature Authenticode** : le workflow est prêt, il attend un
       certificat. Définir la variable de dépôt `SIGN_COMMAND` suffit à
       l'activer — voir `docs/windows-code-signing.md` (lire **avant** d'acheter,

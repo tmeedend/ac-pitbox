@@ -1,0 +1,67 @@
+{
+  "_comment": "Nettoyage des noms de mods avant recherche Wikipédia (SPEC-wikipedia-fiche-detail.md §4.3) et poids du scoring (§4.1.4). Semé au premier accès dans wiki-matching.json du dossier de config, éditable ensuite — même mécanisme que tag-rules.json. Tout est insensible à la casse.",
+
+  "_comment_brackets": "Retire ce qui est entre crochets, parenthèses ou accolades : c'est là que vivent les tags de pack, les mentions de qualité et les notes de l'uploader.",
+  "strip_bracketed": true,
+
+  "_comment_versions": "Un numéro de version se reconnaît à son SÉPARATEUR, jamais à un « v » suivi de chiffres : « RSS GTM Lanzo V8 » est un moteur, pas une version 8, et « Supra MK4 » une génération. Retirer un « v\\d+ » nu couperait les deux.",
+  "version_patterns": [
+    "\\bv?\\d+[._]\\d+(?:[._]\\d+)*\\b",
+    "\\bversion\\s*\\d+(?:[._]\\d+)*\\b",
+    "\\brev\\s*\\d+\\b"
+  ],
+
+  "_comment_phrases": "Retirées où qu'elles soient dans le nom, sur frontière de mot. Qualité, préparateurs, mentions d'upload.",
+  "remove_phrases": [
+    "4k",
+    "8k",
+    "2k",
+    "hd",
+    "uhd",
+    "remaster",
+    "remastered",
+    "reworked",
+    "rework",
+    "updated",
+    "update",
+    "wip",
+    "beta",
+    "alpha",
+    "preview",
+    "release",
+    "final",
+    "repack",
+    "rocket bunny",
+    "liberty walk",
+    "libertywalk",
+    "pandem",
+    "widebody",
+    "wide body",
+    "veilside",
+    "bodykit",
+    "body kit"
+  ],
+
+  "_comment_suffixes": "Retirés uniquement en FIN de nom : « AC » au milieu d'un nom peut être autre chose, « AC » à la fin est un suffixe de conversion.",
+  "remove_suffix_words": [
+    "ac",
+    "acc",
+    "conversion",
+    "converted",
+    "convert",
+    "fixed",
+    "fix",
+    "port",
+    "ported",
+    "mod",
+    "car",
+    "track"
+  ],
+
+  "_comment_weights": "Poids du score de la §4.1.4, somme = 1. L'année est volontairement légère : mesuré sur l'API, aucune voiture ne porte P571 et seules les générations portent P580/P582 — un poids fort ferait dépendre l'appariement d'une donnée presque toujours absente.",
+  "weights": {
+    "name": 0.6,
+    "brand": 0.3,
+    "year": 0.1
+  }
+}
