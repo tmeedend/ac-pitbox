@@ -534,6 +534,8 @@
     "attachSTANDALONE": "Standalone",
     "natureAPPEARANCE": "Appearance",
     "typeSKIN": "Livery",
+    "typeDOCUMENT": "Document",
+    "natureDOCUMENT": "Document",
     "typeSOUND": "Sound",
     "typeTRACK_SKIN": "Track skin",
     "typeLAYER": "Layer",

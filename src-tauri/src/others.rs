@@ -277,7 +277,7 @@ pub const OTHER_CATEGORY: &str = "other";
 ///
 /// Prefixes are lowercase, compared segment by segment against a lowercased
 /// path — AC ships `content/objects3D` with a capital D and mod authors do not
-/// reproduce it reliably.
+/// reproduce it reliably. `*` matches exactly one segment, whatever it is.
 const CATEGORY_RULES: &[(&str, &[&str])] = &[
     ("fonts", &["content", "fonts"]),
     ("driver", &["content", "driver"]),
@@ -288,6 +288,14 @@ const CATEGORY_RULES: &[(&str, &[&str])] = &[
     ("weather", &["content", "weather"]),
     ("gui", &["content", "gui"]),
     ("ppfilters", &["system", "cfg", "ppfilters"]),
+    // Le dossier `extension/` **d'une voiture ou d'un circuit** : une config
+    // CSP qui ne vaut que pour ce contenu-là. Elle n'était couverte par aucune
+    // règle — la dernière ne parle que du `extension/` de la racine d'AC — et
+    // ces mods tombaient donc dans « autre », c'est-à-dire « non reconnu »
+    // (signalé : les configs qui baissent le volume d'un mod de son, qui sont
+    // le cas le plus courant).
+    ("extension", &["content", "cars", "*", "extension"]),
+    ("extension", &["content", "tracks", "*", "extension"]),
     ("extension", &["extension"]),
 ];
 
@@ -301,7 +309,13 @@ fn category_of(rel: &Path) -> &'static str {
     CATEGORY_RULES
         .iter()
         // `>` and not `>=`: the prefix alone is the folder, never a file in it.
-        .find(|(_, prefix)| segs.len() > prefix.len() && segs.iter().zip(prefix.iter()).all(|(a, b)| a == b))
+        .find(|(_, prefix)| {
+            segs.len() > prefix.len()
+                && segs
+                    .iter()
+                    .zip(prefix.iter())
+                    .all(|(a, b)| *b == "*" || a == b)
+        })
         .map(|(cat, _)| *cat)
         .unwrap_or(OTHER_CATEGORY)
 }
@@ -348,6 +362,12 @@ pub struct OtherModCard {
     /// Onglets sous lesquels ce mod se range ([`categories_of`]) — plusieurs
     /// quand il touche plusieurs zones du jeu, jamais vide.
     pub categories: Vec<String>,
+    /// Fichiers stockés dans le dossier du mod. **Zéro** est un cas réel et
+    /// fréquent : une livraison partie tout entière en ressources (§4.5.2) —
+    /// une notice, un manuel — dont la ligne subsiste pour que ces ressources
+    /// restent atteignables. Ce n'est pas un mod non reconnu, c'est un
+    /// document.
+    pub file_count: usize,
     /// Sur quoi il se greffe et ce qu'il fait (refonte §2), **recalculé** à
     /// chaque listage : le parcours de fichiers est déjà fait juste au-dessus
     /// pour les conflits, donc la déduction est gratuite — et elle ne peut pas
@@ -411,6 +431,7 @@ pub fn list_others(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<O
                 conflicts,
                 externally_managed,
                 categories,
+                file_count: mine.map(|f| f.len()).unwrap_or(0),
                 attachment,
             }
         })
@@ -781,6 +802,28 @@ mod tests {
         // Une livraison partie entièrement en ressources n'a aucun fichier
         // stocké (§4.5.2) — elle reste listée, sous « Autres ».
         assert_eq!(categories_of(&HashSet::new()), vec![OTHER_CATEGORY.to_string()]);
+
+        // Le dossier `extension/` d'UNE VOITURE est une config CSP, pas un
+        // mod non reconnu : c'est le cas des configs qui baissent le volume
+        // d'un mod de son, signalé à l'usage.
+        let per_car: HashSet<PathBuf> = ["content/cars/ks_lamborghini_huracan_performante/extension/ext_config.ini"]
+            .iter()
+            .map(PathBuf::from)
+            .collect();
+        assert_eq!(categories_of(&per_car), vec!["extension".to_string()]);
+        let per_track: HashSet<PathBuf> = ["content/tracks/la_canyons/extension/ext_config.ini"]
+            .iter()
+            .map(PathBuf::from)
+            .collect();
+        assert_eq!(categories_of(&per_track), vec!["extension".to_string()]);
+        // Le joker ne mange pas une voiture entière pour autant : un fichier
+        // posé DANS la voiture mais hors de son `extension/` n'est pas une
+        // config.
+        let skin: HashSet<PathBuf> = ["content/cars/ks_alfa_giulia_qv/skins/chp_unit_118/livery.png"]
+            .iter()
+            .map(PathBuf::from)
+            .collect();
+        assert_eq!(categories_of(&skin), vec![OTHER_CATEGORY.to_string()]);
     }
 
     #[test]

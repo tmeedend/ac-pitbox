@@ -17,7 +17,7 @@ export interface Attachment {
    * conjecture assumée : un pack peut livrer une police pour une voiture qu'il
    * ne touche pas autrement. */
   signal: "USER" | "PATH" | "CONFIG_NAME" | "ARCHIVE" | "NONE";
-  nature: "CONTENT" | "APPEARANCE" | "BEHAVIOUR" | "DEPENDENCY" | "UNRECOGNISED";
+  nature: "DOCUMENT" | "CONTENT" | "APPEARANCE" | "BEHAVIOUR" | "DEPENDENCY" | "UNRECOGNISED";
 }
 
 export interface OtherModRow {

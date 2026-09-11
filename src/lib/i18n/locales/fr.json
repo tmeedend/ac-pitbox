@@ -534,6 +534,8 @@
     "attachSTANDALONE": "Autonome",
     "natureAPPEARANCE": "Apparence",
     "typeSKIN": "Livrée",
+    "typeDOCUMENT": "Document",
+    "natureDOCUMENT": "Document",
     "typeSOUND": "Son",
     "typeTRACK_SKIN": "Habillage",
     "typeLAYER": "Couche",

@@ -77,6 +77,11 @@ pub enum AttachKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Nature {
+    /// Changes nothing in the game: a notice, a manual, a livery template. The
+    /// row exists so that the file stays reachable, not because it does
+    /// anything — and calling that "unidentified" was wrong twice over, since
+    /// the app knows exactly what it is.
+    Document,
     /// A thing chosen for itself, not something dressing another: a driver
     /// model. Asking whether a mannequin is "appearance" is the right question
     /// with the wrong answer — it does not dress a car, it *is* the content.

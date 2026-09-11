@@ -31,6 +31,10 @@ pub enum RowKind {
     Sound,
     TrackSkin,
     Layer,
+    /// Notice, manuel, template : une livraison partie tout entière en
+    /// ressources (§4.5.2). Sa ligne subsiste pour que le fichier reste
+    /// atteignable.
+    Document,
     /// Mannequin de pilote. Distingué des autres mods parce que c'est un
     /// **contenu autonome** (§4) : il ne se greffe sur rien, il se choisit.
     /// C'est aussi ce qui le fera sortir de cet inventaire pour rejoindre
@@ -94,7 +98,16 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
         // Un mannequin ne pose QUE dans `content/driver` : c'est ce qui le
         // distingue d'un pack qui en livrerait un parmi d'autres choses.
         let is_driver = card.categories == ["driver"];
-        let attachment = if is_driver {
+        // Aucun fichier stocké : tout est parti en ressources (§4.5.2). C'est
+        // une notice ou un manuel — le seul cas où un mod « autre » ne pose
+        // rien du tout, et il a un nom.
+        let is_document = !is_driver && card.file_count == 0;
+        let attachment = if is_document {
+            crate::attach::Attachment {
+                nature: Nature::Document,
+                ..card.attachment.clone()
+            }
+        } else if is_driver {
             // « Autonome », pas « le jeu » : un modèle de pilote ne se greffe
             // sur rien, il se choisit (§2). Et sa nature est **contenu** — il
             // n'habille pas quelque chose d'autre, il EST la chose.
@@ -110,7 +123,13 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
         };
         out.push(InventoryRow {
             uid: format!("OTHER:{}", card.row.id),
-            kind: if is_driver { RowKind::Driver } else { RowKind::Other },
+            kind: if is_driver {
+                RowKind::Driver
+            } else if is_document {
+                RowKind::Document
+            } else {
+                RowKind::Other
+            },
             name: card.row.display_name_user.clone().unwrap_or_else(|| card.row.id.clone()),
             tech_id: card.row.id.clone(),
             attachment,

@@ -254,6 +254,7 @@
     TRACK_SKIN: "◠",
     LAYER: "▦",
     DRIVER: "👤",
+    DOCUMENT: "📄",
     OTHER: "⚙",
   };
 
@@ -277,7 +278,7 @@
     {
       axis: "nature",
       labelKey: "inventory.facetNature",
-      values: ["CONTENT", "APPEARANCE", "BEHAVIOUR", "DEPENDENCY", "UNRECOGNISED"],
+      values: ["CONTENT", "APPEARANCE", "BEHAVIOUR", "DEPENDENCY", "DOCUMENT", "UNRECOGNISED"],
     },
     { axis: "state", labelKey: "inventory.facetState", values: ["ACTIVE", "INACTIVE", "NOTE"] },
   ];
