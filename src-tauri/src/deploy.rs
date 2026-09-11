@@ -66,7 +66,7 @@ pub(crate) fn link_or_copy(src: &Path, dst: &Path) -> Result<(), String> {
 /// déploiement existant, vrai dossier étranger) est du ressort de l'appelant.
 fn link_tree(source: &Path, dest: &Path) -> Result<(), String> {
     std::fs::create_dir_all(dest).map_err(|e| e.to_string())?;
-    for entry in WalkDir::new(source).into_iter().filter_map(|e| e.ok()) {
+    for entry in walk_following(source) {
         let rel = entry.path().strip_prefix(source).unwrap();
         if rel.as_os_str().is_empty() {
             continue; // la racine elle-même
@@ -87,7 +87,7 @@ fn link_tree(source: &Path, dest: &Path) -> Result<(), String> {
 /// fichier réellement gagnant — jamais de copie de fusion, la bibliothèque a
 /// déjà un fichier physique distinct par entité (mod/couche).
 fn overlay_tree(source: &Path, dest: &Path) -> Result<(), String> {
-    for entry in WalkDir::new(source).into_iter().filter_map(|e| e.ok()) {
+    for entry in walk_following(source) {
         let rel = entry.path().strip_prefix(source).unwrap();
         if rel.as_os_str().is_empty() {
             continue;
@@ -103,6 +103,33 @@ fn overlay_tree(source: &Path, dest: &Path) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Walks `source`, **following junctions**.
+///
+/// A separately stored livery is projected into the host folder as a junction
+/// (`submods::project_skin`, §12bis.2), and a junction is neither a file nor a
+/// directory to `symlink_metadata`: `is_dir()` and `is_file()` are **both**
+/// false on it (verified empirically — Rust std reports a mount point as a
+/// symlink). Left unfollowed, `WalkDir` hands back an entry that both branches
+/// of `link_tree`/`overlay_tree` reject, so the whole livery is skipped without
+/// a word.
+///
+/// Real bug this exists for: a 20-livery skin pack imported onto a managed car
+/// landed in the library, showed up in the car's fiche and in its 3D preview,
+/// and never reached `content/` — redeploying changed nothing, since the walk
+/// had never seen it. Only our own projections are junctions here (an archive
+/// carries none), so following them is exactly materialising what the library
+/// says the host holds.
+///
+/// Walk errors (broken junction, unreadable folder) are skipped as before, but
+/// logged: a packaged build has no console, so a silently missing file would be
+/// undiagnosable after the fact.
+fn walk_following(source: &Path) -> impl Iterator<Item = walkdir::DirEntry> {
+    WalkDir::new(source)
+        .follow_links(true)
+        .into_iter()
+        .filter_map(|e| e.inspect_err(|err| log::warn!("deploy: {err}")).ok())
 }
 
 fn write_marker(dest: &Path, mod_id: &str, kind: HostKind) -> Result<(), String> {
@@ -198,6 +225,43 @@ mod tests {
         // bibliothèque doit se répercuter dans le dossier déployé.
         std::fs::write(source.join("model.kn5"), b"CHANGED").unwrap();
         assert_eq!(std::fs::read(dest.join("model.kn5")).unwrap(), b"CHANGED");
+    }
+
+    /// Règle (§12bis.2) : une livrée stockée à part et projetée par junction
+    /// dans le dossier de l'hôte fait partie de ce que l'hôte livre au jeu.
+    ///
+    /// Bug réel : `WalkDir` sans `follow_links` rend une junction ni fichier ni
+    /// dossier (`is_dir()` et `is_file()` tous deux faux), donc les deux
+    /// branches de `link_tree` la rejetaient — 20 livrées visibles en
+    /// bibliothèque, absentes du jeu, et redéployer n'y changeait rien.
+    #[test]
+    fn deploy_tree_materialises_a_junction_inside_the_source() {
+        let base = temp();
+        let source = base.join("source");
+        std::fs::create_dir_all(source.join("skins")).unwrap();
+        std::fs::write(source.join("model.kn5"), b"FAKE").unwrap();
+
+        // La livrée vit ailleurs (`library/skins/<car>/<livrée>`), comme
+        // `import_skin_pack` la range, et n'est qu'un lien dans la voiture.
+        let store = base.join("store").join("af_corse_51");
+        std::fs::create_dir_all(store.join("nested")).unwrap();
+        std::fs::write(store.join("preview.jpg"), b"IMG").unwrap();
+        std::fs::write(store.join("nested").join("body.dds"), b"DDS").unwrap();
+        crate::activation::create_junction(&source.join("skins").join("af_corse_51"), &store).unwrap();
+
+        let dest = base.join("dest");
+        deploy_tree(&source, &dest, "ferrari_488", HostKind::Car).unwrap();
+
+        let deployed = dest.join("skins").join("af_corse_51");
+        assert!(deployed.join("preview.jpg").is_file(), "livrée projetée déployée");
+        assert!(
+            deployed.join("nested").join("body.dds").is_file(),
+            "y compris ses sous-dossiers"
+        );
+        assert!(
+            !crate::activation::is_junction(&deployed),
+            "matérialisée en vrai dossier : content/ ne porte aucun point d'analyse (§2)"
+        );
     }
 
     #[test]

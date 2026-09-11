@@ -241,6 +241,10 @@ fn import_skin_pack(
     let Ok(entries) = std::fs::read_dir(&sub.dir) else {
         return;
     };
+    // Une seule projection suffit à rendre le déploiement du jeu périmé — mais
+    // aucune n'en change rien, et redéployer pour rien coûte un dossier entier
+    // de hardlinks (§2).
+    let mut projected_any = false;
     for e in entries.flatten() {
         let skin_src = e.path();
         if !skin_src.is_dir() {
@@ -310,6 +314,7 @@ fn import_skin_pack(
         // Projection : junction dans le skins/ de l'entité cible (voiture ou
         // circuit — pour un circuit, sous skins/cm_skins/, convention CM).
         let (projected, warning) = project_skin(conn, cfg, parent, &name, &dest, track);
+        projected_any |= projected;
         out.push(SubImported {
             sub_type: sub_type.into(),
             parent_id: parent.clone(),
@@ -320,6 +325,12 @@ fn import_skin_pack(
             parent_known: host_exists(conn, parent),
             awaiting_decision: false,
         });
+    }
+
+    // Les junctions viennent d'être posées dans la bibliothèque : le jeu n'en
+    // sait encore rien (voir `redeploy_host`). Une fois pour tout le pack.
+    if projected_any {
+        redeploy_host(conn, cfg, parent);
     }
 
     // Fichiers annexes au pack de skins de circuit (ex. ext_config.ini,
@@ -377,6 +388,37 @@ fn project_skin(
     match activation::create_junction(&link, store) {
         Ok(()) => (true, None),
         Err(e) => (false, Some(format!("projection : {e}"))),
+    }
+}
+
+/// Pushes into the game what was just written into the **library** copy of the
+/// host: a projected livery, a recomposed `skins/default/`.
+///
+/// Only a managed mod needs it, and only because of where its liveries live.
+/// `parent_content_dir` points at the library version folder for a managed mod,
+/// while `content/<type>s/<id>` is a hardlink mirror of that folder taken at the
+/// last deployment (§2) — nothing propagates between the two on its own. Stock
+/// content has no such gap (its `parent_content_dir` *is* the deployed folder),
+/// and recomposing it would rebuild the composed tree from `stock_base/`,
+/// dropping the very junction we just created.
+///
+/// Real bug this closes: a 20-livery skin pack imported onto a managed car was
+/// stored, projected, listed in the fiche and shown in the 3D preview — all of
+/// which read the library — and was nowhere to be found in the game. Nothing in
+/// the import report said so, because from the library's point of view nothing
+/// had failed.
+///
+/// Best-effort by design (§4.5): what is stored but not deployed is picked up
+/// again by the general repair (§9.3), and a redeployment that fails must not
+/// lose the rest of a pack. Hence the `log::warn!` — on a packaged build there
+/// is no console to catch it otherwise.
+fn redeploy_host(conn: &Connection, cfg: &AppConfig, parent_id: &str) {
+    let managed = matches!(overlay::get_mod(conn, parent_id), Ok(Some(m)) if !m.is_stock);
+    if !managed {
+        return;
+    }
+    if let Err(e) = crate::compose::recompose(conn, cfg, parent_id) {
+        log::warn!("redeploy_host {parent_id}: {e}");
     }
 }
 
@@ -656,6 +698,10 @@ fn recompose_track_skins(conn: &Connection, cfg: &AppConfig, track_id: &str) -> 
     } else if let Ok(json) = serde_json::to_string_pretty(&names) {
         let _ = std::fs::write(&marker, json);
     }
+
+    // `skins/default/` vient d'être reconstruit dans la bibliothèque pour un
+    // circuit géré : sans redéploiement, le jeu garde la sélection précédente.
+    redeploy_host(conn, cfg, track_id);
 
     Ok(())
 }
@@ -1091,6 +1137,9 @@ pub fn remove_sub(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<()
                     let _ = activation::remove_junction(&link);
                 }
             }
+            // Retirée de la bibliothèque, la livrée est encore déployée dans le
+            // jeu : même écart qu'à l'import, dans l'autre sens.
+            redeploy_host(conn, cfg, &sub.parent_id);
         }
         "TRACK_SKIN" => {
             // Même chose, sous skins/cm_skins/ (convention CM, §8) — et
@@ -2372,6 +2421,100 @@ mod tests {
         assert_eq!(report2.repaired, 0);
         assert_eq!(report2.already_ok, 1);
         assert!(report2.failed.is_empty());
+    }
+
+    /// Règle (§12bis.2) : un skin importé sur une voiture **active** est dans le
+    /// jeu à la fin de l'import, pas seulement en bibliothèque.
+    ///
+    /// Bug réel : pour un mod géré, `parent_content_dir` désigne le dossier de
+    /// bibliothèque, et `content/` n'en est qu'une copie en hardlinks figée au
+    /// dernier déploiement (§2). Les 20 livrées d'un pack F1 étaient stockées,
+    /// projetées, listées dans la fiche et rendues dans l'aperçu 3D — tout cela
+    /// lit la bibliothèque — et n'existaient nulle part dans le jeu.
+    #[test]
+    fn an_imported_skin_reaches_the_game_not_just_the_library() {
+        let base = crate::testutil::temp_dir("skin-to-game");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        let carv = library.join("cars").join("ferrari_488").join("v1");
+        std::fs::create_dir_all(carv.join("ui")).unwrap();
+        std::fs::write(carv.join("ui").join("ui_car.json"), b"{}").unwrap();
+        std::fs::write(carv.join("ferrari.kn5"), b"FAKE").unwrap();
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let now = Local::now().to_rfc3339();
+        overlay::upsert_mod(
+            &conn,
+            "ferrari_488",
+            "Car",
+            Some("Ferrari"),
+            Some("488"),
+            "h",
+            None,
+            &now,
+        )
+        .unwrap();
+        overlay::insert_version(
+            &conn,
+            "v1",
+            "ferrari_488",
+            Some("1.0"),
+            None,
+            &now,
+            &carv.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+        activation::activate(&conn, &cfg, "ferrari_488", Some("v1")).unwrap();
+        let deployed = ac.join("content").join("cars").join("ferrari_488");
+        assert!(
+            deployed.join("ferrari.kn5").is_file(),
+            "précondition : voiture déployée"
+        );
+
+        // Pack de skins pour cette voiture : <carId>/skins/<skin>.
+        let skin_src = base.join("src").join("ferrari_488").join("skins").join("af_corse_51");
+        std::fs::create_dir_all(&skin_src).unwrap();
+        std::fs::write(skin_src.join("preview.jpg"), b"IMG").unwrap();
+        let subs = modscan::scan_subs(&base.join("src"));
+        let res = import_subs(
+            &conn,
+            &cfg,
+            &library,
+            "ferrari_skins.7z",
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+        );
+        assert_eq!(res.len(), 1);
+        assert!(res[0].projected, "précondition : junction posée en bibliothèque");
+
+        assert!(
+            deployed.join("skins").join("af_corse_51").join("preview.jpg").is_file(),
+            "la livrée est dans le jeu à la fin de l'import"
+        );
+
+        // Et elle en repart avec elle : le retrait rejoue le même chemin.
+        let sub_id = overlay::list_subs_for_parent(&conn, "ferrari_488").unwrap()[0]
+            .id
+            .clone();
+        remove_sub(&conn, &cfg, &sub_id).unwrap();
+        assert!(
+            !deployed.join("skins").join("af_corse_51").exists(),
+            "livrée supprimée retirée du jeu aussi"
+        );
+        assert!(deployed.join("ferrari.kn5").is_file(), "la voiture elle-même intacte");
     }
 
     #[test]
