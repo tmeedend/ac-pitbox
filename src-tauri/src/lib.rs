@@ -65,6 +65,7 @@ mod ui_prefs;
 mod uijson;
 mod usermeta;
 mod weather;
+mod wiki;
 
 use overlay::Db;
 use tauri::Manager;

@@ -117,4 +117,12 @@ windows = { version = "0.61", features = [
     # main, faute de crate visant FMOD 1.x. Une feature de plus sur une
     # dépendance déjà là, pas une dépendance de plus.
     "Win32_System_LibraryLoader",
+    # Client HTTPS de l'enrichissement Wikipédia (docs/SPEC-wikipedia-fiche-detail.md
+    # §6) : deux requêtes GET par fiche, pas de client HTTP dans le projet
+    # jusqu'ici. WinHTTP est livré avec Windows et apporte ce qu'un crate
+    # aurait apporté — TLS sur le magasin de certificats de la machine, proxy
+    # de l'utilisateur, redirections, délais — sans faire entrer une trentaine
+    # de crates et une pile TLS pour un onglet décoratif. `wiki/http.rs` note
+    # les deux solutions écartées (reqwest, ureq) et ce qui les ferait gagner.
+    "Win32_Networking_WinHttp",
 ] }

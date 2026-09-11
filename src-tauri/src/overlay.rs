@@ -389,6 +389,45 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             value TEXT NOT NULL
         );
 
+        -- Enrichissement Wikipédia de la fiche (docs/SPEC-wikipedia-fiche-detail.md
+        -- §3). Trois tables : l'appariement, que l'utilisateur peut corriger et
+        -- qui circulera un jour entre installations (§10) ; le contenu rapporté
+        -- du réseau ; et le cache négatif, sans lequel chaque ouverture d'une
+        -- fiche sans correspondance relancerait une résolution complète.
+        --
+        -- `mod_key` est le nom du dossier du mod, donc `mods.id_interne` —
+        -- **sans clé étrangère, délibérément** : les `foreign_keys` sont à ON
+        -- dans cette base, et un appariement est précisément ce qui doit
+        -- survivre à la suppression puis au réimport du mod.
+        CREATE TABLE IF NOT EXISTS wiki_link (
+            mod_key     TEXT PRIMARY KEY,
+            entity_id   TEXT NOT NULL,          -- Q-id Wikidata, jamais une URL (§3.1)
+            source      TEXT NOT NULL,          -- 'auto' | 'import' | 'manual', par précédence
+            resolved_at TEXT NOT NULL
+        );
+
+        -- Clé composite (entité, langue **demandée**) : la langue réellement
+        -- servie peut différer quand la chaîne de repli du §5.2 est descendue
+        -- sur l'anglais, et elle se relit dans `article_url` — c'est pourquoi
+        -- cette URL est stockée et jamais reconstruite (§3.2).
+        CREATE TABLE IF NOT EXISTS wiki_cache (
+            entity_id       TEXT NOT NULL,
+            lang            TEXT NOT NULL,
+            article_title   TEXT NOT NULL,
+            article_url     TEXT NOT NULL,
+            revision_id     INTEGER,
+            extract         TEXT NOT NULL,
+            parent_entity   TEXT,               -- non nul = repli sur l'entité parente (§5.3)
+            available_langs TEXT NOT NULL DEFAULT '[]',
+            fetched_at      TEXT NOT NULL,
+            PRIMARY KEY (entity_id, lang)
+        );
+
+        CREATE TABLE IF NOT EXISTS wiki_no_match (
+            mod_key      TEXT PRIMARY KEY,
+            attempted_at TEXT NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_versions_mod ON versions(mod_id);
         CREATE INDEX IF NOT EXISTS idx_history_mod  ON history(mod_id);
         CREATE INDEX IF NOT EXISTS idx_mods_idhash  ON mods(identity_hash);

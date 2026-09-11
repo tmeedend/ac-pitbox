@@ -776,6 +776,47 @@ laisser pourrir ici.
       pendant deux lots ; et **le `preview.jpg` d'un skin est une référence de
       cadrage, pas de luminosité** — il est plus sombre que le rendu du jeu, ce
       qui m'a fait diagnostiquer un écart inexistant.
+- [ ] **Enrichissement Wikipédia de la fiche** (branche
+      `feature/wikipedia-fiche-detail`). Un extrait de l'article du véhicule ou
+      du circuit **réel**, dans un onglet à côté de la description de l'auteur.
+      Spec : `docs/SPEC-wikipedia-fiche-detail.md`, et son §1 commande tout —
+      la fonctionnalité est **décorative**, donc l'ambiguïté n'affiche rien et
+      l'absence n'est jamais une erreur. Son §2 est juridique et non
+      négociable : le texte reste une **collection** (jamais fusionné à la
+      description, jamais reformulé, résumé ni traduit — surtout pas par un
+      modèle de langage), sinon le ShareAlike de CC BY-SA remonte sur l'app.
+      **Fait : le lot 1 (le socle), sans interface** — `src-tauri/src/wiki/` :
+      les trois tables dans l'overlay (§3), la chaîne de repli et la remontée
+      d'un cran vers l'entité parente (§5), le client Action API (§6).
+      Le module porte un `allow(dead_code)` **assumé et daté** : rien ne
+      l'appelle tant que l'appariement (§4) n'écrit pas de `wiki_link`. À
+      retirer au premier client.
+      Trois choses à savoir avant d'y toucher :
+      - **Le client HTTP est WinHTTP**, via le crate `windows` déjà présent
+        (`wiki/http.rs`) : le projet n'avait aucun client HTTP, et deux GET
+        JSON ne justifiaient pas une trentaine de crates plus une pile TLS.
+        L'OS fournit TLS, proxy, redirections et délais. Les deux solutions
+        écartées (`reqwest` + `native-tls`, `ureq`) sont notées dans le fichier
+        avec ce qui les ferait gagner — le jour où l'app cesse d'être
+        Windows-only, c'est `reqwest`. Corollaire : tout est **bloquant**, donc
+        les futures façades passent par `spawn_blocking`.
+      - **Les deux formats de réponse ont été relevés sur l'API réelle**, pas
+        déduits : `query.pages` est un *tableau* en `formatversion=2`, le
+        parent se lit en `claims.P361[0].mainsnak.datavalue.value.id`, et les
+        sitelinks mélangent `commonswiki` aux langues. Un test ignoré
+        (`talks_to_wikipedia_for_real`) rejoue le tout contre le vrai service —
+        c'est la seule preuve que le FFI WinHTTP fonctionne, la CI ne
+        l'exécutant pas (§11 : aucun test ne dépend de Wikipédia).
+      - **Un 404 et un réseau coupé ne sont pas le même non-résultat**
+        (`api::Fetched`). Les confondre écrirait « pas d'article » dans le
+        cache négatif pour 90 jours à cause d'un tunnel.
+      **Reste** : les lots 2 à 6 du §12 — appariement voitures (§4.1),
+      appariement circuits par coordonnées (§4.2, indépendant du précédent),
+      interface (§7), correction manuelle (§7.6), réglages (§8, dont
+      l'interrupteur « enrichissement en ligne » que `resolve_article` attend
+      déjà sous la forme d'un `net: Option<&WikiClient>`). Les quatre points
+      du §13 sont tranchés pour ce qui touche au socle : TTL 30 jours en
+      positif, 90 en négatif.
 - [ ] **Signature Authenticode** : le workflow est prêt, il attend un
       certificat. Définir la variable de dépôt `SIGN_COMMAND` suffit à
       l'activer — voir `docs/windows-code-signing.md` (lire **avant** d'acheter,
