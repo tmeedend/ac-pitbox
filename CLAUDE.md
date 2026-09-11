@@ -300,6 +300,13 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
   très en dessous de leur bouton jusqu'à sortir de l'écran, puis les colonnes
   de bibliothèque élargies de 10 % à la première prise de poignée. Diviser par
   `zoomFactor()` (`zoom.svelte.ts`) avant d'écrire, toujours.
+  **Corollaire côté CSS : un seuil de mise en page est une `@container`, pas une
+  `@media`.** Une requête de média interroge la fenêtre — donc un seuil que le
+  zoom déplace, et qui de toute façon ignore ce que le rail et la colonne de
+  session ont déjà pris. Une requête de conteneur interroge la largeur
+  réellement disponible, la seule dont dépende la mise en colonnes. `DetailPage`
+  déclare `container: detail / inline-size` sur `.page`, et tous ses seuils s'y
+  réfèrent.
 - **`t("clé")` renvoie la clé elle-même si elle manque** en anglais aussi.
   Une clé oubliée n'explose donc pas : elle s'affiche telle quelle à l'écran
   (`detail.showroom`). C'est ce qui rend `errorText()` sûr, et c'est aussi

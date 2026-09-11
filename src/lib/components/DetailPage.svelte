@@ -74,6 +74,7 @@
   import { getConfig } from "$lib/config";
   import { t } from "$lib/i18n/index.svelte";
   import { odometerText } from "$lib/odometer";
+  import { trackLength } from "$lib/trackLength";
   import LayersBlock from "./detail/LayersBlock.svelte";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
   import DecisionsBlock from "./detail/DecisionsBlock.svelte";
@@ -1017,7 +1018,10 @@
     const layouts = d.track?.layouts ?? [];
     const parts = isCar
       ? [d.brand, d.year ? String(d.year) : null, d.car_class ? d.car_class.toUpperCase() : null]
-      : [layouts[previewLayout]?.length ?? null, layouts.length > 1 ? t("detail.layoutCount", { count: layouts.length }) : null];
+      : [
+          trackLength(layouts[previewLayout]?.length),
+          layouts.length > 1 ? t("detail.layoutCount", { count: layouts.length }) : null,
+        ];
     parts.push(d.author ? t("detail.byAuthor", { author: d.author }) : null);
     return parts.filter(Boolean).join(" · ");
   });
@@ -1076,7 +1080,11 @@
      viendra s'y ajouter. Rendu MÊME VIDE, sans quoi un mod sans description
      n'offrirait aucun endroit où en écrire une (§5bis.3). -->
 {#snippet textCard(text: string | null, overridden: boolean)}
-  <section class="blk text-blk">
+  <section class="text-zone">
+    <!-- Largeur de mesure, marges automatiques : les sous-onglets partagent le
+         même conteneur que le texte, sans quoi la bande courrait sur toute la
+         page au-dessus d'un paragraphe de 430 px. -->
+    <div class="reading">
     <Tabs
       gamepad={false}
       tabs={[
@@ -1100,14 +1108,19 @@
         {/if}
       {/snippet}
     </Tabs>
-    <div class="blk-b text-body">
+    <div class="text-body">
       {#if textTab === "desc"}
-        <div class="desc-body" class:empty-desc={!text}>
+        <div class="read-box desc-body" class:empty-desc={!text}>
           {text ? decodeDescription(text) : t("detail.noDescription")}
         </div>
       {:else}
-        <NoteBlock bare value={detail?.notes_user ?? null} onsave={saveNote} />
+        <!-- Même boîte que la description : les deux sous-onglets échangent un
+             contenu, pas une mise en page. -->
+        <div class="read-box">
+          <NoteBlock bare value={detail?.notes_user ?? null} onsave={saveNote} />
+        </div>
       {/if}
+    </div>
     </div>
   </section>
 {/snippet}
@@ -1310,109 +1323,7 @@
           {@const ol = previewSrc(d.track?.layouts[previewLayout]?.outline ?? null)}
           {#if ol}<img class="hero-outline" src={ol} alt="" />{/if}
         {/if}
-      </div>
-
-        <!-- Le sélecteur est un CONTRÔLE, pas de la documentation (§7.2) : il
-             agit sur l'image du dessus et sur ce qui partira en session, donc
-             il ne doit jamais exiger de faire défiler. Il était jusqu'ici une
-             grille reléguée en bas de fiche.
-             Même fond et même retrait que l'aperçu : les deux se lisent comme
-             une seule carte, l'image et sa commande. -->
-        <div class="pickzone">
-        {#if isCar}
-          <PickerBar
-            label={t("detail.skinsLabel")}
-            items={skins.map((sk) => ({
-              id: sk.id,
-              name: sk.name,
-              // `livery.png` — couleurs et motif de la livrée seule — et non la
-              // photo de la voiture entière : à 20 px dans une liste déroulante,
-              // celle-ci ne montre plus rien. Même choix que le sélecteur de la
-              // colonne de session, et la convention de CM. La photo reprend ses
-              // droits dans la grille dépliée, où elle a la place.
-              image: previewSrc(sk.livery ?? sk.preview, contentRevision),
-            }))}
-            index={previewSkin}
-            onpick={selectSkin}
-            expanded={pickerOpen}
-            ontoggle={() => (pickerOpen = !pickerOpen)}
-            emptyText={t("detail.noSkins")}
-          />
-          {#if pickerOpen && skins.length}
-            <div class="skins">
-              {#each skins as sk, i (sk.id)}
-                {@const sp = previewSrc(sk.preview, contentRevision)}
-                {@const lv = previewSrc(sk.livery, contentRevision)}
-                <button
-                  class="skin"
-                  class:preview={i === previewSkin}
-                  onclick={() => selectSkin(i)}
-                  title={t("detail.chooseSkinTooltip")}
-                >
-                  <div class="skin-img">
-                    {#if sp}<img src={sp} alt={sk.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
-                    <!-- `livery.png` (§8.6) : couleurs/motif du skin seul, en
-                         complément de la photo de la voiture — jamais sur la
-                         grande image du skin sélectionné (heroImg), juste ici
-                         dans la grille de choix. -->
-                    {#if lv}<img class="skin-livery" src={lv} alt="" loading="lazy" />{/if}
-                    {#if i === previewSkin}<span class="skin-apercu mono">{t("library.sessionBadge")}</span>{/if}
-                  </div>
-                  <div class="skin-b">
-                    <span class="skin-name">{sk.name}</span>
-                  </div>
-                </button>
-              {/each}
-              {#each Array.from({ length: gridFillerCount(skins.length) }) as _}
-                <div class="skin-filler" aria-hidden="true"></div>
-              {/each}
-            </div>
-          {/if}
-        {:else if d.track}
-          <PickerBar
-            label={t("detail.layoutLabel")}
-            fit="contain"
-            items={d.track.layouts.map((l, i) => ({
-              id: l.id || String(i),
-              name: l.name,
-              image: previewSrc(l.outline),
-            }))}
-            index={previewLayout}
-            onpick={selectLayout}
-            expanded={pickerOpen}
-            ontoggle={() => (pickerOpen = !pickerOpen)}
-            emptyText={t("detail.singleLayout")}
-            note={d.track.layouts[previewLayout]?.length ?? undefined}
-          />
-          {#if pickerOpen && d.track.layouts.length}
-            <div class="skins">
-              {#each d.track.layouts as l, i (l.id || i)}
-                {@const o = previewSrc(l.outline)}
-                {@const from = originOf(l.id)}
-                <button class="skin" class:preview={i === previewLayout} onclick={() => selectLayout(i)} title={t("detail.chooseLayoutTooltip")}>
-                  <div class="skin-img layout-img">
-                    {#if o}<img src={o} alt={l.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
-                    {#if i === previewLayout}<span class="skin-apercu mono">{t("library.sessionBadge")}</span>{/if}
-                    <!-- Marque d'origine (§7.7) : ce tracé n'est pas dans le mod,
-                         c'est une couche qui l'apporte. -->
-                    {#if from}<span class="skin-from mono" title={t("detail.layoutFromLayerTip", { layer: from.layer_name })}>{t("detail.layoutFromLayer")}</span>{/if}
-                  </div>
-                  <div class="skin-b"><span class="skin-name">{l.name}</span></div>
-                </button>
-              {/each}
-              {#each Array.from({ length: gridFillerCount(d.track.layouts.length) }) as _}
-                <div class="skin-filler" aria-hidden="true"></div>
-              {/each}
-            </div>
-          {/if}
-        {/if}
-
         </div>
-
-        {@render textCard(
-          isCar ? (d.specs?.description ?? null) : (d.track?.description ?? null),
-          !!d.description_user,
-        )}
       </div>
 
       <div class="data">
@@ -1501,6 +1412,68 @@
             </div>
           </section>
 
+          <!-- Le sélecteur de livrée est une carte de cette colonne, pas une
+               barre nue sous l'aperçu : posé entre la fiche technique et le
+               son, il en reprend le cadre et l'en-tête rouge. Un contrôle n'a
+               pas à se distinguer de ses voisins pour rester un contrôle — ce
+               qui le désigne comme tel, c'est qu'il agisse, pas qu'il détonne.
+               L'intitulé quitte le champ : l'en-tête le dit déjà. -->
+          <section class="blk">
+            <header class="blk-h">
+              <span class="blk-t">{t("detail.skinsLabel")}</span>
+              {#if skins.length}<span class="blk-n">{skins.length}</span>{/if}
+            </header>
+            <div class="blk-b pick-b">
+              <PickerBar
+                items={skins.map((sk) => ({
+                  id: sk.id,
+                  name: sk.name,
+                  // `livery.png` — couleurs et motif de la livrée seule — et non la
+                  // photo de la voiture entière : à 20 px dans une liste déroulante,
+                  // celle-ci ne montre plus rien. Même choix que le sélecteur de la
+                  // colonne de session, et la convention de CM. La photo reprend ses
+                  // droits dans la grille dépliée, où elle a la place.
+                  image: previewSrc(sk.livery ?? sk.preview, contentRevision),
+                }))}
+                index={previewSkin}
+                onpick={selectSkin}
+                expanded={pickerOpen}
+                ontoggle={() => (pickerOpen = !pickerOpen)}
+                emptyText={t("detail.noSkins")}
+              />
+              {#if pickerOpen && skins.length}
+                <div class="skins">
+                  {#each skins as sk, i (sk.id)}
+                    {@const sp = previewSrc(sk.preview, contentRevision)}
+                    {@const lv = previewSrc(sk.livery, contentRevision)}
+                    <button
+                      class="skin"
+                      class:preview={i === previewSkin}
+                      onclick={() => selectSkin(i)}
+                      title={t("detail.chooseSkinTooltip")}
+                    >
+                      <div class="skin-img">
+                        {#if sp}<img src={sp} alt={sk.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
+                        <!-- `livery.png` (§8.6) : couleurs/motif du skin seul, en
+                             complément de la photo de la voiture — jamais sur la
+                             grande image du skin sélectionné (heroImg), juste ici
+                             dans la grille de choix. -->
+                        {#if lv}<img class="skin-livery" src={lv} alt="" loading="lazy" />{/if}
+                        {#if i === previewSkin}<span class="skin-apercu mono">{t("library.sessionBadge")}</span>{/if}
+                      </div>
+                      <div class="skin-b">
+                        <span class="skin-name">{sk.name}</span>
+                      </div>
+                    </button>
+                  {/each}
+                  {#each Array.from({ length: gridFillerCount(skins.length) }) as _}
+                    <div class="skin-filler" aria-hidden="true"></div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          </section>
+
         {:else}
           {@const lay = d.track?.layouts[previewLayout]}
           {@const layoutCount = d.track?.layouts.length ?? 0}
@@ -1514,7 +1487,10 @@
           <section class="blk">
             <header class="blk-h"><span class="blk-t">{t("detail.trackInfo")}</span></header>
             <div class="specgrid" style="grid-template-columns:1fr 1fr;">
-              <div><div class="k lbl-key">{t("detail.lengthLabel")}</div><div class="v">{lay?.length ?? "—"}</div></div>
+              <div>
+                <div class="k lbl-key">{t("detail.lengthLabel")}</div>
+                <div class="v">{trackLength(lay?.length) ?? "—"}</div>
+              </div>
               <div>
                 <div class="k lbl-key">{t("detail.layoutsLabel")}</div>
                 <div class="v">
@@ -1566,9 +1542,69 @@
               {/if}
             </div>
           </section>
+
+          <!-- Même carte que le sélecteur de livrée, et même raison : il vit
+               parmi les cartes de la colonne, il en prend le cadre. -->
+          <section class="blk">
+            <header class="blk-h">
+              <span class="blk-t">{t("detail.layoutsLabel")}</span>
+              {#if layoutCount}<span class="blk-n">{layoutCount}</span>{/if}
+            </header>
+            <div class="blk-b pick-b">
+              {#if d.track}
+              <PickerBar
+                fit="contain"
+                items={d.track.layouts.map((l, i) => ({
+                  id: l.id || String(i),
+                  name: l.name,
+                  image: previewSrc(l.outline),
+                }))}
+                index={previewLayout}
+                onpick={selectLayout}
+                expanded={pickerOpen}
+                ontoggle={() => (pickerOpen = !pickerOpen)}
+                emptyText={t("detail.singleLayout")}
+                note={trackLength(d.track.layouts[previewLayout]?.length) ?? undefined}
+              />
+              {#if pickerOpen && d.track.layouts.length}
+                <div class="skins">
+                  {#each d.track.layouts as l, i (l.id || i)}
+                    {@const o = previewSrc(l.outline)}
+                    {@const from = originOf(l.id)}
+                    <button class="skin" class:preview={i === previewLayout} onclick={() => selectLayout(i)} title={t("detail.chooseLayoutTooltip")}>
+                      <div class="skin-img layout-img">
+                        {#if o}<img src={o} alt={l.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
+                        {#if i === previewLayout}<span class="skin-apercu mono">{t("library.sessionBadge")}</span>{/if}
+                        <!-- Marque d'origine (§7.7) : ce tracé n'est pas dans le mod,
+                             c'est une couche qui l'apporte. -->
+                        {#if from}<span class="skin-from mono" title={t("detail.layoutFromLayerTip", { layer: from.layer_name })}>{t("detail.layoutFromLayer")}</span>{/if}
+                      </div>
+                      <div class="skin-b"><span class="skin-name">{l.name}</span></div>
+                    </button>
+                  {/each}
+                  {#each Array.from({ length: gridFillerCount(d.track.layouts.length) }) as _}
+                    <div class="skin-filler" aria-hidden="true"></div>
+                  {/each}
+                </div>
+              {/if}
+              {/if}
+            </div>
+          </section>
         {/if}
       </div>
     </div>
+
+    <!-- ZONE 2 — le bloc de lecture, pleine largeur mais **contenu centré sur
+         une largeur de mesure**. Il occupait jusqu'ici le bas de la colonne de
+         gauche, où une description de trois mots laissait la colonne de droite
+         courir seule sur toute la hauteur de la page. Sorti de la rangée, il la
+         laisse se refermer sur la hauteur de l'aperçu, et gagne au passage une
+         ligne lisible : un paragraphe qui court sur 900 px se relit mal, l'œil
+         perdant le début de la ligne suivante. -->
+    {@render textCard(
+      isCar ? (d.specs?.description ?? null) : (d.track?.description ?? null),
+      !!d.description_user,
+    )}
 
     {:else if activeTab === "media"}
       <!-- Quatre blocs, deux groupes (§7.8) : ce que TU as produit (captures,
@@ -1691,6 +1727,9 @@
     margin: -28px -32px;
     min-height: 100%;
     background: var(--card);
+    /* Conteneur de référence des requêtes ci-dessous : c'est cette largeur-là,
+       celle qui reste à la fiche, qui décide de la mise en colonnes. */
+    container: detail / inline-size;
   }
   .empty {
     color: var(--muted);
@@ -1699,14 +1738,71 @@
   }
   /* Onglets : `Tabs.svelte` (variante `flush`), partagé avec Réglages,
      Add-ons et Règles de tags — plus de style local ici. */
-  /* Hauteur constante du bloc textuel (§7.4) : passer d'une description de
-     trois mots à une note de dix lignes ne doit pas faire sauter la colonne.
-     C'est un plancher, pas un plafond — un texte plus long allonge la carte. */
-  .text-blk :global(.tabs) {
+  /* ZONE 2 — le bloc de lecture.
+     Pleine largeur pour le fond et le filet qui le sépare de la rangée, mais
+     contenu ramené à une largeur de mesure et centré. */
+  .text-zone {
+    border-top: 1px solid var(--line);
+    background: var(--card);
+    padding: 22px 32px 30px;
+  }
+  /* Largeur du bloc de lecture : **des paliers, pas un pourcentage** — le
+     `.container` de Bootstrap, et pour les mêmes raisons.
+     Un `%` donne une largeur différente à chaque résolution, donc un rendu
+     qu'on ne peut régler pour personne : correct sur l'écran où on l'a
+     choisi, étalé sur le suivant. Une largeur fixe, elle, déborde dès que la
+     fenêtre rétrécit. Les paliers prennent les deux : **100 % tant que la
+     place manque**, puis une largeur arrêtée qui laisse la marge croître à
+     gauche et à droite — ce sont les valeurs de Bootstrap, éprouvées et
+     reconnaissables.
+     **Requêtes de conteneur et non de média** (même raison qu'au-dessus, §13) :
+     le seuil doit se mesurer sur la largeur qui reste à la fiche, rail et
+     colonne de session déduits, et le zoom d'interface déplace un seuil de
+     média sans déplacer cette largeur-là. */
+  .reading {
+    width: 100%;
+    margin: 0 auto;
+    /* Le corps de l'interface, comme partout ailleurs sur la fiche : un bloc
+       plus large n'est pas une raison d'écrire plus gros. Défini ici plutôt
+       que sur le paragraphe, pour que description et note — deux contenus du
+       même bloc — ne puissent pas diverger. */
+    font-size: 11px;
+    line-height: 1.55;
+  }
+  @container detail (min-width: 576px) {
+    .reading {
+      max-width: 540px;
+    }
+  }
+  @container detail (min-width: 768px) {
+    .reading {
+      max-width: 720px;
+    }
+  }
+  @container detail (min-width: 992px) {
+    .reading {
+      max-width: 960px;
+    }
+  }
+  @container detail (min-width: 1200px) {
+    .reading {
+      max-width: 1140px;
+    }
+  }
+  @container detail (min-width: 1400px) {
+    .reading {
+      max-width: 1320px;
+    }
+  }
+  .reading :global(.tabs) {
     margin-bottom: 0;
   }
+  /* **Plus de hauteur minimale.** Elle valait 150 px pour qu'une description de
+     trois mots ne fasse pas sauter la colonne d'à côté en changeant de
+     sous-onglet — mais il n'y a plus de colonne à côté : le bloc est seul sur
+     sa rangée, donc une ligne de texte occupe une ligne. */
   .text-body {
-    min-height: 150px;
+    min-width: 0;
   }
   /* Fiche posée par-dessus celle du mod : même respiration que le corps d'un
      onglet, puisqu'elle en occupe la place. */
@@ -1813,6 +1909,27 @@
   }
   .row.top {
     grid-template-columns: 1.4fr 1fr;
+    /* **La rangée se referme sur son contenu.** Par défaut une colonne de
+       grille s'étire à la hauteur de la plus haute, et le panneau de données —
+       qui porte un fond — courait donc jusqu'en bas de la page alors qu'il
+       n'avait de contenu que sur un tiers. Le vide se voyait surtout sur un
+       circuit, dont la colonne est la plus maigre. Avec `start`, chaque colonne
+       s'arrête où son contenu s'arrête, et le cas inverse — une colonne de
+       droite plus haute que l'aperçu, un circuit à vingt habillages — se règle
+       du même coup : elle s'allonge, l'aperçu reste aligné en haut, et rien ne
+       casse la rangée. */
+    align-items: start;
+  }
+  /* Une seule colonne quand la place manque : l'aperçu, puis le panneau.
+     **Requête de conteneur et non de média** : la fiche ne voit pas la fenêtre
+     mais ce qui lui reste une fois le rail et la colonne de session pris — et
+     le zoom d'interface (un `zoom` CSS sur `<html>`, §13) déplace le seuil
+     d'une requête de média sans déplacer la largeur réellement disponible. */
+  @container detail (max-width: 1100px) {
+    .row.top,
+    .row.top.track {
+      grid-template-columns: 1fr;
+    }
   }
   .row.track {
     grid-template-columns: 1fr 1fr;
@@ -1831,17 +1948,6 @@
        pas en largeur » — et un héros de voiture, dont le média est en absolu,
        n'a pas de largeur propre : il se réduirait à rien. */
     align-self: start;
-    /* Retrait du média dans son cadre, repris par le sélecteur pour que les
-       deux s'alignent. Voiture et circuit ne l'ont pas identique (voir
-       `--hero-pad`), d'où la variable plutôt qu'une valeur en dur. */
-    --col-pad: 14px;
-  }
-  .row.top:not(.track) .maincol {
-    --col-pad: 16px;
-  }
-  .pickzone {
-    background: var(--card);
-    padding: 0 var(--col-pad) var(--col-pad);
   }
   .hero {
     /* **Même carte que ses voisines.** Le panneau de données d'à côté est fait
@@ -2035,6 +2141,21 @@
   .data {
     background: var(--card);
     padding: 14px;
+    min-width: 0;
+  }
+  /* La rangée se refermant sur son contenu, la marge basse de la dernière
+     carte se lirait comme un reste de l'ancien fond qui courait jusqu'en bas. */
+  .data > :last-child {
+    margin-bottom: 0;
+  }
+  /* Corps de la carte d'un sélecteur : la ligne de contrôle, puis la grille
+     dépliée. Retrait un peu plus serré que `.blk-b` — ce corps est une ligne
+     d'outils, pas un paragraphe. */
+  .pick-b {
+    padding: 12px;
+  }
+  .pick-b .skins {
+    margin-top: 12px;
   }
   /* Fiche technique + courbe carrée côte à côte (§5bis.1). */
   .tech-curve {
@@ -2096,14 +2217,31 @@
     padding: 8px;
     margin-bottom: 0;
   }
-  .desc-body {
+  /* La boîte du texte : bord supérieur absent, c'est celui de la bande
+     d'onglets qui la ferme — les deux se lisent comme un seul panneau. */
+  .read-box {
     border: 1px solid var(--line);
     border-top: none;
     background: var(--panel2);
-    padding: 9px;
+    padding: 12px 14px 14px;
+  }
+  /* La note reprend la taille de la prose : dans la même boîte, sous le même
+     onglet, deux corps différents se verraient. Imposé d'ici plutôt que dans
+     `NoteBlock`, qui sert aussi les quatre autres fiches où il n'est pas dans
+     une colonne de lecture. */
+  .reading :global(.read-box button),
+  .reading :global(.read-box textarea) {
+    font-size: inherit;
+    line-height: inherit;
+  }
+  .desc-body {
     color: var(--txt2);
-    font-size: 11px;
-    line-height: 1.55;
+    /* Hérite de `.reading` : la taille de la prose est définie à un seul
+       endroit, celui qui calcule aussi la mesure — sans quoi les deux
+       divergeraient et la colonne ne ferait plus le nombre de caractères
+       annoncé. */
+    font-size: inherit;
+    line-height: inherit;
     white-space: pre-line;
     /* Une description de mod contient volontiers une URL de cent caractères
        sans une seule césure possible (bug réel : `ddm_daihatsu_copen_street`

@@ -634,19 +634,59 @@ la **catégorie**, remontée en puce près du titre. Les **extensions CSP**
 quittent les étiquettes pour Installation : elles décrivent l'installation, pas
 le contenu.
 
-**Le sélecteur de livrée/tracé est collé sous l'aperçu** (§7.2, `PickerBar`) :
-c'est un contrôle — il agit sur l'image du dessus et sur ce qui partira en
-session — et non de la documentation ; il ne doit donc jamais exiger de faire
-défiler. Trois gestes pour trois façons de chercher : les **flèches** (défiler
+**Le sélecteur de livrée/tracé est une carte de la colonne de droite**
+(`PickerBar`) : il y voisine avec la fiche technique, le son et les habillages,
+et en reprend le cadre, l'en-tête rouge et le compteur (« SKINS 28 »,
+« LAYOUTS 2 »). Il a d'abord été une barre nue collée sous l'aperçu ; ce qui
+comptait dans ce placement — **un contrôle ne doit jamais exiger de faire
+défiler** — est conservé, il reste au-dessus de la ligne de flottaison. Mais une
+barre sans cadre au milieu de cartes qui en ont détonnait sans rien dire de
+plus : ce qui désigne un contrôle, c'est qu'il agisse, pas qu'il se distingue de
+ses voisins. L'intitulé quitte le champ, l'en-tête le porte. Trois gestes pour trois façons de chercher : les **flèches** (défiler
 en gardant l'œil sur l'aperçu, geste le plus fréquent), le **nom** (liste
 déroulante, quand on le connaît) et **« Voir les N »**, qui déplie la grille de
 vignettes en place — beaucoup de livrées de mods s'appellent `skin_01`, et une
 liste de noms n'en dit alors rien. La grille est repliée à chaque ouverture de
 fiche, sans persistance.
 
-**La colonne de droite n'a que deux cartes sur un circuit** — « Circuit »
-(longueur, nombre de tracés et combien sont apportés par une couche, pays,
-odomètre) puis « Habillages ». C'est tout l'argument du *cas maigre* de la
+**Le premier onglet tient en deux zones empilées.** La première est une rangée
+à deux colonnes qui **se referme sur la hauteur de l'aperçu** : l'aperçu seul à
+gauche, toutes les cartes à droite (voiture : fiche technique et courbe côte à
+côte, son, livrées ; circuit : Circuit, habillages, tracés). Une colonne de
+grille s'étire par défaut à la hauteur de la plus haute, et le panneau de
+données — qui porte un fond — courait donc jusqu'en bas de la page alors qu'il
+n'avait de contenu que sur un tiers ; le vide se voyait surtout sur un circuit,
+dont la colonne est la plus maigre. Le cas inverse est réglé par la même règle :
+une colonne de droite plus haute que l'aperçu s'allonge, l'aperçu reste aligné
+en haut, la rangée ne casse pas. Sous ~1 100 px de largeur **disponible**, la
+rangée passe à une colonne.
+
+La seconde zone est le **bloc de lecture**, sous un filet horizontal : pleine
+largeur, mais contenu centré sur des **paliers de largeur** (ceux du
+`.container` de Bootstrap — 100 % tant que la place manque, puis 540 / 720 /
+960 / 1140 / 1320 px). Un pourcentage donnerait une largeur différente à chaque
+résolution, donc un rendu qu'on ne peut régler pour personne ; une largeur fixe
+déborderait en fenêtre étroite. Les sous-onglets vivent dans le même conteneur
+centré, et le bloc n'a **plus de hauteur minimale** : il était dans la colonne
+de gauche, où une description de trois mots devait ne pas faire sauter la
+colonne voisine — il n'a plus de voisine, donc une ligne de texte occupe une
+ligne. L'article Wikipédia à venir se lira là, dans cette colonne.
+
+**Tous les seuils de cette mise en page sont des requêtes de conteneur, jamais
+de média** : ils doivent se mesurer sur la largeur qui reste à la fiche, rail et
+colonne de session déduits — et le zoom d'interface (§13) déplace un seuil de
+média sans déplacer cette largeur-là.
+
+**La colonne de droite n'a que deux cartes de données sur un circuit** —
+« Circuit » (longueur, nombre de tracés et combien sont apportés par une couche,
+pays, odomètre) puis « Habillages ». **La longueur porte son unité** (« 7 004 m »),
+et celle-ci se déduit : mesuré sur les 70 `ui_track.json` de l'installation de
+référence, le champ s'écrit en entier de mètres (61 fois), avec son unité déjà
+dedans (`165km`, `4456 m` — 7 fois) ou en décimal de **kilomètres** (`3.602`,
+Laguna Seca, une fois). Une valeur sous 100 est donc lue en kilomètres — le plus
+court tracé réel est une piste de drag de 200 m — et une valeur portant déjà une
+lettre est rendue telle quelle, l'auteur ayant dit ce qu'il voulait dire
+(`trackLength.ts`). C'est tout l'argument du *cas maigre* de la
 maquette : **la grille n'est plus dictée par le type le plus riche**. Un circuit
 n'a ni fiche technique ni courbe, donc la place existe, et une rangée basse
 d'une carte et demie sous l'aperçu rouvrait précisément le trou qu'on venait de
@@ -656,8 +696,8 @@ chiffres, lui porte le choix. Le sous-titre de l'en-tête suit la même logique 
 une marque et une année pour une voiture, une longueur et un nombre de tracés
 pour un circuit, dont l'identité tient dans ces deux chiffres.
 
-**Le bloc textuel est à sous-onglets** (§7.4) : Description | Notes, à hauteur
-constante, c'est le contenu qui change. Notes n'est jamais l'onglet par défaut
+**Le bloc textuel est à sous-onglets** (§7.4) : Description | Notes, c'est le
+contenu qui change, pas la mise en page — même boîte, même corps de texte. Notes n'est jamais l'onglet par défaut
 et porte une pastille quand une note existe. Un troisième onglet « Le modèle
 réel » s'y ajoutera avec l'appariement Wikipédia, absent tant qu'aucun article
 n'est apparié.

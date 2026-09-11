@@ -75,9 +75,45 @@
     out.push({ label: t("detail.odometer"), value: odometerText(d) });
     return out;
   });
+
+  // --- La dernière cellule, quand elle est seule sur sa rangée --------------
+  //
+  // L'odomètre est toujours présent et toujours dernier : dès que le nombre de
+  // lignes au-dessus de lui est un multiple du nombre de colonnes, il se
+  // retrouve seul avec une cellule vide à côté. Il prend alors la rangée
+  // entière.
+  //
+  // **Le nombre de colonnes se mesure, il ne se déduit pas.** `auto-fit` le
+  // choisit à partir de la largeur reçue, et rien en CSS ne permet d'écrire
+  // « si la dernière est seule » ; un compte fixé par l'appelant serait faux la
+  // moitié du temps, la fiche passant de deux colonnes à quatre selon que la
+  // courbe de puissance occupe ou non la moitié du bloc. Le style calculé, lui,
+  // rend les pistes réellement créées.
+  let grid = $state<HTMLDivElement | null>(null);
+  let cols = $state(0);
+  $effect(() => {
+    const el = grid;
+    if (!el) return;
+    // Affectation seule, jamais de lecture de `cols` : la relire ici
+    // abonnerait l'effet à ce qu'il écrit, et il se rappellerait sans fin.
+    const read = () => {
+      cols = getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length;
+    };
+    read();
+    const observer = new ResizeObserver(read);
+    observer.observe(el);
+    return () => observer.disconnect();
+  });
+  const spanLast = $derived(cols > 1 && rows.length % cols === 1);
 </script>
 
-<div class="ts {surface}" class:framed style:--ts-min="{minColumn}px">
+<div
+  class="ts {surface}"
+  class:framed
+  class:span-last={spanLast}
+  style:--ts-min="{minColumn}px"
+  bind:this={grid}
+>
   {#each rows as r (r.label)}
     <div class="cell" class:derived={r.derived} title={r.derived ? t("modpanel.derivedTooltip") : undefined}>
       <div class="lbl-key k">{r.label}</div>
@@ -96,6 +132,13 @@
     grid-template-columns: repeat(auto-fit, minmax(var(--ts-min, 128px), 1fr));
     gap: 1px;
     background: var(--line);
+  }
+  /* Dernière cellule seule sur sa rangée : elle la prend entière plutôt que de
+     laisser un trou à côté d'elle. La condition est mesurée côté script
+     (`spanLast`) : CSS ne sait pas dire combien de colonnes `auto-fit` a
+     créées. */
+  .ts.span-last .cell:last-child {
+    grid-column: 1 / -1;
   }
   /* Le trait extérieur, quand l'hôte n'encadre pas déjà la fiche lui-même. */
   .ts.framed {

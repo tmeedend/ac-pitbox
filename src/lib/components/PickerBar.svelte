@@ -25,8 +25,13 @@
   }
 
   interface Props {
-    /** Intitulé de la ligne : « LIVRÉE », « TRACÉ ». */
-    label: string;
+    /** Intitulé posé dans le champ lui-même : « LIVRÉE », « TRACÉ ».
+     *
+     * **Optionnel, et absent quand la carte qui l'entoure le nomme déjà.** Le
+     * sélecteur vit maintenant dans une carte dont l'en-tête dit « SKINS 28 » ;
+     * répéter l'intitulé dans le champ mangeait la largeur dont la ligne a
+     * besoin pour tenir d'un seul tenant. */
+    label?: string;
     items: PickerItem[];
     /** Index courant dans `items`. */
     index: number;
@@ -85,10 +90,16 @@
   .picker {
     display: flex;
     align-items: center;
-    gap: 10px;
-    /* Collé sous l'aperçu, dans la même carte : un écart ici le détacherait de
-       l'image sur laquelle il agit. */
-    padding: 8px 0 0;
+    gap: 8px;
+    /* **Une seule ligne, quoi qu'il arrive.** Le sélecteur est désormais le
+       corps d'une carte de la colonne de droite, donc il travaille dans deux
+       fois moins de largeur qu'avant : sans `nowrap`, le compteur, les flèches
+       et « Voir les N » partaient à la ligne — et avec eux la lecture d'un
+       contrôle qui doit se saisir d'un coup d'œil. C'est la liste déroulante,
+       et elle seule, qui absorbe la variation (`flex: 1; min-width: 0`). */
+    flex-wrap: nowrap;
+    /* Aucun retrait : la carte porte le sien (`.blk-b`). */
+    padding: 0;
     min-width: 0;
   }
   /* La liste déroulante prend la place restante ; le reste de la ligne est
