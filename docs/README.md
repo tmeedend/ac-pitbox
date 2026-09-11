@@ -10,6 +10,10 @@ Documentation de conception de Pit Box (gestionnaire de mods Assetto Corsa). Ce 
 
 - **`SPEC-import.md`** — l'arbre de décision de l'import et la table des mécanismes de pose, sur une page. Ne remplace pas `SPEC.md` §4, il le **rend vérifiable** : une seule question (« où va ce fichier ? »), un seul arbre, une seule table de destinations. À lire **avant** de toucher à une règle d'import, et à rejouer contre les cinq archives de référence qu'il liste. En cas d'écart, `SPEC.md` fait foi — et l'un des deux est à corriger tout de suite.
 
+## Pistes instruites, pas encore ouvertes
+
+- **`SPEC-texture-update.md`** — les *texture updates* (un dossier de textures à copier dans **chaque** livrée d'une voiture), qui ne sont ni une livrée ni une couche telle qu'on les pose. Contient la **règle de détection mesurée** — 100 % des fichiers du mod sont des textures du `.kn5`, contre 58 % au maximum pour 75 livrées réelles ; 0 livrée sur 3585 dépourvue des quatre marqueurs de livrée — et les deux points de conception à trancher avant de coder. Rien n'est implémenté.
+
 ## Données embarquées
 
 - **`kunos_content_dates.json`** — table statique du contenu officiel Kunos (178 voitures + 21 circuits, tirés des dossiers réels). Pour chaque entrée : `year` (année du modèle) et `release` (date de sortie dans AC via son pack). Sert à renseigner l'année et la date de publication du contenu de base. Section `packs` = dates des DLC.
