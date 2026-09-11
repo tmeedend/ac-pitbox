@@ -136,7 +136,7 @@
         <div class="logo"><span>PB</span></div>
         <div>
           <h1>Pit Box</h1>
-          <p class="sub">{t("setup.title")}</p>
+          <p class="kicker">{t("setup.title")}</p>
         </div>
       </header>
 
@@ -301,7 +301,7 @@
     letter-spacing: 1.5px;
     font-style: italic;
   }
-  .sub {
+  .kicker {
     color: var(--rosso-bright);
     font-size: 9px;
     letter-spacing: 3px;

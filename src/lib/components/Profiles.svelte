@@ -69,7 +69,7 @@
 <div class="profiles">
   <!-- Onglet de l'Atelier : le titre d'écran est porté par l'Atelier. -->
   <header>
-    <p class="sub">{t("profiles.subtitle")}</p>
+    <p class="lbl-sub">{t("profiles.subtitle")}</p>
   </header>
 
   <div class="create">
@@ -130,12 +130,6 @@
      à 18px (retour utilisateur direct). */
   /* 12px comme les sept autres sous-titres d'écran : sans cette ligne il
      héritait de la taille du corps, donc plus gros qu'ailleurs. */
-  .sub {
-    color: var(--muted);
-    font-size: 12px;
-    margin-top: 6px;
-    line-height: 1.5;
-  }
   .create {
     display: flex;
     gap: 10px;

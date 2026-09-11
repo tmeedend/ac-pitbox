@@ -14,7 +14,7 @@
  *   .mono                               police à chasse fixe (données)
  *   .pill (+ .pill-ok, .pill-warn, .pill-err)   pastilles d'état
  *   .gp-focus / .gp-editing             focus manette (gamepadNav.ts)
- *   .lbl-screen / .lbl / .lbl-key       libellés (voir plus bas, §chantier libellés)
+ *   .lbl-screen / .lbl-sub / .lbl / .lbl-key    libellés (voir plus bas, §chantier libellés)
  *   .warnbox / .errbox                  alerte non bloquante (jaune) / erreur (rouge)
  *
  * Tout le reste — .tag, .srcbox, .prov-note, .muted, .small… — est local au
@@ -191,6 +191,7 @@ body {
  * hiérarchie qui n'existait pas.
  *
  *   .lbl-screen   titre d'écran        « Add-ons voiture », « Réglages »
+ *   .lbl-sub      sous-titre d'écran   la phrase qui explique l'écran
  *   .lbl          titre de rubrique    « TAGS », « VERSIONS », « PROVENANCE »
  *   .lbl-key      clé de donnée        « PACK », « ARCHIVE », fiche technique
  *
@@ -205,12 +206,30 @@ body {
  * désormais réservé au filet de l'entrée active et au bouton de lancement
  * (barème de la spec accent) — quand tout est accent, rien ne l'est.
  *
- * Ces trois classes sont GLOBALES : ne pas les redéfinir dans un composant.
- * C'est précisément ce qui avait produit six copies identiques de `.lbl`.
+ * Ces quatre classes sont GLOBALES : ne pas les redéfinir dans un composant.
+ * C'est précisément ce qui avait produit six copies identiques de `.lbl`, puis
+ * neuf de `.lbl-sub` — et, en prime, trois homonymes qui ne partageaient que
+ * le nom `.sub` : un en-tête de dialogue, un message sous un champ, et un
+ * surtitre rouge posé AU-DESSUS de son titre. Un nom qui veut dire trois
+ * choses est un piège au premier déplacement de markup, puisque le style, lui,
+ * ne suit pas.
  */
 .lbl-screen {
   font-size: 18px;
   font-weight: 600;
+}
+
+/* Le sous-titre d'un titre d'écran : la phrase qui dit ce qu'on fait ici.
+ *
+ * Neuf copies locales avant celle-ci, identiques à `max-width` près — et c'est
+ * bien `max-width` qui reste à l'appelant : la largeur de mesure d'un
+ * paragraphe dépend de la colonne qui l'accueille (520 à 620 px selon
+ * l'écran), pas du rôle du texte. Même partage que `.errbox` et sa marge. */
+.lbl-sub {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 6px;
 }
 
 .lbl {

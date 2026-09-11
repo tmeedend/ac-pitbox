@@ -117,7 +117,7 @@
     <header class="head">
       <div>
         {#if !embedded}<h2 class="lbl-screen">{t("nav.apps")}</h2>{/if}
-        <p class="sub">{t("apps.subtitle")}</p>
+        <p class="lbl-sub">{t("apps.subtitle")}</p>
       </div>
       {#if apps.length}
         <input class="input search" placeholder={t("apps.searchPlaceholder")} bind:value={query} />
@@ -171,11 +171,7 @@
     gap: 20px;
     margin-bottom: 18px;
   }
-  .sub {
-    color: var(--muted);
-    font-size: 12px;
-    margin-top: 6px;
-    line-height: 1.5;
+  .lbl-sub {
     max-width: 520px;
   }
   .search {

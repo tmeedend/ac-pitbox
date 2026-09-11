@@ -93,7 +93,13 @@ recopier maintenant, c'est les faire diverger tout de suite.
 - `Toolbar.svelte` (§10), `ListRow.svelte` (§4.2) et la coquille de fiche (§6.1) :
   **repoussés à leur premier client** (L2 et L7). Une brique sans consommateur pourrit
   comme une colonne SQL que rien n'écrit ni ne lit.
-- `.lbl-sub` (8 copies de `.sub`) — **décision de design à prendre**, pas à trancher seul.
+- ✅ `.lbl-sub` — **9** copies, identiques à `max-width` près, qui reste à l'appelant :
+  la largeur de mesure d'un paragraphe dépend de la colonne qui l'accueille, pas du
+  rôle du texte. Tranché sur la maintenabilité, l'utilisateur n'ayant pas d'avis :
+  `.lbl-screen` était global et son sous-titre non, si bien que déplacer un en-tête
+  n'emportait que la moitié de son style. Trois homonymes renommés au passage — `.sub`
+  désignait aussi un en-tête de dialogue, un message sous un champ et un surtitre posé
+  **au-dessus** de son titre.
 
 Reformatage pur → commits isolés, jamais mélangés au fonctionnel (sinon `git blame`
 devient inexploitable).

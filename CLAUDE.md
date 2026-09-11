@@ -283,8 +283,9 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
   (`detail.showroom`). C'est ce qui rend `errorText()` sûr, et c'est aussi
   pourquoi une relecture visuelle attrape ces oublis mieux que le typage.
 - **Le CSS des composants est scopé** (voir l'en-tête de `global.css`) : seules
-  `.btn`, `.input`, `.mono`, `.pill`, `.gp-focus`, et les trois niveaux de
-  libellé `.lbl-screen`/`.lbl`/`.lbl-key` (§chantier libellés) sont globales.
+  `.btn`, `.input`, `.mono`, `.pill`, `.gp-focus`, `.warnbox`/`.errbox`, et les
+  quatre niveaux de libellé `.lbl-screen`/`.lbl-sub`/`.lbl`/`.lbl-key`
+  (§chantier libellés) sont globales.
   Déplacer du markup d'un composant à l'autre n'emporte pas son style.
 - **Les clés `StorageKey.*` sont suffixées par type** (`storage.ts`) quand le
   composant est rendu plusieurs fois : `pitbox.view.cars` / `pitbox.view.tracks`,
@@ -377,8 +378,9 @@ laisser pourrir ici.
 - [ ] **Harmonisation des libellés**. 68 règles de libellé
       produisent 53 signatures visuelles distinctes : 15 tailles de police,
       7 interlettrages, 9 couleurs. La même fonction visuelle change donc
-      d'apparence selon l'écran. Cible : trois niveaux globaux — `.lbl-screen`
-      (titre d'écran), `.lbl` (rubrique), `.lbl-key` (clé de donnée) — et des
+      d'apparence selon l'écran. Cible : quatre niveaux globaux —
+      `.lbl-screen` (titre d'écran), `.lbl-sub` (le sous-titre qui l'explique),
+      `.lbl` (rubrique), `.lbl-key` (clé de donnée) — et des
       couleurs redevenues sémantiques (rouge = catégorie/session/destructif,
       bleu = info et fichier mod, vert = règle, jaune = alerte). Fait : fiche
       détail ; titres d'écran passés à `.lbl-screen` sur les quatre zones
@@ -393,7 +395,7 @@ laisser pourrir ici.
       d'une clé de fiche technique en lecture seule, même si visuellement
       proche) et les titres de popup (`OpponentPicker`/`SavedSessionsDialog`,
       13px/majuscules, identiques entre eux mais ne correspondant à aucun des
-      trois niveaux). **Couleurs sémantiques** : le **rouge** a désormais son
+      quatre niveaux). **Couleurs sémantiques** : le **rouge** a désormais son
       barème, écrit au §7.2ter du SPEC — quatre niveaux, un quota par niveau,
       et la règle « le survol n'introduit jamais de rouge sur un élément qui
       n'y a pas droit au repos ». Appliqué au rail de navigation et à la
@@ -422,14 +424,15 @@ laisser pourrir ici.
       entre les copies), `Seg.svelte` (sept groupes segmentés recopiés — trois
       axes de variation et trois seulement, chacun porté par une raison :
       `vertical`, `tone` au barème du rouge §7.2ter, et `size` nommée par son
-      rôle, jamais par une taille).
+      rôle, jamais par une taille), `.lbl-sub` (neuf copies du sous-titre
+      d'écran ; `max-width` reste à l'appelant, la largeur de mesure d'un
+      paragraphe dépendant de la colonne qui l'accueille et non du rôle du
+      texte). **Trois homonymes ont été renommés au passage** — `.sub`
+      désignait aussi un en-tête de dialogue, un message sous un champ et un
+      surtitre rouge posé au-dessus de son titre : un nom qui veut dire trois
+      choses est un piège au premier déplacement de markup.
       **Inventaire de ce qui reste** (mesuré le 2026-08-18, revu le
       2026-09-11) :
-      - **Sous-titre d'écran : 8 copies** de `.sub`, identiques à `max-width`
-        près (520/540/560/620/aucune). Trois n'avaient pas de `font-size` et
-        étaient donc plus gros que les autres — corrigé, mais les 8 copies
-        restent. En faire un 4ᵉ niveau global (`.lbl-sub` ?) est une décision
-        de design à prendre avec l'utilisateur, pas à trancher seul.
       - **Enregistrer / charger / supprimer une liste nommée : 2 copies**, et
         c'est la seule entrée de cet inventaire qui ne soit pas du style mais
         du **comportement**. Les sessions enregistrées (`SavedSessionsDialog`

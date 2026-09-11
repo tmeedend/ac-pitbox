@@ -107,7 +107,7 @@
     <header>
       <div>
         <h2>{t("import.massTitle")}</h2>
-        <div class="sub mono">{parentName}</div>
+        <div class="dialog-sub mono">{parentName}</div>
       </div>
       <button class="btn-ghost close" type="button" onclick={onclose}>✕</button>
     </header>
@@ -223,7 +223,7 @@
     font-size: 15px;
     font-weight: 600;
   }
-  .sub {
+  .dialog-sub {
     color: var(--muted2);
     font-size: 11px;
     margin-top: 3px;

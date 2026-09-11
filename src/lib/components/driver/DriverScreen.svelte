@@ -512,7 +512,7 @@
 <div class="screen">
   <header class="head">
     <h2 class="lbl-screen">{t("driver.title")}</h2>
-    <p class="sub">{t("driver.subtitle")}</p>
+    <p class="lbl-sub">{t("driver.subtitle")}</p>
   </header>
 
   {#if !nav.sessionCar}
@@ -716,11 +716,7 @@
   .head {
     margin-bottom: 18px;
   }
-  .sub {
-    color: var(--muted);
-    font-size: 12px;
-    margin-top: 6px;
-    line-height: 1.5;
+  .lbl-sub {
     max-width: 540px;
   }
 

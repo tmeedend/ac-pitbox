@@ -62,7 +62,7 @@
 <div class="import-screen">
   <!-- Onglet de l'Atelier : le titre d'écran est porté par l'Atelier. -->
   <header class="head">
-    <p class="sub">
+    <p class="lbl-sub">
       {t("import.subtitlePrefix")}<b>{t("import.subtitleBold")}</b>{t("import.subtitleSuffix")}
     </p>
   </header>
@@ -213,11 +213,7 @@
     margin-bottom: 22px;
   }
   /* Taille/graisse viennent de `.lbl-screen` (global, §chantier libellés). */
-  .sub {
-    color: var(--muted);
-    font-size: 12px;
-    margin-top: 6px;
-    line-height: 1.5;
+  .lbl-sub {
     max-width: 560px;
   }
   h3 {

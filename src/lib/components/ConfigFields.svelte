@@ -33,10 +33,10 @@
 {#if validation && (!validation.content_dir.ok || !validation.content_writable.ok)}
   <div class="subchecks">
     {#if !validation.content_dir.ok}
-      <div class="sub err">{t(validation.content_dir.message)}</div>
+      <div class="hint err">{t(validation.content_dir.message)}</div>
     {/if}
     {#if validation.content_dir.ok && !validation.content_writable.ok}
-      <div class="sub err">{t(validation.content_writable.message)}</div>
+      <div class="hint err">{t(validation.content_writable.message)}</div>
     {/if}
   </div>
 {/if}
@@ -190,11 +190,11 @@
     padding-left: 10px;
     border-left: 2px solid var(--rosso-border);
   }
-  .sub {
+  .hint {
     font-size: 11px;
     margin: 2px 0;
   }
-  .sub.err {
+  .hint.err {
     color: var(--rosso-bright);
   }
   .optional-block {

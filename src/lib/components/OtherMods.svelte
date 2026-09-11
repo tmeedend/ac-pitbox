@@ -189,7 +189,7 @@
     <header class="head">
       <div>
         <h2 class="lbl-screen">{t("nav.others")}</h2>
-        <p class="sub">{t("others.subtitle")}</p>
+        <p class="lbl-sub">{t("others.subtitle")}</p>
       </div>
       {#if others.length && tab !== APPS_TAB}
         <input class="input search" placeholder={t("others.searchPlaceholder")} bind:value={query} />
@@ -276,11 +276,7 @@
     gap: 20px;
     margin-bottom: 18px;
   }
-  .sub {
-    color: var(--muted);
-    font-size: 12px;
-    margin-top: 6px;
-    line-height: 1.5;
+  .lbl-sub {
     max-width: 620px;
   }
   .search {

@@ -291,7 +291,7 @@
   {#if !embedded}
     <header class="head">
       <h2 class="lbl-screen">{isTrack ? t("nav.trackAddons") : t("nav.carAddons")}</h2>
-      <p class="sub">
+      <p class="lbl-sub">
         {isTrack ? t("transversal.trackSubtitle") : t("transversal.skinSubtitle")}
       </p>
     </header>
@@ -441,11 +441,7 @@
   .head {
     margin-bottom: 18px;
   }
-  .sub {
-    color: var(--muted);
-    font-size: 12px;
-    margin-top: 6px;
-    line-height: 1.5;
+  .lbl-sub {
     max-width: 540px;
   }
   .search {

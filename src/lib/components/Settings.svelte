@@ -238,17 +238,17 @@
   {#if activeTab === "music"}
     <MusicTab />
   {:else if activeTab === "thumbs"}
-    <p class="sub">{t("settings.tabThumbsHint")}</p>
+    <p class="lbl-sub">{t("settings.tabThumbsHint")}</p>
     <ThumbsTab />
   {:else if activeTab === "preview"}
     <!-- Réglages appliqués tout de suite, donc pas de garde de navigation :
          celle-ci ne porte que sur AppConfig. L'onglet a son propre bouton
          Enregistrer (écriture disque différée, voir PreviewTab). -->
-    <p class="sub">{t("settings.tabPreviewHint")}</p>
+    <p class="lbl-sub">{t("settings.tabPreviewHint")}</p>
     <PreviewTab />
   {:else}
     {#if activeTab === "general"}
-      <p class="sub">{t("settings.tabGeneralHint")}</p>
+      <p class="lbl-sub">{t("settings.tabGeneralHint")}</p>
 
       <section class="lang-section">
         <label>
@@ -368,7 +368,7 @@
         </button>
       </section>
     {:else if activeTab === "paths"}
-      <p class="sub">{t("settings.tabPathsHint")}</p>
+      <p class="lbl-sub">{t("settings.tabPathsHint")}</p>
       <ConfigFields bind:config {validation} />
     {/if}
 
@@ -403,12 +403,6 @@
     margin-bottom: 22px;
   }
   /* 12px comme les autres sous-titres d'écran (voir Profiles.svelte). */
-  .sub {
-    color: var(--muted);
-    font-size: 12px;
-    margin-top: 6px;
-    line-height: 1.5;
-  }
   .lang-section {
     margin-bottom: 22px;
     padding-bottom: 18px;
