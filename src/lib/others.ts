@@ -7,6 +7,19 @@ export interface ConflictInfo {
   count: number;
 }
 
+/** Sur quoi un mod se greffe et ce qu'il fait (refonte §2). Recalculé côté
+ * Rust à chaque listage — jamais stocké, sauf la correction de l'utilisateur. */
+export interface Attachment {
+  kind: "CAR" | "TRACK" | "APP" | "GAME" | "STANDALONE";
+  target_id: string | null;
+  target_name: string | null;
+  /** Force du signal, de la plus sûre à la plus faible. `ARCHIVE` est une
+   * conjecture assumée : un pack peut livrer une police pour une voiture qu'il
+   * ne touche pas autrement. */
+  signal: "USER" | "PATH" | "CONFIG_NAME" | "ARCHIVE" | "NONE";
+  nature: "DOCUMENT" | "CONTENT" | "APPEARANCE" | "BEHAVIOUR" | "DEPENDENCY" | "UNRECOGNISED";
+}
+
 export interface OtherModRow {
   id: string;
   library_path: string;
@@ -21,11 +34,19 @@ export interface OtherModRow {
   display_name_user: string | null;
   /** Note libre (refonte §9). */
   notes_user: string | null;
+  /** Rattachement corrigé à la main (§2.3), `null` tant qu'on n'a rien corrigé. */
+  attachment_user: string | null;
+  /** Rattachement effectif et nature, déduits ou corrigés. */
+  attachment: Attachment;
   conflicts: ConflictInfo[];
   /** Fichiers visant une zone qu'un outil externe synchronise
    * (`extension/config/*​/loaded/`, vao-patches) : Content Manager peut y
    * remplacer la version du mod par la sienne (§4.5.3). */
   externally_managed: number;
+  /** Chemins réellement posés dans le jeu, relatifs à la racine d'AC (§11).
+   * Vide quand rien n'est posé — mod désactivé, ou copie plus ancienne que ce
+   * qui tourne déjà (règle d'or n°5). */
+  placed: string[];
   /** Zones du jeu touchées par le mod, dans l'ordre des onglets (§7.3).
    * Plusieurs quand il en touche plusieurs — il apparaît alors sous chacune. */
   categories: string[];
@@ -55,6 +76,12 @@ export interface ActivateOtherResult {
 
 export function listOtherMods(): Promise<OtherModRow[]> {
   return invoke<OtherModRow[]>("list_other_mods");
+}
+
+/** Corrige le rattachement d'un mod « autre » (§2.3). Chaîne vide = revenir à
+ * la déduction. */
+export function setOtherAttachment(id: string, target: string): Promise<void> {
+  return invoke<void>("set_other_attachment", { id, target });
 }
 
 export function setOtherPriority(id: string, priority: boolean): Promise<void> {

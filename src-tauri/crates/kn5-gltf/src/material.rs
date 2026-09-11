@@ -428,18 +428,18 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     {
         return GltfMaterial {
             name: material.name.clone(),
-            // **Sauf quand cette diffuse est une couleur.** La règle ci-dessus
-            // vaut pour un pare-brise, dont la texture est une carte de
-            // saleté ; elle est ruineuse pour une lentille teintée, que les
-            // mods déclarent en verre tout autant. `amy_ek_cup` met ainsi ses
-            // feux arrière (`rgbab60000ff.dds`, rouge plein) dans un
-            // `[Material_Glass]` — décolorés, ils deviennent des vitres
-            // blanches à l'arrière d'une voiture. glTF teinte ce qui traverse
-            // par la couleur de base : la garder est exactement ce qu'il faut
-            // pour un verre coloré.
-            base_color_texture: diffuse_carries_a_colour(textures.diffuse_average)
-                .then(|| base_color_map(material))
-                .flatten(),
+            // **Et on la jette quoi qu'elle contienne.** Une tentative de la
+            // garder « quand elle porte une couleur » a été faite puis
+            // retirée : mesurée sur les 470 matériaux que la bibliothèque
+            // déclare en verre, **155 échantillonnent un bouchon** — le
+            // `glass.dds` d'`art_diablo_gtr` est un PNG de 70 octets, un pixel
+            // bleu pur, et il n'est pas le seul. Saturation maximale, couleur
+            // nulle : gardée, elle peint les vitres en bleu. Les autres ne
+            // valent pas mieux — atlas partagés entre vitrage et feux
+            // (`ks_ford_mustang_2015`, toutes vitres et phares noircis), teintes
+            // quasi noires. C'est l'écart n°6 sous une autre forme, et la règle
+            // qui vaut pour un pare-brise vaut pour tout le vitrage.
+            base_color_texture: None,
             shader: material.shader.clone(),
             normal_texture: normal_map(material),
             roughness_texture: None,
@@ -701,6 +701,10 @@ fn normal_map(material: &Kn5Material) -> Option<String> {
 /// environment reflected in it.
 /// Saturation au-delà de laquelle la diffuse d'une optique est **sa couleur**,
 /// et non le gabarit de vitre gris qu'AC pose partout ailleurs.
+///
+/// Ne sert plus qu'à **un** arbitrage : décider si rendre une optique opaque
+/// en verre clair lui ferait perdre sa teinte. Le vitrage déclaré, lui, jette
+/// sa diffuse sans se poser la question — voir la note dans [`convert`].
 ///
 /// **Mesurée sur les 52 optiques opaques que la bibliothèque déclare en
 /// `[REFRACTING_HEADLIGHT_…]`** (saturation = écart entre le canal le plus
@@ -1108,6 +1112,36 @@ mod tests {
                 < 1.0,
             "le verre garde son approximation même si son alpha se mesure opaque"
         );
+    }
+
+    // Règle : le verre déclaré par un mod jette sa diffuse, quelle qu'elle
+    // soit — y compris franchement colorée.
+    //
+    // Bug réel : `glass.dds` d'`art_diablo_gtr` est un PNG de 70 octets, un
+    // pixel bleu pur, et 155 des 470 matériaux de verre de la bibliothèque
+    // échantillonnent un bouchon de ce genre. Gardée, cette texture peint les
+    // vitres en bleu ; sur `ks_ford_mustang_2015`, c'est un atlas partagé
+    // entre vitrage et lampes qui noircissait vitres et phares.
+    #[test]
+    fn declared_glass_drops_its_diffuse_however_coloured() {
+        let glass = crate::SurfaceOverride {
+            glass_ior: Some(1.5),
+            ..crate::SurfaceOverride::default()
+        };
+        let converted = convert(
+            &material("ksPerPixelReflection", 1, false, &[("ksDiffuse", 0.1)]),
+            MaterialTextures {
+                csp: Some(glass),
+                // Le bouchon bleu : saturation maximale, couleur nulle.
+                diffuse_average: Some([0.0, 0.0, 1.0]),
+                ..Default::default()
+            },
+        );
+        assert!(
+            converted.base_color_texture.is_none(),
+            "un gabarit n'est pas une couleur, si saturé soit-il"
+        );
+        assert_eq!(converted.transmission, 1.0, "et la vitre laisse passer");
     }
 
     // Règle : une optique déclarée par `[REFRACTING_HEADLIGHT_…]` ne devient du

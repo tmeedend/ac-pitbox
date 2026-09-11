@@ -1615,10 +1615,12 @@ qu'elles se touchent :
 | lentille teintée | 0,35 à 1,00 | `turn.dds` (255,139,0) · `red.dds` (217,0,0) · `rgbab60000ff.dds` (180,0,0) |
 
 Sans ce filtre, le clignotant `ext_indicator_glass` de la même Civic — opaque,
-mais franchement orange — devenait une vitre incolore. La règle vaut dans les
-deux sens : le chemin du verre **garde** désormais une diffuse qui porte une
-couleur, ce qui rend son rouge au feu arrière d'`amy_ek_cup`, qu'un
-`[Material_Glass]` déclarait et que la conversion décolorait.
+mais franchement orange — devenait une vitre incolore.
+
+⚠️ **La réciproque a été essayée et retirée.** Ce filtre avait aussi été posé
+dans l'autre sens — le chemin du verre *gardait* une diffuse qui porte une
+couleur, pour rendre son rouge au feu arrière d'`amy_ek_cup`. C'était une
+erreur, et elle a coûté un bug signalé : voir l'écart n°27.
 
 **Troisième découverte, celle qui rendait tout le reste invisible** : un mod
 range rarement sa configuration dans le seul `ext_config.ini`. Il la découpe
@@ -1701,3 +1703,51 @@ Aucun des discriminants essayés ne tient : le canal alpha de la diffuse (95 san
 optiques contre 19/103 sur le reste — un signal, pas une règle).
 
 À rouvrir seulement avec un vrai canal d'ordre de rendu, distinct de l'opacité.
+
+
+---
+
+## Écart n°27 — la diffuse d'une vitre n'est pas une couleur, même quand elle en a l'air
+
+**Attendu** (et écrit ici même, à l'écart n°25) : si la diffuse d'un matériau
+déclaré en verre porte une couleur franche, c'est la teinte de la lentille, et
+la jeter appauvrit le rendu.
+
+**Réel** : sur le vitrage, cette texture n'est presque jamais une couleur. Trois
+formes rencontrées, toutes mesurées :
+
+| Forme | Exemple | Ce qu'on lit | Ce que ça donne |
+| --- | --- | --- | --- |
+| **bouchon** | `glass.dds` d'`art_diablo_gtr`, un **PNG de 70 octets** | (0, 0, 255), saturation 1,00 | des vitres **bleues** |
+| **atlas partagé** | `EXT_windows.dds` de `ks_ford_mustang_2015` | bandes ambre, rouges, blanches **et** une bande quasi noire pour le vitrage | vitres et phares **noirs** |
+| **teinte sombre** | `glass.dds` de la Supra, `ext_glass.dds` | (16,16,16), (41,52,57) | vitre assombrie |
+
+**La mesure qui tranche**, sur les 470 matériaux que la bibliothèque déclare en
+verre : **155 échantillonnent un bouchon du premier type**, saturation 1,00 et
+couleur nulle. Plus d'un sur trois. Le filtre de l'écart n°25, qui gardait la
+texture au-delà de 0,15 de saturation, les gardait donc tous — et avec eux les
+atlas partagés, qui sont le deuxième cas.
+
+C'est l'écart n°6 sous une autre forme (`ksWindscreen`, dont la `txDiffuse` est
+une carte de saletés), et la règle qui vaut pour un pare-brise vaut pour tout le
+vitrage : **le chemin du verre CSP jette sa diffuse, quoi qu'elle contienne.**
+
+Effet mesuré sur les 310 voitures installées : **196 matériaux sur 76 voitures**
+perdent une texture qu'ils n'auraient jamais dû porter, et **rien d'autre ne
+bouge** — pas un mode de fusion, pas une opacité, pas une extension.
+
+**Ce que ça coûte, et pourquoi on l'accepte** : le feu arrière d'`amy_ek_cup`
+(`reflector_taillights`, rouge plein), que son mod déclare en `[Material_Glass]`,
+redevient incolore. Un matériau contre 196, et le cabochon rouge voisin
+(`glass_taillight`) garde le sien puisqu'il ne passe pas par ce chemin.
+
+**La piste qu'il ne sert à rien de reprendre telle quelle** : mesurer la couleur
+sur l'**empreinte** du matériau — là où il échantillonne — plutôt que sur
+l'atlas entier. C'est plus juste en principe, et implémenté ça ne suffit
+toujours pas : un même matériau couvre souvent **deux rôles optiques** à la
+fois, et son empreinte les mélange. `supra_glass_detail` (vitre de phare quasi
+noire + cabochons rouges) mesure 0,200, `EXT_Light_GLASS` du Mustang (vitrage +
+lampes ambre) 0,439 : aucune valeur ne décrit l'une ou l'autre moitié. Le seul
+remède qui tienne serait de **scinder le matériau par maillage**, puisque c'est
+par maillage que les mods déclarent leur verre (`Meshes = …`). Tant que ce n'est
+pas fait, tout seuil de couleur par matériau se trompera sur au moins un rôle.

@@ -231,6 +231,83 @@ pub fn folder_path(conn: &Connection, cfg: &crate::config::AppConfig, layer_id: 
 /// Dossier de base de l'hôte d'une couche, quel que soit son type (§4.4) : la
 /// version active pour un mod, le dossier de bibliothèque pour une app.
 /// `None` quand l'hôte n'est pas (encore) là — une couche en attente.
+/// Un tracé de circuit apporté par une couche (refonte §7.7).
+///
+/// La carte des tracés montre l'**état composé** — ce que l'utilisateur verra
+/// au lancement, couches comprises — mais elle ne disait pas d'où venait chaque
+/// tracé. Sur un circuit dont une extension ajoute une variante, « 2 tracés »
+/// est exact et trompeur à la fois : l'un des deux n'est pas dans le mod.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct LayoutOrigin {
+    /// Identifiant du tracé, tel que le porte le dossier (`""` = tracé unique).
+    pub layout: String,
+    pub layer_id: String,
+    /// Nom de l'archive/du dossier de la couche, pour l'afficher tel quel.
+    pub layer_name: String,
+}
+
+/// Les tracés qu'une **couche active** ajoute à un circuit.
+///
+/// Deux conditions, et la seconde compte autant que la première : la couche
+/// doit poser des fichiers sous le tracé, **et** la base ne doit pas déjà le
+/// connaître. Une couche qui ne fait que remplacer la texture d'un tracé
+/// existant n'en est pas l'origine — elle l'habille.
+///
+/// Seules les couches **actives** sont regardées : la carte décrit l'état
+/// composé, pas ce qui pourrait l'être.
+pub fn layout_origins(
+    conn: &Connection,
+    cfg: &crate::config::AppConfig,
+    parent_id: &str,
+    host: HostKind,
+) -> Result<Vec<LayoutOrigin>, String> {
+    let base = host_base_dir(conn, cfg, parent_id);
+    let layers = overlay::list_layers(conn, parent_id, host).map_err(|e| e.to_string())?;
+    let mut out: Vec<LayoutOrigin> = Vec::new();
+    for layer in layers.iter().filter(|l| l.is_active) {
+        let Some(dir) = crate::libpath::resolve(cfg.library_path.as_deref(), &layer.library_path) else {
+            continue;
+        };
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for entry in walkdir::WalkDir::new(&dir).into_iter().flatten() {
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let Ok(rel) = entry.path().strip_prefix(&dir) else {
+                continue;
+            };
+            let parts: Vec<String> = rel
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().to_string())
+                .collect();
+            // Un tracé se reconnaît à son dossier : `<tracé>/…` pour les
+            // données, `ui/<tracé>/…` pour sa fiche. Les deux désignent le
+            // même, d'où la normalisation avant de dédoublonner.
+            let layout = match parts.as_slice() {
+                [first, _rest @ ..] if first.eq_ignore_ascii_case("ui") && parts.len() > 2 => parts[1].clone(),
+                [first, _rest @ ..] if parts.len() > 1 => first.clone(),
+                _ => continue,
+            };
+            if layout.eq_ignore_ascii_case("ui") || !seen.insert(layout.clone()) {
+                continue;
+            }
+            // Déjà dans la base : la couche l'habille, elle ne l'apporte pas.
+            let known = base
+                .as_ref()
+                .is_some_and(|b| b.join(&layout).is_dir() || b.join("ui").join(&layout).is_dir());
+            if known {
+                continue;
+            }
+            out.push(LayoutOrigin {
+                layout,
+                layer_id: layer.id.clone(),
+                layer_name: layer.source_archive.clone().unwrap_or_else(|| layer.name.clone()),
+            });
+        }
+    }
+    Ok(out)
+}
+
 fn host_base_dir(conn: &Connection, cfg: &crate::config::AppConfig, parent_id: &str) -> Option<PathBuf> {
     if overlay::get_mod(conn, parent_id).ok().flatten().is_some() {
         return crate::submods::parent_content_dir(conn, cfg, parent_id);
@@ -287,6 +364,68 @@ mod tests {
             !library.join("layers").join("srp").exists(),
             "nothing written to the library either"
         );
+    }
+
+    /// Rule (refonte §7.7): a layer is the ORIGIN of a track layout only when
+    /// the base does not already know it. A layer that merely replaces a file
+    /// of an existing layout dresses it up, it does not bring it — and saying
+    /// otherwise on the card would mislabel the track's own content as an
+    /// add-on.
+    ///
+    /// Inactive layers are ignored: the card describes the composed state, the
+    /// one the user will get at launch, not what could be composed.
+    #[test]
+    fn only_layouts_the_base_does_not_have_count_as_brought_by_a_layer() {
+        let base = crate::testutil::temp_dir("layout-origins");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        // Base du circuit : un seul tracé, `gp`, avec sa fiche.
+        let track = ac.join("content").join("tracks").join("shuto");
+        std::fs::create_dir_all(track.join("gp")).unwrap();
+        std::fs::create_dir_all(track.join("ui").join("gp")).unwrap();
+        let cfg = crate::config::AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_mod(&conn, "shuto", "Track", None, Some("Shuto"), "h", None, &now).unwrap();
+
+        // Trois couches : l'une apporte un tracé, l'autre habille celui de la
+        // base, la troisième apporterait un tracé mais elle est inactive.
+        let make = |name: &str, files: &[&str], active: i64| {
+            let dir = library.join("layers").join("tracks").join("shuto").join(name);
+            for rel in files {
+                let path = dir.join(rel);
+                std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+                std::fs::write(&path, b"X").unwrap();
+            }
+            overlay::insert_layer(
+                &conn,
+                name,
+                "shuto",
+                "Track",
+                name,
+                &format!("layers/tracks/shuto/{name}"),
+                Some(&format!("{name}.7z")),
+                1,
+                0,
+                0,
+                &now,
+            )
+            .unwrap();
+            overlay::set_layer_active(&conn, name, active != 0).unwrap();
+        };
+        make("club", &["club/data.ini", "ui/club/ui_track.json"], 1);
+        make("reskin", &["gp/map.png"], 1);
+        make("night", &["night/data.ini"], 0);
+
+        let origins = layout_origins(&conn, &cfg, "shuto", HostKind::Track).unwrap();
+        let names: Vec<&str> = origins.iter().map(|o| o.layout.as_str()).collect();
+        assert_eq!(names, vec!["club"], "seul le tracé absent de la base est apporté");
+        assert_eq!(origins[0].layer_name, "club.7z", "la couche est nommée par son archive");
+        drop(base);
     }
 
     /// Règle (§4.4) : une couche est rangée sous le type de son hôte —

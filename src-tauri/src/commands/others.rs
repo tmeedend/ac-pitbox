@@ -27,6 +27,34 @@ pub fn open_other_mod_folder(app: AppHandle, db: State<Db>, id: String) -> Resul
         .map_err(|e| e.to_string())
 }
 
+/// L'inventaire des compléments (§4) : une ligne par chose, cinq sources.
+#[tauri::command]
+pub fn list_inventory(app: AppHandle, db: State<Db>) -> Result<Vec<crate::inventory::InventoryRow>, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::inventory::list(&conn, &cfg).map_err(|e| e.to_string())
+}
+
+/// Ce qui est greffé sur une voiture, un circuit ou une app (§4.3).
+#[tauri::command]
+pub fn list_attached(
+    app: AppHandle,
+    db: State<Db>,
+    entity_id: String,
+) -> Result<Vec<crate::inventory::InventoryRow>, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::inventory::attached_to(&conn, &cfg, &entity_id).map_err(|e| e.to_string())
+}
+
+/// Corrige le rattachement d'un mod « autre » (§2.3). Chaîne vide = revenir à
+/// la déduction.
+#[tauri::command]
+pub fn set_other_attachment(db: State<Db>, id: String, target: String) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::others::set_attachment(&conn, &id, Some(&target))
+}
+
 /// Marque/démarque un mod « autre » comme prioritaire (§7.3).
 #[tauri::command]
 pub fn set_other_priority(db: State<Db>, id: String, priority: bool) -> Result<(), String> {

@@ -72,6 +72,15 @@ export const nav = $state<{
   prefill: LaunchPrefill | null;
   /** Demande d'ouverture d'une fiche détail depuis une vue transversale (§12bis.3). */
   openMod: string | null;
+  /** Livrée à **montrer** en ouvrant la fiche d'une voiture, posée par
+   * l'inventaire quand on y clique une livrée (refonte §4.2).
+   *
+   * Montrer, et rien d'autre : surtout pas `selectSkin`, qui écrit la livrée
+   * préférée **et** le choix de session. Aller voir une livrée depuis
+   * l'inventaire changerait alors en silence la voiture qui partira en
+   * session — décider à la place de l'utilisateur sur un geste qui ne
+   * demandait qu'à regarder. */
+  openSkin: string | null;
   /** Terme de recherche à appliquer à la bibliothèque (ex. filtrer par pack, §4.4). */
   search: string | null;
   /** Duo de session courant (§8.6) — la bibliothèque le met à jour à l'ouverture. */
@@ -121,6 +130,7 @@ export const nav = $state<{
   prefill: null,
   settingsTab: null,
   openMod: null,
+  openSkin: null,
   search: null,
   // Hydraté juste en dessous, de façon asynchrone (lecture fichier côté
   // Rust) : reste `null` le temps d'un aller-retour IPC au tout premier
@@ -195,6 +205,30 @@ export async function requestSection(id: string): Promise<boolean> {
   // sans en avoir choisi une rouvrait la fiche du circuit en tant que voiture
   // (aperçu 3D lancé avec l'id du circuit → crash natif d'acShowroom.exe).
   nav.openFull = null;
+  nav.openPack = null;
+  return true;
+}
+
+/**
+ * Change de section **et** ouvre une fiche, d'un seul tenant.
+ *
+ * `requestSection` remet `openFull` à zéro, et l'appelant qui la pose juste
+ * après le fait forcément dans un autre tour de boucle — l'`await` le garantit.
+ * L'observateur d'historique (`navHistory.ts`) voit donc passer un écran
+ * intermédiaire que personne n'a regardé : la liste de la section d'arrivée.
+ * Revenir en arrière ramenait à cette liste au lieu de l'écran d'où l'on
+ * venait — signalé depuis l'inventaire des compléments.
+ *
+ * Les deux écritures d'affilée, sans `await` entre elles, n'en font qu'un seul
+ * état observable.
+ */
+export async function openInSection(section: string, openFull: string): Promise<boolean> {
+  if (sectionGuard) {
+    const ok = await sectionGuard();
+    if (!ok) return false;
+  }
+  nav.section = section;
+  nav.openFull = openFull;
   nav.openPack = null;
   return true;
 }

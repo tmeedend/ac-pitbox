@@ -4,9 +4,9 @@
   import About from "./About.svelte";
   import Library from "./Library.svelte";
   import Launch from "./Launch.svelte";
-  import Transversal from "./Transversal.svelte";
   import DriverScreen from "./driver/DriverScreen.svelte";
-  import OtherMods from "./OtherMods.svelte";
+  import Inventory from "./Inventory.svelte";
+  import Apps from "./Apps.svelte";
   import NavRail from "./NavRail.svelte";
   import Workshop from "./Workshop.svelte";
   import ImportOverlay from "./ImportOverlay.svelte";
@@ -29,7 +29,7 @@
   import { bodyThumb, requestBodyThumb } from "$lib/driverThumbs.svelte";
   import { wornOutfit } from "$lib/driverOutfits.svelte";
   import TrackSkinChecklistDropdown from "./TrackSkinChecklistDropdown.svelte";
-  import { nav, requestSection, pickSession } from "$lib/nav.svelte";
+  import { nav, requestSection, openInSection, pickSession } from "$lib/nav.svelte";
   import { recordScreen, goBack, goForward } from "$lib/navHistory";
   import { previewSrc, getModDetail, activateMod } from "$lib/library";
   import { withoutBrand } from "$lib/displayName";
@@ -304,7 +304,12 @@
   // Double-clic sur le slot de session : ouvre directement la fiche détail de
   // l'entité choisie (skin, layout…) plutôt que la liste de la bibliothèque.
   async function openSessionDetail(section: "cars" | "tracks", id: string | null | undefined) {
-    if (await requestSection(section) && id) nav.openMod = id;
+    // `openInSection` plutôt que `requestSection` puis `openMod` : les deux
+    // écritures d'affilée n'exposent qu'un seul état, sinon l'historique
+    // enregistre la liste de la bibliothèque comme un écran traversé et
+    // « précédent » y ramène au lieu de rendre l'écran d'où l'on vient.
+    if (id) await openInSection(section, id);
+    else await requestSection(section);
   }
 
   // --- Sélecteurs rapides skin voiture / layout+skins circuit, directement
@@ -787,15 +792,14 @@
           <DriverScreen />
         {:else if nav.section === "race"}
           <Launch />
-        {:else if nav.section === "carskins"}
-          <Transversal variant="car" />
-        {:else if nav.section === "trackskins"}
-          <Transversal variant="track" />
-        {:else if nav.section === "others" || nav.section === "apps"}
-          <!-- Un seul écran pour les deux adresses : les apps sont un onglet
-               de « Compléments » (SPEC §7.3), et `apps` reste une adresse
-               valide — c'est ce qui la fait ouvrir directement sur son onglet. -->
-          <OtherMods />
+        {:else if nav.section === "apps"}
+          <!-- Les apps ont leur écran (refonte §3.2) : une app a un nom, une
+               identité, on l'installe volontairement — elle n'est la dépendance
+               de rien, et n'avait rien à faire dans un tiroir avec les polices
+               et les fragments de config. -->
+          <Apps />
+        {:else if nav.section === "others"}
+          <Inventory />
         {/if}
       </main>
     </div>

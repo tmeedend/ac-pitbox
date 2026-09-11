@@ -21,6 +21,8 @@
     type NativeSpecs,
     type LayoutItem,
     type LayerRow,
+    layerLayoutOrigins,
+    type LayoutOrigin,
   } from "$lib/library";
   import { listMediaScreenshots, listMediaReplays, listMediaBackgrounds } from "$lib/media";
   import { listModSkins, openNativeShowroom, type SkinItem } from "$lib/launch";
@@ -32,6 +34,10 @@
   import { setEntityNote } from "$lib/userMeta";
   import NoteBlock from "./NoteBlock.svelte";
   import LayerDetail from "./LayerDetail.svelte";
+  import OtherModDetail from "./OtherModDetail.svelte";
+  import { listAttached, type InventoryRow } from "$lib/inventory";
+  import { listOtherMods, activateOther, deactivateOther, openOtherModFolder, type OtherModRow } from "$lib/others";
+  import { setEntityDisplayName } from "$lib/userMeta";
   import StateBadge from "./StateBadge.svelte";
   import { tick, untrack } from "svelte";
   import { focusGamepadElement, isGamepadDriving } from "$lib/gamepadNav";
@@ -67,6 +73,7 @@
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
   import { getConfig } from "$lib/config";
   import { t } from "$lib/i18n/index.svelte";
+  import { odometerText } from "$lib/odometer";
   import LayersBlock from "./detail/LayersBlock.svelte";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
   import DecisionsBlock from "./detail/DecisionsBlock.svelte";
@@ -119,6 +126,114 @@
    * pack. Le nombre de couches sœurs voyage avec elle : la carte Ordre n'a de
    * sens qu'à partir de deux. */
   let openLayer = $state<{ layer: LayerRow; siblings: number } | null>(null);
+  /** Ce qui est greffé sur ce mod (§4.3) : livrées, sons, couches, configs CSP,
+   * polices, notices. Relu à chaque recomposition — activer une couche change
+   * la réponse.
+   *
+   * C'est la contrepartie de l'inventaire du côté de l'hôte, et la raison pour
+   * laquelle une déduction de rattachement peut se tromper sans dommage : au
+   * pire il manque un raccourci ici, le mod restant listé là-bas. */
+  let attached = $state<InventoryRow[]>([]);
+  /** Les documents rattachés : ceux dont tout le contenu est une annexe
+   * (§4.5.2). Ils ont leur place dans l'onglet Médias **et** dans le bloc
+   * « Posé sur ce mod » — l'un pour les lire, l'autre pour les gérer. */
+  const attachedDocs = $derived(attached.filter((a) => a.kind === "DOCUMENT"));
+
+  /** Fiche d'un mod greffé, ouverte par-dessus celle de l'hôte — comme celle
+   * d'une couche, et pour la même raison : on y est arrivé DEPUIS ce mod. */
+  let openAttached = $state<OtherModRow | null>(null);
+  $effect(() => {
+    const current = id;
+    void contentRevision;
+    listAttached(current)
+      .then((rows) => {
+        if (current === id) attached = rows;
+      })
+      .catch(() => {
+        if (current === id) attached = [];
+      });
+  });
+
+  /** Les gestes que la fiche d'un mod greffé peut demander. Mêmes commandes que
+   * l'inventaire, et relecture derrière : sans elle, l'écran ment jusqu'au
+   * prochain passage. */
+  async function refreshAttached() {
+    try {
+      const all = await listOtherMods();
+      if (openAttached) openAttached = all.find((o) => o.id === openAttached!.id) ?? null;
+      attached = await listAttached(id);
+    } catch (e) {
+      actionError = errorText(e);
+    }
+  }
+
+  async function toggleAttached() {
+    const row = openAttached;
+    if (!row) return;
+    try {
+      if (row.is_active) await deactivateOther(row.id);
+      else await activateOther(row.id);
+      await refreshAttached();
+    } catch (e) {
+      actionError = errorText(e);
+    }
+  }
+
+  async function renameAttached(value: string | null) {
+    if (!openAttached) return;
+    try {
+      await setEntityDisplayName("OTHER", openAttached.id, value ?? "");
+      await refreshAttached();
+    } catch (e) {
+      actionError = errorText(e);
+    }
+  }
+
+  async function noteAttached(value: string | null) {
+    if (!openAttached) return;
+    try {
+      await setEntityNote("OTHER", openAttached.id, value ?? "");
+      await refreshAttached();
+    } catch (e) {
+      actionError = errorText(e);
+    }
+  }
+
+  /** La ligne complète d'un mod « autre », chargée à la demande : elle coûte un
+   * parcours de fichiers qu'on ne paie qu'en ouvrant la fiche. */
+  async function openAttachedFiche(row: InventoryRow) {
+    if (!row.uid.startsWith("OTHER:")) return;
+    try {
+      const all = await listOtherMods();
+      openAttached = all.find((o) => o.id === row.id) ?? null;
+    } catch (e) {
+      actionError = errorText(e);
+    }
+  }
+  /** Tracés apportés par une couche active (§7.7). La carte des tracés montre
+   * l'état **composé** — celui du lancement — et « 2 tracés » y est exact tout
+   * en étant trompeur quand l'un des deux vient d'une extension.
+   * Relu à chaque recomposition (`contentRevision`) : activer une couche change
+   * la réponse. */
+  let layoutOrigins = $state<LayoutOrigin[]>([]);
+  $effect(() => {
+    const current = id;
+    void contentRevision;
+    if (isCar) {
+      layoutOrigins = [];
+      return;
+    }
+    layerLayoutOrigins(current, "Track")
+      .then((o) => {
+        if (current === id) layoutOrigins = o;
+      })
+      .catch(() => {
+        // Best-effort : sans cette mention, la carte reste juste, elle est
+        // seulement moins bavarde.
+        if (current === id) layoutOrigins = [];
+      });
+  });
+  const originOf = $derived((layoutId: string) => layoutOrigins.find((o) => o.layout === layoutId) ?? null);
   /** Sous-onglet du bloc textuel (§7.4). **Jamais « Notes » par défaut** : la
    * description est ce qu'on vient lire, la note ce qu'on vient ajouter.
    * L'onglet « Le modèle réel » viendra du chantier Wikipédia et sera absent
@@ -163,7 +278,11 @@
   const mediaCount = $derived.by(() => {
     const parts = [screenshotsCount, replaysCount, resourcesCount, isCar ? null : backgroundsCount];
     const known = parts.filter((n): n is number => n !== null);
-    return known.length ? known.reduce((a, b) => a + b, 0) : null;
+    if (!known.length) return null;
+    // Les documents rattachés comptent pour un chacun : ils rejoignent la
+    // liste des ressources, et leur livraison ne contient qu'eux — c'est le
+    // cas qui les définit (§4.5.2).
+    return known.reduce((a, b) => a + b, 0) + attachedDocs.length;
   });
 
   const tabItems = $derived.by(() => {
@@ -171,7 +290,11 @@
     return [
       { id: "content", label: isCar ? t("detail.tabCar") : t("detail.tabTrack") },
       { id: "media", label: t("detail.tabMedia") + count(mediaCount) },
-      { id: "install", label: t("detail.tabInstall") + count(extrasCount) },
+      // Pas de décompte sur Installation : l'onglet n'est pas une collection
+      // mais une section — origine, couches, étiquettes, ajouts au jeu. Y
+      // afficher le seul nombre d'ajouts au jeu donnait un « (0) » qui avait
+      // l'air de dire que l'onglet était vide (signalé).
+      { id: "install", label: t("detail.tabInstall") },
     ];
   });
 
@@ -482,12 +605,30 @@
       // sélectionné réinitialisé, donc aperçu 3D remonté et retour à la photo.
       // C'est une restauration ponctuelle à l'ouverture, jamais une dépendance.
       const savedSkin = untrack(() => getPreferredSkin(current));
+      // Livrée demandée par l'inventaire (§4.2). Lue en `untrack` comme la
+      // préférence juste au-dessus : c'est une intention ponctuelle, pas une
+      // dépendance de cet effet — et elle est consommée, donc remise à `null`.
+      const wanted = untrack(() => {
+        const w = nav.openSkin;
+        nav.openSkin = null;
+        return w;
+      });
       listModSkins(current)
         .then((s) => {
           if (current !== id) return;
           skins = s;
-          const pi = s.findIndex((x) => x.id === savedSkin?.id);
+          // La demande l'emporte sur la préférence enregistrée : on vient de
+          // cliquer cette livrée-là.
+          const wi = wanted ? s.findIndex((x) => x.id === wanted) : -1;
+          const pi = wi >= 0 ? wi : s.findIndex((x) => x.id === savedSkin?.id);
           previewSkin = pi >= 0 ? pi : 0;
+          // Venir voir une livrée vaut la choisir : `selectSkin` la mémorise et
+          // met à jour le duo de session, exactement comme un clic dans le
+          // sélecteur. C'est la convention de l'app — la bibliothèque met déjà
+          // la voiture en session dès qu'on la sélectionne — et s'en écarter
+          // ici laisserait l'utilisateur sans moyen évident de choisir ce qu'il
+          // a sous les yeux.
+          if (wi >= 0) selectSkin(wi);
         })
         .finally(() => skinsLoadResolve?.());
       loadSounds(current);
@@ -865,16 +1006,21 @@
   /** Sous-titre de l'en-tête (§6.1) : ce qui identifie l'objet en une ligne,
    * auteur compris — c'est une propriété du mod, elle n'a rien à faire en bas
    * de colonne. Les parties absentes ne laissent pas de séparateur orphelin. */
-  const subtitle = $derived(
-    [
-      detail?.brand,
-      detail?.year ? String(detail.year) : null,
-      detail?.car_class ? detail.car_class.toUpperCase() : null,
-      detail?.author ? t("detail.byAuthor", { author: detail.author }) : null,
-    ]
-      .filter(Boolean)
-      .join(" · "),
-  );
+  const subtitle = $derived.by(() => {
+    const d = detail;
+    if (!d) return "";
+    // Un circuit n'a ni marque, ni année, ni classe : sa ligne d'identité se
+    // réduisait à son auteur. Ce qui l'identifie, c'est sa longueur et le
+    // nombre de tracés qu'il porte (maquette écran 7). Le décompte ne
+    // s'affiche qu'à partir de deux — « 1 tracé » n'apprend rien, et c'est
+    // aussi ce qui évite un pluriel que l'i18n ne sait pas accorder.
+    const layouts = d.track?.layouts ?? [];
+    const parts = isCar
+      ? [d.brand, d.year ? String(d.year) : null, d.car_class ? d.car_class.toUpperCase() : null]
+      : [layouts[previewLayout]?.length ?? null, layouts.length > 1 ? t("detail.layoutCount", { count: layouts.length }) : null];
+    parts.push(d.author ? t("detail.byAuthor", { author: d.author }) : null);
+    return parts.filter(Boolean).join(" · ");
+  });
 
   // Actions de la fiche (§6.3) : le ⋮ de `FicheHeader` les rend et les
   // positionne — ici ne reste que leur liste. Cœur favori et pastille d'état
@@ -967,7 +1113,38 @@
 {/snippet}
 
 <div class="page">
-  {#if !detail}
+  <!-- Fiches posées PAR-DESSUS celle du mod : une couche (§8.4), un mod greffé
+       (§4.3). La fermer ramène ici, ce qui est le chemin par lequel on y est
+       arrivé — même disposition que la fiche d'un pack. -->
+  {#if openLayer}
+    <div class="sheet-wrap">
+      <LayerDetail
+        layer={openLayer.layer}
+        hostName={detail?.display_name ?? null}
+        siblingCount={openLayer.siblings}
+        onclose={() => (openLayer = null)}
+        onchanged={() => {
+          contentRevision += 1;
+          void refreshEntity();
+        }}
+      />
+    </div>
+  {:else if openAttached}
+    <div class="sheet-wrap">
+      <OtherModDetail
+        row={openAttached}
+        busy={false}
+        warnings={[]}
+        onclose={() => (openAttached = null)}
+        ontoggle={() => void toggleAttached()}
+        ontogglePriority={() => {}}
+        onopenFolder={() => void openOtherModFolder(openAttached!.id)}
+        ondelete={() => (openAttached = null)}
+        onrename={(v) => void renameAttached(v)}
+        onnote={(v) => void noteAttached(v)}
+      />
+    </div>
+  {:else if !detail}
     <div class="empty">{t("common.loading")}</div>
   {:else}
     {@const d = detail}
@@ -1145,7 +1322,16 @@
         {#if isCar}
           <PickerBar
             label={t("detail.skinsLabel")}
-            items={skins.map((sk) => ({ id: sk.id, name: sk.name, image: previewSrc(sk.preview, contentRevision) }))}
+            items={skins.map((sk) => ({
+              id: sk.id,
+              name: sk.name,
+              // `livery.png` — couleurs et motif de la livrée seule — et non la
+              // photo de la voiture entière : à 20 px dans une liste déroulante,
+              // celle-ci ne montre plus rien. Même choix que le sélecteur de la
+              // colonne de session, et la convention de CM. La photo reprend ses
+              // droits dans la grille dépliée, où elle a la place.
+              image: previewSrc(sk.livery ?? sk.preview, contentRevision),
+            }))}
             index={previewSkin}
             onpick={selectSkin}
             expanded={pickerOpen}
@@ -1196,15 +1382,20 @@
             expanded={pickerOpen}
             ontoggle={() => (pickerOpen = !pickerOpen)}
             emptyText={t("detail.singleLayout")}
+            note={d.track.layouts[previewLayout]?.length ?? undefined}
           />
           {#if pickerOpen && d.track.layouts.length}
             <div class="skins">
               {#each d.track.layouts as l, i (l.id || i)}
                 {@const o = previewSrc(l.outline)}
+                {@const from = originOf(l.id)}
                 <button class="skin" class:preview={i === previewLayout} onclick={() => selectLayout(i)} title={t("detail.chooseLayoutTooltip")}>
                   <div class="skin-img layout-img">
                     {#if o}<img src={o} alt={l.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
                     {#if i === previewLayout}<span class="skin-apercu mono">{t("library.sessionBadge")}</span>{/if}
+                    <!-- Marque d'origine (§7.7) : ce tracé n'est pas dans le mod,
+                         c'est une couche qui l'apporte. -->
+                    {#if from}<span class="skin-from mono" title={t("detail.layoutFromLayerTip", { layer: from.layer_name })}>{t("detail.layoutFromLayer")}</span>{/if}
                   </div>
                   <div class="skin-b"><span class="skin-name">{l.name}</span></div>
                 </button>
@@ -1312,79 +1503,73 @@
 
         {:else}
           {@const lay = d.track?.layouts[previewLayout]}
+          {@const layoutCount = d.track?.layouts.length ?? 0}
+          <!-- Les quatre chiffres d'un circuit, dans une seule carte (maquette
+               écran 7). Le **nom** du tracé n'y est pas : le sélecteur le dit
+               déjà, à quelques pixels au-dessus, et c'est lui qui le change.
+               L'odomètre y entre comme il entre dans la fiche technique d'une
+               voiture : la carte « Distance » qui le portait à part n'existait
+               que parce qu'un circuit n'avait aucune carte de données où le
+               mettre. Il en a une. -->
           <section class="blk">
             <header class="blk-h"><span class="blk-t">{t("detail.trackInfo")}</span></header>
             <div class="specgrid" style="grid-template-columns:1fr 1fr;">
-              <div><div class="k lbl-key">{t("detail.layoutLabel")}</div><div class="v">{lay?.name ?? t("detail.defaultLayout")}</div></div>
               <div><div class="k lbl-key">{t("detail.lengthLabel")}</div><div class="v">{lay?.length ?? "—"}</div></div>
+              <div>
+                <div class="k lbl-key">{t("detail.layoutsLabel")}</div>
+                <div class="v">
+                  {layoutCount}
+                  {#if layoutOrigins.length}<span class="v-sub"
+                      >{t("detail.layoutsAdded", { count: layoutOrigins.length })}</span
+                    >{/if}
+                </div>
+              </div>
+              <div><div class="k lbl-key">{t("columns.country")}</div><div class="v">{d.country ?? "—"}</div></div>
+              <div><div class="k lbl-key">{t("detail.odometer")}</div><div class="v">{odometerText(d)}</div></div>
             </div>
           </section>
-        {/if}
-      </div>
-    </div>
 
-    <!-- RANGÉE BASSE — circuits seulement. Pour une voiture, il n'y a plus rien
-         à y mettre : les livrées ont rejoint le sélecteur sous l'aperçu, le son
-         la colonne de données, les étiquettes et l'origine l'onglet
-         Installation. Une carte absente ne laisse pas de trou (§6.3) : la
-         rangée entière disparaît plutôt que d'afficher une colonne vide. -->
-    {#if !isCar}
-    <div class="row bottom track">
-        <!-- Les tracés ont rejoint le sélecteur, sous l'aperçu : la colonne
-             commence donc par les habillages. -->
-        <div class="col">
-          <!-- Skins de circuit (TRACK_SKIN) — activables individuellement, plusieurs
-               à la fois (§8, pas de notion d'exclusivité côté CSP). -->
+          <!-- Habillages de circuit : deuxième carte de cette colonne, et non
+               une rangée à part sous la fiche. C'est tout l'argument de
+               l'écran 7 — sans fiche technique ni courbe, la colonne droite a
+               la place, et une rangée basse d'une carte et demie rouvrait
+               précisément le trou qu'on venait de fermer. -->
           <section class="blk">
             <header class="blk-h">
               <span class="blk-t">{t("detail.trackSkinsLabelPlain")}</span>
               {#if !trackSkinsLoading}<span class="blk-n">{trackSkins.length}</span>{/if}
             </header>
             <div class="blk-b">
-          {#if trackSkinsLoading}
-            <div class="muted small loading-inline"><span class="spinner-sm"></span>{t("common.loading")}</div>
-          {:else if trackSkins.length}
-            <ul class="tsk-list">
-              {#each trackSkins as s (s.id)}
-                {@const active = activeTrackSkins.includes(s.name)}
-                <li class:inactive={!active}>
-                  <label class="tog" title={active ? t("detail.trackSkinActiveOn") : t("detail.trackSkinActiveOff")}>
-                    <input
-                      type="checkbox"
-                      checked={active}
-                      disabled={trackSkinBusy}
-                      onchange={() => toggleTrackSkin(s.name)}
-                    />
-                  </label>
-                  <span class="tsk-name">{s.name}</span>
-                  {#if s.source_archive}<span class="tsk-src mono">{s.source_archive}</span>{/if}
-                </li>
-              {/each}
-            </ul>
-            <div class="muted small">{t("detail.trackSkinsNote")}</div>
-          {:else}
-            <div class="muted small">{t("detail.noTrackSkins")}</div>
-          {/if}
+              {#if trackSkinsLoading}
+                <div class="muted small loading-inline"><span class="spinner-sm"></span>{t("common.loading")}</div>
+              {:else if trackSkins.length}
+                <ul class="tsk-list">
+                  {#each trackSkins as sk (sk.id)}
+                    {@const active = activeTrackSkins.includes(sk.name)}
+                    <li class:inactive={!active}>
+                      <label class="tog" title={active ? t("detail.trackSkinActiveOn") : t("detail.trackSkinActiveOff")}>
+                        <input
+                          type="checkbox"
+                          checked={active}
+                          disabled={trackSkinBusy}
+                          onchange={() => toggleTrackSkin(sk.name)}
+                        />
+                      </label>
+                      <span class="tsk-name">{sk.name}</span>
+                      {#if sk.source_archive}<span class="tsk-src mono">{sk.source_archive}</span>{/if}
+                    </li>
+                  {/each}
+                </ul>
+                <div class="muted small">{t("detail.trackSkinsNote")}</div>
+              {:else}
+                <div class="muted small">{t("detail.noTrackSkins")}</div>
+              {/if}
             </div>
           </section>
-        </div>
-
-        <!-- Distance (l'auteur vit dans le sous-titre de l'en-tête, les
-             étiquettes dans l'onglet Installation). -->
-        <div class="col">
-          <section class="blk">
-            <header class="blk-h"><span class="blk-t">{t("detail.distanceLabel")}</span></header>
-            <div class="blk-b">
-            <div class="dist">
-              <span class="dist-ic">🛣</span>
-              <span class="dist-km mono">{d.distance_km != null ? `${d.distance_km.toFixed(1)} km` : "—"}</span>
-              <span class="dist-state mono" class:on={d.tried}>{d.tried ? t("detail.triedYes") : t("detail.triedNo")}</span>
-            </div>
-            </div>
-          </section>
-        </div>
+        {/if}
+      </div>
     </div>
-    {/if}
+
     {:else if activeTab === "media"}
       <!-- Quatre blocs, deux groupes (§7.8) : ce que TU as produit (captures,
            replays), puis ce qui est LIVRÉ avec le mod (ressources, fonds).
@@ -1394,7 +1579,16 @@
       <div class="tab-body stack">
         <MediaScreenshots modId={id} onerror={(m) => (actionError = m)} />
         <MediaReplays modId={id} onerror={(m) => (actionError = m)} />
-        <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
+        <!-- Les documents livrés AVEC ce mod mais rangés à part (§7.8) — une
+             notice, un manuel, des notes de version — rejoignent la liste des
+             ressources plutôt que d'ouvrir une carte chacun : trois cartes
+             au-dessus d'une carte « Ressources » annonçant « aucun fichier
+             annexe » disaient le contraire de la vérité. -->
+        <ResourcesBlock
+          modId={id}
+          extras={attachedDocs.map((doc) => ({ id: doc.id, source: "other" as const, label: doc.name }))}
+          onerror={(m) => (actionError = m)}
+        />
         {#if !isCar}
           <MediaBackgrounds
             modId={id}
@@ -1411,6 +1605,40 @@
            temps que l'origine et les décisions d'import. -->
       <div class="tab-body install">
         <div class="col">
+          <!-- Ce qui est posé sur ce mod (§4.3). Sans ce bloc, une notice
+               livrée avec la voiture n'était atteignable que par l'inventaire :
+               ses fichiers appartiennent au mod qui la porte, pas à la voiture,
+               donc l'onglet Médias ne la montrera jamais.
+               C'est aussi ce qui rend le rattachement déduit sans danger : une
+               déduction ratée coûte un raccourci manquant ici, jamais un mod
+               introuvable — il reste dans l'inventaire quoi qu'il arrive. -->
+          {#if attached.length}
+            <section class="blk">
+              <header class="blk-h">
+                <span class="blk-t">{t("detail.attachedTitle")}</span>
+                <span class="blk-n">{attached.length}</span>
+              </header>
+              <div class="blk-b">
+                <ul class="attached">
+                  {#each attached as a (a.uid)}
+                    <li>
+                      <button
+                        class="a-row"
+                        type="button"
+                        disabled={!a.uid.startsWith("OTHER:")}
+                        title={a.uid.startsWith("OTHER:") ? t("inventory.openFiche") : t("inventory.noFiche")}
+                        onclick={() => void openAttachedFiche(a)}
+                      >
+                        <span class="a-name">{a.name}</span>
+                        <span class="a-type mono">{t(`inventory.type${a.kind}`)}</span>
+                        {#if a.active === false}<span class="a-off mono">{t("common.inactive")}</span>{/if}
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              </div>
+            </section>
+          {/if}
           <ExtrasBlock modId={id} />
           <DecisionsBlock modId={id} />
         </div>
@@ -1480,6 +1708,53 @@
   .text-body {
     min-height: 150px;
   }
+  /* Fiche posée par-dessus celle du mod : même respiration que le corps d'un
+     onglet, puisqu'elle en occupe la place. */
+  .sheet-wrap {
+    padding: 18px;
+  }
+  .attached {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .a-row {
+    width: 100%;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    background: transparent;
+    padding: 4px 2px;
+    text-align: left;
+  }
+  .a-row:hover:not(:disabled) {
+    background: var(--raised);
+  }
+  .a-row:disabled {
+    cursor: default;
+  }
+  .a-name {
+    flex: 1;
+    min-width: 0;
+    color: var(--txt2);
+    font-size: 11.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .a-type {
+    flex: none;
+    color: var(--muted2);
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .a-off {
+    flex: none;
+    color: var(--orange);
+    font-size: 9px;
+  }
   .tab-body {
     padding: 18px;
   }
@@ -1538,12 +1813,6 @@
   }
   .row.top {
     grid-template-columns: 1.4fr 1fr;
-  }
-  /* Deux colonnes depuis que l'installation a son onglet (§7.1) : la rangée
-     basse ne porte plus que ce qui décrit l'objet — livrées et son pour une
-     voiture, tracés/habillages et odomètre pour un circuit. */
-  .row.bottom {
-    grid-template-columns: 1.3fr 1fr;
   }
   .row.track {
     grid-template-columns: 1fr 1fr;
@@ -1804,6 +2073,13 @@
   .specgrid .k {
     margin-bottom: 3px;
   }
+  /* Complément d'une valeur, dans la même cellule : « 2 » puis « dont 1
+     ajouté ». Un second champ l'aurait séparé du chiffre qu'il qualifie. */
+  .specgrid .v-sub {
+    color: var(--muted);
+    font-size: 10px;
+    margin-left: 5px;
+  }
   .specgrid .v {
     color: var(--txt2);
     font-size: 11px;
@@ -1916,6 +2192,18 @@
     color: var(--faint);
     font-size: 16px;
   }
+  /* Même gabarit que la pastille de session, l'autre coin et le bleu des
+     fichiers de mod (§7.2ter) : elle informe, elle n'alerte pas. */
+  .skin-from {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    background: var(--blue-dim);
+    border: 1px solid var(--blue-border);
+    color: var(--blue);
+    font-size: 7px;
+    padding: 0 3px;
+  }
   .skin-apercu {
     position: absolute;
     bottom: 3px;
@@ -1953,30 +2241,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     flex: 1;
-  }
-
-  .dist {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 10px;
-  }
-  .dist-ic {
-    font-size: 14px;
-    opacity: 0.8;
-  }
-  .dist-km {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--txt);
-  }
-  .dist-state {
-    margin-left: auto;
-    font-size: 8px;
-    color: var(--muted);
-  }
-  .dist-state.on {
-    color: var(--green);
   }
 
   .sounds {

@@ -3,6 +3,7 @@ mod acpath;
 mod activation;
 mod apps;
 mod archive;
+mod attach;
 mod backup;
 mod bulk;
 mod cm_stats;
@@ -28,6 +29,7 @@ mod import_bench;
 mod import_progress;
 mod importer;
 mod inspect;
+mod inventory;
 mod kunos;
 mod kunos_dates;
 mod launch;
@@ -250,6 +252,7 @@ pub fn run() {
             commands::layers::set_layer_active,
             commands::layers::reorder_layer,
             commands::layers::list_layer_files,
+            commands::layers::layer_layout_origins,
             commands::layers::open_layer_folder,
             commands::library::list_library,
             commands::library::get_mod_detail,
@@ -381,7 +384,10 @@ pub fn run() {
             commands::addons::open_app_resource,
             commands::addons::open_app_folder,
             commands::others::list_other_mods,
+            commands::others::list_inventory,
+            commands::others::list_attached,
             commands::others::set_other_priority,
+            commands::others::set_other_attachment,
             commands::others::activate_other,
             commands::others::deactivate_other,
             commands::others::delete_other_mod,

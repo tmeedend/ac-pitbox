@@ -611,6 +611,21 @@ pub struct BodyOption {
     pub era: Option<&'static str>,
 }
 
+/// Ce que l'écran Pilote reçoit : les mannequins utilisables, **et le nombre
+/// de ceux qui ont été écartés**.
+///
+/// Le décompte n'est pas décoratif. Un `.kn5` posé dans `content/driver` mais
+/// dépourvu de squelette n'apparaît nulle part — ni ici, ni dans l'inventaire
+/// des compléments, qui cesse de lister les mannequins déployés puisque c'est
+/// ici qu'ils vivent (refonte §5). Sans ce chiffre, un mannequin importé
+/// pourrait disparaître des deux écrans sans un mot.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BodyList {
+    pub bodies: Vec<BodyOption>,
+    /// `.kn5` présents mais inutilisables (illisibles ou sans squelette).
+    pub discarded: usize,
+}
+
 /// Les mannequins qu'on peut proposer, triés par nom.
 ///
 /// **Un corps qu'on ne peut pas prendre n'a pas à être montré** (§9.3) : les
@@ -628,16 +643,21 @@ pub struct BodyOption {
 /// textures et qu'on ne les décode pas ici. Pas de cache disque, donc : ce
 /// serait un fichier de plus à invalider pour économiser un tiers de seconde
 /// sur un écran qu'on ouvre rarement.
-pub fn bodies(ac_root: &Path) -> Vec<BodyOption> {
+pub fn bodies(ac_root: &Path) -> BodyList {
     let dir = ac_root.join("content").join("driver");
     let Ok(entries) = std::fs::read_dir(&dir) else {
         log::warn!("driver: {} illisible", dir.display());
-        return Vec::new();
+        return BodyList {
+            bodies: Vec::new(),
+            discarded: 0,
+        };
     };
+    let mut seen = 0usize;
     let mut out: Vec<BodyOption> = entries
         .flatten()
         .map(|entry| entry.path())
         .filter(|path| path.extension().is_some_and(|e| e.eq_ignore_ascii_case("kn5")))
+        .inspect(|_| seen += 1)
         .filter_map(|path| {
             let id = path.file_stem()?.to_string_lossy().into_owned();
             let bytes = std::fs::read(&path)
@@ -663,7 +683,8 @@ pub fn bodies(ac_root: &Path) -> Vec<BodyOption> {
         })
         .collect();
     out.sort_by_key(|body| body.id.to_lowercase());
-    out
+    let discarded = seen.saturating_sub(out.len());
+    BodyList { bodies: out, discarded }
 }
 
 /// Préfixe dont AC affuble chaque nœud d'un mannequin. C'est par lui qu'il
@@ -1111,7 +1132,7 @@ SUIT=\\type1\\black_black
         };
         let root = PathBuf::from(ac_root);
         let wanted = ["RIG_HAND_L", "RIG_HAND_R", "RIG_Head", "RIG_Hips"];
-        for body in bodies(&root) {
+        for body in bodies(&root).bodies {
             let Ok(bytes) = std::fs::read(body_file(&root, &body.id)) else {
                 continue;
             };
@@ -1187,7 +1208,7 @@ SUIT=\\type1\\black_black
             .count();
         let offered = bodies(&root);
         let mut by_era: std::collections::BTreeMap<&str, Vec<&str>> = Default::default();
-        for body in &offered {
+        for body in &offered.bodies {
             by_era.entry(body.era.unwrap_or("—")).or_default().push(&body.id);
         }
         for (era, ids) in &by_era {
@@ -1196,7 +1217,7 @@ SUIT=\\type1\\black_black
         eprintln!(
             "
 === {} corps proposés sur {installed} installés ===",
-            offered.len()
+            offered.bodies.len()
         );
     }
 

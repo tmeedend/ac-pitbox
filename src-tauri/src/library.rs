@@ -197,7 +197,12 @@ pub struct SkinItem {
     pub livery: Option<String>,
 }
 
-fn read_skin_name(skin_dir: &Path) -> Option<String> {
+/// Nom lisible d'une livrée, lu dans son `ui_skin.json` (`skinname`).
+///
+/// `pub(crate)` parce que l'inventaire (§4) doit afficher **le même** nom que
+/// le sélecteur de la fiche : un `chp_unit_118` d'un côté et un « Unit 118 » de
+/// l'autre, pour la même livrée, est une divergence qu'aucun typage ne signale.
+pub(crate) fn read_skin_name(skin_dir: &Path) -> Option<String> {
     let text = std::fs::read_to_string(skin_dir.join("ui_skin.json")).ok()?;
     let v: serde_json::Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
     v.get("skinname")

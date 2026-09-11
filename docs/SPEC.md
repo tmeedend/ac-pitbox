@@ -462,7 +462,7 @@ Les caractéristiques mécaniques ne sont **pas** des tags (un tag filtre/groupe
 
 **Une seule fiche technique, un seul composant** (`components/detail/TechSheet.svelte`), rendu par le panneau latéral **et** par la page pleine. Les deux la construisaient chacune de leur côté, et elles avaient divergé : le panneau montrait toute la fiche native (puissance, couple, poids, vitesse max, 0-100, rapport poids/puissance, autonomie, pays) plus les cinq champs harmonisés, la page en montrait six et laissait de côté tout ce que le moteur dit de lui-même — même titre, même écran, moitié moins de contenu (signalé par l'utilisateur). Le composant rend les cellules ; **le cadre reste à l'appelant** (le panneau dessine le sien, la page a sa carte), et le nombre de colonnes se déduit de la largeur reçue (`auto-fit`) plutôt que d'être dicté par l'un ou l'autre — deux colonnes dans le panneau, trois sur la page, sans que ni l'un ni l'autre ait à le dire. Une ligne vide est omise : une fiche de tirets ne dit rien de plus que son absence. Les champs déduits par les règles (§5bis.1) gardent leur couleur verte et leur infobulle « déduit par règle ».
 
-**L'odomètre est une ligne de la fiche, pas une carte** : la distance parcourue (§6.5) se lit là où on la cherche, au milieu des autres chiffres de la voiture, et la carte « Distance » de la page a disparu avec elle. C'est la seule ligne toujours présente — un odomètre vide est lui-même une réponse, et il donne alors le marqueur « jamais essayée » plutôt qu'un tiret. Les circuits, qui n'ont pas de fiche technique, gardent leur carte Distance.
+**L'odomètre est une ligne de la fiche, pas une carte** : la distance parcourue (§6.5) se lit là où on la cherche, au milieu des autres chiffres de la voiture, et la carte « Distance » de la page a disparu avec elle. C'est la seule ligne toujours présente — un odomètre vide est lui-même une réponse, et il donne alors le marqueur « jamais essayée » plutôt qu'un tiret. **Les circuits suivent la même règle** depuis qu'ils ont, eux aussi, une carte de données (§6.3bis) : l'exception qu'ils formaient n'était pas un choix, seulement l'absence d'un endroit où mettre le chiffre. La règle vit dans `odometer.ts`, partagée par les deux fiches — c'est la seule ligne dont l'absence de valeur est une valeur, et deux copies de cette subtilité auraient divergé.
 
 **Badge de marque** : `content/cars/<voiture>/ui/badge.png` (présent quasi partout, mod comme Kunos). Affiché sur fiches et vignettes. Source locale, pas de dépendance externe. Fallback (monogramme/générique) pour les rares voitures sans badge. **Pas d'icône d'auteur** (elle vient d'un pack externe communautaire, pas des fichiers du mod) : afficher le nom en texte.
 
@@ -484,7 +484,7 @@ visibles en permanence, hors du menu.
 
 **Un seul curseur pour toute l'app** (`src/lib/components/Slider.svelte`) : réglages de session (dégâts, carburant, usure des pneus, heure), volume et fondu de Musique, cinq réglages de cadrage de l'aperçu 3D. Il y en avait quatre, tous faits main — les réglages de session dessinaient une poignée carrée rouge sur une piste de 3 px, Musique et Aperçu laissaient la poignée ronde du navigateur avec `accent-color`. Même contrôle, deux apparences. Le remplissage de la piste se calcule **dans** le composant, à partir des bornes : chaque appelant le recopiait à la main (`fuel_rate / 2` pour une échelle 0-200), donc une borne qui bouge laissait un remplissage faux. Le comportement manette « entrer dans le champ » (§7.4bis) vient avec, sans rien à déclarer : il porte sur le type `range` lui-même.
 
-**Un seul composant d'onglets pour toute l'app** (`src/lib/components/Tabs.svelte`) : fiche détail, Réglages, Add-ons voiture/circuit et Règles de tags. Ils avaient chacun leur `.tabs` local — trois tailles de police, trois façons de marquer l'onglet actif, trois fonds. Le CSS Svelte étant scopé par composant, chaque copie dérivait de son côté sans que personne ne le voie : le mécanisme même qui a produit 53 signatures visuelles pour 68 libellés (§chantier libellés). Une variante `flush` (bande pleine largeur sur fond de carte) pour la fiche, qui occupe tout le cadre ; partout ailleurs la bande est transparente et porte elle-même son écart au contenu — une valeur de plus qui divergeait d'un écran à l'autre. Le composant s'inscrit tout seul auprès de `screenActions` (§7.4bis), ce qui rend tout écran à onglets parcourable à la manette sans une ligne de code de sa part.
+**Un seul composant d'onglets pour toute l'app** (`src/lib/components/Tabs.svelte`) : fiche détail, Réglages, Apps et Règles de tags. Ils avaient chacun leur `.tabs` local — trois tailles de police, trois façons de marquer l'onglet actif, trois fonds. Le CSS Svelte étant scopé par composant, chaque copie dérivait de son côté sans que personne ne le voie : le mécanisme même qui a produit 53 signatures visuelles pour 68 libellés (§chantier libellés). Une variante `flush` (bande pleine largeur sur fond de carte) pour la fiche, qui occupe tout le cadre ; partout ailleurs la bande est transparente et porte elle-même son écart au contenu — une valeur de plus qui divergeait d'un écran à l'autre. Le composant s'inscrit tout seul auprès de `screenActions` (§7.4bis), ce qui rend tout écran à onglets parcourable à la manette sans une ligne de code de sa part — **sauf** une bande imbriquée dans un onglet (les sous-onglets du bloc textuel, §6.3bis), qui s'en retire : le registre est une pile dont la dernière inscription gagne, et sans ce retrait « onglet suivant » ferait défiler Description/Notes en rendant les onglets de la fiche injoignables.
 
 **Chiffre entre parenthèses** sur Screenshots/Replays/Resources/Ajouts au jeu/Backgrounds
 (ex. « Replays (3) ») dès qu'il est connu, pour savoir s'il y a quelque chose
@@ -502,6 +502,16 @@ avec le mod** — **Ressources**, **Backgrounds** (cette dernière réservée au
 circuits). Le décompte de l'onglet est la somme des quatre. Aucun bloc n'est
 masqué quand il est vide : ses actions « Ouvrir le dossier » et « Lier un
 fichier… » sont la seule voie pour y ajouter quelque chose.
+
+**Les documents livrés avec le mod mais rangés à part y figurent aussi** : une
+notice, un manuel, des notes de version que l'import a stockés comme des mods à
+eux (§4.5.2) parce qu'ils étaient hors du dossier du mod. Leurs fichiers ne sont
+donc pas dans les ressources de la voiture — mais c'est bien là qu'on les
+cherche. Ils rejoignent **la liste du bloc Ressources**, chacun marqué du nom de
+sa livraison, et non une carte par document : trois cartes au-dessus d'un bloc
+« Ressources » annonçant « aucun fichier annexe » disaient le contraire de la
+vérité. Ils restent par ailleurs gérables depuis « Posé sur ce mod » (§4.3) et
+depuis l'inventaire — lire et gérer sont deux gestes.
 
 Rattachement par simple **`nom_de_fichier.contains(id)`**
 sur l'ensemble des id de la bibliothèque (voitures ∪ circuits, stock inclus) —
@@ -634,11 +644,38 @@ vignettes en place — beaucoup de livrées de mods s'appellent `skin_01`, et un
 liste de noms n'en dit alors rien. La grille est repliée à chaque ouverture de
 fiche, sans persistance.
 
+**La colonne de droite n'a que deux cartes sur un circuit** — « Circuit »
+(longueur, nombre de tracés et combien sont apportés par une couche, pays,
+odomètre) puis « Habillages ». C'est tout l'argument du *cas maigre* de la
+maquette : **la grille n'est plus dictée par le type le plus riche**. Un circuit
+n'a ni fiche technique ni courbe, donc la place existe, et une rangée basse
+d'une carte et demie sous l'aperçu rouvrait précisément le trou qu'on venait de
+fermer. Le **nom** du tracé n'entre pas dans la carte — le sélecteur le dit à
+quelques pixels au-dessus, et c'est lui qui le change ; la carte porte les
+chiffres, lui porte le choix. Le sous-titre de l'en-tête suit la même logique :
+une marque et une année pour une voiture, une longueur et un nombre de tracés
+pour un circuit, dont l'identité tient dans ces deux chiffres.
+
 **Le bloc textuel est à sous-onglets** (§7.4) : Description | Notes, à hauteur
 constante, c'est le contenu qui change. Notes n'est jamais l'onglet par défaut
 et porte une pastille quand une note existe. Un troisième onglet « Le modèle
 réel » s'y ajoutera avec l'appariement Wikipédia, absent tant qu'aucun article
 n'est apparié.
+
+### 6.3bis (suite) Tracés apportés par une couche (refonte §7.7)
+
+La carte des tracés montre l'**état composé** — celui que l'utilisateur aura au
+lancement, couches comprises. Elle ne disait pas d'où venait chaque tracé : sur
+un circuit dont une extension ajoute une variante, « 2 tracés » est exact et
+trompeur à la fois.
+
+Un tracé porte donc une marque d'origine quand une couche **active** l'apporte,
+et le compteur du sélecteur ajoute « dont 1 ajouté ». Deux conditions, et la
+seconde compte autant que la première (`layers::layout_origins`) : la couche
+doit poser des fichiers sous ce tracé **et** la base ne doit pas déjà le
+connaître. Une couche qui remplace la texture d'un tracé existant l'habille,
+elle ne l'apporte pas — l'étiqueter reviendrait à présenter le contenu propre
+du circuit comme un add-on.
 
 ### 6.3ter Fiche d'une couche (refonte §8)
 
@@ -665,6 +702,27 @@ répète. Dérivé donc faillible, donc repris à la main quand il se trompe. La
 dérivation réemploie `withoutBrand` (§7.4), qui porte déjà la règle délicate —
 comparaison insensible aux séparateurs, mais coupe seulement sur une espace,
 pour qu'un hôte `ks_nords` n'ampute pas `ks_nordschleife` en plein mot.
+
+### 6.3quater Fiche d'un mod greffé simple (refonte §11)
+
+Une police, un fragment de config, un mannequin : leur fiche n'affichait qu'un
+titre, trois métadonnées et « aucun fichier annexe ». Deux blocs la comblent,
+sans rien inventer — le parcours de fichiers qui détecte les conflits produisait
+déjà tout ce qu'il fallait :
+
+- **Où il atterrit** : les chemins réellement posés dans le jeu, groupés par
+  dossier de destination et **relatifs à la racine d'AC** — le chemin
+  d'installation de l'utilisateur ne dit rien et prend toute la largeur. Un
+  mod peut n'avoir rien posé sans être en panne : désactivé, ou porteur d'une
+  copie plus ancienne que ce qui tourne déjà (règle d'or n°5). Le bloc le dit
+  plutôt que d'afficher une liste vide.
+- **Conflits** : quels autres mods visent les mêmes fichiers, combien, et qui
+  gagne — la priorité marquée à la main, ou à défaut la date.
+
+Ces fiches restent en **page pleine posée sur la liste** ; le panneau latéral
+du §6.2 de la refonte est écarté. Il avait déjà été retiré du projet pour cause
+de redondance, et la fiche posée par-dessus — dont le retour ramène à la liste
+d'où l'on vient — rend le même service sans ajouter un second contenant.
 
 ### 6.4 Notes (refonte §9)
 
@@ -744,9 +802,17 @@ L'application compte une douzaine de destinations. Elles se répartissent en tro
 
 Avant ce découpage, la colonne de session faisait office de navigation en plus de son travail propre, et les deux grilles de boutons `ADD-ONS` et `ATELIER` qu'elle portait en pied étaient orphelines : elles n'étaient pas mal dessinées, elles étaient mal placées. Deux conséquences qui ne se devinent pas : **« À propos » quitte la barre de titre** (c'est du contenu — version, liens, dépôt — pas un état de fenêtre) et descend au pied du rail ; **« Ouvrir CM » quitte la navigation pour la colonne de session** (ce n'est pas une destination mais un chemin de lancement alternatif, pour qui préfère démarrer depuis Content Manager — le critère de rangement est l'intention, pas le fait que la cible soit externe).
 
-**Règle d'architecture : le rail porte les lieux, les onglets vivent à l'intérieur d'un lieu, aucun lieu n'a deux niveaux d'onglets.** C'est elle qui décide de tout le reste. Les quatre inventaires (add-ons voiture, add-ons circuit, compléments, apps) possèdent déjà leurs propres onglets internes : les ranger sous un onglet supplémentaire produirait deux rangées horizontales de forme identique, sans que rien n'indique laquelle commande l'autre. Ils sont donc des entrées de rail à part entière. Les quatre outils de l'Atelier, à l'inverse, n'ont **aucune** sous-rubrique — c'est la seule raison pour laquelle ce regroupement-là est légitime et l'autre non (§7.2quater).
+**Règle d'architecture : le rail porte les lieux, les onglets vivent à l'intérieur d'un lieu, aucun lieu n'a deux niveaux d'onglets.** C'est elle qui décide de tout le reste. Les deux inventaires restants (compléments, apps) portent déjà leurs propres facettes ou onglets : les ranger sous un onglet supplémentaire produirait deux rangées horizontales de forme identique, sans que rien n'indique laquelle commande l'autre. Ils sont donc des entrées de rail à part entière. Les quatre outils de l'Atelier, à l'inverse, n'ont **aucune** sous-rubrique — c'est la seule raison pour laquelle ce regroupement-là est légitime et l'autre non (§7.2quater).
 
-**Neuf entrées, trois filets** : Voitures · Circuits · Pilote — *ce avec quoi on roule* — puis Add-ons voiture · Add-ons circuit · Compléments — *ce qu'on possède* — puis Atelier, et en pied Réglages · À propos. Chaque entrée porte une **icône et un libellé** : le rail n'est pas iconographique seul, « Add-ons voiture » contre « Compléments » n'étant pas une distinction qu'une icône peut porter, et un rail muet se paie en infobulles pour un gain de largeur sans valeur ici.
+**Sept entrées, deux rangs nommés** : *La session* — Voitures · Circuits ·
+Pilote — puis *Le jeu* — Apps · Compléments — puis Atelier, et en pied
+Réglages · À propos. Les rangs ne classent pas par type de contenu mais par
+**durée de validité** de ce qu'on y règle : ce qui se décide à chaque session,
+et ce qui reste vrai jusqu'à nouvel ordre. Les deux écrans d'add-ons ont
+disparu — ils classaient par mécanique d'installation, c'est-à-dire par la
+complexité que l'app existe pour absorber — et leur contenu vit dans
+l'inventaire (§7bis). Apps devient une entrée : une app a un nom, une identité,
+on l'installe volontairement, elle n'est la dépendance de rien. Chaque entrée porte une **icône et un libellé** : le rail n'est pas iconographique seul, « Add-ons voiture » contre « Compléments » n'étant pas une distinction qu'une icône peut porter, et un rail muet se paie en infobulles pour un gain de largeur sans valeur ici.
 
 L'entrée active — celle dont l'écran est affiché — se marque par un **filet gauche rouge de 2 px** (`box-shadow: inset`, jamais une bordure : 2 px de bordure décaleraient le contenu d'un pixel à chaque changement d'écran), plus une icône pleine et un libellé en pleine lumière. C'est la seule apparition du rouge dans le rail (§7.2ter), et le seul repère d'écran actif de l'application : la colonne de session ne le porte plus, elle qui n'est plus de la navigation (§9.1). Au clavier, flèches haut/bas pour circuler dans le rail (bouclé aux deux extrémités), `Entrée` pour activer, `aria-current="page"` sur l'entrée active.
 
@@ -785,6 +851,18 @@ Les deux **boutons latéraux de la souris** font ce qu'ils font dans un navigate
 
 L'historique **observe** cette adresse plutôt que d'être alimenté par ceux qui la changent. Une douzaine d'endroits ouvrent une fiche ou changent de section — double-clic sur une carte, menu contextuel, manette, vue transversale, barre latérale, bloc Session. Leur demander à chacun de pousser aussi une entrée, c'est un historique qui devient faux le jour où un treizième apparaît ; il regarde donc le triplet changer et note ce qu'il voit (`navHistory.ts`, effet dans `AppShell`).
 
+**Le « ← » d'une fiche est ce même retour**, et le bouton B de la manette
+aussi : l'historique d'abord, la fermeture de la fiche en repli quand il n'y a
+rien derrière (`goBackOr`). Une flèche qui ramène toujours à la liste de l'écran
+courant — le travers classique des applications Android — rendait la
+bibliothèque après un aller depuis l'inventaire, au lieu de l'inventaire.
+
+**Changer de section ET ouvrir une fiche passe par `openInSection`.**
+`requestSection` remet les fiches à zéro, et l'`await` qui la suit garantit que
+l'observateur voit passer la liste d'arrivée comme un écran à part entière :
+« précédent » y ramenait. Les deux écritures d'affilée n'exposent qu'un seul
+état observable.
+
 Trois points de comportement :
 - **Naviguer après un retour efface l'avance**, comme dans un navigateur.
 - **La garde de §10bis s'applique** : reculer depuis les Réglages avec des changements non enregistrés propose de les enregistrer, exactement comme un clic dans la barre latérale. Un refus laisse l'historique où il était.
@@ -792,13 +870,13 @@ Trois points de comportement :
 
 WebView2 mappe ces deux boutons sur **son** historique de navigation ; l'app à route unique (SPA `adapter-static`) n'a rien où reculer, et la webview quitterait la page pour une fenêtre blanche. Ils sont donc interceptés (`preventDefault` sur `mousedown` et sur `auxclick`) avant d'être traduits en navigation Pit Box.
 
-### 7.3 Type « Autres mods » (écran « Compléments »)
+### 7.3 Type « Autres mods »
 
-**L'écran s'appelle « Compléments » et absorbe les apps**, en onglet de plus aux côtés des zones du jeu. Il est déjà le tiroir de ce qui n'est ni voiture ni circuit : les apps y entrent sans forcer, et le jeu d'onglets existait — c'est une entrée de plus, pas une structure de plus (§7.2). Le mot « autres mods » désigne encore, dans tout ce qui suit, le **type** de mod ; il ne désigne plus l'écran.
-
-**Apps ouvre la bande d'onglets**, avec son décompte, et c'est l'onglet par défaut : c'est la rubrique qu'on vient consulter, les zones du jeu sont le fourre-tout derrière. Le décompte est chargé par l'écran lui-même et non remonté par l'onglet Apps, qui n'est monté que lorsqu'il est ouvert — sinon le nombre disparaîtrait dès qu'on regarde ailleurs ; un chargement raté laisse l'onglet **sans** décompte plutôt qu'à zéro, qui affirmerait qu'il n'y a pas d'app.
-
-**Il n'y a plus d'onglet « Tous ».** Sur une vraie collection il ramassait tout ce que l'écran contient, ce qui n'est pas une vue mais une absence de vue — et c'était celle qui s'ouvrait par défaut.
+« Autres mods » désigne un **type** de mod, jamais un écran. Celui qui les
+montre est l'inventaire des compléments (**§7bis**), où ils voisinent avec les
+livrées, les sons, les habillages et les couches ; les apps, elles, ont leur
+propre écran (§3.2 de la refonte). Tout ce qui suit décrit le type : comment il
+s'importe, se pose et se classe.
 
 **L'onglet Pilotes montre le mannequin.** Un mannequin ne se reconnaît qu'à sa géométrie — forme de casque, HANS ou pas, carrure, visage — et sa fiche ne portait que son id de fichier, ce qui ne dit rien de ce qu'on vient d'importer. Elle rend donc le corps en 3D, avec la galerie de l'écran Pilote (§9.5) telle quelle, PNG gardé sur disque compris. Deux dépendances qui se disent à l'écran plutôt que d'afficher un cadre vide : le mod doit être **actif** — les mannequins se lisent dans les jonctions posées, AC ne connaissant un corps que par le nom de fichier trouvé dans `content/driver/` — et une **voiture de session** doit être choisie, puisque c'est elle qui pose le mannequin (`prepare_body_preview`).
 
@@ -806,14 +884,15 @@ Mods de type non reconnu (shaders, configs CSP, mods d'UI, weather patterns…) 
 
 **Chaque entrée a sa fiche**, ouverte en cliquant son nom — comme un mod de son (§8). Elle porte les mêmes actions que la ligne, et surtout le bloc **Ressources** (§4.5.2), qui n'avait nulle part où vivre dans une liste plate : c'est là que se lisent la notice et les images qu'un auteur livre à côté de son mod. Le bloc est celui de la fiche voiture, pas une copie.
 
+**La provenance d'un reste se lit sur deux lignes.** Un reste (voir plus bas) est nommé d'après l'archive **et** l'endroit d'où il en a été tiré — `<archive>__<chemin dedans>` —, parce que c'est cette chaîne qui forme aussi son identifiant. Les deux moitiés sont utiles et ne répondent pas à la même question : la fiche affiche donc « Provenance » (l'archive seule, le même mot que sur une fiche voiture) puis « Emplacement dans l'archive », et cette seconde ligne disparaît quand la livraison était l'archive entière. C'est l'archive seule, également, qui sert de clé au regroupement « par archive » de l'inventaire — sans quoi chaque reste forme un groupe d'une ligne au lieu de rejoindre les contenus arrivés avec lui.
+
 **Un mannequin de pilote s'importe même livré nu.** Beaucoup se téléchargent comme un `.kn5` seul, sans archive ni dossier autour. Un tel fichier — déposé sur l'app ou choisi dans le sélecteur — est reconnu par son **contenu** (maillage skinné *et* nœuds préfixés `DRIVER:`, aucun faux positif sur voiture ou collider), mis en boîte sous `content/driver/` et rangé comme « autre mod », onglet Pilotes. Un `.kn5` qui n'est **pas** un mannequin est refusé avec un message : une carrosserie arrachée à son dossier n'a pas de destination qui ait un sens, et lui en inventer une poserait un fichier inerte dans le jeu. Le fichier d'origine n'est jamais déplacé, même en mode « déplacer » — seule différence assumée avec l'import d'un dossier, parce qu'un fichier isolé posé sur l'app n'a souvent pas d'autre exemplaire. Un mannequin trouvé **dans** une archive ou un dossier suit le même chemin sans être détecté par le contenu : son chemin le dit déjà.
 
-**Rangés par zone du jeu, en onglets.** « Autres mods » est un fourre-tout par construction — un shader, une police et un pack de drapeaux n'ont rien à faire dans la même liste. Chaque entrée est donc classée d'après **les chemins de ses fichiers**, en dix zones : Extensions (`extension/`), Météo (`content/weather/`), Interface (`content/gui/`), Pilotes (`content/driver/`), Textures (`content/texture/` et `extension/textures/`), Objets 3D (`content/objects3D/`), Polices (`content/fonts/`), Filtres PP (`system/cfg/ppfilters/`), Showrooms (`content/showroom/`) et Autres — ce dernier ramassant ce qu'aucune règle ne reconnaît, y compris une entrée sans aucun fichier stocké (livraison partie entièrement en ressources, §4.5.2). Quatre points :
+**Classés par zone du jeu.** « Autres mods » est un fourre-tout par construction — un shader, une police et un pack de drapeaux n'ont rien à faire dans la même liste. Chaque entrée est donc classée d'après **les chemins de ses fichiers**, en dix zones. Ce classement ne dessine plus des onglets : il alimente la **nature** de l'inventaire (§7bis) — comportement, apparence, dépendance — et c'est la même donnée qui sert aux deux. Les zones : Extensions (`extension/`), Météo (`content/weather/`), Interface (`content/gui/`), Pilotes (`content/driver/`), Textures (`content/texture/` et `extension/textures/`), Objets 3D (`content/objects3D/`), Polices (`content/fonts/`), Filtres PP (`system/cfg/ppfilters/`), Showrooms (`content/showroom/`), le `extension/` **d'une voiture ou d'un circuit** (`content/cars/<id>/extension/`, une config CSP qui ne vaut que pour ce contenu — typiquement celle qui rattrape le volume d'un mod de son) et Autres — ce dernier ramassant ce qu'aucune règle ne reconnaît, y compris une entrée sans aucun fichier stocké (livraison partie entièrement en ressources, §4.5.2). Quatre points :
 
 - **Rien n'est stocké.** La classification est recalculée à chaque lecture, à partir du parcours de fichiers que `list_others` fait déjà pour détecter les conflits. Une entrée mal rangée par une version antérieure se répare donc toute seule, ce qui est la seule voie possible : un mod « autre » ne connaît pas la mise à jour (voir plus bas).
 - **La règle la plus précise gagne**, fichier par fichier : `extension/textures/` est une texture, pas une config CSP, alors que les deux préfixes correspondent.
-- **Un mod est listé sous chacune des zones qu'il touche**, pas sous une zone dominante. Un pack qui livre des polices *et* un habillage d'interface se cherche des deux côtés, et le classer sous sa moitié la plus grosse perdrait l'autre. Chaque ligne porte donc la liste de ses zones : c'est ce qui permet de reconnaître le même mod d'un onglet à l'autre.
-- **Un onglet vide reste affiché, grisé.** Une bande d'onglets qui change de taille selon le contenu se relit entièrement à chaque visite.
+- **Un mod est listé sous chacune des zones qu'il touche**, pas sous une zone dominante. Un pack qui livre des polices *et* un habillage d'interface se cherche des deux côtés, et le classer sous sa moitié la plus grosse perdrait l'autre. Chaque ligne porte donc la liste de ses zones : c'est ce qui permet de le reconnaître d'une facette à l'autre.
 
 **Le signalement « zone Content Manager » vaut ici aussi** (§4.5.3) : le décompte des fichiers de l'entrée qui visent un dossier auto-synchronisé est affiché sur sa ligne, avec la même explication au survol que dans « Ajouts au jeu ». Ce n'est pas un doublon décoratif — c'est précisément ici qu'atterrissent les configs CSP d'un **pack multi-mods**, puisque rien ne les rattache à une voiture en particulier (voir le rattachement ci-dessous). N'avertir que dans « Ajouts au jeu » aurait laissé muet le cas le plus probable.
 
@@ -1002,6 +1081,65 @@ Le **décompte de résultats** ne porte plus de badge de nombre de filtres actif
 
 ---
 
+## 7bis. Écran Compléments — l'inventaire (refonte §4)
+
+**Tout ce qui n'est pas un contenu autonome**, dans une seule liste : livrées,
+sons, habillages de circuit, couches, mods « autres », et tout ce que Pit Box
+n'a pas su reconnaître. Les quatre contenus autonomes — voitures, circuits,
+modèles de pilote, apps — ont leur écran et n'y figurent pas.
+
+Trois écrans le précédaient (Add-ons voiture, Add-ons circuit, Compléments) :
+ils classaient par **mécanique d'installation**, c'est-à-dire par la complexité
+que l'app existe pour absorber, et un même mod pouvait y figurer deux fois sans
+que rien ne le dise.
+
+**Deux axes, indépendants du type** (`attach.rs`) :
+
+- **le rattachement** — une voiture, un circuit, une app, le jeu, autonome —
+  déduit par ordre de force décroissante, le **signal voyageant avec la
+  réponse** : chemin posé (quasi certain), hôte écrit dans la ligne (certain),
+  nom de config formé sur une entité (fort), même archive (conjecture).
+  Corrigeable à la main, et seule la correction est stockée ;
+- **la nature** — apparence, comportement, dépendance, non reconnu — déduite
+  des zones du jeu touchées, la plus conséquente l'emportant.
+
+**Facettes tri-état**, chaque valeur avec son compteur : un clic inclut, un
+deuxième exclut. Les décomptes se calculent sur la recherche et non sur le
+résultat filtré — un chiffre qui bouge à chaque facette posée ne sert à rien
+pour décider de la suivante.
+
+**Le type d'une ligne se dit par ce qu'elle touche.** Livrée, Son, Habillage,
+Couche, Mannequin et Document se nomment d'eux-mêmes ; il restait « Mod », qui
+est le mot qu'on écrit quand on n'a rien de plus précis à dire. Une ligne issue
+d'un mod « autre » affiche donc **les zones du jeu qu'elle touche** (§7.3) —
+« Polices », « Interface », « Extensions », plusieurs séparées par un point
+médian — et ne retombe sur « Mod » que lorsque aucune n'est reconnue, ce qui
+est exactement ce que ce mot veut dire. Ce n'est pas une classification de
+plus : c'est la donnée dont la **nature** est déjà tirée, remontée d'un cran, et
+c'est le vocabulaire de la fiche, pas un second.
+
+**La ligne est à deux niveaux** (nom lisible, identifiant technique en
+dessous), ce qui est la condition pour renommer sans rien perdre, et **aucun
+bouton n'y est exposé** : ouvrir, prioriser, désactiver, supprimer passent par
+le ⋮. Reste visible ce qui se *lit* — le rattachement (lien vers l'hôte), la
+nature, l'étoile de priorité quand elle est posée, le marqueur de note, l'état.
+
+**Les mannequins de pilote y figurent**, comme les livrées — et pour la même
+raison : la galerie de l'écran Pilote (§9.5) et le sélecteur d'une fiche
+voiture servent à **choisir**, l'inventaire à **gérer** (désactiver, supprimer,
+ouvrir le dossier, annoter). Deux gestes, deux écrans. Les retirer d'ici, essayé
+puis annulé, supprimait le seul endroit d'où on pouvait agir sur eux.
+
+L'écran Pilote annonce de son côté le nombre de `.kn5` qu'il a **écartés**
+(illisibles ou sans squelette) : ceux-là n'apparaissent pas dans sa galerie, et
+sans ce décompte rien n'expliquait leur absence.
+
+**Groupement par archive ou par hôte.** Le second remplace le regroupement par
+voiture des anciennes vues transversales : sans lui, « voir toutes les livrées
+de cette voiture » se perdait.
+
+---
+
 ## 8. Skins, sons, apps
 
 **Base Kunos indexée** en lecture seule (`is_stock`), non désactivable, pour que skins/sons puissent s'attacher à une voiture/circuit de base comme à un mod.
@@ -1068,11 +1206,16 @@ Deux précautions dans ce classement :
 
 **Reprise des bibliothèques existantes** (`extras::migrate_app_extras_to_layers`, au démarrage). Les ajouts au jeu rangés avant que les couches d'app n'existent sont convertis. **Idempotente par construction** : plus aucun chemin `apps/<lang>/…` ne subsiste dans l'arbre des ajouts après coup, donc un second démarrage ne trouve rien — pas de drapeau à mémoriser. **Sans risque de perte** : l'arbre des ajouts est la source et n'est touché qu'après un `undeploy` réussi ; un exemplaire posé dans le jeu étant un *hardlink* de celui du magasin, le retirer ne fait que décrémenter le compteur de liens, y compris dans le cas tordu où le chemin de jeu traversait la junction d'une app et pointait donc dans la bibliothèque. Ce qui restait d'ajouts légitimes est reposé ensuite, et seulement si le mod est actif.
 
-**Accès transversal** : vues Skins / Sons / Apps dans la barre latérale, en plus de l'accès par la fiche.
+**Accès transversal : l'inventaire des compléments** (§7bis). Les écrans
+« Add-ons voiture » et « Add-ons circuit » (`Transversal.svelte`) **ont
+disparu** : ils classaient par mécanique d'installation, et leurs trois
+rubriques — skins, sons, couches — sont devenues trois valeurs de facette dans
+une liste unique, qui porte en plus les mods « autres ». Le regroupement **par
+hôte** y remplace leur regroupement par voiture : sans lui, « voir toutes les
+livrées de cette voiture » se perdait. L'accès par la fiche du mod, lui, n'a
+pas bougé.
 
-**Écrans Add-ons voiture / circuit en onglets** (`Transversal.svelte`) : Skins | Sons | Couches & extensions pour les voitures, Skins | Couches & extensions pour les circuits (les sons ne concernent que les voitures). Les trois rubriques s'empilaient sur une page interminable alors qu'elles ne se consultent jamais ensemble. La recherche est descendue de l'en-tête dans la barre d'outils de la liste : elle y accompagne ce qu'elle filtre, et couvre du même coup les sons, qui n'avaient aucun champ de recherche une fois imbriqués.
-
-**Les skins de circuit fournis avec le mod ne sont plus listés dans la vue transversale.** Reconnus sur disque dans `cm_skins/` (§8 ci-dessus), jamais importés séparément, donc sans archive d'origine : ils remplissaient à eux seuls la rubrique « Origine inconnue ». Et rien dans cette vue ne s'applique à eux — ni sélection, ni suppression (seul le mod entier les emporte), ni activation (elle se fait depuis la barre latérale ou la fiche du circuit). Les lister n'apprenait donc rien et noyait ce qui se gère vraiment. Conséquence : la rubrique « Origine inconnue » n'apparaît plus que si un skin réellement importé n'a pas d'archive connue. Les skins **de voiture** fournis avec le mod restent listés : là, parcourir l'ensemble des skins d'une voiture est un usage légitime de la vue.
+**Les skins de circuit fournis avec le mod ne sont pas listés dans l'inventaire.** Reconnus sur disque dans `cm_skins/` (§8 ci-dessus), jamais importés séparément, donc sans archive d'origine : ils remplissaient à eux seuls la rubrique « Origine inconnue ». Et rien dans cette vue ne s'applique à eux — ni sélection, ni suppression (seul le mod entier les emporte), ni activation (elle se fait depuis la barre latérale ou la fiche du circuit). Les lister n'apprenait donc rien et noyait ce qui se gère vraiment. Conséquence : la rubrique « Origine inconnue » n'apparaît plus que si un skin réellement importé n'a pas d'archive connue. Les skins **de voiture** fournis avec le mod restent listés : là, parcourir l'ensemble des livrées d'une voiture est un usage légitime.
 
 **Analyse des extensions CSP** : poussée plus loin (détection fine des fonctionnalités CSP d'un mod).
 

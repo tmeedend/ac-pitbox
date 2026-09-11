@@ -48,18 +48,32 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import ResourcePdf from "./ResourcePdf.svelte";
 
+  type Source = "mod" | "app" | "pack" | "sound" | "other";
+
   let {
     modId,
     source = "mod",
+    title,
+    extras = [],
     onerror,
   }: {
     modId: string;
+    /** Intitulé du bandeau. Par défaut « Ressources ». */
+    title?: string;
+    /** Livraisons **rattachées** dont les documents rejoignent cette liste
+     * (§7.8) : les notices d'un pack, stockées comme des mods à eux parce
+     * qu'elles arrivaient hors du dossier du mod.
+     *
+     * Dans la même liste, et non dans une carte chacune : trois cartes pour
+     * trois PDF, au-dessus d'une carte « Ressources » vide affichant « aucun
+     * fichier annexe », disait exactement le contraire de la vérité. */
+    extras?: { id: string; source: Source; label: string }[];
     /** D'où viennent les ressources. Une app a le même dossier `resources/`
      * qu'une voiture (§4.5.2) et la même prévisualisation ; seul le chemin de
      * résolution côté backend diffère. Le bloc est donc partagé plutôt que
      * recopié — c'est exactement le genre de duplication qui a produit 53
      * signatures visuelles pour 68 libellés (§chantier composants partagés). */
-    source?: "mod" | "app" | "pack" | "sound" | "other";
+    source?: Source;
     onerror: (message: string) => void;
   } = $props();
 
@@ -114,16 +128,29 @@
     },
   } as const;
 
-  const backend = $derived(BACKENDS[source]);
-  const load = (id: string) => backend.list(id);
-  const openExternal = (id: string, rel: string, origin: string) => backend.open(id, rel, origin);
-  const srcOf = (id: string, rel: string, origin: string) => backend.src(id, rel, origin);
-  const bytesOf = (id: string, rel: string, origin: string) => backend.read(id, rel, origin);
-  const pathOf = (id: string, rel: string, origin: string) => backend.path(id, rel, origin);
+  /** À quelle livraison appartient un fichier de la liste. Sans elle, ouvrir la
+   * notice d'un pack demanderait ses octets au mauvais backend et au mauvais
+   * id — la liste est commune, les racines ne le sont pas.
+   *
+   * **Portée par le fichier lui-même, jamais par une table externe.** Le
+   * premier jet en tenait une `Map` clé par identité d'objet : elle ne
+   * retrouvait *jamais* rien. `files` est un `$state`, donc un proxy profond,
+   * et l'objet relu dans le `{#each}` n'est pas celui qu'on y avait rangé. La
+   * recherche échouait en silence, le repli demandait le fichier au mod
+   * courant, et l'erreur sortait à des kilomètres de là : « dossier ressources
+   * introuvable » sur une voiture qui n'a pas de dossier ressources — parce
+   * que c'est le PDF d'une livraison voisine qu'on venait de cliquer. */
+  type Owner = { id: string; source: Source; label: string | null };
+  type Row = ResourceFile & { owner: Owner };
 
-  let files = $state<ResourceFile[]>([]);
+  const openExternal = (f: Row) => BACKENDS[f.owner.source].open(f.owner.id, f.rel_path, f.origin);
+  const srcOf = (f: Row) => BACKENDS[f.owner.source].src(f.owner.id, f.rel_path, f.origin);
+  const bytesOf = (f: Row) => BACKENDS[f.owner.source].read(f.owner.id, f.rel_path, f.origin);
+  const pathOf = (f: Row) => BACKENDS[f.owner.source].path(f.owner.id, f.rel_path, f.origin);
+
+  let files = $state<Row[]>([]);
   /** Ressource ouverte en prévisualisation, `null` quand la liste seule est affichée. */
-  let selected = $state<ResourceFile | null>(null);
+  let selected = $state<Row | null>(null);
   let loading = $state(false);
   /** Message d'échec propre à la prévisualisation : il s'affiche à la place du
       document, sans faire remonter une bannière d'erreur sur toute la fiche. */
@@ -165,10 +192,10 @@
       const resolved: { key: string; path: string }[] = [];
       for (const f of wanted) {
         try {
-          const path = await pathOf(current, f.rel_path, f.origin);
+          const path = await pathOf(f);
           if (stale()) return;
           resolved.push({ key: keyOf(f), path });
-          fullSrc = { ...fullSrc, [keyOf(f)]: await srcOf(current, f.rel_path, f.origin) };
+          fullSrc = { ...fullSrc, [keyOf(f)]: await srcOf(f) };
         } catch {
           // Image irrésolvable : elle reste sans vignette plutôt que de casser
           // la galerie entière.
@@ -193,17 +220,30 @@
 
   /** Identité d'une entrée : le chemin relatif seul ne suffit pas, un même
       `readme.txt` peut exister dans les ressources **et** dans le mod. */
-  const keyOf = (f: ResourceFile) => `${f.origin}:${f.rel_path}`;
+  const keyOf = (f: Row) => `${f.owner.id}:${f.origin}:${f.rel_path}`;
 
   // La garde sur `modId` évite qu'une réponse tardive d'un mod précédent
   // n'écrase la liste du mod courant.
   $effect(() => {
     const current = modId;
+    // Les livraisons rattachées sont lues **en tête** de l'effet, avec le
+    // reste : une garde placée avant elles tronquerait la liste des
+    // dépendances, et l'ajout d'une notice ne redéclencherait rien.
+    const also = extras.map((e) => ({ ...e }));
     files = [];
     selected = null;
-    load(current).then((rs) => {
-      if (current === modId) files = rs;
-    });
+    (async () => {
+      const mine: Owner = { id: current, source, label: null };
+      const own = await BACKENDS[source].list(current);
+      const all: Row[] = own.map((f) => ({ ...f, owner: mine }));
+      for (const e of also) {
+        const owner: Owner = { id: e.id, source: e.source, label: e.label };
+        const rs = await BACKENDS[e.source].list(e.id).catch(() => [] as ResourceFile[]);
+        for (const f of rs) all.push({ ...f, owner });
+      }
+      if (current !== modId) return;
+      files = all;
+    })();
   });
 
   function clearPreview() {
@@ -229,7 +269,7 @@
       try {
         // Pas d'image ici : elles passent par la galerie et la visionneuse,
         // jamais par l'aperçu en ligne (voir plus haut).
-        const bytes = await bytesOf(mod, f.rel_path, f.origin);
+        const bytes = await bytesOf(f);
         if (stale()) return;
         if (kind === "pdf") pdfData = bytes;
         else if (kind === "markdown") html = renderMarkdown(decodeText(bytes));
@@ -257,7 +297,7 @@
 
   /** Un clic prévisualise ce qui est lisible, et bascule (referme) la sélection
       courante ; le reste part dans l'application par défaut de Windows. */
-  function activate(f: ResourceFile) {
+  function activate(f: Row) {
     if (previewKind(f.rel_path)) {
       selected = selected && keyOf(selected) === keyOf(f) ? null : f;
     } else {
@@ -265,10 +305,10 @@
     }
   }
 
-  async function openExternally(f: ResourceFile) {
+  async function openExternally(f: Row) {
     try {
       // Le chemin relatif est résolu et validé côté backend (anti-traversée).
-      await openExternal(modId, f.rel_path, f.origin);
+      await openExternal(f);
     } catch (e) {
       onerror(errorText(e));
     }
@@ -286,7 +326,7 @@
 
 <section class="blk">
   <header class="blk-h">
-    <span class="blk-t">{t("detail.resourcesTitle")}</span>
+    <span class="blk-t">{title ?? t("detail.resourcesTitle")}</span>
     <span class="blk-n">{files.length}</span>
   </header>
   <div class="blk-b">
@@ -323,7 +363,9 @@
                 title={canPreview ? t("detail.resourcePreviewTooltip") : t("detail.resourceOpenTooltip")}
               >
                 <span class="res-nm">{f.rel_path}</span>
-                {#if f.origin === "mod"}
+                {#if f.owner.label}
+                  <span class="res-src">{f.owner.label}</span>
+                {:else if f.origin === "mod"}
                   <span class="res-src">{t("detail.resourceInMod")}</span>
                 {:else if f.origin === "pack"}
                   <span class="res-src">{t("detail.resourceFromPack")}</span>

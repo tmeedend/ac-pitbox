@@ -24,18 +24,23 @@
     sections?: string[];
     /** Filet de séparation AVANT cette entrée. */
     sep?: boolean;
+    /** Intitulé du rang, posé au-dessus de l'entrée (refonte §3). Les deux
+     * rangs ne classent pas par type de contenu mais par **durée de validité**
+     * de ce qu'on y règle : ce qui se décide à chaque session, et ce qui reste
+     * vrai jusqu'à nouvel ordre. */
+    group?: string;
     /** Pousse l'entrée (et ses suivantes) en pied de rail. */
     foot?: boolean;
   };
 
   const ENTRIES: Entry[] = [
-    { target: "cars", labelKey: "nav.cars" },
+    { target: "cars", labelKey: "nav.cars", group: "nav.groupSession" },
     { target: "tracks", labelKey: "nav.tracks" },
     { target: "driver", labelKey: "nav.driver" },
-    // Premier filet : sépare ce avec quoi on roule de ce qu'on possède.
-    { target: "carskins", labelKey: "nav.carAddons", sep: true },
-    { target: "trackskins", labelKey: "nav.trackAddons" },
-    { target: "others", labelKey: "nav.others", sections: ["others", "apps"] },
+    // Les deux écrans d'add-ons ont disparu : ils classaient par mécanique de
+    // pose, et leur contenu est dans l'inventaire (refonte §3.1).
+    { target: "apps", labelKey: "nav.apps", sep: true, group: "nav.groupGame" },
+    { target: "others", labelKey: "nav.others" },
     // Deuxième filet : isole les outils.
     { target: "rules", labelKey: "nav.atelier", sections: ["rules", "import", "profiles", "maintenance"], sep: true },
     // Troisième filet : détache le pied.
@@ -76,6 +81,7 @@
   {#each ENTRIES as e (e.target)}
     {#if e.foot}<div class="spacer"></div>{/if}
     {#if e.sep}<div class="sep"></div>{/if}
+    {#if e.group}<span class="grp">{t(e.group)}</span>{/if}
     {@const active = isActive(e)}
     {@const alert = hasAlert(e)}
     <button
@@ -99,14 +105,9 @@
             <path d="M3 11.4a7 7 0 0 1 7-7" />
             <path d="M3 11.4v2.6a1.6 1.6 0 0 0 1.6 1.6h9.2" />
             <path d="M6.6 15.6v-1.4a1.6 1.6 0 0 1 1.6-1.6h1" />
-          {:else if e.target === "carskins"}
-            <path d="M1.5 12v-1l1.4-3.1A1.8 1.8 0 0 1 4.6 6.8h6.6a1.8 1.8 0 0 1 1.6 1.1L14.2 11v1" />
-            <path d="M1.5 12h12.7v1.4a.7.7 0 0 1-.7.7h-1.2a.7.7 0 0 1-.7-.7v-.5M4.1 12.9v.5a.7.7 0 0 1-.7.7H2.2a.7.7 0 0 1-.7-.7V12" />
-            <path d="M15.4 4.2v4.6M13.1 6.5h4.6" />
-          {:else if e.target === "trackskins"}
-            <path d="M4 13.6c-1.7 0-2.6-1.1-2.6-2.3 0-1.3 1-2 2.3-2.3 1.6-.3 2.9-.2 4-.9.9-.7.7-2 1.9-2.6 1-.5 2.5-.4 3.5.1" />
-            <path d="M13.9 10.6c-1.4.5-2.7 0-3.9.3-1 .3-1.2 1.3-2 2-.8.6-1.9.9-3.3.9" />
-            <path d="M15.4 4.2v4.6M13.1 6.5h4.6" />
+          {:else if e.target === "apps"}
+            <path d="M3.2 3.2h5.4v5.4H3.2zM11.4 3.2h5.4v5.4h-5.4zM3.2 11.4h5.4v5.4H3.2z" />
+            <path d="M14.1 11.4v5.4M11.4 14.1h5.4" />
           {:else if e.target === "others"}
             <path d="M2.6 6.4 10 3.1l7.4 3.3-7.4 3.3z" />
             <path d="M2.6 6.4v7.2l7.4 3.3 7.4-3.3V6.4" />
@@ -152,6 +153,17 @@
     height: 1px;
     background: var(--line);
     margin: 7px 14px;
+  }
+  /* Intitulé de rang : de la STRUCTURE, pas un état — d'où le gris et non le
+     rouge (barème du §7.2ter, même règle que les titres de section de la
+     coquille). */
+  .grp {
+    color: var(--muted2);
+    font-size: 8px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 2px 0 4px;
   }
   .entry {
     position: relative;

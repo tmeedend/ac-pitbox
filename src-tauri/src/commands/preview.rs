@@ -249,9 +249,12 @@ async fn driver_glb(
 /// Parcourt tout `content/driver/`, soit une cinquantaine de KN5 de quinze
 /// mégaoctets : `spawn_blocking` obligatoire.
 #[tauri::command]
-pub async fn list_driver_bodies(app: AppHandle) -> Result<Vec<crate::driver::BodyOption>, String> {
+pub async fn list_driver_bodies(app: AppHandle) -> Result<crate::driver::BodyList, String> {
     let Some(ac_root) = crate::config::load(&app).ac_install_path else {
-        return Ok(Vec::new());
+        return Ok(crate::driver::BodyList {
+            bodies: Vec::new(),
+            discarded: 0,
+        });
     };
     tauri::async_runtime::spawn_blocking(move || crate::driver::bodies(&ac_root))
         .await
