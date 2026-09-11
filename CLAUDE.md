@@ -416,27 +416,20 @@ laisser pourrir ici.
       `Field` (un réglage dans un bloc : intitulé, commande, explication — et
       surtout **l'écart avec le précédent**, que chaque écran posait à la main
       et qu'un champ ajouté après coup oubliait ; c'est ce qui collait « pilote
-      au volant » à la case du dessus).
-      **Inventaire de ce qui reste**, mesuré le 2026-08-18 :
-      - **Boîte d'erreur : 14 définitions locales** (`.err` / `.error` /
-        `.action-err` dans Apps, BulkEditPanel, BulkImport, DetailPage,
-        Launch, LayersSection, Maintenance, OtherMods, Profiles,
-        Settings, SetupWizard, Transversal, MusicTab — la quinzième est partie
-        avec le panneau latéral). Mêmes trois couleurs
-        partout (`--rosso-dim` / `--rosso-border` / `--rosso-bright`), seuls
-        le padding (8/10 vs 10/12), la taille (11,5 vs 12px) et les marges
-        diffèrent. Le cas le plus net : une classe globale `.errbox` suffit,
-        les marges restant à l'appelant.
+      au volant » à la case du dessus), `.errbox` (la boîte d'erreur : 21
+      copies locales retirées — sœur de `.warnbox`, même boîte, autre couleur,
+      et c'est ce voisinage qui a tranché sa géométrie plutôt qu'un arbitrage
+      entre les copies), `Seg.svelte` (sept groupes segmentés recopiés — trois
+      axes de variation et trois seulement, chacun porté par une raison :
+      `vertical`, `tone` au barème du rouge §7.2ter, et `size` nommée par son
+      rôle, jamais par une taille).
+      **Inventaire de ce qui reste** (mesuré le 2026-08-18, revu le
+      2026-09-11) :
       - **Sous-titre d'écran : 8 copies** de `.sub`, identiques à `max-width`
         près (520/540/560/620/aucune). Trois n'avaient pas de `font-size` et
         étaient donc plus gros que les autres — corrigé, mais les 8 copies
         restent. En faire un 4ᵉ niveau global (`.lbl-sub` ?) est une décision
         de design à prendre avec l'utilisateur, pas à trancher seul.
-      - **Groupe de boutons segmenté : 6 copies** (`.seg` / `.seg-v`) dans
-        Library, Transversal, BulkImport, OpponentsBlock, SessionOptionsBlock,
-        SessionTypeBlock. Deux orientations (horizontale/verticale) et deux
-        traitements de l'état actif (fond rouge plein vs fond surélevé) : un
-        vrai composant avec une prop d'orientation, pas juste une classe.
       - **Enregistrer / charger / supprimer une liste nommée : 2 copies**, et
         c'est la seule entrée de cet inventaire qui ne soit pas du style mais
         du **comportement**. Les sessions enregistrées (`SavedSessionsDialog`
@@ -449,6 +442,10 @@ laisser pourrir ici.
       Un lot de ce genre est du **reformatage pur sur une quinzaine de
       fichiers** : le faire dans son propre commit, jamais mélangé à un
       changement fonctionnel (sinon `git blame` devient inexploitable).
+      **Une brique ne se crée pas avant son premier client** : `Toolbar`,
+      `ListRow` et la coquille de fiche attendent donc les lots de la refonte
+      qui les consomment (L2, L7), pour la même raison qu'une colonne SQL que
+      rien n'écrit ni ne lit pourrit.
 - [ ] **Vignettes régénérées de la grille** — **fusionné dans `main`, mais
       éteint** : `FEATURE_GRID_THUMBS` est à `false` dans `src/lib/features.ts`,
       qui porte le mode d'emploi de l'interrupteur. Il ne reste qu'un réglage,
