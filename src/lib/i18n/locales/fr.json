@@ -541,6 +541,7 @@
     "stateNOTE": "A une note",
     "openHost": "Ouvrir son hôte",
     "openFiche": "Ouvrir sa fiche",
+    "noFiche": "Rien à ouvrir : il vit sur son hôte",
     "priorityOn": "Lui faire gagner les conflits",
     "priorityOff": "Ne plus lui faire gagner les conflits",
     "detach": "Revenir au rattachement déduit",

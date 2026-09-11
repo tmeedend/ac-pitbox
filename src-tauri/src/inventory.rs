@@ -53,7 +53,16 @@ pub struct InventoryRow {
     /// renommer sans rien perdre (§4.2).
     pub tech_id: String,
     pub attachment: Attachment,
-    pub active: bool,
+    /// Déployé ou non — **`None` quand la notion ne s'applique pas**.
+    ///
+    /// Une livrée ne s'active pas : elle est projetée dans le dossier `skins/`
+    /// de sa voiture et le jeu la voit, point. La colonne `is_active` de
+    /// `sub_mods` ne sert qu'aux sons (exclusifs) et aux habillages de circuit
+    /// — mesuré sur une bibliothèque réelle : les 26 livrées y sont toutes à
+    /// 0, quand les sons se répartissent 6/4. Lire cette colonne pour une
+    /// livrée affichait donc « Inactif » sur chacune : faux, et pire que faux
+    /// puisque ça suggère une action qui n'existe pas.
+    pub active: Option<bool>,
     /// Prioritaire en cas de conflit (§7.3) — affiché comme un **état** (une
     /// étoile), jamais comme un bouton.
     pub priority: bool,
@@ -83,7 +92,7 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
             name: card.row.display_name_user.clone().unwrap_or_else(|| card.row.id.clone()),
             tech_id: card.row.id.clone(),
             attachment: card.attachment,
-            active: card.row.is_active,
+            active: Some(card.row.is_active),
             priority: card.row.is_priority,
             has_note: card.row.notes_user.is_some(),
             source_archive: card.row.source_archive.clone(),
@@ -107,7 +116,12 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
             name: sub.display_name_user.clone().unwrap_or_else(|| sub.name.clone()),
             tech_id: sub.name.clone(),
             attachment: host_attachment(&index, &sub.parent_id, nature_of_sub(kind)),
-            active: sub.is_active,
+            // Voir `active` : seuls les sons et les habillages de circuit ont
+            // un état de déploiement propre.
+            active: match kind {
+                RowKind::Sound | RowKind::TrackSkin => Some(sub.is_active),
+                _ => None,
+            },
             priority: false,
             has_note: sub.notes_user.is_some(),
             source_archive: sub.source_archive.clone(),
@@ -129,7 +143,7 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
             name: layer.display_name_user.clone().unwrap_or_else(|| layer.name.clone()),
             tech_id: layer.source_archive.clone().unwrap_or_else(|| layer.name.clone()),
             attachment: host_attachment(&index, &layer.parent_id, Nature::Appearance),
-            active: layer.is_active,
+            active: Some(layer.is_active),
             priority: false,
             has_note: layer.notes_user.is_some(),
             source_archive: layer.source_archive.clone(),
@@ -215,6 +229,10 @@ mod tests {
 
         let rows = list(&conn, &cfg).unwrap();
         assert_eq!(rows.len(), 2, "une ligne par chose");
+        let skin = rows.iter().find(|r| r.kind == RowKind::Skin).unwrap();
+        assert_eq!(skin.active, None, "une livrée ne s'active pas : pas d'état de déploiement");
+        let layer = rows.iter().find(|r| r.kind == RowKind::Layer).unwrap();
+        assert_eq!(layer.active, Some(true), "une couche, si");
         let uids: Vec<&str> = rows.iter().map(|r| r.uid.as_str()).collect();
         assert!(uids.contains(&"SUB:pack") && uids.contains(&"LAYER:pack"), "ids distincts: {uids:?}");
         for r in &rows {
@@ -246,6 +264,7 @@ mod tests {
 
         let rows = list(&conn, &cfg).unwrap();
         assert_eq!(rows.len(), 1, "toujours listé");
+        assert_eq!(rows[0].active, Some(false), "un son a bien un état, lui");
         assert_eq!(rows[0].attachment.kind, AttachKind::Game);
         assert_eq!(rows[0].attachment.target_id, None);
         drop(base);

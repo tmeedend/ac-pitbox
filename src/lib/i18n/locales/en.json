@@ -541,6 +541,7 @@
     "stateNOTE": "Has a note",
     "openHost": "Open its host",
     "openFiche": "Open its page",
+    "noFiche": "Nothing to open: it lives on its host",
     "priorityOn": "Make it win conflicts",
     "priorityOff": "Stop making it win conflicts",
     "detach": "Back to the deduced host",

@@ -90,7 +90,11 @@
 
   /** Les trois axes de facette d'une ligne, sous forme de clés. */
   function keysOf(r: InventoryRow): string[] {
-    const out = [`attach:${r.attachment.kind}`, `nature:${r.attachment.nature}`, r.active ? "state:ACTIVE" : "state:INACTIVE"];
+    const out = [`attach:${r.attachment.kind}`, `nature:${r.attachment.nature}`];
+    // Une livrée n'a pas d'état de déploiement (voir `active` côté Rust) :
+    // elle ne compte donc ni dans « Actif » ni dans « Inactif ». Lui en
+    // inventer un ferait mentir les deux compteurs à la fois.
+    if (r.active !== null) out.push(r.active ? "state:ACTIVE" : "state:INACTIVE");
     if (r.has_note) out.push("state:NOTE");
     return out;
   }
@@ -237,6 +241,13 @@
     return items;
   }
 
+  /** Ce que le clic sur la ligne va ouvrir — dit en infobulle, parce que la
+   * destination n'est pas la même selon le type et qu'on ne le devine pas. */
+  function fichePromise(r: InventoryRow): string {
+    if (r.kind === "OTHER" || r.kind === "SOUND") return "inventory.openFiche";
+    return r.attachment.target_id ? "inventory.openHost" : "inventory.noFiche";
+  }
+
   const ICONS: Record<InventoryRow["kind"], string> = {
     SKIN: "▤",
     SOUND: "♪",
@@ -367,14 +378,17 @@
       {/if}
       <ul class="rows">
         {#each g.rows as r (r.uid)}
-          <li class="row" class:inactive={!r.active}>
+          <li class="row" class:inactive={r.active === false}>
             <span class="ic" aria-hidden="true">{ICONS[r.kind]}</span>
             <!-- Deux niveaux : le nom lisible, l'identifiant technique en
-                 dessous. C'est ce qui permet de renommer sans rien perdre. -->
-            <span class="nm">
+                 dessous. C'est ce qui permet de renommer sans rien perdre.
+                 Cliquable : une ligne d'inventaire mène toujours quelque part —
+                 à sa propre fiche quand elle en a une, à celle de son hôte
+                 sinon, où une livrée et une couche vivent réellement. -->
+            <button class="nm" type="button" onclick={() => void openFiche(r)} title={t(fichePromise(r))}>
               <span class="n1">{nameOf(r)}{#if r.has_note}<span class="noteflag" title={t("notes.title")}>✎</span>{/if}</span>
               <span class="n2 mono">{r.tech_id}</span>
-            </span>
+            </button>
             {#if r.attachment.target_id}
               <button class="att" type="button" onclick={() => openHost(r)} title={t("inventory.openHost")}>
                 {r.attachment.target_name ?? r.attachment.target_id} →
@@ -386,7 +400,9 @@
               {t(`inventory.nature${r.attachment.nature}`)}
             </span>
             {#if r.priority}<span class="prio" title={t("others.priorityTooltip")}>★</span>{/if}
-            <span class="st"><StateBadge active={r.active} stock={false} /></span>
+            <span class="st">
+              {#if r.active !== null}<StateBadge active={r.active} stock={false} />{/if}
+            </span>
             <button
               class="kebab"
               type="button"
@@ -540,7 +556,15 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
     gap: 1px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    text-align: left;
+  }
+  .nm:hover .n1 {
+    color: var(--txt);
   }
   .n1 {
     font-size: 12px;
