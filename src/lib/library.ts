@@ -91,6 +91,10 @@ export interface ModCard {
   description: string | null;
   /** Badge/logo de la marque (ui/badge.png, voitures), à la place des initiales. */
   badge: string | null;
+  /** Note libre (refonte §9), `null` quand il n'y en a pas. Portée par la carte
+   * pour que le filtre « a une note » et la recherche restent côté front, sans
+   * aller-retour backend à chaque frappe — même raison que `description`. */
+  notes_user: string | null;
   /** Mod cassé (fichiers de la version active manquants/invalides, §6.4) —
    * même détection que l'écran Maintenance, signalée ici sur la carte. */
   broken: boolean;

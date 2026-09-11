@@ -701,6 +701,16 @@
     return map;
   });
 
+  /** Même index que les descriptions, et pour la même raison — sauf qu'une
+   * note n'a jamais de balises : c'est du texte brut par décision (§9.3). */
+  const noteIndex = $derived.by(() => {
+    const map = new Map<string, string>();
+    for (const c of typed) {
+      if (c.notes_user) map.set(c.id_interne, c.notes_user.toLowerCase());
+    }
+    return map;
+  });
+
   /** Ce que le moteur de filtres a besoin de savoir lire sur une carte. Les
    * trois origines de tags sont équivalentes ici ; seule la fiche détail les
    * distingue par origine. */
@@ -708,6 +718,7 @@
     isCar,
     tagsOf: modTags,
     descOf: (c) => descIndex.get(c.id_interne),
+    noteOf: (c) => noteIndex.get(c.id_interne),
     hasDriver: hasOwnDriver,
   });
 
@@ -734,9 +745,11 @@
         // réel signalé : « GT-M Evo » ne remontait pas « GT-M Adonis Evo »,
         // recherché comme une seule sous-chaîne collée.
         const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-        // Inclut le pack (§4.4) : rechercher son nom remonte toutes ses voitures.
+        // Inclut le pack (§4.4) : rechercher son nom remonte toutes ses
+        // voitures. Et la note (§9.5) : une note qu'on ne peut pas retrouver
+        // est une note en écriture seule.
         const hay =
-          `${c.display_name ?? ""} ${c.brand ?? ""} ${c.id_interne} ${c.category ?? ""} ${c.source_pack ?? ""} ${modTags(c).join(" ")}`.toLowerCase();
+          `${c.display_name ?? ""} ${c.brand ?? ""} ${c.id_interne} ${c.category ?? ""} ${c.source_pack ?? ""} ${c.notes_user ?? ""} ${modTags(c).join(" ")}`.toLowerCase();
         if (!terms.every((term) => hay.includes(term))) return false;
       }
       return true;
@@ -1009,6 +1022,11 @@
               {:else}<div class="noprev">{isCar ? t("library.typeCar") : t("library.typeTrack")}</div>{/if}
               {#if !isCar && ol}<img class="outline" src={ol} alt="" loading="lazy" />{/if}
               {#if sessionId === c.id_interne}<span class="sessbadge">{t("library.sessionBadge")}</span>{/if}
+              <!-- Marqueur de note (§9.5) : sans lui, une note est en écriture
+                   seule — on ne saurait plus sur quel mod on en a laissé une.
+                   Posé en bas à gauche, en face du cœur : les deux disent la
+                   même sorte de chose, « j'ai touché à ce mod ». -->
+              {#if c.notes_user}<span class="card-note" title={c.notes_user}>✎</span>{/if}
               <span
                 class="card-fav"
                 class:on={c.is_favorite}
@@ -1431,6 +1449,16 @@
   .broken-flag {
     color: var(--yellow);
     margin-right: 4px;
+  }
+  .card-note {
+    position: absolute;
+    bottom: 5px;
+    left: 6px;
+    font-size: 12px;
+    line-height: 1;
+    color: var(--muted2);
+    text-shadow: 0 0 3px var(--bg);
+    pointer-events: auto;
   }
   .card-fav {
     position: absolute;

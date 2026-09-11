@@ -571,6 +571,58 @@ l'interface, avec ordre de repli :
 4. Fond neutre actuel (aucun média disponible).
 
 
+### 6.3 Coquille de fiche unique (refonte §6.1, §12)
+
+**Les cinq fiches — voiture/circuit, app, mod « autre », son, pack — partagent
+un seul en-tête** (`FicheHeader.svelte`) : retour, tuile, nom, sous-titre, état,
+favori et menu ⋮. Avant lui, quatre d'entre elles affichaient un **nom de
+fichier en monospace** suivi d'une rangée de boutons ; le titre de la fiche
+était donc l'identifiant technique.
+
+- **La tuile montre la chose réelle** quand elle existe — badge de marque d'une
+  voiture, vignette — et un **pictogramme de type** sinon. Jamais deux lettres
+  tirées du nom : « PO » pour `policeman` n'apprend rien et se lit comme un
+  badge de marque inexistant.
+- **Le nom d'affichage se reprend à la main sur tous les types** (§5bis.3
+  étendu), la saisie vivant dans l'overlay à côté du nom dérivé et jamais à sa
+  place. Quand un nom est repris, l'identifiant technique passe en sous-titre.
+- **L'auteur est dans le sous-titre** : c'est une propriété du mod.
+- **Les actions vivent dans le ⋮**, sauf un contrôle par fiche quand il en est
+  la raison d'être (la clé de contact d'un mod de son).
+- Variante `flush` pour la fiche qui déborde les marges de l'écran, comme le
+  `flush` de `Tabs.svelte`.
+
+**Un seul vocabulaire d'état** (`StateBadge.svelte`), rendu dans l'en-tête et
+dans la colonne « État » du tableau : **Actif** (vert), **Inactif** (orange),
+**En attente** (jaune), **De base** (bleu), **Non géré** (gris). « En attente »
+ne se fond pas dans « inactif » : un mod inactif a été désactivé, un mod en
+attente est actif mais perd l'arbitrage sur un emplacement disputé et reprendra
+sa place dès que l'autre partira.
+
+### 6.4 Notes (refonte §9)
+
+**Tout mod peut porter une note libre**, quel que soit son type — exclure un
+type créerait une règle à apprendre pour une économie nulle. Colonne
+`notes_user` de l'overlay, sur les cinq tables d'entités, écrite par la
+commande commune `set_entity_note` (`usermeta.rs`).
+
+**Une note n'est pas une description**, et la différence porte sur un seul
+geste : effacer. La description surcharge ce que dit le fichier du mod, donc la
+vider veut dire « reviens au fichier » ; une note n'a pas de valeur d'origine,
+donc la vider veut dire vide. D'où deux champs, et deux colonnes.
+
+Comportement (`NoteBlock.svelte`) : **texte brut**, pas de markdown — un rendu à
+moitié interprété est pire que pas de rendu ; **sauvegarde à la perte du
+focus**, sans bouton ; phrase « enregistré dans Pit Box, pas dans les fichiers
+du mod » affichée **pendant** la saisie, comme pour le renommage.
+
+**Une note se retrouve**, sans quoi elle serait en écriture seule. Trois
+mécanismes, livrés ensemble : elle entre dans la **recherche plein texte** des
+écrans concernés ; la bibliothèque offre un filtre **« Note contient… »** et un
+filtre booléen **« A une note »**, plus une colonne Note optionnelle ; et un
+**marqueur ✎** apparaît sur la carte de grille et sur la ligne de liste, avec
+la note en infobulle.
+
 ---
 
 ## 7. Bibliothèque et navigation

@@ -13,6 +13,7 @@
   import { type OtherModRow } from "$lib/others";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
   import FicheHeader from "./FicheHeader.svelte";
+  import NoteBlock from "./NoteBlock.svelte";
   import { bodyThumb, requestBodyThumb } from "$lib/driverThumbs.svelte";
   import { nav } from "$lib/nav.svelte";
 
@@ -27,9 +28,11 @@
     ondelete: () => void;
     /** Nom repris à la main (§6.1). `null` = revenir à l'identifiant du mod. */
     onrename: (value: string | null) => void;
+    /** Note libre (§9). `null` = effacer. */
+    onnote: (value: string | null) => void;
   }
 
-  const { row, busy, warnings, onclose, ontoggle, ontogglePriority, onopenFolder, ondelete, onrename }: Props =
+  const { row, busy, warnings, onclose, ontoggle, ontogglePriority, onopenFolder, ondelete, onrename, onnote }: Props =
     $props();
 
   let error = $state("");
@@ -117,6 +120,8 @@
       </div>
     </section>
   {/if}
+
+  <NoteBlock value={row.notes_user} onsave={onnote} />
 
   <dl class="meta">
     <div>

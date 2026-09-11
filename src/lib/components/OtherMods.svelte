@@ -25,7 +25,7 @@
   import { nav } from "$lib/nav.svelte";
 
   import { errorText } from "$lib/errors";
-  import { setEntityDisplayName } from "$lib/userMeta";
+  import { setEntityDisplayName, setEntityNote } from "$lib/userMeta";
 
   /** Les apps sont un onglet de plus, pas une entrée de rail (SPEC §7.3) :
    * cet écran est déjà le tiroir de ce qui n'est ni voiture ni circuit, et le
@@ -123,6 +123,18 @@
     }
   }
 
+  /** Note libre (§9) : même chemin que le renommage — l'écran tient la liste,
+   * donc c'est lui qui relit après écriture. */
+  async function note(o: OtherModRow, value: string | null) {
+    error = "";
+    try {
+      await setEntityNote("OTHER", o.id, value ?? "");
+      await load();
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
   async function openFolder(o: OtherModRow) {
     error = "";
     try {
@@ -157,7 +169,10 @@
       // Un terme par mot séparé par un espace, ET entre eux (même correction
       // que la bibliothèque, Library.svelte).
       const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-      const hay = o.id.toLowerCase();
+      // Le nom repris à la main et la note en font partie (§9.5) : sans ça,
+      // renommer un mod le rendrait introuvable sous son nouveau nom, et une
+      // note serait en écriture seule.
+      const hay = `${o.id} ${o.display_name_user ?? ""} ${o.notes_user ?? ""}`.toLowerCase();
       return terms.every((term) => hay.includes(term));
     }),
   );
@@ -196,6 +211,7 @@
     onopenFolder={() => openFolder(fullRow)}
     ondelete={() => remove(fullRow)}
     onrename={(v) => rename(fullRow, v)}
+    onnote={(v) => note(fullRow, v)}
   />
 {:else}
 <div class="others">
@@ -236,9 +252,16 @@
       {#each filtered as o (o.id)}
         <li class:active={o.is_active}>
           <div class="row">
-            <button class="o-name o-link mono" type="button" title={t("others.detailTooltip")} onclick={() => (fullId = o.id)}>
-              {o.id}
+            <button
+              class="o-name o-link"
+              class:mono={!o.display_name_user}
+              type="button"
+              title={t("others.detailTooltip")}
+              onclick={() => (fullId = o.id)}
+            >
+              {o.display_name_user ?? o.id}
             </button>
+            {#if o.notes_user}<span class="noteflag" title={o.notes_user}>✎</span>{/if}
             <span class="cats">
               {#each o.categories as c}
                 <span class="cat" class:here={c === tab}>{t(`others.cat.${c}`)}</span>
@@ -299,6 +322,13 @@
   }
   .errbox {
     margin-bottom: 14px;
+  }
+  /* Marqueur de note (§9.5) : discret, mais présent — une note qu'on ne voit
+     pas depuis la liste est une note qu'on oublie avoir écrite. */
+  .noteflag {
+    flex: none;
+    color: var(--muted2);
+    font-size: 11px;
   }
   .list {
     list-style: none;

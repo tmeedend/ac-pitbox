@@ -417,6 +417,10 @@
     "filterBrand": "Brand",
     "filterDescription": "Description",
     "filterDescriptionPlaceholder": "Contains…",
+    "filterNote": "Note",
+    "filterNotePlaceholder": "Contains…",
+    "hasNote": "Has a note",
+    "hasNoNote": "Without a note",
     "results": "{count} results",
     "driverSet": "Driver set",
     "filterYear": "Year",
@@ -479,6 +483,7 @@
     "model": "Model",
     "brand": "Brand",
     "category": "Category",
+    "note": "Note",
     "carClass": "Class",
     "year": "Year",
     "weight": "Weight",
@@ -502,6 +507,12 @@
     "size": "Size",
     "layouts": "Layouts",
     "csp": "CSP extensions"
+  },
+  "notes": {
+    "title": "Notes",
+    "add": "Add a note",
+    "edit": "Edit this note",
+    "placeholder": "What you want to remember about this mod…"
   },
   "detail": {
     "backTooltip": "Back to the list",

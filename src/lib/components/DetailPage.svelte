@@ -27,6 +27,8 @@
   import InlineEdit from "./InlineEdit.svelte";
   import Tabs from "./Tabs.svelte";
   import FicheHeader from "./FicheHeader.svelte";
+  import { setEntityNote } from "$lib/userMeta";
+  import NoteBlock from "./NoteBlock.svelte";
   import StateBadge from "./StateBadge.svelte";
   import { tick, untrack } from "svelte";
   import { focusGamepadElement, isGamepadDriving } from "$lib/gamepadNav";
@@ -259,6 +261,19 @@
   async function saveOverride(field: "display_name_user" | "description_user", value: string | null) {
     try {
       await setModField(id, field, value);
+      await refreshEntity();
+      onchange?.();
+    } catch (e) {
+      actionError = errorText(e);
+    }
+  }
+
+  /** Note libre (§9). Passe par la commande commune à tous les types plutôt
+   * que par `setModField` : c'est la même colonne sur les cinq tables, et le
+   * même geste. */
+  async function saveNote(value: string | null) {
+    try {
+      await setEntityNote("MOD", id, value ?? "");
       await refreshEntity();
       onchange?.();
     } catch (e) {
@@ -1089,6 +1104,7 @@
           </div>
 
           {@render descriptionCard(d.specs?.description ?? null, !!d.description_user)}
+          <NoteBlock value={d.notes_user} onsave={saveNote} />
         {:else}
           {@const lay = d.track?.layouts[previewLayout]}
           <section class="blk">
@@ -1108,6 +1124,7 @@
             </section>
           {/if}
           {@render descriptionCard(d.track?.description ?? null, !!d.description_user)}
+          <NoteBlock value={d.notes_user} onsave={saveNote} />
         {/if}
       </div>
     </div>

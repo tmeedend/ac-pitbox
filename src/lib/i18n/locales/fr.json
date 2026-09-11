@@ -417,6 +417,10 @@
     "filterBrand": "Marque",
     "filterDescription": "Description",
     "filterDescriptionPlaceholder": "Contient…",
+    "filterNote": "Note",
+    "filterNotePlaceholder": "Contient…",
+    "hasNote": "A une note",
+    "hasNoNote": "Sans note",
     "results": "{count} résultats",
     "driverSet": "Pilote choisi",
     "filterYear": "Année",
@@ -479,6 +483,7 @@
     "model": "Modèle",
     "brand": "Marque",
     "category": "Catégorie",
+    "note": "Note",
     "carClass": "Classe",
     "year": "Année",
     "weight": "Poids",
@@ -502,6 +507,12 @@
     "size": "Taille",
     "layouts": "Layouts",
     "csp": "Extensions CSP"
+  },
+  "notes": {
+    "title": "Notes",
+    "add": "Ajouter une note",
+    "edit": "Modifier cette note",
+    "placeholder": "Ce que vous voulez retenir de ce mod…"
   },
   "detail": {
     "backTooltip": "Retour à la liste",

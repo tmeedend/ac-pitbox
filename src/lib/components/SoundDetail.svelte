@@ -12,12 +12,13 @@
   import { soundDetail, setSoundAuthor, type SoundDetail } from "$lib/enginesound";
   import { fmtSize } from "$lib/format";
   import { errorText } from "$lib/errors";
-  import { setEntityDisplayName } from "$lib/userMeta";
+  import { setEntityDisplayName, setEntityNote } from "$lib/userMeta";
   import { t } from "$lib/i18n/index.svelte";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
   import IgnitionKey from "./detail/IgnitionKey.svelte";
   import InlineEdit from "./InlineEdit.svelte";
   import FicheHeader from "./FicheHeader.svelte";
+  import NoteBlock from "./NoteBlock.svelte";
   import {
     engineControls,
     engineRev,
@@ -70,6 +71,19 @@
 
   /** Renommer (§6.1) : la saisie vit dans l'overlay, à côté du nom dérivé du
    * fichier et jamais à sa place — vider le champ ramène donc celui-ci. */
+  /** Note libre (§9). Passe par la commande commune à tous les types plutôt
+   * que par `setModField` : c'est la même colonne sur les cinq tables, et le
+   * même geste. */
+  async function saveNote(value: string | null): Promise<void> {
+    error = "";
+    try {
+      await setEntityNote("SUB_MOD", subId, value ?? "");
+      await load();
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
   async function rename(value: string | null): Promise<void> {
     error = "";
     try {
@@ -152,6 +166,8 @@
   {#if error}<div class="errbox">{error}</div>{/if}
 
   {#if detail}
+    <NoteBlock value={detail.notesUser} onsave={saveNote} />
+
     <dl class="meta">
       <div>
         <dt class="lbl-key">{t("sounds.carLabel")}</dt>

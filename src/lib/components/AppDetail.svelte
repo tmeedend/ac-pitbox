@@ -10,12 +10,13 @@
   import { activateApp, deactivateApp, deleteApp, openAppFolder, type AppItem } from "$lib/apps";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
-  import { setEntityDisplayName } from "$lib/userMeta";
+  import { setEntityDisplayName, setEntityNote } from "$lib/userMeta";
   import { t } from "$lib/i18n/index.svelte";
   import ExtrasBlock from "./detail/ExtrasBlock.svelte";
   import LayersBlock from "./detail/LayersBlock.svelte";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
   import FicheHeader from "./FicheHeader.svelte";
+  import NoteBlock from "./NoteBlock.svelte";
   import Tabs from "./Tabs.svelte";
 
   interface Props {
@@ -53,6 +54,19 @@
 
   /** Renommer (§6.1) : la saisie vit dans l'overlay, à côté du nom dérivé du
    * fichier et jamais à sa place — vider le champ ramène donc celui-ci. */
+  /** Note libre (§9). Passe par la commande commune à tous les types plutôt
+   * que par `setModField` : c'est la même colonne sur les cinq tables, et le
+   * même geste. */
+  async function saveNote(value: string | null): Promise<void> {
+    error = "";
+    try {
+      await setEntityNote("APP", app.id, value ?? "");
+      onchange();
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
   async function rename(value: string | null): Promise<void> {
     error = "";
     try {
@@ -132,6 +146,8 @@
       <dd>{new Date(app.imported_at).toLocaleString()}</dd>
     </div>
   </dl>
+
+  <NoteBlock value={app.notes_user} onsave={saveNote} />
 
   {#if error}<div class="errbox">{error}</div>{/if}
 

@@ -96,6 +96,18 @@ function commonTail(): ColumnDef[] {
       sortValue: (c) => (c.active ? 1 : 0),
     },
     {
+      key: "note",
+      labelKey: "columns.note",
+      sortable: true,
+      defaultVisible: false,
+      // Le texte, pas un simple oui/non : une colonne qui dirait seulement
+      // « oui » obligerait à ouvrir chaque fiche pour savoir laquelle on
+      // cherche. Le tri met les mods annotés en tête, ce qui est la question
+      // qu'on pose à cette colonne.
+      value: (c) => c.notes_user?.replace(/\s+/g, " ").trim() || DASH,
+      sortValue: (c) => (c.notes_user ? 0 : 1),
+    },
+    {
       key: "distance",
       labelKey: "columns.distance",
       sortable: true,
