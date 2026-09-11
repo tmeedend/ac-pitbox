@@ -475,6 +475,159 @@ pub struct RepairAllReport {
     pub reinstall_errors: Vec<ReinstallOutcome>,
 }
 
+/// Phase of a general repair, as the toast names it.
+pub const REPAIR_SIZING: &str = "sizing";
+pub const REPAIR_PROJECTIONS: &str = "projections";
+pub const REPAIR_REDEPLOY: &str = "redeploy";
+pub const REPAIR_REINSTALL: &str = "reinstall";
+
+/// Progress of a general repair (§9.3). Emitted as `repair:progress` by the
+/// façade — mirrored by `RepairProgress` in `src/lib/maintenance.ts`, the two
+/// change together.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepairProgress {
+    pub phase: String,
+    /// 1-based rank **within the current phase** — what the count on the toast
+    /// reads. The bar does not use it: see `ratio`.
+    pub index: usize,
+    pub total: usize,
+    /// Whole repair, in [0,1], weighted by bytes rather than by items.
+    pub ratio: f64,
+    /// `None` until the repair has run long enough to say anything. An
+    /// estimate that appears at once and then triples is worse than none.
+    pub eta_secs: Option<u64>,
+    /// What is being worked on — the only landmark while three hundred mods
+    /// go by.
+    pub label: String,
+}
+
+/// Where progress goes. A closure, not an `AppHandle`: **this module must not
+/// know about Tauri** — same measured constraint as `bulk::ProgressSink`,
+/// where the mere import makes the lib's test binary refuse to start.
+pub type RepairSink<'a> = &'a dyn Fn(RepairProgress);
+
+/// Minimum delay between two emissions, same reason as everywhere else: three
+/// hundred junctions recreated in a second would flood the IPC channel with
+/// frames nobody can read.
+const REPAIR_EMIT_INTERVAL_MS: u128 = 80;
+
+/// Weight of one projection against one deployed byte.
+///
+/// A junction is created in about a millisecond, so three hundred of them are
+/// nothing next to relinking a library — but *nothing* is the wrong answer
+/// too: a bar that stays at zero for the whole first phase reads as a frozen
+/// repair, which is the very thing this is for. One mebibyte each puts the
+/// phase at well under a percent of a real library, and keeps it visible.
+const PROJECTION_WEIGHT: u64 = 1 << 20;
+
+/// Weight of a mod whose size the library never measured (imported before
+/// §9.4). The median of the reference library, rounded — a wrong weight
+/// distorts the bar, an absent one would drop the mod out of it entirely.
+const UNKNOWN_MOD_WEIGHT: u64 = 400 << 20;
+
+/// Below this share of the work, elapsed time says more about start-up than
+/// about speed (same threshold as the import, §4.2bis).
+const ETA_MIN_PROGRESS: f64 = 0.02;
+
+/// Smoothing of the displayed estimate. One that jumps around is worse than
+/// none at all.
+const ETA_SMOOTHING: f64 = 0.3;
+
+/// Bookkeeping of one repair: the total weight planned, what is done, and the
+/// estimate that follows from the two.
+pub struct RepairCtx<'a> {
+    sink: Option<RepairSink<'a>>,
+    started: std::time::Instant,
+    total_weight: std::cell::Cell<u64>,
+    done_weight: std::cell::Cell<u64>,
+    last_emit: std::cell::Cell<Option<std::time::Instant>>,
+    eta: std::cell::Cell<Option<f64>>,
+}
+
+impl<'a> RepairCtx<'a> {
+    pub fn new(sink: RepairSink<'a>) -> Self {
+        Self {
+            sink: Some(sink),
+            started: std::time::Instant::now(),
+            total_weight: std::cell::Cell::new(1),
+            done_weight: std::cell::Cell::new(0),
+            last_emit: std::cell::Cell::new(None),
+            eta: std::cell::Cell::new(None),
+        }
+    }
+
+    /// Sans destinataire : les tests n'ont pas d'`AppHandle`. `cfg(test)` pour
+    /// la même raison que `BulkCtx::silent` — une réparation muette laissée
+    /// visible finirait par être appelée par mégarde.
+    #[cfg(test)]
+    pub fn silent() -> Self {
+        Self {
+            sink: None,
+            started: std::time::Instant::now(),
+            total_weight: std::cell::Cell::new(1),
+            done_weight: std::cell::Cell::new(0),
+            last_emit: std::cell::Cell::new(None),
+            eta: std::cell::Cell::new(None),
+        }
+    }
+
+    /// Arrête le poids total de la réparation. **Jamais zéro** — pas par
+    /// prudence : le poids est le dénominateur du rapport, et la phase de pesée
+    /// émet *avant* que le plan soit connu. À zéro, elle rendait `NaN`, que le
+    /// `style:width` du bandeau traduit par une barre absente — trouvé par le
+    /// test, pas à l'écran.
+    fn plan(&self, total_weight: u64) {
+        self.total_weight.set(total_weight.max(1));
+    }
+
+    /// Annonce ce qui commence, puis compte son poids comme fait. Le premier et
+    /// le dernier de chaque phase passent toujours : sans le premier, une phase
+    /// courte n'afficherait jamais rien.
+    fn step(&self, phase: &str, index: usize, total: usize, label: &str, weight: u64) {
+        let Some(sink) = self.sink else {
+            self.done_weight.set(self.done_weight.get() + weight);
+            return;
+        };
+        let now = std::time::Instant::now();
+        let due = index <= 1
+            || index == total
+            || self
+                .last_emit
+                .get()
+                .is_none_or(|t| now.duration_since(t).as_millis() >= REPAIR_EMIT_INTERVAL_MS);
+        if due {
+            self.last_emit.set(Some(now));
+            let ratio = (self.done_weight.get() as f64 / self.total_weight.get() as f64).clamp(0.0, 1.0);
+            sink(RepairProgress {
+                phase: phase.to_string(),
+                index,
+                total,
+                ratio,
+                eta_secs: self.eta_secs(ratio),
+                label: label.to_string(),
+            });
+        }
+        self.done_weight.set(self.done_weight.get() + weight);
+    }
+
+    /// Temps restant, extrapolé du temps déjà passé. Lissé, et muet tant que
+    /// la mesure ne vaut rien.
+    fn eta_secs(&self, ratio: f64) -> Option<u64> {
+        if !(ETA_MIN_PROGRESS..1.0).contains(&ratio) {
+            return None;
+        }
+        let elapsed = self.started.elapsed().as_secs_f64();
+        let raw = elapsed * (1.0 - ratio) / ratio;
+        let smoothed = match self.eta.get() {
+            Some(prev) => prev + ETA_SMOOTHING * (raw - prev),
+            None => raw,
+        };
+        self.eta.set(Some(smoothed));
+        Some(smoothed.round().max(1.0) as u64)
+    }
+}
+
 /// Réparation générale (§9.3), à la manière du « purge & deploy » des autres
 /// gestionnaires de mods. Sa définition tient en une phrase : **recalculer tout
 /// ce qui dérive de la bibliothèque**.
@@ -496,40 +649,80 @@ pub struct RepairAllReport {
 ///
 /// Seule la 3 touche la bibliothèque elle-même ; les deux premières sont sûres
 /// et idempotentes, d'où l'opt-in sur celle-là seulement.
-pub fn repair_all(conn: &Connection, cfg: &AppConfig, reinstall_broken: bool) -> Result<RepairAllReport, String> {
-    let projections = submods::repair_projections(conn, cfg);
+pub fn repair_all(
+    ctx: &RepairCtx,
+    conn: &Connection,
+    cfg: &AppConfig,
+    reinstall_broken: bool,
+) -> Result<RepairAllReport, String> {
+    // Tout est pesé **avant** de commencer, pour la même raison que le lot
+    // d'import : une barre en items sauterait, une livrée de 3 Mo et un circuit
+    // de 4 Go valant chacun un pas. Le décompte des skins et la liste des mods
+    // actifs sont deux lectures de base, la liste des mods cassés un parcours
+    // de bibliothèque — d'où la phase `sizing`, sans laquelle le tout premier
+    // instant d'une grosse install ressemble déjà à un blocage.
+    ctx.step(REPAIR_SIZING, 1, 1, "", 0);
+
+    let projection_count = ["SKIN", "TRACK_SKIN"]
+        .iter()
+        .map(|t| overlay::list_subs_by_type(conn, t).map(|v| v.len()).unwrap_or(0))
+        .sum::<usize>();
+
+    let active: Vec<(String, u64)> = overlay::list_mods(conn)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .filter(|m| !m.is_stock && activation::is_mod_active(cfg, kind_of(&m.kind), &m.id_interne))
+        .map(|m| {
+            let weight = m.size_bytes.filter(|s| *s > 0).map_or(UNKNOWN_MOD_WEIGHT, |s| s as u64);
+            (m.id_interne, weight)
+        })
+        .collect();
+
+    // Le parcours de bibliothèque n'a lieu que si on a demandé la
+    // réinstallation : c'est la seule étape qui en a besoin, et il coûte cher.
+    let broken: Vec<BrokenMod> = if reinstall_broken {
+        scan(conn, cfg)?.broken
+    } else {
+        Vec::new()
+    };
+
+    ctx.plan(
+        projection_count as u64 * PROJECTION_WEIGHT
+            + active.iter().map(|(_, w)| *w).sum::<u64>()
+            + broken.len() as u64 * UNKNOWN_MOD_WEIGHT,
+    );
+
+    let projections = submods::repair_projections(conn, cfg, &|index, total, label| {
+        ctx.step(REPAIR_PROJECTIONS, index, total, label, PROJECTION_WEIGHT);
+    });
 
     // Redéploiement : seulement ce qui est **déjà actif**. Activer au passage
     // un mod que l'utilisateur avait désactivé serait une surprise, pas une
     // réparation.
     let mut redeployed = 0usize;
     let mut redeploy_errors = Vec::new();
-    for m in overlay::list_mods(conn).map_err(|e| e.to_string())? {
-        if m.is_stock || !activation::is_mod_active(cfg, kind_of(&m.kind), &m.id_interne) {
-            continue;
-        }
-        match activation::activate(conn, cfg, &m.id_interne, None) {
+    let redeploy_total = active.len();
+    for (i, (id, weight)) in active.into_iter().enumerate() {
+        ctx.step(REPAIR_REDEPLOY, i + 1, redeploy_total, &id, weight);
+        match activation::activate(conn, cfg, &id, None) {
             Ok(()) => redeployed += 1,
             Err(error) => {
-                log::warn!("redeploy {}: {error}", m.id_interne);
-                redeploy_errors.push(ReinstallOutcome {
-                    id: m.id_interne,
-                    error,
-                });
+                log::warn!("redeploy {id}: {error}");
+                redeploy_errors.push(ReinstallOutcome { id, error });
             }
         }
     }
 
     let mut reinstalled = Vec::new();
     let mut reinstall_errors = Vec::new();
-    if reinstall_broken {
-        for b in scan(conn, cfg)?.broken {
-            match reinstall_from_archive(conn, cfg, &b.id) {
-                Ok(()) => reinstalled.push(b.id),
-                Err(error) => {
-                    log::warn!("reinstall_from_archive {}: {error}", b.id);
-                    reinstall_errors.push(ReinstallOutcome { id: b.id, error });
-                }
+    let reinstall_total = broken.len();
+    for (i, b) in broken.into_iter().enumerate() {
+        ctx.step(REPAIR_REINSTALL, i + 1, reinstall_total, &b.id, UNKNOWN_MOD_WEIGHT);
+        match reinstall_from_archive(conn, cfg, &b.id) {
+            Ok(()) => reinstalled.push(b.id),
+            Err(error) => {
+                log::warn!("reinstall_from_archive {}: {error}", b.id);
+                reinstall_errors.push(ReinstallOutcome { id: b.id, error });
             }
         }
     }
@@ -966,6 +1159,103 @@ mod tests {
         assert!(scan(&conn, &cfg).unwrap().orphan_subs.is_empty());
     }
 
+    /// Règle (§9.3) : la réparation rend compte de son avancement, et sa barre
+    /// ne recule jamais.
+    ///
+    /// Elle est née d'un défaut de la même famille que celui qui l'a rendue
+    /// nécessaire : commande **synchrone**, donc exécutée sur le thread
+    /// principal, elle gelait la fenêtre entière pendant tout son travail. Ce
+    /// test protège le contrat côté métier — les phases annoncées dans l'ordre
+    /// et un rapport pondéré monotone ; le `spawn_blocking` de la façade, lui,
+    /// ne se teste pas d'ici.
+    #[test]
+    fn repair_reports_its_phases_in_order_and_never_goes_backwards() {
+        let base = crate::testutil::temp_dir("repair-progress");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let now = chrono::Local::now().to_rfc3339();
+
+        let dir = library.join("cars").join("a_car").join("v1");
+        std::fs::create_dir_all(dir.join("ui")).unwrap();
+        std::fs::write(dir.join("ui").join("ui_car.json"), b"{}").unwrap();
+        std::fs::write(dir.join("model.kn5"), b"data").unwrap();
+        overlay::upsert_mod(&conn, "a_car", "Car", Some("B"), Some("A"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn,
+            "v1",
+            "a_car",
+            Some("1.0"),
+            None,
+            &now,
+            &crate::libpath::to_relative(Some(&library), &dir),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "a_car", "v1").unwrap();
+        activation::activate(&conn, &cfg, "a_car", None).unwrap();
+
+        // Une livrée stockée à part, pour que la phase des projections ait de
+        // quoi faire au moins un pas.
+        let store = library.join("skins").join("a_car").join("rosso");
+        std::fs::create_dir_all(&store).unwrap();
+        std::fs::write(store.join("preview.jpg"), b"IMG").unwrap();
+        overlay::insert_sub_mod(
+            &conn,
+            "s1",
+            "SKIN",
+            "a_car",
+            "rosso",
+            &crate::libpath::to_relative(Some(&library), &store),
+            None,
+            &now,
+        )
+        .unwrap();
+
+        let seen = std::cell::RefCell::new(Vec::<RepairProgress>::new());
+        let sink = |p: RepairProgress| seen.borrow_mut().push(p);
+        repair_all(&RepairCtx::new(&sink), &conn, &cfg, false).unwrap();
+
+        let seen = seen.into_inner();
+        assert_eq!(
+            seen.first().map(|p| p.phase.as_str()),
+            Some(REPAIR_SIZING),
+            "la pesée passe en premier : sans elle, le premier instant d'une grosse install ressemble à un blocage"
+        );
+        for phase in [REPAIR_PROJECTIONS, REPAIR_REDEPLOY] {
+            assert!(
+                seen.iter().any(|p| p.phase == phase),
+                "la phase {phase} doit s'annoncer"
+            );
+        }
+        assert!(
+            !seen.iter().any(|p| p.phase == REPAIR_REINSTALL),
+            "aucune réinstallation n'a été demandée : la phase ne doit pas exister"
+        );
+
+        let mut previous = 0.0;
+        for p in &seen {
+            assert!(
+                p.ratio >= previous - f64::EPSILON && p.ratio <= 1.0,
+                "avancement monotone dans [0,1], vu {} après {previous}",
+                p.ratio
+            );
+            previous = p.ratio;
+        }
+    }
+
     #[test]
     fn repair_redeploys_active_mods_and_leaves_inactive_ones_alone() {
         // §9.3 : « réparer » = recalculer tout ce qui dérive de la
@@ -1020,7 +1310,7 @@ mod tests {
         // Déploiement abîmé à la main : c'est ce que la réparation doit refaire.
         std::fs::remove_file(deployed.join("model.kn5")).unwrap();
 
-        let report = repair_all(&conn, &cfg, false).unwrap();
+        let report = repair_all(&RepairCtx::silent(), &conn, &cfg, false).unwrap();
         assert_eq!(report.redeployed, 1, "seul le mod actif est redéployé");
         assert!(report.redeploy_errors.is_empty());
         assert!(
@@ -1079,7 +1369,7 @@ mod tests {
             "précondition : contenu bibliothèque incomplet"
         );
 
-        let report = repair_all(&conn, &cfg, false).unwrap();
+        let report = repair_all(&RepairCtx::silent(), &conn, &cfg, false).unwrap();
         assert!(report.reinstalled.is_empty(), "reinstall_broken=false : rien tenté");
         assert!(report.reinstall_errors.is_empty());
         assert!(
@@ -1087,7 +1377,7 @@ mod tests {
             "reinstall_broken=false ne doit pas réinstaller"
         );
 
-        let report2 = repair_all(&conn, &cfg, true).unwrap();
+        let report2 = repair_all(&RepairCtx::silent(), &conn, &cfg, true).unwrap();
         assert_eq!(report2.reinstalled, vec!["reinst_car".to_string()]);
         assert!(report2.reinstall_errors.is_empty());
         assert!(

@@ -11,6 +11,7 @@
     type MaintenanceReport,
     type WaitingLayer,
   } from "$lib/maintenance";
+  import { runRepair, repairState } from "$lib/repairState.svelte";
   import { deleteLayer } from "$lib/library";
   import { indexStockContent } from "$lib/submods";
   import { confirm } from "@tauri-apps/plugin-dialog";
@@ -26,7 +27,9 @@
   let reindexing = $state(false);
   let reindexMsg = $state("");
   let recalcSize = $state(false);
-  let repairing = $state(false);
+  // L'état vit dans `repairState` et non ici : la réparation survit à
+  // l'écran, et le bouton doit rester désactivé si on y revient pendant.
+  const repairing = $derived(repairState.running);
   let repairMsg = $state("");
   let reinstallBroken = $state(false);
   let reinstallFailures = $state<{ id: string; name: string; reason: string }[]>([]);
@@ -110,14 +113,23 @@
     }
   }
 
+  /**
+   * Lance la réparation et rend la main tout de suite.
+   *
+   * Passe par `runRepair` plutôt que d'appeler `repairAll` directement : c'est
+   * lui qui alimente la notification de progression, seule chose visible si on
+   * quitte l'Atelier pendant les quelques minutes que dure une réparation. Le
+   * compte rendu détaillé reste ici — c'est le seul endroit qui sache
+   * retrouver le **nom** des mods en échec.
+   */
   async function doRepair() {
-    repairing = true;
     error = "";
     repairMsg = "";
     reinstallFailures = [];
     projectionFailures = [];
     try {
-      const r = await repairAll(reinstallBroken);
+      const r = await runRepair(() => repairAll(reinstallBroken));
+      if (!r) return; // une réparation tourne déjà
       const parts = [
         t("maintenance.repairProjectionsDone", { repaired: r.projections.repaired, alreadyOk: r.projections.already_ok }),
       ];
@@ -150,8 +162,6 @@
       }
     } catch (e) {
       error = errorText(e);
-    } finally {
-      repairing = false;
     }
   }
 

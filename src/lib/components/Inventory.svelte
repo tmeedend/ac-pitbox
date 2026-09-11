@@ -17,12 +17,15 @@
   import { layerDisplayName } from "$lib/layerName";
   import { splitProvenance } from "$lib/provenance";
   import { nav, openInSection } from "$lib/nav.svelte";
+  import { StorageKey } from "$lib/storage";
+  import { getUiPrefs, setUiPref } from "$lib/uiPrefs.svelte";
   import LoadingState from "./LoadingState.svelte";
   import Seg from "./Seg.svelte";
   import StateBadge from "./StateBadge.svelte";
   import ContextMenu from "./ContextMenu.svelte";
   import OtherModDetail from "./OtherModDetail.svelte";
   import SoundDetail from "./SoundDetail.svelte";
+  import SkinDetail from "./SkinDetail.svelte";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import {
     listOtherMods,
@@ -49,13 +52,24 @@
    * exclut. Même polarité que les filtres de la bibliothèque — « sauf les
    * dépendances » est une question aussi fréquente que « seulement elles ». */
   let facets = $state<Record<string, 1 | -1>>({});
+  /** Garde les quatre persistances ci-dessous tant que l'`onMount` n'a pas
+   * restauré les valeurs enregistrées — sans elle, les effets partent dès le
+   * montage avec les défauts et les écrivent par-dessus la sauvegarde avant
+   * même qu'elle soit lue (même classe de bug que `prefsReady` dans
+   * `Library.svelte`, et il est arrivé). */
+  let prefsReady = false;
   let busy = $state<string | null>(null);
   let menu = $state<{ x: number; y: number; row: InventoryRow } | null>(null);
-  /** Fiche ouverte par-dessus l'inventaire. Un mod « autre » et un son en ont
-   * une ; une livrée, un habillage et une couche vivent sur la fiche de leur
-   * hôte, où le lien de rattachement mène. */
+  /** Fiche ouverte par-dessus l'inventaire. Un mod « autre », un son et une
+   * livrée en ont une ; une couche vit sur la fiche de son hôte, où le lien de
+   * rattachement mène. */
   let fullOther = $state<OtherModRow | null>(null);
   let fullSound = $state<string | null>(null);
+  /** Livrée ouverte en fiche. Elle n'en avait aucune : cliquer son titre menait
+   * à l'hôte, exactement là où mène déjà le lien de rattachement à droite de la
+   * ligne — deux gestes pour une destination, et rien nulle part sur la livrée
+   * elle-même. */
+  let fullSkin = $state<string | null>(null);
   /** Les lignes complètes des mods « autres », chargées à la demande : elles
    * coûtent un second parcours de fichiers, qu'on ne paie qu'en ouvrant une
    * fiche. */
@@ -80,7 +94,75 @@
       loading = false;
     }
   }
-  onMount(load);
+  /**
+   * Le contexte de recherche survit à l'écran (refonte §4.2).
+   *
+   * Cliquer une ligne mène ailleurs — la fiche de l'hôte, celle de la livrée —
+   * et l'inventaire est **démonté** pendant ce temps : au retour, il repartait
+   * de zéro. Champ libre, facettes, regroupement et tri étaient perdus, alors
+   * qu'on vient précisément de les poser pour trouver la ligne qu'on est allé
+   * voir. Le grief était « on a perdu tout le contexte de recherche », et il
+   * ne visait pas seulement le « précédent » : changer d'écran et revenir
+   * faisait exactement la même chose.
+   *
+   * `ui_prefs.json` et non `localStorage` (règle d'or n°6), et le même patron
+   * que les filtres de bibliothèque : restauration en un aller-retour au
+   * montage, écriture par effet ensuite. Le réglage traverse donc aussi un
+   * redémarrage, ce qui est cohérent avec la bibliothèque — un écran qu'on
+   * rouvre est celui qu'on avait laissé.
+   */
+  onMount(async () => {
+    await load();
+    const saved = await getUiPrefs([
+      StorageKey.inventoryQuery,
+      StorageKey.inventoryFacets,
+      StorageKey.inventoryGroupBy,
+      StorageKey.inventorySortBy,
+    ]);
+    query = saved[StorageKey.inventoryQuery] ?? "";
+    facets = parseFacets(saved[StorageKey.inventoryFacets]);
+    const g = saved[StorageKey.inventoryGroupBy];
+    if (g === "none" || g === "archive" || g === "host") groupBy = g;
+    const s = saved[StorageKey.inventorySortBy];
+    if (s === "name" || s === "size" || s === "import") sortBy = s;
+    prefsReady = true;
+  });
+
+  /** Relit les facettes enregistrées en **écartant tout ce qui n'est pas une
+   * valeur connue** : une facette retirée du code resterait sinon posée pour
+   * toujours, filtrant sur une clé que plus aucune ligne ne porte — un écran
+   * vide que rien n'explique. */
+  function parseFacets(raw: string | null): Record<string, 1 | -1> {
+    if (!raw) return {};
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const known = new Set(FACETS.flatMap((f) => f.values.map((v) => `${f.axis}:${v}`)));
+      const out: Record<string, 1 | -1> = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        if (known.has(k) && (v === 1 || v === -1)) out[k] = v;
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  }
+
+  $effect(() => {
+    const snapshot = JSON.stringify(facets);
+    if (prefsReady) setUiPref(StorageKey.inventoryFacets, snapshot);
+  });
+  $effect(() => {
+    const value = query;
+    if (prefsReady) setUiPref(StorageKey.inventoryQuery, value);
+  });
+  $effect(() => {
+    const value = groupBy;
+    if (prefsReady) setUiPref(StorageKey.inventoryGroupBy, value);
+  });
+  $effect(() => {
+    const value = sortBy;
+    if (prefsReady) setUiPref(StorageKey.inventorySortBy, value);
+  });
 
   /** Nom affiché : une couche porte un nom d'archive, qui se dérive comme sur
    * sa fiche — la même fonction, pour que les deux ne divergent pas. */
@@ -199,6 +281,12 @@
       fullSound = r.id;
       return;
     }
+    // Une livrée a sa fiche depuis qu'elle en a une : le titre y mène, et
+    // le lien de rattachement continue de mener à l'hôte.
+    if (r.kind === "SKIN" || r.kind === "TRACK_SKIN") {
+      fullSkin = r.id;
+      return;
+    }
     if (!isOtherMod(r)) {
       await openHost(r);
       return;
@@ -245,7 +333,7 @@
    * visible sur la ligne est ce qui se *lit*, pas ce qui se clique. */
   function menuItems(r: InventoryRow) {
     const items: { label: string; onclick: () => void; disabled?: boolean; danger?: boolean }[] = [];
-    if (isOtherMod(r) || r.kind === "SOUND") {
+    if (hasFiche(r)) {
       items.push({ label: t("inventory.openFiche"), onclick: () => void openFiche(r) });
     }
     if (r.attachment.target_id) {
@@ -278,9 +366,14 @@
   /** Ce que le clic sur la ligne va ouvrir — dit en infobulle, parce que la
    * destination n'est pas la même selon le type et qu'on ne le devine pas. */
   function fichePromise(r: InventoryRow): string {
-    if (isOtherMod(r) || r.kind === "SOUND") return "inventory.openFiche";
+    if (hasFiche(r)) return "inventory.openFiche";
     return r.attachment.target_id ? "inventory.openHost" : "inventory.noFiche";
   }
+
+  /** Cette ligne a-t-elle une fiche à elle ? Une couche et un habillage vivent
+   * toujours sur la fiche de leur hôte ; tout le reste a la sienne. */
+  const hasFiche = (r: InventoryRow) =>
+    isOtherMod(r) || r.kind === "SOUND" || r.kind === "SKIN" || r.kind === "TRACK_SKIN";
 
   const ICONS: Record<InventoryRow["kind"], string> = {
     SKIN: "▤",
@@ -337,6 +430,17 @@
   />
 {:else if fullSound}
   <SoundDetail subId={fullSound} onclose={() => (fullSound = null)} />
+{:else if fullSkin}
+  <!-- Le lien vers l'hôte est repris dans la fiche : c'est en la lisant qu'on
+       se demande ce que la livrée habille. La suppression, elle, n'y est pas —
+       le ⋮ de la ligne ne l'offre pas non plus pour une livrée, et l'ajouter
+       ici seulement en ferait un geste qu'on ne trouve qu'à un endroit. -->
+  {@const row = rows.find((r) => r.uid === `SUB:${fullSkin}`)}
+  <SkinDetail
+    subId={fullSkin}
+    onclose={() => (fullSkin = null)}
+    onopenHost={row && row.attachment.target_id ? () => void openHost(row) : undefined}
+  />
 {:else}
 <div class="screen">
   <header class="head">

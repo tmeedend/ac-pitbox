@@ -35,6 +35,7 @@ pub const SUB_MOD_NOT_FOUND: &str = "errors.subModNotFound";
 pub const SOUND_NOT_FOUND: &str = "errors.soundNotFound";
 pub const TARGET_CAR_UNKNOWN: &str = "errors.targetCarUnknown";
 pub const NOT_A_SOUND_MOD: &str = "errors.notASoundMod";
+pub const NOT_A_SKIN: &str = "errors.notASkin";
 pub const SOUND_BANK_MISSING: &str = "errors.soundBankMissing";
 pub const SOUND_CODEC_UNSUPPORTED: &str = "errors.soundCodecUnsupported";
 pub const SOUND_NO_ENGINE_SAMPLE: &str = "errors.soundNoEngineSample";

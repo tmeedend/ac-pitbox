@@ -1148,6 +1148,29 @@ deuxième exclut. Les décomptes se calculent sur la recherche et non sur le
 résultat filtré — un chiffre qui bouge à chaque facette posée ne sert à rien
 pour décider de la suivante.
 
+**Le contexte de recherche survit à l'écran.** Champ libre, facettes,
+regroupement et tri sont enregistrés (`ui_prefs.json`, règle §6.2) et
+restaurés au montage, comme les filtres de bibliothèque. Sans cela, cliquer une
+ligne — le geste même auquel la recherche sert — démontait l'inventaire, et
+« précédent » le ramenait vierge : on venait de poser trois facettes pour
+trouver la ligne qu'on est allé voir, et il fallait les reposer. Le grief ne
+visait pas seulement le retour : changer d'écran et revenir faisait la même
+chose. Une facette enregistrée qui n'existe plus dans le code est **écartée à
+la relecture** — laissée en place, elle filtrerait sur une clé que plus aucune
+ligne ne porte, c'est-à-dire un écran vide que rien n'explique.
+
+**Une livrée a sa fiche** (`SkinDetail.svelte`), voiture ou circuit, comme un
+son et un mod « autre ». Le titre de la ligne y mène ; le lien de rattachement,
+à droite, continue de mener à l'hôte. Les deux mènaient au même endroit, si
+bien qu'un des deux gestes était perdu et que rien nulle part ne parlait de la
+livrée elle-même. Elle porte ce qu'une ligne ne peut pas porter : ses fichiers,
+son poids, sa provenance, son nom déclaré par `ui_skin.json`, sa note — et
+**si le jeu la voit**, seul fait de la fiche qui demande une action. Une livrée
+stockée mais non projetée (§12bis.2) est parfaitement normale partout ailleurs
+dans l'app et n'existe pas pour le jeu ; la réparation générale la rebranche.
+Une **couche** n'a toujours pas de fiche à elle : elle vit sur celle de son
+hôte, où le lien mène.
+
 **Le type d'une ligne se dit par ce qu'elle touche.** Livrée, Son, Habillage,
 Couche, Mannequin et Document se nomment d'eux-mêmes ; il restait « Mod », qui
 est le mot qu'on écrit quand on n'a rien de plus précis à dire. Une ligne issue
@@ -1482,6 +1505,10 @@ Choisir le pilote qu'on voit au volant : son **corps** (le mannequin 3D) et sa *
 Ce n'est un déchet que si le parent ne revient jamais. Ils sont donc **listés en maintenance** (« Skins et sons sans mod ») et nettoyés **sur décision**, jamais automatiquement. Le nettoyage contourne le garde-fou `removable` : il protège un skin fourni avec un mod vivant, ce qui n'a plus de sens quand le parent a disparu.
 
 **Réparation générale** (écran Maintenance, à la manière du « purge & deploy » des autres gestionnaires de mods). Sa définition tient en une phrase : **recalculer tout ce qui dérive de la bibliothèque**. Rien de tout cela n'exige de connaître les règles des versions précédentes de l'app — `content/` est une fonction pure de la bibliothèque, recalculée à chaque activation, donc un changement de règles de déploiement se rattrape en redéployant, sans rien versionner ni comparer. Deux étapes sûres et rejouables à volonté : (1) recréer les projections (junctions) de skins voiture/circuit manquantes ou cassées — cas typique, une copie de bibliothèque (robocopy, migration) qui ne préserve pas les junctions, leur cible étant un chemin absolu propre à la machine source ; (2) **redéployer les mods actifs**, ce qui refait `content/` selon le mode et les règles du jour, ajouts au jeu compris (§4.5.3) — un mod importé avant leur existence les pose ainsi sans réimport. Un mod que l'utilisateur avait **désactivé n'est jamais réactivé** au passage : ce serait une surprise, pas une réparation. Une case à cocher optionnelle ajoute la seule étape qui touche la bibliothèque elle-même : réinstaller depuis l'archive source conservée tout mod détecté cassé qui en a une ; sans archive conservée il est laissé de côté, visible dans la liste des mods cassés. Les échecs individuels sont listés en détail sous le bouton, pas seulement comptés — chaque ligne identifie le skin/mod concerné et la raison technique brute.
+
+**Elle tourne en fond, et elle se voit.** La commande était synchrone, c'est-à-dire exécutée sur le **thread principal** : sur une install réelle — trois cents mods à redéployer, plusieurs centaines de milliers de hardlinks — la fenêtre entière gelait pendant toute sa durée, plus aucun `invoke` ne répondait, et Windows finissait par la marquer comme ne répondant plus. Elle faisait exactement ce qu'on lui demandait, sans qu'on puisse le savoir. `async` + `spawn_blocking`, donc, comme l'import (§4.2) et les lots (§6.3bis) — et la progression part dans la **pile de notifications** (§4.2bis), pas dans l'écran : une réparation dure des minutes, rien n'oblige à rester devant l'Atelier pendant ce temps. Le compte rendu détaillé reste sur l'écran Maintenance, seul endroit qui sache retrouver le *nom* des mods en échec.
+
+**La barre se compte en octets, pas en items**, même raison qu'à l'import : une livrée de 3 Mo et un circuit de 4 Go valent chacun un pas, et une barre en items sauterait. Tout est donc pesé avant de commencer — d'où une phase de *pesée* annoncée, sans laquelle le premier instant d'une grosse install ressemble déjà à un blocage. Une projection compte pour un poids nominal : une junction se crée en une milliseconde, mais *zéro* serait le mauvais chiffre — une barre immobile pendant toute la première phase se lit comme une réparation figée, ce que cette barre existe précisément pour démentir. Le temps restant s'extrapole du temps passé, lissé, et **muet tant que la mesure ne vaut rien** (sous 2 % du travail, le temps écoulé parle du démarrage, pas de la vitesse).
 
 **Journal fichier** (`tauri-plugin-log`, niveau Warn, `%APPDATA%\com.pitbox.app\logs\pitbox.log`) : seul moyen de diagnostiquer, sur une install packagée sans console, un échec d'opération best-effort qui ne bloque jamais l'UI (activation automatique à l'import, arbitrage de priorité entre « autres mods », etc.). N'enregistre que des échecs réels — jamais un flux d'activité normale.
 

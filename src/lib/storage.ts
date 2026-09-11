@@ -60,6 +60,17 @@ export const StorageKey = {
    * des fantômes sans objet sur l'écran des circuits. Cette clé-ci n'a jamais
    * connu `localStorage` : elle naît dans `ui_prefs.json`. */
   libraryPinned: (kind: ModKind) => `${PREFIX}.pinned.${kindKey(kind)}`,
+  /** Contexte de recherche de l'inventaire (refonte §4.2) : champ libre,
+   * facettes, regroupement, tri. Quatre clés qui n'ont jamais connu
+   * `localStorage` — elles naissent dans `ui_prefs.json`.
+   *
+   * Distinctes des `transversal*` ci-dessus, qui nommaient les mêmes réglages
+   * sur l'écran que l'inventaire remplace : leurs valeurs ne veulent plus dire
+   * la même chose, et relire les anciennes poserait un regroupement inconnu. */
+  inventoryQuery: `${PREFIX}.inventory.query`,
+  inventoryFacets: `${PREFIX}.inventory.facets`,
+  inventoryGroupBy: `${PREFIX}.inventory.groupBy`,
+  inventorySortBy: `${PREFIX}.inventory.sortBy`,
   preferredSkin: (carId: string) => `${PREFIX}.skin.${carId}`,
   preferredLayout: (trackId: string) => `${PREFIX}.layout.${trackId}`,
   /** Tenue de pilote choisie pour cette voiture (SPEC-ecran-pilote §1.4).

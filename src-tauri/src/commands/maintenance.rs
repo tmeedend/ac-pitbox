@@ -2,6 +2,7 @@
 //! réparation et archive autonome.
 
 use super::prelude::*;
+use tauri::{Emitter, Manager};
 
 /// Analyse mods cassés + junctions orphelines, sans rien supprimer (§9.3).
 #[tauri::command]
@@ -89,17 +90,35 @@ pub fn reinstall_from_archive(app: AppHandle, db: State<Db>, id: String) -> Resu
 }
 
 /// Réparation générale (§9.3) : recrée les projections skin/circuit cassées,
-/// et si `reinstall_broken`, réinstalle depuis l'archive source conservée
-/// chaque mod détecté cassé qui en a une.
+/// redéploie les mods actifs, et si `reinstall_broken`, réinstalle depuis
+/// l'archive source conservée chaque mod détecté cassé qui en a une.
+///
+/// `async` + `spawn_blocking`, comme l'import (§4.2) et les lots (§6.3bis), et
+/// pour la raison qu'ils documentent : **une commande synchrone s'exécute sur
+/// le thread principal**. Sur une install réelle — 311 mods à redéployer,
+/// plusieurs centaines de milliers de hardlinks — la fenêtre entière gelait,
+/// plus aucun `invoke` ne répondait, et Windows finissait par la marquer comme
+/// ne répondant plus. Constaté sur la réparation qui a suivi le correctif des
+/// livrées : elle faisait exactement ce qu'on lui demandait, sans qu'on puisse
+/// le savoir.
+///
+/// Les événements `repair:progress` sont d'ailleurs indissociables du
+/// changement : émis depuis le thread principal, ils ne seraient livrés qu'à
+/// la toute fin, c'est-à-dire quand plus personne n'en a besoin.
 #[tauri::command]
-pub fn repair_all(
-    app: AppHandle,
-    db: State<Db>,
-    reinstall_broken: bool,
-) -> Result<crate::maintenance::RepairAllReport, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::maintenance::repair_all(&conn, &cfg, reinstall_broken)
+pub async fn repair_all(app: AppHandle, reinstall_broken: bool) -> Result<crate::maintenance::RepairAllReport, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let emit = |p: crate::maintenance::RepairProgress| {
+            let _ = app.emit("repair:progress", p);
+        };
+        let ctx = crate::maintenance::RepairCtx::new(&emit);
+        let cfg = crate::config::load(&app);
+        let db = app.state::<Db>();
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        crate::maintenance::repair_all(&ctx, &conn, &cfg, reinstall_broken)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Exporte la version active d'un mod en archive autonome dans `dest_dir` (§9.1).

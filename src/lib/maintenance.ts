@@ -52,6 +52,18 @@ export interface ReinstallOutcome {
   error: string;
 }
 
+/** Doit rester aligné sur `maintenance::RepairProgress` côté Rust. */
+export interface RepairProgress {
+  phase: "sizing" | "projections" | "redeploy" | "reinstall";
+  /** Rang dans la phase courante — ce que lit le décompte, pas la barre. */
+  index: number;
+  total: number;
+  /** Réparation entière, dans [0,1], pondérée en octets et non en items. */
+  ratio: number;
+  etaSecs: number | null;
+  label: string;
+}
+
 export interface RepairAllReport {
   projections: RepairProjectionsReport;
   /** Mods actifs redéployés depuis la bibliothèque. */
