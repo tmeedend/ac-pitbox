@@ -95,6 +95,23 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     // part dans les fichiers. Un `.bank` FMOD ne le porte pas, et le lire dans
     // une notice serait une devinette sur du texte libre.
     let _ = conn.execute("ALTER TABLE sub_mods ADD COLUMN author TEXT", []);
+
+    // --- Saisie utilisateur, toutes entités (refonte §6.1 et §9.4) ---
+    //
+    // La note et le nom d'affichage cessent d'être un privilège des mods :
+    // une couche s'appelle `spa2022-release_V1-03.rar` et c'est exactement
+    // l'objet qui a besoin d'être renommé. Même principe que les colonnes
+    // `*_user` de `mods` : la saisie vit **à côté** du champ dérivé du
+    // fichier, jamais à sa place — sinon la première mise à jour du mod
+    // l'écrase. Les erreurs « duplicate column » sont ignorées comme plus
+    // haut : c'est ce qui rend ces ALTER idempotents.
+    for table in ["mods", "sub_mods", "apps", "other_mods", "layers"] {
+        let _ = conn.execute(&format!("ALTER TABLE {table} ADD COLUMN notes_user TEXT"), []);
+    }
+    // `mods` a déjà le sien depuis L2 : seule la note lui manquait.
+    for table in ["sub_mods", "apps", "other_mods", "layers"] {
+        let _ = conn.execute(&format!("ALTER TABLE {table} ADD COLUMN display_name_user TEXT"), []);
+    }
     Ok(())
 }
 
@@ -456,6 +473,11 @@ pub struct ModRow {
     /// sous gestion suppose que l'utilisateur retire lui-même le dossier du
     /// jeu et importe le mod.
     pub is_unmanaged: bool,
+    /// Note libre (refonte §9). Distincte de `description_user` : celle-ci
+    /// surcharge ce que dit le fichier du mod, donc la vider veut dire
+    /// « reviens au fichier » ; une note n'a pas de valeur d'origine, donc
+    /// vide veut dire vide.
+    pub notes_user: Option<String>,
     /// Date de publication estimée de la version active (§6.2).
     pub published_at: Option<String>,
     /// Taille sur disque cumulée de toutes les versions, octets (§9.4).
@@ -801,7 +823,8 @@ const MOD_SELECT: &str = r#"
            -- ci-dessus masque dès qu'une surcharge existe : c'est pourtant lui
            -- qu'il faut montrer à qui hésite à revenir en arrière.
            m.display_name AS display_name_file,
-           m.is_unmanaged
+           m.is_unmanaged,
+           m.notes_user
     FROM mods m
 "#;
 
@@ -848,6 +871,7 @@ fn map_mod(row: &rusqlite::Row) -> rusqlite::Result<ModRow> {
         description_user: row.get(32)?,
         display_name_file: row.get(33)?,
         is_unmanaged: row.get::<_, i64>(34)? != 0,
+        notes_user: row.get(35)?,
     })
 }
 
@@ -1529,6 +1553,12 @@ pub struct LayerRow {
     pub is_active: bool,
     pub priority: i64,
     pub imported_at: String,
+    /// Nom repris à la main (refonte §8.3). Le nom dérivé de l'archive est
+    /// faillible par construction, donc corrigeable.
+    pub display_name_user: Option<String>,
+    /// Note libre (refonte §9). Distincte de la description : elle n'a pas de
+    /// valeur d'origine, donc vide veut dire vide.
+    pub notes_user: Option<String>,
 }
 
 /// Fragment SQL isolant les couches d'un hôte : son id **et son espace de noms**.
@@ -1602,10 +1632,12 @@ fn map_layer(row: &rusqlite::Row) -> rusqlite::Result<LayerRow> {
         is_active: row.get::<_, i64>(8)? != 0,
         priority: row.get(9)?,
         imported_at: row.get(10)?,
+        display_name_user: row.get(11)?,
+        notes_user: row.get(12)?,
     })
 }
 
-const LAYER_SELECT: &str = "SELECT id, parent_id, parent_kind, name, library_path, source_archive, added_count, overwritten_count, is_active, priority, imported_at FROM layers";
+const LAYER_SELECT: &str = "SELECT id, parent_id, parent_kind, name, library_path, source_archive, added_count, overwritten_count, is_active, priority, imported_at, display_name_user, notes_user FROM layers";
 
 /// Couches/extensions rattachées à une base (fiche détail, §4.4), par priorité.
 pub fn list_layers(conn: &Connection, parent_id: &str, host: HostKind) -> rusqlite::Result<Vec<LayerRow>> {
@@ -1682,6 +1714,11 @@ pub struct SubModRow {
     /// demande, donc `None` partout sauf là où on la réclame explicitement
     /// (vue transversale, cf. `submods::list_by_type_sized`).
     pub size_bytes: Option<i64>,
+    /// Nom repris à la main (refonte §6.1) : `skin_01` ne dit rien de ce que
+    /// la livrée montre.
+    pub display_name_user: Option<String>,
+    /// Note libre (refonte §9).
+    pub notes_user: Option<String>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1736,11 +1773,13 @@ fn map_sub(row: &rusqlite::Row) -> rusqlite::Result<SubModRow> {
         imported_at: row.get(8)?,
         author: row.get(9)?,
         size_bytes: None,
+        display_name_user: row.get(10)?,
+        notes_user: row.get(11)?,
     })
 }
 
 const SUB_SELECT: &str =
-    "SELECT id, sub_type, parent_id, name, library_path, source_archive, is_active, removable, imported_at, author FROM sub_mods";
+    "SELECT id, sub_type, parent_id, name, library_path, source_archive, is_active, removable, imported_at, author, display_name_user, notes_user FROM sub_mods";
 
 /// Sous-éléments rattachés à une entité (fiche détail, §12bis.3).
 /// Sous-éléments (skins, sons) dont le parent n'existe plus (§9.3). Conservés
@@ -1748,11 +1787,13 @@ const SUB_SELECT: &str =
 /// inutiles dès qu'on ne compte plus réimporter le parent. Listés ici pour être
 /// nettoyés sur décision de l'utilisateur, jamais automatiquement.
 pub fn orphan_subs(conn: &Connection) -> rusqlite::Result<Vec<SubModRow>> {
-    let mut stmt = conn.prepare(
-        "SELECT * FROM sub_mods
-          WHERE parent_id NOT IN (SELECT id_interne FROM mods)
-          ORDER BY parent_id, name",
-    )?;
+    // Colonnes nommées, jamais `SELECT *` : `map_sub` lit par index, or l'ordre
+    // des colonnes de la table est celui des `ALTER` successifs, pas celui du
+    // mappeur. Les deux ont divergé dès l'ajout de `notes_user`.
+    let mut stmt = conn.prepare(&format!(
+        "{SUB_SELECT} WHERE parent_id NOT IN (SELECT id_interne FROM mods)
+          ORDER BY parent_id, name"
+    ))?;
     let rows = stmt.query_map([], map_sub)?;
     rows.collect()
 }
@@ -1840,6 +1881,11 @@ pub struct AppRow {
     pub library_path: String,
     pub source_archive: Option<String>,
     pub imported_at: String,
+    /// Nom repris à la main (refonte §6.1) : le titre d'une fiche d'app n'est
+    /// plus son nom de dossier.
+    pub display_name_user: Option<String>,
+    /// Note libre (refonte §9).
+    pub notes_user: Option<String>,
 }
 
 pub fn insert_app(
@@ -1858,30 +1904,29 @@ pub fn insert_app(
     Ok(())
 }
 
+fn map_app(row: &rusqlite::Row) -> rusqlite::Result<AppRow> {
+    Ok(AppRow {
+        id: row.get(0)?,
+        library_path: row.get(1)?,
+        source_archive: row.get(2)?,
+        imported_at: row.get(3)?,
+        display_name_user: row.get(4)?,
+        notes_user: row.get(5)?,
+    })
+}
+
+const APP_SELECT: &str =
+    "SELECT id, library_path, source_archive, imported_at, display_name_user, notes_user FROM apps";
+
 pub fn list_apps(conn: &Connection) -> rusqlite::Result<Vec<AppRow>> {
-    let mut stmt =
-        conn.prepare("SELECT id, library_path, source_archive, imported_at FROM apps ORDER BY id COLLATE NOCASE")?;
-    let rows = stmt.query_map([], |r| {
-        Ok(AppRow {
-            id: r.get(0)?,
-            library_path: r.get(1)?,
-            source_archive: r.get(2)?,
-            imported_at: r.get(3)?,
-        })
-    })?;
+    let mut stmt = conn.prepare(&format!("{APP_SELECT} ORDER BY id COLLATE NOCASE"))?;
+    let rows = stmt.query_map([], map_app)?;
     rows.collect()
 }
 
 pub fn get_app(conn: &Connection, id: &str) -> rusqlite::Result<Option<AppRow>> {
-    let mut stmt = conn.prepare("SELECT id, library_path, source_archive, imported_at FROM apps WHERE id = ?1")?;
-    let mut rows = stmt.query_map([id], |r| {
-        Ok(AppRow {
-            id: r.get(0)?,
-            library_path: r.get(1)?,
-            source_archive: r.get(2)?,
-            imported_at: r.get(3)?,
-        })
-    })?;
+    let mut stmt = conn.prepare(&format!("{APP_SELECT} WHERE id = ?1"))?;
+    let mut rows = stmt.query_map([id], map_app)?;
     match rows.next() {
         Some(r) => Ok(Some(r?)),
         None => Ok(None),
@@ -1913,6 +1958,11 @@ pub struct OtherModRow {
     pub is_active: bool,
     /// Chemins absolus des jonctions créées lors de la dernière activation.
     pub junctions: Vec<String>,
+    /// Nom repris à la main (refonte §6.1) : ces mods-là portent des noms
+    /// d'archive (`policeman__ext_config.ini`), c'est-à-dire rien de lisible.
+    pub display_name_user: Option<String>,
+    /// Note libre (refonte §9).
+    pub notes_user: Option<String>,
 }
 
 pub fn insert_other_mod(
@@ -1940,11 +1990,13 @@ fn map_other(row: &rusqlite::Row) -> rusqlite::Result<OtherModRow> {
         is_priority: row.get::<_, i64>(4)? != 0,
         is_active: row.get::<_, i64>(5)? != 0,
         junctions: json_arr(&junctions),
+        display_name_user: row.get(7)?,
+        notes_user: row.get(8)?,
     })
 }
 
 const OTHER_SELECT: &str =
-    "SELECT id, library_path, source_archive, imported_at, is_priority, is_active, junctions FROM other_mods";
+    "SELECT id, library_path, source_archive, imported_at, is_priority, is_active, junctions, display_name_user, notes_user FROM other_mods";
 
 pub fn list_other_mods(conn: &Connection) -> rusqlite::Result<Vec<OtherModRow>> {
     let mut stmt = conn.prepare(&format!("{OTHER_SELECT} ORDER BY id COLLATE NOCASE"))?;

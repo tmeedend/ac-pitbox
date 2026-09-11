@@ -61,6 +61,7 @@ mod testutil;
 mod thumbnails;
 mod ui_prefs;
 mod uijson;
+mod usermeta;
 mod weather;
 
 use overlay::Db;
@@ -390,6 +391,8 @@ pub fn run() {
             commands::others::get_other_resource_path,
             commands::others::read_other_resource,
             commands::addons::delete_app,
+            commands::usermeta::set_entity_note,
+            commands::usermeta::set_entity_display_name,
             commands::rules::get_rules,
             commands::rules::save_rules,
             commands::rules::rules_impact,
