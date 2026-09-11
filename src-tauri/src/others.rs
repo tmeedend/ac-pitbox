@@ -310,11 +310,7 @@ fn category_of(rel: &Path) -> &'static str {
         .iter()
         // `>` and not `>=`: the prefix alone is the folder, never a file in it.
         .find(|(_, prefix)| {
-            segs.len() > prefix.len()
-                && segs
-                    .iter()
-                    .zip(prefix.iter())
-                    .all(|(a, b)| *b == "*" || a == b)
+            segs.len() > prefix.len() && segs.iter().zip(prefix.iter()).all(|(a, b)| *b == "*" || a == b)
         })
         .map(|(cat, _)| *cat)
         .unwrap_or(OTHER_CATEGORY)

@@ -121,11 +121,18 @@ impl EntityIndex {
     pub fn build(conn: &Connection) -> rusqlite::Result<Self> {
         let mut entities = HashMap::new();
         for m in overlay::list_mods(conn)? {
-            let kind = if m.kind == "Track" { AttachKind::Track } else { AttachKind::Car };
+            let kind = if m.kind == "Track" {
+                AttachKind::Track
+            } else {
+                AttachKind::Car
+            };
             entities.insert(m.id_interne.to_ascii_lowercase(), (kind, m.display_name.clone()));
         }
         for a in overlay::list_apps(conn)? {
-            entities.insert(a.id.to_ascii_lowercase(), (AttachKind::App, a.display_name_user.clone()));
+            entities.insert(
+                a.id.to_ascii_lowercase(),
+                (AttachKind::App, a.display_name_user.clone()),
+            );
         }
         Ok(Self { entities })
     }
@@ -318,7 +325,17 @@ mod tests {
         let base = crate::testutil::temp_dir("attach");
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let now = chrono::Local::now().to_rfc3339();
-        overlay::upsert_mod(&conn, "ks_nordschleife", "Track", None, Some("Nordschleife"), "h", None, &now).unwrap();
+        overlay::upsert_mod(
+            &conn,
+            "ks_nordschleife",
+            "Track",
+            None,
+            Some("Nordschleife"),
+            "h",
+            None,
+            &now,
+        )
+        .unwrap();
         overlay::upsert_mod(&conn, "la_canyons", "Track", None, Some("LA Canyons"), "h", None, &now).unwrap();
         overlay::upsert_mod(
             &conn,
@@ -378,7 +395,14 @@ mod tests {
 
         // Un mod dont l'id commence par un fragment trop court ne s'accroche à
         // rien : `ks` n'est pas une entité, et ne doit pas le devenir.
-        let b = attachment_of(&index(&conn), "ks__something.ini", None, &paths(&["extension/x.ini"]), &["extension".into()], None);
+        let b = attachment_of(
+            &index(&conn),
+            "ks__something.ini",
+            None,
+            &paths(&["extension/x.ini"]),
+            &["extension".into()],
+            None,
+        );
         assert_eq!(b.kind, AttachKind::Game, "aucun signal : le jeu");
         drop(base);
     }
@@ -397,7 +421,11 @@ mod tests {
             None,
         );
         assert_eq!(a.target_id.as_deref(), Some("rss_formula_rss_supreme_25"));
-        assert_eq!(a.signal, Signal::Archive, "conjecture, et elle est étiquetée comme telle");
+        assert_eq!(
+            a.signal,
+            Signal::Archive,
+            "conjecture, et elle est étiquetée comme telle"
+        );
         assert_eq!(a.nature, Nature::Dependency, "une police est un moyen, pas un sujet");
         drop(base);
     }
@@ -409,12 +437,23 @@ mod tests {
     fn a_correction_wins_unless_its_target_is_gone() {
         let (base, conn) = db();
         let files = paths(&["content/tracks/ks_nordschleife/ui/x.png"]);
-        let a = attachment_of(&index(&conn), "x", None, &files, &["textures".into()], Some("la_canyons"));
+        let a = attachment_of(
+            &index(&conn),
+            "x",
+            None,
+            &files,
+            &["textures".into()],
+            Some("la_canyons"),
+        );
         assert_eq!(a.target_id.as_deref(), Some("la_canyons"), "la correction l'emporte");
         assert_eq!(a.signal, Signal::User);
 
         let b = attachment_of(&index(&conn), "x", None, &files, &["textures".into()], Some("disparu"));
-        assert_eq!(b.target_id.as_deref(), Some("ks_nordschleife"), "repli sur la déduction");
+        assert_eq!(
+            b.target_id.as_deref(),
+            Some("ks_nordschleife"),
+            "repli sur la déduction"
+        );
         assert_eq!(b.signal, Signal::Path);
         drop(base);
     }
@@ -425,7 +464,14 @@ mod tests {
     #[test]
     fn no_signal_means_the_game_unless_nothing_is_posed() {
         let (base, conn) = db();
-        let a = attachment_of(&index(&conn), "naturalmod_v6", None, &paths(&["system/cfg/ppfilters/natural.ini"]), &["ppfilters".into()], None);
+        let a = attachment_of(
+            &index(&conn),
+            "naturalmod_v6",
+            None,
+            &paths(&["system/cfg/ppfilters/natural.ini"]),
+            &["ppfilters".into()],
+            None,
+        );
         assert_eq!(a.kind, AttachKind::Game);
         assert_eq!(a.nature, Nature::Appearance);
 

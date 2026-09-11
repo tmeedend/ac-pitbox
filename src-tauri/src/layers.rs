@@ -273,7 +273,9 @@ pub fn layout_origins(
             if !entry.file_type().is_file() {
                 continue;
             }
-            let Ok(rel) = entry.path().strip_prefix(&dir) else { continue };
+            let Ok(rel) = entry.path().strip_prefix(&dir) else {
+                continue;
+            };
             let parts: Vec<String> = rel
                 .components()
                 .map(|c| c.as_os_str().to_string_lossy().to_string())

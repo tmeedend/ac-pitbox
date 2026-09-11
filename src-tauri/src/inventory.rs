@@ -147,7 +147,11 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
             } else {
                 RowKind::Other
             },
-            name: card.row.display_name_user.clone().unwrap_or_else(|| card.row.id.clone()),
+            name: card
+                .row
+                .display_name_user
+                .clone()
+                .unwrap_or_else(|| card.row.id.clone()),
             tech_id: card.row.id.clone(),
             attachment,
             active: Some(card.row.is_active),
@@ -294,10 +298,30 @@ mod tests {
         };
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let now = chrono::Local::now().to_rfc3339();
-        overlay::upsert_mod(&conn, "ks_nordschleife", "Track", None, Some("Nordschleife"), "h", None, &now).unwrap();
+        overlay::upsert_mod(
+            &conn,
+            "ks_nordschleife",
+            "Track",
+            None,
+            Some("Nordschleife"),
+            "h",
+            None,
+            &now,
+        )
+        .unwrap();
 
         // Même id « pack » des deux côtés : c'est tout le sujet.
-        overlay::insert_sub_mod(&conn, "pack", "SKIN", "ks_nordschleife", "pack", "subs/pack", None, &now).unwrap();
+        overlay::insert_sub_mod(
+            &conn,
+            "pack",
+            "SKIN",
+            "ks_nordschleife",
+            "pack",
+            "subs/pack",
+            None,
+            &now,
+        )
+        .unwrap();
         overlay::insert_layer(
             &conn,
             "pack",
@@ -316,11 +340,17 @@ mod tests {
         let rows = list(&conn, &cfg).unwrap();
         assert_eq!(rows.len(), 2, "une ligne par chose");
         let skin = rows.iter().find(|r| r.kind == RowKind::Skin).unwrap();
-        assert_eq!(skin.active, None, "une livrée ne s'active pas : pas d'état de déploiement");
+        assert_eq!(
+            skin.active, None,
+            "une livrée ne s'active pas : pas d'état de déploiement"
+        );
         let layer = rows.iter().find(|r| r.kind == RowKind::Layer).unwrap();
         assert_eq!(layer.active, Some(true), "une couche, si");
         let uids: Vec<&str> = rows.iter().map(|r| r.uid.as_str()).collect();
-        assert!(uids.contains(&"SUB:pack") && uids.contains(&"LAYER:pack"), "ids distincts: {uids:?}");
+        assert!(
+            uids.contains(&"SUB:pack") && uids.contains(&"LAYER:pack"),
+            "ids distincts: {uids:?}"
+        );
         for r in &rows {
             assert_eq!(
                 r.attachment.target_id.as_deref(),
@@ -369,7 +399,10 @@ mod tests {
 
         let rows = list(&conn, &cfg).unwrap();
         let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
-        assert!(ids.contains(&"ada"), "déployé, et listé quand même : c'est ici qu'on agit dessus");
+        assert!(
+            ids.contains(&"ada"),
+            "déployé, et listé quand même : c'est ici qu'on agit dessus"
+        );
         assert!(
             rows.iter().all(|r| r.uid.starts_with("OTHER:")),
             "mannequin ou pas, la ligne vient de la table des mods « autres » — c'est d'elle que              dépendent sa fiche et ses actions, pas du type affiché"
