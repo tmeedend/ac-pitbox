@@ -137,7 +137,7 @@
     <p class="sub">{t("transversal.layersSubtitle")}</p>
   </div>
 
-  {#if error}<div class="err">{error}</div>{/if}
+  {#if error}<div class="errbox">{error}</div>{/if}
 
   {#if loading}
     <LoadingState />
@@ -217,12 +217,7 @@
     font-size: 12px;
     margin-top: 8px;
   }
-  .err {
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    padding: 10px 12px;
-    font-size: 12px;
+  .errbox {
     margin: 12px 0;
   }
   .empty {

@@ -85,7 +85,7 @@
   </div>
   <p class="hint">{t("profiles.captureHint")}</p>
 
-  {#if error}<div class="err">{error}</div>{/if}
+  {#if error}<div class="errbox">{error}</div>{/if}
 
   {#if report}
     <div class="report">
@@ -148,13 +148,8 @@
     font-size: 11.5px;
     margin-top: 6px;
   }
-  .err {
+  .errbox {
     margin-top: 12px;
-    padding: 8px 10px;
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    font-size: 12px;
   }
   .report {
     margin-top: 14px;

@@ -86,7 +86,7 @@
     <button class="btn-ghost close" type="button" onclick={onclose} title={t("bulkEdit.clearTooltip")}>✕</button>
   </header>
 
-  {#if error}<div class="err">{error}</div>{/if}
+  {#if error}<div class="errbox">{error}</div>{/if}
 
   <div class="sections">
     <section>
@@ -182,13 +182,8 @@
     white-space: nowrap;
     flex: none;
   }
-  .err {
+  .errbox {
     margin: 10px 16px 0;
-    padding: 8px 10px;
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    font-size: 11.5px;
     flex: none;
   }
   .sections {

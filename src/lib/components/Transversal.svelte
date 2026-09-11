@@ -304,7 +304,7 @@
        d'origine — le ré-indenter d'un cran noierait le changement réel dans
        cent lignes de diff blanc, et avec lui `git blame`. -->
   {#if activeTab === "skins"}
-  {#if error}<div class="err">{error}</div>{/if}
+  {#if error}<div class="errbox">{error}</div>{/if}
 
   {#if loading}
     <LoadingState />
@@ -443,12 +443,7 @@
     width: 200px;
     flex: none;
   }
-  .err {
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    padding: 10px 12px;
-    font-size: 12px;
+  .errbox {
     margin-bottom: 14px;
   }
   .toolbar {

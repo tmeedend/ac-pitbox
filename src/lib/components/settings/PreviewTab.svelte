@@ -311,7 +311,7 @@
         {t("settings.preview3dCacheClear")}
       </button>
     </div>
-    {#if cacheError}<div class="err">{errorText(cacheError)}</div>{/if}
+    {#if cacheError}<div class="errbox">{errorText(cacheError)}</div>{/if}
   </div>
   </section>
 
@@ -470,13 +470,8 @@
     gap: 12px;
     margin-top: 14px;
   }
-  .err {
+  .errbox {
     margin-top: 10px;
-    padding: 8px 10px;
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    font-size: 11.5px;
   }
   /* Même barre que les autres onglets de Réglages (Musique, Général…) :
      pastille d'état puis bouton, alignés à droite. */

@@ -211,7 +211,7 @@
     </button>
   </header>
 
-  {#if error}<div class="err">{error}</div>{/if}
+  {#if error}<div class="errbox">{error}</div>{/if}
 
   <section class="stock-sec">
     <h3>{t("maintenance.stockTitle")}</h3>
@@ -406,12 +406,7 @@
     line-height: 1.5;
     max-width: 560px;
   }
-  .err {
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    padding: 10px 12px;
-    font-size: 12px;
+  .errbox {
     margin-bottom: 16px;
   }
   .ok {

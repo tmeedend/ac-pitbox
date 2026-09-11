@@ -114,7 +114,7 @@
     {#if loading}
       <div class="state">{t("bulkImport.analyzing")}</div>
     {:else if error && !entries.length}
-      <div class="err">{error}</div>
+      <div class="errbox">{error}</div>
     {:else}
       <!-- Récapitulatif -->
       <div class="counts">
@@ -168,7 +168,7 @@
         {/each}
       </div>
 
-      {#if error}<div class="err">{error}</div>{/if}
+      {#if error}<div class="errbox">{error}</div>{/if}
 
       <footer>
         <span class="mode mono">{copy ? t("import.copy") : t("import.move")}</span>
@@ -349,13 +349,8 @@
     background: var(--raised);
     color: var(--rosso-bright);
   }
-  .err {
+  .errbox {
     margin: 12px 18px;
-    padding: 9px 11px;
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    font-size: 12px;
   }
   footer {
     display: flex;

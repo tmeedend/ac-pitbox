@@ -186,7 +186,7 @@
       <ConfigFields bind:config {validation} />
 
       {#if error}
-        <div class="error">{error}</div>
+        <div class="errbox">{error}</div>
       {/if}
 
       <footer>
@@ -319,13 +319,8 @@
     gap: 12px;
     margin-bottom: 22px;
   }
-  .error {
+  .errbox {
     margin: 12px 0;
-    padding: 10px;
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    font-size: 12px;
   }
   footer {
     margin-top: 24px;

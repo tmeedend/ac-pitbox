@@ -200,7 +200,7 @@
     {:else}
       <p class="empty">{t("detail.noExtras")}</p>
     {/if}
-    {#if forceError}<p class="err">{forceError}</p>{/if}
+    {#if forceError}<p class="errbox">{forceError}</p>{/if}
   </div>
 </section>
 
@@ -311,13 +311,8 @@
     opacity: 0.5;
     cursor: default;
   }
-  .err {
+  .errbox {
     margin-top: 10px;
-    padding: 8px 10px;
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    font-size: 11.5px;
   }
   /* Jaune = alerte : ni une erreur, ni une action destructive — un fichier
      conservé mais que le jeu ne recevra pas. */

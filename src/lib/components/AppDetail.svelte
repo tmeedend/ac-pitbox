@@ -112,7 +112,7 @@
     </div>
   </dl>
 
-  {#if error}<div class="err">{error}</div>{/if}
+  {#if error}<div class="errbox">{error}</div>{/if}
 
   <Tabs {tabs} active={tab} onselect={(id) => (tab = id)} />
 
@@ -181,12 +181,7 @@
   .body {
     margin-top: 14px;
   }
-  .err {
+  .errbox {
     margin-bottom: 10px;
-    padding: 8px 10px;
-    border: 1px solid var(--rosso-border);
-    background: var(--rosso-dim);
-    color: var(--rosso-bright);
-    font-size: 11.5px;
   }
 </style>

@@ -962,7 +962,7 @@
       {/snippet}
     </Tabs>
 
-    {#if actionError}<div class="action-err">{actionError}</div>{/if}
+    {#if actionError}<div class="errbox">{actionError}</div>{/if}
     {#if reinstallOk}<div class="export-ok">{t("detail.reinstallSuccess")}</div>{/if}
     {#if versionNotice}<div class="export-ok">{versionNotice}</div>{/if}
     {#if exportResult}
@@ -1542,13 +1542,8 @@
   .tab-body {
     padding: 18px;
   }
-  .action-err {
+  .errbox {
     margin: 10px 18px 0;
-    padding: 8px 10px;
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    font-size: 11.5px;
   }
   .export-ok {
     margin: 10px 18px 0;

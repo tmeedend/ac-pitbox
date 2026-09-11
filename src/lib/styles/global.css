@@ -15,7 +15,7 @@
  *   .pill (+ .pill-ok, .pill-warn, .pill-err)   pastilles d'état
  *   .gp-focus / .gp-editing             focus manette (gamepadNav.ts)
  *   .lbl-screen / .lbl / .lbl-key       libellés (voir plus bas, §chantier libellés)
- *   .warnbox                            alerte non bloquante (jaune)
+ *   .warnbox / .errbox                  alerte non bloquante (jaune) / erreur (rouge)
  *
  * Tout le reste — .tag, .srcbox, .prov-note, .muted, .small… — est local au
  * composant qui le définit, même si le nom se répète ailleurs.
@@ -404,6 +404,28 @@ a {
   background: #1a1708;
   border: 1px solid #4a4426;
   color: var(--yellow);
+  padding: 8px 10px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+/* Message d'erreur d'un écran ou d'un bloc : ce qui vient d'échouer, dit là où
+ * l'action a été demandée.
+ *
+ * **Sœur de `.warnbox` : la même boîte, une autre couleur.** C'est ce qui a
+ * tranché sa géométrie, sinon arbitraire : les 21 copies locales qu'elle
+ * remplace annonçaient les trois mêmes couleurs mais quatre paddings
+ * (8/10, 9/11, 10/12, 10) et deux tailles (11,5 et 12px), si bien que la même
+ * phrase changeait de taille d'un écran à l'autre. Aligner sur l'encadré jaune
+ * déjà global ne demande de choisir ni l'un ni l'autre.
+ *
+ * La marge appartient à l'appelant, comme pour `.warnbox` : la même boîte
+ * apparaît dans le flux d'un bloc, sous un en-tête pleine largeur, ou dans une
+ * colonne de panneau. */
+.errbox {
+  background: var(--rosso-dim);
+  border: 1px solid var(--rosso-border);
+  color: var(--rosso-bright);
   padding: 8px 10px;
   font-size: 11.5px;
   line-height: 1.45;

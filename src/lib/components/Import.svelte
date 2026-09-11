@@ -208,11 +208,6 @@
   }
   .errbox {
     margin-top: 12px;
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    padding: 8px 10px;
-    font-size: 11.5px;
   }
   .head {
     margin-bottom: 22px;
