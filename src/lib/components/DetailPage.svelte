@@ -1189,7 +1189,16 @@
         {#if isCar}
           <PickerBar
             label={t("detail.skinsLabel")}
-            items={skins.map((sk) => ({ id: sk.id, name: sk.name, image: previewSrc(sk.preview, contentRevision) }))}
+            items={skins.map((sk) => ({
+              id: sk.id,
+              name: sk.name,
+              // `livery.png` — couleurs et motif de la livrée seule — et non la
+              // photo de la voiture entière : à 20 px dans une liste déroulante,
+              // celle-ci ne montre plus rien. Même choix que le sélecteur de la
+              // colonne de session, et la convention de CM. La photo reprend ses
+              // droits dans la grille dépliée, où elle a la place.
+              image: previewSrc(sk.livery ?? sk.preview, contentRevision),
+            }))}
             index={previewSkin}
             onpick={selectSkin}
             expanded={pickerOpen}
