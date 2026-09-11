@@ -84,11 +84,15 @@ styles recopiés » de CLAUDE.md, et il passe **avant** la refonte, pas après :
 écrans neufs et quatre fiches vont écrire ces briques. Le CSS Svelte étant scopé, les
 recopier maintenant, c'est les faire diverger tout de suite.
 
-- `.errbox` globale (14 définitions locales aujourd'hui) ;
-- `Seg.svelte` (6 copies) — la barre d'outils du §10 en a besoin partout ;
-- `Toolbar.svelte` : recherche + GROUPER + TRIER + compteur `n / N` (§10) ;
-- `ListRow.svelte` : la ligne à deux niveaux du §4.2 ;
-- `FicheHeader.svelte` : la coquille du §6.1 ;
+- ✅ `.errbox` globale — **21** copies locales, pas 14 : l'inventaire datait de trois
+  semaines et quatre composants s'étaient ajoutés depuis. Sœur de `.warnbox`, ce qui a
+  tranché sa géométrie sans avoir à arbitrer entre les copies.
+- ✅ `Seg.svelte` — **7** copies. Trois axes de variation (`vertical`, `tone`, `size`
+  nommée par son rôle) et rien d'autre. Le groupe zoom de la visionneuse PDF en est
+  exclu : ses trois boutons sont des actions, pas un choix parmi trois.
+- `Toolbar.svelte` (§10), `ListRow.svelte` (§4.2) et la coquille de fiche (§6.1) :
+  **repoussés à leur premier client** (L2 et L7). Une brique sans consommateur pourrit
+  comme une colonne SQL que rien n'écrit ni ne lit.
 - `.lbl-sub` (8 copies de `.sub`) — **décision de design à prendre**, pas à trancher seul.
 
 Reformatage pur → commits isolés, jamais mélangés au fonctionnel (sinon `git blame`
