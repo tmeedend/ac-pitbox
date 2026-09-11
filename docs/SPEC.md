@@ -507,9 +507,11 @@ fichier… » sont la seule voie pour y ajouter quelque chose.
 notice, un manuel, des notes de version que l'import a stockés comme des mods à
 eux (§4.5.2) parce qu'ils étaient hors du dossier du mod. Leurs fichiers ne sont
 donc pas dans les ressources de la voiture — mais c'est bien là qu'on les
-cherche. Chaque livraison garde son bloc, son intitulé et sa visionneuse ; elle
-reste par ailleurs gérable depuis « Posé sur ce mod » (§4.3) et depuis
-l'inventaire.
+cherche. Ils rejoignent **la liste du bloc Ressources**, chacun marqué du nom de
+sa livraison, et non une carte par document : trois cartes au-dessus d'un bloc
+« Ressources » annonçant « aucun fichier annexe » disaient le contraire de la
+vérité. Ils restent par ailleurs gérables depuis « Posé sur ce mod » (§4.3) et
+depuis l'inventaire — lire et gérer sont deux gestes.
 
 Rattachement par simple **`nom_de_fichier.contains(id)`**
 sur l'ensemble des id de la bibliothèque (voitures ∪ circuits, stock inclus) —

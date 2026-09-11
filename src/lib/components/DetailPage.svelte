@@ -278,9 +278,9 @@
     const parts = [screenshotsCount, replaysCount, resourcesCount, isCar ? null : backgroundsCount];
     const known = parts.filter((n): n is number => n !== null);
     if (!known.length) return null;
-    // Les livraisons de documents rattachées comptent pour une chacune : leur
-    // nombre de fichiers demanderait autant d'allers-retours, et l'onglet dit
-    // « il y a quelque chose », pas « combien exactement ».
+    // Les documents rattachés comptent pour un chacun : ils rejoignent la
+    // liste des ressources, et leur livraison ne contient qu'eux — c'est le
+    // cas qui les définit (§4.5.2).
     return known.reduce((a, b) => a + b, 0) + attachedDocs.length;
   });
 
@@ -1579,20 +1579,16 @@
       <div class="tab-body stack">
         <MediaScreenshots modId={id} onerror={(m) => (actionError = m)} />
         <MediaReplays modId={id} onerror={(m) => (actionError = m)} />
-        <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
-        <!-- Les documents livrés AVEC ce mod mais rangés à part (§7.8) : une
-             notice, un manuel, des notes de version. L'import les a stockés
-             comme des mods à eux, leurs fichiers ne sont donc pas dans les
-             ressources de la voiture — mais c'est bien ici qu'on les cherche.
-             Chaque livraison garde son bloc et sa visionneuse. -->
-        {#each attachedDocs as doc (doc.uid)}
-          <ResourcesBlock
-            modId={doc.id}
-            source="other"
-            title={doc.name}
-            onerror={(m) => (actionError = m)}
-          />
-        {/each}
+        <!-- Les documents livrés AVEC ce mod mais rangés à part (§7.8) — une
+             notice, un manuel, des notes de version — rejoignent la liste des
+             ressources plutôt que d'ouvrir une carte chacun : trois cartes
+             au-dessus d'une carte « Ressources » annonçant « aucun fichier
+             annexe » disaient le contraire de la vérité. -->
+        <ResourcesBlock
+          modId={id}
+          extras={attachedDocs.map((doc) => ({ id: doc.id, source: "other" as const, label: doc.name }))}
+          onerror={(m) => (actionError = m)}
+        />
         {#if !isCar}
           <MediaBackgrounds
             modId={id}
