@@ -494,10 +494,16 @@ la réponse n'est pas là, jamais de blocage de l'affichage de la fiche pour
 l'attendre. Backgrounds se recalcule aussi à chaque changement de layout
 sélectionné (même filtrage que la sous-vue elle-même, §6.1).
 
-### 6.1 Onglet Médias (fiche voiture/circuit)
+### 6.1 Onglet Médias et documents (fiche voiture/circuit)
 
-Sous-vues **Screenshots**, **Replays** et **Backgrounds** (cette dernière
-réservée aux circuits). Rattachement par simple **`nom_de_fichier.contains(id)`**
+Quatre blocs réunis dans un seul onglet (refonte §7.8), en deux groupes : ce
+que **tu as produit** — **Screenshots**, **Replays** — puis ce qui est **livré
+avec le mod** — **Ressources**, **Backgrounds** (cette dernière réservée aux
+circuits). Le décompte de l'onglet est la somme des quatre. Aucun bloc n'est
+masqué quand il est vide : ses actions « Ouvrir le dossier » et « Lier un
+fichier… » sont la seule voie pour y ajouter quelque chose.
+
+Rattachement par simple **`nom_de_fichier.contains(id)`**
 sur l'ensemble des id de la bibliothèque (voitures ∪ circuits, stock inclus) —
 pas de découpage voiture/circuit dans le nom : les deux espaces de noms ne se
 recoupent jamais (`content/cars/<id>` vs `content/tracks/<id>`), donc un id
@@ -598,6 +604,41 @@ dans la colonne « État » du tableau : **Actif** (vert), **Inactif** (orange),
 ne se fond pas dans « inactif » : un mod inactif a été désactivé, un mod en
 attente est actif mais perd l'arbitrage sur un emplacement disputé et reprendra
 sa place dès que l'autre partira.
+
+### 6.3bis Les trois onglets de la fiche voiture/circuit (refonte §7)
+
+| Onglet | Contenu |
+|---|---|
+| **La voiture** / **Le circuit** | Aperçu, sélecteur, fiche technique, courbe, son, bloc textuel |
+| **Médias et documents** | Screenshots, Replays, Ressources, Backgrounds (§6.1) |
+| **Installation** | Ajouts au jeu, décisions d'import, origine, historique, couches, étiquettes, extensions CSP |
+
+Six onglets exposaient auparavant la mécanique : Ressources et Ajouts au jeu
+étaient vides la plupart du temps et il fallait cliquer pour le découvrir.
+
+**Les étiquettes vivent dans Installation** (§7.5) : elles sont la matière
+première d'où la catégorie est dérivée, et on les ouvre au moment où cette
+dérivation s'est trompée — donc en même temps que l'origine et les décisions
+d'import. Ce que l'utilisateur consulte en premier onglet, c'est le résultat :
+la **catégorie**, remontée en puce près du titre. Les **extensions CSP**
+quittent les étiquettes pour Installation : elles décrivent l'installation, pas
+le contenu.
+
+**Le sélecteur de livrée/tracé est collé sous l'aperçu** (§7.2, `PickerBar`) :
+c'est un contrôle — il agit sur l'image du dessus et sur ce qui partira en
+session — et non de la documentation ; il ne doit donc jamais exiger de faire
+défiler. Trois gestes pour trois façons de chercher : les **flèches** (défiler
+en gardant l'œil sur l'aperçu, geste le plus fréquent), le **nom** (liste
+déroulante, quand on le connaît) et **« Voir les N »**, qui déplie la grille de
+vignettes en place — beaucoup de livrées de mods s'appellent `skin_01`, et une
+liste de noms n'en dit alors rien. La grille est repliée à chaque ouverture de
+fiche, sans persistance.
+
+**Le bloc textuel est à sous-onglets** (§7.4) : Description | Notes, à hauteur
+constante, c'est le contenu qui change. Notes n'est jamais l'onglet par défaut
+et porte une pastille quand une note existe. Un troisième onglet « Le modèle
+réel » s'y ajoutera avec l'appariement Wikipédia, absent tant qu'aucun article
+n'est apparié.
 
 ### 6.4 Notes (refonte §9)
 
