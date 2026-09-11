@@ -167,6 +167,9 @@ src-tauri/src/          Backend Rust — un module par domaine
   activation.rs deploy.rs compose.rs layers.rs   Déploiement dans content/
   extras.rs gamebackup.rs              Ce qu'un mod pose hors de content/<type>/<id>
   library.rs submods.rs apps.rs others.rs        Bibliothèque et add-ons
+  attach.rs inventory.rs usermeta.rs   Inventaire des compléments : sur quoi un
+                        mod se greffe, ce qu'il fait, et ce que l'utilisateur a
+                        saisi dessus (note, nom repris à la main)
   launch.rs quickdrive.rs weather.rs   Lancement de session via CM
   rules.rs harmonize.rs                Moteur de tags
   maintenance.rs export.rs             Outils
@@ -178,6 +181,9 @@ src-tauri/crates/       Crates du workspace (aperçu 3D, docs/SPEC-preview-3d-kn
 src/lib/
   components/           Composants Svelte (voir la carte des écrans)
   components/detail/    Blocs extraits de la fiche détail
+  components/Inventory.svelte  L'écran Compléments (§7bis du SPEC)
+  components/FicheHeader.svelte NoteBlock.svelte PickerBar.svelte Pencil.svelte
+                        Briques de fiche partagées par les cinq types
   *.ts                  Bindings typés vers les commandes Tauri
   i18n/locales/         fr, en (référence) + it, de, es, pt (traductions)
   styles/global.css     Design system Rosso Corsa
