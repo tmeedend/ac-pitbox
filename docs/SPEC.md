@@ -462,7 +462,7 @@ Les caractéristiques mécaniques ne sont **pas** des tags (un tag filtre/groupe
 
 **Une seule fiche technique, un seul composant** (`components/detail/TechSheet.svelte`), rendu par le panneau latéral **et** par la page pleine. Les deux la construisaient chacune de leur côté, et elles avaient divergé : le panneau montrait toute la fiche native (puissance, couple, poids, vitesse max, 0-100, rapport poids/puissance, autonomie, pays) plus les cinq champs harmonisés, la page en montrait six et laissait de côté tout ce que le moteur dit de lui-même — même titre, même écran, moitié moins de contenu (signalé par l'utilisateur). Le composant rend les cellules ; **le cadre reste à l'appelant** (le panneau dessine le sien, la page a sa carte), et le nombre de colonnes se déduit de la largeur reçue (`auto-fit`) plutôt que d'être dicté par l'un ou l'autre — deux colonnes dans le panneau, trois sur la page, sans que ni l'un ni l'autre ait à le dire. Une ligne vide est omise : une fiche de tirets ne dit rien de plus que son absence. Les champs déduits par les règles (§5bis.1) gardent leur couleur verte et leur infobulle « déduit par règle ».
 
-**L'odomètre est une ligne de la fiche, pas une carte** : la distance parcourue (§6.5) se lit là où on la cherche, au milieu des autres chiffres de la voiture, et la carte « Distance » de la page a disparu avec elle. C'est la seule ligne toujours présente — un odomètre vide est lui-même une réponse, et il donne alors le marqueur « jamais essayée » plutôt qu'un tiret. Les circuits, qui n'ont pas de fiche technique, gardent leur carte Distance.
+**L'odomètre est une ligne de la fiche, pas une carte** : la distance parcourue (§6.5) se lit là où on la cherche, au milieu des autres chiffres de la voiture, et la carte « Distance » de la page a disparu avec elle. C'est la seule ligne toujours présente — un odomètre vide est lui-même une réponse, et il donne alors le marqueur « jamais essayée » plutôt qu'un tiret. **Les circuits suivent la même règle** depuis qu'ils ont, eux aussi, une carte de données (§6.3bis) : l'exception qu'ils formaient n'était pas un choix, seulement l'absence d'un endroit où mettre le chiffre. La règle vit dans `odometer.ts`, partagée par les deux fiches — c'est la seule ligne dont l'absence de valeur est une valeur, et deux copies de cette subtilité auraient divergé.
 
 **Badge de marque** : `content/cars/<voiture>/ui/badge.png` (présent quasi partout, mod comme Kunos). Affiché sur fiches et vignettes. Source locale, pas de dépendance externe. Fallback (monogramme/générique) pour les rares voitures sans badge. **Pas d'icône d'auteur** (elle vient d'un pack externe communautaire, pas des fichiers du mod) : afficher le nom en texte.
 
@@ -643,6 +643,18 @@ déroulante, quand on le connaît) et **« Voir les N »**, qui déplie la grill
 vignettes en place — beaucoup de livrées de mods s'appellent `skin_01`, et une
 liste de noms n'en dit alors rien. La grille est repliée à chaque ouverture de
 fiche, sans persistance.
+
+**La colonne de droite n'a que deux cartes sur un circuit** — « Circuit »
+(longueur, nombre de tracés et combien sont apportés par une couche, pays,
+odomètre) puis « Habillages ». C'est tout l'argument du *cas maigre* de la
+maquette : **la grille n'est plus dictée par le type le plus riche**. Un circuit
+n'a ni fiche technique ni courbe, donc la place existe, et une rangée basse
+d'une carte et demie sous l'aperçu rouvrait précisément le trou qu'on venait de
+fermer. Le **nom** du tracé n'entre pas dans la carte — le sélecteur le dit à
+quelques pixels au-dessus, et c'est lui qui le change ; la carte porte les
+chiffres, lui porte le choix. Le sous-titre de l'en-tête suit la même logique :
+une marque et une année pour une voiture, une longueur et un nombre de tracés
+pour un circuit, dont l'identité tient dans ces deux chiffres.
 
 **Le bloc textuel est à sous-onglets** (§7.4) : Description | Notes, à hauteur
 constante, c'est le contenu qui change. Notes n'est jamais l'onglet par défaut

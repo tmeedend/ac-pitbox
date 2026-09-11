@@ -73,6 +73,7 @@
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
   import { getConfig } from "$lib/config";
   import { t } from "$lib/i18n/index.svelte";
+  import { odometerText } from "$lib/odometer";
   import LayersBlock from "./detail/LayersBlock.svelte";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
   import DecisionsBlock from "./detail/DecisionsBlock.svelte";
@@ -1005,16 +1006,21 @@
   /** Sous-titre de l'en-tête (§6.1) : ce qui identifie l'objet en une ligne,
    * auteur compris — c'est une propriété du mod, elle n'a rien à faire en bas
    * de colonne. Les parties absentes ne laissent pas de séparateur orphelin. */
-  const subtitle = $derived(
-    [
-      detail?.brand,
-      detail?.year ? String(detail.year) : null,
-      detail?.car_class ? detail.car_class.toUpperCase() : null,
-      detail?.author ? t("detail.byAuthor", { author: detail.author }) : null,
-    ]
-      .filter(Boolean)
-      .join(" · "),
-  );
+  const subtitle = $derived.by(() => {
+    const d = detail;
+    if (!d) return "";
+    // Un circuit n'a ni marque, ni année, ni classe : sa ligne d'identité se
+    // réduisait à son auteur. Ce qui l'identifie, c'est sa longueur et le
+    // nombre de tracés qu'il porte (maquette écran 7). Le décompte ne
+    // s'affiche qu'à partir de deux — « 1 tracé » n'apprend rien, et c'est
+    // aussi ce qui évite un pluriel que l'i18n ne sait pas accorder.
+    const layouts = d.track?.layouts ?? [];
+    const parts = isCar
+      ? [d.brand, d.year ? String(d.year) : null, d.car_class ? d.car_class.toUpperCase() : null]
+      : [layouts[previewLayout]?.length ?? null, layouts.length > 1 ? t("detail.layoutCount", { count: layouts.length }) : null];
+    parts.push(d.author ? t("detail.byAuthor", { author: d.author }) : null);
+    return parts.filter(Boolean).join(" · ");
+  });
 
   // Actions de la fiche (§6.3) : le ⋮ de `FicheHeader` les rend et les
   // positionne — ici ne reste que leur liste. Cœur favori et pastille d'état
@@ -1376,7 +1382,7 @@
             expanded={pickerOpen}
             ontoggle={() => (pickerOpen = !pickerOpen)}
             emptyText={t("detail.singleLayout")}
-            note={layoutOrigins.length ? t("detail.layoutsAdded", { count: layoutOrigins.length }) : undefined}
+            note={d.track.layouts[previewLayout]?.length ?? undefined}
           />
           {#if pickerOpen && d.track.layouts.length}
             <div class="skins">
@@ -1497,79 +1503,73 @@
 
         {:else}
           {@const lay = d.track?.layouts[previewLayout]}
+          {@const layoutCount = d.track?.layouts.length ?? 0}
+          <!-- Les quatre chiffres d'un circuit, dans une seule carte (maquette
+               écran 7). Le **nom** du tracé n'y est pas : le sélecteur le dit
+               déjà, à quelques pixels au-dessus, et c'est lui qui le change.
+               L'odomètre y entre comme il entre dans la fiche technique d'une
+               voiture : la carte « Distance » qui le portait à part n'existait
+               que parce qu'un circuit n'avait aucune carte de données où le
+               mettre. Il en a une. -->
           <section class="blk">
             <header class="blk-h"><span class="blk-t">{t("detail.trackInfo")}</span></header>
             <div class="specgrid" style="grid-template-columns:1fr 1fr;">
-              <div><div class="k lbl-key">{t("detail.layoutLabel")}</div><div class="v">{lay?.name ?? t("detail.defaultLayout")}</div></div>
               <div><div class="k lbl-key">{t("detail.lengthLabel")}</div><div class="v">{lay?.length ?? "—"}</div></div>
+              <div>
+                <div class="k lbl-key">{t("detail.layoutsLabel")}</div>
+                <div class="v">
+                  {layoutCount}
+                  {#if layoutOrigins.length}<span class="v-sub"
+                      >{t("detail.layoutsAdded", { count: layoutOrigins.length })}</span
+                    >{/if}
+                </div>
+              </div>
+              <div><div class="k lbl-key">{t("columns.country")}</div><div class="v">{d.country ?? "—"}</div></div>
+              <div><div class="k lbl-key">{t("detail.odometer")}</div><div class="v">{odometerText(d)}</div></div>
             </div>
           </section>
-        {/if}
-      </div>
-    </div>
 
-    <!-- RANGÉE BASSE — circuits seulement. Pour une voiture, il n'y a plus rien
-         à y mettre : les livrées ont rejoint le sélecteur sous l'aperçu, le son
-         la colonne de données, les étiquettes et l'origine l'onglet
-         Installation. Une carte absente ne laisse pas de trou (§6.3) : la
-         rangée entière disparaît plutôt que d'afficher une colonne vide. -->
-    {#if !isCar}
-    <div class="row bottom track">
-        <!-- Les tracés ont rejoint le sélecteur, sous l'aperçu : la colonne
-             commence donc par les habillages. -->
-        <div class="col">
-          <!-- Skins de circuit (TRACK_SKIN) — activables individuellement, plusieurs
-               à la fois (§8, pas de notion d'exclusivité côté CSP). -->
+          <!-- Habillages de circuit : deuxième carte de cette colonne, et non
+               une rangée à part sous la fiche. C'est tout l'argument de
+               l'écran 7 — sans fiche technique ni courbe, la colonne droite a
+               la place, et une rangée basse d'une carte et demie rouvrait
+               précisément le trou qu'on venait de fermer. -->
           <section class="blk">
             <header class="blk-h">
               <span class="blk-t">{t("detail.trackSkinsLabelPlain")}</span>
               {#if !trackSkinsLoading}<span class="blk-n">{trackSkins.length}</span>{/if}
             </header>
             <div class="blk-b">
-          {#if trackSkinsLoading}
-            <div class="muted small loading-inline"><span class="spinner-sm"></span>{t("common.loading")}</div>
-          {:else if trackSkins.length}
-            <ul class="tsk-list">
-              {#each trackSkins as s (s.id)}
-                {@const active = activeTrackSkins.includes(s.name)}
-                <li class:inactive={!active}>
-                  <label class="tog" title={active ? t("detail.trackSkinActiveOn") : t("detail.trackSkinActiveOff")}>
-                    <input
-                      type="checkbox"
-                      checked={active}
-                      disabled={trackSkinBusy}
-                      onchange={() => toggleTrackSkin(s.name)}
-                    />
-                  </label>
-                  <span class="tsk-name">{s.name}</span>
-                  {#if s.source_archive}<span class="tsk-src mono">{s.source_archive}</span>{/if}
-                </li>
-              {/each}
-            </ul>
-            <div class="muted small">{t("detail.trackSkinsNote")}</div>
-          {:else}
-            <div class="muted small">{t("detail.noTrackSkins")}</div>
-          {/if}
+              {#if trackSkinsLoading}
+                <div class="muted small loading-inline"><span class="spinner-sm"></span>{t("common.loading")}</div>
+              {:else if trackSkins.length}
+                <ul class="tsk-list">
+                  {#each trackSkins as sk (sk.id)}
+                    {@const active = activeTrackSkins.includes(sk.name)}
+                    <li class:inactive={!active}>
+                      <label class="tog" title={active ? t("detail.trackSkinActiveOn") : t("detail.trackSkinActiveOff")}>
+                        <input
+                          type="checkbox"
+                          checked={active}
+                          disabled={trackSkinBusy}
+                          onchange={() => toggleTrackSkin(sk.name)}
+                        />
+                      </label>
+                      <span class="tsk-name">{sk.name}</span>
+                      {#if sk.source_archive}<span class="tsk-src mono">{sk.source_archive}</span>{/if}
+                    </li>
+                  {/each}
+                </ul>
+                <div class="muted small">{t("detail.trackSkinsNote")}</div>
+              {:else}
+                <div class="muted small">{t("detail.noTrackSkins")}</div>
+              {/if}
             </div>
           </section>
-        </div>
-
-        <!-- Distance (l'auteur vit dans le sous-titre de l'en-tête, les
-             étiquettes dans l'onglet Installation). -->
-        <div class="col">
-          <section class="blk">
-            <header class="blk-h"><span class="blk-t">{t("detail.distanceLabel")}</span></header>
-            <div class="blk-b">
-            <div class="dist">
-              <span class="dist-ic">🛣</span>
-              <span class="dist-km mono">{d.distance_km != null ? `${d.distance_km.toFixed(1)} km` : "—"}</span>
-              <span class="dist-state mono" class:on={d.tried}>{d.tried ? t("detail.triedYes") : t("detail.triedNo")}</span>
-            </div>
-            </div>
-          </section>
-        </div>
+        {/if}
+      </div>
     </div>
-    {/if}
+
     {:else if activeTab === "media"}
       <!-- Quatre blocs, deux groupes (§7.8) : ce que TU as produit (captures,
            replays), puis ce qui est LIVRÉ avec le mod (ressources, fonds).
@@ -1813,12 +1813,6 @@
   }
   .row.top {
     grid-template-columns: 1.4fr 1fr;
-  }
-  /* Deux colonnes depuis que l'installation a son onglet (§7.1) : la rangée
-     basse ne porte plus que ce qui décrit l'objet — livrées et son pour une
-     voiture, tracés/habillages et odomètre pour un circuit. */
-  .row.bottom {
-    grid-template-columns: 1.3fr 1fr;
   }
   .row.track {
     grid-template-columns: 1fr 1fr;
@@ -2079,6 +2073,13 @@
   .specgrid .k {
     margin-bottom: 3px;
   }
+  /* Complément d'une valeur, dans la même cellule : « 2 » puis « dont 1
+     ajouté ». Un second champ l'aurait séparé du chiffre qu'il qualifie. */
+  .specgrid .v-sub {
+    color: var(--muted);
+    font-size: 10px;
+    margin-left: 5px;
+  }
   .specgrid .v {
     color: var(--txt2);
     font-size: 11px;
@@ -2240,30 +2241,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     flex: 1;
-  }
-
-  .dist {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 10px;
-  }
-  .dist-ic {
-    font-size: 14px;
-    opacity: 0.8;
-  }
-  .dist-km {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--txt);
-  }
-  .dist-state {
-    margin-left: auto;
-    font-size: 8px;
-    color: var(--muted);
-  }
-  .dist-state.on {
-    color: var(--green);
   }
 
   .sounds {

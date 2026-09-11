@@ -16,6 +16,7 @@
   // row itself.
   import { t } from "$lib/i18n/index.svelte";
   import type { ModDetail } from "$lib/library";
+  import { odometerText } from "$lib/odometer";
 
   interface Props {
     detail: ModDetail;
@@ -48,13 +49,6 @@
     return pos;
   }
 
-  /** Distance driven (§6.5). Always present, unlike every other row: an empty
-   * odometer is itself the answer, and "never driven" is worth reading. */
-  function odometer(d: ModDetail): string {
-    if (d.distance_km != null) return `${d.distance_km.toFixed(1)} km`;
-    return d.tried ? t("detail.triedYes") : t("detail.triedNo");
-  }
-
   const rows = $derived.by(() => {
     const d = detail;
     const out: Row[] = [];
@@ -78,7 +72,7 @@
     add(t("columns.engineConfig"), d.engine_config, true);
     add(t("columns.enginePos"), d.engine_pos ? posLabel(d.engine_pos) : null, true);
     add(t("columns.gearbox"), d.gearbox, true);
-    out.push({ label: t("detail.odometer"), value: odometer(d) });
+    out.push({ label: t("detail.odometer"), value: odometerText(d) });
     return out;
   });
 </script>
