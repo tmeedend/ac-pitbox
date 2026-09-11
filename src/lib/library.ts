@@ -228,6 +228,12 @@ export interface LayerRow {
   /** Ordre de priorité : la plus haute gagne à la superposition. */
   priority: number;
   imported_at: string;
+  /** Nom repris à la main (refonte §8.3) : le nom dérivé de l'archive est
+   * faillible par construction, donc corrigeable. `null` tant que rien n'a été
+   * saisi — c'est alors `layerDisplayName` qui décide de l'affichage. */
+  display_name_user: string | null;
+  /** Note libre (refonte §9). */
+  notes_user: string | null;
 }
 
 /** Sous-élément rattaché (skin/son) routé à l'import (§12bis.2). */

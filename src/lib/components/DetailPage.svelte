@@ -20,6 +20,7 @@
     type ModKind,
     type NativeSpecs,
     type LayoutItem,
+    type LayerRow,
   } from "$lib/library";
   import { listMediaScreenshots, listMediaReplays, listMediaBackgrounds } from "$lib/media";
   import { listModSkins, openNativeShowroom, type SkinItem } from "$lib/launch";
@@ -30,6 +31,7 @@
   import FicheHeader from "./FicheHeader.svelte";
   import { setEntityNote } from "$lib/userMeta";
   import NoteBlock from "./NoteBlock.svelte";
+  import LayerDetail from "./LayerDetail.svelte";
   import StateBadge from "./StateBadge.svelte";
   import { tick, untrack } from "svelte";
   import { focusGamepadElement, isGamepadDriving } from "$lib/gamepadNav";
@@ -112,6 +114,11 @@
    * ouverture de fiche**, sans persistance : la fiche s'ouvre sur l'aperçu et
    * ses données, pas sur une grille de trente livrées. */
   let pickerOpen = $state(false);
+  /** Fiche d'une couche ouverte par-dessus celle de l'hôte (§8.4) : la fermer
+   * y ramène, au lieu de renvoyer à la liste — même règle que la fiche d'un
+   * pack. Le nombre de couches sœurs voyage avec elle : la carte Ordre n'a de
+   * sens qu'à partir de deux. */
+  let openLayer = $state<{ layer: LayerRow; siblings: number } | null>(null);
   /** Sous-onglet du bloc textuel (§7.4). **Jamais « Notes » par défaut** : la
    * description est ce qu'on vient lire, la note ce qu'on vient ajouter.
    * L'onglet « Le modèle réel » viendra du chantier Wikipédia et sera absent
@@ -1428,6 +1435,8 @@
               void refreshEntity();
             }}
             onerror={(m) => (actionError = m)}
+            hostName={d.display_name}
+            onopen={(layer, siblings) => (openLayer = { layer, siblings })}
           />
           <TagsBlock detail={d} onaddtag={addManual} onremovetag={removeManual} />
           {#if d.csp_features.length}

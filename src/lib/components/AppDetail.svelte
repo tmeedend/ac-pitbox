@@ -9,6 +9,7 @@
   // le reste de la page est ce qu'elle met sur le disque.
   import { activateApp, deactivateApp, deleteApp, openAppFolder, type AppItem } from "$lib/apps";
   import { confirm } from "@tauri-apps/plugin-dialog";
+  import type { LayerRow } from "$lib/library";
   import { errorText } from "$lib/errors";
   import { setEntityDisplayName, setEntityNote } from "$lib/userMeta";
   import { t } from "$lib/i18n/index.svelte";
@@ -29,6 +30,8 @@
   let { app, onclose, onchange }: Props = $props();
 
   let tab = $state("resources");
+  /** Fiche d'une couche ouverte par-dessus celle de l'app (§8.4). */
+  let openLayer = $state<{ layer: LayerRow; siblings: number } | null>(null);
   let busy = $state(false);
   let error = $state("");
 
@@ -162,7 +165,14 @@
       <!-- Le composant des couches d'un mod, repris tel quel : il ne connaît
            qu'un id et quatre commandes, et une app est un hôte comme un autre
            (§12bis.4). Recomposer change l'état de l'app — d'où `onchange`. -->
-      <LayersBlock modId={app.id} hostKind="App" onchanged={onchange} onerror={(m) => (error = m)} />
+      <LayersBlock
+        modId={app.id}
+        hostKind="App"
+        hostName={app.display_name_user ?? app.id}
+        onchanged={onchange}
+        onerror={(m) => (error = m)}
+        onopen={(layer, siblings) => (openLayer = { layer, siblings })}
+      />
     {/if}
   </div>
 </div>
