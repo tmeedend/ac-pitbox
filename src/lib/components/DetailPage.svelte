@@ -34,6 +34,10 @@
   import { setEntityNote } from "$lib/userMeta";
   import NoteBlock from "./NoteBlock.svelte";
   import LayerDetail from "./LayerDetail.svelte";
+  import OtherModDetail from "./OtherModDetail.svelte";
+  import { listAttached, type InventoryRow } from "$lib/inventory";
+  import { listOtherMods, activateOther, deactivateOther, openOtherModFolder, type OtherModRow } from "$lib/others";
+  import { setEntityDisplayName } from "$lib/userMeta";
   import StateBadge from "./StateBadge.svelte";
   import { tick, untrack } from "svelte";
   import { focusGamepadElement, isGamepadDriving } from "$lib/gamepadNav";
@@ -121,6 +125,85 @@
    * pack. Le nombre de couches sœurs voyage avec elle : la carte Ordre n'a de
    * sens qu'à partir de deux. */
   let openLayer = $state<{ layer: LayerRow; siblings: number } | null>(null);
+  /** Ce qui est greffé sur ce mod (§4.3) : livrées, sons, couches, configs CSP,
+   * polices, notices. Relu à chaque recomposition — activer une couche change
+   * la réponse.
+   *
+   * C'est la contrepartie de l'inventaire du côté de l'hôte, et la raison pour
+   * laquelle une déduction de rattachement peut se tromper sans dommage : au
+   * pire il manque un raccourci ici, le mod restant listé là-bas. */
+  let attached = $state<InventoryRow[]>([]);
+  /** Fiche d'un mod greffé, ouverte par-dessus celle de l'hôte — comme celle
+   * d'une couche, et pour la même raison : on y est arrivé DEPUIS ce mod. */
+  let openAttached = $state<OtherModRow | null>(null);
+  $effect(() => {
+    const current = id;
+    void contentRevision;
+    listAttached(current)
+      .then((rows) => {
+        if (current === id) attached = rows;
+      })
+      .catch(() => {
+        if (current === id) attached = [];
+      });
+  });
+
+  /** Les gestes que la fiche d'un mod greffé peut demander. Mêmes commandes que
+   * l'inventaire, et relecture derrière : sans elle, l'écran ment jusqu'au
+   * prochain passage. */
+  async function refreshAttached() {
+    try {
+      const all = await listOtherMods();
+      if (openAttached) openAttached = all.find((o) => o.id === openAttached!.id) ?? null;
+      attached = await listAttached(id);
+    } catch (e) {
+      actionError = errorText(e);
+    }
+  }
+
+  async function toggleAttached() {
+    const row = openAttached;
+    if (!row) return;
+    try {
+      if (row.is_active) await deactivateOther(row.id);
+      else await activateOther(row.id);
+      await refreshAttached();
+    } catch (e) {
+      actionError = errorText(e);
+    }
+  }
+
+  async function renameAttached(value: string | null) {
+    if (!openAttached) return;
+    try {
+      await setEntityDisplayName("OTHER", openAttached.id, value ?? "");
+      await refreshAttached();
+    } catch (e) {
+      actionError = errorText(e);
+    }
+  }
+
+  async function noteAttached(value: string | null) {
+    if (!openAttached) return;
+    try {
+      await setEntityNote("OTHER", openAttached.id, value ?? "");
+      await refreshAttached();
+    } catch (e) {
+      actionError = errorText(e);
+    }
+  }
+
+  /** La ligne complète d'un mod « autre », chargée à la demande : elle coûte un
+   * parcours de fichiers qu'on ne paie qu'en ouvrant la fiche. */
+  async function openAttachedFiche(row: InventoryRow) {
+    if (!row.uid.startsWith("OTHER:")) return;
+    try {
+      const all = await listOtherMods();
+      openAttached = all.find((o) => o.id === row.id) ?? null;
+    } catch (e) {
+      actionError = errorText(e);
+    }
+  }
   /** Tracés apportés par une couche active (§7.7). La carte des tracés montre
    * l'état **composé** — celui du lancement — et « 2 tracés » y est exact tout
    * en étant trompeur quand l'un des deux vient d'une extension.
@@ -1011,7 +1094,38 @@
 {/snippet}
 
 <div class="page">
-  {#if !detail}
+  <!-- Fiches posées PAR-DESSUS celle du mod : une couche (§8.4), un mod greffé
+       (§4.3). La fermer ramène ici, ce qui est le chemin par lequel on y est
+       arrivé — même disposition que la fiche d'un pack. -->
+  {#if openLayer}
+    <div class="sheet-wrap">
+      <LayerDetail
+        layer={openLayer.layer}
+        hostName={detail?.display_name ?? null}
+        siblingCount={openLayer.siblings}
+        onclose={() => (openLayer = null)}
+        onchanged={() => {
+          contentRevision += 1;
+          void refreshEntity();
+        }}
+      />
+    </div>
+  {:else if openAttached}
+    <div class="sheet-wrap">
+      <OtherModDetail
+        row={openAttached}
+        busy={false}
+        warnings={[]}
+        onclose={() => (openAttached = null)}
+        ontoggle={() => void toggleAttached()}
+        ontogglePriority={() => {}}
+        onopenFolder={() => void openOtherModFolder(openAttached!.id)}
+        ondelete={() => (openAttached = null)}
+        onrename={(v) => void renameAttached(v)}
+        onnote={(v) => void noteAttached(v)}
+      />
+    </div>
+  {:else if !detail}
     <div class="empty">{t("common.loading")}</div>
   {:else}
     {@const d = detail}
@@ -1469,6 +1583,40 @@
            temps que l'origine et les décisions d'import. -->
       <div class="tab-body install">
         <div class="col">
+          <!-- Ce qui est posé sur ce mod (§4.3). Sans ce bloc, une notice
+               livrée avec la voiture n'était atteignable que par l'inventaire :
+               ses fichiers appartiennent au mod qui la porte, pas à la voiture,
+               donc l'onglet Médias ne la montrera jamais.
+               C'est aussi ce qui rend le rattachement déduit sans danger : une
+               déduction ratée coûte un raccourci manquant ici, jamais un mod
+               introuvable — il reste dans l'inventaire quoi qu'il arrive. -->
+          {#if attached.length}
+            <section class="blk">
+              <header class="blk-h">
+                <span class="blk-t">{t("detail.attachedTitle")}</span>
+                <span class="blk-n">{attached.length}</span>
+              </header>
+              <div class="blk-b">
+                <ul class="attached">
+                  {#each attached as a (a.uid)}
+                    <li>
+                      <button
+                        class="a-row"
+                        type="button"
+                        disabled={!a.uid.startsWith("OTHER:")}
+                        title={a.uid.startsWith("OTHER:") ? t("inventory.openFiche") : t("inventory.noFiche")}
+                        onclick={() => void openAttachedFiche(a)}
+                      >
+                        <span class="a-name">{a.name}</span>
+                        <span class="a-type mono">{t(`inventory.type${a.kind}`)}</span>
+                        {#if a.active === false}<span class="a-off mono">{t("common.inactive")}</span>{/if}
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              </div>
+            </section>
+          {/if}
           <ExtrasBlock modId={id} />
           <DecisionsBlock modId={id} />
         </div>
@@ -1537,6 +1685,53 @@
   }
   .text-body {
     min-height: 150px;
+  }
+  /* Fiche posée par-dessus celle du mod : même respiration que le corps d'un
+     onglet, puisqu'elle en occupe la place. */
+  .sheet-wrap {
+    padding: 18px;
+  }
+  .attached {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .a-row {
+    width: 100%;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    background: transparent;
+    padding: 4px 2px;
+    text-align: left;
+  }
+  .a-row:hover:not(:disabled) {
+    background: var(--raised);
+  }
+  .a-row:disabled {
+    cursor: default;
+  }
+  .a-name {
+    flex: 1;
+    min-width: 0;
+    color: var(--txt2);
+    font-size: 11.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .a-type {
+    flex: none;
+    color: var(--muted2);
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .a-off {
+    flex: none;
+    color: var(--orange);
+    font-size: 9px;
   }
   .tab-body {
     padding: 18px;

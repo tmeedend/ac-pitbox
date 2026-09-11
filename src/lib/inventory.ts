@@ -30,3 +30,10 @@ export interface InventoryRow {
 export function listInventory(): Promise<InventoryRow[]> {
   return invoke<InventoryRow[]>("list_inventory");
 }
+
+/** Ce qui est greffé sur une entité (refonte §4.3) : la contrepartie de
+ * l'inventaire, du côté de l'hôte. Une déduction ratée n'y coûte qu'un
+ * raccourci manquant — le mod, lui, reste dans l'inventaire. */
+export function listAttached(entityId: string): Promise<InventoryRow[]> {
+  return invoke<InventoryRow[]>("list_attached", { entityId });
+}

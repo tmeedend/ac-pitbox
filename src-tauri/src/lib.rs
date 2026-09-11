@@ -385,6 +385,7 @@ pub fn run() {
             commands::addons::open_app_folder,
             commands::others::list_other_mods,
             commands::others::list_inventory,
+            commands::others::list_attached,
             commands::others::set_other_priority,
             commands::others::set_other_attachment,
             commands::others::activate_other,

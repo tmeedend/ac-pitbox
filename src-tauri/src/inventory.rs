@@ -259,6 +259,22 @@ fn host_attachment(index: &attach::EntityIndex, parent_id: &str, nature: Nature)
     }
 }
 
+/// Ce qui est greffé sur une entité (refonte §4.3).
+///
+/// **C'est ce qui rend le non-dogmatisme sûr** : une déduction ratée coûte un
+/// raccourci manquant sur la fiche de l'hôte, jamais un mod introuvable — il
+/// reste dans l'inventaire quoi qu'il arrive. Et une déduction réussie répond à
+/// la question qu'on se pose devant une voiture : qu'est-ce qui a été posé
+/// dessus ? Les notices livrées avec elle comprises, qui sont les ressources du
+/// mod qui les porte et que sa fiche à elle ne montrera jamais.
+pub fn attached_to(conn: &Connection, cfg: &AppConfig, entity_id: &str) -> rusqlite::Result<Vec<InventoryRow>> {
+    let key = entity_id.to_ascii_lowercase();
+    Ok(list(conn, cfg)?
+        .into_iter()
+        .filter(|r| r.attachment.target_id.as_deref() == Some(key.as_str()))
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
