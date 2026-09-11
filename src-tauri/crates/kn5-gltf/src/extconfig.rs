@@ -498,12 +498,62 @@ const DEFAULT_CAR_PAINT_MATERIAL: &str = "Carpaint";
 pub fn material_overrides(config: &CspConfig, skin_id: &str) -> MaterialOverrides {
     let mut out = MaterialOverrides::default();
     let mut car_paint = vec![DEFAULT_CAR_PAINT_MATERIAL.to_string()];
+    let mut splits = Vec::new();
     for source in config.sources() {
         if let Ok(text) = std::fs::read_to_string(source) {
-            collect_materials(&text, skin_id, &mut car_paint, &mut out);
+            collect_materials(&text, skin_id, &mut car_paint, &mut out, &mut splits);
         }
     }
+    // En dernier, pas au fil des sections : rien ne garantit qu'un
+    // `[MESH_SPLIT_…]` précède le `[REFRACTING_HEADLIGHT_…]` qui vise le
+    // morceau qu'il découpe, ni même qu'ils soient dans le même fichier.
+    resolve_split_names(&mut out, &splits);
     out
+}
+
+/// Un maillage que CSP **fabrique** en découpant un autre.
+///
+/// `[MESH_SPLIT_…]` coupe un maillage en deux le long d'un axe et suffixe le
+/// morceau (`SPLIT_POSTFIX = _CUT`). Le nom ainsi créé n'existe nulle part
+/// dans le KN5, et une section qui le vise ne trouve donc rien chez nous.
+#[derive(Debug, Clone)]
+struct MeshSplit {
+    meshes: Vec<String>,
+    postfix: String,
+}
+
+/// Fait pointer sur le maillage d'origine les déclarations qui visent un
+/// morceau découpé.
+///
+/// **Bug réel sur `ks_toyota_supra_mkiv_drift`** : sa vitre de phare est
+/// déclarée en optique par `SURFACE = SUPRA_LIGHTS_GLASS_CUT`, un nom que CSP
+/// obtient en découpant `SUPRA_LIGHTS_GLASS`. Faute de faire la découpe, la
+/// déclaration ne s'appliquait à rien et la vitre sortait en panneau noir
+/// strié — voir `docs/kn5-format.md`, écart n°26.
+///
+/// **On ne découpe pas pour autant** : la moitié qui reste est du verre elle
+/// aussi, et le morceau retiré est justement celui que CSP redessine. Viser le
+/// maillage entier est donc plus juste que de ne rien viser du tout, et c'est
+/// tout ce que cette fonction fait. Portée mesurée sur les 310 voitures
+/// installées : 695 `SURFACE` se résolvent directement, **4 passent par ici**
+/// (les trois Supra MkIV et `ddm_mugen_civic_aero_ek9`), 57 restent
+/// introuvables pour d'autres raisons — des expressions de filtre CSP
+/// (`{ lod:A & Head_Light_Glass_L }`) et des maillages qui vivent dans un LOD.
+fn resolve_split_names(out: &mut MaterialOverrides, splits: &[MeshSplit]) {
+    let mut extra = Vec::new();
+    for (name, over) in &out.meshes {
+        for split in splits {
+            let Some(base) = name.strip_suffix(&split.postfix) else {
+                continue;
+            };
+            if split.meshes.iter().any(|m| m == base) {
+                // Ajouté, pas substitué : si le KN5 porte réellement un
+                // maillage à ce nom, il garde la main.
+                extra.push((base.to_string(), *over));
+            }
+        }
+    }
+    out.meshes.extend(extra);
 }
 
 /// Les clés raccourcies de `materials_glass.ini`, et leur variante `…Meshes`.
@@ -519,8 +569,22 @@ const GLASS_SHORTHANDS: [&str; 5] = [
     "ExteriorGlassPhotoelasticMaterials",
 ];
 
-fn collect_materials(text: &str, skin_id: &str, car_paint: &mut Vec<String>, out: &mut MaterialOverrides) {
+fn collect_materials(
+    text: &str,
+    skin_id: &str,
+    car_paint: &mut Vec<String>,
+    out: &mut MaterialOverrides,
+    splits: &mut Vec<MeshSplit>,
+) {
     for section in parse_sections(text) {
+        if section.name.to_ascii_uppercase().starts_with("MESH_SPLIT") {
+            let meshes = section.list("MESHES").unwrap_or_default();
+            let postfix = section.get("SPLIT_POSTFIX").unwrap_or_default().trim().to_string();
+            if !meshes.is_empty() && !postfix.is_empty() {
+                splits.push(MeshSplit { meshes, postfix });
+            }
+            continue;
+        }
         // Le raccourci se redéfinit en cours de fichier, et vaut pour tout ce
         // qui suit — `ks_toyota_ae86_tuned` y liste ses onze pièces de
         // carrosserie d'un coup.
@@ -1817,6 +1881,50 @@ OriginalRims = RIM_?
         );
     }
 
+    // Règle : une `SURFACE` qui vise un morceau découpé par `[MESH_SPLIT_…]`
+    // retombe sur le maillage d'origine — sans quoi elle ne vise rien.
+    //
+    // Bug réel sur `ks_toyota_supra_mkiv_drift` : sa vitre de phare sortait en
+    // panneau noir strié parce que la seule déclaration qui la dit optique
+    // nomme `SUPRA_LIGHTS_GLASS_CUT`, un maillage que CSP fabrique.
+    #[test]
+    fn a_surface_naming_a_split_off_piece_falls_back_on_the_whole_mesh() {
+        let over = collected(
+            "[MESH_SPLIT_...]
+MESHES = SUPRA_LIGHTS_GLASS
+SPLIT_AXIS = 0, 1, 0
+SPLIT_POSTFIX = _CUT
+
+[REFRACTING_HEADLIGHT_...]
+SURFACE = SUPRA_LIGHTS_GLASS_CUT
+IOR = 2
+",
+        );
+        let names: Vec<&str> = over.meshes.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(
+            names.contains(&"SUPRA_LIGHTS_GLASS"),
+            "le maillage d'origine est visé, lui existe : {names:?}"
+        );
+        assert!(
+            over.meshes
+                .iter()
+                .all(|(_, o)| o.glass_ior == Some(2.0) && o.glass_only_if_opaque),
+            "et il hérite de l'optique déclarée, garde comprise"
+        );
+
+        // Un suffixe qui ne correspond à aucun découpage ne fabrique rien.
+        let alone = collected(
+            "[REFRACTING_HEADLIGHT_...]
+SURFACE = SOMETHING_CUT
+",
+        );
+        assert_eq!(
+            alone.meshes.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(),
+            vec!["SOMETHING_CUT"],
+            "rien à retomber sur"
+        );
+    }
+
     // Règle : `[REFRACTING_HEADLIGHT_…]` déclare que le maillage de son
     // `SURFACE` est une optique, et rien d'autre de la section n'est retenu.
     #[test]
@@ -1857,7 +1965,9 @@ GLASS_COLOR = 0.25,0.25,0.25
     fn collected_for(text: &str, skin: &str) -> MaterialOverrides {
         let mut out = MaterialOverrides::default();
         let mut car_paint = vec![DEFAULT_CAR_PAINT_MATERIAL.to_string()];
-        collect_materials(text, skin, &mut car_paint, &mut out);
+        let mut splits = Vec::new();
+        collect_materials(text, skin, &mut car_paint, &mut out, &mut splits);
+        resolve_split_names(&mut out, &splits);
         out
     }
 

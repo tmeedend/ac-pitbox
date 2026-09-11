@@ -322,7 +322,10 @@ affiche la voiture entière.
 - les sections `[Material_*]`, qui disent de quelle matière est une surface
   (§6.3), et les `[REFRACTING_HEADLIGHT_…]`, qui disent qu'un maillage est une
   optique — sans elles, une vitre de phare dont la diffuse est un gabarit gris
-  sort en aplat noir (`docs/kn5-format.md`, écart n°25).
+  sort en aplat noir (`docs/kn5-format.md`, écart n°25). Le `SURFACE` d'une
+  optique nomme parfois un morceau que `[MESH_SPLIT_…]` fabrique en découpant
+  un maillage : la déclaration retombe alors sur le maillage entier, faute de
+  faire la découpe (écart n°26).
 
 **Quels fichiers sont lus**, du plus spécifique au plus général : le
 `ext_config.ini` du skin, celui de la voiture, son `materials.ini`, puis la

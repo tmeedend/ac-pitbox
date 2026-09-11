@@ -394,6 +394,14 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
 
     let (alpha_mode, alpha_cutoff) = alpha_mode_of(material);
 
+    // Calculé ici, avant la branche du verre : c'est ce verdict-là — et non le
+    // seul `blend_mode` — qui dit si la conversion rendrait la surface opaque,
+    // et l'optique déclarée plus bas a besoin de le savoir.
+    let declared_opacity = declared_opacity(material);
+    let fades_by_declaration = declared_opacity.is_some_and(|opacity| opacity < 1.0);
+    let opaque_by_alpha = !is_glass_shader(shader) && textures.diffuse_alpha_opaque && !fades_by_declaration;
+    let renders_opaque = alpha_mode == AlphaMode::Opaque || opaque_by_alpha;
+
     // **Le verre que CSP déclare est du verre physique, pas un fondu.**
     //
     // `[Material_Glass]` remplace le shader par `smGlass`, dont la
@@ -414,8 +422,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     if let Some(ior) = textures
         .csp
         .filter(|csp| {
-            !csp.glass_only_if_opaque
-                || (alpha_mode == AlphaMode::Opaque && !diffuse_carries_a_colour(textures.diffuse_average))
+            !csp.glass_only_if_opaque || (renders_opaque && !diffuse_carries_a_colour(textures.diffuse_average))
         })
         .and_then(|csp| csp.glass_ior)
     {
@@ -522,9 +529,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // « fais-moi fondre » : ni l'empreinte opaque ci-dessous, ni la découpe
     // plus bas, ne doivent la contredire — le premier rendrait `overlay` noir
     // plein, la seconde effacerait une décalcomanie en fondu.
-    let declared_opacity = declared_opacity(material);
-    let fades_by_declaration = declared_opacity.is_some_and(|opacity| opacity < 1.0);
-    let opaque_by_alpha = !is_glass_shader(shader) && textures.diffuse_alpha_opaque && !fades_by_declaration;
+
     // **Et il est opaque pour de bon, pas seulement à opacité 1.** Le laisser
     // en fondu avec un alpha plein donnait la bonne couleur mais gardait la
     // mécanique du transparent : trié après l'opaque, et — sur le plateau du

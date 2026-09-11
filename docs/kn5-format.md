@@ -1629,3 +1629,75 @@ la Civic se déclarent dans `refraction.ini`, que rien n'ouvrait. Les fichiers
 common/…]` ne l'est pas, car il désigne un template de CSP résolu contre son
 propre dossier, et ces templates sont précisément ce que la conversion renonce
 à interpréter.
+
+---
+
+## Écart n°26 — une section CSP peut viser un maillage qui n'existe pas encore
+
+Suite directe de l'écart n°25, et le même symptôme : un phare bouché en noir.
+
+**Réel** : `[MESH_SPLIT_…]` coupe un maillage en deux le long d'un axe et
+suffixe le morceau obtenu (`SPLIT_POSTFIX = _CUT`). Le nom ainsi **fabriqué**
+n'existe nulle part dans le KN5, et c'est pourtant lui que la section
+`[REFRACTING_HEADLIGHT_…]` désigne :
+
+```ini
+[MESH_SPLIT_...]
+MESHES = SUPRA_LIGHTS_GLASS
+SPLIT_AXIS = 0, 1, 0
+SPLIT_POSTFIX = _CUT
+
+[REFRACTING_HEADLIGHT_...]
+SURFACE = SUPRA_LIGHTS_GLASS_CUT
+```
+
+Faute de faire la découpe, la déclaration ne s'appliquait à rien. La vitre de
+`ks_toyota_supra_mkiv_drift` sortait donc telle que sa diffuse la décrit — et
+`exterior_lights_glass_diffuse.dds` **n'est pas une couleur** : sa moitié basse
+est une image quasi noire, striée de nervures blanches, avec deux disques
+sombres à l'emplacement des optiques. C'est un calque de reflets à poser
+par-dessus le réflecteur, pas la couleur d'un panneau. Rendu opaque, il donne
+exactement ce que l'utilisateur a signalé : un cache noir strié, à la place des
+trois optiques qu'on doit voir au travers.
+
+**On ne découpe pas pour autant.** La moitié qui reste est du verre elle aussi,
+et le morceau retiré est précisément celui que CSP redessine : viser le
+maillage entier est plus juste que de ne rien viser. Portée mesurée sur les
+310 voitures installées : 695 `SURFACE` se résolvent directement, **4 passent
+par le détour** (les trois Supra MkIV et `ddm_mugen_civic_aero_ek9`), 57
+restent introuvables pour d'autres raisons — des expressions de filtre CSP
+(`{ lod:A & Head_Light_Glass_L }`) et des maillages qui ne vivent que dans un
+LOD.
+
+**Le même lot déplace la garde de l'écart n°25** : « la conversion rendrait
+cette surface opaque » se jugeait sur le seul `blend_mode`, avant que la règle
+d'empreinte (écart n°15) n'ait rendu son verdict. Or c'est elle qui opacifie la
+vitre de la Supra, dont le `blend_mode` vaut bien 1. Le verdict complet est
+donc calculé avant la branche du verre. Effet mesuré sur le même corpus :
+**18 matériaux sur 15 voitures**, tous des optiques
+(`Headlights_glass`, `EXT_GLASS_Light`, `Glass_Headlight`, `Fog_Light_Glass`,
+`EXT_glass_frontlights`…), pas un seul logo ni une seule grille.
+
+### Ce qui a été mesuré puis écarté : le drapeau de transparence du maillage
+
+Le troisième octet du bloc de flags d'un maillage (§12 q1) dit que l'auteur l'a
+coché « transparent », et la conversion ne s'en sert que pour éviter de fusionner
+un maillage transparent avec un opaque. Il **sépare pourtant exactement** les
+deux cas de l'écart n°15 : la vitre de la Supra est cochée, le `senna_head` de
+`senna.kn5` — celui pour qui la règle d'empreinte existe — ne l'est pas.
+
+Il n'a quand même pas été retenu comme veto à cette règle. Mesuré en convertissant
+les 310 voitures deux fois : **175 matériaux, sur 91 voitures**, repasseraient
+en fondu, et la moitié ne sont pas des vitres mais des **logos, décalcomanies,
+coutures, grilles et tapis** (`EXT_Logos_alfa`, `INT_Stitches`, `EXT_Grid_NM`,
+`Decal`…). Ceux-là recevraient l'approximation d'opacité du verre — 15 à 60 %
+— et deviendraient fantomatiques.
+
+C'est que le drapeau dit **l'ordre de rendu**, pas la translucidité : « dessine-moi
+après la passe opaque », ce dont un décalque coplanaire a besoin autant qu'une
+vitre. `alphaMode` de glTF mélange les deux, et c'est notre seul levier de tri.
+Aucun des discriminants essayés ne tient : le canal alpha de la diffuse (95 sans,
+68 avec, vitres et logos des deux côtés), `fresnelMaxLevel` (38/53 sur les
+optiques contre 19/103 sur le reste — un signal, pas une règle).
+
+À rouvrir seulement avec un vrai canal d'ordre de rendu, distinct de l'opacité.
