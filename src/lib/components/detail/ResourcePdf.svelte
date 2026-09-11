@@ -37,6 +37,7 @@
   import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
   import { tick, untrack } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
+  import Seg from "../Seg.svelte";
   import { zoomState } from "$lib/zoom.svelte";
   import { getUiPrefs, setUiPrefs } from "$lib/uiPrefs.svelte";
 
@@ -522,15 +523,15 @@
 <div class="pdf" bind:this={root} bind:clientWidth={width}>
   {#if slots.length}
     <div class="bar">
-      <div class="seg">
-        <button type="button" class:on={fit === "width"} onclick={() => applyScale("width")}>
-          {t("detail.pdfFitWidth")}
-        </button>
-        <button type="button" class:on={fit === "page"} onclick={() => applyScale("page")}>
-          {t("detail.pdfFitPage")}
-        </button>
-      </div>
-      <div class="seg zoom">
+      <Seg
+        value={fit}
+        onselect={(v) => applyScale(v as "width" | "page")}
+        items={[
+          { value: "width", label: t("detail.pdfFitWidth") },
+          { value: "page", label: t("detail.pdfFitPage") },
+        ]}
+      />
+      <div class="zoomer">
         <button
           type="button"
           onclick={() => step(-1)}
@@ -587,38 +588,34 @@
     flex-wrap: wrap;
     padding: 0 0 10px;
   }
-  /* Groupe segmenté, recopié de `Transversal`/`Library` — le CSS Svelte est
-     scopé. C'est une copie de plus : quand le composant `Seg` du chantier
-     « composants partagés » arrivera, celle-ci part avec les autres. */
-  .seg {
+  /* Le zoom **ressemble** à un groupe segmenté et n'en est pas un : ses trois
+     boutons sont des actions (reculer, taille réelle, avancer), pas un choix
+     parmi trois. `Seg` ne lui conviendrait qu'en lui inventant une valeur
+     courante — d'où ce style local, qui n'est plus une copie de celui d'à
+     côté mais le style d'un autre objet. */
+  .zoomer {
     display: flex;
     border: 1px solid var(--line);
+    width: fit-content;
   }
-  .seg button {
+  .zoomer button {
     background: var(--panel2);
     color: var(--muted);
     padding: 5px 11px;
     font-size: 11px;
     border-right: 1px solid var(--line);
-    cursor: pointer;
-  }
-  .seg button:last-child {
-    border-right: none;
-  }
-  .seg button:hover:not(:disabled) {
-    color: var(--txt2);
-  }
-  .seg button.on {
-    background: var(--rosso);
-    color: #fff;
-  }
-  .seg button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-  .zoom button {
     min-width: 26px;
     text-align: center;
+  }
+  .zoomer button:last-child {
+    border-right: none;
+  }
+  .zoomer button:hover:not(:disabled) {
+    color: var(--txt2);
+  }
+  .zoomer button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
   /* Assez large pour « 400 % » sans que la barre ne bouge d'un cran à l'autre. */
   .pct {

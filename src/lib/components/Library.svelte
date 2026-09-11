@@ -8,6 +8,7 @@
   import ContextMenu from "./ContextMenu.svelte";
   import LoadingState from "./LoadingState.svelte";
   import StateBadge from "./StateBadge.svelte";
+  import Seg from "./Seg.svelte";
   import Tooltip from "./Tooltip.svelte";
   import {
     listLibrary,
@@ -927,11 +928,18 @@
              partagent, sinon le menu se lit comme un contrôle de plus au lieu
              du complément de celui-ci. -->
         <div class="view-wrap">
-          <div class="seg view">
-            <button class:on={shown === "dense"} onclick={() => setView("dense")} title={t("library.viewDense")}>▦</button>
-            <button class:on={shown === "comfortable"} onclick={() => setView("comfortable")} title={t("library.viewComfortable")}>▤</button>
-            <button class:on={shown === "table"} onclick={() => setView("table")} title={t("library.viewList")}>☰</button>
-          </div>
+          <Seg
+            size="toolbar"
+            tone="neutral"
+            icon
+            value={shown}
+            onselect={(v) => setView(v as GridView)}
+            items={[
+              { value: "dense", label: "▦", title: t("library.viewDense") },
+              { value: "comfortable", label: "▤", title: t("library.viewComfortable") },
+              { value: "table", label: "☰", title: t("library.viewList") },
+            ]}
+          />
         <!-- Les préférences de présentation vivent **ici** et non dans les
              réglages globaux : il faut en voir l'effet pour les juger, et un
              écran de réglages les rend invisibles. -->
@@ -1289,31 +1297,6 @@
     height: 1px;
     background: var(--line);
     margin: 6px 0;
-  }
-  .seg {
-    display: flex;
-    border: 1px solid var(--line);
-  }
-  /* 32 px comme la recherche et le bouton « + Filtre » : ce sont des contrôles,
-     et la barre de filtres n'en connaît que deux hauteurs (§7.1). */
-  .seg button {
-    background: var(--panel2);
-    color: var(--muted);
-    height: 32px;
-    padding: 0 11px;
-    font-size: 11.5px;
-    border-right: 1px solid var(--line);
-  }
-  .seg button:last-child {
-    border-right: none;
-  }
-  .seg button.on {
-    background: var(--raised);
-    color: var(--txt);
-  }
-  .seg.view button {
-    font-size: 14px;
-    padding: 0 10px;
   }
   .empty {
     color: var(--muted);

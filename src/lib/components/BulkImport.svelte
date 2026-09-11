@@ -10,6 +10,7 @@
   import { t } from "$lib/i18n/index.svelte";
 
   import { errorText } from "$lib/errors";
+  import Seg from "./Seg.svelte";
   interface Props {
     parent: string;
     copy: boolean;
@@ -155,9 +156,17 @@
                     <span class="m-name">{m.name ?? m.id}</span>
                     {#if m.status === "ambiguous"}
                       <span class="m-conflict">≈ {m.existing_name ?? m.existing_id}</span>
-                      <span class="seg-mini">
-                        <button class:on={(decisions[m.id] ?? "keep_both") === "keep_both"} onclick={() => (decisions[m.id] = "keep_both")}>{t("bulkImport.keepBoth")}</button>
-                        <button class:on={decisions[m.id] === "replace"} onclick={() => (decisions[m.id] = "replace")}>{t("bulkImport.replace")}</button>
+                      <span class="decision">
+                        <Seg
+                          size="mini"
+                          tone="neutral"
+                          value={decisions[m.id] ?? "keep_both"}
+                          onselect={(v) => (decisions[m.id] = v as "keep_both" | "replace")}
+                          items={[
+                            { value: "keep_both", label: t("bulkImport.keepBoth") },
+                            { value: "replace", label: t("bulkImport.replace") },
+                          ]}
+                        />
                       </span>
                     {/if}
                   </div>
@@ -330,24 +339,8 @@
     color: var(--yellow);
     font-size: 11px;
   }
-  .seg-mini {
-    display: flex;
+  .decision {
     margin-left: auto;
-    border: 1px solid var(--line);
-  }
-  .seg-mini button {
-    background: var(--panel2);
-    color: var(--muted);
-    font-size: 10px;
-    padding: 3px 7px;
-    border-right: 1px solid var(--line);
-  }
-  .seg-mini button:last-child {
-    border-right: none;
-  }
-  .seg-mini button.on {
-    background: var(--raised);
-    color: var(--rosso-bright);
   }
   .errbox {
     margin: 12px 18px;

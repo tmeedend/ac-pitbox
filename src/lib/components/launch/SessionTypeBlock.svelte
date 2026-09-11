@@ -5,6 +5,7 @@
   // la cible (§8.4bis), orchestré par Launch.svelte via `onselect`.
   import type { SessionType } from "$lib/launch";
   import { t } from "$lib/i18n/index.svelte";
+  import Seg from "../Seg.svelte";
 
   let {
     sessionType,
@@ -42,10 +43,13 @@
 <section class="blk">
   <header class="blk-h"><span class="blk-t">{t("launch.sessionTypeLabel")}</span></header>
   <div class="blk-b">
-    <div class="seg types">
-      {#each sessionTypes as st}
-        <button class:on={sessionType === st.id} onclick={() => onselect(st.id)}>{t(st.labelKey)}</button>
-      {/each}
+    <div class="types">
+      <Seg
+        size="main"
+        value={sessionType}
+        onselect={(v) => onselect(v as SessionType)}
+        items={sessionTypes.map((st) => ({ value: st.id, label: t(st.labelKey) }))}
+      />
     </div>
     {#if warn}
       <p class="warnbox spaced">⚠ {t("launch.trackNotCircuitWarning")}</p>
@@ -54,30 +58,11 @@
 </section>
 
 <style>
-  .seg,
   .types {
-    display: flex;
-    border: 1px solid var(--line);
-    width: fit-content;
     margin-bottom: 16px;
   }
-  .seg button {
-    background: var(--panel2);
-    color: var(--muted);
-    padding: 9px 26px;
-    font-size: 12px;
-    letter-spacing: 1px;
-    border-right: 1px solid var(--line);
-  }
-  .seg button:last-child {
-    border-right: none;
-  }
-  .seg button.on {
-    background: var(--rosso);
-    color: #fff;
-  }
   /* L'encadré vient de `.warnbox` (global.css). La marge négative rattrape
-     celle que `.seg` réserve sous les boutons. */
+     celle que `.types` réserve sous les boutons. */
   .spaced {
     margin-top: -6px;
   }

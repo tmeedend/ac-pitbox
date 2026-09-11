@@ -7,6 +7,7 @@
   import type { RaceSetup } from "$lib/launch";
   import { t } from "$lib/i18n/index.svelte";
   import NumberStepper from "../NumberStepper.svelte";
+  import Seg from "../Seg.svelte";
 
   let { setup }: { setup: RaceSetup } = $props();
 
@@ -47,21 +48,31 @@
           </label>
         {/if}
         <div><span class="fk lbl-key">{t("launch.jumpStart")}</span>
-          <div class="seg-v">
-            <button type="button" class:on={setup.jump_start_penalty === 0} onclick={() => (setup.jump_start_penalty = 0)}>{t("launch.jumpStartNone")}</button>
-            <button type="button" class:on={setup.jump_start_penalty === 1} onclick={() => (setup.jump_start_penalty = 1)}>{t("launch.jumpStartTeleport")}</button>
-            <button type="button" class:on={setup.jump_start_penalty === 2} onclick={() => (setup.jump_start_penalty = 2)}>{t("launch.jumpStartDrivethrough")}</button>
-          </div>
+          <Seg
+            vertical
+            value={String(setup.jump_start_penalty)}
+            onselect={(v) => (setup.jump_start_penalty = Number(v))}
+            items={[
+              { value: "0", label: t("launch.jumpStartNone") },
+              { value: "1", label: t("launch.jumpStartTeleport") },
+              { value: "2", label: t("launch.jumpStartDrivethrough") },
+            ]}
+          />
         </div>
       {/if}
 
       <div><span class="fk lbl-key">{t("launch.gripEvolution")}</span>
-        <div class="seg-v">
-          <button type="button" class:on={setup.grip === 86} onclick={() => (setup.grip = 86)}>{t("launch.gripGreen")}</button>
-          <button type="button" class:on={setup.grip === 92} onclick={() => (setup.grip = 92)}>{t("launch.gripMedium")}</button>
-          <button type="button" class:on={setup.grip === 96} onclick={() => (setup.grip = 96)}>{t("launch.gripRubbered")}</button>
-          <button type="button" class:on={setup.grip === 100} onclick={() => (setup.grip = 100)}>{t("launch.gripOptimal")}</button>
-        </div>
+        <Seg
+          vertical
+          value={String(setup.grip)}
+          onselect={(v) => (setup.grip = Number(v))}
+          items={[
+            { value: "86", label: t("launch.gripGreen") },
+            { value: "92", label: t("launch.gripMedium") },
+            { value: "96", label: t("launch.gripRubbered") },
+            { value: "100", label: t("launch.gripOptimal") },
+          ]}
+        />
       </div>
 
       {#if setup.session_type === "race"}
@@ -90,11 +101,16 @@
 
       {#if setup.session_type === "practice"}
         <div><span class="fk lbl-key">{t("launch.startFrom")}</span>
-          <div class="seg-v">
-            <button type="button" class:on={setup.practice_start === "pit"} onclick={() => (setup.practice_start = "pit")}>{t("launch.startFromPit")}</button>
-            <button type="button" class:on={setup.practice_start === "track"} onclick={() => (setup.practice_start = "track")}>{t("launch.startFromTrack")}</button>
-            <button type="button" class:on={setup.practice_start === "hotlap"} onclick={() => (setup.practice_start = "hotlap")}>{t("launch.startFromHotlap")}</button>
-          </div>
+          <Seg
+            vertical
+            value={setup.practice_start}
+            onselect={(v) => (setup.practice_start = v as RaceSetup["practice_start"])}
+            items={[
+              { value: "pit", label: t("launch.startFromPit") },
+              { value: "track", label: t("launch.startFromTrack") },
+              { value: "hotlap", label: t("launch.startFromHotlap") },
+            ]}
+          />
         </div>
       {/if}
     </div>
@@ -129,29 +145,6 @@
   /* Groupe de boutons rectangulaire (remplace les <select> natifs, dont la
      popup n'est pas pilotable à la manette) : chaque option est un bouton
      focusable, sélectionnable au clic comme au clic manette (bouton A). */
-  .seg-v {
-    display: flex;
-    flex-direction: column;
-    border: 1px solid var(--line);
-  }
-  .seg-v button {
-    background: var(--panel2);
-    color: var(--txt2);
-    text-align: left;
-    padding: 7px 9px;
-    font-size: 11px;
-    border-bottom: 1px solid var(--line);
-  }
-  .seg-v button:last-child {
-    border-bottom: none;
-  }
-  .seg-v button:hover {
-    background: var(--raised);
-  }
-  .seg-v button.on {
-    background: var(--rosso);
-    color: #fff;
-  }
   /* `.check` est aussi utilisée par le bloc Simulation resté dans
      Launch.svelte (aides à la conduite) — dupliquée ici plutôt que partagée
      (CSS Svelte scopé par composant, §conventions projet). */

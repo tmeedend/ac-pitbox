@@ -20,6 +20,7 @@
   import LayersSection from "./LayersSection.svelte";
   import LoadingState from "./LoadingState.svelte";
   import Tabs from "./Tabs.svelte";
+  import Seg from "./Seg.svelte";
   // Auto-import : la vue des sons est ce même composant, en sous-section.
   import Transversal from "./Transversal.svelte";
 
@@ -320,15 +321,23 @@
            sons — imbriqués, ils n'avaient aucun champ de recherche. -->
       <input class="input search" placeholder={t("transversal.searchPlaceholder")} bind:value={query} />
       <span class="seg-lbl lbl-key mono">{t("transversal.groupLabel")}</span>
-      <div class="seg">
-        <button class:on={groupBy === "archive"} type="button" onclick={() => setGroupBy("archive")}>{t("transversal.groupByArchive")}</button>
-        <button class:on={groupBy === "car"} type="button" onclick={() => setGroupBy("car")}>{t("transversal.groupByCar")}</button>
-      </div>
+      <Seg
+        value={groupBy}
+        onselect={(v) => setGroupBy(v as GroupBy)}
+        items={[
+          { value: "archive", label: t("transversal.groupByArchive") },
+          { value: "car", label: t("transversal.groupByCar") },
+        ]}
+      />
       <span class="seg-lbl lbl-key mono">{t("transversal.sortLabel")}</span>
-      <div class="seg">
-        <button class:on={sortBy === "name"} type="button" onclick={() => setSortBy("name")}>{t("transversal.sortByName")}</button>
-        <button class:on={sortBy === "size"} type="button" onclick={() => setSortBy("size")}>{t("transversal.sortBySize")}</button>
-      </div>
+      <Seg
+        value={sortBy}
+        onselect={(v) => setSortBy(v as SortBy)}
+        items={[
+          { value: "name", label: t("transversal.sortByName") },
+          { value: "size", label: t("transversal.sortBySize") },
+        ]}
+      />
       <button class="btn" type="button" onclick={toggleAll} disabled={searching}>
         {allOpen ? t("transversal.collapseAll") : t("transversal.expandAll")}
       </button>
@@ -452,24 +461,6 @@
     gap: 12px;
     margin-bottom: 14px;
     flex-wrap: wrap;
-  }
-  .seg {
-    display: flex;
-    border: 1px solid var(--line);
-  }
-  .seg button {
-    background: var(--panel2);
-    color: var(--muted);
-    padding: 6px 14px;
-    font-size: 11px;
-    border-right: 1px solid var(--line);
-  }
-  .seg button:last-child {
-    border-right: none;
-  }
-  .seg button.on {
-    background: var(--rosso);
-    color: #fff;
   }
   /* Couleur/taille/interlettrage viennent de `.lbl-key` (global, harmonisation
      §chantier libellés) : ne reste ici que les majuscules, que la classe
