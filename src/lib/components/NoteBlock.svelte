@@ -28,8 +28,11 @@
      * d'écriture à l'appelant : une note qu'on croit prise et qui n'est pas
      * écrite est pire que pas de note. */
     onsave: (value: string | null) => void;
+    /** Sans la carte ni son bandeau : le bloc est alors le contenu d'un
+     * sous-onglet, qui porte déjà le titre et le marqueur (§7.4). */
+    bare?: boolean;
   }
-  let { value, onsave }: Props = $props();
+  let { value, onsave, bare = false }: Props = $props();
 
   let editing = $state(false);
   let draft = $state("");
@@ -64,35 +67,41 @@
   });
 </script>
 
-<section class="blk">
-  <header class="blk-h">
-    <span class="blk-t">{t("notes.title")}</span>
-    <!-- Même crayon que le nom et la description, et il ouvre le champ : le
-         premier jet posait ici un ✎ décoratif, qui ressemblait au crayon des
-         autres blocs sans rien faire au clic. -->
-    {#if value && !editing}<Pencil label={t("notes.edit")} onclick={open} />{/if}
-  </header>
-  <div class="blk-b">
-    {#if editing}
-      <textarea
-        class="input"
-        bind:this={field}
-        bind:value={draft}
-        rows="5"
-        placeholder={t("notes.placeholder")}
-        onblur={commit}
-        onkeydown={onkeydown}
-      ></textarea>
-      <p class="hint">{t("detail.editStoredInApp")}</p>
-    {:else if value}
-      <!-- Bouton et pas `<div onclick>` : on doit pouvoir y revenir au clavier
-           et à la manette comme sur n'importe quel champ de la fiche. -->
-      <button class="text" type="button" onclick={open} title={t("notes.edit")}>{value}</button>
-    {:else}
-      <button class="add" type="button" onclick={open}>{t("notes.add")}</button>
-    {/if}
-  </div>
-</section>
+{#snippet body()}
+  {#if editing}
+    <textarea
+      class="input"
+      bind:this={field}
+      bind:value={draft}
+      rows="5"
+      placeholder={t("notes.placeholder")}
+      onblur={commit}
+      onkeydown={onkeydown}
+    ></textarea>
+    <p class="hint">{t("detail.editStoredInApp")}</p>
+  {:else if value}
+    <!-- Bouton et pas `<div onclick>` : on doit pouvoir y revenir au clavier
+         et à la manette comme sur n'importe quel champ de la fiche. -->
+    <button class="text" type="button" onclick={open} title={t("notes.edit")}>{value}</button>
+  {:else}
+    <button class="add" type="button" onclick={open}>{t("notes.add")}</button>
+  {/if}
+{/snippet}
+
+{#if bare}
+  {@render body()}
+{:else}
+  <section class="blk">
+    <header class="blk-h">
+      <span class="blk-t">{t("notes.title")}</span>
+      <!-- Même crayon que le nom et la description, et il ouvre le champ : le
+           premier jet posait ici un ✎ décoratif, qui ressemblait au crayon des
+           autres blocs sans rien faire au clic. -->
+      {#if value && !editing}<Pencil label={t("notes.edit")} onclick={open} />{/if}
+    </header>
+    <div class="blk-b">{@render body()}</div>
+  </section>
+{/if}
 
 <style>
   /* `pre-wrap` : les retours à la ligne saisis sont le seul formatage qu'une

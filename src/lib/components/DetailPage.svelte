@@ -112,6 +112,12 @@
    * ouverture de fiche**, sans persistance : la fiche s'ouvre sur l'aperçu et
    * ses données, pas sur une grille de trente livrées. */
   let pickerOpen = $state(false);
+  /** Sous-onglet du bloc textuel (§7.4). **Jamais « Notes » par défaut** : la
+   * description est ce qu'on vient lire, la note ce qu'on vient ajouter.
+   * L'onglet « Le modèle réel » viendra du chantier Wikipédia et sera absent
+   * tant qu'aucun article n'est apparié. */
+  type TextTab = "desc" | "notes";
+  let textTab = $state<TextTab>("desc");
   // Chiffres affichés entre parenthèses sur les onglets Médias/Ressources —
   // mêmes appels que ceux faits à l'ouverture de l'onglet (media.rs parcourt
   // en direct `screens/`/`replay/`, potentiellement coûteux), mais lancés ici
@@ -435,6 +441,7 @@
     actionError = "";
     activeTab = "content";
     pickerOpen = false;
+    textTab = "desc";
     siblings = [];
     previewLayout = 0;
     trackSkinsLoading = true;
@@ -909,25 +916,45 @@
 
 </script>
 
-<!-- Carte « Description », identique pour une voiture et pour un circuit :
-     seule la source du texte change. Rendue MÊME VIDE, sans quoi un mod sans
-     description n'offrirait aucun endroit où en écrire une (§5bis.3). -->
-{#snippet descriptionCard(text: string | null, overridden: boolean)}
-  <section class="blk">
-    <header class="blk-h">
-      <span class="blk-t">{t("common.description")}</span>
-      <InlineEdit
-        value={text}
-        original={overridden ? null : text}
-        {overridden}
-        multiline
-        label={t("detail.editDescriptionLabel")}
-        placeholder={t("detail.editDescriptionPlaceholder")}
-        onsave={(v) => saveOverride("description_user", v)}
-      />
-    </header>
-    <div class="blk-b desc-body" class:empty-desc={!text}>
-      {text ? decodeDescription(text) : t("detail.noDescription")}
+<!-- Bloc textuel à sous-onglets (§7.4), identique pour une voiture et pour un
+     circuit : seule la source du texte change. **Hauteur constante**, c'est le
+     contenu qui change — la longueur d'un texte cesse ainsi d'être un problème
+     de mise en page, ce qui comptera le jour où un article encyclopédique
+     viendra s'y ajouter. Rendu MÊME VIDE, sans quoi un mod sans description
+     n'offrirait aucun endroit où en écrire une (§5bis.3). -->
+{#snippet textCard(text: string | null, overridden: boolean)}
+  <section class="blk text-blk">
+    <Tabs
+      gamepad={false}
+      tabs={[
+        { id: "desc", label: t("common.description") },
+        { id: "notes", label: t("notes.title"), marker: !!detail?.notes_user },
+      ]}
+      active={textTab}
+      onselect={(v) => (textTab = v as TextTab)}
+    >
+      {#snippet trailing()}
+        {#if textTab === "desc"}
+          <InlineEdit
+            value={text}
+            original={overridden ? null : text}
+            {overridden}
+            multiline
+            label={t("detail.editDescriptionLabel")}
+            placeholder={t("detail.editDescriptionPlaceholder")}
+            onsave={(v) => saveOverride("description_user", v)}
+          />
+        {/if}
+      {/snippet}
+    </Tabs>
+    <div class="blk-b text-body">
+      {#if textTab === "desc"}
+        <div class="desc-body" class:empty-desc={!text}>
+          {text ? decodeDescription(text) : t("detail.noDescription")}
+        </div>
+      {:else}
+        <NoteBlock bare value={detail?.notes_user ?? null} onsave={saveNote} />
+      {/if}
     </div>
   </section>
 {/snippet}
@@ -1259,8 +1286,7 @@
             </div>
           </section>
 
-          {@render descriptionCard(d.specs?.description ?? null, !!d.description_user)}
-          <NoteBlock value={d.notes_user} onsave={saveNote} />
+          {@render textCard(d.specs?.description ?? null, !!d.description_user)}
         {:else}
           {@const lay = d.track?.layouts[previewLayout]}
           <section class="blk">
@@ -1270,8 +1296,7 @@
               <div><div class="k lbl-key">{t("detail.lengthLabel")}</div><div class="v">{lay?.length ?? "—"}</div></div>
             </div>
           </section>
-          {@render descriptionCard(d.track?.description ?? null, !!d.description_user)}
-          <NoteBlock value={d.notes_user} onsave={saveNote} />
+          {@render textCard(d.track?.description ?? null, !!d.description_user)}
         {/if}
       </div>
     </div>
@@ -1422,6 +1447,15 @@
   }
   /* Onglets : `Tabs.svelte` (variante `flush`), partagé avec Réglages,
      Add-ons et Règles de tags — plus de style local ici. */
+  /* Hauteur constante du bloc textuel (§7.4) : passer d'une description de
+     trois mots à une note de dix lignes ne doit pas faire sauter la colonne.
+     C'est un plancher, pas un plafond — un texte plus long allonge la carte. */
+  .text-blk :global(.tabs) {
+    margin-bottom: 0;
+  }
+  .text-body {
+    min-height: 150px;
+  }
   .tab-body {
     padding: 18px;
   }
