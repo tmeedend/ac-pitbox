@@ -26,6 +26,7 @@
   import CarPreview3D from "./detail/CarPreview3D.svelte";
   import InlineEdit from "./InlineEdit.svelte";
   import Tabs from "./Tabs.svelte";
+  import PickerBar from "./PickerBar.svelte";
   import FicheHeader from "./FicheHeader.svelte";
   import { setEntityNote } from "$lib/userMeta";
   import NoteBlock from "./NoteBlock.svelte";
@@ -107,6 +108,10 @@
    * et il fallait cliquer pour le découvrir. */
   type DetailTab = "content" | "media" | "install";
   let activeTab = $state<DetailTab>("content");
+  /** Grille de vignettes du sélecteur dépliée (§7.3). **Repliée à chaque
+   * ouverture de fiche**, sans persistance : la fiche s'ouvre sur l'aperçu et
+   * ses données, pas sur une grille de trente livrées. */
+  let pickerOpen = $state(false);
   // Chiffres affichés entre parenthèses sur les onglets Médias/Ressources —
   // mêmes appels que ceux faits à l'ouverture de l'onglet (media.rs parcourt
   // en direct `screens/`/`replay/`, potentiellement coûteux), mais lancés ici
@@ -429,6 +434,7 @@
     const current = id;
     actionError = "";
     activeTab = "content";
+    pickerOpen = false;
     siblings = [];
     previewLayout = 0;
     trackSkinsLoading = true;
@@ -1087,57 +1093,22 @@
           {@const ol = previewSrc(d.track?.layouts[previewLayout]?.outline ?? null)}
           {#if ol}<img class="hero-outline" src={ol} alt="" />{/if}
         {/if}
-      </div>
 
-      <div class="data">
+        <!-- Le sélecteur est un CONTRÔLE, pas de la documentation (§7.2) : il
+             agit sur l'image du dessus et sur ce qui partira en session, donc
+             il ne doit jamais exiger de faire défiler. Il était jusqu'ici une
+             grille reléguée en bas de fiche. -->
         {#if isCar}
-          {@const hasCurve = !!d.specs && d.specs.power_curve.length > 1}
-          <div class="tech-curve" class:with-curve={hasCurve}>
-            <section class="blk fiche">
-              <header class="blk-h"><span class="blk-t">{t("detail.techSheet")}</span></header>
-              <TechSheet detail={d} surface="panel2" framed={false} />
-            </section>
-            {#if hasCurve && d.specs}
-              <section class="blk curve-col">
-                <header class="blk-h">
-                  <span class="blk-t">{t("detail.curve")}</span>
-                  <span class="blk-n"><span class="lg-pow">— bhp</span> <span class="lg-tor">— Nm</span></span>
-                </header>
-                <div class="blk-b curve-box">
-                  <PowerCurve power={d.specs.power_curve} torque={d.specs.torque_curve} />
-                </div>
-              </section>
-            {/if}
-          </div>
-
-          {@render descriptionCard(d.specs?.description ?? null, !!d.description_user)}
-          <NoteBlock value={d.notes_user} onsave={saveNote} />
-        {:else}
-          {@const lay = d.track?.layouts[previewLayout]}
-          <section class="blk">
-            <header class="blk-h"><span class="blk-t">{t("detail.trackInfo")}</span></header>
-            <div class="specgrid" style="grid-template-columns:1fr 1fr;">
-              <div><div class="k lbl-key">{t("detail.layoutLabel")}</div><div class="v">{lay?.name ?? t("detail.defaultLayout")}</div></div>
-              <div><div class="k lbl-key">{t("detail.lengthLabel")}</div><div class="v">{lay?.length ?? "—"}</div></div>
-            </div>
-          </section>
-          {@render descriptionCard(d.track?.description ?? null, !!d.description_user)}
-          <NoteBlock value={d.notes_user} onsave={saveNote} />
-        {/if}
-      </div>
-    </div>
-
-    <!-- RANGÉE BASSE -->
-    <div class="row bottom" class:track={!isCar}>
-      {#if isCar}
-        <!-- Skins : le skin sélectionné devient le skin de session (§8.6), mémorisé -->
-        <div class="col">
-          <section class="blk">
-            <header class="blk-h">
-              <span class="blk-t">{t("detail.skinsLabel")}</span>
-              <span class="blk-n">{skins.length}</span>
-            </header>
-          {#if skins.length}
+          <PickerBar
+            label={t("detail.skinsLabel")}
+            items={skins.map((sk) => ({ id: sk.id, name: sk.name, image: previewSrc(sk.preview, contentRevision) }))}
+            index={previewSkin}
+            onpick={selectSkin}
+            expanded={pickerOpen}
+            ontoggle={() => (pickerOpen = !pickerOpen)}
+            emptyText={t("detail.noSkins")}
+          />
+          {#if pickerOpen && skins.length}
             <div class="skins">
               {#each skins as sk, i (sk.id)}
                 {@const sp = previewSrc(sk.preview, contentRevision)}
@@ -1166,16 +1137,63 @@
                 <div class="skin-filler" aria-hidden="true"></div>
               {/each}
             </div>
-          {:else}
-            <div class="blk-b muted small">{t("detail.noSkins")}</div>
           {/if}
-          </section>
-        </div>
+        {:else if d.track}
+          <PickerBar
+            label={t("detail.layoutLabel")}
+            fit="contain"
+            items={d.track.layouts.map((l, i) => ({
+              id: l.id || String(i),
+              name: l.name,
+              image: previewSrc(l.outline),
+            }))}
+            index={previewLayout}
+            onpick={selectLayout}
+            expanded={pickerOpen}
+            ontoggle={() => (pickerOpen = !pickerOpen)}
+            emptyText={t("detail.singleLayout")}
+          />
+          {#if pickerOpen && d.track.layouts.length}
+            <div class="skins">
+              {#each d.track.layouts as l, i (l.id || i)}
+                {@const o = previewSrc(l.outline)}
+                <button class="skin" class:preview={i === previewLayout} onclick={() => selectLayout(i)} title={t("detail.chooseLayoutTooltip")}>
+                  <div class="skin-img layout-img">
+                    {#if o}<img src={o} alt={l.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
+                    {#if i === previewLayout}<span class="skin-apercu mono">{t("library.sessionBadge")}</span>{/if}
+                  </div>
+                  <div class="skin-b"><span class="skin-name">{l.name}</span></div>
+                </button>
+              {/each}
+              {#each Array.from({ length: gridFillerCount(d.track.layouts.length) }) as _}
+                <div class="skin-filler" aria-hidden="true"></div>
+              {/each}
+            </div>
+          {/if}
+        {/if}
+      </div>
 
-        <!-- La distance parcourue n'a plus sa carte : elle est devenue la ligne
-             « Odomètre » de la fiche technique, où on la cherche naturellement.
-             La colonne commence donc directement par le son. -->
-        <div class="col">
+      <div class="data">
+        {#if isCar}
+          {@const hasCurve = !!d.specs && d.specs.power_curve.length > 1}
+          <div class="tech-curve" class:with-curve={hasCurve}>
+            <section class="blk fiche">
+              <header class="blk-h"><span class="blk-t">{t("detail.techSheet")}</span></header>
+              <TechSheet detail={d} surface="panel2" framed={false} />
+            </section>
+            {#if hasCurve && d.specs}
+              <section class="blk curve-col">
+                <header class="blk-h">
+                  <span class="blk-t">{t("detail.curve")}</span>
+                  <span class="blk-n"><span class="lg-pow">— bhp</span> <span class="lg-tor">— Nm</span></span>
+                </header>
+                <div class="blk-b curve-box">
+                  <PowerCurve power={d.specs.power_curve} torque={d.specs.torque_curve} />
+                </div>
+              </section>
+            {/if}
+          </div>
+
           <section class="blk">
             <header class="blk-h"><span class="blk-t">{t("detail.engineSound")}</span></header>
             <div class="blk-b">
@@ -1241,36 +1259,33 @@
             </div>
           </section>
 
-        </div>
-      {:else}
-        <!-- Layouts (galerie illustrée par le tracé, comme les skins voiture) -->
-        <div class="col">
+          {@render descriptionCard(d.specs?.description ?? null, !!d.description_user)}
+          <NoteBlock value={d.notes_user} onsave={saveNote} />
+        {:else}
+          {@const lay = d.track?.layouts[previewLayout]}
           <section class="blk">
-            <header class="blk-h">
-              <span class="blk-t">{t("columns.layouts")}</span>
-              <span class="blk-n">{d.track?.layouts.length ?? 0}</span>
-            </header>
-          {#if d.track && d.track.layouts.length}
-            <div class="skins">
-              {#each d.track.layouts as l, i (l.id || i)}
-                {@const o = previewSrc(l.outline)}
-                <button class="skin" class:preview={i === previewLayout} onclick={() => selectLayout(i)} title={t("detail.chooseLayoutTooltip")}>
-                  <div class="skin-img layout-img">
-                    {#if o}<img src={o} alt={l.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
-                    {#if i === previewLayout}<span class="skin-apercu mono">{t("library.sessionBadge")}</span>{/if}
-                  </div>
-                  <div class="skin-b"><span class="skin-name">{l.name}</span></div>
-                </button>
-              {/each}
-              {#each Array.from({ length: gridFillerCount(d.track.layouts.length) }) as _}
-                <div class="skin-filler" aria-hidden="true"></div>
-              {/each}
+            <header class="blk-h"><span class="blk-t">{t("detail.trackInfo")}</span></header>
+            <div class="specgrid" style="grid-template-columns:1fr 1fr;">
+              <div><div class="k lbl-key">{t("detail.layoutLabel")}</div><div class="v">{lay?.name ?? t("detail.defaultLayout")}</div></div>
+              <div><div class="k lbl-key">{t("detail.lengthLabel")}</div><div class="v">{lay?.length ?? "—"}</div></div>
             </div>
-          {:else}
-            <div class="blk-b muted small">{t("detail.singleLayout")}</div>
-          {/if}
           </section>
+          {@render descriptionCard(d.track?.description ?? null, !!d.description_user)}
+          <NoteBlock value={d.notes_user} onsave={saveNote} />
+        {/if}
+      </div>
+    </div>
 
+    <!-- RANGÉE BASSE — circuits seulement. Pour une voiture, il n'y a plus rien
+         à y mettre : les livrées ont rejoint le sélecteur sous l'aperçu, le son
+         la colonne de données, les étiquettes et l'origine l'onglet
+         Installation. Une carte absente ne laisse pas de trou (§6.3) : la
+         rangée entière disparaît plutôt que d'afficher une colonne vide. -->
+    {#if !isCar}
+    <div class="row bottom track">
+        <!-- Les tracés ont rejoint le sélecteur, sous l'aperçu : la colonne
+             commence donc par les habillages. -->
+        <div class="col">
           <!-- Skins de circuit (TRACK_SKIN) — activables individuellement, plusieurs
                à la fois (§8, pas de notion d'exclusivité côté CSP). -->
           <section class="blk">
@@ -1321,8 +1336,8 @@
             </div>
           </section>
         </div>
-      {/if}
     </div>
+    {/if}
     {:else if activeTab === "media"}
       <!-- Quatre blocs, deux groupes (§7.8) : ce que TU as produit (captures,
            replays), puis ce qui est LIVRÉ avec le mod (ressources, fonds).
