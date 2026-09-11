@@ -1001,6 +1001,12 @@
     {#if activeTab === "content"}
     <!-- RANGÉE HAUTE : héros + panneau données -->
     <div class="row top" class:track={!isCar}>
+      <!-- Colonne principale (§7.2) : l'aperçu, le sélecteur qui le pilote,
+           puis le bloc textuel en dernier — sa longueur est imprévisible, il ne
+           doit donc rien repousser. Le sélecteur est un FRÈRE du héros et non
+           son enfant : `.hero` est un conteneur flex centré à ratio fixe, un
+           second enfant s'y retrouvait posé au milieu de l'image (signalé). -->
+      <div class="maincol">
       <div class="hero">
         <!-- Photo et aperçu 3D partagent le même cadre (§ correctif marge) :
              la photo est un enfant normal, `CarPreview3D` se pose en absolu
@@ -1120,11 +1126,15 @@
           {@const ol = previewSrc(d.track?.layouts[previewLayout]?.outline ?? null)}
           {#if ol}<img class="hero-outline" src={ol} alt="" />{/if}
         {/if}
+      </div>
 
         <!-- Le sélecteur est un CONTRÔLE, pas de la documentation (§7.2) : il
              agit sur l'image du dessus et sur ce qui partira en session, donc
              il ne doit jamais exiger de faire défiler. Il était jusqu'ici une
-             grille reléguée en bas de fiche. -->
+             grille reléguée en bas de fiche.
+             Même fond et même retrait que l'aperçu : les deux se lisent comme
+             une seule carte, l'image et sa commande. -->
+        <div class="pickzone">
         {#if isCar}
           <PickerBar
             label={t("detail.skinsLabel")}
@@ -1198,6 +1208,13 @@
             </div>
           {/if}
         {/if}
+
+        </div>
+
+        {@render textCard(
+          isCar ? (d.specs?.description ?? null) : (d.track?.description ?? null),
+          !!d.description_user,
+        )}
       </div>
 
       <div class="data">
@@ -1286,7 +1303,6 @@
             </div>
           </section>
 
-          {@render textCard(d.specs?.description ?? null, !!d.description_user)}
         {:else}
           {@const lay = d.track?.layouts[previewLayout]}
           <section class="blk">
@@ -1296,7 +1312,6 @@
               <div><div class="k lbl-key">{t("detail.lengthLabel")}</div><div class="v">{lay?.length ?? "—"}</div></div>
             </div>
           </section>
-          {@render textCard(d.track?.description ?? null, !!d.description_user)}
         {/if}
       </div>
     </div>
@@ -1525,6 +1540,31 @@
     grid-template-columns: 1fr 1fr;
   }
 
+  /* Colonne principale : le héros garde son ratio et sa taille propres, le
+     sélecteur et le bloc textuel s'empilent dessous. */
+  .maincol {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    /* `align-self` appartient désormais à la colonne, plus au héros : c'est
+       elle qui est l'élément de grille. Sur le héros, dans une colonne flex,
+       il ne voudrait plus dire « ne t'étire pas en hauteur » mais « ne t'étire
+       pas en largeur » — et un héros de voiture, dont le média est en absolu,
+       n'a pas de largeur propre : il se réduirait à rien. */
+    align-self: start;
+    /* Retrait du média dans son cadre, repris par le sélecteur pour que les
+       deux s'alignent. Voiture et circuit ne l'ont pas identique (voir
+       `--hero-pad`), d'où la variable plutôt qu'une valeur en dur. */
+    --col-pad: 14px;
+  }
+  .row.top:not(.track) .maincol {
+    --col-pad: 16px;
+  }
+  .pickzone {
+    background: var(--card);
+    padding: 0 var(--col-pad) var(--col-pad);
+  }
   .hero {
     /* **Même carte que ses voisines.** Le panneau de données d'à côté est fait
        de `.blk` — encadré, fond `--panel2` — et le héros était un simple `div`
@@ -1586,7 +1626,6 @@
     --hero-pad: 16px;
     aspect-ratio: 16 / 9;
     min-height: 0;
-    align-self: start;
     padding: 0;
   }
   .row.top:not(.track) .hero-inner {
