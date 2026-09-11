@@ -10,11 +10,12 @@
   import { activateApp, deactivateApp, deleteApp, openAppFolder, type AppItem } from "$lib/apps";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
+  import { setEntityDisplayName } from "$lib/userMeta";
   import { t } from "$lib/i18n/index.svelte";
   import ExtrasBlock from "./detail/ExtrasBlock.svelte";
   import LayersBlock from "./detail/LayersBlock.svelte";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
-  import StateBadge from "./StateBadge.svelte";
+  import FicheHeader from "./FicheHeader.svelte";
   import Tabs from "./Tabs.svelte";
 
   interface Props {
@@ -50,6 +51,18 @@
     }
   }
 
+  /** Renommer (§6.1) : la saisie vit dans l'overlay, à côté du nom dérivé du
+   * fichier et jamais à sa place — vider le champ ramène donc celui-ci. */
+  async function rename(value: string | null): Promise<void> {
+    error = "";
+    try {
+      await setEntityDisplayName("APP", app.id, value ?? "");
+      onchange();
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
   async function openFolder(): Promise<void> {
     try {
       await openAppFolder(app.id);
@@ -78,20 +91,28 @@
 </script>
 
 <div class="page">
-  <header class="head">
-    <button class="back" type="button" onclick={onclose}>{t("apps.back")}</button>
-    <h2 class="lbl-screen mono">{app.id}</h2>
-    <StateBadge active={app.active} stock={false} />
-    <div class="actions">
-      <button class="btn" type="button" onclick={openFolder} title={t("apps.openFolderTooltip")}>
-        {t("detail.openFolder")}
-      </button>
-      <button class="btn" type="button" onclick={toggle} disabled={busy}>
-        {busy ? t("common.working") : app.active ? t("common.deactivate") : t("common.activate")}
-      </button>
-      <button class="btn del" type="button" title={t("common.delete")} onclick={remove} disabled={busy}>✕</button>
-    </div>
-  </header>
+  <FicheHeader
+    onback={onclose}
+    backLabel={t("apps.back")}
+    glyph="◈"
+    name={app.display_name_user ?? app.id}
+    subtitle={app.display_name_user ? app.id : undefined}
+    rename={{
+      original: app.id,
+      overridden: !!app.display_name_user,
+      onsave: rename,
+    }}
+    deployment={{ active: app.active }}
+    actions={[
+      { label: t("detail.openFolder"), onclick: openFolder },
+      {
+        label: busy ? t("common.working") : app.active ? t("common.deactivate") : t("common.activate"),
+        onclick: toggle,
+        disabled: busy,
+      },
+      { label: t("common.delete"), onclick: remove, disabled: busy, danger: true },
+    ]}
+  />
 
   <!-- Tout ce qui décrit une app tient là : d'où elle vient, quand elle est
        arrivée, et sous quel `apps/<langue>/` elle est posée. -->
@@ -133,38 +154,6 @@
 <style>
   .page {
     max-width: 860px;
-  }
-  .head {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 12px;
-  }
-  .head h2 {
-    flex: 1;
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .back {
-    background: none;
-    border: none;
-    padding: 0;
-    font: inherit;
-    font-size: 11.5px;
-    color: var(--muted);
-    cursor: pointer;
-  }
-  .back:hover,
-  .back:focus-visible {
-    color: var(--rosso-bright);
-  }
-  .actions {
-    display: flex;
-    gap: 6px;
-  }
-  .actions .del {
-    color: var(--rosso-bright);
   }
   .meta {
     display: flex;

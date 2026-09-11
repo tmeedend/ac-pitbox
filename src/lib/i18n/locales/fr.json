@@ -368,6 +368,7 @@
     "working": "…",
     "description": "Description",
     "unmanagedState": "Non géré",
+    "pendingState": "En attente",
     "brokenState": "Cassé"
   },
   "gridThumbs": {
@@ -561,6 +562,7 @@
     "noSkins": "Aucun skin pour cette voiture.",
     "distanceLabel": "Distance",
     "authorLabel": "Auteur",
+    "byAuthor": "par {author}",
     "triedYes": "Essayée ✓",
     "triedNo": "Jamais essayée",
     "engineSound": "Son moteur",

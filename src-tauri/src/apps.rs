@@ -33,6 +33,11 @@ pub struct AppItem {
     /// colonne. Affiché sur la fiche : c'est ce qui dit si l'app suit la
     /// convention historique d'AC ou celle de CSP, et donc où elle est posée.
     pub lang: String,
+    /// Nom repris à la main (refonte §6.1) : le titre de la fiche n'est plus le
+    /// nom de dossier de l'app.
+    pub display_name_user: Option<String>,
+    /// Note libre (refonte §9).
+    pub notes_user: Option<String>,
 }
 
 /// Sous-dossier `apps/<langue>/` où pointe la junction d'activation d'une app
@@ -154,6 +159,8 @@ pub fn list_apps(conn: &Connection, cfg: &AppConfig) -> Result<Vec<AppItem>, Str
                 imported_at: a.imported_at,
                 active,
                 lang: lang.to_string(),
+                display_name_user: a.display_name_user,
+                notes_user: a.notes_user,
             }
         })
         .collect())

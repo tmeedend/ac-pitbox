@@ -25,6 +25,7 @@
   import { nav } from "$lib/nav.svelte";
 
   import { errorText } from "$lib/errors";
+  import { setEntityDisplayName } from "$lib/userMeta";
 
   /** Les apps sont un onglet de plus, pas une entrée de rail (SPEC §7.3) :
    * cet écran est déjà le tiroir de ce qui n'est ni voiture ni circuit, et le
@@ -110,6 +111,18 @@
     }
   }
 
+  /** Renommer (§6.1) : la saisie vit dans l'overlay, à côté de l'identifiant
+   * du mod et jamais à sa place — vider le champ ramène donc celui-ci. */
+  async function rename(o: OtherModRow, value: string | null) {
+    error = "";
+    try {
+      await setEntityDisplayName("OTHER", o.id, value ?? "");
+      await load();
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
   async function openFolder(o: OtherModRow) {
     error = "";
     try {
@@ -182,6 +195,7 @@
     ontogglePriority={() => togglePriority(fullRow)}
     onopenFolder={() => openFolder(fullRow)}
     ondelete={() => remove(fullRow)}
+    onrename={(v) => rename(fullRow, v)}
   />
 {:else}
 <div class="others">

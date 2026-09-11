@@ -26,6 +26,7 @@
   import CarPreview3D from "./detail/CarPreview3D.svelte";
   import InlineEdit from "./InlineEdit.svelte";
   import Tabs from "./Tabs.svelte";
+  import FicheHeader from "./FicheHeader.svelte";
   import StateBadge from "./StateBadge.svelte";
   import { tick, untrack } from "svelte";
   import { focusGamepadElement, isGamepadDriving } from "$lib/gamepadNav";
@@ -56,7 +57,6 @@
   import { open, confirm } from "@tauri-apps/plugin-dialog";
   import PowerCurve from "./PowerCurve.svelte";
   import TechSheet from "./detail/TechSheet.svelte";
-  import ContextMenu from "./ContextMenu.svelte";
   import { nav, pickSession, requestSection } from "$lib/nav.svelte";
   import { libraryVersion } from "$lib/libraryVersion.svelte";
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
@@ -820,26 +820,23 @@
       .trim();
   }
 
-  function initials(brand: string | null, id: string): string {
-    const src = (brand ?? id).replace(/[^a-zA-Z]/g, "");
-    return (src.slice(0, 2) || "??").toUpperCase();
-  }
+  /** Sous-titre de l'en-tête (§6.1) : ce qui identifie l'objet en une ligne,
+   * auteur compris — c'est une propriété du mod, elle n'a rien à faire en bas
+   * de colonne. Les parties absentes ne laissent pas de séparateur orphelin. */
+  const subtitle = $derived(
+    [
+      detail?.brand,
+      detail?.year ? String(detail.year) : null,
+      detail?.car_class ? detail.car_class.toUpperCase() : null,
+      detail?.author ? t("detail.byAuthor", { author: detail.author }) : null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  );
 
-  // Menu ⋮ (§6.3, revue de la fiche) : regroupe les actions autrefois alignées
-  // en rangée dans l'en-tête, peu utilisées au regard de la place qu'elles
-  // prenaient une fois les onglets ajoutés. Cœur favori et badge « Contenu de
-  // base » restent hors du menu (visibles en permanence, pas des actions).
-  let menuPos = $state<{ x: number; y: number } | null>(null);
-  function openActionsMenu(e: MouseEvent) {
-    // Sans ça, ce même clic bulle jusqu'à `document` juste après le montage
-    // de `ContextMenu` (son propre listener `click` de fermeture, voir
-    // ContextMenu.svelte) et referme le menu dans la foulée — il s'ouvrait et
-    // se refermait dans le même geste, invisible à l'œil (bug réel : hover
-    // fonctionnait, le clic ne semblait « rien faire »).
-    e.stopPropagation();
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    menuPos = { x: rect.left, y: rect.bottom + 4 };
-  }
+  // Actions de la fiche (§6.3) : le ⋮ de `FicheHeader` les rend et les
+  // positionne — ici ne reste que leur liste. Cœur favori et pastille d'état
+  // n'y sont pas : ils se lisent en permanence, ce ne sont pas des actions.
   const menuItems = $derived.by(() => {
     const d = detail;
     if (!d) return [];
@@ -912,55 +909,27 @@
     <div class="empty">{t("common.loading")}</div>
   {:else}
     {@const d = detail}
-    <header class="head">
-      <button class="back" type="button" onclick={onclose} title={t("detail.backTooltip")}>←</button>
-      {#if isCar && d.badge}
-        <img class="escu badge-img" src={previewSrc(d.badge)} alt={d.brand ?? ""} />
-      {:else}
-        <span class="escu">{initials(d.brand, d.id_interne)}</span>
-      {/if}
-      <div class="title">
-        <div class="t-name">
-          <span class="t-name-txt">{d.display_name ?? d.id_interne}</span>
-          <!-- Renommer (§5bis.3). Le repère montré pendant l'édition est le nom
-               du FICHIER : `d.display_name` porte déjà la surcharge quand il y
-               en a une, il ne dirait donc pas à quoi on reviendrait. -->
-          <InlineEdit
-            value={d.display_name}
-            original={d.display_name_user ? d.display_name_file : null}
-            overridden={!!d.display_name_user}
-            label={t("detail.renameLabel")}
-            onsave={(v) => saveOverride("display_name_user", v)}
-          />
-        </div>
-        <div class="t-meta mono">
-          {d.brand ?? ""}{d.year ? ` · ${d.year}` : ""}
-          {#if d.category}· <span class="cat">{d.category}</span>{/if}
-          {#if d.car_class}· {d.car_class.toUpperCase()}{/if}
-        </div>
-      </div>
-      <div class="actions">
-        <button class="fav" class:on={d.is_favorite} type="button" onclick={toggleFav} title={t("common.favorite")}>
-          {d.is_favorite ? "♥" : "♡"}
-        </button>
-        <button class="kebab" type="button" onclick={openActionsMenu} title={t("detail.moreActions")}>
-          <span class="kebab-dot"></span><span class="kebab-dot"></span><span class="kebab-dot"></span>
-        </button>
-      </div>
-    </header>
-    {#if menuPos}
-      <ContextMenu x={menuPos.x} y={menuPos.y} items={menuItems} onclose={() => (menuPos = null)} />
-    {/if}
+    <FicheHeader
+      flush
+      onback={onclose}
+      backLabel={t("detail.backTooltip")}
+      glyph={isCar ? "▤" : "◠"}
+      image={isCar && d.badge ? previewSrc(d.badge) : null}
+      imageAlt={d.brand ?? ""}
+      name={d.display_name ?? d.id_interne}
+      {subtitle}
+      category={d.category}
+      rename={{
+        original: d.display_name_file,
+        overridden: !!d.display_name_user,
+        onsave: (v) => saveOverride("display_name_user", v),
+      }}
+      deployment={{ active: d.active, stock: d.is_stock, unmanaged: d.is_unmanaged }}
+      favorite={{ on: d.is_favorite, ontoggle: toggleFav }}
+      actions={menuItems}
+    />
 
-    <!-- État du mod à droite de la bande d'onglets : c'est la première chose
-         qu'on vient vérifier sur une fiche, et elle était introuvable sans
-         ouvrir le menu ⋮ (dont le libellé Activer/Désactiver était le seul
-         indice). Même pastille que la colonne « État » du tableau. -->
-    <Tabs flush tabs={tabItems} active={activeTab} onselect={(v) => (activeTab = v as DetailTab)}>
-      {#snippet trailing()}
-        <StateBadge active={d.active} stock={d.is_stock} unmanaged={d.is_unmanaged} />
-      {/snippet}
-    </Tabs>
+    <Tabs flush tabs={tabItems} active={activeTab} onselect={(v) => (activeTab = v as DetailTab)} />
 
     {#if actionError}<div class="errbox">{actionError}</div>{/if}
     {#if reinstallOk}<div class="export-ok">{t("detail.reinstallSuccess")}</div>{/if}
@@ -1419,123 +1388,6 @@
     color: var(--muted);
     text-align: center;
     padding: 80px 0;
-  }
-  .head {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 18px;
-    border-bottom: 1px solid var(--line);
-    background: var(--panel2);
-  }
-  .back {
-    background: transparent;
-    color: var(--muted);
-    font-size: 18px;
-    line-height: 1;
-    padding: 2px 8px;
-  }
-  .back:hover {
-    color: var(--txt);
-  }
-  .escu {
-    width: 30px;
-    height: 30px;
-    background: var(--rosso);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-family: var(--mono);
-    font-weight: 600;
-    font-size: 11px;
-    flex: none;
-  }
-  .escu.badge-img {
-    background: var(--panel2);
-    border: 1px solid var(--line);
-    object-fit: contain;
-    padding: 3px;
-  }
-  .title {
-    min-width: 0;
-    /* Prend la place disponible : en édition, le champ de saisie a besoin
-       d'une largeur utile plutôt que de la seule largeur du nom. */
-    flex: 1;
-  }
-  .t-name {
-    font-size: 14px;
-    font-weight: 600;
-    /* 1.2 et pas 1.1 : à 1.1 la boîte de ligne est plus courte que la fonte,
-       et les jambages descendants se font rogner en bas (le « g » de
-       « Mugello » — retour utilisateur direct). */
-    line-height: 1.2;
-    /* Le crayon se pose au bout du nom, sur la même ligne de base. En édition,
-       `InlineEdit` remplace le crayon par son champ : la colonne du titre
-       s'élargit alors au lieu de pousser le nom hors cadre. */
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-  }
-  .t-name-txt {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  /* Description absente : le texte de remplacement se distingue d'une vraie
-     description, sinon « Aucune description. » se lit comme le contenu du mod. */
-  .empty-desc {
-    color: var(--muted);
-    font-style: italic;
-  }
-  .t-meta {
-    color: var(--muted);
-    font-size: 10px;
-    margin-top: 2px;
-  }
-  .t-meta .cat {
-    color: var(--rosso-bright);
-  }
-  .actions {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .fav {
-    background: transparent;
-    color: var(--txt2);
-    font-size: 18px;
-    line-height: 1;
-  }
-  .fav:hover {
-    color: var(--rosso-bright);
-  }
-  .fav.on {
-    color: var(--rosso-bright);
-  }
-  /* Menu ⋮ : regroupe les actions autrefois en rangée dans l'en-tête (§6.3).
-     Icône construite en CSS (3 carrés empilés) plutôt qu'un glyphe Unicode —
-     le rendu du caractère « ⋮ » dépendait trop de la police (fin, peu
-     lisible, cible de clic minuscule dans certains cas). */
-  .kebab {
-    background: transparent;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    padding: 4px 7px;
-  }
-  .kebab-dot {
-    width: 4px;
-    height: 4px;
-    background: var(--txt2);
-    border-radius: 1px;
-  }
-  .kebab:hover .kebab-dot {
-    background: var(--rosso-bright);
   }
   /* Onglets : `Tabs.svelte` (variante `flush`), partagé avec Réglages,
      Add-ons et Règles de tags — plus de style local ici. */

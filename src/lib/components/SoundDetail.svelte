@@ -12,11 +12,12 @@
   import { soundDetail, setSoundAuthor, type SoundDetail } from "$lib/enginesound";
   import { fmtSize } from "$lib/format";
   import { errorText } from "$lib/errors";
+  import { setEntityDisplayName } from "$lib/userMeta";
   import { t } from "$lib/i18n/index.svelte";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
   import IgnitionKey from "./detail/IgnitionKey.svelte";
   import InlineEdit from "./InlineEdit.svelte";
-  import StateBadge from "./StateBadge.svelte";
+  import FicheHeader from "./FicheHeader.svelte";
   import {
     engineControls,
     engineRev,
@@ -67,6 +68,18 @@
     }
   }
 
+  /** Renommer (§6.1) : la saisie vit dans l'overlay, à côté du nom dérivé du
+   * fichier et jamais à sa place — vider le champ ramène donc celui-ci. */
+  async function rename(value: string | null): Promise<void> {
+    error = "";
+    try {
+      await setEntityDisplayName("SUB_MOD", subId, value ?? "");
+      await load();
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
   async function listen() {
     if (!detail) return;
     error = "";
@@ -95,16 +108,24 @@
 </script>
 
 <div class="page">
-  <header class="head">
-    <button class="back" type="button" onclick={onclose}>{t("sounds.back")}</button>
-    <h2 class="lbl-screen">{detail?.name ?? subId}</h2>
-    {#if detail}
-      <StateBadge active={detail.isActive} stock={false} />
-      <div class="actions">
-        <IgnitionKey state={engineState(detail.parentId, detail.id)} onclick={listen} />
-      </div>
-    {/if}
-  </header>
+  {#if detail}
+    {@const d = detail}
+    <FicheHeader
+      onback={onclose}
+      backLabel={t("sounds.back")}
+      glyph="♪"
+      name={d.displayNameUser ?? d.name}
+      subtitle={d.displayNameUser ? d.name : undefined}
+      rename={{ original: d.name, overridden: !!d.displayNameUser, onsave: rename }}
+      deployment={{ active: d.isActive }}
+    >
+      {#snippet control()}
+        <IgnitionKey state={engineState(d.parentId, d.id)} onclick={listen} />
+      {/snippet}
+    </FicheHeader>
+  {:else}
+    <FicheHeader onback={onclose} backLabel={t("sounds.back")} glyph="♪" name={subId} />
+  {/if}
 
   {#if revControls}
     <div class="rev">
@@ -216,35 +237,6 @@
 <style>
   .page {
     max-width: 860px;
-  }
-  .head {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 12px;
-  }
-  .head h2 {
-    flex: 1;
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .back {
-    background: none;
-    border: none;
-    padding: 0;
-    font: inherit;
-    font-size: 11.5px;
-    color: var(--muted);
-    cursor: pointer;
-  }
-  .back:hover,
-  .back:focus-visible {
-    color: var(--rosso-bright);
-  }
-  .actions {
-    display: flex;
-    gap: 6px;
   }
   .meta {
     display: flex;

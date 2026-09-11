@@ -15,6 +15,12 @@ export interface OtherModRow {
   is_priority: boolean;
   is_active: boolean;
   junctions: string[];
+  /** Nom repris à la main (refonte §6.1) : ces mods portent des noms
+   * d'archive, c'est-à-dire rien de lisible. `null` tant que rien n'a été
+   * saisi — le nom affiché reste alors `id`. */
+  display_name_user: string | null;
+  /** Note libre (refonte §9). */
+  notes_user: string | null;
   conflicts: ConflictInfo[];
   /** Fichiers visant une zone qu'un outil externe synchronise
    * (`extension/config/*​/loaded/`, vao-patches) : Content Manager peut y

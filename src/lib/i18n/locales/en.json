@@ -368,6 +368,7 @@
     "working": "…",
     "description": "Description",
     "unmanagedState": "Unmanaged",
+    "pendingState": "Pending",
     "brokenState": "Broken"
   },
   "gridThumbs": {
@@ -561,6 +562,7 @@
     "noSkins": "No skin for this car.",
     "distanceLabel": "Distance",
     "authorLabel": "Author",
+    "byAuthor": "by {author}",
     "triedYes": "Tried ✓",
     "triedNo": "Never tried",
     "engineSound": "Engine sound",

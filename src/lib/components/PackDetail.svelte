@@ -16,6 +16,7 @@
   import { fmtSize } from "$lib/format";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
+  import FicheHeader from "./FicheHeader.svelte";
   import ExtrasBlock from "./detail/ExtrasBlock.svelte";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
   import LoadingState from "./LoadingState.svelte";
@@ -83,17 +84,17 @@
 </script>
 
 <div class="page">
-  <header class="head">
-    <button class="back" type="button" onclick={onclose}>{t("apps.back")}</button>
-    <h2 class="lbl-screen mono">{pack}</h2>
-    {#if detail}
-      <div class="actions">
-        <button class="btn del" type="button" onclick={uninstall} disabled={busy}>
-          {busy ? t("common.working") : t("pack.uninstall")}
-        </button>
-      </div>
-    {/if}
-  </header>
+  <!-- Un pack n'est pas une entité de la base : ni état de déploiement (ce
+       sont ses membres qui en ont un), ni nom repris à la main. -->
+  <FicheHeader
+    onback={onclose}
+    backLabel={t("apps.back")}
+    glyph="▦"
+    name={pack}
+    actions={detail
+      ? [{ label: busy ? t("common.working") : t("pack.uninstall"), onclick: uninstall, disabled: busy, danger: true }]
+      : undefined}
+  />
 
   {#if error}<div class="errbox">{error}</div>{/if}
 
@@ -152,50 +153,6 @@
 <style>
   .page {
     max-width: 980px;
-  }
-  .head {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 12px;
-  }
-  .head h2 {
-    flex: 1;
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .back {
-    background: var(--raised);
-    border: 1px solid var(--line);
-    color: var(--txt2);
-    font-size: 11px;
-    padding: 6px 12px;
-  }
-  .back:hover {
-    border-color: var(--rosso-border);
-    color: var(--rosso-bright);
-  }
-  .actions {
-    display: flex;
-    gap: 8px;
-  }
-  .btn {
-    background: var(--raised);
-    color: var(--txt2);
-    border: 1px solid var(--line);
-    font-size: 11px;
-    padding: 6px 12px;
-  }
-  .btn:hover:not(:disabled) {
-    border-color: var(--rosso-border);
-    color: var(--rosso-bright);
-  }
-  .btn:disabled {
-    opacity: 0.5;
-  }
-  .btn.del {
-    color: var(--muted);
   }
   .errbox {
     margin-bottom: 14px;
