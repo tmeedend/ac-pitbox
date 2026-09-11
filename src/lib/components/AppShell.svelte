@@ -4,9 +4,9 @@
   import About from "./About.svelte";
   import Library from "./Library.svelte";
   import Launch from "./Launch.svelte";
-  import Transversal from "./Transversal.svelte";
   import DriverScreen from "./driver/DriverScreen.svelte";
-  import OtherMods from "./OtherMods.svelte";
+  import Inventory from "./Inventory.svelte";
+  import Apps from "./Apps.svelte";
   import NavRail from "./NavRail.svelte";
   import Workshop from "./Workshop.svelte";
   import ImportOverlay from "./ImportOverlay.svelte";
@@ -787,15 +787,14 @@
           <DriverScreen />
         {:else if nav.section === "race"}
           <Launch />
-        {:else if nav.section === "carskins"}
-          <Transversal variant="car" />
-        {:else if nav.section === "trackskins"}
-          <Transversal variant="track" />
-        {:else if nav.section === "others" || nav.section === "apps"}
-          <!-- Un seul écran pour les deux adresses : les apps sont un onglet
-               de « Compléments » (SPEC §7.3), et `apps` reste une adresse
-               valide — c'est ce qui la fait ouvrir directement sur son onglet. -->
-          <OtherMods />
+        {:else if nav.section === "apps"}
+          <!-- Les apps ont leur écran (refonte §3.2) : une app a un nom, une
+               identité, on l'installe volontairement — elle n'est la dépendance
+               de rien, et n'avait rien à faire dans un tiroir avec les polices
+               et les fragments de config. -->
+          <Apps />
+        {:else if nav.section === "others"}
+          <Inventory />
         {/if}
       </main>
     </div>

@@ -34,12 +34,6 @@ use crate::overlay;
 
 /// How sure the attachment is. Ordered from strongest to weakest — the first
 /// signal that answers wins, and the UI may degrade what it shows accordingly.
-///
-/// The spec's second signal — "the mod is a layer, its host is known by
-/// construction" — has no variant here yet: layers carry their `parent_id` and
-/// are not deduced at all. It arrives the day the inventory lists them next to
-/// the rest (L7), and not before: a variant nothing constructs is dead code
-/// that clippy rightly refuses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Signal {
@@ -48,6 +42,9 @@ pub enum Signal {
     /// A posed path carries the id of a known entity
     /// (`content/cars/ks_toyota_ae86/…`). Near-certain.
     Path,
+    /// The host is written in the row itself — a livery, a sound, a layer all
+    /// carry their `parent_id`. Nothing is deduced: this one is **certain**.
+    Layer,
     /// A file (or the mod's own id) is named after an entity —
     /// `la_canyons__hide_pit_crew.ini`. Strong.
     ConfigName,
@@ -120,7 +117,10 @@ impl EntityIndex {
         Ok(Self { entities })
     }
 
-    fn get(&self, id: &str) -> Option<(AttachKind, Option<String>, String)> {
+    /// L'entité d'un id, si la bibliothèque la connaît. Public parce que
+    /// l'inventaire (§4) s'en sert pour les sources dont l'hôte est **écrit**
+    /// et non déduit — livrées, sons, couches.
+    pub fn lookup(&self, id: &str) -> Option<(AttachKind, Option<String>, String)> {
         let key = id.to_ascii_lowercase();
         self.entities
             .get(&key)
@@ -153,7 +153,7 @@ pub fn attachment_of(
     //    pas : c'est la seule information de cette fonction qui vienne de
     //    quelqu'un qui SAIT, au lieu d'être déduite.
     if let Some(target) = user_override.map(str::trim).filter(|s| !s.is_empty()) {
-        if let Some((kind, name, key)) = index.get(target) {
+        if let Some((kind, name, key)) = index.lookup(target) {
             return Attachment {
                 kind,
                 target_id: Some(key),
@@ -171,7 +171,7 @@ pub fn attachment_of(
     for f in files {
         for seg in f.as_ref().components() {
             let Some(seg) = seg.as_os_str().to_str() else { continue };
-            if let Some((kind, name, key)) = index.get(seg) {
+            if let Some((kind, name, key)) = index.lookup(seg) {
                 return Attachment {
                     kind,
                     target_id: Some(key),
@@ -252,7 +252,7 @@ fn name_prefix_entity(index: &EntityIndex, name: &str) -> Option<(AttachKind, Op
     candidates
         .into_iter()
         .filter(|c| c.len() >= MIN_NAME_MATCH)
-        .find_map(|c| index.get(c))
+        .find_map(|c| index.lookup(c))
 }
 
 /// L'entité dont l'archive d'origine est la même. Le nom d'archive traîne

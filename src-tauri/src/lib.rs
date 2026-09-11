@@ -28,6 +28,7 @@ mod identity;
 mod import_bench;
 mod import_progress;
 mod importer;
+mod inventory;
 mod inspect;
 mod kunos;
 mod kunos_dates;
@@ -383,6 +384,7 @@ pub fn run() {
             commands::addons::open_app_resource,
             commands::addons::open_app_folder,
             commands::others::list_other_mods,
+            commands::others::list_inventory,
             commands::others::set_other_priority,
             commands::others::set_other_attachment,
             commands::others::activate_other,

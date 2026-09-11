@@ -27,6 +27,14 @@ pub fn open_other_mod_folder(app: AppHandle, db: State<Db>, id: String) -> Resul
         .map_err(|e| e.to_string())
 }
 
+/// L'inventaire des compléments (§4) : une ligne par chose, cinq sources.
+#[tauri::command]
+pub fn list_inventory(app: AppHandle, db: State<Db>) -> Result<Vec<crate::inventory::InventoryRow>, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::inventory::list(&conn, &cfg).map_err(|e| e.to_string())
+}
+
 /// Corrige le rattachement d'un mod « autre » (§2.3). Chaîne vide = revenir à
 /// la déduction.
 #[tauri::command]

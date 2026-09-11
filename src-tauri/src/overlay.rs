@@ -1651,6 +1651,13 @@ pub fn list_layers(conn: &Connection, parent_id: &str, host: HostKind) -> rusqli
 }
 
 /// Toutes les couches d'un type (Car|Track), pour la vue transversale add-ons.
+/// Toutes les couches, tous hôtes confondus (inventaire, refonte §4).
+pub fn list_all_layers(conn: &Connection) -> rusqlite::Result<Vec<LayerRow>> {
+    let mut stmt = conn.prepare(&format!("{LAYER_SELECT} ORDER BY parent_id, priority"))?;
+    let rows = stmt.query_map([], map_layer)?;
+    rows.collect()
+}
+
 pub fn list_layers_by_kind(conn: &Connection, kind: &str) -> rusqlite::Result<Vec<LayerRow>> {
     let mut stmt = conn.prepare(&format!(
         "{LAYER_SELECT} WHERE parent_kind = ?1 ORDER BY parent_id, priority"
@@ -1816,6 +1823,13 @@ pub fn list_subs_by_type(conn: &Connection, sub_type: &str) -> rusqlite::Result<
         "{SUB_SELECT} WHERE sub_type = ?1 ORDER BY parent_id, name COLLATE NOCASE"
     ))?;
     let rows = stmt.query_map([sub_type], map_sub)?;
+    rows.collect()
+}
+
+/// Tous les sous-éléments, quel que soit leur type (inventaire, refonte §4).
+pub fn list_all_subs(conn: &Connection) -> rusqlite::Result<Vec<SubModRow>> {
+    let mut stmt = conn.prepare(&format!("{SUB_SELECT} ORDER BY parent_id, name COLLATE NOCASE"))?;
+    let rows = stmt.query_map([], map_sub)?;
     rows.collect()
 }
 
