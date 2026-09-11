@@ -83,24 +83,21 @@ pub struct InventoryRow {
 
 /// L'inventaire complet, à plat.
 ///
-/// **Un mannequin déployé n'y figure pas** : l'inventaire d'un type vit avec
-/// son sélecteur quand il en existe un (§5), et celui des mannequins est
-/// l'écran Pilote. C'était le doublon que la refonte vient supprimer.
+/// **Les mannequins y figurent, comme les livrées.** Le §5 veut que
+/// l'inventaire d'un type vive avec son sélecteur, et un premier jet les avait
+/// donc retirés dès qu'ils étaient posés dans le jeu. C'était une erreur, pour
+/// une raison qu'on ne voit qu'à l'usage : la galerie de l'écran Pilote est un
+/// **sélecteur**, elle ne gère rien — ni désactivation, ni suppression, ni
+/// ouverture du dossier. Les retirer d'ici revenait donc à retirer le seul
+/// endroit d'où on pouvait agir sur eux.
 ///
-/// « Déployé » et pas « importé », et la nuance porte tout : l'écran Pilote lit
-/// `content/driver` **du jeu**, donc un mannequin désactivé n'y apparaît pas et
-/// doit rester listé ici, sans quoi il n'existerait plus nulle part. Le test de
-/// présence du fichier est une question au disque, à trois francs six sous —
-/// répondre exactement (« l'écran Pilote le montre-t-il ? ») exigerait de
-/// parser chaque KN5, une quinzaine de millisecondes pour quinze mégaoctets.
-/// L'écart résiduel — déployé mais sans squelette, donc écarté par l'écran
-/// Pilote — est couvert par le décompte que celui-ci affiche
-/// (`driver::BodyList::discarded`).
+/// Les livrées tranchent la question par l'exemple : elles vivent dans le
+/// sélecteur de la fiche voiture **et** ici, et personne ne s'en plaint —
+/// choisir et gérer sont deux gestes, ils peuvent avoir deux écrans. Le type
+/// « Mannequin » et sa facette suffisent à ce que le doublon se lise.
 pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<InventoryRow>> {
     let index = attach::EntityIndex::build(conn)?;
     let mut out: Vec<InventoryRow> = Vec::new();
-
-    let driver_dir = cfg.ac_install_path.as_ref().map(|ac| ac.join("content").join("driver"));
 
     // --- Mods « autres » : la seule source dont le rattachement se déduit ---
     for card in crate::others::list_others(conn, cfg)? {
@@ -108,11 +105,6 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
         // Un mannequin ne pose QUE dans `content/driver` : c'est ce qui le
         // distingue d'un pack qui en livrerait un parmi d'autres choses.
         let is_driver = card.categories == ["driver"];
-        // Déployé dans le jeu = montré par l'écran Pilote, donc rien à faire
-        // ici. Le fichier porte le nom du modèle, que la junction pose tel quel.
-        if is_driver && driver_dir.as_ref().is_some_and(|d| deployed_driver(d, &card)) {
-            continue;
-        }
         // Aucun fichier stocké : tout est parti en ressources (§4.5.2). C'est
         // une notice ou un manuel — le seul cas où un mod « autre » ne pose
         // rien du tout, et il a un nom.
@@ -224,19 +216,6 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
     Ok(out)
 }
 
-/// Le mannequin de ce mod est-il posé dans `content/driver` du jeu ?
-///
-/// On regarde les jonctions enregistrées à l'activation — ce sont les chemins
-/// réellement posés — et on vérifie qu'au moins un existe encore. Un fichier
-/// effacé à la main derrière le dos de l'app rend donc la ligne à l'inventaire,
-/// ce qui est exactement ce qu'on veut : elle y redevient réparable.
-fn deployed_driver(driver_dir: &std::path::Path, card: &crate::others::OtherModCard) -> bool {
-    card.row.junctions.iter().any(|j| {
-        let path = std::path::Path::new(j);
-        path.starts_with(driver_dir) && path.exists()
-    })
-}
-
 /// Une livrée change ce qu'on voit, un son ce qu'on entend : les deux relèvent
 /// de l'apparence au sens de la facette — ce qui se choisit pour lui-même, par
 /// opposition à une dépendance qu'on subit.
@@ -327,12 +306,15 @@ mod tests {
         drop(base);
     }
 
-    /// Rule (§5): a mannequin deployed in the game is shown by the Pilote
-    /// screen, which is its selector — so the inventory stops listing it. One
-    /// that is NOT deployed stays: that screen reads `content/driver` of the
-    /// game, so nothing else would show it, and it would exist nowhere.
+    /// Rule (§4, decided with the user): a mannequin stays in the inventory
+    /// **whether or not it is deployed**, exactly like a livery.
+    ///
+    /// Removing the deployed ones looked faithful to §5 and took away the only
+    /// place they could be acted on: the Pilote gallery chooses, it does not
+    /// manage. Choosing and managing are two gestures and may have two screens
+    /// — which is already how liveries work, and nobody trips over it.
     #[test]
-    fn a_deployed_mannequin_leaves_the_inventory_but_a_dormant_one_stays() {
+    fn a_mannequin_stays_listed_whether_deployed_or_not() {
         let base = crate::testutil::temp_dir("inventory-driver");
         let library = base.join("library");
         let ac = base.join("ac");
@@ -359,9 +341,14 @@ mod tests {
             }
         }
 
-        let ids: Vec<String> = list(&conn, &cfg).unwrap().into_iter().map(|r| r.id).collect();
-        assert!(!ids.contains(&"ada".to_string()), "posé dans le jeu : l'écran Pilote le montre");
-        assert!(ids.contains(&"dormant".to_string()), "pas posé : sinon il n'existerait nulle part");
+        let rows = list(&conn, &cfg).unwrap();
+        let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
+        assert!(ids.contains(&"ada"), "déployé, et listé quand même : c'est ici qu'on agit dessus");
+        assert!(ids.contains(&"dormant"), "pas déployé, listé aussi");
+        assert!(
+            rows.iter().all(|r| r.kind == RowKind::Driver),
+            "reconnus comme mannequins des deux côtés"
+        );
         drop(base);
     }
 
