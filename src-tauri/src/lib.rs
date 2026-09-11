@@ -250,6 +250,7 @@ pub fn run() {
             commands::layers::set_layer_active,
             commands::layers::reorder_layer,
             commands::layers::list_layer_files,
+            commands::layers::layer_layout_origins,
             commands::layers::open_layer_folder,
             commands::library::list_library,
             commands::library::get_mod_detail,

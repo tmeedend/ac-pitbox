@@ -398,6 +398,18 @@ export function listLayerFiles(id: string): Promise<LayerFile[]> {
 }
 
 /** Ouvre le dossier d'une couche dans l'explorateur (§4.4). */
+/** Un tracé apporté par une couche active (refonte §7.7). */
+export interface LayoutOrigin {
+  layout: string;
+  layer_id: string;
+  layer_name: string;
+}
+
+/** Tracés qu'une couche ajoute au circuit — ceux que la base ne connaît pas. */
+export function layerLayoutOrigins(parentId: string, kind: LayerHostKind): Promise<LayoutOrigin[]> {
+  return invoke<LayoutOrigin[]>("layer_layout_origins", { parentId, kind });
+}
+
 export function openLayerFolder(id: string): Promise<void> {
   return invoke<void>("open_layer_folder", { id });
 }

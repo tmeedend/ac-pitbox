@@ -53,6 +53,19 @@ pub fn list_layer_files(app: AppHandle, db: State<Db>, id: String) -> Result<Vec
 /// Ouvre le dossier d'une couche dans l'explorateur. Même rationale que
 /// `open_mod_folder` : le chemin est résolu côté Rust depuis l'overlay, jamais
 /// donné par le front, donc pas de scope ACL large à ouvrir.
+/// Tracés apportés par les couches actives d'un circuit (§7.7).
+#[tauri::command]
+pub fn layer_layout_origins(
+    app: AppHandle,
+    db: State<Db>,
+    parent_id: String,
+    kind: String,
+) -> Result<Vec<crate::layers::LayoutOrigin>, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::layers::layout_origins(&conn, &cfg, &parent_id, crate::layers::HostKind::parse(&kind))
+}
+
 #[tauri::command]
 pub fn open_layer_folder(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
     let cfg = crate::config::load(&app);

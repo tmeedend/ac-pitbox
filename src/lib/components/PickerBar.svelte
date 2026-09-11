@@ -38,8 +38,11 @@
     /** "contain" pour un tracé (forme entière), "cover" pour une photo. */
     fit?: "cover" | "contain";
     emptyText: string;
+    /** Mention accolée au compteur : « dont 1 ajouté » quand une couche apporte
+     * une partie de la liste (§7.7). Absente quand il n'y a rien à dire. */
+    note?: string;
   }
-  let { label, items, index, onpick, expanded, ontoggle, fit = "cover", emptyText }: Props = $props();
+  let { label, items, index, onpick, expanded, ontoggle, fit = "cover", emptyText, note }: Props = $props();
 
   /** Boucle plutôt que butée, comme la bande d'onglets : sur deux livrées, une
    * butée rendrait l'une des deux flèches inerte la moitié du temps. */
@@ -63,7 +66,7 @@
     }}
   />
   {#if items.length > 1}
-    <span class="pos mono">{index + 1} / {items.length}</span>
+    <span class="pos mono">{index + 1} / {items.length}{#if note} · {note}{/if}</span>
     <span class="arrows">
       <button type="button" onclick={() => step(-1)} title={t("detail.pickerPrev")} aria-label={t("detail.pickerPrev")}
         >‹</button

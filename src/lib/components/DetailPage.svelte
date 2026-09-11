@@ -21,6 +21,8 @@
     type NativeSpecs,
     type LayoutItem,
     type LayerRow,
+    layerLayoutOrigins,
+    type LayoutOrigin,
   } from "$lib/library";
   import { listMediaScreenshots, listMediaReplays, listMediaBackgrounds } from "$lib/media";
   import { listModSkins, openNativeShowroom, type SkinItem } from "$lib/launch";
@@ -119,6 +121,30 @@
    * pack. Le nombre de couches sœurs voyage avec elle : la carte Ordre n'a de
    * sens qu'à partir de deux. */
   let openLayer = $state<{ layer: LayerRow; siblings: number } | null>(null);
+  /** Tracés apportés par une couche active (§7.7). La carte des tracés montre
+   * l'état **composé** — celui du lancement — et « 2 tracés » y est exact tout
+   * en étant trompeur quand l'un des deux vient d'une extension.
+   * Relu à chaque recomposition (`contentRevision`) : activer une couche change
+   * la réponse. */
+  let layoutOrigins = $state<LayoutOrigin[]>([]);
+  $effect(() => {
+    const current = id;
+    void contentRevision;
+    if (isCar) {
+      layoutOrigins = [];
+      return;
+    }
+    layerLayoutOrigins(current, "Track")
+      .then((o) => {
+        if (current === id) layoutOrigins = o;
+      })
+      .catch(() => {
+        // Best-effort : sans cette mention, la carte reste juste, elle est
+        // seulement moins bavarde.
+        if (current === id) layoutOrigins = [];
+      });
+  });
+  const originOf = $derived((layoutId: string) => layoutOrigins.find((o) => o.layout === layoutId) ?? null);
   /** Sous-onglet du bloc textuel (§7.4). **Jamais « Notes » par défaut** : la
    * description est ce qu'on vient lire, la note ce qu'on vient ajouter.
    * L'onglet « Le modèle réel » viendra du chantier Wikipédia et sera absent
@@ -1196,15 +1222,20 @@
             expanded={pickerOpen}
             ontoggle={() => (pickerOpen = !pickerOpen)}
             emptyText={t("detail.singleLayout")}
+            note={layoutOrigins.length ? t("detail.layoutsAdded", { count: layoutOrigins.length }) : undefined}
           />
           {#if pickerOpen && d.track.layouts.length}
             <div class="skins">
               {#each d.track.layouts as l, i (l.id || i)}
                 {@const o = previewSrc(l.outline)}
+                {@const from = originOf(l.id)}
                 <button class="skin" class:preview={i === previewLayout} onclick={() => selectLayout(i)} title={t("detail.chooseLayoutTooltip")}>
                   <div class="skin-img layout-img">
                     {#if o}<img src={o} alt={l.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
                     {#if i === previewLayout}<span class="skin-apercu mono">{t("library.sessionBadge")}</span>{/if}
+                    <!-- Marque d'origine (§7.7) : ce tracé n'est pas dans le mod,
+                         c'est une couche qui l'apporte. -->
+                    {#if from}<span class="skin-from mono" title={t("detail.layoutFromLayerTip", { layer: from.layer_name })}>{t("detail.layoutFromLayer")}</span>{/if}
                   </div>
                   <div class="skin-b"><span class="skin-name">{l.name}</span></div>
                 </button>
@@ -1915,6 +1946,18 @@
   .skin-noimg {
     color: var(--faint);
     font-size: 16px;
+  }
+  /* Même gabarit que la pastille de session, l'autre coin et le bleu des
+     fichiers de mod (§7.2ter) : elle informe, elle n'alerte pas. */
+  .skin-from {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    background: var(--blue-dim);
+    border: 1px solid var(--blue-border);
+    color: var(--blue);
+    font-size: 7px;
+    padding: 0 3px;
   }
   .skin-apercu {
     position: absolute;

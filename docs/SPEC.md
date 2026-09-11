@@ -640,6 +640,21 @@ et porte une pastille quand une note existe. Un troisième onglet « Le modèle
 réel » s'y ajoutera avec l'appariement Wikipédia, absent tant qu'aucun article
 n'est apparié.
 
+### 6.3bis (suite) Tracés apportés par une couche (refonte §7.7)
+
+La carte des tracés montre l'**état composé** — celui que l'utilisateur aura au
+lancement, couches comprises. Elle ne disait pas d'où venait chaque tracé : sur
+un circuit dont une extension ajoute une variante, « 2 tracés » est exact et
+trompeur à la fois.
+
+Un tracé porte donc une marque d'origine quand une couche **active** l'apporte,
+et le compteur du sélecteur ajoute « dont 1 ajouté ». Deux conditions, et la
+seconde compte autant que la première (`layers::layout_origins`) : la couche
+doit poser des fichiers sous ce tracé **et** la base ne doit pas déjà le
+connaître. Une couche qui remplace la texture d'un tracé existant l'habille,
+elle ne l'apporte pas — l'étiqueter reviendrait à présenter le contenu propre
+du circuit comme un add-on.
+
 ### 6.3ter Fiche d'une couche (refonte §8)
 
 Une couche a sa **fiche**, ouverte depuis la liste de l'hôte et posée
