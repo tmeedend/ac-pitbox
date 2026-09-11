@@ -94,8 +94,13 @@ recopier maintenant, c'est les faire diverger tout de suite.
 Reformatage pur → commits isolés, jamais mélangés au fonctionnel (sinon `git blame`
 devient inexploitable).
 
-**0.c — Vitest**, installé ici pour que les lots suivants écrivent leurs tests au fil
-de l'eau plutôt qu'à la fin.
+**0.c — Vitest.** ✅ Fait. `vitest.config.ts` (config séparée, sans le plugin
+SvelteKit), `npm run test` enchaîné dans `npm run verify`, un fichier `*.test.ts` à
+côté de son module. Neuf cas sur `withoutBrand` au démarrage — dont un rouge : la
+table d'alias de `displayName.ts` s'indexait sur des clés écrites à la main
+(`mercedes-benz`) quand la recherche passe par `normalise`, qui ne laisse jamais de
+tiret. Toutes les Mercedes gardaient donc leur marque sur la carte. À l'œil, la table
+paraît juste.
 
 ---
 
@@ -103,7 +108,7 @@ de l'eau plutôt qu'à la fin.
 
 | Lot | Contenu | Dépend de |
 |---|---|---|
-| **L1** | **Socle overlay** : `notes_user` et `display_name_user` sur `sub_mods`, `apps`, `other_mods`, `layers` ; `attachment_user`. ALTER idempotents, CRUD, façades, bindings. Backend seul. | — |
+| **L1** | ✅ **Socle overlay** : `notes_user` et `display_name_user` sur les cinq tables d'entités, module `usermeta.rs`, un couple de commandes pour tous les types, binding typé. ALTER idempotents. Backend seul, aucun écran touché. `attachment_user` est **reporté en L6**, avec le code qui le calcule : une colonne que rien n'écrit ni ne lit pourrit. | — |
 | **L2** | **Coquille de fiche** (§6, §12) : en-tête unique, tuile réelle, vocabulaire d'état Actif / Inactif / **En attente** (ambre), nom éditable partout, auteur au sous-titre. Appliquée aux 5 fiches existantes. | L1, 0.b |
 | **L3** | **Notes** (§9) : champ sur toutes les fiches, jeton `note:`, facette « A une note », indicateur sur ligne et carte, export. Les trois mécanismes du §9.5 **ensemble**. | L1, L2 |
 | **L4** | **Fiche voiture / circuit** (§7 + §7.8) — le gros morceau, sur `DetailPage.svelte` (2 159 lignes). ① découpage en blocs, commit de déplacement pur ② les trois onglets, blocs déplacés **sans être modifiés** (§17) ③ sélecteur compact partagé livrée/tracé ④ bloc textuel à sous-onglets, catégorie près du titre, CSP démotées, unités d'origine en gris, tracés composés. | L2, L3 |

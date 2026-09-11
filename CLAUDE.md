@@ -718,16 +718,20 @@ laisser pourrir ici.
       source), réponse attendue par email. Si refus ou trop long, plan B
       documenté : Certum Open Source Code Signing (~49€/an, cloud SimplySign,
       pas de jeton USB).
-- [ ] **Runner de tests frontend** : délibérément absent. À reconsidérer
-      seulement le jour où de la logique pure sera extraite des composants —
-      pour tester *cette* logique, pas l'affichage. **Ce jour est arrivé** :
-      `src/lib/displayName.ts` (retrait du préfixe de marque) est une fonction
-      pure avec une table d'alias, des règles de coupe qui se contredisent
-      volontairement (comparaison insensible aux tirets, coupe seulement sur
-      une espace) et des cas qui ne se vérifient qu'en les exécutant
-      (`Mercedes-Benz SLS`, `Mercedes AMG GT`, `Ferrari` tout seul). Le
-      tri/regroupement/cumul de `Transversal.svelte` en est toujours proche.
-      Décision à prendre avec l'utilisateur : c'est une dépendance de plus.
+- [ ] **Refonte de la navigation et des fiches** (branche
+      `feature/refonte-navigation`). Rail à deux rangs, inventaire unique des
+      compléments, une seule anatomie de fiche, notes sur toutes les entités.
+      **Spec, maquette et plan de livraison dans `docs/`** —
+      `PLAN-refonte-navigation.md` porte l'ordre des lots et, surtout, les
+      **mesures faites sur la bibliothèque réelle avant de commencer** : elles
+      ont supprimé un lot entier (la détection CSP des voitures existe déjà,
+      167 sur 311) et démenti le fourre-tout redouté (19 des 28 mods « autres »
+      sont des mannequins, qui partent dans l'écran Pilote). Fait : L1, le
+      socle overlay — `notes_user` et `display_name_user` sur les cinq tables
+      d'entités, `usermeta.rs`, deux commandes pour tous les types. Le
+      rattachement déduit (`attachment_user`) est **volontairement reporté au
+      lot L6**, avec le code qui le calcule : une colonne que rien n'écrit ni
+      ne lit pourrit.
 ## Fin de tâche — dans cet ordre
 
 1. **Mettre à jour `docs/SPEC.md`** dès qu'une évolution change le
@@ -773,9 +777,20 @@ servent plus (une fonctionnalité abandonnée emporte sa dépendance).
 
 ## Tests
 
-Tout en module, `#[cfg(test)] mod tests` en fin de fichier. Pas de dossier
-`tests/`, pas de runner frontend — `npm run check` couvre le typage, et le
-risque réel est côté Rust, là où une erreur détruit des fichiers de jeu.
+Côté Rust, tout en module, `#[cfg(test)] mod tests` en fin de fichier, pas de
+dossier `tests/` : c'est là qu'est le risque réel, là où une erreur détruit des
+fichiers de jeu.
+
+Côté front, **Vitest sur la logique pure uniquement** (`vitest.config.ts`,
+`npm run test`, enchaîné dans `npm run verify`) : un fichier `*.test.ts` à côté
+de son module, aucun test de composant, pas de jsdom, pas de
+`@testing-library`. La config est séparée de `vite.config.js` et n'a pas le
+plugin SvelteKit — monter un composant demanderait trois dépendances de plus,
+c'est une décision à reprendre explicitement le jour où elle se pose, pas à
+franchir par inadvertance. Le typage reste le travail de `npm run check` ; le
+test ne sert qu'aux fonctions dont les cas limites ne se vérifient qu'en les
+exécutant (`displayName.ts` et ses règles de coupe contradictoires — dont le
+premier test a d'ailleurs trouvé une table d'alias inatteignable).
 
 - **Un test = une règle**, nommée en phrase :
   `junction_create_remove_and_guard`, `activate_deactivate_leave_no_history`.
