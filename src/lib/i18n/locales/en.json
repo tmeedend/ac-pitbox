@@ -1505,6 +1505,7 @@
   "driver": {
     "title": "Driver",
     "subtitle": "The driver's body and outfit — helmet, suit, gloves. The choice is global: it follows you from one car to the next.",
+    "discarded": "{count} .kn5 files in content/driver are unusable (unreadable, or without a skeleton) and are not shown here.",
     "search": "Search",
     "searchPlaceholder": "Folder name, family…",
     "favorites": "Favourites",

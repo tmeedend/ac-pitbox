@@ -1050,6 +1050,14 @@ bouton n'y est exposé** : ouvrir, prioriser, désactiver, supprimer passent par
 le ⋮. Reste visible ce qui se *lit* — le rattachement (lien vers l'hôte), la
 nature, l'étoile de priorité quand elle est posée, le marqueur de note, l'état.
 
+**Un mannequin de pilote déployé n'y figure pas** : l'inventaire d'un type vit
+avec son sélecteur quand il en existe un, et celui des mannequins est l'écran
+Pilote (§9.5). *Déployé*, pas *importé* — cet écran lit `content/driver` du
+jeu, donc un mannequin désactivé reste listé dans l'inventaire, sans quoi il
+n'existerait plus nulle part. L'écran Pilote annonce de son côté le nombre de
+`.kn5` qu'il a écartés (illisibles ou sans squelette), qui n'apparaissent ni
+chez lui ni ici.
+
 **Groupement par archive ou par hôte.** Le second remplace le regroupement par
 voiture des anciennes vues transversales : sans lui, « voir toutes les livrées
 de cette voiture » se perdait.

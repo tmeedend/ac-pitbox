@@ -83,14 +83,24 @@ pub struct InventoryRow {
 
 /// L'inventaire complet, à plat.
 ///
-/// Les modèles de pilote (mods « autres » de zone `driver`) **y figurent
-/// encore** : leur inventaire propre vit avec le sélecteur de l'écran Pilote
-/// (§5), qui ne l'a pas encore. Les retirer d'ici avant qu'il l'ait les rendrait
-/// introuvables — une régression, là où les garder n'est qu'un doublon
-/// temporaire.
+/// **Un mannequin déployé n'y figure pas** : l'inventaire d'un type vit avec
+/// son sélecteur quand il en existe un (§5), et celui des mannequins est
+/// l'écran Pilote. C'était le doublon que la refonte vient supprimer.
+///
+/// « Déployé » et pas « importé », et la nuance porte tout : l'écran Pilote lit
+/// `content/driver` **du jeu**, donc un mannequin désactivé n'y apparaît pas et
+/// doit rester listé ici, sans quoi il n'existerait plus nulle part. Le test de
+/// présence du fichier est une question au disque, à trois francs six sous —
+/// répondre exactement (« l'écran Pilote le montre-t-il ? ») exigerait de
+/// parser chaque KN5, une quinzaine de millisecondes pour quinze mégaoctets.
+/// L'écart résiduel — déployé mais sans squelette, donc écarté par l'écran
+/// Pilote — est couvert par le décompte que celui-ci affiche
+/// (`driver::BodyList::discarded`).
 pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<InventoryRow>> {
     let index = attach::EntityIndex::build(conn)?;
     let mut out: Vec<InventoryRow> = Vec::new();
+
+    let driver_dir = cfg.ac_install_path.as_ref().map(|ac| ac.join("content").join("driver"));
 
     // --- Mods « autres » : la seule source dont le rattachement se déduit ---
     for card in crate::others::list_others(conn, cfg)? {
@@ -98,6 +108,11 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
         // Un mannequin ne pose QUE dans `content/driver` : c'est ce qui le
         // distingue d'un pack qui en livrerait un parmi d'autres choses.
         let is_driver = card.categories == ["driver"];
+        // Déployé dans le jeu = montré par l'écran Pilote, donc rien à faire
+        // ici. Le fichier porte le nom du modèle, que la junction pose tel quel.
+        if is_driver && driver_dir.as_ref().is_some_and(|d| deployed_driver(d, &card)) {
+            continue;
+        }
         // Aucun fichier stocké : tout est parti en ressources (§4.5.2). C'est
         // une notice ou un manuel — le seul cas où un mod « autre » ne pose
         // rien du tout, et il a un nom.
@@ -209,6 +224,19 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
     Ok(out)
 }
 
+/// Le mannequin de ce mod est-il posé dans `content/driver` du jeu ?
+///
+/// On regarde les jonctions enregistrées à l'activation — ce sont les chemins
+/// réellement posés — et on vérifie qu'au moins un existe encore. Un fichier
+/// effacé à la main derrière le dos de l'app rend donc la ligne à l'inventaire,
+/// ce qui est exactement ce qu'on veut : elle y redevient réparable.
+fn deployed_driver(driver_dir: &std::path::Path, card: &crate::others::OtherModCard) -> bool {
+    card.row.junctions.iter().any(|j| {
+        let path = std::path::Path::new(j);
+        path.starts_with(driver_dir) && path.exists()
+    })
+}
+
 /// Une livrée change ce qu'on voit, un son ce qu'on entend : les deux relèvent
 /// de l'apparence au sens de la facette — ce qui se choisit pour lui-même, par
 /// opposition à une dépendance qu'on subit.
@@ -296,6 +324,44 @@ mod tests {
             );
             assert_eq!(r.attachment.signal, Signal::Layer, "aucune déduction ici");
         }
+        drop(base);
+    }
+
+    /// Rule (§5): a mannequin deployed in the game is shown by the Pilote
+    /// screen, which is its selector — so the inventory stops listing it. One
+    /// that is NOT deployed stays: that screen reads `content/driver` of the
+    /// game, so nothing else would show it, and it would exist nowhere.
+    #[test]
+    fn a_deployed_mannequin_leaves_the_inventory_but_a_dormant_one_stays() {
+        let base = crate::testutil::temp_dir("inventory-driver");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        let driver_dir = ac.join("content").join("driver");
+        std::fs::create_dir_all(&driver_dir).unwrap();
+        std::fs::write(driver_dir.join("ada.kn5"), b"KN5").unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+
+        // Deux mannequins : l'un posé dans le jeu, l'autre seulement importé.
+        for (id, deployed) in [("ada", true), ("dormant", false)] {
+            let dir = library.join("others").join(id);
+            std::fs::create_dir_all(dir.join("content").join("driver")).unwrap();
+            std::fs::write(dir.join("content").join("driver").join(format!("{id}.kn5")), b"KN5").unwrap();
+            overlay::insert_other_mod(&conn, id, &format!("others/{id}"), None, &now).unwrap();
+            if deployed {
+                let posed = driver_dir.join(format!("{id}.kn5"));
+                overlay::set_other_active(&conn, id, true, &[posed.to_string_lossy().into_owned()]).unwrap();
+            }
+        }
+
+        let ids: Vec<String> = list(&conn, &cfg).unwrap().into_iter().map(|r| r.id).collect();
+        assert!(!ids.contains(&"ada".to_string()), "posé dans le jeu : l'écran Pilote le montre");
+        assert!(ids.contains(&"dormant".to_string()), "pas posé : sinon il n'existerait nulle part");
         drop(base);
     }
 

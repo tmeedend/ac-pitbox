@@ -65,6 +65,16 @@ export function listDriverChoices(carId: string, body: string | null = null): Pr
  * une option qu'on ne peut pas choisir n'a pas à être montrée (§9.3). Liste
  * vide, jamais une erreur, quand Assetto Corsa n'est pas configuré.
  */
-export function listDriverBodies(): Promise<BodyOption[]> {
-  return invoke<BodyOption[]>("list_driver_bodies");
+/** Ce que l'écran Pilote reçoit : les mannequins utilisables, **et** le nombre
+ * de `.kn5` écartés — présents dans `content/driver` mais illisibles ou sans
+ * squelette. Ce chiffre est la seule trace de ceux-là : l'inventaire des
+ * compléments ne liste plus les mannequins déployés (refonte §5), donc sans lui
+ * un mannequin importé pourrait disparaître des deux écrans sans un mot. */
+export interface BodyList {
+  bodies: BodyOption[];
+  discarded: number;
+}
+
+export function listDriverBodies(): Promise<BodyList> {
+  return invoke<BodyList>("list_driver_bodies");
 }

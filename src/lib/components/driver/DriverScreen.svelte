@@ -71,6 +71,12 @@
   const chosenBody = $derived(prefs.body);
 
   let bodies = $state<BodyOption[]>([]);
+  /** `.kn5` posés dans `content/driver` mais inutilisables — illisibles ou sans
+   * squelette. Dit à l'écran plutôt que tu, parce que depuis que l'inventaire
+   * des compléments ne liste plus les mannequins déployés (refonte §5), c'est
+   * ici ou nulle part : un mannequin importé qui n'apparaît pas mérite une
+   * explication, pas un silence. */
+  let discarded = $state(0);
   let choices = $state<DriverChoices | null>(null);
   let loading = $state(true);
   /** Piste active. **De session, pas globale** (§13) : on rouvre l'écran sur
@@ -106,7 +112,8 @@
       recents = parseList(read[KEYS.recents]);
     });
     void listDriverBodies().then((list) => {
-      bodies = list;
+      bodies = list.bodies;
+      discarded = list.discarded;
     });
   });
 
@@ -601,6 +608,9 @@
            lui, et lui en inventer un mentirait sur ce qu'il est. -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <section class="gallery" class:busy={loading && !firstLoad} onkeydown={arrowMove}>
+        {#if discarded}
+          <p class="discarded">{t("driver.discarded", { count: discarded })}</p>
+        {/if}
         {#if showNotice}
           <div class="warnbox notice">
             <div>
@@ -822,6 +832,14 @@
     justify-content: center;
     margin-top: 12px;
     font-size: 11px;
+  }
+
+  /* Mannequins écartés : une ligne discrète, pas une alerte — il n'y a rien à
+     réparer, seulement quelque chose à savoir. */
+  .discarded {
+    color: var(--muted2);
+    font-size: 10.5px;
+    margin-bottom: 10px;
   }
 
   /* --- galerie (§6, §7) --- */
