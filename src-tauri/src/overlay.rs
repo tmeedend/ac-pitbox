@@ -112,6 +112,10 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     for table in ["sub_mods", "apps", "other_mods", "layers"] {
         let _ = conn.execute(&format!("ALTER TABLE {table} ADD COLUMN display_name_user TEXT"), []);
     }
+    // Rattachement corrigé à la main (refonte §2.3). Seule la **correction**
+    // est stockée : la déduction se recalcule à chaque lecture, `attach.rs`
+    // dit pourquoi un rattachement périmé serait pire que pas de rattachement.
+    let _ = conn.execute("ALTER TABLE other_mods ADD COLUMN attachment_user TEXT", []);
     Ok(())
 }
 
@@ -1963,6 +1967,10 @@ pub struct OtherModRow {
     pub display_name_user: Option<String>,
     /// Note libre (refonte §9).
     pub notes_user: Option<String>,
+    /// Rattachement corrigé à la main (§2.3) : id de l'entité visée. Seule la
+    /// **correction** est stockée — la déduction se recalcule à chaque lecture,
+    /// `attach.rs` dit pourquoi.
+    pub attachment_user: Option<String>,
 }
 
 pub fn insert_other_mod(
@@ -1992,11 +2000,12 @@ fn map_other(row: &rusqlite::Row) -> rusqlite::Result<OtherModRow> {
         junctions: json_arr(&junctions),
         display_name_user: row.get(7)?,
         notes_user: row.get(8)?,
+        attachment_user: row.get(9)?,
     })
 }
 
 const OTHER_SELECT: &str =
-    "SELECT id, library_path, source_archive, imported_at, is_priority, is_active, junctions, display_name_user, notes_user FROM other_mods";
+    "SELECT id, library_path, source_archive, imported_at, is_priority, is_active, junctions, display_name_user, notes_user, attachment_user FROM other_mods";
 
 pub fn list_other_mods(conn: &Connection) -> rusqlite::Result<Vec<OtherModRow>> {
     let mut stmt = conn.prepare(&format!("{OTHER_SELECT} ORDER BY id COLLATE NOCASE"))?;
@@ -2210,6 +2219,27 @@ pub fn orphan_layers(conn: &Connection) -> rusqlite::Result<Vec<LayerRow>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// Rule: every column a `*_SELECT` reads must be created by `init` **or**
+    /// added by `migrate` — on a brand-new database as well as an old one.
+    ///
+    /// Ce test vient d'un bug réel, et son mode de défaillance est ce qui le
+    /// rend nécessaire : une colonne lue mais jamais créée fait échouer le
+    /// SELECT, et les appelants de ces listes sont pour la plupart
+    /// *best-effort* (`let _ = …`). Le mod s'importait donc normalement mais ne
+    /// s'activait plus, sans un mot nulle part. Rien dans le typage ne relie la
+    /// liste de colonnes du SELECT à celle des `ALTER`.
+    #[test]
+    fn every_listing_runs_on_a_fresh_database() {
+        let base = crate::testutil::temp_dir("fresh-db");
+        let conn = open(&base.join("overlay.sqlite")).unwrap();
+        list_mods(&conn).expect("mods");
+        list_other_mods(&conn).expect("other_mods");
+        list_apps(&conn).expect("apps");
+        list_subs_by_type(&conn, "SKIN").expect("sub_mods");
+        list_layers(&conn, "x", HostKind::Track).expect("layers");
+        drop(base);
+    }
+
     /// Règle (§4.4) : les couches d'une app et celles d'un mod ne se mélangent
     /// pas, **même à id identique**.
     ///

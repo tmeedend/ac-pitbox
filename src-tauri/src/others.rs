@@ -348,11 +348,20 @@ pub struct OtherModCard {
     /// Onglets sous lesquels ce mod se range ([`categories_of`]) — plusieurs
     /// quand il touche plusieurs zones du jeu, jamais vide.
     pub categories: Vec<String>,
+    /// Sur quoi il se greffe et ce qu'il fait (refonte §2), **recalculé** à
+    /// chaque listage : le parcours de fichiers est déjà fait juste au-dessus
+    /// pour les conflits, donc la déduction est gratuite — et elle ne peut pas
+    /// être périmée, ce qu'une colonne stockée ne garantirait pas.
+    pub attachment: crate::attach::Attachment,
 }
 
 /// Liste les mods « autres » avec les conflits de fichiers détectés entre eux.
 pub fn list_others(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<OtherModCard>> {
     let rows = overlay::list_other_mods(conn)?;
+    // Index construit UNE fois : la déduction interroge la bibliothèque une
+    // fois par chemin de chaque mod, et la rebâtir à chaque appel est ce qui
+    // transformerait un calcul gratuit en calcul lent.
+    let index = crate::attach::EntityIndex::build(conn)?;
     let files: Vec<(String, HashSet<PathBuf>)> = rows
         .iter()
         .map(|r| {
@@ -385,16 +394,43 @@ pub fn list_others(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<O
             let externally_managed = mine
                 .map(|f| f.iter().filter(|p| crate::acpath::is_externally_managed(p)).count())
                 .unwrap_or(0);
+            let categories = mine
+                .map(categories_of)
+                .unwrap_or_else(|| vec![OTHER_CATEGORY.to_string()]);
+            let paths: Vec<PathBuf> = mine.map(|f| f.iter().cloned().collect()).unwrap_or_default();
+            let attachment = crate::attach::attachment_of(
+                &index,
+                &row.id,
+                row.source_archive.as_deref(),
+                &paths,
+                &categories,
+                row.attachment_user.as_deref(),
+            );
             OtherModCard {
                 row,
                 conflicts,
                 externally_managed,
-                categories: mine
-                    .map(categories_of)
-                    .unwrap_or_else(|| vec![OTHER_CATEGORY.to_string()]),
+                categories,
+                attachment,
             }
         })
         .collect())
+}
+
+/// Corrige à la main le rattachement d'un mod « autre » (§2.3). Chaîne vide =
+/// revenir à la déduction.
+pub fn set_attachment(conn: &Connection, id: &str, target: Option<&str>) -> Result<(), String> {
+    let cleaned = target.map(str::trim).filter(|s| !s.is_empty());
+    let n = conn
+        .execute(
+            "UPDATE other_mods SET attachment_user = ?2 WHERE id = ?1",
+            rusqlite::params![id, cleaned],
+        )
+        .map_err(|e| e.to_string())?;
+    if n == 0 {
+        return Err(crate::errors::MOD_NOT_FOUND.to_string());
+    }
+    Ok(())
 }
 
 /// Dossier de bibliothèque d'un mod « autre », résolu depuis l'overlay — le

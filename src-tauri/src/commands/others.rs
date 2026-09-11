@@ -27,6 +27,14 @@ pub fn open_other_mod_folder(app: AppHandle, db: State<Db>, id: String) -> Resul
         .map_err(|e| e.to_string())
 }
 
+/// Corrige le rattachement d'un mod « autre » (§2.3). Chaîne vide = revenir à
+/// la déduction.
+#[tauri::command]
+pub fn set_other_attachment(db: State<Db>, id: String, target: String) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::others::set_attachment(&conn, &id, Some(&target))
+}
+
 /// Marque/démarque un mod « autre » comme prioritaire (§7.3).
 #[tauri::command]
 pub fn set_other_priority(db: State<Db>, id: String, priority: bool) -> Result<(), String> {
