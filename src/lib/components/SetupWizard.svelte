@@ -14,6 +14,7 @@
   import { listLibrary } from "$lib/library";
   import { savePreview3dPrefs, setPreview3dEnabled, setPreview3dValue } from "$lib/preview3dPrefs.svelte";
   import { saveGridThumbPrefs, setGridThumbsEnabled } from "$lib/gridThumbPrefs.svelte";
+  import { FEATURE_GRID_THUMBS } from "$lib/features";
 
   import { errorText } from "$lib/errors";
   interface Props {
@@ -61,6 +62,14 @@
     error = "";
     try {
       await saveConfig(config);
+      // Sans les vignettes régénérées, la page des profils n'a plus de question
+      // à poser : ce qu'elle réglait d'autre — aperçu 3D, plafond du cache — a
+      // des défauts qui **sont** ceux du profil « Normal » qu'elle
+      // présélectionnait (`features.ts`).
+      if (!FEATURE_GRID_THUMBS) {
+        ondone();
+        return;
+      }
       // Le contenu de base est indexé par `save_config` : c'est seulement
       // maintenant qu'on sait combien de voitures cette installation contient,
       // et le choix de profil ne se pose **qu'avec ce chiffre** (§5.5).
@@ -187,7 +196,7 @@
           onclick={finish}
           disabled={!validation?.is_valid || saving}
         >
-          {saving ? t("settings.saving") : t("setup.next")}
+          {saving ? t("settings.saving") : FEATURE_GRID_THUMBS ? t("setup.next") : t("setup.finish")}
         </button>
       </footer>
       {/if}

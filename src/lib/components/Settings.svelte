@@ -5,6 +5,7 @@
   import MusicTab from "./settings/MusicTab.svelte";
   import PreviewTab from "./settings/PreviewTab.svelte";
   import ThumbsTab from "./settings/ThumbsTab.svelte";
+  import { FEATURE_GRID_THUMBS } from "$lib/features";
   import {
     emptyConfig,
     getConfig,
@@ -49,8 +50,14 @@
   // l'autre régénère 312 images. C'est cette asymétrie qui rend acceptable
   // qu'un écran affiche une facture — et qui interdit de la faire apparaître
   // dans celui qui n'en a pas besoin.
-  const TAB_IDS = ["general", "paths", "preview", "thumbs", "music"] as const;
-  type SettingsTab = (typeof TAB_IDS)[number];
+  const ALL_TAB_IDS = ["general", "paths", "preview", "thumbs", "music"] as const;
+  // L'onglet « Vignettes » disparaît avec son interrupteur de fonctionnalité :
+  // un onglet qui existe mais ne mène à rien d'utilisable n'est pas une
+  // fonctionnalité éteinte, c'en est une cassée (`features.ts`).
+  const TAB_IDS: readonly SettingsTab[] = FEATURE_GRID_THUMBS
+    ? ALL_TAB_IDS
+    : ALL_TAB_IDS.filter((id) => id !== "thumbs");
+  type SettingsTab = (typeof ALL_TAB_IDS)[number];
   // Onglet demandé depuis ailleurs (raccourci « régler l'aperçu » de la fiche
   // voiture), consommé une fois : sans la remise à `null`, revenir plus tard
   // dans les Réglages rouvrirait toujours le même onglet.

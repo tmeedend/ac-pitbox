@@ -449,8 +449,11 @@ laisser pourrir ici.
       Un lot de ce genre est du **reformatage pur sur une quinzaine de
       fichiers** : le faire dans son propre commit, jamais mélangé à un
       changement fonctionnel (sinon `git blame` devient inexploitable).
-- [ ] **Vignettes régénérées de la grille** — **fusionné dans `main`**, il ne
-      reste qu'un réglage. Spec dans `docs/SPEC-grille.md`, dont le §11 dit ce
+- [ ] **Vignettes régénérées de la grille** — **fusionné dans `main`, mais
+      éteint** : `FEATURE_GRID_THUMBS` est à `false` dans `src/lib/features.ts`,
+      qui porte le mode d'emploi de l'interrupteur. Il ne reste qu'un réglage,
+      long et fastidieux, et trois presets livrés avec des valeurs provisoires
+      seraient jugés sur elles. Spec dans `docs/SPEC-grille.md`, dont le §11 dit ce
       que l'implémentation a changé et pourquoi. La partie A (§2 à §4) était
       déjà livrée ; la **partie B** (§5 à §8) l'est — pipeline, tâche de fond,
       écran de réglage, profils à l'installation — et le modèle de **presets**
@@ -542,6 +545,14 @@ laisser pourrir ici.
       (`Réglages › Vignettes`), comme les défauts de l'aperçu 3D l'ont été, et
       il n'y a **rien à coder pour ça** — seulement à recopier les nombres
       arrêtés dans `BUILTIN_PRESETS`.
+      **Pour reprendre :** passer `FEATURE_GRID_THUMBS` à `true`, et vérifier
+      les trois points d'entrée qu'il rallume — l'onglet `Réglages › Vignettes`,
+      la deuxième page de l'assistant (les trois profils), la tâche de fond.
+      Rien n'a été effacé en s'éteignant : les images déjà produites sont dans
+      `app_cache_dir/gridthumbs/` et les presets de l'utilisateur dans
+      `ui_prefs.json`. Les images, en revanche, se refont dès que les valeurs
+      d'un preset embarqué changent — c'est le fonctionnement normal de
+      l'empreinte, pas un accident.
       Trois choses à savoir avant d'y toucher :
       - les trois partagent le cadrage arrêté à l'écran (angle 320°, focale
         26°, hauteur 8 %) ; les séparer est possible mais c'était un choix ;

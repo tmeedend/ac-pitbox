@@ -37,6 +37,7 @@
 import type { GridTemplate } from "./gridThumbs";
 import { sweepGridTemplates } from "./gridThumbs";
 import { getUiPrefs, setUiPrefs } from "./uiPrefs.svelte";
+import { FEATURE_GRID_THUMBS } from "./features";
 
 const KEYS = {
   enabled: "pitbox.gridThumbs",
@@ -497,10 +498,20 @@ export function gridThumbsReady(): Promise<void> {
   return ensureLoaded();
 }
 
-/** La génération est-elle allumée **sur disque** ? `stored` et non `values` :
- * cocher la case ne doit pas lancer trois cents conversions avant Enregistrer. */
+/**
+ * La génération est-elle allumée **sur disque** ?
+ *
+ * `stored` et non `values` : cocher la case ne doit pas lancer trois cents
+ * conversions avant Enregistrer.
+ *
+ * C'est aussi **le point d'étranglement de l'interrupteur de fonctionnalité**
+ * (`FEATURE_GRID_THUMBS`). Tout ce qui demande, produit ou affiche une vignette
+ * passe par ici : le gater à la source évite d'avoir à se souvenir de chacun des
+ * appelants, et le réglage de l'utilisateur reste intact sur disque pour le jour
+ * où l'interrupteur repasse à `true`.
+ */
 export function gridThumbsOn(): boolean {
-  return stored.enabled;
+  return FEATURE_GRID_THUMBS && stored.enabled;
 }
 
 /** Les réglages en cours d'édition, réactifs. */

@@ -15,6 +15,7 @@
   import ToastStack from "./ToastStack.svelte";
   import ControllerToast from "./ControllerToast.svelte";
   import GridThumbToast from "./GridThumbToast.svelte";
+  import { FEATURE_GRID_THUMBS } from "$lib/features";
   import { PAUSE_SESSION, pauseGridThumbs, resumeGridThumbs } from "$lib/gridThumbs.svelte";
   import { onAcRunning } from "$lib/launch";
   import PrefsToast from "./PrefsToast.svelte";
@@ -814,7 +815,7 @@
   <!-- La génération des vignettes en dernier, donc au plus près du coin : elle
        dure des minutes là où les autres passent, et c'est celle qu'on revient
        consulter. -->
-  <GridThumbToast />
+  {#if FEATURE_GRID_THUMBS}<GridThumbToast />{/if}
 </ToastStack>
 {#if controllers.setupOpen}
   <ControllerSetup onclose={() => (controllers.setupOpen = false)} />

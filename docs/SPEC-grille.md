@@ -4,7 +4,15 @@
 
 *Lisibilité des cartes, affichage du nom, et régénération des vignettes. Ne concerne ni les filtres (spec séparée, close) ni l'écran de détail d'un mod. Maquette de référence : `pit-box-barre-et-grille.html`, section 2.*
 
-> **État : implémenté, avec un écart de structure.** Ce document reste
+> **État : implémenté, éteint, avec un écart de structure.**
+>
+> La partie B (§5 à §8, la régénération) est **derrière un interrupteur de
+> fonctionnalité à `false`** — `FEATURE_GRID_THUMBS`, dans `src/lib/features.ts`,
+> qui porte le mode d'emploi. Il ne manque que le réglage des valeurs par défaut
+> des trois presets, long et fastidieux, et trois presets livrés avec des
+> valeurs provisoires seraient jugés sur elles. La partie A (§2 à §4), elle, est
+> livrée et visible.
+> Ce document reste
 > l'intention d'origine et l'argumentaire qui la porte — c'est pour ça qu'on le
 > relit. Mais il décrit **un** gabarit de rendu, là où l'implémentation en porte
 > **trois**, et le §5.7 qu'il consacre au versionnage de ce gabarit unique est
