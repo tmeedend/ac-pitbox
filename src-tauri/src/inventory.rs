@@ -102,9 +102,19 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
     // --- Mods « autres » : la seule source dont le rattachement se déduit ---
     for card in crate::others::list_others(conn, cfg)? {
         let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &card.row.library_path);
-        // Un mannequin ne pose QUE dans `content/driver` : c'est ce qui le
+        // Un mannequin ne touche QUE `content/driver` — c'est ce qui le
         // distingue d'un pack qui en livrerait un parmi d'autres choses.
-        let is_driver = card.categories == ["driver"];
+        //
+        // La catégorie fourre-tout ne compte pas dans ce jugement : elle
+        // ramasse ce qui ne va nulle part dans le jeu, c'est-à-dire l'emballage
+        // de l'auteur. `DORIKIN_DRIVER_MOD` livre deux mannequins **et** sa
+        // notice d'installation en japonais avec deux captures d'écran ; une
+        // égalité stricte en faisait un mod quelconque à cause d'elles.
+        let is_driver = card.categories.iter().any(|c| c == "driver")
+            && card
+                .categories
+                .iter()
+                .all(|c| c == "driver" || c == crate::others::OTHER_CATEGORY);
         // Aucun fichier stocké : tout est parti en ressources (§4.5.2). C'est
         // une notice ou un manuel — le seul cas où un mod « autre » ne pose
         // rien du tout, et il a un nom.
@@ -344,6 +354,10 @@ mod tests {
         let rows = list(&conn, &cfg).unwrap();
         let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
         assert!(ids.contains(&"ada"), "déployé, et listé quand même : c'est ici qu'on agit dessus");
+        assert!(
+            rows.iter().all(|r| r.uid.starts_with("OTHER:")),
+            "mannequin ou pas, la ligne vient de la table des mods « autres » — c'est d'elle que              dépendent sa fiche et ses actions, pas du type affiché"
+        );
         assert!(ids.contains(&"dormant"), "pas déployé, listé aussi");
         assert!(
             rows.iter().all(|r| r.kind == RowKind::Driver),

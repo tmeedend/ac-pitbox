@@ -160,12 +160,22 @@
       .map(([key, list]) => ({ key, label: key, rows: list }));
   });
 
+  /** Cette ligne vient-elle de la table des mods « autres » ?
+   *
+   * La question est celle de la **source**, pas du type affiché : un mannequin
+   * et un document sont des mods « autres » eux aussi, et ont donc la même
+   * fiche et les mêmes actions. Juger sur `kind` privait le mannequin de sa
+   * fiche ET de son ⋮ — donc du seul endroit d'où on peut le désactiver ou le
+   * supprimer (signalé sur `Claire_re2`). Le préfixe de l'`uid` est là pour ça.
+   */
+  const isOtherMod = (r: InventoryRow) => r.uid.startsWith("OTHER:");
+
   async function openFiche(r: InventoryRow) {
     if (r.kind === "SOUND") {
       fullSound = r.id;
       return;
     }
-    if (r.kind !== "OTHER") {
+    if (!isOtherMod(r)) {
       await openHost(r);
       return;
     }
@@ -211,13 +221,13 @@
    * visible sur la ligne est ce qui se *lit*, pas ce qui se clique. */
   function menuItems(r: InventoryRow) {
     const items: { label: string; onclick: () => void; disabled?: boolean; danger?: boolean }[] = [];
-    if (r.kind === "OTHER" || r.kind === "SOUND") {
+    if (isOtherMod(r) || r.kind === "SOUND") {
       items.push({ label: t("inventory.openFiche"), onclick: () => void openFiche(r) });
     }
     if (r.attachment.target_id) {
       items.push({ label: t("inventory.openHost"), onclick: () => void openHost(r) });
     }
-    if (r.kind === "OTHER") {
+    if (isOtherMod(r)) {
       items.push(
         { label: t("others.openFolder"), onclick: () => void openOtherModFolder(r.id) },
         {
@@ -244,7 +254,7 @@
   /** Ce que le clic sur la ligne va ouvrir — dit en infobulle, parce que la
    * destination n'est pas la même selon le type et qu'on ne le devine pas. */
   function fichePromise(r: InventoryRow): string {
-    if (r.kind === "OTHER" || r.kind === "SOUND") return "inventory.openFiche";
+    if (isOtherMod(r) || r.kind === "SOUND") return "inventory.openFiche";
     return r.attachment.target_id ? "inventory.openHost" : "inventory.noFiche";
   }
 
