@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pit Box — maquettes de référence</title>
+<style>
+  :root{
+    --bg:#0a0a0f;--surface:#13131a;--surface-2:#1a1b20;--raise:#1f2027;
+    --hairline:#26272e;--red:#c7290e;--red-soft:#f16258;--green:#74c7a6;--amber:#d9a441;--link:#7fa8e0;
+    --ink:#e9e9ee;--ink-2:#a2a2ad;--ink-3:#6d6d78;
+    --sans:"Segoe UI",system-ui,-apple-system,sans-serif;
+    --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .page{max-width:1500px;margin:0 auto;padding:44px 32px 96px}
+
+  /* sommaire */
+  .toc{border:1px solid var(--hairline);background:var(--surface-2);padding:20px 24px;margin-bottom:56px}
+  .toc h1{margin:0 0 4px;font-size:20px;font-weight:600;letter-spacing:-.01em}
+  .toc p{margin:0 0 16px;color:var(--ink-3);font-size:13.5px;max-width:70ch}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:36px;font-size:14px}
+  .toc li{margin-bottom:6px;break-inside:avoid}
+  .toc a{color:var(--ink-2);text-decoration:none}
+  .toc a:hover{color:var(--ink)}
+  .toc a i{font-style:normal;color:var(--ink-3);font-size:12px;margin-left:7px}
+
+  .chapter{margin:0 0 12px;font-size:12.5px;letter-spacing:.16em;color:var(--red-soft);font-weight:600}
+  .chapter b{color:var(--ink);letter-spacing:-.01em;font-size:21px;font-weight:600;display:block;margin-top:6px}
+  .lede{color:var(--ink-2);max-width:72ch;margin:0 0 24px}
+  .note{border-left:2px solid var(--red);padding:2px 0 2px 12px;margin:18px 0 0;color:var(--ink-2);font-size:13.5px;max-width:74ch}
+  .note.warn{border-color:var(--amber)}
+  .note strong{color:var(--ink);font-weight:600}
+  .note+.note{margin-top:12px}
+  .hint{font-size:12.5px;color:var(--ink-3);margin:10px 0 0}
+  section{margin-bottom:78px;scroll-margin-top:20px}
+
+  .frame{background:var(--surface);border:1px solid #000;box-shadow:0 0 0 1px #000,0 24px 60px rgba(0,0,0,.6);overflow:hidden;display:grid;grid-template-columns:110px 1fr}
+  .side{background:#101013;border-right:1px solid #000;padding:14px 0}
+  .side .it{display:flex;flex-direction:column;align-items:center;gap:5px;padding:12px 6px;color:var(--ink-3);font-size:11.5px;text-align:center;cursor:pointer;line-height:1.25}
+  .side .it i{font-style:normal;font-size:17px;line-height:1}
+  .side .it.on{color:var(--ink);box-shadow:inset 3px 0 0 var(--red)}
+  .side .it.pin i{color:var(--red-soft)}
+  .side hr{border:0;border-top:1px solid #1e1e24;margin:10px 20px}
+  .side .grp{font-size:9.5px;letter-spacing:.14em;color:#44444e;text-align:center;margin:6px 0 2px}
+  .main{padding:20px 24px 26px;min-width:0}
+
+  /* en-tête de fiche */
+  .head{display:flex;gap:15px;align-items:flex-start}
+  .back{color:var(--ink-3);font-size:17px;padding-top:10px}
+  .tile{width:46px;height:46px;flex:none;border:1px solid var(--hairline);display:grid;place-items:center;font-size:16px;background:var(--surface-2);color:var(--ink-3)}
+  .tile.subaru{background:#16233d;border-color:#22345a;color:#cfe0ff;font-family:var(--mono);font-size:12px}
+  .tile.font{background:#0e0f13;color:var(--ink-2);font-family:Georgia,serif;font-size:20px}
+  .id{flex:1;min-width:0}
+  .id h1{margin:0;font-size:25px;font-weight:600;letter-spacing:-.018em;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .id h1.sm{font-size:20px}
+  .cat{font-size:11.5px;letter-spacing:.08em;color:var(--red-soft);border:1px solid #4a1a12;padding:2px 9px;font-weight:400}
+  .sub{margin:4px 0 0;color:var(--ink-2);font-size:14px}
+  .sub .sep{color:var(--ink-3);margin:0 7px}
+  .sub a{color:var(--link);text-decoration:none}
+  .pen{color:var(--ink-3);font-size:13px;cursor:pointer}
+  .headright{display:flex;align-items:center;gap:15px;padding-top:7px}
+  .state{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-2);white-space:nowrap}
+  .state.off{color:var(--ink-3)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex:none}
+  .dot.stock{background:#6b7280}
+  .dot.off{background:#4a4a52}
+  .ico{color:var(--ink-2);font-size:16px;cursor:pointer}
+
+  .tabs{display:flex;gap:26px;border-bottom:1px solid var(--hairline);margin:18px 0 18px}
+  .tabs span{padding:0 0 10px;font-size:14.5px;color:var(--ink-3);cursor:pointer}
+  .tabs span.on{color:var(--ink);box-shadow:inset 0 -2px 0 var(--red)}
+  .tabs span em{font-style:normal;font-family:var(--mono);font-size:12px;color:var(--ink-3);margin-left:5px}
+
+  .body{display:grid;grid-template-columns:minmax(0,1.62fr) minmax(300px,1fr);gap:18px}
+  .body.wide{grid-template-columns:minmax(0,2.1fr) minmax(280px,1fr)}
+  .col{display:flex;flex-direction:column;gap:18px;min-width:0}
+  .card{background:var(--surface-2);border:1px solid var(--hairline)}
+  .card>h2{margin:0;font-size:11.5px;letter-spacing:.14em;color:var(--red-soft);font-weight:600;padding:12px 15px;border-bottom:1px solid var(--hairline);display:flex;justify-content:space-between;align-items:center}
+  .card>h2 .c{color:var(--ink-3);letter-spacing:0;font-family:var(--mono);font-size:12px;font-weight:400}
+  .card .in{padding:14px 15px}
+  .shot{width:100%;display:block}
+  .shot.car{aspect-ratio:16/7.4;background:linear-gradient(160deg,#1b1d24,#0e0f13)}
+  .shot.track{aspect-ratio:16/8;background:linear-gradient(160deg,#232a20,#0e100c)}
+
+  /* sélecteur */
+  .pick{border:1px solid var(--hairline);border-top:0;background:var(--surface-2)}
+  .pickbar{display:flex;align-items:center;gap:13px;padding:9px 12px}
+  .swatch{width:52px;height:32px;flex:none;border:1px solid var(--hairline);background:linear-gradient(150deg,#2b3550,#141a29)}
+  .picklab{font-size:10px;letter-spacing:.14em;color:var(--ink-3);flex:none}
+  .pickname{flex:1;min-width:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pickname i{font-style:normal;color:var(--ink-3);font-size:12px;margin-left:8px}
+  .arrow{color:var(--ink-3);font-size:13px;padding:0 4px;cursor:pointer}
+  .expand{border:1px solid var(--hairline);background:none;color:var(--ink-2);font:inherit;font-size:12.5px;padding:5px 11px;cursor:pointer;white-space:nowrap}
+  .expand:hover{color:var(--ink);border-color:#3a3b45}
+  .grid{display:none;grid-template-columns:repeat(auto-fill,minmax(116px,1fr));gap:8px;padding:0 12px 12px}
+  .grid.open{display:grid}
+  .sk{border:1px solid var(--hairline);background:#0e0f13;cursor:pointer}
+  .sk.on{border-color:var(--red)}
+  .sk .m{aspect-ratio:16/10;background:linear-gradient(150deg,#242630,#111319)}
+  .sk .n{padding:5px 7px;font-size:11.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sk .n s{text-decoration:none;color:var(--red-soft)}
+
+  /* bloc textuel */
+  .subtabs{display:flex;gap:20px;padding:0 15px;border-bottom:1px solid var(--hairline)}
+  .subtabs span{padding:11px 0;font-size:13.5px;color:var(--ink-3);cursor:pointer}
+  .subtabs span.on{color:var(--ink);box-shadow:inset 0 -2px 0 var(--red)}
+  .subtabs span .mk{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--red-soft);margin-left:6px;vertical-align:3px}
+  .prose{padding:15px;font-size:14.5px;min-height:120px}
+  .prose p{margin:0 0 10px}
+  .prose .attr{margin:14px 0 0;font-size:12px;color:var(--ink-3)}
+  .field{width:100%;background:#0e0e13;border:1px solid var(--red);color:var(--ink);font:inherit;font-size:14.5px;padding:10px 12px;min-height:76px;resize:vertical}
+  .saving{color:var(--ink-3);font-size:12.5px;margin:8px 0 0}
+
+  .rows{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--hairline)}
+  .rows.one{grid-template-columns:1fr}
+  .rows div{background:var(--surface-2);padding:9px 14px}
+  .rows dt{color:var(--ink-3);font-size:10px;letter-spacing:.12em;margin:0 0 3px}
+  .rows dd{margin:0;font-family:var(--mono);font-size:14px}
+  .rows dd.soft{color:var(--ink-3);font-family:var(--sans);font-style:italic;font-size:13px}
+  .rows dd.good{color:var(--green)}
+  .rows dd .orig{color:var(--ink-3);font-size:11px;margin-left:6px;font-family:var(--mono)}
+  .meta{display:grid;grid-template-columns:auto 1fr;gap:9px 16px;font-size:13.5px;margin:0}
+  .meta dt{color:var(--ink-3)}
+  .meta dd{margin:0;text-align:right;font-family:var(--mono);font-size:12.5px;word-break:break-all}
+  .empty{color:var(--ink-3);font-size:13.5px;margin:0}
+  .num{font-family:var(--mono);font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+  .num em{font-style:normal;color:var(--red-soft)}
+  .ghost{border:1px dashed var(--hairline);color:var(--ink-2);background:none;font:inherit;font-size:13.5px;padding:6px 12px;cursor:pointer}
+
+  /* listes */
+  .tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .search{flex:1;min-width:200px;background:#0e0e13;border:1px solid var(--hairline);padding:8px 12px;color:var(--ink-3);font-size:13.5px}
+  .seg{display:flex;border:1px solid var(--hairline)}
+  .seg i{font-style:normal;padding:7px 12px;font-size:13px;color:var(--ink-3);cursor:pointer}
+  .seg i.on{background:var(--red);color:#fff}
+  .seg-label{font-size:11px;letter-spacing:.12em;color:var(--ink-3)}
+  .facets{display:flex;gap:26px;flex-wrap:wrap;padding:12px 14px;border:1px solid var(--hairline);background:var(--surface-2);margin-bottom:16px}
+  .facet>b{display:block;font-size:10.5px;letter-spacing:.14em;color:var(--ink-3);font-weight:600;margin-bottom:8px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .chip{font-size:12.5px;padding:3px 10px;border:1px solid var(--hairline);color:var(--ink-2);cursor:pointer;white-space:nowrap}
+  .chip u{text-decoration:none;font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-left:6px}
+  .chip.on{border-color:var(--red);background:#1e0d09;color:var(--ink)}
+  .chip.on x{font-style:normal;color:var(--ink-3);margin-left:7px}
+  .chip.no{border-color:#3a2020;color:#6a4a4a;text-decoration:line-through}
+
+  .row{display:flex;align-items:center;gap:13px;padding:11px 13px;border:1px solid var(--hairline);border-top:0;background:var(--surface)}
+  .row.first{border-top:1px solid var(--hairline)}
+  .row:hover{background:var(--raise)}
+  .row .th{width:30px;height:30px;flex:none;background:#0e0e13;border:1px solid var(--hairline);display:grid;place-items:center;color:var(--ink-3);font-size:13px}
+  .nm{flex:1;min-width:0}
+  .nm b{font-weight:500;font-size:14px}
+  .nm s{text-decoration:none;display:block;font-size:12px;color:var(--ink-3);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nm .also{color:var(--link);font-size:12px;text-decoration:none;margin-left:8px}
+  .att{font-size:13px;color:var(--link);white-space:nowrap;text-decoration:none}
+  .att.game{color:var(--ink-3)}
+  .nat{font-size:10.5px;letter-spacing:.1em;color:var(--ink-3);border:1px solid var(--hairline);padding:1px 7px;white-space:nowrap}
+  .nat.no{border-color:#3a2020;color:#8a6a6a}
+  .noteflag{color:var(--red-soft);font-size:12px}
+  .prio{color:var(--red-soft);font-size:12px}
+  .kebab{color:var(--ink-3);cursor:pointer;padding:0 3px}
+  .chk{width:15px;height:15px;flex:none;background:var(--red);display:grid;place-items:center;color:#fff;font-size:10px}
+  .chk.off{background:none;border:1px solid #3a3b45}
+  .rank{font-family:var(--mono);font-size:12px;color:var(--ink-3);border:1px solid var(--hairline);padding:2px 7px}
+
+  .ghead{display:flex;align-items:center;gap:12px;padding:11px 13px;background:var(--surface-2);border:1px solid var(--hairline);margin-top:10px}
+  .ghead .gname{flex:1;font-family:var(--mono);font-size:13.5px;word-break:break-all}
+  .ghead .gmeta{font-family:var(--mono);font-size:12.5px;color:var(--ink-3)}
+  .ghead .gact{font-size:12.5px;color:var(--ink-3);border:1px solid var(--hairline);padding:4px 10px;cursor:pointer}
+
+  /* pilote */
+  .driver{display:grid;grid-template-columns:290px 1fr;gap:22px}
+  .stage{border:1px solid var(--hairline);background:radial-gradient(120% 80% at 50% 10%,#2a2b33,#101014 72%);aspect-ratio:3/4;display:grid;place-items:end center}
+  .figure{width:46%;height:76%;background:linear-gradient(180deg,#585966,#232430);clip-path:polygon(38% 0,62% 0,72% 16%,68% 34%,86% 44%,88% 100%,12% 100%,14% 44%,32% 34%,28% 16%)}
+  .outfit{display:grid;gap:1px;background:var(--hairline);border:1px solid var(--hairline);margin-top:14px}
+  .outfit div{background:var(--surface-2);padding:9px 12px;display:flex;justify-content:space-between;align-items:center}
+  .outfit dt{color:var(--ink-3);font-size:10px;letter-spacing:.12em}
+  .outfit dd{margin:0;font-size:13.5px}
+  .dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:11px}
+  .dcard{border:1px solid var(--hairline);background:var(--surface-2);cursor:pointer}
+  .dcard.sel{border-color:var(--red)}
+  .dcard .mat{aspect-ratio:3/4;background:radial-gradient(120% 90% at 50% 15%,#2a2b33 0%,#131318 70%);display:grid;place-items:end center}
+  .dcard .fig{width:44%;height:74%;background:linear-gradient(180deg,#4a4b57,#22232a);clip-path:polygon(38% 0,62% 0,72% 16%,68% 34%,86% 44%,88% 100%,12% 100%,14% 44%,32% 34%,28% 16%)}
+  .dcard .cap{padding:7px 9px;font-size:12.5px;display:flex;justify-content:space-between;align-items:center;gap:6px}
+
+  /* panneau */
+  .scene{display:grid;grid-template-columns:1fr 430px;min-height:470px}
+  .dim{padding:20px 22px;opacity:.3;pointer-events:none}
+  .panel{background:var(--surface);border-left:1px solid #000;box-shadow:-24px 0 48px rgba(0,0,0,.55);display:flex;flex-direction:column}
+  .panel .ph{padding:18px 20px 0}
+  .panel .pb{padding:16px 20px 22px;display:flex;flex-direction:column;gap:15px}
+  .escalate{display:block;text-align:center;padding:10px;border:1px solid var(--hairline);color:var(--ink-2);font-size:13.5px;text-decoration:none}
+  .tree{font-family:var(--mono);font-size:12.5px}
+  .tree div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1f2026;color:var(--ink-2)}
+  .tree div:last-child{border-bottom:0}
+  .tree div span{color:var(--ink-3)}
+
+  /* couche */
+  .stats{display:flex;gap:26px;flex-wrap:wrap;margin-bottom:20px}
+  .stat{font-family:var(--mono);font-size:21px}
+  .stat small{display:block;font-family:var(--sans);font-size:11.5px;color:var(--ink-3);letter-spacing:.05em}
+  .stat.warn{color:var(--red-soft)}
+  .kick{margin:0 0 8px;font-size:11.5px;letter-spacing:.11em;color:var(--ink-3)}
+  .repl{border:1px solid #3a1a14;background:#170d0c;margin-bottom:22px}
+  .repl div{display:flex;justify-content:space-between;gap:14px;padding:8px 13px;border-bottom:1px solid #241210;font-family:var(--mono);font-size:12.5px}
+  .repl div:last-child{border-bottom:0}
+  .repl div span{color:var(--ink-3)}
+  .fold{display:flex;justify-content:space-between;padding:9px 13px;border-bottom:1px solid #1f2026;font-family:var(--mono);font-size:12.5px;color:var(--ink-2)}
+  .fold:last-child{border-bottom:0}
+  .fold em{font-style:normal;color:var(--ink-3)}
+  .dec{border-left:2px solid var(--amber);padding:7px 12px;background:#17130a;font-size:13px;margin-bottom:8px}
+  .dec s{text-decoration:none;font-family:var(--mono);font-size:12px;color:var(--ink-3);margin-left:8px}
+  .csp b{color:var(--ink-3);font-weight:400;font-size:10.5px;letter-spacing:.11em;display:block;margin-bottom:5px}
+  /* médias */
+  .shotcap{position:relative;border:1px solid var(--hairline);background:#0e0f13}
+  .shotcap .im{aspect-ratio:16/9;background:linear-gradient(150deg,#26301f,#101410)}
+  .shotcap .tag{position:absolute;top:6px;left:6px;font-family:var(--mono);font-size:10.5px;color:var(--green);background:rgba(0,0,0,.7);padding:1px 6px}
+  .shotcap .ts{position:absolute;bottom:6px;left:6px;font-family:var(--mono);font-size:10.5px;color:var(--ink-2);background:rgba(0,0,0,.7);padding:1px 6px}
+  .acts{margin:12px 0 0;font-size:13.5px;color:var(--ink-3);cursor:pointer}
+  @media(max-width:1000px){.body,.body.wide,.driver,.scene{grid-template-columns:1fr}.toc ol{columns:1}}
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="toc">
+  <h1>Pit Box — maquettes de référence</h1>
+  <p>État final des décisions de conception. Ce fichier remplace toutes les maquettes
+  intermédiaires. Les chiffres et les noms sont plausibles mais inventés ; en cas d'écart avec
+  la spec, c'est la spec qui prime.</p>
+  <ol>
+    <li><a href="#rail">Le rail, avant et après <i>§3</i></a></li>
+    <li><a href="#installe">Écran des compléments, inventaire à facettes <i>§4</i></a></li>
+    <li><a href="#apps">Apps, écran dédié <i>§3.2</i></a></li>
+    <li><a href="#pilote">Écran Pilote <i>§5</i></a></li>
+    <li><a href="#voiture">Fiche voiture — La voiture <i>§7</i></a></li>
+    <li><a href="#install-tab">Fiche voiture — Installation <i>§7.1</i></a></li>
+    <li><a href="#circuit">Fiche circuit <i>§7</i></a></li>
+    <li><a href="#couche">Fiche d'une couche <i>§8.3</i></a></li>
+    <li><a href="#greffe">Panneau d'un mod greffé <i>§6.2, §11</i></a></li>
+    <li><a href="#medias">Fiche voiture — Médias et documents <i>§7.8</i></a></li>
+  </ol>
+</div>
+
+<!-- ============ 1 ============ -->
+<section id="rail">
+  <p class="chapter">1 · Navigation<b>Le rail, avant et après</b></p>
+  <p class="lede">Même nombre d'entrées. Ce qui change, c'est le critère : la mécanique
+  d'installation cède la place à la durée de validité de ce qu'on y règle.</p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div class="frame">
+      <nav class="side">
+        <div class="it"><i>▤</i>Voitures</div>
+        <div class="it"><i>◠</i>Circuits</div>
+        <div class="it"><i>◔</i>Pilote</div>
+        <hr>
+        <div class="it"><i>▦</i>Add-ons<br>voiture</div>
+        <div class="it"><i>▧</i>Add-ons<br>circuit</div>
+        <div class="it"><i>◈</i>Compléments</div>
+        <hr>
+        <div class="it"><i>⚙</i>Atelier</div>
+      </nav>
+      <div class="main" style="color:var(--ink-3);font-size:13.5px">
+        <p class="kick" style="margin-bottom:14px">AUJOURD'HUI</p>
+        <p style="margin:0 0 10px">Trois entrées classent par mécanique de pose : ce qui se greffe
+        sur une voiture, sur un circuit, et le reste.</p>
+        <p style="margin:0 0 10px">Un modèle de pilote apparaît deux fois, dans Pilote et dans
+        Compléments.</p>
+        <p style="margin:0">Une app, contenu autonome qu'on installe volontairement, est rangée
+        entre une police et un fragment de config.</p>
+      </div>
+    </div>
+
+    <div class="frame">
+      <nav class="side">
+        <div class="grp">LA SESSION</div>
+        <div class="it"><i>▤</i>Voitures</div>
+        <div class="it"><i>◠</i>Circuits</div>
+        <div class="it"><i>◔</i>Pilote</div>
+        <hr>
+        <div class="grp">LE JEU</div>
+        <div class="it"><i>◈</i>Apps</div>
+        <div class="it on"><i>▩</i>Compléments</div>
+        <hr>
+        <div class="it"><i>⚙</i>Atelier</div>
+      </nav>
+      <div class="main" style="color:var(--ink-3);font-size:13.5px">
+        <p class="kick" style="margin-bottom:14px;color:var(--red-soft)">PROPOSÉ</p>
+        <p style="margin:0 0 10px"><b style="color:var(--ink-2)">La session</b> : ce qui se décide
+        à chaque fois. <b style="color:var(--ink-2)">Le jeu</b> : ce qui reste vrai jusqu'à nouvel
+        ordre.</p>
+        <p style="margin:0 0 10px">Add-ons voiture, Add-ons circuit et l'ancien fourre-tout fusionnent
+        dans un inventaire unique, où se retrouve tout ce qui n'est pas un contenu autonome.</p>
+        <p style="margin:0">Apps devient un écran, comme Voitures : une app est un contenu autonome,
+        pas une dépendance.</p>
+      </div>
+    </div>
+  </div>
+
+  <p class="note"><strong>Les couches n'ont pas d'écran à elles.</strong> Une fois qu'un inventaire
+  liste tout, « est une couche » est une valeur de facette et non un lieu. C'est aussi ce qui règle
+  le fait qu'un skin ou un son sont eux aussi, techniquement, des couches.</p>
+</section>
+
+<!-- ============ 2 ============ -->
+<section id="installe">
+  <p class="chapter">2 · Écran<b>Compléments — l'inventaire à facettes</b></p>
+  <p class="lede">Tout ce qui n'est pas un contenu autonome, y compris ce que l'application n'a
+  pas su reconnaître. Les voitures, circuits, modèles de pilote et apps ont leur écran et ne
+  figurent pas ici. Deux facettes indépendantes : sur quoi c'est greffé, et de quelle nature.</p>
+
+  <div class="frame">
+    <nav class="side">
+      <div class="grp">LA SESSION</div>
+      <div class="it"><i>▤</i>Voitures</div><div class="it"><i>◠</i>Circuits</div><div class="it"><i>◔</i>Pilote</div>
+      <hr><div class="grp">LE JEU</div>
+      <div class="it"><i>◈</i>Apps</div><div class="it on"><i>▩</i>Compléments</div>
+      <hr><div class="it"><i>⚙</i>Atelier</div>
+    </nav>
+    <div class="main">
+      <h1 style="margin:0 0 3px;font-size:22px;font-weight:600">Compléments</h1>
+      <p style="margin:0 0 16px;color:var(--ink-3);font-size:13.5px">Tout ce qui se greffe, s'ajoute
+      ou se superpose au jeu. Rien n'est perdu, même ce que Pit Box n'a pas su reconnaître.</p>
+
+      <div class="tools">
+        <div class="search">Rechercher un nom, une archive, un chemin, une note…</div>
+        <span class="seg-label">GROUPER</span>
+        <div class="seg"><i>Par archive</i><i class="on">Aucun</i></div>
+        <span class="seg-label">TRIER</span>
+        <div class="seg"><i class="on">A → Z</i><i>Taille</i><i>Import</i></div>
+      </div>
+
+      <div class="facets">
+        <div class="facet">
+          <b>GREFFÉ SUR</b>
+          <div class="chips">
+            <span class="chip">Une voiture <u>19</u></span>
+            <span class="chip">Un circuit <u>7</u></span>
+            <span class="chip">Une app <u>1</u></span>
+            <span class="chip">Le jeu <u>26</u></span>
+            <span class="chip">Autonome <u>8</u></span>
+          </div>
+        </div>
+        <div class="facet">
+          <b>NATURE</b>
+          <div class="chips">
+            <span class="chip">Apparence <u>28</u></span>
+            <span class="chip">Comportement <u>6</u></span>
+            <span class="chip">Dépendance <u>19</u></span>
+            <span class="chip no">Non reconnu <u>8</u></span>
+          </div>
+        </div>
+        <div class="facet">
+          <b>ÉTAT</b>
+          <div class="chips">
+            <span class="chip">Actif <u>54</u></span>
+            <span class="chip">Inactif <u>7</u></span>
+            <span class="chip">A une note <u>4</u></span>
+          </div>
+        </div>
+        <div class="facet" style="margin-left:auto;align-self:flex-end">
+          <span class="num">61 / 61</span>
+        </div>
+      </div>
+
+      <div class="row first">
+        <span class="th">⚙</span>
+        <span class="nm"><b>Masquer le personnel de stand</b> <span class="pen">✎</span><s>la_canyons__hide_pit_crew.ini</s></span>
+        <a class="att">LA Canyons →</a>
+        <span class="nat">COMPORTEMENT</span>
+        <span class="state"><i class="dot"></i>Actif</span><span class="kebab">⋮</span>
+      </div>
+      <div class="row">
+        <span class="th">▤</span>
+        <span class="nm"><b>Spa 2022</b> <span class="noteflag" title="Contient une note">✎</span><s>spa2022-release_V1-03.rar · couche</s></span>
+        <a class="att">Spa →</a>
+        <span class="nat">APPARENCE</span>
+        <span class="state"><i class="dot"></i>Actif</span><span class="kebab">⋮</span>
+      </div>
+      <div class="row">
+        <span class="th">⚙</span>
+        <span class="nm"><b>Caméras CamTool Nordschleife</b><s>nords_cameras_v3.zip · couche</s></span>
+        <a class="att">Nordschleife →</a>
+        <span class="nat">COMPORTEMENT</span>
+        <span class="state off"><i class="dot off"></i>Inactif</span><span class="kebab">⋮</span>
+      </div>
+      <div class="row">
+        <span class="th">⚙</span>
+        <span class="nm"><b>Configs pluie — pack 30 circuits</b><s>rain_fx_pack_v4.7z</s></span>
+        <a class="att">30 circuits →</a>
+        <span class="nat">COMPORTEMENT</span>
+        <span class="state"><i class="dot"></i>Actif</span><span class="kebab">⋮</span>
+      </div>
+      <div class="row">
+        <span class="th">👤</span>
+        <span class="nm"><b>Dorikin</b> <span class="pen">✎</span><a class="also">aussi dans Pilote</a><s>DORIKIN_DRIVER_MOD</s></span>
+        <a class="att game">Le jeu</a>
+        <span class="nat">APPARENCE</span>
+        <span class="prio" title="Prioritaire en cas de conflit">★</span>
+        <span class="state"><i class="dot"></i>Actif</span><span class="kebab">⋮</span>
+      </div>
+      <div class="row">
+        <span class="th" style="font-family:Georgia,serif">Aa</span>
+        <span class="nm"><b>Polices RSS Supreme 25</b> <span class="pen">✎</span><s>RSS_Formula_..._v2.rar\content\fonts</s></span>
+        <a class="att">Formula RSS Supreme 25 →</a>
+        <span class="nat">DÉPENDANCE</span>
+        <span class="state"><i class="dot"></i>Actif</span><span class="kebab">⋮</span>
+      </div>
+      <div class="row">
+        <span class="th">◐</span>
+        <span class="nm"><b>Natural Mod PP filter</b><s>naturalmod_v6.zip</s></span>
+        <a class="att game">Le jeu</a>
+        <span class="nat">APPARENCE</span>
+        <span class="state"><i class="dot"></i>Actif</span><span class="kebab">⋮</span>
+      </div>
+      <div class="row">
+        <span class="th">?</span>
+        <span class="nm"><b>sol_config_patch</b><s>sol_2.2_patch.7z</s></span>
+        <a class="att game">Le jeu</a>
+        <span class="nat no">NON RECONNU</span>
+        <span class="state"><i class="dot"></i>Actif</span><span class="kebab">⋮</span>
+      </div>
+
+      <div class="ghead">
+        <span class="gname">Groupé par archive — RSS_Formula_RSS_Supreme_25-Assetto_Corsa-v2.rar</span>
+        <span class="gmeta">3 éléments · 4,1 Mo</span>
+        <span class="gact">Tout supprimer</span>
+      </div>
+      <p class="hint" style="margin-top:8px">En-tête de groupe, affiché quand le groupement par
+      archive est actif. Les contenus arrivés en pack se lisent alors comme une livraison.</p>
+    </div>
+  </div>
+
+  <p class="note"><strong>Aucun bouton exposé sur les lignes.</strong> Ouvrir le dossier, Priorité,
+  Désactiver et Supprimer passent dans le ⋮. Reste visible ce qui se <em>lit</em> : le rattachement,
+  la nature, l'état, l'étoile de priorité seulement quand elle est posée, et le marqueur de note.</p>
+
+  <p class="note"><strong>« Aussi dans Pilote » remplace les doubles badges.</strong> Un mod qui
+  touche plusieurs zones apparaît une fois, et ses autres rattachements sont écrits en clair plutôt
+  que codés dans des étiquettes qu'il faut savoir décoder.</p>
+
+  <p class="note warn"><strong>Chiffres inventés, et volontairement peu flatteurs.</strong> « Le jeu »
+  ramasse 26 entrées sur 61 : c'est le fourre-tout que la facette Nature doit rendre praticable.
+  À mesurer sur la vraie bibliothèque (§14.4).</p>
+</section>
+
+<!-- ============ 3 ============ -->
+<section id="apps">
+  <p class="chapter">3 · Écran<b>Apps — un écran à part entière</b></p>
+  <p class="lede">Une app a un nom, une identité, on l'installe volontairement et on l'active. Elle
+  n'est la dépendance de rien, donc elle a son écran, comme les voitures — et comme elles, elle ne
+  figure pas dans l'inventaire des compléments. Les composants de liste sont les mêmes.</p>
+
+  <div class="frame">
+    <nav class="side">
+      <div class="grp">LA SESSION</div>
+      <div class="it"><i>▤</i>Voitures</div><div class="it"><i>◠</i>Circuits</div><div class="it"><i>◔</i>Pilote</div>
+      <hr><div class="grp">LE JEU</div>
+      <div class="it on"><i>◈</i>Apps</div><div class="it"><i>▩</i>Compléments</div>
+      <hr><div class="it"><i>⚙</i>Atelier</div>
+    </nav>
+    <div class="main">
+      <h1 style="margin:0 0 3px;font-size:22px;font-weight:600">Apps</h1>
+      <p style="margin:0 0 16px;color:var(--ink-3);font-size:13.5px">Applications Python et Lua qui
+      s'affichent en jeu.</p>
+
+      <div class="tools">
+        <div class="search">Rechercher une app, un auteur, une note…</div>
+        <span class="num">3 / 3</span>
+      </div>
+
+      <div class="row first">
+        <span class="th">⌘</span>
+        <span class="nm"><b>Extended Controls</b> <span class="pen">✎</span><s>ext_controls · Python</s></span>
+        <span class="num">1 ressource</span>
+        <span class="state"><i class="dot"></i>Active</span><span class="kebab">⋮</span>
+      </div>
+      <div class="row">
+        <span class="th">⌘</span>
+        <span class="nm"><b>Réglages RSS</b> <span class="pen">✎</span><s>RSS_Settings · Lua (CSP)</s></span>
+        <span class="num">1 couche · 1 ressource</span>
+        <span class="state"><i class="dot"></i>Active</span><span class="kebab">⋮</span>
+      </div>
+      <div class="row">
+        <span class="th">⌘</span>
+        <span class="nm"><b>Supreme OTS</b><s>RSS_Supreme_OTS · Lua (CSP)</s></span>
+        <span class="num"></span>
+        <span class="state off"><i class="dot off"></i>Inactive</span><span class="kebab">⋮</span>
+      </div>
+    </div>
+  </div>
+
+  <p class="note"><strong>Une app peut être l'hôte d'une couche</strong> (le fichier Lua livré à
+  RSS_Settings par une voiture RSS). La couche, elle, figure bien dans l'inventaire des
+  compléments, avec « greffé sur une app » pour rattachement. C'est la raison pour laquelle les
+  couches ne pouvaient pas vivre dans les seuls écrans Add-ons voiture et circuit.</p>
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="pilote">
+  <p class="chapter">4 · Écran<b>Pilote — choisir et gérer au même endroit</b></p>
+  <p class="lede">L'inventaire d'un type vit avec son sélecteur quand il en existe un. C'est déjà
+  vrai pour les livrées ; les modèles de pilote étaient la seule exception, d'où le doublon avec
+  Compléments.</p>
+
+  <div class="frame">
+    <nav class="side">
+      <div class="grp">LA SESSION</div>
+      <div class="it"><i>▤</i>Voitures</div><div class="it"><i>◠</i>Circuits</div><div class="it on"><i>◔</i>Pilote</div>
+      <hr><div class="grp">LE JEU</div>
+      <div class="it"><i>◈</i>Apps</div><div class="it"><i>▩</i>Compléments</div>
+      <hr><div class="it"><i>⚙</i>Atelier</div>
+    </nav>
+    <div class="main">
+      <h1 style="margin:0 0 3px;font-size:22px;font-weight:600">Pilote</h1>
+      <p style="margin:0 0 18px;color:var(--ink-3);font-size:13.5px">Le mannequin et sa tenue,
+      utilisés dans toutes les sessions.</p>
+
+      <div class="driver">
+        <div>
+          <div class="stage"><div class="figure"></div></div>
+          <dl class="outfit">
+            <div><dt>MODÈLE</dt><dd>Alicia</dd></div>
+            <div><dt>CASQUE</dt><dd>Arai bleu</dd></div>
+            <div><dt>COMBINAISON</dt><dd>Sparco 2024</dd></div>
+            <div><dt>GANTS</dt><dd style="color:var(--ink-3)">D'origine</dd></div>
+          </dl>
+        </div>
+        <div>
+          <div class="tools">
+            <div class="search">Rechercher un modèle, une archive, une note…</div>
+            <span class="num">20 modèles</span>
+          </div>
+          <div class="dgrid">
+            <div class="dcard sel"><div class="mat"><div class="fig"></div></div><div class="cap">Alicia <i class="dot"></i></div></div>
+            <div class="dcard"><div class="mat"><div class="fig"></div></div><div class="cap">Claire <i class="dot"></i></div></div>
+            <div class="dcard"><div class="mat"><div class="fig"></div></div><div class="cap">Jill <i class="dot"></i></div></div>
+            <div class="dcard"><div class="mat"><div class="fig"></div></div><div class="cap">Ada <i class="dot"></i></div></div>
+            <div class="dcard"><div class="mat"><div class="fig"></div></div><div class="cap">Dorikin <i class="dot"></i></div></div>
+            <div class="dcard"><div class="mat"><div class="fig"></div></div><div class="cap">Policier <i class="dot"></i></div></div>
+            <div class="dcard"><div class="mat"><div class="fig"></div></div><div class="cap">Robot <i class="dot"></i></div></div>
+            <div class="dcard"><div class="mat"><div class="fig"></div></div><div class="cap">Mai <i class="dot"></i></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note"><strong>Grille pour ce qui se voit, liste pour ce qui se lit.</strong> Un mannequin
+  ne se reconnaît qu'à sa géométrie. Le mat est celui de la grille de voitures, et la même image
+  alimente la tuile d'en-tête de la fiche.</p>
+</section>
+
+<!-- ============ 5 ============ -->
+<section id="voiture">
+  <p class="chapter">5 · Fiche<b>Une voiture — onglet « La voiture »</b></p>
+  <p class="lede">Ne reste ici que ce qui décide de rouler. Le sélecteur de livrée est collé sous
+  l'aperçu qu'il pilote ; le bloc textuel, dont la longueur est imprévisible, passe en dernier.</p>
+
+  <div class="frame">
+    <nav class="side">
+      <div class="grp">LA SESSION</div>
+      <div class="it on"><i>▤</i>Voitures</div><div class="it"><i>◠</i>Circuits</div><div class="it"><i>◔</i>Pilote</div>
+      <hr><div class="grp">LE JEU</div>
+      <div class="it"><i>◈</i>Apps</div><div class="it"><i>▩</i>Compléments</div>
+      <hr><div class="it"><i>⚙</i>Atelier</div>
+    </nav>
+    <div class="main">
+      <div class="head">
+        <span class="back">←</span>
+        <div class="tile subaru">SUB</div>
+        <div class="id">
+          <h1>Subaru Impreza WRX STi Taishin <span class="pen">✎</span> <span class="cat">Sportives</span></h1>
+          <p class="sub">Subaru<span class="sep">·</span>1999<span class="sep">·</span>par <a>slowcar_enjoyer</a> (pour HSRC)</p>
+        </div>
+        <div class="headright">
+          <span class="state"><i class="dot"></i>Actif</span>
+          <span class="ico">♡</span><span class="ico">⋮</span>
+        </div>
+      </div>
+
+      <div class="tabs"><span class="on">La voiture</span><span>Médias <em>7</em></span><span>Installation</span></div>
+
+      <div class="body">
+        <div class="col">
+          <div>
+            <div class="card" style="border-bottom:0"><div class="shot car"></div></div>
+            <div class="pick">
+              <div class="pickbar">
+                <span class="picklab">LIVRÉE</span>
+                <span class="swatch"></span>
+                <span class="pickname">Deep Navy <i>1 / 7</i></span>
+                <span class="arrow">‹</span><span class="arrow">›</span>
+                <button class="expand" onclick="var g=document.getElementById('g1');g.classList.toggle('open');this.textContent=g.classList.contains('open')?'Replier':'Voir les 7'">Voir les 7</button>
+              </div>
+              <div class="grid" id="g1">
+                <div class="sk on"><div class="m"></div><div class="n">Deep Navy</div></div>
+                <div class="sk"><div class="m"></div><div class="n">01_brilliant_red</div></div>
+                <div class="sk"><div class="m"></div><div class="n">Bright Yellow</div></div>
+                <div class="sk"><div class="m"></div><div class="n">Silver</div></div>
+                <div class="sk"><div class="m"></div><div class="n">WR Blue</div></div>
+                <div class="sk"><div class="m"></div><div class="n">Monster</div></div>
+                <div class="sk"><div class="m"></div><div class="n">skin_07</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="subtabs"><span class="on">Description</span><span>Le modèle réel</span><span>Notes <i class="mk"></i></span></div>
+            <div class="prose">
+              <p>Poids réduit et transmission intégrale. Aérodynamique de série, appui arrière
+              modeste. Moteur Subaru EJ207 (B4 2.0 16v) légèrement retravaillé, pneus Yokohama
+              ADVAN Neova AD09, ressorts, amortisseurs et freins d'origine.</p>
+              <p style="color:var(--ink-3);font-size:13.5px;margin:0">Extra A : feux de jour ·
+              Extra B et C : modes DCCD · Extra D : plafonnier · Extra E : antibrouillards</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="card">
+            <h2>Fiche technique</h2>
+            <dl class="rows">
+              <div><dt>PUISSANCE</dt><dd>327 ch <span class="orig">327 л.с.</span></dd></div>
+              <div><dt>COUPLE</dt><dd>379 Nm</dd></div>
+              <div><dt>POIDS</dt><dd>1 196 kg <span class="orig">1195.7</span></dd></div>
+              <div><dt>VITESSE MAX</dt><dd>254 km/h</dd></div>
+              <div><dt>0–100</dt><dd>3,93 s</dd></div>
+              <div><dt>POIDS / CH</dt><dd>3,66 kg</dd></div>
+              <div><dt>ADMISSION</dt><dd class="good">Turbo</dd></div>
+              <div><dt>BOÎTE</dt><dd class="good">Manuelle</dd></div>
+              <div><dt>PAYS</dt><dd>Japon</dd></div>
+              <div><dt>ODOMÈTRE</dt><dd class="soft">Jamais essayée</dd></div>
+            </dl>
+          </div>
+          <div class="card">
+            <h2>Courbe <span class="c">ch · Nm</span></h2>
+            <div class="in">
+              <svg viewBox="0 0 260 120" style="width:100%;height:auto">
+                <line x1="26" y1="100" x2="250" y2="100" stroke="#26272e"/>
+                <line x1="26" y1="8" x2="26" y2="100" stroke="#26272e"/>
+                <path d="M26 98 C70 92 96 62 126 44 C158 26 190 22 216 30 C230 34 240 44 248 56" fill="none" stroke="#d9a441" stroke-width="2"/>
+                <path d="M26 100 C64 98 92 86 122 66 C154 46 190 34 216 34 C232 34 242 42 248 52" fill="none" stroke="#c7290e" stroke-width="2"/>
+                <text x="26" y="114" fill="#6d6d78" font-size="8" font-family="monospace">0</text>
+                <text x="130" y="114" fill="#6d6d78" font-size="8" font-family="monospace">5k</text>
+                <text x="236" y="114" fill="#6d6d78" font-size="8" font-family="monospace">10k</text>
+              </svg>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Son moteur</h2>
+            <div class="in" style="display:flex;justify-content:space-between;align-items:center;font-size:14px">
+              <span>D'origine</span><span class="num">aucun son importé</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="hint">Le bouton « Voir les 7 » fonctionne. La grille se replie à chaque ouverture de fiche.</p>
+
+  <p class="note"><strong>Trois gestes dans la ligne compacte.</strong> Les flèches défilent d'une
+  livrée à l'autre en gardant l'œil sur l'aperçu, le nom ouvre une liste déroulante, le bouton
+  déplie la grille pour chercher par apparence — nécessaire quand les livrées s'appellent
+  <span style="font-family:var(--mono);font-size:12.5px">skin_07</span>.</p>
+
+  <p class="note"><strong>La valeur d'origine reste lisible</strong> en gris à côté de la valeur
+  convertie, uniquement quand elles diffèrent.</p>
+
+  <p class="note"><strong>Le bloc textuel absorbe Wikipédia sans rien allonger :</strong> trois
+  sous-onglets, hauteur constante. L'onglet « Le modèle réel » est absent si aucun article n'est
+  apparié. Le point rouge signale une note sans forcer l'ouverture, et Notes n'est jamais l'onglet
+  par défaut.</p>
+</section>
+
+<!-- ============ 6 ============ -->
+<section id="install-tab">
+  <p class="chapter">6 · Fiche<b>La même voiture — onglet « Installation »</b></p>
+  <p class="lede">Tout ce qui décrit la pose du mod, réuni. C'est ce que les autres gestionnaires ne
+  suivent pas, donc ça mérite un onglet entier plutôt qu'un coin de colonne.</p>
+
+  <div class="frame">
+    <nav class="side">
+      <div class="grp">LA SESSION</div>
+      <div class="it on"><i>▤</i>Voitures</div><div class="it"><i>◠</i>Circuits</div><div class="it"><i>◔</i>Pilote</div>
+      <hr><div class="grp">LE JEU</div>
+      <div class="it"><i>◈</i>Apps</div><div class="it"><i>▩</i>Compléments</div>
+      <hr><div class="it"><i>⚙</i>Atelier</div>
+    </nav>
+    <div class="main">
+      <div class="head">
+        <span class="back">←</span>
+        <div class="tile subaru">SUB</div>
+        <div class="id">
+          <h1>Subaru Impreza WRX STi Taishin <span class="pen">✎</span> <span class="cat">Sportives</span></h1>
+          <p class="sub">Subaru<span class="sep">·</span>1999<span class="sep">·</span>par <a>slowcar_enjoyer</a> (pour HSRC)</p>
+        </div>
+        <div class="headright">
+          <span class="state"><i class="dot"></i>Actif</span>
+          <span class="ico">♡</span><span class="ico">⋮</span>
+        </div>
+      </div>
+
+      <div class="tabs"><span>La voiture</span><span>Médias <em>7</em></span><span class="on">Installation</span></div>
+
+      <div class="body wide">
+        <div class="col">
+          <div class="card">
+            <h2>Posé sur cette voiture <span class="c">1 couche · 7 livrées · 0 son</span></h2>
+            <div class="in">
+              <div class="row first" style="background:var(--surface)">
+                <span class="chk">✓</span>
+                <span class="nm"><b>AE86 Tuned</b><s>ks_toyota_ae86_tuned.7z</s></span>
+                <span class="rank">rang 1</span>
+                <span class="num">392 ajoutés · <em>49 remplacés</em></span>
+                <span class="kebab">⋮</span>
+              </div>
+              <p class="empty" style="margin:12px 0 0">Retirer une couche restitue les fichiers de la
+              base. L'ordre se règle ici, il est seulement affiché ailleurs.</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Décisions d'import <span class="c">2</span></h2>
+            <div class="in">
+              <div class="dec">Sons d'ambiance écartés <s>optionnel, non déployé</s></div>
+              <div class="dec" style="margin-bottom:0">Hors chemin du jeu, non déployé <s>Installation.txt</s></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Ajouts au jeu <span class="c">3 dossiers</span></h2>
+            <div class="in">
+              <p class="empty" style="margin:0 0 10px">Fichiers posés ailleurs dans Assetto Corsa,
+              hors du dossier de la voiture. Retirés avec elle.</p>
+              <div style="border:1px solid var(--hairline)">
+                <div class="fold"><span>+ content/driver/</span><em><span style="color:var(--amber)">1 en attente</span> · 1 fichier · 14 Mo</em></div>
+                <div class="fold"><span>+ content/fonts/</span><em><span style="color:var(--amber)">2 en attente</span> · 2 fichiers · 5,4 Mo</em></div>
+                <div class="fold"><span>+ extension/config/cars/srp/</span><em>6 fichiers · 2,6 Ko</em></div>
+              </div>
+              <p class="acts" style="margin-top:10px">Arbre par dossier de destination, conservé tel
+              quel — y compris l'état « en attente ».</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="card">
+            <h2>Origine</h2>
+            <div class="in">
+              <dl class="meta">
+                <dt>Auteur</dt><dd>slowcar_enjoyer</dd>
+                <dt>Provenance</dt><dd>SRP_Car_Pack_3.6.7z</dd>
+                <dt>Importée le</dt><dd>22/08/2026 16:54</dd>
+                <dt>Version</dt><dd>1.46</dd>
+                <dt>Sur le disque</dt><dd>492 Mo</dd>
+                <dt>Dossier</dt><dd>srp_impreza_gc8</dd>
+              </dl>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Étiquettes</h2>
+            <div class="in">
+              <div class="chips">
+                <span class="chip" style="border-color:#4a1a12;color:var(--red-soft)">Sportives</span>
+                <span class="chip">japonaise</span>
+                <span class="chip">années 90</span>
+                <span class="chip" style="border-style:dashed">+</span>
+              </div>
+              <div class="csp" style="margin-top:16px;font-size:13px;color:var(--ink-2)">
+                <b>EXTENSIONS CSP</b>
+                displays, lightingfx, rainfx <span style="color:var(--ink-3)">+3</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note"><strong>Les extensions CSP tiennent en une ligne grise.</strong> Elles décrivent
+  l'installation, pas la voiture, et personne ne choisit une voiture parce qu'elle déclare
+  <span style="font-family:var(--mono);font-size:12.5px">lightpollution</span>.
+  <em>Réserve :</em> cette détection n'existe aujourd'hui que pour les circuits ; l'étendre aux
+  voitures est un lot distinct.</p>
+
+  <p class="note"><strong>Les Ressources ne sont pas ici</strong> mais dans l'onglet Médias et
+  documents : ce sont précisément les fichiers qui n'entrent pas dans Assetto Corsa, l'inverse des
+  ajouts au jeu.</p>
+
+  <p class="note"><strong>Les étiquettes sont la matière première, pas le résultat.</strong> Ce que
+  le premier onglet montre, c'est ce qu'on en dérive : la catégorie près du titre et la fiche
+  technique. On ouvre les tags bruts quand la dérivation s'est trompée, au même moment qu'on
+  regarde l'origine et les décisions d'import. La puce de catégorie y mène en un clic.</p>
+</section>
+
+<!-- ============ 7 ============ -->
+<section id="circuit">
+  <p class="chapter">7 · Fiche<b>Un circuit — le cas maigre</b></p>
+  <p class="lede">Sans fiche technique ni courbe, la colonne droite n'a que deux cartes et ne laisse
+  plus de trou : la grille n'est plus dictée par le type le plus riche.</p>
+
+  <div class="frame">
+    <nav class="side">
+      <div class="grp">LA SESSION</div>
+      <div class="it"><i>▤</i>Voitures</div><div class="it on"><i>◠</i>Circuits</div><div class="it"><i>◔</i>Pilote</div>
+      <hr><div class="grp">LE JEU</div>
+      <div class="it"><i>◈</i>Apps</div><div class="it"><i>▩</i>Compléments</div>
+      <hr><div class="it"><i>⚙</i>Atelier</div>
+    </nav>
+    <div class="main">
+      <div class="head">
+        <span class="back">←</span>
+        <div class="tile">◠</div>
+        <div class="id">
+          <h1>Spa-Francorchamps <span class="pen">✎</span> <span class="cat">Circuit</span></h1>
+          <p class="sub">Kunos<span class="sep">·</span>7 004 m<span class="sep">·</span>2 tracés</p>
+        </div>
+        <div class="headright">
+          <span class="state"><i class="dot stock"></i>Contenu de base</span>
+          <span class="ico">♡</span><span class="ico">⋮</span>
+        </div>
+      </div>
+
+      <div class="tabs"><span class="on">Le circuit</span><span>Médias <em>2</em></span><span>Installation</span></div>
+
+      <div class="body">
+        <div class="col">
+          <div>
+            <div class="card" style="border-bottom:0"><div class="shot track"></div></div>
+            <div class="pick">
+              <div class="pickbar">
+                <span class="picklab">TRACÉ</span>
+                <span class="swatch" style="background:linear-gradient(150deg,#2c3a2c,#141a14)"></span>
+                <span class="pickname">Spa <i>1 / 2 · 7 004 m</i></span>
+                <span class="arrow">‹</span><span class="arrow">›</span>
+                <button class="expand" onclick="var g=document.getElementById('g2');g.classList.toggle('open');this.textContent=g.classList.contains('open')?'Replier':'Voir les 2'">Voir les 2</button>
+              </div>
+              <div class="grid" id="g2" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
+                <div class="sk on"><div class="m"></div><div class="n">Spa — 7 004 m</div></div>
+                <div class="sk"><div class="m"></div><div class="n">Spa 2022 <s>· couche</s></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="subtabs"><span>Description</span><span class="on">Le circuit</span><span>Notes</span></div>
+            <div class="prose">
+              <p>Tracé routier des Ardennes belges, en service depuis 1925 et raccourci en 1979 à sa
+              configuration actuelle. Il reste l'un des plus longs du calendrier, connu pour son
+              dénivelé et pour l'enchaînement montant de l'Eau Rouge et du Raidillon.</p>
+              <p class="attr">Extrait de l'article <b>Circuit de Spa-Francorchamps</b> de Wikipédia —
+              lire l'article complet · Texte sous licence CC BY-SA 4.0</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="card">
+            <h2>Circuit</h2>
+            <dl class="rows">
+              <div><dt>LONGUEUR</dt><dd>7 004 m</dd></div>
+              <div><dt>TRACÉS</dt><dd>2 <span class="orig">dont 1 ajouté</span></dd></div>
+              <div><dt>PAYS</dt><dd>Belgique</dd></div>
+              <div><dt>ODOMÈTRE</dt><dd>16,6 km</dd></div>
+            </dl>
+          </div>
+          <div class="card">
+            <h2>Habillages <span class="c">0</span></h2>
+            <div class="in"><p class="empty">Aucun habillage importé.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note"><strong>L'onglet Wikipédia est ouvert par défaut ici</strong> parce que la
+  description du mod tient en trois mots. C'est la règle des 150 caractères, et elle s'appliquera à
+  la plupart des circuits du jeu de base.</p>
+
+  <p class="note"><strong>« · couche » en rouge</strong> sur la vignette du second tracé : la carte
+  montre l'état composé, celui du lancement, sans confondre la base et l'ajout.</p>
+</section>
+
+<!-- ============ 8 ============ -->
+<section id="couche">
+  <p class="chapter">8 · Fiche<b>Une couche</b></p>
+  <p class="lede">Le détail des fichiers vit ici et nulle part ailleurs. Les écrans de liste ne
+  déversent plus rien.</p>
+
+  <div class="frame">
+    <nav class="side">
+      <div class="grp">LA SESSION</div>
+      <div class="it"><i>▤</i>Voitures</div><div class="it"><i>◠</i>Circuits</div><div class="it"><i>◔</i>Pilote</div>
+      <hr><div class="grp">LE JEU</div>
+      <div class="it"><i>◈</i>Apps</div><div class="it on"><i>▩</i>Compléments</div>
+      <hr><div class="it"><i>⚙</i>Atelier</div>
+    </nav>
+    <div class="main">
+      <div class="head">
+        <span class="back">←</span>
+        <div class="tile">▤</div>
+        <div class="id">
+          <h1>AE86 Tuned <span class="pen">✎</span></h1>
+          <p class="sub">Couche<span class="sep">·</span>sur <a>Toyota AE86</a><span class="sep">·</span>rang 1 sur 1<span class="sep">·</span>importée le 22/08/2026</p>
+        </div>
+        <div class="headright">
+          <span class="state"><i class="dot"></i>Actif</span>
+          <span class="ico">⋮</span>
+        </div>
+      </div>
+
+      <div class="body" style="margin-top:20px">
+        <div class="col">
+          <div class="card">
+            <h2>Ce que cette couche fait</h2>
+            <div class="in">
+              <div class="stats">
+                <div class="stat">392<small>fichiers ajoutés</small></div>
+                <div class="stat warn">49<small>fichiers remplacés</small></div>
+                <div class="stat">28 Mo<small>sur le disque</small></div>
+              </div>
+              <p class="kick">CE QUI ÉCRASE LA BASE</p>
+              <div class="repl">
+                <div><b style="font-weight:400">data/suspensions.ini</b><span>base sauvegardée</span></div>
+                <div><b style="font-weight:400">data/drivetrain.ini</b><span>base sauvegardée</span></div>
+                <div><b style="font-weight:400">animations/car_shift.ksanim</b><span>base sauvegardée</span></div>
+                <div><span>46 autres fichiers remplacés</span><span>tout afficher</span></div>
+              </div>
+              <p class="kick">CE QUI S'AJOUTE</p>
+              <div style="border:1px solid var(--hairline)">
+                <div class="fold"><span>› skins/</span><em>148 fichiers · 22 Mo</em></div>
+                <div class="fold"><span>› animations/</span><em>112 fichiers · 1,2 Mo</em></div>
+                <div class="fold"><span>› data/</span><em>96 fichiers · 3,4 Mo</em></div>
+                <div class="fold"><span>› sfx/</span><em>36 fichiers · 1,4 Mo</em></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Notes</h2>
+            <div class="in">
+              <textarea class="field">Casse le son d'origine si on l'active après le soundmod. Réactiver dans l'ordre : soundmod puis couche.</textarea>
+              <p class="saving">Enregistré dans Pit Box, pas dans les fichiers du mod : conservé si le mod est mis à jour.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="card">
+            <h2>Origine</h2>
+            <div class="in">
+              <dl class="meta">
+                <dt>Archive</dt><dd>ks_toyota_ae86_tuned.7z</dd>
+                <dt>Importée le</dt><dd>22/08/2026 16:54</dd>
+                <dt>Hôte</dt><dd>ks_toyota_ae86_tuned</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Ressources <span class="c">0</span></h2>
+            <div class="in"><p class="empty">Rien n'est livré à côté de cette couche.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note"><strong>« Base sauvegardée » n'est pas décoratif.</strong> C'est la promesse de
+  non-destructivité rendue visible au seul endroit où elle inquiète : retirer la couche restitue les
+  49 fichiers. Dit ici, le bandeau explicatif n'a plus à être répété sur chaque écran.</p>
+
+  <p class="note"><strong>Le poids est au niveau du dossier</strong>, jamais par fichier : personne
+  ne décide sur 4 Ko. Et la carte Ordre n'apparaît qu'à partir de deux couches sur le même hôte.</p>
+</section>
+
+<!-- ============ 9 ============ -->
+<section id="greffe">
+  <p class="chapter">9 · Fiche<b>Un mod greffé simple — en panneau</b></p>
+  <p class="lede">Ouvert depuis l'inventaire. Même grammaire d'en-tête, largeur réduite. Le vide de
+  la fiche actuelle se comble avec ce que le parcours de fichiers produit déjà pour la détection de
+  conflits.</p>
+
+  <div class="frame" style="grid-template-columns:110px 1fr">
+    <nav class="side">
+      <div class="grp">LA SESSION</div>
+      <div class="it"><i>▤</i>Voitures</div><div class="it"><i>◠</i>Circuits</div><div class="it"><i>◔</i>Pilote</div>
+      <hr><div class="grp">LE JEU</div>
+      <div class="it"><i>◈</i>Apps</div><div class="it on"><i>▩</i>Compléments</div>
+      <hr><div class="it"><i>⚙</i>Atelier</div>
+    </nav>
+    <div style="display:grid;grid-template-columns:1fr 430px;min-width:0">
+      <div class="dim">
+        <h1 style="margin:0 0 14px;font-size:22px;font-weight:600">Installé</h1>
+        <div class="row first"><span class="th">⚙</span><span class="nm"><b>Masquer le personnel de stand</b></span><span class="att">LA Canyons</span></div>
+        <div class="row"><span class="th" style="font-family:Georgia,serif">Aa</span><span class="nm"><b>Polices RSS Supreme 25</b></span><span class="att">Formula RSS Supreme 25</span></div>
+        <div class="row"><span class="th">◐</span><span class="nm"><b>Natural Mod PP filter</b></span><span class="att game">Le jeu</span></div>
+        <div class="row"><span class="th">?</span><span class="nm"><b>sol_config_patch</b></span><span class="att game">Le jeu</span></div>
+      </div>
+
+      <aside class="panel">
+        <div class="ph">
+          <div class="head">
+            <div class="tile font">Aa</div>
+            <div class="id">
+              <h1 class="sm">Polices RSS Supreme 25 <span class="pen">✎</span></h1>
+              <p class="sub">Police<span class="sep">·</span>2 fichiers<span class="sep">·</span>greffé sur <a>Formula RSS Supreme 25</a></p>
+            </div>
+            <div class="headright"><span class="ico">⋮</span></div>
+          </div>
+          <div style="margin-top:14px"><span class="state"><i class="dot"></i>Actif</span></div>
+        </div>
+
+        <div class="pb">
+          <div class="card">
+            <h2>Emplacements <span class="c">2 fichiers</span></h2>
+            <div class="in tree">
+              <div><b style="font-weight:400;color:var(--ink)">content/fonts/</b><span>2 fichiers · 340 Ko</span></div>
+              <div><span>rss_supreme.txt</span><span>ajouté</span></div>
+              <div><span>rss_supreme.png</span><span>ajouté</span></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Conflits</h2>
+            <div class="in"><p class="empty">Aucun autre mod ne vise ces fichiers.</p></div>
+          </div>
+
+          <div class="card">
+            <h2>Notes</h2>
+            <div class="in"><button class="ghost">Ajouter une note</button></div>
+          </div>
+
+          <div class="card">
+            <h2>Origine</h2>
+            <div class="in">
+              <dl class="meta">
+                <dt>Archive</dt><dd>RSS_Formula_RSS_Supreme_25-Assetto_Corsa-v2.rar</dd>
+                <dt>Dans l'archive</dt><dd>content\fonts</dd>
+                <dt>Importé le</dt><dd>24/08/2026 21:51</dd>
+              </dl>
+            </div>
+          </div>
+
+          <a class="escalate">Ouvrir le dossier</a>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <p class="note"><strong>L'identifiant technique n'est plus le titre.</strong> Il redescend dans la
+  carte Origine, et le nom d'affichage est dérivé puis éditable. C'est ce qui remplace le titre de
+  trois lignes en monospace de la fiche actuelle.</p>
+
+  <p class="note"><strong>Le rattachement est ici une conjecture</strong> — ces polices sont
+  rattachées à la voiture parce qu'elles sont arrivées dans la même archive, le signal le plus
+  faible. Le ⋮ porte donc « Rattacher à… », et la correction se stocke dans l'overlay.</p>
+
+  <p class="note"><strong>Sur ce type, la note est un bouton</strong> et non un champ ouvert. Le lien
+  « Ouvrir la fiche complète » n'apparaîtrait que si le mod portait des couches ou plus d'une
+  dizaine d'ajouts au jeu — pour une app, presque toujours.</p>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="medias">
+  <p class="chapter">10 · Fiche<b>Une voiture — onglet « Médias et documents »</b></p>
+  <p class="lede">Quatre blocs existants empilés en deux groupes, sans rien changer à aucun d'eux :
+  ce que tu as produit, puis ce qui est livré avec le mod. Ce qui change est le nombre de clics —
+  des onglets souvent vides deviennent un seul, dont le compteur dit d'emblée s'il y a quelque
+  chose.</p>
+
+  <div class="frame">
+    <nav class="side">
+      <div class="grp">LA SESSION</div>
+      <div class="it on"><i>▤</i>Voitures</div><div class="it"><i>◠</i>Circuits</div><div class="it"><i>◔</i>Pilote</div>
+      <hr><div class="grp">LE JEU</div>
+      <div class="it"><i>◈</i>Apps</div><div class="it"><i>▩</i>Compléments</div>
+      <hr><div class="it"><i>⚙</i>Atelier</div>
+    </nav>
+    <div class="main">
+      <div class="head">
+        <span class="back">←</span>
+        <div class="tile" style="background:#1d0f12;border-color:#3a1a20;color:#e0c0c8;font-family:var(--mono);font-size:11px">ALF</div>
+        <div class="id">
+          <h1>Alfa Romeo 155 TI V6 <span class="pen">✎</span> <span class="cat">Tourisme</span></h1>
+          <p class="sub">Alfa Romeo<span class="sep">·</span>1993<span class="sep">·</span>Kunos</p>
+        </div>
+        <div class="headright">
+          <span class="state"><i class="dot stock"></i>Contenu de base</span>
+          <span class="ico">♡</span><span class="ico">⋮</span>
+        </div>
+      </div>
+
+      <div class="tabs"><span>La voiture</span><span class="on">Médias et documents <em>8</em></span><span>Installation</span></div>
+
+      <div class="col">
+        <p class="kick" style="margin:0">CE QUE TU AS PRODUIT</p>
+        <div class="card">
+          <h2>Screenshots <span class="c">5</span></h2>
+          <div class="in">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
+              <div class="shotcap"><div class="im"></div><span class="tag">spa</span><span class="ts">10/08/2026 12:02:32</span></div>
+              <div class="shotcap"><div class="im"></div><span class="tag">spa</span><span class="ts">10/08/2026 12:02:32</span></div>
+              <div class="shotcap"><div class="im"></div><span class="tag">spa</span><span class="ts">10/08/2026 12:02:32</span></div>
+              <div class="shotcap"><div class="im"></div><span class="tag">spa</span><span class="ts">10/08/2026 12:02:32</span></div>
+              <div class="shotcap"><div class="im"></div><span class="tag">spa</span><span class="ts">10/08/2026 12:02:32</span></div>
+            </div>
+            <p class="acts">Ouvrir le dossier &nbsp; Lier un fichier…</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Replays <span class="c">1</span></h2>
+          <div class="in">
+            <div class="row first" style="background:var(--surface)">
+              <span class="nm"><b>AC_090826-102315_O_ks_alfa_romeo_155_v6_spa_.acreplay</b><s>09/08/2026 10:23:15 · 0 · spa</s></span>
+              <span class="num" style="color:var(--ink-2)">▶ Lire dans CM</span>
+              <span class="kebab">🗑</span>
+            </div>
+            <p class="acts">Ouvrir le dossier &nbsp; Lier un fichier…</p>
+          </div>
+        </div>
+
+        <p class="kick" style="margin:4px 0 0">CE QUI EST LIVRÉ AVEC LE MOD</p>
+
+        <div class="card">
+          <h2>Ressources <span class="c">2</span></h2>
+          <div class="in">
+            <div class="row first" style="background:var(--surface)">
+              <span class="nm"><b>ReadMe_FHA-2025.pdf</b></span>
+              <span class="num">4,7 Mo</span><span class="kebab">↗</span>
+            </div>
+            <div class="row" style="background:var(--surface);border-color:var(--red)">
+              <span class="nm"><b style="color:var(--red-soft)">ReleaseNotes_FHA-2025.pdf</b></span>
+              <span class="num">1,2 Mo</span><span class="kebab">↗</span>
+            </div>
+            <div style="border:1px solid var(--hairline);border-top:0;padding:10px 13px;display:flex;gap:10px;align-items:center;background:var(--surface)">
+              <span class="num" style="font-size:13px;color:var(--ink-2)">ReleaseNotes_FHA-2025.pdf</span>
+              <span class="chip" style="padding:2px 9px">Ajuster largeur</span>
+              <span class="chip on" style="padding:2px 9px">Ajuster page</span>
+              <span class="chip" style="padding:2px 9px">− 79 % +</span>
+              <span class="num" style="margin-left:auto">page 1 / 3</span>
+            </div>
+            <div style="border:1px solid var(--hairline);border-top:0;background:#0b0b0f;height:120px;display:grid;place-items:center;color:var(--ink-3);font-size:13px">visionneuse intégrée — conservée telle quelle</div>
+            <p class="acts">Ouvrir le dossier &nbsp; Lier un fichier…</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Backgrounds <span class="c">circuits uniquement</span></h2>
+          <div class="in">
+            <p class="empty">Ce bloc n'apparaît que sur la fiche d'un circuit. Il sert de repli sur
+            l'écran de réglage de session quand aucun screenshot personnel ne correspond au duo
+            voiture / circuit.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note"><strong>Les quatre blocs sont repris tels quels</strong> — grille horodatée avec
+  badge de circuit, ligne de replay avec « Lire dans CM », liste de ressources avec sa visionneuse
+  intégrée, bande de backgrounds. Seul leur emballage change. Les actions « Ouvrir le dossier » et
+  « Lier un fichier… » restent au pied de chaque bloc : elles visent des dossiers différents.</p>
+
+  <p class="note"><strong>Ressources et Ajouts au jeu ne doivent jamais partager un bloc.</strong>
+  Les ajouts au jeu sont posés dans Assetto Corsa ; les ressources sont exactement ce qui n'y entre
+  pas. D'où leur séparation : les premières dans Installation, les secondes ici.</p>
+
+  <p class="note"><strong>Un bloc vide reste affiché.</strong> Ses actions sont la seule voie pour
+  y ajouter quelque chose ; le masquer le rendrait inatteignable.</p>
+
+  <p class="note warn"><strong>Replays n'est pas une galerie.</strong> Ce sont des fichiers datés
+  avec durée et circuit, listés, pas des vignettes. Ne pas uniformiser avec les deux autres blocs
+  sous prétexte qu'ils partagent un onglet.</p>
+</section>
+
+</div>
+</body>
+</html>

@@ -24,6 +24,12 @@ Documentation de conception de Pit Box (gestionnaire de mods Assetto Corsa). Ce 
 - **`pitbox-source-pack.html`** — affichage du pack d'origine (voitures sœurs, filtrer/désinstaller par pack).
 - **`pitbox-a-propos.html`** — écran « À propos » : identité, outils tiers (Assetto Corsa/Content Manager/QuickBMS), soutien (Patreon/OverTake), licences open source, mentions légales.
 
+## Refonte de la navigation et des fiches (chantier en cours)
+
+- **`SPEC-refonte-navigation-et-fiches.md`** — ce qui change dans le rail, l'inventaire des compléments et l'anatomie des fiches. Complément à `SPEC.md` : il énonce ce qui change, ce qui reste et ce qui devient caduc, section par section. **Point d'entrée du chantier.**
+- **`PLAN-refonte-navigation.md`** — le plan de livraison en lots, et surtout les **mesures faites sur la bibliothèque réelle avant de commencer** : elles suppriment un lot entier (la détection CSP des voitures existe déjà) et démentent le volume du fourre-tout redouté au §14.4.
+- **`pitbox-maquettes.html`** — les dix écrans de la refonte, sélecteurs de livrée et de tracé interactifs. Elle illustre, elle ne fait pas foi : en cas d'écart, la spec prime.
+
 ## Grille de la bibliothèque (chantier en cours)
 
 - **`SPEC-grille.md`** — lisibilité des cartes, affichage du nom, et **régénération des vignettes**. Porte la distinction qui structure tout le reste : « les voitures sombres sont indiscernables » recouvre deux problèmes — la carte qui ne se détache pas de la page (réglé par le contenant, §2) et deux voitures sombres qui se ressemblent (réglé par la source, §5). Les confondre conduit à régler le mauvais. **Point d'entrée du chantier.**
