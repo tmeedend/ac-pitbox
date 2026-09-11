@@ -72,6 +72,15 @@ export const nav = $state<{
   prefill: LaunchPrefill | null;
   /** Demande d'ouverture d'une fiche détail depuis une vue transversale (§12bis.3). */
   openMod: string | null;
+  /** Livrée à **montrer** en ouvrant la fiche d'une voiture, posée par
+   * l'inventaire quand on y clique une livrée (refonte §4.2).
+   *
+   * Montrer, et rien d'autre : surtout pas `selectSkin`, qui écrit la livrée
+   * préférée **et** le choix de session. Aller voir une livrée depuis
+   * l'inventaire changerait alors en silence la voiture qui partira en
+   * session — décider à la place de l'utilisateur sur un geste qui ne
+   * demandait qu'à regarder. */
+  openSkin: string | null;
   /** Terme de recherche à appliquer à la bibliothèque (ex. filtrer par pack, §4.4). */
   search: string | null;
   /** Duo de session courant (§8.6) — la bibliothèque le met à jour à l'ouverture. */
@@ -121,6 +130,7 @@ export const nav = $state<{
   prefill: null,
   settingsTab: null,
   openMod: null,
+  openSkin: null,
   search: null,
   // Hydraté juste en dessous, de façon asynchrone (lecture fichier côté
   // Rust) : reste `null` le temps d'un aller-retour IPC au tout premier

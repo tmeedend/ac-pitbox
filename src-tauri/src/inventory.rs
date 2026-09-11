@@ -31,6 +31,11 @@ pub enum RowKind {
     Sound,
     TrackSkin,
     Layer,
+    /// Mannequin de pilote. Distingué des autres mods parce que c'est un
+    /// **contenu autonome** (§4) : il ne se greffe sur rien, il se choisit.
+    /// C'est aussi ce qui le fera sortir de cet inventaire pour rejoindre
+    /// l'écran Pilote (L8).
+    Driver,
     /// Mod « autre » (§7.3), y compris ce qui n'a pas été reconnu.
     Other,
 }
@@ -86,12 +91,29 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
     // --- Mods « autres » : la seule source dont le rattachement se déduit ---
     for card in crate::others::list_others(conn, cfg)? {
         let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &card.row.library_path);
+        // Un mannequin ne pose QUE dans `content/driver` : c'est ce qui le
+        // distingue d'un pack qui en livrerait un parmi d'autres choses.
+        let is_driver = card.categories == ["driver"];
+        let attachment = if is_driver {
+            // « Autonome », pas « le jeu » : un modèle de pilote ne se greffe
+            // sur rien, il se choisit (§2). Et sa nature est **contenu** — il
+            // n'habille pas quelque chose d'autre, il EST la chose.
+            crate::attach::Attachment {
+                kind: crate::attach::AttachKind::Standalone,
+                target_id: None,
+                target_name: None,
+                signal: card.attachment.signal,
+                nature: Nature::Content,
+            }
+        } else {
+            card.attachment
+        };
         out.push(InventoryRow {
             uid: format!("OTHER:{}", card.row.id),
-            kind: RowKind::Other,
+            kind: if is_driver { RowKind::Driver } else { RowKind::Other },
             name: card.row.display_name_user.clone().unwrap_or_else(|| card.row.id.clone()),
             tech_id: card.row.id.clone(),
-            attachment: card.attachment,
+            attachment,
             active: Some(card.row.is_active),
             priority: card.row.is_priority,
             has_note: card.row.notes_user.is_some(),
@@ -110,10 +132,22 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
             _ => RowKind::Skin,
         };
         let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &sub.library_path);
+        // Nom lisible d'une livrée : celui de son `ui_skin.json`, le même que
+        // montre le sélecteur de la fiche. Sans lui, la ligne répétait deux
+        // fois `chp_unit_118` — en blanc puis en gris.
+        let readable = if kind == RowKind::Skin {
+            dir.as_deref().and_then(crate::library::read_skin_name)
+        } else {
+            None
+        };
         out.push(InventoryRow {
             uid: format!("SUB:{}", sub.id),
             kind,
-            name: sub.display_name_user.clone().unwrap_or_else(|| sub.name.clone()),
+            name: sub
+                .display_name_user
+                .clone()
+                .or(readable)
+                .unwrap_or_else(|| sub.name.clone()),
             tech_id: sub.name.clone(),
             attachment: host_attachment(&index, &sub.parent_id, nature_of_sub(kind)),
             // Voir `active` : seuls les sons et les habillages de circuit ont

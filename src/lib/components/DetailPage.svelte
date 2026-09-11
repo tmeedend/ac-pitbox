@@ -508,11 +508,23 @@
       // sélectionné réinitialisé, donc aperçu 3D remonté et retour à la photo.
       // C'est une restauration ponctuelle à l'ouverture, jamais une dépendance.
       const savedSkin = untrack(() => getPreferredSkin(current));
+      // Livrée demandée par l'inventaire (§4.2). Lue en `untrack` comme la
+      // préférence juste au-dessus : c'est une intention ponctuelle, pas une
+      // dépendance de cet effet — et elle est consommée, donc remise à `null`.
+      const wanted = untrack(() => {
+        const w = nav.openSkin;
+        nav.openSkin = null;
+        return w;
+      });
       listModSkins(current)
         .then((s) => {
           if (current !== id) return;
           skins = s;
-          const pi = s.findIndex((x) => x.id === savedSkin?.id);
+          // La demande l'emporte sur la préférence enregistrée : on vient de
+          // cliquer cette livrée-là. Elle n'écrit rien pour autant — le choix
+          // de session reste celui d'avant.
+          const wi = wanted ? s.findIndex((x) => x.id === wanted) : -1;
+          const pi = wi >= 0 ? wi : s.findIndex((x) => x.id === savedSkin?.id);
           previewSkin = pi >= 0 ? pi : 0;
         })
         .finally(() => skinsLoadResolve?.());

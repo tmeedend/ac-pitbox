@@ -253,6 +253,7 @@
     SOUND: "♪",
     TRACK_SKIN: "◠",
     LAYER: "▦",
+    DRIVER: "👤",
     OTHER: "⚙",
   };
 
@@ -261,6 +262,10 @@
     const target = r.attachment.target_id;
     if (!target) return;
     const section = r.attachment.kind === "TRACK" ? "tracks" : r.attachment.kind === "APP" ? "apps" : "cars";
+    // Une livrée arrive sur la fiche de sa voiture **déjà montrée** : y
+    // atterrir sur une autre livrée obligerait à la chercher dans le
+    // sélecteur, alors qu'on vient précisément de cliquer celle-là.
+    if (r.kind === "SKIN") nav.openSkin = r.tech_id;
     if (await requestSection(section)) nav.openFull = target;
   }
 
@@ -269,7 +274,7 @@
     {
       axis: "nature",
       labelKey: "inventory.facetNature",
-      values: ["APPEARANCE", "BEHAVIOUR", "DEPENDENCY", "UNRECOGNISED"],
+      values: ["CONTENT", "APPEARANCE", "BEHAVIOUR", "DEPENDENCY", "UNRECOGNISED"],
     },
     { axis: "state", labelKey: "inventory.facetState", values: ["ACTIVE", "INACTIVE", "NOTE"] },
   ];
@@ -379,7 +384,7 @@
       <ul class="rows">
         {#each g.rows as r (r.uid)}
           <li class="row" class:inactive={r.active === false}>
-            <span class="ic" aria-hidden="true">{ICONS[r.kind]}</span>
+            <span class="ic" title={t(`inventory.type${r.kind}`)}>{ICONS[r.kind]}</span>
             <!-- Deux niveaux : le nom lisible, l'identifiant technique en
                  dessous. C'est ce qui permet de renommer sans rien perdre.
                  Cliquable : une ligne d'inventaire mène toujours quelque part —
@@ -387,7 +392,14 @@
                  sinon, où une livrée et une couche vivent réellement. -->
             <button class="nm" type="button" onclick={() => void openFiche(r)} title={t(fichePromise(r))}>
               <span class="n1">{nameOf(r)}{#if r.has_note}<span class="noteflag" title={t("notes.title")}>✎</span>{/if}</span>
-              <span class="n2 mono">{r.tech_id}</span>
+              <!-- Le TYPE en toutes lettres, et l'identifiant technique
+                   seulement s'il apprend quelque chose : une livrée nommée
+                   comme son dossier affichait deux fois la même chaîne, en
+                   blanc puis en gris. -->
+              <span class="n2">
+                <span class="ty">{t(`inventory.type${r.kind}`)}</span>
+                {#if r.tech_id !== nameOf(r)}<span class="mono">· {r.tech_id}</span>{/if}
+              </span>
             </button>
             {#if r.attachment.target_id}
               <button class="att" type="button" onclick={() => openHost(r)} title={t("inventory.openHost")}>
@@ -574,11 +586,17 @@
     white-space: nowrap;
   }
   .n2 {
+    display: flex;
+    gap: 5px;
     font-size: 10px;
     color: var(--muted2);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .ty {
+    flex: none;
+    color: var(--muted);
   }
   .noteflag {
     color: var(--muted2);

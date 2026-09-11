@@ -68,11 +68,19 @@ pub enum AttachKind {
     Standalone,
 }
 
-/// What the mod does (§2.2). Never `Content`: that one belongs to the four
-/// autonomous types, which have their own screens and are not inventoried.
+/// What the mod does (§2.2).
+///
+/// `Content` is the one an inventoried row should almost never carry: it
+/// belongs to the four autonomous types, which have their own screens. The
+/// exception is the driver model, which is one of those four and is still
+/// listed here while the Pilote screen has no inventory of its own (L8).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Nature {
+    /// A thing chosen for itself, not something dressing another: a driver
+    /// model. Asking whether a mannequin is "appearance" is the right question
+    /// with the wrong answer — it does not dress a car, it *is* the content.
+    Content,
     /// Changes how something looks — a livery, a driver model, a PP filter.
     Appearance,
     /// Changes how something behaves — a CSP config, a weather script.

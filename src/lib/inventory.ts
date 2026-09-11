@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Attachment } from "$lib/others";
 
 /** Doit rester aligné sur `inventory::RowKind` côté Rust. */
-export type RowKind = "SKIN" | "SOUND" | "TRACK_SKIN" | "LAYER" | "OTHER";
+export type RowKind = "SKIN" | "SOUND" | "TRACK_SKIN" | "LAYER" | "DRIVER" | "OTHER";
 
 export interface InventoryRow {
   /** Unique dans l'inventaire : les cinq tables ont chacune leurs ids, et rien
