@@ -1169,6 +1169,7 @@
     "conflictWinsUnknown": "arbitré par la date",
     "conflictHint": "Deux mods visant le même fichier se départagent à la priorité, marquée à la main ; sans elle, c'est l'exemplaire le plus récent qui gagne.",
     "managed": "{count} en zone Content Manager",
+    "insideArchive": "Emplacement dans l'archive",
     "managedTooltip": "Content Manager synchronise ces dossiers depuis le dépôt de configs CSP. Il peut y remplacer ces fichiers par ses propres versions à tout moment. Ce n'est pas l'emplacement recommandé pour un mod.",
     "back": "← Retour aux autres mods",
     "detailTooltip": "ouvrir la fiche de ce mod",

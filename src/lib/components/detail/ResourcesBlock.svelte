@@ -128,34 +128,29 @@
     },
   } as const;
 
-  /** À quelle livraison appartient un fichier de la liste. Sans cette table,
-   * ouvrir la notice d'un pack demanderait ses octets au mauvais backend et au
-   * mauvais id — la liste est commune, les racines ne le sont pas. Clé par
-   * identité d'objet : les fichiers viennent du backend et sont stockés tels
-   * quels, jamais recopiés. */
-  let owners = new Map<ResourceFile, { id: string; source: Source; label: string | null }>();
-  const ownerOf = (f: ResourceFile) => owners.get(f) ?? { id: modId, source, label: null };
+  /** À quelle livraison appartient un fichier de la liste. Sans elle, ouvrir la
+   * notice d'un pack demanderait ses octets au mauvais backend et au mauvais
+   * id — la liste est commune, les racines ne le sont pas.
+   *
+   * **Portée par le fichier lui-même, jamais par une table externe.** Le
+   * premier jet en tenait une `Map` clé par identité d'objet : elle ne
+   * retrouvait *jamais* rien. `files` est un `$state`, donc un proxy profond,
+   * et l'objet relu dans le `{#each}` n'est pas celui qu'on y avait rangé. La
+   * recherche échouait en silence, le repli demandait le fichier au mod
+   * courant, et l'erreur sortait à des kilomètres de là : « dossier ressources
+   * introuvable » sur une voiture qui n'a pas de dossier ressources — parce
+   * que c'est le PDF d'une livraison voisine qu'on venait de cliquer. */
+  type Owner = { id: string; source: Source; label: string | null };
+  type Row = ResourceFile & { owner: Owner };
 
-  const openExternal = (f: ResourceFile) => {
-    const o = ownerOf(f);
-    return BACKENDS[o.source].open(o.id, f.rel_path, f.origin);
-  };
-  const srcOf = (f: ResourceFile) => {
-    const o = ownerOf(f);
-    return BACKENDS[o.source].src(o.id, f.rel_path, f.origin);
-  };
-  const bytesOf = (f: ResourceFile) => {
-    const o = ownerOf(f);
-    return BACKENDS[o.source].read(o.id, f.rel_path, f.origin);
-  };
-  const pathOf = (f: ResourceFile) => {
-    const o = ownerOf(f);
-    return BACKENDS[o.source].path(o.id, f.rel_path, f.origin);
-  };
+  const openExternal = (f: Row) => BACKENDS[f.owner.source].open(f.owner.id, f.rel_path, f.origin);
+  const srcOf = (f: Row) => BACKENDS[f.owner.source].src(f.owner.id, f.rel_path, f.origin);
+  const bytesOf = (f: Row) => BACKENDS[f.owner.source].read(f.owner.id, f.rel_path, f.origin);
+  const pathOf = (f: Row) => BACKENDS[f.owner.source].path(f.owner.id, f.rel_path, f.origin);
 
-  let files = $state<ResourceFile[]>([]);
+  let files = $state<Row[]>([]);
   /** Ressource ouverte en prévisualisation, `null` quand la liste seule est affichée. */
-  let selected = $state<ResourceFile | null>(null);
+  let selected = $state<Row | null>(null);
   let loading = $state(false);
   /** Message d'échec propre à la prévisualisation : il s'affiche à la place du
       document, sans faire remonter une bannière d'erreur sur toute la fiche. */
@@ -225,7 +220,7 @@
 
   /** Identité d'une entrée : le chemin relatif seul ne suffit pas, un même
       `readme.txt` peut exister dans les ressources **et** dans le mod. */
-  const keyOf = (f: ResourceFile) => `${ownerOf(f).id}:${f.origin}:${f.rel_path}`;
+  const keyOf = (f: Row) => `${f.owner.id}:${f.origin}:${f.rel_path}`;
 
   // La garde sur `modId` évite qu'une réponse tardive d'un mod précédent
   // n'écrase la liste du mod courant.
@@ -238,18 +233,15 @@
     files = [];
     selected = null;
     (async () => {
+      const mine: Owner = { id: current, source, label: null };
       const own = await BACKENDS[source].list(current);
-      const map = new Map<ResourceFile, { id: string; source: Source; label: string | null }>();
-      const all = [...own];
+      const all: Row[] = own.map((f) => ({ ...f, owner: mine }));
       for (const e of also) {
+        const owner: Owner = { id: e.id, source: e.source, label: e.label };
         const rs = await BACKENDS[e.source].list(e.id).catch(() => [] as ResourceFile[]);
-        for (const f of rs) {
-          map.set(f, { id: e.id, source: e.source, label: e.label });
-          all.push(f);
-        }
+        for (const f of rs) all.push({ ...f, owner });
       }
       if (current !== modId) return;
-      owners = map;
       files = all;
     })();
   });
@@ -305,7 +297,7 @@
 
   /** Un clic prévisualise ce qui est lisible, et bascule (referme) la sélection
       courante ; le reste part dans l'application par défaut de Windows. */
-  function activate(f: ResourceFile) {
+  function activate(f: Row) {
     if (previewKind(f.rel_path)) {
       selected = selected && keyOf(selected) === keyOf(f) ? null : f;
     } else {
@@ -313,7 +305,7 @@
     }
   }
 
-  async function openExternally(f: ResourceFile) {
+  async function openExternally(f: Row) {
     try {
       // Le chemin relatif est résolu et validé côté backend (anti-traversée).
       await openExternal(f);
@@ -371,8 +363,8 @@
                 title={canPreview ? t("detail.resourcePreviewTooltip") : t("detail.resourceOpenTooltip")}
               >
                 <span class="res-nm">{f.rel_path}</span>
-                {#if ownerOf(f).label}
-                  <span class="res-src">{ownerOf(f).label}</span>
+                {#if f.owner.label}
+                  <span class="res-src">{f.owner.label}</span>
                 {:else if f.origin === "mod"}
                   <span class="res-src">{t("detail.resourceInMod")}</span>
                 {:else if f.origin === "pack"}

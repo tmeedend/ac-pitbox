@@ -17,6 +17,10 @@ export interface InventoryRow {
    * renommer sans rien perdre (§4.2). */
   tech_id: string;
   attachment: Attachment;
+  /** Zones du jeu touchées, vide pour les sources qui n'en ont pas. Affichées
+   * à la place du type sur un mod « autre », dont le type ne dit rien : une
+   * police se lit « Font », pas « Mod ». */
+  areas: string[];
   /** Déployé ou non, `null` quand la notion ne s'applique pas : une livrée ne
    * s'active pas, elle est là. */
   active: boolean | null;

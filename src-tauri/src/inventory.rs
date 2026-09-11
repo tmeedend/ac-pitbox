@@ -62,6 +62,17 @@ pub struct InventoryRow {
     /// renommer sans rien perdre (§4.2).
     pub tech_id: String,
     pub attachment: Attachment,
+    /// Zones du jeu que la ligne touche ([`crate::others::CATEGORY_ORDER`]) —
+    /// vide pour les sources qui n'en ont pas (livrées, sons, couches).
+    ///
+    /// Affiché **à la place du type** quand la ligne est un mod « autre » : le
+    /// type y vaut « Mod », c'est-à-dire le mot qui reste quand on n'a rien de
+    /// plus précis à dire. Une police du jeu se lit « Font », pas « Mod », et
+    /// l'information existait déjà — elle ne vivait que sur la fiche.
+    ///
+    /// Ce n'est pas une quatrième classification : c'est la même donnée que
+    /// celle dont `attach::nature_of` tire la nature, remontée d'un cran.
+    pub areas: Vec<String>,
     /// Déployé ou non — **`None` quand la notion ne s'applique pas**.
     ///
     /// Une livrée ne s'active pas : elle est projetée dans le dossier `skins/`
@@ -153,6 +164,7 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
                 .clone()
                 .unwrap_or_else(|| card.row.id.clone()),
             tech_id: card.row.id.clone(),
+            areas: card.categories.clone(),
             attachment,
             active: Some(card.row.is_active),
             priority: card.row.is_priority,
@@ -189,6 +201,7 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
                 .or(readable)
                 .unwrap_or_else(|| sub.name.clone()),
             tech_id: sub.name.clone(),
+            areas: Vec::new(),
             attachment: host_attachment(&index, &sub.parent_id, nature_of_sub(kind)),
             // Voir `active` : seuls les sons et les habillages de circuit ont
             // un état de déploiement propre.
@@ -216,6 +229,7 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
             // dupliquer ici en ferait deux versions à garder d'accord.
             name: layer.display_name_user.clone().unwrap_or_else(|| layer.name.clone()),
             tech_id: layer.source_archive.clone().unwrap_or_else(|| layer.name.clone()),
+            areas: Vec::new(),
             attachment: host_attachment(&index, &layer.parent_id, Nature::Appearance),
             active: Some(layer.is_active),
             priority: false,
@@ -411,6 +425,46 @@ mod tests {
         assert!(
             rows.iter().all(|r| r.kind == RowKind::Driver),
             "reconnus comme mannequins des deux côtés"
+        );
+        drop(base);
+    }
+
+    /// Rule (§4.2): an "other" row carries the game areas it touches, so the
+    /// screen can name it instead of falling back on "Mod".
+    ///
+    /// Measured on the real library: the `content/fonts` folder of a pack of
+    /// nine NSX, left over once the cars were recognised (§7.3). Its row read
+    /// "Mod", which is the word that remains when there is nothing more precise
+    /// to say — while the app knew perfectly well it was a font, and said so on
+    /// the fiche. Same data, one screen short.
+    #[test]
+    fn an_other_row_names_the_areas_it_touches() {
+        let base = crate::testutil::temp_dir("inventory-areas");
+        let library = base.join("library");
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+
+        let dir = library.join("others").join("nsx_fonts");
+        std::fs::create_dir_all(dir.join("content").join("fonts")).unwrap();
+        std::fs::write(dir.join("content").join("fonts").join("some1_nsx.txt"), b"font").unwrap();
+        overlay::insert_other_mod(&conn, "nsx_fonts", "others/nsx_fonts", None, &now).unwrap();
+
+        let rows = list(&conn, &cfg).unwrap();
+        let row = rows.iter().find(|r| r.id == "nsx_fonts").unwrap();
+        assert_eq!(row.kind, RowKind::Other, "une police reste un mod « autre »");
+        assert_eq!(
+            row.areas,
+            vec!["fonts".to_string()],
+            "la zone touchée voyage avec la ligne"
+        );
+        assert_eq!(
+            row.attachment.nature,
+            Nature::Dependency,
+            "et c'est d'elle que la nature est tirée : une police est un moyen, pas un sujet"
         );
         drop(base);
     }

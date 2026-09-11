@@ -1169,6 +1169,7 @@
     "conflictWinsUnknown": "arbitrated by date",
     "conflictHint": "Two mods aiming at the same file are settled by priority, marked by hand; without it, the more recent copy wins.",
     "managed": "{count} in Content Manager territory",
+    "insideArchive": "Place in the archive",
     "managedTooltip": "Content Manager syncs these folders from the CSP config repository. It may replace these files with its own versions at any time. This is not the recommended location for a mod.",
     "back": "← Back to other mods",
     "detailTooltip": "Open this mod's sheet",

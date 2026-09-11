@@ -16,6 +16,7 @@
   import NoteBlock from "./NoteBlock.svelte";
   import { bodyThumb, requestBodyThumb } from "$lib/driverThumbs.svelte";
   import { nav } from "$lib/nav.svelte";
+  import { splitProvenance } from "$lib/provenance";
 
   interface Props {
     row: OtherModRow;
@@ -36,6 +37,8 @@
     $props();
 
   let error = $state("");
+
+  const provenance = $derived(splitProvenance(row.source_archive));
 
   /** Les chemins posés, groupés par dossier de destination : c'est le niveau
    * auquel on lit un mod (`content/driver`, `extension/config/cars`), et le
@@ -148,11 +151,22 @@
         {#each row.categories as c}<span class="cat">{t(`others.cat.${c}`)}</span>{/each}
       </dd>
     </div>
-    {#if row.source_archive}
+    <!-- Deux lignes et non une (§7.3) : la provenance d'un **reste** est la
+         chaîne que l'import a fabriquée pour le nommer, `<archive>__<chemin
+         dedans>`. Affichée d'un bloc sous « Provenance », elle se donnait pour
+         un nom d'archive sans en être un. Les deux moitiés sont utiles, elles
+         ne répondent simplement pas à la même question. -->
+    {#if provenance}
       <div>
-        <dt class="lbl-key">{t("detail.sourceLabel")}</dt>
-        <dd class="mono">{row.source_archive}</dd>
+        <dt class="lbl-key">{t("detail.provenanceLabel")}</dt>
+        <dd class="mono">{provenance.archive}</dd>
       </div>
+      {#if provenance.inside}
+        <div>
+          <dt class="lbl-key">{t("others.insideArchive")}</dt>
+          <dd class="mono">{provenance.inside}</dd>
+        </div>
+      {/if}
     {/if}
     <div>
       <dt class="lbl-key">{t("apps.importedAt")}</dt>

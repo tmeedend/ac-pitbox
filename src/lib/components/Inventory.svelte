@@ -15,6 +15,7 @@
   import { fmtSize } from "$lib/format";
   import { listInventory, type InventoryRow } from "$lib/inventory";
   import { layerDisplayName } from "$lib/layerName";
+  import { splitProvenance } from "$lib/provenance";
   import { nav, openInSection } from "$lib/nav.svelte";
   import LoadingState from "./LoadingState.svelte";
   import Seg from "./Seg.svelte";
@@ -88,6 +89,25 @@
     return r.name;
   }
 
+  /** Le type en toutes lettres.
+   *
+   * Pour un mod « autre », ce sont les **zones du jeu qu'il touche** et non le
+   * type de la ligne : celui-ci vaut « Mod », c'est-à-dire le mot qui reste
+   * quand on n'a rien de plus précis à dire. La police d'un pack de neuf NSX
+   * se lit « Fonts » ; l'information existait déjà, elle ne vivait que sur la
+   * fiche. Le fourre-tout ne compte pas — il signifie exactement « aucune zone
+   * reconnue », donc il n'apprend rien que « Mod » ne dise déjà.
+   *
+   * Le vocabulaire est celui de la fiche (`others.cat.*`), pas un nouveau :
+   * deux mots pour la même chose seraient une quatrième classification. */
+  function typeLabel(r: InventoryRow): string {
+    if (r.kind === "OTHER") {
+      const named = r.areas.filter((a) => a !== "other");
+      if (named.length) return named.map((a) => t(`others.cat.${a}`)).join(" · ");
+    }
+    return t(`inventory.type${r.kind}`);
+  }
+
   /** Les trois axes de facette d'une ligne, sous forme de clés. */
   function keysOf(r: InventoryRow): string[] {
     const out = [`attach:${r.attachment.kind}`, `nature:${r.attachment.nature}`];
@@ -149,7 +169,11 @@
     for (const r of sorted) {
       const key =
         groupBy === "archive"
-          ? (r.source_archive ?? t("inventory.noArchive"))
+          ? // L'archive **seule** : la provenance d'un reste (§7.3) porte aussi
+            // le chemin d'où il a été tiré, et groupée telle quelle elle
+            // fabriquait un groupe d'une ligne au lieu de rejoindre celui des
+            // voitures arrivées dans la même archive.
+            (splitProvenance(r.source_archive)?.archive ?? t("inventory.noArchive"))
           : (r.attachment.target_name ?? r.attachment.target_id ?? t("inventory.attachGAME"));
       const list = map.get(key);
       if (list) list.push(r);
@@ -398,7 +422,7 @@
       <ul class="rows">
         {#each g.rows as r (r.uid)}
           <li class="row" class:inactive={r.active === false}>
-            <span class="ic" title={t(`inventory.type${r.kind}`)}>{ICONS[r.kind]}</span>
+            <span class="ic" title={typeLabel(r)}>{ICONS[r.kind]}</span>
             <!-- Deux niveaux : le nom lisible, l'identifiant technique en
                  dessous. C'est ce qui permet de renommer sans rien perdre.
                  Cliquable : une ligne d'inventaire mène toujours quelque part —
@@ -411,7 +435,7 @@
                    comme son dossier affichait deux fois la même chaîne, en
                    blanc puis en gris. -->
               <span class="n2">
-                <span class="ty">{t(`inventory.type${r.kind}`)}</span>
+                <span class="ty">{typeLabel(r)}</span>
                 {#if r.tech_id !== nameOf(r)}<span class="mono">· {r.tech_id}</span>{/if}
               </span>
             </button>
