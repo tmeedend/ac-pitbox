@@ -19,6 +19,7 @@
   //    se demande si on écrit dans les fichiers du mod. Même convention que le
   //    renommage (`InlineEdit`).
   import { t } from "$lib/i18n/index.svelte";
+  import Pencil from "./Pencil.svelte";
 
   interface Props {
     /** Note enregistrée, `null` quand il n'y en a pas. */
@@ -66,7 +67,10 @@
 <section class="blk">
   <header class="blk-h">
     <span class="blk-t">{t("notes.title")}</span>
-    {#if value && !editing}<span class="blk-n" aria-hidden="true">✎</span>{/if}
+    <!-- Même crayon que le nom et la description, et il ouvre le champ : le
+         premier jet posait ici un ✎ décoratif, qui ressemblait au crayon des
+         autres blocs sans rien faire au clic. -->
+    {#if value && !editing}<Pencil label={t("notes.edit")} onclick={open} />{/if}
   </header>
   <div class="blk-b">
     {#if editing}

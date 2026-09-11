@@ -134,6 +134,21 @@ pour que le chantier Wikipédia n'ait pas à rouvrir la mise en page.
 
 ---
 
+## 4bis. Demandes venues de l'usage
+
+- **Markdown dans les notes** (demandé le 2026-09-11, à faire dans un lot à
+  part). Le §9.3 de la spec l'interdit — « un rendu à moitié interprété est
+  pire que rien » — mais cet argument tombe ici : `src/lib/markdown.ts` existe
+  déjà, écrit à la main pour les `readme.md` des mods, **échappe avant de
+  produire la moindre balise**, et *dégrade en texte brut ce qu'il ne connaît
+  pas*. C'est exactement la garantie qui manquait. Reste à décider si le rendu
+  s'applique toujours (recommandé : une case « interpréter le markdown » par
+  note est un réglage de plus pour une question que l'utilisateur ne devrait
+  pas avoir à se poser) et ce que devient la recherche plein texte, qui doit
+  continuer de porter sur la **source**, pas sur le rendu.
+
+---
+
 ## 5. Ce qui reste à trancher
 
 - **Le retour du panneau latéral** (§6.2). Il a été retiré du projet parce qu'il
