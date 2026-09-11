@@ -202,21 +202,37 @@ les lieux) + **colonne de session** (ce qu'on lance) + aiguillage sur
 `nav.section` (`src/lib/nav.svelte.ts`). Les trois territoires et leur
 frontière étanche sont au §7.2 du SPEC. Correspondance section → composant :
 
+Le rail a **deux rangs**, et ils ne classent pas par type de contenu mais par
+**durée de validité** de ce qu'on y règle : *La session* (ce qui se décide à
+chaque fois) et *Le jeu* (ce qui reste vrai jusqu'à nouvel ordre).
+
 | Section | Composant | Note |
 | --- | --- | --- |
 | `cars` / `tracks` | `Library.svelte` | **rendu deux fois**, prop `kind` — persistance suffixée par type |
-| `carskins` / `trackskins` / `sounds` | `Transversal.svelte` | **un seul composant pour trois entrées**, prop `variant` |
-| `driver` | `driver/DriverScreen.svelte` | |
+| `driver` | `driver/DriverScreen.svelte` | galerie des mannequins + panneau d'essayage |
+| `apps` | `Apps.svelte` | écran à part entière depuis la refonte (§3.2) |
+| `others` | `Inventory.svelte` | **l'inventaire des compléments** — cinq sources en une liste |
 | `race` | `Launch.svelte` | |
 | `rules` / `import` / `profiles` / `maintenance` | `Workshop.svelte` | **un écran, quatre onglets** — l'onglet EST la section, pas un état local |
-| `others` / `apps` | `OtherMods.svelte` | Apps y est un onglet (`<Apps embedded />`), `apps` ouvre l'écran dessus |
 | `settings` / `about` | `Settings` / `About` | |
+
+**Les trois écrans transversaux ont disparu** (Add-ons voiture, Add-ons
+circuit, l'ancien fourre-tout) : ils classaient par mécanique d'installation,
+et leur contenu est dans l'inventaire. `Transversal.svelte` est supprimé,
+`OtherMods.svelte` n'est plus routé — la fiche d'un mod « autre »
+(`OtherModDetail`) vit désormais par-dessus l'inventaire.
 
 Deux pièges de ce regroupement : l'onglet de l'Atelier étant `nav.section`, un
 `requestSection("import")` posé ailleurs (glisser-déposer global, rapport
 d'import) continue d'atterrir au bon endroit — ne pas le remplacer par un état
 local ; et `RulesEditor` reste le seul des quatre à gérer son propre
 défilement (`noPad`), d'où le mode `full` de `Workshop`.
+
+**Les fiches s'empilent**, et l'empilement est plat : `DetailPage` rend
+`LayerDetail` (une couche) ou `OtherModDetail` (un mod greffé) **à sa place**
+quand l'une d'elles est ouverte, `Library` rend `PackDetail` par-dessus
+`DetailPage`, et `Inventory` rend `OtherModDetail`/`SoundDetail` par-dessus
+sa liste. Le retour ferme la fiche du dessus, jamais l'écran entier.
 
 **Une seule fiche** : `DetailPage.svelte`, la page pleine, ouverte par
 `Library` au double-clic sur une carte ou une ligne (état `nav.openFull`). Le
@@ -293,6 +309,27 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
   voitures et circuits. Ces clés ne servent plus qu'à nommer les entrées dans
   `ui_prefs.json`/les fichiers Rust dédiés (règle d'or n°5) — `localStorage`
   lui-même n'est plus écrit nulle part, seulement lu une fois en migration.
+- **Une prop Svelte ne peut pas s'appeler `state`.** Svelte 5 y voit une
+  ambiguïté avec la rune `$state` — un `$state` préfixant une variable locale
+  crée un abonnement de store — et refuse de compiler. `FicheHeader` nomme donc
+  sa prop `deployment`, du vocabulaire du §12, plutôt que `state`.
+- **Une colonne lue par un `SELECT` mais oubliée dans `migrate()` échoue en
+  silence.** Le SELECT rate, et comme la plupart des appelants de ces listes
+  sont *best-effort* (`let _ = …`), le symptôme est à des kilomètres de la
+  cause : un mod qui s'importe normalement mais ne s'active plus, sans un mot.
+  Rien dans le typage ne relie la liste de colonnes d'un SELECT à celle des
+  `ALTER` — c'est `overlay::tests::every_listing_runs_on_a_fresh_database` qui
+  s'en charge, et il vient d'une erreur réelle.
+- **Changer de section ET ouvrir une fiche demande `openInSection`.**
+  `requestSection` remet `openFull` à zéro, et l'`await` qui la suit garantit
+  que l'observateur d'historique (`navHistory.ts`) voit passer la liste
+  d'arrivée comme un écran à part entière : « précédent » y ramenait au lieu de
+  rendre l'écran d'où l'on venait. Les deux écritures d'affilée, sans `await`
+  entre elles, n'exposent qu'un seul état.
+- **Le « ← » d'une fiche passe par `goBackOr`**, jamais par une fermeture
+  sèche : l'historique d'abord, la fermeture en repli quand il n'y a rien
+  derrière. Même règle pour le bouton B de la manette et les boutons latéraux
+  de la souris — c'est le même geste, il ne peut pas avoir deux comportements.
 - **`Prefs` (`config.rs`) est en `#[serde(default)]`** : un champ retiré est
   simplement ignoré dans les `config.json` existants, pas de migration à
   écrire. Un champ ajouté prend sa valeur par défaut chez les utilisateurs
@@ -424,7 +461,13 @@ laisser pourrir ici.
       entre les copies), `Seg.svelte` (sept groupes segmentés recopiés — trois
       axes de variation et trois seulement, chacun porté par une raison :
       `vertical`, `tone` au barème du rouge §7.2ter, et `size` nommée par son
-      rôle, jamais par une taille), `.lbl-sub` (neuf copies du sous-titre
+      rôle, jamais par une taille), `FicheHeader` (l'en-tête des cinq fiches :
+      tuile, nom éditable, sous-titre, état, favori, ⋮), `NoteBlock` (la note
+      libre, avec sa variante `bare` pour vivre dans un sous-onglet),
+      `PickerBar` (le sélecteur de livrée/tracé), `Pencil` (le crayon
+      « ça se reprend à la main », partagé par le nom, la description, l'auteur
+      et la note — le premier jet de la note en avait posé un **décoratif**,
+      qui ressemblait à un bouton sans en être un), `.lbl-sub` (neuf copies du sous-titre
       d'écran ; `max-width` reste à l'appelant, la largeur de mesure d'un
       paragraphe dépendant de la colonne qui l'accueille et non du rôle du
       texte). **Trois homonymes ont été renommés au passage** — `.sub`
@@ -726,12 +769,24 @@ laisser pourrir ici.
       **mesures faites sur la bibliothèque réelle avant de commencer** : elles
       ont supprimé un lot entier (la détection CSP des voitures existe déjà,
       167 sur 311) et démenti le fourre-tout redouté (19 des 28 mods « autres »
-      sont des mannequins, qui partent dans l'écran Pilote). Fait : L1, le
-      socle overlay — `notes_user` et `display_name_user` sur les cinq tables
-      d'entités, `usermeta.rs`, deux commandes pour tous les types. Le
-      rattachement déduit (`attachment_user`) est **volontairement reporté au
-      lot L6**, avec le code qui le calcule : une colonne que rien n'écrit ni
-      ne lit pourrit.
+      sont des mannequins). **Les neuf lots sont faits** (L1 à L9), le premier
+      palier est fusionné dans `main`, le second reste à fusionner. Le détail
+      lot par lot, avec ses écarts assumés, est dans le plan — ne pas le
+      recopier ici.
+      **Quatre points de la spec sont tombés à la mesure** plutôt qu'en
+      implémentation, et c'est le genre d'information qu'on ne retrouve pas
+      deux fois : la détection CSP des voitures existait déjà (167 sur 311),
+      l'export des notes n'a nulle part où aller (il n'existe aucun export des
+      métadonnées de l'overlay), la valeur d'origine des unités est déjà la
+      seule affichée (rien n'est converti), et le retrait des mannequins de
+      l'inventaire — pourtant demandé par le §5 — s'est révélé **nuisible** :
+      la galerie de l'écran Pilote est un sélecteur, elle ne gère rien, et les
+      en retirer supprimait le seul endroit d'où on pouvait les désactiver ou
+      les supprimer. Les livrées tranchent par l'exemple : **choisir et gérer
+      sont deux gestes, ils peuvent avoir deux écrans.**
+      **Reste** : « aussi dans … » (§4.5, un mod rattaché à plusieurs entités),
+      les points ouverts §14 à reposer avec l'inventaire réel sous les yeux, et
+      le markdown dans les notes (demandé à l'usage, voir le §4bis du plan).
 ## Fin de tâche — dans cet ordre
 
 1. **Mettre à jour `docs/SPEC.md`** dès qu'une évolution change le
