@@ -11,6 +11,10 @@ export interface AppItem {
   /** "python" | "lua" : dit si l'app suit la convention historique d'AC ou
    * celle de CSP, et donc sous quel `apps/<langue>/` elle est posée. */
   lang: string;
+  /** Nom repris à la main (refonte §6.1), `null` tant que rien n'a été saisi. */
+  display_name_user: string | null;
+  /** Note libre (refonte §9). */
+  notes_user: string | null;
 }
 
 export function listApps(): Promise<AppItem[]> {

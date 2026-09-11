@@ -953,7 +953,7 @@
   </header>
 
   {#if info}<div class="ok">{info}</div>{/if}
-  {#if error}<div class="err">{error}</div>{/if}
+  {#if error}<div class="errbox">{error}</div>{/if}
   {#if warning}<div class="warnbox banner">⚠ {warning}</div>{/if}
 
   {#if !ready}
@@ -1146,9 +1146,11 @@
     flex: 1;
   }
   .ok,
-  .err,
+  .errbox,
   .banner {
     margin: 14px 32px 0;
+  }
+  .banner {
     padding: 10px 12px;
     font-size: 12px;
   }
@@ -1156,11 +1158,6 @@
     background: var(--green-dim);
     border: 1px solid var(--green-border);
     color: var(--green);
-  }
-  .err {
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
   }
   .body {
     padding: 22px 32px 40px;

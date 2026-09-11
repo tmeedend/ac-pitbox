@@ -204,14 +204,14 @@
   <header class="head">
     <!-- Onglet de l'Atelier : le titre d'écran est porté par l'Atelier. -->
     <div>
-      <p class="sub">{t("maintenance.subtitle")}</p>
+      <p class="lbl-sub">{t("maintenance.subtitle")}</p>
     </div>
     <button class="btn btn-primary" type="button" onclick={scan} disabled={scanning}>
       {scanning ? t("maintenance.scanning") : t("maintenance.scan")}
     </button>
   </header>
 
-  {#if error}<div class="err">{error}</div>{/if}
+  {#if error}<div class="errbox">{error}</div>{/if}
 
   <section class="stock-sec">
     <h3>{t("maintenance.stockTitle")}</h3>
@@ -399,19 +399,10 @@
     margin-bottom: 20px;
   }
   /* Taille/graisse viennent de `.lbl-screen` (global, §chantier libellés). */
-  .sub {
-    color: var(--muted);
-    font-size: 12px;
-    margin-top: 6px;
-    line-height: 1.5;
+  .lbl-sub {
     max-width: 560px;
   }
-  .err {
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    padding: 10px 12px;
-    font-size: 12px;
+  .errbox {
     margin-bottom: 16px;
   }
   .ok {

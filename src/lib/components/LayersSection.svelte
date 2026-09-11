@@ -134,10 +134,10 @@
 <section class="layers-sec" class:alone={!heading}>
   <div class="sec-head">
     {#if heading}<h3 class="sec-t">{t("transversal.layersTitle")}</h3>{/if}
-    <p class="sub">{t("transversal.layersSubtitle")}</p>
+    <p class="lbl-sub">{t("transversal.layersSubtitle")}</p>
   </div>
 
-  {#if error}<div class="err">{error}</div>{/if}
+  {#if error}<div class="errbox">{error}</div>{/if}
 
   {#if loading}
     <LoadingState />
@@ -212,17 +212,7 @@
     padding-top: 0;
     border-top: none;
   }
-  .sub {
-    color: var(--muted);
-    font-size: 12px;
-    margin-top: 8px;
-  }
-  .err {
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    padding: 10px 12px;
-    font-size: 12px;
+  .errbox {
     margin: 12px 0;
   }
   .empty {

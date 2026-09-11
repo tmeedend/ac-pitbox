@@ -16,6 +16,12 @@ export interface SubModRow {
   author: string | null;
   /** Taille sur disque, octets. Renseignée par `listSubsByType` (vue transversale), `null` ailleurs. */
   size_bytes: number | null;
+  /** Nom repris à la main (refonte §6.1) : `skin_01` ne dit rien de ce que la
+   * livrée montre. `null` tant que rien n'a été saisi — le nom affiché reste
+   * alors `name`. */
+  display_name_user: string | null;
+  /** Note libre (refonte §9). */
+  notes_user: string | null;
 }
 
 /** Indexe le contenu de base Kunos présent dans content/ (§12bis.1). Renvoie le nb indexé. */

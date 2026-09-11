@@ -104,6 +104,11 @@ export function filterDefs(kind: ModKind): FilterDef[] {
   defs.push(
     { key: "state", labelKey: "library.filterState", type: "val", choices: STATE_CHOICES },
     { key: "description", labelKey: "library.filterDescription", type: "text" },
+    // Two filters for notes, not one: "a note that says X" and "any note at
+    // all" are different questions, and the second is the one asked after a
+    // long import session - which mods did I leave myself a word about?
+    { key: "note", labelKey: "library.filterNote", type: "text" },
+    { key: "hasNote", labelKey: "library.hasNote", type: "bool", negLabelKey: "library.hasNoNote" },
     { key: "favorite", labelKey: "library.favorites", type: "bool", negLabelKey: "library.favExcludedShort" },
   );
   if (isCar) {
@@ -138,6 +143,8 @@ export interface FilterContext {
   /** Effective description, markup stripped and lowercased; `undefined` when
    * the mod has none, which can then never match. */
   descOf: (c: ModCard) => string | undefined;
+  /** The user's own note, lowercased; `undefined` when there is none. */
+  noteOf: (c: ModCard) => string | undefined;
   /** Whether this car has been given a driver outfit of its own. */
   hasDriver: (id: string) => boolean;
 }
@@ -185,6 +192,8 @@ function boolOf(key: string, ctx: FilterContext): (c: ModCard) => boolean {
     // hence the explicit removal of the second.
     case "base":
       return (c) => c.is_stock && !c.is_unmanaged;
+    case "hasNote":
+      return (c) => !!c.notes_user;
     case "driver":
       return (c) => ctx.hasDriver(c.id_interne);
     default:
@@ -282,9 +291,12 @@ export function buildPredicate(
     } else {
       const words = terms(st.text);
       if (!words.length) continue;
+      // Accessor resolved ONCE per filter, like `valuesOf` above: this runs
+      // over the whole library on every keystroke.
+      const hay = def.key === "note" ? ctx.noteOf : ctx.descOf;
       tests.push((c) => {
-        const hay = ctx.descOf(c);
-        return !!hay && words.every((w) => hay.includes(w));
+        const text = hay(c);
+        return !!text && words.every((w) => text.includes(w));
       });
     }
   }

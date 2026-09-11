@@ -136,7 +136,7 @@
         <div class="logo"><span>PB</span></div>
         <div>
           <h1>Pit Box</h1>
-          <p class="sub">{t("setup.title")}</p>
+          <p class="kicker">{t("setup.title")}</p>
         </div>
       </header>
 
@@ -186,7 +186,7 @@
       <ConfigFields bind:config {validation} />
 
       {#if error}
-        <div class="error">{error}</div>
+        <div class="errbox">{error}</div>
       {/if}
 
       <footer>
@@ -301,7 +301,7 @@
     letter-spacing: 1.5px;
     font-style: italic;
   }
-  .sub {
+  .kicker {
     color: var(--rosso-bright);
     font-size: 9px;
     letter-spacing: 3px;
@@ -319,13 +319,8 @@
     gap: 12px;
     margin-bottom: 22px;
   }
-  .error {
+  .errbox {
     margin: 12px 0;
-    padding: 10px;
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    font-size: 12px;
   }
   footer {
     margin-top: 24px;

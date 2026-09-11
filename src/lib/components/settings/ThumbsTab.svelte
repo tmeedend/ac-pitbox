@@ -261,7 +261,7 @@
             {/if}
           </div>
         </Field>
-        {#if error}<div class="err">{errorText(error)}</div>{/if}
+        {#if error}<div class="errbox">{errorText(error)}</div>{/if}
       </div>
     </section>
   </div>
@@ -492,13 +492,8 @@
     color: var(--muted);
     font-size: 11.5px;
   }
-  .err {
+  .errbox {
     margin-top: 10px;
-    padding: 8px 10px;
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    font-size: 11.5px;
   }
   /* Même barre que les autres onglets de Réglages. La facture est à gauche,
      les boutons à droite : on lit ce que ça coûte avant d'atteindre le bouton

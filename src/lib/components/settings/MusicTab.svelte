@@ -199,7 +199,7 @@
   />
 </section>
 
-{#if error}<div class="error">{error}</div>{/if}
+{#if error}<div class="errbox">{error}</div>{/if}
 
 <footer>
   {#if saved}<span class="pill pill-ok">{t("settings.saved")}</span>{/if}
@@ -263,13 +263,8 @@
     color: var(--faint);
   }
 
-  .error {
+  .errbox {
     margin: 12px 0;
-    padding: 10px;
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    font-size: 12px;
   }
   footer {
     margin-top: 24px;

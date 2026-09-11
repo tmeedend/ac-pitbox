@@ -91,6 +91,10 @@ export interface ModCard {
   description: string | null;
   /** Badge/logo de la marque (ui/badge.png, voitures), à la place des initiales. */
   badge: string | null;
+  /** Note libre (refonte §9), `null` quand il n'y en a pas. Portée par la carte
+   * pour que le filtre « a une note » et la recherche restent côté front, sans
+   * aller-retour backend à chaque frappe — même raison que `description`. */
+  notes_user: string | null;
   /** Mod cassé (fichiers de la version active manquants/invalides, §6.4) —
    * même détection que l'écran Maintenance, signalée ici sur la carte. */
   broken: boolean;
@@ -224,6 +228,12 @@ export interface LayerRow {
   /** Ordre de priorité : la plus haute gagne à la superposition. */
   priority: number;
   imported_at: string;
+  /** Nom repris à la main (refonte §8.3) : le nom dérivé de l'archive est
+   * faillible par construction, donc corrigeable. `null` tant que rien n'a été
+   * saisi — c'est alors `layerDisplayName` qui décide de l'affichage. */
+  display_name_user: string | null;
+  /** Note libre (refonte §9). */
+  notes_user: string | null;
 }
 
 /** Sous-élément rattaché (skin/son) routé à l'import (§12bis.2). */

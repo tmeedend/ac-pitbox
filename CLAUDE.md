@@ -283,8 +283,9 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
   (`detail.showroom`). C'est ce qui rend `errorText()` sûr, et c'est aussi
   pourquoi une relecture visuelle attrape ces oublis mieux que le typage.
 - **Le CSS des composants est scopé** (voir l'en-tête de `global.css`) : seules
-  `.btn`, `.input`, `.mono`, `.pill`, `.gp-focus`, et les trois niveaux de
-  libellé `.lbl-screen`/`.lbl`/`.lbl-key` (§chantier libellés) sont globales.
+  `.btn`, `.input`, `.mono`, `.pill`, `.gp-focus`, `.warnbox`/`.errbox`, et les
+  quatre niveaux de libellé `.lbl-screen`/`.lbl-sub`/`.lbl`/`.lbl-key`
+  (§chantier libellés) sont globales.
   Déplacer du markup d'un composant à l'autre n'emporte pas son style.
 - **Les clés `StorageKey.*` sont suffixées par type** (`storage.ts`) quand le
   composant est rendu plusieurs fois : `pitbox.view.cars` / `pitbox.view.tracks`,
@@ -377,8 +378,9 @@ laisser pourrir ici.
 - [ ] **Harmonisation des libellés**. 68 règles de libellé
       produisent 53 signatures visuelles distinctes : 15 tailles de police,
       7 interlettrages, 9 couleurs. La même fonction visuelle change donc
-      d'apparence selon l'écran. Cible : trois niveaux globaux — `.lbl-screen`
-      (titre d'écran), `.lbl` (rubrique), `.lbl-key` (clé de donnée) — et des
+      d'apparence selon l'écran. Cible : quatre niveaux globaux —
+      `.lbl-screen` (titre d'écran), `.lbl-sub` (le sous-titre qui l'explique),
+      `.lbl` (rubrique), `.lbl-key` (clé de donnée) — et des
       couleurs redevenues sémantiques (rouge = catégorie/session/destructif,
       bleu = info et fichier mod, vert = règle, jaune = alerte). Fait : fiche
       détail ; titres d'écran passés à `.lbl-screen` sur les quatre zones
@@ -393,7 +395,7 @@ laisser pourrir ici.
       d'une clé de fiche technique en lecture seule, même si visuellement
       proche) et les titres de popup (`OpponentPicker`/`SavedSessionsDialog`,
       13px/majuscules, identiques entre eux mais ne correspondant à aucun des
-      trois niveaux). **Couleurs sémantiques** : le **rouge** a désormais son
+      quatre niveaux). **Couleurs sémantiques** : le **rouge** a désormais son
       barème, écrit au §7.2ter du SPEC — quatre niveaux, un quota par niveau,
       et la règle « le survol n'introduit jamais de rouge sur un élément qui
       n'y a pas droit au repos ». Appliqué au rail de navigation et à la
@@ -416,27 +418,21 @@ laisser pourrir ici.
       `Field` (un réglage dans un bloc : intitulé, commande, explication — et
       surtout **l'écart avec le précédent**, que chaque écran posait à la main
       et qu'un champ ajouté après coup oubliait ; c'est ce qui collait « pilote
-      au volant » à la case du dessus).
-      **Inventaire de ce qui reste**, mesuré le 2026-08-18 :
-      - **Boîte d'erreur : 14 définitions locales** (`.err` / `.error` /
-        `.action-err` dans Apps, BulkEditPanel, BulkImport, DetailPage,
-        Launch, LayersSection, Maintenance, OtherMods, Profiles,
-        Settings, SetupWizard, Transversal, MusicTab — la quinzième est partie
-        avec le panneau latéral). Mêmes trois couleurs
-        partout (`--rosso-dim` / `--rosso-border` / `--rosso-bright`), seuls
-        le padding (8/10 vs 10/12), la taille (11,5 vs 12px) et les marges
-        diffèrent. Le cas le plus net : une classe globale `.errbox` suffit,
-        les marges restant à l'appelant.
-      - **Sous-titre d'écran : 8 copies** de `.sub`, identiques à `max-width`
-        près (520/540/560/620/aucune). Trois n'avaient pas de `font-size` et
-        étaient donc plus gros que les autres — corrigé, mais les 8 copies
-        restent. En faire un 4ᵉ niveau global (`.lbl-sub` ?) est une décision
-        de design à prendre avec l'utilisateur, pas à trancher seul.
-      - **Groupe de boutons segmenté : 6 copies** (`.seg` / `.seg-v`) dans
-        Library, Transversal, BulkImport, OpponentsBlock, SessionOptionsBlock,
-        SessionTypeBlock. Deux orientations (horizontale/verticale) et deux
-        traitements de l'état actif (fond rouge plein vs fond surélevé) : un
-        vrai composant avec une prop d'orientation, pas juste une classe.
+      au volant » à la case du dessus), `.errbox` (la boîte d'erreur : 21
+      copies locales retirées — sœur de `.warnbox`, même boîte, autre couleur,
+      et c'est ce voisinage qui a tranché sa géométrie plutôt qu'un arbitrage
+      entre les copies), `Seg.svelte` (sept groupes segmentés recopiés — trois
+      axes de variation et trois seulement, chacun porté par une raison :
+      `vertical`, `tone` au barème du rouge §7.2ter, et `size` nommée par son
+      rôle, jamais par une taille), `.lbl-sub` (neuf copies du sous-titre
+      d'écran ; `max-width` reste à l'appelant, la largeur de mesure d'un
+      paragraphe dépendant de la colonne qui l'accueille et non du rôle du
+      texte). **Trois homonymes ont été renommés au passage** — `.sub`
+      désignait aussi un en-tête de dialogue, un message sous un champ et un
+      surtitre rouge posé au-dessus de son titre : un nom qui veut dire trois
+      choses est un piège au premier déplacement de markup.
+      **Inventaire de ce qui reste** (mesuré le 2026-08-18, revu le
+      2026-09-11) :
       - **Enregistrer / charger / supprimer une liste nommée : 2 copies**, et
         c'est la seule entrée de cet inventaire qui ne soit pas du style mais
         du **comportement**. Les sessions enregistrées (`SavedSessionsDialog`
@@ -449,6 +445,10 @@ laisser pourrir ici.
       Un lot de ce genre est du **reformatage pur sur une quinzaine de
       fichiers** : le faire dans son propre commit, jamais mélangé à un
       changement fonctionnel (sinon `git blame` devient inexploitable).
+      **Une brique ne se crée pas avant son premier client** : `Toolbar`,
+      `ListRow` et la coquille de fiche attendent donc les lots de la refonte
+      qui les consomment (L2, L7), pour la même raison qu'une colonne SQL que
+      rien n'écrit ni ne lit pourrit.
 - [ ] **Vignettes régénérées de la grille** — **fusionné dans `main`, mais
       éteint** : `FEATURE_GRID_THUMBS` est à `false` dans `src/lib/features.ts`,
       qui porte le mode d'emploi de l'interrupteur. Il ne reste qu'un réglage,
@@ -718,16 +718,20 @@ laisser pourrir ici.
       source), réponse attendue par email. Si refus ou trop long, plan B
       documenté : Certum Open Source Code Signing (~49€/an, cloud SimplySign,
       pas de jeton USB).
-- [ ] **Runner de tests frontend** : délibérément absent. À reconsidérer
-      seulement le jour où de la logique pure sera extraite des composants —
-      pour tester *cette* logique, pas l'affichage. **Ce jour est arrivé** :
-      `src/lib/displayName.ts` (retrait du préfixe de marque) est une fonction
-      pure avec une table d'alias, des règles de coupe qui se contredisent
-      volontairement (comparaison insensible aux tirets, coupe seulement sur
-      une espace) et des cas qui ne se vérifient qu'en les exécutant
-      (`Mercedes-Benz SLS`, `Mercedes AMG GT`, `Ferrari` tout seul). Le
-      tri/regroupement/cumul de `Transversal.svelte` en est toujours proche.
-      Décision à prendre avec l'utilisateur : c'est une dépendance de plus.
+- [ ] **Refonte de la navigation et des fiches** (branche
+      `feature/refonte-navigation`). Rail à deux rangs, inventaire unique des
+      compléments, une seule anatomie de fiche, notes sur toutes les entités.
+      **Spec, maquette et plan de livraison dans `docs/`** —
+      `PLAN-refonte-navigation.md` porte l'ordre des lots et, surtout, les
+      **mesures faites sur la bibliothèque réelle avant de commencer** : elles
+      ont supprimé un lot entier (la détection CSP des voitures existe déjà,
+      167 sur 311) et démenti le fourre-tout redouté (19 des 28 mods « autres »
+      sont des mannequins, qui partent dans l'écran Pilote). Fait : L1, le
+      socle overlay — `notes_user` et `display_name_user` sur les cinq tables
+      d'entités, `usermeta.rs`, deux commandes pour tous les types. Le
+      rattachement déduit (`attachment_user`) est **volontairement reporté au
+      lot L6**, avec le code qui le calcule : une colonne que rien n'écrit ni
+      ne lit pourrit.
 ## Fin de tâche — dans cet ordre
 
 1. **Mettre à jour `docs/SPEC.md`** dès qu'une évolution change le
@@ -773,9 +777,20 @@ servent plus (une fonctionnalité abandonnée emporte sa dépendance).
 
 ## Tests
 
-Tout en module, `#[cfg(test)] mod tests` en fin de fichier. Pas de dossier
-`tests/`, pas de runner frontend — `npm run check` couvre le typage, et le
-risque réel est côté Rust, là où une erreur détruit des fichiers de jeu.
+Côté Rust, tout en module, `#[cfg(test)] mod tests` en fin de fichier, pas de
+dossier `tests/` : c'est là qu'est le risque réel, là où une erreur détruit des
+fichiers de jeu.
+
+Côté front, **Vitest sur la logique pure uniquement** (`vitest.config.ts`,
+`npm run test`, enchaîné dans `npm run verify`) : un fichier `*.test.ts` à côté
+de son module, aucun test de composant, pas de jsdom, pas de
+`@testing-library`. La config est séparée de `vite.config.js` et n'a pas le
+plugin SvelteKit — monter un composant demanderait trois dépendances de plus,
+c'est une décision à reprendre explicitement le jour où elle se pose, pas à
+franchir par inadvertance. Le typage reste le travail de `npm run check` ; le
+test ne sert qu'aux fonctions dont les cas limites ne se vérifient qu'en les
+exécutant (`displayName.ts` et ses règles de coupe contradictoires — dont le
+premier test a d'ailleurs trouvé une table d'alias inatteignable).
 
 - **Un test = une règle**, nommée en phrase :
   `junction_create_remove_and_guard`, `activate_deactivate_leave_no_history`.

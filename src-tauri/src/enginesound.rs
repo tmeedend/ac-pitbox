@@ -161,6 +161,11 @@ pub struct SoundDetail {
     pub is_active: bool,
     pub removable: bool,
     pub size_bytes: u64,
+    /// Nom repris à la main (refonte §6.1) : un dossier de son s'appelle
+    /// `Sound - ks_lamborghini_huracan by Marti`.
+    pub display_name_user: Option<String>,
+    /// Note libre (refonte §9).
+    pub notes_user: Option<String>,
     /// `None` quand le bank est illisible : la fiche reste utile, elle dit
     /// simplement qu'elle n'a pas pu l'ouvrir.
     pub bank: Option<BankFacts>,
@@ -192,6 +197,8 @@ pub fn detail(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<SoundD
         is_active: sub.is_active,
         removable: sub.removable,
         size_bytes: crate::inspect::dir_size_bytes(&dir),
+        display_name_user: sub.display_name_user,
+        notes_user: sub.notes_user,
         bank: bank_facts(&dir),
     })
 }

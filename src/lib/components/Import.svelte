@@ -62,7 +62,7 @@
 <div class="import-screen">
   <!-- Onglet de l'Atelier : le titre d'écran est porté par l'Atelier. -->
   <header class="head">
-    <p class="sub">
+    <p class="lbl-sub">
       {t("import.subtitlePrefix")}<b>{t("import.subtitleBold")}</b>{t("import.subtitleSuffix")}
     </p>
   </header>
@@ -208,21 +208,12 @@
   }
   .errbox {
     margin-top: 12px;
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    padding: 8px 10px;
-    font-size: 11.5px;
   }
   .head {
     margin-bottom: 22px;
   }
   /* Taille/graisse viennent de `.lbl-screen` (global, §chantier libellés). */
-  .sub {
-    color: var(--muted);
-    font-size: 12px;
-    margin-top: 6px;
-    line-height: 1.5;
+  .lbl-sub {
     max-width: 560px;
   }
   h3 {

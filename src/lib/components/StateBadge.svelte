@@ -17,6 +17,11 @@
   //            d'ailleurs pour ça que le filtre « Actif » remonte le
   //            contenu de base sans rien y changer ici), mais ce n'est pas
   //            l'information que cette pastille doit donner)
+  //   jaune  = en attente (refonte §12) : le mod est actif, mais un autre lui
+  //            dispute l'emplacement et gagne l'arbitrage. À ne pas fondre
+  //            dans « inactif » — un mod inactif a été désactivé, celui-ci
+  //            n'a rien demandé et reprendra sa place dès que l'autre partira.
+  //            C'est l'ambre déjà employé par l'arbre des ajouts au jeu.
   //   gris   = mod installé hors Pit Box (§12bis.1bis) : présent dans le jeu,
   //            donc chargé, mais l'app ne le gère pas — ni activation, ni
   //            couche, ni écriture. Gris et pas jaune : sur une install déjà
@@ -25,24 +30,34 @@
 
   // `unmanaged` l'emporte sur `stock` : les deux sont vrais ensemble côté base
   // (un mod non géré vit dans content/ comme le contenu de jeu, §12bis.1bis),
-  // et c'est bien « non géré » qu'il faut lire dans ce cas.
-  let { active, stock, unmanaged = false }: { active: boolean; stock: boolean; unmanaged?: boolean } = $props();
+  // et c'est bien « non géré » qu'il faut lire dans ce cas. `pending`, lui,
+  // l'emporte sur `active` : les deux sont vrais ensemble par construction —
+  // c'est précisément ce que « en attente » veut dire.
+  let {
+    active,
+    stock,
+    unmanaged = false,
+    pending = false,
+  }: { active: boolean; stock: boolean; unmanaged?: boolean; pending?: boolean } = $props();
 </script>
 
 <span
   class="state"
-  class:stock={stock && !unmanaged}
+  class:stock={stock && !unmanaged && !pending}
   class:unmanaged
-  class:off={!stock && !active}
+  class:pending={pending && !unmanaged}
+  class:off={!stock && !active && !pending}
   title={unmanaged ? t("library.unmanagedTooltip") : stock ? t("library.stockTooltip") : undefined}
 >
   <span class="dot"></span>{unmanaged
     ? t("common.unmanagedState")
-    : stock
-      ? t("common.stockState")
-      : active
-        ? t("common.active")
-        : t("common.inactive")}
+    : pending
+      ? t("common.pendingState")
+      : stock
+        ? t("common.stockState")
+        : active
+          ? t("common.active")
+          : t("common.inactive")}
 </span>
 
 <style>
@@ -65,6 +80,9 @@
   }
   .stock .dot {
     background: var(--blue);
+  }
+  .pending .dot {
+    background: var(--yellow);
   }
   /* Gris : « hors périmètre, l'app n'y touche pas » — ni le vert de ce qu'on a
      déployé, ni le bleu du contenu de jeu, ni l'alerte du jaune : une install

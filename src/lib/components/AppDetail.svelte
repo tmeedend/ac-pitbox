@@ -9,12 +9,15 @@
   // le reste de la page est ce qu'elle met sur le disque.
   import { activateApp, deactivateApp, deleteApp, openAppFolder, type AppItem } from "$lib/apps";
   import { confirm } from "@tauri-apps/plugin-dialog";
+  import type { LayerRow } from "$lib/library";
   import { errorText } from "$lib/errors";
+  import { setEntityDisplayName, setEntityNote } from "$lib/userMeta";
   import { t } from "$lib/i18n/index.svelte";
   import ExtrasBlock from "./detail/ExtrasBlock.svelte";
   import LayersBlock from "./detail/LayersBlock.svelte";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
-  import StateBadge from "./StateBadge.svelte";
+  import FicheHeader from "./FicheHeader.svelte";
+  import NoteBlock from "./NoteBlock.svelte";
   import Tabs from "./Tabs.svelte";
 
   interface Props {
@@ -27,6 +30,8 @@
   let { app, onclose, onchange }: Props = $props();
 
   let tab = $state("resources");
+  /** Fiche d'une couche ouverte par-dessus celle de l'app (§8.4). */
+  let openLayer = $state<{ layer: LayerRow; siblings: number } | null>(null);
   let busy = $state(false);
   let error = $state("");
 
@@ -47,6 +52,31 @@
       error = errorText(e);
     } finally {
       busy = false;
+    }
+  }
+
+  /** Renommer (§6.1) : la saisie vit dans l'overlay, à côté du nom dérivé du
+   * fichier et jamais à sa place — vider le champ ramène donc celui-ci. */
+  /** Note libre (§9). Passe par la commande commune à tous les types plutôt
+   * que par `setModField` : c'est la même colonne sur les cinq tables, et le
+   * même geste. */
+  async function saveNote(value: string | null): Promise<void> {
+    error = "";
+    try {
+      await setEntityNote("APP", app.id, value ?? "");
+      onchange();
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
+  async function rename(value: string | null): Promise<void> {
+    error = "";
+    try {
+      await setEntityDisplayName("APP", app.id, value ?? "");
+      onchange();
+    } catch (e) {
+      error = errorText(e);
     }
   }
 
@@ -78,20 +108,28 @@
 </script>
 
 <div class="page">
-  <header class="head">
-    <button class="back" type="button" onclick={onclose}>{t("apps.back")}</button>
-    <h2 class="lbl-screen mono">{app.id}</h2>
-    <StateBadge active={app.active} stock={false} />
-    <div class="actions">
-      <button class="btn" type="button" onclick={openFolder} title={t("apps.openFolderTooltip")}>
-        {t("detail.openFolder")}
-      </button>
-      <button class="btn" type="button" onclick={toggle} disabled={busy}>
-        {busy ? t("common.working") : app.active ? t("common.deactivate") : t("common.activate")}
-      </button>
-      <button class="btn del" type="button" title={t("common.delete")} onclick={remove} disabled={busy}>✕</button>
-    </div>
-  </header>
+  <FicheHeader
+    onback={onclose}
+    backLabel={t("apps.back")}
+    glyph="◈"
+    name={app.display_name_user ?? app.id}
+    subtitle={app.display_name_user ? app.id : undefined}
+    rename={{
+      original: app.id,
+      overridden: !!app.display_name_user,
+      onsave: rename,
+    }}
+    deployment={{ active: app.active }}
+    actions={[
+      { label: t("detail.openFolder"), onclick: openFolder },
+      {
+        label: busy ? t("common.working") : app.active ? t("common.deactivate") : t("common.activate"),
+        onclick: toggle,
+        disabled: busy,
+      },
+      { label: t("common.delete"), onclick: remove, disabled: busy, danger: true },
+    ]}
+  />
 
   <!-- Tout ce qui décrit une app tient là : d'où elle vient, quand elle est
        arrivée, et sous quel `apps/<langue>/` elle est posée. -->
@@ -112,7 +150,9 @@
     </div>
   </dl>
 
-  {#if error}<div class="err">{error}</div>{/if}
+  <NoteBlock value={app.notes_user} onsave={saveNote} />
+
+  {#if error}<div class="errbox">{error}</div>{/if}
 
   <Tabs {tabs} active={tab} onselect={(id) => (tab = id)} />
 
@@ -125,7 +165,14 @@
       <!-- Le composant des couches d'un mod, repris tel quel : il ne connaît
            qu'un id et quatre commandes, et une app est un hôte comme un autre
            (§12bis.4). Recomposer change l'état de l'app — d'où `onchange`. -->
-      <LayersBlock modId={app.id} hostKind="App" onchanged={onchange} onerror={(m) => (error = m)} />
+      <LayersBlock
+        modId={app.id}
+        hostKind="App"
+        hostName={app.display_name_user ?? app.id}
+        onchanged={onchange}
+        onerror={(m) => (error = m)}
+        onopen={(layer, siblings) => (openLayer = { layer, siblings })}
+      />
     {/if}
   </div>
 </div>
@@ -133,38 +180,6 @@
 <style>
   .page {
     max-width: 860px;
-  }
-  .head {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 12px;
-  }
-  .head h2 {
-    flex: 1;
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .back {
-    background: none;
-    border: none;
-    padding: 0;
-    font: inherit;
-    font-size: 11.5px;
-    color: var(--muted);
-    cursor: pointer;
-  }
-  .back:hover,
-  .back:focus-visible {
-    color: var(--rosso-bright);
-  }
-  .actions {
-    display: flex;
-    gap: 6px;
-  }
-  .actions .del {
-    color: var(--rosso-bright);
   }
   .meta {
     display: flex;
@@ -181,12 +196,7 @@
   .body {
     margin-top: 14px;
   }
-  .err {
+  .errbox {
     margin-bottom: 10px;
-    padding: 8px 10px;
-    border: 1px solid var(--rosso-border);
-    background: var(--rosso-dim);
-    color: var(--rosso-bright);
-    font-size: 11.5px;
   }
 </style>

@@ -30,6 +30,7 @@ pub mod saved_sessions;
 pub mod session;
 pub mod session_state;
 pub mod ui_prefs;
+pub mod usermeta;
 
 /// Imports communs à toutes les façades. Import global volontaire : il ne
 /// déclenche pas d'avertissement `unused_imports` quand un module n'en

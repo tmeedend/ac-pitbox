@@ -25,6 +25,10 @@
      * une bande d'onglets qui change de taille selon le contenu se relit
      * entièrement à chaque visite. */
     disabled?: boolean;
+    /** Pastille signalant qu'il y a quelque chose là-dedans, quand le décompte
+     * n'a pas de sens : une note existe, elle est unique, « (1) » n'apprendrait
+     * rien de plus que sa présence (refonte §7.4). */
+    marker?: boolean;
   }
 
   interface Props {
@@ -41,21 +45,28 @@
      * la largeur, et l'alignement vertical est celui des onglets par
      * construction. */
     trailing?: Snippet;
+    /** Bande **imbriquée** dans un onglet (les sous-onglets du bloc textuel) :
+     * elle ne s'inscrit pas auprès de `screenActions`. Le registre est une
+     * pile dont la dernière inscription gagne — sans ce retrait, « onglet
+     * suivant » à la manette ferait défiler Description/Notes au lieu des
+     * onglets de la fiche, et la bande principale deviendrait injoignable. */
+    gamepad?: boolean;
   }
-  let { tabs, active, onselect, flush = false, trailing }: Props = $props();
+  let { tabs, active, onselect, flush = false, trailing, gamepad = true }: Props = $props();
 
   // Boucle plutôt que butée : avec deux onglets, une butée rendrait l'un des
   // deux boutons de la manette inerte la moitié du temps. Les onglets
   // désactivés sont sautés — la manette ne montre pas qu'un onglet est grisé,
   // elle le traverserait sans que rien ne change à l'écran.
-  $effect(() =>
-    registerTabStrip((delta) => {
+  $effect(() => {
+    if (!gamepad) return;
+    return registerTabStrip((delta) => {
       const reachable = tabs.filter((tab) => !tab.disabled);
       const i = reachable.findIndex((tab) => tab.id === active);
       if (i === -1 || reachable.length < 2) return;
       onselect(reachable[(i + delta + reachable.length) % reachable.length].id);
-    }),
-  );
+    });
+  });
 </script>
 
 <nav class="tabs" class:flush>
@@ -66,7 +77,10 @@
       disabled={tab.disabled}
       onclick={() => onselect(tab.id)}
     >
-      {tab.label}{#if tab.count !== undefined}<span class="n">{tab.count}</span>{/if}
+      {tab.label}{#if tab.count !== undefined}<span class="n">{tab.count}</span>{/if}{#if tab.marker}<span
+          class="marker"
+          aria-hidden="true"
+        ></span>{/if}
     </button>
   {/each}
   {#if trailing}
@@ -120,6 +134,19 @@
   }
   .tabs button.on .n {
     color: var(--muted);
+  }
+  /* Pastille de présence : même rôle que le décompte, sans chiffre. */
+  .marker {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--muted2);
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .tabs button.on .marker {
+    background: var(--rosso-bright);
   }
   .trailing {
     margin-left: auto;

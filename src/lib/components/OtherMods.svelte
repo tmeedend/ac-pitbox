@@ -25,6 +25,7 @@
   import { nav } from "$lib/nav.svelte";
 
   import { errorText } from "$lib/errors";
+  import { setEntityDisplayName, setEntityNote } from "$lib/userMeta";
 
   /** Les apps sont un onglet de plus, pas une entrée de rail (SPEC §7.3) :
    * cet écran est déjà le tiroir de ce qui n'est ni voiture ni circuit, et le
@@ -110,6 +111,30 @@
     }
   }
 
+  /** Renommer (§6.1) : la saisie vit dans l'overlay, à côté de l'identifiant
+   * du mod et jamais à sa place — vider le champ ramène donc celui-ci. */
+  async function rename(o: OtherModRow, value: string | null) {
+    error = "";
+    try {
+      await setEntityDisplayName("OTHER", o.id, value ?? "");
+      await load();
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
+  /** Note libre (§9) : même chemin que le renommage — l'écran tient la liste,
+   * donc c'est lui qui relit après écriture. */
+  async function note(o: OtherModRow, value: string | null) {
+    error = "";
+    try {
+      await setEntityNote("OTHER", o.id, value ?? "");
+      await load();
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
   async function openFolder(o: OtherModRow) {
     error = "";
     try {
@@ -144,7 +169,10 @@
       // Un terme par mot séparé par un espace, ET entre eux (même correction
       // que la bibliothèque, Library.svelte).
       const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-      const hay = o.id.toLowerCase();
+      // Le nom repris à la main et la note en font partie (§9.5) : sans ça,
+      // renommer un mod le rendrait introuvable sous son nouveau nom, et une
+      // note serait en écriture seule.
+      const hay = `${o.id} ${o.display_name_user ?? ""} ${o.notes_user ?? ""}`.toLowerCase();
       return terms.every((term) => hay.includes(term));
     }),
   );
@@ -182,6 +210,8 @@
     ontogglePriority={() => togglePriority(fullRow)}
     onopenFolder={() => openFolder(fullRow)}
     ondelete={() => remove(fullRow)}
+    onrename={(v) => rename(fullRow, v)}
+    onnote={(v) => note(fullRow, v)}
   />
 {:else}
 <div class="others">
@@ -189,14 +219,14 @@
     <header class="head">
       <div>
         <h2 class="lbl-screen">{t("nav.others")}</h2>
-        <p class="sub">{t("others.subtitle")}</p>
+        <p class="lbl-sub">{t("others.subtitle")}</p>
       </div>
       {#if others.length && tab !== APPS_TAB}
         <input class="input search" placeholder={t("others.searchPlaceholder")} bind:value={query} />
       {/if}
     </header>
 
-    {#if error}<div class="err">{error}</div>{/if}
+    {#if error}<div class="errbox">{error}</div>{/if}
 
     {#if loading}
       <LoadingState />
@@ -222,9 +252,16 @@
       {#each filtered as o (o.id)}
         <li class:active={o.is_active}>
           <div class="row">
-            <button class="o-name o-link mono" type="button" title={t("others.detailTooltip")} onclick={() => (fullId = o.id)}>
-              {o.id}
+            <button
+              class="o-name o-link"
+              class:mono={!o.display_name_user}
+              type="button"
+              title={t("others.detailTooltip")}
+              onclick={() => (fullId = o.id)}
+            >
+              {o.display_name_user ?? o.id}
             </button>
+            {#if o.notes_user}<span class="noteflag" title={o.notes_user}>✎</span>{/if}
             <span class="cats">
               {#each o.categories as c}
                 <span class="cat" class:here={c === tab}>{t(`others.cat.${c}`)}</span>
@@ -276,24 +313,22 @@
     gap: 20px;
     margin-bottom: 18px;
   }
-  .sub {
-    color: var(--muted);
-    font-size: 12px;
-    margin-top: 6px;
-    line-height: 1.5;
+  .lbl-sub {
     max-width: 620px;
   }
   .search {
     width: 220px;
     flex: none;
   }
-  .err {
-    background: var(--rosso-dim);
-    border: 1px solid var(--rosso-border);
-    color: var(--rosso-bright);
-    padding: 10px 12px;
-    font-size: 12px;
+  .errbox {
     margin-bottom: 14px;
+  }
+  /* Marqueur de note (§9.5) : discret, mais présent — une note qu'on ne voit
+     pas depuis la liste est une note qu'on oublie avoir écrite. */
+  .noteflag {
+    flex: none;
+    color: var(--muted2);
+    font-size: 11px;
   }
   .list {
     list-style: none;

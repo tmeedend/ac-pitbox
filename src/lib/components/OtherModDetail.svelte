@@ -12,7 +12,8 @@
   import { t } from "$lib/i18n/index.svelte";
   import { type OtherModRow } from "$lib/others";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";
-  import StateBadge from "./StateBadge.svelte";
+  import FicheHeader from "./FicheHeader.svelte";
+  import NoteBlock from "./NoteBlock.svelte";
   import { bodyThumb, requestBodyThumb } from "$lib/driverThumbs.svelte";
   import { nav } from "$lib/nav.svelte";
 
@@ -25,9 +26,14 @@
     ontogglePriority: () => void;
     onopenFolder: () => void;
     ondelete: () => void;
+    /** Nom repris à la main (§6.1). `null` = revenir à l'identifiant du mod. */
+    onrename: (value: string | null) => void;
+    /** Note libre (§9). `null` = effacer. */
+    onnote: (value: string | null) => void;
   }
 
-  const { row, busy, warnings, onclose, ontoggle, ontogglePriority, onopenFolder, ondelete }: Props = $props();
+  const { row, busy, warnings, onclose, ontoggle, ontogglePriority, onopenFolder, ondelete, onrename, onnote }: Props =
+    $props();
 
   let error = $state("");
 
@@ -59,32 +65,31 @@
 </script>
 
 <div class="page">
-  <header class="head">
-    <button class="back" type="button" onclick={onclose}>{t("others.back")}</button>
-    <h2 class="lbl-screen mono">{row.id}</h2>
-    <StateBadge active={row.is_active} stock={false} />
-    <div class="actions">
-      <button class="btn" type="button" onclick={onopenFolder} title={t("others.openFolder")}>
-        {t("others.openFolder")}
-      </button>
-      <button
-        class="btn prio"
-        class:on={row.is_priority}
-        type="button"
-        onclick={ontogglePriority}
-        disabled={busy}
-        title={t("others.priorityTooltip")}
-      >
-        {t("others.priority")}
-      </button>
-      <button class="btn" type="button" onclick={ontoggle} disabled={busy}>
-        {busy ? t("common.working") : row.is_active ? t("common.deactivate") : t("common.activate")}
-      </button>
-      <button class="btn del" type="button" onclick={ondelete} disabled={busy}>{t("common.delete")}</button>
-    </div>
-  </header>
+  <FicheHeader
+    onback={onclose}
+    backLabel={t("others.back")}
+    glyph="⚙"
+    name={row.display_name_user ?? row.id}
+    subtitle={row.display_name_user ? row.id : undefined}
+    rename={{
+      original: row.id,
+      overridden: !!row.display_name_user,
+      onsave: onrename,
+    }}
+    deployment={{ active: row.is_active }}
+    actions={[
+      { label: t("others.openFolder"), onclick: onopenFolder },
+      { label: t("others.priority"), onclick: ontogglePriority, disabled: busy },
+      {
+        label: busy ? t("common.working") : row.is_active ? t("common.deactivate") : t("common.activate"),
+        onclick: ontoggle,
+        disabled: busy,
+      },
+      { label: t("common.delete"), onclick: ondelete, disabled: busy, danger: true },
+    ]}
+  />
 
-  {#if error}<div class="err">{error}</div>{/if}
+  {#if error}<div class="errbox">{error}</div>{/if}
 
   {#if isDriverMod}
     <section class="blk">
@@ -115,6 +120,8 @@
       </div>
     </section>
   {/if}
+
+  <NoteBlock value={row.notes_user} onsave={onnote} />
 
   <dl class="meta">
     <div>
@@ -199,65 +206,6 @@
   .page {
     max-width: 860px;
   }
-  .head {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 12px;
-  }
-  .head h2 {
-    flex: 1;
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .back {
-    background: none;
-    border: none;
-    padding: 0;
-    font: inherit;
-    font-size: 11.5px;
-    color: var(--muted);
-    cursor: pointer;
-  }
-  .back:hover,
-  .back:focus-visible {
-    color: var(--rosso-bright);
-  }
-  .actions {
-    display: flex;
-    gap: 6px;
-  }
-  .btn {
-    background: var(--raised);
-    color: var(--txt2);
-    border: 1px solid var(--line);
-    font-size: 11px;
-    padding: 6px 12px;
-    flex: none;
-    cursor: pointer;
-  }
-  .btn:hover {
-    border-color: var(--rosso-border);
-    color: var(--rosso-bright);
-  }
-  .btn:disabled {
-    opacity: 0.5;
-  }
-  .btn.prio {
-    color: var(--muted);
-  }
-  .btn.prio.on {
-    color: var(--rosso-bright);
-    border-color: var(--rosso-border);
-  }
-  .btn.del {
-    color: var(--muted);
-  }
-  .btn.del:hover {
-    border-color: var(--rosso-border);
-    color: var(--rosso-bright);
-  }
   .meta {
     display: flex;
     flex-wrap: wrap;
@@ -301,12 +249,7 @@
   .body {
     margin-top: 14px;
   }
-  .err {
+  .errbox {
     margin-bottom: 10px;
-    padding: 8px 10px;
-    border: 1px solid var(--rosso-border);
-    background: var(--rosso-dim);
-    color: var(--rosso-bright);
-    font-size: 11.5px;
   }
 </style>

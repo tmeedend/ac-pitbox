@@ -94,7 +94,7 @@
       <!-- Pas de titre d'écran : c'est un onglet de l'Atelier, qui porte le
            sien. Le sous-titre reste, lui — il décrit l'outil, pas le lieu. -->
       <header class="r-header">
-        <p class="sub">{t("rules.subtitle")}</p>
+        <p class="lbl-sub">{t("rules.subtitle")}</p>
       </header>
 
       {#if !rules}
@@ -312,12 +312,6 @@
   }
   /* Taille/graisse viennent de `.lbl-screen` (global, §chantier libellés). */
   /* 12px comme les autres sous-titres d'écran (voir Profiles.svelte). */
-  .sub {
-    color: var(--muted);
-    font-size: 12px;
-    margin-top: 6px;
-    line-height: 1.5;
-  }
   section {
     margin-bottom: 26px;
   }
