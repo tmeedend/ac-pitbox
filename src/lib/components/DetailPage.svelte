@@ -101,8 +101,12 @@
   let detail = $state<ModDetail | null>(null);
   // Onglets de premier niveau de la fiche (§6.1) — réinitialisé à "fiche" à
   // chaque changement d'entité (voir le $effect suivant `id`).
-  type DetailTab = "fiche" | "screenshots" | "replays" | "resources" | "extras" | "backgrounds";
-  let activeTab = $state<DetailTab>("fiche");
+  /** Trois onglets (refonte §7.1) : ce que l'objet EST, ce qu'il a produit ou
+   * apporté, et ce que son installation a fait. Les six d'avant exposaient la
+   * mécanique — Ressources et Ajouts au jeu étaient vides la plupart du temps,
+   * et il fallait cliquer pour le découvrir. */
+  type DetailTab = "content" | "media" | "install";
+  let activeTab = $state<DetailTab>("content");
   // Chiffres affichés entre parenthèses sur les onglets Médias/Ressources —
   // mêmes appels que ceux faits à l'ouverture de l'onglet (media.rs parcourt
   // en direct `screens/`/`replay/`, potentiellement coûteux), mais lancés ici
@@ -134,20 +138,23 @@
   // Couches / extensions rattachées (§4.4).
   // Fichiers annexes du mod (§4.5.2, Bloc Ressources) — lus en direct sur disque.
 
-  // Onglets de la fiche. Le décompte fait partie du libellé (`null` tant qu'il
-  // n'est pas connu : afficher « (0) » avant de savoir est un mensonge qui
-  // dure une seconde). « Backgrounds » n'existe que pour un circuit.
+  /** Décompte de l'onglet Médias : la **somme** des quatre blocs qu'il réunit
+   * (§7.8). `null` tant qu'aucun n'a répondu — afficher « (0) » avant de savoir
+   * est un mensonge qui dure une seconde ; un seul bloc connu suffit en
+   * revanche à donner un chiffre, les autres s'y ajoutent en arrivant. */
+  const mediaCount = $derived.by(() => {
+    const parts = [screenshotsCount, replaysCount, resourcesCount, isCar ? null : backgroundsCount];
+    const known = parts.filter((n): n is number => n !== null);
+    return known.length ? known.reduce((a, b) => a + b, 0) : null;
+  });
+
   const tabItems = $derived.by(() => {
     const count = (n: number | null) => (n !== null ? ` (${n})` : "");
-    const items = [
-      { id: "fiche", label: t("detail.tabFiche") },
-      { id: "screenshots", label: t("detail.tabScreenshots") + count(screenshotsCount) },
-      { id: "replays", label: t("detail.tabReplays") + count(replaysCount) },
-      { id: "resources", label: t("detail.tabResources") + count(resourcesCount) },
-      { id: "extras", label: t("detail.tabExtras") + count(extrasCount) },
+    return [
+      { id: "content", label: isCar ? t("detail.tabCar") : t("detail.tabTrack") },
+      { id: "media", label: t("detail.tabMedia") + count(mediaCount) },
+      { id: "install", label: t("detail.tabInstall") + count(extrasCount) },
     ];
-    if (!isCar) items.push({ id: "backgrounds", label: t("detail.tabBackgrounds") + count(backgroundsCount) });
-    return items;
   });
 
   // Image héros : voiture → skin sélectionné ; circuit → preview du layout
@@ -421,7 +428,7 @@
   $effect(() => {
     const current = id;
     actionError = "";
-    activeTab = "fiche";
+    activeTab = "content";
     siblings = [];
     previewLayout = 0;
     trackSkinsLoading = true;
@@ -958,7 +965,7 @@
       </div>
     {/if}
 
-    {#if activeTab === "fiche"}
+    {#if activeTab === "content"}
     <!-- RANGÉE HAUTE : héros + panneau données -->
     <div class="row top" class:track={!isCar}>
       <div class="hero">
@@ -1114,15 +1121,6 @@
               <div><div class="k lbl-key">{t("detail.lengthLabel")}</div><div class="v">{lay?.length ?? "—"}</div></div>
             </div>
           </section>
-          {#if d.csp_features.length}
-            <section class="blk">
-              <header class="blk-h">
-                <span class="blk-t">{t("columns.csp")}</span>
-                <span class="blk-n">{d.csp_features.length}</span>
-              </header>
-              <div class="blk-b csp-row">{#each d.csp_features as f}<span class="csp">{f}</span>{/each}</div>
-            </section>
-          {/if}
           {@render descriptionCard(d.track?.description ?? null, !!d.description_user)}
           <NoteBlock value={d.notes_user} onsave={saveNote} />
         {/if}
@@ -1243,32 +1241,6 @@
             </div>
           </section>
 
-          <TagsBlock detail={d} onaddtag={addManual} onremovetag={removeManual} />
-        </div>
-
-        <!-- Versions + Historique + Provenance -->
-        <div class="col">
-          <HistoryBlock
-            detail={d}
-            {busy}
-            onactivateversion={(vid) => activate(vid)}
-            ondeleteversion={deleteVersion}
-          />
-          <ProvenanceBlock detail={d} {siblings} busy={packBusy} onfilterbypack={filterByPack} onopenpack={openPack} onopensibling={openSibling} onuninstallpack={uninstallPack} />
-          <LayersBlock
-            modId={id}
-            onchanged={() => {
-              // Le contenu déployé vient de changer sous les mêmes chemins :
-              // relire ne suffit pas, il faut aussi le dire (voir
-              // `contentRevision`).
-              contentRevision += 1;
-              void refreshEntity();
-            }}
-            onerror={(m) => (actionError = m)}
-          />
-          <!-- Sous Provenance : c'est du même ordre — d'où vient ce mod et ce
-               que l'app en a fait. Le bloc s'efface quand il n'y a rien à dire. -->
-          <DecisionsBlock modId={id} />
         </div>
       {:else}
         <!-- Layouts (galerie illustrée par le tracé, comme les skins voiture) -->
@@ -1335,7 +1307,8 @@
           </section>
         </div>
 
-        <!-- Distance + Tags (l'auteur vit désormais dans Source / origine) -->
+        <!-- Distance (l'auteur vit dans le sous-titre de l'en-tête, les
+             étiquettes dans l'onglet Installation). -->
         <div class="col">
           <section class="blk">
             <header class="blk-h"><span class="blk-t">{t("detail.distanceLabel")}</span></header>
@@ -1347,48 +1320,74 @@
             </div>
             </div>
           </section>
-          <TagsBlock detail={d} onaddtag={addManual} onremovetag={removeManual} />
-        </div>
-
-        <!-- Versions + Historique + Provenance -->
-        <div class="col">
-          <HistoryBlock
-            detail={d}
-            {busy}
-            onactivateversion={(vid) => activate(vid)}
-            ondeleteversion={deleteVersion}
-          />
-          <ProvenanceBlock detail={d} {siblings} busy={packBusy} onfilterbypack={filterByPack} onopenpack={openPack} onopensibling={openSibling} onuninstallpack={uninstallPack} />
-          <LayersBlock modId={id} onchanged={refreshEntity} onerror={(m) => (actionError = m)} />
-          <!-- Sous Provenance : c'est du même ordre — d'où vient ce mod et ce
-               que l'app en a fait. Le bloc s'efface quand il n'y a rien à dire. -->
-          <DecisionsBlock modId={id} />
         </div>
       {/if}
     </div>
-    {:else if activeTab === "screenshots"}
-      <div class="tab-body">
+    {:else if activeTab === "media"}
+      <!-- Quatre blocs, deux groupes (§7.8) : ce que TU as produit (captures,
+           replays), puis ce qui est LIVRÉ avec le mod (ressources, fonds).
+           Aucun n'est masqué quand il est vide : ses actions « Ouvrir le
+           dossier » et « Lier un fichier… » sont la seule voie pour y ajouter
+           quelque chose. -->
+      <div class="tab-body stack">
         <MediaScreenshots modId={id} onerror={(m) => (actionError = m)} />
-      </div>
-    {:else if activeTab === "replays"}
-      <div class="tab-body">
         <MediaReplays modId={id} onerror={(m) => (actionError = m)} />
-      </div>
-    {:else if activeTab === "resources"}
-      <div class="tab-body">
         <ResourcesBlock modId={id} onerror={(m) => (actionError = m)} />
+        {#if !isCar}
+          <MediaBackgrounds
+            modId={id}
+            layoutId={d.track?.layouts[previewLayout]?.id ?? null}
+            onerror={(m) => (actionError = m)}
+          />
+        {/if}
       </div>
-    {:else if activeTab === "extras"}
-      <div class="tab-body">
-        <ExtrasBlock modId={id} />
-      </div>
-    {:else if activeTab === "backgrounds" && !isCar}
-      <div class="tab-body">
-        <MediaBackgrounds
-          modId={id}
-          layoutId={d.track?.layouts[previewLayout]?.id ?? null}
-          onerror={(m) => (actionError = m)}
-        />
+    {:else}
+      <!-- Installation : d'où vient ce mod, ce que l'app en a fait, et ce qu'il
+           a posé dans le jeu. Les étiquettes y sont aussi (§7.5) : elles sont la
+           matière première d'où la catégorie est dérivée, et on les ouvre au
+           moment précis où la dérivation s'est trompée — c'est-à-dire en même
+           temps que l'origine et les décisions d'import. -->
+      <div class="tab-body install">
+        <div class="col">
+          <ExtrasBlock modId={id} />
+          <DecisionsBlock modId={id} />
+        </div>
+        <div class="col">
+          <ProvenanceBlock
+            detail={d}
+            {siblings}
+            busy={packBusy}
+            onfilterbypack={filterByPack}
+            onopenpack={openPack}
+            onopensibling={openSibling}
+            onuninstallpack={uninstallPack}
+          />
+          <HistoryBlock detail={d} {busy} onactivateversion={(vid) => activate(vid)} ondeleteversion={deleteVersion} />
+          <LayersBlock
+            modId={id}
+            onchanged={() => {
+              // Le contenu déployé vient de changer sous les mêmes chemins :
+              // relire ne suffit pas, il faut aussi le dire (voir
+              // `contentRevision`).
+              contentRevision += 1;
+              void refreshEntity();
+            }}
+            onerror={(m) => (actionError = m)}
+          />
+          <TagsBlock detail={d} onaddtag={addManual} onremovetag={removeManual} />
+          {#if d.csp_features.length}
+            <!-- Les extensions CSP ont quitté les étiquettes (§7.5) : elles
+                 décrivent l'installation, pas le contenu. Une ligne grise
+                 suffit — on ne les compose pas, on les constate. -->
+            <section class="blk">
+              <header class="blk-h">
+                <span class="blk-t">{t("columns.csp")}</span>
+                <span class="blk-n">{d.csp_features.length}</span>
+              </header>
+              <div class="blk-b csp-row">{#each d.csp_features as f}<span class="csp">{f}</span>{/each}</div>
+            </section>
+          {/if}
+        </div>
       </div>
     {/if}
   {/if}
@@ -1410,6 +1409,29 @@
      Add-ons et Règles de tags — plus de style local ici. */
   .tab-body {
     padding: 18px;
+  }
+  /* Médias : quatre blocs l'un sous l'autre, pleine largeur. Une grille de
+     colonnes y mettrait côte à côte une galerie de vignettes et une liste de
+     replays, qui n'ont ni la même largeur utile ni le même rythme. */
+  .tab-body.stack {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  /* Installation : deux colonnes. À gauche ce que le mod a posé (souvent long
+     — 34 dossiers pour une seule voiture), à droite d'où il vient et ce que
+     l'app en a fait. */
+  .tab-body.install {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+  .tab-body.install .col {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
   }
   .errbox {
     margin: 10px 18px 0;
@@ -1444,14 +1466,14 @@
   .row.top {
     grid-template-columns: 1.4fr 1fr;
   }
+  /* Deux colonnes depuis que l'installation a son onglet (§7.1) : la rangée
+     basse ne porte plus que ce qui décrit l'objet — livrées et son pour une
+     voiture, tracés/habillages et odomètre pour un circuit. */
   .row.bottom {
-    grid-template-columns: 1.3fr 1fr 1fr;
+    grid-template-columns: 1.3fr 1fr;
   }
   .row.track {
     grid-template-columns: 1fr 1fr;
-  }
-  .row.bottom.track {
-    grid-template-columns: 1fr 1fr 1fr;
   }
 
   .hero {
