@@ -640,6 +640,32 @@ et porte une pastille quand une note existe. Un troisième onglet « Le modèle
 réel » s'y ajoutera avec l'appariement Wikipédia, absent tant qu'aucun article
 n'est apparié.
 
+### 6.3ter Fiche d'une couche (refonte §8)
+
+Une couche a sa **fiche**, ouverte depuis la liste de l'hôte et posée
+par-dessus elle (la fermer y ramène). La liste de l'hôte ne fait plus que
+poser, activer et ordonner : la liste complète des fichiers — jusqu'à 392
+lignes en monospace — ne s'y déplie plus.
+
+Ordre des blocs, et il n'est pas neutre :
+
+1. **Trois chiffres** : ajoutés, remplacés (en rouge dès qu'il y en a), poids.
+2. **« Ce qui écrase la base »**, en clair et non en compteur — c'est le seul
+   endroit où une couche inquiète. La promesse du §4.4 (l'original est
+   sauvegardé avant d'être remplacé et revient dès qu'aucune couche ne le
+   réclame) y est écrite une fois, au lieu d'être répétée en bandeau partout.
+3. **« Ce qui s'ajoute »**, replié par dossier, avec compteur et poids **au
+   niveau du dossier** : le poids d'un fichier ne décide de rien.
+4. **Ordre**, seulement à partir de deux couches sur le même hôte.
+5. **Notes**.
+
+Le **nom affiché est dérivé** (`layerName.ts`) : extension d'archive retirée,
+séparateurs rendus à l'espace, préfixe de l'hôte retiré quand l'archive le
+répète. Dérivé donc faillible, donc repris à la main quand il se trompe. La
+dérivation réemploie `withoutBrand` (§7.4), qui porte déjà la règle délicate —
+comparaison insensible aux séparateurs, mais coupe seulement sur une espace,
+pour qu'un hôte `ks_nords` n'ampute pas `ks_nordschleife` en plein mot.
+
 ### 6.4 Notes (refonte §9)
 
 **Tout mod peut porter une note libre**, quel que soit son type — exclure un
