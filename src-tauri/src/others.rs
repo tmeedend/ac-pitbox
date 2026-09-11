@@ -362,6 +362,15 @@ pub struct OtherModCard {
     /// Onglets sous lesquels ce mod se range ([`categories_of`]) — plusieurs
     /// quand il touche plusieurs zones du jeu, jamais vide.
     pub categories: Vec<String>,
+    /// Chemins réellement posés dans le jeu, **relatifs à la racine d'AC**
+    /// (§11) : `content/driver/ada.kn5`, `extension/config/…`. Ce sont les
+    /// mêmes que `row.junctions`, débarrassés du chemin d'installation — celui
+    /// de l'utilisateur ne dit rien et prend toute la largeur.
+    ///
+    /// Vide quand rien n'est posé : mod désactivé, ou copie plus ancienne que
+    /// ce qui tourne déjà (règle d'or n°5), ce qui est un cas réel et pas une
+    /// anomalie.
+    pub placed: Vec<String>,
     /// Fichiers stockés dans le dossier du mod. **Zéro** est un cas réel et
     /// fréquent : une livraison partie tout entière en ressources (§4.5.2) —
     /// une notice, un manuel — dont la ligne subsiste pour que ces ressources
@@ -426,11 +435,27 @@ pub fn list_others(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<O
                 &categories,
                 row.attachment_user.as_deref(),
             );
+            let placed = cfg
+                .ac_install_path
+                .as_ref()
+                .map(|ac| {
+                    row.junctions
+                        .iter()
+                        .map(|j| {
+                            std::path::Path::new(j)
+                                .strip_prefix(ac)
+                                .map(|p| p.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/"))
+                                .unwrap_or_else(|_| j.clone())
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
             OtherModCard {
                 row,
                 conflicts,
                 externally_managed,
                 categories,
+                placed,
                 file_count: mine.map(|f| f.len()).unwrap_or(0),
                 attachment,
             }

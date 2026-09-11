@@ -681,6 +681,27 @@ dérivation réemploie `withoutBrand` (§7.4), qui porte déjà la règle délic
 comparaison insensible aux séparateurs, mais coupe seulement sur une espace,
 pour qu'un hôte `ks_nords` n'ampute pas `ks_nordschleife` en plein mot.
 
+### 6.3quater Fiche d'un mod greffé simple (refonte §11)
+
+Une police, un fragment de config, un mannequin : leur fiche n'affichait qu'un
+titre, trois métadonnées et « aucun fichier annexe ». Deux blocs la comblent,
+sans rien inventer — le parcours de fichiers qui détecte les conflits produisait
+déjà tout ce qu'il fallait :
+
+- **Où il atterrit** : les chemins réellement posés dans le jeu, groupés par
+  dossier de destination et **relatifs à la racine d'AC** — le chemin
+  d'installation de l'utilisateur ne dit rien et prend toute la largeur. Un
+  mod peut n'avoir rien posé sans être en panne : désactivé, ou porteur d'une
+  copie plus ancienne que ce qui tourne déjà (règle d'or n°5). Le bloc le dit
+  plutôt que d'afficher une liste vide.
+- **Conflits** : quels autres mods visent les mêmes fichiers, combien, et qui
+  gagne — la priorité marquée à la main, ou à défaut la date.
+
+Ces fiches restent en **page pleine posée sur la liste** ; le panneau latéral
+du §6.2 de la refonte est écarté. Il avait déjà été retiré du projet pour cause
+de redondance, et la fiche posée par-dessus — dont le retour ramène à la liste
+d'où l'on vient — rend le même service sans ajouter un second contenant.
+
 ### 6.4 Notes (refonte §9)
 
 **Tout mod peut porter une note libre**, quel que soit son type — exclure un

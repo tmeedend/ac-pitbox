@@ -43,6 +43,10 @@ export interface OtherModRow {
    * (`extension/config/*​/loaded/`, vao-patches) : Content Manager peut y
    * remplacer la version du mod par la sienne (§4.5.3). */
   externally_managed: number;
+  /** Chemins réellement posés dans le jeu, relatifs à la racine d'AC (§11).
+   * Vide quand rien n'est posé — mod désactivé, ou copie plus ancienne que ce
+   * qui tourne déjà (règle d'or n°5). */
+  placed: string[];
   /** Zones du jeu touchées par le mod, dans l'ordre des onglets (§7.3).
    * Plusieurs quand il en touche plusieurs — il apparaît alors sous chacune. */
   categories: string[];
