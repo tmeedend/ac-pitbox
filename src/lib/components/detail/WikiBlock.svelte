@@ -26,6 +26,7 @@
   import { localeNames } from "$lib/i18n/index.svelte";
   import { parseExtract } from "$lib/wikiText";
   import { renderArticle } from "$lib/wikiHtml";
+  import { zoomFactor } from "$lib/zoom.svelte";
   import {
     articleLang,
     clearWikiLink,
@@ -88,11 +89,25 @@
   }
 
   /** Saute à une section. L'ancre est l'`id` que MediaWiki a posé sur le titre
-   * et que la reconstruction a conservé. */
+   * et que la reconstruction a conservé.
+   *
+   * **Pas de `scrollIntoView`** : il fait défiler *tous* les ancêtres
+   * scrollables pour amener l'élément dans la fenêtre, la page comprise — et
+   * le titre visé finissait sous la barre de fenêtre (celle qui porte
+   * réduire/agrandir/Big Picture). Seul le conteneur de l'article doit bouger.
+   *
+   * **Et la division par `zoomFactor()` n'est pas décorative** : le zoom
+   * d'interface est un `zoom` CSS posé sur `<html>`, donc
+   * `getBoundingClientRect` rend des pixels réels de fenêtre déjà multipliés,
+   * alors que `scrollTop` est en pixels CSS. Reporter l'un dans l'autre
+   * appliquerait le facteur deux fois — le même piège que le menu contextuel
+   * décalé et les listes déroulantes hors écran (voir CLAUDE.md). */
   function goToSection(anchor: string) {
     if (!host || !anchor) return;
     const target = host.querySelector(`#${CSS.escape(anchor)}`);
-    target?.scrollIntoView({ block: "start", behavior: "smooth" });
+    if (!target) return;
+    const delta = (target.getBoundingClientRect().top - host.getBoundingClientRect().top) / zoomFactor();
+    host.scrollTo({ top: host.scrollTop + delta, behavior: "smooth" });
   }
 
   // Les langues où l'article existe vraiment, jamais une liste en dur : sur les
