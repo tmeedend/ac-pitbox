@@ -6,12 +6,14 @@
   // cache de skins) reste dans Launch.svelte, qui la déclenche aussi depuis
   // d'autres sources (presets, resynchronisation voiture/circuit) — ce bloc
   // ne fait qu'afficher le résultat et notifier les actions locales
-  // (ajouter/dupliquer/retirer une ligne, régler un niveau, ouvrir le picker).
+  // (ajouter/dupliquer/retirer une ligne, régler un niveau, ouvrir la modale).
+  // La modale de sélection est rendue par `Launch.svelte` : elle a besoin de
+  // toute la bibliothèque voitures et des jetons dérivés du vivier, que ce
+  // bloc n'a pas à connaître.
   import { SAME_CATEGORY, type GridMode, type Opponent, type RaceSetup, type SkinItem } from "$lib/launch";
   import { previewSrc, type ModCard } from "$lib/library";
   import { t } from "$lib/i18n/index.svelte";
   import NumberStepper from "../NumberStepper.svelte";
-  import OpponentPicker from "../OpponentPicker.svelte";
   import Seg from "../Seg.svelte";
 
   let {
@@ -22,8 +24,6 @@
     skinsByCarId,
     categorySelection,
     categoryOptions,
-    pickerPool,
-    pickerIndex,
     onselectmode,
     onselectcategory,
     oncountchange,
@@ -32,8 +32,6 @@
     onduplicate,
     onsetlevel,
     onopenpicker,
-    onclosepicker,
-    onconfirmpicker,
     onregenerate,
   }: {
     setup: RaceSetup;
@@ -43,8 +41,6 @@
     skinsByCarId: Record<string, SkinItem[]>;
     categorySelection: string;
     categoryOptions: string[];
-    pickerPool: ModCard[];
-    pickerIndex: number | null;
     onselectmode: (mode: GridMode) => void;
     onselectcategory: (category: string) => void;
     oncountchange: (n: number) => void;
@@ -53,8 +49,6 @@
     onduplicate: (index: number) => void;
     onsetlevel: (index: number, level: number) => void;
     onopenpicker: (index: number) => void;
-    onclosepicker: () => void;
-    onconfirmpicker: (carId: string, skinId: string | null) => void;
     onregenerate: () => void;
   } = $props();
 
@@ -262,15 +256,6 @@
   </div>
 </section>
 
-{#if pickerIndex != null}
-  <OpponentPicker
-    pool={pickerPool}
-    currentCarId={setup.opponents[pickerIndex].car_id}
-    currentSkinId={setup.opponents[pickerIndex].car_skin}
-    onpick={onconfirmpicker}
-    onclose={onclosepicker}
-  />
-{/if}
 
 <style>
   .modes {
