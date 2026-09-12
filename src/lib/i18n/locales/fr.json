@@ -1047,6 +1047,12 @@
     "reasonFilesMissing": "fichiers de la bibliothèque introuvables",
     "reasonUiCarMissing": "ui/ui_car.json manquant",
     "reasonUiDirMissing": "dossier ui/ manquant",
+    "repairPhaseSizing": "Inventaire du travail…",
+    "repairPhaseProjections": "Livrées rebranchées",
+    "repairPhaseRedeploy": "Mods redéployés",
+    "repairPhaseReinstall": "Mods réinstallés",
+    "repairDone": "Réparation terminée — {count} mod(s) redéployé(s)",
+    "repairFailedCount": ", {count} en échec",
     "repairTitle": "Réparation générale",
     "repairHint": "Redéploie les mods actifs et recrée les projections de skins manquantes ou cassées — utile après une copie de bibliothèque (ex. robocopy) qui ne préserve pas les junctions, ou pour rattraper une mise à jour de Pit Box. Ne touche jamais aux fichiers stockés.",
     "repairReinstallOption": "Aussi réinstaller depuis l'archive source les mods cassés qui en ont une conservée",
@@ -1430,6 +1436,7 @@
     "notADriverModel": "Ce fichier .kn5 n'est pas un mannequin de pilote. Seul un modèle de pilote peut s'importer seul : pour tout le reste, importez le dossier ou l'archive qui l'entoure.",
     "tempDirUnavailable": "impossible de créer le dossier temporaire d'extraction.",
     "notAJunction": "refus : le chemin n'est pas une junction.",
+    "notASkin": "ce sous-élément n'est pas une livrée.",
     "notASoundMod": "ce sous-élément n'est pas un mod de son.",
     "soundBankMissing": "aucun fichier de son trouvé pour cette entrée.",
     "soundCodecUnsupported": "ce fichier de son utilise une compression que Pit Box ne sait pas lire.",
@@ -1497,6 +1504,16 @@
     "pinHint": "◈ épingle le filtre : il reste visible même sans valeur.",
     "chipRemove": "Retirer ce filtre",
     "chipResetPinned": "Vider ce filtre (épinglé : il reste en fantôme)"
+  },
+  "skins": {
+    "back": "Retour aux compléments",
+    "carLabel": "Voiture",
+    "trackLabel": "Circuit",
+    "filesLabel": "Fichiers",
+    "previewLabel": "Aperçu",
+    "noFiles": "Ce dossier est vide.",
+    "openFolder": "Ouvrir le dossier",
+    "notProjected": "Cette livrée est en bibliothèque mais n'est pas posée dans le dossier de son hôte : le jeu ne la charge pas. La réparation générale de l'Atelier la rebranche."
   },
   "sounds": {
     "back": "Retour aux sons",

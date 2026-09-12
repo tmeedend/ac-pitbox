@@ -266,6 +266,30 @@ pub fn sound_detail(app: AppHandle, db: State<Db>, sub_id: String) -> Result<cra
     crate::enginesound::detail(&conn, &cfg, &sub_id)
 }
 
+/// Fiche d'une livrée (§12bis.2), voiture ou circuit : ce qu'elle habille, ce
+/// qu'elle pèse, ses fichiers, et si le jeu la voit. Lue à la demande pour la
+/// même raison que la fiche d'un son — un dossier de livrée change sous nos
+/// pieds, rien de tout cela n'a sa place en base.
+#[tauri::command]
+pub fn skin_detail(app: AppHandle, db: State<Db>, sub_id: String) -> Result<crate::submods::SkinDetail, String> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::submods::skin_detail(&conn, &cfg, &sub_id)
+}
+
+/// Ouvre le dossier stocké d'une livrée dans l'explorateur.
+#[tauri::command]
+pub fn open_skin_folder(app: AppHandle, db: State<Db>, sub_id: String) -> Result<(), String> {
+    let cfg = crate::config::load(&app);
+    let dir = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        crate::submods::skin_folder(&conn, &cfg, &sub_id)?
+    };
+    app.opener()
+        .open_path(dir.display().to_string(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
 /// Saisit l'auteur d'un mod de son. Vide efface.
 #[tauri::command]
 pub fn set_sound_author(db: State<Db>, sub_id: String, author: Option<String>) -> Result<(), String> {

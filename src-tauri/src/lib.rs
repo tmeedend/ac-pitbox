@@ -389,6 +389,8 @@ pub fn run() {
             #[cfg(windows)]
             commands::addons::stop_audition_native,
             commands::addons::sound_detail,
+            commands::addons::skin_detail,
+            commands::addons::open_skin_folder,
             commands::addons::set_sound_author,
             commands::addons::list_sound_resources,
             commands::addons::open_sound_resource,

@@ -20,6 +20,7 @@
   import { onAcRunning } from "$lib/launch";
   import PrefsToast from "./PrefsToast.svelte";
   import BulkToasts from "./BulkToasts.svelte";
+  import RepairToast from "./RepairToast.svelte";
   import TitleBar from "./TitleBar.svelte";
   import ControllerSetup from "./ControllerSetup.svelte";
   import ImageSelectDropdown from "./ImageSelectDropdown.svelte";
@@ -39,6 +40,7 @@
   import { errorText } from "$lib/errors";
   import { initGlobalDragDrop } from "$lib/importState.svelte";
   import { initBulkProgress } from "$lib/bulkState.svelte";
+  import { initRepairProgress } from "$lib/repairState.svelte";
   import { openContentManager, listModSkins, type SkinItem } from "$lib/launch";
   import { listOtherMods } from "$lib/others";
   import { setPreferredSkin, setPreferredLayout } from "$lib/preferred";
@@ -74,6 +76,7 @@
   // comme le glisser-déposer — un lot lancé depuis la bibliothèque doit rester
   // visible même si on change d'écran pendant.
   onMount(() => initBulkProgress());
+  onMount(() => initRepairProgress());
 
   // **La fin de la session lève la pause de la génération.**
   //
@@ -815,6 +818,7 @@
   <PrefsToast />
   <ControllerToast />
   <BulkToasts />
+  <RepairToast />
   <ImportToasts />
   <!-- La génération des vignettes en dernier, donc au plus près du coin : elle
        dure des minutes là où les autres passent, et c'est celle qu'on revient

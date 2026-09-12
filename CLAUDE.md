@@ -436,6 +436,17 @@ mélangé à un changement fonctionnel : sinon `git blame` devient inexploitable
 Liste vivante : **retirer chaque entrée dès qu'elle est faite**, ne pas la
 laisser pourrir ici.
 
+- [ ] **Texture updates — la couche développée sur toutes les livrées.**
+      Recherche faite, **rien d'implémenté** : tout est dans
+      `docs/SPEC-texture-update.md`, y compris les mesures, qui sont la partie
+      qu'on ne retrouve pas deux fois. En bref : un dossier de textures à
+      recopier dans *chaque* livrée d'une voiture n'est ni une livrée ni une
+      couche telle qu'on les pose, et finit aujourd'hui en « autre mod »
+      `UNRECOGNISED` — ce qui est exact, faute de mécanisme. La détection est
+      possible et **nette** (100 % des fichiers du mod sont des textures de son
+      `.kn5`, contre 58 % au maximum pour 75 livrées réelles ; 0 livrée sur
+      3585 dépourvue des quatre marqueurs de livrée). Restent deux décisions de
+      conception, §5 et §6 de la spec. Ne pas commencer sans les avoir lues.
 - [ ] **Harmonisation des libellés**. 68 règles de libellé
       produisent 53 signatures visuelles distinctes : 15 tailles de police,
       7 interlettrages, 9 couleurs. La même fonction visuelle change donc

@@ -241,6 +241,10 @@ fn import_skin_pack(
     let Ok(entries) = std::fs::read_dir(&sub.dir) else {
         return;
     };
+    // Une seule projection suffit à rendre le déploiement du jeu périmé — mais
+    // aucune n'en change rien, et redéployer pour rien coûte un dossier entier
+    // de hardlinks (§2).
+    let mut projected_any = false;
     for e in entries.flatten() {
         let skin_src = e.path();
         if !skin_src.is_dir() {
@@ -310,6 +314,7 @@ fn import_skin_pack(
         // Projection : junction dans le skins/ de l'entité cible (voiture ou
         // circuit — pour un circuit, sous skins/cm_skins/, convention CM).
         let (projected, warning) = project_skin(conn, cfg, parent, &name, &dest, track);
+        projected_any |= projected;
         out.push(SubImported {
             sub_type: sub_type.into(),
             parent_id: parent.clone(),
@@ -320,6 +325,12 @@ fn import_skin_pack(
             parent_known: host_exists(conn, parent),
             awaiting_decision: false,
         });
+    }
+
+    // Les junctions viennent d'être posées dans la bibliothèque : le jeu n'en
+    // sait encore rien (voir `redeploy_host`). Une fois pour tout le pack.
+    if projected_any {
+        redeploy_host(conn, cfg, parent);
     }
 
     // Fichiers annexes au pack de skins de circuit (ex. ext_config.ini,
@@ -380,6 +391,162 @@ fn project_skin(
     }
 }
 
+/// Pushes into the game what was just written into the **library** copy of the
+/// host: a projected livery, a recomposed `skins/default/`.
+///
+/// Only a managed mod needs it, and only because of where its liveries live.
+/// `parent_content_dir` points at the library version folder for a managed mod,
+/// while `content/<type>s/<id>` is a hardlink mirror of that folder taken at the
+/// last deployment (§2) — nothing propagates between the two on its own. Stock
+/// content has no such gap (its `parent_content_dir` *is* the deployed folder),
+/// and recomposing it would rebuild the composed tree from `stock_base/`,
+/// dropping the very junction we just created.
+///
+/// Real bug this closes: a 20-livery skin pack imported onto a managed car was
+/// stored, projected, listed in the fiche and shown in the 3D preview — all of
+/// which read the library — and was nowhere to be found in the game. Nothing in
+/// the import report said so, because from the library's point of view nothing
+/// had failed.
+///
+/// Best-effort by design (§4.5): what is stored but not deployed is picked up
+/// again by the general repair (§9.3), and a redeployment that fails must not
+/// lose the rest of a pack. Hence the `log::warn!` — on a packaged build there
+/// is no console to catch it otherwise.
+fn redeploy_host(conn: &Connection, cfg: &AppConfig, parent_id: &str) {
+    let managed = matches!(overlay::get_mod(conn, parent_id), Ok(Some(m)) if !m.is_stock);
+    if !managed {
+        return;
+    }
+    if let Err(e) = crate::compose::recompose(conn, cfg, parent_id) {
+        log::warn!("redeploy_host {parent_id}: {e}");
+    }
+}
+
+/// One file of a livery, relative to its stored folder.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkinFile {
+    pub path: String,
+    pub size_bytes: u64,
+}
+
+/// The sheet of a separately stored livery — car (`SKIN`) or track
+/// (`TRACK_SKIN`), §12bis.2.
+///
+/// It exists for the reason the sound sheet does (§8): what there is to say
+/// about a livery is a **list of files**, which has no place unfolded inside a
+/// list. Until now the inventory had nowhere to send a livery, so clicking its
+/// name opened the host car instead — the same destination as the link on the
+/// right of the row, so one of the two gestures was wasted and the livery had
+/// no sheet at all.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkinDetail {
+    pub id: String,
+    /// `"SKIN"` or `"TRACK_SKIN"` — the sheet reads the same, the vocabulary
+    /// does not.
+    pub sub_type: String,
+    pub name: String,
+    /// Name declared by `ui_skin.json`, when it carries one. The very same
+    /// reading as the livery picker of the host sheet — two names for one
+    /// livery is a divergence no typing would catch.
+    pub ui_name: Option<String>,
+    pub parent_id: String,
+    pub parent_name: Option<String>,
+    pub source_archive: Option<String>,
+    pub imported_at: String,
+    /// Only a track livery has one (§8): a car livery is always loadable, the
+    /// game picks at launch.
+    pub is_active: bool,
+    pub removable: bool,
+    pub size_bytes: u64,
+    pub display_name_user: Option<String>,
+    pub notes_user: Option<String>,
+    /// Stored folder, absolute — what "open the folder" opens.
+    pub folder: String,
+    /// Projected into the host's `skins/` (§12bis.2). False means the game
+    /// cannot load it, which is worth saying rather than leaving to be
+    /// guessed.
+    pub projected: bool,
+    /// Absolute paths, for `convertFileSrc`.
+    pub preview: Option<String>,
+    pub livery: Option<String>,
+    pub files: Vec<SkinFile>,
+}
+
+/// Reads the sheet of a livery. Everything is read from disk at call time:
+/// a livery folder can change under us, and nothing here is worth caching.
+pub fn skin_detail(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<SkinDetail, String> {
+    let sub = overlay::get_sub_mod(conn, sub_id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::SUB_MOD_NOT_FOUND)?;
+    if sub.sub_type != "SKIN" && sub.sub_type != "TRACK_SKIN" {
+        return Err(crate::errors::NOT_A_SKIN.into());
+    }
+    let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &sub.library_path)
+        .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    let track = sub.sub_type == "TRACK_SKIN";
+
+    let mut files: Vec<SkinFile> = walkdir::WalkDir::new(&dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .filter_map(|e| {
+            let rel = e.path().strip_prefix(&dir).ok()?;
+            Some(SkinFile {
+                path: rel.to_string_lossy().replace('\\', "/"),
+                size_bytes: e.metadata().map(|m| m.len()).unwrap_or(0),
+            })
+        })
+        .collect();
+    files.sort_by_key(|f| f.path.to_lowercase());
+
+    // Projection : la junction porte le nom du skin dans le `skins/` de l'hôte
+    // (sous `cm_skins/` pour un circuit, convention CM, §8).
+    let projected = parent_skins_dir(conn, cfg, &sub.parent_id)
+        .map(|d| if track { d.join("cm_skins") } else { d })
+        .map(|d| d.join(&sub.name))
+        .is_some_and(|link| activation::is_junction(&link) || link.is_dir());
+
+    let existing = |name: &str| {
+        let p = dir.join(name);
+        p.is_file().then(|| p.to_string_lossy().into_owned())
+    };
+
+    Ok(SkinDetail {
+        id: sub.id,
+        sub_type: sub.sub_type,
+        ui_name: library::read_skin_name(&dir),
+        parent_name: overlay::get_mod(conn, &sub.parent_id)
+            .ok()
+            .flatten()
+            .and_then(|m| m.display_name),
+        parent_id: sub.parent_id,
+        source_archive: sub.source_archive,
+        imported_at: sub.imported_at,
+        is_active: sub.is_active,
+        removable: sub.removable,
+        size_bytes: files.iter().map(|f| f.size_bytes).sum(),
+        display_name_user: sub.display_name_user,
+        notes_user: sub.notes_user,
+        projected,
+        preview: existing("preview.jpg").or_else(|| existing("preview.png")),
+        livery: existing("livery.png"),
+        folder: dir.to_string_lossy().into_owned(),
+        name: sub.name,
+        files,
+    })
+}
+
+/// Ouvre le dossier stocké d'une livrée dans l'explorateur.
+pub fn skin_folder(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<PathBuf, String> {
+    let sub = overlay::get_sub_mod(conn, sub_id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::SUB_MOD_NOT_FOUND)?;
+    crate::libpath::resolve(cfg.library_path.as_deref(), &sub.library_path)
+        .ok_or_else(|| crate::errors::LIBRARY_NOT_CONFIGURED.into())
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct RepairReport {
     pub repaired: usize,
@@ -397,11 +564,27 @@ pub struct RepairReport {
 /// `project_skin` est déjà un no-op quand la junction existe (`link.exists()`),
 /// donc rejouable sans risque même sur une bibliothèque saine : on boucle
 /// simplement sur tous les skins connus et on laisse ce garde-fou décider.
-pub fn repair_projections(conn: &Connection, cfg: &AppConfig) -> RepairReport {
+/// `on_step` reçoit `(rang 1-based, total, nom du skin)` avant chaque skin :
+/// une fermeture plutôt qu'un `AppHandle`, pour la raison mesurée que
+/// `bulk::ProgressSink` documente — l'import de Tauri dans un module métier
+/// rend le binaire de test de la lib inexécutable.
+pub fn repair_projections(conn: &Connection, cfg: &AppConfig, on_step: &dyn Fn(usize, usize, &str)) -> RepairReport {
     let mut report = RepairReport::default();
-    for sub_type in ["SKIN", "TRACK_SKIN"] {
-        let track = sub_type == "TRACK_SKIN";
-        for s in overlay::list_subs_by_type(conn, sub_type).unwrap_or_default() {
+    let all: Vec<(bool, Vec<overlay::SubModRow>)> = ["SKIN", "TRACK_SKIN"]
+        .iter()
+        .map(|t| {
+            (
+                *t == "TRACK_SKIN",
+                overlay::list_subs_by_type(conn, t).unwrap_or_default(),
+            )
+        })
+        .collect();
+    let total: usize = all.iter().map(|(_, v)| v.len()).sum();
+    let mut seen = 0usize;
+    for (track, subs) in all {
+        for s in subs {
+            seen += 1;
+            on_step(seen, total, &s.name);
             let Some(store) = crate::libpath::resolve(cfg.library_path.as_deref(), &s.library_path) else {
                 continue;
             };
@@ -656,6 +839,10 @@ fn recompose_track_skins(conn: &Connection, cfg: &AppConfig, track_id: &str) -> 
     } else if let Ok(json) = serde_json::to_string_pretty(&names) {
         let _ = std::fs::write(&marker, json);
     }
+
+    // `skins/default/` vient d'être reconstruit dans la bibliothèque pour un
+    // circuit géré : sans redéploiement, le jeu garde la sélection précédente.
+    redeploy_host(conn, cfg, track_id);
 
     Ok(())
 }
@@ -1091,6 +1278,9 @@ pub fn remove_sub(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<()
                     let _ = activation::remove_junction(&link);
                 }
             }
+            // Retirée de la bibliothèque, la livrée est encore déployée dans le
+            // jeu : même écart qu'à l'import, dans l'autre sens.
+            redeploy_host(conn, cfg, &sub.parent_id);
         }
         "TRACK_SKIN" => {
             // Même chose, sous skins/cm_skins/ (convention CM, §8) — et
@@ -2360,7 +2550,7 @@ mod tests {
         assert!(!link.exists(), "précondition : junction disparue");
         assert!(store.join("preview.jpg").is_file(), "précondition : stockage intact");
 
-        let report = repair_projections(&conn, &cfg);
+        let report = repair_projections(&conn, &cfg, &|_, _, _| {});
         assert_eq!(report.repaired, 1);
         assert_eq!(report.already_ok, 0);
         assert!(report.failed.is_empty());
@@ -2368,10 +2558,196 @@ mod tests {
 
         // Rejouable sans risque sur une bibliothèque déjà saine : la seconde
         // passe ne doit rien recréer, juste confirmer que tout est en place.
-        let report2 = repair_projections(&conn, &cfg);
+        let report2 = repair_projections(&conn, &cfg, &|_, _, _| {});
         assert_eq!(report2.repaired, 0);
         assert_eq!(report2.already_ok, 1);
         assert!(report2.failed.is_empty());
+    }
+
+    /// Règle (§12bis.2) : un skin importé sur une voiture **active** est dans le
+    /// jeu à la fin de l'import, pas seulement en bibliothèque.
+    ///
+    /// Bug réel : pour un mod géré, `parent_content_dir` désigne le dossier de
+    /// bibliothèque, et `content/` n'en est qu'une copie en hardlinks figée au
+    /// dernier déploiement (§2). Les 20 livrées d'un pack F1 étaient stockées,
+    /// projetées, listées dans la fiche et rendues dans l'aperçu 3D — tout cela
+    /// lit la bibliothèque — et n'existaient nulle part dans le jeu.
+    #[test]
+    fn an_imported_skin_reaches_the_game_not_just_the_library() {
+        let base = crate::testutil::temp_dir("skin-to-game");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        let carv = library.join("cars").join("ferrari_488").join("v1");
+        std::fs::create_dir_all(carv.join("ui")).unwrap();
+        std::fs::write(carv.join("ui").join("ui_car.json"), b"{}").unwrap();
+        std::fs::write(carv.join("ferrari.kn5"), b"FAKE").unwrap();
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let now = Local::now().to_rfc3339();
+        overlay::upsert_mod(
+            &conn,
+            "ferrari_488",
+            "Car",
+            Some("Ferrari"),
+            Some("488"),
+            "h",
+            None,
+            &now,
+        )
+        .unwrap();
+        overlay::insert_version(
+            &conn,
+            "v1",
+            "ferrari_488",
+            Some("1.0"),
+            None,
+            &now,
+            &carv.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+        activation::activate(&conn, &cfg, "ferrari_488", Some("v1")).unwrap();
+        let deployed = ac.join("content").join("cars").join("ferrari_488");
+        assert!(
+            deployed.join("ferrari.kn5").is_file(),
+            "précondition : voiture déployée"
+        );
+
+        // Pack de skins pour cette voiture : <carId>/skins/<skin>.
+        let skin_src = base.join("src").join("ferrari_488").join("skins").join("af_corse_51");
+        std::fs::create_dir_all(&skin_src).unwrap();
+        std::fs::write(skin_src.join("preview.jpg"), b"IMG").unwrap();
+        let subs = modscan::scan_subs(&base.join("src"));
+        let res = import_subs(
+            &conn,
+            &cfg,
+            &library,
+            "ferrari_skins.7z",
+            &subs,
+            true,
+            ExtractionMode::InfoOnly,
+        );
+        assert_eq!(res.len(), 1);
+        assert!(res[0].projected, "précondition : junction posée en bibliothèque");
+
+        assert!(
+            deployed.join("skins").join("af_corse_51").join("preview.jpg").is_file(),
+            "la livrée est dans le jeu à la fin de l'import"
+        );
+
+        // Et elle en repart avec elle : le retrait rejoue le même chemin.
+        let sub_id = overlay::list_subs_for_parent(&conn, "ferrari_488").unwrap()[0]
+            .id
+            .clone();
+        remove_sub(&conn, &cfg, &sub_id).unwrap();
+        assert!(
+            !deployed.join("skins").join("af_corse_51").exists(),
+            "livrée supprimée retirée du jeu aussi"
+        );
+        assert!(deployed.join("ferrari.kn5").is_file(), "la voiture elle-même intacte");
+    }
+
+    /// Règle (refonte §4.2) : une livrée a sa propre fiche, et celle-ci dit ce
+    /// que la ligne d'inventaire ne peut pas dire — ses fichiers, et si le jeu
+    /// la voit.
+    ///
+    /// Ce dernier point est le seul fait de la fiche qui demande une action :
+    /// stockée en bibliothèque mais non projetée, une livrée est parfaitement
+    /// normale partout ailleurs dans l'app et n'existe pas pour le jeu.
+    #[test]
+    fn a_skin_sheet_lists_its_files_and_says_whether_the_game_sees_it() {
+        let base = crate::testutil::temp_dir("skin-sheet");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        let carv = library.join("cars").join("ferrari_488").join("v1");
+        std::fs::create_dir_all(&carv).unwrap();
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let now = Local::now().to_rfc3339();
+        overlay::upsert_mod(
+            &conn,
+            "ferrari_488",
+            "Car",
+            Some("Ferrari"),
+            Some("488"),
+            "h",
+            None,
+            &now,
+        )
+        .unwrap();
+        overlay::insert_version(
+            &conn,
+            "v1",
+            "ferrari_488",
+            None,
+            None,
+            &now,
+            &carv.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "ferrari_488", "v1").unwrap();
+
+        let store = library.join("skins").join("ferrari_488").join("af_corse_51");
+        std::fs::create_dir_all(store.join("nested")).unwrap();
+        std::fs::write(store.join("preview.jpg"), vec![0u8; 700]).unwrap();
+        std::fs::write(store.join("ui_skin.json"), br#"{"skinname":"AF Corse #51"}"#).unwrap();
+        std::fs::write(store.join("nested").join("body.dds"), vec![0u8; 324]).unwrap();
+        overlay::insert_sub_mod(
+            &conn,
+            "s1",
+            "SKIN",
+            "ferrari_488",
+            "af_corse_51",
+            &store.to_string_lossy(),
+            Some("pack.7z"),
+            &now,
+        )
+        .unwrap();
+
+        let d = skin_detail(&conn, &cfg, "s1").unwrap();
+        assert_eq!(
+            d.ui_name.as_deref(),
+            Some("AF Corse #51"),
+            "le nom déclaré par ui_skin.json"
+        );
+        assert_eq!(d.parent_name.as_deref(), Some("488"));
+        assert_eq!(d.files.len(), 3, "les sous-dossiers comptent aussi");
+        assert!(
+            d.files.iter().any(|f| f.path == "nested/body.dds"),
+            "chemin relatif en séparateurs /, sous-dossiers compris"
+        );
+        assert_eq!(d.size_bytes, 700 + 324 + 27, "somme des fichiers réels");
+        assert!(d.preview.is_some(), "l'aperçu est celui du dossier");
+        assert!(!d.projected, "pas encore posée : le jeu ne la voit pas");
+
+        project_skin(&conn, &cfg, "ferrari_488", "af_corse_51", &store, false);
+        assert!(
+            skin_detail(&conn, &cfg, "s1").unwrap().projected,
+            "posée : la fiche cesse de le signaler"
+        );
     }
 
     #[test]

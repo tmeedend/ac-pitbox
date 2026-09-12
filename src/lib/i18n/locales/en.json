@@ -1047,6 +1047,12 @@
     "reasonFilesMissing": "library files not found",
     "reasonUiCarMissing": "ui/ui_car.json missing",
     "reasonUiDirMissing": "ui/ folder missing",
+    "repairPhaseSizing": "Sizing up the work…",
+    "repairPhaseProjections": "Skins reconnected",
+    "repairPhaseRedeploy": "Mods redeployed",
+    "repairPhaseReinstall": "Mods reinstalled",
+    "repairDone": "Repair finished — {count} mod(s) redeployed",
+    "repairFailedCount": ", {count} failed",
     "repairTitle": "General repair",
     "repairHint": "Redeploys active mods and recreates missing or broken skin projections — useful after a library copy (e.g. robocopy) that doesn't preserve junctions, or to catch up with a Pit Box update. Never touches stored files.",
     "repairReinstallOption": "Also reinstall from the source archive any broken mods that have one kept",
@@ -1430,6 +1436,7 @@
     "notADriverModel": "This .kn5 file is not a driver model. Only a driver model can be imported on its own: for anything else, import the folder or archive around it.",
     "tempDirUnavailable": "Could not create the temporary extraction folder.",
     "notAJunction": "Refused: this path is not a junction.",
+    "notASkin": "This sub-item is not a skin.",
     "notASoundMod": "This sub-item is not a sound mod.",
     "soundBankMissing": "No sound bank found for this entry.",
     "soundCodecUnsupported": "This sound bank uses a compression Pit Box cannot read.",
@@ -1497,6 +1504,16 @@
     "pinHint": "◈ pins the filter: it stays visible even without a value.",
     "chipRemove": "Remove this filter",
     "chipResetPinned": "Clear this filter (pinned: it stays as a ghost)"
+  },
+  "skins": {
+    "back": "Back to extras",
+    "carLabel": "Car",
+    "trackLabel": "Track",
+    "filesLabel": "Files",
+    "previewLabel": "Preview",
+    "noFiles": "This folder is empty.",
+    "openFolder": "Open folder",
+    "notProjected": "This skin is in the library but is not placed in its host's folder, so the game does not load it. The Workshop's general repair reconnects it."
   },
   "sounds": {
     "back": "Back to sounds",
