@@ -116,6 +116,20 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     // est stockée : la déduction se recalcule à chaque lecture, `attach.rs`
     // dit pourquoi un rattachement périmé serait pire que pas de rattachement.
     let _ = conn.execute("ALTER TABLE other_mods ADD COLUMN attachment_user TEXT", []);
+
+    // Article rendu, table des matières et crédits d'images de l'onglet
+    // Wikipédia (§7.3). Ajoutés après coup : une base écrite par la version
+    // précédente n'a que le texte brut, et c'est `wiki::store::CONTENT_VERSION`
+    // qui la vide — un ALTER ne rétro-remplit rien.
+    let _ = conn.execute("ALTER TABLE wiki_cache ADD COLUMN html TEXT NOT NULL DEFAULT ''", []);
+    let _ = conn.execute(
+        "ALTER TABLE wiki_cache ADD COLUMN sections TEXT NOT NULL DEFAULT '[]'",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE wiki_cache ADD COLUMN images TEXT NOT NULL DEFAULT '[]'",
+        [],
+    );
     Ok(())
 }
 
@@ -387,6 +401,45 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         CREATE TABLE IF NOT EXISTS meta (
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL
+        );
+
+        -- Enrichissement Wikipédia de la fiche (docs/SPEC-wikipedia-fiche-detail.md
+        -- §3). Trois tables : l'appariement, que l'utilisateur peut corriger et
+        -- qui circulera un jour entre installations (§10) ; le contenu rapporté
+        -- du réseau ; et le cache négatif, sans lequel chaque ouverture d'une
+        -- fiche sans correspondance relancerait une résolution complète.
+        --
+        -- `mod_key` est le nom du dossier du mod, donc `mods.id_interne` —
+        -- **sans clé étrangère, délibérément** : les `foreign_keys` sont à ON
+        -- dans cette base, et un appariement est précisément ce qui doit
+        -- survivre à la suppression puis au réimport du mod.
+        CREATE TABLE IF NOT EXISTS wiki_link (
+            mod_key     TEXT PRIMARY KEY,
+            entity_id   TEXT NOT NULL,          -- Q-id Wikidata, jamais une URL (§3.1)
+            source      TEXT NOT NULL,          -- 'auto' | 'import' | 'manual', par précédence
+            resolved_at TEXT NOT NULL
+        );
+
+        -- Clé composite (entité, langue **demandée**) : la langue réellement
+        -- servie peut différer quand la chaîne de repli du §5.2 est descendue
+        -- sur l'anglais, et elle se relit dans `article_url` — c'est pourquoi
+        -- cette URL est stockée et jamais reconstruite (§3.2).
+        CREATE TABLE IF NOT EXISTS wiki_cache (
+            entity_id       TEXT NOT NULL,
+            lang            TEXT NOT NULL,
+            article_title   TEXT NOT NULL,
+            article_url     TEXT NOT NULL,
+            revision_id     INTEGER,
+            extract         TEXT NOT NULL,
+            parent_entity   TEXT,               -- non nul = repli sur l'entité parente (§5.3)
+            available_langs TEXT NOT NULL DEFAULT '[]',
+            fetched_at      TEXT NOT NULL,
+            PRIMARY KEY (entity_id, lang)
+        );
+
+        CREATE TABLE IF NOT EXISTS wiki_no_match (
+            mod_key      TEXT PRIMARY KEY,
+            attempted_at TEXT NOT NULL
         );
 
         CREATE INDEX IF NOT EXISTS idx_versions_mod ON versions(mod_id);

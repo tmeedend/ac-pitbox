@@ -776,6 +776,172 @@ laisser pourrir ici.
       pendant deux lots ; et **le `preview.jpg` d'un skin est une référence de
       cadrage, pas de luminosité** — il est plus sombre que le rendu du jeu, ce
       qui m'a fait diagnostiquer un écart inexistant.
+- [ ] **Enrichissement Wikipédia de la fiche** (branche
+      `feature/wikipedia-fiche-detail`). Un extrait de l'article du véhicule ou
+      du circuit **réel**, dans un onglet à côté de la description de l'auteur.
+      Spec : `docs/SPEC-wikipedia-fiche-detail.md`, et son §1 commande tout —
+      la fonctionnalité est **décorative**, donc l'ambiguïté n'affiche rien et
+      l'absence n'est jamais une erreur. Son §2 est juridique et non
+      négociable : le texte reste une **collection** (jamais fusionné à la
+      description, jamais reformulé, résumé ni traduit — surtout pas par un
+      modèle de langage), sinon le ShareAlike de CC BY-SA remonte sur l'app.
+      **Fait : les lots 1 à 3, sans interface** — `src-tauri/src/wiki/` : les
+      trois tables dans l'overlay (§3), la chaîne de repli et la remontée d'un
+      cran (§5), le client Action API (§6), et l'appariement automatique des
+      voitures et des circuits (§4) avec sa commande de calibration.
+      Le module porte un `allow(dead_code)` **assumé et daté** : rien ne
+      l'appelle tant que l'interface (§7) n'existe pas. À retirer au premier
+      client.
+      **Les identifiants Wikidata sont dans `wiki/ids.rs`**, un par un relevés
+      sur l'API vivante (§4.4 l'exige) — le libellé en commentaire est celui
+      que l'API a rendu, et chaque entrée dit sur quel item réel elle a été
+      confirmée. Ne pas en ajouter de mémoire.
+      **Les seuils sont dans `Prefs`** (`wiki_match_*`, `wiki_track_*`) et la
+      liste de nettoyage des noms dans `rules/wiki-matching.json`, semée dans
+      le dossier de config et éditable — §4.3 l'exige, et c'est ce qui permet
+      de régler la reconnaissance sans release.
+      **Pour calibrer** (rien n'est persisté, le rapport sort en Markdown) :
+      ```
+      PITBOX_WIKI_LIMIT=20 cargo test --lib wiki -- --ignored --nocapture calibrate_the_library
+      ```
+      Quatre mesures ont corrigé la spec, et elles ne se retrouvent pas deux
+      fois :
+      - **La recherche géographique des circuits tourne sur Wikidata, pas sur
+        Wikipédia.** L'article anglais « Nürburgring » n'a *aucune* coordonnée
+        GeoData (Suzuka non plus) : le `list=geosearch` de la §4.2 ne peut
+        structurellement pas rendre le circuit qui lui sert d'exemple. L'item
+        Wikidata porte bien P625, et y chercher rend des Q-ids directement.
+      - **Le filtre de type porte toute la stratégie circuit.** À 5 m du
+        Nordschleife, les vingt items les plus proches sont dix-neuf éditions
+        de Grand Prix, un village, un château et un ruisseau — le circuit n'y
+        est pas, une vingtaine d'items partageant la coordonnée exacte. D'où
+        `gslimit=50` et l'allowlist de `ids::TRACK_TYPES`.
+      - **Les coordonnées viennent de CSP, pas des `geotags`.**
+        `sun::track_location` les résout déjà pour 445 circuits ; les `geotags`
+        des circuits Kunos sont le littéral `["lat", "lon"]`.
+      - **L'année n'existe presque jamais** : aucune voiture mesurée ne porte
+        P571, seules les générations portent P580/P582. Elle est donc un bonus
+        quand elle existe et jamais une pénalité quand elle manque — son poids
+        quitte le dénominateur.
+      Trois choses à savoir avant d'y toucher :
+      - **Le client HTTP est WinHTTP**, via le crate `windows` déjà présent
+        (`wiki/http.rs`) : le projet n'avait aucun client HTTP, et deux GET
+        JSON ne justifiaient pas une trentaine de crates plus une pile TLS.
+        L'OS fournit TLS, proxy, redirections et délais. Les deux solutions
+        écartées (`reqwest` + `native-tls`, `ureq`) sont notées dans le fichier
+        avec ce qui les ferait gagner — le jour où l'app cesse d'être
+        Windows-only, c'est `reqwest`. Corollaire : tout est **bloquant**, donc
+        les futures façades passent par `spawn_blocking`.
+      - **Les deux formats de réponse ont été relevés sur l'API réelle**, pas
+        déduits : `query.pages` est un *tableau* en `formatversion=2`, le
+        parent se lit en `claims.P361[0].mainsnak.datavalue.value.id`, et les
+        sitelinks mélangent `commonswiki` aux langues. Un test ignoré
+        (`talks_to_wikipedia_for_real`) rejoue le tout contre le vrai service —
+        c'est la seule preuve que le FFI WinHTTP fonctionne, la CI ne
+        l'exécutant pas (§11 : aucun test ne dépend de Wikipédia).
+      - **Un 404 et un réseau coupé ne sont pas le même non-résultat**
+        (`api::Fetched`). Les confondre écrirait « pas d'article » dans le
+        cache négatif pour 90 jours à cause d'un tunnel.
+      **La calibration a tourné** (335 mods) et les seuils livrés sont les
+      siens, plus ceux du §13. Elle a corrigé quatre choses que le raisonnement
+      n'aurait pas trouvées, toutes consignées dans le code :
+      - `wbsearchentities` **cherche par préfixe de libellé** : « BMW M3 E30 »
+        n'y rend *rien*, aucun item ne s'appelant ainsi. C'était la cause
+        dominante des 264 échecs du premier passage. La recherche passe
+        désormais par le moteur plein texte de Wikipédia, qui rend « BMW M3 »
+        en tête — et « Abarth 500 » pour une variante sans article à elle, ce
+        que la §4.1 veut explicitement.
+      - **`gsradius` est plafonné à 10 km par l'API**, qui refuse la requête
+        entière au-delà. Un rayon de 25 km a transformé *les 24 circuits* en
+        « réseau indisponible » d'un coup — c'est à ça que ressemble une panne
+        systématique à côté d'une vraie coupure.
+      - **Les routes ne s'apparient plus automatiquement** (écart assumé avec
+        la §4.2) : une rue est à portée de n'importe quelle coordonnée, et le
+        nom ne peut pas arbitrer puisque la spec a choisi les coordonnées
+        *parce que* « Shutoko » ne ressemble pas à « Metropolitan Expressway ».
+        Quatre articles faux pour une poignée de justes. Shutoko et les touge
+        relèvent désormais de la correction manuelle (§7.6).
+      - **Un item sans libellé anglais revenait sans nom** et marquait 0 contre
+        tout — d'où `borrow_labels`, qui reprend le titre trouvé par la
+        recherche.
+      Résultat : 15 circuits retenus, tous justes (Monza retrouvé par le repli
+      sur le nom, ses coordonnées CSP étant celles de Milan), contre 0 avant.
+      **Les six lots du §12 sont faits.** L'onglet vit dans la fiche
+      (voitures et circuits), la correction manuelle y est, et
+      `Réglages › Wikipédia` porte l'interrupteur, la langue, la purge du cache
+      et l'export des corrections.
+      **Quatre écarts assumés avec la spec, tous décidés avec l'utilisateur
+      après l'avoir vu à l'écran** — ils sont écrits dans le SPEC de la
+      fonctionnalité, pas seulement ici :
+      - **L'onglet est permanent** (contre la §7.1). Un onglet absent ne se
+        distingue ni d'une recherche en cours, ni d'une fonctionnalité qui
+        n'existe pas — constaté en vrai, sur un circuit qui s'appariait
+        pendant qu'on regardait la fiche. Il porte donc six états, dont aucun
+        n'est une erreur, et la correction manuelle avec eux : la §7.6
+        l'accrochait à un onglet qui n'existait pas dans le seul cas où elle
+        sert.
+      - **L'article entier et rendu** (contre la §7.3, qui n'en voulait que
+        l'introduction en texte brut) : sections, sommaire, tableaux, infobox.
+        Le HTML n'est jamais injecté tel quel — `wikiHtml.ts` **reconstruit**
+        un arbre depuis une liste blanche, la webview ayant accès à `invoke`.
+        Aucune dépendance ajoutée pour ça.
+      - **Les images sont affichées** (contre la §9). Ses trois objections
+        étaient exactes et sont traitées, pas contournées : **Commons
+        uniquement** (`imagerepository == "shared"`), ce qui écarte
+        structurellement l'usage loyal puisque Commons n'accepte que du libre ;
+        auteur et licence sous chaque image, non masquables.
+      - **Le mot « extrait » quitte l'attribution** (§7.4) : il était exigé
+        parce que ne montrer qu'un fragment est une modification. Montrer le
+        texte entier est le régime **plus simple**, pas plus risqué.
+      **Reste une seule chose : régler les seuils sur les corrections
+      manuelles.** Tout le code est livré ; ce qui manque est une **mesure**,
+      et elle demande que l'utilisateur ait corrigé un paquet d'articles.
+      **Pourquoi ça attend, et pourquoi ça vaut le coup d'attendre.** Le
+      rapport de calibration dit aujourd'hui « score 0,689, marge 0,122 », il
+      ne dit jamais *juste ou faux* : sans vérité terrain, un seuil s'arbitre
+      au jugé — c'est ainsi que le plancher a été posé à 0,70, en relisant onze
+      lignes à la main. Chaque correction faite dans l'onglet est au contraire
+      un **exemple étiqueté** (`wiki_link` en `source = 'manual'`). À partir
+      d'une cinquantaine, la calibration peut comparer son propre verdict aux
+      réponses de l'utilisateur, sortir un vrai taux de justesse, et surtout
+      essayer des dizaines de combinaisons de seuils **hors ligne** contre ces
+      étiquettes.
+      **Pour reprendre à froid :**
+      1. Vérifier la matière : `SELECT COUNT(*) FROM wiki_link WHERE
+         source='manual'` dans `%APPDATA%\com.pitbox.app\overlay.sqlite`. Sous
+         une cinquantaine, il n'y a pas encore de quoi mesurer — demander à
+         l'utilisateur de corriger au fil de sa navigation.
+      2. Faire tourner la calibration, qui ne persiste rien :
+         ```
+         cd src-tauri; cargo test --lib wiki::calibrate::tests::calibrate_the_library -- --ignored --nocapture
+         ```
+         (`PITBOX_WIKI_LIMIT` raccourcit un premier passage, `PITBOX_WIKI_REPORT`
+         choisit où le Markdown atterrit ; le rapport par défaut va dans le
+         dossier de config.)
+      3. Ajouter au rapport la comparaison aux étiquettes : pour chaque mod
+         corrigé à la main, le verdict du moteur est **juste**, **faux** ou
+         **absent**. C'est ce qui transforme le rapport d'un décompte en mesure.
+      4. Balayer les couples (`wiki_match_min_score`, `wiki_match_min_margin`)
+         sur ces étiquettes et retenir celui qui maximise les justes sans
+         laisser passer de faux — la §1 échange volontiers du rappel contre de
+         la précision.
+      **Deux pièges à ne pas réintroduire :**
+      - **La calibration doit comparer le verdict brut du moteur aux
+        étiquettes, sans jamais lire `wiki_link`.** Sinon elle se note sur ses
+        propres copies : les appariements qu'elle a elle-même écrits, et les
+        entrées livrées, lui renverraient ses réponses comme si c'était la
+        vérité.
+      - **Un mod de `no_counterpart` n'est pas un manque.** La séparation
+        existe déjà dans le rapport (`rules/wiki-links.json`) et c'est elle qui
+        empêche de régler les seuils contre du bruit — 129 « sans candidat »
+        dont une bonne part sont des succès ne veut rien dire.
+      Diagnostic d'un mod isolé, quand un article n'apparaît pas :
+      ```
+      $env:PITBOX_WIKI_MOD = "ks_ferrari_sf15t"; cargo test --lib wiki::calibrate::tests::what_the_fiche_gets -- --ignored --nocapture
+      ```
+      Il dit où la résolution s'arrête — appariement, langue, ou réseau —, trois
+      causes que rien ne distingue à l'écran.
+      TTL : 30 jours en positif, 90 en négatif.
 - [ ] **Signature Authenticode** : le workflow est prêt, il attend un
       certificat. Définir la variable de dépôt `SIGN_COMMAND` suffit à
       l'activer — voir `docs/windows-code-signing.md` (lire **avant** d'acheter,

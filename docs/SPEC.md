@@ -698,9 +698,45 @@ pour un circuit, dont l'identité tient dans ces deux chiffres.
 
 **Le bloc textuel est à sous-onglets** (§7.4) : Description | Notes, c'est le
 contenu qui change, pas la mise en page — même boîte, même corps de texte. Notes n'est jamais l'onglet par défaut
-et porte une pastille quand une note existe. Un troisième onglet « Le modèle
-réel » s'y ajoutera avec l'appariement Wikipédia, absent tant qu'aucun article
-n'est apparié.
+et porte une pastille quand une note existe.
+
+**Un troisième onglet porte l'article Wikipédia** — « Le modèle réel » sur une
+voiture, « Le circuit » sur un circuit
+(`docs/SPEC-wikipedia-fiche-detail.md`). Il est **toujours présent**, et c'est une
+révision née de l'usage : un onglet absent ne se distingue ni d'une recherche en
+cours, ni d'une fonctionnalité qui n'existe pas, et il prive l'utilisateur de
+tout recours au moment où il en aurait le plus besoin. L'article est cherché à
+l'ouverture de la fiche, jamais en masse, et la fiche s'affiche complète sans
+l'attendre.
+
+Quand il n'y a pas d'article, l'onglet **dit lequel des cinq cas s'applique** —
+recherche en cours, rien trouvé, ambiguïté, entité sans article lisible,
+enrichissement désactivé — et propose d'en associer un à la main : recherche
+libre pré-remplie avec ce qui a été cherché, candidats affichés avec leur
+description Wikidata, collage d'URL accepté. Aucun de ces états n'est une
+erreur : pas d'icône d'alerte, pas d'encart rouge. Un choix fait à la main est
+enregistré en `manual` et plus rien d'automatique ne l'écrase.
+
+L'article est affiché **en entier et rendu** — sections, table des matières,
+tableaux, infobox et images : on lit dans Pit Box, on n'y trouve pas un teaser.
+Le HTML de Wikipédia n'est jamais injecté tel quel : un arbre neuf est
+reconstruit à partir d'une liste blanche, la webview ayant accès à `invoke` et
+le wiki étant éditable par n'importe qui. Les images affichées sont **celles de
+Commons dont l'auteur et la licence sont connus**, chacune portant sa ligne de
+crédit — c'est ce que leur licence impose, et c'est ce qui permet de les
+afficher. Deux choses ne sont pas négociables
+et viennent du droit d'auteur, pas du goût : le texte n'est **jamais fondu**
+dans la description du mod — ce sont deux sous-onglets, donc deux blocs
+distincts — et il est affiché **tel que l'API le rend**, sans reformulation,
+résumé ni traduction. L'attribution en pied (titre, lien, licence CC BY-SA) est
+obligatoire. Le lien « Voir sur Wikipédia » ouvre le **navigateur système** et
+sert ce que le texte brut perd : infobox, tableaux, images, références.
+
+L'enrichissement est **désactivable** (`wiki_online`, §12) : l'app interroge
+Wikipédia à l'ouverture d'une fiche, ce qui révèle indirectement le contenu de
+la bibliothèque, et une partie du public joue délibérément hors ligne.
+Désactivé, aucune requête ne sort et le cache déjà constitué reste
+consultable.
 
 ### 6.3bis (suite) Tracés apportés par une couche (refonte §7.7)
 

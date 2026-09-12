@@ -27,6 +27,10 @@ export interface Prefs {
    * élévation requis). Un mod à couche(s) active(s) reste toujours en
    * hardlinks quel que soit ce réglage (une junction ne fusionne pas). */
   deploy_mode: "hardlink" | "symlink";
+  /** Enrichissement Wikipédia en ligne (§8). L'app interroge Wikipédia à
+   * l'ouverture d'une fiche, ce qui révèle indirectement le contenu de la
+   * bibliothèque — d'où un interrupteur, et non un simple confort. */
+  wiki_online: boolean;
 }
 
 export interface AppConfig {
@@ -76,6 +80,7 @@ export function emptyConfig(): AppConfig {
       showroom_scene: null,
       resource_extraction_mode: "info_only",
       keep_source_archive: false,
+      wiki_online: true,
       deploy_mode: "hardlink",
     },
   };

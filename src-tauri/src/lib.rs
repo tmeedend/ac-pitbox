@@ -65,6 +65,7 @@ mod ui_prefs;
 mod uijson;
 mod usermeta;
 mod weather;
+mod wiki;
 
 use overlay::Db;
 use tauri::Manager;
@@ -113,6 +114,27 @@ pub fn run() {
             // une app tuée entre la sauvegarde et la pose, ou entre le retrait
             // et la restauration.
             gamebackup::restore_orphans(&conn);
+
+            // Appariements Wikipédia livrés avec l'application (§10) : posés à
+            // chaque démarrage parce que la table peut avoir grandi depuis la
+            // version précédente. La précédence du §3.1 fait que c'est sans
+            // risque — une correction locale (`manual`) n'est jamais écrasée.
+            // Le cache d'articles est vidé quand il porte des textes écrits par
+            // une version antérieure du code (§7.3 : l'introduction seule, puis
+            // l'article entier). Rien dans une ligne ne le dirait, et sa date
+            // de récupération est récente : sans ça, un article tronqué serait
+            // servi trente jours de plus.
+            match wiki::store::purge_outdated(&conn) {
+                Ok(true) => log::warn!("wiki: cache d'articles vidé, son contenu datait d'une version antérieure"),
+                Err(e) => log::warn!("wiki: purge du cache d'articles échouée — {e}"),
+                _ => {}
+            }
+
+            let curated = wiki::curated::shipped();
+            let (written, skipped) = wiki::curated::seed_links(&conn, &curated);
+            if written > 0 || skipped > 0 {
+                log::debug!("wiki: {written} appariements livrés posés, {skipped} laissés en place");
+            }
 
             // Filet de sécurité : le brouillon de conversion des vignettes de
             // grille (`SPEC-grille.md` §5.3) est effacé dès l'image rendue,
@@ -397,6 +419,13 @@ pub fn run() {
             commands::others::get_other_resource_path,
             commands::others::read_other_resource,
             commands::addons::delete_app,
+            commands::wiki::get_wiki_panel,
+            commands::wiki::search_wiki_candidates,
+            commands::wiki::set_wiki_link,
+            commands::wiki::clear_wiki_link,
+            commands::wiki::purge_wiki_cache,
+            commands::wiki::export_wiki_links,
+            commands::wiki::count_wiki_manual_links,
             commands::usermeta::set_entity_note,
             commands::usermeta::set_entity_display_name,
             commands::rules::get_rules,

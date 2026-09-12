@@ -60,6 +60,29 @@ pub struct Prefs {
     /// sources en une seule ne se fait pas via une simple junction, voir
     /// `compose.rs`.
     pub deploy_mode: String,
+    /// Enrichissement Wikipédia en ligne (§8). Activé par défaut, mais
+    /// désactivable : l'app interroge Wikipédia à l'ouverture d'une fiche, ce
+    /// qui révèle indirectement le contenu de la bibliothèque, et une partie
+    /// du public joue délibérément hors ligne. Désactivé, aucune requête ne
+    /// sort et le cache déjà constitué reste consultable.
+    pub wiki_online: bool,
+    /// Seuils de l'appariement Wikipédia (§4 et §13 de
+    /// `docs/SPEC-wikipedia-fiche-detail.md`). Ils vivent ici et non dans le
+    /// code parce que ce sont précisément les nombres que la commande de
+    /// calibration existe pour régler : la spec les donne comme points de
+    /// départ, pas comme cibles.
+    ///
+    /// Score minimal en dessous duquel le meilleur candidat n'est l'article de
+    /// personne.
+    pub wiki_match_min_score: f64,
+    /// Écart minimal entre le premier et le deuxième candidat (§4.1.5). En
+    /// dessous, l'ambiguïté l'emporte et on n'affiche rien.
+    pub wiki_match_min_margin: f64,
+    /// Rayon de la recherche géographique des circuits, en mètres (§4.2.1).
+    pub wiki_track_radius_m: u32,
+    /// Deux candidats circuit plus proches que ça l'un de l'autre, en mètres,
+    /// sont à égalité — donc ambigus.
+    pub wiki_track_tie_margin_m: f64,
 }
 
 impl Default for Prefs {
@@ -76,6 +99,31 @@ impl Default for Prefs {
             resource_extraction_mode: "info_only".into(),
             keep_source_archive: false,
             deploy_mode: "hardlink".into(),
+            // **Réglés sur un vrai passage de calibration** (335 mods), et non
+            // plus sur les points de départ de la spec.
+            //
+            // Plancher à 0,70 : sous cette valeur, le rapport comptait sept
+            // appariements faux pour quatre justes (917/30 → 918 Spyder,
+            // Cobra 427 → Shelby Mustang, Countach → Espada…), au-dessus rien
+            // de faux n'a été relevé. La §1 tranche ce genre d'échange —
+            // perdre quatre articles coûte moins cher qu'en afficher sept de
+            // travers.
+            //
+            // Marge à 0,12 : le seul faux positif qu'elle laissait passer est
+            // tombé avec le plancher. Le premier appariement juste est à
+            // 0,127, donc monter davantage couperait du bon.
+            wiki_online: true,
+            wiki_match_min_score: 0.70,
+            wiki_match_min_margin: 0.12,
+            // 10 km — le maximum que l'API accepte (`gsradius`), et non les
+            // 5 km proposés par la spec : mesuré, les coordonnées que CSP donne
+            // pour un circuit sont parfois celles de la ville voisine (Monza
+            // est listé aux coordonnées de Milan). Le filtre de type rend cette
+            // largeur sûre, et les rues gardent leur propre rayon bien plus
+            // court (`matchtrack::ROUTE_RADIUS_M`). Au-delà de 10 km, seul le
+            // repli par le nom peut rattraper — `matchtrack` s'en charge.
+            wiki_track_radius_m: 10_000,
+            wiki_track_tie_margin_m: 150.0,
         }
     }
 }
