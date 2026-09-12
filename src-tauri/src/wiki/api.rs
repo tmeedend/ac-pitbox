@@ -278,6 +278,26 @@ impl WikiClient {
         }
     }
 
+    /// The Wikidata entity a given article belongs to (§7.6, pasted URL).
+    ///
+    /// One request: `pageprops` carries `wikibase_item`, and `redirects=1` means
+    /// a URL copied from a redirect still lands on the right item.
+    pub fn entity_of_page(&self, lang: &str, title: &str) -> Option<String> {
+        let path = format!(
+            "/w/api.php?action=query&format=json&formatversion=2&prop=pageprops&ppprop=wikibase_item\
+             &redirects=1&titles={}",
+            http::encode_query_value(title)
+        );
+        let Fetched::Found(root) = self.get_json(&format!("{lang}.wikipedia.org"), &path) else {
+            return None;
+        };
+        let id = root["query"]["pages"]
+            .as_array()
+            .and_then(|pages| pages.first())
+            .and_then(|page| page["pageprops"]["wikibase_item"].as_str())?;
+        is_entity_id(id).then(|| id.to_string())
+    }
+
     /// Full details for up to `MAX_BATCH` entities in one request.
     pub fn details(&self, ids: &[String]) -> Fetched<Vec<EntityDetails>> {
         if ids.is_empty() {

@@ -31,6 +31,7 @@ pub mod clean;
 pub mod curated;
 pub mod ids;
 pub mod lang;
+pub mod manual;
 pub mod matchcar;
 pub mod matching;
 pub mod matchtrack;
@@ -117,8 +118,8 @@ fn parent_to_climb(net: &WikiClient, facts: &api::EntityFacts) -> Option<api::En
 /// blocked-library bug `commands/ui_prefs.rs` documents. A decorative tab must
 /// never be able to do that.
 pub enum Step {
-    /// Nothing to ask anyone: here is what to display, if anything.
-    Settled(Option<CachedArticle>),
+    /// Nothing to ask anyone: here is what the tab shows.
+    Settled(WikiPanel),
     /// The network is needed. Everything it takes is in here, already read.
     Ask(Ask),
 }
@@ -134,12 +135,58 @@ pub struct Ask {
     /// What to fall back on when the network leads nowhere: a stale cache entry
     /// beats an empty tab, and §1 says nothing here is worth an error.
     pub stale: Option<CachedArticle>,
+    /// Carried through so the tab can pre-fill its search field.
+    pub query: String,
 }
 
 /// Cars and tracks share the resolution and **not** the search strategy (§4).
 pub enum Subject {
     Car(matchcar::CarSubject),
     Track(matchtrack::TrackSubject),
+}
+
+/// Why the tab shows what it shows.
+///
+/// **This exists because the user could not tell three silences apart.** The
+/// spec wanted an absent tab (§7.1) and no message at all (§1), and on a real
+/// library that produced something nobody could act on: "still searching",
+/// "nothing matched" and "the feature is off" looked exactly the same — an
+/// empty space. Naming the reason is what lets the tab offer the right thing
+/// instead of nothing.
+///
+/// It stays true to §1 on the point that mattered: none of these is an error.
+/// They are states, and the interface answers each with an offer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WikiState {
+    /// An article is being shown.
+    Article,
+    /// Online enrichment is switched off (§8); the cache is still readable.
+    Offline,
+    /// Several articles were just as good. §1 refuses to draw lots — but the
+    /// user can settle it in one click, which is the whole point of saying so.
+    Ambiguous,
+    /// Nothing that looks like this mod was found.
+    NoCandidate,
+    /// The entity is matched but has no readable article in these languages.
+    NoArticle,
+    /// We could not ask. Nothing was learned, so nothing is concluded.
+    Unavailable,
+}
+
+/// Everything the tab needs, article or not.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WikiPanel {
+    pub article: Option<CachedArticle>,
+    pub state: WikiState,
+    /// What was searched for, cleaned (§4.3) — the search field starts from
+    /// this rather than from a blank box, because the cleaning rules live in
+    /// Rust and the user should be able to *fix* the query, not retype it.
+    pub query: String,
+    /// The entity currently linked, so the tab can say "not the right article?"
+    /// knowing what it is talking about.
+    pub entity_id: Option<String>,
 }
 
 /// What `fetch` learnt, ready to be written under the lock.
@@ -152,6 +199,8 @@ pub struct Resolved {
     /// failure, which teaches nothing (§3.3).
     pub no_match: bool,
     pub stale: Option<CachedArticle>,
+    pub state: WikiState,
+    pub query: String,
 }
 
 /// Reads everything the resolution needs from the overlay (§5).
@@ -168,13 +217,30 @@ pub fn plan(
 ) -> Step {
     let lang = wiki_lang(requested_lang);
     let link = best_effort("wiki_link", store::get_link(conn, mod_key)).flatten();
+    let entity_id = link.as_ref().map(|l| l.entity_id.clone());
 
     let cached = link
         .as_ref()
         .and_then(|l| best_effort("wiki_cache", store::get_article(conn, &l.entity_id, &lang)).flatten());
+
+    // The query is computed even when an article is found: "not the right
+    // article?" needs it too, and it is what the search field starts from —
+    // the cleaning rules live in Rust, so the user must be able to *fix* the
+    // query rather than retype it from scratch.
+    let subject = subject_of(conn, ac_install, mod_key);
+    let query = subject.as_ref().map(query_of).unwrap_or_default();
+    let settled = |state: WikiState, article: Option<CachedArticle>| {
+        Step::Settled(WikiPanel {
+            state: if article.is_some() { WikiState::Article } else { state },
+            article,
+            query: query.clone(),
+            entity_id: entity_id.clone(),
+        })
+    };
+
     if let Some(row) = &cached {
         if store::is_fresh(&row.fetched_at, Duration::days(POSITIVE_TTL_DAYS), Local::now()) {
-            return Step::Settled(cached);
+            return settled(WikiState::Article, cached);
         }
     }
 
@@ -182,26 +248,35 @@ pub fn plan(
     // a stale extract is worth more than an empty tab, and nothing depends on
     // it being current.
     if !online {
-        return Step::Settled(cached);
+        return settled(WikiState::Offline, cached);
     }
 
     // §3.3, before anything else: this mod was tried recently and led nowhere.
     // Without this check, every opening of the fiche replays a full resolution
     // for an answer that has not changed.
     if best_effort("wiki_no_match", store::has_fresh_no_match(conn, mod_key, Local::now())).unwrap_or(false) {
-        return Step::Settled(cached);
+        return settled(WikiState::NoCandidate, cached);
     }
 
-    let Some(subject) = subject_of(conn, ac_install, mod_key) else {
-        return Step::Settled(cached);
+    let Some(subject) = subject else {
+        return settled(WikiState::NoCandidate, cached);
     };
     Step::Ask(Ask {
         mod_key: mod_key.to_string(),
         lang,
-        entity_id: link.map(|l| l.entity_id),
+        entity_id,
         subject,
         stale: cached,
+        query,
     })
+}
+
+/// The name a subject is searched by, for the tab's search field.
+fn query_of(subject: &Subject) -> String {
+    match subject {
+        Subject::Car(car) => car.name.clone().unwrap_or_default(),
+        Subject::Track(track) => track.name.clone().unwrap_or_default(),
+    }
 }
 
 /// Builds what §4 needs to search with, from what the overlay already knows
@@ -242,6 +317,8 @@ pub fn fetch(
         article: None,
         no_match: false,
         stale: ask.stale,
+        state: WikiState::NoCandidate,
+        query: ask.query,
     };
 
     let lang = ask.lang;
@@ -256,12 +333,19 @@ pub fn fetch(
                 out.matched = Some(candidate.entity_id.clone());
                 candidate.entity_id
             }
-            matching::MatchOutcome::Ambiguous { .. } => return out,
-            matching::MatchOutcome::NoCandidate => {
-                out.no_match = true;
+            matching::MatchOutcome::Ambiguous { .. } => {
+                out.state = WikiState::Ambiguous;
                 return out;
             }
-            matching::MatchOutcome::Unavailable => return out,
+            matching::MatchOutcome::NoCandidate => {
+                out.no_match = true;
+                out.state = WikiState::NoCandidate;
+                return out;
+            }
+            matching::MatchOutcome::Unavailable => {
+                out.state = WikiState::Unavailable;
+                return out;
+            }
         },
     };
 
@@ -270,10 +354,14 @@ pub fn fetch(
         // The entity itself has no article anywhere: durable, worth remembering.
         Fetched::Absent => {
             out.no_match = true;
+            out.state = WikiState::NoArticle;
             return out;
         }
         // Nothing was learned — in particular, not that there is no article.
-        Fetched::Unavailable => return out,
+        Fetched::Unavailable => {
+            out.state = WikiState::Unavailable;
+            return out;
+        }
     };
 
     // The parent is fetched only when the entity cannot serve the requested
@@ -313,6 +401,7 @@ pub fn fetch(
                     available_langs: text.available_langs,
                     fetched_at: Local::now().to_rfc3339(),
                 });
+                out.state = WikiState::Article;
                 return out;
             }
             Fetched::Absent => continue,
@@ -326,6 +415,11 @@ pub fn fetch(
     // One `Unavailable` anywhere in the chain forbids the negative cache: a
     // train tunnel must not cost ninety days of absent tab.
     out.no_match = !could_not_ask;
+    out.state = if could_not_ask {
+        WikiState::Unavailable
+    } else {
+        WikiState::NoArticle
+    };
     out
 }
 
@@ -351,7 +445,7 @@ fn match_subject(
 }
 
 /// Writes what `fetch` learnt, back under the lock (§3).
-pub fn commit(conn: &Connection, resolved: Resolved) -> Option<CachedArticle> {
+pub fn commit(conn: &Connection, resolved: Resolved) -> WikiPanel {
     if let Some(entity_id) = &resolved.matched {
         // `auto`: the precedence of §3.1 means this never overwrites a
         // correction or a shipped entry.
@@ -365,10 +459,22 @@ pub fn commit(conn: &Connection, resolved: Resolved) -> Option<CachedArticle> {
         // It used to lead nowhere and now it does: the entry would otherwise
         // keep an article out of sight for up to ninety days.
         best_effort("wiki_no_match clear", store::forget_no_match(conn, &resolved.mod_key));
-        return resolved.article;
-    }
-    if resolved.no_match {
+    } else if resolved.no_match {
         best_effort("wiki_no_match write", store::note_no_match(conn, &resolved.mod_key));
     }
-    resolved.stale
+    let entity_id = resolved
+        .matched
+        .or_else(|| resolved.article.as_ref().map(|a| a.entity_id.clone()))
+        .or_else(|| resolved.stale.as_ref().map(|a| a.entity_id.clone()));
+    let article = resolved.article.or(resolved.stale);
+    WikiPanel {
+        state: if article.is_some() {
+            WikiState::Article
+        } else {
+            resolved.state
+        },
+        article,
+        query: resolved.query,
+        entity_id,
+    }
 }

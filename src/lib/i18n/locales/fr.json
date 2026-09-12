@@ -1459,7 +1459,8 @@
     "versionIsActive": "C'est la version installée. Activez-en une autre avant de la supprimer.",
     "packNotFound": "Ce pack n'existe plus : aucun de ses mods n'est en bibliothèque.",
     "unmanagedNotActivatable": "ce mod a été installé dans le jeu hors Pit Box : il est déjà là et ne s'active pas d'ici. Pour le gérer, supprimez son dossier du jeu, puis importez-le dans Pit Box.",
-    "unmanagedNoLayer": "ce mod a été installé dans le jeu hors Pit Box : rien ne peut être posé par-dessus. Supprimez son dossier du jeu et importez le mod dans Pit Box pour le gérer ici."
+    "unmanagedNoLayer": "ce mod a été installé dans le jeu hors Pit Box : rien ne peut être posé par-dessus. Supprimez son dossier du jeu et importez le mod dans Pit Box pour le gérer ici.",
+    "wikiNotAnEntity": "Identifiant Wikidata invalide."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -1645,7 +1646,20 @@
     "readFull": "Lire l'article complet",
     "attribution": "Extrait de l'article {title} de Wikipédia",
     "license": "Texte disponible sous licence CC BY-SA 4.0",
-    "languageLabel": "Langue de l'article"
+    "languageLabel": "Langue de l'article",
+    "searching": "Recherche en cours…",
+    "stateNoneFound": "Aucun article ne correspond à « {query} ».",
+    "stateNoneFoundPlain": "Aucun article ne correspond à ce mod.",
+    "stateAmbiguous": "Plusieurs articles convenaient aussi bien : aucun n'a été retenu.",
+    "stateNoArticle": "L'entité liée n'a d'article dans aucune des langues lues.",
+    "stateOffline": "L'enrichissement en ligne est désactivé.",
+    "stateUnavailable": "Wikipédia n'a pas répondu.",
+    "associate": "Associer un article…",
+    "wrongArticle": "Ce n'est pas le bon article ?",
+    "detach": "Détacher l'article",
+    "searchPlaceholder": "Nom de l'article, ou URL Wikipédia collée",
+    "searchAction": "Chercher",
+    "noResults": "Aucun résultat."
   },
   "prefs": {
     "writeFailedTitle": "Vos réglages ne sont pas enregistrés",

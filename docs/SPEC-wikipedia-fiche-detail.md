@@ -12,8 +12,11 @@ arbitrage d'implémentation :
 
 - **La précision prime sur le rappel.** En cas d'ambiguïté, on n'affiche rien. Un mauvais
   article coûte beaucoup plus cher que pas d'article.
-- **L'absence n'est pas une erreur.** Aucun message, aucune icône d'avertissement, aucun
-  encart grisé. L'onglet est simplement absent.
+- **L'absence n'est pas une erreur.** Aucune icône d'avertissement, aucun encart grisé,
+  aucun ton d'échec. *(Cette ligne disait d'abord « l'onglet est simplement absent » ;
+  révisé à l'usage — voir §7.1. L'onglet reste, l'absence y est dite en une phrase et
+  s'accompagne d'une proposition d'agir. Ce qui ne change pas : rien ici n'a le droit de
+  ressembler à une panne.)*
 - **Rien ne dépend de cette donnée.** Elle n'alimente ni les filtres, ni le scoring, ni
   aucune autre fonctionnalité. Elle peut échouer silencieusement sans conséquence.
 
@@ -225,8 +228,27 @@ Sur la fiche de détail, un jeu d'onglets au niveau du bloc textuel :
 - `Description` — contenu actuel, inchangé
 - `Le modèle réel` (voitures) / `Le circuit` (circuits) — contenu Wikipédia
 
-L'onglet Wikipédia est **entièrement masqué** si aucun contenu n'est disponible. Un onglet
-présent mais vide est pire que pas d'onglet.
+**L'onglet est permanent** — révisé à l'usage, contre la première rédaction de cette
+section, qui le voulait entièrement masqué sans contenu.
+
+Ce qui a tranché : essayé sur la bibliothèque réelle, un onglet absent ne se distingue
+ni d'une recherche encore en cours, ni d'une fonctionnalité qui n'existe pas. Et il
+prive l'utilisateur de tout point d'entrée précisément dans le cas où il aurait le plus
+à faire — l'appariement raté ou ambigu, que la §7.6 lui permet justement de corriger.
+
+L'argument d'origine (« un onglet présent mais vide est pire que pas d'onglet ») reste
+vrai et devient une contrainte sur le **contenu** de l'état vide : jamais un cadre vide,
+jamais une alerte. Une phrase qui dit ce qui s'est passé, et une proposition d'agir.
+Les six états, tous non-erreurs :
+
+| État | Ce que l'onglet dit |
+|---|---|
+| recherche en cours | qu'il cherche — le seul état qui n'est pas un verdict |
+| article trouvé | l'extrait (§7.3) |
+| rien trouvé | ce qui a été cherché, et « Associer un article… » |
+| ambiguïté | que plusieurs articles se valaient, et la même proposition |
+| entité sans article lisible | qu'aucune langue lue n'a d'article |
+| enrichissement désactivé | le réglage, sans reproche (§8) |
 
 ### 7.2 Onglet par défaut
 
@@ -263,12 +285,22 @@ transition pour éviter tout décalage de mise en page à l'arrivée du contenu.
 
 ### 7.6 Correction manuelle
 
-Dans un menu contextuel de l'onglet (pas un assistant, pas de validation au premier
-affichage) : « Ce n'est pas le bon article ? »
+**Dans l'onglet lui-même**, et non dans un menu contextuel — conséquence directe de
+l'onglet permanent (§7.1) : quand rien n'a été trouvé, l'onglet ne contient que ça, et
+quand un article est affiché, « Ce n'est pas le bon article ? » est en pied. Reste
+entier le principe d'origine : **pas un assistant, pas de validation au premier
+affichage**. L'utilisateur vient corriger s'il le veut, on ne lui demande rien.
 
 Ouvre une recherche libre affichant les candidats avec leur description courte Wikidata
-(« modèle d'automobile Toyota, 1983–1987 »), qui lève l'ambiguïté d'un coup d'œil. Accepte
-également le collage d'une URL Wikipédia, résolue immédiatement en Q-id.
+(« modèle d'automobile Toyota, 1983–1987 »), qui lève l'ambiguïté d'un coup d'œil. Le
+champ est **pré-rempli avec ce qui a été cherché** : les règles de nettoyage (§4.3)
+vivent côté Rust, et l'utilisateur doit pouvoir corriger des mots-clés plutôt que tout
+retaper. Accepte également le collage d'une URL Wikipédia, résolue immédiatement en
+Q-id — et l'URL n'est jamais stockée (§3.1).
+
+Un bouton **détache** l'article : un mod sans appariement est une réponse valable (§1),
+et le cache négatif est vidé au passage pour que l'appariement automatique ait une
+nouvelle chance au lieu de rester condamné 90 jours.
 
 **En mode manuel, relâcher le filtrage par type.** Si l'utilisateur veut lier son mod à
 une entité hors taxonomie, c'est son droit — la taxonomie a plus de chances d'être en tort

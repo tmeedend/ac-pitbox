@@ -398,6 +398,73 @@ mod tests {
         assert!(md.contains("Q4"), "le second candidat d'une ambiguïté");
     }
 
+    /// **Diagnostic, by hand.** What the fiche would get for ONE mod, step by
+    /// step, against the real library.
+    ///
+    /// Exists because "the tab does not appear" has three causes that look
+    /// identical from outside — no appariement, no article in the requested
+    /// language, or the network — and none of them shows on screen, absence
+    /// being silent by design (§1).
+    ///
+    /// ```text
+    /// $env:PITBOX_WIKI_MOD = "ks_ferrari_sf15t"; cargo test --lib wiki -- --ignored --nocapture what_the_fiche_gets
+    /// ```
+    #[test]
+    #[ignore = "needs the real library and the network; diagnostic, not a check"]
+    fn what_the_fiche_gets() {
+        let mod_key = std::env::var("PITBOX_WIKI_MOD").unwrap_or_else(|_| "ks_ferrari_sf15t".into());
+        let lang = std::env::var("PITBOX_WIKI_LANG").unwrap_or_else(|_| "en".into());
+        let Some(config_dir) = dirs::config_dir().map(|d| d.join("com.pitbox.app")) else {
+            eprintln!("dossier de config introuvable");
+            return;
+        };
+        let conn = crate::overlay::open(&config_dir.join("overlay.sqlite")).expect("overlay");
+        let cfg: crate::config::AppConfig = serde_json::from_str(
+            &std::fs::read_to_string(config_dir.join("config.json")).unwrap_or_else(|_| "{}".into()),
+        )
+        .unwrap_or_default();
+
+        eprintln!("mod     {mod_key}");
+        eprintln!("langue  {lang}");
+        eprintln!(
+            "en base {:?}",
+            crate::overlay::get_mod(&conn, &mod_key).unwrap().is_some()
+        );
+        eprintln!("lien    {:?}", crate::wiki::store::get_link(&conn, &mod_key).unwrap());
+
+        let ask = match crate::wiki::plan(
+            &conn,
+            cfg.ac_install_path.as_deref(),
+            &mod_key,
+            &lang,
+            cfg.prefs.wiki_online,
+        ) {
+            crate::wiki::Step::Settled(panel) => {
+                eprintln!("plan    → réglé sans réseau : {:?}", panel.state);
+                eprintln!("        → article {:?}", panel.article.map(|a| a.article_title));
+                return;
+            }
+            crate::wiki::Step::Ask(ask) => ask,
+        };
+        eprintln!("plan    → réseau nécessaire, entité {:?}", ask.entity_id);
+
+        let matching_cfg = crate::wiki::clean::load(&config_dir);
+        let cleaner = Cleaner::new(&matching_cfg);
+        let resolved = crate::wiki::fetch(
+            &WikiClient::new(),
+            &cleaner,
+            &matching_cfg.weights,
+            &Thresholds::from_prefs(&cfg.prefs),
+            ask,
+        );
+        eprintln!("fetch   → apparié {:?}", resolved.matched);
+        eprintln!(
+            "        → article  {:?}",
+            resolved.article.as_ref().map(|a| &a.article_title)
+        );
+        eprintln!("        → no_match {}", resolved.no_match);
+    }
+
     /// **Calibration run, by hand.** Needs the real library and the network, so
     /// it is ignored — §11 forbids a test that depends on Wikipedia.
     ///

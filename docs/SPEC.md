@@ -702,12 +702,20 @@ et porte une pastille quand une note existe.
 
 **Un troisième onglet porte l'article Wikipédia** — « Le modèle réel » sur une
 voiture, « Le circuit » sur un circuit
-(`docs/SPEC-wikipedia-fiche-detail.md`). Il est **entièrement absent** tant
-qu'aucun article n'est trouvé : un onglet vide serait pire que pas d'onglet, et
-l'absence n'a rien à expliquer — la fonctionnalité est décorative, elle échoue
-sans conséquence. L'article est cherché à l'ouverture de la fiche, jamais en
-masse, et la fiche s'affiche complète sans l'attendre : l'onglet apparaît quand
-le contenu arrive.
+(`docs/SPEC-wikipedia-fiche-detail.md`). Il est **toujours présent**, et c'est une
+révision née de l'usage : un onglet absent ne se distingue ni d'une recherche en
+cours, ni d'une fonctionnalité qui n'existe pas, et il prive l'utilisateur de
+tout recours au moment où il en aurait le plus besoin. L'article est cherché à
+l'ouverture de la fiche, jamais en masse, et la fiche s'affiche complète sans
+l'attendre.
+
+Quand il n'y a pas d'article, l'onglet **dit lequel des cinq cas s'applique** —
+recherche en cours, rien trouvé, ambiguïté, entité sans article lisible,
+enrichissement désactivé — et propose d'en associer un à la main : recherche
+libre pré-remplie avec ce qui a été cherché, candidats affichés avec leur
+description Wikidata, collage d'URL accepté. Aucun de ces états n'est une
+erreur : pas d'icône d'alerte, pas d'encart rouge. Un choix fait à la main est
+enregistré en `manual` et plus rien d'automatique ne l'écrase.
 
 Deux choses ne sont pas négociables et viennent du droit d'auteur, pas du
 goût : l'extrait n'est **jamais fondu** dans la description du mod — ce sont

@@ -30,7 +30,7 @@
   import InlineEdit from "./InlineEdit.svelte";
   import Tabs from "./Tabs.svelte";
   import WikiBlock from "./detail/WikiBlock.svelte";
-  import { getWikiArticle, setWikiLang, wikiLang, type WikiArticle } from "$lib/wiki";
+  import { getWikiPanel, setWikiLang, wikiLang, type WikiPanel } from "$lib/wiki";
   import PickerBar from "./PickerBar.svelte";
   import FicheHeader from "./FicheHeader.svelte";
   import { setEntityNote } from "$lib/userMeta";
@@ -244,9 +244,11 @@
   type TextTab = "desc" | "notes" | "wiki";
   let textTab = $state<TextTab>("desc");
 
-  /** L'article Wikipédia du mod (§7). `null` = pas d'onglet, sans un mot :
-   * l'absence n'est pas une erreur (§1). */
-  let wikiArticle = $state<WikiArticle | null>(null);
+  /** Ce que l'onglet Wikipédia affiche (§7). `null` = la recherche tourne
+   * encore, ce que l'onglet dit lui-même — un onglet absent ne se distinguait
+   * ni d'un chargement ni d'une fonctionnalité inexistante, d'où l'écart
+   * assumé avec la §7.1 : **l'onglet est permanent**. */
+  let wikiPanel = $state<WikiPanel | null>(null);
 
   /** Charge l'article à l'ouverture de la fiche, et à chaque changement de mod.
    *
@@ -258,25 +260,26 @@
    * bouger un curseur de l'aperçu 3D relancerait la requête réseau. */
   $effect(() => {
     const key = detail?.id_interne ?? null;
-    wikiArticle = null;
+    wikiPanel = null;
     if (!key) return;
     const lang = untrack(() => wikiLang());
     let cancelled = false;
-    void getWikiArticle(key, lang).then((a) => {
-      if (!cancelled) wikiArticle = a;
+    void getWikiPanel(key, lang).then((p) => {
+      if (!cancelled) wikiPanel = p;
     });
     return () => {
       cancelled = true;
     };
   });
 
-  /** Changement de langue de lecture (§5.4) : mémorisé globalement, pas par
-   * mod, et l'article est redemandé dans la foulée. */
-  async function changeWikiLang(lang: string) {
+  /** Recharge l'onglet : changement de langue de lecture (§5.4, mémorisée
+   * globalement et non par mod), ou article associé à la main (§7.6). */
+  async function reloadWiki(lang?: string) {
     const key = detail?.id_interne;
     if (!key) return;
-    await setWikiLang(lang);
-    wikiArticle = await getWikiArticle(key, lang);
+    if (lang) await setWikiLang(lang);
+    wikiPanel = null;
+    wikiPanel = await getWikiPanel(key, lang);
   }
   // Chiffres affichés entre parenthèses sur les onglets Médias/Ressources —
   // mêmes appels que ceux faits à l'ouverture de l'onglet (media.rs parcourt
@@ -1127,10 +1130,16 @@
       tabs={[
         { id: "desc", label: t("common.description") },
         { id: "notes", label: t("notes.title"), marker: !!detail?.notes_user },
-        // §7.1 : l'onglet est **entièrement absent** sans contenu. Un onglet
-        // présent mais vide est pire que pas d'onglet — et il n'y a rien à
-        // expliquer, l'absence n'étant pas une panne (§1).
-        ...(wikiArticle ? [{ id: "wiki", label: isCar ? t("wiki.tabCar") : t("wiki.tabTrack") }] : []),
+        // **Permanent**, contre la §7.1 et décidé avec l'utilisateur : un
+        // onglet absent ne se distingue ni d'une recherche en cours, ni d'une
+        // fonctionnalité qui n'existe pas — et c'est quand rien n'est trouvé
+        // qu'il y a le plus à faire. La pastille dit qu'il y a un article à
+        // lire, sans rien promettre quand il n'y en a pas.
+        {
+          id: "wiki",
+          label: isCar ? t("wiki.tabCar") : t("wiki.tabTrack"),
+          marker: !!wikiPanel?.article,
+        },
       ]}
       active={textTab}
       onselect={(v) => (textTab = v as TextTab)}
@@ -1154,12 +1163,12 @@
         <div class="read-box desc-body" class:empty-desc={!text}>
           {text ? decodeDescription(text) : t("detail.noDescription")}
         </div>
-      {:else if textTab === "wiki" && wikiArticle}
+      {:else if textTab === "wiki"}
         <!-- Même boîte que les deux autres : le texte de Wikipédia est un
              contenu de plus dans le même cadre, jamais fondu dans la
              description (§2). -->
         <div class="read-box">
-          <WikiBlock article={wikiArticle} onlang={changeWikiLang} />
+          <WikiBlock modKey={detail?.id_interne ?? ""} panel={wikiPanel} onreload={reloadWiki} />
         </div>
       {:else}
         <!-- Même boîte que la description : les deux sous-onglets échangent un
