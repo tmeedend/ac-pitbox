@@ -1382,7 +1382,11 @@ L'app pilote CM via son protocole `acmanager://race/quick?presetFile=…` : un *
 
 > L'ancien mécanisme `race/config?configFile=` (race.ini brut via `PreparedConfig`) a été abandonné : il ne peuple pas `StartProperties.BasicProperties`, dont dépend le check CSP auto-load côté CM — bug confirmé empiriquement, détail en `docs/L4-cm-launch-research.md`.
 
-Limites connues du preset Quick Drive (pas de champ correspondant trouvé dans le schéma) : évolution du grip non mappée (toujours « Optimum »/sec), durée de session Practice non appliquée (sessions à durée libre par design Quick Drive).
+Limite connue du preset Quick Drive : durée de session Practice non appliquée (sessions à durée libre par design Quick Drive, pas de champ correspondant dans le schéma).
+
+**L'évolution du grip, elle, part bien** — elle ne partait pas, et le champ existait pourtant. Les dix presets de référence portent tous le même `TrackPropertiesData`, ce qui avait été lu comme « pas de champ dédié » alors qu'ils avaient simplement tous été sauvegardés sur une piste optimale. Ce qui a tranché est la table de presets **que le jeu embarque**, `cfg/templates/tracks.ini` : son entrée `OPTIMUM` (`SESSION_START=100`, `SESSION_TRANSFER=100`, `RANDOMNESS=0`, `LAP_GAIN=1`, « Perfect track for hotlapping. ») reproduit exactement le `{"s":1.0,"t":1.0,"r":0.0,"g":1,"d":…}` des presets. D'où la lecture des clés abrégées : `s` et `t` sont des pourcentages divisés par 100, `g` le `LAP_GAIN` brut, `d` une description que CM affiche et que le jeu ne lit pas — son `[DYNAMIC_TRACK]` n'a pas de clé correspondante.
+
+**Seul le grip de départ varie** : c'est le seul des quatre paramètres que l'écran expose, les trois autres gardent la valeur prouvée par les presets de référence. L'échelle de `r` reste d'ailleurs **indécidable** — un `RANDOMNESS` de `0` donne `0.0`, ce qui ne dit pas si CM divise par 100 comme pour `s` et `t` ou garde le brut comme pour `g`. Se tromper d'un facteur 100 sur une variation aléatoire de grip ne se verrait qu'en jeu, un jour de course : tant qu'aucun preset de référence ne porte un `RANDOMNESS` non nul, la valeur ne bouge pas.
 
 ### 9.2ter Une course, deux modes CM selon la qualification
 

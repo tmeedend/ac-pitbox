@@ -58,6 +58,60 @@ fn build_assists(s: &RaceSetup) -> Value {
     })
 }
 
+/// État de la piste (§9.3) — le `TrackPropertiesData` du preset, au niveau
+/// racine et non dans le `ModeData`, donc commun aux quatre types de session.
+///
+/// **Le schéma est décodé, plus deviné.** Le jeu embarque sa propre table de
+/// presets dans `cfg/templates/tracks.ini`, et son entrée `OPTIMUM`
+/// (`SESSION_START=100`, `SESSION_TRANSFER=100`, `RANDOMNESS=0`, `LAP_GAIN=1`,
+/// « Perfect track for hotlapping. ») reproduit **exactement** le
+/// `{"s":1.0,"t":1.0,"r":0.0,"g":1,"d":"Perfect track for hotlapping."}` que
+/// portent les dix presets de référence. D'où la correspondance : `s` et `t`
+/// sont des pourcentages divisés par 100, `g` est le `LAP_GAIN` brut, `d` la
+/// description. Ces quatre clés-là sont ensuite écrites telles quelles dans le
+/// `[DYNAMIC_TRACK]` du `race.ini` par CM (relevé sur un `race.ini` réel).
+///
+/// **Seul le grip de départ varie, et c'est volontaire** : c'est le seul
+/// réglage que l'écran expose. Les trois autres gardent la valeur prouvée par
+/// les presets de référence. Pour `r` en particulier, l'échelle reste
+/// **indécidable** — `RANDOMNESS=0` donne `0.0`, ce qui ne dit pas si CM
+/// divise par 100 comme pour `s`/`t` ou garde le brut comme pour `g`. Se
+/// tromper d'un facteur 100 sur une variation aléatoire de grip est
+/// exactement le genre de réglage faux qu'on ne remarque qu'en jeu, un jour de
+/// course : tant qu'un preset de référence ne porte pas un `RANDOMNESS` non
+/// nul, cette valeur ne bouge pas.
+///
+/// `d` est cosmétique : CM l'affiche, le jeu ne la lit pas — son
+/// `[DYNAMIC_TRACK]` n'a pas de clé `DESCRIPTION`. Elle est reprise du preset
+/// du jeu dont le grip de départ est le plus proche, pour qu'elle ne
+/// contredise pas le nombre envoyé (une piste à 86 % annoncée « parfaite pour
+/// le hotlap » était le cas jusqu'ici).
+fn build_track_properties(s: &RaceSetup) -> Value {
+    // `cfg/templates/tracks.ini`, verbatim : grip de départ et description.
+    const GAME_PRESETS: [(u32, &str); 6] = [
+        (86, "A very slippery track, improves fast with more laps."),
+        (89, "Old tarmac. Bad grip won't get better soon."),
+        (95, "A clean track, gets better with more laps."),
+        (96, "A slow track that doesn't improve much."),
+        (98, "Very grippy track right from the start."),
+        (100, "Perfect track for hotlapping."),
+    ];
+    let grip = s.grip.clamp(1, 100);
+    let description = GAME_PRESETS
+        .iter()
+        .min_by_key(|(start, _)| start.abs_diff(grip))
+        .map(|(_, d)| *d)
+        .unwrap_or("");
+    json!({
+        "s": f64::from(grip) / 100.0,
+        "t": 1.0,
+        "r": 0.0,
+        "g": 1,
+        "d": description,
+        "w": false,
+    })
+}
+
 /// Grille d'adversaires explicite (§8.6, mode course) : `ModeId:"manual"`
 /// avec des tableaux parallèles `CarIds`/`SkinIds`/`AiLevels` — un index par
 /// adversaire, valeur confirmée en lisant `RaceGridViewModel.cs`
@@ -194,10 +248,11 @@ fn mode_data_trackday(s: &RaceSetup) -> String {
 ///   et `race/quick` (invocation URI) ne le transmet pas. `s.car_skin` n'est
 ///   donc pas envoyé **par ce preset** : il est réinjecté après coup dans le
 ///   `race.ini` écrit par CM, voir `raceini.rs` (§9.2).
-/// - **Évolution du grip / état de piste** : pas de champ dédié trouvé —
-///   les 4 presets de référence utilisent tous le même `TrackPropertiesData`
-///   ("Optimum"/sec). `s.grip` n'est **pas encore appliqué** — toujours piste
-///   optimale sèche pour l'instant.
+/// - **Évolution du grip / état de piste** : appliqué, voir
+///   [`build_track_properties`]. Les presets de référence portent tous le même
+///   `TrackPropertiesData` parce qu'ils ont tous été sauvegardés sur une piste
+///   optimale, pas parce que le champ n'existe pas — c'est la table de presets
+///   du jeu (`cfg/templates/tracks.ini`) qui l'a montré.
 /// - **Durée en Practice** : le `ModeData` de `QuickDrive_Practice.xaml`
 ///   (confirmé sur `pitbox-practice.cmpreset`, et sur la classe C# CM
 ///   elle-même) n'a aucun champ de durée — contrairement à l'ancien race.ini
@@ -241,9 +296,7 @@ pub fn build_preset(s: &RaceSetup) -> Result<String, String> {
         "udt": s.season_date.is_some(),
         "dtv": s.season_date.as_ref().map(|d| format!("{d}T00:00:00")),
         "tpc": true,
-        "TrackPropertiesData": json!({
-            "s": 1.0, "t": 1.0, "r": 0.0, "g": 1, "d": "Perfect track for hotlapping.", "w": false,
-        }).to_string(),
+        "TrackPropertiesData": build_track_properties(s).to_string(),
         "asc": true,
         "AssistsData": build_assists(s).to_string(),
         "ico": false,
@@ -484,6 +537,33 @@ mod tests {
         assert_eq!(assists["TyreWear"], 1.0);
         assert_eq!(assists["FuelConsumption"], 2.0);
         assert_eq!(assists["Abs"], 0);
+    }
+
+    /// §9.3 — l'état de piste choisi part réellement dans le preset. Il ne
+    /// partait pas : les quatre niveaux de l'écran écrivaient tous la piste
+    /// optimale, donc le réglage n'avait aucun effet en jeu.
+    #[test]
+    fn the_chosen_grip_reaches_the_preset() {
+        let mut s = base_setup(SessionType::Practice);
+        s.grip = 86;
+        let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
+        let track: Value = serde_json::from_str(v["TrackPropertiesData"].as_str().unwrap()).unwrap();
+        assert_eq!(track["s"], 0.86, "grip de départ transmis");
+        assert_eq!(
+            track["d"], "A very slippery track, improves fast with more laps.",
+            "la description suit le nombre envoyé au lieu de le contredire"
+        );
+
+        // La piste optimale doit rester exactement ce que portent les dix
+        // presets de référence, sinon c'est le cas nominal qu'on a cassé.
+        s.grip = 100;
+        let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
+        let track: Value = serde_json::from_str(v["TrackPropertiesData"].as_str().unwrap()).unwrap();
+        assert_eq!(track["s"], 1.0);
+        assert_eq!(track["t"], 1.0);
+        assert_eq!(track["r"], 0.0);
+        assert_eq!(track["g"], 1);
+        assert_eq!(track["d"], "Perfect track for hotlapping.");
     }
 
     /// §9.3 — les trois niveaux d'une aide sont ceux du launcher d'AC lui-même
