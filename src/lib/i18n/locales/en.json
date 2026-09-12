@@ -334,7 +334,9 @@
     "bigpictureView.dense": "Dense thumbnails",
     "bigpictureView.table": "Table",
     "bigpictureView.keep": "Keep the current view",
-    "bigpictureViewHint": "What the library shows in Big Picture. Your usual setting comes back on the way out."
+    "bigpictureViewHint": "What the library shows in Big Picture. Your usual setting comes back on the way out.",
+    "tabWiki": "Wikipedia",
+    "tabWikiHint": "The article shown on a car's or a circuit's fiche."
   },
   "bigpicture": {
     "exit": "✕ Exit Big Picture (Esc)"
@@ -1660,7 +1662,22 @@
     "searchPlaceholder": "Article name, or a pasted Wikipedia URL",
     "searchAction": "Search",
     "noResults": "No results.",
-    "contents": "Contents"
+    "contents": "Contents",
+    "online": "Online enrichment",
+    "onlineHint": "Pit Box queries Wikipedia when a fiche is opened, which indirectly reveals what your library holds. Switched off, no request goes out and the articles already fetched stay readable.",
+    "readingLang": "Article language",
+    "readingLangHint": "The article is looked for in this language, then in English if it does not exist there.",
+    "readingLangAuto": "Follow the application language",
+    "export": "Share your corrections",
+    "exportHint": "Produces the file to paste back into the Pit Box repository: your article corrections are merged into it and will reach everyone in the next release. Automatic matches are never included.",
+    "exportAction": "Export {count} correction(s)…",
+    "exportDone": "{count} correction(s) exported.",
+    "exportFailed": "The file could not be written.",
+    "purge": "Article cache",
+    "purgeHint": "Clears cached articles and failed searches. Your matches, corrections included, are kept.",
+    "purgeAction": "Clear the cache",
+    "purgeConfirm": "Clear the cached Wikipedia articles? They will be downloaded again next time you read one.",
+    "purgeDone": "Cache cleared."
   },
   "prefs": {
     "writeFailedTitle": "Your settings are not being saved",

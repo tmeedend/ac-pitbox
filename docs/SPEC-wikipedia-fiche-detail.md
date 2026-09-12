@@ -337,6 +337,13 @@ Le choix est enregistré avec `source = manual`.
 - **Langue de préférence** pour les articles.
 - **Vider le cache Wikipédia** — purge `wiki_cache` et `wiki_no_match`, conserve
   `wiki_link`.
+- **Partager vos corrections** — écrit le contenu de `rules/wiki-links.json` avec les
+  corrections locales fondues dedans, prêt à recoller dans le dépôt (§10). **Seules les
+  entrées `manual` en sortent** : exporter les verdicts automatiques les figerait dans le
+  binaire, où la précédence (`import` > `auto`) les ferait ensuite écraser un moteur
+  futur, meilleur, par ses propres vieilles réponses.
+
+Le tout vit dans `Réglages › Wikipédia`.
 
 ---
 

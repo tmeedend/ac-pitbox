@@ -135,6 +135,39 @@ export async function clearWikiLink(modKey: string): Promise<void> {
   }
 }
 
+/** §8 — vide le cache d'articles et le cache négatif, garde les appariements. */
+export async function purgeWikiCache(): Promise<void> {
+  try {
+    await invoke<void>("purge_wiki_cache");
+  } catch (e) {
+    console.warn("purge_wiki_cache", e);
+  }
+}
+
+/** §10 — écrit `rules/wiki-links.json` (corrections locales fondues dedans) à
+ * l'endroit choisi, prêt à recoller dans le dépôt. Rend `false` en cas
+ * d'échec. */
+export async function exportWikiLinks(path: string): Promise<boolean> {
+  try {
+    await invoke<void>("export_wiki_links", { path });
+    return true;
+  } catch (e) {
+    console.error("export_wiki_links", e);
+    return false;
+  }
+}
+
+/** Combien de corrections manuelles l'export contiendrait. Sert à ne pas
+ * proposer d'exporter le vide. */
+export async function countWikiManualLinks(): Promise<number> {
+  try {
+    return await invoke<number>("count_wiki_manual_links");
+  } catch (e) {
+    console.warn("count_wiki_manual_links", e);
+    return 0;
+  }
+}
+
 /** La langue réellement servie, lue sur l'URL — `fr.wikipedia.org` → `fr`.
  * Le backend fait le même calcul ; c'est l'URL qui fait foi, elle vient de
  * l'API. */

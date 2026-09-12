@@ -866,17 +866,39 @@ laisser pourrir ici.
         recherche.
       Résultat : 15 circuits retenus, tous justes (Monza retrouvé par le repli
       sur le nom, ses coordonnées CSP étant celles de Milan), contre 0 avant.
-      **Reste** : les lots 4 à 6 du §12 :
-      interface (§7), correction manuelle (§7.6), réglages (§8, dont
-      l'interrupteur « enrichissement en ligne » que `resolve_article` attend
-      déjà sous la forme d'un `net: Option<&WikiClient>`).
-      **Un trou de la spec à combler au lot 5** : la §7.6 accroche « Ce n'est
-      pas le bon article ? » au menu de l'onglet, mais la §7.1 masque l'onglet
-      quand il n'y a pas de contenu — donc un mod rejeté pour ambiguïté n'a
-      aucun point d'entrée vers la correction manuelle, alors que c'est
-      exactement le cas où choisir servirait. Décidé : déplacer l'entrée vers
-      le menu ⋮ de la fiche, toujours présent. La plomberie existe déjà
-      (`set_link` + précédence).
+      **Les six lots du §12 sont faits.** L'onglet vit dans la fiche
+      (voitures et circuits), la correction manuelle y est, et
+      `Réglages › Wikipédia` porte l'interrupteur, la langue, la purge du cache
+      et l'export des corrections.
+      **Quatre écarts assumés avec la spec, tous décidés avec l'utilisateur
+      après l'avoir vu à l'écran** — ils sont écrits dans le SPEC de la
+      fonctionnalité, pas seulement ici :
+      - **L'onglet est permanent** (contre la §7.1). Un onglet absent ne se
+        distingue ni d'une recherche en cours, ni d'une fonctionnalité qui
+        n'existe pas — constaté en vrai, sur un circuit qui s'appariait
+        pendant qu'on regardait la fiche. Il porte donc six états, dont aucun
+        n'est une erreur, et la correction manuelle avec eux : la §7.6
+        l'accrochait à un onglet qui n'existait pas dans le seul cas où elle
+        sert.
+      - **L'article entier et rendu** (contre la §7.3, qui n'en voulait que
+        l'introduction en texte brut) : sections, sommaire, tableaux, infobox.
+        Le HTML n'est jamais injecté tel quel — `wikiHtml.ts` **reconstruit**
+        un arbre depuis une liste blanche, la webview ayant accès à `invoke`.
+        Aucune dépendance ajoutée pour ça.
+      - **Les images sont affichées** (contre la §9). Ses trois objections
+        étaient exactes et sont traitées, pas contournées : **Commons
+        uniquement** (`imagerepository == "shared"`), ce qui écarte
+        structurellement l'usage loyal puisque Commons n'accepte que du libre ;
+        auteur et licence sous chaque image, non masquables.
+      - **Le mot « extrait » quitte l'attribution** (§7.4) : il était exigé
+        parce que ne montrer qu'un fragment est une modification. Montrer le
+        texte entier est le régime **plus simple**, pas plus risqué.
+      **Reste** : régler les seuils sur les corrections manuelles. C'est le
+      seul travail qui demande l'utilisateur — chaque correction est un exemple
+      étiqueté, et à partir d'une cinquantaine la calibration peut se noter
+      elle-même au lieu d'être arbitrée au jugé. Précaution à ne pas rater : la
+      calibration devra comparer le verdict **brut** du moteur aux étiquettes,
+      sans lire `wiki_link`, sinon elle se noterait sur ses propres copies.
       TTL : 30 jours en positif, 90 en négatif.
 - [ ] **Signature Authenticode** : le workflow est prêt, il attend un
       certificat. Définir la variable de dépôt `SIGN_COMMAND` suffit à

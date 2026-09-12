@@ -79,6 +79,73 @@ pub fn seed_links(conn: &Connection, curated: &CuratedLinks) -> (usize, usize) {
     (written, skipped)
 }
 
+/// Le fichier livré, tel qu'il doit être recollé dans le dépôt, avec les
+/// corrections locales fondues dedans (§10).
+///
+/// **Seules les corrections `manual` sont exportées.** Jamais les `auto`, et ce
+/// n'est pas une question de propreté : la précédence du §3.1 fait qu'un
+/// `import` l'emporte sur un `auto`, donc exporter les verdicts de
+/// l'algorithme d'aujourd'hui les figerait dans le binaire — et une version
+/// future, au moteur meilleur, se ferait écraser par ses propres vieilles
+/// réponses. Le piège est silencieux et durable.
+///
+/// Les entrées déjà livrées sont conservées ; une correction locale portant sur
+/// la même clé l'emporte, parce qu'elle est plus récente et faite à la main.
+pub fn export_links(conn: &Connection, curated: &CuratedLinks) -> rusqlite::Result<String> {
+    let mut links = curated.links.clone();
+    let mut stmt = conn.prepare("SELECT mod_key, entity_id FROM wiki_link WHERE source = 'manual' ORDER BY mod_key")?;
+    let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?;
+    let mut added = 0;
+    for row in rows {
+        let (mod_key, entity_id) = row?;
+        if !is_entity_id(&entity_id) {
+            continue;
+        }
+        if links.insert(mod_key, entity_id).is_none() {
+            added += 1;
+        }
+    }
+    log::debug!("wiki: export de {} appariements ({added} nouveaux)", links.len());
+
+    // Écrit à la main plutôt que par `serde_json` : le fichier du dépôt porte
+    // des commentaires `_comment_*` que l'utilisateur relit, et un export qui
+    // les effacerait rendrait la table illisible au bout de deux tours.
+    let mut out = String::from("{\n");
+    out.push_str(
+        "  \"_comment\": \"Appariements Wikipédia livrés avec l'application (§10). \
+Généré par Réglages › Wikipédia › Exporter mes corrections, puis recollé ici. \
+Ne contient que des corrections faites à la main : les verdicts automatiques n'y ont pas leur place, \
+ils écraseraient un futur moteur meilleur.\",\n\n",
+    );
+    out.push_str("  \"links\": {\n");
+    let total = links.len();
+    for (index, (mod_key, entity_id)) in links.iter().enumerate() {
+        let comma = if index + 1 < total { "," } else { "" };
+        out.push_str(&format!(
+            "    {}: {}{comma}\n",
+            json_string(mod_key),
+            json_string(entity_id)
+        ));
+    }
+    out.push_str("  },\n\n");
+
+    out.push_str("  \"no_counterpart\": [\n");
+    let total = curated.no_counterpart.len();
+    for (index, key) in curated.no_counterpart.iter().enumerate() {
+        let comma = if index + 1 < total { "," } else { "" };
+        out.push_str(&format!("    {}{comma}\n", json_string(key)));
+    }
+    out.push_str("  ]\n}\n");
+    Ok(out)
+}
+
+/// Échappe une chaîne en littéral JSON. `serde_json` le fait très bien, et
+/// c'est lui qu'on appelle — la fonction existe pour que le rendu à la main
+/// ci-dessus reste lisible.
+fn json_string(value: &str) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "\"\"".into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,6 +205,54 @@ mod tests {
             "Q888",
             "une décision humaine l'emporte sur l'appariement automatique"
         );
+    }
+
+    /// Rule (§10): **the export carries the hand-made corrections and nothing
+    /// else.**
+    ///
+    /// Exporting the automatic verdicts would be the quiet kind of mistake: an
+    /// `import` outranks an `auto` (§3.1), so today's algorithm would be frozen
+    /// into the binary and would overrule a future, better one with its own old
+    /// answers. Nobody would notice for a release or two.
+    #[test]
+    fn the_export_carries_manual_corrections_only() {
+        let base = crate::testutil::temp_dir("wiki-export");
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).expect("overlay");
+
+        store::set_link(&conn, "chosen_by_hand", "Q111", LinkSource::Manual).unwrap();
+        store::set_link(&conn, "found_by_the_engine", "Q222", LinkSource::Auto).unwrap();
+        // Une correction locale qui contredit la table livrée : c'est la plus
+        // récente et elle est humaine, elle gagne.
+        store::set_link(&conn, "shipped_but_corrected", "Q333", LinkSource::Manual).unwrap();
+
+        let curated = CuratedLinks {
+            links: BTreeMap::from([
+                ("shipped_but_corrected".into(), "Q999".into()),
+                ("shipped_elsewhere".into(), "Q444".into()),
+            ]),
+            no_counterpart: vec!["rss_formula_2013".into()],
+        };
+        let json = export_links(&conn, &curated).unwrap();
+
+        assert!(json.contains("\"chosen_by_hand\": \"Q111\""), "la correction manuelle");
+        assert!(
+            !json.contains("found_by_the_engine"),
+            "un verdict automatique n'est jamais exporté"
+        );
+        assert!(
+            json.contains("\"shipped_but_corrected\": \"Q333\""),
+            "la correction locale l'emporte sur l'entrée livrée"
+        );
+        assert!(
+            json.contains("\"shipped_elsewhere\": \"Q444\""),
+            "le reste de la table survit"
+        );
+        assert!(json.contains("rss_formula_2013"), "les absences attendues aussi");
+
+        // Et le résultat doit être relisible par le chargeur qui le consommera.
+        let back: CuratedLinks = serde_json::from_str(&json).expect("export relisible");
+        assert_eq!(back.links.len(), 3);
+        assert_eq!(back.no_counterpart, vec!["rss_formula_2013".to_string()]);
     }
 
     /// Rule (§1, §10): a malformed entry is skipped, never written. The file is

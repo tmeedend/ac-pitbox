@@ -5,6 +5,7 @@
   import MusicTab from "./settings/MusicTab.svelte";
   import PreviewTab from "./settings/PreviewTab.svelte";
   import ThumbsTab from "./settings/ThumbsTab.svelte";
+  import WikiTab from "./settings/WikiTab.svelte";
   import { FEATURE_GRID_THUMBS } from "$lib/features";
   import {
     emptyConfig,
@@ -50,7 +51,7 @@
   // l'autre régénère 312 images. C'est cette asymétrie qui rend acceptable
   // qu'un écran affiche une facture — et qui interdit de la faire apparaître
   // dans celui qui n'en a pas besoin.
-  const ALL_TAB_IDS = ["general", "paths", "preview", "thumbs", "music"] as const;
+  const ALL_TAB_IDS = ["general", "paths", "preview", "thumbs", "music", "wiki"] as const;
   // L'onglet « Vignettes » disparaît avec son interrupteur de fonctionnalité :
   // un onglet qui existe mais ne mène à rien d'utilisable n'est pas une
   // fonctionnalité éteinte, c'en est une cassée (`features.ts`).
@@ -235,7 +236,10 @@
 
   <Tabs tabs={tabItems} active={activeTab} onselect={(v) => (activeTab = v as SettingsTab)} />
 
-  {#if activeTab === "music"}
+  {#if activeTab === "wiki"}
+    <p class="lbl-sub">{t("settings.tabWikiHint")}</p>
+    <WikiTab bind:config />
+  {:else if activeTab === "music"}
     <MusicTab />
   {:else if activeTab === "thumbs"}
     <p class="lbl-sub">{t("settings.tabThumbsHint")}</p>

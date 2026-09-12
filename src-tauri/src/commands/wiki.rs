@@ -130,6 +130,45 @@ pub fn clear_wiki_link(db: State<Db>, mod_key: String) -> Result<(), String> {
     wiki::store::forget_no_match(&conn, &mod_key).map_err(|e| e.to_string())
 }
 
+/// §8 — vide le cache d'articles et le cache négatif, **garde les
+/// appariements**. Une correction faite à la main n'est pas du cache, et
+/// réapparier toute une bibliothèque pour la retrouver serait long et lossy.
+#[tauri::command]
+pub fn purge_wiki_cache(db: State<Db>) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    wiki::store::purge_cache(&conn).map_err(|e| e.to_string())
+}
+
+/// §10 — le contenu de `rules/wiki-links.json` avec les corrections locales
+/// fondues dedans, prêt à être recollé dans le dépôt.
+///
+/// Écrit à l'endroit que la boîte de dialogue du système a rendu — donc un
+/// chemin que l'utilisateur vient de désigner lui-même, même modèle de
+/// confiance que l'export de mods (`export.rs`). Écrire ici plutôt que de
+/// rendre le texte au frontend évite d'ajouter `@tauri-apps/plugin-fs` pour
+/// un seul fichier.
+#[tauri::command]
+pub fn export_wiki_links(db: State<Db>, path: String) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let curated = wiki::curated::shipped();
+    let content = wiki::curated::export_links(&conn, &curated).map_err(|e| e.to_string())?;
+    std::fs::write(&path, content).map_err(|e| {
+        log::warn!("wiki: export vers {path} échoué — {e}");
+        e.to_string()
+    })
+}
+
+/// Combien de corrections faites à la main l'export contiendrait — pour que
+/// l'écran puisse le dire avant qu'on clique, et se taire quand il n'y a rien.
+#[tauri::command]
+pub fn count_wiki_manual_links(db: State<Db>) -> Result<i64, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    conn.query_row("SELECT COUNT(*) FROM wiki_link WHERE source = 'manual'", [], |r| {
+        r.get(0)
+    })
+    .map_err(|e| e.to_string())
+}
+
 fn config_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     app.path()
         .app_config_dir()

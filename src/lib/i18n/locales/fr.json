@@ -334,7 +334,9 @@
     "bigpictureView.dense": "Vignettes denses",
     "bigpictureView.table": "Tableau",
     "bigpictureView.keep": "Garder la vue en cours",
-    "bigpictureViewHint": "Ce que la bibliothèque affiche en Big Picture. Le réglage habituel est retrouvé en sortant."
+    "bigpictureViewHint": "Ce que la bibliothèque affiche en Big Picture. Le réglage habituel est retrouvé en sortant.",
+    "tabWiki": "Wikipédia",
+    "tabWikiHint": "L'extrait d'article affiché sur la fiche d'une voiture ou d'un circuit."
   },
   "bigpicture": {
     "exit": "✕ Quitter Big Picture (Échap)"
@@ -1660,7 +1662,22 @@
     "searchPlaceholder": "Nom de l'article, ou URL Wikipédia collée",
     "searchAction": "Chercher",
     "noResults": "Aucun résultat.",
-    "contents": "Sommaire"
+    "contents": "Sommaire",
+    "online": "Enrichissement en ligne",
+    "onlineHint": "Pit Box interroge Wikipédia à l'ouverture d'une fiche, ce qui révèle indirectement le contenu de votre bibliothèque. Désactivé, aucune requête ne sort et les articles déjà récupérés restent lisibles.",
+    "readingLang": "Langue des articles",
+    "readingLangHint": "L'article est cherché dans cette langue, puis en anglais s'il n'y existe pas.",
+    "readingLangAuto": "Suivre la langue de l'application",
+    "export": "Partager vos corrections",
+    "exportHint": "Produit le fichier à recoller dans le dépôt de Pit Box : vos corrections d'articles y sont fondues et profiteront à tout le monde à la version suivante. Les appariements trouvés automatiquement n'y sont jamais inclus.",
+    "exportAction": "Exporter {count} correction(s)…",
+    "exportDone": "{count} correction(s) exportée(s).",
+    "exportFailed": "Le fichier n'a pas pu être écrit.",
+    "purge": "Cache des articles",
+    "purgeHint": "Efface les articles et les recherches infructueuses mises en cache. Vos appariements, corrections comprises, sont conservés.",
+    "purgeAction": "Vider le cache",
+    "purgeConfirm": "Vider le cache des articles Wikipédia ? Ils seront retéléchargés à la prochaine consultation.",
+    "purgeDone": "Cache vidé."
   },
   "prefs": {
     "writeFailedTitle": "Vos réglages ne sont pas enregistrés",
