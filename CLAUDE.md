@@ -893,12 +893,54 @@ laisser pourrir ici.
       - **Le mot « extrait » quitte l'attribution** (§7.4) : il était exigé
         parce que ne montrer qu'un fragment est une modification. Montrer le
         texte entier est le régime **plus simple**, pas plus risqué.
-      **Reste** : régler les seuils sur les corrections manuelles. C'est le
-      seul travail qui demande l'utilisateur — chaque correction est un exemple
-      étiqueté, et à partir d'une cinquantaine la calibration peut se noter
-      elle-même au lieu d'être arbitrée au jugé. Précaution à ne pas rater : la
-      calibration devra comparer le verdict **brut** du moteur aux étiquettes,
-      sans lire `wiki_link`, sinon elle se noterait sur ses propres copies.
+      **Reste une seule chose : régler les seuils sur les corrections
+      manuelles.** Tout le code est livré ; ce qui manque est une **mesure**,
+      et elle demande que l'utilisateur ait corrigé un paquet d'articles.
+      **Pourquoi ça attend, et pourquoi ça vaut le coup d'attendre.** Le
+      rapport de calibration dit aujourd'hui « score 0,689, marge 0,122 », il
+      ne dit jamais *juste ou faux* : sans vérité terrain, un seuil s'arbitre
+      au jugé — c'est ainsi que le plancher a été posé à 0,70, en relisant onze
+      lignes à la main. Chaque correction faite dans l'onglet est au contraire
+      un **exemple étiqueté** (`wiki_link` en `source = 'manual'`). À partir
+      d'une cinquantaine, la calibration peut comparer son propre verdict aux
+      réponses de l'utilisateur, sortir un vrai taux de justesse, et surtout
+      essayer des dizaines de combinaisons de seuils **hors ligne** contre ces
+      étiquettes.
+      **Pour reprendre à froid :**
+      1. Vérifier la matière : `SELECT COUNT(*) FROM wiki_link WHERE
+         source='manual'` dans `%APPDATA%\com.pitbox.app\overlay.sqlite`. Sous
+         une cinquantaine, il n'y a pas encore de quoi mesurer — demander à
+         l'utilisateur de corriger au fil de sa navigation.
+      2. Faire tourner la calibration, qui ne persiste rien :
+         ```
+         cd src-tauri; cargo test --lib wiki::calibrate::tests::calibrate_the_library -- --ignored --nocapture
+         ```
+         (`PITBOX_WIKI_LIMIT` raccourcit un premier passage, `PITBOX_WIKI_REPORT`
+         choisit où le Markdown atterrit ; le rapport par défaut va dans le
+         dossier de config.)
+      3. Ajouter au rapport la comparaison aux étiquettes : pour chaque mod
+         corrigé à la main, le verdict du moteur est **juste**, **faux** ou
+         **absent**. C'est ce qui transforme le rapport d'un décompte en mesure.
+      4. Balayer les couples (`wiki_match_min_score`, `wiki_match_min_margin`)
+         sur ces étiquettes et retenir celui qui maximise les justes sans
+         laisser passer de faux — la §1 échange volontiers du rappel contre de
+         la précision.
+      **Deux pièges à ne pas réintroduire :**
+      - **La calibration doit comparer le verdict brut du moteur aux
+        étiquettes, sans jamais lire `wiki_link`.** Sinon elle se note sur ses
+        propres copies : les appariements qu'elle a elle-même écrits, et les
+        entrées livrées, lui renverraient ses réponses comme si c'était la
+        vérité.
+      - **Un mod de `no_counterpart` n'est pas un manque.** La séparation
+        existe déjà dans le rapport (`rules/wiki-links.json`) et c'est elle qui
+        empêche de régler les seuils contre du bruit — 129 « sans candidat »
+        dont une bonne part sont des succès ne veut rien dire.
+      Diagnostic d'un mod isolé, quand un article n'apparaît pas :
+      ```
+      $env:PITBOX_WIKI_MOD = "ks_ferrari_sf15t"; cargo test --lib wiki::calibrate::tests::what_the_fiche_gets -- --ignored --nocapture
+      ```
+      Il dit où la résolution s'arrête — appariement, langue, ou réseau —, trois
+      causes que rien ne distingue à l'écran.
       TTL : 30 jours en positif, 90 en négatif.
 - [ ] **Signature Authenticode** : le workflow est prêt, il attend un
       certificat. Définir la variable de dépôt `SIGN_COMMAND` suffit à
