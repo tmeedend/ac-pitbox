@@ -654,7 +654,6 @@
     "aiCount": "Rivales",
     "yearMinLabel": "Año mín.",
     "yearMaxLabel": "Año máx.",
-    "gridGenerated": "Parrilla generada · {count} IA",
     "addOpponent": "Añadir un rival",
     "opponentEditTooltip": "Haz clic para cambiar el coche o el skin",
     "opponentLevelTooltip": "Nivel de dificultad — haz clic para editarlo",

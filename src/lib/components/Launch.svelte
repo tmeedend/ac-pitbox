@@ -1001,6 +1001,7 @@
             onopenpicker={openPicker}
             onclosepicker={closePicker}
             onconfirmpicker={confirmPicker}
+            onregenerate={() => void regenerateGrid()}
           />
         {/if}
       </div>

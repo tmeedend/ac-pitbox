@@ -654,7 +654,6 @@
     "aiCount": "Avversari",
     "yearMinLabel": "Anno min.",
     "yearMaxLabel": "Anno max.",
-    "gridGenerated": "Griglia generata · {count} IA",
     "addOpponent": "Aggiungi un avversario",
     "opponentEditTooltip": "Clicca per cambiare l'auto o lo skin",
     "opponentLevelTooltip": "Livello di difficoltà — clicca per modificarlo",

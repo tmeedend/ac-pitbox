@@ -654,7 +654,6 @@
     "aiCount": "Gegner",
     "yearMinLabel": "Jahr ab",
     "yearMaxLabel": "Jahr bis",
-    "gridGenerated": "Startfeld erzeugt · {count} KI",
     "addOpponent": "Gegner hinzufügen",
     "opponentEditTooltip": "Klicken, um Fahrzeug oder Skin zu ändern",
     "opponentLevelTooltip": "Schwierigkeitsgrad — zum Ändern klicken",
