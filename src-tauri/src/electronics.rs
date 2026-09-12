@@ -194,5 +194,4 @@ MAX_SPIN_POWER=0.8
         assert!(!found.abs, "ABS said nothing: not equipped rather than borrowed");
         assert!(found.traction_control, "traction control said yes");
     }
-
 }

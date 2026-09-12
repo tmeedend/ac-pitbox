@@ -915,7 +915,7 @@ Quatre niveaux. Tout élément rouge doit pouvoir se rattacher à l'un d'eux ; s
 | **3 — éteint** | bordure `--rosso-border`, fond `--rosso-dim` | actif mais secondaire | libre |
 | **0 — marque** | `--rosso` | identité, hors zone de contenu | deux occurrences fixes : le filet supérieur de la fenêtre et le carré du logo |
 
-Niveau 2 : entrée active du rail, carte du duo en session dans la grille (+ badge `SESSION`), onglet actif, piste active de l'écran Pilote, case retenue dans une galerie. Le **focus** est le seul emploi qui peut apparaître n'importe où — c'est cohérent, il désigne « où je suis » — et il reste **jaune** dans Pit Box (`:focus-visible`, `global.css`) : la carte en session portant elle-même une bordure rouge, un focus rouge s'y fondrait, ce qui était déjà la raison du jaune avant ce barème.
+Niveau 2 : entrée active du rail, carte du duo en session dans la grille (+ badge `SESSION`), onglet actif, piste active de l'écran Pilote, case retenue dans une galerie, **option retenue d'un groupe segmenté** — c'est le ton `accent` de `Seg.svelte`, fond éteint plus filet de 2 px. Ce ton a longtemps rendu un fond rouge **plein**, et comme il est le défaut du composant, l'écran de session en comptait cinq : quatre segmentés plus le bouton de lancement, dont un seul a droit au niveau 1. Les quatre appels qui s'étaient posé la question avaient tous répondu `neutral` — le rouge n'était donc choisi nulle part, seulement hérité. Le **focus** est le seul emploi qui peut apparaître n'importe où — c'est cohérent, il désigne « où je suis » — et il reste **jaune** dans Pit Box (`:focus-visible`, `global.css`) : la carte en session portant elle-même une bordure rouge, un focus rouge s'y fondrait, ce qui était déjà la raison du jaune avant ce barème.
 
 **Le survol n'introduit jamais de rouge sur un élément qui n'y a pas droit au repos.** Sinon le rouge acquiert un quatrième sens — « sous le curseur » — qui annule le barème. Un contrôle neutre (bouton secondaire, menu, champ, « + Filtre ») éclaircit son gris (`--line` → `--faint2`/`--faint`) ; seul un élément *sélectionnable* (carte, case de galerie, puce, option de liste) peut aller jusqu'au niveau 3, et l'action principale éclaircit son rouge plein.
 
@@ -1426,12 +1426,75 @@ soit le type (`Penalties` figure dans les trois `ModeData` ; `TrackPropertiesDat
 et `AssistsData` sont au niveau racine du preset, pas dans `ModeData`), rien ne
 justifie de les cantonner à Course. Météo et heure, également communes.
 
+**Options de session : deux zones, et la droite ne bouge jamais.** À gauche ce
+qui dépend du type (départ en Practice ; ghost car en Hotlap ; tours, faux
+départ, qualification et essais libres en Course ; faux départ en Track day),
+à droite l'évolution du grip puis les pénalités, **dans cet ordre et à la même
+place dans les quatre types**. Tous les contrôles se suivaient auparavant dans
+une seule ligne qui se réarrangeait à chaque changement de type : les deux
+réglages qu'on ne change jamais étaient précisément ceux qu'il fallait
+rechercher à chaque fois. Le seuil qui empile les deux zones est une requête de
+**conteneur**, pas de média : c'est la largeur reçue par le bloc qui décide, et
+le zoom d'interface déplace celle de la fenêtre sans rien changer à celle-là
+(§13).
+
+**Case et durée sont un seul contrôle** pour la qualification comme pour les
+essais libres : cadre unique, la durée décrochée à droite de la case. Décochée,
+le cadre entier s'éteint et la durée devient inerte — elle reste lisible (on y
+revient) au lieu de disparaître, ce qui obligeait à recocher pour savoir ce
+qu'on avait mis, ou de rester éditable sans effet.
+
+**Les aides au pilotage ont trois états, pas deux** : `Off` / `Factory` / `On`,
+le vocabulaire d'Assetto Corsa lui-même — et ses valeurs, relevées sur un
+fichier livré par le jeu (`launcher/themes/default/index.html` :
+`data-slidervalues="0,1,2"` en face de `data-slidertextvalues="Off,Factory,On"`,
+lié à la clé `ABS` de `cfg/assists.ini`, celle que porte l'`AssistsData` d'un
+preset Quick Drive). Une case à cocher n'en portait que deux, et « cochée »
+envoyait `1`, c'est-à-dire `Factory` — le réglage avait donc trois états en jeu
+et deux à l'écran, dont aucun ne s'appelait par son nom. `Factory` garde
+l'équipement réel de la voiture, ce qui veut dire que **`On` ne peut rien
+ajouter à une voiture qui n'en a pas** : c'est le piège que les deux
+info-bulles expliquent. La ligne idéale reste une case — elle n'a que deux
+états.
+
+> **Migration** d'un réglage enregistré avant ces trois états : `true →
+> factory`, `false → off`, absent → `factory`. Pas `true → on`, malgré
+> l'apparence : l'ancien booléen envoyait déjà `1`, et une migration ne change
+> pas ce qui part en jeu. La conversion passe sur **toutes** les entrées
+> (chaque type de session a son preset, chaque session enregistrée son propre
+> `setup`), pas sur le preset courant seul.
+
+**Ce que `Factory` vaut pour la voiture en session** se lit sous les deux
+segmentés : « *Factory — la Ford Mustang Mach 1 428 n'a ni ABS ni
+antipatinage.* » C'est la troisième chose que Pit Box sait et que Content
+Manager ne montre pas, après le vivier et les sessions enregistrées : CM
+affiche trois valeurs opaques, l'app lit les specs de la voiture. La présence
+d'usine est déclarée par `PRESENT` sous `[ABS]` et `[TRACTION_CONTROL]` de
+**`electronics.ini`**, à l'intérieur du `data.acd` (`electronics.rs` ; le
+déchiffrement est celui d'`acd.rs`). Trois précisions qui ne se retrouvent pas
+deux fois :
+
+- **Ce n'est pas `drivetrain.ini`**, qui porte la boîte et le différentiel.
+- **La présence du fichier ne prouve rien** : il existe sur toutes les voitures
+  de l'install de référence, y compris celles qui n'ont aucune aide, où il dit
+  simplement `0`. Seul son contenu répond.
+- **La lecture est bornée à la section.** `PRESENT` apparaît aussi sous
+  `[EDL]` : une lecture à plat créditerait d'un antipatinage toute voiture
+  ayant l'ABS.
+
+Mesuré sur les 311 voitures de l'install : 142 ont les deux, 31 l'ABS seul, 17
+l'antipatinage seul, 111 ni l'un ni l'autre, et **10 ne déclarent aucune des
+deux sections**. Ces dix-là n'affichent **aucune ligne** — jamais une ligne au
+conditionnel ni un « inconnu » : aucune donnée inventée présentée comme un
+fait. Les 48 asymétriques sont la raison pour laquelle la phrase nomme *quelle*
+aide la voiture possède au lieu de répondre oui ou non.
+
 **Course et Track day** (absents des schémas Quick Drive Practice/Hotlap : pas de
 grille, pas de phase weekend) :
-- **Adversaires** : 4 modes (Même voiture / Même catégorie / Même ère via année min/max / Libre). Remplissage auto selon le mode, **liste du plateau visible et ajustable** (chaque IA avec sa force, retirer/ajouter, cliquer une ligne pour changer sa voiture/son skin — vignette de la ligne : livery du skin choisi si connue, même convention que le sélecteur de skin de la barre latérale, repli sur la preview du skin puis sur celle du mod). Un bouton « + » par ligne duplique cette voiture avec un skin différent (pas encore pris par un autre adversaire du même mod dans le plateau ; reboucle sur les skins déjà pris une fois tous épuisés). **Catégorie** (visible seulement en mode Par catégorie), nombre d'adversaires, **Difficulté** (fourchette min-max, deux curseurs, le plateau réparti dans la plage — sous-rubrique du bloc Adversaires, pas une rubrique séparée) et année min/max sur une même ligne. Année min/max sont deux champs numériques indépendants (pas une double glissière) : 0 ou vide = pas de borne de ce côté, filtrage fait côté front (non transmis au preset Quick Drive). Mode **Par catégorie** (renommé — l'onglet ne peut plus dire *laquelle* catégorie depuis qu'elle est choisissable) : un menu déroulant « Catégorie » sur la ligne nombre d'adversaires/difficulté/année (pas dans l'onglet lui-même — la place y manque, et un champ posé dans un onglet cliquable prête à confusion), visible seulement quand ce mode est actif, liste **« Même catégorie »** en tête (valeur par défaut, comportement d'origine — suit automatiquement la catégorie de la voiture pilotée à chaque changement de voiture) puis les catégories de la bibliothèque voitures (même liste que son filtre). Choisir une catégorie précise la **fixe** : elle reste utilisée à travers les changements de voiture, jusqu'à revenir sur « Même catégorie ». Avant ce champ, la catégorie se réinitialisait silencieusement sur celle de la voiture pilotée à *chaque* changement, y compris après un choix manuel — impossible de garder un vivier « GT3 » pendant qu'on essaie différentes voitures (bug réel). Persisté avec le preset par type de session et dans les sessions enregistrées nommées ; absent sur une sauvegarde antérieure à ce champ, repli sur « Même catégorie » — son comportement implicite d'alors.
+- **Adversaires** : 4 modes (Même voiture / Même catégorie / Même ère via année min/max / Libre). Remplissage auto selon le mode, **liste du plateau visible et ajustable** (chaque IA avec sa force, retirer/ajouter, cliquer une ligne pour changer sa voiture/son skin — vignette de la ligne : `preview.jpg` du skin d'abord, puis celle du mod, `livery.png` en dernier recours — **l'inverse du sélecteur de livrée de la barre latérale**, et l'inversion est locale au plateau : les deux ne posent pas la même question, « quelle peinture ? » d'un côté, « quelle voiture ? » de l'autre, à laquelle quatre pastilles de couleur ne répondent pas. Format 16:9, recadré plutôt que dézoomé, le cadrage Kunos étant constant. Survoler ou focusser une ligne ouvre la même image en grand : un JPEG déjà chargé par la vignette, donc aucun appel backend et jamais l'aperçu 3D). Un bouton « + » par ligne duplique cette voiture avec un skin différent (pas encore pris par un autre adversaire du même mod dans le plateau ; reboucle sur les skins déjà pris une fois tous épuisés). **Catégorie** (visible seulement en mode Par catégorie), nombre d'adversaires, **Difficulté** (fourchette min-max, deux curseurs, le plateau réparti dans la plage — sous-rubrique du bloc Adversaires, pas une rubrique séparée) et année min/max sur une même ligne — les deux valeurs de la difficulté sont **accrochées à leur poignée** plutôt que posées aux extrémités de la piste, qui disaient la fourchette sans dire laquelle des deux on était en train de bouger ; rapprochées, chacune se range du côté extérieur de la sienne. La **force** d'une IA s'affiche en blanc et sans cadre, et prend son cadre au survol de sa ligne : c'est là qu'il faut savoir qu'elle s'édite. Année min/max sont deux champs numériques indépendants (pas une double glissière) : 0 ou vide = pas de borne de ce côté, filtrage fait côté front (non transmis au preset Quick Drive). Mode **Par catégorie** (renommé — l'onglet ne peut plus dire *laquelle* catégorie depuis qu'elle est choisissable) : un menu déroulant « Catégorie » sur la ligne nombre d'adversaires/difficulté/année (pas dans l'onglet lui-même — la place y manque, et un champ posé dans un onglet cliquable prête à confusion), visible seulement quand ce mode est actif, liste **« Même catégorie »** en tête (valeur par défaut, comportement d'origine — suit automatiquement la catégorie de la voiture pilotée à chaque changement de voiture) puis les catégories de la bibliothèque voitures (même liste que son filtre). Choisir une catégorie précise la **fixe** : elle reste utilisée à travers les changements de voiture, jusqu'à revenir sur « Même catégorie ». Avant ce champ, la catégorie se réinitialisait silencieusement sur celle de la voiture pilotée à *chaque* changement, y compris après un choix manuel — impossible de garder un vivier « GT3 » pendant qu'on essaie différentes voitures (bug réel). Persisté avec le preset par type de session et dans les sessions enregistrées nommées ; absent sur une sauvegarde antérieure à ce champ, repli sur « Même catégorie » — son comportement implicite d'alors.
 - Faux départ, pénalités — communs à Course et Track day. **Tours** : Course uniquement — envoyé dans le `ModeData` de Track day aussi (schéma confirmé sur un preset CM réel), mais sans effet en jeu : une session Track day ne se termine jamais sur un compte de tours, donc le réglage n'a pas sa place dans l'écran pour ce type de session. **Case qualification** (durée en min, mini 5 — borne de CM) et, sous elle, **case essais libres** (durée en min) : **Course uniquement**, absentes de Track day (§9.2quater, aucun mode Weekend équivalent côté CM). Décocher la qualification décoche les essais libres : les deux n'existent que dans le mode Weekend de CM, et sans qualification le preset bascule sur son mode course sèche, où aucune phase préparatoire n'existe (§9.2ter). Laisser les essais cochables y afficherait un réglage sans effet en jeu.
 
-**Régénération du plateau** (Course et Track day) : le vivier dépend de la voiture pilotée, donc changer de voiture régénère les adversaires — sauf en mode **Libre**, dont le vivier n'en dépend pas et où le plateau est le plus souvent réglé à la main. Changer seulement de **skin** ne régénère jamais. La voiture pour laquelle le plateau a été construit est persistée avec lui (`grid_car_id`) : l'écran de lancement est démonté dès qu'on passe à la bibliothèque, c'est donc la seule façon, au remontage, de distinguer un plateau fait pour la voiture courante d'un plateau hérité de la précédente — sans ça, changer de voiture depuis la bibliothèque puis revenir laissait le plateau de l'ancienne (bug réel).
+**Régénération du plateau** (Course et Track day) : un bouton **Régénérer** à droite de l'en-tête `Plateau · N IA` la demande explicitement — l'action n'existait que comme effet de bord d'un changement de voiture. L'en-tête ne dit plus « généré », qui devenait faux dès qu'une ligne avait été posée à la main. Le vivier dépend de la voiture pilotée, donc changer de voiture régénère les adversaires — sauf en mode **Libre**, dont le vivier n'en dépend pas et où le plateau est le plus souvent réglé à la main. Changer seulement de **skin** ne régénère jamais. La voiture pour laquelle le plateau a été construit est persistée avec lui (`grid_car_id`) : l'écran de lancement est démonté dès qu'on passe à la bibliothèque, c'est donc la seule façon, au remontage, de distinguer un plateau fait pour la voiture courante d'un plateau hérité de la précédente — sans ça, changer de voiture depuis la bibliothèque puis revenir laissait le plateau de l'ancienne (bug réel).
 
 **Practice** : pas de champ durée (non applicable — session à durée libre par design Quick Drive, voir §9.2 ; pas de champ correspondant côté Pit Box), ni tours/faux départ (absents du schéma `QuickDrive_Practice.xaml`, réservés à Course/Track day). Départ (Stand/Piste/Position de chrono → `StartType` du `ModeData`, trois valeurs) : "Piste" non vérifiée sur un preset réel, voir commentaire `PracticeStart`.
 

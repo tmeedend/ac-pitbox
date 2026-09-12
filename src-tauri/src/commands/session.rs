@@ -60,7 +60,11 @@ pub fn track_sun(
 /// n'est pas une erreur : l'écran n'affiche alors aucune ligne, plutôt qu'une
 /// ligne au conditionnel.
 #[tauri::command]
-pub fn car_factory_assists(app: AppHandle, db: State<Db>, car_id: String) -> Option<crate::electronics::FactoryAssists> {
+pub fn car_factory_assists(
+    app: AppHandle,
+    db: State<Db>,
+    car_id: String,
+) -> Option<crate::electronics::FactoryAssists> {
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().ok()?;
     let dir = crate::preview::car_dir(&conn, &cfg, &car_id)?;
