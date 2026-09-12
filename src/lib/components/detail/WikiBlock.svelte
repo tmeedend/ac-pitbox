@@ -74,6 +74,7 @@
     el.replaceChildren();
     if (!html) return;
     el.appendChild(renderArticle(html, lang, images));
+    pinShell();
   });
 
   /** Les liens de l'article ouvrent le navigateur système — jamais une
@@ -117,6 +118,34 @@
    * titre se lit mal et on ne voit pas ce qui le précède. */
   const SCROLL_MARGIN = 12;
 
+  /** Rétablit l'invariant de la coquille : **rien au-dessus du conteneur
+   * d'écran n'a le droit d'être décalé**.
+   *
+   * `global.css` met `html` et `body` en `overflow: hidden` pour ça — « un
+   * scroll de page entraînait toute la coquille, barre de titre comprise, hors
+   * champ ». Mais un `overflow: hidden` n'interdit que la **molette** : le
+   * navigateur, lui, fait défiler ces conteneurs tout seul pour rendre visible
+   * un élément qui vient de prendre le focus. Un clic sur une entrée du
+   * sommaire suffit donc à décaler la fenêtre entière — et comme la molette ne
+   * peut pas revenir dessus, le décalage est définitif.
+   *
+   * D'où cette remise à zéro, appelée au montage (elle répare une fenêtre déjà
+   * coincée) et après chaque saut. Ce n'est pas une rustine sur un symptôme :
+   * c'est la règle que la coquille énonce, appliquée là où quelque chose peut
+   * la violer. */
+  function pinShell() {
+    const root = document.documentElement;
+    if (root.scrollTop) root.scrollTop = 0;
+    if (root.scrollLeft) root.scrollLeft = 0;
+    if (document.body.scrollTop) document.body.scrollTop = 0;
+    if (document.body.scrollLeft) document.body.scrollLeft = 0;
+    let node: HTMLElement | null = host;
+    while (node && node !== document.body) {
+      if (getComputedStyle(node).overflowY === "hidden" && node.scrollTop) node.scrollTop = 0;
+      node = node.parentElement;
+    }
+  }
+
   /** Saute à une section. L'ancre est l'`id` que MediaWiki a posé sur le titre
    * et que la reconstruction a conservé.
    *
@@ -139,6 +168,9 @@
     if (!target || !scroller) return;
     const delta = (target.getBoundingClientRect().top - scroller.getBoundingClientRect().top) / zoomFactor();
     scroller.scrollTo({ top: scroller.scrollTop + delta - SCROLL_MARGIN, behavior: "smooth" });
+    // Le défilement du focus, lui, a déjà eu lieu — en synchrone, avant ce
+    // clic. On remet la coquille d'aplomb derrière.
+    pinShell();
   }
 
   // Les langues où l'article existe vraiment, jamais une liste en dur : sur les
@@ -275,10 +307,16 @@
           <span class="toc-title">{t("wiki.contents")}</span>
           {#each article.sections as section (section.anchor + section.line)}
             {#if section.level <= 2}
+              <!-- `preventDefault` sur `mousedown` : c'est ce qui empêche le
+                   bouton de prendre le focus, donc le navigateur de faire
+                   défiler la coquille pour le rendre visible. Le clic, lui,
+                   part normalement — et le clavier garde son chemin, `Tab`
+                   puis `Entrée` continuant de fonctionner. -->
               <button
                 class="toc-item"
                 class:sub={section.level === 2}
                 type="button"
+                onmousedown={(e) => e.preventDefault()}
                 onclick={() => goToSection(section.anchor)}>{section.line}</button
               >
             {/if}
