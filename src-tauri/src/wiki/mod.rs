@@ -400,6 +400,9 @@ pub fn fetch(
                     parent_entity: attempt.via_parent.then(|| attempt.entity_id.clone()),
                     available_langs: text.available_langs,
                     fetched_at: Local::now().to_rfc3339(),
+                    html: text.html,
+                    sections: text.sections,
+                    images: text.images,
                 });
                 out.state = WikiState::Article;
                 return out;

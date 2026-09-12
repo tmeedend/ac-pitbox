@@ -116,6 +116,20 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     // est stockée : la déduction se recalcule à chaque lecture, `attach.rs`
     // dit pourquoi un rattachement périmé serait pire que pas de rattachement.
     let _ = conn.execute("ALTER TABLE other_mods ADD COLUMN attachment_user TEXT", []);
+
+    // Article rendu, table des matières et crédits d'images de l'onglet
+    // Wikipédia (§7.3). Ajoutés après coup : une base écrite par la version
+    // précédente n'a que le texte brut, et c'est `wiki::store::CONTENT_VERSION`
+    // qui la vide — un ALTER ne rétro-remplit rien.
+    let _ = conn.execute("ALTER TABLE wiki_cache ADD COLUMN html TEXT NOT NULL DEFAULT ''", []);
+    let _ = conn.execute(
+        "ALTER TABLE wiki_cache ADD COLUMN sections TEXT NOT NULL DEFAULT '[]'",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE wiki_cache ADD COLUMN images TEXT NOT NULL DEFAULT '[]'",
+        [],
+    );
     Ok(())
 }
 

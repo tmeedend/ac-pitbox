@@ -260,12 +260,19 @@ le cas où il apporte le plus, et il est fréquent.
 
 - Si repli parent actif : une ligne discrète en tête, `Article général : {titre}`.
   Affichée uniquement dans ce cas.
-- **L'article entier**, tel que renvoyé par l'API — révisé à l'usage, contre la première
-  rédaction qui n'en voulait que l'introduction. L'utilisateur lit dans Pit Box, il ne
-  veut pas d'un teaser qui renvoie ailleurs. Texte brut (`explaintext`) : ni HTML, ni
-  images (que la §9 écarte de toute façon), ni appels de note. Mesuré sur `Mazda MX-5` :
-  ~17 500 caractères, avec les titres de section en balisage wiki (`== Overview ==`) —
-  reconnus et mis en forme, le texte lui-même n'étant jamais retouché.
+- **L'article entier, rendu** — révisé deux fois : d'abord de l'introduction à l'article
+  complet, puis du texte brut au rendu HTML. On lit dans Pit Box, avec ses sections, ses
+  tableaux, son infobox et ses images (§9).
+- **Une table des matières**, construite sur l'arbre de sections que l'API rend tout
+  fait (`action=parse&prop=sections`). C'est ce qui manquait le plus à dix-sept mille
+  caractères.
+- **Le HTML n'est jamais injecté tel quel.** La webview a accès à `invoke`, et Wikipédia
+  est éditable par n'importe qui : un arbre neuf est **reconstruit** à partir d'une liste
+  blanche de balises et d'attributs (`src/lib/wikiHtml.ts`), plutôt que filtré. Ce qui
+  n'est pas explicitement prévu n'existe pas. Aucune dépendance : ni assainisseur Rust,
+  ni DOMPurify — la sécurité vient de la liste blanche.
+- **Le texte brut reste récupéré en plus du rendu**, et sert de repli quand celui-ci
+  échoue. Un article dégradé vaut mieux qu'un onglet vide (§1).
 - Sélecteur de langue.
 - Lien **« Voir sur Wikipédia »** ouvrant le **navigateur système**. Il ne sert plus à
   « lire la suite » puisque tout est là : ce qu'il apporte encore, c'est ce que le texte
@@ -335,14 +342,23 @@ Le choix est enregistré avec `source = manual`.
 
 ## 9. Images
 
-**Ne pas afficher d'images issues de Wikipédia ou de Commons dans cette version.**
+**Les images sont affichées** — révisé, contre la première rédaction qui les excluait.
+Demandé par l'utilisateur : un article illustré se lit mieux qu'un mur de texte.
 
-Chaque image possède sa propre licence, distincte de celle du texte. Beaucoup sont non
-libres (usage loyal), en particulier les logos de constructeurs. Même pour les fichiers
-libres de Commons, la licence impose de créditer l'auteur individuellement.
+Les trois objections d'origine restent **exactes**, et c'est précisément pourquoi elles
+sont traitées une par une plutôt que contournées :
 
-Les mods disposent déjà de leurs previews. Le rapport bénéfice/complexité juridique est
-défavorable.
+| Objection | Réponse |
+|---|---|
+| Chaque image a sa propre licence, distincte du texte | Elle est lue par fichier (`imageinfo`/`extmetadata`), jamais supposée |
+| Beaucoup sont non libres (usage loyal), surtout les logos | **Seuls les fichiers hébergés sur Commons** sont affichés (`imagerepository == "shared"`). Commons n'accepte que du libre ; l'usage loyal est hébergé localement par le wiki, donc écarté **structurellement** et non au cas par cas — mesuré sur une pochette d'album, qui revient sans dépôt, sans vignette et sans licence |
+| Même libre, il faut créditer l'auteur individuellement | Une ligne de crédit — auteur et licence — sous **chaque** image, non masquable. Un fichier sans auteur ou sans licence connus n'est pas affiché |
+
+Une vignette est demandée au serveur (640 px), jamais l'original : une photo de Commons
+fait couramment vingt mégapixels, et rien ici n'en a l'usage.
+
+Ce que ça ne change pas : les previews du mod restent les images de la fiche. Celles de
+l'article illustrent un texte, elles ne prétendent pas montrer le mod.
 
 ---
 

@@ -85,6 +85,15 @@ pub struct CachedArticle {
     pub parent_entity: Option<String>,
     pub available_langs: Vec<String>,
     pub fetched_at: String,
+    /// L'article rendu par MediaWiki. Vide = le rendu n'a pas pu être obtenu,
+    /// et le texte brut d'`extract` porte l'onglet à lui seul.
+    #[serde(default)]
+    pub html: String,
+    #[serde(default)]
+    pub sections: Vec<super::api::Section>,
+    /// Les seules images affichables : Commons, licence et auteur connus (§9).
+    #[serde(default)]
+    pub images: Vec<super::api::ImageCredit>,
 }
 
 impl CachedArticle {
@@ -109,7 +118,8 @@ impl CachedArticle {
 /// and `purge_outdated` empties the cache once.
 ///
 /// 2 — the whole article rather than its introduction (§7.3).
-pub const CONTENT_VERSION: u32 = 2;
+/// 3 — the rendered article, its sections and its image credits alongside.
+pub const CONTENT_VERSION: u32 = 3;
 
 /// Empties the cache when it holds rows a previous version of the code wrote.
 ///
@@ -202,7 +212,7 @@ pub fn clear_link(conn: &Connection, mod_key: &str) -> rusqlite::Result<()> {
 pub fn get_article(conn: &Connection, entity_id: &str, lang: &str) -> rusqlite::Result<Option<CachedArticle>> {
     conn.query_row(
         "SELECT entity_id, lang, article_title, article_url, revision_id, extract, parent_entity,
-                available_langs, fetched_at
+                available_langs, fetched_at, html, sections, images
            FROM wiki_cache WHERE entity_id = ?1 AND lang = ?2",
         params![entity_id, lang],
         |row| {
@@ -218,6 +228,12 @@ pub fn get_article(conn: &Connection, entity_id: &str, lang: &str) -> rusqlite::
                 // A corrupted list costs the language selector, not the text.
                 available_langs: serde_json::from_str(&langs).unwrap_or_default(),
                 fetched_at: row.get(8)?,
+                html: row.get(9)?,
+                // Same stance for these two: a table of contents or a credit
+                // list that cannot be read costs its own feature, never the
+                // article.
+                sections: serde_json::from_str(&row.get::<_, String>(10)?).unwrap_or_default(),
+                images: serde_json::from_str(&row.get::<_, String>(11)?).unwrap_or_default(),
             })
         },
     )
@@ -228,13 +244,14 @@ pub fn put_article(conn: &Connection, article: &CachedArticle) -> rusqlite::Resu
     let langs = serde_json::to_string(&article.available_langs).unwrap_or_else(|_| "[]".into());
     conn.execute(
         "INSERT INTO wiki_cache(entity_id, lang, article_title, article_url, revision_id, extract,
-                                parent_entity, available_langs, fetched_at)
-         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                                parent_entity, available_langs, fetched_at, html, sections, images)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
          ON CONFLICT(entity_id, lang) DO UPDATE SET
             article_title = excluded.article_title, article_url = excluded.article_url,
             revision_id = excluded.revision_id, extract = excluded.extract,
             parent_entity = excluded.parent_entity, available_langs = excluded.available_langs,
-            fetched_at = excluded.fetched_at",
+            fetched_at = excluded.fetched_at, html = excluded.html,
+            sections = excluded.sections, images = excluded.images",
         params![
             article.entity_id,
             article.lang,
@@ -245,6 +262,9 @@ pub fn put_article(conn: &Connection, article: &CachedArticle) -> rusqlite::Resu
             article.parent_entity,
             langs,
             article.fetched_at,
+            article.html,
+            serde_json::to_string(&article.sections).unwrap_or_else(|_| "[]".into()),
+            serde_json::to_string(&article.images).unwrap_or_else(|_| "[]".into()),
         ],
     )?;
     Ok(())
@@ -315,6 +335,9 @@ mod tests {
             parent_entity: None,
             available_langs: vec!["en".into(), "fr".into(), "ja".into()],
             fetched_at: now_stamp(),
+            html: "<p>The AE86 series...</p>".into(),
+            sections: Vec::new(),
+            images: Vec::new(),
         }
     }
 

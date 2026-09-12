@@ -717,8 +717,14 @@ description Wikidata, collage d'URL accepté. Aucun de ces états n'est une
 erreur : pas d'icône d'alerte, pas d'encart rouge. Un choix fait à la main est
 enregistré en `manual` et plus rien d'automatique ne l'écrase.
 
-L'article est affiché **en entier**, pas seulement son introduction : on lit
-dans Pit Box, on n'y trouve pas un teaser. Deux choses ne sont pas négociables
+L'article est affiché **en entier et rendu** — sections, table des matières,
+tableaux, infobox et images : on lit dans Pit Box, on n'y trouve pas un teaser.
+Le HTML de Wikipédia n'est jamais injecté tel quel : un arbre neuf est
+reconstruit à partir d'une liste blanche, la webview ayant accès à `invoke` et
+le wiki étant éditable par n'importe qui. Les images affichées sont **celles de
+Commons dont l'auteur et la licence sont connus**, chacune portant sa ligne de
+crédit — c'est ce que leur licence impose, et c'est ce qui permet de les
+afficher. Deux choses ne sont pas négociables
 et viennent du droit d'auteur, pas du goût : le texte n'est **jamais fondu**
 dans la description du mod — ce sont deux sous-onglets, donc deux blocs
 distincts — et il est affiché **tel que l'API le rend**, sans reformulation,

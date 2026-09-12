@@ -1659,7 +1659,8 @@
     "detach": "Unlink the article",
     "searchPlaceholder": "Article name, or a pasted Wikipedia URL",
     "searchAction": "Search",
-    "noResults": "No results."
+    "noResults": "No results.",
+    "contents": "Contents"
   },
   "prefs": {
     "writeFailedTitle": "Your settings are not being saved",

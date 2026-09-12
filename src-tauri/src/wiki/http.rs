@@ -28,10 +28,14 @@ pub struct Response {
     pub body: Vec<u8>,
 }
 
-/// Ceiling on a response body, 2 MiB. An introduction extract is a few
-/// kilobytes; anything approaching this is a redirect gone wrong or a wiki
-/// having a bad day, and a decorative feature has no business buffering it.
-const MAX_BODY: usize = 2 * 1024 * 1024;
+/// Ceiling on a response body, 8 MiB.
+///
+/// It was 2 MiB when the only thing fetched was a plain-text introduction. A
+/// rendered article is another order of magnitude — a long one runs to several
+/// hundred kilobytes of HTML — so the ceiling moved with the payload. It still
+/// exists for the same reason: a decorative tab has no business buffering a
+/// redirect gone wrong.
+const MAX_BODY: usize = 8 * 1024 * 1024;
 
 /// Percent-encodes one query-string **value** (RFC 3986 unreserved set).
 ///

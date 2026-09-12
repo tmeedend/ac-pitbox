@@ -25,6 +25,28 @@ export interface WikiArticle {
   parentEntity: string | null;
   availableLangs: string[];
   fetchedAt: string;
+  /** L'article rendu par MediaWiki. Vide = le rendu n'a pas pu être obtenu, et
+   * `extract` (texte brut) porte l'onglet à lui seul. */
+  html: string;
+  sections: WikiSection[];
+  /** Les seules images affichables : Commons, licence et auteur connus (§9). */
+  images: WikiImage[];
+}
+
+/** Une entrée de la table des matières. */
+export interface WikiSection {
+  level: number;
+  line: string;
+  anchor: string;
+}
+
+/** Une image, avec ce que sa licence impose d'afficher à côté. */
+export interface WikiImage {
+  file: string;
+  url: string;
+  descriptionUrl: string;
+  artist: string;
+  licence: string;
 }
 
 /** Pourquoi l'onglet montre ce qu'il montre. Aucun n'est une erreur. */

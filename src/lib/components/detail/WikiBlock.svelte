@@ -25,6 +25,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import { localeNames } from "$lib/i18n/index.svelte";
   import { parseExtract } from "$lib/wikiText";
+  import { renderArticle } from "$lib/wikiHtml";
   import {
     articleLang,
     clearWikiLink,
@@ -45,9 +46,54 @@
   const article = $derived(panel?.article ?? null);
   const shown = $derived(article ? articleLang(article) : null);
 
-  // L'article entier, découpé en titres et paragraphes. Le texte lui-même n'est
-  // jamais retouché (§2) : seules les lignes de titre sont reconnues.
-  const blocks = $derived(article ? parseExtract(article.extract) : []);
+  // Repli en texte brut : utilisé seulement quand le rendu HTML n'a pas pu
+  // être obtenu. Les deux sont récupérés côté Rust pour cette raison — un
+  // article dégradé vaut mieux qu'un onglet vide (§1).
+  const blocks = $derived(article && !article.html ? parseExtract(article.extract) : []);
+
+  /** Le conteneur où l'article reconstruit est posé. */
+  let host = $state<HTMLDivElement | null>(null);
+
+  /** Pose l'article dans le DOM.
+   *
+   * `renderArticle` ne fait **jamais** d'`innerHTML` : il reconstruit un arbre
+   * neuf à partir d'une liste blanche (voir `wikiHtml.ts`). Le HTML de
+   * Wikipédia n'entre donc jamais tel quel dans une webview qui a accès à
+   * `invoke`.
+   *
+   * Toutes les dépendances sont lues **en tête**, avant la moindre sortie :
+   * une garde placée avant elles tronquerait la liste au premier passage, et
+   * le premier passage a lieu au montage, quand `host` est encore nul. */
+  $effect(() => {
+    const el = host;
+    const html = article?.html ?? "";
+    const images = article?.images ?? [];
+    const lang = shown ?? article?.lang ?? "en";
+    if (!el) return;
+    el.replaceChildren();
+    if (!html) return;
+    el.appendChild(renderArticle(html, lang, images));
+    el.scrollTop = 0;
+  });
+
+  /** Les liens de l'article ouvrent le navigateur système — jamais une
+   * navigation interne, qui ferait sortir l'utilisateur de sa fiche. Les `href`
+   * ont été remplacés par des `data-href` validés à la reconstruction. */
+  function onArticleClick(event: MouseEvent) {
+    const target = (event.target as HTMLElement | null)?.closest("[data-href]");
+    const href = target?.getAttribute("data-href");
+    if (!href) return;
+    event.preventDefault();
+    openUrl(href).catch(() => {});
+  }
+
+  /** Saute à une section. L'ancre est l'`id` que MediaWiki a posé sur le titre
+   * et que la reconstruction a conservé. */
+  function goToSection(anchor: string) {
+    if (!host || !anchor) return;
+    const target = host.querySelector(`#${CSS.escape(anchor)}`);
+    target?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
 
   // Les langues où l'article existe vraiment, jamais une liste en dur : sur les
   // JDM, l'article japonais est souvent le plus complet (§5.4).
@@ -160,20 +206,41 @@
       <p class="muted">{t("wiki.generalArticle", { title: article.articleTitle })}</p>
     {/if}
 
-    <!-- L'article **entier**, pas seulement son introduction. Le mot
-         « extrait » disparaît donc de l'attribution : la §7.4 l'exigeait parce
-         que ne montrer qu'un fragment est une modification — ce qui n'est plus
-         le cas. `pre-wrap` préserve les sauts de ligne internes, une façon de
-         plus de ne pas retoucher le texte. -->
-    <div class="extract">
-      {#each blocks as block, i (i)}
-        {#if block.kind === "heading"}
-          <p class="h" class:h3={block.level >= 3}>{block.text}</p>
-        {:else}
-          <p class="para">{block.text}</p>
-        {/if}
-      {/each}
-    </div>
+    <!-- L'article **entier**, tel que MediaWiki le rend : sections, tableaux,
+         infobox, et les images dont la licence permet l'affichage (§9). Le mot
+         « extrait » a quitté l'attribution avec l'introduction seule : ne
+         montrer qu'un fragment était la modification qu'il fallait signaler. -->
+    {#if article.sections.length > 1}
+      <nav class="toc">
+        <span class="toc-title">{t("wiki.contents")}</span>
+        {#each article.sections as section (section.anchor + section.line)}
+          {#if section.level <= 2}
+            <button
+              class="toc-item"
+              class:sub={section.level === 2}
+              type="button"
+              onclick={() => goToSection(section.anchor)}>{section.line}</button
+            >
+          {/if}
+        {/each}
+      </nav>
+    {/if}
+
+    {#if article.html}
+      <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+      <div class="extract article-html" bind:this={host} onclick={onArticleClick}></div>
+    {:else}
+      <!-- Repli : le rendu n'a pas pu être obtenu, le texte brut porte l'onglet. -->
+      <div class="extract">
+        {#each blocks as block, i (i)}
+          {#if block.kind === "heading"}
+            <p class="h" class:h3={block.level >= 3}>{block.text}</p>
+          {:else}
+            <p class="para">{block.text}</p>
+          {/if}
+        {/each}
+      </div>
+    {/if}
 
     <div class="foot">
       {#if langs.length > 1}
@@ -260,6 +327,122 @@
   }
   .h:first-child {
     margin-top: 0;
+  }
+
+  /* Sommaire : une bande discrète au-dessus de l'article, pas un panneau. Sur
+     dix-sept mille caractères, c'est ce qui manquait le plus. */
+  .toc {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  .toc-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+  .toc-item {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-size: 12px;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+  .toc-item:hover {
+    text-decoration: underline;
+  }
+  .toc-item.sub {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* --- L'article reconstruit -------------------------------------------
+     Ces sélecteurs visent un arbre créé en JavaScript, donc invisible au
+     compilateur Svelte : sans `:global`, le CSS scopé ne l'atteindrait pas.
+     C'est ici qu'on reprend la main sur l'apparence — le balisage vient de
+     MediaWiki, la mise en forme est celle de Pit Box. */
+  .article-html :global(p) {
+    margin: 0 0 10px;
+  }
+  .article-html :global(h2),
+  .article-html :global(h3),
+  .article-html :global(h4) {
+    margin: 16px 0 6px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .article-html :global(h3),
+  .article-html :global(h4) {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+  .article-html :global(ul),
+  .article-html :global(ol) {
+    margin: 0 0 10px;
+    padding-left: 18px;
+  }
+  .article-html :global(li) {
+    margin-bottom: 3px;
+  }
+  .article-html :global(img) {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+    margin: 10px 0 2px;
+  }
+  /* Le crédit d'auteur : obligatoire sous chaque image (§9), donc jamais
+     masqué — discret, mais présent. */
+  .article-html :global(.wiki-credit) {
+    display: block;
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 10px;
+    cursor: pointer;
+  }
+  .article-html :global(table) {
+    border-collapse: collapse;
+    margin: 0 0 12px;
+    font-size: 12px;
+    max-width: 100%;
+  }
+  .article-html :global(th),
+  .article-html :global(td) {
+    border: 1px solid var(--line);
+    padding: 3px 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .article-html :global(th) {
+    background: rgba(127, 127, 127, 0.08);
+    font-weight: 600;
+  }
+  .article-html :global(caption) {
+    font-size: 12px;
+    font-weight: 600;
+    padding-bottom: 4px;
+  }
+  .article-html :global(figure) {
+    margin: 10px 0;
+  }
+  .article-html :global(figcaption) {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .article-html :global([data-href]) {
+    color: var(--accent, inherit);
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
   }
   .foot {
     display: flex;

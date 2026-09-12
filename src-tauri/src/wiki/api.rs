@@ -46,6 +46,11 @@ pub const MAX_BATCH: usize = 50;
 /// truncated — the request is **refused entirely**.
 pub const MAX_GEOSEARCH_RADIUS_M: u32 = 10_000;
 
+/// Width asked of the thumbnailer, in pixels. Wide enough to stay sharp in a
+/// reading column, far from the originals — a Commons photograph is routinely
+/// twenty megapixels, and nothing here needs that.
+const IMAGE_WIDTH: u32 = 640;
+
 /// What came back from an API call. Three variants, all of them non-results in
 /// the sense of §1 — none is an error.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -139,8 +144,41 @@ pub struct GeoHit {
     pub distance_m: f64,
 }
 
-/// One article's introduction, as the API gives it — never reworded, never
-/// summarised, never passed through a model (§2).
+/// One section of an article, for the table of contents (§7.3).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Section {
+    /// Depth in the table of contents, 1 being a top-level section.
+    pub level: u32,
+    /// The heading as displayed.
+    pub line: String,
+    /// The `id` MediaWiki gave the heading in the HTML, so the entry can jump.
+    pub anchor: String,
+}
+
+/// One image the article shows, **with what the licence requires to show it**.
+///
+/// Nothing reaches this struct without a licence and an author: the filter is
+/// in `image_credits`, and it is the whole reason images can be displayed at
+/// all (§9).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageCredit {
+    /// File name as MediaWiki spells it, without the `File:` prefix.
+    pub file: String,
+    /// A thumbnail URL, not the full-resolution original.
+    pub url: String,
+    /// The file's page on Commons — where the full credit and the licence text
+    /// live, and where the "read more" of an attribution has to point.
+    pub description_url: String,
+    /// Author, as Commons records it. Displayed verbatim.
+    pub artist: String,
+    /// Short licence name, e.g. `CC BY-SA 4.0`.
+    pub licence: String,
+}
+
+/// One article, as the API gives it — never reworded, never summarised, never
+/// passed through a model (§2).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArticleText {
     pub title: String,
@@ -153,6 +191,12 @@ pub struct ArticleText {
     /// language it was fetched in, which the API's interlanguage links leave
     /// out.
     pub available_langs: Vec<String>,
+    /// The article rendered by MediaWiki. **Empty when the render could not be
+    /// had** — the plain text above then carries the tab on its own, which is
+    /// why both are fetched rather than one replacing the other.
+    pub html: String,
+    pub sections: Vec<Section>,
+    pub images: Vec<ImageCredit>,
 }
 
 /// Holds the User-Agent and nothing else: WinHTTP opens and closes its handles
@@ -226,11 +270,99 @@ impl WikiClient {
              &prop=extracts%7Cinfo%7Clanglinks&inprop=url&explaintext=1&lllimit=max&redirects=1&titles={}",
             http::encode_query_value(title)
         );
-        match self.get_json(&format!("{lang}.wikipedia.org"), &path) {
-            Fetched::Found(root) => parse_article(&root, lang),
-            Fetched::Absent => Fetched::Absent,
-            Fetched::Unavailable => Fetched::Unavailable,
+        let mut article = match self.get_json(&format!("{lang}.wikipedia.org"), &path) {
+            Fetched::Found(root) => match parse_article(&root, lang) {
+                Fetched::Found(article) => article,
+                other => return other,
+            },
+            Fetched::Absent => return Fetched::Absent,
+            Fetched::Unavailable => return Fetched::Unavailable,
+        };
+
+        // The rendered article comes from a **second** request, and the plain
+        // text above is kept rather than replaced: if this one fails — and it
+        // is the bigger, slower of the two — the tab still has something to
+        // show. A degraded article beats an empty one (§1).
+        if let Some((html, sections, files)) = self.render(lang, &article.title) {
+            article.images = self.image_credits(lang, &files);
+            article.sections = sections;
+            article.html = html;
         }
+        Fetched::Found(article)
+    }
+
+    /// The article as MediaWiki renders it, plus its section tree and the files
+    /// it shows (§7.3).
+    ///
+    /// `None` on any failure, deliberately: this is an enrichment of an
+    /// enrichment, and nothing it can do is worth costing the reader the text.
+    fn render(&self, lang: &str, title: &str) -> Option<(String, Vec<Section>, Vec<String>)> {
+        let path = format!(
+            "/w/api.php?action=parse&format=json&formatversion=2&prop=text%7Csections%7Cimages\
+             &redirects=1&disableeditsection=1&disabletoc=1&page={}",
+            http::encode_query_value(title)
+        );
+        let Fetched::Found(root) = self.get_json(&format!("{lang}.wikipedia.org"), &path) else {
+            return None;
+        };
+        let parse = &root["parse"];
+        let html = parse["text"].as_str()?.to_string();
+        let sections = parse["sections"]
+            .as_array()
+            .map(|list| {
+                list.iter()
+                    .filter_map(|s| {
+                        Some(Section {
+                            // `toclevel` is the depth in the table of contents;
+                            // `level` is the HTML heading level. The first is
+                            // what a table of contents indents by.
+                            level: s["toclevel"].as_u64().unwrap_or(1) as u32,
+                            line: s["line"].as_str()?.to_string(),
+                            anchor: s["anchor"].as_str().unwrap_or_default().to_string(),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let files = parse["images"]
+            .as_array()
+            .map(|list| list.iter().filter_map(|f| f.as_str().map(str::to_string)).collect())
+            .unwrap_or_default();
+        Some((html, sections, files))
+    }
+
+    /// Licence and author for each file, **keeping only what may be shown**.
+    ///
+    /// Two conditions, and the first does most of the work: the file must live
+    /// on **Commons** (`imagerepository == "shared"`). Commons accepts free
+    /// files only, so anything under fair use is hosted locally by the wiki and
+    /// is excluded structurally rather than judged case by case — measured on
+    /// an album cover, which comes back with no repository, no thumbnail and no
+    /// licence at all. The second is that the licence and the author are
+    /// actually there, since they are what gets displayed.
+    ///
+    /// This is what §9 was protecting: it forbade images because each carries
+    /// its own licence, many are non-free, and the free ones still require
+    /// crediting their author. None of that is skipped here — it is answered.
+    fn image_credits(&self, lang: &str, files: &[String]) -> Vec<ImageCredit> {
+        let mut out = Vec::new();
+        for batch in files.chunks(MAX_BATCH) {
+            let titles: Vec<String> = batch.iter().map(|f| format!("File:{f}")).collect();
+            let path = format!(
+                "/w/api.php?action=query&format=json&formatversion=2&prop=imageinfo\
+                 &iiprop=url%7Cextmetadata&iiurlwidth={IMAGE_WIDTH}&titles={}",
+                http::encode_query_value(&titles.join("|"))
+            );
+            let Fetched::Found(root) = self.get_json(&format!("{lang}.wikipedia.org"), &path) else {
+                continue;
+            };
+            for page in root["query"]["pages"].as_array().into_iter().flatten() {
+                if let Some(credit) = parse_image_credit(page) {
+                    out.push(credit);
+                }
+            }
+        }
+        out
     }
 
     /// Free-text entity search (§4.1.1, and the manual correction of §7.6).
@@ -603,6 +735,60 @@ fn parse_search(root: &Value) -> Fetched<Vec<SearchHit>> {
     }
 }
 
+/// Reads one `imageinfo` page, and **refuses everything that may not be shown**.
+///
+/// Pure, so the rule that lets images exist at all is testable without a
+/// network — which matters more here than anywhere else in this module: it is
+/// the difference between crediting an author and taking their work.
+fn parse_image_credit(page: &Value) -> Option<ImageCredit> {
+    // Commons only. Anything under fair use is hosted by the wiki itself and
+    // never reports `shared`.
+    if page["imagerepository"].as_str() != Some("shared") {
+        return None;
+    }
+    let info = page["imageinfo"].as_array()?.first()?;
+    let meta = &info["extmetadata"];
+    let licence = meta["LicenseShortName"]["value"].as_str()?.trim().to_string();
+    let artist = strip_markup(meta["Artist"]["value"].as_str()?);
+    if licence.is_empty() || artist.is_empty() {
+        return None;
+    }
+    // A thumbnail, never the original: a 6000×4000 photograph in a side panel
+    // is neither useful nor polite to their servers.
+    let url = info["thumburl"].as_str().or_else(|| info["url"].as_str())?.to_string();
+    let file = page["title"].as_str()?.strip_prefix("File:")?.to_string();
+    Some(ImageCredit {
+        file,
+        url,
+        description_url: info["descriptionurl"].as_str().unwrap_or_default().to_string(),
+        artist,
+        licence,
+    })
+}
+
+/// The author field comes as a fragment of HTML (`<a href=…>Name</a>`), and it
+/// is displayed as **text** — so the markup is removed here rather than trusted
+/// downstream. Entities are decoded for the four that matter in a name.
+fn strip_markup(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut inside = false;
+    for ch in value.chars() {
+        match ch {
+            '<' => inside = true,
+            '>' => inside = false,
+            c if !inside => out.push(c),
+            _ => {}
+        }
+    }
+    out.replace("&amp;", "&")
+        .replace("&quot;", "\"")
+        .replace("&#039;", "'")
+        .replace("&nbsp;", " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Reads a `generator=search` answer: article titles with their Wikidata ids,
 /// kept in the search engine's own relevance order (`index`).
 ///
@@ -699,6 +885,9 @@ fn parse_article(root: &Value, lang: &str) -> Fetched<ArticleText> {
         revision_id: page["lastrevid"].as_i64(),
         extract: extract.to_string(),
         available_langs,
+        html: String::new(),
+        sections: Vec::new(),
+        images: Vec::new(),
     })
 }
 
