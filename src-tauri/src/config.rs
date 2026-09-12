@@ -93,10 +93,29 @@ impl Default for Prefs {
             resource_extraction_mode: "info_only".into(),
             keep_source_archive: false,
             deploy_mode: "hardlink".into(),
-            // Points de départ, à régler sur le rapport de calibration.
-            wiki_match_min_score: 0.55,
+            // **Réglés sur un vrai passage de calibration** (335 mods), et non
+            // plus sur les points de départ de la spec.
+            //
+            // Plancher à 0,70 : sous cette valeur, le rapport comptait sept
+            // appariements faux pour quatre justes (917/30 → 918 Spyder,
+            // Cobra 427 → Shelby Mustang, Countach → Espada…), au-dessus rien
+            // de faux n'a été relevé. La §1 tranche ce genre d'échange —
+            // perdre quatre articles coûte moins cher qu'en afficher sept de
+            // travers.
+            //
+            // Marge à 0,12 : le seul faux positif qu'elle laissait passer est
+            // tombé avec le plancher. Le premier appariement juste est à
+            // 0,127, donc monter davantage couperait du bon.
+            wiki_match_min_score: 0.70,
             wiki_match_min_margin: 0.12,
-            wiki_track_radius_m: 5_000,
+            // 10 km — le maximum que l'API accepte (`gsradius`), et non les
+            // 5 km proposés par la spec : mesuré, les coordonnées que CSP donne
+            // pour un circuit sont parfois celles de la ville voisine (Monza
+            // est listé aux coordonnées de Milan). Le filtre de type rend cette
+            // largeur sûre, et les rues gardent leur propre rayon bien plus
+            // court (`matchtrack::ROUTE_RADIUS_M`). Au-delà de 10 km, seul le
+            // repli par le nom peut rattraper — `matchtrack` s'en charge.
+            wiki_track_radius_m: 10_000,
             wiki_track_tie_margin_m: 150.0,
         }
     }

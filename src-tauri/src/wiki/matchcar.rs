@@ -157,15 +157,21 @@ pub fn match_car(
         return MatchOutcome::NoCandidate;
     }
 
-    let hits = match net.search(&query, "en", SEARCH_LIMIT) {
+    // English, whatever the reading language will be: it has the widest
+    // coverage, and the type filter that follows is language-independent. What
+    // the user reads is settled later and separately, by §5.2.
+    let hits = match net.search_pages("en", &query, SEARCH_LIMIT) {
         Fetched::Found(hits) => hits,
         Fetched::Absent => return MatchOutcome::NoCandidate,
         Fetched::Unavailable => return MatchOutcome::Unavailable,
     };
-    let ids: Vec<String> = hits.into_iter().map(|h| h.entity_id).collect();
+    let ids: Vec<String> = hits.iter().map(|h| h.entity_id.clone()).collect();
 
     match net.details(&ids) {
-        Fetched::Found(details) => rank(&details, subject, &cleaned_name, weights, thresholds),
+        Fetched::Found(mut details) => {
+            super::borrow_labels(&mut details, &hits);
+            rank(&details, subject, &cleaned_name, weights, thresholds)
+        }
         Fetched::Absent => MatchOutcome::NoCandidate,
         Fetched::Unavailable => MatchOutcome::Unavailable,
     }

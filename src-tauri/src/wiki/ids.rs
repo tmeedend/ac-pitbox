@@ -99,6 +99,26 @@ pub const URBAN_MOTORWAY: &str = "Q1367934";
 /// `mountain pass` / « col routier ». Seen on the Stelvio (Q1334855).
 pub const MOUNTAIN_PASS: &str = "Q133056";
 
+/// What a purpose-built circuit is. **Tried alone first** (see `TRACK_TYPES`).
+pub const CIRCUIT_TYPES: [&str; 2] = [MOTORSPORT_RACING_TRACK, RACE_TRACK];
+
+/// Roads, passes and expressways — the Shutoko and touge half of the library.
+///
+/// Kept **apart** from `CIRCUIT_TYPES`, and that separation was bought with a
+/// calibration run: a street is a valid answer for Shutoko and a catastrophe
+/// for Zandvoort, because every circuit on earth has streets at its own
+/// coordinates. The run matched the Nordschleife against `Kurt-Bosch-Straße`
+/// (7 mm of score apart), Vallelunga against two Roman streets and Zandvoort
+/// against `Duinweg` — four of the fourteen ambiguities, all of them this.
+pub const ROUTE_TYPES: [&str; 6] = [
+    ROAD,
+    STREET,
+    CONTROLLED_ACCESS_HIGHWAY,
+    HIGHWAY_SYSTEM,
+    URBAN_MOTORWAY,
+    MOUNTAIN_PASS,
+];
+
 /// The allowlist of §4.2.2, wider than the cars' on purpose.
 ///
 /// **This list carries the whole track strategy.** Measured five metres from

@@ -42,6 +42,10 @@ const BACKOFF_BASE: Duration = Duration::from_millis(500);
 /// no type" and drop them from the filter.
 pub const MAX_BATCH: usize = 50;
 
+/// Widest radius `list=geosearch` accepts, in metres. Asking for more is not
+/// truncated — the request is **refused entirely**.
+pub const MAX_GEOSEARCH_RADIUS_M: u32 = 10_000;
+
 /// What came back from an API call. Three variants, all of them non-results in
 /// the sense of §1 — none is an error.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -241,6 +245,39 @@ impl WikiClient {
         }
     }
 
+    /// Candidate entities from **Wikipedia's full-text search** (§4.1.1).
+    ///
+    /// Not `wbsearchentities`, and this is measured rather than preferred: that
+    /// endpoint matches labels and aliases from the **start of the string**, so
+    /// `"BMW M3 E30"` returns *nothing at all* — no item is labelled that, the
+    /// item is called `BMW M3`. Every mod name carrying a generation, a step or
+    /// a year therefore found zero candidates, which was most of the library.
+    ///
+    /// A full-text search returns what a person gets in their browser: for
+    /// `"BMW M3 E30"`, `BMW M3` first; for `"Abarth 500 Assetto Corse"` — a
+    /// variant with no article of its own — the `Abarth 500` page that
+    /// describes it in a section. Which is exactly what §4.1 wants, since §5.3
+    /// accepts the generic model anyway.
+    ///
+    /// One request: `generator=search` carries `pageprops` along, so the Q-ids
+    /// come back with the titles.
+    pub fn search_pages(&self, lang: &str, query: &str, limit: u32) -> Fetched<Vec<SearchHit>> {
+        let query = query.trim();
+        if query.is_empty() {
+            return Fetched::Absent;
+        }
+        let path = format!(
+            "/w/api.php?action=query&format=json&formatversion=2&generator=search\
+             &gsrsearch={}&gsrlimit={limit}&gsrnamespace=0&prop=pageprops&ppprop=wikibase_item",
+            http::encode_query_value(query),
+        );
+        match self.get_json(&format!("{lang}.wikipedia.org"), &path) {
+            Fetched::Found(root) => parse_search_pages(&root),
+            Fetched::Absent => Fetched::Absent,
+            Fetched::Unavailable => Fetched::Unavailable,
+        }
+    }
+
     /// Full details for up to `MAX_BATCH` entities in one request.
     pub fn details(&self, ids: &[String]) -> Fetched<Vec<EntityDetails>> {
         if ids.is_empty() {
@@ -277,6 +314,14 @@ impl WikiClient {
     /// example. The Wikidata item does carry `P625`, and searching there
     /// returns Q-ids directly — one request less, and it works.
     pub fn geosearch(&self, latitude: f64, longitude: f64, radius_m: u32, limit: u32) -> Fetched<Vec<GeoHit>> {
+        // **The API caps this at ten kilometres**, and says so by refusing the
+        // whole request: `"The value \"25000\" for parameter \"gsradius\" must
+        // be between 10 and 10,000."` A wider setting used to turn every single
+        // track into "network unavailable" — twenty-four of them, all at once,
+        // which is what a systematic failure looks like next to a real outage.
+        // Clamped here rather than validated in the settings: this is the
+        // API's limit, and this is the only place that knows it.
+        let radius_m = radius_m.clamp(10, MAX_GEOSEARCH_RADIUS_M);
         let path = format!(
             "/w/api.php?action=query&format=json&formatversion=2&list=geosearch\
              &gscoord={latitude}%7C{longitude}&gsradius={radius_m}&gslimit={limit}",
@@ -522,6 +567,39 @@ fn parse_search(root: &Value) -> Fetched<Vec<SearchHit>> {
     } else {
         Fetched::Found(found)
     }
+}
+
+/// Reads a `generator=search` answer: article titles with their Wikidata ids,
+/// kept in the search engine's own relevance order (`index`).
+///
+/// A page without a `wikibase_item` is dropped — it cannot be an appariement,
+/// and there is nothing to score it against.
+fn parse_search_pages(root: &Value) -> Fetched<Vec<SearchHit>> {
+    let Some(pages) = root["query"]["pages"].as_array() else {
+        // No `query` at all is how this API says "no result", not a failure.
+        return Fetched::Absent;
+    };
+    let mut ranked: Vec<(i64, SearchHit)> = pages
+        .iter()
+        .filter_map(|page| {
+            let id = page["pageprops"]["wikibase_item"].as_str()?;
+            is_entity_id(id).then(|| {
+                (
+                    page["index"].as_i64().unwrap_or(i64::MAX),
+                    SearchHit {
+                        entity_id: id.to_string(),
+                        label: page["title"].as_str().map(str::to_string),
+                        description: None,
+                    },
+                )
+            })
+        })
+        .collect();
+    if ranked.is_empty() {
+        return Fetched::Absent;
+    }
+    ranked.sort_by_key(|(index, _)| *index);
+    Fetched::Found(ranked.into_iter().map(|(_, hit)| hit).collect())
 }
 
 /// Reads a `list=geosearch` answer. On Wikidata the `title` of a result **is**
@@ -801,6 +879,37 @@ mod tests {
             details[0].is_of_type(&crate::wiki::ids::CAR_TYPES),
             "and it is a car model"
         );
+    }
+
+    /// Rule (§4.1.1, measured): the candidate search is Wikipedia's full-text
+    /// one, and it answers a name carrying a generation.
+    ///
+    /// `wbsearchentities("BMW M3 E30")` comes back **empty** — it matches
+    /// labels from the start of the string, and no item is called that. The
+    /// full-text search returns `BMW M3` first, which is the answer §4.1 wants.
+    #[test]
+    fn a_full_text_search_keeps_the_engines_own_order() {
+        let value = json!({
+            "query": { "pages": [
+                { "index": 3, "title": "BMW 3 Series", "pageprops": { "wikibase_item": "Q466066" } },
+                { "index": 1, "title": "BMW M3", "pageprops": { "wikibase_item": "Q796579" } },
+                { "index": 2, "title": "BMW 3 Series (E30)", "pageprops": { "wikibase_item": "Q838837" } },
+                { "index": 4, "title": "Une page sans entité" }
+            ]}
+        });
+        let Fetched::Found(hits) = parse_search_pages(&value) else {
+            panic!("three pages carry an entity");
+        };
+        assert_eq!(hits.len(), 3, "une page sans Q-id n'est pas un candidat");
+        assert_eq!(hits[0].entity_id, "Q796579", "l'ordre de pertinence est rétabli");
+        assert_eq!(hits[0].label.as_deref(), Some("BMW M3"));
+    }
+
+    /// Rule (§1): a search that finds nothing is `Absent` — a non-result, never
+    /// an error.
+    #[test]
+    fn a_search_without_results_is_absent() {
+        assert_eq!(parse_search_pages(&json!({ "batchcomplete": true })), Fetched::Absent);
     }
 
     /// Rule (§4.2.1, measured): on Wikidata a geosearch result's `title` is the

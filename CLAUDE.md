@@ -842,11 +842,31 @@ laisser pourrir ici.
       - **Un 404 et un réseau coupé ne sont pas le même non-résultat**
         (`api::Fetched`). Les confondre écrirait « pas d'article » dans le
         cache négatif pour 90 jours à cause d'un tunnel.
-      **Reste** : **régler les seuils sur un vrai passage de calibration** —
-      les valeurs livrées sont celles du §13, un point de départ, et un premier
-      échantillon de huit mods n'en a retenu qu'un : le plancher de score et le
-      signal « marque » méritent d'être revus sur les 312 (une Acura NSX ne
-      correspond pas à la Honda NSX par la marque). Puis les lots 4 à 6 du §12 :
+      **La calibration a tourné** (335 mods) et les seuils livrés sont les
+      siens, plus ceux du §13. Elle a corrigé quatre choses que le raisonnement
+      n'aurait pas trouvées, toutes consignées dans le code :
+      - `wbsearchentities` **cherche par préfixe de libellé** : « BMW M3 E30 »
+        n'y rend *rien*, aucun item ne s'appelant ainsi. C'était la cause
+        dominante des 264 échecs du premier passage. La recherche passe
+        désormais par le moteur plein texte de Wikipédia, qui rend « BMW M3 »
+        en tête — et « Abarth 500 » pour une variante sans article à elle, ce
+        que la §4.1 veut explicitement.
+      - **`gsradius` est plafonné à 10 km par l'API**, qui refuse la requête
+        entière au-delà. Un rayon de 25 km a transformé *les 24 circuits* en
+        « réseau indisponible » d'un coup — c'est à ça que ressemble une panne
+        systématique à côté d'une vraie coupure.
+      - **Les routes ne s'apparient plus automatiquement** (écart assumé avec
+        la §4.2) : une rue est à portée de n'importe quelle coordonnée, et le
+        nom ne peut pas arbitrer puisque la spec a choisi les coordonnées
+        *parce que* « Shutoko » ne ressemble pas à « Metropolitan Expressway ».
+        Quatre articles faux pour une poignée de justes. Shutoko et les touge
+        relèvent désormais de la correction manuelle (§7.6).
+      - **Un item sans libellé anglais revenait sans nom** et marquait 0 contre
+        tout — d'où `borrow_labels`, qui reprend le titre trouvé par la
+        recherche.
+      Résultat : 15 circuits retenus, tous justes (Monza retrouvé par le repli
+      sur le nom, ses coordonnées CSP étant celles de Milan), contre 0 avant.
+      **Reste** : les lots 4 à 6 du §12 :
       interface (§7), correction manuelle (§7.6), réglages (§8, dont
       l'interrupteur « enrichissement en ligne » que `resolve_article` attend
       déjà sous la forme d'un `net: Option<&WikiClient>`).

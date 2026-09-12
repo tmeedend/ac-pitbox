@@ -44,6 +44,25 @@ use api::{Fetched, WikiClient};
 use lang::{fallback_chain, wiki_lang, EntityArticles};
 use store::{CachedArticle, POSITIVE_TTL_DAYS};
 
+/// Fills in a label the entity fetch did not return, from the title the search
+/// already gave us.
+///
+/// Not cosmetic: `wbgetentities` is asked for `en|fr` labels, and an item that
+/// has neither comes back nameless — which scores 0 against every name and
+/// drops out silently. Measured on Q10843475 ("Abarth 500 Assetto Corse"),
+/// whose only sitelinks are Spanish and Russian. The search knew its name; the
+/// details call did not.
+fn borrow_labels(details: &mut [api::EntityDetails], hits: &[api::SearchHit]) {
+    for entry in details.iter_mut() {
+        if entry.label.is_some() {
+            continue;
+        }
+        if let Some(hit) = hits.iter().find(|h| h.entity_id == entry.entity_id) {
+            entry.label = hit.label.clone();
+        }
+    }
+}
+
 /// Logs what a best-effort database call lost, and carries on.
 ///
 /// Every read in this module is best-effort by design — a decorative tab must
