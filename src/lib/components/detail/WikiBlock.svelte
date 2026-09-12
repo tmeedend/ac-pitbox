@@ -210,37 +210,43 @@
          infobox, et les images dont la licence permet l'affichage (§9). Le mot
          « extrait » a quitté l'attribution avec l'introduction seule : ne
          montrer qu'un fragment était la modification qu'il fallait signaler. -->
-    {#if article.sections.length > 1}
-      <nav class="toc">
-        <span class="toc-title">{t("wiki.contents")}</span>
-        {#each article.sections as section (section.anchor + section.line)}
-          {#if section.level <= 2}
-            <button
-              class="toc-item"
-              class:sub={section.level === 2}
-              type="button"
-              onclick={() => goToSection(section.anchor)}>{section.line}</button
-            >
-          {/if}
-        {/each}
-      </nav>
-    {/if}
+    <!-- Deux colonnes, comme sur Wikipédia et pour la même raison : un sommaire
+         posé en bande horizontale au-dessus d'un article de quarante sections
+         déborde sur deux lignes et cesse d'être lisible. Il descend donc à
+         gauche, et il tient tout seul pendant qu'on fait défiler. -->
+    <div class="body">
+      {#if article.sections.length > 1}
+        <nav class="toc">
+          <span class="toc-title">{t("wiki.contents")}</span>
+          {#each article.sections as section (section.anchor + section.line)}
+            {#if section.level <= 2}
+              <button
+                class="toc-item"
+                class:sub={section.level === 2}
+                type="button"
+                onclick={() => goToSection(section.anchor)}>{section.line}</button
+              >
+            {/if}
+          {/each}
+        </nav>
+      {/if}
 
-    {#if article.html}
-      <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-      <div class="extract article-html" bind:this={host} onclick={onArticleClick}></div>
-    {:else}
-      <!-- Repli : le rendu n'a pas pu être obtenu, le texte brut porte l'onglet. -->
-      <div class="extract">
-        {#each blocks as block, i (i)}
-          {#if block.kind === "heading"}
-            <p class="h" class:h3={block.level >= 3}>{block.text}</p>
-          {:else}
-            <p class="para">{block.text}</p>
-          {/if}
-        {/each}
-      </div>
-    {/if}
+      {#if article.html}
+        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+        <div class="extract article-html" bind:this={host} onclick={onArticleClick}></div>
+      {:else}
+        <!-- Repli : le rendu n'a pas pu être obtenu, le texte brut porte l'onglet. -->
+        <div class="extract">
+          {#each blocks as block, i (i)}
+            {#if block.kind === "heading"}
+              <p class="h" class:h3={block.level >= 3}>{block.text}</p>
+            {:else}
+              <p class="para">{block.text}</p>
+            {/if}
+          {/each}
+        </div>
+      {/if}
+    </div>
 
     <div class="foot">
       {#if langs.length > 1}
@@ -304,10 +310,16 @@
   }
   .extract {
     flex: 1;
+    min-width: 0;
     overflow-y: auto;
     line-height: 1.55;
-    /* Largeur de mesure : un article entier se lit, il ne se balaie pas. */
     padding-right: 6px;
+  }
+  /* Le flottant de l'infobox ne doit pas déborder sur ce qui suit l'article. */
+  .article-html::after {
+    content: "";
+    display: block;
+    clear: both;
   }
   .para {
     margin: 0 0 10px;
@@ -329,31 +341,50 @@
     margin-top: 0;
   }
 
-  /* Sommaire : une bande discrète au-dessus de l'article, pas un panneau. Sur
-     dix-sept mille caractères, c'est ce qui manquait le plus. */
-  .toc {
+  /* Les deux colonnes. Le défilement appartient à l'article, pas à la page :
+     le sommaire doit rester sous les yeux pendant qu'on descend. */
+  .body {
     display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 4px 10px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--line);
+    gap: 16px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .toc {
+    flex: 0 0 170px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    overflow-y: auto;
+    padding-right: 10px;
+    border-right: 1px solid var(--line);
+  }
+  /* Un seuil de mise en page est une `@container`, pas une `@media` : la
+     fenêtre ne dit rien de la largeur réellement disponible ici, le rail et la
+     colonne de session en ayant déjà pris leur part (convention du projet).
+     Sous cette largeur, l'article vaut mieux que son sommaire. */
+  @container detail (max-width: 700px) {
+    .toc {
+      display: none;
+    }
   }
   .toc-title {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--muted);
+    margin-bottom: 3px;
   }
   .toc-item {
     background: none;
     border: none;
-    padding: 0;
+    padding: 1px 0;
     font: inherit;
     font-size: 12px;
     color: inherit;
     cursor: pointer;
     text-align: left;
+    line-height: 1.35;
   }
   .toc-item:hover {
     text-decoration: underline;
@@ -361,6 +392,7 @@
   .toc-item.sub {
     font-size: 11px;
     color: var(--muted);
+    padding-left: 10px;
   }
 
   /* --- L'article reconstruit -------------------------------------------
@@ -407,6 +439,34 @@
     color: var(--muted);
     margin-bottom: 10px;
     cursor: pointer;
+  }
+  /* **L'infobox flotte à droite**, comme sur Wikipédia — et c'est ce qui
+     change tout : pleine largeur en tête d'article, elle repoussait le texte
+     d'un écran entier avant qu'on en lise la première ligne. Largeur fixe
+     plutôt que relative : c'est une fiche technique, ses libellés ne gagnent
+     rien à s'étirer. */
+  .article-html :global(.wiki-infobox) {
+    float: right;
+    width: 290px;
+    max-width: 45%;
+    margin: 0 0 12px 16px;
+    font-size: 11px;
+  }
+  .article-html :global(.wiki-infobox caption) {
+    font-size: 12px;
+  }
+  .article-html :global(.wiki-infobox img) {
+    margin-top: 6px;
+  }
+  /* Sur un conteneur étroit, un flottant de 290 px ne laisse plus de place au
+     texte : l'infobox reprend le fil normal. */
+  @container detail (max-width: 620px) {
+    .article-html :global(.wiki-infobox) {
+      float: none;
+      width: auto;
+      max-width: 100%;
+      margin-left: 0;
+    }
   }
   .article-html :global(table) {
     border-collapse: collapse;

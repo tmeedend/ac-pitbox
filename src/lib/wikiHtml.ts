@@ -92,6 +92,23 @@ const DROPPED_CLASSES = [
   "catlinks",
 ];
 
+/** Les seules classes MediaWiki qu'on reconnaît, traduites en classes à nous.
+ *
+ * L'attribut `class` d'origine n'est **jamais** recopié : leurs noms changent
+ * au gré de leurs refontes, et en garder des centaines reviendrait à hériter
+ * d'une feuille de style qu'on n'écrit pas. On en retient deux, celles qui
+ * portent une vraie information de mise en page — le reste du balisage se met
+ * en forme par sa balise.
+ *
+ * L'infobox est la raison d'être de cette table : sans elle, impossible de la
+ * distinguer d'un tableau ordinaire, donc impossible de la faire flotter à
+ * droite comme sur Wikipédia. Elle s'étalait sur toute la largeur en tête
+ * d'article et repoussait le texte d'un écran entier. */
+const CLASS_MAP: [string, string][] = [
+  ["infobox", "wiki-infobox"],
+  ["wikitable", "wiki-table"],
+];
+
 /** Attributs conservés, par balise. Rien d'autre ne passe — en particulier
  * aucun `on*`, aucun `style`, aucun `srcset`. */
 const ATTRS: Record<string, string[]> = {
@@ -203,6 +220,12 @@ function rebuild(node: Node, into: Node, lang: string, images: Map<string, Allow
   }
 
   const copy = document.createElement(tag);
+  const source = el.getAttribute("class");
+  if (source) {
+    const list = source.split(/\s+/);
+    const mapped = CLASS_MAP.filter(([from]) => list.includes(from)).map(([, to]) => to);
+    if (mapped.length) copy.setAttribute("class", mapped.join(" "));
+  }
   for (const attr of ATTRS[tag] ?? []) {
     const value = el.getAttribute(attr);
     if (value === null) continue;
