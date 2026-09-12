@@ -119,6 +119,17 @@ pub fn run() {
             // chaque démarrage parce que la table peut avoir grandi depuis la
             // version précédente. La précédence du §3.1 fait que c'est sans
             // risque — une correction locale (`manual`) n'est jamais écrasée.
+            // Le cache d'articles est vidé quand il porte des textes écrits par
+            // une version antérieure du code (§7.3 : l'introduction seule, puis
+            // l'article entier). Rien dans une ligne ne le dirait, et sa date
+            // de récupération est récente : sans ça, un article tronqué serait
+            // servi trente jours de plus.
+            match wiki::store::purge_outdated(&conn) {
+                Ok(true) => log::warn!("wiki: cache d'articles vidé, son contenu datait d'une version antérieure"),
+                Err(e) => log::warn!("wiki: purge du cache d'articles échouée — {e}"),
+                _ => {}
+            }
+
             let curated = wiki::curated::shipped();
             let (written, skipped) = wiki::curated::seed_links(&conn, &curated);
             if written > 0 || skipped > 0 {

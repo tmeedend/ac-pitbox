@@ -14,12 +14,17 @@
   // **Contrainte juridique** (§2), elle non négociable : le texte n'est jamais
   // fondu dans la description du mod (deux sous-onglets, deux blocs), il est
   // affiché tel que l'API le rend — pas de reformulation, pas de résumé, pas de
-  // traduction — et l'attribution en pied est obligatoire, le mot « extrait »
-  // compris : n'en montrer qu'un fragment est une modification, qui doit être
-  // signalée.
+  // traduction — et l'attribution en pied est obligatoire.
+  //
+  // L'article est affiché **en entier**, demandé par l'utilisateur, et le
+  // raisonnement juridique s'en trouve simplifié : la §7.4 exigeait le mot
+  // « extrait » parce que ne montrer qu'un fragment est une modification, qui
+  // doit être signalée. Reproduire le texte intégralement, tel quel, avec son
+  // attribution et sa licence, est exactement ce que CC BY-SA autorise.
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { t } from "$lib/i18n/index.svelte";
   import { localeNames } from "$lib/i18n/index.svelte";
+  import { parseExtract } from "$lib/wikiText";
   import {
     articleLang,
     clearWikiLink,
@@ -39,6 +44,10 @@
 
   const article = $derived(panel?.article ?? null);
   const shown = $derived(article ? articleLang(article) : null);
+
+  // L'article entier, découpé en titres et paragraphes. Le texte lui-même n'est
+  // jamais retouché (§2) : seules les lignes de titre sont reconnues.
+  const blocks = $derived(article ? parseExtract(article.extract) : []);
 
   // Les langues où l'article existe vraiment, jamais une liste en dur : sur les
   // JDM, l'article japonais est souvent le plus complet (§5.4).
@@ -151,9 +160,20 @@
       <p class="muted">{t("wiki.generalArticle", { title: article.articleTitle })}</p>
     {/if}
 
-    <!-- `pre-wrap` : l'API rend les paragraphes en sauts de ligne, et les
-         préserver est déjà une façon de ne pas retoucher le texte. -->
-    <p class="extract">{article.extract}</p>
+    <!-- L'article **entier**, pas seulement son introduction. Le mot
+         « extrait » disparaît donc de l'attribution : la §7.4 l'exigeait parce
+         que ne montrer qu'un fragment est une modification — ce qui n'est plus
+         le cas. `pre-wrap` préserve les sauts de ligne internes, une façon de
+         plus de ne pas retoucher le texte. -->
+    <div class="extract">
+      {#each blocks as block, i (i)}
+        {#if block.kind === "heading"}
+          <p class="h" class:h3={block.level >= 3}>{block.text}</p>
+        {:else}
+          <p class="para">{block.text}</p>
+        {/if}
+      {/each}
+    </div>
 
     <div class="foot">
       {#if langs.length > 1}
@@ -216,11 +236,30 @@
     color: var(--muted);
   }
   .extract {
-    margin: 0;
     flex: 1;
     overflow-y: auto;
-    white-space: pre-wrap;
     line-height: 1.55;
+    /* Largeur de mesure : un article entier se lit, il ne se balaie pas. */
+    padding-right: 6px;
+  }
+  .para {
+    margin: 0 0 10px;
+    white-space: pre-wrap;
+  }
+  /* Titres de section : la hiérarchie de l'article, pas celle de l'écran —
+     d'où une graduation discrète plutôt que les niveaux de `.lbl-*`. */
+  .h {
+    margin: 16px 0 6px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .h.h3 {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+  .h:first-child {
+    margin-top: 0;
   }
   .foot {
     display: flex;

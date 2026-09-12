@@ -2,7 +2,7 @@
 //!
 //! Two requests, no more (§6.1): one to Wikidata to turn a Q-id into article
 //! titles, a parent entity and the list of languages, one to the wiki of the
-//! chosen language for the introduction extract. The Action API (`/w/api.php`)
+//! chosen language for the article text. The Action API (`/w/api.php`)
 //! rather than the REST ones, which are being retired.
 //!
 //! **Nothing here returns a `Result`.** A dead network, a timeout, a 404 and a
@@ -203,13 +203,27 @@ impl WikiClient {
         }
     }
 
-    /// The introduction extract of one article, in one `action=query` call
-    /// (§6.1): plain text, canonical URL, revision number and interlanguage
-    /// links together.
+    /// One article **in full**, in one `action=query` call (§6.1): plain text,
+    /// canonical URL, revision number and interlanguage links together.
+    ///
+    /// **The whole article, not just its introduction** — asked for by the
+    /// user, and the legal reading improves rather than worsens: §7.4 required
+    /// the word "extrait" precisely because showing only a fragment *is* a
+    /// modification, which has to be signalled. Reproducing the text entire,
+    /// verbatim, with attribution and the licence, is what CC BY-SA plainly
+    /// allows.
+    ///
+    /// `explaintext` keeps it to plain text: no HTML, no images (§9 forbids
+    /// them anyway), no reference markers. Measured on `Mazda MX-5`: about
+    /// 17,500 characters, with section titles left in wiki markup
+    /// (`== Overview ==`) — `wikiText.ts` turns those into headings.
+    ///
+    /// What plain text loses is the infobox and the tables, which is the
+    /// remaining reason to keep a link to the browser.
     pub fn article(&self, lang: &str, title: &str) -> Fetched<ArticleText> {
         let path = format!(
             "/w/api.php?action=query&format=json&formatversion=2\
-             &prop=extracts%7Cinfo%7Clanglinks&inprop=url&exintro=1&explaintext=1&lllimit=max&redirects=1&titles={}",
+             &prop=extracts%7Cinfo%7Clanglinks&inprop=url&explaintext=1&lllimit=max&redirects=1&titles={}",
             http::encode_query_value(title)
         );
         match self.get_json(&format!("{lang}.wikipedia.org"), &path) {

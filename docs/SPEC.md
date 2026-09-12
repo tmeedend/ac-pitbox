@@ -717,14 +717,14 @@ description Wikidata, collage d'URL accepté. Aucun de ces états n'est une
 erreur : pas d'icône d'alerte, pas d'encart rouge. Un choix fait à la main est
 enregistré en `manual` et plus rien d'automatique ne l'écrase.
 
-Deux choses ne sont pas négociables et viennent du droit d'auteur, pas du
-goût : l'extrait n'est **jamais fondu** dans la description du mod — ce sont
-deux sous-onglets, donc deux blocs distincts — et il est affiché **tel que
-l'API le rend**, sans reformulation, résumé ni traduction. L'attribution en
-pied (titre de l'article, lien, licence CC BY-SA) est obligatoire, et le mot
-« extrait » y est nécessaire : n'en montrer qu'un fragment est une
-modification, qui doit être signalée. Le lien « Lire l'article complet » ouvre
-le **navigateur système**, jamais une webview interne.
+L'article est affiché **en entier**, pas seulement son introduction : on lit
+dans Pit Box, on n'y trouve pas un teaser. Deux choses ne sont pas négociables
+et viennent du droit d'auteur, pas du goût : le texte n'est **jamais fondu**
+dans la description du mod — ce sont deux sous-onglets, donc deux blocs
+distincts — et il est affiché **tel que l'API le rend**, sans reformulation,
+résumé ni traduction. L'attribution en pied (titre, lien, licence CC BY-SA) est
+obligatoire. Le lien « Voir sur Wikipédia » ouvre le **navigateur système** et
+sert ce que le texte brut perd : infobox, tableaux, images, références.
 
 L'enrichissement est **désactivable** (`wiki_online`, §12) : l'app interroge
 Wikipédia à l'ouverture d'une fiche, ce qui révèle indirectement le contenu de

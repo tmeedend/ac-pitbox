@@ -100,6 +100,32 @@ impl CachedArticle {
     }
 }
 
+/// Version of what a cached row *contains*, as opposed to how old it is.
+///
+/// Same need, and same remedy, as `harmonize::ENGINE_VERSION`: the rows cached
+/// before this bumped hold an introduction only, and nothing in a row says so —
+/// its `fetched_at` is recent, so the TTL would happily serve a truncated
+/// article for thirty days. Bump this whenever the stored text changes meaning,
+/// and `purge_outdated` empties the cache once.
+///
+/// 2 — the whole article rather than its introduction (§7.3).
+pub const CONTENT_VERSION: u32 = 2;
+
+/// Empties the cache when it holds rows a previous version of the code wrote.
+///
+/// Only `wiki_cache` — the appariements and the negative cache say nothing
+/// about the text and have no reason to go.
+pub fn purge_outdated(conn: &Connection) -> rusqlite::Result<bool> {
+    const KEY: &str = "wiki_content_version";
+    let stored: Option<u32> = crate::overlay::get_meta(conn, KEY)?.and_then(|v| v.parse().ok());
+    if stored == Some(CONTENT_VERSION) {
+        return Ok(false);
+    }
+    conn.execute("DELETE FROM wiki_cache", [])?;
+    crate::overlay::set_meta(conn, KEY, &CONTENT_VERSION.to_string())?;
+    Ok(stored.is_some())
+}
+
 /// §13: a cached article is refetched after thirty days. Long enough that a
 /// browsed library costs nothing, short enough that a rewritten introduction
 /// catches up within a season.

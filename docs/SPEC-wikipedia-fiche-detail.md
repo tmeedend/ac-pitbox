@@ -260,22 +260,33 @@ le cas où il apporte le plus, et il est fréquent.
 
 - Si repli parent actif : une ligne discrète en tête, `Article général : {titre}`.
   Affichée uniquement dans ce cas.
-- Extrait d'introduction, tel que renvoyé par l'API.
+- **L'article entier**, tel que renvoyé par l'API — révisé à l'usage, contre la première
+  rédaction qui n'en voulait que l'introduction. L'utilisateur lit dans Pit Box, il ne
+  veut pas d'un teaser qui renvoie ailleurs. Texte brut (`explaintext`) : ni HTML, ni
+  images (que la §9 écarte de toute façon), ni appels de note. Mesuré sur `Mazda MX-5` :
+  ~17 500 caractères, avec les titres de section en balisage wiki (`== Overview ==`) —
+  reconnus et mis en forme, le texte lui-même n'étant jamais retouché.
 - Sélecteur de langue.
-- Lien « Lire l'article complet » ouvrant le **navigateur système**. Pas de webview
-  intégrée pointant vers wikipedia.org : cela casse le mode hors ligne, impose leur CSP et
-  fait perdre l'identité visuelle de l'application.
+- Lien **« Voir sur Wikipédia »** ouvrant le **navigateur système**. Il ne sert plus à
+  « lire la suite » puisque tout est là : ce qu'il apporte encore, c'est ce que le texte
+  brut perd — infobox, tableaux, images, références, historique. Pas de webview intégrée
+  pointant vers wikipedia.org : cela casse le mode hors ligne, impose leur CSP et fait
+  perdre l'identité visuelle de l'application.
 - Bloc d'attribution (§7.4).
 
 ### 7.4 Attribution
 
 En pied d'onglet, obligatoire :
 
-> Extrait de l'article **{titre}** de Wikipédia — {lien} · Texte disponible sous licence
+> Article **{titre}** de Wikipédia — {lien} · Texte disponible sous licence
 > [CC BY-SA 4.0]({lien vers la licence})
 
-Le mot « extrait » est nécessaire : n'afficher qu'un fragment constitue une modification,
-qui doit être signalée.
+Le mot « extrait » a disparu **parce que l'article est désormais affiché en entier**
+(§7.3). Il était exigé pour la raison inverse : n'afficher qu'un fragment constitue une
+modification, qui doit être signalée. Reproduire le texte intégralement et tel quel, avec
+son attribution et sa licence, est ce que CC BY-SA autorise sans réserve — et c'est un
+régime **plus simple** que l'extrait, pas plus risqué. Si l'affichage redevenait partiel
+un jour, le mot devrait revenir avec lui.
 
 ### 7.5 Chargement
 
