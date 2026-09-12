@@ -11,8 +11,10 @@
     "\\brev\\s*\\d+\\b"
   ],
 
-  "_comment_phrases": "Retirées où qu'elles soient dans le nom, sur frontière de mot. Qualité, préparateurs, mentions d'upload.",
+  "_comment_phrases": "Retirées où qu'elles soient dans le nom, sur frontière de mot. Qualité, préparateurs, mentions d'upload — et « traffic », que les auteurs ajoutent pour dire que la voiture sert de circulation sur Shutoko et qui n'a rien à voir avec le modèle réel.",
   "remove_phrases": [
+    "traffic",
+    "npc",
     "4k",
     "8k",
     "2k",

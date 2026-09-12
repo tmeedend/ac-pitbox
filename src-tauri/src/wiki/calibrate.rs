@@ -51,6 +51,31 @@ pub struct Row {
 pub struct Report {
     pub rows: Vec<Row>,
     pub thresholds: Thresholds,
+    /// Mods known to have **no real-world counterpart** — fictional cars and
+    /// invented circuits. See `load_expected_absences`.
+    pub expected_absences: Vec<String>,
+}
+
+/// Reads the list of mods that are *supposed* to match nothing.
+///
+/// **Why this exists.** "129 sans candidat" is not a miss rate: an RSS Formula
+/// Hybrid, a traffic car and `ks_black_cat_county` have no article anywhere,
+/// and finding nothing for them is the right answer. Mixed into one number,
+/// those successes look exactly like the Ferrari SF15-T, whose article existed
+/// all along and was being thrown away by a too-narrow type filter. Separating
+/// the two is what turns the report from a tally into a measurement — and the
+/// knowledge of which is which is the user's, not the code's.
+///
+/// One mod folder name per line; `#` starts a comment. A missing file is not
+/// an error, it only means the two populations stay merged.
+pub fn load_expected_absences(path: &Path) -> Vec<String> {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    text.lines()
+        .map(|line| line.split('#').next().unwrap_or_default().trim().to_string())
+        .filter(|line| !line.is_empty())
+        .collect()
 }
 
 /// Everything a run needs, so the loop takes one argument instead of six.
@@ -61,6 +86,10 @@ pub struct Calibration<'a> {
     pub thresholds: Thresholds,
     /// Assetto Corsa install, for the track coordinates (`sun::track_location`).
     pub ac_install_path: Option<&'a Path>,
+    /// The reader's language: searched before English (`lang::search_order`).
+    pub locale: &'a str,
+    /// Mods known to have no real-world counterpart.
+    pub expected_absences: Vec<String>,
 }
 
 impl Calibration<'_> {
@@ -99,6 +128,7 @@ impl Calibration<'_> {
         Report {
             rows,
             thresholds: self.thresholds,
+            expected_absences: self.expected_absences.clone(),
         }
     }
 
@@ -109,7 +139,14 @@ impl Calibration<'_> {
             year,
         };
         let query = matchcar::search_query(self.cleaner, &subject);
-        let outcome = matchcar::match_car(self.net, self.cleaner, self.weights, &self.thresholds, &subject);
+        let outcome = matchcar::match_car(
+            self.net,
+            self.cleaner,
+            self.weights,
+            &self.thresholds,
+            &subject,
+            self.locale,
+        );
         (query, outcome)
     }
 
@@ -128,7 +165,7 @@ impl Calibration<'_> {
             Some((lat, lon)) => format!("{lat:.5}, {lon:.5}"),
             None => format!("nom : {}", self.cleaner.clean(display_name)),
         };
-        let outcome = matchtrack::match_track(self.net, self.cleaner, &self.thresholds, &subject);
+        let outcome = matchtrack::match_track(self.net, self.cleaner, &self.thresholds, &subject, self.locale);
         (query, outcome)
     }
 }
@@ -222,10 +259,52 @@ impl Report {
             ));
         }
 
-        out.push_str("\n## Sans candidat\n\n| mod | type | recherche |\n|---|---|---|\n");
-        for row in &self.rows {
-            if matches!(row.outcome, MatchOutcome::NoCandidate) {
-                out.push_str(&format!("| `{}` | {} | {} |\n", row.mod_key, row.kind, row.query));
+        // **The two populations that must never be added together.** A
+        // fictional car finding nothing is a success; a real one finding
+        // nothing is a miss. Merged, they made one number that said nothing —
+        // and hid the Ferrari SF15-T, whose article existed all along.
+        let expected = |key: &str| self.expected_absences.iter().any(|k| k == key);
+        let absent: Vec<&Row> = self
+            .rows
+            .iter()
+            .filter(|r| matches!(r.outcome, MatchOutcome::NoCandidate))
+            .collect();
+        let (known, missed): (Vec<&Row>, Vec<&Row>) = absent.into_iter().partition(|r| expected(&r.mod_key));
+
+        out.push_str(&format!(
+            "\n## Manques — un article existe peut-être, on ne l'a pas trouvé ({})\n\n",
+            missed.len()
+        ));
+        out.push_str("| mod | type | recherche |\n|---|---|---|\n");
+        for row in &missed {
+            out.push_str(&format!("| `{}` | {} | {} |\n", row.mod_key, row.kind, row.query));
+        }
+
+        if !self.expected_absences.is_empty() {
+            out.push_str(&format!(
+                "\n## Absences attendues — rien à trouver, et rien trouvé ({})\n\n",
+                known.len()
+            ));
+            for row in &known {
+                out.push_str(&format!("- `{}` — {}\n", row.mod_key, row.display_name));
+            }
+            // An expected absence that came back matched is a certain false
+            // positive: no opinion needed, the answer is known to be wrong.
+            let contradicted: Vec<&Row> = self
+                .rows
+                .iter()
+                .filter(|r| expected(&r.mod_key) && matches!(r.outcome, MatchOutcome::Matched { .. }))
+                .collect();
+            if !contradicted.is_empty() {
+                out.push_str(&format!(
+                    "\n### Attendus absents, pourtant appariés ({}) — faux positifs certains\n\n",
+                    contradicted.len()
+                ));
+                for row in &contradicted {
+                    if let MatchOutcome::Matched { candidate, .. } = &row.outcome {
+                        out.push_str(&format!("- `{}` → {}\n", row.mod_key, candidate.name()));
+                    }
+                }
             }
         }
 
@@ -268,6 +347,7 @@ mod tests {
         };
         let report = Report {
             thresholds: thresholds(),
+            expected_absences: vec!["rss_formula_hybrid".into()],
             rows: vec![
                 Row {
                     mod_key: "ks_toyota_ae86".into(),
@@ -341,6 +421,12 @@ mod tests {
                 track_tie_margin_m: cfg.prefs.wiki_track_tie_margin_m,
             },
             ac_install_path: cfg.ac_install_path.as_deref(),
+            // La langue de lecture décide du wiki interrogé en premier
+            // (`lang::search_order`). Celle des réglages, français par défaut.
+            locale: cfg.prefs.language.as_deref().unwrap_or("fr"),
+            // Les mods dont on SAIT qu'ils n'ont pas d'équivalent réel, un par
+            // ligne. Sans ce fichier, les deux populations restent mélangées.
+            expected_absences: load_expected_absences(&config_dir.join("wiki-absences-attendues.txt")),
         };
 
         let report = calibration.run(&conn, limit, &mut |done, total, id| {

@@ -67,10 +67,20 @@ pub const CAR_MODEL: &str = "Q3231690";
 /// models — the shape a model family takes when it is not one model.
 pub const CAR_MODEL_SERIES: &str = "Q59773381";
 
-/// What §4.1.3 accepts for a car. Deliberately short: the four cars measured
-/// all land on `CAR_MODEL`, and every entry added here is a new way to match
-/// the wrong thing.
-pub const CAR_TYPES: [&str; 2] = [CAR_MODEL, CAR_MODEL_SERIES];
+/// `racing automobile model` / « modèle de voiture de course ».
+///
+/// **A separate class from `CAR_MODEL`, and the library is full of them.**
+/// Ferrari SF15-T (Q18918144), Audi R18 (Q693616) and Chevrolet Corvette C7.R
+/// (Q16957322) all carry this one and none of them carries `Q3231690` — so a
+/// filter that only knew about road cars rejected every Formula One car,
+/// prototype and GT racer in the library while their articles sat there.
+/// Found because a calibration report claimed the SF15-T had no article.
+pub const RACING_CAR_MODEL: &str = "Q90834785";
+
+/// What §4.1.3 accepts for a car. Every entry added here is a new way to match
+/// the wrong thing, so each one is measured on a real item rather than
+/// imagined.
+pub const CAR_TYPES: [&str; 3] = [CAR_MODEL, CAR_MODEL_SERIES, RACING_CAR_MODEL];
 
 // --- Classes: tracks, roads and passes --------------------------------------
 

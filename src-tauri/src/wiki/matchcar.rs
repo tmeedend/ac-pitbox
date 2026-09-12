@@ -144,12 +144,17 @@ pub fn rank(
 }
 
 /// The whole §4.1 pipeline, network included.
+///
+/// `locale` is the reader's language: the search runs there first and falls
+/// back to English, for the reason `lang::search_order` documents. The language
+/// of the *article shown* is a separate question, settled later by §5.2.
 pub fn match_car(
     net: &WikiClient,
     cleaner: &Cleaner,
     weights: &Weights,
     thresholds: &Thresholds,
     subject: &CarSubject,
+    locale: &str,
 ) -> MatchOutcome {
     let cleaned_name = cleaner.clean(subject.name.as_deref().unwrap_or_default());
     let query = search_query(cleaner, subject);
@@ -157,24 +162,30 @@ pub fn match_car(
         return MatchOutcome::NoCandidate;
     }
 
-    // English, whatever the reading language will be: it has the widest
-    // coverage, and the type filter that follows is language-independent. What
-    // the user reads is settled later and separately, by §5.2.
-    let hits = match net.search_pages("en", &query, SEARCH_LIMIT) {
-        Fetched::Found(hits) => hits,
-        Fetched::Absent => return MatchOutcome::NoCandidate,
-        Fetched::Unavailable => return MatchOutcome::Unavailable,
-    };
-    let ids: Vec<String> = hits.iter().map(|h| h.entity_id.clone()).collect();
-
-    match net.details(&ids) {
-        Fetched::Found(mut details) => {
-            super::borrow_labels(&mut details, &hits);
-            rank(&details, subject, &cleaned_name, weights, thresholds)
+    for wiki in super::lang::search_order(locale) {
+        let hits = match net.search_pages(&wiki, &query, SEARCH_LIMIT) {
+            Fetched::Found(hits) => hits,
+            // Nothing here; the next wiki may know it.
+            Fetched::Absent => continue,
+            // Nothing was learned, so nothing is concluded (§1).
+            Fetched::Unavailable => return MatchOutcome::Unavailable,
+        };
+        let ids: Vec<String> = hits.iter().map(|h| h.entity_id.clone()).collect();
+        let outcome = match net.details(&ids) {
+            Fetched::Found(mut details) => {
+                super::borrow_labels(&mut details, &hits);
+                rank(&details, subject, &cleaned_name, weights, thresholds)
+            }
+            Fetched::Absent => MatchOutcome::NoCandidate,
+            Fetched::Unavailable => return MatchOutcome::Unavailable,
+        };
+        // An ambiguity is a verdict (§1) and stops the walk; only "found
+        // nothing at all" is worth asking another wiki about.
+        if !matches!(outcome, MatchOutcome::NoCandidate) {
+            return outcome;
         }
-        Fetched::Absent => MatchOutcome::NoCandidate,
-        Fetched::Unavailable => MatchOutcome::Unavailable,
     }
+    MatchOutcome::NoCandidate
 }
 
 #[cfg(test)]

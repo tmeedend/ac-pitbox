@@ -92,12 +92,10 @@ pub fn collapse_configurations(candidates: Vec<(EntityDetails, f64)>) -> Vec<(En
 ///
 /// Pure — the tests drive this directly, coordinates and all.
 pub fn decide_by_distance(candidates: Vec<(EntityDetails, f64)>, thresholds: &Thresholds) -> MatchOutcome {
-    // **Circuits first, and alone when there is one.** A purpose-built circuit
-    // three hundred metres away beats a street at five, because every circuit
-    // has streets at its own coordinates — the calibration run rejected the
-    // Nordschleife, Vallelunga and Zandvoort for tying with one. Roads only
-    // get a turn when nothing was built for racing nearby, which is the
-    // Shutoko and touge case §4.2 widened the list for.
+    // **Circuits, and nothing else.** A purpose-built circuit nine hundred
+    // metres away beats a street at five, because every circuit has streets at
+    // its own coordinates — the calibration run rejected the Nordschleife,
+    // Vallelunga and Zandvoort for tying with one.
     let circuits: Vec<(EntityDetails, f64)> = candidates
         .iter()
         .filter(|(d, _)| d.is_of_type(&ids::CIRCUIT_TYPES))
@@ -186,6 +184,7 @@ pub fn match_track(
     cleaner: &Cleaner,
     thresholds: &Thresholds,
     subject: &TrackSubject,
+    locale: &str,
 ) -> MatchOutcome {
     if let Some((latitude, longitude)) = subject.location {
         let outcome = by_coordinates(net, thresholds, latitude, longitude);
@@ -196,11 +195,11 @@ pub fn match_track(
         // all. An **ambiguity is not retried**: it is a verdict (§1), and
         // neither is an unreachable network, which taught us nothing.
         if matches!(outcome, MatchOutcome::NoCandidate) {
-            return by_name(net, cleaner, thresholds, subject);
+            return by_name(net, cleaner, thresholds, subject, locale);
         }
         return outcome;
     }
-    by_name(net, cleaner, thresholds, subject)
+    by_name(net, cleaner, thresholds, subject, locale)
 }
 
 fn by_coordinates(net: &WikiClient, thresholds: &Thresholds, latitude: f64, longitude: f64) -> MatchOutcome {
@@ -239,25 +238,38 @@ fn by_coordinates(net: &WikiClient, thresholds: &Thresholds, latitude: f64, long
     decide_by_distance(paired, thresholds)
 }
 
-fn by_name(net: &WikiClient, cleaner: &Cleaner, thresholds: &Thresholds, subject: &TrackSubject) -> MatchOutcome {
+fn by_name(
+    net: &WikiClient,
+    cleaner: &Cleaner,
+    thresholds: &Thresholds,
+    subject: &TrackSubject,
+    locale: &str,
+) -> MatchOutcome {
     let cleaned = cleaner.clean(subject.name.as_deref().unwrap_or_default());
     if cleaned.trim().is_empty() {
         return MatchOutcome::NoCandidate;
     }
-    let hits = match net.search_pages("en", &cleaned, SEARCH_LIMIT) {
-        Fetched::Found(hits) => hits,
-        Fetched::Absent => return MatchOutcome::NoCandidate,
-        Fetched::Unavailable => return MatchOutcome::Unavailable,
-    };
-    let ids: Vec<String> = hits.iter().map(|h| h.entity_id.clone()).collect();
-    match net.details(&ids) {
-        Fetched::Found(mut details) => {
-            super::borrow_labels(&mut details, &hits);
-            rank_by_name(&details, &cleaned, thresholds)
+    // Home wiki first, English second — same reason as the cars.
+    for wiki in super::lang::search_order(locale) {
+        let hits = match net.search_pages(&wiki, &cleaned, SEARCH_LIMIT) {
+            Fetched::Found(hits) => hits,
+            Fetched::Absent => continue,
+            Fetched::Unavailable => return MatchOutcome::Unavailable,
+        };
+        let ids: Vec<String> = hits.iter().map(|h| h.entity_id.clone()).collect();
+        let outcome = match net.details(&ids) {
+            Fetched::Found(mut details) => {
+                super::borrow_labels(&mut details, &hits);
+                rank_by_name(&details, &cleaned, thresholds)
+            }
+            Fetched::Absent => MatchOutcome::NoCandidate,
+            Fetched::Unavailable => return MatchOutcome::Unavailable,
+        };
+        if !matches!(outcome, MatchOutcome::NoCandidate) {
+            return outcome;
         }
-        Fetched::Absent => MatchOutcome::NoCandidate,
-        Fetched::Unavailable => MatchOutcome::Unavailable,
     }
+    MatchOutcome::NoCandidate
 }
 
 #[cfg(test)]

@@ -25,6 +25,26 @@ pub fn wiki_lang(locale: &str) -> String {
     code.trim().to_ascii_lowercase()
 }
 
+/// Which wikis to search a name in, in order: the reader's own language, then
+/// English.
+///
+/// Not an optimisation — a correctness fix, measured. The English Wikipedia's
+/// `Abarth 500` is a **disambiguation page** (Q4167410), so a full-text search
+/// there for "Abarth 500 Assetto Corse" returns `Fiat 500 (2007)` and the type
+/// filter rightly throws it away. The French Wikipedia has a real `Abarth 500`
+/// article, and its search returns it first. European cars are routinely
+/// better covered at home than in English, so home comes first.
+///
+/// English still follows, because it carries the widest net for everything
+/// else — and the second search only ever runs when the first found nothing.
+pub fn search_order(locale: &str) -> Vec<String> {
+    let home = wiki_lang(locale);
+    if home == FALLBACK_LANG {
+        return vec![home];
+    }
+    vec![home, FALLBACK_LANG.to_string()]
+}
+
 /// The articles one Wikidata entity has, one title per language.
 ///
 /// Built from Wikidata sitelinks (`api::EntityFacts`), or from what the cache
