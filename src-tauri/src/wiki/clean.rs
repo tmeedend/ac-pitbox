@@ -57,6 +57,15 @@ pub struct MatchingConfig {
     pub remove_phrases: Vec<String>,
     #[serde(default)]
     pub remove_suffix_words: Vec<String>,
+    /// Patterns removed **only** when the mod carries that category.
+    ///
+    /// The general list cannot hold everything: "traffic" belongs in a car
+    /// name (the Renault Trafic is a real van) and is noise on a mod whose
+    /// category *is* `#traffic`. What separates the two is not the word, it is
+    /// what the library already knows about the mod — which is on disk, so the
+    /// app can decide rather than guess.
+    #[serde(default)]
+    pub remove_patterns_by_category: std::collections::BTreeMap<String, Vec<String>>,
     #[serde(default)]
     pub weights: Weights,
 }
@@ -86,7 +95,7 @@ pub fn load(config_dir: &Path) -> MatchingConfig {
             return MatchingConfig::default();
         }
     }
-    match std::fs::read_to_string(&path) {
+    let mut cfg: MatchingConfig = match std::fs::read_to_string(&path) {
         Ok(text) => serde_json::from_str(&text).unwrap_or_else(|e| {
             log::warn!("wiki: {} illisible, jeu embarqué utilisé — {e}", path.display());
             MatchingConfig::default()
@@ -95,17 +104,37 @@ pub fn load(config_dir: &Path) -> MatchingConfig {
             log::warn!("wiki: {} illisible — {e}", path.display());
             MatchingConfig::default()
         }
+    };
+
+    // **Backfill.** The copy is seeded once and never rewritten, so a key added
+    // to the embedded seed afterwards is missing from every file already out
+    // there — and the rule it carries silently does nothing. That is exactly
+    // how the `#traffic` rule looked broken on a machine whose file predated
+    // it. Same remedy as `rules::load`, and the same limit: a user who empties
+    // the list on purpose gets it back. Never rewrites the file — the user's
+    // edits stay theirs.
+    if cfg.remove_patterns_by_category.is_empty() {
+        cfg.remove_patterns_by_category = MatchingConfig::default().remove_patterns_by_category;
     }
+    cfg
 }
 
 /// Compiled once, applied to every name of a run.
 pub struct Cleaner {
+    /// Normalised category name (no leading `#`, lowercase) to its patterns.
+    by_category: Vec<(String, Vec<Regex>)>,
     bracketed: Option<Regex>,
     versions: Vec<Regex>,
     phrases: Vec<Regex>,
     suffix_words: Vec<String>,
     punctuation: Regex,
     whitespace: Regex,
+}
+
+/// A category compares without its leading `#` and without case: the overlay
+/// writes `#traffic`, a hand-edited config file may well write `traffic`.
+fn normalise_category(category: &str) -> String {
+    category.trim().trim_start_matches('#').to_lowercase()
 }
 
 impl Cleaner {
@@ -121,6 +150,14 @@ impl Cleaner {
             }
         };
         Self {
+            by_category: cfg
+                .remove_patterns_by_category
+                .iter()
+                .map(|(category, patterns)| {
+                    let compiled = patterns.iter().filter_map(|p| compile(&format!("(?i){p}"))).collect();
+                    (normalise_category(category), compiled)
+                })
+                .collect(),
             bracketed: cfg
                 .strip_bracketed
                 .then(|| Regex::new(r"[\[\(\{][^\]\)\}]*[\]\)\}]").expect("motif de crochets valide")),
@@ -146,6 +183,30 @@ impl Cleaner {
     /// inside them), versions next, then phrases, then trailing words. Running
     /// the suffix pass last is what lets `Fixed 1.05` lose both halves.
     pub fn clean(&self, raw: &str) -> String {
+        self.clean_in_category(raw, None)
+    }
+
+    /// The cleaned name, knowing which category the mod belongs to.
+    ///
+    /// The category patterns run **first**: they strip pack prefixes that sit
+    /// in front of the real model name, and everything after them assumes it is
+    /// looking at a model name.
+    pub fn clean_in_category(&self, raw: &str, category: Option<&str>) -> String {
+        let mut raw = raw.to_string();
+        if let Some(category) = category.map(normalise_category) {
+            for (name, patterns) in &self.by_category {
+                if *name != category {
+                    continue;
+                }
+                for re in patterns {
+                    raw = re.replace_all(&raw, " ").into_owned();
+                }
+            }
+        }
+        self.clean_name(&raw)
+    }
+
+    fn clean_name(&self, raw: &str) -> String {
         // Folder ids arrive as `rss_gtm_lanzo_v8`; a display name rarely has
         // underscores. Splitting them into words costs nothing on a real name
         // and makes an id searchable.
@@ -247,6 +308,58 @@ mod tests {
             "Shelby Cobra",
             "en fin de nom, c'est le suffixe"
         );
+    }
+
+    /// Rule (§4.3): **"traffic" is only noise when the mod says it is.**
+    ///
+    /// The Renault Trafic is a real van, so the word cannot go in the general
+    /// list — a mod of it would lose its own name. But the twenty-five cars
+    /// carrying `category = "#traffic"` in the reference library hide a real
+    /// model behind a pack prefix: `τraffic Japan | Mazda RX-8 SE3P`, with a
+    /// **Greek tau** (U+03C4), which is also why a plain "traffic" would never
+    /// have matched it. What separates the two cases is on disk, so the app
+    /// reads it instead of guessing.
+    #[test]
+    fn traffic_is_noise_only_in_the_traffic_category() {
+        let c = cleaner();
+        let traffic = Some("#traffic");
+
+        assert_eq!(
+            c.clean_in_category("τraffic Japan | Mazda RX-8 SE3P", traffic),
+            "Mazda RX-8 SE3P"
+        );
+        assert_eq!(
+            c.clean_in_category("τraffic jp - Toyota Camry", traffic),
+            "Toyota Camry"
+        );
+        assert_eq!(
+            c.clean_in_category("traffic jp - Nissan Leaf", traffic),
+            "Nissan Leaf",
+            "la graphie latine aussi"
+        );
+
+        // Hors catégorie, le mot est un nom de modèle et doit survivre.
+        assert_eq!(c.clean_in_category("Renault Trafic", None), "Renault Trafic");
+        assert_eq!(
+            c.clean_in_category("Renault Trafic", Some("#sportscars")),
+            "Renault Trafic",
+            "une autre catégorie ne déclenche pas la règle"
+        );
+    }
+
+    /// Rule: the category is compared without its `#` and without case — the
+    /// overlay writes `#traffic`, a hand-edited config may write `Traffic`.
+    #[test]
+    fn a_category_matches_with_or_without_its_hash() {
+        let c = cleaner();
+        let expected = "Toyota Camry";
+        for spelling in ["#traffic", "traffic", "#Traffic", " #TRAFFIC "] {
+            assert_eq!(
+                c.clean_in_category("τraffic jp - Toyota Camry", Some(spelling)),
+                expected,
+                "orthographe {spelling:?}"
+            );
+        }
     }
 
     /// Rule (§1): cleaning never invents. A name made only of noise comes back

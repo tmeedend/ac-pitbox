@@ -112,7 +112,7 @@ impl Calibration<'_> {
             let (query, outcome) = if m.kind == "Track" {
                 self.one_track(&m.id_interne, &display_name)
             } else {
-                self.one_car(m.brand.clone(), &display_name, m.year)
+                self.one_car(m.brand.clone(), &display_name, m.year, m.category.clone())
             };
 
             rows.push(Row {
@@ -132,11 +132,18 @@ impl Calibration<'_> {
         }
     }
 
-    fn one_car(&self, brand: Option<String>, display_name: &str, year: Option<i64>) -> (String, MatchOutcome) {
+    fn one_car(
+        &self,
+        brand: Option<String>,
+        display_name: &str,
+        year: Option<i64>,
+        category: Option<String>,
+    ) -> (String, MatchOutcome) {
         let subject = CarSubject {
             brand,
             name: Some(display_name.to_string()),
             year,
+            category,
         };
         let query = matchcar::search_query(self.cleaner, &subject);
         let outcome = matchcar::match_car(

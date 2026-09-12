@@ -24,6 +24,10 @@ pub struct CarSubject {
     pub brand: Option<String>,
     pub name: Option<String>,
     pub year: Option<i64>,
+    /// The mod's main category (`#traffic`, `#gt3`…). Some packs bury the real
+    /// model behind a prefix that only that category identifies — see
+    /// `Cleaner::clean_in_category`.
+    pub category: Option<String>,
 }
 
 /// The string to search for: brand and name, cleaned (§4.3).
@@ -32,7 +36,7 @@ pub struct CarSubject {
 /// with it — modders write both `Toyota AE86` and `AE86` under brand `Toyota`,
 /// and searching "Toyota Toyota AE86" scores worse on every candidate.
 pub fn search_query(cleaner: &Cleaner, subject: &CarSubject) -> String {
-    let name = cleaner.clean(subject.name.as_deref().unwrap_or_default());
+    let name = cleaner.clean_in_category(subject.name.as_deref().unwrap_or_default(), subject.category.as_deref());
     let brand = subject.brand.as_deref().map(str::trim).unwrap_or_default();
     if brand.is_empty() {
         return name;
@@ -156,7 +160,8 @@ pub fn match_car(
     subject: &CarSubject,
     locale: &str,
 ) -> MatchOutcome {
-    let cleaned_name = cleaner.clean(subject.name.as_deref().unwrap_or_default());
+    let cleaned_name =
+        cleaner.clean_in_category(subject.name.as_deref().unwrap_or_default(), subject.category.as_deref());
     let query = search_query(cleaner, subject);
     if query.trim().is_empty() {
         return MatchOutcome::NoCandidate;
@@ -220,6 +225,7 @@ mod tests {
             brand: Some(brand.into()),
             name: Some(name.into()),
             year,
+            category: None,
         }
     }
 

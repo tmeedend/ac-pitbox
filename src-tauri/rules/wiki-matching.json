@@ -11,10 +11,16 @@
     "\\brev\\s*\\d+\\b"
   ],
 
-  "_comment_phrases": "Retirées où qu'elles soient dans le nom, sur frontière de mot. Qualité, préparateurs, mentions d'upload — et « traffic », que les auteurs ajoutent pour dire que la voiture sert de circulation sur Shutoko et qui n'a rien à voir avec le modèle réel.",
+  "_comment_by_category": "Motifs retirés UNIQUEMENT si le mod porte cette catégorie. « traffic » ne peut pas aller dans la liste générale : le Renault Trafic existe, et un mod de ce fourgon perdrait son nom. Mais une voiture de catégorie #traffic porte un préfixe de pack que l'auteur a collé devant le vrai modèle — « τraffic Japan | Mazda RX-8 SE3P », avec un τ grec (U+03C4), d'où les deux graphies dans le motif. Le nom de catégorie se compare sans son « # » et sans casse.",
+  "remove_patterns_by_category": {
+    "traffic": [
+      "^[^|]*\\|",
+      "^\\s*[tτ]raffic\\s+(japan|jp)\\b\\s*[-–—]?\\s*"
+    ]
+  },
+
+  "_comment_phrases": "Retirées où qu'elles soient dans le nom, sur frontière de mot. Qualité, préparateurs, mentions d'upload.",
   "remove_phrases": [
-    "traffic",
-    "npc",
     "4k",
     "8k",
     "2k",
