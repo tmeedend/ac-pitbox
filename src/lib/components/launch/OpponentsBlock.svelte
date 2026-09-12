@@ -77,14 +77,21 @@
   const aiMaxPct = $derived(((setup.ai_level_max - RANGE_MIN) / (RANGE_MAX - RANGE_MIN)) * 100);
   // Les deux valeurs sont accrochées à leur poignée (§9.3) : posées aux
   // extrémités de la piste, elles disaient la fourchette sans dire laquelle
-  // des deux poignées on était en train de bouger. Rapprochées, elles se
-  // chevaucheraient : chacune se range alors du côté extérieur de sa poignée.
+  // des deux poignées on était en train de bouger.
+  //
+  // Sous 20 points d'écart, les deux libellés ne tiennent plus côte à côte sur
+  // une piste de cette largeur — et à cette distance les poignées elles-mêmes
+  // ne se distinguent plus, donc les séparer n'apprendrait rien. Une seule
+  // valeur alors, la fourchette d'un bout à l'autre. C'est le cas du réglage
+  // par défaut (92-98).
   //
   // Le placement est en **pourcentage de la piste**, jamais en pixels relevés
   // à l'écran — un `getBoundingClientRect` rendrait des pixels de fenêtre déjà
   // multipliés par le zoom d'interface, qu'un `left` en pixels CSS
-  // multiplierait une seconde fois (§13).
-  const aiLabelsTight = $derived(aiMaxPct - aiMinPct < 28);
+  // multiplierait une seconde fois (§13). Le débordement au ras des bords est
+  // rattrapé en CSS par un `clamp()`, qui connaît la largeur réelle de la
+  // piste là où ce fichier ne la connaît pas.
+  const aiLabelsMerged = $derived(aiMaxPct - aiMinPct < 20);
 
   function opponentName(carId: string): string {
     return carPool.find((c) => c.id_interne === carId)?.display_name ?? carId;
@@ -152,14 +159,34 @@
       <div class="dual-range">
         <div class="dr-track"></div>
         <div class="dr-fill" style="left:{aiMinPct}%; right:{100 - aiMaxPct}%"></div>
-        <input type="range" min={RANGE_MIN} max={RANGE_MAX} bind:value={setup.ai_level_min} oninput={clampAiMin} />
-        <input type="range" min={RANGE_MIN} max={RANGE_MAX} bind:value={setup.ai_level_max} oninput={clampAiMax} />
-        <span class="dr-v mono" class:tight={aiLabelsTight} style="left:{aiMinPct}%"
-          >{t("launch.aiMin", { level: setup.ai_level_min })}</span
-        >
-        <span class="dr-v max mono" class:tight={aiLabelsTight} style="left:{aiMaxPct}%"
-          >{t("launch.aiMax", { level: setup.ai_level_max })}</span
-        >
+        <!-- Les mots « min » et « max » ont quitté les libellés : la position
+             de la poignée le dit déjà, et ils doublaient la largeur d'une
+             valeur là où c'est précisément la largeur qui manque. Ils restent
+             sur les curseurs comme nom accessible, qui n'en a pas d'autre. -->
+        <input
+          type="range"
+          min={RANGE_MIN}
+          max={RANGE_MAX}
+          aria-label={t("launch.aiMin", { level: setup.ai_level_min })}
+          bind:value={setup.ai_level_min}
+          oninput={clampAiMin}
+        />
+        <input
+          type="range"
+          min={RANGE_MIN}
+          max={RANGE_MAX}
+          aria-label={t("launch.aiMax", { level: setup.ai_level_max })}
+          bind:value={setup.ai_level_max}
+          oninput={clampAiMax}
+        />
+        {#if aiLabelsMerged}
+          <span class="dr-v pair mono" style="--at:{(aiMinPct + aiMaxPct) / 2}%"
+            >{setup.ai_level_min}–{setup.ai_level_max}%</span
+          >
+        {:else}
+          <span class="dr-v mono" style="--at:{aiMinPct}%">{setup.ai_level_min}%</span>
+          <span class="dr-v mono" style="--at:{aiMaxPct}%">{setup.ai_level_max}%</span>
+        {/if}
       </div>
     </div>
 
@@ -516,24 +543,26 @@
     cursor: pointer;
     margin-top: 4px;
   }
-  /* Accrochée à sa poignée, au-dessus de la piste. `left` est un pourcentage
+  /* Accrochée à sa poignée, au-dessus de la piste. `--at` est un pourcentage
      de la piste, pas une mesure relevée à l'écran : rien à diviser par le zoom
-     (§13). */
+     (§13).
+     Le `clamp` retient la valeur dans la piste quand la poignée arrive au bord
+     — sans lui, la valeur maximale d'une fourchette haute passait par-dessus
+     le champ voisin (constaté à l'écran, « année min » recouvert). Il vaut une
+     demi-largeur de libellé, la seule mesure que le CSS connaisse ici et que
+     le composant ignore. */
   .dr-v {
+    --pad: 16px;
     position: absolute;
     bottom: calc(100% - 4px);
+    left: clamp(var(--pad), var(--at), calc(100% - var(--pad)));
     transform: translateX(-50%);
     white-space: nowrap;
     font-size: 8.5px;
     color: var(--txt2);
     pointer-events: none;
   }
-  /* Poignées rapprochées : chacune se range du côté extérieur de la sienne
-     plutôt que de se superposer à l'autre. */
-  .dr-v.tight {
-    transform: translateX(-100%);
-  }
-  .dr-v.max.tight {
-    transform: translateX(0);
+  .dr-v.pair {
+    --pad: 26px;
   }
 </style>

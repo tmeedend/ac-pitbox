@@ -98,10 +98,15 @@
     <div class="aids">
       <!-- Three states, not two: a tick could not tell "whatever the real car
            had" from "forced on", and the middle one is the default. The order
-           reads as a progression, which is why Factory sits between the two. -->
+           reads as a progression, which is why Factory sits between the two.
+
+           `align="left"` on both bubbles: these two labels sit at the very left
+           edge of the block, and a centred bubble ran off under the session
+           column, which clips it (`.flow` is `overflow-x: hidden`). Anchored on
+           its trigger's left edge, it grows into the room it actually has. -->
       <div>
         <span class="fk lbl-key"
-          >{t("launch.absLabel")}<Tooltip text={t("launch.absTooltip")}
+          >{t("launch.absLabel")}<Tooltip text={t("launch.absTooltip")} align="left"
             ><button type="button" class="info-i">ⓘ</button></Tooltip
           ></span
         >
@@ -109,7 +114,7 @@
       </div>
       <div>
         <span class="fk lbl-key"
-          >{t("launch.tractionLabel")}<Tooltip text={t("launch.tractionTooltip")}
+          >{t("launch.tractionLabel")}<Tooltip text={t("launch.tractionTooltip")} align="left"
             ><button type="button" class="info-i">ⓘ</button></Tooltip
           ></span
         >
@@ -140,10 +145,14 @@
   .blankets {
     margin-top: 10px;
   }
+  /* `flex-end`: ABS and traction control carry a label above them, the ideal
+     line does not. Aligned on the top edge, the lone tick box floated a
+     label's height above the two segmented controls — what the eye lines up is
+     the row of controls. */
   .aids {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-start;
+    align-items: flex-end;
     gap: 14px 16px;
   }
   .aids > div {

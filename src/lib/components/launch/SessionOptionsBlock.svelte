@@ -164,13 +164,25 @@
   }
   /* Each setting keeps its natural width rather than stretching into a grid:
      a slot layout would move every control each time the type changes one of
-     them, which is exactly what the two zones exist to avoid. */
-  .varies,
-  .fixed {
+     them, which is exactly what the two zones exist to avoid.
+
+     `flex-end` and not `flex-start`: some settings carry a label above them
+     and some do not, so aligning on the top edge left the bare tick boxes
+     floating a label's height above their neighbours' controls. What the eye
+     lines up is the row of controls, not the row of boxes' top corners. */
+  .varies {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-start;
+    align-items: flex-end;
     gap: 14px 16px;
+  }
+  /* Stacked, in this order, in the four session types — that is the whole
+     point of this zone. Side by side they would re-flow with the width. */
+  .fixed {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
   .varies > div,
   .fixed > div {
