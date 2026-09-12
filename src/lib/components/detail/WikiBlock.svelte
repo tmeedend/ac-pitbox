@@ -95,7 +95,17 @@
    * serait un pari sur une structure qui bouge. */
   function scrollParent(el: HTMLElement): HTMLElement | null {
     let node = el.parentElement;
-    while (node) {
+    // **On s'arrête avant `<body>` et `<html>`, et ce n'est pas de la
+    // prudence.** `global.css` les met en `overflow: hidden` exprès : « le
+    // document lui-même ne défile jamais, un scroll de page entraînait toute la
+    // coquille — barre de titre comprise — hors champ ». Or `scrollTo()`
+    // fonctionne **même** sur un élément en `overflow: hidden`, alors que la
+    // molette, elle, ne peut plus le ramener. Les atteindre décalait donc la
+    // fenêtre entière, définitivement : bande noire en bas, coquille coincée,
+    // et aucun geste pour revenir. `hidden` ne passe de toute façon pas le
+    // test ci-dessous, mais la garde reste explicite — c'est l'ancêtre à ne
+    // jamais toucher.
+    while (node && node !== document.body && node !== document.documentElement) {
       const overflow = getComputedStyle(node).overflowY;
       if (/(auto|scroll|overlay)/.test(overflow) && node.scrollHeight > node.clientHeight) return node;
       node = node.parentElement;

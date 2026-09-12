@@ -307,6 +307,20 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
   réellement disponible, la seule dont dépende la mise en colonnes. `DetailPage`
   déclare `container: detail / inline-size` sur `.page`, et tous ses seuils s'y
   réfèrent.
+- **Un défilement programmatique ne doit jamais atteindre `<html>` ni
+  `<body>`.** `global.css` les met en `overflow: hidden` exprès — « le document
+  lui-même ne défile jamais, un scroll de page entraînait toute la coquille,
+  barre de titre comprise, hors champ ». Le piège : `scrollTo()` et
+  `scrollTop = …` **fonctionnent quand même** sur un élément en
+  `overflow: hidden`, alors que la molette ne peut plus le ramener. Un
+  décalage posé là est donc **définitif** — bande noire sous la fenêtre,
+  coquille coincée, et aucun geste utilisateur pour revenir ; seul un
+  redémarrage efface. Deux façons d'y tomber, toutes deux vécues sur le
+  sommaire de l'onglet Wikipédia : `scrollIntoView()`, qui fait défiler *tous*
+  les ancêtres scrollables jusqu'à la fenêtre, et un chercheur d'ancêtre
+  scrollable qui remonte trop haut — l'`overflow-y` calculé de l'élément racine
+  vaut « auto », pas « visible ». Faire défiler le conteneur d'écran, et
+  s'arrêter avant `document.body`.
 - **`t("clé")` renvoie la clé elle-même si elle manque** en anglais aussi.
   Une clé oubliée n'explose donc pas : elle s'affiche telle quelle à l'écran
   (`detail.showroom`). C'est ce qui rend `errorText()` sûr, et c'est aussi
