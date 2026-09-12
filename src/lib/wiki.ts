@@ -47,6 +47,9 @@ export interface WikiImage {
   descriptionUrl: string;
   artist: string;
   licence: string;
+  /** Taille d'affichage de `url`, en pixels CSS. 0 quand l'API ne l'a pas dite. */
+  width: number;
+  height: number;
 }
 
 /** Pourquoi l'onglet montre ce qu'il montre. Aucun n'est une erreur. */

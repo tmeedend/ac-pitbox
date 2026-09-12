@@ -364,6 +364,14 @@ sont traitées une par une plutôt que contournées :
 Une vignette est demandée au serveur (640 px), jamais l'original : une photo de Commons
 fait couramment vingt mégapixels, et rien ici n'en a l'usage.
 
+**La taille d'affichage voyage avec le crédit**, et l'image la porte en `width`/`height` :
+sans elle, une `<img>` n'occupe rien tant que le fichier n'est pas arrivé — l'article est
+mis en page bien trop court, le sommaire saute à côté de la section demandée, et chaque
+image qui se charge ensuite au-dessus du lecteur le repousse vers le bas. Mesuré sur
+Commons : `thumbwidth` est la largeur **demandée** (640), tandis que `thumburl` peut
+pointer un fichier plus dense (960 px) pour les écrans à haute résolution — c'est la
+première qu'on réserve, la seconde laisserait un trou sous chaque image.
+
 Ce que ça ne change pas : les previews du mod restent les images de la fiche. Celles de
 l'article illustrent un texte, elles ne prétendent pas montrer le mod.
 

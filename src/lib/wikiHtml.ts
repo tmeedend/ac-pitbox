@@ -130,6 +130,9 @@ export interface AllowedImage {
   descriptionUrl: string;
   artist: string;
   licence: string;
+  /** Taille d'affichage de `url`, en pixels CSS. 0 quand elle est inconnue. */
+  width: number;
+  height: number;
 }
 
 /** Le nom de fichier derrière une balise `<img>` de MediaWiki.
@@ -255,6 +258,22 @@ function appendImage(el: Element, into: Node, images: Map<string, AllowedImage>)
   img.setAttribute("src", credit.url);
   img.setAttribute("alt", el.getAttribute("alt") ?? "");
   img.setAttribute("loading", "lazy");
+  // **La place est réservée avant que le fichier arrive**, et ce n'est pas un
+  // détail de confort : une `<img>` sans dimensions n'occupe rien tant qu'elle
+  // n'est pas chargée, et `loading="lazy"` garantit qu'elle ne l'est pas tant
+  // qu'on ne s'en approche pas. Un article de trente photos était donc mis en
+  // page un écran trop court — le sommaire sautait à côté de la section
+  // demandée, puis chaque image qui se chargeait *au-dessus* du lecteur
+  // grandissait d'un coup, ce à quoi l'ancrage de défilement de Chromium
+  // répond en repoussant la position vers le bas : impossible de remonter.
+  // Les deux attributs valent `width`/`height` en CSS, que `height: auto` et
+  // `max-width: 100%` reprennent ensuite — la boîte réservée et l'image
+  // chargée ont donc exactement la même taille, donc aucun saut. Bug réel,
+  // rapporté sur l'onglet Wikipédia d'une fiche voiture.
+  if (credit.width > 0 && credit.height > 0) {
+    img.setAttribute("width", String(credit.width));
+    img.setAttribute("height", String(credit.height));
+  }
   into.appendChild(img);
 
   // **Obligatoire, pas décoratif** : les fichiers libres de Commons imposent de
