@@ -350,6 +350,11 @@
     background: var(--panel2);
     color: var(--txt2);
   }
+  /* `relative` porte la bulle de survol, et son absence ne se voit pas comme
+     un défaut de style : un enfant `absolute` se cale sur le premier ancêtre
+     positionné, ici le conteneur de défilement de tout l'écran — la bulle
+     partait donc en bas de la page, hors champ, et le survol semblait n'avoir
+     aucun effet. */
   .oppo-row {
     display: flex;
     align-items: center;
@@ -358,6 +363,7 @@
     border-top: 1px solid var(--line);
     background: var(--panel2);
     cursor: pointer;
+    position: relative;
   }
   .oppo-row:hover {
     background: var(--raised);
