@@ -490,12 +490,27 @@
     font-weight: 600;
     padding-bottom: 4px;
   }
+  /* Les illustrations du corps flottent à droite, comme sur la page d'origine.
+     Posées en pleine largeur elles coupaient le fil du texte à chaque section —
+     l'inverse de l'aération qu'on leur demande. */
   .article-html :global(figure) {
-    margin: 10px 0;
+    float: right;
+    width: 240px;
+    max-width: 45%;
+    margin: 4px 0 10px 16px;
   }
   .article-html :global(figcaption) {
     font-size: 11px;
     color: var(--muted);
+  }
+  /* Trop étroit pour un flottant : l'image reprend le fil, centrée. */
+  @container detail (max-width: 620px) {
+    .article-html :global(figure) {
+      float: none;
+      width: auto;
+      max-width: 100%;
+      margin-left: 0;
+    }
   }
   .article-html :global([data-href]) {
     color: var(--accent, inherit);
