@@ -178,6 +178,15 @@
         <button class="btn" type="button" onclick={() => (searching = false)}>{t("common.cancel")}</button>
       </div>
 
+      {#if panel.entityId}
+        <!-- « Aucun de ceux-ci » (§7.6). Il manquait ici : depuis un article
+             affiché, on ne pouvait que **remplacer** l'appariement, jamais le
+             retirer — alors qu'un mod sans article est une réponse valable
+             (§1), et que c'est la seule façon de dire « celui-ci est faux et
+             je n'en connais pas de bon ». -->
+        <button class="btn link detach" type="button" onclick={detach} disabled={busy}>{t("wiki.detach")}</button>
+      {/if}
+
       {#if busy}
         <p class="muted">{t("wiki.searching")}</p>
       {:else if results && results.length === 0}
@@ -540,6 +549,9 @@
   .row {
     display: flex;
     gap: 6px;
+  }
+  .detach {
+    align-self: flex-start;
   }
   .row .input {
     flex: 1;
