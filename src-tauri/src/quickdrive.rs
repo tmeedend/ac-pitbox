@@ -36,9 +36,9 @@ fn track_id(s: &RaceSetup) -> String {
 /// `TyreWear`/`FuelConsumption` en multiplicateur de taux (1.0 = 100%, notre
 /// échelle 0-200 divisée par 100 — vérifié sur `AssistsData` d'un preset réel
 /// : `"Damage":100.0,...,"TyreWear":1.0,"FuelConsumption":1.0`).
-/// `Abs`/`TractionControl` : entiers 0/1 dans les presets réels (pas des
-/// booléens) — mappés depuis nos réglages "auto" (best effort : la
-/// signification exacte d'un éventuel niveau 2 n'a pas été vue).
+/// `Abs`/`TractionControl` : entiers (pas des booléens), aux trois valeurs que
+/// le launcher d'AC déclare lui-même — `0` Off, `1` Factory, `2` On, voir
+/// `AssistLevel`.
 fn build_assists(s: &RaceSetup) -> Value {
     json!({
         "IdealLine": s.ideal_line,
@@ -48,8 +48,8 @@ fn build_assists(s: &RaceSetup) -> Value {
         "AutoShifter": false,
         "SlipSteam": 1.0,
         "AutoClutch": false,
-        "Abs": if s.abs_auto { 1 } else { 0 },
-        "TractionControl": if s.traction_control_auto { 1 } else { 0 },
+        "Abs": s.abs.to_ac(),
+        "TractionControl": s.traction_control.to_ac(),
         "VisualDamage": true,
         "Damage": s.damage as f64,
         "TyreWear": s.tyre_wear as f64 / 100.0,
@@ -267,7 +267,7 @@ pub fn build_preset(s: &RaceSetup) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::launch::RaceSetup;
+    use crate::launch::{AssistLevel, RaceSetup};
 
     fn base_setup(session_type: SessionType) -> RaceSetup {
         RaceSetup {
@@ -304,8 +304,8 @@ mod tests {
             fuel_rate: 100,
             tyre_wear: 100,
             tyre_blankets: false,
-            abs_auto: true,
-            traction_control_auto: true,
+            abs: AssistLevel::Factory,
+            traction_control: AssistLevel::Factory,
             ideal_line: false,
         }
     }
@@ -476,7 +476,7 @@ mod tests {
         s.damage = 100;
         s.tyre_wear = 100;
         s.fuel_rate = 200;
-        s.abs_auto = false;
+        s.abs = AssistLevel::Off;
         let json = build_preset(&s).unwrap();
         let v: Value = serde_json::from_str(&json).unwrap();
         let assists: Value = serde_json::from_str(v["AssistsData"].as_str().unwrap()).unwrap();
@@ -484,6 +484,22 @@ mod tests {
         assert_eq!(assists["TyreWear"], 1.0);
         assert_eq!(assists["FuelConsumption"], 2.0);
         assert_eq!(assists["Abs"], 0);
+    }
+
+    /// §9.3 — les trois niveaux d'une aide sont ceux du launcher d'AC lui-même
+    /// (`0,1,2` en face de `Off,Factory,On`) : une case à cocher n'en portait
+    /// que deux, et `Factory` n'était pas celui qu'elle exprimait.
+    #[test]
+    fn the_three_assist_levels_reach_the_preset() {
+        for (level, expected) in [(AssistLevel::Off, 0), (AssistLevel::Factory, 1), (AssistLevel::On, 2)] {
+            let mut s = base_setup(SessionType::Practice);
+            s.abs = level;
+            s.traction_control = level;
+            let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
+            let assists: Value = serde_json::from_str(v["AssistsData"].as_str().unwrap()).unwrap();
+            assert_eq!(assists["Abs"], expected, "ABS {level:?}");
+            assert_eq!(assists["TractionControl"], expected, "antipatinage {level:?}");
+        }
     }
 
     #[test]

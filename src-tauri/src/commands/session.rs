@@ -52,6 +52,21 @@ pub fn track_sun(
     )
 }
 
+/// Ce que la voiture avait d'usine comme aides (§9.3) : ABS et antipatinage,
+/// lus dans son `electronics.ini`.
+///
+/// `None` dès que la voiture ne le dit pas — dossier introuvable, `data.acd`
+/// illisible, sections absentes (dix voitures de l'install de référence). Ce
+/// n'est pas une erreur : l'écran n'affiche alors aucune ligne, plutôt qu'une
+/// ligne au conditionnel.
+#[tauri::command]
+pub fn car_factory_assists(app: AppHandle, db: State<Db>, car_id: String) -> Option<crate::electronics::FactoryAssists> {
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().ok()?;
+    let dir = crate::preview::car_dir(&conn, &cfg, &car_id)?;
+    crate::electronics::read(&dir, &car_id)
+}
+
 /// Construit le preset Quick Drive et lance la session via Content Manager (§8.3).
 #[tauri::command]
 pub fn launch_session(app: AppHandle, db: State<Db>, setup: crate::launch::RaceSetup) -> Result<(), String> {

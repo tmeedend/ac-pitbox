@@ -10,6 +10,13 @@ export type SessionType = "practice" | "hotlap" | "race" | "trackday";
  * Quick Drive ("PIT"/"TRACK"/"HOTLAP_START", voir `PracticeStart` côté Rust). */
 export type PracticeStart = "pit" | "track" | "hotlap";
 
+/** Niveau d'une aide au pilotage — les trois états d'Assetto Corsa lui-même
+ * (`0,1,2` en face de `Off,Factory,On` dans le launcher du jeu, voir
+ * `AssistLevel` côté Rust). `factory` garde l'équipement réel de la voiture,
+ * et c'est pourquoi `on` ne peut rien ajouter à une voiture qui n'a pas
+ * l'aide. */
+export type AssistLevel = "off" | "factory" | "on";
+
 /** Saison optionnelle associée à une session (§8.6bis) — influence la
  * température recommandée et, best-effort côté CSP, le rendu (arbres,
  * neige). "" = aucune saison choisie. */
@@ -92,9 +99,40 @@ export interface RaceSetup {
   fuel_rate: number;
   tyre_wear: number;
   tyre_blankets: boolean;
-  abs_auto: boolean;
-  traction_control_auto: boolean;
+  abs: AssistLevel;
+  traction_control: AssistLevel;
   ideal_line: boolean;
+}
+
+/** Reprise d'un réglage d'aide enregistré avant les trois états (§9.3).
+ *
+ * L'ancien champ était un booléen nommé `abs_auto`, et « auto » voulait dire
+ * `Abs: 1` dans le preset Quick Drive, c'est-à-dire **exactement** le niveau
+ * qui s'appelle aujourd'hui `factory`. Donc `true → factory`, pas `true → on` :
+ * `on` vaut `2` et forcerait une aide là où l'utilisateur n'avait demandé que
+ * l'équipement réel de la voiture. Une migration ne change pas ce qui part en
+ * jeu — c'est la même raison qui fait que `false → off` plutôt que le nouveau
+ * défaut, l'un et l'autre conservant à la lettre la valeur déjà envoyée.
+ *
+ * Absent (`undefined`, distinct de `false`) : sauvegarde plus ancienne encore,
+ * ou preset neuf — `factory`, le défaut. */
+export function assistLevelFrom(level: AssistLevel | undefined, legacy: boolean | undefined): AssistLevel {
+  if (level) return level;
+  if (legacy === undefined) return "factory";
+  return legacy ? "factory" : "off";
+}
+
+/** Ce que la voiture avait d'usine — lu dans son `electronics.ini` (§9.3).
+ * `null` quand elle ne le dit pas : l'écran n'affiche alors rien. */
+export interface FactoryAssists {
+  abs: boolean;
+  tractionControl: boolean;
+}
+
+/** Aides d'usine de la voiture en session, pour dire ce que « Factory » vaut
+ * **pour elle**. Jamais une erreur : une voiture muette rend `null`. */
+export function carFactoryAssists(carId: string): Promise<FactoryAssists | null> {
+  return invoke<FactoryAssists | null>("car_factory_assists", { carId });
 }
 
 export interface SkinItem {

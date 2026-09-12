@@ -3,12 +3,14 @@
   import { invoke } from "@tauri-apps/api/core";
   import {
     launchSession,
+    assistLevelFrom,
     isSteamRunning,
     listModSkins,
     getModCspFeatures,
     weatherOptions,
     weatherConditions,
     trackSun,
+    type AssistLevel,
     type GridMode,
     SAME_CATEGORY,
     type Opponent,
@@ -103,8 +105,8 @@
     fuel_rate: 100,
     tyre_wear: 100,
     tyre_blankets: false,
-    abs_auto: true,
-    traction_control_auto: true,
+    abs: "factory",
+    traction_control: "factory",
     ideal_line: false,
   });
 
@@ -503,7 +505,11 @@
     practice_enabled: boolean; practice_minutes: number;
     qualify_enabled: boolean; qualify_minutes: number; ghost_car: boolean; practice_start: PracticeStart;
     damage: number; fuel_rate: number; tyre_wear: number; tyre_blankets: boolean; intent: string; season: Season;
-    abs_auto: boolean; traction_control_auto: boolean; ideal_line: boolean;
+    /** Trois états depuis §9.3 ; `abs_auto`/`traction_control_auto` sont les
+     * booléens d'avant, relus une dernière fois par `assistLevelFrom`. */
+    abs?: AssistLevel; traction_control?: AssistLevel;
+    abs_auto?: boolean; traction_control_auto?: boolean;
+    ideal_line: boolean;
   }
   let presets: Record<string, Persisted> = {};
   let applying = false;
@@ -548,7 +554,7 @@
       practice_start: setup.practice_start,
       damage: setup.damage, fuel_rate: setup.fuel_rate, tyre_wear: setup.tyre_wear, tyre_blankets: setup.tyre_blankets,
       intent: selectedIntent, season,
-      abs_auto: setup.abs_auto, traction_control_auto: setup.traction_control_auto, ideal_line: setup.ideal_line,
+      abs: setup.abs, traction_control: setup.traction_control, ideal_line: setup.ideal_line,
     };
     persistLaunchState();
   }
@@ -569,7 +575,8 @@
       setup.damage = p.damage ?? 50;
       setup.fuel_rate = p.fuel_rate ?? 100; setup.tyre_wear = p.tyre_wear ?? 100;
       setup.tyre_blankets = p.tyre_blankets ?? false;
-      setup.abs_auto = p.abs_auto ?? true; setup.traction_control_auto = p.traction_control_auto ?? true;
+      setup.abs = assistLevelFrom(p.abs, p.abs_auto);
+      setup.traction_control = assistLevelFrom(p.traction_control, p.traction_control_auto);
       setup.ideal_line = p.ideal_line ?? false;
       applySeason(p.season ?? "");
       const opt = weathers.find((w) => w.id === p.intent && w.available);
@@ -594,7 +601,7 @@
       setup.practice_enabled, setup.practice_minutes, setup.qualify_minutes,
       setup.ghost_car, setup.practice_start, setup.damage, setup.fuel_rate, setup.tyre_wear, setup.tyre_blankets,
       selectedIntent, season,
-      setup.abs_auto, setup.traction_control_auto, setup.ideal_line];
+      setup.abs, setup.traction_control, setup.ideal_line];
     if (ready && !applying && selectedIntent) savePreset();
   });
 
@@ -971,7 +978,7 @@
 
         <SessionOptionsBlock {setup} />
 
-        <SimulationBlock {setup} />
+        <SimulationBlock {setup} carName={player?.display_name ?? null} />
 
         {#if setup.session_type === "race" || setup.session_type === "trackday"}
           <OpponentsBlock
