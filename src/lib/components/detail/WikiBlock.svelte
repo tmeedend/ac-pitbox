@@ -74,7 +74,6 @@
     el.replaceChildren();
     if (!html) return;
     el.appendChild(renderArticle(html, lang, images));
-    el.scrollTop = 0;
   });
 
   /** Les liens de l'article ouvrent le navigateur système — jamais une
@@ -88,26 +87,48 @@
     openUrl(href).catch(() => {});
   }
 
+  /** Le conteneur qui défile réellement au-dessus de nous.
+   *
+   * Cherché à l'exécution plutôt que codé en dur : l'article vit dans la boîte
+   * de texte de la fiche, qui n'a **aucune contrainte de hauteur** — c'est un
+   * ancêtre bien plus haut qui porte le défilement, et le savoir de mémoire
+   * serait un pari sur une structure qui bouge. */
+  function scrollParent(el: HTMLElement): HTMLElement | null {
+    let node = el.parentElement;
+    while (node) {
+      const overflow = getComputedStyle(node).overflowY;
+      if (/(auto|scroll|overlay)/.test(overflow) && node.scrollHeight > node.clientHeight) return node;
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  /** Marge au-dessus du titre visé, en pixels CSS : collé au bord haut, un
+   * titre se lit mal et on ne voit pas ce qui le précède. */
+  const SCROLL_MARGIN = 12;
+
   /** Saute à une section. L'ancre est l'`id` que MediaWiki a posé sur le titre
    * et que la reconstruction a conservé.
    *
-   * **Pas de `scrollIntoView`** : il fait défiler *tous* les ancêtres
-   * scrollables pour amener l'élément dans la fenêtre, la page comprise — et
-   * le titre visé finissait sous la barre de fenêtre (celle qui porte
-   * réduire/agrandir/Big Picture). Seul le conteneur de l'article doit bouger.
+   * **Jamais `scrollIntoView`** : il fait défiler *tous* les ancêtres
+   * scrollables pour amener l'élément dans la **fenêtre**, et le titre visé
+   * finissait sous la barre de titre (celle qui porte réduire/agrandir/Big
+   * Picture). On fait donc défiler le conteneur, dont le haut est déjà sous
+   * cette barre — le problème disparaît au lieu d'être compensé.
    *
-   * **Et la division par `zoomFactor()` n'est pas décorative** : le zoom
+   * **La division par `zoomFactor()` n'est pas décorative** : le zoom
    * d'interface est un `zoom` CSS posé sur `<html>`, donc
-   * `getBoundingClientRect` rend des pixels réels de fenêtre déjà multipliés,
-   * alors que `scrollTop` est en pixels CSS. Reporter l'un dans l'autre
-   * appliquerait le facteur deux fois — le même piège que le menu contextuel
-   * décalé et les listes déroulantes hors écran (voir CLAUDE.md). */
+   * `getBoundingClientRect` rend des pixels de fenêtre déjà multipliés quand
+   * `scrollTop` est en pixels CSS. Reporter l'un dans l'autre appliquerait le
+   * facteur deux fois — même piège que le menu contextuel décalé et les listes
+   * déroulantes hors écran (voir CLAUDE.md). */
   function goToSection(anchor: string) {
     if (!host || !anchor) return;
-    const target = host.querySelector(`#${CSS.escape(anchor)}`);
-    if (!target) return;
-    const delta = (target.getBoundingClientRect().top - host.getBoundingClientRect().top) / zoomFactor();
-    host.scrollTo({ top: host.scrollTop + delta, behavior: "smooth" });
+    const target = host.querySelector<HTMLElement>(`#${CSS.escape(anchor)}`);
+    const scroller = scrollParent(host);
+    if (!target || !scroller) return;
+    const delta = (target.getBoundingClientRect().top - scroller.getBoundingClientRect().top) / zoomFactor();
+    scroller.scrollTo({ top: scroller.scrollTop + delta - SCROLL_MARGIN, behavior: "smooth" });
   }
 
   // Les langues où l'article existe vraiment, jamais une liste en dur : sur les
@@ -321,11 +342,16 @@
 </div>
 
 <style>
+  /* **L'article coule avec la page, il n'a pas son propre ascenseur.**
+     La boîte de texte de la fiche n'impose aucune hauteur : un conteneur en
+     `overflow: auto` posé dedans ne borne donc rien, il grandit — et on se
+     retrouvait avec deux défilements qui se marchent dessus, dont un qui
+     laissait une bande noire sous la fenêtre. Un seul ascenseur, celui de la
+     fiche, comme pour tout le reste de l'écran. */
   .wiki {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    height: 100%;
   }
   .muted {
     margin: 0;
@@ -335,7 +361,6 @@
   .extract {
     flex: 1;
     min-width: 0;
-    overflow-y: auto;
     line-height: 1.55;
     padding-right: 6px;
   }
@@ -370,15 +395,19 @@
   .body {
     display: flex;
     gap: 16px;
-    flex: 1;
-    min-height: 0;
+    align-items: flex-start;
   }
 
+  /* Collant : c'est ce qui remplace l'ascenseur propre au sommaire. Il suit
+     la lecture au lieu de disparaître en haut de l'article. */
   .toc {
     flex: 0 0 170px;
+    position: sticky;
+    top: 8px;
     display: flex;
     flex-direction: column;
     gap: 3px;
+    max-height: 70vh;
     overflow-y: auto;
     padding-right: 10px;
     border-right: 1px solid var(--line);
@@ -558,8 +587,6 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    min-height: 0;
-    flex: 1;
   }
   .row {
     display: flex;
@@ -575,6 +602,9 @@
     list-style: none;
     margin: 0;
     padding: 0;
+    /* Le seul ascenseur restant du bloc, et il est borné : une liste de dix
+       candidats ne doit pas allonger la page de la fiche. */
+    max-height: 320px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
