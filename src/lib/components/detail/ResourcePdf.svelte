@@ -523,7 +523,12 @@
 <div class="pdf" bind:this={root} bind:clientWidth={width}>
   {#if slots.length}
     <div class="bar">
+      <!-- Ajuster à la largeur ou à la page est une bascule de présentation :
+           rien n'est « retenu pour la session », donc pas de rouge (§7.2ter).
+           Le ton par défaut du composant lui en donnait un faute d'avoir été
+           écrit. -->
       <Seg
+        tone="neutral"
         value={fit}
         onselect={(v) => applyScale(v as "width" | "page")}
         items={[
