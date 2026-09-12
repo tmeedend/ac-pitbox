@@ -52,30 +52,12 @@ pub struct Report {
     pub rows: Vec<Row>,
     pub thresholds: Thresholds,
     /// Mods known to have **no real-world counterpart** — fictional cars and
-    /// invented circuits. See `load_expected_absences`.
+    /// invented circuits, from the shipped table.
     pub expected_absences: Vec<String>,
-}
-
-/// Reads the list of mods that are *supposed* to match nothing.
-///
-/// **Why this exists.** "129 sans candidat" is not a miss rate: an RSS Formula
-/// Hybrid, a traffic car and `ks_black_cat_county` have no article anywhere,
-/// and finding nothing for them is the right answer. Mixed into one number,
-/// those successes look exactly like the Ferrari SF15-T, whose article existed
-/// all along and was being thrown away by a too-narrow type filter. Separating
-/// the two is what turns the report from a tally into a measurement — and the
-/// knowledge of which is which is the user's, not the code's.
-///
-/// One mod folder name per line; `#` starts a comment. A missing file is not
-/// an error, it only means the two populations stay merged.
-pub fn load_expected_absences(path: &Path) -> Vec<String> {
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return Vec::new();
-    };
-    text.lines()
-        .map(|line| line.split('#').next().unwrap_or_default().trim().to_string())
-        .filter(|line| !line.is_empty())
-        .collect()
+    /// True when the run covered only part of the library (`PITBOX_WIKI_LIMIT`).
+    /// A partial run cannot tell a typo from a mod it simply did not reach, so
+    /// the "clés sans mod" check stays quiet.
+    pub partial: bool,
 }
 
 /// Everything a run needs, so the loop takes one argument instead of six.
@@ -129,6 +111,7 @@ impl Calibration<'_> {
             rows,
             thresholds: self.thresholds,
             expected_absences: self.expected_absences.clone(),
+            partial: limit.is_some(),
         }
     }
 
@@ -315,6 +298,31 @@ impl Report {
             }
         }
 
+        // **A curated key that matches no mod does nothing, silently.** A typo
+        // in `wiki-links.json` is invisible otherwise: no error, no row, just
+        // an appariement that never appears. The run has the whole library in
+        // hand, so it is the only place that can say so.
+        let curated = if self.partial {
+            crate::wiki::curated::CuratedLinks::default()
+        } else {
+            crate::wiki::curated::shipped()
+        };
+        let unknown: Vec<&String> = curated
+            .links
+            .keys()
+            .chain(curated.no_counterpart.iter())
+            .filter(|key| !self.rows.iter().any(|r| r.mod_key == **key))
+            .collect();
+        if !unknown.is_empty() {
+            out.push_str(&format!(
+                "\n## Clés livrées sans mod correspondant ({}) — coquille probable\n\n",
+                unknown.len()
+            ));
+            for key in unknown {
+                out.push_str(&format!("- `{key}`\n"));
+            }
+        }
+
         if unavailable > 0 {
             out.push_str("\n## Réseau indisponible — à rejouer, ce ne sont pas des verdicts\n\n");
             for row in &self.rows {
@@ -355,6 +363,7 @@ mod tests {
         let report = Report {
             thresholds: thresholds(),
             expected_absences: vec!["rss_formula_hybrid".into()],
+            partial: true,
             rows: vec![
                 Row {
                     mod_key: "ks_toyota_ae86".into(),
@@ -431,9 +440,10 @@ mod tests {
             // La langue de lecture décide du wiki interrogé en premier
             // (`lang::search_order`). Celle des réglages, français par défaut.
             locale: cfg.prefs.language.as_deref().unwrap_or("fr"),
-            // Les mods dont on SAIT qu'ils n'ont pas d'équivalent réel, un par
-            // ligne. Sans ce fichier, les deux populations restent mélangées.
-            expected_absences: load_expected_absences(&config_dir.join("wiki-absences-attendues.txt")),
+            // Livrés avec l'application (`rules/wiki-links.json`) : rien à
+            // poser dans le dossier de config, et la liste se versionne avec
+            // le code plutôt que de vivre chez un seul utilisateur.
+            expected_absences: crate::wiki::curated::shipped().no_counterpart,
         };
 
         let report = calibration.run(&conn, limit, &mut |done, total, id| {

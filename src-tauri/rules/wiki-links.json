@@ -1,0 +1,31 @@
+{
+  "_comment": "Appariements Wikipédia livrés avec l'application (SPEC-wikipedia-fiche-detail.md §10). Corrections faites une fois par le mainteneur, embarquées dans le binaire, dont profitent tous les utilisateurs sans avoir à refaire le travail. Posées en `source = import` : la précédence du §3.1 (manual > import > auto) garantit qu'elles n'écrasent JAMAIS une correction locale, et qu'elles l'emportent sur l'appariement automatique.",
+
+  "_comment_links": "Nom du dossier du mod → identifiant Wikidata (Q-id, jamais une URL). Ne mettre ici que ce qui a été VÉRIFIÉ sur Wikidata : un mauvais article coûte plus cher que pas d'article (§1). Les mods que l'appariement automatique trouve déjà n'ont rien à faire ici — cette table est pour ce qu'il rate.",
+  "links": {
+    "ks_abarth500_assetto_corse": "Q2614496",
+    "ks_monza66": "Q171417",
+    "shuto_revival_project_beta": "Q1369525"
+  },
+
+  "_comment_links_notes": [
+    "ks_abarth500_assetto_corse → Abarth 500 (Q2614496). L'item de la variante Assetto Corse existe (Q10843475) mais n'a d'article qu'en espagnol et en russe, et aucun lien « partie de » vers le modèle : rien ne permet d'y arriver automatiquement. L'article du modèle contient une section sur cette version.",
+    "ks_monza66 → Monza (Q171417). Le tracé de 1966 n'a pas d'article à lui ; ses coordonnées CSP sont celles de Milan, à 18 km.",
+    "shuto_revival_project_beta → Shuto Expressway (Q1369525). Les routes ne s'apparient plus automatiquement (voir matchtrack) : c'est précisément le cas que cette table rattrape."
+  ],
+
+  "_comment_no_counterpart": "Mods dont on SAIT qu'ils n'ont pas d'équivalent réel. Ne change rien au comportement de l'application : sert à ce que le rapport de calibration cesse d'additionner deux choses opposées — un mod fictif qui ne trouve rien est un succès, une vraie voiture qui ne trouve rien est un manque.",
+  "no_counterpart": [
+    "rss_formula_1990_v10",
+    "rss_formula_2010",
+    "rss_formula_2013",
+    "rss_formula_hybrid_2025_alpine",
+    "rss_formula_rss_supreme_25",
+    "rss_gtm_lanzo_v10",
+    "rss_gtm_lanzo_v8",
+    "rss_gtm_lux_v8_evo",
+    "vrc_erc_1999_renoir_csp",
+    "vrc_pt_2023_pageau_98",
+    "vrc_pt_2023_pageau_98_csp"
+  ]
+}

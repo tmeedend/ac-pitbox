@@ -28,6 +28,7 @@
 pub mod api;
 pub mod calibrate;
 pub mod clean;
+pub mod curated;
 pub mod ids;
 pub mod lang;
 pub mod matchcar;
