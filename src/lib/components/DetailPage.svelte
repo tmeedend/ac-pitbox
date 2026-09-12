@@ -29,6 +29,8 @@
   import CarPreview3D from "./detail/CarPreview3D.svelte";
   import InlineEdit from "./InlineEdit.svelte";
   import Tabs from "./Tabs.svelte";
+  import WikiBlock from "./detail/WikiBlock.svelte";
+  import { getWikiArticle, setWikiLang, wikiLang, type WikiArticle } from "$lib/wiki";
   import PickerBar from "./PickerBar.svelte";
   import FicheHeader from "./FicheHeader.svelte";
   import { setEntityNote } from "$lib/userMeta";
@@ -239,8 +241,43 @@
    * description est ce qu'on vient lire, la note ce qu'on vient ajouter.
    * L'onglet « Le modèle réel » viendra du chantier Wikipédia et sera absent
    * tant qu'aucun article n'est apparié. */
-  type TextTab = "desc" | "notes";
+  type TextTab = "desc" | "notes" | "wiki";
   let textTab = $state<TextTab>("desc");
+
+  /** L'article Wikipédia du mod (§7). `null` = pas d'onglet, sans un mot :
+   * l'absence n'est pas une erreur (§1). */
+  let wikiArticle = $state<WikiArticle | null>(null);
+
+  /** Charge l'article à l'ouverture de la fiche, et à chaque changement de mod.
+   *
+   * Deux pièges du projet évités ici, tous deux documentés dans CLAUDE.md :
+   * l'identifiant est lu **en tête**, avant toute sortie, sans quoi l'effet ne
+   * s'abonnerait à rien au premier passage ; et `wikiLang()` passe par
+   * `peekUiPref`, dont le cache est un `$state` global — le lire sans
+   * `untrack` abonnerait cet effet à *toutes* les préférences de l'app, et
+   * bouger un curseur de l'aperçu 3D relancerait la requête réseau. */
+  $effect(() => {
+    const key = detail?.id_interne ?? null;
+    wikiArticle = null;
+    if (!key) return;
+    const lang = untrack(() => wikiLang());
+    let cancelled = false;
+    void getWikiArticle(key, lang).then((a) => {
+      if (!cancelled) wikiArticle = a;
+    });
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  /** Changement de langue de lecture (§5.4) : mémorisé globalement, pas par
+   * mod, et l'article est redemandé dans la foulée. */
+  async function changeWikiLang(lang: string) {
+    const key = detail?.id_interne;
+    if (!key) return;
+    await setWikiLang(lang);
+    wikiArticle = await getWikiArticle(key, lang);
+  }
   // Chiffres affichés entre parenthèses sur les onglets Médias/Ressources —
   // mêmes appels que ceux faits à l'ouverture de l'onglet (media.rs parcourt
   // en direct `screens/`/`replay/`, potentiellement coûteux), mais lancés ici
@@ -1090,6 +1127,10 @@
       tabs={[
         { id: "desc", label: t("common.description") },
         { id: "notes", label: t("notes.title"), marker: !!detail?.notes_user },
+        // §7.1 : l'onglet est **entièrement absent** sans contenu. Un onglet
+        // présent mais vide est pire que pas d'onglet — et il n'y a rien à
+        // expliquer, l'absence n'étant pas une panne (§1).
+        ...(wikiArticle ? [{ id: "wiki", label: isCar ? t("wiki.tabCar") : t("wiki.tabTrack") }] : []),
       ]}
       active={textTab}
       onselect={(v) => (textTab = v as TextTab)}
@@ -1112,6 +1153,13 @@
       {#if textTab === "desc"}
         <div class="read-box desc-body" class:empty-desc={!text}>
           {text ? decodeDescription(text) : t("detail.noDescription")}
+        </div>
+      {:else if textTab === "wiki" && wikiArticle}
+        <!-- Même boîte que les deux autres : le texte de Wikipédia est un
+             contenu de plus dans le même cadre, jamais fondu dans la
+             description (§2). -->
+        <div class="read-box">
+          <WikiBlock article={wikiArticle} onlang={changeWikiLang} />
         </div>
       {:else}
         <!-- Même boîte que la description : les deux sous-onglets échangent un

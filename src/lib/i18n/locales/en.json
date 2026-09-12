@@ -1638,6 +1638,15 @@
     },
     "groupOther": "Others"
   },
+  "wiki": {
+    "tabCar": "The real car",
+    "tabTrack": "The circuit",
+    "generalArticle": "General article: {title}",
+    "readFull": "Read the full article",
+    "attribution": "Extract from the Wikipedia article {title}",
+    "license": "Text available under the CC BY-SA 4.0 licence",
+    "languageLabel": "Article language"
+  },
   "prefs": {
     "writeFailedTitle": "Your settings are not being saved",
     "writeFailedBody": "Pit Box cannot write its preferences to disk. What you set stays active until you close the app, then it is lost — favourites, driver outfits, filters and views included."

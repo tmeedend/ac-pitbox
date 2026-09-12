@@ -430,12 +430,7 @@ mod tests {
             net: &net,
             cleaner: &cleaner,
             weights: &matching.weights,
-            thresholds: Thresholds {
-                min_score: cfg.prefs.wiki_match_min_score,
-                min_margin: cfg.prefs.wiki_match_min_margin,
-                track_radius_m: cfg.prefs.wiki_track_radius_m,
-                track_tie_margin_m: cfg.prefs.wiki_track_tie_margin_m,
-            },
+            thresholds: Thresholds::from_prefs(&cfg.prefs),
             ac_install_path: cfg.ac_install_path.as_deref(),
             // La langue de lecture décide du wiki interrogé en premier
             // (`lang::search_order`). Celle des réglages, français par défaut.

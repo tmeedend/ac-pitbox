@@ -60,6 +60,12 @@ pub struct Prefs {
     /// sources en une seule ne se fait pas via une simple junction, voir
     /// `compose.rs`.
     pub deploy_mode: String,
+    /// Enrichissement Wikipédia en ligne (§8). Activé par défaut, mais
+    /// désactivable : l'app interroge Wikipédia à l'ouverture d'une fiche, ce
+    /// qui révèle indirectement le contenu de la bibliothèque, et une partie
+    /// du public joue délibérément hors ligne. Désactivé, aucune requête ne
+    /// sort et le cache déjà constitué reste consultable.
+    pub wiki_online: bool,
     /// Seuils de l'appariement Wikipédia (§4 et §13 de
     /// `docs/SPEC-wikipedia-fiche-detail.md`). Ils vivent ici et non dans le
     /// code parce que ce sont précisément les nombres que la commande de
@@ -106,6 +112,7 @@ impl Default for Prefs {
             // Marge à 0,12 : le seul faux positif qu'elle laissait passer est
             // tombé avec le plancher. Le premier appariement juste est à
             // 0,127, donc monter davantage couperait du bon.
+            wiki_online: true,
             wiki_match_min_score: 0.70,
             wiki_match_min_margin: 0.12,
             // 10 km — le maximum que l'API accepte (`gsradius`), et non les

@@ -107,60 +107,173 @@ fn parent_to_climb(net: &WikiClient, facts: &api::EntityFacts) -> Option<api::En
     Some(parent)
 }
 
-/// The article to show for a mod, in the requested language (§5).
+/// What the fiche needs, decided **without touching the network**.
 ///
-/// `net` is `None` when online enrichment is switched off (§8) — the cache
-/// stays readable, no request goes out. `requested_lang` is an app locale and
-/// gets truncated (`fr-CA` reads `fr.wikipedia.org`); the global preference
-/// behind it belongs to the frontend, which is where §5.1 puts it.
+/// The three-step split — `plan`, `fetch`, `commit` — exists for one reason
+/// and it is not elegance: `plan` and `commit` run under the SQLite lock,
+/// `fetch` does not. A resolution can spend fifteen seconds on the network in
+/// the worst case (three timeouts), and holding the overlay's mutex for that
+/// long would freeze every other command in the app — the exact shape of the
+/// blocked-library bug `commands/ui_prefs.rs` documents. A decorative tab must
+/// never be able to do that.
+pub enum Step {
+    /// Nothing to ask anyone: here is what to display, if anything.
+    Settled(Option<CachedArticle>),
+    /// The network is needed. Everything it takes is in here, already read.
+    Ask(Ask),
+}
+
+/// What `fetch` needs, gathered under the lock so it needs no database.
+pub struct Ask {
+    pub mod_key: String,
+    pub lang: String,
+    /// The appariement, when there is one. `None` means the matching of §4 has
+    /// to run first — which is how a fiche opened for the first time works.
+    pub entity_id: Option<String>,
+    pub subject: Subject,
+    /// What to fall back on when the network leads nowhere: a stale cache entry
+    /// beats an empty tab, and §1 says nothing here is worth an error.
+    pub stale: Option<CachedArticle>,
+}
+
+/// Cars and tracks share the resolution and **not** the search strategy (§4).
+pub enum Subject {
+    Car(matchcar::CarSubject),
+    Track(matchtrack::TrackSubject),
+}
+
+/// What `fetch` learnt, ready to be written under the lock.
+pub struct Resolved {
+    pub mod_key: String,
+    /// An appariement found just now, to store as `auto`.
+    pub matched: Option<String>,
+    pub article: Option<CachedArticle>,
+    /// True only when the absence is **durable** — never after a network
+    /// failure, which teaches nothing (§3.3).
+    pub no_match: bool,
+    pub stale: Option<CachedArticle>,
+}
+
+/// Reads everything the resolution needs from the overlay (§5).
 ///
-/// `None` means there is nothing to show, and that is an ordinary outcome: no
-/// appariement, no article, nothing cached and no network. The caller has
-/// nothing to display and no error to report.
-///
-/// The order below is what keeps the request count at "a few dozen a month"
-/// (§6.3): cache, then negative cache, then at most three requests — one for
-/// the entity, one for the parent only when the entity cannot serve the
-/// requested language, one for the article itself.
-pub fn resolve_article(
+/// `online` is §8's switch: off, the cache stays readable and not one request
+/// goes out. `requested_lang` is an app locale and gets truncated — `fr-CA`
+/// reads `fr.wikipedia.org`.
+pub fn plan(
     conn: &Connection,
-    net: Option<&WikiClient>,
+    ac_install: Option<&std::path::Path>,
     mod_key: &str,
     requested_lang: &str,
-) -> Option<CachedArticle> {
+    online: bool,
+) -> Step {
     let lang = wiki_lang(requested_lang);
+    let link = best_effort("wiki_link", store::get_link(conn, mod_key)).flatten();
 
-    // No appariement, nothing to resolve. Creating one is §4's job.
-    let link = best_effort("wiki_link", store::get_link(conn, mod_key))??;
-
-    let cached = best_effort("wiki_cache", store::get_article(conn, &link.entity_id, &lang)).flatten();
+    let cached = link
+        .as_ref()
+        .and_then(|l| best_effort("wiki_cache", store::get_article(conn, &l.entity_id, &lang)).flatten());
     if let Some(row) = &cached {
         if store::is_fresh(&row.fetched_at, Duration::days(POSITIVE_TTL_DAYS), Local::now()) {
-            return cached;
+            return Step::Settled(cached);
         }
     }
 
     // §8: enrichment off. What was fetched before stays readable, however old —
-    // a stale extract is worth more than an empty tab, and nothing here depends
-    // on it being current.
-    let net = net?;
-
-    // §3.3, before any request: this mod has been tried recently and led
-    // nowhere. Without this check every opening of the fiche replays the whole
-    // resolution for an answer that has not changed.
-    if best_effort("wiki_no_match", store::has_fresh_no_match(conn, mod_key, Local::now())).unwrap_or(false) {
-        return cached;
+    // a stale extract is worth more than an empty tab, and nothing depends on
+    // it being current.
+    if !online {
+        return Step::Settled(cached);
     }
 
-    let facts = match net.entity(&link.entity_id) {
+    // §3.3, before anything else: this mod was tried recently and led nowhere.
+    // Without this check, every opening of the fiche replays a full resolution
+    // for an answer that has not changed.
+    if best_effort("wiki_no_match", store::has_fresh_no_match(conn, mod_key, Local::now())).unwrap_or(false) {
+        return Step::Settled(cached);
+    }
+
+    let Some(subject) = subject_of(conn, ac_install, mod_key) else {
+        return Step::Settled(cached);
+    };
+    Step::Ask(Ask {
+        mod_key: mod_key.to_string(),
+        lang,
+        entity_id: link.map(|l| l.entity_id),
+        subject,
+        stale: cached,
+    })
+}
+
+/// Builds what §4 needs to search with, from what the overlay already knows
+/// about the mod.
+fn subject_of(conn: &Connection, ac_install: Option<&std::path::Path>, mod_key: &str) -> Option<Subject> {
+    let row = best_effort("mods", crate::overlay::get_mod(conn, mod_key)).flatten()?;
+    let name = row.display_name.clone().unwrap_or_else(|| row.id_interne.clone());
+    if row.kind == "Track" {
+        // CSP's table first, the mod's geotags second — `sun.rs` already knows
+        // how, and knows that Kunos geotags are a placeholder.
+        let location = ac_install
+            .and_then(|ac| crate::sun::track_location(ac, mod_key, None))
+            .map(|l| (l.latitude, l.longitude));
+        return Some(Subject::Track(matchtrack::TrackSubject {
+            name: Some(name),
+            location,
+        }));
+    }
+    Some(Subject::Car(matchcar::CarSubject {
+        brand: row.brand.clone(),
+        name: Some(name),
+        year: row.year,
+        category: row.category.clone(),
+    }))
+}
+
+/// The network half (§4 then §5), with **no database at all**.
+pub fn fetch(
+    net: &WikiClient,
+    cleaner: &clean::Cleaner,
+    weights: &clean::Weights,
+    thresholds: &matching::Thresholds,
+    ask: Ask,
+) -> Resolved {
+    let mut out = Resolved {
+        mod_key: ask.mod_key,
+        matched: None,
+        article: None,
+        no_match: false,
+        stale: ask.stale,
+    };
+
+    let lang = ask.lang;
+
+    // The appariement first, when the mod has none. An ambiguity is a verdict
+    // (§1): it produces no match and no negative-cache entry either, because
+    // the candidates are real and a better threshold may accept one later.
+    let entity_id = match ask.entity_id {
+        Some(id) => id,
+        None => match match_subject(net, cleaner, weights, thresholds, &ask.subject, &lang) {
+            matching::MatchOutcome::Matched { candidate, .. } => {
+                out.matched = Some(candidate.entity_id.clone());
+                candidate.entity_id
+            }
+            matching::MatchOutcome::Ambiguous { .. } => return out,
+            matching::MatchOutcome::NoCandidate => {
+                out.no_match = true;
+                return out;
+            }
+            matching::MatchOutcome::Unavailable => return out,
+        },
+    };
+
+    let facts = match net.entity(&entity_id) {
         Fetched::Found(facts) => facts,
         // The entity itself has no article anywhere: durable, worth remembering.
         Fetched::Absent => {
-            best_effort("wiki_no_match write", store::note_no_match(conn, mod_key));
-            return cached;
+            out.no_match = true;
+            return out;
         }
         // Nothing was learned — in particular, not that there is no article.
-        Fetched::Unavailable => return cached,
+        Fetched::Unavailable => return out,
     };
 
     // The parent is fetched only when the entity cannot serve the requested
@@ -187,8 +300,8 @@ pub fn resolve_article(
     for attempt in chain {
         match net.article(&attempt.lang, &attempt.title) {
             Fetched::Found(text) => {
-                let row = CachedArticle {
-                    entity_id: link.entity_id.clone(),
+                out.article = Some(CachedArticle {
+                    entity_id: entity_id.clone(),
                     // The language **asked for**, per §3.2 — the one actually
                     // served is readable off the URL.
                     lang: lang.clone(),
@@ -199,12 +312,8 @@ pub fn resolve_article(
                     parent_entity: attempt.via_parent.then(|| attempt.entity_id.clone()),
                     available_langs: text.available_langs,
                     fetched_at: Local::now().to_rfc3339(),
-                };
-                best_effort("wiki_cache write", store::put_article(conn, &row));
-                // It used to lead nowhere and now it does: the entry would
-                // otherwise keep an article out of sight for up to ninety days.
-                best_effort("wiki_no_match clear", store::forget_no_match(conn, mod_key));
-                return Some(row);
+                });
+                return out;
             }
             Fetched::Absent => continue,
             Fetched::Unavailable => {
@@ -214,8 +323,52 @@ pub fn resolve_article(
         }
     }
 
-    if !could_not_ask {
-        best_effort("wiki_no_match write", store::note_no_match(conn, mod_key));
+    // One `Unavailable` anywhere in the chain forbids the negative cache: a
+    // train tunnel must not cost ninety days of absent tab.
+    out.no_match = !could_not_ask;
+    out
+}
+
+/// Runs the right strategy for the subject. Cars and tracks share this line and
+/// nothing else — §4 gives them two different searches on purpose.
+///
+/// `locale` decides which wiki is searched **first** (`lang::search_order`,
+/// English second): the English "Abarth 500" is a disambiguation page while the
+/// French one is a real article, so a French reader finds what an English
+/// search throws away.
+fn match_subject(
+    net: &WikiClient,
+    cleaner: &clean::Cleaner,
+    weights: &clean::Weights,
+    thresholds: &matching::Thresholds,
+    subject: &Subject,
+    locale: &str,
+) -> matching::MatchOutcome {
+    match subject {
+        Subject::Car(car) => matchcar::match_car(net, cleaner, weights, thresholds, car, locale),
+        Subject::Track(track) => matchtrack::match_track(net, cleaner, thresholds, track, locale),
     }
-    cached
+}
+
+/// Writes what `fetch` learnt, back under the lock (§3).
+pub fn commit(conn: &Connection, resolved: Resolved) -> Option<CachedArticle> {
+    if let Some(entity_id) = &resolved.matched {
+        // `auto`: the precedence of §3.1 means this never overwrites a
+        // correction or a shipped entry.
+        best_effort(
+            "wiki_link write",
+            store::set_link(conn, &resolved.mod_key, entity_id, store::LinkSource::Auto),
+        );
+    }
+    if let Some(row) = &resolved.article {
+        best_effort("wiki_cache write", store::put_article(conn, row));
+        // It used to lead nowhere and now it does: the entry would otherwise
+        // keep an article out of sight for up to ninety days.
+        best_effort("wiki_no_match clear", store::forget_no_match(conn, &resolved.mod_key));
+        return resolved.article;
+    }
+    if resolved.no_match {
+        best_effort("wiki_no_match write", store::note_no_match(conn, &resolved.mod_key));
+    }
+    resolved.stale
 }

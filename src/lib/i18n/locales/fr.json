@@ -1638,6 +1638,15 @@
     },
     "groupOther": "Autres"
   },
+  "wiki": {
+    "tabCar": "Le modèle réel",
+    "tabTrack": "Le circuit",
+    "generalArticle": "Article général : {title}",
+    "readFull": "Lire l'article complet",
+    "attribution": "Extrait de l'article {title} de Wikipédia",
+    "license": "Texte disponible sous licence CC BY-SA 4.0",
+    "languageLabel": "Langue de l'article"
+  },
   "prefs": {
     "writeFailedTitle": "Vos réglages ne sont pas enregistrés",
     "writeFailedBody": "Pit Box n'arrive pas à écrire ses préférences sur le disque. Ce que vous réglez reste actif jusqu'à la fermeture, puis sera perdu — favoris, tenues de pilote, filtres et vues comprises."

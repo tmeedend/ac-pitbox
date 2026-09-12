@@ -135,6 +135,19 @@ pub fn name_similarity(a: &str, b: &str) -> f64 {
 /// Two ways to end with nothing, and they are not the same: too weak (nobody
 /// is plausible) and too close (several are). The second is the one the spec
 /// insists on — "l'ambiguïté produit un non-résultat, pas un tirage au sort".
+impl Thresholds {
+    /// Reads the four settings. One place, so the calibration and the fiche
+    /// can never drift apart on what "the threshold" means.
+    pub fn from_prefs(prefs: &crate::config::Prefs) -> Self {
+        Self {
+            min_score: prefs.wiki_match_min_score,
+            min_margin: prefs.wiki_match_min_margin,
+            track_radius_m: prefs.wiki_track_radius_m,
+            track_tie_margin_m: prefs.wiki_track_tie_margin_m,
+        }
+    }
+}
+
 pub fn decide(mut candidates: Vec<Candidate>, thresholds: &Thresholds) -> MatchOutcome {
     candidates.sort_by(|a, b| b.score.total_cmp(&a.score));
     let mut it = candidates.into_iter();

@@ -115,6 +115,16 @@ pub fn run() {
             // et la restauration.
             gamebackup::restore_orphans(&conn);
 
+            // Appariements Wikipédia livrés avec l'application (§10) : posés à
+            // chaque démarrage parce que la table peut avoir grandi depuis la
+            // version précédente. La précédence du §3.1 fait que c'est sans
+            // risque — une correction locale (`manual`) n'est jamais écrasée.
+            let curated = wiki::curated::shipped();
+            let (written, skipped) = wiki::curated::seed_links(&conn, &curated);
+            if written > 0 || skipped > 0 {
+                log::debug!("wiki: {written} appariements livrés posés, {skipped} laissés en place");
+            }
+
             // Filet de sécurité : le brouillon de conversion des vignettes de
             // grille (`SPEC-grille.md` §5.3) est effacé dès l'image rendue,
             // mais une fermeture brutale en laisse un — vingt mégaoctets que
@@ -398,6 +408,7 @@ pub fn run() {
             commands::others::get_other_resource_path,
             commands::others::read_other_resource,
             commands::addons::delete_app,
+            commands::wiki::get_wiki_article,
             commands::usermeta::set_entity_note,
             commands::usermeta::set_entity_display_name,
             commands::rules::get_rules,

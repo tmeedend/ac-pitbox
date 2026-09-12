@@ -698,9 +698,31 @@ pour un circuit, dont l'identité tient dans ces deux chiffres.
 
 **Le bloc textuel est à sous-onglets** (§7.4) : Description | Notes, c'est le
 contenu qui change, pas la mise en page — même boîte, même corps de texte. Notes n'est jamais l'onglet par défaut
-et porte une pastille quand une note existe. Un troisième onglet « Le modèle
-réel » s'y ajoutera avec l'appariement Wikipédia, absent tant qu'aucun article
-n'est apparié.
+et porte une pastille quand une note existe.
+
+**Un troisième onglet porte l'article Wikipédia** — « Le modèle réel » sur une
+voiture, « Le circuit » sur un circuit
+(`docs/SPEC-wikipedia-fiche-detail.md`). Il est **entièrement absent** tant
+qu'aucun article n'est trouvé : un onglet vide serait pire que pas d'onglet, et
+l'absence n'a rien à expliquer — la fonctionnalité est décorative, elle échoue
+sans conséquence. L'article est cherché à l'ouverture de la fiche, jamais en
+masse, et la fiche s'affiche complète sans l'attendre : l'onglet apparaît quand
+le contenu arrive.
+
+Deux choses ne sont pas négociables et viennent du droit d'auteur, pas du
+goût : l'extrait n'est **jamais fondu** dans la description du mod — ce sont
+deux sous-onglets, donc deux blocs distincts — et il est affiché **tel que
+l'API le rend**, sans reformulation, résumé ni traduction. L'attribution en
+pied (titre de l'article, lien, licence CC BY-SA) est obligatoire, et le mot
+« extrait » y est nécessaire : n'en montrer qu'un fragment est une
+modification, qui doit être signalée. Le lien « Lire l'article complet » ouvre
+le **navigateur système**, jamais une webview interne.
+
+L'enrichissement est **désactivable** (`wiki_online`, §12) : l'app interroge
+Wikipédia à l'ouverture d'une fiche, ce qui révèle indirectement le contenu de
+la bibliothèque, et une partie du public joue délibérément hors ligne.
+Désactivé, aucune requête ne sort et le cache déjà constitué reste
+consultable.
 
 ### 6.3bis (suite) Tracés apportés par une couche (refonte §7.7)
 
