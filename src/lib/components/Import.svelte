@@ -8,7 +8,10 @@
   import BulkImport from "./BulkImport.svelte";
   import ImportReport from "./ImportReport.svelte";
   import Field from "./Field.svelte";
+  import { convertCmGrids, scanCmPresets, type CmImportReport, type CmScan } from "$lib/cmImport";
   import { getConfig, saveConfig, type AppConfig } from "$lib/config";
+  import { listLibrary } from "$lib/library";
+  import { addGrids } from "$lib/savedGrids";
   import { errorText } from "$lib/errors";
   import {
     importState,
@@ -35,12 +38,57 @@
   let config = $state<AppConfig | null>(null);
   let prefsOpen = $state(false);
   let prefsError = $state("");
+
+  // --- Presets Content Manager (§6) ----------------------------------------
+  //
+  // **Deux moments, un seul mécanisme.** La spec voulait une proposition au
+  // premier lancement et un bouton permanent sur cette page. Les deux vivent
+  // ici : la carte de proposition n'apparaît que si des presets existent et que
+  // l'utilisateur n'a pas refusé — et son refus est définitif —, le bouton reste
+  // en dessous quoi qu'il arrive. Une seule surface plutôt que deux à tenir
+  // d'accord, et le « premier lancement » devient la première ouverture de la
+  // page d'import, qui est de toute façon l'endroit où l'on vient chercher ça.
+  let cmScan = $state<CmScan | null>(null);
+  let cmReport = $state<CmImportReport | null>(null);
+  let cmBusy = $state(false);
+  let cmError = $state("");
+  const cmOffer = $derived(!!cmScan?.grids.length && !!config && !config.prefs.cm_import_declined && !cmReport);
+
+  /** L'import aboutit toujours (§6.3) : ce qui manque est nommé, jamais fatal. */
+  async function importCmGrids() {
+    if (!cmScan || cmBusy) return;
+    cmBusy = true;
+    cmError = "";
+    try {
+      const cars = (await listLibrary()).filter((c) => c.kind === "Car");
+      const { grids, missing, disabled } = convertCmGrids(cmScan.grids, cars);
+      const imported = grids.length ? await addGrids(grids) : [];
+      cmReport = { imported, missing, disabled, skipped: cmScan.skipped };
+    } catch (e) {
+      cmError = errorText(e);
+    } finally {
+      cmBusy = false;
+    }
+  }
+
+  /** Refus **définitif** : la proposition ne revient pas. Le bouton d'import,
+   * lui, reste — ce qu'on refuse est qu'on le redemande, pas la
+   * fonctionnalité. */
+  async function declineCmOffer() {
+    if (!config) return;
+    config.prefs.cm_import_declined = true;
+    await persistPrefs();
+  }
+
   onMount(async () => {
     try {
       config = await getConfig();
     } catch (e) {
       prefsError = errorText(e);
     }
+    // Jamais bloquant : Content Manager peut ne pas être installé, et c'est un
+    // non-résultat, pas une panne.
+    cmScan = await scanCmPresets().catch(() => null);
   });
   async function persistPrefs() {
     if (!config) return;
@@ -106,6 +154,51 @@
     </button>
   </section>
 
+  <!-- Grilles Content Manager (§6). La carte est la proposition, la section en
+       dessous le point d'entrée permanent. -->
+  {#if cmOffer}
+    <section class="cm-offer">
+      <h3>{t("import.cmFoundTitle")}</h3>
+      <p class="hint">{t("import.cmFoundHint", { count: cmScan?.grids.length ?? 0 })}</p>
+      <div class="cm-actions">
+        <button class="btn btn-primary" type="button" disabled={cmBusy} onclick={importCmGrids}>
+          {cmBusy ? t("import.importing") : t("import.cmImport")}
+        </button>
+        <button class="btn" type="button" onclick={() => void declineCmOffer()}>{t("import.cmNotNow")}</button>
+      </div>
+    </section>
+  {/if}
+
+  <section class="cm">
+    <h3>{t("import.cmTitle")}</h3>
+    <p class="hint">{t("import.cmHint")}</p>
+    {#if cmScan?.root == null}
+      <p class="hint small">{t("import.cmNotFound")}</p>
+    {:else}
+      <button class="btn" type="button" disabled={cmBusy || !cmScan.grids.length} onclick={importCmGrids}>
+        {cmBusy ? t("import.importing") : t("import.cmImportCount", { count: cmScan.grids.length })}
+      </button>
+    {/if}
+    {#if cmError}<div class="errbox">{cmError}</div>{/if}
+    {#if cmReport}
+      <!-- Un rapport, pas un échec (§6.3) : ce qui manque est nommé. -->
+      <div class="cm-report">
+        <p>{t("import.cmImported", { count: cmReport.imported.length })}</p>
+        {#if cmReport.disabled.length}
+          <p class="warnbox">{t("import.cmDisabled", { count: cmReport.disabled.length })}</p>
+        {/if}
+        {#if cmReport.missing.length}
+          <p class="hint small">{t("import.cmMissing", { count: cmReport.missing.length })}</p>
+          <p class="cm-ids mono">{cmReport.missing.join(", ")}</p>
+        {/if}
+        {#if cmReport.skipped.length}
+          <p class="hint small">{t("import.cmSkipped", { count: cmReport.skipped.length })}</p>
+          <p class="cm-ids mono">{cmReport.skipped.map((k) => k.name).join(", ")}</p>
+        {/if}
+      </div>
+    {/if}
+  </section>
+
   <section class="dnd">
     <h3>{t("import.dndTitle")}</h3>
     <p class="hint">{t("import.dndHint")}</p>
@@ -165,6 +258,36 @@
 {/if}
 
 <style>
+  /* Proposition : la couleur de l'alerte non bloquante, parce que c'est une
+     offre qu'on peut refuser définitivement — ni une erreur, ni une action
+     retenue pour la session (§7.2ter). */
+  .cm-offer {
+    border: 1px solid #4a4426;
+    background: #1a1708;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+  }
+  .cm-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 11px;
+  }
+  .cm-report {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--txt2);
+  }
+  /* Les identifiants bruts : ce sont eux qu'on recopie dans une recherche de
+     mod, donc ils doivent être sélectionnables et repliables. */
+  .cm-ids {
+    font-size: 10px;
+    color: var(--faint);
+    word-break: break-all;
+    user-select: text;
+  }
   .import-screen {
     max-width: 760px;
   }

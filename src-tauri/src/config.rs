@@ -43,6 +43,12 @@ pub struct Prefs {
     /// Scène utilisée par l'aperçu 3D (`content/showroom/<id>`, nom de dossier).
     /// `None` = `showroom::DEFAULT_SHOWROOM`, la plus légère.
     pub showroom_scene: Option<String>,
+    /// L'utilisateur a refusé la proposition d'importer les presets de Content
+    /// Manager (§6.1). Un refus est **définitif** : la proposition ne revient
+    /// pas. Le bouton d'import permanent de la page d'import, lui, reste — ce
+    /// qu'on refuse est qu'on le lui redemande, pas la fonctionnalité.
+    #[serde(default)]
+    pub cm_import_declined: bool,
     /// Extraction des fichiers annexes du mod à l'import (§4.5.2) : "none" |
     /// "info_only" (défaut) | "all". Jamais reposée à chaque import — voir
     /// `resources::ExtractionMode::parse`.
@@ -96,6 +102,7 @@ impl Default for Prefs {
             bigpicture_zoom: None,
             bigpicture_view: None,
             showroom_scene: None,
+            cm_import_declined: false,
             resource_extraction_mode: "info_only".into(),
             keep_source_archive: false,
             deploy_mode: "hardlink".into(),

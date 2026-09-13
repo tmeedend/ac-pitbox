@@ -7,6 +7,7 @@ mod attach;
 mod backup;
 mod bulk;
 mod cm_stats;
+mod cmimport;
 mod commands;
 mod compose;
 mod config;
@@ -339,6 +340,7 @@ pub fn run() {
             commands::session_state::save_session_picks,
             commands::session_state::get_launch_state,
             commands::session_state::save_launch_state,
+            commands::cmimport::scan_cm_presets,
             commands::saved_grids::get_saved_grids,
             commands::saved_grids::save_saved_grids,
             commands::saved_sessions::get_saved_sessions,

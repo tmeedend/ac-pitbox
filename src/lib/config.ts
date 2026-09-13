@@ -18,6 +18,9 @@ export interface Prefs {
   showroom_scene: string | null;
   /** Extraction des fichiers annexes du mod à l'import (§4.5.2) — jamais reposée
    * à chaque import : "none" | "info_only" (défaut) | "all". */
+  /** Proposition d'import des presets Content Manager refusée (§6.1) — un
+   * refus est définitif, elle ne revient pas. */
+  cm_import_declined: boolean;
   resource_extraction_mode: "none" | "info_only" | "all";
   /** Conserve l'archive/dossier source de chaque mod importé, en plus du
    * contenu extrait (§10/§11). Défaut : false. */
@@ -78,6 +81,7 @@ export function emptyConfig(): AppConfig {
       bigpicture_zoom: null,
       bigpicture_view: null,
       showroom_scene: null,
+      cm_import_declined: false,
       resource_extraction_mode: "info_only",
       keep_source_archive: false,
       wiki_online: true,
