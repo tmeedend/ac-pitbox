@@ -341,6 +341,7 @@ pub fn run() {
             commands::session_state::get_launch_state,
             commands::session_state::save_launch_state,
             commands::cmimport::scan_cm_presets,
+            commands::trackstate::track_states,
             commands::saved_grids::get_saved_grids,
             commands::saved_grids::save_saved_grids,
             commands::saved_sessions::get_saved_sessions,

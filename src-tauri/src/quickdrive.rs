@@ -75,6 +75,7 @@ pub const TRACK_STATES: [TrackState; 6] = [
         randomness: 1,
         lap_gain: 30,
         description: "A very slippery track, improves fast with more laps.",
+        name: "Dusty",
     },
     TrackState {
         start: 89,
@@ -82,6 +83,7 @@ pub const TRACK_STATES: [TrackState; 6] = [
         randomness: 3,
         lap_gain: 50,
         description: "Old tarmac. Bad grip won't get better soon.",
+        name: "Old",
     },
     TrackState {
         start: 95,
@@ -89,6 +91,7 @@ pub const TRACK_STATES: [TrackState; 6] = [
         randomness: 2,
         lap_gain: 132,
         description: "A clean track, gets better with more laps.",
+        name: "Green",
     },
     TrackState {
         start: 96,
@@ -96,6 +99,7 @@ pub const TRACK_STATES: [TrackState; 6] = [
         randomness: 1,
         lap_gain: 300,
         description: "A slow track that doesn't improve much.",
+        name: "Slow",
     },
     TrackState {
         start: 98,
@@ -103,6 +107,7 @@ pub const TRACK_STATES: [TrackState; 6] = [
         randomness: 2,
         lap_gain: 700,
         description: "Very grippy track right from the start.",
+        name: "Fast",
     },
     TrackState {
         start: 100,
@@ -110,10 +115,17 @@ pub const TRACK_STATES: [TrackState; 6] = [
         randomness: 0,
         lap_gain: 1,
         description: "Perfect track for hotlapping.",
+        name: "Optimum",
     },
 ];
 
 /// Une entrée de `cfg/templates/tracks.ini`.
+///
+/// **Un objet nommé porteur de quatre valeurs, pas un cas d'énumération.** La
+/// distinction compte pour la suite : des états d'autres provenances (les
+/// presets utilisateur de Content Manager) viendront s'ajouter à la liste sans
+/// que rien de ce modèle n'ait à bouger — ce ne sera qu'une entrée de plus.
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct TrackState {
     /// `SESSION_START` — le grip au départ, en pourcentage. C'est lui qui
     /// identifie l'état : l'écran ne retient que ce nombre.
@@ -127,6 +139,8 @@ pub struct TrackState {
     pub lap_gain: u32,
     /// Telle que le jeu l'écrit. Cosmétique côté CM, jamais lue par AC.
     pub description: &'static str,
+    /// Le nom que le jeu donne à l'état, celui que CM affiche aussi.
+    pub name: &'static str,
 }
 
 /// « Auto » : l'état est laissé à la météo (§9.3). Sentinelle plutôt qu'un
@@ -148,7 +162,23 @@ const WEATHER_STATE: TrackState = TrackState {
     randomness: 2,
     lap_gain: 132,
     description: "Track state specified by weather, or Green, in case weather doesn't specify track state",
+    name: "Auto (set by weather)",
 };
+
+/// L'entrée « Auto » telle que l'écran la lit (§2.2) : ses quatre valeurs sont
+/// celles de Green, puisque c'est sur elles que le jeu retombe quand la météo
+/// ne dit rien de la piste.
+pub fn weather_state_option() -> crate::commands::trackstate::TrackStateOption {
+    crate::commands::trackstate::TrackStateOption {
+        start: GRIP_WEATHER,
+        name: WEATHER_STATE.name.to_string(),
+        transfer: WEATHER_STATE.transfer,
+        randomness: WEATHER_STATE.randomness,
+        lap_gain: WEATHER_STATE.lap_gain,
+        description: WEATHER_STATE.description.to_string(),
+        weather_defined: true,
+    }
+}
 
 /// L'état de piste le plus proche du grip demandé.
 ///

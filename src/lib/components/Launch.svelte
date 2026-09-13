@@ -16,6 +16,7 @@
     weatherOptions,
     weatherConditions,
     trackSun,
+    trackStates,
     type AssistLevel,
     type Opponent,
     type PracticeStart,
@@ -23,6 +24,7 @@
     type Season,
     type SessionType,
     type SkinItem,
+    type TrackStateOption,
     type TrackSun,
     type WeatherOption,
   } from "$lib/launch";
@@ -38,6 +40,7 @@
   import { getPreferredSkin, setPreferredLayout, setPreferredSkin } from "$lib/preferred";
   import { listActiveTrackSkins, listTrackSkinOptions, setTrackSkinActive, syncTrackSkins } from "$lib/submods";
   import { t } from "$lib/i18n/index.svelte";
+  import TrackConditionBlock from "./launch/TrackConditionBlock.svelte";
   import WeatherBlock from "./launch/WeatherBlock.svelte";
   import OpponentsBlock from "./launch/OpponentsBlock.svelte";
   import SessionOptionsBlock from "./launch/SessionOptionsBlock.svelte";
@@ -54,6 +57,10 @@
   import { StorageKey } from "$lib/storage";
   let libCards = $state<ModCard[]>([]);
   let weathers = $state<WeatherOption[]>([]);
+  // Lus côté Rust dans la table du jeu (§2.2) : l'écran ne connaît plus la
+  // liste, il la reçoit — c'est ce qui permettra d'y ajouter des états d'une
+  // autre provenance sans le toucher.
+  let trackStateList = $state<TrackStateOption[]>([]);
   let selectedIntent = $state("");
   let opponentCount = $state(7);
   // Jeton de génération du plateau (§6.3ter) : `regenerateGrid` est asynchrone
@@ -819,7 +826,7 @@
 
   // --- Chargement + résolution des défauts (§8.6) ---
   onMount(async () => {
-    [weathers, libCards] = await Promise.all([weatherOptions(), listLibrary()]);
+    [weathers, libCards, trackStateList] = await Promise.all([weatherOptions(), listLibrary(), trackStates()]);
 
     const state = await loadLaunchState();
     // Repli sur l'ancien `localStorage` seulement si le fichier Rust n'a rien
@@ -1234,6 +1241,12 @@
           onsave={doSaveSession}
           onload={doLoadSession}
         />
+
+        <!-- Voisins par nécessité et non par commodité de mise en page :
+             l'entrée « Auto (set by weather) » de l'état de piste ne se lit
+             que si la météo qui la pilote est sous les yeux. Ne rien
+             intercaler entre les deux. -->
+        <TrackConditionBlock {setup} states={trackStateList} />
 
         <WeatherBlock
           {setup}

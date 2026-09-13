@@ -31,6 +31,7 @@ pub mod saved_grids;
 pub mod saved_sessions;
 pub mod session;
 pub mod session_state;
+pub mod trackstate;
 pub mod ui_prefs;
 pub mod usermeta;
 pub mod wiki;

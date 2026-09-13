@@ -74,6 +74,29 @@ export function clampAiLevel(level: number): number {
   return Math.max(AI_LEVEL_MIN, Math.min(AI_LEVEL_MAX, Math.round(level)));
 }
 
+/** Un état de piste tel que l'écran le lit (§2.2) : **un objet nommé porteur
+ * de quatre valeurs**, jamais un cas d'énumération. C'est ce qui permettra d'y
+ * ajouter des états d'une autre provenance sans que l'écran ait à changer —
+ * ce ne sera qu'une entrée de plus dans la liste. */
+export interface TrackStateOption {
+  /** Grip de départ, en pourcentage : il sert d'identifiant parce que c'est le
+   * seul des quatre que le réglage retient. */
+  start: number;
+  name: string;
+  transfer: number;
+  randomness: number;
+  lap_gain: number;
+  description: string;
+  /** L'entrée « Auto », qui n'est pas un état mais le drapeau `WeatherDefined` :
+   * ses quatre valeurs sont celles de Green, en repli. */
+  weather_defined: boolean;
+}
+
+/** La liste des états, lue côté Rust dans la table du jeu. */
+export function trackStates(): Promise<TrackStateOption[]> {
+  return invoke<TrackStateOption[]>("track_states");
+}
+
 /** Saison optionnelle associée à une session (§8.6bis) — influence la
  * température recommandée et, best-effort côté CSP, le rendu (arbres,
  * neige). "" = aucune saison choisie. */

@@ -4,7 +4,7 @@
   // do (grip evolution, penalties). Pure presentation: everything is a direct
   // read/write of `setup` (state shared with the parent, §8.6bis) — no logic
   // to lift up.
-  import { GRIP_WEATHER, TRACK_GRIPS, type RaceSetup } from "$lib/launch";
+  import { type RaceSetup } from "$lib/launch";
   import { t } from "$lib/i18n/index.svelte";
   import NumberStepper from "../NumberStepper.svelte";
   import Seg from "../Seg.svelte";
@@ -121,33 +121,6 @@
         {/if}
       </div>
 
-      <div class="fixed">
-        <!-- Les six états que le jeu embarque (`cfg/templates/tracks.ini`), dans
-             l'ordre et avec les noms de sa propre liste — celle que Content
-             Manager affiche aussi. Vertical : six libellés nommés ne tiennent
-             pas sur une ligne dans cette colonne, et une liste d'états se lit
-             de haut en bas. Chacun porte au survol ce que le jeu en dit.
-
-             « Auto » en tête, comme chez CM : ce n'est pas un état mais le
-             drapeau `WeatherDefined`, qui laisse la météo décider et retombe
-             sur Verte si elle ne dit rien. -->
-        <div>
-          <span class="fk lbl-key">{t("launch.gripEvolution")}</span>
-          <Seg
-            vertical
-            value={String(setup.grip)}
-            onselect={(v) => (setup.grip = Number(v))}
-            items={[
-              { value: String(GRIP_WEATHER), label: t("launch.gripAuto"), title: t("launch.gripAutoDesc") },
-              ...TRACK_GRIPS.map((g) => ({
-                value: String(g),
-                label: t(`launch.grip${g}`),
-                title: t(`launch.grip${g}Desc`),
-              })),
-            ]}
-          />
-        </div>
-      </div>
     </div>
   </div>
 </section>
@@ -165,16 +138,15 @@
     /* The right zone is sized by its content, not by a number: its widest
        control is the grip segmented, whose six options never change, so its
        width is the same in the four session types — which is the whole point.
-       A fixed width would only be a guess about a column whose own width
-       depends on the window. */
-    grid-template-columns: minmax(0, 1fr) auto;
+
+       **Une seule zone depuis que le grip et les pénalités sont partis** : la
+       colonne de droite ne portait plus rien. Ce que les deux zones
+       protégeaient — les réglages invariants restant au même endroit quel que
+       soit le type — est obtenu autrement, et mieux : ils ne sont plus dans ce
+       bloc du tout. */
+    grid-template-columns: minmax(0, 1fr);
     gap: 14px 24px;
     align-items: start;
-  }
-  @container sessopts (max-width: 520px) {
-    .opts {
-      grid-template-columns: minmax(0, 1fr);
-    }
   }
   /* Each setting keeps its natural width rather than stretching into a grid:
      a slot layout would move every control each time the type changes one of
@@ -190,16 +162,7 @@
     align-items: flex-end;
     gap: 14px 16px;
   }
-  /* Stacked, in this order, in the four session types — that is the whole
-     point of this zone. Side by side they would re-flow with the width. */
-  .fixed {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-  .varies > div,
-  .fixed > div {
+  .varies > div {
     display: flex;
     flex-direction: column;
     gap: 5px;
