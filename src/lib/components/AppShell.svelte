@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import Settings from "./Settings.svelte";
   import About from "./About.svelte";
   import Library from "./Library.svelte";
@@ -16,6 +16,8 @@
   import ControllerToast from "./ControllerToast.svelte";
   import GridThumbToast from "./GridThumbToast.svelte";
   import { FEATURE_GRID_THUMBS } from "$lib/features";
+  import { gridMods, loadGridCars } from "$lib/gridMods.svelte";
+  import { bumpLibraryVersion } from "$lib/libraryVersion.svelte";
   import { PAUSE_SESSION, pauseGridThumbs, resumeGridThumbs } from "$lib/gridThumbs.svelte";
   import { onAcRunning } from "$lib/launch";
   import PrefsToast from "./PrefsToast.svelte";
@@ -36,7 +38,7 @@
   import { withoutBrand } from "$lib/displayName";
   import { peekUiPref } from "$lib/uiPrefs.svelte";
   import { StorageKey } from "$lib/storage";
-  import { confirm, message } from "@tauri-apps/plugin-dialog";
+  import { message } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
   import { initGlobalDragDrop } from "$lib/importState.svelte";
   import { initBulkProgress } from "$lib/bulkState.svelte";
@@ -77,6 +79,9 @@
   // visible même si on change d'écran pendant.
   onMount(() => initBulkProgress());
   onMount(() => initRepairProgress());
+  // Plateau du dernier réglage de session : la garde d'activation doit savoir
+  // ce qu'elle protège même quand l'écran de réglages n'est pas monté.
+  onMount(() => void loadGridCars());
 
   // **La fin de la session lève la pause de la génération.**
   //
@@ -472,37 +477,75 @@
 
   const trackInactive = $derived(nav.sessionTrack != null && trackDetail != null && !trackDetail.active);
 
+  // --- Garde d'activation (§9.3) ---
+  //
+  // La bibliothèque montre les mods désactivés, Assetto Corsa ne les voit pas :
+  // lancer une session qui en contient échoue, et c'est un trou propre à Pit
+  // Box — Content Manager ne montre que ce qui est installé.
+  //
+  // **Une ligne au-dessus du bouton, pas un dialogue au lancement.** C'était
+  // un `confirm()` posé au clic : au moment où on l'ouvre, on est déjà parti
+  // mentalement, et il ne couvrait que la voiture et le circuit. La ligne
+  // couvre les trois, se voit avant de cliquer, et porte son remède ; le
+  // bouton reste verrouillé tant qu'elle est là, donc aucune session ne peut
+  // partir en échec.
+  //
+  // **Les doublons comptent pour un** : trois adversaires sur la même voiture
+  // inactive font une seule activation, et la ligne annonce un mod, pas trois.
+  let opponentDetails = $state<Record<string, Awaited<ReturnType<typeof getModDetail>>>>({});
+  $effect(() => {
+    const ids = gridMods.carIds;
+    for (const id of ids) {
+      if (id in untrack(() => opponentDetails)) continue;
+      getModDetail(id).then((d) => {
+        opponentDetails = { ...untrack(() => opponentDetails), [id]: d };
+      });
+    }
+  });
+
+  const inactiveMods = $derived.by(() => {
+    const out = new Map<string, string>();
+    if (carInactive && nav.sessionCar) out.set(nav.sessionCar.id, nav.sessionCar.name);
+    if (trackInactive && nav.sessionTrack) out.set(nav.sessionTrack.id, nav.sessionTrack.name);
+    for (const id of gridMods.carIds) {
+      const d = opponentDetails[id];
+      if (d && !d.active) out.set(id, d.display_name ?? id);
+    }
+    return [...out].map(([id, name]) => ({ id, name }));
+  });
+
+  let activating = $state(false);
+  async function activateInactive() {
+    if (activating) return;
+    activating = true;
+    try {
+      for (const m of inactiveMods) await activateMod(m.id);
+      // Relit tout de suite l'état frais : la ligne doit disparaître au clic,
+      // pas au prochain changement de sélection.
+      if (nav.sessionCar) carDetail = await getModDetail(nav.sessionCar.id);
+      if (nav.sessionTrack) trackDetail = await getModDetail(nav.sessionTrack.id);
+      const fresh: Record<string, Awaited<ReturnType<typeof getModDetail>>> = {};
+      for (const id of gridMods.carIds) fresh[id] = await getModDetail(id);
+      opponentDetails = fresh;
+      bumpLibraryVersion();
+    } catch (e) {
+      await message(errorText(e), { title: t("session.activateFailedTitle"), kind: "error" });
+    } finally {
+      activating = false;
+    }
+  }
+
   // Bouton rouge « Démarrer la session » : lance directement avec les
   // réglages courants (dernier preset du type de session), sans repasser par
   // l'écran Paramétrage — pose le drapeau consommé par Launch.svelte une fois
   // monté et prêt (mêmes valeurs que si l'écran avait été ouvert normalement).
   //
-  // Garde-fou activation (§ bug réel signalé) : lancer une session avec une
-  // voiture/un circuit sélectionné mais non activé (jamais junctionné dans
-  // `content/`) fait planter Content Manager/AC, qui ne trouve pas le contenu.
-  // On bloque, on demande confirmation, et on active avant de laisser
-  // continuer — jamais d'activation silencieuse sans accord explicite.
+  // L'activation n'est plus demandée ici : la garde ci-dessus verrouille le
+  // bouton tant qu'un mod de la session est inactif, donc ce chemin n'est
+  // atteint que sur une session lançable. L'activation reste **explicite** —
+  // lancer une course ne doit pas modifier la bibliothèque dans le dos de
+  // l'utilisateur, même si les liens durs rendent l'opération réversible.
   async function launchNow() {
-    const toActivate: { id: string; name: string }[] = [];
-    if (carInactive && nav.sessionCar) toActivate.push({ id: nav.sessionCar.id, name: nav.sessionCar.name });
-    if (trackInactive && nav.sessionTrack) toActivate.push({ id: nav.sessionTrack.id, name: nav.sessionTrack.name });
-    if (toActivate.length) {
-      const ok = await confirm(t("session.inactivePrompt", { names: toActivate.map((m) => m.name).join(", ") }), {
-        title: t("session.inactiveTitle"),
-        kind: "warning",
-      });
-      if (!ok) return;
-      try {
-        for (const m of toActivate) await activateMod(m.id);
-      } catch (e) {
-        await message(errorText(e), { title: t("session.activateFailedTitle"), kind: "error" });
-        return;
-      }
-      // Recharge tout de suite l'état frais : efface l'icône d'alerte sans
-      // attendre le prochain changement de sélection.
-      if (nav.sessionCar) carDetail = await getModDetail(nav.sessionCar.id);
-      if (nav.sessionTrack) trackDetail = await getModDetail(nav.sessionTrack.id);
-    }
     nav.autoLaunch = true;
     if (!(await requestSection("race"))) nav.autoLaunch = false;
   }
@@ -743,10 +786,26 @@
         <button class="btn-configure" disabled={!sessionReady} onclick={() => requestSection("race")}
           >{t("session.configure")}</button
         >
+        {#if inactiveMods.length}
+          <div class="warnbox guard">
+            <span aria-hidden="true">⚠</span>
+            <span class="guard-txt"
+              >{inactiveMods.length === 1
+                ? t("session.inactiveOne")
+                : t("session.inactiveMany", { count: inactiveMods.length })}</span
+            >
+            <button class="guard-btn" type="button" disabled={activating} onclick={activateInactive}
+              >{t("common.activate")}</button
+            >
+          </div>
+        {/if}
         <!-- Cible du bouton Start de la manette (§7.4bis) : il y amène le
              curseur depuis n'importe quel écran, il ne lance pas lui-même. -->
-        <button class="btn-launch" disabled={!sessionReady} {...{ [LAUNCH_BUTTON_ATTR]: "" }} onclick={launchNow}
-          >{t("session.start")}</button
+        <button
+          class="btn-launch"
+          disabled={!sessionReady || inactiveMods.length > 0}
+          {...{ [LAUNCH_BUTTON_ATTR]: "" }}
+          onclick={launchNow}>{t("session.start")}</button
         >
         <!-- Sortie vers Content Manager : un lien texte, jamais un troisième
              bouton encadré — trois blocs de même gabarit empilés annuleraient
@@ -1268,6 +1327,33 @@
     font-weight: 600;
     font-family: var(--mono);
     margin-top: 2px;
+  }
+  /* L'encadré vient de `.warnbox` (global) : jaune, parce que ce n'est pas une
+     erreur mais une condition réparable d'un clic, et parce que le rouge de
+     cette colonne appartient au lancement (§7.2ter). Ne reste ici que la mise
+     en ligne et le bouton, que `.warnbox` ne connaît pas. */
+  .guard {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 8px;
+    font-size: 10.5px;
+  }
+  .guard-txt {
+    flex: 1;
+  }
+  .guard-btn {
+    background: transparent;
+    border: 1px solid currentcolor;
+    color: inherit;
+    font-size: 9px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding: 5px 9px;
+    flex: none;
+  }
+  .guard-btn:hover:not(:disabled) {
+    background: rgb(241 216 60 / 12%);
   }
   .btn-launch:hover:not(:disabled) {
     background: var(--rosso-bright);

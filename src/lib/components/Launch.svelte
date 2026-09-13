@@ -3,12 +3,15 @@
   import { invoke } from "@tauri-apps/api/core";
   import {
     launchSession,
+    assistLevelFrom,
     isSteamRunning,
+    nearestGrip,
     listModSkins,
     getModCspFeatures,
     weatherOptions,
     weatherConditions,
     trackSun,
+    type AssistLevel,
     type GridMode,
     SAME_CATEGORY,
     type Opponent,
@@ -21,6 +24,8 @@
     type WeatherOption,
   } from "$lib/launch";
   import { carClassOf, driverFor, isEmpty } from "$lib/driverOverride.svelte";
+  import type { FilterMap } from "$lib/filters";
+  import { setGridCars } from "$lib/gridMods.svelte";
   import { getModDetail, listLibrary, previewSrc, type ModCard } from "$lib/library";
   import { getSessionBackground } from "$lib/media";
   import { nav, pickSession, type OpponentsAction } from "$lib/nav.svelte";
@@ -32,6 +37,7 @@
   import SessionOptionsBlock from "./launch/SessionOptionsBlock.svelte";
   import SimulationBlock from "./launch/SimulationBlock.svelte";
   import SessionTypeBlock from "./launch/SessionTypeBlock.svelte";
+  import OpponentPicker from "./OpponentPicker.svelte";
   import SavedSessionsBlock from "./launch/SavedSessionsBlock.svelte";
   import LoadingState from "./LoadingState.svelte";
   import { saveSession, listSavedSessions, type SavedSession } from "$lib/savedSessions";
@@ -55,6 +61,11 @@
   // bibliothèque, donc c'est le seul moyen, au remontage, de savoir si le
   // plateau restauré correspond encore à la voiture pilotée.
   let gridCarId = $state<string | null>(null);
+  /** Plateau composé à la main par la modale de sélection (§9.3) : plus de
+   * régénération silencieuse au changement de voiture pilotée. Persisté avec
+   * le plateau — sans quoi passer à la bibliothèque et revenir démonte l'écran
+   * et perd le drapeau, donc jette précisément le plateau qu'il protège. */
+  let gridManual = $state(false);
   let launching = $state(false);
   let error = $state("");
   let info = $state("");
@@ -103,8 +114,8 @@
     fuel_rate: 100,
     tyre_wear: 100,
     tyre_blankets: false,
-    abs_auto: true,
-    traction_control_auto: true,
+    abs: "factory",
+    traction_control: "factory",
     ideal_line: false,
   });
 
@@ -298,6 +309,9 @@
   }
 
   async function regenerateGrid() {
+    // Régénérer, c'est reprendre la main automatique : le plateau redevient
+    // celui du vivier.
+    gridManual = false;
     const gen = ++opponentsGen;
     // Posé avant l'attente, pas après : c'est un marqueur d'intention, sinon
     // l'effet de resynchronisation redéclencherait une génération pendant
@@ -311,6 +325,7 @@
 
   async function selectGridMode(mode: GridMode) {
     gridMode = mode;
+    gridManual = false;
     await regenerateGrid();
   }
 
@@ -339,15 +354,6 @@
     const opponents = [...setup.opponents];
     opponents[index] = { ...opponents[index], ai_level: level };
     setup.opponents = opponents;
-  }
-
-  async function addOpponent() {
-    const exclude = new Set(setup.opponents.map((o) => o.car_id));
-    const extra = await generateOpponents(1, exclude);
-    if (extra.length) {
-      setup.opponents = [...setup.opponents, ...extra];
-      opponentCount = setup.opponents.length;
-    }
   }
 
   /** Ajoute la même voiture qu'un adversaire existant, avec un skin différent
@@ -395,22 +401,83 @@
     opponentCount = setup.opponents.length;
   }
 
-  // --- Popup de sélection d'adversaire (§8.6ter) : changer voiture (parmi le
-  // vivier du mode courant) et skin, pour un réglage fin du plateau. ---
+  // --- Modale de sélection d'adversaire (§9.3) ---
+  //
+  // Elle reçoit **toute** la bibliothèque voitures, pas le vivier du mode
+  // courant : ce sont ses jetons qui restreignent, et c'est ce qui leur donne
+  // un sens — retirer « Catégorie » doit réellement élargir la liste. L'onglet
+  // dit dans quoi le `+` pioche, la modale dit ce qu'on prend à la main.
   let pickerIndex = $state<number | null>(null);
-  const pickerPool = $derived(pickerIndex != null ? poolForMode(gridMode) : []);
+  let pickerAdding = $state(false);
+  const pickerOpen = $derived(pickerAdding || pickerIndex != null);
+
+  /** Jetons posés à l'ouverture, dérivés du vivier actif (§9.3).
+   *
+   * Le jeton « jouable » est **deux exclusions**, pas une valeur : le filtre
+   * d'état n'offre que `active`/`inactive`/`stock`/`unmanaged`/`broken`, et
+   * « jouable » veut dire tout sauf les deux qu'Assetto Corsa ne peut pas
+   * charger. Les exclusions sont toujours conjonctives et l'emportent
+   * toujours (`buildPredicate`), donc les trois autres passent.
+   *
+   * En « même voiture », seule la **marque** devient un jeton : il n'existe
+   * aucun filtre « modèle » dans le catalogue, et en inventer un pour cette
+   * modale seule créerait un filtre que la bibliothèque n'a pas. La boîte de
+   * recherche est juste à côté pour affiner. */
+  function poolChips(): FilterMap {
+    const chips: FilterMap = {
+      state: { type: "val", values: [{ value: "inactive", sign: -1 }, { value: "broken", sign: -1 }], op: "and" },
+    };
+    if (gridMode === "same_car") {
+      if (player?.brand) chips.brand = { type: "val", values: [{ value: player.brand, sign: 1 }], op: "and" };
+    } else if (gridMode === "same_category") {
+      const cat = categorySelection === SAME_CATEGORY ? player?.category : categorySelection;
+      if (cat) chips.category = { type: "val", values: [{ value: cat, sign: 1 }], op: "and" };
+    }
+    return chips;
+  }
+
   function openPicker(index: number) {
     pickerIndex = index;
   }
+  function openAddPicker() {
+    pickerAdding = true;
+  }
   function closePicker() {
     pickerIndex = null;
+    pickerAdding = false;
   }
-  function confirmPicker(carId: string, skinId: string | null) {
-    if (pickerIndex == null) return;
+
+  /** Remplacement d'une ligne : la force est celle de la ligne, le skin est
+   * tiré dans ceux de la nouvelle voiture (§9.3). */
+  async function replaceOpponent(carId: string) {
+    const i = pickerIndex;
+    closePicker();
+    if (i == null) return;
+    const used = new Set(
+      setup.opponents.filter((o, k) => k !== i && o.car_id === carId).map((o) => o.car_skin ?? "").filter(Boolean),
+    );
+    const skin = await skinFor(carId, used);
     const opponents = [...setup.opponents];
-    opponents[pickerIndex] = { ...opponents[pickerIndex], car_id: carId, car_skin: skinId };
+    opponents[i] = { ...opponents[i], car_id: carId, car_skin: skin };
     setup.opponents = opponents;
-    pickerIndex = null;
+    gridManual = true;
+  }
+
+  /** Ajout en fin de plateau, dans l'ordre de la liste. Skin et force suivent
+   * les règles déjà en place — rien de neuf ici. */
+  async function addOpponentsFromPicker(carIds: string[]) {
+    closePicker();
+    const additions: Opponent[] = [];
+    for (const carId of carIds) {
+      const used = new Set(
+        [...setup.opponents, ...additions].filter((o) => o.car_id === carId).map((o) => o.car_skin ?? "").filter(Boolean),
+      );
+      additions.push({ car_id: carId, car_skin: await skinFor(carId, used), ai_level: randomLevel() });
+    }
+    if (!additions.length) return;
+    setup.opponents = [...setup.opponents, ...additions];
+    opponentCount = setup.opponents.length;
+    gridManual = true;
   }
 
   // --- Fourchette de niveau IA (§8.6) : bornes réutilisées par le réglage
@@ -498,12 +565,19 @@
      * comportement implicite (toujours suivre la voiture pilotée). */
     category_selection?: string;
     year_min: number; year_max: number;
+    /** Absent sur un preset antérieur à ce champ — `false`, l'ancien
+     * comportement implicite (plateau toujours régénérable). */
+    grid_manual?: boolean;
     laps: number; time_hours: number;
     penalties: boolean; jump_start_penalty: number; grip: number;
     practice_enabled: boolean; practice_minutes: number;
     qualify_enabled: boolean; qualify_minutes: number; ghost_car: boolean; practice_start: PracticeStart;
     damage: number; fuel_rate: number; tyre_wear: number; tyre_blankets: boolean; intent: string; season: Season;
-    abs_auto: boolean; traction_control_auto: boolean; ideal_line: boolean;
+    /** Trois états depuis §9.3 ; `abs_auto`/`traction_control_auto` sont les
+     * booléens d'avant, relus une dernière fois par `assistLevelFrom`. */
+    abs?: AssistLevel; traction_control?: AssistLevel;
+    abs_auto?: boolean; traction_control_auto?: boolean;
+    ideal_line: boolean;
   }
   let presets: Record<string, Persisted> = {};
   let applying = false;
@@ -540,7 +614,7 @@
     presets[setup.session_type] = {
       ai_level_min: setup.ai_level_min, ai_level_max: setup.ai_level_max,
       grid_mode: gridMode, opponent_count: opponentCount, category_selection: categorySelection,
-      year_min: setup.year_min, year_max: setup.year_max,
+      year_min: setup.year_min, year_max: setup.year_max, grid_manual: gridManual,
       laps: setup.laps, time_hours: setup.time_hours,
       penalties: setup.penalties, jump_start_penalty: setup.jump_start_penalty, grip: setup.grip,
       practice_enabled: setup.practice_enabled, practice_minutes: setup.practice_minutes,
@@ -548,7 +622,7 @@
       practice_start: setup.practice_start,
       damage: setup.damage, fuel_rate: setup.fuel_rate, tyre_wear: setup.tyre_wear, tyre_blankets: setup.tyre_blankets,
       intent: selectedIntent, season,
-      abs_auto: setup.abs_auto, traction_control_auto: setup.traction_control_auto, ideal_line: setup.ideal_line,
+      abs: setup.abs, traction_control: setup.traction_control, ideal_line: setup.ideal_line,
     };
     persistLaunchState();
   }
@@ -560,16 +634,18 @@
       gridMode = p.grid_mode ?? "same_category"; opponentCount = p.opponent_count ?? 7;
       categorySelection = p.category_selection ?? SAME_CATEGORY;
       setup.year_min = p.year_min ?? YEAR_RANGE_MIN; setup.year_max = p.year_max ?? YEAR_RANGE_MAX;
+      gridManual = p.grid_manual ?? false;
       setup.laps = p.laps; setup.time_hours = p.time_hours;
       setup.penalties = p.penalties; setup.jump_start_penalty = p.jump_start_penalty ?? 0;
-      setup.grip = p.grip ?? 96;
+      setup.grip = nearestGrip(p.grip ?? 100);
       setup.practice_enabled = p.practice_enabled ?? false; setup.practice_minutes = p.practice_minutes ?? 20;
       setup.qualify_enabled = p.qualify_enabled ?? true; setup.qualify_minutes = p.qualify_minutes ?? 10;
       setup.ghost_car = p.ghost_car ?? false; setup.practice_start = p.practice_start ?? "pit";
       setup.damage = p.damage ?? 50;
       setup.fuel_rate = p.fuel_rate ?? 100; setup.tyre_wear = p.tyre_wear ?? 100;
       setup.tyre_blankets = p.tyre_blankets ?? false;
-      setup.abs_auto = p.abs_auto ?? true; setup.traction_control_auto = p.traction_control_auto ?? true;
+      setup.abs = assistLevelFrom(p.abs, p.abs_auto);
+      setup.traction_control = assistLevelFrom(p.traction_control, p.traction_control_auto);
       setup.ideal_line = p.ideal_line ?? false;
       applySeason(p.season ?? "");
       const opt = weathers.find((w) => w.id === p.intent && w.available);
@@ -587,6 +663,12 @@
     setup.session_type = type;
     await applyPreset(type);
   }
+  // La garde d'activation de la colonne de session lit le plateau courant
+  // (§9.3) : elle est rendue ailleurs, et n'a pas d'autre moyen de le voir.
+  $effect(() => {
+    setGridCars(setup.opponents.map((o) => o.car_id));
+  });
+
   $effect(() => {
     void [setup.ai_level_min, setup.ai_level_max, gridMode, opponentCount, setup.year_min, setup.year_max,
       setup.laps,
@@ -594,7 +676,7 @@
       setup.practice_enabled, setup.practice_minutes, setup.qualify_minutes,
       setup.ghost_car, setup.practice_start, setup.damage, setup.fuel_rate, setup.tyre_wear, setup.tyre_blankets,
       selectedIntent, season,
-      setup.abs_auto, setup.traction_control_auto, setup.ideal_line];
+      setup.abs, setup.traction_control, setup.ideal_line];
     if (ready && !applying && selectedIntent) savePreset();
   });
 
@@ -658,13 +740,21 @@
   // catégorie » change de catégorie. Deux cas où on n'y touche pas :
   // - mode « libre », dont le vivier est indépendant de la voiture pilotée —
   //   régénérer jetterait un plateau souvent réglé à la main ;
+  // - plateau **manuel**, c'est-à-dire touché par la modale de sélection : la
+  //   même raison, sans avoir eu à basculer l'onglet sur « libre » dans le dos
+  //   de l'utilisateur (§9.3). Le bouton « Régénérer » lève le drapeau ;
   // - changement de **skin** seul : `setup.car_id` ne bouge pas, donc rien ne
   //   se déclenche (`nav.sessionCar?.skin` n'est lu que pour resynchroniser).
   $effect(() => {
     void [nav.sessionCar?.id, nav.sessionCar?.skin, nav.sessionTrack?.id, nav.sessionTrack?.layout];
     if (!ready) return;
     syncFromSession();
-    if ((setup.session_type === "race" || setup.session_type === "trackday") && gridMode !== "free" && setup.car_id !== gridCarId) {
+    if (
+      (setup.session_type === "race" || setup.session_type === "trackday") &&
+      gridMode !== "free" &&
+      !gridManual &&
+      setup.car_id !== gridCarId
+    ) {
       void regenerateGrid();
     }
   });
@@ -971,7 +1061,7 @@
 
         <SessionOptionsBlock {setup} />
 
-        <SimulationBlock {setup} />
+        <SimulationBlock {setup} carName={player?.display_name ?? null} />
 
         {#if setup.session_type === "race" || setup.session_type === "trackday"}
           <OpponentsBlock
@@ -982,18 +1072,15 @@
             {skinsByCarId}
             {categorySelection}
             {categoryOptions}
-            {pickerPool}
-            {pickerIndex}
             onselectmode={selectGridMode}
             onselectcategory={selectCategory}
             oncountchange={applyOpponentCount}
             onremove={removeOpponent}
-            onadd={addOpponent}
+            onadd={openAddPicker}
             onduplicate={duplicateOpponentWithVariant}
             onsetlevel={setOpponentLevel}
             onopenpicker={openPicker}
-            onclosepicker={closePicker}
-            onconfirmpicker={confirmPicker}
+            onregenerate={() => void regenerateGrid()}
           />
         {/if}
       </div>
@@ -1034,6 +1121,21 @@
      bandeau, parce qu'il y a un geste à faire hors de l'app et qu'il faut
      revérifier après — un texte passif laisserait l'utilisateur relancer dans
      le vide. -->
+{#if pickerOpen}
+  <OpponentPicker
+    pool={carPool}
+    mode={pickerIndex != null ? "replace" : "add"}
+    initialFilters={poolChips()}
+    gridCount={setup.opponents.length}
+    gridTarget={opponentCount}
+    slotNumber={(pickerIndex ?? 0) + 1}
+    currentCarId={pickerIndex != null ? setup.opponents[pickerIndex].car_id : null}
+    onadd={addOpponentsFromPicker}
+    onreplace={replaceOpponent}
+    onclose={closePicker}
+  />
+{/if}
+
 {#if steamPromptOpen}
   <div class="backdrop">
     <div class="modal">

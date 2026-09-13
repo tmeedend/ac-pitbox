@@ -10,6 +10,47 @@ export type SessionType = "practice" | "hotlap" | "race" | "trackday";
  * Quick Drive ("PIT"/"TRACK"/"HOTLAP_START", voir `PracticeStart` côté Rust). */
 export type PracticeStart = "pit" | "track" | "hotlap";
 
+/** Niveau d'une aide au pilotage — les trois états d'Assetto Corsa lui-même
+ * (`0,1,2` en face de `Off,Factory,On` dans le launcher du jeu, voir
+ * `AssistLevel` côté Rust). `factory` garde l'équipement réel de la voiture,
+ * et c'est pourquoi `on` ne peut rien ajouter à une voiture qui n'a pas
+ * l'aide. */
+export type AssistLevel = "off" | "factory" | "on";
+
+/** Les six états de piste du jeu, par grip de départ croissant — la liste que
+ * Content Manager propose, et qui vient du même fichier (`tracks.ini`). Le
+ * pourcentage de départ **est** l'identifiant de l'état : c'est le seul des
+ * quatre paramètres que l'écran retient, `quickdrive.rs` retrouve les trois
+ * autres à partir de lui. */
+export const TRACK_GRIPS = [86, 89, 95, 96, 98, 100] as const;
+
+/** « Auto » : l'état de piste est laissé à la météo — le `WeatherDefined` de
+ * Content Manager, et la première entrée de sa liste. Sentinelle plutôt qu'un
+ * second champ : l'écran n'offre qu'un choix parmi sept, et deux champs pour
+ * une seule décision finissent toujours par se contredire. Aucun état réel ne
+ * vaut 0 %. */
+export const GRIP_WEATHER = 0;
+
+/** Recale un grip enregistré sur la liste offerte.
+ *
+ * Un preset antérieur à l'alignement sur la table du jeu peut porter une
+ * valeur qui n'y figure plus (92 % a existé, inventé) : sans ce recalage, le
+ * segmenté n'en marquerait aucun comme actif. À égale distance le plus
+ * adhérent gagne, comme côté Rust — une piste un peu plus roulante est le
+ * repli indulgent. */
+export function nearestGrip(grip: number): number {
+  // « Auto » n'est pas un grip : le recalage ne doit pas le prendre pour une
+  // valeur basse et le remplacer par la piste la plus glissante.
+  if (grip === GRIP_WEATHER) return grip;
+  let best: number = TRACK_GRIPS[0];
+  for (const g of TRACK_GRIPS) {
+    const d = Math.abs(g - grip);
+    const bd = Math.abs(best - grip);
+    if (d < bd || (d === bd && g > best)) best = g;
+  }
+  return best;
+}
+
 /** Saison optionnelle associée à une session (§8.6bis) — influence la
  * température recommandée et, best-effort côté CSP, le rendu (arbres,
  * neige). "" = aucune saison choisie. */
@@ -92,9 +133,40 @@ export interface RaceSetup {
   fuel_rate: number;
   tyre_wear: number;
   tyre_blankets: boolean;
-  abs_auto: boolean;
-  traction_control_auto: boolean;
+  abs: AssistLevel;
+  traction_control: AssistLevel;
   ideal_line: boolean;
+}
+
+/** Reprise d'un réglage d'aide enregistré avant les trois états (§9.3).
+ *
+ * L'ancien champ était un booléen nommé `abs_auto`, et « auto » voulait dire
+ * `Abs: 1` dans le preset Quick Drive, c'est-à-dire **exactement** le niveau
+ * qui s'appelle aujourd'hui `factory`. Donc `true → factory`, pas `true → on` :
+ * `on` vaut `2` et forcerait une aide là où l'utilisateur n'avait demandé que
+ * l'équipement réel de la voiture. Une migration ne change pas ce qui part en
+ * jeu — c'est la même raison qui fait que `false → off` plutôt que le nouveau
+ * défaut, l'un et l'autre conservant à la lettre la valeur déjà envoyée.
+ *
+ * Absent (`undefined`, distinct de `false`) : sauvegarde plus ancienne encore,
+ * ou preset neuf — `factory`, le défaut. */
+export function assistLevelFrom(level: AssistLevel | undefined, legacy: boolean | undefined): AssistLevel {
+  if (level) return level;
+  if (legacy === undefined) return "factory";
+  return legacy ? "factory" : "off";
+}
+
+/** Ce que la voiture avait d'usine — lu dans son `electronics.ini` (§9.3).
+ * `null` quand elle ne le dit pas : l'écran n'affiche alors rien. */
+export interface FactoryAssists {
+  abs: boolean;
+  tractionControl: boolean;
+}
+
+/** Aides d'usine de la voiture en session, pour dire ce que « Factory » vaut
+ * **pour elle**. Jamais une erreur : une voiture muette rend `null`. */
+export function carFactoryAssists(carId: string): Promise<FactoryAssists | null> {
+  return invoke<FactoryAssists | null>("car_factory_assists", { carId });
 }
 
 export interface SkinItem {

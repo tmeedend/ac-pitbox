@@ -3,6 +3,7 @@
   import DetailPage from "./DetailPage.svelte";
   import PackDetail from "./PackDetail.svelte";
   import FilterBar from "./filters/FilterBar.svelte";
+  import { matchesQuery } from "$lib/cardSearch";
   import { hasOwnDriver } from "$lib/driverOverride.svelte";
   import BulkEditPanel from "./BulkEditPanel.svelte";
   import ContextMenu from "./ContextMenu.svelte";
@@ -39,16 +40,13 @@
   import { zoomFactor } from "$lib/zoom.svelte";
   import { getUiPrefs, setUiPref } from "$lib/uiPrefs.svelte";
   import {
+    buildCardIndex,
     buildPredicate,
-    decadePresets,
     filterDefs,
-    optionsOf,
     parseFilters,
     parsePinned,
     serializeFilters,
-    type FilterContext,
     type FilterMap,
-    type FilterOption,
   } from "$lib/filters";
 
   import { StorageKey } from "$lib/storage";
@@ -681,81 +679,17 @@
   // N'expose que les mods du type de cette bibliothèque (§6.1).
   const typed = $derived(cards.filter((c) => c.kind === kind));
 
-  // Les trois origines de tags (fichier mod, règle, manuel) sont équivalentes
-  // pour filtrer/rechercher — seule la fiche détail les distingue par origine.
-  function modTags(c: ModCard): string[] {
-    return [...c.tags_from_mod, ...c.tags_from_rule, ...c.tags_manual];
-  }
+  // Index de recherche et valeurs proposées : partagés avec la modale
+  // d'adversaires, qui pose exactement la même question sur le même vivier
+  // (`filters.ts`/`cardSearch.ts`). Ils vivaient ici, en six blocs, et une
+  // seconde copie aurait dérivé au premier champ ajouté — le nom du pack et la
+  // note de l'utilisateur sont tous deux entrés dans la botte de foin après
+  // coup.
+  const index = $derived(buildCardIndex(typed, defs, isCar, hasOwnDriver));
 
-  // Descriptions ready to be matched, built ONCE per list load rather than on
-  // every keystroke: ~400 KB of prose over a full library, which is cheap to
-  // walk but not to lowercase again at each letter typed.
-  //
-  // Markup is stripped first: 116 of the 124 descriptions measured on a real
-  // library carry HTML (`<br>`, `<b>`, `<font color=...>`), so matching the raw
-  // text would make "b", "br", "font" or "color" hit nearly every mod.
-  const descIndex = $derived.by(() => {
-    const map = new Map<string, string>();
-    for (const c of typed) {
-      if (c.description) map.set(c.id_interne, c.description.replace(/<[^>]*>/g, " ").toLowerCase());
-    }
-    return map;
-  });
+  const matchesFilters = $derived(buildPredicate(defs, filters, index.ctx));
 
-  /** Même index que les descriptions, et pour la même raison — sauf qu'une
-   * note n'a jamais de balises : c'est du texte brut par décision (§9.3). */
-  const noteIndex = $derived.by(() => {
-    const map = new Map<string, string>();
-    for (const c of typed) {
-      if (c.notes_user) map.set(c.id_interne, c.notes_user.toLowerCase());
-    }
-    return map;
-  });
-
-  /** Ce que le moteur de filtres a besoin de savoir lire sur une carte. Les
-   * trois origines de tags sont équivalentes ici ; seule la fiche détail les
-   * distingue par origine. */
-  const ctx: FilterContext = $derived({
-    isCar,
-    tagsOf: modTags,
-    descOf: (c) => descIndex.get(c.id_interne),
-    noteOf: (c) => noteIndex.get(c.id_interne),
-    hasDriver: hasOwnDriver,
-  });
-
-  /** Valeurs proposées par filtre, avec leur décompte. Calculées sur le type
-   * courant et **pas** sur les résultats filtrés : un chiffre qui bouge à
-   * chaque jeton posé ne sert à rien pour décider du jeton suivant. */
-  const optionIndex = $derived.by(() => {
-    const map = new Map<string, FilterOption[]>();
-    for (const def of defs) {
-      if (def.type === "val") map.set(def.key, optionsOf(def, typed, ctx));
-    }
-    return map;
-  });
-  const yearPresets = $derived(isCar ? decadePresets(typed.map((c) => c.year ?? 0)) : []);
-
-  const matchesFilters = $derived(buildPredicate(defs, filters, ctx));
-
-  const filtered = $derived(
-    typed.filter((c) => {
-      if (!matchesFilters(c)) return false;
-      if (query.trim()) {
-        // Un terme par mot séparé par un espace, ET entre eux mais chacun en
-        // simple "contains" (pas besoin d'être collés ni dans l'ordre) — bug
-        // réel signalé : « GT-M Evo » ne remontait pas « GT-M Adonis Evo »,
-        // recherché comme une seule sous-chaîne collée.
-        const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-        // Inclut le pack (§4.4) : rechercher son nom remonte toutes ses
-        // voitures. Et la note (§9.5) : une note qu'on ne peut pas retrouver
-        // est une note en écriture seule.
-        const hay =
-          `${c.display_name ?? ""} ${c.brand ?? ""} ${c.id_interne} ${c.category ?? ""} ${c.source_pack ?? ""} ${c.notes_user ?? ""} ${modTags(c).join(" ")}`.toLowerCase();
-        if (!terms.every((term) => hay.includes(term))) return false;
-      }
-      return true;
-    }),
-  );
+  const filtered = $derived(typed.filter((c) => matchesFilters(c) && matchesQuery(c, query)));
 
   const sorted = $derived.by(() => {
     const col = columns.find((c) => c.key === sortKey);
@@ -912,8 +846,8 @@
       bind:filters
       bind:pinned
       bind:query
-      optionsFor={(key) => optionIndex.get(key) ?? []}
-      presets={yearPresets}
+      optionsFor={index.optionsFor}
+      presets={index.yearPresets}
       resultCount={filtered.length}
     >
       {#snippet end()}

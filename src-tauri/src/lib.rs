@@ -14,6 +14,7 @@ mod deploy;
 mod detect;
 mod driver;
 mod driverapply;
+mod electronics;
 mod enginesound;
 mod errors;
 mod export;
@@ -307,6 +308,7 @@ pub fn run() {
             commands::session::weather_options,
             commands::session::weather_conditions,
             commands::session::track_sun,
+            commands::session::car_factory_assists,
             commands::session::launch_session,
             commands::session::is_steam_running,
             commands::session::open_content_manager,

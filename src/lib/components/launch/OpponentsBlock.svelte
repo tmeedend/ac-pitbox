@@ -6,12 +6,15 @@
   // cache de skins) reste dans Launch.svelte, qui la déclenche aussi depuis
   // d'autres sources (presets, resynchronisation voiture/circuit) — ce bloc
   // ne fait qu'afficher le résultat et notifier les actions locales
-  // (ajouter/dupliquer/retirer une ligne, régler un niveau, ouvrir le picker).
+  // (ajouter/dupliquer/retirer une ligne, régler un niveau, ouvrir la modale).
+  // La modale de sélection est rendue par `Launch.svelte` : elle a besoin de
+  // toute la bibliothèque voitures et des jetons dérivés du vivier, que ce
+  // bloc n'a pas à connaître.
   import { SAME_CATEGORY, type GridMode, type Opponent, type RaceSetup, type SkinItem } from "$lib/launch";
   import { previewSrc, type ModCard } from "$lib/library";
   import { t } from "$lib/i18n/index.svelte";
   import NumberStepper from "../NumberStepper.svelte";
-  import OpponentPicker from "../OpponentPicker.svelte";
+  import Seg from "../Seg.svelte";
 
   let {
     setup,
@@ -21,8 +24,6 @@
     skinsByCarId,
     categorySelection,
     categoryOptions,
-    pickerPool,
-    pickerIndex,
     onselectmode,
     onselectcategory,
     oncountchange,
@@ -31,8 +32,7 @@
     onduplicate,
     onsetlevel,
     onopenpicker,
-    onclosepicker,
-    onconfirmpicker,
+    onregenerate,
   }: {
     setup: RaceSetup;
     gridMode: GridMode;
@@ -41,8 +41,6 @@
     skinsByCarId: Record<string, SkinItem[]>;
     categorySelection: string;
     categoryOptions: string[];
-    pickerPool: ModCard[];
-    pickerIndex: number | null;
     onselectmode: (mode: GridMode) => void;
     onselectcategory: (category: string) => void;
     oncountchange: (n: number) => void;
@@ -51,15 +49,14 @@
     onduplicate: (index: number) => void;
     onsetlevel: (index: number, level: number) => void;
     onopenpicker: (index: number) => void;
-    onclosepicker: () => void;
-    onconfirmpicker: (carId: string, skinId: string | null) => void;
+    onregenerate: () => void;
   } = $props();
 
-  const gridModes: { id: GridMode; labelKey: string }[] = [
-    { id: "same_car", labelKey: "launch.gridSameCar" },
-    { id: "same_category", labelKey: "launch.gridSameCategory" },
-    { id: "free", labelKey: "launch.gridFree" },
-  ];
+  const gridModes = $derived([
+    { value: "same_car", label: t("launch.gridSameCar") },
+    { value: "same_category", label: t("launch.gridSameCategory") },
+    { value: "free", label: t("launch.gridFree") },
+  ]);
 
   // --- Fourchette de niveau IA (deux curseurs, §8.6) ---
   const RANGE_MIN = 60;
@@ -72,19 +69,41 @@
   }
   const aiMinPct = $derived(((setup.ai_level_min - RANGE_MIN) / (RANGE_MAX - RANGE_MIN)) * 100);
   const aiMaxPct = $derived(((setup.ai_level_max - RANGE_MIN) / (RANGE_MAX - RANGE_MIN)) * 100);
+  // Les deux valeurs sont accrochées à leur poignée (§9.3) : posées aux
+  // extrémités de la piste, elles disaient la fourchette sans dire laquelle
+  // des deux poignées on était en train de bouger.
+  //
+  // Sous 20 points d'écart, les deux libellés ne tiennent plus côte à côte sur
+  // une piste de cette largeur — et à cette distance les poignées elles-mêmes
+  // ne se distinguent plus, donc les séparer n'apprendrait rien. Une seule
+  // valeur alors, la fourchette d'un bout à l'autre. C'est le cas du réglage
+  // par défaut (92-98).
+  //
+  // Le placement est en **pourcentage de la piste**, jamais en pixels relevés
+  // à l'écran — un `getBoundingClientRect` rendrait des pixels de fenêtre déjà
+  // multipliés par le zoom d'interface, qu'un `left` en pixels CSS
+  // multiplierait une seconde fois (§13). Le débordement au ras des bords est
+  // rattrapé en CSS par un `clamp()`, qui connaît la largeur réelle de la
+  // piste là où ce fichier ne la connaît pas.
+  const aiLabelsMerged = $derived(aiMaxPct - aiMinPct < 20);
 
   function opponentName(carId: string): string {
     return carPool.find((c) => c.id_interne === carId)?.display_name ?? carId;
   }
-  /** Vignette de l'adversaire : livery du skin choisi si connue (couleurs/motif
-   * du skin seul, même convention que le sélecteur de skin de la barre
-   * latérale — voir `ImageSelectDropdown`/`AppShell`), repli sur la preview du
-   * skin puis sur celle du mod (deux adversaires « même voiture » doivent se
-   * distinguer visuellement par leur skin, pas juste par leur nom). */
+  /** Vignette de l'adversaire : `preview.jpg` du skin d'abord, `livery.png`
+   * seulement en dernier recours.
+   *
+   * C'est l'inverse de l'ordre du sélecteur de livrée de la barre latérale, et
+   * l'inversion est **locale à ce composant** : les deux ne posent pas la même
+   * question. Là-bas c'est « quelle peinture ? », et une pastille de couleur y
+   * répond ; ici c'est « quelle voiture ? », et quatre pastilles de couleur n'y
+   * répondent pas. La preview montre la voiture *portant* le skin, donc elle
+   * répond aux deux à la fois — y compris pour deux adversaires « même
+   * voiture », qui doivent rester distinguables. */
   function opponentPreview(opp: Opponent): string | null {
     const skin = opp.car_skin ? skinsByCarId[opp.car_id]?.find((s) => s.id === opp.car_skin) : null;
-    if (skin?.livery || skin?.preview) return previewSrc(skin.livery ?? skin.preview);
-    return previewSrc(carPool.find((c) => c.id_interne === opp.car_id)?.preview ?? null);
+    const modPreview = carPool.find((c) => c.id_interne === opp.car_id)?.preview ?? null;
+    return previewSrc(skin?.preview ?? modPreview ?? skin?.livery ?? null);
   }
   function opponentSkinName(opp: Opponent): string | undefined {
     return opp.car_skin ? skinsByCarId[opp.car_id]?.find((s) => s.id === opp.car_skin)?.name : undefined;
@@ -95,19 +114,11 @@
 <section class="blk">
   <header class="blk-h"><span class="blk-t">{t("launch.opponentsLabel")}</span></header>
   <div class="blk-b">
+  <!-- Segmenté partagé : ces trois modes avaient leur propre copie, avec ses
+       divs cliquables et son marquage de l'actif — lequel se trouvait être
+       déjà le bon (rouge éteint + filet), le seul de l'écran à l'être. -->
   <div class="modes">
-    {#each gridModes as m}
-      <div
-        class="mode"
-        class:on={gridMode === m.id}
-        role="button"
-        tabindex="0"
-        onclick={() => onselectmode(m.id)}
-        onkeydown={(e) => (e.key === "Enter" || e.key === " ") && onselectmode(m.id)}
-      >
-        <div class="mt">{t(m.labelKey)}</div>
-      </div>
-    {/each}
+    <Seg value={gridMode} onselect={(v) => onselectmode(v as GridMode)} items={gridModes} />
   </div>
 
   <!-- Catégorie du vivier, nombre d'adversaires, difficulté et fourchette
@@ -142,12 +153,34 @@
       <div class="dual-range">
         <div class="dr-track"></div>
         <div class="dr-fill" style="left:{aiMinPct}%; right:{100 - aiMaxPct}%"></div>
-        <input type="range" min={RANGE_MIN} max={RANGE_MAX} bind:value={setup.ai_level_min} oninput={clampAiMin} />
-        <input type="range" min={RANGE_MIN} max={RANGE_MAX} bind:value={setup.ai_level_max} oninput={clampAiMax} />
-      </div>
-      <div class="dr-vals mono">
-        <span>{t("launch.aiMin", { level: setup.ai_level_min })}</span>
-        <span>{t("launch.aiMax", { level: setup.ai_level_max })}</span>
+        <!-- Les mots « min » et « max » ont quitté les libellés : la position
+             de la poignée le dit déjà, et ils doublaient la largeur d'une
+             valeur là où c'est précisément la largeur qui manque. Ils restent
+             sur les curseurs comme nom accessible, qui n'en a pas d'autre. -->
+        <input
+          type="range"
+          min={RANGE_MIN}
+          max={RANGE_MAX}
+          aria-label={t("launch.aiMin", { level: setup.ai_level_min })}
+          bind:value={setup.ai_level_min}
+          oninput={clampAiMin}
+        />
+        <input
+          type="range"
+          min={RANGE_MIN}
+          max={RANGE_MAX}
+          aria-label={t("launch.aiMax", { level: setup.ai_level_max })}
+          bind:value={setup.ai_level_max}
+          oninput={clampAiMax}
+        />
+        {#if aiLabelsMerged}
+          <span class="dr-v pair mono" style="--at:{(aiMinPct + aiMaxPct) / 2}%"
+            >{setup.ai_level_min}–{setup.ai_level_max}%</span
+          >
+        {:else}
+          <span class="dr-v mono" style="--at:{aiMinPct}%">{setup.ai_level_min}%</span>
+          <span class="dr-v mono" style="--at:{aiMaxPct}%">{setup.ai_level_max}%</span>
+        {/if}
       </div>
     </div>
 
@@ -166,7 +199,13 @@
   </div>
 
   <div class="oppo">
-    <div class="oppo-h lbl">{t("launch.gridGenerated", { count: setup.opponents.length })}</div>
+    <!-- « généré » devenait faux dès qu'une ligne avait été posée à la main.
+         L'espace laissé libre entre le titre et le bouton est celui de la
+         position de départ (L3) : il est tenu vide exprès. -->
+    <div class="oppo-h lbl">
+      <span>{t("launch.gridHeader", { count: setup.opponents.length })}</span>
+      <button class="oppo-regen" type="button" onclick={onregenerate}>{t("launch.regenerateGrid")}</button>
+    </div>
     {#each setup.opponents as opp, i}
       {@const prev = opponentPreview(opp)}
       <div
@@ -179,6 +218,9 @@
       >
         <div class="oppo-img">{#if prev}<img src={prev} alt="" />{:else}<span class="mono">🏎</span>{/if}</div>
         <span class="oppo-n">{opponentName(opp.car_id)}{#if opponentSkinName(opp)}<span class="oppo-skin"> · {opponentSkinName(opp)}</span>{/if}</span>
+        <!-- Rapport poids/puissance (L3) : colonne tenue vide pour que rien ne
+             se déplace quand elle se remplira. -->
+        <span class="oppo-ratio"></span>
         <input
           class="oppo-force mono"
           type="number"
@@ -196,6 +238,17 @@
           onclick={(e) => { e.stopPropagation(); onduplicate(i); }}
         >+</button>
         <button class="oppo-x" type="button" title={t("common.remove")} onclick={(e) => { e.stopPropagation(); onremove(i); }}>✕</button>
+        <!-- La vignette de ligne dit quelle voiture ; en grand, elle dit
+             laquelle exactement. Le JPEG est déjà sur disque et déjà chargé
+             par la vignette : aucun appel backend, jamais l'aperçu 3D.
+             Positionnement **absolu** dans la ligne, pas `fixed` : une bulle
+             fixe se place à partir d'un `getBoundingClientRect`, donc des
+             pixels de fenêtre déjà multipliés par le zoom d'interface (§13) —
+             et il faudrait la refermer au défilement de chaque ancêtre. Ici
+             elle suit le contenu toute seule. -->
+        {#if prev}
+          <span class="oppo-bubble"><img src={prev} alt="" /></span>
+        {/if}
       </div>
     {/each}
     <button class="oppo-add" type="button" onclick={onadd}>+ {t("launch.addOpponent")}</button>
@@ -203,23 +256,9 @@
   </div>
 </section>
 
-{#if pickerIndex != null}
-  <OpponentPicker
-    pool={pickerPool}
-    currentCarId={setup.opponents[pickerIndex].car_id}
-    currentSkinId={setup.opponents[pickerIndex].car_skin}
-    onpick={onconfirmpicker}
-    onclose={onclosepicker}
-  />
-{/if}
 
 <style>
   .modes {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1px;
-    background: var(--line);
-    border: 1px solid var(--line);
     margin-bottom: 12px;
   }
   /* Même patron que `.ai-range-field` : libellé au-dessus, largeur fixe pour
@@ -252,33 +291,6 @@
        emplacement en pleine rubrique. */
     width: 170px;
   }
-  .ai-range-field .dr-vals {
-    font-size: 8.5px;
-  }
-  .mode {
-    background: var(--panel2);
-    padding: 12px 8px;
-    text-align: center;
-    cursor: pointer;
-  }
-  .mode:hover {
-    background: var(--raised);
-  }
-  .mode.on {
-    background: var(--rosso-dim);
-    box-shadow: inset 0 -2px 0 var(--rosso);
-  }
-  /* Même taille que .seg button (Practice/Hotlap/Course, Launch.svelte) et
-     .seg-v button (Faux départ/Grip, Launch.svelte) : ce sont le même rôle —
-     le libellé d'une option cliquable — qui n'a aucune raison de changer de
-     taille selon l'écran. */
-  .mode .mt {
-    font-size: 11px;
-    color: var(--txt2);
-  }
-  .mode.on .mt {
-    color: var(--rosso-bright);
-  }
   .grid-fields {
     display: inline-flex;
     align-items: center;
@@ -301,7 +313,33 @@
     background: var(--raised);
     padding: 6px 10px;
     margin-bottom: 0;
+    /* `.lbl` est déjà en flex : reste à écarter les deux bouts. L'espace du
+       milieu attend la position de départ (L3). */
+    justify-content: space-between;
+    gap: 10px;
   }
+  /* Bouton secondaire neutre : régénérer le plateau n'est pas ce qui est
+     retenu pour la session, donc pas de rouge (§7.2ter). L'action existait
+     déjà comme effet de bord d'un changement de voiture — sans aucun moyen de
+     la demander. */
+  .oppo-regen {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 8.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+  }
+  .oppo-regen:hover {
+    background: var(--panel2);
+    color: var(--txt2);
+  }
+  /* `relative` porte la bulle de survol, et son absence ne se voit pas comme
+     un défaut de style : un enfant `absolute` se cale sur le premier ancêtre
+     positionné, ici le conteneur de défilement de tout l'écran — la bulle
+     partait donc en bas de la page, hors champ, et le survol semblait n'avoir
+     aucun effet. */
   .oppo-row {
     display: flex;
     align-items: center;
@@ -310,13 +348,19 @@
     border-top: 1px solid var(--line);
     background: var(--panel2);
     cursor: pointer;
+    position: relative;
   }
   .oppo-row:hover {
     background: var(--raised);
   }
+  /* 16:9, le format de `preview.jpg`. La ligne ne grandit que de quelques
+     pixels et la surface double : à 34x22 on voyait une couleur, pas une
+     voiture. Recadrage plutôt que dézoom — le cadrage Kunos est constant et la
+     plupart des mods le reprennent, la voiture est donc toujours au même
+     endroit dans l'image. */
   .oppo-img {
-    width: 34px;
-    height: 22px;
+    width: 48px;
+    height: 27px;
     border: 1px solid var(--line);
     background: var(--bg);
     display: flex;
@@ -329,6 +373,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    object-position: center 60%;
   }
   .oppo-n {
     font-size: 10.5px;
@@ -341,26 +386,41 @@
   .oppo-skin {
     color: var(--muted);
   }
+  /* Vide jusqu'au L3 (rapport poids/puissance). Largeur d'un « 412 ch/t » en
+     mono 9px, pour que le nom ne se réétale pas le jour où elle se remplit. */
+  .oppo-ratio {
+    width: 46px;
+    flex: none;
+  }
+  /* Blanche, et sans cadre au repos : le vert était la seule occurrence de
+     cette couleur dans un contrôle, et un cadre permanent faisait de chaque
+     ligne un formulaire. Le cadre apparaît au survol de la ligne — c'est là
+     qu'il faut savoir que la valeur s'édite, pas avant. */
   .oppo-force {
     width: 34px;
     height: 20px;
-    background: var(--bg);
-    border: 1px solid var(--line);
-    color: var(--green);
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--txt);
     font-size: 9px;
     text-align: center;
     flex: none;
     appearance: textfield;
+  }
+  .oppo-row:hover .oppo-force {
+    background: var(--bg);
+    border-color: var(--line);
   }
   .oppo-force::-webkit-outer-spin-button,
   .oppo-force::-webkit-inner-spin-button {
     appearance: none;
     margin: 0;
   }
-  .oppo-force:hover,
+  /* Le focus reste jaune, celui de `global.css` : le rouge qu'il portait ici
+     ne se rattache à aucun niveau du barème (§7.2ter). */
   .oppo-force:focus {
-    border-color: var(--rosso-border);
-    outline: none;
+    background: var(--bg);
+    border-color: var(--line);
   }
   .oppo-dup {
     background: transparent;
@@ -372,7 +432,7 @@
   }
   .oppo-dup:hover {
     background: transparent;
-    color: var(--green);
+    color: var(--txt);
   }
   .oppo-x {
     background: transparent;
@@ -384,23 +444,28 @@
     background: transparent;
     color: var(--rosso-bright);
   }
+  /* Action secondaire : aucun niveau du barème ne couvre un libellé rouge
+     (§7.2ter), et le rouge de cet écran doit rester au bouton de lancement. */
   .oppo-add {
     background: var(--panel2);
     padding: 7px 10px;
     border-top: 1px solid var(--line);
-    color: var(--rosso-bright);
+    color: var(--txt2);
     font-size: 9.5px;
     text-align: left;
     width: 100%;
   }
   .oppo-add:hover {
-    background: var(--rosso-dim);
+    background: var(--raised);
   }
 
   /* Fourchettes (année + IA, deux curseurs) */
   .dual-range {
     position: relative;
     height: 28px;
+    /* Les valeurs vivent au-dessus de la piste, dans la place que leur ancienne
+       ligne occupait en dessous. */
+    margin-top: 12px;
   }
   .dr-track {
     position: absolute;
@@ -410,6 +475,32 @@
     height: 3px;
     background: var(--line);
     transform: translateY(-50%);
+  }
+  /* Bulle de survol : la même image, en grand. Aucune transition sous
+     `prefers-reduced-motion` (règle globale de `global.css`). */
+  .oppo-bubble {
+    position: absolute;
+    left: 56px;
+    bottom: calc(100% - 10px);
+    z-index: 20;
+    width: 240px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    box-shadow: 0 12px 34px rgb(0 0 0 / 60%);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.1s;
+  }
+  .oppo-row:hover .oppo-bubble,
+  .oppo-row:focus-visible .oppo-bubble {
+    opacity: 1;
+    visibility: visible;
+  }
+  .oppo-bubble img {
+    display: block;
+    width: 100%;
+    height: auto;
   }
   .dr-fill {
     position: absolute;
@@ -443,18 +534,26 @@
     cursor: pointer;
     margin-top: 4px;
   }
-  .dr-vals {
-    display: flex;
-    justify-content: space-between;
-    font-size: 9.5px;
+  /* Accrochée à sa poignée, au-dessus de la piste. `--at` est un pourcentage
+     de la piste, pas une mesure relevée à l'écran : rien à diviser par le zoom
+     (§13).
+     Le `clamp` retient la valeur dans la piste quand la poignée arrive au bord
+     — sans lui, la valeur maximale d'une fourchette haute passait par-dessus
+     le champ voisin (constaté à l'écran, « année min » recouvert). Il vaut une
+     demi-largeur de libellé, la seule mesure que le CSS connaisse ici et que
+     le composant ignore. */
+  .dr-v {
+    --pad: 16px;
+    position: absolute;
+    bottom: calc(100% - 4px);
+    left: clamp(var(--pad), var(--at), calc(100% - var(--pad)));
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 8.5px;
     color: var(--txt2);
-    margin-top: 4px;
+    pointer-events: none;
   }
-  /* `.dr-vals` sert aux deux fourchettes : année (3 spans, avec séparateur)
-     et niveau IA (2 spans, sans — la sienne a été retirée). `:not(:last-child)`
-     évite qu'à 2 spans la règle n'atteigne le max au lieu d'un séparateur
-     disparu. */
-  .dr-vals span:nth-child(2):not(:last-child) {
-    color: var(--muted);
+  .dr-v.pair {
+    --pad: 26px;
   }
 </style>

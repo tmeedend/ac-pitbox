@@ -119,7 +119,9 @@ impl CachedArticle {
 ///
 /// 2 — the whole article rather than its introduction (§7.3).
 /// 3 — the rendered article, its sections and its image credits alongside.
-pub const CONTENT_VERSION: u32 = 3;
+/// 4 — the image credits carry the size of their image, without which the
+///     article is laid out too short and moves under the reader as it loads.
+pub const CONTENT_VERSION: u32 = 4;
 
 /// Empties the cache when it holds rows a previous version of the code wrote.
 ///

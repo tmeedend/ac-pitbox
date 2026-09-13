@@ -3,7 +3,7 @@
 // un instantané complet et rappelable à la demande (surtout utile pour ne pas
 // reperdre un plateau d'adversaires soigneusement ajusté).
 import { invoke } from "@tauri-apps/api/core";
-import type { GridMode, RaceSetup, SessionType } from "./launch";
+import { assistLevelFrom, type GridMode, type RaceSetup, type SessionType } from "./launch";
 import { StorageKey } from "./storage";
 
 export type Season = "" | "spring" | "summer" | "autumn" | "winter";
@@ -58,14 +58,33 @@ function loadLegacyAll(): Record<string, SavedSession> {
  * voir `loadLegacyAll` pour le pourquoi du changement. */
 async function loadAll(): Promise<Record<string, SavedSession>> {
   const fromRust = await invoke<Record<string, SavedSession>>("get_saved_sessions").catch(() => ({}));
-  if (Object.keys(fromRust).length > 0) return fromRust;
+  if (Object.keys(fromRust).length > 0) return migrate(fromRust);
   // Repli sur l'ancien `localStorage` seulement si le nouveau fichier n'a
   // rien (première ouverture après la mise à jour) — et dans ce cas,
   // persiste tout de suite au nouvel endroit pour ne plus jamais redépendre
   // de `localStorage`.
   const legacy = loadLegacyAll();
-  if (Object.keys(legacy).length > 0) await persist(legacy);
-  return legacy;
+  if (Object.keys(legacy).length > 0) await persist(migrate(legacy));
+  return migrate(legacy);
+}
+
+/** Champs d'un instantané qui ont changé de forme depuis qu'il a été écrit.
+ *
+ * Passe sur **toutes** les entrées, pas sur celles du type courant : chaque
+ * sauvegarde porte son propre `setup`, et n'en convertir qu'une partie
+ * laisserait des booléens orphelins qui retomberaient en silence sur le défaut
+ * au prochain chargement. Ici plutôt qu'au chargement d'une session : c'est le
+ * seul passage obligé des trois opérations (lister, enregistrer, supprimer),
+ * et `saveSession` réécrit le tout, ce qui rend la conversion durable sans
+ * écriture dédiée. Idempotent — une entrée déjà convertie porte son niveau et
+ * l'ancien booléen n'est plus regardé. */
+function migrate(all: Record<string, SavedSession>): Record<string, SavedSession> {
+  for (const s of Object.values(all)) {
+    const old = s.setup as Partial<{ abs_auto: boolean; traction_control_auto: boolean }>;
+    s.setup.abs = assistLevelFrom(s.setup.abs, old.abs_auto);
+    s.setup.traction_control = assistLevelFrom(s.setup.traction_control, old.traction_control_auto);
+  }
+  return all;
 }
 
 function persist(all: Record<string, SavedSession>): Promise<void> {

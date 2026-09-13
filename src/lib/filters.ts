@@ -17,6 +17,7 @@
 // This module is deliberately free of Svelte and of the DOM: catalogue,
 // evaluation and summaries are plain functions, so the two library screens
 // (cars and tracks) share them and they stay readable on their own.
+import { modTags } from "./cardSearch";
 import type { ModCard, ModKind } from "./library";
 import { t } from "./i18n/index.svelte";
 
@@ -592,4 +593,57 @@ export function parsePinned(raw: string | null, defs: FilterDef[]): string[] {
   } catch {
     return defaultPinned().filter((k) => defs.some((d) => d.key === k));
   }
+}
+
+/** What a pool of cards offers the filter bar, computed once per list load. */
+export interface CardIndex {
+  ctx: FilterContext;
+  /** Values offered for a `val` filter, with their counts. */
+  optionsFor: (key: string) => FilterOption[];
+  /** Decade shortcuts of the year filter, deduced from the pool. */
+  yearPresets: { label: string; min: number; max: number }[];
+}
+
+/**
+ * Builds the indexes the filter bar reads.
+ *
+ * Descriptions and notes are lowercased **once per list load** rather than at
+ * each keystroke: ~400 KB of prose over a full library, cheap to walk and not
+ * cheap to lowercase again per letter typed. Markup is stripped first — 116 of
+ * the 124 descriptions measured on a real library carry HTML (`<br>`, `<b>`,
+ * `<font color=…>`), so matching the raw text would make "b", "br", "font" or
+ * "color" hit nearly every mod.
+ *
+ * Counts are computed on the **whole pool**, not on the filtered result: a
+ * number that moves each time a chip is dropped is no help in deciding the
+ * next chip.
+ */
+export function buildCardIndex(
+  cards: ModCard[],
+  defs: FilterDef[],
+  isCar: boolean,
+  hasDriver: (id: string) => boolean,
+): CardIndex {
+  const descIndex = new Map<string, string>();
+  const noteIndex = new Map<string, string>();
+  for (const c of cards) {
+    if (c.description) descIndex.set(c.id_interne, c.description.replace(/<[^>]*>/g, " ").toLowerCase());
+    if (c.notes_user) noteIndex.set(c.id_interne, c.notes_user.toLowerCase());
+  }
+  const ctx: FilterContext = {
+    isCar,
+    tagsOf: modTags,
+    descOf: (c) => descIndex.get(c.id_interne),
+    noteOf: (c) => noteIndex.get(c.id_interne),
+    hasDriver,
+  };
+  const options = new Map<string, FilterOption[]>();
+  for (const def of defs) {
+    if (def.type === "val") options.set(def.key, optionsOf(def, cards, ctx));
+  }
+  return {
+    ctx,
+    optionsFor: (key) => options.get(key) ?? [],
+    yearPresets: isCar ? decadePresets(cards.map((c) => c.year ?? 0)) : [],
+  };
 }

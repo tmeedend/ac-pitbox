@@ -14,10 +14,10 @@
   //  - `vertical` : une colonne d'options qui se parcourt à la manette (les
   //    options de session). Une liste déroulante n'y conviendrait pas, elle
   //    n'est pas pilotable au pad.
-  //  - `tone` : `accent` (fond rouge plein) pour un choix qui porte sur la
-  //    session ou la catégorie, `neutral` (fond surélevé) pour une bascule de
-  //    présentation. Le rouge a un barème (SPEC §7.2ter) : une bascule
-  //    d'affichage n'y a pas droit.
+  //  - `tone` : `accent` (rouge éteint + filet, niveau 2 du barème) pour un
+  //    choix qui porte sur la session ou la catégorie, `neutral` (fond
+  //    surélevé) pour une bascule de présentation. Le rouge a un barème
+  //    (SPEC §7.2ter) : une bascule d'affichage n'y a pas droit.
   //  - `size` : nommée par son rôle, jamais par une taille. `toolbar` s'aligne
   //    sur les 32 px des autres contrôles de la barre de filtres (§7.1) —
   //    c'est une contrainte mécanique, pas une préférence ; `main` est le
@@ -98,9 +98,24 @@
   }
 
   /* --- Marquage de l'actif : deux tons, deux rôles (voir l'en-tête) --- */
+  /* Niveau 2 du barème (§7.2ter), pas niveau 1 : un fond rouge plein est
+     réservé à « Démarrer la session », **un seul élément par écran**. L'écran
+     de session en comptait cinq — quatre segmentés plus le bouton de
+     lancement — parce que ce ton était le défaut du composant et que personne
+     n'avait eu à l'écrire. Le traitement retenu est celui que le bloc
+     Adversaires avait déjà inventé dans son coin pour ses trois modes :
+     fond éteint, libellé rouge clair, filet de 2 px. C'est aussi, mot pour
+     mot, ce que le barème appelle « ce qui est retenu pour la session ». */
   .seg button.on {
-    background: var(--rosso);
-    color: #fff;
+    background: var(--rosso-dim);
+    color: var(--rosso-bright);
+    box-shadow: inset 0 -2px 0 var(--rosso);
+  }
+  /* Empilés, le filet du bas se lirait comme un séparateur de plus : une
+     colonne marque son option retenue sur le bord d'attaque, comme l'entrée
+     active du rail. */
+  .seg.vertical button.on {
+    box-shadow: inset 2px 0 0 var(--rosso);
   }
   .seg.neutral button.on {
     background: var(--raised);

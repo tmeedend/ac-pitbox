@@ -36,9 +36,9 @@ fn track_id(s: &RaceSetup) -> String {
 /// `TyreWear`/`FuelConsumption` en multiplicateur de taux (1.0 = 100%, notre
 /// échelle 0-200 divisée par 100 — vérifié sur `AssistsData` d'un preset réel
 /// : `"Damage":100.0,...,"TyreWear":1.0,"FuelConsumption":1.0`).
-/// `Abs`/`TractionControl` : entiers 0/1 dans les presets réels (pas des
-/// booléens) — mappés depuis nos réglages "auto" (best effort : la
-/// signification exacte d'un éventuel niveau 2 n'a pas été vue).
+/// `Abs`/`TractionControl` : entiers (pas des booléens), aux trois valeurs que
+/// le launcher d'AC déclare lui-même — `0` Off, `1` Factory, `2` On, voir
+/// `AssistLevel`.
 fn build_assists(s: &RaceSetup) -> Value {
     json!({
         "IdealLine": s.ideal_line,
@@ -48,13 +48,163 @@ fn build_assists(s: &RaceSetup) -> Value {
         "AutoShifter": false,
         "SlipSteam": 1.0,
         "AutoClutch": false,
-        "Abs": if s.abs_auto { 1 } else { 0 },
-        "TractionControl": if s.traction_control_auto { 1 } else { 0 },
+        "Abs": s.abs.to_ac(),
+        "TractionControl": s.traction_control.to_ac(),
         "VisualDamage": true,
         "Damage": s.damage as f64,
         "TyreWear": s.tyre_wear as f64 / 100.0,
         "FuelConsumption": s.fuel_rate as f64 / 100.0,
         "TyreBlankets": s.tyre_blankets,
+    })
+}
+
+/// Les six états de piste **du jeu**, `cfg/templates/tracks.ini` recopié
+/// verbatim : grip de départ, report d'une session à l'autre, aléa, et nombre
+/// de tours pour gagner un point de grip.
+///
+/// Content Manager lit ce même fichier pour peupler sa liste (relevé dans
+/// `launcher/themes/default/js/ui.js` : `getiniasjson/templates/tracks.ini`),
+/// et affiche les trois premiers en pourcentages — ce qui est la preuve que
+/// son preset les stocke divisés par cent, voir [`build_track_properties`].
+///
+/// Ordonnés par grip croissant, comme la liste de CM.
+pub const TRACK_STATES: [TrackState; 6] = [
+    TrackState {
+        start: 86,
+        transfer: 50,
+        randomness: 1,
+        lap_gain: 30,
+        description: "A very slippery track, improves fast with more laps.",
+    },
+    TrackState {
+        start: 89,
+        transfer: 80,
+        randomness: 3,
+        lap_gain: 50,
+        description: "Old tarmac. Bad grip won't get better soon.",
+    },
+    TrackState {
+        start: 95,
+        transfer: 90,
+        randomness: 2,
+        lap_gain: 132,
+        description: "A clean track, gets better with more laps.",
+    },
+    TrackState {
+        start: 96,
+        transfer: 80,
+        randomness: 1,
+        lap_gain: 300,
+        description: "A slow track that doesn't improve much.",
+    },
+    TrackState {
+        start: 98,
+        transfer: 80,
+        randomness: 2,
+        lap_gain: 700,
+        description: "Very grippy track right from the start.",
+    },
+    TrackState {
+        start: 100,
+        transfer: 100,
+        randomness: 0,
+        lap_gain: 1,
+        description: "Perfect track for hotlapping.",
+    },
+];
+
+/// Une entrée de `cfg/templates/tracks.ini`.
+pub struct TrackState {
+    /// `SESSION_START` — le grip au départ, en pourcentage. C'est lui qui
+    /// identifie l'état : l'écran ne retient que ce nombre.
+    pub start: u32,
+    /// `SESSION_TRANSFER` — ce qui se reporte d'une session à la suivante.
+    pub transfer: u32,
+    /// `RANDOMNESS` — la variation aléatoire.
+    pub randomness: u32,
+    /// `LAP_GAIN` — nombre de tours pour gagner un point de grip : plus il est
+    /// grand, moins la piste s'améliore.
+    pub lap_gain: u32,
+    /// Telle que le jeu l'écrit. Cosmétique côté CM, jamais lue par AC.
+    pub description: &'static str,
+}
+
+/// « Auto » : l'état est laissé à la météo (§9.3). Sentinelle plutôt qu'un
+/// second champ, parce que l'écran n'offre qu'**un** choix parmi sept — deux
+/// champs pour une seule décision finissent toujours par se contredire. Aucun
+/// état réel ne vaut 0 %.
+pub const GRIP_WEATHER: u32 = 0;
+
+/// Ce que porte « Auto », repris de `TrackStateViewModelBase.CreateBuiltIn`
+/// de Content Manager : le drapeau, et les valeurs de `GREEN` en repli.
+///
+/// Le repli n'est pas décoratif — `ToProperties()` écrit les quatre nombres
+/// dans tous les cas, `WeatherDefined` compris. Une session « Auto » dont la
+/// météo ne dit rien de la piste roule donc sur une piste verte, ce que la
+/// description de CM énonce mot pour mot.
+const WEATHER_STATE: TrackState = TrackState {
+    start: 95,
+    transfer: 90,
+    randomness: 2,
+    lap_gain: 132,
+    description: "Track state specified by weather, or Green, in case weather doesn't specify track state",
+};
+
+/// L'état de piste le plus proche du grip demandé.
+///
+/// Par proximité et non par égalité : un preset enregistré avant que la liste
+/// ne s'aligne sur celle du jeu peut porter une valeur qui n'y figure pas (92 %
+/// a existé, inventé). Aucune migration à écrire — il atterrit sur l'état
+/// voisin, et l'écran l'y recale à l'affichage.
+///
+/// **À égale distance, le plus adhérent gagne** : 92 % tombait entre 89 et 95,
+/// et une piste un peu plus roulante est le repli indulgent — l'inverse
+/// rendrait une session plus difficile qu'à la sauvegarde, ce qui se remarque
+/// au volant alors que le contraire ne se remarque pas.
+pub fn track_state_for(grip: u32) -> &'static TrackState {
+    let grip = grip.clamp(1, 100);
+    TRACK_STATES
+        .iter()
+        .min_by_key(|st| (st.start.abs_diff(grip), std::cmp::Reverse(st.start)))
+        .expect("the table is never empty")
+}
+
+/// État de la piste (§9.3) — le `TrackPropertiesData` du preset, au niveau
+/// racine et non dans le `ModeData`, donc commun aux quatre types de session.
+///
+/// **Le schéma est décodé, plus deviné**, et en deux temps. L'entrée `OPTIMUM`
+/// de la table du jeu (100/100/0/1, « Perfect track for hotlapping. »)
+/// reproduit exactement le `{"s":1.0,"t":1.0,"r":0.0,"g":1,"d":…}` que portent
+/// les dix presets de référence : `s`, `t` et `g` s'en déduisent, mais pas `r`,
+/// qu'un `RANDOMNESS` nul laissait indécidable entre les deux échelles.
+///
+/// C'est le panneau « Track state » de CM qui a tranché : sur `GREEN` il
+/// affiche 95 %, 90 % et 2 %, là où le fichier du jeu dit `SESSION_START=95`,
+/// `SESSION_TRANSFER=90` et `RANDOMNESS=2`. Les trois sont donc **le même
+/// pourcentage divisé par cent**, l'aléa compris ; seul `LAP_GAIN` reste brut,
+/// et il n'est d'ailleurs pas affiché en pourcentage.
+///
+/// `d` est cosmétique : CM l'affiche, le jeu ne la lit pas — son
+/// `[DYNAMIC_TRACK]` n'a pas de clé `DESCRIPTION`. Et `w` est `WeatherDefined`,
+/// le « Auto (set by weather) » de la liste de CM — voir [`GRIP_WEATHER`].
+///
+/// **Le nom de l'état ne part jamais.** « Green » n'est qu'un libellé
+/// d'interface pour une combinaison de quatre nombres ; rien dans le preset ne
+/// le transporte. Ce sont donc bien les nombres qu'il faut envoyer justes.
+fn build_track_properties(s: &RaceSetup) -> Value {
+    let weather_defined = s.grip == GRIP_WEATHER;
+    let st = if weather_defined {
+        &WEATHER_STATE
+    } else {
+        track_state_for(s.grip)
+    };
+    json!({
+        "s": f64::from(st.start) / 100.0,
+        "t": f64::from(st.transfer) / 100.0,
+        "r": f64::from(st.randomness) / 100.0,
+        "g": st.lap_gain,
+        "d": st.description,
+        "w": weather_defined,
     })
 }
 
@@ -194,10 +344,11 @@ fn mode_data_trackday(s: &RaceSetup) -> String {
 ///   et `race/quick` (invocation URI) ne le transmet pas. `s.car_skin` n'est
 ///   donc pas envoyé **par ce preset** : il est réinjecté après coup dans le
 ///   `race.ini` écrit par CM, voir `raceini.rs` (§9.2).
-/// - **Évolution du grip / état de piste** : pas de champ dédié trouvé —
-///   les 4 presets de référence utilisent tous le même `TrackPropertiesData`
-///   ("Optimum"/sec). `s.grip` n'est **pas encore appliqué** — toujours piste
-///   optimale sèche pour l'instant.
+/// - **Évolution du grip / état de piste** : appliqué, voir
+///   [`build_track_properties`]. Les presets de référence portent tous le même
+///   `TrackPropertiesData` parce qu'ils ont tous été sauvegardés sur une piste
+///   optimale, pas parce que le champ n'existe pas — c'est la table de presets
+///   du jeu (`cfg/templates/tracks.ini`) qui l'a montré.
 /// - **Durée en Practice** : le `ModeData` de `QuickDrive_Practice.xaml`
 ///   (confirmé sur `pitbox-practice.cmpreset`, et sur la classe C# CM
 ///   elle-même) n'a aucun champ de durée — contrairement à l'ancien race.ini
@@ -241,9 +392,7 @@ pub fn build_preset(s: &RaceSetup) -> Result<String, String> {
         "udt": s.season_date.is_some(),
         "dtv": s.season_date.as_ref().map(|d| format!("{d}T00:00:00")),
         "tpc": true,
-        "TrackPropertiesData": json!({
-            "s": 1.0, "t": 1.0, "r": 0.0, "g": 1, "d": "Perfect track for hotlapping.", "w": false,
-        }).to_string(),
+        "TrackPropertiesData": build_track_properties(s).to_string(),
         "asc": true,
         "AssistsData": build_assists(s).to_string(),
         "ico": false,
@@ -267,7 +416,7 @@ pub fn build_preset(s: &RaceSetup) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::launch::RaceSetup;
+    use crate::launch::{AssistLevel, RaceSetup};
 
     fn base_setup(session_type: SessionType) -> RaceSetup {
         RaceSetup {
@@ -304,8 +453,8 @@ mod tests {
             fuel_rate: 100,
             tyre_wear: 100,
             tyre_blankets: false,
-            abs_auto: true,
-            traction_control_auto: true,
+            abs: AssistLevel::Factory,
+            traction_control: AssistLevel::Factory,
             ideal_line: false,
         }
     }
@@ -476,7 +625,7 @@ mod tests {
         s.damage = 100;
         s.tyre_wear = 100;
         s.fuel_rate = 200;
-        s.abs_auto = false;
+        s.abs = AssistLevel::Off;
         let json = build_preset(&s).unwrap();
         let v: Value = serde_json::from_str(&json).unwrap();
         let assists: Value = serde_json::from_str(v["AssistsData"].as_str().unwrap()).unwrap();
@@ -484,6 +633,100 @@ mod tests {
         assert_eq!(assists["TyreWear"], 1.0);
         assert_eq!(assists["FuelConsumption"], 2.0);
         assert_eq!(assists["Abs"], 0);
+    }
+
+    /// §9.3 — l'état de piste choisi part réellement dans le preset. Il ne
+    /// partait pas : les quatre niveaux de l'écran écrivaient tous la piste
+    /// optimale, donc le réglage n'avait aucun effet en jeu.
+    #[test]
+    fn the_chosen_grip_reaches_the_preset() {
+        let mut s = base_setup(SessionType::Practice);
+        s.grip = 86;
+        let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
+        let track: Value = serde_json::from_str(v["TrackPropertiesData"].as_str().unwrap()).unwrap();
+        assert_eq!(track["s"], 0.86, "grip de départ transmis");
+        assert_eq!(track["t"], 0.5, "report de session");
+        assert_eq!(track["g"], 30, "tours par point de grip");
+        assert_eq!(
+            track["d"], "A very slippery track, improves fast with more laps.",
+            "la description suit le nombre envoyé au lieu de le contredire"
+        );
+
+        // La piste optimale doit rester exactement ce que portent les dix
+        // presets de référence, sinon c'est le cas nominal qu'on a cassé.
+        s.grip = 100;
+        let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
+        let track: Value = serde_json::from_str(v["TrackPropertiesData"].as_str().unwrap()).unwrap();
+        assert_eq!(track["s"], 1.0);
+        assert_eq!(track["t"], 1.0);
+        assert_eq!(track["r"], 0.0);
+        assert_eq!(track["g"], 1);
+        assert_eq!(track["d"], "Perfect track for hotlapping.");
+    }
+
+    /// §9.3 — « Auto » pose le drapeau que CM appelle `WeatherDefined`, et
+    /// envoie tout de même quatre nombres : `ToProperties()` les écrit dans
+    /// tous les cas, donc une météo muette sur la piste la laisse verte.
+    #[test]
+    fn the_weather_driven_state_sets_the_flag_and_falls_back_on_green() {
+        let mut s = base_setup(SessionType::Practice);
+        s.grip = GRIP_WEATHER;
+        let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
+        let track: Value = serde_json::from_str(v["TrackPropertiesData"].as_str().unwrap()).unwrap();
+        assert_eq!(track["w"], true, "drapeau posé");
+        assert_eq!(track["s"], 0.95, "repli sur Green");
+        assert_eq!(track["g"], 132);
+
+        // Tout autre état laisse le drapeau à terre.
+        s.grip = 100;
+        let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
+        let track: Value = serde_json::from_str(v["TrackPropertiesData"].as_str().unwrap()).unwrap();
+        assert_eq!(track["w"], false);
+    }
+
+    /// §9.3 — l'aléa est un pourcentage comme le grip de départ, pas une valeur
+    /// brute : c'est le panneau de CM qui l'a montré, en affichant « 2 % » là
+    /// où la table du jeu écrit `RANDOMNESS=2`. Se tromper d'un facteur cent
+    /// ici ne se verrait qu'en course.
+    #[test]
+    fn randomness_travels_as_a_percentage_like_the_other_two() {
+        let mut s = base_setup(SessionType::Practice);
+        s.grip = 95;
+        let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
+        let track: Value = serde_json::from_str(v["TrackPropertiesData"].as_str().unwrap()).unwrap();
+        assert_eq!(track["s"], 0.95);
+        assert_eq!(track["t"], 0.9);
+        assert_eq!(track["r"], 0.02, "2 % et non 2");
+    }
+
+    /// Un preset enregistré avant que la liste ne s'aligne sur celle du jeu
+    /// porte un grip qui n'y figure pas — il atterrit sur l'état voisin plutôt
+    /// que de partir tel quel avec les paramètres d'une autre piste.
+    #[test]
+    fn a_grip_that_is_no_longer_offered_lands_on_the_nearest_state() {
+        assert_eq!(
+            track_state_for(92).start,
+            95,
+            "92 inventé -> Green, le plus proche vers le haut"
+        );
+        assert_eq!(track_state_for(0).start, 86, "sous la table -> la plus glissante");
+        assert_eq!(track_state_for(100).start, 100, "une valeur exacte reste elle-même");
+    }
+
+    /// §9.3 — les trois niveaux d'une aide sont ceux du launcher d'AC lui-même
+    /// (`0,1,2` en face de `Off,Factory,On`) : une case à cocher n'en portait
+    /// que deux, et `Factory` n'était pas celui qu'elle exprimait.
+    #[test]
+    fn the_three_assist_levels_reach_the_preset() {
+        for (level, expected) in [(AssistLevel::Off, 0), (AssistLevel::Factory, 1), (AssistLevel::On, 2)] {
+            let mut s = base_setup(SessionType::Practice);
+            s.abs = level;
+            s.traction_control = level;
+            let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
+            let assists: Value = serde_json::from_str(v["AssistsData"].as_str().unwrap()).unwrap();
+            assert_eq!(assists["Abs"], expected, "ABS {level:?}");
+            assert_eq!(assists["TractionControl"], expected, "antipatinage {level:?}");
+        }
     }
 
     #[test]

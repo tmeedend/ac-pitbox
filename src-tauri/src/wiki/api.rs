@@ -175,6 +175,19 @@ pub struct ImageCredit {
     pub artist: String,
     /// Short licence name, e.g. `CC BY-SA 4.0`.
     pub licence: String,
+    /// Display size of `url`, in CSS pixels. Zero when the API did not say.
+    ///
+    /// **Not decoration: it is what stops the article from moving under the
+    /// reader.** An `<img>` with no width and no height occupies nothing until
+    /// the file arrives, so an article of thirty photographs is laid out an
+    /// entire screen too short — the table of contents then jumps to the wrong
+    /// place, and every image that loads afterwards grows above the reader,
+    /// which the browser's scroll anchoring answers by pushing the scroll back
+    /// down. Reserving the box beforehand is the only cure.
+    #[serde(default)]
+    pub width: u32,
+    #[serde(default)]
+    pub height: u32,
 }
 
 /// One article, as the API gives it — never reworded, never summarised, never
@@ -350,7 +363,7 @@ impl WikiClient {
             let titles: Vec<String> = batch.iter().map(|f| format!("File:{f}")).collect();
             let path = format!(
                 "/w/api.php?action=query&format=json&formatversion=2&prop=imageinfo\
-                 &iiprop=url%7Cextmetadata&iiurlwidth={IMAGE_WIDTH}&titles={}",
+                 &iiprop=url%7Csize%7Cextmetadata&iiurlwidth={IMAGE_WIDTH}&titles={}",
                 http::encode_query_value(&titles.join("|"))
             );
             let Fetched::Found(root) = self.get_json(&format!("{lang}.wikipedia.org"), &path) else {
@@ -755,7 +768,16 @@ fn parse_image_credit(page: &Value) -> Option<ImageCredit> {
     }
     // A thumbnail, never the original: a 6000×4000 photograph in a side panel
     // is neither useful nor polite to their servers.
-    let url = info["thumburl"].as_str().or_else(|| info["url"].as_str())?.to_string();
+    //
+    // The size read here is the size of the URL kept on the same line, never
+    // the other one: measured on Commons, `thumbwidth` is the *display* width asked
+    // for (640) while `thumburl` may point at a denser file (960 px) for high
+    // resolution screens. Reserving 960 would leave a hole under every image.
+    let (url, width, height) = match info["thumburl"].as_str() {
+        Some(url) => (url, &info["thumbwidth"], &info["thumbheight"]),
+        None => (info["url"].as_str()?, &info["width"], &info["height"]),
+    };
+    let url = url.to_string();
     let file = page["title"].as_str()?.strip_prefix("File:")?.to_string();
     Some(ImageCredit {
         file,
@@ -763,6 +785,8 @@ fn parse_image_credit(page: &Value) -> Option<ImageCredit> {
         description_url: info["descriptionurl"].as_str().unwrap_or_default().to_string(),
         artist,
         licence,
+        width: width.as_u64().unwrap_or(0) as u32,
+        height: height.as_u64().unwrap_or(0) as u32,
     })
 }
 
@@ -1203,5 +1227,57 @@ mod tests {
             article.url.starts_with("https://fr.wikipedia.org/"),
             "the French wiki answered"
         );
+    }
+
+    /// Rule (§9, and the layout bug behind it): an image credit carries the
+    /// **display size** of the URL it carries, so the interface can reserve the
+    /// box before the file arrives. Measured on Commons: asking for a 640 px
+    /// thumbnail answers `thumbwidth` 640 next to a `thumburl` pointing at the
+    /// 960 px file — reserving the file's own width would leave a hole.
+    #[test]
+    fn an_image_credit_carries_the_size_of_the_url_it_carries() {
+        let page = json!({
+            "title": "File:Levin.jpg",
+            "imagerepository": "shared",
+            "imageinfo": [{
+                "thumburl": "https://thumb.wikimedia.org/…/960px-Levin.jpg",
+                "thumbwidth": 640,
+                "thumbheight": 326,
+                "url": "https://upload.wikimedia.org/…/Levin.jpg",
+                "width": 4031,
+                "height": 2054,
+                "descriptionurl": "https://commons.wikimedia.org/wiki/File:Levin.jpg",
+                "extmetadata": {
+                    "LicenseShortName": { "value": "CC BY-SA 4.0" },
+                    "Artist": { "value": "<a href=\"/wiki/User:X\">X</a>" }
+                }
+            }]
+        });
+        let credit = parse_image_credit(&page).expect("Commons, licence and author are all there");
+        assert_eq!(credit.width, 640, "the asked-for display width, not the file's");
+        assert_eq!(credit.height, 326, "…and the height that goes with it");
+        assert!(credit.url.contains("960px"), "the denser file is still the one loaded");
+    }
+
+    /// Rule (§9): no thumbnail means the original is small enough to be shown
+    /// as it is — and then it is the original's own size that must be reserved.
+    #[test]
+    fn a_credit_without_a_thumbnail_reserves_the_original() {
+        let page = json!({
+            "title": "File:Badge.png",
+            "imagerepository": "shared",
+            "imageinfo": [{
+                "url": "https://upload.wikimedia.org/…/Badge.png",
+                "width": 180,
+                "height": 240,
+                "descriptionurl": "https://commons.wikimedia.org/wiki/File:Badge.png",
+                "extmetadata": {
+                    "LicenseShortName": { "value": "CC0" },
+                    "Artist": { "value": "Y" }
+                }
+            }]
+        });
+        let credit = parse_image_credit(&page).expect("licence and author are there");
+        assert_eq!((credit.width, credit.height), (180, 240), "the original's own size");
     }
 }

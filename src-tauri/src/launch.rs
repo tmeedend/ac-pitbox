@@ -48,6 +48,41 @@ pub enum PracticeStart {
     Hotlap,
 }
 
+/// Niveau d'une aide au pilotage (§9.3), tel qu'Assetto Corsa lui-même le
+/// définit : `Off` / `Factory` / `On`, et rien d'autre.
+///
+/// **Les trois valeurs numériques sont relevées, pas déduites.** Le launcher
+/// du jeu déclare son curseur d'ABS et d'antipatinage dans
+/// `launcher/themes/default/index.html` : `data-slidervalues="0,1,2"` en face
+/// de `data-slidertextvalues="Off,Factory,On"`, lié à `assists?ABS` — soit la
+/// clé `ABS` de `cfg/assists.ini`, celle-là même que porte l'`AssistsData`
+/// d'un preset Quick Drive. Les presets de référence de l'app valent tous `1`,
+/// ce qui confirme la valeur du milieu mais n'aurait jamais permis de trancher
+/// les deux autres.
+///
+/// `Factory` garde l'équipement réel de la voiture ; c'est le défaut, et c'est
+/// pourquoi `On` ne peut rien ajouter à une voiture qui n'a pas l'aide —
+/// `electronics.rs` lit cette présence pour que l'écran le dise.
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AssistLevel {
+    Off,
+    #[default]
+    Factory,
+    On,
+}
+
+impl AssistLevel {
+    /// La valeur qu'attend `assists.ini`, donc l'`AssistsData` du preset.
+    pub fn to_ac(self) -> i32 {
+        match self {
+            AssistLevel::Off => 0,
+            AssistLevel::Factory => 1,
+            AssistLevel::On => 2,
+        }
+    }
+}
+
 /// Un adversaire du plateau (mode course, §8.6) : voiture + son propre niveau
 /// IA (réparti dans la fourchette min-max choisie, pas une valeur unique).
 #[derive(Debug, Clone, Deserialize)]
@@ -179,10 +214,12 @@ pub struct RaceSetup {
     #[serde(default)]
     pub tyre_blankets: bool,
     // --- Aides à la conduite (Course uniquement, §8.6) ---
-    #[serde(default = "default_true")]
-    pub abs_auto: bool,
-    #[serde(default = "default_true")]
-    pub traction_control_auto: bool,
+    /// Trois états, pas deux (§9.3) : une case à cocher ne pouvait pas dire la
+    /// différence entre « comme la vraie voiture » et « forcée ».
+    #[serde(default)]
+    pub abs: AssistLevel,
+    #[serde(default)]
+    pub traction_control: AssistLevel,
     #[serde(default)]
     pub ideal_line: bool,
 }
