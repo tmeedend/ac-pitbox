@@ -2,6 +2,7 @@
   import { tick, untrack, onMount, onDestroy } from "svelte";
   import DetailPage from "./DetailPage.svelte";
   import PackDetail from "./PackDetail.svelte";
+  import ColumnsMenu from "./ColumnsMenu.svelte";
   import FilterBar from "./filters/FilterBar.svelte";
   import { matchesQuery } from "$lib/cardSearch";
   import { hasOwnDriver } from "$lib/driverOverride.svelte";
@@ -164,7 +165,6 @@
   let visibleKeys = $state<string[]>(untrack(() => columns.filter((c) => c.fixed || c.defaultVisible).map((c) => c.key)));
   let columnOrder = $state<string[]>(untrack(() => columns.map((c) => c.key)));
   let columnWidths = $state<Record<string, number>>({});
-  let showColumns = $state(false);
   // Colonne en cours de glissement (réordonnancement d'en-tête, §6.2) : pilote
   // le retour visuel et la cible du drop, jamais persistée telle quelle.
   let dragKey = $state<string | null>(null);
@@ -858,24 +858,11 @@
     >
       {#snippet end()}
         {#if shown === "table"}
-          <div class="columns-wrap">
-            <button class="btn" type="button" onclick={() => (showColumns = !showColumns)}>{t("library.columns")}</button>
-            {#if showColumns}
-              <div class="columns-menu">
-                {#each columns as col}
-                  <label class:fixed={col.fixed}>
-                    <input
-                      type="checkbox"
-                      checked={col.fixed || visibleKeys.includes(col.key)}
-                      disabled={col.fixed}
-                      onchange={() => toggleColumn(col.key)}
-                    />
-                    <span>{t(col.labelKey)}</span>
-                  </label>
-                {/each}
-              </div>
-            {/if}
-          </div>
+          <ColumnsMenu
+            items={columns.map((c) => ({ key: c.key, label: t(c.labelKey), fixed: c.fixed }))}
+            visible={visibleKeys}
+            ontoggle={toggleColumn}
+          />
         {/if}
 
         <!-- Chevron ACCOLÉ à la bascule, pas posé à côté : les deux bords se
@@ -900,7 +887,7 @@
         <div class="display-wrap">
           <button class="disp-toggle" type="button" aria-expanded={showDisplay} title={t("library.displayMenu")} onclick={() => (showDisplay = !showDisplay)}>▾</button>
           {#if showDisplay}
-            <div class="columns-menu display-menu">
+            <div class="display-menu">
               <span class="dm-title">{t("library.density")}</span>
               {#each [["dense", "library.viewDense"], ["comfortable", "library.viewComfortable"], ["table", "library.viewList"]] as [id, key] (id)}
                 <label>
@@ -1185,10 +1172,11 @@
     scrollbar-gutter: stable;
     padding: 0 22px 18px;
   }
-  .columns-wrap {
-    position: relative;
-  }
-  .columns-menu {
+  /* Le menu des colonnes est parti dans `ColumnsMenu` ; celui-ci reste, et il
+     empruntait ses styles au précédent. Le CSS étant scopé, l'extraction les
+     lui aurait retirés en silence — d'où cette copie, qui n'en est plus une :
+     c'est désormais le seul menu de cet écran. */
+  .display-menu {
     position: absolute;
     top: calc(100% + 4px);
     right: 0;
@@ -1199,10 +1187,10 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    min-width: 180px;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+    min-width: 200px;
+    box-shadow: 0 6px 18px rgb(0 0 0 / 40%);
   }
-  .columns-menu label {
+  .display-menu label {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -1211,12 +1199,8 @@
     padding: 3px 4px;
     cursor: pointer;
   }
-  .columns-menu label:hover {
+  .display-menu label:hover {
     background: var(--raised);
-  }
-  .columns-menu label.fixed {
-    color: var(--muted);
-    cursor: default;
   }
   .view-wrap {
     display: flex;
@@ -1240,9 +1224,6 @@
   .disp-toggle[aria-expanded="true"] {
     color: var(--txt);
     border-color: var(--faint2);
-  }
-  .display-menu {
-    min-width: 200px;
   }
   .display-menu .dm-title {
     color: var(--muted);

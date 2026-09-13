@@ -21,6 +21,7 @@
   // in `Launch.svelte`, which triggers it from other sources too (presets, the
   // library's "set as opponents"). This block shows the result and reports the
   // local gestures.
+  import { formatRatio } from "$lib/carSpecs";
   import type { CardIndex, FilterDef, FilterMap } from "$lib/filters";
   import { chipAvailable, isChipOn, toggleChip, type ChipKind } from "$lib/opponentPool";
   import {
@@ -37,6 +38,7 @@
   import { previewSrc, type ModCard } from "$lib/library";
   import { t } from "$lib/i18n/index.svelte";
   import FilterBar from "../filters/FilterBar.svelte";
+  import ColumnsMenu from "../ColumnsMenu.svelte";
   import NumberStepper from "../NumberStepper.svelte";
   import Slider from "../Slider.svelte";
 
@@ -52,6 +54,8 @@
     index,
     poolCount,
     playerCard,
+    columns = $bindable(),
+    wide = $bindable(),
     oncountchange,
     onfill,
     onchoose,
@@ -59,6 +63,7 @@
     onremove,
     onduplicate,
     onsetlevel,
+    onsetcell,
     onopenpicker,
   }: {
     setup: RaceSetup;
@@ -74,6 +79,9 @@
     poolCount: number;
     /** The car being driven: what the three chips take their value from. */
     playerCard: ModCard | null;
+    /** Colonnes optionnelles affichées, et plateau élargi (§4.2/§4.3). */
+    columns: string[];
+    wide: boolean;
     oncountchange: (n: number) => void;
     onfill: () => void;
     onchoose: () => void;
@@ -81,6 +89,7 @@
     onremove: (index: number) => void;
     onduplicate: (index: number) => void;
     onsetlevel: (index: number, level: number | null) => void;
+    onsetcell: (index: number, patch: Partial<Opponent>) => void;
     onopenpicker: (index: number) => void;
   } = $props();
 
@@ -140,6 +149,53 @@
     { value: "random", labelKey: "launch.startRandom" },
     { value: "custom", labelKey: "launch.startCustom" },
   ];
+  // --- Columns (§4.2) ------------------------------------------------------
+  //
+  // The car is fixed — it IS the row. The other six are a preference, and they
+  // go through the same menu as the library's table view: same gesture, same
+  // component (`ColumnsMenu`).
+  //
+  // **No "how many fit" note.** §4.3 asks the menu to say how many more columns
+  // the current width takes, which means measuring the grid in pixels — and a
+  // pixel read back into a layout is precisely what the interface zoom breaks
+  // (§13). What the width does instead is squeeze the name column, which says
+  // the same thing without a number and without a legend: `⤢` gives the room
+  // back. Worth revisiting with a measurement whose zoom behaviour has been
+  // checked in the app.
+  const COLUMNS = $derived([
+    { key: "car", label: t("columns.name"), fixed: true },
+    { key: "ratio", label: t("launch.colRatio") },
+    { key: "strength", label: t("launch.colStrength") },
+    { key: "driver", label: t("launch.colDriver") },
+    { key: "nationality", label: t("launch.colNationality") },
+    { key: "ballast", label: t("launch.colBallast") },
+    { key: "restrictor", label: t("launch.colRestrictor") },
+  ]);
+  const shows = (key: string) => columns.includes(key);
+  function toggleColumn(key: string) {
+    columns = columns.includes(key) ? columns.filter((k) => k !== key) : [...columns, key];
+  }
+
+  /** kg/bhp d'un adversaire, `—` quand sa fiche est illisible — jamais estimé.
+   * Lu dans l'index du vivier, donc analysé une fois par chargement de liste et
+   * pas une fois par ligne rendue. */
+  function opponentRatio(carId: string): string {
+    const card = carPool.find((c) => c.id_interne === carId);
+    return formatRatio(card ? index.ctx.ratioOf(card) : null);
+  }
+
+  /** Une saisie vidée rend la cellule à `Auto` (§4.1). */
+  const orAuto = (v: string): string | null => (v.trim() === "" ? null : v.trim());
+
+  /** Lest et bride : 0 à 100, jamais d'`Auto` — « rien » s'y dit par 0. */
+  const clamp100 = (v: string): number => Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
+
+  /** Les quatre colonnes optionnelles portent des valeurs qu'aucune ligne ne
+   * nomme d'elle-même : dès que l'une est là, l'en-tête devient nécessaire. */
+  const headerNeeded = $derived(
+    columns.some((k) => k === "driver" || k === "nationality" || k === "ballast" || k === "restrictor"),
+  );
+
   const lastRank = $derived(setup.opponents.length + 1);
   const hasExplicitStrength = $derived(setup.opponents.some((o) => o.ai_level != null));
   // Re-bounded as the grid shrinks, rather than refused at launch: a rank that
@@ -317,10 +373,35 @@
           <NumberStepper width={58} min={1} max={lastRank} bind:value={setup.start_position} />
         {/if}
       {/if}
+      <ColumnsMenu size="header" items={COLUMNS} visible={columns} ontoggle={toggleColumn} />
+      <button
+        class="oppo-regen"
+        type="button"
+        aria-pressed={wide}
+        class:on={wide}
+        title={t("launch.widenGrid")}
+        onclick={() => (wide = !wide)}>⤢</button
+      >
       <button class="oppo-regen" type="button" disabled={!setup.opponents.length} onclick={onregenerate}
         >{t("launch.regenerateGrid")}</button
       >
     </div>
+
+    <!-- En-tête de colonnes seulement quand il y a plus que la voiture à
+         nommer : sur trois colonnes, la ligne se lit sans légende. -->
+    {#if headerNeeded}
+      <div class="oppo-row oppo-th">
+        <span class="oppo-img th-img"></span>
+        <span class="oppo-n lbl-key">{t("columns.name")}</span>
+        {#if shows("driver")}<span class="oppo-driver lbl-key">{t("launch.colDriver")}</span>{/if}
+        {#if shows("nationality")}<span class="oppo-nat lbl-key">{t("launch.colNatShort")}</span>{/if}
+        {#if shows("ratio")}<span class="oppo-ratio lbl-key">{t("launch.colRatio")}</span>{/if}
+        {#if shows("strength")}<span class="oppo-force lbl-key">{t("launch.colStrShort")}</span>{/if}
+        {#if shows("ballast")}<span class="oppo-bal lbl-key">{t("launch.colBallast")}</span>{/if}
+        {#if shows("restrictor")}<span class="oppo-res lbl-key">{t("launch.colResShort")}</span>{/if}
+        <span class="th-act"></span>
+      </div>
+    {/if}
     {#each setup.opponents as opp, i}
       {@const prev = opponentPreview(opp)}
       <div
@@ -333,9 +414,37 @@
       >
         <div class="oppo-img">{#if prev}<img src={prev} alt="" />{:else}<span class="mono">🏎</span>{/if}</div>
         <span class="oppo-n">{opponentName(opp.car_id)}{#if opponentSkinName(opp)}<span class="oppo-skin"> · {opponentSkinName(opp)}</span>{/if}</span>
-        <!-- Rapport poids/puissance (L3) : colonne tenue vide pour que rien ne
-             se déplace quand elle se remplira. -->
-        <span class="oppo-ratio"></span>
+        {#if shows("driver")}
+          <!-- Vide = `Auto` : le nom vient alors du `ui_skin.json` de la livrée,
+               ce que le jeu fait déjà. Rien à voir avec les mods de tenue de
+               pilote, qui sont une apparence 3D sur leur propre axe. -->
+          <input
+            class="oppo-driver cell"
+            class:is-auto={opp.driver_name == null}
+            type="text"
+            placeholder={t("launch.autoCell")}
+            value={opp.driver_name ?? ""}
+            onclick={(e) => e.stopPropagation()}
+            onchange={(e) => onsetcell(i, { driver_name: orAuto(e.currentTarget.value) })}
+          />
+        {/if}
+        {#if shows("nationality")}
+          <!-- Un nom de pays anglais entier, jamais un code : c'est ce que CM
+               écrit, relevé sur un preset réel (« Brunei Darussalam »). -->
+          <input
+            class="oppo-nat cell mono"
+            class:is-auto={opp.nationality == null}
+            type="text"
+            placeholder={t("launch.autoCell")}
+            value={opp.nationality ?? ""}
+            onclick={(e) => e.stopPropagation()}
+            onchange={(e) => onsetcell(i, { nationality: orAuto(e.currentTarget.value) })}
+          />
+        {/if}
+        {#if shows("ratio")}
+          <span class="oppo-ratio mono">{opponentRatio(opp.car_id)}</span>
+        {/if}
+        {#if shows("strength")}
         <!-- `Auto` is not a value we draw: it is the absence of an override,
              and the game draws inside the global range. Hence a placeholder
              rather than a number — emptying the field is the gesture that puts
@@ -352,6 +461,31 @@
           onclick={(e) => e.stopPropagation()}
           onchange={(e) => onsetlevel(i, e.currentTarget.value.trim() === "" ? null : Number(e.currentTarget.value))}
         />
+        {/if}
+        {#if shows("ballast")}
+          <input
+            class="oppo-bal cell mono"
+            class:is-zero={!opp.ballast}
+            type="number"
+            min="0"
+            max="100"
+            value={opp.ballast}
+            onclick={(e) => e.stopPropagation()}
+            onchange={(e) => onsetcell(i, { ballast: clamp100(e.currentTarget.value) })}
+          />
+        {/if}
+        {#if shows("restrictor")}
+          <input
+            class="oppo-res cell mono"
+            class:is-zero={!opp.restrictor}
+            type="number"
+            min="0"
+            max="100"
+            value={opp.restrictor}
+            onclick={(e) => e.stopPropagation()}
+            onchange={(e) => onsetcell(i, { restrictor: clamp100(e.currentTarget.value) })}
+          />
+        {/if}
         <button
           class="oppo-dup"
           type="button"
@@ -514,9 +648,20 @@
     text-transform: uppercase;
     padding: 3px 8px;
   }
-  .oppo-regen:hover {
+  .oppo-regen:hover:not(:disabled) {
     background: var(--panel2);
     color: var(--txt2);
+  }
+  .oppo-regen:disabled {
+    color: var(--faint2);
+    cursor: not-allowed;
+  }
+  /* Niveau 2 du barème (§7.2ter) : le plateau élargi est un état qu'on a
+     demandé, et le bouton le dit. */
+  .oppo-regen.on {
+    border-color: var(--rosso-border);
+    background: var(--rosso-dim);
+    color: var(--rosso-bright);
   }
   /* `relative` porte la bulle de survol, et son absence ne se voit pas comme
      un défaut de style : un enfant `absolute` se cale sur le premier ancêtre
@@ -569,10 +714,81 @@
   .oppo-skin {
     color: var(--muted);
   }
-  /* Vide jusqu'au L3 (rapport poids/puissance). Largeur d'un « 412 ch/t » en
-     mono 9px, pour que le nom ne se réétale pas le jour où elle se remplit. */
+  /* Toutes les cellules optionnelles ont une largeur FIXE et le nom prend ce
+     qui reste : ajouter une colonne serre donc le nom, et c'est `⤢` qui lui
+     rend sa place. Aucune ne s'étire, sans quoi l'alignement d'une colonne à
+     l'autre se perdrait d'une ligne à la suivante. */
   .oppo-ratio {
-    width: 46px;
+    width: 52px;
+    flex: none;
+    font-size: 9px;
+    color: var(--muted);
+    text-align: right;
+  }
+  .oppo-driver {
+    width: 104px;
+  }
+  .oppo-nat {
+    width: 74px;
+  }
+  .oppo-bal,
+  .oppo-res {
+    width: 44px;
+    text-align: right;
+  }
+  /* Les quatre champs de cellule partagent la même discrétion que la force :
+     pas de cadre au repos, il apparaît au survol de la ligne — sans quoi
+     chaque ligne devient un formulaire. */
+  .cell {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--txt);
+    font-size: 9.5px;
+    padding: 2px 3px;
+    flex: none;
+    min-width: 0;
+    appearance: textfield;
+  }
+  .oppo-row:hover .cell {
+    background: var(--bg);
+    border-color: var(--line);
+  }
+  .cell:focus {
+    background: var(--bg);
+    border-color: var(--line);
+  }
+  .cell::-webkit-outer-spin-button,
+  .cell::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+  /* `Auto` et 0 se lisent comme « non décidé » et « rien » : éteints tous les
+     deux, mais le premier est un texte de substitution et le second une vraie
+     valeur — d'où deux règles et non une. */
+  .cell.is-auto::placeholder {
+    color: var(--faint);
+  }
+  .cell.is-zero {
+    color: var(--faint);
+  }
+  /* Rangée d'en-tête : une ligne du plateau sans ses gestes. */
+  .oppo-th {
+    cursor: default;
+    background: var(--bg);
+    padding-top: 3px;
+    padding-bottom: 3px;
+  }
+  .oppo-th:hover {
+    background: var(--bg);
+  }
+  .th-img {
+    width: 48px;
+    border: 0;
+    background: transparent;
+    height: auto;
+  }
+  .th-act {
+    width: 44px;
     flex: none;
   }
   /* Blanche, et sans cadre au repos : le vert était la seule occurrence de

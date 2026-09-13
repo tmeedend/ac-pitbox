@@ -217,6 +217,10 @@
   // menu, et les trois puces sont ce qui la remplit en un clic.
   let gridPinned = $state<string[]>([]);
   let gridQuery = $state("");
+  /** Colonnes optionnelles du plateau et état élargi (§4.2/§4.3), mémorisés
+   * par type de session comme tous les autres réglages. */
+  let gridColumns = $state<string[]>(["ratio", "strength"]);
+  let gridWide = $state(false);
   const gridIndex = $derived(buildCardIndex(carPool, gridDefs, true, hasOwnDriver, setup.car_id));
   const gridMatches = $derived(buildPredicate(gridDefs, gridFilters, gridIndex.ctx));
   const gridPool = $derived(carPool.filter((c) => gridMatches(c) && matchesQuery(c, gridQuery)));
@@ -349,6 +353,18 @@
       ballast: o.ballast ?? 0,
       restrictor: o.restrictor ?? 0,
     };
+  }
+
+  /** Une cellule d'une ligne du plateau (§4.1/§4.2). `null` sur un texte, et
+   * `null` sur la force, valent **`Auto`** : la ligne n'a pas de surcharge et
+   * le jeu décide. C'est ce que fait un champ vidé — le geste naturel pour dire
+   * « je ne décide pas », et la raison pour laquelle aucun menu de ligne n'est
+   * nécessaire pour y revenir. Le lest et la bride n'ont pas d'`Auto` : « rien »
+   * s'y dit par 0, comme dans le preset. */
+  function setOpponentCell(index: number, patch: Partial<Opponent>) {
+    const opponents = [...setup.opponents];
+    opponents[index] = { ...opponents[index], ...patch };
+    setup.opponents = opponents;
   }
 
   /** Force d'une ligne. `null` = la cellule repasse en `Auto` — c'est ce que
@@ -540,6 +556,8 @@
      * et ne sont plus jamais écrits. */
     grid_filters?: string;
     grid_pinned?: string[];
+    grid_columns?: string[];
+    grid_wide?: boolean;
     grid_mode?: "same_car" | "same_category" | "free";
     category_selection?: string;
     year_min?: number; year_max?: number;
@@ -627,6 +645,7 @@
       aggression: setup.aggression, start_mode: setup.start_mode, start_position: setup.start_position,
       opponent_count: opponentCount,
       grid_filters: serializeFilters(gridQuery, gridFilters), grid_pinned: [...gridPinned],
+      grid_columns: [...gridColumns], grid_wide: gridWide,
       laps: setup.laps, time_hours: setup.time_hours,
       penalties: setup.penalties, jump_start_penalty: setup.jump_start_penalty, grip: setup.grip,
       practice_enabled: setup.practice_enabled, practice_minutes: setup.practice_minutes,
@@ -650,6 +669,8 @@
       setup.aggression = Math.max(0, Math.min(100, p.aggression ?? 0));
       setup.start_mode = p.start_mode ?? "last";
       setup.start_position = Math.max(1, p.start_position ?? 1);
+      gridColumns = p.grid_columns ?? ["ratio", "strength"];
+      gridWide = p.grid_wide ?? false;
       opponentCount = p.opponent_count ?? 7;
       applyGridPreset(p);
       setup.laps = p.laps; setup.time_hours = p.time_hours;
@@ -688,7 +709,7 @@
 
   $effect(() => {
     void [setup.ai_level_min, setup.ai_level_max, setup.aggression, setup.start_mode, setup.start_position,
-      opponentCount, gridFilters, gridQuery, gridPinned,
+      opponentCount, gridFilters, gridQuery, gridPinned, gridColumns, gridWide,
       setup.laps,
       setup.time_hours, setup.penalties, setup.jump_start_penalty, setup.grip,
       setup.practice_enabled, setup.practice_minutes, setup.qualify_minutes,
@@ -1056,7 +1077,12 @@
     <LoadingState />
   {:else}
   <div class="body">
-    <div class="cols">
+    <!-- `⤢` (§4.3) : le plateau prend toute la largeur du contenu et la
+         colonne de droite passe dessous, le temps de composer. C'est une
+         **classe sur la grille de l'écran**, pas une largeur posée sur le bloc :
+         les deux colonnes sont un `grid`, et seule la grille peut décider que
+         l'une passe sous l'autre. -->
+    <div class="cols" class:wide={gridWide && (setup.session_type === "race" || setup.session_type === "trackday")}>
       <!-- COLONNE GAUCHE -->
       <div>
         <SessionTypeBlock
@@ -1082,6 +1108,9 @@
             index={gridIndex}
             poolCount={gridPool.length}
             playerCard={player}
+            bind:columns={gridColumns}
+            bind:wide={gridWide}
+            onsetcell={setOpponentCell}
             oncountchange={applyOpponentCount}
             onfill={() => void fillGrid()}
             onchoose={openAddPicker}
@@ -1281,5 +1310,8 @@
     display: grid;
     grid-template-columns: 1.35fr 1fr;
     gap: 26px;
+  }
+  .cols.wide {
+    grid-template-columns: 1fr;
   }
 </style>
