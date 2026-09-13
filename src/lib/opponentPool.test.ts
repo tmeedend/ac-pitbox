@@ -6,19 +6,11 @@ const car = (over: Partial<ModCard> = {}): ModCard =>
   ({ id_interne: "ks_ferrari_488_gt3", display_name: "Ferrari 488 GT3", category: "#gt3", ...over }) as ModCard;
 
 describe("defaultGridFilters", () => {
-  // What the whole guard exists for: a `Fill at random` that can draw a mod
-  // Assetto Corsa cannot load produces a session that fails.
-  it("starts on the playable token and nothing else", () => {
-    const f = defaultGridFilters();
-    expect(Object.keys(f)).toEqual(["state"]);
-    expect(f.state).toEqual({
-      type: "val",
-      values: [
-        { value: "inactive", sign: -1 },
-        { value: "broken", sign: -1 },
-      ],
-      op: "and",
-    });
+  // A pinned "playable" token used to sit here. It is gone on purpose: a mod
+  // disabled under a grid is rare, and the activation guard already says so
+  // and repairs it — where the chip cost room in the bar every single time.
+  it("starts on nothing at all", () => {
+    expect(defaultGridFilters()).toEqual({});
   });
 });
 
@@ -42,9 +34,9 @@ describe("toggleChip", () => {
   });
 
   it("leaves the rest of the map alone", () => {
-    const before = defaultGridFilters();
+    const before = { year: { type: "range" as const, min: 2010, max: 2016 } };
     const after = toggleChip(before, "model", car());
-    expect(after.state).toBe(before.state);
+    expect(after.year).toBe(before.year);
     expect(after.model).toEqual({ type: "val", values: [{ value: "Ferrari 488 GT3", sign: 1 }], op: "and" });
   });
 

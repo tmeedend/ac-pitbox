@@ -4,6 +4,9 @@
   import {
     launchSession,
     assistLevelFrom,
+    AI_LEVEL_MAX,
+    AI_LEVEL_MIN,
+    clampAiLevel,
     isSteamRunning,
     nearestGrip,
     listModSkins,
@@ -205,7 +208,9 @@
   // needs the car to be in there anyway.
   const gridDefs = filterDefs("Car");
   let gridFilters = $state<FilterMap>(defaultGridFilters());
-  let gridPinned = $state<string[]>(["state"]);
+  // Aucun filtre épinglé : la barre s'ouvre sur son champ de recherche et son
+  // menu, et les trois puces sont ce qui la remplit en un clic.
+  let gridPinned = $state<string[]>([]);
   let gridQuery = $state("");
   const gridIndex = $derived(buildCardIndex(carPool, gridDefs, true, hasOwnDriver, setup.car_id));
   const gridMatches = $derived(buildPredicate(gridDefs, gridFilters, gridIndex.ctx));
@@ -328,7 +333,7 @@
   /** Réglage individuel du niveau IA d'un adversaire (clic sur le chiffre),
    * indépendant de la fourchette globale qui ne sert qu'à la génération. */
   function setOpponentLevel(index: number, raw: number) {
-    const level = Math.max(RANGE_MIN, Math.min(RANGE_MAX, Math.round(raw) || RANGE_MIN));
+    const level = clampAiLevel(raw);
     const opponents = [...setup.opponents];
     opponents[index] = { ...opponents[index], ai_level: level };
     setup.opponents = opponents;
@@ -434,8 +439,8 @@
   // --- Fourchette de niveau IA (§8.6) : bornes réutilisées par le réglage
   // individuel d'un adversaire (setOpponentLevel) — le curseur double lui-même
   // est rendu par OpponentsBlock. ---
-  const RANGE_MIN = 60;
-  const RANGE_MAX = 100;
+  const RANGE_MIN = AI_LEVEL_MIN;
+  const RANGE_MAX = AI_LEVEL_MAX;
 
   // --- Météo (intentions + température/vent, §8.5/§8.6) ---
   // Air, piste et vent sont des valeurs **recommandées** par météo+saison, mais
@@ -574,7 +579,7 @@
       const snap = parseFilters(p.grid_filters, gridDefs);
       gridQuery = snap.query;
       gridFilters = snap.filters;
-      gridPinned = p.grid_pinned ?? ["state"];
+      gridPinned = p.grid_pinned ?? [];
       return;
     }
     const migrated: FilterMap = defaultGridFilters();
@@ -592,7 +597,7 @@
     if (min != null || max != null) migrated.year = { type: "range", min, max };
     gridQuery = "";
     gridFilters = migrated;
-    gridPinned = ["state"];
+    gridPinned = [];
   }
 
   function savePreset() {
@@ -615,7 +620,11 @@
     const p = presets[type];
     applying = true;
     if (p) {
-      setup.ai_level_min = p.ai_level_min ?? 92; setup.ai_level_max = p.ai_level_max ?? 98;
+      // Recalés : un preset enregistré quand le plancher était 60 porte des
+      // valeurs que Content Manager n'accepte pas, et les envoyer telles quelles
+      // ferait courir une session que l'écran n'annonce pas.
+      setup.ai_level_min = clampAiLevel(p.ai_level_min ?? 92);
+      setup.ai_level_max = clampAiLevel(p.ai_level_max ?? 98);
       opponentCount = p.opponent_count ?? 7;
       applyGridPreset(p);
       setup.laps = p.laps; setup.time_hours = p.time_hours;
@@ -677,7 +686,11 @@
       ? (state.selection ?? {})
       : JSON.parse(localStorage.getItem(StorageKey.launchSelection) ?? "{}");
     setup.session_type = saved.session_type ?? "practice";
-    if (saved.opponents?.length) setup.opponents = saved.opponents;
+    // Forces recalées à la relecture, pas seulement à l'édition : un plateau
+    // enregistré quand le plancher était 60 porte des valeurs que Content
+    // Manager n'accepte pas.
+    if (saved.opponents?.length)
+      setup.opponents = saved.opponents.map((o) => ({ ...o, ai_level: clampAiLevel(o.ai_level) }));
 
     // La bibliothèque EST le sélecteur (§8.6) : voiture/circuit viennent du duo
     // de session choisi dans les bibliothèques — rien à choisir ici.

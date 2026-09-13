@@ -1,5 +1,4 @@
-// The three shortcut chips of the Opponents block, and the playable token
-// (§3.2/§3.3).
+// The three shortcut chips of the Opponents block (§3.2/§3.3).
 //
 // **The chips are not modes.** They were — `Same car` / `By category` / `Free`
 // were three tabs, and a tab did two jobs at once: define a set of cars, and
@@ -21,33 +20,24 @@
 // longer drives would be lying, whereas a category token that stopped saying
 // what it says would be the tab behaviour coming back in.
 import { PERF_DEFAULT_PCT } from "./carSpecs";
-import type { FilterMap, FilterState } from "./filters";
+import type { FilterMap } from "./filters";
 import type { ModCard } from "./library";
 
 export type ChipKind = "model" | "category" | "performance";
 
-/** The "playable" token (§5.1): everything Assetto Corsa can actually load.
+/**
+ * What the block starts from, the first time a session type is configured:
+ * nothing at all.
  *
- * Two EXCLUSIONS rather than a value: the state filter offers
- * `active`/`inactive`/`stock`/`unmanaged`/`broken`, and "playable" means all of
- * them but the two the game cannot load. Exclusions are always conjunctive and
- * always win (`buildPredicate`), so the three others pass. */
-export function playableState(): FilterState {
-  return {
-    type: "val",
-    values: [
-      { value: "inactive", sign: -1 },
-      { value: "broken", sign: -1 },
-    ],
-    op: "and",
-  };
-}
-
-/** What the block starts from, the first time a session type is configured.
- * Only the playable token: the pool is the whole library minus what cannot
- * race, and the chips are there to narrow it in one click. */
+ * **No pinned "playable" token.** One was posed here, excluding disabled and
+ * broken mods so a random draw could never build an unplayable grid. It cost a
+ * permanent chip in a 600 px bar to prevent something that hardly ever
+ * happens — and when it does happen, the activation guard above the launch
+ * button says so and repairs it in one click. A warning that appears when the
+ * case occurs beats a chip that takes room every time it does not.
+ */
 export function defaultGridFilters(): FilterMap {
-  return { state: playableState() };
+  return {};
 }
 
 /** The value a chip poses, or `null` when the reference car cannot supply one

@@ -208,6 +208,12 @@ fn build_track_properties(s: &RaceSetup) -> Value {
     })
 }
 
+/// Bornes de la force d'une IA, celles du curseur de Content Manager — voir
+/// `AI_LEVEL_MIN`/`AI_LEVEL_MAX` côté front, qui portent la même règle pour
+/// l'affichage.
+const AI_LEVEL_MIN: f64 = 70.0;
+const AI_LEVEL_MAX: f64 = 100.0;
+
 /// Grille d'adversaires explicite (§8.6, mode course) : `ModeId:"manual"`
 /// avec des tableaux parallèles `CarIds`/`SkinIds`/`AiLevels` — un index par
 /// adversaire, valeur confirmée en lisant `RaceGridViewModel.cs`
@@ -220,7 +226,16 @@ fn build_grid(opponents: &[Opponent]) -> Value {
         .iter()
         .map(|o| o.car_skin.as_deref().map(Value::from).unwrap_or(Value::Null))
         .collect();
-    let ai_levels: Vec<f64> = opponents.iter().map(|o| o.ai_level as f64).collect();
+    // Recalées sur la plage du curseur de Content Manager : il ne descend pas
+    // sous 70 et ne monte pas au-dessus de 100. Un plateau enregistré avant que
+    // l'écran ne connaisse ce plancher porte des valeurs plus basses, et CM les
+    // recalerait lui-même — la session ne serait alors pas celle que Pit Box a
+    // affichée. Le recalage est ici, à la frontière, plutôt que seulement côté
+    // écran : c'est le seul endroit par lequel toutes les sources passent.
+    let ai_levels: Vec<f64> = opponents
+        .iter()
+        .map(|o| (o.ai_level as f64).clamp(AI_LEVEL_MIN, AI_LEVEL_MAX))
+        .collect();
     json!({
         "ModeId": "manual",
         "FilterValue": "",
@@ -735,6 +750,40 @@ mod tests {
         let v: Value = serde_json::from_str(&json).unwrap();
         let assists: Value = serde_json::from_str(v["AssistsData"].as_str().unwrap()).unwrap();
         assert_eq!(assists["TyreBlankets"], true);
+    }
+
+    /// Règle protégée : une force par ligne part toujours dans la plage du
+    /// curseur de Content Manager (70-100). Un plateau enregistré quand l'écran
+    /// offrait 60 en porte de plus basses ; CM les recalerait lui-même, donc
+    /// sans ce bornage la session lancée ne serait pas celle qui a été affichée.
+    #[test]
+    fn a_line_strength_never_leaves_the_range_content_manager_accepts() {
+        let mut s = base_setup(SessionType::Race);
+        s.opponents = vec![
+            Opponent {
+                car_id: "a".into(),
+                ai_level: 60,
+                car_skin: None,
+            },
+            Opponent {
+                car_id: "b".into(),
+                ai_level: 85,
+                car_skin: None,
+            },
+            Opponent {
+                car_id: "c".into(),
+                ai_level: 140,
+                car_skin: None,
+            },
+        ];
+        let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
+        let mode: Value = serde_json::from_str(v["ModeData"].as_str().unwrap()).unwrap();
+        let grid: Value = serde_json::from_str(mode["RaceGridSerialized"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            grid["AiLevels"],
+            serde_json::json!([70.0, 85.0, 100.0]),
+            "forces bornées à 70-100"
+        );
     }
 
     #[test]

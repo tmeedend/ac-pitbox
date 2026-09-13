@@ -23,7 +23,7 @@
   // local gestures.
   import type { CardIndex, FilterDef, FilterMap } from "$lib/filters";
   import { chipAvailable, isChipOn, toggleChip, type ChipKind } from "$lib/opponentPool";
-  import type { Opponent, RaceSetup, SkinItem } from "$lib/launch";
+  import { AI_LEVEL_MAX, AI_LEVEL_MIN, type Opponent, type RaceSetup, type SkinItem } from "$lib/launch";
   import { previewSrc, type ModCard } from "$lib/library";
   import { t } from "$lib/i18n/index.svelte";
   import FilterBar from "../filters/FilterBar.svelte";
@@ -89,9 +89,10 @@
     return t("launch.chipNoCategory");
   }
 
-  // --- AI level range (two handles, §8.6) ---
-  const RANGE_MIN = 60;
-  const RANGE_MAX = 100;
+  // --- AI level range (two handles, §8.6). Bounds from `launch.ts`: they are
+  // Content Manager's own, and the line strengths below share them. ---
+  const RANGE_MIN = AI_LEVEL_MIN;
+  const RANGE_MAX = AI_LEVEL_MAX;
   function clampAiMin() {
     if (setup.ai_level_min > setup.ai_level_max) setup.ai_level_min = setup.ai_level_max;
   }

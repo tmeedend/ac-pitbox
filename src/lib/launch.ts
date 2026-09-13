@@ -51,6 +51,29 @@ export function nearestGrip(grip: number): number {
   return best;
 }
 
+/**
+ * Bornes de la force d'une IA, **celles du curseur de Content Manager**.
+ *
+ * 70 et non 60 : CM ne descend pas plus bas, et une valeur hors de sa plage
+ * part dans un preset qu'il recalera lui-même — le réglage ne serait donc pas
+ * celui qu'on affiche. Relevé sur son écran, et confirmé sur un preset de
+ * grille réel dont la ligne la plus faible vaut exactement 70.
+ *
+ * Ici et pas dans un composant : l'écran dessine la fourchette, la ligne du
+ * plateau borne sa propre valeur, et `savedSessions`/les presets recalent ce
+ * qu'ils relisent. Trois copies d'un même nombre finissent par diverger.
+ */
+export const AI_LEVEL_MIN = 70;
+export const AI_LEVEL_MAX = 100;
+
+/** Recale une force dans la plage de CM. Une valeur enregistrée avant que le
+ * plancher ne soit corrigé (60 était offert) remonte donc à 70 au lieu de
+ * partir telle quelle. */
+export function clampAiLevel(level: number): number {
+  if (!Number.isFinite(level)) return AI_LEVEL_MAX;
+  return Math.max(AI_LEVEL_MIN, Math.min(AI_LEVEL_MAX, Math.round(level)));
+}
+
 /** Saison optionnelle associée à une session (§8.6bis) — influence la
  * température recommandée et, best-effort côté CSP, le rendu (arbres,
  * neige). "" = aucune saison choisie. */
