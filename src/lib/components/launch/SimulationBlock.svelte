@@ -90,9 +90,18 @@
         oninput={(v) => (setup.tyre_wear = v)}
       />
     </div>
-    <label class="check blankets"
-      ><input type="checkbox" bind:checked={setup.tyre_blankets} /><span>{t("launch.tyreBlankets")}</span></label
-    >
+    <!-- Penalties came over from SESSION OPTIONS, where it floated under the
+         grip column: it does not depend on the session type, and what does not
+         vary belongs with the other invariants. Two ticks on one line, because
+         they answer the same question — what the simulation forgives. -->
+    <div class="blankets">
+      <label class="check"
+        ><input type="checkbox" bind:checked={setup.tyre_blankets} /><span>{t("launch.tyreBlankets")}</span></label
+      >
+      <label class="check"
+        ><input type="checkbox" bind:checked={setup.penalties} /><span>{t("launch.penalties")}</span></label
+      >
+    </div>
 
     <div class="lbl section">{t("launch.assistsLabel")}</div>
     <div class="aids">
@@ -143,6 +152,9 @@
     gap: 10px 16px;
   }
   .blankets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
     margin-top: 10px;
   }
   /* `flex-end`: ABS and traction control carry a label above them, the ideal

@@ -233,6 +233,12 @@ export interface SkinItem {
   preview: string | null;
   /** `livery.png` (couleurs/motif du skin seul, sans la voiture) — `null` si absent. */
   livery: string | null;
+  /** Pilote, numéro et pays déclarés par la livrée : **ce que vaut une cellule
+   * `Auto` du plateau**, puisque c'est ce que le jeu emploiera pour l'IA qui la
+   * porte. `null` quand la livrée ne le dit pas. */
+  driver: string | null;
+  number: string | null;
+  country: string | null;
 }
 
 /** Skins de la version active d'un mod, lus dans la bibliothèque (fiche détail §6.3). */

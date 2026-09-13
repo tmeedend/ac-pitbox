@@ -242,15 +242,67 @@
     skinsByCarId = { ...skinsByCarId, [carId]: skins };
     return skins;
   }
-  /** Pioche un skin pour `carId`, en évitant `used` (skins déjà pris pour ce
-   * même mod dans le plateau courant) tant qu'il en reste de disponibles. */
-  async function skinFor(carId: string, used: Set<string>): Promise<string | null> {
+  /**
+   * Pioche un skin pour `carId`, en évitant ce qui est déjà pris.
+   *
+   * **Deux choses à éviter, pas une.** Le skin lui-même, pour que deux lignes
+   * de la même voiture ne soient pas la même image ; et surtout le **pilote**
+   * qu'il déclare — le jeu nomme l'IA d'après le `ui_skin.json` de sa livrée,
+   * donc deux livrées différentes portant « 59 Juan » produisent deux lignes
+   * qu'on ne distingue pas, alors même que les skins diffèrent. C'était le
+   * défaut visible : un plateau avec deux fois le même pilote.
+   *
+   * `taken` est partagé par TOUT le plateau et non par voiture : c'est
+   * l'identité du pilote qui doit être unique dans la grille, pas dans une
+   * marque. Quand le vivier de livrées est épuisé, on reprend — un plateau
+   * tronqué serait pire, et l'avertissement de vivier maigre l'a déjà annoncé.
+   */
+  interface TakenIdentities {
+    skins: Set<string>;
+    drivers: Set<string>;
+  }
+  const newTaken = (): TakenIdentities => ({ skins: new Set(), drivers: new Set() });
+
+  /** Ce qui doit rester unique : le couple numéro + nom, insensible à la
+   * casse. Une livrée muette ne participe pas — elle n'impose rien. */
+  function driverKey(skin: SkinItem): string | null {
+    const key = `${skin.number ?? ""}|${skin.driver ?? ""}`.trim().toLowerCase();
+    return key === "|" ? null : key;
+  }
+
+  /** Le registre de ce que le plateau courant porte déjà : une ligne ajoutée
+   * après coup doit éviter les mêmes pilotes que le tirage initial. `skip`
+   * exclut la ligne qu'on est en train de remplacer, qui ne se fait pas
+   * concurrence à elle-même. */
+  async function takenFromGrid(skip = -1): Promise<TakenIdentities> {
+    const taken = newTaken();
+    for (const [i, o] of setup.opponents.entries()) {
+      if (i === skip || !o.car_skin) continue;
+      taken.skins.add(o.car_skin);
+      const sk = (await ensureSkins(o.car_id)).find((x) => x.id === o.car_skin);
+      const key = sk && driverKey(sk);
+      if (key) taken.drivers.add(key);
+    }
+    return taken;
+  }
+
+  async function skinFor(carId: string, taken: TakenIdentities): Promise<string | null> {
     const skins = await ensureSkins(carId);
     if (!skins.length) return null;
-    const fresh = skins.filter((s) => !used.has(s.id));
-    const from = fresh.length ? fresh : skins;
-    const pick = from[Math.floor(Math.random() * from.length)];
-    used.add(pick.id);
+    const free = skins.filter((sk) => {
+      if (taken.skins.has(sk.id)) return false;
+      const key = driverKey(sk);
+      return !key || !taken.drivers.has(key);
+    });
+    // Repli en deux temps : d'abord une livrée simplement pas encore prise,
+    // ensuite n'importe laquelle. Mieux vaut répéter un pilote que rendre une
+    // ligne sans livrée.
+    const from = free.length ? free : skins.filter((sk) => !taken.skins.has(sk.id));
+    const pool = from.length ? from : skins;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    taken.skins.add(pick.id);
+    const key = driverKey(pick);
+    if (key) taken.drivers.add(key);
     return pick.id;
   }
 
@@ -281,13 +333,9 @@
       idx++;
     }
 
-    const usedByCar = new Map<string, Set<string>>();
+    const taken = newTaken();
     const out: Opponent[] = [];
-    for (const c of picks) {
-      const used = usedByCar.get(c.id_interne) ?? new Set<string>();
-      usedByCar.set(c.id_interne, used);
-      out.push(newOpponent(c.id_interne, await skinFor(c.id_interne, used)));
-    }
+    for (const c of picks) out.push(newOpponent(c.id_interne, await skinFor(c.id_interne, taken)));
     return out;
   }
 
@@ -307,16 +355,14 @@
    * n'est pas le bon » sont deux gestes qu'on veut séparément. */
   async function regenerateGrid() {
     const gen = ++opponentsGen;
-    const usedByCar = new Map<string, Set<string>>();
+    const taken = newTaken();
     const out: Opponent[] = [];
     for (const opp of setup.opponents) {
-      const used = usedByCar.get(opp.car_id) ?? new Set<string>();
-      usedByCar.set(opp.car_id, used);
       // La livrée est retirée au sort, **pas** les cellules `Auto` : `Auto`
       // n'est pas une valeur qu'on tire, c'est l'absence de surcharge, et
       // c'est le jeu qui tire dedans (§4.1). Ce qui change vraiment ici est
       // donc la livrée — et avec elle le nom de pilote `Auto`, qui en vient.
-      out.push({ ...opp, car_skin: await skinFor(opp.car_id, used) });
+      out.push({ ...opp, car_skin: await skinFor(opp.car_id, taken) });
     }
     if (gen === opponentsGen) setup.opponents = out;
   }
@@ -443,10 +489,7 @@
    * logique que la génération initiale). Insérée juste après la ligne source. */
   async function duplicateOpponentWithVariant(index: number) {
     const source = setup.opponents[index];
-    const used = new Set(
-      setup.opponents.filter((o) => o.car_id === source.car_id).map((o) => o.car_skin ?? "").filter(Boolean),
-    );
-    const skin = await skinFor(source.car_id, used);
+    const skin = await skinFor(source.car_id, await takenFromGrid());
     const clone: Opponent = { ...source, car_skin: skin };
     setup.opponents = [...setup.opponents.slice(0, index + 1), clone, ...setup.opponents.slice(index + 1)];
     opponentCount = setup.opponents.length;
@@ -507,10 +550,7 @@
     const i = pickerIndex;
     closePicker();
     if (i == null) return;
-    const used = new Set(
-      setup.opponents.filter((o, k) => k !== i && o.car_id === carId).map((o) => o.car_skin ?? "").filter(Boolean),
-    );
-    const skin = await skinFor(carId, used);
+    const skin = await skinFor(carId, await takenFromGrid(i));
     const opponents = [...setup.opponents];
     opponents[i] = { ...opponents[i], car_id: carId, car_skin: skin };
     setup.opponents = opponents;
@@ -521,12 +561,8 @@
   async function addOpponentsFromPicker(carIds: string[]) {
     closePicker();
     const additions: Opponent[] = [];
-    for (const carId of carIds) {
-      const used = new Set(
-        [...setup.opponents, ...additions].filter((o) => o.car_id === carId).map((o) => o.car_skin ?? "").filter(Boolean),
-      );
-      additions.push(newOpponent(carId, await skinFor(carId, used)));
-    }
+    const taken = await takenFromGrid();
+    for (const carId of carIds) additions.push(newOpponent(carId, await skinFor(carId, taken)));
     if (!additions.length) return;
     setup.opponents = [...setup.opponents, ...additions];
     opponentCount = setup.opponents.length;

@@ -367,22 +367,26 @@
        premier lancement…). -->
   <div class="season-wrap">
     <div class="opt-name lbl-key" style="margin-bottom:6px;">{t("launch.seasonLabel")}</div>
+    <!-- Date manuelle (§8.6bis) : sélectionner une saison ci-contre pose déjà
+         cette date (SEASON_MID, calculée côté Launch.svelte) — ce champ permet
+         de la voir et, si besoin, de la corriger précisément sans passer par
+         une saison. Ne remet pas `season` à "" : une date tapée à la main
+         reste compatible avec la saison affichée tant qu'on ne touche pas aux
+         tuiles.
+
+         **Sa propre ligne, au-dessus de la rangée** : ce n'est pas une
+         bascule, et lui donner le gabarit d'une tuile le faisait lire comme
+         une sixième saison. -->
+    <label class="date-row">
+      <span class="fk lbl-key">{t("launch.seasonDateLabel")}</span>
+      <input
+        type="date"
+        class="date-input mono"
+        value={setup.season_date ?? ""}
+        onchange={(e) => (setup.season_date = e.currentTarget.value || null)}
+      />
+    </label>
     <div class="weather season-grid">
-      <!-- Date manuelle (§8.6bis) : sélectionner une saison ci-contre pose
-           déjà cette date (SEASON_MID, calculée côté Launch.svelte) — ce
-           champ permet de la voir et, si besoin, de la corriger précisément
-           sans passer par une saison. Ne remet pas `season` à "" : une date
-           tapée à la main reste compatible avec la saison affichée tant que
-           l'utilisateur ne touche pas aux cartes. -->
-      <label class="wcard date-card">
-        <input
-          type="date"
-          class="date-input mono"
-          value={setup.season_date ?? ""}
-          onchange={(e) => (setup.season_date = e.currentTarget.value || null)}
-        />
-        <div class="wn">{t("launch.seasonDateLabel")}</div>
-      </label>
       {#each SEASONS as s}
         {@const unsupported = s.id !== "" && !trackSupportsSeason}
         <button
@@ -598,28 +602,26 @@
   .season-wrap {
     margin-top: 16px;
   }
-  /* Mêmes cartes que la météo (.wcard/.wn ci-dessus), deux colonnes de plus
-     pour garder les 5 options (Aucune + 4 saisons) et la date manuelle sur
-     une seule ligne. Sélecteur composé pour primer sur .weather
-     { grid-template-columns } quel que soit l'ordre des règles dans la
-     feuille de style. */
+  /* Mêmes cartes que la météo (.wcard/.wn ci-dessus). Cinq colonnes depuis que
+     la date a quitté la rangée : il n'y reste que Aucune + les quatre saisons.
+     Sélecteur composé pour primer sur .weather { grid-template-columns } quel
+     que soit l'ordre des règles dans la feuille de style. */
   .weather.season-grid {
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(5, 1fr);
   }
-  /* Date manuelle (§8.6bis) : même encadré wcard que les cartes saison,
-     contenu différent (champ natif au lieu d'une icône SVG). Le picker natif
-     est blanc par défaut, hors charte sombre — `color-scheme: dark` sur
-     .date-input bascule son rendu (icône + popup) en sombre, seule prise
-     possible dessus (pas de pseudo-élément stylable autrement). */
-  .date-card {
+  /* Date manuelle (§8.6bis), sur sa propre ligne : libellé à gauche, champ à
+     droite. Le picker natif est blanc par défaut, hors charte sombre —
+     `color-scheme: dark` sur .date-input bascule son rendu (icône + popup) en
+     sombre, seule prise possible dessus (pas de pseudo-élément stylable
+     autrement). */
+  .date-row {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 5px;
-    cursor: default;
+    gap: 10px;
+    margin-bottom: 8px;
   }
   .date-input {
-    width: 100%;
+    width: 132px;
     background: var(--bg);
     border: 1px solid var(--line);
     color: var(--txt2);

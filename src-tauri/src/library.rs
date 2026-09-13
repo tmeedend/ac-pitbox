@@ -204,21 +204,60 @@ pub struct SkinItem {
     /// dans un menu déroulant (§8.6) ; utilisé aussi en vignette dans la
     /// grille de skins de la fiche détail (§6.3).
     pub livery: Option<String>,
+    /// Pilote, numéro et pays **déclarés par la livrée**, tels que le jeu les
+    /// emploie pour l'IA qui la porte (§4.2).
+    ///
+    /// C'est ce que vaut une cellule `Auto` du plateau : ne pas les lire
+    /// obligeait à afficher un `Auto` creux là où le jeu, lui, sait très bien
+    /// quel nom il va mettre. Mesuré sur 400 livrées réelles : `skinname` et
+    /// `number` sont présents sur les 400, `country` sur 396 et `drivername`
+    /// sur 393 — la donnée est là, il suffisait de la prendre.
+    pub driver: Option<String>,
+    pub number: Option<String>,
+    pub country: Option<String>,
 }
 
-/// Nom lisible d'une livrée, lu dans son `ui_skin.json` (`skinname`).
+/// Ce qu'une livrée déclare dans son `ui_skin.json`.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct SkinInfo {
+    pub name: Option<String>,
+    pub driver: Option<String>,
+    pub number: Option<String>,
+    pub country: Option<String>,
+}
+
+/// Une valeur de `ui_skin.json`, vide traitée comme absente. Le numéro peut
+/// être écrit en nombre **ou** en chaîne selon l'auteur : les deux se lisent.
+fn skin_field(v: &serde_json::Value, key: &str) -> Option<String> {
+    match v.get(key)? {
+        serde_json::Value::String(s) if !s.trim().is_empty() => Some(s.trim().to_string()),
+        serde_json::Value::Number(n) => Some(n.to_string()),
+        _ => None,
+    }
+}
+
+pub(crate) fn read_skin_info(skin_dir: &Path) -> SkinInfo {
+    let Ok(text) = std::fs::read_to_string(skin_dir.join("ui_skin.json")) else {
+        return SkinInfo::default();
+    };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(text.trim_start_matches('\u{feff}')) else {
+        return SkinInfo::default();
+    };
+    SkinInfo {
+        name: skin_field(&v, "skinname").or_else(|| skin_field(&v, "name")),
+        driver: skin_field(&v, "drivername"),
+        number: skin_field(&v, "number"),
+        country: skin_field(&v, "country"),
+    }
+}
+
+/// Nom lisible d'une livrée.
 ///
 /// `pub(crate)` parce que l'inventaire (§4) doit afficher **le même** nom que
 /// le sélecteur de la fiche : un `chp_unit_118` d'un côté et un « Unit 118 » de
 /// l'autre, pour la même livrée, est une divergence qu'aucun typage ne signale.
 pub(crate) fn read_skin_name(skin_dir: &Path) -> Option<String> {
-    let text = std::fs::read_to_string(skin_dir.join("ui_skin.json")).ok()?;
-    let v: serde_json::Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
-    v.get("skinname")
-        .or_else(|| v.get("name"))
-        .and_then(|x| x.as_str())
-        .filter(|s| !s.trim().is_empty())
-        .map(|s| s.to_string())
+    read_skin_info(skin_dir).name
 }
 
 /// Lit les skins d'un dossier `skins/` donné (sous-dossiers + miniature + nom).
@@ -238,12 +277,16 @@ fn read_skins_dir(skins_dir: &Path) -> Vec<SkinItem> {
                 .map(|pp| pp.to_string_lossy().into_owned());
             let livery = p.join("livery.png");
             let livery = livery.is_file().then(|| livery.to_string_lossy().into_owned());
-            let name = read_skin_name(&p).unwrap_or_else(|| id.clone());
+            let info = read_skin_info(&p);
+            let name = info.name.clone().unwrap_or_else(|| id.clone());
             out.push(SkinItem {
                 id,
                 name,
                 preview,
                 livery,
+                driver: info.driver,
+                number: info.number,
+                country: info.country,
             });
         }
     }

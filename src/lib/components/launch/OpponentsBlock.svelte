@@ -39,6 +39,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import FilterBar from "../filters/FilterBar.svelte";
   import ColumnsMenu from "../ColumnsMenu.svelte";
+  import Tooltip from "../Tooltip.svelte";
   import NumberStepper from "../NumberStepper.svelte";
   import Slider from "../Slider.svelte";
 
@@ -191,6 +192,39 @@
   /** Une saisie vidée rend la cellule à `Auto` (§4.1). */
   const orAuto = (v: string): string | null => (v.trim() === "" ? null : v.trim());
 
+  /** La livrée d'une ligne, quand elle est connue. */
+  function skinOf(opp: Opponent): SkinItem | undefined {
+    return opp.car_skin ? skinsByCarId[opp.car_id]?.find((sk) => sk.id === opp.car_skin) : undefined;
+  }
+
+  /** Ce qu'une cellule `Auto` vaut **réellement** : ce que la livrée déclare,
+   * et donc ce que le jeu mettra. Afficher un « Auto » creux là où la donnée
+   * existe cachait au lecteur le nom qui allait s'afficher en course — y
+   * compris quand deux lignes portaient le même. */
+  function autoDriver(opp: Opponent): string {
+    const sk = skinOf(opp);
+    const number = sk?.number ? `${sk.number} ` : "";
+    return sk?.driver ? `${number}${sk.driver}` : t("launch.autoCell");
+  }
+  function autoNationality(opp: Opponent): string {
+    return skinOf(opp)?.country ?? t("launch.autoCell");
+  }
+
+  /** Deux pilotes sous la même identité (§1.9). La génération l'évite ; ceci
+   * n'attrape que ce que l'utilisateur a forcé à la main, et le dit plutôt que
+   * de le corriger dans son dos. */
+  const duplicateDrivers = $derived.by(() => {
+    const seen = new Set<string>();
+    for (const opp of setup.opponents) {
+      const sk = skinOf(opp);
+      const key = `${opp.driver_name ?? sk?.number ?? ""}|${opp.driver_name ?? sk?.driver ?? ""}`.trim().toLowerCase();
+      if (key === "|") continue;
+      if (seen.has(key)) return true;
+      seen.add(key);
+    }
+    return false;
+  });
+
   /** Lest et bride : 0 à 100, jamais d'`Auto` — « rien » s'y dit par 0. */
   const clamp100 = (v: string): number => Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
 
@@ -201,7 +235,6 @@
   );
 
   const lastRank = $derived(setup.opponents.length + 1);
-  const hasExplicitStrength = $derived(setup.opponents.some((o) => o.ai_level != null));
   // Re-bounded as the grid shrinks, rather than refused at launch: a rank that
   // stopped being reachable must not be a reason not to start.
   $effect(() => {
@@ -289,7 +322,15 @@
     >
 
     <div class="ai-range-field">
-      <span class="fk lbl-key">{t("launch.aiRangeLabel")}</span>
+      <!-- The explanation used to be a yellow box under the row. Yellow is for
+           a configuration problem calling for an action; this is a permanent
+           explanation, so it belongs to the ⓘ — the same treatment as ABS and
+           Traction control. -->
+      <span class="fk lbl-key"
+        >{t("launch.aiRangeLabel")}<Tooltip text={t("launch.explicitStrengthNote")} align="left"
+          ><button type="button" class="info-i">ⓘ</button></Tooltip
+        ></span
+      >
       <div class="dual-range">
         <div class="dr-track"></div>
         <div class="dr-fill" style="left:{aiMinPct}%; right:{100 - aiMaxPct}%"></div>
@@ -341,14 +382,10 @@
     </div>
   </div>
 
-  <!-- §4.5: the trap that has cost Content Manager users years. A strength
-       posed on a line does NOT replace the global difficulty — the two
-       multiply — so moving the global slider has a large effect even on lines
-       one has set by hand. Said here, once, and only while such a line exists:
-       a line of explanation at the moment it starts to matter beats ten forum
-       threads. -->
-  {#if hasExplicitStrength}
-    <p class="warnbox thin">{t("launch.explicitStrengthNote")}</p>
+  <!-- A configuration problem calling for an action, so yellow is right here —
+       unlike the strength explanation, which moved to an ⓘ. -->
+  {#if duplicateDrivers}
+    <p class="warnbox thin">{t("launch.duplicateDrivers")}</p>
   {/if}
 
   <!-- A statement, not a block: the grid is still playable, so no red (§3.5). -->
@@ -396,7 +433,10 @@
     {#if headerNeeded}
       <div class="oppo-row oppo-th">
         <span class="oppo-img th-img"></span>
-        <span class="oppo-n lbl-key">{t("columns.name")}</span>
+        <!-- Read-only header in the dimmer grey, editable ones in the lighter:
+             two greys, no third level, and the row says what can be typed into
+             before one tries. -->
+        <span class="oppo-n lbl-key ro">{t("columns.name")}</span>
         {#if shows("driver")}<span class="oppo-driver lbl-key">{t("launch.colDriver")}</span>{/if}
         {#if shows("nationality")}<span class="oppo-nat lbl-key">{t("launch.colNatShort")}</span>{/if}
         {#if shows("ratio")}<span class="oppo-ratio lbl-key">{t("launch.colRatio")}</span>{/if}
@@ -426,7 +466,7 @@
             class="oppo-driver cell"
             class:is-auto={opp.driver_name == null}
             type="text"
-            placeholder={t("launch.autoCell")}
+            placeholder={autoDriver(opp)}
             value={opp.driver_name ?? ""}
             onclick={(e) => e.stopPropagation()}
             onchange={(e) => onsetcell(i, { driver_name: orAuto(e.currentTarget.value) })}
@@ -439,7 +479,7 @@
             class="oppo-nat cell mono"
             class:is-auto={opp.nationality == null}
             type="text"
-            placeholder={t("launch.autoCell")}
+            placeholder={autoNationality(opp)}
             value={opp.nationality ?? ""}
             onclick={(e) => e.stopPropagation()}
             onchange={(e) => onsetcell(i, { nationality: orAuto(e.currentTarget.value) })}
@@ -513,7 +553,7 @@
     <!-- The pool count in the label is the point: it says what the filter
          bought — this many rows to read instead of the whole library. -->
     <button class="oppo-add" type="button" disabled={poolCount === 0} onclick={onchoose}
-      >{t("launch.chooseFromPool", { count: poolCount })}</button
+      >{poolCount === 1 ? t("launch.chooseFromPoolOne") : t("launch.chooseFromPool", { count: poolCount })}</button
     >
     <!-- A grid is worth saving on its own, apart from the session that holds
          it: the same GT3 field on ten tracks (§5). -->
@@ -581,6 +621,24 @@
     background: transparent;
     color: var(--faint);
     cursor: not-allowed;
+  }
+  /* Même ⓘ que SIMULATION : l'explication permanente vit là, jamais dans un
+     encart jaune. */
+  .info-i {
+    background: transparent;
+    border: none;
+    padding: 0 0 0 4px;
+    color: var(--muted2);
+    font-size: 10px;
+    line-height: 1;
+  }
+  .info-i:hover {
+    color: var(--txt2);
+  }
+  /* Le second des deux gris, et il n'y en a pas de troisième : une colonne en
+     lecture seule s'annonce plus éteinte que celles qui se saisissent. */
+  .oppo-th .ro {
+    color: var(--faint);
   }
   .oppo-foot {
     display: flex;
@@ -898,14 +956,25 @@
     background: var(--line);
     transform: translateY(-50%);
   }
-  /* Bulle de survol : la même image, en grand. Aucune transition sous
-     `prefers-reduced-motion` (règle globale de `global.css`). */
+  /* Bulle de survol : la même image, en grand.
+     **Elle déborde vers le BAS, jamais vers le haut.** Elle remontait depuis le
+     haut de la ligne et recouvrait donc les lignes précédentes — précisément
+     celles qu'on est en train de comparer à celle qu'on survole. Ancrée sur le
+     bord supérieur de sa ligne, elle ne cache que ce qui suit, qu'on n'a pas
+     encore lu.
+     Le repli en fin de liste est un `margin-bottom` négatif sur la dernière
+     ligne : la seule façon de remonter la bulle « du strict nécessaire » sans
+     relever une position à l'écran, donc sans repasser par des pixels que le
+     zoom d'interface multiplierait une seconde fois (§13).
+     Aucune transition sous `prefers-reduced-motion` (règle globale). */
   .oppo-bubble {
     position: absolute;
     left: 56px;
-    bottom: calc(100% - 10px);
+    top: 0;
     z-index: 20;
     width: 240px;
+    max-height: 240px;
+    overflow: hidden;
     padding: 4px;
     border: 1px solid var(--line);
     background: var(--bg);
@@ -913,6 +982,12 @@
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.1s;
+  }
+  /* Les deux dernières lignes n'ont pas 240 px sous elles : la bulle y remonte
+     pour rester dans le bloc plutôt que de le déborder. */
+  .oppo-row:nth-last-of-type(-n + 2) .oppo-bubble {
+    top: auto;
+    bottom: 0;
   }
   .oppo-row:hover .oppo-bubble,
   .oppo-row:focus-visible .oppo-bubble {

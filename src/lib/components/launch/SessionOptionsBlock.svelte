@@ -48,10 +48,13 @@
         {/if}
 
         {#if setup.session_type === "race"}
-          <label class="grid-fields">
-            <NumberStepper min={1} max={99} bind:value={setup.laps} />
+          <!-- Libellé AU-DESSUS du champ, comme tout le reste du bloc : il
+               était le seul posé à droite du sien, ce qui faisait lire la
+               rangée en zigzag. -->
+          <div>
             <span class="fk lbl-key">{t("launch.laps")}</span>
-          </label>
+            <NumberStepper min={1} max={99} bind:value={setup.laps} />
+          </div>
         {/if}
 
         {#if setup.session_type === "race" || setup.session_type === "trackday"}
@@ -144,7 +147,6 @@
             ]}
           />
         </div>
-        <label class="check"><input type="checkbox" bind:checked={setup.penalties} /><span>{t("launch.penalties")}</span></label>
       </div>
     </div>
   </div>
@@ -201,11 +203,6 @@
     display: flex;
     flex-direction: column;
     gap: 5px;
-  }
-  .grid-fields {
-    display: inline-flex;
-    align-items: center;
-    gap: 12px;
   }
   /* Colour/size/letter-spacing come from `.lbl-key` (global, §labels): only
      what `.lbl-key` does not cover stays here. */
