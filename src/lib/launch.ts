@@ -56,18 +56,6 @@ export function nearestGrip(grip: number): number {
  * neige). "" = aucune saison choisie. */
 export type Season = "" | "spring" | "summer" | "autumn" | "winter";
 
-/** Type de plateau d'adversaires (§8.6) : détermine le vivier où piocher.
- * "same_era" retiré au profit de la fourchette d'année (year_min/year_max),
- * disponible pour same_category/free. */
-export type GridMode = "same_car" | "same_category" | "free";
-
-/** Valeur spéciale de la catégorie du vivier « Par catégorie » (§8.6) : suit
- * automatiquement la catégorie de la voiture pilotée, plutôt qu'une catégorie
- * fixée à la main qui doit survivre à un changement de voiture. Vit ici (pas
- * dans un composant) parce que `savedSessions.ts` en a besoin comme valeur par
- * défaut pour les sauvegardes antérieures à ce champ. */
-export const SAME_CATEGORY = "__same_category__";
-
 export interface Opponent {
   car_id: string;
   ai_level: number;
@@ -106,10 +94,6 @@ export interface RaceSetup {
   road_c: number | null;
   wind_speed_kmh: number | null;
   wind_direction_deg: number | null;
-  /** Fourchette d'année du vivier d'adversaires (remplace « même ère »), comme
-   * ai_level_min/max : toujours une valeur concrète (pas de « non réglé »). */
-  year_min: number;
-  year_max: number;
   /** Saison optionnelle (§8.6bis) — voir season_date pour la valeur réellement écrite. */
   season: string | null;
   /** Date ISO (YYYY-MM-DD) associée à la saison choisie ; best-effort côté preset Quick Drive (udt/dtv). */

@@ -144,15 +144,6 @@ pub struct RaceSetup {
     pub wind_speed_kmh: Option<u32>,
     #[serde(default)]
     pub wind_direction_deg: Option<u32>,
-    /// Fourchette d'année du vivier d'adversaires (§8.6, remplace « même ère »)
-    /// — filtrage fait côté front, transportée ici pour cohérence de la
-    /// sérialisation (comme ai_level_min/max : toujours une valeur concrète).
-    #[serde(default = "default_year_min")]
-    #[allow(dead_code)]
-    pub year_min: i32,
-    #[serde(default = "default_year_max")]
-    #[allow(dead_code)]
-    pub year_max: i32,
     /// Saison optionnelle (§8.6bis) : "spring"|"summer"|"autumn"|"winter",
     /// juste persistée — c'est `season_date` qui est réellement écrite.
     #[serde(default)]
@@ -241,12 +232,6 @@ fn default_qualify_minutes() -> u32 {
 }
 fn default_practice_minutes() -> u32 {
     20
-}
-fn default_year_min() -> i32 {
-    1950
-}
-fn default_year_max() -> i32 {
-    2026
 }
 fn default_damage() -> u32 {
     50

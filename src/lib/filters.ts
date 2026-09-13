@@ -97,7 +97,15 @@ export function filterDefs(kind: ModKind): FilterDef[] {
     // only offered where an AND can ever match.
     { key: "category", labelKey: "library.filterCategory", type: "val", operator: !isCar },
   ];
-  if (isCar) defs.push({ key: "brand", labelKey: "library.filterBrand", type: "val" });
+  if (isCar) {
+    defs.push({ key: "brand", labelKey: "library.filterBrand", type: "val" });
+    // The one honest token for "the same car as mine" (§3.2). Matched on the
+    // DISPLAY NAME rather than on the mod id: two mods of the same model then
+    // both answer, which is what a one-make grid wants - and it keeps the
+    // suggestion list readable, an id being exactly what one does not
+    // recognise.
+    defs.push({ key: "model", labelKey: "library.filterModel", type: "val" });
+  }
   defs.push(
     { key: "tag", labelKey: "library.filterTag", type: "val", operator: true },
     { key: "author", labelKey: "library.filterAuthor", type: "val" },
@@ -192,6 +200,8 @@ function valuesOf(key: string, ctx: FilterContext): (c: ModCard) => string[] {
       return ctx.isCar ? (c) => one(c.category) : (c) => c.categories;
     case "brand":
       return (c) => one(c.brand);
+    case "model":
+      return (c) => one(c.display_name ?? c.id_interne);
     case "author":
       return (c) => one(c.author);
     case "country":

@@ -45,6 +45,10 @@
     /** Raccourcis de décennie du filtre d'année, déduits de la bibliothèque. */
     presets: { label: string; min: number; max: number }[];
     resultCount: number;
+    /** Clé du décompte, quand l'écran ne compte pas des « résultats » : le bloc
+     * Adversaires compte un **vivier** (`Pool · 42 cars`), qui n'est pas la
+     * même chose — un résultat se regarde, un vivier se tire dedans. */
+    countKey?: string;
     /** Voiture de référence de la bande de performance (§3.4) et nombre de
      * voitures que leurs specs illisibles écartent — l'éditeur du filtre
      * `perf` s'en sert pour dire sur quoi il mesure. */
@@ -61,6 +65,7 @@
     optionsFor,
     presets,
     resultCount,
+    countKey = "library.results",
     perfRef = null,
     perfUnreadable = 0,
     end,
@@ -277,7 +282,7 @@
   </div>
 
   <div class="aside">
-    <span class="count mono">{t("library.results", { count: resultCount })}</span>
+    <span class="count mono">{t(countKey, { count: resultCount })}</span>
     {@render end?.()}
   </div>
 </div>

@@ -12,8 +12,6 @@
     weatherConditions,
     trackSun,
     type AssistLevel,
-    type GridMode,
-    SAME_CATEGORY,
     type Opponent,
     type PracticeStart,
     type RaceSetup,
@@ -24,7 +22,10 @@
     type WeatherOption,
   } from "$lib/launch";
   import { carClassOf, driverFor, isEmpty } from "$lib/driverOverride.svelte";
-  import type { FilterMap } from "$lib/filters";
+  import { buildCardIndex, buildPredicate, filterDefs, parseFilters, serializeFilters, type FilterMap } from "$lib/filters";
+  import { matchesQuery } from "$lib/cardSearch";
+  import { hasOwnDriver } from "$lib/driverOverride.svelte";
+  import { defaultGridFilters } from "$lib/opponentPool";
   import { setGridCars } from "$lib/gridMods.svelte";
   import { getModDetail, listLibrary, previewSrc, type ModCard } from "$lib/library";
   import { getSessionBackground } from "$lib/media";
@@ -47,7 +48,6 @@
   let libCards = $state<ModCard[]>([]);
   let weathers = $state<WeatherOption[]>([]);
   let selectedIntent = $state("");
-  let gridMode = $state<GridMode>("same_category");
   let opponentCount = $state(7);
   // Jeton de génération du plateau (§6.3ter) : `regenerateGrid` est asynchrone
   // (résolution des skins par IPC) et peut encore être « en vol » quand
@@ -56,16 +56,6 @@
   // régénération capture le jeton courant et n'applique son résultat que s'il
   // n'a pas été invalidé entre-temps par un appel plus récent.
   let opponentsGen = 0;
-  // Voiture pour laquelle le plateau courant a été construit (§8.6ter).
-  // Persistée avec lui : cet écran est démonté dès qu'on passe à la
-  // bibliothèque, donc c'est le seul moyen, au remontage, de savoir si le
-  // plateau restauré correspond encore à la voiture pilotée.
-  let gridCarId = $state<string | null>(null);
-  /** Plateau composé à la main par la modale de sélection (§9.3) : plus de
-   * régénération silencieuse au changement de voiture pilotée. Persisté avec
-   * le plateau — sans quoi passer à la bibliothèque et revenir démonte l'écran
-   * et perd le drapeau, donc jette précisément le plateau qu'il protège. */
-  let gridManual = $state(false);
   let launching = $state(false);
   let error = $state("");
   let info = $state("");
@@ -75,10 +65,6 @@
   // session ne sera pas exactement celle qui avait été enregistrée.
   let warning = $state("");
   let ready = $state(false);
-
-  // --- Fourchette d'année du vivier d'adversaires (§8.6, remplace « même ère ») ---
-  const YEAR_RANGE_MIN = 1950;
-  const YEAR_RANGE_MAX = new Date().getFullYear();
 
   let setup = $state<RaceSetup>({
     car_id: "",
@@ -97,8 +83,6 @@
     road_c: null,
     wind_speed_kmh: null,
     wind_direction_deg: null,
-    year_min: YEAR_RANGE_MIN,
-    year_max: YEAR_RANGE_MAX,
     season: null,
     season_date: null,
     penalties: false,
@@ -206,43 +190,26 @@
   const player = $derived(carPool.find((c) => c.id_interne === setup.car_id) ?? null);
   const currentWeather = $derived(weathers.find((w) => w.id === selectedIntent));
 
-  // --- Catégorie du vivier « Par catégorie » (§8.6) : `SAME_CATEGORY` (valeur
-  // par défaut) suit la catégorie de la voiture pilotée automatiquement — une
-  // catégorie fixée à la main, elle, reste choisie tant qu'on ne revient pas
-  // sur « Même catégorie » dans la liste, y compris à travers un changement de
-  // voiture. `effectiveCategory` fait toute la traduction : sentinelle → la
-  // catégorie du joueur (recalculée à chaque frame par construction, `player`
-  // étant lui-même dérivé de `setup.car_id`), valeur fixée → elle-même. Plus
-  // besoin de rejouer cette bascule à la main à chaque changement de voiture.
-  // Même liste que le filtre catégorie de la bibliothèque voitures. ---
-  let categorySelection = $state<string>(SAME_CATEGORY);
-  const categoryOptions = $derived([...new Set(carPool.map((c) => c.category).filter((c): c is string => !!c))].sort());
-  const effectiveCategory = $derived(categorySelection === SAME_CATEGORY ? player?.category ?? "" : categorySelection);
-  async function selectCategory(cat: string) {
-    categorySelection = cat;
-    if (gridMode === "same_category") await regenerateGrid();
-  }
-
-  // --- Plateau d'adversaires (§8.6) : 3 modes de vivier, liste ajustable.
-  // « Même voiture » = littéralement le même mod que le joueur (juste un
-  // skin différent) ; « même catégorie »/« libre » filtrent aussi par
-  // fourchette d'année (remplace « même ère »). ---
-  function inYearRange(c: ModCard): boolean {
-    // Année inconnue : ne pas exclure injustement un mod mal renseigné.
-    if (c.year == null) return true;
-    // 0 (ou champ vidé, qui retombe à 0 côté NumberStepper) = pas de borne
-    // de ce côté — l'utilisateur tape juste le champ qui l'intéresse.
-    if (setup.year_min > 0 && c.year < setup.year_min) return false;
-    if (setup.year_max > 0 && c.year > setup.year_max) return false;
-    return true;
-  }
-  function poolForMode(mode: GridMode): ModCard[] {
-    if (!player) return carPool;
-    if (mode === "same_car") return [player];
-    const others = carPool.filter((c) => c.id_interne !== setup.car_id);
-    const byCategory = mode === "same_category" && effectiveCategory ? others.filter((c) => c.category === effectiveCategory) : others;
-    return byCategory.filter(inYearRange);
-  }
+  // --- The pool (§3.3) ---------------------------------------------------
+  //
+  // **The filter defines the pool, never the grid.** Three tabs used to do it
+  // (`Same car` / `By category` / `Free`), and they were a poorer copy of the
+  // filter bar: they could not combine `#gt3` AND 2010-2016 AND "except
+  // Kunos", which chips make trivial. What the tabs really carried was the
+  // GESTURE that turns a pool into a grid, and there are now two of them,
+  // explicit and both working on this same set: `Fill` and `Choose`.
+  //
+  // The whole car library comes in — including the car being driven. No hidden
+  // "except mine" rule: a rule the chips do not show is exactly the kind of
+  // reconciliation this refactor exists to delete, and the `Same car` chip
+  // needs the car to be in there anyway.
+  const gridDefs = filterDefs("Car");
+  let gridFilters = $state<FilterMap>(defaultGridFilters());
+  let gridPinned = $state<string[]>(["state"]);
+  let gridQuery = $state("");
+  const gridIndex = $derived(buildCardIndex(carPool, gridDefs, true, hasOwnDriver, setup.car_id));
+  const gridMatches = $derived(buildPredicate(gridDefs, gridFilters, gridIndex.ctx));
+  const gridPool = $derived(carPool.filter((c) => gridMatches(c) && matchesQuery(c, gridQuery)));
 
   function randomLevel(): number {
     const { ai_level_min: min, ai_level_max: max } = setup;
@@ -279,14 +246,20 @@
 
   /** Génère `n` adversaires pour le mode courant. `excludeCarIds` = mods déjà
    * présents dans le plateau, évités en priorité (sauf en « même voiture »,
-   * où il n'y a qu'un seul mod possible). Si le vivier distinct est épuisé
-   * (ex. tous les modèles d'une catégorie déjà utilisés), on complète en
-   * dupliquant un mod déjà choisi avec un skin différent plutôt que de
-   * tronquer le plateau. */
+   * `excludeCarIds` = mods déjà présents dans le plateau, évités en priorité.
+   * Si le vivier distinct est épuisé (un vivier d'une seule voiture, par
+   * exemple), on complète en dupliquant un mod déjà choisi avec un skin
+   * différent plutôt que de tronquer le plateau — c'est ce que
+   * l'avertissement de vivier maigre annonce (§3.5).
+   *
+   * **Aucun repli sur la bibliothèque entière quand le vivier est vide** : un
+   * filtre qui ne garde rien doit rendre un plateau vide, pas un plateau tiré
+   * ailleurs. Le repli d'avant venait des onglets, dont le vivier pouvait être
+   * vide sans que rien ne le dise ; le compteur `Pool · 0 cars` le dit
+   * maintenant, et les deux boutons sont éteints. */
   async function generateOpponents(n: number, excludeCarIds: Set<string>): Promise<Opponent[]> {
     if (n <= 0) return [];
-    const pool = poolForMode(gridMode);
-    const source = pool.length ? pool : carPool.filter((c) => c.id_interne !== setup.car_id);
+    const source = gridPool;
     if (!source.length) return [];
 
     const fresh = source.filter((c) => !excludeCarIds.has(c.id_interne)).sort(() => Math.random() - 0.5);
@@ -308,25 +281,30 @@
     return out;
   }
 
-  async function regenerateGrid() {
-    // Régénérer, c'est reprendre la main automatique : le plateau redevient
-    // celui du vivier.
-    gridManual = false;
+  /** `Fill N at random` (§3.3) : tire N voitures dans le vivier et **remplace**
+   * le plateau. Le chemin de celui qui veut courir tout de suite. */
+  async function fillGrid() {
     const gen = ++opponentsGen;
-    // Posé avant l'attente, pas après : c'est un marqueur d'intention, sinon
-    // l'effet de resynchronisation redéclencherait une génération pendant
-    // celle-ci.
-    gridCarId = setup.car_id;
     const opponents = await generateOpponents(opponentCount, new Set());
     // Une action plus récente (nouvelle régénération, ou adversaires imposés
     // depuis la bibliothèque) a pris le dessus entre-temps : ne pas écraser.
     if (gen === opponentsGen) setup.opponents = opponents;
   }
 
-  async function selectGridMode(mode: GridMode) {
-    gridMode = mode;
-    gridManual = false;
-    await regenerateGrid();
+  /** `Regenerate` (§4.1) : garde les voitures, **retire au sort ce qui avait
+   * été tiré sur elles** — skin et force. Ce n'est pas `Fill` sous un autre
+   * nom : « le plateau est bon mais les livrées se répètent » et « le plateau
+   * n'est pas le bon » sont deux gestes qu'on veut séparément. */
+  async function regenerateGrid() {
+    const gen = ++opponentsGen;
+    const usedByCar = new Map<string, Set<string>>();
+    const out: Opponent[] = [];
+    for (const opp of setup.opponents) {
+      const used = usedByCar.get(opp.car_id) ?? new Set<string>();
+      usedByCar.set(opp.car_id, used);
+      out.push({ car_id: opp.car_id, ai_level: randomLevel(), car_skin: await skinFor(opp.car_id, used) });
+    }
+    if (gen === opponentsGen) setup.opponents = out;
   }
 
   async function applyOpponentCount(raw: number) {
@@ -383,15 +361,13 @@
    * après coup : (1) `lastCarForGrid` aligné AVANT de toucher `session_type` —
    * l'effet de resynchronisation de session (plus haut) lit aussi
    * `setup.session_type`/`setup.car_id`, donc passer `session_type` à "race"
-   * le redéclenche, et sans cet alignement il voit `car_id !== lastCarForGrid`
-   * et lance une régénération inutile ; (2) `opponentsGen` incrémenté pour
-   * invalider toute régénération DÉJÀ en vol (ex. si le type de session était
-   * déjà "course" à l'arrivée sur cet écran, `onMount` en a lancé une). */
+   * `opponentsGen` est incrémenté pour invalider toute génération DÉJÀ en vol
+   * (ex. si le type de session était déjà "course" à l'arrivée sur cet écran,
+   * `onMount` en a lancé une) : sans ça, son résultat arrive après coup et
+   * écrase les adversaires qu'on vient d'imposer. */
   function applyOpponentsAction(action: OpponentsAction) {
     opponentsGen++;
-    gridCarId = setup.car_id;
     setup.session_type = "race";
-    gridMode = "free";
     const additions: Opponent[] = action.carIds.map((carId) => ({
       car_id: carId,
       ai_level: randomLevel(),
@@ -403,38 +379,15 @@
 
   // --- Modale de sélection d'adversaire (§9.3) ---
   //
-  // Elle reçoit **toute** la bibliothèque voitures, pas le vivier du mode
-  // courant : ce sont ses jetons qui restreignent, et c'est ce qui leur donne
-  // un sens — retirer « Catégorie » doit réellement élargir la liste. L'onglet
-  // dit dans quoi le `+` pioche, la modale dit ce qu'on prend à la main.
+  // Elle reçoit **toute** la bibliothèque voitures, et surtout **l'état de
+  // filtre du bloc lui-même** (§3.3) — elle ne dérive plus rien. C'est plus
+  // simple que ce qui était en place : il n'y a qu'un vivier, celui que la
+  // barre de filtres montre, et la modale en est la vue détaillée. Retirer un
+  // jeton dans la modale élargit donc aussi le vivier du `Fill` — ce sont les
+  // deux gestes d'un seul et même ensemble, pas deux ensembles à réconcilier.
   let pickerIndex = $state<number | null>(null);
   let pickerAdding = $state(false);
   const pickerOpen = $derived(pickerAdding || pickerIndex != null);
-
-  /** Jetons posés à l'ouverture, dérivés du vivier actif (§9.3).
-   *
-   * Le jeton « jouable » est **deux exclusions**, pas une valeur : le filtre
-   * d'état n'offre que `active`/`inactive`/`stock`/`unmanaged`/`broken`, et
-   * « jouable » veut dire tout sauf les deux qu'Assetto Corsa ne peut pas
-   * charger. Les exclusions sont toujours conjonctives et l'emportent
-   * toujours (`buildPredicate`), donc les trois autres passent.
-   *
-   * En « même voiture », seule la **marque** devient un jeton : il n'existe
-   * aucun filtre « modèle » dans le catalogue, et en inventer un pour cette
-   * modale seule créerait un filtre que la bibliothèque n'a pas. La boîte de
-   * recherche est juste à côté pour affiner. */
-  function poolChips(): FilterMap {
-    const chips: FilterMap = {
-      state: { type: "val", values: [{ value: "inactive", sign: -1 }, { value: "broken", sign: -1 }], op: "and" },
-    };
-    if (gridMode === "same_car") {
-      if (player?.brand) chips.brand = { type: "val", values: [{ value: player.brand, sign: 1 }], op: "and" };
-    } else if (gridMode === "same_category") {
-      const cat = categorySelection === SAME_CATEGORY ? player?.category : categorySelection;
-      if (cat) chips.category = { type: "val", values: [{ value: cat, sign: 1 }], op: "and" };
-    }
-    return chips;
-  }
 
   function openPicker(index: number) {
     pickerIndex = index;
@@ -460,7 +413,6 @@
     const opponents = [...setup.opponents];
     opponents[i] = { ...opponents[i], car_id: carId, car_skin: skin };
     setup.opponents = opponents;
-    gridManual = true;
   }
 
   /** Ajout en fin de plateau, dans l'ordre de la liste. Skin et force suivent
@@ -477,7 +429,6 @@
     if (!additions.length) return;
     setup.opponents = [...setup.opponents, ...additions];
     opponentCount = setup.opponents.length;
-    gridManual = true;
   }
 
   // --- Fourchette de niveau IA (§8.6) : bornes réutilisées par le réglage
@@ -550,24 +501,22 @@
     track_layout: string | null;
     session_type: SessionType;
     opponents: Opponent[];
-    /** Voiture pour laquelle le plateau restauré a été construit (§8.6ter).
-     * Sans elle, revenir sur cet écran après avoir changé de voiture dans la
-     * bibliothèque remonte le composant, qui ne peut plus distinguer « plateau
-     * fait pour cette voiture » de « plateau hérité de la précédente ». */
-    grid_car_id: string | null;
   }
 
   // --- Presets de session par type (§8.4) ---
   interface Persisted {
-    ai_level_min: number; ai_level_max: number; grid_mode: GridMode; opponent_count: number;
-    /** §8.6 : `SAME_CATEGORY` ou une catégorie fixée à la main. Absent sur un
-     * preset antérieur à ce champ — repli sur `SAME_CATEGORY`, l'ancien
-     * comportement implicite (toujours suivre la voiture pilotée). */
+    ai_level_min: number; ai_level_max: number; opponent_count: number;
+    /** Vivier d'adversaires (§3.3), sérialisé par `serializeFilters` — la même
+     * forme que les filtres de bibliothèque, relue par le même `parseFilters`.
+     * Absent sur un preset antérieur aux jetons : `migrateGridPreset` reprend
+     * alors les trois anciens champs (`grid_mode`, `category_selection`,
+     * `year_min`/`year_max`), qui restent déclarés pour cette seule relecture
+     * et ne sont plus jamais écrits. */
+    grid_filters?: string;
+    grid_pinned?: string[];
+    grid_mode?: "same_car" | "same_category" | "free";
     category_selection?: string;
-    year_min: number; year_max: number;
-    /** Absent sur un preset antérieur à ce champ — `false`, l'ancien
-     * comportement implicite (plateau toujours régénérable). */
-    grid_manual?: boolean;
+    year_min?: number; year_max?: number;
     laps: number; time_hours: number;
     penalties: boolean; jump_start_penalty: number; grip: number;
     practice_enabled: boolean; practice_minutes: number;
@@ -601,7 +550,6 @@
       track_layout: setup.track_layout,
       session_type: setup.session_type,
       opponents: setup.opponents,
-      grid_car_id: gridCarId,
     };
     invoke("save_launch_state", { state: { selection, presets } }).catch((e) => console.error("save_launch_state", e));
   }
@@ -610,11 +558,48 @@
     persistLaunchState();
   });
 
+  /**
+   * Rétablit le vivier d'un preset, **ou le reconstruit** depuis les trois
+   * champs de l'époque des onglets (§3.1).
+   *
+   * Une migration plutôt qu'un repli sur les défauts : un utilisateur qui
+   * courait en « Même catégorie / 2010-2016 » retrouve exactement ce vivier,
+   * dit cette fois par deux jetons qu'il peut combiner. Le mode « même
+   * voiture » se traduit par le jeton `Model` de la voiture du preset — la
+   * seule perte assumée est qu'il ne suit plus la voiture pilotée, ce qui est
+   * précisément ce que « une puce pose un jeton et rien d'autre » signifie.
+   */
+  function applyGridPreset(p: Persisted) {
+    if (p.grid_filters) {
+      const snap = parseFilters(p.grid_filters, gridDefs);
+      gridQuery = snap.query;
+      gridFilters = snap.filters;
+      gridPinned = p.grid_pinned ?? ["state"];
+      return;
+    }
+    const migrated: FilterMap = defaultGridFilters();
+    if (p.grid_mode === "same_car") {
+      const name = player?.display_name ?? player?.id_interne;
+      if (name) migrated.model = { type: "val", values: [{ value: name, sign: 1 }], op: "and" };
+    } else if (p.grid_mode === "same_category") {
+      const cat = p.category_selection && p.category_selection !== "__same_category__" ? p.category_selection : player?.category;
+      if (cat) migrated.category = { type: "val", values: [{ value: cat, sign: 1 }], op: "and" };
+    }
+    // 0 des deux côtés voulait déjà dire « pas de borne » (`inYearRange`), et
+    // `parseFilters` traite un 0 de la même façon : rien à convertir.
+    const min = p.year_min && p.year_min > 0 ? p.year_min : null;
+    const max = p.year_max && p.year_max > 0 ? p.year_max : null;
+    if (min != null || max != null) migrated.year = { type: "range", min, max };
+    gridQuery = "";
+    gridFilters = migrated;
+    gridPinned = ["state"];
+  }
+
   function savePreset() {
     presets[setup.session_type] = {
       ai_level_min: setup.ai_level_min, ai_level_max: setup.ai_level_max,
-      grid_mode: gridMode, opponent_count: opponentCount, category_selection: categorySelection,
-      year_min: setup.year_min, year_max: setup.year_max, grid_manual: gridManual,
+      opponent_count: opponentCount,
+      grid_filters: serializeFilters(gridQuery, gridFilters), grid_pinned: [...gridPinned],
       laps: setup.laps, time_hours: setup.time_hours,
       penalties: setup.penalties, jump_start_penalty: setup.jump_start_penalty, grip: setup.grip,
       practice_enabled: setup.practice_enabled, practice_minutes: setup.practice_minutes,
@@ -631,10 +616,8 @@
     applying = true;
     if (p) {
       setup.ai_level_min = p.ai_level_min ?? 92; setup.ai_level_max = p.ai_level_max ?? 98;
-      gridMode = p.grid_mode ?? "same_category"; opponentCount = p.opponent_count ?? 7;
-      categorySelection = p.category_selection ?? SAME_CATEGORY;
-      setup.year_min = p.year_min ?? YEAR_RANGE_MIN; setup.year_max = p.year_max ?? YEAR_RANGE_MAX;
-      gridManual = p.grid_manual ?? false;
+      opponentCount = p.opponent_count ?? 7;
+      applyGridPreset(p);
       setup.laps = p.laps; setup.time_hours = p.time_hours;
       setup.penalties = p.penalties; setup.jump_start_penalty = p.jump_start_penalty ?? 0;
       setup.grip = nearestGrip(p.grip ?? 100);
@@ -670,7 +653,7 @@
   });
 
   $effect(() => {
-    void [setup.ai_level_min, setup.ai_level_max, gridMode, opponentCount, setup.year_min, setup.year_max,
+    void [setup.ai_level_min, setup.ai_level_max, opponentCount, gridFilters, gridQuery, gridPinned,
       setup.laps,
       setup.time_hours, setup.penalties, setup.jump_start_penalty, setup.grip,
       setup.practice_enabled, setup.practice_minutes, setup.qualify_minutes,
@@ -699,16 +682,6 @@
     // La bibliothèque EST le sélecteur (§8.6) : voiture/circuit viennent du duo
     // de session choisi dans les bibliothèques — rien à choisir ici.
     syncFromSession();
-    // Voiture du plateau restauré — **pas** celle qui vient d'être
-    // synchronisée : c'est toute la différence entre « ce plateau est fait
-    // pour cette voiture » et « ce plateau vient d'une autre voiture ».
-    // S'aligner sur la voiture courante rendait le second cas indétectable,
-    // et laissait le plateau de l'ancienne voiture après un changement fait
-    // depuis la bibliothèque (bug réel : Shelby restées face à une autre
-    // voiture). Fichier d'avant ce champ : on suppose le plateau à jour,
-    // c'était le comportement précédent.
-    gridCarId = saved.grid_car_id ?? setup.car_id;
-
     const first = weathers.find((w) => w.available);
     if (first) await selectIntent(first);
     await applyPreset(setup.session_type);
@@ -732,31 +705,22 @@
     setup.track_layout = tr?.layout ?? null;
   }
 
-  // Resynchronise si le duo change (l'utilisateur ouvre une autre voiture/circuit
-  // dans la bibliothèque puis revient à la session).
+  // Resynchronise si le duo change (l'utilisateur ouvre une autre voiture/
+  // circuit dans la bibliothèque puis revient à la session).
   //
-  // Le plateau se régénère quand la **voiture pilotée** change, parce que le
-  // vivier en dépend : « même voiture » n'a plus rien à voir, « même
-  // catégorie » change de catégorie. Deux cas où on n'y touche pas :
-  // - mode « libre », dont le vivier est indépendant de la voiture pilotée —
-  //   régénérer jetterait un plateau souvent réglé à la main ;
-  // - plateau **manuel**, c'est-à-dire touché par la modale de sélection : la
-  //   même raison, sans avoir eu à basculer l'onglet sur « libre » dans le dos
-  //   de l'utilisateur (§9.3). Le bouton « Régénérer » lève le drapeau ;
-  // - changement de **skin** seul : `setup.car_id` ne bouge pas, donc rien ne
-  //   se déclenche (`nav.sessionCar?.skin` n'est lu que pour resynchroniser).
+  // **Le plateau ne se régénère plus tout seul au changement de voiture**, et
+  // c'est la disparition des onglets qui l'emporte (§4.1). La règle était
+  // « régénérer sauf en mode libre, sauf si le plateau a été touché à la
+  // main » — trois conditions pour deviner si le plateau appartenait encore à
+  // l'utilisateur ou au vivier. Le vivier est maintenant un filtre, qu'un
+  // changement de voiture ne déplace pas (les jetons `Model` et `Category`
+  // portent une valeur), donc régénérer jetterait un plateau au profit d'un
+  // tirage dans le **même** vivier. Le plateau ne change plus que sur un
+  // geste : `Fill`, `Choose`, `Regenerate`.
   $effect(() => {
     void [nav.sessionCar?.id, nav.sessionCar?.skin, nav.sessionTrack?.id, nav.sessionTrack?.layout];
     if (!ready) return;
     syncFromSession();
-    if (
-      (setup.session_type === "race" || setup.session_type === "trackday") &&
-      gridMode !== "free" &&
-      !gridManual &&
-      setup.car_id !== gridCarId
-    ) {
-      void regenerateGrid();
-    }
   });
 
   // Fond photo derrière l'interface (§6.2/§9.3) : combo exact → même circuit →
@@ -905,9 +869,9 @@
       name,
       savedAt: new Date().toISOString(),
       setup: $state.snapshot(setup),
-      gridMode,
       opponentCount,
-      categorySelection,
+      gridFilters: serializeFilters(gridQuery, gridFilters),
+      gridPinned: [...gridPinned],
       season,
       intent: selectedIntent,
       trackSkins,
@@ -929,9 +893,11 @@
     const warnings: string[] = [];
 
     setup = { ...setup, ...s.setup };
-    gridMode = s.gridMode;
     opponentCount = s.opponentCount;
-    categorySelection = s.categorySelection ?? SAME_CATEGORY;
+    // Même migration que pour un preset par type : une sauvegarde d'avant les
+    // jetons retrouve son vivier, elle ne retombe pas sur les défauts.
+    applyGridPreset({ grid_filters: s.gridFilters, grid_pinned: s.gridPinned, grid_mode: s.gridMode,
+      category_selection: s.categorySelection } as Persisted);
     season = s.season;
     selectedIntent = s.intent;
 
@@ -945,10 +911,6 @@
     // le circuit n'ont pu être rétablis — aucun `pickSession` n'ayant eu lieu,
     // l'effet de resynchronisation ne passe pas de lui-même.
     syncFromSession();
-    // Le plateau chargé appartient à la voiture qui vient d'être rétablie :
-    // sans cet alignement, ce même effet prend le plateau pour un héritage de
-    // la voiture précédente et le régénère par-dessus.
-    gridCarId = setup.car_id;
 
     warning = warnings.join(" ");
   }
@@ -1066,17 +1028,20 @@
         {#if setup.session_type === "race" || setup.session_type === "trackday"}
           <OpponentsBlock
             {setup}
-            {gridMode}
             {opponentCount}
             {carPool}
             {skinsByCarId}
-            {categorySelection}
-            {categoryOptions}
-            onselectmode={selectGridMode}
-            onselectcategory={selectCategory}
+            defs={gridDefs}
+            bind:filters={gridFilters}
+            bind:pinned={gridPinned}
+            bind:query={gridQuery}
+            index={gridIndex}
+            poolCount={gridPool.length}
+            playerCard={player}
             oncountchange={applyOpponentCount}
+            onfill={() => void fillGrid()}
+            onchoose={openAddPicker}
             onremove={removeOpponent}
-            onadd={openAddPicker}
             onduplicate={duplicateOpponentWithVariant}
             onsetlevel={setOpponentLevel}
             onopenpicker={openPicker}
@@ -1125,7 +1090,9 @@
   <OpponentPicker
     pool={carPool}
     mode={pickerIndex != null ? "replace" : "add"}
-    initialFilters={poolChips()}
+    bind:filters={gridFilters}
+    bind:pinned={gridPinned}
+    bind:query={gridQuery}
     perfRefId={setup.car_id}
     gridCount={setup.opponents.length}
     gridTarget={opponentCount}

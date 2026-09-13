@@ -436,8 +436,6 @@ mod tests {
             road_c: None,
             wind_speed_kmh: Some(6),
             wind_direction_deg: Some(250),
-            year_min: 1950,
-            year_max: 2026,
             season: None,
             season_date: None,
             penalties: false,

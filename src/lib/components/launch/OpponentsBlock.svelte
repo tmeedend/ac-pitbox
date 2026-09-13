@@ -1,64 +1,95 @@
 <script lang="ts">
-  // Bloc « Adversaires » de l'écran Lancement (§8.6/§8.6ter) : mode de
-  // plateau, fourchette d'année du vivier, liste générée (avec picker de
-  // réglage fin), fourchette de niveau IA. Vue de présentation : la
-  // génération du plateau (poolForMode/generateOpponents/regenerateGrid,
-  // cache de skins) reste dans Launch.svelte, qui la déclenche aussi depuis
-  // d'autres sources (presets, resynchronisation voiture/circuit) — ce bloc
-  // ne fait qu'afficher le résultat et notifier les actions locales
-  // (ajouter/dupliquer/retirer une ligne, régler un niveau, ouvrir la modale).
-  // La modale de sélection est rendue par `Launch.svelte` : elle a besoin de
-  // toute la bibliothèque voitures et des jetons dérivés du vivier, que ce
-  // bloc n'a pas à connaître.
-  import { SAME_CATEGORY, type GridMode, type Opponent, type RaceSetup, type SkinItem } from "$lib/launch";
+  // Opponents block of the session settings screen (§3).
+  //
+  // **The filter replaced the tabs.** `Same car` / `By category` / `Free` did
+  // two jobs at once: define a set of cars — which the filter bar already does,
+  // better — and generate a grid out of that set. Only the second justified
+  // them, and the duplication of the first is what forced the reconciliation
+  // rules ("removing a chip does not change the tab", "the grid goes manual").
+  // The block now carries the SAME filter bar as the library, plus three
+  // shortcut chips that pose a token and nothing else (`opponentPool.ts`).
+  //
+  // **The filter defines the pool, never the grid.** Between the two there is
+  // always a gesture, and there are exactly two, both working on the filtered
+  // set: `Fill N at random` REPLACES the grid — the path of whoever wants to
+  // drive now — and `Choose from the N…` opens the picker on that same filter
+  // and ADDS at the end — the path of whoever wants to decide. The second
+  // carries the pool count in its label, because that is what says what the
+  // filter bought: 42 rows to read instead of 600.
+  //
+  // Presentation only: generation (`generateOpponents`, the skin cache) stays
+  // in `Launch.svelte`, which triggers it from other sources too (presets, the
+  // library's "set as opponents"). This block shows the result and reports the
+  // local gestures.
+  import type { CardIndex, FilterDef, FilterMap } from "$lib/filters";
+  import { chipAvailable, isChipOn, toggleChip, type ChipKind } from "$lib/opponentPool";
+  import type { Opponent, RaceSetup, SkinItem } from "$lib/launch";
   import { previewSrc, type ModCard } from "$lib/library";
   import { t } from "$lib/i18n/index.svelte";
+  import FilterBar from "../filters/FilterBar.svelte";
   import NumberStepper from "../NumberStepper.svelte";
-  import Seg from "../Seg.svelte";
 
   let {
     setup,
-    gridMode,
     opponentCount,
     carPool,
     skinsByCarId,
-    categorySelection,
-    categoryOptions,
-    onselectmode,
-    onselectcategory,
+    defs,
+    filters = $bindable(),
+    pinned = $bindable(),
+    query = $bindable(),
+    index,
+    poolCount,
+    playerCard,
     oncountchange,
+    onfill,
+    onchoose,
+    onregenerate,
     onremove,
-    onadd,
     onduplicate,
     onsetlevel,
     onopenpicker,
-    onregenerate,
   }: {
     setup: RaceSetup;
-    gridMode: GridMode;
     opponentCount: number;
     carPool: ModCard[];
     skinsByCarId: Record<string, SkinItem[]>;
-    categorySelection: string;
-    categoryOptions: string[];
-    onselectmode: (mode: GridMode) => void;
-    onselectcategory: (category: string) => void;
+    defs: FilterDef[];
+    filters: FilterMap;
+    pinned: string[];
+    query: string;
+    index: CardIndex;
+    /** Distinct cars the filter keeps — the number both gestures work on. */
+    poolCount: number;
+    /** The car being driven: what the three chips take their value from. */
+    playerCard: ModCard | null;
     oncountchange: (n: number) => void;
+    onfill: () => void;
+    onchoose: () => void;
+    onregenerate: () => void;
     onremove: (index: number) => void;
-    onadd: () => void;
     onduplicate: (index: number) => void;
     onsetlevel: (index: number, level: number) => void;
     onopenpicker: (index: number) => void;
-    onregenerate: () => void;
   } = $props();
 
-  const gridModes = $derived([
-    { value: "same_car", label: t("launch.gridSameCar") },
-    { value: "same_category", label: t("launch.gridSameCategory") },
-    { value: "free", label: t("launch.gridFree") },
-  ]);
+  const CHIPS: { kind: ChipKind; labelKey: string }[] = [
+    { kind: "model", labelKey: "launch.chipSameCar" },
+    { kind: "category", labelKey: "launch.chipSameCategory" },
+    { kind: "performance", labelKey: "launch.chipSamePerformance" },
+  ];
+  const refRatio = $derived(index.ctx.perfRef?.ratio ?? null);
 
-  // --- Fourchette de niveau IA (deux curseurs, §8.6) ---
+  /** Why a chip cannot be clicked. Three causes, three sentences: "no car
+   * chosen" and "this car declares no category" are not the same problem, and
+   * one of them the user can do something about. */
+  function chipReason(kind: ChipKind): string {
+    if (!playerCard) return t("launch.chipNoCar");
+    if (kind === "performance") return t("launch.chipNoPerf");
+    return t("launch.chipNoCategory");
+  }
+
+  // --- AI level range (two handles, §8.6) ---
   const RANGE_MIN = 60;
   const RANGE_MAX = 100;
   function clampAiMin() {
@@ -69,22 +100,20 @@
   }
   const aiMinPct = $derived(((setup.ai_level_min - RANGE_MIN) / (RANGE_MAX - RANGE_MIN)) * 100);
   const aiMaxPct = $derived(((setup.ai_level_max - RANGE_MIN) / (RANGE_MAX - RANGE_MIN)) * 100);
-  // Les deux valeurs sont accrochées à leur poignée (§9.3) : posées aux
-  // extrémités de la piste, elles disaient la fourchette sans dire laquelle
-  // des deux poignées on était en train de bouger.
+  // Both values hang off their own handle (§9.3): laid at the ends of the
+  // track, they said the range without saying which handle one was dragging.
   //
-  // Sous 20 points d'écart, les deux libellés ne tiennent plus côte à côte sur
-  // une piste de cette largeur — et à cette distance les poignées elles-mêmes
-  // ne se distinguent plus, donc les séparer n'apprendrait rien. Une seule
-  // valeur alors, la fourchette d'un bout à l'autre. C'est le cas du réglage
-  // par défaut (92-98).
+  // Under 20 points apart the two labels no longer fit side by side on a track
+  // this wide — and at that distance the handles themselves stop being
+  // distinguishable, so separating the labels would teach nothing. One label
+  // then, the range end to end. That is the default setting (92-98).
   //
-  // Le placement est en **pourcentage de la piste**, jamais en pixels relevés
-  // à l'écran — un `getBoundingClientRect` rendrait des pixels de fenêtre déjà
-  // multipliés par le zoom d'interface, qu'un `left` en pixels CSS
-  // multiplierait une seconde fois (§13). Le débordement au ras des bords est
-  // rattrapé en CSS par un `clamp()`, qui connaît la largeur réelle de la
-  // piste là où ce fichier ne la connaît pas.
+  // Placement is a PERCENTAGE OF THE TRACK, never a measurement taken off the
+  // screen: a `getBoundingClientRect` would return window pixels already
+  // multiplied by the interface zoom, which a `left` in CSS pixels would
+  // multiply a second time (§13). The overflow at the very edges is caught in
+  // CSS by a `clamp()`, which knows the real width of the track where this
+  // file does not.
   const aiLabelsMerged = $derived(aiMaxPct - aiMinPct < 20);
 
   function opponentName(carId: string): string {
@@ -110,53 +139,71 @@
   }
 </script>
 
-<!-- Adversaires (Course uniquement, §8.6) -->
+<!-- Opponents (race and track day only, §3) -->
 <section class="blk">
   <header class="blk-h"><span class="blk-t">{t("launch.opponentsLabel")}</span></header>
   <div class="blk-b">
-  <!-- Segmenté partagé : ces trois modes avaient leur propre copie, avec ses
-       divs cliquables et son marquage de l'actif — lequel se trouvait être
-       déjà le bon (rouge éteint + filet), le seul de l'écran à l'être. -->
-  <div class="modes">
-    <Seg value={gridMode} onselect={(v) => onselectmode(v as GridMode)} items={gridModes} />
+
+  <!-- The library's own filter bar, third consumer. The chips row below is not
+       a second way of filtering: it poses tokens INTO this bar, which is why a
+       chip lights up when the matching token is posed by hand. -->
+  <FilterBar
+    {defs}
+    bind:filters
+    bind:pinned
+    bind:query
+    optionsFor={index.optionsFor}
+    presets={index.yearPresets}
+    resultCount={poolCount}
+    countKey="launch.poolCount"
+    perfRef={index.ctx.perfRef}
+    perfUnreadable={index.perfUnreadable}
+  />
+
+  <!-- Three shortcuts, not three modes. They exist for the one-click gesture
+       and for what tokens alone do not offer: reading the pool at a glance. -->
+  <div class="chips">
+    {#each CHIPS as chip (chip.kind)}
+      {@const on = isChipOn(filters, chip.kind, playerCard)}
+      {@const can = chipAvailable(chip.kind, playerCard, refRatio)}
+      <!-- `aria-disabled`, not `disabled`: §3.4 asks the chip to EXPLAIN why it
+           cannot be clicked, and a disabled button fires no mouse event, so its
+           tooltip never appears and the keyboard cannot reach it either. It
+           stays focusable and says its reason; the click is what is refused. -->
+      <button
+        type="button"
+        class="chip"
+        class:on
+        class:off={!can}
+        aria-disabled={!can}
+        title={can ? undefined : chipReason(chip.kind)}
+        onclick={() => can && (filters = toggleChip(filters, chip.kind, playerCard))}>{t(chip.labelKey)}</button
+      >
+    {/each}
   </div>
 
-  <!-- Catégorie du vivier, nombre d'adversaires, difficulté et fourchette
-       d'année, tout sur une ligne (§8.6). Catégorie : par défaut « Même
-       catégorie » (en tête de liste) suit automatiquement la voiture pilotée,
-       comportement d'origine ; une catégorie fixée à la main reste choisie
-       même si on change de voiture. Année min/max : 0 ou vide = pas de filtre
-       sur ce bord (`inYearRange` côté Launch.svelte) — remplace l'ancienne
-       double glissière, ces deux champs se tapent directement. -->
+  <!-- How many, the random draw, and the difficulty the draw spreads over. -->
   <div class="adv-row">
-    {#if gridMode === "same_category"}
-      <label class="cat-field">
-        <span class="fk lbl-key">{t("launch.gridCategoryLabel")}</span>
-        <select
-          class="input cat-select"
-          value={categorySelection}
-          onchange={(e) => onselectcategory(e.currentTarget.value)}
-        >
-          <option value={SAME_CATEGORY}>{t("launch.gridCategorySame")}</option>
-          {#each categoryOptions as cat}<option value={cat}>{cat}</option>{/each}
-        </select>
-      </label>
-    {/if}
-
     <label class="grid-fields">
       <NumberStepper min={0} max={30} value={opponentCount} onchange={(v) => oncountchange(v)} />
       <span class="fk lbl-key">{t("launch.aiCount")}</span>
     </label>
+
+    <!-- The only red of the block, and it is level 2 of the scale (§7.2ter):
+         filled red stays on the launch button alone. -->
+    <button class="fill" type="button" disabled={poolCount === 0 || opponentCount === 0} onclick={onfill}
+      >{t("launch.fillAtRandom", { count: opponentCount })}</button
+    >
 
     <div class="ai-range-field">
       <span class="fk lbl-key">{t("launch.aiRangeLabel")}</span>
       <div class="dual-range">
         <div class="dr-track"></div>
         <div class="dr-fill" style="left:{aiMinPct}%; right:{100 - aiMaxPct}%"></div>
-        <!-- Les mots « min » et « max » ont quitté les libellés : la position
-             de la poignée le dit déjà, et ils doublaient la largeur d'une
-             valeur là où c'est précisément la largeur qui manque. Ils restent
-             sur les curseurs comme nom accessible, qui n'en a pas d'autre. -->
+        <!-- « min » et « max » ont quitté les libellés : la position de la
+             poignée le dit déjà, et ils doublaient la largeur d'une valeur là
+             où c'est précisément la largeur qui manque. Ils restent sur les
+             curseurs comme nom accessible, qui n'en a pas d'autre. -->
         <input
           type="range"
           min={RANGE_MIN}
@@ -183,28 +230,27 @@
         {/if}
       </div>
     </div>
-
-    {#if gridMode !== "same_car"}
-      <!-- Pas de plafond à l'année courante : un vivier peut légitimement
-         viser une voiture concept ou un DLC annoncé pas encore sorti. -->
-      <label class="grid-fields">
-        <NumberStepper width={70} min={0} bind:value={setup.year_min} />
-        <span class="fk lbl-key">{t("launch.yearMinLabel")}</span>
-      </label>
-      <label class="grid-fields">
-        <NumberStepper width={70} min={0} bind:value={setup.year_max} />
-        <span class="fk lbl-key">{t("launch.yearMaxLabel")}</span>
-      </label>
-    {/if}
   </div>
 
+  <!-- A statement, not a block: the grid is still playable, so no red (§3.5). -->
+  {#if poolCount > 0 && poolCount < opponentCount}
+    <p class="warnbox thin">
+      {poolCount === 1 ? t("launch.poolThinOne") : t("launch.poolThinFew", { count: poolCount })}
+    </p>
+  {:else if poolCount === 0}
+    <p class="warnbox thin">{t("launch.poolEmpty")}</p>
+  {/if}
+
   <div class="oppo">
-    <!-- « généré » devenait faux dès qu'une ligne avait été posée à la main.
-         L'espace laissé libre entre le titre et le bouton est celui de la
-         position de départ (L3) : il est tenu vide exprès. -->
+    <!-- `Regenerate` is NOT `Fill` with another name: it keeps the cars and
+         re-rolls what was drawn on them (skin, strength), where `Fill` draws
+         the cars themselves. Two gestures one actually wants separately — the
+         grid is right but the liveries repeat, versus the grid is wrong. -->
     <div class="oppo-h lbl">
       <span>{t("launch.gridHeader", { count: setup.opponents.length })}</span>
-      <button class="oppo-regen" type="button" onclick={onregenerate}>{t("launch.regenerateGrid")}</button>
+      <button class="oppo-regen" type="button" disabled={!setup.opponents.length} onclick={onregenerate}
+        >{t("launch.regenerateGrid")}</button
+      >
     </div>
     {#each setup.opponents as opp, i}
       {@const prev = opponentPreview(opp)}
@@ -251,36 +297,82 @@
         {/if}
       </div>
     {/each}
-    <button class="oppo-add" type="button" onclick={onadd}>+ {t("launch.addOpponent")}</button>
+    <!-- The pool count in the label is the point: it says what the filter
+         bought — this many rows to read instead of the whole library. -->
+    <button class="oppo-add" type="button" disabled={poolCount === 0} onclick={onchoose}
+      >{t("launch.chooseFromPool", { count: poolCount })}</button
+    >
   </div>
   </div>
 </section>
 
 
 <style>
-  .modes {
-    margin-bottom: 12px;
-  }
-  /* Même patron que `.ai-range-field` : libellé au-dessus, largeur fixe pour
-     tenir dans la ligne plutôt que de s'étirer sur toute la largeur restante. */
-  .cat-field {
+  /* Three shortcuts under the token row, close enough to read as its
+     complement rather than as a control bar of their own. */
+  .chips {
     display: flex;
-    flex-direction: column;
-    gap: 5px;
-    width: 150px;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 9px;
   }
-  .cat-select {
-    width: 100%;
+  /* Level 2 of the red scale when active (§7.2ter): red text, dimmed ground,
+     border — never a filled red, which stays the launch button's alone. A chip
+     at rest introduces no red, and neither does hovering it. */
+  .chip {
+    border: 1px solid var(--line);
+    background: var(--panel2);
+    color: var(--txt2);
+    font-size: 10.5px;
+    padding: 4px 9px;
   }
-  /* Catégorie (si « Par catégorie »), compteur d'adversaires, difficulté,
-     fourchette d'année : tout sur une ligne (retombe seulement si la largeur
-     manque). */
+  .chip:hover:not(.off) {
+    background: var(--raised);
+    color: var(--txt);
+  }
+  .chip.on {
+    border-color: var(--rosso-border);
+    background: var(--rosso-dim);
+    color: var(--rosso-bright);
+  }
+  .chip.off {
+    color: var(--faint);
+    cursor: not-allowed;
+  }
+  /* The draw. Same level 2 as an active chip: it is the gesture the block is
+     built around, not a destructive action. */
+  .fill {
+    border: 1px solid var(--rosso-border);
+    background: var(--rosso-dim);
+    color: var(--rosso-bright);
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    white-space: nowrap;
+  }
+  .fill:hover:not(:disabled) {
+    border-color: var(--rosso-bright);
+    color: var(--rosso-bright);
+  }
+  .fill:disabled {
+    border-color: var(--line);
+    background: transparent;
+    color: var(--faint);
+    cursor: not-allowed;
+  }
+  /* `.warnbox` carries the colours; only the spacing is local. */
+  .thin {
+    margin-top: 10px;
+  }
+  /* Compteur d'adversaires, tirage et difficulté : tout sur une ligne (retombe
+     seulement si la largeur manque). */
   .adv-row {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-start;
     gap: 16px 20px;
-    margin-bottom: 12px;
+    margin: 13px 0 0;
   }
   .ai-range-field {
     display: flex;

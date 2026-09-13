@@ -3,7 +3,7 @@
 // un instantané complet et rappelable à la demande (surtout utile pour ne pas
 // reperdre un plateau d'adversaires soigneusement ajusté).
 import { invoke } from "@tauri-apps/api/core";
-import { assistLevelFrom, type GridMode, type RaceSetup, type SessionType } from "./launch";
+import { assistLevelFrom, type RaceSetup, type SessionType } from "./launch";
 import { StorageKey } from "./storage";
 
 export type Season = "" | "spring" | "summer" | "autumn" | "winter";
@@ -12,12 +12,14 @@ export interface SavedSession {
   name: string;
   savedAt: string;
   setup: RaceSetup;
-  gridMode: GridMode;
   opponentCount: number;
-  /** §8.6 : `SAME_CATEGORY` ou une catégorie fixée à la main. `undefined` sur
-   * une sauvegarde antérieure à ce champ — même repli qu'à la relecture d'un
-   * preset, `SAME_CATEGORY` reproduit exactement l'ancien comportement
-   * implicite (toujours suivre la voiture pilotée). */
+  /** Vivier d'adversaires (§3.3), sérialisé comme les filtres de bibliothèque.
+   * `undefined` sur une sauvegarde antérieure aux jetons : le chargement
+   * reconstruit alors le vivier depuis `gridMode`/`categorySelection`, gardés
+   * pour cette seule relecture et jamais réécrits. */
+  gridFilters?: string;
+  gridPinned?: string[];
+  gridMode?: "same_car" | "same_category" | "free";
   categorySelection?: string;
   season: Season;
   /** Intention météo sélectionnée (pour resurligner la bonne carte à la relecture). */

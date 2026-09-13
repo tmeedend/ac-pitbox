@@ -7,11 +7,12 @@
   // what one would expect. It now consumes `FilterBar` and the shared search
   // index, which is why this file carries no filtering logic of its own.
   //
-  // **The whole car library comes in, not the pool of the active grid mode.**
-  // The chips do the narrowing, and that is what makes them meaningful:
-  // removing `Category` has to actually widen the list. The tab says what the
-  // `+` of the grid draws from; this modal says what one takes by hand, and
-  // the two are allowed to diverge.
+  // **It shares the block's filter state, it no longer derives anything**
+  // (§3.3). There used to be two sets to reconcile — the tab said what the `+`
+  // drew from, the modal said what one took by hand — and the rules that kept
+  // them apart ("removing a chip does not change the tab") were the cost of
+  // that duplication. There is one pool now, and this modal is its detailed
+  // view: narrowing here narrows the draw too, which is what one means.
   //
   // One component, two modes. "Replace" is not a second modal: it drops the
   // tick column, selects one row, and opens scrolled to the car already there.
@@ -28,8 +29,10 @@
     /** The whole car library — see the header. */
     pool: ModCard[];
     mode: "add" | "replace";
-    /** Chips derived from the active grid mode, posed at opening (§9.3). */
-    initialFilters: FilterMap;
+    /** The block's own filter state, shared rather than copied (§3.3). */
+    filters: FilterMap;
+    pinned: string[];
+    query: string;
     /** Car the performance band is measured against (§3.4) — the one being
      * driven. The modal offers the same catalogue as the library, so the same
      * reference has to reach it, or a `Performance` chip posed here would say
@@ -48,7 +51,9 @@
   let {
     pool,
     mode,
-    initialFilters,
+    filters = $bindable(),
+    pinned = $bindable(),
+    query = $bindable(),
     perfRefId = null,
     gridCount = 0,
     gridTarget = 0,
@@ -60,12 +65,6 @@
   }: Props = $props();
 
   const defs = untrack(() => filterDefs("Car"));
-  // Captured once: the modal is created anew at each opening, and its filters
-  // are deliberately NOT persisted — it always opens on the chips of the
-  // current pool, never on those of the previous time (§9.3).
-  let filters = $state<FilterMap>(untrack(() => ({ ...initialFilters })));
-  let pinned = $state<string[]>(untrack(() => Object.keys(initialFilters)));
-  let query = $state("");
 
   const index = $derived(buildCardIndex(pool, defs, true, hasOwnDriver, perfRefId));
   const matchesFilters = $derived(buildPredicate(defs, filters, index.ctx));
