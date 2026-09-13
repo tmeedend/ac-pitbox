@@ -64,6 +64,8 @@
     onduplicate,
     onsetlevel,
     onsetcell,
+    onsavegrid,
+    onloadgrid,
     onopenpicker,
   }: {
     setup: RaceSetup;
@@ -90,6 +92,8 @@
     onduplicate: (index: number) => void;
     onsetlevel: (index: number, level: number | null) => void;
     onsetcell: (index: number, patch: Partial<Opponent>) => void;
+    onsavegrid: () => void;
+    onloadgrid: () => void;
     onopenpicker: (index: number) => void;
   } = $props();
 
@@ -511,6 +515,14 @@
     <button class="oppo-add" type="button" disabled={poolCount === 0} onclick={onchoose}
       >{t("launch.chooseFromPool", { count: poolCount })}</button
     >
+    <!-- A grid is worth saving on its own, apart from the session that holds
+         it: the same GT3 field on ten tracks (§5). -->
+    <div class="oppo-foot">
+      <button class="oppo-regen" type="button" disabled={!setup.opponents.length} onclick={onsavegrid}
+        >{t("launch.saveGrid")}</button
+      >
+      <button class="oppo-regen" type="button" onclick={onloadgrid}>{t("launch.loadGrid")}</button>
+    </div>
   </div>
   </div>
 </section>
@@ -569,6 +581,12 @@
     background: transparent;
     color: var(--faint);
     cursor: not-allowed;
+  }
+  .oppo-foot {
+    display: flex;
+    gap: 7px;
+    padding: 7px 10px;
+    border-top: 1px solid var(--line);
   }
   /* Pushes the start position and `Regenerate` to the right of the title. */
   .oppo-sp {

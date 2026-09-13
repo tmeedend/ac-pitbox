@@ -43,10 +43,12 @@
   import SessionOptionsBlock from "./launch/SessionOptionsBlock.svelte";
   import SimulationBlock from "./launch/SimulationBlock.svelte";
   import SessionTypeBlock from "./launch/SessionTypeBlock.svelte";
+  import NamedListDialog from "./NamedListDialog.svelte";
   import OpponentPicker from "./OpponentPicker.svelte";
   import SavedSessionsBlock from "./launch/SavedSessionsBlock.svelte";
   import LoadingState from "./LoadingState.svelte";
   import { saveSession, listSavedSessions, type SavedSession } from "$lib/savedSessions";
+  import { deleteSavedGrid, listSavedGrids, saveGrid, type SavedGrid } from "$lib/savedGrids";
 
   import { errorText } from "$lib/errors";
   import { StorageKey } from "$lib/storage";
@@ -353,6 +355,66 @@
       ballast: o.ballast ?? 0,
       restrictor: o.restrictor ?? 0,
     };
+  }
+
+  // --- Grilles enregistrées (§5) -------------------------------------------
+  //
+  // Une grille n'est PAS une session : elle ne porte que les adversaires et ce
+  // qui fait le caractère du plateau (fourchette de force, agressivité), donc
+  // la charger dans une session déjà configurée ne touche ni à la météo, ni à
+  // l'heure, ni au type de session. C'est le cas réel : le même plateau GT3 sur
+  // dix circuits.
+  let gridDialog = $state<"save" | "load" | null>(null);
+  let savedGrids = $state<SavedGrid[]>([]);
+
+  async function openGridDialog(mode: "save" | "load") {
+    savedGrids = await listSavedGrids();
+    gridDialog = mode;
+  }
+
+  async function doSaveGrid(name: string) {
+    gridDialog = null;
+    try {
+      await saveGrid({
+        name,
+        savedAt: new Date().toISOString(),
+        // Une **copie**, jamais un lien (§5.1) : sans `$state.snapshot`, c'est
+        // le proxy réactif du plateau courant qui partirait au backend, et
+        // modifier le plateau changerait la grille enregistrée.
+        opponents: $state.snapshot(setup.opponents),
+        aiLevelMin: setup.ai_level_min,
+        aiLevelMax: setup.ai_level_max,
+        aggression: setup.aggression,
+      });
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
+  /** Charge une grille : **seuls les adversaires changent**, plus ce qui fait
+   * le caractère du plateau. Une voiture disparue de la bibliothèque depuis
+   * l'enregistrement est retirée en le disant, jamais en échouant — une grille
+   * survit à des années de bibliothèque remaniée. */
+  async function doLoadGrid(name: string) {
+    const grid = savedGrids.find((g) => g.name === name);
+    gridDialog = null;
+    if (!grid) return;
+    const known = new Set(carPool.map((c) => c.id_interne));
+    const kept = grid.opponents.filter((o) => known.has(o.car_id)).map(restoreOpponent);
+    const missing = grid.opponents.length - kept.length;
+    opponentsGen++;
+    setup.opponents = kept;
+    opponentCount = kept.length;
+    setup.ai_level_min = clampAiLevel(grid.aiLevelMin);
+    setup.ai_level_max = clampAiLevel(grid.aiLevelMax);
+    setup.aggression = Math.max(0, Math.min(100, grid.aggression));
+    warning = missing ? t("launch.gridMissingCars", { count: missing }) : "";
+    info = t("launch.gridLoaded", { name: grid.name, count: kept.length });
+  }
+
+  async function removeSavedGrid(name: string) {
+    await deleteSavedGrid(name);
+    savedGrids = await listSavedGrids();
   }
 
   /** Une cellule d'une ligne du plateau (§4.1/§4.2). `null` sur un texte, et
@@ -1111,6 +1173,8 @@
             bind:columns={gridColumns}
             bind:wide={gridWide}
             onsetcell={setOpponentCell}
+            onsavegrid={() => void openGridDialog("save")}
+            onloadgrid={() => void openGridDialog("load")}
             oncountchange={applyOpponentCount}
             onfill={() => void fillGrid()}
             onchoose={openAddPicker}
@@ -1159,6 +1223,25 @@
      bandeau, parce qu'il y a un geste à faire hors de l'app et qu'il faut
      revérifier après — un texte passif laisserait l'utilisateur relancer dans
      le vide. -->
+{#if gridDialog}
+  <NamedListDialog
+    mode={gridDialog}
+    searchable
+    title={t(gridDialog === "save" ? "launch.saveGridTitle" : "launch.loadGridTitle")}
+    placeholder={t(gridDialog === "save" ? "launch.gridNamePlaceholder" : "launch.gridSearchPlaceholder")}
+    emptyText={t("launch.noSavedGrids")}
+    entries={savedGrids.map((g) => ({
+      name: g.name,
+      meta: t("launch.gridAiCount", { count: g.opponents.length }),
+      badge: g.fromCm ? t("launch.fromCm") : undefined,
+    }))}
+    onsave={(name) => void doSaveGrid(name)}
+    onpick={(name) => void doLoadGrid(name)}
+    ondelete={(name) => void removeSavedGrid(name)}
+    onclose={() => (gridDialog = null)}
+  />
+{/if}
+
 {#if pickerOpen}
   <OpponentPicker
     pool={carPool}

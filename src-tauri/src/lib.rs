@@ -52,6 +52,7 @@ mod quickdrive;
 mod raceini;
 mod resources;
 mod rules;
+mod saved_grids;
 mod saved_sessions;
 mod session_state;
 mod showroom;
@@ -338,6 +339,8 @@ pub fn run() {
             commands::session_state::save_session_picks,
             commands::session_state::get_launch_state,
             commands::session_state::save_launch_state,
+            commands::saved_grids::get_saved_grids,
+            commands::saved_grids::save_saved_grids,
             commands::saved_sessions::get_saved_sessions,
             commands::saved_sessions::save_saved_sessions,
             commands::library_columns::get_library_columns,

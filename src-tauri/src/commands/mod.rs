@@ -26,6 +26,7 @@ pub mod packs;
 pub mod preview;
 pub mod profiles;
 pub mod rules;
+pub mod saved_grids;
 pub mod saved_sessions;
 pub mod session;
 pub mod session_state;
