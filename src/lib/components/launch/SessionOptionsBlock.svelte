@@ -4,7 +4,7 @@
   // do (grip evolution, penalties). Pure presentation: everything is a direct
   // read/write of `setup` (state shared with the parent, §8.6bis) — no logic
   // to lift up.
-  import type { RaceSetup } from "$lib/launch";
+  import { TRACK_GRIPS, type RaceSetup } from "$lib/launch";
   import { t } from "$lib/i18n/index.svelte";
   import NumberStepper from "../NumberStepper.svelte";
   import Seg from "../Seg.svelte";
@@ -119,17 +119,22 @@
       </div>
 
       <div class="fixed">
+        <!-- Les six états que le jeu embarque (`cfg/templates/tracks.ini`), dans
+             l'ordre et avec les noms de sa propre liste — celle que Content
+             Manager affiche aussi. Vertical : six libellés nommés ne tiennent
+             pas sur une ligne dans cette colonne, et une liste d'états se lit
+             de haut en bas. Chacun porte au survol ce que le jeu en dit. -->
         <div>
           <span class="fk lbl-key">{t("launch.gripEvolution")}</span>
           <Seg
+            vertical
             value={String(setup.grip)}
             onselect={(v) => (setup.grip = Number(v))}
-            items={[
-              { value: "86", label: t("launch.gripGreen") },
-              { value: "92", label: t("launch.gripMedium") },
-              { value: "96", label: t("launch.gripRubbered") },
-              { value: "100", label: t("launch.gripOptimal") },
-            ]}
+            items={TRACK_GRIPS.map((g) => ({
+              value: String(g),
+              label: t(`launch.grip${g}`),
+              title: t(`launch.grip${g}Desc`),
+            }))}
           />
         </div>
         <label class="check"><input type="checkbox" bind:checked={setup.penalties} /><span>{t("launch.penalties")}</span></label>
@@ -149,7 +154,7 @@
   .opts {
     display: grid;
     /* The right zone is sized by its content, not by a number: its widest
-       control is the grip segmented, whose four options never change, so its
+       control is the grip segmented, whose six options never change, so its
        width is the same in the four session types — which is the whole point.
        A fixed width would only be a guess about a column whose own width
        depends on the window. */

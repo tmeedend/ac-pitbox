@@ -5,6 +5,7 @@
     launchSession,
     assistLevelFrom,
     isSteamRunning,
+    nearestGrip,
     listModSkins,
     getModCspFeatures,
     weatherOptions,
@@ -636,7 +637,7 @@
       gridManual = p.grid_manual ?? false;
       setup.laps = p.laps; setup.time_hours = p.time_hours;
       setup.penalties = p.penalties; setup.jump_start_penalty = p.jump_start_penalty ?? 0;
-      setup.grip = p.grip ?? 96;
+      setup.grip = nearestGrip(p.grip ?? 100);
       setup.practice_enabled = p.practice_enabled ?? false; setup.practice_minutes = p.practice_minutes ?? 20;
       setup.qualify_enabled = p.qualify_enabled ?? true; setup.qualify_minutes = p.qualify_minutes ?? 10;
       setup.ghost_car = p.ghost_car ?? false; setup.practice_start = p.practice_start ?? "pit";

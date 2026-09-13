@@ -58,56 +58,121 @@ fn build_assists(s: &RaceSetup) -> Value {
     })
 }
 
+/// Les six états de piste **du jeu**, `cfg/templates/tracks.ini` recopié
+/// verbatim : grip de départ, report d'une session à l'autre, aléa, et nombre
+/// de tours pour gagner un point de grip.
+///
+/// Content Manager lit ce même fichier pour peupler sa liste (relevé dans
+/// `launcher/themes/default/js/ui.js` : `getiniasjson/templates/tracks.ini`),
+/// et affiche les trois premiers en pourcentages — ce qui est la preuve que
+/// son preset les stocke divisés par cent, voir [`build_track_properties`].
+///
+/// Ordonnés par grip croissant, comme la liste de CM.
+pub const TRACK_STATES: [TrackState; 6] = [
+    TrackState {
+        start: 86,
+        transfer: 50,
+        randomness: 1,
+        lap_gain: 30,
+        description: "A very slippery track, improves fast with more laps.",
+    },
+    TrackState {
+        start: 89,
+        transfer: 80,
+        randomness: 3,
+        lap_gain: 50,
+        description: "Old tarmac. Bad grip won't get better soon.",
+    },
+    TrackState {
+        start: 95,
+        transfer: 90,
+        randomness: 2,
+        lap_gain: 132,
+        description: "A clean track, gets better with more laps.",
+    },
+    TrackState {
+        start: 96,
+        transfer: 80,
+        randomness: 1,
+        lap_gain: 300,
+        description: "A slow track that doesn't improve much.",
+    },
+    TrackState {
+        start: 98,
+        transfer: 80,
+        randomness: 2,
+        lap_gain: 700,
+        description: "Very grippy track right from the start.",
+    },
+    TrackState {
+        start: 100,
+        transfer: 100,
+        randomness: 0,
+        lap_gain: 1,
+        description: "Perfect track for hotlapping.",
+    },
+];
+
+/// Une entrée de `cfg/templates/tracks.ini`.
+pub struct TrackState {
+    /// `SESSION_START` — le grip au départ, en pourcentage. C'est lui qui
+    /// identifie l'état : l'écran ne retient que ce nombre.
+    pub start: u32,
+    /// `SESSION_TRANSFER` — ce qui se reporte d'une session à la suivante.
+    pub transfer: u32,
+    /// `RANDOMNESS` — la variation aléatoire.
+    pub randomness: u32,
+    /// `LAP_GAIN` — nombre de tours pour gagner un point de grip : plus il est
+    /// grand, moins la piste s'améliore.
+    pub lap_gain: u32,
+    /// Telle que le jeu l'écrit. Cosmétique côté CM, jamais lue par AC.
+    pub description: &'static str,
+}
+
+/// L'état de piste le plus proche du grip demandé.
+///
+/// Par proximité et non par égalité : un preset enregistré avant que la liste
+/// ne s'aligne sur celle du jeu peut porter une valeur qui n'y figure pas (92 %
+/// a existé, inventé). Aucune migration à écrire — il atterrit sur l'état
+/// voisin, et l'écran l'y recale à l'affichage.
+///
+/// **À égale distance, le plus adhérent gagne** : 92 % tombait entre 89 et 95,
+/// et une piste un peu plus roulante est le repli indulgent — l'inverse
+/// rendrait une session plus difficile qu'à la sauvegarde, ce qui se remarque
+/// au volant alors que le contraire ne se remarque pas.
+pub fn track_state_for(grip: u32) -> &'static TrackState {
+    let grip = grip.clamp(1, 100);
+    TRACK_STATES
+        .iter()
+        .min_by_key(|st| (st.start.abs_diff(grip), std::cmp::Reverse(st.start)))
+        .expect("the table is never empty")
+}
+
 /// État de la piste (§9.3) — le `TrackPropertiesData` du preset, au niveau
 /// racine et non dans le `ModeData`, donc commun aux quatre types de session.
 ///
-/// **Le schéma est décodé, plus deviné.** Le jeu embarque sa propre table de
-/// presets dans `cfg/templates/tracks.ini`, et son entrée `OPTIMUM`
-/// (`SESSION_START=100`, `SESSION_TRANSFER=100`, `RANDOMNESS=0`, `LAP_GAIN=1`,
-/// « Perfect track for hotlapping. ») reproduit **exactement** le
-/// `{"s":1.0,"t":1.0,"r":0.0,"g":1,"d":"Perfect track for hotlapping."}` que
-/// portent les dix presets de référence. D'où la correspondance : `s` et `t`
-/// sont des pourcentages divisés par 100, `g` est le `LAP_GAIN` brut, `d` la
-/// description. Ces quatre clés-là sont ensuite écrites telles quelles dans le
-/// `[DYNAMIC_TRACK]` du `race.ini` par CM (relevé sur un `race.ini` réel).
+/// **Le schéma est décodé, plus deviné**, et en deux temps. L'entrée `OPTIMUM`
+/// de la table du jeu (100/100/0/1, « Perfect track for hotlapping. »)
+/// reproduit exactement le `{"s":1.0,"t":1.0,"r":0.0,"g":1,"d":…}` que portent
+/// les dix presets de référence : `s`, `t` et `g` s'en déduisent, mais pas `r`,
+/// qu'un `RANDOMNESS` nul laissait indécidable entre les deux échelles.
 ///
-/// **Seul le grip de départ varie, et c'est volontaire** : c'est le seul
-/// réglage que l'écran expose. Les trois autres gardent la valeur prouvée par
-/// les presets de référence. Pour `r` en particulier, l'échelle reste
-/// **indécidable** — `RANDOMNESS=0` donne `0.0`, ce qui ne dit pas si CM
-/// divise par 100 comme pour `s`/`t` ou garde le brut comme pour `g`. Se
-/// tromper d'un facteur 100 sur une variation aléatoire de grip est
-/// exactement le genre de réglage faux qu'on ne remarque qu'en jeu, un jour de
-/// course : tant qu'un preset de référence ne porte pas un `RANDOMNESS` non
-/// nul, cette valeur ne bouge pas.
+/// C'est le panneau « Track state » de CM qui a tranché : sur `GREEN` il
+/// affiche 95 %, 90 % et 2 %, là où le fichier du jeu dit `SESSION_START=95`,
+/// `SESSION_TRANSFER=90` et `RANDOMNESS=2`. Les trois sont donc **le même
+/// pourcentage divisé par cent**, l'aléa compris ; seul `LAP_GAIN` reste brut,
+/// et il n'est d'ailleurs pas affiché en pourcentage.
 ///
 /// `d` est cosmétique : CM l'affiche, le jeu ne la lit pas — son
-/// `[DYNAMIC_TRACK]` n'a pas de clé `DESCRIPTION`. Elle est reprise du preset
-/// du jeu dont le grip de départ est le plus proche, pour qu'elle ne
-/// contredise pas le nombre envoyé (une piste à 86 % annoncée « parfaite pour
-/// le hotlap » était le cas jusqu'ici).
+/// `[DYNAMIC_TRACK]` n'a pas de clé `DESCRIPTION`.
 fn build_track_properties(s: &RaceSetup) -> Value {
-    // `cfg/templates/tracks.ini`, verbatim : grip de départ et description.
-    const GAME_PRESETS: [(u32, &str); 6] = [
-        (86, "A very slippery track, improves fast with more laps."),
-        (89, "Old tarmac. Bad grip won't get better soon."),
-        (95, "A clean track, gets better with more laps."),
-        (96, "A slow track that doesn't improve much."),
-        (98, "Very grippy track right from the start."),
-        (100, "Perfect track for hotlapping."),
-    ];
-    let grip = s.grip.clamp(1, 100);
-    let description = GAME_PRESETS
-        .iter()
-        .min_by_key(|(start, _)| start.abs_diff(grip))
-        .map(|(_, d)| *d)
-        .unwrap_or("");
+    let st = track_state_for(s.grip);
     json!({
-        "s": f64::from(grip) / 100.0,
-        "t": 1.0,
-        "r": 0.0,
-        "g": 1,
-        "d": description,
+        "s": f64::from(st.start) / 100.0,
+        "t": f64::from(st.transfer) / 100.0,
+        "r": f64::from(st.randomness) / 100.0,
+        "g": st.lap_gain,
+        "d": st.description,
         "w": false,
     })
 }
@@ -549,6 +614,8 @@ mod tests {
         let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
         let track: Value = serde_json::from_str(v["TrackPropertiesData"].as_str().unwrap()).unwrap();
         assert_eq!(track["s"], 0.86, "grip de départ transmis");
+        assert_eq!(track["t"], 0.5, "report de session");
+        assert_eq!(track["g"], 30, "tours par point de grip");
         assert_eq!(
             track["d"], "A very slippery track, improves fast with more laps.",
             "la description suit le nombre envoyé au lieu de le contredire"
@@ -564,6 +631,35 @@ mod tests {
         assert_eq!(track["r"], 0.0);
         assert_eq!(track["g"], 1);
         assert_eq!(track["d"], "Perfect track for hotlapping.");
+    }
+
+    /// §9.3 — l'aléa est un pourcentage comme le grip de départ, pas une valeur
+    /// brute : c'est le panneau de CM qui l'a montré, en affichant « 2 % » là
+    /// où la table du jeu écrit `RANDOMNESS=2`. Se tromper d'un facteur cent
+    /// ici ne se verrait qu'en course.
+    #[test]
+    fn randomness_travels_as_a_percentage_like_the_other_two() {
+        let mut s = base_setup(SessionType::Practice);
+        s.grip = 95;
+        let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
+        let track: Value = serde_json::from_str(v["TrackPropertiesData"].as_str().unwrap()).unwrap();
+        assert_eq!(track["s"], 0.95);
+        assert_eq!(track["t"], 0.9);
+        assert_eq!(track["r"], 0.02, "2 % et non 2");
+    }
+
+    /// Un preset enregistré avant que la liste ne s'aligne sur celle du jeu
+    /// porte un grip qui n'y figure pas — il atterrit sur l'état voisin plutôt
+    /// que de partir tel quel avec les paramètres d'une autre piste.
+    #[test]
+    fn a_grip_that_is_no_longer_offered_lands_on_the_nearest_state() {
+        assert_eq!(
+            track_state_for(92).start,
+            95,
+            "92 inventé -> Green, le plus proche vers le haut"
+        );
+        assert_eq!(track_state_for(0).start, 86, "sous la table -> la plus glissante");
+        assert_eq!(track_state_for(100).start, 100, "une valeur exacte reste elle-même");
     }
 
     /// §9.3 — les trois niveaux d'une aide sont ceux du launcher d'AC lui-même

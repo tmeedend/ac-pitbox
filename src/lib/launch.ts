@@ -17,6 +17,30 @@ export type PracticeStart = "pit" | "track" | "hotlap";
  * l'aide. */
 export type AssistLevel = "off" | "factory" | "on";
 
+/** Les six états de piste du jeu, par grip de départ croissant — la liste que
+ * Content Manager propose, et qui vient du même fichier (`tracks.ini`). Le
+ * pourcentage de départ **est** l'identifiant de l'état : c'est le seul des
+ * quatre paramètres que l'écran retient, `quickdrive.rs` retrouve les trois
+ * autres à partir de lui. */
+export const TRACK_GRIPS = [86, 89, 95, 96, 98, 100] as const;
+
+/** Recale un grip enregistré sur la liste offerte.
+ *
+ * Un preset antérieur à l'alignement sur la table du jeu peut porter une
+ * valeur qui n'y figure plus (92 % a existé, inventé) : sans ce recalage, le
+ * segmenté n'en marquerait aucun comme actif. À égale distance le plus
+ * adhérent gagne, comme côté Rust — une piste un peu plus roulante est le
+ * repli indulgent. */
+export function nearestGrip(grip: number): number {
+  let best: number = TRACK_GRIPS[0];
+  for (const g of TRACK_GRIPS) {
+    const d = Math.abs(g - grip);
+    const bd = Math.abs(best - grip);
+    if (d < bd || (d === bd && g > best)) best = g;
+  }
+  return best;
+}
+
 /** Saison optionnelle associée à une session (§8.6bis) — influence la
  * température recommandée et, best-effort côté CSP, le rendu (arbres,
  * neige). "" = aucune saison choisie. */
