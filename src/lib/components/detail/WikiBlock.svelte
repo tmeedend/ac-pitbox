@@ -599,14 +599,28 @@
     font-weight: 600;
     padding-bottom: 4px;
   }
-  /* Les illustrations du corps flottent à droite, comme sur la page d'origine.
-     Posées en pleine largeur elles coupaient le fil du texte à chaque section —
-     l'inverse de l'aération qu'on leur demande. */
-  .article-html :global(figure) {
+  /* **Une colonne d'illustrations à droite, et le `clear` en est la clé.**
+     Sans lui, trois vignettes consécutives se rangent côte à côte et écrasent
+     le texte en une bande étroite — c'est ce qu'on voyait. Avec, chacune passe
+     sous la précédente : la colonne de Wikipédia.
+
+     Et seules les figures que l'article **marque** comme alignées flottent :
+     `mw-halign-right` est écrit dans le HTML, le deviner pour toutes faisait
+     flotter jusqu'à celles qui doivent rester dans le fil. */
+  .article-html :global(figure.wiki-right) {
     float: right;
-    width: 240px;
-    max-width: 45%;
+    clear: right;
+    max-width: min(280px, 45%);
     margin: 4px 0 10px 16px;
+  }
+  .article-html :global(figure.wiki-left) {
+    float: left;
+    clear: left;
+    max-width: min(280px, 45%);
+    margin: 4px 16px 10px 0;
+  }
+  .article-html :global(figure) {
+    margin: 10px 0;
   }
   .article-html :global(figcaption) {
     font-size: 11px;
@@ -614,11 +628,12 @@
   }
   /* Trop étroit pour un flottant : l'image reprend le fil, centrée. */
   @container detail (max-width: 620px) {
-    .article-html :global(figure) {
+    .article-html :global(figure.wiki-right),
+    .article-html :global(figure.wiki-left) {
       float: none;
-      width: auto;
       max-width: 100%;
       margin-left: 0;
+      margin-right: 0;
     }
   }
   .article-html :global([data-href]) {

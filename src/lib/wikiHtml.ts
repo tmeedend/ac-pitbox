@@ -107,6 +107,15 @@ const DROPPED_CLASSES = [
 const CLASS_MAP: [string, string][] = [
   ["infobox", "wiki-infobox"],
   ["wikitable", "wiki-table"],
+  // **L'alignement des vignettes est une donnee, pas une devinette.** Mesure
+  // sur `Audi TT` : MediaWiki emet
+  // `<figure class="mw-default-size mw-halign-right" typeof="mw:File/Thumb">`.
+  // Sans ces trois classes, toutes les illustrations flottaient a droite --- y
+  // compris celles que l'article veut dans le fil --- et rien ne disait
+  // lesquelles.
+  ["mw-halign-right", "wiki-right"],
+  ["mw-halign-left", "wiki-left"],
+  ["mw-halign-center", "wiki-center"],
 ];
 
 /** Attributs conservés, par balise. Rien d'autre ne passe — en particulier
@@ -269,6 +278,15 @@ function rebuild(node: Node, into: Node, lang: string, images: Map<string, Allow
   // Une figure vidée de son image (non libre) ne laisse pas sa légende
   // orpheline flotter au milieu du texte.
   if (tag === "figure" && !copy.querySelector("img")) return;
+
+  // Le crédit est pose juste apres l'image, donc **avant** la legende de
+  // l'article. A la lecture, l'ordre naturel est l'inverse : la legende dit ce
+  // qu'on voit, le credit dit d'ou ca vient. On le renvoie en fin de figure.
+  if (tag === "figure") {
+    for (const credit of Array.from(copy.querySelectorAll(":scope > .wiki-credit"))) {
+      copy.appendChild(credit);
+    }
+  }
   into.appendChild(copy);
 }
 
