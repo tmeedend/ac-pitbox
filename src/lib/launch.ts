@@ -24,6 +24,13 @@ export type AssistLevel = "off" | "factory" | "on";
  * autres à partir de lui. */
 export const TRACK_GRIPS = [86, 89, 95, 96, 98, 100] as const;
 
+/** « Auto » : l'état de piste est laissé à la météo — le `WeatherDefined` de
+ * Content Manager, et la première entrée de sa liste. Sentinelle plutôt qu'un
+ * second champ : l'écran n'offre qu'un choix parmi sept, et deux champs pour
+ * une seule décision finissent toujours par se contredire. Aucun état réel ne
+ * vaut 0 %. */
+export const GRIP_WEATHER = 0;
+
 /** Recale un grip enregistré sur la liste offerte.
  *
  * Un preset antérieur à l'alignement sur la table du jeu peut porter une
@@ -32,6 +39,9 @@ export const TRACK_GRIPS = [86, 89, 95, 96, 98, 100] as const;
  * adhérent gagne, comme côté Rust — une piste un peu plus roulante est le
  * repli indulgent. */
 export function nearestGrip(grip: number): number {
+  // « Auto » n'est pas un grip : le recalage ne doit pas le prendre pour une
+  // valeur basse et le remplacer par la piste la plus glissante.
+  if (grip === GRIP_WEATHER) return grip;
   let best: number = TRACK_GRIPS[0];
   for (const g of TRACK_GRIPS) {
     const d = Math.abs(g - grip);

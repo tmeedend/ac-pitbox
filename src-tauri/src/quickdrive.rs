@@ -129,6 +129,27 @@ pub struct TrackState {
     pub description: &'static str,
 }
 
+/// « Auto » : l'état est laissé à la météo (§9.3). Sentinelle plutôt qu'un
+/// second champ, parce que l'écran n'offre qu'**un** choix parmi sept — deux
+/// champs pour une seule décision finissent toujours par se contredire. Aucun
+/// état réel ne vaut 0 %.
+pub const GRIP_WEATHER: u32 = 0;
+
+/// Ce que porte « Auto », repris de `TrackStateViewModelBase.CreateBuiltIn`
+/// de Content Manager : le drapeau, et les valeurs de `GREEN` en repli.
+///
+/// Le repli n'est pas décoratif — `ToProperties()` écrit les quatre nombres
+/// dans tous les cas, `WeatherDefined` compris. Une session « Auto » dont la
+/// météo ne dit rien de la piste roule donc sur une piste verte, ce que la
+/// description de CM énonce mot pour mot.
+const WEATHER_STATE: TrackState = TrackState {
+    start: 95,
+    transfer: 90,
+    randomness: 2,
+    lap_gain: 132,
+    description: "Track state specified by weather, or Green, in case weather doesn't specify track state",
+};
+
 /// L'état de piste le plus proche du grip demandé.
 ///
 /// Par proximité et non par égalité : un preset enregistré avant que la liste
@@ -164,16 +185,26 @@ pub fn track_state_for(grip: u32) -> &'static TrackState {
 /// et il n'est d'ailleurs pas affiché en pourcentage.
 ///
 /// `d` est cosmétique : CM l'affiche, le jeu ne la lit pas — son
-/// `[DYNAMIC_TRACK]` n'a pas de clé `DESCRIPTION`.
+/// `[DYNAMIC_TRACK]` n'a pas de clé `DESCRIPTION`. Et `w` est `WeatherDefined`,
+/// le « Auto (set by weather) » de la liste de CM — voir [`GRIP_WEATHER`].
+///
+/// **Le nom de l'état ne part jamais.** « Green » n'est qu'un libellé
+/// d'interface pour une combinaison de quatre nombres ; rien dans le preset ne
+/// le transporte. Ce sont donc bien les nombres qu'il faut envoyer justes.
 fn build_track_properties(s: &RaceSetup) -> Value {
-    let st = track_state_for(s.grip);
+    let weather_defined = s.grip == GRIP_WEATHER;
+    let st = if weather_defined {
+        &WEATHER_STATE
+    } else {
+        track_state_for(s.grip)
+    };
     json!({
         "s": f64::from(st.start) / 100.0,
         "t": f64::from(st.transfer) / 100.0,
         "r": f64::from(st.randomness) / 100.0,
         "g": st.lap_gain,
         "d": st.description,
-        "w": false,
+        "w": weather_defined,
     })
 }
 
@@ -631,6 +662,26 @@ mod tests {
         assert_eq!(track["r"], 0.0);
         assert_eq!(track["g"], 1);
         assert_eq!(track["d"], "Perfect track for hotlapping.");
+    }
+
+    /// §9.3 — « Auto » pose le drapeau que CM appelle `WeatherDefined`, et
+    /// envoie tout de même quatre nombres : `ToProperties()` les écrit dans
+    /// tous les cas, donc une météo muette sur la piste la laisse verte.
+    #[test]
+    fn the_weather_driven_state_sets_the_flag_and_falls_back_on_green() {
+        let mut s = base_setup(SessionType::Practice);
+        s.grip = GRIP_WEATHER;
+        let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
+        let track: Value = serde_json::from_str(v["TrackPropertiesData"].as_str().unwrap()).unwrap();
+        assert_eq!(track["w"], true, "drapeau posé");
+        assert_eq!(track["s"], 0.95, "repli sur Green");
+        assert_eq!(track["g"], 132);
+
+        // Tout autre état laisse le drapeau à terre.
+        s.grip = 100;
+        let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
+        let track: Value = serde_json::from_str(v["TrackPropertiesData"].as_str().unwrap()).unwrap();
+        assert_eq!(track["w"], false);
     }
 
     /// §9.3 — l'aléa est un pourcentage comme le grip de départ, pas une valeur

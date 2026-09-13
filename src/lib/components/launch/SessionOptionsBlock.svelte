@@ -4,7 +4,7 @@
   // do (grip evolution, penalties). Pure presentation: everything is a direct
   // read/write of `setup` (state shared with the parent, §8.6bis) — no logic
   // to lift up.
-  import { TRACK_GRIPS, type RaceSetup } from "$lib/launch";
+  import { GRIP_WEATHER, TRACK_GRIPS, type RaceSetup } from "$lib/launch";
   import { t } from "$lib/i18n/index.svelte";
   import NumberStepper from "../NumberStepper.svelte";
   import Seg from "../Seg.svelte";
@@ -123,18 +123,25 @@
              l'ordre et avec les noms de sa propre liste — celle que Content
              Manager affiche aussi. Vertical : six libellés nommés ne tiennent
              pas sur une ligne dans cette colonne, et une liste d'états se lit
-             de haut en bas. Chacun porte au survol ce que le jeu en dit. -->
+             de haut en bas. Chacun porte au survol ce que le jeu en dit.
+
+             « Auto » en tête, comme chez CM : ce n'est pas un état mais le
+             drapeau `WeatherDefined`, qui laisse la météo décider et retombe
+             sur Verte si elle ne dit rien. -->
         <div>
           <span class="fk lbl-key">{t("launch.gripEvolution")}</span>
           <Seg
             vertical
             value={String(setup.grip)}
             onselect={(v) => (setup.grip = Number(v))}
-            items={TRACK_GRIPS.map((g) => ({
-              value: String(g),
-              label: t(`launch.grip${g}`),
-              title: t(`launch.grip${g}Desc`),
-            }))}
+            items={[
+              { value: String(GRIP_WEATHER), label: t("launch.gripAuto"), title: t("launch.gripAutoDesc") },
+              ...TRACK_GRIPS.map((g) => ({
+                value: String(g),
+                label: t(`launch.grip${g}`),
+                title: t(`launch.grip${g}Desc`),
+              })),
+            ]}
           />
         </div>
         <label class="check"><input type="checkbox" bind:checked={setup.penalties} /><span>{t("launch.penalties")}</span></label>

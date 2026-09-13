@@ -944,6 +944,8 @@
     "jumpStartTeleport": "Téléport au stand",
     "jumpStartDrivethrough": "Drive-through",
     "gripEvolution": "Évolution du grip",
+    "gripAuto": "Auto (selon la météo)",
+    "gripAutoDesc": "La météo décide de l'état de la piste ; piste verte si elle n'en dit rien.",
     "grip86": "Poussiéreuse (86 %)",
     "grip86Desc": "Très glissante, s'améliore vite au fil des tours.",
     "grip89": "Ancienne (89 %)",

@@ -944,6 +944,8 @@
     "jumpStartTeleport": "Teleport to pits",
     "jumpStartDrivethrough": "Drive-through",
     "gripEvolution": "Grip evolution",
+    "gripAuto": "Auto (set by weather)",
+    "gripAutoDesc": "The weather decides the track state; green track if it says nothing about it.",
     "grip86": "Dusty (86%)",
     "grip86Desc": "Very slippery, improves quickly over the laps.",
     "grip89": "Old (89%)",
