@@ -23,11 +23,22 @@
   // local gestures.
   import type { CardIndex, FilterDef, FilterMap } from "$lib/filters";
   import { chipAvailable, isChipOn, toggleChip, type ChipKind } from "$lib/opponentPool";
-  import { AI_LEVEL_MAX, AI_LEVEL_MIN, type Opponent, type RaceSetup, type SkinItem } from "$lib/launch";
+  import {
+    AGGRESSION_MAX,
+    AGGRESSION_MIN,
+    AGGRESSION_STEP,
+    AI_LEVEL_MAX,
+    AI_LEVEL_MIN,
+    type Opponent,
+    type RaceSetup,
+    type SkinItem,
+    type StartMode,
+  } from "$lib/launch";
   import { previewSrc, type ModCard } from "$lib/library";
   import { t } from "$lib/i18n/index.svelte";
   import FilterBar from "../filters/FilterBar.svelte";
   import NumberStepper from "../NumberStepper.svelte";
+  import Slider from "../Slider.svelte";
 
   let {
     setup,
@@ -69,7 +80,7 @@
     onregenerate: () => void;
     onremove: (index: number) => void;
     onduplicate: (index: number) => void;
-    onsetlevel: (index: number, level: number) => void;
+    onsetlevel: (index: number, level: number | null) => void;
     onopenpicker: (index: number) => void;
   } = $props();
 
@@ -116,6 +127,27 @@
   // CSS by a `clamp()`, which knows the real width of the track where this
   // file does not.
   const aiLabelsMerged = $derived(aiMaxPct - aiMinPct < 20);
+
+  // --- Starting position (§4.4) --------------------------------------------
+  //
+  // Race only: a track day has no grid order to take a place in. The last rank
+  // is `opponents + 1` — the player counts as a car — and the four modes are
+  // resolved Rust-side, where the grid size is known for good at the moment
+  // the preset is written.
+  const startModes: { value: StartMode; labelKey: string }[] = [
+    { value: "last", labelKey: "launch.startLast" },
+    { value: "first", labelKey: "launch.startFirst" },
+    { value: "random", labelKey: "launch.startRandom" },
+    { value: "custom", labelKey: "launch.startCustom" },
+  ];
+  const lastRank = $derived(setup.opponents.length + 1);
+  const hasExplicitStrength = $derived(setup.opponents.some((o) => o.ai_level != null));
+  // Re-bounded as the grid shrinks, rather than refused at launch: a rank that
+  // stopped being reachable must not be a reason not to start.
+  $effect(() => {
+    if (setup.start_position > lastRank) setup.start_position = lastRank;
+    if (setup.start_position < 1) setup.start_position = 1;
+  });
 
   function opponentName(carId: string): string {
     return carPool.find((c) => c.id_interne === carId)?.display_name ?? carId;
@@ -231,7 +263,33 @@
         {/if}
       </div>
     </div>
+
+    <!-- Aggression sits next to difficulty because the two decide the same
+         thing: the character of the race. Default 0, Content Manager's own —
+         not a number to "improve". -->
+    <div class="aggr-field">
+      <Slider
+        compact
+        label={t("launch.aggressionLabel")}
+        min={AGGRESSION_MIN}
+        max={AGGRESSION_MAX}
+        step={AGGRESSION_STEP}
+        value={setup.aggression}
+        display={`${setup.aggression}%`}
+        oninput={(v) => (setup.aggression = v)}
+      />
+    </div>
   </div>
+
+  <!-- §4.5: the trap that has cost Content Manager users years. A strength
+       posed on a line does NOT replace the global difficulty — the two
+       multiply — so moving the global slider has a large effect even on lines
+       one has set by hand. Said here, once, and only while such a line exists:
+       a line of explanation at the moment it starts to matter beats ten forum
+       threads. -->
+  {#if hasExplicitStrength}
+    <p class="warnbox thin">{t("launch.explicitStrengthNote")}</p>
+  {/if}
 
   <!-- A statement, not a block: the grid is still playable, so no red (§3.5). -->
   {#if poolCount > 0 && poolCount < opponentCount}
@@ -249,6 +307,16 @@
          grid is right but the liveries repeat, versus the grid is wrong. -->
     <div class="oppo-h lbl">
       <span>{t("launch.gridHeader", { count: setup.opponents.length })}</span>
+      <span class="oppo-sp"></span>
+      {#if setup.session_type === "race"}
+        <span class="fk lbl-key">{t("launch.startLabel")}</span>
+        <select class="oppo-start" bind:value={setup.start_mode} aria-label={t("launch.startLabel")}>
+          {#each startModes as m (m.value)}<option value={m.value}>{t(m.labelKey)}</option>{/each}
+        </select>
+        {#if setup.start_mode === "custom"}
+          <NumberStepper width={58} min={1} max={lastRank} bind:value={setup.start_position} />
+        {/if}
+      {/if}
       <button class="oppo-regen" type="button" disabled={!setup.opponents.length} onclick={onregenerate}
         >{t("launch.regenerateGrid")}</button
       >
@@ -268,15 +336,21 @@
         <!-- Rapport poids/puissance (L3) : colonne tenue vide pour que rien ne
              se déplace quand elle se remplira. -->
         <span class="oppo-ratio"></span>
+        <!-- `Auto` is not a value we draw: it is the absence of an override,
+             and the game draws inside the global range. Hence a placeholder
+             rather than a number — emptying the field is the gesture that puts
+             the cell back to `Auto`, which is why no menu is needed here. -->
         <input
           class="oppo-force mono"
+          class:is-auto={opp.ai_level == null}
           type="number"
           min={RANGE_MIN}
           max={RANGE_MAX}
-          value={opp.ai_level}
+          placeholder={t("launch.autoCell")}
+          value={opp.ai_level ?? ""}
           title={t("launch.opponentLevelTooltip")}
           onclick={(e) => e.stopPropagation()}
-          onchange={(e) => onsetlevel(i, Number(e.currentTarget.value))}
+          onchange={(e) => onsetlevel(i, e.currentTarget.value.trim() === "" ? null : Number(e.currentTarget.value))}
         />
         <button
           class="oppo-dup"
@@ -361,6 +435,22 @@
     background: transparent;
     color: var(--faint);
     cursor: not-allowed;
+  }
+  /* Pushes the start position and `Regenerate` to the right of the title. */
+  .oppo-sp {
+    flex: 1;
+  }
+  .oppo-start {
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    color: var(--txt2);
+    font-size: 9.5px;
+    padding: 2px 4px;
+  }
+  /* Same width as the difficulty track, so the three settings of the row line
+     up on their left edges rather than drifting apart. */
+  .aggr-field {
+    width: 170px;
   }
   /* `.warnbox` carries the colours; only the spacing is local. */
   .thin {
@@ -499,6 +589,11 @@
     text-align: center;
     flex: none;
     appearance: textfield;
+  }
+  /* Dimmed like any `Auto` cell — the placeholder is what shows, and it must
+     read as "not decided", not as a value. */
+  .oppo-force.is-auto::placeholder {
+    color: var(--faint);
   }
   .oppo-row:hover .oppo-force {
     background: var(--bg);

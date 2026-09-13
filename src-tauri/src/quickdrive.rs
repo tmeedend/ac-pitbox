@@ -19,7 +19,7 @@
 
 use serde_json::{json, Value};
 
-use crate::launch::{Opponent, PracticeStart, RaceSetup, SessionType};
+use crate::launch::{PracticeStart, RaceSetup, SessionType, StartMode};
 
 /// `TrackId` façon CM : `<piste>/<layout>` si un layout est choisi (même
 /// convention que `race/csp` côté CM : `trackId.Split('/')`), sinon la piste
@@ -214,13 +214,30 @@ fn build_track_properties(s: &RaceSetup) -> Value {
 const AI_LEVEL_MIN: f64 = 70.0;
 const AI_LEVEL_MAX: f64 = 100.0;
 
-/// Grille d'adversaires explicite (§8.6, mode course) : `ModeId:"manual"`
-/// avec des tableaux parallèles `CarIds`/`SkinIds`/`AiLevels` — un index par
-/// adversaire, valeur confirmée en lisant `RaceGridViewModel.cs`
-/// (AcManager.Controls) : c'est exactement ce que sérialise le mode grille
-/// manuel de CM, pas seulement un tirage aléatoire dans un vivier.
-/// `ShuffleCandidates:false` pour que CM n'aille pas re-mélanger notre ordre.
-fn build_grid(opponents: &[Opponent]) -> Value {
+/// Ce que Content Manager écrit dans un tableau **numérique** par ligne pour
+/// dire « laissé au jeu » (§4.1). Relevé sur un preset réel, où il voisine un
+/// `"0"` explicite — les deux ne veulent pas dire la même chose.
+const AUTO_NUMBER: i32 = -1;
+
+/// Grille d'adversaires explicite (§4, mode course).
+///
+/// **Le schéma n'est plus déduit : il est relevé** sur un preset de grille réel
+/// enregistré depuis l'éditeur de CM (`Presets/Race Grids/*.cmpreset`, qui se
+/// trouve être exactement cet objet-ci, JSON brut sans en-tête). Trois choses
+/// qu'aucune lecture de source n'avait données :
+///
+/// - les six tableaux par ligne s'appellent `AiLevels`, `AiAggressions`,
+///   `Ballasts`, `Restrictors`, `Names` et `Nationalities` ;
+/// - **leurs valeurs sont des chaînes**, pas des nombres — `"74"`, `"100"` ;
+/// - **`Auto` existe déjà dans le format**, et il a deux écritures selon le
+///   type : `"-1"` pour les nombres, `null` pour les textes. C'est ce qui
+///   permet de distinguer « laissé au hasard » de « posé à zéro », que le
+///   preks de référence montre côte à côte (`"0"` et `"-1"` dans
+///   `AiAggressions`).
+///
+/// `ShuffleCandidates: false` pour que CM ne re-mélange pas notre ordre.
+fn build_grid(s: &RaceSetup) -> Value {
+    let opponents = &s.opponents;
     let car_ids: Vec<&str> = opponents.iter().map(|o| o.car_id.as_str()).collect();
     let skin_ids: Vec<Value> = opponents
         .iter()
@@ -232,9 +249,25 @@ fn build_grid(opponents: &[Opponent]) -> Value {
     // recalerait lui-même — la session ne serait alors pas celle que Pit Box a
     // affichée. Le recalage est ici, à la frontière, plutôt que seulement côté
     // écran : c'est le seul endroit par lequel toutes les sources passent.
-    let ai_levels: Vec<f64> = opponents
+    let ai_levels: Vec<String> = opponents
         .iter()
-        .map(|o| (o.ai_level as f64).clamp(AI_LEVEL_MIN, AI_LEVEL_MAX))
+        .map(|o| match o.ai_level {
+            Some(l) => (f64::from(l).clamp(AI_LEVEL_MIN, AI_LEVEL_MAX) as u32).to_string(),
+            None => AUTO_NUMBER.to_string(),
+        })
+        .collect();
+    // Aucune colonne d'agressivité par ligne (§4.2 n'en demande pas) : toutes
+    // les lignes sont donc `Auto`, et c'est la valeur globale qui décide.
+    let aggressions: Vec<String> = opponents.iter().map(|_| AUTO_NUMBER.to_string()).collect();
+    let ballasts: Vec<String> = opponents.iter().map(|o| o.ballast.min(100).to_string()).collect();
+    let restrictors: Vec<String> = opponents.iter().map(|o| o.restrictor.min(100).to_string()).collect();
+    let names: Vec<Value> = opponents
+        .iter()
+        .map(|o| o.driver_name.as_deref().map(Value::from).unwrap_or(Value::Null))
+        .collect();
+    let nationalities: Vec<Value> = opponents
+        .iter()
+        .map(|o| o.nationality.as_deref().map(Value::from).unwrap_or(Value::Null))
         .collect();
     json!({
         "ModeId": "manual",
@@ -242,20 +275,41 @@ fn build_grid(opponents: &[Opponent]) -> Value {
         "CarIds": car_ids,
         "SkinIds": skin_ids,
         "AiLevels": ai_levels,
+        "AiAggressions": aggressions,
+        "Ballasts": ballasts,
+        "Restrictors": restrictors,
+        "Names": names,
+        "Nationalities": nationalities,
         "ShuffleCandidates": false,
         "VarietyLimitation": 0,
         "OpponentsNumber": opponents.len(),
-        "StartingPosition": opponents.len() + 1,
-        "AiLevel": 95.0,
-        "AiLevelMin": 85.0,
+        "StartingPosition": starting_position(s),
+        "AiLevel": f64::from(s.ai_level_max),
+        "AiLevelMin": f64::from(s.ai_level_min),
         "AiLevelArrangeRandom": 0.0,
         "AiLevelArrangeReverse": false,
         "AiLevelArrangePowerRatio": false,
-        "AiAggression": 0.0,
-        "AiAggressionMin": 0.0,
+        "AiAggression": f64::from(s.aggression.min(100)),
+        "AiAggressionMin": f64::from(s.aggression.min(100)),
         "AiAggressionArrangeRandom": 0.0,
         "AiAggressionArrangeReverse": false,
     })
+}
+
+/// Rang de départ du joueur (§4.4), résolu **ici** parce que trois des quatre
+/// modes dépendent de la taille du plateau, que seul ce moment connaît pour de
+/// bon. Les rangs sont 1-based, et le dernier est `adversaires + 1` : le joueur
+/// compte pour une voiture.
+fn starting_position(s: &RaceSetup) -> usize {
+    let last = s.opponents.len() + 1;
+    match s.start_mode {
+        StartMode::Last => last,
+        StartMode::First => 1,
+        StartMode::Random => fastrand::usize(1..=last),
+        // Borné plutôt que refusé : réduire le nombre d'adversaires après avoir
+        // saisi un rang ne doit pas empêcher de lancer la session.
+        StartMode::Custom => (s.start_position.max(1) as usize).min(last),
+    }
 }
 
 /// `ModeData` (§8.6) pour `QuickDrive_Practice.xaml` — schéma confirmé sur
@@ -306,7 +360,7 @@ fn mode_data_weekend(s: &RaceSetup) -> String {
         "Penalties": s.penalties,
         "JumpStartPenalty": s.jump_start_penalty,
         "LapsNumber": s.laps,
-        "RaceGridSerialized": build_grid(&s.opponents).to_string(),
+        "RaceGridSerialized": build_grid(s).to_string(),
         "Version": 2,
     })
     .to_string()
@@ -322,7 +376,7 @@ fn mode_data_race(s: &RaceSetup) -> String {
         "Penalties": s.penalties,
         "JumpStartPenalty": s.jump_start_penalty,
         "LapsNumber": s.laps,
-        "RaceGridSerialized": build_grid(&s.opponents).to_string(),
+        "RaceGridSerialized": build_grid(s).to_string(),
         "Version": 2,
     })
     .to_string()
@@ -340,7 +394,7 @@ fn mode_data_trackday(s: &RaceSetup) -> String {
         "Penalties": s.penalties,
         "JumpStartPenalty": s.jump_start_penalty,
         "LapsNumber": s.laps,
-        "RaceGridSerialized": build_grid(&s.opponents).to_string(),
+        "RaceGridSerialized": build_grid(s).to_string(),
         "Version": 2,
     })
     .to_string()
@@ -431,7 +485,14 @@ pub fn build_preset(s: &RaceSetup) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::launch::{AssistLevel, RaceSetup};
+    use crate::launch::{AssistLevel, Opponent, RaceSetup};
+
+    /// La grille du preset, deux couches de JSON-dans-une-chaîne plus bas.
+    fn grid_of(s: &RaceSetup) -> Value {
+        let v: Value = serde_json::from_str(&build_preset(s).unwrap()).unwrap();
+        let mode: Value = serde_json::from_str(v["ModeData"].as_str().unwrap()).unwrap();
+        serde_json::from_str(mode["RaceGridSerialized"].as_str().unwrap()).unwrap()
+    }
 
     fn base_setup(session_type: SessionType) -> RaceSetup {
         RaceSetup {
@@ -444,6 +505,9 @@ mod tests {
             opponents: Vec::new(),
             ai_level_min: 92,
             ai_level_max: 98,
+            aggression: 0,
+            start_mode: StartMode::Last,
+            start_position: 0,
             laps: 5,
             weather: "sol_01_clear".into(),
             time_hours: 13.0,
@@ -525,13 +589,15 @@ mod tests {
         s.opponents = vec![
             Opponent {
                 car_id: "ks_ferrari_488_gt3".into(),
-                ai_level: 92,
+                ai_level: Some(92),
                 car_skin: Some("red".into()),
+                ..Default::default()
             },
             Opponent {
                 car_id: "ks_porsche_991_gt3_r".into(),
-                ai_level: 87,
+                ai_level: Some(87),
                 car_skin: None,
+                ..Default::default()
             },
         ];
         let json = build_preset(&s).unwrap();
@@ -550,7 +616,8 @@ mod tests {
         assert_eq!(grid["CarIds"][1], "ks_porsche_991_gt3_r");
         assert_eq!(grid["SkinIds"][0], "red");
         assert!(grid["SkinIds"][1].is_null());
-        assert_eq!(grid["AiLevels"][0], 92.0);
+        // Des CHAÎNES, comme dans les presets que CM écrit lui-même.
+        assert_eq!(grid["AiLevels"][0], "92");
     }
 
     /// Bug réel : `null` ne saute pas les essais libres, CM le lit comme
@@ -578,8 +645,9 @@ mod tests {
         s.laps = 12;
         s.opponents = vec![Opponent {
             car_id: "ks_ferrari_488_gt3".into(),
-            ai_level: 92,
+            ai_level: Some(92),
             car_skin: Some("red".into()),
+            ..Default::default()
         }];
         let json = build_preset(&s).unwrap();
         let v: Value = serde_json::from_str(&json).unwrap();
@@ -604,8 +672,9 @@ mod tests {
         s.laps = 2;
         s.opponents = vec![Opponent {
             car_id: "ks_praga_r1".into(),
-            ai_level: 90,
+            ai_level: Some(90),
             car_skin: None,
+            ..Default::default()
         }];
         let json = build_preset(&s).unwrap();
         let v: Value = serde_json::from_str(&json).unwrap();
@@ -762,28 +831,113 @@ mod tests {
         s.opponents = vec![
             Opponent {
                 car_id: "a".into(),
-                ai_level: 60,
+                ai_level: Some(60),
                 car_skin: None,
+                ..Default::default()
             },
             Opponent {
                 car_id: "b".into(),
-                ai_level: 85,
+                ai_level: Some(85),
                 car_skin: None,
+                ..Default::default()
             },
             Opponent {
                 car_id: "c".into(),
-                ai_level: 140,
+                ai_level: Some(140),
                 car_skin: None,
+                ..Default::default()
             },
         ];
-        let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
-        let mode: Value = serde_json::from_str(v["ModeData"].as_str().unwrap()).unwrap();
-        let grid: Value = serde_json::from_str(mode["RaceGridSerialized"].as_str().unwrap()).unwrap();
+        let grid = grid_of(&s);
         assert_eq!(
             grid["AiLevels"],
-            serde_json::json!([70.0, 85.0, 100.0]),
+            serde_json::json!(["70", "85", "100"]),
             "forces bornées à 70-100"
         );
+    }
+
+    /// Règle protégée : `Auto` s'écrit `"-1"` sur un nombre et `null` sur un
+    /// texte (§4.1), les deux relevés sur un preset de grille réel. La
+    /// distinction compte : `"0"` d'agressivité y voisine `"-1"`, et ce n'est
+    /// pas la même chose — l'un est posé à zéro, l'autre laissé au jeu.
+    #[test]
+    fn auto_cells_travel_as_minus_one_or_null_depending_on_the_type() {
+        let mut s = base_setup(SessionType::Race);
+        s.opponents = vec![
+            Opponent {
+                car_id: "a".into(),
+                ai_level: None,
+                driver_name: None,
+                nationality: None,
+                ..Default::default()
+            },
+            Opponent {
+                car_id: "b".into(),
+                ai_level: Some(88),
+                driver_name: Some("Bob".into()),
+                nationality: Some("Argentina".into()),
+                ballast: 40,
+                restrictor: 15,
+                ..Default::default()
+            },
+        ];
+        let grid = grid_of(&s);
+        assert_eq!(grid["AiLevels"], serde_json::json!(["-1", "88"]), "force Auto en -1");
+        assert_eq!(grid["Names"], serde_json::json!([null, "Bob"]), "nom Auto en null");
+        assert_eq!(
+            grid["Nationalities"],
+            serde_json::json!([null, "Argentina"]),
+            "nationalité Auto en null"
+        );
+        // Pas d'Auto sur ces deux-là : « aucun lest » se dit par 0.
+        assert_eq!(grid["Ballasts"], serde_json::json!(["0", "40"]));
+        assert_eq!(grid["Restrictors"], serde_json::json!(["0", "15"]));
+    }
+
+    /// Règle protégée : la fourchette réglée à l'écran atteint le preset.
+    /// Elle était codée en dur sur 95/85, donc jamais envoyée — et une ligne
+    /// `Auto` n'aurait alors rien voulu dire, puisque c'est dedans que le jeu
+    /// tire. `AiLevel` est le HAUT de la fourchette, `AiLevelMin` le bas.
+    #[test]
+    fn the_difficulty_range_reaches_the_grid() {
+        let mut s = base_setup(SessionType::Race);
+        s.ai_level_min = 78;
+        s.ai_level_max = 94;
+        s.aggression = 35;
+        let grid = grid_of(&s);
+        assert_eq!(grid["AiLevelMin"], 78.0, "bas de la fourchette");
+        assert_eq!(grid["AiLevel"], 94.0, "haut de la fourchette");
+        assert_eq!(grid["AiAggression"], 35.0);
+        assert_eq!(grid["AiAggressionMin"], 35.0, "curseur simple : les deux bornes égales");
+    }
+
+    /// Règle protégée : les quatre positions de départ (§4.4), et le fait que
+    /// le dernier rang vaut `adversaires + 1` — le joueur compte pour une
+    /// voiture. Un rang saisi puis rendu impossible par un plateau réduit est
+    /// borné, jamais refusé : ça n'empêche pas de lancer la session.
+    #[test]
+    fn the_starting_position_counts_the_player_and_stays_on_the_grid() {
+        let mut s = base_setup(SessionType::Race);
+        s.opponents = (0..5)
+            .map(|i| Opponent {
+                car_id: format!("c{i}"),
+                ..Default::default()
+            })
+            .collect();
+        s.start_mode = StartMode::Last;
+        assert_eq!(grid_of(&s)["StartingPosition"], 6, "5 adversaires + le joueur");
+        s.start_mode = StartMode::First;
+        assert_eq!(grid_of(&s)["StartingPosition"], 1);
+        s.start_mode = StartMode::Custom;
+        s.start_position = 3;
+        assert_eq!(grid_of(&s)["StartingPosition"], 3);
+        s.start_position = 40;
+        assert_eq!(grid_of(&s)["StartingPosition"], 6, "borné au dernier rang");
+        s.start_position = 0;
+        assert_eq!(grid_of(&s)["StartingPosition"], 1, "jamais sous le premier rang");
+        s.start_mode = StartMode::Random;
+        let drawn = grid_of(&s)["StartingPosition"].as_u64().unwrap();
+        assert!((1..=6).contains(&drawn), "tiré sur la grille, {drawn}");
     }
 
     #[test]

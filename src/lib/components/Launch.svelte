@@ -7,6 +7,8 @@
     AI_LEVEL_MAX,
     AI_LEVEL_MIN,
     clampAiLevel,
+    newOpponent,
+    type StartMode,
     isSteamRunning,
     nearestGrip,
     listModSkins,
@@ -79,6 +81,9 @@
     opponents: [],
     ai_level_min: 92,
     ai_level_max: 98,
+    aggression: 0,
+    start_mode: "last",
+    start_position: 1,
     laps: 5,
     weather: "",
     time_hours: 13,
@@ -216,12 +221,6 @@
   const gridMatches = $derived(buildPredicate(gridDefs, gridFilters, gridIndex.ctx));
   const gridPool = $derived(carPool.filter((c) => gridMatches(c) && matchesQuery(c, gridQuery)));
 
-  function randomLevel(): number {
-    const { ai_level_min: min, ai_level_max: max } = setup;
-    if (max <= min) return min;
-    return Math.round(min + Math.random() * (max - min));
-  }
-
   // --- Skins par voiture (cache, §8.6/§8.6bis) : chargés à la demande pour
   // assigner un skin à chaque adversaire, et réutilisés par la popup. ---
   let skinsByCarId = $state<Record<string, SkinItem[]>>({});
@@ -281,7 +280,7 @@
     for (const c of picks) {
       const used = usedByCar.get(c.id_interne) ?? new Set<string>();
       usedByCar.set(c.id_interne, used);
-      out.push({ car_id: c.id_interne, ai_level: randomLevel(), car_skin: await skinFor(c.id_interne, used) });
+      out.push(newOpponent(c.id_interne, await skinFor(c.id_interne, used)));
     }
     return out;
   }
@@ -307,7 +306,11 @@
     for (const opp of setup.opponents) {
       const used = usedByCar.get(opp.car_id) ?? new Set<string>();
       usedByCar.set(opp.car_id, used);
-      out.push({ car_id: opp.car_id, ai_level: randomLevel(), car_skin: await skinFor(opp.car_id, used) });
+      // La livrée est retirée au sort, **pas** les cellules `Auto` : `Auto`
+      // n'est pas une valeur qu'on tire, c'est l'absence de surcharge, et
+      // c'est le jeu qui tire dedans (§4.1). Ce qui change vraiment ici est
+      // donc la livrée — et avec elle le nom de pilote `Auto`, qui en vient.
+      out.push({ ...opp, car_skin: await skinFor(opp.car_id, used) });
     }
     if (gen === opponentsGen) setup.opponents = out;
   }
@@ -332,10 +335,27 @@
 
   /** Réglage individuel du niveau IA d'un adversaire (clic sur le chiffre),
    * indépendant de la fourchette globale qui ne sert qu'à la génération. */
-  function setOpponentLevel(index: number, raw: number) {
-    const level = clampAiLevel(raw);
+  /** Remet une ligne relue sur disque dans la forme courante : les quatre
+   * champs de §4.2 n'existaient pas, et `??` ne suffirait pas — un `undefined`
+   * qui traverserait jusqu'au backend s'y lirait comme un champ absent, pas
+   * comme `Auto`. */
+  function restoreOpponent(o: Opponent): Opponent {
+    return {
+      car_id: o.car_id,
+      ai_level: o.ai_level == null ? null : clampAiLevel(o.ai_level),
+      car_skin: o.car_skin ?? null,
+      driver_name: o.driver_name ?? null,
+      nationality: o.nationality ?? null,
+      ballast: o.ballast ?? 0,
+      restrictor: o.restrictor ?? 0,
+    };
+  }
+
+  /** Force d'une ligne. `null` = la cellule repasse en `Auto` — c'est ce que
+   * fait un champ vidé, le geste naturel pour dire « je ne décide pas ». */
+  function setOpponentLevel(index: number, raw: number | null) {
     const opponents = [...setup.opponents];
-    opponents[index] = { ...opponents[index], ai_level: level };
+    opponents[index] = { ...opponents[index], ai_level: raw == null ? null : clampAiLevel(raw) };
     setup.opponents = opponents;
   }
 
@@ -349,7 +369,7 @@
       setup.opponents.filter((o) => o.car_id === source.car_id).map((o) => o.car_skin ?? "").filter(Boolean),
     );
     const skin = await skinFor(source.car_id, used);
-    const clone: Opponent = { car_id: source.car_id, car_skin: skin, ai_level: randomLevel() };
+    const clone: Opponent = { ...source, car_skin: skin };
     setup.opponents = [...setup.opponents.slice(0, index + 1), clone, ...setup.opponents.slice(index + 1)];
     opponentCount = setup.opponents.length;
   }
@@ -373,11 +393,9 @@
   function applyOpponentsAction(action: OpponentsAction) {
     opponentsGen++;
     setup.session_type = "race";
-    const additions: Opponent[] = action.carIds.map((carId) => ({
-      car_id: carId,
-      ai_level: randomLevel(),
-      car_skin: getPreferredSkin(carId)?.id ?? null,
-    }));
+    const additions: Opponent[] = action.carIds.map((carId) =>
+      newOpponent(carId, getPreferredSkin(carId)?.id ?? null),
+    );
     setup.opponents = action.mode === "set" ? additions : [...setup.opponents, ...additions];
     opponentCount = setup.opponents.length;
   }
@@ -429,7 +447,7 @@
       const used = new Set(
         [...setup.opponents, ...additions].filter((o) => o.car_id === carId).map((o) => o.car_skin ?? "").filter(Boolean),
       );
-      additions.push({ car_id: carId, car_skin: await skinFor(carId, used), ai_level: randomLevel() });
+      additions.push(newOpponent(carId, await skinFor(carId, used)));
     }
     if (!additions.length) return;
     setup.opponents = [...setup.opponents, ...additions];
@@ -511,6 +529,9 @@
   // --- Presets de session par type (§8.4) ---
   interface Persisted {
     ai_level_min: number; ai_level_max: number; opponent_count: number;
+    /** Absents sur un preset antérieur au §4.4 : les défauts de Content
+     * Manager, dernier sur la grille et agressivité nulle. */
+    aggression?: number; start_mode?: StartMode; start_position?: number;
     /** Vivier d'adversaires (§3.3), sérialisé par `serializeFilters` — la même
      * forme que les filtres de bibliothèque, relue par le même `parseFilters`.
      * Absent sur un preset antérieur aux jetons : `migrateGridPreset` reprend
@@ -603,6 +624,7 @@
   function savePreset() {
     presets[setup.session_type] = {
       ai_level_min: setup.ai_level_min, ai_level_max: setup.ai_level_max,
+      aggression: setup.aggression, start_mode: setup.start_mode, start_position: setup.start_position,
       opponent_count: opponentCount,
       grid_filters: serializeFilters(gridQuery, gridFilters), grid_pinned: [...gridPinned],
       laps: setup.laps, time_hours: setup.time_hours,
@@ -625,6 +647,9 @@
       // ferait courir une session que l'écran n'annonce pas.
       setup.ai_level_min = clampAiLevel(p.ai_level_min ?? 92);
       setup.ai_level_max = clampAiLevel(p.ai_level_max ?? 98);
+      setup.aggression = Math.max(0, Math.min(100, p.aggression ?? 0));
+      setup.start_mode = p.start_mode ?? "last";
+      setup.start_position = Math.max(1, p.start_position ?? 1);
       opponentCount = p.opponent_count ?? 7;
       applyGridPreset(p);
       setup.laps = p.laps; setup.time_hours = p.time_hours;
@@ -662,7 +687,8 @@
   });
 
   $effect(() => {
-    void [setup.ai_level_min, setup.ai_level_max, opponentCount, gridFilters, gridQuery, gridPinned,
+    void [setup.ai_level_min, setup.ai_level_max, setup.aggression, setup.start_mode, setup.start_position,
+      opponentCount, gridFilters, gridQuery, gridPinned,
       setup.laps,
       setup.time_hours, setup.penalties, setup.jump_start_penalty, setup.grip,
       setup.practice_enabled, setup.practice_minutes, setup.qualify_minutes,
@@ -689,8 +715,13 @@
     // Forces recalées à la relecture, pas seulement à l'édition : un plateau
     // enregistré quand le plancher était 60 porte des valeurs que Content
     // Manager n'accepte pas.
-    if (saved.opponents?.length)
-      setup.opponents = saved.opponents.map((o) => ({ ...o, ai_level: clampAiLevel(o.ai_level) }));
+    //
+    // Une force enregistrée avant les cellules `Auto` reste une valeur
+    // **explicite**, elle ne devient pas `Auto` : rien ne distingue un nombre
+    // tiré au hasard par l'ancienne génération d'un nombre posé à la main, et
+    // effacer le second serait pire que garder le premier. Le champ se vide
+    // d'un geste pour repasser en `Auto`.
+    if (saved.opponents?.length) setup.opponents = saved.opponents.map(restoreOpponent);
 
     // La bibliothèque EST le sélecteur (§8.6) : voiture/circuit viennent du duo
     // de session choisi dans les bibliothèques — rien à choisir ici.
@@ -905,7 +936,7 @@
     error = ""; info = ""; warning = "";
     const warnings: string[] = [];
 
-    setup = { ...setup, ...s.setup };
+    setup = { ...setup, ...s.setup, opponents: (s.setup.opponents ?? []).map(restoreOpponent) };
     opponentCount = s.opponentCount;
     // Même migration que pour un preset par type : une sauvegarde d'avant les
     // jetons retrouve son vivier, elle ne retombe pas sur les défauts.

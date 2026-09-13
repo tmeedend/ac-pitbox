@@ -79,12 +79,55 @@ export function clampAiLevel(level: number): number {
  * neige). "" = aucune saison choisie. */
 export type Season = "" | "spring" | "summer" | "autumn" | "winter";
 
+/** Ce que Content Manager écrit dans un tableau numérique par ligne pour dire
+ * « laissé au jeu » (§4.1). Relevé sur un preset de grille réel, où il voisine
+ * un `"0"` explicite : les deux ne veulent pas dire la même chose. */
+export const AUTO_CELL = null;
+
 export interface Opponent {
   car_id: string;
-  ai_level: number;
+  /** Force de l'IA, ou `null` pour **`Auto`** : la ligne n'a pas de surcharge
+   * et le jeu tire dans la fourchette globale. Ce n'est donc pas une valeur
+   * qu'on tire nous-mêmes — c'est son absence, et le format la connaît déjà. */
+  ai_level: number | null;
   /** Skin de l'adversaire, choisi (auto ou via la popup de sélection). */
   car_skin: string | null;
+  /** Nom de pilote et nationalité repris à la main, ou `null` pour `Auto` — le
+   * jeu prend alors ce que le `ui_skin.json` de la livrée déclare. La
+   * nationalité est un nom de pays anglais entier, jamais un code ISO. */
+  driver_name: string | null;
+  nationality: string | null;
+  /** Lest et bride d'équilibrage, 0 à 100. Pas d'`Auto` : « aucun lest » se
+   * dit par 0, et c'est ce que CM écrit. */
+  ballast: number;
+  restrictor: number;
 }
+
+/** Un adversaire neuf : une voiture, une livrée, et rien d'autre. Tout le reste
+ * vaut `Auto`, ce qui est le bon défaut — poser une valeur est un geste. */
+export function newOpponent(carId: string, skinId: string | null): Opponent {
+  return {
+    car_id: carId,
+    ai_level: AUTO_CELL,
+    car_skin: skinId,
+    driver_name: AUTO_CELL,
+    nationality: AUTO_CELL,
+    ballast: 0,
+    restrictor: 0,
+  };
+}
+
+/** Position de départ du joueur (§4.4), **course uniquement**. Les trois
+ * premières se résolvent côté Rust, où la taille du plateau est connue pour de
+ * bon. `last` est le défaut, celui de Content Manager. */
+export type StartMode = "last" | "first" | "random" | "custom";
+
+/** Agressivité de l'IA (§4.4). Défaut **0**, celui de CM — à ne pas
+ * « améliorer » : c'est la valeur avec laquelle des milliers d'heures de course
+ * ont été réglées. Pas de 5, comme la tolérance de performance. */
+export const AGGRESSION_MIN = 0;
+export const AGGRESSION_MAX = 100;
+export const AGGRESSION_STEP = 5;
 
 /** Les quatre pièces telles que le backend les nomme — `model` est le corps,
  * comme `driver3d.ini` l'appelle. */
@@ -107,9 +150,17 @@ export interface RaceSetup {
   session_type: SessionType;
   /** Plateau d'adversaires (mode course uniquement), chacun avec son niveau IA. */
   opponents: Opponent[];
-  /** Fourchette de niveau IA (§8.6) : le plateau est réparti dedans. */
+  /** Fourchette de force de l'IA (§8.6) : le jeu y répartit les lignes `Auto`.
+   * Elle part maintenant vraiment dans le preset — `AiLevel`/`AiLevelMin` y
+   * étaient codés en dur sur 95/85. */
   ai_level_min: number;
   ai_level_max: number;
+  /** Agressivité de l'IA (§4.4), 0 à 100. */
+  aggression: number;
+  /** Position de départ du joueur (§4.4), course uniquement. */
+  start_mode: StartMode;
+  /** Rang saisi, lu seulement quand `start_mode` vaut `"custom"`. */
+  start_position: number;
   laps: number;
   weather: string;
   time_hours: number;

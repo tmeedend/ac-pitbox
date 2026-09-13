@@ -83,16 +83,57 @@ impl AssistLevel {
     }
 }
 
-/// Un adversaire du plateau (mode course, §8.6) : voiture + son propre niveau
-/// IA (réparti dans la fourchette min-max choisie, pas une valeur unique).
-#[derive(Debug, Clone, Deserialize)]
+/// Un adversaire du plateau (mode course, §4) : une voiture, sa livrée, et ce
+/// que l'utilisateur a éventuellement posé sur sa ligne. Tout le reste vaut
+/// `Auto` et se résout côté jeu.
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct Opponent {
     pub car_id: String,
-    pub ai_level: u32,
+    /// Force de l'IA, ou `None` pour **`Auto`** (§4.1).
+    ///
+    /// `Auto` n'est pas une valeur qu'on tire nous-mêmes : c'est l'absence de
+    /// surcharge, et Content Manager la note déjà `-1` dans ses propres presets
+    /// de grille — le jeu tire alors dans la fourchette globale. Un preset
+    /// antérieur à ce champ porte un nombre, qui reste donc une valeur
+    /// explicite : mieux vaut ne pas régénérer une force que l'utilisateur
+    /// avait peut-être posée à la main que de l'effacer en la prenant pour un
+    /// tirage.
+    #[serde(default)]
+    pub ai_level: Option<u32>,
     /// Skin de l'adversaire (§8.6 : plateau réglable finement depuis la popup
     /// de sélection). `None` → le jeu applique son skin par défaut.
     #[serde(default)]
     pub car_skin: Option<String>,
+    /// Nom du pilote et nationalité, ou `None` pour `Auto` — CM les note `null`
+    /// et le jeu reprend alors ce que le `ui_skin.json` de la livrée déclare.
+    /// La nationalité est un **nom de pays anglais entier** (« Brunei
+    /// Darussalam »), relevé sur un preset réel, jamais un code ISO.
+    #[serde(default)]
+    pub driver_name: Option<String>,
+    #[serde(default)]
+    pub nationality: Option<String>,
+    /// Lest et bride d'équilibrage, 0 à 100 (§4.2). Pas d'`Auto` ici, contre
+    /// la force et le nom : CM écrit toujours un nombre, et « aucun lest » se
+    /// dit très bien par 0.
+    #[serde(default)]
+    pub ballast: u32,
+    #[serde(default)]
+    pub restrictor: u32,
+}
+
+/// Position de départ du joueur (§4.4) — le `StartingPosition` du preset, qui
+/// est un simple rang. Les trois premières valeurs se résolvent au moment de
+/// construire le preset, parce qu'elles dépendent de la taille du plateau.
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum StartMode {
+    /// Dernier de la grille — le défaut de Content Manager.
+    #[default]
+    Last,
+    First,
+    Random,
+    /// Le rang saisi dans `start_position`.
+    Custom,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -116,16 +157,30 @@ pub struct RaceSetup {
     /// plateau côté front (même voiture/catégorie/ère/libre), puis ajustable.
     #[serde(default)]
     pub opponents: Vec<Opponent>,
-    /// Fourchette de niveau IA (comme CM) : le plateau est réparti dedans,
-    /// pas une valeur unique — plateau plus vivant. `ai_level_min` n'est pas
-    /// lu ici : la répartition se fait côté front, chaque `Opponent` porte
-    /// déjà son propre niveau ; le champ ne fait que l'aller-retour.
+    /// Fourchette de force de l'IA (comme CM) : le plateau est réparti dedans,
+    /// pas une valeur unique — plateau plus vivant.
+    ///
+    /// **Elle part maintenant vraiment dans le preset.** Le `AiLevel`/
+    /// `AiLevelMin` de la grille était codé en dur sur 95/85 : la fourchette
+    /// réglée à l'écran n'atteignait donc jamais le jeu, et une ligne `Auto`
+    /// (§4.1) n'aurait eu aucun sens puisque c'est précisément dedans que le
+    /// jeu tire. `AiLevel` est le **haut** de la fourchette et `AiLevelMin` le
+    /// bas, relevé sur un preset réel (95 avec un minimum de 85).
     #[serde(default = "default_ai_level_min")]
-    #[allow(dead_code)]
     pub ai_level_min: u32,
     #[serde(default = "default_ai_level_max")]
-    #[allow(dead_code)]
     pub ai_level_max: u32,
+    /// Agressivité de l'IA, 0 à 100 (§4.4). Défaut **0**, celui de Content
+    /// Manager — à ne pas « améliorer » : c'est la valeur avec laquelle des
+    /// milliers d'heures de course ont été réglées.
+    #[serde(default)]
+    pub aggression: u32,
+    /// Position de départ du joueur (§4.4), **course uniquement**.
+    #[serde(default)]
+    pub start_mode: StartMode,
+    /// Rang saisi, lu seulement quand `start_mode` vaut `Custom`.
+    #[serde(default)]
+    pub start_position: u32,
     #[serde(default)]
     pub laps: u32,
     /// Nom du dossier météo (ex. "3_clear").
