@@ -40,7 +40,7 @@
   import ColumnsMenu from "../ColumnsMenu.svelte";
   import Tooltip from "../Tooltip.svelte";
   import NumberStepper from "../NumberStepper.svelte";
-  import Slider from "../Slider.svelte";
+  import CenterSpread from "../CenterSpread.svelte";
 
   let {
     setup,
@@ -113,34 +113,11 @@
     return t("launch.chipNoCategory");
   }
 
-  // --- AI level range (two handles, §8.6). Bounds from `launch.ts`: they are
-  // Content Manager's own, and the line strengths below share them. ---
+  // Bornes de la force d'une ligne du plateau : celles du curseur de Content
+  // Manager (`launch.ts`). La fourchette elle-même est passée en centre ± écart
+  // et vit dans `CenterSpread` (§2.9).
   const RANGE_MIN = AI_LEVEL_MIN;
   const RANGE_MAX = AI_LEVEL_MAX;
-  function clampAiMin() {
-    if (setup.ai_level_min > setup.ai_level_max) setup.ai_level_min = setup.ai_level_max;
-  }
-  function clampAiMax() {
-    if (setup.ai_level_max < setup.ai_level_min) setup.ai_level_max = setup.ai_level_min;
-  }
-  const aiMinPct = $derived(((setup.ai_level_min - RANGE_MIN) / (RANGE_MAX - RANGE_MIN)) * 100);
-  const aiMaxPct = $derived(((setup.ai_level_max - RANGE_MIN) / (RANGE_MAX - RANGE_MIN)) * 100);
-  // Both values hang off their own handle (§9.3): laid at the ends of the
-  // track, they said the range without saying which handle one was dragging.
-  //
-  // Under 20 points apart the two labels no longer fit side by side on a track
-  // this wide — and at that distance the handles themselves stop being
-  // distinguishable, so separating the labels would teach nothing. One label
-  // then, the range end to end. That is the default setting (92-98).
-  //
-  // Placement is a PERCENTAGE OF THE TRACK, never a measurement taken off the
-  // screen: a `getBoundingClientRect` would return window pixels already
-  // multiplied by the interface zoom, which a `left` in CSS pixels would
-  // multiply a second time (§13). The overflow at the very edges is caught in
-  // CSS by a `clamp()`, which knows the real width of the track where this
-  // file does not.
-  const aiLabelsMerged = $derived(aiMaxPct - aiMinPct < 20);
-
   // --- Columns (§4.2) ------------------------------------------------------
   //
   // The car is fixed — it IS the row. The other six are a preference, and they
@@ -305,65 +282,40 @@
       >{t("launch.fillAtRandom", { count: opponentCount })}</button
     >
 
-    <div class="ai-range-field">
-      <!-- The explanation used to be a yellow box under the row. Yellow is for
-           a configuration problem calling for an action; this is a permanent
-           explanation, so it belongs to the ⓘ — the same treatment as ABS and
-           Traction control. -->
-      <span class="fk lbl-key"
-        >{t("launch.aiRangeLabel")}<Tooltip text={t("launch.explicitStrengthNote")} align="left"
+    <CenterSpread
+      label={t("launch.aiRangeLabel")}
+      center={setup.ai_level}
+      spread={setup.ai_spread}
+      min={AI_LEVEL_MIN}
+      max={AI_LEVEL_MAX}
+      onchange={(c, sp) => {
+        setup.ai_level = c;
+        setup.ai_spread = sp;
+      }}
+    >
+      {#snippet info()}
+        <!-- L'explication permanente vit dans le ⓘ, jamais dans un encart
+             jaune : celui-ci est réservé à ce qui appelle une action. -->
+        <Tooltip text={t("launch.explicitStrengthNote")} align="left"
           ><button type="button" class="info-i">ⓘ</button></Tooltip
-        ></span
-      >
-      <div class="dual-range">
-        <div class="dr-track"></div>
-        <div class="dr-fill" style="left:{aiMinPct}%; right:{100 - aiMaxPct}%"></div>
-        <!-- « min » et « max » ont quitté les libellés : la position de la
-             poignée le dit déjà, et ils doublaient la largeur d'une valeur là
-             où c'est précisément la largeur qui manque. Ils restent sur les
-             curseurs comme nom accessible, qui n'en a pas d'autre. -->
-        <input
-          type="range"
-          min={RANGE_MIN}
-          max={RANGE_MAX}
-          aria-label={t("launch.aiMin", { level: setup.ai_level_min })}
-          bind:value={setup.ai_level_min}
-          oninput={clampAiMin}
-        />
-        <input
-          type="range"
-          min={RANGE_MIN}
-          max={RANGE_MAX}
-          aria-label={t("launch.aiMax", { level: setup.ai_level_max })}
-          bind:value={setup.ai_level_max}
-          oninput={clampAiMax}
-        />
-        {#if aiLabelsMerged}
-          <span class="dr-v pair mono" style="--at:{(aiMinPct + aiMaxPct) / 2}%"
-            >{setup.ai_level_min}–{setup.ai_level_max}%</span
-          >
-        {:else}
-          <span class="dr-v mono" style="--at:{aiMinPct}%">{setup.ai_level_min}%</span>
-          <span class="dr-v mono" style="--at:{aiMaxPct}%">{setup.ai_level_max}%</span>
-        {/if}
-      </div>
-    </div>
+        >
+      {/snippet}
+    </CenterSpread>
 
-    <!-- Aggression sits next to difficulty because the two decide the same
-         thing: the character of the race. Default 0, Content Manager's own —
-         not a number to "improve". -->
-    <div class="aggr-field">
-      <Slider
-        compact
-        label={t("launch.aggressionLabel")}
-        min={AGGRESSION_MIN}
-        max={AGGRESSION_MAX}
-        step={AGGRESSION_STEP}
-        value={setup.aggression}
-        display={`${setup.aggression}%`}
-        oninput={(v) => (setup.aggression = v)}
-      />
-    </div>
+    <!-- Même composant, mêmes gestes : ce sont les deux réglages qui décident
+         du caractère de la course, ils ne peuvent pas se manipuler autrement
+         l'un que l'autre. -->
+    <CenterSpread
+      label={t("launch.aggressionLabel")}
+      center={setup.aggression}
+      spread={setup.aggression_spread}
+      min={AGGRESSION_MIN}
+      max={AGGRESSION_MAX}
+      onchange={(c, sp) => {
+        setup.aggression = c;
+        setup.aggression_spread = sp;
+      }}
+    />
   </div>
 
   <!-- A configuration problem calling for an action, so yellow is right here —
@@ -637,11 +589,6 @@
   .oppo-sp {
     flex: 1;
   }
-  /* Same width as the difficulty track, so the three settings of the row line
-     up on their left edges rather than drifting apart. */
-  .aggr-field {
-    width: 170px;
-  }
   /* `.warnbox` carries the colours; only the spacing is local. */
   .thin {
     margin-top: 10px;
@@ -654,15 +601,6 @@
     align-items: flex-start;
     gap: 16px 20px;
     margin: 13px 0 0;
-  }
-  .ai-range-field {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    /* Largeur fixe pour tenir à côté du compteur et des champs année, plutôt
-       que de s'étirer sur toute la largeur restante comme sur son ancien
-       emplacement en pleine rubrique. */
-    width: 170px;
   }
   .grid-fields {
     display: inline-flex;
@@ -943,23 +881,6 @@
     background: var(--raised);
   }
 
-  /* Fourchettes (année + IA, deux curseurs) */
-  .dual-range {
-    position: relative;
-    height: 28px;
-    /* Les valeurs vivent au-dessus de la piste, dans la place que leur ancienne
-       ligne occupait en dessous. */
-    margin-top: 12px;
-  }
-  .dr-track {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 50%;
-    height: 3px;
-    background: var(--line);
-    transform: translateY(-50%);
-  }
   /* Bulle de survol : la même image, en grand.
      **Elle déborde vers le BAS, jamais vers le haut.** Elle remontait depuis le
      haut de la ligne et recouvrait donc les lignes précédentes — précisément
@@ -1002,59 +923,5 @@
     display: block;
     width: 100%;
     height: auto;
-  }
-  .dr-fill {
-    position: absolute;
-    top: 50%;
-    height: 3px;
-    background: var(--rosso);
-    transform: translateY(-50%);
-  }
-  .dual-range input[type="range"] {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 28px;
-    margin: 0;
-    appearance: none;
-    background: transparent;
-    pointer-events: none;
-  }
-  .dual-range input[type="range"]::-webkit-slider-runnable-track {
-    background: transparent;
-  }
-  .dual-range input[type="range"]::-webkit-slider-thumb {
-    appearance: none;
-    pointer-events: auto;
-    width: 10px;
-    height: 20px;
-    border-radius: 2px;
-    background: var(--rosso);
-    border: 2px solid var(--panel);
-    cursor: pointer;
-    margin-top: 4px;
-  }
-  /* Accrochée à sa poignée, au-dessus de la piste. `--at` est un pourcentage
-     de la piste, pas une mesure relevée à l'écran : rien à diviser par le zoom
-     (§13).
-     Le `clamp` retient la valeur dans la piste quand la poignée arrive au bord
-     — sans lui, la valeur maximale d'une fourchette haute passait par-dessus
-     le champ voisin (constaté à l'écran, « année min » recouvert). Il vaut une
-     demi-largeur de libellé, la seule mesure que le CSS connaisse ici et que
-     le composant ignore. */
-  .dr-v {
-    --pad: 16px;
-    position: absolute;
-    bottom: calc(100% - 4px);
-    left: clamp(var(--pad), var(--at), calc(100% - var(--pad)));
-    transform: translateX(-50%);
-    white-space: nowrap;
-    font-size: 8.5px;
-    color: var(--txt2);
-    pointer-events: none;
-  }
-  .dr-v.pair {
-    --pad: 26px;
   }
 </style>

@@ -3,6 +3,7 @@
 // un instantané complet et rappelable à la demande (surtout utile pour ne pas
 // reperdre un plateau d'adversaires soigneusement ajusté).
 import { invoke } from "@tauri-apps/api/core";
+import { centerSpreadOf } from "./aiBand";
 import { assistLevelFrom, type RaceSetup, type SessionType } from "./launch";
 import { StorageKey } from "./storage";
 
@@ -82,9 +83,25 @@ async function loadAll(): Promise<Record<string, SavedSession>> {
  * l'ancien booléen n'est plus regardé. */
 function migrate(all: Record<string, SavedSession>): Record<string, SavedSession> {
   for (const s of Object.values(all)) {
-    const old = s.setup as Partial<{ abs_auto: boolean; traction_control_auto: boolean }>;
+    const old = s.setup as Partial<{
+      abs_auto: boolean;
+      traction_control_auto: boolean;
+      ai_level_min: number;
+      ai_level_max: number;
+    }>;
     s.setup.abs = assistLevelFrom(s.setup.abs, old.abs_auto);
     s.setup.traction_control = assistLevelFrom(s.setup.traction_control, old.traction_control_auto);
+    // Difficulté : deux bornes avant le modèle centre ± écart (§2.9). Converti
+    // plutôt que repli sur le défaut — une session enregistrée porte souvent un
+    // réglage ajusté longuement, et le voir se réinitialiser en la rechargeant
+    // est pire que tout. Idempotent : une entrée déjà convertie porte son
+    // centre, et les anciennes bornes ne sont plus regardées.
+    if (s.setup.ai_level == null && old.ai_level_min != null && old.ai_level_max != null) {
+      const band = centerSpreadOf(old.ai_level_min, old.ai_level_max);
+      s.setup.ai_level = band.center;
+      s.setup.ai_spread = band.spread;
+    }
+    s.setup.aggression_spread ??= 0;
   }
   return all;
 }

@@ -314,19 +314,30 @@ fn build_grid(s: &RaceSetup) -> Value {
         "VarietyLimitation": 0,
         "OpponentsNumber": opponents.len(),
         "StartingPosition": starting_position(s),
-        "AiLevel": f64::from(s.ai_level_max),
-        "AiLevelMin": f64::from(s.ai_level_min),
+        "AiLevel": band(s.ai_level, s.ai_spread, AI_LEVEL_MIN, AI_LEVEL_MAX).1,
+        "AiLevelMin": band(s.ai_level, s.ai_spread, AI_LEVEL_MIN, AI_LEVEL_MAX).0,
         "AiLevelArrangeRandom": 0.0,
         "AiLevelArrangeReverse": false,
         "AiLevelArrangePowerRatio": false,
-        "AiAggression": f64::from(s.aggression.min(100)),
-        "AiAggressionMin": f64::from(s.aggression.min(100)),
+        "AiAggression": band(s.aggression, s.aggression_spread, 0.0, 100.0).1,
+        "AiAggressionMin": band(s.aggression, s.aggression_spread, 0.0, 100.0).0,
         "AiAggressionArrangeRandom": 0.0,
         "AiAggressionArrangeReverse": false,
     })
 }
 
-/// Rang de départ du joueur (§4.4), résolu **ici** parce que trois des quatre
+/// Les deux bornes d'un réglage « centre ± écart » (§2.9), **bornées**.
+///
+/// Le bornage est appliqué ici et pas seulement à l'affichage : un centre de 3
+/// avec un écart de 5 doit envoyer 0 à 8, pas −2 à 8. Sans ça l'écran annonce
+/// une plage et le jeu en reçoit une autre.
+fn band(center: u32, spread: u32, lo: f64, hi: f64) -> (f64, f64) {
+    let c = f64::from(center);
+    let s = f64::from(spread);
+    ((c - s).clamp(lo, hi), (c + s).clamp(lo, hi))
+}
+
+/// Rang de départ du joueur (§2.6), résolu **ici** parce que trois des quatre
 /// modes dépendent de la taille du plateau, que seul ce moment connaît pour de
 /// bon. Les rangs sont 1-based, et le dernier est `adversaires + 1` : le joueur
 /// compte pour une voiture.
@@ -533,9 +544,10 @@ mod tests {
             track_layout: None,
             session_type,
             opponents: Vec::new(),
-            ai_level_min: 92,
-            ai_level_max: 98,
+            ai_level: 95,
+            ai_spread: 3,
             aggression: 0,
+            aggression_spread: 0,
             start_mode: StartMode::Random,
             ghost_advantage: 0.0,
             laps: 5,
@@ -931,14 +943,15 @@ mod tests {
     #[test]
     fn the_difficulty_range_reaches_the_grid() {
         let mut s = base_setup(SessionType::Race);
-        s.ai_level_min = 78;
-        s.ai_level_max = 94;
+        s.ai_level = 86;
+        s.ai_spread = 8;
         s.aggression = 35;
+        s.aggression_spread = 0;
         let grid = grid_of(&s);
         assert_eq!(grid["AiLevelMin"], 78.0, "bas de la fourchette");
         assert_eq!(grid["AiLevel"], 94.0, "haut de la fourchette");
         assert_eq!(grid["AiAggression"], 35.0);
-        assert_eq!(grid["AiAggressionMin"], 35.0, "curseur simple : les deux bornes égales");
+        assert_eq!(grid["AiAggressionMin"], 35.0, "écart nul : les deux bornes égales");
     }
 
     /// Règle protégée : les quatre positions de départ (§4.4), et le fait que
@@ -974,6 +987,24 @@ mod tests {
         );
         s.opponents.clear();
         assert_eq!(grid_of(&s)["StartingPosition"], 1, "seul en piste : premier");
+    }
+
+    /// Règle protégée : le bornage s'applique à ce qui **part en jeu**, pas
+    /// seulement à l'affichage. Un centre bas avec un grand écart doit envoyer
+    /// le plancher, jamais une valeur négative — sinon l'écran annonce une
+    /// plage et le jeu en reçoit une autre.
+    #[test]
+    fn a_band_wider_than_its_range_is_clamped_before_it_leaves() {
+        let mut s = base_setup(SessionType::Race);
+        s.ai_level = 72;
+        s.ai_spread = 20;
+        s.aggression = 3;
+        s.aggression_spread = 5;
+        let grid = grid_of(&s);
+        assert_eq!(grid["AiLevelMin"], 70.0, "jamais sous le plancher de CM");
+        assert_eq!(grid["AiLevel"], 92.0);
+        assert_eq!(grid["AiAggressionMin"], 0.0, "jamais négatif");
+        assert_eq!(grid["AiAggression"], 8.0);
     }
 
     #[test]

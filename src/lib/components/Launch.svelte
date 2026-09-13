@@ -29,6 +29,7 @@
     type WeatherOption,
   } from "$lib/launch";
   import { carClassOf, driverFor, isEmpty } from "$lib/driverOverride.svelte";
+  import { centerSpreadOf } from "$lib/aiBand";
   import { buildCardIndex, buildPredicate, filterDefs, parseFilters, serializeFilters, type FilterMap } from "$lib/filters";
   import { matchesQuery } from "$lib/cardSearch";
   import { hasOwnDriver } from "$lib/driverOverride.svelte";
@@ -88,9 +89,10 @@
     track_layout: null,
     session_type: "practice",
     opponents: [],
-    ai_level_min: 92,
-    ai_level_max: 98,
+    ai_level: 95,
+    ai_spread: 3,
     aggression: 0,
+    aggression_spread: 0,
     start_mode: "random",
     laps: 5,
     weather: "",
@@ -435,8 +437,11 @@
         // le proxy réactif du plateau courant qui partirait au backend, et
         // modifier le plateau changerait la grille enregistrée.
         opponents: $state.snapshot(setup.opponents),
-        aiLevelMin: setup.ai_level_min,
-        aiLevelMax: setup.ai_level_max,
+        // Les grilles gardent les bornes : c'est le vocabulaire de Content
+        // Manager, d'où viennent les grilles importées. La conversion se fait
+        // ici, à la frontière, plutôt que deux vocabulaires dans le modèle.
+        aiLevelMin: Math.max(AI_LEVEL_MIN, setup.ai_level - setup.ai_spread),
+        aiLevelMax: Math.min(AI_LEVEL_MAX, setup.ai_level + setup.ai_spread),
         aggression: setup.aggression,
       });
     } catch (e) {
@@ -458,8 +463,9 @@
     opponentsGen++;
     setup.opponents = kept;
     opponentCount = kept.length;
-    setup.ai_level_min = clampAiLevel(grid.aiLevelMin);
-    setup.ai_level_max = clampAiLevel(grid.aiLevelMax);
+    const band = centerSpreadOf(clampAiLevel(grid.aiLevelMin), clampAiLevel(grid.aiLevelMax));
+    setup.ai_level = band.center;
+    setup.ai_spread = band.spread;
     setup.aggression = Math.max(0, Math.min(100, grid.aggression));
     warning = missing ? t("launch.gridMissingCars", { count: missing }) : "";
     info = t("launch.gridLoaded", { name: grid.name, count: kept.length });
@@ -649,7 +655,11 @@
 
   // --- Presets de session par type (§8.4) ---
   interface Persisted {
-    ai_level_min: number; ai_level_max: number; opponent_count: number;
+    /** Centre et écart (§2.9). Un preset d'avant porte encore `ai_level_min`
+     * et `ai_level_max` : `applyPreset` les convertit, il ne les jette pas. */
+    ai_level?: number; ai_spread?: number; aggression_spread?: number;
+    ai_level_min?: number; ai_level_max?: number;
+    opponent_count: number;
     /** Absents sur un preset antérieur au §4.4 : les défauts de Content
      * Manager, dernier sur la grille et agressivité nulle. */
     aggression?: number; start_mode?: StartMode; ghost_advantage?: number;
@@ -746,7 +756,7 @@
 
   function savePreset() {
     presets[setup.session_type] = {
-      ai_level_min: setup.ai_level_min, ai_level_max: setup.ai_level_max,
+      ai_level: setup.ai_level, ai_spread: setup.ai_spread, aggression_spread: setup.aggression_spread,
       aggression: setup.aggression, start_mode: setup.start_mode, ghost_advantage: setup.ghost_advantage,
       opponent_count: opponentCount,
       grid_filters: serializeFilters(gridQuery, gridFilters), grid_pinned: [...gridPinned],
@@ -769,8 +779,19 @@
       // Recalés : un preset enregistré quand le plancher était 60 porte des
       // valeurs que Content Manager n'accepte pas, et les envoyer telles quelles
       // ferait courir une session que l'écran n'annonce pas.
-      setup.ai_level_min = clampAiLevel(p.ai_level_min ?? 92);
-      setup.ai_level_max = clampAiLevel(p.ai_level_max ?? 98);
+      //
+      // Et converti : un preset d'avant le modèle centre ± écart porte deux
+      // bornes. Les convertir plutôt que retomber sur le défaut, sinon une
+      // difficulté réglée depuis des mois se réinitialise sans un mot.
+      if (p.ai_level != null) {
+        setup.ai_level = clampAiLevel(p.ai_level);
+        setup.ai_spread = Math.max(0, p.ai_spread ?? 0);
+      } else {
+        const band = centerSpreadOf(clampAiLevel(p.ai_level_min ?? 92), clampAiLevel(p.ai_level_max ?? 98));
+        setup.ai_level = band.center;
+        setup.ai_spread = band.spread;
+      }
+      setup.aggression_spread = Math.max(0, Math.min(100, p.aggression_spread ?? 0));
       setup.aggression = Math.max(0, Math.min(100, p.aggression ?? 0));
       // Un preset d'avant les quatre segments porte `"custom"` ou `"last"` :
       // seul `last` existe encore, le reste retombe sur le défaut.
@@ -815,7 +836,7 @@
   });
 
   $effect(() => {
-    void [setup.ai_level_min, setup.ai_level_max, setup.aggression, setup.start_mode, setup.ghost_advantage,
+    void [setup.ai_level, setup.ai_spread, setup.aggression, setup.aggression_spread, setup.start_mode, setup.ghost_advantage,
       opponentCount, gridFilters, gridQuery, gridPinned, gridColumns, gridWide,
       setup.laps,
       setup.time_hours, setup.penalties, setup.jump_start_penalty, setup.grip,

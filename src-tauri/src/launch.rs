@@ -160,24 +160,30 @@ pub struct RaceSetup {
     /// plateau côté front (même voiture/catégorie/ère/libre), puis ajustable.
     #[serde(default)]
     pub opponents: Vec<Opponent>,
-    /// Fourchette de force de l'IA (comme CM) : le plateau est réparti dedans,
-    /// pas une valeur unique — plateau plus vivant.
+    /// Force de l'IA : un **centre et un écart**, pas un minimum et un maximum
+    /// (§2.9).
     ///
-    /// **Elle part maintenant vraiment dans le preset.** Le `AiLevel`/
-    /// `AiLevelMin` de la grille était codé en dur sur 95/85 : la fourchette
-    /// réglée à l'écran n'atteignait donc jamais le jeu, et une ligne `Auto`
-    /// (§4.1) n'aurait eu aucun sens puisque c'est précisément dedans que le
-    /// jeu tire. `AiLevel` est le **haut** de la fourchette et `AiLevelMin` le
+    /// Le geste fréquent est de monter tout le plateau de quelques points sans
+    /// en changer la dispersion, et il ne doit pas demander deux
+    /// manipulations. `quickdrive` en déduit les deux bornes que le preset
+    /// attend — `AiLevel` est le **haut** de la fourchette et `AiLevelMin` le
     /// bas, relevé sur un preset réel (95 avec un minimum de 85).
-    #[serde(default = "default_ai_level_min")]
-    pub ai_level_min: u32,
-    #[serde(default = "default_ai_level_max")]
-    pub ai_level_max: u32,
-    /// Agressivité de l'IA, 0 à 100 (§4.4). Défaut **0**, celui de Content
-    /// Manager — à ne pas « améliorer » : c'est la valeur avec laquelle des
-    /// milliers d'heures de course ont été réglées.
+    ///
+    /// Ces bornes partent maintenant vraiment : elles étaient codées en dur sur
+    /// 95/85, donc la difficulté réglée à l'écran n'atteignait jamais le jeu —
+    /// et une ligne `Auto` (§4.1) n'aurait rien voulu dire, puisque c'est
+    /// précisément dedans que le jeu tire.
+    #[serde(default = "default_ai_level")]
+    pub ai_level: u32,
+    #[serde(default)]
+    pub ai_spread: u32,
+    /// Agressivité de l'IA, même modèle. Centre par défaut **0**, celui de
+    /// Content Manager — à ne pas « améliorer » : c'est la valeur avec laquelle
+    /// des milliers d'heures de course ont été réglées.
     #[serde(default)]
     pub aggression: u32,
+    #[serde(default)]
+    pub aggression_spread: u32,
     /// Position de départ du joueur (§2.6), **course uniquement**.
     #[serde(default)]
     pub start_mode: StartMode,
@@ -274,11 +280,8 @@ pub struct RaceSetup {
     pub ideal_line: bool,
 }
 
-fn default_ai_level_min() -> u32 {
-    92
-}
-fn default_ai_level_max() -> u32 {
-    98
+fn default_ai_level() -> u32 {
+    95
 }
 fn default_time() -> f32 {
     13.0

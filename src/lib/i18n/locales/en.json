@@ -923,6 +923,8 @@
     "fromCm": "From CM",
     "gridLoaded": "Grid “{name}” loaded — {count} opponents.",
     "gridMissingCars": "{count} cars of this grid are no longer in the library and were left out.",
+    "centerLabel": "{label} centre",
+    "aggressionSpreadHint": "Spread",
     "aiCount": "Opponents",
     "gridHeader": "Grid · {count} AI",
     "regenerateGrid": "Regenerate",

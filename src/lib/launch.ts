@@ -173,13 +173,16 @@ export interface RaceSetup {
   session_type: SessionType;
   /** Plateau d'adversaires (mode course uniquement), chacun avec son niveau IA. */
   opponents: Opponent[];
-  /** Fourchette de force de l'IA (§8.6) : le jeu y répartit les lignes `Auto`.
-   * Elle part maintenant vraiment dans le preset — `AiLevel`/`AiLevelMin` y
-   * étaient codés en dur sur 95/85. */
-  ai_level_min: number;
-  ai_level_max: number;
-  /** Agressivité de l'IA (§4.4), 0 à 100. */
+  /** Force de l'IA : un **centre et un écart** (§2.9), pas un minimum et un
+   * maximum. Le geste fréquent est de monter tout le plateau de quelques
+   * points sans en changer la dispersion, et il ne doit pas demander deux
+   * manipulations. Les deux bornes en sont déduites, bornées, à la frontière
+   * du preset. */
+  ai_level: number;
+  ai_spread: number;
+  /** Agressivité de l'IA, même modèle. */
   aggression: number;
+  aggression_spread: number;
   /** Position de départ du joueur (§2.6), course uniquement. */
   start_mode: StartMode;
   laps: number;
