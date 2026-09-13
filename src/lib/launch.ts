@@ -140,10 +140,10 @@ export function newOpponent(carId: string, skinId: string | null): Opponent {
   };
 }
 
-/** Position de départ du joueur (§4.4), **course uniquement**. Les trois
- * premières se résolvent côté Rust, où la taille du plateau est connue pour de
- * bon. `last` est le défaut, celui de Content Manager. */
-export type StartMode = "last" | "first" | "random" | "custom";
+/** Position de départ du joueur (§2.6), **course uniquement**. Résolue côté
+ * Rust, où la taille du plateau est connue pour de bon. `random` est le défaut,
+ * et le seul des quatre qui ne fixe rien. */
+export type StartMode = "random" | "first" | "second" | "last";
 
 /** Agressivité de l'IA (§4.4). Défaut **0**, celui de CM — à ne pas
  * « améliorer » : c'est la valeur avec laquelle des milliers d'heures de course
@@ -180,10 +180,8 @@ export interface RaceSetup {
   ai_level_max: number;
   /** Agressivité de l'IA (§4.4), 0 à 100. */
   aggression: number;
-  /** Position de départ du joueur (§4.4), course uniquement. */
+  /** Position de départ du joueur (§2.6), course uniquement. */
   start_mode: StartMode;
-  /** Rang saisi, lu seulement quand `start_mode` vaut `"custom"`. */
-  start_position: number;
   laps: number;
   weather: string;
   time_hours: number;
@@ -208,6 +206,8 @@ export interface RaceSetup {
   /** Durée qualif quand elle est demandée (mini 5 min, borne de CM). */
   qualify_minutes: number;
   ghost_car: boolean;
+  /** Avance du fantôme en secondes (§2.8), hotlap uniquement. */
+  ghost_advantage: number;
   /** Départ en Practice (mode Practice uniquement). */
   practice_start: PracticeStart;
   damage: number;

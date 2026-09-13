@@ -33,7 +33,6 @@
     type Opponent,
     type RaceSetup,
     type SkinItem,
-    type StartMode,
   } from "$lib/launch";
   import { previewSrc, type ModCard } from "$lib/library";
   import { t } from "$lib/i18n/index.svelte";
@@ -142,18 +141,6 @@
   // file does not.
   const aiLabelsMerged = $derived(aiMaxPct - aiMinPct < 20);
 
-  // --- Starting position (§4.4) --------------------------------------------
-  //
-  // Race only: a track day has no grid order to take a place in. The last rank
-  // is `opponents + 1` — the player counts as a car — and the four modes are
-  // resolved Rust-side, where the grid size is known for good at the moment
-  // the preset is written.
-  const startModes: { value: StartMode; labelKey: string }[] = [
-    { value: "last", labelKey: "launch.startLast" },
-    { value: "first", labelKey: "launch.startFirst" },
-    { value: "random", labelKey: "launch.startRandom" },
-    { value: "custom", labelKey: "launch.startCustom" },
-  ];
   // --- Columns (§4.2) ------------------------------------------------------
   //
   // The car is fixed — it IS the row. The other six are a preference, and they
@@ -233,14 +220,6 @@
   const headerNeeded = $derived(
     columns.some((k) => k === "driver" || k === "nationality" || k === "ballast" || k === "restrictor"),
   );
-
-  const lastRank = $derived(setup.opponents.length + 1);
-  // Re-bounded as the grid shrinks, rather than refused at launch: a rank that
-  // stopped being reachable must not be a reason not to start.
-  $effect(() => {
-    if (setup.start_position > lastRank) setup.start_position = lastRank;
-    if (setup.start_position < 1) setup.start_position = 1;
-  });
 
   function opponentName(carId: string): string {
     return carPool.find((c) => c.id_interne === carId)?.display_name ?? carId;
@@ -410,16 +389,9 @@
          grid is right but the liveries repeat, versus the grid is wrong. -->
     <div class="oppo-h lbl">
       <span>{t("launch.gridHeader", { count: setup.opponents.length })}</span>
+      <!-- La position de départ a rejoint SESSION OPTIONS (§2.5) : elle dépend
+           du type de session, et tout ce qui en dépend vit là-bas. -->
       <span class="oppo-sp"></span>
-      {#if setup.session_type === "race"}
-        <span class="fk lbl-key">{t("launch.startLabel")}</span>
-        <select class="oppo-start" bind:value={setup.start_mode} aria-label={t("launch.startLabel")}>
-          {#each startModes as m (m.value)}<option value={m.value}>{t(m.labelKey)}</option>{/each}
-        </select>
-        {#if setup.start_mode === "custom"}
-          <NumberStepper width={58} min={1} max={lastRank} bind:value={setup.start_position} />
-        {/if}
-      {/if}
       <ColumnsMenu size="header" items={COLUMNS} visible={columns} ontoggle={toggleColumn} />
       <button
         class="oppo-regen"
@@ -664,13 +636,6 @@
   /* Pushes the start position and `Regenerate` to the right of the title. */
   .oppo-sp {
     flex: 1;
-  }
-  .oppo-start {
-    background: var(--panel2);
-    border: 1px solid var(--line);
-    color: var(--txt2);
-    font-size: 9.5px;
-    padding: 2px 4px;
   }
   /* Same width as the difficulty track, so the three settings of the row line
      up on their left edges rather than drifting apart. */

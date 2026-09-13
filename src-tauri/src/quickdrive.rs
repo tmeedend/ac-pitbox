@@ -333,12 +333,12 @@ fn build_grid(s: &RaceSetup) -> Value {
 fn starting_position(s: &RaceSetup) -> usize {
     let last = s.opponents.len() + 1;
     match s.start_mode {
-        StartMode::Last => last,
-        StartMode::First => 1,
         StartMode::Random => fastrand::usize(1..=last),
-        // Borné plutôt que refusé : réduire le nombre d'adversaires après avoir
-        // saisi un rang ne doit pas empêcher de lancer la session.
-        StartMode::Custom => (s.start_position.max(1) as usize).min(last),
+        StartMode::First => 1,
+        // Borné plutôt que refusé : un plateau d'un seul adversaire n'a pas de
+        // deuxième rang, et ça ne doit pas empêcher de lancer la session.
+        StartMode::Second => 2.min(last),
+        StartMode::Last => last,
     }
 }
 
@@ -367,7 +367,7 @@ fn mode_data_hotlap(s: &RaceSetup) -> String {
     json!({
         "GhostCar": s.ghost_car,
         "DoNotRecordGhostCar": false,
-        "GhostCarAdvantage": 0.0,
+        "GhostCarAdvantage": s.ghost_advantage.clamp(0.0, 5.0),
         "Penalties": s.penalties,
         "PlayerBallast": 0,
         "PlayerRestrictor": 0,
@@ -536,8 +536,8 @@ mod tests {
             ai_level_min: 92,
             ai_level_max: 98,
             aggression: 0,
-            start_mode: StartMode::Last,
-            start_position: 0,
+            start_mode: StartMode::Random,
+            ghost_advantage: 0.0,
             laps: 5,
             weather: "sol_01_clear".into(),
             time_hours: 13.0,
@@ -958,16 +958,22 @@ mod tests {
         assert_eq!(grid_of(&s)["StartingPosition"], 6, "5 adversaires + le joueur");
         s.start_mode = StartMode::First;
         assert_eq!(grid_of(&s)["StartingPosition"], 1);
-        s.start_mode = StartMode::Custom;
-        s.start_position = 3;
-        assert_eq!(grid_of(&s)["StartingPosition"], 3);
-        s.start_position = 40;
-        assert_eq!(grid_of(&s)["StartingPosition"], 6, "borné au dernier rang");
-        s.start_position = 0;
-        assert_eq!(grid_of(&s)["StartingPosition"], 1, "jamais sous le premier rang");
+        s.start_mode = StartMode::Second;
+        assert_eq!(grid_of(&s)["StartingPosition"], 2);
         s.start_mode = StartMode::Random;
         let drawn = grid_of(&s)["StartingPosition"].as_u64().unwrap();
         assert!((1..=6).contains(&drawn), "tiré sur la grille, {drawn}");
+        // Un plateau d'un seul adversaire n'a pas de deuxième rang : borné,
+        // jamais un rang qui n'existe pas.
+        s.opponents.truncate(1);
+        s.start_mode = StartMode::Second;
+        assert_eq!(
+            grid_of(&s)["StartingPosition"],
+            2,
+            "2 rangs pour 1 adversaire + le joueur"
+        );
+        s.opponents.clear();
+        assert_eq!(grid_of(&s)["StartingPosition"], 1, "seul en piste : premier");
     }
 
     #[test]

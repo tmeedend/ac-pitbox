@@ -121,19 +121,22 @@ pub struct Opponent {
     pub restrictor: u32,
 }
 
-/// Position de départ du joueur (§4.4) — le `StartingPosition` du preset, qui
-/// est un simple rang. Les trois premières valeurs se résolvent au moment de
-/// construire le preset, parce qu'elles dépendent de la taille du plateau.
+/// Position de départ du joueur (§2.6) — le `StartingPosition` du preset, qui
+/// est un simple rang. Les quatre valeurs se résolvent au moment de construire
+/// le preset, parce que `Last` dépend de la taille du plateau.
+///
+/// Quatre choix et pas un rang libre : au-delà du premier, du deuxième et du
+/// dernier, un rang précis ne répond à aucune question qu'on se pose vraiment
+/// avant une course.
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum StartMode {
-    /// Dernier de la grille — le défaut de Content Manager.
+    /// Le défaut, et le seul qui ne fixe rien.
     #[default]
-    Last,
-    First,
     Random,
-    /// Le rang saisi dans `start_position`.
-    Custom,
+    First,
+    Second,
+    Last,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -175,12 +178,9 @@ pub struct RaceSetup {
     /// milliers d'heures de course ont été réglées.
     #[serde(default)]
     pub aggression: u32,
-    /// Position de départ du joueur (§4.4), **course uniquement**.
+    /// Position de départ du joueur (§2.6), **course uniquement**.
     #[serde(default)]
     pub start_mode: StartMode,
-    /// Rang saisi, lu seulement quand `start_mode` vaut `Custom`.
-    #[serde(default)]
-    pub start_position: u32,
     #[serde(default)]
     pub laps: u32,
     /// Nom du dossier météo (ex. "3_clear").
@@ -245,6 +245,10 @@ pub struct RaceSetup {
     /// Ghost car (Hotlap uniquement) → [GHOST_CAR] du race.ini.
     #[serde(default)]
     pub ghost_car: bool,
+    /// Avance du fantôme, en secondes (§2.8) — le `GhostCarAdvantage` du preset,
+    /// qui y était codé en dur à 0. Hotlap uniquement.
+    #[serde(default)]
+    pub ghost_advantage: f64,
     /// Départ en Practice (mode Practice uniquement) — voir `PracticeStart`.
     #[serde(default = "default_practice_start")]
     pub practice_start: PracticeStart,

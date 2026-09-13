@@ -41,9 +41,22 @@
     size?: "compact" | "toolbar" | "mini" | "main";
     /** Les libellés sont des glyphes : boutons centrés, de largeur égale. */
     icon?: boolean;
+    /** Le groupe entier est neutralisé par son contexte (§2.6) — distinct du
+     * `disabled` d'un item, qui écarte un choix parmi d'autres. Un réglage
+     * visible mais sans effet doit être éteint, pas seulement silencieux. */
+    disabled?: boolean;
   }
 
-  let { items, value, onselect, vertical = false, tone = "accent", size = "compact", icon = false }: Props = $props();
+  let {
+    items,
+    value,
+    onselect,
+    vertical = false,
+    tone = "accent",
+    size = "compact",
+    icon = false,
+    disabled = false,
+  }: Props = $props();
 </script>
 
 <div class="seg {size}" class:vertical class:neutral={tone === "neutral"} class:icon>
@@ -52,7 +65,7 @@
       type="button"
       class:on={value === item.value}
       title={item.title}
-      disabled={item.disabled}
+      disabled={disabled || item.disabled}
       onclick={() => onselect(item.value)}
     >
       {item.label}

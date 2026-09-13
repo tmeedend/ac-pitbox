@@ -8,6 +8,11 @@
     min?: number;
     max?: number;
     step?: number;
+    /** Nombre de décimales retenues ET affichées. Sans lui, un pas de 0,1
+     * rend `0.30000000000000004` à la troisième pression — l'arithmétique
+     * flottante se voit à l'écran. Défaut 0 : entier, le cas de tous les
+     * appelants d'avant. */
+    decimals?: number;
     /** "field" (~32px, champs de formulaire standard) | "compact" (~20px, listes denses). */
     variant?: "field" | "compact";
     width?: number;
@@ -39,6 +44,7 @@
     min,
     max,
     step = 1,
+    decimals = 0,
     variant = "field",
     width,
     disabled = false,
@@ -52,11 +58,12 @@
   let inputEl: HTMLInputElement | null = null;
 
   const isEmpty = (v: number) => emptyValue != null && v === emptyValue;
-  const display = (v: number) => (isEmpty(v) ? "" : String(v));
+  const display = (v: number) => (isEmpty(v) ? "" : decimals > 0 ? v.toFixed(decimals) : String(v));
 
   function clamp(v: number): number {
     if (isEmpty(v)) return v;
-    let n = v;
+    // Arrondi AVANT bornage : c'est ce qui empêche le flottant de ressortir.
+    let n = decimals > 0 ? Number(v.toFixed(decimals)) : v;
     if (min != null) n = Math.max(min, n);
     if (max != null) n = Math.min(max, n);
     return n;

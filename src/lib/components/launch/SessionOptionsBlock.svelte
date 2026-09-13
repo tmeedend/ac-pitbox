@@ -4,10 +4,11 @@
   // do (grip evolution, penalties). Pure presentation: everything is a direct
   // read/write of `setup` (state shared with the parent, §8.6bis) — no logic
   // to lift up.
-  import { type RaceSetup } from "$lib/launch";
+  import { type RaceSetup, type StartMode } from "$lib/launch";
   import { t } from "$lib/i18n/index.svelte";
   import NumberStepper from "../NumberStepper.svelte";
   import Seg from "../Seg.svelte";
+  import Tooltip from "../Tooltip.svelte";
 
   let { setup }: { setup: RaceSetup } = $props();
 
@@ -19,6 +20,25 @@
     setup.qualify_enabled = on;
     if (!on) setup.practice_enabled = false;
   }
+
+  // --- Starting position (§2.6) ---------------------------------------------
+  //
+  // **Neutralised by qualifying, and that is Content Manager's own behaviour**,
+  // not a choice made here: its starting-position control lives in
+  // `QuickDrive_Race` only — the `QuickDrive_Weekend` view, the one that
+  // carries qualifying, has no such binding at all. When a qualifying session
+  // precedes the race, the grid comes from its results.
+  //
+  // Dimmed rather than removed, because this is an internal dependency (a box
+  // ticked here) and not a setting without meaning in this session type — the
+  // same rule that dims a duration under an unticked phase.
+  const startModes: { value: StartMode; labelKey: string }[] = [
+    { value: "random", labelKey: "launch.startRandom" },
+    { value: "first", labelKey: "launch.startFirst" },
+    { value: "second", labelKey: "launch.startSecond" },
+    { value: "last", labelKey: "launch.startLast" },
+  ];
+  const startFixedByQualifying = $derived(setup.session_type === "race" && setup.qualify_enabled);
 </script>
 
 <!-- Session options (§8.4/§8.6): first card of the column, the most consulted.
@@ -44,7 +64,27 @@
     <div class="opts">
       <div class="varies">
         {#if setup.session_type === "hotlap"}
-          <label class="check"><input type="checkbox" bind:checked={setup.ghost_car} /><span>{t("launch.ghostCar")}</span></label>
+          <!-- One control out of a tick and a value, like the two race phases:
+               the advantage only means anything while the ghost is on. Its
+               value survives an untick — one comes back to it. -->
+          <div class="phase" class:off={!setup.ghost_car}>
+            <label class="tick"
+              ><input type="checkbox" bind:checked={setup.ghost_car} /><span>{t("launch.ghostCar")}</span></label
+            >
+            <span class="dur">
+              <span class="unit lbl-key">{t("launch.ghostAdvantage")}</span>
+              <NumberStepper
+                min={0}
+                max={5}
+                step={0.1}
+                decimals={2}
+                width={64}
+                disabled={!setup.ghost_car}
+                bind:value={setup.ghost_advantage}
+              />
+              <span class="unit lbl-key">{t("launch.secondsUnit")}</span>
+            </span>
+          </div>
         {/if}
 
         {#if setup.session_type === "race"}
@@ -68,6 +108,23 @@
                 { value: "1", label: t("launch.jumpStartTeleport") },
                 { value: "2", label: t("launch.jumpStartDrivethrough") },
               ]}
+            />
+          </div>
+        {/if}
+
+        {#if setup.session_type === "race"}
+          <div class:off={startFixedByQualifying}>
+            <span class="fk lbl-key"
+              >{t("launch.startLabel")}{#if startFixedByQualifying}<Tooltip
+                  text={t("launch.startFixedByQualifying")}
+                  align="left"><button type="button" class="info-i">ⓘ</button></Tooltip
+                >{/if}</span
+            >
+            <Seg
+              value={setup.start_mode}
+              disabled={startFixedByQualifying}
+              onselect={(v) => (setup.start_mode = v as StartMode)}
+              items={startModes.map((m) => ({ value: m.value, label: t(m.labelKey) }))}
             />
           </div>
         {/if}
@@ -172,17 +229,17 @@
   .fk {
     text-transform: uppercase;
   }
-  /* `.check` is also defined by the Simulation block — duplicated rather than
-     shared (Svelte CSS is scoped per component, §project conventions). */
-  .check {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    border: 1px solid var(--line);
-    background: var(--panel2);
-    padding: 8px 10px;
-    cursor: pointer;
+  /* Même ⓘ que SIMULATION : une explication permanente vit là, jamais dans un
+     encart jaune. */
+  .info-i {
+    background: transparent;
+    border: none;
+    padding: 0 0 0 4px;
+    color: var(--muted2);
     font-size: 10px;
+    line-height: 1;
+  }
+  .info-i:hover {
     color: var(--txt2);
   }
   /* One control out of a tick and a duration. The stepper keeps its own

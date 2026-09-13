@@ -91,8 +91,7 @@
     ai_level_min: 92,
     ai_level_max: 98,
     aggression: 0,
-    start_mode: "last",
-    start_position: 1,
+    start_mode: "random",
     laps: 5,
     weather: "",
     time_hours: 13,
@@ -110,6 +109,7 @@
     qualify_enabled: true,
     qualify_minutes: 10,
     ghost_car: false,
+    ghost_advantage: 0,
     practice_start: "pit",
     damage: 50,
     fuel_rate: 100,
@@ -652,7 +652,7 @@
     ai_level_min: number; ai_level_max: number; opponent_count: number;
     /** Absents sur un preset antérieur au §4.4 : les défauts de Content
      * Manager, dernier sur la grille et agressivité nulle. */
-    aggression?: number; start_mode?: StartMode; start_position?: number;
+    aggression?: number; start_mode?: StartMode; ghost_advantage?: number;
     /** Vivier d'adversaires (§3.3), sérialisé par `serializeFilters` — la même
      * forme que les filtres de bibliothèque, relue par le même `parseFilters`.
      * Absent sur un preset antérieur aux jetons : `migrateGridPreset` reprend
@@ -747,7 +747,7 @@
   function savePreset() {
     presets[setup.session_type] = {
       ai_level_min: setup.ai_level_min, ai_level_max: setup.ai_level_max,
-      aggression: setup.aggression, start_mode: setup.start_mode, start_position: setup.start_position,
+      aggression: setup.aggression, start_mode: setup.start_mode, ghost_advantage: setup.ghost_advantage,
       opponent_count: opponentCount,
       grid_filters: serializeFilters(gridQuery, gridFilters), grid_pinned: [...gridPinned],
       grid_columns: [...gridColumns], grid_wide: gridWide,
@@ -772,8 +772,10 @@
       setup.ai_level_min = clampAiLevel(p.ai_level_min ?? 92);
       setup.ai_level_max = clampAiLevel(p.ai_level_max ?? 98);
       setup.aggression = Math.max(0, Math.min(100, p.aggression ?? 0));
-      setup.start_mode = p.start_mode ?? "last";
-      setup.start_position = Math.max(1, p.start_position ?? 1);
+      // Un preset d'avant les quatre segments porte `"custom"` ou `"last"` :
+      // seul `last` existe encore, le reste retombe sur le défaut.
+      setup.start_mode = p.start_mode === "last" || p.start_mode === "first" ? p.start_mode : "random";
+      setup.ghost_advantage = Math.max(0, Math.min(5, p.ghost_advantage ?? 0));
       gridColumns = p.grid_columns ?? ["ratio", "strength"];
       gridWide = p.grid_wide ?? false;
       opponentCount = p.opponent_count ?? 7;
@@ -813,7 +815,7 @@
   });
 
   $effect(() => {
-    void [setup.ai_level_min, setup.ai_level_max, setup.aggression, setup.start_mode, setup.start_position,
+    void [setup.ai_level_min, setup.ai_level_max, setup.aggression, setup.start_mode, setup.ghost_advantage,
       opponentCount, gridFilters, gridQuery, gridPinned, gridColumns, gridWide,
       setup.laps,
       setup.time_hours, setup.penalties, setup.jump_start_penalty, setup.grip,
