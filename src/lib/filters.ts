@@ -17,6 +17,7 @@
 // This module is deliberately free of Svelte and of the DOM: catalogue,
 // evaluation and summaries are plain functions, so the two library screens
 // (cars and tracks) share them and they stay readable on their own.
+import { carPerf, clampPerfPct, perfBand, PERF_DEFAULT_PCT } from "./carSpecs";
 import { modTags } from "./cardSearch";
 import type { ModCard, ModKind } from "./library";
 import { t } from "./i18n/index.svelte";
@@ -36,7 +37,13 @@ export type FilterState =
   | { type: "val"; values: SignedValue[]; op: Operator }
   | { type: "range"; min: number | null; max: number | null }
   | { type: "text"; text: string }
-  | { type: "bool"; sign: Sign };
+  | { type: "bool"; sign: Sign }
+  /** Performance band, as a percentage of the SESSION car's kg/bhp (§3.4).
+   * Only the tolerance is stored: the reference is read from the context, so
+   * the band follows the car one drives instead of freezing the ratio it had
+   * the day the chip was posed - which is the whole point of "cars that run at
+   * the level of mine". */
+  | { type: "perf"; pct: number };
 
 export type FilterMap = Record<string, FilterState>;
 
@@ -100,6 +107,7 @@ export function filterDefs(kind: ModKind): FilterDef[] {
     defs.push(
       { key: "year", labelKey: "library.filterYear", type: "range" },
       { key: "carClass", labelKey: "library.filterClass", type: "val" },
+      { key: "performance", labelKey: "library.filterPerformance", type: "perf" },
     );
   }
   defs.push(
@@ -148,6 +156,23 @@ export interface FilterContext {
   noteOf: (c: ModCard) => string | undefined;
   /** Whether this car has been given a driver outfit of its own. */
   hasDriver: (id: string) => boolean;
+  /** kg/bhp of a card, `null` when its spec sheet is unreadable (§3.4). Read
+   * off an index built once per list load, never re-parsed per keystroke. */
+  ratioOf: (c: ModCard) => number | null;
+  /** The car the band is measured against - the session car. `null` when there
+   * is none, or when its own specs are unreadable. */
+  perfRef: PerfRef | null;
+}
+
+/** The reference of a performance band, kept whole so the editor can say what
+ * it is measuring against rather than showing a bare percentage. */
+export interface PerfRef {
+  id: string;
+  name: string;
+  bhp: number | null;
+  kg: number | null;
+  /** `null` when either side is unreadable - the band then cannot be drawn. */
+  ratio: number | null;
 }
 
 const one = (v: string | null): string[] => (v ? [v] : []);
@@ -289,6 +314,20 @@ export function buildPredicate(
         if (max != null && (c.year ?? 9999) > max) return false;
         return true;
       });
+    } else if (st.type === "perf") {
+      // No reference, or a reference whose own specs are unreadable: the chip
+      // stays and says so, but it filters NOTHING. Emptying a library of 311
+      // cars because the session car writes its power in `ps` would look like
+      // a bug, and the user could not tell it from one.
+      const ref = ctx.perfRef?.ratio;
+      if (ref == null) continue;
+      const { min, max } = perfBand(ref, clampPerfPct(st.pct));
+      const get = ctx.ratioOf;
+      // An unreadable car is EXCLUDED, never estimated into the band (§3.4).
+      tests.push((c) => {
+        const r = get(c);
+        return r != null && r >= min && r <= max;
+      });
     } else {
       const words = terms(st.text);
       if (!words.length) continue;
@@ -318,6 +357,7 @@ export function isBlank(st: FilterState): boolean {
     case "text":
       return st.text.trim() === "";
     case "bool":
+    case "perf":
       return false;
   }
 }
@@ -333,6 +373,8 @@ export function blankState(def: FilterDef): FilterState {
       return { type: "text", text: "" };
     case "bool":
       return { type: "bool", sign: def.defaultSign ?? 1 };
+    case "perf":
+      return { type: "perf", pct: PERF_DEFAULT_PCT };
   }
 }
 
@@ -386,6 +428,12 @@ export function chipSummary(def: FilterDef, st: FilterState): ChipSummary {
     return { ...empty, plain: `${st.min ?? dash} – ${st.max ?? dash}` };
   }
   if (st.type === "text") return { ...empty, plain: st.text };
+  // The chip carries the tolerance and nothing else. The reference car, the
+  // computed kg/bhp bounds and the count of cars left out for unreadable specs
+  // are three lines of prose: they live in the editor popover, which is where
+  // one goes to change the tolerance anyway - and which is what the mock-up
+  // itself draws (`Performance : ±15%`).
+  if (st.type === "perf") return { ...empty, plain: `±${clampPerfPct(st.pct)}%` };
   return { ...empty, plain: "", negative: st.sign < 0 };
 }
 
@@ -396,6 +444,7 @@ export function ariaSummary(def: FilterDef, st: FilterState): string {
   if (st.type === "bool") return st.sign > 0 ? label : t(def.negLabelKey ?? def.labelKey);
   if (st.type === "range") return `${label} : ${st.min ?? "…"} – ${st.max ?? "…"}`;
   if (st.type === "text") return `${label} : ${st.text}`;
+  if (st.type === "perf") return `${label} : ±${clampPerfPct(st.pct)}%`;
   const inc = st.values.filter((v) => v.sign > 0).map((v) => valueLabel(def, v.value));
   const exc = st.values.filter((v) => v.sign < 0).map((v) => valueLabel(def, v.value));
   const parts: string[] = [];
@@ -454,6 +503,8 @@ function sanitize(raw: unknown, defs: FilterDef[]): FilterMap {
       out[def.key] = { type: "text", text: st.text };
     } else if (st.type === "bool") {
       out[def.key] = { type: "bool", sign: st.sign === -1 ? -1 : 1 };
+    } else if (st.type === "perf") {
+      out[def.key] = { type: "perf", pct: clampPerfPct(st.pct) };
     }
   }
   return out;
@@ -602,6 +653,10 @@ export interface CardIndex {
   optionsFor: (key: string) => FilterOption[];
   /** Decade shortcuts of the year filter, deduced from the pool. */
   yearPresets: { label: string; min: number; max: number }[];
+  /** How many cars of the pool a performance band can never keep, because
+   * their spec sheet is unreadable (§3.4). Said out loud in the editor rather
+   * than swallowed: on a real library of 311 cars it is 20 of them. */
+  perfUnreadable: number;
 }
 
 /**
@@ -623,12 +678,28 @@ export function buildCardIndex(
   defs: FilterDef[],
   isCar: boolean,
   hasDriver: (id: string) => boolean,
+  /** Id of the car the performance band is measured against - the session car.
+   * `null` on the track library, and on a first run with no session car yet. */
+  perfRefId: string | null = null,
 ): CardIndex {
   const descIndex = new Map<string, string>();
   const noteIndex = new Map<string, string>();
+  // Parsed ONCE per list load, like the descriptions above and for the same
+  // reason: the tolerance slider re-evaluates the predicate at every notch, and
+  // re-reading 311 spec sheets per notch is what makes a slider stutter.
+  const ratioIndex = new Map<string, number>();
+  let perfUnreadable = 0;
+  let perfRef: PerfRef | null = null;
   for (const c of cards) {
     if (c.description) descIndex.set(c.id_interne, c.description.replace(/<[^>]*>/g, " ").toLowerCase());
     if (c.notes_user) noteIndex.set(c.id_interne, c.notes_user.toLowerCase());
+    if (!isCar) continue;
+    const perf = carPerf(c.bhp, c.weight);
+    if (perf.ratio != null) ratioIndex.set(c.id_interne, perf.ratio);
+    else perfUnreadable++;
+    if (c.id_interne === perfRefId) {
+      perfRef = { id: c.id_interne, name: c.display_name ?? c.id_interne, bhp: perf.bhp, kg: perf.kg, ratio: perf.ratio };
+    }
   }
   const ctx: FilterContext = {
     isCar,
@@ -636,6 +707,8 @@ export function buildCardIndex(
     descOf: (c) => descIndex.get(c.id_interne),
     noteOf: (c) => noteIndex.get(c.id_interne),
     hasDriver,
+    ratioOf: (c) => ratioIndex.get(c.id_interne) ?? null,
+    perfRef,
   };
   const options = new Map<string, FilterOption[]>();
   for (const def of defs) {
@@ -645,5 +718,6 @@ export function buildCardIndex(
     ctx,
     optionsFor: (key) => options.get(key) ?? [],
     yearPresets: isCar ? decadePresets(cards.map((c) => c.year ?? 0)) : [],
+    perfUnreadable,
   };
 }

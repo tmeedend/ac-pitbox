@@ -84,6 +84,12 @@ export interface ModCard {
   tried: boolean;
   /** Poids natif (voitures), lu à la volée dans ui_car.json (§6.2). */
   weight: string | null;
+  /** Puissance native (voitures), lue dans la même fiche que le poids. Les
+   * deux ensemble donnent le rapport kg/bhp du filtre `Performance` (§3.4) —
+   * porté par la carte pour que le calcul reste côté front, comme
+   * `description` et `notes_user`. Texte brut de l'auteur, jamais nettoyé :
+   * `carSpecs.ts` décide seul de ce qui est lisible. */
+  bhp: string | null;
   /** Effective description (§6.1): the user's own text when they wrote one,
    * the `ui_*.json` one otherwise - already arbitrated Rust-side. Carried by
    * the card so the description filter runs client-side, with no backend

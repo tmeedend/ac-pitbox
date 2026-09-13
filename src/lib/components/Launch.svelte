@@ -1126,6 +1126,7 @@
     pool={carPool}
     mode={pickerIndex != null ? "replace" : "add"}
     initialFilters={poolChips()}
+    perfRefId={setup.car_id}
     gridCount={setup.opponents.length}
     gridTarget={opponentCount}
     slotNumber={(pickerIndex ?? 0) + 1}

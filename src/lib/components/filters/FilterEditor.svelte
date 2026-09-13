@@ -12,8 +12,10 @@
   // jamais d'éditeur.
   import { untrack } from "svelte";
   import NumberStepper from "../NumberStepper.svelte";
+  import Slider from "../Slider.svelte";
   import { t } from "$lib/i18n/index.svelte";
-  import { valueLabel, type FilterDef, type FilterOption, type FilterState, type Sign } from "$lib/filters";
+  import { clampPerfPct, formatRatio, perfBand, PERF_MAX_PCT, PERF_MIN_PCT, PERF_STEP } from "$lib/carSpecs";
+  import { valueLabel, type FilterDef, type FilterOption, type FilterState, type PerfRef, type Sign } from "$lib/filters";
 
   interface Props {
     def: FilterDef;
@@ -22,9 +24,20 @@
     options: FilterOption[];
     /** Raccourcis de décennie (`range` seulement). */
     presets: { label: string; min: number; max: number }[];
+    /** Voiture de référence de la bande de performance (`perf` seulement) et
+     * nombre de voitures que leurs specs illisibles écartent d'office. */
+    perfRef?: PerfRef | null;
+    perfUnreadable?: number;
     onupdate: (next: FilterState) => void;
   }
-  let { def, st, options, presets, onupdate }: Props = $props();
+  let { def, st, options, presets, perfRef = null, perfUnreadable = 0, onupdate }: Props = $props();
+
+  // Bande de performance (§3.4) : les bornes réelles en kg/bhp, pas seulement
+  // le pourcentage. Un « ±15 % » ne dit pas ce qu'il laisse passer ; « 3,0 à
+  // 4,1 kg/bhp » le dit, et c'est la seule façon de comprendre pourquoi une
+  // voiture précise entre ou n'entre pas.
+  const perfPct = $derived(st.type === "perf" ? clampPerfPct(st.pct) : 0);
+  const perfBounds = $derived(perfRef?.ratio != null ? perfBand(perfRef.ratio, perfPct) : null);
 
   // « Rien de ce côté » côté NumberStepper : une sentinelle plutôt qu'un
   // `null`, `value` restant un `number` pour tous ses appelants (voir son
@@ -231,6 +244,39 @@
         {/each}
       </div>
     {/if}
+  {:else if st.type === "perf"}
+    <!-- Sans référence lisible, la bande ne peut pas être tracée : le dire,
+         plutôt que d'afficher un curseur qui ne filtrerait rien en silence. -->
+    {#if perfRef?.ratio == null}
+      <p class="perf-none">
+        {perfRef ? t("library.perfRefUnreadable", { name: perfRef.name }) : t("library.perfNoRef")}
+      </p>
+    {:else}
+      <Slider
+        compact
+        label={t("library.perfTolerance")}
+        min={PERF_MIN_PCT}
+        max={PERF_MAX_PCT}
+        step={PERF_STEP}
+        value={perfPct}
+        display={`±${perfPct}%`}
+        oninput={(v) => onupdate({ type: "perf", pct: clampPerfPct(v) })}
+      />
+      <p class="perf-ref">
+        {t("library.perfReference", {
+          name: perfRef.name,
+          bhp: perfRef.bhp ?? 0,
+          kg: perfRef.kg ?? 0,
+          ratio: formatRatio(perfRef.ratio),
+        })}
+      </p>
+      {#if perfBounds}
+        <p class="perf-band mono">{formatRatio(perfBounds.min)} – {formatRatio(perfBounds.max)} kg/bhp</p>
+      {/if}
+    {/if}
+    {#if perfUnreadable > 0}
+      <p class="perf-out">{t("library.perfUnreadable", { count: perfUnreadable })}</p>
+    {/if}
   {:else if st.type === "text"}
     <input
       bind:this={inputEl}
@@ -245,6 +291,31 @@
 </div>
 
 <style>
+  /* Trois registres, trois poids : le réglage, ce sur quoi il porte, et ce
+     qu'il laisse dehors. Sans cet écart les trois lignes se lisent comme un
+     paragraphe et on ne trouve plus les bornes. */
+  .perf-ref,
+  .perf-none {
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+  .perf-band {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: var(--txt);
+  }
+  /* Jaune, pas rouge : une voiture sans specs lisibles n'est pas une erreur,
+     c'est une donnée qui manque — même couleur que `.warnbox`, qui porte déjà
+     l'alerte non bloquante de l'app. */
+  .perf-out {
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: var(--yellow);
+    line-height: 1.45;
+  }
+
   .ed {
     display: flex;
     flex-direction: column;

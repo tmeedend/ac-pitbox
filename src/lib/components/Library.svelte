@@ -685,7 +685,11 @@
   // seconde copie aurait dérivé au premier champ ajouté — le nom du pack et la
   // note de l'utilisateur sont tous deux entrés dans la botte de foin après
   // coup.
-  const index = $derived(buildCardIndex(typed, defs, isCar, hasOwnDriver));
+  // La référence de la bande de performance est la **voiture de session**, sur
+  // cet écran comme dans le bloc Adversaires : « montre-moi tout ce qui roule
+  // au niveau de ma 488 » se pose aussi hors session, et la 488 en question
+  // est toujours celle que la colonne de droite affiche (§3.4).
+  const index = $derived(buildCardIndex(typed, defs, isCar, hasOwnDriver, isCar ? nav.sessionCar?.id ?? null : null));
 
   const matchesFilters = $derived(buildPredicate(defs, filters, index.ctx));
 
@@ -849,6 +853,8 @@
       optionsFor={index.optionsFor}
       presets={index.yearPresets}
       resultCount={filtered.length}
+      perfRef={index.ctx.perfRef}
+      perfUnreadable={index.perfUnreadable}
     >
       {#snippet end()}
         {#if shown === "table"}

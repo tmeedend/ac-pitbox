@@ -30,6 +30,11 @@
     mode: "add" | "replace";
     /** Chips derived from the active grid mode, posed at opening (§9.3). */
     initialFilters: FilterMap;
+    /** Car the performance band is measured against (§3.4) — the one being
+     * driven. The modal offers the same catalogue as the library, so the same
+     * reference has to reach it, or a `Performance` chip posed here would say
+     * it has nothing to compare to. */
+    perfRefId?: string | null;
     /** "add": how many opponents the grid holds, and how many are asked for. */
     gridCount?: number;
     gridTarget?: number;
@@ -44,6 +49,7 @@
     pool,
     mode,
     initialFilters,
+    perfRefId = null,
     gridCount = 0,
     gridTarget = 0,
     slotNumber = 1,
@@ -61,7 +67,7 @@
   let pinned = $state<string[]>(untrack(() => Object.keys(initialFilters)));
   let query = $state("");
 
-  const index = $derived(buildCardIndex(pool, defs, true, hasOwnDriver));
+  const index = $derived(buildCardIndex(pool, defs, true, hasOwnDriver, perfRefId));
   const matchesFilters = $derived(buildPredicate(defs, filters, index.ctx));
   const results = $derived(
     pool
@@ -199,6 +205,8 @@
         optionsFor={index.optionsFor}
         presets={index.yearPresets}
         resultCount={results.length}
+        perfRef={index.ctx.perfRef}
+        perfUnreadable={index.perfUnreadable}
       />
     </div>
 

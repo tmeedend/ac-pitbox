@@ -31,6 +31,7 @@
     type FilterMap,
     type FilterOption,
     type FilterState,
+    type PerfRef,
     type Sign,
   } from "$lib/filters";
 
@@ -44,6 +45,11 @@
     /** Raccourcis de décennie du filtre d'année, déduits de la bibliothèque. */
     presets: { label: string; min: number; max: number }[];
     resultCount: number;
+    /** Voiture de référence de la bande de performance (§3.4) et nombre de
+     * voitures que leurs specs illisibles écartent — l'éditeur du filtre
+     * `perf` s'en sert pour dire sur quoi il mesure. */
+    perfRef?: PerfRef | null;
+    perfUnreadable?: number;
     /** Ce que l'écran range dans le bloc de droite (colonnes, vue). */
     end?: Snippet;
   }
@@ -55,6 +61,8 @@
     optionsFor,
     presets,
     resultCount,
+    perfRef = null,
+    perfUnreadable = 0,
     end,
   }: Props = $props();
 
@@ -287,6 +295,8 @@
       st={openState}
       options={optionsFor(openKey)}
       {presets}
+      {perfRef}
+      {perfUnreadable}
       onupdate={(next) => update(openDef.key, next)}
     />
   </AnchoredPopover>

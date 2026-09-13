@@ -31,6 +31,13 @@ pub struct ModCard {
     pub tried: bool,
     /// Poids natif (voitures), lu à la volée dans ui_car.json — colonne §6.2.
     pub weight: Option<String>,
+    /// Puissance native (voitures), lue dans le **même** `NativeSpecs` que le
+    /// poids — la fiche est déjà ouverte et analysée une fois par carte, donc
+    /// ce champ ne coûte aucune lecture de plus. Les deux ensemble portent le
+    /// rapport poids/puissance du filtre `Performance` (§3.4), qui a besoin
+    /// d'être calculable **par carte, côté front**, sans aller-retour backend
+    /// à chaque cran du curseur de tolérance.
+    pub bhp: Option<String>,
     /// Effective description: the user's own text (§5bis.3) when there is one,
     /// otherwise the `ui_*.json` one. Same arbitration as the detail view, but
     /// carried by the card so the library's description filter (§6.1) stays
@@ -146,6 +153,7 @@ fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
     let active = is_active(cfg, &m);
     let native = car_specs_for(conn, cfg, &m);
     let weight = native.as_ref().and_then(|s| s.weight.clone());
+    let bhp = native.as_ref().and_then(|s| s.bhp.clone());
     let description = description_for(conn, cfg, &m, native.as_ref());
     let badge = badge_for(conn, cfg, &m);
     let broken = crate::maintenance::broken_reason(conn, cfg, &m).is_some();
@@ -157,6 +165,7 @@ fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
         distance_km: None,
         tried: false,
         weight,
+        bhp,
         description,
         badge,
         broken,
