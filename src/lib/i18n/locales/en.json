@@ -354,6 +354,7 @@
     "crossfade": "Crossfade"
   },
   "common": {
+    "noResults": "No result for this search.",
     "error": "Error",
     "all": "All",
     "allFem": "All",

@@ -354,6 +354,7 @@
     "crossfade": "Fondu"
   },
   "common": {
+    "noResults": "Aucun résultat pour cette recherche.",
     "error": "Erreur",
     "all": "Tous",
     "allFem": "Toutes",
