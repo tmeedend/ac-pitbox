@@ -266,9 +266,14 @@
 </script>
 
 <!-- Opponents (race and track day only, §3) -->
-<section class="blk">
+<section class="blk oppo-blk">
   <header class="blk-h"><span class="blk-t">{t("launch.opponentsLabel")}</span></header>
   <div class="blk-b">
+  <!-- Tout ce qui n'est pas la grille reste à sa largeur de repos, même en
+       mode élargi : un champ de recherche et trois puces étalés sur 1200 px
+       ne gagnent rien, et la barre de filtres doit rester le même objet que
+       dans la bibliothèque (§2.3). -->
+  <div class="head-cap" class:capped={wide}>
 
   <!-- The library's own filter bar, third consumer. The chips row below is not
        a second way of filtering: it poses tokens INTO this bar, which is why a
@@ -396,8 +401,9 @@
   {:else if poolCount === 0}
     <p class="warnbox thin">{t("launch.poolEmpty")}</p>
   {/if}
+  </div>
 
-  <div class="oppo">
+  <div class="oppo" class:wide>
     <!-- `Regenerate` is NOT `Fill` with another name: it keeps the cars and
          re-rolls what was drawn on them (skin, strength), where `Fill` draws
          the cars themselves. Two gestures one actually wants separately — the
@@ -438,11 +444,15 @@
              before one tries. -->
         <span class="oppo-n lbl-key ro">{t("columns.name")}</span>
         {#if shows("driver")}<span class="oppo-driver lbl-key">{t("launch.colDriver")}</span>{/if}
-        {#if shows("nationality")}<span class="oppo-nat lbl-key">{t("launch.colNatShort")}</span>{/if}
+        <!-- Abréviations levées en mode élargi (§2.4) : la place gagnée sert
+             d'abord à nommer les colonnes en entier. `Restrictor` y reprend le
+             mot exact de la carte voiture du joueur, pour que le lien entre
+             les deux réglages se voie. -->
+        {#if shows("nationality")}<span class="oppo-nat lbl-key">{wide ? t("launch.colNationality") : t("launch.colNatShort")}</span>{/if}
         {#if shows("ratio")}<span class="oppo-ratio lbl-key">{t("launch.colRatio")}</span>{/if}
-        {#if shows("strength")}<span class="oppo-force lbl-key">{t("launch.colStrShort")}</span>{/if}
+        {#if shows("strength")}<span class="oppo-force lbl-key">{wide ? t("launch.colStrength") : t("launch.colStrShort")}</span>{/if}
         {#if shows("ballast")}<span class="oppo-bal lbl-key">{t("launch.colBallast")}</span>{/if}
-        {#if shows("restrictor")}<span class="oppo-res lbl-key">{t("launch.colResShort")}</span>{/if}
+        {#if shows("restrictor")}<span class="oppo-res lbl-key">{wide ? t("launch.colRestrictor") : t("launch.colResShort")}</span>{/if}
         <span class="th-act"></span>
       </div>
     {/if}
@@ -640,6 +650,11 @@
   .oppo-th .ro {
     color: var(--faint);
   }
+  /* 600 px : la largeur que le bloc reçoit réellement en mode normal, et celle
+     sur laquelle le plateau a été dessiné. */
+  .head-cap.capped {
+    max-width: 600px;
+  }
   .oppo-foot {
     display: flex;
     gap: 7px;
@@ -779,6 +794,11 @@
     object-fit: cover;
     object-position: center 60%;
   }
+  /* Plafonnée en mode élargi (§2.4) : sans ce cap, la largeur gagnée allait
+     toute au nom, et l'écart entre lui et `Driver name` devenait assez grand
+     pour qu'on perde la ligne en la parcourant des yeux. Ce qu'on est venu
+     chercher en élargissant, ce sont des colonnes de plus, pas une colonne
+     plus large. */
   .oppo-n {
     font-size: 10.5px;
     flex: 1;
@@ -786,6 +806,25 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .oppo.wide .oppo-n {
+    flex: 0 1 300px;
+  }
+  /* La place restante va au vide en fin de ligne plutôt qu'à une colonne
+     arbitraire : chaque cellule garde la largeur qui la rend lisible. */
+  .oppo.wide .oppo-row::after {
+    content: "";
+    flex: 1;
+  }
+  .oppo.wide .oppo-driver {
+    width: 150px;
+  }
+  .oppo.wide .oppo-nat {
+    width: 110px;
+  }
+  .oppo.wide .oppo-bal,
+  .oppo.wide .oppo-res {
+    width: 72px;
   }
   .oppo-skin {
     color: var(--muted);

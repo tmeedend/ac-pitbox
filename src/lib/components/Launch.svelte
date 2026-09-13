@@ -1443,7 +1443,27 @@
     grid-template-columns: 1.35fr 1fr;
     gap: 26px;
   }
+  /* `⤢` élargissait toute la page (§2.3). Il n'élargit plus que la **grille**.
+     Les curseurs de SIMULATION étirés sur 1200 px avaient une course souris
+     disproportionnée pour un réglage qu'on pose au pourcentage près, et le
+     bloc ne ressemblait plus au même composant d'un mode à l'autre.
+     La colonne de droite passe dessous, comme prévu ; la colonne centrale, elle,
+     est plafonnée et reste calée à gauche. */
   .cols.wide {
     grid-template-columns: 1fr;
+  }
+  /* 600 px : la largeur que ces blocs reçoivent réellement en mode normal, et
+     celle sur laquelle le plateau a été dessiné. Plafond et non largeur fixe —
+     une fenêtre étroite doit encore pouvoir les rétrécir. */
+  .cols.wide :global(.blk) {
+    max-width: 600px;
+  }
+  /* Le bloc Adversaires est exempté du plafond : c'est lui qu'on est venu
+     élargir. Le plafond y est reposé **à l'intérieur**, sur son en-tête seul,
+     pour que la grille soit la seule chose à s'étendre (§2.3). `:global` parce
+     que le bloc est rendu par un composant enfant et que le CSS de Svelte est
+     scopé — sans ça la règle ne l'atteindrait pas. */
+  .cols.wide :global(.blk.oppo-blk) {
+    max-width: none;
   }
 </style>
