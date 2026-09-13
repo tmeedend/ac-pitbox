@@ -49,9 +49,14 @@
   import SessionTypeBlock from "./launch/SessionTypeBlock.svelte";
   import NamedListDialog from "./NamedListDialog.svelte";
   import OpponentPicker from "./OpponentPicker.svelte";
-  import SavedSessionsBlock from "./launch/SavedSessionsBlock.svelte";
   import LoadingState from "./LoadingState.svelte";
-  import { saveSession, listSavedSessions, type SavedSession } from "$lib/savedSessions";
+  import {
+    saveSession,
+    listSavedSessions,
+    deleteSavedSession,
+    formatSavedAt,
+    type SavedSession,
+  } from "$lib/savedSessions";
   import { deleteSavedGrid, listSavedGrids, saveGrid, type SavedGrid } from "$lib/savedGrids";
 
   import { errorText } from "$lib/errors";
@@ -1040,17 +1045,43 @@
   // La liste (carte « Sessions enregistrées ») est filtrée par type — un
   // effet la recharge à chaque changement d'onglet, et le save/delete la
   // rafraîchissent en plus puisqu'ils ne changent pas le type. ---
-  let saveDialogOpen = $state(false);
+  // Deux boutons et une modale, comme les grilles (§2.11) : enregistrer et
+  // recharger une configuration nommée est le même geste des deux côtés, il ne
+  // peut pas avoir deux grammaires d'interface.
+  //
+  // **Dans la barre de titre**, et pas à côté du type de session : ça
+  // suggérerait que la sauvegarde est rattachée au type, alors qu'elle porte
+  // sur toute la configuration de la page. L'action se place au niveau de ce
+  // qu'elle enregistre — d'où `Save grid…` en bas de la grille et celle-ci en
+  // en-tête d'écran.
+  let sessionDialog = $state<"save" | "load" | null>(null);
   let savedList = $state<SavedSession[]>([]);
   $effect(() => {
     const type = setup.session_type;
-    // Le type peut changer avant que la réponse (invoke Rust) n'arrive :
-    // n'applique le résultat que s'il correspond encore au type courant,
-    // sinon une réponse tardive écraserait la liste avec le mauvais type.
+    // Le type ne filtre plus, il TRIE (§2.11) : la liste les porte toutes, et
+    // celles du type courant viennent en tête. Le type peut changer avant que
+    // la réponse (invoke Rust) n'arrive — n'applique le résultat que s'il
+    // correspond encore, sinon une réponse tardive rendrait un tri périmé.
     listSavedSessions(type).then((list) => {
       if (setup.session_type === type) savedList = list;
     });
   });
+
+  /** Ce qui distingue deux sauvegardes d'un coup d'œil : son type — devenu une
+   * propriété affichée depuis qu'il ne filtre plus —, son circuit, sa date. */
+  function savedMeta(s: SavedSession): string {
+    const track = libCards.find((c) => c.id_interne === s.setup.track_id)?.display_name ?? s.setup.track_id;
+    return [t(`launch.type.${s.setup.session_type}`), track, formatSavedAt(s.savedAt)].filter(Boolean).join(" · ");
+  }
+
+  async function removeSavedSession(name: string) {
+    // Le type vient de l'entrée elle-même, pas de l'écran : la liste n'est plus
+    // filtrée, donc on peut très bien supprimer une session d'un autre type que
+    // celui qu'on est en train de régler.
+    const entry = savedList.find((s) => s.name === name);
+    if (entry) await deleteSavedSession(entry.setup.session_type, name);
+    savedList = await listSavedSessions(setup.session_type);
+  }
 
   async function doSaveSession(name: string) {
     // Skins de circuit actifs : état de déploiement, pas un champ de `setup` —
@@ -1070,7 +1101,7 @@
       trackSkins,
     });
     savedList = await listSavedSessions(setup.session_type);
-    saveDialogOpen = false;
+    sessionDialog = null;
   }
 
   /** Charge une session enregistrée (§8.4bis) : réglages **et** duo de session
@@ -1195,6 +1226,14 @@
        « Paramétrage de la session » — plus de bouton Lancer sur cet écran. -->
   <header class="bar">
     <h1 class="lbl-screen">{t("launch.pageTitle")}</h1>
+    <!-- Le décompte passe sur le bouton : il disait « 12 » à côté d'un titre
+         qui ne parlait pas de sauvegardes. -->
+    <div class="hbtns">
+      <button class="btn" type="button" onclick={() => (sessionDialog = "save")}>{t("launch.saveSession")}</button>
+      <button class="btn" type="button" onclick={() => (sessionDialog = "load")}
+        >{t("launch.loadSession")}{#if savedList.length}&nbsp;({savedList.length}){/if}</button
+      >
+    </div>
   </header>
 
   {#if info}<div class="ok">{info}</div>{/if}
@@ -1255,16 +1294,6 @@
 
       <!-- COLONNE DROITE -->
       <div>
-        <SavedSessionsBlock
-          sessionType={setup.session_type}
-          {savedList}
-          dialogOpen={saveDialogOpen}
-          onopendialog={() => (saveDialogOpen = true)}
-          onclosedialog={() => (saveDialogOpen = false)}
-          onsave={doSaveSession}
-          onload={doLoadSession}
-        />
-
         <!-- Voisins par nécessité et non par commodité de mise en page :
              l'entrée « Auto (set by weather) » de l'état de piste ne se lit
              que si la météo qui la pilote est sous les yeux. Ne rien
@@ -1295,6 +1324,25 @@
      bandeau, parce qu'il y a un geste à faire hors de l'app et qu'il faut
      revérifier après — un texte passif laisserait l'utilisateur relancer dans
      le vide. -->
+{#if sessionDialog}
+  <NamedListDialog
+    mode={sessionDialog}
+    searchable
+    title={t(sessionDialog === "save" ? "launch.saveSessionTitle" : "launch.loadSessionTitle")}
+    placeholder={t(sessionDialog === "save" ? "launch.sessionNamePlaceholder" : "launch.sessionSearchPlaceholder")}
+    emptyText={t("launch.noSavedSessions")}
+    entries={savedList.map((s) => ({ name: s.name, meta: savedMeta(s) }))}
+    onsave={(name) => void doSaveSession(name)}
+    onpick={(name) => {
+      const s = savedList.find((x) => x.name === name);
+      sessionDialog = null;
+      if (s) void doLoadSession(s);
+    }}
+    ondelete={(name) => void removeSavedSession(name)}
+    onclose={() => (sessionDialog = null)}
+  />
+{/if}
+
 {#if gridDialog}
   <NamedListDialog
     mode={gridDialog}
@@ -1353,7 +1401,7 @@
 {/if}
 
 <style>
-  /* Dialogue Steam — même langage visuel que `SavedSessionsDialog` ; le CSS
+  /* Dialogue Steam — même langage visuel que `NamedListDialog` ; le CSS
      des composants étant scopé, il se recopie plutôt qu'il ne s'hérite. */
   .backdrop {
     position: fixed;
@@ -1424,6 +1472,11 @@
     background-size: cover;
     background-position: center;
     filter: blur(32px);
+  }
+  /* Les deux boutons de sauvegarde, à droite du titre d'écran. */
+  .hbtns {
+    display: flex;
+    gap: 8px;
   }
   .bar {
     display: flex;

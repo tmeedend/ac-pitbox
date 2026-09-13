@@ -110,12 +110,26 @@ function persist(all: Record<string, SavedSession>): Promise<void> {
   return invoke<void>("save_saved_sessions", { all }).catch((e) => console.error("save_saved_sessions", e));
 }
 
-/** Sauvegardes du type de session donné, les plus récentes d'abord. */
+/**
+ * **Toutes** les sauvegardes, celles du type courant en tête (§2.11).
+ *
+ * Le filtre par type a été retiré parce qu'il était **invisible**. Quelqu'un
+ * qui avait enregistré une session en Course et la cherchait depuis Practice ne
+ * voyait pas une liste filtrée : il voyait une liste vide, et en concluait que
+ * sa sauvegarde avait échoué. Charger une session bascule le type — il fait
+ * partie de ce qui est enregistré —, donc la charger depuis un autre type est
+ * une opération parfaitement valide qu'il n'y avait aucune raison de masquer.
+ *
+ * Le bénéfice pratique du filtre est conservé par le **tri** : ce qu'on cherche
+ * le plus souvent est en tête, et rien n'est caché.
+ */
 export async function listSavedSessions(sessionType: SessionType): Promise<SavedSession[]> {
   const all = await loadAll();
-  return Object.values(all)
-    .filter((s) => s.setup.session_type === sessionType)
-    .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+  return Object.values(all).sort((a, b) => {
+    const am = a.setup.session_type === sessionType ? 0 : 1;
+    const bm = b.setup.session_type === sessionType ? 0 : 1;
+    return am !== bm ? am - bm : b.savedAt.localeCompare(a.savedAt);
+  });
 }
 
 /** Enregistre (ou écrase si le nom existe déjà pour ce type) une session. */

@@ -608,7 +608,7 @@
     border-bottom: 1px solid var(--line);
   }
   /* Même traitement que les autres popups (OpponentPicker,
-     SavedSessionsDialog) : pas un quatrième niveau de libellé. */
+     NamedListDialog) : pas un quatrième niveau de libellé. */
   h2 {
     font-size: 13px;
     letter-spacing: 0.5px;
