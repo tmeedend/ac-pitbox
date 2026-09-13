@@ -116,6 +116,15 @@ const CLASS_MAP: [string, string][] = [
   ["mw-halign-right", "wiki-right"],
   ["mw-halign-left", "wiki-left"],
   ["mw-halign-center", "wiki-center"],
+  // **Et le balisage ancien, que Wikipedia sert encore selon les pages** :
+  // `<div class="thumb tright">` au lieu de `<figure class="mw-halign-right">`.
+  // Ne reconnaitre que le moderne a coute un tour : les vignettes cessaient de
+  // flotter au lieu de former une colonne, donc elles se posaient au milieu du
+  // texte --- pire que le defaut qu'on corrigeait.
+  ["tright", "wiki-right"],
+  ["tleft", "wiki-left"],
+  ["tnone", "wiki-center"],
+  ["thumb", "wiki-thumb"],
 ];
 
 /** Attributs conservés, par balise. Rien d'autre ne passe — en particulier
