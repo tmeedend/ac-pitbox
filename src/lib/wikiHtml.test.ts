@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fileNameFromSrc, resolveHref } from "./wikiHtml";
+import { fileNameFromSrc, isIconSized, resolveHref } from "./wikiHtml";
 
 // Seules les deux fonctions **pures** sont testées ici : la reconstruction de
 // l'arbre demande un DOM, et le projet a écarté jsdom explicitement (voir la
@@ -55,5 +55,29 @@ describe("resolveHref", () => {
     expect(resolveHref("data:text/html,<script>", "fr")).toBeNull();
     expect(resolveHref("file:///C:/Windows", "fr")).toBeNull();
     expect(resolveHref("#cite_note-1", "fr")).toBeNull();
+  });
+});
+
+describe("isIconSized", () => {
+  // Regle (§7.3) : c'est la taille demandee par la page qui decide, pas le
+  // fichier. Les cinq etoiles d'une note ANCAP font vingt pixels et forment un
+  // score ; servies en vignette de 640 px elles devenaient cinq affiches
+  // empilees, chacune avec sa ligne de credit — vu sur l'article `Audi TT`.
+  it("reconnait une icone posee dans le fil du texte", () => {
+    expect(isIconSized("20", "20")).toBe(true);
+    expect(isIconSized("64", "12")).toBe(true);
+  });
+
+  it("laisse une illustration en contenu", () => {
+    expect(isIconSized("250", "180")).toBe(false);
+    expect(isIconSized("300", null)).toBe(false);
+    // Etroite mais haute : une image, pas une puce.
+    expect(isIconSized("40", "400")).toBe(false);
+  });
+
+  it("tranche pour le contenu quand la taille est absente", () => {
+    expect(isIconSized(null, null)).toBe(false);
+    expect(isIconSized("", "")).toBe(false);
+    expect(isIconSized("abc", "20")).toBe(false);
   });
 });

@@ -123,6 +123,17 @@ const ATTRS: Record<string, string[]> = {
   h6: ["id"],
 };
 
+/** Largeur, en pixels, au-dela de laquelle une image est du **contenu** et non
+ * une icone posee dans le fil du texte.
+ *
+ * MediaWiki ecrit la taille voulue sur chaque `<img>`, et la difference est
+ * franche : une note ANCAP est faite de cinq etoiles de vingt pixels cote a
+ * cote, une photo d'infobox en fait deux cent cinquante. Ignorer cette taille
+ * et servir la vignette de 640 px a tout le monde transformait ces cinq
+ * etoiles en cinq affiches empilees, chacune avec sa ligne de credit --- vu
+ * sur l'article `Audi TT`. */
+const ICON_MAX_WIDTH = 64;
+
 /** Une image affichable, avec ce que sa licence impose (§9). */
 export interface AllowedImage {
   file: string;
@@ -163,6 +174,20 @@ export function fileNameFromSrc(src: string): string | null {
   } catch {
     return name.replace(/_/g, " ");
   }
+}
+
+/** Cette image est-elle une icone du fil du texte plutot qu'une illustration ?
+ *
+ * Decide sur la taille que **la page** demande, jamais sur le fichier : la meme
+ * etoile sert d'icone ici et d'illustration ailleurs. Sans dimension declaree
+ * on tranche pour « contenu » --- se tromper dans ce sens donne une image trop
+ * grande, l'inverse la rend illisible. */
+export function isIconSized(width: string | null, height: string | null): boolean {
+  const w = Number(width);
+  const h = Number(height);
+  if (!Number.isFinite(w) || w <= 0) return false;
+  if (Number.isFinite(h) && h > ICON_MAX_WIDTH) return false;
+  return w <= ICON_MAX_WIDTH;
 }
 
 /** Un lien interne de wiki (`/wiki/Titre`) rendu absolu, ou `null` si le lien
@@ -253,6 +278,30 @@ function appendImage(el: Element, into: Node, images: Map<string, AllowedImage>)
   const file = fileNameFromSrc(src);
   const credit = file ? images.get(file) : undefined;
   if (!credit) return;
+
+  // **La taille que la page demande decide de tout ce qui suit.** Une icone
+  // garde sa propre source et ses propres dimensions : la vignette de 640 px
+  // qu'on demande pour les illustrations n'a aucun sens pour une etoile de
+  // notation, et la servir la rendait enorme.
+  const width = el.getAttribute("width");
+  const height = el.getAttribute("height");
+  if (isIconSized(width, height)) {
+    const icon = document.createElement("img");
+    icon.className = "wiki-icon";
+    icon.setAttribute("src", src);
+    icon.setAttribute("alt", el.getAttribute("alt") ?? "");
+    if (width) icon.setAttribute("width", width);
+    if (height) icon.setAttribute("height", height);
+    // **L'attribution ne disparait pas, elle change de forme.** Une ligne de
+    // credit sous une etoile de vingt pixels est illisible et casse la ligne de
+    // texte ; l'auteur et la licence passent en infobulle, et l'icone mene a sa
+    // page Commons. C'est ce que fait Wikipedia elle-meme pour ses images en
+    // ligne, et ce que « crediter de maniere raisonnable » autorise.
+    icon.setAttribute("title", `${credit.artist} - ${credit.licence}`);
+    if (credit.descriptionUrl) icon.setAttribute("data-href", credit.descriptionUrl);
+    into.appendChild(icon);
+    return;
+  }
 
   const img = document.createElement("img");
   img.setAttribute("src", credit.url);

@@ -532,6 +532,14 @@
     border-radius: 6px;
     margin: 10px 0 2px;
   }
+  /* Les icones restent dans le fil du texte, a la taille que la page demande :
+     cinq etoiles de notation forment une note, pas cinq affiches. */
+  .article-html :global(img.wiki-icon) {
+    display: inline-block;
+    vertical-align: middle;
+    border-radius: 0;
+    margin: 0 1px;
+  }
   /* Le crédit d'auteur : obligatoire sous chaque image (§9), donc jamais
      masqué — discret, mais présent. */
   .article-html :global(.wiki-credit) {
