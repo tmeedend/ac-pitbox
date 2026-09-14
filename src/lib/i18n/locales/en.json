@@ -903,6 +903,7 @@
     "duplicateDrivers": "Two drivers share the same number.",
     "pickSkinTooltip": "Choose a livery",
     "noSkinsForCar": "This car has no livery of its own.",
+    "searchCountry": "Search a country…",
     "autoCell": "Auto",
     "startSecond": "2nd",
     "ghostAdvantage": "Advantage",

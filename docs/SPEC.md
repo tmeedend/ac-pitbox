@@ -1669,10 +1669,15 @@ qu'AC y a commentés et qui restent donc écartés. Chacune a son drapeau dans
 pourvues** plus `AC.png`, le repli du jeu. La cellule ne montre **que le drapeau** : écrit en toutes lettres,
 « Brunei Darussalam » prenait un cinquième de la largeur du plateau pour ce
 qu'un drapeau dit d'un coup d'œil. Le nom reste là où on le cherche — en
-infobulle, et dans le menu au moment de choisir. Le `select` est posé
-**transparent par-dessus la cellule** plutôt qu'affiché : c'est ce qui garde le
-menu natif du système, son clavier et sa recherche à la frappe, sous une cellule
-qui ne montre qu'une image.
+infobulle, et dans le menu au moment de choisir.
+
+**Le menu est maison, pas un `<select>`.** Un `<option>` natif ne peut pas
+porter d'image : le menu déroulé est dessiné par le système, pas par la webview,
+donc le drapeau n'y apparaissait jamais — alors que c'est lui qui fait
+reconnaître un pays d'un coup d'œil. Ce qu'on perd est la recherche à la frappe
+du système ; ce qu'on gagne est un vrai champ de recherche, et sur **220 pays**
+il vaut mieux : il cherche n'importe où dans le nom et pas seulement au début,
+donc « guinea » rend les trois Guinées.
 
 Ce qui est **stocké reste le nom entier**, jamais le code : c'est ce que dit
 `ui_skin.json` et ce qu'écrit un preset de grille CM (« Brunei Darussalam » y a
@@ -1707,6 +1712,20 @@ force par défaut ; nom de pilote, nationalité, lest et bride s'ajoutent par le
 et la bride n'ont pas d'`Auto` : « rien » s'y dit par 0, comme dans le preset.
 Les en-têtes distinguent les colonnes éditables des colonnes en lecture seule
 par les **deux gris** de l'app, sans en introduire un troisième.
+
+**Le plateau est un bloc à lui, frère du vivier et non son enfant.** Il vivait
+dans un cadre à l'intérieur du cadre « Adversaires ». Les deux sont pourtant
+deux objets — c'est toute la conception ci-dessus : le filtre définit le vivier,
+jamais le plateau, et il faut un geste explicite pour passer de l'un à l'autre.
+Deux cadres frères le disent mieux qu'un cadre imbriqué, et le plateau avait
+déjà son en-tête et son pied.
+
+**Il prend une rangée à lui, sur toute la largeur**, sous les deux colonnes. En
+colonne de gauche, il laissait ~700 px vides à droite dès que la météo
+s'arrêtait. En rangée 2, il commence après la **plus haute** des deux colonnes :
+il ne peut donc jamais chevaucher le rail, ce qu'une pleine largeur posée en
+rangée 1 aurait fait. Le vide résiduel passe sous la colonne la plus courte, et
+le vivier ayant rejoint la gauche, c'est en général le rail.
 
 **Il n'y a pas de mode « plateau élargi ».** Un bouton `⤢` a existé : il donnait
 au plateau toute la largeur du contenu en faisant passer la colonne de droite

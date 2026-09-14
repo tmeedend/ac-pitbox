@@ -396,10 +396,24 @@
      retrouvait avec deux défilements qui se marchent dessus, dont un qui
      laissait une bande noire sous la fenêtre. Un seul ascenseur, celui de la
      fiche, comme pour tout le reste de l'écran. */
+  /* **A bounded reading column, exactly like Wikipedia's.** Not a matter of
+     taste: the column width is what decides where thumbnails land. On a wide
+     window the prose reached 1400px, where a 280px figure weighs nothing, a
+     paragraph fits in three lines, and figures — which queue up behind each
+     other through `clear: right` — end up scattered along the text instead of
+     forming a column of images. *That* was the defect we kept mistaking for a
+     float problem: it vanishes as soon as the window is narrowed to the width
+     of a Wikipedia page, which is how the user found it, after three fixes
+     aimed at the floats that could not have helped.
+     Bounded **and centred**: otherwise the article hugs the left edge and
+     leaves a gap on the right that reads as broken. */
   .wiki {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    width: 100%;
+    max-width: 950px;
+    margin-inline: auto;
   }
   .muted {
     margin: 0;
@@ -409,6 +423,10 @@
   .extract {
     flex: 1;
     min-width: 0;
+    /* A single-section article has no table of contents: without this bound
+       its prose would take the whole block width on its own, and the thumbnail
+       placement defect would come back through that door. */
+    max-width: 760px;
     line-height: 1.55;
     padding-right: 6px;
   }
@@ -444,6 +462,9 @@
     display: flex;
     gap: 16px;
     align-items: flex-start;
+    /* Centres the contents + article pair when the prose does not use all the
+       available width (an article without a table of contents). */
+    justify-content: center;
   }
 
   /* Collant : c'est ce qui remplace l'ascenseur propre au sommaire. Il suit

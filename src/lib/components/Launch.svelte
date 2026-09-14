@@ -49,6 +49,7 @@
   import TrackConditionBlock from "./launch/TrackConditionBlock.svelte";
   import WeatherBlock from "./launch/WeatherBlock.svelte";
   import OpponentsBlock from "./launch/OpponentsBlock.svelte";
+  import GridBlock from "./launch/GridBlock.svelte";
   import SessionOptionsBlock from "./launch/SessionOptionsBlock.svelte";
   import SimulationBlock from "./launch/SimulationBlock.svelte";
   import SessionTypeBlock from "./launch/SessionTypeBlock.svelte";
@@ -1305,8 +1306,6 @@
           <OpponentsBlock
             {setup}
             {opponentCount}
-            {carPool}
-            {skinsByCarId}
             defs={gridDefs}
             bind:filters={gridFilters}
             bind:pinned={gridPinned}
@@ -1314,19 +1313,8 @@
             index={gridIndex}
             poolCount={gridPool.length}
             playerCard={player}
-            bind:columns={gridColumns}
-            {nationalityList}
-            onsetcell={setOpponentCell}
-            onsavegrid={() => void openGridDialog("save")}
-            onloadgrid={() => void openGridDialog("load")}
             oncountchange={applyOpponentCount}
             onfill={() => void fillGrid()}
-            onchoose={openAddPicker}
-            onremove={removeOpponent}
-            onduplicate={duplicateOpponentWithVariant}
-            onsetlevel={setOpponentLevel}
-            onopenpicker={openPicker}
-            onregenerate={() => void regenerateGrid()}
           />
         {/if}
       </div>
@@ -1354,6 +1342,33 @@
           onoverridewind={overrideWind}
         />
       </div>
+
+      <!-- LE PLATEAU — une rangée à lui, sur toute la largeur.
+           Il occupait la colonne de gauche, et laissait donc ~700 px vides à
+           droite sous la météo dès que celle-ci s'arrêtait. En rangée 2, il
+           commence après la **plus haute** des deux colonnes : il ne peut donc
+           jamais chevaucher le rail, ce qu'une pleine largeur posée en rangée 1
+           aurait fait. -->
+      {#if setup.session_type === "race" || setup.session_type === "trackday"}
+        <GridBlock
+          {setup}
+          {carPool}
+          {skinsByCarId}
+          index={gridIndex}
+          poolCount={gridPool.length}
+          bind:columns={gridColumns}
+          {nationalityList}
+          onchoose={openAddPicker}
+          onregenerate={() => void regenerateGrid()}
+          onremove={removeOpponent}
+          onduplicate={duplicateOpponentWithVariant}
+          onsetlevel={setOpponentLevel}
+          onsetcell={setOpponentCell}
+          onsavegrid={() => void openGridDialog("save")}
+          onloadgrid={() => void openGridDialog("load")}
+          onopenpicker={openPicker}
+        />
+      {/if}
     </div>
   </div>
   {/if}
@@ -1577,6 +1592,10 @@
      comprimer : en dessous d'environ 380 px elle ne sait plus afficher la bande
      jour/nuit ni les quatre valeurs de l'état de piste sur une ligne. La colonne
      unique se plafonne à son tour et reste centrée. */
+  /* Le plateau prend la rangée du dessous, sur les deux colonnes. */
+  .cols > :global(.grid-blk) {
+    grid-column: 1 / -1;
+  }
   @container session (max-width: 980px) {
     .cols {
       grid-template-columns: minmax(0, 1fr);

@@ -1,45 +1,35 @@
 <script lang="ts">
-  // Opponents block of the session settings screen (§3).
+  // Le **vivier** d'adversaires : à qui la grille a le droit de piocher, combien
+  // de voitures, et le caractère de la course.
   //
-  // **The filter replaced the tabs.** `Same car` / `By category` / `Free` did
-  // two jobs at once: define a set of cars — which the filter bar already does,
-  // better — and generate a grid out of that set. Only the second justified
-  // them, and the duplication of the first is what forced the reconciliation
-  // rules ("removing a chip does not change the tab", "the grid goes manual").
-  // The block now carries the SAME filter bar as the library, plus three
-  // shortcut chips that pose a token and nothing else (`opponentPool.ts`).
+  // **Le filtre a remplacé les onglets.** `Même voiture` / `Par catégorie` /
+  // `Libre` faisaient deux choses à la fois — définir un ensemble de voitures,
+  // ce que la barre de filtres fait déjà et mieux, et engendrer un plateau à
+  // partir de lui. Seule la seconde les justifiait, et le doublon de la première
+  // est ce qui obligeait aux règles de réconciliation. Ce bloc porte donc la
+  // **même** barre de filtres que la bibliothèque, plus trois puces qui posent
+  // un jeton et rien d'autre (`opponentPool.ts`).
   //
-  // **The filter defines the pool, never the grid.** Between the two there is
-  // always a gesture, and there are exactly two, both working on the filtered
-  // set: `Fill N at random` REPLACES the grid — the path of whoever wants to
-  // drive now — and `Choose from the N…` opens the picker on that same filter
-  // and ADDS at the end — the path of whoever wants to decide. The second
-  // carries the pool count in its label, because that is what says what the
-  // filter bought: 42 rows to read instead of 600.
+  // **Le filtre définit le vivier, jamais le plateau.** Entre les deux il y a
+  // toujours un geste, et il y en a exactement deux, travaillant sur le même
+  // ensemble filtré : `Tirer N au hasard` **remplace** le plateau, et
+  // `Choisir dans le vivier` — qui vit avec le plateau, en dessous — **ajoute**.
   //
-  // Presentation only: generation (`generateOpponents`, the skin cache) stays
-  // in `Launch.svelte`, which triggers it from other sources too (presets, the
-  // library's "set as opponents"). This block shows the result and reports the
-  // local gestures.
-  import { formatRatio } from "$lib/carSpecs";
+  // Le plateau lui-même est un bloc **frère** (`GridBlock`) et non un cadre
+  // imbriqué : ce sont deux objets, et c'est ce qui lui permet de prendre toute
+  // la largeur de l'écran sous les deux colonnes.
   import type { CardIndex, FilterDef, FilterMap } from "$lib/filters";
   import { chipAvailable, isChipOn, toggleChip, type ChipKind } from "$lib/opponentPool";
   import {
     AGGRESSION_MAX,
     AGGRESSION_MIN,
-    AGGRESSION_STEP,
     AI_LEVEL_MAX,
     AI_LEVEL_MIN,
-    type Opponent,
     type RaceSetup,
-    type Nationality,
-    type SkinItem,
   } from "$lib/launch";
-  import { previewSrc, type ModCard } from "$lib/library";
+  import type { ModCard } from "$lib/library";
   import { t } from "$lib/i18n/index.svelte";
   import FilterBar from "../filters/FilterBar.svelte";
-  import AnchoredPopover from "../filters/AnchoredPopover.svelte";
-  import ColumnsMenu from "../ColumnsMenu.svelte";
   import Tooltip from "../Tooltip.svelte";
   import NumberStepper from "../NumberStepper.svelte";
   import CenterSpread from "../CenterSpread.svelte";
@@ -47,8 +37,6 @@
   let {
     setup,
     opponentCount,
-    carPool,
-    skinsByCarId,
     defs,
     filters = $bindable(),
     pinned = $bindable(),
@@ -56,24 +44,11 @@
     index,
     poolCount,
     playerCard,
-    columns = $bindable(),
-    nationalityList,
     oncountchange,
     onfill,
-    onchoose,
-    onregenerate,
-    onremove,
-    onduplicate,
-    onsetlevel,
-    onsetcell,
-    onsavegrid,
-    onloadgrid,
-    onopenpicker,
   }: {
     setup: RaceSetup;
     opponentCount: number;
-    carPool: ModCard[];
-    skinsByCarId: Record<string, SkinItem[]>;
     defs: FilterDef[];
     filters: FilterMap;
     pinned: string[];
@@ -83,22 +58,8 @@
     poolCount: number;
     /** The car being driven: what the three chips take their value from. */
     playerCard: ModCard | null;
-    /** Colonnes optionnelles affichées (§4.2). */
-    columns: string[];
-    /** Les nationalités que le jeu connaît, avec leur drapeau. Vide quand
-     * l'installation n'est pas lisible : la cellule redevient un champ libre. */
-    nationalityList: Nationality[];
     oncountchange: (n: number) => void;
     onfill: () => void;
-    onchoose: () => void;
-    onregenerate: () => void;
-    onremove: (index: number) => void;
-    onduplicate: (index: number) => void;
-    onsetlevel: (index: number, level: number | null) => void;
-    onsetcell: (index: number, patch: Partial<Opponent>) => void;
-    onsavegrid: () => void;
-    onloadgrid: () => void;
-    onopenpicker: (index: number) => void;
   } = $props();
 
   const CHIPS: { kind: ChipKind; labelKey: string }[] = [
@@ -116,160 +77,8 @@
     if (kind === "performance") return t("launch.chipNoPerf");
     return t("launch.chipNoCategory");
   }
-
-  // Bornes de la force d'une ligne du plateau : celles du curseur de Content
-  // Manager (`launch.ts`). La fourchette elle-même est passée en centre ± écart
-  // et vit dans `CenterSpread` (§2.9).
-  const RANGE_MIN = AI_LEVEL_MIN;
-  const RANGE_MAX = AI_LEVEL_MAX;
-  // --- Columns (§4.2) ------------------------------------------------------
-  //
-  // The car is fixed — it IS the row. The other six are a preference, and they
-  // go through the same menu as the library's table view: same gesture, same
-  // component (`ColumnsMenu`).
-  //
-  // **No "how many fit" note.** §4.3 asks the menu to say how many more columns
-  // the current width takes, which means measuring the grid in pixels — and a
-  // pixel read back into a layout is precisely what the interface zoom breaks
-  // (§13). What the width does instead is squeeze the name column, which says
-  // the same thing without a number and without a legend: `⤢` gives the room
-  // back. Worth revisiting with a measurement whose zoom behaviour has been
-  // checked in the app.
-  const COLUMNS = $derived([
-    { key: "car", label: t("columns.name"), fixed: true },
-    { key: "ratio", label: t("launch.colRatio") },
-    { key: "strength", label: t("launch.colStrength") },
-    { key: "driver", label: t("launch.colDriver") },
-    { key: "nationality", label: t("launch.colNationality") },
-    { key: "ballast", label: t("launch.colBallast") },
-    { key: "restrictor", label: t("launch.colRestrictor") },
-  ]);
-  const shows = (key: string) => columns.includes(key);
-  function toggleColumn(key: string) {
-    columns = columns.includes(key) ? columns.filter((k) => k !== key) : [...columns, key];
-  }
-
-  /** kg/bhp d'un adversaire, `—` quand sa fiche est illisible — jamais estimé.
-   * Lu dans l'index du vivier, donc analysé une fois par chargement de liste et
-   * pas une fois par ligne rendue. */
-  function opponentRatio(carId: string): string {
-    const card = carPool.find((c) => c.id_interne === carId);
-    return formatRatio(card ? index.ctx.ratioOf(card) : null);
-  }
-
-  /** La nationalité **n'est pas un champ libre** : le jeu en tient la liste, et
-   * en affiche le drapeau. C'est ce que fait Content Manager, et c'est ce que
-   * la cellule faisait passer pour du texte quelconque. */
-  const flagByName = $derived(new Map(nationalityList.map((n) => [n.name.toLowerCase(), n.flag])));
-  function flagOf(name: string | null | undefined): string | null {
-    if (!name) return null;
-    return previewSrc(flagByName.get(name.toLowerCase()) ?? null);
-  }
-
-  /** Une saisie vidée rend la cellule à `Auto` (§4.1). */
-  const orAuto = (v: string): string | null => (v.trim() === "" ? null : v.trim());
-
-  /** La livrée d'une ligne, quand elle est connue. */
-  function skinOf(opp: Opponent): SkinItem | undefined {
-    return opp.car_skin ? skinsByCarId[opp.car_id]?.find((sk) => sk.id === opp.car_skin) : undefined;
-  }
-
-  /** Ce qu'une cellule `Auto` vaut **réellement** : ce que la livrée déclare,
-   * et donc ce que le jeu mettra. Afficher un « Auto » creux là où la donnée
-   * existe cachait au lecteur le nom qui allait s'afficher en course — y
-   * compris quand deux lignes portaient le même. */
-  function autoDriver(opp: Opponent): string {
-    const sk = skinOf(opp);
-    const number = sk?.number ? `${sk.number} ` : "";
-    return sk?.driver ? `${number}${sk.driver}` : t("launch.autoCell");
-  }
-  function autoNationality(opp: Opponent): string {
-    return skinOf(opp)?.country ?? t("launch.autoCell");
-  }
-
-  /** Deux pilotes sous la même identité (§1.9). La génération l'évite ; ceci
-   * n'attrape que ce que l'utilisateur a forcé à la main, et le dit plutôt que
-   * de le corriger dans son dos. */
-  const duplicateDrivers = $derived.by(() => {
-    const seen = new Set<string>();
-    for (const opp of setup.opponents) {
-      const sk = skinOf(opp);
-      const key = `${opp.driver_name ?? sk?.number ?? ""}|${opp.driver_name ?? sk?.driver ?? ""}`.trim().toLowerCase();
-      if (key === "|") continue;
-      if (seen.has(key)) return true;
-      seen.add(key);
-    }
-    return false;
-  });
-
-  /** Lest et bride : 0 à 100, jamais d'`Auto` — « rien » s'y dit par 0. */
-  const clamp100 = (v: string): number => Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
-
-  /** Les quatre colonnes optionnelles portent des valeurs qu'aucune ligne ne
-   * nomme d'elle-même : dès que l'une est là, l'en-tête devient nécessaire. */
-  const headerNeeded = $derived(
-    columns.some((k) => k === "driver" || k === "nationality" || k === "ballast" || k === "restrictor"),
-  );
-
-  function opponentName(carId: string): string {
-    return carPool.find((c) => c.id_interne === carId)?.display_name ?? carId;
-  }
-  /** Vignette de l'adversaire : `preview.jpg` du skin d'abord, `livery.png`
-   * seulement en dernier recours.
-   *
-   * C'est l'inverse de l'ordre du sélecteur de livrée de la barre latérale, et
-   * l'inversion est **locale à ce composant** : les deux ne posent pas la même
-   * question. Là-bas c'est « quelle peinture ? », et une pastille de couleur y
-   * répond ; ici c'est « quelle voiture ? », et quatre pastilles de couleur n'y
-   * répondent pas. La preview montre la voiture *portant* le skin, donc elle
-   * répond aux deux à la fois — y compris pour deux adversaires « même
-   * voiture », qui doivent rester distinguables. */
-  function opponentPreview(opp: Opponent): string | null {
-    const skin = opp.car_skin ? skinsByCarId[opp.car_id]?.find((s) => s.id === opp.car_skin) : null;
-    const modPreview = carPool.find((c) => c.id_interne === opp.car_id)?.preview ?? null;
-    return previewSrc(skin?.preview ?? modPreview ?? skin?.livery ?? null);
-  }
-  /** Voiture et livrée en toutes lettres, pour l'infobulle de la ligne. */
-  function opponentFullName(opp: Opponent): string {
-    const skin = opponentSkinName(opp);
-    return skin ? `${opponentName(opp.car_id)} · ${skin}` : opponentName(opp.car_id);
-  }
-
-  // --- Choix de la livrée d'un adversaire -----------------------------------
-  //
-  // Il n'y en avait aucun : le `+` dupliquait une ligne avec une autre livrée,
-  // `Regenerate` les retirait toutes au sort, mais rien ne permettait d'en
-  // désigner une. La vignette est la cible naturelle — c'est l'image de la
-  // livrée, donc l'endroit où l'on pense à la changer — et elle évite un
-  // bouton de plus dans une ligne qui en porte déjà deux.
-  let skinRow = $state<number | null>(null);
-  let skinAnchor = $state<HTMLElement | null>(null);
-  const skinChoices = $derived(skinRow == null ? [] : (skinsByCarId[setup.opponents[skinRow]?.car_id] ?? []));
-
-  function openSkins(index: number, anchor: HTMLElement) {
-    // Deuxième clic sur la même vignette : on referme, comme tout menu.
-    if (skinRow === index) {
-      closeSkins();
-      return;
-    }
-    skinRow = index;
-    skinAnchor = anchor;
-  }
-  function closeSkins() {
-    skinRow = null;
-    skinAnchor = null;
-  }
-  function pickSkin(id: string) {
-    if (skinRow != null) onsetcell(skinRow, { car_skin: id });
-    closeSkins();
-  }
-
-  function opponentSkinName(opp: Opponent): string | undefined {
-    return opp.car_skin ? skinsByCarId[opp.car_id]?.find((s) => s.id === opp.car_skin)?.name : undefined;
-  }
 </script>
 
-<!-- Opponents (race and track day only, §3) -->
 <section class="blk oppo-blk">
   <header class="blk-h"><span class="blk-t">{t("launch.opponentsLabel")}</span></header>
   <div class="blk-b">
@@ -362,11 +171,7 @@
         setup.aggression_spread = sp;
       }}
     />
-  <!-- A configuration problem calling for an action, so yellow is right here —
-       unlike the strength explanation, which moved to an ⓘ. -->
-  {#if duplicateDrivers}
-    <p class="warnbox thin">{t("launch.duplicateDrivers")}</p>
-  {/if}
+  </div>
 
   <!-- A statement, not a block: the grid is still playable, so no red (§3.5). -->
   {#if poolCount > 0 && poolCount < opponentCount}
@@ -377,220 +182,7 @@
     <p class="warnbox thin">{t("launch.poolEmpty")}</p>
   {/if}
   </div>
-
-  <div class="oppo">
-    <!-- `Regenerate` is NOT `Fill` with another name: it keeps the cars and
-         re-rolls what was drawn on them (skin, strength), where `Fill` draws
-         the cars themselves. Two gestures one actually wants separately — the
-         grid is right but the liveries repeat, versus the grid is wrong. -->
-    <div class="oppo-h lbl">
-      <span>{t("launch.gridHeader", { count: setup.opponents.length })}</span>
-      <!-- La position de départ a rejoint SESSION OPTIONS (§2.5) : elle dépend
-           du type de session, et tout ce qui en dépend vit là-bas. -->
-      <span class="oppo-sp"></span>
-      <ColumnsMenu size="header" items={COLUMNS} visible={columns} ontoggle={toggleColumn} />
-      <button class="oppo-regen" type="button" disabled={!setup.opponents.length} onclick={onregenerate}
-        >{t("launch.regenerateGrid")}</button
-      >
-    </div>
-
-    <!-- En-tête de colonnes seulement quand il y a plus que la voiture à
-         nommer : sur trois colonnes, la ligne se lit sans légende. -->
-    {#if headerNeeded}
-      <div class="oppo-row oppo-th">
-        <span class="oppo-img th-img"></span>
-        <!-- Read-only header in the dimmer grey, editable ones in the lighter:
-             two greys, no third level, and the row says what can be typed into
-             before one tries. -->
-        <span class="oppo-n lbl-key ro">{t("columns.name")}</span>
-        {#if shows("driver")}<span class="oppo-driver lbl-key">{t("launch.colDriver")}</span>{/if}
-        {#if shows("nationality")}<span class="oppo-nat lbl-key">{t("launch.colNatShort")}</span>{/if}
-        {#if shows("ratio")}<span class="oppo-ratio lbl-key">{t("launch.colRatio")}</span>{/if}
-        {#if shows("strength")}<span class="oppo-force lbl-key">{t("launch.colStrShort")}</span>{/if}
-        {#if shows("ballast")}<span class="oppo-bal lbl-key">{t("launch.colBallast")}</span>{/if}
-        <!-- `Restrictor` en entier et non `Restr.`, seul des trois à ne pas
-             s'abréger : c'est le mot exact de la carte voiture du joueur, et
-             c'est ce qui fait voir que les deux réglages sont le même. `Nat.`
-             et `Str.` n'ont pas ce voisin et ne se confondent avec rien. -->
-        {#if shows("restrictor")}<span class="oppo-res lbl-key">{t("launch.colRestrictor")}</span>{/if}
-        <span class="th-act"></span>
-      </div>
-    {/if}
-    {#each setup.opponents as opp, i}
-      {@const prev = opponentPreview(opp)}
-      <div
-        class="oppo-row"
-        role="button"
-        tabindex="0"
-        title={t("launch.opponentEditTooltip")}
-        onclick={() => onopenpicker(i)}
-        onkeydown={(e) => (e.key === "Enter" || e.key === " ") && onopenpicker(i)}
-      >
-        <!-- La vignette ouvre le choix de **livrée** : c'est elle qu'elle
-             montre, donc l'endroit où l'on pense à la changer. Le reste de la
-             ligne ouvre le choix de **voiture** — deux questions, deux cibles,
-             et aucun bouton de plus à caser dans la ligne. -->
-        <button
-          class="oppo-img"
-          type="button"
-          title={t("launch.pickSkinTooltip")}
-          onclick={(e) => {
-            e.stopPropagation();
-            openSkins(i, e.currentTarget);
-          }}>{#if prev}<img src={prev} alt="" />{:else}<span class="mono">🏎</span>{/if}</button
-        >
-        <!-- Le nom entier au survol. La colonne l'élide, et c'est précisément
-             ce qu'on cherche à lire — l'aperçu en grand qui s'ouvrait ici
-             recouvrait les lignes voisines pour montrer ce que la vignette
-             montrait déjà. -->
-        <span class="oppo-n" title={opponentFullName(opp)}
-          >{opponentName(opp.car_id)}{#if opponentSkinName(opp)}<span class="oppo-skin"> · {opponentSkinName(opp)}</span
-            >{/if}</span
-        >
-        {#if shows("driver")}
-          <!-- Vide = `Auto` : le nom vient alors du `ui_skin.json` de la livrée,
-               ce que le jeu fait déjà. Rien à voir avec les mods de tenue de
-               pilote, qui sont une apparence 3D sur leur propre axe. -->
-          <input
-            class="oppo-driver cell"
-            class:is-auto={opp.driver_name == null}
-            type="text"
-            placeholder={autoDriver(opp)}
-            value={opp.driver_name ?? ""}
-            onclick={(e) => e.stopPropagation()}
-            onchange={(e) => onsetcell(i, { driver_name: orAuto(e.currentTarget.value) })}
-          />
-        {/if}
-        {#if shows("nationality")}
-          {@const shownName = opp.nationality ?? skinOf(opp)?.country ?? null}
-          <!-- **Le drapeau seul dans la ligne, le nom au survol.** Écrit en
-               toutes lettres, « Brunei Darussalam » prenait un cinquième de la
-               largeur du plateau pour ce qu'un drapeau dit d'un coup d'œil. Le
-               nom reste là où on le cherche vraiment : en infobulle, et dans le
-               menu au moment de choisir.
-
-               Le `select` est **posé transparent par-dessus la cellule** plutôt
-               qu'affiché : c'est ce qui garde le menu natif du système, son
-               clavier et sa recherche à la frappe, sous une cellule qui ne
-               montre qu'une image. -->
-          <span class="oppo-nat natcell" title={shownName ?? t("launch.autoCell")}>
-            {#if flagOf(shownName)}
-              <img class="flag" src={flagOf(shownName)} alt="" />
-            {:else}
-              <span class="flag flag-none"></span>
-            {/if}
-            <select
-              class="natsel"
-              aria-label={t("launch.colNationality")}
-              value={opp.nationality ?? ""}
-              onclick={(e) => e.stopPropagation()}
-              onchange={(e) => onsetcell(i, { nationality: orAuto(e.currentTarget.value) })}
-            >
-              <option value="">{autoNationality(opp)}</option>
-              <!-- Une valeur déjà posée que la liste du jeu ne contient pas
-                   (preset importé, installation illisible) reste offerte : la
-                   retirer du menu l'effacerait au premier changement. -->
-              {#if opp.nationality && !nationalityList.some((n) => n.name === opp.nationality)}
-                <option value={opp.nationality}>{opp.nationality}</option>
-              {/if}
-              {#each nationalityList as n (n.code)}<option value={n.name}>{n.name}</option>{/each}
-            </select>
-          </span>
-        {/if}
-        {#if shows("ratio")}
-          <span class="oppo-ratio mono">{opponentRatio(opp.car_id)}</span>
-        {/if}
-        {#if shows("strength")}
-        <!-- `Auto` is not a value we draw: it is the absence of an override,
-             and the game draws inside the global range. Hence a placeholder
-             rather than a number — emptying the field is the gesture that puts
-             the cell back to `Auto`, which is why no menu is needed here. -->
-        <input
-          class="oppo-force mono"
-          class:is-auto={opp.ai_level == null}
-          type="number"
-          min={RANGE_MIN}
-          max={RANGE_MAX}
-          placeholder={t("launch.autoCell")}
-          value={opp.ai_level ?? ""}
-          title={t("launch.opponentLevelTooltip")}
-          onclick={(e) => e.stopPropagation()}
-          onchange={(e) => onsetlevel(i, e.currentTarget.value.trim() === "" ? null : Number(e.currentTarget.value))}
-        />
-        {/if}
-        {#if shows("ballast")}
-          <input
-            class="oppo-bal cell mono"
-            class:is-zero={!opp.ballast}
-            type="number"
-            min="0"
-            max="100"
-            value={opp.ballast}
-            onclick={(e) => e.stopPropagation()}
-            onchange={(e) => onsetcell(i, { ballast: clamp100(e.currentTarget.value) })}
-          />
-        {/if}
-        {#if shows("restrictor")}
-          <input
-            class="oppo-res cell mono"
-            class:is-zero={!opp.restrictor}
-            type="number"
-            min="0"
-            max="100"
-            value={opp.restrictor}
-            onclick={(e) => e.stopPropagation()}
-            onchange={(e) => onsetcell(i, { restrictor: clamp100(e.currentTarget.value) })}
-          />
-        {/if}
-        <button
-          class="oppo-dup"
-          type="button"
-          title={t("launch.opponentDuplicateTooltip")}
-          onclick={(e) => { e.stopPropagation(); onduplicate(i); }}
-        >+</button>
-        <button class="oppo-x" type="button" title={t("common.remove")} onclick={(e) => { e.stopPropagation(); onremove(i); }}>✕</button>
-      </div>
-    {/each}
-    <!-- The pool count in the label is the point: it says what the filter
-         bought — this many rows to read instead of the whole library. -->
-    <button class="oppo-add" type="button" disabled={poolCount === 0} onclick={onchoose}
-      >{poolCount === 1 ? t("launch.chooseFromPoolOne") : t("launch.chooseFromPool", { count: poolCount })}</button
-    >
-    {#if skinRow != null && skinAnchor}
-      <AnchoredPopover anchor={skinAnchor} minWidth={228} onclose={closeSkins}>
-        <div class="skins">
-          {#if skinChoices.length}
-            {#each skinChoices as sk (sk.id)}
-              {@const img = previewSrc(sk.livery ?? sk.preview)}
-              <button
-                class="skin"
-                class:on={setup.opponents[skinRow]?.car_skin === sk.id}
-                type="button"
-                onclick={() => pickSkin(sk.id)}
-              >
-                <span class="skin-img">{#if img}<img src={img} alt="" />{/if}</span>
-                <span class="skin-n">{sk.name}</span>
-              </button>
-            {/each}
-          {:else}
-            <p class="skin-none">{t("launch.noSkinsForCar")}</p>
-          {/if}
-        </div>
-      </AnchoredPopover>
-    {/if}
-
-    <!-- A grid is worth saving on its own, apart from the session that holds
-         it: the same GT3 field on ten tracks (§5). -->
-    <div class="oppo-foot">
-      <button class="oppo-regen" type="button" disabled={!setup.opponents.length} onclick={onsavegrid}
-        >{t("launch.saveGrid")}</button
-      >
-      <button class="oppo-regen" type="button" onclick={onloadgrid}>{t("launch.loadGrid")}</button>
-    </div>
-  </div>
-  </div>
 </section>
-
 
 <style>
   /* Three shortcuts under the token row, close enough to read as its
@@ -659,76 +251,6 @@
   .info-i:hover {
     color: var(--txt2);
   }
-  /* Le second des deux gris, et il n'y en a pas de troisième : une colonne en
-     lecture seule s'annonce plus éteinte que celles qui se saisissent. */
-  .oppo-th .ro {
-    color: var(--faint);
-  }
-  /* Liste de livrées du popover : `livery.png` d'abord (le motif seul, lisible
-     à 34 px) et la photo en repli — l'inverse de la vignette de ligne, qui
-     répond à « quelle voiture ? » et non à « quelle peinture ? ». */
-  .skins {
-    display: flex;
-    flex-direction: column;
-    max-height: 320px;
-    overflow-y: auto;
-    padding: 4px;
-  }
-  .skin {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 4px 6px;
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--txt2);
-    font-size: 11px;
-    text-align: left;
-  }
-  .skin:hover {
-    background: var(--raised);
-    color: var(--txt);
-  }
-  .skin.on {
-    border-color: var(--rosso-border);
-    background: var(--rosso-dim);
-    color: var(--rosso-bright);
-  }
-  .skin-img {
-    flex: none;
-    width: 34px;
-    height: 20px;
-    border: 1px solid var(--line);
-    background: var(--bg);
-    overflow: hidden;
-  }
-  .skin-img img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .skin-n {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .skin-none {
-    padding: 8px 6px;
-    font-size: 11px;
-    color: var(--muted);
-  }
-  .oppo-foot {
-    display: flex;
-    gap: 7px;
-    padding: 7px 10px;
-    border-top: 1px solid var(--line);
-  }
-  /* Pushes the start position and `Regenerate` to the right of the title. */
-  .oppo-sp {
-    flex: 1;
-  }
   /* `.warnbox` carries the colours; only the spacing is local. */
   .thin {
     margin-top: 10px;
@@ -758,296 +280,6 @@
      §chantier libellés) : ne reste ici que ce que `.lbl-key` ne couvre pas. */
   .fk {
     text-transform: uppercase;
-  }
-  .oppo {
-    border: 1px solid var(--line);
-    margin-top: 12px;
-  }
-  /* Couleur/taille/interlettrage/majuscules viennent de `.lbl` (global,
-     harmonisation §chantier libellés) : ne reste ici que le fond en bandeau
-     et l'annulation de la marge basse (`.lbl` en prévoit une pour une
-     rubrique de carte, pas pour un bandeau suivi directement des lignes). */
-  .oppo-h {
-    background: var(--raised);
-    padding: 6px 10px;
-    margin-bottom: 0;
-    /* `.lbl` est déjà en flex : reste à écarter les deux bouts. L'espace du
-       milieu attend la position de départ (L3). */
-    justify-content: space-between;
-    gap: 10px;
-  }
-  /* Bouton secondaire neutre : régénérer le plateau n'est pas ce qui est
-     retenu pour la session, donc pas de rouge (§7.2ter). L'action existait
-     déjà comme effet de bord d'un changement de voiture — sans aucun moyen de
-     la demander. */
-  .oppo-regen {
-    background: transparent;
-    border: 1px solid var(--line);
-    color: var(--muted);
-    font-size: 8.5px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 3px 8px;
-  }
-  .oppo-regen:hover:not(:disabled) {
-    background: var(--panel2);
-    color: var(--txt2);
-  }
-  .oppo-regen:disabled {
-    color: var(--faint2);
-    cursor: not-allowed;
-  }
-  /* `relative` porte la bulle de survol, et son absence ne se voit pas comme
-     un défaut de style : un enfant `absolute` se cale sur le premier ancêtre
-     positionné, ici le conteneur de défilement de tout l'écran — la bulle
-     partait donc en bas de la page, hors champ, et le survol semblait n'avoir
-     aucun effet. */
-  .oppo-row {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 6px 10px;
-    border-top: 1px solid var(--line);
-    background: var(--panel2);
-    cursor: pointer;
-    position: relative;
-  }
-  .oppo-row:hover {
-    background: var(--raised);
-  }
-  /* 16:9, le format de `preview.jpg`. La ligne ne grandit que de quelques
-     pixels et la surface double : à 34x22 on voyait une couleur, pas une
-     voiture. Recadrage plutôt que dézoom — le cadrage Kunos est constant et la
-     plupart des mods le reprennent, la voiture est donc toujours au même
-     endroit dans l'image. */
-  /* Bouton et non plus `div` : elle ouvre le choix de livrée. Rien d'un bouton
-     au repos — c'est une image, et le cadre du survol suffit à dire qu'elle se
-     clique, comme les cellules de la ligne. */
-  .oppo-img {
-    padding: 0;
-    cursor: pointer;
-    width: 48px;
-    height: 27px;
-    border: 1px solid var(--line);
-    background: var(--bg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
-    overflow: hidden;
-  }
-  .oppo-img img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center 60%;
-  }
-  .oppo-row:hover .oppo-img {
-    border-color: var(--faint2);
-  }
-  /* Plafonnée en mode élargi (§2.4) : sans ce cap, la largeur gagnée allait
-     toute au nom, et l'écart entre lui et `Driver name` devenait assez grand
-     pour qu'on perde la ligne en la parcourant des yeux. Ce qu'on est venu
-     chercher en élargissant, ce sont des colonnes de plus, pas une colonne
-     plus large. */
-  .oppo-n {
-    font-size: 10.5px;
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .oppo-skin {
-    color: var(--muted);
-  }
-  /* Toutes les cellules optionnelles ont une largeur FIXE et le nom prend ce
-     qui reste : ajouter une colonne serre donc le nom, et c'est `⤢` qui lui
-     rend sa place. Aucune ne s'étire, sans quoi l'alignement d'une colonne à
-     l'autre se perdrait d'une ligne à la suivante. */
-  .oppo-ratio {
-    width: 52px;
-    flex: none;
-    font-size: 9px;
-    color: var(--muted);
-    text-align: right;
-  }
-  .oppo-driver {
-    width: 104px;
-  }
-  /* Assez large pour le drapeau et un nom de pays lisible ; les plus longs
-     s'élident, le drapeau portant la reconnaissance. */
-  /* La largeur d'un drapeau, plus de quoi écrire « Nat. » en en-tête. Le nom
-     du pays vit en infobulle, pas dans la colonne. */
-  .oppo-nat {
-    width: 30px;
-  }
-  .natcell {
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-  /* 4:3 comme les PNG du jeu, et un filet : beaucoup de drapeaux ont du blanc
-     sur un bord, qui se fondrait dans la ligne. */
-  .flag {
-    flex: none;
-    width: 16px;
-    height: 12px;
-    object-fit: cover;
-    border: 1px solid var(--line);
-  }
-  /* Transparent et posé sur toute la cellule : le menu natif du système reste,
-     avec son clavier et sa recherche à la frappe, sous une cellule qui ne montre
-     qu'un drapeau. `color-scheme: dark` est la seule prise sur le menu déroulé,
-     rendu par le système — sans lui il s'ouvre en blanc, hors charte, comme le
-     sélecteur de date de la météo. */
-  .natsel {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    opacity: 0;
-    cursor: pointer;
-    color-scheme: dark;
-  }
-  /* Place tenue quand la livrée ne déclare aucun pays : sans elle la colonne se
-     replierait sur les lignes muettes et la grille danserait. */
-  .flag-none {
-    border-style: dashed;
-  }
-  .oppo-bal {
-    width: 44px;
-    text-align: right;
-  }
-  /* Assez large pour « Restrictor » en toutes lettres à 8 px interlettré. */
-  .oppo-res {
-    width: 60px;
-    text-align: right;
-  }
-  /* Les quatre champs de cellule partagent la même discrétion que la force :
-     pas de cadre au repos, il apparaît au survol de la ligne — sans quoi
-     chaque ligne devient un formulaire. */
-  .cell {
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--txt);
-    font-size: 9.5px;
-    padding: 2px 3px;
-    flex: none;
-    min-width: 0;
-    appearance: textfield;
-  }
-  .oppo-row:hover .cell {
-    background: var(--bg);
-    border-color: var(--line);
-  }
-  .cell:focus {
-    background: var(--bg);
-    border-color: var(--line);
-  }
-  .cell::-webkit-outer-spin-button,
-  .cell::-webkit-inner-spin-button {
-    appearance: none;
-    margin: 0;
-  }
-  /* `Auto` et 0 se lisent comme « non décidé » et « rien » : éteints tous les
-     deux, mais le premier est un texte de substitution et le second une vraie
-     valeur — d'où deux règles et non une. */
-  .cell.is-auto::placeholder {
-    color: var(--faint);
-  }
-  .cell.is-zero {
-    color: var(--faint);
-  }
-  /* Rangée d'en-tête : une ligne du plateau sans ses gestes. */
-  .oppo-th {
-    cursor: default;
-    background: var(--bg);
-    padding-top: 3px;
-    padding-bottom: 3px;
-  }
-  .oppo-th:hover {
-    background: var(--bg);
-  }
-  .th-img {
-    width: 48px;
-    border: 0;
-    background: transparent;
-    height: auto;
-  }
-  .th-act {
-    width: 44px;
-    flex: none;
-  }
-  /* Blanche, et sans cadre au repos : le vert était la seule occurrence de
-     cette couleur dans un contrôle, et un cadre permanent faisait de chaque
-     ligne un formulaire. Le cadre apparaît au survol de la ligne — c'est là
-     qu'il faut savoir que la valeur s'édite, pas avant. */
-  .oppo-force {
-    width: 34px;
-    height: 20px;
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--txt);
-    font-size: 9px;
-    text-align: center;
-    flex: none;
-    appearance: textfield;
-  }
-  /* Dimmed like any `Auto` cell — the placeholder is what shows, and it must
-     read as "not decided", not as a value. */
-  .oppo-force.is-auto::placeholder {
-    color: var(--faint);
-  }
-  .oppo-row:hover .oppo-force {
-    background: var(--bg);
-    border-color: var(--line);
-  }
-  .oppo-force::-webkit-outer-spin-button,
-  .oppo-force::-webkit-inner-spin-button {
-    appearance: none;
-    margin: 0;
-  }
-  /* Le focus reste jaune, celui de `global.css` : le rouge qu'il portait ici
-     ne se rattache à aucun niveau du barème (§7.2ter). */
-  .oppo-force:focus {
-    background: var(--bg);
-    border-color: var(--line);
-  }
-  .oppo-dup {
-    background: transparent;
-    color: var(--muted2);
-    font-size: 13px;
-    line-height: 1;
-    padding: 2px 5px;
-    flex: none;
-  }
-  .oppo-dup:hover {
-    background: transparent;
-    color: var(--txt);
-  }
-  .oppo-x {
-    background: transparent;
-    color: var(--muted2);
-    font-size: 12px;
-    padding: 2px 4px;
-  }
-  .oppo-x:hover {
-    background: transparent;
-    color: var(--rosso-bright);
-  }
-  /* Action secondaire : aucun niveau du barème ne couvre un libellé rouge
-     (§7.2ter), et le rouge de cet écran doit rester au bouton de lancement. */
-  .oppo-add {
-    background: var(--panel2);
-    padding: 7px 10px;
-    border-top: 1px solid var(--line);
-    color: var(--txt2);
-    font-size: 9.5px;
-    text-align: left;
-    width: 100%;
-  }
-  .oppo-add:hover {
-    background: var(--raised);
   }
 
 </style>
