@@ -26,6 +26,7 @@
     type SessionType,
     type SkinItem,
     type TrackStateOption,
+    type TrackStateRef,
     type TrackSun,
     type WeatherOption,
   } from "$lib/launch";
@@ -114,6 +115,7 @@
     season_date: null,
     penalties: false,
     jump_start_penalty: 0,
+    track_state: null,
     grip: 96,
     practice_enabled: false,
     practice_minutes: 20,
@@ -688,7 +690,11 @@
     category_selection?: string;
     year_min?: number; year_max?: number;
     laps: number; time_hours: number;
-    penalties: boolean; jump_start_penalty: number; grip: number;
+    penalties: boolean; jump_start_penalty: number;
+    /** L'état de piste entier (§4.7). `grip` reste écrit pour qu'un retour en
+     * arrière de version retrouve quelque chose, et relu quand `track_state`
+     * manque. */
+    track_state?: TrackStateRef | null; grip: number;
     practice_enabled: boolean; practice_minutes: number;
     qualify_enabled: boolean; qualify_minutes: number; ghost_car: boolean; practice_start: PracticeStart;
     damage: number; fuel_rate: number; tyre_wear: number; tyre_blankets: boolean; intent: string; season: Season;
@@ -778,7 +784,8 @@
       grid_filters: serializeFilters(gridQuery, gridFilters), grid_pinned: [...gridPinned],
       grid_columns: [...gridColumns], grid_wide: gridWide,
       laps: setup.laps, time_hours: setup.time_hours,
-      penalties: setup.penalties, jump_start_penalty: setup.jump_start_penalty, grip: setup.grip,
+      penalties: setup.penalties, jump_start_penalty: setup.jump_start_penalty,
+      track_state: setup.track_state ? { ...setup.track_state } : null, grip: setup.grip,
       practice_enabled: setup.practice_enabled, practice_minutes: setup.practice_minutes,
       qualify_enabled: setup.qualify_enabled, qualify_minutes: setup.qualify_minutes, ghost_car: setup.ghost_car,
       practice_start: setup.practice_start,
@@ -821,6 +828,9 @@
       applyGridPreset(p);
       setup.laps = p.laps; setup.time_hours = p.time_hours;
       setup.penalties = p.penalties; setup.jump_start_penalty = p.jump_start_penalty ?? 0;
+      // L'état entier s'il est là, le pourcentage seul sinon : `TrackConditionBlock`
+      // retrouve alors l'état natif le plus proche, ce que faisait l'ancien select.
+      setup.track_state = p.track_state ?? null;
       setup.grip = nearestGrip(p.grip ?? 100);
       setup.practice_enabled = p.practice_enabled ?? false; setup.practice_minutes = p.practice_minutes ?? 20;
       setup.qualify_enabled = p.qualify_enabled ?? true; setup.qualify_minutes = p.qualify_minutes ?? 10;
@@ -866,7 +876,7 @@
     void [setup.ai_level, setup.ai_spread, setup.aggression, setup.aggression_spread, setup.start_mode, setup.ghost_advantage,
       opponentCount, gridFilters, gridQuery, gridPinned, gridColumns, gridWide,
       setup.laps,
-      setup.time_hours, setup.penalties, setup.jump_start_penalty, setup.grip,
+      setup.time_hours, setup.penalties, setup.jump_start_penalty, setup.grip, setup.track_state,
       setup.practice_enabled, setup.practice_minutes, setup.qualify_minutes,
       setup.ghost_car, setup.practice_start, setup.damage, setup.fuel_rate, setup.tyre_wear, setup.tyre_blankets,
       selectedIntent, season,

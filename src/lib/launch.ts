@@ -79,6 +79,11 @@ export function clampAiLevel(level: number): number {
  * ajouter des états d'une autre provenance sans que l'écran ait à changer —
  * ce ne sera qu'une entrée de plus dans la liste. */
 export interface TrackStateOption {
+  /** `"builtin"` (table du jeu) ou `"cm"` (preset utilisateur de Content
+   * Manager). **Le nom seul ne distingue pas** : rien n'empêche d'appeler son
+   * preset « Green », et c'est le couple origine + nom qu'une session retient
+   * (§4.6). */
+  origin: TrackStateOrigin;
   /** Grip de départ, en pourcentage : il sert d'identifiant parce que c'est le
    * seul des quatre que le réglage retient. */
   start: number;
@@ -90,6 +95,53 @@ export interface TrackStateOption {
   /** L'entrée « Auto », qui n'est pas un état mais le drapeau `WeatherDefined` :
    * ses quatre valeurs sont celles de Green, en repli. */
   weather_defined: boolean;
+}
+
+export type TrackStateOrigin = "builtin" | "cm";
+
+/** Ce qu'une session retient d'un état de piste (§4.7) : sa référence **et**
+ * ses quatre valeurs.
+ *
+ * Ce qui part au jeu, ce sont les nombres — le nom n'est qu'une étiquette. Les
+ * mémoriser est ce qui fait qu'un preset supprimé ou renommé dans Content
+ * Manager ne modifie jamais en silence une session déjà enregistrée : elle
+ * reste jouable telle qu'elle a été réglée, et l'écran dit seulement que la
+ * référence a disparu. */
+export interface TrackStateRef {
+  origin: TrackStateOrigin;
+  name: string;
+  start: number;
+  transfer: number;
+  randomness: number;
+  lap_gain: number;
+  weather_defined: boolean;
+  description: string | null;
+}
+
+/** L'état d'une option de la liste, ramené à ce qu'une session en retient. */
+export function trackStateRefOf(o: TrackStateOption): TrackStateRef {
+  return {
+    origin: o.origin,
+    name: o.name,
+    start: o.start,
+    transfer: o.transfer,
+    randomness: o.randomness,
+    lap_gain: o.lap_gain,
+    weather_defined: o.weather_defined,
+    description: o.description || null,
+  };
+}
+
+/**
+ * Retrouve dans la liste courante l'option que la session référence.
+ *
+ * **Par origine ET par nom** : le nom seul confondrait un `Green` maison avec
+ * celui du jeu. `undefined` quand la référence a disparu — un preset supprimé
+ * dans CM —, ce que l'écran dit sans rien bloquer.
+ */
+export function findTrackState(states: TrackStateOption[], ref: TrackStateRef | null): TrackStateOption | undefined {
+  if (!ref) return undefined;
+  return states.find((s) => s.origin === ref.origin && s.name === ref.name);
 }
 
 /** La liste des états, lue côté Rust dans la table du jeu. */
@@ -208,6 +260,11 @@ export interface RaceSetup {
   season_date: string | null;
   penalties: boolean;
   jump_start_penalty: number;
+  /** L'état de piste retenu, porté en entier (§4.7). `null` sur une
+   * configuration antérieure : `grip` est alors relu. */
+  track_state: TrackStateRef | null;
+  /** Ancien réglage — le seul pourcentage de départ. Gardé pour la relecture,
+   * plus jamais la source de vérité. */
   grip: number;
   /** Essais libres avant la course (weekend Quick Drive) — indépendants de la qualification. */
   practice_enabled: boolean;

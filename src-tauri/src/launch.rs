@@ -14,7 +14,7 @@ use std::process::Command;
 use std::os::windows::process::CommandExt;
 
 use rusqlite::Connection;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::activation;
@@ -119,6 +119,29 @@ pub struct Opponent {
     pub ballast: u32,
     #[serde(default)]
     pub restrictor: u32,
+}
+
+/// Un état de piste tel qu'une session le retient : d'où il vient, comment il
+/// s'appelle, et les quatre nombres qui partent réellement au jeu.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TrackStateRef {
+    /// `"builtin"` (table du jeu) ou `"cm"` (preset utilisateur de Content
+    /// Manager). **Le nom seul ne suffit pas** : rien n'empêche d'appeler son
+    /// preset « Green ».
+    pub origin: String,
+    pub name: String,
+    /// `SESSION_START`, `SESSION_TRANSFER`, `RANDOMNESS` en pourcentage entier,
+    /// `LAP_GAIN` brut — l'échelle de la table du jeu, pas celle du preset CM
+    /// (qui divise les trois premiers par cent).
+    pub start: u32,
+    pub transfer: u32,
+    pub randomness: u32,
+    pub lap_gain: u32,
+    /// L'entrée « Auto » n'est pas un état mais le drapeau `WeatherDefined`.
+    #[serde(default)]
+    pub weather_defined: bool,
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 /// Position de départ du joueur (§2.6) — le `StartingPosition` du preset, qui
@@ -231,12 +254,25 @@ pub struct RaceSetup {
     /// Faux départ : 0 = aucune, 1 = téléport, 2 = drive-through.
     #[serde(default)]
     pub jump_start_penalty: u32,
-    /// Évolution du grip : DYNAMIC_TRACK SESSION_START (86 vert … 100 optimal).
-    /// Pas de champ correspondant trouvé dans `TrackPropertiesData` (Quick
-    /// Drive) — toujours « Optimum »/sec pour l'instant. Conservé pour
-    /// l'aller-retour front, non lu ici.
+    /// L'état de piste retenu, **porté en entier** plutôt que désigné par un
+    /// nombre (§4.6/§4.7).
+    ///
+    /// Le réglage n'était que le pourcentage de départ, qui servait
+    /// d'identifiant. Ça ne tient plus dès que des presets utilisateur de
+    /// Content Manager s'ajoutent aux sept entrées du jeu : deux états peuvent
+    /// partager le même pourcentage, et rien n'empêche de nommer le sien
+    /// « Green ». D'où l'origine **et** le nom — et surtout les quatre valeurs
+    /// résolues, puisque ce qui part au jeu, ce sont les nombres. Un preset
+    /// supprimé ou renommé dans CM ne change donc jamais une session déjà
+    /// enregistrée.
+    ///
+    /// `None` sur un preset antérieur : `grip` est alors relu, et l'état de la
+    /// table du jeu le plus proche est repris.
+    #[serde(default)]
+    pub track_state: Option<TrackStateRef>,
+    /// Ancien réglage — le seul pourcentage de départ. Gardé pour cette seule
+    /// relecture, jamais réécrit.
     #[serde(default = "default_grip")]
-    #[allow(dead_code)]
     pub grip: u32,
     /// Essais libres avant la course (mode course uniquement, weekend Quick
     /// Drive) : phase optionnelle indépendante de la qualification — les deux

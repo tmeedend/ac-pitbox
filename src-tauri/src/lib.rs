@@ -64,6 +64,7 @@ mod sun;
 #[cfg(test)]
 mod testutil;
 mod thumbnails;
+mod trackstates;
 mod ui_prefs;
 mod uijson;
 mod usermeta;

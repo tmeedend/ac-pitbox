@@ -1726,11 +1726,79 @@ le vocabulaire de Content Manager (`INITIAL GRIP`, `GRIP TRANSFER`,
 reconnaître ce qu'il lit ici. Lecture seule.
 
 **Un état de piste est un objet nommé porteur de quatre valeurs, pas un cas
-d'énumération.** L'écran ne connaît plus la liste, il la reçoit — y ajouter des
-états d'une autre provenance ne sera qu'une entrée de plus, sans rien changer à
+d'énumération.** L'écran ne connaît plus la liste, il la reçoit — et c'est ce
+qui a permis d'y ajouter les presets de Content Manager sans rien changer à
 l'écran. `Auto` n'est pas un état mais le drapeau `WeatherDefined` : ses quatre
 valeurs sont celles de Green, sur lesquelles le jeu retombe quand la météo ne
 dit rien de la piste, et la ligne le dit.
+
+**Deux groupes, et les natifs ne sont jamais masqués.** Les presets d'état de
+piste que l'utilisateur a créés dans Content Manager s'ajoutent **après** les
+sept entrées du jeu, par ordre alphabétique, jamais à leur place : celles-ci
+viennent de la table du jeu, ce sont les noms que tout le monde emploie, et
+quelqu'un qui s'est fabriqué une piste verte humide veut quand même pouvoir
+choisir `Optimum`. Le second groupe est simplement **absent** quand il n'y en a
+aucun — pas de message, pas d'état vide, c'est le cas nominal. Lecture seule :
+Pit Box n'écrit rien dans le dossier de CM, et n'ouvre pas l'édition des quatre
+valeurs. Qui veut composer un état le fait dans CM et le retrouve ici.
+
+**La lecture a lieu à l'ouverture de l'écran**, pas au démarrage de l'app : le
+scénario réel est de créer un preset dans CM puis de revenir dans Pit Box, et
+une lecture au démarrage obligerait à relancer.
+
+**La description est la partie la plus utile du lot.** Elle s'affiche sous la
+ligne des quatre valeurs, en prose (sans-serif) : ce sont les mots de
+l'utilisateur pour décrire l'état qu'il a composé, et c'est exactement ce qui
+manquait pour départager deux états proches. Les sept natifs en portent une
+aussi, celle du jeu, affichée par le même chemin. Absente, rien n'est affiché.
+
+**Le format a été relevé à l'envers, faute d'échantillon.** Le dossier
+`…\Presets\Track States` existe et est **vide** sur la machine de référence.
+Ce qui donne le format est le couple `TrackPropertiesPresetFilename` /
+`TrackPropertiesData` des presets Quick Drive réels : CM y désigne un état par
+un **nom de fichier** de ce dossier (`Optimum.cmpreset`, qui n'existe pourtant
+pas sur disque — les natifs sont virtuels) et en sérialise le contenu sous la
+forme `{"s":1.0,"t":1.0,"r":0.0,"g":1,"d":"…","w":false}`. C'est exactement ce
+que `build_track_properties` écrit déjà : **le lecteur en est l'inverse**, ce
+qui est la meilleure garantie que les deux restent d'accord. Reste non vérifié
+que le fichier soit cet objet **nu** ; le lecteur accepte donc les deux formes,
+nue et enveloppée, plutôt que de parier.
+
+**Bornage volontairement large, et c'est un écart assumé.** Les plages de
+l'éditeur de CM (grip initial 85-100, lap gain 0-700) n'ont pas pu être
+confirmées. Un plancher non confirmé à 85 réécrirait en silence un état composé
+à 70 — précisément ce que ce lot est censé rendre à l'utilisateur. On s'en tient
+donc au sens physique : un pourcentage entre 0 et 100, un lap gain d'au moins 1.
+Un fichier illisible ou incomplet est ignoré **en silence** : c'est un
+enrichissement optionnel, il ne doit jamais empêcher de régler ni de lancer.
+
+### 9.3quater-bis Ce qu'une session retient d'un état de piste
+
+**Origine + nom, jamais le nom seul.** Rien n'empêche de nommer son preset
+`Green`. À l'écran, l'appartenance au groupe suffit à distinguer ; au stockage,
+non.
+
+**Et les quatre valeurs résolues, en plus de la référence.** Ce qui part au jeu,
+ce sont les nombres — le nom n'est qu'une étiquette. Trois conséquences, toutes
+voulues :
+
+- un preset supprimé ou renommé dans CM ne modifie **jamais silencieusement**
+  une session déjà enregistrée ;
+- **référence introuvable au chargement** : les quatre valeurs mémorisées sont
+  appliquées telles quelles, et le select garde l'entrée sous son nom suivi de
+  `(introuvable)` plutôt que de sauter en silence sur un autre état. Aucun
+  blocage, aucune boîte de dialogue — la session reste jouable telle qu'elle a
+  été réglée ;
+- **référence trouvée mais valeurs différentes** : celles du preset gagnent.
+  Modifier son preset dans CM est un geste intentionnel, et on attend que ses
+  sessions suivent. L'autre branche se défend (la session prime, le preset n'est
+  qu'un point de départ figé) ; rien dans l'implémentation n'a fait apparaître de
+  raison de trancher autrement.
+
+Le réglage n'était qu'un **pourcentage de départ**, qui servait d'identifiant :
+ça ne tient plus dès que deux états peuvent partager le même. Un preset ou une
+session d'avant ce modèle ne porte que ce pourcentage — l'état natif le plus
+proche est repris, ce que faisait déjà l'ancien select.
 
 ### 9.3quinquies Grilles enregistrées et import Content Manager
 
