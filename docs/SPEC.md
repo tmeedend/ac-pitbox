@@ -1437,22 +1437,51 @@ Maquette de référence `pitbox-reglages-session.html`. Pas de rappel du duo en 
 **Communs à tous les types de session** — regroupés dans « Simulation » (dégâts,
 conso carburant, usure pneus, chauffe-pneus, puis en sous-rubrique aides à la
 conduite ABS/antipatinage/ligne) et dans « Options de session » (pénalités,
-évolution du grip) : ces réglages sont envoyés au preset Quick Drive quel que
-soit le type (`Penalties` figure dans les trois `ModeData` ; `TrackPropertiesData`
-et `AssistsData` sont au niveau racine du preset, pas dans `ModeData`), rien ne
-justifie de les cantonner à Course. Météo et heure, également communes.
+puis pénalités) et dans le rail droit (état de la piste, §9.3quater) : ces
+réglages sont envoyés au preset Quick Drive quel que soit le type (`Penalties`
+figure dans les trois `ModeData` ; `TrackPropertiesData` et `AssistsData` sont au
+niveau racine du preset, pas dans `ModeData`), rien ne justifie de les cantonner
+à Course. Météo et heure, également communes. Lest et bride du joueur aussi, mais
+leur place est la carte voiture du panneau gauche (§9.3ter).
 
-**Options de session : deux zones, et la droite ne bouge jamais.** À gauche ce
-qui dépend du type (départ en Practice ; ghost car en Hotlap ; tours, faux
-départ, qualification et essais libres en Course ; faux départ en Track day),
-à droite l'évolution du grip puis les pénalités, **dans cet ordre et à la même
-place dans les quatre types**. Tous les contrôles se suivaient auparavant dans
-une seule ligne qui se réarrangeait à chaque changement de type : les deux
-réglages qu'on ne change jamais étaient précisément ceux qu'il fallait
-rechercher à chaque fois. Le seuil qui empile les deux zones est une requête de
-**conteneur**, pas de média : c'est la largeur reçue par le bloc qui décide, et
-le zoom d'interface déplace celle de la fenêtre sans rien changer à celle-là
-(§13).
+**Options de session ne porte que ce qui dépend du type** : départ en Practice ;
+ghost car et son avance en Hotlap ; tours, faux départ, position de départ,
+qualification et essais libres en Course ; faux départ en Track day. Le bloc a
+longtemps eu **deux zones**, la droite portant l'évolution du grip et les
+pénalités pour qu'elles restent à la même place dans les quatre types. Les deux
+en sont sorties — le grip vers le rail droit (§9.3ter), les pénalités vers
+Simulation — et la seconde zone avec elles : ce qu'elle protégeait est obtenu
+mieux en sortant du bloc ce qui n'y dépend de rien.
+
+**Un champ sans objet dans le type courant est retiré, jamais grisé.** Le grisé
+est réservé aux **dépendances internes** — une case décochée éteint sa durée, la
+qualification éteint la position de départ. La distinction se lit : ce qui est
+absent n'existe pas ici, ce qui est éteint existe et attend qu'on lève ce qui le
+neutralise. Dans les deux cas la valeur est **conservée** : décocher puis
+recocher retrouve ce qui avait été réglé.
+
+**Ordre des blocs de la colonne centrale, invariant dans les quatre types** :
+Type de session, Options de session, Simulation, puis Adversaires. Toute la
+variabilité est donc en bas : rien de ce qui bouge ne se trouve au-dessus de ce
+qui ne bouge pas.
+
+**Position de départ** (Course uniquement) : quatre segments — Au hasard, 1er,
+2e, Dernier — placés juste après le faux départ. Au hasard par défaut, et le
+seul des quatre qui ne fixe rien. Le rang réel se résout à la construction du
+preset, où la taille du plateau est connue pour de bon : « Dernier » vaut
+`adversaires + 1`, le joueur comptant pour une voiture.
+
+**Écart assumé avec Content Manager, à ne pas « corriger » par mégarde.**
+Cocher la qualification neutralise la position de départ — la grille vient alors
+des résultats de qualif. Chez CM le contrôle est purement **absent** dans ce
+cas : relevé dans son binaire, il n'est lié que dans la vue `QuickDrive_Race`,
+et `QuickDrive_Weekend` — celle qui porte la qualification — n'en a aucune
+trace. Pit Box l'**éteint** au lieu de le retirer, et c'est délibéré : chez CM
+la qualification et la position vivent dans deux vues, chez nous dans le même
+écran, à quelques centimètres l'une de l'autre. Un réglage qui disparaît quand
+on coche une case voisine se lit comme un bug ; éteint, il dit ce qui le
+neutralise. C'est la règle des dépendances internes ci-dessus, et elle prime
+ici sur l'alignement sur CM.
 
 **Case et durée sont un seul contrôle** pour la qualification comme pour les
 essais libres : cadre unique, la durée décrochée à droite de la case. Décochée,
@@ -1507,24 +1536,250 @@ aide la voiture possède au lieu de répondre oui ou non.
 
 **Course et Track day** (absents des schémas Quick Drive Practice/Hotlap : pas de
 grille, pas de phase weekend) :
-- **Adversaires** : 4 modes (Même voiture / Même catégorie / Même ère via année min/max / Libre). Remplissage auto selon le mode, **liste du plateau visible et ajustable** (chaque IA avec sa force, retirer/ajouter, cliquer une ligne pour changer sa voiture — le skin n'y est plus choisi, il est tiré dans ceux de la voiture retenue — vignette de la ligne : `preview.jpg` du skin d'abord, puis celle du mod, `livery.png` en dernier recours — **l'inverse du sélecteur de livrée de la barre latérale**, et l'inversion est locale au plateau : les deux ne posent pas la même question, « quelle peinture ? » d'un côté, « quelle voiture ? » de l'autre, à laquelle quatre pastilles de couleur ne répondent pas. Format 16:9, recadré plutôt que dézoomé, le cadrage Kunos étant constant. Survoler ou focusser une ligne ouvre la même image en grand : un JPEG déjà chargé par la vignette, donc aucun appel backend et jamais l'aperçu 3D). Un bouton « + » par ligne duplique cette voiture avec un skin différent (pas encore pris par un autre adversaire du même mod dans le plateau ; reboucle sur les skins déjà pris une fois tous épuisés). **Catégorie** (visible seulement en mode Par catégorie), nombre d'adversaires, **Difficulté** (fourchette min-max, deux curseurs, le plateau réparti dans la plage — sous-rubrique du bloc Adversaires, pas une rubrique séparée) et année min/max sur une même ligne — les deux valeurs de la difficulté sont **accrochées à leur poignée** plutôt que posées aux extrémités de la piste, qui disaient la fourchette sans dire laquelle des deux on était en train de bouger ; rapprochées, chacune se range du côté extérieur de la sienne. La **force** d'une IA s'affiche en blanc et sans cadre, et prend son cadre au survol de sa ligne : c'est là qu'il faut savoir qu'elle s'édite. Année min/max sont deux champs numériques indépendants (pas une double glissière) : 0 ou vide = pas de borne de ce côté, filtrage fait côté front (non transmis au preset Quick Drive). Mode **Par catégorie** (renommé — l'onglet ne peut plus dire *laquelle* catégorie depuis qu'elle est choisissable) : un menu déroulant « Catégorie » sur la ligne nombre d'adversaires/difficulté/année (pas dans l'onglet lui-même — la place y manque, et un champ posé dans un onglet cliquable prête à confusion), visible seulement quand ce mode est actif, liste **« Même catégorie »** en tête (valeur par défaut, comportement d'origine — suit automatiquement la catégorie de la voiture pilotée à chaque changement de voiture) puis les catégories de la bibliothèque voitures (même liste que son filtre). Choisir une catégorie précise la **fixe** : elle reste utilisée à travers les changements de voiture, jusqu'à revenir sur « Même catégorie ». Avant ce champ, la catégorie se réinitialisait silencieusement sur celle de la voiture pilotée à *chaque* changement, y compris après un choix manuel — impossible de garder un vivier « GT3 » pendant qu'on essaie différentes voitures (bug réel). Persisté avec le preset par type de session et dans les sessions enregistrées nommées ; absent sur une sauvegarde antérieure à ce champ, repli sur « Même catégorie » — son comportement implicite d'alors.
-- Faux départ, pénalités — communs à Course et Track day. **Tours** : Course uniquement — envoyé dans le `ModeData` de Track day aussi (schéma confirmé sur un preset CM réel), mais sans effet en jeu : une session Track day ne se termine jamais sur un compte de tours, donc le réglage n'a pas sa place dans l'écran pour ce type de session. **Case qualification** (durée en min, mini 5 — borne de CM) et, sous elle, **case essais libres** (durée en min) : **Course uniquement**, absentes de Track day (§9.2quater, aucun mode Weekend équivalent côté CM). Décocher la qualification décoche les essais libres : les deux n'existent que dans le mode Weekend de CM, et sans qualification le preset bascule sur son mode course sèche, où aucune phase préparatoire n'existe (§9.2ter). Laisser les essais cochables y afficherait un réglage sans effet en jeu.
+- **Adversaires** : le vivier est **un filtre**, celui de la bibliothèque, posé en ligne dans le bloc (§9.3bis). Trois onglets (Même voiture / Par catégorie / Libre) faisaient ce travail avant lui et le faisaient moins bien : ils ne savaient pas combiner, et ils doublaient une barre de filtres qui existait déjà — c'est ce doublon qui obligeait à des règles de réconciliation entre l'onglet et les jetons.
+- Faux départ, pénalités — communs à Course et Track day. **Tours** : Course uniquement — envoyé dans le `ModeData` de Track day aussi (schéma confirmé sur un preset CM réel), mais sans effet en jeu : une session Track day ne se termine jamais sur un décompte de tours (testé).
 
-**La sélection d'un adversaire passe par la barre de filtres de la bibliothèque** (`OpponentPicker.svelte`). Elle n'offrait qu'une recherche par nom, ce qui rendait le choix d'un adversaire plus difficile que celui de la voiture pilotée — l'inverse du bon sens sur une bibliothèque de 300 mods. Elle consomme désormais `FilterBar` et l'index de recherche partagé (`filters.ts`/`cardSearch.ts`), en vue liste seule : marque, nom, catégorie, année, état — pas de sélecteur de colonnes ni de commutateur de vues, on y compare des noms, pas des images.
+### 9.3bis Le vivier, le plateau, et les deux gestes entre les deux
 
-**Elle reçoit toute la bibliothèque voitures**, pas le vivier de l'onglet : sinon ses jetons ne voudraient rien dire, puisque retirer « Catégorie » n'élargirait pas une liste déjà restreinte en amont. L'onglet dit dans quoi le `+` pioche, la modale dit ce qu'on prend à la main, et les deux ont le droit de diverger.
+**Le filtre définit le vivier, jamais le plateau.** Le bloc Adversaires porte la
+barre de filtres de la bibliothèque — troisième consommateur après les deux
+écrans de bibliothèque — et un compteur `Vivier · N voitures`. Ce qu'on y gagne
+est la **combinaison** : `#gt3` **et** 2010-2016 **et** sauf Kunos est trivial
+avec des jetons et était impossible avec trois onglets.
 
-**Les jetons posés à l'ouverture suivent le vivier** — marque en « même voiture », catégorie en « par catégorie », rien en « libre » — plus, dans les trois cas, la restriction aux mods **jouables**. Celle-ci est **deux exclusions et non une valeur** : le filtre d'état n'offre qu'`active`, `inactive`, `stock`, `unmanaged` et `broken`, et « jouable » veut dire tout sauf les deux qu'AC ne peut pas charger. En « même voiture », seule la **marque** devient un jeton : il n'existe aucun filtre « modèle » dans le catalogue, et en inventer un pour cette modale seule créerait un filtre que la bibliothèque n'a pas. Tous sont **retirables** : un jeton qui ressemble aux autres et résiste au clic abîmerait la confiance dans tout le système tri-état. Les filtres de la modale ne sont jamais persistés — elle s'ouvre toujours sur le vivier courant, jamais sur les filtres de la fois précédente.
+**Trois puces de raccourci** — Même voiture, Même catégorie, Même performance —
+posent **un jeton et rien d'autre**. Une puce paraît active quand son jeton est
+présent, y compris posé à la main ; la recliquer le retire. Il n'y a donc pas de
+second état à tenir d'accord avec le premier, ce qui est tout l'intérêt. Une
+puce dont la référence ne peut rien fournir (pas de voiture choisie, pas de
+catégorie déclarée, specs illisibles) est éteinte et **dit pourquoi** — par
+`aria-disabled` et non `disabled`, un bouton désactivé ne recevant aucun
+événement de survol, donc n'affichant jamais son explication.
 
-**Un composant, deux modes.** « Ajouter » : sélection multiple à cases, `Maj+clic` pour étendre, ajout en fin de plateau dans l'ordre affiché, skin et force tirés comme le fait déjà le `+`. « Remplacer » : sélection simple, sans cases, ouverte défilée sur la voiture déjà en place, double-clic pour valider, force de la ligne conservée et skin tiré dans ceux de la nouvelle voiture. Le focus est piégé dans la modale et rendu au déclencheur à la fermeture.
+**Asymétrie assumée entre les trois.** `Modèle` et `Catégorie` posent une
+**valeur** : changer de voiture ne déplace pas le jeton, c'est un instantané.
+`Performance` pose une **tolérance**, dont la référence est lue dans le
+contexte : la bande suit la voiture pilotée. Une bande nommée « ±15 % de ma
+voiture » qui continuerait de mesurer sur une voiture qu'on ne pilote plus
+mentirait ; un jeton de catégorie qui cesserait de dire ce qu'il affiche serait
+le comportement des onglets revenu par la fenêtre.
 
-**Le plateau devient manuel** dès qu'une voiture y est ajoutée à la main : il n'est plus régénéré au changement de voiture pilotée. Un drapeau (`grid_manual`, persisté avec le preset) plutôt qu'une bascule de l'onglet sur « libre », qui changerait un réglage visible dans le dos de l'utilisateur. Le bouton **Régénérer** le lève, comme le changement de mode de vivier.
+**Le jeton `Performance`** filtre sur le rapport **poids / puissance** en
+kg/bhp, à un écart relatif réglable autour de celui de la voiture pilotée. Il
+est disponible **aussi dans la bibliothèque** : « montre-moi tout ce qui roule au
+niveau de ma 488 » est une question qu'on se pose hors session. La lecture des
+specs est délibérément **conservatrice** — mesurée sur les 311 voitures de
+l'install, 291 donnent un ratio et 20 sont écartées : six annoncent une
+puissance aux roues (`whp`, une autre grandeur, pas un facteur), neuf des
+chevaux métriques (`ps`, `л.с.` — le facteur est exact mais l'intention de
+l'auteur ne l'est pas), cinq écrivent `--`. Une voiture illisible **sort du
+vivier** et affiche `—`, jamais une valeur estimée.
 
-**Régénération du plateau** (Course et Track day) : un bouton **Régénérer** à droite de l'en-tête `Plateau · N IA` la demande explicitement — l'action n'existait que comme effet de bord d'un changement de voiture. L'en-tête ne dit plus « généré », qui devenait faux dès qu'une ligne avait été posée à la main. Le vivier dépend de la voiture pilotée, donc changer de voiture régénère les adversaires — sauf en mode **Libre**, dont le vivier n'en dépend pas et où le plateau est le plus souvent réglé à la main. Changer seulement de **skin** ne régénère jamais. La voiture pour laquelle le plateau a été construit est persistée avec lui (`grid_car_id`) : l'écran de lancement est démonté dès qu'on passe à la bibliothèque, c'est donc la seule façon, au remontage, de distinguer un plateau fait pour la voiture courante d'un plateau hérité de la précédente — sans ça, changer de voiture depuis la bibliothèque puis revenir laissait le plateau de l'ancienne (bug réel).
+**Entre le vivier et le plateau il y a toujours un geste, et il y en a
+exactement deux**, travaillant tous deux sur l'ensemble filtré : `Tirer N au
+hasard` **remplace** le plateau — le chemin de qui veut courir tout de suite —
+et `Choisir dans le vivier · N voitures` ouvre la modale sur **ce même filtre**
+et **ajoute** en fin de plateau — le chemin de qui veut décider. Le nombre porté
+par le second dit ce que le filtre a acheté : N lignes à lire au lieu de toute
+la bibliothèque.
+
+**La modale partage l'état de filtre du bloc**, elle n'en dérive plus. Il n'y a
+qu'un vivier, et elle en est la vue détaillée : y retirer un jeton élargit aussi
+ce dans quoi le tirage pioche. **Un composant, deux modes** — « Ajouter » :
+sélection multiple à cases, `Maj+clic` pour étendre, ajout en fin de plateau
+dans l'ordre affiché ; « Remplacer » : sélection simple, ouverte défilée sur la
+voiture de la ligne, double-clic pour valider, la force de la ligne conservée et
+le skin retiré au sort dans ceux de la nouvelle voiture.
+
+**Aucun repli quand le vivier est vide.** Un filtre qui ne garde rien rend un
+plateau vide, pas un tirage fait ailleurs : le compteur dit `Vivier · 0` et les
+deux boutons sont éteints. Le repli d'avant venait des onglets, dont le vivier
+pouvait être vide sans que rien ne le dise. Un vivier plus maigre que le nombre
+d'adversaires demandé se signale sans bloquer — le plateau reste jouable, il
+répète simplement des voitures avec d'autres livrées.
+
+**Le jeton « jouable » n'est pas épinglé.** Il l'a été, pour qu'un tirage ne
+puisse pas produire un plateau injouable. Il coûtait une puce permanente dans
+une barre de 600 px pour prévenir un cas rare, et quand ce cas se présente la
+garde d'activation le dit au-dessus du bouton de lancement et le répare d'un
+clic. Un avertissement qui apparaît quand le cas se produit vaut mieux qu'une
+puce qui prend de la place le reste du temps.
+
+**Le plateau ne se régénère plus tout seul au changement de voiture pilotée.**
+La règle était « régénérer sauf en mode libre, sauf si le plateau a été touché à
+la main » — trois conditions pour deviner s'il appartenait encore à
+l'utilisateur ou au vivier. Le vivier étant un filtre qu'un changement de
+voiture ne déplace pas, régénérer jetterait un plateau au profit d'un tirage
+dans le **même** vivier. Le plateau ne change donc plus que sur un geste, et le
+marqueur « plateau manuel » a disparu avec la règle qu'il servait.
+
+**`Régénérer` n'est pas `Tirer` sous un autre nom** : il garde les voitures et
+retire au sort ce qui avait été tiré **sur** elles — la livrée, et avec elle le
+nom de pilote laissé en `Auto`. « Le plateau est bon mais les livrées se
+répètent » et « le plateau n'est pas le bon » sont deux gestes qu'on veut
+séparément.
+
+**Deux pilotes ne portent jamais la même identité par accident.** Le jeu nomme
+une IA d'après le `ui_skin.json` de sa livrée — pilote, numéro, pays, présents
+sur 393 à 400 livrées d'un corpus de 400. Le tirage évite donc les livrées dont
+le couple numéro + nom est déjà pris **sur tout le plateau**, pas seulement par
+voiture : deux livrées différentes peuvent parfaitement déclarer le même « 59
+Juan », et deux lignes indistinguables étaient le défaut visible. Un doublon
+forcé à la main est signalé, jamais corrigé dans le dos.
+
+### 9.3ter Le plateau
+
+**Chaque cellule éditable vaut `Auto` ou une valeur explicite.** `Auto` n'est
+pas une valeur qu'on tire : c'est **l'absence de surcharge**, et le format de
+Content Manager la connaît déjà — `-1` dans un tableau numérique, `null` dans un
+tableau de texte, les deux relevés sur un preset de grille réel où un `"0"`
+explicite voisine un `"-1"`. Une valeur posée à la main n'est donc jamais
+écrasée par un tirage, et **vider le champ la rend à `Auto`** : le geste naturel
+pour dire « je ne décide pas », et la raison pour laquelle aucun menu de ligne
+n'est nécessaire.
+
+Une force laissée en `Auto` est tirée **par le jeu** dans la fourchette de
+difficulté, à l'exécution : elle n'est pas connue au moment où l'on configure, et
+l'écran affiche donc le mot `Auto` plutôt qu'un nombre qui ne serait pas
+celui-là. Un nom ou une nationalité en `Auto` affiche en revanche **ce que la
+livrée déclare**, qui est exactement ce que le jeu emploiera.
+
+**Une force explicite remplace, elle ne multiplie pas.** `race.ini` écrit un
+`AI_LEVEL` absolu par voiture : il n'y a aucune transformation entre ce qu'on
+pose et ce que le jeu reçoit. Une ligne à 95 dans un plateau réglé 84-90 est
+donc **légitime** — c'est même le cas d'usage, poser une IA rapide dans un
+plateau moyen — et rien dans l'écran ne la signale comme une incohérence. Ce
+qu'on observe en bougeant la fourchette, c'est le **recalcul des lignes `Auto`**,
+qui ressemble à une multiplication sans en être une.
+
+**La fourchette part enfin dans le preset.** `AiLevel` / `AiLevelMin` y étaient
+codés en dur sur 95/85 : le réglage de l'écran n'atteignait jamais le jeu — et
+une ligne `Auto` n'aurait rien voulu dire, puisque c'est précisément dedans que
+le jeu tire. `AiLevel` est le **haut** de la fourchette et `AiLevelMin` le bas,
+relevé sur un preset réel.
+
+**Colonnes** : voiture + livrée (fixe, c'est la ligne elle-même), kg/bhp et
+force par défaut ; nom de pilote, nationalité, lest et bride s'ajoutent par le
+**même menu que la vue tableau de la bibliothèque**, composant compris. Le lest
+et la bride n'ont pas d'`Auto` : « rien » s'y dit par 0, comme dans le preset.
+Les en-têtes distinguent les colonnes éditables des colonnes en lecture seule
+par les **deux gris** de l'app, sans en introduire un troisième.
+
+**Le bouton `⤢` n'élargit que la grille.** Il élargissait toute la page : les
+curseurs de Simulation étirés sur toute la largeur avaient une course souris
+disproportionnée pour un réglage qu'on pose au pourcentage près, et le bloc ne
+ressemblait plus au même composant d'un mode à l'autre. Les blocs de la colonne
+centrale sont donc plafonnés à leur largeur de repos et calés à gauche —
+l'en-tête d'Adversaires compris, dont la barre de filtres doit rester le même
+objet que dans la bibliothèque. La largeur gagnée sert à afficher **plus de
+colonnes**, pas à étirer les existantes : le nom est plafonné, sans quoi l'écart
+entre lui et le nom de pilote devient assez grand pour qu'on perde la ligne en
+la parcourant, et les abréviations tombent.
+
+**Difficulté et agressivité : un centre et un écart**, et un seul composant
+instancié deux fois — ce sont les deux réglages qui décident du caractère de la
+course, ils ne peuvent pas se manipuler autrement l'un que l'autre. Le geste
+fréquent est de monter tout le plateau de quelques points sans en changer la
+dispersion : avec un minimum et un maximum il demande deux manipulations, et
+rater l'une des deux resserre la fourchette sans qu'on s'en aperçoive. Déplacer
+le centre conserve l'écart par construction. L'écart est un **champ** et non un
+second curseur, parce que `± 0` — tout le plateau à la même force — est une
+valeur qu'on veut poser exactement et qu'un pointeur n'atteint qu'à la bagarre.
+Le libellé affiche la plage **bornée** (`3% ± 5 (0–8)`, jamais `(-2–8)`), et le
+bornage s'applique aussi à ce qui part en jeu : sinon l'écran annonce une plage
+et le jeu en reçoit une autre. Le stockage est centre + écart ; presets par type
+et sessions enregistrées d'avant ce modèle sont **convertis**, jamais repliés
+sur le défaut.
+
+**Lest et bride du joueur** : dans la carte voiture du panneau gauche, au
+gabarit de Livrée et Pilote mais **sans chevron** — celles-là ouvrent un
+sélecteur, celles-ci s'éditent sur place. Leur place n'est pas dans les options
+de session parce qu'elles valent pour les quatre types, alors que tout le
+contenu de ce bloc en dépend ; ça ne les sort pas de la configuration
+enregistrée pour autant. Zéro s'affiche éteint, toute autre valeur en rouge,
+pour qu'un handicap oublié se voie sans lire la ligne. Ils partent dans le
+preset des quatre types — au niveau de la grille pour une course, dans le
+`ModeData` pour les modes solo, les deux emplacements relevés sur des presets
+réels.
+
+### 9.3quater État de piste — un bloc du rail droit
+
+**Le rail droit porte les conditions de course, et rien d'autre** : l'état de la
+piste puis la météo, identiques dans les quatre types de session. C'est lui qui
+donne à l'écran sa silhouette constante pendant que la colonne centrale grandit
+ou rétrécit. En Practice, où cette colonne est courte, le rail porte l'essentiel
+du réglage — on est seul en piste, la météo et l'état de la piste *sont* la
+session. Le déséquilibre est donc un signal juste : rien n'est centré
+verticalement, aucun espace n'est réservé, et le nombre de colonnes ne change
+pas avec le type.
+
+**Les deux blocs sont voisins par nécessité**, pas par commodité de mise en
+page : l'entrée `Auto (set by weather)` de l'état de piste n'a de sens qu'à côté
+de la météo qui la pilote. Ne rien intercaler entre eux.
+
+**Un select, et les quatre vraies valeurs sous lui.** Sept lignes nommées
+coûtaient la hauteur du bloc météo pour un réglage qu'on choisit une fois, et
+les quatre nombres qui décident réellement de l'évolution de la piste n'étaient
+lisibles qu'au survol — c'est-à-dire nulle part. Ils s'affichent maintenant avec
+le vocabulaire de Content Manager (`INITIAL GRIP`, `GRIP TRANSFER`,
+`RANDOMIZATION`, `LAP GAIN`) : quelqu'un qui a réglé un état de piste là-bas doit
+reconnaître ce qu'il lit ici. Lecture seule.
+
+**Un état de piste est un objet nommé porteur de quatre valeurs, pas un cas
+d'énumération.** L'écran ne connaît plus la liste, il la reçoit — y ajouter des
+états d'une autre provenance ne sera qu'une entrée de plus, sans rien changer à
+l'écran. `Auto` n'est pas un état mais le drapeau `WeatherDefined` : ses quatre
+valeurs sont celles de Green, sur lesquelles le jeu retombe quand la météo ne
+dit rien de la piste, et la ligne le dit.
+
+### 9.3quinquies Grilles enregistrées et import Content Manager
+
+**Une grille et une session sont deux objets, et la distinction n'est pas une
+nuance.** Une session enregistre tout — duo, météo, heure, options — dont une
+**copie** de sa grille ; une grille n'enregistre que les adversaires et ce qui
+fait le caractère du plateau (fourchette, agressivité), et c'est ce qui la rend
+rejouable ailleurs : le même plateau GT3 sur dix circuits. La charger dans une
+session déjà configurée ne touche donc ni à la météo, ni à l'heure, ni au type.
+
+**Une copie, jamais un lien** : sinon modifier une grille changerait en silence
+toutes les sessions qui la citent. C'est cette règle seule qui justifie les deux
+objets. Liste plate avec recherche, pas d'arborescence — un dossier est une
+taxonomie qu'il faut inventer et maintenir, un nom cherchable ne demande rien.
+Fichier JSON dédié, jamais rangé par type de session : une grille ne dépend pas
+du type de course qu'on fera avec.
+
+**Import des presets Content Manager, jamais synchronisation.** On lit une fois,
+on convertit en objet Pit Box, on ne dépend plus du fichier — une passerelle
+vivante rendrait l'app dépendante du format de CM. Deux dossiers sont parcourus
+récursivement, CM rangeant ses presets en arborescence : `Race Grids\`, dont un
+`.cmpreset` est exactement l'objet `RaceGrid`, et `Quick Drive\`, qui l'enfouit
+sous deux couches de JSON-dans-une-chaîne. La grille d'un preset de session
+s'importe donc aussi.
+
+**Seul `ModeId: "manual"` devient une grille.** Les autres modes de CM
+(`same_car`, `similar_p_w_ratio`, `same_subclass_only`…) décrivent une **règle
+de tirage** : leurs `CarIds` sont des candidats, pas des lignes, et en faire un
+plateau inventerait ce que personne n'a composé. Ils sont nommés dans le
+rapport — et Pit Box exprime déjà ces règles, en mieux, avec ses jetons.
+
+**L'import aboutit toujours** : un fichier corrompu est nommé et n'arrête rien,
+une voiture absente de la bibliothèque est retirée en le disant, une voiture
+simplement désactivée reste et la garde d'activation la rallume d'un clic. La
+proposition d'import et le bouton permanent vivent tous deux sur la page
+d'import de mods ; un refus est définitif.
+
+**Piège du format à ne pas réintroduire** : le même fichier mélange deux
+écritures des nombres — les tableaux par ligne en **chaînes** (`"74"`), les
+valeurs globales en **flottants** (`95.0`). Un lecteur qui n'accepte que les
+entiers rend `None` sur les secondes, et la fourchette de difficulté d'un preset
+importé retombe alors sur le défaut sans un mot.
+
 
 **Practice** : pas de champ durée (non applicable — session à durée libre par design Quick Drive, voir §9.2 ; pas de champ correspondant côté Pit Box), ni tours/faux départ (absents du schéma `QuickDrive_Practice.xaml`, réservés à Course/Track day). Départ (Stand/Piste/Position de chrono → `StartType` du `ModeData`, trois valeurs) : "Piste" non vérifiée sur un preset réel, voir commentaire `PracticeStart`.
 
-**Hotlap** : ghost car.
+**Hotlap** : ghost car et son **avance**, sur une seule ligne — case et valeur
+forment un contrôle, comme les deux phases de la course. `GhostCarAdvantage`
+était codé en dur à 0 dans le preset, donc le réglage n'existait nulle part.
 
 **Météo** : conditions en **icônes SVG stylisées** (thème, libre de droits) — Beau, Quelques nuages, Couvert, Brouillard, Pluie légère, Pluie, Orage. **Température, vent et heure implicites** sur une même ligne (heure modifiable, température/vent recommandés par condition + heure + stack SOL/CSP, tous corrigeables à la main). **Saison** optionnelle : un champ date natif (en premier, avant les 4 cartes saison) qui affiche/permet de corriger précisément la date associée — sélectionner une saison y reporte automatiquement la date calculée (milieu de saison), la modifier à la main ne désélectionne pas la saison affichée.
 
@@ -1539,7 +1794,32 @@ grille, pas de phase weekend) :
 
 **Presets de session par type** : chaque type (Practice/Hotlap/Course/Track day) a un preset mémorisé ; toute modif est persistée pour les prochaines sessions du même type. **Persistance** (`src-tauri/src/session_state.rs`, `app_config_dir/launch_state.json`) : fichier écrit côté Rust, même mécanisme et même raison que le duo de session (§7.4) — `localStorage` n'est pas garanti synchrone sur disque côté WebView2, ce qui pouvait perdre les presets et la dernière sélection (type de session, adversaires) à la fermeture de l'app. Fichier dédié, distinct de `session.json` (chaque commande réécrit tout son fichier ; les mélanger ferait que sauvegarder le duo de session écrase les presets, et inversement). Migration silencieuse au premier démarrage après la mise à jour, même schéma qu'en §7.4.
 
-**Sessions enregistrées** (carte dédiée, à droite de « Type de session », surtout utile pour la liste d'adversaires) : liste inline, scrollable, **filtrée par le type de session courant** — change avec l'onglet Practice/Hotlap/Course/Track day. Cliquer une entrée la charge immédiatement. Bouton **Sauvegarder** au-dessus de la liste ouvre une popup de nommage (ou sélection d'une sauvegarde existante du même type, pour l'écraser). Clé par `<type>::<nom>` : deux types peuvent avoir une sauvegarde du même nom sans collision. **Persistance** (`src-tauri/src/saved_sessions.rs`, `app_config_dir/saved_sessions.json`) : même mécanisme et même raison que le duo de session et les presets ci-dessus — fichier dédié écrit côté Rust, migration silencieuse depuis `localStorage` au premier démarrage après la mise à jour.
+**Sessions enregistrées : deux boutons dans la barre de titre, et une modale.**
+Enregistrer et recharger une configuration nommée est le même geste pour une
+grille et pour une session ; les deux partagent donc le même composant. Le
+placement suit une règle générale : *l'action se place au niveau de ce qu'elle
+enregistre* — `Enregistrer la grille…` en bas de la grille, `Enregistrer la
+session…` en en-tête d'écran. Pas à côté du type de session, ce qui suggérerait
+que la sauvegarde y est rattachée alors qu'elle porte sur toute la page. Le
+décompte est porté par le bouton, qui est ce dont il parle.
+
+**Le filtre par type est supprimé, parce qu'il était invisible.** Qui avait
+enregistré une session en Course et la cherchait depuis Practice ne voyait pas
+une liste filtrée : il voyait une liste vide, et en concluait que sa sauvegarde
+avait échoué. Charger une session **bascule** le type — il fait partie de ce qui
+est enregistré —, donc la charger depuis un autre type est valide et il n'y
+avait rien à masquer. Le bénéfice du filtre passe dans le **tri** : type courant
+en tête, rien de caché. Le type devient une propriété affichée, à côté du
+circuit et de la date. Si un filtre explicite devenait nécessaire, il prendrait
+la forme d'une puce visible et effaçable — jamais d'un masquage silencieux.
+
+Clé par `<type>::<nom>` : deux types peuvent avoir une sauvegarde du même nom
+sans collision, et la suppression lit le type de **l'entrée**, pas celui de
+l'écran, puisque la liste n'est plus filtrée. **Persistance**
+(`src-tauri/src/saved_sessions.rs`, `app_config_dir/saved_sessions.json`) : même
+mécanisme et même raison que le duo de session et les presets ci-dessus —
+fichier dédié écrit côté Rust, migration silencieuse depuis `localStorage` au
+premier démarrage après la mise à jour.
 
 **Contenu d'une session enregistrée** : les réglages (météo, adversaires, options) **et le duo de session** — voiture pilotée avec son skin, circuit avec son tracé et ses **skins de circuit actifs** (§8, seul élément hors `setup` : c'est un état de déploiement, d'où un champ `trackSkins` à part). Le chargement rétablit le tout en passant par le duo de session (§8.6), qui reste la source de vérité : voiture et circuit sont reposés via `pickSession`, pas écrits directement dans le setup. Les skins de circuit sont remis **à l'identique** — ceux qui manquent sont activés, ceux en trop désactivés, sinon un skin resté actif d'une session précédente changerait l'apparence du circuit sans que rien ne le signale. Une sauvegarde antérieure au champ `trackSkins` (`undefined`, distinct d'une liste vide) n'y touche pas du tout.
 
