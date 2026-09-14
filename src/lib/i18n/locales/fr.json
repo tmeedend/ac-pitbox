@@ -33,6 +33,9 @@
   },
   "session": {
     "trackTag": "CIRCUIT",
+    "fieldBallast": "Lest",
+    "fieldRestrictor": "Bride",
+    "ballastUnit": "kg",
     "fieldLivery": "Livrée",
     "fieldDriver": "Pilote",
     "fieldLayout": "Layout",
@@ -909,7 +912,7 @@
     "startRandom": "Au hasard",
     "startCustom": "Position…",
     "aggressionLabel": "Agressivité",
-    "explicitStrengthNote": "Une force posée sur une ligne ne remplace pas la fourchette de difficulté : les deux se multiplient. Bouger la fourchette déplace donc aussi ces lignes.",
+    "explicitStrengthNote": "Une valeur posée sur une ligne remplace le niveau de cette voiture.\nLes lignes laissées sur Auto sont tirées dans la fourchette de difficulté et la suivent quand on la déplace.",
     "colRatio": "kg/bhp",
     "colStrength": "Force",
     "colStrShort": "Force",

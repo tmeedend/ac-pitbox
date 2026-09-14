@@ -7,6 +7,7 @@
     AI_LEVEL_MAX,
     AI_LEVEL_MIN,
     clampAiLevel,
+    START_MODES,
     newOpponent,
     type StartMode,
     isSteamRunning,
@@ -35,6 +36,7 @@
   import { hasOwnDriver } from "$lib/driverOverride.svelte";
   import { defaultGridFilters } from "$lib/opponentPool";
   import { setGridCars } from "$lib/gridMods.svelte";
+  import { playerHandicap, setPlayerHandicap } from "$lib/playerHandicap.svelte";
   import { getModDetail, listLibrary, previewSrc, type ModCard } from "$lib/library";
   import { getSessionBackground } from "$lib/media";
   import { nav, pickSession, type OpponentsAction } from "$lib/nav.svelte";
@@ -98,6 +100,8 @@
     ai_spread: 3,
     aggression: 0,
     aggression_spread: 0,
+    player_ballast: 0,
+    player_restrictor: 0,
     start_mode: "random",
     laps: 5,
     weather: "",
@@ -656,6 +660,8 @@
     track_layout: string | null;
     session_type: SessionType;
     opponents: Opponent[];
+    player_ballast: number;
+    player_restrictor: number;
   }
 
   // --- Presets de session par type (§8.4) ---
@@ -714,11 +720,16 @@
       track_layout: setup.track_layout,
       session_type: setup.session_type,
       opponents: setup.opponents,
+      // Dans la sélection et non dans les presets par type : ces deux-là ne
+      // dépendent pas du type de session (§2.7).
+      player_ballast: setup.player_ballast,
+      player_restrictor: setup.player_restrictor,
     };
     invoke("save_launch_state", { state: { selection, presets } }).catch((e) => console.error("save_launch_state", e));
   }
   $effect(() => {
-    void [setup.car_id, setup.car_skin, setup.track_id, setup.track_layout, setup.session_type, setup.opponents];
+    void [setup.car_id, setup.car_skin, setup.track_id, setup.track_layout, setup.session_type, setup.opponents,
+      setup.player_ballast, setup.player_restrictor];
     persistLaunchState();
   });
 
@@ -798,9 +809,11 @@
       }
       setup.aggression_spread = Math.max(0, Math.min(100, p.aggression_spread ?? 0));
       setup.aggression = Math.max(0, Math.min(100, p.aggression ?? 0));
-      // Un preset d'avant les quatre segments porte `"custom"` ou `"last"` :
-      // seul `last` existe encore, le reste retombe sur le défaut.
-      setup.start_mode = p.start_mode === "last" || p.start_mode === "first" ? p.start_mode : "random";
+      // Les quatre valeurs courantes se relisent telles quelles ; seul le
+      // `"custom"` d'avant les segments retombe sur le défaut. La liste était
+      // écrite à l'envers — elle n'acceptait que `first` et `last`, donc un
+      // preset portant `second` ou `random` revenait sur `random` en silence.
+      setup.start_mode = START_MODES.includes(p.start_mode as StartMode) ? (p.start_mode as StartMode) : "random";
       setup.ghost_advantage = Math.max(0, Math.min(5, p.ghost_advantage ?? 0));
       gridColumns = p.grid_columns ?? ["ratio", "strength"];
       gridWide = p.grid_wide ?? false;
@@ -834,6 +847,15 @@
     setup.session_type = type;
     await applyPreset(type);
   }
+  // Lest et bride : le store est la valeur vivante (il s'édite dans le panneau
+  // gauche, toujours à l'écran), `setup` la recopie. **Un seul sens** — un
+  // effet en retour ferait s'entre-réveiller les deux. Ce qui écrit dans
+  // l'autre sens, c'est un chargement : preset, session enregistrée.
+  $effect(() => {
+    setup.player_ballast = playerHandicap.ballast;
+    setup.player_restrictor = playerHandicap.restrictor;
+  });
+
   // La garde d'activation de la colonne de session lit le plateau courant
   // (§9.3) : elle est rendue ailleurs, et n'a pas d'autre moyen de le voir.
   $effect(() => {
@@ -1117,6 +1139,9 @@
     const warnings: string[] = [];
 
     setup = { ...setup, ...s.setup, opponents: (s.setup.opponents ?? []).map(restoreOpponent) };
+    // Par le store, qui est la valeur vivante : l'écrire dans `setup` seul
+    // laisserait la carte du panneau gauche afficher l'ancienne.
+    setPlayerHandicap(s.setup.player_ballast ?? 0, s.setup.player_restrictor ?? 0);
     opponentCount = s.opponentCount;
     // Même migration que pour un preset par type : une sauvegarde d'avant les
     // jetons retrouve son vivier, elle ne retombe pas sur les défauts.

@@ -310,6 +310,10 @@ fn build_grid(s: &RaceSetup) -> Value {
         "Restrictors": restrictors,
         "Names": names,
         "Nationalities": nationalities,
+        // Au niveau de la grille et non du `ModeData`, comme le preset de
+        // référence : c'est là que CM les écrit pour une course.
+        "PlayerBallast": player_ballast(s),
+        "PlayerRestrictor": player_restrictor(s),
         "ShuffleCandidates": false,
         "VarietyLimitation": 0,
         "OpponentsNumber": opponents.len(),
@@ -324,6 +328,16 @@ fn build_grid(s: &RaceSetup) -> Value {
         "AiAggressionArrangeRandom": 0.0,
         "AiAggressionArrangeReverse": false,
     })
+}
+
+/// Lest et bride du joueur (§2.7), bornés sur la plage de Content Manager.
+/// Écrits en flottants comme le preset de référence, où ils valent `5.0` et
+/// `10.0` — les tableaux par ligne, eux, sont des chaînes.
+fn player_ballast(s: &RaceSetup) -> f64 {
+    f64::from(s.player_ballast.min(200))
+}
+fn player_restrictor(s: &RaceSetup) -> f64 {
+    f64::from(s.player_restrictor.min(100))
 }
 
 /// Les deux bornes d'un réglage « centre ± écart » (§2.9), **bornées**.
@@ -366,8 +380,8 @@ fn mode_data_practice(s: &RaceSetup) -> String {
     json!({
         "StartType": start_type,
         "Penalties": s.penalties,
-        "PlayerBallast": 0,
-        "PlayerRestrictor": 0,
+        "PlayerBallast": player_ballast(s),
+        "PlayerRestrictor": player_restrictor(s),
     })
     .to_string()
 }
@@ -380,8 +394,8 @@ fn mode_data_hotlap(s: &RaceSetup) -> String {
         "DoNotRecordGhostCar": false,
         "GhostCarAdvantage": s.ghost_advantage.clamp(0.0, 5.0),
         "Penalties": s.penalties,
-        "PlayerBallast": 0,
-        "PlayerRestrictor": 0,
+        "PlayerBallast": player_ballast(s),
+        "PlayerRestrictor": player_restrictor(s),
     })
     .to_string()
 }
@@ -548,6 +562,8 @@ mod tests {
             ai_spread: 3,
             aggression: 0,
             aggression_spread: 0,
+            player_ballast: 0,
+            player_restrictor: 0,
             start_mode: StartMode::Random,
             ghost_advantage: 0.0,
             laps: 5,
@@ -1005,6 +1021,33 @@ mod tests {
         assert_eq!(grid["AiLevel"], 92.0);
         assert_eq!(grid["AiAggressionMin"], 0.0, "jamais négatif");
         assert_eq!(grid["AiAggression"], 8.0);
+    }
+
+    /// Règle protégée : le lest et la bride du joueur partent dans les quatre
+    /// types de session (§2.7) — au niveau de la grille pour une course, dans
+    /// le `ModeData` pour les modes solo, les deux emplacements relevés sur des
+    /// presets réels. Un réglage qui ne partirait que pour un type serait
+    /// invisible ailleurs, et c'est précisément la raison pour laquelle il ne
+    /// vit pas dans SESSION OPTIONS.
+    #[test]
+    fn the_player_handicap_reaches_every_session_type() {
+        for kind in [SessionType::Race, SessionType::TrackDay] {
+            let mut s = base_setup(kind);
+            s.player_ballast = 40;
+            s.player_restrictor = 15;
+            let grid = grid_of(&s);
+            assert_eq!(grid["PlayerBallast"], 40.0, "{kind:?}");
+            assert_eq!(grid["PlayerRestrictor"], 15.0, "{kind:?}");
+        }
+        for kind in [SessionType::Practice, SessionType::Hotlap] {
+            let mut s = base_setup(kind);
+            s.player_ballast = 40;
+            s.player_restrictor = 15;
+            let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
+            let mode: Value = serde_json::from_str(v["ModeData"].as_str().unwrap()).unwrap();
+            assert_eq!(mode["PlayerBallast"], 40.0, "{kind:?}");
+            assert_eq!(mode["PlayerRestrictor"], 15.0, "{kind:?}");
+        }
     }
 
     #[test]

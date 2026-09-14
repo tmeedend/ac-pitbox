@@ -17,6 +17,13 @@
   import GridThumbToast from "./GridThumbToast.svelte";
   import { FEATURE_GRID_THUMBS } from "$lib/features";
   import { gridMods, loadGridCars } from "$lib/gridMods.svelte";
+  import {
+    BALLAST_MAX,
+    RESTRICTOR_MAX,
+    loadPlayerHandicap,
+    playerHandicap,
+    setPlayerHandicap,
+  } from "$lib/playerHandicap.svelte";
   import { bumpLibraryVersion } from "$lib/libraryVersion.svelte";
   import { PAUSE_SESSION, pauseGridThumbs, resumeGridThumbs } from "$lib/gridThumbs.svelte";
   import { onAcRunning } from "$lib/launch";
@@ -82,6 +89,7 @@
   // Plateau du dernier réglage de session : la garde d'activation doit savoir
   // ce qu'elle protège même quand l'écran de réglages n'est pas monté.
   onMount(() => void loadGridCars());
+  onMount(() => void loadPlayerHandicap());
 
   // **La fin de la session lève la pause de la génération.**
   //
@@ -722,6 +730,42 @@
               {/if}
               <span class="chev" aria-hidden="true">›</span>
             </button>
+
+            <!-- Lest et bride (§2.7) : même gabarit de ligne que LIVERY et
+                 DRIVER, **sans chevron** — celles-là ouvrent un sélecteur,
+                 celles-ci s'éditent sur place. Même forme, affordance
+                 différente, et c'est le chevron qui fait la différence.
+
+                 Ils valent pour les quatre types de session : leur place n'est
+                 donc pas dans SESSION OPTIONS, dont tout le contenu dépend du
+                 type. Ça ne les sort pas de la configuration enregistrée pour
+                 autant. -->
+            <label class="field">
+              <span class="k">{t("session.fieldBallast")}</span>
+              <input
+                class="hcap mono"
+                class:set={playerHandicap.ballast > 0}
+                type="number"
+                min="0"
+                max={BALLAST_MAX}
+                value={playerHandicap.ballast}
+                onchange={(e) => setPlayerHandicap(Number(e.currentTarget.value), playerHandicap.restrictor)}
+              />
+              <span class="unit">{t("session.ballastUnit")}</span>
+            </label>
+            <label class="field">
+              <span class="k">{t("session.fieldRestrictor")}</span>
+              <input
+                class="hcap mono"
+                class:set={playerHandicap.restrictor > 0}
+                type="number"
+                min="0"
+                max={RESTRICTOR_MAX}
+                value={playerHandicap.restrictor}
+                onchange={(e) => setPlayerHandicap(playerHandicap.ballast, Number(e.currentTarget.value))}
+              />
+              <span class="unit">%</span>
+            </label>
           {/if}
         </div>
 
@@ -1252,6 +1296,35 @@
        cadrage — et parce que le recalculer invaliderait les 85 vignettes déjà
        sur disque pour un problème qui n'existe qu'ici. */
     transform: translateY(46%) scale(1.9);
+  }
+  /* Champ nu : c'est la ligne qui porte le cadre, comme les cellules du
+     plateau. Un `NumberStepper` y mettrait un second cadre dans le premier. */
+  .hcap {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: var(--faint);
+    font-size: 11px;
+    text-align: right;
+    appearance: textfield;
+  }
+  .hcap::-webkit-outer-spin-button,
+  .hcap::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+  /* Zéro est éteint — il n'y a pas de handicap —, toute autre valeur est rouge.
+     C'est le seul moyen qu'un lest oublié se voie sans lire la ligne, et le
+     rouge est ici au sens du barème : un réglage qui change la course. */
+  .hcap.set {
+    color: var(--rosso-bright);
+  }
+  .field .unit {
+    flex: none;
+    font-size: 9px;
+    color: var(--muted);
   }
   .field .v {
     flex: 1;

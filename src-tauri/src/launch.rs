@@ -184,6 +184,15 @@ pub struct RaceSetup {
     pub aggression: u32,
     #[serde(default)]
     pub aggression_spread: u32,
+    /// Lest et bride **du joueur** (§2.7), 0-200 kg et 0-100 %. Valables dans
+    /// les quatre types de session, d'où leur place hors de `ModeData` pour la
+    /// course : le preset de grille réel les porte au niveau de la grille
+    /// (`PlayerBallast`/`PlayerRestrictor`), et les modes solo dans leur propre
+    /// `ModeData`.
+    #[serde(default)]
+    pub player_ballast: u32,
+    #[serde(default)]
+    pub player_restrictor: u32,
     /// Position de départ du joueur (§2.6), **course uniquement**.
     #[serde(default)]
     pub start_mode: StartMode,

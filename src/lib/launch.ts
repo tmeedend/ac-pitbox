@@ -145,6 +145,11 @@ export function newOpponent(carId: string, skinId: string | null): Opponent {
  * et le seul des quatre qui ne fixe rien. */
 export type StartMode = "random" | "first" | "second" | "last";
 
+/** Les quatre valeurs, pour relire un preset sans en oublier une. Une liste
+ * écrite à la main dans la relecture avait laissé tomber `second` et `random`,
+ * qui revenaient donc au défaut en silence. */
+export const START_MODES: StartMode[] = ["random", "first", "second", "last"];
+
 /** Agressivité de l'IA (§4.4). Défaut **0**, celui de CM — à ne pas
  * « améliorer » : c'est la valeur avec laquelle des milliers d'heures de course
  * ont été réglées. Pas de 5, comme la tolérance de performance. */
@@ -183,6 +188,11 @@ export interface RaceSetup {
   /** Agressivité de l'IA, même modèle. */
   aggression: number;
   aggression_spread: number;
+  /** Lest et bride **du joueur** (§2.7), 0-200 kg et 0-100 %. Valables dans les
+   * quatre types de session — ils s'éditent dans la carte voiture du panneau
+   * gauche, et `playerHandicap.svelte.ts` est ce qui les y relie. */
+  player_ballast: number;
+  player_restrictor: number;
   /** Position de départ du joueur (§2.6), course uniquement. */
   start_mode: StartMode;
   laps: number;

@@ -33,6 +33,9 @@
   },
   "session": {
     "trackTag": "TRACK",
+    "fieldBallast": "Ballast",
+    "fieldRestrictor": "Restrictor",
+    "ballastUnit": "kg",
     "fieldLivery": "Livery",
     "fieldDriver": "Driver",
     "fieldLayout": "Layout",
@@ -909,7 +912,7 @@
     "startRandom": "Random",
     "startCustom": "Position…",
     "aggressionLabel": "Aggression",
-    "explicitStrengthNote": "A strength set on a line does not replace the difficulty range: the two multiply. Move the range and these lines move with it.",
+    "explicitStrengthNote": "A value set on a line replaces the level for that car.\nLines left on Auto are drawn from the difficulty range and follow it when you move it.",
     "colRatio": "kg/bhp",
     "colStrength": "Strength",
     "colStrShort": "Str.",
