@@ -1665,16 +1665,33 @@ et la bride n'ont pas d'`Auto` : « rien » s'y dit par 0, comme dans le preset.
 Les en-têtes distinguent les colonnes éditables des colonnes en lecture seule
 par les **deux gris** de l'app, sans en introduire un troisième.
 
-**Le bouton `⤢` n'élargit que la grille.** Il élargissait toute la page : les
-curseurs de Simulation étirés sur toute la largeur avaient une course souris
-disproportionnée pour un réglage qu'on pose au pourcentage près, et le bloc ne
-ressemblait plus au même composant d'un mode à l'autre. Les blocs de la colonne
-centrale sont donc plafonnés à leur largeur de repos et calés à gauche —
-l'en-tête d'Adversaires compris, dont la barre de filtres doit rester le même
-objet que dans la bibliothèque. La largeur gagnée sert à afficher **plus de
-colonnes**, pas à étirer les existantes : le nom est plafonné, sans quoi l'écart
-entre lui et le nom de pilote devient assez grand pour qu'on perde la ligne en
-la parcourant, et les abréviations tombent.
+**Il n'y a pas de mode « plateau élargi ».** Un bouton `⤢` a existé : il donnait
+au plateau toute la largeur du contenu en faisant passer la colonne de droite
+dessous. Retiré après l'avoir vu — les autres blocs restaient plafonnés et calés
+à gauche pendant que le plateau partait plein écran, et deux régimes de largeur
+dans un même écran se voient plus qu'ils ne servent. Qui manque de place retire
+une colonne : le menu est à un clic, et c'est le même geste que dans la
+bibliothèque.
+
+**Le nom est plafonné** : sans quoi la largeur gagnée y va toute, et l'écart
+entre lui et le nom de pilote devient assez grand pour qu'on perde la ligne en la
+parcourant des yeux. La place restante va au vide en fin de ligne plutôt qu'à une
+colonne arbitraire. `Restrictor` s'écrit en toutes lettres, seul des trois à ne
+pas s'abréger : c'est le mot exact de la carte voiture du joueur, et c'est ce qui
+fait voir que les deux réglages sont le même — `Nat.` et `Str.` n'ont pas ce
+voisin et ne se confondent avec rien.
+
+**L'écran est responsive, et centré.** La colonne de droite **passe dessous**
+quand la largeur manque, plutôt que de se comprimer : en dessous d'environ 380 px
+elle ne sait plus afficher la bande jour/nuit ni les quatre valeurs de l'état de
+piste sur une ligne. Le contenu est plafonné et centré dans les deux régimes,
+jamais collé à un bord — sans plafond, un curseur de difficulté long de 900 px a
+une course souris disproportionnée pour une valeur qu'on pose au pourcentage
+près, et une barre de filtres étalée ne ressemble plus à celle de la
+bibliothèque. Le seuil est une requête de **conteneur** et non de média : ce qui
+décide est la largeur réellement reçue par le corps de l'écran — le rail de
+navigation et la colonne de session ont déjà pris la leur — et le zoom
+d'interface déplace la largeur de la fenêtre sans rien changer à celle-là.
 
 **Difficulté et agressivité : un centre et un écart**, et un seul composant
 instancié deux fois — ce sont les deux réglages qui décident du caractère de la

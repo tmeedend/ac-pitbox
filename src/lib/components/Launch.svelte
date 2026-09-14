@@ -239,10 +239,9 @@
   // menu, et les trois puces sont ce qui la remplit en un clic.
   let gridPinned = $state<string[]>([]);
   let gridQuery = $state("");
-  /** Colonnes optionnelles du plateau et état élargi (§4.2/§4.3), mémorisés
-   * par type de session comme tous les autres réglages. */
+  /** Colonnes optionnelles du plateau (§4.2), mémorisées par type de session
+   * comme tous les autres réglages. */
   let gridColumns = $state<string[]>(["ratio", "strength"]);
-  let gridWide = $state(false);
   const gridIndex = $derived(buildCardIndex(carPool, gridDefs, true, hasOwnDriver, setup.car_id));
   const gridMatches = $derived(buildPredicate(gridDefs, gridFilters, gridIndex.ctx));
   const gridPool = $derived(carPool.filter((c) => gridMatches(c) && matchesQuery(c, gridQuery)));
@@ -685,7 +684,6 @@
     grid_filters?: string;
     grid_pinned?: string[];
     grid_columns?: string[];
-    grid_wide?: boolean;
     grid_mode?: "same_car" | "same_category" | "free";
     category_selection?: string;
     year_min?: number; year_max?: number;
@@ -782,7 +780,7 @@
       aggression: setup.aggression, start_mode: setup.start_mode, ghost_advantage: setup.ghost_advantage,
       opponent_count: opponentCount,
       grid_filters: serializeFilters(gridQuery, gridFilters), grid_pinned: [...gridPinned],
-      grid_columns: [...gridColumns], grid_wide: gridWide,
+      grid_columns: [...gridColumns],
       laps: setup.laps, time_hours: setup.time_hours,
       penalties: setup.penalties, jump_start_penalty: setup.jump_start_penalty,
       track_state: setup.track_state ? { ...setup.track_state } : null, grip: setup.grip,
@@ -823,7 +821,6 @@
       setup.start_mode = START_MODES.includes(p.start_mode as StartMode) ? (p.start_mode as StartMode) : "random";
       setup.ghost_advantage = Math.max(0, Math.min(5, p.ghost_advantage ?? 0));
       gridColumns = p.grid_columns ?? ["ratio", "strength"];
-      gridWide = p.grid_wide ?? false;
       opponentCount = p.opponent_count ?? 7;
       applyGridPreset(p);
       setup.laps = p.laps; setup.time_hours = p.time_hours;
@@ -874,7 +871,7 @@
 
   $effect(() => {
     void [setup.ai_level, setup.ai_spread, setup.aggression, setup.aggression_spread, setup.start_mode, setup.ghost_advantage,
-      opponentCount, gridFilters, gridQuery, gridPinned, gridColumns, gridWide,
+      opponentCount, gridFilters, gridQuery, gridPinned, gridColumns,
       setup.laps,
       setup.time_hours, setup.penalties, setup.jump_start_penalty, setup.grip, setup.track_state,
       setup.practice_enabled, setup.practice_minutes, setup.qualify_minutes,
@@ -1279,12 +1276,7 @@
     <LoadingState />
   {:else}
   <div class="body">
-    <!-- `⤢` (§4.3) : le plateau prend toute la largeur du contenu et la
-         colonne de droite passe dessous, le temps de composer. C'est une
-         **classe sur la grille de l'écran**, pas une largeur posée sur le bloc :
-         les deux colonnes sont un `grid`, et seule la grille peut décider que
-         l'une passe sous l'autre. -->
-    <div class="cols" class:wide={gridWide && (setup.session_type === "race" || setup.session_type === "trackday")}>
+    <div class="cols">
       <!-- COLONNE GAUCHE -->
       <div>
         <SessionTypeBlock
@@ -1311,7 +1303,6 @@
             poolCount={gridPool.length}
             playerCard={player}
             bind:columns={gridColumns}
-            bind:wide={gridWide}
             onsetcell={setOpponentCell}
             onsavegrid={() => void openGridDialog("save")}
             onloadgrid={() => void openGridDialog("load")}
@@ -1545,36 +1536,36 @@
     border: 1px solid var(--green-border);
     color: var(--green);
   }
+  /* Le seuil de mise en page est une requête de **conteneur** et non de média :
+     ce qui décide, c'est la largeur réellement reçue par le corps de l'écran —
+     le rail de navigation et la colonne de session ont déjà pris la leur — et
+     le zoom d'interface déplace la largeur de la fenêtre sans rien changer à
+     celle-là. */
   .body {
+    container: session / inline-size;
     padding: 22px 32px 40px;
   }
 
+  /* Centré et plafonné, jamais collé à un bord. Sans plafond, les blocs
+     s'étirent jusqu'aux extrémités d'un grand écran : un curseur de difficulté
+     long de 900 px a une course souris disproportionnée pour une valeur qu'on
+     pose au pourcentage près, et une barre de filtres étalée ne ressemble plus
+     à celle de la bibliothèque. */
   .cols {
     display: grid;
-    grid-template-columns: 1.35fr 1fr;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
     gap: 26px;
+    max-width: 1280px;
+    margin-inline: auto;
   }
-  /* `⤢` élargissait toute la page (§2.3). Il n'élargit plus que la **grille**.
-     Les curseurs de SIMULATION étirés sur 1200 px avaient une course souris
-     disproportionnée pour un réglage qu'on pose au pourcentage près, et le
-     bloc ne ressemblait plus au même composant d'un mode à l'autre.
-     La colonne de droite passe dessous, comme prévu ; la colonne centrale, elle,
-     est plafonnée et reste calée à gauche. */
-  .cols.wide {
-    grid-template-columns: 1fr;
-  }
-  /* 600 px : la largeur que ces blocs reçoivent réellement en mode normal, et
-     celle sur laquelle le plateau a été dessiné. Plafond et non largeur fixe —
-     une fenêtre étroite doit encore pouvoir les rétrécir. */
-  .cols.wide :global(.blk) {
-    max-width: 600px;
-  }
-  /* Le bloc Adversaires est exempté du plafond : c'est lui qu'on est venu
-     élargir. Le plafond y est reposé **à l'intérieur**, sur son en-tête seul,
-     pour que la grille soit la seule chose à s'étendre (§2.3). `:global` parce
-     que le bloc est rendu par un composant enfant et que le CSS de Svelte est
-     scopé — sans ça la règle ne l'atteindrait pas. */
-  .cols.wide :global(.blk.oppo-blk) {
-    max-width: none;
+  /* Sous ce seuil, la colonne de droite **passe dessous** plutôt que de se
+     comprimer : en dessous d'environ 380 px elle ne sait plus afficher la bande
+     jour/nuit ni les quatre valeurs de l'état de piste sur une ligne. La colonne
+     unique se plafonne à son tour et reste centrée. */
+  @container session (max-width: 980px) {
+    .cols {
+      grid-template-columns: minmax(0, 1fr);
+      max-width: 720px;
+    }
   }
 </style>

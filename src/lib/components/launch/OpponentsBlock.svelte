@@ -55,7 +55,6 @@
     poolCount,
     playerCard,
     columns = $bindable(),
-    wide = $bindable(),
     oncountchange,
     onfill,
     onchoose,
@@ -81,9 +80,8 @@
     poolCount: number;
     /** The car being driven: what the three chips take their value from. */
     playerCard: ModCard | null;
-    /** Colonnes optionnelles affichées, et plateau élargi (§4.2/§4.3). */
+    /** Colonnes optionnelles affichées (§4.2). */
     columns: string[];
-    wide: boolean;
     oncountchange: (n: number) => void;
     onfill: () => void;
     onchoose: () => void;
@@ -225,11 +223,6 @@
 <section class="blk oppo-blk">
   <header class="blk-h"><span class="blk-t">{t("launch.opponentsLabel")}</span></header>
   <div class="blk-b">
-  <!-- Tout ce qui n'est pas la grille reste à sa largeur de repos, même en
-       mode élargi : un champ de recherche et trois puces étalés sur 1200 px
-       ne gagnent rien, et la barre de filtres doit rester le même objet que
-       dans la bibliothèque (§2.3). -->
-  <div class="head-cap" class:capped={wide}>
 
   <!-- The library's own filter bar, third consumer. The chips row below is not
        a second way of filtering: it poses tokens INTO this bar, which is why a
@@ -319,8 +312,6 @@
         setup.aggression_spread = sp;
       }}
     />
-  </div>
-
   <!-- A configuration problem calling for an action, so yellow is right here —
        unlike the strength explanation, which moved to an ⓘ. -->
   {#if duplicateDrivers}
@@ -337,7 +328,7 @@
   {/if}
   </div>
 
-  <div class="oppo" class:wide>
+  <div class="oppo">
     <!-- `Regenerate` is NOT `Fill` with another name: it keeps the cars and
          re-rolls what was drawn on them (skin, strength), where `Fill` draws
          the cars themselves. Two gestures one actually wants separately — the
@@ -348,14 +339,6 @@
            du type de session, et tout ce qui en dépend vit là-bas. -->
       <span class="oppo-sp"></span>
       <ColumnsMenu size="header" items={COLUMNS} visible={columns} ontoggle={toggleColumn} />
-      <button
-        class="oppo-regen"
-        type="button"
-        aria-pressed={wide}
-        class:on={wide}
-        title={t("launch.widenGrid")}
-        onclick={() => (wide = !wide)}>⤢</button
-      >
       <button class="oppo-regen" type="button" disabled={!setup.opponents.length} onclick={onregenerate}
         >{t("launch.regenerateGrid")}</button
       >
@@ -371,15 +354,15 @@
              before one tries. -->
         <span class="oppo-n lbl-key ro">{t("columns.name")}</span>
         {#if shows("driver")}<span class="oppo-driver lbl-key">{t("launch.colDriver")}</span>{/if}
-        <!-- Abréviations levées en mode élargi (§2.4) : la place gagnée sert
-             d'abord à nommer les colonnes en entier. `Restrictor` y reprend le
-             mot exact de la carte voiture du joueur, pour que le lien entre
-             les deux réglages se voie. -->
-        {#if shows("nationality")}<span class="oppo-nat lbl-key">{wide ? t("launch.colNationality") : t("launch.colNatShort")}</span>{/if}
+        {#if shows("nationality")}<span class="oppo-nat lbl-key">{t("launch.colNatShort")}</span>{/if}
         {#if shows("ratio")}<span class="oppo-ratio lbl-key">{t("launch.colRatio")}</span>{/if}
-        {#if shows("strength")}<span class="oppo-force lbl-key">{wide ? t("launch.colStrength") : t("launch.colStrShort")}</span>{/if}
+        {#if shows("strength")}<span class="oppo-force lbl-key">{t("launch.colStrShort")}</span>{/if}
         {#if shows("ballast")}<span class="oppo-bal lbl-key">{t("launch.colBallast")}</span>{/if}
-        {#if shows("restrictor")}<span class="oppo-res lbl-key">{wide ? t("launch.colRestrictor") : t("launch.colResShort")}</span>{/if}
+        <!-- `Restrictor` en entier et non `Restr.`, seul des trois à ne pas
+             s'abréger : c'est le mot exact de la carte voiture du joueur, et
+             c'est ce qui fait voir que les deux réglages sont le même. `Nat.`
+             et `Str.` n'ont pas ce voisin et ne se confondent avec rien. -->
+        {#if shows("restrictor")}<span class="oppo-res lbl-key">{t("launch.colRestrictor")}</span>{/if}
         <span class="th-act"></span>
       </div>
     {/if}
@@ -577,11 +560,6 @@
   .oppo-th .ro {
     color: var(--faint);
   }
-  /* 600 px : la largeur que le bloc reçoit réellement en mode normal, et celle
-     sur laquelle le plateau a été dessiné. */
-  .head-cap.capped {
-    max-width: 600px;
-  }
   .oppo-foot {
     display: flex;
     gap: 7px;
@@ -660,13 +638,6 @@
     color: var(--faint2);
     cursor: not-allowed;
   }
-  /* Niveau 2 du barème (§7.2ter) : le plateau élargi est un état qu'on a
-     demandé, et le bouton le dit. */
-  .oppo-regen.on {
-    border-color: var(--rosso-border);
-    background: var(--rosso-dim);
-    color: var(--rosso-bright);
-  }
   /* `relative` porte la bulle de survol, et son absence ne se voit pas comme
      un défaut de style : un enfant `absolute` se cale sur le premier ancêtre
      positionné, ici le conteneur de défilement de tout l'écran — la bulle
@@ -720,25 +691,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .oppo.wide .oppo-n {
-    flex: 0 1 300px;
-  }
-  /* La place restante va au vide en fin de ligne plutôt qu'à une colonne
-     arbitraire : chaque cellule garde la largeur qui la rend lisible. */
-  .oppo.wide .oppo-row::after {
-    content: "";
-    flex: 1;
-  }
-  .oppo.wide .oppo-driver {
-    width: 150px;
-  }
-  .oppo.wide .oppo-nat {
-    width: 110px;
-  }
-  .oppo.wide .oppo-bal,
-  .oppo.wide .oppo-res {
-    width: 72px;
-  }
   .oppo-skin {
     color: var(--muted);
   }
@@ -759,9 +711,13 @@
   .oppo-nat {
     width: 74px;
   }
-  .oppo-bal,
-  .oppo-res {
+  .oppo-bal {
     width: 44px;
+    text-align: right;
+  }
+  /* Assez large pour « Restrictor » en toutes lettres à 8 px interlettré. */
+  .oppo-res {
+    width: 60px;
     text-align: right;
   }
   /* Les quatre champs de cellule partagent la même discrétion que la force :
