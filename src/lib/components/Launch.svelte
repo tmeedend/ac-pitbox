@@ -18,6 +18,7 @@
     weatherConditions,
     trackSun,
     trackStates,
+    nationalities,
     type AssistLevel,
     type Opponent,
     type PracticeStart,
@@ -25,6 +26,7 @@
     type Season,
     type SessionType,
     type SkinItem,
+    type Nationality,
     type TrackStateOption,
     type TrackStateRef,
     type TrackSun,
@@ -70,6 +72,11 @@
   // liste, il la reçoit — c'est ce qui permettra d'y ajouter des états d'une
   // autre provenance sans le toucher.
   let trackStateList = $state<TrackStateOption[]>([]);
+  // La liste des nationalités du jeu (§4.2), avec leurs drapeaux. Lue à
+  // l'ouverture de l'écran comme les états de piste, et vide quand
+  // l'installation n'est pas lisible — la cellule retombe alors sur la saisie
+  // libre plutôt que d'offrir un menu vide.
+  let nationalityList = $state<Nationality[]>([]);
   let selectedIntent = $state("");
   let opponentCount = $state(7);
   // Jeton de génération du plateau (§6.3ter) : `regenerateGrid` est asynchrone
@@ -883,7 +890,12 @@
 
   // --- Chargement + résolution des défauts (§8.6) ---
   onMount(async () => {
-    [weathers, libCards, trackStateList] = await Promise.all([weatherOptions(), listLibrary(), trackStates()]);
+    [weathers, libCards, trackStateList, nationalityList] = await Promise.all([
+      weatherOptions(),
+      listLibrary(),
+      trackStates(),
+      nationalities().catch(() => []),
+    ]);
 
     const state = await loadLaunchState();
     // Repli sur l'ancien `localStorage` seulement si le fichier Rust n'a rien
@@ -1303,6 +1315,7 @@
             poolCount={gridPool.length}
             playerCard={player}
             bind:columns={gridColumns}
+            {nationalityList}
             onsetcell={setOpponentCell}
             onsavegrid={() => void openGridDialog("save")}
             onloadgrid={() => void openGridDialog("load")}
@@ -1546,16 +1559,18 @@
     padding: 22px 32px 40px;
   }
 
-  /* Centré et plafonné, jamais collé à un bord. Sans plafond, les blocs
-     s'étirent jusqu'aux extrémités d'un grand écran : un curseur de difficulté
-     long de 900 px a une course souris disproportionnée pour une valeur qu'on
-     pose au pourcentage près, et une barre de filtres étalée ne ressemble plus
-     à celle de la bibliothèque. */
+  /* Centré et plafonné, jamais collé à un bord.
+     Le plafond est là pour qu'un très grand écran ne délaye pas l'écran sur
+     deux mètres, pas pour le rétrécir : il est assez haut pour que la fenêtre
+     habituelle le remplisse et n'en voie jamais la marge. Ce qui protège les
+     curseurs d'une course souris absurde n'est pas lui mais la mise en colonnes
+     des blocs eux-mêmes — trois curseurs côte à côte dans Simulation, une
+     largeur fixe pour les deux fourchettes. */
   .cols {
     display: grid;
     grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
     gap: 26px;
-    max-width: 1280px;
+    max-width: 1720px;
     margin-inline: auto;
   }
   /* Sous ce seuil, la colonne de droite **passe dessous** plutôt que de se
@@ -1565,7 +1580,7 @@
   @container session (max-width: 980px) {
     .cols {
       grid-template-columns: minmax(0, 1fr);
-      max-width: 720px;
+      max-width: 880px;
     }
   }
 </style>

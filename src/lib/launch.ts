@@ -144,6 +144,27 @@ export function findTrackState(states: TrackStateOption[], ref: TrackStateRef | 
   return states.find((s) => s.origin === ref.origin && s.name === ref.name);
 }
 
+/** Une nationalité offerte par le jeu, et son drapeau (§4.2).
+ *
+ * **Ce n'est pas un champ libre** : Assetto Corsa en tient la liste — 221
+ * entrées dans `launcher/themes/.base/ac.utils.js`, toutes pourvues d'un
+ * drapeau dans `content/gui/NationFlags/<CODE>.png`. Ce qui est **stocké** est
+ * le nom entier, jamais le code : c'est ce que dit `ui_skin.json`, et ce que
+ * porte le tableau `Nationalities` d'un preset de grille CM. */
+export interface Nationality {
+  /** ISO 3166-1 alpha-3 — sert à trouver le drapeau, jamais à stocker. */
+  code: string;
+  name: string;
+  /** Chemin du PNG, à passer à `previewSrc`. `null` si le fichier manque. */
+  flag: string | null;
+}
+
+/** Liste vide quand l'installation du jeu n'est pas lisible : la cellule
+ * retombe alors sur la saisie libre plutôt que d'offrir un menu vide. */
+export function nationalities(): Promise<Nationality[]> {
+  return invoke<Nationality[]>("nationalities");
+}
+
 /** La liste des états, lue côté Rust dans la table du jeu. */
 export function trackStates(): Promise<TrackStateOption[]> {
   return invoke<TrackStateOption[]>("track_states");

@@ -1644,6 +1644,28 @@ l'écran affiche donc le mot `Auto` plutôt qu'un nombre qui ne serait pas
 celui-là. Un nom ou une nationalité en `Auto` affiche en revanche **ce que la
 livrée déclare**, qui est exactement ce que le jeu emploiera.
 
+**La nationalité n'est pas un champ libre.** Le jeu en tient la liste —
+`$.Nationalities` dans `launcher/themes/.base/ac.utils.js`, **221 entrées**
+actives, code ISO 3166-1 alpha-3 vers nom anglais, plus vingt-huit territoires
+qu'AC y a commentés et qui restent donc écartés. Chacune a son drapeau dans
+`content/gui/NationFlags/<CODE>.png` : 222 fichiers, les 221 entrées **toutes
+pourvues** plus `AC.png`, le repli du jeu. La cellule est donc un menu, avec le
+drapeau **dans la ligne** et non dans le menu — c'est en parcourant le plateau
+qu'il sert, pas au moment de choisir.
+
+Ce qui est **stocké reste le nom entier**, jamais le code : c'est ce que dit
+`ui_skin.json` et ce qu'écrit un preset de grille CM (« Brunei Darussalam » y a
+été relevé) ; le code ne sert qu'à trouver l'image. La liste est lue dans
+l'installation du jeu plutôt que recopiée — les drapeaux en viennent déjà, et
+les deux restent ainsi alignés. Installation illisible : liste vide et retour à
+la saisie libre, un menu vide empêcherait d'éditer.
+
+**Un piège, et il est dans la table du jeu** : « Congo » y apparaît deux fois,
+`COD` et `COG` sous le même libellé. Le nom ne peut donc pas désigner un drapeau
+sans ambiguïté. C'est l'ambiguïté d'AC et non la nôtre — on n'invente pas un
+libellé qu'il ne connaît pas : la liste est dédoublonnée par nom (220 entrées
+offertes) et le premier code gagne pour le drapeau.
+
 **Une force explicite remplace, elle ne multiplie pas.** `race.ini` écrit un
 `AI_LEVEL` absolu par voiture : il n'y a aucune transformation entre ce qu'on
 pose et ce que le jeu reçoit. Une ligne à 95 dans un plateau réglé 84-90 est

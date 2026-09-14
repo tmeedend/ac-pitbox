@@ -32,6 +32,7 @@
     AI_LEVEL_MIN,
     type Opponent,
     type RaceSetup,
+    type Nationality,
     type SkinItem,
   } from "$lib/launch";
   import { previewSrc, type ModCard } from "$lib/library";
@@ -55,6 +56,7 @@
     poolCount,
     playerCard,
     columns = $bindable(),
+    nationalityList,
     oncountchange,
     onfill,
     onchoose,
@@ -82,6 +84,9 @@
     playerCard: ModCard | null;
     /** Colonnes optionnelles affichées (§4.2). */
     columns: string[];
+    /** Les nationalités que le jeu connaît, avec leur drapeau. Vide quand
+     * l'installation n'est pas lisible : la cellule redevient un champ libre. */
+    nationalityList: Nationality[];
     oncountchange: (n: number) => void;
     onfill: () => void;
     onchoose: () => void;
@@ -149,6 +154,15 @@
   function opponentRatio(carId: string): string {
     const card = carPool.find((c) => c.id_interne === carId);
     return formatRatio(card ? index.ctx.ratioOf(card) : null);
+  }
+
+  /** La nationalité **n'est pas un champ libre** : le jeu en tient la liste, et
+   * en affiche le drapeau. C'est ce que fait Content Manager, et c'est ce que
+   * la cellule faisait passer pour du texte quelconque. */
+  const flagByName = $derived(new Map(nationalityList.map((n) => [n.name.toLowerCase(), n.flag])));
+  function flagOf(name: string | null | undefined): string | null {
+    if (!name) return null;
+    return previewSrc(flagByName.get(name.toLowerCase()) ?? null);
   }
 
   /** Une saisie vidée rend la cellule à `Auto` (§4.1). */
@@ -393,17 +407,42 @@
           />
         {/if}
         {#if shows("nationality")}
-          <!-- Un nom de pays anglais entier, jamais un code : c'est ce que CM
-               écrit, relevé sur un preset réel (« Brunei Darussalam »). -->
-          <input
-            class="oppo-nat cell mono"
-            class:is-auto={opp.nationality == null}
-            type="text"
-            placeholder={autoNationality(opp)}
-            value={opp.nationality ?? ""}
-            onclick={(e) => e.stopPropagation()}
-            onchange={(e) => onsetcell(i, { nationality: orAuto(e.currentTarget.value) })}
-          />
+          {@const shownName = opp.nationality ?? skinOf(opp)?.country ?? null}
+          <!-- **Une liste, pas un champ libre** : le jeu tient les 221
+               nationalités qu'il connaît, et un drapeau pour chacune. Ce qui est
+               stocké reste le nom anglais entier — c'est ce que dit
+               `ui_skin.json` et ce qu'écrit un preset CM (« Brunei
+               Darussalam ») —, le code ne servant qu'à trouver l'image.
+
+               Le drapeau est dans la cellule et non dans le menu : c'est en
+               parcourant le plateau qu'il sert, pas au moment de choisir. -->
+          <span class="oppo-nat natcell">
+            {#if flagOf(shownName)}<img class="flag" src={flagOf(shownName)} alt="" />{/if}
+            {#if nationalityList.length}
+              <select
+                class="cell natsel"
+                class:is-auto={opp.nationality == null}
+                value={opp.nationality ?? ""}
+                onclick={(e) => e.stopPropagation()}
+                onchange={(e) => onsetcell(i, { nationality: orAuto(e.currentTarget.value) })}
+              >
+                <option value="">{autoNationality(opp)}</option>
+                {#each nationalityList as n (n.code)}<option value={n.name}>{n.name}</option>{/each}
+              </select>
+            {:else}
+              <!-- Installation du jeu illisible : la liste est vide, et un menu
+                   vide empêcherait d'éditer. Retour à la saisie libre. -->
+              <input
+                class="cell mono natfree"
+                class:is-auto={opp.nationality == null}
+                type="text"
+                placeholder={autoNationality(opp)}
+                value={opp.nationality ?? ""}
+                onclick={(e) => e.stopPropagation()}
+                onchange={(e) => onsetcell(i, { nationality: orAuto(e.currentTarget.value) })}
+              />
+            {/if}
+          </span>
         {/if}
         {#if shows("ratio")}
           <span class="oppo-ratio mono">{opponentRatio(opp.car_id)}</span>
@@ -708,8 +747,42 @@
   .oppo-driver {
     width: 104px;
   }
+  /* Assez large pour le drapeau et un nom de pays lisible ; les plus longs
+     s'élident, le drapeau portant la reconnaissance. */
   .oppo-nat {
-    width: 74px;
+    width: 118px;
+  }
+  .natcell {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+  }
+  /* 4:3 comme les PNG du jeu, et un filet : beaucoup de drapeaux ont du blanc
+     sur un bord, qui se fondrait dans la ligne. */
+  .flag {
+    flex: none;
+    width: 16px;
+    height: 12px;
+    object-fit: cover;
+    border: 1px solid var(--line);
+  }
+  .natsel,
+  .natfree {
+    flex: 1;
+    min-width: 0;
+  }
+  /* Le chevron natif prendrait un quart de la cellule pour rien : la ligne dit
+     déjà qu'elle s'édite en faisant apparaître les cadres au survol. */
+  .natsel {
+    appearance: none;
+    font-size: 9.5px;
+  }
+  /* Le menu déroulé est rendu par le système : son fond ne se style pas depuis
+     ici. `color-scheme: dark` est la seule prise — sans lui il s'ouvre en blanc,
+     hors charte, comme le sélecteur de date de la météo. */
+  .natsel {
+    color-scheme: dark;
   }
   .oppo-bal {
     width: 44px;
