@@ -9,31 +9,29 @@
 //! cas nominal de ce lot est donc « aucun preset », et il ne produit ni message
 //! ni erreur.
 //!
-//! **Le format n'a pas été deviné, il a été relevé à l'envers.** Aucun preset
-//! utilisateur n'existant pour servir d'échantillon, c'est le couple
-//! `TrackPropertiesPresetFilename` / `TrackPropertiesData` des dix presets
-//! Quick Drive réels qui le donne : CM y désigne un état par un **nom de
-//! fichier** de ce dossier (`Optimum.cmpreset`, qui n'existe pourtant pas sur
-//! disque — les natifs sont virtuels) et en sérialise le contenu sous la forme
+//! **Le format est relevé sur un preset réel**, enregistré depuis CM pour
+//! l'occasion. Un `.cmpreset` de ce dossier est exactement l'objet d'état, JSON
+//! brut sans en-tête — comme un `.cmpreset` de `Race Grids` est exactement
+//! l'objet `RaceGrid` :
 //!
 //! ```json
-//! {"s":1.0,"t":1.0,"r":0.0,"g":1,"d":"Perfect track for hotlapping.","w":false}
+//! {"s":0.89,"t":0.8,"r":0.03,"g":50,"d":"Old tarmac. Bad grip won't get better soon.","w":false}
 //! ```
 //!
-//! C'est exactement l'objet que `quickdrive::build_track_properties` écrit
-//! déjà : **ce module en est l'inverse**, et c'est la meilleure garantie qu'ils
+//! C'est exactement ce que `quickdrive::build_track_properties` écrit déjà :
+//! **ce module en est l'inverse**, et c'est la meilleure garantie qu'ils
 //! restent d'accord. `s`, `t` et `r` sont des pourcentages divisés par cent,
-//! `g` est le `LAP_GAIN` brut — l'échelle est celle établie au §9.2, tranchée
-//! par le panneau de CM qui affiche 95/90/2 là où le fichier du jeu dit
-//! `SESSION_START=95`, `SESSION_TRANSFER=90`, `RANDOMNESS=2`.
+//! `g` est le `LAP_GAIN` brut.
 //!
-//! **Ce qui reste non vérifié** : qu'un `.cmpreset` de ce dossier soit cet
-//! objet nu, sans enveloppe. Le précédent des grilles le dit — un `.cmpreset`
-//! de `Race Grids` s'est révélé être exactement l'objet `RaceGrid`, JSON brut
-//! sans en-tête — mais le lecteur ci-dessous accepte **les deux formes** plutôt
-//! que de parier sur une seule : l'objet nu, ou enveloppé sous
-//! `TrackPropertiesData`. Ça ne coûte que trois lignes et ça ne peut pas se
-//! tromper.
+//! **L'échantillon est un duplicata de l'état natif `Old`**, ce qui en fait un
+//! témoin : ses quatre valeurs doivent relire 89 / 80 / 3 / 50, les nombres que
+//! `cfg/templates/tracks.ini` donne à cette entrée. L'échelle n'est donc pas
+//! seulement supposée cohérente, elle est vérifiée contre des valeurs connues.
+//!
+//! L'identité d'un état est son **nom de fichier** : c'est ainsi que CM
+//! lui-même le désigne (`TrackPropertiesPresetFilename`), y compris pour les
+//! natifs — `Optimum.cmpreset`, qui n'existe pourtant pas sur disque, les
+//! natifs étant virtuels.
 //!
 //! ## Tolérance
 //!
@@ -89,14 +87,6 @@ fn text(v: Option<&Value>) -> Option<String> {
     }
 }
 
-/// L'objet d'état, sous l'une ou l'autre de ses deux formes possibles.
-fn state_object(root: &Value) -> Option<Value> {
-    if let Some(inner) = root.get("TrackPropertiesData").and_then(Value::as_str) {
-        return serde_json::from_str(inner).ok();
-    }
-    root.get("s").is_some().then(|| root.clone())
-}
-
 /// Convertit un objet d'état en entrée de la liste. `None` dès qu'une des
 /// quatre valeurs manque : un état à trois nombres n'est pas un état.
 fn convert(obj: &Value, name: &str) -> Option<TrackStateOption> {
@@ -127,7 +117,7 @@ fn read_dir(root: &Path) -> Vec<TrackStateOption> {
             let name = p.file_stem()?.to_string_lossy().to_string();
             let text = std::fs::read_to_string(&p).ok()?;
             let root: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
-            convert(&state_object(&root)?, &name)
+            convert(&root, &name)
         })
         .collect();
     out.sort_by_key(|s| s.name.to_lowercase());
@@ -160,18 +150,44 @@ mod tests {
         assert_eq!(st.origin, "cm");
     }
 
-    /// Règle protégée : les deux formes possibles du fichier se lisent, faute
-    /// d'avoir pu relever laquelle CM emploie. L'objet nu est celle du
-    /// précédent des grilles ; l'enveloppe est celle d'un preset Quick Drive.
+    /// Règle protégée : le fichier **réel**, recopié verbatim depuis
+    /// `Presets\Track States\grip-example-for-pitbox.cmpreset`.
+    ///
+    /// C'est un duplicata de l'état natif `Old`, donc il sert de **témoin** :
+    /// ses quatre valeurs doivent relire exactement ce que
+    /// `cfg/templates/tracks.ini` donne à cette entrée. Une erreur d'échelle sur
+    /// un seul des quatre donnerait un état plausible et faux — c'est le genre
+    /// de défaut qui ne se voit qu'au volant.
     #[test]
-    fn both_shapes_of_the_file_are_accepted() {
-        let bare = r#"{"s":1.0,"t":1.0,"r":0.0,"g":1,"d":"Perfect.","w":false}"#;
-        let wrapped = serde_json::json!({ "TrackPropertiesData": bare }).to_string();
-        for raw in [bare.to_string(), wrapped] {
-            let root: Value = serde_json::from_str(&raw).unwrap();
-            let st = convert(&state_object(&root).expect("objet trouvé"), "Optimum").unwrap();
-            assert_eq!(st.start, 100);
-        }
+    fn the_reference_file_reads_back_as_the_builtin_it_duplicates() {
+        const REAL: &str =
+            r#"{"s":0.89,"t":0.8,"r":0.03,"g":50,"d":"Old tarmac. Bad grip won't get better soon.","w":false}"#;
+        let obj: Value = serde_json::from_str(REAL).unwrap();
+        let st = convert(&obj, "grip-example-for-pitbox").unwrap();
+        let old = crate::quickdrive::TRACK_STATES
+            .iter()
+            .find(|s| s.name == "Old")
+            .expect("l'état natif Old");
+        assert_eq!(
+            (st.start, st.transfer, st.randomness, st.lap_gain),
+            (old.start, old.transfer, old.randomness, old.lap_gain),
+            "relu à l'identique de l'état qu'il duplique"
+        );
+        assert_eq!(st.description, old.description);
+        assert_eq!(st.name, "grip-example-for-pitbox", "le nom vient du fichier");
+    }
+
+    /// Règle protégée : l'arrondi, et non la troncature.
+    ///
+    /// `0.29 * 100.0` vaut `28.999999999999996` en flottant : un `as u32` seul
+    /// rendrait **28**. Le fichier de référence n'expose pas le défaut (`0.8`
+    /// tombe du bon côté), donc rien n'aurait signalé sa réintroduction — un
+    /// état relu un point plus glissant qu'il n'a été composé.
+    #[test]
+    fn a_percentage_is_rounded_not_truncated() {
+        let obj: Value = serde_json::from_str(r#"{"s":0.29,"t":0.71,"r":0.07,"g":40,"d":"","w":false}"#).unwrap();
+        let st = convert(&obj, "x").unwrap();
+        assert_eq!((st.start, st.transfer, st.randomness), (29, 71, 7));
     }
 
     /// Règle protégée : un fichier cassé est ignoré, jamais fatal — les autres
@@ -195,6 +211,30 @@ mod tests {
             states[0].start, 70,
             "pas de plancher à 85 : c'est son état, pas le nôtre"
         );
+    }
+
+    /// Lit le **vrai** dossier de Content Manager de la machine, et affiche ce
+    /// qui en sort. Ignoré par défaut, comme tout ce qui dépend d'un état
+    /// extérieur au dépôt :
+    ///
+    /// ```text
+    /// cargo test --lib trackstates::tests::what_content_manager_really_holds -- --ignored --nocapture
+    /// ```
+    #[test]
+    #[ignore = "dépend du dossier Content Manager de la machine"]
+    fn what_content_manager_really_holds() {
+        match dir() {
+            None => println!("(pas de dossier Track States)"),
+            Some(d) => {
+                println!("dossier : {}", d.display());
+                for s in read_dir(&d) {
+                    println!(
+                        "  {:<28} s={} t={} r={} g={} w={} d={:?}",
+                        s.name, s.start, s.transfer, s.randomness, s.lap_gain, s.weather_defined, s.description
+                    );
+                }
+            }
+        }
     }
 
     /// Règle protégée : ordre alphabétique, insensible à la casse — une liste

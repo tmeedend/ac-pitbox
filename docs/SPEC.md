@@ -1752,17 +1752,35 @@ l'utilisateur pour décrire l'état qu'il a composé, et c'est exactement ce qui
 manquait pour départager deux états proches. Les sept natifs en portent une
 aussi, celle du jeu, affichée par le même chemin. Absente, rien n'est affiché.
 
-**Le format a été relevé à l'envers, faute d'échantillon.** Le dossier
-`…\Presets\Track States` existe et est **vide** sur la machine de référence.
-Ce qui donne le format est le couple `TrackPropertiesPresetFilename` /
-`TrackPropertiesData` des presets Quick Drive réels : CM y désigne un état par
-un **nom de fichier** de ce dossier (`Optimum.cmpreset`, qui n'existe pourtant
-pas sur disque — les natifs sont virtuels) et en sérialise le contenu sous la
-forme `{"s":1.0,"t":1.0,"r":0.0,"g":1,"d":"…","w":false}`. C'est exactement ce
-que `build_track_properties` écrit déjà : **le lecteur en est l'inverse**, ce
-qui est la meilleure garantie que les deux restent d'accord. Reste non vérifié
-que le fichier soit cet objet **nu** ; le lecteur accepte donc les deux formes,
-nue et enveloppée, plutôt que de parier.
+**Le format est relevé sur un preset réel.** Un `.cmpreset` de
+`…\Presets\Track States` est exactement l'objet d'état, JSON brut sans
+en-tête — comme un `.cmpreset` de `Race Grids` est exactement l'objet
+`RaceGrid` :
+
+```json
+{"s":0.89,"t":0.8,"r":0.03,"g":50,"d":"Old tarmac. Bad grip won't get better soon.","w":false}
+```
+
+`s`, `t` et `r` sont des pourcentages divisés par cent, `g` le `LAP_GAIN` brut.
+C'est exactement ce que `build_track_properties` écrit déjà : **le lecteur en est
+l'inverse**, ce qui est la meilleure garantie que les deux restent d'accord.
+
+**L'échantillon est un duplicata de l'état natif `Old`, ce qui en fait un
+témoin** : ses quatre valeurs doivent relire 89 / 80 / 3 / 50, les nombres que
+`cfg/templates/tracks.ini` donne à cette entrée. L'échelle n'est donc pas
+seulement supposée cohérente, elle est vérifiée contre des valeurs connues, et
+un test rejoue le fichier verbatim.
+
+**Les pourcentages s'arrondissent, ils ne se tronquent pas.** `0.29 × 100` vaut
+`28.999999999999996` en flottant : une troncature rendrait 28, soit un état relu
+un point plus glissant qu'il n'a été composé. Le fichier de référence n'expose
+pas le défaut — `0.8` tombe du bon côté — donc rien n'aurait signalé sa
+réintroduction, d'où un test dédié.
+
+L'identité d'un état est son **nom de fichier** : c'est ainsi que CM lui-même le
+désigne (`TrackPropertiesPresetFilename`), y compris pour les natifs —
+`Optimum.cmpreset`, qui n'existe pourtant pas sur disque, les natifs étant
+virtuels.
 
 **Bornage volontairement large, et c'est un écart assumé.** Les plages de
 l'éditeur de CM (grip initial 85-100, lap gain 0-700) n'ont pas pu être
