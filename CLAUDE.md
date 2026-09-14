@@ -402,7 +402,8 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
   celui-ci les montre *ensemble*, ce qui est la seule façon de voir qu'une
   règle en contredit une autre. En cas d'écart, `SPEC.md` fait foi, et l'un
   des deux est à corriger tout de suite.
-- **`docs/*.html`** — maquettes visuelles (référence de layout et de thème).
+- **`docs/*.html`** — maquettes visuelles. **Référence d'UX, pas d'UI** : voir
+  la règle « Le design system fait foi » ci-dessous.
 - **`docs/*-research.md`** — comptes rendus de recherche sur les points durs
   (lancement CM, aperçu 3D). Contiennent le *pourquoi* de choix non évidents et
   la trace des pistes abandonnées. À lire avant de retenter quelque chose.
@@ -1044,6 +1045,27 @@ concernée (`§4.5.3`) quand elle existe.
 
 **Dépendances** : ne pas en ajouter à la légère, et retirer celles qui ne
 servent plus (une fonctionnalité abandonnée emporte sa dépendance).
+
+**Le design system fait foi, pas la maquette.** Sauf indication contraire
+explicite, une maquette (`docs/*.html`, un fichier reçu, une capture) apporte
+l'**UX** — ce qu'on montre, dans quel ordre, quel geste fait quoi, ce qui est
+groupé avec quoi. L'**UI** vient de l'application : les jetons de
+`styles/global.css` (`--rosso`, `--muted`, `--faint`, `--line`, `--yellow`…),
+les quatre niveaux de libellé, le barème du rouge (§7.2ter), les composants
+partagés, les tailles et les graisses déjà en place.
+
+Concrètement : reprendre d'une maquette sa disposition et son intention, jamais
+ses couleurs ni ses polices. Une maquette écrit couramment des jetons qui
+n'existent pas ici (`--text-secondary`, `--border`, `--warn`) ou des valeurs en
+dur — les traduire vers les nôtres au lieu de les recopier, et le dire dans le
+compte rendu. Une maquette qui introduirait un cinquième gris ou un rouge de
+plus se trompe sur ce point précis : c'est elle qui s'aligne sur l'app, pas
+l'inverse.
+
+Cette règle vaut aussi pour la géométrie quand elle porte du sens : la hauteur
+d'un contrôle, l'écart entre deux réglages et l'alignement d'une rangée sont
+déjà arbitrés par les composants partagés. Si une maquette demande autre chose,
+c'est une demande d'UX à traduire, pas un gabarit à reproduire au pixel.
 
 ## Tests
 

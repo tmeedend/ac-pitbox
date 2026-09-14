@@ -271,9 +271,12 @@
 
   <!-- How many, the random draw, and the difficulty the draw spreads over. -->
   <div class="adv-row">
-    <label class="grid-fields">
-      <NumberStepper min={0} max={30} value={opponentCount} onchange={(v) => oncountchange(v)} />
+    <!-- Libellé AU-DESSUS, comme les deux réglages voisins : trois contrôles
+         d'une même rangée avec deux placements de libellé se lisent en zigzag,
+         et c'est ce qui donnait à la rangée son air désaligné. -->
+    <label class="field">
       <span class="fk lbl-key">{t("launch.aiCount")}</span>
+      <NumberStepper min={0} max={30} value={opponentCount} onchange={(v) => oncountchange(v)} />
     </label>
 
     <!-- The only red of the block, and it is level 2 of the scale (§7.2ter):
@@ -595,17 +598,24 @@
   }
   /* Compteur d'adversaires, tirage et difficulté : tout sur une ligne (retombe
      seulement si la largeur manque). */
+  /* `flex-end` et non `flex-start` : ces réglages ne portent pas le même
+     nombre de lignes au-dessus de leur contrôle — un libellé seul pour le
+     compteur, un libellé **et** la valeur lue pour les deux fourchettes. Alignés
+     par le haut, le compteur et le bouton flottaient donc une soixantaine de
+     pixels au-dessus des curseurs. **Ce que l'œil aligne, c'est la rangée de
+     contrôles**, pas le coin supérieur des blocs — même leçon que le bloc
+     Simulation, qui l'avait déjà apprise sur ses cases à cocher. */
   .adv-row {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-start;
+    align-items: flex-end;
     gap: 16px 20px;
     margin: 13px 0 0;
   }
-  .grid-fields {
-    display: inline-flex;
-    align-items: center;
-    gap: 12px;
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
   /* Couleur/taille/interlettrage viennent de `.lbl-key` (global, harmonisation
      §chantier libellés) : ne reste ici que ce que `.lbl-key` ne couvre pas. */
