@@ -901,6 +901,8 @@
     "poolThinFew": "Only {count} cars in the pool — widen the filter for more variety.",
     "poolEmpty": "No car matches this filter. Remove a chip to widen the pool.",
     "duplicateDrivers": "Two drivers share the same number.",
+    "pickSkinTooltip": "Choose a livery",
+    "noSkinsForCar": "This car has no livery of its own.",
     "autoCell": "Auto",
     "startSecond": "2nd",
     "ghostAdvantage": "Advantage",

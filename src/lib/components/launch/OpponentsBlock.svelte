@@ -38,6 +38,7 @@
   import { previewSrc, type ModCard } from "$lib/library";
   import { t } from "$lib/i18n/index.svelte";
   import FilterBar from "../filters/FilterBar.svelte";
+  import AnchoredPopover from "../filters/AnchoredPopover.svelte";
   import ColumnsMenu from "../ColumnsMenu.svelte";
   import Tooltip from "../Tooltip.svelte";
   import NumberStepper from "../NumberStepper.svelte";
@@ -228,6 +229,41 @@
     const modPreview = carPool.find((c) => c.id_interne === opp.car_id)?.preview ?? null;
     return previewSrc(skin?.preview ?? modPreview ?? skin?.livery ?? null);
   }
+  /** Voiture et livrée en toutes lettres, pour l'infobulle de la ligne. */
+  function opponentFullName(opp: Opponent): string {
+    const skin = opponentSkinName(opp);
+    return skin ? `${opponentName(opp.car_id)} · ${skin}` : opponentName(opp.car_id);
+  }
+
+  // --- Choix de la livrée d'un adversaire -----------------------------------
+  //
+  // Il n'y en avait aucun : le `+` dupliquait une ligne avec une autre livrée,
+  // `Regenerate` les retirait toutes au sort, mais rien ne permettait d'en
+  // désigner une. La vignette est la cible naturelle — c'est l'image de la
+  // livrée, donc l'endroit où l'on pense à la changer — et elle évite un
+  // bouton de plus dans une ligne qui en porte déjà deux.
+  let skinRow = $state<number | null>(null);
+  let skinAnchor = $state<HTMLElement | null>(null);
+  const skinChoices = $derived(skinRow == null ? [] : (skinsByCarId[setup.opponents[skinRow]?.car_id] ?? []));
+
+  function openSkins(index: number, anchor: HTMLElement) {
+    // Deuxième clic sur la même vignette : on referme, comme tout menu.
+    if (skinRow === index) {
+      closeSkins();
+      return;
+    }
+    skinRow = index;
+    skinAnchor = anchor;
+  }
+  function closeSkins() {
+    skinRow = null;
+    skinAnchor = null;
+  }
+  function pickSkin(id: string) {
+    if (skinRow != null) onsetcell(skinRow, { car_skin: id });
+    closeSkins();
+  }
+
   function opponentSkinName(opp: Opponent): string | undefined {
     return opp.car_skin ? skinsByCarId[opp.car_id]?.find((s) => s.id === opp.car_skin)?.name : undefined;
   }
@@ -390,8 +426,27 @@
         onclick={() => onopenpicker(i)}
         onkeydown={(e) => (e.key === "Enter" || e.key === " ") && onopenpicker(i)}
       >
-        <div class="oppo-img">{#if prev}<img src={prev} alt="" />{:else}<span class="mono">🏎</span>{/if}</div>
-        <span class="oppo-n">{opponentName(opp.car_id)}{#if opponentSkinName(opp)}<span class="oppo-skin"> · {opponentSkinName(opp)}</span>{/if}</span>
+        <!-- La vignette ouvre le choix de **livrée** : c'est elle qu'elle
+             montre, donc l'endroit où l'on pense à la changer. Le reste de la
+             ligne ouvre le choix de **voiture** — deux questions, deux cibles,
+             et aucun bouton de plus à caser dans la ligne. -->
+        <button
+          class="oppo-img"
+          type="button"
+          title={t("launch.pickSkinTooltip")}
+          onclick={(e) => {
+            e.stopPropagation();
+            openSkins(i, e.currentTarget);
+          }}>{#if prev}<img src={prev} alt="" />{:else}<span class="mono">🏎</span>{/if}</button
+        >
+        <!-- Le nom entier au survol. La colonne l'élide, et c'est précisément
+             ce qu'on cherche à lire — l'aperçu en grand qui s'ouvrait ici
+             recouvrait les lignes voisines pour montrer ce que la vignette
+             montrait déjà. -->
+        <span class="oppo-n" title={opponentFullName(opp)}
+          >{opponentName(opp.car_id)}{#if opponentSkinName(opp)}<span class="oppo-skin"> · {opponentSkinName(opp)}</span
+            >{/if}</span
+        >
         {#if shows("driver")}
           <!-- Vide = `Auto` : le nom vient alors du `ui_skin.json` de la livrée,
                ce que le jeu fait déjà. Rien à voir avec les mods de tenue de
@@ -408,40 +463,38 @@
         {/if}
         {#if shows("nationality")}
           {@const shownName = opp.nationality ?? skinOf(opp)?.country ?? null}
-          <!-- **Une liste, pas un champ libre** : le jeu tient les 221
-               nationalités qu'il connaît, et un drapeau pour chacune. Ce qui est
-               stocké reste le nom anglais entier — c'est ce que dit
-               `ui_skin.json` et ce qu'écrit un preset CM (« Brunei
-               Darussalam ») —, le code ne servant qu'à trouver l'image.
+          <!-- **Le drapeau seul dans la ligne, le nom au survol.** Écrit en
+               toutes lettres, « Brunei Darussalam » prenait un cinquième de la
+               largeur du plateau pour ce qu'un drapeau dit d'un coup d'œil. Le
+               nom reste là où on le cherche vraiment : en infobulle, et dans le
+               menu au moment de choisir.
 
-               Le drapeau est dans la cellule et non dans le menu : c'est en
-               parcourant le plateau qu'il sert, pas au moment de choisir. -->
-          <span class="oppo-nat natcell">
-            {#if flagOf(shownName)}<img class="flag" src={flagOf(shownName)} alt="" />{/if}
-            {#if nationalityList.length}
-              <select
-                class="cell natsel"
-                class:is-auto={opp.nationality == null}
-                value={opp.nationality ?? ""}
-                onclick={(e) => e.stopPropagation()}
-                onchange={(e) => onsetcell(i, { nationality: orAuto(e.currentTarget.value) })}
-              >
-                <option value="">{autoNationality(opp)}</option>
-                {#each nationalityList as n (n.code)}<option value={n.name}>{n.name}</option>{/each}
-              </select>
+               Le `select` est **posé transparent par-dessus la cellule** plutôt
+               qu'affiché : c'est ce qui garde le menu natif du système, son
+               clavier et sa recherche à la frappe, sous une cellule qui ne
+               montre qu'une image. -->
+          <span class="oppo-nat natcell" title={shownName ?? t("launch.autoCell")}>
+            {#if flagOf(shownName)}
+              <img class="flag" src={flagOf(shownName)} alt="" />
             {:else}
-              <!-- Installation du jeu illisible : la liste est vide, et un menu
-                   vide empêcherait d'éditer. Retour à la saisie libre. -->
-              <input
-                class="cell mono natfree"
-                class:is-auto={opp.nationality == null}
-                type="text"
-                placeholder={autoNationality(opp)}
-                value={opp.nationality ?? ""}
-                onclick={(e) => e.stopPropagation()}
-                onchange={(e) => onsetcell(i, { nationality: orAuto(e.currentTarget.value) })}
-              />
+              <span class="flag flag-none"></span>
             {/if}
+            <select
+              class="natsel"
+              aria-label={t("launch.colNationality")}
+              value={opp.nationality ?? ""}
+              onclick={(e) => e.stopPropagation()}
+              onchange={(e) => onsetcell(i, { nationality: orAuto(e.currentTarget.value) })}
+            >
+              <option value="">{autoNationality(opp)}</option>
+              <!-- Une valeur déjà posée que la liste du jeu ne contient pas
+                   (preset importé, installation illisible) reste offerte : la
+                   retirer du menu l'effacerait au premier changement. -->
+              {#if opp.nationality && !nationalityList.some((n) => n.name === opp.nationality)}
+                <option value={opp.nationality}>{opp.nationality}</option>
+              {/if}
+              {#each nationalityList as n (n.code)}<option value={n.name}>{n.name}</option>{/each}
+            </select>
           </span>
         {/if}
         {#if shows("ratio")}
@@ -496,17 +549,6 @@
           onclick={(e) => { e.stopPropagation(); onduplicate(i); }}
         >+</button>
         <button class="oppo-x" type="button" title={t("common.remove")} onclick={(e) => { e.stopPropagation(); onremove(i); }}>✕</button>
-        <!-- La vignette de ligne dit quelle voiture ; en grand, elle dit
-             laquelle exactement. Le JPEG est déjà sur disque et déjà chargé
-             par la vignette : aucun appel backend, jamais l'aperçu 3D.
-             Positionnement **absolu** dans la ligne, pas `fixed` : une bulle
-             fixe se place à partir d'un `getBoundingClientRect`, donc des
-             pixels de fenêtre déjà multipliés par le zoom d'interface (§13) —
-             et il faudrait la refermer au défilement de chaque ancêtre. Ici
-             elle suit le contenu toute seule. -->
-        {#if prev}
-          <span class="oppo-bubble"><img src={prev} alt="" /></span>
-        {/if}
       </div>
     {/each}
     <!-- The pool count in the label is the point: it says what the filter
@@ -514,6 +556,29 @@
     <button class="oppo-add" type="button" disabled={poolCount === 0} onclick={onchoose}
       >{poolCount === 1 ? t("launch.chooseFromPoolOne") : t("launch.chooseFromPool", { count: poolCount })}</button
     >
+    {#if skinRow != null && skinAnchor}
+      <AnchoredPopover anchor={skinAnchor} minWidth={228} onclose={closeSkins}>
+        <div class="skins">
+          {#if skinChoices.length}
+            {#each skinChoices as sk (sk.id)}
+              {@const img = previewSrc(sk.livery ?? sk.preview)}
+              <button
+                class="skin"
+                class:on={setup.opponents[skinRow]?.car_skin === sk.id}
+                type="button"
+                onclick={() => pickSkin(sk.id)}
+              >
+                <span class="skin-img">{#if img}<img src={img} alt="" />{/if}</span>
+                <span class="skin-n">{sk.name}</span>
+              </button>
+            {/each}
+          {:else}
+            <p class="skin-none">{t("launch.noSkinsForCar")}</p>
+          {/if}
+        </div>
+      </AnchoredPopover>
+    {/if}
+
     <!-- A grid is worth saving on its own, apart from the session that holds
          it: the same GT3 field on ten tracks (§5). -->
     <div class="oppo-foot">
@@ -598,6 +663,61 @@
      lecture seule s'annonce plus éteinte que celles qui se saisissent. */
   .oppo-th .ro {
     color: var(--faint);
+  }
+  /* Liste de livrées du popover : `livery.png` d'abord (le motif seul, lisible
+     à 34 px) et la photo en repli — l'inverse de la vignette de ligne, qui
+     répond à « quelle voiture ? » et non à « quelle peinture ? ». */
+  .skins {
+    display: flex;
+    flex-direction: column;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 4px;
+  }
+  .skin {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 4px 6px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--txt2);
+    font-size: 11px;
+    text-align: left;
+  }
+  .skin:hover {
+    background: var(--raised);
+    color: var(--txt);
+  }
+  .skin.on {
+    border-color: var(--rosso-border);
+    background: var(--rosso-dim);
+    color: var(--rosso-bright);
+  }
+  .skin-img {
+    flex: none;
+    width: 34px;
+    height: 20px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    overflow: hidden;
+  }
+  .skin-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .skin-n {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .skin-none {
+    padding: 8px 6px;
+    font-size: 11px;
+    color: var(--muted);
   }
   .oppo-foot {
     display: flex;
@@ -700,7 +820,12 @@
      voiture. Recadrage plutôt que dézoom — le cadrage Kunos est constant et la
      plupart des mods le reprennent, la voiture est donc toujours au même
      endroit dans l'image. */
+  /* Bouton et non plus `div` : elle ouvre le choix de livrée. Rien d'un bouton
+     au repos — c'est une image, et le cadre du survol suffit à dire qu'elle se
+     clique, comme les cellules de la ligne. */
   .oppo-img {
+    padding: 0;
+    cursor: pointer;
     width: 48px;
     height: 27px;
     border: 1px solid var(--line);
@@ -716,6 +841,9 @@
     height: 100%;
     object-fit: cover;
     object-position: center 60%;
+  }
+  .oppo-row:hover .oppo-img {
+    border-color: var(--faint2);
   }
   /* Plafonnée en mode élargi (§2.4) : sans ce cap, la largeur gagnée allait
      toute au nom, et l'écart entre lui et `Driver name` devenait assez grand
@@ -749,14 +877,15 @@
   }
   /* Assez large pour le drapeau et un nom de pays lisible ; les plus longs
      s'élident, le drapeau portant la reconnaissance. */
+  /* La largeur d'un drapeau, plus de quoi écrire « Nat. » en en-tête. Le nom
+     du pays vit en infobulle, pas dans la colonne. */
   .oppo-nat {
-    width: 118px;
+    width: 30px;
   }
   .natcell {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 5px;
-    min-width: 0;
   }
   /* 4:3 comme les PNG du jeu, et un filet : beaucoup de drapeaux ont du blanc
      sur un bord, qui se fondrait dans la ligne. */
@@ -767,22 +896,23 @@
     object-fit: cover;
     border: 1px solid var(--line);
   }
-  .natsel,
-  .natfree {
-    flex: 1;
-    min-width: 0;
-  }
-  /* Le chevron natif prendrait un quart de la cellule pour rien : la ligne dit
-     déjà qu'elle s'édite en faisant apparaître les cadres au survol. */
+  /* Transparent et posé sur toute la cellule : le menu natif du système reste,
+     avec son clavier et sa recherche à la frappe, sous une cellule qui ne montre
+     qu'un drapeau. `color-scheme: dark` est la seule prise sur le menu déroulé,
+     rendu par le système — sans lui il s'ouvre en blanc, hors charte, comme le
+     sélecteur de date de la météo. */
   .natsel {
-    appearance: none;
-    font-size: 9.5px;
-  }
-  /* Le menu déroulé est rendu par le système : son fond ne se style pas depuis
-     ici. `color-scheme: dark` est la seule prise — sans lui il s'ouvre en blanc,
-     hors charte, comme le sélecteur de date de la météo. */
-  .natsel {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    opacity: 0;
+    cursor: pointer;
     color-scheme: dark;
+  }
+  /* Place tenue quand la livrée ne déclare aucun pays : sans elle la colonne se
+     replierait sur les lignes muettes et la grille danserait. */
+  .flag-none {
+    border-style: dashed;
   }
   .oppo-bal {
     width: 44px;
@@ -920,47 +1050,4 @@
     background: var(--raised);
   }
 
-  /* Bulle de survol : la même image, en grand.
-     **Elle déborde vers le BAS, jamais vers le haut.** Elle remontait depuis le
-     haut de la ligne et recouvrait donc les lignes précédentes — précisément
-     celles qu'on est en train de comparer à celle qu'on survole. Ancrée sur le
-     bord supérieur de sa ligne, elle ne cache que ce qui suit, qu'on n'a pas
-     encore lu.
-     Le repli en fin de liste est un `margin-bottom` négatif sur la dernière
-     ligne : la seule façon de remonter la bulle « du strict nécessaire » sans
-     relever une position à l'écran, donc sans repasser par des pixels que le
-     zoom d'interface multiplierait une seconde fois (§13).
-     Aucune transition sous `prefers-reduced-motion` (règle globale). */
-  .oppo-bubble {
-    position: absolute;
-    left: 56px;
-    top: 0;
-    z-index: 20;
-    width: 240px;
-    max-height: 240px;
-    overflow: hidden;
-    padding: 4px;
-    border: 1px solid var(--line);
-    background: var(--bg);
-    box-shadow: 0 12px 34px rgb(0 0 0 / 60%);
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.1s;
-  }
-  /* Les deux dernières lignes n'ont pas 240 px sous elles : la bulle y remonte
-     pour rester dans le bloc plutôt que de le déborder. */
-  .oppo-row:nth-last-of-type(-n + 2) .oppo-bubble {
-    top: auto;
-    bottom: 0;
-  }
-  .oppo-row:hover .oppo-bubble,
-  .oppo-row:focus-visible .oppo-bubble {
-    opacity: 1;
-    visibility: visible;
-  }
-  .oppo-bubble img {
-    display: block;
-    width: 100%;
-    height: auto;
-  }
 </style>

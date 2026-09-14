@@ -1644,14 +1644,35 @@ l'écran affiche donc le mot `Auto` plutôt qu'un nombre qui ne serait pas
 celui-là. Un nom ou une nationalité en `Auto` affiche en revanche **ce que la
 livrée déclare**, qui est exactement ce que le jeu emploiera.
 
+**Le survol d'une ligne montre ce qui est tronqué, pas une photo.** Un aperçu
+en grand s'y ouvrait : il recouvrait les lignes voisines — précisément celles
+qu'on est en train de comparer — pour montrer ce que la vignette de la ligne
+montrait déjà. Ce qui manque vraiment, c'est le texte que la colonne élide : le
+nom complet de la voiture et de sa livrée, et le nom du pays. Ils sont donc en
+infobulle.
+
+**La vignette ouvre le choix de livrée.** Il n'y en avait aucun : le `+`
+dupliquait une ligne avec une autre livrée, `Regenerate` les retirait toutes au
+sort, mais rien ne permettait d'en désigner une. La vignette est la cible
+naturelle — c'est l'image de la livrée, donc l'endroit où l'on pense à la
+changer — et elle évite un bouton de plus dans une ligne qui en porte déjà deux.
+Le reste de la ligne ouvre le choix de **voiture** : deux questions, deux cibles.
+Le popover liste les livrées par leur `livery.png` d'abord, la photo en repli —
+l'inverse de la vignette de ligne, qui répond à « quelle voiture ? » et non à
+« quelle peinture ? ».
+
 **La nationalité n'est pas un champ libre.** Le jeu en tient la liste —
 `$.Nationalities` dans `launcher/themes/.base/ac.utils.js`, **221 entrées**
 actives, code ISO 3166-1 alpha-3 vers nom anglais, plus vingt-huit territoires
 qu'AC y a commentés et qui restent donc écartés. Chacune a son drapeau dans
 `content/gui/NationFlags/<CODE>.png` : 222 fichiers, les 221 entrées **toutes
-pourvues** plus `AC.png`, le repli du jeu. La cellule est donc un menu, avec le
-drapeau **dans la ligne** et non dans le menu — c'est en parcourant le plateau
-qu'il sert, pas au moment de choisir.
+pourvues** plus `AC.png`, le repli du jeu. La cellule ne montre **que le drapeau** : écrit en toutes lettres,
+« Brunei Darussalam » prenait un cinquième de la largeur du plateau pour ce
+qu'un drapeau dit d'un coup d'œil. Le nom reste là où on le cherche — en
+infobulle, et dans le menu au moment de choisir. Le `select` est posé
+**transparent par-dessus la cellule** plutôt qu'affiché : c'est ce qui garde le
+menu natif du système, son clavier et sa recherche à la frappe, sous une cellule
+qui ne montre qu'une image.
 
 Ce qui est **stocké reste le nom entier**, jamais le code : c'est ce que dit
 `ui_skin.json` et ce qu'écrit un preset de grille CM (« Brunei Darussalam » y a
