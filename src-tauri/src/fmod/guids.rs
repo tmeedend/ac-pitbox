@@ -3,7 +3,7 @@
 //! Assetto Corsa ships no per-car string bank, so `FMOD_Studio_System_GetEvent`
 //! (which takes a path) is useless for cars: the path has to be turned into a
 //! GUID first, and this text file is the table that does it. See
-//! `docs/SPEC-engine-sound-fmod.md` §2.3.
+//! `docs/SPEC-engine-sound-fmod.md` FMOD§2.3.
 
 use std::path::{Path, PathBuf};
 
@@ -77,7 +77,7 @@ fn hex_pairs(s: &str) -> impl Iterator<Item = Option<u8>> + '_ {
 
 /// Which of the two engine events to reach for first.
 ///
-/// Left open on purpose: `docs/SPEC-engine-sound-fmod.md` §7 has not settled
+/// Left open on purpose: `docs/SPEC-engine-sound-fmod.md` FMOD§7 has not settled
 /// whether the exterior or the interior view should be the default, and this
 /// module has no business deciding it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -142,7 +142,7 @@ pub fn lookup(text: &str, event_path: &str) -> Option<(String, Guid)> {
 
 /// Finds a car's engine event, degrading rather than failing.
 ///
-/// The chain is the one in `docs/SPEC-engine-sound-fmod.md` §6: the requested
+/// The chain is the one in `docs/SPEC-engine-sound-fmod.md` FMOD§6: the requested
 /// view, then the other one, then **any** event under this car whose name
 /// mentions the engine. A mod that names its events unusually still gets
 /// something to play; only a car with no engine event at all comes back empty.
@@ -221,7 +221,7 @@ pub fn guid_files(bank_dir: &Path, ac_root: Option<&Path>) -> Vec<PathBuf> {
 /// and the preference is there for the day a bank does carry the exterior one.
 ///
 /// `None` is the ordinary answer, not a failure: a car with no ignition event
-/// simply starts already running (§6sexies).
+/// simply starts already running (FMOD§6sexies).
 pub fn resolve_ignition_event(bank_dir: &Path, ac_root: Option<&Path>, car_id: &str) -> Option<(String, Guid)> {
     for file in guid_files(bank_dir, ac_root) {
         let Ok(text) = std::fs::read_to_string(&file) else {
@@ -309,7 +309,7 @@ mod tests {
     /// The byte order of the three leading integers is the one thing this
     /// parser could get wrong silently, so it is pinned to a measured oracle:
     /// the GT40's `engine_ext` GUID as `FMOD_Studio_ParseID` itself decoded it
-    /// during lot 0 (`docs/SPEC-engine-sound-fmod.md` §2bis).
+    /// during lot 0 (`docs/SPEC-engine-sound-fmod.md` FMOD§2bis).
     #[test]
     fn guid_matches_what_fmod_parse_id_returned() {
         let parsed = Guid::parse("{d33f0a36-b38e-410f-b895-4797f5f77e18}").expect("well-formed guid parses");
@@ -402,7 +402,7 @@ mod tests {
         );
     }
 
-    /// §6: a mod with no `engine_ext` must still play something.
+    /// FMOD§6: a mod with no `engine_ext` must still play something.
     #[test]
     fn engine_event_falls_back_to_the_other_view_then_to_any_engine() {
         let int_only = "{6855af70-8f4e-4851-a5b0-237bc434d2c1} event:/cars/modcar/engine_int\n";

@@ -1,4 +1,4 @@
-// Presets de vignettes de la grille (docs/SPEC-grille.md §5.6, §6).
+// Presets de vignettes de la grille (docs/SPEC-grille.md GRILLE§5.6, GRILLE§6).
 //
 // **Un preset, pas un gabarit unique.** La première version n'avait qu'un jeu
 // de valeurs, et elle butait sur un constat de l'utilisateur : la preview
@@ -8,7 +8,7 @@
 // avoir envie de regarder. Un compromis unique les aurait mal servis tous les
 // deux.
 //
-// Ça ne touche pas à la propriété non négociable du §5.6 : « toute valeur doit
+// Ça ne touche pas à la propriété non négociable du GRILLE§5.6 : « toute valeur doit
 // rester identique pour les 312 ». Elle porte sur un jeu d'images, pas sur le
 // nombre de jeux possibles — chaque preset reste uniforme chez lui.
 //
@@ -17,7 +17,7 @@
 //  1. *Les embarqués sont en lecture seule, et on les duplique.* Un preset vide
 //     est une douzaine de curseurs de rien ; une copie de Vitrine est à un
 //     réglage d'être la sienne. Bénéfice inattendu : ça supprime tout le
-//     versionnage du §5.7 — plus besoin de deviner « l'utilisateur a-t-il
+//     versionnage du GRILLE§5.7 — plus besoin de deviner « l'utilisateur a-t-il
 //     personnalisé ? » pour savoir s'il hérite du nouveau défaut. Les embarqués
 //     évoluent avec l'app, les copies ne bougent jamais.
 //  2. *Le mat fait partie du preset.* La moitié de ce qui rend la preview d'AC
@@ -51,10 +51,10 @@ const KEYS = {
 /**
  * Les huit valeurs de rendu, et leurs bornes.
  *
- * Un écart assumé vis-à-vis du §5.6, qui demande de relever l'azimut sur les
+ * Un écart assumé vis-à-vis du GRILLE§5.6, qui demande de relever l'azimut sur les
  * previews Kunos plutôt que de l'inventer : c'est déjà fait, et c'est le défaut
  * de l'aperçu 3D — 318°, trois-quarts avant **gauche**, la convention de toutes
- * les photos du jeu. La grille restant mixte pour toujours (§7), aligner
+ * les photos du jeu. La grille restant mixte pour toujours (GRILLE§7), aligner
  * l'angle sur celui des previews d'origine est ce qui réduit le plus
  * durablement l'écart entre les deux sources.
  */
@@ -72,7 +72,7 @@ export const GRID_THUMB_RANGES = {
    * **ajusté et non à l'échelle** : chaque voiture remplit le cadre quelle que
    * soit sa taille réelle. On perd le gabarit relatif, on gagne que chaque
    * vignette est lisible à 190 px — pour un catalogue dont le métier est
-   * l'identification, c'est le bon échange (§5.6).
+   * l'identification, c'est le bon échange (GRILLE§5.6).
    *
    * **Ce n'est pas « le pourcentage de cadre laissé vide ».** À marge nulle, la
    * voiture n'occupe déjà que ~75 % de la largeur : le cadrage ajuste la
@@ -181,7 +181,7 @@ export const TEMPLATE_KEYS = Object.keys(GRID_THUMB_RANGES) as TemplateKey[];
 export const RENDERER_VERSION = 3;
 
 /** Le fond de carte d'un preset : les deux bouts du dégradé radial du mat
- * (§2.2). Clair au centre pour décoller la voiture, sombre aux bords pour
+ * (GRILLE§2.2). Clair au centre pour décoller la voiture, sombre aux bords pour
  * contenir l'image. */
 export interface GridMat {
   hi: string;
@@ -249,7 +249,7 @@ function defaultTemplate(): GridTemplateValues {
   return template((key) => GRID_THUMB_RANGES[key].default);
 }
 
-/** Le mat d'origine : celui de la grille depuis le §2.2. */
+/** Le mat d'origine : celui de la grille depuis le GRILLE§2.2. */
 const CATALOGUE_MAT: GridMat = { hi: "#2b2d33", lo: "#17181c" };
 
 /**
@@ -269,7 +269,7 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
     skipStock: false,
   },
   {
-    // Le problème B du §1 pris par l'autre bout : ici on ne cherche pas à
+    // Le problème B du GRILLE§1 pris par l'autre bout : ici on ne cherche pas à
     // identifier vite, on cherche à avoir envie de regarder. Contre-jour poussé
     // — c'est lui qui découpe une silhouette sombre sur un fond sombre —,
     // principale retenue, complément réduit pour garder les ombres fermées,
@@ -320,7 +320,7 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
   {
     // **Le preset qui retourne le problème de la grille mixte** au lieu de le
     // contenir. Les voitures chiffrées et le contenu de base gardent leur
-    // `preview.png` pour toujours (§7) ; plutôt que d'encadrer cette disparité,
+    // `preview.png` pour toujours (GRILLE§7) ; plutôt que d'encadrer cette disparité,
     // celui-ci l'efface — il imite ce rendu, donc une voiture régénérée ne se
     // distingue plus de celle d'à côté.
     //
@@ -424,7 +424,7 @@ interface Values {
 // `$state` de module : lu par la grille et par l'écran de réglages, écrit par
 // les fonctions ci-dessous.
 const values: Values = $state({
-  // Éteint par défaut, comme le profil « Normal » du §5.5 : régénérer trois
+  // Éteint par défaut, comme le profil « Normal » du GRILLE§5.5 : régénérer trois
   // cents voitures est un travail qu'on choisit, pas un défaut qu'on subit.
   enabled: false,
   user: [],
@@ -436,7 +436,7 @@ const values: Values = $state({
 });
 
 /** Ce qui est **sur disque**. La différence avec `values` est ce que le pied de
- * l'écran chiffre, et ce que « Annuler » jette (§6.3). */
+ * l'écran chiffre, et ce que « Annuler » jette (GRILLE§6.3). */
 const stored: Values = $state({ enabled: false, user: [], bound: { ...FALLBACK } });
 
 let loaded: Promise<void> | null = null;
@@ -539,7 +539,7 @@ function find(list: readonly GridPreset[], id: string): GridPreset | undefined {
  * ou de produire.
  *
  * Bouger un curseur ne doit pas mettre trois cents vignettes au rebut avant que
- * l'utilisateur n'ait dit « Appliquer » (§6.3).
+ * l'utilisateur n'ait dit « Appliquer » (GRILLE§6.3).
  */
 export function presetForDensity(density: GridDensity): GridPreset {
   const list = storedPresets();
@@ -630,7 +630,7 @@ export function deletePreset(id: string): void {
   }
 }
 
-/** Revient sur ce qui est enregistré : le « Annuler » du §6.3, qui ne coûte
+/** Revient sur ce qui est enregistré : le « Annuler » du GRILLE§6.3, qui ne coûte
  * rien et rend l'expérimentation gratuite. */
 export function revertGridThumbPrefs(): void {
   Object.assign(values, structuredClone($state.snapshot(stored)));

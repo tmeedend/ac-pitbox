@@ -1,9 +1,9 @@
 <script lang="ts">
-  // Aperçu 3D interactif d'une voiture (docs/SPEC-preview-3d-kn5.md §8).
+  // Aperçu 3D interactif d'une voiture (docs/SPEC-preview-3d-kn5.md PREVIEW§8).
   //
   // Le modèle est converti côté Rust en glTF binaire, mis en cache et servi
   // par le protocole `carpreview` : ici on ne reçoit qu'une URL, jamais les
-  // octets (§7.2).
+  // octets (PREVIEW§7.2).
   //
   // three.js est chargé en `import()` dynamique : c'est de loin la plus grosse
   // dépendance du front, et elle ne doit peser ni au démarrage de l'app ni sur
@@ -59,7 +59,7 @@
 
   let phase = $state<Phase>("loading");
   let stage = $state<PreviewStage | null>(null);
-  /** Clé i18n ou message technique, affiché en infobulle du badge (§8.5). */
+  /** Clé i18n ou message technique, affiché en infobulle du badge (PREVIEW§8.5). */
   let reason = $state<string | null>(null);
   /** Un nouveau skin se prépare pendant que le précédent reste à l'écran :
    * le badge doit le dire, mais l'aperçu ne bascule pas pour autant. */
@@ -155,7 +155,7 @@
      * chaque changement de niveau. */
     host: HTMLElement;
     /** Horodatage du début de l'effet d'entrée, 0 quand il n'y en a pas ou
-     * qu'il est terminé (§15 — effet d'intro). */
+     * qu'il est terminé (PREVIEW§15 — effet d'intro). */
     introAt: number;
     /** Miroir du sol. `null` quand le reflet est à 0 : c'est un second rendu
      * de la scène, autant ne pas le construire du tout. */
@@ -202,7 +202,7 @@
   // Plateau tournant, comme un socle de salon : c'est la raison d'être de tout
   // ce chantier — voir la voiture tourner, pas seulement pouvoir la tourner.
   //
-  // Le §8.4 de la spec demande l'inverse (« ne pas rendre en continu à 60 fps
+  // Le PREVIEW§8.4 de la spec demande l'inverse (« ne pas rendre en continu à 60 fps
   // sur un panneau statique ») et les deux sont inconciliables. La contrepartie
   // est donc payée là où elle se voit : la rotation s'arrête dès que la fiche
   // quitte l'écran, que la fenêtre passe en arrière-plan, ou que l'utilisateur
@@ -212,7 +212,7 @@
    * qu'on voie les reflets glisser sur la carrosserie. */
   const SPIN_SPEED = 0.22;
 
-  // Lens and framing, measured against Kunos' `preview.jpg` (§15 point 7).
+  // Lens and framing, measured against Kunos' `preview.jpg` (PREVIEW§15 point 7).
   //
   // A 20° field of view rather than the 35° first used: at 35° the nose of a
   // car looms and its tail falls away, a distortion the game's own previews do
@@ -221,7 +221,7 @@
   const FRAMING_FOV = 20;
   /** Camera distance at zoom 100 %, in multiples of the model's radius. */
   const FRAMING_DISTANCE = 4.9;
-  // Qualité de rendu (§15). Ne touche **que** l'affichage : aucun de ces
+  // Qualité de rendu (PREVIEW§15). Ne touche **que** l'affichage : aucun de ces
   // réglages n'entre dans la conversion, donc en changer n'invalide aucune
   // entrée de cache et s'applique à l'image suivante.
   //
@@ -233,7 +233,7 @@
   // produit de différence visible, alors qu'elle imposait un `EffectComposer`,
   // donc **deux** cibles RGBA16F multi-échantillonnées (il clone la sienne)
   // plus ses deux tampons internes : près d'un gigaoctet de mémoire graphique
-  // sur une fiche large. Le suréchantillonnage, lui, se voit (§15 point 8).
+  // sur une fiche large. Le suréchantillonnage, lui, se voit (PREVIEW§15 point 8).
   //
   // Ce qu'il faut retenir si l'idée revient : il ne suffit pas d'ajouter la
   // passe, il faut prouver qu'elle se voit — et sur ce panneau, elle ne se
@@ -435,7 +435,7 @@
     roughnessFloor: 0.15,
   };
 
-  // Effet d'entrée du plateau (§15). Deux gestes, et rien d'autre qu'un
+  // Effet d'entrée du plateau (PREVIEW§15). Deux gestes, et rien d'autre qu'un
   // facteur appliqué à la vitesse déjà calculée : aucune image de plus, aucun
   // coût GPU.
   /** Montée en douceur jusqu'à la vitesse réglée. */
@@ -471,7 +471,7 @@
    * `KHR_materials_transmission`?
    *
    * Glass declared by a mod's `ext_config.ini` is converted as transmissive
-   * rather than blended (`kn5-gltf`, SPEC §4.5ter): blending attenuates the
+   * rather than blended (`kn5-gltf`, SPEC PREVIEW§4.5ter): blending attenuates the
    * whole surface response, specular reflection included, and it is that
    * reflection that makes a pane read as glass. The consequence here is that
    * such a material is **not** `transparent`, so every rule keyed on that flag
@@ -586,7 +586,7 @@
       color: 0xffffff,
       shader: floorMirrorShader,
       // No MSAA on the reflection pass, and the memory it would have taken goes
-      // into resolution instead. Same argument as §15: MSAA samples triangle
+      // into resolution instead. Same argument as PREVIEW§15: MSAA samples triangle
       // *coverage* but still shades once per texel, so it can do nothing about
       // a sub-pixel specular highlight — while the target now follows a drawing
       // buffer already supersampled 1,5× to 4×, which is precisely what does
@@ -652,7 +652,7 @@
     current.renderer.toneMappingExposure = prefs.exposure / 100;
     // `scene.environmentIntensity`, et **pas** `material.envMapIntensity` :
     // mesuré au banc, ce dernier n'a aucun effet quand l'environnement vient
-    // de la scène (voir `docs/SPEC-preview-3d-kn5.md` §15).
+    // de la scène (voir `docs/SPEC-preview-3d-kn5.md` PREVIEW§15).
     current.scene.environmentIntensity = prefs.light / 100;
     const ground = current.ground.material as ThreeModule.MeshBasicMaterial;
     ground.opacity = prefs.pool / 100;
@@ -665,7 +665,7 @@
   }
 
   /**
-   * Facteur appliqué à la vitesse du plateau pendant l'effet d'entrée (§15).
+   * Facteur appliqué à la vitesse du plateau pendant l'effet d'entrée (PREVIEW§15).
    *
    * Se désarme lui-même en écrivant `introAt = 0` : une fois l'effet fini, il
    * ne reste aucun calcul par image, et la boucle de rendu retrouve exactement
@@ -705,7 +705,7 @@
   let onScreen = true;
 
   /**
-   * WebGL indisponible = repli silencieux sur la photo (§8.5) : ce n'est pas
+   * WebGL indisponible = repli silencieux sur la photo (PREVIEW§8.5) : ce n'est pas
    * une erreur à signaler, c'est une machine qui ne peut pas afficher de 3D.
    */
   function webglAvailable(): boolean {
@@ -718,7 +718,7 @@
   }
 
   /**
-   * Libère tout ce qui occupe la mémoire GPU (§8.3).
+   * Libère tout ce qui occupe la mémoire GPU (PREVIEW§8.3).
    *
    * Première cause de plantage de ce genre de composant : l'utilisateur
    * parcourt deux cents voitures, chacune laissant ses géométries et ses
@@ -953,7 +953,7 @@
   }
 
   /**
-   * Pose la caméra d'après les réglages (§15) : distance, angle autour de
+   * Pose la caméra d'après les réglages (PREVIEW§15) : distance, angle autour de
    * l'axe vertical, hauteur. Par défaut un trois-quarts avant, l'angle le plus
    * flatteur pour une voiture.
    *
@@ -1011,7 +1011,7 @@
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     // Suréchantillonner puis réduire est le remède direct au scintillement des
     // reflets, et le panneau est assez petit pour qu'on puisse se le payer. Le
-    // facteur vient du niveau de qualité (§15) — c'était 1,5 à 2 avant lui.
+    // facteur vient du niveau de qualité (PREVIEW§15) — c'était 1,5 à 2 avant lui.
     applyPixelRatio(renderer, host);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -1019,7 +1019,7 @@
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     const scene = new THREE.Scene();
-    // Image-based lighting, and no asset to ship for it (§8.1). The showroom is
+    // Image-based lighting, and no asset to ship for it (PREVIEW§8.1). The showroom is
     // dark on purpose — see `showroomEnvironment` for what a white room did to
     // the paint.
     const pmrem = new THREE.PMREMGenerator(renderer);
@@ -1035,7 +1035,7 @@
     const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
 
     // Les vitres passent après l'opaque et n'écrivent pas dans le tampon de
-    // profondeur, sinon l'intérieur disparaît derrière le pare-brise (§8.2).
+    // profondeur, sinon l'intérieur disparaît derrière le pare-brise (PREVIEW§8.2).
     gltf.scene.traverse((object) => {
       const mesh = object as ThreeModule.Mesh;
       if (!mesh.isMesh) return;
@@ -1079,7 +1079,7 @@
     });
 
     // Cadrage calculé, jamais codé en dur : les mods ont des échelles très
-    // variables et un cadrage fixe en couperait la moitié (§8.1).
+    // variables et un cadrage fixe en couperait la moitié (PREVIEW§8.1).
     const box = new THREE.Box3().setFromObject(gltf.scene);
     const center = box.getCenter(new THREE.Vector3());
     const radius = box.getSize(new THREE.Vector3()).length() / 2;
@@ -1120,7 +1120,7 @@
     controls.maxPolarAngle = Math.PI * 0.495;
 
     // The ground: a pool of light with the contact shadow in its middle, drawn
-    // as one gradient rather than a shadow map (§8.1). Two things at once,
+    // as one gradient rather than a shadow map (PREVIEW§8.1). Two things at once,
     // because they are two halves of the same thing — the car sits on a lit
     // floor and blocks part of that light.
     const ground = new THREE.Mesh(
@@ -1335,7 +1335,7 @@
   }
 
   /**
-   * The floor under the car, drawn on the fly — no file to ship (§8.1).
+   * The floor under the car, drawn on the fly — no file to ship (PREVIEW§8.1).
    *
    * Two gradients on one texture. The wide, pale one is the pool of light a
    * showroom floor returns under the lamps: it is what the Kunos photos show
@@ -1572,7 +1572,7 @@
   });
 
   // Étapes de conversion, pour que le squelette dise où on en est plutôt que
-  // de tourner dans le vide pendant une seconde et demie (§7.3).
+  // de tourner dans le vide pendant une seconde et demie (PREVIEW§7.3).
   let unlisten: (() => void) | null = null;
   onPreviewProgress((s) => {
     stage = s;
@@ -1611,7 +1611,7 @@
          fait deux images là où on en attend une, et le fondu de l'une à
          l'autre attirait l'œil sur le remplacement plutôt que sur le modèle.
          Elle reste, entière, quand la 3D ne peut pas aboutir — modèle chiffré,
-         pas de WebGL, conversion en échec (§8.5). -->
+         pas de WebGL, conversion en échec (PREVIEW§8.5). -->
     <img class="fallback" src={fallbackSrc} alt="" />
   {/if}
 

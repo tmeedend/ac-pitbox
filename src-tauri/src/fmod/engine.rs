@@ -4,7 +4,7 @@
 //! and the freeing of stopped instances both happen there — so the system needs
 //! a thread of its own rather than a call site. The project already has this
 //! shape in `music/engine.rs`, and this follows it: one thread, one channel,
-//! commands in, nothing shared out. See `docs/SPEC-engine-sound-fmod.md` §4.3.
+//! commands in, nothing shared out. See `docs/SPEC-engine-sound-fmod.md` FMOD§4.3.
 //!
 //! The FMOD types make that discipline structural rather than a convention:
 //! `System` holds raw pointers, so it is not `Send`, and the compiler refuses
@@ -76,7 +76,7 @@ pub struct PlayRequest {
     pub limiter_rev: Option<f32>,
     /// `event:/cars/<id>/ign_ext` or `ign_int`, when the car has one — CSP
     /// builds do, Kunos cars do not. Its presence is what turns the audition
-    /// into a **start** rather than an engine already running (§6sexies).
+    /// into a **start** rather than an engine already running (FMOD§6sexies).
     pub ignition_guid: Option<Guid>,
     /// Where the engine settles once it has caught. Also the speed the slider
     /// starts at, so the two cannot disagree.
@@ -156,7 +156,7 @@ fn normalize(v: [f32; 3]) -> [f32; 3] {
 pub struct PlayReport {
     pub event_path: String,
     /// Name and range of the rev parameter, when one was recognised. This is
-    /// what the slider of §4.4 binds to — never a hardcoded range.
+    /// what the slider of FMOD§4.4 binds to — never a hardcoded range.
     pub rev_param: Option<String>,
     pub rev_min: Option<f32>,
     pub rev_max: Option<f32>,
@@ -166,10 +166,10 @@ pub struct PlayReport {
 pub enum Command {
     Play(PlayRequest, Sender<Result<PlayReport, String>>),
     SetRev(f32),
-    /// The pointer took hold of the rev slider, or let go of it (§6septies).
+    /// The pointer took hold of the rev slider, or let go of it (FMOD§6septies).
     Pedal(bool),
     SetListener(Listener),
-    /// Start or stop the "showing off the engine" routine (§6bis).
+    /// Start or stop the "showing off the engine" routine (FMOD§6bis).
     Showcase(bool),
     Stop,
 }
@@ -190,7 +190,7 @@ impl FmodEngineHandle {
     /// Starts playback and waits for the verdict.
     ///
     /// Blocking on purpose: the caller has to know whether the native path
-    /// worked in order to fall back to the WAV decoder (§4.1), and the answer
+    /// worked in order to fall back to the WAV decoder (FMOD§4.1), and the answer
     /// costs a bank load, not a user-visible wait.
     pub fn play(&self, request: PlayRequest) -> Result<PlayReport, String> {
         let (tx, rx) = mpsc::channel();
@@ -292,7 +292,7 @@ struct Limiter {
 const LIMITER_MARGIN: f32 = 60.0;
 
 /// Idle for a few seconds, then a handful of short throttle blips — someone
-/// letting a bystander hear what the car has. §6bis.
+/// letting a bystander hear what the car has. FMOD§6bis.
 ///
 /// It lives on the audio thread rather than in the interface for one reason:
 /// a blip is 200 ms of rising engine speed, and driving that from the webview
@@ -551,7 +551,7 @@ struct Cranking {
     done: bool,
 }
 
-/// Starting the engine, for a car that has an ignition event (§6sexies).
+/// Starting the engine, for a car that has an ignition event (FMOD§6sexies).
 ///
 /// Clockless like [`Throttle`] and [`Showcase`]: time comes in through `tick`.
 #[derive(Debug)]
@@ -638,7 +638,7 @@ const THROTTLE_EPSILON: f32 = 0.002;
 /// The slider states an engine speed, but the gesture says something its
 /// position cannot: one climbs to 5000 rpm *on the throttle* and comes back
 /// down *off* it. Without this a mod was only ever heard under load — half of
-/// what a bank holds, the off-throttle layers of §2.4, stayed inaudible.
+/// what a bank holds, the off-throttle layers of FMOD§2.4, stayed inaudible.
 ///
 /// Deliberately clockless: time comes in through `tick`, which makes the rule
 /// testable without FMOD running.
@@ -767,7 +767,7 @@ fn run(rx: Receiver<Command>) {
                 let outcome = start(&mut loaded, &mut playing, request, listener);
                 if let Err(e) = &outcome {
                     // Not an error the user sees: it is the switch to the
-                    // in-house decoder (§4.2). But an install packaged as an
+                    // in-house decoder (FMOD§4.2). But an install packaged as an
                     // .exe has no console, so without this line a bug report
                     // carries nothing at all.
                     log::warn!("fmod: native audition unavailable, falling back to the decoder: {e}");
@@ -778,7 +778,7 @@ fn run(rx: Receiver<Command>) {
                 if let Some(p) = &mut playing {
                     // The direction of the move is the throttle: read it before
                     // `manual_rev` is overwritten, or there is nothing to
-                    // compare against (§6quater).
+                    // compare against (FMOD§6quater).
                     p.throttle.slider_moved(p.manual_rev, value);
                     p.manual_rev = value;
                     // Touching the slider mid-start is a takeover like any
@@ -892,7 +892,7 @@ fn run(rx: Receiver<Command>) {
                 }
             // Nobody is showing off: the throttle follows the slider's own
             // direction, which is the only thing that tells accelerating from
-            // lifting off at a given engine speed (§6quater).
+            // lifting off at a given engine speed (FMOD§6quater).
             } else if let Some(throttle) = p.throttle.tick(TICK) {
                 if let (Some(l), Some(param)) = (&loaded, p.roles.throttle.as_ref()) {
                     let _ = l
@@ -1061,7 +1061,7 @@ fn start(
     });
     // A car that has one starts **at rest**: the first mixed block must be a
     // stopped engine, not an idling one, or the start is heard over a running
-    // motor (§6sexies).
+    // motor (FMOD§6sexies).
     let startup = ignition.is_some().then(|| Startup::new(request.idle_rev));
     let (first_rev, first_throttle) = match &startup {
         Some(_) => (0.0, 0.0),
@@ -1166,7 +1166,7 @@ fn start(
 /// Applies a value to whichever role the selector picks, clamped to the range
 /// the event declared. Silently does nothing when nothing is playing, or when
 /// this event has no such parameter — an event with no rev parameter still
-/// plays, it just cannot be revved (§2.4).
+/// plays, it just cannot be revved (FMOD§2.4).
 fn set_role(
     loaded: &Option<Loaded>,
     playing: &Option<Playing>,
@@ -1375,7 +1375,7 @@ mod tests {
         }
     }
 
-    /// The rule of §6quater: pushing the slider up is accelerating.
+    /// The rule of FMOD§6quater: pushing the slider up is accelerating.
     #[test]
     fn pushing_the_slider_up_opens_the_throttle() {
         let mut throttle = Throttle::new();
@@ -1717,7 +1717,7 @@ mod tests {
         // a different thing from setting it before `start`.
         //
         // The throttle is **not** set here any more: it now follows the
-        // direction of these very moves (§6quater). What to listen for is that
+        // direction of these very moves (FMOD§6quater). What to listen for is that
         // 6000 → 3000 does not sound like 4000 → 6000 played backwards — the
         // way down should be off-throttle, and audibly quieter.
         for rev in [900.0, 2000.0, 4000.0, 6000.0, 3000.0, 900.0] {

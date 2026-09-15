@@ -5,11 +5,11 @@
 //! block-compressed DDS, which WebGL could technically consume, but only via
 //! `WEBGL_compressed_texture_s3tc` and never for BC7 — decoding to plain RGBA8
 //! here and re-encoding to PNG/JPEG is what makes the result portable
-//! (spec §5.4).
+//! (PREVIEW§5.4).
 //!
 //! ## Pourquoi JPEG et pas WebP — question rouverte, puis refermée
 //!
-//! §5.4 demandait du WebP qualité 85 sur les cartes de couleur. Trois choses
+//! PREVIEW§5.4 demandait du WebP qualité 85 sur les cartes de couleur. Trois choses
 //! s'y opposent, dont une mesurée depuis :
 //!
 //! - le glTF 2.0 de base n'autorise que `image/png` et `image/jpeg` ; WebP
@@ -64,14 +64,14 @@ impl TextureRole {
 pub enum TextureOrigin {
     /// The blob stored inside the KN5.
     Embedded,
-    /// A file of the selected skin folder, which takes priority (§4.3).
+    /// A file of the selected skin folder, which takes priority (PREVIEW§4.3).
     Skin(PathBuf),
 }
 
 #[derive(Debug, Clone)]
 pub struct TextureOptions {
     /// Longest side of a colour map. A preview panel is a few hundred pixels
-    /// wide; 4K liveries buy nothing and cost seconds of conversion (§5.4).
+    /// wide; 4K liveries buy nothing and cost seconds of conversion (PREVIEW§5.4).
     pub max_color_size: u32,
     /// Longest side of every other map.
     pub max_data_size: u32,
@@ -128,7 +128,7 @@ pub struct PreparedTexture {
 }
 
 /// A texture that could not be prepared. Never fatal: a car with one broken
-/// texture is still worth previewing (§6.3).
+/// texture is still worth previewing (PREVIEW§6.3).
 #[derive(Debug, Clone)]
 pub struct TextureWarning {
     pub name: String,
@@ -244,7 +244,7 @@ struct TextureUse {
 ///
 /// `skin_dir` is the folder of the selected skin, when there is one. Each
 /// texture is deduplicated by name, so a file shared by twenty materials is
-/// decoded once (§5.4).
+/// decoded once (PREVIEW§5.4).
 pub fn prepare_textures(model: &Kn5Model, skin_dir: Option<&Path>, options: &TextureOptions) -> TextureSet {
     let roles = roles(model);
     let footprints = diffuse_footprints(model);
@@ -353,7 +353,7 @@ impl FootprintAlpha {
     /// La distinction n'est pas cosmétique, c'est celle qui décide dans quelle
     /// passe le matériau est rendu. Une décalcomanie et une vitre portent le
     /// même `blend_mode = 1`, et le traiter pareil met les deux dans la passe
-    /// transparente, **sans écriture de profondeur** (§8.2) — indispensable
+    /// transparente, **sans écriture de profondeur** (PREVIEW§8.2) — indispensable
     /// pour la vitre, désastreux pour la décalcomanie : deux calques posés à
     /// 2 mm l'un de l'autre n'ont alors plus la géométrie pour les départager,
     /// c'est l'ordre des matériaux dans le fichier qui tranche.
@@ -660,7 +660,7 @@ fn paint_one(
     }))
 }
 
-/// Skin file first, embedded blob second (§4.3).
+/// Skin file first, embedded blob second (PREVIEW§4.3).
 fn load_source(name: &str, skin_dir: Option<&Path>, embedded: Option<&[u8]>) -> Option<(Vec<u8>, TextureOrigin)> {
     if let Some(dir) = skin_dir {
         let path = dir.join(name);
@@ -798,7 +798,7 @@ fn strip_alpha(image: &mut RgbaImage) {
 }
 
 /// Decodes whatever the blob actually is — the filename is never consulted
-/// (§3.2, and one texture in a hundred contradicts its own extension).
+/// (PREVIEW§3.2, and one texture in a hundred contradicts its own extension).
 pub(crate) fn decode(blob: &[u8]) -> Result<RgbaImage, String> {
     match ImageFormat::sniff(blob) {
         ImageFormat::Dds => {
@@ -976,7 +976,7 @@ fn downscale(image: RgbaImage, max_size: u32) -> RgbaImage {
 fn encode(image: &RgbaImage, role: TextureRole, options: &TextureOptions) -> Result<(Vec<u8>, &'static str), String> {
     // Alpha decides before the role does. A colour map with transparency is
     // exactly what feeds `ksAlphaRef` masking — grilles, ajoured rims — and
-    // JPEG would silently drop that channel, filling every opening (§10,
+    // JPEG would silently drop that channel, filling every opening (PREVIEW§10,
     // "`ksAlphaRef` ignoré").
     let has_alpha = image.pixels().any(|p| p.0[3] != u8::MAX);
     let lossy = match role {
@@ -1458,7 +1458,7 @@ mod tests {
     }
 
     // Rule: a blob that decodes to nothing usable is a warning, not a failure
-    // of the whole car (§6.3).
+    // of the whole car (PREVIEW§6.3).
     #[test]
     fn undecodable_blob_is_reported_not_fatal() {
         let error = prepare_one(

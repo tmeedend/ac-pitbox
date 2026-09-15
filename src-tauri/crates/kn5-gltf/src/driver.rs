@@ -495,7 +495,7 @@ pub struct DriverRig {
 }
 
 /// The mannequin alone, dressed and posed — what the fitting stage of the
-/// driver screen shows (`docs/SPEC-ecran-pilote.md` §5.1).
+/// driver screen shows (`docs/SPEC-ecran-pilote.md` PILOTE§5.1).
 ///
 /// Deliberately not [`graft`] with an empty host, but for **one** of that
 /// function's four jobs rather than three: the body is not offset onto the

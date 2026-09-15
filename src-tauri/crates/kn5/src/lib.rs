@@ -3,12 +3,12 @@
 //! Pure parsing only: no Tauri, no filesystem, no network. The caller hands
 //! over the whole file as bytes and gets a [`Kn5Model`] back. Keeping I/O out
 //! is what makes this crate testable from `kn5-tool` without launching the app
-//! (see `docs/SPEC-preview-3d-kn5.md` §5.1).
+//! (see `docs/SPEC-preview-3d-kn5.md` PREVIEW§5.1).
 //!
 //! The format is undocumented by Kunos and was reverse-engineered by the
-//! community; the layout implemented here is the one described in §3 of that
+//! community; the layout implemented here is the one described in PREVIEW§3 of that
 //! spec, written from scratch rather than transcribed from any third-party
-//! codebase (§2 — licensing).
+//! codebase (PREVIEW§2 — licensing).
 //!
 //! # Untrusted input
 //!

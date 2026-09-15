@@ -1,12 +1,12 @@
-//! The Action API client (`docs/SPEC-wikipedia-fiche-detail.md` §6).
+//! The Action API client (`docs/SPEC-wikipedia-fiche-detail.md` WIKI§6).
 //!
-//! Two requests, no more (§6.1): one to Wikidata to turn a Q-id into article
+//! Two requests, no more (WIKI§6.1): one to Wikidata to turn a Q-id into article
 //! titles, a parent entity and the list of languages, one to the wiki of the
 //! chosen language for the article text. The Action API (`/w/api.php`)
 //! rather than the REST ones, which are being retired.
 //!
 //! **Nothing here returns a `Result`.** A dead network, a timeout, a 404 and a
-//! quota refusal are four non-results (§1): the tab is simply absent, and there
+//! quota refusal are four non-results (WIKI§1): the tab is simply absent, and there
 //! is no error for a caller to propagate or an interface to show. What the
 //! caller does need to tell apart is "the thing does not exist" from "I could
 //! not ask" — see `Fetched` — because only the first is worth remembering.
@@ -26,13 +26,13 @@ use super::ids;
 /// Wikidata's own API host — entities live here, not on a language wiki.
 const WIKIDATA_HOST: &str = "www.wikidata.org";
 
-/// §6.2: five seconds, every phase included. A decorative tab has no business
+/// WIKI§6.2: five seconds, every phase included. A decorative tab has no business
 /// making anyone wait longer than that.
 const TIMEOUT_MS: i32 = 5_000;
 
-/// §6.2: exponential backoff on 429, then a silent give-up. Three tries and
+/// WIKI§6.2: exponential backoff on 429, then a silent give-up. Three tries and
 /// under two seconds of waiting in total — the expected traffic is a few dozen
-/// requests a month (§6.3), so a quota refusal means something is wrong, not
+/// requests a month (WIKI§6.3), so a quota refusal means something is wrong, not
 /// that we should wait it out.
 const RETRIES: u32 = 3;
 const BACKOFF_BASE: Duration = Duration::from_millis(500);
@@ -52,7 +52,7 @@ pub const MAX_GEOSEARCH_RADIUS_M: u32 = 10_000;
 const IMAGE_WIDTH: u32 = 640;
 
 /// What came back from an API call. Three variants, all of them non-results in
-/// the sense of §1 — none is an error.
+/// the sense of WIKI§1 — none is an error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fetched<T> {
     /// The API answered and the thing exists.
@@ -75,7 +75,7 @@ impl<T> Fetched<T> {
     }
 }
 
-/// What Wikidata knows about an entity, reduced to what §5 needs.
+/// What Wikidata knows about an entity, reduced to what WIKI§5 needs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityFacts {
     pub entity_id: String,
@@ -84,7 +84,7 @@ pub struct EntityFacts {
     /// `P31` of the entity itself — needed to judge whether a `P279` parent is
     /// of the same nature (see `parent_fallback`).
     pub types: Vec<String>,
-    /// The parent entity of §5.3 by `part of`, when there is exactly one.
+    /// The parent entity of WIKI§5.3 by `part of`, when there is exactly one.
     /// **One level only**: this is never climbed again.
     pub parent: Option<String>,
     /// The `subclass of` candidate, kept **separate and unvalidated**.
@@ -96,15 +96,15 @@ pub struct EntityFacts {
     pub parent_fallback: Option<String>,
 }
 
-/// Everything the matching of §4 reads off one candidate entity.
+/// Everything the matching of WIKI§4 reads off one candidate entity.
 ///
 /// Fetched in batches: `wbgetentities` takes up to 50 ids at once, so a whole
-/// list of candidates costs **one** request — which is what makes §4 fit in the
-/// politeness budget of §6.2.
+/// list of candidates costs **one** request — which is what makes WIKI§4 fit in the
+/// politeness budget of WIKI§6.2.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EntityDetails {
     pub entity_id: String,
-    /// English label and short description — the description is what §7.6 will
+    /// English label and short description — the description is what WIKI§7.6 will
     /// show to disambiguate by eye ("modèle d'automobile Toyota, 1983–1987").
     pub label: Option<String>,
     pub description: Option<String>,
@@ -144,7 +144,7 @@ pub struct GeoHit {
     pub distance_m: f64,
 }
 
-/// One section of an article, for the table of contents (§7.3).
+/// One section of an article, for the table of contents (WIKI§7.3).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Section {
@@ -160,7 +160,7 @@ pub struct Section {
 ///
 /// Nothing reaches this struct without a licence and an author: the filter is
 /// in `image_credits`, and it is the whole reason images can be displayed at
-/// all (§9).
+/// all (WIKI§9).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageCredit {
@@ -191,16 +191,16 @@ pub struct ImageCredit {
 }
 
 /// One article, as the API gives it — never reworded, never summarised, never
-/// passed through a model (§2).
+/// passed through a model (WIKI§2).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArticleText {
     pub title: String,
     /// Canonical URL as served by the API. Stored with the text and never
-    /// rebuilt afterwards (§3.2).
+    /// rebuilt afterwards (WIKI§3.2).
     pub url: String,
     pub revision_id: Option<i64>,
     pub extract: String,
-    /// Languages this article exists in, for the selector (§5.4). Includes the
+    /// Languages this article exists in, for the selector (WIKI§5.4). Includes the
     /// language it was fetched in, which the API's interlanguage links leave
     /// out.
     pub available_langs: Vec<String>,
@@ -225,7 +225,7 @@ impl Default for WikiClient {
 }
 
 impl WikiClient {
-    /// §6.2: the User-Agent is mandatory and must identify the application —
+    /// WIKI§6.2: the User-Agent is mandatory and must identify the application —
     /// Wikimedia blocks requests without one. Name, version and a contact URL,
     /// which is the form their policy asks for.
     pub fn new() -> Self {
@@ -240,11 +240,11 @@ impl WikiClient {
     /// Sitelinks and parent entity for a Q-id, in one `wbgetentities` call.
     ///
     /// This single request pays for three things at once: the titles the
-    /// fallback chain needs (§5.2), the parent of §5.3, and the language list
-    /// of §5.4.
+    /// fallback chain needs (WIKI§5.2), the parent of WIKI§5.3, and the language list
+    /// of WIKI§5.4.
     pub fn entity(&self, entity_id: &str) -> Fetched<EntityFacts> {
         // Validated before it reaches a URL. The format check is cheap here and
-        // mandatory the day entries arrive by import (§10).
+        // mandatory the day entries arrive by import (WIKI§10).
         if !is_entity_id(entity_id) {
             log::warn!("wiki/api: {entity_id:?} is not a Wikidata id");
             return Fetched::Absent;
@@ -260,17 +260,17 @@ impl WikiClient {
         }
     }
 
-    /// One article **in full**, in one `action=query` call (§6.1): plain text,
+    /// One article **in full**, in one `action=query` call (WIKI§6.1): plain text,
     /// canonical URL, revision number and interlanguage links together.
     ///
     /// **The whole article, not just its introduction** — asked for by the
-    /// user, and the legal reading improves rather than worsens: §7.4 required
+    /// user, and the legal reading improves rather than worsens: WIKI§7.4 required
     /// the word "extrait" precisely because showing only a fragment *is* a
     /// modification, which has to be signalled. Reproducing the text entire,
     /// verbatim, with attribution and the licence, is what CC BY-SA plainly
     /// allows.
     ///
-    /// `explaintext` keeps it to plain text: no HTML, no images (§9 forbids
+    /// `explaintext` keeps it to plain text: no HTML, no images (WIKI§9 forbids
     /// them anyway), no reference markers. Measured on `Mazda MX-5`: about
     /// 17,500 characters, with section titles left in wiki markup
     /// (`== Overview ==`) — `wikiText.ts` turns those into headings.
@@ -295,7 +295,7 @@ impl WikiClient {
         // The rendered article comes from a **second** request, and the plain
         // text above is kept rather than replaced: if this one fails — and it
         // is the bigger, slower of the two — the tab still has something to
-        // show. A degraded article beats an empty one (§1).
+        // show. A degraded article beats an empty one (WIKI§1).
         if let Some((html, sections, files)) = self.render(lang, &article.title) {
             article.images = self.image_credits(lang, &files);
             article.sections = sections;
@@ -305,7 +305,7 @@ impl WikiClient {
     }
 
     /// The article as MediaWiki renders it, plus its section tree and the files
-    /// it shows (§7.3).
+    /// it shows (WIKI§7.3).
     ///
     /// `None` on any failure, deliberately: this is an enrichment of an
     /// enrichment, and nothing it can do is worth costing the reader the text.
@@ -354,7 +354,7 @@ impl WikiClient {
     /// licence at all. The second is that the licence and the author are
     /// actually there, since they are what gets displayed.
     ///
-    /// This is what §9 was protecting: it forbade images because each carries
+    /// This is what WIKI§9 was protecting: it forbade images because each carries
     /// its own licence, many are non-free, and the free ones still require
     /// crediting their author. None of that is skipped here — it is answered.
     fn image_credits(&self, lang: &str, files: &[String]) -> Vec<ImageCredit> {
@@ -378,7 +378,7 @@ impl WikiClient {
         out
     }
 
-    /// Free-text entity search (§4.1.1, and the manual correction of §7.6).
+    /// Free-text entity search (§4.1.1, and the manual correction of WIKI§7.6).
     ///
     /// `wbsearchentities` is the API's own name lookup: it returns ids, labels
     /// and short descriptions, but **no types** — the filtering of §4.1.3 needs
@@ -386,7 +386,7 @@ impl WikiClient {
     pub fn search(&self, query: &str, lang: &str, limit: u32) -> Fetched<Vec<SearchHit>> {
         let query = query.trim();
         if query.is_empty() {
-            // Searching for nothing is not a network question (§4.3: a name
+            // Searching for nothing is not a network question (WIKI§4.3: a name
             // made only of noise cleans down to empty).
             return Fetched::Absent;
         }
@@ -415,7 +415,7 @@ impl WikiClient {
     /// A full-text search returns what a person gets in their browser: for
     /// `"BMW M3 E30"`, `BMW M3` first; for `"Abarth 500 Assetto Corse"` — a
     /// variant with no article of its own — the `Abarth 500` page that
-    /// describes it in a section. Which is exactly what §4.1 wants, since §5.3
+    /// describes it in a section. Which is exactly what WIKI§4.1 wants, since WIKI§5.3
     /// accepts the generic model anyway.
     ///
     /// One request: `generator=search` carries `pageprops` along, so the Q-ids
@@ -437,7 +437,7 @@ impl WikiClient {
         }
     }
 
-    /// The Wikidata entity a given article belongs to (§7.6, pasted URL).
+    /// The Wikidata entity a given article belongs to (WIKI§7.6, pasted URL).
     ///
     /// One request: `pageprops` carries `wikibase_item`, and `redirects=1` means
     /// a URL copied from a redirect still lands on the right item.
@@ -489,7 +489,7 @@ impl WikiClient {
     /// **On Wikidata, not on a language wiki**, and that is a correction to the
     /// spec rather than a shortcut: the English article "Nürburgring" carries
     /// no GeoData coordinates at all (nor does Suzuka's), so a `geosearch`
-    /// against en.wikipedia can never return the very circuit §4.2 uses as its
+    /// against en.wikipedia can never return the very circuit WIKI§4.2 uses as its
     /// example. The Wikidata item does carry `P625`, and searching there
     /// returns Q-ids directly — one request less, and it works.
     pub fn geosearch(&self, latitude: f64, longitude: f64, radius_m: u32, limit: u32) -> Fetched<Vec<GeoHit>> {
@@ -512,7 +512,7 @@ impl WikiClient {
         }
     }
 
-    /// One GET, decoded as JSON, with the backoff of §6.2.
+    /// One GET, decoded as JSON, with the backoff of WIKI§6.2.
     ///
     /// A transport failure is **not** retried: it already cost a five-second
     /// timeout, and trying again would only make the fiche wait longer for
@@ -557,7 +557,7 @@ impl WikiClient {
 
 /// A Wikidata item id: `Q` and digits, nothing else.
 ///
-/// Kept strict on purpose — this string is concatenated into a URL, and §10
+/// Kept strict on purpose — this string is concatenated into a URL, and WIKI§10
 /// will hand the same check arbitrary third-party content at import time.
 pub fn is_entity_id(value: &str) -> bool {
     let Some(digits) = value.strip_prefix('Q') else {
@@ -597,10 +597,10 @@ fn site_to_lang(site: &str) -> Option<String> {
     Some(code.replace('_', "-"))
 }
 
-/// The parent entity of §5.3, or nothing.
+/// The parent entity of WIKI§5.3, or nothing.
 ///
 /// "part of" first, "subclass of" as a fallback. **Exactly one** candidate or
-/// none: several parents is an ambiguity, and §1 settles ambiguity by showing
+/// none: several parents is an ambiguity, and WIKI§1 settles ambiguity by showing
 /// nothing rather than drawing lots. Deprecated statements are skipped — that
 /// rank exists precisely to mean "this was wrong".
 /// Every distinct entity id a property points at, deprecated statements and
@@ -637,7 +637,7 @@ fn claim_year(claims: &Value, property: &str) -> Option<i64> {
     time.trim_start_matches(['+', '-']).get(..4)?.parse().ok()
 }
 
-/// **Exactly one** value or nothing: several parents is an ambiguity, and §1
+/// **Exactly one** value or nothing: several parents is an ambiguity, and WIKI§1
 /// settles ambiguity by showing nothing rather than drawing lots.
 fn single(ids: Vec<String>, property: &str) -> Option<String> {
     match ids.len() {
@@ -890,7 +890,7 @@ fn parse_article(root: &Value, lang: &str) -> Fetched<ArticleText> {
     let extract = page["extract"].as_str().unwrap_or_default().trim();
     if extract.is_empty() {
         // A page with no introduction (a disambiguation page, a redirect that
-        // lost its target) has nothing to show: precision over recall (§1).
+        // lost its target) has nothing to show: precision over recall (WIKI§1).
         return Fetched::Absent;
     }
 
@@ -920,7 +920,7 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    /// Rule (§3.1, §10): a Q-id is `Q` and digits. Everything else — a URL
+    /// Rule (WIKI§3.1, WIKI§10): a Q-id is `Q` and digits. Everything else — a URL
     /// above all — is refused before it can reach a request.
     #[test]
     fn only_a_q_id_passes_for_an_entity() {
@@ -930,12 +930,12 @@ mod tests {
         assert!(!is_entity_id("P361"), "a property is not an item");
         assert!(
             !is_entity_id("https://fr.wikipedia.org/wiki/Toyota_AE86"),
-            "a URL is never stored as an id (§3.1)"
+            "a URL is never stored as an id (WIKI§3.1)"
         );
         assert!(!is_entity_id("Q123&action=delete"), "nothing that changes a query");
     }
 
-    /// Rule (§5.4): sitelinks describe the whole Wikimedia estate; only the
+    /// Rule (WIKI§5.4): sitelinks describe the whole Wikimedia estate; only the
     /// Wikipedia language editions are languages. `commonswiki` sits next to
     /// `frwiki` on the real entity, which is how this was found.
     #[test]
@@ -974,7 +974,7 @@ mod tests {
         })
     }
 
-    /// Rule (§5.2, §5.3): one entity answer yields the titles the chain needs
+    /// Rule (WIKI§5.2, WIKI§5.3): one entity answer yields the titles the chain needs
     /// and the single parent to climb to.
     #[test]
     fn an_entity_answer_yields_titles_and_one_parent() {
@@ -991,7 +991,7 @@ mod tests {
         assert_eq!(facts.types, vec!["Q3231690"], "its own type, to judge a P279 parent");
     }
 
-    /// Rule (§5.3, measured): **a `subclass of` target is not a parent until it
+    /// Rule (WIKI§5.3, measured): **a `subclass of` target is not a parent until it
     /// has been checked.**
     ///
     /// The AE86's P279 is `Q5333841` = "sport compact", a classification. It
@@ -1014,7 +1014,7 @@ mod tests {
         );
     }
 
-    /// Rule (§1, §5.3): two parents is an ambiguity, and an ambiguity shows
+    /// Rule (WIKI§1, WIKI§5.3): two parents is an ambiguity, and an ambiguity shows
     /// nothing rather than picking one.
     #[test]
     fn two_parents_produce_no_parent_at_all() {
@@ -1030,7 +1030,7 @@ mod tests {
         assert_eq!(facts.parent, None, "no drawing of lots");
     }
 
-    /// Rule (§1): an unknown entity is `Absent`, never an error — and never
+    /// Rule (WIKI§1): an unknown entity is `Absent`, never an error — and never
     /// confused with a network failure.
     #[test]
     fn an_unknown_entity_is_absent() {
@@ -1038,7 +1038,7 @@ mod tests {
         assert_eq!(parse_entity(&value, "Q404"), Fetched::Absent);
     }
 
-    /// Rule (§6.1): one article answer carries everything the cache row needs —
+    /// Rule (WIKI§6.1): one article answer carries everything the cache row needs —
     /// text, url, revision and the languages for the selector.
     #[test]
     fn an_article_answer_fills_a_cache_row() {
@@ -1069,7 +1069,7 @@ mod tests {
         assert_eq!(article.revision_id, Some(1373212308));
         assert!(
             article.extract.starts_with("The AE86 series"),
-            "text kept verbatim (§2)"
+            "text kept verbatim (WIKI§2)"
         );
         assert_eq!(
             article.available_langs,
@@ -1078,7 +1078,7 @@ mod tests {
         );
     }
 
-    /// Rule (§1): a missing page and a page with no introduction are the same
+    /// Rule (WIKI§1): a missing page and a page with no introduction are the same
     /// non-result — there is nothing to show either way.
     #[test]
     fn a_missing_page_and_an_empty_extract_are_both_absent() {
@@ -1108,7 +1108,7 @@ mod tests {
         assert_eq!(details[0].end_year, Some(1989));
     }
 
-    /// Rule (§4): a batch drops what came back missing and keeps the rest —
+    /// Rule (WIKI§4): a batch drops what came back missing and keeps the rest —
     /// one dead id among the candidates is normal, not a failed batch.
     #[test]
     fn a_batch_drops_the_missing_and_keeps_the_rest() {
@@ -1133,7 +1133,7 @@ mod tests {
     ///
     /// `wbsearchentities("BMW M3 E30")` comes back **empty** — it matches
     /// labels from the start of the string, and no item is called that. The
-    /// full-text search returns `BMW M3` first, which is the answer §4.1 wants.
+    /// full-text search returns `BMW M3` first, which is the answer WIKI§4.1 wants.
     #[test]
     fn a_full_text_search_keeps_the_engines_own_order() {
         let value = json!({
@@ -1152,7 +1152,7 @@ mod tests {
         assert_eq!(hits[0].label.as_deref(), Some("BMW M3"));
     }
 
-    /// Rule (§1): a search that finds nothing is `Absent` — a non-result, never
+    /// Rule (WIKI§1): a search that finds nothing is `Absent` — a non-result, never
     /// an error.
     #[test]
     fn a_search_without_results_is_absent() {
@@ -1178,7 +1178,7 @@ mod tests {
         assert_eq!(hits[0].distance_m, 4.9, "metres, as the API computed them");
     }
 
-    /// Rule (§1): a shape we do not recognise is `Unavailable`, not `Absent` —
+    /// Rule (WIKI§1): a shape we do not recognise is `Unavailable`, not `Absent` —
     /// an API change must not be written into the negative cache as "this mod
     /// has no article" for ninety days.
     #[test]
@@ -1190,7 +1190,7 @@ mod tests {
     /// **Smoke test, run by hand.** Everything above proves the parsing; this
     /// is the only thing that proves the WinHTTP client underneath it — TLS,
     /// the User-Agent, the query string, the read loop. Ignored so that no test
-    /// ever depends on Wikipedia being up (§11), and kept because FFI that has
+    /// ever depends on Wikipedia being up (WIKI§11), and kept because FFI that has
     /// never run is FFI nobody has checked.
     ///
     /// ```text
@@ -1229,7 +1229,7 @@ mod tests {
         );
     }
 
-    /// Rule (§9, and the layout bug behind it): an image credit carries the
+    /// Rule (WIKI§9, and the layout bug behind it): an image credit carries the
     /// **display size** of the URL it carries, so the interface can reserve the
     /// box before the file arrives. Measured on Commons: asking for a 640 px
     /// thumbnail answers `thumbwidth` 640 next to a `thumburl` pointing at the
@@ -1259,7 +1259,7 @@ mod tests {
         assert!(credit.url.contains("960px"), "the denser file is still the one loaded");
     }
 
-    /// Rule (§9): no thumbnail means the original is small enough to be shown
+    /// Rule (WIKI§9): no thumbnail means the original is small enough to be shown
     /// as it is — and then it is the original's own size that must be reserved.
     #[test]
     fn a_credit_without_a_thumbnail_reserves_the_original() {

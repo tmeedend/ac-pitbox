@@ -1,11 +1,11 @@
-//! Appariements livrés avec l'application (§10).
+//! Appariements livrés avec l'application (WIKI§10).
 //!
 //! The spec prepares for sharing matches between installations and makes
 //! `source = import` the mechanism. This is that mechanism's first use, and the
 //! most useful one: the maintainer corrects a mod once, the correction ships in
 //! the binary, and nobody else has to do the work again.
 //!
-//! Three properties come free from the precedence of §3.1, and they are the
+//! Three properties come free from the precedence of WIKI§3.1, and they are the
 //! reason this is safe:
 //!
 //! - **A shipped match never overwrites a local correction.** `manual` outranks
@@ -16,7 +16,7 @@
 //! - **It is reversible.** Removing the entry from the file, or correcting it
 //!   locally, is all it takes.
 //!
-//! **On §10's "import toujours explicite, jamais automatique".** That rule
+//! **On WIKI§10's "import toujours explicite, jamais automatique".** That rule
 //! guards against a *third party's* file being trusted silently, and its
 //! companion demand — strict validation, URL allowlists against homographs —
 //! exists for the same reason. A table compiled into the application is not
@@ -80,10 +80,10 @@ pub fn seed_links(conn: &Connection, curated: &CuratedLinks) -> (usize, usize) {
 }
 
 /// Le fichier livré, tel qu'il doit être recollé dans le dépôt, avec les
-/// corrections locales fondues dedans (§10).
+/// corrections locales fondues dedans (WIKI§10).
 ///
 /// **Seules les corrections `manual` sont exportées.** Jamais les `auto`, et ce
-/// n'est pas une question de propreté : la précédence du §3.1 fait qu'un
+/// n'est pas une question de propreté : la précédence du WIKI§3.1 fait qu'un
 /// `import` l'emporte sur un `auto`, donc exporter les verdicts de
 /// l'algorithme d'aujourd'hui les figerait dans le binaire — et une version
 /// future, au moteur meilleur, se ferait écraser par ses propres vieilles
@@ -112,7 +112,7 @@ pub fn export_links(conn: &Connection, curated: &CuratedLinks) -> rusqlite::Resu
     // les effacerait rendrait la table illisible au bout de deux tours.
     let mut out = String::from("{\n");
     out.push_str(
-        "  \"_comment\": \"Appariements Wikipédia livrés avec l'application (§10). \
+        "  \"_comment\": \"Appariements Wikipédia livrés avec l'application (WIKI§10). \
 Généré par Réglages › Wikipédia › Exporter mes corrections, puis recollé ici. \
 Ne contient que des corrections faites à la main : les verdicts automatiques n'y ont pas leur place, \
 ils écraseraient un futur moteur meilleur.\",\n\n",
@@ -150,7 +150,7 @@ fn json_string(value: &str) -> String {
 mod tests {
     use super::*;
 
-    /// Rule (§10): the shipped file parses, and every match in it is a Q-id.
+    /// Rule (WIKI§10): the shipped file parses, and every match in it is a Q-id.
     /// It is embedded with `include_str!`, so a typo would otherwise only
     /// surface at runtime — on a user's machine.
     #[test]
@@ -165,7 +165,7 @@ mod tests {
         }
     }
 
-    /// Rule (§3.1, §10): **a shipped match never overwrites a local
+    /// Rule (WIKI§3.1, WIKI§10): **a shipped match never overwrites a local
     /// correction**, and does replace an automatic one.
     ///
     /// This is the property that makes shipping the table safe at all: an
@@ -207,11 +207,11 @@ mod tests {
         );
     }
 
-    /// Rule (§10): **the export carries the hand-made corrections and nothing
+    /// Rule (WIKI§10): **the export carries the hand-made corrections and nothing
     /// else.**
     ///
     /// Exporting the automatic verdicts would be the quiet kind of mistake: an
-    /// `import` outranks an `auto` (§3.1), so today's algorithm would be frozen
+    /// `import` outranks an `auto` (WIKI§3.1), so today's algorithm would be frozen
     /// into the binary and would overrule a future, better one with its own old
     /// answers. Nobody would notice for a release or two.
     #[test]
@@ -255,7 +255,7 @@ mod tests {
         assert_eq!(back.no_counterpart, vec!["rss_formula_2013".to_string()]);
     }
 
-    /// Rule (§1, §10): a malformed entry is skipped, never written. The file is
+    /// Rule (WIKI§1, WIKI§10): a malformed entry is skipped, never written. The file is
     /// hand-edited, and a URL pasted where a Q-id belongs is the likely slip.
     #[test]
     fn a_malformed_entry_is_skipped_not_written() {

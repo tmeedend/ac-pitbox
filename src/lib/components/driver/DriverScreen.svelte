@@ -2,7 +2,7 @@
   // Écran Pilote (docs/SPEC-ecran-pilote.md) : choisir le corps du pilote et
   // sa tenue en trois pièces.
   //
-  // **L'asymétrie fondatrice structure l'écran** (§1.3) : le corps est un
+  // **L'asymétrie fondatrice structure l'écran** (PILOTE§1.3) : le corps est un
   // modèle 3D que la physique de la voiture désigne — il ne se substitue que
   // dans l'aperçu — alors que le casque, la combinaison et les gants ne sont
   // que des images posées dessus, que la livrée choisit déjà et qu'on peut
@@ -32,9 +32,9 @@
   import DriverStage from "./DriverStage.svelte";
   import DriverOutfits from "./DriverOutfits.svelte";
 
-  /** Les quatre pistes, dans l'ordre où elles s'empilent (§5.5). */
+  /** Les quatre pistes, dans l'ordre où elles s'empilent (PILOTE§5.5). */
   type Lane = "body" | "helmet" | "suit" | "gloves";
-  /** Les trois pièces de tenue — le corps n'en est pas une (§1.3). */
+  /** Les trois pièces de tenue — le corps n'en est pas une (PILOTE§1.3). */
   type Piece = "helmet" | "suit" | "gloves";
   const OUTFIT_LANES: Piece[] = ["helmet", "suit", "gloves"];
 
@@ -42,7 +42,7 @@
    * « celui de la voiture » côté corps. La chaîne vide plutôt qu'un `null`
    * parce qu'une case de galerie a toujours une identité, y compris celle-là :
    * le défaut est un choix parmi les autres, pas une case à cocher à part
-   * (§6.5). */
+   * (PILOTE§6.5). */
   const DEFAULT_ID = "";
 
   const KEYS = {
@@ -73,13 +73,13 @@
   let bodies = $state<BodyOption[]>([]);
   /** `.kn5` posés dans `content/driver` mais inutilisables — illisibles ou sans
    * squelette. Dit à l'écran plutôt que tu, parce que depuis que l'inventaire
-   * des compléments ne liste plus les mannequins déployés (refonte §5), c'est
+   * des compléments ne liste plus les mannequins déployés (refonte PILOTE§5), c'est
    * ici ou nulle part : un mannequin importé qui n'apparaît pas mérite une
    * explication, pas un silence. */
   let discarded = $state(0);
   let choices = $state<DriverChoices | null>(null);
   let loading = $state(true);
-  /** Piste active. **De session, pas globale** (§13) : on rouvre l'écran sur
+  /** Piste active. **De session, pas globale** (PILOTE§13) : on rouvre l'écran sur
    * le casque, qui est ce qu'on vient y changer neuf fois sur dix. */
   let lane = $state<Lane>("helmet");
   /** Ce qu'on essaie en ce moment, `null` au repos. Jamais persisté : le
@@ -93,7 +93,7 @@
   let favorites = $state<string[]>([]);
   let recents = $state<string[]>([]);
   /** Bannière d'invalidation : elle se referme au premier choix effectué ou
-   * par son propre bouton de marche arrière (§10.2), pas toute seule. */
+   * par son propre bouton de marche arrière (PILOTE§10.2), pas toute seule. */
   let noticeSeen = $state(false);
 
   const substituted = $derived(choices?.substituted ?? false);
@@ -129,7 +129,7 @@
 
   // Les listes dépendent du corps courant, pas de celui de la voiture : c'est
   // lui qui porte les noms de texture, donc lui qui décide de ce qui s'y pose
-  // (§1.3). Recalculées à chaque changement de voiture ou de corps.
+  // (PILOTE§1.3). Recalculées à chaque changement de voiture ou de corps.
   $effect(() => {
     const carId = nav.sessionCar?.id ?? null;
     const body = chosenBody;
@@ -165,13 +165,13 @@
   interface Cell {
     /** Valeur telle que `skin.ini` l'écrit, ou nom de fichier du corps. */
     id: string;
-    /** Ce qu'on affiche sous la case. Ne se traduit pas (§14). */
+    /** Ce qu'on affiche sous la case. Ne se traduit pas (PILOTE§14). */
     label: string;
     thumb: string | null;
   }
   interface Group {
     key: string;
-    /** Nom lisible, en tête de groupe (§6.4). */
+    /** Nom lisible, en tête de groupe (PILOTE§6.4). */
     name: string;
     /** Identifiant de dossier, en mono à côté du nom. `null` pour un
      * regroupement qui n'en est pas un (l'époque, côté corps). */
@@ -181,7 +181,7 @@
 
   /** Noms complets des cinq casques de 1969 qui portent celui d'un pilote —
    * table statique, et le seul endroit du produit où le catalogue raconte
-   * quelque chose (§6.4). Les seize autres entrées de cette famille sont des
+   * quelque chose (PILOTE§6.4). Les seize autres entrées de cette famille sont des
    * couleurs, qui se lisent très bien telles quelles. */
   const HISTORIC: Record<string, string> = {
     amon: "Chris Amon",
@@ -364,7 +364,7 @@
    * près (`HELMET_2012.jpg` à côté de `HELMET_2012.dds`).
    *
    * `null` sur la piste Corps et sur la case par défaut : un corps n'est pas
-   * une texture, il demande une vraie conversion (§9.2), et le défaut se
+   * une texture, il demande une vraie conversion (PILOTE§9.2), et le défaut se
    * rétablit en retirant l'essai plutôt qu'en en posant un autre. */
   const trialTexture = $derived.by(() => {
     if (lane === "body" || trying == null || trying === DEFAULT_ID) return null;
@@ -379,7 +379,7 @@
     return t((substituted ? "driver.none." : "driver.fromLivery.") + lane);
   }
 
-  /** Ce que la case par défaut annonce (§6.5). Elle n'est pas une case à
+  /** Ce que la case par défaut annonce (PILOTE§6.5). Elle n'est pas une case à
    * cocher à part : elle se survole et s'adopte comme les autres, et en mode
    * substitué elle retire simplement la pièce au lieu de rendre la main à la
    * livrée — qui n'a plus de destinataire. */
@@ -404,7 +404,7 @@
     remember(tag(id));
   }
 
-  /** Douze derniers essais **adoptés**, pas survolés (§8.4) : le survol est
+  /** Douze derniers essais **adoptés**, pas survolés (PILOTE§8.4) : le survol est
    * exploratoire par nature et polluerait l'historique. */
   function remember(entry: string) {
     recents = [entry, ...recents.filter((r) => r !== entry)].slice(0, 12);
@@ -417,7 +417,7 @@
     setUiPref(KEYS.favorites, JSON.stringify(favorites));
   }
 
-  /** Sortie unique (§5.6) : en mode substitué, la livrée n'est pas une
+  /** Sortie unique (PILOTE§5.6) : en mode substitué, la livrée n'est pas une
    * destination atteignable sans d'abord rétablir le corps. */
   function exit() {
     if (!carId) return;
@@ -432,7 +432,7 @@
   // --- Barre d'outils ------------------------------------------------------
 
   /** Compteur : le nombre, et la cause du filtrage — jamais le filtre seul
-   * (§8.3). Il porte implicitement l'avertissement que changer de corps
+   * (PILOTE§8.3). Il porte implicitement l'avertissement que changer de corps
    * changera ce nombre. */
   const countLabel = $derived(
     options.length
@@ -448,7 +448,7 @@
   /**
    * Une pièce retenue qui **ne s'applique pas** au corps courant.
    *
-   * Le choix est global et il est conservé au changement de voiture (§13) :
+   * Le choix est global et il est conservé au changement de voiture (PILOTE§13) :
    * c'est voulu, et c'est ce qui permet de se reconnaître d'une voiture à
    * l'autre. Mais un casque de 1969 gardé sur une voiture moderne ne change
    * rien du tout — le dossier existe, ses fichiers ne portent simplement aucun
@@ -462,7 +462,7 @@
     return !choices[plural(piece)].some((o) => o.id === chosen);
   }
 
-  /** Ce qui tombe quand on substitue le corps (§10.2) — et rien que ça : une
+  /** Ce qui tombe quand on substitue le corps (PILOTE§10.2) — et rien que ça : une
    * puce dont l'objet n'a pas réellement été perdu ne s'affiche pas. */
   const noticeItems = $derived(
     [choices?.helmets.length === 0 ? t("driver.notice.helmet") : "", t("driver.notice.outfit")].filter(Boolean),
@@ -470,7 +470,7 @@
   const showNotice = $derived(substituted && !noticeSeen);
 
   /**
-   * Les flèches parcourent la grille (§12.2).
+   * Les flèches parcourent la grille (PILOTE§12.2).
    *
    * Rien ne bloquait : `Tab` fonctionnait déjà (les cases sont des `<button>`,
    * et `onfocus` vaut survol), mais il faut vingt frappes pour traverser une
@@ -656,7 +656,7 @@
             <div class="grid">
               {#if gi === 0}
                 <!-- Le défaut est un choix parmi les autres, en première
-                     position du premier groupe, toujours (§6.5). -->
+                     position du premier groupe, toujours (PILOTE§6.5). -->
                 <button
                   class="cell special"
                   class:sel={kept === DEFAULT_ID}
@@ -758,7 +758,7 @@
     flex: 1;
     min-height: 0;
   }
-  /* Le panneau d'essayage est fixe, seule la galerie défile (§4) : le pilote
+  /* Le panneau d'essayage est fixe, seule la galerie défile (PILOTE§4) : le pilote
      ne quitte jamais le champ de vision. */
   .fitting {
     width: 392px;
@@ -770,7 +770,7 @@
     overflow: auto;
   }
 
-  /* --- les pistes (§5.5) --- */
+  /* --- les pistes (PILOTE§5.5) --- */
   .lanes {
     border-top: 1px solid var(--line);
   }
@@ -796,7 +796,7 @@
     background: var(--raised);
   }
   /* Bordure gauche en accent : un des trois seuls emplois du rouge saturé sur
-     cet écran (§15). */
+     cet écran (PILOTE§15). */
   .lane.on {
     background: var(--panel);
     border-color: var(--line);
@@ -814,7 +814,7 @@
     font-style: italic;
   }
   /* Pièce gardée mais sans effet sur ce corps : barrée, pas retirée — le choix
-     est conservé et reviendra sur une voiture compatible (§13). */
+     est conservé et reviendra sur une voiture compatible (PILOTE§13). */
   .lane .v.inert {
     color: var(--faint);
     text-decoration: line-through;
@@ -842,7 +842,7 @@
     margin-bottom: 10px;
   }
 
-  /* --- galerie (§6, §7) --- */
+  /* --- galerie (PILOTE§6, PILOTE§7) --- */
   .gallery {
     flex: 1;
     min-width: 0;
@@ -918,7 +918,7 @@
     text-align: left;
   }
   /* Carré plein, filet franc, aucune ombre : l'échantillon doit être
-     lisiblement une image et non un aperçu du résultat (§7.3). */
+     lisiblement une image et non un aperçu du résultat (PILOTE§7.3). */
   .cell .art {
     display: block;
     aspect-ratio: 1;

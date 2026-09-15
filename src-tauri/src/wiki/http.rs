@@ -1,7 +1,7 @@
-//! One HTTPS GET, over WinHTTP (`docs/SPEC-wikipedia-fiche-detail.md` §6).
+//! One HTTPS GET, over WinHTTP (`docs/SPEC-wikipedia-fiche-detail.md` WIKI§6).
 //!
 //! **Why no HTTP crate.** The app had no HTTP client at all, and the two
-//! requests this feature needs (§6.1 — one to Wikidata, one to a wiki) did not
+//! requests this feature needs (WIKI§6.1 — one to Wikidata, one to a wiki) did not
 //! justify pulling a stack of some thirty crates plus a TLS backend into a
 //! Windows-only build for a decorative tab. WinHTTP ships with Windows, the
 //! `windows` crate is already a dependency (registry reads, shared memory, FMOD
@@ -19,7 +19,7 @@
 //! **Blocking on purpose.** WinHTTP is synchronous, so every call here blocks
 //! its thread — which is why the command facades that will eventually call this
 //! belong in `spawn_blocking`, exactly like the disk-touching commands
-//! (`commands/ui_prefs.rs`). Sequential requests are what §6.2 asks for anyway.
+//! (`commands/ui_prefs.rs`). Sequential requests are what WIKI§6.2 asks for anyway.
 
 /// What came back. A body the caller is free to fail to parse: this layer knows
 /// nothing about Wikipedia, only about bytes and a status code.
@@ -58,7 +58,7 @@ pub fn encode_query_value(value: &str) -> String {
 ///
 /// `None` is "we could not ask" — DNS, connection, TLS, timeout, a body over
 /// the ceiling. Never an error type: at this layer every failure is already a
-/// non-result (§1), and the caller has nothing to display either way.
+/// non-result (WIKI§1), and the caller has nothing to display either way.
 #[cfg(windows)]
 pub fn get(host: &str, path: &str, user_agent: &str, timeout_ms: i32) -> Option<Response> {
     imp::get(host, path, user_agent, timeout_ms)
@@ -133,7 +133,7 @@ mod imp {
 
         unsafe {
             // The User-Agent lives on the session, so every request carries it
-            // — §6.2 makes it mandatory, and Wikimedia blocks requests without
+            // — WIKI§6.2 makes it mandatory, and Wikimedia blocks requests without
             // an identifiable one.
             let session = WinHttpOpen(
                 PCWSTR(agent.as_ptr()),
@@ -148,7 +148,7 @@ mod imp {
             }
             let session = Handle(session);
 
-            // §6.2 asks for a short timeout, and it has to cover every phase:
+            // WIKI§6.2 asks for a short timeout, and it has to cover every phase:
             // a name that never resolves hangs exactly as long as a server that
             // never answers.
             win_step!(
@@ -257,7 +257,7 @@ mod imp {
 mod tests {
     use super::*;
 
-    /// Rule (§6.1): a title goes into the query string intact, whatever it is
+    /// Rule (WIKI§6.1): a title goes into the query string intact, whatever it is
     /// made of. The three cases are real titles of the same car, measured on
     /// the API.
     #[test]

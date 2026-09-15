@@ -1,7 +1,7 @@
 //! Aperçu 3D des voitures : cache disque et orchestration de la conversion
-//! (`docs/SPEC-preview-3d-kn5.md` §5.3 et §7).
+//! (`docs/SPEC-preview-3d-kn5.md` PREVIEW§5.3 et PREVIEW§7).
 //!
-//! Le `.glb` produit ne transite **jamais** par l'IPC (§7.2) : il est écrit
+//! Le `.glb` produit ne transite **jamais** par l'IPC (PREVIEW§7.2) : il est écrit
 //! dans le cache, et l'UI ne reçoit qu'une URL servie par le protocole
 //! `carpreview` (voir `lib.rs`). Un modèle de 30 Mo sérialisé en base64
 //! deviendrait ~40 Mo de chaîne à parser côté JS — blocage de l'UI et pic
@@ -22,7 +22,7 @@ use crate::config::AppConfig;
 ///
 /// **À incrémenter dès que le rendu produit change** — mapping matériaux,
 /// filtrage de nœuds, taille des textures. Sans ça, un utilisateur qui met
-/// l'app à jour continue de voir les anciens `.glb` : le §10 liste
+/// l'app à jour continue de voir les anciens `.glb` : le PREVIEW§10 liste
 /// « cache non versionné » parmi les pièges connus, et c'est celui qui se
 /// remarque le plus tard.
 ///
@@ -33,7 +33,7 @@ use crate::config::AppConfig;
 /// n'aurait effacées avant que le plafond de 2 Gio ne finisse par les évincer.
 const CONVERTER_VERSION: u32 = 49;
 
-/// Default cache ceiling (§5.3). Beyond it, the least recently used entries
+/// Default cache ceiling (PREVIEW§5.3). Beyond it, the least recently used entries
 /// are evicted. Only a default: the real ceiling is a setting, carried by
 /// [`PreviewState`] — the frontend pushes it in at startup and on every
 /// change (`set_preview_cache_cap`).
@@ -46,7 +46,7 @@ const DEFAULT_CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const CACHE_CAP_MIN_BYTES: u64 = 512 * 1024 * 1024;
 const CACHE_CAP_MAX_BYTES: u64 = 20 * 1024 * 1024 * 1024;
 
-/// Ce que l'UI reçoit d'une conversion réussie (§7.1).
+/// Ce que l'UI reçoit d'une conversion réussie (PREVIEW§7.1).
 ///
 /// Nommé `CarPreview` et non `PreviewHandle` comme dans la spec : ce dernier
 /// nom est déjà pris dans le crate par `music::PreviewHandle`, qui est un état
@@ -64,7 +64,7 @@ pub struct CarPreview {
 }
 
 /// État partagé : sérialise les conversions et permet d'abandonner celles
-/// devenues obsolètes (§7.3).
+/// devenues obsolètes (PREVIEW§7.3).
 pub struct PreviewState {
     /// Incrémenté à chaque demande. Une conversion dont le jeton n'est plus
     /// le dernier a été remplacée par une sélection plus récente.
@@ -119,7 +119,7 @@ fn clamp_cap(bytes: u64) -> u64 {
     bytes.clamp(CACHE_CAP_MIN_BYTES, CACHE_CAP_MAX_BYTES)
 }
 
-/// Applies the cache ceiling and enforces it **right away** (§5.3).
+/// Applies the cache ceiling and enforces it **right away** (PREVIEW§5.3).
 ///
 /// Evicting on the spot rather than at the next conversion is what makes the
 /// setting legible: someone who lowers the ceiling to free disk space expects
@@ -253,7 +253,7 @@ fn stamp(hasher: &mut Sha256, path: &Path) {
 ///
 /// Inclut la date et la taille du `.kn5` : réimporter une version modifiée
 /// d'un mod invalide l'entrée sans qu'on ait à s'en occuper. Inclut le skin,
-/// puisqu'il surcharge les textures (§4.3). La version du convertisseur, elle,
+/// puisqu'il surcharge les textures (PREVIEW§4.3). La version du convertisseur, elle,
 /// est portée par le nom du fichier (voir [`CONVERTER_VERSION`]).
 fn cache_key(
     model: &Path,
@@ -329,7 +329,7 @@ fn cache_key(
 /// bien que l'angle ne décide plus de rien dans le fichier produit.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PreviewRequest<'a> {
-    /// Livrée dont les textures surchargent celles du modèle (§4.3).
+    /// Livrée dont les textures surchargent celles du modèle (PREVIEW§4.3).
     pub skin_id: Option<&'a str>,
     /// Le pilote à greffer, et la tenue qu'on lui impose. `None` = personne au
     /// volant, et la conversion ne lit alors aucun mannequin.
@@ -342,11 +342,11 @@ pub struct PreviewRequest<'a> {
 /// Extrait de [`prepare`] parce que la voie des **vignettes de grille**
 /// (`gridthumbs.rs`) en a besoin deux fois sans convertir : pour connaître le
 /// nom d'entrée d'une voiture — donc savoir si sa vignette est déjà là — et
-/// pour la convertir ailleurs que dans le cache (§5.3 de `SPEC-grille.md`).
+/// pour la convertir ailleurs que dans le cache (PREVIEW§5.3 de `SPEC-grille.md`).
 struct CarSources {
     resolved: kn5_gltf::ResolvedModel,
     /// Livrée résolue : c'est elle qui désigne le dossier où vivent le
-    /// `ext_config.ini` et les KN5 de jante (§4.3).
+    /// `ext_config.ini` et les KN5 de jante (PREVIEW§4.3).
     skin_dir: Option<PathBuf>,
     csp: kn5_gltf::CspConfig,
     /// Ce que la voiture déclare de sa direction. **Pas l'angle** : il n'est
@@ -454,7 +454,7 @@ pub fn prepare(
 
     if let Ok(meta) = std::fs::metadata(&file) {
         if meta.len() > 0 {
-            // Touche la date pour que l'éviction LRU (§5.3) voie bien cette
+            // Touche la date pour que l'éviction LRU (PREVIEW§5.3) voie bien cette
             // entrée comme récemment utilisée : sans ça, une voiture consultée
             // tous les jours finirait évincée avant une convertie une fois.
             touch(&file);
@@ -471,7 +471,7 @@ pub fn prepare(
 
     // Une seule conversion à la fois, et on abandonne celles qu'une sélection
     // plus récente a rendues inutiles — l'utilisateur qui parcourt la liste
-    // vite ne doit pas laisser une file de conversions orphelines (§7.3).
+    // vite ne doit pas laisser une file de conversions orphelines (PREVIEW§7.3).
     let _slot = state
         .slot
         .lock()
@@ -519,12 +519,12 @@ fn convert_car(
     let bytes = std::fs::read(&resolved.path).map_err(|e| format!("{} : {e}", resolved.path.display()))?;
     let mut model = kn5::parse(&bytes).map_err(|e| match e {
         // Un KN5 chiffré (CSP) n'a pas la bonne magie : c'est la seule
-        // détection dont on dispose, et on ne tente rien de plus (§4.5).
+        // détection dont on dispose, et on ne tente rien de plus (PREVIEW§4.5).
         kn5::Kn5Error::NotAKn5File => crate::errors::PREVIEW_PROTECTED.to_string(),
         other => format!("{} : {other}", resolved.path.display()),
     })?;
 
-    // Deuxième détection, complémentaire à la magie ci-dessus (§4.5bis) : un
+    // Deuxième détection, complémentaire à la magie ci-dessus (PREVIEW§4.5bis) : un
     // modèle peut avoir un en-tête KN5 parfaitement valide et pourtant ne rien
     // avoir d'affichable. **Mesuré depuis** : leurs sommets sont intacts —
     // normales et tangentes unitaires à 100 %, dimensions d'une voiture,
@@ -574,7 +574,7 @@ fn convert_car(
 
     // Le mod déclare lui-même ce que sont ses surfaces — verre, chrome, cuir,
     // carbone. C'est la seule façon de le savoir : le KN5 seul ne le dit pas
-    // (SPEC §4.5ter).
+    // (PREVIEW§4.5ter).
     let options = kn5_gltf::ConvertOptions {
         // Rangement éclaté : c'est le cache, et deux skins d'une même voiture y
         // partagent tout sauf leur livrée (voir `write_entry`).
@@ -620,7 +620,7 @@ fn convert_car(
     Ok(conversion)
 }
 
-// --- Vignettes de la grille : la voie parallèle (`SPEC-grille.md` §5.3) -----
+// --- Vignettes de la grille : la voie parallèle (`SPEC-grille.md` PREVIEW§5.3) -----
 
 /// Sous-dossier du brouillon, à côté des entrées de cache.
 ///
@@ -686,7 +686,7 @@ pub fn car_entry_stem(
 ///
 /// Renvoie l'URL du modèle dans le brouillon. L'appelant rend l'image puis
 /// appelle [`release_scratch`] : convertir → rendre → écrire le PNG → jeter, la
-/// séquence du §5.3. Rien n'entre dans le cache LRU, donc rien n'en sort.
+/// séquence du PREVIEW§5.3. Rien n'entre dans le cache LRU, donc rien n'en sort.
 ///
 /// **Sans jeton de génération**, comme les vignettes de corps : une vignette ne
 /// périme pas l'aperçu de la fiche et ne se périme pas elle-même. Le verrou de
@@ -716,7 +716,7 @@ pub fn prepare_scratch(
     let dir = reset_scratch(app)?;
     // **Sur un pool restreint** : trois cents vignettes qui prennent la machine
     // en entier rendent l'app inutilisable pendant qu'elles se produisent, et
-    // la génération est explicitement un travail de fond (§5.4). L'aperçu de la
+    // la génération est explicitement un travail de fond (PREVIEW§5.4). L'aperçu de la
     // fiche, lui, garde tous les cœurs — quelqu'un l'attend.
     let conversion = kn5_gltf::with_background_pool(|| convert_car(app, &sources, None, false))?;
     write_entry(&dir, &stem, &conversion)?;
@@ -724,7 +724,7 @@ pub fn prepare_scratch(
 }
 
 /// Ce que le plateau d'essayage de l'écran Pilote reçoit
-/// (`docs/SPEC-ecran-pilote.md` §5.1).
+/// (`docs/SPEC-ecran-pilote.md` PREVIEW§5.1).
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DriverPreview {
@@ -948,7 +948,7 @@ fn read_rig(dir: &Path, key: &str) -> Option<DriverRig> {
     serde_json::from_slice(&bytes).ok()
 }
 
-/// URL servie par le protocole custom (§7.2).
+/// URL servie par le protocole custom (PREVIEW§7.2).
 ///
 /// Forme Windows d'un scheme custom sous Tauri v2 — l'app ne cible que
 /// Windows (§Stack).
@@ -1007,7 +1007,7 @@ fn write_blob(dir: &Path, bytes: &[u8], extension: &str) -> Result<String, Strin
 /// que produit `kn5-tool`, parce qu'il doit s'ouvrir tel quel ailleurs ; dans
 /// le cache, il faisait écrire à chaque skin d'une même voiture une copie
 /// complète de la géométrie et des textures. Mesuré sur trois skins de deux
-/// voitures : **−53 % et −61 %** (§15.0quater).
+/// voitures : **−53 % et −61 %** (PREVIEW§15.0quater).
 fn write_entry(dir: &Path, key: &str, conversion: &kn5_gltf::Conversion) -> Result<(), String> {
     let mut json = conversion.document.json.clone();
 
@@ -1056,7 +1056,7 @@ fn touch(file: &Path) {
 }
 
 /// Ramène le cache sous `cap` en supprimant les entrées les plus anciennement
-/// utilisées (§5.3). Le plafond est un paramètre pour que le test puisse
+/// utilisées (PREVIEW§5.3). Le plafond est un paramètre pour que le test puisse
 /// prouver l'éviction sans écrire deux gigaoctets.
 fn evict_to(dir: &Path, cap: u64) {
     // Avant de mesurer : ce qui appartient à une autre version ne se compte
@@ -1223,7 +1223,7 @@ fn sweep_unreferenced_blobs(dir: &Path) {
     }
 }
 
-/// Vide le cache et renvoie le nombre d'octets libérés (§7.1).
+/// Vide le cache et renvoie le nombre d'octets libérés (PREVIEW§7.1).
 pub fn clear_cache(app: &tauri::AppHandle) -> Result<u64, String> {
     let dir = cache_dir(app)?;
     let mut freed = 0u64;
@@ -1254,7 +1254,7 @@ pub fn clear_cache(app: &tauri::AppHandle) -> Result<u64, String> {
 /// d'une source qu'on ne contrôle pas entièrement.
 pub fn cached_file(dir: &Path, requested: &str) -> Option<PathBuf> {
     let name = requested.trim_start_matches('/');
-    // Le brouillon des vignettes de grille (§5.3) : mêmes noms, même
+    // Le brouillon des vignettes de grille (PREVIEW§5.3) : mêmes noms, même
     // validation, un dossier plus bas. Le préfixe est retiré **une seule
     // fois** — la suite passe par le contrôle habituel, qui refuse tout ce qui
     // n'est pas un nom d'entrée. Les URI du document restent relatives
@@ -1297,7 +1297,7 @@ fn cached_entry(dir: &Path, name: &str) -> Option<PathBuf> {
     file.is_file().then_some(file)
 }
 
-/// Répond à une requête du protocole `carpreview` (§7.2).
+/// Répond à une requête du protocole `carpreview` (PREVIEW§7.2).
 ///
 /// Sert le fichier en octets bruts, avec le type MIME du glTF binaire et un
 /// `Cache-Control: immutable` — la clé de cache **est** la version, donc le
@@ -1460,7 +1460,7 @@ mod tests {
     }
 
     // Règle : la clé de cache change dès que le fichier change, sinon un mod
-    // réimporté garderait l'aperçu de son ancienne version (§5.3).
+    // réimporté garderait l'aperçu de son ancienne version (PREVIEW§5.3).
     #[test]
     fn cache_key_follows_the_file_and_the_skin() {
         let base = crate::testutil::temp_dir("preview-key");
@@ -1491,7 +1491,7 @@ mod tests {
     // Règle : un `ext_config.ini` fait partie de la clé, parce qu'il décide
     // des pièces greffées sur le modèle. Sans ça, corriger une ligne de config
     // laisse l'ancien aperçu troué servi depuis le cache — exactement le piège
-    // « cache non versionné » du §10, sous une autre forme.
+    // « cache non versionné » du PREVIEW§10, sous une autre forme.
     #[test]
     fn cache_key_follows_the_ext_config() {
         let base = crate::testutil::temp_dir("preview-key-ext");
@@ -1525,7 +1525,7 @@ INSERT = part.kn5",
     }
 
     // Règle : le pilote fait partie de la clé — sinon cocher la case
-    // laisserait servir l'aperçu sans pilote déjà en cache (§4.6). Et son
+    // laisserait servir l'aperçu sans pilote déjà en cache (PREVIEW§4.6). Et son
     // absence n'y ajoute **rien** : les entrées écrites avant qu'il n'existe
     // restent valides.
     #[test]
@@ -1662,7 +1662,7 @@ INSERT = part.kn5",
         );
     }
 
-    /// Le brouillon des vignettes de grille (`SPEC-grille.md` §5.3) est servi
+    /// Le brouillon des vignettes de grille (`SPEC-grille.md` PREVIEW§5.3) est servi
     /// par le même protocole, un dossier plus bas, et **avec la même
     /// validation** : le préfixe n'ouvre pas une porte dérobée.
     #[test]
@@ -1694,7 +1694,7 @@ INSERT = part.kn5",
         );
     }
 
-    /// §5.3 — le brouillon ne pèse dans aucun plafond : ni l'éviction ni la
+    /// PREVIEW§5.3 — le brouillon ne pèse dans aucun plafond : ni l'éviction ni la
     /// mesure d'occupation ne le regardent. Sans quoi convertir trois cents
     /// voitures pour leurs vignettes évincerait les aperçus que l'utilisateur
     /// consulte vraiment, et le cache travaillerait contre lui.
@@ -2006,7 +2006,7 @@ INSERT = part.kn5",
 
     // Règle : le plafond de cache réglable reste dans ses bornes, et un
     // plafond trop bas ne peut pas transformer le cache en trou noir
-    // (§5.3 — bornes de `set_preview_cache_cap`).
+    // (PREVIEW§5.3 — bornes de `set_preview_cache_cap`).
     #[test]
     fn cache_cap_is_clamped_into_its_range() {
         assert_eq!(clamp_cap(0), CACHE_CAP_MIN_BYTES, "zero is raised to the floor");

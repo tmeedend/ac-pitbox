@@ -2,7 +2,7 @@
 //!
 //! The same accumulator serves `inspect` (one file) and `scan` (a whole
 //! `content/cars`). Scanning a real library is how the open questions of spec
-//! §12 get answered — the distribution of `blend_mode` values or of mesh flag
+//! PREVIEW§12 get answered — the distribution of `blend_mode` values or of mesh flag
 //! combinations over two hundred cars says more than any single file.
 
 use std::collections::BTreeMap;
@@ -17,7 +17,7 @@ pub struct Stats {
     pub textures: usize,
     pub texture_bytes: u64,
     pub texture_formats: BTreeMap<&'static str, usize>,
-    /// Type-0 entries: declared but holding nothing (§3.2).
+    /// Type-0 entries: declared but holding nothing (PREVIEW§3.2).
     pub texture_placeholders: usize,
     /// Blobs whose real container contradicts the extension in their name.
     /// The number that justifies sniffing rather than trusting the filename.
@@ -28,12 +28,12 @@ pub struct Stats {
     /// `(blend_mode, alpha_tested)` — the two bytes of the material's `i16`.
     pub blend_modes: BTreeMap<(u8, bool), usize>,
     /// Shaders used by meshes whose third flag byte is set. If that byte
-    /// really is `is_transparent` (§12, q1) this table holds glass and decals
+    /// really is `is_transparent` (PREVIEW§12, q1) this table holds glass and decals
     /// and nothing else.
     pub transparent_mesh_shaders: BTreeMap<String, usize>,
     pub property_names: BTreeMap<String, usize>,
     pub sampler_names: BTreeMap<String, usize>,
-    /// Non-zero values of the 36 trailing bytes of a property (§12, q5): if
+    /// Non-zero values of the 36 trailing bytes of a property (PREVIEW§12, q5): if
     /// they are always zero we can stop wondering what they hold.
     pub properties_with_extra: usize,
 
@@ -43,7 +43,7 @@ pub struct Stats {
     pub skinned_meshes: usize,
     pub vertices: usize,
     pub triangles: usize,
-    /// `(cast_shadows, is_visible, is_transparent)` as parsed — feeds §12, q1.
+    /// `(cast_shadows, is_visible, is_transparent)` as parsed — feeds PREVIEW§12, q1.
     pub mesh_flags: BTreeMap<(bool, bool, bool), usize>,
     pub not_renderable: usize,
 
@@ -146,7 +146,7 @@ impl Stats {
 
     /// Longest side of the bounding box, in metres. A car should land between
     /// 1 and 8 m — the cheapest detector of a scale or coordinate mistake
-    /// (spec §11).
+    /// (PREVIEW§11).
     pub fn size(&self) -> Option<[f32; 3]> {
         self.bounds
             .map(|(min, max)| [max[0] - min[0], max[1] - min[1], max[2] - min[2]])

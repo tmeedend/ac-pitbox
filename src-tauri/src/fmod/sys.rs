@@ -5,11 +5,11 @@
 //! by hand costs less than fighting that, and adds **no dependency**.
 //!
 //! Nothing here is loaded from anywhere but the user's own Assetto Corsa
-//! install (`docs/SPEC-engine-sound-fmod.md` §3): no FMOD binary is
+//! install (`docs/SPEC-engine-sound-fmod.md` FMOD§3): no FMOD binary is
 //! redistributed, copied, or looked for on the wider system.
 //!
 //! Everything this module knows about the ABI that is *not* in FMOD's public
-//! headers was measured at lot 0 and written up in §2bis of that spec.
+//! headers was measured at lot 0 and written up in FMOD§2bis of that spec.
 
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uint, c_void};
@@ -67,7 +67,7 @@ const REVERB_DSP_TYPE: c_int = 19;
 /// ten-second guard before playing — while switching to another mod stayed
 /// instant, because swapping the bank resets the state and makes it pass
 /// through `LOADING` once more. A wrong constant that is only wrong on the
-/// second try. See `docs/SPEC-engine-sound-fmod.md` §6quater.
+/// second try. See `docs/SPEC-engine-sound-fmod.md` FMOD§6quater.
 const LOADING_STATE_LOADED: c_int = 3;
 
 /// `FMOD_STUDIO_STOP_MODE::IMMEDIATE`.
@@ -153,7 +153,7 @@ type FmodResult = c_int;
 /// These are diagnostics, not advice, so they stay raw rather than becoming
 /// i18n keys — same treatment as the I/O, SQLite and 7-Zip errors elsewhere in
 /// the backend. Nothing here reaches the user directly: a failure to reach FMOD
-/// is a silent fall back to the in-house decoder (§4.2).
+/// is a silent fall back to the in-house decoder (FMOD§4.2).
 #[derive(Debug, Clone)]
 pub enum FmodError {
     /// A DLL could not be loaded — usually because the configured Assetto
@@ -207,7 +207,7 @@ fn check(call: &'static str, code: FmodResult) -> Result<(), FmodError> {
     }
 }
 
-// The twelve entry points of §2.2, plus the three that lot 0 proved necessary:
+// The twelve entry points of FMOD§2.2, plus the three that lot 0 proved necessary:
 // sample loading is not implicit, and playback state is how we know an instance
 // is alive.
 type FnSystemCreate = unsafe extern "C" fn(*mut *mut c_void, c_uint) -> FmodResult;
@@ -303,7 +303,7 @@ impl Fmod {
     ///
     /// Order matters and so does the full path: the Studio DLL imports the low
     /// level one, and resolving it ourselves first keeps the system search path
-    /// out of the picture entirely (§4.2). Nothing is added to `PATH`.
+    /// out of the picture entirely (FMOD§4.2). Nothing is added to `PATH`.
     pub fn load(ac_root: &Path) -> Result<Self, FmodError> {
         // SAFETY: both paths point inside the configured game install, and the
         // signatures below are FMOD 1.08's.
@@ -385,12 +385,12 @@ pub struct EventInstance(*mut c_void);
 
 /// A live FMOD Studio system.
 ///
-/// Deliberately **not** `Send`: it holds raw pointers, and §4.3 requires that
+/// Deliberately **not** `Send`: it holds raw pointers, and FMOD§4.3 requires that
 /// one thread own the system and be the only one to touch it. The type system
 /// enforcing that is a feature, not an obstacle to work around.
 pub struct System {
     /// Owned rather than borrowed. A borrow would make the pair
-    /// self-referential the moment a thread wants to hold both (§4.3), and
+    /// self-referential the moment a thread wants to hold both (FMOD§4.3), and
     /// there is never a reason to keep the libraries alive without a system.
     /// Field order matters: `Drop` releases the system, then this drops and
     /// unloads the DLLs — never the other way round.
@@ -441,7 +441,7 @@ impl System {
     }
 
     /// Must be called regularly: FMOD does its mixing bookkeeping and frees
-    /// stopped instances here (§4.3).
+    /// stopped instances here (FMOD§4.3).
     pub fn update(&self) -> Result<(), FmodError> {
         unsafe { check("FMOD_Studio_System_Update", (self.fmod.api.system_update)(self.raw)) }
     }
@@ -542,7 +542,7 @@ impl System {
     /// Sets a parameter by name.
     ///
     /// Valid on an instance that is **already playing**, which is what the rev
-    /// slider of §4.4 relies on — and a different thing from setting it before
+    /// slider of FMOD§4.4 relies on — and a different thing from setting it before
     /// `start`, which is all a fixed-value run proves.
     pub fn set_parameter(&self, inst: EventInstance, name: &str, value: f32) -> Result<(), FmodError> {
         let c_name = CString::new(name).map_err(|_| FmodError::Call {
@@ -756,7 +756,7 @@ impl Drop for System {
 mod tests {
     use super::*;
 
-    /// The layout correction of §2bis, frozen. If this ever fails, the struct
+    /// The layout correction of FMOD§2bis, frozen. If this ever fails, the struct
     /// has been "tidied" back to the plausible-but-wrong 24-byte version, and
     /// every parameter would silently read as GAME_CONTROLLED again.
     #[test]
@@ -938,7 +938,7 @@ mod survey {
     ///
     /// The one thing no amount of reading settles: `ign_int` exposes a single
     /// `state` (0–1) and nothing says what it selects. This plays the event at
-    /// 0, then at 1, announcing each — the ear decides, and §6sexies records
+    /// 0, then at 1, announcing each — the ear decides, and FMOD§6sexies records
     /// the answer.
     ///
     /// ```text
@@ -1080,7 +1080,7 @@ mod survey {
                             with_rev += 1;
                             *rev_names.entry(p.name.clone()).or_default() += 1;
                         }
-                        // Still playable — it just cannot be revved (§2.4).
+                        // Still playable — it just cannot be revved (FMOD§2.4).
                         None => played_blind += 1,
                     }
                     if roles.throttle.is_some() {

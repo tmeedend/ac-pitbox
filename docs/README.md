@@ -5,6 +5,30 @@ Ce fichier liste **tout** le contenu de `docs/` : si un fichier est là, il est
 dans cette liste. Un fichier ajouté sans sa ligne d'index est un fichier que
 personne ne retrouvera.
 
+## Comment le code renvoie ici
+
+Le code porte près de 2 800 renvois `§` vers ces documents. Un numéro seul ne
+dit pas lequel — `§5.3` existe dans quatre specs à la fois — donc **un `§` nu
+désigne `SPEC.md`** et les autres documents portent une étiquette :
+
+| Étiquette | Document |
+| --- | --- |
+| *(rien)* | `SPEC.md` |
+| `GRILLE§` | `SPEC-grille.md` |
+| `PILOTE§` | `SPEC-ecran-pilote.md` |
+| `WIKI§` | `SPEC-wikipedia-fiche-detail.md` |
+| `PREVIEW§` | `SPEC-preview-3d-kn5.md` |
+| `FMOD§` | `SPEC-engine-sound-fmod.md` |
+| `MUSIQUE§` | `spec-module-musique_2.md` |
+| `IMPORT§` | `SPEC-import.md` |
+| `REFONTE§` | `SPEC-refonte-navigation-et-fiches.md` |
+| `TEXTURE§` | `SPEC-texture-update.md` |
+
+`npm run check` vérifie que chaque renvoi tombe sur une section qui existe
+(`scripts/check-refs.mjs`). **Conséquence pour qui édite un document ici :
+renuméroter une section casse le contrôle**, et c'est voulu — c'est la seule
+chose qui rendait jusqu'ici une renumérotation invisible au code.
+
 ## Référence principale
 
 - **`SPEC.md`** — spécification de référence, organisée par domaine

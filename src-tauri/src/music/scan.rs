@@ -1,4 +1,4 @@
-//! Scan de dossiers musicaux (§3.4, périmètre réduit) : compte les pistes
+//! Scan de dossiers musicaux (MUSIQUE§3.4, périmètre réduit) : compte les pistes
 //! pour l'affichage dans l'onglet Musique, liste les fichiers pour le moteur
 //! de lecture. Pas de cache d'index ni de normalisation RMS — voir `mod.rs`
 //! pour la justification du report.
@@ -7,10 +7,10 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-/// Extensions listées par la spec (§3.2). `rodio` (features par défaut) ne
+/// Extensions listées par la spec (MUSIQUE§3.2). `rodio` (features par défaut) ne
 /// décode que mp3/flac/ogg/wav ; un `.m4a` est compté ici pour l'information
 /// affichée à l'utilisateur mais échouera à l'ouverture en lecture — géré
-/// comme n'importe quel fichier corrompu (§9, piste suivante + log).
+/// comme n'importe quel fichier corrompu (MUSIQUE§9, piste suivante + log).
 pub const AUDIO_EXTENSIONS: [&str; 5] = ["mp3", "flac", "ogg", "wav", "m4a"];
 
 fn is_audio_file(path: &Path) -> bool {
@@ -27,8 +27,8 @@ pub struct FolderInfo {
 }
 
 /// Nombre de pistes lisibles d'un dossier — pour l'affichage "N pistes
-/// détectées" (§6). Dossier absent ou illisible = 0, jamais une erreur (repli
-/// silencieux, §9).
+/// détectées" (MUSIQUE§6). Dossier absent ou illisible = 0, jamais une erreur (repli
+/// silencieux, MUSIQUE§9).
 pub fn scan_folder(dir: &Path) -> FolderInfo {
     let track_count = std::fs::read_dir(dir)
         .map(|entries| {

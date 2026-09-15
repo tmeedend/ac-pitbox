@@ -331,12 +331,12 @@ pub struct NativeTarget {
     /// sits against its limit — the sound that makes a rev-out recognisable.
     pub limiter_guid: Option<crate::fmod::guids::Guid>,
     /// Its GUID. Present means the audition **starts the engine** instead of
-    /// finding it running (§6sexies).
+    /// finding it running (FMOD§6sexies).
     pub ignition_guid: Option<crate::fmod::guids::Guid>,
 }
 
 /// Lowest engine speed the slider offers. Below an idle nothing sounds like an
-/// engine any more, and 900 rpm — the value §4.4 settles on for the start — has
+/// engine any more, and 900 rpm — the value FMOD§4.4 settles on for the start — has
 /// to sit comfortably inside the range.
 pub const REV_FLOOR: f32 = 500.0;
 
@@ -472,7 +472,7 @@ fn rpm_numbers_in(name: &str) -> Vec<f32> {
 /// Top of the rev range, per car, taken from the **unencrypted** power curve.
 ///
 /// The real redline lives in `data/engine.ini`, inside a `data.acd` that is
-/// encrypted most of the time, and §4.4 says not to go there. It does not have
+/// encrypted most of the time, and FMOD§4.4 says not to go there. It does not have
 /// to: `ui/ui_car.json` carries `powerCurve` and `torqueCurve` in clear, and
 /// their last point sits at or just under the limiter.
 ///
@@ -503,7 +503,7 @@ pub(crate) fn rev_ceiling(car_dir: &Path) -> f32 {
 ///
 /// Every failure here is a **fallback trigger**, not something to show: no game
 /// configured, no bank, no engine event in the table. The caller drops back to
-/// the in-house decoder (§4.1) and the message only ever reaches the log, which
+/// the in-house decoder (FMOD§4.1) and the message only ever reaches the log, which
 /// is why these strings stay raw diagnostics rather than becoming i18n keys.
 pub fn native_target(
     conn: &Connection,
@@ -559,7 +559,7 @@ pub fn native_target(
     // The limiter event lives beside the engine one, in whichever table gave it.
     let limiter_guid = crate::fmod::guids::resolve_event(&dir, Some(&ac_root), parent_id, "limiter");
 
-    // And the starter, for the cars that have one (§6sexies). Absent on every
+    // And the starter, for the cars that have one (FMOD§6sexies). Absent on every
     // Kunos car, which is why its absence has to mean "already running" rather
     // than "something is missing".
     let ignition = crate::fmod::guids::resolve_ignition_event(&dir, Some(&ac_root), parent_id);

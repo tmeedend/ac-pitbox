@@ -1,15 +1,15 @@
-//! Language resolution for the Wikipedia tab (`docs/SPEC-wikipedia-fiche-detail.md` §5).
+//! Language resolution for the Wikipedia tab (`docs/SPEC-wikipedia-fiche-detail.md` WIKI§5).
 //!
 //! Everything in this file is **pure**: no network, no database, no clock. That
 //! is the whole point of the split. The fallback chain is the one piece whose
 //! order is easy to get wrong and impossible to notice afterwards — a French
 //! article silently replaced by an English one reads as "this mod has no French
-//! article", never as a bug — so §11 asks for it to be testable without
+//! article", never as a bug — so WIKI§11 asks for it to be testable without
 //! Wikipedia being up, and it is.
 
 use std::collections::BTreeMap;
 
-/// Language every level of the chain falls back to (§5.2, levels 3 and 4).
+/// Language every level of the chain falls back to (WIKI§5.2, levels 3 and 4).
 pub const FALLBACK_LANG: &str = "en";
 
 /// Wiki language code for an app locale: `"pt-BR"` becomes `"pt"`.
@@ -19,7 +19,7 @@ pub const FALLBACK_LANG: &str = "en";
 /// language editions are addressed the same way (`fr.wikipedia.org`). Variants
 /// that do have their own wiki (`zh-yue`, `be-tarask`) are never *requested* by
 /// the app — they can only turn up in `available_langs`, where they are kept
-/// verbatim for the language selector (§5.4).
+/// verbatim for the language selector (WIKI§5.4).
 pub fn wiki_lang(locale: &str) -> String {
     let code = locale.split(['-', '_']).next().unwrap_or(locale);
     code.trim().to_ascii_lowercase()
@@ -66,30 +66,30 @@ impl EntityArticles {
         }
     }
 
-    /// The languages this entity has an article in, for the selector (§5.4).
+    /// The languages this entity has an article in, for the selector (WIKI§5.4).
     pub fn langs(&self) -> Vec<String> {
         self.titles.keys().cloned().collect()
     }
 }
 
-/// One link of the fallback chain (§5.2): an article that is known to exist.
+/// One link of the fallback chain (WIKI§5.2): an article that is known to exist.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Attempt {
     pub entity_id: String,
     pub lang: String,
     pub title: String,
     /// True at levels 2 and 4: the article is the **parent** entity's, which
-    /// the interface has to say out loud (§7.3, "Article général : {titre}").
+    /// the interface has to say out loud (WIKI§7.3, "Article général : {titre}").
     pub via_parent: bool,
 }
 
-/// The four levels of §5.2, in order, reduced to those that actually exist.
+/// The four levels of WIKI§5.2, in order, reduced to those that actually exist.
 ///
 /// An empty vector is level 5 — "rien" — and that is a normal outcome, not a
-/// failure (§1).
+/// failure (WIKI§1).
 ///
 /// Returns the **whole chain** rather than just its head for two reasons: the
-/// tests read the order (§11), and the caller moves on to the next link when a
+/// tests read the order (WIKI§11), and the caller moves on to the next link when a
 /// fetch comes back `Unavailable` — one wiki being unreachable is not a reason
 /// to give up on a level another wiki could serve.
 ///
@@ -138,7 +138,7 @@ mod tests {
         EntityArticles::new(id, titles)
     }
 
-    /// Rule (§5.1): an app locale is truncated to its wiki language code.
+    /// Rule (WIKI§5.1): an app locale is truncated to its wiki language code.
     #[test]
     fn locale_truncates_to_its_language_code() {
         assert_eq!(wiki_lang("pt-BR"), "pt", "regional variant falls back to its language");
@@ -147,7 +147,7 @@ mod tests {
         assert_eq!(wiki_lang("zh_CN"), "zh", "underscore separates too");
     }
 
-    /// Rule (§5.2): the four levels come out in the order the spec fixes.
+    /// Rule (WIKI§5.2): the four levels come out in the order the spec fixes.
     #[test]
     fn the_chain_walks_the_four_levels_in_order() {
         let entity = articles("Q1", &[("fr", "AE86 fr"), ("en", "AE86 en")]);
@@ -171,7 +171,7 @@ mod tests {
         );
     }
 
-    /// Rule (§5.2): the case the spec singles out — only the **parent** has an
+    /// Rule (WIKI§5.2): the case the spec singles out — only the **parent** has an
     /// article in the requested language. It must win over the entity's own
     /// English article, which is only level 3.
     #[test]
@@ -187,7 +187,7 @@ mod tests {
         assert_eq!(chain[1].entity_id, "Q1", "the entity's English article is level 3");
     }
 
-    /// Rule (§5.2): asking for English collapses the chain to two links rather
+    /// Rule (WIKI§5.2): asking for English collapses the chain to two links rather
     /// than offering the same article twice.
     #[test]
     fn asking_for_english_does_not_duplicate_levels() {
@@ -201,7 +201,7 @@ mod tests {
         assert_eq!(chain[1].entity_id, "Q2");
     }
 
-    /// Rule (§5.3): no parent means the chain skips levels 2 and 4 — it never
+    /// Rule (WIKI§5.3): no parent means the chain skips levels 2 and 4 — it never
     /// climbs any higher looking for one.
     #[test]
     fn without_a_parent_only_the_entity_levels_remain() {
@@ -216,7 +216,7 @@ mod tests {
         );
     }
 
-    /// Rule (§5.2, level 5): nothing anywhere is an empty chain, not an error.
+    /// Rule (WIKI§5.2, level 5): nothing anywhere is an empty chain, not an error.
     #[test]
     fn nothing_in_either_language_is_an_empty_chain() {
         let entity = articles("Q1", &[("ja", "AE86 ja")]);
@@ -225,7 +225,7 @@ mod tests {
         assert!(fallback_chain(&entity, Some(&parent), "fr").is_empty(), "level 5: rien");
     }
 
-    /// Rule (§5.1): the requested language goes through the same truncation as
+    /// Rule (WIKI§5.1): the requested language goes through the same truncation as
     /// the app locale — `fr-CA` must not miss the French article.
     #[test]
     fn a_regional_locale_still_finds_its_language() {

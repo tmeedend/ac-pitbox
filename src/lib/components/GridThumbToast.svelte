@@ -1,8 +1,8 @@
 <script lang="ts">
   // Suivi de la génération des vignettes, dans la pile bas-droite
-  // (docs/SPEC-grille.md §8).
+  // (docs/SPEC-grille.md GRILLE§8).
   //
-  // **Ce n'est pas un toast, et c'est tout le sujet du §8.1.** Trois cents
+  // **Ce n'est pas un toast, et c'est tout le sujet du GRILLE§8.1.** Trois cents
   // voitures à environ une seconde, c'est cinq minutes et plus ; un toast est
   // éphémère par définition. Il faut une tâche de fond : elle ne se ferme pas
   // seule, elle survit à la navigation, elle se réduit au lieu de disparaître,
@@ -10,7 +10,7 @@
   //
   // Elle emprunte quand même le cadre de `Toast` — c'est la pile qui décide de
   // la position (SPEC §4.2bis), et deux cartes fixées au même coin se
-  // recouvrent en silence. **Écart assumé au §8.2** : réduite, elle est une
+  // recouvrent en silence. **Écart assumé au GRILLE§8.2** : réduite, elle est une
   // barre d'une ligne et non une pastille circulaire à anneau. La pastille
   // aurait été une deuxième forme pour la même chose dans une pile qui n'en a
   // qu'une, et le chantier « composants partagés » dit exactement pourquoi
@@ -60,7 +60,7 @@
 
   /** Le rapport de fin. Une ligne factuelle, **sans tonalité d'échec** : les
    * voitures protégées ne sont pas un problème à régler, l'utilisateur n'y peut
-   * rien et sa grille reste parfaitement utilisable (§7). */
+   * rien et sa grille reste parfaitement utilisable (GRILLE§7). */
   const report = $derived.by(() => {
     const parts = [t("gridThumbs.reportDone", { count: String(p.done) })];
     if (p.failed > 0) parts.push(t("gridThumbs.reportFailed", { count: String(p.failed) }));

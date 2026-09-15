@@ -1,7 +1,7 @@
 <script lang="ts">
-  // L'aperçu du gabarit des vignettes (docs/SPEC-grille.md §6.2).
+  // L'aperçu du gabarit des vignettes (docs/SPEC-grille.md GRILLE§6.2).
   //
-  // **Une grille, pas une voiture.** C'est la décision structurante du §6.2, et
+  // **Une grille, pas une voiture.** C'est la décision structurante du GRILLE§6.2, et
   // elle se justifie en une phrase : régler l'angle sur une seule voiture
   // conduit à l'optimiser pour elle et à massacrer les autres. On édite un
   // catalogue, l'aperçu doit être un catalogue.
@@ -123,7 +123,7 @@
   $effect(() => {
     let alive = true;
     // La file est suspendue le temps de l'aperçu : ses conversions et
-    // celles-ci se disputeraient le brouillon et le processeur, et le §6.3 dit
+    // celles-ci se disputeraient le brouillon et le processeur, et le GRILLE§6.3 dit
     // que manipuler les réglages ne régénère rien.
     pauseGridThumbs(PAUSE_STUDIO);
     void (async () => {

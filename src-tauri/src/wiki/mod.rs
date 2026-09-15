@@ -1,17 +1,17 @@
 //! Wikipedia enrichment of the detail fiche (`docs/SPEC-wikipedia-fiche-detail.md`).
 //!
-//! All six lots of §12 are in: the data model (§3, `store`), the automatic
-//! matching of cars and tracks (§4, `matchcar`/`matchtrack`/`matching`), the
-//! resolution at display time with its fallback chain (§5, `lang`), the Action
-//! API client (§6, `api`/`http`), and the tab and settings screen that consume
-//! them (§7 and §8, front-side).
+//! All six lots of WIKI§12 are in: the data model (WIKI§3, `store`), the automatic
+//! matching of cars and tracks (WIKI§4, `matchcar`/`matchtrack`/`matching`), the
+//! resolution at display time with its fallback chain (WIKI§5, `lang`), the Action
+//! API client (WIKI§6, `api`/`http`), and the tab and settings screen that consume
+//! them (WIKI§7 and WIKI§8, front-side).
 //!
 //! **The three beats of this file are the point of it.** `plan` reads the
 //! database, `fetch` talks to the network, `commit` writes back — split that
 //! way because the SQLite mutex must never be held across a network call, and
 //! because a request that fails must leave the cache exactly as it found it.
 //!
-//! Three things govern every decision in this module, all from §1:
+//! Three things govern every decision in this module, all from WIKI§1:
 //!
 //! - **Precision over recall.** An ambiguity shows nothing. A wrong article
 //!   costs far more than a missing one.
@@ -21,7 +21,7 @@
 //!   feature, and may fail silently — which is exactly why every failure that
 //!   is invisible to the user is written to the log file instead.
 //!
-//! The legal constraint of §2 shapes one thing in the code: the extract is
+//! The legal constraint of WIKI§2 shapes one thing in the code: the extract is
 //! stored and served **verbatim**, as the API returned it. Nothing here
 //! reformats, truncates, merges or translates it.
 
@@ -95,7 +95,7 @@ fn best_effort<T>(what: &str, result: rusqlite::Result<T>) -> Option<T> {
     }
 }
 
-/// The entity to climb to for §5.3, fetched and **checked**.
+/// The entity to climb to for WIKI§5.3, fetched and **checked**.
 ///
 /// `part of` is trusted outright: it is the relation the spec names, and it is
 /// what a generation or a configuration uses to point at its whole.
@@ -142,18 +142,18 @@ pub enum Step {
 pub struct Ask {
     pub mod_key: String,
     pub lang: String,
-    /// The appariement, when there is one. `None` means the matching of §4 has
+    /// The appariement, when there is one. `None` means the matching of WIKI§4 has
     /// to run first — which is how a fiche opened for the first time works.
     pub entity_id: Option<String>,
     pub subject: Subject,
     /// What to fall back on when the network leads nowhere: a stale cache entry
-    /// beats an empty tab, and §1 says nothing here is worth an error.
+    /// beats an empty tab, and WIKI§1 says nothing here is worth an error.
     pub stale: Option<CachedArticle>,
     /// Carried through so the tab can pre-fill its search field.
     pub query: String,
 }
 
-/// Cars and tracks share the resolution and **not** the search strategy (§4).
+/// Cars and tracks share the resolution and **not** the search strategy (WIKI§4).
 pub enum Subject {
     Car(matchcar::CarSubject),
     Track(matchtrack::TrackSubject),
@@ -162,22 +162,22 @@ pub enum Subject {
 /// Why the tab shows what it shows.
 ///
 /// **This exists because the user could not tell three silences apart.** The
-/// spec wanted an absent tab (§7.1) and no message at all (§1), and on a real
+/// spec wanted an absent tab (WIKI§7.1) and no message at all (WIKI§1), and on a real
 /// library that produced something nobody could act on: "still searching",
 /// "nothing matched" and "the feature is off" looked exactly the same — an
 /// empty space. Naming the reason is what lets the tab offer the right thing
 /// instead of nothing.
 ///
-/// It stays true to §1 on the point that mattered: none of these is an error.
+/// It stays true to WIKI§1 on the point that mattered: none of these is an error.
 /// They are states, and the interface answers each with an offer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum WikiState {
     /// An article is being shown.
     Article,
-    /// Online enrichment is switched off (§8); the cache is still readable.
+    /// Online enrichment is switched off (WIKI§8); the cache is still readable.
     Offline,
-    /// Several articles were just as good. §1 refuses to draw lots — but the
+    /// Several articles were just as good. WIKI§1 refuses to draw lots — but the
     /// user can settle it in one click, which is the whole point of saying so.
     Ambiguous,
     /// Nothing that looks like this mod was found.
@@ -194,7 +194,7 @@ pub enum WikiState {
 pub struct WikiPanel {
     pub article: Option<CachedArticle>,
     pub state: WikiState,
-    /// What was searched for, cleaned (§4.3) — the search field starts from
+    /// What was searched for, cleaned (WIKI§4.3) — the search field starts from
     /// this rather than from a blank box, because the cleaning rules live in
     /// Rust and the user should be able to *fix* the query, not retype it.
     pub query: String,
@@ -210,16 +210,16 @@ pub struct Resolved {
     pub matched: Option<String>,
     pub article: Option<CachedArticle>,
     /// True only when the absence is **durable** — never after a network
-    /// failure, which teaches nothing (§3.3).
+    /// failure, which teaches nothing (WIKI§3.3).
     pub no_match: bool,
     pub stale: Option<CachedArticle>,
     pub state: WikiState,
     pub query: String,
 }
 
-/// Reads everything the resolution needs from the overlay (§5).
+/// Reads everything the resolution needs from the overlay (WIKI§5).
 ///
-/// `online` is §8's switch: off, the cache stays readable and not one request
+/// `online` is WIKI§8's switch: off, the cache stays readable and not one request
 /// goes out. `requested_lang` is an app locale and gets truncated — `fr-CA`
 /// reads `fr.wikipedia.org`.
 pub fn plan(
@@ -258,14 +258,14 @@ pub fn plan(
         }
     }
 
-    // §8: enrichment off. What was fetched before stays readable, however old —
+    // WIKI§8: enrichment off. What was fetched before stays readable, however old —
     // a stale extract is worth more than an empty tab, and nothing depends on
     // it being current.
     if !online {
         return settled(WikiState::Offline, cached);
     }
 
-    // §3.3, before anything else: this mod was tried recently and led nowhere.
+    // WIKI§3.3, before anything else: this mod was tried recently and led nowhere.
     // Without this check, every opening of the fiche replays a full resolution
     // for an answer that has not changed.
     if best_effort("wiki_no_match", store::has_fresh_no_match(conn, mod_key, Local::now())).unwrap_or(false) {
@@ -293,7 +293,7 @@ fn query_of(subject: &Subject) -> String {
     }
 }
 
-/// Builds what §4 needs to search with, from what the overlay already knows
+/// Builds what WIKI§4 needs to search with, from what the overlay already knows
 /// about the mod.
 fn subject_of(conn: &Connection, ac_install: Option<&std::path::Path>, mod_key: &str) -> Option<Subject> {
     let row = best_effort("mods", crate::overlay::get_mod(conn, mod_key)).flatten()?;
@@ -317,7 +317,7 @@ fn subject_of(conn: &Connection, ac_install: Option<&std::path::Path>, mod_key: 
     }))
 }
 
-/// The network half (§4 then §5), with **no database at all**.
+/// The network half (WIKI§4 then WIKI§5), with **no database at all**.
 pub fn fetch(
     net: &WikiClient,
     cleaner: &clean::Cleaner,
@@ -338,7 +338,7 @@ pub fn fetch(
     let lang = ask.lang;
 
     // The appariement first, when the mod has none. An ambiguity is a verdict
-    // (§1): it produces no match and no negative-cache entry either, because
+    // (WIKI§1): it produces no match and no negative-cache entry either, because
     // the candidates are real and a better threshold may accept one later.
     let entity_id = match ask.entity_id {
         Some(id) => id,
@@ -379,9 +379,9 @@ pub fn fetch(
     };
 
     // The parent is fetched only when the entity cannot serve the requested
-    // language, which is the only case where level 2 can win (§5.2). When it
+    // language, which is the only case where level 2 can win (WIKI§5.2). When it
     // can, level 1 takes it and the second request would be pure politeness
-    // debt against §6.2.
+    // debt against WIKI§6.2.
     let parent = if facts.titles.contains_key(&lang) {
         None
     } else {
@@ -404,7 +404,7 @@ pub fn fetch(
             Fetched::Found(text) => {
                 out.article = Some(CachedArticle {
                     entity_id: entity_id.clone(),
-                    // The language **asked for**, per §3.2 — the one actually
+                    // The language **asked for**, per WIKI§3.2 — the one actually
                     // served is readable off the URL.
                     lang: lang.clone(),
                     article_title: text.title,
@@ -441,7 +441,7 @@ pub fn fetch(
 }
 
 /// Runs the right strategy for the subject. Cars and tracks share this line and
-/// nothing else — §4 gives them two different searches on purpose.
+/// nothing else — WIKI§4 gives them two different searches on purpose.
 ///
 /// `locale` decides which wiki is searched **first** (`lang::search_order`,
 /// English second): the English "Abarth 500" is a disambiguation page while the
@@ -461,10 +461,10 @@ fn match_subject(
     }
 }
 
-/// Writes what `fetch` learnt, back under the lock (§3).
+/// Writes what `fetch` learnt, back under the lock (WIKI§3).
 pub fn commit(conn: &Connection, resolved: Resolved) -> WikiPanel {
     if let Some(entity_id) = &resolved.matched {
-        // `auto`: the precedence of §3.1 means this never overwrites a
+        // `auto`: the precedence of WIKI§3.1 means this never overwrites a
         // correction or a shipped entry.
         best_effort(
             "wiki_link write",

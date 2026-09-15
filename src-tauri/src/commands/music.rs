@@ -31,7 +31,7 @@ pub struct DefaultMusicFolders {
     pub grid: PathBuf,
 }
 
-/// Dossiers par défaut (§3.1), pour affichage côté frontend quand
+/// Dossiers par défaut (MUSIQUE§3.1), pour affichage côté frontend quand
 /// `menu_folder`/`grid_folder` valent `None` dans la config.
 #[tauri::command]
 pub fn get_default_music_folders(app: AppHandle) -> DefaultMusicFolders {
@@ -66,7 +66,7 @@ pub fn music_enter_grid(engine: State<MusicEngineHandle>) {
     engine.send(EngineCommand::EnterGrid);
 }
 
-/// Écoute au clic (§6) : tire une piste au hasard dans le dossier, en dehors
+/// Écoute au clic (MUSIQUE§6) : tire une piste au hasard dans le dossier, en dehors
 /// de l'ambiance en cours (voir `engine::PreviewHandle`).
 #[tauri::command]
 pub fn music_preview_start(path: PathBuf, volume: f32, preview: State<PreviewHandle>) -> Result<(), String> {

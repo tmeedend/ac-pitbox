@@ -2,7 +2,7 @@
 //!
 //! Parameter names belong to whoever authored the mod: `rpms`, `rpm`,
 //! `throttle`, `load`… The event is asked what it has, and the answer is sorted
-//! out here. See `docs/SPEC-engine-sound-fmod.md` §2.4 and §2bis.
+//! out here. See `docs/SPEC-engine-sound-fmod.md` FMOD§2.4 and FMOD§2bis.
 
 /// `FMOD_STUDIO_PARAMETER_TYPE::GAME_CONTROLLED`.
 ///
@@ -40,10 +40,10 @@ impl ParamInfo {
 /// The parameters that mean something to us, out of everything the event has.
 ///
 /// Both fields are optional by design: an event whose parameters are entirely
-/// unrecognised still plays, at its default values (§2.4).
+/// unrecognised still plays, at its default values (FMOD§2.4).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Roles {
-    /// Engine speed. Drives pitch, and is what the rev slider of §4.4 moves.
+    /// Engine speed. Drives pitch, and is what the rev slider of FMOD§4.4 moves.
     pub rev: Option<ParamInfo>,
     /// Throttle. Blends the on-load layers against the off-throttle ones —
     /// measured at lot 0 as a 4× drop in level when it goes from 1.0 to 0.0.
@@ -107,7 +107,7 @@ mod tests {
     }
 
     /// The GT40's four parameters, exactly as `GetParameterByIndex` reported
-    /// them at lot 0 (`docs/SPEC-engine-sound-fmod.md` §2bis).
+    /// them at lot 0 (`docs/SPEC-engine-sound-fmod.md` FMOD§2bis).
     fn gt40() -> Vec<ParamInfo> {
         vec![
             param("throttle", 0, 0.0, 1.0, 0),
@@ -166,7 +166,7 @@ mod tests {
     }
 
     /// A car whose event exposes nothing recognisable still plays — it just
-    /// plays at the defaults (§2.4).
+    /// plays at the defaults (FMOD§2.4).
     #[test]
     fn nothing_recognisable_yields_no_roles() {
         let params = vec![param("Distance", 0, 0.0, 500.0, 1), param("mystery", 1, 0.0, 3.0, 0)];

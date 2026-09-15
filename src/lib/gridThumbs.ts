@@ -1,4 +1,4 @@
-// Pont typé vers les vignettes régénérées de la grille (docs/SPEC-grille.md §5).
+// Pont typé vers les vignettes régénérées de la grille (docs/SPEC-grille.md GRILLE§5).
 //
 // Le `.glb` ne transite jamais par ici : `prepareGridModel` rend une URL servie
 // par le protocole `carpreview`, que le chargeur three.js va chercher lui-même.
@@ -7,7 +7,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 /**
- * Gabarit de rendu (§5.6), tel que l'écran de réglages le tient.
+ * Gabarit de rendu (GRILLE§5.6), tel que l'écran de réglages le tient.
  *
  * Tout est entier, en unités lisibles : des degrés pour les angles, des
  * pourcentages pour le reste. Ces huit valeurs font **la moitié de l'identité**
@@ -81,7 +81,7 @@ export function gridThumbnail(carId: string, skinId: string | null, template: Gr
 /**
  * Convertit une voiture **hors du cache d'aperçus** et rend l'URL du modèle.
  *
- * La voie parallèle du §5.3 : réutiliser `prepareCarPreview` remplirait le cache
+ * La voie parallèle du GRILLE§5.3 : réutiliser `prepareCarPreview` remplirait le cache
  * LRU de 312 voitures que personne n'ouvrira, en évinçant celles qu'on consulte
  * vraiment. Ici le modèle atterrit dans un brouillon vidé avant chaque
  * conversion, et jeté aussitôt l'image rendue.
@@ -95,7 +95,7 @@ export function saveGridThumbnail(stem: string, png: Uint8Array): Promise<string
   return invoke<string>("save_grid_thumbnail", { stem, png: Array.from(png) });
 }
 
-/** Mémorise qu'une voiture ne rendra pas, et pourquoi (§7). Elle ne sera plus
+/** Mémorise qu'une voiture ne rendra pas, et pourquoi (GRILLE§7). Elle ne sera plus
  * retentée tant que le mod lui-même n'aura pas changé — son empreinte est dans
  * le nom d'entrée. */
 export function markGridThumbnailFailed(stem: string, reason: string): Promise<void> {
@@ -121,7 +121,7 @@ export function releaseGridModel(): Promise<void> {
   return invoke<void>("release_grid_model");
 }
 
-/** Compteurs pour l'écran de réglages et le rapport de génération (§8.2). */
+/** Compteurs pour l'écran de réglages et le rapport de génération (GRILLE§8.2). */
 export function gridThumbnailStats(): Promise<GridThumbStats> {
   return invoke<GridThumbStats>("grid_thumbnail_stats");
 }

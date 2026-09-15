@@ -1,4 +1,4 @@
-// Tenues complètes enregistrées (docs/SPEC-ecran-pilote.md §13, complément).
+// Tenues complètes enregistrées (docs/SPEC-ecran-pilote.md PILOTE§13, complément).
 //
 // Le choix du pilote est déjà global et persistant : rouvrir l'app retrouve
 // le casque, la combinaison et les gants d'hier. Ce que ça ne donne pas,

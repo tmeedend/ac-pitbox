@@ -1,4 +1,4 @@
-// Réglages de l'aperçu 3D des voitures (docs/SPEC-preview-3d-kn5.md §15).
+// Réglages de l'aperçu 3D des voitures (docs/SPEC-preview-3d-kn5.md PREVIEW§15).
 //
 // Partagés par l'écran Réglages (où on les change) et par `CarPreview3D`
 // (qui les applique) : d'où un `$state` de module plutôt qu'un état par
@@ -60,7 +60,7 @@ export const PREVIEW3D_RANGES = {
   zoom: { min: 50, max: 200, step: 5, default: 140 },
   /** Rotation de la caméra autour de l'axe vertical, en degrés. Le défaut est
    * l'angle des `preview.jpg` Kunos : trois-quarts avant **gauche**, comme
-   * toutes les photos du jeu (§15 point 7). */
+   * toutes les photos du jeu (PREVIEW§15 point 7). */
   azimuth: { min: 0, max: 359, step: 1, default: 318 },
   /** Plongée de la caméra, en degrés au-dessus de l'horizon. Plafonnée sous
    * l'angle polaire maximal des contrôles. */

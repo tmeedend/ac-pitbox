@@ -51,7 +51,7 @@ pub fn spawn(tx: Sender<EngineCommand>, on_running: impl Fn(bool) + Send + 'stat
         let mut sys = System::new_all();
         sys.refresh_processes(ProcessesToUpdate::All, true);
         let mut running = ac_running(&sys);
-        // Reprise d'état (§4/§16.4) : le process peut déjà tourner au
+        // Reprise d'état (MUSIQUE§4/§16.4) : le process peut déjà tourner au
         // démarrage de ce thread ; le statut "en piste" n'est en revanche
         // jamais annoncé rétroactivement ici (rien ne jouait encore côté
         // moteur tant que Big Picture n'a pas été ouvert, `AcProcessStarted`

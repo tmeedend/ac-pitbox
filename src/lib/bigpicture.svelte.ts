@@ -87,7 +87,7 @@ export async function enterBigPicture(): Promise<void> {
   bigPictureState.active = true;
   applyZoomFor(cfg.prefs);
   // Musique après le passage en plein écran/zoom : si `enabled` est faux
-  // côté réglages, le moteur ne joue rien (§2, coupe-circuit) — pas de
+  // côté réglages, le moteur ne joue rien (MUSIQUE§2, coupe-circuit) — pas de
   // condition à dupliquer côté frontend.
   await musicEnterBigPicture();
 }

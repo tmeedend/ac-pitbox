@@ -1,4 +1,4 @@
-//! Allocation caps for untrusted files (spec §5.2, "sécurité du parser").
+//! Allocation caps for untrusted files (PREVIEW§5.2, "sécurité du parser").
 //!
 //! Every count read from the file is checked against one of these *before* any
 //! `Vec::with_capacity`. The values are deliberately generous — they are there

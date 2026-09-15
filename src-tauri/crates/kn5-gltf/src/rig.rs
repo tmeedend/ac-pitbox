@@ -1,6 +1,6 @@
 //! Le mannequin exporté **vivant** : squelette, peau et animation de braquage
 //! écrits dans le glTF au lieu d'être cuits dans les sommets
-//! (`docs/SPEC-preview-3d-kn5.md` §4.6bis).
+//! (`docs/SPEC-preview-3d-kn5.md` PREVIEW§4.6bis).
 //!
 //! **Pourquoi.** La pose des bras était figée à la conversion, donc l'angle de
 //! braquage entrait dans la clé de cache dès qu'un pilote était greffé : chaque
@@ -322,7 +322,7 @@ fn skin(name: &str, skinned: &kn5::Kn5SkinnedMesh) -> Option<SkinnedMesh> {
     let mut joints = Vec::with_capacity(mesh.vertices.len());
     let mut weights = Vec::with_capacity(mesh.vertices.len());
     for binding in &skinned.skin {
-        // Les indices sont rangés en flottants dans le fichier (§3.4).
+        // Les indices sont rangés en flottants dans le fichier (PREVIEW§3.4).
         let mut slot = [0u16; 4];
         for (out, raw) in slot.iter_mut().zip(binding.bone_indices) {
             let index = raw.max(0.0).round() as usize;

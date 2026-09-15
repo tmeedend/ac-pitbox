@@ -1,7 +1,7 @@
 //! GLB writer — glTF 2.0 binary container.
 //!
 //! Written against the schema directly rather than through `gltf-json`
-//! (suggested by spec §5.2): the subset used here is small and fixed, the
+//! (suggested by PREVIEW§5.2): the subset used here is small and fixed, the
 //! container itself is a 12-byte header plus two chunks, and the acceptance
 //! test is empirical anyway — the file has to open in Blender *and* in a web
 //! viewer, which catches schema mistakes far better than a type wrapper would.
@@ -35,7 +35,7 @@ const TARGET_ELEMENT_ARRAY_BUFFER: u32 = 34963;
 /// skins d'une même voiture écrivent alors deux fois la même géométrie et les
 /// mêmes textures : mesuré sur trois skins, **une seule variante de géométrie
 /// pour les trois**, et les images partagées aux deux tiers. Éclatées, elles
-/// s'adressent par leur contenu et ne s'écrivent qu'une fois (§15.0quater).
+/// s'adressent par leur contenu et ne s'écrivent qu'une fois (PREVIEW§15.0quater).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Layout {
     /// Tout dans le tampon binaire : le `.glb` autonome. C'est le défaut :
@@ -112,7 +112,7 @@ pub fn build(
     }
 
     // Images, deduplicated by texture name: one embedded blob however many
-    // materials point at it (§5.4).
+    // materials point at it (PREVIEW§5.4).
     let mut image_blobs: Vec<Vec<u8>> = Vec::new();
     let mut images: Vec<Value> = Vec::new();
     let mut gltf_textures: Vec<Value> = Vec::new();

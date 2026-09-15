@@ -1,4 +1,4 @@
-//! Wikidata identifiers, in one place (§4.4).
+//! Wikidata identifiers, in one place (WIKI§4.4).
 //!
 //! The spec asks for these to be **verified against Wikidata before being
 //! wired**, and never scattered through the code. Every one below was read off
@@ -21,20 +21,20 @@ pub const INSTANCE_OF: &str = "P31";
 ///
 /// **Not a parent for cars.** Measured on the AE86 (Q1377219): it carries
 /// `P361 → Q2626308` (Toyota Sprinter Trueno, the generic model — the right
-/// "article général" of §5.3) *and* `P279 → Q5333841`, which is **"sport
+/// "article général" of WIKI§5.3) *and* `P279 → Q5333841`, which is **"sport
 /// compact"**, a classification. Climbing P279 blindly would offer an article
 /// about a car category as if it were the mod's model. Hence
 /// `parent_of_type`: a P279 target is only accepted when its own P31 is in the
 /// same allowlist as the entity itself.
 pub const SUBCLASS_OF: &str = "P279";
 
-/// `part of` / « partie de ». The relation §5.3 names: a generation to its
+/// `part of` / « partie de ». The relation WIKI§5.3 names: a generation to its
 /// model, a track configuration to its circuit. Tried before `SUBCLASS_OF`.
 /// Seen on Q1377219 → Q2626308.
 pub const PART_OF: &str = "P361";
 
 /// `coordinate location` / « coordonnées géographiques » (globe-coordinate).
-/// What the geographic search of §4.2 matches on. Seen on Q152207
+/// What the geographic search of WIKI§4.2 matches on. Seen on Q152207
 /// (Nürburgring): 50.3355555, 6.9475.
 pub const COORDINATE_LOCATION: &str = "P625";
 

@@ -1,4 +1,4 @@
-// Vignettes des corps de pilote (docs/SPEC-ecran-pilote.md §9.1).
+// Vignettes des corps de pilote (docs/SPEC-ecran-pilote.md PILOTE§9.1).
 //
 // **Pourquoi un rendu 3D et pas une image plate**, contrairement aux trois
 // autres galeries : un corps n'a pas d'échantillon plat qui veuille dire

@@ -1,4 +1,4 @@
-// Mise en forme du texte d'article (SPEC-wikipedia-fiche-detail.md §7.3).
+// Mise en forme du texte d'article (SPEC-wikipedia-fiche-detail.md WIKI§7.3).
 //
 // Module séparé de `wiki.ts` **et sans import Tauri** : c'est de la logique
 // pure, donc testable par Vitest, et `wiki.ts` traîne `@tauri-apps/api`.
@@ -9,7 +9,7 @@
 // retirer sans rien en faire écraserait la structure d'un article de 17 000
 // caractères en un seul pavé.
 //
-// **Rien n'est réécrit ici** (§2) : on reconnaît une ligne de titre et on la
+// **Rien n'est réécrit ici** (WIKI§2) : on reconnaît une ligne de titre et on la
 // balise, le texte lui-même n'est jamais touché.
 
 export type WikiBlockKind = "heading" | "paragraph";

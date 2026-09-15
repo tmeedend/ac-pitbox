@@ -1,4 +1,4 @@
-// Rendu de l'article Wikipédia (SPEC-wikipedia-fiche-detail.md §7.3).
+// Rendu de l'article Wikipédia (SPEC-wikipedia-fiche-detail.md WIKI§7.3).
 //
 // **Le HTML de Wikipédia n'est jamais injecté tel quel.** La webview de Pit Box
 // a accès à `invoke` : du balisage tiers posé dans notre DOM aurait la même
@@ -152,7 +152,7 @@ const ATTRS: Record<string, string[]> = {
  * sur l'article `Audi TT`. */
 const ICON_MAX_WIDTH = 64;
 
-/** Une image affichable, avec ce que sa licence impose (§9). */
+/** Une image affichable, avec ce que sa licence impose (WIKI§9). */
 export interface AllowedImage {
   file: string;
   url: string;
@@ -262,7 +262,7 @@ function hasDroppedClass(el: Element): boolean {
  * Reconstruit un fragment sûr à partir du HTML de l'article.
  *
  * `images` est la liste **blanche** : une `<img>` dont le fichier n'y figure pas
- * est retirée avec sa figure. C'est là que se joue la conformité du §9 — ce qui
+ * est retirée avec sa figure. C'est là que se joue la conformité du WIKI§9 — ce qui
  * n'a pas de licence et d'auteur connus ne s'affiche pas.
  */
 export function renderArticle(html: string, lang: string, images: AllowedImage[]): DocumentFragment {

@@ -1,4 +1,4 @@
-//! Cache d'index par dossier (§3.4) : durée et correction de gain RMS de
+//! Cache d'index par dossier (MUSIQUE§3.4) : durée et correction de gain RMS de
 //! chaque piste, calculées une fois au premier scan puis relues depuis un
 //! fichier `.pitbox-index.json` posé dans le dossier lui-même.
 //!
@@ -6,11 +6,11 @@
 //! bibliothèque audio de plus. Décoder le fichier entier est de toute façon
 //! nécessaire pour le RMS ; la durée exacte qu'on en tire au passage comble
 //! le "durée inconnue pour la plupart des MP3" documenté dans `engine.rs`
-//! (§5.3, préchargement du crossfade) — `engine.rs` préfère maintenant cette
+//! (MUSIQUE§5.3, préchargement du crossfade) — `engine.rs` préfère maintenant cette
 //! durée indexée à celle, souvent absente, que `Source::total_duration()`
 //! annonce en direct.
 //!
-//! Écart assumé vs la spec : le tag ReplayGain n'est pas lu (spec §3.4, "si
+//! Écart assumé vs la spec : le tag ReplayGain n'est pas lu (MUSIQUE§3.4, "si
 //! présent, le préférer au calcul") — lecture de tags audio = une dépendance
 //! de plus (`lofty`/`id3`) pour une préférence secondaire, pas la demande
 //! principale (normaliser les dossiers qui n'en ont pas). Le calcul RMS
@@ -29,10 +29,10 @@ use tauri::AppHandle;
 use super::config::MusicConfig;
 
 const INDEX_FILE_NAME: &str = ".pitbox-index.json";
-/// Cible RMS (§3.4). dBFS : 0 dB = pleine échelle, donc une valeur négative.
+/// Cible RMS (MUSIQUE§3.4). dBFS : 0 dB = pleine échelle, donc une valeur négative.
 const TARGET_DBFS: f64 = -18.0;
 /// Borne la correction pour éviter les aberrations sur une piste très
-/// atypique (silence quasi total, clip extrême) — §3.4.
+/// atypique (silence quasi total, clip extrême) — MUSIQUE§3.4.
 const MAX_GAIN_DB: f64 = 12.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,7 +46,7 @@ struct TrackIndex {
 struct FolderIndex {
     scanned_at: chrono::DateTime<Utc>,
     /// Nombre de fichiers audio au moment du scan — comparé au compte
-    /// courant pour l'invalidation (§3.4).
+    /// courant pour l'invalidation (MUSIQUE§3.4).
     file_count: usize,
     /// Secondes Unix de la dernière modification du DOSSIER (pas des
     /// fichiers un par un) au moment du scan — un ajout/suppression met à
@@ -65,7 +65,7 @@ pub struct IndexedTrack {
     /// Correction en dB vers `TARGET_DBFS`, 0.0 si non calculable.
     pub gain_db: f32,
     /// `None` si la piste n'a pas pu être décodée à l'indexation — le moteur
-    /// retombe alors sur le comportement "durée inconnue" du §5.3.
+    /// retombe alors sur le comportement "durée inconnue" du MUSIQUE§5.3.
     pub duration: Option<Duration>,
 }
 
@@ -83,7 +83,7 @@ fn dir_mtime_secs(dir: &Path) -> i64 {
 }
 
 /// RMS en dBFS sur l'ensemble des échantillons, converti en correction de
-/// gain vers `TARGET_DBFS`, bornée à ±`MAX_GAIN_DB` (§3.4) ; durée exacte en
+/// gain vers `TARGET_DBFS`, bornée à ±`MAX_GAIN_DB` (MUSIQUE§3.4) ; durée exacte en
 /// sous-produit du décodage complet. `None` si le fichier est illisible.
 fn analyze(path: &Path) -> Option<(f32, Duration)> {
     let file = File::open(path).ok()?;
@@ -132,7 +132,7 @@ fn build(tracks: &[PathBuf]) -> Vec<TrackIndex> {
                     gain_db,
                 },
                 None => {
-                    // Piste illisible (§9) : entrée neutre plutôt que de
+                    // Piste illisible (MUSIQUE§9) : entrée neutre plutôt que de
                     // faire échouer l'indexation de tout le dossier.
                     log::warn!("music: impossible d'analyser {} pour la normalisation", t.display());
                     TrackIndex {
@@ -153,7 +153,7 @@ fn read_cache(path: &Path) -> Option<FolderIndex> {
 
 /// Charge l'index d'un dossier, le (re)calcule si absent ou périmé. Bloquant
 /// (décode chaque piste au premier scan, "quelques secondes pour 30 pistes"
-/// par la spec §3.4) — appelé depuis un thread dédié (moteur ou façade de
+/// par la spec MUSIQUE§3.4) — appelé depuis un thread dédié (moteur ou façade de
 /// commande), jamais depuis le thread UI.
 fn load_or_build(dir: &Path, tracks: &[PathBuf]) -> Vec<TrackIndex> {
     let path = index_path(dir);
@@ -188,7 +188,7 @@ fn load_or_build(dir: &Path, tracks: &[PathBuf]) -> Vec<TrackIndex> {
 /// séparé, sans toucher au moteur ni à sa file de commandes.
 ///
 /// Sans ça, le premier scan (décodage complet de chaque piste, "quelques
-/// secondes pour 30 pistes" §3.4) se déclenche la première fois que le
+/// secondes pour 30 pistes" MUSIQUE§3.4) se déclenche la première fois que le
 /// moteur a réellement besoin de la playlist — typiquement en pleine
 /// navigation Big Picture (ouverture, ou bascule vers l'écran de
 /// paramétrage de session) : d'où le décalage perceptible entre l'affichage

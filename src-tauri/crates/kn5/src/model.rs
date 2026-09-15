@@ -1,9 +1,9 @@
-//! In-memory representation of a parsed KN5 (spec §3).
+//! In-memory representation of a parsed KN5 (PREVIEW§3).
 //!
 //! Deliberately close to the file layout: no filtering, no coordinate change,
 //! no material interpretation. Those belong to the conversion stage, so that
 //! `kn5-tool inspect` shows what is *actually* in the file — which is the
-//! whole point of having an inspectable intermediate (§1).
+//! whole point of having an inspectable intermediate (PREVIEW§1).
 
 use std::collections::BTreeSet;
 
@@ -11,7 +11,7 @@ use std::collections::BTreeSet;
 #[derive(Debug, Clone)]
 pub struct Kn5Model {
     pub version: u32,
-    /// Extra header word present when `version > 5`, meaning unknown (§3.1).
+    /// Extra header word present when `version > 5`, meaning unknown (PREVIEW§3.1).
     pub extra: Option<u32>,
     pub textures: Vec<Kn5Texture>,
     pub materials: Vec<Kn5Material>,
@@ -53,14 +53,14 @@ impl Kn5Model {
         n
     }
 
-    /// Distinct shader names, sorted. Feeds the material mapping work (§6):
+    /// Distinct shader names, sorted. Feeds the material mapping work (PREVIEW§6):
     /// the list of shaders actually met in the wild is what tells us which
     /// ones deserve a special case.
     pub fn shaders(&self) -> BTreeSet<&str> {
         self.materials.iter().map(|m| m.shader.as_str()).collect()
     }
 
-    /// Embedded texture by name. Placeholder entries (§3.2, type 0) never
+    /// Embedded texture by name. Placeholder entries (PREVIEW§3.2, type 0) never
     /// match: they have no name and no blob.
     pub fn texture(&self, name: &str) -> Option<&Kn5Texture> {
         self.textures.iter().find(|t| t.has_data() && t.name == name)
@@ -68,11 +68,11 @@ impl Kn5Model {
 }
 
 /// An embedded texture. The blob is stored verbatim: sniff it, do not trust
-/// the extension in `name` (§3.2).
+/// the extension in `name` (PREVIEW§3.2).
 #[derive(Debug, Clone)]
 pub struct Kn5Texture {
     /// `1` = a real entry. `0` is a placeholder: the file stores nothing else
-    /// for it, so `name` and `data` are empty (§3.2).
+    /// for it, so `name` and `data` are empty (PREVIEW§3.2).
     pub kind: i32,
     pub name: String,
     pub data: Vec<u8>,
@@ -90,14 +90,14 @@ pub struct Kn5Material {
     /// AC shader name, e.g. `ksPerPixelMultiMap`. Drives the glTF mapping.
     pub shader: String,
     /// `0` opaque, `1` alpha blend. Low byte of the `i16` the file stores;
-    /// see [`Self::alpha_tested`] and docs/kn5-format.md (§12, question 2).
+    /// see [`Self::alpha_tested`] and docs/kn5-format.md (PREVIEW§12, question 2).
     pub blend_mode: u8,
     /// Alpha testing, i.e. the shader discards fragments below `ksAlphaRef`
     /// instead of blending them. High byte of that same `i16`.
     pub alpha_tested: bool,
     /// Word that follows `blend_mode` when `version > 4`; observed at 0.
     pub reserved: i32,
-    /// *All* scalar properties, not just the known ones (§3.3) — CSP mods add
+    /// *All* scalar properties, not just the known ones (PREVIEW§3.3) — CSP mods add
     /// their own and we want to be able to surface them later.
     pub properties: Vec<Kn5MaterialProperty>,
     pub samplers: Vec<Kn5Sampler>,
@@ -122,7 +122,7 @@ pub struct Kn5MaterialProperty {
     pub name: String,
     pub value: f32,
     /// The 36 bytes that follow every property, read as 9 floats. Unused in
-    /// v1 but kept so the open question about their meaning (§12, question 5)
+    /// v1 but kept so the open question about their meaning (PREVIEW§12, question 5)
     /// can be answered from real files rather than from assumption.
     pub extra: [f32; 9],
 }
@@ -133,7 +133,7 @@ pub struct Kn5Sampler {
     pub name: String,
     pub slot: i32,
     /// Key into [`Kn5Model::textures`]. May be empty, and may name a texture
-    /// that is not embedded (skin overrides live on disk — §4.3).
+    /// that is not embedded (skin overrides live on disk — PREVIEW§4.3).
     pub texture: String,
 }
 
@@ -165,7 +165,7 @@ impl Kn5Node {
     }
 
     /// Local transform. Only dummy nodes carry one: meshes inherit their
-    /// parent's (§3.4).
+    /// parent's (PREVIEW§3.4).
     pub fn transform(&self) -> Option<&[f32; 16]> {
         match &self.kind {
             Kn5NodeKind::Dummy { transform } => Some(transform),
@@ -179,7 +179,7 @@ pub enum Kn5NodeKind {
     /// Type 1 — pure transform, the only kind that carries a matrix.
     Dummy {
         /// Row-vector 4x4 (DirectX convention): translation sits in
-        /// `[12..15]`, and world = local × parent (§3.4).
+        /// `[12..15]`, and world = local × parent (PREVIEW§3.4).
         transform: [f32; 16],
     },
     /// Type 2 — rigid mesh.
@@ -190,7 +190,7 @@ pub enum Kn5NodeKind {
 
 #[derive(Debug, Clone)]
 pub struct Kn5Mesh {
-    /// Order of the three flags is not confirmed — §12, open question 1.
+    /// Order of the three flags is not confirmed — PREVIEW§12, open question 1.
     pub cast_shadows: bool,
     pub is_visible: bool,
     pub is_transparent: bool,
@@ -226,7 +226,7 @@ pub struct Kn5Bone {
 #[derive(Debug, Clone, Copy)]
 pub struct Kn5SkinBinding {
     pub weights: [f32; 4],
-    /// Stored as floats in the file, not integers (§3.4).
+    /// Stored as floats in the file, not integers (PREVIEW§3.4).
     pub bone_indices: [f32; 4],
 }
 
@@ -235,7 +235,7 @@ pub struct Kn5Vertex {
     pub position: [f32; 3],
     pub normal: [f32; 3],
     /// V is flipped relative to the glTF convention — corrected at conversion
-    /// time, not here (§4.4).
+    /// time, not here (PREVIEW§4.4).
     pub uv: [f32; 2],
     pub tangent: [f32; 3],
 }

@@ -1,4 +1,4 @@
-//! Picking the model file inside a car folder (spec §4.2).
+//! Picking the model file inside a car folder (PREVIEW§4.2).
 //!
 //! Lives here rather than in the `kn5` crate, which is pure parsing with no
 //! filesystem access. Shared by `kn5-tool` and by the application: both have
@@ -21,7 +21,7 @@ pub struct ResolvedModel {
     pub source: ModelSource,
 }
 
-/// Skin folder to use for texture overrides (§4.3).
+/// Skin folder to use for texture overrides (PREVIEW§4.3).
 ///
 /// `wanted` names a skin explicitly; without it the first one in alphabetical
 /// order wins, which is also what AC shows first. Returns `None` when the car
@@ -65,7 +65,7 @@ pub fn resolve_model(car_dir: &Path) -> Option<ResolvedModel> {
 
 /// Reads `[LOD_0] FILE=` from `data/lods.ini`, when the data folder is
 /// unpacked. Packed cars keep it inside the encrypted `data.acd`, which we
-/// deliberately do not decrypt (§4.2) — the heuristic covers those.
+/// deliberately do not decrypt (PREVIEW§4.2) — the heuristic covers those.
 fn from_lods_ini(car_dir: &Path) -> Option<PathBuf> {
     let text = std::fs::read_to_string(car_dir.join("data").join("lods.ini")).ok()?;
     let mut in_lod0 = false;
@@ -95,7 +95,7 @@ fn from_lods_ini(car_dir: &Path) -> Option<PathBuf> {
 }
 
 /// Every `*.kn5` at the root of the folder, minus the collider and the lower
-/// LODs; largest one wins (§4.2).
+/// LODs; largest one wins (PREVIEW§4.2).
 fn largest_candidate(car_dir: &Path) -> Option<PathBuf> {
     let mut best: Option<(u64, PathBuf)> = None;
     for entry in std::fs::read_dir(car_dir).ok()?.flatten() {

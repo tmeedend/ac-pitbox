@@ -1,5 +1,5 @@
 //! What the two matching strategies have in common — and it is deliberately
-//! little (§4).
+//! little (WIKI§4).
 //!
 //! Cars are matched by name, tracks by coordinates; forcing one abstraction
 //! over the two would mean a "search" trait whose implementations share no
@@ -20,7 +20,7 @@ pub struct Candidate {
     pub entity_id: String,
     pub label: Option<String>,
     /// Wikidata's short description — "automobile produced by Toyota". What
-    /// §7.6 will show to disambiguate by eye, and what makes the calibration
+    /// WIKI§7.6 will show to disambiguate by eye, and what makes the calibration
     /// report readable.
     pub description: Option<String>,
     pub score: f64,
@@ -33,7 +33,7 @@ impl Candidate {
     }
 }
 
-/// What an attempt concluded. Three of the four are non-results (§1).
+/// What an attempt concluded. Three of the four are non-results (WIKI§1).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "outcome", rename_all = "camelCase")]
 pub enum MatchOutcome {
@@ -46,7 +46,7 @@ pub enum MatchOutcome {
         /// Gap to the runner-up. `None` when there was only one candidate.
         margin: Option<f64>,
     },
-    /// Candidates were found and none stood out. **The heart of §1**: an
+    /// Candidates were found and none stood out. **The heart of WIKI§1**: an
     /// ambiguity produces a non-result, not a draw.
     Ambiguous {
         best: Candidate,
@@ -56,7 +56,7 @@ pub enum MatchOutcome {
     /// Nothing of an accepted type came back — or nothing came back at all.
     NoCandidate,
     /// The network could not answer. Not a verdict: nothing was learned, and
-    /// in particular not that this mod has no article (§3.3).
+    /// in particular not that this mod has no article (WIKI§3.3).
     Unavailable,
 }
 
@@ -64,7 +64,7 @@ pub enum MatchOutcome {
 ///
 /// They come from `Prefs` (`config.rs`) precisely because they are what the
 /// calibration command exists to tune: the values shipped are a starting
-/// point, and §13 says so.
+/// point, and WIKI§13 says so.
 #[derive(Debug, Clone, Copy)]
 pub struct Thresholds {
     /// Below this, the best candidate is not good enough to be anybody's
@@ -113,9 +113,9 @@ fn tokens(text: &str) -> Vec<String> {
 /// How much two names look like the same thing, in `[0, 1]`.
 ///
 /// Half Jaccard, half containment. The containment half is what makes the
-/// **generic model an acceptable answer** (§4.1): `Toyota Corolla` is entirely
+/// **generic model an acceptable answer** (WIKI§4.1): `Toyota Corolla` is entirely
 /// contained in `Toyota Corolla Levin`, so it scores high even though it is
-/// shorter — which is exactly the outcome the spec asks for, since §5.3 will
+/// shorter — which is exactly the outcome the spec asks for, since WIKI§5.3 will
 /// fall back to the generic article anyway.
 pub fn name_similarity(a: &str, b: &str) -> f64 {
     let (a, b) = (tokens(a), tokens(b));
@@ -201,9 +201,9 @@ mod tests {
         }
     }
 
-    /// Rule (§4.1): the generic model is a valid answer for a generation mod.
+    /// Rule (WIKI§4.1): the generic model is a valid answer for a generation mod.
     /// `Toyota Corolla` must score well against `Toyota Corolla Levin`, since
-    /// §5.3 falls back to the generic article anyway.
+    /// WIKI§5.3 falls back to the generic article anyway.
     #[test]
     fn the_generic_model_stays_close_to_its_generation() {
         let generic = name_similarity("Toyota Corolla", "Toyota Corolla Levin");
@@ -212,7 +212,7 @@ mod tests {
         assert_eq!(unrelated, 0.0, "rien en commun");
     }
 
-    /// Rule (§4.3): punctuation is not meaning. The three spellings modders use
+    /// Rule (WIKI§4.3): punctuation is not meaning. The three spellings modders use
     /// for the same car must land on each other — `RX-7`, `RX 7` and `RX7`.
     #[test]
     fn punctuation_does_not_separate_a_name_from_itself() {
@@ -225,7 +225,7 @@ mod tests {
         assert_eq!(name_similarity("Toyota AE86", "toyota ae-86"), 1.0);
     }
 
-    /// Rule (§1, §4.1.5): **two close candidates produce nothing.** This is the
+    /// Rule (WIKI§1, §4.1.5): **two close candidates produce nothing.** This is the
     /// test the whole feature turns on — a wrong article costs far more than a
     /// missing one, so a near-tie is never resolved by picking the first.
     #[test]
@@ -267,7 +267,7 @@ mod tests {
         }
     }
 
-    /// Rule (§1): a candidate nobody would recognise is no candidate. Without
+    /// Rule (WIKI§1): a candidate nobody would recognise is no candidate. Without
     /// the floor, a lone bad hit would win by walkover for lack of a second.
     #[test]
     fn a_lone_weak_candidate_wins_nothing() {

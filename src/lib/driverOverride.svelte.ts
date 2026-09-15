@@ -1,5 +1,5 @@
 // La tenue de pilote que l'utilisateur impose, voiture par voiture
-// (docs/SPEC-ecran-pilote.md §1.4, révisé).
+// (docs/SPEC-ecran-pilote.md PILOTE§1.4, révisé).
 //
 // **Le choix est par voiture, et c'est un revirement assumé.** La spec le
 // voulait global — « mon pilote », pas « le pilote de cette livrée » — et
@@ -142,7 +142,7 @@ export function setDriverOutfit(carId: string, outfit: DriverOutfit): void {
   write(carId, outfit);
 }
 
-/** Rend cette voiture à sa livrée : l'entrée disparaît (§5.6). */
+/** Rend cette voiture à sa livrée : l'entrée disparaît (PILOTE§5.6). */
 export function resetDriverOutfit(carId: string): void {
   removeUiPref(StorageKey.driverOutfit(carId));
 }

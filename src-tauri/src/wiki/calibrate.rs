@@ -1,5 +1,5 @@
 //! Calibration run: the whole library through the matching, **persisting
-//! nothing** (§13).
+//! nothing** (WIKI§13).
 //!
 //! The thresholds of §4.1.5 and §4.2.3 cannot be chosen from a desk. The spec
 //! says as much — its numbers are "des points de départ, pas des cibles" — so
@@ -31,7 +31,7 @@ use super::matchcar::{self, CarSubject};
 use super::matching::{MatchOutcome, Thresholds};
 use super::matchtrack::{self, TrackSubject};
 
-/// Courtesy pause between two mods (§6.2: sequential, never a burst). Three
+/// Courtesy pause between two mods (WIKI§6.2: sequential, never a burst). Three
 /// hundred mods at two requests each is already the largest thing this feature
 /// will ever ask of Wikimedia, and it only ever happens on demand.
 const PAUSE_BETWEEN_MODS: std::time::Duration = std::time::Duration::from_millis(100);
@@ -223,7 +223,7 @@ impl Report {
             ));
         }
 
-        out.push_str("\n## Ambigus — rejetés par le §1, et la raison du seuil\n\n");
+        out.push_str("\n## Ambigus — rejetés par le WIKI§1, et la raison du seuil\n\n");
         out.push_str("| mod | type | recherche | premier | second | marge |\n");
         out.push_str("|---|---|---|---|---|---:|\n");
         for row in &self.rows {
@@ -349,7 +349,7 @@ mod tests {
         }
     }
 
-    /// Rule (§13): the report shows what the threshold has to arbitrate — the
+    /// Rule (WIKI§13): the report shows what the threshold has to arbitrate — the
     /// retained candidate, its score, its margin, and the ambiguities that were
     /// refused. A report without the refusals cannot calibrate anything.
     #[test]
@@ -404,7 +404,7 @@ mod tests {
     /// Exists because "the tab does not appear" has three causes that look
     /// identical from outside — no appariement, no article in the requested
     /// language, or the network — and none of them shows on screen, absence
-    /// being silent by design (§1).
+    /// being silent by design (WIKI§1).
     ///
     /// ```text
     /// $env:PITBOX_WIKI_MOD = "ks_ferrari_sf15t"; cargo test --lib wiki -- --ignored --nocapture what_the_fiche_gets
@@ -466,7 +466,7 @@ mod tests {
     }
 
     /// **Calibration run, by hand.** Needs the real library and the network, so
-    /// it is ignored — §11 forbids a test that depends on Wikipedia.
+    /// it is ignored — WIKI§11 forbids a test that depends on Wikipedia.
     ///
     /// ```text
     /// PITBOX_WIKI_CALIBRATE=1 cargo test --lib wiki -- --ignored --nocapture calibrate_the_library

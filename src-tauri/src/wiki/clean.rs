@@ -1,4 +1,4 @@
-//! Name cleaning and scoring weights (§4.3), driven by a configuration file.
+//! Name cleaning and scoring weights (WIKI§4.3), driven by a configuration file.
 //!
 //! The spec is explicit that the list of things to strip "doit vivre dans un
 //! fichier de configuration, pas dans le code": modders invent a new suffix
@@ -249,7 +249,7 @@ mod tests {
         Cleaner::new(&MatchingConfig::default())
     }
 
-    /// Rule (§4.3): the shipped list is valid JSON and parses into the config.
+    /// Rule (WIKI§4.3): the shipped list is valid JSON and parses into the config.
     /// It is embedded with `include_str!`, so a typo in it is only discovered
     /// at runtime — this test is what turns that into a build-time failure.
     #[test]
@@ -261,7 +261,7 @@ mod tests {
         assert!((cfg.weights.name + cfg.weights.brand + cfg.weights.year - 1.0).abs() < 1e-9);
     }
 
-    /// Rule (§4.3): real mod names from the library, cleaned down to something
+    /// Rule (WIKI§4.3): real mod names from the library, cleaned down to something
     /// worth searching.
     #[test]
     fn real_mod_names_lose_what_wikipedia_never_heard_of() {
@@ -274,7 +274,7 @@ mod tests {
         assert_eq!(c.clean("Porsche 911 GT3 RS - WIP"), "Porsche 911 GT3 RS");
     }
 
-    /// Rule (§4.3): **a `v` followed by digits is not a version number.**
+    /// Rule (WIKI§4.3): **a `v` followed by digits is not a version number.**
     ///
     /// `rss_gtm_lanzo_v8` is the project's own example of a mod folder, and its
     /// `V8` is an engine. `MK4` is a generation. A pattern matching a bare
@@ -297,7 +297,7 @@ mod tests {
         assert_eq!(c.clean("Audi R8 V10"), "Audi R8 V10");
     }
 
-    /// Rule (§4.3): a suffix word is only stripped at the end. "AC" inside a
+    /// Rule (WIKI§4.3): a suffix word is only stripped at the end. "AC" inside a
     /// name can be part of it — `AC Cobra` is a car, not a conversion.
     #[test]
     fn a_suffix_word_is_only_stripped_at_the_end() {
@@ -310,7 +310,7 @@ mod tests {
         );
     }
 
-    /// Rule (§4.3): **"traffic" is only noise when the mod says it is.**
+    /// Rule (WIKI§4.3): **"traffic" is only noise when the mod says it is.**
     ///
     /// The Renault Trafic is a real van, so the word cannot go in the general
     /// list — a mod of it would lose its own name. But the twenty-five cars
@@ -362,7 +362,7 @@ mod tests {
         }
     }
 
-    /// Rule (§1): cleaning never invents. A name made only of noise comes back
+    /// Rule (WIKI§1): cleaning never invents. A name made only of noise comes back
     /// empty, and an empty name is a non-result — not a search for "".
     #[test]
     fn a_name_made_of_noise_comes_back_empty() {

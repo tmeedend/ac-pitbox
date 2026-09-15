@@ -1,11 +1,11 @@
-//! The parser proper — layout described in spec §3.
+//! The parser proper — layout described in PREVIEW§3.
 
 use crate::error::{Kn5Error, Result};
 use crate::limits::Limits;
 use crate::model::*;
 use crate::reader::Reader;
 
-/// Magic at offset 0 of every unprotected KN5 (§3.1).
+/// Magic at offset 0 of every unprotected KN5 (PREVIEW§3.1).
 const MAGIC: [u8; 6] = *b"sc6969";
 
 /// Highest version this parser was written against. Newer files are still
@@ -70,7 +70,7 @@ fn read_textures(r: &mut Reader, limits: &Limits) -> Result<Vec<Kn5Texture>> {
     for _ in 0..count {
         let kind = r.i32()?;
         // A type-0 entry is a four-byte marker and nothing else: no name, no
-        // size, no blob. The spec (§3.2) only said "0 rencontré = pas de
+        // size, no blob. The spec (PREVIEW§3.2) only said "0 rencontré = pas de
         // données", which reads as "the blob is empty"; taken that way the
         // whole section desynchronises. Found on `rss_gtm_lanzo_v8`, whose
         // first entry is type 0 — reading a name there swallowed the next
@@ -99,7 +99,7 @@ fn read_materials(r: &mut Reader, limits: &Limits, version: u32) -> Result<Vec<K
     for _ in 0..count {
         let name = r.string("material_name", limits.max_string_bytes)?;
         let shader = r.string("material_shader", limits.max_string_bytes)?;
-        // Spec §3.3 calls this a single `i16` of unknown meaning. It is in
+        // Spec PREVIEW§3.3 calls this a single `i16` of unknown meaning. It is in
         // fact two independent bytes — see docs/kn5-format.md: across the
         // reference library only 0, 1 and 256 occur, and every material at
         // 256 uses an `*_AT` (alpha-tested) shader while every material at 1
@@ -113,7 +113,7 @@ fn read_materials(r: &mut Reader, limits: &Limits, version: u32) -> Result<Vec<K
         for _ in 0..prop_count {
             let name = r.string("material_property_name", limits.max_string_bytes)?;
             let value = r.f32()?;
-            // 36 bytes of what is most likely a vector value (§12, q5). Read
+            // 36 bytes of what is most likely a vector value (PREVIEW§12, q5). Read
             // as floats rather than skipped: costs nothing and lets the tool
             // answer the question from real files.
             let extra = r.f32s::<9>()?;
@@ -146,7 +146,7 @@ fn read_materials(r: &mut Reader, limits: &Limits, version: u32) -> Result<Vec<K
 ///
 /// `depth` is checked first: a crafted file with a million nested dummies
 /// would otherwise blow the stack, and a stack overflow aborts the process —
-/// no `Result` can save us there (§5.2).
+/// no `Result` can save us there (PREVIEW§5.2).
 fn read_node(r: &mut Reader, limits: &Limits, material_count: usize, depth: usize) -> Result<Kn5Node> {
     if depth > limits.max_depth {
         return Err(Kn5Error::DepthLimitExceeded {
@@ -169,7 +169,7 @@ fn read_node(r: &mut Reader, limits: &Limits, material_count: usize, depth: usiz
     };
 
     // In practice only dummies have children, but the format does not say so
-    // and the parser must not assume it (§3.4).
+    // and the parser must not assume it (PREVIEW§3.4).
     let mut children = Vec::with_capacity(children_count);
     for _ in 0..children_count {
         children.push(read_node(r, limits, material_count, depth + 1)?);
@@ -260,7 +260,7 @@ fn read_skinned_mesh(
         lod_in: r.f32()?,
         lod_out: r.f32()?,
         // Skinned meshes carry no bounding sphere and no renderable flag: the
-        // trailing block is 12 bytes here against 29 on a rigid mesh (§3.4).
+        // trailing block is 12 bytes here against 29 on a rigid mesh (PREVIEW§3.4).
         bounding_sphere_center: [0.0; 3],
         bounding_sphere_radius: 0.0,
         is_renderable: true,
@@ -294,7 +294,7 @@ fn read_indices(r: &mut Reader, limits: &Limits) -> Result<Vec<u16>> {
 
 /// Validates the material index before it is ever used to index a slice —
 /// a mesh pointing outside the material table is corruption, not something to
-/// paper over (§5.2).
+/// paper over (PREVIEW§5.2).
 fn read_material_id(r: &mut Reader, material_count: usize, node_name: &str) -> Result<u32> {
     let id = r.i32()?;
     if id < 0 || id as usize >= material_count {
@@ -434,7 +434,7 @@ mod tests {
     }
 
     // Rule: a file that is not a KN5 is refused on its magic, not parsed as
-    // garbage. Encrypted CSP models land here too (§4.5).
+    // garbage. Encrypted CSP models land here too (PREVIEW§4.5).
     #[test]
     fn wrong_magic_is_rejected() {
         let mut data = sample_file();
@@ -447,7 +447,7 @@ mod tests {
 
     // Rule: truncation at *any* offset yields an error, never a panic. This is
     // the single most important property of the parser — mods ship broken
-    // files and one of them must not take the app down (§5.2).
+    // files and one of them must not take the app down (PREVIEW§5.2).
     #[test]
     fn truncation_at_any_offset_errors_without_panic() {
         let full = sample_file();

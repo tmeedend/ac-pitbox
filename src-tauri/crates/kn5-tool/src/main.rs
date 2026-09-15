@@ -1,4 +1,4 @@
-//! Developer CLI for the KN5 pipeline — never shipped to users (spec §5.1).
+//! Developer CLI for the KN5 pipeline — never shipped to users (PREVIEW§5.1).
 //!
 //! Exists so that every lot before the viewer can be verified without
 //! launching the application: `inspect` proves the parser against one file,
@@ -139,7 +139,7 @@ fn main() -> ExitCode {
 }
 
 /// Accepts either a `.kn5` directly or a car folder, in which case the model
-/// is resolved the way the application will resolve it (§4.2).
+/// is resolved the way the application will resolve it (PREVIEW§4.2).
 fn model_path(path: &Path) -> Result<(PathBuf, Option<ModelSource>), String> {
     if path.is_file() {
         return Ok((path.to_path_buf(), None));
@@ -333,7 +333,7 @@ fn print_tree(node: &kn5::Kn5Node, depth: usize, model: &Kn5Model, transforms: b
         Kn5NodeKind::Dummy { transform } => {
             println!("{indent}[dummy] {}", node.name);
             if transforms {
-                // Convention vecteur-ligne (§3.4) : les trois premières lignes
+                // Convention vecteur-ligne (PREVIEW§3.4) : les trois premières lignes
                 // portent la base, la quatrième la translation. C'est la base
                 // qui dit si un auteur a compensé l'orientation de sa
                 // géométrie sur le nœud qui la porte.
@@ -485,11 +485,11 @@ fn scan(dir: &Path, flags: &[&str]) -> Result<(), String> {
         );
     }
     println!(
-        "material property extra bytes non-zero (§12 q5): {} of {} properties",
+        "material property extra bytes non-zero (PREVIEW§12 q5): {} of {} properties",
         stats.properties_with_extra,
         stats.property_names.values().sum::<usize>()
     );
-    println!("shaders of the meshes flagged transparent (§12 q1):");
+    println!("shaders of the meshes flagged transparent (PREVIEW§12 q1):");
     for (shader, count) in by_count(&stats.transparent_mesh_shaders) {
         println!("  {count:>5}  {shader}");
     }
@@ -524,7 +524,7 @@ fn scan(dir: &Path, flags: &[&str]) -> Result<(), String> {
 ///
 /// Written for one question, and it is worth stating it: the green channel of
 /// `txMaps` is documented as the gloss (docs/kn5-format.md, écart n°7), R and
-/// B are not. `metallicFactor` is held at zero until they are, because §6.2
+/// B are not. `metallicFactor` is held at zero until they are, because PREVIEW§6.2
 /// of the spec asks for a plausible result rather than a guessed one — so the
 /// chrome, the rims and the bare metal of every car currently render as
 /// glossy paint.
@@ -762,7 +762,7 @@ alpha des textures de couleur"
     Ok(())
 }
 
-/// Regression guard for the coordinate conversion (§4.4, §12 q4).
+/// Regression guard for the coordinate conversion (PREVIEW§4.4, PREVIEW§12 q4).
 ///
 /// **Calibré sur un rendu, pas déduit** — et recalibré une fois, ce qui est
 /// tout l'intérêt de l'avoir. La référence est `abarth500` : la conversion

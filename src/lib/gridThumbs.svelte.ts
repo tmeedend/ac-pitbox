@@ -1,4 +1,4 @@
-// Génération des vignettes de la grille (docs/SPEC-grille.md §5).
+// Génération des vignettes de la grille (docs/SPEC-grille.md GRILLE§5).
 //
 // **Le problème que ça règle.** Les `preview.png` d'origine sont hétérogènes —
 // rendus sur noir, sur blanc, captures en jeu, photos — et l'œil passe son
@@ -13,11 +13,11 @@
 //  1. *Au fil de l'eau, jamais en masse.* Une carte demande sa vignette quand
 //     elle entre dans le champ de vision, pas au chargement de la liste : la
 //     bibliothèque se normalise pendant qu'on l'utilise, sans attente initiale.
-//     Ce qui devient visible passe devant le reste de la file (§5.4).
+//     Ce qui devient visible passe devant le reste de la file (GRILLE§5.4).
 //  2. *Une conversion à la fois, et hors du cache d'aperçus.* Le backend écrit
 //     le modèle dans un brouillon qu'il vide avant chaque conversion : le pic
 //     disque est celui d'une voiture, et le cache LRU — qui protège les
-//     voitures qu'on consulte vraiment — n'est jamais touché (§5.3).
+//     voitures qu'on consulte vraiment — n'est jamais touché (GRILLE§5.3).
 //  3. *Un seul contexte WebGL, gardé pour la session.* Un `WebGLRenderer` par
 //     carte épuiserait la limite du navigateur (seize contextes en pratique)
 //     dès la première rangée. Celui-ci ne rend jamais à l'écran : il produit un
@@ -37,8 +37,8 @@ import {
 import { gridThumbsOn, gridThumbsReady } from "./gridThumbPrefs.svelte";
 import { applyFloorMirror } from "./components/detail/floorMirror";
 
-/** Taille de sortie (§5.6). 16:9 parce que c'est le rapport des `preview.png`
- * d'Assetto Corsa : la grille restant mixte pour toujours (§7), les deux
+/** Taille de sortie (GRILLE§5.6). 16:9 parce que c'est le rapport des `preview.png`
+ * d'Assetto Corsa : la grille restant mixte pour toujours (GRILLE§7), les deux
  * sources doivent occuper le même cadre sans bande noire ni recadrage. */
 const WIDTH = 1024;
 const HEIGHT = 576;
@@ -64,7 +64,7 @@ const KEY_BASE = 2.2;
 /** Part de l'éclairage qui vient du showroom plutôt que des trois lampes.
  * L'environnement n'est pas décoratif : sans lui, une carrosserie ne reflète
  * rien et la peinture rend plate — c'est lui qui a été calibré sur les photos
- * Kunos (SPEC-preview-3d-kn5 §8.1). Les lampes viennent par-dessus, pour
+ * Kunos (SPEC-preview-3d-kn5 GRILLE§8.1). Les lampes viennent par-dessus, pour
  * détacher la silhouette. */
 const ENVIRONMENT = 0.55;
 
@@ -106,7 +106,7 @@ interface Job {
   template: GridTemplate;
   carId: string;
   skinId: string | null;
-  /** Nom lisible, pour la tâche de fond : le §8.2 y montre « Nissan Skyline
+  /** Nom lisible, pour la tâche de fond : le GRILLE§8.2 y montre « Nissan Skyline
    * GT-R R34 » et non un identifiant de dossier. */
   name: string;
   key: string;
@@ -149,7 +149,7 @@ function withScratch<T>(work: () => Promise<T>): Promise<T> {
 const pauses = new Set<string>();
 
 /** L'aperçu de réglages : ses six conversions et le rendu qu'on manipule ne
- * doivent pas se disputer le brouillon ni le processeur (§6.3). */
+ * doivent pas se disputer le brouillon ni le processeur (GRILLE§6.3). */
 export const PAUSE_STUDIO = "studio";
 /**
  * Une session lancée. **La demande la plus forte de l'utilisateur** : le jeu
@@ -182,7 +182,7 @@ export function gridThumbsPaused(): boolean {
 }
 
 /**
- * Avancement de la génération, pour la tâche de fond du §8.
+ * Avancement de la génération, pour la tâche de fond du GRILLE§8.
  *
  * `total` est **cumulatif sur le lot** et non la taille de la file : celle-ci
  * se vide au fur et à mesure, donc s'en servir donnerait une barre qui recule.
@@ -195,7 +195,7 @@ const progress = $state({
   current: null as string | null,
   running: false,
   cancelling: false,
-  /** Le lot est fini et son rapport attend d'être fermé à la main (§8.2). */
+  /** Le lot est fini et son rapport attend d'être fermé à la main (GRILLE§8.2). */
   finished: false,
   startedAt: 0,
 });
@@ -207,7 +207,7 @@ export function gridThumbProgress() {
 /**
  * Temps restant estimé, en secondes, ou `null` tant qu'il serait fantaisiste.
  *
- * **Rien avant une dizaine de voitures** (§8.3) : une estimation tirée de deux
+ * **Rien avant une dizaine de voitures** (GRILLE§8.3) : une estimation tirée de deux
  * mesures est fausse d'un facteur trois, et elle détruit la confiance dans
  * toutes les suivantes. Afficher le décompte seul coûte moins cher.
  */
@@ -224,7 +224,7 @@ export function gridThumbEta(): number | null {
 /**
  * Arrête le lot. **Ce qui est fait est gardé**, et le rapport le dit — sans
  * cette phrase, on se retrouve avec une grille mixte sans savoir qu'on peut
- * reprendre (§8.3).
+ * reprendre (GRILLE§8.3).
  */
 export function cancelGridThumbs(): void {
   queue.length = 0;
@@ -280,7 +280,7 @@ function enqueue(
  *
  * Elle passe devant tout le reste de la file : faire défiler ou changer de
  * filtre la réordonne donc de lui-même, ce qui est nouvellement visible
- * d'abord (§8.4).
+ * d'abord (GRILLE§8.4).
  */
 export function requestGridThumb(
   template: GridTemplate,
@@ -294,7 +294,7 @@ export function requestGridThumb(
 }
 
 /**
- * Met en file tout ce qui reste, derrière ce qui est visible (§5.4).
+ * Met en file tout ce qui reste, derrière ce qui est visible (GRILLE§5.4).
  *
  * Sans cette seconde moitié, la génération ne produirait que ce qu'on a
  * regardé, et le décompte de la tâche de fond n'aurait pas de dénominateur : la
@@ -375,7 +375,7 @@ async function drain(): Promise<void> {
     // reste du travail — la tâche de fond dit alors pourquoi il n'avance pas —
     // et le rapport n'arrive que la file vide.
     //
-    // Le rapport, lui, reste affiché y compris après une annulation : le §8.3
+    // Le rapport, lui, reste affiché y compris après une annulation : le GRILLE§8.3
     // veut « 148 vignettes générées, reprendre plus tard » plutôt qu'une
     // disparition silencieuse.
     const remaining = queue.length > 0;
@@ -388,7 +388,7 @@ async function produce(job: Job): Promise<Entry> {
   const template = job.template;
   // Le disque d'abord, toujours : quelques `stat` contre une conversion. C'est
   // aussi ce qui répond « déjà essayé, impossible » sans reparser un KN5 de
-  // quatorze mégaoctets à chaque lancement (§7).
+  // quatorze mégaoctets à chaque lancement (GRILLE§7).
   const known = await gridThumbnail(job.carId, job.skinId, template);
   if (known.path) {
     progress.done += 1;
@@ -405,7 +405,7 @@ async function produce(job: Job): Promise<Entry> {
     const reason = typeof e === "string" ? e : String(e);
     // Une voiture chiffrée ne rendra **jamais** : on le note à côté de l'image
     // qu'on n'a pas pu produire, avec l'empreinte du mod dans le nom, donc la
-    // tentative se refera d'elle-même le jour où le mod change (§7).
+    // tentative se refera d'elle-même le jour où le mod change (GRILLE§7).
     if (reason.startsWith("errors.preview")) {
       await markGridThumbnailFailed(known.stem, reason).catch((err) =>
         console.error("échec de vignette non mémorisé", job.carId, err),
@@ -417,7 +417,7 @@ async function produce(job: Job): Promise<Entry> {
   }
 }
 
-/** Convertir, rendre, ranger, jeter — la séquence du §5.3, sous le verrou du
+/** Convertir, rendre, ranger, jeter — la séquence du GRILLE§5.3, sous le verrou du
  * brouillon. */
 async function convert(job: Job, stem: string, template: GridTemplate): Promise<Entry> {
   const url = await prepareGridModel(job.carId, job.skinId);
@@ -443,7 +443,7 @@ async function convert(job: Job, stem: string, template: GridTemplate): Promise<
 // **Un banc, deux clients.** La file en monte un seul, à la taille de sortie,
 // gardé pour la session : un `WebGLRenderer` par carte épuiserait la limite du
 // navigateur (seize contextes en pratique) dès la première rangée. L'aperçu de
-// l'écran de réglages (§6.2) en monte un second, plus petit, avec ses six
+// l'écran de réglages (GRILLE§6.2) en monte un second, plus petit, avec ses six
 // voitures gardées en mémoire — bouger un curseur doit redessiner, jamais
 // reconvertir.
 //
@@ -524,7 +524,7 @@ async function createRig(width: number, height: number): Promise<Rig> {
     // vide dès que le navigateur a eu le temps de vider le tampon entre le
     // rendu et la lecture. C'est le piège classique du rendu hors écran.
     // `alpha` : le fond reste transparent, c'est la carte qui fournit le sien
-    // (§5.6) — un dégradé en CSS suit le thème et les états sans jamais
+    // (GRILLE§5.6) — un dégradé en CSS suit le thème et les états sans jamais
     // demander de régénérer une image.
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     renderer.setPixelRatio(1);
@@ -543,7 +543,7 @@ async function createRig(width: number, height: number): Promise<Rig> {
     scene.environment = pmrem.fromScene(showroomEnvironment(THREE), 0.04).texture;
     scene.environmentIntensity = ENVIRONMENT;
 
-    // Les trois lampes du §5.6. Leurs positions sont posées à chaque rendu,
+    // Les trois lampes du GRILLE§5.6. Leurs positions sont posées à chaque rendu,
     // relativement à la voiture : un mod fait deux mètres, un autre en fait
     // quinze si son auteur s'est trompé d'unité.
     const key = new THREE.DirectionalLight(0xffffff, 0);
@@ -822,7 +822,7 @@ async function render(url: string, template: GridTemplate): Promise<Blob | null>
 
 /**
  * Cadrage **ajusté**, pas à l'échelle : chaque voiture remplit le cadre quelle
- * que soit sa taille réelle (§5.6).
+ * que soit sa taille réelle (GRILLE§5.6).
  *
  * La distance ne se déduit pas d'un rayon : une voiture vue de trois-quarts est
  * large et basse, et la caler sur sa sphère englobante la laisserait minuscule
@@ -887,7 +887,7 @@ function placeCamera(
   camera.updateProjectionMatrix();
 }
 
-/** Les trois lampes, posées relativement à la caméra (§5.6). */
+/** Les trois lampes, posées relativement à la caméra (GRILLE§5.6). */
 function placeLights(
   rig: Rig,
   camera: ThreeModule.PerspectiveCamera,
@@ -938,7 +938,7 @@ function placeLights(
   shadow.updateProjectionMatrix();
 }
 
-// --- L'aperçu de l'écran de réglages (§6.2) ---------------------------------
+// --- L'aperçu de l'écran de réglages (GRILLE§6.2) ---------------------------------
 
 /** Une voiture chargée une fois et gardée, pour être redessinée à chaque
  * mouvement de curseur. */
@@ -966,7 +966,7 @@ export interface GridStudio {
  * Monte le banc de l'aperçu de réglages : **six voitures gardées en mémoire**,
  * redessinées à chaque mouvement de curseur.
  *
- * C'est la décision structurante du §6.2. Régler l'angle sur une seule voiture
+ * C'est la décision structurante du GRILLE§6.2. Régler l'angle sur une seule voiture
  * conduit à l'optimiser pour elle et à massacrer les autres : on édite un
  * catalogue, l'aperçu doit être un catalogue. Et garder les modèles chargés est
  * ce qui rend le geste possible — reconvertir six voitures à chaque pixel de

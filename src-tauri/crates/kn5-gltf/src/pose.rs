@@ -1,4 +1,4 @@
-//! Posing a rig from a `.ksanim` frame (spec §4.6bis).
+//! Posing a rig from a `.ksanim` frame (PREVIEW§4.6bis).
 //!
 //! Two files describe a seated driver, and this module applies both the same
 //! way — by swapping local transforms into the model tree by node name:
@@ -164,7 +164,7 @@ mod tests {
     }
 
     // Rule: the middle frame is the wheel centred, the ends are the stops
-    // (§4.6bis). Off by one here and every driver preview is slightly turned.
+    // (PREVIEW§4.6bis). Off by one here and every driver preview is slightly turned.
     #[test]
     fn the_middle_frame_is_the_wheel_centred() {
         let anim = animation(101);

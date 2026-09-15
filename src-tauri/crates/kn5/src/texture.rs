@@ -3,7 +3,7 @@
 //! The name stored in the file ends in `.dds` far more often than the blob
 //! actually is one — mod authors rename PNGs and JPEGs freely, and AC loads
 //! them anyway. So the extension is never trusted; the magic bytes decide
-//! (spec §3.2).
+//! (PREVIEW§3.2).
 
 /// Container format of an embedded texture blob.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,7 +44,7 @@ impl ImageFormat {
 mod tests {
     use super::*;
 
-    // Rule: the blob decides, not the filename (§3.2).
+    // Rule: the blob decides, not the filename (PREVIEW§3.2).
     #[test]
     fn sniffs_container_from_magic_bytes() {
         assert_eq!(ImageFormat::sniff(b"DDS \x7c\x00\x00\x00"), ImageFormat::Dds, "dds");

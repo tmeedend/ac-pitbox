@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Plateau d'essayage de l'écran Pilote (docs/SPEC-ecran-pilote.md §5).
+  // Plateau d'essayage de l'écran Pilote (docs/SPEC-ecran-pilote.md PILOTE§5).
   //
   // **Deux vitesses, et c'est la clé de tout l'écran.** La spec suppose que
   // l'essai au survol coûte « quelques millisecondes » (§D2) ; or habiller un
@@ -40,7 +40,7 @@
   import { errorText } from "$lib/errors";
   import type * as ThreeModule from "three";
 
-  /** Les quatre cadrages de §5.2, dans le vocabulaire de l'écran. Déclaré ici
+  /** Les quatre cadrages de PILOTE§5.2, dans le vocabulaire de l'écran. Déclaré ici
    * et non exporté : le mode runes réserve `export` aux props. */
   type StageLane = "body" | "helmet" | "suit" | "gloves";
 
@@ -54,15 +54,15 @@
      * la texture qu'elle remplace. `null` au repos. */
     trial = null,
     /** Nom de ce qui est appliqué — l'essai s'il y en a un, le choix retenu
-     * sinon. Le nommer est obligatoire (§5.4) : sans ça, rien ne distingue ce
+     * sinon. Le nommer est obligatoire (PILOTE§5.4) : sans ça, rien ne distingue ce
      * qu'on survole de ce qu'on garde. */
     applied,
     /** Échantillon plat de ce qui est appliqué, seul recours quand la 3D ne
-     * démarre pas (§12.4). */
+     * démarre pas (PILOTE§12.4). */
     sample = null,
     /** Un survol est en cours. Distinct de `trial` : on survole aussi des
      * corps, qui n'ont pas de texture à échanger, et la ligne d'état doit les
-     * nommer comme les autres (§5.4). */
+     * nommer comme les autres (PILOTE§5.4). */
     trying = false,
   }: {
     carId: string;
@@ -98,7 +98,7 @@
     renderer: ThreeModule.WebGLRenderer;
     scene: ThreeModule.Scene;
     camera: ThreeModule.PerspectiveCamera;
-    /** Le pilote, dans un groupe qu'on fait tourner (§5.1 : glisser = pivoter
+    /** Le pilote, dans un groupe qu'on fait tourner (PILOTE§5.1 : glisser = pivoter
      * autour de l'axe vertical, rien d'autre). */
     pivot: ThreeModule.Group;
     rig: DriverRig;
@@ -138,7 +138,7 @@
           return;
         }
         // Le corps précédent reste affiché jusqu'à ce que le nouveau soit prêt
-        // (§9.2) : on ne démonte l'ancienne scène qu'ici, une fois le `.glb`
+        // (PILOTE§9.2) : on ne démonte l'ancienne scène qu'ici, une fois le `.glb`
         // obtenu. Jamais de plateau vide.
         const built = await build(node, preview.url, preview.rig);
         if (cancelled) {
@@ -154,7 +154,7 @@
       } catch (e) {
         if (cancelled) return;
         // La galerie et la sélection restent pleinement fonctionnelles :
-        // l'écran ne se bloque jamais sur l'absence de 3D (§12.4).
+        // l'écran ne se bloque jamais sur l'absence de 3D (PILOTE§12.4).
         phase = "unavailable";
         reason = errorText(e);
         console.error("driver: plateau indisponible", e);
@@ -170,7 +170,7 @@
 
   // Le cadrage suit la piste active, et **seulement** elle : un cadrage qui
   // bouge pendant qu'on compare des options rendrait la comparaison
-  // impossible (§5.2).
+  // impossible (PILOTE§5.2).
   $effect(() => {
     const wanted = lane;
     untrack(() => scene)?.frame(wanted, prefersReducedMotion());
@@ -225,7 +225,7 @@
     if (!texture) {
       const fetched = await loadTexture(stage, wanted.url);
       // Une vignette manquante — trois casques sur 176 n'en ont pas — laisse
-      // simplement la texture en place (§7.4).
+      // simplement la texture en place (PILOTE§7.4).
       if (!fetched) return;
       texture = fetched;
       stage.trials.set(wanted.url, fetched);
@@ -285,7 +285,7 @@
 
     // Le showroom des voitures est volontairement sombre : il a été calibré
     // pour que la peinture garde sa couleur. Sur une combinaison noire il ne
-    // reste rien à voir, or ici **le contraste prime sur le réalisme** (§5.1).
+    // reste rien à voir, or ici **le contraste prime sur le réalisme** (PILOTE§5.1).
     // D'où deux lampes explicites par-dessus l'environnement, l'une de face à
     // gauche, l'autre en contre pour décoller la silhouette du fond.
     //
@@ -359,7 +359,7 @@
     let animation: { from: ThreeModule.Vector3; to: ThreeModule.Vector3; d0: number; d1: number; t: number } | null =
       null;
 
-    // **C'est le pilote qui tourne, pas la caméra** (§5.1), et ce n'est pas
+    // **C'est le pilote qui tourne, pas la caméra** (PILOTE§5.1), et ce n'est pas
     // qu'une façon de dire : l'éclairage est fixe, trois-quarts avant-gauche,
     // et faire orbiter la caméra le laisserait derrière le sujet dès qu'on
     // regarde son dos. Un plateau tournant garde la lumière du côté du
@@ -416,7 +416,7 @@
     controls.minDistance = 0.15;
     controls.maxDistance = 8;
 
-    // Double-clic : remise de face **et** cadrage d'origine (§5.1). Le zoom
+    // Double-clic : remise de face **et** cadrage d'origine (PILOTE§5.1). Le zoom
     // n'ayant pas de commande à l'écran, il lui faut une marche arrière, et
     // c'est déjà le geste « remets tout comme c'était ».
     const onDouble = () => {
@@ -443,7 +443,7 @@
       const dt = Math.min((now - previous) / 1000, 0.1);
       previous = now;
       if (animation) {
-        // 220 ms, accélération douce (§5.2).
+        // 220 ms, accélération douce (PILOTE§5.2).
         animation.t = Math.min(animation.t + dt / 0.22, 1);
         const e = animation.t < 0.5 ? 2 * animation.t * animation.t : 1 - (-2 * animation.t + 2) ** 2 / 2;
         target = animation.from.clone().lerp(animation.to, e);
@@ -498,7 +498,7 @@
   const VIEW_AZIMUTH = -0.42;
   const VIEW_ELEVATION = 0.14;
 
-  /** Le cadrage d'une piste (§5.2), déduit du rig et non codé en dur. */
+  /** Le cadrage d'une piste (PILOTE§5.2), déduit du rig et non codé en dur. */
   function framingFor(
     THREE: typeof ThreeModule,
     lane: StageLane,
@@ -535,7 +535,7 @@
   <div class="canvas" bind:this={host} class:hidden={phase === "unavailable"}></div>
 
   {#if phase === "unavailable"}
-    <!-- §12.4 : l'échantillon plat de la pièce retenue, en grand. La galerie
+    <!-- PILOTE§12.4 : l'échantillon plat de la pièce retenue, en grand. La galerie
          et la sélection restent pleinement fonctionnelles. -->
     <div class="flat">
       <div class="art">
@@ -562,7 +562,7 @@
 </div>
 
 <style>
-  /* Dégradé radial du gris panneau vers le noir de fond (§5.1) : une livrée
+  /* Dégradé radial du gris panneau vers le noir de fond (PILOTE§5.1) : une livrée
      sombre doit rester lisible, donc le contraste prime sur le réalisme. */
   /* Le plateau vit dans une carte `.blk`, dont le fond est `--panel2` : le
      dégradé part du gris de carte et y retombe, au lieu d'ouvrir un trou plus
@@ -591,7 +591,7 @@
   }
 
 
-  /* Filet de progression en pied de plateau (§9.2). Le corps précédent reste
+  /* Filet de progression en pied de plateau (PILOTE§9.2). Le corps précédent reste
      affiché derrière : jamais de plateau vide. */
   /* Même badge, même serpent que l'aperçu 3D d'une voiture (`CarPreview3D`) :
      c'est le même moment — un modèle se prépare pendant que le précédent
@@ -694,7 +694,7 @@
     border-top: 1px solid var(--line);
     background: color-mix(in srgb, var(--panel2) 82%, transparent);
   }
-  /* Un des trois seuls emplois du rouge saturé sur cet écran (§15). */
+  /* Un des trois seuls emplois du rouge saturé sur cet écran (PILOTE§15). */
   .live {
     font-family: var(--mono);
     color: var(--rosso-bright);

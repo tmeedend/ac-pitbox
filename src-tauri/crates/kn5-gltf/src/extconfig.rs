@@ -989,7 +989,7 @@ fn section_applies(section: &Section, model_file: &str, skin_id: &str) -> bool {
 /// **The one thing we cannot reproduce** is where the target radius and width
 /// come from: CSP reads them out of `data/tyres.ini`, which on a packed car
 /// lives inside the encrypted `data.acd` that this project deliberately does
-/// not decrypt (SPEC-preview-3d-kn5 §4.2). Absent an explicit `Radius`/`Width`
+/// not decrypt (SPEC-preview-3d-kn5 PREVIEW§4.2). Absent an explicit `Radius`/`Width`
 /// in the section, we fall back to the dimensions the rim model declares for
 /// itself, i.e. a scale of exactly 1. That is the right answer whenever the
 /// modder sized the rim for this car, which is the normal case — the AE86's

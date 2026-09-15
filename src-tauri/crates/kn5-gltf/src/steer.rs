@@ -1,5 +1,5 @@
 //! Les roues braquées d'une voiture à l'arrêt — les roues avant et le volant
-//! (`docs/SPEC-preview-3d-kn5.md` §15).
+//! (`docs/SPEC-preview-3d-kn5.md` PREVIEW§15).
 //!
 //! **Rien dans un modèle de voiture ne dit de combien elles tournent.** Le
 //! `steer.ksanim` d'une voiture pose les membres du pilote et **eux seuls** —

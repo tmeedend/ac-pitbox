@@ -8,7 +8,7 @@ import { fileNameFromSrc, isIconSized, largerImage, resolveHref } from "./wikiHt
 // d'être suivie.
 
 describe("fileNameFromSrc", () => {
-  // Règle (§9) : le nom de fichier est la clé du crédit. Sans lui, l'image est
+  // Règle (WIKI§9) : le nom de fichier est la clé du crédit. Sans lui, l'image est
   // refusée — mieux vaut une image manquante qu'une image non créditée.
   it("retrouve le fichier derrière une URL de vignette", () => {
     expect(
@@ -59,7 +59,7 @@ describe("resolveHref", () => {
 });
 
 describe("isIconSized", () => {
-  // Regle (§7.3) : c'est la taille demandee par la page qui decide, pas le
+  // Regle (WIKI§7.3) : c'est la taille demandee par la page qui decide, pas le
   // fichier. Les cinq etoiles d'une note ANCAP font vingt pixels et forment un
   // score ; servies en vignette de 640 px elles devenaient cinq affiches
   // empilees, chacune avec sa ligne de credit — vu sur l'article `Audi TT`.
@@ -85,7 +85,7 @@ describe("isIconSized", () => {
 describe("largerImage", () => {
   // Règle : la visionneuse demande la même image en plus grand, et n'invente
   // jamais une URL qu'elle ne sait pas construire. Un repli silencieux sur la
-  // vignette vaut mieux qu'une image cassée — la §1 préfère toujours le moins
+  // vignette vaut mieux qu'une image cassée — la WIKI§1 préfère toujours le moins
   // au faux.
 
   it("demande la même image en plus grand", () => {

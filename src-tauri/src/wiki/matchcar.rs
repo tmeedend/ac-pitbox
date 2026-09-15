@@ -1,10 +1,10 @@
-//! Matching a car mod to a Wikidata entity, by name (§4.1).
+//! Matching a car mod to a Wikidata entity, by name (WIKI§4.1).
 //!
 //! Source: the `ui_car.json` fields the app already reads — `brand`, `name`,
 //! `year`. Two requests: a name search, then one batched fetch of the
 //! candidates' types and claims.
 //!
-//! The scoring is a pure function of what came back, so §11's requirement —
+//! The scoring is a pure function of what came back, so WIKI§11's requirement —
 //! "rejet effectif en cas de candidats proches ; acceptation du modèle
 //! générique quand la génération est absente" — is tested without a network.
 
@@ -30,7 +30,7 @@ pub struct CarSubject {
     pub category: Option<String>,
 }
 
-/// The string to search for: brand and name, cleaned (§4.3).
+/// The string to search for: brand and name, cleaned (WIKI§4.3).
 ///
 /// The brand is prepended only when the cleaned name does not already start
 /// with it — modders write both `Toyota AE86` and `AE86` under brand `Toyota`,
@@ -53,7 +53,7 @@ pub fn search_query(cleaner: &Cleaner, subject: &CarSubject) -> String {
 /// exists and never a penalty when it does not**. Measured on the real API —
 /// no car item carries `P571`, and only generations carry `P580`/`P582`. A
 /// missing period is therefore the normal case, and weighting it as a zero
-/// would systematically punish the generic model that §4.1 explicitly wants to
+/// would systematically punish the generic model that WIKI§4.1 explicitly wants to
 /// accept. So its weight is removed from the denominator instead.
 ///
 /// The brand is read from the candidate's **label and description** rather
@@ -147,11 +147,11 @@ pub fn rank(
     decide(candidates, thresholds)
 }
 
-/// The whole §4.1 pipeline, network included.
+/// The whole WIKI§4.1 pipeline, network included.
 ///
 /// `locale` is the reader's language: the search runs there first and falls
 /// back to English, for the reason `lang::search_order` documents. The language
-/// of the *article shown* is a separate question, settled later by §5.2.
+/// of the *article shown* is a separate question, settled later by WIKI§5.2.
 pub fn match_car(
     net: &WikiClient,
     cleaner: &Cleaner,
@@ -172,7 +172,7 @@ pub fn match_car(
             Fetched::Found(hits) => hits,
             // Nothing here; the next wiki may know it.
             Fetched::Absent => continue,
-            // Nothing was learned, so nothing is concluded (§1).
+            // Nothing was learned, so nothing is concluded (WIKI§1).
             Fetched::Unavailable => return MatchOutcome::Unavailable,
         };
         let ids: Vec<String> = hits.iter().map(|h| h.entity_id.clone()).collect();
@@ -184,7 +184,7 @@ pub fn match_car(
             Fetched::Absent => MatchOutcome::NoCandidate,
             Fetched::Unavailable => return MatchOutcome::Unavailable,
         };
-        // An ambiguity is a verdict (§1) and stops the walk; only "found
+        // An ambiguity is a verdict (WIKI§1) and stops the walk; only "found
         // nothing at all" is worth asking another wiki about.
         if !matches!(outcome, MatchOutcome::NoCandidate) {
             return outcome;
@@ -244,7 +244,7 @@ mod tests {
         );
     }
 
-    /// Rule (§4.1, §11): **the generic model is accepted when the generation is
+    /// Rule (WIKI§4.1, WIKI§11): **the generic model is accepted when the generation is
     /// absent.** The spec says so in as many words — "Toyota Corolla" is a
     /// valid result for an AE86 mod.
     #[test]
@@ -263,7 +263,7 @@ mod tests {
         }
     }
 
-    /// Rule (§1, §4.1.5, §11): **two plausible candidates produce nothing.**
+    /// Rule (WIKI§1, §4.1.5, WIKI§11): **two plausible candidates produce nothing.**
     /// Two generations of the same model, both matching the brand and the
     /// name, is the realistic ambiguity — and it must not be resolved.
     #[test]
@@ -311,7 +311,7 @@ mod tests {
     ///
     /// No car item measured carries `P571`, and only generations carry
     /// `P580`/`P582` — so "no period" is the ordinary case, the generic model
-    /// of §4.1 included. Neutral means two things: the candidate scores exactly
+    /// of WIKI§4.1 included. Neutral means two things: the candidate scores exactly
     /// what it would if no year had been asked for (the weight leaves the
     /// denominator), and it stays **ahead** of a candidate whose period
     /// actually contradicts the year.

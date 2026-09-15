@@ -144,11 +144,11 @@ pub struct DriverView {
 ///
 /// Une pièce à `None` laisse celle du skin. Le **mannequin, lui, n'a pas le
 /// même statut que les trois autres** et c'est l'asymétrie qui structure tout
-/// l'écran Pilote (`docs/SPEC-ecran-pilote.md` §1.3) : la tenue ne tient qu'au
+/// l'écran Pilote (`docs/SPEC-ecran-pilote.md` PILOTE§1.3) : la tenue ne tient qu'au
 /// `skin.ini`, un fichier de skin, alors que le mannequin est nommé par
 /// `driver3d.ini`, donc par le `data.acd` que le serveur de course vérifie.
 /// Le substituer ne vaut **que dans l'aperçu** — d'où le bandeau permanent que
-/// l'écran affiche tant que dure ce mode (§10.1).
+/// l'écran affiche tant que dure ce mode (PILOTE§10.1).
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OutfitOverride {
@@ -162,7 +162,7 @@ pub struct OutfitOverride {
 
 impl OutfitOverride {
     fn apply(&self, outfit: &mut DriverOutfit) {
-        // Corps substitué : la garde-robe du skin tombe avec lui (§10.1).
+        // Corps substitué : la garde-robe du skin tombe avec lui (PILOTE§10.1).
         // Elle est lue sous le nom de l'ancien mannequin — la section
         // `[driver_80]` d'un `skin.ini` ne dit rien du `driver_60` qu'on vient
         // de mettre à sa place, et la lui appliquer quand même reviendrait à
@@ -286,7 +286,7 @@ pub fn graft_for(
 }
 
 /// Le mannequin seul, habillé comme l'écran Pilote le demande — sans habitacle
-/// autour (`docs/SPEC-ecran-pilote.md` §5.1).
+/// autour (`docs/SPEC-ecran-pilote.md` PILOTE§5.1).
 ///
 /// Même résolution que [`resolve`], à une chose près : **l'ancrage tombe**. Il
 /// pose le corps sur le `DRIVEREYES` de la voiture, c'est-à-dire à sa place
@@ -420,12 +420,12 @@ pub struct DriverChoices {
     /// voiture, ou celui que l'utilisateur lui a substitué.
     pub model: String,
     /// `true` quand ce mannequin n'est pas celui que la voiture nomme — le
-    /// mode « corps substitué » de l'écran Pilote (§10), qui ne vaut que dans
+    /// mode « corps substitué » de l'écran Pilote (PILOTE§10), qui ne vaut que dans
     /// l'aperçu.
     pub substituted: bool,
     /// Époque de la boîte à casques du mannequin, clé de la table [`ERAS`].
     /// `None` = mannequin qui nomme ses images autrement, donc aucun casque du
-    /// jeu ne s'y pose (§11.1).
+    /// jeu ne s'y pose (PILOTE§11.1).
     pub era: Option<&'static str>,
     pub suits: Vec<WardrobeOption>,
     pub gloves: Vec<WardrobeOption>,
@@ -452,7 +452,7 @@ pub struct DriverChoices {
 /// comme les autres.
 pub fn choices(ac_root: &Path, car_dir: &Path, car_id: &str, body: Option<&str>) -> Option<DriverChoices> {
     let declared = outfit_of(car_dir, car_id, None)?.model;
-    // Le corps substitué commande les trois listes (§1.3) : c'est lui qui
+    // Le corps substitué commande les trois listes (PILOTE§1.3) : c'est lui qui
     // porte les noms de texture, donc lui qui décide de ce qui s'y pose.
     let model = body
         .map(str::trim)
@@ -572,16 +572,16 @@ fn thumbnail_of(files: &[PathBuf], matches: &dyn Fn(&Path) -> bool) -> Option<Pa
         .cloned()
 }
 
-// --- Les corps installés (§9) -----------------------------------------------
+// --- Les corps installés (PILOTE§9) -----------------------------------------------
 
 /// Époque d'un mannequin, lue sur le nom de la texture de casque qu'il
 /// échantillonne, et clé i18n du libellé que l'écran en affiche.
 ///
-/// **Table maintenue en code, indexée sur le préfixe** (§6.3) : c'est une
+/// **Table maintenue en code, indexée sur le préfixe** (PILOTE§6.3) : c'est une
 /// convention de nommage Kunos, pas une donnée du format, et un mannequin de
 /// mod qui nomme ses images autrement tombe simplement en `None` — sans
 /// erreur, et l'écran le dit en toutes lettres plutôt que de proposer un choix
-/// sans effet (§11.1). Mesuré sur les 52 mannequins de l'installation de
+/// sans effet (PILOTE§11.1). Mesuré sur les 52 mannequins de l'installation de
 /// référence : les quatre préfixes ci-dessous couvrent tous ceux dont un
 /// casque du jeu peut changer l'apparence, les autres (`RSS_Helmet`,
 /// `HELMET_HR2`, `helmet_2019`, `2016_Suit_DIFFc` de `yk2_kana`) portent leur
@@ -599,7 +599,7 @@ fn era_of(diffuse: &BTreeSet<String>) -> Option<&'static str> {
         .map(|(_, era)| *era)
 }
 
-/// Un mannequin installé, tel qu'il s'offre au choix (§9.1).
+/// Un mannequin installé, tel qu'il s'offre au choix (PILOTE§9.1).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BodyOption {
@@ -617,7 +617,7 @@ pub struct BodyOption {
 /// Le décompte n'est pas décoratif. Un `.kn5` posé dans `content/driver` mais
 /// dépourvu de squelette n'apparaît nulle part — ni ici, ni dans l'inventaire
 /// des compléments, qui cesse de lister les mannequins déployés puisque c'est
-/// ici qu'ils vivent (refonte §5). Sans ce chiffre, un mannequin importé
+/// ici qu'ils vivent (refonte PILOTE§5). Sans ce chiffre, un mannequin importé
 /// pourrait disparaître des deux écrans sans un mot.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct BodyList {
@@ -628,7 +628,7 @@ pub struct BodyList {
 
 /// Les mannequins qu'on peut proposer, triés par nom.
 ///
-/// **Un corps qu'on ne peut pas prendre n'a pas à être montré** (§9.3) : les
+/// **Un corps qu'on ne peut pas prendre n'a pas à être montré** (PILOTE§9.3) : les
 /// illisibles et ceux sans squelette sont écartés en silence. Le critère est
 /// mesuré, pas supposé — un mannequin sans *skinned mesh* n'a pas de rig, donc
 /// ni le `driver_base_pos.knh` de la voiture ni son `steer.ksanim` n'ont prise
@@ -870,12 +870,12 @@ SUIT=\\type1\\black_black
         assert_eq!(parse_position("0, x, 0"), None, "nor is a word");
     }
 
-    /// Règle §10.1 : substituer le corps supprime la référence « livrée ».
+    /// Règle PILOTE§10.1 : substituer le corps supprime la référence « livrée ».
     ///
     /// La garde-robe du `skin.ini` est écrite sous le nom de l'ancien
     /// mannequin ; la garder reviendrait à habiller le nouveau avec des
     /// fichiers qui ne le concernent pas — ce que l'écran annonce d'ailleurs
-    /// en toutes lettres avant de le faire (bannière d'invalidation, §10.2).
+    /// en toutes lettres avant de le faire (bannière d'invalidation, PILOTE§10.2).
     #[test]
     fn a_substituted_body_drops_the_wardrobe_of_the_livery() {
         let tmp = crate::testutil::temp_dir("driver_substitute");
@@ -924,7 +924,7 @@ SUIT=\\type1\\black_black
         assert_eq!(outfit, before, "rien ne bouge quand on redemande le corps déclaré");
     }
 
-    /// Règle §6.2 : l'époque se lit sur la texture de casque que le mannequin
+    /// Règle PILOTE§6.2 : l'époque se lit sur la texture de casque que le mannequin
     /// échantillonne, et rien d'autre — un mannequin de mod qui nomme ses
     /// images à lui n'a pas d'époque, il n'a pas non plus de casque à proposer.
     #[test]
@@ -1115,7 +1115,7 @@ SUIT=\\type1\\black_black
 
     /// Où un mannequin tient ses mains, sa tête et ses pieds dans sa **pose de
     /// repos** — celle qu'il a sans voiture autour de lui, donc celle du
-    /// plateau d'essayage (SPEC-ecran-pilote §5.1).
+    /// plateau d'essayage (SPEC-ecran-pilote PILOTE§5.1).
     ///
     /// La question à laquelle ce test répond : peut-on poser un volant
     /// générique à un endroit fixe, ou faut-il le calculer par mannequin ?

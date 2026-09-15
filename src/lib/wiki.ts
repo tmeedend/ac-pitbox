@@ -1,18 +1,18 @@
-// Onglet Wikipédia de la fiche (docs/SPEC-wikipedia-fiche-detail.md §7).
+// Onglet Wikipédia de la fiche (docs/SPEC-wikipedia-fiche-detail.md WIKI§7).
 //
-// **L'onglet est permanent**, écart assumé avec la §7.1 et décidé avec
+// **L'onglet est permanent**, écart assumé avec la WIKI§7.1 et décidé avec
 // l'utilisateur : un onglet absent ne se distingue ni d'une recherche en cours,
 // ni d'une fonctionnalité inexistante — et le moment où l'on a le plus besoin
 // d'agir est justement celui où rien n'a été trouvé. D'où `WikiPanel`, qui
 // porte un **état** et non un simple `article | null`.
 //
-// Ce que la §1 garde : aucun de ces états n'est une erreur. Rien ici ne
+// Ce que la WIKI§1 garde : aucun de ces états n'est une erreur. Rien ici ne
 // propage ; tout échec rend un panneau ou une liste vide.
 import { invoke } from "@tauri-apps/api/core";
 import { i18n } from "./i18n/index.svelte";
 import { getUiPref, peekUiPref, setUiPref } from "./uiPrefs.svelte";
 
-/** Une entrée de cache telle que le backend la rend (§3.2). */
+/** Une entrée de cache telle que le backend la rend (WIKI§3.2). */
 export interface WikiArticle {
   entityId: string;
   /** Langue **demandée**, pas forcément celle du texte — voir `articleLang`. */
@@ -21,7 +21,7 @@ export interface WikiArticle {
   articleUrl: string;
   revisionId: number | null;
   extract: string;
-  /** Non nul quand le texte est celui de l'entité parente (§5.3). */
+  /** Non nul quand le texte est celui de l'entité parente (WIKI§5.3). */
   parentEntity: string | null;
   availableLangs: string[];
   fetchedAt: string;
@@ -29,7 +29,7 @@ export interface WikiArticle {
    * `extract` (texte brut) porte l'onglet à lui seul. */
   html: string;
   sections: WikiSection[];
-  /** Les seules images affichables : Commons, licence et auteur connus (§9). */
+  /** Les seules images affichables : Commons, licence et auteur connus (WIKI§9). */
   images: WikiImage[];
 }
 
@@ -64,7 +64,7 @@ export interface WikiPanel {
   entityId: string | null;
 }
 
-/** Un candidat de la recherche libre (§7.6). */
+/** Un candidat de la recherche libre (WIKI§7.6). */
 export interface WikiSuggestion {
   entityId: string;
   label: string;
@@ -73,7 +73,7 @@ export interface WikiSuggestion {
   description: string | null;
 }
 
-/** Clé de la langue de lecture préférée (§5.1) : **globale**, pas par mod. */
+/** Clé de la langue de lecture préférée (WIKI§5.1) : **globale**, pas par mod. */
 const LANG_KEY = "pitbox.wiki.lang";
 
 export function wikiLang(): string {
@@ -93,7 +93,7 @@ export async function loadWikiLang(): Promise<void> {
  * Ce que l'onglet affiche pour un mod.
  *
  * Peut prendre quelques secondes au premier appel (appariement + article), et
- * c'est assumé : la §7.5 veut que la fiche s'affiche **complète et
+ * c'est assumé : la WIKI§7.5 veut que la fiche s'affiche **complète et
  * immédiatement**, le contenu de l'onglet arrivant ensuite. `null` pendant ce
  * temps-là, ce que l'onglet dit explicitement.
  */
@@ -101,14 +101,14 @@ export async function getWikiPanel(modKey: string, lang = wikiLang()): Promise<W
   try {
     return await invoke<WikiPanel>("get_wiki_panel", { modKey, lang });
   } catch (e) {
-    // Un échec ici n'a rien à dire à l'utilisateur (§1) ; il a tout à dire au
+    // Un échec ici n'a rien à dire à l'utilisateur (WIKI§1) ; il a tout à dire au
     // journal, sans quoi une install packagée ne laisse aucune trace.
     console.warn("get_wiki_panel", modKey, e);
     return { article: null, state: "unavailable", query: "", entityId: null };
   }
 }
 
-/** Recherche libre, filtre de type relâché (§7.6). Accepte aussi une URL
+/** Recherche libre, filtre de type relâché (WIKI§7.6). Accepte aussi une URL
  * Wikipédia collée, résolue en Q-id côté backend. */
 export async function searchWikiCandidates(query: string, lang = wikiLang()): Promise<WikiSuggestion[]> {
   try {
@@ -120,7 +120,7 @@ export async function searchWikiCandidates(query: string, lang = wikiLang()): Pr
 }
 
 /** Associe un article à la main : enregistré en `manual`, donc protégé de
- * toute reprise automatique et de la table livrée (§3.1). */
+ * toute reprise automatique et de la table livrée (WIKI§3.1). */
 export async function setWikiLink(modKey: string, entityId: string): Promise<void> {
   try {
     await invoke<void>("set_wiki_link", { modKey, entityId });
@@ -129,7 +129,7 @@ export async function setWikiLink(modKey: string, entityId: string): Promise<voi
   }
 }
 
-/** Détache l'article : un mod sans appariement est une réponse valable (§1). */
+/** Détache l'article : un mod sans appariement est une réponse valable (WIKI§1). */
 export async function clearWikiLink(modKey: string): Promise<void> {
   try {
     await invoke<void>("clear_wiki_link", { modKey });
@@ -138,7 +138,7 @@ export async function clearWikiLink(modKey: string): Promise<void> {
   }
 }
 
-/** §8 — vide le cache d'articles et le cache négatif, garde les appariements. */
+/** WIKI§8 — vide le cache d'articles et le cache négatif, garde les appariements. */
 export async function purgeWikiCache(): Promise<void> {
   try {
     await invoke<void>("purge_wiki_cache");
@@ -147,7 +147,7 @@ export async function purgeWikiCache(): Promise<void> {
   }
 }
 
-/** §10 — écrit `rules/wiki-links.json` (corrections locales fondues dedans) à
+/** WIKI§10 — écrit `rules/wiki-links.json` (corrections locales fondues dedans) à
  * l'endroit choisi, prêt à recoller dans le dépôt. Rend `false` en cas
  * d'échec. */
 export async function exportWikiLinks(path: string): Promise<boolean> {

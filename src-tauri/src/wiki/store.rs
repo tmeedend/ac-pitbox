@@ -1,10 +1,10 @@
-//! The three tables of §3, in `overlay.sqlite`.
+//! The three tables of WIKI§3, in `overlay.sqlite`.
 //!
 //! `wiki_link` is metadata the app produced and the user may correct; it
 //! belongs with the rest of the overlay, and it is the row that will travel
-//! between installations one day (§10). The two others are caches of what the
+//! between installations one day (WIKI§10). The two others are caches of what the
 //! network said, and they live in the same file for one practical reason: the
-//! purge of §8 is then two `DELETE`s under the lock the app already holds,
+//! purge of WIKI§8 is then two `DELETE`s under the lock the app already holds,
 //! rather than a second database with its own migrations.
 //!
 //! The schema itself is declared in `overlay::init`, like every other table —
@@ -15,7 +15,7 @@ use chrono::{DateTime, Duration, Local};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
-/// Where an appariement comes from, and who may overwrite whom (§3.1).
+/// Where an appariement comes from, and who may overwrite whom (WIKI§3.1).
 ///
 /// **The declaration order is the precedence**: the derived `Ord` gives
 /// `Auto < Import < Manual`, so `set_link` only has to compare. Spelled this
@@ -25,11 +25,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LinkSource {
-    /// Matched by the app (§4).
+    /// Matched by the app (WIKI§4).
     Auto,
-    /// Received from a shared set of appariements (§10, not implemented).
+    /// Received from a shared set of appariements (WIKI§10, not implemented).
     Import,
-    /// Corrected by hand (§7.6). Never overwritten automatically.
+    /// Corrected by hand (WIKI§7.6). Never overwritten automatically.
     Manual,
 }
 
@@ -53,7 +53,7 @@ impl LinkSource {
     }
 }
 
-/// §3.1 — one mod, one entity.
+/// WIKI§3.1 — one mod, one entity.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WikiLink {
@@ -65,10 +65,10 @@ pub struct WikiLink {
     pub resolved_at: String,
 }
 
-/// §3.2 — what is shown for one (entity, requested language) pair.
+/// WIKI§3.2 — what is shown for one (entity, requested language) pair.
 ///
 /// `lang` is the language that was **asked for**, not necessarily the one the
-/// text is in: the chain of §5.2 may have landed on English. The language
+/// text is in: the chain of WIKI§5.2 may have landed on English. The language
 /// actually displayed is readable from `article_url`, which is why that URL is
 /// stored rather than rebuilt (see `article_lang`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -80,8 +80,8 @@ pub struct CachedArticle {
     pub article_url: String,
     pub revision_id: Option<i64>,
     pub extract: String,
-    /// Set when the text comes from the parent entity (§5.3), which the
-    /// interface must say (§7.3).
+    /// Set when the text comes from the parent entity (WIKI§5.3), which the
+    /// interface must say (WIKI§7.3).
     pub parent_entity: Option<String>,
     pub available_langs: Vec<String>,
     pub fetched_at: String,
@@ -91,7 +91,7 @@ pub struct CachedArticle {
     pub html: String,
     #[serde(default)]
     pub sections: Vec<super::api::Section>,
-    /// Les seules images affichables : Commons, licence et auteur connus (§9).
+    /// Les seules images affichables : Commons, licence et auteur connus (WIKI§9).
     #[serde(default)]
     pub images: Vec<super::api::ImageCredit>,
 }
@@ -117,7 +117,7 @@ impl CachedArticle {
 /// article for thirty days. Bump this whenever the stored text changes meaning,
 /// and `purge_outdated` empties the cache once.
 ///
-/// 2 — the whole article rather than its introduction (§7.3).
+/// 2 — the whole article rather than its introduction (WIKI§7.3).
 /// 3 — the rendered article, its sections and its image credits alongside.
 /// 4 — the image credits carry the size of their image, without which the
 ///     article is laid out too short and moves under the reader as it loads.
@@ -138,12 +138,12 @@ pub fn purge_outdated(conn: &Connection) -> rusqlite::Result<bool> {
     Ok(stored.is_some())
 }
 
-/// §13: a cached article is refetched after thirty days. Long enough that a
+/// WIKI§13: a cached article is refetched after thirty days. Long enough that a
 /// browsed library costs nothing, short enough that a rewritten introduction
 /// catches up within a season.
 pub const POSITIVE_TTL_DAYS: i64 = 30;
 
-/// §3.3: a mod with no match is left alone for ninety days. An article can be
+/// WIKI§3.3: a mod with no match is left alone for ninety days. An article can be
 /// created in the meantime — this is the only reason the negative cache
 /// expires at all.
 pub const NEGATIVE_TTL_DAYS: i64 = 90;
@@ -155,7 +155,7 @@ fn now_stamp() -> String {
 /// Is an RFC3339 stamp still within `ttl` of `now`?
 ///
 /// `now` is a parameter and not a call to the clock: that is what lets the TTL
-/// test of §11 assert on an expired entry without waiting ninety days. An
+/// test of WIKI§11 assert on an expired entry without waiting ninety days. An
 /// unparseable stamp reads as stale — refetching costs one request, trusting a
 /// corrupted row costs a wrong article forever.
 pub fn is_fresh(stamp: &str, ttl: Duration, now: DateTime<Local>) -> bool {
@@ -181,7 +181,7 @@ pub fn get_link(conn: &Connection, mod_key: &str) -> rusqlite::Result<Option<Wik
     .optional()
 }
 
-/// Writes an appariement **if the precedence allows it** (§3.1).
+/// Writes an appariement **if the precedence allows it** (WIKI§3.1).
 ///
 /// Returns whether the row was written. A refusal is not an error: re-running
 /// the automatic matching over a library where the user corrected three entries
@@ -205,7 +205,7 @@ pub fn set_link(conn: &Connection, mod_key: &str, entity_id: &str, source: LinkS
 }
 
 /// Drops an appariement. Used when a correction says "none of these" — the mod
-/// then has no entity at all, which is a valid answer (§1).
+/// then has no entity at all, which is a valid answer (WIKI§1).
 pub fn clear_link(conn: &Connection, mod_key: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM wiki_link WHERE mod_key = ?1", [mod_key])?;
     Ok(())
@@ -272,7 +272,7 @@ pub fn put_article(conn: &Connection, article: &CachedArticle) -> rusqlite::Resu
     Ok(())
 }
 
-/// Records that this mod led nowhere (§3.3).
+/// Records that this mod led nowhere (WIKI§3.3).
 ///
 /// Only ever called on a **durable** non-result — an entity or an article that
 /// does not exist. A network failure must never come through here: it would
@@ -293,7 +293,7 @@ pub fn forget_no_match(conn: &Connection, mod_key: &str) -> rusqlite::Result<()>
 
 /// Has this mod been tried recently enough that it should not be tried again?
 ///
-/// This is the whole point of the table (§3.3): without it, every opening of a
+/// This is the whole point of the table (WIKI§3.3): without it, every opening of a
 /// fiche with no match replays a full resolution — two requests each time, for
 /// an answer that will not have changed.
 pub fn has_fresh_no_match(conn: &Connection, mod_key: &str, now: DateTime<Local>) -> rusqlite::Result<bool> {
@@ -307,7 +307,7 @@ pub fn has_fresh_no_match(conn: &Connection, mod_key: &str, now: DateTime<Local>
     Ok(stamp.is_some_and(|s| is_fresh(&s, Duration::days(NEGATIVE_TTL_DAYS), now)))
 }
 
-/// §8 — empties both caches and **keeps the appariements**. Corrections made by
+/// WIKI§8 — empties both caches and **keeps the appariements**. Corrections made by
 /// hand are not cache, and re-matching a whole library to recover them would be
 /// both slow and lossy.
 pub fn purge_cache(conn: &Connection) -> rusqlite::Result<()> {
@@ -343,7 +343,7 @@ mod tests {
         }
     }
 
-    /// Rule (§3.1): `manual` is never overwritten automatically — not by the
+    /// Rule (WIKI§3.1): `manual` is never overwritten automatically — not by the
     /// matching engine, not by a shared set of appariements.
     #[test]
     fn a_manual_link_survives_auto_and_import() {
@@ -356,7 +356,7 @@ mod tests {
         );
         assert!(
             !set_link(&conn, "ks_toyota_ae86", "Q888", LinkSource::Import).unwrap(),
-            "a shared appariement must give way too (§10)"
+            "a shared appariement must give way too (WIKI§10)"
         );
 
         let link = get_link(&conn, "ks_toyota_ae86").unwrap().expect("link");
@@ -364,7 +364,7 @@ mod tests {
         assert_eq!(link.source, LinkSource::Manual);
     }
 
-    /// Rule (§3.1): the precedence runs the other way round without resistance,
+    /// Rule (WIKI§3.1): the precedence runs the other way round without resistance,
     /// and an equal rank refreshes its own verdict.
     #[test]
     fn a_stronger_source_replaces_a_weaker_one() {
@@ -387,7 +387,7 @@ mod tests {
         assert_eq!(get_link(&conn, "mod").unwrap().unwrap().entity_id, "Q4");
     }
 
-    /// Rule (§3.2): a cache row survives the round trip whole, list of
+    /// Rule (WIKI§3.2): a cache row survives the round trip whole, list of
     /// languages and parent fallback included.
     #[test]
     fn a_cache_row_round_trips() {
@@ -402,11 +402,11 @@ mod tests {
         assert_eq!(
             back.parent_entity.as_deref(),
             Some("Q2626308"),
-            "the parent fallback must stay visible to the interface (§7.3)"
+            "the parent fallback must stay visible to the interface (WIKI§7.3)"
         );
     }
 
-    /// Rule (§3.2): the same entity in two languages is two rows, not one
+    /// Rule (WIKI§3.2): the same entity in two languages is two rows, not one
     /// overwriting the other — the primary key is composite.
     #[test]
     fn two_languages_of_one_entity_coexist() {
@@ -419,7 +419,7 @@ mod tests {
         assert!(get_article(&conn, "Q1377219", "en").unwrap().is_some());
     }
 
-    /// Rule (§3.3, §11): a mod that led nowhere is not tried again before the
+    /// Rule (WIKI§3.3, WIKI§11): a mod that led nowhere is not tried again before the
     /// TTL expires — and is tried again after.
     #[test]
     fn the_negative_cache_holds_for_its_ttl_and_not_longer() {
@@ -434,7 +434,7 @@ mod tests {
         note_no_match(&conn, "ks_unknown").unwrap();
         assert!(
             has_fresh_no_match(&conn, "ks_unknown", now).unwrap(),
-            "just recorded: no new request (§3.3)"
+            "just recorded: no new request (WIKI§3.3)"
         );
 
         let later = now + Duration::days(NEGATIVE_TTL_DAYS) + Duration::hours(1);
@@ -444,7 +444,7 @@ mod tests {
         );
     }
 
-    /// Rule (§8): the purge takes the caches and leaves the appariements. A
+    /// Rule (WIKI§8): the purge takes the caches and leaves the appariements. A
     /// correction made by hand is not cache.
     #[test]
     fn the_purge_keeps_what_the_user_decided() {
@@ -460,10 +460,13 @@ mod tests {
             !has_fresh_no_match(&conn, "other_mod", Local::now()).unwrap(),
             "negative cache emptied"
         );
-        assert!(get_link(&conn, "mod").unwrap().is_some(), "the appariement stays (§8)");
+        assert!(
+            get_link(&conn, "mod").unwrap().is_some(),
+            "the appariement stays (WIKI§8)"
+        );
     }
 
-    /// Rule (§3.2/§5.2): the displayed language is readable off the stored URL,
+    /// Rule (WIKI§3.2/WIKI§5.2): the displayed language is readable off the stored URL,
     /// which is what makes a tenth column unnecessary — a French request served
     /// by the English article must not look French.
     #[test]
@@ -478,7 +481,7 @@ mod tests {
         assert_eq!(row.article_lang(), None, "not a Wikipedia URL, no claim made");
     }
 
-    /// Rule (§13): freshness is decided against a clock the caller passes, and
+    /// Rule (WIKI§13): freshness is decided against a clock the caller passes, and
     /// a stamp that cannot be read counts as stale.
     #[test]
     fn freshness_is_decided_against_the_given_clock() {

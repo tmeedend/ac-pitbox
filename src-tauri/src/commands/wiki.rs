@@ -1,4 +1,4 @@
-//! Wikipedia tab commands (`docs/SPEC-wikipedia-fiche-detail.md` §7).
+//! Wikipedia tab commands (`docs/SPEC-wikipedia-fiche-detail.md` WIKI§7).
 //!
 //! **The SQLite lock is never held across the network**, and that shapes the
 //! whole file. A resolution can spend fifteen seconds on timeouts in the worst
@@ -21,10 +21,10 @@ use crate::wiki::{self, manual::Suggestion, matching::Thresholds, store::LinkSou
 /// algorithm.
 const SUGGESTION_LIMIT: u32 = 10;
 
-/// Everything the tab shows, resolving the article if needed (§5, §7).
+/// Everything the tab shows, resolving the article if needed (WIKI§5, WIKI§7).
 ///
 /// Never an error for an absent article: absence is a **state**, carried in
-/// `state`, and the tab answers it with an offer rather than a message (§1).
+/// `state`, and the tab answers it with an offer rather than a message (WIKI§1).
 /// The only `Err` here is a poisoned mutex, which is a bug.
 #[tauri::command]
 pub async fn get_wiki_panel(
@@ -67,7 +67,7 @@ pub async fn get_wiki_panel(
     Ok(wiki::commit(&conn, resolved))
 }
 
-/// Free search for the correction panel (§7.6).
+/// Free search for the correction panel (WIKI§7.6).
 ///
 /// Takes no database at all: it only asks Wikipedia. The type filter is
 /// **relaxed** here, deliberately — the spec's own argument is that a user who
@@ -75,7 +75,7 @@ pub async fn get_wiki_panel(
 /// taxonomy.
 ///
 /// A URL pasted instead of words is recognised and resolved to its entity, the
-/// URL itself never being stored (§3.1).
+/// URL itself never being stored (WIKI§3.1).
 #[tauri::command]
 pub async fn search_wiki_candidates(app: AppHandle, query: String, lang: String) -> Result<Vec<Suggestion>, String> {
     let config_dir = config_dir(&app)?;
@@ -103,8 +103,8 @@ pub async fn search_wiki_candidates(app: AppHandle, query: String, lang: String)
     .map_err(|e| e.to_string())
 }
 
-/// Ties a mod to an entity by hand (§7.6). Stored as `manual`, which the
-/// precedence of §3.1 then protects from every automatic pass and from the
+/// Ties a mod to an entity by hand (WIKI§7.6). Stored as `manual`, which the
+/// precedence of WIKI§3.1 then protects from every automatic pass and from the
 /// shipped table.
 ///
 /// The cached article of the previous entity is left alone: it belongs to that
@@ -120,8 +120,8 @@ pub fn set_wiki_link(db: State<Db>, mod_key: String, entity_id: String) -> Resul
     wiki::store::forget_no_match(&conn, &mod_key).map_err(|e| e.to_string())
 }
 
-/// Unties a mod from its entity (§7.6, "none of these"). A mod with no
-/// appariement is a valid answer (§1) — and the negative cache is cleared too,
+/// Unties a mod from its entity (WIKI§7.6, "none of these"). A mod with no
+/// appariement is a valid answer (WIKI§1) — and the negative cache is cleared too,
 /// so the automatic matching gets another go rather than staying written off.
 #[tauri::command]
 pub fn clear_wiki_link(db: State<Db>, mod_key: String) -> Result<(), String> {
@@ -130,7 +130,7 @@ pub fn clear_wiki_link(db: State<Db>, mod_key: String) -> Result<(), String> {
     wiki::store::forget_no_match(&conn, &mod_key).map_err(|e| e.to_string())
 }
 
-/// §8 — vide le cache d'articles et le cache négatif, **garde les
+/// WIKI§8 — vide le cache d'articles et le cache négatif, **garde les
 /// appariements**. Une correction faite à la main n'est pas du cache, et
 /// réapparier toute une bibliothèque pour la retrouver serait long et lossy.
 #[tauri::command]
@@ -139,7 +139,7 @@ pub fn purge_wiki_cache(db: State<Db>) -> Result<(), String> {
     wiki::store::purge_cache(&conn).map_err(|e| e.to_string())
 }
 
-/// §10 — le contenu de `rules/wiki-links.json` avec les corrections locales
+/// WIKI§10 — le contenu de `rules/wiki-links.json` avec les corrections locales
 /// fondues dedans, prêt à être recollé dans le dépôt.
 ///
 /// Écrit à l'endroit que la boîte de dialogue du système a rendu — donc un

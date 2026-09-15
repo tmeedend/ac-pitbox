@@ -1,4 +1,4 @@
-//! Configuration du module musique (§2 de la spec) : fichier séparé de
+//! Configuration du module musique (MUSIQUE§2 de la spec) : fichier séparé de
 //! `config.json`, comme prescrit — l'ambiance musicale est un réglage à part
 //! entière, pas un champ de plus dans `Prefs`.
 //!
@@ -24,7 +24,7 @@ pub const CURRENT_VERSION: u32 = 1;
 pub struct MusicConfig {
     pub version: u32,
     /// Coupe-circuit global : si faux, entrer en Big Picture ne joue rien
-    /// (§6, case à cocher "Activer la musique dans le mode Big Picture").
+    /// (MUSIQUE§6, case à cocher "Activer la musique dans le mode Big Picture").
     pub enabled: bool,
     /// Décochée par défaut : les deux ambiances jouent le pack embarqué
     /// (§16.1, `embedded_menu_dir`/`embedded_grid_dir`), aucun dossier à
@@ -77,14 +77,14 @@ impl MusicConfig {
     }
 }
 
-/// Dossier Musique de l'app (§3.1), sous le dossier de config — jamais le
+/// Dossier Musique de l'app (MUSIQUE§3.1), sous le dossier de config — jamais le
 /// dossier Musique de Windows, qui n'est qu'un point de départ pour le
 /// sélecteur de dossier côté frontend (`open()` avec `defaultPath`).
 fn music_root(app: &AppHandle) -> PathBuf {
     app.path().app_config_dir().unwrap_or_default().join("Music")
 }
 
-/// Repli des dossiers personnalisés (§3.1) tant qu'aucun n'a été choisi via
+/// Repli des dossiers personnalisés (MUSIQUE§3.1) tant qu'aucun n'a été choisi via
 /// Parcourir — vides, juste un point de départ cohérent pour le sélecteur.
 /// Distinct du pack embarqué ci-dessous : ce dossier-ci appartient à
 /// l'utilisateur, jamais réécrit par l'app.
@@ -118,7 +118,7 @@ fn embedded_grid_dir(app: &AppHandle) -> PathBuf {
     music_root(app).join("embedded").join("grid")
 }
 
-/// Crée les dossiers par défaut (§3.1, repli des dossiers personnalisés) et
+/// Crée les dossiers par défaut (MUSIQUE§3.1, repli des dossiers personnalisés) et
 /// dépose/rafraîchit le pack embarqué (§16.1) — best-effort, un échec
 /// n'empêche pas l'app de démarrer.
 pub fn ensure_default_dirs(app: &AppHandle) {
@@ -260,7 +260,7 @@ mod tests {
 
     #[test]
     fn missing_fields_fall_back_to_defaults_serde_default() {
-        // `#[serde(default)]` (§2, "règles de persistance") : un music.json
+        // `#[serde(default)]` (MUSIQUE§2, "règles de persistance") : un music.json
         // partiel (ancienne version, édition manuelle) ne doit pas planter,
         // les champs absents reprennent leur valeur par défaut.
         let partial: MusicConfig = serde_json::from_str(r#"{"enabled": false}"#).unwrap();

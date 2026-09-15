@@ -1,4 +1,4 @@
-//! Regenerated thumbnails for the library grid (`docs/SPEC-grille.md` §5).
+//! Regenerated thumbnails for the library grid (`docs/SPEC-grille.md` GRILLE§5).
 //!
 //! Rendering happens in the frontend — that is where three.js lives — so the
 //! round trip is: ask what this car needs (`grid_thumbnail`), convert it out of
@@ -41,7 +41,7 @@ pub async fn grid_thumbnail(
 }
 
 /// Converts one car **outside the preview cache** and returns the URL of the
-/// model to render (§5.3).
+/// model to render (GRILLE§5.3).
 ///
 /// The obvious implementation would reuse `prepare_car_preview`. It must not:
 /// the generation would fill the LRU cache with 312 cars the user will never
@@ -71,7 +71,7 @@ pub fn save_grid_thumbnail(app: AppHandle, stem: String, png: Vec<u8>) -> Result
     crate::gridthumbs::write(&app, &stem, &png).map(|path| path.to_string_lossy().into_owned())
 }
 
-/// Remembers that this car will not render, and why (§7).
+/// Remembers that this car will not render, and why (GRILLE§7).
 ///
 /// `reason` is an i18n key — `errors.previewProtected` for an encrypted model,
 /// which is the case this exists for. It is never retried until the mod itself
@@ -101,7 +101,7 @@ pub fn release_grid_model(app: AppHandle) {
     crate::preview::release_scratch(&app);
 }
 
-/// Counters for the settings screen and the generation report (§8.2).
+/// Counters for the settings screen and the generation report (GRILLE§8.2).
 #[tauri::command]
 pub fn grid_thumbnail_stats(app: AppHandle) -> Result<GridThumbStats, String> {
     crate::gridthumbs::stats(&app)

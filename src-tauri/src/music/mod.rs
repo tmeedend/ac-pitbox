@@ -3,13 +3,13 @@
 //! Périmètre de cette première implémentation ("noyau du module", décidé avec
 //! l'utilisateur) : moteur audio à deux ambiances avec crossfade, détection du
 //! lancement d'AC, coupure/duck de session, sélection de dossier par
-//! Parcourir, normalisation RMS + cache d'index (§3.4, `index.rs`).
+//! Parcourir, normalisation RMS + cache d'index (MUSIQUE§3.4, `index.rs`).
 //! Pack par défaut embarqué (§16.1, deux pistes Pixabay Content License,
 //! crédits dans `assets/music/CREDITS.md`) déposé dans les dossiers par
 //! défaut à leur création (`config::ensure_default_dirs`) — l'utilisateur
 //! reste libre de les remplacer ou de les vider, jamais réécrits ensuite.
 //! **Écartée pour de bon** (pas juste reportée, décidé avec l'utilisateur) :
-//! la détection automatique des bandes-son Steam (§3.2) — le sélecteur de
+//! la détection automatique des bandes-son Steam (MUSIQUE§3.2) — le sélecteur de
 //! dossier par Parcourir suffit.
 //!
 //! La spec cible NAudio/C# ; ce module est sa transposition Rust avec

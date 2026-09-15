@@ -12,7 +12,7 @@ pub type Result<T> = std::result::Result<T, Kn5Error>;
 pub enum Kn5Error {
     /// Magic bytes are not `sc6969`. Also what an encrypted (CSP-protected)
     /// KN5 looks like from here — telling the two apart is the caller's job
-    /// (spec §4.5); the parser never tries to decrypt anything.
+    /// (PREVIEW§4.5); the parser never tries to decrypt anything.
     #[error("not a KN5 file (bad magic)")]
     NotAKn5File,
 

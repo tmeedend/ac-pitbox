@@ -1,5 +1,5 @@
 // Dark showroom used as the preview's image-based lighting
-// (docs/SPEC-preview-3d-kn5.md §8.1, §15 point 7).
+// (docs/SPEC-preview-3d-kn5.md PREVIEW§8.1, PREVIEW§15 point 7).
 //
 // three.js ships `RoomEnvironment`, a bright **white** room. On car paint —
 // which the surface maps now report as nearly smooth — the whole body ends up
@@ -11,7 +11,7 @@
 // reflects black except where it catches a strip, which is what keeps a colour
 // deep and draws the long highlight along a bonnet.
 //
-// Procedural, like `RoomEnvironment` itself: §8.1 rules out shipping any asset
+// Procedural, like `RoomEnvironment` itself: PREVIEW§8.1 rules out shipping any asset
 // for the preview, and an HDRI would be one.
 import type * as ThreeModule from "three";
 

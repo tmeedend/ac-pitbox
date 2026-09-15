@@ -10,7 +10,7 @@
 //! The in-house FSB5 decoder is not replaced by any of this: it still feeds the
 //! mod sheet (codec, sample count, rate, duration) and it is still the only
 //! path that works with no game installed. See
-//! `docs/SPEC-engine-sound-fmod.md` §4.1.
+//! `docs/SPEC-engine-sound-fmod.md` FMOD§4.1.
 //!
 //! Layout, and why it is split this way: `guids` and `params` are pure and
 //! portable, so the recognition rules that decide what actually gets played are

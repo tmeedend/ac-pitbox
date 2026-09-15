@@ -1,4 +1,4 @@
-//! Roughness read from `txMaps` (spec §6.2, §12 q3 — partly answered).
+//! Roughness read from `txMaps` (PREVIEW§6.2, PREVIEW§12 q3 — partly answered).
 //!
 //! `txMaps` is AC's per-pixel surface map. Measured across the reference
 //! library, its **green channel is glossiness**, and that is the only channel

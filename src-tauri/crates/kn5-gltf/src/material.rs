@@ -1,9 +1,9 @@
-//! KN5 material → glTF PBR (spec §6).
+//! KN5 material → glTF PBR (PREVIEW§6).
 //!
 //! An approximation, and an assumed one: AC's shaders are not
 //! metallic/roughness, so there is no exact conversion. The rule followed here
 //! is the spec's — a plausible diffuse result beats a wrong metallic one
-//! (§6.2), so `metallicFactor` stays at zero until the semantics of `txMaps`
+//! (PREVIEW§6.2), so `metallicFactor` stays at zero until the semantics of `txMaps`
 //! are actually documented rather than guessed.
 
 use kn5::Kn5Material;
@@ -182,7 +182,7 @@ pub(crate) fn alpha_mode_of(material: &Kn5Material) -> (AlphaMode, f32) {
         (AlphaMode::Blend, 0.5)
     } else if material.alpha_tested {
         // Le drapeau décodé est le signal fiable ici, plus que `ksAlphaRef > 0`
-        // — voir docs/kn5-format.md, §12 q2.
+        // — voir docs/kn5-format.md, PREVIEW§12 q2.
         (AlphaMode::Mask, alpha_cutoff_of(material))
     } else {
         (AlphaMode::Opaque, 0.5)
@@ -279,7 +279,7 @@ const METALLIC_MIN_REFLECTION: f32 = 0.15;
 /// Deux familles sont exclues quoi qu'annonce leur `fresnelC`. Le **vitrage**,
 /// diélectrique très réfléchissant que la métallicité rendrait opaque et
 /// teinté — c'est le contraire d'une vitre. Et le **caoutchouc**, pour la même
-/// raison qu'au §6.3 : un pneu n'est jamais un miroir, quoi qu'en dise son
+/// raison qu'au PREVIEW§6.3 : un pneu n'est jamais un miroir, quoi qu'en dise son
 /// matériau.
 fn metallic_of(material: &Kn5Material, shader: &str) -> f32 {
     if GLASS_MARKERS.iter().any(|marker| shader.contains(marker)) || shader.contains("ksTyres") {
@@ -348,7 +348,7 @@ fn metallic_of(material: &Kn5Material, shader: &str) -> f32 {
 pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMaterial {
     let shader = material.shader.as_str();
 
-    // §6.1: an approximation to calibrate by eye, not an exact conversion.
+    // PREVIEW§6.1: an approximation to calibrate by eye, not an exact conversion.
     // `ksSpecularEXP` is a Blinn-Phong exponent; the square root maps its very
     // non-linear range onto something roughness-shaped.
     //
@@ -362,7 +362,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     };
     // Tyres are the one surface where a generic guess is plainly wrong: rubber
     // is almost fully rough, and reading it off `ksSpecularEXP` gives a
-    // plastic sheen (§6.3).
+    // plastic sheen (PREVIEW§6.3).
     let roughness = if shader.contains("ksTyres") { 0.9 } else { roughness };
     // Glass is the other one, in the opposite direction. `ksWindscreen`
     // announces `ksSpecular = 0` and `ksSpecularEXP = 10` — its shader does not
@@ -467,7 +467,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     }
 
     if !shader.starts_with("ks") {
-        // Never a failure (§6.3), but worth collecting: the list of shaders met
+        // Never a failure (PREVIEW§6.3), but worth collecting: the list of shaders met
         // in the wild is what drives the next round of material work.
         log::warn!(
             "kn5-gltf: unknown shader `{shader}` on material `{}`, using defaults",
@@ -546,7 +546,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // **Et le symétrique : un alpha qui ne fait que découper n'est pas un
     // fondu.** Même image — il ne vaut que 0 ou 255 —, mais rendue dans la
     // passe opaque, où la profondeur arbitre. En fondu, elle ne le fait pas :
-    // §8.2 retire l'écriture de profondeur à tout le transparent, pour que
+    // PREVIEW§8.2 retire l'écriture de profondeur à tout le transparent, pour que
     // l'habitacle reste visible derrière le pare-brise. C'est juste pour une
     // vitre et faux pour une décalcomanie, qui se retrouve départagée par
     // l'ordre des matériaux dans le fichier au lieu de sa position.
@@ -593,7 +593,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
         metallic,
         alpha_mode,
         // Glass rendered double-sided shows the inside of the far pane through
-        // the near one; §6.1 asks for single-sided there specifically.
+        // the near one; PREVIEW§6.1 asks for single-sided there specifically.
         double_sided: false,
         alpha_cutoff,
         base_color,
@@ -855,7 +855,7 @@ mod tests {
     }
 
     // Rule: the alpha-tested byte drives MASK. Ignoring it renders grilles and
-    // ajoured rims as solid panels (§10).
+    // ajoured rims as solid panels (PREVIEW§10).
     #[test]
     fn alpha_tested_material_becomes_a_mask() {
         let converted = convert(
@@ -1042,7 +1042,7 @@ mod tests {
     // c'est elle qui lui donne un aspect plausible.
     // Règle : un `blend_mode = 1` dont l'alpha ne fait que découper se rend en
     // `MASK`, dans la passe opaque. Bug réel, `rss_gtm_lanzo_v10` : en fondu,
-    // le numéro de portière n'écrivait pas la profondeur (§8.2) et le calque de
+    // le numéro de portière n'écrivait pas la profondeur (PREVIEW§8.2) et le calque de
     // décalcomanies de toute la voiture, dessiné après lui, le recouvrait —
     // 4 558 pixels d'un côté de la voiture, 119 de l'autre.
     #[test]
@@ -1063,7 +1063,7 @@ mod tests {
         );
 
         // Et le verre garde son fondu : sa transparence vient du reflet, pas
-        // de l'alpha, et le cockpit doit rester visible derrière (§8.2).
+        // de l'alpha, et le cockpit doit rester visible derrière (PREVIEW§8.2).
         let glass = material("ksWindscreen", 1, false, &[("ksDiffuse", 0.3)]);
         assert_eq!(
             convert(
@@ -1465,7 +1465,7 @@ mod tests {
 
     // Règle : deux surfaces ne deviennent jamais métalliques, quoi qu'annonce
     // leur `fresnelC` — une vitre métallique est opaque, un pneu n'est pas un
-    // miroir (§6.3).
+    // miroir (PREVIEW§6.3).
     #[test]
     fn glass_and_rubber_are_never_metallic() {
         let shiny = material("ksWindscreen", 1, false, &[("fresnelC", 0.9), ("fresnelMaxLevel", 1.0)]);
@@ -1568,8 +1568,8 @@ mod tests {
         );
     }
 
-    // Rule: metallic stays at zero until §12 q3 is answered — a wrong
-    // metallic surface looks far worse than a merely diffuse one (§6.2).
+    // Rule: metallic stays at zero until PREVIEW§12 q3 is answered — a wrong
+    // metallic surface looks far worse than a merely diffuse one (PREVIEW§6.2).
     #[test]
     fn metallic_stays_neutral() {
         assert_eq!(

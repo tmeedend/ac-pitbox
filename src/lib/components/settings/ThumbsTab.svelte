@@ -1,14 +1,14 @@
 <script lang="ts">
-  // Presets de vignettes de la grille (docs/SPEC-grille.md §6).
+  // Presets de vignettes de la grille (docs/SPEC-grille.md GRILLE§6).
   //
-  // **Un onglet à part de l'aperçu 3D, et ce n'est pas un rangement** (§6.1).
+  // **Un onglet à part de l'aperçu 3D, et ce n'est pas un rangement** (GRILLE§6.1).
   // Les deux règlent une caméra et des lumières, mais tourner l'aperçu d'une
   // fiche ne coûte rien et ne dure que le temps qu'on la regarde, alors que
   // toucher à un preset périme les images de toute la grille. C'est cette
   // asymétrie qui rend acceptable qu'un écran affiche une facture et prévienne,
   // et que l'autre n'avertisse jamais.
   //
-  // D'où la règle du §6.3 : **rien ne s'applique avant Appliquer.** Manipuler
+  // D'où la règle du GRILLE§6.3 : **rien ne s'applique avant Appliquer.** Manipuler
   // les curseurs ne régénère rien, le pied de l'écran chiffre ce que ça
   // coûtera, et Annuler ne coûte rien — ce qui rend l'expérimentation gratuite.
   //
@@ -95,7 +95,7 @@
   });
 
   /**
-   * La facture du §6.3, affichée en continu.
+   * La facture du GRILLE§6.3, affichée en continu.
    *
    * **Toutes les voitures**, moins celles qu'on sait protégées : changer un
    * seul degré change l'empreinte du gabarit, donc le nom de toutes les images,
@@ -151,7 +151,7 @@
   }
 
   /**
-   * « Générer toute la bibliothèque » (§5.4).
+   * « Générer toute la bibliothèque » (GRILLE§5.4).
    *
    * Ce n'est pas le même besoin que la génération au fil de l'eau : à
    * l'installation on exprime une intention, ici on déclenche un travail —
@@ -255,7 +255,7 @@
             <!-- Le décompte des impossibles se dit une fois, sans tonalité
                  d'échec : l'utilisateur n'y peut rien, aucune action n'est
                  proposable, et ces cartes restent parfaitement utilisables avec
-                 leur photo d'origine (§7). -->
+                 leur photo d'origine (GRILLE§7). -->
             {#if stats && stats.failed > 0}
               <span class="muted">{t("settings.gridThumbsFailed", { count: String(stats.failed) })}</span>
             {/if}

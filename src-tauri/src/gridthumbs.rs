@@ -1,4 +1,4 @@
-//! Regenerated thumbnails for the library grid (`docs/SPEC-grille.md` §5).
+//! Regenerated thumbnails for the library grid (`docs/SPEC-grille.md` GRILLE§5).
 //!
 //! The grid shows whatever the mod author shipped as `preview.png`: renders on
 //! black, renders on white, in-game captures, photographs. The eye re-adapts to
@@ -15,7 +15,7 @@
 //! is twenty megabytes that must not. Same reasoning — and same measurement —
 //! as the driver body thumbnails: 312 conversions poured into a pool that is
 //! already at its 2 GiB cap evict the entries the user actually consults, and
-//! the cache starts working against them (§5.3).
+//! the cache starts working against them (GRILLE§5.3).
 //!
 //! **A thumbnail identity is the car cache entry name plus the template.** The
 //! first half already tracks the `.kn5`, its date, the skin, the CSP configs and
@@ -24,7 +24,7 @@
 //! Nothing here needs a migration or an invalidation pass.
 //!
 //! **A failure is remembered, next to the image it could not produce.** Some
-//! cars are encrypted and will never be renderable (§7): retrying fourteen
+//! cars are encrypted and will never be renderable (GRILLE§7): retrying fourteen
 //! protected models on every launch would cost fourteen KN5 parses for an
 //! answer that cannot change until the mod itself does — and the fingerprint in
 //! the name is exactly what notices that it did.
@@ -34,7 +34,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-/// Rendering template, as the settings screen holds it (§5.6).
+/// Rendering template, as the settings screen holds it (GRILLE§5.6).
 ///
 /// Every field is an integer in user-facing units — degrees for angles,
 /// percentages for the rest — because that is what the sliders produce and what
@@ -241,7 +241,7 @@ pub fn write(app: &tauri::AppHandle, stem: &str, png: &[u8]) -> Result<PathBuf, 
     Ok(file)
 }
 
-/// Remembers that this entry cannot be rendered, and why (§7).
+/// Remembers that this entry cannot be rendered, and why (GRILLE§7).
 ///
 /// `reason` is an i18n key. Best-effort: failing to write it costs one retry at
 /// the next launch, not a bug — but it is logged, because a store that silently
@@ -279,7 +279,7 @@ pub fn forget(app: &tauri::AppHandle, stem: &str) -> Result<bool, String> {
     Ok(png || failed)
 }
 
-/// Counters for the generation report and the settings screen (§8.2).
+/// Counters for the generation report and the settings screen (GRILLE§8.2).
 #[derive(Debug, Clone, Copy, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GridThumbStats {
@@ -389,7 +389,7 @@ mod tests {
         }
     }
 
-    /// §5.6 — every template value is part of a thumbnail identity: two
+    /// GRILLE§5.6 — every template value is part of a thumbnail identity: two
     /// templates that differ anywhere must not share an image.
     #[test]
     fn every_template_field_changes_the_entry_name() {
@@ -515,7 +515,7 @@ mod tests {
         }
     }
 
-    /// §5.7 — the car own fingerprint stays in the name, so an updated mod
+    /// GRILLE§5.7 — the car own fingerprint stays in the name, so an updated mod
     /// regenerates without any invalidation pass.
     #[test]
     fn entry_name_keeps_the_car_fingerprint() {

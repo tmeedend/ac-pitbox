@@ -2,7 +2,7 @@
 //!
 //! Split from the `kn5` crate because this half does touch the filesystem
 //! (skin overrides live on disk next to the model) and pulls in image codecs,
-//! neither of which belong in a parser (spec §5.1).
+//! neither of which belong in a parser (PREVIEW§5.1).
 
 mod driver;
 mod extconfig;
@@ -76,7 +76,7 @@ pub struct DriverRigSource {
 }
 
 /// Everything the conversion produced, alongside the numbers the caller needs
-/// to report — the Tauri command answers with these (§7.1) and `kn5-tool`
+/// to report — the Tauri command answers with these (PREVIEW§7.1) and `kn5-tool`
 /// Exécute un travail de conversion sur un pool **restreint**, pour laisser
 /// des cœurs à l'interface.
 ///
@@ -138,7 +138,7 @@ impl Conversion {
 /// Stage the conversion has reached, reported as it goes.
 ///
 /// Exists so the application can keep a skeleton alive during the second or
-/// two a first conversion takes (§7.3). Transcoding is by far the longest of
+/// two a first conversion takes (PREVIEW§7.3). Transcoding is by far the longest of
 /// the three, which is why it is announced before it starts and not after.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConvertStage {
@@ -158,7 +158,7 @@ impl ConvertStage {
 }
 
 /// Fraction of winding-consistent triangles below which a model is not worth
-/// rendering (§4.5bis of the spec).
+/// rendering (PREVIEW§4.5bis of the spec).
 ///
 /// Measured, not guessed: every healthy car in the reference library sits
 /// between 99.5 % and 100 % (`ferrari_599_gto`, `rss_gtm_lanzo_v8`,
@@ -175,7 +175,7 @@ pub const WINDING_SANITY_THRESHOLD: f64 = 0.9;
 /// True when the model's geometry is coherent enough to be worth converting —
 /// see [`WINDING_SANITY_THRESHOLD`]. Split out from `convert()` so a caller
 /// that already has `winding_consistency`'s numbers (the app's preview
-/// pipeline, §4.5bis) can bail out **before** paying for texture transcoding,
+/// pipeline, PREVIEW§4.5bis) can bail out **before** paying for texture transcoding,
 /// instead of converting a model no one will keep.
 pub fn is_geometry_sane(agreeing: usize, total: usize) -> bool {
     total == 0 || (agreeing as f64) >= WINDING_SANITY_THRESHOLD * total as f64
@@ -195,7 +195,7 @@ pub fn convert(
     // otherwise render inside out without a word. `kn5-tool` calls `convert`
     // directly (never through the app's preview pipeline), so this warning is
     // its only signal — the app itself checks earlier, see
-    // `is_geometry_sane`/§4.5bis.
+    // `is_geometry_sane`/PREVIEW§4.5bis.
     let (agreeing, total) = geometry::winding_consistency(model);
     if !is_geometry_sane(agreeing, total) {
         log::warn!(
@@ -231,7 +231,7 @@ pub fn convert(
     texture::bake_paint(&mut textures, &mut paint, model, skin_dir, &options.textures);
 
     // Même temps, même raison : savoir si un `txMaps` est une vraie carte de
-    // surface demande de connaître le rôle de chaque texture (§12 q3).
+    // surface demande de connaître le rôle de chaque texture (PREVIEW§12 q3).
     let mut roughness = roughness::plan(model, &textures, options.mannequin);
     texture::bake_roughness(&mut textures, &mut roughness, model, skin_dir, &options.textures);
 
@@ -298,7 +298,7 @@ pub fn convert(
 mod tests {
     use super::*;
 
-    // Rule: the threshold used to gate the app's preview pipeline (§4.5bis)
+    // Rule: the threshold used to gate the app's preview pipeline (PREVIEW§4.5bis)
     // is the same one `convert()` warns on — a single constant, not two
     // literals that could drift apart.
     #[test]

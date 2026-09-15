@@ -1,4 +1,4 @@
-//! Node tree → flat list of meshes in glTF space (spec §3.4, §3.5, §4.4).
+//! Node tree → flat list of meshes in glTF space (PREVIEW§3.4, PREVIEW§3.5, PREVIEW§4.4).
 //!
 //! Three things happen here, and each one has its own way of going wrong:
 //! flattening the hierarchy, changing handedness, and dropping the nodes that
@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use kn5::{Kn5Material, Kn5Mesh, Kn5Model, Kn5Node, Kn5NodeKind, Kn5SkinBinding};
 
 // **Aucune conversion de repère, et aucune inversion de la coordonnée V.**
-// Le §4.4 de la spec demande les deux ; les deux sont fausses, et il a fallu
+// Le PREVIEW§4.4 de la spec demande les deux ; les deux sont fausses, et il a fallu
 // deux erreurs successives pour l'établir.
 //
 // Deux mesures numériques disaient dès le départ « identité » :
@@ -52,7 +52,7 @@ pub struct FlatMesh {
     pub tangents: Vec<[f32; 4]>,
     pub indices: Vec<u32>,
     /// Kept for reporting: a mesh flagged transparent needs the render-order
-    /// treatment of §8.2 on the viewer side.
+    /// treatment of PREVIEW§8.2 on the viewer side.
     pub transparent: bool,
     /// Ce maillage tourne-t-il avec le braquage, et autour de quoi ?
     ///
@@ -65,7 +65,7 @@ pub struct FlatMesh {
 #[derive(Debug, Clone)]
 pub struct GeometryOptions {
     /// Node name patterns that mark helpers rather than geometry. Kept as
-    /// configuration rather than hard-coded in the middle of the walk (§3.5),
+    /// configuration rather than hard-coded in the middle of the walk (PREVIEW§3.5),
     /// because mods invent their own conventions. A match drops the node
     /// **and everything under it**: the telling name is on the group, not on
     /// the meshes inside it.
@@ -158,7 +158,7 @@ pub fn flatten(model: &Kn5Model, options: &GeometryOptions) -> (Vec<FlatMesh>, G
     // Calculé en amont, et seulement s'il y a de quoi s'en servir : c'est un
     // second parcours complet de l'arbre, que la quasi-totalité des modèles
     // n'a aucune raison de payer — un maillage skinné sur une voiture, ça
-    // n'existe pas. Le pilote greffé en apporte deux (§4.6bis).
+    // n'existe pas. Le pilote greffé en apporte deux (PREVIEW§4.6bis).
     let bones = if has_skinned_mesh(model) {
         node_world_matrices(model)
     } else {
@@ -202,7 +202,7 @@ pub fn flatten(model: &Kn5Model, options: &GeometryOptions) -> (Vec<FlatMesh>, G
 /// décorative : le drapeau est porté par le *maillage* (`mesh.is_transparent`)
 /// et non par le matériau, donc deux maillages du même matériau peuvent ne pas
 /// s'accorder. Les fusionner mélangerait un objet que la vue doit rendre après
-/// l'opaque, sans écriture de profondeur (§8.2), avec un objet ordinaire.
+/// l'opaque, sans écriture de profondeur (PREVIEW§8.2), avec un objet ordinaire.
 fn merge_by_material(meshes: Vec<FlatMesh>) -> Vec<FlatMesh> {
     let mut merged: Vec<FlatMesh> = Vec::new();
     // L'ordre de première apparition est conservé : deux conversions du même
@@ -293,7 +293,7 @@ fn walk(
         stats.skipped_by_name += mesh_count(node);
         return;
     }
-    // Row-vector convention: `world = local × parent` (§3.4). Getting this
+    // Row-vector convention: `world = local × parent` (PREVIEW§3.4). Getting this
     // order backwards leaves the hierarchy intact but scatters every part.
     let world = match node.transform() {
         Some(local) => multiply(local, parent_world),
@@ -522,7 +522,7 @@ fn blend(binding: &Kn5SkinBinding, matrices: &[[f32; 16]]) -> [f32; 16] {
         if *weight <= 0.0 {
             continue;
         }
-        // L'indice est stocké en flottant (§3.4) ; négatif ou hors bornes, il
+        // L'indice est stocké en flottant (PREVIEW§3.4) ; négatif ou hors bornes, il
         // ne désigne rien, et l'os est ignoré plutôt que de faire paniquer.
         let matrix = if index >= 0.0 {
             matrices.get(index as usize)
@@ -646,7 +646,7 @@ fn convert_mesh(name: &str, mesh: &Kn5Mesh, world: &[f32; 16]) -> FlatMesh {
     // Le repère ne change pas, mais un nœud dont la transformation est en
     // miroir — la façon habituelle de ne modéliser qu'une moitié symétrique —
     // inverse l'orientation de ses triangles. glTF veut des faces avant en
-    // sens antihoraire, donc on la rétablit là et seulement là (§10).
+    // sens antihoraire, donc on la rétablit là et seulement là (PREVIEW§10).
     if determinant3(world) < 0.0 {
         // `as_chunks_mut` plutôt que `chunks_exact_mut(3)` : la taille étant
         // constante, il rend des `[u32; 3]` au lieu de tranches de longueur
@@ -855,7 +855,7 @@ fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
 }
 
 /// Where a node sits once flattened and converted, by name — the wheel test of
-/// §4.4 needs this, and nothing else does.
+/// PREVIEW§4.4 needs this, and nothing else does.
 pub fn node_world_centers(model: &Kn5Model) -> Vec<(String, [f32; 3])> {
     let mut out = Vec::new();
     collect_centers(&model.root, &IDENTITY, &mut out);
@@ -904,7 +904,7 @@ mod tests {
     // Rule: row-vector convention — the translation lives in the last row, and
     // `world = local × parent`. A transposed read puts parts in the wrong
     // place while leaving the hierarchy plausible, which is why this is
-    // checked against a transform worked out by hand (§10).
+    // checked against a transform worked out by hand (PREVIEW§10).
     #[test]
     fn point_transform_uses_the_last_row_for_translation() {
         let mut m = IDENTITY;
@@ -1200,7 +1200,7 @@ mod tests {
     // Règle : la transparence entre dans la clé de fusion. Elle est portée par
     // le **maillage** et non par le matériau, donc deux maillages du même
     // matériau peuvent ne pas s'accorder — les fusionner mélangerait un objet
-    // qui doit passer après l'opaque avec un objet ordinaire (§8.2).
+    // qui doit passer après l'opaque avec un objet ordinaire (PREVIEW§8.2).
     #[test]
     fn a_transparent_mesh_is_never_merged_into_an_opaque_one() {
         let merged = merge_by_material(vec![flat(0, false), flat(0, true)]);

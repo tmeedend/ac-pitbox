@@ -1,23 +1,23 @@
 <script lang="ts">
-  // L'onglet Wikipédia de la fiche (docs/SPEC-wikipedia-fiche-detail.md §7).
+  // L'onglet Wikipédia de la fiche (docs/SPEC-wikipedia-fiche-detail.md WIKI§7).
   //
-  // **L'onglet est permanent**, et c'est un écart assumé avec la §7.1, décidé
+  // **L'onglet est permanent**, et c'est un écart assumé avec la WIKI§7.1, décidé
   // avec l'utilisateur : un onglet absent ne se distingue ni d'une recherche en
   // cours, ni d'une fonctionnalité qui n'existe pas. Or le cas où l'utilisateur
   // a le plus besoin d'agir est précisément celui où rien n'a été trouvé — et
   // il n'avait alors nulle part où aller.
   //
-  // Ce que la §1 garde, et qui compte : **aucun de ces états n'est une
+  // Ce que la WIKI§1 garde, et qui compte : **aucun de ces états n'est une
   // erreur.** Pas d'icône d'alerte, pas d'encart rouge, pas de ton d'échec. Une
   // phrase qui dit ce qui s'est passé, et une proposition d'agir.
   //
-  // **Contrainte juridique** (§2), elle non négociable : le texte n'est jamais
+  // **Contrainte juridique** (WIKI§2), elle non négociable : le texte n'est jamais
   // fondu dans la description du mod (deux sous-onglets, deux blocs), il est
   // affiché tel que l'API le rend — pas de reformulation, pas de résumé, pas de
   // traduction — et l'attribution en pied est obligatoire.
   //
   // L'article est affiché **en entier**, demandé par l'utilisateur, et le
-  // raisonnement juridique s'en trouve simplifié : la §7.4 exigeait le mot
+  // raisonnement juridique s'en trouve simplifié : la WIKI§7.4 exigeait le mot
   // « extrait » parce que ne montrer qu'un fragment est une modification, qui
   // doit être signalée. Reproduire le texte intégralement, tel quel, avec son
   // attribution et sa licence, est exactement ce que CC BY-SA autorise.
@@ -51,7 +51,7 @@
 
   // Repli en texte brut : utilisé seulement quand le rendu HTML n'a pas pu
   // être obtenu. Les deux sont récupérés côté Rust pour cette raison — un
-  // article dégradé vaut mieux qu'un onglet vide (§1).
+  // article dégradé vaut mieux qu'un onglet vide (WIKI§1).
   const blocks = $derived(article && !article.html ? parseExtract(article.extract) : []);
 
   /** Le conteneur où l'article reconstruit est posé. */
@@ -94,7 +94,7 @@
    * ont été remplacés par des `data-href` validés à la reconstruction.
    *
    * Une image fait exception, et c'est le seul clic qui reste chez nous : elle
-   * s'ouvre dans la visionneuse (§9). */
+   * s'ouvre dans la visionneuse (WIKI§9). */
   function onArticleClick(event: MouseEvent) {
     // **A photograph is tested first, and it must be.** MediaWiki wraps most
     // illustrations in a link to their file page, so the enclosing `[data-href]`
@@ -132,7 +132,7 @@
       list.push({
         // The enlargement is asked for, never assumed: `fallbackSrc` is the
         // thumbnail the article is already showing, so a refused enlargement
-        // costs nothing (§9).
+        // costs nothing (WIKI§9).
         src: largerImage(credit.url),
         fallbackSrc: credit.url,
         caption: el.dataset.caption || undefined,
@@ -212,7 +212,7 @@
   }
 
   // Les langues où l'article existe vraiment, jamais une liste en dur : sur les
-  // JDM, l'article japonais est souvent le plus complet (§5.4).
+  // JDM, l'article japonais est souvent le plus complet (WIKI§5.4).
   const langs = $derived.by(() => {
     if (!article) return [];
     const all = [...new Set(article.availableLangs)];
@@ -295,10 +295,10 @@
       </div>
 
       {#if panel.entityId}
-        <!-- « Aucun de ceux-ci » (§7.6). Il manquait ici : depuis un article
+        <!-- « Aucun de ceux-ci » (WIKI§7.6). Il manquait ici : depuis un article
              affiché, on ne pouvait que **remplacer** l'appariement, jamais le
              retirer — alors qu'un mod sans article est une réponse valable
-             (§1), et que c'est la seule façon de dire « celui-ci est faux et
+             (WIKI§1), et que c'est la seule façon de dire « celui-ci est faux et
              je n'en connais pas de bon ». -->
         <button class="btn link detach" type="button" onclick={detach} disabled={busy}>{t("wiki.detach")}</button>
       {/if}
@@ -309,7 +309,7 @@
         <p class="muted">{t("wiki.noResults")}</p>
       {:else if results}
         <!-- La description courte de Wikidata est ce qui lève l'ambiguïté d'un
-             coup d'œil (§7.6) : « modèle d'automobile Toyota, 1983-1987 » en
+             coup d'œil (WIKI§7.6) : « modèle d'automobile Toyota, 1983-1987 » en
              dit plus qu'un score. -->
         <ul class="results">
           {#each results as r (r.entityId)}
@@ -325,14 +325,14 @@
     </div>
   {:else if article}
     {#if article.parentEntity}
-      <!-- §7.3 : affichée UNIQUEMENT en cas de repli parent. L'utilisateur lit
+      <!-- WIKI§7.3 : affichée UNIQUEMENT en cas de repli parent. L'utilisateur lit
            l'article du modèle générique et non celui de sa variante — le taire
            serait lui laisser croire qu'on parle de son mod. -->
       <p class="muted">{t("wiki.generalArticle", { title: article.articleTitle })}</p>
     {/if}
 
     <!-- L'article **entier**, tel que MediaWiki le rend : sections, tableaux,
-         infobox, et les images dont la licence permet l'affichage (§9). Le mot
+         infobox, et les images dont la licence permet l'affichage (WIKI§9). Le mot
          « extrait » a quitté l'attribution avec l'introduction seule : ne
          montrer qu'un fragment était la modification qu'il fallait signaler. -->
     <!-- Deux colonnes, comme sur Wikipédia et pour la même raison : un sommaire
@@ -394,7 +394,7 @@
           </select>
         </label>
       {/if}
-      <!-- Navigateur système, jamais une webview interne (§7.3) : elle casserait
+      <!-- Navigateur système, jamais une webview interne (WIKI§7.3) : elle casserait
            le mode hors ligne, imposerait leur CSP et ferait perdre l'identité
            visuelle de l'app. -->
       <button class="btn" type="button" onclick={() => openUrl(article.articleUrl).catch(() => {})}>
@@ -418,7 +418,7 @@
       >
     </p>
   {:else}
-    <!-- L'état vide : une phrase et une porte, jamais une alerte (§1). -->
+    <!-- L'état vide : une phrase et une porte, jamais une alerte (WIKI§1). -->
     <div class="empty">
       <p class="muted">{explanation}</p>
       <div class="foot">
@@ -608,7 +608,7 @@
     border-radius: 0;
     margin: 0 1px;
   }
-  /* Le crédit d'auteur : obligatoire sous chaque image (§9), donc jamais
+  /* Le crédit d'auteur : obligatoire sous chaque image (WIKI§9), donc jamais
      masqué — discret, mais présent. */
   .article-html :global(.wiki-credit) {
     display: block;

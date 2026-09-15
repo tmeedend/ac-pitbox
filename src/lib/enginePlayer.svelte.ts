@@ -203,11 +203,11 @@ export async function toggleEngine(
   // **Le vrai moteur du jeu d'abord.** Il joue l'événement `engine_ext` que le
   // jeu jouerait, réglable en régime, au lieu d'un échantillon deviné — mesuré
   // sur les 299 voitures de l'installation de référence, il aboutit à chaque
-  // fois (docs/SPEC-engine-sound-fmod.md §5, lot 4).
+  // fois (docs/SPEC-engine-sound-fmod.md FMOD§5, lot 4).
   //
   // Un échec ici n'est **pas** une erreur à montrer : pas d'AC configuré, DLL
   // absentes, bank refusé. C'est le basculement vers le décodeur maison, qui
-  // reste le seul chemin fonctionnant sans installation du jeu (§4.1). Il n'en
+  // reste le seul chemin fonctionnant sans installation du jeu (FMOD§4.1). Il n'en
   // reste qu'une ligne de journal.
   loading = key;
   try {

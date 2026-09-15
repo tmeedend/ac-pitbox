@@ -1,12 +1,12 @@
 //! Bounds-checked cursor over the raw file.
 //!
-//! Written by hand rather than with `binrw` (suggested by spec §5.2): the
+//! Written by hand rather than with `binrw` (suggested by PREVIEW§5.2): the
 //! layout is riddled with version-dependent fields and every single count has
 //! to be validated against a cap *and* against the bytes that remain before
 //! anything is allocated. Expressing that in `binrw` attributes costs more
 //! than the hundred lines below, for one more dependency.
 //!
-//! All integers are little-endian (§3).
+//! All integers are little-endian (PREVIEW§3).
 
 use crate::error::{Kn5Error, Result};
 
@@ -118,7 +118,7 @@ impl<'a> Reader<'a> {
         Ok(value)
     }
 
-    /// Length-prefixed string: `i32` byte length, then that many bytes (§3).
+    /// Length-prefixed string: `i32` byte length, then that many bytes (PREVIEW§3).
     ///
     /// Decoded lossily on purpose. The spec says UTF-8, and Kunos files are,
     /// but mod authors occasionally ship names encoded in the Windows ANSI

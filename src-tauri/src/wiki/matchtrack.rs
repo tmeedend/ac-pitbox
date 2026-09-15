@@ -1,10 +1,10 @@
-//! Matching a track mod to a Wikidata entity, by coordinates first (§4.2).
+//! Matching a track mod to a Wikidata entity, by coordinates first (WIKI§4.2).
 //!
 //! Coordinates beat names here, and the spec gives the reason: Nordschleife is
 //! an article called Nürburgring, Shutoko is the Metropolitan Expressway, and
 //! an Initial D pass is a mountain nobody spells the same way twice.
 //!
-//! Four corrections to §4.2, every one of them measured rather than reasoned —
+//! Four corrections to WIKI§4.2, every one of them measured rather than reasoned —
 //! the last two came out of the first calibration run over the real library:
 //!
 //! - **The search runs on Wikidata, not on a language wiki.** The English
@@ -17,13 +17,13 @@
 //!   included — and falls back to the mod's geotags. Reading geotags alone
 //!   would fail on every Kunos track, whose `geotags` field is the literal
 //!   placeholder `["lat", "lon"]`.
-//! - **Only purpose-built circuits are matched automatically.** §4.2 widens the
+//! - **Only purpose-built circuits are matched automatically.** WIKI§4.2 widens the
 //!   allowlist to roads and passes, and the intent is right, but the run showed
 //!   there is no signal to act on it with: a street is within reach of every
 //!   coordinate on earth, and the name cannot arbitrate — the spec chose
 //!   coordinates *because* "Shutoko" does not look like "Metropolitan
 //!   Expressway". Roads produced four wrong articles for a handful of right
-//!   ones, so §1 settles it. `decide_by_distance` carries the detail.
+//!   ones, so WIKI§1 settles it. `decide_by_distance` carries the detail.
 //! - **The radius is the API's ceiling, and it is not always enough.** Monza is
 //!   listed at Milan's coordinates, eighteen kilometres away, while
 //!   `list=geosearch` refuses anything over ten. What rescues those is the name
@@ -68,7 +68,7 @@ fn proximity(distance_m: f64, radius_m: u32) -> f64 {
 
 /// Drops a candidate that is `part of` another candidate still in the running.
 ///
-/// This is §4.2's "apparier au niveau du circuit, pas de la configuration",
+/// This is WIKI§4.2's "apparier au niveau du circuit, pas de la configuration",
 /// done with claims already in hand: a layout item points at its circuit
 /// through `P361`, so the child is the one to drop. It also spares a genuine
 /// tie — circuit and configuration sit at the same coordinate, and without
@@ -104,7 +104,7 @@ pub fn decide_by_distance(candidates: Vec<(EntityDetails, f64)>, thresholds: &Th
     // **And no road at all when there is no circuit**, which the second
     // calibration run settled against the spec's own wish.
     //
-    // §4.2 widens the allowlist to roads for Shutoko and the touge passes, and
+    // WIKI§4.2 widens the allowlist to roads for Shutoko and the touge passes, and
     // the intent is right — but a road is *always* within reach: every set of
     // coordinates on earth has a street next to it. The run matched
     // `ks_barcelona` to "carrer de Sant Lluís", `trento-bondone` to "Via
@@ -112,11 +112,11 @@ pub fn decide_by_distance(candidates: Vec<(EntityDetails, f64)>, thresholds: &Th
     // `ks_black_cat_county` to "Hill Street" — four wrong articles presented
     // as right, against a handful of real roads found.
     //
-    // Nor can the name arbitrate: §4.2 chose coordinates precisely *because*
+    // Nor can the name arbitrate: WIKI§4.2 chose coordinates precisely *because*
     // "Shutoko" does not look like "Metropolitan Expressway". So there is no
-    // signal that separates the two situations, and §1 decides what to do
+    // signal that separates the two situations, and WIKI§1 decides what to do
     // without one — nothing. Roads stay in `ids::ROUTE_TYPES` for the manual
-    // correction of §7.6, which relaxes the type filter anyway, and for the
+    // correction of WIKI§7.6, which relaxes the type filter anyway, and for the
     // name fallback below where the name *did* agree.
     let mut accepted = collapse_configurations(circuits);
     accepted.sort_by(|a, b| a.1.total_cmp(&b.1));
@@ -178,7 +178,7 @@ pub fn rank_by_name(details: &[EntityDetails], cleaned_name: &str, thresholds: &
     decide(candidates, thresholds)
 }
 
-/// The whole §4.2 pipeline, network included.
+/// The whole WIKI§4.2 pipeline, network included.
 pub fn match_track(
     net: &WikiClient,
     cleaner: &Cleaner,
@@ -192,7 +192,7 @@ pub fn match_track(
         // does not mean the track has no article: Monza's coordinates are
         // Milan's, eighteen kilometres from the circuit. So the name gets its
         // turn, which §4.2.4 already grants when there are no coordinates at
-        // all. An **ambiguity is not retried**: it is a verdict (§1), and
+        // all. An **ambiguity is not retried**: it is a verdict (WIKI§1), and
         // neither is an unreachable network, which taught us nothing.
         if matches!(outcome, MatchOutcome::NoCandidate) {
             return by_name(net, cleaner, thresholds, subject, locale);
@@ -318,7 +318,7 @@ mod tests {
         }
     }
 
-    /// Rule (§4.2): "apparier au niveau du circuit, pas de la configuration".
+    /// Rule (WIKI§4.2): "apparier au niveau du circuit, pas de la configuration".
     /// A layout item points at its circuit through `part of`, and sits at the
     /// same coordinate — so without the collapse the pair would be rejected as
     /// a tie, and the mod would get nothing.
@@ -344,7 +344,7 @@ mod tests {
         }
     }
 
-    /// Rule (§1): two unrelated circuits at the same place is an ambiguity, and
+    /// Rule (WIKI§1): two unrelated circuits at the same place is an ambiguity, and
     /// an ambiguity produces nothing — even here, where the spec only says
     /// "le plus proche".
     #[test]
@@ -406,13 +406,13 @@ mod tests {
         }
     }
 
-    /// Rule (§1, calibrated): **a road alone matches nothing**, however close.
+    /// Rule (WIKI§1, calibrated): **a road alone matches nothing**, however close.
     ///
-    /// This one goes against §4.2's wish, and the run is why: a street is
+    /// This one goes against WIKI§4.2's wish, and the run is why: a street is
     /// within reach of every coordinate, so `ks_barcelona` came back as "carrer
     /// de Sant Lluís" and the fictional `ks_black_cat_county` as "Hill Street".
     /// Shutoko and the touge passes lose their automatic match here — they are
-    /// what the manual correction of §7.6 is for — but nobody is told a wrong
+    /// what the manual correction of WIKI§7.6 is for — but nobody is told a wrong
     /// article is the right one.
     #[test]
     fn a_road_alone_matches_nothing() {

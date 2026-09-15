@@ -2,7 +2,7 @@
 //
 // AC habille un pilote par le `skin.ini` de la livrée, sous le nom du
 // mannequin que la voiture impose. **Deux natures d'objet, deux
-// comportements** (`docs/SPEC-ecran-pilote.md` §1.3) : la tenue ne tient qu'à
+// comportements** (`docs/SPEC-ecran-pilote.md` PILOTE§1.3) : la tenue ne tient qu'à
 // un fichier de skin, donc elle se choisit ; le corps vit dans `driver3d.ini`,
 // donc dans le `data.acd` que le serveur de course vérifie, donc le substituer
 // ne vaut que dans l'aperçu.
@@ -28,7 +28,7 @@ export interface DriverChoices {
    * ou celui qu'on lui a substitué. */
   model: string;
   /** `true` quand ce corps n'est pas celui de la voiture — le mode « corps
-   * substitué », qui ne vaut que dans l'aperçu (SPEC-ecran-pilote §10). */
+   * substitué », qui ne vaut que dans l'aperçu (SPEC-ecran-pilote PILOTE§10). */
   substituted: boolean;
   era: DriverEra | null;
   suits: WardrobeOption[];
@@ -40,7 +40,7 @@ export interface DriverChoices {
   helmets: WardrobeOption[];
 }
 
-/** Un mannequin installé, tel qu'il s'offre au choix (§9.1). */
+/** Un mannequin installé, tel qu'il s'offre au choix (PILOTE§9.1). */
 export interface BodyOption {
   /** Nom de fichier sans extension : `driver_60`. Ne se traduit pas. */
   id: string;
@@ -59,16 +59,16 @@ export function listDriverChoices(carId: string, body: string | null = null): Pr
 }
 
 /**
- * Les corps installés, pour la galerie des corps (§9.1).
+ * Les corps installés, pour la galerie des corps (PILOTE§9.1).
  *
  * Ceux qu'on ne peut pas prendre — illisibles, sans squelette — n'y sont pas :
- * une option qu'on ne peut pas choisir n'a pas à être montrée (§9.3). Liste
+ * une option qu'on ne peut pas choisir n'a pas à être montrée (PILOTE§9.3). Liste
  * vide, jamais une erreur, quand Assetto Corsa n'est pas configuré.
  */
 /** Ce que l'écran Pilote reçoit : les mannequins utilisables, **et** le nombre
  * de `.kn5` écartés — présents dans `content/driver` mais illisibles ou sans
  * squelette. Ce chiffre est la seule trace de ceux-là : l'inventaire des
- * compléments ne liste plus les mannequins déployés (refonte §5), donc sans lui
+ * compléments ne liste plus les mannequins déployés (refonte PILOTE§5), donc sans lui
  * un mannequin importé pourrait disparaître des deux écrans sans un mot. */
 export interface BodyList {
   bodies: BodyOption[];

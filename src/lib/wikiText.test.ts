@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseExtract } from "./wikiText";
 
 describe("parseExtract", () => {
-  // Règle (§7.3) : les titres de section arrivent en balisage wiki dans le
+  // Règle (WIKI§7.3) : les titres de section arrivent en balisage wiki dans le
   // texte brut de l'API — mesuré sur `Mazda MX-5` : `== Overview ==` et
   // `=== First generation – NA (1989–1997) ===`. Les afficher tels quels serait
   // du bruit, les perdre écraserait la structure.
@@ -21,7 +21,7 @@ describe("parseExtract", () => {
     ]);
   });
 
-  // Règle (§2) : le texte n'est jamais réécrit. Seule la ligne de titre est
+  // Règle (WIKI§2) : le texte n'est jamais réécrit. Seule la ligne de titre est
   // reconnue ; tout le reste ressort à l'identique, y compris un `=` qui
   // n'ouvre pas un titre.
   it("ne touche pas au texte", () => {

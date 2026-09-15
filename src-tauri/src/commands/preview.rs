@@ -1,4 +1,4 @@
-//! Aperçu 3D des voitures (`docs/SPEC-preview-3d-kn5.md` §7.1).
+//! Aperçu 3D des voitures (`docs/SPEC-preview-3d-kn5.md` PREVIEW§7.1).
 
 use tauri::Manager;
 
@@ -16,10 +16,10 @@ use super::prelude::*;
 /// `None` = pas de pilote ; sinon la tenue imposée. Tout cela fait partie de
 /// l'identité de l'entrée de cache — le pilote est greffé dans le `.glb` et sa
 /// pose y est cuite — donc changer l'un ou l'autre convertit une fois, après
-/// quoi les versions déjà vues se rendent instantanément (§4.6).
+/// quoi les versions déjà vues se rendent instantanément (PREVIEW§4.6).
 ///
 /// La conversion est bloquante et gourmande en CPU : elle part sur
-/// `spawn_blocking`, jamais sur le thread principal (§7.3). Le jeton de
+/// `spawn_blocking`, jamais sur le thread principal (PREVIEW§7.3). Le jeton de
 /// génération est pris **avant** de céder la main, pour qu'une sélection
 /// arrivée entre-temps rende bien celle-ci obsolète.
 #[tauri::command]
@@ -59,7 +59,7 @@ pub async fn prepare_car_preview(
 }
 
 /// Les tenues de pilote qui marcheront sur le mannequin de cette voiture
-/// (`docs/SPEC-ecran-pilote.md` §6).
+/// (`docs/SPEC-ecran-pilote.md` PREVIEW§6).
 ///
 /// Rendu au frontend pour peupler les trois galeries de l'écran Pilote. La
 /// compatibilité n'est pas devinée ni déduite d'autres voitures : un dossier
@@ -92,7 +92,7 @@ pub async fn list_driver_choices(
 }
 
 /// Prépare le mannequin seul, habillé, pour le plateau d'essayage de l'écran
-/// Pilote (`docs/SPEC-ecran-pilote.md` §5.1).
+/// Pilote (`docs/SPEC-ecran-pilote.md` PREVIEW§5.1).
 ///
 /// Le pilote y est **sans habitacle autour**, mais posé comme sa voiture le
 /// pose : seul l'ancrage sur les yeux tombe, l'assise et l'animation de
@@ -261,19 +261,19 @@ pub async fn list_driver_bodies(app: AppHandle) -> Result<crate::driver::BodyLis
         .map_err(|e| format!("tâche de corps interrompue : {e}"))
 }
 
-/// Vide le cache d'aperçus et renvoie le nombre d'octets libérés (§5.3).
+/// Vide le cache d'aperçus et renvoie le nombre d'octets libérés (PREVIEW§5.3).
 #[tauri::command]
 pub fn clear_preview_cache(app: AppHandle) -> Result<u64, String> {
     crate::preview::clear_cache(&app)
 }
 
-/// Octets actuellement occupés par le cache d'aperçus (§5.3).
+/// Octets actuellement occupés par le cache d'aperçus (PREVIEW§5.3).
 #[tauri::command]
 pub fn preview_cache_size(app: AppHandle) -> Result<u64, String> {
     crate::preview::cache_usage(&app)
 }
 
-/// Fixe le plafond du cache et l'applique tout de suite (§5.3).
+/// Fixe le plafond du cache et l'applique tout de suite (PREVIEW§5.3).
 ///
 /// Le réglage vit dans `ui_prefs.json`, dont le schéma appartient au
 /// frontend : c'est donc lui qui pousse la valeur ici, au démarrage et à

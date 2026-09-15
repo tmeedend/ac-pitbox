@@ -1,4 +1,4 @@
-//! Moteur audio (§4, §5 de la spec) : deux lecteurs qui se relaient pour le
+//! Moteur audio (MUSIQUE§4, MUSIQUE§5 de la spec) : deux lecteurs qui se relaient pour le
 //! crossfade, une machine à états MENU/GRID/SESSION, une piste par ambiance
 //! (mémorisant sa position pour un retour agréable).
 //!
@@ -7,21 +7,21 @@
 //! que NAudio expose. `rodio` (le choix retenu pour la transposition Rust,
 //! voir `mod.rs`) mixe et rééchantillonne déjà en interne au sein d'un même
 //! `OutputStream` : chaque `Sink` est juste une piste de plus dans son mixeur.
-//! Le crossfade lui-même (§5.2, gains à puissance constante) reste identique
+//! Le crossfade lui-même (MUSIQUE§5.2, gains à puissance constante) reste identique
 //! bit pour bit — c'est la seule partie du pipeline qui ne se déduit pas de
 //! la bibliothèque, donc la seule qui mérite d'être écrite à la main ici.
 //!
-//! Écart §5.3 (préchargement) : `rodio` ne connaît la durée totale d'une
+//! Écart MUSIQUE§5.3 (préchargement) : `rodio` ne connaît la durée totale d'une
 //! piste à l'avance que pour certains formats en décodage direct (WAV/FLAC
 //! typiquement ; un MP3 décodé par `minimp3` renvoie `None`). `index.rs`
-//! (§3.4) comble l'essentiel de cet écart : la durée exacte, calculée une
+//! (MUSIQUE§3.4) comble l'essentiel de cet écart : la durée exacte, calculée une
 //! fois au premier scan du dossier en sous-produit du calcul RMS, est
 //! préférée à celle du décodeur en direct — donc le vrai recouvrement
 //! `crossfade_ms + 500ms` s'applique aussi aux MP3, dès qu'ils ont été
 //! indexés. Le repli sur `Sink::empty()` (la piste précédente est alors déjà
 //! silencieuse, le crossfade se comporte comme un simple fondu d'entrée) ne
 //! reste utile que pour une piste dont l'indexation elle-même a échoué
-//! (fichier corrompu, §9) — un cas marginal plutôt que la majorité des MP3.
+//! (fichier corrompu, MUSIQUE§9) — un cas marginal plutôt que la majorité des MP3.
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -68,7 +68,7 @@ pub enum EngineCommand {
     ExitSession,
     /// `acs.exe`/`AssettoCorsa.exe` vient de démarrer — aucun effet sur la
     /// lecture (le chargement n'est pas la course), juste un repère d'état
-    /// pour `enter_big_picture` (§4, "reprise d'état").
+    /// pour `enter_big_picture` (MUSIQUE§4, "reprise d'état").
     AcProcessStarted,
     /// Le process s'est fermé — filet de sécurité qui force la sortie de
     /// session même si la mémoire partagée n'a pas signalé la transition
@@ -101,7 +101,7 @@ impl MusicEngineHandle {
 
 /// Démarre le thread moteur (propriétaire de l'`OutputStream` WASAPI, jamais
 /// en mode exclusif — c'est le comportement par défaut de `rodio`/`cpal`,
-/// voir §5.1 de la spec) et renvoie la poignée à manager côté Tauri.
+/// voir MUSIQUE§5.1 de la spec) et renvoie la poignée à manager côté Tauri.
 pub fn spawn(app: AppHandle, initial_config: MusicConfig) -> MusicEngineHandle {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || run(app, initial_config, rx));
@@ -147,7 +147,7 @@ struct Slot {
     started_at: Option<Instant>,
     total_duration: Option<Duration>,
     /// Correction de gain de normalisation en dB, telle que calculée par
-    /// `index.rs` (§3.4) pour la piste chargée dans ce slot — brute, pas
+    /// `index.rs` (MUSIQUE§3.4) pour la piste chargée dans ce slot — brute, pas
     /// encore convertie en facteur linéaire ni filtrée par `config.normalize`
     /// (fait à la lecture par `Engine::slot_gain_linear`, pour qu'activer/
     /// désactiver la normalisation dans les réglages s'entende tout de suite
@@ -168,7 +168,7 @@ impl Slot {
 }
 
 /// Ordre de lecture d'une ambiance + position mémorisée pour reprendre là où
-/// elle en était au retour (§5.4).
+/// elle en était au retour (MUSIQUE§5.4).
 struct Playlist {
     tracks: Vec<IndexedTrack>,
     order: Vec<IndexedTrack>,
@@ -196,7 +196,7 @@ impl Playlist {
     }
 
     /// Passe à la piste suivante, en rejouant une nouvelle permutation quand
-    /// la liste est épuisée (jamais un tirage à chaque piste, §5.4).
+    /// la liste est épuisée (jamais un tirage à chaque piste, MUSIQUE§5.4).
     fn advance(&mut self, shuffle: bool) -> Option<IndexedTrack> {
         if self.order.is_empty() {
             return None;
@@ -226,7 +226,7 @@ fn apply_no_repeat_constraint(order: &mut [IndexedTrack], last_played: Option<&I
     }
 }
 
-/// Permutation Fisher-Yates (§5.4) + contrainte : si la première piste de la
+/// Permutation Fisher-Yates (MUSIQUE§5.4) + contrainte : si la première piste de la
 /// nouvelle permutation est la dernière jouée, l'échanger avec la seconde.
 pub fn shuffle_order(tracks: &[IndexedTrack], last_played: Option<&IndexedTrack>) -> Vec<IndexedTrack> {
     let mut order = tracks.to_vec();
@@ -235,7 +235,7 @@ pub fn shuffle_order(tracks: &[IndexedTrack], last_played: Option<&IndexedTrack>
     order
 }
 
-/// Crossfade à puissance constante (§5.2). `t` ∈ [0,1]. Invariant :
+/// Crossfade à puissance constante (MUSIQUE§5.2). `t` ∈ [0,1]. Invariant :
 /// `gain_out² + gain_in² == 1`, contrairement à un fondu linéaire qui produit
 /// un creux de volume audible au milieu de la transition.
 pub fn crossfade_gains(t: f32) -> (f32, f32) {
@@ -243,7 +243,7 @@ pub fn crossfade_gains(t: f32) -> (f32, f32) {
     (t.cos(), t.sin())
 }
 
-/// Fondu simple, courbe quadratique (§5.2) — l'oreille perçoit le volume de
+/// Fondu simple, courbe quadratique (MUSIQUE§5.2) — l'oreille perçoit le volume de
 /// façon logarithmique, une rampe linéaire "part" trop vite.
 pub fn fade_in_gain(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
@@ -321,7 +321,7 @@ struct Engine {
     big_picture_active: bool,
     /// Ambiance active juste avant `enter_session` (menu ou grid selon
     /// l'écran affiché au lancement) — `exit_session` y revient plutôt que
-    /// de retomber systématiquement sur MENU (§4/§19).
+    /// de retomber systématiquement sur MENU (MUSIQUE§4/§19).
     pre_session_ambience: Option<Ambience>,
 }
 
@@ -423,7 +423,7 @@ impl Engine {
         }
     }
 
-    /// Facteur linéaire de la correction de normalisation (§3.4) — toujours
+    /// Facteur linéaire de la correction de normalisation (MUSIQUE§3.4) — toujours
     /// appliqué, pas de réglage pour le désactiver (décidé avec
     /// l'utilisateur : aucune raison de vouloir des sauts de volume entre
     /// pistes hétérogènes).
@@ -440,7 +440,7 @@ impl Engine {
 
     fn stop_slot(&mut self, slot: usize) {
         // Le Drop du Sink coupe la lecture et relâche le verrou sur le
-        // fichier (§9 — sans ça, l'utilisateur ne peut plus renommer ni
+        // fichier (MUSIQUE§9 — sans ça, l'utilisateur ne peut plus renommer ni
         // supprimer ses pistes tant que l'app tourne).
         self.slots[slot] = Slot::empty();
     }
@@ -488,15 +488,15 @@ impl Engine {
             return false;
         };
         let Some(decoder) = open_track(&track.path) else {
-            // Piste corrompue/illisible (§9) : on journalise et on laisse
+            // Piste corrompue/illisible (MUSIQUE§9) : on journalise et on laisse
             // l'appelant décider de la suite plutôt que de faire planter la
             // lecture pour tout le dossier.
             log::warn!("music: piste illisible, ignorée : {}", track.path.display());
             return false;
         };
-        // Durée indexée (§3.4/index.rs) préférée à `total_duration()` : fiable
+        // Durée indexée (MUSIQUE§3.4/index.rs) préférée à `total_duration()` : fiable
         // même pour les MP3, où le décodeur en direct répond souvent `None`
-        // (§5.3 — comble l'écart documenté en tête de ce fichier).
+        // (MUSIQUE§5.3 — comble l'écart documenté en tête de ce fichier).
         let total_duration = track.duration.or_else(|| decoder.total_duration());
         sink.set_volume(0.0);
         sink.append(decoder);
@@ -559,7 +559,7 @@ impl Engine {
     fn switch_ambience(&mut self, target: Ambience) {
         if !matches!(self.state, State::Playing(_)) {
             // Session en cours ou Big Picture inactif : une bascule menu/grid
-            // n'a de sens que pendant la navigation Big Picture (§4).
+            // n'a de sens que pendant la navigation Big Picture (MUSIQUE§4).
             return;
         }
         if self.state == State::Playing(target) {
@@ -632,7 +632,7 @@ impl Engine {
 
     fn enter_big_picture(&mut self) {
         if self.ac_process_running {
-            // Reprise d'état (§4) : AC tourne déjà (chargement ou course),
+            // Reprise d'état (MUSIQUE§4) : AC tourne déjà (chargement ou course),
             // inutile de démarrer une ambiance vouée à être coupée ou à
             // couvrir le chargement.
             return;
@@ -709,7 +709,7 @@ impl Engine {
             self.save_elapsed(amb);
             // Mémorisé pour `exit_session` : reprendre la même ambiance
             // qu'avant la session (menu ou grid selon l'écran affiché au
-            // lancement, §4/§19) plutôt que de retomber systématiquement sur
+            // lancement, MUSIQUE§4/§19) plutôt que de retomber systématiquement sur
             // MENU.
             self.pre_session_ambience = Some(amb);
         }
@@ -744,7 +744,7 @@ impl Engine {
             return;
         }
         // Reprend l'ambiance active avant la session — menu ou grid selon
-        // l'écran affiché au lancement (§4/§19) — jamais systématiquement
+        // l'écran affiché au lancement (MUSIQUE§4/§19) — jamais systématiquement
         // MENU. `None` seulement si la session a commencé avant que Big
         // Picture ait joué quoi que ce soit (ouvert pendant le chargement) :
         // MENU reste alors le repli le plus sensé.
@@ -780,7 +780,7 @@ impl Engine {
     }
 }
 
-// --- Écoute au clic (§6, bouton ▶) --------------------------------------
+// --- Écoute au clic (MUSIQUE§6, bouton ▶) --------------------------------------
 //
 // Entièrement indépendante du moteur ci-dessus : une prévisualisation ouvre
 // son propre `OutputStream` éphémère (plusieurs flux WASAPI en mode partagé
@@ -868,7 +868,7 @@ mod tests {
 
     #[test]
     fn single_fade_volume_ramps_down_for_a_fade_out() {
-        // Bug réel (§5.2) : en combinant `fade_out_gain` (déjà une courbe de
+        // Bug réel (MUSIQUE§5.2) : en combinant `fade_out_gain` (déjà une courbe de
         // gain 1→0) au même lerp que `fade_in_gain` (une progression 0→1), le
         // volume d'un fondu de sortie partait de 0 pour remonter jusqu'à
         // `from` — silence au début, plein volume juste avant la coupure

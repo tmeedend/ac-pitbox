@@ -1,15 +1,15 @@
-//! Choosing the article by hand (§7.6).
+//! Choosing the article by hand (WIKI§7.6).
 //!
 //! The spec put this in a context menu of the tab, reachable only once an
 //! article was already showing. Decided with the user and changed: **the tab is
 //! permanent and carries this**, because the case where choosing helps most is
 //! precisely the one where nothing was found — and an absent tab offered
 //! nowhere to go. An empty tab that proposes something is not the "encart
-//! grisé" §1 forbids; it is an offer, and it carries no alarm.
+//! grisé" WIKI§1 forbids; it is an offer, and it carries no alarm.
 //!
 //! Two things are deliberately looser here than in the automatic matching:
 //!
-//! - **No type filter.** §7.6 says so outright: if someone wants to tie their
+//! - **No type filter.** WIKI§7.6 says so outright: if someone wants to tie their
 //!   mod to an entity outside the taxonomy, the taxonomy is likelier to be
 //!   wrong than they are.
 //! - **No score, no threshold.** A person is reading the list; the Wikidata
@@ -85,13 +85,13 @@ pub fn search(
 
 /// Language and title of a Wikipedia article URL, or nothing.
 ///
-/// **The host check is an allowlist and it is ASCII-only**, which is what §10
+/// **The host check is an allowlist and it is ASCII-only**, which is what WIKI§10
 /// asks for: `wikipedıa.org` — with a dotless Turkish ı — looks identical in a
 /// proof-reading and is a different domain entirely. Refusing everything whose
 /// host is not plain ASCII `<lang>.wikipedia.org` closes that door without
 /// having to enumerate lookalikes.
 ///
-/// Pure, so §11's "rejet des domaines non-Wikipédia, y compris homographes" is
+/// Pure, so WIKI§11's "rejet des domaines non-Wikipédia, y compris homographes" is
 /// testable without a network.
 pub fn parse_wikipedia_url(url: &str) -> Option<(String, String)> {
     let rest = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://"))?;
@@ -134,9 +134,9 @@ fn percent_decode(value: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// The entity behind a pasted Wikipedia URL (§7.6).
+/// The entity behind a pasted Wikipedia URL (WIKI§7.6).
 ///
-/// The URL itself is **never stored** (§3.1): it is resolved to a Q-id and
+/// The URL itself is **never stored** (WIKI§3.1): it is resolved to a Q-id and
 /// thrown away, because the Q-id is language-independent and survives an
 /// article being renamed.
 pub fn entity_from_url(net: &WikiClient, url: &str) -> Option<String> {
@@ -148,7 +148,7 @@ pub fn entity_from_url(net: &WikiClient, url: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    /// Rule (§7.6): a URL copied from the browser gives its language and title.
+    /// Rule (WIKI§7.6): a URL copied from the browser gives its language and title.
     #[test]
     fn a_pasted_article_url_yields_its_language_and_title() {
         assert_eq!(
@@ -167,7 +167,7 @@ mod tests {
         );
     }
 
-    /// Rule (§10, §11): **everything that is not a Wikipedia URL is refused,
+    /// Rule (WIKI§10, WIKI§11): **everything that is not a Wikipedia URL is refused,
     /// homographs included.**
     ///
     /// The dotless ı of `wikipedıa.org` is invisible in a proof-reading and

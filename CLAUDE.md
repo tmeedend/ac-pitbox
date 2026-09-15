@@ -392,6 +392,21 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
 
 ## Documentation
 
+**Un renvoi `§` dit de quel document il parle.** Le code en porte près de
+2 800, et le numéro seul ne suffit pas : `§5.3` désigne `SPEC-grille.md` dans
+`gridthumbs.rs` et `SPEC.md` dans `importer.rs`. Donc : **`§4.5` nu = `SPEC.md`**
+(le défaut, inchangé), et une **étiquette** pour les autres — `GRILLE§5.3`,
+`WIKI§4.2`, `PILOTE§6.3`, `PREVIEW§8.1`, `FMOD§2bis`, `MUSIQUE§3.4`,
+`IMPORT§`, `REFONTE§`, `TEXTURE§`. La liste fait foi dans `scripts/check-refs.mjs`.
+
+`npm run check` vérifie que chaque renvoi tombe sur un titre qui existe.
+**Les renvois déjà cassés sont dans `scripts/refs-baseline.json`** et n'échouent
+pas — 348 couples (fichier, renvoi), hérités de renumérotations successives.
+Tout renvoi cassé **nouveau**, lui, échoue. Deux choses à savoir : un renvoi du
+socle qu'on répare est signalé (`node scripts/check-refs.mjs --update` retire
+l'entrée), et **on ne grossit pas le socle pour se débarrasser d'une erreur** —
+il est là pour se vider.
+
 - **`docs/README.md`** — index de tout `docs/`. Point d'entrée.
 - **`docs/SPEC.md`** — spécification de référence, organisée par domaine.
   Décrit l'app telle qu'elle fonctionne. **La source de vérité.**
