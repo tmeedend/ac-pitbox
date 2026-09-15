@@ -92,6 +92,17 @@ Jamais d'élévation admin — l'app doit fonctionner en utilisateur standard.
 2. **Avant toute suppression dans `content/`, vérifier junction/hardlink vs vrai
    dossier.** Le garde-fou existe dans `activation.rs` — ne jamais le
    contourner. Effacer un vrai dossier du jeu est irréversible.
+   **Mais il n'est pas au même endroit partout, et c'est le piège.**
+   `activation.rs`, `apps.rs` et `maintenance::remove_orphan` appellent
+   `remove_junction`/`deploy::remove_deployment`, qui refusent d'eux-mêmes ce
+   qu'ils ne reconnaissent pas. `maintenance::delete_broken` est le seul à
+   supprimer directement (`std::fs::remove_dir`), protégé par le seul `if
+   is_junction(…) … else if is_deployed(…)` qui l'entoure : l'invariant y vit
+   dans la condition, pas dans la fonction appelée. Simplifier ce bloc en un
+   `remove_dir_all` est à un geste de distance, et **aucun test
+   d'`activation.rs` ne le verrait** — d'où
+   `delete_broken_never_touches_an_unmanaged_folder_in_content`, qui garde ce
+   chemin-là pour lui.
 3. **Jamais un fichier retiré de l'intérieur du dossier du mod.** Le dossier du
    mod, c'est le dossier que l'auteur a conçu pour être posé dans `content/`
    (`rss_gtm_lanzo_v8/`, `ks_nordschleife/`) — pas l'archive qui l'entoure.

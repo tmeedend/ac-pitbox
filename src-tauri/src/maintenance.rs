@@ -1631,4 +1631,286 @@ mod tests {
             "une couche d'app dont l'app est là n'est pas en attente"
         );
     }
+    /// Enregistre un mod voiture d'une seule version dans l'overlay, avec ses
+    /// fichiers en bibliothèque sous `<lib>/cars/<id>/v`. Renvoie ce dossier.
+    ///
+    /// Les quatre tests de suppression ci-dessous ont tous besoin du même
+    /// décor — un mod complet, déclaré ET sur disque — et ce qu'ils vérifient
+    /// n'est jamais la façon de le construire.
+    fn register_car(conn: &Connection, lib: &Path, id: &str, pack: Option<&str>) -> std::path::PathBuf {
+        let dir = lib.join("cars").join(id).join("v");
+        make_car(&lib.join("cars").join(id), "v", "contenu");
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_mod(conn, id, "Car", Some("B"), Some(id), "h", None, &now).unwrap();
+        overlay::insert_version(
+            conn,
+            &format!("{id}_v"),
+            id,
+            Some("1.0"),
+            None,
+            &now,
+            &dir.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+        overlay::set_active_version(conn, id, &format!("{id}_v")).unwrap();
+        if let Some(pack) = pack {
+            overlay::set_source(conn, id, Some(pack), None).unwrap();
+        }
+        dir
+    }
+
+    #[test]
+    fn delete_broken_never_touches_an_unmanaged_folder_in_content() {
+        // Règle d'or n°2 (§2) : avant toute suppression dans `content/`, on
+        // vérifie junction/hardlink vs vrai dossier. Effacer un vrai dossier du
+        // jeu est irréversible.
+        //
+        // Le garde-fou de `delete_broken` est **écrit sur place**
+        // (`is_junction` puis `deploy::is_deployed`), il ne passe pas par
+        // `activation::remove_junction` : le test de garde-fou d'`activation.rs`
+        // ne couvre donc pas ce chemin-là. Un `remove_dir_all` posé ici
+        // laisserait passer toute la suite de tests existante.
+        let base = crate::testutil::temp_dir("maint-unmanaged");
+        let ac = base.join("ac");
+        let library = base.join("library");
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let libdir = register_car(&conn, &library, "stock_car", None);
+
+        // Le dossier du jeu : un VRAI dossier, ni junction ni déploiement Pit
+        // Box — exactement ce qu'est une voiture Kunos d'origine.
+        let real = ac.join("content").join("cars").join("stock_car");
+        std::fs::create_dir_all(real.join("ui")).unwrap();
+        std::fs::write(real.join("ui").join("ui_car.json"), b"{}").unwrap();
+        std::fs::write(real.join("model.kn5"), b"KUNOS").unwrap();
+
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library),
+            ..Default::default()
+        };
+        assert!(
+            !activation::is_junction(&real) && !deploy::is_deployed(&real),
+            "précondition : le dossier du jeu n'est ni une junction ni un déploiement"
+        );
+
+        delete_broken(&conn, &cfg, "stock_car").unwrap();
+
+        assert!(
+            real.join("model.kn5").is_file(),
+            "un vrai dossier de content/ survit à la suppression du mod"
+        );
+        assert_eq!(
+            std::fs::read(real.join("model.kn5")).unwrap(),
+            b"KUNOS",
+            "et son contenu est intact, pas seulement le dossier"
+        );
+        assert!(!libdir.exists(), "les fichiers de bibliothèque, eux, sont partis");
+        assert!(
+            !overlay::mod_exists(&conn, "stock_car").unwrap(),
+            "et la ligne overlay aussi"
+        );
+    }
+
+    #[test]
+    fn remove_orphan_refuses_a_real_folder_but_removes_a_junction() {
+        // Règle d'or n°2 (§10) : le bouton « retirer la junction orpheline »
+        // vise `content/<type>/<id>`, le dossier le plus dangereux de la
+        // machine. `remove_orphan` ne fait que construire ce chemin — toute sa
+        // sûreté tient à ce qu'il délègue à `activation::remove_junction`.
+        // Rien dans le typage ne le garantit : le test est là pour ça.
+        if !cfg!(windows) {
+            return;
+        }
+        let base = crate::testutil::temp_dir("maint-orphan");
+        let ac = base.join("ac");
+        let cars = ac.join("content").join("cars");
+        std::fs::create_dir_all(&cars).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+
+        // 1. Un vrai dossier du jeu : refus, et il reste entier.
+        let real = cars.join("ks_mazda_miata");
+        std::fs::create_dir_all(&real).unwrap();
+        std::fs::write(real.join("model.kn5"), b"KUNOS").unwrap();
+        assert_eq!(
+            remove_orphan(&cfg, "Car", "ks_mazda_miata").err().as_deref(),
+            Some(crate::errors::NOT_A_JUNCTION),
+            "un vrai dossier est refusé, et refusé par le garde-fou"
+        );
+        assert!(
+            real.join("model.kn5").is_file(),
+            "et il n'est pas touché — la suppression serait irréversible"
+        );
+
+        // 2. Une junction : retirée, sans emporter sa cible.
+        let target = base.join("lib").join("modded_car");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("data.txt"), b"mod").unwrap();
+        activation::create_junction(&cars.join("modded_car"), &target).unwrap();
+
+        remove_orphan(&cfg, "Car", "modded_car").unwrap();
+
+        assert!(!cars.join("modded_car").exists(), "la junction est retirée");
+        assert!(
+            target.join("data.txt").is_file(),
+            "la cible en bibliothèque survit : on retire un lien, pas du contenu"
+        );
+    }
+
+    #[test]
+    fn deleting_a_pack_removes_its_members_and_nothing_else() {
+        // §4.4 : désinstaller un pack supprime plusieurs mods d'un coup, ce qui
+        // en fait l'opération la plus destructrice de l'écran. Sa portée tient
+        // entièrement à `list_pack_ids` — un `LIKE` au lieu d'un `=`, ou un
+        // `OR source_pack IS NULL` de trop, et c'est la bibliothèque qui part.
+        let base = crate::testutil::temp_dir("maint-pack");
+        let library = base.join("library");
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let a1 = register_car(&conn, &library, "pack_a_one", Some("Pack A"));
+        let a2 = register_car(&conn, &library, "pack_a_two", Some("Pack A"));
+        // Un nom de pack dont « Pack A » est un préfixe : ce que `LIKE` avalerait.
+        let b1 = register_car(&conn, &library, "pack_b_one", Some("Pack A bis"));
+        let solo = register_car(&conn, &library, "solo_car", None);
+        let cfg = AppConfig {
+            library_path: Some(library),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            delete_pack(&conn, &cfg, "Pack A").unwrap(),
+            2,
+            "les deux membres du pack, et eux seuls, sont comptés"
+        );
+
+        assert!(!a1.exists(), "le premier membre est supprimé");
+        assert!(!a2.exists(), "le second aussi");
+        assert!(b1.exists(), "un pack dont le nom commence pareil n'est pas concerné");
+        assert!(solo.exists(), "un mod sans pack encore moins");
+        assert!(
+            overlay::mod_exists(&conn, "pack_b_one").unwrap() && overlay::mod_exists(&conn, "solo_car").unwrap(),
+            "et leurs lignes overlay sont intactes"
+        );
+    }
+
+    #[test]
+    fn deleting_an_unknown_pack_deletes_nothing() {
+        // Le cas dégénéré de §4.4, et le seul où une erreur vide toute la
+        // bibliothèque : si le nom demandé ne correspond à rien, la bonne
+        // réponse est « zéro mod supprimé », jamais « tous ».
+        let base = crate::testutil::temp_dir("maint-pack-unknown");
+        let library = base.join("library");
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let member = register_car(&conn, &library, "in_a_pack", Some("Pack A"));
+        let solo = register_car(&conn, &library, "no_pack", None);
+        let cfg = AppConfig {
+            library_path: Some(library),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            delete_pack(&conn, &cfg, "Pack Z").unwrap(),
+            0,
+            "un pack inconnu ne supprime rien"
+        );
+        assert_eq!(delete_pack(&conn, &cfg, "").unwrap(), 0, "un nom vide non plus");
+
+        assert!(member.exists(), "le mod d'un autre pack est là");
+        assert!(solo.exists(), "et le mod sans pack, dont `source_pack` est NULL, aussi");
+    }
+
+    #[test]
+    fn reindexing_never_rewrites_the_mods_own_ui_json() {
+        // Règle d'or n°1 : le `ui_*.json` d'un mod est en lecture seule, jamais
+        // réécrit ni « corrigé ». La réindexation est la fonction qui passe sur
+        // tous ces fichiers, donc celle qui les corrigerait si quelqu'un le
+        // décidait un jour — les métadonnées relues vont dans l'overlay, et
+        // nulle part ailleurs.
+        let base = crate::testutil::temp_dir("maint-readonly");
+        let library = base.join("library");
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let dir = register_car(&conn, &library, "readonly_car", None);
+
+        // Un `ui_car.json` volontairement mal tenu : champs dans un ordre
+        // inhabituel, année en chaîne, indentation à la main. Un « correcteur »
+        // le normaliserait ; on le veut à l'octet près.
+        let ui = dir.join("ui").join("ui_car.json");
+        let original = br#"{
+    "tags"  : ["street"],
+  "name":"Deutschlandring",
+      "year": "1998",
+   "brand" : "B"
+}"#;
+        std::fs::write(&ui, original).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library),
+            ..Default::default()
+        };
+
+        reindex_all(&conn, &cfg, true).unwrap();
+
+        assert_eq!(
+            std::fs::read(&ui).unwrap(),
+            original,
+            "le ui_car.json du mod est inchangé, à l'octet près"
+        );
+        assert_eq!(
+            overlay::get_mod(&conn, "readonly_car")
+                .unwrap()
+                .unwrap()
+                .display_name
+                .as_deref(),
+            Some("Deutschlandring"),
+            "la relecture a bien eu lieu : c'est l'overlay qui reçoit le nom"
+        );
+    }
+
+    #[test]
+    fn reindex_all_covers_every_mod_even_when_one_lost_its_files() {
+        // SESSION§3.1 : « Réindexer tout » sert précisément quand la
+        // bibliothèque est en mauvais état. Un mod dont les fichiers ont disparu
+        // ne doit donc pas interrompre le balayage — sinon le bouton ne marche
+        // plus le jour où il est utile, et les mods suivants restent sur des
+        // métadonnées périmées sans un mot.
+        let base = crate::testutil::temp_dir("maint-reindex-all");
+        let library = base.join("library");
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        // L'ordre alphabétique met le mod cassé en premier : s'il interrompt,
+        // le second n'est jamais atteint.
+        let gone = register_car(&conn, &library, "aaa_gone", None);
+        let after = register_car(&conn, &library, "zzz_after", None);
+        std::fs::remove_dir_all(&gone).unwrap();
+        std::fs::write(
+            after.join("ui").join("ui_car.json"),
+            br#"{"name":"Relu apres le casse","brand":"B","tags":[]}"#,
+        )
+        .unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library),
+            ..Default::default()
+        };
+
+        // `expect` plutôt qu'`unwrap` : c'est l'interruption elle-même qu'on
+        // surveille, et le message doit dire la règle plutôt que « unwrap on
+        // an Err value ».
+        let swept = reindex_all(&conn, &cfg, false).expect("un mod aux fichiers disparus n'interrompt pas le balayage");
+        assert_eq!(swept, 2, "les deux mods sont comptés");
+        assert_eq!(
+            overlay::get_mod(&conn, "zzz_after")
+                .unwrap()
+                .unwrap()
+                .display_name
+                .as_deref(),
+            Some("Relu apres le casse"),
+            "le mod qui suit le mod cassé a bien été réindexé"
+        );
+    }
 }
