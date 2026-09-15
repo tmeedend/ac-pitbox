@@ -626,6 +626,18 @@ de reprendre. En cas d'écart, la spec fait foi.
       - **Lot 2 — `CLAUDE.md` dégraissé.** Les 591 lignes de ce journal en
         sortaient 55 % du fichier, relues à chaque session pour un contenu qui
         n'est pas une consigne. `CLAUDE.md` n'en garde qu'un tableau.
+      - **Lot 3 — les garde-fous.** `scripts/check-conventions.mjs` dans
+        `npm run check` : six règles de « Conventions qui ne se devinent pas »
+        qu'une machine sait lire. Les deux `scrollIntoView` qui violaient une
+        règle écrite en gras sont corrigés, et `shellScroll.ts` gagne
+        `scrollIntoContainer` — les deux pièges documentés (défilement jusqu'au
+        document, chercheur d'ancêtre qui remonte trop haut) y sont pris en
+        charge une fois pour toutes, pour ses trois appelants.
+        **`check-conventions-selftest.mjs` prouve que chaque règle sait
+        échouer**, et il a démasqué une vraie fausse porte en naissant : la
+        détection d'orphelin ne regardait que les fichiers suivis par git, donc
+        un composant tout juste créé — celui sur lequel on veut justement être
+        prévenu — y échappait. À relancer à chaque règle ajoutée.
       **Les mesures qui ont décidé du plan**, et qu'on ne referait pas deux
       fois :
       - **Deux tiers des renvois `§` du code étaient ambigus** (1 861 sur
@@ -643,20 +655,9 @@ de reprendre. En cas d'écart, la spec fait foi.
         commenté « **Jamais `scrollIntoView`** » dans deux fichiers — et
         appelé dans deux autres.
       **Reste, dans cet ordre :**
-      1. **Lot 3 — les garde-fous.** Un `scripts/check-conventions.mjs` qui
-         interdit ce qui est *greppable* parmi les conventions du présent
-         fichier : `scrollIntoView`, `localStorage.setItem` hors migration,
-         une clé i18n jamais citée, un composant `.svelte` jamais importé, un
-         `#[tauri::command]` absent d'`invoke_handler` (aujourd'hui l'écart ne
-         se voit qu'à l'exécution ; mesuré au lot 0, les 195 concordent, mais
-         rien ne le garantit demain). La détection des clés mortes existe
-         déjà, écrite au lot 0 : **elle doit rester conservatrice** — tout
-         littéral qui ressemble à un préfixe protège ce qui est dessous, faute
-         de quoi on supprime une clé vivante. C'est ce qui a sauvé
-         `driver.fromLivery.*`, construite par concaténation.
-      2. **Lot 4 — maquettes.** `docs/maquettes/` + `archive/`. L'index les
+      1. **Lot 4 — maquettes.** `docs/maquettes/` + `archive/`. L'index les
          date et les sépare déjà en deux groupes ; il reste à les déplacer.
-      3. **Lot 5 — découper `SPEC.md`.** §9 → `SPEC-session.md`, §4 fusionné
+      2. **Lot 5 — découper `SPEC.md`.** §9 → `SPEC-session.md`, §4 fusionné
          avec `SPEC-import.md` (aujourd'hui les deux décrivent la même chose
          avec une règle de préséance, ce qui est une désynchronisation en
          attente). Et surtout : **rendre à §8 les sous-sections que le code lui
@@ -668,7 +669,7 @@ de reprendre. En cas d'écart, la spec fait foi.
          `§4.2.4`, qui désignent les étapes numérotées d'une liste que le doc
          n'a jamais titrée. Faisable seulement maintenant que `check-refs`
          vérifie chaque renumérotation.
-      4. **Lot 6 — tests ciblés.** Idempotence de `overlay::migrate()` sur deux
+      3. **Lot 6 — tests ciblés.** Idempotence de `overlay::migrate()` sur deux
          passages et migration depuis une base ancienne (2 tests pour
          2 379 lignes aujourd'hui) ; l'arbitrage par date de `gamebackup.rs`
          (règle d'or n°5, 3 tests).

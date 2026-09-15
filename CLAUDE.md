@@ -266,6 +266,22 @@ partagent `commands::prelude`.
 
 Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux.
 
+**Six d'entre elles sont désormais vérifiées** par `scripts/check-conventions.mjs`,
+dans `npm run check` : `scrollIntoView`, écriture dans `localStorage`, mesure de
+fenêtre écrite dans un style sans `zoomFactor()`, composant `.svelte` importé
+nulle part, `#[tauri::command]` absente d'`invoke_handler`, clé i18n devenue
+inatteignable. Une exception légitime se déclare sur la ligne ou juste
+au-dessus : `// conventions: allow <règle>` — rare, et visible en revue.
+
+Deux choses à savoir avant d'y toucher. **Une règle ajoutée se prouve** :
+`node scripts/check-conventions-selftest.mjs` injecte une violation par règle et
+vérifie qu'elle sort — une porte verte dont les règles sont cassées est pire
+qu'aucune porte, et le banc en a démasqué une en naissant. Et **une règle qui
+crie sur du code correct n'entre pas** : « un `let _ =` s'accompagne d'un
+`log::warn!` » reste vraie mais donne 145 occurrences dont beaucoup de
+légitimes, « aucune chaîne visible en dur » en donne 1 880 sans un vrai parseur
+Svelte. Les deux sont documentées comme écartées, en tête du script.
+
 - **Lire une préférence dans le corps d'un `$effect` abonne cet effet à
   *toutes* les préférences.** `peekUiPref` (donc `getPreferredSkin`,
   `getPreferredLayout`, `preferred.ts` en général) lit un cache `$state` global :
@@ -320,7 +336,11 @@ Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux
   les ancêtres scrollables jusqu'à la fenêtre, et un chercheur d'ancêtre
   scrollable qui remonte trop haut — l'`overflow-y` calculé de l'élément racine
   vaut « auto », pas « visible ». Faire défiler le conteneur d'écran, et
-  s'arrêter avant `document.body`.
+  s'arrêter avant `document.body`. **Les deux pièges sont pris en charge par
+  `scrollIntoContainer` de `$lib/shellScroll`** : c'est lui qu'on appelle, pas
+  `scrollIntoView`, et `check-conventions.mjs` refuse le second. La règle était
+  écrite ici et commentée dans deux fichiers ; elle était quand même violée
+  dans deux autres, ce qui est précisément la raison d'être de la porte.
 - **`t("clé")` renvoie la clé elle-même si elle manque** en anglais aussi.
   Une clé oubliée n'explose donc pas : elle s'affiche telle quelle à l'écran
   (`detail.showroom`). C'est ce qui rend `errorText()` sûr, et c'est aussi
@@ -480,7 +500,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Enrichissement Wikipédia** | livré ; reste à régler les seuils sur les corrections manuelles de l'utilisateur | `docs/SPEC-wikipedia-fiche-detail.md` |
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |
 | **Refonte navigation et fiches** | neuf lots faits ; second palier à fusionner | `docs/PLAN-refonte-navigation.md` |
-| **Passe documentation** | lots 0 à 2 faits ; le contrôle des renvois `§` est en place | `docs/CHANTIERS.md` |
+| **Passe documentation** | lots 0 à 3 faits ; les renvois `§` et six conventions sont sous contrôle | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre
 

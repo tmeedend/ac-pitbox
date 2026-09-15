@@ -18,6 +18,7 @@
   // tick column, selects one row, and opens scrolled to the car already there.
   import { onMount, tick, untrack } from "svelte";
   import { matchesQuery } from "$lib/cardSearch";
+  import { scrollIntoContainer } from "$lib/shellScroll";
   import { hasOwnDriver } from "$lib/driverOverride.svelte";
   import { buildCardIndex, buildPredicate, filterDefs, type FilterMap } from "$lib/filters";
   import type { ModCard } from "$lib/library";
@@ -137,7 +138,11 @@
     // The row already in the slot, scrolled into view — "replace" opens on
     // what it is about to replace, never at the top of a list of 300.
     void tick().then(() => {
-      root?.querySelector<HTMLElement>(".row.on")?.scrollIntoView({ block: "center" });
+      // `scrollIntoContainer` and never `scrollIntoView`: the latter scrolls
+      // every scrollable ancestor up to the document, which is deliberately
+      // `overflow: hidden` — an offset landed there cannot be scrolled back.
+      const on = root?.querySelector<HTMLElement>(".row.on");
+      if (on) scrollIntoContainer(on, "center");
       root?.querySelector<HTMLElement>("input, button")?.focus();
     });
     return () => opener?.focus();

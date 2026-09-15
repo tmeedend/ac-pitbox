@@ -14,6 +14,7 @@
   // ne dit rien du résultat — c'est tout le problème que cet écran résout.
   import { onMount } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
+  import { scrollIntoContainer } from "$lib/shellScroll";
   import { getModDetail, previewSrc } from "$lib/library";
   import { nav, requestSection } from "$lib/nav.svelte";
   import { listDriverBodies, listDriverChoices, type BodyOption, type DriverChoices } from "$lib/driver";
@@ -509,10 +510,12 @@
     }
     if (!best) return;
     // Le défilement suit le focus, sans saut : la case visée est souvent à
-    // demi sortie du champ.
+    // demi sortie du champ. `scrollIntoContainer` et non `scrollIntoView` —
+    // celui-ci ferait défiler tous les ancêtres jusqu'au document, qui est en
+    // `overflow: hidden` et dont le décalage serait définitif.
     e.preventDefault();
     best.el.focus();
-    best.el.scrollIntoView({ block: "nearest", inline: "nearest" });
+    scrollIntoContainer(best.el, "nearest");
   }
 </script>
 
