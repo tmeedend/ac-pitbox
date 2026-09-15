@@ -1,4 +1,4 @@
-// Pont typé vers l'aperçu 3D des voitures (docs/SPEC-preview-3d-kn5.md §7).
+// Pont typé vers l'aperçu 3D des voitures (PREVIEW§7).
 //
 // Le `.glb` ne passe jamais par ici : la commande renvoie une URL servie par
 // le protocole `carpreview`, que le chargeur three.js va chercher lui-même
@@ -108,7 +108,7 @@ export function onPreviewProgress(handler: (stage: PreviewStage) => void): Promi
 }
 
 /** Repères du rig d'un mannequin, en mètres, dans l'espace du `.glb`
- * (SPEC-ecran-pilote §5.1). Le volant générique s'y pose et la caméra s'y
+ * (PILOTE§5.1). Le volant générique s'y pose et la caméra s'y
  * vise : l'application le dessine elle-même, il n'est pas dans le modèle. */
 export interface DriverRig {
   /** Poignet gauche puis droit, ou `null` si le mannequin n'a pas d'os de

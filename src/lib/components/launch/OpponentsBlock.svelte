@@ -17,7 +17,7 @@
   //
   // Le plateau lui-même est **la suite de cette page** (`GridBlock`) et non un
   // cadre imbriqué : le générateur est en haut, sa sortie en dessous, et rien
-  // ne les sépare (lot 5 §5.1). Une gouttière entre les deux rendait invisibles
+  // ne les sépare (L5§5.1). Une gouttière entre les deux rendait invisibles
   // trois liens réels — la bannière de vivier explique le contenu du plateau,
   // `Tirer au hasard` et `Régénérer` font des choses voisines, et la colonne
   // « Force » réagit à un curseur hors de vue.

@@ -82,7 +82,7 @@
     }
   }
 
-  // --- Profil de rendu (docs/SPEC-grille.md §5.5) ---------------------------
+  // --- Profil de rendu (GRILLE§5.5) ---------------------------
   //
   // **Deux écrans et non un**, parce que le premier ne peut pas porter le
   // second : les profils se présentent « avec les chiffres de la bibliothèque

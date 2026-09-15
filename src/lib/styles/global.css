@@ -69,7 +69,7 @@
   --cell-line: #2e2f34;
   --mat: #242529;
   --mat-line: #2b2c31;
-  /* Les deux bouts du **dégradé radial** du mat (SPEC-grille §2.2) : clair au
+  /* Les deux bouts du **dégradé radial** du mat (GRILLE§2.2) : clair au
      centre, sombre aux bords. Le ton plat ci-dessus a suffi tant que les
      images étaient opaques et le recouvraient — il ne se voyait qu'en bordure.
      Il ne suffit plus depuis que les vignettes régénérées sont transparentes

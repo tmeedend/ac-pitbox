@@ -1,4 +1,4 @@
-// Pont typé vers la surcharge de pilote (docs/SPEC-preview-3d-kn5.md §4.6ter).
+// Pont typé vers la surcharge de pilote (PREVIEW§4.6).
 //
 // AC habille un pilote par le `skin.ini` de la livrée, sous le nom du
 // mannequin que la voiture impose. **Deux natures d'objet, deux

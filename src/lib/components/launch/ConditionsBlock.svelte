@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Bloc « Conditions » du rail droit (SESSION§3.3, lot 5 §4) : tout ce
+  // Bloc « Conditions » du rail droit (SESSION§3.3, L5§4) : tout ce
   // qui décrit le jour et la piste sur lesquels on roule — météo, températures,
   // vent, état de piste, heure, saison.
   //
@@ -301,7 +301,7 @@
     </p>
   {/if}
 
-  <!-- ÉTAT DE PISTE (lot 5 §4) : une rubrique de ce bloc et non une carte à
+  <!-- ÉTAT DE PISTE (L5§4) : une rubrique de ce bloc et non une carte à
        elle, juste sous la météo qui pilote son entrée « Auto ». -->
   <div class="lbl section">{t("launch.trackConditionLabel")}</div>
   <TrackConditionBlock {setup} {states} bare />
@@ -535,7 +535,7 @@
   }
 
   /* L'heure a quitté `.implicit` : l'état de piste s'intercale désormais entre
-     le vent et elle (lot 5 §4), et elle demandait de toute façon la largeur du
+     le vent et elle (L5§4), et elle demandait de toute façon la largeur du
      bloc — la bande jour/nuit porte deux heures lisibles et des repères à
      placer au pixel. */
   .time-group {

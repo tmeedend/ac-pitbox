@@ -39,6 +39,9 @@ const DOCS = {
   IMPORT: "SPEC-import.md",
   REFONTE: "SPEC-refonte-navigation-et-fiches.md",
   TEXTURE: "SPEC-texture-update.md",
+  // Les instructions par lot de la refonte de l'écran de session. Livrées,
+  // gardées pour leurs arguments — et parce que le code y renvoie.
+  L5: "LOT5-refonte-ecran-session.md",
   // Le module musique renvoie à sa spec d'origine, écrite pour une autre stack
   // (C#/NAudio) : elle garde sa numérotation propre, et §16 de SPEC.md décrit
   // ce que l'app en a réellement fait.

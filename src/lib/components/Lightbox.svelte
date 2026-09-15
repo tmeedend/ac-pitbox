@@ -29,7 +29,7 @@
      * at, the credit says who owns it. Wikipedia images are shown under the
      * Commons licences, which require the author to be named next to the work
      * — so this is what makes displaying them lawful, not an embellishment
-     * (SPEC-wikipedia-fiche-detail.md §9). Absent for the app's own galleries,
+     * (WIKI§9). Absent for the app's own galleries,
      * whose images belong to the user. */
     credit?: string;
     /** Where the full licence text lives — the file's page on Commons. Opened

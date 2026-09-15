@@ -216,7 +216,7 @@
    * l'utilisateur pour se donner un bouton à activer. */
   const sessionReady = $derived(nav.sessionCar != null && nav.sessionTrack != null);
 
-  // --- Le type de session EST la navigation (lot 5 §1) ----------------------
+  // --- Le type de session EST la navigation (L5§1) ----------------------
   //
   // Le bouton « Paramétrage de la session » et le segmenté « Type de session »
   // de l'écran de réglages ont disparu tous les deux : ils disaient la même
@@ -272,7 +272,7 @@
   const typeSelected = (type: SessionType) =>
     onSessionScreen && sessionNav.type === type && sessionNav.page === "setup";
 
-  // --- Repli « Performance » de la carte voiture (lot 5 §2.1) ---------------
+  // --- Repli « Performance » de la carte voiture (L5§2.1) ---------------
   //
   // Lest, bride, ABS et contrôle de traction sous une seule ligne, au gabarit
   // de LIVRÉE et PILOTE. Les deux assistances viennent de l'écran de réglages,
@@ -594,7 +594,7 @@
     return hideBrandPref ? withoutBrand(name, carDetail?.brand ?? null) : name;
   });
 
-  // --- Point d'entrée de l'écran Pilote (SPEC-ecran-pilote §3.2) ---------
+  // --- Point d'entrée de l'écran Pilote (PILOTE§3.2) ---------
   //
   // Une ligne, pas trois menus : le choix a quitté cette colonne pour son
   // propre écran, parce que la hauteur y est la ressource rare et que
@@ -970,7 +970,7 @@
               <span class="chev" aria-hidden="true">›</span>
             </button>
 
-            <!-- PERFORMANCE (lot 5 §2.1) : lest, bride, ABS et contrôle de
+            <!-- PERFORMANCE (L5§2.1) : lest, bride, ABS et contrôle de
                  traction sous une ligne unique, au gabarit de LIVRÉE et
                  PILOTE. Quatre réglages valaient quatre lignes dans une colonne
                  dont la hauteur est la ressource rare, et les deux assistances
@@ -1062,7 +1062,7 @@
 
         <div class="nsec section">{t("nav.session")}</div>
 
-        <!-- LE TYPE DE SESSION EST LA NAVIGATION (lot 5 §1). Les quatre types
+        <!-- LE TYPE DE SESSION EST LA NAVIGATION (L5§1). Les quatre types
              sont toujours visibles, jamais repliés derrière un sélecteur : ils
              annoncent ce que l'application sait faire, et c'est la seule chose
              de cette colonne qui ne se replie pas quand la hauteur manque.
@@ -1245,7 +1245,7 @@
     background: var(--bg);
     border-right: 1px solid var(--line);
     overflow-y: auto;
-    /* **La colonne ne doit jamais défiler** (lot 5 §2.3), et ce qu'on réduit
+    /* **La colonne ne doit jamais défiler** (L5§2.3), et ce qu'on réduit
        quand le compte n'y est pas, ce sont les deux vignettes. Le seuil est
        donc une requête de CONTENEUR et non de média : une `@media
        (max-height)` interroge la fenêtre, que le zoom d'interface ne touche
@@ -1399,7 +1399,7 @@
     height: auto;
   }
   /* Fenêtre basse : la photo et le plan tombent à la moitié de leur hauteur
-     (lot 5 §2.3, premier des trois recours). Un plafond de hauteur plutôt
+     (L5§2.3, premier des trois recours). Un plafond de hauteur plutôt
      qu'un rapport d'image, parce que la boîte prend le rapport de SA photo
      dès qu'il y en a une (`.thumb.photo`) — c'est donc la hauteur qu'il faut
      borner, et le recadrage est préférable à une image écrasée. */
@@ -1646,7 +1646,7 @@
     width: max-content;
     white-space: nowrap;
   }
-  /* --- La liste des types de session (lot 5 §1) ---------------------------
+  /* --- La liste des types de session (L5§1) ---------------------------
      Même langage que le rail de navigation : le repos est en retrait, l'entrée
      retenue s'éclaircit et prend un filet rouge sur son bord d'attaque —
      niveau 2 du barème (SPEC §7.2ter), jamais un fond plein, qui reste au seul
@@ -1731,7 +1731,7 @@
     color: var(--rosso-bright);
   }
 
-  /* --- Repli « Performance » (lot 5 §2.1) -------------------------------- */
+  /* --- Repli « Performance » (L5§2.1) -------------------------------- */
   .perf {
     display: flex;
     flex-direction: column;

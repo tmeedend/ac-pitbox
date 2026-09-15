@@ -98,7 +98,7 @@ pub fn run() {
         // fermeture et sur redimensionnement/déplacement).
         .plugin(tauri_plugin_window_state::Builder::default().build())
         // Protocole servant les `.glb` d'aperçu 3D depuis le cache disque
-        // (docs/SPEC-preview-3d-kn5.md §7.2). Sans lui, il faudrait faire
+        // (PREVIEW§7.2). Sans lui, il faudrait faire
         // transiter le modèle par l'IPC : 30 Mo de binaire deviennent ~40 Mo
         // de base64 à parser côté JS, l'UI se fige. Ici la webview fetch un
         // fichier local, sans copie intermédiaire.
@@ -246,7 +246,7 @@ pub fn run() {
             app.manage(music::PreviewHandle::default());
 
             // Aperçu 3D des voitures : jeton de génération + créneau unique de
-            // conversion (docs/SPEC-preview-3d-kn5.md §7.3).
+            // conversion (PREVIEW§7.3).
             app.manage(preview::PreviewState::default());
             // Thread propriétaire du système FMOD (§4.3). Rien n'est chargé
             // ici : les DLL du jeu ne sont touchées qu'à la première écoute,

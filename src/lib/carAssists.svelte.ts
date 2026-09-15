@@ -1,4 +1,4 @@
-// ABS and traction control (lot 5 §2.2) — the electronics of the car being
+// ABS and traction control (L5§2.2) — the electronics of the car being
 // driven.
 //
 // **Why they left the settings screen.** They sat in a `DRIVING AIDS` block

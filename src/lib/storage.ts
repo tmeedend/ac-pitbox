@@ -73,7 +73,7 @@ export const StorageKey = {
   inventorySortBy: `${PREFIX}.inventory.sortBy`,
   preferredSkin: (carId: string) => `${PREFIX}.skin.${carId}`,
   preferredLayout: (trackId: string) => `${PREFIX}.layout.${trackId}`,
-  /** Tenue de pilote choisie pour cette voiture (SPEC-ecran-pilote §1.4).
+  /** Tenue de pilote choisie pour cette voiture (PILOTE§1.4).
    * Une clé par voiture, comme le skin préféré : le filtre « pilote modifié »
    * de la bibliothèque la lit par carte, donc de façon synchrone. */
   driverOutfit: (carId: string) => `${PREFIX}.driver.car.${carId}`,

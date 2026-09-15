@@ -73,7 +73,7 @@
 
     <!-- Mention **obligatoire**, pas un remerciement : la clause 3 de la licence
          FMOD impose un crédit visible contenant les mots « FMOD Studio » et
-         « Firelight Technologies Pty Ltd » (docs/SPEC-engine-sound-fmod.md §3).
+         « Firelight Technologies Pty Ltd » (FMOD§3).
          D'où une chaîne littérale et non un `t()` : c'est un texte légal, il ne
          se traduit pas et ne doit pas pouvoir se perdre dans une locale.
          Aucune DLL FMOD n'est redistribuée — on charge celle que l'utilisateur

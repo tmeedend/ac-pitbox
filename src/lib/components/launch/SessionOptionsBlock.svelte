@@ -11,7 +11,7 @@
 
   let { setup }: { setup: RaceSetup } = $props();
 
-  // --- Durations: a value of 0 turns its phase off (lot 5 §3.1) -------------
+  // --- Durations: a value of 0 turns its phase off (L5§3.1) -------------
   //
   // The two tick boxes are gone. A tick and a duration were one control drawn
   // as two, and the pair carried a rule of its own — grey the field out, keep
@@ -195,7 +195,7 @@
 <style>
   /* Each setting keeps its natural width rather than stretching into a grid:
      a slot layout would move every control each time the type changes one of
-     them (lot 5 §3.3).
+     them (L5§3.3).
 
      `flex-end` and not `flex-start`: some settings carry a label above them
      and some do not, so aligning on the top edge left the bare tick boxes

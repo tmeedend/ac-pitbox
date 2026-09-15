@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Réglages de l'aperçu 3D des voitures (docs/SPEC-preview-3d-kn5.md §15).
+  // Réglages de l'aperçu 3D des voitures (PREVIEW§15).
   //
   // **L'aperçu est ici**, en haut de l'onglet, et c'est ce qui justifie que les
   // treize curseurs y soient aussi : on règle en voyant le résultat. La fiche

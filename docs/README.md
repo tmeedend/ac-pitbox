@@ -24,6 +24,7 @@ désigne `SPEC.md`** et les autres documents portent une étiquette :
 | `IMPORT§` | `SPEC-import.md` |
 | `REFONTE§` | `SPEC-refonte-navigation-et-fiches.md` |
 | `TEXTURE§` | `SPEC-texture-update.md` |
+| `L5§` | `LOT5-refonte-ecran-session.md` |
 
 `npm run check` vérifie que chaque renvoi tombe sur une section qui existe
 (`scripts/check-refs.mjs`). **Conséquence pour qui édite un document ici :
@@ -56,6 +57,18 @@ chose qui rendait jusqu'ici une renumérotation invisible au code.
   d'import, et à rejouer contre les cinq archives de référence qu'il liste.
   En cas d'écart, `SPEC.md` fait foi, et la relecture se fait en même temps que
   la modification de la règle — jamais après. Le code y renvoie par `IMPORT§`.
+
+## Instructions par lot — livrées, gardées pour leurs arguments
+
+- **`LOT5-refonte-ecran-session.md`** — la refonte de l'écran de préparation de
+  session : le type devient la navigation, le repli `Performance`, le bloc
+  `CONDITIONS` unique, la page adversaires. **Livré.** Gardé parce que
+  77 renvois du code y pointent et parce qu'il porte les *arguments* — « un
+  réglage se range selon sa portée, jamais selon sa fréquence d'usage », « le
+  panneau gauche ne doit jamais défiler » et ses trois recours dans l'ordre.
+  `SPEC-session.md` décrit ce que l'écran **est** ; celui-ci dit ce qui a été
+  demandé et pourquoi. **Ses documents frères — lots 1, 2 et 4 — manquent**, et
+  une quarantaine de renvois du code les désignent.
 
 ## Chantiers en cours
 

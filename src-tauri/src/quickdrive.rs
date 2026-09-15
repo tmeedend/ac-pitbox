@@ -874,7 +874,7 @@ mod tests {
         assert_eq!(track["r"], 0.02, "2 % et non 2");
     }
 
-    /// §4.7 + lot 5 §4.1 — l'état « Auto » voyageant entier depuis l'écran, ses
+    /// §4.7 + L5§4.1 — l'état « Auto » voyageant entier depuis l'écran, ses
     /// quatre nombres sont ceux de Green et non la sentinelle : c'est le repli
     /// que Content Manager écrit, et c'est ce que le jeu roulera si la météo ne
     /// dit rien de la piste. Bug réel : `s` partait à 0.

@@ -4,7 +4,7 @@
   // everything is a direct read/write of `setup` (state shared with the
   // parent) — no logic to lift up.
   //
-  // **ABS and traction control have left** (lot 5 §2.2). They are not rules of
+  // **ABS and traction control have left** (L5§2.2). They are not rules of
   // the session but capabilities of the CAR — the setting only exists because
   // the car has the hardware, which is exactly what the `Factory` line said out
   // loud. They now sit in the car card of the session column, folded under
@@ -76,7 +76,7 @@
      `Slider.svelte` — frame, track and thumb defined once for the whole app.
 
      A block may take the width it is given; its controls keep their own
-     gauge and stay flush left (lot 5 §3.3). A 900px slider for a setting one
+     gauge and stay flush left (L5§3.3). A 900px slider for a setting one
      poses to the percent is a regression, not a gain. */
   .opt-row {
     display: grid;

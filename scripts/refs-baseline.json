@@ -108,7 +108,6 @@
     "src/lib/components/detail/HistoryBlock.svelte|§3.2",
     "src/lib/components/detail/TagsBlock.svelte|§5bis",
     "src/lib/components/detail/TechSheet.svelte|§5bis.1",
-    "src/lib/components/detail/studioFloor.ts|§5.6",
     "src/lib/components/filters/FilterBar.svelte|§3.4",
     "src/lib/components/filters/FilterEditor.svelte|§3.4",
     "src/lib/components/launch/ConditionsBlock.svelte|§2.2",
@@ -152,7 +151,6 @@
     "src/lib/opponentPool.ts|§3.4",
     "src/lib/others.ts|§2.3",
     "src/lib/playerHandicap.svelte.ts|§2.7",
-    "src/lib/preview.ts|§5.1",
     "src/lib/rules.ts|§5.4",
     "src/lib/rules.ts|§5bis.2",
     "src/lib/savedSessions.ts|§2.11",
@@ -163,7 +161,6 @@
     "src/lib/sessionNav.svelte.ts|§1.2",
     "src/lib/sessionNav.svelte.ts|§1.3",
     "src/lib/sessionNav.svelte.ts|§1.4",
-    "src/lib/storage.ts|§1.4",
     "src/lib/trackLength.ts|§7.6"
   ]
 }

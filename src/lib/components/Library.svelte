@@ -320,7 +320,7 @@
   }
   onDestroy(stopResizeListeners);
 
-  // --- Vignettes régénérées : demandées à la visibilité (SPEC-grille §5.4) ---
+  // --- Vignettes régénérées : demandées à la visibilité (GRILLE§5.4) ---
   //
   // **Pas au chargement de la liste.** Trois cents conversions demandées d'un
   // coup, c'est cinq minutes de travail pour des cartes que personne ne
@@ -960,7 +960,7 @@
           {@const prefLayout = !isCar ? getPreferredLayout(c.id_interne) : null}
           {@const src = previewSrc(prefSkin?.preview ?? prefLayout?.preview ?? c.preview)}
           <!-- La vignette régénérée prend le pas sur la `preview.png` du mod
-               quand elle existe (SPEC-grille §5). Quand elle n'existe pas — et
+               quand elle existe (GRILLE§5). Quand elle n'existe pas — et
                une voiture chiffrée n'en aura jamais — la carte garde la photo
                d'origine : la grille reste mixte pour toujours, et c'est le mat
                qui les rend comparables. -->

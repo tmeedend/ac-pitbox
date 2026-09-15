@@ -607,7 +607,7 @@
    * de le corriger dans son dos.
    *
    * Calculé ici et non dans le plateau depuis que l'alerte doit **remonter sur
-   * l'entrée de navigation** (lot 5 §1.3) : une alerte sur une page qu'on ne
+   * l'entrée de navigation** (L5§1.3) : une alerte sur une page qu'on ne
    * regarde pas ne vaut pas mieux que pas d'alerte. */
   const duplicateDrivers = $derived.by(() => {
     const seen = new Set<string>();
@@ -621,7 +621,7 @@
     return false;
   });
 
-  /** Sur quelle page de l'écran on est (lot 5 §1) — la sous-entrée n'existe
+  /** Sur quelle page de l'écran on est (L5§1) — la sous-entrée n'existe
    * que sous un type qui aligne un plateau. */
   const onOpponentsPage = $derived(sessionNav.page === "opponents" && hasOpponents(setup.session_type));
 
@@ -893,7 +893,7 @@
     // ne retire au sort que ce qui est posé dessus, donc sur un plateau vide
     // elle ne faisait rien du tout. Une course ouverte pour la première fois
     // restait sans adversaire, alors qu'on doit pouvoir la lancer sans être
-    // allé sur la page adversaires (lot 5 §1.5).
+    // allé sur la page adversaires (L5§1.5).
     if (hasOpponents(type) && setup.opponents.length === 0) await fillGrid();
     applying = false;
   }
@@ -904,7 +904,7 @@
     await applyPreset(type);
   }
 
-  // --- Le type vient de la colonne de session (lot 5 §1) --------------------
+  // --- Le type vient de la colonne de session (L5§1) --------------------
   //
   // `sessionNav` est la valeur vivante, cet écran la recopie : la liste des
   // types est dans le panneau gauche, qui est à l'écran en permanence, alors
@@ -937,7 +937,7 @@
   });
 
   // ABS et contrôle de traction : même circulation à sens unique que le lest
-  // et la bride depuis qu'ils vivent dans la carte voiture (lot 5 §2.2).
+  // et la bride depuis qu'ils vivent dans la carte voiture (L5§2.2).
   $effect(() => {
     setup.abs = carAssists.abs;
     setup.traction_control = carAssists.tractionControl;
@@ -1354,7 +1354,7 @@
 </script>
 
 <div class="flow" class:has-bg={!!backgroundSrc} style:--session-bg={backgroundSrc ? `url('${backgroundSrc}')` : undefined}>
-  <!-- Le titre suit la navigation (lot 5 §1.6) : le type, puis le type et sa
+  <!-- Le titre suit la navigation (L5§1.6) : le type, puis le type et sa
        sous-entrée. « Paramétrage de la session » ne disait plus rien depuis que
        la liste des types est dans la colonne — c'est elle qui nomme l'écran.
        Enregistrer/charger restent où ils étaient : ils portent sur toute la
@@ -1382,7 +1382,7 @@
   {#if !ready}
     <LoadingState />
   {:else if onOpponentsPage}
-    <!-- LA PAGE ADVERSAIRES (lot 5 §5) : un seul enchaînement, pleine largeur,
+    <!-- LA PAGE ADVERSAIRES (L5§5) : un seul enchaînement, pleine largeur,
          sans césure de carte entre le générateur et sa sortie. Le bloc du haut
          configure un générateur, le plateau en EST la sortie — séparés par une
          gouttière, trois liens réels devenaient invisibles : la bannière de
@@ -1449,7 +1449,7 @@
           <SimulationBlock {setup} />
         </div>
 
-        <!-- RAIL DROIT — les conditions, en un seul bloc (lot 5 §4).
+        <!-- RAIL DROIT — les conditions, en un seul bloc (L5§4).
              `Track condition` et `Weather` étaient deux cartes, et la première
              entrée de l'état de piste est « Auto (posé par la météo) » : une
              entrée qui nomme sa voisine ne se lit que si cette voisine est sous

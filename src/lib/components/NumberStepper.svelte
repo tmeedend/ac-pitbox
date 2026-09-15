@@ -39,7 +39,7 @@
     emptyStart?: number;
     /** Un 0 se lit « rien », pas « la valeur zéro » : le champ l'affiche alors
      * éteint, comme une cellule `Auto` du plateau. Posé là où 0 **désactive**
-     * ce que le champ mesure (les deux durées de séance, lot 5 §3.1) —
+     * ce que le champ mesure (les deux durées de séance, L5§3.1) —
      * jamais là où c'est une valeur comme une autre (un lest de 0 kg). */
     zeroDim?: boolean;
     onchange?: (value: number) => void;

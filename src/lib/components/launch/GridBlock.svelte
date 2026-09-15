@@ -60,7 +60,7 @@
     nationalityList: Nationality[];
     /** Deux pilotes sous la même identité (§1.9). Calculé par l'écran et non
      * ici depuis que l'alerte doit aussi remonter sur l'entrée de navigation
-     * (lot 5 §1.3) : une seule source, deux lecteurs. */
+     * (L5§1.3) : une seule source, deux lecteurs. */
     duplicateDrivers: boolean;
     onchoose: () => void;
     onregenerate: () => void;

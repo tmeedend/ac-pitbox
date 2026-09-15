@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Réglages Wikipédia (docs/SPEC-wikipedia-fiche-detail.md §8).
+  // Réglages Wikipédia (WIKI§8).
   //
   // Trois réglages et un outil. L'interrupteur a une raison qui n'est pas le
   // confort : l'app interroge Wikipédia à l'ouverture d'une fiche, ce qui
