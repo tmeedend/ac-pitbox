@@ -4,13 +4,13 @@
   //
   // **La sortie du générateur, pas son enfant.** Le plateau vivait dans un cadre
   // à l'intérieur du cadre « Adversaires ». Les deux sont pourtant deux objets —
-  // c'est toute la conception du §3.3 : le filtre définit le vivier, jamais le
+  // c'est toute la conception du CIBLE§3.3 : le filtre définit le vivier, jamais le
   // plateau, et il faut un geste explicite pour passer de l'un à l'autre.
   //
   // Depuis le lot 5 les deux ont leur **page**, en pleine largeur, et plus aucun
   // cadre entre eux : le générateur en haut, le plateau dessous, dans un seul
   // enchaînement. La hauteur de la table est plafonnée à une dizaine de lignes
-  // avec défilement interne (§5.3) — c'est le seul défilement imbriqué autorisé
+  // avec défilement interne (L5§5.3) — c'est le seul défilement imbriqué autorisé
   // dans l'app, et une table de données est précisément le composant pour lequel
   // cette convention existe : sans lui, la hauteur de la page serait fonction du
   // nombre d'IA, et le cas normal d'une course GT3 en aligne 24.
@@ -58,7 +58,7 @@
     poolCount: number;
     /** Les nationalités que le jeu connaît, avec leur drapeau. */
     nationalityList: Nationality[];
-    /** Deux pilotes sous la même identité (§1.9). Calculé par l'écran et non
+    /** Deux pilotes sous la même identité (SETUP§1.9). Calculé par l'écran et non
      * ici depuis que l'alerte doit aussi remonter sur l'entrée de navigation
      * (L5§1.3) : une seule source, deux lecteurs. */
     duplicateDrivers: boolean;
@@ -245,7 +245,7 @@
          grid is right but the liveries repeat, versus the grid is wrong. -->
     <div class="oppo-h lbl">
       <span>{t("launch.gridHeader", { count: setup.opponents.length })}</span>
-      <!-- La position de départ a rejoint SESSION OPTIONS (§2.5) : elle dépend
+      <!-- La position de départ a rejoint SESSION OPTIONS (SETUP§2.5) : elle dépend
            du type de session, et tout ce qui en dépend vit là-bas. -->
       <span class="oppo-sp"></span>
       <button class="oppo-regen" type="button" disabled={!setup.opponents.length} onclick={onregenerate}
@@ -253,7 +253,7 @@
       >
     </div>
 
-    <!-- La table, et elle seule, défile (§5.3). L'en-tête de colonnes y est
+    <!-- La table, et elle seule, défile (L5§5.3). L'en-tête de colonnes y est
          collant : une ligne d'en-tête qui sort par le haut au bout de trois
          lignes ne sert à rien. -->
     <div class="oppo-rows">
@@ -546,7 +546,7 @@
     border: 1px solid var(--line);
   }
   /* Une dizaine de lignes, puis on défile — la hauteur de la page cesse ainsi
-     d'être fonction du nombre d'IA (§5.3). Une ligne fait 58 px (vignette 45 +
+     d'être fonction du nombre d'IA (L5§5.3). Une ligne fait 58 px (vignette 45 +
      deux fois 6 de marge + le filet). */
   .oppo-rows {
     max-height: 580px;

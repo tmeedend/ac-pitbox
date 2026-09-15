@@ -1,4 +1,4 @@
-// Lest et bride du joueur (§2.7) — les deux handicaps qu'on s'impose à
+// Lest et bride du joueur (SETUP§2.7) — les deux handicaps qu'on s'impose à
 // soi-même pour équilibrer une course.
 //
 // **Pourquoi un store, comme `gridMods`.** Ces deux réglages s'éditent dans la
@@ -37,7 +37,7 @@ export function setPlayerHandicap(ballast: number, restrictor: number): void {
  * Amorce depuis `launch_state.json` au démarrage.
  *
  * Rangé dans la **sélection** et non dans les presets par type, parce que ces
- * deux valeurs ne dépendent pas du type de session (§2.7) : il n'y en a qu'un
+ * deux valeurs ne dépendent pas du type de session (SETUP§2.7) : il n'y en a qu'un
  * jeu, celui qu'on avait sous les yeux. Jamais une erreur — un fichier
  * illisible laisse simplement les deux à zéro, ce qu'ils valaient avant que ce
  * réglage n'existe.

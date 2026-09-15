@@ -144,7 +144,7 @@ pub struct TrackStateRef {
     pub description: Option<String>,
 }
 
-/// Position de départ du joueur (§2.6) — le `StartingPosition` du preset, qui
+/// Position de départ du joueur (SETUP§2.6) — le `StartingPosition` du preset, qui
 /// est un simple rang. Les quatre valeurs se résolvent au moment de construire
 /// le preset, parce que `Last` dépend de la taille du plateau.
 ///
@@ -184,7 +184,7 @@ pub struct RaceSetup {
     #[serde(default)]
     pub opponents: Vec<Opponent>,
     /// Force de l'IA : un **centre et un écart**, pas un minimum et un maximum
-    /// (§2.9).
+    /// (SETUP§2.9).
     ///
     /// Le geste fréquent est de monter tout le plateau de quelques points sans
     /// en changer la dispersion, et il ne doit pas demander deux
@@ -207,7 +207,7 @@ pub struct RaceSetup {
     pub aggression: u32,
     #[serde(default)]
     pub aggression_spread: u32,
-    /// Lest et bride **du joueur** (§2.7), 0-200 kg et 0-100 %. Valables dans
+    /// Lest et bride **du joueur** (SETUP§2.7), 0-200 kg et 0-100 %. Valables dans
     /// les quatre types de session, d'où leur place hors de `ModeData` pour la
     /// course : le preset de grille réel les porte au niveau de la grille
     /// (`PlayerBallast`/`PlayerRestrictor`), et les modes solo dans leur propre
@@ -216,7 +216,7 @@ pub struct RaceSetup {
     pub player_ballast: u32,
     #[serde(default)]
     pub player_restrictor: u32,
-    /// Position de départ du joueur (§2.6), **course uniquement**.
+    /// Position de départ du joueur (SETUP§2.6), **course uniquement**.
     #[serde(default)]
     pub start_mode: StartMode,
     #[serde(default)]
@@ -255,7 +255,7 @@ pub struct RaceSetup {
     #[serde(default)]
     pub jump_start_penalty: u32,
     /// L'état de piste retenu, **porté en entier** plutôt que désigné par un
-    /// nombre (§4.6/§4.7).
+    /// nombre (§4.6/L4§4.7).
     ///
     /// Le réglage n'était que le pourcentage de départ, qui servait
     /// d'identifiant. Ça ne tient plus dès que des presets utilisateur de
@@ -296,7 +296,7 @@ pub struct RaceSetup {
     /// Ghost car (Hotlap uniquement) → [GHOST_CAR] du race.ini.
     #[serde(default)]
     pub ghost_car: bool,
-    /// Avance du fantôme, en secondes (§2.8) — le `GhostCarAdvantage` du preset,
+    /// Avance du fantôme, en secondes (SETUP§2.8) — le `GhostCarAdvantage` du preset,
     /// qui y était codé en dur à 0. Hotlap uniquement.
     #[serde(default)]
     pub ghost_advantage: f64,

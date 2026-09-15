@@ -41,7 +41,7 @@
     size?: "compact" | "toolbar" | "mini" | "main";
     /** Les libellés sont des glyphes : boutons centrés, de largeur égale. */
     icon?: boolean;
-    /** Le groupe entier est neutralisé par son contexte (§2.6) — distinct du
+    /** Le groupe entier est neutralisé par son contexte (SETUP§2.6) — distinct du
      * `disabled` d'un item, qui écarte un choix parmi d'autres. Un réglage
      * visible mais sans effet doit être éteint, pas seulement silencieux. */
     disabled?: boolean;

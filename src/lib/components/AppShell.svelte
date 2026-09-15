@@ -244,7 +244,7 @@
     openSetupPage();
     void requestSection("race");
   }
-  /** `6 AI · 87% ± 3` (§1.2). Ce n'est pas un ornement : sans elle on ne peut
+  /** `6 AI · 87% ± 3` (L5§1.2). Ce n'est pas un ornement : sans elle on ne peut
    * plus savoir combien d'adversaires on affronte sans changer de page, alors
    * qu'on peut lancer la session sans y être allé. */
   const opponentsSummary = $derived(
@@ -605,7 +605,7 @@
   // n'importe quelle voiture (§DRIVER3D_MODEL, docs/csp-driver-research.md),
   // et un verrou qui n'empêchait plus rien — un simple clic le franchissait —
   // ne faisait que décrire un état qui n'était même plus vrai. Retiré avec
-  // l'utilisateur : le §11.2 de la spec (voiture de course grisée) est donc
+  // l'utilisateur : le PILOTE§11.2 de la spec (voiture de course grisée) est donc
   // un écart assumé.
   /** La tenue de **cette** voiture, cascade résolue : la sienne si elle en a
    * une, la tenue par défaut si l'option est active, la livrée sinon. */
@@ -638,7 +638,7 @@
       : t("session.driverCustom");
   });
 
-  /** Clé du badge, ou `null` (§3.2). « Modifié » a disparu de la liste : le
+  /** Clé du badge, ou `null` (PILOTE§3.2). « Modifié » a disparu de la liste : le
    * libellé le dit déjà, et un badge qui répète la ligne qu'il accompagne
    * n'est que du bruit. */
   const driverBadge = $derived(driverPrefs.body ? "substituted" : null);
@@ -1094,7 +1094,7 @@
               >
                 <span class="sub-n">{t("launch.opponentsLabel")}</span>
                 <!-- Le résumé passe en rouge et porte un marqueur quand la page
-                     adversaires porte une alerte (§1.3) : une alerte sur une
+                     adversaires porte une alerte (L5§1.3) : une alerte sur une
                      page qu'on ne regarde pas ne vaut pas mieux que pas
                      d'alerte. -->
                 <span class="sub-v" class:alert={sessionNav.alert}
@@ -1725,7 +1725,7 @@
     color: var(--muted);
     font-family: var(--mono);
   }
-  /* Une alerte vivant sur la page adversaires (§1.3). Niveau 2 du barème : le
+  /* Une alerte vivant sur la page adversaires (L5§1.3). Niveau 2 du barème : le
      libellé passe en rouge, rien de plein. */
   .sub-v.alert {
     color: var(--rosso-bright);

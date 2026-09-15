@@ -124,7 +124,7 @@
         {#each CHIPS as chip (chip.kind)}
           {@const on = isChipOn(filters, chip.kind, playerCard)}
           {@const can = chipAvailable(chip.kind, playerCard, refRatio)}
-          <!-- `aria-disabled`, not `disabled`: §3.4 asks the chip to EXPLAIN
+          <!-- `aria-disabled`, not `disabled`: CIBLE§3.4 asks the chip to EXPLAIN
                why it cannot be clicked, and a disabled button fires no mouse
                event, so its tooltip never appears and the keyboard cannot reach
                it either. It stays focusable and says its reason; the click is
@@ -197,7 +197,7 @@
     </div>
   </div>
 
-  <!-- A statement, not a block: the grid is still playable, so no red (§3.5). -->
+  <!-- A statement, not a block: the grid is still playable, so no red (CIBLE§3.5). -->
   {#if poolCount > 0 && poolCount < opponentCount}
     <p class="warnbox thin">
       {poolCount === 1 ? t("launch.poolThinOne") : t("launch.poolThinFew", { count: poolCount })}

@@ -1,4 +1,4 @@
-//! États de piste offerts à l'écran de session (§2.2) — voir `quickdrive.rs`,
+//! États de piste offerts à l'écran de session (SETUP§2.2) — voir `quickdrive.rs`,
 //! qui porte la table et l'envoie au preset.
 
 use serde::Serialize;

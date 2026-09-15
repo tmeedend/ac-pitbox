@@ -8,7 +8,7 @@
   // index, which is why this file carries no filtering logic of its own.
   //
   // **It shares the block's filter state, it no longer derives anything**
-  // (§3.3). There used to be two sets to reconcile — the tab said what the `+`
+  // (CIBLE§3.3). There used to be two sets to reconcile — the tab said what the `+`
   // drew from, the modal said what one took by hand — and the rules that kept
   // them apart ("removing a chip does not change the tab") were the cost of
   // that duplication. There is one pool now, and this modal is its detailed
@@ -30,11 +30,11 @@
     /** The whole car library — see the header. */
     pool: ModCard[];
     mode: "add" | "replace";
-    /** The block's own filter state, shared rather than copied (§3.3). */
+    /** The block's own filter state, shared rather than copied (CIBLE§3.3). */
     filters: FilterMap;
     pinned: string[];
     query: string;
-    /** Car the performance band is measured against (§3.4) — the one being
+    /** Car the performance band is measured against (CIBLE§3.4) — the one being
      * driven. The modal offers the same catalogue as the library, so the same
      * reference has to reach it, or a `Performance` chip posed here would say
      * it has nothing to compare to. */

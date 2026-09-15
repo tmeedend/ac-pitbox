@@ -14,7 +14,7 @@ export interface SavedSession {
   savedAt: string;
   setup: RaceSetup;
   opponentCount: number;
-  /** Vivier d'adversaires (§3.3), sérialisé comme les filtres de bibliothèque.
+  /** Vivier d'adversaires (CIBLE§3.3), sérialisé comme les filtres de bibliothèque.
    * `undefined` sur une sauvegarde antérieure aux jetons : le chargement
    * reconstruit alors le vivier depuis `gridMode`/`categorySelection`, gardés
    * pour cette seule relecture et jamais réécrits. */
@@ -91,7 +91,7 @@ function migrate(all: Record<string, SavedSession>): Record<string, SavedSession
     }>;
     s.setup.abs = assistLevelFrom(s.setup.abs, old.abs_auto);
     s.setup.traction_control = assistLevelFrom(s.setup.traction_control, old.traction_control_auto);
-    // Difficulté : deux bornes avant le modèle centre ± écart (§2.9). Converti
+    // Difficulté : deux bornes avant le modèle centre ± écart (SETUP§2.9). Converti
     // plutôt que repli sur le défaut — une session enregistrée porte souvent un
     // réglage ajusté longuement, et le voir se réinitialiser en la rechargeant
     // est pire que tout. Idempotent : une entrée déjà convertie porte son
@@ -111,7 +111,7 @@ function persist(all: Record<string, SavedSession>): Promise<void> {
 }
 
 /**
- * **Toutes** les sauvegardes, celles du type courant en tête (§2.11).
+ * **Toutes** les sauvegardes, celles du type courant en tête (SETUP§2.11).
  *
  * Le filtre par type a été retiré parce qu'il était **invisible**. Quelqu'un
  * qui avait enregistré une session en Course et la cherchait depuis Practice ne

@@ -165,14 +165,14 @@ const WEATHER_STATE: TrackState = TrackState {
     name: "Auto (set by weather)",
 };
 
-/// L'entrée « Auto » telle que l'écran la lit (§2.2) : ses quatre valeurs sont
+/// L'entrée « Auto » telle que l'écran la lit (SETUP§2.2) : ses quatre valeurs sont
 /// celles de Green, puisque c'est sur elles que le jeu retombe quand la météo
 /// ne dit rien de la piste.
 ///
 /// **`start` porte bien 95 et non la sentinelle.** Il l'a portée, et ça se
 /// voyait deux fois : l'écran affichait `INITIAL GRIP 0 %` pour une entrée que
 /// la liste annonce à 95, et surtout l'état voyageant désormais **entier**
-/// depuis l'écran (§4.7), ce 0 partait tel quel dans le preset — une session
+/// depuis l'écran (L4§4.7), ce 0 partait tel quel dans le preset — une session
 /// « Auto » dont la météo ne dit rien de la piste roulait donc sur une piste à
 /// 0 % d'adhérence au lieu du vert que Content Manager écrit. La sentinelle
 /// reste ce qu'elle a toujours été, un réglage d'avant ce modèle (`RaceSetup::
@@ -232,7 +232,7 @@ pub fn track_state_for(grip: u32) -> &'static TrackState {
 /// d'interface pour une combinaison de quatre nombres ; rien dans le preset ne
 /// le transporte. Ce sont donc bien les nombres qu'il faut envoyer justes.
 fn build_track_properties(s: &RaceSetup) -> Value {
-    // L'état voyage entier depuis l'écran (§4.7) : on sérialise ce qu'il porte,
+    // L'état voyage entier depuis l'écran (L4§4.7) : on sérialise ce qu'il porte,
     // sans rien rechercher. Un preset d'avant ce modèle ne porte qu'un
     // pourcentage — on retrouve alors l'état de la table du jeu le plus proche,
     // ce qui est exactement ce que faisait l'ancien chemin.
@@ -364,7 +364,7 @@ fn build_grid(s: &RaceSetup) -> Value {
     })
 }
 
-/// Lest et bride du joueur (§2.7), bornés sur la plage de Content Manager.
+/// Lest et bride du joueur (SETUP§2.7), bornés sur la plage de Content Manager.
 /// Écrits en flottants comme le preset de référence, où ils valent `5.0` et
 /// `10.0` — les tableaux par ligne, eux, sont des chaînes.
 fn player_ballast(s: &RaceSetup) -> f64 {
@@ -374,7 +374,7 @@ fn player_restrictor(s: &RaceSetup) -> f64 {
     f64::from(s.player_restrictor.min(100))
 }
 
-/// Les deux bornes d'un réglage « centre ± écart » (§2.9), **bornées**.
+/// Les deux bornes d'un réglage « centre ± écart » (SETUP§2.9), **bornées**.
 ///
 /// Le bornage est appliqué ici et pas seulement à l'affichage : un centre de 3
 /// avec un écart de 5 doit envoyer 0 à 8, pas −2 à 8. Sans ça l'écran annonce
@@ -385,7 +385,7 @@ fn band(center: u32, spread: u32, lo: f64, hi: f64) -> (f64, f64) {
     ((c - s).clamp(lo, hi), (c + s).clamp(lo, hi))
 }
 
-/// Rang de départ du joueur (§2.6), résolu **ici** parce que trois des quatre
+/// Rang de départ du joueur (SETUP§2.6), résolu **ici** parce que trois des quatre
 /// modes dépendent de la taille du plateau, que seul ce moment connaît pour de
 /// bon. Les rangs sont 1-based, et le dernier est `adversaires + 1` : le joueur
 /// compte pour une voiture.
@@ -874,7 +874,7 @@ mod tests {
         assert_eq!(track["r"], 0.02, "2 % et non 2");
     }
 
-    /// §4.7 + L5§4.1 — l'état « Auto » voyageant entier depuis l'écran, ses
+    /// L4§4.7 + L5§4.1 — l'état « Auto » voyageant entier depuis l'écran, ses
     /// quatre nombres sont ceux de Green et non la sentinelle : c'est le repli
     /// que Content Manager écrit, et c'est ce que le jeu roulera si la météo ne
     /// dit rien de la piste. Bug réel : `s` partait à 0.
@@ -1086,7 +1086,7 @@ mod tests {
     }
 
     /// Règle protégée : le lest et la bride du joueur partent dans les quatre
-    /// types de session (§2.7) — au niveau de la grille pour une course, dans
+    /// types de session (SETUP§2.7) — au niveau de la grille pour une course, dans
     /// le `ModeData` pour les modes solo, les deux emplacements relevés sur des
     /// presets réels. Un réglage qui ne partirait que pour un type serait
     /// invisible ailleurs, et c'est précisément la raison pour laquelle il ne

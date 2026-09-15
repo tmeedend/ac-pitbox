@@ -37,7 +37,7 @@
    * rather than accepting a value that goes nowhere. */
   const practiceUnavailable = $derived(setup.qualify_minutes === 0);
 
-  // --- Starting position (§2.6) ---------------------------------------------
+  // --- Starting position (SETUP§2.6) ---------------------------------------------
   //
   // **Neutralised by qualifying, and that is Content Manager's own behaviour**,
   // not a choice made here: its starting-position control lives in

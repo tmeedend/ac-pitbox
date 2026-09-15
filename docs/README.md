@@ -25,6 +25,7 @@ désigne `SPEC.md`** et les autres documents portent une étiquette :
 | `REFONTE§` | `SPEC-refonte-navigation-et-fiches.md` |
 | `TEXTURE§` | `SPEC-texture-update.md` |
 | `SETUP§` | `LOT-session-setup.md` |
+| `CIBLE§` | `CIBLE-reglages-session.md` |
 | `L1§` | `LOT1-forme-ecran-session.md` |
 | `L2§` | `LOT2-selection-adversaires.md` |
 | `L4§` | `LOT4-etat-de-piste.md` |
@@ -71,6 +72,10 @@ retrouve pas deux fois. `SPEC-session.md` décrit ce que l'écran **est**
 aujourd'hui ; celles-ci disent ce qui a été demandé et pourquoi. En cas
 d'écart, `SPEC-session.md` fait foi.
 
+- **`CIBLE-reglages-session.md`** (`CIBLE§`) — la cible de l'écran : le bloc
+  Adversaires où **le filtre remplace les onglets**, le plateau, les grilles
+  enregistrées, l'import Content Manager. C'est lui qui porte « le filtre
+  définit le vivier, jamais le plateau ».
 - **`LOT-session-setup.md`** (`SETUP§`) — corrections et réorganisation de
   départ, §1.1 à §1.9 puis §2.1 à §2.11. C'est à ces deux moitiés que le lot 5
   renvoie quand il écrit « la règle 1.2 du lot 1 » et « §2.6 du lot 2 ».

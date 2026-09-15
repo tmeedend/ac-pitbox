@@ -45,7 +45,7 @@
     /** Course du soleil du circuit (SESSION§3.3), ou `null` si sa position est
      * inconnue — la bande jour/nuit ne s'affiche alors pas du tout. */
     sun: TrackSun | null;
-    /** Les états de piste offerts (§2.2) : natifs du jeu puis presets de
+    /** Les états de piste offerts (SETUP§2.2) : natifs du jeu puis presets de
      * Content Manager. Traversent ce bloc jusqu'à `TrackConditionBlock`, qui
      * n'est plus une carte mais une rubrique de celle-ci. */
     states: TrackStateOption[];

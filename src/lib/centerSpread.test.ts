@@ -1,4 +1,4 @@
-// Les deux moitiés du modèle « centre ± écart » (§2.9) : la migration depuis
+// Les deux moitiés du modèle « centre ± écart » (SETUP§2.9) : la migration depuis
 // deux bornes, et le bornage de ce qui en ressort.
 import { describe, expect, it } from "vitest";
 import { band, centerSpreadOf } from "./aiBand";

@@ -1,4 +1,4 @@
-// Le modèle « centre ± écart » de la difficulté et de l'agressivité (§2.9).
+// Le modèle « centre ± écart » de la difficulté et de l'agressivité (SETUP§2.9).
 //
 // Son propre module, et pour une raison mécanique : `launch.ts` importe
 // `gridThumbs.svelte.ts`, donc des runes, donc il n'est pas chargeable par
@@ -9,7 +9,7 @@
 // DOM, rien que des fonctions.
 
 /**
- * Les bornes réelles d'un réglage « centre ± écart », **bornées** (§2.9).
+ * Les bornes réelles d'un réglage « centre ± écart », **bornées** (SETUP§2.9).
  *
  * Le bornage porte sur l'affichage **et** sur ce qui part en jeu : un centre de
  * 3 avec un écart de 5 donne `3% ± 5 (0–8)`, jamais `(-2–8)`. Le côté Rust
@@ -25,7 +25,7 @@ export function band(center: number, spread: number, min: number, max: number): 
 }
 
 /**
- * Passe d'un minimum et d'un maximum au couple centre + écart (§2.9).
+ * Passe d'un minimum et d'un maximum au couple centre + écart (SETUP§2.9).
  *
  * Sert à deux endroits qui parlent encore en bornes, et pour deux raisons
  * différentes : les presets et sessions enregistrés **avant** ce modèle, et les

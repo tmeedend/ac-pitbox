@@ -46,6 +46,7 @@ const DOCS = {
   L2: "LOT2-selection-adversaires.md",
   L1: "LOT1-forme-ecran-session.md",
   SETUP: "LOT-session-setup.md",
+  CIBLE: "CIBLE-reglages-session.md",
   // Le module musique renvoie à sa spec d'origine, écrite pour une autre stack
   // (C#/NAudio) : elle garde sa numérotation propre, et §16 de SPEC.md décrit
   // ce que l'app en a réellement fait.

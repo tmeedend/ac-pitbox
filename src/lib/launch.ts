@@ -74,7 +74,7 @@ export function clampAiLevel(level: number): number {
   return Math.max(AI_LEVEL_MIN, Math.min(AI_LEVEL_MAX, Math.round(level)));
 }
 
-/** Un état de piste tel que l'écran le lit (§2.2) : **un objet nommé porteur
+/** Un état de piste tel que l'écran le lit (SETUP§2.2) : **un objet nommé porteur
  * de quatre valeurs**, jamais un cas d'énumération. C'est ce qui permettra d'y
  * ajouter des états d'une autre provenance sans que l'écran ait à changer —
  * ce ne sera qu'une entrée de plus dans la liste. */
@@ -99,7 +99,7 @@ export interface TrackStateOption {
 
 export type TrackStateOrigin = "builtin" | "cm";
 
-/** Ce qu'une session retient d'un état de piste (§4.7) : sa référence **et**
+/** Ce qu'une session retient d'un état de piste (L4§4.7) : sa référence **et**
  * ses quatre valeurs.
  *
  * Ce qui part au jeu, ce sont les nombres — le nom n'est qu'une étiquette. Les
@@ -213,7 +213,7 @@ export function newOpponent(carId: string, skinId: string | null): Opponent {
   };
 }
 
-/** Position de départ du joueur (§2.6), **course uniquement**. Résolue côté
+/** Position de départ du joueur (SETUP§2.6), **course uniquement**. Résolue côté
  * Rust, où la taille du plateau est connue pour de bon. `random` est le défaut,
  * et le seul des quatre qui ne fixe rien. */
 export type StartMode = "random" | "first" | "second" | "last";
@@ -251,7 +251,7 @@ export interface RaceSetup {
   session_type: SessionType;
   /** Plateau d'adversaires (mode course uniquement), chacun avec son niveau IA. */
   opponents: Opponent[];
-  /** Force de l'IA : un **centre et un écart** (§2.9), pas un minimum et un
+  /** Force de l'IA : un **centre et un écart** (SETUP§2.9), pas un minimum et un
    * maximum. Le geste fréquent est de monter tout le plateau de quelques
    * points sans en changer la dispersion, et il ne doit pas demander deux
    * manipulations. Les deux bornes en sont déduites, bornées, à la frontière
@@ -261,12 +261,12 @@ export interface RaceSetup {
   /** Agressivité de l'IA, même modèle. */
   aggression: number;
   aggression_spread: number;
-  /** Lest et bride **du joueur** (§2.7), 0-200 kg et 0-100 %. Valables dans les
+  /** Lest et bride **du joueur** (SETUP§2.7), 0-200 kg et 0-100 %. Valables dans les
    * quatre types de session — ils s'éditent dans la carte voiture du panneau
    * gauche, et `playerHandicap.svelte.ts` est ce qui les y relie. */
   player_ballast: number;
   player_restrictor: number;
-  /** Position de départ du joueur (§2.6), course uniquement. */
+  /** Position de départ du joueur (SETUP§2.6), course uniquement. */
   start_mode: StartMode;
   laps: number;
   weather: string;
@@ -281,7 +281,7 @@ export interface RaceSetup {
   season_date: string | null;
   penalties: boolean;
   jump_start_penalty: number;
-  /** L'état de piste retenu, porté en entier (§4.7). `null` sur une
+  /** L'état de piste retenu, porté en entier (L4§4.7). `null` sur une
    * configuration antérieure : `grip` est alors relu. */
   track_state: TrackStateRef | null;
   /** Ancien réglage — le seul pourcentage de départ. Gardé pour la relecture,
@@ -297,7 +297,7 @@ export interface RaceSetup {
   /** Durée qualif quand elle est demandée (mini 5 min, borne de CM). */
   qualify_minutes: number;
   ghost_car: boolean;
-  /** Avance du fantôme en secondes (§2.8), hotlap uniquement. */
+  /** Avance du fantôme en secondes (SETUP§2.8), hotlap uniquement. */
   ghost_advantage: number;
   /** Départ en Practice (mode Practice uniquement). */
   practice_start: PracticeStart;

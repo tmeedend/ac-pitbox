@@ -1,4 +1,4 @@
-// The three shortcut chips of the Opponents block (§3.2/§3.3).
+// The three shortcut chips of the Opponents block (CIBLE§3.2/CIBLE§3.3).
 //
 // **The chips are not modes.** They were — `Same car` / `By category` / `Free`
 // were three tabs, and a tab did two jobs at once: define a set of cars, and
@@ -85,7 +85,7 @@ export function toggleChip(filters: FilterMap, kind: ChipKind, car: ModCard | nu
 }
 
 /** Whether a chip can be clicked at all: no car chosen, a car with no category,
- * or — for the band — a car whose own specs are unreadable (§3.4). No silent
+ * or — for the band — a car whose own specs are unreadable (CIBLE§3.4). No silent
  * fallback on a random draw: the chip goes dim and says why. */
 export function chipAvailable(kind: ChipKind, car: ModCard | null, refRatio: number | null): boolean {
   if (kind === "performance") return refRatio != null;

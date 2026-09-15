@@ -69,7 +69,7 @@
   import { StorageKey } from "$lib/storage";
   let libCards = $state<ModCard[]>([]);
   let weathers = $state<WeatherOption[]>([]);
-  // Lus côté Rust dans la table du jeu (§2.2) : l'écran ne connaît plus la
+  // Lus côté Rust dans la table du jeu (SETUP§2.2) : l'écran ne connaît plus la
   // liste, il la reçoit — c'est ce qui permettra d'y ajouter des états d'une
   // autre provenance sans le toucher.
   let trackStateList = $state<TrackStateOption[]>([]);
@@ -228,7 +228,7 @@
   const player = $derived(carPool.find((c) => c.id_interne === setup.car_id) ?? null);
   const currentWeather = $derived(weathers.find((w) => w.id === selectedIntent));
 
-  // --- The pool (§3.3) ---------------------------------------------------
+  // --- The pool (CIBLE§3.3) ---------------------------------------------------
   //
   // **The filter defines the pool, never the grid.** Three tabs used to do it
   // (`Same car` / `By category` / `Free`), and they were a poorer copy of the
@@ -336,7 +336,7 @@
    * Si le vivier distinct est épuisé (un vivier d'une seule voiture, par
    * exemple), on complète en dupliquant un mod déjà choisi avec un skin
    * différent plutôt que de tronquer le plateau — c'est ce que
-   * l'avertissement de vivier maigre annonce (§3.5).
+   * l'avertissement de vivier maigre annonce (CIBLE§3.5).
    *
    * **Aucun repli sur la bibliothèque entière quand le vivier est vide** : un
    * filtre qui ne garde rien doit rendre un plateau vide, pas un plateau tiré
@@ -363,7 +363,7 @@
     return out;
   }
 
-  /** `Fill N at random` (§3.3) : tire N voitures dans le vivier et **remplace**
+  /** `Fill N at random` (CIBLE§3.3) : tire N voitures dans le vivier et **remplace**
    * le plateau. Le chemin de celui qui veut courir tout de suite. */
   async function fillGrid() {
     const gen = ++opponentsGen;
@@ -448,7 +448,7 @@
       await saveGrid({
         name,
         savedAt: new Date().toISOString(),
-        // Une **copie**, jamais un lien (§5.1) : sans `$state.snapshot`, c'est
+        // Une **copie**, jamais un lien (CIBLE§5.1) : sans `$state.snapshot`, c'est
         // le proxy réactif du plateau courant qui partirait au backend, et
         // modifier le plateau changerait la grille enregistrée.
         opponents: $state.snapshot(setup.opponents),
@@ -552,7 +552,7 @@
   // --- Modale de sélection d'adversaire (SESSION§3) ---
   //
   // Elle reçoit **toute** la bibliothèque voitures, et surtout **l'état de
-  // filtre du bloc lui-même** (§3.3) — elle ne dérive plus rien. C'est plus
+  // filtre du bloc lui-même** (CIBLE§3.3) — elle ne dérive plus rien. C'est plus
   // simple que ce qui était en place : il n'y a qu'un vivier, celui que la
   // barre de filtres montre, et la modale en est la vue détaillée. Retirer un
   // jeton dans la modale élargit donc aussi le vivier du `Fill` — ce sont les
@@ -602,7 +602,7 @@
     return opp.car_skin ? skinsByCarId[opp.car_id]?.find((sk) => sk.id === opp.car_skin) : undefined;
   }
 
-  /** Deux pilotes sous la même identité (§1.9). La génération l'évite ; ceci
+  /** Deux pilotes sous la même identité (SETUP§1.9). La génération l'évite ; ceci
    * n'attrape que ce que l'utilisateur a forcé à la main, et le dit plutôt que
    * de le corriger dans son dos.
    *
@@ -712,7 +712,7 @@
 
   // --- Presets de session par type (SESSION§3) ---
   interface Persisted {
-    /** Centre et écart (§2.9). Un preset d'avant porte encore `ai_level_min`
+    /** Centre et écart (SETUP§2.9). Un preset d'avant porte encore `ai_level_min`
      * et `ai_level_max` : `applyPreset` les convertit, il ne les jette pas. */
     ai_level?: number; ai_spread?: number; aggression_spread?: number;
     ai_level_min?: number; ai_level_max?: number;
@@ -720,7 +720,7 @@
     /** Absents sur un preset antérieur au §4.4 : les défauts de Content
      * Manager, dernier sur la grille et agressivité nulle. */
     aggression?: number; start_mode?: StartMode; ghost_advantage?: number;
-    /** Vivier d'adversaires (§3.3), sérialisé par `serializeFilters` — la même
+    /** Vivier d'adversaires (CIBLE§3.3), sérialisé par `serializeFilters` — la même
      * forme que les filtres de bibliothèque, relue par le même `parseFilters`.
      * Absent sur un preset antérieur aux jetons : `migrateGridPreset` reprend
      * alors les trois anciens champs (`grid_mode`, `category_selection`,
@@ -733,7 +733,7 @@
     year_min?: number; year_max?: number;
     laps: number; time_hours: number;
     penalties: boolean; jump_start_penalty: number;
-    /** L'état de piste entier (§4.7). `grip` reste écrit pour qu'un retour en
+    /** L'état de piste entier (L4§4.7). `grip` reste écrit pour qu'un retour en
      * arrière de version retrouve quelque chose, et relu quand `track_state`
      * manque. */
     track_state?: TrackStateRef | null; grip: number;
@@ -769,7 +769,7 @@
       session_type: setup.session_type,
       opponents: setup.opponents,
       // Dans la sélection et non dans les presets par type : ces deux-là ne
-      // dépendent pas du type de session (§2.7).
+      // dépendent pas du type de session (SETUP§2.7).
       player_ballast: setup.player_ballast,
       player_restrictor: setup.player_restrictor,
     };
@@ -783,7 +783,7 @@
 
   /**
    * Rétablit le vivier d'un preset, **ou le reconstruit** depuis les trois
-   * champs de l'époque des onglets (§3.1).
+   * champs de l'époque des onglets (CIBLE§3.1).
    *
    * Une migration plutôt qu'un repli sur les défauts : un utilisateur qui
    * courait en « Même catégorie / 2010-2016 » retrouve exactement ce vivier,
@@ -918,19 +918,19 @@
     if (untrack(() => setup.session_type) !== wanted) void setSessionType(wanted);
   });
   // Le type décide de ce qui est AFFICHÉ et de ce qui est envoyé au jeu, jamais
-  // de ce qui est mémorisé (§1.4) : la page adversaires d'un type qui n'en a
+  // de ce qui est mémorisé (L5§1.4) : la page adversaires d'un type qui n'en a
   // pas se referme, le plateau reste intact derrière.
   $effect(() => {
     if (!hasOpponents(sessionNav.type) && sessionNav.page === "opponents") openSetupPage();
   });
-  // Ce que la sous-entrée annonce (§1.2/§1.3). Écrit d'ici parce que c'est ici
+  // Ce que la sous-entrée annonce (L5§1.2/L5§1.3). Écrit d'ici parce que c'est ici
   // qu'on le sait ; lu là-bas parce que c'est là qu'il faut le voir sans
   // changer de page.
   $effect(() => {
     sessionNav.count = setup.opponents.length;
     sessionNav.center = setup.ai_level;
     sessionNav.spread = setup.ai_spread;
-    // Les deux alertes de la page (§1.3) : un vivier trop maigre pour le nombre
+    // Les deux alertes de la page (L5§1.3) : un vivier trop maigre pour le nombre
     // demandé — vide compris —, et deux pilotes sous la même identité.
     sessionNav.alert =
       hasOpponents(setup.session_type) && (gridPool.length < opponentCount || duplicateDrivers);
@@ -1172,7 +1172,7 @@
   // La liste (carte « Sessions enregistrées ») est filtrée par type — un
   // effet la recharge à chaque changement d'onglet, et le save/delete la
   // rafraîchissent en plus puisqu'ils ne changent pas le type. ---
-  // Deux boutons et une modale, comme les grilles (§2.11) : enregistrer et
+  // Deux boutons et une modale, comme les grilles (SETUP§2.11) : enregistrer et
   // recharger une configuration nommée est le même geste des deux côtés, il ne
   // peut pas avoir deux grammaires d'interface.
   //
@@ -1185,7 +1185,7 @@
   let savedList = $state<SavedSession[]>([]);
   $effect(() => {
     const type = setup.session_type;
-    // Le type ne filtre plus, il TRIE (§2.11) : la liste les porte toutes, et
+    // Le type ne filtre plus, il TRIE (SETUP§2.11) : la liste les porte toutes, et
     // celles du type courant viennent en tête. Le type peut changer avant que
     // la réponse (invoke Rust) n'arrive — n'applique le résultat que s'il
     // correspond encore, sinon une réponse tardive rendrait un tri périmé.
@@ -1691,7 +1691,7 @@
      des blocs eux-mêmes — trois curseurs côte à côte dans Simulation, une
      largeur fixe pour les deux fourchettes. */
   /* La page adversaires : un seul enchaînement vertical, pleine largeur, sans
-     cadre entre le générateur et sa sortie (§5.1). Le plafond est celui des
+     cadre entre le générateur et sa sortie (CIBLE§5.1). Le plafond est celui des
      deux colonnes, pour que le passage d'une page à l'autre ne déplace pas les
      bords de l'écran. */
   .oppopage {

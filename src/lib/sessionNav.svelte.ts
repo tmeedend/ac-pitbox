@@ -26,7 +26,7 @@ import type { SessionType } from "./launch";
 export type SessionPage = "setup" | "opponents";
 
 /** The four types, in the order the list shows them: what the application can
- * do, never folded behind a picker (§1.1). */
+ * do, never folded behind a picker (L5§1.1). */
 export const SESSION_TYPES: SessionType[] = ["practice", "hotlap", "race", "trackday"];
 
 /** Only these two field a grid of opponents. */
@@ -38,13 +38,13 @@ export const sessionNav = $state<{
   type: SessionType;
   page: SessionPage;
   /** Number of opponents on the grid, and the difficulty band the draw spreads
-   * over — the `6 AI · 87% ± 3` of the sub-entry (§1.2). */
+   * over — the `6 AI · 87% ± 3` of the sub-entry (L5§1.2). */
   count: number;
   center: number;
   spread: number;
   /** An alert living on the opponents page (thin pool, duplicate drivers).
    * Raised here because an alert on a page one is not looking at is worth no
-   * more than no alert at all (§1.3). */
+   * more than no alert at all (L5§1.3). */
   alert: boolean;
 }>({
   type: "practice",
@@ -91,7 +91,7 @@ async function loadSessionNav(): Promise<void> {
  *
  * Landing on the settings page of that type, always: `Opponents` is a sub-entry
  * of the type one is on, so leaving Race for Practice cannot keep pointing at a
- * page Practice does not have (§1.4). What the grid holds is untouched — the
+ * page Practice does not have (L5§1.4). What the grid holds is untouched — the
  * type decides what is shown and what is sent to the game, never what is
  * remembered.
  */
