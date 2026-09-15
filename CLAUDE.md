@@ -815,9 +815,17 @@ laisser pourrir ici.
       trois tables dans l'overlay (§3), la chaîne de repli et la remontée d'un
       cran (§5), le client Action API (§6), et l'appariement automatique des
       voitures et des circuits (§4) avec sa commande de calibration.
-      Le module porte un `allow(dead_code)` **assumé et daté** : rien ne
-      l'appelle tant que l'interface (§7) n'existe pas. À retirer au premier
-      client.
+      Le module porte encore un `allow(dead_code)`, mais **plus pour la raison
+      qui l'a fait poser** : il datait du temps où rien n'appelait le module.
+      Mesuré en le retirant, il masque aujourd'hui **13 warnings de deux
+      natures** — le banc de calibration, mort dans une compilation de lib
+      puisque seuls des tests `#[ignore]` l'atteignent (couverture légitime),
+      et **sept éléments réellement inutilisés** (`ids::ROUTE_TYPES`,
+      `ids::COORDINATE_LOCATION`, `api::parse_search`, `WikiClient::search`,
+      `CachedArticle::langs`…). Le restreindre à `calibrate` et trancher ces
+      sept-là un par un est un chantier à part : certains sont des restes,
+      et au moins un (`ROUTE_TYPES`) **porte une décision** — les routes ne
+      s'apparient pas automatiquement — qu'une suppression effacerait.
       **Les identifiants Wikidata sont dans `wiki/ids.rs`**, un par un relevés
       sur l'API vivante (§4.4 l'exige) — le libellé en commentaire est celui
       que l'API a rendu, et chaque entrée dit sur quel item réel elle a été
@@ -919,8 +927,8 @@ laisser pourrir ici.
       - **Le mot « extrait » quitte l'attribution** (§7.4) : il était exigé
         parce que ne montrer qu'un fragment est une modification. Montrer le
         texte entier est le régime **plus simple**, pas plus risqué.
-      **Reste une seule chose : régler les seuils sur les corrections
-      manuelles.** Tout le code est livré ; ce qui manque est une **mesure**,
+      **Reste deux choses** : le ménage du `allow(dead_code)` ci-dessus, et
+      surtout — **régler les seuils sur les corrections manuelles.** Tout le code est livré ; ce qui manque est une **mesure**,
       et elle demande que l'utilisateur ait corrigé un paquet d'articles.
       **Pourquoi ça attend, et pourquoi ça vaut le coup d'attendre.** Le
       rapport de calibration dit aujourd'hui « score 0,689, marge 0,122 », il
