@@ -71,7 +71,7 @@ export interface ModCard {
   is_unmanaged: boolean;
   /** Date de publication estimée (dates de fichiers à l'import), remplaçable par L7 (§6.2). */
   published_at: string | null;
-  /** Taille sur disque cumulée de toutes les versions, octets (§9.4). `null`
+  /** Taille sur disque cumulée de toutes les versions, octets (SESSION§4). `null`
    * tant qu'aucune n'a été calculée (mod importé avant cette fonctionnalité). */
   size_bytes: number | null;
   preview: string | null;
@@ -121,7 +121,7 @@ export interface VersionRow {
   tags_from_mod: string[];
   /** Date de publication estimée depuis les dates de fichiers (§6.2). */
   published_at: string | null;
-  /** Taille sur disque de cette version, octets (§9.4). */
+  /** Taille sur disque de cette version, octets (SESSION§4). */
   size_bytes: number | null;
   /** Archive/dossier source conservé en bibliothèque (§10/§11), si le réglage
    * était activé à l'import. `null` = non conservé, pas de réinstallation possible. */

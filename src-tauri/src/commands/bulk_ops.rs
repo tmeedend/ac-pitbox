@@ -97,7 +97,7 @@ pub async fn bulk_deactivate(app: AppHandle, ids: Vec<String>) -> Result<crate::
     .map_err(|e| e.to_string())?
 }
 
-/// Supprime en masse (fichiers + junction + overlay pour chacun, §9.3).
+/// Supprime en masse (fichiers + junction + overlay pour chacun, SESSION§3).
 #[tauri::command]
 pub async fn bulk_delete(app: AppHandle, ids: Vec<String>) -> Result<crate::bulk::BulkReport, String> {
     tauri::async_runtime::spawn_blocking(move || {

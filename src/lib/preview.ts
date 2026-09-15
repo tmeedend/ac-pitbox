@@ -149,7 +149,7 @@ export function prepareDriverPreview(
 }
 
 /**
- * Le même mannequin, pour la **vignette** d'un corps dans la galerie (§9.1).
+ * Le même mannequin, pour la **vignette** d'un corps dans la galerie (SESSION§1).
  *
  * Deux différences avec le plateau, une seule raison derrière : il y en a
  * quarante-cinq à produire. Aucune n'en périme une autre ni ne périme le

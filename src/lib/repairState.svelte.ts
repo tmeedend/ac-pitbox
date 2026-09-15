@@ -1,4 +1,4 @@
-// État de la réparation générale en cours (§9.3) : progression et rapport.
+// État de la réparation générale en cours (SESSION§3) : progression et rapport.
 //
 // Vit ici, hors de l'écran Maintenance, pour la raison qui a valu à l'édition
 // groupée le même traitement (§6.3bis) : la réparation dure des minutes sur une

@@ -127,7 +127,7 @@ function commonTail(): ColumnDef[] {
       sortable: true,
       defaultVisible: false,
       mono: true,
-      // Somme de toutes les versions en bibliothèque (§9.4) ; « — » tant que non
+      // Somme de toutes les versions en bibliothèque (SESSION§4) ; « — » tant que non
       // calculée (mod importé avant cette fonctionnalité, cf. Maintenance).
       value: (c) => fmtSize(c.size_bytes),
       sortValue: (c) => c.size_bytes ?? -1,

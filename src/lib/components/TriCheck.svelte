@@ -4,7 +4,7 @@
 </script>
 
 <script lang="ts">
-  // Case à cocher à trois états (filtres de l'écran Pilote, §9.5).
+  // Case à cocher à trois états (filtres de l'écran Pilote, SESSION§5).
   //
   // Une case booléenne ne sait dire qu'une moitié de ce qu'on veut : « favoris
   // uniquement » se cochait, « tout sauf les favoris » ne s'exprimait pas. D'où

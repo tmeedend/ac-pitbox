@@ -549,7 +549,7 @@
     opponentCount = setup.opponents.length;
   }
 
-  // --- Modale de sélection d'adversaire (§9.3) ---
+  // --- Modale de sélection d'adversaire (SESSION§3) ---
   //
   // Elle reçoit **toute** la bibliothèque voitures, et surtout **l'état de
   // filtre du bloc lui-même** (§3.3) — elle ne dérive plus rien. C'est plus
@@ -573,7 +573,7 @@
   }
 
   /** Remplacement d'une ligne : la force est celle de la ligne, le skin est
-   * tiré dans ceux de la nouvelle voiture (§9.3). */
+   * tiré dans ceux de la nouvelle voiture (SESSION§3). */
   async function replaceOpponent(carId: string) {
     const i = pickerIndex;
     closePicker();
@@ -740,7 +740,7 @@
     practice_enabled: boolean; practice_minutes: number;
     qualify_enabled: boolean; qualify_minutes: number; ghost_car: boolean; practice_start: PracticeStart;
     damage: number; fuel_rate: number; tyre_wear: number; tyre_blankets: boolean; intent: string; season: Season;
-    /** Trois états depuis §9.3 ; `abs_auto`/`traction_control_auto` sont les
+    /** Trois états depuis SESSION§3 ; `abs_auto`/`traction_control_auto` sont les
      * booléens d'avant, relus une dernière fois par `assistLevelFrom`. */
     abs?: AssistLevel; traction_control?: AssistLevel;
     abs_auto?: boolean; traction_control_auto?: boolean;
@@ -952,7 +952,7 @@
   });
 
   // La garde d'activation de la colonne de session lit le plateau courant
-  // (§9.3) : elle est rendue ailleurs, et n'a pas d'autre moyen de le voir.
+  // (SESSION§3) : elle est rendue ailleurs, et n'a pas d'autre moyen de le voir.
   $effect(() => {
     setGridCars(setup.opponents.map((o) => o.car_id));
   });
@@ -1048,7 +1048,7 @@
     syncFromSession();
   });
 
-  // Fond photo derrière l'interface (§6.2/§9.3) : combo exact → même circuit →
+  // Fond photo derrière l'interface (§6.2/SESSION§3) : combo exact → même circuit →
   // background officiel CSP → null (fond neutre actuel, aucun changement visuel).
   // Non bloquant pour l'écran : une erreur reste silencieuse, ce fond est un
   // agrément, jamais une donnée dont dépend le lancement de la session.
@@ -1094,7 +1094,7 @@
     }
   });
 
-  // --- Contrôle Steam (§9.2bis) ---
+  // --- Contrôle Steam (SESSION§2.3) ---
   // Assetto Corsa est un jeu Steam : sans Steam, le lancement échoue côté
   // Content Manager, après que Pit Box a rendu la main — aucune erreur ne
   // remonte jusqu'ici, l'utilisateur voit juste une session qui ne démarre
@@ -1477,7 +1477,7 @@
   {/if}
 </div>
 
-<!-- Steam manquant (§9.2bis) : dialogue bloquant plutôt qu'un message dans le
+<!-- Steam manquant (SESSION§2.3) : dialogue bloquant plutôt qu'un message dans le
      bandeau, parce qu'il y a un geste à faire hors de l'app et qu'il faut
      revérifier après — un texte passif laisserait l'utilisateur relancer dans
      le vide. -->
@@ -1611,7 +1611,7 @@
     overflow-x: hidden;
     position: relative;
   }
-  /* Fond photo assombri et flouté (§6.2/§9.3) : appliqué seulement si un
+  /* Fond photo assombri et flouté (§6.2/SESSION§3) : appliqué seulement si un
      média a été résolu, sinon le fond neutre existant reste inchangé. Flou
      posé sur un calque séparé (::before, derrière tout le contenu) plutôt
      que sur .flow directement — un `filter` sur .flow flouterait aussi les

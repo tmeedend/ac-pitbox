@@ -1043,7 +1043,7 @@ Chacun a été pris en connaissance de cause, avec sa raison. Ne pas les
   la vitesse.
 - **Manipulation à la souris** conservée par-dessus le plateau : orbite et
   zoom, sans panoramique, angle polaire borné pour ne pas passer sous le sol.
-- **Coexistence avec le showroom natif** (`acShowroom.exe`, §9.4 du SPEC
+- **Coexistence avec le showroom natif** (`acShowroom.exe`, SESSION§4 du SPEC
   principal) au lieu du remplacement : les deux ne rendent pas le même
   service. Une barre d'outils vit dans la zone héros : bascule photo/3D
   mémorisée, remise en place de la voiture, et ouverture des réglages de

@@ -1,5 +1,5 @@
 // Cars of the current opponent grid, for the activation guard of the session
-// column (§9.3).
+// column (SESSION§3).
 //
 // **Why a store at all.** The launch button lives in the session column, which
 // is always on screen; the grid lives in `Launch.svelte`, which is mounted only

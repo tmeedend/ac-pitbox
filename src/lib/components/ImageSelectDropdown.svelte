@@ -19,7 +19,7 @@
     onselect: (id: string) => void;
     /** "contain" pour un tracé (forme complète, pas de recadrage) — défaut "cover" pour une photo/skin. */
     fit?: "cover" | "contain";
-    /** Intitulé du champ, en colonne à gauche de la valeur (SPEC §9.1). Sa
+    /** Intitulé du champ, en colonne à gauche de la valeur (SPEC SESSION§1). Sa
      * largeur est partagée par tous les champs de la colonne de session via
      * `--sess-lblw` : c'est l'alignement des valeurs qui fait tout l'intérêt
      * du dispositif, et il disparaît si chaque ligne se dimensionne seule. */

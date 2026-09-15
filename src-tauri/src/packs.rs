@@ -32,7 +32,7 @@ pub struct PackDetail {
     /// Fichiers posés dans le jeu par le pack lui-même — ceux que rien ne
     /// rattachait à un mod en particulier.
     pub extras: Vec<extras::ExtraFile>,
-    /// Somme des tailles sur disque des membres, octets (§9.4). `0` tant
+    /// Somme des tailles sur disque des membres, octets (SESSION§4). `0` tant
     /// qu'aucune n'a été calculée.
     pub members_bytes: i64,
     /// Taille des ajouts au jeu du pack, octets.

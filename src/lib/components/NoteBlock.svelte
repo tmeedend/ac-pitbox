@@ -8,7 +8,7 @@
   // d'origine, donc la vider veut dire vide. Les fusionner rendrait « effacer »
   // ambigu — d'où deux champs, et deux colonnes en base.
   //
-  // Trois choix de comportement, tous du §9.3 :
+  // Trois choix de comportement, tous du SESSION§3 :
   //
   //  - **texte brut, pas de markdown.** Un rendu à moitié interprété (des
   //    `**` qui s'affichent ici et gras là) est pire que pas de rendu du tout ;

@@ -780,7 +780,7 @@ impl From<kn5_gltf::DriverRig> for DriverRig {
 /// global.
 ///
 /// `token` à `None` = « ne me périme pas, et ne périme personne ». C'est le
-/// mode des **vignettes de corps** (§9.1), qui en demandent quarante-cinq à la
+/// mode des **vignettes de corps** (SESSION§1), qui en demandent quarante-cinq à la
 /// file : avec un jeton, chacune rendrait obsolète la conversion du plateau
 /// lancée juste avant, et le plateau ne se chargerait jamais. Le verrou de
 /// conversion, lui, s'applique quand même — une conversion à la fois.
@@ -893,7 +893,7 @@ fn driver_cache_key(graft: &kn5_gltf::DriverGraft) -> String {
     format!("{:x}", hasher.finalize())[..32].to_string()
 }
 
-// --- Vignettes de corps (§9.1) ----------------------------------------------
+// --- Vignettes de corps (SESSION§1) ----------------------------------------------
 
 /// Où vivent les vignettes de corps : à côté du cache d'aperçus, **et hors de
 /// son plafond**.

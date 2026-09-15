@@ -15,7 +15,7 @@
 //!   the row was deleted meanwhile is worse than an error message: the UI can
 //!   keep the text and say so.
 //!
-//! A note is **not** a description (§9.2). A description overrides what the mod
+//! A note is **not** a description (SESSION§2). A description overrides what the mod
 //! file says, so clearing it means "go back to the file"; a note has no
 //! original value, so clearing it means empty. Blank input is therefore stored
 //! as `NULL` — otherwise the "has a note" facet would count empty notes.
@@ -110,7 +110,7 @@ mod tests {
         chrono::Local::now().to_rfc3339()
     }
 
-    /// Rule (§9.4, §6.1): every kind of entity can carry a note and a name,
+    /// Rule (SESSION§4, §6.1): every kind of entity can carry a note and a name,
     /// and both come back as they were typed.
     #[test]
     fn note_and_display_name_round_trip_on_every_entity_kind() {
@@ -177,7 +177,7 @@ mod tests {
         drop(base);
     }
 
-    /// Rule (§9.4): the entry survives a reimport of the entity — that is the
+    /// Rule (SESSION§4): the entry survives a reimport of the entity — that is the
     /// whole point of storing it beside the derived fields instead of in them.
     #[test]
     fn note_survives_a_reimport_of_the_entity() {
@@ -227,7 +227,7 @@ mod tests {
         drop(base);
     }
 
-    /// Rule (§9.2): clearing stores `NULL`, never an empty string — otherwise
+    /// Rule (SESSION§2): clearing stores `NULL`, never an empty string — otherwise
     /// the "has a note" facet would count empty notes.
     #[test]
     fn blank_input_clears_instead_of_storing_an_empty_string() {

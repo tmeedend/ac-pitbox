@@ -245,7 +245,7 @@
   }
   /* Une flèche éteinte dit « on est déjà en bout de liste ». Elle reste
      lisible : ce qui est désactivé existe et attend, ce qui est absent n'existe
-     pas (même distinction qu'à l'écran de session, §9.3). */
+     pas (même distinction qu'à l'écran de session, SESSION§3). */
   .layer-arrow:disabled {
     opacity: 0.3;
     cursor: default;

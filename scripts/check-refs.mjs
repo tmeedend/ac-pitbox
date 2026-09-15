@@ -30,6 +30,7 @@ import { execSync } from "node:child_process";
 /** Étiquette → document. Un `§` nu vaut `SPEC.md`. */
 const DOCS = {
   "": "SPEC.md",
+  SESSION: "SPEC-session.md",
   GRILLE: "SPEC-grille.md",
   PILOTE: "SPEC-ecran-pilote.md",
   WIKI: "SPEC-wikipedia-fiche-detail.md",

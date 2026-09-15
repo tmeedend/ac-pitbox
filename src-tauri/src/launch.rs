@@ -48,7 +48,7 @@ pub enum PracticeStart {
     Hotlap,
 }
 
-/// Niveau d'une aide au pilotage (§9.3), tel qu'Assetto Corsa lui-même le
+/// Niveau d'une aide au pilotage (SESSION§3), tel qu'Assetto Corsa lui-même le
 /// définit : `Off` / `Factory` / `On`, et rien d'autre.
 ///
 /// **Les trois valeurs numériques sont relevées, pas déduites.** Le launcher
@@ -168,7 +168,7 @@ pub struct RaceSetup {
     /// Skin du joueur : pas de champ dédié dans le schéma Quick Drive
     /// (`race/quick`), CM retombe sur le dernier skin qu'il a lui-même utilisé
     /// pour cette voiture. Appliqué en réécrivant le `race.ini` juste après CM
-    /// et avant que le jeu ne le lise — voir `raceini.rs` (§9.2).
+    /// et avant que le jeu ne le lise — voir `raceini.rs` (SESSION§2).
     pub car_skin: Option<String>,
     /// Le pilote choisi pour cette voiture, posé dans son dossier juste avant
     /// de lancer (`driverapply`). Vient du frontend, où il vit
@@ -281,7 +281,7 @@ pub struct RaceSetup {
     pub practice_enabled: bool,
     #[serde(default = "default_practice_minutes")]
     pub practice_minutes: u32,
-    /// Qualification avant la course (§9.3). Le mode Weekend de CM n'a pas
+    /// Qualification avant la course (SESSION§3). Le mode Weekend de CM n'a pas
     /// d'état « pas de qualif » : son curseur va de 5 à 90 min et son `Save()`
     /// n'écrit jamais de durée nulle (`QuickDrive_Weekend.xaml.cs`) — envoyer
     /// `null` retombe juste sur son défaut interne de 30 min. Décochée, on
@@ -315,7 +315,7 @@ pub struct RaceSetup {
     #[serde(default)]
     pub tyre_blankets: bool,
     // --- Aides à la conduite (Course uniquement, §8.6) ---
-    /// Trois états, pas deux (§9.3) : une case à cocher ne pouvait pas dire la
+    /// Trois états, pas deux (SESSION§3) : une case à cocher ne pouvait pas dire la
     /// différence entre « comme la vraie voiture » et « forcée ».
     #[serde(default)]
     pub abs: AssistLevel,
@@ -368,7 +368,7 @@ fn ensure_available(conn: &Connection, cfg: &AppConfig, kind: ModKind, id: &str)
     Err(format!("« {id} » n'est pas installé dans Assetto Corsa."))
 }
 
-/// Steam tourne-t-il ? (§9.2bis)
+/// Steam tourne-t-il ? (SESSION§2.3)
 ///
 /// Assetto Corsa est un jeu Steam : c'est Steam qui le démarre, quel que soit
 /// le `Starter` choisi par CM. Steam éteint, le lancement échoue **côté CM**,
@@ -482,7 +482,7 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
     cmd.creation_flags(CREATE_NO_WINDOW);
     cmd.spawn().map_err(|e| format!("lancement de Content Manager : {e}"))?;
 
-    // Skin du joueur (§9.2) : absent du schéma Quick Drive, donc réinjecté
+    // Skin du joueur (SESSION§2) : absent du schéma Quick Drive, donc réinjecté
     // dans le `race.ini` que CM écrit à l'instant où il lance `acs.exe` — le
     // jeu ne lit ce fichier que quelques centaines de ms plus tard. Démarré
     // après le `spawn` : CM n'a pas encore lu ses arguments, l'état initial du

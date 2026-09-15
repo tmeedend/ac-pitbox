@@ -159,7 +159,7 @@
 
   // --- Colonne de session : ce que les deux emplacements ont à dire ---------
   //
-  // Trois états, pas deux (SPEC §9.1) : un mod choisi, rien de
+  // Trois états, pas deux (SPEC SESSION§1) : un mod choisi, rien de
   // choisi, ou des chemins cassés. Le troisième existe parce que l'invitation
   // « choisir une voiture » mène à une bibliothèque vide quand Assetto Corsa
   // est introuvable — ce n'est pas le même problème, donc pas la même
@@ -167,7 +167,7 @@
   type SlotState = "picked" | "empty" | "broken";
   let pathsBroken = $state(false);
   /** Content Manager introuvable : le lien de sortie ne s'affiche pas du tout
-   * (SPEC §9.1). Ni bouton grisé ni message d'erreur au clic — une sortie vers
+   * (SPEC SESSION§1). Ni bouton grisé ni message d'erreur au clic — une sortie vers
    * un outil absent n'a pas à occuper une ligne dans une colonne dont la
    * hauteur est comptée. */
   let cmAvailable = $state(false);
@@ -212,7 +212,7 @@
   const carSlot = $derived<SlotState>(nav.sessionCar ? "picked" : pathsBroken ? "broken" : "empty");
   const trackSlot = $derived<SlotState>(nav.sessionTrack ? "picked" : pathsBroken ? "broken" : "empty");
   /** Tant que le duo n'est pas complet, il n'y a ni session à paramétrer ni
-   * session à lancer (SPEC §9.1) — l'app ne choisit pas une voiture à la place de
+   * session à lancer (SPEC SESSION§1) — l'app ne choisit pas une voiture à la place de
    * l'utilisateur pour se donner un bouton à activer. */
   const sessionReady = $derived(nav.sessionCar != null && nav.sessionTrack != null);
 
@@ -342,7 +342,7 @@
     return t(key, { car: sessionCarName });
   });
 
-  // --- Colonne d'intitulés partagée (SPEC §9.1) -----------------------------
+  // --- Colonne d'intitulés partagée (SPEC SESSION§1) -----------------------------
   //
   // Les quatre champs alignent leurs valeurs sur une même colonne d'intitulé :
   // c'est ce qui fait lire le bloc comme une fiche technique plutôt que comme
@@ -420,7 +420,7 @@
     }, DOUBLE_CLICK_MS);
   }
 
-  /** Clic sur la vignette ou le nom : c'est la zone qui NAVIGUE (SPEC §9.1). Les
+  /** Clic sur la vignette ou le nom : c'est la zone qui NAVIGUE (SPEC SESSION§1). Les
    * menus de livrée/layout et la ligne « Mon pilote » sont ses frères dans le
    * DOM, jamais ses enfants — un clic qui visait un menu ne doit pas éjecter
    * vers la bibliothèque. */
@@ -671,7 +671,7 @@
 
   const trackInactive = $derived(nav.sessionTrack != null && trackDetail != null && !trackDetail.active);
 
-  // --- Garde d'activation (§9.3) ---
+  // --- Garde d'activation (SESSION§3) ---
   //
   // La bibliothèque montre les mods désactivés, Assetto Corsa ne les voit pas :
   // lancer une session qui en contient échoue, et c'est un trou propre à Pit
@@ -772,7 +772,7 @@
     const sk = carSkins.find((s) => s.id === skinId);
     if (!car || !sk) return;
     setPreferredSkin(car.id, sk);
-    // `meta` ne porte plus la livrée (SPEC §9.1) : elle a sa propre ligne
+    // `meta` ne porte plus la livrée (SPEC SESSION§1) : elle a sa propre ligne
     // juste dessous, il n'y a donc plus rien à y réécrire.
     pickSession("Car", {
       ...car,
@@ -900,7 +900,7 @@
             <div class="thumb car" class:vacant={carSlot !== "picked"} class:photo={carSlot === "picked" && carPrev}>
               {#if carSlot === "picked"}
                 {#if carPrev}<img src={carPrev} alt="" />{:else}<span class="thumb-ic">🚗</span>{/if}
-                <!-- Le libellé n'est pas supprimé, il est différé (SPEC §9.1) : au
+                <!-- Le libellé n'est pas supprimé, il est différé (SPEC SESSION§1) : au
                      survol et au focus clavier seulement, sur un voile PLEIN — au
                      moment où l'on décide de changer, la voiture actuelle n'est
                      plus l'information utile, et un voile partiel rendrait le
@@ -909,7 +909,7 @@
               {:else if carSlot === "empty"}
                 <span class="invite"><span aria-hidden="true">＋</span>{t("session.chooseCar")}</span>
               {:else}
-                <!-- Impasse (SPEC §9.1) : même trame que l'état initial, autre
+                <!-- Impasse (SPEC SESSION§1) : même trame que l'état initial, autre
                      destination — ici l'invitation à choisir mènerait à une
                      bibliothèque vide. -->
                 <span class="invite">
@@ -1340,7 +1340,7 @@
   .blk > :global(.pick + *) {
     margin-top: 12px;
   }
-  /* Zone qui NAVIGUE (SPEC §9.1) : vignette + nom + source, et rien d'autre.
+  /* Zone qui NAVIGUE (SPEC SESSION§1) : vignette + nom + source, et rien d'autre.
      C'est un `<button>` FRÈRE des champs, jamais leur parent — un bouton qui
      contient des contrôles interactifs est invalide en HTML et casse la
      navigation clavier, et un clic qui visait un menu ne doit jamais éjecter
@@ -1425,7 +1425,7 @@
     font-size: 34px;
     opacity: 0.6;
   }
-  /* Voile du libellé différé (SPEC §9.1) : plein, pas dégradé — au moment où
+  /* Voile du libellé différé (SPEC SESSION§1) : plein, pas dégradé — au moment où
      l'on décide de changer, la photo n'est plus l'information utile, et un
      voile partiel rendrait le texte illisible sur une image imprévisible. Au
      focus clavier comme au survol : le libellé doit être atteignable sans
@@ -1834,7 +1834,7 @@
   .btn-launch:hover:not(:disabled) {
     background: var(--rosso-bright);
   }
-  /* Garde son fond rouge à l'état désactivé, en opacité réduite (SPEC §9.1) : il
+  /* Garde son fond rouge à l'état désactivé, en opacité réduite (SPEC SESSION§1) : il
      reste la destination visible de l'écran, et le griser complètement
      effacerait le but à atteindre. */
   .btn-launch:disabled {

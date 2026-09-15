@@ -415,9 +415,10 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
 **Un renvoi `§` dit de quel document il parle.** Le code en porte près de
 2 800, et le numéro seul ne suffit pas : `§5.3` désigne `SPEC-grille.md` dans
 `gridthumbs.rs` et `SPEC.md` dans `importer.rs`. Donc : **`§4.5` nu = `SPEC.md`**
-(le défaut, inchangé), et une **étiquette** pour les autres — `GRILLE§5.3`,
-`WIKI§4.2`, `PILOTE§6.3`, `PREVIEW§8.1`, `FMOD§2bis`, `MUSIQUE§3.4`,
-`IMPORT§`, `REFONTE§`, `TEXTURE§`. La liste fait foi dans `scripts/check-refs.mjs`.
+(le défaut, inchangé), et une **étiquette** pour les autres — `SESSION§3.2`,
+`GRILLE§5.3`, `WIKI§4.2`, `PILOTE§6.3`, `PREVIEW§8.1`, `FMOD§2bis`,
+`MUSIQUE§3.4`, `IMPORT§`, `REFONTE§`, `TEXTURE§`. La liste fait foi dans
+`scripts/check-refs.mjs`.
 
 `npm run check` vérifie que chaque renvoi tombe sur un titre qui existe.
 **Les renvois déjà cassés sont dans `scripts/refs-baseline.json`** et n'échouent

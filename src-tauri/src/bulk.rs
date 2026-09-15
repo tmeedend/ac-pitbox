@@ -97,7 +97,7 @@ impl<'a> BulkCtx<'a> {
 
     /// Vrai dès que l'utilisateur a demandé l'arrêt. Constaté **entre deux
     /// mods**, jamais au milieu de l'un d'eux : interrompre une activation en
-    /// cours laisserait des junctions à moitié posées (§9.3).
+    /// cours laisserait des junctions à moitié posées (SESSION§3).
     fn cancelled(&self) -> bool {
         self.cancel.as_ref().is_some_and(|c| c.load(Ordering::Relaxed))
     }

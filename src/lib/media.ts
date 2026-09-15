@@ -1,6 +1,6 @@
 // Pont typé vers les commandes de l'onglet Médias (§6.1) : screenshots/
 // replays personnels rattachés par nom de fichier, backgrounds officiels CSP,
-// et fond photo de l'écran de réglages (§6.2/§9.3).
+// et fond photo de l'écran de réglages (§6.2/SESSION§3).
 import { invoke } from "@tauri-apps/api/core";
 
 export interface ScreenshotFile {
@@ -68,7 +68,7 @@ export function launchReplay(replayPath: string): Promise<void> {
   return invoke<void>("launch_replay", { replayPath });
 }
 
-/** Fond photo de l'écran de réglages (§6.2/§9.3) : combo exact → même
+/** Fond photo de l'écran de réglages (§6.2/SESSION§3) : combo exact → même
  * circuit → background officiel → `null` (fond neutre côté appelant). */
 export function getSessionBackground(
   carId: string,

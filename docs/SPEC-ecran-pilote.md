@@ -170,7 +170,7 @@ Deux lignes de texte remplacent une convention visuelle à apprendre. Elles sont
 
 **État actif.** Fond légèrement éclairci, bordure gauche de 2 px en accent. Une seule piste active à la fois ; elle détermine le contenu de la galerie et le cadrage.
 
-**Le bloc Corps** a en plus un sélecteur de corps replié (§9.1).
+**Le bloc Corps** a en plus un sélecteur de corps replié (SESSION§1).
 
 ## 5.6 Sortie
 

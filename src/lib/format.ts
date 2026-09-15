@@ -2,7 +2,7 @@
 
 const DASH = "—";
 
-/** Taille lisible (Ko/Mo/Go/To, base 1024), « — » si pas encore calculée (§9.4). */
+/** Taille lisible (Ko/Mo/Go/To, base 1024), « — » si pas encore calculée (SESSION§4). */
 export function fmtSize(bytes: number | null | undefined): string {
   if (bytes == null) return DASH;
   if (bytes < 1024) return `${bytes} B`;

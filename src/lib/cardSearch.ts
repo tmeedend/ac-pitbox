@@ -30,7 +30,7 @@ export function modTags(c: ModCard): string[] {
  * Terms need be neither adjacent nor in order.
  *
  * The haystack includes the pack (§4.4), so searching its name brings up all
- * of its cars, and the user's own note (§9.5) — a note one cannot find again
+ * of its cars, and the user's own note (SESSION§5) — a note one cannot find again
  * is a write-only note.
  */
 export function matchesQuery(c: ModCard, query: string): boolean {

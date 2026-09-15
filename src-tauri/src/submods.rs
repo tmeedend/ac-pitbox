@@ -409,7 +409,7 @@ fn project_skin(
 /// had failed.
 ///
 /// Best-effort by design (§4.5): what is stored but not deployed is picked up
-/// again by the general repair (§9.3), and a redeployment that fails must not
+/// again by the general repair (SESSION§3), and a redeployment that fails must not
 /// lose the rest of a pack. Hence the `log::warn!` — on a packaged build there
 /// is no console to catch it otherwise.
 fn redeploy_host(conn: &Connection, cfg: &AppConfig, parent_id: &str) {

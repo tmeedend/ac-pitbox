@@ -4,7 +4,7 @@
 use super::prelude::*;
 use tauri::{Emitter, Manager};
 
-/// Analyse mods cassés + junctions orphelines, sans rien supprimer (§9.3).
+/// Analyse mods cassés + junctions orphelines, sans rien supprimer (SESSION§3).
 #[tauri::command]
 pub fn maintenance_scan(app: AppHandle, db: State<Db>) -> Result<crate::maintenance::MaintenanceReport, String> {
     let cfg = crate::config::load(&app);
@@ -16,7 +16,7 @@ pub fn maintenance_scan(app: AppHandle, db: State<Db>) -> Result<crate::maintena
 /// skins/layouts) de tous les mods déjà importés, puis réapplique l'ontologie
 /// (même effet que « Réappliquer les règles »). Sert à rattraper un mod dont
 /// le fichier source a été corrigé/édité après import, sans le réimporter.
-/// `recalc_size` (§9.4, option décochée par défaut côté UI) : recalcule aussi
+/// `recalc_size` (SESSION§4, option décochée par défaut côté UI) : recalcule aussi
 /// la taille sur disque de chaque version — parcourt tous les fichiers de la
 /// bibliothèque, potentiellement lent, d'où l'opt-in explicite.
 /// Renvoie le nombre de mods traités.
@@ -59,7 +59,7 @@ pub fn profiles_using_version(db: State<Db>, version_id: String) -> Result<Vec<S
     crate::overlay::profiles_using_version(&conn, &version_id).map_err(|e| e.to_string())
 }
 
-/// Efface les skins/sons dont le mod parent n'existe plus (§9.3).
+/// Efface les skins/sons dont le mod parent n'existe plus (SESSION§3).
 #[tauri::command]
 pub fn purge_orphan_subs(app: AppHandle, db: State<Db>) -> Result<usize, String> {
     let cfg = crate::config::load(&app);
@@ -89,7 +89,7 @@ pub fn reinstall_from_archive(app: AppHandle, db: State<Db>, id: String) -> Resu
     crate::maintenance::reinstall_from_archive(&conn, &cfg, &id)
 }
 
-/// Réparation générale (§9.3) : recrée les projections skin/circuit cassées,
+/// Réparation générale (SESSION§3) : recrée les projections skin/circuit cassées,
 /// redéploie les mods actifs, et si `reinstall_broken`, réinstalle depuis
 /// l'archive source conservée chaque mod détecté cassé qui en a une.
 ///
@@ -121,7 +121,7 @@ pub async fn repair_all(app: AppHandle, reinstall_broken: bool) -> Result<crate:
     .map_err(|e| e.to_string())?
 }
 
-/// Exporte la version active d'un mod en archive autonome dans `dest_dir` (§9.1).
+/// Exporte la version active d'un mod en archive autonome dans `dest_dir` (SESSION§1).
 #[tauri::command]
 pub fn export_mod(
     app: AppHandle,

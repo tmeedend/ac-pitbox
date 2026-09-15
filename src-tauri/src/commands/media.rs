@@ -1,6 +1,6 @@
 //! Commandes de l'onglet Médias (§6.1) : screenshots/replays personnels
 //! rattachés par nom de fichier, backgrounds officiels CSP, et fond photo de
-//! l'écran de réglages (§6.2/§9.3).
+//! l'écran de réglages (§6.2/SESSION§3).
 
 use std::path::{Path, PathBuf};
 
@@ -112,7 +112,7 @@ pub async fn get_thumbnail(app: AppHandle, path: PathBuf, max_dim: Option<u32>) 
         .map_err(|e| e.to_string())?
 }
 
-/// Fond photo de l'écran de réglages (§6.2/§9.3) : combo exact → même circuit
+/// Fond photo de l'écran de réglages (§6.2/SESSION§3) : combo exact → même circuit
 /// → background officiel → `None` (fond neutre côté front).
 #[tauri::command]
 pub fn get_session_background(

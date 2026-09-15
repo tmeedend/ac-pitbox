@@ -119,7 +119,7 @@ pub async fn prepare_driver_preview(
     driver_glb(app, db, car_id, skin_id, outfit, token).await
 }
 
-/// Le même mannequin, pour la **vignette** d'un corps dans la galerie (§9.1).
+/// Le même mannequin, pour la **vignette** d'un corps dans la galerie (SESSION§1).
 ///
 /// Deux différences avec le plateau, et une seule raison derrière les deux :
 /// il y en a quarante-cinq à produire. Pas de jeton de génération, donc — une
@@ -142,7 +142,7 @@ pub async fn prepare_body_preview(
 }
 
 /// La vignette déjà rendue pour ce corps, ou `None` s'il faut la produire
-/// (§9.1).
+/// (SESSION§1).
 ///
 /// **Ne convertit rien** : elle ne fait que recalculer le nom d'entrée du
 /// mannequin — quelques `stat` sur des fichiers — et regarder si le PNG est
@@ -241,7 +241,7 @@ async fn driver_glb(
     .map_err(|e| format!("tâche de pilote interrompue : {e}"))?
 }
 
-/// Les mannequins installés, pour la galerie des corps (§9.1).
+/// Les mannequins installés, pour la galerie des corps (SESSION§1).
 ///
 /// Liste vide — jamais une erreur — quand Assetto Corsa n'est pas configuré :
 /// l'écran Pilote reste ouvrable, il n'a simplement rien à proposer.

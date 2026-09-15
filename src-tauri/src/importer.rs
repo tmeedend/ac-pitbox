@@ -3132,7 +3132,7 @@ fn process_found(
         crate::overlay::set_kept_archive(conn, &version_id, kept).map_err(|e| e.to_string())?;
     }
 
-    // Taille sur disque (§9.4) : calculée maintenant, le dossier final venant
+    // Taille sur disque (SESSION§4) : calculée maintenant, le dossier final venant
     // d'être créé par la copie/le déplacement ci-dessus.
     let size_bytes = inspect::dir_size_bytes(&dest) as i64;
     crate::overlay::update_version_size(conn, &version_id, size_bytes).map_err(|e| e.to_string())?;

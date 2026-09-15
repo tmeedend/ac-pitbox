@@ -137,7 +137,7 @@ pour que le chantier Wikipédia n'ait pas à rouvrir la mise en page.
 ## 4bis. Demandes venues de l'usage
 
 - **Markdown dans les notes** (demandé le 2026-09-11, à faire dans un lot à
-  part). Le §9.3 de la spec l'interdit — « un rendu à moitié interprété est
+  part). Le SESSION§3 de la spec l'interdit — « un rendu à moitié interprété est
   pire que rien » — mais cet argument tombe ici : `src/lib/markdown.ts` existe
   déjà, écrit à la main pour les `readme.md` des mods, **échappe avant de
   produire la moindre balise**, et *dégrade en texte brut ce qu'il ne connaît

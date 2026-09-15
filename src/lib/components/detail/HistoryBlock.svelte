@@ -46,7 +46,7 @@
     installed: boolean;
     /** Ce qui s'est passé : « import initial », « mise à jour »… */
     event: string;
-    /** Taille sur disque de cette version (§9.4), `null` pour un événement
+    /** Taille sur disque de cette version (SESSION§4), `null` pour un événement
      * isolé ou une version importée avant que la taille ne soit calculée. */
     size: number | null;
     /** Archive dont provient la version, ou détail de l'événement. */

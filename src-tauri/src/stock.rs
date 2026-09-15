@@ -56,7 +56,7 @@ pub fn needs_reindex(previous: Option<&Path>, current: Option<&Path>, indexed: u
 /// jusqu'ici, et il perdait ces saisies sans le dire — un utilisateur ayant
 /// renommé « Mugello » en « Autodromo del Mugello » retrouvait « Mugello »
 /// après un simple réindex (bug réel signalé). Réservé désormais à une demande
-/// explicite, confirmée à l'écran (§9.3bis).
+/// explicite, confirmée à l'écran (SESSION§3.1).
 pub fn index_stock_content(
     conn: &Connection,
     cfg: &AppConfig,
@@ -332,7 +332,7 @@ mod tests {
     }
 
     /// Règle : un réindex ordinaire ne détruit RIEN de ce que l'utilisateur a
-    /// saisi sur le contenu de base (§9.3bis). Bug réel signalé : « Mugello »
+    /// saisi sur le contenu de base (SESSION§3.1). Bug réel signalé : « Mugello »
     /// renommé « Autodromo del Mugello » redevenait « Mugello » au premier
     /// réindex, parce que l'indexation repartait d'un `DELETE` global.
     #[test]

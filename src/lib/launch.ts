@@ -290,7 +290,7 @@ export interface RaceSetup {
   /** Essais libres avant la course (weekend Quick Drive) — indépendants de la qualification. */
   practice_enabled: boolean;
   practice_minutes: number;
-  /** Qualification avant la course (§9.3). Décochée, le preset bascule sur le
+  /** Qualification avant la course (SESSION§3). Décochée, le preset bascule sur le
    * mode course sèche de CM : son mode Weekend n'a pas d'état « pas de
    * qualif ». Les essais libres n'existant que dans Weekend, ils la suivent. */
   qualify_enabled: boolean;
@@ -310,7 +310,7 @@ export interface RaceSetup {
   ideal_line: boolean;
 }
 
-/** Reprise d'un réglage d'aide enregistré avant les trois états (§9.3).
+/** Reprise d'un réglage d'aide enregistré avant les trois états (SESSION§3).
  *
  * L'ancien champ était un booléen nommé `abs_auto`, et « auto » voulait dire
  * `Abs: 1` dans le preset Quick Drive, c'est-à-dire **exactement** le niveau
@@ -328,7 +328,7 @@ export function assistLevelFrom(level: AssistLevel | undefined, legacy: boolean 
   return legacy ? "factory" : "off";
 }
 
-/** Ce que la voiture avait d'usine — lu dans son `electronics.ini` (§9.3).
+/** Ce que la voiture avait d'usine — lu dans son `electronics.ini` (SESSION§3).
  * `null` quand elle ne le dit pas : l'écran n'affiche alors rien. */
 export interface FactoryAssists {
   abs: boolean;
@@ -472,7 +472,7 @@ export function openContentManager(): Promise<void> {
   return invoke<void>("open_content_manager");
 }
 
-/** Steam tourne-t-il ? (§9.2bis) Assetto Corsa est un jeu Steam : sans Steam,
+/** Steam tourne-t-il ? (SESSION§2.3) Assetto Corsa est un jeu Steam : sans Steam,
  * le lancement échoue côté Content Manager, après que Pit Box a rendu la main
  * — donc sans erreur qu'on puisse afficher. D'où ce contrôle avant lancement. */
 export function isSteamRunning(): Promise<boolean> {

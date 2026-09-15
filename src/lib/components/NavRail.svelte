@@ -42,7 +42,7 @@
 
   const ENTRIES: Entry[] = [
     // **Le circuit avant la voiture**, comme dans la colonne de session : c'est
-    // l'ordre de la décision (§9.1), et deux listes qui portent les mêmes
+    // l'ordre de la décision (SESSION§1), et deux listes qui portent les mêmes
     // entités dans deux ordres différents se paient à chaque coup d'œil.
     { target: "tracks", labelKey: "nav.tracks", group: "nav.groupSession" },
     { target: "cars", labelKey: "nav.cars" },

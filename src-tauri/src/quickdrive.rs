@@ -143,7 +143,7 @@ pub struct TrackState {
     pub name: &'static str,
 }
 
-/// « Auto » : l'état est laissé à la météo (§9.3). Sentinelle plutôt qu'un
+/// « Auto » : l'état est laissé à la météo (SESSION§3). Sentinelle plutôt qu'un
 /// second champ, parce que l'écran n'offre qu'**un** choix parmi sept — deux
 /// champs pour une seule décision finissent toujours par se contredire. Aucun
 /// état réel ne vaut 0 %.
@@ -209,7 +209,7 @@ pub fn track_state_for(grip: u32) -> &'static TrackState {
         .expect("the table is never empty")
 }
 
-/// État de la piste (§9.3) — le `TrackPropertiesData` du preset, au niveau
+/// État de la piste (SESSION§3) — le `TrackPropertiesData` du preset, au niveau
 /// racine et non dans le `ModeData`, donc commun aux quatre types de session.
 ///
 /// **Le schéma est décodé, plus deviné**, et en deux temps. L'entrée `OPTIMUM`
@@ -501,7 +501,7 @@ fn mode_data_trackday(s: &RaceSetup) -> String {
 ///   paramètre `carSkinId` passé à `RunAsync` par le code C#, jamais du JSON,
 ///   et `race/quick` (invocation URI) ne le transmet pas. `s.car_skin` n'est
 ///   donc pas envoyé **par ce preset** : il est réinjecté après coup dans le
-///   `race.ini` écrit par CM, voir `raceini.rs` (§9.2).
+///   `race.ini` écrit par CM, voir `raceini.rs` (SESSION§2).
 /// - **Évolution du grip / état de piste** : appliqué, voir
 ///   [`build_track_properties`]. Les presets de référence portent tous le même
 ///   `TrackPropertiesData` parce qu'ils ont tous été sauvegardés sur une piste
@@ -515,7 +515,7 @@ fn mode_data_trackday(s: &RaceSetup) -> String {
 ///   de champ correspondant dans `RaceSetup` : rien à envoyer.
 ///
 /// Une course se joue sur **deux** modes CM selon `qualify_enabled` : Weekend
-/// quand une qualification est demandée, Race sinon (§9.3). Le mode Weekend
+/// quand une qualification est demandée, Race sinon (SESSION§3). Le mode Weekend
 /// n'a pas d'état « pas de qualif » — sa durée est bornée à `[5, 90]` et son
 /// `Save()` n'écrit jamais de durée nulle.
 pub fn build_preset(s: &RaceSetup) -> Result<String, String> {
@@ -730,7 +730,7 @@ mod tests {
     }
 
     /// Le mode Weekend n'a pas d'état « pas de qualification » : sans elle,
-    /// c'est l'autre mode course de CM qu'il faut viser (§9.3).
+    /// c'est l'autre mode course de CM qu'il faut viser (SESSION§3).
     #[test]
     fn race_without_qualification_switches_to_race_mode() {
         let mut s = base_setup(SessionType::Race);
@@ -810,7 +810,7 @@ mod tests {
         assert_eq!(assists["Abs"], 0);
     }
 
-    /// §9.3 — l'état de piste choisi part réellement dans le preset. Il ne
+    /// SESSION§3 — l'état de piste choisi part réellement dans le preset. Il ne
     /// partait pas : les quatre niveaux de l'écran écrivaient tous la piste
     /// optimale, donc le réglage n'avait aucun effet en jeu.
     #[test]
@@ -839,7 +839,7 @@ mod tests {
         assert_eq!(track["d"], "Perfect track for hotlapping.");
     }
 
-    /// §9.3 — « Auto » pose le drapeau que CM appelle `WeatherDefined`, et
+    /// SESSION§3 — « Auto » pose le drapeau que CM appelle `WeatherDefined`, et
     /// envoie tout de même quatre nombres : `ToProperties()` les écrit dans
     /// tous les cas, donc une météo muette sur la piste la laisse verte.
     #[test]
@@ -859,7 +859,7 @@ mod tests {
         assert_eq!(track["w"], false);
     }
 
-    /// §9.3 — l'aléa est un pourcentage comme le grip de départ, pas une valeur
+    /// SESSION§3 — l'aléa est un pourcentage comme le grip de départ, pas une valeur
     /// brute : c'est le panneau de CM qui l'a montré, en affichant « 2 % » là
     /// où la table du jeu écrit `RANDOMNESS=2`. Se tromper d'un facteur cent
     /// ici ne se verrait qu'en course.
@@ -915,7 +915,7 @@ mod tests {
         assert_eq!(track_state_for(100).start, 100, "une valeur exacte reste elle-même");
     }
 
-    /// §9.3 — les trois niveaux d'une aide sont ceux du launcher d'AC lui-même
+    /// SESSION§3 — les trois niveaux d'une aide sont ceux du launcher d'AC lui-même
     /// (`0,1,2` en face de `Off,Factory,On`) : une case à cocher n'en portait
     /// que deux, et `Factory` n'était pas celui qu'elle exprimait.
     #[test]

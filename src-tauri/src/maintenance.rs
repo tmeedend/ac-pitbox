@@ -1,4 +1,4 @@
-//! Nettoyage (§9.3) : détection assistée des **mods cassés** (fichiers de
+//! Nettoyage (SESSION§3) : détection assistée des **mods cassés** (fichiers de
 //! bibliothèque manquants/invalides) et des **junctions orphelines** (pointant
 //! vers une version supprimée). Porté de l'esprit de `clean.py`, mais non
 //! destructif sans confirmation et respectant le garde-fou junction.
@@ -36,7 +36,7 @@ pub struct OrphanJunction {
     pub path: String,
 }
 
-/// Skin ou son dont la voiture/le circuit parent n'existe plus (§9.3).
+/// Skin ou son dont la voiture/le circuit parent n'existe plus (SESSION§3).
 #[derive(Debug, Clone, Serialize)]
 pub struct OrphanSub {
     pub id: String,
@@ -61,7 +61,7 @@ pub struct WaitingLayer {
 pub struct MaintenanceReport {
     pub broken: Vec<BrokenMod>,
     pub orphans: Vec<OrphanJunction>,
-    /// Sous-éléments sans parent (§9.3). Conservés volontairement à la
+    /// Sous-éléments sans parent (SESSION§3). Conservés volontairement à la
     /// suppression d'un mod — réimporter le même id les retrouve — donc jamais
     /// nettoyés automatiquement : seulement listés, pour décision.
     pub orphan_subs: Vec<OrphanSub>,
@@ -77,7 +77,7 @@ pub struct MaintenanceReport {
 /// Un mod est-il cassé (fichiers de sa version active manquants/invalides) ?
 /// Renvoie une clé i18n (résolue côté frontend, pas du texte affichable), ou
 /// `None` si tout va bien. Contenu de base (`is_stock`) jamais cassé (vrai
-/// dossier du jeu, pas géré par nous). Partagé entre `scan` (§9.3, écran
+/// dossier du jeu, pas géré par nous). Partagé entre `scan` (SESSION§3, écran
 /// Maintenance) et `library::to_card` (§6.4, badge sur la carte bibliothèque).
 pub fn broken_reason(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
     if m.is_stock {
@@ -104,7 +104,7 @@ pub fn broken_reason(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<S
     }
 }
 
-/// Analyse la bibliothèque + `content/` sans rien supprimer (§9.3).
+/// Analyse la bibliothèque + `content/` sans rien supprimer (SESSION§3).
 pub fn scan(conn: &Connection, cfg: &AppConfig) -> Result<MaintenanceReport, String> {
     let mut broken = Vec::new();
     let mut orphans = Vec::new();
@@ -176,7 +176,7 @@ pub fn scan(conn: &Connection, cfg: &AppConfig) -> Result<MaintenanceReport, Str
 }
 
 /// Efface les sous-éléments sans parent : fichiers stockés puis ligne overlay
-/// (§9.3). Contourne délibérément le garde-fou `removable` de `remove_sub` —
+/// (SESSION§3). Contourne délibérément le garde-fou `removable` de `remove_sub` —
 /// il protège un skin fourni avec un mod **vivant**, ce qui n'a plus de sens
 /// quand le parent a disparu. Aucune projection à retirer non plus : le
 /// dossier `skins/` de la cible n'existe plus.
@@ -387,7 +387,7 @@ pub fn delete_pack(conn: &Connection, cfg: &AppConfig, pack: &str) -> Result<usi
     let ids = overlay::list_pack_ids(conn, pack).map_err(|e| e.to_string())?;
     let mut n = 0;
     for id in &ids {
-        // `delete_broken` réalise la suppression complète d'un mod (cf. §9.3).
+        // `delete_broken` réalise la suppression complète d'un mod (cf. SESSION§3).
         delete_broken(conn, cfg, id)?;
         n += 1;
     }
@@ -481,7 +481,7 @@ pub const REPAIR_PROJECTIONS: &str = "projections";
 pub const REPAIR_REDEPLOY: &str = "redeploy";
 pub const REPAIR_REINSTALL: &str = "reinstall";
 
-/// Progress of a general repair (§9.3). Emitted as `repair:progress` by the
+/// Progress of a general repair (SESSION§3). Emitted as `repair:progress` by the
 /// façade — mirrored by `RepairProgress` in `src/lib/maintenance.ts`, the two
 /// change together.
 #[derive(Debug, Clone, Serialize)]
@@ -522,7 +522,7 @@ const REPAIR_EMIT_INTERVAL_MS: u128 = 80;
 const PROJECTION_WEIGHT: u64 = 1 << 20;
 
 /// Weight of a mod whose size the library never measured (imported before
-/// §9.4). The median of the reference library, rounded — a wrong weight
+/// SESSION§4). The median of the reference library, rounded — a wrong weight
 /// distorts the bar, an absent one would drop the mod out of it entirely.
 const UNKNOWN_MOD_WEIGHT: u64 = 400 << 20;
 
@@ -628,7 +628,7 @@ impl<'a> RepairCtx<'a> {
     }
 }
 
-/// Réparation générale (§9.3), à la manière du « purge & deploy » des autres
+/// Réparation générale (SESSION§3), à la manière du « purge & deploy » des autres
 /// gestionnaires de mods. Sa définition tient en une phrase : **recalculer tout
 /// ce qui dérive de la bibliothèque**.
 ///
@@ -749,7 +749,7 @@ pub fn remove_orphan(cfg: &AppConfig, kind: &str, id: &str) -> Result<(), String
 /// lui-même (lecture seule, §3.0) — sert à rattraper un mod déjà importé dont
 /// le fichier source a changé, ou dont le parsing a été corrigé après coup.
 ///
-/// `recalc_size` (§9.4) : recalcule en plus la taille sur disque de chaque
+/// `recalc_size` (SESSION§4) : recalcule en plus la taille sur disque de chaque
 /// version. Décorrélé du reste (case à cocher dédiée côté UI, décochée par
 /// défaut) car parcourir tous les fichiers de toute la bibliothèque peut être
 /// lent — la plupart des réindexations n'ont pas besoin de ça (la taille ne
@@ -840,7 +840,7 @@ pub fn reindex_mod(conn: &Connection, cfg: &AppConfig, id: &str, recalc_size: bo
     Ok(())
 }
 
-/// Réindexe tous les mods de la bibliothèque (§9.3bis). Renvoie le nombre traité.
+/// Réindexe tous les mods de la bibliothèque (SESSION§3.1). Renvoie le nombre traité.
 pub fn reindex_all(conn: &Connection, cfg: &AppConfig, recalc_size: bool) -> Result<usize, String> {
     let mods = overlay::list_mods(conn).map_err(|e| e.to_string())?;
     for m in &mods {
@@ -1109,7 +1109,7 @@ mod tests {
 
     #[test]
     fn subs_survive_their_parent_and_are_purged_only_on_demand() {
-        // §9.3 : skins et sons sont **volontairement** conservés à la
+        // SESSION§3 : skins et sons sont **volontairement** conservés à la
         // suppression de leur voiture — réimporter le même id les retrouve, ce
         // qui est le geste d'une réinstallation. Ils ne deviennent des déchets
         // que si le parent ne revient jamais, d'où le nettoyage sur décision et
@@ -1159,7 +1159,7 @@ mod tests {
         assert!(scan(&conn, &cfg).unwrap().orphan_subs.is_empty());
     }
 
-    /// Règle (§9.3) : la réparation rend compte de son avancement, et sa barre
+    /// Règle (SESSION§3) : la réparation rend compte de son avancement, et sa barre
     /// ne recule jamais.
     ///
     /// Elle est née d'un défaut de la même famille que celui qui l'a rendue
@@ -1258,7 +1258,7 @@ mod tests {
 
     #[test]
     fn repair_redeploys_active_mods_and_leaves_inactive_ones_alone() {
-        // §9.3 : « réparer » = recalculer tout ce qui dérive de la
+        // SESSION§3 : « réparer » = recalculer tout ce qui dérive de la
         // bibliothèque. C'est ce qui rattrape un changement de règles de
         // déploiement sans avoir à connaître les anciennes — `content/` est une
         // fonction pure de la bibliothèque. Un mod que l'utilisateur avait
@@ -1325,7 +1325,7 @@ mod tests {
 
     #[test]
     fn repair_all_reinstalls_broken_mods_only_when_requested() {
-        // §9.3bis (réparation générale) : reinstall_broken=false doit se
+        // SESSION§3.1 (réparation générale) : reinstall_broken=false doit se
         // limiter à la réparation des projections skins (toujours sûre) et
         // laisser les mods cassés intacts ; reinstall_broken=true doit en
         // plus rattraper ceux qui ont une archive source conservée.

@@ -865,7 +865,7 @@
     if (!detail) return;
     const sk = skins[i];
     if (sk) setPreferredSkin(detail.id_interne, sk);
-    // Marque et année seulement (SPEC §9.1) : la livrée a sa propre ligne
+    // Marque et année seulement (SPEC SESSION§1) : la livrée a sa propre ligne
     // dans la colonne de session.
     const meta = [detail.brand, detail.year].filter(Boolean).join(" · ");
     pickSession("Car", {

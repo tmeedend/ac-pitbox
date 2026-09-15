@@ -1,5 +1,5 @@
 //! Sauvegarde automatique de la base et des petits fichiers de préférences
-//! (§6.2/§9.4) : copie best-effort dans un sous-dossier horodaté à chaque
+//! (§6.2/SESSION§4) : copie best-effort dans un sous-dossier horodaté à chaque
 //! démarrage, avec rotation sur les `BACKUP_KEEP` plus récentes. Filet de
 //! sécurité contre une base corrompue ou un fichier de préférences écrasé
 //! par erreur — pas un vrai système de restauration point-in-time, juste

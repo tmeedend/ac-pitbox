@@ -614,7 +614,7 @@
     // Restaure les préférences mémorisées de l'entité (skin voiture, layout circuit).
     const sk = isCar ? getPreferredSkin(c.id_interne) : null;
     const lay = !isCar ? getPreferredLayout(c.id_interne) : null;
-    // Source, pas résumé (SPEC §9.1) : la livrée et le tracé sont affichés
+    // Source, pas résumé (SPEC SESSION§1) : la livrée et le tracé sont affichés
     // juste dessous dans la colonne de session, et le nom juste au-dessus —
     // les répéter ici coûtait des caractères pour rien. Le tag, lui, est un
     // critère de recherche : sa place est dans la bibliothèque et sur la
@@ -973,7 +973,7 @@
               {:else}<div class="noprev">{isCar ? t("library.typeCar") : t("library.typeTrack")}</div>{/if}
               {#if !isCar && ol}<img class="outline" src={ol} alt="" loading="lazy" />{/if}
               {#if sessionId === c.id_interne}<span class="sessbadge">{t("library.sessionBadge")}</span>{/if}
-              <!-- Marqueur de note (§9.5) : sans lui, une note est en écriture
+              <!-- Marqueur de note (SESSION§5) : sans lui, une note est en écriture
                    seule — on ne saurait plus sur quel mod on en a laissé une.
                    Posé en bas à gauche, en face du cœur : les deux disent la
                    même sorte de chose, « j'ai touché à ce mod ». -->

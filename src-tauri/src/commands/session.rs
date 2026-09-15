@@ -52,7 +52,7 @@ pub fn track_sun(
     )
 }
 
-/// Ce que la voiture avait d'usine comme aides (§9.3) : ABS et antipatinage,
+/// Ce que la voiture avait d'usine comme aides (SESSION§3) : ABS et antipatinage,
 /// lus dans son `electronics.ini`.
 ///
 /// `None` dès que la voiture ne le dit pas — dossier introuvable, `data.acd`
@@ -79,7 +79,7 @@ pub fn launch_session(app: AppHandle, db: State<Db>, setup: crate::launch::RaceS
     crate::launch::launch(&conn, &cfg, &setup)
 }
 
-/// Steam tourne-t-il ? Vérifié avant chaque lancement de session (§9.2bis) :
+/// Steam tourne-t-il ? Vérifié avant chaque lancement de session (SESSION§2.3) :
 /// sans Steam, l'échec se produit côté CM, hors de notre portée.
 #[tauri::command]
 pub fn is_steam_running() -> bool {

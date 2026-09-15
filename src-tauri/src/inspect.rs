@@ -140,7 +140,7 @@ pub fn estimate_published_at(dir: &Path) -> Option<String> {
     Some(dt.to_rfc3339())
 }
 
-/// Taille sur disque d'un dossier de version, octets (§9.4) : somme récursive
+/// Taille sur disque d'un dossier de version, octets (SESSION§4) : somme récursive
 /// de la taille réelle des fichiers (pas la taille allouée sur disque).
 pub fn dir_size_bytes(dir: &Path) -> u64 {
     WalkDir::new(dir)

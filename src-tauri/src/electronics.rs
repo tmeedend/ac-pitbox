@@ -2,7 +2,7 @@
 //! `[TRACTION_CONTROL]`.
 //!
 //! Read for one thing only: saying what the `Factory` assist setting is worth
-//! **for the car in session** (§9.3). Assetto Corsa's three assist levels are
+//! **for the car in session** (SESSION§3). Assetto Corsa's three assist levels are
 //! `Off` / `Factory` / `On`, and `Factory` means "whatever the real car had" —
 //! so on a 1966 GT40 it means nothing at all, and the screen can say so
 //! instead of leaving the driver to find out on track.
@@ -153,7 +153,7 @@ MAX_SPIN_POWER=0.8
     /// A GT3 declares both — and `[EDL]` must not leak into either answer.
     const GT3: &str = "[ABS]\nPRESENT=1\n\n[TRACTION_CONTROL]\nPRESENT=1\n\n[EDL]\nPRESENT=0\n";
 
-    /// §9.3 — `Factory` on a 1966 car means no aid at all, and the third
+    /// SESSION§3 — `Factory` on a 1966 car means no aid at all, and the third
     /// `PRESENT` of the file must not turn that into a yes.
     #[test]
     fn edl_does_not_lend_its_present_to_the_two_aids() {
@@ -166,7 +166,7 @@ MAX_SPIN_POWER=0.8
         assert!(found.traction_control, "a GT3 has traction control");
     }
 
-    /// §9.3 — the asymmetric case is 48 cars of the reference install, so it
+    /// SESSION§3 — the asymmetric case is 48 cars of the reference install, so it
     /// is not an edge: one aid present must never imply the other.
     #[test]
     fn one_aid_alone_is_reported_alone() {
@@ -177,7 +177,7 @@ MAX_SPIN_POWER=0.8
         assert!(!found.abs && found.traction_control, "traction control only");
     }
 
-    /// §9.3 — ten cars of the install declare neither section. They must
+    /// SESSION§3 — ten cars of the install declare neither section. They must
     /// produce nothing at all, since the screen shows no line rather than a
     /// hedged one.
     #[test]

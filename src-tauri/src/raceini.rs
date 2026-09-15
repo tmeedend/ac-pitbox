@@ -1,4 +1,4 @@
-//! Player skin re-injection into the `race.ini` Content Manager writes (§9.2).
+//! Player skin re-injection into the `race.ini` Content Manager writes (SESSION§2).
 //!
 //! The Quick Drive preset carries no skin field for the player's car: CM falls
 //! back on its own per-car memory (`CarObject.SelectedSkin`), so the skin picked
@@ -223,7 +223,7 @@ mod tests {
 [CAR_1]\r\nMODEL=ks_bmw_m4_gt3\r\nSKIN=09_team_mando\r\nAI_LEVEL=93\r\n";
 
     /// The rule this whole module exists for: the player's skin changes, the
-    /// opponents' skins — which CM filled from our own grid — must not (§9.2).
+    /// opponents' skins — which CM filled from our own grid — must not (SESSION§2).
     #[test]
     fn only_player_sections_are_patched() {
         let out = set_player_skin(RACE, "12_endurance");

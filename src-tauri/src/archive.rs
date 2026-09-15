@@ -155,7 +155,7 @@ fn parse_percent(update: &str) -> Option<u8> {
 }
 
 /// Crée une archive `.7z` à partir du **contenu** de `src_dir` (chemins relatifs
-/// préservés), via `7z a`. Utilisé par l'export autonome (§9.1).
+/// préservés), via `7z a`. Utilisé par l'export autonome (SESSION§1).
 pub fn create_7z(sevenzip: &Path, src_dir: &Path, archive: &Path) -> Result<(), String> {
     if archive.exists() {
         let _ = std::fs::remove_file(archive);

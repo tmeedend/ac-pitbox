@@ -14,7 +14,7 @@
     options: TrackSkinOption[];
     busy?: boolean;
     ontoggle: (name: string, active: boolean) => void;
-    /** Intitulé du champ, en colonne (SPEC §9.1) — largeur partagée par
+    /** Intitulé du champ, en colonne (SPEC SESSION§1) — largeur partagée par
      * `--sess-lblw` avec les autres champs de la colonne de session. */
     label?: string;
   }

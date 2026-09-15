@@ -1,4 +1,4 @@
-//! Export d'archive autonome (§9.1). Repackage un mod en `.7z` complet, en
+//! Export d'archive autonome (SESSION§1). Repackage un mod en `.7z` complet, en
 //! embarquant pour une voiture ses **dépendances éparpillées** : pilotes 3D
 //! (`content/driver/*.kn5`), polices (`content/fonts/*`), crews
 //! (`content/texture/crew_*`), config d'extension. Porté de `drivers.py`/
@@ -6,9 +6,9 @@
 //!
 //! Les dépendances se résolvent via `data/driver3d.ini` et
 //! `data/digital_instruments.ini`. Si la voiture n'a que `data.acd` (packé), on
-//! l'extrait via QuickBMS + `acd.bms` **seulement si configurés** (§9.2, hors
+//! l'extrait via QuickBMS + `acd.bms` **seulement si configurés** (SESSION§2, hors
 //! chemin critique) ; sinon on prévient que certaines dépendances peuvent
-//! manquer. Le contenu Kunos est exclu (§9.1, [[kunos]]).
+//! manquer. Le contenu Kunos est exclu (SESSION§1, [[kunos]]).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -52,7 +52,7 @@ fn sanitize(s: &str) -> String {
         .to_string()
 }
 
-/// Exporte la version active d'un mod en archive autonome dans `dest_dir` (§9.1).
+/// Exporte la version active d'un mod en archive autonome dans `dest_dir` (SESSION§1).
 pub fn export_mod(conn: &Connection, cfg: &AppConfig, mod_id: &str, dest_dir: &Path) -> Result<ExportReport, String> {
     let sevenzip = cfg
         .sevenzip_exe
@@ -269,7 +269,7 @@ fn stage_dir(ac: &Path, staging: &Path, rel: &str) -> bool {
     archive::copy_dir(&src, &staging.join(rel)).is_ok()
 }
 
-/// Extrait `data.acd` via QuickBMS + `acd.bms` si configurés (§9.2). La clé de
+/// Extrait `data.acd` via QuickBMS + `acd.bms` si configurés (SESSION§2). La clé de
 /// déchiffrement dérive du nom de dossier : l'`.acd` est lu dans son emplacement.
 fn extract_acd(cfg: &AppConfig, acd: &Path) -> Option<PathBuf> {
     let quickbms = cfg.quickbms_exe.as_ref()?;

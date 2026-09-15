@@ -150,7 +150,7 @@ pub fn load(app: &AppHandle) -> Bench {
 
 /// Best-effort: a benchmark that fails to persist only costs a less accurate
 /// estimate next time, so it must never surface as an import error — but it is
-/// logged, since nothing else would show it on a packaged install (§9.4).
+/// logged, since nothing else would show it on a packaged install (SESSION§4).
 pub fn save(app: &AppHandle, bench: &Bench) {
     let Some(path) = file(app) else { return };
     if let Some(parent) = path.parent() {

@@ -329,7 +329,7 @@ pub fn list_backgrounds(ac_install: &Path, track_id: &str, layout_id: Option<&st
     list_backgrounds_in(&ac_install.join("extension").join("backgrounds"), track_id, layout_id)
 }
 
-/// Chaîne de repli du fond photo de l'écran de réglages (§6.2/§9.3) :
+/// Chaîne de repli du fond photo de l'écran de réglages (§6.2/SESSION§3) :
 /// 1. Screenshot perso du combo exact (même voiture + même circuit).
 /// 2. Screenshot perso du même circuit, autre voiture.
 /// 3. Background officiel du circuit.

@@ -1,4 +1,4 @@
-//! Listes du contenu **natif Kunos** à exclure du packaging d'export (§9.1/§11).
+//! Listes du contenu **natif Kunos** à exclure du packaging d'export (SESSION§1/§11).
 //! Porté de `drivers.py::isKunosDriver/isKunosCrew` et `fonts.py::isKunosFont`.
 //! Un pilote/police/crew Kunos est livré avec le jeu : inutile (et faux) de
 //! l'embarquer dans une archive de mod autonome.

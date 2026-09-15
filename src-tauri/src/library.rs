@@ -46,7 +46,7 @@ pub struct ModCard {
     /// Badge/logo de la marque (`ui/badge.png`, voitures), à la place des initiales.
     pub badge: Option<String>,
     /// Mod cassé (fichiers de la version active manquants/invalides, §6.4) —
-    /// même détection que l'écran Maintenance (§9.3), remontée ici comme
+    /// même détection que l'écran Maintenance (SESSION§3), remontée ici comme
     /// signalement visuel sur la carte bibliothèque.
     pub broken: bool,
 }
@@ -781,7 +781,7 @@ mod tests {
     fn broken_mod_flagged_on_card() {
         // Mod dont la version active pointe vers un dossier bibliothèque
         // disparu (§6.4) : list_cards doit remonter broken=true, la même
-        // détection que l'écran Maintenance (§9.3).
+        // détection que l'écran Maintenance (SESSION§3).
         let base = crate::testutil::temp_dir("broken-card");
         std::fs::create_dir_all(&base).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();

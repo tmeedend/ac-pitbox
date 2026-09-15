@@ -226,7 +226,7 @@ de reprendre. En cas d'écart, la spec fait foi.
         s'en écarter est permis, l'ignorer serait dommage.
 - [ ] **Écran Pilote** (fusionné dans `main`). Spec et maquette dans
       `docs/SPEC-ecran-pilote.md` + `maquettes/pitbox-ecran-pilote.html`, résumé au
-      §9.5 du SPEC. **À lire avant de reprendre** — l'asymétrie qui structure
+      SESSION§5 du SPEC. **À lire avant de reprendre** — l'asymétrie qui structure
       tout l'écran (le corps commande, la tenue en découle) y est expliquée une
       fois pour toutes.
       Fait : le backend liste les corps installés et écarte ceux sans squelette

@@ -73,7 +73,7 @@ export interface RepairAllReport {
   reinstall_errors: ReinstallOutcome[];
 }
 
-/** Skin ou son dont la voiture/le circuit parent n'existe plus (§9.3). */
+/** Skin ou son dont la voiture/le circuit parent n'existe plus (SESSION§3). */
 export interface OrphanSub {
   id: string;
   sub_type: string;
@@ -92,7 +92,7 @@ export function maintenanceScan(): Promise<MaintenanceReport> {
 }
 
 /** Relit sur le disque les champs cache de tous les mods et réapplique l'ontologie. Renvoie le nb traité.
- * `recalcSize` (§9.4) : recalcule aussi la taille sur disque de chaque mod — plus lent, décoché par défaut. */
+ * `recalcSize` (SESSION§4) : recalcule aussi la taille sur disque de chaque mod — plus lent, décoché par défaut. */
 export function reindexLibrary(recalcSize: boolean): Promise<number> {
   return invoke<number>("reindex_library", { recalcSize });
 }
@@ -137,7 +137,7 @@ export function reinstallFromArchive(id: string): Promise<void> {
   return invoke<void>("reinstall_from_archive", { id });
 }
 
-/** Réparation générale (§9.3) : recalcule tout ce qui dérive de la bibliothèque —
+/** Réparation générale (SESSION§3) : recalcule tout ce qui dérive de la bibliothèque —
  * projections skin/circuit cassées, puis redéploiement des mods actifs (donc aussi
  * leurs ajouts au jeu). Si `reinstallBroken`, réinstalle en plus depuis l'archive
  * source conservée chaque mod cassé qui en a une : la seule étape qui touche la
@@ -157,7 +157,7 @@ export async function deletePack(pack: string): Promise<number> {
   return n;
 }
 
-/** Exporte la version active d'un mod en archive autonome dans `destDir` (§9.1). */
+/** Exporte la version active d'un mod en archive autonome dans `destDir` (SESSION§1). */
 export function exportMod(id: string, destDir: string): Promise<ExportReport> {
   return invoke<ExportReport>("export_mod", { id, destDir });
 }

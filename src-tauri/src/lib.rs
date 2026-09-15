@@ -80,7 +80,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        // Journal fichier (`%APPDATA%\com.pitbox.app\logs\`, §9.4) : seul moyen
+        // Journal fichier (`%APPDATA%\com.pitbox.app\logs\`, SESSION§4) : seul moyen
         // de diagnostiquer un échec sur une install packagée (`.exe`, pas de
         // console). Niveau Warn : n'attrape que les échecs réels d'opérations
         // best-effort (`let _ = ...`) déjà silencieuses côté écran par design —
@@ -106,7 +106,7 @@ pub fn run() {
             preview::serve_request(ctx.app_handle(), &request)
         })
         .setup(|app| {
-            // Sauvegarde de démarrage (§6.2/§9.4), avant toute ouverture de
+            // Sauvegarde de démarrage (§6.2/SESSION§4), avant toute ouverture de
             // connexion : on veut la base et les préférences exactement
             // telles que la session précédente les a laissées.
             backup::run_startup_backup(app.handle());

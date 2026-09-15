@@ -14,6 +14,7 @@ désigne `SPEC.md`** et les autres documents portent une étiquette :
 | Étiquette | Document |
 | --- | --- |
 | *(rien)* | `SPEC.md` |
+| `SESSION§` | `SPEC-session.md` |
 | `GRILLE§` | `SPEC-grille.md` |
 | `PILOTE§` | `SPEC-ecran-pilote.md` |
 | `WIKI§` | `SPEC-wikipedia-fiche-detail.md` |
@@ -35,6 +36,13 @@ chose qui rendait jusqu'ici une renumérotation invisible au code.
   (architecture, identité/import, tags, fiche technique, bibliothèque,
   skins/sons/apps, lancement de session, maintenance, config, conventions).
   **Point d'entrée** : commencer ici. Décrit l'app telle qu'elle fonctionne.
+
+## Les deux gros domaines, sortis dans leur fichier
+
+- **`SPEC-session.md`** — **lancement de session** : la bibliothèque comme
+  sélecteur, le pilotage par preset Quick Drive, l'écran de réglages avec le
+  plateau et les conditions, l'aperçu 3D, l'écran Pilote. Extrait du §9 de
+  `SPEC.md`, qui en portait 38 % à lui seul. Le code y renvoie par `SESSION§`.
 
 ## Import (le domaine le plus dense)
 

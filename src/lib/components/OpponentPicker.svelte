@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Opponent picker (§9.3) — the same filter bar the car library uses, over
+  // Opponent picker (SESSION§3) — the same filter bar the car library uses, over
   // the same library, in a modal.
   //
   // It used to offer a search box and nothing else, so picking an opponent out
