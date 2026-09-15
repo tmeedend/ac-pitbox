@@ -410,8 +410,10 @@ a {
  * ne boucle pas. Jamais un refus — l'app dit ce qu'elle sait, elle n'arbitre
  * pas ce que l'utilisateur a le droit de lancer.
  *
- * Globale parce qu'elle était recopiée dans trois composants (Launch,
- * WeatherBlock, SessionTypeBlock), le CSS Svelte étant scopé — et les copies
+ * Globale parce qu'elle était recopiée dans trois composants (l'écran de
+ * session, la météo et le type de session — ces deux derniers ont depuis
+ * fusionné dans `ConditionsBlock` et disparu), le CSS Svelte étant scopé —
+ * et les copies
  * avaient déjà divergé : 12px avec marge dans l'une, 10px sans dans les deux
  * autres, quand l'une des alertes s'affichait carrément en 8px gris, à peine
  * lisible. C'est exactement le mécanisme décrit au chantier « composants

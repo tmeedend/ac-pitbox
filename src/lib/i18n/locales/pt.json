@@ -43,7 +43,6 @@
     "noCarDetected": "Nenhum carro detetado",
     "noTrackDetected": "Nenhum circuito detetado",
     "checkPaths": "Verifique o caminho de instalação",
-    "configure": "CONFIGURAÇÃO DA SESSÃO",
     "start": "▶ INICIAR A SESSÃO",
     "carTooltip": "Clique: biblioteca de carros · clique duplo: página de detalhes",
     "trackTooltip": "Clique: biblioteca de pistas · clique duplo: página de detalhes",
@@ -615,7 +614,6 @@
     "specRange": "Autonomia"
   },
   "launch": {
-    "pageTitle": "Configuração da sessão",
     "savedSessionsLabel": "Sessões salvas",
     "saveSession": "⤒ Salvar",
     "saveSessionTitle": "Salvar a sessão",
@@ -629,10 +627,6 @@
     "loadWarnTrackSkinsFailed": "Skins de pista não restaurados: {error}",
     "overwriteConfirm": "« {name} » já existe. Sobrescrever?",
     "overwriteConfirmBtn": "Sobrescrever",
-    "typePractice": "Treino",
-    "typeHotlap": "Hotlap",
-    "typeRace": "Corrida",
-    "typeTrackday": "Track day",
     "launchSuccess": "Sessão enviada para o Content Manager — o Assetto Corsa está iniciando…",
     "steamRequiredTitle": "O Steam não está em execução",
     "steamRequiredBody": "O Assetto Corsa inicia pelo Steam. Abra o Steam, faça login e confirme aqui para continuar.",
@@ -658,7 +652,6 @@
     "fuelLabel": "Consumo de combustível",
     "tyreLabel": "Desgaste dos pneus",
     "laps": "Voltas (ou duração em minutos)",
-    "weather": "Clima",
     "wxClear": "Céu limpo",
     "wxFewClouds": "Poucas nuvens",
     "wxOvercast": "Encoberto",
@@ -699,10 +692,8 @@
     "gripEvolution": "Evolução da aderência",
     "qualifying": "Classificação",
     "freePractice": "Treino livre",
-    "assistsLabel": "Ajudas de pilotagem",
     "idealLine": "Traçado ideal",
     "tyreBlankets": "Mantas térmicas",
-    "sessionTypeLabel": "Tipo de sessão",
     "trackNotCircuitWarning": "Esta pista não está classificada como circuito fechado: um hotlap ou uma corrida vão iniciar mesmo assim, mas sem uma volta para fechar não haverá tempos de volta nem classificação utilizáveis."
   },
   "config": {

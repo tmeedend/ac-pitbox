@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import {
     launchSession,
@@ -43,16 +43,16 @@
   import { getModDetail, listLibrary, previewSrc, type ModCard } from "$lib/library";
   import { getSessionBackground } from "$lib/media";
   import { nav, pickSession, type OpponentsAction } from "$lib/nav.svelte";
+  import { hasOpponents, openSetupPage, sessionNav, sessionNavReady } from "$lib/sessionNav.svelte";
+  import { carAssists, setCarAssists } from "$lib/carAssists.svelte";
   import { getPreferredSkin, setPreferredLayout, setPreferredSkin } from "$lib/preferred";
   import { listActiveTrackSkins, listTrackSkinOptions, setTrackSkinActive, syncTrackSkins } from "$lib/submods";
   import { t } from "$lib/i18n/index.svelte";
-  import TrackConditionBlock from "./launch/TrackConditionBlock.svelte";
-  import WeatherBlock from "./launch/WeatherBlock.svelte";
+  import ConditionsBlock from "./launch/ConditionsBlock.svelte";
   import OpponentsBlock from "./launch/OpponentsBlock.svelte";
   import GridBlock from "./launch/GridBlock.svelte";
   import SessionOptionsBlock from "./launch/SessionOptionsBlock.svelte";
   import SimulationBlock from "./launch/SimulationBlock.svelte";
-  import SessionTypeBlock from "./launch/SessionTypeBlock.svelte";
   import NamedListDialog from "./NamedListDialog.svelte";
   import OpponentPicker from "./OpponentPicker.svelte";
   import LoadingState from "./LoadingState.svelte";
@@ -248,8 +248,12 @@
   let gridPinned = $state<string[]>([]);
   let gridQuery = $state("");
   /** Colonnes optionnelles du plateau (§4.2), mémorisées par type de session
-   * comme tous les autres réglages. */
-  let gridColumns = $state<string[]>(["ratio", "strength"]);
+   * comme tous les autres réglages.
+   *
+   * Le nom du pilote et la force au repos, et rien d'autre (lot 5 §5.4) : huit
+   * colonnes, c'était trop, et `kg/bhp`, nationalité, lest et bride sont des
+   * choses qu'on va chercher — pas qu'on lit à chaque coup d'œil. */
+  let gridColumns = $state<string[]>(["driver", "strength"]);
   const gridIndex = $derived(buildCardIndex(carPool, gridDefs, true, hasOwnDriver, setup.car_id));
   const gridMatches = $derived(buildPredicate(gridDefs, gridFilters, gridIndex.ctx));
   const gridPool = $derived(carPool.filter((c) => gridMatches(c) && matchesQuery(c, gridQuery)));
@@ -599,6 +603,46 @@
     opponentCount = setup.opponents.length;
   }
 
+  /** La livrée d'une ligne, quand elle est connue — et par elle, le pilote que
+   * le jeu nommera. */
+  function skinOfOpponent(opp: Opponent): SkinItem | undefined {
+    return opp.car_skin ? skinsByCarId[opp.car_id]?.find((sk) => sk.id === opp.car_skin) : undefined;
+  }
+
+  /** Deux pilotes sous la même identité (§1.9). La génération l'évite ; ceci
+   * n'attrape que ce que l'utilisateur a forcé à la main, et le dit plutôt que
+   * de le corriger dans son dos.
+   *
+   * Calculé ici et non dans le plateau depuis que l'alerte doit **remonter sur
+   * l'entrée de navigation** (lot 5 §1.3) : une alerte sur une page qu'on ne
+   * regarde pas ne vaut pas mieux que pas d'alerte. */
+  const duplicateDrivers = $derived.by(() => {
+    const seen = new Set<string>();
+    for (const opp of setup.opponents) {
+      const sk = skinOfOpponent(opp);
+      const key = `${opp.driver_name ?? sk?.number ?? ""}|${opp.driver_name ?? sk?.driver ?? ""}`.trim().toLowerCase();
+      if (key === "|") continue;
+      if (seen.has(key)) return true;
+      seen.add(key);
+    }
+    return false;
+  });
+
+  /** Sur quelle page de l'écran on est (lot 5 §1) — la sous-entrée n'existe
+   * que sous un type qui aligne un plateau. */
+  const onOpponentsPage = $derived(sessionNav.page === "opponents" && hasOpponents(setup.session_type));
+
+  /** Le circuit choisi n'est pas catégorisé comme circuit fermé, et le type
+   * demandé se chronomètre au tour. Comparé sans le `#` : la catégorie est
+   * stockée avec, mais un tag saisi à la main ou une règle personnalisée peut
+   * l'écrire sans. */
+  const trackNotCircuit = $derived.by(() => {
+    const cats = trackCard?.categories ?? [];
+    if (!cats.length) return false;
+    if (setup.session_type !== "hotlap" && setup.session_type !== "race") return false;
+    return !cats.some((c) => c.replace(/^#/, "").toLowerCase() === "circuit");
+  });
+
   // --- Fourchette de niveau IA (§8.6) : bornes réutilisées par le réglage
   // individuel d'un adversaire (setOpponentLevel) — le curseur double lui-même
   // est rendu par OpponentsBlock. ---
@@ -828,7 +872,7 @@
       // preset portant `second` ou `random` revenait sur `random` en silence.
       setup.start_mode = START_MODES.includes(p.start_mode as StartMode) ? (p.start_mode as StartMode) : "random";
       setup.ghost_advantage = Math.max(0, Math.min(5, p.ghost_advantage ?? 0));
-      gridColumns = p.grid_columns ?? ["ratio", "strength"];
+      gridColumns = p.grid_columns ?? ["driver", "strength"];
       opponentCount = p.opponent_count ?? 7;
       applyGridPreset(p);
       setup.laps = p.laps; setup.time_hours = p.time_hours;
@@ -843,17 +887,24 @@
       setup.damage = p.damage ?? 50;
       setup.fuel_rate = p.fuel_rate ?? 100; setup.tyre_wear = p.tyre_wear ?? 100;
       setup.tyre_blankets = p.tyre_blankets ?? false;
-      setup.abs = assistLevelFrom(p.abs, p.abs_auto);
-      setup.traction_control = assistLevelFrom(p.traction_control, p.traction_control_auto);
+      // Par le store, qui est la valeur vivante : les écrire dans `setup` seul
+      // laisserait la carte voiture du panneau gauche afficher les anciennes.
+      setCarAssists(assistLevelFrom(p.abs, p.abs_auto), assistLevelFrom(p.traction_control, p.traction_control_auto));
       setup.ideal_line = p.ideal_line ?? false;
       applySeason(p.season ?? "");
       const opt = weathers.find((w) => w.id === p.intent && w.available);
       if (opt) await selectIntent(opt);
     }
-    // Ne régénère que s'il n'y a vraiment rien à préserver (première visite
+    // Ne remplit que s'il n'y a vraiment rien à préserver (première visite
     // de l'écran course/trackday, ou aucun adversaire restauré) — jamais en
     // écrasant silencieusement un plateau déjà construit (§8.6ter, bug réel).
-    if ((type === "race" || type === "trackday") && setup.opponents.length === 0) await regenerateGrid();
+    //
+    // `fillGrid` et non `regenerateGrid` : celle-ci **garde les voitures** et
+    // ne retire au sort que ce qui est posé dessus, donc sur un plateau vide
+    // elle ne faisait rien du tout. Une course ouverte pour la première fois
+    // restait sans adversaire, alors qu'on doit pouvoir la lancer sans être
+    // allé sur la page adversaires (lot 5 §1.5).
+    if (hasOpponents(type) && setup.opponents.length === 0) await fillGrid();
     applying = false;
   }
   async function setSessionType(type: SessionType) {
@@ -862,6 +913,45 @@
     setup.session_type = type;
     await applyPreset(type);
   }
+
+  // --- Le type vient de la colonne de session (lot 5 §1) --------------------
+  //
+  // `sessionNav` est la valeur vivante, cet écran la recopie : la liste des
+  // types est dans le panneau gauche, qui est à l'écran en permanence, alors
+  // que celui-ci n'est monté que pendant qu'on le regarde. Un seul sens de
+  // circulation, comme pour le lest et la bride — l'écran ne réécrit dans le
+  // store qu'au **chargement** (son propre montage, une session enregistrée),
+  // jamais en réaction.
+  $effect(() => {
+    const wanted = sessionNav.type;
+    if (!ready) return;
+    if (untrack(() => setup.session_type) !== wanted) void setSessionType(wanted);
+  });
+  // Le type décide de ce qui est AFFICHÉ et de ce qui est envoyé au jeu, jamais
+  // de ce qui est mémorisé (§1.4) : la page adversaires d'un type qui n'en a
+  // pas se referme, le plateau reste intact derrière.
+  $effect(() => {
+    if (!hasOpponents(sessionNav.type) && sessionNav.page === "opponents") openSetupPage();
+  });
+  // Ce que la sous-entrée annonce (§1.2/§1.3). Écrit d'ici parce que c'est ici
+  // qu'on le sait ; lu là-bas parce que c'est là qu'il faut le voir sans
+  // changer de page.
+  $effect(() => {
+    sessionNav.count = setup.opponents.length;
+    sessionNav.center = setup.ai_level;
+    sessionNav.spread = setup.ai_spread;
+    // Les deux alertes de la page (§1.3) : un vivier trop maigre pour le nombre
+    // demandé — vide compris —, et deux pilotes sous la même identité.
+    sessionNav.alert =
+      hasOpponents(setup.session_type) && (gridPool.length < opponentCount || duplicateDrivers);
+  });
+
+  // ABS et contrôle de traction : même circulation à sens unique que le lest
+  // et la bride depuis qu'ils vivent dans la carte voiture (lot 5 §2.2).
+  $effect(() => {
+    setup.abs = carAssists.abs;
+    setup.traction_control = carAssists.tractionControl;
+  });
   // Lest et bride : le store est la valeur vivante (il s'édite dans le panneau
   // gauche, toujours à l'écran), `setup` la recopie. **Un seul sens** — un
   // effet en retour ferait s'entre-réveiller les deux. Ce qui écrit dans
@@ -907,7 +997,12 @@
     const saved: Partial<Selection> = hasPersisted
       ? (state.selection ?? {})
       : JSON.parse(localStorage.getItem(StorageKey.launchSelection) ?? "{}");
-    setup.session_type = saved.session_type ?? "practice";
+    // Le type vient de la colonne de session, qui a hydraté le sien depuis ce
+    // même fichier — attendre sa lecture plutôt que de relire la nôtre :
+    // les deux se courent sinon après, et un type choisi dans la liste avant
+    // que cet écran ne soit monté se ferait écraser par celui du disque.
+    await sessionNavReady;
+    setup.session_type = sessionNav.type;
     // Forces recalées à la relecture, pas seulement à l'édition : un plateau
     // enregistré quand le plancher était 60 porte des valeurs que Content
     // Manager n'accepte pas.
@@ -1162,6 +1257,10 @@
     // Par le store, qui est la valeur vivante : l'écrire dans `setup` seul
     // laisserait la carte du panneau gauche afficher l'ancienne.
     setPlayerHandicap(s.setup.player_ballast ?? 0, s.setup.player_restrictor ?? 0);
+    setCarAssists(s.setup.abs ?? "factory", s.setup.traction_control ?? "factory");
+    // Le type fait partie de ce qui est rechargé, et il vit désormais dans la
+    // colonne de session : sans ça, la liste resterait sur l'ancien.
+    sessionNav.type = s.setup.session_type;
     opponentCount = s.opponentCount;
     // Même migration que pour un preset par type : une sauvegarde d'avant les
     // jetons retrouve son vivier, elle ne retombe pas sur les défauts.
@@ -1265,12 +1364,17 @@
 </script>
 
 <div class="flow" class:has-bg={!!backgroundSrc} style:--session-bg={backgroundSrc ? `url('${backgroundSrc}')` : undefined}>
-  <!-- Titre seul : pas de rappel du duo voiture/circuit ici (déjà dans la
-       colonne latérale, §8.6). Le lancement se fait désormais depuis le
-       bouton rouge « Démarrer la session » de la barre latérale, juste sous
-       « Paramétrage de la session » — plus de bouton Lancer sur cet écran. -->
+  <!-- Le titre suit la navigation (lot 5 §1.6) : le type, puis le type et sa
+       sous-entrée. « Paramétrage de la session » ne disait plus rien depuis que
+       la liste des types est dans la colonne — c'est elle qui nomme l'écran.
+       Enregistrer/charger restent où ils étaient : ils portent sur toute la
+       configuration, pas sur le type. -->
   <header class="bar">
-    <h1 class="lbl-screen">{t("launch.pageTitle")}</h1>
+    <h1 class="lbl-screen">
+      {t(`launch.type.${setup.session_type}`)}{#if onOpponentsPage}<span class="crumb">
+          · {t("launch.opponentsLabel")}</span
+        >{/if}
+    </h1>
     <!-- Le décompte passe sur le bouton : il disait « 12 » à côté d'un titre
          qui ne parlait pas de sauvegardes. -->
     <div class="hbtns">
@@ -1287,69 +1391,29 @@
 
   {#if !ready}
     <LoadingState />
-  {:else}
-  <div class="body">
-    <div class="cols">
-      <!-- COLONNE GAUCHE -->
-      <div>
-        <SessionTypeBlock
-          sessionType={setup.session_type}
-          trackCategories={trackCard?.categories ?? []}
-          onselect={setSessionType}
-        />
-
-        <SessionOptionsBlock {setup} />
-
-        <SimulationBlock {setup} carName={player?.display_name ?? null} />
-
-        {#if setup.session_type === "race" || setup.session_type === "trackday"}
-          <OpponentsBlock
-            {setup}
-            {opponentCount}
-            defs={gridDefs}
-            bind:filters={gridFilters}
-            bind:pinned={gridPinned}
-            bind:query={gridQuery}
-            index={gridIndex}
-            poolCount={gridPool.length}
-            playerCard={player}
-            oncountchange={applyOpponentCount}
-            onfill={() => void fillGrid()}
-          />
-        {/if}
-      </div>
-
-      <!-- COLONNE DROITE -->
-      <div>
-        <!-- Voisins par nécessité et non par commodité de mise en page :
-             l'entrée « Auto (set by weather) » de l'état de piste ne se lit
-             que si la météo qui la pilote est sous les yeux. Ne rien
-             intercaler entre les deux. -->
-        <TrackConditionBlock {setup} states={trackStateList} />
-
-        <WeatherBlock
+  {:else if onOpponentsPage}
+    <!-- LA PAGE ADVERSAIRES (lot 5 §5) : un seul enchaînement, pleine largeur,
+         sans césure de carte entre le générateur et sa sortie. Le bloc du haut
+         configure un générateur, le plateau en EST la sortie — séparés par une
+         gouttière, trois liens réels devenaient invisibles : la bannière de
+         vivier explique le contenu du plateau, `Tirer au hasard` et
+         `Régénérer` font des choses voisines, et la colonne « Force » réagit à
+         un curseur hors de vue. -->
+    <div class="body">
+      <div class="oppopage">
+        <OpponentsBlock
           {setup}
-          {weathers}
-          {selectedIntent}
-          {currentWeather}
-          {trackSupportsSeason}
-          {sun}
-          {trackSupportsRain}
-          {season}
-          onselectintent={selectIntent}
-          onselectseason={selectSeason}
-          onoverridetemps={overrideTemps}
-          onoverridewind={overrideWind}
+          {opponentCount}
+          defs={gridDefs}
+          bind:filters={gridFilters}
+          bind:pinned={gridPinned}
+          bind:query={gridQuery}
+          index={gridIndex}
+          poolCount={gridPool.length}
+          playerCard={player}
+          oncountchange={applyOpponentCount}
+          onfill={() => void fillGrid()}
         />
-      </div>
-
-      <!-- LE PLATEAU — une rangée à lui, sur toute la largeur.
-           Il occupait la colonne de gauche, et laissait donc ~700 px vides à
-           droite sous la météo dès que celle-ci s'arrêtait. En rangée 2, il
-           commence après la **plus haute** des deux colonnes : il ne peut donc
-           jamais chevaucher le rail, ce qu'une pleine largeur posée en rangée 1
-           aurait fait. -->
-      {#if setup.session_type === "race" || setup.session_type === "trackday"}
         <GridBlock
           {setup}
           {carPool}
@@ -1358,6 +1422,7 @@
           poolCount={gridPool.length}
           bind:columns={gridColumns}
           {nationalityList}
+          {duplicateDrivers}
           onchoose={openAddPicker}
           onregenerate={() => void regenerateGrid()}
           onremove={removeOpponent}
@@ -1368,9 +1433,58 @@
           onloadgrid={() => void openGridDialog("load")}
           onopenpicker={openPicker}
         />
-      {/if}
+      </div>
     </div>
-  </div>
+  {:else}
+    <div class="body">
+      <div class="cols">
+        <!-- COLONNE CENTRALE — la session et ses règles.
+             Un réglage se range selon sa PORTÉE, jamais selon sa fréquence
+             d'usage : ce qui porte sur la voiture est dans le panneau gauche,
+             ce qui porte sur les conditions dans le rail de droite, ce qui
+             porte sur les adversaires a sa page. -->
+        <div>
+          <!-- Un hotlap et une course supposent un tracé qui boucle et qu'on
+               chronomètre ; sur une montée ou un point-à-point, elles partent
+               mais ne veulent rien dire. On avertit sans bloquer — l'app
+               n'arbitre pas ce que l'utilisateur a le droit de lancer, et la
+               catégorie vient de règles que lui-même peut modifier.
+               Au niveau de la page depuis que le type n'a plus de bloc : c'est
+               le couple type + circuit qui est en cause, pas un réglage. -->
+          {#if trackNotCircuit}
+            <p class="warnbox banner-warn">⚠ {t("launch.trackNotCircuitWarning")}</p>
+          {/if}
+
+          <SessionOptionsBlock {setup} />
+
+          <SimulationBlock {setup} />
+        </div>
+
+        <!-- RAIL DROIT — les conditions, en un seul bloc (lot 5 §4).
+             `Track condition` et `Weather` étaient deux cartes, et la première
+             entrée de l'état de piste est « Auto (posé par la météo) » : une
+             entrée qui nomme sa voisine ne se lit que si cette voisine est sous
+             les yeux. Elles n'étaient pas voisines par commodité de mise en
+             page, elles ne faisaient qu'un. -->
+        <div>
+          <ConditionsBlock
+            {setup}
+            {weathers}
+            {selectedIntent}
+            {currentWeather}
+            {trackSupportsSeason}
+            {sun}
+            {trackSupportsRain}
+            {season}
+            states={trackStateList}
+            onselectintent={selectIntent}
+            onselectseason={selectSeason}
+            onoverridetemps={overrideTemps}
+            onoverridewind={overrideWind}
+          />
+        </div>
+      </div>
+    </div>
   {/if}
 </div>
 
@@ -1550,6 +1664,12 @@
   h1 {
     flex: 1;
   }
+  /* Le fil d'Ariane du titre : la sous-entrée, dans le gris du sous-titre —
+     ce qui est en gras, c'est le type, pas la page. */
+  .crumb {
+    color: var(--muted);
+    font-weight: 400;
+  }
   .ok,
   .errbox,
   .banner {
@@ -1581,6 +1701,21 @@
      curseurs d'une course souris absurde n'est pas lui mais la mise en colonnes
      des blocs eux-mêmes — trois curseurs côte à côte dans Simulation, une
      largeur fixe pour les deux fourchettes. */
+  /* La page adversaires : un seul enchaînement vertical, pleine largeur, sans
+     cadre entre le générateur et sa sortie (§5.1). Le plafond est celui des
+     deux colonnes, pour que le passage d'une page à l'autre ne déplace pas les
+     bords de l'écran. */
+  .oppopage {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 1720px;
+    margin-inline: auto;
+  }
+  /* Le bandeau de type + circuit, au-dessus du premier bloc de la colonne. */
+  .banner-warn {
+    margin-bottom: 14px;
+  }
   .cols {
     display: grid;
     grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
@@ -1592,10 +1727,6 @@
      comprimer : en dessous d'environ 380 px elle ne sait plus afficher la bande
      jour/nuit ni les quatre valeurs de l'état de piste sur une ligne. La colonne
      unique se plafonne à son tour et reste centrée. */
-  /* Le plateau prend la rangée du dessous, sur les deux colonnes. */
-  .cols > :global(.grid-blk) {
-    grid-column: 1 / -1;
-  }
   @container session (max-width: 980px) {
     .cols {
       grid-template-columns: minmax(0, 1fr);

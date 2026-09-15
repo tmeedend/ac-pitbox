@@ -15,9 +15,12 @@
   // ensemble filtré : `Tirer N au hasard` **remplace** le plateau, et
   // `Choisir dans le vivier` — qui vit avec le plateau, en dessous — **ajoute**.
   //
-  // Le plateau lui-même est un bloc **frère** (`GridBlock`) et non un cadre
-  // imbriqué : ce sont deux objets, et c'est ce qui lui permet de prendre toute
-  // la largeur de l'écran sous les deux colonnes.
+  // Le plateau lui-même est **la suite de cette page** (`GridBlock`) et non un
+  // cadre imbriqué : le générateur est en haut, sa sortie en dessous, et rien
+  // ne les sépare (lot 5 §5.1). Une gouttière entre les deux rendait invisibles
+  // trois liens réels — la bannière de vivier explique le contenu du plateau,
+  // `Tirer au hasard` et `Régénérer` font des choses voisines, et la colonne
+  // « Force » réagit à un curseur hors de vue.
   import type { CardIndex, FilterDef, FilterMap } from "$lib/filters";
   import { chipAvailable, isChipOn, toggleChip, type ChipKind } from "$lib/opponentPool";
   import {
@@ -79,9 +82,10 @@
   }
 </script>
 
-<section class="blk oppo-blk">
-  <header class="blk-h"><span class="blk-t">{t("launch.opponentsLabel")}</span></header>
-  <div class="blk-b">
+<!-- Ni carte ni en-tête : le titre de l'écran dit déjà « Course · Adversaires »,
+     et un second cadre autour du générateur le détacherait du plateau qu'il
+     alimente. -->
+<div class="oppo-setup">
 
   <!-- The library's own filter bar, third consumer. The chips row below is not
        a second way of filtering: it poses tokens INTO this bar, which is why a
@@ -181,8 +185,7 @@
   {:else if poolCount === 0}
     <p class="warnbox thin">{t("launch.poolEmpty")}</p>
   {/if}
-  </div>
-</section>
+</div>
 
 <style>
   /* Three shortcuts under the token row, close enough to read as its

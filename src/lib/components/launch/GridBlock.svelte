@@ -2,16 +2,18 @@
   // Le **plateau** : une ligne par adversaire, ses cellules éditables, et les
   // deux gestes qui le sauvegardent.
   //
-  // **Un bloc à lui, frère du vivier et non son enfant.** Le plateau vivait
-  // dans un cadre à l'intérieur du cadre « Adversaires ». Les deux sont pourtant
-  // deux objets — c'est même toute la conception du §3.3 : le filtre définit le
-  // vivier, jamais le plateau, et il faut un geste explicite pour passer de l'un
-  // à l'autre. Deux cadres frères le disent mieux qu'un cadre imbriqué.
+  // **La sortie du générateur, pas son enfant.** Le plateau vivait dans un cadre
+  // à l'intérieur du cadre « Adversaires ». Les deux sont pourtant deux objets —
+  // c'est toute la conception du §3.3 : le filtre définit le vivier, jamais le
+  // plateau, et il faut un geste explicite pour passer de l'un à l'autre.
   //
-  // Et ça règle une question de mise en page : le plateau prend **une rangée à
-  // lui, sur toute la largeur**, sous les deux colonnes. Il gagne les ~700 px
-  // que la colonne de droite laissait vides sous la météo, sans jamais pouvoir
-  // la chevaucher — il commence après la plus haute des deux colonnes.
+  // Depuis le lot 5 les deux ont leur **page**, en pleine largeur, et plus aucun
+  // cadre entre eux : le générateur en haut, le plateau dessous, dans un seul
+  // enchaînement. La hauteur de la table est plafonnée à une dizaine de lignes
+  // avec défilement interne (§5.3) — c'est le seul défilement imbriqué autorisé
+  // dans l'app, et une table de données est précisément le composant pour lequel
+  // cette convention existe : sans lui, la hauteur de la page serait fonction du
+  // nombre d'IA, et le cas normal d'une course GT3 en aligne 24.
   //
   // Présentation seulement : la génération (`generateOpponents`, le cache de
   // livrées) reste dans `Launch.svelte`, qui la déclenche aussi d'ailleurs.
@@ -38,6 +40,7 @@
     poolCount,
     columns = $bindable(),
     nationalityList,
+    duplicateDrivers,
     onchoose,
     onregenerate,
     onremove,
@@ -59,6 +62,10 @@
     columns: string[];
     /** Les nationalités que le jeu connaît, avec leur drapeau. */
     nationalityList: Nationality[];
+    /** Deux pilotes sous la même identité (§1.9). Calculé par l'écran et non
+     * ici depuis que l'alerte doit aussi remonter sur l'entrée de navigation
+     * (lot 5 §1.3) : une seule source, deux lecteurs. */
+    duplicateDrivers: boolean;
     onchoose: () => void;
     onregenerate: () => void;
     onremove: (index: number) => void;
@@ -83,10 +90,14 @@
   // **No "how many fit" note.** §4.3 asks the menu to say how many more columns
   // the current width takes, which means measuring the grid in pixels — and a
   // pixel read back into a layout is precisely what the interface zoom breaks
-  // (§13). What the width does instead is squeeze the name column, which says
-  // the same thing without a number and without a legend: `⤢` gives the room
-  // back. Worth revisiting with a measurement whose zoom behaviour has been
-  // checked in the app.
+  // (§13). The dedicated page made the question moot: the table has the whole
+  // width, and the widen-in-place button it used to need went with it (lot 5
+  // §5.2).
+  //
+  // **Five columns at rest, not eight** (§5.4): the thumbnail, the car, the
+  // driver's name, the strength, and the two actions. `kg/bhp`, nationality,
+  // ballast and restrictor are things one goes looking for, not things one
+  // reads every time — they live behind this menu.
   const COLUMNS = $derived([
     { key: "car", label: t("columns.name"), fixed: true },
     { key: "ratio", label: t("launch.colRatio") },
@@ -138,21 +149,6 @@
   function autoNationality(opp: Opponent): string {
     return skinOf(opp)?.country ?? t("launch.autoCell");
   }
-
-  /** Deux pilotes sous la même identité (§1.9). La génération l'évite ; ceci
-   * n'attrape que ce que l'utilisateur a forcé à la main, et le dit plutôt que
-   * de le corriger dans son dos. */
-  const duplicateDrivers = $derived.by(() => {
-    const seen = new Set<string>();
-    for (const opp of setup.opponents) {
-      const sk = skinOf(opp);
-      const key = `${opp.driver_name ?? sk?.number ?? ""}|${opp.driver_name ?? sk?.driver ?? ""}`.trim().toLowerCase();
-      if (key === "|") continue;
-      if (seen.has(key)) return true;
-      seen.add(key);
-    }
-    return false;
-  });
 
   /** Lest et bride : 0 à 100, jamais d'`Auto` — « rien » s'y dit par 0. */
   const clamp100 = (v: string): number => Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
@@ -261,7 +257,7 @@
   }
 </script>
 
-<section class="blk grid-blk">
+<section class="grid-blk">
   <!-- Un problème de configuration qui appelle une action, donc le jaune est à
        sa place ici — contrairement à l'explication de la force, passée au ⓘ. Il
        vit avec le plateau, qui est ce qui le produit. -->
@@ -285,6 +281,10 @@
       >
     </div>
 
+    <!-- La table, et elle seule, défile (§5.3). L'en-tête de colonnes y est
+         collant : une ligne d'en-tête qui sort par le haut au bout de trois
+         lignes ne sert à rien. -->
+    <div class="oppo-rows">
     <!-- En-tête de colonnes seulement quand il y a plus que la voiture à
          nommer : sur trois colonnes, la ligne se lit sans légende. -->
     {#if headerNeeded}
@@ -435,6 +435,7 @@
         <button class="oppo-x" type="button" title={t("common.remove")} onclick={(e) => { e.stopPropagation(); onremove(i); }}>✕</button>
       </div>
     {/each}
+    </div>
     <!-- The pool count in the label is the point: it says what the filter
          bought — this many rows to read instead of the whole library. -->
     <button class="oppo-add" type="button" disabled={poolCount === 0} onclick={onchoose}
@@ -587,6 +588,24 @@
   .oppo {
     border: 1px solid var(--line);
   }
+  /* Une dizaine de lignes, puis on défile — la hauteur de la page cesse ainsi
+     d'être fonction du nombre d'IA (§5.3). Une ligne fait 58 px (vignette 45 +
+     deux fois 6 de marge + le filet). */
+  .oppo-rows {
+    max-height: 580px;
+    overflow-y: auto;
+  }
+  /* Collante : sans ça l'en-tête sort par le haut au bout de trois lignes, et
+     les colonnes optionnelles redeviennent des nombres sans nom.
+     Sélecteur descendant et non `.oppo-th` seul : la rangée porte AUSSI la
+     classe `.oppo-row`, qui se pose en `relative` — à spécificité égale c'est
+     l'ordre dans la feuille qui tranche, et il donnait « relative ». Constaté
+     à l'écran, l'en-tête partait par le haut. */
+  .oppo-rows .oppo-th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
   /* Couleur/taille/interlettrage/majuscules viennent de `.lbl` (global,
      harmonisation §chantier libellés) : ne reste ici que le fond en bandeau
      et l'annulation de la marge basse (`.lbl` en prévoit une pour une
@@ -674,11 +693,6 @@
   .oppo-row:hover .oppo-img {
     border-color: var(--faint2);
   }
-  /* Plafonnée en mode élargi (§2.4) : sans ce cap, la largeur gagnée allait
-     toute au nom, et l'écart entre lui et `Driver name` devenait assez grand
-     pour qu'on perde la ligne en la parcourant des yeux. Ce qu'on est venu
-     chercher en élargissant, ce sont des colonnes de plus, pas une colonne
-     plus large. */
   /* Plafonné : sans ça toute la largeur gagnée lui revient, et l'écart entre
      lui et le nom de pilote devient assez grand pour qu'on perde la ligne en la
      parcourant des yeux. La place restante va au vide en fin de ligne plutôt
@@ -699,9 +713,9 @@
     color: var(--muted);
   }
   /* Toutes les cellules optionnelles ont une largeur FIXE et le nom prend ce
-     qui reste : ajouter une colonne serre donc le nom, et c'est `⤢` qui lui
-     rend sa place. Aucune ne s'étire, sans quoi l'alignement d'une colonne à
-     l'autre se perdrait d'une ligne à la suivante. */
+     qui reste : ajouter une colonne serre donc le nom. Aucune ne s'étire, sans
+     quoi l'alignement d'une colonne à l'autre se perdrait d'une ligne à la
+     suivante. */
   .oppo-ratio {
     width: 52px;
     flex: none;

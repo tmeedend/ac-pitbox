@@ -729,10 +729,14 @@ et viennent du droit d'auteur, pas du goût : le texte n'est **jamais fondu**
 dans la description du mod — ce sont deux sous-onglets, donc deux blocs
 distincts — et il est affiché **tel que l'API le rend**, sans reformulation,
 résumé ni traduction. L'attribution en pied (titre, lien, licence CC BY-SA) est
-obligatoire. Le lien « Voir sur Wikipédia » ouvre le **navigateur système** et
-sert ce que le texte brut perd : infobox, tableaux, images, références.
+obligatoire. Le lien « Voir sur Wikipédia » ouvre le **navigateur système**,
+jamais une webview interne : elle casserait le mode hors ligne, imposerait la
+CSP du site et ferait perdre l'identité visuelle de l'app. Ce qu'il apporte
+n'est plus l'infobox ni les images — la fiche les montre — mais ce que la
+reconstruction laisse volontairement de côté : les références et leurs notes,
+la navigation vers les autres articles, et la version vivante de la page.
 
-L'enrichissement est **désactivable** (`wiki_online`, §12) : l'app interroge
+L'enrichissement est **désactivable** (`wiki_online`, §11) : l'app interroge
 Wikipédia à l'ouverture d'une fiche, ce qui révèle indirectement le contenu de
 la bibliothèque, et une partie du public joue délibérément hors ligne.
 Désactivé, aucune requête ne sort et le cache déjà constitué reste
@@ -1338,26 +1342,108 @@ pas bougé.
 
 Pas d'écran séparé de sélection : la voiture/le circuit sélectionnés dans la bibliothèque sont ceux de la session. La **colonne de session** montre en permanence le duo courant. La page « Démarrer une session » ne contient aucune sélection de voiture/circuit — seulement les réglages + Lancer.
 
-**La colonne répond à une seule question : *qu'est-ce que je lance ?*** Tout ce qui n'y répond pas en est sorti — les boutons de navigation dans le rail (§7.2), les trois menus de tenue dans l'écran Pilote (§9.5). Restent **deux blocs à l'anatomie strictement identique** — vignette, nom, source, puis les champs — et trois actions :
+**La colonne répond à une seule question : *qu'est-ce que je lance ?*** Tout ce qui n'y répond pas en est sorti — les boutons de navigation dans le rail (§7.2), les trois menus de tenue dans l'écran Pilote (§9.5). Restent **le type de session, qui est la navigation** (§9.1bis), **deux blocs à l'anatomie strictement identique** — vignette, nom, source, puis les champs — et deux actions :
 
 ```
 SESSION
+  Essais
+  Hotlap
+  Course                           ← sélectionné
+    Adversaires  6 IA · 87 % ± 3   ← sous-entrée, indentée, filet d'attache
+  Track day
+VOITURE
   [ vignette ]                     ← cliquable : ouvre la bibliothèque
   Porsche 718 Boxster S            ← cliquable, même zone
   Porsche · 2016
-  LIVRÉE   ▪ Miami Blue         ▾
-  PILOTE     Mon pilote         ›
+  LIVRÉE        ▪ Miami Blue    ▾
+  PILOTE          Mon pilote    ›
+  PERFORMANCE     D'origine     ▾  ← repli : lest, bride, ABS, antipatinage
 CIRCUIT
   [ vignette ]
   Imola
   Kunos
   LAYOUT     Imola — layout unique     (statique : une seule option)
   SKIN       Celui d'origine     ▾
-  [ PARAMÉTRAGE DE LA SESSION ]
   [ ▶ DÉMARRER LA SESSION      ]
   ─────────────────────────────
     ↗ Ouvrir Content Manager
 ```
+
+**La colonne ne doit jamais défiler**, et le cas à tenir est le plus chargé :
+Course sélectionnée, sous-entrée affichée, en 1920 × 1080. Deux dispositifs y
+suffisent — le repli `PERFORMANCE`, qui ramène quatre réglages à une ligne, et
+des **vignettes adaptatives** : sous le seuil de hauteur, la photo de voiture et
+le plan de circuit tombent à 68 px. Le seuil est une requête de **conteneur**
+(`container: sidecol / size`, 1020 px) et non de média : une requête de média
+interroge la fenêtre, que le zoom d'interface ne touche pas — à 150 %, une
+fenêtre de 1080 px n'offre plus que 720 px de mise en page et la règle ne se
+déclencherait pas. Le nombre est une mesure, pas une valeur ronde : la colonne
+la plus chargée fait un millier de pixels. **La liste des types ne se replie
+jamais** — c'est la seule chose de cette colonne qui ne soit pas négociable.
+
+#### 9.1bis Le type de session EST la navigation
+
+Les quatre types — Essais, Hotlap, Course, Track day — forment une liste en tête
+de la colonne, **toujours dépliée** : ils annoncent ce que l'application sait
+faire. Cliquer un type le sélectionne **et** ouvre ses réglages ; c'est ce
+double geste qui a remplacé le bouton `PARAMÉTRAGE DE LA SESSION` et le
+segmenté `TYPE DE SESSION` de l'écran de réglages, qui disaient la même chose à
+deux endroits sans qu'aucun ne dise ce que l'app savait faire.
+
+- **La sous-entrée `Adversaires`** ne paraît que sous Course et Track day, et
+  seulement quand ce type est sélectionné. En Essais et en Hotlap, la liste fait
+  quatre lignes.
+- **Elle porte une ligne de résumé** — `6 IA · 87 % ± 3`, le nombre d'IA puis la
+  difficulté en centre ± écart. Ce n'est pas un ornement : sans elle, on ne peut
+  plus savoir combien d'adversaires on affronte sans changer de page, alors
+  qu'on peut lancer la session sans y être allé.
+- **Les alertes de la page adversaires remontent sur l'entrée** — vivier trop
+  maigre pour le nombre demandé, deux pilotes sous la même identité : le résumé
+  passe en rouge et prend un marqueur. Une alerte sur une page qu'on ne regarde
+  pas ne vaut pas mieux que pas d'alerte.
+- **L'entrée parente sert de retour** depuis `Adversaires` : cliquer `Course`
+  ramène aux réglages sans changer de type. L'indentation seule ne dirait pas
+  « remontée » — c'est le **filet vertical** qui rattache la sous-entrée à son
+  parent qui le dit, et il passe au rouge quand elle est l'entrée retenue.
+  Compromis assumé de cette structure : le retour se fait en cliquant un type
+  déjà sélectionné. La solution de repli, si le geste ne se lit pas à l'usage,
+  est de rétablir une entrée `Paramétrage` distincte, au prix d'une ligne.
+- **Changer de type ne détruit jamais rien.** Passer de Course à Essais puis
+  revenir restitue l'intégralité des réglages Course, plateau compris — le type
+  décide de ce qui est **affiché** et de ce qui est **envoyé au jeu**, jamais de
+  ce qui est **mémorisé**. Quitter Course pour un type sans plateau referme
+  simplement la page adversaires.
+- **Une session est lançable sans avoir ouvert la page adversaires** : ouvrir un
+  type Course ou Track day vierge remplit le plateau au hasard (`fillGrid`).
+- Le type vit dans un **store partagé** (`sessionNav.svelte.ts`) et non dans
+  l'écran de réglages : la liste est à l'écran en permanence, l'écran de
+  réglages n'est monté que pendant qu'on le regarde. Même circulation à sens
+  unique que le lest et la bride — le store est la valeur vivante, l'écran la
+  recopie, et seul un **chargement** (son propre montage, une session
+  enregistrée) réécrit dans le store.
+
+#### 9.1ter Le repli `PERFORMANCE`
+
+Lest, bride, ABS et antipatinage sous **une ligne unique** de la carte voiture,
+au gabarit de `LIVRÉE` et `PILOTE`. Les deux assistances viennent de l'écran de
+réglages, où elles vivaient parmi les règles de la course : ce sont des
+**capacités de la voiture**, et le réglage n'existe que parce que la voiture les
+possède — ce que dit déjà la ligne « *Factory — la 1M a l'ABS et
+l'antipatinage* », qui les suit ici. La ligne idéale (§9.3) ne suit **pas** :
+elle n'est pas une capacité de la voiture mais une assistance d'affichage.
+
+**La ligne affiche toujours son état, repliée ou non** : rien n'est masqué,
+seulement rendu non modifiable — « absent » et « à zéro » ne doivent pas se
+ressembler. Le résumé vaut *D'origine* en gris italique quand rien n'est posé,
+et la liste des réglages non neutres en rouge sinon (`Lest 50 kg · Bride 10 %`,
+`ABS Off`) : le rouge au sens du barème (§7.2ter), un réglage qui change la
+course. ABS et antipatinage ne comptent comme posés que s'ils diffèrent de
+`Factory`.
+
+Le repli n'est pas mémorisé, et n'a pas à l'être : la ligne disant déjà tout,
+l'ouvrir ne révèle rien qu'on ne sache. Le chevron est `▾` et non le `›` de la
+maquette — dans cette colonne, `›` annonce une destination (l'écran Pilote) et
+`▾` un dépliement sur place.
 
 **L'intitulé d'un champ est une colonne, pas une ligne au-dessus.** Largeur fixe à gauche, valeur alignée à droite, la ligne restant à 30 px : **coût en hauteur zéro**, là où un intitulé posé au-dessus aurait coûté 14 px par champ pour le même service. Effet recherché : les valeurs s'alignent verticalement et la colonne se lit comme une fiche technique, pas comme une pile de menus. Cet alignement **est** tout l'intérêt du dispositif, donc la largeur est partagée par les quatre champs (variable CSS `--sess-lblw`) et **mesurée une fois par langue** — 60 px conviennent au français, l'allemand demande plus (`LACKIERUNG`), 88 px plafonnent et l'intitulé tronque au-delà. La mesure divise par `zoomFactor()` avant d'écrire, comme toute mesure de pixels qui repart dans un style (§13).
 
@@ -1432,26 +1518,64 @@ Le lancement vérifie donc la présence du process `steam.exe` (`launch::steam_r
 
 ### 9.3 Écran de réglages
 
-Maquette de référence `pitbox-reglages-session.html`. Pas de rappel du duo en haut (déjà dans la barre latérale) — titre + Lancer. Toutes les options visibles (pas de bloc replié). **Fond photo** derrière l'interface : voir §6.2 pour l'ordre de repli (screenshot du combo → screenshot du circuit → background officiel → fond neutre).
+Pas de rappel du duo en haut (déjà dans la barre latérale). Le titre **suit la
+navigation** : `Course`, puis `Course · Adversaires` (§9.1bis) ; `Enregistrer` et
+`Charger` restent à sa droite — ils portent sur toute la configuration, pas sur
+le type. **Fond photo** derrière l'interface : voir §6.2 pour l'ordre de repli
+(screenshot du combo → screenshot du circuit → background officiel → fond
+neutre).
+
+**Un réglage se range selon sa PORTÉE, jamais selon sa fréquence d'usage.**
+C'est le principe qui décide de tout placement sur cet écran, et le critère de
+fréquence est écarté explicitement : il envoie tout ce qui est rare au même
+endroit, et cet endroit devient un fourre-tout. Quatre zones, quatre objets :
+
+| Zone | Objet | Contenu |
+| --- | --- | --- |
+| Panneau gauche | la voiture et la piste | livrée, pilote, lest, bride, ABS, antipatinage |
+| Colonne centrale | la session et ses règles | durées, dégâts, carburant, usure, pénalités, ligne idéale, départ |
+| Rail droit | les conditions | météo, températures, vent, état de piste, heure, saison |
+| Page dédiée | les adversaires | filtres, générateur, plateau |
 
 **Communs à tous les types de session** — regroupés dans « Simulation » (dégâts,
-conso carburant, usure pneus, chauffe-pneus, puis en sous-rubrique aides à la
-conduite ABS/antipatinage/ligne) et dans « Options de session » (pénalités,
-puis pénalités) et dans le rail droit (état de la piste, §9.3quater) : ces
-réglages sont envoyés au preset Quick Drive quel que soit le type (`Penalties`
-figure dans les trois `ModeData` ; `TrackPropertiesData` et `AssistsData` sont au
-niveau racine du preset, pas dans `ModeData`), rien ne justifie de les cantonner
-à Course. Météo et heure, également communes. Lest et bride du joueur aussi, mais
-leur place est la carte voiture du panneau gauche (§9.3ter).
+conso carburant, usure pneus, puis chauffe-pneus, pénalités et ligne idéale sur
+une ligne de trois cases) et dans le rail droit (« Conditions », §9.3quater) :
+ces réglages sont envoyés au preset Quick Drive quel que soit le type
+(`Penalties` figure dans les trois `ModeData` ; `TrackPropertiesData` et
+`AssistsData` sont au niveau racine du preset, pas dans `ModeData`), rien ne
+justifie de les cantonner à Course. Lest, bride, ABS et antipatinage sont
+communs eux aussi, mais leur place est la carte voiture du panneau gauche
+(§9.1ter).
 
 **Options de session ne porte que ce qui dépend du type** : départ en Practice ;
-ghost car et son avance en Hotlap ; tours, faux départ, position de départ,
-qualification et essais libres en Course ; faux départ en Track day. Le bloc a
-longtemps eu **deux zones**, la droite portant l'évolution du grip et les
-pénalités pour qu'elles restent à la même place dans les quatre types. Les deux
-en sont sorties — le grip vers le rail droit (§9.3ter), les pénalités vers
-Simulation — et la seconde zone avec elles : ce qu'elle protégeait est obtenu
-mieux en sortant du bloc ce qui n'y dépend de rien.
+ghost car et son avance en Hotlap ; tours, durées de qualification et d'essais
+libres, faux départ et position de départ en Course ; faux départ en Track day.
+Le bloc a longtemps eu **deux zones**, la droite portant l'évolution du grip et
+les pénalités pour qu'elles restent à la même place dans les quatre types. Les
+deux en sont sorties — le grip vers le rail droit (§9.3quater), les pénalités
+vers Simulation — et la seconde zone avec elles : ce qu'elle protégeait est
+obtenu mieux en sortant du bloc ce qui n'y dépend de rien.
+
+**Les durées : trois champs du même gabarit, et une valeur à 0 désactive sa
+séance.**
+
+```
+TOURS  [  5 ]      QUALIFICATION  [ 10 ] min      ESSAIS LIBRES  [ 20 ] min
+```
+
+Les deux cases à cocher ont disparu. Une case et une durée étaient un seul
+contrôle dessiné en deux, et la paire portait une règle à elle — griser le
+champ, conserver la valeur au décochage — qu'un champ unique rend sans objet :
+il n'y a plus rien à griser, et la valeur qu'on retrouve est celle qui est à
+l'écran. Un `0` s'affiche **éteint**, une valeur non nulle en blanc. Les
+booléens restent dans `RaceSetup` — ce sont eux qui choisissent le mode de
+Content Manager — mais ils se **déduisent** des durées. Les essais libres
+n'existant que dans le mode Weekend, celui que porte la qualification, leur
+champ est éteint tant que la qualification vaut 0 et dit pourquoi.
+
+**Un bloc peut prendre la largeur disponible ; ses contrôles internes gardent
+leur gabarit et restent calés à gauche.** Un curseur de 900 px pour un réglage
+qu'on pose au pourcentage près est une régression, pas un gain.
 
 **Un champ sans objet dans le type courant est retiré, jamais grisé.** Le grisé
 est réservé aux **dépendances internes** — une case décochée éteint sa durée, la
@@ -1461,9 +1585,12 @@ neutralise. Dans les deux cas la valeur est **conservée** : décocher puis
 recocher retrouve ce qui avait été réglé.
 
 **Ordre des blocs de la colonne centrale, invariant dans les quatre types** :
-Type de session, Options de session, Simulation, puis Adversaires. Toute la
-variabilité est donc en bas : rien de ce qui bouge ne se trouve au-dessus de ce
-qui ne bouge pas.
+Options de session, puis Simulation. Le bloc « Type de session » a disparu — le
+type est la navigation de la colonne de gauche (§9.1bis) — et les adversaires
+ont leur page (§9.3ter). Le seul bandeau qui puisse s'ajouter en tête est
+l'avertissement « ce circuit n'est pas catégorisé comme circuit fermé », posé au
+niveau de la page parce que c'est le couple type + circuit qui est en cause, pas
+un réglage.
 
 **Position de départ** (Course uniquement) : quatre segments — Au hasard, 1er,
 2e, Dernier — placés juste après le faux départ. Au hasard par défaut, et le
@@ -1472,7 +1599,7 @@ preset, où la taille du plateau est connue pour de bon : « Dernier » vaut
 `adversaires + 1`, le joueur comptant pour une voiture.
 
 **Écart assumé avec Content Manager, à ne pas « corriger » par mégarde.**
-Cocher la qualification neutralise la position de départ — la grille vient alors
+Une qualification non nulle neutralise la position de départ — la grille vient alors
 des résultats de qualif. Chez CM le contrôle est purement **absent** dans ce
 cas : relevé dans son binaire, il n'est lié que dans la vue `QuickDrive_Race`,
 et `QuickDrive_Weekend` — celle qui porte la qualification — n'en a aucune
@@ -1483,13 +1610,9 @@ on coche une case voisine se lit comme un bug ; éteint, il dit ce qui le
 neutralise. C'est la règle des dépendances internes ci-dessus, et elle prime
 ici sur l'alignement sur CM.
 
-**Case et durée sont un seul contrôle** pour la qualification comme pour les
-essais libres : cadre unique, la durée décrochée à droite de la case. Décochée,
-le cadre entier s'éteint et la durée devient inerte — elle reste lisible (on y
-revient) au lieu de disparaître, ce qui obligeait à recocher pour savoir ce
-qu'on avait mis, ou de rester éditable sans effet.
-
-**Les aides au pilotage ont trois états, pas deux** : `Off` / `Factory` / `On`,
+**Les aides au pilotage ont trois états, pas deux** — elles vivent depuis le
+lot 5 dans le repli `PERFORMANCE` de la carte voiture (§9.1ter), leur règle
+restant celle-ci : `Off` / `Factory` / `On`,
 le vocabulaire d'Assetto Corsa lui-même — et ses valeurs, relevées sur un
 fichier livré par le jeu (`launcher/themes/default/index.html` :
 `data-slidervalues="0,1,2"` en face de `data-slidertextvalues="Off,Factory,On"`,
@@ -1510,7 +1633,7 @@ info-bulles expliquent. La ligne idéale reste une case — elle n'a que deux
 > `setup`), pas sur le preset courant seul.
 
 **Ce que `Factory` vaut pour la voiture en session** se lit sous les deux
-segmentés : « *Factory — la Ford Mustang Mach 1 428 n'a ni ABS ni
+segmentés, dans le repli `PERFORMANCE` du panneau gauche (§9.1ter) : « *Factory — la Ford Mustang Mach 1 428 n'a ni ABS ni
 antipatinage.* » C'est la troisième chose que Pit Box sait et que Content
 Manager ne montre pas, après le vivier et les sessions enregistrées : CM
 affiche trois valeurs opaques, l'app lit les specs de la voiture. La présence
@@ -1536,7 +1659,7 @@ aide la voiture possède au lieu de répondre oui ou non.
 
 **Course et Track day** (absents des schémas Quick Drive Practice/Hotlap : pas de
 grille, pas de phase weekend) :
-- **Adversaires** : le vivier est **un filtre**, celui de la bibliothèque, posé en ligne dans le bloc (§9.3bis). Trois onglets (Même voiture / Par catégorie / Libre) faisaient ce travail avant lui et le faisaient moins bien : ils ne savaient pas combiner, et ils doublaient une barre de filtres qui existait déjà — c'est ce doublon qui obligeait à des règles de réconciliation entre l'onglet et les jetons.
+- **Adversaires** : une **page dédiée**, atteinte par la sous-entrée de la liste des types (§9.1bis). Le vivier y est **un filtre**, celui de la bibliothèque (§9.3bis). Trois onglets (Même voiture / Par catégorie / Libre) faisaient ce travail avant lui et le faisaient moins bien : ils ne savaient pas combiner, et ils doublaient une barre de filtres qui existait déjà — c'est ce doublon qui obligeait à des règles de réconciliation entre l'onglet et les jetons.
 - Faux départ, pénalités — communs à Course et Track day. **Tours** : Course uniquement — envoyé dans le `ModeData` de Track day aussi (schéma confirmé sur un preset CM réel), mais sans effet en jeu : une session Track day ne se termine jamais sur un décompte de tours (testé).
 
 ### 9.3bis Le vivier, le plateau, et les deux gestes entre les deux
@@ -1706,34 +1829,45 @@ une ligne `Auto` n'aurait rien voulu dire, puisque c'est précisément dedans qu
 le jeu tire. `AiLevel` est le **haut** de la fourchette et `AiLevelMin` le bas,
 relevé sur un preset réel.
 
-**Colonnes** : voiture + livrée (fixe, c'est la ligne elle-même), kg/bhp et
-force par défaut ; nom de pilote, nationalité, lest et bride s'ajoutent par le
-**même menu que la vue tableau de la bibliothèque**, composant compris. Le lest
-et la bride n'ont pas d'`Auto` : « rien » s'y dit par 0, comme dans le preset.
-Les en-têtes distinguent les colonnes éditables des colonnes en lecture seule
-par les **deux gris** de l'app, sans en introduire un troisième.
+**Colonnes** : voiture + livrée (fixe, c'est la ligne elle-même), nom de pilote
+et force par défaut ; kg/bhp, nationalité, lest et bride s'ajoutent par le
+**même menu que la vue tableau de la bibliothèque**, composant compris. Huit
+colonnes au repos, c'était trop : les quatre optionnelles sont des choses qu'on
+va chercher, pas qu'on lit à chaque coup d'œil. Le lest et la bride n'ont pas
+d'`Auto` : « rien » s'y dit par 0, comme dans le preset. Les en-têtes
+distinguent les colonnes éditables des colonnes en lecture seule par les **deux
+gris** de l'app, sans en introduire un troisième.
 
-**Le plateau est un bloc à lui, frère du vivier et non son enfant.** Il vivait
-dans un cadre à l'intérieur du cadre « Adversaires ». Les deux sont pourtant
-deux objets — c'est toute la conception ci-dessus : le filtre définit le vivier,
-jamais le plateau, et il faut un geste explicite pour passer de l'un à l'autre.
-Deux cadres frères le disent mieux qu'un cadre imbriqué, et le plateau avait
-déjà son en-tête et son pied.
+**Le vivier et le plateau ont leur page, et rien ne les sépare.** Dans l'ordre :
+filtres, contraintes, générateur, bannières d'alerte, plateau — un seul
+enchaînement, pleine largeur, sans césure de carte. Le bloc du haut configure un
+générateur, le plateau en est la **sortie** ; séparés par une gouttière, trois
+liens réels devenaient invisibles — la bannière de vivier explique le contenu du
+plateau, `Tirer au hasard` et `Régénérer` font des choses voisines, et la
+colonne « Force » réagit à un curseur hors de vue. `PLATEAU · N IA` est un
+sous-titre à l'intérieur de la page, avec `Colonnes` et `Régénérer` sur la même
+ligne.
 
-**Il prend une rangée à lui, sur toute la largeur**, sous les deux colonnes. En
-colonne de gauche, il laissait ~700 px vides à droite dès que la météo
-s'arrêtait. En rangée 2, il commence après la **plus haute** des deux colonnes :
-il ne peut donc jamais chevaucher le rail, ce qu'une pleine largeur posée en
-rangée 1 aurait fait. Le vide résiduel passe sous la colonne la plus courte, et
-le vivier ayant rejoint la gauche, c'est en général le rail.
+**La hauteur de la table est plafonnée** à une dizaine de lignes, avec
+**défilement interne** et ligne d'en-tête figée : la hauteur de la page cesse
+ainsi d'être fonction du nombre d'IA — le cas normal d'une course GT3 en aligne
+24. C'est le **seul défilement imbriqué autorisé** dans l'application : une table
+de données est précisément le composant pour lequel cette convention existe.
+
+> Piège de mise en œuvre, constaté à l'écran : la rangée d'en-tête porte aussi
+> la classe des lignes, qui se pose en `position: relative`. À spécificité
+> égale, c'est l'ordre dans la feuille qui tranchait — et il donnait `relative`,
+> donc un en-tête qui sortait par le haut au bout de trois lignes.
 
 **Il n'y a pas de mode « plateau élargi ».** Un bouton `⤢` a existé : il donnait
 au plateau toute la largeur du contenu en faisant passer la colonne de droite
-dessous. Retiré après l'avoir vu — les autres blocs restaient plafonnés et calés
-à gauche pendant que le plateau partait plein écran, et deux régimes de largeur
-dans un même écran se voient plus qu'ils ne servent. Qui manque de place retire
-une colonne : le menu est à un clic, et c'est le même geste que dans la
-bibliothèque.
+dessous. La page dédiée rend l'élargissement en place sans objet — la table a
+déjà toute la largeur. Qui manque de place retire une colonne : le menu est à un
+clic, et c'est le même geste que dans la bibliothèque.
+
+**Ce qui ne migre pas sur cette page** : dégâts, carburant, usure, pénalités et
+ligne idéale restent sur la page de réglages. Ce sont les règles de la course,
+pas les adversaires.
 
 **Le nom est plafonné** : sans quoi la largeur gagnée y va toute, et l'écart
 entre lui et le nom de pilote devient assez grand pour qu'on perde la ligne en la
@@ -1770,31 +1904,38 @@ et le jeu en reçoit une autre. Le stockage est centre + écart ; presets par ty
 et sessions enregistrées d'avant ce modèle sont **convertis**, jamais repliés
 sur le défaut.
 
-**Lest et bride du joueur** : dans la carte voiture du panneau gauche, au
-gabarit de Livrée et Pilote mais **sans chevron** — celles-là ouvrent un
-sélecteur, celles-ci s'éditent sur place. Leur place n'est pas dans les options
-de session parce qu'elles valent pour les quatre types, alors que tout le
-contenu de ce bloc en dépend ; ça ne les sort pas de la configuration
-enregistrée pour autant. Zéro s'affiche éteint, toute autre valeur en rouge,
-pour qu'un handicap oublié se voie sans lire la ligne. Ils partent dans le
-preset des quatre types — au niveau de la grille pour une course, dans le
+**Lest et bride du joueur** : dans la carte voiture du panneau gauche, sous le
+repli `PERFORMANCE` (§9.1ter). Leur place n'est pas dans les options de session
+parce qu'elles valent pour les quatre types, alors que tout le contenu de ce
+bloc en dépend ; ça ne les sort pas de la configuration enregistrée pour autant.
+Zéro s'affiche éteint, toute autre valeur en rouge, pour qu'un handicap oublié
+se voie sans lire la ligne — et le résumé du repli le redit, la ligne affichant
+toujours son état. Ils partent dans le preset des quatre types — au niveau de la grille pour une course, dans le
 `ModeData` pour les modes solo, les deux emplacements relevés sur des presets
 réels.
 
-### 9.3quater État de piste — un bloc du rail droit
+### 9.3quater Les conditions — un bloc unique du rail droit
 
-**Le rail droit porte les conditions de course, et rien d'autre** : l'état de la
-piste puis la météo, identiques dans les quatre types de session. C'est lui qui
-donne à l'écran sa silhouette constante pendant que la colonne centrale grandit
-ou rétrécit. En Practice, où cette colonne est courte, le rail porte l'essentiel
-du réglage — on est seul en piste, la météo et l'état de la piste *sont* la
-session. Le déséquilibre est donc un signal juste : rien n'est centré
-verticalement, aucun espace n'est réservé, et le nombre de colonnes ne change
-pas avec le type.
+**Le rail droit porte les conditions de course, et rien d'autre**, identiques
+dans les quatre types de session. C'est lui qui donne à l'écran sa silhouette
+constante pendant que la colonne centrale grandit ou rétrécit. En Practice, où
+cette colonne est courte, le rail porte l'essentiel du réglage — on est seul en
+piste, la météo et l'état de la piste *sont* la session. Le déséquilibre est
+donc un signal juste : rien n'est centré verticalement, aucun espace n'est
+réservé, et le nombre de colonnes ne change pas avec le type.
 
-**Les deux blocs sont voisins par nécessité**, pas par commodité de mise en
-page : l'entrée `Auto (set by weather)` de l'état de piste n'a de sens qu'à côté
-de la météo qui la pilote. Ne rien intercaler entre eux.
+**Un seul bloc `CONDITIONS`, un seul en-tête**, dans cet ordre : les huit tuiles
+météo, la rangée air / piste / vent, l'état de piste, l'heure, la saison.
+`ÉTAT DE PISTE` et `MÉTÉO` ont été deux cartes, et ce n'en a jamais été deux :
+la première entrée de l'état de piste est « Auto (posé par la météo) », et une
+entrée qui nomme sa voisine ne se lit que si cette voisine est sous les yeux.
+Elles n'étaient pas voisines par commodité de mise en page — elles ne faisaient
+qu'un. Rien ne s'intercale entre elles.
+
+**L'heure et la bande jour/nuit sont un seul contrôle** : la bande est posée
+directement sous le curseur, poignée alignée sur la sienne, et elle en est la
+légende. La date affichée à sa droite a été retirée — elle doublait le champ
+`Date` du bloc saison.
 
 **Un select, et les quatre vraies valeurs sous lui.** Sept lignes nommées
 coûtaient la hauteur du bloc météo pour un réglage qu'on choisit une fois, et
@@ -1809,7 +1950,21 @@ d'énumération.** L'écran ne connaît plus la liste, il la reçoit — et c'es
 qui a permis d'y ajouter les presets de Content Manager sans rien changer à
 l'écran. `Auto` n'est pas un état mais le drapeau `WeatherDefined` : ses quatre
 valeurs sont celles de Green, sur lesquelles le jeu retombe quand la météo ne
-dit rien de la piste, et la ligne le dit.
+dit rien de la piste, et **une seule phrase le dit** — la mention de repli, en
+gris. La description que le jeu donne à cette entrée (« *Track state specified
+by weather, or Green…* ») disait mot pour mot la même chose, en blanc, juste
+au-dessus : deux phrases pour un même repli se lisaient comme deux règles.
+
+> **Ses quatre valeurs sont celles de Green, `INITIAL GRIP` compris.** Le champ
+> a porté 0 %, qui est la sentinelle du réglage hérité (`RaceSetup::grip`) et
+> non un grip. Ça se voyait deux fois : la liste annonçait 95 % et l'écran
+> affichait 0, et surtout — l'état voyageant désormais **entier** depuis
+> l'écran (§9.3quater-bis) — ce 0 partait tel quel dans le preset, donc une
+> session « Auto » dont la météo ne disait rien de la piste roulait sur une
+> piste à 0 % d'adhérence là où Content Manager écrit du vert. Ce qui identifie
+> « Auto » est le drapeau `weather_defined`, jamais le grip ; la sentinelle
+> reste dans `grip`, qui n'est plus relu que pour les configurations
+> antérieures à ce modèle.
 
 **Deux groupes, et les natifs ne sont jamais masqués.** Les presets d'état de
 piste que l'utilisateur a créés dans Content Manager s'ajoutent **après** les
@@ -2090,9 +2245,21 @@ Ce n'est un déchet que si le parent ne revient jamais. Ils sont donc **listés 
 
 **Trois bases/fichiers distincts** : bibliothèque (fichiers), base d'overlay SQLite (métadonnées), fichier de règles (ontologie), plus le fichier de config (chemins + préférences).
 
-**Préférences persistantes** : affichage des tags du fichier mod (masquables), état du panneau de suivi (global), vue bibliothèque + colonnes (par type), presets de session (par type), preset CM graphique/FFB par défaut, décor de l'aperçu 3D natif (§9.4), **aperçu 3D intégré affiché ou non sur la fiche voiture** (défaut affiché — §9.4), regroupement des skins (archive/voiture), extraction des fichiers annexes (Aucun / Informations seulement / Tout — §4.5.2), **conservation de l'archive source** (défaut désactivé — §10), **mode de déploiement** (hardlink/symlink, défaut hardlink — §2), **zoom du mode Big Picture** (§16, distinct du zoom normal — `None` reprend ce dernier).
+**Préférences persistantes** : affichage des tags du fichier mod (masquables), état du panneau de suivi (global), vue bibliothèque + colonnes (par type), presets de session (par type), preset CM graphique/FFB par défaut, décor de l'aperçu 3D natif (§9.4), **aperçu 3D intégré affiché ou non sur la fiche voiture** (défaut affiché — §9.4), regroupement des skins (archive/voiture), extraction des fichiers annexes (Aucun / Informations seulement / Tout — §4.5.2), **conservation de l'archive source** (défaut désactivé — §10), **mode de déploiement** (hardlink/symlink, défaut hardlink — §2), **zoom du mode Big Picture** (§16, distinct du zoom normal — `None` reprend ce dernier),
+**enrichissement Wikipédia** (`wiki_online`, défaut activé — §6.3) et sa **langue de
+lecture** (automatique par défaut : la langue de l'app, puis la chaîne de repli).
 
-**Écran Réglages en onglets** (Général / Chemins / Aperçu 3D / Musique) depuis le mode Big Picture (§16) — Général et Chemins partagent `AppConfig` et sa garde de navigation (§10bis) ; Aperçu 3D et Musique ont chacun leur propre stockage et **s'appliquent sans bouton Enregistrer** (`ui_prefs.json` pour l'un, `music.json` pour l'autre). L'onglet **Import** n'est plus ici : ses deux préférences vivent au pied de l'écran `Atelier › Importer` (§7.2quater).
+**Écran Réglages en onglets** (Général / Chemins / Aperçu 3D / Vignettes / Musique / Wikipédia) depuis le mode Big Picture (§16) — Général et Chemins partagent `AppConfig` et sa garde de navigation (§10bis) ; Aperçu 3D et Musique ont chacun leur propre stockage et **s'appliquent sans bouton Enregistrer** (`ui_prefs.json` pour l'un, `music.json` pour l'autre). L'onglet **Import** n'est plus ici : ses deux préférences vivent au pied de l'écran `Atelier › Importer` (§7.2quater).
+
+**Onglet Wikipédia** (`components/settings/WikiTab.svelte`) : l'interrupteur de
+l'enrichissement et son motif (§6.3), la langue de lecture, la **purge du cache**
+d'articles, et l'**export des corrections manuelles**. Ce dernier n'exporte que
+les liens `manual` — jamais ceux que l'appariement automatique a posés : un
+appariement `auto` figé dans un fichier livré deviendrait un `import`, qui prime
+sur `auto`, et gèlerait donc l'algorithme d'aujourd'hui par-dessus tout moteur
+meilleur à venir. Les seuils d'appariement, eux, ne sont **pas** à l'écran : ce
+sont des paramètres de `Prefs` (`wiki_match_*`, `wiki_track_*`) qu'on règle par
+la mesure, pas au jugé.
 
 **Onglet Aperçu** (`components/settings/PreviewTab.svelte`) : **il porte son propre aperçu 3D**, en haut, et c'est ce qui justifie que les treize curseurs y soient — on règle en voyant le résultat. La voiture montrée est celle de la session en cours, à défaut la première de la bibliothèque. La fiche voiture, elle, n'en garde qu'un raccourci : son panneau compact ne tenait que cinq curseurs sur treize. Réglages de l'aperçu 3D intégré (§9.4), en **deux colonnes assignées** : sous l'aperçu, ce qu'on regarde en même temps que lui — **Rendu**, **Éclairage**, **Sol** ; à sa droite, ce qu'on manipule le plus — **Cadrage**, puis **Cache**, seul bloc qui efface des fichiers pour de bon et donc placé en dernier. Les colonnes sont assignées et non laissées au flux du navigateur : celui-ci répartissait les cartes comme il voulait, et le bloc le plus utilisé tombait où il tombait. *Rendu* : affichage de l'aperçu, **pilote au volant** (Toujours / Au démarrage du moteur / Jamais), **braquage**, qualité (Standard / Élevée) et effet d'entrée du plateau (Aucun / Progressif / Lancé). *Cadrage* : affiché ou non sur les fiches (même réglage que la bascule de la zone héros), zoom, orientation, angle de plongée, hauteur de caméra, **focale** et vitesse du plateau tournant. La focale recalcule la distance pour que la voiture garde sa taille dans le cadre : elle ne change que la perspective, le zoom restant ce qui recadre. *Éclairage* : exposition et intensité des rampes du studio. *Sol* : **reflet de la voiture** (intensité, flou, portée), flaque de lumière et ombre portée. Chaque groupe porte son propre bouton de remise à zéro, qui ne touche qu'à lui. *Cache* : plafond du cache d'aperçus (0,5 à 20 Go, défaut 2 Go), taille réellement occupée, et un bouton qui vide le cache. **Comme l'onglet Général, rien ne s'enregistre tout seul** : les réglages s'appliquent à l'aperçu mais n'atteignent le disque qu'au clic sur Enregistrer, un bouton Annuler revient sur l'enregistré, et quitter l'écran avec des changements en attente demande quoi en faire. Seule exception, la bascule photo/3D de la fiche voiture, qui est un interrupteur d'un clic. Baisser le plafond évince tout de suite, sans attendre la prochaine conversion. La qualité ne touche **que** le rendu : en changer n'invalide aucune entrée de cache. Les curseurs eux-mêmes sont dans `components/detail/Preview3dControls.svelte`, **partagé avec le panneau posé sur la fiche voiture** : on les règle là où on voit le résultat, on les retrouve ici avec leur mode d'emploi. Les valeurs par défaut sont celles mesurées sur les `preview.jpg` de Kunos, pour que la bascule photo/3D ne saute pas à l'œil (trois-quarts avant gauche, vue basse — détail dans `SPEC-preview-3d-kn5.md` §15), et un changement s'applique à une fiche déjà ouverte sans recharger son modèle.
 

@@ -43,7 +43,6 @@
     "noCarDetected": "Nessuna auto rilevata",
     "noTrackDetected": "Nessun circuito rilevato",
     "checkPaths": "Verifica il percorso d'installazione",
-    "configure": "CONFIGURAZIONE DELLA SESSIONE",
     "start": "▶ AVVIA LA SESSIONE",
     "carTooltip": "Clic: libreria auto · doppio clic: scheda dettagli",
     "trackTooltip": "Clic: libreria circuiti · doppio clic: scheda dettagli",
@@ -615,7 +614,6 @@
     "specRange": "Autonomia"
   },
   "launch": {
-    "pageTitle": "Configurazione della sessione",
     "savedSessionsLabel": "Sessioni salvate",
     "saveSession": "⤒ Salva",
     "saveSessionTitle": "Salva la sessione",
@@ -629,10 +627,6 @@
     "loadWarnTrackSkinsFailed": "Skin del circuito non ripristinati: {error}",
     "overwriteConfirm": "« {name} » esiste già. Sovrascrivere?",
     "overwriteConfirmBtn": "Sovrascrivi",
-    "typePractice": "Prove libere",
-    "typeHotlap": "Hotlap",
-    "typeRace": "Gara",
-    "typeTrackday": "Track day",
     "launchSuccess": "Sessione inviata a Content Manager — Assetto Corsa si sta avviando…",
     "steamRequiredTitle": "Steam non è in esecuzione",
     "steamRequiredBody": "Assetto Corsa si avvia tramite Steam. Avvia Steam, accedi, poi conferma qui per continuare.",
@@ -658,7 +652,6 @@
     "fuelLabel": "Consumo di carburante",
     "tyreLabel": "Usura delle gomme",
     "laps": "Giri (o durata in minuti)",
-    "weather": "Meteo",
     "wxClear": "Sereno",
     "wxFewClouds": "Poco nuvoloso",
     "wxOvercast": "Coperto",
@@ -699,10 +692,8 @@
     "gripEvolution": "Evoluzione del grip",
     "qualifying": "Qualifiche",
     "freePractice": "Prove libere",
-    "assistsLabel": "Aiuti alla guida",
     "idealLine": "Traiettoria ideale",
     "tyreBlankets": "Termocoperte",
-    "sessionTypeLabel": "Tipo di sessione",
     "trackNotCircuitWarning": "Questo tracciato non è classificato come circuito chiuso: un hotlap o una gara partiranno comunque, ma senza un giro da chiudere non ci saranno tempi sul giro né classifica utilizzabili."
   },
   "config": {

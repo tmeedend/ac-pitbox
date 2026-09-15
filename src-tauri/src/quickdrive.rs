@@ -168,10 +168,19 @@ const WEATHER_STATE: TrackState = TrackState {
 /// L'entrée « Auto » telle que l'écran la lit (§2.2) : ses quatre valeurs sont
 /// celles de Green, puisque c'est sur elles que le jeu retombe quand la météo
 /// ne dit rien de la piste.
+///
+/// **`start` porte bien 95 et non la sentinelle.** Il l'a portée, et ça se
+/// voyait deux fois : l'écran affichait `INITIAL GRIP 0 %` pour une entrée que
+/// la liste annonce à 95, et surtout l'état voyageant désormais **entier**
+/// depuis l'écran (§4.7), ce 0 partait tel quel dans le preset — une session
+/// « Auto » dont la météo ne dit rien de la piste roulait donc sur une piste à
+/// 0 % d'adhérence au lieu du vert que Content Manager écrit. La sentinelle
+/// reste ce qu'elle a toujours été, un réglage d'avant ce modèle (`RaceSetup::
+/// grip`) ; ce qui identifie « Auto » ici, c'est `weather_defined`.
 pub fn weather_state_option() -> crate::commands::trackstate::TrackStateOption {
     crate::commands::trackstate::TrackStateOption {
         origin: "builtin".into(),
-        start: GRIP_WEATHER,
+        start: WEATHER_STATE.start,
         name: WEATHER_STATE.name.to_string(),
         transfer: WEATHER_STATE.transfer,
         randomness: WEATHER_STATE.randomness,
@@ -863,6 +872,33 @@ mod tests {
         assert_eq!(track["s"], 0.95);
         assert_eq!(track["t"], 0.9);
         assert_eq!(track["r"], 0.02, "2 % et non 2");
+    }
+
+    /// §4.7 + lot 5 §4.1 — l'état « Auto » voyageant entier depuis l'écran, ses
+    /// quatre nombres sont ceux de Green et non la sentinelle : c'est le repli
+    /// que Content Manager écrit, et c'est ce que le jeu roulera si la météo ne
+    /// dit rien de la piste. Bug réel : `s` partait à 0.
+    #[test]
+    fn the_weather_state_carried_from_the_screen_still_falls_back_on_green() {
+        let auto = weather_state_option();
+        assert_eq!(auto.start, 95, "les quatre valeurs sont celles de Green");
+        assert!(auto.weather_defined, "c'est le drapeau qui identifie Auto, pas le 0");
+
+        let mut s = base_setup(SessionType::Practice);
+        s.track_state = Some(crate::launch::TrackStateRef {
+            origin: auto.origin.clone(),
+            name: auto.name.clone(),
+            start: auto.start,
+            transfer: auto.transfer,
+            randomness: auto.randomness,
+            lap_gain: auto.lap_gain,
+            weather_defined: auto.weather_defined,
+            description: Some(auto.description.clone()),
+        });
+        let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
+        let track: Value = serde_json::from_str(v["TrackPropertiesData"].as_str().unwrap()).unwrap();
+        assert_eq!(track["w"], true, "drapeau posé");
+        assert_eq!(track["s"], 0.95, "repli sur Green, jamais 0");
     }
 
     /// Un preset enregistré avant que la liste ne s'aligne sur celle du jeu

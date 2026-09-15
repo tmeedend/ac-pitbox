@@ -1,9 +1,8 @@
 <script lang="ts">
   // "Session options" block of the launch screen (§8.4/§8.6): the settings
-  // whose content depends on the chosen session type, plus the two that never
-  // do (grip evolution, penalties). Pure presentation: everything is a direct
-  // read/write of `setup` (state shared with the parent, §8.6bis) — no logic
-  // to lift up.
+  // whose content depends on the chosen session type. Pure presentation:
+  // everything is a direct read/write of `setup` (state shared with the
+  // parent, §8.6bis) — no logic to lift up.
   import { type RaceSetup, type StartMode } from "$lib/launch";
   import { t } from "$lib/i18n/index.svelte";
   import NumberStepper from "../NumberStepper.svelte";
@@ -12,14 +11,31 @@
 
   let { setup }: { setup: RaceSetup } = $props();
 
-  // Free practice only exists in CM's Weekend mode — the very one that carries
-  // qualifying. Without qualifying the preset falls back to the plain race
-  // mode, where no preparatory phase exists (§9.3): leaving it tickable would
-  // show a setting with no effect in game.
-  function toggleQualifying(on: boolean) {
-    setup.qualify_enabled = on;
-    if (!on) setup.practice_enabled = false;
+  // --- Durations: a value of 0 turns its phase off (lot 5 §3.1) -------------
+  //
+  // The two tick boxes are gone. A tick and a duration were one control drawn
+  // as two, and the pair carried a rule of its own — grey the field out, keep
+  // the value when unticked — that a single field makes moot: there is nothing
+  // left to grey out, and the value one comes back to is the one on screen.
+  //
+  // The booleans stay in `RaceSetup`: they are what picks Content Manager's
+  // mode (`QuickDrive_Weekend` carries qualifying, `QuickDrive_Race` does not),
+  // so they are derived from the minutes rather than typed by hand.
+  function setQualifyMinutes(v: number) {
+    setup.qualify_minutes = v;
+    setup.qualify_enabled = v > 0;
+    // Free practice only exists in the Weekend mode — the very one qualifying
+    // carries. Without qualifying it has nowhere to happen, so it follows.
+    if (v === 0) setup.practice_enabled = false;
+    else setup.practice_enabled = setup.practice_minutes > 0;
   }
+  function setPracticeMinutes(v: number) {
+    setup.practice_minutes = v;
+    setup.practice_enabled = v > 0 && setup.qualify_minutes > 0;
+  }
+  /** Free practice has no effect at all without qualifying: the field says so
+   * rather than accepting a value that goes nowhere. */
+  const practiceUnavailable = $derived(setup.qualify_minutes === 0);
 
   // --- Starting position (§2.6) ---------------------------------------------
   //
@@ -29,28 +45,24 @@
   // carries qualifying, has no such binding at all. When a qualifying session
   // precedes the race, the grid comes from its results.
   //
-  // Dimmed rather than removed, because this is an internal dependency (a box
-  // ticked here) and not a setting without meaning in this session type — the
-  // same rule that dims a duration under an unticked phase.
+  // Dimmed rather than removed, because this is an internal dependency (a
+  // duration set here) and not a setting without meaning in this session type.
+  //
+  // `Random / 1st / 2nd / Last` and no longer `Random / First / 2nd / Last`:
+  // the row mixed two ways of writing the same kind of thing.
   const startModes: { value: StartMode; labelKey: string }[] = [
     { value: "random", labelKey: "launch.startRandom" },
     { value: "first", labelKey: "launch.startFirst" },
     { value: "second", labelKey: "launch.startSecond" },
     { value: "last", labelKey: "launch.startLast" },
   ];
-  const startFixedByQualifying = $derived(setup.session_type === "race" && setup.qualify_enabled);
+  const startFixedByQualifying = $derived(setup.session_type === "race" && setup.qualify_minutes > 0);
 </script>
 
 <!-- Session options (§8.4/§8.6): first card of the column, the most consulted.
-     Two zones, and only the left one varies.
-
-     The left zone holds what depends on the session type, the right one what
-     never does. Grip evolution and penalties are sent to the Quick Drive
-     preset whatever the type (`Penalties` sits in all three `ModeData`,
-     `TrackPropertiesData` at the preset root, not in `ModeData`), so they keep
-     the exact same place in the four types — before this split they travelled
-     across the row as the type-dependent controls appeared and disappeared,
-     and the two settings one never changes were the hardest to find again.
+     Everything here depends on the session type — what does not has left, to
+     the car card (ballast, restrictor, aids), to the conditions rail (track
+     state) or to the simulation block (penalties).
 
      Jump start / laps / practice / qualifying are absent from the
      Practice/Hotlap schemas (no grid, no weekend phase): never shown for those
@@ -61,153 +73,129 @@
 <section class="blk">
   <header class="blk-h"><span class="blk-t">{t("launch.sessionOptionsLabel")}</span></header>
   <div class="blk-b">
-    <div class="opts">
-      <div class="varies">
-        {#if setup.session_type === "hotlap"}
-          <!-- One control out of a tick and a value, like the two race phases:
-               the advantage only means anything while the ghost is on. Its
-               value survives an untick — one comes back to it. -->
-          <div class="phase" class:off={!setup.ghost_car}>
-            <label class="tick"
-              ><input type="checkbox" bind:checked={setup.ghost_car} /><span>{t("launch.ghostCar")}</span></label
-            >
-            <span class="dur">
-              <span class="unit lbl-key">{t("launch.ghostAdvantage")}</span>
-              <NumberStepper
-                min={0}
-                max={5}
-                step={0.1}
-                decimals={2}
-                width={64}
-                disabled={!setup.ghost_car}
-                bind:value={setup.ghost_advantage}
-              />
-              <span class="unit lbl-key">{t("launch.secondsUnit")}</span>
-            </span>
-          </div>
-        {/if}
-
-        {#if setup.session_type === "race"}
-          <!-- Libellé AU-DESSUS du champ, comme tout le reste du bloc : il
-               était le seul posé à droite du sien, ce qui faisait lire la
-               rangée en zigzag. -->
-          <div>
-            <span class="fk lbl-key">{t("launch.laps")}</span>
-            <NumberStepper min={1} max={99} bind:value={setup.laps} />
-          </div>
-        {/if}
-
-        {#if setup.session_type === "race" || setup.session_type === "trackday"}
-          <div>
-            <span class="fk lbl-key">{t("launch.jumpStart")}</span>
-            <Seg
-              value={String(setup.jump_start_penalty)}
-              onselect={(v) => (setup.jump_start_penalty = Number(v))}
-              items={[
-                { value: "0", label: t("launch.jumpStartNone") },
-                { value: "1", label: t("launch.jumpStartTeleport") },
-                { value: "2", label: t("launch.jumpStartDrivethrough") },
-              ]}
+    <div class="varies">
+      {#if setup.session_type === "race"}
+        <!-- The three durations on one row, all three the same gauge: they
+             answer the same question — how long does each part last — and a
+             zero is the answer "not at all". -->
+        <div>
+          <span class="fk lbl-key">{t("launch.laps")}</span>
+          <NumberStepper min={1} max={99} width={64} bind:value={setup.laps} />
+        </div>
+        <div>
+          <span class="fk lbl-key">{t("launch.qualifying")}</span>
+          <span class="dur">
+            <NumberStepper
+              min={0}
+              max={90}
+              width={64}
+              zeroDim
+              value={setup.qualify_minutes}
+              onchange={setQualifyMinutes}
             />
-          </div>
-        {/if}
-
-        {#if setup.session_type === "race"}
-          <div class:off={startFixedByQualifying}>
-            <span class="fk lbl-key"
-              >{t("launch.startLabel")}{#if startFixedByQualifying}<Tooltip
-                  text={t("launch.startFixedByQualifying")}
-                  align="left"><button type="button" class="info-i">ⓘ</button></Tooltip
-                >{/if}</span
-            >
-            <Seg
-              value={setup.start_mode}
-              disabled={startFixedByQualifying}
-              onselect={(v) => (setup.start_mode = v as StartMode)}
-              items={startModes.map((m) => ({ value: m.value, label: t(m.labelKey) }))}
+            <span class="unit lbl-key">{t("launch.minutesUnit")}</span>
+          </span>
+        </div>
+        <div class:off={practiceUnavailable}>
+          <span class="fk lbl-key"
+            >{t("launch.freePractice")}{#if practiceUnavailable}<Tooltip
+                text={t("launch.practiceNeedsQualifying")}
+                align="left"><button type="button" class="info-i">ⓘ</button></Tooltip
+              >{/if}</span
+          >
+          <span class="dur">
+            <NumberStepper
+              min={0}
+              max={120}
+              width={64}
+              zeroDim
+              disabled={practiceUnavailable}
+              value={setup.practice_minutes}
+              onchange={setPracticeMinutes}
             />
-          </div>
-        {/if}
+            <span class="unit lbl-key">{t("launch.minutesUnit")}</span>
+          </span>
+        </div>
+      {/if}
 
-        <!-- Tick and duration are one control, not two. Left apart, the
-             duration kept living next to a box that no longer commanded it —
-             and an unticked phase still showed an editable field. Welded, and
-             the frame dims as a whole: the value stays readable (one comes
-             back to it) but says it applies to nothing. -->
-        {#if setup.session_type === "race"}
-          <div class="phase" class:off={!setup.qualify_enabled}>
-            <label class="tick">
-              <input
-                type="checkbox"
-                checked={setup.qualify_enabled}
-                onchange={(e) => toggleQualifying(e.currentTarget.checked)}
-              /><span>{t("launch.qualifying")}</span>
-            </label>
-            <span class="dur">
-              <NumberStepper min={5} max={90} width={58} disabled={!setup.qualify_enabled} bind:value={setup.qualify_minutes} />
-              <span class="unit lbl-key">{t("launch.minutesUnit")}</span>
-            </span>
-          </div>
-
-          <div class="phase" class:off={!setup.practice_enabled}>
-            <label class="tick">
-              <input type="checkbox" bind:checked={setup.practice_enabled} disabled={!setup.qualify_enabled} /><span
-                >{t("launch.freePractice")}</span
-              >
-            </label>
-            <span class="dur">
-              <NumberStepper min={1} max={120} width={58} disabled={!setup.practice_enabled} bind:value={setup.practice_minutes} />
-              <span class="unit lbl-key">{t("launch.minutesUnit")}</span>
-            </span>
-          </div>
-        {/if}
-
-        {#if setup.session_type === "practice"}
-          <div>
-            <span class="fk lbl-key">{t("launch.startFrom")}</span>
-            <Seg
-              value={setup.practice_start}
-              onselect={(v) => (setup.practice_start = v as RaceSetup["practice_start"])}
-              items={[
-                { value: "pit", label: t("launch.startFromPit") },
-                { value: "track", label: t("launch.startFromTrack") },
-                { value: "hotlap", label: t("launch.startFromHotlap") },
-              ]}
+      {#if setup.session_type === "hotlap"}
+        <!-- One control out of a tick and a value: the advantage only means
+             anything while the ghost is on. Its value survives an untick — one
+             comes back to it. -->
+        <div class="phase" class:off={!setup.ghost_car}>
+          <label class="tick"
+            ><input type="checkbox" bind:checked={setup.ghost_car} /><span>{t("launch.ghostCar")}</span></label
+          >
+          <span class="dur">
+            <span class="unit lbl-key">{t("launch.ghostAdvantage")}</span>
+            <NumberStepper
+              min={0}
+              max={5}
+              step={0.1}
+              decimals={2}
+              width={64}
+              disabled={!setup.ghost_car}
+              bind:value={setup.ghost_advantage}
             />
-          </div>
-        {/if}
-      </div>
+            <span class="unit lbl-key">{t("launch.secondsUnit")}</span>
+          </span>
+        </div>
+      {/if}
 
+      {#if setup.session_type === "race" || setup.session_type === "trackday"}
+        <div>
+          <span class="fk lbl-key">{t("launch.jumpStart")}</span>
+          <Seg
+            value={String(setup.jump_start_penalty)}
+            onselect={(v) => (setup.jump_start_penalty = Number(v))}
+            items={[
+              { value: "0", label: t("launch.jumpStartNone") },
+              { value: "1", label: t("launch.jumpStartTeleport") },
+              { value: "2", label: t("launch.jumpStartDrivethrough") },
+            ]}
+          />
+        </div>
+      {/if}
+
+      {#if setup.session_type === "race"}
+        <div class:off={startFixedByQualifying}>
+          <span class="fk lbl-key"
+            >{t("launch.startLabel")}{#if startFixedByQualifying}<Tooltip
+                text={t("launch.startFixedByQualifying")}
+                align="left"><button type="button" class="info-i">ⓘ</button></Tooltip
+              >{/if}</span
+          >
+          <Seg
+            value={setup.start_mode}
+            disabled={startFixedByQualifying}
+            onselect={(v) => (setup.start_mode = v as StartMode)}
+            items={startModes.map((m) => ({ value: m.value, label: t(m.labelKey) }))}
+          />
+        </div>
+      {/if}
+
+      {#if setup.session_type === "practice"}
+        <div>
+          <span class="fk lbl-key">{t("launch.startFrom")}</span>
+          <Seg
+            value={setup.practice_start}
+            onselect={(v) => (setup.practice_start = v as RaceSetup["practice_start"])}
+            items={[
+              { value: "pit", label: t("launch.startFromPit") },
+              { value: "track", label: t("launch.startFromTrack") },
+              { value: "hotlap", label: t("launch.startFromHotlap") },
+            ]}
+          />
+        </div>
+      {/if}
     </div>
   </div>
 </section>
 
 <style>
-  /* The threshold is a container query, not a media one: what decides whether
-     the two zones fit side by side is the width this block actually got — the
-     rail and the session column have already taken theirs, and the interface
-     zoom moves a window threshold without moving anything here (§13). */
-  .blk-b {
-    container: sessopts / inline-size;
-  }
-  .opts {
-    display: grid;
-    /* The right zone is sized by its content, not by a number: its widest
-       control is the grip segmented, whose six options never change, so its
-       width is the same in the four session types — which is the whole point.
-
-       **Une seule zone depuis que le grip et les pénalités sont partis** : la
-       colonne de droite ne portait plus rien. Ce que les deux zones
-       protégeaient — les réglages invariants restant au même endroit quel que
-       soit le type — est obtenu autrement, et mieux : ils ne sont plus dans ce
-       bloc du tout. */
-    grid-template-columns: minmax(0, 1fr);
-    gap: 14px 24px;
-    align-items: start;
-  }
   /* Each setting keeps its natural width rather than stretching into a grid:
      a slot layout would move every control each time the type changes one of
-     them, which is exactly what the two zones exist to avoid.
+     them (lot 5 §3.3).
 
      `flex-end` and not `flex-start`: some settings carry a label above them
      and some do not, so aligning on the top edge left the bare tick boxes
@@ -242,6 +230,14 @@
   .info-i:hover {
     color: var(--txt2);
   }
+  .dur {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .dur .unit {
+    text-transform: none;
+  }
   /* One control out of a tick and a duration. The stepper keeps its own
      border, and the negative margin collapses it onto the tick's: a single
      shared line, which is the separator. */
@@ -262,15 +258,9 @@
     color: var(--txt2);
   }
   .phase .dur {
-    display: flex;
-    align-items: center;
-    gap: 7px;
     margin-left: -1px;
   }
-  .phase .unit {
-    text-transform: none;
-  }
-  .phase.off {
+  .off {
     opacity: 0.55;
   }
 </style>

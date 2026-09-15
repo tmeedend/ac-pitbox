@@ -1,12 +1,20 @@
 <script lang="ts">
-  // Bloc « Météo & saison » de l'écran Lancement (§8.5/§8.6/§8.6bis) : cartes
-  // météo en icônes SVG, température/vent implicites (jamais saisis
-  // manuellement, seulement corrigeables), heure de la session, saison
-  // optionnelle. Vue de présentation : le déclenchement des calculs
-  // (weatherConditions, mémorisation de l'override) reste dans Launch.svelte,
-  // qui pilote aussi ce même état depuis d'autres sources (presets, sessions
-  // sauvegardées) — ce bloc ne fait qu'afficher et notifier.
-  import type { RaceSetup, Season, TrackSun, WeatherOption } from "$lib/launch";
+  // Bloc « Conditions » du rail droit (§8.5/§8.6/§8.6bis, lot 5 §4) : tout ce
+  // qui décrit le jour et la piste sur lesquels on roule — météo, températures,
+  // vent, état de piste, heure, saison.
+  //
+  // **Un seul bloc, et ce n'était pas un regroupement de confort.** L'état de
+  // piste avait sa carte et la météo la sienne, alors que la première entrée de
+  // l'état de piste est « Auto (posé par la météo) » : une entrée qui nomme sa
+  // voisine ne se lit que si cette voisine est sous les yeux. Les deux n'ont
+  // jamais été deux objets — un seul en-tête, et rien ne s'intercale.
+  //
+  // Vue de présentation : le déclenchement des calculs (weatherConditions,
+  // mémorisation de l'override) reste dans Launch.svelte, qui pilote aussi ce
+  // même état depuis d'autres sources (presets, sessions sauvegardées) — ce
+  // bloc ne fait qu'afficher et notifier.
+  import type { RaceSetup, Season, TrackStateOption, TrackSun, WeatherOption } from "$lib/launch";
+  import TrackConditionBlock from "./TrackConditionBlock.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import NumberStepper from "../NumberStepper.svelte";
   import Slider from "../Slider.svelte";
@@ -21,6 +29,7 @@
     trackSupportsRain,
     season,
     sun,
+    states,
     onselectintent,
     onselectseason,
     onoverridetemps,
@@ -36,6 +45,10 @@
     /** Course du soleil du circuit (§8.6ter), ou `null` si sa position est
      * inconnue — la bande jour/nuit ne s'affiche alors pas du tout. */
     sun: TrackSun | null;
+    /** Les états de piste offerts (§2.2) : natifs du jeu puis presets de
+     * Content Manager. Traversent ce bloc jusqu'à `TrackConditionBlock`, qui
+     * n'est plus une carte mais une rubrique de celle-ci. */
+    states: TrackStateOption[];
     onselectintent: (opt: WeatherOption) => void;
     onselectseason: (id: Season) => void;
     onoverridetemps: () => void;
@@ -80,14 +93,6 @@
     const total = Math.round(h * 60);
     const hh = Math.floor(total / 60) % 24, mm = total % 60;
     return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-  }
-
-  /** Date de la journée représentée par la bande. Format court de la machine,
-   * comme partout ailleurs dans l'app (`ProvenanceBlock`, colonnes de
-   * bibliothèque). */
-  function fmtDate(iso: string): string {
-    const d = new Date(`${iso}T12:00:00`);
-    return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString();
   }
 
   // --- Curseur d'heure (§8.6) ---
@@ -222,9 +227,10 @@
   {/if}
 {/snippet}
 
-<!-- Météo en icônes SVG (§8.6) -->
+<!-- Les conditions, dans l'ordre où on les règle : la météo, ce qu'elle
+     implique, la piste qu'elle laisse, l'heure, puis la saison. -->
 <section class="blk">
-  <header class="blk-h"><span class="blk-t">{t("launch.weather")}</span></header>
+  <header class="blk-h"><span class="blk-t">{t("launch.conditionsLabel")}</span></header>
   <div class="blk-b">
   <div class="weather">
     {#each WEATHER_IDS as id}
@@ -285,68 +291,6 @@
           </select>
         </div>
       </div>
-      <div class="imp time-imp">
-        <Slider
-          label={t("launch.timeLabelShort")}
-          value={setup.time_hours}
-          min={0}
-          max={TIME_MAX}
-          step={TIME_STEP}
-          display={fmtTime(setup.time_hours)}
-          oninput={(v) => (setup.time_hours = v)}
-        />
-        {#if sun}
-          <!-- Bande jour/nuit (§8.6ter) : la course du soleil sur ce circuit,
-               à la date que CSP utilisera. Alignée sur la course du pouce du
-               curseur (marges de 5px = demi-largeur du pouce), pour qu'un
-               repère de coucher désigne bien l'heure qu'il affiche. Les deux
-               repères sont cliquables : c'est le geste utile — se poser pile
-               au lever ou au coucher, ce qu'un curseur au pas d'une demi-heure
-               ne permet pas d'atteindre.
-               La date est affichée, pas seulement en infobulle : sans saison
-               choisie, le champ date reste vide alors que le jeu, lui, prend
-               la date du jour — un champ vide laisserait croire qu'aucune date
-               ne s'applique. C'est la journée qu'on regarde, donc elle se lit. -->
-          <div
-            class="sky-wrap"
-            title={t("launch.sunBandTitle", { date: sun.date }) +
-              (sun.source === "geotags" ? ` — ${t("launch.sunApprox")}` : "")}
-          >
-            <div class="sky-date mono">{fmtDate(sun.date)}</div>
-            <div class="sky">
-              <div
-                class="sky-band"
-                class:approx={sun.source === "geotags"}
-                style:background-image={skyGradient(sun)}
-              ></div>
-              {#if sun.sunrise !== null && sun.sunset !== null}
-                {@const rise = sun.sunrise}
-                {@const fall = sun.sunset}
-                <button
-                  class="sun-mark"
-                  type="button"
-                  style:left="{bandPct(rise)}%"
-                  title={t("launch.sunrise")}
-                  onclick={() => (setup.time_hours = rise)}
-                >
-                  <span class="sun-tick"></span>
-                  <span class="sun-time mono">↑{fmtTime(rise)}</span>
-                </button>
-                <button
-                  class="sun-mark"
-                  type="button"
-                  style:left="{bandPct(fall)}%"
-                  title={t("launch.sunset")}
-                  onclick={() => (setup.time_hours = fall)}
-                >
-                  <span class="sun-tick"></span>
-                  <span class="sun-time mono">↓{fmtTime(fall)}</span>
-                </button>
-              {/if}
-            </div>
-          </div>
-        {/if}
-      </div>
     </div>
     <p class="implicit-note">{t("launch.implicitNote")}</p>
   {/if}
@@ -357,6 +301,78 @@
     </p>
   {/if}
 
+  <!-- ÉTAT DE PISTE (lot 5 §4) : une rubrique de ce bloc et non une carte à
+       elle, juste sous la météo qui pilote son entrée « Auto ». -->
+  <div class="lbl section">{t("launch.trackConditionLabel")}</div>
+  <TrackConditionBlock {setup} {states} bare />
+
+  <!-- HEURE. Rubrique au niveau de la donnée (`.lbl-key`, porté par le
+       curseur lui-même) et non au niveau du titre : c'est un champ, comme l'air
+       et le vent, pas un groupe de réglages — l'état de piste et la saison, eux,
+       en sont. La bande jour/nuit lui est directement accolée : les deux ne font
+       qu'un contrôle, la bande est la légende du curseur. -->
+  <div class="time-group">
+      <Slider
+        label={t("launch.timeLabelShort")}
+        value={setup.time_hours}
+        min={0}
+        max={TIME_MAX}
+        step={TIME_STEP}
+        display={fmtTime(setup.time_hours)}
+        oninput={(v) => (setup.time_hours = v)}
+      />
+      {#if sun}
+        <!-- Bande jour/nuit (§8.6ter) : la course du soleil sur ce circuit,
+             à la date que CSP utilisera. Alignée sur la course du pouce du
+             curseur (marges de 5px = demi-largeur du pouce), pour qu'un
+             repère de coucher désigne bien l'heure qu'il affiche. Les deux
+             repères sont cliquables : c'est le geste utile — se poser pile
+             au lever ou au coucher, ce qu'un curseur au pas d'une demi-heure
+             ne permet pas d'atteindre.
+             La date est affichée, pas seulement en infobulle : sans saison
+             choisie, le champ date reste vide alors que le jeu, lui, prend
+             la date du jour — un champ vide laisserait croire qu'aucune date
+             ne s'applique. C'est la journée qu'on regarde, donc elle se lit. -->
+        <div
+          class="sky-wrap"
+          title={t("launch.sunBandTitle", { date: sun.date }) +
+            (sun.source === "geotags" ? ` — ${t("launch.sunApprox")}` : "")}
+        >
+          <div class="sky">
+            <div
+              class="sky-band"
+              class:approx={sun.source === "geotags"}
+              style:background-image={skyGradient(sun)}
+            ></div>
+            {#if sun.sunrise !== null && sun.sunset !== null}
+              {@const rise = sun.sunrise}
+              {@const fall = sun.sunset}
+              <button
+                class="sun-mark"
+                type="button"
+                style:left="{bandPct(rise)}%"
+                title={t("launch.sunrise")}
+                onclick={() => (setup.time_hours = rise)}
+              >
+                <span class="sun-tick"></span>
+                <span class="sun-time mono">↑{fmtTime(rise)}</span>
+              </button>
+              <button
+                class="sun-mark"
+                type="button"
+                style:left="{bandPct(fall)}%"
+                title={t("launch.sunset")}
+                onclick={() => (setup.time_hours = fall)}
+              >
+                <span class="sun-tick"></span>
+                <span class="sun-time mono">↓{fmtTime(fall)}</span>
+              </button>
+            {/if}
+          </div>
+        </div>
+      {/if}
+  </div>
+
   <!-- Saison optionnelle (§8.6bis) : associe une date, best-effort côté
        CSP (couleur des arbres en automne, piste blanche en hiver).
        Reste cliquable même sans config CSP identifiée pour les
@@ -366,7 +382,7 @@
        téléchargée par Content Manager (mod tout juste importé,
        premier lancement…). -->
   <div class="season-wrap">
-    <div class="opt-name lbl-key" style="margin-bottom:6px;">{t("launch.seasonLabel")}</div>
+    <div class="lbl section">{t("launch.seasonLabel")}</div>
     <!-- Date manuelle (§8.6bis) : sélectionner une saison ci-contre pose déjà
          cette date (SEASON_MID, calculée côté Launch.svelte) — ce champ permet
          de la voir et, si besoin, de la corriger précisément sans passer par
@@ -518,17 +534,12 @@
     color: var(--txt2);
   }
 
-  /* Couleur/taille/interlettrage viennent de `.lbl-key` (global, harmonisation
-     §chantier libellés) : ne reste ici que ce que `.lbl-key` ne couvre pas. */
-  .opt-name {
-    text-transform: uppercase;
-  }
-  /* Heure : sur sa propre ligne dans `.implicit`, sous les températures et le
-     vent (§8.6ter). Elle tenait dans 140px tant qu'elle n'était qu'un
-     curseur ; la bande jour/nuit en dessous porte deux heures lisibles et des
-     repères à placer au pixel, ce qui demande la largeur du bloc. */
-  .time-imp {
-    flex-basis: 100%;
+  /* L'heure a quitté `.implicit` : l'état de piste s'intercale désormais entre
+     le vent et elle (lot 5 §4), et elle demandait de toute façon la largeur du
+     bloc — la bande jour/nuit porte deux heures lisibles et des repères à
+     placer au pixel. */
+  .time-group {
+    margin-top: 14px;
   }
   /* Marges de 5px = demi-largeur du pouce du curseur (voir Slider.svelte) :
      un `input[type=range]` réserve cette moitié à chaque bout, donc une bande
@@ -539,12 +550,6 @@
   .sky-wrap {
     margin: 6px 5px 0;
     padding-bottom: 15px;
-  }
-  .sky-date {
-    font-size: 9.5px;
-    color: var(--faint);
-    text-align: right;
-    margin-bottom: 3px;
   }
   .sky {
     position: relative;

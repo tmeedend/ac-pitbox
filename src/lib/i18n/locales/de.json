@@ -43,7 +43,6 @@
     "noCarDetected": "Kein Fahrzeug erkannt",
     "noTrackDetected": "Keine Strecke erkannt",
     "checkPaths": "Installationspfad prüfen",
-    "configure": "SESSION EINRICHTEN",
     "start": "▶ SESSION STARTEN",
     "carTooltip": "Klick: Fahrzeugbibliothek · Doppelklick: Detailseite",
     "trackTooltip": "Klick: Streckenbibliothek · Doppelklick: Detailseite",
@@ -615,7 +614,6 @@
     "specRange": "Reichweite"
   },
   "launch": {
-    "pageTitle": "Session einrichten",
     "savedSessionsLabel": "Gespeicherte Sessions",
     "saveSession": "⤒ Speichern",
     "saveSessionTitle": "Session speichern",
@@ -629,10 +627,6 @@
     "loadWarnTrackSkinsFailed": "Streckenskins nicht wiederhergestellt: {error}",
     "overwriteConfirm": "„{name}“ existiert bereits. Überschreiben?",
     "overwriteConfirmBtn": "Überschreiben",
-    "typePractice": "Training",
-    "typeHotlap": "Hotlap",
-    "typeRace": "Rennen",
-    "typeTrackday": "Track Day",
     "launchSuccess": "Session an Content Manager geschickt — Assetto Corsa startet…",
     "steamRequiredTitle": "Steam läuft nicht",
     "steamRequiredBody": "Assetto Corsa startet über Steam. Starte Steam, melde dich an und bestätige dann hier, um fortzufahren.",
@@ -658,7 +652,6 @@
     "fuelLabel": "Kraftstoffverbrauch",
     "tyreLabel": "Reifenverschleiß",
     "laps": "Runden (oder Dauer in Minuten)",
-    "weather": "Wetter",
     "wxClear": "Klar",
     "wxFewClouds": "Leicht bewölkt",
     "wxOvercast": "Bedeckt",
@@ -699,10 +692,8 @@
     "gripEvolution": "Grip-Entwicklung",
     "qualifying": "Qualifying",
     "freePractice": "Freies Training",
-    "assistsLabel": "Fahrhilfen",
     "idealLine": "Ideallinie",
     "tyreBlankets": "Reifenwärmer",
-    "sessionTypeLabel": "Session-Typ",
     "trackNotCircuitWarning": "Diese Strecke ist nicht als geschlossener Rundkurs eingestuft: ein Hotlap oder ein Rennen startet trotzdem, aber ohne Runde zum Schließen gibt es keine brauchbaren Rundenzeiten und keine Wertung."
   },
   "config": {

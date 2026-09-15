@@ -24,6 +24,17 @@
     playerHandicap,
     setPlayerHandicap,
   } from "$lib/playerHandicap.svelte";
+  import { carAssists, assistsTouched } from "$lib/carAssists.svelte";
+  import {
+    SESSION_TYPES,
+    hasOpponents,
+    openOpponentsPage,
+    openSetupPage,
+    pickSessionType,
+    sessionNav,
+  } from "$lib/sessionNav.svelte";
+  import Seg from "./Seg.svelte";
+  import Tooltip from "./Tooltip.svelte";
   import { bumpLibraryVersion } from "$lib/libraryVersion.svelte";
   import { PAUSE_SESSION, pauseGridThumbs, resumeGridThumbs } from "$lib/gridThumbs.svelte";
   import { onAcRunning } from "$lib/launch";
@@ -50,7 +61,15 @@
   import { initGlobalDragDrop } from "$lib/importState.svelte";
   import { initBulkProgress } from "$lib/bulkState.svelte";
   import { initRepairProgress } from "$lib/repairState.svelte";
-  import { openContentManager, listModSkins, type SkinItem } from "$lib/launch";
+  import {
+    openContentManager,
+    listModSkins,
+    carFactoryAssists,
+    type AssistLevel,
+    type FactoryAssists,
+    type SessionType,
+    type SkinItem,
+  } from "$lib/launch";
   import { listOtherMods } from "$lib/others";
   import { setPreferredSkin, setPreferredLayout } from "$lib/preferred";
   import { syncTrackSkins, listTrackSkinOptions, setTrackSkinActive, type TrackSkinOption } from "$lib/submods";
@@ -200,6 +219,121 @@
    * l'utilisateur pour se donner un bouton à activer. */
   const sessionReady = $derived(nav.sessionCar != null && nav.sessionTrack != null);
 
+  // --- Le type de session EST la navigation (lot 5 §1) ----------------------
+  //
+  // Le bouton « Paramétrage de la session » et le segmenté « Type de session »
+  // de l'écran de réglages ont disparu tous les deux : ils disaient la même
+  // chose à deux endroits, et aucun des deux ne disait ce que l'app sait
+  // faire. Les quatre types sont désormais une liste, toujours dépliée — c'est
+  // la seule chose de cette colonne qui ne se replie pas.
+  //
+  // Un clic fait deux gestes en un : il choisit le type **et** ouvre ses
+  // réglages. Le second est ce qui remplace le bouton supprimé.
+  async function goToType(type: SessionType) {
+    pickSessionType(type);
+    await requestSection("race");
+  }
+  /** La sous-entrée. Elle sert aussi de retour : depuis la page adversaires,
+   * cliquer le type parent ramène aux réglages sans changer de type. */
+  async function goToOpponents() {
+    openOpponentsPage();
+    await requestSection("race");
+  }
+  function backToSetup(type: SessionType) {
+    if (type !== sessionNav.type) {
+      void goToType(type);
+      return;
+    }
+    openSetupPage();
+    void requestSection("race");
+  }
+  /** `6 AI · 87% ± 3` (§1.2). Ce n'est pas un ornement : sans elle on ne peut
+   * plus savoir combien d'adversaires on affronte sans changer de page, alors
+   * qu'on peut lancer la session sans y être allé. */
+  const opponentsSummary = $derived(
+    t("session.opponentsSummary", {
+      count: sessionNav.count,
+      center: sessionNav.center,
+      spread: sessionNav.spread,
+    }),
+  );
+  /** L'entrée de navigation est surlignée par la section ET la page : sur un
+   * autre écran que les réglages, aucune des deux ne l'est — le type reste
+   * celui qui partira, mais on n'est pas dessus. */
+  const onSessionScreen = $derived(nav.section === "race");
+  const typeSelected = (type: SessionType) =>
+    onSessionScreen && sessionNav.type === type && sessionNav.page === "setup";
+
+  // --- Repli « Performance » de la carte voiture (lot 5 §2.1) ---------------
+  //
+  // Lest, bride, ABS et contrôle de traction sous une seule ligne, au gabarit
+  // de LIVRÉE et PILOTE. Les deux assistances viennent de l'écran de réglages,
+  // où elles vivaient parmi les règles de la course : ce sont des **capacités
+  // de la voiture**, et le réglage n'existe que parce que la voiture les
+  // possède — ce que dit déjà la ligne « Factory » qui les suit ici.
+  //
+  // Le repli n'est pas mémorisé, et il n'a pas à l'être : la ligne **affiche
+  // toujours son état**, replié ou non, donc l'ouvrir ne révèle rien qu'on ne
+  // sache déjà — elle ne fait que rendre les champs modifiables.
+  let perfOpen = $state(false);
+  const perfTouched = $derived(playerHandicap.ballast > 0 || playerHandicap.restrictor > 0 || assistsTouched());
+  /** Ce que la ligne dit repliée. `Stock` quand rien n'est posé — « absent »
+   * et « à zéro » ne doivent pas se ressembler, donc jamais un champ vide. */
+  const perfSummary = $derived.by(() => {
+    if (!perfTouched) return t("session.perfStock");
+    const parts: string[] = [];
+    if (playerHandicap.ballast > 0)
+      parts.push(t("session.perfBallast", { kg: playerHandicap.ballast }));
+    if (playerHandicap.restrictor > 0)
+      parts.push(t("session.perfRestrictor", { pct: playerHandicap.restrictor }));
+    if (carAssists.abs !== "factory")
+      parts.push(`${t("launch.absLabel")} ${t(`launch.assist${carAssists.abs === "on" ? "On" : "Off"}`)}`);
+    if (carAssists.tractionControl !== "factory")
+      parts.push(
+        `${t("launch.tcShort")} ${t(`launch.assist${carAssists.tractionControl === "on" ? "On" : "Off"}`)}`,
+      );
+    return parts.join(" · ");
+  });
+  const assistLevels = $derived([
+    { value: "off", label: t("launch.assistOff") },
+    { value: "factory", label: t("launch.assistFactory") },
+    { value: "on", label: t("launch.assistOn") },
+  ]);
+  /** Ce que `Factory` vaut pour cette voiture, lu dans son `electronics.ini`.
+   * La ligne suit le repli : c'est elle qui justifie que le réglage soit là.
+   * Une voiture qui ne dit rien n'a pas de ligne du tout — jamais d'« inconnu ». */
+  let factoryAssists = $state<FactoryAssists | null>(null);
+  $effect(() => {
+    const carId = nav.sessionCar?.id;
+    if (!carId) {
+      factoryAssists = null;
+      return;
+    }
+    let current = true;
+    carFactoryAssists(carId)
+      .then((found) => {
+        if (current) factoryAssists = found;
+      })
+      .catch(() => {
+        if (current) factoryAssists = null;
+      });
+    return () => {
+      current = false;
+    };
+  });
+  const factoryLine = $derived.by(() => {
+    const f = factoryAssists;
+    if (!f || !sessionCarName) return null;
+    const key = f.abs
+      ? f.tractionControl
+        ? "launch.factoryBoth"
+        : "launch.factoryAbsOnly"
+      : f.tractionControl
+        ? "launch.factoryTcOnly"
+        : "launch.factoryNeither";
+    return t(key, { car: sessionCarName });
+  });
+
   // --- Colonne d'intitulés partagée (SPEC §9.1) -----------------------------
   //
   // Les quatre champs alignent leurs valeurs sur une même colonne d'intitulé :
@@ -211,6 +345,7 @@
   const FIELD_LABELS = $derived([
     t("session.fieldLivery"),
     t("session.fieldDriver"),
+    t("session.fieldPerformance"),
     t("session.fieldLayout"),
     t("session.fieldTrackSkin"),
   ]);
@@ -649,6 +784,50 @@
            Plus de traitement d'exception sur le bloc voiture. -->
       <div class="session" style="--sess-lblw:{labelWidth}px">
         <div class="nsec">{t("nav.session")}</div>
+
+        <!-- LE TYPE DE SESSION EST LA NAVIGATION (lot 5 §1). Les quatre types
+             sont toujours visibles, jamais repliés derrière un sélecteur : ils
+             annoncent ce que l'application sait faire, et c'est la seule chose
+             de cette colonne qui ne se replie pas quand la hauteur manque.
+
+             La sous-entrée « Adversaires » ne paraît que sous Course et Track
+             day, et seulement quand ce type est sélectionné — en Essais et en
+             Hotlap, la liste fait quatre lignes. -->
+        <nav class="types" aria-label={t("nav.session")}>
+          {#each SESSION_TYPES as type (type)}
+            <button
+              class="type"
+              class:on={typeSelected(type)}
+              class:parent={onSessionScreen && sessionNav.type === type && sessionNav.page === "opponents"}
+              type="button"
+              onclick={() => (sessionNav.page === "opponents" ? backToSetup(type) : void goToType(type))}
+              >{t(`launch.type.${type}`)}</button
+            >
+            {#if sessionNav.type === type && hasOpponents(type)}
+              <!-- Indentée, et ce qui la rend lisible comme une descente est le
+                   filet vertical qui la rattache à son parent : sans lui, deux
+                   entrées de même gabarit à quelques pixels d'écart se lisent
+                   comme deux destinations sœurs. -->
+              <button
+                class="type sub"
+                class:on={onSessionScreen && sessionNav.page === "opponents"}
+                type="button"
+                onclick={() => void goToOpponents()}
+              >
+                <span class="sub-n">{t("launch.opponentsLabel")}</span>
+                <!-- Le résumé passe en rouge et porte un marqueur quand la page
+                     adversaires porte une alerte (§1.3) : une alerte sur une
+                     page qu'on ne regarde pas ne vaut pas mieux que pas
+                     d'alerte. -->
+                <span class="sub-v" class:alert={sessionNav.alert}
+                  >{#if sessionNav.alert}<span aria-hidden="true">⚠ </span>{/if}{opponentsSummary}</span
+                >
+              </button>
+            {/if}
+          {/each}
+        </nav>
+
+        <div class="nsec section">{t("session.carTag")}</div>
         <div class="blk">
           <button
             class="pick"
@@ -731,41 +910,93 @@
               <span class="chev" aria-hidden="true">›</span>
             </button>
 
-            <!-- Lest et bride (§2.7) : même gabarit de ligne que LIVERY et
-                 DRIVER, **sans chevron** — celles-là ouvrent un sélecteur,
-                 celles-ci s'éditent sur place. Même forme, affordance
-                 différente, et c'est le chevron qui fait la différence.
+            <!-- PERFORMANCE (lot 5 §2.1) : lest, bride, ABS et contrôle de
+                 traction sous une ligne unique, au gabarit de LIVRÉE et
+                 PILOTE. Quatre réglages valaient quatre lignes dans une colonne
+                 dont la hauteur est la ressource rare, et les deux assistances
+                 vivaient à l'autre bout de l'écran parmi les règles de la
+                 course alors que ce sont des capacités de la VOITURE.
 
-                 Ils valent pour les quatre types de session : leur place n'est
-                 donc pas dans SESSION OPTIONS, dont tout le contenu dépend du
-                 type. Ça ne les sort pas de la configuration enregistrée pour
-                 autant. -->
-            <label class="field">
-              <span class="k">{t("session.fieldBallast")}</span>
-              <input
-                class="hcap mono"
-                class:set={playerHandicap.ballast > 0}
-                type="number"
-                min="0"
-                max={BALLAST_MAX}
-                value={playerHandicap.ballast}
-                onchange={(e) => setPlayerHandicap(Number(e.currentTarget.value), playerHandicap.restrictor)}
-              />
-              <span class="unit">{t("session.ballastUnit")}</span>
-            </label>
-            <label class="field">
-              <span class="k">{t("session.fieldRestrictor")}</span>
-              <input
-                class="hcap mono"
-                class:set={playerHandicap.restrictor > 0}
-                type="number"
-                min="0"
-                max={RESTRICTOR_MAX}
-                value={playerHandicap.restrictor}
-                onchange={(e) => setPlayerHandicap(playerHandicap.ballast, Number(e.currentTarget.value))}
-              />
-              <span class="unit">%</span>
-            </label>
+                 **La ligne affiche toujours son état**, repliée ou non : rien
+                 n'est masqué, seulement rendu non modifiable — « absent » et
+                 « à zéro » ne doivent pas se ressembler.
+
+                 Chevron vers le bas et non vers la droite, contrairement à la
+                 maquette : dans cette colonne, `›` annonce une destination
+                 (l'écran Pilote) et `▾` un dépliement sur place. La distinction
+                 est ténue mais constante, et c'est elle qui fait foi. -->
+            <button
+              class="field"
+              type="button"
+              aria-expanded={perfOpen}
+              onclick={() => (perfOpen = !perfOpen)}
+            >
+              <span class="k">{t("session.fieldPerformance")}</span>
+              <span class="v" class:stock={!perfTouched} class:set={perfTouched}>{perfSummary}</span>
+              <span class="chev" aria-hidden="true">{perfOpen ? "▴" : "▾"}</span>
+            </button>
+            {#if perfOpen}
+              <div class="perf">
+                <label class="field">
+                  <span class="k">{t("session.fieldBallast")}</span>
+                  <input
+                    class="hcap mono"
+                    class:set={playerHandicap.ballast > 0}
+                    type="number"
+                    min="0"
+                    max={BALLAST_MAX}
+                    value={playerHandicap.ballast}
+                    onchange={(e) => setPlayerHandicap(Number(e.currentTarget.value), playerHandicap.restrictor)}
+                  />
+                  <span class="unit">{t("session.ballastUnit")}</span>
+                </label>
+                <label class="field">
+                  <span class="k">{t("session.fieldRestrictor")}</span>
+                  <input
+                    class="hcap mono"
+                    class:set={playerHandicap.restrictor > 0}
+                    type="number"
+                    min="0"
+                    max={RESTRICTOR_MAX}
+                    value={playerHandicap.restrictor}
+                    onchange={(e) => setPlayerHandicap(playerHandicap.ballast, Number(e.currentTarget.value))}
+                  />
+                  <span class="unit">%</span>
+                </label>
+                <!-- Trois états et non une case : une case ne saurait pas
+                     distinguer « ce que la vraie voiture avait » de « forcé »,
+                     et c'est le milieu qui est le défaut. -->
+                <div class="assist">
+                  <span class="k"
+                    >{t("launch.absLabel")}<Tooltip text={t("launch.absTooltip")} align="left"
+                      ><button type="button" class="info-i">ⓘ</button></Tooltip
+                    ></span
+                  >
+                  <Seg
+                    size="mini"
+                    value={carAssists.abs}
+                    onselect={(v) => (carAssists.abs = v as AssistLevel)}
+                    items={assistLevels}
+                  />
+                </div>
+                <div class="assist">
+                  <span class="k"
+                    >{t("launch.tcShort")}<Tooltip text={t("launch.tractionTooltip")} align="left"
+                      ><button type="button" class="info-i">ⓘ</button></Tooltip
+                    ></span
+                  >
+                  <Seg
+                    size="mini"
+                    value={carAssists.tractionControl}
+                    onselect={(v) => (carAssists.tractionControl = v as AssistLevel)}
+                    items={assistLevels}
+                  />
+                </div>
+                {#if factoryLine}
+                  <p class="factory-note"><span class="fw">{t("launch.assistFactory")}</span> — {factoryLine}</p>
+                {/if}
+              </div>
+            {/if}
           {/if}
         </div>
 
@@ -827,9 +1058,6 @@
           {/if}
         </div>
 
-        <button class="btn-configure" disabled={!sessionReady} onclick={() => requestSection("race")}
-          >{t("session.configure")}</button
-        >
         {#if inactiveMods.length}
           <div class="warnbox guard">
             <span aria-hidden="true">⚠</span>
@@ -979,6 +1207,23 @@
     background: var(--bg);
     border-right: 1px solid var(--line);
     overflow-y: auto;
+    /* **La colonne ne doit jamais défiler** (lot 5 §2.3), et ce qu'on réduit
+       quand le compte n'y est pas, ce sont les deux vignettes. Le seuil est
+       donc une requête de CONTENEUR et non de média : une `@media
+       (max-height)` interroge la fenêtre, que le zoom d'interface ne touche
+       pas — à 150 %, une fenêtre de 1080 px n'offre plus que 720 px de mise en
+       page et la règle ne se déclencherait pas. Le conteneur, lui, mesure la
+       hauteur réellement disponible.
+       1020 et non les 900 de la spec : c'est une **mesure**, pas un nombre rond
+       — la colonne la plus chargée (Course sélectionnée, sous-entrée affichée,
+       replis fermés) fait un millier de pixels, relevés à l'écran par
+       bissection du seuil jusqu'à ce qu'il bascule. En dessous de 1020 elle
+       n'a donc plus de marge, et c'est exactement là qu'il faut réagir : 900
+       l'aurait laissée déborder de quelques pixels — le bas de la colonne
+       passe alors sous le bord de la fenêtre — avant que la règle ne se
+       déclenche. Une fenêtre de 1920 × 1080 au zoom d'origine offre 1044 px à
+       la colonne : elle garde ses vignettes entières, ce que la spec demande. */
+    container: sidecol / size;
   }
   .brand {
     display: flex;
@@ -1126,6 +1371,19 @@
     aspect-ratio: 2.9;
     background: linear-gradient(135deg, #0a1a14, var(--panel));
   }
+  /* Tracé du layout superposé à la photo du circuit (comme la fiche). */
+  /* Le tracé est un CALQUE, pas la photo : il garde la boîte entière, quelle
+     que soit la hauteur que la photo lui a donnée (sans les deux dimensions
+     explicites, le `height: auto` de la règle du dessus le ferait retomber
+     sur sa taille intrinsèque et déborder). */
+  .thumb img.outline {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 8px;
+  }
   /* **La photo est montrée entière.** Elle l'était en `cover` sous un rapport
      imposé, donc rognée en haut et en bas — les roues d'une voiture et les
      bords d'un tracé y passaient, et ça se voyait (signalé à l'écran). C'est
@@ -1139,18 +1397,28 @@
     width: 100%;
     height: auto;
   }
-  /* Tracé du layout superposé à la photo du circuit (comme la fiche). */
-  /* Le tracé est un CALQUE, pas la photo : il garde la boîte entière, quelle
-     que soit la hauteur que la photo lui a donnée (sans les deux dimensions
-     explicites, le `height: auto` de la règle du dessus le ferait retomber
-     sur sa taille intrinsèque et déborder). */
-  .thumb img.outline {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    padding: 8px;
+  /* Fenêtre basse : la photo et le plan tombent à la moitié de leur hauteur
+     (lot 5 §2.3, premier des trois recours). Un plafond de hauteur plutôt
+     qu'un rapport d'image, parce que la boîte prend le rapport de SA photo
+     dès qu'il y en a une (`.thumb.photo`) — c'est donc la hauteur qu'il faut
+     borner, et le recadrage est préférable à une image écrasée. */
+  @container sidecol (max-height: 1020px) {
+    /* Hauteur EXPLICITE et non un plafond : la boîte tire sa hauteur de son
+       image (`aspect-ratio: auto`), donc un `max-height` ne donnerait à
+       l'image aucune hauteur de référence à laquelle se rapporter. */
+    .thumb.photo {
+      height: 68px;
+    }
+    .thumb.photo img {
+      height: 100%;
+      object-fit: cover;
+    }
+    .thumb:not(.photo) {
+      aspect-ratio: 4.6;
+    }
+    .thumb.track:not(.photo) {
+      aspect-ratio: 5.8;
+    }
   }
   .thumb-ic {
     font-size: 34px;
@@ -1340,6 +1608,13 @@
     color: var(--muted);
     font-style: italic;
   }
+  /* Un réglage posé sur la voiture se voit sans lire la ligne, comme le lest
+     dans son champ : rouge au sens du barème (§7.2ter) — un réglage qui change
+     la course. */
+  .field .v.set {
+    color: var(--rosso-bright);
+    font-size: 10px;
+  }
   .field .chev {
     flex: none;
     color: var(--faint);
@@ -1370,25 +1645,141 @@
     width: max-content;
     white-space: nowrap;
   }
-  .btn-configure {
+  /* --- La liste des types de session (lot 5 §1) ---------------------------
+     Même langage que le rail de navigation : le repos est en retrait, l'entrée
+     retenue s'éclaircit et prend un filet rouge sur son bord d'attaque —
+     niveau 2 du barème (SPEC §7.2ter), jamais un fond plein, qui reste au seul
+     bouton de lancement. */
+  .types {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 4px;
+  }
+  .type {
+    position: relative;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
     width: 100%;
-    height: 36px;
-    background: var(--raised);
-    border: 1px solid var(--line);
+    padding: 6px 10px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: left;
+  }
+  .type:hover {
     color: var(--txt2);
+    background: var(--panel2);
+  }
+  .type.on {
+    color: var(--txt);
+  }
+  .type.on::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 3px;
+    bottom: 3px;
+    width: 2px;
+    background: var(--rosso);
+  }
+  /* Le type qui porte la sous-entrée ouverte : il reste lisible sans être
+     l'entrée retenue — c'est lui qu'on clique pour remonter. */
+  .type.parent {
+    color: var(--txt2);
+  }
+  /* **L'indentation seule ne dit pas « descente »** — c'est la faiblesse connue
+     de cette structure, et le filet vertical est ce qui la corrige : la
+     sous-entrée est visiblement accrochée au type au-dessus d'elle, donc
+     cliquer celui-ci se lit comme une remontée. */
+  .sub {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1px;
+    margin-left: 14px;
+    padding-left: 12px;
+    border-left: 1px solid var(--line);
+    font-size: 11px;
+  }
+  .sub.on {
+    border-left-color: var(--rosso);
+  }
+  /* Le filet d'attaque appartient au type, pas à sa sous-entrée : celle-ci a
+     déjà le sien, à gauche, et deux traits rouges à 14 px l'un de l'autre se
+     liraient comme deux sélections. */
+  .sub.on::before {
+    display: none;
+  }
+  .sub-v {
     font-size: 9.5px;
-    letter-spacing: 1.5px;
-    font-weight: 600;
+    color: var(--muted);
     font-family: var(--mono);
-    margin-top: 8px;
   }
-  .btn-configure:hover:not(:disabled) {
-    background: var(--card);
-    border-color: var(--faint);
+  /* Une alerte vivant sur la page adversaires (§1.3). Niveau 2 du barème : le
+     libellé passe en rouge, rien de plein. */
+  .sub-v.alert {
+    color: var(--rosso-bright);
   }
-  .btn-configure:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
+
+  /* --- Repli « Performance » (lot 5 §2.1) -------------------------------- */
+  .perf {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    /* Retrait et filet : les quatre réglages appartiennent à la ligne qui les
+       a ouverts, comme la sous-entrée appartient à son type. */
+    margin-left: 8px;
+    padding-left: 8px;
+    border-left: 1px solid var(--line);
+  }
+  /* Même gouttière d'intitulé que `.field`, sans son cadre : ce n'est pas un
+     champ mais un réglage posé sous la ligne qui le commande. */
+  .assist {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 26px;
+  }
+  .assist .k {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex: 0 0 var(--sess-lblw, 60px);
+    max-width: 88px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 8.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  /* Même ⓘ que partout : une explication permanente vit là, jamais dans un
+     encart jaune. */
+  .info-i {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: var(--muted2);
+    font-size: 10px;
+    line-height: 1;
+  }
+  .info-i:hover {
+    background: transparent;
+    color: var(--txt2);
+  }
+  /* Ce que l'app sait et que le volant seul apprendrait — même registre que la
+     note implicite de la météo. Le bleu est l'information au barème (§7.2ter) :
+     rien ne va mal ici. */
+  .factory-note {
+    color: var(--muted);
+    font-size: 10px;
+    margin: 2px 0 0;
+    line-height: 1.45;
+  }
+  .factory-note .fw {
+    color: var(--blue);
   }
   .btn-launch {
     width: 100%;

@@ -43,7 +43,6 @@
     "noCarDetected": "Ningún coche detectado",
     "noTrackDetected": "Ningún circuito detectado",
     "checkPaths": "Comprueba la ruta de instalación",
-    "configure": "CONFIGURACIÓN DE LA SESIÓN",
     "start": "▶ INICIAR LA SESIÓN",
     "carTooltip": "Clic: biblioteca de coches · doble clic: ficha de detalle",
     "trackTooltip": "Clic: biblioteca de circuitos · doble clic: ficha de detalle",
@@ -615,7 +614,6 @@
     "specRange": "Autonomía"
   },
   "launch": {
-    "pageTitle": "Configuración de la sesión",
     "savedSessionsLabel": "Sesiones guardadas",
     "saveSession": "⤒ Guardar",
     "saveSessionTitle": "Guardar la sesión",
@@ -629,10 +627,6 @@
     "loadWarnTrackSkinsFailed": "Skins de circuito no restaurados: {error}",
     "overwriteConfirm": "« {name} » ya existe. ¿Sobrescribir?",
     "overwriteConfirmBtn": "Sobrescribir",
-    "typePractice": "Entrenamientos",
-    "typeHotlap": "Hotlap",
-    "typeRace": "Carrera",
-    "typeTrackday": "Track day",
     "launchSuccess": "Sesión enviada a Content Manager — Assetto Corsa está arrancando…",
     "steamRequiredTitle": "Steam no está en marcha",
     "steamRequiredBody": "Assetto Corsa se lanza a través de Steam. Inicia Steam, accede a tu cuenta y luego confirma aquí para continuar.",
@@ -658,7 +652,6 @@
     "fuelLabel": "Consumo de combustible",
     "tyreLabel": "Desgaste de neumáticos",
     "laps": "Vueltas (o duración en minutos)",
-    "weather": "Meteorología",
     "wxClear": "Despejado",
     "wxFewClouds": "Poco nuboso",
     "wxOvercast": "Cubierto",
@@ -699,10 +692,8 @@
     "gripEvolution": "Evolución del agarre",
     "qualifying": "Clasificación",
     "freePractice": "Entrenamientos libres",
-    "assistsLabel": "Ayudas a la conducción",
     "idealLine": "Trazada ideal",
     "tyreBlankets": "Mantas térmicas",
-    "sessionTypeLabel": "Tipo de sesión",
     "trackNotCircuitWarning": "Este circuito no está clasificado como circuito cerrado: un hotlap o una carrera arrancarán igualmente, pero sin una vuelta que cerrar no habrá tiempos por vuelta ni clasificación utilizables."
   },
   "config": {

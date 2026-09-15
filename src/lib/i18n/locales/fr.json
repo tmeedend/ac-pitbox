@@ -49,7 +49,6 @@
     "noCarDetected": "Aucune voiture détectée",
     "noTrackDetected": "Aucun circuit détecté",
     "checkPaths": "Vérifiez le chemin d'installation",
-    "configure": "PARAMÉTRAGE DE LA SESSION",
     "start": "▶ DÉMARRER LA SESSION",
     "carTooltip": "Clic : bibliothèque voitures · double-clic : fiche détail",
     "trackTooltip": "Clic : bibliothèque circuits · double-clic : fiche détail",
@@ -70,7 +69,13 @@
     "driverStock": "Tenue d'origine",
     "driverStockTooltip": "Le casque, la combinaison et les gants sont ceux que la livrée de cette voiture prévoit. Cliquez pour en changer.",
     "driverCustom": "Tenue personnalisée",
-    "driverFallback": "Tenue par défaut"
+    "driverFallback": "Tenue par défaut",
+    "carTag": "VOITURE",
+    "fieldPerformance": "Performance",
+    "perfStock": "D'origine",
+    "perfBallast": "Lest {kg} kg",
+    "perfRestrictor": "Bride {pct} %",
+    "opponentsSummary": "{count} IA · {center} % ± {spread}"
   },
   "controller": {
     "banner": {
@@ -850,17 +855,17 @@
     "specRange": "Autonomie"
   },
   "launch": {
-    "pageTitle": "Paramétrage de la session",
     "savedSessionsLabel": "Sessions enregistrées",
-    "saveSession": "⤒ Sauvegarder",
     "saveSession": "Enregistrer la session…",
     "loadSession": "Charger une session…",
     "loadSessionTitle": "Charger une session",
     "sessionSearchPlaceholder": "Chercher une session…",
-    "type.practice": "Essais",
-    "type.hotlap": "Hotlap",
-    "type.race": "Course",
-    "type.trackday": "Track day",
+    "type": {
+      "practice": "Essais",
+      "hotlap": "Hotlap",
+      "race": "Course",
+      "trackday": "Track day"
+    },
     "saveSessionTitle": "Sauvegarder la session",
     "sessionNamePlaceholder": "Nom de la sauvegarde…",
     "noSavedSessions": "Aucune session sauvegardée.",
@@ -872,10 +877,6 @@
     "loadWarnTrackSkinsFailed": "Skins de circuit non rétablis : {error}",
     "overwriteConfirm": "« {name} » existe déjà. Écraser ?",
     "overwriteConfirmBtn": "Écraser",
-    "typePractice": "Practice",
-    "typeHotlap": "Hotlap",
-    "typeRace": "Course",
-    "typeTrackday": "Track day",
     "launchSuccess": "Session envoyée à Content Manager — Assetto Corsa démarre…",
     "steamRequiredTitle": "Steam n'est pas démarré",
     "steamRequiredBody": "Assetto Corsa se lance par Steam. Démarre Steam, connecte-toi, puis valide ici pour continuer.",
@@ -911,7 +912,7 @@
     "startFixedByQualifying": "La grille est donnée par les résultats de la qualification.",
     "startLabel": "Départ",
     "startLast": "Dernier",
-    "startFirst": "Premier",
+    "startFirst": "1er",
     "startRandom": "Au hasard",
     "startCustom": "Position…",
     "aggressionLabel": "Agressivité",
@@ -961,7 +962,6 @@
     "fuelLabel": "Conso carburant",
     "tyreLabel": "Usure pneus",
     "laps": "Tours",
-    "weather": "Météo",
     "wxClear": "Beau",
     "wxFewClouds": "Quelques nuages",
     "wxOvercast": "Couvert",
@@ -1031,7 +1031,6 @@
     "qualifying": "Qualification",
     "minutesUnit": "min",
     "freePractice": "Essais libres",
-    "assistsLabel": "Aides à la conduite",
     "absLabel": "ABS",
     "tractionLabel": "Antipatinage",
     "assistOff": "Off",
@@ -1045,8 +1044,10 @@
     "factoryBoth": "la {car} a l'ABS et l'antipatinage.",
     "idealLine": "Ligne idéale",
     "tyreBlankets": "Chauffe-pneus",
-    "sessionTypeLabel": "Type de session",
-    "trackNotCircuitWarning": "Ce circuit n'est pas catégorisé comme un circuit fermé : un hotlap ou une course y partiront, mais sans tour à boucler il n'y aura ni temps au tour ni classement utilisables."
+    "trackNotCircuitWarning": "Ce circuit n'est pas catégorisé comme un circuit fermé : un hotlap ou une course y partiront, mais sans tour à boucler il n'y aura ni temps au tour ni classement utilisables.",
+    "conditionsLabel": "Conditions",
+    "tcShort": "Antipat.",
+    "practiceNeedsQualifying": "Les essais libres n'existent qu'à côté de la qualification — sans elle, Content Manager n'a pas de phase préparatoire. Posez d'abord une durée de qualification."
   },
   "config": {
     "acInstallOk": "Dossier Assetto Corsa trouvé.",

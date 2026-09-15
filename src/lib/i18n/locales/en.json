@@ -49,7 +49,6 @@
     "noCarDetected": "No car detected",
     "noTrackDetected": "No track detected",
     "checkPaths": "Check the installation path",
-    "configure": "SESSION SETUP",
     "start": "▶ START THE SESSION",
     "carTooltip": "Click: car library · double-click: detail page",
     "trackTooltip": "Click: track library · double-click: detail page",
@@ -70,7 +69,13 @@
     "driverStock": "Stock outfit",
     "driverStockTooltip": "The helmet, suit and gloves are the ones this car's livery specifies. Click to change them.",
     "driverCustom": "Custom outfit",
-    "driverFallback": "Default outfit"
+    "driverFallback": "Default outfit",
+    "carTag": "CAR",
+    "fieldPerformance": "Performance",
+    "perfStock": "Stock",
+    "perfBallast": "Ballast {kg} kg",
+    "perfRestrictor": "Restr. {pct}%",
+    "opponentsSummary": "{count} AI · {center}% ± {spread}"
   },
   "controller": {
     "banner": {
@@ -850,17 +855,17 @@
     "specRange": "Range"
   },
   "launch": {
-    "pageTitle": "Session setup",
     "savedSessionsLabel": "Saved sessions",
-    "saveSession": "⤒ Save",
     "saveSession": "Save session…",
     "loadSession": "Load session…",
     "loadSessionTitle": "Load a session",
     "sessionSearchPlaceholder": "Search a session…",
-    "type.practice": "Practice",
-    "type.hotlap": "Hotlap",
-    "type.race": "Race",
-    "type.trackday": "Track day",
+    "type": {
+      "practice": "Practice",
+      "hotlap": "Hotlap",
+      "race": "Race",
+      "trackday": "Track day"
+    },
     "saveSessionTitle": "Save session",
     "sessionNamePlaceholder": "Save name…",
     "noSavedSessions": "No saved sessions.",
@@ -872,10 +877,6 @@
     "loadWarnTrackSkinsFailed": "Track skins not restored: {error}",
     "overwriteConfirm": "“{name}” already exists. Overwrite?",
     "overwriteConfirmBtn": "Overwrite",
-    "typePractice": "Practice",
-    "typeHotlap": "Hotlap",
-    "typeRace": "Race",
-    "typeTrackday": "Track day",
     "launchSuccess": "Session sent to Content Manager — Assetto Corsa is starting…",
     "steamRequiredTitle": "Steam isn't running",
     "steamRequiredBody": "Assetto Corsa launches through Steam. Start Steam, sign in, then confirm here to continue.",
@@ -911,7 +912,7 @@
     "startFixedByQualifying": "Grid is set by qualifying results.",
     "startLabel": "Start",
     "startLast": "Last",
-    "startFirst": "First",
+    "startFirst": "1st",
     "startRandom": "Random",
     "startCustom": "Position…",
     "aggressionLabel": "Aggression",
@@ -961,7 +962,6 @@
     "fuelLabel": "Fuel consumption",
     "tyreLabel": "Tyre wear",
     "laps": "Laps",
-    "weather": "Weather",
     "wxClear": "Clear",
     "wxFewClouds": "Few clouds",
     "wxOvercast": "Overcast",
@@ -1031,7 +1031,6 @@
     "qualifying": "Qualifying",
     "minutesUnit": "min",
     "freePractice": "Free practice",
-    "assistsLabel": "Driving aids",
     "absLabel": "ABS",
     "tractionLabel": "Traction control",
     "assistOff": "Off",
@@ -1045,8 +1044,10 @@
     "factoryBoth": "the {car} has both ABS and traction control.",
     "idealLine": "Ideal line",
     "tyreBlankets": "Tyre blankets",
-    "sessionTypeLabel": "Session type",
-    "trackNotCircuitWarning": "This track isn't categorised as a closed circuit: a hotlap or a race will still start, but with no lap to complete there will be no usable lap times or standings."
+    "trackNotCircuitWarning": "This track isn't categorised as a closed circuit: a hotlap or a race will still start, but with no lap to complete there will be no usable lap times or standings.",
+    "conditionsLabel": "Conditions",
+    "tcShort": "TC",
+    "practiceNeedsQualifying": "Free practice only exists alongside qualifying — Content Manager has no preparatory phase without it. Set a qualifying duration first."
   },
   "config": {
     "acInstallOk": "Assetto Corsa folder found.",

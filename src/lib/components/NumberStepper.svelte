@@ -37,6 +37,11 @@
      * destination définie, d'où sa désactivation forcée tant que le champ
      * était vide — corrigée ici, une fois qu'il en a une. */
     emptyStart?: number;
+    /** Un 0 se lit « rien », pas « la valeur zéro » : le champ l'affiche alors
+     * éteint, comme une cellule `Auto` du plateau. Posé là où 0 **désactive**
+     * ce que le champ mesure (les deux durées de séance, lot 5 §3.1) —
+     * jamais là où c'est une valeur comme une autre (un lest de 0 kg). */
+    zeroDim?: boolean;
     onchange?: (value: number) => void;
   }
   let {
@@ -52,6 +57,7 @@
     class: cls = "",
     emptyValue,
     emptyStart,
+    zeroDim = false,
     onchange,
   }: Props = $props();
 
@@ -107,6 +113,7 @@
   <input
     bind:this={inputEl}
     class="nstep-input mono"
+    class:zero={zeroDim && value === 0}
     type="number"
     {min}
     {max}
@@ -164,6 +171,11 @@
   }
   .nstep-input:focus {
     outline: none;
+  }
+  /* Éteint : ce champ ne mesure plus rien. Même gris que les cellules `Auto`
+     du plateau — « non décidé » et « pas de séance » se lisent pareil. */
+  .nstep-input.zero {
+    color: var(--faint);
   }
   .nstep.field {
     height: 32px;
