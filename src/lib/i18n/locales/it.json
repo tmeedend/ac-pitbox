@@ -268,7 +268,9 @@
     "deactivate": "Disattiva",
     "remove": "Rimuovi",
     "working": "…",
-    "description": "Descrizione"
+    "description": "Descrizione",
+    "overwriteConfirm": "« {name} » esiste già. Sovrascrivere?",
+    "overwriteConfirmBtn": "Sovrascrivi"
   },
   "toast": {
     "expand": "Espandi",
@@ -574,8 +576,6 @@
     "loadWarnLayoutMissing": "Layout « {id} » non trovato: viene usato il layout predefinito del circuito.",
     "loadWarnTrackSkinsMissing": "Skin del circuito non trovati: {names}.",
     "loadWarnTrackSkinsFailed": "Skin del circuito non ripristinati: {error}",
-    "overwriteConfirm": "« {name} » esiste già. Sovrascrivere?",
-    "overwriteConfirmBtn": "Sovrascrivi",
     "launchSuccess": "Sessione inviata a Content Manager — Assetto Corsa si sta avviando…",
     "steamRequiredTitle": "Steam non è in esecuzione",
     "steamRequiredBody": "Assetto Corsa si avvia tramite Steam. Avvia Steam, accedi, poi conferma qui per continuare.",

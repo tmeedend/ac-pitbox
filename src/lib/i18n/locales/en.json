@@ -374,7 +374,9 @@
     "description": "Description",
     "unmanagedState": "Unmanaged",
     "pendingState": "Pending",
-    "brokenState": "Broken"
+    "brokenState": "Broken",
+    "overwriteConfirm": "“{name}” already exists. Overwrite?",
+    "overwriteConfirmBtn": "Overwrite"
   },
   "gridThumbs": {
     "taskTitle": "Generating thumbnails",
@@ -822,8 +824,6 @@
     "loadWarnLayoutMissing": "Layout “{id}” not found: using the track's default layout.",
     "loadWarnTrackSkinsMissing": "Track skins not found: {names}.",
     "loadWarnTrackSkinsFailed": "Track skins not restored: {error}",
-    "overwriteConfirm": "“{name}” already exists. Overwrite?",
-    "overwriteConfirmBtn": "Overwrite",
     "launchSuccess": "Session sent to Content Manager — Assetto Corsa is starting…",
     "steamRequiredTitle": "Steam isn't running",
     "steamRequiredBody": "Assetto Corsa launches through Steam. Start Steam, sign in, then confirm here to continue.",

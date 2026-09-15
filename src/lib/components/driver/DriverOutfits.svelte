@@ -31,6 +31,7 @@
 
   let naming = $state(false);
   let draft = $state("");
+  let confirmName = $state<string | null>(null);
   let input = $state<HTMLInputElement | null>(null);
 
   /** Rien à enregistrer tant que tout vient de la voiture et de sa livrée. */
@@ -39,15 +40,58 @@
   function open() {
     naming = true;
     draft = "";
+    confirmName = null;
     queueMicrotask(() => input?.focus());
   }
 
-  function confirm() {
-    const name = draft.trim();
-    if (name) {
-      saveOutfit({ name, body: prefs.body, helmet: prefs.helmet, suit: prefs.suit, gloves: prefs.gloves });
-    }
+  function cancelNaming() {
     naming = false;
+    confirmName = null;
+  }
+
+  /**
+   * Enregistre — ou demande d'abord, si le nom est déjà pris.
+   *
+   * `saveOutfit` remplace **insensible à la casse**, donc enregistrer « gt »
+   * quand « GT » existe effaçait l'ancienne sans un mot. Les deux autres listes
+   * nommées de l'app posent la question depuis toujours (`NamedListDialog`) ;
+   * c'était la seule des trois à ne pas la poser, et rien ne justifiait
+   * l'écart. La comparaison se fait donc dans la casse du **contrat**, pas
+   * dans celle de l'affichage : comparer exactement laisserait passer le seul
+   * cas dangereux.
+   */
+  function submit() {
+    const name = draft.trim();
+    if (!name) {
+      cancelNaming();
+      return;
+    }
+    // Même marche que `NamedListDialog` : la confirmation porte sur CE nom-là,
+    // si bien que rééditer le texte repose la question au lieu de valider un
+    // accord donné pour un autre nom.
+    if (outfits.some((o) => o.name.toLowerCase() === name.toLowerCase()) && confirmName !== name) {
+      confirmName = name;
+      return;
+    }
+    commit(name);
+  }
+
+  function commit(name: string) {
+    saveOutfit({ name, body: prefs.body, helmet: prefs.helmet, suit: prefs.suit, gloves: prefs.gloves });
+    cancelNaming();
+  }
+
+  /**
+   * Le champ perd le focus : on valide, **sauf si la question est à l'écran**.
+   *
+   * Sans cette sortie, cliquer « Annuler » enregistrerait quand même — le blur
+   * du champ part avant le clic, et il trouverait `confirmName` déjà égal au
+   * nom saisi, donc l'accord déjà donné. La question posée, c'est aux deux
+   * boutons d'y répondre.
+   */
+  function blurred() {
+    if (confirmName) return;
+    submit();
   }
 
   function apply(outfit: SavedOutfit) {
@@ -94,11 +138,12 @@
         bind:value={draft}
         placeholder={t("driver.outfits.placeholder")}
         maxlength="28"
+        oninput={() => (confirmName = null)}
         onkeydown={(e) => {
-          if (e.key === "Enter") confirm();
-          if (e.key === "Escape") naming = false;
+          if (e.key === "Enter") submit();
+          if (e.key === "Escape") cancelNaming();
         }}
-        onblur={confirm}
+        onblur={blurred}
       />
     {:else}
       <button class="btn add" type="button" disabled={empty} title={t("driver.outfits.saveHint")} onclick={open}>
@@ -106,6 +151,20 @@
       </button>
     {/if}
   </div>
+
+  <!-- La question d'écrasement, posée sur place plutôt que dans une fenêtre :
+       les puces juste en dessous montrent déjà la tenue qu'on remplace. Même
+       formulation et mêmes mots que les sessions et les grilles — c'est la
+       même question, elle ne gagne rien à être posée autrement ici. -->
+  {#if confirmName}
+    <div class="confirm-overwrite">
+      <span>{t("common.overwriteConfirm", { name: confirmName })}</span>
+      <button class="btn btn-primary" type="button" onclick={() => commit(confirmName ?? "")}>
+        {t("common.overwriteConfirmBtn")}
+      </button>
+      <button class="btn" type="button" onclick={cancelNaming}>{t("common.cancel")}</button>
+    </div>
+  {/if}
 
   {#if outfits.length}
     <div class="chips">
@@ -173,6 +232,26 @@
     height: 26px;
     max-width: 170px;
     font-size: 11.5px;
+  }
+  /* Mêmes jetons que la même question dans `NamedListDialog` — le CSS Svelte
+     étant scopé, la ressemblance se réécrit, elle ne s'hérite pas. Seule la
+     géométrie change : pas de gouttière latérale, on est déjà dans le panneau.
+     Les boutons peuvent passer à la ligne, la colonne étant étroite. */
+  .confirm-overwrite {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: var(--rosso-dim);
+    border: 1px solid var(--rosso-border);
+    color: var(--rosso-bright);
+    font-size: 11.5px;
+  }
+  .confirm-overwrite button {
+    padding: 3px 10px;
+    font-size: 11px;
   }
   .chips {
     display: flex;

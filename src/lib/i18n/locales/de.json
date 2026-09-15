@@ -268,7 +268,9 @@
     "deactivate": "Deaktivieren",
     "remove": "Entfernen",
     "working": "…",
-    "description": "Beschreibung"
+    "description": "Beschreibung",
+    "overwriteConfirm": "„{name}“ existiert bereits. Überschreiben?",
+    "overwriteConfirmBtn": "Überschreiben"
   },
   "toast": {
     "expand": "Ausklappen",
@@ -574,8 +576,6 @@
     "loadWarnLayoutMissing": "Layout „{id}“ nicht gefunden: es wird das Standard-Layout der Strecke genutzt.",
     "loadWarnTrackSkinsMissing": "Streckenskins nicht gefunden: {names}.",
     "loadWarnTrackSkinsFailed": "Streckenskins nicht wiederhergestellt: {error}",
-    "overwriteConfirm": "„{name}“ existiert bereits. Überschreiben?",
-    "overwriteConfirmBtn": "Überschreiben",
     "launchSuccess": "Session an Content Manager geschickt — Assetto Corsa startet…",
     "steamRequiredTitle": "Steam läuft nicht",
     "steamRequiredBody": "Assetto Corsa startet über Steam. Starte Steam, melde dich an und bestätige dann hier, um fortzufahren.",

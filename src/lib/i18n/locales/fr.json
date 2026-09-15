@@ -374,7 +374,9 @@
     "description": "Description",
     "unmanagedState": "Non géré",
     "pendingState": "En attente",
-    "brokenState": "Cassé"
+    "brokenState": "Cassé",
+    "overwriteConfirm": "« {name} » existe déjà. Écraser ?",
+    "overwriteConfirmBtn": "Écraser"
   },
   "gridThumbs": {
     "taskTitle": "Génération des vignettes",
@@ -822,8 +824,6 @@
     "loadWarnLayoutMissing": "Tracé « {id} » introuvable : tracé par défaut du circuit.",
     "loadWarnTrackSkinsMissing": "Skins de circuit introuvables : {names}.",
     "loadWarnTrackSkinsFailed": "Skins de circuit non rétablis : {error}",
-    "overwriteConfirm": "« {name} » existe déjà. Écraser ?",
-    "overwriteConfirmBtn": "Écraser",
     "launchSuccess": "Session envoyée à Content Manager — Assetto Corsa démarre…",
     "steamRequiredTitle": "Steam n'est pas démarré",
     "steamRequiredBody": "Assetto Corsa se lance par Steam. Démarre Steam, connecte-toi, puis valide ici pour continuer.",

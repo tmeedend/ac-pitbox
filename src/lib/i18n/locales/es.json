@@ -268,7 +268,9 @@
     "deactivate": "Desactivar",
     "remove": "Quitar",
     "working": "…",
-    "description": "Descripción"
+    "description": "Descripción",
+    "overwriteConfirm": "« {name} » ya existe. ¿Sobrescribir?",
+    "overwriteConfirmBtn": "Sobrescribir"
   },
   "toast": {
     "expand": "Desplegar",
@@ -574,8 +576,6 @@
     "loadWarnLayoutMissing": "Layout « {id} » no encontrado: se usa el layout predeterminado del circuito.",
     "loadWarnTrackSkinsMissing": "Skins de circuito no encontrados: {names}.",
     "loadWarnTrackSkinsFailed": "Skins de circuito no restaurados: {error}",
-    "overwriteConfirm": "« {name} » ya existe. ¿Sobrescribir?",
-    "overwriteConfirmBtn": "Sobrescribir",
     "launchSuccess": "Sesión enviada a Content Manager — Assetto Corsa está arrancando…",
     "steamRequiredTitle": "Steam no está en marcha",
     "steamRequiredBody": "Assetto Corsa se lanza a través de Steam. Inicia Steam, accede a tu cuenta y luego confirma aquí para continuar.",

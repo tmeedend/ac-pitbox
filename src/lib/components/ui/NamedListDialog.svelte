@@ -92,16 +92,26 @@
 
     {#if mode === "save"}
       <div class="save-row">
-        <input class="input" {placeholder} bind:value={name} onkeydown={(e) => e.key === "Enter" && submitSave()} />
+        <!-- Retaper referme la question : elle nomme un nom précis, et la
+             laisser affichée pendant qu'on en saisit un autre la fait mentir.
+             Le garde de `submitSave` rendait déjà la chose sûre ; ceci la rend
+             lisible. -->
+        <input
+          class="input"
+          {placeholder}
+          bind:value={name}
+          oninput={() => (confirmName = null)}
+          onkeydown={(e) => e.key === "Enter" && submitSave()}
+        />
         <button class="btn btn-primary" type="button" onclick={submitSave} disabled={!name.trim()}>
           {t("settings.save")}
         </button>
       </div>
       {#if confirmName}
         <div class="confirm-overwrite">
-          <span>{t("launch.overwriteConfirm", { name: confirmName })}</span>
+          <span>{t("common.overwriteConfirm", { name: confirmName })}</span>
           <button class="btn btn-primary" type="button" onclick={() => onsave?.(confirmName ?? "")}>
-            {t("launch.overwriteConfirmBtn")}
+            {t("common.overwriteConfirmBtn")}
           </button>
           <button class="btn" type="button" onclick={() => (confirmName = null)}>{t("common.cancel")}</button>
         </div>
