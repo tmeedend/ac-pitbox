@@ -130,10 +130,17 @@ de reprendre. En cas d'écart, la spec fait foi.
       Un lot de ce genre est du **reformatage pur sur une quinzaine de
       fichiers** : le faire dans son propre commit, jamais mélangé à un
       changement fonctionnel (sinon `git blame` devient inexploitable).
-      **Une brique ne se crée pas avant son premier client** : `Toolbar`,
-      `ListRow` et la coquille de fiche attendent donc les lots de la refonte
-      qui les consomment (L2, L7), pour la même raison qu'une colonne SQL que
-      rien n'écrit ni ne lit pourrit.
+      **Une brique ne se crée pas avant son premier client** — et les trois qui
+      attendaient sont tranchées (2026-09-15). La coquille de fiche **a été
+      écrite** : c'est `FicheHeader`, livrée par L2 et portée par les cinq
+      fiches. `Toolbar` et `ListRow` ne le seront pas : leurs clients (L2, L7)
+      ont livré sans eux, et la mesure donne **deux** conteneurs identiques pour
+      le premier, **un seul** appelant pour le second — quand `.errbox` en avait
+      21, `.lbl-sub` 9 et `Seg` 7. Ce sont les *contrôles* qui ont été
+      factorisés (`Seg`, `TriCheck`, `.input`, `FilterBar`) et pas les
+      conteneurs, et c'est la bonne issue : la règle qui les avait repoussés
+      les annule. Détail et dérive résiduelle dans
+      `PLAN-refonte-navigation.md` §0.b.
 - [ ] **Vignettes régénérées de la grille** — **fusionné dans `main`, mais
       éteint** : `FEATURE_GRID_THUMBS` est à `false` dans `src/lib/features.ts`,
       qui porte le mode d'emploi de l'interrupteur. Il ne reste qu'un réglage,

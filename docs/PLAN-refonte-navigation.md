@@ -90,9 +90,22 @@ recopier maintenant, c'est les faire diverger tout de suite.
 - ✅ `Seg.svelte` — **7** copies. Trois axes de variation (`vertical`, `tone`, `size`
   nommée par son rôle) et rien d'autre. Le groupe zoom de la visionneuse PDF en est
   exclu : ses trois boutons sont des actions, pas un choix parmi trois.
-- `Toolbar.svelte` (§10), `ListRow.svelte` (§4.2) et la coquille de fiche (§6.1) :
-  **repoussés à leur premier client** (L2 et L7). Une brique sans consommateur pourrit
-  comme une colonne SQL que rien n'écrit ni ne lit.
+- ✅ La coquille de fiche (REFONTE§6.1) — c'est `FicheHeader`, livrée par **L2** et
+  portée par les cinq fiches.
+- ❌ `Toolbar.svelte` (REFONTE§10) et `ListRow.svelte` (REFONTE§4.2) — **ne seront pas
+  écrits** (mesuré le 2026-09-15). Leurs clients ont livré sans eux, et ce sont les
+  *contrôles* qui ont été factorisés plutôt que les conteneurs : `Seg`, `TriCheck`,
+  `.input`, et `FilterBar` pour la bibliothèque, partie sur des puces (§7.1) au lieu de
+  la barre commune du REFONTE§10. Reste **deux** conteneurs identiques à cinq
+  déclarations près (`.tools` d'`Inventory`, `.toolbar` de `DriverScreen`) — `Apps`
+  porte un en-tête d'écran, pas une barre de liste. Et la ligne du REFONTE§4.2 —
+  vignette, nom sur deux lignes, rattachement, état, ⋮ — n'existe qu'**une fois**,
+  dans `Inventory`. Deux conteneurs et un appelant, quand `.errbox` en avait 21,
+  `.lbl-sub` 9 et `Seg` 7 : sous le seuil qui a justifié chacune des autres briques.
+  La règle qui les avait repoussés les annule.
+  **Une dérive réelle, minuscule** : `.search` vaut 280 px dans `Inventory`, 200 dans
+  `DriverScreen` et 220 dans `Apps`, sans qu'aucune raison soit écrite nulle part. À
+  reprendre si on touche à l'un des trois, pas avant.
 - ✅ `.lbl-sub` — **9** copies, identiques à `max-width` près, qui reste à l'appelant :
   la largeur de mesure d'un paragraphe dépend de la colonne qui l'accueille, pas du
   rôle du texte. Tranché sur la maintenabilité, l'utilisateur n'ayant pas d'avis :
