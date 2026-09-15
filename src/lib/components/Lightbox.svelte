@@ -18,10 +18,30 @@
   import { untrack } from "svelte";
   import { nav } from "$lib/nav.svelte";
   import { t } from "$lib/i18n/index.svelte";
+  import { openUrl } from "@tauri-apps/plugin-opener";
 
   export interface LightboxItem {
     src: string;
     caption?: string;
+    /** **A credit line that cannot be dropped**, e.g. `Jane Doe · CC BY-SA 4.0`.
+     *
+     * Not the same thing as `caption`: the caption says what is being looked
+     * at, the credit says who owns it. Wikipedia images are shown under the
+     * Commons licences, which require the author to be named next to the work
+     * — so this is what makes displaying them lawful, not an embellishment
+     * (SPEC-wikipedia-fiche-detail.md §9). Absent for the app's own galleries,
+     * whose images belong to the user. */
+    credit?: string;
+    /** Where the full licence text lives — the file's page on Commons. Opened
+     * in the system browser, like every other outbound link. */
+    creditHref?: string;
+    /** Source to fall back on when `src` fails to load.
+     *
+     * MediaWiki refuses to render a thumbnail larger than the original and
+     * nothing in a URL says how big that original is, so asking for a big
+     * rendering is a gamble the caller cannot settle beforehand. It passes the
+     * size it already knows works, and a failed enlargement costs nothing. */
+    fallbackSrc?: string;
   }
 
   let {
@@ -65,6 +85,14 @@
     if (items.length === 0) onclose();
     else if (index >= items.length) index = items.length - 1;
   });
+
+  // A failed enlargement falls back once, and every image gets its own try.
+  let downgraded = $state(false);
+  $effect(() => {
+    void index;
+    downgraded = false;
+  });
+  const shown = $derived(downgraded ? (items[index]?.fallbackSrc ?? items[index]?.src) : items[index]?.src);
 
   const PLAY_INTERVAL_MS = 4000;
   $effect(() => {
@@ -152,7 +180,7 @@
 
     <div class="lb-center">
       <div class="lb-stage">
-        <img src={items[index].src} alt={items[index].caption ?? ""} />
+        <img src={shown} alt={items[index].caption ?? ""} onerror={() => (downgraded = true)} />
       </div>
 
       <div class="lb-bar">
@@ -175,6 +203,18 @@
           <span class="lb-count mono">{index + 1} / {items.length}</span>
         {/if}
         {#if items[index].caption}<span class="lb-caption">{items[index].caption}</span>{/if}
+        {#if items[index].credit}
+          <span class="lb-credit">{items[index].credit}</span>
+        {/if}
+        {#if items[index].creditHref}
+          <button
+            class="lb-source"
+            type="button"
+            onclick={() => openUrl(items[index].creditHref ?? "").catch(() => {})}
+          >
+            {t("lightbox.source")}
+          </button>
+        {/if}
       </div>
     </div>
 
@@ -324,5 +364,24 @@
   .lb-caption {
     color: var(--txt2);
     font-size: 11.5px;
+  }
+  /* Une mention de service : présente et lisible, jamais en concurrence avec
+     la légende, qui est le contenu. */
+  .lb-credit {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .lb-source {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--muted);
+    font: inherit;
+    font-size: 11px;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .lb-source:hover {
+    color: var(--rosso-bright);
   }
 </style>

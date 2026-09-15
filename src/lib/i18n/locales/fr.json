@@ -809,7 +809,8 @@
     "next": "Image suivante",
     "play": "Lancer le diaporama",
     "pause": "Mettre le diaporama en pause",
-    "trash": "Mettre à la corbeille (Suppr)"
+    "trash": "Mettre à la corbeille (Suppr)",
+    "source": "Voir sur Commons"
   },
   "history": {
     "event": {
@@ -1799,11 +1800,7 @@
     "purgeHint": "Efface les articles et les recherches infructueuses mises en cache. Vos appariements, corrections comprises, sont conservés.",
     "purgeAction": "Vider le cache",
     "purgeConfirm": "Vider le cache des articles Wikipédia ? Ils seront retéléchargés à la prochaine consultation.",
-    "purgeDone": "Cache vidé.",
-    "viewerClose": "Fermer",
-    "viewerPrev": "Image précédente",
-    "viewerNext": "Image suivante",
-    "viewerSource": "Voir sur Commons"
+    "purgeDone": "Cache vidé."
   },
   "prefs": {
     "writeFailedTitle": "Vos réglages ne sont pas enregistrés",

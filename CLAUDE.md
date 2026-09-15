@@ -975,15 +975,22 @@ laisser pourrir ici.
       ```
       Il dit où la résolution s'arrête — appariement, langue, ou réseau —, trois
       causes que rien ne distingue à l'écran.
-      **La visionneuse d'images est faite**, et il vaut la peine de savoir
-      pourquoi elle a coûté si peu : l'image est déjà là avec son auteur et sa
-      licence (§9 l'exige), Commons seul est accepté — donc rien sous usage
-      loyal ne peut y arriver —, et c'est la même balise `<img>` en plus grand
-      dans notre propre DOM. **Aucune surface nouvelle.** Elle s'affiche en
-      `position: fixed` et couvre pourtant la fiche et non la fenêtre : la
-      `container-type: inline-size` de `DetailPage` apporte le confinement de
-      mise en page, qui fait d'elle le bloc conteneur de ses descendants fixes.
-      C'est voulu — et ça évite gratuitement le piège du zoom.
+      **Les images s'ouvrent en grand**, et c'est `Lightbox` qui le fait —
+      la visionneuse partagée des captures et des backgrounds, à qui on a
+      ajouté deux choses : le **crédit avec son lien Commons** (§9 : sans lui
+      l'image ne peut pas être affichée du tout) et une **source de repli**,
+      parce que MediaWiki refuse d'agrandir au-delà de l'original et que rien
+      dans l'URL ne dit où il est — on demande 1600 px, on retombe sur la
+      vignette au premier échec.
+      **L'erreur à ne pas refaire, elle, vaut d'être écrite** : une deuxième
+      visionneuse a d'abord été écrite sans chercher si l'app en avait une.
+      Elle fonctionnait à la souris et au clavier, et elle était **cassée à la
+      manette** — `nav.inputCapture` est le drapeau par lequel une visionneuse
+      dit à `gamepadNav` de se taire, si bien que sans lui le B fermait la
+      fiche derrière l'image et gauche/droite changeaient de mod. Le
+      commentaire de `gamepadNav.ts` décrivait le piège mot pour mot. Une
+      brique recopiée ne coûte pas seulement du style dupliqué : elle **perd
+      les comportements que l'originale avait appris**.
       **Idée notée, pas un chantier** (« pas très important », dixit
       l'utilisateur) : **ouvrir les articles liés dans l'app**. Tout le pipeline
       existe déjà — un `/wiki/Titre` se résout, se récupère et se rend comme

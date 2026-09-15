@@ -25,8 +25,8 @@
   import { t } from "$lib/i18n/index.svelte";
   import { localeNames } from "$lib/i18n/index.svelte";
   import { parseExtract } from "$lib/wikiText";
-  import { renderArticle } from "$lib/wikiHtml";
-  import WikiImageViewer, { type ViewerImage } from "./WikiImageViewer.svelte";
+  import { largerImage, renderArticle } from "$lib/wikiHtml";
+  import Lightbox, { type LightboxItem } from "../Lightbox.svelte";
   import { zoomFactor } from "$lib/zoom.svelte";
   import { pinShell } from "$lib/shellScroll";
   import {
@@ -34,7 +34,6 @@
     clearWikiLink,
     searchWikiCandidates,
     setWikiLink,
-    type WikiImage,
     type WikiPanel,
     type WikiSuggestion,
   } from "$lib/wiki";
@@ -80,8 +79,14 @@
     pinShellHere();
   });
 
-  /** The article's photographs, in reading order, and which one is open. */
-  let viewerImages = $state<ViewerImage[]>([]);
+  /** The article's photographs, in reading order, and which one is open.
+   *
+   * They go through the app's **shared** viewer (`Lightbox`), the same one the
+   * screenshots and the backgrounds use. Writing a second one was a mistake:
+   * it left the gamepad out — `nav.inputCapture` is how a viewer tells the
+   * global controller navigation to stand down, and without it B closed the
+   * fiche behind the open image. */
+  let viewerItems = $state<LightboxItem[]>([]);
   let viewerIndex = $state<number | null>(null);
 
   /** Les liens de l'article ouvrent le navigateur système — jamais une
@@ -118,16 +123,25 @@
   function openViewer(clicked: HTMLImageElement) {
     if (!host || !article) return;
     const byFile = new Map(article.images.map((i) => [i.file, i]));
-    const list: ViewerImage[] = [];
+    const list: LightboxItem[] = [];
     let at = 0;
     for (const el of Array.from(host.querySelectorAll<HTMLImageElement>("img.wiki-photo"))) {
       const credit = byFile.get(el.dataset.file ?? "");
       if (!credit) continue;
       if (el === clicked) at = list.length;
-      list.push({ ...credit, caption: el.dataset.caption ?? "" });
+      list.push({
+        // The enlargement is asked for, never assumed: `fallbackSrc` is the
+        // thumbnail the article is already showing, so a refused enlargement
+        // costs nothing (§9).
+        src: largerImage(credit.url),
+        fallbackSrc: credit.url,
+        caption: el.dataset.caption || undefined,
+        credit: `${credit.artist} · ${credit.licence}`,
+        creditHref: credit.descriptionUrl || undefined,
+      });
     }
     if (list.length === 0) return;
-    viewerImages = list;
+    viewerItems = list;
     viewerIndex = at;
   }
 
@@ -389,13 +403,8 @@
       <button class="btn link" type="button" onclick={openSearch}>{t("wiki.wrongArticle")}</button>
     </div>
 
-    {#if viewerIndex !== null && viewerImages.length > 0}
-      <WikiImageViewer
-        images={viewerImages}
-        index={viewerIndex}
-        onclose={() => (viewerIndex = null)}
-        onnavigate={(i) => (viewerIndex = i)}
-      />
+    {#if viewerIndex !== null && viewerItems.length > 0}
+      <Lightbox items={viewerItems} startIndex={viewerIndex} onclose={() => (viewerIndex = null)} />
     {/if}
 
     <p class="attribution">
