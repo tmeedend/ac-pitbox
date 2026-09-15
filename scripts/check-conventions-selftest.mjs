@@ -86,6 +86,11 @@ const cases = [
     file: "zz-selftest-probe.pem",
     create: "pas une vraie clé, juste un nom de fichier\n",
   },
+  {
+    rule: "docs-index-incomplete",
+    file: "docs/zz-selftest-orphan.md",
+    create: "# Document que l'index ne connaît pas\n",
+  },
 ];
 
 let proven = 0;

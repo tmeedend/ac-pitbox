@@ -28,7 +28,7 @@
 // pour se voir en revue — si elle devient fréquente, c'est la règle qu'il faut
 // revoir, pas les exceptions qu'il faut multiplier.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 
 // `--others --exclude-standard` en plus du suivi : un composant tout juste
@@ -272,6 +272,33 @@ for (const locale of ["fr", "en", "it", "de", "es", "pt"]) {
   const RISKY = /\.(pfx|p12|pem|key|keystore|jks|ppk)$|(^|\/)\.env(\.|$)|(^|\/)(secrets?|credentials?)\./i;
   for (const f of ls(".")) {
     if (RISKY.test(f)) report("no-secret-file", f, 1, "fichier de secret ou de certificat");
+  }
+}
+
+// --- 9. tout `docs/` est dans l'index ---------------------------------------
+// `docs/README.md` promet de lister **tout** le dossier. Il ne le faisait pas :
+// dix fichiers sur trente-trois y manquaient, et il renvoyait à un
+// `archives.py` supprimé depuis. Un document que l'index ignore est un document
+// que personne ne retrouvera — et c'est exactement ce qui est arrivé aux six
+// instructions de l'écran de session, restées hors du dépôt des mois durant.
+{
+  const index = read("docs/README.md");
+  for (const entry of readdirSync("docs")) {
+    if (entry === "README.md") continue;
+    if (!index.includes(entry)) {
+      report("docs-index-incomplete", "docs/README.md", 1, `\`${entry}\` n'est pas dans l'index`);
+    }
+  }
+  // Et l'inverse : un fichier cité mais absent. `acmm-spec.md` a survécu des
+  // mois dans l'index après son renommage en `SPEC.md`.
+  const present = new Set(readdirSync("docs"));
+  for (const m of index.matchAll(/`([A-Za-z0-9._-]+\.(?:md|html|json|py))`/g)) {
+    const name = m[1];
+    // Les noms cités comme « anciens » ou hors `docs/` sont dans la prose, pas
+    // dans une entrée d'index : on ne réclame que ceux annoncés en gras.
+    if (!present.has(name) && index.includes(`**\`${name}\`**`)) {
+      report("docs-index-incomplete", "docs/README.md", 1, `\`${name}\` est cité mais n'existe pas`);
+    }
   }
 }
 
