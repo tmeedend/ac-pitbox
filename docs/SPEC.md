@@ -2370,17 +2370,23 @@ Atteint par la **dernière entrée du rail** (§7.2) : c'est du contenu, pas un 
 
 ## 14. Références (fichiers du dossier docs/)
 
-Voir `README.md` pour l'index complet. Fichiers de données et maquettes cités ci-dessus :
-- `kunos_content_dates.json` — années + dates de publication du contenu officiel Kunos.
-- `default-tag-rules-enriched.json` — ontologie de tags.
-- `pitbox-biblio-session2.html` — barre latérale unifiée (référence écran principal).
-- `pitbox-reglages-session.html` — écran de réglages de session.
-- `pitbox-fiche-B-revisee.html` — fiche voiture (référence layout).
-- `pitbox-vues-transversales.html` — vues Skins/Sons/Apps.
-- `pitbox-source-pack.html` — affichage pack d'origine.
-- `pitbox-ecran-pilote.html` — écran Pilote (§9.5), maquette interactive.
-- `archives.py` — logique d'import/détection à porter (référence, jamais exécutée ; ne jamais réécrire les `ui_*.json`).
-- `spec-module-musique_2.md` — spec de référence du module musique (§16), écrite pour une autre stack (C#/NAudio) : les écarts de transposition Rust/`rodio` sont documentés en tête de `src-tauri/src/music/engine.rs`, pas ici.
+**L'index est `docs/README.md`**, et il est le seul — une deuxième liste ici se
+mettrait à diverger de la première, ce qu'elle a fait : elle a renvoyé
+plusieurs mois durant à `archives.py`, supprimé du dépôt, et présentait comme
+« référence de l'écran principal » une maquette antérieure à la refonte de la
+navigation. Il dit, pour chaque fichier, ce qu'il contient, à quelle date il a
+été écrit, et s'il fait encore autorité.
+
+Un seul fichier de `docs/` est lu par l'application, et à ce titre il est une
+donnée et non de la documentation : **`kunos_content_dates.json`** (années et
+dates de publication du contenu officiel Kunos, §7.1), embarqué par
+`include_str!` depuis `kunos_dates.rs`.
+
+**`docs/default-tag-rules-enriched.json` n'est pas ce que l'app charge** —
+c'est `src-tauri/rules/default-tag-rules.json`, semé dans le dossier de config
+au premier démarrage puis édité par l'écran Règles (§5). Les deux ont divergé :
+la copie de `docs/` porte un groupe de règles de plus. Ne pas confondre les
+deux, et ne pas éditer celle de `docs/` en croyant changer le comportement.
 
 ---
 

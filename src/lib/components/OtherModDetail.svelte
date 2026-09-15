@@ -3,12 +3,12 @@
   //
   // Même raison d'être que la fiche d'un mod de son (`SoundDetail.svelte`) :
   // ses annexes (notice, images d'un mannequin de pilote nu, par exemple)
-  // n'avaient nulle part où vivre — la liste plate d'`OtherMods.svelte` n'a
-  // que des actions de ligne, pas d'espace pour un `ResourcesBlock`. Rien
-  // n'est réinventé : `StateBadge` et `ResourcesBlock` sont ceux de la fiche
-  // voiture et du son ; les actions (activer, prioritaire, dossier,
-  // supprimer) sont celles déjà écrites dans `OtherMods.svelte`, reçues en
-  // props plutôt que réimplémentées ici.
+  // n'avaient nulle part où vivre — une liste n'a que des actions de ligne,
+  // pas d'espace pour un `ResourcesBlock`. Rien n'est réinventé : `StateBadge`
+  // et `ResourcesBlock` sont ceux de la fiche voiture et du son ; les actions
+  // (activer, prioritaire, dossier, supprimer) sont reçues en props de
+  // l'écran qui ouvre la fiche — `Inventory.svelte` ou `DetailPage.svelte` —
+  // plutôt que réimplémentées ici.
   import { t } from "$lib/i18n/index.svelte";
   import { type OtherModRow } from "$lib/others";
   import ResourcesBlock from "./detail/ResourcesBlock.svelte";

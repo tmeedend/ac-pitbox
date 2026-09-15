@@ -224,8 +224,8 @@ chaque fois) et *Le jeu* (ce qui reste vrai jusqu'à nouvel ordre).
 
 **Les trois écrans transversaux ont disparu** (Add-ons voiture, Add-ons
 circuit, l'ancien fourre-tout) : ils classaient par mécanique d'installation,
-et leur contenu est dans l'inventaire. `Transversal.svelte` est supprimé,
-`OtherMods.svelte` n'est plus routé — la fiche d'un mod « autre »
+et leur contenu est dans l'inventaire. `Transversal.svelte`, `OtherMods.svelte`
+et `LayersSection.svelte` sont supprimés — la fiche d'un mod « autre »
 (`OtherModDetail`) vit désormais par-dessus l'inventaire.
 
 Deux pièges de ce regroupement : l'onglet de l'Atelier étant `nav.section`, un
@@ -655,7 +655,7 @@ laisser pourrir ici.
         remonte aussi les deux autres ;
       - le cadrage d'Officiel a une **mesure** derrière lui (§11.4 de la spec) ;
         s'en écarter est permis, l'ignorer serait dommage.
-- [ ] **Écran Pilote** (branche `feature/ecran-pilote`). Spec et maquette dans
+- [ ] **Écran Pilote** (fusionné dans `main`). Spec et maquette dans
       `docs/SPEC-ecran-pilote.md` + `docs/pitbox-ecran-pilote.html`, résumé au
       §9.5 du SPEC. **À lire avant de reprendre** — l'asymétrie qui structure
       tout l'écran (le corps commande, la tenue en découle) y est expliquée une
@@ -764,7 +764,8 @@ laisser pourrir ici.
       Deux mesures à garder en tête : les trois voitures dont la `.knh` est
       vide retombent sur `DRIVEREYES`, et `[MODEL] POSITION` ne doit **pas**
       être appliqué (voir `seating_offset`).
-- [ ] **Aperçu 3D natif des voitures** (branche `feature/3dpreview`).
+- [ ] **Aperçu 3D natif des voitures** (fusionné dans `main` ; la branche
+      d'origine `feature/3dpreview` ne subsiste que sur `origin`).
       **L'avancement détaillé, les écarts assumés vis-à-vis de la spec et le
       reste à faire sont dans `docs/SPEC-preview-3d-kn5.md` §13 à §15** — c'est
       là qu'il faut lire en reprenant, pas ici.
@@ -802,8 +803,8 @@ laisser pourrir ici.
       pendant deux lots ; et **le `preview.jpg` d'un skin est une référence de
       cadrage, pas de luminosité** — il est plus sombre que le rendu du jeu, ce
       qui m'a fait diagnostiquer un écart inexistant.
-- [ ] **Enrichissement Wikipédia de la fiche** (branche
-      `feature/wikipedia-fiche-detail`). Un extrait de l'article du véhicule ou
+- [ ] **Enrichissement Wikipédia de la fiche** (fusionné dans
+      `main`). Un extrait de l'article du véhicule ou
       du circuit **réel**, dans un onglet à côté de la description de l'auteur.
       Spec : `docs/SPEC-wikipedia-fiche-detail.md`, et son §1 commande tout —
       la fonctionnalité est **décorative**, donc l'ambiguïté n'affiche rien et
@@ -1010,8 +1011,8 @@ laisser pourrir ici.
       source), réponse attendue par email. Si refus ou trop long, plan B
       documenté : Certum Open Source Code Signing (~49€/an, cloud SimplySign,
       pas de jeton USB).
-- [ ] **Refonte de la navigation et des fiches** (branche
-      `feature/refonte-navigation`). Rail à deux rangs, inventaire unique des
+- [ ] **Refonte de la navigation et des fiches** (premier palier fusionné dans
+      `main`). Rail à deux rangs, inventaire unique des
       compléments, une seule anatomie de fiche, notes sur toutes les entités.
       **Spec, maquette et plan de livraison dans `docs/`** —
       `PLAN-refonte-navigation.md` porte l'ordre des lots et, surtout, les

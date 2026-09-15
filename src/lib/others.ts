@@ -52,23 +52,6 @@ export interface OtherModRow {
   categories: string[];
 }
 
-/** Ordre des onglets de l'écran « Autres mods ». Doit rester aligné sur
- * `others::CATEGORY_ORDER` côté Rust ; une catégorie que le backend renverrait
- * sans qu'elle figure ici n'est pas perdue pour autant — `OtherMods.svelte`
- * ajoute les inconnues avant « Autres » plutôt que de masquer leurs mods. */
-export const OTHER_CATEGORIES = [
-  "extension",
-  "weather",
-  "gui",
-  "driver",
-  "textures",
-  "objects3d",
-  "fonts",
-  "ppfilters",
-  "showrooms",
-  "other",
-] as const;
-
 export interface ActivateOtherResult {
   junctions: number;
   warnings: string[];

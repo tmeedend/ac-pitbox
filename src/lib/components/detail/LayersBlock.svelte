@@ -211,8 +211,8 @@
     color: var(--blue);
   }
   /* **Les cinq règles que l'extraction avait laissées derrière.** Ce bloc vient
-     de `LayersSection`, et le CSS d'un composant Svelte est scopé : le markup a
-     déménagé, son habillage non. Rien ne le signale — ni `npm run check`, ni la
+     d'un composant depuis supprimé, et le CSS d'un composant Svelte est scopé :
+     le markup a déménagé, son habillage non. Rien ne le signale — ni `npm run check`, ni la
      relecture du fichier d'arrivée — et le navigateur sert alors son propre
      style de bouton : des rectangles blancs au milieu d'un thème sombre. Vu à
      l'usage sur les couches d'une app et sur celles de Spa. */
