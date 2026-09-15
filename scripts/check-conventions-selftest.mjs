@@ -74,6 +74,18 @@ const cases = [
     file: "src/lib/i18n/locales/fr.json",
     inject: (s) => `${JSON.stringify({ ...JSON.parse(s), zzSelfTestRef: "voir la règle (§4.4)." }, null, 2)}\n`,
   },
+  {
+    // Valeur volontairement fantaisiste : ce qu'on teste est la **forme** du
+    // jeton, celle que les robots de moissonnage cherchent sur GitHub.
+    rule: "no-secret",
+    file: "src/lib/zoom.svelte.ts",
+    inject: (s) => `${s}\nconst _probe = "ghp_000000000000000000000000000000000000";\n`,
+  },
+  {
+    rule: "no-secret-file",
+    file: "zz-selftest-probe.pem",
+    create: "pas une vraie clé, juste un nom de fichier\n",
+  },
 ];
 
 let proven = 0;

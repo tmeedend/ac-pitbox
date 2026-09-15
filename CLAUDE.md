@@ -154,6 +154,30 @@ Jamais d'élévation admin — l'app doit fonctionner en utilisateur standard.
    jamais relu après redémarrage (aucun cas de ce genre dans le projet
    aujourd'hui) — dans le doute, c'est un fichier Rust.
 
+## Le dépôt est public
+
+Ça change une chose et une seule, mais elle est sans retour : **un secret
+poussé est un secret brûlé.** Les robots moissonnent les dépôts publics en
+quelques secondes, et le retirer dans un commit suivant ne le dépublie pas — il
+reste dans l'historique, et il est déjà copié ailleurs. Un jeton exposé se
+**révoque**, il ne s'efface pas.
+
+Donc : jamais de clé, de jeton, de mot de passe ni de certificat dans un
+fichier du dépôt, **même le temps d'un essai**. Ce qui est secret vit dans une
+variable d'environnement ou dans les secrets du dépôt GitHub — c'est déjà ce
+que fait la signature de l'installateur (`SIGN_COMMAND`, voir
+`docs/windows-code-signing.md`).
+
+`npm run check` refuse un jeton reconnaissable (`ghp_`, `sk-ant-`, `AKIA`…),
+une affectation dont le nom dit « secret » avec une valeur longue, et un
+fichier dont le **nom** annonce un secret (`.pem`, `.pfx`, `.env`). **Il ne voit
+pas tout** : un secret qui ne ressemble à rien de connu passe. Le contrôle
+attrape l'accident courant, il ne remplace pas l'attention.
+
+Rien de personnel non plus — chemins de la machine, adresses, captures d'écran
+d'autre chose que l'app. Le dépôt a été vérifié de bout en bout, historique
+compris : il en est indemne aujourd'hui.
+
 ## Structure du projet
 
 ```

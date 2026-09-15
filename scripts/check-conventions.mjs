@@ -216,6 +216,65 @@ for (const locale of ["fr", "en", "it", "de", "es", "pt"]) {
   walk(JSON.parse(read(file)), "");
 }
 
+// --- 8. secret sur le point d'être versionné --------------------------------
+// **Le dépôt est public.** Un jeton poussé sur GitHub est moissonné par des
+// robots en quelques secondes, et le retirer d'un commit ultérieur ne le
+// dépublie pas : il reste dans l'historique, et il est déjà copié ailleurs. Le
+// seul remède qui vaille est de ne jamais l'écrire — d'où un contrôle **avant**
+// le commit plutôt qu'une consigne qu'on relit quand on y pense.
+//
+// Deux familles, et la première seule est sûre à 100 % : les jetons qui portent
+// leur propre préfixe (`ghp_`, `sk-ant-`, `AKIA`…) ne ressemblent à rien
+// d'autre. La seconde — une affectation dont le nom dit « secret » et dont la
+// valeur est longue — attrape le cas courant sans prétendre à l'exhaustivité.
+// Un contrôle qui ne voit pas tout vaut mieux qu'aucun ; il ne dispense pas de
+// faire attention.
+{
+  const SECRETS = [
+    [/\bghp_[A-Za-z0-9]{20,}/, "jeton GitHub"],
+    [/\bgithub_pat_[A-Za-z0-9_]{20,}/, "jeton GitHub (fine-grained)"],
+    [/\bsk-ant-[A-Za-z0-9_-]{20,}/, "clé API Anthropic"],
+    [/\bsk-[A-Za-z0-9]{32,}/, "clé API (format OpenAI)"],
+    [/\bAKIA[0-9A-Z]{16}\b/, "clé d'accès AWS"],
+    [/\bxox[baprs]-[A-Za-z0-9-]{10,}/, "jeton Slack"],
+    [/-----BEGIN [A-Z ]*PRIVATE KEY-----/, "clé privée"],
+    [
+      /\b(?:api[_-]?key|secret|password|passwd|token|credential)\s*[:=]\s*["'][^"'\s]{12,}["']/i,
+      "affectation qui ressemble à un secret",
+    ],
+  ];
+  // Le fichier de licences est généré, les verrous sont pleins de hachages : ni
+  // l'un ni l'autre ne contient de secret, et tous deux déclencheraient le
+  // motif d'affectation.
+  const SKIP = /package-lock\.json$|Cargo\.lock$|generated\/|refs-baseline\.json$|check-conventions/;
+
+  for (const f of ls(".").filter((f) => !SKIP.test(f))) {
+    let lines;
+    try {
+      lines = read(f).split("\n");
+    } catch {
+      continue; // binaire ou illisible : rien à y lire de toute façon
+    }
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].length > 4000) continue; // ligne minifiée ou encodée
+      for (const [re, what] of SECRETS) {
+        if (re.test(lines[i]) && !allowed(lines, i, "no-secret")) {
+          report("no-secret", f, i + 1, `${what} — ne jamais versionner, le dépôt est public`);
+          break;
+        }
+      }
+    }
+  }
+
+  // Un fichier dont le **nom** annonce un secret n'a rien à faire ici, même
+  // vide : c'est le plus souvent un certificat ou un `.env` déposé « le temps
+  // d'un essai ».
+  const RISKY = /\.(pfx|p12|pem|key|keystore|jks|ppk)$|(^|\/)\.env(\.|$)|(^|\/)(secrets?|credentials?)\./i;
+  for (const f of ls(".")) {
+    if (RISKY.test(f)) report("no-secret-file", f, 1, "fichier de secret ou de certificat");
+  }
+}
+
 // --- Rapport ----------------------------------------------------------------
 
 if (!violations.length) {

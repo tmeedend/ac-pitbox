@@ -42,6 +42,10 @@ const DOCS = {
   // Les instructions par lot de la refonte de l'écran de session. Livrées,
   // gardées pour leurs arguments — et parce que le code y renvoie.
   L5: "LOT5-refonte-ecran-session.md",
+  L4: "LOT4-etat-de-piste.md",
+  L2: "LOT2-selection-adversaires.md",
+  L1: "LOT1-forme-ecran-session.md",
+  SETUP: "LOT-session-setup.md",
   // Le module musique renvoie à sa spec d'origine, écrite pour une autre stack
   // (C#/NAudio) : elle garde sa numérotation propre, et §16 de SPEC.md décrit
   // ce que l'app en a réellement fait.
@@ -76,7 +80,13 @@ if (missingDocs.length) {
 // Pas de `\b` devant l'étiquette : un `§` nu est le plus souvent précédé d'une
 // parenthèse ou d'une espace, où `\b` ne matche pas — c'est ce qui faisait
 // rendre « 0 renvoi » au premier jet.
-const REF = /([A-Z]{3,8})?§([0-9]+(?:\.[0-9]+)*(?:[a-z-]+(?:\.[0-9]+)*)*)/g;
+//
+// L'étiquette peut porter des chiffres et n'en faire que deux (`L5§2.3`) : la
+// première version exigeait trois majuscules, si bien que `L5§2.3` se lisait
+// comme un `§2.3` nu et se faisait vérifier contre le mauvais document — en
+// silence, puisque le socle le connaissait déjà sous cette forme. Une étiquette
+// inconnue vaut mieux qu'une étiquette invisible : elle, au moins, échoue.
+const REF = /([A-Z][A-Z0-9]{0,7})?§([0-9]+(?:\.[0-9]+)*(?:[a-z-]+(?:\.[0-9]+)*)*)/g;
 
 const files = execSync("git ls-files src src-tauri/src src-tauri/crates", { maxBuffer: 1e9 })
   .toString().trim().split("\n")

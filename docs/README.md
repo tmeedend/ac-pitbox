@@ -24,6 +24,10 @@ désigne `SPEC.md`** et les autres documents portent une étiquette :
 | `IMPORT§` | `SPEC-import.md` |
 | `REFONTE§` | `SPEC-refonte-navigation-et-fiches.md` |
 | `TEXTURE§` | `SPEC-texture-update.md` |
+| `SETUP§` | `LOT-session-setup.md` |
+| `L1§` | `LOT1-forme-ecran-session.md` |
+| `L2§` | `LOT2-selection-adversaires.md` |
+| `L4§` | `LOT4-etat-de-piste.md` |
 | `L5§` | `LOT5-refonte-ecran-session.md` |
 
 `npm run check` vérifie que chaque renvoi tombe sur une section qui existe
@@ -60,15 +64,24 @@ chose qui rendait jusqu'ici une renumérotation invisible au code.
 
 ## Instructions par lot — livrées, gardées pour leurs arguments
 
-- **`LOT5-refonte-ecran-session.md`** — la refonte de l'écran de préparation de
-  session : le type devient la navigation, le repli `Performance`, le bloc
-  `CONDITIONS` unique, la page adversaires. **Livré.** Gardé parce que
-  77 renvois du code y pointent et parce qu'il porte les *arguments* — « un
-  réglage se range selon sa portée, jamais selon sa fréquence d'usage », « le
-  panneau gauche ne doit jamais défiler » et ses trois recours dans l'ordre.
-  `SPEC-session.md` décrit ce que l'écran **est** ; celui-ci dit ce qui a été
-  demandé et pourquoi. **Ses documents frères — lots 1, 2 et 4 — manquent**, et
-  une quarantaine de renvois du code les désignent.
+Cinq instructions ont piloté la construction de l'écran de session, dans cet
+ordre. Toutes **livrées**. On les garde parce que le code y renvoie et parce
+qu'elles portent les *arguments* derrière les choix — la partie qu'on ne
+retrouve pas deux fois. `SPEC-session.md` décrit ce que l'écran **est**
+aujourd'hui ; celles-ci disent ce qui a été demandé et pourquoi. En cas
+d'écart, `SPEC-session.md` fait foi.
+
+- **`LOT-session-setup.md`** (`SETUP§`) — corrections et réorganisation de
+  départ, §1.1 à §1.9 puis §2.1 à §2.11. C'est à ces deux moitiés que le lot 5
+  renvoie quand il écrit « la règle 1.2 du lot 1 » et « §2.6 du lot 2 ».
+- **`LOT1-forme-ecran-session.md`** (`L1§`) — la forme de l'écran de réglages.
+- **`LOT2-selection-adversaires.md`** (`L2§`) — la sélection d'adversaires.
+- **`LOT4-etat-de-piste.md`** (`L4§`) — les presets d'état de piste de Content
+  Manager.
+- **`LOT5-refonte-ecran-session.md`** (`L5§`) — la refonte : le type devient la
+  navigation, le repli `Performance`, le bloc `CONDITIONS` unique, la page
+  adversaires. Il porte le principe directeur de l'ensemble — « un réglage se
+  range selon sa portée, jamais selon sa fréquence d'usage ».
 
 ## Chantiers en cours
 
