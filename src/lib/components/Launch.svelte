@@ -18,6 +18,7 @@
     weatherConditions,
     trackSun,
     trackStates,
+    nationalities,
     type AssistLevel,
     type Opponent,
     type PracticeStart,
@@ -25,7 +26,9 @@
     type Season,
     type SessionType,
     type SkinItem,
+    type Nationality,
     type TrackStateOption,
+    type TrackStateRef,
     type TrackSun,
     type WeatherOption,
   } from "$lib/launch";
@@ -46,6 +49,7 @@
   import TrackConditionBlock from "./launch/TrackConditionBlock.svelte";
   import WeatherBlock from "./launch/WeatherBlock.svelte";
   import OpponentsBlock from "./launch/OpponentsBlock.svelte";
+  import GridBlock from "./launch/GridBlock.svelte";
   import SessionOptionsBlock from "./launch/SessionOptionsBlock.svelte";
   import SimulationBlock from "./launch/SimulationBlock.svelte";
   import SessionTypeBlock from "./launch/SessionTypeBlock.svelte";
@@ -69,6 +73,11 @@
   // liste, il la reçoit — c'est ce qui permettra d'y ajouter des états d'une
   // autre provenance sans le toucher.
   let trackStateList = $state<TrackStateOption[]>([]);
+  // La liste des nationalités du jeu (§4.2), avec leurs drapeaux. Lue à
+  // l'ouverture de l'écran comme les états de piste, et vide quand
+  // l'installation n'est pas lisible — la cellule retombe alors sur la saisie
+  // libre plutôt que d'offrir un menu vide.
+  let nationalityList = $state<Nationality[]>([]);
   let selectedIntent = $state("");
   let opponentCount = $state(7);
   // Jeton de génération du plateau (§6.3ter) : `regenerateGrid` est asynchrone
@@ -114,6 +123,7 @@
     season_date: null,
     penalties: false,
     jump_start_penalty: 0,
+    track_state: null,
     grip: 96,
     practice_enabled: false,
     practice_minutes: 20,
@@ -237,10 +247,9 @@
   // menu, et les trois puces sont ce qui la remplit en un clic.
   let gridPinned = $state<string[]>([]);
   let gridQuery = $state("");
-  /** Colonnes optionnelles du plateau et état élargi (§4.2/§4.3), mémorisés
-   * par type de session comme tous les autres réglages. */
+  /** Colonnes optionnelles du plateau (§4.2), mémorisées par type de session
+   * comme tous les autres réglages. */
   let gridColumns = $state<string[]>(["ratio", "strength"]);
-  let gridWide = $state(false);
   const gridIndex = $derived(buildCardIndex(carPool, gridDefs, true, hasOwnDriver, setup.car_id));
   const gridMatches = $derived(buildPredicate(gridDefs, gridFilters, gridIndex.ctx));
   const gridPool = $derived(carPool.filter((c) => gridMatches(c) && matchesQuery(c, gridQuery)));
@@ -683,12 +692,15 @@
     grid_filters?: string;
     grid_pinned?: string[];
     grid_columns?: string[];
-    grid_wide?: boolean;
     grid_mode?: "same_car" | "same_category" | "free";
     category_selection?: string;
     year_min?: number; year_max?: number;
     laps: number; time_hours: number;
-    penalties: boolean; jump_start_penalty: number; grip: number;
+    penalties: boolean; jump_start_penalty: number;
+    /** L'état de piste entier (§4.7). `grip` reste écrit pour qu'un retour en
+     * arrière de version retrouve quelque chose, et relu quand `track_state`
+     * manque. */
+    track_state?: TrackStateRef | null; grip: number;
     practice_enabled: boolean; practice_minutes: number;
     qualify_enabled: boolean; qualify_minutes: number; ghost_car: boolean; practice_start: PracticeStart;
     damage: number; fuel_rate: number; tyre_wear: number; tyre_blankets: boolean; intent: string; season: Season;
@@ -776,9 +788,10 @@
       aggression: setup.aggression, start_mode: setup.start_mode, ghost_advantage: setup.ghost_advantage,
       opponent_count: opponentCount,
       grid_filters: serializeFilters(gridQuery, gridFilters), grid_pinned: [...gridPinned],
-      grid_columns: [...gridColumns], grid_wide: gridWide,
+      grid_columns: [...gridColumns],
       laps: setup.laps, time_hours: setup.time_hours,
-      penalties: setup.penalties, jump_start_penalty: setup.jump_start_penalty, grip: setup.grip,
+      penalties: setup.penalties, jump_start_penalty: setup.jump_start_penalty,
+      track_state: setup.track_state ? { ...setup.track_state } : null, grip: setup.grip,
       practice_enabled: setup.practice_enabled, practice_minutes: setup.practice_minutes,
       qualify_enabled: setup.qualify_enabled, qualify_minutes: setup.qualify_minutes, ghost_car: setup.ghost_car,
       practice_start: setup.practice_start,
@@ -816,11 +829,13 @@
       setup.start_mode = START_MODES.includes(p.start_mode as StartMode) ? (p.start_mode as StartMode) : "random";
       setup.ghost_advantage = Math.max(0, Math.min(5, p.ghost_advantage ?? 0));
       gridColumns = p.grid_columns ?? ["ratio", "strength"];
-      gridWide = p.grid_wide ?? false;
       opponentCount = p.opponent_count ?? 7;
       applyGridPreset(p);
       setup.laps = p.laps; setup.time_hours = p.time_hours;
       setup.penalties = p.penalties; setup.jump_start_penalty = p.jump_start_penalty ?? 0;
+      // L'état entier s'il est là, le pourcentage seul sinon : `TrackConditionBlock`
+      // retrouve alors l'état natif le plus proche, ce que faisait l'ancien select.
+      setup.track_state = p.track_state ?? null;
       setup.grip = nearestGrip(p.grip ?? 100);
       setup.practice_enabled = p.practice_enabled ?? false; setup.practice_minutes = p.practice_minutes ?? 20;
       setup.qualify_enabled = p.qualify_enabled ?? true; setup.qualify_minutes = p.qualify_minutes ?? 10;
@@ -864,9 +879,9 @@
 
   $effect(() => {
     void [setup.ai_level, setup.ai_spread, setup.aggression, setup.aggression_spread, setup.start_mode, setup.ghost_advantage,
-      opponentCount, gridFilters, gridQuery, gridPinned, gridColumns, gridWide,
+      opponentCount, gridFilters, gridQuery, gridPinned, gridColumns,
       setup.laps,
-      setup.time_hours, setup.penalties, setup.jump_start_penalty, setup.grip,
+      setup.time_hours, setup.penalties, setup.jump_start_penalty, setup.grip, setup.track_state,
       setup.practice_enabled, setup.practice_minutes, setup.qualify_minutes,
       setup.ghost_car, setup.practice_start, setup.damage, setup.fuel_rate, setup.tyre_wear, setup.tyre_blankets,
       selectedIntent, season,
@@ -876,7 +891,12 @@
 
   // --- Chargement + résolution des défauts (§8.6) ---
   onMount(async () => {
-    [weathers, libCards, trackStateList] = await Promise.all([weatherOptions(), listLibrary(), trackStates()]);
+    [weathers, libCards, trackStateList, nationalityList] = await Promise.all([
+      weatherOptions(),
+      listLibrary(),
+      trackStates(),
+      nationalities().catch(() => []),
+    ]);
 
     const state = await loadLaunchState();
     // Repli sur l'ancien `localStorage` seulement si le fichier Rust n'a rien
@@ -1269,12 +1289,7 @@
     <LoadingState />
   {:else}
   <div class="body">
-    <!-- `⤢` (§4.3) : le plateau prend toute la largeur du contenu et la
-         colonne de droite passe dessous, le temps de composer. C'est une
-         **classe sur la grille de l'écran**, pas une largeur posée sur le bloc :
-         les deux colonnes sont un `grid`, et seule la grille peut décider que
-         l'une passe sous l'autre. -->
-    <div class="cols" class:wide={gridWide && (setup.session_type === "race" || setup.session_type === "trackday")}>
+    <div class="cols">
       <!-- COLONNE GAUCHE -->
       <div>
         <SessionTypeBlock
@@ -1291,8 +1306,6 @@
           <OpponentsBlock
             {setup}
             {opponentCount}
-            {carPool}
-            {skinsByCarId}
             defs={gridDefs}
             bind:filters={gridFilters}
             bind:pinned={gridPinned}
@@ -1300,19 +1313,8 @@
             index={gridIndex}
             poolCount={gridPool.length}
             playerCard={player}
-            bind:columns={gridColumns}
-            bind:wide={gridWide}
-            onsetcell={setOpponentCell}
-            onsavegrid={() => void openGridDialog("save")}
-            onloadgrid={() => void openGridDialog("load")}
             oncountchange={applyOpponentCount}
             onfill={() => void fillGrid()}
-            onchoose={openAddPicker}
-            onremove={removeOpponent}
-            onduplicate={duplicateOpponentWithVariant}
-            onsetlevel={setOpponentLevel}
-            onopenpicker={openPicker}
-            onregenerate={() => void regenerateGrid()}
           />
         {/if}
       </div>
@@ -1340,6 +1342,33 @@
           onoverridewind={overrideWind}
         />
       </div>
+
+      <!-- LE PLATEAU — une rangée à lui, sur toute la largeur.
+           Il occupait la colonne de gauche, et laissait donc ~700 px vides à
+           droite sous la météo dès que celle-ci s'arrêtait. En rangée 2, il
+           commence après la **plus haute** des deux colonnes : il ne peut donc
+           jamais chevaucher le rail, ce qu'une pleine largeur posée en rangée 1
+           aurait fait. -->
+      {#if setup.session_type === "race" || setup.session_type === "trackday"}
+        <GridBlock
+          {setup}
+          {carPool}
+          {skinsByCarId}
+          index={gridIndex}
+          poolCount={gridPool.length}
+          bind:columns={gridColumns}
+          {nationalityList}
+          onchoose={openAddPicker}
+          onregenerate={() => void regenerateGrid()}
+          onremove={removeOpponent}
+          onduplicate={duplicateOpponentWithVariant}
+          onsetlevel={setOpponentLevel}
+          onsetcell={setOpponentCell}
+          onsavegrid={() => void openGridDialog("save")}
+          onloadgrid={() => void openGridDialog("load")}
+          onopenpicker={openPicker}
+        />
+      {/if}
     </div>
   </div>
   {/if}
@@ -1535,36 +1564,42 @@
     border: 1px solid var(--green-border);
     color: var(--green);
   }
+  /* Le seuil de mise en page est une requête de **conteneur** et non de média :
+     ce qui décide, c'est la largeur réellement reçue par le corps de l'écran —
+     le rail de navigation et la colonne de session ont déjà pris la leur — et
+     le zoom d'interface déplace la largeur de la fenêtre sans rien changer à
+     celle-là. */
   .body {
+    container: session / inline-size;
     padding: 22px 32px 40px;
   }
 
+  /* Centré et plafonné, jamais collé à un bord.
+     Le plafond est là pour qu'un très grand écran ne délaye pas l'écran sur
+     deux mètres, pas pour le rétrécir : il est assez haut pour que la fenêtre
+     habituelle le remplisse et n'en voie jamais la marge. Ce qui protège les
+     curseurs d'une course souris absurde n'est pas lui mais la mise en colonnes
+     des blocs eux-mêmes — trois curseurs côte à côte dans Simulation, une
+     largeur fixe pour les deux fourchettes. */
   .cols {
     display: grid;
-    grid-template-columns: 1.35fr 1fr;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
     gap: 26px;
+    max-width: 1720px;
+    margin-inline: auto;
   }
-  /* `⤢` élargissait toute la page (§2.3). Il n'élargit plus que la **grille**.
-     Les curseurs de SIMULATION étirés sur 1200 px avaient une course souris
-     disproportionnée pour un réglage qu'on pose au pourcentage près, et le
-     bloc ne ressemblait plus au même composant d'un mode à l'autre.
-     La colonne de droite passe dessous, comme prévu ; la colonne centrale, elle,
-     est plafonnée et reste calée à gauche. */
-  .cols.wide {
-    grid-template-columns: 1fr;
+  /* Sous ce seuil, la colonne de droite **passe dessous** plutôt que de se
+     comprimer : en dessous d'environ 380 px elle ne sait plus afficher la bande
+     jour/nuit ni les quatre valeurs de l'état de piste sur une ligne. La colonne
+     unique se plafonne à son tour et reste centrée. */
+  /* Le plateau prend la rangée du dessous, sur les deux colonnes. */
+  .cols > :global(.grid-blk) {
+    grid-column: 1 / -1;
   }
-  /* 600 px : la largeur que ces blocs reçoivent réellement en mode normal, et
-     celle sur laquelle le plateau a été dessiné. Plafond et non largeur fixe —
-     une fenêtre étroite doit encore pouvoir les rétrécir. */
-  .cols.wide :global(.blk) {
-    max-width: 600px;
-  }
-  /* Le bloc Adversaires est exempté du plafond : c'est lui qu'on est venu
-     élargir. Le plafond y est reposé **à l'intérieur**, sur son en-tête seul,
-     pour que la grille soit la seule chose à s'étendre (§2.3). `:global` parce
-     que le bloc est rendu par un composant enfant et que le CSS de Svelte est
-     scopé — sans ça la règle ne l'atteindrait pas. */
-  .cols.wide :global(.blk.oppo-blk) {
-    max-width: none;
+  @container session (max-width: 980px) {
+    .cols {
+      grid-template-columns: minmax(0, 1fr);
+      max-width: 880px;
+    }
   }
 </style>

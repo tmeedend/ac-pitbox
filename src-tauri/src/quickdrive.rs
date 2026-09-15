@@ -170,6 +170,7 @@ const WEATHER_STATE: TrackState = TrackState {
 /// ne dit rien de la piste.
 pub fn weather_state_option() -> crate::commands::trackstate::TrackStateOption {
     crate::commands::trackstate::TrackStateOption {
+        origin: "builtin".into(),
         start: GRIP_WEATHER,
         name: WEATHER_STATE.name.to_string(),
         transfer: WEATHER_STATE.transfer,
@@ -222,18 +223,42 @@ pub fn track_state_for(grip: u32) -> &'static TrackState {
 /// d'interface pour une combinaison de quatre nombres ; rien dans le preset ne
 /// le transporte. Ce sont donc bien les nombres qu'il faut envoyer justes.
 fn build_track_properties(s: &RaceSetup) -> Value {
-    let weather_defined = s.grip == GRIP_WEATHER;
-    let st = if weather_defined {
-        &WEATHER_STATE
-    } else {
-        track_state_for(s.grip)
+    // L'état voyage entier depuis l'écran (§4.7) : on sérialise ce qu'il porte,
+    // sans rien rechercher. Un preset d'avant ce modèle ne porte qu'un
+    // pourcentage — on retrouve alors l'état de la table du jeu le plus proche,
+    // ce qui est exactement ce que faisait l'ancien chemin.
+    let (start, transfer, randomness, lap_gain, description, weather_defined) = match &s.track_state {
+        Some(ts) => (
+            ts.start,
+            ts.transfer,
+            ts.randomness,
+            ts.lap_gain,
+            ts.description.clone().unwrap_or_default(),
+            ts.weather_defined,
+        ),
+        None => {
+            let weather_defined = s.grip == GRIP_WEATHER;
+            let st = if weather_defined {
+                &WEATHER_STATE
+            } else {
+                track_state_for(s.grip)
+            };
+            (
+                st.start,
+                st.transfer,
+                st.randomness,
+                st.lap_gain,
+                st.description.to_string(),
+                weather_defined,
+            )
+        }
     };
     json!({
-        "s": f64::from(st.start) / 100.0,
-        "t": f64::from(st.transfer) / 100.0,
-        "r": f64::from(st.randomness) / 100.0,
-        "g": st.lap_gain,
-        "d": st.description,
+        "s": f64::from(start) / 100.0,
+        "t": f64::from(transfer) / 100.0,
+        "r": f64::from(randomness) / 100.0,
+        "g": lap_gain,
+        "d": description,
         "w": weather_defined,
     })
 }
@@ -562,6 +587,7 @@ mod tests {
             ai_spread: 3,
             aggression: 0,
             aggression_spread: 0,
+            track_state: None,
             player_ballast: 0,
             player_restrictor: 0,
             start_mode: StartMode::Random,

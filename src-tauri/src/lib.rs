@@ -43,6 +43,7 @@ mod maintenance;
 mod media;
 mod modscan;
 mod music;
+mod nationalities;
 mod others;
 mod overlay;
 mod packs;
@@ -64,6 +65,7 @@ mod sun;
 #[cfg(test)]
 mod testutil;
 mod thumbnails;
+mod trackstates;
 mod ui_prefs;
 mod uijson;
 mod usermeta;
@@ -342,6 +344,7 @@ pub fn run() {
             commands::session_state::save_launch_state,
             commands::cmimport::scan_cm_presets,
             commands::trackstate::track_states,
+            commands::nationalities::nationalities,
             commands::saved_grids::get_saved_grids,
             commands::saved_grids::save_saved_grids,
             commands::saved_sessions::get_saved_sessions,

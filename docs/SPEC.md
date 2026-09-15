@@ -1644,6 +1644,54 @@ l'écran affiche donc le mot `Auto` plutôt qu'un nombre qui ne serait pas
 celui-là. Un nom ou une nationalité en `Auto` affiche en revanche **ce que la
 livrée déclare**, qui est exactement ce que le jeu emploiera.
 
+**Le survol d'une ligne montre ce qui est tronqué, pas une photo.** Un aperçu
+en grand s'y ouvrait : il recouvrait les lignes voisines — précisément celles
+qu'on est en train de comparer — pour montrer ce que la vignette de la ligne
+montrait déjà. Ce qui manque vraiment, c'est le texte que la colonne élide : le
+nom complet de la voiture et de sa livrée, et le nom du pays. Ils sont donc en
+infobulle.
+
+**La vignette ouvre le choix de livrée.** Il n'y en avait aucun : le `+`
+dupliquait une ligne avec une autre livrée, `Regenerate` les retirait toutes au
+sort, mais rien ne permettait d'en désigner une. La vignette est la cible
+naturelle — c'est l'image de la livrée, donc l'endroit où l'on pense à la
+changer — et elle évite un bouton de plus dans une ligne qui en porte déjà deux.
+Le reste de la ligne ouvre le choix de **voiture** : deux questions, deux cibles.
+Le popover liste les livrées par leur `livery.png` d'abord, la photo en repli —
+l'inverse de la vignette de ligne, qui répond à « quelle voiture ? » et non à
+« quelle peinture ? ».
+
+**La nationalité n'est pas un champ libre.** Le jeu en tient la liste —
+`$.Nationalities` dans `launcher/themes/.base/ac.utils.js`, **221 entrées**
+actives, code ISO 3166-1 alpha-3 vers nom anglais, plus vingt-huit territoires
+qu'AC y a commentés et qui restent donc écartés. Chacune a son drapeau dans
+`content/gui/NationFlags/<CODE>.png` : 222 fichiers, les 221 entrées **toutes
+pourvues** plus `AC.png`, le repli du jeu. La cellule ne montre **que le drapeau** : écrit en toutes lettres,
+« Brunei Darussalam » prenait un cinquième de la largeur du plateau pour ce
+qu'un drapeau dit d'un coup d'œil. Le nom reste là où on le cherche — en
+infobulle, et dans le menu au moment de choisir.
+
+**Le menu est maison, pas un `<select>`.** Un `<option>` natif ne peut pas
+porter d'image : le menu déroulé est dessiné par le système, pas par la webview,
+donc le drapeau n'y apparaissait jamais — alors que c'est lui qui fait
+reconnaître un pays d'un coup d'œil. Ce qu'on perd est la recherche à la frappe
+du système ; ce qu'on gagne est un vrai champ de recherche, et sur **220 pays**
+il vaut mieux : il cherche n'importe où dans le nom et pas seulement au début,
+donc « guinea » rend les trois Guinées.
+
+Ce qui est **stocké reste le nom entier**, jamais le code : c'est ce que dit
+`ui_skin.json` et ce qu'écrit un preset de grille CM (« Brunei Darussalam » y a
+été relevé) ; le code ne sert qu'à trouver l'image. La liste est lue dans
+l'installation du jeu plutôt que recopiée — les drapeaux en viennent déjà, et
+les deux restent ainsi alignés. Installation illisible : liste vide et retour à
+la saisie libre, un menu vide empêcherait d'éditer.
+
+**Un piège, et il est dans la table du jeu** : « Congo » y apparaît deux fois,
+`COD` et `COG` sous le même libellé. Le nom ne peut donc pas désigner un drapeau
+sans ambiguïté. C'est l'ambiguïté d'AC et non la nôtre — on n'invente pas un
+libellé qu'il ne connaît pas : la liste est dédoublonnée par nom (220 entrées
+offertes) et le premier code gagne pour le drapeau.
+
 **Une force explicite remplace, elle ne multiplie pas.** `race.ini` écrit un
 `AI_LEVEL` absolu par voiture : il n'y a aucune transformation entre ce qu'on
 pose et ce que le jeu reçoit. Une ligne à 95 dans un plateau réglé 84-90 est
@@ -1665,16 +1713,47 @@ et la bride n'ont pas d'`Auto` : « rien » s'y dit par 0, comme dans le preset.
 Les en-têtes distinguent les colonnes éditables des colonnes en lecture seule
 par les **deux gris** de l'app, sans en introduire un troisième.
 
-**Le bouton `⤢` n'élargit que la grille.** Il élargissait toute la page : les
-curseurs de Simulation étirés sur toute la largeur avaient une course souris
-disproportionnée pour un réglage qu'on pose au pourcentage près, et le bloc ne
-ressemblait plus au même composant d'un mode à l'autre. Les blocs de la colonne
-centrale sont donc plafonnés à leur largeur de repos et calés à gauche —
-l'en-tête d'Adversaires compris, dont la barre de filtres doit rester le même
-objet que dans la bibliothèque. La largeur gagnée sert à afficher **plus de
-colonnes**, pas à étirer les existantes : le nom est plafonné, sans quoi l'écart
-entre lui et le nom de pilote devient assez grand pour qu'on perde la ligne en
-la parcourant, et les abréviations tombent.
+**Le plateau est un bloc à lui, frère du vivier et non son enfant.** Il vivait
+dans un cadre à l'intérieur du cadre « Adversaires ». Les deux sont pourtant
+deux objets — c'est toute la conception ci-dessus : le filtre définit le vivier,
+jamais le plateau, et il faut un geste explicite pour passer de l'un à l'autre.
+Deux cadres frères le disent mieux qu'un cadre imbriqué, et le plateau avait
+déjà son en-tête et son pied.
+
+**Il prend une rangée à lui, sur toute la largeur**, sous les deux colonnes. En
+colonne de gauche, il laissait ~700 px vides à droite dès que la météo
+s'arrêtait. En rangée 2, il commence après la **plus haute** des deux colonnes :
+il ne peut donc jamais chevaucher le rail, ce qu'une pleine largeur posée en
+rangée 1 aurait fait. Le vide résiduel passe sous la colonne la plus courte, et
+le vivier ayant rejoint la gauche, c'est en général le rail.
+
+**Il n'y a pas de mode « plateau élargi ».** Un bouton `⤢` a existé : il donnait
+au plateau toute la largeur du contenu en faisant passer la colonne de droite
+dessous. Retiré après l'avoir vu — les autres blocs restaient plafonnés et calés
+à gauche pendant que le plateau partait plein écran, et deux régimes de largeur
+dans un même écran se voient plus qu'ils ne servent. Qui manque de place retire
+une colonne : le menu est à un clic, et c'est le même geste que dans la
+bibliothèque.
+
+**Le nom est plafonné** : sans quoi la largeur gagnée y va toute, et l'écart
+entre lui et le nom de pilote devient assez grand pour qu'on perde la ligne en la
+parcourant des yeux. La place restante va au vide en fin de ligne plutôt qu'à une
+colonne arbitraire. `Restrictor` s'écrit en toutes lettres, seul des trois à ne
+pas s'abréger : c'est le mot exact de la carte voiture du joueur, et c'est ce qui
+fait voir que les deux réglages sont le même — `Nat.` et `Str.` n'ont pas ce
+voisin et ne se confondent avec rien.
+
+**L'écran est responsive, et centré.** La colonne de droite **passe dessous**
+quand la largeur manque, plutôt que de se comprimer : en dessous d'environ 380 px
+elle ne sait plus afficher la bande jour/nuit ni les quatre valeurs de l'état de
+piste sur une ligne. Le contenu est plafonné et centré dans les deux régimes,
+jamais collé à un bord — sans plafond, un curseur de difficulté long de 900 px a
+une course souris disproportionnée pour une valeur qu'on pose au pourcentage
+près, et une barre de filtres étalée ne ressemble plus à celle de la
+bibliothèque. Le seuil est une requête de **conteneur** et non de média : ce qui
+décide est la largeur réellement reçue par le corps de l'écran — le rail de
+navigation et la colonne de session ont déjà pris la leur — et le zoom
+d'interface déplace la largeur de la fenêtre sans rien changer à celle-là.
 
 **Difficulté et agressivité : un centre et un écart**, et un seul composant
 instancié deux fois — ce sont les deux réglages qui décident du caractère de la
@@ -1726,11 +1805,97 @@ le vocabulaire de Content Manager (`INITIAL GRIP`, `GRIP TRANSFER`,
 reconnaître ce qu'il lit ici. Lecture seule.
 
 **Un état de piste est un objet nommé porteur de quatre valeurs, pas un cas
-d'énumération.** L'écran ne connaît plus la liste, il la reçoit — y ajouter des
-états d'une autre provenance ne sera qu'une entrée de plus, sans rien changer à
+d'énumération.** L'écran ne connaît plus la liste, il la reçoit — et c'est ce
+qui a permis d'y ajouter les presets de Content Manager sans rien changer à
 l'écran. `Auto` n'est pas un état mais le drapeau `WeatherDefined` : ses quatre
 valeurs sont celles de Green, sur lesquelles le jeu retombe quand la météo ne
 dit rien de la piste, et la ligne le dit.
+
+**Deux groupes, et les natifs ne sont jamais masqués.** Les presets d'état de
+piste que l'utilisateur a créés dans Content Manager s'ajoutent **après** les
+sept entrées du jeu, par ordre alphabétique, jamais à leur place : celles-ci
+viennent de la table du jeu, ce sont les noms que tout le monde emploie, et
+quelqu'un qui s'est fabriqué une piste verte humide veut quand même pouvoir
+choisir `Optimum`. Le second groupe est simplement **absent** quand il n'y en a
+aucun — pas de message, pas d'état vide, c'est le cas nominal. Lecture seule :
+Pit Box n'écrit rien dans le dossier de CM, et n'ouvre pas l'édition des quatre
+valeurs. Qui veut composer un état le fait dans CM et le retrouve ici.
+
+**La lecture a lieu à l'ouverture de l'écran**, pas au démarrage de l'app : le
+scénario réel est de créer un preset dans CM puis de revenir dans Pit Box, et
+une lecture au démarrage obligerait à relancer.
+
+**La description est la partie la plus utile du lot.** Elle s'affiche sous la
+ligne des quatre valeurs, en prose (sans-serif) : ce sont les mots de
+l'utilisateur pour décrire l'état qu'il a composé, et c'est exactement ce qui
+manquait pour départager deux états proches. Les sept natifs en portent une
+aussi, celle du jeu, affichée par le même chemin. Absente, rien n'est affiché.
+
+**Le format est relevé sur un preset réel.** Un `.cmpreset` de
+`…\Presets\Track States` est exactement l'objet d'état, JSON brut sans
+en-tête — comme un `.cmpreset` de `Race Grids` est exactement l'objet
+`RaceGrid` :
+
+```json
+{"s":0.89,"t":0.8,"r":0.03,"g":50,"d":"Old tarmac. Bad grip won't get better soon.","w":false}
+```
+
+`s`, `t` et `r` sont des pourcentages divisés par cent, `g` le `LAP_GAIN` brut.
+C'est exactement ce que `build_track_properties` écrit déjà : **le lecteur en est
+l'inverse**, ce qui est la meilleure garantie que les deux restent d'accord.
+
+**L'échantillon est un duplicata de l'état natif `Old`, ce qui en fait un
+témoin** : ses quatre valeurs doivent relire 89 / 80 / 3 / 50, les nombres que
+`cfg/templates/tracks.ini` donne à cette entrée. L'échelle n'est donc pas
+seulement supposée cohérente, elle est vérifiée contre des valeurs connues, et
+un test rejoue le fichier verbatim.
+
+**Les pourcentages s'arrondissent, ils ne se tronquent pas.** `0.29 × 100` vaut
+`28.999999999999996` en flottant : une troncature rendrait 28, soit un état relu
+un point plus glissant qu'il n'a été composé. Le fichier de référence n'expose
+pas le défaut — `0.8` tombe du bon côté — donc rien n'aurait signalé sa
+réintroduction, d'où un test dédié.
+
+L'identité d'un état est son **nom de fichier** : c'est ainsi que CM lui-même le
+désigne (`TrackPropertiesPresetFilename`), y compris pour les natifs —
+`Optimum.cmpreset`, qui n'existe pourtant pas sur disque, les natifs étant
+virtuels.
+
+**Bornage volontairement large, et c'est un écart assumé.** Les plages de
+l'éditeur de CM (grip initial 85-100, lap gain 0-700) n'ont pas pu être
+confirmées. Un plancher non confirmé à 85 réécrirait en silence un état composé
+à 70 — précisément ce que ce lot est censé rendre à l'utilisateur. On s'en tient
+donc au sens physique : un pourcentage entre 0 et 100, un lap gain d'au moins 1.
+Un fichier illisible ou incomplet est ignoré **en silence** : c'est un
+enrichissement optionnel, il ne doit jamais empêcher de régler ni de lancer.
+
+### 9.3quater-bis Ce qu'une session retient d'un état de piste
+
+**Origine + nom, jamais le nom seul.** Rien n'empêche de nommer son preset
+`Green`. À l'écran, l'appartenance au groupe suffit à distinguer ; au stockage,
+non.
+
+**Et les quatre valeurs résolues, en plus de la référence.** Ce qui part au jeu,
+ce sont les nombres — le nom n'est qu'une étiquette. Trois conséquences, toutes
+voulues :
+
+- un preset supprimé ou renommé dans CM ne modifie **jamais silencieusement**
+  une session déjà enregistrée ;
+- **référence introuvable au chargement** : les quatre valeurs mémorisées sont
+  appliquées telles quelles, et le select garde l'entrée sous son nom suivi de
+  `(introuvable)` plutôt que de sauter en silence sur un autre état. Aucun
+  blocage, aucune boîte de dialogue — la session reste jouable telle qu'elle a
+  été réglée ;
+- **référence trouvée mais valeurs différentes** : celles du preset gagnent.
+  Modifier son preset dans CM est un geste intentionnel, et on attend que ses
+  sessions suivent. L'autre branche se défend (la session prime, le preset n'est
+  qu'un point de départ figé) ; rien dans l'implémentation n'a fait apparaître de
+  raison de trancher autrement.
+
+Le réglage n'était qu'un **pourcentage de départ**, qui servait d'identifiant :
+ça ne tient plus dès que deux états peuvent partager le même. Un preset ou une
+session d'avant ce modèle ne porte que ce pourcentage — l'état natif le plus
+proche est repris, ce que faisait déjà l'ancien select.
 
 ### 9.3quinquies Grilles enregistrées et import Content Manager
 
