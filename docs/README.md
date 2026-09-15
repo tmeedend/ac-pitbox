@@ -146,44 +146,15 @@ dans un commentaire de code.
   démarrage. Les deux ont divergé — celui-ci porte un groupe de règles de plus.
   L'éditer ne change rien au comportement de l'app.
 
-## Maquettes — références d'UX, datées
+## Maquettes et captures
 
-Une maquette est la **trace d'une décision à une date**, pas une cible qui se
-met à jour. Le design system fait foi pour l'UI (voir `CLAUDE.md`, « Le design
-system fait foi, pas la maquette ») : on en reprend la disposition et
-l'intention, jamais les couleurs ni les polices.
-
-**Encore d'actualité :**
-
-- `pitbox-maquettes.html` (2026-09-11) — les dix écrans de la refonte de
-  navigation, sélecteurs de livrée et de tracé interactifs. Elle illustre, elle
-  ne fait pas foi : en cas d'écart, la spec prime.
-- `pitbox-ecran-pilote.html` (2026-09-01) — l'écran Pilote, interactive :
-  survol = essai, clic = adoption, et les trois modes (corps d'origine, corps
-  substitué, corps sans casque applicable).
-- `pitbox-onglet-medias_1.html` (2026-08-09) — l'onglet Médias d'une fiche
-  voiture (captures, replays, backgrounds).
-- `filtre-tags-mockup.html` (2026-08-22) — les filtres de la bibliothèque,
-  antérieure au passage aux puces décrit au §7.1 de `SPEC.md`. Utile pour le
-  vocabulaire des filtres, pas pour leur présentation.
-- `pitbox-a-propos.html` (2026-07-11) — écran « À propos » : identité, outils
-  tiers, soutien, licences open source, mentions légales.
-
-**Périmées, gardées pour le *pourquoi* qu'elles portent** — elles montrent une
-navigation ou des écrans qui n'existent plus depuis la refonte :
-
-- `pitbox-vues-transversales.html` (2026-06-29) — les trois écrans transversaux
-  Skins / Sons / Apps. **Supprimés** : leur contenu est dans l'inventaire.
-- `pitbox-biblio-session2.html` (2026-07-03) — barre latérale unifiée, bloc
-  Session en haut. Antérieure au rail à deux rangs.
-- `pitbox-fiche-B-revisee.html` (2026-06-29) — fiche voiture, image héros à
-  gauche. Antérieure à l'anatomie de fiche commune.
-- `pitbox-reglages-session.html` (2026-07-04) — réglages de session, antérieure
-  à la refonte du plateau et du bloc Conditions.
-- `pitbox-source-pack.html` (2026-06-30) — affichage du pack d'origine.
-- `pitbox-mockup.html` (2026-06-29) — la toute première maquette interactive.
-
-Enfin, `screenshots/` — trois captures de l'app réelle (grille, tableau, fiche).
+- **`maquettes/`** — les maquettes HTML, **datées**, avec leur propre index
+  (`maquettes/README.md`) qui dit pour chacune ce qu'elle a servi à décider et
+  si elle fait encore autorité. Les périmées vivent dans `maquettes/archive/` :
+  gardées pour le *pourquoi* qu'elles portent, jamais pour savoir à quoi
+  ressemble l'app. Une maquette apporte l'**UX**, jamais l'UI — voir
+  `CLAUDE.md`, « Le design system fait foi, pas la maquette ».
+- **`screenshots/`** — trois captures de l'app réelle (grille, tableau, fiche).
 
 ## Historique
 

@@ -440,8 +440,11 @@ il est là pour se vider.
   celui-ci les montre *ensemble*, ce qui est la seule façon de voir qu'une
   règle en contredit une autre. En cas d'écart, `SPEC.md` fait foi, et l'un
   des deux est à corriger tout de suite.
-- **`docs/*.html`** — maquettes visuelles. **Référence d'UX, pas d'UI** : voir
-  la règle « Le design system fait foi » ci-dessous.
+- **`docs/maquettes/`** — les maquettes visuelles, **datées**, avec leur index
+  (`maquettes/README.md`) : ce que chacune a servi à décider, et si elle fait
+  encore autorité. Les périmées sont dans `maquettes/archive/`, gardées pour le
+  *pourquoi* qu'elles portent. **Référence d'UX, pas d'UI** : voir la règle
+  « Le design system fait foi » ci-dessous.
 - **`docs/*-research.md`** — comptes rendus de recherche sur les points durs
   (lancement CM, aperçu 3D). Contiennent le *pourquoi* de choix non évidents et
   la trace des pistes abandonnées. À lire avant de retenter quelque chose.
@@ -500,7 +503,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Enrichissement Wikipédia** | livré ; reste à régler les seuils sur les corrections manuelles de l'utilisateur | `docs/SPEC-wikipedia-fiche-detail.md` |
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |
 | **Refonte navigation et fiches** | neuf lots faits ; second palier à fusionner | `docs/PLAN-refonte-navigation.md` |
-| **Passe documentation** | lots 0 à 3 faits ; les renvois `§` et six conventions sont sous contrôle | `docs/CHANTIERS.md` |
+| **Passe documentation** | lots 0 à 4 faits ; restent la découpe de `SPEC.md` et deux lots de tests | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre
 
@@ -550,7 +553,7 @@ concernée (`§4.5.3`) quand elle existe.
 servent plus (une fonctionnalité abandonnée emporte sa dépendance).
 
 **Le design system fait foi, pas la maquette.** Sauf indication contraire
-explicite, une maquette (`docs/*.html`, un fichier reçu, une capture) apporte
+explicite, une maquette (`docs/maquettes/`, un fichier reçu, une capture) apporte
 l'**UX** — ce qu'on montre, dans quel ordre, quel geste fait quoi, ce qui est
 groupé avec quoi. L'**UI** vient de l'application : les jetons de
 `styles/global.css` (`--rosso`, `--muted`, `--faint`, `--line`, `--yellow`…),

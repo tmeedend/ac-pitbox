@@ -571,7 +571,7 @@ Les lots 1 à 4 n'exigent pas la refonte de la navigation et peuvent être livr�
 
 ## 16. Maquette de référence
 
-Un seul fichier HTML autonome, à joindre à cette spec : **`pitbox-maquettes.html`**. Il
+Un seul fichier HTML autonome, à joindre à cette spec : **`maquettes/pitbox-maquettes.html`**. Il
 illustre, il ne fait pas foi : en cas d'écart, le texte ci-dessus prime.
 
 | Écran | §§ |

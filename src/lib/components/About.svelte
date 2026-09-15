@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Écran « À propos » (§12, maquette pitbox-a-propos.html) : identité,
+  // Écran « À propos » (§12, maquette maquettes/pitbox-a-propos.html) : identité,
   // crédits des outils tiers (non-affiliation), soutien/communauté, licences
   // open source, bandeau légal. Statique hors version app + liste OSS.
   import { onMount } from "svelte";

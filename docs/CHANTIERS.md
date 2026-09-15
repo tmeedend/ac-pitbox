@@ -225,7 +225,7 @@ de reprendre. En cas d'écart, la spec fait foi.
       - le cadrage d'Officiel a une **mesure** derrière lui (§11.4 de la spec) ;
         s'en écarter est permis, l'ignorer serait dommage.
 - [ ] **Écran Pilote** (fusionné dans `main`). Spec et maquette dans
-      `docs/SPEC-ecran-pilote.md` + `docs/pitbox-ecran-pilote.html`, résumé au
+      `docs/SPEC-ecran-pilote.md` + `maquettes/pitbox-ecran-pilote.html`, résumé au
       §9.5 du SPEC. **À lire avant de reprendre** — l'asymétrie qui structure
       tout l'écran (le corps commande, la tenue en découle) y est expliquée une
       fois pour toutes.
@@ -638,6 +638,17 @@ de reprendre. En cas d'écart, la spec fait foi.
         détection d'orphelin ne regardait que les fichiers suivis par git, donc
         un composant tout juste créé — celui sur lequel on veut justement être
         prévenu — y échappait. À relancer à chaque règle ajoutée.
+      - **Lot 4 — maquettes rangées et datées.** Les onze fichiers HTML
+        quittent la racine de `docs/` pour `maquettes/` et
+        `maquettes/archive/`, avec leur propre index : pour chacune, la date,
+        ce qu'elle a servi à décider, et si elle fait encore autorité. Sept
+        sont archivées — elles montrent des écrans supprimés (les trois vues
+        transversales), une navigation d'avant le rail à deux rangs, ou des
+        filtres d'avant les puces. **La date est le cœur du rangement** : sans
+        elle on ne sait pas si on regarde la cible ou un souvenir, et l'index
+        présentait encore comme « référence de l'écran principal » une
+        maquette antérieure de deux mois à la refonte. `docs/` passe de 33
+        entrées à 20 fichiers et deux dossiers.
       **Les mesures qui ont décidé du plan**, et qu'on ne referait pas deux
       fois :
       - **Deux tiers des renvois `§` du code étaient ambigus** (1 861 sur
@@ -655,9 +666,7 @@ de reprendre. En cas d'écart, la spec fait foi.
         commenté « **Jamais `scrollIntoView`** » dans deux fichiers — et
         appelé dans deux autres.
       **Reste, dans cet ordre :**
-      1. **Lot 4 — maquettes.** `docs/maquettes/` + `archive/`. L'index les
-         date et les sépare déjà en deux groupes ; il reste à les déplacer.
-      2. **Lot 5 — découper `SPEC.md`.** §9 → `SPEC-session.md`, §4 fusionné
+      1. **Lot 5 — découper `SPEC.md`.** §9 → `SPEC-session.md`, §4 fusionné
          avec `SPEC-import.md` (aujourd'hui les deux décrivent la même chose
          avec une règle de préséance, ce qui est une désynchronisation en
          attente). Et surtout : **rendre à §8 les sous-sections que le code lui
@@ -669,7 +678,7 @@ de reprendre. En cas d'écart, la spec fait foi.
          `§4.2.4`, qui désignent les étapes numérotées d'une liste que le doc
          n'a jamais titrée. Faisable seulement maintenant que `check-refs`
          vérifie chaque renumérotation.
-      3. **Lot 6 — tests ciblés.** Idempotence de `overlay::migrate()` sur deux
+      2. **Lot 6 — tests ciblés.** Idempotence de `overlay::migrate()` sur deux
          passages et migration depuis une base ancienne (2 tests pour
          2 379 lignes aujourd'hui) ; l'arbitrage par date de `gamebackup.rs`
          (règle d'or n°5, 3 tests).

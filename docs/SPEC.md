@@ -2244,7 +2244,7 @@ Deux aperçus 3D **coexistent**, parce qu'ils ne rendent pas le même service.
 
 ### 9.5 Écran Pilote
 
-Choisir le pilote qu'on voit au volant : son **corps** (le mannequin 3D) et sa **tenue** en trois pièces — casque, combinaison, gants. Spécification complète dans `SPEC-ecran-pilote.md`, maquette dans `pitbox-ecran-pilote.html`.
+Choisir le pilote qu'on voit au volant : son **corps** (le mannequin 3D) et sa **tenue** en trois pièces — casque, combinaison, gants. Spécification complète dans `SPEC-ecran-pilote.md`, maquette dans `maquettes/pitbox-ecran-pilote.html`.
 
 **Deux natures d'objet, deux comportements**, et cette asymétrie structure l'écran. Le corps est un modèle 3D que la voiture désigne dans `data.acd`, le conteneur qu'un serveur de course vérifie ; il ne se remplace donc pas en y touchant, mais par une surcharge CSP posée à côté (voir plus bas). Le casque, la combinaison et les gants ne sont que des images posées dessus, que la livrée choisit déjà — les choisir à sa place ne demande qu'un fichier de skin. D'où le corps au-dessus, séparé, et les trois autres en dessous : le corps **commande**, la tenue en découle.
 
@@ -2348,7 +2348,7 @@ la mesure, pas au jugé.
 
 ## 12. Écran « À propos »
 
-Atteint par la **dernière entrée du rail** (§7.2) : c'est du contenu, pas un état de fenêtre, et il n'a donc rien à faire dans la barre de titre où il vivait sous forme d'icône « ? ». Maquette de référence `pitbox-a-propos.html`. Contenu :
+Atteint par la **dernière entrée du rail** (§7.2) : c'est du contenu, pas un état de fenêtre, et il n'a donc rien à faire dans la barre de titre où il vivait sous forme d'icône « ? ». Maquette de référence `maquettes/pitbox-a-propos.html`. Contenu :
 - **Identité** : nom, version/build, courte phrase de philosophie (non-destructif).
 - **Outils tiers** (Assetto Corsa, Content Manager, QuickBMS) : description, auteur/studio, lien externe, mention **non-affiliation** par outil (Kunos Simulazioni, gro-ove, Luigi Auriemma). Content Manager marqué **requis**, QuickBMS marqué **optionnel** (non embarqué — export seulement, §10).
 - **Soutien & communauté** : lien **PayPal** (don libre, pas d'abonnement), profil OverTake, lien vers le **dépôt source** (code ouvert), lien « signaler un bug », journal des versions.

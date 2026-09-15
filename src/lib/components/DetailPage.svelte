@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Page de détail pleine page (§6.3, maquette pitbox-fiche-B-revisee.html).
+  // Page de détail pleine page (§6.3, maquette maquettes/archive/pitbox-fiche-B-revisee.html).
   // Riche pour les voitures (héros + specs natives + fiche technique + courbe +
   // description + skins + tags/versions/historique). Panneaux Son et Distance =
   // placeholders « à venir » (lots §12bis et §6.5). Réduite pour les circuits.

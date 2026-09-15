@@ -20,16 +20,16 @@ et l'ordre dans lequel s'en servir.
 
 ## Maquettes visuelles (le À QUOI ÇA RESSEMBLE) — Claude Code peut les ouvrir
 
-- **pitbox-mockup.html** — maquette principale navigable : bibliothèque (galerie/tableau),
+- **maquettes/archive/pitbox-mockup.html** — maquette principale navigable : bibliothèque (galerie/tableau),
   fiches, écran de course, page de règles. Référence du thème Rosso Corsa et de la navigation.
   (Note : antérieure à quelques évolutions — la spec fait foi en cas d'écart.)
 
-- **pitbox-fiche-B-revisee.html** — LAYOUT DE RÉFÉRENCE de la fiche voiture pleine page
+- **maquettes/archive/pitbox-fiche-B-revisee.html** — LAYOUT DE RÉFÉRENCE de la fiche voiture pleine page
   (héros large à gauche, données à droite, description dépliable, rangée basse skins/distance+son/
   tags+versions). ⚠️ modèle skins correct : SÉLECTION (prévisualisation + étoile « piloté »),
   PAS d'activation par case à cocher.
 
-- **pitbox-vues-transversales.html** — vues transversales Skins / Sons / Apps (lot L6) :
+- **maquettes/archive/pitbox-vues-transversales.html** — vues transversales Skins / Sons / Apps (lot L6) :
   comment retrouver les sous-éléments indépendamment des fiches.
 
 ## Points de vigilance transverses
