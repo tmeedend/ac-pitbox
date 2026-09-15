@@ -11,8 +11,8 @@
   // version, et en supprimer une (§10) : deux actions réelles, déléguées
   // au parent (qui possède `busy`, la relecture de la fiche, la confirmation
   // et la bannière d'erreur).
-  import type { ModDetail } from "$lib/library";
-  import { historyEventLabel, historyDetails } from "$lib/history";
+  import type { ModDetail } from "$lib/library/library";
+  import { historyEventLabel, historyDetails } from "$lib/wiki/history";
   import { fmtSize } from "$lib/format";
   import { t } from "$lib/i18n/index.svelte";
 

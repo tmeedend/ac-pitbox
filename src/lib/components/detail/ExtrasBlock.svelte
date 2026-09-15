@@ -6,10 +6,10 @@
   //
   // Regroupé par dossier de destination : 69 lignes plates sont illisibles,
   // alors que quatre destinations disent tout de suite ce que le mod touche.
-  import { listModExtras, forceModExtra, type ExtraFile } from "$lib/library";
+  import { listModExtras, forceModExtra, type ExtraFile } from "$lib/library/library";
   import { errorText } from "$lib/errors";
-  import { listAppExtras } from "$lib/apps";
-  import { listPackExtras } from "$lib/packs";
+  import { listAppExtras } from "$lib/inventory/apps";
+  import { listPackExtras } from "$lib/library/packs";
   import { t } from "$lib/i18n/index.svelte";
 
   let {

@@ -23,15 +23,15 @@
   // s'arrête (sinon un glissé réécrit `ui_prefs.json` cinquante fois). Il force
   // cette écriture et attend qu'elle ait eu lieu — c'est ce que dit la pastille
   // « Enregistré ».
-  import CarPreview3D from "../detail/CarPreview3D.svelte";
-  import Preview3dControls from "../detail/Preview3dControls.svelte";
-  import Field from "../Field.svelte";
-  import Slider from "../Slider.svelte";
+  import CarPreview3D from "$lib/components/detail/CarPreview3D.svelte";
+  import Preview3dControls from "$lib/components/detail/Preview3dControls.svelte";
+  import Field from "$lib/components/ui/Field.svelte";
+  import Slider from "$lib/components/ui/Slider.svelte";
   import { i18n, t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
-  import { listLibrary } from "$lib/library";
-  import { nav } from "$lib/nav.svelte";
-  import { clearPreviewCache, previewCacheSize } from "$lib/preview";
+  import { listLibrary } from "$lib/library/library";
+  import { nav } from "$lib/shell/nav.svelte";
+  import { clearPreviewCache, previewCacheSize } from "$lib/preview3d/preview";
   import {
     DRIVER_MODES,
     INTRO_EFFECTS,
@@ -48,7 +48,7 @@
     setPreview3dIntro,
     setPreview3dQuality,
     setPreview3dValue,
-  } from "$lib/preview3dPrefs.svelte";
+  } from "$lib/preview3d/preview3dPrefs.svelte";
 
   const prefs = $derived(preview3dPrefs());
 

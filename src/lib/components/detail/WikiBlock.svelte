@@ -24,11 +24,11 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { t } from "$lib/i18n/index.svelte";
   import { localeNames } from "$lib/i18n/index.svelte";
-  import { parseExtract } from "$lib/wikiText";
-  import { largerImage, renderArticle } from "$lib/wikiHtml";
-  import Lightbox, { type LightboxItem } from "../Lightbox.svelte";
-  import { zoomFactor } from "$lib/zoom.svelte";
-  import { pinShell } from "$lib/shellScroll";
+  import { parseExtract } from "$lib/wiki/wikiText";
+  import { largerImage, renderArticle } from "$lib/wiki/wikiHtml";
+  import Lightbox, { type LightboxItem } from "$lib/components/ui/Lightbox.svelte";
+  import { zoomFactor } from "$lib/shell/zoom.svelte";
+  import { pinShell } from "$lib/shell/shellScroll";
   import {
     articleLang,
     clearWikiLink,
@@ -36,7 +36,7 @@
     setWikiLink,
     type WikiPanel,
     type WikiSuggestion,
-  } from "$lib/wiki";
+  } from "$lib/wiki/wiki";
 
   interface Props {
     modKey: string;

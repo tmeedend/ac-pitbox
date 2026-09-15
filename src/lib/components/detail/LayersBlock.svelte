@@ -13,8 +13,8 @@
     openLayerFolder,
     type LayerRow,
     type LayerHostKind,
-  } from "$lib/library";
-  import { layerDisplayName } from "$lib/layerName";
+  } from "$lib/library/library";
+  import { layerDisplayName } from "$lib/detail/layerName";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";

@@ -16,8 +16,8 @@
   // Les six modèles sont **chargés une fois et gardés** : bouger un curseur
   // redessine, ne reconvertit jamais. Sans ça, chaque pixel de curseur coûterait
   // six conversions, soit six secondes par image.
-  import { listLibrary, previewSrc, type ModCard } from "$lib/library";
-  import { nav } from "$lib/nav.svelte";
+  import { listLibrary, previewSrc, type ModCard } from "$lib/library/library";
+  import { nav } from "$lib/shell/nav.svelte";
   import {
     PAUSE_STUDIO,
     createGridStudio,
@@ -25,11 +25,11 @@
     resumeGridThumbs,
     type GridStudio,
     type StudioCar,
-  } from "$lib/gridThumbs.svelte";
-  import type { GridTemplate } from "$lib/gridThumbs";
-  import type { GridMat } from "$lib/gridThumbPrefs.svelte";
+  } from "$lib/gridthumbs/gridThumbs.svelte";
+  import type { GridTemplate } from "$lib/gridthumbs/gridThumbs";
+  import type { GridMat } from "$lib/gridthumbs/gridThumbPrefs.svelte";
   import { t } from "$lib/i18n/index.svelte";
-  import LoadingState from "../LoadingState.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
 
   // Le mat vient du preset comme le gabarit : la moitié de ce qui distingue
   // deux presets est leur fond, et régler un éclairage de vitrine sur le fond

@@ -21,21 +21,21 @@
   // trois liens réels — la bannière de vivier explique le contenu du plateau,
   // `Tirer au hasard` et `Régénérer` font des choses voisines, et la colonne
   // « Force » réagit à un curseur hors de vue.
-  import type { CardIndex, FilterDef, FilterMap } from "$lib/filters";
-  import { chipAvailable, isChipOn, toggleChip, type ChipKind } from "$lib/opponentPool";
+  import type { CardIndex, FilterDef, FilterMap } from "$lib/library/filters";
+  import { chipAvailable, isChipOn, toggleChip, type ChipKind } from "$lib/launch/opponentPool";
   import {
     AGGRESSION_MAX,
     AGGRESSION_MIN,
     AI_LEVEL_MAX,
     AI_LEVEL_MIN,
     type RaceSetup,
-  } from "$lib/launch";
-  import type { ModCard } from "$lib/library";
+  } from "$lib/launch/launch";
+  import type { ModCard } from "$lib/library/library";
   import { t } from "$lib/i18n/index.svelte";
-  import FilterBar from "../filters/FilterBar.svelte";
-  import Tooltip from "../Tooltip.svelte";
-  import NumberStepper from "../NumberStepper.svelte";
-  import CenterSpread from "../CenterSpread.svelte";
+  import FilterBar from "$lib/components/filters/FilterBar.svelte";
+  import Tooltip from "$lib/components/ui/Tooltip.svelte";
+  import NumberStepper from "$lib/components/ui/NumberStepper.svelte";
+  import CenterSpread from "./CenterSpread.svelte";
 
   let {
     setup,

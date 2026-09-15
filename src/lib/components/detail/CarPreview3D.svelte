@@ -9,20 +9,20 @@
   // dépendance du front, et elle ne doit peser ni au démarrage de l'app ni sur
   // les écrans qui n'affichent aucun aperçu.
   import { onDestroy, untrack } from "svelte";
-  import { prepareCarPreview, onPreviewProgress, type DriverView, type PreviewStage } from "$lib/preview";
-  import { carClassOf, driverOverridePayload } from "$lib/driverOverride.svelte";
+  import { prepareCarPreview, onPreviewProgress, type DriverView, type PreviewStage } from "$lib/preview3d/preview";
+  import { carClassOf, driverOverridePayload } from "$lib/driver/driverOverride.svelte";
   import {
     preview3dGraftsDriver,
     preview3dPrefs,
     preview3dReady,
     preview3dResets,
-  } from "$lib/preview3dPrefs.svelte";
+  } from "$lib/preview3d/preview3dPrefs.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
   // Le seul lien de l'aperçu vers le son : une fonction qui ne fait rien tant
   // que rien ne joue. L'aperçu n'a pas à savoir ce qu'est une écoute native.
-  import { engineRunning, reportListenerAngle } from "$lib/enginePlayer.svelte";
-  import { DRIVER_MESH_PREFIX } from "$lib/preview";
+  import { engineRunning, reportListenerAngle } from "$lib/detail/enginePlayer.svelte";
+  import { DRIVER_MESH_PREFIX } from "$lib/preview3d/preview";
   import type * as ThreeModule from "three";
   import type { Reflector } from "three/addons/objects/Reflector.js";
   import { applyFloorMirror, floorMirrorShader } from "./floorMirror";

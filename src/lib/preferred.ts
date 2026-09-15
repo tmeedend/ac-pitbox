@@ -7,8 +7,8 @@
 // (§6.2, `uiPrefs.svelte.ts`) plutôt que l'API asynchrone `getUiPref` —
 // `null` le temps très bref du premier chargement, comme
 // `nav.sessionCar`/`sessionTrack`.
-import type { SkinItem } from "$lib/launch";
-import type { LayoutItem } from "$lib/library";
+import type { SkinItem } from "$lib/launch/launch";
+import type { LayoutItem } from "$lib/library/library";
 import { StorageKey } from "./storage";
 import { peekUiPref, setUiPref } from "./uiPrefs.svelte";
 

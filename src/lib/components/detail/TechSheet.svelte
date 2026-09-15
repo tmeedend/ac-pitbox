@@ -15,8 +15,8 @@
   // The frame stays the host's business: what is shared is the content and the
   // row itself.
   import { t } from "$lib/i18n/index.svelte";
-  import type { ModDetail } from "$lib/library";
-  import { odometerText } from "$lib/odometer";
+  import type { ModDetail } from "$lib/library/library";
+  import { odometerText } from "$lib/detail/odometer";
 
   interface Props {
     detail: ModDetail;

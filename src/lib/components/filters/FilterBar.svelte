@@ -33,7 +33,7 @@
     type FilterState,
     type PerfRef,
     type Sign,
-  } from "$lib/filters";
+  } from "$lib/library/filters";
 
   interface Props {
     defs: FilterDef[];

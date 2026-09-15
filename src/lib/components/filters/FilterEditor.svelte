@@ -11,11 +11,11 @@
   // Pas de branche `bool` : une puce booléenne s'inverse au clic, elle n'ouvre
   // jamais d'éditeur.
   import { untrack } from "svelte";
-  import NumberStepper from "../NumberStepper.svelte";
-  import Slider from "../Slider.svelte";
+  import NumberStepper from "$lib/components/ui/NumberStepper.svelte";
+  import Slider from "$lib/components/ui/Slider.svelte";
   import { t } from "$lib/i18n/index.svelte";
-  import { clampPerfPct, formatRatio, perfBand, PERF_MAX_PCT, PERF_MIN_PCT, PERF_STEP } from "$lib/carSpecs";
-  import { valueLabel, type FilterDef, type FilterOption, type FilterState, type PerfRef, type Sign } from "$lib/filters";
+  import { clampPerfPct, formatRatio, perfBand, PERF_MAX_PCT, PERF_MIN_PCT, PERF_STEP } from "$lib/detail/carSpecs";
+  import { valueLabel, type FilterDef, type FilterOption, type FilterState, type PerfRef, type Sign } from "$lib/library/filters";
 
   interface Props {
     def: FilterDef;

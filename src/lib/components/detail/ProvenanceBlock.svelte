@@ -12,8 +12,8 @@
   // sœur, désinstaller le pack) sont déléguées au parent, qui possède la
   // navigation, la bannière d'erreur et la fermeture de la fiche. Désinstaller
   // un pack ferme la page — ça ne peut pas se décider ici.
-  import type { ModCard, ModDetail } from "$lib/library";
-  import { previewSrc } from "$lib/library";
+  import type { ModCard, ModDetail } from "$lib/library/library";
+  import { previewSrc } from "$lib/library/library";
   import { t } from "$lib/i18n/index.svelte";
 
   let {

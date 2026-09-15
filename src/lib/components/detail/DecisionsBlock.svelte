@@ -12,7 +12,7 @@
   // Vide pour la grande majorité des mods : le bloc disparaît alors
   // entièrement plutôt que d'afficher « aucune décision », qui n'apprend rien
   // et occupe une place sur toutes les fiches.
-  import { listImportDecisions, type ImportJournalEntry } from "$lib/library";
+  import { listImportDecisions, type ImportJournalEntry } from "$lib/library/library";
   import { t } from "$lib/i18n/index.svelte";
 
   let { modId }: { modId: string } = $props();

@@ -9,7 +9,7 @@
   // fois : poser le corps puis les pièces les effacerait, `setDriverBody`
   // remettant les trois autres au défaut (§D6).
   import { t } from "$lib/i18n/index.svelte";
-  import { deleteOutfit, saveOutfit, savedOutfits, wornOutfit, type SavedOutfit } from "$lib/driverOutfits.svelte";
+  import { deleteOutfit, saveOutfit, savedOutfits, wornOutfit, type SavedOutfit } from "$lib/driver/driverOutfits.svelte";
   import {
     driverFor,
     fallbackName,
@@ -17,8 +17,8 @@
     setDriverOutfit,
     setFallbackName,
     type CarClass,
-  } from "$lib/driverOverride.svelte";
-  import ImageSelectDropdown from "../ImageSelectDropdown.svelte";
+  } from "$lib/driver/driverOverride.svelte";
+  import ImageSelectDropdown from "$lib/components/ui/ImageSelectDropdown.svelte";
 
   let { carId, kind }: { carId: string; kind: CarClass } = $props();
 

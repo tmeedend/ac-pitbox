@@ -11,10 +11,10 @@
     emptyMusicConfig,
     type MusicConfig,
     type DefaultMusicFolders,
-  } from "$lib/music";
+  } from "$lib/shell/music";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
-  import Slider from "../Slider.svelte";
+  import Slider from "$lib/components/ui/Slider.svelte";
 
   // Fichier séparé de AppConfig (music.json, §2 de la spec musique) : état et
   // sauvegarde propres à cet onglet, indépendants de la garde de navigation

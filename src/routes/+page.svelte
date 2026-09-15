@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import SetupWizard from "$lib/components/SetupWizard.svelte";
-  import AppShell from "$lib/components/AppShell.svelte";
+  import SetupWizard from "$lib/components/shell/SetupWizard.svelte";
+  import AppShell from "$lib/components/shell/AppShell.svelte";
   import { getConfig, validateConfig } from "$lib/config";
   import { t } from "$lib/i18n/index.svelte";
 

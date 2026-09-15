@@ -5,12 +5,12 @@
   // les backgrounds génériques du circuit si ce layout n'en a pas — voir
   // media::list_backgrounds). Servent aussi de repli pour le fond photo de
   // l'écran de réglages (§6.2/SESSION§3).
-  import { listMediaBackgrounds, type BackgroundFile } from "$lib/media";
-  import { previewSrc } from "$lib/library";
-  import { loadThumbnails } from "$lib/thumbnails";
+  import { listMediaBackgrounds, type BackgroundFile } from "$lib/detail/media";
+  import { previewSrc } from "$lib/library/library";
+  import { loadThumbnails } from "$lib/detail/thumbnails";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
-  import Lightbox, { type LightboxItem } from "../Lightbox.svelte";
+  import Lightbox, { type LightboxItem } from "$lib/components/ui/Lightbox.svelte";
 
   let {
     modId,

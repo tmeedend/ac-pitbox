@@ -100,15 +100,16 @@ de reprendre. En cas d'écart, la spec fait foi.
       choses est un piège au premier déplacement de markup.
       **Inventaire de ce qui reste** (mesuré le 2026-08-18, revu le
       2026-09-11) :
-      - **Enregistrer / charger / supprimer une liste nommée : 2 copies**, et
-        c'est la seule entrée de cet inventaire qui ne soit pas du style mais
-        du **comportement**. Les sessions enregistrées (`SavedSessionsDialog`
-        pour le nom, la liste de chargement restée inline dans `Launch.svelte`)
-        et les tenues de pilote (`DriverOutfits.svelte`) font le même geste
-        avec deux implémentations. Demandé par l'utilisateur, qui l'a reconnu
-        d'un écran à l'autre. **Le mutualiser demande d'abord d'extraire la
-        moitié « liste » de `Launch.svelte`** — c'est là qu'est le travail, pas
-        dans le dialogue de nommage.
+      - **Enregistrer / charger / supprimer une liste nommée : 1 copie de
+        trop**, et c'est la seule entrée de cet inventaire qui ne soit pas du
+        style mais du **comportement**. Demandé par l'utilisateur, qui l'avait
+        reconnu d'un écran à l'autre. `NamedListDialog` porte le geste
+        (`196fcbe`), et **le préalable est levé** : `d45b67f` a sorti la moitié
+        « liste » de `Launch.svelte` — le bloc du rail droit et le dialogue
+        maison ont disparu au profit de deux boutons et de la brique partagée,
+        qui sert désormais les sessions **et** les grilles. Reste
+        `DriverOutfits.svelte`, seul à garder son implémentation ; c'est du
+        raccordement, plus de l'extraction.
       Un lot de ce genre est du **reformatage pur sur une quinzaine de
       fichiers** : le faire dans son propre commit, jamais mélangé à un
       changement fonctionnel (sinon `git blame` devient inexploitable).

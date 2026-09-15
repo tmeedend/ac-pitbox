@@ -20,7 +20,7 @@
   // aucune raison de vivre dans la page. La persistance, elle, remonte au
   // parent — lui seul sait relire la fiche et prévenir la bibliothèque.
   import { onMount } from "svelte";
-  import type { ModDetail } from "$lib/library";
+  import type { ModDetail } from "$lib/library/library";
   import { t } from "$lib/i18n/index.svelte";
   import { StorageKey } from "$lib/storage";
   import { getUiPref, setUiPref } from "$lib/uiPrefs.svelte";

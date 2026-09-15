@@ -17,8 +17,8 @@
   //
   // Présentation seulement : la génération (`generateOpponents`, le cache de
   // livrées) reste dans `Launch.svelte`, qui la déclenche aussi d'ailleurs.
-  import { formatRatio } from "$lib/carSpecs";
-  import type { CardIndex } from "$lib/filters";
+  import { formatRatio } from "$lib/detail/carSpecs";
+  import type { CardIndex } from "$lib/library/filters";
   import {
     AI_LEVEL_MAX,
     AI_LEVEL_MIN,
@@ -26,10 +26,10 @@
     type Opponent,
     type RaceSetup,
     type SkinItem,
-  } from "$lib/launch";
-  import { previewSrc, type ModCard } from "$lib/library";
+  } from "$lib/launch/launch";
+  import { previewSrc, type ModCard } from "$lib/library/library";
   import { t } from "$lib/i18n/index.svelte";
-  import AnchoredPopover from "../filters/AnchoredPopover.svelte";
+  import AnchoredPopover from "$lib/components/filters/AnchoredPopover.svelte";
 
   let {
     setup,

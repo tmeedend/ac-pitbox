@@ -13,8 +13,8 @@
   //
   // The ideal line does **not** follow: it is not a capability of the car but a
   // display aid, so it stays here with the tyre blankets and the penalties.
-  import { type RaceSetup } from "$lib/launch";
-  import Slider from "../Slider.svelte";
+  import { type RaceSetup } from "$lib/launch/launch";
+  import Slider from "$lib/components/ui/Slider.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
   let { setup }: { setup: RaceSetup } = $props();

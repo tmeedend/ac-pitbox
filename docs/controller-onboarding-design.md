@@ -262,9 +262,9 @@ Tout est frontend : le Gamepad API est une API web, la persistance passe par
 | Fichier | Rôle |
 | --- | --- |
 | `src/lib/gamepadDevices.svelte.ts` | Détection, décisions, persistance |
-| `src/lib/gamepadProfile.ts` | **Logique pure** : `deviceKey`, écart au repos, capture, appariement |
-| `src/lib/gamepadNav.ts` | Existant — résolution du profil (§3), retour au neutre (§4) |
-| `src/lib/components/ControllerSetup.svelte` | Panneau (bandeau + Réglages) |
+| `src/lib/shell/gamepadProfile.ts` | **Logique pure** : `deviceKey`, écart au repos, capture, appariement |
+| `src/lib/shell/gamepadNav.ts` | Existant — résolution du profil (§3), retour au neutre (§4) |
+| `src/lib/components/settings/ControllerSetup.svelte` | Panneau (bandeau + Réglages) |
 
 Clés i18n dans les **deux** locales, namespace structuré d'emblée
 (`controller.banner.*`, `controller.panel.*`, `controller.calib.*`,

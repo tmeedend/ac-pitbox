@@ -9,7 +9,7 @@
   // La séquence clavier complète doit marcher sans souris : « + Filtre » →
   // trois lettres → Entrée → la valeur → Entrée.
   import { t } from "$lib/i18n/index.svelte";
-  import type { FilterDef } from "$lib/filters";
+  import type { FilterDef } from "$lib/library/filters";
 
   interface Props {
     defs: FilterDef[];

@@ -36,7 +36,7 @@
   // gants, et l'adoption rétablit le rendu exact. Un essai est un essai.
   import { onDestroy, untrack } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
-  import { prepareDriverPreview, type DriverRig } from "$lib/preview";
+  import { prepareDriverPreview, type DriverRig } from "$lib/preview3d/preview";
   import { errorText } from "$lib/errors";
   import type * as ThreeModule from "three";
 
@@ -272,7 +272,7 @@
     const THREE = await import("three");
     const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
     const { OrbitControls } = await import("three/examples/jsm/controls/OrbitControls.js");
-    const { showroomEnvironment } = await import("../detail/showroomEnvironment");
+    const { showroomEnvironment } = await import("$lib/components/detail/showroomEnvironment");
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));

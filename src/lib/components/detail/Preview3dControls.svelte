@@ -8,7 +8,7 @@
   // de ne montrer que le cadrage — celui qu'on règle en voyant le résultat —
   // pendant que l'écran Réglages les présente tous, chacun avec son bouton de
   // remise à zéro posé à côté de ce qu'il remet à zéro.
-  import Slider from "../Slider.svelte";
+  import Slider from "$lib/components/ui/Slider.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import {
     PREVIEW3D_GROUPS,
@@ -17,7 +17,7 @@
     resetPreview3dGroup,
     setPreview3dValue,
     type Preview3dGroup,
-  } from "$lib/preview3dPrefs.svelte";
+  } from "$lib/preview3d/preview3dPrefs.svelte";
 
   /** `compact` : version posée par-dessus l'aperçu, où la place manque et où
    * le résultat est sous les yeux — pas de texte d'aide. */

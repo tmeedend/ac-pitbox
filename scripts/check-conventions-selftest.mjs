@@ -33,12 +33,12 @@ function run() {
 const cases = [
   {
     rule: "no-scroll-into-view",
-    file: "src/lib/zoom.svelte.ts",
+    file: "src/lib/shell/zoom.svelte.ts",
     inject: (s) => `${s}\nfunction _probe(e: HTMLElement) { e.scrollIntoView({ block: "center" }); }\n`,
   },
   {
     rule: "no-localstorage-write",
-    file: "src/lib/zoom.svelte.ts",
+    file: "src/lib/shell/zoom.svelte.ts",
     inject: (s) => `${s}\nfunction _probe() { localStorage.setItem("x", "y"); }\n`,
   },
   {
@@ -52,7 +52,7 @@ const cases = [
   },
   {
     rule: "orphan-component",
-    file: "src/lib/components/ZzSelfTestOrphan.svelte",
+    file: "src/lib/components/ui/ZzSelfTestOrphan.svelte",
     create: '<script lang="ts">\n  let x = 1;\n</script>\n\n<span>{x}</span>\n',
   },
   {
@@ -78,7 +78,7 @@ const cases = [
     // Valeur volontairement fantaisiste : ce qu'on teste est la **forme** du
     // jeton, celle que les robots de moissonnage cherchent sur GitHub.
     rule: "no-secret",
-    file: "src/lib/zoom.svelte.ts",
+    file: "src/lib/shell/zoom.svelte.ts",
     inject: (s) => `${s}\nconst _probe = "ghp_000000000000000000000000000000000000";\n`,
   },
   {
@@ -116,7 +116,7 @@ for (const c of cases) {
 // L'échappatoire doit éteindre la règle, sinon elle n'est pas utilisable et
 // quelqu'un finira par retirer la règle plutôt que de la contourner proprement.
 {
-  const file = "src/lib/zoom.svelte.ts";
+  const file = "src/lib/shell/zoom.svelte.ts";
   const before = readFileSync(file, "utf8");
   try {
     writeFileSync(

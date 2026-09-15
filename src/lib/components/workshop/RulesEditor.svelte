@@ -1,0 +1,477 @@
+<script lang="ts">
+  import { onMount } from "svelte";
+  import Tabs from "$lib/components/ui/Tabs.svelte";
+  import { getRules, saveRules, rulesImpact, type Rules } from "$lib/workshop/rules";
+  import { t } from "$lib/i18n/index.svelte";
+
+  let rules = $state<Rules | null>(null);
+  let tab = $state<"car" | "track">("car");
+  let impact = $state<number | null>(null);
+  let saving = $state(false);
+  let savedMsg = $state("");
+
+  // Le map pays s'édite via une liste de paires synchronisée vers l'objet.
+  let countryPairs = $state<{ tag: string; country: string }[]>([]);
+
+  onMount(async () => {
+    rules = await getRules();
+    countryPairs = Object.entries(rules.car.extraction_country.map).map(
+      ([tag, country]) => ({ tag, country }),
+    );
+  });
+
+  // Reconstruit le map pays depuis les paires éditées.
+  $effect(() => {
+    if (!rules) return;
+    const map: Record<string, string> = {};
+    for (const p of countryPairs) {
+      const k = p.tag.trim().toLowerCase();
+      if (k) map[k] = p.country.trim();
+    }
+    rules.car.extraction_country.map = map;
+  });
+
+  // Aperçu d'impact à la volée (anti-rebond) — « N mods affectés » (§5).
+  $effect(() => {
+    if (!rules) return;
+    JSON.stringify(rules); // dépendance réactive
+    savedMsg = "";
+    const snapshot = rules;
+    const timer = setTimeout(async () => {
+      impact = await rulesImpact(snapshot);
+    }, 350);
+    return () => clearTimeout(timer);
+  });
+
+  const parseList = (s: string) =>
+    s.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const joinList = (a: string[]) => a.join(", ");
+
+  function push<T>(list: T[], item: T) {
+    list.unshift(item);
+  }
+  function removeAt<T>(list: T[], i: number) {
+    list.splice(i, 1);
+  }
+
+  // --- Liste blanche des catégories de circuit (§5) : ordonnée par
+  // priorité (1ʳᵉ = principale). Ajout en fin, réordonnable, `#` normalisé. ---
+  let catInput = $state("");
+  function normCat(s: string): string {
+    const t = s.trim().toLowerCase().replace(/^#+/, "");
+    return t ? `#${t}` : "";
+  }
+  function addCategory(list: string[], value: string) {
+    const v = normCat(value);
+    if (v && !list.includes(v)) list.push(v);
+  }
+  function moveCat(list: string[], i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+
+  async function save() {
+    if (!rules) return;
+    saving = true;
+    try {
+      const n = await saveRules(rules);
+      savedMsg = t("rules.savedMsg", { count: n });
+      impact = 0;
+    } finally {
+      saving = false;
+    }
+  }
+</script>
+
+<!-- Écran à défilement interne (`noPad` dans AppShell), et non un contenu posé
+     dans le `.content` qui défile : c'est ce qui permet à la barre du bas
+     d'être un vrai frère de la zone qui défile plutôt qu'un `position: fixed`
+     posé par-dessus. Voir le commentaire de `.r-footer`. -->
+<div class="screen">
+  <div class="scroll">
+    <div class="rules">
+      <!-- Pas de titre d'écran : c'est un onglet de l'Atelier, qui porte le
+           sien. Le sous-titre reste, lui — il décrit l'outil, pas le lieu. -->
+      <header class="r-header">
+        <p class="lbl-sub">{t("rules.subtitle")}</p>
+      </header>
+
+      {#if !rules}
+        <div class="empty">{t("rules.loading")}</div>
+      {:else}
+        {@const fam = tab === "car" ? rules.car : rules.track}
+        <Tabs
+          tabs={[
+            { id: "car", label: t("rules.tabCars") },
+            { id: "track", label: t("rules.tabTracks") },
+          ]}
+          active={tab}
+          onselect={(v) => (tab = v as "car" | "track")}
+        />
+
+        <!-- FUSION / DÉDUCTION -->
+        <section>
+          <div class="s-head">
+            <h3>{t("rules.tagMerge")} <span class="cnt">{fam.tag_merge.length}</span></h3>
+            <button class="btn" type="button" onclick={() => push(fam.tag_merge, { from: [], to: [] })}>+ {t("rules.addRule")}</button>
+          </div>
+          <p class="hint">{t("rules.tagMergeHint")} <span class="mono">#</span> {t("rules.tagMergeHintCat")}</p>
+          <div class="rows">
+            {#each fam.tag_merge as rule, i}
+              <div class="row">
+                <input class="input mono" value={joinList(rule.from)} oninput={(e) => (rule.from = parseList(e.currentTarget.value))} placeholder="hothatch, hot hatchback" />
+                <span class="arrow">→</span>
+                <input class="input mono" value={joinList(rule.to)} oninput={(e) => (rule.to = parseList(e.currentTarget.value))} placeholder="hatchback" />
+                <button class="btn-ghost del" type="button" onclick={() => removeAt(fam.tag_merge, i)} title={t("common.delete")}>✕</button>
+              </div>
+            {/each}
+          </div>
+        </section>
+
+        {#if tab === "track"}
+          {@const allow = rules.track.category_allowlist}
+          <!-- CATÉGORIES DE CIRCUIT (liste blanche ordonnée, §5) -->
+          <section>
+            <div class="s-head">
+              <h3>{t("rules.trackCategoriesTitle")} <span class="cnt">{allow.length}</span></h3>
+            </div>
+            <p class="s-hint">{t("rules.trackCategoriesHint")}</p>
+            <input
+              class="input add-input"
+              placeholder={t("rules.addCategoryPlaceholder")}
+              bind:value={catInput}
+              onkeydown={(e) => { if (e.key === "Enter") { addCategory(allow, catInput); catInput = ""; } }}
+            />
+            <ol class="cat-list">
+              {#each allow as cat, i}
+                <li>
+                  <span class="cat-rank mono">{i + 1}</span>
+                  <span class="cat-name mono">{cat}</span>
+                  <button class="btn-ghost" type="button" disabled={i === 0} onclick={() => moveCat(allow, i, -1)} title={t("rules.moveUp")}>↑</button>
+                  <button class="btn-ghost" type="button" disabled={i === allow.length - 1} onclick={() => moveCat(allow, i, 1)} title={t("rules.moveDown")}>↓</button>
+                  <button class="btn-ghost del" type="button" onclick={() => removeAt(allow, i)} title={t("common.delete")}>✕</button>
+                </li>
+              {/each}
+            </ol>
+          </section>
+        {/if}
+
+        {#if tab === "car"}
+          {@const car = rules.car}
+          <!-- CORRECTION DE MARQUE -->
+          <section>
+            <div class="s-head">
+              <h3>{t("rules.brandFixTitle")} <span class="cnt">{car.brand_fix.length}</span></h3>
+              <button class="btn" type="button" onclick={() => push(car.brand_fix, { name_contains: "", set_brand: "" })}>+ {t("rules.addRule")}</button>
+            </div>
+            <p class="hint">{t("rules.brandFixHint")}</p>
+            <div class="rows">
+              {#each car.brand_fix as rule, i}
+                <div class="row">
+                  <input class="input" value={rule.name_contains} oninput={(e) => (rule.name_contains = e.currentTarget.value)} placeholder="bayro" />
+                  <span class="arrow">→</span>
+                  <input class="input" value={rule.set_brand} oninput={(e) => (rule.set_brand = e.currentTarget.value)} placeholder="BMW" />
+                  <button class="btn-ghost del" type="button" onclick={() => removeAt(car.brand_fix, i)} title={t("common.delete")}>✕</button>
+                </div>
+              {/each}
+            </div>
+          </section>
+
+          <!-- NOM → TAG -->
+          <section>
+            <div class="s-head">
+              <h3>{t("rules.nameToTagTitle")} <span class="cnt">{car.name_to_tag.length}</span></h3>
+              <button class="btn" type="button" onclick={() => push(car.name_to_tag, { name_contains: "", add: [] })}>+ {t("rules.addRule")}</button>
+            </div>
+            <p class="hint">{t("rules.nameToTagHint")}</p>
+            <div class="rows">
+              {#each car.name_to_tag as rule, i}
+                <div class="row">
+                  <input class="input" value={rule.name_contains} oninput={(e) => (rule.name_contains = e.currentTarget.value)} placeholder="police" />
+                  <span class="arrow">→</span>
+                  <input class="input mono" value={joinList(rule.add)} oninput={(e) => (rule.add = parseList(e.currentTarget.value))} placeholder="police" />
+                  <button class="btn-ghost del" type="button" onclick={() => removeAt(car.name_to_tag, i)} title={t("common.delete")}>✕</button>
+                </div>
+              {/each}
+            </div>
+          </section>
+
+          <!-- NORMALISATION DE CLASSE -->
+          <section>
+            <div class="s-head">
+              <h3>{t("rules.classFixTitle")} <span class="cnt">{car.class_fix.length}</span></h3>
+              <button class="btn" type="button" onclick={() => push(car.class_fix, { from: [], set_class: null, add: [] })}>+ {t("rules.addRule")}</button>
+            </div>
+            <p class="hint">{t("rules.classFixHint")}</p>
+            <div class="rows">
+              {#each car.class_fix as rule, i}
+                <div class="row class-row">
+                  <input class="input mono" value={joinList(rule.from)} oninput={(e) => (rule.from = parseList(e.currentTarget.value))} placeholder="rally, hillclimb" />
+                  <select class="input sel" value={rule.set_class ?? ""} onchange={(e) => (rule.set_class = e.currentTarget.value || null)}>
+                    <option value="">{t("rules.noneOption")}</option>
+                    <option value="race">race</option>
+                    <option value="street">street</option>
+                  </select>
+                  <input class="input mono" value={joinList(rule.add)} oninput={(e) => (rule.add = parseList(e.currentTarget.value))} placeholder="#rally" />
+                  <button class="btn-ghost del" type="button" onclick={() => removeAt(car.class_fix, i)} title={t("common.delete")}>✕</button>
+                </div>
+              {/each}
+            </div>
+          </section>
+
+          <!-- EXTRACTION SPECS -->
+          <section>
+            <div class="s-head"><h3>{t("rules.specsExtractionTitle")}</h3></div>
+            <p class="hint">{t("rules.specsExtractionHint")}</p>
+            {#each [["drivetrain", "rules.fieldDrivetrain"], ["aspiration", "rules.fieldAspiration"], ["engine_config", "rules.fieldEngineConfig"], ["engine_pos", "rules.fieldEnginePos"], ["gearbox", "rules.fieldGearbox"]] as [field, labelKey]}
+              {@const list = car.extraction_specs[field as keyof typeof car.extraction_specs]}
+              <div class="sub-fam">
+                <div class="sub-head">
+                  <span class="sub-label">{t(labelKey)} <span class="cnt">{list.length}</span></span>
+                  <button class="btn-ghost mini" type="button" onclick={() => push(list, { from: [], set: "" })}>+ </button>
+                </div>
+                {#each list as rule, i}
+                  <div class="row">
+                    <input class="input mono" value={joinList(rule.from)} oninput={(e) => (rule.from = parseList(e.currentTarget.value))} placeholder="rwd, propulsion" />
+                    <span class="arrow">→</span>
+                    <input class="input mono" value={rule.set} oninput={(e) => (rule.set = e.currentTarget.value)} placeholder="RWD" />
+                    <button class="btn-ghost del" type="button" onclick={() => removeAt(list, i)} title={t("common.delete")}>✕</button>
+                  </div>
+                {/each}
+              </div>
+            {/each}
+          </section>
+
+          <!-- EXTRACTION PAYS -->
+          <section>
+            <div class="s-head">
+              <h3>{t("rules.countryExtractionTitle")} <span class="cnt">{countryPairs.length}</span></h3>
+              <button class="btn" type="button" onclick={() => push(countryPairs, { tag: "", country: "" })}>+ {t("columns.country")}</button>
+            </div>
+            <p class="hint">{t("rules.countryExtractionHint")}</p>
+            <div class="rows">
+              {#each countryPairs as pair, i}
+                <div class="row">
+                  <input class="input mono" bind:value={pair.tag} placeholder="germany" />
+                  <span class="arrow">→</span>
+                  <input class="input" bind:value={pair.country} placeholder="Germany" />
+                  <button class="btn-ghost del" type="button" onclick={() => removeAt(countryPairs, i)} title={t("common.delete")}>✕</button>
+                </div>
+              {/each}
+            </div>
+          </section>
+        {/if}
+      {/if}
+    </div>
+  </div>
+
+  {#if rules}
+    <footer class="r-footer">
+      <div class="impact">
+        {#if impact !== null}
+          <span class="i-num">{impact}</span> {t("rules.impactText")}
+        {:else}
+          <span class="muted">{t("rules.calculatingImpact")}</span>
+        {/if}
+      </div>
+      <div class="f-actions">
+        {#if savedMsg}<span class="pill pill-ok">{savedMsg}</span>{/if}
+        <button class="btn btn-primary" type="button" onclick={save} disabled={saving}>
+          {saving ? t("rules.applying") : t("rules.saveAndReapply")}
+        </button>
+      </div>
+    </footer>
+  {/if}
+</div>
+
+<style>
+  /* Écran pleine hauteur qui gère son propre défilement (`noPad` dans
+     AppShell) : la zone qui défile et la barre du bas sont deux frères d'une
+     colonne flex, pas un contenu et un calque posé dessus. */
+  .screen {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    /* Le retrait que `.content` appliquait avant que cet écran ne prenne son
+       défilement en main — sans le haut, désormais donné par la barre
+       d'onglets de l'Atelier juste au-dessus. */
+    padding: 0 32px 28px;
+  }
+  .rules {
+    max-width: 760px;
+  }
+  .r-header {
+    margin-bottom: 16px;
+  }
+  /* Taille/graisse viennent de `.lbl-screen` (global, §chantier libellés). */
+  /* 12px comme les autres sous-titres d'écran (voir Profiles.svelte). */
+  section {
+    margin-bottom: 26px;
+  }
+  .s-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--txt2);
+  }
+  .cnt {
+    color: var(--faint);
+    font-family: var(--mono);
+    margin-left: 6px;
+  }
+  .hint {
+    color: var(--muted);
+    font-size: 11.5px;
+    margin-bottom: 10px;
+    line-height: 1.5;
+  }
+  .rows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .row .input {
+    flex: 1;
+    min-width: 0;
+  }
+  .class-row .sel {
+    flex: 0 0 110px;
+  }
+  .arrow {
+    color: var(--rosso-bright);
+    flex: none;
+  }
+  .del {
+    flex: none;
+    padding: 4px 8px;
+  }
+  .add-input {
+    margin-bottom: 10px;
+  }
+  .sub-fam {
+    margin: 10px 0;
+    padding-left: 10px;
+    border-left: 2px solid var(--line);
+  }
+  .sub-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 5px;
+  }
+  .sub-label {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .mini {
+    padding: 2px 8px;
+    font-size: 13px;
+  }
+  /* Barre d'action du bas. Elle était en `position: fixed; bottom: 0;
+     left: 180px; right: 0` et cumulait deux défauts, tous deux visibles à
+     l'écran :
+     — `left: 180px` était une supposition sur la largeur de la barre latérale,
+       qui fait 328px (`.shell` dans AppShell) : la barre mordait donc de
+       148px sur le menu de gauche ;
+     — `bottom: 0` en `fixed` se place dans le même repère que `100vh`, celui
+       que `zoom.svelte.ts` documente : le zoom d'interface agrandit le rendu
+       sans diviser ces unités, donc au-delà de 100 % la barre atterrissait
+       SOUS le bord bas de la fenêtre — cachée derrière la barre des tâches.
+       C'est exactement ce que `.frame` compense avec son `calc(100vh /
+       var(--ui-zoom))`.
+     Rien à compenser ici : sortie du positionnement absolu, la barre est le
+     second enfant d'une colonne flex pleine hauteur et ne peut plus déborder
+     de la zone principale ni de la fenêtre. Même raisonnement que
+     `.bigpicture-exit` dans AppShell. */
+  .r-footer {
+    flex: none;
+    background: var(--panel);
+    border-top: 1px solid var(--rosso-border);
+    padding: 12px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .impact {
+    font-size: 13px;
+    color: var(--txt2);
+  }
+  .i-num {
+    font-family: var(--mono);
+    color: var(--rosso-bright);
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .muted {
+    color: var(--muted);
+  }
+  .f-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .empty {
+    color: var(--muted);
+    padding: 40px 0;
+  }
+  .s-hint {
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.5;
+    margin-bottom: 10px;
+    max-width: 620px;
+  }
+  .cat-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+    max-width: 420px;
+  }
+  .cat-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--line);
+    background: var(--panel2);
+    padding: 5px 8px;
+  }
+  .cat-rank {
+    color: var(--faint);
+    font-size: 10px;
+    width: 18px;
+    text-align: right;
+    flex: none;
+  }
+  .cat-name {
+    flex: 1;
+    color: var(--rosso-bright);
+    font-size: 12px;
+  }
+  .cat-list .btn-ghost {
+    padding: 2px 7px;
+    font-size: 12px;
+  }
+  .cat-list .btn-ghost:disabled {
+    opacity: 0.3;
+  }
+</style>

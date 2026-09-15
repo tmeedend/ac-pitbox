@@ -202,13 +202,27 @@ src-tauri/crates/       Crates du workspace (aperçu 3D, docs/SPEC-preview-3d-kn
   kn5/                  Parsing du format KN5 — pur, sans I/O ni Tauri
   kn5-gltf/             Textures et export glTF (touche au disque : skins)
   kn5-tool/             CLI de validation, jamais livrée à l'utilisateur
-src/lib/
-  components/           Composants Svelte (voir la carte des écrans)
+src/lib/                Modules : un dossier par domaine, comme le backend
+  shell/                La coquille : navigation, historique, zoom, défilement,
+                        manette, Big Picture
+  library/              L'écran bibliothèque : cartes, colonnes, filtres, lots
+  detail/               La fiche : caractéristiques, médias, ressources, son
+  wiki/                 L'onglet Wikipédia (WIKI§7)
+  preview3d/            L'aperçu 3D des voitures (PREVIEW§7)
+  launch/               La session : plateau, sessions et grilles enregistrées
+  gridthumbs/           Les vignettes de la grille (GRILLE§5), éteintes
+  driver/               Le pilote : corps, tenues, surcharges
+  inventory/            Les compléments : apps, autres mods, sous-éléments
+  workshop/             L'Atelier : règles, import, profils, maintenance
+  *.ts                  Ce qui ne relève d'aucun domaine : `config`, `errors`,
+                        `features`, `format`, `invokeSafe`, `storage`,
+                        `uiPrefs`, `preferred`
+  components/           Composants Svelte, mêmes domaines (voir la carte des
+                        écrans) + `ui/` (les briques partagées) et `toasts/`
   components/detail/    Blocs extraits de la fiche détail
-  components/Inventory.svelte  L'écran Compléments (§7bis du SPEC)
-  components/FicheHeader.svelte NoteBlock.svelte PickerBar.svelte Pencil.svelte
-                        Briques de fiche partagées par les cinq types
-  *.ts                  Bindings typés vers les commandes Tauri
+  components/inventory/Inventory.svelte  L'écran Compléments (§7bis du SPEC)
+  components/detail/FicheHeader.svelte NoteBlock.svelte PickerBar.svelte
+  components/ui/Pencil.svelte   Briques de fiche partagées par les cinq types
   i18n/locales/         fr, en (référence) + it, de, es, pt (traductions)
   styles/global.css     Design system Rosso Corsa
 docs/                   Documentation (voir ci-dessous)
@@ -225,11 +239,40 @@ bibliothèque, sans quoi les déploiements par hardlink deviennent de vrais
 dossiers pleins de contenu que rien ne nettoie et sur lesquels le garde-fou
 refusera ensuite de reposer quoi que ce soit.
 
+**Où va un fichier neuf.** `src/lib/` et `src/lib/components/` portent les
+**mêmes noms de domaine**, et ce sont ceux de la carte des écrans ci-dessous :
+un module et le composant qui le consomme se trouvent au même endroit dans deux
+arbres parallèles. Le critère est **ce qui change en même temps**, pas la nature
+technique du fichier — le pont typé vers les commandes, l'état `$state` partagé
+et la logique pure d'un domaine vivent ensemble, parce qu'une évolution de ce
+domaine les touche ensemble. Un fichier ne reste à la racine de `src/lib/` que
+s'il n'appartient à **aucun** domaine (`errors`, `format`, `storage`…) ; dans le
+doute, il appartient à un domaine.
+
+**Deux dossiers de `components/` ne sont pas des domaines, et pas pour la même
+raison.** `ui/` regroupe les briques partagées (§chantier composants partagés) :
+elles ne savent **rien du contenu** qu'on leur passe, et c'est vérifiable — un
+composant de `ui/` qui importe `$lib/library/…` ou `$lib/detail/…` s'est trompé
+de dossier. La seule dépendance qu'elles ont le droit d'avoir est la coquille
+(`$lib/shell/zoom.svelte` pour la règle du zoom, `screenActions` pour
+l'inscription manette de `Tabs`), parce que le cadre s'applique à tout contrôle
+quel qu'il soit. `toasts/`, lui, est regroupé par **l'endroit à l'écran** : la
+pile bas-droite (§4.2bis) où six bandeaux se disputent la même place. Chacun
+connaît bien son domaine (`bulkState`, `importState`, `gamepadDevices`…) — les
+ranger chacun chez soi les laisserait se dessiner indépendamment, ce qui est
+exactement ce que la pile existe pour empêcher.
+
+**Un import qui traverse un domaine s'écrit en absolu** (`$lib/library/filters`,
+`$lib/components/ui/Slider.svelte`) ; seul un voisin de dossier garde la forme
+relative (`./ConditionsBlock.svelte`). Une chaîne de `../../` ne dit pas où elle
+va et se casse au déplacement suivant — c'est exactement ce que ce rangement
+coûtait avant d'exister.
+
 ### Carte des écrans
 
 `AppShell.svelte` est la coquille : **rail de navigation** (`NavRail.svelte`,
 les lieux) + **colonne de session** (ce qu'on lance) + aiguillage sur
-`nav.section` (`src/lib/nav.svelte.ts`). Les trois territoires et leur
+`nav.section` (`src/lib/shell/nav.svelte.ts`). Les trois territoires et leur
 frontière étanche sont au §7.2 du SPEC. Correspondance section → composant :
 
 Le rail a **deux rangs**, et ils ne classent pas par type de contenu mais par
@@ -238,13 +281,13 @@ chaque fois) et *Le jeu* (ce qui reste vrai jusqu'à nouvel ordre).
 
 | Section | Composant | Note |
 | --- | --- | --- |
-| `cars` / `tracks` | `Library.svelte` | **rendu deux fois**, prop `kind` — persistance suffixée par type |
+| `cars` / `tracks` | `library/Library.svelte` | **rendu deux fois**, prop `kind` — persistance suffixée par type |
 | `driver` | `driver/DriverScreen.svelte` | galerie des mannequins + panneau d'essayage |
-| `apps` | `Apps.svelte` | écran à part entière depuis la refonte (§3.2) |
-| `others` | `Inventory.svelte` | **l'inventaire des compléments** — cinq sources en une liste |
-| `race` | `Launch.svelte` | |
-| `rules` / `import` / `profiles` / `maintenance` | `Workshop.svelte` | **un écran, quatre onglets** — l'onglet EST la section, pas un état local |
-| `settings` / `about` | `Settings` / `About` | |
+| `apps` | `inventory/Apps.svelte` | écran à part entière depuis la refonte (§3.2) |
+| `others` | `inventory/Inventory.svelte` | **l'inventaire des compléments** — cinq sources en une liste |
+| `race` | `launch/Launch.svelte` | |
+| `rules` / `import` / `profiles` / `maintenance` | `workshop/Workshop.svelte` | **un écran, quatre onglets** — l'onglet EST la section, pas un état local |
+| `settings` / `about` | `settings/Settings` / `settings/About` | |
 
 **Les trois écrans transversaux ont disparu** (Add-ons voiture, Add-ons
 circuit, l'ancien fourre-tout) : ils classaient par mécanique d'installation,
@@ -342,7 +385,7 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
   listes déroulantes (skin de la colonne de session, tenue par défaut) ouvertes
   très en dessous de leur bouton jusqu'à sortir de l'écran, puis les colonnes
   de bibliothèque élargies de 10 % à la première prise de poignée. Diviser par
-  `zoomFactor()` (`zoom.svelte.ts`) avant d'écrire, toujours.
+  `zoomFactor()` (`shell/zoom.svelte.ts`) avant d'écrire, toujours.
   **Corollaire côté CSS : un seuil de mise en page est une `@container`, pas une
   `@media`.** Une requête de média interroge la fenêtre — donc un seuil que le
   zoom déplace, et qui de toute façon ignore ce que le rail et la colonne de
@@ -364,7 +407,7 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
   scrollable qui remonte trop haut — l'`overflow-y` calculé de l'élément racine
   vaut « auto », pas « visible ». Faire défiler le conteneur d'écran, et
   s'arrêter avant `document.body`. **Les deux pièges sont pris en charge par
-  `scrollIntoContainer` de `$lib/shellScroll`** : c'est lui qu'on appelle, pas
+  `scrollIntoContainer` de `$lib/shell/shellScroll`** : c'est lui qu'on appelle, pas
   `scrollIntoView`, et `check-conventions.mjs` refuse le second. La règle était
   écrite ici et commentée dans deux fichiers ; elle était quand même violée
   dans deux autres, ce qui est précisément la raison d'être de la porte.
@@ -407,7 +450,7 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
   s'en charge, et il vient d'une erreur réelle.
 - **Changer de section ET ouvrir une fiche demande `openInSection`.**
   `requestSection` remet `openFull` à zéro, et l'`await` qui la suit garantit
-  que l'observateur d'historique (`navHistory.ts`) voit passer la liste
+  que l'observateur d'historique (`shell/navHistory.ts`) voit passer la liste
   d'arrivée comme un écran à part entière : « précédent » y ramenait au lieu de
   rendre l'écran d'où l'on venait. Les deux écritures d'affilée, sans `await`
   entre elles, n'exposent qu'un seul état.
@@ -540,7 +583,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | --- | --- | --- |
 | **Texture updates** | rien d'implémenté ; la règle de détection est mesurée et nette | `docs/SPEC-texture-update.md` |
 | **Harmonisation des libellés** | fiche détail et titres d'écran faits ; filtres et grille de bibliothèque restent | `docs/CHANTIERS.md` |
-| **Composants partagés** | une brique reste — et elle demande d'abord d'extraire la moitié « liste » de `Launch.svelte` | `docs/CHANTIERS.md` |
+| **Composants partagés** | une brique reste, et son préalable est levé : reste à y raccorder `DriverOutfits` | `docs/CHANTIERS.md` |
 | **Vignettes de la grille** | fusionné mais **éteint** (`FEATURE_GRID_THUMBS`) ; reste à figer les valeurs des trois presets | `docs/SPEC-grille.md` |
 | **Écran Pilote** | livré ; trois points restent, dont un casque posé de travers | `docs/SPEC-ecran-pilote.md` |
 | **Aperçu 3D natif** | lots 0 à 6 validés à l'écran ; reste le choix du LOD | `docs/SPEC-preview-3d-kn5.md` PREVIEW§13 à §15 |

@@ -37,8 +37,8 @@
   import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
   import { tick, untrack } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
-  import Seg from "../Seg.svelte";
-  import { zoomState } from "$lib/zoom.svelte";
+  import Seg from "$lib/components/ui/Seg.svelte";
+  import { zoomState } from "$lib/shell/zoom.svelte";
   import { getUiPrefs, setUiPrefs } from "$lib/uiPrefs.svelte";
 
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;

@@ -12,7 +12,7 @@
     launchReplay,
     trashMediaFile,
     type ReplayFile,
-  } from "$lib/media";
+  } from "$lib/detail/media";
   import { open } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";

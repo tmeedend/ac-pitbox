@@ -16,33 +16,33 @@
     modResourceSrc,
     readModResource,
     type ResourceFile,
-  } from "$lib/library";
-  import { listAppResources, openAppResource, appResourcePath, appResourceSrc, readAppResource } from "$lib/apps";
+  } from "$lib/library/library";
+  import { listAppResources, openAppResource, appResourcePath, appResourceSrc, readAppResource } from "$lib/inventory/apps";
   import {
     listPackResources,
     openPackResource,
     packResourcePath,
     packResourceSrc,
     readPackResource,
-  } from "$lib/packs";
+  } from "$lib/library/packs";
   import {
     listSoundResources,
     openSoundResource,
     soundResourcePath,
     soundResourceSrc,
     readSoundResource,
-  } from "$lib/enginesound";
+  } from "$lib/detail/enginesound";
   import {
     listOtherResources,
     openOtherResource,
     otherResourcePath,
     otherResourceSrc,
     readOtherResource,
-  } from "$lib/others";
-  import { loadThumbnails } from "$lib/thumbnails";
-  import Lightbox, { type LightboxItem } from "../Lightbox.svelte";
-  import { previewKind, decodeText, type PreviewKind } from "$lib/resourcePreview";
-  import { renderMarkdown } from "$lib/markdown";
+  } from "$lib/inventory/others";
+  import { loadThumbnails } from "$lib/detail/thumbnails";
+  import Lightbox, { type LightboxItem } from "$lib/components/ui/Lightbox.svelte";
+  import { previewKind, decodeText, type PreviewKind } from "$lib/detail/resourcePreview";
+  import { renderMarkdown } from "$lib/detail/markdown";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
   import { openUrl } from "@tauri-apps/plugin-opener";

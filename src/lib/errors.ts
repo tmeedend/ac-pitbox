@@ -5,7 +5,7 @@
 // ne serait traduisible dans aucune langue. Les erreurs techniques (E/S,
 // SQLite, 7-Zip) restent du texte brut — ce sont des diagnostics, pas des
 // conseils, et les tronquer ferait perdre l'information utile au débogage.
-import { t } from "./i18n/index.svelte";
+import { t } from "$lib/i18n/index.svelte";
 
 const KEY_PREFIX = "errors.";
 

@@ -16,16 +16,16 @@
   // serait une douzaine de curseurs de rien ; une copie de Vitrine est à un
   // réglage d'être la sienne. C'est aussi ce qui remplace le bouton « rétablir
   // le gabarit d'origine » : l'original est toujours là, juste à côté, intact.
-  import Field from "../Field.svelte";
+  import Field from "$lib/components/ui/Field.svelte";
   import GridTemplateStudio from "./GridTemplateStudio.svelte";
-  import Slider from "../Slider.svelte";
+  import Slider from "$lib/components/ui/Slider.svelte";
   import { errorText } from "$lib/errors";
   import { i18n, t } from "$lib/i18n/index.svelte";
-  import { listLibrary } from "$lib/library";
-  import { clearGridThumbnails, gridThumbnailStats, type GridThumbStats } from "$lib/gridThumbs";
-  import { enqueueGridThumbs } from "$lib/gridThumbs.svelte";
+  import { listLibrary } from "$lib/library/library";
+  import { clearGridThumbnails, gridThumbnailStats, type GridThumbStats } from "$lib/gridthumbs/gridThumbs";
+  import { enqueueGridThumbs } from "$lib/gridthumbs/gridThumbs.svelte";
   import { getPreferredSkin } from "$lib/preferred";
-  import { withoutBrand } from "$lib/displayName";
+  import { withoutBrand } from "$lib/library/displayName";
   import {
     GRID_THUMB_RANGES,
     allPresets,
@@ -44,7 +44,7 @@
     setGridThumbsEnabled,
     type GridDensity,
     type GridPreset,
-  } from "$lib/gridThumbPrefs.svelte";
+  } from "$lib/gridthumbs/gridThumbPrefs.svelte";
 
   const prefs = $derived(gridThumbPrefs());
   const presets = $derived(allPresets());

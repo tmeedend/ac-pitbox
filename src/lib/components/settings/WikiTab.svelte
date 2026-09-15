@@ -12,10 +12,10 @@
   // suivante. C'est le seul endroit de l'app d'où la connaissance de
   // l'utilisateur ressort.
   import { confirm, save } from "@tauri-apps/plugin-dialog";
-  import Field from "../Field.svelte";
+  import Field from "$lib/components/ui/Field.svelte";
   import { t, availableLocales, localeNames } from "$lib/i18n/index.svelte";
   import type { AppConfig } from "$lib/config";
-  import { countWikiManualLinks, exportWikiLinks, purgeWikiCache, setWikiLang, wikiLang } from "$lib/wiki";
+  import { countWikiManualLinks, exportWikiLinks, purgeWikiCache, setWikiLang, wikiLang } from "$lib/wiki/wiki";
   import { getUiPref } from "$lib/uiPrefs.svelte";
 
   interface Props {

@@ -3,11 +3,11 @@
   // whose content depends on the chosen session type. Pure presentation:
   // everything is a direct read/write of `setup` (state shared with the
   // parent, SESSION§3.3) — no logic to lift up.
-  import { type RaceSetup, type StartMode } from "$lib/launch";
+  import { type RaceSetup, type StartMode } from "$lib/launch/launch";
   import { t } from "$lib/i18n/index.svelte";
-  import NumberStepper from "../NumberStepper.svelte";
-  import Seg from "../Seg.svelte";
-  import Tooltip from "../Tooltip.svelte";
+  import NumberStepper from "$lib/components/ui/NumberStepper.svelte";
+  import Seg from "$lib/components/ui/Seg.svelte";
+  import Tooltip from "$lib/components/ui/Tooltip.svelte";
 
   let { setup }: { setup: RaceSetup } = $props();
 

@@ -2,12 +2,12 @@
 // langue, recherche de clé en points (`section.cle`), interpolation simple
 // `{nom}`. Ajouter une langue = copier un fichier locales/xx.json et le
 // déclarer dans `locales` ci-dessous.
-import fr from "./locales/fr.json";
-import en from "./locales/en.json";
-import it from "./locales/it.json";
-import de from "./locales/de.json";
-import es from "./locales/es.json";
-import pt from "./locales/pt.json";
+import fr from "$lib/i18n/locales/fr.json";
+import en from "$lib/i18n/locales/en.json";
+import it from "$lib/i18n/locales/it.json";
+import de from "$lib/i18n/locales/de.json";
+import es from "$lib/i18n/locales/es.json";
+import pt from "$lib/i18n/locales/pt.json";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Dict = Record<string, any>;

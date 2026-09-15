@@ -275,7 +275,7 @@ le cas où il apporte le plus, et il est fréquent.
   caractères.
 - **Le HTML n'est jamais injecté tel quel.** La webview a accès à `invoke`, et Wikipédia
   est éditable par n'importe qui : un arbre neuf est **reconstruit** à partir d'une liste
-  blanche de balises et d'attributs (`src/lib/wikiHtml.ts`), plutôt que filtré. Ce qui
+  blanche de balises et d'attributs (`src/lib/wiki/wikiHtml.ts`), plutôt que filtré. Ce qui
   n'est pas explicitement prévu n'existe pas. Aucune dépendance : ni assainisseur Rust,
   ni DOMPurify — la sécurité vient de la liste blanche.
 - **Le texte brut reste récupéré en plus du rendu**, et sert de repli quand celui-ci

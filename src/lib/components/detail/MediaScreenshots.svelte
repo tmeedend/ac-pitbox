@@ -11,13 +11,13 @@
     openMediaFolder,
     trashMediaFile,
     type ScreenshotFile,
-  } from "$lib/media";
-  import { previewSrc } from "$lib/library";
-  import { loadThumbnails } from "$lib/thumbnails";
+  } from "$lib/detail/media";
+  import { previewSrc } from "$lib/library/library";
+  import { loadThumbnails } from "$lib/detail/thumbnails";
   import { open } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
-  import Lightbox, { type LightboxItem } from "../Lightbox.svelte";
+  import Lightbox, { type LightboxItem } from "$lib/components/ui/Lightbox.svelte";
 
   let {
     modId,

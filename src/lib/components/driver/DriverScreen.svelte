@@ -14,10 +14,10 @@
   // ne dit rien du résultat — c'est tout le problème que cet écran résout.
   import { onMount } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
-  import { scrollIntoContainer } from "$lib/shellScroll";
-  import { getModDetail, previewSrc } from "$lib/library";
-  import { nav, requestSection } from "$lib/nav.svelte";
-  import { listDriverBodies, listDriverChoices, type BodyOption, type DriverChoices } from "$lib/driver";
+  import { scrollIntoContainer } from "$lib/shell/shellScroll";
+  import { getModDetail, previewSrc } from "$lib/library/library";
+  import { nav, requestSection } from "$lib/shell/nav.svelte";
+  import { listDriverBodies, listDriverChoices, type BodyOption, type DriverChoices } from "$lib/driver/driver";
   import {
     carClassOf,
     driverFor,
@@ -25,11 +25,11 @@
     setDriverBody,
     setDriverPiece,
     type DriverOutfit,
-  } from "$lib/driverOverride.svelte";
+  } from "$lib/driver/driverOverride.svelte";
   import { getUiPrefs, setUiPref } from "$lib/uiPrefs.svelte";
-  import { bodyThumb, requestBodyThumb } from "$lib/driverThumbs.svelte";
-  import LoadingState from "../LoadingState.svelte";
-  import TriCheck, { type TriState } from "../TriCheck.svelte";
+  import { bodyThumb, requestBodyThumb } from "$lib/driver/driverThumbs.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import TriCheck, { type TriState } from "$lib/components/ui/TriCheck.svelte";
   import DriverStage from "./DriverStage.svelte";
   import DriverOutfits from "./DriverOutfits.svelte";
 

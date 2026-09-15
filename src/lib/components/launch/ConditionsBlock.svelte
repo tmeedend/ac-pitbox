@@ -13,12 +13,12 @@
   // mémorisation de l'override) reste dans Launch.svelte, qui pilote aussi ce
   // même état depuis d'autres sources (presets, sessions sauvegardées) — ce
   // bloc ne fait qu'afficher et notifier.
-  import type { RaceSetup, Season, TrackStateOption, TrackSun, WeatherOption } from "$lib/launch";
+  import type { RaceSetup, Season, TrackStateOption, TrackSun, WeatherOption } from "$lib/launch/launch";
   import TrackConditionBlock from "./TrackConditionBlock.svelte";
   import { t } from "$lib/i18n/index.svelte";
-  import NumberStepper from "../NumberStepper.svelte";
-  import Slider from "../Slider.svelte";
-  import Tooltip from "../Tooltip.svelte";
+  import NumberStepper from "$lib/components/ui/NumberStepper.svelte";
+  import Slider from "$lib/components/ui/Slider.svelte";
+  import Tooltip from "$lib/components/ui/Tooltip.svelte";
 
   let {
     setup,

@@ -5,7 +5,7 @@
   // C'est ce qui permet à la barre de garder une hauteur fixe quelle que soit
   // la complexité d'un filtre (R1 de la spec) — donc il y en aura d'autres, et
   // le placement vit ici une fois pour toutes plutôt que dans chaque contenu.
-  import { zoomFactor } from "$lib/zoom.svelte";
+  import { zoomFactor } from "$lib/shell/zoom.svelte";
   import type { Snippet } from "svelte";
 
   interface Props {

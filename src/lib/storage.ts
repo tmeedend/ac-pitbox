@@ -17,7 +17,7 @@
 // contre une faute de frappe silencieuse dans les lectures de migration
 // (`nav.svelte.ts`, `Launch.svelte`, `savedSessions.ts`, `columns.ts`,
 // `uiPrefs.svelte.ts`) — mais plus aucune de ces clés n'est écrite.
-import type { ModKind } from "./library";
+import type { ModKind } from "$lib/library/library";
 
 const PREFIX = "pitbox";
 

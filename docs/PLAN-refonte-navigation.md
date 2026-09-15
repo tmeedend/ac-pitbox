@@ -138,7 +138,7 @@ pour que le chantier Wikipédia n'ait pas à rouvrir la mise en page.
 
 - **Markdown dans les notes** (demandé le 2026-09-11, à faire dans un lot à
   part). Le SESSION§3 de la spec l'interdit — « un rendu à moitié interprété est
-  pire que rien » — mais cet argument tombe ici : `src/lib/markdown.ts` existe
+  pire que rien » — mais cet argument tombe ici : `src/lib/detail/markdown.ts` existe
   déjà, écrit à la main pour les `readme.md` des mods, **échappe avant de
   produire la moindre balise**, et *dégrade en texte brut ce qu'il ne connaît
   pas*. C'est exactement la garantie qui manquait. Reste à décider si le rendu

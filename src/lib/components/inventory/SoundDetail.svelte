@@ -1,0 +1,315 @@
+<script lang="ts">
+  // Fiche d'un mod de son (§8).
+  //
+  // Même raison d'être que la fiche d'une app : les listes de fichiers y vivent,
+  // pas dans un dépliant au milieu d'une liste. Et un mod de son a de quoi la
+  // remplir — ce que son bank contient réellement, que personne d'autre ne sait
+  // afficher parce qu'il faut décoder le conteneur pour le savoir.
+  //
+  // Rien n'est réinventé : `StateBadge`, `InlineEdit`, `ResourcesBlock`
+  // et la clé de contact sont les composants de la fiche voiture.
+  import { onMount } from "svelte";
+  import { soundDetail, setSoundAuthor, type SoundDetail } from "$lib/detail/enginesound";
+  import { fmtSize } from "$lib/format";
+  import { errorText } from "$lib/errors";
+  import { setEntityDisplayName, setEntityNote } from "$lib/detail/userMeta";
+  import { t } from "$lib/i18n/index.svelte";
+  import ResourcesBlock from "$lib/components/detail/ResourcesBlock.svelte";
+  import IgnitionKey from "$lib/components/detail/IgnitionKey.svelte";
+  import InlineEdit from "$lib/components/ui/InlineEdit.svelte";
+  import FicheHeader from "$lib/components/detail/FicheHeader.svelte";
+  import NoteBlock from "$lib/components/detail/NoteBlock.svelte";
+  import {
+    engineControls,
+    engineRev,
+    engineShowcase,
+    engineState,
+    setEnginePedal,
+  setEngineRev,
+    setEngineShowcase,
+    stopEngine,
+    toggleEngine,
+  } from "$lib/detail/enginePlayer.svelte";
+  import Slider from "$lib/components/ui/Slider.svelte";
+
+  interface Props {
+    subId: string;
+    onclose: () => void;
+  }
+
+  const { subId, onclose }: Props = $props();
+
+  let detail = $state<SoundDetail | null>(null);
+  let error = $state("");
+
+  async function load() {
+    try {
+      detail = await soundDetail(subId);
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
+  onMount(load);
+
+  // Quitter la fiche coupe le moteur : un son qui survit à l'écran qui le porte
+  // ne peut plus être arrêté.
+  $effect(() => {
+    void subId;
+    return () => stopEngine();
+  });
+
+  async function saveAuthor(value: string | null) {
+    error = "";
+    try {
+      await setSoundAuthor(subId, value);
+      await load();
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
+  /** Renommer (§6.1) : la saisie vit dans l'overlay, à côté du nom dérivé du
+   * fichier et jamais à sa place — vider le champ ramène donc celui-ci. */
+  /** Note libre (§9). Passe par la commande commune à tous les types plutôt
+   * que par `setModField` : c'est la même colonne sur les cinq tables, et le
+   * même geste. */
+  async function saveNote(value: string | null): Promise<void> {
+    error = "";
+    try {
+      await setEntityNote("SUB_MOD", subId, value ?? "");
+      await load();
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
+  async function rename(value: string | null): Promise<void> {
+    error = "";
+    try {
+      await setEntityDisplayName("SUB_MOD", subId, value ?? "");
+      await load();
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
+  async function listen() {
+    if (!detail) return;
+    error = "";
+    try {
+      await toggleEngine(detail.parentId, detail.id);
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
+  // Voir `DetailPage` : le curseur n'existe que sur le chemin natif, et
+  // seulement quand l'événement expose un régime réglable.
+  const revControls = $derived.by(() => {
+    const c = engineControls();
+    return c && c.revParam ? c : null;
+  });
+
+  /** Durée totale du bank, en minutes et secondes — des heures de son en
+   * secondes ne se lisent pas. */
+  function fmtDuration(seconds: number): string {
+    const total = Math.round(seconds);
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return m > 0 ? `${m} min ${String(s).padStart(2, "0")} s` : `${s} s`;
+  }
+</script>
+
+<div class="page">
+  {#if detail}
+    {@const d = detail}
+    <FicheHeader
+      onback={onclose}
+      backLabel={t("sounds.back")}
+      glyph="♪"
+      name={d.displayNameUser ?? d.name}
+      subtitle={d.displayNameUser ? d.name : undefined}
+      rename={{ original: d.name, overridden: !!d.displayNameUser, onsave: rename }}
+      deployment={{ active: d.isActive }}
+    >
+      {#snippet control()}
+        <IgnitionKey state={engineState(d.parentId, d.id)} onclick={listen} />
+      {/snippet}
+    </FicheHeader>
+  {:else}
+    <FicheHeader onback={onclose} backLabel={t("sounds.back")} glyph="♪" name={subId} />
+  {/if}
+
+  {#if revControls}
+    <div class="rev">
+      {#if !engineShowcase()}
+        <Slider
+          compact
+          label={t("detail.soundRev")}
+          min={revControls.revFloor}
+          max={revControls.revCeiling}
+          step={50}
+          value={engineRev()}
+          display={t("detail.soundRevValue", { rpm: Math.round(engineRev()).toLocaleString() })}
+          oninput={setEngineRev}
+          onpress={() => setEnginePedal(true)}
+          onrelease={() => setEnginePedal(false)}
+        />
+      {/if}
+      <button class="blip" class:on={engineShowcase()} type="button" onclick={() => setEngineShowcase(!engineShowcase())}>
+        {engineShowcase() ? t("detail.soundBlipStop") : t("detail.soundBlip")}
+      </button>
+    </div>
+  {/if}
+
+  {#if error}<div class="errbox">{error}</div>{/if}
+
+  {#if detail}
+    <NoteBlock value={detail.notesUser} onsave={saveNote} />
+
+    <dl class="meta">
+      <div>
+        <dt class="lbl-key">{t("sounds.carLabel")}</dt>
+        <dd>
+          {detail.parentName ?? detail.parentId}
+          <span class="mono dim">{detail.parentId}</span>
+        </dd>
+      </div>
+      <div>
+        <dt class="lbl-key">{t("sounds.sizeLabel")}</dt>
+        <dd class="mono">{fmtSize(detail.sizeBytes)}</dd>
+      </div>
+      {#if detail.sourceArchive}
+        <div>
+          <dt class="lbl-key">{t("detail.sourceLabel")}</dt>
+          <dd class="mono">{detail.sourceArchive}</dd>
+        </div>
+      {/if}
+      <div>
+        <dt class="lbl-key">{t("apps.importedAt")}</dt>
+        <dd>{new Date(detail.importedAt).toLocaleString()}</dd>
+      </div>
+    </dl>
+
+    <!-- L'auteur se saisit à la main : aucun fichier de mod ne le porte, et le
+         lire dans une notice serait une devinette sur du texte libre. -->
+    <section class="blk">
+      <header class="blk-h"><span class="blk-t">{t("sounds.authorLabel")}</span></header>
+      <div class="blk-b">
+        <InlineEdit
+          value={detail.author}
+          original={null}
+          overridden={detail.author != null}
+          label={t("sounds.authorLabel")}
+          placeholder={t("sounds.authorPlaceholder")}
+          onsave={saveAuthor}
+        />
+      </div>
+    </section>
+
+    <section class="blk">
+      <header class="blk-h"><span class="blk-t">{t("sounds.bankLabel")}</span></header>
+      <div class="blk-b">
+        {#if detail.bank}
+          <dl class="meta">
+            <div>
+              <dt class="lbl-key">{t("sounds.bankFile")}</dt>
+              <dd class="mono">{detail.bank.fileName}</dd>
+            </div>
+            <div>
+              <dt class="lbl-key">{t("sounds.bankCodec")}</dt>
+              <dd class="mono">{detail.bank.codec}</dd>
+            </div>
+            <div>
+              <dt class="lbl-key">{t("sounds.bankSamples")}</dt>
+              <dd class="mono">{detail.bank.sampleCount}</dd>
+            </div>
+            <div>
+              <dt class="lbl-key">{t("sounds.bankRate")}</dt>
+              <dd class="mono">{(detail.bank.frequency / 1000).toFixed(1)} kHz</dd>
+            </div>
+            <div>
+              <dt class="lbl-key">{t("sounds.bankDuration")}</dt>
+              <dd class="mono">{fmtDuration(detail.bank.seconds)}</dd>
+            </div>
+            <div>
+              <dt class="lbl-key">{t("sounds.bankNames")}</dt>
+              <dd>{detail.bank.named ? t("sounds.bankNamesPresent") : t("sounds.bankNamesAbsent")}</dd>
+            </div>
+          </dl>
+        {:else}
+          <p class="muted small">{t("sounds.bankUnreadable")}</p>
+        {/if}
+      </div>
+    </section>
+
+    <div class="body">
+      <ResourcesBlock modId={detail.id} source="sound" onerror={(m) => (error = m)} />
+    </div>
+  {/if}
+</div>
+
+<style>
+  .page {
+    max-width: 860px;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 28px;
+    margin-bottom: 14px;
+  }
+  .meta dd {
+    font-size: 12px;
+    color: var(--txt2);
+    margin-top: 2px;
+    overflow-wrap: anywhere;
+  }
+  .dim {
+    color: var(--txt3);
+    margin-left: 6px;
+  }
+  .body {
+    margin-top: 14px;
+  }
+  /* Le curseur prend la largeur du bandeau, sous l'en-tête qui porte la clé. */
+  .rev {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    max-width: 520px;
+    margin: 0 0 12px;
+  }
+
+  .rev :global(.slider) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .blip {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 6px 12px;
+    border: 1px solid var(--rosso-border);
+    border-radius: 4px;
+    background: var(--rosso-dim);
+    color: var(--txt);
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+
+  .blip:hover {
+    border-color: var(--rosso-bright);
+  }
+
+  .blip.on {
+    background: var(--rosso-bright);
+    border-color: var(--rosso-bright);
+    color: #fff;
+  }
+
+  .errbox {
+    margin-bottom: 10px;
+  }
+</style>
