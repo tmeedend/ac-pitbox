@@ -175,7 +175,7 @@
     void refreshConditions(true);
   }
 
-  // --- Support CSP effectif du circuit courant (§6.4bis) : détecté à la
+  // --- Support CSP effectif du circuit courant (§6) : détecté à la
   // volée (config propre au mod + config CSP "chargée" séparément — voir
   // get_mod_csp_features), pas figé à l'import. Sert à griser la saison si le
   // circuit ne sait pas la gérer, et à avertir si la pluie n'a pas de
@@ -221,7 +221,7 @@
   const trackSupportsRain = $derived(trackCspFeatures.includes("rainfx"));
 
   const carPool = $derived(libCards.filter((c) => c.kind === "Car"));
-  /** Carte du circuit choisi — sert à connaître ses catégories (§5bis.2). */
+  /** Carte du circuit choisi — sert à connaître ses catégories (§5). */
   const trackCard = $derived(
     libCards.find((c) => c.kind === "Track" && c.id_interne === setup.track_id) ?? null,
   );

@@ -30,7 +30,7 @@
      * corrige ici : vider « année min » écrivait 1950. */
     emptyValue?: number;
     /** Valeur sur laquelle atterrissent ▲ **et** ▼ au premier appui depuis un
-     * champ vide (§6.2bis) — le même repère quel que soit le sens, comme
+     * champ vide (§6) — le même repère quel que soit le sens, comme
      * taper directement cette valeur. Sans elle, ▲ retombait sur `min` même
      * pour un champ dont le point de départ naturel est ailleurs (année max
      * de la bibliothèque : l'année courante, pas 1950) et ▼ n'avait aucune

@@ -25,16 +25,16 @@ pub struct ModCard {
     pub outline: Option<String>,
     /// Junction présente dans content/ (détection fine = L3).
     pub active: bool,
-    /// Distance parcourue (km) d'après CM, si connue (§6.5).
+    /// Distance parcourue (km) d'après CM, si connue (§6).
     pub distance_km: Option<f64>,
-    /// « Déjà essayé » : lancé par l'app OU km CM > 0 (§6.5).
+    /// « Déjà essayé » : lancé par l'app OU km CM > 0 (§6).
     pub tried: bool,
     /// Poids natif (voitures), lu à la volée dans ui_car.json — colonne §6.2.
     pub weight: Option<String>,
     /// Puissance native (voitures), lue dans le **même** `NativeSpecs` que le
     /// poids — la fiche est déjà ouverte et analysée une fois par carte, donc
     /// ce champ ne coûte aucune lecture de plus. Les deux ensemble portent le
-    /// rapport poids/puissance du filtre `Performance` (§3.4), qui a besoin
+    /// rapport poids/puissance du filtre `Performance` (CIBLE§3.4), qui a besoin
     /// d'être calculable **par carte, côté front**, sans aller-retour backend
     /// à chaque cran du curseur de tolérance.
     pub bhp: Option<String>,
@@ -115,7 +115,7 @@ fn outline_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String>
 
 /// Native spec sheet of a car (weight §6.2, description §6.1), read on the fly
 /// from ui_car.json - "native" data, never harmonized by the rule engine
-/// (§5bis.1). One read for both fields: two separate helpers would reopen and
+/// (§6). One read for both fields: two separate helpers would reopen and
 /// reparse the very same file for every card of the list.
 fn car_specs_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<NativeSpecs> {
     if m.kind != "Car" {
@@ -172,7 +172,7 @@ fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
     }
 }
 
-/// Renseigne la distance CM et le marqueur « essayé » (§6.5) sur une carte.
+/// Renseigne la distance CM et le marqueur « essayé » (§6) sur une carte.
 fn fill_usage(card: &mut ModCard, cm: &CmUsage, launched: &HashSet<String>) {
     let id = &card.base.id_interne;
     card.distance_km = cm.km(id);
@@ -407,7 +407,7 @@ pub fn folder_path(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<PathB
     entity_dir(conn, cfg, &m).ok_or_else(|| format!("dossier introuvable pour « {id} »"))
 }
 
-/// Fonctionnalités CSP effectivement détectées pour un mod (§6.4bis) : config
+/// Fonctionnalités CSP effectivement détectées pour un mod (§6) : config
 /// propre au mod + config CSP "chargée" séparément par CSP (hors du mod, cf.
 /// `inspect::csp_features_loaded` — c'est notamment ce qui manquait pour le
 /// contenu de base). Calculé à la demande (pas mis en cache) : sert à griser

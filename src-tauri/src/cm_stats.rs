@@ -1,4 +1,4 @@
-//! Lecture du kilométrage Content Manager (§6.5), source fragile mais riche.
+//! Lecture du kilométrage Content Manager (§6), source fragile mais riche.
 //!
 //! On lit le **journal de sessions** de CM (`Profile (Sessions).data` sous
 //! `%LOCALAPPDATA%\AcTools Content Manager\Progress\`), un flux de lignes JSON
@@ -6,7 +6,7 @@
 //! `Distance` par voiture et par circuit. On évite ainsi le binaire compressé
 //! `Profile.data`/`Values.data` (format « Storage » de CM, difficile à parser).
 //!
-//! Fragilités assumées (§6.5) : 0 km ≠ « jamais essayé » (resets de CM), d'où la
+//! Fragilités assumées (§6) : 0 km ≠ « jamais essayé » (resets de CM), d'où la
 //! combinaison avec le marqueur propre de l'app.
 
 use std::collections::HashMap;

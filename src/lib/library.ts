@@ -29,7 +29,7 @@ export interface ModCard {
   year: number | null;
   car_class: string | null;
   category: string | null;
-  /** Catégories de circuit (§5bis.2), multi-valué, ordonnées par priorité.
+  /** Catégories de circuit (§5), multi-valué, ordonnées par priorité.
    * Vide pour une voiture (qui utilise `category`). */
   categories: string[];
   country: string | null;
@@ -78,14 +78,14 @@ export interface ModCard {
   /** Tracé du circuit à superposer à la photo (circuits, §6.1). */
   outline: string | null;
   active: boolean;
-  /** Distance parcourue (km) d'après CM, si connue (§6.5). */
+  /** Distance parcourue (km) d'après CM, si connue (§6). */
   distance_km: number | null;
-  /** « Déjà essayé » : lancé par l'app OU km CM > 0 (§6.5). */
+  /** « Déjà essayé » : lancé par l'app OU km CM > 0 (§6). */
   tried: boolean;
   /** Poids natif (voitures), lu à la volée dans ui_car.json (§6.2). */
   weight: string | null;
   /** Puissance native (voitures), lue dans la même fiche que le poids. Les
-   * deux ensemble donnent le rapport kg/bhp du filtre `Performance` (§3.4) —
+   * deux ensemble donnent le rapport kg/bhp du filtre `Performance` (CIBLE§3.4) —
    * porté par la carte pour que le calcul reste côté front, comme
    * `description` et `notes_user`. Texte brut de l'auteur, jamais nettoyé :
    * `carSpecs.ts` décide seul de ce qui est lisible. */

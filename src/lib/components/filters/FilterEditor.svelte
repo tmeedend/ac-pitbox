@@ -32,7 +32,7 @@
   }
   let { def, st, options, presets, perfRef = null, perfUnreadable = 0, onupdate }: Props = $props();
 
-  // Bande de performance (§3.4) : les bornes réelles en kg/bhp, pas seulement
+  // Bande de performance (CIBLE§3.4) : les bornes réelles en kg/bhp, pas seulement
   // le pourcentage. Un « ±15 % » ne dit pas ce qu'il laisse passer ; « 3,0 à
   // 4,1 kg/bhp » le dit, et c'est la seule façon de comprendre pourquoi une
   // voiture précise entre ou n'entre pas.

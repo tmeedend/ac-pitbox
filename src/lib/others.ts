@@ -34,7 +34,7 @@ export interface OtherModRow {
   display_name_user: string | null;
   /** Note libre (REFONTE§9). */
   notes_user: string | null;
-  /** Rattachement corrigé à la main (§2.3), `null` tant qu'on n'a rien corrigé. */
+  /** Rattachement corrigé à la main (REFONTE§2.3), `null` tant qu'on n'a rien corrigé. */
   attachment_user: string | null;
   /** Rattachement effectif et nature, déduits ou corrigés. */
   attachment: Attachment;
@@ -61,7 +61,7 @@ export function listOtherMods(): Promise<OtherModRow[]> {
   return invoke<OtherModRow[]>("list_other_mods");
 }
 
-/** Corrige le rattachement d'un mod « autre » (§2.3). Chaîne vide = revenir à
+/** Corrige le rattachement d'un mod « autre » (REFONTE§2.3). Chaîne vide = revenir à
  * la déduction. */
 export function setOtherAttachment(id: string, target: string): Promise<void> {
   return invoke<void>("set_other_attachment", { id, target });

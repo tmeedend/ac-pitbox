@@ -1,4 +1,4 @@
-// Pont typé vers l'ontologie de tags (§5.4).
+// Pont typé vers l'ontologie de tags (§5).
 import { invoke } from "@tauri-apps/api/core";
 
 export interface SetRule {
@@ -42,7 +42,7 @@ export interface CarRules {
 }
 export interface TrackRules {
   tag_merge: TagMerge[];
-  /** Catégories de circuit autorisées (§5bis.2), tags `#` par ordre de priorité. */
+  /** Catégories de circuit autorisées (§5), tags `#` par ordre de priorité. */
   category_allowlist: string[];
 }
 export interface Rules {

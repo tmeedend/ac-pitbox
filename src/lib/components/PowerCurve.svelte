@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Courbe moteur à double axe (§5bis.1) façon Content Manager : couple (Nm) à
+  // Courbe moteur à double axe (§6) façon Content Manager : couple (Nm) à
   // gauche en jaune, puissance (bhp) à droite en rouge, RPM en abscisse, zone de
   // tracé carrée avec graduations.
   interface Props {

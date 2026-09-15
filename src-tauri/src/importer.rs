@@ -3139,7 +3139,7 @@ fn process_found(
 
     crate::overlay::set_active_version(conn, &id_interne, &version_id).map_err(|e| e.to_string())?;
 
-    // Harmonisation des tags + extraction specs/pays (§5.4), stockée en overlay.
+    // Harmonisation des tags + extraction specs/pays (§5), stockée en overlay.
     let class = ui.class.clone().unwrap_or_default();
     let h = harmonize::compute(rules, fm.kind, &ui.tags, &name, &class, ui.country.as_deref());
     harmonize::store(conn, &id_interne, &h, ui.country.as_deref()).map_err(|e| e.to_string())?;
@@ -4181,7 +4181,7 @@ mod tests {
         assert_eq!(mods[0].version_count, 1);
         assert_eq!(mods[0].tags_from_mod, vec!["gt3", "turbo", "italy"]);
 
-        // Harmonisation (§5.4) : gt3 -> #gt3 (catégorie), turbo -> aspiration,
+        // Harmonisation (§5) : gt3 -> #gt3 (catégorie), turbo -> aspiration,
         // italy -> pays ; les tags techniques/pays sont retirés du vocabulaire.
         assert_eq!(mods[0].category.as_deref(), Some("#gt3"));
         assert!(mods[0].tags_from_rule.contains(&"#gt3".to_string()));

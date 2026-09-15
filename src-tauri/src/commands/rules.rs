@@ -19,7 +19,7 @@ pub fn save_rules(app: AppHandle, db: State<Db>, rules: Rules) -> Result<usize, 
 }
 
 /// Aperçu d'impact : nombre de mods affectés par un jeu de règles candidat,
-/// sans rien enregistrer (§5.4).
+/// sans rien enregistrer (§5).
 #[tauri::command]
 pub fn rules_impact(app: AppHandle, db: State<Db>, rules: Rules) -> Result<usize, String> {
     let cfg = crate::config::load(&app);

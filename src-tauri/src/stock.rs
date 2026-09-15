@@ -162,7 +162,7 @@ pub fn index_stock_content(
             )
             .map_err(|e| e.to_string())?;
 
-            // Année du modèle (§6.2bis) : ui_car.json si renseigné, sinon la
+            // Année du modèle (§6) : ui_car.json si renseigné, sinon la
             // table statique docs/kunos_content_dates.json (mods importés
             // n'ont pas ce repli, seul le contenu de base est concerné).
             let year = if matches!(kind, ModKind::Car) {

@@ -1,6 +1,6 @@
 //! Lecture **strictement en lecture seule** des `ui_car.json` / `ui_track.json`.
 //!
-//! Règle d'or (§3.0) : ces fichiers ne sont JAMAIS réécrits. On les lit comme
+//! Règle d'or (§3) : ces fichiers ne sont JAMAIS réécrits. On les lit comme
 //! une entrée du pipeline, jamais comme une sortie.
 
 use std::fs;
@@ -170,7 +170,7 @@ pub fn read_showroom_name(showroom_dir: &Path) -> Option<String> {
     as_string(v.get("name")?)
 }
 
-/// Fiche technique native d'une voiture (§5bis.1), lue directement dans
+/// Fiche technique native d'une voiture (§6), lue directement dans
 /// `ui_car.json`. `specs` est un OBJET de chaînes déjà formatées (pas de
 /// parsing), les courbes sont des paires `[rpm, valeur]`. Lecture seule.
 #[derive(Debug, Clone, Serialize, Default)]

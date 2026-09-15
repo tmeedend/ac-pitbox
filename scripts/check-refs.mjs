@@ -12,12 +12,19 @@
 // `GRILLE§5.3`, `WIKI§4.2`, `PILOTE§6.3`. C'est la seule façon qu'un renvoi
 // dise de lui-même où il va.
 //
-// **Le socle (`refs-baseline.json`).** Les renvois déjà cassés au moment où ce
-// contrôle est né y sont listés, un par un. Ils ne font pas échouer la CI —
-// sinon rien ne passerait tant qu'ils ne sont pas tous repris — mais **tout
-// nouveau renvoi cassé, lui, échoue**. La pourriture s'arrête aujourd'hui et se
-// résorbe au fil de l'eau. Un renvoi du socle qu'on répare est simplement
-// signalé : `node scripts/check-refs.mjs --update` retire l'entrée.
+// **Le socle (`refs-baseline.json`) est vide, et c'est un aboutissement.** Il a
+// été créé avec 348 couples (fichier, renvoi) cassés — des séquelles de
+// renumérotations successives — précisément pour que le contrôle puisse entrer
+// en CI sans tout bloquer : les renvois hérités passaient, un renvoi cassé
+// **neuf** échouait. Ils ont tous été repris depuis. Le contrôle est donc
+// strict aujourd'hui : **le moindre renvoi sans cible fait échouer
+// `npm run check`.**
+//
+// On garde le fichier vide plutôt que le mécanisme : le jour où une refonte
+// casse trente renvois d'un coup, `--update` permet de les geler et de les
+// reprendre par lots, au lieu de tout faire d'un bloc ou de retirer le
+// contrôle. **Mais on ne grossit pas le socle pour faire taire une erreur** —
+// il est là pour se vider, et il est vide.
 //
 // Une entrée du socle est un couple (fichier, renvoi), pas une ligne : un même
 // renvoi cassé répété dans un fichier n'y figure qu'une fois. C'est délibéré —

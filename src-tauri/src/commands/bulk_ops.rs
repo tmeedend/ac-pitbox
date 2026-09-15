@@ -1,4 +1,4 @@
-//! Commandes groupées (§6.6) : appliquées à une sélection de mods.
+//! Commandes groupées (§7) : appliquées à une sélection de mods.
 //!
 //! Les quatre lots qui touchent au disque (activer, désactiver, supprimer,
 //! exporter) sont `async` + `spawn_blocking`, comme l'import et pour la même

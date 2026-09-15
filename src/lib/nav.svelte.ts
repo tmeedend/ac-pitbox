@@ -1,6 +1,6 @@
 // État de navigation partagé + sélection de session (SESSION§1). La bibliothèque EST
 // le sélecteur : ouvrir une voiture/un circuit le définit comme choix de session,
-// affiché en permanence dans le bloc SESSION de la barre latérale (§6.1ter).
+// affiché en permanence dans le bloc SESSION de la barre latérale (SESSION§1).
 
 import { invoke } from "@tauri-apps/api/core";
 import { StorageKey } from "./storage";

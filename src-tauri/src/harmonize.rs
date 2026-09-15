@@ -1,4 +1,4 @@
-//! Orchestration de l'harmonisation (§5.4/§5.5) : applique l'ontologie sur un
+//! Orchestration de l'harmonisation (§5/§5) : applique l'ontologie sur un
 //! mod et persiste le résultat dans l'overlay. Utilisé à l'import et lors d'une
 //! réapplication globale après édition des règles.
 
@@ -100,7 +100,7 @@ fn native_country(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<Stri
     uijson::read_car(&lib).and_then(|ui| ui.country)
 }
 
-/// Aperçu d'impact (§5.4) : nombre de mods dont l'harmonisation changerait
+/// Aperçu d'impact (§5) : nombre de mods dont l'harmonisation changerait
 /// avec le jeu de règles candidat (comparé aux tags règle / catégorie / classe
 /// actuellement stockés). Ne modifie rien.
 pub fn count_affected(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> rusqlite::Result<usize> {

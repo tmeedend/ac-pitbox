@@ -49,7 +49,7 @@
      * Adversaires compte un **vivier** (`Pool · 42 cars`), qui n'est pas la
      * même chose — un résultat se regarde, un vivier se tire dedans. */
     countKey?: string;
-    /** Voiture de référence de la bande de performance (§3.4) et nombre de
+    /** Voiture de référence de la bande de performance (CIBLE§3.4) et nombre de
      * voitures que leurs specs illisibles écartent — l'éditeur du filtre
      * `perf` s'en sert pour dire sur quoi il mesure. */
     perfRef?: PerfRef | null;

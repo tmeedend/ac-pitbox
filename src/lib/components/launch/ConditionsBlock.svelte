@@ -376,7 +376,7 @@
   <!-- Saison optionnelle (SESSION§3.3) : associe une date, best-effort côté
        CSP (couleur des arbres en automne, piste blanche en hiver).
        Reste cliquable même sans config CSP identifiée pour les
-       ajustements saisonniers (§6.4bis) — juste signalée (pas de
+       ajustements saisonniers (§6) — juste signalée (pas de
        garantie de rendu), jamais bloquée : une config CSP absente ici
        ne veut pas dire absente pour de bon, seulement pas encore
        téléchargée par Content Manager (mod tout juste importé,

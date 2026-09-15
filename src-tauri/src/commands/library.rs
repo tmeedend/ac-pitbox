@@ -205,7 +205,7 @@ pub fn open_mod_resource(
         .map_err(|e| e.to_string())
 }
 
-/// Fonctionnalités CSP effectivement détectées pour un mod (§6.4bis) : sert à
+/// Fonctionnalités CSP effectivement détectées pour un mod (§6) : sert à
 /// griser les réglages météo/saison non supportés sur l'écran de session.
 #[tauri::command]
 pub fn get_mod_csp_features(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<String>, String> {

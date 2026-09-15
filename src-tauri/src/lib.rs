@@ -122,7 +122,7 @@ pub fn run() {
 
             // Appariements Wikipédia livrés avec l'application (§10) : posés à
             // chaque démarrage parce que la table peut avoir grandi depuis la
-            // version précédente. La précédence du §3.1 fait que c'est sans
+            // version précédente. La précédence du WIKI§3.1 fait que c'est sans
             // risque — une correction locale (`manual`) n'est jamais écrasée.
             // Le cache d'articles est vidé quand il porte des textes écrits par
             // une version antérieure du code (§7.3 : l'introduction seule, puis

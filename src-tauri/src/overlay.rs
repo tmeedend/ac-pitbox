@@ -1,4 +1,4 @@
-//! Base d'overlay (§3.0) — SQLite. Source de vérité des **métadonnées produites
+//! Base d'overlay (§3) — SQLite. Source de vérité des **métadonnées produites
 //! par l'app** (jamais des fichiers du mod). Indexée sur `id_interne` du mod.
 //!
 //! L1 peuple : mods, versions (avec snapshot lecture seule des tags du fichier,
@@ -150,8 +150,8 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             identity_hash     TEXT,
             car_class         TEXT,                   -- overlay-éditable (L2)
             year              INTEGER,
-            category          TEXT,                   -- tag # principal (§5bis)
-            categories        TEXT NOT NULL DEFAULT '[]', -- catégories circuit multi-valué (§5bis.2)
+            category          TEXT,                   -- tag # principal (§5)
+            categories        TEXT NOT NULL DEFAULT '[]', -- catégories circuit multi-valué (§5)
             country           TEXT,
             is_favorite       INTEGER NOT NULL DEFAULT 0,
             tags_from_rule    TEXT NOT NULL DEFAULT '[]',
@@ -192,7 +192,7 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             imported_at    TEXT NOT NULL
         );
 
-        -- Suivi d'usage propre à l'app (§6.5) : marqueur « déjà essayé » définitif
+        -- Suivi d'usage propre à l'app (§6) : marqueur « déjà essayé » définitif
         -- posé au lancement d'une session. Fiabilise les faux zéros de CM.
         CREATE TABLE IF NOT EXISTS usage (
             mod_id        TEXT PRIMARY KEY,  -- id_interne de la voiture ou du circuit
@@ -415,13 +415,13 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         -- survivre à la suppression puis au réimport du mod.
         CREATE TABLE IF NOT EXISTS wiki_link (
             mod_key     TEXT PRIMARY KEY,
-            entity_id   TEXT NOT NULL,          -- Q-id Wikidata, jamais une URL (§3.1)
+            entity_id   TEXT NOT NULL,          -- Q-id Wikidata, jamais une URL (WIKI§3.1)
             source      TEXT NOT NULL,          -- 'auto' | 'import' | 'manual', par précédence
             resolved_at TEXT NOT NULL
         );
 
         -- Clé composite (entité, langue **demandée**) : la langue réellement
-        -- servie peut différer quand la chaîne de repli du §5.2 est descendue
+        -- servie peut différer quand la chaîne de repli du WIKI§5.2 est descendue
         -- sur l'anglais, et elle se relit dans `article_url` — c'est pourquoi
         -- cette URL est stockée et jamais reconstruite (WIKI§3.2).
         CREATE TABLE IF NOT EXISTS wiki_cache (
@@ -431,7 +431,7 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             article_url     TEXT NOT NULL,
             revision_id     INTEGER,
             extract         TEXT NOT NULL,
-            parent_entity   TEXT,               -- non nul = repli sur l'entité parente (§5.3)
+            parent_entity   TEXT,               -- non nul = repli sur l'entité parente (WIKI§5.3)
             available_langs TEXT NOT NULL DEFAULT '[]',
             fetched_at      TEXT NOT NULL,
             PRIMARY KEY (entity_id, lang)
@@ -462,7 +462,7 @@ pub struct ModRow {
     pub year: Option<i64>,
     pub car_class: Option<String>,
     pub category: Option<String>,
-    /// Catégories de circuit (§5bis.2), multi-valué, ordonnées par priorité.
+    /// Catégories de circuit (§5), multi-valué, ordonnées par priorité.
     /// Vide pour une voiture (qui utilise `category`).
     pub categories: Vec<String>,
     pub country: Option<String>,
@@ -724,7 +724,7 @@ pub fn set_active_version(conn: &Connection, mod_id: &str, version_id: &str) -> 
     Ok(())
 }
 
-/// Écrit le résultat d'harmonisation (§5.4) dans l'overlay. brand/country et les
+/// Écrit le résultat d'harmonisation (§5) dans l'overlay. brand/country et les
 /// specs ne sont écrasés que si une valeur est fournie (préserve les complétions
 /// manuelles) ; tags_from_rule/car_class/category reflètent toujours les règles.
 #[allow(clippy::too_many_arguments)]
@@ -1128,7 +1128,7 @@ pub fn get_version_path(conn: &Connection, version_id: &str) -> rusqlite::Result
 /// N'agit que sur l'overlay : les fichiers bibliothèque sont gérés par l'appelant.
 /// Supprime un mod de l'overlay. Ce qui **survit volontairement** :
 ///
-/// - `usage` (§6.5) — le marqueur « déjà essayé » et le nombre de lancements.
+/// - `usage` (§6) — le marqueur « déjà essayé » et le nombre de lancements.
 ///   Réimporter la même voiture retrouve son historique d'usage plutôt que de
 ///   repartir de zéro. Le kilométrage, lui, n'a jamais été chez nous : il vit
 ///   dans le journal de sessions de Content Manager.
@@ -2243,7 +2243,7 @@ pub fn delete_pending_folder(conn: &Connection, id: &str) -> rusqlite::Result<()
     Ok(())
 }
 
-// --- Suivi d'usage (§6.5) ---------------------------------------------------
+// --- Suivi d'usage (§6) ---------------------------------------------------
 
 /// Pose/incrémente le marqueur « essayé » d'un mod au lancement d'une session.
 pub fn mark_launched(conn: &Connection, mod_id: &str, ts: &str) -> rusqlite::Result<()> {

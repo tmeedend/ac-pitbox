@@ -2,7 +2,7 @@
   // Page de détail pleine page (§6.3, maquette maquettes/archive/pitbox-fiche-B-revisee.html).
   // Riche pour les voitures (héros + specs natives + fiche technique + courbe +
   // description + skins + tags/versions/historique). Panneaux Son et Distance =
-  // placeholders « à venir » (lots §8 et §6.5). Réduite pour les circuits.
+  // placeholders « à venir » (lots §8 et §6). Réduite pour les circuits.
   import {
     activateMod,
     deactivateMod,
@@ -272,7 +272,7 @@
     };
   });
 
-  /** Recharge l'onglet : changement de langue de lecture (§5.4, mémorisée
+  /** Recharge l'onglet : changement de langue de lecture (WIKI§5.4, mémorisée
    * globalement et non par mod), ou article associé à la main (WIKI§7.6). */
   async function reloadWiki(lang?: string) {
     const key = detail?.id_interne;
@@ -818,7 +818,7 @@
    */
   // `null` tant que le chemin natif ne joue pas, ou quand l'événement joué
   // n'expose aucun paramètre de régime reconnaissable — il s'entend quand même,
-  // il ne se règle simplement pas (§2.4).
+  // il ne se règle simplement pas (FMOD§2.4).
   const revControls = $derived.by(() => {
     const c = engineControls();
     return c && c.revParam ? c : null;
@@ -2214,7 +2214,7 @@
   .pick-b .skins {
     margin-top: 12px;
   }
-  /* Fiche technique + courbe carrée côte à côte (§5bis.1). */
+  /* Fiche technique + courbe carrée côte à côte (§6). */
   .tech-curve {
     display: flex;
     flex-wrap: wrap;

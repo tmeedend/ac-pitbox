@@ -746,7 +746,7 @@ pub fn remove_orphan(cfg: &AppConfig, kind: &str, id: &str) -> Result<(), String
 /// Relit le `ui_*.json` (et l'inspection CSP/skins/layouts) de chaque version
 /// d'un mod depuis son `library_path` déjà en bibliothèque, et met à jour les
 /// champs en cache dans l'overlay. Ne réécrit jamais les fichiers du mod
-/// lui-même (lecture seule, §3.0) — sert à rattraper un mod déjà importé dont
+/// lui-même (lecture seule, §3) — sert à rattraper un mod déjà importé dont
 /// le fichier source a changé, ou dont le parsing a été corrigé après coup.
 ///
 /// `recalc_size` (SESSION§4) : recalcule en plus la taille sur disque de chaque
@@ -776,7 +776,7 @@ pub fn reindex_mod(conn: &Connection, cfg: &AppConfig, id: &str, recalc_size: bo
         }
         .unwrap_or_default();
         // Config CSP propre au mod + config "chargée" séparément par CSP
-        // (hors du mod, §6.4bis) — sans cette seconde source, le contenu de
+        // (hors du mod, §6) — sans cette seconde source, le contenu de
         // base Kunos ne remonte quasiment jamais de features CSP.
         let mut csp = inspect::csp_features(dir);
         if let Some(ac) = &cfg.ac_install_path {

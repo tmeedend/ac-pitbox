@@ -380,7 +380,7 @@
     visibility = null;
   });
 
-  // **Et tout le reste derrière**, une fois la liste filtrée connue (§5.4).
+  // **Et tout le reste derrière**, une fois la liste filtrée connue (§5).
   // Sans cette seconde moitié, la génération ne produirait que ce qu'on a
   // regardé : le travail n'aurait pas de fin, et la tâche de fond pas de
   // dénominateur — sa file se viderait à chaque arrêt du défilement. Les
@@ -711,7 +711,7 @@
   // La référence de la bande de performance est la **voiture de session**, sur
   // cet écran comme dans le bloc Adversaires : « montre-moi tout ce qui roule
   // au niveau de ma 488 » se pose aussi hors session, et la 488 en question
-  // est toujours celle que la colonne de droite affiche (§3.4).
+  // est toujours celle que la colonne de droite affiche (CIBLE§3.4).
   const index = $derived(buildCardIndex(typed, defs, isCar, hasOwnDriver, isCar ? nav.sessionCar?.id ?? null : null));
 
   const matchesFilters = $derived(buildPredicate(defs, filters, index.ctx));

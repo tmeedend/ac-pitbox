@@ -178,7 +178,7 @@ const TRACK_COLUMNS: ColumnDef[] = [
     labelKey: "columns.category",
     sortable: true,
     defaultVisible: true,
-    // Multi-valué (§5bis.2), ordonné par priorité ; la 1ʳᵉ = catégorie principale (tri).
+    // Multi-valué (§5), ordonné par priorité ; la 1ʳᵉ = catégorie principale (tri).
     value: (c) => (c.categories.length ? c.categories.join(" · ") : DASH),
     sortValue: (c) => c.categories[0] ?? "",
   },

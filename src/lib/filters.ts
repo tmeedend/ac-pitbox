@@ -38,7 +38,7 @@ export type FilterState =
   | { type: "range"; min: number | null; max: number | null }
   | { type: "text"; text: string }
   | { type: "bool"; sign: Sign }
-  /** Performance band, as a percentage of the SESSION car's kg/bhp (§3.4).
+  /** Performance band, as a percentage of the SESSION car's kg/bhp (CIBLE§3.4).
    * Only the tolerance is stored: the reference is read from the context, so
    * the band follows the car one drives instead of freezing the ratio it had
    * the day the chip was posed - which is the whole point of "cars that run at
@@ -164,7 +164,7 @@ export interface FilterContext {
   noteOf: (c: ModCard) => string | undefined;
   /** Whether this car has been given a driver outfit of its own. */
   hasDriver: (id: string) => boolean;
-  /** kg/bhp of a card, `null` when its spec sheet is unreadable (§3.4). Read
+  /** kg/bhp of a card, `null` when its spec sheet is unreadable (CIBLE§3.4). Read
    * off an index built once per list load, never re-parsed per keystroke. */
   ratioOf: (c: ModCard) => number | null;
   /** The car the band is measured against - the session car. `null` when there
@@ -333,7 +333,7 @@ export function buildPredicate(
       if (ref == null) continue;
       const { min, max } = perfBand(ref, clampPerfPct(st.pct));
       const get = ctx.ratioOf;
-      // An unreadable car is EXCLUDED, never estimated into the band (§3.4).
+      // An unreadable car is EXCLUDED, never estimated into the band (CIBLE§3.4).
       tests.push((c) => {
         const r = get(c);
         return r != null && r >= min && r <= max;
@@ -664,7 +664,7 @@ export interface CardIndex {
   /** Decade shortcuts of the year filter, deduced from the pool. */
   yearPresets: { label: string; min: number; max: number }[];
   /** How many cars of the pool a performance band can never keep, because
-   * their spec sheet is unreadable (§3.4). Said out loud in the editor rather
+   * their spec sheet is unreadable (CIBLE§3.4). Said out loud in the editor rather
    * than swallowed: on a real library of 311 cars it is 20 of them. */
   perfUnreadable: number;
 }

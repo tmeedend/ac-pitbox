@@ -1,4 +1,4 @@
-// Power, weight and the kg/bhp ratio, read off `ui_car.json` (§3.4).
+// Power, weight and the kg/bhp ratio, read off `ui_car.json` (CIBLE§3.4).
 //
 // **The reading is deliberately conservative, and that is the whole point of
 // this file.** The `specs` of a `ui_car.json` are free text typed by the mod
@@ -99,7 +99,7 @@ export function perfBand(ref: number, pct: number): { min: number; max: number }
   return { min: ref - d, max: ref + d };
 }
 
-/** Tolerances offered by the editor: ±5 % to ±50 %, step 5 (§3.4). */
+/** Tolerances offered by the editor: ±5 % to ±50 %, step 5 (CIBLE§3.4). */
 export const PERF_STEP = 5;
 export const PERF_MIN_PCT = 5;
 export const PERF_MAX_PCT = 50;

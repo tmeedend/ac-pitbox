@@ -360,7 +360,7 @@ export function listModSkins(id: string): Promise<SkinItem[]> {
   return invoke<SkinItem[]>("list_mod_skins", { id });
 }
 
-/** Fonctionnalités CSP effectivement détectées pour un mod (§6.4bis) : config
+/** Fonctionnalités CSP effectivement détectées pour un mod (§6) : config
  * propre au mod + config CSP "chargée" séparément par CSP (hors du mod — ce
  * qui manquait pour le contenu de base). Valeurs possibles : "grassfx",
  * "rainfx", "lightingfx", "season". Sert à griser les réglages non supportés

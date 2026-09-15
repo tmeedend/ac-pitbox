@@ -72,7 +72,7 @@
       }
       // Le contenu de base est indexé par `save_config` : c'est seulement
       // maintenant qu'on sait combien de voitures cette installation contient,
-      // et le choix de profil ne se pose **qu'avec ce chiffre** (§5.5).
+      // et le choix de profil ne se pose **qu'avec ce chiffre** (GRILLE§5.5).
       carCount = (await listLibrary().catch(() => [])).filter((c) => c.kind === "Car").length;
       step = "profile";
     } catch (e) {
@@ -90,7 +90,7 @@
   // qu'une fois les chemins enregistrés. Un « 0 voiture détectée » aurait vidé
   // l'écran de ce qui lui donne son sens.
   //
-  // Quatre exigences du §5.5, toutes tenues ici : nommer par le résultat (et
+  // Quatre exigences du GRILLE§5.5, toutes tenues ici : nommer par le résultat (et
   // non « optimiser l'espace disque », qui décrit un moyen), chiffrer sur sa
   // propre bibliothèque, présélectionner le milieu, et dire que c'est
   // modifiable — cette dernière phrase transforme une décision en préférence et
@@ -103,7 +103,7 @@
   let carCount = $state(0);
   let profile = $state<Profile>("normal");
 
-  /** Poids du magasin de vignettes, en mégaoctets : ~150 Ko par voiture (§5.2). */
+  /** Poids du magasin de vignettes, en mégaoctets : ~150 Ko par voiture (GRILLE§5.2). */
   const thumbsMb = $derived(Math.max(1, Math.round((carCount * 150) / 1024)));
 
   function count(n: number): string {
@@ -238,7 +238,7 @@
     color: var(--txt2);
   }
   /* Le coût en dernier et en gris : c'est ce qui départage, pas ce qui
-     nomme — le §5.5 veut des profils nommés par leur résultat. */
+     nomme — le GRILLE§5.5 veut des profils nommés par leur résultat. */
   .p-cost {
     font-size: 11px;
     color: var(--muted);

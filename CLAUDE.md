@@ -446,13 +446,16 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
 `MUSIQUE§3.4`, `IMPORT§`, `REFONTE§`, `TEXTURE§`. La liste fait foi dans
 `scripts/check-refs.mjs`.
 
-`npm run check` vérifie que chaque renvoi tombe sur un titre qui existe.
-**Les renvois déjà cassés sont dans `scripts/refs-baseline.json`** et n'échouent
-pas — 348 couples (fichier, renvoi), hérités de renumérotations successives.
-Tout renvoi cassé **nouveau**, lui, échoue. Deux choses à savoir : un renvoi du
-socle qu'on répare est signalé (`node scripts/check-refs.mjs --update` retire
-l'entrée), et **on ne grossit pas le socle pour se débarrasser d'une erreur** —
-il est là pour se vider.
+`npm run check` vérifie que chaque renvoi tombe sur un titre qui existe, et
+**les 2 780 y tombent** : le socle (`scripts/refs-baseline.json`) est vide. Le
+contrôle est donc strict — le moindre renvoi sans cible fait échouer
+`npm run check`. Il a démarré avec 348 renvois cassés hérités de
+renumérotations successives ; ils ont tous été repris.
+
+Le mécanisme du socle reste, pour le jour où une refonte en casse trente d'un
+coup : `node scripts/check-refs.mjs --update` les gèle et on les reprend par
+lots. **Mais on ne grossit pas le socle pour faire taire une erreur** — il est
+là pour se vider, et il est vide.
 
 - **`docs/README.md`** — index de tout `docs/`. Point d'entrée.
 - **`docs/SPEC.md`** — spécification de référence, organisée par domaine.
@@ -532,7 +535,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Enrichissement Wikipédia** | livré ; reste à régler les seuils sur les corrections manuelles de l'utilisateur | `docs/SPEC-wikipedia-fiche-detail.md` |
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |
 | **Refonte navigation et fiches** | neuf lots faits ; second palier à fusionner | `docs/PLAN-refonte-navigation.md` |
-| **Passe documentation** | lots 0 à 6 faits ; reste le socle des renvois `§` à vider | `docs/CHANTIERS.md` |
+| **Passe documentation** | **finie** ; reste à trancher la divergence des règles de tags | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre
 

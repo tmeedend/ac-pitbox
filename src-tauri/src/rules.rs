@@ -59,7 +59,7 @@ pub struct CarRules {
 pub struct TrackRules {
     #[serde(default)]
     pub tag_merge: Vec<TagMerge>,
-    /// Catégories de circuit autorisées (§5bis.2), tags `#` par ordre de
+    /// Catégories de circuit autorisées (§5), tags `#` par ordre de
     /// priorité décroissante. Un circuit peut en porter plusieurs (celles de
     /// ses tags présentes ici) ; la première de la liste qu'il possède est sa
     /// catégorie principale. Éditable ; rempli au chargement depuis le seed
@@ -148,7 +148,7 @@ pub fn load(app: &AppHandle) -> Rules {
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_else(default_rules);
     // Backfill : une config antérieure à la liste blanche des catégories de
-    // circuit (§5bis.2) n'a pas la clé → on la remplit depuis le seed embarqué,
+    // circuit (§5) n'a pas la clé → on la remplit depuis le seed embarqué,
     // sans réécrire le fichier (l'utilisateur peut ensuite l'éditer et sauver).
     if rules.track.category_allowlist.is_empty() {
         rules.track.category_allowlist = default_rules().track.category_allowlist;
@@ -171,10 +171,10 @@ pub fn save(app: &AppHandle, rules: &Rules) -> Result<(), String> {
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Harmonized {
     pub tags_from_rule: Vec<String>,
-    /// Tag `#` principal = catégorie (§5bis). Pour un circuit : la 1ʳᵉ de
+    /// Tag `#` principal = catégorie (§5). Pour un circuit : la 1ʳᵉ de
     /// `categories` (la plus prioritaire).
     pub category: Option<String>,
-    /// Catégories de circuit (§5bis.2), multi-valué, par ordre de priorité.
+    /// Catégories de circuit (§5), multi-valué, par ordre de priorité.
     /// Vide pour une voiture (qui n'a qu'une catégorie unique via `category`).
     pub categories: Vec<String>,
     pub car_class: Option<String>,
@@ -340,7 +340,7 @@ pub fn apply_car(rules: &Rules, raw_tags: &[String], name: &str, class: &str, co
 }
 
 /// Harmonises a track (tag_merge only; no class, no specs). Categories
-/// (§5bis.2): the subset of its tags found in the allowlist, ordered by
+/// (§5): the subset of its tags found in the allowlist, ordered by
 /// priority — multi-valued.
 pub fn apply_track(rules: &Rules, raw_tags: &[String]) -> Harmonized {
     let t = &rules.track;
@@ -400,7 +400,7 @@ fn track_categories(allowlist: &[String], tags: &BTreeSet<String>) -> Vec<String
         .collect()
 }
 
-/// Catégorie = premier tag `#` (convention CM, §5bis). Utilisé pour les voitures.
+/// Catégorie = premier tag `#` (convention CM, §5). Utilisé pour les voitures.
 fn pick_category(tags: &BTreeSet<String>) -> Option<String> {
     tags.iter().find(|t| t.starts_with('#')).cloned()
 }
@@ -470,7 +470,7 @@ mod tests {
         );
     }
 
-    // §5bis.2 — Six seeded categories (#oval, #drag, #karting, #rallycross,
+    // §5 — Six seeded categories (#oval, #drag, #karting, #rallycross,
     // #test, #touge) are the output of no merge rule at all: the allowlist is
     // their only declaration. Recognising the bare spelling is what keeps them
     // working now that unknown tags no longer pass through.
@@ -498,7 +498,7 @@ mod tests {
         );
     }
 
-    // §5bis — An unknown `#` tag used to become the car's category, which is
+    // §5 — An unknown `#` tag used to become the car's category, which is
     // what filled the library filter with one-off categories invented by a
     // single mod author. It must now leave the car without one.
     #[test]

@@ -35,7 +35,7 @@
   interface Row {
     label: string;
     value: string;
-    /** Deduced by the rule engine (§5bis.1) rather than read in the mod's own
+    /** Deduced by the rule engine (§6) rather than read in the mod's own
      * file — shown in the rule colour, with the tooltip that says so. */
     derived?: boolean;
   }

@@ -1,4 +1,4 @@
-// La distance parcourue, telle qu'elle se lit sur une fiche (§6.5).
+// La distance parcourue, telle qu'elle se lit sur une fiche (§6).
 //
 // Une ligne partagée par les deux types de fiche — la fiche technique d'une
 // voiture (`TechSheet`) et la carte « Circuit » d'un circuit. Elle a sa propre

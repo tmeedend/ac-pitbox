@@ -18,7 +18,7 @@
 //!   double la matière sans une ligne de plus.
 //!
 //! Les deux sont parcourus **récursivement** : CM range ses presets dans une
-//! arborescence de dossiers (§5.2 explique pourquoi Pit Box ne la reprend pas).
+//! arborescence de dossiers (§5 explique pourquoi Pit Box ne la reprend pas).
 //!
 //! ## Ce qui n'est pas importable, et pourquoi
 //!

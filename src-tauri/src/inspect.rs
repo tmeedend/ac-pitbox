@@ -23,7 +23,7 @@ fn parse_csp_features(text: &str) -> Vec<String> {
     if upper.contains("[LIGHT_SERIES_1") {
         feats.push("lightingfx".to_string());
     }
-    // Ajustements saisonniers (arbres/herbe qui changent de couleur, §6.4bis) :
+    // Ajustements saisonniers (arbres/herbe qui changent de couleur, §6) :
     // le circuit doit avoir un bloc dédié référençant les conditions
     // SEASON_*_NORTH (cf. extension/config/tracks/common/conditions.ini) —
     // sans ça, choisir une saison dans l'app n'a aucun effet visuel.
@@ -277,7 +277,7 @@ mod tests {
     fn loaded_config_detects_rain_and_season_outside_mod_folder() {
         // Le contenu de base Kunos n'a pas ces sections dans son propre
         // dossier — elles vivent dans la config CSP "chargée" séparément
-        // (§6.4bis), ex. extension/config/tracks/loaded/<id>.ini. Reproduit
+        // (§6), ex. extension/config/tracks/loaded/<id>.ini. Reproduit
         // un extrait réel (magione.ini) : RainFX + ajustements saisonniers.
         let ac = crate::testutil::temp_dir("inspect-loaded");
         let loaded_dir = ac.join("extension").join("config").join("tracks").join("loaded");

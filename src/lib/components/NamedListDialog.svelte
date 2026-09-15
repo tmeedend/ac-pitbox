@@ -21,7 +21,7 @@
   //   `mode`        saving needs a name field and an overwrite confirmation;
   //                 loading needs neither, and a click means "take this one".
   //   `searchable`  a handful of sessions are read at a glance, thirty grids
-  //                 are not (§5.2 — a searchable name beats a folder tree).
+  //                 are not (§5 — a searchable name beats a folder tree).
   //
   // Nothing else. The list, the delete cross, the empty state and the frame are
   // the same in both, and always were.

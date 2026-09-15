@@ -51,7 +51,7 @@
     setUiPref(StorageKey.showFileTags, String(showRawTags));
   }
 
-  // Les catégories (#) passent devant : ce sont les tags structurants (§5bis).
+  // Les catégories (#) passent devant : ce sont les tags structurants (§5).
   const categories = $derived(detail.tags_from_rule.filter((tag) => tag.startsWith("#")));
   const fromRules = $derived(detail.tags_from_rule.filter((tag) => !tag.startsWith("#")));
 

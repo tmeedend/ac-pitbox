@@ -31,7 +31,7 @@
     rules.car.extraction_country.map = map;
   });
 
-  // Aperçu d'impact à la volée (anti-rebond) — « N mods affectés » (§5.4).
+  // Aperçu d'impact à la volée (anti-rebond) — « N mods affectés » (§5).
   $effect(() => {
     if (!rules) return;
     JSON.stringify(rules); // dépendance réactive
@@ -54,7 +54,7 @@
     list.splice(i, 1);
   }
 
-  // --- Liste blanche des catégories de circuit (§5bis.2) : ordonnée par
+  // --- Liste blanche des catégories de circuit (§5) : ordonnée par
   // priorité (1ʳᵉ = principale). Ajout en fin, réordonnable, `#` normalisé. ---
   let catInput = $state("");
   function normCat(s: string): string {
@@ -131,7 +131,7 @@
 
         {#if tab === "track"}
           {@const allow = rules.track.category_allowlist}
-          <!-- CATÉGORIES DE CIRCUIT (liste blanche ordonnée, §5bis.2) -->
+          <!-- CATÉGORIES DE CIRCUIT (liste blanche ordonnée, §5) -->
           <section>
             <div class="s-head">
               <h3>{t("rules.trackCategoriesTitle")} <span class="cnt">{allow.length}</span></h3>

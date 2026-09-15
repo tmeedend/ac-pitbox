@@ -702,6 +702,29 @@ de reprendre. En cas d'écart, la spec fait foi.
         indemne, historique compris. Ce que `CLAUDE.md` dit surtout, c'est
         *pourquoi* ça se joue avant le commit : un jeton poussé se révoque, il
         ne s'efface pas.
+      - **Le socle est vide : 2 780 renvois, 0 sans cible.** Parti de 906.
+        Le contrôle est donc **strict** — le moindre renvoi sans cible fait
+        désormais échouer `npm run check`.
+        **Le remède annoncé n'était pas le bon, et le contenu l'a dit.** Le plan
+        prévoyait de renuméroter `SPEC.md` §5, §6 et §7 pour leur donner les
+        sous-sections manquantes. À la lecture, ces numéros ne désignaient pas
+        des sections perdues : la bande de performance est du `CIBLE§3.4`, la
+        précédence de l'appariement du `WIKI§3.1`, la langue de lecture du
+        `WIKI§5.4`. Renuméroter aurait produit un gros diff sans rien résoudre,
+        **en cassant au passage les renvois qui marchaient**. Une seule
+        sous-section méritait son titre : `§7.4bis`, que `SPEC.md` employait
+        déjà dans son propre texte. Le reste se repointe — vers un autre
+        document, ou vers la section qui le porte réellement. **Un renvoi plus
+        large qui tombe juste vaut mieux qu'un numéro précis qui ne tombe nulle
+        part.**
+      - **Un piège de remplacement, attrapé en simulation** : la règle
+        `§5bis → §5` avalait `§5bis.3`, qui est **valide**, et l'aurait
+        transformé en `§5.3` — 26 renvois corrompus en silence. Le garde-fou
+        doit exclure « point suivi d'un chiffre » (le début d'un renvoi plus
+        profond) sans exclure le point de fin de phrase. C'est la troisième
+        fois de ce chantier qu'un remplacement de masse veut mordre plus loin
+        que prévu ; à chaque fois c'est la **simulation avant écriture** qui
+        l'a montré.
       - **Lot 6 — trois tests là où une erreur détruit des fichiers.**
         `gamebackup::is_newer` (règle d'or n°5, §4.5.4) n'était couvert par
         rien : le cas qui compte est l'**égalité de dates** — deux copies
@@ -750,21 +773,10 @@ de reprendre. En cas d'écart, la spec fait foi.
         violée** : `scrollIntoView` est interdit en gras dans `CLAUDE.md` et
         commenté « **Jamais `scrollIntoView`** » dans deux fichiers — et
         appelé dans deux autres.
-      **Reste, dans cet ordre :**
-      1. **Renuméroter `SPEC.md` §5, §6 et §7 — la dernière poche du socle.**
-         69 entrées restent, et elles disent toutes la même chose : `§5bis.1`,
-         `§5bis.2`, `§6.2bis`, `§6.4bis`, `§6.5`, `§6.6`, `§7.4bis`, `§3.0`
-         sont des sous-sections que `SPEC.md` n'a pas et que le code suppose.
-         Même constat qu'au §8, même remède — sauf que §6 et §7 portent
-         aujourd'hui la numérotation dégénérée que le §9 avait avant sa
-         reprise, dont **deux titres `6.3bis`**, l'un suffixé « (suite) ». Les
-         leur donner demande donc de renuméroter, ce que `check-refs` rend sûr.
-         *(Anecdote utile : les passes de repointage ont réécrit ce paragraphe
-         lui-même — `§10bis` y est devenu `§11`. Les scripts traitent `docs/`
-         comme le reste, y compris le journal qui les décrit.)*
-
-      **Deux choses mises de côté avec l'utilisateur, à ne pas glisser dans un
-      lot :**
+      **La passe est finie** — les sept lots sont faits, `npm run check` porte
+      quatre portes (locales, version, renvois, conventions) et le socle des
+      renvois est vide. **Reste une seule décision, mise de côté avec
+      l'utilisateur :**
       - **`docs/default-tag-rules-enriched.json` n'est pas ce que l'app
         charge** — c'est `src-tauri/rules/default-tag-rules.json`, semé dans le
         dossier de config. Les deux ont divergé : la copie de `docs/` porte un
