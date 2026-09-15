@@ -2,7 +2,7 @@
 //!
 //! Read for one thing only: saying how far the **road wheels** of the 3D
 //! preview turn for a given angle at the steering wheel
-//! (`docs/SPEC-preview-3d-kn5.md` §15). AC turns them from physics, so nothing
+//! (PREVIEW§15). AC turns them from physics, so nothing
 //! in the model says how far they go — no animation covers them, unlike the
 //! driver's arms, which the car's own `steer.ksanim` poses.
 //!

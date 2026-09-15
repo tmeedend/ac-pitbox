@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Bloc « Historique » de la fiche détail (§3.2 / §6.2).
+  // Bloc « Historique » de la fiche détail (WIKI§3.2 / §6.2).
   //
   // Versions et historique ne font plus deux rubriques : une version EST un
   // événement du mod, la séparer obligeait à faire l'aller-retour entre deux
@@ -91,7 +91,7 @@
     }));
 
     // Activer/désactiver n'est pas un événement de cycle de vie : ces lignes
-    // pollueraient la frise sans rien apprendre (§3.2).
+    // pollueraient la frise sans rien apprendre (WIKI§3.2).
     const fromHistory: Entry[] = detail.history
       .filter(
         (h) =>

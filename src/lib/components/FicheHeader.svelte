@@ -66,7 +66,7 @@
     name: string;
     /** Sous-titre lisible : marque · année · par auteur. */
     subtitle?: string;
-    /** Seul tag qui fait un travail — la composition de plateau (§7.5). */
+    /** Seul tag qui fait un travail — la composition de plateau (REFONTE§7.5). */
     category?: string | null;
     rename?: FicheRename;
     deployment?: FicheDeployment;

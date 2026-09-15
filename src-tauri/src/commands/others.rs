@@ -47,7 +47,7 @@ pub fn list_attached(
     crate::inventory::attached_to(&conn, &cfg, &entity_id).map_err(|e| e.to_string())
 }
 
-/// Corrige le rattachement d'un mod « autre » (§2.3). Chaîne vide = revenir à
+/// Corrige le rattachement d'un mod « autre » (REFONTE§2.3). Chaîne vide = revenir à
 /// la déduction.
 #[tauri::command]
 pub fn set_other_attachment(db: State<Db>, id: String, target: String) -> Result<(), String> {

@@ -99,7 +99,7 @@ export function filterDefs(kind: ModKind): FilterDef[] {
   ];
   if (isCar) {
     defs.push({ key: "brand", labelKey: "library.filterBrand", type: "val" });
-    // The one honest token for "the same car as mine" (§3.2). Matched on the
+    // The one honest token for "the same car as mine" (WIKI§3.2). Matched on the
     // DISPLAY NAME rather than on the mod id: two mods of the same model then
     // both answer, which is what a one-make grid wants - and it keeps the
     // suggestion list readable, an id being exactly what one does not

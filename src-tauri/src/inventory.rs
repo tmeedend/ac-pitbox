@@ -253,7 +253,7 @@ fn nature_of_sub(_kind: RowKind) -> Nature {
 
 /// Rattachement d'un élément dont l'hôte est écrit dans sa propre table.
 ///
-/// C'est le signal n°2 du §2.1, le seul qui soit **certain** : rien n'est
+/// C'est le signal n°2 du REFONTE§2.1, le seul qui soit **certain** : rien n'est
 /// déduit, `parent_id` dit l'hôte. Un hôte inconnu de la bibliothèque (mod
 /// supprimé, couche en attente de son contenu) laisse la ligne rattachée « au
 /// jeu » plutôt que de la faire disparaître — REFONTE§14 en fera un état d'attente

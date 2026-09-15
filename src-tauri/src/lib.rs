@@ -142,7 +142,7 @@ pub fn run() {
             }
 
             // Filet de sécurité : le brouillon de conversion des vignettes de
-            // grille (`SPEC-grille.md` §5.3) est effacé dès l'image rendue,
+            // grille (GRILLE§5.3) est effacé dès l'image rendue,
             // mais une fermeture brutale en laisse un — vingt mégaoctets que
             // rien d'autre ne ramasse, son dossier étant hors du plafond du
             // cache exprès.
@@ -227,7 +227,7 @@ pub fn run() {
             // démarrés pour toute la durée de vie de l'app.
             music::config::ensure_default_dirs(app.handle());
             let music_cfg = music::config::load(app.handle());
-            // Préchauffe le cache d'index (§3.4/§16.3) en tâche de fond dès
+            // Préchauffe le cache d'index (MUSIQUE§3.4/§16.3) en tâche de fond dès
             // le démarrage, pour que la première navigation Big Picture de
             // la session ne subisse pas le scan complet du dossier.
             music::index::warm(app.handle(), music_cfg.clone());

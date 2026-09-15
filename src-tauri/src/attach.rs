@@ -55,7 +55,7 @@ pub enum Signal {
     None,
 }
 
-/// What the mod hangs onto (§2.1).
+/// What the mod hangs onto (REFONTE§2.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum AttachKind {
@@ -68,7 +68,7 @@ pub enum AttachKind {
     Standalone,
 }
 
-/// What the mod does (§2.2).
+/// What the mod does (REFONTE§2.2).
 ///
 /// `Content` is the one an inventoried row should almost never carry: it
 /// belongs to the four autonomous types, which have their own screens. The
@@ -356,7 +356,7 @@ mod tests {
         list.iter().map(PathBuf::from).collect()
     }
 
-    /// Rule (§2.1, signal 1): a posed path carrying a known id says where the
+    /// Rule (REFONTE§2.1, signal 1): a posed path carrying a known id says where the
     /// mod hangs, and it cannot mean anything else.
     #[test]
     fn a_posed_path_names_its_host() {
@@ -376,7 +376,7 @@ mod tests {
         drop(base);
     }
 
-    /// Rule (§2.1, signal 3): a CSP config named after an entity. The cut falls
+    /// Rule (REFONTE§2.1, signal 3): a CSP config named after an entity. The cut falls
     /// on `__` — the import's own convention — never on a single `_`, which
     /// would reduce `ks_nordschleife` to `ks` and attach half the library to it.
     #[test]
@@ -407,7 +407,7 @@ mod tests {
         drop(base);
     }
 
-    /// Rule (§2.1, signal 4): same archive as a content. It is a **guess**, and
+    /// Rule (REFONTE§2.1, signal 4): same archive as a content. It is a **guess**, and
     /// the signal says so — this is the RSS pack's fonts.
     #[test]
     fn the_archive_is_a_guess_and_says_so() {
@@ -430,7 +430,7 @@ mod tests {
         drop(base);
     }
 
-    /// Rule (§2.3): the user's correction beats every deduction — and a
+    /// Rule (REFONTE§2.3): the user's correction beats every deduction — and a
     /// correction pointing at an entity that no longer exists falls back on the
     /// deduction instead of showing a ghost.
     #[test]
@@ -458,7 +458,7 @@ mod tests {
         drop(base);
     }
 
-    /// Rule (§2.1): no signal at all means the mod touches the game itself —
+    /// Rule (REFONTE§2.1): no signal at all means the mod touches the game itself —
     /// and a mod that poses nothing is standalone rather than "the game",
     /// because nothing lets us say it aims at the game.
     #[test]
@@ -482,7 +482,7 @@ mod tests {
         drop(base);
     }
 
-    /// Rule (§2.2): several zones, one nature — the most consequential wins,
+    /// Rule (REFONTE§2.2): several zones, one nature — the most consequential wins,
     /// because it is the one being looked for.
     #[test]
     fn the_most_consequential_zone_gives_the_nature() {

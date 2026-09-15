@@ -423,7 +423,7 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         -- Clé composite (entité, langue **demandée**) : la langue réellement
         -- servie peut différer quand la chaîne de repli du §5.2 est descendue
         -- sur l'anglais, et elle se relit dans `article_url` — c'est pourquoi
-        -- cette URL est stockée et jamais reconstruite (§3.2).
+        -- cette URL est stockée et jamais reconstruite (WIKI§3.2).
         CREATE TABLE IF NOT EXISTS wiki_cache (
             entity_id       TEXT NOT NULL,
             lang            TEXT NOT NULL,
@@ -2034,7 +2034,7 @@ pub struct OtherModRow {
     pub display_name_user: Option<String>,
     /// Note libre (REFONTE§9).
     pub notes_user: Option<String>,
-    /// Rattachement corrigé à la main (§2.3) : id de l'entité visée. Seule la
+    /// Rattachement corrigé à la main (REFONTE§2.3) : id de l'entité visée. Seule la
     /// **correction** est stockée — la déduction se recalcule à chaque lecture,
     /// `attach.rs` dit pourquoi.
     pub attachment_user: Option<String>,

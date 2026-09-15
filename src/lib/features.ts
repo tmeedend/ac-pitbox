@@ -18,7 +18,7 @@
 // moins visible.
 
 /**
- * **Vignettes régénérées de la grille** (`docs/SPEC-grille.md` §5 à §8, §11).
+ * **Vignettes régénérées de la grille** (GRILLE§5 à §8, §11).
  *
  * Éteint le temps que les valeurs par défaut des trois presets embarqués soient
  * arrêtées. Le mécanisme est complet et fusionné dans `main` ; ce qui manque

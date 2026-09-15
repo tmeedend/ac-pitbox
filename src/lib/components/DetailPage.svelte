@@ -273,7 +273,7 @@
   });
 
   /** Recharge l'onglet : changement de langue de lecture (§5.4, mémorisée
-   * globalement et non par mod), ou article associé à la main (§7.6). */
+   * globalement et non par mod), ou article associé à la main (WIKI§7.6). */
   async function reloadWiki(lang?: string) {
     const key = detail?.id_interne;
     if (!key) return;
@@ -1692,7 +1692,7 @@
       </div>
     {:else}
       <!-- Installation : d'où vient ce mod, ce que l'app en a fait, et ce qu'il
-           a posé dans le jeu. Les étiquettes y sont aussi (§7.5) : elles sont la
+           a posé dans le jeu. Les étiquettes y sont aussi (REFONTE§7.5) : elles sont la
            matière première d'où la catégorie est dérivée, et on les ouvre au
            moment précis où la dérivation s'est trompée — c'est-à-dire en même
            temps que l'origine et les décisions d'import. -->
@@ -1761,7 +1761,7 @@
           />
           <TagsBlock detail={d} onaddtag={addManual} onremovetag={removeManual} />
           {#if d.csp_features.length}
-            <!-- Les extensions CSP ont quitté les étiquettes (§7.5) : elles
+            <!-- Les extensions CSP ont quitté les étiquettes (REFONTE§7.5) : elles
                  décrivent l'installation, pas le contenu. Une ligne grise
                  suffit — on ne les compose pas, on les constate. -->
             <section class="blk">

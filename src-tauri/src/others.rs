@@ -459,7 +459,7 @@ pub fn list_others(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<O
         .collect())
 }
 
-/// Corrige à la main le rattachement d'un mod « autre » (§2.3). Chaîne vide =
+/// Corrige à la main le rattachement d'un mod « autre » (REFONTE§2.3). Chaîne vide =
 /// revenir à la déduction.
 pub fn set_attachment(conn: &Connection, id: &str, target: Option<&str>) -> Result<(), String> {
     let cleaned = target.map(str::trim).filter(|s| !s.is_empty());

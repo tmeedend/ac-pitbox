@@ -23,7 +23,7 @@
   }
   const { config = $bindable() }: Props = $props();
 
-  /** Langue de lecture : vide = suivre celle de l'application (§5.1). */
+  /** Langue de lecture : vide = suivre celle de l'application (WIKI§5.1). */
   let lang = $state("");
   let manualCount = $state(0);
   let busy = $state(false);

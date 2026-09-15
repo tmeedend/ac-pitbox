@@ -1,4 +1,4 @@
-// Rendu localisé des entrées d'historique (§3.2). Le backend stocke désormais
+// Rendu localisé des entrées d'historique (WIKI§3.2). Le backend stocke désormais
 // les détails sous forme de payload structuré JSON (`{ key, ...params }`) ; on
 // le traduit ici via `history.<key>`. Les anciennes lignes (texte brut FR
 // d'avant la passe i18n) ne sont pas du JSON valide → affichées telles quelles.

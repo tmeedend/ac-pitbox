@@ -28,7 +28,7 @@ const KM_THRESHOLD = 100;
  *
  * Une valeur qui porte **déjà** une unité est rendue telle quelle : son auteur
  * a dit ce qu'il voulait dire, et la réécrire reviendrait à convertir ce que le
- * mod déclare — précisément ce que le §7.6 interdit. */
+ * mod déclare — précisément ce que le WIKI§7.6 interdit. */
 export function trackLength(raw: string | null | undefined): string | null {
   const s = raw?.trim();
   if (!s) return null;

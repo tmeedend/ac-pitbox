@@ -67,7 +67,7 @@ pub async fn prepare_car_preview(
 /// de base — voir `driver::choices`.
 ///
 /// `body` porte le corps substitué, quand l'utilisateur en impose un : c'est
-/// lui qui commande les trois listes (§1.3), pas celui que la voiture nomme.
+/// lui qui commande les trois listes (PILOTE§1.3), pas celui que la voiture nomme.
 ///
 /// Lit un KN5 de quatorze mégaoctets, donc `spawn_blocking` comme la
 /// conversion, même si le parsing seul se compte en millisecondes.
