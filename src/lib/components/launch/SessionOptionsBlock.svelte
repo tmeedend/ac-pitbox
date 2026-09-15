@@ -1,5 +1,5 @@
 <script lang="ts">
-  // "Session options" block of the launch screen (SESSION§3/SESSION§3): the settings
+  // "Session options" block of the launch screen (SESSION§3): the settings
   // whose content depends on the chosen session type. Pure presentation:
   // everything is a direct read/write of `setup` (state shared with the
   // parent, SESSION§3.3) — no logic to lift up.
@@ -59,7 +59,7 @@
   const startFixedByQualifying = $derived(setup.session_type === "race" && setup.qualify_minutes > 0);
 </script>
 
-<!-- Session options (SESSION§3/SESSION§3): first card of the column, the most consulted.
+<!-- Session options (SESSION§3): first card of the column, the most consulted.
      Everything here depends on the session type — what does not has left, to
      the car card (ballast, restrictor, aids), to the conditions rail (track
      state) or to the simulation block (penalties).

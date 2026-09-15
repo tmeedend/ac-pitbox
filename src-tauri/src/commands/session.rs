@@ -22,7 +22,7 @@ pub fn weather_options(app: AppHandle) -> Vec<crate::weather::WeatherOption> {
 }
 
 /// Température + vent **recommandés** (air/piste/vent) pour une intention +
-/// heure + saison optionnelle (SESSION§3.3/SESSION§3/SESSION§3.3). L'écran de session propose
+/// heure + saison optionnelle (SESSION§3.3). L'écran de session propose
 /// ces valeurs par défaut ; l'air et la piste restent ensuite modifiables à la
 /// main tant que la météo/saison ne change pas.
 #[tauri::command]

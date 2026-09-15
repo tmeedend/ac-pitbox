@@ -210,7 +210,7 @@ fn season_delta(season: Option<&str>) -> i32 {
     }
 }
 
-/// Température + vent implicites (SESSION§3.3/SESSION§3.3) déduits de l'intention + l'heure +
+/// Température + vent implicites (SESSION§3.3) déduits de l'intention + l'heure +
 /// la saison optionnelle (SESSION§3.3). Sert de **valeur recommandée** — l'écran de
 /// session la propose et permet ensuite à l'utilisateur de la corriger à la main.
 pub fn implicit_conditions(intent_id: &str, hour: f32, season: Option<&str>) -> ImplicitConditions {

@@ -251,7 +251,7 @@
   const gridMatches = $derived(buildPredicate(gridDefs, gridFilters, gridIndex.ctx));
   const gridPool = $derived(carPool.filter((c) => gridMatches(c) && matchesQuery(c, gridQuery)));
 
-  // --- Skins par voiture (cache, SESSION§3/SESSION§3.3) : chargés à la demande pour
+  // --- Skins par voiture (cache, SESSION§3.3) : chargés à la demande pour
   // assigner un skin à chaque adversaire, et réutilisés par la popup. ---
   let skinsByCarId = $state<Record<string, SkinItem[]>>({});
   async function ensureSkins(carId: string): Promise<SkinItem[]> {
@@ -687,7 +687,7 @@
       refreshConditions(false);
     }
   });
-  // --- Mémorisation de la sélection + presets (SESSION§3/SESSION§3) ---
+  // --- Mémorisation de la sélection + presets (SESSION§3) ---
   // `opponents` en fait partie (SESSION§3.3, bug réel) : sans elle, revenir sur cet
   // écran après être allé choisir un circuit/une voiture démonte puis remonte
   // Launch.svelte — `setup.opponents` (état local) repart de zéro, et

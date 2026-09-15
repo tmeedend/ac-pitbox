@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Bloc « Conditions » du rail droit (SESSION§3.3/SESSION§3.3/SESSION§3.3, lot 5 §4) : tout ce
+  // Bloc « Conditions » du rail droit (SESSION§3.3, lot 5 §4) : tout ce
   // qui décrit le jour et la piste sur lesquels on roule — météo, températures,
   // vent, état de piste, heure, saison.
   //
