@@ -98,38 +98,35 @@ de reprendre. En cas d'écart, la spec fait foi.
       désignait aussi un en-tête de dialogue, un message sous un champ et un
       surtitre rouge posé au-dessus de son titre : un nom qui veut dire trois
       choses est un piège au premier déplacement de markup.
-      **Inventaire de ce qui reste** (mesuré le 2026-08-18, revu le
-      2026-09-11) :
-      - **Enregistrer / charger / supprimer une liste nommée : 1 copie de
-        trop**, et c'est la seule entrée de cet inventaire qui ne soit pas du
-        style mais du **comportement**. Demandé par l'utilisateur, qui l'avait
-        reconnu d'un écran à l'autre. `NamedListDialog` porte le geste
-        (`196fcbe`), et **le préalable est levé** : `d45b67f` a sorti la moitié
-        « liste » de `Launch.svelte` — le bloc du rail droit et le dialogue
-        maison ont disparu au profit de deux boutons et de la brique partagée,
-        qui sert désormais les sessions **et** les grilles. Reste
-        `DriverOutfits.svelte`, seul à garder son implémentation ; c'est du
-        raccordement, plus de l'extraction.
-        **Mesuré avant de raccorder, et ça change la conclusion** : les trois
-        modules ont la même *forme* (`list`/`save`/`delete`) mais **trois
-        contrats d'écrasement différents, chacun porté par une raison écrite**.
-        `savedSessions` écrase par nom **dans le type de session** — « Test » en
-        Race et « Test » en Practice sont deux choses sans rapport.
-        `savedGrids` écrase par nom, mais **suffixe au lieu d'écraser à
-        l'import**, parce qu'un import ne doit rien détruire. `driverOutfits`
-        écrase **insensible à la casse**, plafonne à `MAX`, et attend la lecture
-        avant d'écrire — garde née d'un bug remonté deux fois, la tenue
-        apparaissait puis disparaissait au redémarrage.
-        Un module commun devrait donc exposer clé de portée, casse, plafond,
-        mode import et garde de chargement : **cinq axes pour trois appelants**,
-        quand `Seg.svelte` s'est limité à trois axes pour sept. Ce qui est
-        partagé est la forme, et elle tient déjà en trois petits modules ; ce
-        qui diffère est le comportement, et il diffère exprès.
-        **Reste une question d'UX, et elle seule** : les tenues sont des puces
-        toujours visibles (un clic pour reposer une tenue), `NamedListDialog`
-        est une modale (deux clics). Les brancher coûterait au panneau
-        d'essayage son geste principal. À trancher avec l'utilisateur — ce
-        n'est pas du reformatage.
+      **L'inventaire est clos** (ouvert le 2026-08-18, revu le 2026-09-11,
+      fermé le 2026-09-15). Sa dernière ligne — « enregistrer / charger /
+      supprimer une liste nommée », la seule qui fût du comportement et non du
+      style — s'est refermée sur une **mesure**, pas sur un lot :
+      - `NamedListDialog` porte le geste (`196fcbe`) et sert les sessions **et**
+        les grilles depuis que `d45b67f` a sorti la moitié « liste » de
+        `Launch.svelte`. Il n'y reste aujourd'hui **aucune boucle de rendu** :
+        ce que le fichier garde encore des listes nommées est la restauration
+        d'une session (voiture, livrée, circuit, tracé, track skins), qui
+        appartient à l'écran et à rien d'autre.
+      - **Les trois modules ont la même forme et trois contrats différents,
+        chacun porté par une raison écrite** (`14cefab`). `savedSessions` écrase
+        par nom **dans le type de session** — « Test » en Race et « Test » en
+        Practice sont deux choses sans rapport. `savedGrids` écrase par nom mais
+        **suffixe au lieu d'écraser à l'import**, parce qu'un import ne détruit
+        rien. `driverOutfits` écrase **insensible à la casse**, plafonne à
+        `MAX`, et attend la lecture avant d'écrire — garde née d'un bug remonté
+        deux fois, la tenue apparaissait puis disparaissait au redémarrage.
+        Un module commun exposerait clé de portée, casse, plafond, mode import
+        et garde de chargement : **cinq axes pour trois appelants**, quand
+        `Seg.svelte` s'est limité à trois pour sept. Ce qui est partagé est la
+        forme, et elle tient déjà en trois petits modules ; ce qui diffère est
+        le comportement, et il diffère **exprès**. Il n'y avait donc pas une
+        copie de trop, mais **trois contrats voisins qu'on lit mieux séparés**.
+      Une seule question survit, et elle n'est pas du partage de composant :
+      les tenues sont des **puces toujours visibles** (un clic pour reposer une
+      tenue), `NamedListDialog` est une **modale** (deux clics). À reposer le
+      jour où le panneau d'essayage se refait, pas avant — et comme une
+      question d'UX, jamais comme du reformatage.
       Un lot de ce genre est du **reformatage pur sur une quinzaine de
       fichiers** : le faire dans son propre commit, jamais mélangé à un
       changement fonctionnel (sinon `git blame` devient inexploitable).
