@@ -2376,4 +2376,114 @@ mod tests {
         assert_eq!(next_layer_priority(&conn, "shuto", HostKind::Track).unwrap(), 1);
         assert_eq!(next_layer_priority(&conn, "shuto", HostKind::App).unwrap(), 1);
     }
+
+    /// Columns `migrate` adds, each paired with a listing that reads it. Used
+    /// by the migration test below to build an "old" database out of the
+    /// current one.
+    const ADDED_LATER: [(&str, &str); 4] = [
+        ("mods", "is_unmanaged"),
+        ("layers", "notes_user"),
+        ("sub_mods", "author"),
+        ("other_mods", "attachment_user"),
+    ];
+
+    /// Rule: `open` is safe to call on a database it has already migrated.
+    ///
+    /// It runs `init` **and** `migrate` every single time — there is no version
+    /// marker — so idempotence is not a nicety, it is the whole design. Each
+    /// `ALTER` swallows its "duplicate column" error with `let _ =`, which is
+    /// exactly the shape that hides a real failure: if one of them ever started
+    /// failing for another reason, nothing would say so, and the damage would
+    /// surface somewhere else entirely.
+    #[test]
+    fn reopening_a_database_migrates_it_again_without_losing_anything() {
+        let base = crate::testutil::temp_dir("db-reopen");
+        let path = base.join("overlay.sqlite");
+        let now = chrono::Local::now().to_rfc3339();
+
+        {
+            let conn = open(&path).unwrap();
+            upsert_mod(
+                &conn,
+                "ks_mazda_mx5",
+                "Car",
+                Some("Mazda"),
+                Some("MX-5"),
+                "h",
+                Some(2015),
+                &now,
+            )
+            .unwrap();
+        }
+
+        // Second open: `init` re-runs against existing tables, `migrate` against
+        // columns that are all already there.
+        let conn = open(&path).expect("reopening an already-migrated database");
+        let rows = list_mods(&conn).expect("the listing still runs");
+        assert_eq!(rows.len(), 1, "the row survived the second migration");
+        assert_eq!(
+            rows[0].display_name.as_deref(),
+            Some("MX-5"),
+            "and so did its values — `init` must never recreate a table over one that holds data"
+        );
+    }
+
+    /// Rule: a column added to `migrate` after the fact reaches a database
+    /// written before it existed.
+    ///
+    /// This is the other half of `every_listing_runs_on_a_fresh_database`, and
+    /// the half that was never covered: `init` already creates every column
+    /// `migrate` adds, so on a fresh database the `ALTER`s all fail harmlessly
+    /// and **the migration path is never exercised at all**. Only an older
+    /// database runs it — which is precisely the case nobody has on hand.
+    ///
+    /// The old shape is derived from the current one by dropping the columns,
+    /// never by pasting an old `CREATE TABLE`: a copy of the schema would rot
+    /// at the next change and quietly stop testing anything.
+    ///
+    /// The failure mode is what makes this worth a test. A listing whose SELECT
+    /// names a missing column errors, and most callers of these listings are
+    /// best-effort (`let _ = …`), so the symptom lands miles from the cause —
+    /// a mod that imports normally and then never activates, without a word.
+    #[test]
+    fn a_column_added_after_the_fact_reaches_a_database_that_predates_it() {
+        let base = crate::testutil::temp_dir("db-old");
+        let path = base.join("overlay.sqlite");
+        let now = chrono::Local::now().to_rfc3339();
+
+        {
+            let conn = open(&path).unwrap();
+            upsert_mod(
+                &conn,
+                "ks_mazda_mx5",
+                "Car",
+                Some("Mazda"),
+                Some("MX-5"),
+                "h",
+                Some(2015),
+                &now,
+            )
+            .unwrap();
+            for (table, col) in ADDED_LATER {
+                conn.execute(&format!("ALTER TABLE {table} DROP COLUMN {col}"), [])
+                    .unwrap_or_else(|e| panic!("{table}.{col} should be droppable: {e}"));
+            }
+            // Guard the guard: if the listing still worked here, the test would
+            // pass for the wrong reason and prove nothing about `migrate`.
+            assert!(
+                list_mods(&conn).is_err(),
+                "a listing must break on the missing column — otherwise this test proves nothing"
+            );
+        }
+
+        let conn = open(&path).expect("opening an older database");
+        assert_eq!(
+            list_mods(&conn).expect("mods").len(),
+            1,
+            "the migration put the column back, and the row is still there"
+        );
+        list_other_mods(&conn).expect("other_mods");
+        list_subs_by_type(&conn, "SKIN").expect("sub_mods");
+        list_layers(&conn, "x", HostKind::Track).expect("layers");
+    }
 }

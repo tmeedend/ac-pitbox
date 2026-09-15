@@ -508,7 +508,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Enrichissement Wikipédia** | livré ; reste à régler les seuils sur les corrections manuelles de l'utilisateur | `docs/SPEC-wikipedia-fiche-detail.md` |
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |
 | **Refonte navigation et fiches** | neuf lots faits ; second palier à fusionner | `docs/PLAN-refonte-navigation.md` |
-| **Passe documentation** | lots 0 à 5 faits ; restent le socle des renvois à vider et les tests ciblés | `docs/CHANTIERS.md` |
+| **Passe documentation** | lots 0 à 6 faits ; reste le socle des renvois `§` à vider | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre
 

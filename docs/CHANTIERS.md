@@ -680,6 +680,27 @@ de reprendre. En cas d'écart, la spec fait foi.
         vérification que personne ne faisait, par ce qui est vrai : deux
         objets distincts, et une relecture **en même temps** que la
         modification de la règle, jamais après.
+      - **Lot 6 — trois tests là où une erreur détruit des fichiers.**
+        `gamebackup::is_newer` (règle d'or n°5, §4.5.4) n'était couvert par
+        rien : le cas qui compte est l'**égalité de dates** — deux copies
+        tirées de la même archive portent le même horodatage, et un `>=` au
+        lieu d'un `>` ferait gagner le dernier mod déployé une course que
+        personne n'a voulu courir. Vérifié en injectant ce `>=` : le test
+        tombe, avec le message qui l'explique.
+        Côté `overlay`, la découverte est que **`migrate()` n'était exercé par
+        aucun test** — `init()` crée déjà toutes les colonnes que `migrate`
+        ajoute, donc sur une base neuve les `ALTER` échouent tous sans effet et
+        le chemin de migration n'est jamais emprunté. Seule une base
+        **ancienne** l'emprunte, et c'est le cas que personne n'a sous la main.
+        Deux tests : la réouverture (qui rejoue `init` **et** `migrate` à
+        chaque fois, sans marqueur de version — l'idempotence est le design,
+        pas une commodité), et la vraie migration. **La vieille base se
+        fabrique en retirant des colonnes de l'actuelle**, jamais en recopiant
+        un ancien `CREATE TABLE` : une copie du schéma pourrirait au premier
+        changement et cesserait de tester quoi que ce soit. Le test vérifie
+        d'abord que le listing **casse** sans la colonne — sans ça il passerait
+        pour une mauvaise raison — puis qu'`open` la remet et que la ligne
+        survit. Vérifié en retirant `is_unmanaged` de `migrate` : le test tombe.
       - **Lot 4 — maquettes rangées et datées.** Les onze fichiers HTML
         quittent la racine de `docs/` pour `maquettes/` et
         `maquettes/archive/`, avec leur propre index : pour chacune, la date,
@@ -716,10 +737,7 @@ de reprendre. En cas d'écart, la spec fait foi.
          numérotées** des pipelines d'appariement, que le doc énumère sans en
          faire des titres ; soit on leur donne des titres, soit on renvoie à
          la section mère.
-      2. **Lot 6 — tests ciblés.** Idempotence de `overlay::migrate()` sur deux
-         passages et migration depuis une base ancienne (2 tests pour
-         2 379 lignes aujourd'hui) ; l'arbitrage par date de `gamebackup.rs`
-         (règle d'or n°5, 3 tests).
+
       **Deux choses mises de côté avec l'utilisateur, à ne pas glisser dans un
       lot :**
       - **`docs/default-tag-rules-enriched.json` n'est pas ce que l'app

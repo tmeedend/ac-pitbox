@@ -271,4 +271,58 @@ mod tests {
         assert_eq!(std::fs::read(&target).unwrap(), b"NOT-OURS", "intact");
         assert!(!is_replaced(&conn, &target));
     }
+
+    /// Sets a file's modification time, so the arbitration can be tested
+    /// without sleeping. Wall-clock waits make a suite slow and flaky; the
+    /// rule under test is about ordering, not about elapsed time.
+    fn set_mtime(p: &Path, secs_from_epoch: u64) {
+        let f = std::fs::File::options().write(true).open(p).unwrap();
+        f.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs_from_epoch))
+            .unwrap();
+    }
+
+    /// Rule (golden rule n°5, §4.5.4): an older — or equally dated — copy never
+    /// displaces what is already running, and an unreadable date displaces
+    /// nothing either.
+    ///
+    /// This is the corollary that gets forgotten, because it reads like a
+    /// detail: two mods ship the same shared file, and the second must not
+    /// quietly overwrite the first with a staler build. `extras.rs` and
+    /// `others.rs` both ask this question before writing into the game folder,
+    /// and both treat a `false` as "leave it alone".
+    ///
+    /// The equal-dates case is the one worth pinning: two copies extracted from
+    /// the same archive carry the same timestamp, and `>=` instead of `>` would
+    /// make the last mod deployed win a race nobody meant to run.
+    #[test]
+    fn an_older_or_equally_dated_copy_never_displaces_what_is_already_there() {
+        let base = crate::testutil::temp_dir("gb-newer");
+        let old = base.join("old.ini");
+        let new = base.join("new.ini");
+        write(&old, b"old");
+        write(&new, b"new");
+        set_mtime(&old, 1_000);
+        set_mtime(&new, 2_000);
+
+        assert!(is_newer(&new, &old), "a strictly newer copy may replace");
+        assert!(!is_newer(&old, &new), "an older copy never replaces");
+
+        let twin = base.join("twin.ini");
+        write(&twin, b"twin");
+        set_mtime(&twin, 2_000);
+        assert!(
+            !is_newer(&twin, &new),
+            "same date is not newer — otherwise deployment order would decide"
+        );
+
+        let missing = base.join("nope.ini");
+        assert!(
+            !is_newer(&missing, &new),
+            "unreadable source date: in doubt, do not replace"
+        );
+        assert!(
+            !is_newer(&new, &missing),
+            "unreadable target date: in doubt, do not replace"
+        );
+    }
 }
