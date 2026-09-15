@@ -114,7 +114,7 @@ pub fn route_beside_root(path: &Path, mode: ExtractionMode) -> Route {
 fn classify(path: &Path, is_root: bool, mode: ExtractionMode) -> Route {
     if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
         // GUIDs.txt : requis par le moteur audio AC (mapping GUID des .bank
-        // FMOD, §12bis.2) — jamais une annexe malgré son extension .txt.
+        // FMOD, §8.3) — jamais une annexe malgré son extension .txt.
         if name.eq_ignore_ascii_case("GUIDs.txt") {
             return Route::Content;
         }
@@ -323,7 +323,7 @@ pub struct ResourceFile {
 /// Document d'information : notice, changelog, readme. Même famille
 /// d'extensions que le classement à l'import — mais ici pour **signaler** un
 /// fichier, pas pour le déplacer. `GUIDs.txt` en est exclu comme partout
-/// ailleurs : c'est un fichier de fonctionnement du moteur audio (§12bis.2).
+/// ailleurs : c'est un fichier de fonctionnement du moteur audio (§8.3).
 fn is_info_document(path: &Path) -> bool {
     if path
         .file_name()
@@ -722,7 +722,7 @@ mod tests {
 
     #[test]
     fn guids_txt_never_extracted() {
-        // Fichier requis par le moteur audio AC (§12bis.2) : ne doit jamais
+        // Fichier requis par le moteur audio AC (§8.3) : ne doit jamais
         // être traité comme une annexe malgré son extension .txt.
         let base = crate::testutil::temp_dir("res-guids");
         let src = base.join("src");
@@ -784,7 +784,7 @@ mod tests {
         let src = base.join("src");
         make_mod(&src);
         write(&src.join("skins").join("red").join("notes.txt")); // en profondeur : contenu, pas annexe
-        write(&src.join("GUIDs.txt")); // fonctionnel (§12bis.2), jamais une annexe
+        write(&src.join("GUIDs.txt")); // fonctionnel (§8.3), jamais une annexe
         let content = base.join("content");
         let resources = base.join("resources");
 

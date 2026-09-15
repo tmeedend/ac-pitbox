@@ -1,4 +1,4 @@
-//! Commandes des réglages d'interface (§6.2/§8.6) — voir `ui_prefs.rs`.
+//! Commandes des réglages d'interface (§6.2/§11) — voir `ui_prefs.rs`.
 //!
 //! **`async` + `spawn_blocking`, comme tout ce qui touche au disque** (§6.3bis).
 //! Elles étaient synchrones, donc exécutées sur le thread principal, et c'est

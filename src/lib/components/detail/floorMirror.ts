@@ -1,4 +1,4 @@
-// Reflet de la voiture au sol (docs/SPEC-preview-3d-kn5.md §8.1).
+// Reflet de la voiture au sol (docs/SPEC-preview-3d-kn5.md PREVIEW§8.1).
 //
 // **Pourquoi un vrai miroir et pas un matériau brillant** — la question a coûté
 // trois détours, elle mérite d'être tranchée ici une fois pour toutes : un

@@ -25,7 +25,7 @@
     sections?: string[];
     /** Filet de séparation AVANT cette entrée. */
     sep?: boolean;
-    /** Intitulé du rang, posé au-dessus de l'entrée (refonte §3). Les deux
+    /** Intitulé du rang, posé au-dessus de l'entrée (REFONTE§3). Les deux
      * rangs ne classent pas par type de contenu mais par **durée de validité**
      * de ce qu'on y règle : ce qui se décide à chaque session, et ce qui reste
      * vrai jusqu'à nouvel ordre. */
@@ -48,7 +48,7 @@
     { target: "cars", labelKey: "nav.cars" },
     { target: "driver", labelKey: "nav.driver" },
     // Les deux écrans d'add-ons ont disparu : ils classaient par mécanique de
-    // pose, et leur contenu est dans l'inventaire (refonte §3.1).
+    // pose, et leur contenu est dans l'inventaire (REFONTE§3.1).
     { target: "apps", labelKey: "nav.apps", sep: true, group: "nav.groupGame" },
     { target: "others", labelKey: "nav.others" },
     // Deuxième filet : isole les outils.

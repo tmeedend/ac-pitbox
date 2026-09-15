@@ -60,7 +60,7 @@ export const StorageKey = {
    * des fantômes sans objet sur l'écran des circuits. Cette clé-ci n'a jamais
    * connu `localStorage` : elle naît dans `ui_prefs.json`. */
   libraryPinned: (kind: ModKind) => `${PREFIX}.pinned.${kindKey(kind)}`,
-  /** Contexte de recherche de l'inventaire (refonte §4.2) : champ libre,
+  /** Contexte de recherche de l'inventaire (REFONTE§4.2) : champ libre,
    * facettes, regroupement, tri. Quatre clés qui n'ont jamais connu
    * `localStorage` — elles naissent dans `ui_prefs.json`.
    *

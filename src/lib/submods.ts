@@ -1,4 +1,4 @@
-// Pont typé vers les commandes L6 / §12bis (contenu de base + sous-éléments).
+// Pont typé vers les commandes L6 / §8 (contenu de base + sous-éléments).
 import { invoke } from "@tauri-apps/api/core";
 
 export interface SubModRow {
@@ -16,38 +16,38 @@ export interface SubModRow {
   author: string | null;
   /** Taille sur disque, octets. Renseignée par `listSubsByType` (vue transversale), `null` ailleurs. */
   size_bytes: number | null;
-  /** Nom repris à la main (refonte §6.1) : `skin_01` ne dit rien de ce que la
+  /** Nom repris à la main (REFONTE§6.1) : `skin_01` ne dit rien de ce que la
    * livrée montre. `null` tant que rien n'a été saisi — le nom affiché reste
    * alors `name`. */
   display_name_user: string | null;
-  /** Note libre (refonte §9). */
+  /** Note libre (REFONTE§9). */
   notes_user: string | null;
 }
 
-/** Indexe le contenu de base Kunos présent dans content/ (§12bis.1). Renvoie le nb indexé. */
-/** Réindexe le contenu de base (§12bis.1). `resetUserEdits` efface en plus ce
+/** Indexe le contenu de base Kunos présent dans content/ (§8.1). Renvoie le nb indexé. */
+/** Réindexe le contenu de base (§8.1). `resetUserEdits` efface en plus ce
  * que l'utilisateur a saisi dessus (nom, description, tags manuels, favori) —
  * jamais le défaut, et confirmé à l'écran avant d'être envoyé (SESSION§3.1). */
 export function indexStockContent(resetUserEdits = false): Promise<number> {
   return invoke<number>("index_stock_content", { resetUserEdits });
 }
 
-/** Sous-éléments rattachés à une entité (skins/sons d'une voiture, §12bis.3). */
+/** Sous-éléments rattachés à une entité (skins/sons d'une voiture, §8.3). */
 export function listSubMods(parentId: string): Promise<SubModRow[]> {
   return invoke<SubModRow[]>("list_sub_mods", { parentId });
 }
 
-/** Tous les sous-éléments d'un type, vue transversale (§12bis.3). */
+/** Tous les sous-éléments d'un type, vue transversale (§8.3). */
 export function listSubsByType(subType: string): Promise<SubModRow[]> {
   return invoke<SubModRow[]>("list_subs_by_type", { subType });
 }
 
-/** Active un mod de son (bascule exclusive du sfx/, §12bis.2). */
+/** Active un mod de son (bascule exclusive du sfx/, §8.3). */
 export function activateSound(subId: string): Promise<void> {
   return invoke<void>("activate_sound", { subId });
 }
 
-/** Restaure le son d'origine d'une voiture (§12bis.2). */
+/** Restaure le son d'origine d'une voiture (§8.3). */
 export function restoreSound(parentId: string): Promise<void> {
   return invoke<void>("restore_sound", { parentId });
 }
@@ -78,7 +78,7 @@ export function setTrackSkinActive(trackId: string, skinName: string, active: bo
   return invoke<void>("set_track_skin_active", { trackId, skinName, active });
 }
 
-/** Supprime un sous-élément (skin/son) de l'overlay (§12bis.3). */
+/** Supprime un sous-élément (skin/son) de l'overlay (§8.3). */
 export function deleteSubMod(id: string): Promise<void> {
   return invoke<void>("delete_sub_mod", { id });
 }

@@ -638,6 +638,32 @@ de reprendre. En cas d'écart, la spec fait foi.
         détection d'orphelin ne regardait que les fichiers suivis par git, donc
         un composant tout juste créé — celui sur lequel on veut justement être
         prévenu — y échappait. À relancer à chaque règle ajoutée.
+      - **Lot 5a — « Lancement de session » sort dans `SPEC-session.md`.** Le
+        §9 pesait 924 lignes, 38 % de `SPEC.md`. Numérotation refaite : 1 à 5,
+        et les `bis`/`ter` retrouvent leur nature de sous-sujets. 186 renvois
+        repointés vers `SESSION§`. **Deux pièges, attrapés par `check-refs`** :
+        le remplacement a d'abord frappé des renvois **déjà étiquetés**
+        (`PILOTE§9.1` → `PILOTESESSION§1`, 9 cas) ; et **un auto-renvoi porte
+        son étiquette même dans son propre fichier**, sinon « voir §3.2 » et
+        « voir §4.5.3 » parlent de deux documents sans que rien ne le dise.
+      - **Lot 5b — les fossiles, et le §8 retrouve ses sous-sections.** Les
+        `§8.3`/`§8.4`/`§8.5`/`§8.6` du code n'étaient pas du bruit : ce sont
+        des renvois vers « Lancement de session », qui portait le numéro 8
+        dans une structure antérieure — et ils coexistaient avec les `§8.x` de
+        la spec de refonte, qui parlent des couches. **Le fichier tranche**, pas
+        le numéro. Une fois l'espace `§8.x` libéré, le §8 a reçu les cinq
+        sous-sections que 149 renvois `§12bis.*` lui supposaient depuis
+        toujours : le code était **plus précis que la spec**, la réparation
+        était du côté du document. Le socle passe de 348 à 215 entrées.
+        Exploité au passage : **59 renvois écrivaient « refonte §X » en toutes
+        lettres** — le document était dans la phrase, il ne restait qu'à en
+        faire une étiquette.
+      - **Trouvé en réparant, et corrigé** : deux chaînes **visibles par
+        l'utilisateur** portaient un renvoi de spec (« contenu de base Kunos :
+        déjà présent, non activable (§12bis.1). »). Un numéro de section ne
+        veut rien dire pour qui utilise l'app, et celui-là pointait vers une
+        section disparue. Nettoyées dans les six locales, et c'est devenu la
+        septième règle de `check-conventions.mjs`.
       - **Lot 4 — maquettes rangées et datées.** Les onze fichiers HTML
         quittent la racine de `docs/` pour `maquettes/` et
         `maquettes/archive/`, avec leur propre index : pour chacune, la date,
@@ -666,19 +692,19 @@ de reprendre. En cas d'écart, la spec fait foi.
         commenté « **Jamais `scrollIntoView`** » dans deux fichiers — et
         appelé dans deux autres.
       **Reste, dans cet ordre :**
-      1. **Lot 5 — découper `SPEC.md`.** §9 → `SPEC-session.md`, §4 fusionné
-         avec `SPEC-import.md` (aujourd'hui les deux décrivent la même chose
-         avec une règle de préséance, ce qui est une désynchronisation en
-         attente). Et surtout : **rendre à §8 les sous-sections que le code lui
-         suppose déjà.** Les 149 renvois `§12bis.*` désignent les apps, la
-         projection des livrées par junction, le refus d'un mod non géré — que
-         `SPEC.md` traite dans un §8 de 85 lignes sans une seule sous-section.
-         Le code est plus précis que la spec : la réparation est du côté du
-         document, pas du commentaire. Même motif pour `WIKI§4.1.1` à
-         `§4.2.4`, qui désignent les étapes numérotées d'une liste que le doc
-         n'a jamais titrée. Faisable seulement maintenant que `check-refs`
-         vérifie chaque renumérotation.
-      2. **Lot 6 — tests ciblés.** Idempotence de `overlay::migrate()` sur deux
+      1. **Lot 5c — fusionner §4 et `SPEC-import.md`.** Les deux décrivent
+         l'import, avec une règle de préséance (« en cas d'écart, `SPEC.md`
+         fait foi ») — c'est-à-dire une désynchronisation en attente, écrite
+         noir sur blanc. Un seul doit rester normatif.
+      2. **Vider le socle des renvois.** 215 entrées restent, en familles de
+         cinq à onze fichiers : `§3.4`, `§2.2`, `§5.4`, `§6.5`, `§10bis`,
+         `§5bis.1`/`§5bis.2`… Même méthode que pour les `§8.x` — lire les
+         commentaires qui les portent, le fichier tranche, jamais le numéro.
+         Un cas déjà instruit : `WIKI§4.1.1` à `§4.2.4` désignent les **étapes
+         numérotées** des pipelines d'appariement, que le doc énumère sans en
+         faire des titres ; soit on leur donne des titres, soit on renvoie à
+         la section mère.
+      3. **Lot 6 — tests ciblés.** Idempotence de `overlay::migrate()` sur deux
          passages et migration depuis une base ancienne (2 tests pour
          2 379 lignes aujourd'hui) ; l'arbitrage par date de `gamebackup.rs`
          (règle d'or n°5, 3 tests).

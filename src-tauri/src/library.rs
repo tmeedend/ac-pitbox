@@ -192,7 +192,7 @@ pub fn list_cards(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Mo
         .collect())
 }
 
-/// Skin d'une voiture avec sa miniature (§8.6).
+/// Skin d'une voiture avec sa miniature (SESSION§1).
 #[derive(Debug, Clone, Serialize)]
 pub struct SkinItem {
     pub id: String,
@@ -201,7 +201,7 @@ pub struct SkinItem {
     /// `livery.png` (couleurs/motif du skin seul, sans la voiture) — convention
     /// AC reprise par CM pour son propre sélecteur de skin. Bien plus lisible
     /// que `preview` (photo de la voiture entière) une fois écrasé à 20px
-    /// dans un menu déroulant (§8.6) ; utilisé aussi en vignette dans la
+    /// dans un menu déroulant (SESSION§1) ; utilisé aussi en vignette dans la
     /// grille de skins de la fiche détail (§6.3).
     pub livery: Option<String>,
     /// Pilote, numéro et pays **déclarés par la livrée**, tels que le jeu les
@@ -298,7 +298,7 @@ fn read_skins_dir(skins_dir: &Path) -> Vec<SkinItem> {
 /// la version active en bibliothèque (disponible même inactif). Pour une
 /// **voiture de base Kunos** (`is_stock`, sans version bibliothèque), on lit
 /// directement `content/cars/<id>/skins` — là où vivent ses skins (y compris
-/// ceux projetés par junction, §12bis.2).
+/// ceux projetés par junction, §8.3).
 pub fn list_mod_skins(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Vec<SkinItem> {
     let Some(m) = overlay::get_mod(conn, mod_id).ok().flatten() else {
         return Vec::new();

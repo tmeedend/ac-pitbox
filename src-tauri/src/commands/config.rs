@@ -9,7 +9,7 @@ pub fn get_config(app: AppHandle) -> AppConfig {
 }
 
 /// Enregistre la config, puis **réindexe le contenu de base si le dossier du
-/// jeu vient d'être désigné ou a changé** (§12bis.1).
+/// jeu vient d'être désigné ou a changé** (§8.1).
 ///
 /// Sans ça, le scan du contenu Kunos ne tournait qu'au démarrage de l'app, et
 /// seulement si un chemin d'AC était déjà connu — donc jamais au **premier**

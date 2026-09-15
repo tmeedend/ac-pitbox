@@ -44,7 +44,7 @@
    * d'archive : jeu de base ou DLC (`detail.stock_pack`, résolu côté Rust
    * depuis `docs/kunos_content_dates.json`), jamais les deux à la fois.
    *
-   * Un mod installé hors Pit Box (§12bis.1bis) partage `is_stock` sans être du
+   * Un mod installé hors Pit Box (§8.2) partage `is_stock` sans être du
    * contenu de jeu : il ne doit surtout pas hériter du « Jeu de base » par
    * défaut ci-dessous — c'est justement le mensonge que cette distinction est
    * venue corriger. On ne sait pas d'où il vient, et on le dit. */

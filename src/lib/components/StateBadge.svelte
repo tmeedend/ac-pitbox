@@ -17,19 +17,19 @@
   //            d'ailleurs pour ça que le filtre « Actif » remonte le
   //            contenu de base sans rien y changer ici), mais ce n'est pas
   //            l'information que cette pastille doit donner)
-  //   jaune  = en attente (refonte §12) : le mod est actif, mais un autre lui
+  //   jaune  = en attente (REFONTE§12) : le mod est actif, mais un autre lui
   //            dispute l'emplacement et gagne l'arbitrage. À ne pas fondre
   //            dans « inactif » — un mod inactif a été désactivé, celui-ci
   //            n'a rien demandé et reprendra sa place dès que l'autre partira.
   //            C'est l'ambre déjà employé par l'arbre des ajouts au jeu.
-  //   gris   = mod installé hors Pit Box (§12bis.1bis) : présent dans le jeu,
+  //   gris   = mod installé hors Pit Box (§8.2) : présent dans le jeu,
   //            donc chargé, mais l'app ne le gère pas — ni activation, ni
   //            couche, ni écriture. Gris et pas jaune : sur une install déjà
   //            moddée il y en a des centaines, et elles fonctionnent.
   import { t } from "$lib/i18n/index.svelte";
 
   // `unmanaged` l'emporte sur `stock` : les deux sont vrais ensemble côté base
-  // (un mod non géré vit dans content/ comme le contenu de jeu, §12bis.1bis),
+  // (un mod non géré vit dans content/ comme le contenu de jeu, §8.2),
   // et c'est bien « non géré » qu'il faut lire dans ce cas. `pending`, lui,
   // l'emporte sur `active` : les deux sont vrais ensemble par construction —
   // c'est précisément ce que « en attente » veut dire.

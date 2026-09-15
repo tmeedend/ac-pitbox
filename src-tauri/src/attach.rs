@@ -1,4 +1,4 @@
-//! What a mod hangs onto, and what it does (refonte §2).
+//! What a mod hangs onto, and what it does (REFONTE§2).
 //!
 //! Two independent axes, and they are attributes **of a mod**, not of its type:
 //! a driver model is standalone in the general case and grafted onto a car when

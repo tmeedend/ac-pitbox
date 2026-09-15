@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Écran « Compléments » : l'inventaire (refonte §4).
+  // Écran « Compléments » : l'inventaire (REFONTE§4).
   //
   // Tout ce qui n'est pas un contenu autonome, dans une seule liste. Trois
   // écrans le précédaient — Add-ons voiture, Add-ons circuit, et un
@@ -95,7 +95,7 @@
     }
   }
   /**
-   * Le contexte de recherche survit à l'écran (refonte §4.2).
+   * Le contexte de recherche survit à l'écran (REFONTE§4.2).
    *
    * Cliquer une ligne mène ailleurs — la fiche de l'hôte, celle de la livrée —
    * et l'inventaire est **démonté** pendant ce temps : au retour, il repartait

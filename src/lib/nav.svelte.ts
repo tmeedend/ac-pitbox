@@ -1,4 +1,4 @@
-// État de navigation partagé + sélection de session (§8.6). La bibliothèque EST
+// État de navigation partagé + sélection de session (SESSION§1). La bibliothèque EST
 // le sélecteur : ouvrir une voiture/un circuit le définit comme choix de session,
 // affiché en permanence dans le bloc SESSION de la barre latérale (§6.1ter).
 
@@ -56,7 +56,7 @@ interface SessionPicks {
   track: SessionPick | null;
 }
 
-/** Persistance durable (§8.6) : fichier écrit côté Rust (`session_state.rs`,
+/** Persistance durable (SESSION§1) : fichier écrit côté Rust (`session_state.rs`,
  * `std::fs::write` synchrone) plutôt que `localStorage` — voir `loadLegacy`
  * pour le pourquoi du changement. */
 function loadPicks(): Promise<SessionPicks> {
@@ -70,10 +70,10 @@ function savePicks(picks: SessionPicks): void {
 export const nav = $state<{
   section: string;
   prefill: LaunchPrefill | null;
-  /** Demande d'ouverture d'une fiche détail depuis une vue transversale (§12bis.3). */
+  /** Demande d'ouverture d'une fiche détail depuis une vue transversale (§8.3). */
   openMod: string | null;
   /** Livrée à **montrer** en ouvrant la fiche d'une voiture, posée par
-   * l'inventaire quand on y clique une livrée (refonte §4.2).
+   * l'inventaire quand on y clique une livrée (REFONTE§4.2).
    *
    * Montrer, et rien d'autre : surtout pas `selectSkin`, qui écrit la livrée
    * préférée **et** le choix de session. Aller voir une livrée depuis
@@ -83,7 +83,7 @@ export const nav = $state<{
   openSkin: string | null;
   /** Terme de recherche à appliquer à la bibliothèque (ex. filtrer par pack, §4.4). */
   search: string | null;
-  /** Duo de session courant (§8.6) — la bibliothèque le met à jour à l'ouverture. */
+  /** Duo de session courant (SESSION§1) — la bibliothèque le met à jour à l'ouverture. */
   sessionCar: SessionPick | null;
   sessionTrack: SessionPick | null;
   /** Id du mod affiché en fiche pleine page (Library), ou null si aucune n'est
@@ -158,7 +158,7 @@ loadPicks().then((picks) => {
   }
 });
 
-/** Définit le choix de session (persisté) — appelé à l'ouverture d'un mod (§8.6). */
+/** Définit le choix de session (persisté) — appelé à l'ouverture d'un mod (SESSION§1). */
 export function pickSession(kind: "Car" | "Track", pick: SessionPick): void {
   if (kind === "Car") {
     nav.sessionCar = pick;

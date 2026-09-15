@@ -1,4 +1,4 @@
-// Nom lisible d'une couche (refonte §8.3).
+// Nom lisible d'une couche (REFONTE§8.3).
 //
 // Une couche s'appelle `spa2022-release_V1-03.rar` : c'est le nom de l'archive
 // que l'auteur a publiée, et c'est exactement l'objet qui a besoin d'être

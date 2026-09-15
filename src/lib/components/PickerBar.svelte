@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Sélecteur compact de livrée ou de tracé (refonte §7.3).
+  // Sélecteur compact de livrée ou de tracé (REFONTE§7.3).
   //
   // Il remplace une grille de vignettes reléguée en bas de fiche, qu'il fallait
   // faire défiler pour atteindre — alors que c'est un **contrôle** et non de la

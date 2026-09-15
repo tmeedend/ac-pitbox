@@ -1,5 +1,5 @@
 <script lang="ts">
-  // En-tête de fiche, le même pour TOUS les types (refonte §6.1).
+  // En-tête de fiche, le même pour TOUS les types (REFONTE§6.1).
   //
   // Avant lui, cinq fiches, cinq anatomies : la fiche voiture avait une tuile,
   // un nom éditable, un sous-titre et un menu ⋮ ; celles d'app, de mod

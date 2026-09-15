@@ -48,7 +48,7 @@ export interface ModCard {
   gearbox: string | null;
   /** Pack d'origine commun aux mods d'une même archive multi-voitures (§4.4). */
   source_pack: string | null;
-  /** URL d'origine (rempli plus tard par l'extension, §4.4/§12ter). */
+  /** URL d'origine (rempli plus tard par l'extension, §4.4). */
   source_url: string | null;
   /** Auteur de la version active (colonne §6.2). */
   author: string | null;
@@ -61,12 +61,12 @@ export interface ModCard {
   /** Extensions CSP de la version active (colonne circuits §6.2). */
   csp_features: string[];
   /** Indexé depuis `content/` : contenu de base Kunos **ou** mod installé hors
-   * Pit Box — lecture seule, non désactivable (§12bis.1). `is_unmanaged`
+   * Pit Box — lecture seule, non désactivable (§8.1). `is_unmanaged`
    * distingue les deux ; ne jamais présenter un `is_stock` seul comme du
    * contenu de jeu. */
   is_stock: boolean;
   /** Mod installé hors Pit Box, trouvé dans `content/` à l'indexation
-   * (§12bis.1bis) : l'app n'y touche pas — pour le gérer, l'utilisateur retire
+   * (§8.2) : l'app n'y touche pas — pour le gérer, l'utilisateur retire
    * lui-même le dossier du jeu et importe le mod. */
   is_unmanaged: boolean;
   /** Date de publication estimée (dates de fichiers à l'import), remplaçable par L7 (§6.2). */
@@ -97,7 +97,7 @@ export interface ModCard {
   description: string | null;
   /** Badge/logo de la marque (ui/badge.png, voitures), à la place des initiales. */
   badge: string | null;
-  /** Note libre (refonte §9), `null` quand il n'y en a pas. Portée par la carte
+  /** Note libre (REFONTE§9), `null` quand il n'y en a pas. Portée par la carte
    * pour que le filtre « a une note » et la recherche restent côté front, sans
    * aller-retour backend à chaque frappe — même raison que `description`. */
   notes_user: string | null;
@@ -234,15 +234,15 @@ export interface LayerRow {
   /** Ordre de priorité : la plus haute gagne à la superposition. */
   priority: number;
   imported_at: string;
-  /** Nom repris à la main (refonte §8.3) : le nom dérivé de l'archive est
+  /** Nom repris à la main (REFONTE§8.3) : le nom dérivé de l'archive est
    * faillible par construction, donc corrigeable. `null` tant que rien n'a été
    * saisi — c'est alors `layerDisplayName` qui décide de l'affichage. */
   display_name_user: string | null;
-  /** Note libre (refonte §9). */
+  /** Note libre (REFONTE§9). */
   notes_user: string | null;
 }
 
-/** Sous-élément rattaché (skin/son) routé à l'import (§12bis.2). */
+/** Sous-élément rattaché (skin/son) routé à l'import (§8.3). */
 export interface SubImported {
   sub_type: "SKIN" | "TRACK_SKIN" | "SOUND";
   parent_id: string;
@@ -259,7 +259,7 @@ export interface SubImported {
   awaiting_decision?: boolean;
 }
 
-/** Une couche rangée sur une app pendant cet import (§12bis.4). */
+/** Une couche rangée sur une app pendant cet import (§8.4). */
 export interface AppLayerImported {
   app_id: string;
   name: string;
@@ -270,7 +270,7 @@ export interface AppLayerImported {
   replaces_main_script: boolean;
 }
 
-/** App Python importée (§12bis.4). */
+/** App Python importée (§8.4). */
 export interface AppImported {
   name: string;
   resources_extracted: number;
@@ -298,7 +298,7 @@ export interface ArchiveResult {
   subs: SubImported[];
   apps: AppImported[];
   others: OtherImported[];
-  /** Couches posées sur une app (§12bis.4) : ce qui va DANS une app, à part
+  /** Couches posées sur une app (§8.4) : ce qui va DANS une app, à part
    * des ajouts au jeu, qui vont à côté. */
   app_layers?: AppLayerImported[];
   /** Fichiers livrés à côté du mod et rattachés à lui (§4.5.3). */
@@ -404,7 +404,7 @@ export function listLayerFiles(id: string): Promise<LayerFile[]> {
 }
 
 /** Ouvre le dossier d'une couche dans l'explorateur (§4.4). */
-/** Un tracé apporté par une couche active (refonte §7.7). */
+/** Un tracé apporté par une couche active (REFONTE§7.7). */
 export interface LayoutOrigin {
   layout: string;
   layer_id: string;

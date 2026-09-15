@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { layerDisplayName } from "./layerName";
 
-// A layer's derived name (§8.3). Derived, therefore fallible, therefore
+// A layer's derived name (REFONTE§8.3). Derived, therefore fallible, therefore
 // correctable by hand — but the derivation still has to be conservative: every
 // extra rule is a chance to drop a word that mattered.
 describe("layerDisplayName", () => {

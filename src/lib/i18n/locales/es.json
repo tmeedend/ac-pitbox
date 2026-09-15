@@ -443,7 +443,7 @@
     "onlyEntity": "Por ahora es el único elemento de este pack.",
     "filterByPack": "Filtrar por este pack",
     "uninstallPack": "Desinstalar el pack",
-    "layersNote": "Importadas encima de esta base sin sustituirla — la base queda intacta (§4.4).",
+    "layersNote": "Importadas encima de esta base sin sustituirla — la base queda intacta.",
     "layerCounts": "{added} añadidos · {overwritten} sobrescritos",
     "layerDeleteTitle": "Eliminar la capa",
     "layerDeleteConfirm": "¿Eliminar la capa « {name} »? La base no se toca.",

@@ -232,7 +232,7 @@ pub fn set_mod_field(db: State<Db>, id: String, field: String, value: Option<Str
     crate::overlay::set_mod_field(&conn, &id, &field, value.as_deref()).map_err(|e| e.to_string())
 }
 
-/// Skins d'une voiture pour la fiche détail (mod ou voiture de base, §6.3/§12bis).
+/// Skins d'une voiture pour la fiche détail (mod ou voiture de base, §6.3/§8).
 #[tauri::command]
 pub fn list_mod_skins(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<crate::library::SkinItem>, String> {
     let cfg = crate::config::load(&app);

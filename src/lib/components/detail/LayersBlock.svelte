@@ -29,7 +29,7 @@
   }: {
     modId: string;
     /** Nom lisible de l'hôte : sert à retirer son préfixe du nom dérivé d'une
-     * couche (§8.3), quand l'archive le répète. */
+     * couche (REFONTE§8.3), quand l'archive le répète. */
     hostName?: string | null;
     /** Espace de noms de l'hôte (§4.4). Une app vit dans une autre table qu'un
      * mod : rien n'empêche un circuit et une app de porter le même id, et sans
@@ -40,7 +40,7 @@
     /** La recomposition de content/ change l'état du mod : la fiche se relit. */
     onchanged: () => void;
     onerror: (message: string) => void;
-    /** Ouvre la fiche de la couche (§8.4). C'est là que vit le détail de ce
+    /** Ouvre la fiche de la couche (REFONTE§8.4). C'est là que vit le détail de ce
      * qu'elle apporte — cette liste-ci ne fait que poser, activer et
      * ordonner. */
     onopen: (layer: LayerRow, siblingCount: number) => void;
@@ -63,7 +63,7 @@
     layers = await listLayers(modId, hostKind);
   }
 
-  // La liste des fichiers apportés **ne se déplie plus ici** (§8.2) : elle
+  // La liste des fichiers apportés **ne se déplie plus ici** (REFONTE§8.2) : elle
   // vivait en monospace au milieu de la liste des couches — 392 lignes pour
   // une seule, poids par fichier compris. Elle est dans la fiche de la couche,
   // où elle est groupée par dossier et où ce qui écrase la base vient en

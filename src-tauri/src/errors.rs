@@ -75,7 +75,7 @@ pub const NOT_A_DRIVER_MODEL: &str = "errors.notADriverModel";
 pub const TEMP_DIR_UNAVAILABLE: &str = "errors.tempDirUnavailable";
 // Aperçu 3D des voitures (docs/SPEC-preview-3d-kn5.md §7.1). Aucune de ces
 // erreurs ne doit ressembler à une panne : l'aperçu 3D est un bonus visuel,
-// l'UI retombe sur `preview.jpg` avec un badge discret (§8.5).
+// l'UI retombe sur `preview.jpg` avec un badge discret (PREVIEW§8.5).
 pub const WIKI_NOT_AN_ENTITY: &str = "errors.wikiNotAnEntity";
 pub const PREVIEW_MODEL_NOT_FOUND: &str = "errors.previewModelNotFound";
 pub const PREVIEW_PROTECTED: &str = "errors.previewProtected";

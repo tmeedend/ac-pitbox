@@ -1,5 +1,5 @@
 //! User-entered metadata commands: one note and one display name, for every
-//! kind of entity (refonte §6.1 and §9).
+//! kind of entity (REFONTE§6.1 and §9).
 //!
 //! One pair of commands rather than one pair per type: the frontend says which
 //! kind it is holding, and `usermeta` resolves the table. Adding an entity type

@@ -752,7 +752,7 @@
   }
 
   // `livery.png` (couleurs/motif du skin seul) plutôt que `preview` (photo de
-  // la voiture entière, §8.6) : à 20px dans ce menu compact, la voiture
+  // la voiture entière, SESSION§1) : à 20px dans ce menu compact, la voiture
   // entière écrasée était illisible — repli sur `preview` si le skin n'a pas
   // de livery (convention pas garantie sur tous les skins).
   const carSkinOptions = $derived(
@@ -1165,7 +1165,7 @@
         {:else if nav.section === "race"}
           <Launch />
         {:else if nav.section === "apps"}
-          <!-- Les apps ont leur écran (refonte §3.2) : une app a un nom, une
+          <!-- Les apps ont leur écran (REFONTE§3.2) : une app a un nom, une
                identité, on l'installe volontairement — elle n'est la dépendance
                de rien, et n'avait rien à faire dans un tiroir avec les polices
                et les fragments de config. -->

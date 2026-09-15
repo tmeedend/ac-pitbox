@@ -91,7 +91,7 @@
   let error = $state("");
   let info = $state("");
   // Ce qui n'a pas pu être rétabli au chargement d'une session enregistrée
-  // (§8.4bis) : bandeau dans la page, au même endroit que le retour de
+  // (SESSION§3.5) : bandeau dans la page, au même endroit que le retour de
   // lancement — pas une popup. Il n'y a rien à décider, juste à savoir que la
   // session ne sera pas exactement celle qui avait été enregistrée.
   let warning = $state("");
@@ -141,7 +141,7 @@
     ideal_line: false,
   });
 
-  // --- Saison optionnelle (§8.6bis) : associe une date au preset Quick
+  // --- Saison optionnelle (SESSION§3.3) : associe une date au preset Quick
   // Drive (udt/dtv), best-effort côté CSP (voir RaceSetup.season_date côté back). ---
   // Mois/jour représentatifs (milieu de saison, hémisphère nord).
   const SEASON_MID: Record<Exclude<Season, "">, [number, number]> = {
@@ -168,7 +168,7 @@
     }
   }
   /** Choix de saison par l'utilisateur (bouton) : la saison influence la
-   * température recommandée (§8.6bis) — la changer remet des valeurs
+   * température recommandée (SESSION§3.3) — la changer remet des valeurs
    * cohérentes, comme un changement de météo. */
   function selectSeason(next: Season) {
     applySeason(next);
@@ -196,7 +196,7 @@
       })
       .catch(() => (trackCspFeatures = []));
   });
-  // --- Course du soleil du circuit (§8.6ter) : alimente la bande jour/nuit
+  // --- Course du soleil du circuit (SESSION§3.3) : alimente la bande jour/nuit
   // sous le curseur d'heure. Recalculée au changement de circuit, de layout ou
   // de date de saison — les trois entrées dont dépendent lever et coucher. ---
   let sun = $state<TrackSun | null>(null);
@@ -251,7 +251,7 @@
   const gridMatches = $derived(buildPredicate(gridDefs, gridFilters, gridIndex.ctx));
   const gridPool = $derived(carPool.filter((c) => gridMatches(c) && matchesQuery(c, gridQuery)));
 
-  // --- Skins par voiture (cache, §8.6/§8.6bis) : chargés à la demande pour
+  // --- Skins par voiture (cache, SESSION§3/SESSION§3.3) : chargés à la demande pour
   // assigner un skin à chaque adversaire, et réutilisés par la popup. ---
   let skinsByCarId = $state<Record<string, SkinItem[]>>({});
   async function ensureSkins(carId: string): Promise<SkinItem[]> {
@@ -636,15 +636,15 @@
     return !cats.some((c) => c.replace(/^#/, "").toLowerCase() === "circuit");
   });
 
-  // --- Fourchette de niveau IA (§8.6) : bornes réutilisées par le réglage
+  // --- Fourchette de niveau IA (SESSION§3) : bornes réutilisées par le réglage
   // individuel d'un adversaire (setOpponentLevel) — le curseur double lui-même
   // est rendu par OpponentsBlock. ---
   const RANGE_MIN = AI_LEVEL_MIN;
   const RANGE_MAX = AI_LEVEL_MAX;
 
-  // --- Météo (intentions + température/vent, §8.5/§8.6) ---
+  // --- Météo (intentions + température/vent, SESSION§3.3/SESSION§3) ---
   // Air, piste et vent sont des valeurs **recommandées** par météo+saison, mais
-  // restent modifiables à la main (§8.6bis) : `tempsOverridden`/`windOverridden`
+  // restent modifiables à la main (SESSION§3.3) : `tempsOverridden`/`windOverridden`
   // mémorisent que l'utilisateur a corrigé les valeurs proposées, pour ne plus
   // les écraser tant que la météo ou la saison ne change pas. Un changement de
   // météo ou de saison remet toujours des valeurs recommandées fraîches (reset
@@ -687,15 +687,15 @@
       refreshConditions(false);
     }
   });
-  // --- Mémorisation de la sélection + presets (§8.4/§8.6) ---
-  // `opponents` en fait partie (§8.6ter, bug réel) : sans elle, revenir sur cet
+  // --- Mémorisation de la sélection + presets (SESSION§3/SESSION§3) ---
+  // `opponents` en fait partie (SESSION§3.3, bug réel) : sans elle, revenir sur cet
   // écran après être allé choisir un circuit/une voiture démonte puis remonte
   // Launch.svelte — `setup.opponents` (état local) repart de zéro, et
   // `applyPreset` régénère alors un plateau aléatoire à la place de celui,
   // potentiellement construit à la main (mode « libre »), qu'avait l'utilisateur.
   //
   // Persisté côté Rust (`launch_state.json`, écriture synchrone), pas en
-  // `localStorage` : même bug que le duo voiture/circuit (§8.6, voir
+  // `localStorage` : même bug que le duo voiture/circuit (SESSION§3, voir
   // `nav.svelte.ts`/`session_state.rs`) — `localStorage` n'est pas garanti
   // synchrone sur disque côté WebView2, ce qui perdait les réglages de
   // session à la fermeture de l'app plutôt qu'au prochain changement d'onglet.
@@ -710,7 +710,7 @@
     player_restrictor: number;
   }
 
-  // --- Presets de session par type (§8.4) ---
+  // --- Presets de session par type (SESSION§3) ---
   interface Persisted {
     /** Centre et écart (§2.9). Un preset d'avant porte encore `ai_level_min`
      * et `ai_level_max` : `applyPreset` les convertit, il ne les jette pas. */
@@ -887,7 +887,7 @@
     }
     // Ne remplit que s'il n'y a vraiment rien à préserver (première visite
     // de l'écran course/trackday, ou aucun adversaire restauré) — jamais en
-    // écrasant silencieusement un plateau déjà construit (§8.6ter, bug réel).
+    // écrasant silencieusement un plateau déjà construit (SESSION§3.3, bug réel).
     //
     // `fillGrid` et non `regenerateGrid` : celle-ci **garde les voitures** et
     // ne retire au sort que ce qui est posé dessus, donc sur un plateau vide
@@ -969,7 +969,7 @@
     if (ready && !applying && selectedIntent) savePreset();
   });
 
-  // --- Chargement + résolution des défauts (§8.6) ---
+  // --- Chargement + résolution des défauts (SESSION§3) ---
   onMount(async () => {
     [weathers, libCards, trackStateList, nationalityList] = await Promise.all([
       weatherOptions(),
@@ -1004,7 +1004,7 @@
     // d'un geste pour repasser en `Auto`.
     if (saved.opponents?.length) setup.opponents = saved.opponents.map(restoreOpponent);
 
-    // La bibliothèque EST le sélecteur (§8.6) : voiture/circuit viennent du duo
+    // La bibliothèque EST le sélecteur (SESSION§3) : voiture/circuit viennent du duo
     // de session choisi dans les bibliothèques — rien à choisir ici.
     syncFromSession();
     const first = weathers.find((w) => w.available);
@@ -1018,13 +1018,13 @@
     if (!hasPersisted) persistLaunchState();
   });
 
-  // Applique le duo de session (§8.6) au setup : voiture, skin piloté, circuit,
+  // Applique le duo de session (SESSION§3) au setup : voiture, skin piloté, circuit,
   // layout. Repli sur le 1er installé si aucune sélection.
   function syncFromSession() {
     const c = nav.sessionCar;
     const tr = nav.sessionTrack;
     setup.car_id = c?.id ?? carPool[0]?.id_interne ?? "";
-    // Skin de session choisi sur la fiche (§8.6), repli sur mémorisé.
+    // Skin de session choisi sur la fiche (SESSION§3), repli sur mémorisé.
     setup.car_skin = c?.skin ?? (c ? getPreferredSkin(c.id)?.id ?? null : null);
     setup.track_id = tr?.id ?? "";
     setup.track_layout = tr?.layout ?? null;
@@ -1073,7 +1073,7 @@
   });
 
   // Lancement immédiat demandé depuis le bouton rouge « Démarrer la session »
-  // de la barre latérale (§8.6bis) : réactif plutôt que dans onMount, pour
+  // de la barre latérale (SESSION§3.3) : réactif plutôt que dans onMount, pour
   // couvrir aussi bien l'arrivée fraîche sur cet écran que le cas où il est
   // déjà ouvert (auquel cas onMount ne se redéclenche pas).
   $effect(() => {
@@ -1165,10 +1165,10 @@
     }
   }
 
-  // --- Sessions sauvegardées nommées (§8.4bis) : instantané complet des
+  // --- Sessions sauvegardées nommées (SESSION§3.5) : instantané complet des
   // réglages (adversaires, météo, options…), rappelable par nom — distinct
   // des presets automatiques par type. Ne touche pas au duo voiture/circuit
-  // courant (géré par la bibliothèque, §8.6) : seuls les réglages sont repris.
+  // courant (géré par la bibliothèque, SESSION§3) : seuls les réglages sont repris.
   // La liste (carte « Sessions enregistrées ») est filtrée par type — un
   // effet la recharge à chaque changement d'onglet, et le save/delete la
   // rafraîchissent en plus puisqu'ils ne changent pas le type. ---
@@ -1231,7 +1231,7 @@
     sessionDialog = null;
   }
 
-  /** Charge une session enregistrée (§8.4bis) : réglages **et** duo de session
+  /** Charge une session enregistrée (SESSION§3.5) : réglages **et** duo de session
    * (voiture + skin piloté, circuit + tracé + skins de circuit).
    *
    * Rien n'est bloquant ici : un mod supprimé depuis la sauvegarde laisse la
@@ -1274,7 +1274,7 @@
   }
 
   /** Rétablit la voiture pilotée et son skin. Passe par `pickSession` et non
-   * par `setup` : le duo de session est la source de vérité (§8.6), l'effet de
+   * par `setup` : le duo de session est la source de vérité (SESSION§3), l'effet de
    * resynchronisation réécrirait sinon `setup.car_id` avec la voiture restée
    * dans la barre latérale. */
   async function restoreCar(carId: string, skinId: string | null, warnings: string[]) {

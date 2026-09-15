@@ -1,4 +1,4 @@
-//! Sunrise and sunset for the session time slider (§8.6ter).
+//! Sunrise and sunset for the session time slider (SESSION§3.3).
 //!
 //! Picking "the lap that starts at sunset" is only useful if the times shown
 //! are the ones the game will actually render. So this module does not invent
@@ -390,7 +390,7 @@ mod tests {
         (hours * 60.0 - (expected_h * 60.0 + expected_m)).abs()
     }
 
-    // §8.6ter — sunrise/sunset must match the real world within a couple of
+    // SESSION§3.3 — sunrise/sunset must match the real world within a couple of
     // minutes, otherwise "start at sunset" puts the car in the dark. Reference
     // values: Monza, 15 July 2026, CEST (UTC+2) — 05:47 / 21:07.
     #[test]
@@ -472,7 +472,7 @@ mod tests {
         assert_eq!(utc_offset_hours(Some("Not/AZone"), 139.7, date(2026, 7, 15)), 9.0);
     }
 
-    // §8.6ter — ALLOW_ADJUSTMENTS decides which date the sun follows, and the
+    // SESSION§3.3 — ALLOW_ADJUSTMENTS decides which date the sun follows, and the
     // four documented values do not agree with each other.
     #[test]
     fn seasonal_setting_decides_the_date_basis() {

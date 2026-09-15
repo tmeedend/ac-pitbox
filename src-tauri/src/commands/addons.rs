@@ -1,9 +1,9 @@
-//! Commandes des add-ons (§12bis) : contenu de base Kunos, skins, skins de
+//! Commandes des add-ons (§8) : contenu de base Kunos, skins, skins de
 //! circuit, sons et apps Python/Lua.
 
 use super::prelude::*;
 
-/// Indexe le contenu de base Kunos présent dans content/ (§12bis.1).
+/// Indexe le contenu de base Kunos présent dans content/ (§8.1).
 ///
 /// `reset_user_edits` : efface aussi ce que l'utilisateur a saisi sur ce
 /// contenu (SESSION§3.1). Absent = préserver, le seul défaut acceptable — c'est le
@@ -16,14 +16,14 @@ pub fn index_stock_content(app: AppHandle, db: State<Db>, reset_user_edits: Opti
     crate::stock::index_stock_content(&conn, &cfg, &rules, reset_user_edits.unwrap_or(false))
 }
 
-/// Sous-éléments rattachés à une entité (skins/sons d'une voiture, §12bis.3).
+/// Sous-éléments rattachés à une entité (skins/sons d'une voiture, §8.3).
 #[tauri::command]
 pub fn list_sub_mods(db: State<Db>, parent_id: String) -> Result<Vec<crate::overlay::SubModRow>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::overlay::list_subs_for_parent(&conn, &parent_id).map_err(|e| e.to_string())
 }
 
-/// Tous les sous-éléments d'un type, pour la vue transversale (§12bis.3) —
+/// Tous les sous-éléments d'un type, pour la vue transversale (§8.3) —
 /// taille sur disque incluse (regroupements pesés côté UI).
 #[tauri::command]
 pub fn list_subs_by_type(
@@ -81,7 +81,7 @@ pub fn set_track_skin_active(
     crate::submods::set_track_skin_active(&conn, &cfg, &track_id, &skin_name, active)
 }
 
-/// Active un mod de son (bascule exclusive du sfx/, §12bis.2).
+/// Active un mod de son (bascule exclusive du sfx/, §8.3).
 #[tauri::command]
 pub fn activate_sound(app: AppHandle, db: State<Db>, sub_id: String) -> Result<(), String> {
     let cfg = crate::config::load(&app);
@@ -266,7 +266,7 @@ pub fn sound_detail(app: AppHandle, db: State<Db>, sub_id: String) -> Result<cra
     crate::enginesound::detail(&conn, &cfg, &sub_id)
 }
 
-/// Fiche d'une livrée (§12bis.2), voiture ou circuit : ce qu'elle habille, ce
+/// Fiche d'une livrée (§8.3), voiture ou circuit : ce qu'elle habille, ce
 /// qu'elle pèse, ses fichiers, et si le jeu la voit. Lue à la demande pour la
 /// même raison que la fiche d'un son — un dossier de livrée change sous nos
 /// pieds, rien de tout cela n'a sa place en base.
@@ -365,7 +365,7 @@ pub fn read_sound_resource(
     )?))
 }
 
-/// Restaure le son d'origine d'une voiture (§12bis.2).
+/// Restaure le son d'origine d'une voiture (§8.3).
 #[tauri::command]
 pub fn restore_sound(app: AppHandle, db: State<Db>, parent_id: String) -> Result<(), String> {
     let cfg = crate::config::load(&app);
@@ -373,7 +373,7 @@ pub fn restore_sound(app: AppHandle, db: State<Db>, parent_id: String) -> Result
     crate::submods::restore_sound(&conn, &cfg, &parent_id)
 }
 
-/// Supprime proprement un sous-élément (skin/son) : junction + fichiers + overlay (§12bis.3).
+/// Supprime proprement un sous-élément (skin/son) : junction + fichiers + overlay (§8.3).
 #[tauri::command]
 pub fn delete_sub_mod(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
     let cfg = crate::config::load(&app);
@@ -381,7 +381,7 @@ pub fn delete_sub_mod(app: AppHandle, db: State<Db>, id: String) -> Result<(), S
     crate::submods::remove_sub(&conn, &cfg, &id)
 }
 
-/// Supprime proprement une app : junction + fichiers + overlay (§12bis.4).
+/// Supprime proprement une app : junction + fichiers + overlay (§8.4).
 #[tauri::command]
 pub fn delete_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
     let cfg = crate::config::load(&app);
@@ -389,7 +389,7 @@ pub fn delete_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), Strin
     crate::apps::remove_app(&conn, &cfg, &id)
 }
 
-/// Liste les apps (Python ou Lua/CSP) avec leur état d'activation (§12bis.4).
+/// Liste les apps (Python ou Lua/CSP) avec leur état d'activation (§8.4).
 #[tauri::command]
 pub fn list_apps(app: AppHandle, db: State<Db>) -> Result<Vec<crate::apps::AppItem>, String> {
     let cfg = crate::config::load(&app);
@@ -398,7 +398,7 @@ pub fn list_apps(app: AppHandle, db: State<Db>) -> Result<Vec<crate::apps::AppIt
 }
 
 /// Active une app (junction vers apps/python/ ou apps/lua/ selon le langage
-/// détecté, §12bis.4).
+/// détecté, §8.4).
 #[tauri::command]
 pub fn activate_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
     let cfg = crate::config::load(&app);
@@ -406,7 +406,7 @@ pub fn activate_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), Str
     crate::apps::activate_app(&conn, &cfg, &id)
 }
 
-/// Désactive une app (§12bis.4).
+/// Désactive une app (§8.4).
 #[tauri::command]
 pub fn deactivate_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
     let cfg = crate::config::load(&app);

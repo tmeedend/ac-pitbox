@@ -1,4 +1,4 @@
-// La flaque de lumière du sol du studio (docs/SPEC-preview-3d-kn5.md §8.1).
+// La flaque de lumière du sol du studio (docs/SPEC-preview-3d-kn5.md PREVIEW§8.1).
 //
 // Extrait de `CarPreview3D` le jour où les vignettes de la grille en ont eu
 // besoin aussi (SPEC-grille §5.6) : le sol du preset Vitrine est exactement

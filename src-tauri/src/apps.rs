@@ -1,4 +1,4 @@
-//! Apps Python ou Lua/CSP d'AC (§12bis.4) : type **autonome** (ni voiture, ni
+//! Apps Python ou Lua/CSP d'AC (§8.4) : type **autonome** (ni voiture, ni
 //! circuit, ni sous-élément). Stockées dans la bibliothèque, activables/
 //! désactivables par junction comme le reste, vers `<ac>/apps/python/<id>` ou
 //! `<ac>/apps/lua/<id>` selon le langage détecté (`app_lang`). Pas de fiche ni
@@ -33,15 +33,15 @@ pub struct AppItem {
     /// colonne. Affiché sur la fiche : c'est ce qui dit si l'app suit la
     /// convention historique d'AC ou celle de CSP, et donc où elle est posée.
     pub lang: String,
-    /// Nom repris à la main (refonte §6.1) : le titre de la fiche n'est plus le
+    /// Nom repris à la main (REFONTE§6.1) : le titre de la fiche n'est plus le
     /// nom de dossier de l'app.
     pub display_name_user: Option<String>,
-    /// Note libre (refonte §9).
+    /// Note libre (REFONTE§9).
     pub notes_user: Option<String>,
 }
 
 /// Sous-dossier `apps/<langue>/` où pointe la junction d'activation d'une app
-/// (§12bis.4) : `lua` si les fichiers stockés incluent un script `<id>.lua`
+/// (§8.4) : `lua` si les fichiers stockés incluent un script `<id>.lua`
 /// (convention CSP), sinon `python` (convention historique `<id>.py`, aussi
 /// le repli si aucun des deux n'est trouvé). Déduit des fichiers réellement
 /// stockés plutôt que d'une colonne overlay dédiée — pas de migration de
@@ -58,7 +58,7 @@ pub(crate) fn app_lang(stored_dir: &Path, id: &str) -> &'static str {
 /// Un chemin de jeu qui vise **l'intérieur** du dossier d'une app :
 /// `apps/<lang>/<AppId>[/<reste>]` → (`AppId`, `<reste>`).
 ///
-/// C'est ce qui sépare une **couche d'app** (§12bis.4) d'un ajout au jeu
+/// C'est ce qui sépare une **couche d'app** (§8.4) d'un ajout au jeu
 /// (§4.5.3) : ces fichiers ne sont pas posés *à côté* de l'app, ils sont posés
 /// **dedans**, et c'est très exactement la définition d'une couche. Les traiter
 /// comme des ajouts au jeu produisait deux défauts — le dossier de l'app créé
@@ -91,7 +91,7 @@ pub(crate) fn app_link(cfg: &AppConfig, id: &str, lang: &str) -> Option<PathBuf>
         .map(|ac| ac.join("apps").join(lang).join(id))
 }
 
-/// Importe les apps détectées : stockage bibliothèque + enregistrement (§12bis.4).
+/// Importe les apps détectées : stockage bibliothèque + enregistrement (§8.4).
 pub fn import_apps(
     conn: &Connection,
     library: &Path,
@@ -150,7 +150,7 @@ pub fn list_apps(conn: &Connection, cfg: &AppConfig) -> Result<Vec<AppItem>, Str
             let stored = crate::libpath::resolve(cfg.library_path.as_deref(), &a.library_path);
             let lang = stored.as_deref().map(|d| app_lang(d, &a.id)).unwrap_or("python");
             // Même définition d'« active » que `is_app_active` : junction pour
-            // une app nue, arbre composé dès qu'une couche l'est (§12bis.4).
+            // une app nue, arbre composé dès qu'une couche l'est (§8.4).
             // La dupliquer ici affichait « inactive » une app pourtant posée.
             let active = is_app_active(cfg, &a.id);
             AppItem {
@@ -168,7 +168,7 @@ pub fn list_apps(conn: &Connection, cfg: &AppConfig) -> Result<Vec<AppItem>, Str
 
 /// Active une app dans `<ac>/apps/<lang>/<id>` : junction vers le dossier
 /// bibliothèque quand elle est nue, arbre composé par hardlinks dès qu'une
-/// couche est active (§12bis.4, même règle qu'au §2 pour les mods).
+/// couche est active (§8.4, même règle qu'au §2 pour les mods).
 pub fn activate_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
     let app = overlay::get_app(conn, id)
         .map_err(|e| e.to_string())?
@@ -215,7 +215,7 @@ pub fn activate_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), 
 /// langage se déduit des fichiers stockés ([`app_lang`]), et un appelant qui
 /// n'a pas la bibliothèque sous la main n'a pas à le savoir.
 ///
-/// **Les deux formes de déploiement comptent** (§12bis.4) : junction pour une
+/// **Les deux formes de déploiement comptent** (§8.4) : junction pour une
 /// app nue, arbre composé marqué dès qu'une couche est active. Ne tester que la
 /// junction ferait passer pour inactive toute app à couche — et `recompose`,
 /// qui s'appuie là-dessus, refuserait alors de la reprojeter.
@@ -257,7 +257,7 @@ pub fn deactivate_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<()
 }
 
 /// Supprime proprement une app : désactive (retire la junction), efface les
-/// fichiers de bibliothèque, puis la ligne overlay (§12bis.4).
+/// fichiers de bibliothèque, puis la ligne overlay (§8.4).
 pub fn remove_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
     let app = overlay::get_app(conn, id)
         .map_err(|e| e.to_string())?
@@ -387,7 +387,7 @@ mod tests {
 
     #[test]
     fn an_app_with_a_layer_is_composed_instead_of_junctioned() {
-        // Règle (§12bis.4) : une app nue reste jonctionnée — c'est plus léger et
+        // Règle (§8.4) : une app nue reste jonctionnée — c'est plus léger et
         // c'est ce qui existait — mais dès qu'une couche est active, elle bascule
         // en composition par hardlinks. Même règle qu'au §2 pour les mods, et
         // pour la même raison physique : une junction ne pointe que vers UNE

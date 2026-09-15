@@ -6,7 +6,7 @@ import { PAUSE_SESSION, pauseGridThumbs } from "./gridThumbs.svelte";
 
 export type SessionType = "practice" | "hotlap" | "race" | "trackday";
 
-/** Départ en Practice (§8.4) : "pit"/"track"/"hotlap" → `StartType` du preset
+/** Départ en Practice (SESSION§3) : "pit"/"track"/"hotlap" → `StartType` du preset
  * Quick Drive ("PIT"/"TRACK"/"HOTLAP_START", voir `PracticeStart` côté Rust). */
 export type PracticeStart = "pit" | "track" | "hotlap";
 
@@ -170,7 +170,7 @@ export function trackStates(): Promise<TrackStateOption[]> {
   return invoke<TrackStateOption[]>("track_states");
 }
 
-/** Saison optionnelle associée à une session (§8.6bis) — influence la
+/** Saison optionnelle associée à une session (SESSION§3.3) — influence la
  * température recommandée et, best-effort côté CSP, le rendu (arbres,
  * neige). "" = aucune saison choisie. */
 export type Season = "" | "spring" | "summer" | "autumn" | "winter";
@@ -275,7 +275,7 @@ export interface RaceSetup {
   road_c: number | null;
   wind_speed_kmh: number | null;
   wind_direction_deg: number | null;
-  /** Saison optionnelle (§8.6bis) — voir season_date pour la valeur réellement écrite. */
+  /** Saison optionnelle (SESSION§3.3) — voir season_date pour la valeur réellement écrite. */
   season: string | null;
   /** Date ISO (YYYY-MM-DD) associée à la saison choisie ; best-effort côté preset Quick Drive (udt/dtv). */
   season_date: string | null;
@@ -385,7 +385,7 @@ export interface WeatherOption {
   wet: boolean;
 }
 
-/** Température + vent implicites (§8.5/§8.6) — jamais saisis manuellement. */
+/** Température + vent implicites (SESSION§3.3/SESSION§3) — jamais saisis manuellement. */
 export interface ImplicitConditions {
   ambient: number;
   road: number;
@@ -401,7 +401,7 @@ export function weatherConditions(intent: string, hour: number, season: string |
   return invoke<ImplicitConditions>("weather_conditions", { intent, hour, season });
 }
 
-/** Course du soleil sur le circuit choisi (§8.6ter), telle que CSP la
+/** Course du soleil sur le circuit choisi (SESSION§3.3), telle que CSP la
  * calculera : coordonnées et fuseau de `data_track_params.ini`, date effective
  * décidée par `[SEASONS] ALLOW_ADJUSTMENTS`. Toutes les heures sont en heures
  * décimales sur l'horloge locale du circuit ; `null` quand le soleil ne passe
@@ -467,7 +467,7 @@ export function onAcRunning(handler: (running: boolean) => void): Promise<() => 
   return listen<boolean>("ac://running", (event) => handler(event.payload));
 }
 
-/** Ouvre Content Manager sans argument (§12bis.5). */
+/** Ouvre Content Manager sans argument (§7.2). */
 export function openContentManager(): Promise<void> {
   return invoke<void>("open_content_manager");
 }

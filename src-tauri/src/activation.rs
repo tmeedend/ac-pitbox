@@ -206,7 +206,7 @@ pub fn activate(conn: &Connection, cfg: &AppConfig, mod_id: &str, version_id: Op
     if m.is_stock {
         // Deux raisons distinctes de refuser, deux messages : le contenu de
         // base est toujours là par nature, un mod non géré attend d'être
-        // retiré du jeu puis importé (§12bis.1bis) — dire « contenu de base »
+        // retiré du jeu puis importé (§8.2) — dire « contenu de base »
         // à quelqu'un qui regarde son propre mod ne lui apprend rien, et ne
         // lui dit pas ce qu'il peut faire.
         return Err(if m.is_unmanaged {
@@ -597,7 +597,7 @@ mod tests {
         assert!(carv.join("data.txt").is_file(), "bibliothèque intacte");
     }
 
-    /// Rule (§12bis.1bis): a mod installed outside Pit Box is refused for
+    /// Rule (§8.2): a mod installed outside Pit Box is refused for
     /// activation like base content — the app owns neither folder — but with
     /// its own message. Being told "Kunos base content" about one's own mod
     /// explains nothing.

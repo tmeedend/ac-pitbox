@@ -139,9 +139,9 @@ export interface SoundDetail {
   isActive: boolean;
   removable: boolean;
   sizeBytes: number;
-  /** Nom repris à la main (refonte §6.1), `null` tant que rien n'a été saisi. */
+  /** Nom repris à la main (REFONTE§6.1), `null` tant que rien n'a été saisi. */
   displayNameUser: string | null;
-  /** Note libre (refonte §9). */
+  /** Note libre (REFONTE§9). */
   notesUser: string | null;
   /** `null` quand le bank n'a pas pu être ouvert : la fiche le dit au lieu de
    * faire croire à un mod vide. */

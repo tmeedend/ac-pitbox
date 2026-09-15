@@ -1,4 +1,4 @@
-// Pont typé vers l'inventaire des compléments (refonte §4).
+// Pont typé vers l'inventaire des compléments (REFONTE§4).
 import { invoke } from "@tauri-apps/api/core";
 import type { Attachment } from "$lib/others";
 
@@ -35,7 +35,7 @@ export function listInventory(): Promise<InventoryRow[]> {
   return invoke<InventoryRow[]>("list_inventory");
 }
 
-/** Ce qui est greffé sur une entité (refonte §4.3) : la contrepartie de
+/** Ce qui est greffé sur une entité (REFONTE§4.3) : la contrepartie de
  * l'inventaire, du côté de l'hôte. Une déduction ratée n'y coûte qu'un
  * raccourci manquant — le mod, lui, reste dans l'inventaire. */
 export function listAttached(entityId: string): Promise<InventoryRow[]> {

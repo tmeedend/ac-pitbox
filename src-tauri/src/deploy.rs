@@ -108,7 +108,7 @@ fn overlay_tree(source: &Path, dest: &Path) -> Result<(), String> {
 /// Walks `source`, **following junctions**.
 ///
 /// A separately stored livery is projected into the host folder as a junction
-/// (`submods::project_skin`, §12bis.2), and a junction is neither a file nor a
+/// (`submods::project_skin`, §8.3), and a junction is neither a file nor a
 /// directory to `symlink_metadata`: `is_dir()` and `is_file()` are **both**
 /// false on it (verified empirically — Rust std reports a mount point as a
 /// symlink). Left unfollowed, `WalkDir` hands back an entry that both branches
@@ -227,7 +227,7 @@ mod tests {
         assert_eq!(std::fs::read(dest.join("model.kn5")).unwrap(), b"CHANGED");
     }
 
-    /// Règle (§12bis.2) : une livrée stockée à part et projetée par junction
+    /// Règle (§8.3) : une livrée stockée à part et projetée par junction
     /// dans le dossier de l'hôte fait partie de ce que l'hôte livre au jeu.
     ///
     /// Bug réel : `WalkDir` sans `follow_links` rend une junction ni fichier ni

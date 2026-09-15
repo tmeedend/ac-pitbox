@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Note libre d'une entité (refonte §9). Une par mod, quel que soit son type :
+  // Note libre d'une entité (REFONTE§9). Une par mod, quel que soit son type :
   // exclure un type créerait une règle à apprendre pour une économie nulle.
   //
   // **Ce n'est pas une description**, et la différence porte sur un seul geste :

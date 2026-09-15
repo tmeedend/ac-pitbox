@@ -1,6 +1,6 @@
 //! Persistance des sessions de lancement sauvegardées par l'utilisateur
-//! (§8.4bis) — fichier dédié (`saved_sessions.json`), écriture synchrone.
-//! Même bug que le duo de session et les presets (§8.6, voir
+//! (SESSION§3.5) — fichier dédié (`saved_sessions.json`), écriture synchrone.
+//! Même bug que le duo de session et les presets (SESSION§3, voir
 //! `session_state.rs`) : `localStorage` n'est pas garanti synchrone sur
 //! disque côté WebView2, ce qui perdait une sauvegarde nommée à la fermeture
 //! de l'app plutôt qu'au clic sur Sauvegarder/Retirer. Structure opaque côté

@@ -1,9 +1,9 @@
 <script lang="ts">
-  // Fiche d'une couche (refonte §8.3).
+  // Fiche d'une couche (REFONTE§8.3).
   //
   // Une couche n'avait pas de fiche : ses fichiers se déversaient dans la liste
   // de l'hôte, 392 lignes en monospace avec le poids de chacun. Ce déversement
-  // disparaît (§8.2) — il vit ici, et il y est organisé.
+  // disparaît (REFONTE§8.2) — il vit ici, et il y est organisé.
   //
   // L'ordre des blocs n'est pas neutre. **Ce qui écrase la base vient en
   // premier**, en clair et non en compteur, parce que c'est le seul endroit où

@@ -1,4 +1,4 @@
-//! Commandes des sessions de lancement sauvegardées (§8.4bis) — voir
+//! Commandes des sessions de lancement sauvegardées (SESSION§3.5) — voir
 //! `saved_sessions.rs`.
 
 use super::prelude::*;

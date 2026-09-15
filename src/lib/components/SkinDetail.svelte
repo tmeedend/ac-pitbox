@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Fiche d'une livrée (§12bis.2), voiture ou circuit.
+  // Fiche d'une livrée (§8.3), voiture ou circuit.
   //
   // Elle manquait, et son absence coûtait un geste sur deux dans l'inventaire :
   // une ligne de livrée porte déjà un lien vers son hôte **à droite**, et
@@ -8,7 +8,7 @@
   // vient, ce qu'elle contient, et si le jeu la voit.
   //
   // Rien n'est réinventé : `FicheHeader`, `NoteBlock` et le vocabulaire d'état
-  // sont ceux des cinq autres fiches (refonte §6.1).
+  // sont ceux des cinq autres fiches (REFONTE§6.1).
   import { onMount } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
@@ -45,7 +45,7 @@
   }
   onMount(load);
 
-  /** Renommer (refonte §6.1) : la saisie vit dans l'overlay, à côté du nom du
+  /** Renommer (REFONTE§6.1) : la saisie vit dans l'overlay, à côté du nom du
    * dossier et jamais à sa place — vider le champ ramène celui-ci. */
   async function rename(value: string | null): Promise<void> {
     error = "";

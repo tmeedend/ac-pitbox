@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Fiche d'une app (§12bis.4). Page pleine, comme `DetailPage` — et pour la
+  // Fiche d'une app (§8.4). Page pleine, comme `DetailPage` — et pour la
   // même raison qu'elle (§4.5.5) : les listes de fichiers vivent dans la page
   // pleine, pas dans un panneau ni dans un dépliant au milieu d'une liste. Une
   // app qui pose trente configs CSP ferait déborder la vue Apps.
@@ -30,7 +30,7 @@
   let { app, onclose, onchange }: Props = $props();
 
   let tab = $state("resources");
-  /** Fiche d'une couche ouverte par-dessus celle de l'app (§8.4). */
+  /** Fiche d'une couche ouverte par-dessus celle de l'app (REFONTE§8.4). */
   let openLayer = $state<{ layer: LayerRow; siblings: number } | null>(null);
   let busy = $state(false);
   let error = $state("");
@@ -164,7 +164,7 @@
     {:else}
       <!-- Le composant des couches d'un mod, repris tel quel : il ne connaît
            qu'un id et quatre commandes, et une app est un hôte comme un autre
-           (§12bis.4). Recomposer change l'état de l'app — d'où `onchange`. -->
+           (§8.4). Recomposer change l'état de l'app — d'où `onchange`. -->
       <LayersBlock
         modId={app.id}
         hostKind="App"

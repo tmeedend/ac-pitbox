@@ -413,7 +413,7 @@
     );
   });
 
-  // Restauration au montage (§6.2/§8.6) : colonnes (fichier dédié,
+  // Restauration au montage (§6.2/SESSION§1) : colonnes (fichier dédié,
   // `columns.ts`) et le reste des petits réglages d'écran (`uiPrefs.ts`) en
   // parallèle, un seul aller-retour chacun. `prefsReady` n'est levé qu'une
   // fois tout appliqué, pour que l'effet de persistance des filtres plus haut
@@ -563,7 +563,7 @@
   });
   const contextItems = $derived(buildModContextItems(contextTargets, refresh));
 
-  // La bibliothèque EST le sélecteur (§8.6) : ouvrir une carte la définit comme
+  // La bibliothèque EST le sélecteur (SESSION§1) : ouvrir une carte la définit comme
   // choix de session, affiché dans le bloc SESSION de la barre latérale.
   const sessionId = $derived(isCar ? nav.sessionCar?.id ?? null : nav.sessionTrack?.id ?? null);
   // Sélection effective du panneau : le clic explicite prime, sinon le choix
@@ -675,7 +675,7 @@
     select(c);
   }
 
-  // Ouverture demandée depuis une vue transversale (§12bis.3) : on ouvre la
+  // Ouverture demandée depuis une vue transversale (§8.3) : on ouvre la
   // fiche pleine page de l'entité ciblée (la bonne bibliothèque est déjà active).
   $effect(() => {
     if (nav.openMod) {

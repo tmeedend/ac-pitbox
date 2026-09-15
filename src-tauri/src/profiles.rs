@@ -1,5 +1,5 @@
 //! Profils (§7) : ensembles nommés de mods/versions activés, **plus** l'état
-//! des Autres mods et des Apps (§7.3/§12bis.4) capturés dans le même
+//! des Autres mods et des Apps (§7.3/§8.4) capturés dans le même
 //! instantané. Appliquer un profil = **réconcilier** chacun des trois :
 //! désactiver ce qui n'y est pas, activer ce qui y est.
 //!
@@ -59,7 +59,7 @@ pub fn create_from_active(conn: &Connection, cfg: &AppConfig, name: &str) -> Res
         }
     }
 
-    // Apps (§12bis.4) : état dérivé de la junction, pas de version non plus.
+    // Apps (§8.4) : état dérivé de la junction, pas de version non plus.
     for a in apps::list_apps(conn, cfg).map_err(|e| e.to_string())? {
         if a.active {
             overlay::add_profile_extra_entry(conn, &id, "app", &a.id).map_err(|e| e.to_string())?;
@@ -125,7 +125,7 @@ pub fn apply(conn: &Connection, cfg: &AppConfig, profile_id: &str) -> Result<App
         }
     }
 
-    // --- Apps (§12bis.4) ---
+    // --- Apps (§8.4) ---
     for a in apps::list_apps(conn, cfg).map_err(|e| e.to_string())? {
         if a.active && !target_apps.contains(&a.id) {
             match apps::deactivate_app(conn, cfg, &a.id) {

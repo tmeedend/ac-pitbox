@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Vue Apps (§12bis.4) : type autonome, activable/désactivable par junction.
+  // Vue Apps (§8.4) : type autonome, activable/désactivable par junction.
   //
   // La liste ne montre plus les ressources elle-même : elles vivent, avec les
   // ajouts au jeu, sur la **fiche** de l'app (`AppDetail`) — même règle que

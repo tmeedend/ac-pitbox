@@ -148,13 +148,13 @@ pub fn run() {
             // cache exprès.
             preview::release_scratch(app.handle());
 
-            // Filet de sécurité (§8.7bis) : restaure video.ini si une
+            // Filet de sécurité : restaure video.ini si une
             // sauvegarde laissée par l'ancien aperçu 3D intégré traîne encore
             // (il forçait le mode fenêtré ; Pit Box n'y touche plus).
             showroom::restore_orphaned_video_ini();
 
             // Contenu de base Kunos jamais indexé : scan auto, pour que les
-            // skins/sons puissent s'y rattacher tout de suite (§12bis.1).
+            // skins/sons puissent s'y rattacher tout de suite (§8.1).
             // Ne couvre PAS le premier démarrage — la config n'existe pas
             // encore à ce moment-là, l'assistant ne l'écrit qu'après. C'est
             // `save_config` qui s'en charge, dès que le dossier du jeu est
@@ -166,7 +166,7 @@ pub fn run() {
                     log::warn!("index_stock_content at startup: {e}");
                 }
             }
-            // Contenu de base vs mod installé hors Pit Box (§12bis.1bis) : une
+            // Contenu de base vs mod installé hors Pit Box (§8.2) : une
             // base écrite avant cette distinction range les seconds avec les
             // premiers, ce qui autorise dessus des écritures qu'ils ne doivent
             // pas subir. Le scan complet ci-dessus ne se relancerait jamais
@@ -179,7 +179,7 @@ pub fn run() {
                 _ => {}
             }
 
-            // Reprise (§12bis.4) : les ajouts au jeu qui visaient l'intérieur du
+            // Reprise (§8.4) : les ajouts au jeu qui visaient l'intérieur du
             // dossier d'une app deviennent des couches de cette app. Rangés
             // avant que les couches d'app n'existent, ils créaient le dossier de
             // l'app en vrai dossier — ce qui bloquait ensuite son installation.

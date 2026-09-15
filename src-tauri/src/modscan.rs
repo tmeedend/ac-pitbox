@@ -179,7 +179,7 @@ pub fn scan(root: &Path) -> Vec<FoundMod> {
 }
 
 /// Descend et collecte les **sous-éléments** (packs de skins, mods de son) qui
-/// ne sont pas des mods de premier niveau (§12bis.2). Disjoint de `scan` : une
+/// ne sont pas des mods de premier niveau (§8.3). Disjoint de `scan` : une
 /// vraie voiture/circuit (avec `ui/`) est ignorée ici.
 pub fn scan_subs(root: &Path) -> Vec<FoundSub> {
     let mut found = Vec::new();
@@ -187,7 +187,7 @@ pub fn scan_subs(root: &Path) -> Vec<FoundSub> {
     found
 }
 
-/// App Python OU Lua/CSP d'AC (§12bis.4) : dossier `<nom>` contenant `<nom>.py`
+/// App Python OU Lua/CSP d'AC (§8.4) : dossier `<nom>` contenant `<nom>.py`
 /// (script principal, convention AC `apps/python/<App>/<App>.py`) ou
 /// `<nom>.lua` (convention CSP `apps/lua/<App>/<App>.lua`, même schéma de
 /// nommage) — les deux sont des scripts d'app autonomes, seul le sous-dossier
@@ -205,7 +205,7 @@ pub struct FoundApp {
     pub dir: PathBuf,
 }
 
-/// Descend et collecte les **apps** (type autonome, §12bis.4). Disjoint des
+/// Descend et collecte les **apps** (type autonome, §8.4). Disjoint des
 /// voitures/circuits.
 pub fn scan_apps(root: &Path) -> Vec<FoundApp> {
     let mut found = Vec::new();
@@ -248,7 +248,7 @@ fn descend_subs(dir: &Path, out: &mut Vec<FoundSub>) {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
 
-    // Pack de skins : deux arborescences possibles (§12bis.2), plus la
+    // Pack de skins : deux arborescences possibles (§8.3), plus la
     // convention CM pour les skins de circuit `skins/cm_skins/<skin>` (regroupe
     // les livrées sous un sous-dossier dédié, à distinguer d'un dossier de
     // voiture/circuit cible qui aurait la même forme à un niveau) — sinon

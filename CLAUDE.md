@@ -266,11 +266,13 @@ partagent `commands::prelude`.
 
 Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux.
 
-**Six d'entre elles sont désormais vérifiées** par `scripts/check-conventions.mjs`,
+**Sept d'entre elles sont désormais vérifiées** par `scripts/check-conventions.mjs`,
 dans `npm run check` : `scrollIntoView`, écriture dans `localStorage`, mesure de
 fenêtre écrite dans un style sans `zoomFactor()`, composant `.svelte` importé
 nulle part, `#[tauri::command]` absente d'`invoke_handler`, clé i18n devenue
-inatteignable. Une exception légitime se déclare sur la ligne ou juste
+inatteignable, et **renvoi de spec dans une chaîne visible** — « non activable
+(§12bis.1) » s'affichait tel quel à l'utilisateur, en pointant vers une section
+disparue. Une exception légitime se déclare sur la ligne ou juste
 au-dessus : `// conventions: allow <règle>` — rare, et visible en revue.
 
 Deux choses à savoir avant d'y toucher. **Une règle ajoutée se prouve** :

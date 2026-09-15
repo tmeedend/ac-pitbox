@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Bloc « Conditions » du rail droit (§8.5/§8.6/§8.6bis, lot 5 §4) : tout ce
+  // Bloc « Conditions » du rail droit (SESSION§3.3/SESSION§3.3/SESSION§3.3, lot 5 §4) : tout ce
   // qui décrit le jour et la piste sur lesquels on roule — météo, températures,
   // vent, état de piste, heure, saison.
   //
@@ -42,7 +42,7 @@
     trackSupportsSeason: boolean;
     trackSupportsRain: boolean;
     season: Season;
-    /** Course du soleil du circuit (§8.6ter), ou `null` si sa position est
+    /** Course du soleil du circuit (SESSION§3.3), ou `null` si sa position est
      * inconnue — la bande jour/nuit ne s'affiche alors pas du tout. */
     sun: TrackSun | null;
     /** Les états de piste offerts (§2.2) : natifs du jeu puis presets de
@@ -95,7 +95,7 @@
     return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
   }
 
-  // --- Curseur d'heure (§8.6) ---
+  // --- Curseur d'heure (SESSION§3.3) ---
   // Pas de 10 minutes : une demi-heure passe à côté de la lumière qu'on vient
   // chercher — au bord d'un coucher, le ciel change complètement en dix
   // minutes. `time_hours` reste une heure décimale (le preset Quick Drive
@@ -322,7 +322,7 @@
         oninput={(v) => (setup.time_hours = v)}
       />
       {#if sun}
-        <!-- Bande jour/nuit (§8.6ter) : la course du soleil sur ce circuit,
+        <!-- Bande jour/nuit (SESSION§3.3) : la course du soleil sur ce circuit,
              à la date que CSP utilisera. Alignée sur la course du pouce du
              curseur (marges de 5px = demi-largeur du pouce), pour qu'un
              repère de coucher désigne bien l'heure qu'il affiche. Les deux
@@ -373,7 +373,7 @@
       {/if}
   </div>
 
-  <!-- Saison optionnelle (§8.6bis) : associe une date, best-effort côté
+  <!-- Saison optionnelle (SESSION§3.3) : associe une date, best-effort côté
        CSP (couleur des arbres en automne, piste blanche en hiver).
        Reste cliquable même sans config CSP identifiée pour les
        ajustements saisonniers (§6.4bis) — juste signalée (pas de
@@ -383,7 +383,7 @@
        premier lancement…). -->
   <div class="season-wrap">
     <div class="lbl section">{t("launch.seasonLabel")}</div>
-    <!-- Date manuelle (§8.6bis) : sélectionner une saison ci-contre pose déjà
+    <!-- Date manuelle (SESSION§3.3) : sélectionner une saison ci-contre pose déjà
          cette date (SEASON_MID, calculée côté Launch.svelte) — ce champ permet
          de la voir et, si besoin, de la corriger précisément sans passer par
          une saison. Ne remet pas `season` à "" : une date tapée à la main
@@ -513,7 +513,7 @@
   .spaced {
     margin-top: 10px;
   }
-  /* Signale sans bloquer (§8.6bis) : une config CSP absente ici ne veut pas
+  /* Signale sans bloquer (SESSION§3.3) : une config CSP absente ici ne veut pas
      dire absente pour de bon (voir le commentaire sur .season-wrap), donc
      jamais un simple `:disabled` — juste un repère visuel discret. */
   .wcard.unsupported {
@@ -614,7 +614,7 @@
   .weather.season-grid {
     grid-template-columns: repeat(5, 1fr);
   }
-  /* Date manuelle (§8.6bis), sur sa propre ligne : libellé à gauche, champ à
+  /* Date manuelle (SESSION§3.3), sur sa propre ligne : libellé à gauche, champ à
      droite. Le picker natif est blanc par défaut, hors charte sombre —
      `color-scheme: dark` sur .date-input bascule son rendu (icône + popup) en
      sombre, seule prise possible dessus (pas de pseudo-élément stylable

@@ -54,7 +54,7 @@
   }
 
   const entries = $derived.by(() => {
-    // Contenu de base Kunos (§4/§12bis.1) : pas de vraie notion de version ni
+    // Contenu de base Kunos (§4/§8.1) : pas de vraie notion de version ni
     // d'import à raconter ici — une seule ligne informative, pas la frise
     // habituelle avec « (sans n°) », badge « installée » et une date qui ne
     // correspond à rien de réel (juste l'indexation locale).

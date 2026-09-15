@@ -443,7 +443,7 @@
     "onlyEntity": "Vorerst der einzige Eintrag dieses Packs.",
     "filterByPack": "Nach diesem Pack filtern",
     "uninstallPack": "Pack deinstallieren",
-    "layersNote": "Über diese Basis importiert, ohne sie zu ersetzen — die Basis bleibt unangetastet (§4.4).",
+    "layersNote": "Über diese Basis importiert, ohne sie zu ersetzen — die Basis bleibt unangetastet.",
     "layerCounts": "{added} hinzugefügt · {overwritten} überschrieben",
     "layerDeleteTitle": "Layer löschen",
     "layerDeleteConfirm": "Layer „{name}“ löschen? Die Basis bleibt unberührt.",

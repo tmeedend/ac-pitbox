@@ -1,5 +1,5 @@
 <script lang="ts">
-  // "Simulation" block of the launch screen (§8.6): what the simulation models
+  // "Simulation" block of the launch screen (SESSION§3): what the simulation models
   // and what it forgives, active whatever the session type. Pure presentation:
   // everything is a direct read/write of `setup` (state shared with the
   // parent) — no logic to lift up.

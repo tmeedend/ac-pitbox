@@ -1,4 +1,4 @@
-// Pont typé vers les commandes Apps (§12bis.4).
+// Pont typé vers les commandes Apps (§8.4).
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { ExtraFile, ResourceFile } from "$lib/library";
@@ -11,9 +11,9 @@ export interface AppItem {
   /** "python" | "lua" : dit si l'app suit la convention historique d'AC ou
    * celle de CSP, et donc sous quel `apps/<langue>/` elle est posée. */
   lang: string;
-  /** Nom repris à la main (refonte §6.1), `null` tant que rien n'a été saisi. */
+  /** Nom repris à la main (REFONTE§6.1), `null` tant que rien n'a été saisi. */
   display_name_user: string | null;
-  /** Note libre (refonte §9). */
+  /** Note libre (REFONTE§9). */
   notes_user: string | null;
 }
 
@@ -29,7 +29,7 @@ export function deactivateApp(id: string): Promise<void> {
   return invoke<void>("deactivate_app", { id });
 }
 
-/** Supprime proprement une app (junction + fichiers + overlay, §12bis.4). */
+/** Supprime proprement une app (junction + fichiers + overlay, §8.4). */
 export function deleteApp(id: string): Promise<void> {
   return invoke<void>("delete_app", { id });
 }

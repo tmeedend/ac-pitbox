@@ -109,10 +109,10 @@ pub struct ArchiveResult {
     pub archive: String,
     pub mods: Vec<ImportedMod>,
     pub error: Option<String>,
-    /// Sous-éléments rattachés (skins/sons) routés vers la bibliothèque (§12bis.2).
+    /// Sous-éléments rattachés (skins/sons) routés vers la bibliothèque (§8.3).
     #[serde(default)]
     pub subs: Vec<crate::submods::SubImported>,
-    /// Apps Python importées (§12bis.4).
+    /// Apps Python importées (§8.4).
     #[serde(default)]
     pub apps: Vec<crate::apps::AppImported>,
     /// Mods « autres » importés — type non reconnu, jamais perdus (§7.3).
@@ -131,7 +131,7 @@ pub struct ArchiveResult {
     /// de lot puisse annoncer qu'il y a une question à trancher.
     #[serde(default)]
     pub pending: usize,
-    /// Couches posées sur une app (§12bis.4). À part des ajouts au jeu : ce
+    /// Couches posées sur une app (§8.4). À part des ajouts au jeu : ce
     /// n'est pas la même chose, et les compter avec eux faisait annoncer au
     /// rapport « N fichiers ajoutés au jeu » pour des fichiers qui vont en
     /// réalité **dans** une app.
@@ -139,7 +139,7 @@ pub struct ArchiveResult {
     pub app_layers: Vec<AppLayerImported>,
 }
 
-/// Une couche rangée sur une app pendant cet import (§12bis.4).
+/// Une couche rangée sur une app pendant cet import (§8.4).
 #[derive(Debug, Clone, Serialize)]
 pub struct AppLayerImported {
     /// App visée — présente en bibliothèque ou non.
@@ -932,7 +932,7 @@ fn sweep_leftovers(
     // leur arbre n'existe pas encore — sans ce rattrapage, ils ne
     // seraient posés qu'à la réactivation suivante.
     let mut owners_with_extras: Vec<(String, OwnerKind)> = Vec::new();
-    // Restes qui visent l'intérieur du dossier d'une app (§12bis.4).
+    // Restes qui visent l'intérieur du dossier d'une app (§8.4).
     // **Accumulés, pas rangés au vol** : un circuit qui livre neuf fichiers de
     // caméras à CamTool doit produire UNE couche, pas neuf. Vidés après la
     // boucle, groupés par app.
@@ -1007,7 +1007,7 @@ fn sweep_leftovers(
             // d'avant, qui ne perd rien non plus.
         }
 
-        // Couche d'app (§12bis.4) : le chemin vise l'intérieur du dossier d'une
+        // Couche d'app (§8.4) : le chemin vise l'intérieur du dossier d'une
         // app, donc ce n'est pas un ajout au jeu — c'est une couche de cette
         // app. Le test passe **avant** la recherche de propriétaire : la cible
         // est écrite dans le chemin, elle ne dépend pas de qui livre le
@@ -1219,7 +1219,7 @@ struct AimedAtApps {
 }
 
 /// Cherche, **à toute profondeur** sous un reste, les fichiers qui visent
-/// l'intérieur du dossier d'une app (§12bis.4).
+/// l'intérieur du dossier d'une app (§8.4).
 ///
 /// Le balayage ramasse les restes **en bloc** : un `apps/` livré à côté d'un
 /// circuit arrive ici comme un seul dossier nommé `apps`, pas comme ses
@@ -1257,7 +1257,7 @@ fn app_layer_targets_under(rel: &Path, p: &Path) -> AimedAtApps {
     }
 }
 
-/// Un reste destiné à l'intérieur du dossier d'une app (§12bis.4).
+/// Un reste destiné à l'intérieur du dossier d'une app (§8.4).
 struct AppLayerPart {
     /// App visée, lue dans le chemin (`apps/<lang>/<app_id>/…`).
     app_id: String,
@@ -1272,7 +1272,7 @@ struct AppLayerPart {
 }
 
 /// Range en couches les restes qui visaient l'intérieur d'une app : **une
-/// couche par app**, quel qu'en soit le nombre de fichiers (§12bis.4).
+/// couche par app**, quel qu'en soit le nombre de fichiers (§8.4).
 ///
 /// Chaque groupe est reconstitué dans un dossier temporaire qui rejoue les
 /// chemins **relatifs au dossier de l'app** — une couche se compose par-dessus
@@ -1374,7 +1374,7 @@ fn flush_app_layers(
         ) {
             Ok(_) => {
                 // Remplacer le script principal d'une app change ce qu'elle
-                // *est* : autorisé, mais jamais en silence (§12bis.4). Lu sur
+                // *est* : autorisé, mais jamais en silence (§8.4). Lu sur
                 // le staging, avant qu'il ne soit consommé.
                 let replaces_main_script = ["py", "lua"]
                     .iter()
@@ -1713,7 +1713,7 @@ fn auto_activate(conn: &Connection, cfg: &AppConfig, mods: &[ImportedMod]) {
     }
 }
 
-/// Active par défaut les apps fraîchement importées (§4.2, §12bis.4) — même
+/// Active par défaut les apps fraîchement importées (§4.2, §8.4) — même
 /// logique que les mods voiture/circuit et les mods « autres » : best-effort,
 /// une app déjà active ou dont l'AC install n'est pas configurée ne bloque pas
 /// le reste de l'import.
@@ -2125,8 +2125,8 @@ fn import_one_folder(
     result
 }
 
-/// Range ce qui suit les mods d'un item : sous-éléments rattachés (§12bis.2),
-/// apps Python (§12bis.4) et balayage des restes (§7.3).
+/// Range ce qui suit les mods d'un item : sous-éléments rattachés (§8.3),
+/// apps Python (§8.4) et balayage des restes (§7.3).
 ///
 /// Extrait en commun des deux chemins d'import (archive et dossier) au moment
 /// d'y ajouter la progression : les trois étapes occupent la queue de la barre,
@@ -2840,7 +2840,7 @@ fn process_found(
             });
         }
 
-        // Mod installé hors Pit Box (§12bis.1bis) : **rien n'est écrit**. Le
+        // Mod installé hors Pit Box (§8.2) : **rien n'est écrit**. Le
         // dossier de `content/` est à l'utilisateur, l'app ne l'a pas mis là.
         // Le classer en extension — ce que faisait la branche `is_stock`
         // ci-dessous, qui ramassait tout ce qui traînait dans `content/` —
@@ -3808,7 +3808,7 @@ mod tests {
 
     #[test]
     fn import_over_an_unmanaged_mod_writes_nothing() {
-        // Rule (§12bis.1bis): a mod the user installed outside Pit Box is
+        // Rule (§8.2): a mod the user installed outside Pit Box is
         // never written over, not even as a layer. Before the distinction it
         // was filed as Kunos content, so this very import turned into an
         // "extension" — which copies the real folder to `stock_base/` and then
@@ -4235,7 +4235,7 @@ mod tests {
         // Bug réel : une app importée restait inactive tant qu'on n'allait pas
         // cliquer « Activer » sur l'écran Apps — contrairement aux mods
         // voiture/circuit (`auto_activate`) et aux mods « autres »
-        // (`activate_other` appelé juste après l'import), §4.2/§12bis.4.
+        // (`activate_other` appelé juste après l'import), §4.2/§8.4.
         let base = crate::testutil::temp_dir("import-app-autoactivate");
         let library = base.join("library");
         let ac = base.join("ac");
@@ -5961,12 +5961,12 @@ mod tests {
 
     #[test]
     fn files_aimed_inside_an_app_become_one_layer_of_that_app() {
-        // Règle (§12bis.4) : des fichiers posés DANS le dossier d'une app sont
+        // Règle (§8.4) : des fichiers posés DANS le dossier d'une app sont
         // une couche de cette app, pas des ajouts au jeu du mod qui les livre.
         // Cas réel : le circuit `pk_gunma_cycle_sports_center` livre neuf
         // fichiers de caméras pour CamTool 2. Rangés en ajouts au jeu, ils
         // créaient `apps/python/CamTool_2/` en VRAI dossier — ce qui bloquait
-        // définitivement l'installation de CamTool ensuite (§12bis.1bis).
+        // définitivement l'installation de CamTool ensuite (§8.2).
         //
         // Et **une seule** couche, pas une par fichier.
         let base = crate::testutil::temp_dir("app-layer-import");

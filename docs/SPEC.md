@@ -167,11 +167,11 @@ Deux candidats à égalité ne sont jamais départagés : poser le contenu sur u
 
 - **Hôte trouvé** → rangé en **couche**, automatiquement, sans rien demander : l'opération n'est pas destructive (§4.3) et la question n'a qu'une réponse. La décision est **visible** — la ligne du rapport nomme le dossier rangé *et* l'hôte, la couche apparaît dans « Couches & extensions » sous le nom de son dossier source, et l'historique de l'hôte porte sa ligne.
 - **Un fragment n'est jamais une mise à jour**, quel que soit le décompte de fichiers et quelle que soit la décision demandée. Même règle absolue que le contenu de base (§4.3) : sans géométrie, remplacer la base par lui la rendrait injouable. C'est aussi le seul cas où le décompte ment — un fragment qui ne retouche que des `ui/` recouvre proportionnellement beaucoup d'un circuit qui en a peu.
-- **Hôte nommé mais absent** → **rien n'est écrit**, on demande, et le défaut proposé est de **ne pas importer**. La troisième issue, « garder pour plus tard », range la couche sous l'id attendu sans rien poser dans le jeu : `compose::recompose` lit les couches par `parent_id`, que le mod existe ou non, donc l'hôte la reprend le jour où il arrive. Même parti que pour un son dont la voiture manque (§12bis.2).
+- **Hôte nommé mais absent** → **rien n'est écrit**, on demande, et le défaut proposé est de **ne pas importer**. La troisième issue, « garder pour plus tard », range la couche sous l'id attendu sans rien poser dans le jeu : `compose::recompose` lit les couches par `parent_id`, que le mod existe ou non, donc l'hôte la reprend le jour où il arrive. Même parti que pour un son dont la voiture manque (§8.3).
 - **Hôte introuvable** → on demande aussi, avec pour seules issues « ne pas importer » (défaut) et « importer quand même », qui produit l'ancien comportement, cette fois assumé et signalé dans le rapport.
 - **En import de masse**, où l'on ne s'arrête jamais pour demander (§4.2bis), le défaut sûr est de **garder** : couche en attente si l'hôte est nommé, import tel quel sinon. Un mod de trop vaut mieux qu'un contenu perdu, et la ligne du rapport dit lequel.
 
-**Un skin ou un son dont la voiture manque suit exactement la même règle** (§12bis.2) : rien n'est écrit, on demande, défaut « ne pas importer », et « garder pour plus tard » range sous l'id visé. Une livrée est du contenu posé **dans** une voiture — c'est la même chose qu'une couche, et deux comportements différents pour la même question ne se justifiaient pas.
+**Un skin ou un son dont la voiture manque suit exactement la même règle** (§8.3) : rien n'est écrit, on demande, défaut « ne pas importer », et « garder pour plus tard » range sous l'id visé. Une livrée est du contenu posé **dans** une voiture — c'est la même chose qu'une couche, et deux comportements différents pour la même question ne se justifiaient pas.
 
 Trois choses rendent cette reprise sûre, et elles existaient déjà :
 
@@ -458,7 +458,7 @@ Les caractéristiques mécaniques ne sont **pas** des tags (un tag filtre/groupe
 
 **Le bandeau de specs en surimpression de l'aperçu a disparu** : puissance, couple, poids et vitesse max se lisaient à la fois sur la photo et dans la fiche technique juste à côté. Une donnée affichée deux fois au même endroit n'est pas une redondance utile, c'est une hésitation sur qui la porte — c'est la fiche.
 
-**Pas de ligne « URL d'origine » sur la fiche.** Le champ existe en base (`source_url`, §4.4) et attend l'extension de navigateur qui le remplira (§12ter) ; en attendant, la ligne n'affichait « inconnue » sur toutes les fiches de tout le monde. Une rubrique permanente qui ne peut rien dire n'est pas une promesse, c'est du bruit : elle réapparaîtra avec ce qui la remplit.
+**Pas de ligne « URL d'origine » sur la fiche.** Le champ existe en base (`source_url`, §4.4) et attend l'extension de navigateur qui le remplira ; en attendant, la ligne n'affichait « inconnue » sur toutes les fiches de tout le monde. Une rubrique permanente qui ne peut rien dire n'est pas une promesse, c'est du bruit : elle réapparaîtra avec ce qui la remplit.
 
 **Une seule fiche technique, un seul composant** (`components/detail/TechSheet.svelte`), rendu par le panneau latéral **et** par la page pleine. Les deux la construisaient chacune de leur côté, et elles avaient divergé : le panneau montrait toute la fiche native (puissance, couple, poids, vitesse max, 0-100, rapport poids/puissance, autonomie, pays) plus les cinq champs harmonisés, la page en montrait six et laissait de côté tout ce que le moteur dit de lui-même — même titre, même écran, moitié moins de contenu (signalé par l'utilisateur). Le composant rend les cellules ; **le cadre reste à l'appelant** (le panneau dessine le sien, la page a sa carte), et le nombre de colonnes se déduit de la largeur reçue (`auto-fit`) plutôt que d'être dicté par l'un ou l'autre — deux colonnes dans le panneau, trois sur la page, sans que ni l'un ni l'autre ait à le dire. Une ligne vide est omise : une fiche de tirets ne dit rien de plus que son absence. Les champs déduits par les règles (§5bis.1) gardent leur couleur verte et leur infobulle « déduit par règle ».
 
@@ -496,7 +496,7 @@ sélectionné (même filtrage que la sous-vue elle-même, §6.1).
 
 ### 6.1 Onglet Médias et documents (fiche voiture/circuit)
 
-Quatre blocs réunis dans un seul onglet (refonte §7.8), en deux groupes : ce
+Quatre blocs réunis dans un seul onglet (REFONTE§7.8), en deux groupes : ce
 que **tu as produit** — **Screenshots**, **Replays** — puis ce qui est **livré
 avec le mod** — **Ressources**, **Backgrounds** (cette dernière réservée aux
 circuits). Le décompte de l'onglet est la somme des quatre. Aucun bloc n'est
@@ -587,7 +587,7 @@ l'interface, avec ordre de repli :
 4. Fond neutre actuel (aucun média disponible).
 
 
-### 6.3 Coquille de fiche unique (refonte §6.1, §12)
+### 6.3 Coquille de fiche unique (REFONTE§6.1, §12)
 
 **Les cinq fiches — voiture/circuit, app, mod « autre », son, pack — partagent
 un seul en-tête** (`FicheHeader.svelte`) : retour, tuile, nom, sous-titre, état,
@@ -615,7 +615,7 @@ ne se fond pas dans « inactif » : un mod inactif a été désactivé, un mod e
 attente est actif mais perd l'arbitrage sur un emplacement disputé et reprendra
 sa place dès que l'autre partira.
 
-### 6.3bis Les trois onglets de la fiche voiture/circuit (refonte §7)
+### 6.3bis Les trois onglets de la fiche voiture/circuit (REFONTE§7)
 
 | Onglet | Contenu |
 |---|---|
@@ -748,7 +748,7 @@ la bibliothèque, et une partie du public joue délibérément hors ligne.
 Désactivé, aucune requête ne sort et le cache déjà constitué reste
 consultable.
 
-### 6.3bis (suite) Tracés apportés par une couche (refonte §7.7)
+### 6.3bis (suite) Tracés apportés par une couche (REFONTE§7.7)
 
 La carte des tracés montre l'**état composé** — celui que l'utilisateur aura au
 lancement, couches comprises. Elle ne disait pas d'où venait chaque tracé : sur
@@ -763,7 +763,7 @@ connaître. Une couche qui remplace la texture d'un tracé existant l'habille,
 elle ne l'apporte pas — l'étiqueter reviendrait à présenter le contenu propre
 du circuit comme un add-on.
 
-### 6.3ter Fiche d'une couche (refonte §8)
+### 6.3ter Fiche d'une couche (REFONTE§8)
 
 Une couche a sa **fiche**, ouverte depuis la liste de l'hôte et posée
 par-dessus elle (la fermer y ramène). La liste de l'hôte ne fait plus que
@@ -789,7 +789,7 @@ dérivation réemploie `withoutBrand` (§7.4), qui porte déjà la règle délic
 comparaison insensible aux séparateurs, mais coupe seulement sur une espace,
 pour qu'un hôte `ks_nords` n'ampute pas `ks_nordschleife` en plein mot.
 
-### 6.3quater Fiche d'un mod greffé simple (refonte §11)
+### 6.3quater Fiche d'un mod greffé simple (REFONTE§11)
 
 Une police, un fragment de config, un mannequin : leur fiche n'affichait qu'un
 titre, trois métadonnées et « aucun fichier annexe ». Deux blocs la comblent,
@@ -810,7 +810,7 @@ du §6.2 de la refonte est écarté. Il avait déjà été retiré du projet pou
 de redondance, et la fiche posée par-dessus — dont le retour ramène à la liste
 d'où l'on vient — rend le même service sans ajouter un second contenant.
 
-### 6.4 Notes (refonte §9)
+### 6.4 Notes (REFONTE§9)
 
 **Tout mod peut porter une note libre**, quel que soit son type — exclure un
 type créerait une règle à apprendre pour une économie nulle. Colonne
@@ -872,7 +872,7 @@ Trois règles portent le système :
 
 **L'exclusion n'a pas de couleur à elle.** Elle se dit par le mot (« sauf », « Hors contenu de base ») et par la rature sur les jetons de l'éditeur. Le jaune de l'app est l'alerte et le rouge le destructif : les charger d'un second sens les viderait du premier.
 
-**Persistance** : les valeurs des filtres et les épingles vivent dans `ui_prefs.json`, par type (§8.6). Les valeurs survivent au redémarrage — les puces disent d'un coup d'œil ce qui est appliqué, ce que l'ancienne barre à onze contrôles ne faisait pas, et c'est ce qui rend le maintien du filtre sans danger. La relecture convertit les **deux générations précédentes** d'instantané (le texte à virgules et les `<select>` mono-valués d'abord, les jetons inclure/exclure et les tri-états ensuite) : une bibliothèque laissée filtrée avant une mise à jour se rouvre filtrée après.
+**Persistance** : les valeurs des filtres et les épingles vivent dans `ui_prefs.json`, par type (SESSION§1). Les valeurs survivent au redémarrage — les puces disent d'un coup d'œil ce qui est appliqué, ce que l'ancienne barre à onze contrôles ne faisait pas, et c'est ce qui rend le maintien du filtre sans danger. La relecture convertit les **deux générations précédentes** d'instantané (le texte à virgules et les `<select>` mono-valués d'abord, les jetons inclure/exclure et les tri-états ensuite) : une bibliothèque laissée filtrée avant une mise à jour se rouvre filtrée après.
 
 **Catégories pour les circuits** : les circuits ont aussi des catégories (comme les voitures), pour filtrer et composer.
 
@@ -1077,7 +1077,7 @@ sans ça, ajouter une colonne dans un tableau déjà chargé pouvait la rendre
 quasi invisible au lieu de déclencher le défilement (bug réel constaté).
 **Persistance** (`src-tauri/src/library_columns.rs`,
 `app_config_dir/library_columns.json`) : même mécanisme que le duo de session
-et les presets (§8.4/§8.6, voir plus bas) — fichier dédié écrit côté Rust,
+et les presets (§8.4/SESSION§1, voir plus bas) — fichier dédié écrit côté Rust,
 pas `localStorage`, migration silencieuse depuis l'ancienne clé (visibilité
 seule ; ordre et largeurs, fonctionnalités nouvelles, repartent toujours des
 défauts lors de cette migration).
@@ -1127,7 +1127,7 @@ Le **décompte de résultats** ne porte plus de badge de nombre de filtres actif
 
 **Fourchette d'année (voitures) : vide par défaut, et vide veut dire « aucune borne »** — c'est aussi l'état où « Tout effacer » les ramène. Une borne absente ne filtre rien et ne fait pas exister la puce ; seule une valeur saisie filtre. L'éditeur propose en plus des **raccourcis de décennie déduits de la bibliothèque** plutôt que d'une liste en dur : une collection qui commence en 1930 se voit proposer 1930, une qui s'arrête en 1999 n'a que faire d'un bouton « 2010 ». Le défaut était auparavant `1950`/année courante, ce qui affichait deux bornes que l'utilisateur n'avait pas demandées et ne pouvait pas effacer : vider le champ le ramenait aussitôt à sa borne. Pire, les deux champs se bornant l'un l'autre, vider « année max » l'écrasait à `1950` et ne laissait plus **rien** remonter. `NumberStepper` porte donc une prop `emptyValue` : la valeur-sentinelle qui s'affiche comme un champ vide, échappe volontairement aux bornes (sinon `min` la ramènerait dans la plage — c'est le bug lui-même), et que « vider le champ » rétablit. Une sentinelle plutôt qu'un `null` : `value` reste un `number` pour tous les autres appelants, qui n'ont aucune raison de devenir nullables. Le champ **resynchronise aussi le DOM après coup** : Svelte ne réécrit l'attribut que si la valeur liée a changé, si bien qu'une saisie hors bornes — ou un deuxième vidage — restait affichée en contradiction avec l'état réel (symptôme rapporté : vider une première fois écrivait `1950`, vider une seconde fois laissait le champ vide alors que le filtre valait toujours `1950`). Un filtre enregistré avant ce changement portait les bornes de la plage comme sentinelle : elles sont relues comme « vide », ce qu'elles ont toujours voulu dire.
 
-**Ni ▲ ni ▼ ne se désactive au prétexte que le champ est vide, et les deux flèches partent du même repère** (`emptyStart` de `NumberStepper`) — le même repère quel que soit le sens, comme taper directement cette valeur. Sans lui, ▲ retombait sur `min` même pour un champ dont le point de départ naturel n'est pas sa borne minimale (« année max » : l'année courante), et ▼ n'avait tout simplement aucune destination définie depuis « vide », d'où sa désactivation forcée. « Année min » part de `1950`, « année max » de l'année courante — dans les deux sens : un appui sur ▲ depuis « année max » vide affiche l'année courante, un second l'année suivante, exactement comme un appui sur ▼ affiche l'année courante puis l'année précédente. **Aucune des deux bornes n'a de plancher ni de plafond réel** — `1950`/l'année courante ne sont que des points de départ (`emptyStart`), jamais des `min`/`max` : des voitures existent bien avant 1950 (retour utilisateur direct — une première version bornait `min` à `1950`, empêchant d'aller plus bas une fois qu'on y était arrivé), et un mod peut légitimement porter une année future (voiture concept, DLC annoncé). Le plafond de « année min » suit seulement, dynamiquement, « année max » quand elle est renseignée (une borne ne doit pas dépasser l'autre), sans repli sur une constante quand elle ne l'est pas. Même correctif pour la fourchette d'année du vivier d'adversaires (`OpponentsBlock.svelte`, §8.6) : son plafond à l'année courante grisait ▲ dès qu'on l'atteignait, pour la même raison.
+**Ni ▲ ni ▼ ne se désactive au prétexte que le champ est vide, et les deux flèches partent du même repère** (`emptyStart` de `NumberStepper`) — le même repère quel que soit le sens, comme taper directement cette valeur. Sans lui, ▲ retombait sur `min` même pour un champ dont le point de départ naturel n'est pas sa borne minimale (« année max » : l'année courante), et ▼ n'avait tout simplement aucune destination définie depuis « vide », d'où sa désactivation forcée. « Année min » part de `1950`, « année max » de l'année courante — dans les deux sens : un appui sur ▲ depuis « année max » vide affiche l'année courante, un second l'année suivante, exactement comme un appui sur ▼ affiche l'année courante puis l'année précédente. **Aucune des deux bornes n'a de plancher ni de plafond réel** — `1950`/l'année courante ne sont que des points de départ (`emptyStart`), jamais des `min`/`max` : des voitures existent bien avant 1950 (retour utilisateur direct — une première version bornait `min` à `1950`, empêchant d'aller plus bas une fois qu'on y était arrivé), et un mod peut légitimement porter une année future (voiture concept, DLC annoncé). Le plafond de « année min » suit seulement, dynamiquement, « année max » quand elle est renseignée (une borne ne doit pas dépasser l'autre), sans repli sur une constante quand elle ne l'est pas. Même correctif pour la fourchette d'année du vivier d'adversaires (`OpponentsBlock.svelte`, SESSION§1) : son plafond à l'année courante grisait ▲ dès qu'on l'atteignait, pour la même raison.
 
 **Colonne « État » et pastille d'état** (`StateBadge.svelte`, partagé entre le tableau de bibliothèque et la fiche détail — c'est la même information, elle doit se lire pareil aux deux endroits). Quatre états, la couleur portant la distinction et le libellé l'état : **vert = actif**, **orange = inactif**, **gris = mod installé hors Pit Box** (§8 — présent dans le jeu, donc chargé, mais l'app ne le gère pas ; gris et non jaune parce que sur une install déjà moddée il y en a des centaines et qu'elles fonctionnent), **bleu = contenu de base Kunos** (toujours présent dans le jeu, il ne s'active ni ne se désactive — d'où une couleur à lui plutôt que le vert des mods qu'on a soi-même déployés, avec la même infobulle que le badge des vignettes), libellé **« De base »** plutôt que « Actif » — c'est vrai techniquement (`c.active` vaut aussi vrai pour lui, d'ailleurs le filtre « Actif » remonte le contenu de base sans qu'on y touche ici) mais ce n'est pas l'information que la pastille doit donner. Le tableau affichait auparavant un tiret pour « inactif » — une absence, là où l'utilisateur cherche un état — et rien n'y distinguait le contenu de base d'un mod actif. **Le tri et le filtre d'état ne changent pas** : ils restent sur `c.active`/`c.is_stock` directement, indépendants de l'affichage. Sur la **fiche détail**, cette pastille est posée à droite de la bande d'onglets (emplacement `trailing` de `Tabs.svelte`, donc alignée sur les onglets par construction) : c'est la première chose qu'on vient y vérifier, et elle n'était lisible qu'en ouvrant le menu ⋮, dont le libellé Activer/Désactiver était le seul indice.
 
@@ -1189,7 +1189,7 @@ L'état d'activation n'est jamais déduit de `SessionPick` (juste id/nom/preview
 
 ---
 
-## 7bis. Écran Compléments — l'inventaire (refonte §4)
+## 7bis. Écran Compléments — l'inventaire (REFONTE§4)
 
 **Tout ce qui n'est pas un contenu autonome**, dans une seule liste : livrées,
 sons, habillages de circuit, couches, mods « autres », et tout ce que Pit Box
@@ -1234,7 +1234,7 @@ bien qu'un des deux gestes était perdu et que rien nulle part ne parlait de la
 livrée elle-même. Elle porte ce qu'une ligne ne peut pas porter : ses fichiers,
 son poids, sa provenance, son nom déclaré par `ui_skin.json`, sa note — et
 **si le jeu la voit**, seul fait de la fiche qui demande une action. Une livrée
-stockée mais non projetée (§12bis.2) est parfaitement normale partout ailleurs
+stockée mais non projetée (§8.3) est parfaitement normale partout ailleurs
 dans l'app et n'existe pas pour le jeu ; la réparation générale la rebranche.
 Une **couche** n'a toujours pas de fiche à elle : elle vit sur celle de son
 hôte, où le lien mène.
@@ -1273,7 +1273,15 @@ de cette voiture » se perdait.
 
 ## 8. Skins, sons, apps
 
+### 8.1 Indexation du contenu de base
+
 **Base Kunos indexée** en lecture seule (`is_stock`), non désactivable, pour que skins/sons puissent s'attacher à une voiture/circuit de base comme à un mod.
+
+**Le nom d'un circuit multi-layouts s'y calcule comme partout ailleurs** : la racine commune des noms de ses layouts (§5bis.3), pas celui du premier trouvé. Le correctif n'existait que pour la relecture des mods ; l'indexation du contenu de base rendait encore « Highlands Drift » pour un circuit qui s'appelle « Highlands », au gré de l'ordre alphabétique des dossiers. Deux chemins qui nomment la même chose doivent la nommer pareil.
+
+**Quand l'index est (re)construit** — deux déclencheurs, et il a fallu les deux : à l'**enregistrement de la configuration**, dès que le dossier du jeu est désigné ou qu'il change (`stock::needs_reindex`) ; et au **démarrage**, si rien n'est indexé alors qu'un dossier est connu. Le second seul ne suffisait pas : au tout premier lancement, la config n'existe pas encore quand l'app démarre, l'assistant l'écrit après — la bibliothèque restait donc vide jusqu'au lancement **suivant**. Même angle mort en changeant de dossier de jeu depuis les Réglages, où l'index continuait de décrire l'ancienne install. Un bouton « Indexer le contenu de base » reste disponible en Maintenance pour forcer la reconstruction.
+
+### 8.2 Mods installés hors Pit Box — « non géré »
 
 **Deux populations vivent dans `content/`, et les confondre était dangereux.** Pit Box s'installe souvent sur une install **déjà moddée** : les vrais dossiers de `content/cars` et `content/tracks` sont alors, en majorité, des mods posés à la main avant lui. L'indexation les prenait tous pour du contenu de jeu — auteur « Kunos » d'office, libellé « Jeu de base » dans la fiche, et surtout **le chemin de couche ouvert dessus**, qui sauvegarde puis efface le vrai dossier pour le remplacer par un composé (§4.3). L'utilisateur voyait son mod déplacé sans l'avoir demandé.
 
@@ -1285,14 +1293,12 @@ de cette voiture » se perdait.
 
 **La reclassification se fait sur place, à la réindexation.** Les bases écrites avant cette distinction ont ces mods en `is_stock` : le premier réindex bascule le seul drapeau `is_unmanaged`, sans toucher à ce que l'utilisateur a saisi dessus (nom repris à la main, description, tags manuels, favori).
 
-**Le nom d'un circuit multi-layouts s'y calcule comme partout ailleurs** : la racine commune des noms de ses layouts (§5bis.3), pas celui du premier trouvé. Le correctif n'existait que pour la relecture des mods ; l'indexation du contenu de base rendait encore « Highlands Drift » pour un circuit qui s'appelle « Highlands », au gré de l'ordre alphabétique des dossiers. Deux chemins qui nomment la même chose doivent la nommer pareil.
-
-**Quand l'index est (re)construit** — deux déclencheurs, et il a fallu les deux : à l'**enregistrement de la configuration**, dès que le dossier du jeu est désigné ou qu'il change (`stock::needs_reindex`) ; et au **démarrage**, si rien n'est indexé alors qu'un dossier est connu. Le second seul ne suffisait pas : au tout premier lancement, la config n'existe pas encore quand l'app démarre, l'assistant l'écrit après — la bibliothèque restait donc vide jusqu'au lancement **suivant**. Même angle mort en changeant de dossier de jeu depuis les Réglages, où l'index continuait de décrire l'ancienne install. Un bouton « Indexer le contenu de base » reste disponible en Maintenance pour forcer la reconstruction.
+### 8.3 Livrées et sons — des sous-éléments rattachés à une entité
 
 **Skins — sélection, pas activation filesystem.** Un skin est un sous-dossier dans `skins/` ; AC les charge tous. Aucune activation/désactivation. Seules actions : prévisualiser, et désigner le **skin piloté** (étoile) pour le lancement. Import via l'import général (rattachement automatique via le dossier `skins/<voiture>/`). **Miniature `livery.png`** (couleurs/motif du skin seul, convention AC reprise par CM) affichée quand présente : dans la liste déroulante compacte de sélection du skin de session (barre latérale, SESSION§1 — bien plus lisible que la photo de la voiture entière écrasée à 20px) et en médaillon dans le coin supérieur droit de chaque vignette de la grille de skins (fiche détail, §6.3) ; jamais sur la grande photo du skin sélectionné.
 - **Vue Skins** : sélection multiple (Ctrl/Alt) pour supprimer plusieurs skins d'un coup. **Regroupement par archive d'origine** (pour supprimer d'un coup tous les skins d'une même archive) ou, au choix, **par voiture**.
 
-**Un skin stocké à part fait deux sauts pour arriver dans le jeu, et le second se perdait.** Le premier est la **projection** : une junction dans le `skins/` de l'entité cible (§12bis.2). Pour du contenu de base, ce dossier *est* celui du jeu et tout est dit. Pour un **mod géré**, c'est le dossier de **bibliothèque** — et `content/<type>s/<id>` n'en est qu'une copie en hardlinks figée au dernier déploiement (§2). D'où le second saut, le **redéploiement de l'hôte**, désormais fait à la fin de l'import d'un pack, au retrait d'une livrée, et après chaque recomposition de `skins/default/` d'un circuit. Il n'a lieu que pour un mod géré : recomposer du contenu de base reconstruirait l'arbre depuis `stock_base/` et effacerait la junction qu'on vient de poser. Best-effort — ce qui est stocké sans être déployé est rattrapé par la réparation générale (SESSION§3).
+**Un skin stocké à part fait deux sauts pour arriver dans le jeu, et le second se perdait.** Le premier est la **projection** : une junction dans le `skins/` de l'entité cible (§8.3). Pour du contenu de base, ce dossier *est* celui du jeu et tout est dit. Pour un **mod géré**, c'est le dossier de **bibliothèque** — et `content/<type>s/<id>` n'en est qu'une copie en hardlinks figée au dernier déploiement (§2). D'où le second saut, le **redéploiement de l'hôte**, désormais fait à la fin de l'import d'un pack, au retrait d'une livrée, et après chaque recomposition de `skins/default/` d'un circuit. Il n'a lieu que pour un mod géré : recomposer du contenu de base reconstruirait l'arbre depuis `stock_base/` et effacerait la junction qu'on vient de poser. Best-effort — ce qui est stocké sans être déployé est rattrapé par la réparation générale (SESSION§3).
 
 Deux bugs réels tenaient là, et le second rendait le premier invisible. Les 20 livrées d'un pack F1 étaient stockées, projetées, listées dans la fiche et rendues dans l'aperçu 3D — tout cela lit la bibliothèque — et n'existaient **nulle part dans le jeu**, sans un mot dans le rapport puisque, du point de vue de la bibliothèque, rien n'avait échoué. Réactiver le mod à la main n'y changeait rien non plus : **une junction n'est ni un fichier ni un dossier** pour `symlink_metadata` (`is_dir()` et `is_file()` tous deux faux), donc le parcours de déploiement la rejetait des deux côtés et la livrée disparaissait du déploiement en silence. Le déploiement **suit** désormais les junctions rencontrées dans la bibliothèque — les seules qui s'y trouvent sont nos propres projections, une archive n'en porte jamais — et `content/` continue de ne contenir aucun point d'analyse.
 
@@ -1312,6 +1318,8 @@ Quand ce chemin n'est pas disponible — pas d'installation configurée, DLL abs
 
 Le format des banks FMOD (conteneur FSB5, codecs PCM16 et FADPCM) est consigné dans `docs/fsb5-format.md`, avec la méthode qui a établi chaque fait et les hypothèses écartées. Deux points structurent le reste : la moitié du corpus n'a **pas de table de noms** (les mods la suppriment), donc le ralenti se trouve par le nom quand il existe et **par la mesure** sinon — autocorrélation sur une fraction de seconde, ce qui écarte portes, klaxon et bruit de vent, puis la fondamentale la plus basse. Cette mesure ne tombe juste que 40 fois sur 91, et **ce n'est pas réparable** : rien dans le signal ne distingue un ralenti extérieur d'un bas régime en lâcher de gaz. C'est la raison d'être du chemin FMOD ci-dessus, qui aboutit lui sur 299 voitures sur 299 — l'heuristique ne sert plus que de repli, et **ne doit pas être retouchée**. Et **Vorbis n'est pas décodé** (4 voitures sur 297), le codec étant nommé dans l'erreur plutôt que de rendre du silence.
 
+### 8.4 Apps
+
 **Apps** — type autonome, vue propre, activables (par défaut dès l'import, comme les mods voiture/circuit et les « autres mods »). Détection Python (`<id>/<id>.py`) et Lua/CSP (`<id>/<id>.lua`) ; activation par junction vers `apps/python/<id>` ou `apps/lua/<id>` selon le langage constaté. Ressources annexes (§4.5.2, ex. manuel PDF fourni avec l'app) listées et ouvrables depuis la vue, comme sur une fiche voiture/circuit.
 
 **Une app a sa fiche**, ouverte d'un clic sur son nom dans la vue. Page pleine, comme celle d'une voiture et pour la même raison (§4.5.5) : les listes de fichiers y vivent, pas dans un dépliant au milieu d'une liste — une app qui pose trente configs CSP ferait déborder la vue. Sans tags ni fiche technique, qu'une app n'a pas : ce qui la décrit tient sur une ligne (nom, convention Python ou Lua/CSP, archive d'origine, date d'import), et le reste de la page est **ce qu'elle met sur le disque** — deux onglets **Ressources** et **Ajouts au jeu**, les mêmes composants que la fiche d'un mod, pas des copies. La liste, elle, ne garde que ce qui se décide sans ouvrir : état, activation, dossier, suppression.
@@ -1320,7 +1328,7 @@ Le format des banks FMOD (conteneur FSB5, codecs PCM16 et FADPCM) est consigné 
 
 **Pas de notion de mise à jour.** Contrairement aux voitures/circuits (§4.3), réimporter une app dont l'id existe déjà **remplace intégralement** ses fichiers, sans comparaison ni choix — pas de diff, pas d'historique de versions. Une app est un script autonome, elle n'a pas les enjeux de versions d'un mod de contenu.
 
-**Mais une app reçoit des couches** (§4.3), et le même attirail : ordre de priorité, activation par couche, `LayersBlock` repris tel quel en troisième onglet de sa fiche. Parce que des mods de contenu **ajoutent des fichiers dans le dossier d'une app** — cas réels : une voiture RSS livrant son `.lua` de réglages à `RSS_Settings`, un circuit livrant ses caméras à `CamTool_2`. C'est très exactement une couche, et la traiter comme un « ajout au jeu » (§4.5.3) produisait deux défauts : le dossier de l'app était **créé en vrai dossier** quand elle n'était pas installée (bloquant définitivement son installation ultérieure, §12bis.1bis), et une fois l'app active, les fichiers étaient écrits **à travers la junction**, donc dans son dossier de bibliothèque, qu'un réimport de l'app effaçait.
+**Mais une app reçoit des couches** (§4.3), et le même attirail : ordre de priorité, activation par couche, `LayersBlock` repris tel quel en troisième onglet de sa fiche. Parce que des mods de contenu **ajoutent des fichiers dans le dossier d'une app** — cas réels : une voiture RSS livrant son `.lua` de réglages à `RSS_Settings`, un circuit livrant ses caméras à `CamTool_2`. C'est très exactement une couche, et la traiter comme un « ajout au jeu » (§4.5.3) produisait deux défauts : le dossier de l'app était **créé en vrai dossier** quand elle n'était pas installée (bloquant définitivement son installation ultérieure, §8.2), et une fois l'app active, les fichiers étaient écrits **à travers la junction**, donc dans son dossier de bibliothèque, qu'un réimport de l'app effaçait.
 
 **Une couche est rangée sous le type de son hôte** : `<lib>/layers/<type>/<hôte>/<nom>`, aligné sur `extras/` et `resources/`. Les couches rangées **avant** ce segment gardent leur chemin — il est lu en base, jamais recalculé — et continuent donc de fonctionner là où elles sont : pas de migration, pas de risque, au prix d'un arbre mixte le temps que les anciennes disparaissent.
 
@@ -1340,6 +1348,8 @@ Deux précautions dans ce classement :
 - **Le balayage ramasse les restes en bloc.** Un `apps/` livré à côté d'un circuit arrive comme un seul dossier nommé `apps`, pas comme ses fichiers : tester le seul chemin du reste ne voyait rien (`apps` n'a pas assez de composants pour désigner une app). C'est donc chaque **fichier** sous le reste qui est testé. Et un reste **mixte** — des chemins d'app mêlés à d'autres — n'est pas touché du tout : en consommer la moitié dupliquerait les fichiers en import « copie » et ferait ranger un dossier amputé en « déplacement ».
 
 **Reprise des bibliothèques existantes** (`extras::migrate_app_extras_to_layers`, au démarrage). Les ajouts au jeu rangés avant que les couches d'app n'existent sont convertis. **Idempotente par construction** : plus aucun chemin `apps/<lang>/…` ne subsiste dans l'arbre des ajouts après coup, donc un second démarrage ne trouve rien — pas de drapeau à mémoriser. **Sans risque de perte** : l'arbre des ajouts est la source et n'est touché qu'après un `undeploy` réussi ; un exemplaire posé dans le jeu étant un *hardlink* de celui du magasin, le retirer ne fait que décrémenter le compteur de liens, y compris dans le cas tordu où le chemin de jeu traversait la junction d'une app et pointait donc dans la bibliothèque. Ce qui restait d'ajouts légitimes est reposé ensuite, et seulement si le mod est actif.
+
+### 8.5 Accès transversal : l'inventaire des compléments
 
 **Accès transversal : l'inventaire des compléments** (§7bis). Les écrans
 « Add-ons voiture » et « Add-ons circuit » (`Transversal.svelte`) **ont

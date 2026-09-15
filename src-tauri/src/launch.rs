@@ -1,4 +1,4 @@
-//! Lancement de session (L4/§8.3) : on construit un **preset Quick Drive**
+//! Lancement de session (L4/SESSION§2) : on construit un **preset Quick Drive**
 //! (`quickdrive.rs`) et on le passe à Content Manager via
 //! `acmanager://race/quick?presetFile=…`. Remplace l'ancien mécanisme
 //! `race/config`/`PreparedConfig` (race.ini) : lui seul déclenche le chemin
@@ -35,7 +35,7 @@ pub enum SessionType {
 }
 
 /// Départ en Practice → `StartType` du `ModeData` `QuickDrive_Practice.xaml`
-/// (§8.4). `Pit` → "PIT" (confirmée sur `pitbox-practice.cmpreset`) ; `Hotlap`
+/// (SESSION§3). `Pit` → "PIT" (confirmée sur `pitbox-practice.cmpreset`) ; `Hotlap`
 /// → "HOTLAP_START" (confirmée en usage réel — position de départ dédiée au
 /// chrono, plutôt qu'un point arbitraire sur la piste) ; `Track` → "TRACK",
 /// **non vérifiée sur un preset réel** — à confirmer si le départ sur piste
@@ -100,7 +100,7 @@ pub struct Opponent {
     /// tirage.
     #[serde(default)]
     pub ai_level: Option<u32>,
-    /// Skin de l'adversaire (§8.6 : plateau réglable finement depuis la popup
+    /// Skin de l'adversaire (SESSION§3 : plateau réglable finement depuis la popup
     /// de sélection). `None` → le jeu applique son skin par défaut.
     #[serde(default)]
     pub car_skin: Option<String>,
@@ -227,7 +227,7 @@ pub struct RaceSetup {
     /// Heure du jour (0-24).
     #[serde(default = "default_time")]
     pub time_hours: f32,
-    /// Températures implicites (air/piste) calculées côté météo (§8.5).
+    /// Températures implicites (air/piste) calculées côté météo (SESSION§3.3).
     #[serde(default)]
     pub ambient_c: Option<i32>,
     #[serde(default)]
@@ -237,7 +237,7 @@ pub struct RaceSetup {
     pub wind_speed_kmh: Option<u32>,
     #[serde(default)]
     pub wind_direction_deg: Option<u32>,
-    /// Saison optionnelle (§8.6bis) : "spring"|"summer"|"autumn"|"winter",
+    /// Saison optionnelle (SESSION§3.3) : "spring"|"summer"|"autumn"|"winter",
     /// juste persistée — c'est `season_date` qui est réellement écrite.
     #[serde(default)]
     #[allow(dead_code)]
@@ -245,10 +245,10 @@ pub struct RaceSetup {
     /// Date ISO (YYYY-MM-DD) associée à la saison choisie, calculée côté front.
     /// Écrite dans `[LIGHTING] __CM_DATE` (timestamp Unix), la clé que lit
     /// CSP pour la date de simulation (donc la saison) — validée sur une
-    /// capture de race.ini produit par Content Manager (§8.6bis).
+    /// capture de race.ini produit par Content Manager (SESSION§3.3).
     #[serde(default)]
     pub season_date: Option<String>,
-    // --- Options de course (§8.6, toutes visibles, pas de bloc repliable) ---
+    // --- Options de course (SESSION§3, toutes visibles, pas de bloc repliable) ---
     #[serde(default)]
     pub penalties: bool,
     /// Faux départ : 0 = aucune, 1 = téléport, 2 = drive-through.
@@ -292,7 +292,7 @@ pub struct RaceSetup {
     pub qualify_enabled: bool,
     #[serde(default = "default_qualify_minutes")]
     pub qualify_minutes: u32,
-    // --- Réglages dépendants du type (§8.4) ---
+    // --- Réglages dépendants du type (SESSION§3) ---
     /// Ghost car (Hotlap uniquement) → [GHOST_CAR] du race.ini.
     #[serde(default)]
     pub ghost_car: bool,
@@ -304,7 +304,7 @@ pub struct RaceSetup {
     #[serde(default = "default_practice_start")]
     pub practice_start: PracticeStart,
     /// Simulation — dégâts/usure/carburant → assists.ini. Actifs quel que
-    /// soit le type de session (§8.6, pas réservés à la Course). En %.
+    /// soit le type de session (SESSION§3, pas réservés à la Course). En %.
     #[serde(default = "default_damage")]
     pub damage: u32,
     #[serde(default = "default_rate")]
@@ -314,7 +314,7 @@ pub struct RaceSetup {
     /// Chauffe-pneus au départ. Actif quel que soit le type de session.
     #[serde(default)]
     pub tyre_blankets: bool,
-    // --- Aides à la conduite (Course uniquement, §8.6) ---
+    // --- Aides à la conduite (Course uniquement, SESSION§3) ---
     /// Trois états, pas deux (SESSION§3) : une case à cocher ne pouvait pas dire la
     /// différence entre « comme la vraie voiture » et « forcée ».
     #[serde(default)]
@@ -387,7 +387,7 @@ pub fn steam_running() -> bool {
         .any(|p| p.name().to_string_lossy().eq_ignore_ascii_case("steam.exe"))
 }
 
-/// Ouvre Content Manager sans argument (§12bis.5) : pratique pour parcourir
+/// Ouvre Content Manager sans argument (§7.2) : pratique pour parcourir
 /// son propre menu (réglages CM, contenu…) sans passer par une session Pit Box.
 pub fn open_content_manager(cfg: &AppConfig) -> Result<(), String> {
     let cm = cfg
@@ -430,7 +430,7 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
     ensure_available(conn, cfg, ModKind::Track, &setup.track_id)?;
     // Adversaires : best-effort — un adversaire manquant ne doit pas bloquer
     // toute la session, seulement être absent du plateau final. Track day a
-    // aussi une grille (§8.6), même traitement que Course.
+    // aussi une grille (SESSION§3), même traitement que Course.
     if matches!(setup.session_type, SessionType::Race | SessionType::TrackDay) {
         for opp in &setup.opponents {
             let _ = ensure_available(conn, cfg, ModKind::Car, &opp.car_id);
@@ -457,7 +457,7 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
         }
     }
 
-    // Preset Quick Drive (§8.3) plutôt qu'un race.ini/PreparedConfig : seul ce
+    // Preset Quick Drive (SESSION§2) plutôt qu'un race.ini/PreparedConfig : seul ce
     // chemin peuple StartProperties.BasicProperties côté CM, condition pour
     // que le téléchargement CSP automatique (VAO/config manquants) se
     // déclenche — voir quickdrive.rs et docs/L4-cm-launch-research.md.

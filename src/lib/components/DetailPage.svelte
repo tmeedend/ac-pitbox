@@ -2,7 +2,7 @@
   // Page de détail pleine page (§6.3, maquette maquettes/archive/pitbox-fiche-B-revisee.html).
   // Riche pour les voitures (héros + specs natives + fiche technique + courbe +
   // description + skins + tags/versions/historique). Panneaux Son et Distance =
-  // placeholders « à venir » (lots §12bis et §6.5). Réduite pour les circuits.
+  // placeholders « à venir » (lots §8 et §6.5). Réduite pour les circuits.
   import {
     activateMod,
     deactivateMod,
@@ -114,7 +114,7 @@
   let detail = $state<ModDetail | null>(null);
   // Onglets de premier niveau de la fiche (§6.1) — réinitialisé à "fiche" à
   // chaque changement d'entité (voir le $effect suivant `id`).
-  /** Trois onglets (refonte §7.1) : ce que l'objet EST, ce qu'il a produit ou
+  /** Trois onglets (REFONTE§7.1) : ce que l'objet EST, ce qu'il a produit ou
    * apporté, et ce que son installation a fait. Les six d'avant exposaient la
    * mécanique — Ressources et Ajouts au jeu étaient vides la plupart du temps,
    * et il fallait cliquer pour le découvrir. */
@@ -124,7 +124,7 @@
    * ouverture de fiche**, sans persistance : la fiche s'ouvre sur l'aperçu et
    * ses données, pas sur une grille de trente livrées. */
   let pickerOpen = $state(false);
-  /** Fiche d'une couche ouverte par-dessus celle de l'hôte (§8.4) : la fermer
+  /** Fiche d'une couche ouverte par-dessus celle de l'hôte (REFONTE§8.4) : la fermer
    * y ramène, au lieu de renvoyer à la liste — même règle que la fiche d'un
    * pack. Le nombre de couches sœurs voyage avec elle : la carte Ordre n'a de
    * sens qu'à partir de deux. */
@@ -792,7 +792,7 @@
     queueMicrotask(() => void refreshEntity());
   });
 
-  // Son = bascule exclusive (§12bis.2) : un seul actif, original restaurable.
+  // Son = bascule exclusive (§8.3) : un seul actif, original restaurable.
   async function pickSound(subId: string | null) {
     if (!detail || soundBusy) return;
     soundBusy = true;
@@ -858,7 +858,7 @@
     detail = await getModDetail(id);
   }
 
-  // Sélectionner un skin (§8.6/§12bis.2) : mémorisé par voiture ET poussé dans
+  // Sélectionner un skin (SESSION§1/§8.3) : mémorisé par voiture ET poussé dans
   // le duo de session (visible dans le menu). Remplace l'ancienne « étoile ».
   function selectSkin(i: number) {
     previewSkin = i;
@@ -885,7 +885,7 @@
 
   // Sélectionner un layout de circuit : mémorisé + poussé dans le duo de session
   // (photo + tracé en surimpression dans le menu).
-  /** Si le layout mémorisé comme choix de session (§8.6) pour cette entité a
+  /** Si le layout mémorisé comme choix de session (SESSION§1) pour cette entité a
    * disparu (couche retirée/réordonnée, §4.4) alors qu'il s'agit bien de
    * l'entité de la fiche courante, le resynchronise — sinon un layout fantôme
    * reste affiché dans la barre latérale et proposé au lancement, alors qu'il
@@ -1183,7 +1183,7 @@
 {/snippet}
 
 <div class="page">
-  <!-- Fiches posées PAR-DESSUS celle du mod : une couche (§8.4), un mod greffé
+  <!-- Fiches posées PAR-DESSUS celle du mod : une couche (REFONTE§8.4), un mod greffé
        (§4.3). La fermer ramène ici, ce qui est le chemin par lequel on y est
        arrivé — même disposition que la fiche d'un pack. -->
   {#if openLayer}
@@ -1511,7 +1511,7 @@
                     >
                       <div class="skin-img">
                         {#if sp}<img src={sp} alt={sk.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
-                        <!-- `livery.png` (§8.6) : couleurs/motif du skin seul, en
+                        <!-- `livery.png` (SESSION§1) : couleurs/motif du skin seul, en
                              complément de la photo de la voiture — jamais sur la
                              grande image du skin sélectionné (heroImg), juste ici
                              dans la grille de choix. -->
@@ -2408,12 +2408,12 @@
     font-size: 7px;
     padding: 0 3px;
   }
-  /* `livery.png` (§8.6) : coin supérieur droit, libre (le badge session est
+  /* `livery.png` (SESSION§1) : coin supérieur droit, libre (le badge session est
      en bas à gauche). Bordure pour rester lisible sur une preview claire.
      Sélecteur descendant obligatoire, et pas par style : `.skin-img img`
      (0,1,1) l'emporte sur `.skin-livery` (0,1,0) quel que soit l'ordre des
      règles, donc le médaillon héritait de `width/height: 100%` et recouvrait
-     la photo de la voiture — soit exactement ce que le §8.6 interdit. */
+     la photo de la voiture — soit exactement ce que le SESSION§1 interdit. */
   .skin-img img.skin-livery {
     position: absolute;
     top: 4px;

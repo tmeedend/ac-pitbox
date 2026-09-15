@@ -195,6 +195,27 @@ for (const f of front.filter((f) => f.endsWith(".svelte"))) {
   }
 }
 
+// --- 7. renvoi de spec dans une chaîne visible -------------------------------
+// Trouvé en vrai : « contenu de base Kunos : déjà présent, non activable
+// (§12bis.1). » s'affichait tel quel. Un numéro de section ne veut rien dire
+// pour qui utilise l'app, et il périme en silence — celui-là désignait une
+// section disparue depuis longtemps. Le renvoi appartient au commentaire du
+// code, jamais au libellé ; c'est aussi ce que dit la règle « un libellé
+// d'écran n'explique jamais son propre fonctionnement ».
+for (const locale of ["fr", "en", "it", "de", "es", "pt"]) {
+  const file = `src/lib/i18n/locales/${locale}.json`;
+  const walk = (o, path) => {
+    for (const k in o) {
+      const q = path ? `${path}.${k}` : k;
+      if (o[k] && typeof o[k] === "object") walk(o[k], q);
+      else if (typeof o[k] === "string" && /§[0-9]/.test(o[k])) {
+        report("no-spec-ref-in-locale", file, 1, `\`${q}\` affiche un renvoi de spec`);
+      }
+    }
+  };
+  walk(JSON.parse(read(file)), "");
+}
+
 // --- Rapport ----------------------------------------------------------------
 
 if (!violations.length) {

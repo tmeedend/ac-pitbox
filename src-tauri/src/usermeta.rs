@@ -1,4 +1,4 @@
-//! User-entered metadata, for **every** kind of entity (refonte §6.1 and §9).
+//! User-entered metadata, for **every** kind of entity (REFONTE§6.1 and §9).
 //!
 //! Two fields, one mechanism: a display name and a free-form note. Both used to
 //! belong to cars and tracks only, which left the objects that need them most

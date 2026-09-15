@@ -27,7 +27,7 @@
     disabled?: boolean;
     /** Pastille signalant qu'il y a quelque chose là-dedans, quand le décompte
      * n'a pas de sens : une note existe, elle est unique, « (1) » n'apprendrait
-     * rien de plus que sa présence (refonte §7.4). */
+     * rien de plus que sa présence (REFONTE§7.4). */
     marker?: boolean;
   }
 

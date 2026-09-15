@@ -1,7 +1,7 @@
 //! Table statique des dates du contenu officiel Kunos (voitures + circuits),
 //! embarquée depuis `docs/kunos_content_dates.json` — seule source de vérité,
 //! tenue à jour manuellement par l'utilisateur. Sert à compléter, à la
-//! (ré)indexation du contenu de base (§12bis.1, `stock::index_stock_content`),
+//! (ré)indexation du contenu de base (§8.1, `stock::index_stock_content`),
 //! les champs que `ui_car.json`/`ui_track.json` ne fournissent pas :
 //! - année du modèle (voitures) : lue dans `ui_car.json` si présente, sinon
 //!   ici, sinon laissée vide ;
@@ -82,7 +82,7 @@ pub fn pack_name(kind: ModKind, id: &str) -> Option<String> {
 }
 
 /// True when this folder id belongs to official Kunos content — base game or
-/// any DLC (§12bis.1). This is what tells apart, among the real folders sitting
+/// any DLC (§8.1). This is what tells apart, among the real folders sitting
 /// in `content/`, the game's own content from a mod the user installed by hand
 /// before Pit Box existed (`overlay::ModRow::is_unmanaged`).
 ///
@@ -126,7 +126,7 @@ mod tests {
     }
 
     /// Rule: official content is recognised for both kinds, base game and DLC
-    /// alike (§12bis.1) — this is what keeps a real install from being flagged
+    /// alike (§8.1) — this is what keeps a real install from being flagged
     /// as a pile of unmanaged mods.
     #[test]
     fn official_content_is_recognised_for_base_and_dlc() {
@@ -137,7 +137,7 @@ mod tests {
     }
 
     /// Rule: anything the table does not know is a mod, not game content
-    /// (§12bis.1). A track id is looked up in the track table only — an id
+    /// (§8.1). A track id is looked up in the track table only — an id
     /// shared with a car must not leak across kinds.
     #[test]
     fn unknown_id_is_not_official() {

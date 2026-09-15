@@ -1,4 +1,4 @@
-//! Génération d'un preset Quick Drive Content Manager (§8.3) à partir d'un
+//! Génération d'un preset Quick Drive Content Manager (SESSION§2) à partir d'un
 //! `RaceSetup` — remplace le `race.ini`/`PreparedConfig` (`race/config`), qui
 //! ne déclenche jamais le téléchargement CSP automatique (VAO/config) : ce
 //! dernier n'est vérifié que dans `GameWrapper.StartAsync_Ui()`, à partir de
@@ -31,7 +31,7 @@ fn track_id(s: &RaceSetup) -> String {
     }
 }
 
-/// Assists (§8.6) : dégâts/carburant/pneus/aides, valables quel que soit le
+/// Assists (SESSION§3) : dégâts/carburant/pneus/aides, valables quel que soit le
 /// type de session. `Damage` en pourcentage direct (0-100, comme notre champ) ;
 /// `TyreWear`/`FuelConsumption` en multiplicateur de taux (1.0 = 100%, notre
 /// échelle 0-200 divisée par 100 — vérifié sur `AssistsData` d'un preset réel
@@ -401,7 +401,7 @@ fn starting_position(s: &RaceSetup) -> usize {
     }
 }
 
-/// `ModeData` (§8.6) pour `QuickDrive_Practice.xaml` — schéma confirmé sur
+/// `ModeData` (SESSION§3) pour `QuickDrive_Practice.xaml` — schéma confirmé sur
 /// `pitbox-practice.cmpreset` : `StartType`/`Penalties`/`PlayerBallast`/
 /// `PlayerRestrictor`. Pas de grille (session solo). Valeurs de `StartType` :
 /// voir `PracticeStart`.
@@ -489,7 +489,7 @@ fn mode_data_trackday(s: &RaceSetup) -> String {
     .to_string()
 }
 
-/// Construit le preset Quick Drive complet (§8.3) — remplace le couple
+/// Construit le preset Quick Drive complet (SESSION§2) — remplace le couple
 /// `build_race_ini` / `PreparedConfig`. Renvoie le JSON sérialisé, prêt à
 /// écrire dans un fichier temporaire et passer via `race/quick?presetFile=…`.
 ///

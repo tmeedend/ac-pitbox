@@ -1,4 +1,4 @@
-// Skin/layout préféré par entité (§8.6) : mémorise le dernier choisi, avec
+// Skin/layout préféré par entité (SESSION§1) : mémorise le dernier choisi, avec
 // assez d'infos (nom, preview) pour l'afficher immédiatement (sidebar, grille
 // bibliothèque) sans re-résoudre la liste des skins/layouts de l'entité.
 //

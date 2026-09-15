@@ -1,5 +1,5 @@
 // Pont typé vers la saisie utilisateur commune à toutes les entités
-// (refonte §6.1 et §9) : une note libre et un nom d'affichage.
+// (REFONTE§6.1 et §9) : une note libre et un nom d'affichage.
 //
 // Un seul couple de commandes plutôt qu'un par type : le front dit de quelle
 // entité il parle, le backend résout la table. Ajouter un type plus tard coûte

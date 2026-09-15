@@ -649,7 +649,7 @@
     "onlyEntity": "Only entity in this pack for now.",
     "filterByPack": "Filter by this pack",
     "uninstallPack": "Uninstall pack",
-    "layersNote": "Imported on top of this base without replacing it — the base stays intact (§4.4).",
+    "layersNote": "Imported on top of this base without replacing it — the base stays intact.",
     "layerCounts": "{added} added · {overwritten} overwritten",
     "layerOpenFolder": "Open the layer folder",
     "layerOpenDetail": "Open this layer's page",

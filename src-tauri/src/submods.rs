@@ -1,9 +1,9 @@
-//! Sous-éléments rattachés (§12bis.2) : skins et sons. Routés à l'import vers
+//! Sous-éléments rattachés (§8.3) : skins et sons. Routés à l'import vers
 //! un stockage **séparé** dans la bibliothèque (`<lib>/skins/<parent>/<skin>` et
 //! `<lib>/sounds/<parent>/<nom>`), tracés dans l'overlay `sub_mods`, sans jamais
-//! polluer la bibliothèque principale (§12bis.3).
+//! polluer la bibliothèque principale (§8.3).
 //!
-//! Asymétrie (§12bis.2) :
+//! Asymétrie (§8.3) :
 //! - **Skin voiture** : pas d'activation filesystem. Pour qu'AC le charge, il
 //!   est **projeté** par junction dans le dossier `skins/` de la voiture cible
 //!   (`<parent skins>/<skin>` → stockage séparé). Tous les skins présents sont
@@ -139,7 +139,7 @@ fn count_sub_items(subs: &[FoundSub]) -> usize {
         .sum()
 }
 
-/// Importe les sous-éléments détectés (§12bis.2). `copy` préserve la source.
+/// Importe les sous-éléments détectés (§8.3). `copy` préserve la source.
 #[allow(clippy::too_many_arguments)]
 pub fn import_subs(
     conn: &Connection,
@@ -344,7 +344,7 @@ fn import_skin_pack(
 }
 
 /// Projette un skin stocké séparément dans le `skins/` de l'entité cible via
-/// junction, pour qu'AC (ou CSP, pour un circuit) le charge (§12bis.2). Pour un
+/// junction, pour qu'AC (ou CSP, pour un circuit) le charge (§8.3). Pour un
 /// circuit, sous `skins/cm_skins/<skin>/` (convention CM, §8) — pas
 /// `skins/<skin>/` directement. Best-effort.
 fn project_skin(
@@ -361,7 +361,7 @@ fn project_skin(
     // vit là — mais pour un id **inconnu** ce chemin ne désigne rien, et le
     // `create_dir_all` juste en dessous le **créait** : un vrai dossier
     // `content/cars/<absent>/skins/` dans l'install, exactement le dossier
-    // fantôme qu'on vient de supprimer côté apps (§12bis.4). Pire, ce dossier
+    // fantôme qu'on vient de supprimer côté apps (§8.4). Pire, ce dossier
     // ferait ensuite échouer l'import de la vraie voiture, que le garde-fou
     // `REAL_FOLDER_IN_CONTENT` refuse de recouvrir.
     if !host_exists(conn, parent_id) {
@@ -431,7 +431,7 @@ pub struct SkinFile {
 }
 
 /// The sheet of a separately stored livery — car (`SKIN`) or track
-/// (`TRACK_SKIN`), §12bis.2.
+/// (`TRACK_SKIN`), §8.3.
 ///
 /// It exists for the reason the sound sheet does (§8): what there is to say
 /// about a livery is a **list of files**, which has no place unfolded inside a
@@ -464,7 +464,7 @@ pub struct SkinDetail {
     pub notes_user: Option<String>,
     /// Stored folder, absolute — what "open the folder" opens.
     pub folder: String,
-    /// Projected into the host's `skins/` (§12bis.2). False means the game
+    /// Projected into the host's `skins/` (§8.3). False means the game
     /// cannot load it, which is worth saying rather than leaving to be
     /// guessed.
     pub projected: bool,
@@ -557,7 +557,7 @@ pub struct RepairReport {
 }
 
 /// Recrée les junctions de projection de skins voiture/circuit manquantes ou
-/// cassées (§12bis.2), sans jamais toucher aux fichiers stockés eux-mêmes.
+/// cassées (§8.3), sans jamais toucher aux fichiers stockés eux-mêmes.
 /// Cas d'usage : une copie de bibliothèque (robocopy, migration vers une
 /// autre machine) ne préserve pas les junctions — leur cible est un chemin
 /// absolu propre à la machine source, donc non relogeable telle quelle.
@@ -711,7 +711,7 @@ pub fn list_active_track_skins(conn: &Connection, track_id: &str) -> Vec<String>
         .collect()
 }
 
-/// Vue transversale (§12bis.3) : tous les sous-éléments d'un type, avec leur
+/// Vue transversale (§8.3) : tous les sous-éléments d'un type, avec leur
 /// taille sur disque renseignée. Le poids sert à repérer d'un coup d'œil quel
 /// pack occupe le plus de place, donc il doit refléter le disque au moment de
 /// l'affichage — d'où le parcours récursif ici plutôt qu'une colonne en base.
@@ -1218,11 +1218,11 @@ fn import_sound(
     });
 }
 
-// --- Bascule exclusive du son (§12bis.2) ------------------------------------
+// --- Bascule exclusive du son (§8.3) ------------------------------------
 
 /// Active un mod de son : remplace réellement le `sfx/` de la voiture par les
 /// fichiers du mod (bascule exclusive). Le son d'origine est **sauvegardé une
-/// fois** pour pouvoir y revenir — jamais détruit irréversiblement (§12bis.2).
+/// fois** pour pouvoir y revenir — jamais détruit irréversiblement (§8.3).
 pub fn activate_sound(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<(), String> {
     let sub = overlay::get_sub_mod(conn, sub_id)
         .map_err(|e| e.to_string())?
@@ -1259,7 +1259,7 @@ pub fn restore_sound(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Res
     Ok(())
 }
 
-/// Supprime proprement un sous-élément (§12bis.3) : retire la junction de
+/// Supprime proprement un sous-élément (§8.3) : retire la junction de
 /// projection (skin) ou restaure le son d'origine (son actif), efface les
 /// fichiers stockés, puis la ligne overlay. Garde-fou junction respecté.
 pub fn remove_sub(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Result<(), String> {
@@ -2476,7 +2476,7 @@ mod tests {
 
     #[test]
     fn repair_projections_recreates_missing_car_skin_junction() {
-        // §12bis.2 : une copie de bibliothèque (robocopy sans /XJ, migration
+        // §8.3 : une copie de bibliothèque (robocopy sans /XJ, migration
         // vers une autre machine) ne préserve pas les junctions — leur cible
         // est un chemin absolu propre à la machine source. repair_projections
         // doit recréer celle d'un skin dont le stockage survit mais dont la
@@ -2564,7 +2564,7 @@ mod tests {
         assert!(report2.failed.is_empty());
     }
 
-    /// Règle (§12bis.2) : un skin importé sur une voiture **active** est dans le
+    /// Règle (§8.3) : un skin importé sur une voiture **active** est dans le
     /// jeu à la fin de l'import, pas seulement en bibliothèque.
     ///
     /// Bug réel : pour un mod géré, `parent_content_dir` désigne le dossier de
@@ -2658,7 +2658,7 @@ mod tests {
         assert!(deployed.join("ferrari.kn5").is_file(), "la voiture elle-même intacte");
     }
 
-    /// Règle (refonte §4.2) : une livrée a sa propre fiche, et celle-ci dit ce
+    /// Règle (REFONTE§4.2) : une livrée a sa propre fiche, et celle-ci dit ce
     /// que la ligne d'inventaire ne peut pas dire — ses fichiers, et si le jeu
     /// la voit.
     ///

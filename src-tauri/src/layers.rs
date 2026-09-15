@@ -28,7 +28,7 @@ use crate::{importer, overlay};
 ///
 /// Distinct de [`ModKind`] parce qu'une **app** en reçoit elle aussi : un mod
 /// qui ajoute des fichiers dans le dossier d'une app est très exactement une
-/// couche (§12bis.4). Elle n'a pourtant ni dossier `content/<type>s/`, ni
+/// couche (§8.4). Elle n'a pourtant ni dossier `content/<type>s/`, ni
 /// version, ni fiche technique — ce n'est pas un mod, et l'élargissement de
 /// `ModKind` aurait contaminé tout ce qui s'en sert pour choisir un dossier de
 /// contenu.
@@ -102,7 +102,7 @@ pub fn store_layer(
     archive_name: &str,
     mode: ExtractionMode,
 ) -> Result<(String, usize), String> {
-    // Garde-fou (§12bis.1bis) : un mod installé hors Pit Box ne reçoit jamais
+    // Garde-fou (§8.2) : un mod installé hors Pit Box ne reçoit jamais
     // de couche. Poser une couche entraîne la composition dans `content/`,
     // donc la sauvegarde puis **l'effacement** du vrai dossier par
     // `compose::recompose_stock` — sur un dossier que l'utilisateur a posé
@@ -231,7 +231,7 @@ pub fn folder_path(conn: &Connection, cfg: &crate::config::AppConfig, layer_id: 
 /// Dossier de base de l'hôte d'une couche, quel que soit son type (§4.4) : la
 /// version active pour un mod, le dossier de bibliothèque pour une app.
 /// `None` quand l'hôte n'est pas (encore) là — une couche en attente.
-/// Un tracé de circuit apporté par une couche (refonte §7.7).
+/// Un tracé de circuit apporté par une couche (REFONTE§7.7).
 ///
 /// La carte des tracés montre l'**état composé** — ce que l'utilisateur verra
 /// au lancement, couches comprises — mais elle ne disait pas d'où venait chaque
@@ -321,7 +321,7 @@ mod tests {
     use super::*;
     use crate::identity::DiffStats;
 
-    /// Rule (§12bis.1bis): nothing is ever layered onto a mod the user
+    /// Rule (§8.2): nothing is ever layered onto a mod the user
     /// installed outside Pit Box. The guard lives in `store_layer` rather than
     /// in its callers precisely so that this test covers all of them — import,
     /// author-supplied folder (§4.6ter) and sub-mod projection alike.
@@ -366,7 +366,7 @@ mod tests {
         );
     }
 
-    /// Rule (refonte §7.7): a layer is the ORIGIN of a track layout only when
+    /// Rule (REFONTE§7.7): a layer is the ORIGIN of a track layout only when
     /// the base does not already know it. A layer that merely replaces a file
     /// of an existing layout dresses it up, it does not bring it — and saying
     /// otherwise on the card would mislabel the track's own content as an

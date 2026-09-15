@@ -56,7 +56,7 @@ fn clear_link(link: &Path) -> Result<(), String> {
 /// Rend le déploiement d'un hôte conforme à l'état courant (base + couches
 /// actives). Best-effort : sans dossier AC/bibliothèque configuré, no-op.
 ///
-/// **Un seul point d'entrée pour les trois types d'hôte** (§4.4, §12bis.4) :
+/// **Un seul point d'entrée pour les trois types d'hôte** (§4.4, §8.4) :
 /// l'id est cherché parmi les mods, puis parmi les apps. C'est ce qui fait que
 /// les actions de couche — activer, réordonner, supprimer — n'ont pas eu à
 /// connaître la différence : elles appellent toutes `recompose(parent_id)`, et
@@ -110,7 +110,7 @@ fn recompose_mod(conn: &Connection, cfg: &AppConfig, m: &overlay::ModRow, mod_id
 /// `stock_base/`). Toujours « présent », donc toujours projeté quand il y a des
 /// couches ; restaurée à l'original quand il n'y en a plus.
 ///
-/// `unmanaged` (§12bis.1bis) verrouille la **première** sauvegarde : un mod
+/// `unmanaged` (§8.2) verrouille la **première** sauvegarde : un mod
 /// installé hors Pit Box ne voit jamais son vrai dossier copié puis effacé au
 /// profit d'un composé. `layers::store_layer` refuse déjà de lui poser une
 /// couche, donc le seul cas qui arrive encore ici est une couche posée
@@ -212,7 +212,7 @@ fn recompose_managed(
     }
 }
 
-/// Une app (§12bis.4) : sa base est son dossier de bibliothèque, sa cible est
+/// Une app (§8.4) : sa base est son dossier de bibliothèque, sa cible est
 /// `apps/<lang>/<id>`.
 ///
 /// **Même règle qu'au §2 pour les mods, et pour la même raison physique** : une
@@ -236,7 +236,7 @@ fn recompose_app(conn: &Connection, cfg: &AppConfig, app: &overlay::AppRow) -> R
     if !crate::apps::is_app_active(cfg, &app.id) {
         return Ok(());
     }
-    // Garde-fou (§12bis.4) : ne jamais recouvrir un vrai dossier d'app que nous
+    // Garde-fou (§8.4) : ne jamais recouvrir un vrai dossier d'app que nous
     // n'avons pas posé nous-mêmes.
     if link.exists() && !is_junction(&link) && !deploy::is_deployed(&link) {
         return Err(crate::errors::REAL_APP_FOLDER_EXISTS.into());

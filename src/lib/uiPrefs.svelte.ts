@@ -1,4 +1,4 @@
-// Petits réglages d'interface encore épars (§6.2/§8.6) : vue galerie/tableau
+// Petits réglages d'interface encore épars (§6.2/§11) : vue galerie/tableau
 // et tri de la bibliothèque, filtres, regroupement/tri de la vue
 // transversale, mode copier/déplacer à l'import, tags de fichier affichés,
 // skin/layout préféré par mod. Persistance durable (`ui_prefs.json`, écrit

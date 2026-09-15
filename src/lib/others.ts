@@ -7,7 +7,7 @@ export interface ConflictInfo {
   count: number;
 }
 
-/** Sur quoi un mod se greffe et ce qu'il fait (refonte §2). Recalculé côté
+/** Sur quoi un mod se greffe et ce qu'il fait (REFONTE§2). Recalculé côté
  * Rust à chaque listage — jamais stocké, sauf la correction de l'utilisateur. */
 export interface Attachment {
   kind: "CAR" | "TRACK" | "APP" | "GAME" | "STANDALONE";
@@ -28,11 +28,11 @@ export interface OtherModRow {
   is_priority: boolean;
   is_active: boolean;
   junctions: string[];
-  /** Nom repris à la main (refonte §6.1) : ces mods portent des noms
+  /** Nom repris à la main (REFONTE§6.1) : ces mods portent des noms
    * d'archive, c'est-à-dire rien de lisible. `null` tant que rien n'a été
    * saisi — le nom affiché reste alors `id`. */
   display_name_user: string | null;
-  /** Note libre (refonte §9). */
+  /** Note libre (REFONTE§9). */
   notes_user: string | null;
   /** Rattachement corrigé à la main (§2.3), `null` tant qu'on n'a rien corrigé. */
   attachment_user: string | null;

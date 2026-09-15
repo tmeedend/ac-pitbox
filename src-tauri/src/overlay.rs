@@ -65,7 +65,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         // Nom/description saisis par l'utilisateur (§5bis.3).
         "display_name_user TEXT",
         "description_user TEXT",
-        // Mod installé hors Pit Box, trouvé dans content/ à l'indexation (§12bis.1bis).
+        // Mod installé hors Pit Box, trouvé dans content/ à l'indexation (§8.2).
         "is_unmanaged INTEGER NOT NULL DEFAULT 0",
     ];
     for col in cols {
@@ -96,7 +96,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     // une notice serait une devinette sur du texte libre.
     let _ = conn.execute("ALTER TABLE sub_mods ADD COLUMN author TEXT", []);
 
-    // --- Saisie utilisateur, toutes entités (refonte §6.1 et SESSION§4) ---
+    // --- Saisie utilisateur, toutes entités (REFONTE§6.1 et SESSION§4) ---
     //
     // La note et le nom d'affichage cessent d'être un privilège des mods :
     // une couche s'appelle `spa2022-release_V1-03.rar` et c'est exactement
@@ -112,7 +112,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     for table in ["sub_mods", "apps", "other_mods", "layers"] {
         let _ = conn.execute(&format!("ALTER TABLE {table} ADD COLUMN display_name_user TEXT"), []);
     }
-    // Rattachement corrigé à la main (refonte §2.3). Seule la **correction**
+    // Rattachement corrigé à la main (REFONTE§2.3). Seule la **correction**
     // est stockée : la déduction se recalcule à chaque lecture, `attach.rs`
     // dit pourquoi un rattachement périmé serait pire que pas de rattachement.
     let _ = conn.execute("ALTER TABLE other_mods ADD COLUMN attachment_user TEXT", []);
@@ -162,14 +162,14 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             engine_config     TEXT,
             gearbox           TEXT,
             source_pack       TEXT,                   -- pack d'origine (§4.4)
-            source_url        TEXT,                   -- URL d'origine (§4.4/§12ter)
-            is_stock          INTEGER NOT NULL DEFAULT 0, -- indexé depuis content/ (§12bis.1)
-            is_unmanaged      INTEGER NOT NULL DEFAULT 0, -- ... et pas du Kunos (§12bis.1bis)
+            source_url        TEXT,                   -- URL d'origine (§4.4)
+            is_stock          INTEGER NOT NULL DEFAULT 0, -- indexé depuis content/ (§8.1)
+            is_unmanaged      INTEGER NOT NULL DEFAULT 0, -- ... et pas du Kunos (§8.2)
             active_version_id TEXT,
             created_at        TEXT NOT NULL
         );
 
-        -- Sous-éléments rattachés à une voiture/circuit (§12bis.2) : skins, sons.
+        -- Sous-éléments rattachés à une voiture/circuit (§8.3) : skins, sons.
         -- Ne polluent jamais la bibliothèque principale (mods de 1er niveau).
         CREATE TABLE IF NOT EXISTS sub_mods (
             id             TEXT PRIMARY KEY,
@@ -184,7 +184,7 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_sub_parent ON sub_mods(parent_id);
 
-        -- Apps Python (§12bis.4) : type autonome, activable par junction.
+        -- Apps Python (§8.4) : type autonome, activable par junction.
         CREATE TABLE IF NOT EXISTS apps (
             id             TEXT PRIMARY KEY,       -- nom du dossier de l'app
             library_path   TEXT NOT NULL,
@@ -238,7 +238,7 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             version_id TEXT NOT NULL
         );
 
-        -- Autres mods (§7.3) et Apps (§12bis.4) capturés par un profil : ni
+        -- Autres mods (§7.3) et Apps (§8.4) capturés par un profil : ni
         -- l'un ni l'autre n'a de notion de version (juste actif/inactif), donc
         -- une table séparée plutôt que de rendre `version_id` optionnelle sur
         -- profile_entries (SQLite ne sait pas assouplir une contrainte NOT NULL
@@ -488,7 +488,7 @@ pub struct ModRow {
     pub gearbox: Option<String>,
     /// Pack d'origine commun aux mods d'une même archive multi-voitures (§4.4).
     pub source_pack: Option<String>,
-    /// URL d'origine (rempli plus tard par l'extension, §4.4/§12ter).
+    /// URL d'origine (rempli plus tard par l'extension, §4.4).
     pub source_url: Option<String>,
     /// Auteur de la version active (colonne §6.2).
     pub author: Option<String>,
@@ -514,13 +514,13 @@ pub struct ModRow {
     /// `library.rs`, pas en SQL.
     pub description_user: Option<String>,
     /// Indexé depuis `content/` : vit dans le dossier du jeu, sans version en
-    /// bibliothèque — lecture seule, non désactivable (§12bis.1). Vrai pour le
+    /// bibliothèque — lecture seule, non désactivable (§8.1). Vrai pour le
     /// contenu de base Kunos **comme** pour un mod installé hors Pit Box :
     /// c'est ce qui fait que tout ce qui protège l'un protège l'autre (lecture
     /// des vignettes dans `content/`, refus d'activation, absence de date
     /// d'ajout…). La distinction se lit sur `is_unmanaged`.
     pub is_stock: bool,
-    /// Mod installé hors Pit Box (§12bis.1bis) : présent dans `content/` comme
+    /// Mod installé hors Pit Box (§8.2) : présent dans `content/` comme
     /// un vrai dossier, mais absent de la table du contenu officiel
     /// ([`crate::kunos_dates::is_official`]). Toujours accompagné de
     /// `is_stock`. Contrairement au contenu de base, ce n'est **pas** du
@@ -530,7 +530,7 @@ pub struct ModRow {
     /// sous gestion suppose que l'utilisateur retire lui-même le dossier du
     /// jeu et importe le mod.
     pub is_unmanaged: bool,
-    /// Note libre (refonte §9). Distincte de `description_user` : celle-ci
+    /// Note libre (REFONTE§9). Distincte de `description_user` : celle-ci
     /// surcharge ce que dit le fichier du mod, donc la vider veut dire
     /// « reviens au fichier » ; une note n'a pas de valeur d'origine, donc
     /// vide veut dire vide.
@@ -1344,7 +1344,7 @@ pub struct ProfileEntry {
     pub version_id: String,
 }
 
-/// Entrée de profil sans notion de version — Autre mod ou App (§7.3/§12bis.4),
+/// Entrée de profil sans notion de version — Autre mod ou App (§7.3/§8.4),
 /// simplement actif ou non. `kind` vaut "other" ou "app", `entry_id` est l'id
 /// dans la table correspondante.
 #[derive(Debug, Clone, Serialize)]
@@ -1475,14 +1475,14 @@ pub fn list_media_links(conn: &Connection, entity_id: &str, kind: &str) -> rusql
     rows.collect()
 }
 
-// --- Contenu trouvé dans content/ (§12bis.1) --------------------------------
+// --- Contenu trouvé dans content/ (§8.1) --------------------------------
 
 /// Indexe une voiture/circuit vivant dans `content/` : ligne minimale
 /// `is_stock=1` (lecture seule). Ne touche pas un mod déjà présent (un vrai mod
 /// géré n'est jamais « stock »).
 ///
 /// `unmanaged` distingue le mod installé hors Pit Box du contenu de base
-/// (§12bis.1bis). C'est le **seul** champ réécrit sur une ligne déjà indexée :
+/// (§8.2). C'est le **seul** champ réécrit sur une ligne déjà indexée :
 /// c'est ce qui reclasse les bases d'avant cette distinction — où tout ce qui
 /// traînait dans `content/` passait pour du Kunos — sans perdre ce que
 /// l'utilisateur y a saisi (nom repris à la main, description, tags manuels,
@@ -1507,7 +1507,7 @@ pub fn upsert_stock_mod(
 }
 
 /// Efface les **versions** synthétiques du contenu de base, en gardant les
-/// lignes `mods` (§12bis.1). C'est ce qui permet de réindexer sans détruire ce
+/// lignes `mods` (§8.1). C'est ce qui permet de réindexer sans détruire ce
 /// que l'utilisateur a mis dans l'overlay — nom repris à la main, description,
 /// tags manuels, favori, catégorie.
 ///
@@ -1570,7 +1570,7 @@ pub fn clear_stock(conn: &Connection) -> rusqlite::Result<usize> {
 }
 
 /// Nombre d'entrées de contenu de base déjà indexées — sert à déclencher un
-/// scan automatique au premier démarrage (§12bis.1).
+/// scan automatique au premier démarrage (§8.1).
 pub fn count_stock(conn: &Connection) -> rusqlite::Result<i64> {
     conn.query_row("SELECT COUNT(*) FROM mods WHERE is_stock = 1", [], |r| r.get(0))
 }
@@ -1584,7 +1584,7 @@ pub fn list_stock_ids(conn: &Connection) -> rusqlite::Result<Vec<(String, String
 }
 
 /// Repositionne le seul drapeau `is_unmanaged` d'une entrée déjà indexée
-/// (§12bis.1bis). N'écrit rien d'autre : c'est ce qui permet de reclasser une
+/// (§8.2). N'écrit rien d'autre : c'est ce qui permet de reclasser une
 /// base existante sans toucher aux saisies de l'utilisateur.
 pub fn set_unmanaged(conn: &Connection, id: &str, unmanaged: bool) -> rusqlite::Result<usize> {
     conn.execute(
@@ -1610,10 +1610,10 @@ pub struct LayerRow {
     pub is_active: bool,
     pub priority: i64,
     pub imported_at: String,
-    /// Nom repris à la main (refonte §8.3). Le nom dérivé de l'archive est
+    /// Nom repris à la main (REFONTE§8.3). Le nom dérivé de l'archive est
     /// faillible par construction, donc corrigeable.
     pub display_name_user: Option<String>,
-    /// Note libre (refonte §9). Distincte de la description : elle n'a pas de
+    /// Note libre (REFONTE§9). Distincte de la description : elle n'a pas de
     /// valeur d'origine, donc vide veut dire vide.
     pub notes_user: Option<String>,
 }
@@ -1621,7 +1621,7 @@ pub struct LayerRow {
 /// Fragment SQL isolant les couches d'un hôte : son id **et son espace de noms**.
 ///
 /// `parent_id` seul ne suffit pas depuis que les apps reçoivent des couches
-/// (§12bis.4). Une voiture et un circuit, eux, ne peuvent **pas** porter le même
+/// (§8.4). Une voiture et un circuit, eux, ne peuvent **pas** porter le même
 /// id — ils vivent dans la même table, dont `id_interne` est la clé primaire —
 /// mais une app vit dans `apps`, avec sa propre clé : rien n'empêche un circuit
 /// et une app de s'appeler pareil. Sans ce filtre, les couches de l'un
@@ -1704,7 +1704,7 @@ pub fn list_layers(conn: &Connection, parent_id: &str, host: HostKind) -> rusqli
 }
 
 /// Toutes les couches d'un type (Car|Track), pour la vue transversale add-ons.
-/// Toutes les couches, tous hôtes confondus (inventaire, refonte §4).
+/// Toutes les couches, tous hôtes confondus (inventaire, REFONTE§4).
 pub fn list_all_layers(conn: &Connection) -> rusqlite::Result<Vec<LayerRow>> {
     let mut stmt = conn.prepare(&format!("{LAYER_SELECT} ORDER BY parent_id, priority"))?;
     let rows = stmt.query_map([], map_layer)?;
@@ -1756,7 +1756,7 @@ pub fn delete_layer(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     Ok(())
 }
 
-// --- Sous-éléments rattachés (§12bis.2) -------------------------------------
+// --- Sous-éléments rattachés (§8.3) -------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubModRow {
@@ -1778,10 +1778,10 @@ pub struct SubModRow {
     /// demande, donc `None` partout sauf là où on la réclame explicitement
     /// (vue transversale, cf. `submods::list_by_type_sized`).
     pub size_bytes: Option<i64>,
-    /// Nom repris à la main (refonte §6.1) : `skin_01` ne dit rien de ce que
+    /// Nom repris à la main (REFONTE§6.1) : `skin_01` ne dit rien de ce que
     /// la livrée montre.
     pub display_name_user: Option<String>,
-    /// Note libre (refonte §9).
+    /// Note libre (REFONTE§9).
     pub notes_user: Option<String>,
 }
 
@@ -1845,7 +1845,7 @@ fn map_sub(row: &rusqlite::Row) -> rusqlite::Result<SubModRow> {
 const SUB_SELECT: &str =
     "SELECT id, sub_type, parent_id, name, library_path, source_archive, is_active, removable, imported_at, author, display_name_user, notes_user FROM sub_mods";
 
-/// Sous-éléments rattachés à une entité (fiche détail, §12bis.3).
+/// Sous-éléments rattachés à une entité (fiche détail, §8.3).
 /// Sous-éléments (skins, sons) dont le parent n'existe plus (SESSION§3). Conservés
 /// **délibérément** à la suppression du mod — voir `delete_mod` — mais devenus
 /// inutiles dès qu'on ne compte plus réimporter le parent. Listés ici pour être
@@ -1870,7 +1870,7 @@ pub fn list_subs_for_parent(conn: &Connection, parent_id: &str) -> rusqlite::Res
     rows.collect()
 }
 
-/// Tous les sous-éléments d'un type (vue transversale, §12bis.3).
+/// Tous les sous-éléments d'un type (vue transversale, §8.3).
 pub fn list_subs_by_type(conn: &Connection, sub_type: &str) -> rusqlite::Result<Vec<SubModRow>> {
     let mut stmt = conn.prepare(&format!(
         "{SUB_SELECT} WHERE sub_type = ?1 ORDER BY parent_id, name COLLATE NOCASE"
@@ -1879,7 +1879,7 @@ pub fn list_subs_by_type(conn: &Connection, sub_type: &str) -> rusqlite::Result<
     rows.collect()
 }
 
-/// Tous les sous-éléments, quel que soit leur type (inventaire, refonte §4).
+/// Tous les sous-éléments, quel que soit leur type (inventaire, REFONTE§4).
 pub fn list_all_subs(conn: &Connection) -> rusqlite::Result<Vec<SubModRow>> {
     let mut stmt = conn.prepare(&format!("{SUB_SELECT} ORDER BY parent_id, name COLLATE NOCASE"))?;
     let rows = stmt.query_map([], map_sub)?;
@@ -1920,7 +1920,7 @@ pub fn delete_sub_mod(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     Ok(())
 }
 
-/// Bascule exclusive du son actif d'une voiture (§12bis.2) : un seul SOUND actif
+/// Bascule exclusive du son actif d'une voiture (§8.3) : un seul SOUND actif
 /// par parent. `id = None` désactive tout (retour au son d'origine).
 pub fn set_active_sound(conn: &Connection, parent_id: &str, id: Option<&str>) -> rusqlite::Result<()> {
     conn.execute(
@@ -1944,7 +1944,7 @@ pub fn set_track_skin_active(conn: &Connection, parent_id: &str, name: &str, act
     Ok(())
 }
 
-// --- Apps (§12bis.4) --------------------------------------------------------
+// --- Apps (§8.4) --------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppRow {
@@ -1952,10 +1952,10 @@ pub struct AppRow {
     pub library_path: String,
     pub source_archive: Option<String>,
     pub imported_at: String,
-    /// Nom repris à la main (refonte §6.1) : le titre d'une fiche d'app n'est
+    /// Nom repris à la main (REFONTE§6.1) : le titre d'une fiche d'app n'est
     /// plus son nom de dossier.
     pub display_name_user: Option<String>,
-    /// Note libre (refonte §9).
+    /// Note libre (REFONTE§9).
     pub notes_user: Option<String>,
 }
 
@@ -2029,10 +2029,10 @@ pub struct OtherModRow {
     pub is_active: bool,
     /// Chemins absolus des jonctions créées lors de la dernière activation.
     pub junctions: Vec<String>,
-    /// Nom repris à la main (refonte §6.1) : ces mods-là portent des noms
+    /// Nom repris à la main (REFONTE§6.1) : ces mods-là portent des noms
     /// d'archive (`policeman__ext_config.ini`), c'est-à-dire rien de lisible.
     pub display_name_user: Option<String>,
-    /// Note libre (refonte §9).
+    /// Note libre (REFONTE§9).
     pub notes_user: Option<String>,
     /// Rattachement corrigé à la main (§2.3) : id de l'entité visée. Seule la
     /// **correction** est stockée — la déduction se recalcule à chaque lecture,
@@ -2314,7 +2314,7 @@ mod tests {
     /// dans `mods`, dont `id_interne` est la clé primaire. Une app, elle, vit
     /// dans `apps` avec sa propre clé — rien n'empêche donc un circuit et une
     /// app de s'appeler pareil. `parent_id` seul a cessé d'être une clé unique
-    /// le jour où les apps ont reçu des couches (§12bis.4) ; sans le filtre sur
+    /// le jour où les apps ont reçu des couches (§8.4) ; sans le filtre sur
     /// l'espace de noms, `recompose` composerait les couches de l'app dans le
     /// dossier du circuit.
     #[test]

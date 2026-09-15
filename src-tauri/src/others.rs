@@ -373,7 +373,7 @@ pub struct OtherModCard {
     /// restent atteignables. Ce n'est pas un mod non reconnu, c'est un
     /// document.
     pub file_count: usize,
-    /// Sur quoi il se greffe et ce qu'il fait (refonte §2), **recalculé** à
+    /// Sur quoi il se greffe et ce qu'il fait (REFONTE§2), **recalculé** à
     /// chaque listage : le parcours de fichiers est déjà fait juste au-dessus
     /// pour les conflits, donc la déduction est gratuite — et elle ne peut pas
     /// être périmée, ce qu'une colonne stockée ne garantirait pas.

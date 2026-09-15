@@ -1,4 +1,4 @@
-//! Météo simplifiée à dégradé gracieux (§8.5). L'utilisateur choisit une
+//! Météo simplifiée à dégradé gracieux (SESSION§3.3). L'utilisateur choisit une
 //! **intention** (Beau, Pluie…) ; l'app la traduit dans le meilleur dossier
 //! météo disponible selon la stack détectée (SOL riche → vanilla limité), avec
 //! **température implicite** (jamais saisie). Périmètre v1 : météo statique.
@@ -191,13 +191,13 @@ pub fn options(cfg: &AppConfig) -> Vec<WeatherOption> {
 pub struct ImplicitConditions {
     pub ambient: i32,
     pub road: i32,
-    /// Vent implicite (§8.6) : suit la météo au même titre que la
+    /// Vent implicite (SESSION§3.3) : suit la météo au même titre que la
     /// température, jamais réglé manuellement en v1.
     pub wind_speed_kmh: u32,
     pub wind_direction_deg: u32,
 }
 
-/// Écart de température (°C) associé à une saison (§8.6bis), appliqué à la base
+/// Écart de température (°C) associé à une saison (SESSION§3.3), appliqué à la base
 /// horaire de l'intention météo. `None`/inconnu = pas d'ajustement (comportement
 /// historique, saison non choisie).
 fn season_delta(season: Option<&str>) -> i32 {
@@ -210,8 +210,8 @@ fn season_delta(season: Option<&str>) -> i32 {
     }
 }
 
-/// Température + vent implicites (§8.5/§8.6) déduits de l'intention + l'heure +
-/// la saison optionnelle (§8.6bis). Sert de **valeur recommandée** — l'écran de
+/// Température + vent implicites (SESSION§3.3/SESSION§3.3) déduits de l'intention + l'heure +
+/// la saison optionnelle (SESSION§3.3). Sert de **valeur recommandée** — l'écran de
 /// session la propose et permet ensuite à l'utilisateur de la corriger à la main.
 pub fn implicit_conditions(intent_id: &str, hour: f32, season: Option<&str>) -> ImplicitConditions {
     // (ambient de référence à ~14h, écart piste-air, vent de base, direction) par intention.

@@ -1,4 +1,4 @@
-//! Petits réglages d'interface encore épars (§6.2/§8.6, vue bibliothèque,
+//! Petits réglages d'interface encore épars (§6.2/§11, vue bibliothèque,
 //! vue transversale, import, fiche détail…) — fichier dédié
 //! (`ui_prefs.json`), écriture synchrone. Même raison que
 //! `session_state.rs`/`saved_sessions.rs`/`library_columns.rs` :

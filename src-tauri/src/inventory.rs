@@ -1,4 +1,4 @@
-//! L'inventaire des compléments (refonte §4).
+//! L'inventaire des compléments (REFONTE§4).
 //!
 //! **Tout ce qui n'est pas un contenu autonome**, dans une seule liste : ce qui
 //! se greffe, s'ajoute ou se superpose au jeu — livrées, sons, habillages de
@@ -277,7 +277,7 @@ fn host_attachment(index: &attach::EntityIndex, parent_id: &str, nature: Nature)
     }
 }
 
-/// Ce qui est greffé sur une entité (refonte §4.3).
+/// Ce qui est greffé sur une entité (REFONTE§4.3).
 ///
 /// **C'est ce qui rend le non-dogmatisme sûr** : une déduction ratée coûte un
 /// raccourci manquant sur la fiche de l'hôte, jamais un mod introuvable — il

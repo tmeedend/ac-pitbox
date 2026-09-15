@@ -9,7 +9,7 @@ pub fn list_weather(app: AppHandle) -> Vec<String> {
     crate::library::list_weather(&crate::config::load(&app))
 }
 
-/// Stack météo détectée (CSP/SOL/vanilla) — §8.5.
+/// Stack météo détectée (CSP/SOL/vanilla) — SESSION§3.3.
 #[tauri::command]
 pub fn weather_stack(app: AppHandle) -> crate::weather::WeatherStack {
     crate::weather::detect_stack(&crate::config::load(&app))
@@ -22,7 +22,7 @@ pub fn weather_options(app: AppHandle) -> Vec<crate::weather::WeatherOption> {
 }
 
 /// Température + vent **recommandés** (air/piste/vent) pour une intention +
-/// heure + saison optionnelle (§8.5/§8.6/§8.6bis). L'écran de session propose
+/// heure + saison optionnelle (SESSION§3.3/SESSION§3/SESSION§3.3). L'écran de session propose
 /// ces valeurs par défaut ; l'air et la piste restent ensuite modifiables à la
 /// main tant que la météo/saison ne change pas.
 #[tauri::command]
@@ -30,7 +30,7 @@ pub fn weather_conditions(intent: String, hour: f32, season: Option<String>) -> 
     crate::weather::implicit_conditions(&intent, hour, season.as_deref())
 }
 
-/// Lever/coucher de soleil du circuit, tels que CSP les calculera (§8.6ter) :
+/// Lever/coucher de soleil du circuit, tels que CSP les calculera (SESSION§3.3) :
 /// coordonnées et fuseau de `data_track_params.ini`, date effective décidée
 /// par `[SEASONS] ALLOW_ADJUSTMENTS`. `None` quand le circuit n'a de position
 /// nulle part — pas de bande jour/nuit plutôt qu'une bande fausse.
@@ -71,7 +71,7 @@ pub fn car_factory_assists(
     crate::electronics::read(&dir, &car_id)
 }
 
-/// Construit le preset Quick Drive et lance la session via Content Manager (§8.3).
+/// Construit le preset Quick Drive et lance la session via Content Manager (SESSION§2).
 #[tauri::command]
 pub fn launch_session(app: AppHandle, db: State<Db>, setup: crate::launch::RaceSetup) -> Result<(), String> {
     let cfg = crate::config::load(&app);
@@ -86,7 +86,7 @@ pub fn is_steam_running() -> bool {
     crate::launch::steam_running()
 }
 
-/// Ouvre Content Manager sans argument (§12bis.5).
+/// Ouvre Content Manager sans argument (§7.2).
 #[tauri::command]
 pub fn open_content_manager(app: AppHandle) -> Result<(), String> {
     crate::launch::open_content_manager(&crate::config::load(&app))

@@ -1,11 +1,11 @@
-//! Indexation de ce qui vit dans `content/` (§12bis.1). Référence les voitures
+//! Indexation de ce qui vit dans `content/` (§8.1). Référence les voitures
 //! et circuits **présents comme vrais dossiers** (pas des junctions gérées, pas
 //! déjà des mods) avec `is_stock=1` : lecture seule, non désactivable. But :
 //! permettre aux sous-éléments (skins, sons) de s'y rattacher, et les afficher
 //! avec les mêmes métadonnées que les mods (nom, marque, tags harmonisés, fiche
 //! technique, vignette).
 //!
-//! **Deux populations s'y trouvent** (§12bis.1bis) : le contenu de base Kunos,
+//! **Deux populations s'y trouvent** (§8.2) : le contenu de base Kunos,
 //! et les mods que l'utilisateur a installés lui-même avant Pit Box — sur une
 //! install déjà moddée, ces derniers sont largement majoritaires. La table du
 //! contenu officiel les sépare (`kunos_dates::is_official`) et le drapeau
@@ -142,7 +142,7 @@ pub fn index_stock_content(
             .or_else(|| ui.name.clone())
             .unwrap_or_else(|| id.clone());
 
-            // Contenu de base, ou mod installé hors Pit Box ? (§12bis.1bis)
+            // Contenu de base, ou mod installé hors Pit Box ? (§8.2)
             // Un vrai dossier dans `content/` est l'un ou l'autre, et seule la
             // table du contenu officiel le dit de façon fiable — voir
             // `kunos_dates::is_official`. Sur une install déjà moddée, ce test
@@ -228,7 +228,7 @@ pub fn index_stock_content(
 }
 
 /// Rejuge le classement contenu de base / mod non géré de tout ce qui est déjà
-/// indexé, **sans relire le disque** (§12bis.1bis). Renvoie le nombre d'entrées
+/// indexé, **sans relire le disque** (§8.2). Renvoie le nombre d'entrées
 /// dont le drapeau a changé.
 ///
 /// L'indexation complète ne se relance ni au démarrage (elle ne tourne que si
@@ -541,7 +541,7 @@ mod tests {
     }
 
     /// Rule: a real folder in `content/` is game content only when the official
-    /// table knows its id (§12bis.1bis). Anything else is a mod the user
+    /// table knows its id (§8.2). Anything else is a mod the user
     /// installed by hand — and it must not be handed the "Kunos" author that
     /// made the mistake invisible on an already-modded install.
     #[test]
@@ -578,7 +578,7 @@ mod tests {
     }
 
     /// Rule: the startup pass reclassifies an existing base without touching
-    /// the disk (§12bis.1bis) — the full scan never runs again once something
+    /// the disk (§8.2) — the full scan never runs again once something
     /// is indexed, so without it a base written before the distinction would
     /// keep the user's mods filed as game content until a manual reindex.
     #[test]
@@ -604,7 +604,7 @@ mod tests {
     /// Rule: bases written before this distinction filed every real folder of
     /// `content/` as Kunos content. A plain reindex reclassifies them **in
     /// place** — the flag flips, everything the user typed on the mod stays
-    /// (§12bis.1bis).
+    /// (§8.2).
     #[test]
     fn reindex_reclassifies_a_mod_previously_taken_for_base_content() {
         let base = crate::testutil::temp_dir("stock-reclass");

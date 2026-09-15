@@ -67,6 +67,13 @@ const cases = [
     file: "src/lib/i18n/locales/en.json",
     inject: (s) => `${JSON.stringify({ ...JSON.parse(s), zzSelfTestDeadKey: "never used" }, null, 2)}\n`,
   },
+  {
+    // La clé est aussi citée nulle part, donc elle déclencherait `i18n-unused-key` :
+    // ce qu'on vérifie ici est que `no-spec-ref-in-locale` sort **aussi**.
+    rule: "no-spec-ref-in-locale",
+    file: "src/lib/i18n/locales/fr.json",
+    inject: (s) => `${JSON.stringify({ ...JSON.parse(s), zzSelfTestRef: "voir la règle (§4.4)." }, null, 2)}\n`,
+  },
 ];
 
 let proven = 0;

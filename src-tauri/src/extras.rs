@@ -59,7 +59,7 @@ use crate::modscan::ModKind;
 use crate::overlay;
 
 /// Ce qui peut **posséder** des ajouts au jeu : une voiture, un circuit, ou une
-/// app (§12bis.4). Donne le segment d'arbre sous `extras/` — et le même sous
+/// app (§8.4). Donne le segment d'arbre sous `extras/` — et le même sous
 /// `resources/`, les deux arbres étant rangés à l'identique.
 ///
 /// Une app en a besoin pour la même raison qu'une voiture : ce qu'une archive
@@ -689,7 +689,7 @@ pub fn list(conn: &Connection, cfg: &AppConfig, owner: OwnerKind, mod_id: &str) 
 }
 
 /// Reprise unique : les ajouts au jeu qui visaient l'intérieur du dossier d'une
-/// app deviennent des **couches de cette app** (§12bis.4).
+/// app deviennent des **couches de cette app** (§8.4).
 ///
 /// Ces fichiers n'ont jamais été des ajouts au jeu : ils sont posés *dans* une
 /// app, pas à côté d'elle. Rangés en ajouts, ils produisaient deux défauts —
@@ -1417,7 +1417,7 @@ mod tests {
         assert!(src.join("config").join("a.ini").is_file(), "copie : source intacte");
     }
 
-    /// Règle (§12bis.4) : un ajout au jeu qui visait l'intérieur d'une app
+    /// Règle (§8.4) : un ajout au jeu qui visait l'intérieur d'une app
     /// devient une couche de cette app, sans rien perdre ni laisser de dossier
     /// fantôme derrière.
     ///

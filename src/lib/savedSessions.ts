@@ -1,4 +1,4 @@
-// Sessions sauvegardées nommées (§8.4bis) : distinctes des presets par type
+// Sessions sauvegardées nommées (SESSION§3.5) : distinctes des presets par type
 // (« dernier réglage utilisé pour ce type ») — une sauvegarde nommée capture
 // un instantané complet et rappelable à la demande (surtout utile pour ne pas
 // reperdre un plateau d'adversaires soigneusement ajusté).
@@ -35,7 +35,7 @@ export interface SavedSession {
   trackSkins?: string[];
 }
 
-/** Clé de stockage préfixée par type (§8.4bis, carte « Sessions enregistrées » :
+/** Clé de stockage préfixée par type (SESSION§3.5, carte « Sessions enregistrées » :
  * une liste par type de session) — sans ça, une sauvegarde « Test » en Course
  * écraserait une sauvegarde « Test » en Practice, deux choses sans rapport
  * pour l'utilisateur. */
@@ -56,7 +56,7 @@ function loadLegacyAll(): Record<string, SavedSession> {
   }
 }
 
-/** Persistance durable (§8.4bis) : fichier écrit côté Rust
+/** Persistance durable (SESSION§3.5) : fichier écrit côté Rust
  * (`saved_sessions.json`, `std::fs::write` synchrone), pas `localStorage` —
  * voir `loadLegacyAll` pour le pourquoi du changement. */
 async function loadAll(): Promise<Record<string, SavedSession>> {

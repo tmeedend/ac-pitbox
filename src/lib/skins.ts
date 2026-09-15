@@ -1,4 +1,4 @@
-// Fiche d'une livrée (§12bis.2) — voiture (`SKIN`) ou circuit (`TRACK_SKIN`).
+// Fiche d'une livrée (§8.3) — voiture (`SKIN`) ou circuit (`TRACK_SKIN`).
 //
 // À part des autres bindings de sous-éléments (`enginesound.ts` pour les sons)
 // pour la même raison qu'eux : ce qui décrit une livrée n'a rien à voir avec ce

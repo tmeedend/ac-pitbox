@@ -221,7 +221,7 @@ fn curve(v: &Value, key: &str) -> Vec<[f64; 2]> {
         .unwrap_or_default()
 }
 
-/// Un layout de circuit avec ses images (§6.3 / §8.6).
+/// Un layout de circuit avec ses images (§6.3 / SESSION§1).
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct LayoutItem {
     /// Dossier du layout (vide si mono-layout).

@@ -1,4 +1,4 @@
-//! Persistance du duo de session (voiture/circuit choisis, §8.6).
+//! Persistance du duo de session (voiture/circuit choisis, SESSION§1).
 //!
 //! Fichier dédié plutôt que le `localStorage` du webview : ses écritures ne
 //! sont pas garanties synchrones sur disque côté WebView2 (le moteur
@@ -58,7 +58,7 @@ pub fn save(app: &AppHandle, picks: &SessionPicks) -> Result<(), String> {
     std::fs::write(&path, json).map_err(|e| format!("écriture session.json échouée : {e}"))
 }
 
-/// Réglages de l'écran de session (§8.4/§8.6) : dernière sélection (véhicule,
+/// Réglages de l'écran de session (SESSION§3/SESSION§1) : dernière sélection (véhicule,
 /// circuit, type, adversaires) et presets par type de session. Même bug que
 /// le duo voiture/circuit ci-dessus (`localStorage` pas fiable côté WebView2
 /// à la fermeture) — même remède, fichier dédié à côté de `session.json` pour
