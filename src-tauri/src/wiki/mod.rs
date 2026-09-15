@@ -1,9 +1,15 @@
 //! Wikipedia enrichment of the detail fiche (`docs/SPEC-wikipedia-fiche-detail.md`).
 //!
-//! What is implemented here is lot 1 of §12, the socle: the data model (§3),
-//! the resolution at display time with its fallback chain (§5), and the Action
-//! API client (§6). **No interface, and no automatic matching** — nothing
-//! writes a `wiki_link` row yet, that is §4.
+//! All six lots of §12 are in: the data model (§3, `store`), the automatic
+//! matching of cars and tracks (§4, `matchcar`/`matchtrack`/`matching`), the
+//! resolution at display time with its fallback chain (§5, `lang`), the Action
+//! API client (§6, `api`/`http`), and the tab and settings screen that consume
+//! them (§7 and §8, front-side).
+//!
+//! **The three beats of this file are the point of it.** `plan` reads the
+//! database, `fetch` talks to the network, `commit` writes back — split that
+//! way because the SQLite mutex must never be held across a network call, and
+//! because a request that fails must leave the cache exactly as it found it.
 //!
 //! Three things govern every decision in this module, all from §1:
 //!
@@ -18,12 +24,20 @@
 //! The legal constraint of §2 shapes one thing in the code: the extract is
 //! stored and served **verbatim**, as the API returned it. Nothing here
 //! reformats, truncates, merges or translates it.
+
 #![allow(dead_code)]
-// The socle has no caller yet: the matching (§4) is what will create the
-// appariements this module reads, and the interface (§7) is what will display
-// what it returns. Lifted as soon as either lands — it is here so that a
-// deliberately unreachable lot does not have to be padded with a command
-// surface nobody calls just to keep clippy quiet.
+// **Still here, but no longer for the original reason, and no longer clean.**
+// It was put in when the module had no caller at all. It now has one, and
+// removing the allowance surfaces 13 warnings of two very different kinds:
+// the calibration harness (`calibrate`), which is reachable only from
+// `#[ignore]` tests and is therefore dead in a lib build — legitimately
+// covered — and about seven genuinely unused items (`ids::ROUTE_TYPES`,
+// `ids::COORDINATE_LOCATION`, `api::parse_search`, `WikiClient::search`,
+// `CachedArticle::langs`…), which this blanket allowance is hiding rather
+// than justifying. Narrowing it to `calibrate` and settling each of those
+// seven, one by one, is its own change: some are leftovers, and at least one
+// (`ROUTE_TYPES`) documents a decision — roads are not matched automatically
+// — that a deletion would erase.
 
 pub mod api;
 pub mod calibrate;

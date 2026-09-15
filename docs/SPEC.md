@@ -729,10 +729,14 @@ et viennent du droit d'auteur, pas du goût : le texte n'est **jamais fondu**
 dans la description du mod — ce sont deux sous-onglets, donc deux blocs
 distincts — et il est affiché **tel que l'API le rend**, sans reformulation,
 résumé ni traduction. L'attribution en pied (titre, lien, licence CC BY-SA) est
-obligatoire. Le lien « Voir sur Wikipédia » ouvre le **navigateur système** et
-sert ce que le texte brut perd : infobox, tableaux, images, références.
+obligatoire. Le lien « Voir sur Wikipédia » ouvre le **navigateur système**,
+jamais une webview interne : elle casserait le mode hors ligne, imposerait la
+CSP du site et ferait perdre l'identité visuelle de l'app. Ce qu'il apporte
+n'est plus l'infobox ni les images — la fiche les montre — mais ce que la
+reconstruction laisse volontairement de côté : les références et leurs notes,
+la navigation vers les autres articles, et la version vivante de la page.
 
-L'enrichissement est **désactivable** (`wiki_online`, §12) : l'app interroge
+L'enrichissement est **désactivable** (`wiki_online`, §11) : l'app interroge
 Wikipédia à l'ouverture d'une fiche, ce qui révèle indirectement le contenu de
 la bibliothèque, et une partie du public joue délibérément hors ligne.
 Désactivé, aucune requête ne sort et le cache déjà constitué reste
@@ -2090,9 +2094,21 @@ Ce n'est un déchet que si le parent ne revient jamais. Ils sont donc **listés 
 
 **Trois bases/fichiers distincts** : bibliothèque (fichiers), base d'overlay SQLite (métadonnées), fichier de règles (ontologie), plus le fichier de config (chemins + préférences).
 
-**Préférences persistantes** : affichage des tags du fichier mod (masquables), état du panneau de suivi (global), vue bibliothèque + colonnes (par type), presets de session (par type), preset CM graphique/FFB par défaut, décor de l'aperçu 3D natif (§9.4), **aperçu 3D intégré affiché ou non sur la fiche voiture** (défaut affiché — §9.4), regroupement des skins (archive/voiture), extraction des fichiers annexes (Aucun / Informations seulement / Tout — §4.5.2), **conservation de l'archive source** (défaut désactivé — §10), **mode de déploiement** (hardlink/symlink, défaut hardlink — §2), **zoom du mode Big Picture** (§16, distinct du zoom normal — `None` reprend ce dernier).
+**Préférences persistantes** : affichage des tags du fichier mod (masquables), état du panneau de suivi (global), vue bibliothèque + colonnes (par type), presets de session (par type), preset CM graphique/FFB par défaut, décor de l'aperçu 3D natif (§9.4), **aperçu 3D intégré affiché ou non sur la fiche voiture** (défaut affiché — §9.4), regroupement des skins (archive/voiture), extraction des fichiers annexes (Aucun / Informations seulement / Tout — §4.5.2), **conservation de l'archive source** (défaut désactivé — §10), **mode de déploiement** (hardlink/symlink, défaut hardlink — §2), **zoom du mode Big Picture** (§16, distinct du zoom normal — `None` reprend ce dernier),
+**enrichissement Wikipédia** (`wiki_online`, défaut activé — §6.3) et sa **langue de
+lecture** (automatique par défaut : la langue de l'app, puis la chaîne de repli).
 
-**Écran Réglages en onglets** (Général / Chemins / Aperçu 3D / Musique) depuis le mode Big Picture (§16) — Général et Chemins partagent `AppConfig` et sa garde de navigation (§10bis) ; Aperçu 3D et Musique ont chacun leur propre stockage et **s'appliquent sans bouton Enregistrer** (`ui_prefs.json` pour l'un, `music.json` pour l'autre). L'onglet **Import** n'est plus ici : ses deux préférences vivent au pied de l'écran `Atelier › Importer` (§7.2quater).
+**Écran Réglages en onglets** (Général / Chemins / Aperçu 3D / Vignettes / Musique / Wikipédia) depuis le mode Big Picture (§16) — Général et Chemins partagent `AppConfig` et sa garde de navigation (§10bis) ; Aperçu 3D et Musique ont chacun leur propre stockage et **s'appliquent sans bouton Enregistrer** (`ui_prefs.json` pour l'un, `music.json` pour l'autre). L'onglet **Import** n'est plus ici : ses deux préférences vivent au pied de l'écran `Atelier › Importer` (§7.2quater).
+
+**Onglet Wikipédia** (`components/settings/WikiTab.svelte`) : l'interrupteur de
+l'enrichissement et son motif (§6.3), la langue de lecture, la **purge du cache**
+d'articles, et l'**export des corrections manuelles**. Ce dernier n'exporte que
+les liens `manual` — jamais ceux que l'appariement automatique a posés : un
+appariement `auto` figé dans un fichier livré deviendrait un `import`, qui prime
+sur `auto`, et gèlerait donc l'algorithme d'aujourd'hui par-dessus tout moteur
+meilleur à venir. Les seuils d'appariement, eux, ne sont **pas** à l'écran : ce
+sont des paramètres de `Prefs` (`wiki_match_*`, `wiki_track_*`) qu'on règle par
+la mesure, pas au jugé.
 
 **Onglet Aperçu** (`components/settings/PreviewTab.svelte`) : **il porte son propre aperçu 3D**, en haut, et c'est ce qui justifie que les treize curseurs y soient — on règle en voyant le résultat. La voiture montrée est celle de la session en cours, à défaut la première de la bibliothèque. La fiche voiture, elle, n'en garde qu'un raccourci : son panneau compact ne tenait que cinq curseurs sur treize. Réglages de l'aperçu 3D intégré (§9.4), en **deux colonnes assignées** : sous l'aperçu, ce qu'on regarde en même temps que lui — **Rendu**, **Éclairage**, **Sol** ; à sa droite, ce qu'on manipule le plus — **Cadrage**, puis **Cache**, seul bloc qui efface des fichiers pour de bon et donc placé en dernier. Les colonnes sont assignées et non laissées au flux du navigateur : celui-ci répartissait les cartes comme il voulait, et le bloc le plus utilisé tombait où il tombait. *Rendu* : affichage de l'aperçu, **pilote au volant** (Toujours / Au démarrage du moteur / Jamais), **braquage**, qualité (Standard / Élevée) et effet d'entrée du plateau (Aucun / Progressif / Lancé). *Cadrage* : affiché ou non sur les fiches (même réglage que la bascule de la zone héros), zoom, orientation, angle de plongée, hauteur de caméra, **focale** et vitesse du plateau tournant. La focale recalcule la distance pour que la voiture garde sa taille dans le cadre : elle ne change que la perspective, le zoom restant ce qui recadre. *Éclairage* : exposition et intensité des rampes du studio. *Sol* : **reflet de la voiture** (intensité, flou, portée), flaque de lumière et ombre portée. Chaque groupe porte son propre bouton de remise à zéro, qui ne touche qu'à lui. *Cache* : plafond du cache d'aperçus (0,5 à 20 Go, défaut 2 Go), taille réellement occupée, et un bouton qui vide le cache. **Comme l'onglet Général, rien ne s'enregistre tout seul** : les réglages s'appliquent à l'aperçu mais n'atteignent le disque qu'au clic sur Enregistrer, un bouton Annuler revient sur l'enregistré, et quitter l'écran avec des changements en attente demande quoi en faire. Seule exception, la bascule photo/3D de la fiche voiture, qui est un interrupteur d'un clic. Baisser le plafond évince tout de suite, sans attendre la prochaine conversion. La qualité ne touche **que** le rendu : en changer n'invalide aucune entrée de cache. Les curseurs eux-mêmes sont dans `components/detail/Preview3dControls.svelte`, **partagé avec le panneau posé sur la fiche voiture** : on les règle là où on voit le résultat, on les retrouve ici avec leur mode d'emploi. Les valeurs par défaut sont celles mesurées sur les `preview.jpg` de Kunos, pour que la bascule photo/3D ne saute pas à l'œil (trois-quarts avant gauche, vue basse — détail dans `SPEC-preview-3d-kn5.md` §15), et un changement s'applique à une fiche déjà ouverte sans recharger son modèle.
 
