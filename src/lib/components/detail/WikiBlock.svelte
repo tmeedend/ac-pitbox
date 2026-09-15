@@ -27,6 +27,7 @@
   import { parseExtract } from "$lib/wikiText";
   import { renderArticle } from "$lib/wikiHtml";
   import { zoomFactor } from "$lib/zoom.svelte";
+  import { pinShell } from "$lib/shellScroll";
   import {
     articleLang,
     clearWikiLink,
@@ -74,7 +75,7 @@
     el.replaceChildren();
     if (!html) return;
     el.appendChild(renderArticle(html, lang, images));
-    pinShell();
+    pinShellHere();
   });
 
   /** Les liens de l'article ouvrent le navigateur système — jamais une
@@ -118,33 +119,14 @@
    * titre se lit mal et on ne voit pas ce qui le précède. */
   const SCROLL_MARGIN = 12;
 
-  /** Rétablit l'invariant de la coquille : **rien au-dessus du conteneur
-   * d'écran n'a le droit d'être décalé**.
-   *
-   * `global.css` met `html` et `body` en `overflow: hidden` pour ça — « un
-   * scroll de page entraînait toute la coquille, barre de titre comprise, hors
-   * champ ». Mais un `overflow: hidden` n'interdit que la **molette** : le
-   * navigateur, lui, fait défiler ces conteneurs tout seul pour rendre visible
-   * un élément qui vient de prendre le focus. Un clic sur une entrée du
-   * sommaire suffit donc à décaler la fenêtre entière — et comme la molette ne
-   * peut pas revenir dessus, le décalage est définitif.
-   *
-   * D'où cette remise à zéro, appelée au montage (elle répare une fenêtre déjà
-   * coincée) et après chaque saut. Ce n'est pas une rustine sur un symptôme :
-   * c'est la règle que la coquille énonce, appliquée là où quelque chose peut
-   * la violer. */
-  function pinShell() {
-    const root = document.documentElement;
-    if (root.scrollTop) root.scrollTop = 0;
-    if (root.scrollLeft) root.scrollLeft = 0;
-    if (document.body.scrollTop) document.body.scrollTop = 0;
-    if (document.body.scrollLeft) document.body.scrollLeft = 0;
-    let node: HTMLElement | null = host;
-    while (node && node !== document.body) {
-      if (getComputedStyle(node).overflowY === "hidden" && node.scrollTop) node.scrollTop = 0;
-      node = node.parentElement;
-    }
-  }
+  /** Rétablit l'invariant de la coquille depuis cet onglet : le clic sur une
+   * entrée du sommaire donne le focus au titre visé, et le navigateur fait
+   * défiler le document pour l'amener dans la fenêtre. Appelé au montage (il
+   * répare une fenêtre déjà coincée) et après chaque saut. Le pourquoi complet
+   * est dans `shellScroll.ts`, qui porte la fonction — elle était écrite ici
+   * une première fois, avant qu'un second chemin ne produise le même
+   * décalage. */
+  const pinShellHere = () => pinShell(host);
 
   /** Saute à une section. L'ancre est l'`id` que MediaWiki a posé sur le titre
    * et que la reconstruction a conservé.
@@ -170,7 +152,7 @@
     scroller.scrollTo({ top: scroller.scrollTop + delta - SCROLL_MARGIN, behavior: "smooth" });
     // Le défilement du focus, lui, a déjà eu lieu — en synchrone, avant ce
     // clic. On remet la coquille d'aplomb derrière.
-    pinShell();
+    pinShellHere();
   }
 
   // Les langues où l'article existe vraiment, jamais une liste en dur : sur les

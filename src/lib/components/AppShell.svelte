@@ -59,6 +59,7 @@
   import { message } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
   import { initGlobalDragDrop } from "$lib/importState.svelte";
+  import { watchShellScroll } from "$lib/shellScroll";
   import { initBulkProgress } from "$lib/bulkState.svelte";
   import { initRepairProgress } from "$lib/repairState.svelte";
   import {
@@ -90,6 +91,11 @@
   // Glisser-déposer disponible partout : un seul listener, monté ici à la
   // racine, plutôt que dans chaque écran susceptible de recevoir un drop.
   onMount(() => initGlobalDragDrop());
+
+  // La coquille ne défile jamais (§13) : le filet qui l'y ramène est monté ici
+  // parce que c'est elle qu'il protège — voir `shellScroll.ts` pour le
+  // pourquoi, et pour les deux chemins par lesquels le décalage est arrivé.
+  onMount(() => watchShellScroll());
 
   // Progression des actions groupées (§6.3bis) : un seul écouteur, monté ici
   // comme le glisser-déposer — un lot lancé depuis la bibliothèque doit rester

@@ -39,6 +39,7 @@
   import { buildModContextItems } from "$lib/modContextActions";
   import { t } from "$lib/i18n/index.svelte";
   import { zoomFactor } from "$lib/zoom.svelte";
+  import { pinShell } from "$lib/shellScroll";
   import { getUiPrefs, setUiPref } from "$lib/uiPrefs.svelte";
   import {
     buildCardIndex,
@@ -491,11 +492,33 @@
   // courant. Défilement vers l'élément sélectionné à revenir sur cet écran.
   let mainEl = $state<HTMLDivElement | undefined>();
   let firstLoad = true;
+  /** Ramène la carte sélectionnée au centre de la liste.
+   *
+   * **Jamais `scrollIntoView`** : il fait défiler *tous* les ancêtres
+   * scrollables pour amener l'élément dans la **fenêtre**, document compris —
+   * or `html`/`body` sont en `overflow: hidden` exprès, et un décalage posé là
+   * est définitif (la molette ne peut plus le rattraper). C'est l'un des deux
+   * chemins par lesquels toute la coquille se retrouvait remontée d'une
+   * quinzaine de pixels, barre de titre à moitié sortie. On fait donc défiler
+   * le conteneur, et lui seul.
+   *
+   * La division par `zoomFactor()` n'est pas décorative : le zoom d'interface
+   * est un `zoom` CSS posé sur `<html>`, donc `getBoundingClientRect` rend des
+   * pixels de fenêtre déjà multipliés quand `scrollTop` est en pixels CSS
+   * (§13). */
   function scrollToEffective() {
     if (!effectiveId) return;
     tick().then(() => {
-      const el = mainEl?.querySelector(`[data-id="${CSS.escape(effectiveId!)}"]`);
-      el?.scrollIntoView({ block: "center" });
+      const scroller = mainEl;
+      const el = scroller?.querySelector(`[data-id="${CSS.escape(effectiveId!)}"]`);
+      if (!scroller || !el) return;
+      const f = zoomFactor();
+      const top = (el.getBoundingClientRect().top - scroller.getBoundingClientRect().top) / f;
+      const middle = scroller.clientHeight / 2 - el.getBoundingClientRect().height / f / 2;
+      scroller.scrollTop = scroller.scrollTop + top - middle;
+      // Le défilement dû au focus, lui, a pu avoir lieu avant : on remet la
+      // coquille d'aplomb derrière.
+      pinShell(scroller);
     });
   }
 
