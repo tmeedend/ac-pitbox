@@ -210,4 +210,63 @@
   .layer-icon:hover {
     color: var(--blue);
   }
+  /* **Les cinq règles que l'extraction avait laissées derrière.** Ce bloc vient
+     de `LayersSection`, et le CSS d'un composant Svelte est scopé : le markup a
+     déménagé, son habillage non. Rien ne le signale — ni `npm run check`, ni la
+     relecture du fichier d'arrivée — et le navigateur sert alors son propre
+     style de bouton : des rectangles blancs au milieu d'un thème sombre. Vu à
+     l'usage sur les couches d'une app et sur celles de Spa. */
+  .layer-nm {
+    font-size: 12px;
+    color: var(--txt2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .layer-counts {
+    font-size: 9px;
+    color: var(--muted2);
+  }
+  /* Les deux flèches forment un seul contrôle, d'où l'interligne serré : elles
+     se lisent comme une paire, pas comme deux boutons voisins. */
+  .layer-ord {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    line-height: 0.7;
+  }
+  .layer-arrow {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 8px;
+    padding: 1px 2px;
+  }
+  /* Une flèche éteinte dit « on est déjà en bout de liste ». Elle reste
+     lisible : ce qui est désactivé existe et attend, ce qui est absent n'existe
+     pas (même distinction qu'à l'écran de session, §9.3). */
+  .layer-arrow:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+  /* Réordonner n'est ni destructif ni une action de fichier : le survol
+     éclaircit son gris, sans introduire de couleur (§7.2ter). */
+  .layer-arrow:not(:disabled):hover {
+    color: var(--txt2);
+  }
+  .layer-x {
+    flex: none;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 4px;
+  }
+  /* Supprimer, en revanche, a droit au rouge : c'est le sens destructif du
+     barème, et c'est le traitement déjà en place partout ailleurs. */
+  .layer-x:hover {
+    color: var(--rosso-bright);
+  }
 </style>
