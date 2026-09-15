@@ -2,9 +2,11 @@
 
 ## 1. Objectif et cadrage
 
-Afficher, sur la fiche de détail d'un mod (voiture ou circuit), un extrait de l'article
-Wikipédia correspondant au véhicule ou au circuit réel, dans un onglet distinct de la
-description fournie par l'auteur du mod.
+Afficher, sur la fiche de détail d'un mod (voiture ou circuit), l'article Wikipédia
+correspondant au véhicule ou au circuit réel, dans un onglet distinct de la
+description fournie par l'auteur du mod. *(Rédigé pour un extrait d'introduction ;
+l'article est affiché en entier depuis la révision du §7.3 — le reste de ce
+document emploie encore « extrait » par endroits.)*
 
 **Cette fonctionnalité est décorative.** Elle sert le plaisir de lecture, pas la
 constitution d'un référentiel. Ce cadrage a trois conséquences qui doivent guider chaque
@@ -199,8 +201,13 @@ Utiliser l'**Action API** (`/w/api.php`) plutôt que les API REST. Motif : l'API
 remplacement non encore annoncées, et RESTBase (`/api/rest_v1/`) est également en cours de
 retrait. L'Action API est la plus stable et permet de tout récupérer en une requête.
 
-Une seule requête par article suffit pour obtenir l'extrait d'introduction en texte brut,
-les liens interlangues, l'identifiant Wikidata et le numéro de révision.
+Une seule requête suffisait pour l'extrait d'introduction en texte brut, les liens
+interlangues, l'identifiant Wikidata et le numéro de révision. **L'article entier en
+demande trois**, et c'est le prix de la révision du §7.3 : `action=query` pour ces
+métadonnées, `action=parse` pour le HTML rendu et le sommaire, puis un `imageinfo`
+groupé pour l'auteur et la licence de chaque image — celui-là n'est pas facultatif,
+c'est lui qui autorise l'affichage (§9). Elles restent **séquentielles** (§6.2) et
+le tout est mis en cache d'un bloc.
 
 ### 6.2 Politesse
 
