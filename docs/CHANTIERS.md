@@ -680,6 +680,28 @@ de reprendre. En cas d'écart, la spec fait foi.
         vérification que personne ne faisait, par ce qui est vrai : deux
         objets distincts, et une relecture **en même temps** que la
         modification de la règle, jamais après.
+      - **Le socle vidé aux trois quarts (215 → 69), et six documents
+        retrouvés.** Les 77 renvois de l'écran de session pointaient vers des
+        instructions **jamais commitées** : `LOT-session-setup.md`, `LOT1`,
+        `LOT2`, `LOT4`, `LOT5` et `CIBLE-reglages-session.md`. Elles vivaient
+        hors du dépôt, donc leurs renvois pointaient dans le vide sans que rien
+        ne le signale. Toutes livrées, conservées verbatim : elles portent les
+        *arguments*, la partie qu'on ne retrouve pas deux fois — « un réglage se
+        range selon sa portée, jamais selon sa fréquence d'usage », « le filtre
+        définit le vivier, jamais le plateau ». **L'appariement se fait sur le
+        titre, jamais sur le numéro** : six documents se partagent les mêmes
+        `§1.x`, `§2.x`, `§3.x`, et plusieurs correspondances sont mot pour mot,
+        ce qui les rend vérifiables.
+      - **Un défaut du contrôleur, trouvé en s'en servant** : son motif exigeait
+        trois majuscules pour une étiquette, or `L5` en fait deux. `L5§2.3` se
+        lisait donc comme un `§2.3` nu, vérifié contre le mauvais document, et
+        **en silence** puisque le socle le connaissait sous cette forme. Une
+        étiquette inconnue vaut mieux qu'une étiquette invisible.
+      - **Le dépôt est public : deux règles de plus** (`no-secret`,
+        `no-secret-file`). Vérifié avant de les écrire — le dépôt en est
+        indemne, historique compris. Ce que `CLAUDE.md` dit surtout, c'est
+        *pourquoi* ça se joue avant le commit : un jeton poussé se révoque, il
+        ne s'efface pas.
       - **Lot 6 — trois tests là où une erreur détruit des fichiers.**
         `gamebackup::is_newer` (règle d'or n°5, §4.5.4) n'était couvert par
         rien : le cas qui compte est l'**égalité de dates** — deux copies
@@ -729,14 +751,17 @@ de reprendre. En cas d'écart, la spec fait foi.
         commenté « **Jamais `scrollIntoView`** » dans deux fichiers — et
         appelé dans deux autres.
       **Reste, dans cet ordre :**
-      1. **Vider le socle des renvois.** 215 entrées restent, en familles de
-         cinq à onze fichiers : `§3.4`, `§2.2`, `§5.4`, `§6.5`, `§11`,
-         `§5bis.1`/`§5bis.2`… Même méthode que pour les `§8.x` — lire les
-         commentaires qui les portent, le fichier tranche, jamais le numéro.
-         Un cas déjà instruit : `WIKI§4.1.1` à `WIKI§4.2` désignent les **étapes
-         numérotées** des pipelines d'appariement, que le doc énumère sans en
-         faire des titres ; soit on leur donne des titres, soit on renvoie à
-         la section mère.
+      1. **Renuméroter `SPEC.md` §5, §6 et §7 — la dernière poche du socle.**
+         69 entrées restent, et elles disent toutes la même chose : `§5bis.1`,
+         `§5bis.2`, `§6.2bis`, `§6.4bis`, `§6.5`, `§6.6`, `§7.4bis`, `§3.0`
+         sont des sous-sections que `SPEC.md` n'a pas et que le code suppose.
+         Même constat qu'au §8, même remède — sauf que §6 et §7 portent
+         aujourd'hui la numérotation dégénérée que le §9 avait avant sa
+         reprise, dont **deux titres `6.3bis`**, l'un suffixé « (suite) ». Les
+         leur donner demande donc de renuméroter, ce que `check-refs` rend sûr.
+         *(Anecdote utile : les passes de repointage ont réécrit ce paragraphe
+         lui-même — `§10bis` y est devenu `§11`. Les scripts traitent `docs/`
+         comme le reste, y compris le journal qui les décrit.)*
 
       **Deux choses mises de côté avec l'utilisateur, à ne pas glisser dans un
       lot :**
