@@ -332,6 +332,26 @@ function rebuild(node: Node, into: Node, lang: string, images: Map<string, Allow
   into.appendChild(copy);
 }
 
+/** The caption MediaWiki prints under an illustration, or `""` when it has
+ * none.
+ *
+ * Read from the **source** tree, before the rebuild drops the classes that
+ * make it findable: the modern markup puts it in a `<figcaption>`, the legacy
+ * one in a `div.thumbcaption` that comes out of `rebuild` as an unmarked
+ * `<div>`. Waiting until the tree is ours would leave the second unreachable.
+ *
+ * The caption is what says *what one is looking at* — the credit says who owns
+ * it. They are not interchangeable, and the viewer needs both. */
+function captionOf(el: Element): string {
+  const source = el.closest("figure")?.querySelector("figcaption") ?? el.closest(".thumb")?.querySelector(".thumbcaption");
+  if (!source) return "";
+  // `.magnify` is the legacy "enlarge" affordance sitting inside the caption:
+  // a control, not part of the sentence.
+  const copy = source.cloneNode(true) as Element;
+  for (const control of Array.from(copy.querySelectorAll(".magnify"))) control.remove();
+  return (copy.textContent ?? "").trim();
+}
+
 /** Pose l'image **et son crédit**, ou ne pose rien. */
 function appendImage(el: Element, into: Node, images: Map<string, AllowedImage>): void {
   const src = el.getAttribute("src") ?? "";
@@ -370,6 +390,8 @@ function appendImage(el: Element, into: Node, images: Map<string, AllowedImage>)
   // full-screen would be absurd.
   img.className = "wiki-photo";
   img.dataset.file = file ?? "";
+  const caption = captionOf(el);
+  if (caption) img.dataset.caption = caption;
   img.setAttribute("src", credit.url);
   img.setAttribute("alt", el.getAttribute("alt") ?? "");
   img.setAttribute("loading", "lazy");

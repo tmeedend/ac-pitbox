@@ -16,9 +16,14 @@
   import { largerImage } from "$lib/wikiHtml";
   import type { WikiImage } from "$lib/wiki";
 
+  /** An article image, plus the caption the page printed under it. */
+  export interface ViewerImage extends WikiImage {
+    caption?: string;
+  }
+
   interface Props {
     /** The article's images, in reading order. */
-    images: WikiImage[];
+    images: ViewerImage[];
     /** Which one is shown. */
     index: number;
     onclose: () => void;
@@ -71,16 +76,24 @@
   <figure class="frame">
     <img {src} alt={image.file} onerror={() => (downgraded = true)} />
 
-    <figcaption class="credit">
-      <span class="who">{image.artist} · {image.licence}</span>
-      {#if images.length > 1}
-        <span class="count">{index + 1} / {images.length}</span>
+    <figcaption class="below">
+      {#if image.caption}
+        <!-- **The caption, not the credit.** One says what is being looked at,
+             the other who owns it; dropping the first turns a photograph into
+             an anonymous picture. -->
+        <p class="caption">{image.caption}</p>
       {/if}
-      {#if image.descriptionUrl}
-        <button class="btn link" type="button" onclick={() => openUrl(image.descriptionUrl).catch(() => {})}>
-          {t("wiki.viewerSource")}
-        </button>
-      {/if}
+      <div class="credit">
+        <span class="who">{image.artist} · {image.licence}</span>
+        {#if images.length > 1}
+          <span class="count">{index + 1} / {images.length}</span>
+        {/if}
+        {#if image.descriptionUrl}
+          <button class="btn link" type="button" onclick={() => openUrl(image.descriptionUrl).catch(() => {})}>
+            {t("wiki.viewerSource")}
+          </button>
+        {/if}
+      </div>
     </figcaption>
   </figure>
 
@@ -144,6 +157,20 @@
     pointer-events: auto;
   }
 
+  .below {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    pointer-events: auto;
+  }
+  /* La légende garde la couleur du texte : c'est du contenu de l'article, pas
+     une mention de service comme le crédit. */
+  .caption {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--txt);
+  }
   .credit {
     display: flex;
     align-items: baseline;
@@ -151,7 +178,6 @@
     flex-wrap: wrap;
     font-size: 12px;
     color: var(--muted);
-    pointer-events: auto;
   }
   .who {
     min-width: 0;

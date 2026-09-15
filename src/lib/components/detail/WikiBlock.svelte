@@ -26,7 +26,7 @@
   import { localeNames } from "$lib/i18n/index.svelte";
   import { parseExtract } from "$lib/wikiText";
   import { renderArticle } from "$lib/wikiHtml";
-  import WikiImageViewer from "./WikiImageViewer.svelte";
+  import WikiImageViewer, { type ViewerImage } from "./WikiImageViewer.svelte";
   import { zoomFactor } from "$lib/zoom.svelte";
   import { pinShell } from "$lib/shellScroll";
   import {
@@ -81,7 +81,7 @@
   });
 
   /** The article's photographs, in reading order, and which one is open. */
-  let viewerImages = $state<WikiImage[]>([]);
+  let viewerImages = $state<ViewerImage[]>([]);
   let viewerIndex = $state<number | null>(null);
 
   /** Les liens de l'article ouvrent le navigateur système — jamais une
@@ -118,13 +118,13 @@
   function openViewer(clicked: HTMLImageElement) {
     if (!host || !article) return;
     const byFile = new Map(article.images.map((i) => [i.file, i]));
-    const list: WikiImage[] = [];
+    const list: ViewerImage[] = [];
     let at = 0;
     for (const el of Array.from(host.querySelectorAll<HTMLImageElement>("img.wiki-photo"))) {
       const credit = byFile.get(el.dataset.file ?? "");
       if (!credit) continue;
       if (el === clicked) at = list.length;
-      list.push(credit);
+      list.push({ ...credit, caption: el.dataset.caption ?? "" });
     }
     if (list.length === 0) return;
     viewerImages = list;
