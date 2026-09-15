@@ -877,8 +877,17 @@ L'application compte une douzaine de destinations. Elles se répartissent en tro
 | Territoire | Question | Contenu |
 | --- | --- | --- |
 | **Rail** (à gauche, `NavRail.svelte`) | *où je vais* | les destinations — des lieux qu'on parcourt |
-| **Barre de titre** (en haut, `TitleBar.svelte`) | *quelle forme a la fenêtre* | réduire, agrandir, fermer, Big Picture |
-| **Colonne de session** (`AppShell.svelte`) | *ce que je lance* | voiture, livrée, pilote, circuit, paramétrage, lancement, **Ouvrir CM** |
+| **Barre de titre** (en haut, `TitleBar.svelte`) | *quelle forme a la fenêtre* | réduire, agrandir, fermer, Big Picture — **et l'identité de l'app** : logo, nom, sous-titre |
+| **Colonne de session** (`AppShell.svelte`) | *ce que je lance* | type de session, voiture, livrée, pilote, performance, circuit, lancement, **Ouvrir CM** |
+
+**La marque est dans la barre de titre, pas dans la colonne.** Elle a occupé un
+bandeau en tête de la colonne de session — tuile, nom, sous-titre empilés — soit
+une cinquantaine de pixels pris sur la seule ressource rare de cette colonne,
+sa hauteur, pour une information qui ne change jamais. La barre de titre est
+déjà l'endroit où une application se nomme, et elle portait le nom sans le logo
+ni le sous-titre : les trois s'y rangent sur une ligne, à coût de hauteur nul.
+Conséquence assumée : en mode Big Picture, où la barre de titre est masquée, la
+marque n'apparaît nulle part — c'est un mode immersif, il n'a pas à se nommer.
 
 Avant ce découpage, la colonne de session faisait office de navigation en plus de son travail propre, et les deux grilles de boutons `ADD-ONS` et `ATELIER` qu'elle portait en pied étaient orphelines : elles n'étaient pas mal dessinées, elles étaient mal placées. Deux conséquences qui ne se devinent pas : **« À propos » quitte la barre de titre** (c'est du contenu — version, liens, dépôt — pas un état de fenêtre) et descend au pied du rail ; **« Ouvrir CM » quitte la navigation pour la colonne de session** (ce n'est pas une destination mais un chemin de lancement alternatif, pour qui préfère démarrer depuis Content Manager — le critère de rangement est l'intention, pas le fait que la cible soit externe).
 
@@ -894,7 +903,7 @@ complexité que l'app existe pour absorber — et leur contenu vit dans
 l'inventaire (§7bis). Apps devient une entrée : une app a un nom, une identité,
 on l'installe volontairement, elle n'est la dépendance de rien. Chaque entrée porte une **icône et un libellé** : le rail n'est pas iconographique seul, « Add-ons voiture » contre « Compléments » n'étant pas une distinction qu'une icône peut porter, et un rail muet se paie en infobulles pour un gain de largeur sans valeur ici.
 
-L'entrée active — celle dont l'écran est affiché — se marque par un **filet gauche rouge de 2 px** (`box-shadow: inset`, jamais une bordure : 2 px de bordure décaleraient le contenu d'un pixel à chaque changement d'écran), plus une icône pleine et un libellé en pleine lumière. C'est la seule apparition du rouge dans le rail (§7.2ter), et le seul repère d'écran actif de l'application : la colonne de session ne le porte plus, elle qui n'est plus de la navigation (§9.1). Au clavier, flèches haut/bas pour circuler dans le rail (bouclé aux deux extrémités), `Entrée` pour activer, `aria-current="page"` sur l'entrée active.
+L'entrée active — celle dont l'écran est affiché — se marque par un **filet gauche rouge de 2 px** (`box-shadow: inset`, jamais une bordure : 2 px de bordure décaleraient le contenu d'un pixel à chaque changement d'écran), plus une icône pleine et un libellé en pleine lumière. C'est la seule apparition du rouge dans le rail (§7.2ter). **La colonne de session porte le même filet, et ce n'est pas une brèche dans la frontière** : le rail marque le *lieu* où l'on est, la colonne marque le *type de session* qu'on prépare (§9.1bis) — deux échelles, jamais deux réponses à la même question, et les deux ne peuvent pas se contredire puisqu'un type n'est surligné que tant qu'on est sur l'écran de session. Au clavier, flèches haut/bas pour circuler dans le rail (bouclé aux deux extrémités), `Entrée` pour activer, `aria-current="page"` sur l'entrée active.
 
 **Pastille d'alerte** : un point de 6 px en haut à droite de l'icône, bordé de la couleur du rail, sur une rubrique qui contient un problème. Pas d'agrégat sur une entrée parente et **pas de compteur** — il faut voir *laquelle* aller regarder, et le nombre exact ne change pas cette décision. Une seule source aujourd'hui : les conflits de fichiers entre compléments, que `list_others` calcule déjà. Les autres inventaires n'ont pas de notion de « problème » à remonter.
 

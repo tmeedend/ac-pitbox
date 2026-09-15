@@ -84,8 +84,17 @@
   <!-- Zone de déplacement de fenêtre (chrome OS, pas du contenu de document) :
        double-clic = agrandir/restaurer, comme une vraie barre de titre. -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- **La marque vit ici, et nulle part ailleurs.** Elle occupait un bandeau
+       en tête de la colonne de session — logo, nom, sous-titre empilés — soit
+       une cinquantaine de pixels pris sur la seule ressource rare de cette
+       colonne, sa hauteur, pour une information qui ne change jamais. La barre
+       de titre est déjà l'endroit où une application se nomme, et elle portait
+       le nom sans le logo ni le sous-titre : les trois s'y rangent sur une
+       ligne, à coût de hauteur nul. -->
   <div class="drag" data-tauri-drag-region ondblclick={toggleMaximize}>
+    <div class="logo" aria-hidden="true"><span>PB</span></div>
     <span class="name">PIT BOX</span>
+    <span class="brand-sub">AC MOD MANAGER</span>
   </div>
   <div class="win-controls">
     <!-- Big Picture porte un LIBELLÉ, pas seulement une icône : l'action
@@ -211,13 +220,44 @@
     flex: 1;
     display: flex;
     align-items: center;
-    padding-left: 12px;
+    gap: 9px;
+    padding-left: 10px;
+  }
+  /* Même tuile que celle de la colonne de session, réduite pour tenir dans les
+     32 px de la barre : le biseau et l'italique sont la marque, ils ne se
+     redessinent pas ici. */
+  .logo {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    background: var(--rosso);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: skewX(-8deg);
+  }
+  .logo span {
+    transform: skewX(8deg);
+    color: #fff;
+    font-size: 7.5px;
+    font-weight: 700;
+    font-style: italic;
   }
   .name {
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 600;
-    letter-spacing: 2px;
-    color: var(--muted2);
+    font-style: italic;
+    letter-spacing: 1.5px;
+    color: var(--txt2);
+  }
+  /* `brand-sub` et non `sub` : ce dernier a déjà voulu dire trois choses dans
+     l'app (en-tête de dialogue, message sous un champ, surtitre rouge), et un
+     nom qui veut dire trois choses est un piège au premier déplacement de
+     markup. */
+  .brand-sub {
+    font-size: 6.5px;
+    letter-spacing: 2.5px;
+    color: var(--muted);
   }
   .win-controls {
     display: flex;

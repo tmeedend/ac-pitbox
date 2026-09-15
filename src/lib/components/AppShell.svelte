@@ -770,14 +770,6 @@
          imbriquées les plus internes gagnent, voir `regions()`. -->
     <NavRail {alerts} />
     <aside class="side" data-gp-region="sidebar">
-      <div class="brand">
-        <div class="logo"><span>PB</span></div>
-        <div>
-          <div class="brand-name">PIT BOX</div>
-          <div class="brand-sub">AC MOD MANAGER</div>
-        </div>
-      </div>
-
       <!-- SESSION : le duo choisi, et rien d'autre. La colonne répond à une
            seule question — « qu'est-ce que je lance ? » — et les deux blocs
            ont exactement la même anatomie : vignette, nom, source, champs.
@@ -1214,55 +1206,18 @@
        pas — à 150 %, une fenêtre de 1080 px n'offre plus que 720 px de mise en
        page et la règle ne se déclencherait pas. Le conteneur, lui, mesure la
        hauteur réellement disponible.
-       1020 et non les 900 de la spec : c'est une **mesure**, pas un nombre rond
+       960 et non les 900 de la spec : c'est une **mesure**, pas un nombre rond
        — la colonne la plus chargée (Course sélectionnée, sous-entrée affichée,
-       replis fermés) fait un millier de pixels, relevés à l'écran par
-       bissection du seuil jusqu'à ce qu'il bascule. En dessous de 1020 elle
-       n'a donc plus de marge, et c'est exactement là qu'il faut réagir : 900
-       l'aurait laissée déborder de quelques pixels — le bas de la colonne
-       passe alors sous le bord de la fenêtre — avant que la règle ne se
+       replis fermés) faisait un millier de pixels, relevés à l'écran par
+       bissection du seuil jusqu'à ce qu'il bascule, et le départ du bandeau de
+       marque vers la barre de titre lui en a rendu une cinquantaine. En dessous
+       de ce seuil elle n'a plus de marge, et c'est exactement là qu'il faut
+       réagir : 900 l'aurait laissée déborder de quelques pixels — le bas de la
+       colonne passe alors sous le bord de la fenêtre — avant que la règle ne se
        déclenche. Une fenêtre de 1920 × 1080 au zoom d'origine offre 1044 px à
        la colonne : elle garde ses vignettes entières, ce que la spec demande. */
     container: sidecol / size;
   }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 14px 13px;
-    border-bottom: 1px solid var(--line);
-  }
-  .logo {
-    width: 26px;
-    height: 26px;
-    background: var(--rosso);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transform: skewX(-8deg);
-    flex: none;
-  }
-  .logo span {
-    transform: skewX(8deg);
-    color: #fff;
-    font-size: 10px;
-    font-weight: 700;
-    font-style: italic;
-  }
-  .brand-name {
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 1.5px;
-    font-style: italic;
-    line-height: 1;
-  }
-  .brand-sub {
-    color: var(--muted);
-    font-size: 6.5px;
-    letter-spacing: 2.5px;
-    margin-top: 3px;
-  }
-
   /* Titres de section du rail : mono, majuscules espacées, séparateur.
      Plus rouges depuis le barème de l'accent (SPEC §7.2ter) : un titre de section est de la
      STRUCTURE, pas un état — et ils sont assez nombreux, répartis sur toute
@@ -1402,7 +1357,7 @@
      qu'un rapport d'image, parce que la boîte prend le rapport de SA photo
      dès qu'il y en a une (`.thumb.photo`) — c'est donc la hauteur qu'il faut
      borner, et le recadrage est préférable à une image écrasée. */
-  @container sidecol (max-height: 1020px) {
+  @container sidecol (max-height: 960px) {
     /* Hauteur EXPLICITE et non un plafond : la boîte tire sa hauteur de son
        image (`aspect-ratio: auto`), donc un `max-height` ne donnerait à
        l'image aucune hauteur de référence à laquelle se rapporter. */
