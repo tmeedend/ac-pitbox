@@ -371,6 +371,49 @@
     labelWidth = Math.min(88, Math.max(60, Math.ceil(widest)));
   });
 
+  /**
+   * **Un clic ouvre la bibliothèque, deux ouvrent la fiche — et les deux gestes
+   * sont comptés ici, jamais confiés à `ondblclick`.**
+   *
+   * Les deux étaient posés côte à côte sur le même bouton, `onclick` agissant
+   * tout de suite. Deux défauts en découlaient, dont l'un se voyait :
+   *
+   * - **Le double-clic n'ouvrait pas la fiche** quand on n'était pas déjà sur
+   *   la bibliothèque visée (signalé à l'usage). Le premier clic changeait de
+   *   section, donc remontait tout l'écran principal et remplaçait le contenu
+   *   sous le curseur, entre les deux moitiés du geste — et un `dblclick` ne
+   *   part que si les deux clics tombent sur le même élément, dans le temps
+   *   système ET sans que la cible ait bougé. Impossible à reproduire en
+   *   entrée synthétique, où les deux clics partent avant tout rendu : c'est
+   *   précisément le genre de course qu'on ne corrige pas en la retentant.
+   * - **L'historique enregistrait un écran que personne n'a regardé** : la
+   *   liste de la bibliothèque, ouverte par le premier clic, puis la fiche.
+   *   « Précédent » y ramenait, ce que `openInSection` existe justement pour
+   *   éviter (§7.2bis).
+   *
+   * Compter les clics soi-même règle les deux d'un coup : rien ne part avant
+   * que le geste ne soit fini, donc aucun rendu ne s'intercale et aucun écran
+   * intermédiaire n'existe. Le prix est un quart de seconde d'attente sur le
+   * clic simple — le prix habituel d'une cible qui porte deux gestes.
+   */
+  const DOUBLE_CLICK_MS = 260;
+  let slotClicks = 0;
+  let slotTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function pressSlot(section: "cars" | "tracks", state: SlotState, id: string | null | undefined) {
+    slotClicks += 1;
+    if (slotTimer) clearTimeout(slotTimer);
+    slotTimer = setTimeout(() => {
+      const clicks = slotClicks;
+      slotClicks = 0;
+      slotTimer = null;
+      // Un emplacement vide ou en impasse n'a pas de fiche à ouvrir : le
+      // double-clic y vaut le simple, il mène où le simple mène.
+      if (clicks >= 2 && state === "picked" && id) void openSessionDetail(section, id);
+      else void openSlot(section, state);
+    }, DOUBLE_CLICK_MS);
+  }
+
   /** Clic sur la vignette ou le nom : c'est la zone qui NAVIGUE (SPEC §9.1). Les
    * menus de livrée/layout et la ligne « Mon pilote » sont ses frères dans le
    * DOM, jamais ses enfants — un clic qui visait un menu ne doit pas éjecter
@@ -787,8 +830,7 @@
           <button
             class="pick"
             type="button"
-            onclick={() => openSlot("tracks", trackSlot)}
-            ondblclick={() => openSessionDetail("tracks", nav.sessionTrack?.id)}
+            onclick={() => pressSlot("tracks", trackSlot, nav.sessionTrack?.id)}
             title={trackSlot === "picked" ? t("session.trackTooltip") : undefined}
             aria-label={nav.sessionTrack ? `${nav.sessionTrack.name} — ${t("session.changeTrack")}` : undefined}
           >
@@ -845,8 +887,7 @@
           <button
             class="pick"
             type="button"
-            onclick={() => openSlot("cars", carSlot)}
-            ondblclick={() => openSessionDetail("cars", nav.sessionCar?.id)}
+            onclick={() => pressSlot("cars", carSlot, nav.sessionCar?.id)}
             title={carSlot === "picked" ? t("session.carTooltip") : undefined}
             aria-label={nav.sessionCar ? `${nav.sessionCar.name} — ${t("session.changeCar")}` : undefined}
           >
