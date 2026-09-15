@@ -1614,7 +1614,12 @@
     display: flex;
     align-items: baseline;
     gap: 8px;
-    width: 100%;
+    /* **Pas de `width: 100%`** : la colonne est un `flex` vertical, ses enfants
+       s'étirent déjà d'eux-mêmes. Posée en dur, cette largeur s'ajoutait au
+       `margin-left` de la sous-entrée — une marge vit hors de la boîte, même en
+       `border-box` — et la colonne débordait de quatorze pixels. `.side` étant
+       en `overflow-y: auto`, une règle CSS lui calcule l'autre axe en `auto`
+       aussi : d'où une barre de défilement horizontale pour quatorze pixels. */
     padding: 6px 10px;
     background: none;
     border: none;
