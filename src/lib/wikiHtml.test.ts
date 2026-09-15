@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fileNameFromSrc, isIconSized, resolveHref } from "./wikiHtml";
+import { fileNameFromSrc, isIconSized, largerImage, resolveHref } from "./wikiHtml";
 
 // Seules les deux fonctions **pures** sont testées ici : la reconstruction de
 // l'arbre demande un DOM, et le projet a écarté jsdom explicitement (voir la
@@ -79,5 +79,36 @@ describe("isIconSized", () => {
     expect(isIconSized(null, null)).toBe(false);
     expect(isIconSized("", "")).toBe(false);
     expect(isIconSized("abc", "20")).toBe(false);
+  });
+});
+
+describe("largerImage", () => {
+  // Règle : la visionneuse demande la même image en plus grand, et n'invente
+  // jamais une URL qu'elle ne sait pas construire. Un repli silencieux sur la
+  // vignette vaut mieux qu'une image cassée — la §1 préfère toujours le moins
+  // au faux.
+
+  it("demande la même image en plus grand", () => {
+    expect(largerImage("https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Foo.jpg/640px-Foo.jpg")).toBe(
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Foo.jpg/1600px-Foo.jpg",
+    );
+  });
+
+  it("laisse tel quel ce qui n'est pas une vignette", () => {
+    // Original servi directement : l'image était déjà assez petite.
+    const direct = "https://upload.wikimedia.org/wikipedia/commons/a/ab/Foo.jpg";
+    expect(largerImage(direct)).toBe(direct);
+  });
+
+  it("laisse tel quel un préfixe de taille qu'on ne reconnaît pas", () => {
+    // Les PDF et les scans DjVu portent `lossy-page1-640px-` : le rendu ne se
+    // demande pas de la même façon, et deviner produirait un lien mort.
+    const scan = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Doc.pdf/lossy-page1-640px-Doc.pdf.jpg";
+    expect(largerImage(scan)).toBe(scan);
+  });
+
+  it("ne rétrécit jamais une vignette déjà plus grande", () => {
+    const big = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Foo.jpg/2000px-Foo.jpg";
+    expect(largerImage(big)).toBe(big);
   });
 });

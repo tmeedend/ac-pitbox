@@ -1799,7 +1799,11 @@
     "purgeHint": "Efface les articles et les recherches infructueuses mises en cache. Vos appariements, corrections comprises, sont conservés.",
     "purgeAction": "Vider le cache",
     "purgeConfirm": "Vider le cache des articles Wikipédia ? Ils seront retéléchargés à la prochaine consultation.",
-    "purgeDone": "Cache vidé."
+    "purgeDone": "Cache vidé.",
+    "viewerClose": "Fermer",
+    "viewerPrev": "Image précédente",
+    "viewerNext": "Image suivante",
+    "viewerSource": "Voir sur Commons"
   },
   "prefs": {
     "writeFailedTitle": "Vos réglages ne sont pas enregistrés",

@@ -1799,7 +1799,11 @@
     "purgeHint": "Clears cached articles and failed searches. Your matches, corrections included, are kept.",
     "purgeAction": "Clear the cache",
     "purgeConfirm": "Clear the cached Wikipedia articles? They will be downloaded again next time you read one.",
-    "purgeDone": "Cache cleared."
+    "purgeDone": "Cache cleared.",
+    "viewerClose": "Close",
+    "viewerPrev": "Previous image",
+    "viewerNext": "Next image",
+    "viewerSource": "View on Commons"
   },
   "prefs": {
     "writeFailedTitle": "Your settings are not being saved",

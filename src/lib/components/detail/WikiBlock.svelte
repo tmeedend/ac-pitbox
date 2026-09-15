@@ -26,6 +26,7 @@
   import { localeNames } from "$lib/i18n/index.svelte";
   import { parseExtract } from "$lib/wikiText";
   import { renderArticle } from "$lib/wikiHtml";
+  import WikiImageViewer from "./WikiImageViewer.svelte";
   import { zoomFactor } from "$lib/zoom.svelte";
   import { pinShell } from "$lib/shellScroll";
   import {
@@ -33,6 +34,7 @@
     clearWikiLink,
     searchWikiCandidates,
     setWikiLink,
+    type WikiImage,
     type WikiPanel,
     type WikiSuggestion,
   } from "$lib/wiki";
@@ -78,15 +80,55 @@
     pinShellHere();
   });
 
+  /** The article's photographs, in reading order, and which one is open. */
+  let viewerImages = $state<WikiImage[]>([]);
+  let viewerIndex = $state<number | null>(null);
+
   /** Les liens de l'article ouvrent le navigateur système — jamais une
    * navigation interne, qui ferait sortir l'utilisateur de sa fiche. Les `href`
-   * ont été remplacés par des `data-href` validés à la reconstruction. */
+   * ont été remplacés par des `data-href` validés à la reconstruction.
+   *
+   * Une image fait exception, et c'est le seul clic qui reste chez nous : elle
+   * s'ouvre dans la visionneuse (§9). */
   function onArticleClick(event: MouseEvent) {
+    // **A photograph is tested first, and it must be.** MediaWiki wraps most
+    // illustrations in a link to their file page, so the enclosing `[data-href]`
+    // would otherwise win and send the reader to their browser — the one place
+    // they did not ask to go when clicking an image inside the app.
+    const photo = (event.target as HTMLElement | null)?.closest("img.wiki-photo");
+    if (photo && host && article) {
+      event.preventDefault();
+      openViewer(photo as HTMLImageElement);
+      return;
+    }
+
     const target = (event.target as HTMLElement | null)?.closest("[data-href]");
     const href = target?.getAttribute("data-href");
     if (!href) return;
     event.preventDefault();
     openUrl(href).catch(() => {});
+  }
+
+  /** Builds the viewer's list from the DOM rather than from `article.images`.
+   *
+   * The two are not the same list: the API returns every file the page uses,
+   * the article shows those the rebuild kept, and only reading order makes
+   * « next image » mean anything. Walking the rendered tree is therefore the
+   * only source that matches what the reader sees. */
+  function openViewer(clicked: HTMLImageElement) {
+    if (!host || !article) return;
+    const byFile = new Map(article.images.map((i) => [i.file, i]));
+    const list: WikiImage[] = [];
+    let at = 0;
+    for (const el of Array.from(host.querySelectorAll<HTMLImageElement>("img.wiki-photo"))) {
+      const credit = byFile.get(el.dataset.file ?? "");
+      if (!credit) continue;
+      if (el === clicked) at = list.length;
+      list.push(credit);
+    }
+    if (list.length === 0) return;
+    viewerImages = list;
+    viewerIndex = at;
   }
 
   /** Le conteneur qui défile réellement au-dessus de nous.
@@ -347,6 +389,15 @@
       <button class="btn link" type="button" onclick={openSearch}>{t("wiki.wrongArticle")}</button>
     </div>
 
+    {#if viewerIndex !== null && viewerImages.length > 0}
+      <WikiImageViewer
+        images={viewerImages}
+        index={viewerIndex}
+        onclose={() => (viewerIndex = null)}
+        onnavigate={(i) => (viewerIndex = i)}
+      />
+    {/if}
+
     <p class="attribution">
       {t("wiki.attribution", { title: article.articleTitle })} ·
       <a
@@ -534,6 +585,11 @@
     height: auto;
     border-radius: 6px;
     margin: 10px 0 2px;
+  }
+  /* A photograph opens in the viewer; the cursor is the only thing that says
+     so before the click. Icons keep the default cursor — they open nothing. */
+  .article-html :global(img.wiki-photo) {
+    cursor: zoom-in;
   }
   /* Les icones restent dans le fil du texte, a la taille que la page demande :
      cinq etoiles de notation forment une note, pas cinq affiches. */

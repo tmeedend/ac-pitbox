@@ -724,7 +724,12 @@ reconstruit à partir d'une liste blanche, la webview ayant accès à `invoke` e
 le wiki étant éditable par n'importe qui. Les images affichées sont **celles de
 Commons dont l'auteur et la licence sont connus**, chacune portant sa ligne de
 crédit — c'est ce que leur licence impose, et c'est ce qui permet de les
-afficher. Deux choses ne sont pas négociables
+afficher. Un clic sur l'une d'elles l'ouvre en grand **dans l'application** :
+une visionneuse, pas un navigateur — la même image en plus grand, son crédit
+avec elle, un lien vers sa page Commons, les flèches pour circuler et Échap
+pour sortir. Elle couvre la fiche et non la fenêtre, le rail et la colonne de
+session restant sous les yeux. Les icônes (une étoile de notation, un drapeau)
+ne s'ouvrent pas : ce n'est pas du contenu. Deux choses ne sont pas négociables
 et viennent du droit d'auteur, pas du goût : le texte n'est **jamais fondu**
 dans la description du mod — ce sont deux sous-onglets, donc deux blocs
 distincts — et il est affiché **tel que l'API le rend**, sans reformulation,

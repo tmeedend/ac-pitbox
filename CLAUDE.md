@@ -975,6 +975,24 @@ laisser pourrir ici.
       ```
       Il dit où la résolution s'arrête — appariement, langue, ou réseau —, trois
       causes que rien ne distingue à l'écran.
+      **La visionneuse d'images est faite**, et il vaut la peine de savoir
+      pourquoi elle a coûté si peu : l'image est déjà là avec son auteur et sa
+      licence (§9 l'exige), Commons seul est accepté — donc rien sous usage
+      loyal ne peut y arriver —, et c'est la même balise `<img>` en plus grand
+      dans notre propre DOM. **Aucune surface nouvelle.** Elle s'affiche en
+      `position: fixed` et couvre pourtant la fiche et non la fenêtre : la
+      `container-type: inline-size` de `DetailPage` apporte le confinement de
+      mise en page, qui fait d'elle le bloc conteneur de ses descendants fixes.
+      C'est voulu — et ça évite gratuitement le piège du zoom.
+      **Idée notée, pas un chantier** (« pas très important », dixit
+      l'utilisateur) : **ouvrir les articles liés dans l'app**. Tout le pipeline
+      existe déjà — un `/wiki/Titre` se résout, se récupère et se rend comme
+      l'article principal. Ce qui retient n'est pas technique : l'onglet
+      deviendrait un navigateur, il lui faudrait une pile de retour, et surtout
+      il **dériverait du mod auquel il appartient** — on lirait « Grand Prix
+      d'Allemagne 1976 » dans la fiche d'une Ferrari. Le cache gonflerait sans
+      borne claire et l'attribution devrait suivre chaque page visitée. À
+      trancher comme une question d'UX, pas à glisser dans un lot.
       TTL : 30 jours en positif, 90 en négatif.
 - [ ] **Signature Authenticode** : le workflow est prêt, il attend un
       certificat. Définir la variable de dépôt `SIGN_COMMAND` suffit à

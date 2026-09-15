@@ -218,6 +218,39 @@ export function resolveHref(href: string, lang: string): string | null {
   return null;
 }
 
+/** Width asked of MediaWiki when an image is opened in the viewer.
+ *
+ * The article itself is served 640px thumbnails; that is plenty inline and
+ * unreadable full-screen. 1600 covers the largest window anyone runs this on
+ * without fetching a 6000px original — some Commons photographs weigh tens of
+ * megabytes, and the viewer has to open now, not in ten seconds. */
+const VIEWER_WIDTH = 1600;
+
+/** The same Commons file, asked for at `VIEWER_WIDTH` instead of its thumbnail
+ * width — or the URL unchanged when that cannot be done safely.
+ *
+ * MediaWiki encodes the size in the file name of a thumbnail
+ * (`…/thumb/a/ab/Foo.jpg/640px-Foo.jpg`), so a larger rendering is a matter of
+ * asking for a different name. Three cases are deliberately left alone: a URL
+ * that is not a thumbnail at all (the original was already small enough to be
+ * served directly), a name whose size prefix we do not recognise (`lossy-page1-`
+ * for PDFs and DjVu scans), and a thumbnail already wider than we would ask
+ * for.
+ *
+ * **The caller must still handle failure.** MediaWiki refuses to upscale past
+ * the original, so a 900px photograph asked for at 1600 answers with an error,
+ * not an image — and nothing in the URL says how big the original is. The
+ * viewer falls back to the thumbnail it already has on `error`. */
+export function largerImage(url: string): string {
+  const cut = url.lastIndexOf("/");
+  if (cut < 0) return url;
+  const name = url.slice(cut + 1);
+  const size = /^(\d+)px-/.exec(name);
+  if (!size) return url;
+  if (Number(size[1]) >= VIEWER_WIDTH) return url;
+  return url.slice(0, cut + 1) + name.replace(/^\d+px-/, `${VIEWER_WIDTH}px-`);
+}
+
 function hasDroppedClass(el: Element): boolean {
   const cls = el.getAttribute("class");
   if (!cls) return false;
@@ -331,6 +364,12 @@ function appendImage(el: Element, into: Node, images: Map<string, AllowedImage>)
   }
 
   const img = document.createElement("img");
+  // The class and the file name are what make the image openable: the click
+  // handler recognises a photograph by the class, and looks its author and
+  // licence up by the file name. Icons carry neither — opening a rating star
+  // full-screen would be absurd.
+  img.className = "wiki-photo";
+  img.dataset.file = file ?? "";
   img.setAttribute("src", credit.url);
   img.setAttribute("alt", el.getAttribute("alt") ?? "");
   img.setAttribute("loading", "lazy");
