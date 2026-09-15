@@ -110,6 +110,26 @@ de reprendre. En cas d'écart, la spec fait foi.
         qui sert désormais les sessions **et** les grilles. Reste
         `DriverOutfits.svelte`, seul à garder son implémentation ; c'est du
         raccordement, plus de l'extraction.
+        **Mesuré avant de raccorder, et ça change la conclusion** : les trois
+        modules ont la même *forme* (`list`/`save`/`delete`) mais **trois
+        contrats d'écrasement différents, chacun porté par une raison écrite**.
+        `savedSessions` écrase par nom **dans le type de session** — « Test » en
+        Race et « Test » en Practice sont deux choses sans rapport.
+        `savedGrids` écrase par nom, mais **suffixe au lieu d'écraser à
+        l'import**, parce qu'un import ne doit rien détruire. `driverOutfits`
+        écrase **insensible à la casse**, plafonne à `MAX`, et attend la lecture
+        avant d'écrire — garde née d'un bug remonté deux fois, la tenue
+        apparaissait puis disparaissait au redémarrage.
+        Un module commun devrait donc exposer clé de portée, casse, plafond,
+        mode import et garde de chargement : **cinq axes pour trois appelants**,
+        quand `Seg.svelte` s'est limité à trois axes pour sept. Ce qui est
+        partagé est la forme, et elle tient déjà en trois petits modules ; ce
+        qui diffère est le comportement, et il diffère exprès.
+        **Reste une question d'UX, et elle seule** : les tenues sont des puces
+        toujours visibles (un clic pour reposer une tenue), `NamedListDialog`
+        est une modale (deux clics). Les brancher coûterait au panneau
+        d'essayage son geste principal. À trancher avec l'utilisateur — ce
+        n'est pas du reformatage.
       Un lot de ce genre est du **reformatage pur sur une quinzaine de
       fichiers** : le faire dans son propre commit, jamais mélangé à un
       changement fonctionnel (sinon `git blame` devient inexploitable).
