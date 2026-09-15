@@ -1,8 +1,13 @@
 # Chantiers en cours
 
-Le journal de bord des chantiers : où en est chacun, ce qui reste, et surtout
-**les pièges déjà payés une fois**. `CLAUDE.md` n'en garde qu'un tableau ;
-le détail est ici.
+**C'est ici que vit le travail non terminé.** Chaque entrée porte trois choses :
+ce qui est fait, **ce qui reste**, et les pièges déjà payés une fois. Une case
+`- [ ]` non cochée = un chantier ouvert. `CLAUDE.md` n'en garde qu'un tableau
+d'une ligne par chantier, pour savoir lequel existe sans lire tout ce fichier.
+
+Le mot « journal » n'en dit que le tiers : on n'y écrit pas que ce qu'on a
+appris, on y écrit aussi ce qu'il reste à faire. C'est le document qu'on ouvre
+pour reprendre un chantier à froid.
 
 Deux règles, et la seconde est la raison d'être du fichier :
 

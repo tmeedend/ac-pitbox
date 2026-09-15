@@ -461,9 +461,11 @@ là pour se vider, et il est vide.
 - **`docs/README.md`** — index de tout `docs/`. Point d'entrée.
 - **`docs/SPEC.md`** — spécification de référence, organisée par domaine.
   Décrit l'app telle qu'elle fonctionne. **La source de vérité.**
-- **`docs/CHANTIERS.md`** — le journal de bord des chantiers : avancement,
-  écarts assumés, pièges déjà payés. À lire **avant de reprendre un chantier**,
-  et à mettre à jour en même temps que le tableau ci-dessous.
+- **`docs/CHANTIERS.md`** — **le travail non terminé**, chantier par chantier :
+  ce qui est fait, **ce qui reste**, les écarts assumés et les pièges déjà
+  payés. C'est là qu'on regarde pour savoir quoi faire ensuite. Le tableau
+  ci-dessous n'en est que l'index — une ligne par chantier, à tenir à jour
+  en même temps que lui.
 - **`docs/SPEC-import.md`** — l'import sur une page : une seule question
   (« où va ce fichier ? »), un arbre de décision, la table des mécanismes de
   pose, et les cinq archives réelles qui servent de tests. À lire **avant**
