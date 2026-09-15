@@ -547,7 +547,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Enrichissement Wikipédia** | livré ; reste à régler les seuils sur les corrections manuelles de l'utilisateur | `docs/SPEC-wikipedia-fiche-detail.md` |
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |
 | **Refonte navigation et fiches** | neuf lots faits ; second palier à fusionner | `docs/PLAN-refonte-navigation.md` |
-| **Passe documentation** | **finie** ; reste à trancher la divergence des règles de tags | `docs/CHANTIERS.md` |
+| **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre
 

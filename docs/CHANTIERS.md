@@ -611,186 +611,21 @@ de reprendre. En cas d'écart, la spec fait foi.
       **Reste** : « aussi dans … » (§4.5, un mod rattaché à plusieurs entités),
       les points ouverts §14 à reposer avec l'inventaire réel sous les yeux, et
       le markdown dans les notes (demandé à l'usage, voir le §4bis du plan).
-
-- [ ] **Passe documentation — synchroniser `docs/` et le code, et empêcher la
-      dérive de revenir.** Le dépôt n'est pas en dette de code : 764 tests Rust
-      bien nommés, une architecture qui tient. Il est en dette de **repérage** —
-      tout est écrit, et de plus en plus cher à retrouver. Le plan est en lots
-      indépendants, chacun commitable seul.
-      **Fait :**
-      - **Lot 0 — ménage.** Deux composants morts depuis la refonte
-        (`OtherMods.svelte`, `LayersSection.svelte`, 876 lignes), 119 clés i18n
-        injoignables sur 1 655, l'index `docs/README.md` qui ratait 10 des
-        33 fichiers et renvoyait à `archives.py` supprimé, neuf branches
-        locales entièrement fusionnées.
-      - **Lot 1 — les renvois `§` disent leur document.** Convention : `§4.5`
-        nu = `SPEC.md`, étiquette pour les autres (`GRILLE§`, `WIKI§`,
-        `PILOTE§`, `PREVIEW§`, `FMOD§`, `MUSIQUE§`…). 722 renvois étiquetés,
-        et `scripts/check-refs.mjs` dans `npm run check` vérifie que chacun
-        tombe sur un titre qui existe.
-      - **Lot 2 — `CLAUDE.md` dégraissé.** Les 591 lignes de ce journal en
-        sortaient 55 % du fichier, relues à chaque session pour un contenu qui
-        n'est pas une consigne. `CLAUDE.md` n'en garde qu'un tableau.
-      - **Lot 3 — les garde-fous.** `scripts/check-conventions.mjs` dans
-        `npm run check` : six règles de « Conventions qui ne se devinent pas »
-        qu'une machine sait lire. Les deux `scrollIntoView` qui violaient une
-        règle écrite en gras sont corrigés, et `shellScroll.ts` gagne
-        `scrollIntoContainer` — les deux pièges documentés (défilement jusqu'au
-        document, chercheur d'ancêtre qui remonte trop haut) y sont pris en
-        charge une fois pour toutes, pour ses trois appelants.
-        **`check-conventions-selftest.mjs` prouve que chaque règle sait
-        échouer**, et il a démasqué une vraie fausse porte en naissant : la
-        détection d'orphelin ne regardait que les fichiers suivis par git, donc
-        un composant tout juste créé — celui sur lequel on veut justement être
-        prévenu — y échappait. À relancer à chaque règle ajoutée.
-      - **Lot 5a — « Lancement de session » sort dans `SPEC-session.md`.** Le
-        §9 pesait 924 lignes, 38 % de `SPEC.md`. Numérotation refaite : 1 à 5,
-        et les `bis`/`ter` retrouvent leur nature de sous-sujets. 186 renvois
-        repointés vers `SESSION§`. **Deux pièges, attrapés par `check-refs`** :
-        le remplacement a d'abord frappé des renvois **déjà étiquetés**
-        (`PILOTE§9.1` → `PILOTESESSION§1`, 9 cas) ; et **un auto-renvoi porte
-        son étiquette même dans son propre fichier**, sinon « voir §3.2 » et
-        « voir §4.5.3 » parlent de deux documents sans que rien ne le dise.
-      - **Lot 5b — les fossiles, et le §8 retrouve ses sous-sections.** Les
-        `§8.3`/`§8.4`/`§8.5`/`§8.6` du code n'étaient pas du bruit : ce sont
-        des renvois vers « Lancement de session », qui portait le numéro 8
-        dans une structure antérieure — et ils coexistaient avec les `§8.x` de
-        la spec de refonte, qui parlent des couches. **Le fichier tranche**, pas
-        le numéro. Une fois l'espace `§8.x` libéré, le §8 a reçu les cinq
-        sous-sections que 149 renvois `§12bis.*` lui supposaient depuis
-        toujours : le code était **plus précis que la spec**, la réparation
-        était du côté du document. Le socle passe de 348 à 215 entrées.
-        Exploité au passage : **59 renvois écrivaient « refonte §X » en toutes
-        lettres** — le document était dans la phrase, il ne restait qu'à en
-        faire une étiquette.
-      - **Trouvé en réparant, et corrigé** : deux chaînes **visibles par
-        l'utilisateur** portaient un renvoi de spec (« contenu de base Kunos :
-        déjà présent, non activable (§12bis.1). »). Un numéro de section ne
-        veut rien dire pour qui utilise l'app, et celui-là pointait vers une
-        section disparue. Nettoyées dans les six locales, et c'est devenu la
-        septième règle de `check-conventions.mjs`.
-      - **Lot 5c — et l'hypothèse de départ était fausse.** Le plan voulait
-        fusionner §4 et `SPEC-import.md`, « qui décrivent la même chose avec
-        une règle de préséance ». À la lecture, non : `SPEC-import.md` est un
-        **arbre de décision**, pas un doublon. Le §4 énonce les règles une par
-        une avec le *pourquoi* de chacune ; l'autre les montre **ensemble**,
-        seule façon de voir qu'une règle en contredit une autre. Son en-tête
-        cite le bug que ça a attrapé : `mods/` a figuré des mois dans la liste
-        des dossiers qu'AC lit, parce que personne ne pouvait voir la liste et
-        ses conséquences en même temps. **Les fusionner détruirait ce qui fait
-        sa valeur.** Fait à la place : vérifier qu'ils s'accordent — les
-        13 fichiers et les 6 fonctions qu'il cite existent tous, une seule
-        erreur trouvée (« Sept destinations » pour une table qui en liste
-        huit) — et remplacer la règle de préséance, qui promettait une
-        vérification que personne ne faisait, par ce qui est vrai : deux
-        objets distincts, et une relecture **en même temps** que la
-        modification de la règle, jamais après.
-      - **Le socle vidé aux trois quarts (215 → 69), et six documents
-        retrouvés.** Les 77 renvois de l'écran de session pointaient vers des
-        instructions **jamais commitées** : `LOT-session-setup.md`, `LOT1`,
-        `LOT2`, `LOT4`, `LOT5` et `CIBLE-reglages-session.md`. Elles vivaient
-        hors du dépôt, donc leurs renvois pointaient dans le vide sans que rien
-        ne le signale. Toutes livrées, conservées verbatim : elles portent les
-        *arguments*, la partie qu'on ne retrouve pas deux fois — « un réglage se
-        range selon sa portée, jamais selon sa fréquence d'usage », « le filtre
-        définit le vivier, jamais le plateau ». **L'appariement se fait sur le
-        titre, jamais sur le numéro** : six documents se partagent les mêmes
-        `§1.x`, `§2.x`, `§3.x`, et plusieurs correspondances sont mot pour mot,
-        ce qui les rend vérifiables.
-      - **Un défaut du contrôleur, trouvé en s'en servant** : son motif exigeait
-        trois majuscules pour une étiquette, or `L5` en fait deux. `L5§2.3` se
-        lisait donc comme un `§2.3` nu, vérifié contre le mauvais document, et
-        **en silence** puisque le socle le connaissait sous cette forme. Une
-        étiquette inconnue vaut mieux qu'une étiquette invisible.
-      - **Le dépôt est public : deux règles de plus** (`no-secret`,
-        `no-secret-file`). Vérifié avant de les écrire — le dépôt en est
-        indemne, historique compris. Ce que `CLAUDE.md` dit surtout, c'est
-        *pourquoi* ça se joue avant le commit : un jeton poussé se révoque, il
-        ne s'efface pas.
-      - **Le socle est vide : 2 780 renvois, 0 sans cible.** Parti de 906.
-        Le contrôle est donc **strict** — le moindre renvoi sans cible fait
-        désormais échouer `npm run check`.
-        **Le remède annoncé n'était pas le bon, et le contenu l'a dit.** Le plan
-        prévoyait de renuméroter `SPEC.md` §5, §6 et §7 pour leur donner les
-        sous-sections manquantes. À la lecture, ces numéros ne désignaient pas
-        des sections perdues : la bande de performance est du `CIBLE§3.4`, la
-        précédence de l'appariement du `WIKI§3.1`, la langue de lecture du
-        `WIKI§5.4`. Renuméroter aurait produit un gros diff sans rien résoudre,
-        **en cassant au passage les renvois qui marchaient**. Une seule
-        sous-section méritait son titre : `§7.4bis`, que `SPEC.md` employait
-        déjà dans son propre texte. Le reste se repointe — vers un autre
-        document, ou vers la section qui le porte réellement. **Un renvoi plus
-        large qui tombe juste vaut mieux qu'un numéro précis qui ne tombe nulle
-        part.**
-      - **Un piège de remplacement, attrapé en simulation** : la règle
-        `§5bis → §5` avalait `§5bis.3`, qui est **valide**, et l'aurait
-        transformé en `§5.3` — 26 renvois corrompus en silence. Le garde-fou
-        doit exclure « point suivi d'un chiffre » (le début d'un renvoi plus
-        profond) sans exclure le point de fin de phrase. C'est la troisième
-        fois de ce chantier qu'un remplacement de masse veut mordre plus loin
-        que prévu ; à chaque fois c'est la **simulation avant écriture** qui
-        l'a montré.
-      - **Lot 6 — trois tests là où une erreur détruit des fichiers.**
-        `gamebackup::is_newer` (règle d'or n°5, §4.5.4) n'était couvert par
-        rien : le cas qui compte est l'**égalité de dates** — deux copies
-        tirées de la même archive portent le même horodatage, et un `>=` au
-        lieu d'un `>` ferait gagner le dernier mod déployé une course que
-        personne n'a voulu courir. Vérifié en injectant ce `>=` : le test
-        tombe, avec le message qui l'explique.
-        Côté `overlay`, la découverte est que **`migrate()` n'était exercé par
-        aucun test** — `init()` crée déjà toutes les colonnes que `migrate`
-        ajoute, donc sur une base neuve les `ALTER` échouent tous sans effet et
-        le chemin de migration n'est jamais emprunté. Seule une base
-        **ancienne** l'emprunte, et c'est le cas que personne n'a sous la main.
-        Deux tests : la réouverture (qui rejoue `init` **et** `migrate` à
-        chaque fois, sans marqueur de version — l'idempotence est le design,
-        pas une commodité), et la vraie migration. **La vieille base se
-        fabrique en retirant des colonnes de l'actuelle**, jamais en recopiant
-        un ancien `CREATE TABLE` : une copie du schéma pourrirait au premier
-        changement et cesserait de tester quoi que ce soit. Le test vérifie
-        d'abord que le listing **casse** sans la colonne — sans ça il passerait
-        pour une mauvaise raison — puis qu'`open` la remet et que la ligne
-        survit. Vérifié en retirant `is_unmanaged` de `migrate` : le test tombe.
-      - **Lot 4 — maquettes rangées et datées.** Les onze fichiers HTML
-        quittent la racine de `docs/` pour `maquettes/` et
-        `maquettes/archive/`, avec leur propre index : pour chacune, la date,
-        ce qu'elle a servi à décider, et si elle fait encore autorité. Sept
-        sont archivées — elles montrent des écrans supprimés (les trois vues
-        transversales), une navigation d'avant le rail à deux rangs, ou des
-        filtres d'avant les puces. **La date est le cœur du rangement** : sans
-        elle on ne sait pas si on regarde la cible ou un souvenir, et l'index
-        présentait encore comme « référence de l'écran principal » une
-        maquette antérieure de deux mois à la refonte. `docs/` passe de 33
-        entrées à 20 fichiers et deux dossiers.
-      **Les mesures qui ont décidé du plan**, et qu'on ne referait pas deux
-      fois :
-      - **Deux tiers des renvois `§` du code étaient ambigus** (1 861 sur
-        2 798) : `§5.3` désigne `SPEC-grille.md` dans `gridthumbs.rs` et
-        `SPEC.md` dans `importer.rs`, et rien ne le disait. 401 de plus ne
-        pointaient sur **aucun titre d'aucun document**.
-      - **Les `bis`/`ter`/`quater` de `SPEC.md` §9 ne sont pas un tic de
-        style** : ils existent parce que renuméroter cassait 2 800 pointeurs en
-        silence. D'où l'ordre des lots — le contrôleur d'abord, la découpe
-        ensuite.
-      - **Quatre sections font 83 % de `SPEC.md`** : §9 (924 lignes), §6 (386),
-        §4 (357), §7 (353).
-      - **Une règle de prose qu'aucun outil ne vérifie finit par être
-        violée** : `scrollIntoView` est interdit en gras dans `CLAUDE.md` et
-        commenté « **Jamais `scrollIntoView`** » dans deux fichiers — et
-        appelé dans deux autres.
-      **La passe est finie** — les sept lots sont faits, `npm run check` porte
-      quatre portes (locales, version, renvois, conventions) et le socle des
-      renvois est vide. **Reste une seule décision, mise de côté avec
-      l'utilisateur :**
-      - **`docs/default-tag-rules-enriched.json` n'est pas ce que l'app
-        charge** — c'est `src-tauri/rules/default-tag-rules.json`, semé dans le
-        dossier de config. Les deux ont divergé : la copie de `docs/` porte un
-        groupe de règles de plus, six jours plus récent. Les fusionner
-        changerait le tagging de toute la bibliothèque, donc c'est une décision
-        à part. L'avertissement est écrit dans les deux documents.
-      - **Le socle `scripts/refs-baseline.json` est fait pour se vider.** 348
-        couples (fichier, renvoi), dont 194 qui résolvent dans un autre doc que
-        celui de leur domaine — une règle de chemin à étendre dans
-        `check-refs.mjs` — et 401 occurrences qui ne résolvent nulle part, qui
-        relèvent du lot 5. Ne jamais grossir le socle pour faire taire une
-        erreur.
+- [ ] **Deux jeux de règles de tags ont divergé — à trancher.**
+      `docs/default-tag-rules-enriched.json` **n'est pas ce que l'app charge** :
+      elle sème `src-tauri/rules/default-tag-rules.json` dans le dossier de
+      config au premier démarrage, et c'est celui-là qui est édité par l'écran
+      Règles. Les deux se sont séparés — la copie de `docs/` porte un groupe de
+      règles de plus sous `car` et sous `track`, et six jours d'avance
+      (2026-08-29 contre 2026-08-23).
+      **Pourquoi ça attend.** Reporter ces règles changerait le tagging de
+      **toute** la bibliothèque, donc les catégories, donc les filtres et la
+      composition de plateau qui s'appuient dessus. Ce n'est pas un ménage,
+      c'est une décision sur le contenu — mise de côté avec l'utilisateur
+      pendant la passe documentation.
+      **Pour reprendre :** comparer les deux fichiers groupe par groupe,
+      décider si l'enrichissement de `docs/` est voulu, et s'il l'est, le
+      reporter dans `src-tauri/rules/` — puis faire disparaître l'un des deux,
+      parce que deux fichiers qui décrivent la même ontologie finiront toujours
+      par se séparer à nouveau. L'avertissement est écrit dans
+      `docs/README.md` et au §14 de `SPEC.md` en attendant.
